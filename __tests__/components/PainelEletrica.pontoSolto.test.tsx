@@ -128,6 +128,42 @@ describe('PainelEletrica · o ponto fora de circuito', () => {
     expect(screen.getByText(/TUG cozinha/)).toBeTruthy();
   });
 
+  it('agrupa pelo critério do usuário — "ambiente" sugerido; por tipo, cabeçalhos da taxonomia; "Ligar todos a…" liga o grupo inteiro', async () => {
+    // 13/09/2026: "aparecem todos os pontos elétricos. agrupe-os por ambiente"
+    // → "ofereça a forma que ele quer agrupar; sugira por ambiente e ele decide".
+    localStorage.clear();
+    let m = cena();
+    const levelId = m.levels[0].id;
+    m = applyCommand(m, {
+      type: 'AddTerminal', levelId, disciplina: 'ELETRICA', tipo: 'Luz', at: point(2000, 2000), cotaMm: 2800, tipoEletrico: 'ILUMINACAO_TETO',
+    }).model;
+    m = applyCommand(m, {
+      type: 'AddTerminal', levelId, disciplina: 'ELETRICA', tipo: 'TUG sala', at: point(3000, 1000), cotaMm: 300, tipoEletrico: 'TUG',
+    }).model;
+    const onLigarAoCircuito = vi.fn();
+    const user = userEvent.setup();
+    montar(m, { onLigarAoCircuito });
+
+    const criterio = screen.getByLabelText(/agrupar os pontos fora de circuito por/i) as HTMLSelectElement;
+    expect(criterio.value).toBe('ambiente');
+    expect(screen.getByRole('option', { name: /ambiente \(sugerido\)/i })).toBeTruthy();
+    // Sem parede nenhuma, os três estão "Fora de ambiente" — dito, não escondido.
+    expect(screen.getByText(/fora de ambiente/i)).toBeTruthy();
+
+    await user.selectOptions(criterio, 'tipo');
+    expect(screen.getByText('tomadas')).toBeTruthy();
+    expect(screen.getByText('iluminação')).toBeTruthy();
+    // O primeiro ponto da cena não tem tipo: fica em "A classificar", visível.
+    expect(screen.getByText('A classificar')).toBeTruthy();
+
+    // O grupo "tomadas" tem 1 ponto ("TUG sala"); só grupos com 2+ ganham "Ligar todos a…".
+    expect(screen.queryByLabelText('Circuito de todos em tomadas')).toBeNull();
+    await user.selectOptions(criterio, 'pavimento');
+    await user.selectOptions(screen.getByLabelText('Circuito de todos em Térreo'), m.circuitos[0].id);
+    expect(onLigarAoCircuito).toHaveBeenCalledTimes(3);
+    expect(onLigarAoCircuito).toHaveBeenCalledWith(m.terminais[2].id, m.circuitos[0].id);
+  });
+
   it('sem ponto solto, o aviso não aparece', () => {
     const m = cena();
     const ligado = applyCommand(m, {

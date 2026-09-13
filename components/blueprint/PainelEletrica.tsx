@@ -12,6 +12,14 @@ import {
 import { HipotesesDoPreDimensionamento, LinhaPreDimensionamento } from './PainelPreDimensionamento';
 import PainelQuadroAlimentador from './PainelQuadroAlimentador';
 import { preDimensionarQuadroCompleto } from '../../utils/blueprintEletricaDimensionamento';
+import { usePersistedState } from '../ui/TableUtils';
+import {
+  CRITERIOS_DE_AGRUPAMENTO,
+  CRITERIO_SUGERIDO,
+  ROTULO_DO_CRITERIO,
+  agruparPontos,
+  type CriterioDeAgrupamento,
+} from '../../utils/blueprintAgrupamentoDePontos';
 
 /**
  * O painel de ELÉTRICA — quadros, circuitos e o quadro de cargas.
@@ -77,6 +85,16 @@ export default function PainelEletrica({
 }) {
   const [novoCircuito, setNovoCircuito] = useState<Record<string, string>>({});
   const cargas = quadroDeCargas(model);
+  /**
+   * COMO a lista de pontos fora de circuito se agrupa (13/09/2026). Escolha
+   * do usuário, persistida; "ambiente" é a sugestão — é como um projeto
+   * elétrico se lê (cômodo a cômodo), e é a divisão que a NBR 5410 usa.
+   */
+  const [agrupamento, setAgrupamento] = usePersistedState<CriterioDeAgrupamento>(
+    'blueprint:agruparPontosSoltos',
+    CRITERIO_SUGERIDO,
+  );
+  const gruposDeSoltos = agruparPontos(model, cargas.soltos, agrupamento);
   // ⚠️ A pendência das SUGERIDAS aparece com ou sem quadro: são pontos que o
   // sistema pôs e ninguém confirmou. Ver `Terminal.sugerida`.
   const sugeridas = (model.terminais ?? []).filter((t) => t.sugerida).length;
@@ -151,38 +169,90 @@ export default function PainelEletrica({
                 justamente o que ninguém consegue quando ele está fora de
                 circuito por ter passado despercebido. Relato de uso, 09/09/2026:
                 "porém não encontrou como conectar a um circuito". */}
-            <span className="mt-1.5 block space-y-1">
-              {cargas.soltos.map((s) => (
-                <span key={s.terminalId} className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => onSelecionar?.(s.terminalId)}
-                    title="Selecionar este ponto no desenho"
-                    className="min-w-0 flex-1 truncate text-left text-[11px] text-blue-700 hover:underline"
-                  >
-                    {s.rotulo}
-                  </button>
-                  {todosOsCircuitos.length === 0 ? (
-                    <span className="shrink-0 text-[10px] text-slate-500">
-                      crie um circuito abaixo
+            {/* O CRITÉRIO é do usuário (13/09/2026): "ofereça a forma que ele
+                quer agrupar; sugira por ambiente e ele decide". */}
+            <label className="mt-1.5 flex items-center gap-1.5 text-[10px] text-slate-600">
+              Agrupar por
+              <select
+                value={agrupamento}
+                onChange={(e) => setAgrupamento(e.target.value as CriterioDeAgrupamento)}
+                aria-label="Agrupar os pontos fora de circuito por"
+                className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px]"
+              >
+                {CRITERIOS_DE_AGRUPAMENTO.map((c) => (
+                  <option key={c} value={c}>
+                    {ROTULO_DO_CRITERIO[c]}
+                    {c === CRITERIO_SUGERIDO ? ' (sugerido)' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <span className="mt-1.5 block space-y-2">
+              {gruposDeSoltos.map((g) => (
+                <span key={g.chave} className="block space-y-1">
+                  {g.titulo && (
+                    <span className="flex items-center gap-1.5 border-b border-amber-200 pb-0.5">
+                      <span className="min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                        {g.titulo}
+                        <span className="ml-1 font-normal normal-case tracking-normal text-slate-500">
+                          ({g.itens.length})
+                        </span>
+                      </span>
+                      {/* Ligar o GRUPO inteiro num gesto: é o caso comum — os
+                          pontos de um cômodo vão para o mesmo circuito. */}
+                      {todosOsCircuitos.length > 0 && g.itens.length > 1 && (
+                        <select
+                          value=""
+                          aria-label={`Circuito de todos em ${g.titulo}`}
+                          onChange={(e) => {
+                            if (!e.target.value) return;
+                            for (const s of g.itens) onLigarAoCircuito?.(s.terminalId, e.target.value);
+                          }}
+                          className="w-32 shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px]"
+                        >
+                          <option value="">Ligar todos a…</option>
+                          {todosOsCircuitos.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.quadro} · {c.nome}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </span>
-                  ) : (
-                    <select
-                      value=""
-                      aria-label={`Circuito de ${s.rotulo}`}
-                      onChange={(e) =>
-                        e.target.value && onLigarAoCircuito?.(s.terminalId, e.target.value)
-                      }
-                      className="w-32 shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px]"
-                    >
-                      <option value="">Ligar a…</option>
-                      {todosOsCircuitos.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.quadro} · {c.nome}
-                        </option>
-                      ))}
-                    </select>
                   )}
+                  {g.itens.map((s) => (
+                    <span key={s.terminalId} className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => onSelecionar?.(s.terminalId)}
+                        title="Selecionar este ponto no desenho"
+                        className="min-w-0 flex-1 truncate text-left text-[11px] text-blue-700 hover:underline"
+                      >
+                        {s.rotulo}
+                      </button>
+                      {todosOsCircuitos.length === 0 ? (
+                        <span className="shrink-0 text-[10px] text-slate-500">
+                          crie um circuito abaixo
+                        </span>
+                      ) : (
+                        <select
+                          value=""
+                          aria-label={`Circuito de ${s.rotulo}`}
+                          onChange={(e) =>
+                            e.target.value && onLigarAoCircuito?.(s.terminalId, e.target.value)
+                          }
+                          className="w-32 shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px]"
+                        >
+                          <option value="">Ligar a…</option>
+                          {todosOsCircuitos.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.quadro} · {c.nome}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </span>
+                  ))}
                 </span>
               ))}
             </span>

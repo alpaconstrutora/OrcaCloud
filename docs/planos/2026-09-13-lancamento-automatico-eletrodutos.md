@@ -37,6 +37,21 @@ bloqueadas: quadro colocado, circuito criado, 3 pontos ligados pelo quadro de
 cargas, "Lançar em todos (3)" → 6 eletrodutos sugeridos pontilhados no
 desenho, rodapé "6 sugerido(s)". Suíte completa verde; build ok.
 
+## Agrupamento dos pontos no Quadro de cargas (mesmo dia)
+
+Pedido: *"no Quadro de cargas e NBR 5410: aparecem todos os pontos elétricos.
+agrupe-os por ambiente"* → *"ou melhor, ofereça ao usuário a forma que ele quer
+agrupar. e sugeria agrupar por ambiente e ele decide"*.
+
+`utils/blueprintAgrupamentoDePontos.ts`: critérios **Ambiente (sugerido)**,
+Tipo de ponto, Pavimento, Sem agrupar; o pertencimento ao ambiente é a mesma
+regra da conferência NBR 5410 (contorno de eixo, fora dos furos); "Fora de
+ambiente" e "A classificar" são grupos ditos, não escondidos. No
+`PainelEletrica`, a lista de pontos fora de circuito ganhou o seletor "Agrupar
+por" (persistido em `blueprint:agruparPontosSoltos`) e, em grupo com 2+
+pontos, **"Ligar todos a…"** — o caso comum é o cômodo inteiro no mesmo
+circuito. Testes: `blueprintAgrupamentoDePontos` (3) e o teste do painel.
+
 ## Fora, por decisão
 
 - Desvio de vigas/lajes e passagem pelo piso — o desenho não conhece a

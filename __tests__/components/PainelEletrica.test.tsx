@@ -84,7 +84,9 @@ describe('PainelEletrica', () => {
 
   it('⚠️ mostra os pontos FORA DE CIRCUITO, que não entram em soma nenhuma', () => {
     render(<PainelEletrica model={modelo({ comPotencia: true, soltos: 3 })} {...vazio} />);
-    expect(screen.getByText(/3/)).toBeInTheDocument();
+    // O número do aviso ("3 pontos elétricos fora de circuito") — o cabeçalho do
+    // grupo também mostra "(3)" desde o agrupamento de 13/09, daí o `getAllBy`.
+    expect(screen.getAllByText(/3/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/fora de\s+circuito/i)).toBeInTheDocument();
   });
 

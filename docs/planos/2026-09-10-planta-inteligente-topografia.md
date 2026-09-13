@@ -31,7 +31,15 @@ Todas as 17 fases estão publicadas em `main`, provadas de fora (`conferir-produ
 
 ### O que falta (técnico, aberto)
 
-Nada. As cinco pendências que este quadro listava foram resolvidas na fase 15 e as quatro miúdas que ela declarou, na fase 16 (12/09). Limitações que continuam por desenho, não por falta: a triangulação não é uma CDT (as linhas de quebra são honradas por densificação na resolução da grade), e a TIN importada é descartada ao editar qualquer ponto (índices).
+As pendências do importador e da TIN fecharam nas fases 15 e 16. O que a fase 17 (projeto executivo) declarou e continua aberto:
+
+| Pendência | Onde nasceu | Tamanho |
+|---|---|---|
+| Estabilidade global com água usa γ' em toda a massa (conservador); a linha freática real com poropressão por fatia, a partir do perfil de sondagem, fica por conta do responsável técnico | fase 17 | médio — só vale com perfil de sondagem por furo no sistema |
+| Taludes: entram os limites usuais (aterro h ≥ 1,5, corte h ≥ 1,0, lance ≤ 8 m); a NBR 11682 pede estudo por tipo de solo | fase 17 | médio |
+| A ART/RRT é registrada como informada; não há consulta ao CREA/CAU (sem API pública) | fase 17 | pequeno — só se surgir um serviço de consulta |
+
+Limitações que continuam por desenho, não por falta: a triangulação não é uma CDT (as linhas de quebra são honradas por densificação na resolução da grade), a TIN importada é descartada ao editar qualquer ponto (índices), e uma emissão executiva deixa de valer quando a base muda (é o que a amarração ao hash existe para fazer).
 
 ### Fora do software por decisão (não reabrir sem pedido)
 

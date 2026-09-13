@@ -27,15 +27,8 @@ function fBRL(v: number | null): string {
     if (v === null || v === undefined) return '—';
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 }
-// Sinal ANTES do "R$", como o Intl faz em fBRL ("-R$ 54,04") — a versão
-// anterior saía "R$ -34k" ao lado de "-R$ 54,04" na mesma coluna.
-function fBRLshort(v: number): string {
-    const sinal = v < 0 ? '-' : '';
-    const abs = Math.abs(v);
-    if (abs >= 1_000_000) return `${sinal}R$ ${(abs / 1_000_000).toFixed(1)}M`;
-    if (abs >= 1_000)     return `${sinal}R$ ${(abs / 1_000).toFixed(0)}k`;
-    return fBRL(v);
-}
+// Valores sempre por extenso ("R$ 1.000,00"), nunca abreviados ("R$ 1k") —
+// pedido do usuário em 2026-09-13; é relatório, o número exato é o dado.
 
 // ── Dimensões disponíveis (espelha a whitelist de fn_opura_pivot) ──────────────
 // São as abas da tela (§19.1): cada uma troca a visão inteira, então o subtítulo
@@ -137,18 +130,18 @@ function pivotColumns(dimLabel: string, tree: boolean): StandardTableColumn[] {
     return [
         { key: 'label',     label: dimLabel,    sortable: !tree, width: 360 },
         { key: 'qtd',       label: 'Qtd',       sortable: !tree, width: 90,  align: 'right' },
-        { key: 'realizado', label: 'Realizado', sortable: !tree, width: 150, align: 'right' },
-        { key: 'previsto',  label: 'Previsto',  sortable: !tree, width: 140, align: 'right' },
-        { key: 'vencido',   label: 'Vencido',   sortable: !tree, width: 140, align: 'right' },
+        { key: 'realizado', label: 'Realizado', sortable: !tree, width: 170, align: 'right' },
+        { key: 'previsto',  label: 'Previsto',  sortable: !tree, width: 170, align: 'right' },
+        { key: 'vencido',   label: 'Vencido',   sortable: !tree, width: 170, align: 'right' },
     ];
 }
 
 function compareColumns(dimLabel: string): StandardTableColumn[] {
     return [
         { key: 'label',    label: dimLabel,    sortable: true, width: 360 },
-        { key: 'valorA',   label: 'Período A', sortable: true, width: 150, align: 'right' },
-        { key: 'valorB',   label: 'Período B', sortable: true, width: 150, align: 'right' },
-        { key: 'delta',    label: 'Δ',         sortable: true, width: 140, align: 'right' },
+        { key: 'valorA',   label: 'Período A', sortable: true, width: 170, align: 'right' },
+        { key: 'valorB',   label: 'Período B', sortable: true, width: 170, align: 'right' },
+        { key: 'delta',    label: 'Δ',         sortable: true, width: 170, align: 'right' },
         { key: 'variacao', label: 'Var.',      sortable: true, width: 110, align: 'right' },
     ];
 }
@@ -400,11 +393,11 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
             case 'qtd':
                 return <span className="text-sm font-normal text-gray-600 tabular-nums">{r.qtd}</span>;
             case 'realizado':
-                return <span className={`text-sm font-medium tabular-nums ${r.realizado < 0 ? 'text-red-600' : 'text-gray-800'}`}>{fBRLshort(r.realizado)}</span>;
+                return <span className={`text-sm font-medium tabular-nums ${r.realizado < 0 ? 'text-red-600' : 'text-gray-800'}`}>{fBRL(r.realizado)}</span>;
             case 'previsto':
-                return <span className="text-sm font-normal text-gray-600 tabular-nums">{fBRLshort(r.previsto)}</span>;
+                return <span className="text-sm font-normal text-gray-600 tabular-nums">{fBRL(r.previsto)}</span>;
             case 'vencido':
-                return <span className={`text-sm font-medium tabular-nums ${r.vencido > 0 ? 'text-amber-600' : 'text-gray-300'}`}>{r.vencido > 0 ? fBRLshort(r.vencido) : '—'}</span>;
+                return <span className={`text-sm font-medium tabular-nums ${r.vencido > 0 ? 'text-amber-600' : 'text-gray-300'}`}>{r.vencido > 0 ? fBRL(r.vencido) : '—'}</span>;
             default:
                 return null;
         }
@@ -415,13 +408,13 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
             case 'label':
                 return <span className="block truncate text-sm font-normal text-gray-700" title={r.dimension_label}>{r.dimension_label}</span>;
             case 'valorA':
-                return <span className="text-sm font-medium text-gray-800 tabular-nums">{fBRLshort(r.valorA)}</span>;
+                return <span className="text-sm font-medium text-gray-800 tabular-nums">{fBRL(r.valorA)}</span>;
             case 'valorB':
-                return <span className="text-sm font-normal text-gray-600 tabular-nums">{fBRLshort(r.valorB)}</span>;
+                return <span className="text-sm font-normal text-gray-600 tabular-nums">{fBRL(r.valorB)}</span>;
             case 'delta':
                 return (
                     <span className={`text-sm font-medium tabular-nums ${r.delta < 0 ? 'text-red-600' : r.delta > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
-                        {r.delta > 0 ? '+' : ''}{fBRLshort(r.delta)}
+                        {r.delta > 0 ? '+' : ''}{fBRL(r.delta)}
                     </span>
                 );
             case 'variacao':

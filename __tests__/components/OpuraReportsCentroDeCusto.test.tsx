@@ -77,7 +77,7 @@ describe('ÒPURA · Relatórios › Centro de Custo em grupos', () => {
         // Grupo "Condomínios" soma os filhos: 50 + 12 lançamentos, realizado −23.817
         const cond = within(linhaDe('Condomínios'));
         expect(cond.getByText('62')).toBeInTheDocument();
-        expect(cond.getByText('-R$ 24k')).toBeInTheDocument();
+        expect(cond.getByText('-R$ 23.817,00')).toBeInTheDocument(); // por extenso, nunca abreviado
         // "Obra" (001) não tem lançamento no período: fica de fora da tabela
         expect(rotulos.some(r => r.startsWith('001Obra'))).toBe(false);
     });
@@ -98,7 +98,8 @@ describe('ÒPURA · Relatórios › Centro de Custo em grupos', () => {
         expect(screen.getByRole('columnheader', { name: /Período B/ })).toBeInTheDocument();
         expect(screen.getByRole('columnheader', { name: /Var\./ })).toBeInTheDocument();
         expect(screen.queryByRole('columnheader', { name: /Realizado/ })).not.toBeInTheDocument();
-        expect(screen.getByText('-R$ 34k')).toBeInTheDocument();
+        // célula (o rodapé de totais repete o mesmo valor)
+        expect(within(linhaDe('Administrativo')).getByText('-R$ 34.482,00')).toBeInTheDocument();
     });
 
     it('o total do rodapé continua sendo o total plano (não conta grupo duas vezes)', async () => {

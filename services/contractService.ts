@@ -573,6 +573,9 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
             const internalRows = newTxs.map((tx, i) => ({
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_PARCELADO',
+                // Dimensão "Contrato" do Relatório e filtros por contrato leem esta coluna —
+                // o id só no reference_id não basta (2026-09-13: 420 títulos sem ela).
+                contract_id: contract.id,
                 reference_id: `${contract.id}:p${i + 1}`,
                 project_id: contract.project_id ?? null,
                 transaction_date: tx.date.split('T')[0],
@@ -799,6 +802,7 @@ async function syncRecurringToFinance(contract: Contract) {
             await supabase.from('internal_transactions').upsert(transactions.map(tx => ({
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_RECURRING',
+                contract_id: contract.id,
                 // ⚠️ Um reference_id POR PARCELA. A constraint
                 // internal_transactions_org_ref_key é UNIQUE(organization_id,
                 // reference_id, entry_type): repetir o id do contrato em todas as
@@ -1066,6 +1070,7 @@ export async function generateRecurringInstallmentsForPeriod(
     const { error } = await supabase.from('internal_transactions').upsert(novos.map((d, i) => ({
         organization_id: contract.organization_id,
         source_system: 'CONTRACT_RECURRING',
+        contract_id: contract.id,
         // Um id por parcela — ver a nota em syncRecurringToFinance.
         reference_id: `${contract.id}-p${d}`,
         project_id: contract.project_id ?? null,
@@ -1179,6 +1184,7 @@ async function syncAVistaToFinance(contract: Contract) {
             await supabase.from('internal_transactions').insert({
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_AVISTA',
+                contract_id: contract.id,
                 reference_id: contract.id,
                 project_id: contract.project_id ?? null,
                 transaction_date: dueDate,

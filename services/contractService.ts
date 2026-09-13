@@ -1884,7 +1884,38 @@ export const contractService = {
             }
         }
 
-        // 3. Exclui o contrato do banco
+        // 3. Títulos gerados no Financeiro (parcelado, recorrente E à vista —
+        //    à vista ficava de fora e deixava título órfão pendente; 2026-09-13).
+        //    Antes do DELETE: a FK contract_id é ON DELETE SET NULL, e o
+        //    reference_id ('<id>', '<id>:pN', '<id>-p<data>') é a chave que
+        //    sobrevive. Pago (CONCILIATED) bloqueia; pendente é CANCELADO — não
+        //    apagado — para a trilha em Contas a Pagar/Receber continuar visível.
+        if (contract?.organization_id) {
+            const { data: titulos, error: errTitulos } = await supabase
+                .from('internal_transactions')
+                .select('id, status')
+                .eq('organization_id', contract.organization_id)
+                .in('source_system', ['CONTRACT_RECURRING', 'CONTRACT_PARCELADO', 'CONTRACT_AVISTA'])
+                .like('reference_id', `${id}%`);
+            if (errTitulos) throw errTitulos;
+            const pagos = (titulos ?? []).filter(t => t.status === 'CONCILIATED');
+            if (pagos.length > 0) {
+                throw new Error(
+                    `Não é possível excluir este contrato: ${pagos.length} título(s) já foram pagos no Financeiro. ` +
+                    `Estorne as baixas antes de excluir o contrato.`
+                );
+            }
+            const pendentes = (titulos ?? []).filter(t => t.status !== 'CANCELLED').map(t => t.id);
+            if (pendentes.length > 0) {
+                const { error: errCancel } = await supabase
+                    .from('internal_transactions')
+                    .update({ status: 'CANCELLED', business_status: 'CANCELADO' })
+                    .in('id', pendentes);
+                if (errCancel) throw errCancel;
+            }
+        }
+
+        // 4. Exclui o contrato do banco
         const { error } = await supabase
             .from('contracts')
             .delete()
@@ -1892,7 +1923,7 @@ export const contractService = {
 
         if (error) throw error;
 
-        // 4. Remove transações financeiras geradas (recorrente ou parcelado)
+        // 5. Remove as transações do vault legado (Gestão Comercial) — recorrente ou parcelado
         if (contract?.is_recurring || contract?.payment_term_type === 'Parcelado') {
             try {
                 const orgId = contract.organization_id;
@@ -1937,21 +1968,7 @@ export const contractService = {
                     console.log(`[CONTRACTS] Removed ${removedCount} financial transactions for deleted contract ${id}`);
                 }
 
-                // Also clean internal_transactions (Conciliação / Contas a Receber).
-                // reference_id = contract.id (RECORRENTE/AVISTA) ou contract.id:pN
-                // (PARCELADO) → `${id}%` cobre os dois. Antes só limpava PARCELADO,
-                // então parcelas de LOCAÇÃO (recorrente) ficavam órfãs no financeiro.
-                const { data: contractRows } = await supabase
-                    .from('internal_transactions')
-                    .select('id')
-                    .eq('organization_id', orgId)
-                    .in('source_system', ['CONTRACT_RECURRING', 'CONTRACT_PARCELADO', 'CONTRACT_AVISTA'])
-                    .like('reference_id', `${id}%`);
-                if (contractRows?.length) {
-                    await supabase.from('internal_transactions')
-                        .delete()
-                        .in('id', contractRows.map((r: any) => r.id));
-                }
+                // internal_transactions: tratado no passo 3, antes do DELETE (cancela, não apaga).
             } catch (e) {
                 console.error('[CONTRACTS] Error cleaning up financial transactions on contract delete:', e);
             }

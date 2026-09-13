@@ -138,6 +138,17 @@ painel. As demais tarefas (Dados do lote, Do PDF/IFC/DXF/BCF) continuam no
 painel até o teste dizer qual formato fica. Trade-off declarado: o drawer é
 modal — enquanto aberto não se clica no desenho; distribuir e fechar é o fluxo.
 
+**Drawer aprovado → todas as tarefas** (*"migrar as outras quatro tarefas"*):
+Dados do lote (`2xl`), Do PDF, Do IFC, Do DXF e Do BCF abrem no mesmo `Sheet`
+(um só, conteúdo por tarefa; montado só com tarefa, porque o `Sheet` fica no
+DOM mesmo fechado). A metade de baixo do painel ficou **só com Propriedades**
+da seleção. Onde a tarefa precisa do canvas: **Do PDF** — armar a região
+recolhe o drawer (`drawerRecolhido`, `open=false`, estado preservado) e
+marcar/desistir o traz de volta; **terreno** — traçar perfil ou drenagem fecha
+a tarefa (gesto longo, ferramenta própria) e a descrição do drawer avisa
+"volte por Terreno › Dados do lote". `PainelDeTarefa` continua sendo o
+cabeçalho das Propriedades.
+
 **F4 — prova**: teste com duas paredes selecionadas pela lista de vãos (aba
 aparece, não é auto-selecionada, "2 selecionados", sem Dividir/Unir, Excluir
 esvazia e a aba some); app real com escritas bloqueadas: Parede 1 selecionada →

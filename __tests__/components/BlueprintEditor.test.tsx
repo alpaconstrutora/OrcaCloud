@@ -946,22 +946,26 @@ describe('BlueprintEditor · ribbon', () => {
     expect(screen.queryByRole('button', { name: /^orçamento$/i })).not.toBeInTheDocument();
   });
 
-  it('as tarefas do ribbon abrem na metade de baixo do painel e fecham pelo × ou pelo mesmo botão', async () => {
+  it('as tarefas do ribbon abrem em DRAWER (13/09/2026) e fecham pelo rodapé ou pelo mesmo botão', async () => {
     await montar();
-    expect(screen.queryByRole('region', { name: /importar do ifc/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
     await abrirAba(/^inserir$/i);
     await userEvent.setup().click(botao(/^do ifc$/i));
-    expect(screen.getByRole('region', { name: /importar do ifc/i })).toBeInTheDocument();
+    const drawer = await screen.findByRole('dialog');
+    expect(drawer).toHaveTextContent(/importar do ifc/i);
     expect(botao(/^do ifc$/i)).toHaveAttribute('aria-pressed', 'true');
-
-    // Uma tarefa por vez: abrir outra troca.
-    await userEvent.setup().click(botao(/^do dxf$/i));
+    // Nada de tarefa no painel: a metade de baixo é só das Propriedades.
     expect(screen.queryByRole('region', { name: /importar do ifc/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('region', { name: /importar do dxf/i })).toBeInTheDocument();
 
-    await userEvent.setup().click(screen.getByRole('button', { name: /fechar importar do dxf/i }));
-    expect(screen.queryByRole('region', { name: /importar do dxf/i })).not.toBeInTheDocument();
+    // Uma tarefa por vez: abrir outra troca o conteúdo do mesmo drawer.
+    await userEvent.setup().click(botao(/^do dxf$/i));
+    expect(screen.getByRole('dialog')).toHaveTextContent(/importar do dxf/i);
+    expect(botao(/^do ifc$/i)).toHaveAttribute('aria-pressed', 'false');
+
+    await userEvent
+      .setup()
+      .click(within(screen.getByRole('dialog')).getByRole('button', { name: /^fechar$/i }));
     expect(botao(/^do dxf$/i)).toHaveAttribute('aria-pressed', 'false');
   });
 
@@ -1018,10 +1022,8 @@ describe('BlueprintEditor · ribbon', () => {
     await montar();
     await abrirAba(/^terreno$/i);
     await userEvent.setup().click(botao(/^dados do lote$/i));
-    const tarefa = screen.getByRole('region', { name: /dados do lote/i });
-    // Sem lote desenhado (jsdom não desenha) o painel do terreno fica vazio —
-    // o que se afirma é a tarefa aberta e o botão marcado.
-    expect(tarefa).toBeInTheDocument();
+    const drawer = await screen.findByRole('dialog');
+    expect(drawer).toHaveTextContent(/dados do lote, zona e topografia/i);
     expect(botao(/^dados do lote$/i)).toHaveAttribute('aria-pressed', 'true');
   });
 });

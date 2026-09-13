@@ -733,13 +733,20 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [relatorio, setRelatorio] = useState<RelatorioDoDock | null>(null);
   const tarefaAberta = emVista ? null : tarefa;
   /**
-   * TESTE DE FORMATO (pedido de 13/09/2026: *"o painel ainda está com bastante
-   * informação. Vamos adotar drawer para teste em Distribuir Tomadas"*): a
-   * tarefa de tomadas abre num DRAWER (`Sheet`, §26 do guia) por cima da tela,
-   * e não na metade de baixo do painel. As demais tarefas continuam no painel
-   * até o teste dizer qual formato fica.
+   * TAREFA EM DRAWER (13/09/2026). Primeiro como teste em "Distribuir
+   * tomadas" (*"o painel ainda está com bastante informação. Vamos adotar
+   * drawer para teste"*), depois estendido às outras cinco (*"migrar as outras
+   * quatro tarefas"*): toda tarefa abre num `Sheet` (§26 do guia) por cima da
+   * tela; a metade de baixo do painel fica só com as Propriedades da seleção.
+   *
+   * O drawer é MODAL — e duas tarefas precisam do canvas no meio do caminho:
+   * "Do PDF" marca uma região por arraste, e o terreno traça perfil/drenagem.
+   * `drawerRecolhido` resolve a primeira: armar a região recolhe o drawer,
+   * marcar a região (ou desistir com Esc) o traz de volta, com a tarefa
+   * intacta. Traçar perfil/drenagem FECHA a tarefa — é um gesto longo, com
+   * ferramenta própria, e a pessoa volta pelo ribbon quando terminar.
    */
-  const tarefaNoPainel = tarefaAberta === 'tomadas' ? null : tarefaAberta;
+  const [drawerRecolhido, setDrawerRecolhido] = useState(false);
   const relatorioVisivel = useCallback(
     (id: RelatorioDoDock) =>
       !emVista ||
@@ -4320,7 +4327,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             linhas: linhasDoPerfil.length,
             linhaIndice: indiceDaLinha,
             onLinha: setLinhaDoPerfilIndice,
-            onTracarLinha: () => editor.setTool('perfil'),
+            // Traçar é gesto longo no canvas, que o drawer modal cobre: a tarefa
+          // fecha e a pessoa volta por Terreno › Dados do lote ao terminar.
+          onTracarLinha: () => {
+            setTarefa(null);
+            editor.setTool('perfil');
+          },
             onApagarLinha: () => {
               terraplenagem.removerLinhaDoPerfil(indiceDaLinha);
               if (linhasDoPerfil.length <= 1) setOrigemDoPerfil('CORTE');
@@ -4341,7 +4353,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             analises: analisesDeDrenagem,
             ativa: drenagemAtiva,
             onAtiva: setDrenagemAtiva,
-            onTracar: () => editor.setTool('drenagem'),
+            onTracar: () => {
+            setTarefa(null);
+            editor.setTool('drenagem');
+          },
             temPlato: !!terraplenagemCalc,
             onGerarDoPlato: gerarCanaletasDoPlato,
             onAlterar: terraplenagem.alterarDrenagem,
@@ -5969,6 +5984,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 // confirmada por causa de um Escape seria perder trabalho.
                 setRegiaoArmada(false);
                 if (r) setRegiao(r);
+                // O drawer do "Do PDF" volta, com ou sem região marcada.
+                setDrawerRecolhido(false);
               }}
               onCalibrar={(p1, p2) => setAfericao({ p1, p2 })}
               medicoes={medicoesVisiveis}
@@ -6577,82 +6594,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               faixa azul do cabeçalho, com o caminho de volta. Sem tarefa e sem
               seleção, a metade não existe — o navegador fica com o painel
               inteiro, como antes. */}
-          {!emVista && (tarefaNoPainel || editor.selectedIds.length > 0) && (
+          {!emVista && editor.selectedIds.length > 0 && (
             <div className="flex max-h-[62%] shrink-0 flex-col border-t-2 border-slate-200">
-              {tarefaNoPainel ? (
-                <PainelDeTarefa
-                  titulo={ROTULO_DA_TAREFA[tarefaNoPainel]}
-                  onFechar={() => setTarefa(null)}
-                  selecionado={editor.selectedIds.length > 0 ? rotuloDoSelecionado : null}
-                  onVerPropriedades={() => setTarefa(null)}
-                >
-                  {tarefaAberta === 'terreno' && painelDoTerreno}
-
-                  {tarefaAberta === 'gerar-paredes' && (
-                    <PainelGerarParedes
-                      underlay={fundo.underlay}
-                      temFundo={!!fundo.linha}
-                      semAfericao={fundo.semAfericao}
-                      pranchaId={fundo.ativaId}
-                      limitesDaVista={limitesDaVista}
-                      regiao={regiao}
-                      regiaoArmada={regiaoArmada}
-                      onArmarRegiao={() => setRegiaoArmada((a) => !a)}
-                      onLimparRegiao={() => setRegiao(null)}
-                      ocupado={fundo.ocupado}
-                      onExtrair={(arquivo, pag) => extrairSegmentosPdf(arquivo, pag)}
-                      onVetorGuardado={fundo.vetorDaPranchaAtiva}
-                      onRegravar={(segs, larg, alt, m, arcos) =>
-                        void fundo.regravarVetor(segs, larg, alt, m, arcos)
-                      }
-                      onGerar={aplicarParedesGeradas}
-                      paredesDoNivel={paredesParaPortas}
-                      onGerarPortas={aplicarPortasGeradas}
-                    />
-                  )}
-
-                  {tarefaAberta === 'importar-ifc' && (
-                    <PainelImportarIfc
-                      model={editor.model}
-                      levelIdAtivo={levelId}
-                      onImportar={importarDoIfc}
-                    />
-                  )}
-
-                  {tarefaAberta === 'importar-dxf' && (
-                    <PainelImportarDxf
-                      model={editor.model}
-                      levelIdAtivo={levelId}
-                      onImportar={importarDoIfc}
-                    />
-                  )}
-
-                  {tarefaAberta === 'importar-bcf' && (
-                    <PainelImportarBcf
-                      model={editor.model}
-                      // ⚠️ `orgId` do seletor do topo, e não `study.organization_id`
-                      // — a mesma regra que o resto do editor segue (REGRA #5).
-                      organizationId={orgId ?? study.organization_id}
-                      studyId={study.id}
-                      onSelecionar={(uid) => {
-                        // O tópico aponta por `uid`; a seleção do editor é por `id`.
-                        // A ponte é o modelo — e ela existe porque o uid é estável.
-                        const alvo = [
-                          ...editor.model.walls,
-                          ...editor.model.openings,
-                          ...editor.model.structures,
-                          ...(editor.model.trechos ?? []),
-                          ...(editor.model.terminais ?? []),
-                          ...(editor.model.quadros ?? []),
-                          ...(editor.model.roofs ?? []),
-                          ...(editor.model.stairs ?? []),
-                        ].find((x) => x.uid === uid);
-                        if (alvo) selecionar([alvo.id]);
-                      }}
-                    />
-                  )}
-                </PainelDeTarefa>
-              ) : (
                 <PainelDeTarefa titulo="Propriedades" subtitulo={rotuloDoSelecionado}>
                   {editor.selectedIds.length > 1 ? (
                     <PainelSelecaoMultipla
@@ -6875,7 +6818,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       papel na escritura) — o mesmo que a tarefa "Dados do lote" abre. */}
                   {limiteSel && painelDoTerreno}
                 </PainelDeTarefa>
-              )}
             </div>
           )}
           </aside>
@@ -6895,33 +6837,127 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         onEscolher={resolverDisputa}
       />
 
-      {/* ─── TOMADAS PELA NORMA, EM DRAWER (teste de formato, 13/09/2026) ─────
+      {/* ─── A TAREFA, EM DRAWER (13/09/2026) ──────────────────────────────────
           Fora da coluna do painel, como o Quadro de Divisas: é camada sobre a
           tela inteira. Sem "Salvar": cada clique aplica um comando do kernel na
-          hora e Ctrl+Z desfaz. */}
-      <Sheet open={tarefaAberta === 'tomadas'} onClose={() => setTarefa(null)} size="xl">
+          hora e Ctrl+Z desfaz. Um Sheet só, com o conteúdo trocando pela
+          tarefa — assim a geometria, o cabeçalho e o rodapé são um lugar. */}
+      {/* Montado só COM tarefa (o `Sheet` fica no DOM mesmo fechado): sem
+          tarefa não há dialog na árvore. Enquanto a tarefa existe ele fica
+          montado, e "recolher" é só `open=false` — é o que preserva o estado
+          do "Do PDF" (arquivo lido, segmentos extraídos) enquanto a região é
+          marcada no desenho. */}
+      {tarefaAberta && (
+      <Sheet
+        open={!drawerRecolhido}
+        onClose={() => setTarefa(null)}
+        size={tarefaAberta === 'terreno' ? '2xl' : 'xl'}
+      >
         <SheetHeader onClose={() => setTarefa(null)}>
           <SheetTitle>
             <span className="flex items-center gap-2">
-              <Plug className="h-5 w-5 text-blue-700" />
-              Tomadas pela NBR 5410
+              {tarefaAberta === 'tomadas' && <Plug className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
+              {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'importar-dxf' && <PenTool className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'importar-bcf' && <MessagesSquare className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta ? ROTULO_DA_TAREFA[tarefaAberta] : ''}
             </span>
           </SheetTitle>
           <SheetDescription>
-            Por ambiente: classifique o cômodo, veja o que a norma (9.5.2) pede e distribua.{' '}
-            <strong>Completar pela norma</strong> lança só o que falta; <strong>Distribuir</strong>{' '}
-            lança N ao longo das paredes. As tomadas nascem <em>sugeridas</em> — mover uma
-            confirma.
+            {tarefaAberta === 'tomadas' && (
+              <>
+                Por ambiente: classifique o cômodo, veja o que a norma (9.5.2) pede e distribua.{' '}
+                <strong>Completar pela norma</strong> lança só o que falta;{' '}
+                <strong>Distribuir</strong> lança N ao longo das paredes. As tomadas nascem{' '}
+                <em>sugeridas</em> — mover uma confirma.
+              </>
+            )}
+            {tarefaAberta === 'terreno' &&
+              'Área da escritura, papel de cada divisa, recuos e zona urbanística, topografia, corte e aterro, projeto executivo de terraplenagem. Traçar perfil ou drenagem fecha este painel — volte por Terreno › Dados do lote.'}
+            {tarefaAberta === 'gerar-paredes' &&
+              'Paredes e portas a partir da planta de fundo em PDF. Ao marcar a região, este painel se recolhe para você arrastar sobre o desenho e volta em seguida.'}
+            {tarefaAberta === 'importar-ifc' &&
+              'Paredes, aberturas e estrutura de um modelo IFC, por medida declarada.'}
+            {tarefaAberta === 'importar-dxf' && 'Paredes de um desenho DXF, por camada e polilinha.'}
+            {tarefaAberta === 'importar-bcf' &&
+              'Os tópicos de coordenação (BCF) que o projetista devolveu — pendência, não geometria. Clicar num tópico seleciona a peça no desenho.'}
           </SheetDescription>
         </SheetHeader>
 
-        <SheetPanel className="px-6 py-4">
-          {ambientes.length === 0 ? (
+        <SheetPanel className={tarefaAberta === 'tomadas' ? 'px-6 py-4' : 'p-0'}>
+          {tarefaAberta === 'terreno' && painelDoTerreno}
+
+          {tarefaAberta === 'gerar-paredes' && (
+            <PainelGerarParedes
+              underlay={fundo.underlay}
+              temFundo={!!fundo.linha}
+              semAfericao={fundo.semAfericao}
+              pranchaId={fundo.ativaId}
+              limitesDaVista={limitesDaVista}
+              regiao={regiao}
+              regiaoArmada={regiaoArmada}
+              onArmarRegiao={() => {
+                // Armar RECOLHE o drawer: a região se marca arrastando no
+                // desenho, que o drawer modal cobre. Desarmar o traz de volta.
+                setRegiaoArmada((a) => {
+                  setDrawerRecolhido(!a);
+                  return !a;
+                });
+              }}
+              onLimparRegiao={() => setRegiao(null)}
+              ocupado={fundo.ocupado}
+              onExtrair={(arquivo, pag) => extrairSegmentosPdf(arquivo, pag)}
+              onVetorGuardado={fundo.vetorDaPranchaAtiva}
+              onRegravar={(segs, larg, alt, m, arcos) =>
+                void fundo.regravarVetor(segs, larg, alt, m, arcos)
+              }
+              onGerar={aplicarParedesGeradas}
+              paredesDoNivel={paredesParaPortas}
+              onGerarPortas={aplicarPortasGeradas}
+            />
+          )}
+
+          {tarefaAberta === 'importar-ifc' && (
+            <PainelImportarIfc model={editor.model} levelIdAtivo={levelId} onImportar={importarDoIfc} />
+          )}
+
+          {tarefaAberta === 'importar-dxf' && (
+            <PainelImportarDxf model={editor.model} levelIdAtivo={levelId} onImportar={importarDoIfc} />
+          )}
+
+          {tarefaAberta === 'importar-bcf' && (
+            <PainelImportarBcf
+              model={editor.model}
+              // ⚠️ `orgId` do seletor do topo, e não `study.organization_id`
+              // — a mesma regra que o resto do editor segue (REGRA #5).
+              organizationId={orgId ?? study.organization_id}
+              studyId={study.id}
+              onSelecionar={(uid) => {
+                // O tópico aponta por `uid`; a seleção do editor é por `id`.
+                // A ponte é o modelo — e ela existe porque o uid é estável.
+                const alvo = [
+                  ...editor.model.walls,
+                  ...editor.model.openings,
+                  ...editor.model.structures,
+                  ...(editor.model.trechos ?? []),
+                  ...(editor.model.terminais ?? []),
+                  ...(editor.model.quadros ?? []),
+                  ...(editor.model.roofs ?? []),
+                  ...(editor.model.stairs ?? []),
+                ].find((x) => x.uid === uid);
+                if (alvo) selecionar([alvo.id]);
+              }}
+            />
+          )}
+
+          {tarefaAberta === 'tomadas' && ambientes.length === 0 ? (
             <p className="text-sm text-slate-500">
               Nenhum ambiente fechado ainda. Feche um contorno de paredes — a norma conta
               tomadas por cômodo.
             </p>
-          ) : (
+          ) : tarefaAberta === 'tomadas' ? (
             <ul className="divide-y divide-slate-100">
               {ambientes.map((a) => (
                 <li key={a.id} className="py-3 first:pt-0">
@@ -6936,24 +6972,33 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 </li>
               ))}
             </ul>
-          )}
+          ) : null}
         </SheetPanel>
 
         <SheetFooter>
-          <span className="mr-auto text-xs text-slate-500">
-            {sugeridasNoNivel === 0
-              ? 'Nenhuma tomada sugerida pendente neste pavimento.'
-              : `${sugeridasNoNivel} sugerida(s) aguardando confirmação.`}
-          </span>
-          <button
-            type="button"
-            onClick={aceitarSugeridas}
-            disabled={sugeridasNoNivel === 0}
-            className="inline-flex h-9 items-center gap-1.5 rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <CheckCircle2 className="h-4 w-4" />
-            Aceitar sugeridas
-          </button>
+          {tarefaAberta === 'tomadas' && (
+            <>
+              <span className="mr-auto text-xs text-slate-500">
+                {sugeridasNoNivel === 0
+                  ? 'Nenhuma tomada sugerida pendente neste pavimento.'
+                  : `${sugeridasNoNivel} sugerida(s) aguardando confirmação.`}
+              </span>
+              <button
+                type="button"
+                onClick={aceitarSugeridas}
+                disabled={sugeridasNoNivel === 0}
+                className="inline-flex h-9 items-center gap-1.5 rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Aceitar sugeridas
+              </button>
+            </>
+          )}
+          {tarefaAberta !== 'tomadas' && editor.selectedIds.length > 0 && (
+            <span className="mr-auto truncate text-xs text-slate-500">
+              Selecionado: {rotuloDoSelecionado}
+            </span>
+          )}
           <button
             type="button"
             onClick={() => setTarefa(null)}
@@ -6963,6 +7008,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           </button>
         </SheetFooter>
       </Sheet>
+      )}
 
       <QuadroDeDivisas
         aberto={quadroAberto}

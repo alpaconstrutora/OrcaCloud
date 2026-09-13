@@ -125,7 +125,7 @@ destaca a peça" num receptor: **BCFier** (Revit) ou **usBIM**.
 | **Dimensionamento elétrico** (queda de tensão, seção por corrente, demanda, disjuntor) | cálculo de projeto, com norma e ART — a conferência lê o declarado |
 | **9.1.4.2 (distância do lavatório)**, nota da varanda < 2 m², arandela a ≥ 60 cm do box | o sistema não sabe onde estão lavatório, box e a profundidade útil |
 | **Par de paralelo entre pavimentos** (escada de dois andares) | a busca é por pavimento; vira busca no modelo inteiro se pedirem |
-| **Tipo do ambiente no IFC** (`IfcSpace` ObjectType/Pset) | classificado no kernel, não levado ao IFC — pequeno |
+| ~~Tipo do ambiente no IFC~~ | ✅ 13/09 — `IfcSpace.ObjectType`, `Pset_SpaceCommon.Reference` e `Pset_OpuraPlanta.SpaceKind/SpaceKindLabel`; ambiente sem tipo não recebe nenhum dos três; lido de volta pelo web-ifc no campo certo |
 | **Símbolo do ponto de ligação direta** | quadrado com diagonal é escolha minha, não da NBR 5444 — troco com o print |
 | **Conexões MEP** (joelho, tê), registro, ar-condicionado, gás, incêndio | a `disciplina` aceita; entram quando pedirem |
 | **Snapshot PNG no tópico BCF** | falta decidir o recorte |

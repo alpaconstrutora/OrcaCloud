@@ -88,6 +88,7 @@ import {
   type Wall,
 } from './blueprintKernel';
 import { contornoDaSecaoT, secaoTValida } from './blueprintKernel/secaoT';
+import { ROTULO_DO_TIPO_DE_AMBIENTE } from './blueprintDistribuicao';
 import {
   giroDaPeca,
   medidasDoQuadro,
@@ -155,7 +156,7 @@ export const COBERTURA_IFC = [
   // A cobertura é requisito do arquivo: uma negativa falsa aqui vale menos que
   // nenhuma cobertura, porque quem lê confia nela para saber o que NÃO procurar.
   'NÃO CONTÉM tipos de parede (IfcWallType).',
-  'Ambientes: o contorno do IfcSpace e a GrossFloorArea são pelo EIXO das paredes; a NetFloorArea é a área de PISO (contorno recuado em meia espessura, ~9% menor).',
+  'Ambientes: o contorno do IfcSpace e a GrossFloorArea são pelo EIXO das paredes; a NetFloorArea é a área de PISO (contorno recuado em meia espessura, ~9% menor). O TIPO do ambiente (BANHEIRO, COZINHA_SERVICO, VARANDA, SALA_DORMITORIO, OUTRO — as classes da NBR 5410) vai no ObjectType do IfcSpace, em Pset_SpaceCommon.Reference e em Pset_OpuraPlanta.SpaceKind/SpaceKindLabel; ambiente sem tipo não recebe nenhum dos três.',
   'Geometria por extrusão simples; canto de parede fechado por avanço, mas peças estruturais se INTERPENETRAM no encontro. O corpo da parede é sólido: o vão vem da relação IfcRelVoidsElement.',
   'Uso pretendido: COORDENAÇÃO geométrica e de identidade. As quantidades são as do estudo preliminar e não substituem projeto executivo.',
 ];
@@ -693,8 +694,9 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
     uid: string | undefined,
     rotulo: string | undefined,
     itemCodes: string[] = [],
+    extras: [string, ValorIfc][] = [],
   ) => {
-    const props: [string, ValorIfc][] = [];
+    const props: [string, ValorIfc][] = [...extras];
     if (uid) props.push(['ElementUid', { tipo: 'IFCIDENTIFIER', v: uid }]);
     if (rotulo) props.push(['ElementLabel', { tipo: 'IFCLABEL', v: rotulo }]);
     if (o.studyId) props.push(['StudyId', { tipo: 'IFCIDENTIFIER', v: o.studyId }]);
@@ -797,10 +799,29 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
 
     // ── Ambientes do nível ──────────────────────────────────────────────────
     for (const espaco of model.spaces.filter((x) => x.levelId === nivel.id)) {
-      const produto = emitirAmbiente(espaco, nivel.defaultHeightMm, ctx, localNivel);
+      // O tipo mora na ETIQUETA (o ambiente é derivado) — ver `SpaceLabel.tipoDeAmbiente`.
+      const tipoDeAmbiente =
+        (espaco.labelUid && model.labels.find((l) => l.uid === espaco.labelUid)?.tipoDeAmbiente) || null;
+      const produto = emitirAmbiente(espaco, nivel.defaultHeightMm, ctx, localNivel, tipoDeAmbiente);
       produtos.push(produto);
-      emitirPset(ctx, produto, espaco.labelUid, 'Pset_SpaceCommon', [['IsExternal', { tipo: 'IFCBOOLEAN', v: false }]]);
-      psetOpura(produto, espaco.labelUid, espaco.labelUid ? rotuloCurto(espaco.labelUid, 'label') : undefined);
+      emitirPset(ctx, produto, espaco.labelUid, 'Pset_SpaceCommon', [
+        ['IsExternal', { tipo: 'IFCBOOLEAN', v: false }],
+        // `Reference` é "a referência do tipo deste espaço no projeto" — é
+        // exatamente o que a classe da NBR 5410 é. Só quando declarada.
+        ...(tipoDeAmbiente ? ([['Reference', { tipo: 'IFCIDENTIFIER', v: tipoDeAmbiente }]] as [string, ValorIfc][]) : []),
+      ]);
+      psetOpura(
+        produto,
+        espaco.labelUid,
+        espaco.labelUid ? rotuloCurto(espaco.labelUid, 'label') : undefined,
+        [],
+        tipoDeAmbiente
+          ? [
+              ['SpaceKind', { tipo: 'IFCLABEL', v: tipoDeAmbiente }],
+              ['SpaceKindLabel', { tipo: 'IFCLABEL', v: ROTULO_DO_TIPO_DE_AMBIENTE[tipoDeAmbiente] }],
+            ]
+          : [],
+      );
       emitirQtoAmbiente(ctx, produto, espaco, nivel.defaultHeightMm, qAmbiente.get(espaco.id));
       emitirRevestimentos(ctx, produto, espaco, qAmbiente.get(espaco.id), psetOpura);
     }
@@ -2171,7 +2192,13 @@ function emitirRevestimentos(
   }
 }
 
-function emitirAmbiente(espaco: Space, peDireitoMm: number, ctx: Ctx, localNivel: string): string {
+function emitirAmbiente(
+  espaco: Space,
+  peDireitoMm: number,
+  ctx: Ctx,
+  localNivel: string,
+  tipoDeAmbiente: string | null = null,
+): string {
   const { emitir, guidDe, historico, dirZ, dirX, subContexto } = ctx;
   const pontos = espaco.ring.map((p) => emitir(`IFCCARTESIANPOINT((${n(p.x)},${n(p.y)}))`));
   const contorno = emitir(`IFCPOLYLINE((${pontos.join(',')},${pontos[0]}))`);
@@ -2186,9 +2213,15 @@ function emitirAmbiente(espaco: Space, peDireitoMm: number, ctx: Ctx, localNivel
   // Identidade do ambiente = a da ETIQUETA que o nomeia (ver `Space.labelUid`).
   // Sem etiqueta, cai no GUID por hash — muda a cada revisão, e é honesto que
   // mude: um ambiente sem nome não tem como ser "o mesmo" na versão seguinte.
+  //
+  // O TIPO do ambiente (banheiro, cozinha…, NBR 5410) vai no `ObjectType`: é o
+  // atributo que o IFC reserva para a classificação do usuário, e o Revit o
+  // mostra como "Tipo" do ambiente. `PredefinedType` fica `.INTERNAL.` — a
+  // regra do schema só EXIGE ObjectType com USERDEFINED, não o proíbe fora.
+  // Sem tipo, `$`: "a classificar" não vira um valor inventado.
   return emitir(
     `IFCSPACE(${guidDe(espaco.labelUid, `esp-${espaco.id}`)},${historico},` +
-      `${s(espaco.name ?? 'Ambiente')},$,$,${localEspaco},${produtoForma},$,.ELEMENT.,.INTERNAL.,$)`,
+      `${s(espaco.name ?? 'Ambiente')},$,${tipoDeAmbiente ? s(tipoDeAmbiente) : '$'},${localEspaco},${produtoForma},$,.ELEMENT.,.INTERNAL.,$)`,
   );
 }
 

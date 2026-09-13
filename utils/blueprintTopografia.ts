@@ -550,6 +550,66 @@ export function densificarLinha(linha: LinhaDeQuebra, passoMm: number): PontoCot
 }
 
 /**
+ * Onde duas linhas de quebra se CRUZAM (fase 16), as duas ganham um vértice
+ * no ponto de cruzamento — com a cota da linha que veio PRIMEIRO (um ponto
+ * do terreno não tem duas cotas; a ordem do levantamento decide). Sem isso
+ * nenhuma triangulação honra as duas: os trechos se atravessam e um cede.
+ * Cruzamento em vértice já existente não conta.
+ */
+export function resolverCruzamentos(linhas: LinhaDeQuebra[]): { linhas: LinhaDeQuebra[]; cruzamentos: number } {
+  const insercoes: Map<string, { t: number; ponto: PontoCotado }[]> = new Map();
+  const chave = (li: number, si: number) => `${li}:${si}`;
+  let cruzamentos = 0;
+  const eps = 1e-9;
+  for (let i = 0; i < linhas.length; i++) {
+    for (let j = i + 1; j < linhas.length; j++) {
+      const A = linhas[i].pontos;
+      const B = linhas[j].pontos;
+      for (let si = 0; si + 1 < A.length; si++) {
+        const p = A[si];
+        const r = { x: A[si + 1].x - p.x, y: A[si + 1].y - p.y };
+        for (let sj = 0; sj + 1 < B.length; sj++) {
+          const q = B[sj];
+          const s = { x: B[sj + 1].x - q.x, y: B[sj + 1].y - q.y };
+          const den = r.x * s.y - r.y * s.x;
+          if (Math.abs(den) < eps) continue; // paralelos ou colineares
+          const qp = { x: q.x - p.x, y: q.y - p.y };
+          const t = (qp.x * s.y - qp.y * s.x) / den;
+          const u = (qp.x * r.y - qp.y * r.x) / den;
+          // Estritamente dentro dos dois trechos: cruzamento em vértice já é vértice.
+          if (t <= 1e-6 || t >= 1 - 1e-6 || u <= 1e-6 || u >= 1 - 1e-6) continue;
+          const ponto: PontoCotado = {
+            x: Math.round(p.x + r.x * t),
+            y: Math.round(p.y + r.y * t),
+            cotaM: p.cotaM + (A[si + 1].cotaM - p.cotaM) * t,
+          };
+          cruzamentos++;
+          for (const [k, tt] of [
+            [chave(i, si), t],
+            [chave(j, sj), u],
+          ] as [string, number][]) {
+            const lista = insercoes.get(k) ?? [];
+            lista.push({ t: tt, ponto });
+            insercoes.set(k, lista);
+          }
+        }
+      }
+    }
+  }
+  if (cruzamentos === 0) return { linhas, cruzamentos: 0 };
+  const saida = linhas.map((l, li) => {
+    const pontos: PontoCotado[] = [];
+    for (let si = 0; si < l.pontos.length; si++) {
+      pontos.push(l.pontos[si]);
+      const extras = insercoes.get(chave(li, si));
+      if (extras) for (const e of [...extras].sort((a, b) => a.t - b.t)) pontos.push(e.ponto);
+    }
+    return { pontos };
+  });
+  return { linhas: saida, cruzamentos };
+}
+
+/**
  * TIN que honra as linhas de quebra por DENSIFICAÇÃO: cada linha entra
  * reamostrada a `passoMm` antes do Delaunay, e os trechos entre vértices
  * consecutivos viram arestas quase sempre (Gabriel: nada cai no círculo do
@@ -564,10 +624,14 @@ export function densificarLinha(linha: LinhaDeQuebra, passoMm: number): PontoCot
  */
 export function interpoladorComQuebras(
   pontos: PontoCotado[],
-  linhas: LinhaDeQuebra[],
+  linhasOriginais: LinhaDeQuebra[],
   passoMm: number,
-): { f: ((p: Point) => number | null) | null; trechosNaoHonrados: number; vertices: number; avisos: string[] } {
+): { f: ((p: Point) => number | null) | null; trechosNaoHonrados: number; vertices: number; avisos: string[]; cruzamentos: number } {
   const avisos: string[] = [];
+  const { linhas, cruzamentos } = resolverCruzamentos(linhasOriginais);
+  if (cruzamentos > 0) {
+    avisos.push(`${cruzamentos} cruzamento(s) entre linhas de quebra: no ponto de cruzamento valeu a cota da linha que veio primeiro.`);
+  }
   let passo = Math.max(1, passoMm);
   let melhor: { f: ((p: Point) => number | null) | null; faltantes: number; vertices: number } | null = null;
   for (let rodada = 0; rodada < 3; rodada++) {
@@ -605,7 +669,7 @@ export function interpoladorComQuebras(
   if (r.faltantes > 0) {
     avisos.push(`${r.faltantes} trecho(s) de linha de quebra não coincidem com arestas da triangulação; o relevo pode atravessá-los.`);
   }
-  return { f: r.f, trechosNaoHonrados: r.faltantes, vertices: r.vertices, avisos };
+  return { f: r.f, trechosNaoHonrados: r.faltantes, vertices: r.vertices, avisos, cruzamentos };
 }
 
 /**

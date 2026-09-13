@@ -54,8 +54,44 @@ export interface LeituraDxfTopo {
 interface Bruta {
   tipo: string;
   codigos: Map<number, string[]>;
+  /** Os pares (código, valor) NA ORDEM do arquivo — a LWPOLYLINE alinha o bulge (42) ao vértice por ela. */
+  pares: { c: number; v: string }[];
   /** POLYLINE: os VERTEX até o SEQEND; INSERT: os ATTRIB. */
   filhos?: Bruta[];
+}
+
+/** Quantos segmentos um arco de bulge vira: um a cada ~11°, entre 2 e 32. */
+function segmentosDoArco(anguloRad: number): number {
+  return Math.max(2, Math.min(32, Math.ceil(Math.abs(anguloRad) / (Math.PI / 16))));
+}
+
+/**
+ * Os pontos INTERMEDIÁRIOS do arco entre `a` e `b` com o bulge do DXF
+ * (bulge = tan(θ/4); positivo = anti-horário). Cota interpolada.
+ */
+function arcoDoBulge(a: VerticeDxf, b: VerticeDxf, bulge: number): VerticeDxf[] {
+  if (!bulge || !Number.isFinite(bulge)) return [];
+  const theta = 4 * Math.atan(bulge);
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const corda = Math.hypot(dx, dy);
+  if (corda === 0) return [];
+  const r = corda / (2 * Math.sin(Math.abs(theta) / 2));
+  // Centro: no meio da corda, deslocado na perpendicular (esquerda se anti-horário).
+  const d = r * Math.cos(theta / 2) * Math.sign(bulge);
+  const mx = (a.x + b.x) / 2;
+  const my = (a.y + b.y) / 2;
+  const cx = mx - (dy / corda) * d;
+  const cy = my + (dx / corda) * d;
+  const a0 = Math.atan2(a.y - cy, a.x - cx);
+  const n = segmentosDoArco(theta);
+  const saida: VerticeDxf[] = [];
+  for (let k = 1; k < n; k++) {
+    const t = k / n;
+    const ang = a0 + theta * t;
+    saida.push({ x: cx + r * Math.cos(ang), y: cy + r * Math.sin(ang), z: a.z + (b.z - a.z) * t });
+  }
+  return saida;
 }
 
 interface Bloco {
@@ -117,18 +153,18 @@ function separar(texto: string): { blocos: Map<string, Bloco>; entidades: Bruta[
       if (secao === 'BLOCKS' && v === 'BLOCK') {
         blocoAtual = { nome: '', base: { x: 0, y: 0, z: 0 }, entidades: [] };
         lista = blocoAtual.entidades;
-        atual = { tipo: 'BLOCK', codigos: new Map() };
+        atual = { tipo: 'BLOCK', codigos: new Map(), pares: [] };
         continue;
       }
       if (secao === 'BLOCKS' && v === 'ENDBLK') {
         if (blocoAtual) blocos.set(blocoAtual.nome, blocoAtual);
         blocoAtual = null;
         lista = entidades;
-        atual = { tipo: 'ENDBLK', codigos: new Map() };
+        atual = { tipo: 'ENDBLK', codigos: new Map(), pares: [] };
         continue;
       }
       if (secao === 'ENTITIES' || secao === 'BLOCKS') {
-        atual = { tipo: v, codigos: new Map() };
+        atual = { tipo: v, codigos: new Map(), pares: [] };
         if (secao === 'ENTITIES') lista = entidades;
       }
       continue;
@@ -141,6 +177,7 @@ function separar(texto: string): { blocos: Map<string, Bloco>; entidades: Bruta[
       else if (c === 30) blocoAtual.base.z = Number(v) || 0;
       continue;
     }
+    atual.pares.push({ c, v });
     const arr = atual.codigos.get(c);
     if (arr) arr.push(v);
     else atual.codigos.set(c, [v]);
@@ -181,7 +218,12 @@ interface Afim {
 
 const IDENT: Afim = { aplicar: (p) => p, escala: 1 };
 
-function afimDoInsert(pai: Afim, ins: Bruta, bloco: Bloco): Afim {
+/**
+ * A transformação de um INSERT: escala pela base do bloco, roda, desloca
+ * para a inserção. `desloc` (fase 16) é a posição da instância numa
+ * MINSERT — em unidades do bloco já roda-das, sem escala, como o AutoCAD faz.
+ */
+function afimDoInsert(pai: Afim, ins: Bruta, bloco: Bloco, desloc: { x: number; y: number } = { x: 0, y: 0 }): Afim {
   const ix = numero(ins, 10);
   const iy = numero(ins, 20);
   const iz = numero(ins, 30);
@@ -194,8 +236,8 @@ function afimDoInsert(pai: Afim, ins: Bruta, bloco: Bloco): Afim {
   const { base } = bloco;
   return {
     aplicar: (p) => {
-      const x0 = (p.x - base.x) * sx;
-      const y0 = (p.y - base.y) * sy;
+      const x0 = (p.x - base.x) * sx + desloc.x;
+      const y0 = (p.y - base.y) * sy + desloc.y;
       const z0 = (p.z - base.z) * sz;
       return pai.aplicar({ x: ix + x0 * cos - y0 * sin, y: iy + x0 * sin + y0 * cos, z: iz + z0 });
     },
@@ -241,14 +283,27 @@ function converter(
         break;
       }
       case 'LWPOLYLINE': {
-        const xs = e.codigos.get(10) ?? [];
-        const ys = e.codigos.get(20) ?? [];
+        // Vértices na ordem do arquivo: 10, 20 e, quando há arco, o 42 do
+        // vértice de partida (fase 16: o bulge é tesselado, não cortado pela corda).
         const elev = numero(e, 38);
-        const vertices: VerticeDxf[] = [];
-        for (let i = 0; i < Math.min(xs.length, ys.length); i++) vertices.push(M.aplicar({ x: Number(xs[i]) || 0, y: Number(ys[i]) || 0, z: elev }));
-        if (vertices.length < 2) break;
+        const crus: { x: number; y: number; bulge: number }[] = [];
+        for (const { c, v } of e.pares) {
+          if (c === 10) crus.push({ x: Number(v) || 0, y: 0, bulge: 0 });
+          else if (c === 20 && crus.length > 0) crus[crus.length - 1].y = Number(v) || 0;
+          else if (c === 42 && crus.length > 0) crus[crus.length - 1].bulge = Number(v) || 0;
+        }
+        if (crus.length < 2) break;
         const fechada = (numero(e, 70) & 1) === 1;
-        if (fechada) vertices.push(vertices[0]);
+        const locais: VerticeDxf[] = [];
+        const n = crus.length;
+        for (let i = 0; i < n; i++) {
+          const a = { x: crus[i].x, y: crus[i].y, z: elev };
+          locais.push(a);
+          const proximo = i + 1 < n ? crus[i + 1] : fechada ? crus[0] : null;
+          if (proximo && crus[i].bulge) locais.push(...arcoDoBulge(a, { x: proximo.x, y: proximo.y, z: elev }, crus[i].bulge));
+        }
+        if (fechada) locais.push(locais[0]);
+        const vertices = locais.map((p) => M.aplicar(p));
         saida.push({ tipo: 'POLILINHA', camada, ...vertices[0], vertices, fechada, temZ: elev !== 0 });
         break;
       }
@@ -256,15 +311,22 @@ function converter(
         const flag = numero(e, 70);
         const tresD = (flag & 8) === 8;
         const elev = numero(e, 30);
-        const vertices: VerticeDxf[] = [];
+        const crus: { v: VerticeDxf; bulge: number }[] = [];
         for (const v of e.filhos ?? []) {
           // Vértices de ajuste de spline/curva (70 & 16 / & 8) ficam de fora.
           if ((numero(v, 70) & 16) === 16) continue;
-          vertices.push(M.aplicar({ x: numero(v, 10), y: numero(v, 20), z: tresD ? numero(v, 30) : elev }));
+          crus.push({ v: { x: numero(v, 10), y: numero(v, 20), z: tresD ? numero(v, 30) : elev }, bulge: numero(v, 42) });
         }
-        if (vertices.length < 2) break;
+        if (crus.length < 2) break;
         const fechada = (flag & 1) === 1;
-        if (fechada) vertices.push(vertices[0]);
+        const locais: VerticeDxf[] = [];
+        for (let i = 0; i < crus.length; i++) {
+          locais.push(crus[i].v);
+          const proximo = i + 1 < crus.length ? crus[i + 1].v : fechada ? crus[0].v : null;
+          if (proximo && crus[i].bulge) locais.push(...arcoDoBulge(crus[i].v, proximo, crus[i].bulge));
+        }
+        if (fechada) locais.push(locais[0]);
+        const vertices = locais.map((p) => M.aplicar(p));
         saida.push({ tipo: 'POLILINHA', camada, ...vertices[0], vertices, fechada, temZ: tresD || elev !== 0 });
         break;
       }
@@ -287,11 +349,18 @@ function converter(
           avisos.push(`Bloco "${nome}" aninhado além de ${PROFUNDIDADE_MAXIMA} níveis foi ignorado.`);
           break;
         }
-        const colunas = numero(e, 70, 1);
-        const linhas = numero(e, 71, 1);
-        if (colunas > 1 || linhas > 1) avisos.push(`Bloco "${nome}" inserido em matriz (${colunas}×${linhas}): só a primeira instância foi lida.`);
-        const M2 = afimDoInsert(M, e, bloco);
-        converter(agrupar(bloco.entidades), M2, blocos, profundidade + 1, saida, avisos, blocosFaltando);
+        // MINSERT (fase 16): todas as instâncias da matriz, espaçadas por 44/45
+        // no sistema rodado do bloco, como o AutoCAD desenha.
+        const colunas = Math.max(1, Math.floor(numero(e, 70, 1)));
+        const linhas = Math.max(1, Math.floor(numero(e, 71, 1)));
+        const dx = numero(e, 44);
+        const dy = numero(e, 45);
+        for (let j = 0; j < linhas; j++) {
+          for (let i = 0; i < colunas; i++) {
+            const M2 = afimDoInsert(M, e, bloco, { x: i * dx, y: j * dy });
+            converter(agrupar(bloco.entidades), M2, blocos, profundidade + 1, saida, avisos, blocosFaltando);
+          }
+        }
         // Os ATTRIB do INSERT já vêm em coordenadas do desenho (WCS): não transformar.
         for (const at of e.filhos ?? []) {
           if (at.tipo !== 'ATTRIB') continue;

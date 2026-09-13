@@ -115,13 +115,16 @@ describe('linhas de quebra (fase 15)', () => {
     expect(r.vertices).toBeGreaterThan(40);
   });
 
-  it('quebras que se cruzam: pelo menos um trecho não vira aresta, e o aviso diz', () => {
+  it('quebras que se cruzam (fase 16): o cruzamento vira vértice das duas, a primeira dá a cota, e as duas são honradas', () => {
     const a = { pontos: [{ x: 300, y: 300, cotaM: 100 }, { x: 11700, y: 29700, cotaM: 100 }] };
     const b = { pontos: [{ x: 300, y: 29700, cotaM: 90 }, { x: 11700, y: 300, cotaM: 90 }] };
     const r = interpoladorComQuebras(CANTOS, [a, b], 250);
-    expect(r.trechosNaoHonrados).toBeGreaterThan(0);
-    expect(r.avisos.some((s) => /não coincidem com arestas/.test(s))).toBe(true);
-    expect(r.f).not.toBeNull();
+    expect(r.cruzamentos).toBe(1);
+    expect(r.trechosNaoHonrados).toBe(0);
+    expect(r.avisos.some((s) => /1 cruzamento\(s\).*linha que veio primeiro/.test(s))).toBe(true);
+    expect(r.avisos.some((s) => /não coincidem com arestas/.test(s))).toBe(false);
+    // No cruzamento (o centro) vale a cota da linha `a`.
+    expect(r.f!({ x: 6000, y: 15000 })).toBeCloseTo(100, 6);
   });
 
   it('vértice densificado em cima de um ponto do levantamento: a cota do topógrafo vence', () => {

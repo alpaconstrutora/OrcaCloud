@@ -116,16 +116,31 @@ function atributoTexto(atributos: string, nome: string): string | null {
   return m ? m[1] : null;
 }
 
+/** Um nó da árvore de tags — o que o tokenizer monta antes de emitir. */
+interface NoSvg {
+  tag: string;
+  atributos: string;
+  filhos: NoSvg[];
+  conteudo?: string;
+}
+
+/** Quantos `<use>` aninhados se seguem antes de desistir (um símbolo que se usa é laço). */
+const PROFUNDIDADE_DE_USE = 4;
+
 /**
  * Os elementos desenháveis do SVG, cada um com a sua CTM. Sem DOM: um
- * tokenizer de tags com pilha. `transform` no `<svg>` raiz é ignorado (é o
- * que a spec 1.1 faz) e contado em `transformNaRaiz`; `<svg>` aninhado vale
- * como `translate(x, y)`.
+ * tokenizer de tags monta a árvore e a caminhada empilha as matrizes.
+ * `transform` no `<svg>` raiz é ignorado (é o que a spec 1.1 faz) e contado
+ * em `transformNaRaiz`; `<svg>` aninhado vale como `translate(x, y)`.
+ *
+ * Fase 16: `<use href="#id" x y>` emite o alvo (um elemento com `id`, ou o
+ * conteúdo de um `<symbol>`/`<g>`) com a CTM do `use` · translate(x, y) —
+ * é como GIS e CAD marcam pontos repetidos. Alvo inexistente é contado.
  */
 export function elementosDoSvg(
   texto: string,
   opcoes: { aplicarTransform?: boolean } = {},
-): { elementos: ElementoSvg[]; transformNaRaiz: boolean; comTransform: number } {
+): { elementos: ElementoSvg[]; transformNaRaiz: boolean; comTransform: number; usos: number; usosSemAlvo: number } {
   const aplicarT = opcoes.aplicarTransform ?? true;
   // Comentários, CDATA, instruções e DOCTYPE não têm tags que interessem —
   // e podem ter `<` solto dentro.
@@ -134,11 +149,11 @@ export function elementosDoSvg(
     .replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, (s) => ' '.repeat(s.length))
     .replace(/<\?[\s\S]*?\?>/g, (s) => ' '.repeat(s.length))
     .replace(/<!DOCTYPE[^>]*>/gi, (s) => ' '.repeat(s.length));
-  const elementos: ElementoSvg[] = [];
-  const pilha: { tag: string; ctm: Matriz; oculto: boolean }[] = [];
-  let transformNaRaiz = false;
-  let comTransform = 0;
-  let raizVista = false;
+
+  // 1. A árvore.
+  const raiz: NoSvg = { tag: '', atributos: '', filhos: [] };
+  const pilha: NoSvg[] = [raiz];
+  const porId = new Map<string, NoSvg>();
   const re = /<(\/?)([A-Za-z][\w:.-]*)([^>]*?)(\/?)>/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(limpo))) {
@@ -148,7 +163,7 @@ export function elementosDoSvg(
     const autoFechada = m[4] === '/';
     if (fecha) {
       // Fecha o mais próximo com o mesmo nome (tolerante a arquivo mal formado).
-      for (let i = pilha.length - 1; i >= 0; i--) {
+      for (let i = pilha.length - 1; i >= 1; i--) {
         if (pilha[i].tag === tag) {
           pilha.length = i;
           break;
@@ -156,9 +171,26 @@ export function elementosDoSvg(
       }
       continue;
     }
-    const topo = pilha[pilha.length - 1];
-    const ctmPai = topo?.ctm ?? IDENTIDADE;
-    const ocultoPai = topo?.oculto ?? false;
+    const no: NoSvg = { tag, atributos, filhos: [] };
+    if (tag === 'text' && !autoFechada) {
+      const fim = limpo.indexOf('</text>', re.lastIndex);
+      no.conteudo = fim >= 0 ? limpo.slice(re.lastIndex, fim) : '';
+    }
+    const id = atributoTexto(atributos, 'id');
+    if (id && !porId.has(id)) porId.set(id, no);
+    pilha[pilha.length - 1].filhos.push(no);
+    if (!autoFechada) pilha.push(no);
+  }
+
+  // 2. A caminhada com a pilha de matrizes.
+  const elementos: ElementoSvg[] = [];
+  let transformNaRaiz = false;
+  let comTransform = 0;
+  let usos = 0;
+  let usosSemAlvo = 0;
+  let raizVista = false;
+  const visitar = (no: NoSvg, ctmPai: Matriz, ocultoPai: boolean, profundidadeDeUse: number, viaUse: boolean) => {
+    const { tag, atributos } = no;
     let propria: Matriz = IDENTIDADE;
     const t = atributoTexto(atributos, 'transform');
     if (tag === 'svg' && !raizVista) {
@@ -169,22 +201,36 @@ export function elementosDoSvg(
       const y = Number(atributoTexto(atributos, 'y') ?? 0) || 0;
       propria = [1, 0, 0, 1, x, y];
     } else if (t) {
-      comTransform++;
+      if (!viaUse) comTransform++;
       if (aplicarT) propria = matrizDoTransform(t);
     }
     const ctm = multiplicar(ctmPai, propria);
-    const oculto = ocultoPai || NAO_DESENHADOS.has(tag);
-    if (!oculto) {
-      const el: ElementoSvg = { tag, atributos, ctm };
-      if (tag === 'text' && !autoFechada) {
-        const fim = limpo.indexOf('</text>', re.lastIndex);
-        el.conteudo = fim >= 0 ? limpo.slice(re.lastIndex, fim) : '';
+    // O alvo de um `<use>` é desenhado mesmo morando em <defs>/<symbol>.
+    const oculto = viaUse ? false : ocultoPai || NAO_DESENHADOS.has(tag);
+    if (tag === 'use') {
+      const ref = (atributoTexto(atributos, 'href') ?? atributoTexto(atributos, 'xlink:href') ?? '').trim();
+      const alvo = ref.startsWith('#') ? porId.get(ref.slice(1)) : undefined;
+      if (!oculto) usos++;
+      if (!alvo) {
+        if (!oculto) usosSemAlvo++;
+        return;
       }
+      if (profundidadeDeUse >= PROFUNDIDADE_DE_USE || oculto) return;
+      const x = Number(atributoTexto(atributos, 'x') ?? 0) || 0;
+      const y = Number(atributoTexto(atributos, 'y') ?? 0) || 0;
+      visitar(alvo, multiplicar(ctm, [1, 0, 0, 1, x, y]), false, profundidadeDeUse + 1, true);
+      return;
+    }
+    if (!oculto && tag !== '' && tag !== 'symbol' && tag !== 'g' && tag !== 'svg') {
+      const el: ElementoSvg = { tag, atributos, ctm };
+      if (no.conteudo !== undefined) el.conteudo = no.conteudo;
       elementos.push(el);
     }
-    if (!autoFechada) pilha.push({ tag, ctm, oculto });
-  }
-  return { elementos, transformNaRaiz, comTransform };
+    const ocultoFilhos = viaUse ? NAO_DESENHADOS.has(tag) && tag !== 'symbol' : oculto;
+    for (const f of no.filhos) visitar(f, ctm, ocultoFilhos, profundidadeDeUse, viaUse);
+  };
+  for (const f of raiz.filhos) visitar(f, IDENTIDADE, false, 0, false);
+  return { elementos, transformNaRaiz, comTransform, usos, usosSemAlvo };
 }
 
 // ── `d` de <path> ─────────────────────────────────────────────────────────

@@ -10,9 +10,9 @@
 
 Sessão `5a9ec3fd-30ee-4723-b0a7-4bee36bd0996` · 2026-09-10.
 
-## Status consolidado — 2026-09-12 (fases 1–15)
+## Status consolidado — 2026-09-12 (fases 1–16)
 
-Todas as 15 fases estão publicadas em `main`, provadas de fora (`conferir-producao.sh`) e dirigidas em produção com a conta de leitura. As seções abaixo guardam o pedido, as decisões e os achados de cada fase; este quadro é o resumo do que existe e do que falta.
+Todas as 16 fases estão publicadas em `main`, provadas de fora (`conferir-producao.sh`) e dirigidas em produção com a conta de leitura. As seções abaixo guardam o pedido, as decisões e os achados de cada fase; este quadro é o resumo do que existe e do que falta.
 
 ### O que existe
 
@@ -30,12 +30,11 @@ Todas as 15 fases estão publicadas em `main`, provadas de fora (`conferir-produ
 
 ### O que falta (técnico, aberto)
 
-As cinco pendências deste quadro foram resolvidas na fase 15 (12/09). O que resta é miúdo e declarado lá: `<use>`/`<symbol>` no SVG, MINSERT só a primeira instância, bulge da LWPOLYLINE pela corda, e quebras que se cruzam com cotas diferentes (sem CDT, uma delas cede — o aviso conta).
+As cinco pendências deste quadro foram resolvidas na fase 15 e as quatro miúdas que ela declarou, na fase 16 (12/09). Não há pendência técnica aberta na topografia.
 
 | Pendência | Onde nasceu | Tamanho |
 |---|---|---|
-| `<use>`/`<symbol>` do SVG não viram marca | fase 15 | pequeno |
-| MINSERT (bloco em matriz) lê só a 1ª instância; bulge (42) da LWPOLYLINE entra pela corda | fase 15 | pequeno |
+| — (as quatro miúdas da fase 15 fecharam na fase 16) | | |
 
 ### Fora do software por decisão (não reabrir sem pedido)
 
@@ -870,6 +869,33 @@ O passeio JÁ acompanhava o relevo desde a fase 2 (`bfa3feb0`, F10): `Percorrer`
 
 - `<use>`/`<symbol>` do SVG continuam fora (marca de GIS por `<use>` não vira ponto). MINSERT lê só a primeira instância. Bulge (42) da LWPOLYLINE não é tesselado (o arco entra pela corda).
 - Sem CDT de verdade: quebras que se cruzam com cotas diferentes não podem ser ambas honradas — o aviso conta os trechos.
+
+---
+
+# Pedido posterior — 2026-09-12: fase 16 (as pendências miúdas da fase 15)
+
+## Pedido original
+
+> Corrigir pendências
+
+(As quatro declaradas na fase 15: `<use>`/`<symbol>` no SVG, MINSERT só a primeira instância, bulge da LWPOLYLINE pela corda, quebras que se cruzam com uma cedendo.)
+
+## Decisões
+
+| Tema | Decisão |
+|---|---|
+| `<use>` | `elementosDoSvg` passou a montar a ÁRVORE de tags e caminhar com a pilha; `<use href="#id" x y>` (ou `xlink:href`) emite o alvo — elemento com `id`, `<symbol>` ou `<g>`, mesmo morando em `<defs>` — com a CTM do `use` · translate(x, y). Profundidade ≤ 4 (símbolo que se usa não trava). `usos`/`usosSemAlvo` viram aviso na prévia |
+| MINSERT | todas as instâncias: colunas (70) × linhas (71) com espaçamento 44/45 no sistema rodado do bloco, sem escala — como o AutoCAD desenha |
+| Bulge | `Bruta` guarda os pares NA ORDEM (o 42 vem depois do 10/20 do vértice de partida); `arcoDoBulge` tessela com θ = 4·atan(bulge), um segmento a cada ~11° (2–32), cota interpolada. Vale para LWPOLYLINE e para VERTEX de POLYLINE. Sinal: bulge > 0 é anti-horário — de (0,0) a (10,0) passa por y NEGATIVO |
+| Cruzamentos | `resolverCruzamentos(linhas)`: cruzamento estrito entre trechos de linhas diferentes vira vértice das DUAS, com a cota da linha que veio primeiro (um ponto do terreno não tem duas cotas; a ordem do levantamento decide). Vértice comum já existente e paralelas não contam. `interpoladorComQuebras` chama antes de densificar e avisa "N cruzamento(s)…". Com isso as duas linhas são honradas (o teste da fase 15 que esperava trecho não honrado inverteu) |
+
+## Estado — fase 16
+
+- [x] F44 — `elementosDoSvg` em árvore com `<use>`; MINSERT; `arcoDoBulge`; `resolverCruzamentos`; aviso de `<use>` na prévia
+- [x] Testes: `blueprintTopografiaFase16` (6: símbolo usado 3× + alvo inexistente, use recursivo até 4, MINSERT 3×2 rodado, bulge positivo/negativo/POLYLINE + quebra com arco, cruzamento simples/vértice comum/paralelas, tronco cruzado por duas em ordem); fase 15 ajustada (cruzamento agora honrado)
+- [x] Suíte (290 arquivos, 3.960 testes, 0 falhas), typecheck, `check-xss-sinks.sh`, `verificar:build` e `build` verdes
+- [ ] Publicado e provado
+- [ ] Passeio logado em produção
 
 ## Verificação
 

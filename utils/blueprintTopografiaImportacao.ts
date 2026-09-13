@@ -956,9 +956,11 @@ function lerSvgPontos(texto: string): { brutos: Bruto[]; ignoradas: number; avis
   const alturaSvg = viewBox && viewBox.length === 4 ? viewBox[1] + viewBox[3] : (alturaAttr ?? 0);
   // Fase 15: os elementos saem com a matriz acumulada dos `transform` acima
   // deles, já aplicada às coordenadas. O que fica em <defs> não sai.
-  const { elementos, transformNaRaiz, comTransform } = elementosDoSvg(texto, { aplicarTransform: true });
+  const { elementos, transformNaRaiz, comTransform, usos, usosSemAlvo } = elementosDoSvg(texto, { aplicarTransform: true });
   if (transformNaRaiz) avisos.push('O <svg> raiz tem transform, que a especificação ignora: as coordenadas foram lidas sem ele.');
   if (comTransform > 0) avisos.push(`transform aplicado em ${comTransform} elemento(s) do SVG.`);
+  // Fase 16: <use> de símbolo vira o que o símbolo desenha, na posição do use.
+  if (usos > 0) avisos.push(`${usos - usosSemAlvo} <use> resolvido(s) pelo símbolo referenciado${usosSemAlvo > 0 ? `; ${usosSemAlvo} sem alvo no arquivo` : ''}.`);
   const marcas: { x: number; y: number; z: number }[] = [];
   const textos: { x: number; y: number; valor: number; alcance: number }[] = [];
   for (const el of elementos) {

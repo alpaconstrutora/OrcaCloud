@@ -250,7 +250,9 @@ import {
 import DistribuirTomadas, { ConferenciaDoAmbiente, TomadasNaParede } from './DistribuirTomadas';
 import PainelConferenciaNbr from './PainelConferenciaNbr';
 import { conferirNbr5410 } from '../../utils/blueprintNbr5410';
-import { HIPOTESES_PADRAO, type HipotesesEletricas } from '../../utils/blueprintEletricaDimensionamento';
+import { useBlueprintEletrica } from '../../hooks/useBlueprintEletrica';
+import { hashDaBaseEletrica, memorialEletrico, verificacoesEletricas } from '../../utils/blueprintEletricaExecutivo';
+import PainelEletricaExecutivo from './PainelEletricaExecutivo';
 
 /**
  * Tela do editor de plantas (épico E3).
@@ -581,14 +583,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   );
   const [mostrarLaje3d, setMostrarLaje3d] = usePersistedState('blueprint:vista3dLaje', false);
   /**
-   * Hipóteses do pré-dimensionamento elétrico. Persistidas no navegador por
-   * ora; a tabela por estudo (`blueprint_study_eletrica`) vem com a emissão
-   * executiva (F7 do plano de 13/09/2026).
+   * Hipóteses do pré-dimensionamento elétrico — do ESTUDO, em
+   * `blueprint_study_eletrica` (F7, 13/09/2026). Moravam no navegador, e duas
+   * pessoas viam cálculos diferentes do mesmo estudo; a emissão executiva
+   * amarra o hash delas, então têm de ser do estudo.
    */
-  const [hipotesesEletricas, setHipotesesEletricas] = usePersistedState<HipotesesEletricas>(
-    'blueprint:hipotesesEletricas',
-    HIPOTESES_PADRAO,
-  );
+  const eletricaDoEstudo = useBlueprintEletrica(study.id, study.organization_id);
+  const hipotesesEletricas = eletricaDoEstudo.hipoteses;
+  const setHipotesesEletricas = eletricaDoEstudo.setHipoteses;
   const [mostrarArestas3d, setMostrarArestas3d] = usePersistedState(
     'blueprint:vista3dArestas',
     true,
@@ -2115,6 +2117,50 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const terraplenagem = useBlueprintTerraplenagem(study.id, study.organization_id);
   // Fase 17: o projeto executivo com ART (responsável, sondagem, emissões).
   const executivo = useBlueprintProjetoExecutivo(study.id, study.organization_id);
+
+  // ── Elétrica F7: projeto executivo elétrico com ART ────────────────────────
+  const executivoEletrico = useBlueprintProjetoExecutivo(study.id, study.organization_id, 'ELETRICA');
+  /** A conferência que o painel mostra (o nível atual) — e a que a emissão exige (o modelo inteiro). */
+  const conferenciaNbr = useMemo(
+    () => conferirNbr5410(editor.model, levelId ?? null, hipotesesEletricas),
+    [editor.model, levelId, hipotesesEletricas],
+  );
+  const resultadoEletrico = useMemo(
+    () =>
+      verificacoesEletricas(
+        editor.model,
+        hipotesesEletricas,
+        executivoEletrico.responsavel,
+        conferirNbr5410(editor.model, null, hipotesesEletricas),
+      ),
+    [editor.model, hipotesesEletricas, executivoEletrico.responsavel],
+  );
+  /** Desenho (canônico do kernel) + hipóteses: mudou um, a emissão não vale mais. */
+  const hashEletrico = useMemo(() => hashDaBaseEletrica(editor.model, hipotesesEletricas), [editor.model, hipotesesEletricas]);
+  const emissaoEletricaValida = useMemo<EmissaoExecutiva | null>(() => {
+    const row = executivoEletrico.emitidos.find((r) => r.hash_da_base === hashEletrico.base && r.emitido_em);
+    if (!row) return null;
+    return { artNumero: row.responsavel.artNumero, responsavel: row.responsavel.nome, conselho: row.responsavel.conselho, registro: row.responsavel.registro, emitidoEm: row.emitido_em! };
+  }, [executivoEletrico.emitidos, hashEletrico.base]);
+  const emitirEletrico = useCallback(async () => {
+    if (!resultadoEletrico.podeEmitir) return;
+    const emitidoEm = new Date().toISOString();
+    const linhas = memorialEletrico(executivoEletrico.responsavel, hipotesesEletricas, resultadoEletrico, {
+      nomeDoEstudo: study.name,
+      hashDoDesenho: hashEletrico.desenho,
+      hashDaBase: hashEletrico.base,
+      emitidoEm,
+    });
+    await executivoEletrico.emitir({
+      topografia_id: null,
+      topografia_versao: null,
+      topografia_hash: null,
+      hash_da_base: hashEletrico.base,
+      verificacoes: resultadoEletrico.verificacoes,
+      memorial: linhas.join('\n'),
+      emitido_em: emitidoEm,
+    });
+  }, [resultadoEletrico, executivoEletrico, hipotesesEletricas, study.name, hashEletrico]);
 
   /** A curva clicada na planta: índice na versão exibida + o ponto do clique. */
   const [curvaEmDestaque, setCurvaEmDestaque] = useState<{ indice: number; ponto: Point } | null>(null);
@@ -6228,15 +6274,33 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   editor.run({ type: 'SetTerminalProps', terminalId, circuitoId })
                 }
                 onAceitarSugeridas={aceitarSugeridas}
-                hipoteses={{ ...HIPOTESES_PADRAO, ...hipotesesEletricas }}
+                hipoteses={hipotesesEletricas}
                 onHipoteses={setHipotesesEletricas}
+                onQuadroProps={(quadroId, campos) => editor.run({ type: 'SetQuadroProps', quadroId, ...campos })}
+                executivoSlot={
+                  <PainelEletricaExecutivo
+                    e={{
+                      responsavel: executivoEletrico.responsavel,
+                      onResponsavel: executivoEletrico.setResponsavel,
+                      resultado: resultadoEletrico,
+                      emitidos: executivoEletrico.emitidos,
+                      emissaoValida: emissaoEletricaValida,
+                      hashDaBaseAtual: hashEletrico.base,
+                      onEmitir: () => void emitirEletrico(),
+                      emitindo: executivoEletrico.emitindo,
+                      erro: executivoEletrico.erro,
+                      onBaixarMemorial: (row) => executivoEletrico.baixarMemorial(row, study.name),
+                      persistenciaIndisponivel: executivoEletrico.persistenciaIndisponivel,
+                    }}
+                  />
+                }
               />
               {/* A CONFERÊNCIA da norma vive junto do quadro de cargas: é a
                   mesma leitura — o que foi declarado — vista pelas regras da
                   NBR 5410, e o usuário pediu tudo de elétrica num só lugar. */}
               <div className="mt-3 border-t border-slate-200 pt-3">
                 <PainelConferenciaNbr
-                  conferencia={conferirNbr5410(editor.model, levelId ?? null, { ...HIPOTESES_PADRAO, ...hipotesesEletricas })}
+                  conferencia={conferenciaNbr}
                   onSelecionar={(ids) => selecionar(ids)}
                   onConverterLigacaoDireta={(ids) =>
                     editor.runBatch(

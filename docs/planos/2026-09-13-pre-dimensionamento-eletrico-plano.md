@@ -27,9 +27,11 @@ Respostas do usuário ao §8: *"1. vou testar · 2. enviado as Tabelas 36, 40,
 | F3 disjuntor | ✅ | `disjuntorSugeridoA` (IB ≤ In ≤ Iz), "usar sugerido" na tela |
 | F4 queda de tensão | ✅ | `quedaDeTensaoPct` com L **pelos eletrodutos** (caminho mais longo a partir do quadro) ou **estimado** — dito |
 | F5 DR | ✅ | `Circuito.protecaoDR`, regra **5.1.3.2.2** na conferência (banheiro, cozinha/serviço, varanda, chuveiro) |
-| F6 quadro/alimentador | ⏳ | `Circuito.fase` já existe no kernel; demanda, alimentador e balanceamento ficam |
-| F7 emissão com ART | ⏳ | molde confirmado: **uma** `blueprint_study_projeto_executivo` com `disciplina`. Hipóteses hoje persistem no navegador (`blueprint:hipotesesEletricas`); a tabela por estudo vem aqui |
+| F6 quadro/alimentador | ✅ | `Quadro.ligacao/tensaoV/alimentadorM` (kernel **0.28.0 → 0.29.0**); `preDimensionarQuadroCompleto`: carga por grupo, **demanda como hipótese nomeada** (padrão "sem demanda (1,00)"), IB/seção/disjuntor geral do alimentador, **queda da origem = alimentador + pior terminal** (6.2.7.1, limite 5 %), balanceamento R/S/T só em quadro trifásico (FN sem fase fica FORA e é dito). Bloco "Alimentação" sob a tabela de cada quadro |
+| F7 emissão com ART | ✅ | migration `aplicar_20270921000018` **aplicada e conferida de fora**: `blueprint_study_eletrica` (hipóteses por estudo — saíram do navegador) e `blueprint_study_projeto_executivo.disciplina` (`TERRAPLENAGEM` \| `ELETRICA`, índice de rascunho por estudo+disciplina). `verificacoesEletricas` (responsável, ART, dados completos, cada regra da 5410, cada circuito, cada quadro), `hashDaBaseEletrica` = canônico do desenho + hipóteses, `memorialEletrico` em PDF. Hook e service da topografia reusados com `disciplina` |
 | F8 prancha · F9 eletroduto | ⏳ | — |
+
+**F6–F7 — o que os testes/harness pegaram antes de publicar**: `AddQuadro` não gravava os campos novos (só o `SetQuadroProps`) — o teste F6 caiu; o memorial escrevia "2.5 mm²" com ponto — o teste do memorial caiu; a soma de queda 6.2.7.1 tinha de ser alimentador **+** pior terminal (um cenário do teste estourava o terminal sozinho e foi refeito). Harness com C1 certo, C2 errado, alimentador de 10 m e a emissão com 3 pendências — olhado.
 
 **Na tela**: sob cada circuito, a linha de declarações (tensão, ligação, DR —
 tensão **não tinha campo nenhum** até aqui, o que deixava 9.5.3.1/9.5.3.3

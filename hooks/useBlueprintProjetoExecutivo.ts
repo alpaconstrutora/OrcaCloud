@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { jsPDF } from 'jspdf';
 import type { BlueprintProjetoExecutivoRow } from '../types/blueprint';
-import { blueprintProjetoExecutivoService, type DadosDaEmissao } from '../services/blueprintProjetoExecutivoService';
+import {
+  blueprintProjetoExecutivoService,
+  type DadosDaEmissao,
+  type DisciplinaExecutiva,
+} from '../services/blueprintProjetoExecutivoService';
 import { baixarArtefatos } from '../services/blueprintExportService';
 import { RESPONSAVEL_VAZIO, SONDAGEM_VAZIA, type ResponsavelTecnico, type Sondagem } from '../utils/blueprintTopografiaExecutivo';
 
@@ -96,7 +100,12 @@ export function memorialEmPdf(linhas: string[]): Blob {
   return doc.output('blob');
 }
 
-export function useBlueprintProjetoExecutivo(studyId: string, organizationId: string): ProjetoExecutivo {
+export function useBlueprintProjetoExecutivo(
+  studyId: string,
+  organizationId: string,
+  /** A elétrica reusa este fluxo inteiro (13/09/2026) — só muda a disciplina da linha. */
+  disciplina: DisciplinaExecutiva = 'TERRAPLENAGEM',
+): ProjetoExecutivo {
   const [responsavel, setResponsavelLocal] = useState<ResponsavelTecnico>(RESPONSAVEL_VAZIO);
   const [sondagem, setSondagemLocal] = useState<Sondagem>(SONDAGEM_VAZIA);
   const [rascunhoId, setRascunhoId] = useState<string | null>(null);
@@ -112,7 +121,7 @@ export function useBlueprintProjetoExecutivo(studyId: string, organizationId: st
     let vivo = true;
     (async () => {
       try {
-        const lista = await blueprintProjetoExecutivoService.listar(studyId);
+        const lista = await blueprintProjetoExecutivoService.listar(studyId, disciplina);
         if (!vivo) return;
         const rascunho = lista.find((r) => r.status === 'RASCUNHO') ?? null;
         setEmitidos(lista.filter((r) => r.status === 'EMITIDO'));
@@ -139,7 +148,7 @@ export function useBlueprintProjetoExecutivo(studyId: string, organizationId: st
     return () => {
       vivo = false;
     };
-  }, [studyId]);
+  }, [studyId, disciplina]);
 
   const responsavelRef = useRef(responsavel);
   responsavelRef.current = responsavel;
@@ -154,7 +163,7 @@ export function useBlueprintProjetoExecutivo(studyId: string, organizationId: st
     if (rascunhoRef.current) return rascunhoRef.current;
     if (!criando.current) {
       criando.current = blueprintProjetoExecutivoService
-        .criarRascunho(studyId, organizationId, responsavelRef.current, sondagemRef.current)
+        .criarRascunho(studyId, organizationId, responsavelRef.current, sondagemRef.current, disciplina)
         .then((row) => {
           rascunhoRef.current = row.id;
           setRascunhoId(row.id);
@@ -169,7 +178,7 @@ export function useBlueprintProjetoExecutivo(studyId: string, organizationId: st
         });
     }
     return criando.current;
-  }, [studyId, organizationId, persistenciaIndisponivel]);
+  }, [studyId, organizationId, persistenciaIndisponivel, disciplina]);
 
   // Grava com um respiro: nome e números são digitados letra a letra.
   const persistir = useCallback(() => {

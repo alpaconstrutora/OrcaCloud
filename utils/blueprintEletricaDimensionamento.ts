@@ -34,7 +34,7 @@
  *
  * Puro: números entram, números e textos saem.
  */
-import type { BlueprintModel, Circuito, LigacaoDoCircuito, Terminal, Trecho } from './blueprintKernel';
+import type { BlueprintModel, Circuito, LigacaoDoCircuito, Quadro, Terminal, Trecho } from './blueprintKernel';
 import { comprimentoDoTrecho } from './blueprintRede';
 
 // ─── Tabela 36 — capacidade de condução de corrente (A) ────────────────────
@@ -176,6 +176,15 @@ export interface HipotesesEletricas {
   limiteQuedaTerminalPct: number;
   /** Correntes nominais de disjuntor disponíveis, em A. */
   catalogoDeDisjuntoresA: readonly number[];
+  /**
+   * F6 — fatores de demanda por grupo de carga, com o NOME da tabela de
+   * origem. Padrão: sem demanda. A tabela é da concessionária, não da 5410.
+   */
+  demanda: FatoresDeDemanda;
+  /** Queda da origem ao pior ponto (6.2.7.1): 5 % rede pública, 7 % transformador próprio. */
+  limiteQuedaTotalPct: number;
+  /** Desequilíbrio de fases tolerado num quadro trifásico, % (aviso acima). */
+  desequilibrioMaxPct: number;
 }
 
 export const HIPOTESES_PADRAO: HipotesesEletricas = {
@@ -185,6 +194,9 @@ export const HIPOTESES_PADRAO: HipotesesEletricas = {
   rhoOhmMm2PorM: 0.0206,
   limiteQuedaTerminalPct: 4,
   catalogoDeDisjuntoresA: [6, 10, 16, 20, 25, 32, 40, 50, 63, 70, 80, 100],
+  demanda: { nome: 'sem demanda (1,00)', ILUMINACAO: 1, TUG: 1, FORCA: 1 },
+  limiteQuedaTotalPct: 5,
+  desequilibrioMaxPct: 10,
 };
 
 // ─── Corrente de projeto ───────────────────────────────────────────────────
@@ -532,4 +544,209 @@ export function preDimensionarQuadro(
     .filter((c) => c.quadroId === quadroId)
     .sort((a, b) => a.nome.localeCompare(b.nome))
     .map((c) => preDimensionarCircuito(model, c, hip));
+}
+
+// ─── F6 — QUADRO E ALIMENTADOR: demanda, fases, disjuntor geral ────────────
+//
+// O circuito terminal é dimensionado pela carga que pode alimentar (F1–F4).
+// O QUADRO, não: a norma admite fator de demanda no alimentador — e a tabela
+// de demanda é da CONCESSIONÁRIA, não da NBR 5410. Por isso ela entra como
+// hipótese NOMEADA (`demanda.nome`), padrão 1,00 em todos os grupos (sem
+// demanda), nunca como verdade do software.
+
+/** Os grupos de carga que a demanda distingue. */
+export type GrupoDeCarga = 'ILUMINACAO' | 'TUG' | 'FORCA';
+
+/** O grupo de um ponto pelo tipo: luz → iluminação; TUG e dados → TUG; TUE e ligação direta → força. */
+export function grupoDeCarga(tipoEletrico: Terminal['tipoEletrico']): GrupoDeCarga | null {
+  if (!tipoEletrico || tipoEletrico === 'INTERRUPTOR') return null;
+  if (tipoEletrico.startsWith('ILUMINACAO')) return 'ILUMINACAO';
+  if (tipoEletrico === 'TUE' || tipoEletrico === 'LIGACAO_DIRETA') return 'FORCA';
+  return 'TUG';
+}
+
+export interface FatoresDeDemanda {
+  /** O nome da tabela de onde os fatores saíram ("sem demanda", "NT da concessionária X"). */
+  nome: string;
+  ILUMINACAO: number;
+  TUG: number;
+  FORCA: number;
+}
+
+export const DEMANDA_SEM_FATOR: FatoresDeDemanda = { nome: 'sem demanda (1,00)', ILUMINACAO: 1, TUG: 1, FORCA: 1 };
+
+export interface CargaPorFase {
+  R: number;
+  S: number;
+  T: number;
+}
+
+export interface PreDimensionamentoDoQuadro {
+  quadroId: string;
+  nome: string;
+  circuitos: PreDimensionamentoDoCircuito[];
+  /** Soma dos VA declarados por grupo, antes da demanda. */
+  porGrupoVA: Record<GrupoDeCarga, number>;
+  sInstaladaVA: number;
+  /** Depois dos fatores de demanda declarados. */
+  sDemandadaVA: number;
+  demanda: FatoresDeDemanda;
+  /** A alimentação: declarada no quadro, ou deduzida dos circuitos (dita). */
+  ligacao: LigacaoDoCircuito;
+  tensaoV: number | null;
+  ligacaoDeduzida: boolean;
+  ibA: number | null;
+  secaoCalculada: SecaoMinima | null;
+  disjuntorGeralA: number | null;
+  /** Queda no alimentador, com o comprimento declarado; `null` sem comprimento. */
+  quedaAlimentadorPct: number | null;
+  /** Alimentador + o pior circuito terminal — é o que a 6.2.7 limita da origem ao ponto. */
+  quedaTotalMaxPct: number | null;
+  /** Só em quadro trifásico: a carga por fase dos circuitos FN e o desequilíbrio. */
+  fases: CargaPorFase | null;
+  desequilibrioPct: number | null;
+  achados: AchadoDoDimensionamento[];
+  naoAvaliado: string[];
+}
+
+/** A ligação do quadro: a declarada; senão, trifásico se algum circuito for; senão FN. */
+function ligacaoDoQuadro(quadro: Quadro, circuitos: readonly Circuito[]): { ligacao: LigacaoDoCircuito; deduzida: boolean } {
+  if (quadro.ligacao) return { ligacao: quadro.ligacao, deduzida: false };
+  if (circuitos.some((c) => c.ligacao === 'FFF')) return { ligacao: 'FFF', deduzida: true };
+  if (circuitos.some((c) => c.ligacao === 'FF')) return { ligacao: 'FF', deduzida: true };
+  return { ligacao: 'FN', deduzida: true };
+}
+
+/** A tensão do quadro: a declarada; senão a mais frequente entre os circuitos. */
+function tensaoDoQuadro(quadro: Quadro, circuitos: readonly Circuito[]): number | null {
+  if (quadro.tensaoV) return quadro.tensaoV;
+  const contagem = new Map<number, number>();
+  for (const c of circuitos) if (c.tensaoV) contagem.set(c.tensaoV, (contagem.get(c.tensaoV) ?? 0) + 1);
+  let melhor: number | null = null;
+  let n = 0;
+  for (const [v, k] of contagem) if (k > n) (melhor = v), (n = k);
+  return melhor;
+}
+
+export function preDimensionarQuadroCompleto(
+  model: BlueprintModel,
+  quadroId: string,
+  hip: HipotesesEletricas = HIPOTESES_PADRAO,
+): PreDimensionamentoDoQuadro | null {
+  const quadro = (model.quadros ?? []).find((q) => q.id === quadroId);
+  if (!quadro) return null;
+  const circuitosDoQuadro = (model.circuitos ?? []).filter((c) => c.quadroId === quadroId);
+  const circuitos = preDimensionarQuadro(model, quadroId, hip);
+  const achados: AchadoDoDimensionamento[] = [];
+  const naoAvaliado: string[] = [];
+
+  // Carga por grupo.
+  const porGrupoVA: Record<GrupoDeCarga, number> = { ILUMINACAO: 0, TUG: 0, FORCA: 0 };
+  let semPotencia = 0;
+  for (const t of model.terminais ?? []) {
+    if (t.disciplina !== 'ELETRICA' || !t.circuitoId) continue;
+    if (!circuitosDoQuadro.some((c) => c.id === t.circuitoId)) continue;
+    const g = grupoDeCarga(t.tipoEletrico);
+    if (!g) continue;
+    if (t.potenciaW == null) {
+      semPotencia++;
+      continue;
+    }
+    porGrupoVA[g] += t.potenciaW;
+  }
+  if (semPotencia > 0) naoAvaliado.push(`${semPotencia} ponto(s) sem potência fora da soma do quadro`);
+  const sInstaladaVA = porGrupoVA.ILUMINACAO + porGrupoVA.TUG + porGrupoVA.FORCA;
+  const demanda = hip.demanda;
+  const sDemandadaVA = porGrupoVA.ILUMINACAO * demanda.ILUMINACAO + porGrupoVA.TUG * demanda.TUG + porGrupoVA.FORCA * demanda.FORCA;
+
+  const { ligacao, deduzida } = ligacaoDoQuadro(quadro, circuitosDoQuadro);
+  const tensaoV = tensaoDoQuadro(quadro, circuitosDoQuadro);
+  if (deduzida) naoAvaliado.push(`ligação do quadro não declarada — assumida ${ligacao} pelos circuitos`);
+
+  const base: PreDimensionamentoDoQuadro = {
+    quadroId,
+    nome: quadro.nome,
+    circuitos,
+    porGrupoVA,
+    sInstaladaVA,
+    sDemandadaVA,
+    demanda,
+    ligacao,
+    tensaoV,
+    ligacaoDeduzida: deduzida,
+    ibA: null,
+    secaoCalculada: null,
+    disjuntorGeralA: null,
+    quedaAlimentadorPct: null,
+    quedaTotalMaxPct: null,
+    fases: null,
+    desequilibrioPct: null,
+    achados,
+    naoAvaliado,
+  };
+
+  if (tensaoV == null) {
+    naoAvaliado.push('sem tensão no quadro nem nos circuitos — alimentador não calculado');
+  } else if (sDemandadaVA > 0) {
+    const ibA = correnteDeProjetoA(sDemandadaVA, tensaoV, ligacao);
+    base.ibA = ibA;
+    base.secaoCalculada = secaoMinima(ibA, hip, ligacao, 'FORCA');
+    if (base.secaoCalculada) {
+      base.disjuntorGeralA = disjuntorSugeridoA(ibA, base.secaoCalculada.izA, hip.catalogoDeDisjuntoresA);
+      if (quadro.alimentadorM != null && quadro.alimentadorM > 0) {
+        const queda = quedaDeTensaoPct(ibA, quadro.alimentadorM, base.secaoCalculada.secaoMm2, tensaoV, ligacao, hip.rhoOhmMm2PorM);
+        base.quedaAlimentadorPct = queda;
+        const piorTerminal = Math.max(0, ...circuitos.map((c) => c.quedaPct ?? 0));
+        base.quedaTotalMaxPct = queda + piorTerminal;
+        if (base.quedaTotalMaxPct > hip.limiteQuedaTotalPct) {
+          achados.push({
+            nivel: 'FALTA',
+            referencia: '6.2.7.1',
+            mensagem: `queda da origem ao pior ponto ${n1(base.quedaTotalMaxPct)} % (alimentador ${n1(queda)} % + terminal ${n1(piorTerminal)} %), limite ${hip.limiteQuedaTotalPct} %`,
+          });
+        }
+      } else {
+        naoAvaliado.push('comprimento do alimentador não declarado — queda da origem não calculada');
+      }
+    } else {
+      naoAvaliado.push('IB do alimentador acima da Tabela 36 ou temperatura sem fator');
+    }
+  }
+
+  // Balanceamento — só faz sentido em quadro trifásico.
+  if (ligacao === 'FFF') {
+    const fases: CargaPorFase = { R: 0, S: 0, T: 0 };
+    const semFase: string[] = [];
+    for (const c of circuitosDoQuadro) {
+      const r = circuitos.find((x) => x.circuitoId === c.id);
+      const s = r?.sVA ?? 0;
+      const lig = c.ligacao ?? 'FN';
+      if (lig === 'FFF') {
+        fases.R += s / 3;
+        fases.S += s / 3;
+        fases.T += s / 3;
+      } else if (lig === 'FN') {
+        if (c.fase) fases[c.fase] += s;
+        else semFase.push(c.nome);
+      } else {
+        semFase.push(`${c.nome} (F-F)`);
+      }
+    }
+    base.fases = fases;
+    if (semFase.length > 0) naoAvaliado.push(`fora do balanceamento (sem fase): ${semFase.join(', ')}`);
+    const valores = [fases.R, fases.S, fases.T];
+    const max = Math.max(...valores);
+    if (max > 0) {
+      base.desequilibrioPct = ((max - Math.min(...valores)) / max) * 100;
+      if (base.desequilibrioPct > hip.desequilibrioMaxPct) {
+        achados.push({
+          nivel: 'AVISO',
+          referencia: 'balanceamento',
+          mensagem: `fases desequilibradas em ${n1(base.desequilibrioPct)} % (R ${Math.round(fases.R)} · S ${Math.round(fases.S)} · T ${Math.round(fases.T)} VA), limite ${hip.desequilibrioMaxPct} %`,
+        });
+      }
+    }
+  }
+
+  return base;
 }

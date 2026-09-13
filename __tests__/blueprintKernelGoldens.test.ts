@@ -194,6 +194,13 @@
  *   tem instalação, então nenhuma delas ganha chave — só a versão embutida no
  *   payload mudou.
  *
+ *   0.28.0 → 0.29.0 (13/09/2026): a ALIMENTAÇÃO do quadro — `Quadro.ligacao`,
+ *   `tensaoV` e `alimentadorM` (F6 do pré-dimensionamento: demanda e
+ *   alimentador). Declarações, omitidas quando ausentes; nenhum dos seis casos
+ *   tem quadro. Mesma prova, refeita antes de tocar num hash: com a string em
+ *   0.28.0 e os campos JÁ no lugar, as goldens passaram e as contagens
+ *   (9/49/144/3/78/4) seguiram idênticas.
+ *
  *   0.27.0 → 0.28.0 (13/09/2026): três declarações no CIRCUITO para o
  *   pré-dimensionamento elétrico — `ligacao` (FN/FF/FFF), `protecaoDR` e
  *   `fase` (R/S/T). Declarações do projetista, não resultados: o cálculo
@@ -414,17 +421,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: 'fa287cb4750dce6039c6da4a6895544904020fdd20219105565704ec044ab0bf',
+    hash: 'b7e253835cd7e4aa9755a50daf334e3956a97354d04fe0710fb51dea488a1aa9',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'b90ba9d58384be1d12816144fb830bd10f24ab83a6472c771ab714a57d22f543',
+    hash: '83bb476594880b98cb1a61bf3da36f4d1e1aeed852fe4af9d765ce463b9a4fc2',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: 'c8c98866f3afd782a2bfd35b638e120eb76c6e886bbbef5c9b1ea1f8b0a32ee1',
+    hash: 'b1b787bdabacbf98316baac53ab788279ef3712366599a7f8a6a5472d1fe1ce4',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -432,7 +439,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '3aace284af9c3e96e2e756bf53021046ad7b5b3b0e08adb614cb5bb5097ebe83',
+    hash: 'fba69d3b830de79f865ca07c7771e9c829084fab0b6fcac4f110dea504bbba8f',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -442,7 +449,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '7dc989953e65e98b3c33db1ce040bc64276be7454afd7a019d9783ec47da5272',
+    hash: '066e3fec9ec7f6fe9c756b69496bd0127e006341197a5bb5b0d91dab164c3439',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -453,7 +460,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '3a6abc8cd23a3893f2d086791853c5e84585c9c4ebeddf6830f44214c790797d',
+    hash: 'af554a118f8f332389a0f5646122bd8c0ac8331df1ddd2bc89a46d9b5deceb58',
   },
 };
 

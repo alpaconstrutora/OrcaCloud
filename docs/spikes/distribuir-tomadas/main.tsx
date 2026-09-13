@@ -14,7 +14,10 @@ import DistribuirTomadas, {
 } from '../../../components/blueprint/DistribuirTomadas';
 import PainelConferenciaNbr from '../../../components/blueprint/PainelConferenciaNbr';
 import PainelEletrica from '../../../components/blueprint/PainelEletrica';
+import PainelEletricaExecutivo from '../../../components/blueprint/PainelEletricaExecutivo';
 import { HIPOTESES_PADRAO } from '../../../utils/blueprintEletricaDimensionamento';
+import { hashDaBaseEletrica, verificacoesEletricas } from '../../../utils/blueprintEletricaExecutivo';
+import { conferirNbr5410 } from '../../../utils/blueprintNbr5410';
 import { applyCommand, emptyModel, point } from '../../../utils/blueprintKernel';
 
 /**
@@ -25,7 +28,7 @@ import { applyCommand, emptyModel, point } from '../../../utils/blueprintKernel'
 function cenaEletrica() {
   let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
   const levelId = m.levels[0].id;
-  m = applyCommand(m, { type: 'AddQuadro', levelId, nome: 'QDC', at: point(0, 0), cotaMm: 1600 }).model;
+  m = applyCommand(m, { type: 'AddQuadro', levelId, nome: 'QDC', at: point(0, 0), cotaMm: 1600, ligacao: 'FN', tensaoV: 127, alimentadorM: 10 }).model;
   const quadroId = m.quadros[0].id;
   m = applyCommand(m, { type: 'AddCircuito', quadroId, nome: 'C1 — Tomadas sala', tensaoV: 127, secaoMm2: 2.5, disjuntorA: 16 }).model;
   m = applyCommand(m, { type: 'AddCircuito', quadroId, nome: 'C2 — Tomadas cozinha', tensaoV: 127, secaoMm2: 1.5, disjuntorA: 25 }).model;
@@ -132,13 +135,38 @@ function Linha({ nome, conf }: (typeof casos)[number]) {
 createRoot(document.getElementById('raiz')!).render(
   <>
     <div className="border-b border-slate-200 px-4 py-3" id="eletrica">
-      <PainelEletrica
-        model={cenaEletrica()}
-        onAddCircuito={() => {}}
-        onCircuitoProps={() => {}}
-        hipoteses={HIPOTESES_PADRAO}
-        onHipoteses={() => {}}
-      />
+      {(() => {
+        const modelo = cenaEletrica();
+        const responsavel = { nome: 'Ana Souza', titulo: 'Engenheira Eletricista', conselho: 'CREA' as const, registro: 'SP 123456', artNumero: '', artData: '' };
+        const resultado = verificacoesEletricas(modelo, HIPOTESES_PADRAO, responsavel, conferirNbr5410(modelo, null, HIPOTESES_PADRAO));
+        return (
+          <PainelEletrica
+            model={modelo}
+            onAddCircuito={() => {}}
+            onCircuitoProps={() => {}}
+            onQuadroProps={() => {}}
+            hipoteses={HIPOTESES_PADRAO}
+            onHipoteses={() => {}}
+            executivoSlot={
+              <PainelEletricaExecutivo
+                e={{
+                  responsavel,
+                  onResponsavel: () => {},
+                  resultado,
+                  emitidos: [],
+                  emissaoValida: null,
+                  hashDaBaseAtual: hashDaBaseEletrica(modelo, HIPOTESES_PADRAO).base,
+                  onEmitir: () => {},
+                  emitindo: false,
+                  erro: null,
+                  onBaixarMemorial: () => {},
+                  persistenciaIndisponivel: false,
+                }}
+              />
+            }
+          />
+        );
+      })()}
     </div>
     <div className="border-b border-slate-200 px-4 py-3" id="conferencia">
       <PainelConferenciaNbr conferencia={conferencia} onSelecionar={() => {}} onConverterLigacaoDireta={() => {}} />

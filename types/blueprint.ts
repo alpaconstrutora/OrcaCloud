@@ -95,16 +95,38 @@ export interface BlueprintProjetoExecutivoRow {
   study_id: string;
   organization_id: string;
   status: 'RASCUNHO' | 'EMITIDO';
+  /**
+   * Qual projeto executivo a linha emite (migration `aplicar_20270921000018`):
+   * TERRAPLENAGEM (topografia) ou ELETRICA (NBR 5410). Um rascunho por
+   * estudo POR disciplina.
+   */
+  disciplina: 'TERRAPLENAGEM' | 'ELETRICA';
   responsavel: ResponsavelTecnico;
+  /** Só a terraplenagem usa; a elétrica grava `{}`. */
   sondagem: Sondagem;
   topografia_id: string | null;
   topografia_versao: number | null;
   topografia_hash: string | null;
   hash_da_base: string | null;
-  verificacoes: VerificacaoExecutiva[];
+  /** Da terraplenagem (`VerificacaoExecutiva`) ou da elétrica (`VerificacaoEletrica`) — mesma forma. */
+  verificacoes: (VerificacaoExecutiva | { grupo: string; item: string; norma: string; exigido: string; obtido: string; atende: boolean })[];
   memorial: string | null;
   emitido_em: string | null;
   created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Hipóteses do pré-dimensionamento elétrico de um estudo — linha de
+ * `blueprint_study_eletrica` (migration `aplicar_20270921000018`). Uma por
+ * estudo; JSONB parcial, completado com `HIPOTESES_PADRAO` na leitura.
+ */
+export interface BlueprintEletricaRow {
+  id: string;
+  study_id: string;
+  organization_id: string;
+  hipoteses: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }

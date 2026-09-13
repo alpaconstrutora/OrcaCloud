@@ -357,7 +357,17 @@ export type Command =
       /** Giro em planta, em graus. Normalizado para 0–359; `null` volta a 0. */
       rotacaoGraus?: number | null;
     }
-  | { type: 'AddQuadro'; levelId: ObjectId; nome: string; at: Point; cotaMm?: number }
+  | {
+      type: 'AddQuadro';
+      levelId: ObjectId;
+      nome: string;
+      at: Point;
+      cotaMm?: number;
+      /** A alimentação, quando já se sabe — ver `Quadro.ligacao`/`tensaoV`/`alimentadorM`. */
+      ligacao?: LigacaoDoCircuito | null;
+      tensaoV?: number | null;
+      alimentadorM?: number | null;
+    }
   | {
       type: 'SetQuadroProps';
       quadroId: ObjectId;
@@ -369,6 +379,10 @@ export type Command =
       profundidadeMm?: number | null;
       /** Giro em planta, em graus. Normalizado para 0–359; `null` volta a 0. */
       rotacaoGraus?: number | null;
+      /** A alimentação declarada — ver `Quadro.ligacao`/`tensaoV`/`alimentadorM`. */
+      ligacao?: LigacaoDoCircuito | null;
+      tensaoV?: number | null;
+      alimentadorM?: number | null;
     }
   /**
    * Um CIRCUITO. Exige o quadro: circuito órfão não existe — ele é o que um
@@ -1477,6 +1491,9 @@ function aplicarSemHash(
             y: assertIntegerMm(roundToMm(command.at.y), 'at.y'),
           },
           cotaMm: assertIntegerMm(roundToMm(command.cotaMm ?? 1600), 'cotaMm'),
+          ligacao: command.ligacao ?? null,
+          tensaoV: command.tensaoV ?? null,
+          alimentadorM: command.alimentadorM ?? null,
         },
       ];
       diff.created.push(id);
@@ -1494,6 +1511,9 @@ function aplicarSemHash(
         q.cotaMm = assertIntegerMm(roundToMm(command.cotaMm), 'cotaMm');
       }
       aplicarMedidas(q, command);
+      if (command.ligacao !== undefined) q.ligacao = command.ligacao;
+      if (command.tensaoV !== undefined) q.tensaoV = command.tensaoV;
+      if (command.alimentadorM !== undefined) q.alimentadorM = command.alimentadorM;
       diff.updated.push(q.id);
       break;
     }

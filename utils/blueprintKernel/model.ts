@@ -1265,6 +1265,15 @@ export interface Quadro {
    * hashes diferentes.
    */
   rotacaoGraus?: number | null;
+  /**
+   * A ALIMENTAÇÃO do quadro, declarada (13/09/2026, F6 do pré-dimensionamento):
+   * como chega (`FN`/`FF`/`FFF`), em que tensão e a que distância da origem
+   * (`alimentadorM`, metros de condutor até o medidor/quadro anterior — o
+   * medidor não está no desenho). Ausentes = não declarado; o cálculo diz.
+   */
+  ligacao?: LigacaoDoCircuito | null;
+  tensaoV?: number | null;
+  alimentadorM?: number | null;
 }
 
 /**
@@ -2933,6 +2942,15 @@ export function assertModelInvariants(model: BlueprintModel): void {
       throw new KernelError('LEVEL_NOT_FOUND', `Quadro ${q.id} num nível inexistente: ${q.levelId}`);
     }
     conferirMedidas(q, `Quadro ${q.id}`);
+    if (q.ligacao != null && !(LIGACOES_DO_CIRCUITO as readonly string[]).includes(q.ligacao)) {
+      throw new KernelError('BAD_BOARD_LINK', `Ligação inválida no quadro ${q.id}: ${q.ligacao}`);
+    }
+    if (q.tensaoV != null && (!Number.isFinite(q.tensaoV) || q.tensaoV <= 0)) {
+      throw new KernelError('BAD_BOARD_VALUE', `tensaoV inválida no quadro ${q.id}: ${q.tensaoV}`);
+    }
+    if (q.alimentadorM != null && (!Number.isFinite(q.alimentadorM) || q.alimentadorM < 0)) {
+      throw new KernelError('BAD_BOARD_VALUE', `alimentadorM inválido no quadro ${q.id}: ${q.alimentadorM}`);
+    }
   }
 
   const idsDeCircuito = new Set<ObjectId>();

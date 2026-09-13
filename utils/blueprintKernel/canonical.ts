@@ -385,6 +385,10 @@ function projetar(model: BlueprintModel): {
       alturaMm: q.alturaMm ?? undefined,
       profundidadeMm: q.profundidadeMm ?? undefined,
       rotacaoGraus: q.rotacaoGraus ?? undefined,
+      // A alimentação (13/09/2026): omitida quando não declarada.
+      ligacao: q.ligacao ?? undefined,
+      tensaoV: q.tensaoV ?? undefined,
+      alimentadorM: q.alimentadorM ?? undefined,
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y,
   );
@@ -838,6 +842,10 @@ export interface CanonicalPayload {
     profundidadeMm?: number;
     /** Giro em planta, graus inteiros 0–359. Ausente sob kernel < 0.21.0 e = 0. */
     rotacaoGraus?: number;
+    /** Alimentação do quadro. Ausentes sob kernel < 0.29.0 e quando não declarados. */
+    ligacao?: string;
+    tensaoV?: number;
+    alimentadorM?: number;
   }[];
   /** Quadros de distribuição. Ausente sob kernel < 0.19.0 e em desenho sem um. */
   quadros?: {
@@ -851,6 +859,10 @@ export interface CanonicalPayload {
     profundidadeMm?: number;
     /** Giro em planta, graus inteiros 0–359. Ausente sob kernel < 0.21.0 e = 0. */
     rotacaoGraus?: number;
+    /** Alimentação do quadro. Ausentes sob kernel < 0.29.0 e quando não declarados. */
+    ligacao?: string;
+    tensaoV?: number;
+    alimentadorM?: number;
   }[];
   /**
    * Circuitos. Ausente sob kernel < 0.19.0 e em desenho sem nenhum.
@@ -1121,6 +1133,9 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       alturaMm: q.alturaMm ?? null,
       profundidadeMm: q.profundidadeMm ?? null,
       rotacaoGraus: q.rotacaoGraus ?? null,
+      ligacao: (q.ligacao as LigacaoDoCircuito | undefined) ?? null,
+      tensaoV: q.tensaoV ?? null,
+      alimentadorM: q.alimentadorM ?? null,
     });
   });
 

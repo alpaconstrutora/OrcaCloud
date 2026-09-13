@@ -10,6 +10,8 @@ import {
   type HipotesesEletricas,
 } from '../../utils/blueprintEletricaDimensionamento';
 import { HipotesesDoPreDimensionamento, LinhaPreDimensionamento } from './PainelPreDimensionamento';
+import PainelQuadroAlimentador from './PainelQuadroAlimentador';
+import { preDimensionarQuadroCompleto } from '../../utils/blueprintEletricaDimensionamento';
 
 /**
  * O painel de ELÉTRICA — quadros, circuitos e o quadro de cargas.
@@ -39,6 +41,8 @@ export default function PainelEletrica({
   onAceitarSugeridas,
   hipoteses = HIPOTESES_PADRAO,
   onHipoteses,
+  onQuadroProps,
+  executivoSlot,
 }: {
   model: BlueprintModel;
   onAddCircuito: (quadroId: ObjectId, nome: string) => void;
@@ -58,6 +62,13 @@ export default function PainelEletrica({
   /** Hipóteses do pré-dimensionamento — ver `HipotesesEletricas`. */
   hipoteses?: HipotesesEletricas;
   onHipoteses?: (h: HipotesesEletricas) => void;
+  /** F6: a alimentação do quadro (ligação, tensão, metros até a origem) — declarações. */
+  onQuadroProps?: (
+    quadroId: ObjectId,
+    campos: { ligacao?: LigacaoDoCircuito | null; tensaoV?: number | null; alimentadorM?: number | null },
+  ) => void;
+  /** F7: o projeto executivo elétrico com ART, montado por quem tem o estudo em mãos. */
+  executivoSlot?: React.ReactNode;
   onSelecionar?: (id: string) => void;
   /** Liga um ponto solto a um circuito, direto daqui. */
   onLigarAoCircuito?: (terminalId: ObjectId, circuitoId: ObjectId) => void;
@@ -361,6 +372,27 @@ export default function PainelEletrica({
             </div>
           )}
 
+          {/* F6 — o QUADRO: alimentação declarada, demanda, alimentador, fases. */}
+          {(() => {
+            if (!onQuadroProps || q.circuitos.length === 0) return null;
+            const pq = preDimensionarQuadroCompleto(model, q.quadroId, hipoteses);
+            const quadro = (model.quadros ?? []).find((x) => x.id === q.quadroId);
+            if (!pq || !quadro) return null;
+            return (
+              <PainelQuadroAlimentador
+                q={pq}
+                ligacaoDeclarada={quadro.ligacao ?? null}
+                tensaoDeclarada={quadro.tensaoV ?? null}
+                alimentadorM={quadro.alimentadorM ?? null}
+                onQuadro={(campos) => onQuadroProps(q.quadroId, campos)}
+                fasesDosCircuitos={(model.circuitos ?? [])
+                  .filter((c) => c.quadroId === q.quadroId)
+                  .map((c) => ({ circuitoId: c.id, nome: c.nome, ligacao: c.ligacao ?? 'FN', fase: c.fase ?? null }))}
+                onFase={(circuitoId, fase) => onCircuitoProps(circuitoId, { fase })}
+              />
+            );
+          })()}
+
           <div className="flex items-center gap-1.5 border-t border-slate-200 px-2 py-1.5">
             <input
               type="text"
@@ -388,6 +420,8 @@ export default function PainelEletrica({
       ))}
 
       {onHipoteses && <HipotesesDoPreDimensionamento hipoteses={hipoteses} onChange={onHipoteses} />}
+
+      {executivoSlot}
 
       <p className="text-[10px] text-slate-500">
         Disjuntor e seção são <strong>o que você declarou</strong>. O pré-dimensionamento abaixo

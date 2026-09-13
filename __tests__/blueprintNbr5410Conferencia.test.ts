@@ -279,7 +279,7 @@ describe('9.5.3.3 · circuito comum', () => {
 });
 
 describe('o conjunto', () => {
-  it('oito regras, sempre na mesma ordem; faltas e avisos somados', () => {
+  it('dez regras, sempre na mesma ordem; faltas e avisos somados', () => {
     let m = classificar(casa(), 0, 'Sala', 'SALA_DORMITORIO');
     m = ponto(m, ESQ.x, ESQ.y, 'TUE', { tipo: 'Chuveiro' });
     const c = conferirNbr5410(m);
@@ -291,6 +291,11 @@ describe('o conjunto', () => {
       '9.5.3.1',
       '9.5.3.2',
       '9.5.3.3',
+      // 13/09/2026: DR (5.1.3.2.2) e o pré-dimensionamento (seção, disjuntor,
+      // queda) entram ANTES das sugeridas — são conferência de norma; as
+      // sugeridas são pendência de posição.
+      '5.1.3.2.2',
+      'PRE-DIM',
       'SUGERIDAS',
     ]);
     // Sala vazia de TUG (falta) + chuveiro em TUE (falta) + TUE sem potência (aviso)

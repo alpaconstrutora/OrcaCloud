@@ -53,6 +53,8 @@ import {
   type DisciplinaDeRede,
   type TipoDePontoEletrico,
   type TipoDeInterruptor,
+  type LigacaoDoCircuito,
+  type FaseDoCircuito,
   type TipoDeAmbiente,
   type FuncaoCamada,
   type StructuralKind,
@@ -397,6 +399,11 @@ function projetar(model: BlueprintModel): {
       tensaoV: c.tensaoV ?? null,
       disjuntorA: c.disjuntorA ?? null,
       secaoMm2: c.secaoMm2 ?? null,
+      // Os três são omitidos quando ausentes — todo circuito anterior a
+      // 13/09/2026 está assim, e o hash dele não muda por isto.
+      ligacao: c.ligacao ?? undefined,
+      protecaoDR: c.protecaoDR ?? undefined,
+      fase: c.fase ?? undefined,
     }),
     (x, y) =>
       (indiceDoQuadro.get(x.quadroId) ?? 0) - (indiceDoQuadro.get(y.quadroId) ?? 0) ||
@@ -858,6 +865,10 @@ export interface CanonicalPayload {
     tensaoV: number | null;
     disjuntorA: number | null;
     secaoMm2: number | null;
+    /** Ausentes sob kernel < 0.28.0 e quando não declarados. */
+    ligacao?: string;
+    protecaoDR?: boolean;
+    fase?: string;
   }[];
   labels: {
     level: number;
@@ -1127,6 +1138,9 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       tensaoV: c.tensaoV,
       disjuntorA: c.disjuntorA,
       secaoMm2: c.secaoMm2,
+      ligacao: (c.ligacao as LigacaoDoCircuito | undefined) ?? null,
+      protecaoDR: c.protecaoDR ?? null,
+      fase: (c.fase as FaseDoCircuito | undefined) ?? null,
     });
   });
 

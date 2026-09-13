@@ -250,6 +250,7 @@ import {
 import DistribuirTomadas, { ConferenciaDoAmbiente, TomadasNaParede } from './DistribuirTomadas';
 import PainelConferenciaNbr from './PainelConferenciaNbr';
 import { conferirNbr5410 } from '../../utils/blueprintNbr5410';
+import { HIPOTESES_PADRAO, type HipotesesEletricas } from '../../utils/blueprintEletricaDimensionamento';
 
 /**
  * Tela do editor de plantas (épico E3).
@@ -579,6 +580,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     true,
   );
   const [mostrarLaje3d, setMostrarLaje3d] = usePersistedState('blueprint:vista3dLaje', false);
+  /**
+   * Hipóteses do pré-dimensionamento elétrico. Persistidas no navegador por
+   * ora; a tabela por estudo (`blueprint_study_eletrica`) vem com a emissão
+   * executiva (F7 do plano de 13/09/2026).
+   */
+  const [hipotesesEletricas, setHipotesesEletricas] = usePersistedState<HipotesesEletricas>(
+    'blueprint:hipotesesEletricas',
+    HIPOTESES_PADRAO,
+  );
   const [mostrarArestas3d, setMostrarArestas3d] = usePersistedState(
     'blueprint:vista3dArestas',
     true,
@@ -6218,13 +6228,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   editor.run({ type: 'SetTerminalProps', terminalId, circuitoId })
                 }
                 onAceitarSugeridas={aceitarSugeridas}
+                hipoteses={{ ...HIPOTESES_PADRAO, ...hipotesesEletricas }}
+                onHipoteses={setHipotesesEletricas}
               />
               {/* A CONFERÊNCIA da norma vive junto do quadro de cargas: é a
                   mesma leitura — o que foi declarado — vista pelas regras da
                   NBR 5410, e o usuário pediu tudo de elétrica num só lugar. */}
               <div className="mt-3 border-t border-slate-200 pt-3">
                 <PainelConferenciaNbr
-                  conferencia={conferirNbr5410(editor.model, levelId ?? null)}
+                  conferencia={conferirNbr5410(editor.model, levelId ?? null, { ...HIPOTESES_PADRAO, ...hipotesesEletricas })}
                   onSelecionar={(ids) => selecionar(ids)}
                   onConverterLigacaoDireta={(ids) =>
                     editor.runBatch(

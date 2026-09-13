@@ -33,6 +33,11 @@ import {
   type TipoDeAmbiente,
 } from './blueprintKernel';
 import { conferirIluminacao, conferirTomadas, etiquetaDoAmbiente } from './blueprintDistribuicao';
+import {
+  HIPOTESES_PADRAO,
+  preDimensionarCircuito,
+  type HipotesesEletricas,
+} from './blueprintEletricaDimensionamento';
 
 export type CodigoDaRegra =
   | '9.5.2.1'
@@ -42,6 +47,8 @@ export type CodigoDaRegra =
   | '9.5.3.1'
   | '9.5.3.2'
   | '9.5.3.3'
+  | '5.1.3.2.2'
+  | 'PRE-DIM'
   | 'SUGERIDAS';
 
 export interface Achado {
@@ -523,10 +530,100 @@ function regraSugeridas(model: BlueprintModel, levelId: ObjectId | null): RegraC
   };
 }
 
+// ─── 5.1.3.2.2 — proteção DR onde a norma exige ────────────────────────────
+//
+// Dispositivo DR de 30 mA nos circuitos que alimentam tomadas em banheiro,
+// cozinha/copa/área de serviço, áreas externas (aqui: varanda) e o chuveiro /
+// aquecedor de água. O tipo do ambiente e a ligação direta já dizem quais.
+
+const AMBIENTES_COM_DR: ReadonlySet<TipoDeAmbiente> = new Set(['BANHEIRO', 'COZINHA_SERVICO', 'VARANDA']);
+
+/** Os pontos do circuito que OBRIGAM o DR, com o motivo. */
+export function pontosQueExigemDR(
+  model: BlueprintModel,
+  circuitoId: ObjectId,
+  ambientes: readonly AmbienteClassificado[],
+): { id: ObjectId; motivo: string }[] {
+  const saida: { id: ObjectId; motivo: string }[] = [];
+  for (const t of (model.terminais ?? []).filter((x) => x.disciplina === 'ELETRICA' && x.circuitoId === circuitoId)) {
+    if (t.tipoEletrico === 'LIGACAO_DIRETA' || ehAquecedorDeAgua(t)) {
+      saida.push({ id: t.id, motivo: 'aquecedor de água / chuveiro' });
+      continue;
+    }
+    if (!ehTomada(t)) continue;
+    const a = ambienteDo(t, ambientes);
+    if (a?.tipo && AMBIENTES_COM_DR.has(a.tipo)) saida.push({ id: t.id, motivo: `tomada em ${a.nome}` });
+  }
+  return saida;
+}
+
+function regra51322(model: BlueprintModel, levelId: ObjectId | null): RegraConferida {
+  const ambientes = ambientesDo(model, levelId);
+  const achados: Achado[] = [];
+  let avaliados = 0;
+  for (const c of model.circuitos ?? []) {
+    const exigem = pontosQueExigemDR(model, c.id, ambientes);
+    if (exigem.length === 0) continue;
+    avaliados++;
+    if (c.protecaoDR === true) continue;
+    const motivos = [...new Set(exigem.map((x) => x.motivo))].slice(0, 3).join(', ');
+    achados.push({
+      nivel: 'FALTA',
+      mensagem: `circuito ${c.nome} ${c.protecaoDR === false ? 'declarado SEM DR' : 'sem DR declarado'} — exige DR de 30 mA (${motivos})`,
+      ids: exigem.map((x) => x.id),
+    });
+  }
+  return {
+    codigo: '5.1.3.2.2',
+    titulo: 'Proteção DR (30 mA) em banheiro, cozinha/serviço, área externa e chuveiro',
+    achados,
+    naoAvaliado: ambientes.some((a) => !a.tipo) ? ['tomadas em ambientes sem tipo não entram'] : [],
+    avaliados,
+  };
+}
+
+// ─── Pré-dimensionamento — seção, disjuntor e queda de tensão ──────────────
+//
+// O que `blueprintEletricaDimensionamento` calcula a partir do declarado,
+// confrontado com o declarado. Cada achado leva o item da norma.
+
+function regraPreDim(model: BlueprintModel, hip: HipotesesEletricas): RegraConferida {
+  const achados: Achado[] = [];
+  const naoAvaliado: string[] = [];
+  let avaliados = 0;
+  for (const c of model.circuitos ?? []) {
+    const r = preDimensionarCircuito(model, c, hip);
+    if (r.ibA == null) {
+      if (r.pontos > 0) naoAvaliado.push(`${c.nome}: ${r.naoAvaliado.join('; ')}`);
+      continue;
+    }
+    avaliados++;
+    const pontos = (model.terminais ?? []).filter((t) => t.circuitoId === c.id).map((t) => t.id);
+    for (const a of r.achados) {
+      achados.push({ nivel: a.nivel, mensagem: `${c.nome} (${a.referencia}): ${a.mensagem}`, ids: [c.quadroId, ...pontos] });
+    }
+    for (const x of r.naoAvaliado) naoAvaliado.push(`${c.nome}: ${x}`);
+  }
+  return {
+    codigo: 'PRE-DIM',
+    titulo: 'Pré-dimensionamento: seção (Tab. 36/47), disjuntor (5.3.4.1) e queda de tensão (6.2.7)',
+    achados,
+    naoAvaliado,
+    avaliados,
+  };
+}
+
 // ─── Tudo junto ────────────────────────────────────────────────────────────
 
-/** Confere o nível (ou o modelo inteiro, com `levelId` nulo). */
-export function conferirNbr5410(model: BlueprintModel, levelId: ObjectId | null = null): ConferenciaNbr5410 {
+/**
+ * Confere o nível (ou o modelo inteiro, com `levelId` nulo). As hipóteses do
+ * pré-dimensionamento entram aqui porque a regra `PRE-DIM` depende delas.
+ */
+export function conferirNbr5410(
+  model: BlueprintModel,
+  levelId: ObjectId | null = null,
+  hipoteses: HipotesesEletricas = HIPOTESES_PADRAO,
+): ConferenciaNbr5410 {
   const regras = [
     regra9521(model, levelId),
     regra95221(model, levelId),
@@ -535,6 +632,8 @@ export function conferirNbr5410(model: BlueprintModel, levelId: ObjectId | null 
     regra9531(model, levelId),
     regra9532(model, levelId),
     regra9533(model, levelId),
+    regra51322(model, levelId),
+    regraPreDim(model, hipoteses),
     regraSugeridas(model, levelId),
   ];
   const todos = regras.flatMap((r) => r.achados);

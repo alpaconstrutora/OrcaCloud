@@ -88,9 +88,13 @@ describe('PainelEletrica', () => {
     expect(screen.getByText(/fora de\s+circuito/i)).toBeInTheDocument();
   });
 
-  it('⚠️ NÃO sugere disjuntor: sem declaração, o campo fica vazio', () => {
-    // A fronteira do escopo, na tela: somar é registro, decidir é projeto. Um
-    // valor de partida aqui viraria recomendação na cabeça de quem lê.
+  it('⚠️ o campo DECLARADO fica vazio sem declaração — a sugestão vive ao lado, nunca dentro dele', () => {
+    // A fronteira mudou de forma em 13/09/2026 (item 6, molde da topografia):
+    // o painel passou a PRÉ-DIMENSIONAR, com hipóteses declaradas. O que não
+    // mudou: o campo continua sendo o que o projetista escolheu — vazio é
+    // "ninguém declarou", e o sugerido aparece numa linha própria com o item
+    // da norma. Um valor de partida DENTRO do campo viraria recomendação
+    // silenciosa.
     let m = applyCommand(emptyModel(), {
       type: 'AddLevel',
       name: 'Térreo',
@@ -108,7 +112,9 @@ describe('PainelEletrica', () => {
     render(<PainelEletrica model={m} {...vazio} />);
     expect(screen.getByLabelText(/Disjuntor do circuito C1/i)).toHaveValue(null);
     expect(screen.getByLabelText(/Seção do circuito C1/i)).toHaveValue(null);
-    expect(screen.getByText(/ela não dimensiona/i)).toBeInTheDocument();
+    expect(screen.getByText(/quem grava é você/i)).toBeInTheDocument();
+    // Sem tensão nem pontos, o pré-dimensionamento diz por que não calculou.
+    expect(screen.getByLabelText(/Pré-dimensionamento do circuito C1/i).textContent).toMatch(/sem tensão/);
   });
 
   it('sem quadro nenhum, explica onde criar um em vez de mostrar tabela vazia', () => {

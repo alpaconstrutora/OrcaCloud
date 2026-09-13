@@ -16,6 +16,8 @@ import {
   type DisciplinaDeRede,
   type TipoDePontoEletrico,
   type TipoDeInterruptor,
+  type LigacaoDoCircuito,
+  type FaseDoCircuito,
   type TipoDeAmbiente,
   type Georreferencia,
   type ObjectId,
@@ -380,6 +382,9 @@ export type Command =
       tensaoV?: number | null;
       disjuntorA?: number | null;
       secaoMm2?: number | null;
+      ligacao?: LigacaoDoCircuito | null;
+      protecaoDR?: boolean | null;
+      fase?: FaseDoCircuito | null;
     }
   | {
       type: 'SetCircuitoProps';
@@ -389,6 +394,9 @@ export type Command =
       tensaoV?: number | null;
       disjuntorA?: number | null;
       secaoMm2?: number | null;
+      ligacao?: LigacaoDoCircuito | null;
+      protecaoDR?: boolean | null;
+      fase?: FaseDoCircuito | null;
     }
   /** Move UM vértice do percurso. Espelha `MoveAguaVertex`. */
   | { type: 'MoveEscadaVertex'; escadaId: ObjectId; index: number; to: Point }
@@ -1509,6 +1517,9 @@ function aplicarSemHash(
           tensaoV: command.tensaoV ?? null,
           disjuntorA: command.disjuntorA ?? null,
           secaoMm2: command.secaoMm2 ?? null,
+          ligacao: command.ligacao ?? null,
+          protecaoDR: command.protecaoDR ?? null,
+          fase: command.fase ?? null,
         },
       ];
       diff.created.push(id);
@@ -1530,6 +1541,9 @@ function aplicarSemHash(
       if (command.tensaoV !== undefined) c.tensaoV = command.tensaoV;
       if (command.disjuntorA !== undefined) c.disjuntorA = command.disjuntorA;
       if (command.secaoMm2 !== undefined) c.secaoMm2 = command.secaoMm2;
+      if (command.ligacao !== undefined) c.ligacao = command.ligacao;
+      if (command.protecaoDR !== undefined) c.protecaoDR = command.protecaoDR;
+      if (command.fase !== undefined) c.fase = command.fase;
       diff.updated.push(c.id);
       break;
     }

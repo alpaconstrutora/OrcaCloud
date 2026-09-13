@@ -2,8 +2,14 @@ import React, { useState } from 'react';
 import CamposDeDimensao from './CamposDeDimensao';
 import { MEDIDAS_PADRAO_QUADRO, UNIDADE_DE_POTENCIA, giroDaPeca, medidasDaPeca } from '../../utils/blueprintRede';
 import { AlertTriangle, Plus, Zap } from 'lucide-react';
-import type { BlueprintModel, ObjectId } from '../../utils/blueprintKernel';
-import { quadroDeCargas } from '../../utils/blueprintKernel';
+import type { BlueprintModel, FaseDoCircuito, LigacaoDoCircuito, ObjectId } from '../../utils/blueprintKernel';
+import { LIGACOES_DO_CIRCUITO, quadroDeCargas } from '../../utils/blueprintKernel';
+import {
+  HIPOTESES_PADRAO,
+  preDimensionarCircuito,
+  type HipotesesEletricas,
+} from '../../utils/blueprintEletricaDimensionamento';
+import { HipotesesDoPreDimensionamento, LinhaPreDimensionamento } from './PainelPreDimensionamento';
 
 /**
  * O painel de ELÉTRICA — quadros, circuitos e o quadro de cargas.
@@ -31,13 +37,27 @@ export default function PainelEletrica({
   onSelecionar,
   onLigarAoCircuito,
   onAceitarSugeridas,
+  hipoteses = HIPOTESES_PADRAO,
+  onHipoteses,
 }: {
   model: BlueprintModel;
   onAddCircuito: (quadroId: ObjectId, nome: string) => void;
   onCircuitoProps: (
     circuitoId: ObjectId,
-    campos: { nome?: string; tipo?: string | null; tensaoV?: number | null; disjuntorA?: number | null; secaoMm2?: number | null },
+    campos: {
+      nome?: string;
+      tipo?: string | null;
+      tensaoV?: number | null;
+      disjuntorA?: number | null;
+      secaoMm2?: number | null;
+      ligacao?: LigacaoDoCircuito | null;
+      protecaoDR?: boolean | null;
+      fase?: FaseDoCircuito | null;
+    },
   ) => void;
+  /** Hipóteses do pré-dimensionamento — ver `HipotesesEletricas`. */
+  hipoteses?: HipotesesEletricas;
+  onHipoteses?: (h: HipotesesEletricas) => void;
   onSelecionar?: (id: string) => void;
   /** Liga um ponto solto a um circuito, direto daqui. */
   onLigarAoCircuito?: (terminalId: ObjectId, circuitoId: ObjectId) => void;
@@ -184,19 +204,23 @@ export default function PainelEletrica({
             <p className="px-2 py-1.5 text-[11px] text-slate-500">Sem circuitos ainda.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-[11px]">
+              {/* `table-fixed` com larguras no cabeçalho: com a linha do
+                  pré-dimensionamento (colSpan) o layout automático alargava a
+                  tabela e a coluna Carga saía do painel — visto no harness. */}
+              <table className="w-full table-fixed text-[11px]">
                 <thead>
                   <tr className="text-left text-[10px] uppercase tracking-wide text-slate-500">
                     <th className="px-2 py-1 font-semibold">Circuito</th>
-                    <th className="px-2 py-1 text-right font-semibold">Disj.</th>
-                    <th className="px-2 py-1 text-right font-semibold">Seção</th>
-                    <th className="px-2 py-1 text-right font-semibold">Pontos</th>
-                    <th className="px-2 py-1 text-right font-semibold">Carga</th>
+                    <th className="w-12 px-2 py-1 text-right font-semibold">Disj.</th>
+                    <th className="w-12 px-2 py-1 text-right font-semibold">Seção</th>
+                    <th className="w-12 px-2 py-1 text-right font-semibold">Pts.</th>
+                    <th className="w-16 px-2 py-1 text-right font-semibold">Carga</th>
                   </tr>
                 </thead>
                 <tbody>
                   {q.circuitos.map((c) => (
-                    <tr key={c.circuitoId} className="border-t border-slate-100">
+                    <React.Fragment key={c.circuitoId}>
+                    <tr className="border-t border-slate-100">
                       <td className="px-2 py-1">
                         <input
                           type="text"
@@ -250,6 +274,72 @@ export default function PainelEletrica({
                         {c.potenciaW} {UNIDADE_DE_POTENCIA}
                       </td>
                     </tr>
+                    {/* As DECLARAÇÕES que o pré-dimensionamento lê — tensão,
+                        ligação e DR — e, abaixo, o que a norma pede para elas.
+                        Declarado e calculado lado a lado, nunca um no lugar
+                        do outro (item 6, 13/09/2026). */}
+                    <tr>
+                      {/* `max-w-0`: sem isto o texto do pré-dimensionamento alarga a
+                          tabela e empurra a coluna Carga para fora do painel — o
+                          print do harness mostrou "CARG" cortado. */}
+                      <td colSpan={5} className="max-w-0 pb-0.5">
+                        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-2 text-[10px] text-slate-500">
+                          <label className="flex items-center gap-1">
+                            Tensão
+                            <input
+                              type="number"
+                              value={c.tensaoV ?? ''}
+                              onChange={(e) =>
+                                onCircuitoProps(c.circuitoId, {
+                                  tensaoV: e.target.value === '' ? null : Number(e.target.value),
+                                })
+                              }
+                              placeholder="V"
+                              aria-label={`Tensão do circuito ${c.nome}, em volts`}
+                              className="w-12 rounded border border-slate-200 px-1 py-0 text-right text-[10px]"
+                            />
+                            V
+                          </label>
+                          <label className="flex items-center gap-1">
+                            Ligação
+                            <select
+                              value={circuitoDoModelo(model, c.circuitoId)?.ligacao ?? 'FN'}
+                              onChange={(e) =>
+                                onCircuitoProps(c.circuitoId, { ligacao: e.target.value as LigacaoDoCircuito })
+                              }
+                              aria-label={`Ligação do circuito ${c.nome}`}
+                              className="rounded border border-slate-200 px-1 py-0 text-[10px]"
+                            >
+                              {LIGACOES_DO_CIRCUITO.map((l) => (
+                                <option key={l} value={l}>
+                                  {l === 'FN' ? 'F-N' : l === 'FF' ? 'F-F' : 'trifásico'}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="flex items-center gap-1" title="Dispositivo DR de 30 mA declarado neste circuito (5.1.3.2.2)">
+                            <input
+                              type="checkbox"
+                              checked={circuitoDoModelo(model, c.circuitoId)?.protecaoDR === true}
+                              onChange={(e) => onCircuitoProps(c.circuitoId, { protecaoDR: e.target.checked })}
+                              aria-label={`Proteção DR do circuito ${c.nome}`}
+                            />
+                            DR
+                          </label>
+                        </div>
+                        {(() => {
+                          const circuito = circuitoDoModelo(model, c.circuitoId);
+                          return circuito ? (
+                            <LinhaPreDimensionamento
+                              r={preDimensionarCircuito(model, circuito, hipoteses)}
+                              hipoteses={hipoteses}
+                              onUsarSugerido={(campos) => onCircuitoProps(c.circuitoId, campos)}
+                            />
+                          ) : null;
+                        })()}
+                      </td>
+                    </tr>
+                    </React.Fragment>
                   ))}
                   <tr className="border-t border-slate-200 bg-slate-50 font-semibold">
                     <td className="px-2 py-1" colSpan={3}>
@@ -297,10 +387,18 @@ export default function PainelEletrica({
         </div>
       ))}
 
+      {onHipoteses && <HipotesesDoPreDimensionamento hipoteses={hipoteses} onChange={onHipoteses} />}
+
       <p className="text-[10px] text-slate-500">
-        Disjuntor e seção são <strong>o que você declarou</strong>. Esta tela soma e conta —
-        ela não dimensiona, e não sugere valor nenhum.
+        Disjuntor e seção são <strong>o que você declarou</strong>. O pré-dimensionamento abaixo
+        de cada circuito é o que a NBR 5410 pede para a carga declarada, com as hipóteses
+        escritas — ele sugere; quem grava é você. Dimensionamento é do responsável técnico.
       </p>
     </div>
   );
+}
+
+/** O circuito do kernel por id — para os campos que o quadro de cargas não carrega. */
+function circuitoDoModelo(model: BlueprintModel, circuitoId: ObjectId) {
+  return (model.circuitos ?? []).find((c) => c.id === circuitoId) ?? null;
 }

@@ -13,6 +13,35 @@ import DistribuirTomadas, {
   ConferenciaDoAmbiente,
 } from '../../../components/blueprint/DistribuirTomadas';
 import PainelConferenciaNbr from '../../../components/blueprint/PainelConferenciaNbr';
+import PainelEletrica from '../../../components/blueprint/PainelEletrica';
+import { HIPOTESES_PADRAO } from '../../../utils/blueprintEletricaDimensionamento';
+import { applyCommand, emptyModel, point } from '../../../utils/blueprintKernel';
+
+/**
+ * Item 6 (13/09/2026): QDC com dois circuitos — C1 correto (2,5 mm² / 16 A)
+ * e C2 declarado errado (1,5 mm² / 25 A num circuito de tomadas) — para olhar
+ * a linha do pré-dimensionamento e as hipóteses.
+ */
+function cenaEletrica() {
+  let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+  const levelId = m.levels[0].id;
+  m = applyCommand(m, { type: 'AddQuadro', levelId, nome: 'QDC', at: point(0, 0), cotaMm: 1600 }).model;
+  const quadroId = m.quadros[0].id;
+  m = applyCommand(m, { type: 'AddCircuito', quadroId, nome: 'C1 — Tomadas sala', tensaoV: 127, secaoMm2: 2.5, disjuntorA: 16 }).model;
+  m = applyCommand(m, { type: 'AddCircuito', quadroId, nome: 'C2 — Tomadas cozinha', tensaoV: 127, secaoMm2: 1.5, disjuntorA: 25 }).model;
+  const [c1, c2] = m.circuitos.map((c) => c.id);
+  const tomada = (x: number, circuitoId: string, potenciaW: number) => {
+    m = applyCommand(m, {
+      type: 'AddTerminal', levelId, disciplina: 'ELETRICA', tipo: 'TUG', at: point(x, 75), cotaMm: 300,
+      tipoEletrico: 'TUG', potenciaW,
+    }).model;
+    const id = m.terminais[m.terminais.length - 1].id;
+    m = applyCommand(m, { type: 'SetTerminalProps', terminalId: id, circuitoId }).model;
+  };
+  for (const x of [2000, 4000, 6000]) tomada(x, c1, 600);
+  for (const x of [8000, 9000, 10000, 11000]) tomada(x, c2, 600);
+  return m;
+}
 import { ROTULO_DO_TIPO_DE_AMBIENTE } from '../../../utils/blueprintDistribuicao';
 import { TIPOS_DE_AMBIENTE } from '../../../utils/blueprintKernel';
 import type { ConferenciaNbr5410 } from '../../../utils/blueprintNbr5410';
@@ -85,7 +114,9 @@ function Linha({ nome, conf }: (typeof casos)[number]) {
           conferencia={conf}
           luz={{ minimoVA: 340, luzesDeTeto: nome === 'Cozinha' ? 1 : 0, luzes: nome === 'Cozinha' ? 1 : 0, interruptores: 0,
             declaradoVA: nome === 'Cozinha' ? 100 : 0, semPotencia: 0, faltaLuzDeTeto: nome !== 'Cozinha', faltaInterruptor: true,
-            deficitVA: nome === 'Cozinha' ? 240 : 340 }}
+            deficitVA: nome === 'Cozinha' ? 240 : 340,
+            comandos: { luzesSemInterruptor: [], interruptoresSemLuz: [], paralelosSemPar: [], intermediariosSemParalelos: [] },
+            faltaComando: false }}
           onCompletar={() => 2}
         />
         <DistribuirTomadas escopo="neste ambiente" onDistribuir={(n) => n} />
@@ -100,6 +131,15 @@ function Linha({ nome, conf }: (typeof casos)[number]) {
 
 createRoot(document.getElementById('raiz')!).render(
   <>
+    <div className="border-b border-slate-200 px-4 py-3" id="eletrica">
+      <PainelEletrica
+        model={cenaEletrica()}
+        onAddCircuito={() => {}}
+        onCircuitoProps={() => {}}
+        hipoteses={HIPOTESES_PADRAO}
+        onHipoteses={() => {}}
+      />
+    </div>
     <div className="border-b border-slate-200 px-4 py-3" id="conferencia">
       <PainelConferenciaNbr conferencia={conferencia} onSelecionar={() => {}} onConverterLigacaoDireta={() => {}} />
     </div>

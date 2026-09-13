@@ -1283,8 +1283,12 @@ export interface Quadro {
  * exigiria; `secaoMm2` é a seção que ele especificou, não a que a corrente e a
  * distância pediriam. A fronteira é fina e precisa estar escrita: **somar é
  * registro, decidir é projeto** — e projeto tem norma, responsabilidade técnica
- * e ART atrás. Dimensionamento está fora do escopo por decisão, não por
- * esquecimento.
+ * e ART atrás.
+ *
+ * Desde 13/09/2026 existe o PRÉ-dimensionamento (`blueprintEletricaDimensionamento`):
+ * ele CALCULA a partir do declarado, com hipóteses escritas, e SUGERE — mas o
+ * que fica gravado aqui continua sendo o que o projetista escolheu. `ligacao`,
+ * `protecaoDR` e `fase` são declarações dele, não resultados.
  */
 export interface Circuito {
   id: ObjectId;
@@ -1301,7 +1305,30 @@ export interface Circuito {
   disjuntorA?: number | null;
   /** Seção do condutor DECLARADA, em mm². */
   secaoMm2?: number | null;
+  /**
+   * Como o circuito é ligado: fase-neutro (`FN`, o comum em 127 V),
+   * fase-fase (`FF`, 220 V entre fases) ou trifásico (`FFF`). Decide a fórmula
+   * da corrente de projeto e quantos condutores carregados a Tabela 36 conta.
+   * Ausente = `FN`.
+   */
+  ligacao?: LigacaoDoCircuito | null;
+  /**
+   * Proteção por dispositivo DR (30 mA) DECLARADA. `true`/`false` são
+   * declarações; ausente = ninguém disse. A NBR 5410 (5.1.3.2.2) a exige onde
+   * há tomada em banheiro, cozinha/serviço, área externa e no chuveiro.
+   */
+  protecaoDR?: boolean | null;
+  /** Em quadro trifásico, a fase (`R`, `S`, `T`) que este circuito FN ocupa. */
+  fase?: FaseDoCircuito | null;
 }
+
+/** As ligações possíveis de um circuito — ver `Circuito.ligacao`. */
+export const LIGACOES_DO_CIRCUITO = ['FN', 'FF', 'FFF'] as const;
+export type LigacaoDoCircuito = (typeof LIGACOES_DO_CIRCUITO)[number];
+
+/** As fases de um quadro trifásico — ver `Circuito.fase`. */
+export const FASES_DO_CIRCUITO = ['R', 'S', 'T'] as const;
+export type FaseDoCircuito = (typeof FASES_DO_CIRCUITO)[number];
 
 export interface BlueprintModel {
   levels: Level[];
@@ -2934,6 +2961,12 @@ export function assertModelInvariants(model: BlueprintModel): void {
       if (v != null && (!Number.isFinite(v) || v <= 0)) {
         throw new KernelError('BAD_CIRCUIT_VALUE', `${campo} inválido em ${c.id}: ${v}`);
       }
+    }
+    if (c.ligacao != null && !(LIGACOES_DO_CIRCUITO as readonly string[]).includes(c.ligacao)) {
+      throw new KernelError('BAD_CIRCUIT_LINK', `Ligação inválida em ${c.id}: ${c.ligacao}`);
+    }
+    if (c.fase != null && !(FASES_DO_CIRCUITO as readonly string[]).includes(c.fase)) {
+      throw new KernelError('BAD_CIRCUIT_PHASE', `Fase inválida em ${c.id}: ${c.fase}`);
     }
   }
 

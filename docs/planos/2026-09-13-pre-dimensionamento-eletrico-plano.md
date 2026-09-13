@@ -15,7 +15,40 @@ O item 6 da lista que propus em 13/09/2026:
 
 O item 3 (tipo do ambiente no IFC) foi feito antes deste plano — `3075323f`.
 
-Este documento é **só o plano**. Nada dele está implementado.
+## Status de implementação — 13/09/2026
+
+Respostas do usuário ao §8: *"1. vou testar · 2. enviado as Tabelas 36, 40,
+42 e 47 · 3. uma tabela de projeto executivo com disciplina"*.
+
+| fatia | estado | onde |
+|---|---|---|
+| F1 corrente de projeto | ✅ | `Circuito.ligacao` (kernel 0.27.0 → **0.28.0**), `correnteDeProjetoA` |
+| F2 seção mínima | ✅ | Tabelas **36, 40, 42, 47 transcritas do PDF** (páginas citadas no código; pontos conferidos em teste), `secaoMinima` com f_temp × f_agrup |
+| F3 disjuntor | ✅ | `disjuntorSugeridoA` (IB ≤ In ≤ Iz), "usar sugerido" na tela |
+| F4 queda de tensão | ✅ | `quedaDeTensaoPct` com L **pelos eletrodutos** (caminho mais longo a partir do quadro) ou **estimado** — dito |
+| F5 DR | ✅ | `Circuito.protecaoDR`, regra **5.1.3.2.2** na conferência (banheiro, cozinha/serviço, varanda, chuveiro) |
+| F6 quadro/alimentador | ⏳ | `Circuito.fase` já existe no kernel; demanda, alimentador e balanceamento ficam |
+| F7 emissão com ART | ⏳ | molde confirmado: **uma** `blueprint_study_projeto_executivo` com `disciplina`. Hipóteses hoje persistem no navegador (`blueprint:hipotesesEletricas`); a tabela por estudo vem aqui |
+| F8 prancha · F9 eletroduto | ⏳ | — |
+
+**Na tela**: sob cada circuito, a linha de declarações (tensão, ligação, DR —
+tensão **não tinha campo nenhum** até aqui, o que deixava 9.5.3.1/9.5.3.3
+sempre "não avaliado") e a linha do pré-dimensionamento: IB, seção mínima,
+In sugerido, ΔV, achados em vermelho com o item da norma, "usar sugerido".
+Painel recolhível de hipóteses. Regra **PRE-DIM** na Conferência NBR 5410.
+
+**Achados do harness antes de publicar**: a linha nova alargava a tabela e
+cortava a coluna Carga (`table-fixed` + larguras no cabeçalho); números com
+ponto nas mensagens (agora vírgula).
+
+**Verificação**: `blueprintEletricaDimensionamento` 23/23 (inclui os pontos
+das tabelas contra o PDF) · `blueprintNbr5410DrEPreDim` 6/6 ·
+`PainelEletricaPreDim` 5/5 · goldens 7/7 (neutras em 0.27.0 antes do bump) ·
+suíte 4.009 · build OK · harness olhado (quadro com C1 correto e C2 errado).
+
+---
+
+O texto abaixo é o plano original, mantido como foi escrito.
 
 ---
 

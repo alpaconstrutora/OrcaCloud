@@ -185,7 +185,25 @@ export interface HipotesesEletricas {
   limiteQuedaTotalPct: number;
   /** Desequilíbrio de fases tolerado num quadro trifásico, % (aviso acima). */
   desequilibrioMaxPct: number;
+  /**
+   * F9 — diâmetro EXTERNO típico do condutor isolado por seção (mm) e diâmetro
+   * INTERNO típico do eletroduto por bitola nominal (mm). São tabelas de
+   * CATÁLOGO, não da norma — editáveis; confira com o fabricante.
+   */
+  diametroExternoCondutorMm: readonly (readonly [number, number])[];
+  diametroInternoEletrodutoMm: readonly (readonly [number, number])[];
 }
+
+/** Diâmetro externo típico do condutor isolado (cobre, PVC 750 V), por seção — mm. */
+export const DIAMETRO_EXTERNO_CONDUTOR_MM: readonly (readonly [number, number])[] = [
+  [1.5, 3.0], [2.5, 3.6], [4, 4.2], [6, 4.8], [10, 6.0], [16, 7.2], [25, 9.0], [35, 10.2], [50, 12.0], [70, 13.8], [95, 16.0],
+];
+
+/** Diâmetro interno típico do eletroduto rígido de PVC, pelo diâmetro nominal — mm. */
+export const DIAMETRO_INTERNO_ELETRODUTO_MM: readonly (readonly [number, number])[] = [
+  [16, 13.3], [20, 17.4], [25, 22.4], [32, 29.4], [40, 36.4], [50, 46.3], [60, 55.7], [75, 71.0], [85, 80.9],
+];
+
 
 export const HIPOTESES_PADRAO: HipotesesEletricas = {
   metodoDeInstalacao: 'B1',
@@ -197,6 +215,8 @@ export const HIPOTESES_PADRAO: HipotesesEletricas = {
   demanda: { nome: 'sem demanda (1,00)', ILUMINACAO: 1, TUG: 1, FORCA: 1 },
   limiteQuedaTotalPct: 5,
   desequilibrioMaxPct: 10,
+  diametroExternoCondutorMm: DIAMETRO_EXTERNO_CONDUTOR_MM,
+  diametroInternoEletrodutoMm: DIAMETRO_INTERNO_ELETRODUTO_MM,
 };
 
 // ─── Corrente de projeto ───────────────────────────────────────────────────
@@ -406,7 +426,9 @@ export function preDimensionarCircuito(
   circuito: Circuito,
   hip: HipotesesEletricas = HIPOTESES_PADRAO,
 ): PreDimensionamentoDoCircuito {
-  const pontos = (model.terminais ?? []).filter((t) => t.circuitoId === circuito.id);
+  // O INTERRUPTOR está no circuito mas não é carga: não conta ponto nem
+  // potência — senão todo circuito de luz apareceria com "1 sem potência".
+  const pontos = (model.terminais ?? []).filter((t) => t.circuitoId === circuito.id && t.tipoEletrico !== 'INTERRUPTOR');
   const comPotencia = pontos.filter((t) => t.potenciaW != null);
   const sVA = comPotencia.reduce((s, t) => s + (t.potenciaW as number), 0);
   const ligacao = circuito.ligacao ?? 'FN';
@@ -749,4 +771,86 @@ export function preDimensionarQuadroCompleto(
   }
 
   return base;
+}
+
+// ─── F9 — TAXA DE OCUPAÇÃO DO ELETRODUTO (6.2.11.1.6) ──────────────────────
+//
+// A NBR 5410 limita a área ocupada pelos condutores no eletroduto: 53 % com
+// UM condutor, 31 % com DOIS, 40 % com TRÊS ou mais. A conta precisa de dois
+// diâmetros que a norma NÃO dá — o EXTERNO do condutor isolado e o INTERNO do
+// eletroduto — e que variam por fabricante. Por isso os dois são HIPÓTESES
+// (tabelas típicas de catálogo, editáveis), e a tela diz que são.
+
+/** O limite de ocupação pelo número de condutores (6.2.11.1.6). */
+export function limiteDeOcupacaoPct(condutores: number): number {
+  if (condutores <= 1) return 53;
+  if (condutores === 2) return 31;
+  return 40;
+}
+
+const procurar = (tabela: readonly (readonly [number, number])[], chave: number): number | null =>
+  tabela.find(([k]) => k === chave)?.[1] ?? null;
+
+export interface OcupacaoDoEletroduto {
+  condutores: number;
+  secaoMm2: number;
+  bitolaMm: number;
+  diametroInternoMm: number;
+  diametroCondutorMm: number;
+  ocupacaoPct: number;
+  limitePct: number;
+  atende: boolean;
+  /** O menor diâmetro nominal da tabela que atenderia, quando não atende. */
+  bitolaQueAtendeMm: number | null;
+}
+
+/**
+ * A ocupação de um eletroduto: `condutores` de `secaoMm2` numa bitola nominal.
+ * `null` quando a bitola ou a seção não está nas tabelas — não se aproxima.
+ */
+export function ocupacaoDoEletroduto(
+  bitolaMm: number,
+  condutores: number,
+  secaoMm2: number,
+  hip: Pick<HipotesesEletricas, 'diametroExternoCondutorMm' | 'diametroInternoEletrodutoMm'> = HIPOTESES_PADRAO,
+): OcupacaoDoEletroduto | null {
+  const dCond = procurar(hip.diametroExternoCondutorMm, secaoMm2);
+  const dInt = procurar(hip.diametroInternoEletrodutoMm, bitolaMm);
+  if (dCond == null || dInt == null || condutores <= 0) return null;
+  const areaCondutores = condutores * Math.PI * (dCond / 2) ** 2;
+  const ocupacao = (bitola: number, interno: number) => (areaCondutores / (Math.PI * (interno / 2) ** 2)) * 100;
+  const ocupacaoPct = ocupacao(bitolaMm, dInt);
+  const limitePct = limiteDeOcupacaoPct(condutores);
+  const atende = ocupacaoPct <= limitePct;
+  let bitolaQueAtendeMm: number | null = null;
+  if (!atende) {
+    for (const [b, i] of hip.diametroInternoEletrodutoMm) {
+      if (b > bitolaMm && ocupacao(b, i) <= limitePct) {
+        bitolaQueAtendeMm = b;
+        break;
+      }
+    }
+  }
+  return { condutores, secaoMm2, bitolaMm, diametroInternoMm: dInt, diametroCondutorMm: dCond, ocupacaoPct, limitePct, atende, bitolaQueAtendeMm };
+}
+
+/**
+ * A ocupação de um TRECHO do desenho: bitola do trecho, condutores declarados
+ * e a seção DECLARADA do circuito (ou a mínima calculada, quando não há
+ * declarada). Devolve também o motivo quando não dá para avaliar.
+ */
+export function ocupacaoDoTrecho(
+  model: BlueprintModel,
+  trecho: Trecho,
+  hip: HipotesesEletricas = HIPOTESES_PADRAO,
+): { ocupacao: OcupacaoDoEletroduto | null; motivo: string | null } {
+  if (trecho.disciplina !== 'ELETRICA') return { ocupacao: null, motivo: 'não é eletroduto' };
+  if (!trecho.condutores) return { ocupacao: null, motivo: 'condutores não declarados' };
+  const circuito = (model.circuitos ?? []).find((c) => c.id === trecho.circuitoId);
+  if (!circuito) return { ocupacao: null, motivo: 'sem circuito — a seção vem do circuito' };
+  const secao = circuito.secaoMm2 ?? preDimensionarCircuito(model, circuito, hip).secaoCalculada?.secaoMm2 ?? null;
+  if (secao == null) return { ocupacao: null, motivo: 'circuito sem seção declarada nem calculável' };
+  const oc = ocupacaoDoEletroduto(trecho.bitolaMm, trecho.condutores, secao, hip);
+  if (!oc) return { ocupacao: null, motivo: `bitola ${trecho.bitolaMm} mm ou seção ${String(secao).replace('.', ',')} mm² fora das tabelas` };
+  return { ocupacao: oc, motivo: null };
 }

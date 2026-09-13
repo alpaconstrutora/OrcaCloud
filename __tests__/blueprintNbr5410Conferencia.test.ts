@@ -279,7 +279,7 @@ describe('9.5.3.3 · circuito comum', () => {
 });
 
 describe('o conjunto', () => {
-  it('dez regras, sempre na mesma ordem; faltas e avisos somados', () => {
+  it('onze regras, sempre na mesma ordem; faltas e avisos somados', () => {
     let m = classificar(casa(), 0, 'Sala', 'SALA_DORMITORIO');
     m = ponto(m, ESQ.x, ESQ.y, 'TUE', { tipo: 'Chuveiro' });
     const c = conferirNbr5410(m);
@@ -296,6 +296,8 @@ describe('o conjunto', () => {
       // sugeridas são pendência de posição.
       '5.1.3.2.2',
       'PRE-DIM',
+      // F9 (13/09/2026): a taxa de ocupação do eletroduto.
+      '6.2.11.1.6',
       'SUGERIDAS',
     ]);
     // Sala vazia de TUG (falta) + chuveiro em TUE (falta) + TUE sem potência (aviso)

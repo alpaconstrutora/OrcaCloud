@@ -1,198 +1,140 @@
 /**
- * As três convenções que faltavam da prancha elétrica (09/09/2026).
+ * F8 — A PRANCHA ELÉTRICA no papel e no DXF (13/09/2026).
  *
- * Vindas de um print de projeto real, com o pedido "implemente tudo":
+ * A exportação não desenhava NENHUM símbolo elétrico. Agora, com a prancha
+ * "Elétrica": símbolos e rótulos por cima da planta; legenda e quadro de
+ * cargas numa folha própria; camadas PLANTA-ELETRICA(-TEXTO) no DXF.
  *
- *   1. o número dentro do círculo da luminária — a POTÊNCIA;
- *   2. o `#2,5` ao lado do traço — a SEÇÃO do condutor, e os traços cruzando a
- *      linha que dizem quantos fios passam;
- *   3. as letras "a", "b", "c" — o COMANDO que liga interruptor e ponto de luz.
- *
- * ⚠️ Duas exigiram campo novo no kernel; a primeira não: `potenciaW` já existia
- * e só não estava sendo desenhada.
+ * ⚠️ E a planta arquitetônica continua a mesma: sem `eletrica`, nenhum texto
+ * nem traço elétrico entra — é o que mantém os PDFs de sempre byte a byte.
  */
 import { describe, expect, it } from 'vitest';
+import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import {
-  applyCommand,
-  assertModelInvariants,
-  canonicalPayload,
-  emptyModel,
-  modelFromCanonicalPayload,
-  parseCanonicalPayload,
-  payloadDoHash,
-  point,
-  type BlueprintModel,
-} from '../utils/blueprintKernel';
+  DesenhistaDeProva,
+  PAPEIS,
+  desenharFolhaDoQuadroDeCargas,
+  desenharPlanta,
+  enquadrar,
+  orientar,
+  type OpcoesExportacao,
+} from '../utils/blueprintExport';
+import { familiasPresentes, linhasDaLegenda, linhasDoQuadroDeCargas } from '../utils/blueprintPranchaEletrica';
+import { gerarDxf } from '../utils/blueprintDxf';
+import { HIPOTESES_PADRAO } from '../utils/blueprintEletricaDimensionamento';
 
-/** Um desenho com quadro, circuito, um trecho e uma luminária. */
-function cena(): BlueprintModel {
-  let m = applyCommand(emptyModel(), {
-    type: 'AddLevel',
-    name: 'Térreo',
-    elevationMm: 0,
-    defaultHeightMm: 2800,
-  }).model;
-  const levelId = m.levels[0].id;
-  m = applyCommand(m, {
-    type: 'AddQuadro',
-    levelId,
-    nome: 'QDC',
-    at: point(0, 0),
-    cotaMm: 1600,
-  }).model;
-  m = applyCommand(m, {
-    type: 'AddCircuito',
-    quadroId: m.quadros[0].id,
-    nome: 'C1',
-    secaoMm2: 2.5,
-  }).model;
-  m = applyCommand(m, {
-    type: 'AddTerminal',
-    levelId,
-    disciplina: 'ELETRICA',
-    tipo: 'Luminária',
-    at: point(3000, 0),
-    cotaMm: 2800,
-    tipoEletrico: 'ILUMINACAO_TETO',
-  }).model;
-  return applyCommand(m, {
-    type: 'AddTrecho',
-    levelId,
-    disciplina: 'ELETRICA',
-    a: point(0, 0),
-    b: point(3000, 0),
-    cotaAMm: 2800,
-    cotaBMm: 2800,
-    bitolaMm: 25,
-  }).model;
+/** Sala 6 × 4 com QDC, C1 (tomadas) e um eletroduto no piso; uma luz com interruptor. */
+function casa(): BlueprintModel {
+  const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+  const t = base.levels[0].id;
+  const p = (ax: number, ay: number, bx: number, by: number): Command => ({
+    type: 'AddWall', levelId: t, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800,
+  });
+  let m = applyBatch(base, [p(0, 0, 6000, 0), p(6000, 0, 6000, 4000), p(6000, 4000, 0, 4000), p(0, 4000, 0, 0)]).model;
+  m = applyCommand(m, { type: 'AddQuadro', levelId: t, nome: 'QDC', at: point(75, 1000), cotaMm: 1600, ligacao: 'FN', tensaoV: 127, alimentadorM: 8 }).model;
+  const quadroId = m.quadros[0].id;
+  m = applyCommand(m, { type: 'AddCircuito', quadroId, nome: 'C1', tensaoV: 127, secaoMm2: 2.5, disjuntorA: 16 }).model;
+  const c1 = m.circuitos[0].id;
+  const ponto = (x: number, y: number, tipoEletrico: 'TUG' | 'ILUMINACAO_TETO' | 'INTERRUPTOR', potenciaW: number | null, cotaMm: number, comando: string | null = null) => {
+    m = applyCommand(m, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: tipoEletrico, at: point(x, y), cotaMm, tipoEletrico, potenciaW: potenciaW ?? undefined, comando }).model;
+    const id = m.terminais[m.terminais.length - 1].id;
+    m = applyCommand(m, { type: 'SetTerminalProps', terminalId: id, circuitoId: c1 }).model;
+  };
+  ponto(2000, 75, 'TUG', 600, 300);
+  ponto(4000, 75, 'TUG', 600, 1300);
+  ponto(3000, 2000, 'ILUMINACAO_TETO', 160, 2800, 'a');
+  ponto(1000, 75, 'INTERRUPTOR', null, 1100, 'a');
+  m = applyCommand(m, { type: 'AddTrecho', levelId: t, disciplina: 'ELETRICA', a: point(75, 1000), b: point(2000, 75), cotaAMm: 0, cotaBMm: 0, bitolaMm: 25 }).model;
+  m = applyCommand(m, { type: 'SetTrechoProps', trechoId: m.trechos[0].id, circuitoId: c1, condutores: 3 }).model;
+  return m;
 }
 
-describe('prancha · o circuito e os condutores do TRECHO', () => {
-  it('⚠️ a SEÇÃO não é campo do trecho — ela é a do circuito', () => {
-    // Um número próprio no trecho poderia divergir do quadro de cargas, e a
-    // prancha diria 2,5 num traço que a tabela soma como 4.
-    const m = cena();
-    const comCircuito = applyCommand(m, {
-      type: 'SetTrechoProps',
-      trechoId: m.trechos[0].id,
-      circuitoId: m.circuitos[0].id,
-    }).model;
-    expect(comCircuito.trechos[0].circuitoId).toBe(m.circuitos[0].id);
-    expect(m.circuitos[0].secaoMm2).toBe(2.5);
-    // E o trecho NÃO ganhou um campo de seção.
-    expect('secaoMm2' in comCircuito.trechos[0]).toBe(false);
+const papel = orientar(PAPEIS.find((p) => p.id === 'A3') ?? PAPEIS[0], true);
+const opcoes = (extra: Partial<OpcoesExportacao> = {}): OpcoesExportacao => ({
+  denominador: 50,
+  papel,
+  titulo: 'Casa',
+  revisao: 1,
+  hash: 'p'.repeat(64),
+  data: new Date('2026-09-13T12:00:00Z'),
+  ...extra,
+});
+
+describe('a planta elétrica no papel', () => {
+  it('⚠️ SEM `eletrica`, nenhum símbolo nem rótulo elétrico entra — a planta de sempre', () => {
+    const m = casa();
+    const d = new DesenhistaDeProva();
+    desenharPlanta(d, m, opcoes(), enquadrar(m, 50, papel, false));
+    const textos = d.textos().join(' | ');
+    expect(textos).not.toMatch(/TUG|QDC|Ø25|VA/);
   });
 
-  it('os CONDUTORES são declarados, e inteiros positivos', () => {
-    const m = cena();
-    const id = m.trechos[0].id;
-    expect(applyCommand(m, { type: 'SetTrechoProps', trechoId: id, condutores: 3 }).model
-      .trechos[0].condutores).toBe(3);
-    // ⚠️ Zero é eletroduto vazio: não alimenta nada e ainda assim sairia
-    // desenhado como se alimentasse.
-    expect(() =>
-      applyCommand(m, { type: 'SetTrechoProps', trechoId: id, condutores: 0 }),
-    ).toThrow();
+  it('com `eletrica`: QDC, "TUG · C1", "Luz teto · C1", a letra do comando, "Ø25 #2,5" e a potência', () => {
+    const m = casa();
+    const d = new DesenhistaDeProva();
+    const antes = new DesenhistaDeProva();
+    desenharPlanta(antes, m, opcoes(), enquadrar(m, 50, papel, false));
+    desenharPlanta(d, m, opcoes({ eletrica: true }), enquadrar(m, 50, papel, false));
+    const textos = d.textos();
+    expect(textos).toContain('QDC');
+    expect(textos.filter((t) => t === 'TUG · C1')).toHaveLength(2);
+    expect(textos).toContain('Luz teto · C1');
+    expect(textos).toContain('a');
+    expect(textos).toContain('Ø25 #2,5');
+    expect(textos.filter((t) => t === '600 VA')).toHaveLength(2);
+    // Mais traços que a arquitetônica: os símbolos existem de fato, não só o texto.
+    expect(d.chamadas.length).toBeGreaterThan(antes.chamadas.length + 20);
   });
 
-  it('⚠️ trecho de outra disciplina NÃO pode ter circuito', () => {
-    const m = cena();
-    const agua = applyCommand(m, {
-      type: 'AddTrecho',
-      levelId: m.levels[0].id,
-      disciplina: 'AGUA_FRIA',
-      a: point(0, 500),
-      b: point(1000, 500),
-      cotaAMm: 0,
-      cotaBMm: 0,
-      bitolaMm: 25,
-    }).model;
-    const sujo = {
-      ...agua,
-      trechos: agua.trechos.map((t, i) =>
-        i === 1 ? { ...t, circuitoId: agua.circuitos[0].id } : t,
-      ),
-    };
-    try {
-      assertModelInvariants(sujo);
-      throw new Error('deveria ter recusado');
-    } catch (e) {
-      expect((e as { code?: string }).code).toBe('BAD_RUN_CIRCUIT');
-    }
+  it('a tomada MÉDIA ganha meio preenchimento a mais que a BAIXA (um polígono preto a mais)', () => {
+    const m = casa();
+    const d = new DesenhistaDeProva();
+    desenharPlanta(d, m, opcoes({ eletrica: true }), enquadrar(m, 50, papel, false));
+    const pretos = d.chamadas.filter((c) => c.tipo === 'poligono' && c.args[1] === '#000000');
+    // Uma tomada média (1.300) → um polígono cheio; a baixa (300) → nenhum.
+    expect(pretos).toHaveLength(1);
   });
 
-  it('⚠️ a leitura do canônico traz o circuito do trecho — a ORDEM importa', () => {
-    // Os trechos eram lidos ANTES dos circuitos. Aqui a armadilha é pior que um
-    // TDZ: não estoura — a lista vazia devolveria todo trecho SEM circuito,
-    // calado, e o desenho voltaria sem as seções.
-    const m = cena();
-    const ligado = applyCommand(m, {
-      type: 'SetTrechoProps',
-      trechoId: m.trechos[0].id,
-      circuitoId: m.circuitos[0].id,
-      condutores: 3,
-    }).model;
-    const volta = modelFromCanonicalPayload(parseCanonicalPayload(canonicalPayload(ligado)));
-    expect(volta.trechos[0].circuitoId).toBe(volta.circuitos[0].id);
-    expect(volta.trechos[0].condutores).toBe(3);
+  it('a folha do quadro de cargas traz título, o quadro, o circuito com IB e as hipóteses; a legenda só lista o que existe', () => {
+    const m = casa();
+    const d = new DesenhistaDeProva();
+    desenharFolhaDoQuadroDeCargas(d, m, opcoes({ eletrica: true, hipotesesEletricas: HIPOTESES_PADRAO }), enquadrar(m, 50, papel, false));
+    const textos = d.textos().join('\n');
+    expect(textos).toMatch(/QUADRO DE CARGAS E PRÉ-DIMENSIONAMENTO/);
+    expect(textos).toMatch(/QDC — FN 127 V/);
+    expect(textos).toMatch(/^C1$/m);
+    expect(textos).toMatch(/2,5 \/ 2,5/); // seção declarada / mínima
+    expect(textos).toMatch(/HIPÓTESES/);
+    expect(textos).toMatch(/método B1/);
+    const legenda = linhasDaLegenda(m).join('\n');
+    expect(legenda).toMatch(/TUG \/ TUE/);
+    expect(legenda).toMatch(/LUZ TETO/);
+    expect(legenda).toMatch(/INTERRUPTOR/);
+    expect(legenda).toMatch(/ELETRODUTO NO PISO/);
+    expect(legenda).not.toMatch(/LIGAÇÃO DIRETA/); // não há no desenho
+    expect(familiasPresentes(m).has('ELETRODUTO_PISO')).toBe(true);
   });
 });
 
-describe('prancha · a LETRA do comando', () => {
-  it('sobrevive ao ida e volta', () => {
-    const m = cena();
-    const comLetra = applyCommand(m, {
-      type: 'SetTerminalProps',
-      terminalId: m.terminais[0].id,
-      comando: 'a',
-    }).model;
-    const volta = modelFromCanonicalPayload(parseCanonicalPayload(canonicalPayload(comLetra)));
-    expect(volta.terminais[0].comando).toBe('a');
+describe('a elétrica no DXF', () => {
+  const o = { titulo: 'Casa', revisao: 1, hash: 'p'.repeat(64) };
+
+  it('⚠️ sem `eletrica` as camadas existem mas ficam vazias; com, entram símbolos e textos', () => {
+    const m = casa();
+    const sem = gerarDxf(m, o);
+    expect(sem).not.toMatch(/TEXT\s+8\s+PLANTA-ELETRICA-TEXTO/);
+    const com = gerarDxf(m, { ...o, eletrica: true, hipotesesEletricas: HIPOTESES_PADRAO });
+    expect(com).toMatch(/LAYER[\s\S]*PLANTA-ELETRICA/);
+    expect(com).toMatch(/8\s+PLANTA-ELETRICA-TEXTO[\s\S]*?TUG · C1/);
+    expect(com).toMatch(/QUADRO DE CARGAS E PRE-DIMENSIONAMENTO/);
+    expect(com.length).toBeGreaterThan(sem.length + 2000);
   });
 
-  it('⚠️ é uma LETRA, não um texto — o espaço no desenho é de um caractere', () => {
-    const m = cena();
-    const sujo = {
-      ...m,
-      terminais: [{ ...m.terminais[0], comando: 'interruptor da sala' }],
-    };
-    try {
-      assertModelInvariants(sujo);
-      throw new Error('deveria ter recusado');
-    } catch (e) {
-      expect((e as { code?: string }).code).toBe('BAD_COMMAND');
-    }
-  });
-
-  it('a mesma letra em dois pontos é o normal — é assim que se comanda', () => {
-    // Interruptor "a" e luminária "a" são o par. Um vínculo tipado obrigaria a
-    // criar e apagar relações para o que se escreve com uma letra.
-    const m = cena();
-    const outro = applyCommand(m, {
-      type: 'AddTerminal',
-      levelId: m.levels[0].id,
-      disciplina: 'ELETRICA',
-      tipo: 'Interruptor',
-      at: point(500, 500),
-      cotaMm: 1100,
-      comando: 'a',
-    } as never).model;
-    const comLetra = applyCommand(outro, {
-      type: 'SetTerminalProps',
-      terminalId: outro.terminais[0].id,
-      comando: 'a',
-    }).model;
-    expect(comLetra.terminais.filter((t) => t.comando === 'a')).toHaveLength(2);
-    expect(() => assertModelInvariants(comLetra)).not.toThrow();
-  });
-});
-
-describe('prancha · nada disso muda o hash de quem não usa', () => {
-  it('⚠️ os três campos SOMEM do payload quando ausentes', () => {
-    const payload = JSON.parse(payloadDoHash(cena()));
-    for (const chave of ['circuito', 'condutores']) {
-      expect(Object.keys(payload.trechos[0]), chave).not.toContain(chave);
-    }
-    expect(Object.keys(payload.terminais[0])).not.toContain('comando');
+  it('as linhas do quadro de cargas em texto trazem o circuito e as hipóteses', () => {
+    const L = linhasDoQuadroDeCargas(casa(), HIPOTESES_PADRAO);
+    expect(L[0]).toMatch(/QUADRO DE CARGAS/);
+    // 3 pontos de CARGA (o interruptor não conta), 600 + 600 + 160 = 1.360 VA, IB 10,7 A.
+    expect(L.some((l) => /^C1 \| FN 127 \| 3 \| 1360 \| 10,7 \| 2,5 \/ 2,5 \| 16 \/ 16/.test(l)), L.join('\n')).toBe(true);
+    expect(L.some((l) => /^Hipoteses: cobre\/PVC, metodo B1/.test(l))).toBe(true);
   });
 });

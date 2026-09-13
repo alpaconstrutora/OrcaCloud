@@ -11,6 +11,7 @@ import { jsPDF } from 'jspdf';
 import {
   AVISO_PADRAO,
   desenharElevacao,
+  desenharFolhaDoQuadroDeCargas,
   desenharPlanta,
   enquadrar,
   enquadrarElevacao,
@@ -54,6 +55,8 @@ import { COBERTURA_PLANILHA, abasDoQuantitativo } from '../utils/blueprintPlanil
  */
 export type PranchaExport =
   | 'planta'
+  /** F8: a planta com a camada elétrica + a folha do quadro de cargas. */
+  | 'eletrica'
   | 'frente'
   | 'fundos'
   | 'lateral-esq'
@@ -74,6 +77,7 @@ const DIRECAO_DA_PRANCHA: Record<string, DirecaoElevacao> = {
 
 const ROTULO_FIXO: Record<string, string> = {
   planta: 'Planta',
+  eletrica: 'Planta elétrica',
   frente: 'Elevação frente',
   fundos: 'Elevação fundos',
   'lateral-esq': 'Elevação lateral esquerda',
@@ -103,7 +107,7 @@ function projecaoDaPrancha(
   p: PranchaExport,
   levelIds?: string[],
 ): ProjecaoElevacao | ProjecaoCorte | null {
-  if (p === 'planta') return null;
+  if (p === 'planta' || p === 'eletrica') return null;
   const id = corteDaPrancha(p);
   if (id) {
     const corte = (model.sections ?? []).find((x) => x.id === id);
@@ -311,13 +315,16 @@ export function exportarPranchasPdf(
     p: PranchaExport;
     enq: Enquadramento;
     proj: ProjecaoElevacao | ProjecaoCorte | null;
+    /** F8: a segunda página da prancha elétrica — legenda e quadro de cargas. */
+    quadroDeCargas?: boolean;
   };
 
   // Enquadra tudo antes: uma página não pode sair e a seguinte falhar.
   const enquadrados = pranchas.flatMap<Pagina>((p) => {
-    if (p === 'planta') {
+    if (p === 'planta' || p === 'eletrica') {
       const enq = enquadrar(model, o.denominador, o.papel, o.cotas);
       if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
+      if (p === 'eletrica') return [{ p, enq, proj: null }, { p, enq, proj: null, quadroDeCargas: true }];
       return [{ p, enq, proj: null }];
     }
     const proj = projecaoDaPrancha(model, p, levelIds);
@@ -334,11 +341,16 @@ export function exportarPranchasPdf(
     orientation: o.papel.larguraMm > o.papel.alturaMm ? 'landscape' : 'portrait',
   });
 
-  enquadrados.forEach(({ p, enq, proj }, i) => {
+  enquadrados.forEach(({ p, enq, proj, quadroDeCargas }, i) => {
     if (i > 0) doc.addPage([o.papel.larguraMm, o.papel.alturaMm]);
-    const oPagina = { ...o, titulo: `${o.titulo} — ${rotuloDaPrancha(model, p)}` };
+    const oPagina = {
+      ...o,
+      eletrica: p === 'eletrica',
+      titulo: `${o.titulo} — ${quadroDeCargas ? 'Quadro de cargas' : rotuloDaPrancha(model, p)}`,
+    };
     const desenhista = new DesenhistaPdf(doc);
-    if (proj) desenharElevacao(desenhista, proj, oPagina, enq);
+    if (quadroDeCargas) desenharFolhaDoQuadroDeCargas(desenhista, model, oPagina, enq);
+    else if (proj) desenharElevacao(desenhista, proj, oPagina, enq);
     else desenharPlanta(desenhista, model, oPagina, enq);
   });
 
@@ -356,8 +368,8 @@ export function exportarPranchasPng(
   const k = dpi / 25.4;
   for (const p of pranchas) {
     const proj = projecaoDaPrancha(model, p, levelIds);
-    if (p !== 'planta' && !proj) continue;
-    const oArquivo = { ...o, titulo: `${o.titulo} — ${rotuloDaPrancha(model, p)}` };
+    if (p !== 'planta' && p !== 'eletrica' && !proj) continue;
+    const oArquivo = { ...o, eletrica: p === 'eletrica', titulo: `${o.titulo} — ${rotuloDaPrancha(model, p)}` };
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(o.papel.larguraMm * k);
     canvas.height = Math.round(o.papel.alturaMm * k);
@@ -366,10 +378,26 @@ export function exportarPranchasPng(
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    if (p === 'planta') {
+    if (p === 'planta' || p === 'eletrica') {
       const enq = enquadrar(model, o.denominador, o.papel, o.cotas);
       if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
       desenharPlanta(new DesenhistaCanvas(ctx, dpi), model, oArquivo, enq);
+      if (p === 'eletrica') {
+        // A segunda folha da prancha elétrica: legenda + quadro de cargas.
+        const c2 = document.createElement('canvas');
+        c2.width = canvas.width;
+        c2.height = canvas.height;
+        const ctx2 = c2.getContext('2d');
+        if (ctx2) {
+          ctx2.fillStyle = '#ffffff';
+          ctx2.fillRect(0, 0, c2.width, c2.height);
+          desenharFolhaDoQuadroDeCargas(new DesenhistaCanvas(ctx2, dpi), model, { ...oArquivo, titulo: `${o.titulo} — Quadro de cargas` }, enq);
+          const nome2 = nomeArquivo(oArquivo, 'png').replace(/\.png$/, '-quadro-de-cargas.png');
+          c2.toBlob((blob) => {
+            if (blob) baixar(blob, nome2);
+          }, 'image/png');
+        }
+      }
     } else {
       const enq = enquadrarElevacao(proj!, o.denominador, o.papel);
       if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
@@ -431,6 +459,8 @@ export function montarDxf(
     revisao: o.revisao,
     hash: o.hash,
     cotas: o.cotas,
+    eletrica: o.eletrica,
+    hipotesesEletricas: o.hipotesesEletricas,
     // Elevação e corte saem no MESMO fluxo de blocos à direita da planta: numa
     // prancha os dois são vistas, e separá-los em duas faixas só faria o
     // arquivo ter dois espaçamentos diferentes para a mesma coisa.

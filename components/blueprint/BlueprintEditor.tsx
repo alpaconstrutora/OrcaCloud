@@ -252,6 +252,7 @@ import PainelConferenciaNbr from './PainelConferenciaNbr';
 import { conferirNbr5410 } from '../../utils/blueprintNbr5410';
 import { useBlueprintEletrica } from '../../hooks/useBlueprintEletrica';
 import { hashDaBaseEletrica, memorialEletrico, verificacoesEletricas } from '../../utils/blueprintEletricaExecutivo';
+import { ocupacaoDoTrecho } from '../../utils/blueprintEletricaDimensionamento';
 import PainelEletricaExecutivo from './PainelEletricaExecutivo';
 
 /**
@@ -5466,6 +5467,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       trecho={trechoSel}
                       terminal={terminalSel}
                       circuitos={circuitosParaEscolher}
+                      ocupacao={
+                        trechoSel && trechoSel.disciplina === 'ELETRICA'
+                          ? ocupacaoDoTrecho(editor.model, trechoSel, hipotesesEletricas)
+                          : undefined
+                      }
                       onTrecho={(campos) =>
                         trechoSel &&
                         editor.run({ type: 'SetTrechoProps', trechoId: trechoSel.id, ...campos })
@@ -6393,6 +6399,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               <PainelVersoes
                 study={study}
                 custoPorUid={custoPorUid}
+                hipotesesEletricas={hipotesesEletricas}
                 // As curvas vão para o DXF da prancha nas camadas TOPO-*, no
                 // mesmo mm da planta — a versão EXIBIDA, que é a que se vê.
                 topografia={

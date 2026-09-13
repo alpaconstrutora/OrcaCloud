@@ -35,6 +35,7 @@ import {
 import { conferirIluminacao, conferirTomadas, etiquetaDoAmbiente } from './blueprintDistribuicao';
 import {
   HIPOTESES_PADRAO,
+  ocupacaoDoTrecho,
   preDimensionarCircuito,
   type HipotesesEletricas,
 } from './blueprintEletricaDimensionamento';
@@ -49,6 +50,7 @@ export type CodigoDaRegra =
   | '9.5.3.3'
   | '5.1.3.2.2'
   | 'PRE-DIM'
+  | '6.2.11.1.6'
   | 'SUGERIDAS';
 
 export interface Achado {
@@ -613,6 +615,39 @@ function regraPreDim(model: BlueprintModel, hip: HipotesesEletricas): RegraConfe
   };
 }
 
+// ─── 6.2.11.1.6 — taxa de ocupação do eletroduto ───────────────────────────
+
+function regraEletroduto(model: BlueprintModel, levelId: ObjectId | null, hip: HipotesesEletricas): RegraConferida {
+  const achados: Achado[] = [];
+  const naoAvaliado: string[] = [];
+  let avaliados = 0;
+  const trechos = (model.trechos ?? []).filter((t) => t.disciplina === 'ELETRICA' && (!levelId || t.levelId === levelId));
+  const motivos = new Map<string, number>();
+  for (const t of trechos) {
+    const { ocupacao, motivo } = ocupacaoDoTrecho(model, t, hip);
+    if (!ocupacao) {
+      if (motivo) motivos.set(motivo, (motivos.get(motivo) ?? 0) + 1);
+      continue;
+    }
+    avaliados++;
+    if (!ocupacao.atende) {
+      achados.push({
+        nivel: 'FALTA',
+        mensagem: `eletroduto Ø${t.bitolaMm} com ${ocupacao.condutores} × ${String(ocupacao.secaoMm2).replace('.', ',')} mm²: ocupação ${ocupacao.ocupacaoPct.toFixed(0)} %, limite ${ocupacao.limitePct} %${ocupacao.bitolaQueAtendeMm ? ` — Ø${ocupacao.bitolaQueAtendeMm} atenderia` : ''}`,
+        ids: [t.id],
+      });
+    }
+  }
+  for (const [motivo, n] of motivos) naoAvaliado.push(`${n} eletroduto(s): ${motivo}`);
+  return {
+    codigo: '6.2.11.1.6',
+    titulo: 'Taxa de ocupação do eletroduto (53 % / 31 % / 40 %)',
+    achados,
+    naoAvaliado: [...naoAvaliado, 'diâmetros de condutor e de eletroduto são tabelas típicas de catálogo (hipótese)'],
+    avaliados,
+  };
+}
+
 // ─── Tudo junto ────────────────────────────────────────────────────────────
 
 /**
@@ -634,6 +669,7 @@ export function conferirNbr5410(
     regra9533(model, levelId),
     regra51322(model, levelId),
     regraPreDim(model, hipoteses),
+    regraEletroduto(model, levelId, hipoteses),
     regraSugeridas(model, levelId),
   ];
   const todos = regras.flatMap((r) => r.achados);

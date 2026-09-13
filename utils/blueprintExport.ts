@@ -278,6 +278,14 @@ export interface OpcoesExportacao {
    * em `blueprintIfc.ts`.
    */
   custoPorUid?: ReadonlyMap<string, number>;
+  /**
+   * PRANCHA ELÉTRICA (F8, 13/09/2026): desenha os símbolos elétricos por cima
+   * da planta e, na página seguinte, legenda + quadro de cargas. Ausente =
+   * planta arquitetônica, como sempre foi.
+   */
+  eletrica?: boolean;
+  /** Hipóteses do pré-dimensionamento, para o quadro de cargas da prancha. */
+  hipotesesEletricas?: HipotesesEletricas;
 }
 
 /**
@@ -288,6 +296,9 @@ export interface OpcoesExportacao {
 export const AVISO_PADRAO =
   'ESTUDO PRELIMINAR — sem responsável técnico. Não substitui projeto executivo ' +
   'nem vale para aprovação legal ou execução.';
+
+import { desenharEletrica, desenharQuadroDeCargas } from './blueprintPranchaEletrica';
+import type { HipotesesEletricas } from './blueprintEletricaDimensionamento';
 
 const COR_TRACO = '#000000';
 const COR_AMBIENTE = '#f2f2f2';
@@ -442,8 +453,26 @@ export function desenharPlanta(
     d.texto(px(cx), py(cy) + ESPESSURA_TEXTO_MM, `${area} m²`, ESPESSURA_TEXTO_MM * 0.8);
   }
 
+  // A camada elétrica vem DEPOIS da arquitetura e ANTES das cotas: símbolo
+  // por cima da parede, cota por cima de tudo — a ordem da prancha.
+  if (opcoes.eletrica) desenharEletrica(d, model, { px, py });
+
   if (opcoes.cotas) desenharCotas(d, model, opcoes, enq, px, py);
 
+  desenharCarimbo(d, opcoes, enq);
+}
+
+/**
+ * A FOLHA do quadro de cargas (F8): legenda, tabela por quadro, alimentador e
+ * hipóteses — mesmo papel e mesmo carimbo da planta.
+ */
+export function desenharFolhaDoQuadroDeCargas(
+  d: Desenhista,
+  model: BlueprintModel,
+  opcoes: OpcoesExportacao,
+  enq: Enquadramento,
+): void {
+  desenharQuadroDeCargas(d, model, opcoes, enq, opcoes.hipotesesEletricas);
   desenharCarimbo(d, opcoes, enq);
 }
 

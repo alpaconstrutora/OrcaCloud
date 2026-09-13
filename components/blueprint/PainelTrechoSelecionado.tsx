@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowDownRight, MoveVertical } from 'lucide-react';
 import type { DisciplinaDeRede, Terminal, Trecho } from '../../utils/blueprintKernel';
+import type { OcupacaoDoEletroduto } from '../../utils/blueprintEletricaDimensionamento';
 import { DISCIPLINAS } from '../../utils/blueprintKernel';
 import {
   ROTULO_DA_DISCIPLINA,
@@ -51,6 +52,8 @@ interface Props {
   trecho: Trecho | null;
   terminal: Terminal | null;
   /** Campo omitido fica como está — o painel edita uma coisa por vez. */
+  /** F9: a ocupação do eletroduto, calculada por quem tem o modelo. `undefined` = não mostrar. */
+  ocupacao?: { ocupacao: OcupacaoDoEletroduto | null; motivo: string | null } | null;
   onTrecho: (campos: {
     disciplina?: DisciplinaDeRede;
     cotaAMm?: number;
@@ -81,6 +84,7 @@ interface Props {
 }
 
 export default function PainelTrechoSelecionado({
+  ocupacao,
   trecho,
   terminal,
   onTrecho,
@@ -391,6 +395,18 @@ export default function PainelTrechoSelecionado({
               São os traços cruzando a linha na prancha: 2 = fase e neutro, 3 = com
               retorno, 4 = com terra. <strong>Declarado</strong>, nunca calculado.
             </span>
+            {/* F9 — a taxa de ocupação (6.2.11.1.6), calculada pelo editor com a
+                seção do circuito e as tabelas de catálogo das hipóteses. */}
+            {ocupacao !== undefined && (
+              <p
+                className={`text-[10px] ${ocupacao?.ocupacao ? (ocupacao.ocupacao.atende ? 'text-emerald-700' : 'text-red-700') : 'text-slate-400'}`}
+                aria-label="Ocupação do eletroduto"
+              >
+                {ocupacao?.ocupacao
+                  ? `Ocupação ${ocupacao.ocupacao.ocupacaoPct.toFixed(0)} % (${ocupacao.ocupacao.condutores} × ${String(ocupacao.ocupacao.secaoMm2).replace('.', ',')} mm² em Ø${ocupacao.ocupacao.bitolaMm}) · limite ${ocupacao.ocupacao.limitePct} % (6.2.11.1.6)${ocupacao.ocupacao.atende ? ' ✓' : ocupacao.ocupacao.bitolaQueAtendeMm ? ` ✗ — Ø${ocupacao.ocupacao.bitolaQueAtendeMm} atenderia` : ' ✗'}`
+                  : `Ocupação não avaliada: ${ocupacao?.motivo ?? '—'}.`}
+              </p>
+            )}
           </>
         )}
 

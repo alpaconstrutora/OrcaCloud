@@ -47,12 +47,17 @@ import {
  * tela diz de antemão se cabe no papel. Encolher para caber produziria uma folha
  * que diz 1:100 e mede outra coisa — e alguém vai medir com escalímetro.
  */
+import type { HipotesesEletricas } from '../../utils/blueprintEletricaDimensionamento';
+
 export default function PainelVersoes({
   study,
   custoPorUid,
   topografia,
+  hipotesesEletricas,
 }: {
   study: BlueprintStudy;
+  /** F8: as hipóteses do pré-dimensionamento, para o quadro de cargas da prancha elétrica. */
+  hipotesesEletricas?: HipotesesEletricas;
   /**
    * Curvas de nível e pontos cotados da versão de topografia exibida, para as
    * camadas `TOPO-*` do DXF. Vem do editor porque a topografia vive fora do
@@ -315,6 +320,10 @@ export default function PainelVersoes({
       // procedência em `Pset_OpuraPlanta`; as outras saídas ignoram.
       studyId: study.id,
       cotas,
+      // F8: a camada elétrica no DXF quando a prancha "Elétrica" está marcada;
+      // no PDF/PNG cada prancha decide por si (`exportarPranchasPdf`).
+      eletrica: comEletrica || undefined,
+      hipotesesEletricas,
       // Custo no IFC só quando explicitamente marcado nesta exportação — ver o
       // comentário da caixa, abaixo. `undefined`, e não um mapa vazio, para o
       // gerador não declarar moeda à toa.
@@ -389,6 +398,8 @@ export default function PainelVersoes({
   // a lista reordenaria as pranchas de sempre a cada corte novo.
   const PRANCHAS: { id: PranchaExport; rotulo: string }[] = [
     { id: 'planta', rotulo: 'Planta' },
+    // F8: a planta com os símbolos elétricos + a folha do quadro de cargas.
+    { id: 'eletrica', rotulo: 'Elétrica' },
     { id: 'frente', rotulo: 'Frente' },
     { id: 'fundos', rotulo: 'Fundos' },
     { id: 'lateral-esq', rotulo: 'Lat. esq.' },
@@ -405,8 +416,10 @@ export default function PainelVersoes({
       return PRANCHAS.map((p) => p.id).filter((p) => proximo.includes(p));
     });
   const elevacoesSelecionadas = pranchas.filter(
-    (p): p is Exclude<PranchaExport, 'planta'> => p !== 'planta',
+    (p): p is Exclude<PranchaExport, 'planta' | 'eletrica'> => p !== 'planta' && p !== 'eletrica',
   );
+  /** A elétrica marcada vai para o DXF como camada, e para o PDF/PNG como prancha própria. */
+  const comEletrica = pranchas.includes('eletrica');
 
   async function comparar() {
     if (!compararCom || !modelo) return;
@@ -686,13 +699,13 @@ export default function PainelVersoes({
                 icone={FileText}
                 rotulo="PDF"
                 onClick={() => exportar((m, o) => exportarPranchasPdf(m, o, pranchas))}
-                disabled={!modelo || pranchas.length === 0 || (pranchas.includes('planta') && !enq?.cabe)}
+                disabled={!modelo || pranchas.length === 0 || ((pranchas.includes('planta') || comEletrica) && !enq?.cabe)}
               />
               <BotaoExportar
                 icone={Image}
                 rotulo="PNG"
                 onClick={() => exportar((m, o) => exportarPranchasPng(m, o, pranchas))}
-                disabled={!modelo || pranchas.length === 0 || (pranchas.includes('planta') && !enq?.cabe)}
+                disabled={!modelo || pranchas.length === 0 || ((pranchas.includes('planta') || comEletrica) && !enq?.cabe)}
               />
               <BotaoExportar
                 icone={Download}

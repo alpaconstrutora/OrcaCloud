@@ -127,6 +127,13 @@ export const CAMADAS = {
   ESCADA: 'PLANTA-ESCADA',
   ELEV_ESCADA: 'ELEVACAO-ESCADA',
   CORTE_ESCADA: 'CORTE-ESCADA',
+  /**
+   * ELÉTRICA (F8, 13/09/2026) em duas camadas: os símbolos e eletrodutos, e
+   * os textos (sigla · circuito, Ø, #seção, potência). Quem plota a
+   * arquitetura desliga as duas; quem plota a elétrica plota as duas.
+   */
+  ELETRICA: 'PLANTA-ELETRICA',
+  ELETRICA_TEXTO: 'PLANTA-ELETRICA-TEXTO',
 } as const;
 
 /** Cor por índice ACI, como o R12 espera. */
@@ -161,6 +168,8 @@ const COR_CAMADA: Record<string, number> = {
   [CAMADAS.ESCADA]: 9, // cinza claro — pedra, distinto do magenta do concreto
   [CAMADAS.ELEV_ESCADA]: 9,
   [CAMADAS.CORTE_ESCADA]: 9,
+  [CAMADAS.ELETRICA]: 2, // amarelo — a cor da elétrica no canvas
+  [CAMADAS.ELETRICA_TEXTO]: 2,
 };
 
 const ROTULO_ELEVACAO: Record<string, string> = {
@@ -444,6 +453,10 @@ function entidadesDeAgua(r: Agua): string {
   return saida;
 }
 
+import type { Desenhista } from './blueprintExport';
+import type { HipotesesEletricas } from './blueprintEletricaDimensionamento';
+import { desenharEletrica, linhasDoQuadroDeCargas } from './blueprintPranchaEletrica';
+
 export interface OpcoesDxf {
   titulo: string;
   revisao: number;
@@ -457,6 +470,9 @@ export interface OpcoesDxf {
   elevacoes?: (ProjecaoElevacao | ProjecaoCorte)[];
   /** Curvas de nível e pontos cotados, nas camadas `TOPO-*`, sobre a planta. */
   topografia?: TopografiaParaDxf;
+  /** F8: símbolos elétricos em PLANTA-ELETRICA e o quadro de cargas em texto, abaixo da planta. */
+  eletrica?: boolean;
+  hipotesesEletricas?: HipotesesEletricas;
 }
 
 /**
@@ -775,6 +791,7 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
   // que esconde por onde o corte passa é uma planta incompleta.
   dxf += entidadesDeMarcaDeCorte(model);
   dxf += entidadesDeEscada(model);
+  if (o.eletrica) dxf += entidadesDeEletrica(model, o.hipotesesEletricas);
 
   // Elevações, uma após a outra à direita da planta. O passo entre elas é a
   // largura da mais larga mais uma folga, para não se sobreporem.
@@ -800,6 +817,68 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
 
   dxf += par(0, 'ENDSEC') + par(0, 'EOF');
   return dxf;
+}
+
+/**
+ * A ELÉTRICA no DXF (F8): o MESMO desenho da prancha em papel, passado por um
+ * `Desenhista` que escreve LINE/POLYLINE/TEXT em mm REAIS.
+ *
+ * ─── O TRUQUE DO Y ─────────────────────────────────────────────────────────
+ *
+ * O desenhista do papel trabalha com Y para BAIXO; o DXF, com Y para CIMA.
+ * Projeta-se o modelo num espaço "de papel" (py = −y), desenha-se ali, e o
+ * adaptador desfaz o sinal ao escrever cada entidade. Sem isto o triângulo
+ * da tomada sairia espelhado e o rótulo "embaixo" cairia em cima.
+ *
+ * Os tamanhos de símbolo são de PAPEL; a 1:1 seriam invisíveis. Entram
+ * multiplicados por 50 — a prancha elétrica residencial se plota a 1:50 — e
+ * a cobertura diz isso.
+ */
+function entidadesDeEletrica(model: BlueprintModel, hip?: HipotesesEletricas): string {
+  let saida = '';
+  const FATOR = 50;
+  const d: Desenhista = {
+    linha: (x1, y1, x2, y2) => {
+      saida += linha(CAMADAS.ELETRICA, { x: x1, y: -y1 }, { x: x2, y: -y2 });
+    },
+    poligono: (pontos) => {
+      saida += polilinha(CAMADAS.ELETRICA, pontos.map((p) => ({ x: p.x, y: -p.y })));
+    },
+    texto: (x, y, t, alturaMm) => {
+      saida += texto(CAMADAS.ELETRICA_TEXTO, { x, y: -y }, t, alturaMm * FATOR);
+    },
+    retangulo: (x, y, w, h) => {
+      saida += polilinha(CAMADAS.ELETRICA, [
+        { x, y: -y },
+        { x: x + w, y: -y },
+        { x: x + w, y: -(y + h) },
+        { x, y: -(y + h) },
+      ]);
+    },
+  };
+  desenharEletrica(d, model, { px: (x) => x, py: (y) => -y }, FATOR);
+
+  // Quadro de cargas e legenda, abaixo da planta, uma linha de TEXT por linha.
+  const bb = boundingBoxDoModelo(model);
+  const altura = 200; // mm reais — 4 mm no papel a 1:50
+  let y = (bb?.minY ?? 0) - 1500;
+  const x = bb?.minX ?? 0;
+  for (const l of linhasDoQuadroDeCargas(model, hip)) {
+    saida += texto(CAMADAS.ELETRICA_TEXTO, { x, y }, l, altura);
+    y -= altura * 1.8;
+  }
+  return saida;
+}
+
+function boundingBoxDoModelo(model: BlueprintModel): { minX: number; minY: number } | null {
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (const w of model.walls) {
+    xs.push(w.a.x, w.b.x);
+    ys.push(w.a.y, w.b.y);
+  }
+  if (xs.length === 0) return null;
+  return { minX: Math.min(...xs), minY: Math.min(...ys) };
 }
 
 /**
@@ -860,6 +939,7 @@ function entidadesDeCota(model: BlueprintModel): string {
  * — e as duas levam a decisões opostas.
  */
 export const COBERTURA_DXF = [
+  'Elétrica (quando pedida): símbolos NBR 5444 e eletrodutos em PLANTA-ELETRICA, rótulos (sigla · circuito, Ø, #seção, VA) em PLANTA-ELETRICA-TEXTO; os símbolos têm tamanho de papel a 1:50. O quadro de cargas e a legenda saem como TEXT abaixo da planta.',
   'Unidade: MILÍMETRO, declarada em $INSUNITS. O desenho está em 1:1 — a escala é da prancha.',
   'Paredes: sólido fechado por parede, NÃO APARADO nas junções (os retângulos se sobrepõem).',
   'Eixos: em camada própria, para reeditar as paredes.',

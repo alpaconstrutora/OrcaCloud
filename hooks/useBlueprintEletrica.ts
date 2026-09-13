@@ -49,6 +49,9 @@ export function hipotesesDaColuna(raw: unknown): HipotesesEletricas {
     },
     limiteQuedaTotalPct: n(r.limiteQuedaTotalPct, HIPOTESES_PADRAO.limiteQuedaTotalPct),
     desequilibrioMaxPct: n(r.desequilibrioMaxPct, HIPOTESES_PADRAO.desequilibrioMaxPct),
+    // As tabelas de catálogo (F9) não são editadas pela tela ainda: sempre o padrão.
+    diametroExternoCondutorMm: HIPOTESES_PADRAO.diametroExternoCondutorMm,
+    diametroInternoEletrodutoMm: HIPOTESES_PADRAO.diametroInternoEletrodutoMm,
   };
 }
 

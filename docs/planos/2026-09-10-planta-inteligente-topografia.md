@@ -920,10 +920,14 @@ Estava em "fora do software por decisão" desde a fase 8 ("projeto executivo com
 
 - [x] F45 — `utils/blueprintTopografiaExecutivo.ts` (tipos, `furosMinimosNbr8036`, `empuxoRankineComAgua`, `verificacoesExecutivas`, `hashDaBaseExecutiva`, `avisoExecutivo`, `memorialExecutivo`); export com `executivo`/`avisoDaVersao`; serviço e hook `useBlueprintProjetoExecutivo` (rascunho com respiro, emissão, PDF); painel `SecaoProjetoExecutivo`; editor (drenagem executiva a T = 25, verificações, hash da base, emissão válida, memorial)
 - [x] Testes: `blueprintTopografiaFase17` (8: furos NBR 8036, Rankine seco = clássico e com água maior, responsável/sondagem/ART faltando, muro seco = pré e com água reprova, NSPT × σadm, drenagem T = 25 e taludes, hash da base, memorial, aviso nas exportações) e `PainelTopografiaFase17` (4: campos e lista por grupo, botão só com tudo atendido, emissão válida troca o aviso e leva a ART ao SVG, base mudada volta ao formulário). Ajuste: o CSV do painel passa a levar `executivo`
-- [x] Migration `aplicar_20270921000016` aplicada com `db query -f` e conferida de fora: RLS ligada, policies read/insert/update/delete, `authenticated` com SELECT/INSERT/UPDATE/DELETE, `anon` sem nada, gatilhos `updated` e `immutable`
+- [x] Migrations `aplicar_20270921000016` (tabela) e `aplicar_20270921000017` (sem a FK para a topografia) aplicadas com `db query -f` e conferidas de fora: RLS ligada, policies read/insert/update/delete, `authenticated` com SELECT/INSERT/UPDATE/DELETE, `anon` sem nada, gatilhos `updated` e `immutable`, só a FK do estudo
 - [x] Suíte (292 arquivos, 3.972 testes, 0 falhas), typecheck, `check-ui-standard.sh` (PainelTopografia, BlueprintEditor), `check-xss-sinks.sh`, `verificar:build` e `build` verdes
 - [ ] Publicado e provado
 - [ ] Passeio logado em produção
+
+### Achado desta fase (só a medição pegou)
+
+- **Apagar a versão de topografia falhava depois da emissão**: a FK `topografia_id … ON DELETE SET NULL` fazia o Postgres emitir um UPDATE na linha EMITIDA, que o gatilho de imutabilidade bloqueia — a versão não podia ser apagada. Uma emissão é histórico e já guarda versão e hash; a FK saiu (migration `aplicar_20270921000017`).
 
 ### Pendências (declaradas)
 

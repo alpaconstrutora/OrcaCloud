@@ -126,7 +126,15 @@ async function montar() {
   // O `ClientSelect` (compartilhar com o cliente) abre um `Sheet`, que usa `useConfirm`.
   const { ConfirmProvider } = await import('../../components/ui/confirm');
   render(<ConfirmProvider><PainelVersoes study={study} /></ConfirmProvider>);
+  // ⚠️ Esperar a LISTA CHEGAR, não só a chamada sair. `toHaveBeenCalled()`
+  // satisfaz-se antes de a promessa resolver e de o painel sair de
+  // "Carregando…" — e os testes seguem com `getByLabelText(/escala/i)`
+  // SÍNCRONO. Na máquina local a corrida era ganha; no CI do GitHub, sob a
+  // suíte inteira, perdeu-se em 13/09/2026 (4 testes, "Unable to find a label
+  // /escala/i", "Versão 1"), em dois commits seguidos que nem tocavam neste
+  // painel. Ancorar no fim do carregamento fecha a corrida de vez.
   await waitFor(() => expect(listSnapshots).toHaveBeenCalled());
+  await waitFor(() => expect(screen.queryByText(/^Carregando…$/)).not.toBeInTheDocument());
 }
 
 /**

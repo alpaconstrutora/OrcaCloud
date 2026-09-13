@@ -115,6 +115,7 @@ import Ribbon, { BarraDeOpcoes, BotaoDoRibbon, GrupoDoRibbon, abaEfetiva } from 
 import DockDeRelatorios, { useAlturaDoDock } from './DockDeRelatorios';
 import PainelDeTarefa from './PainelDeTarefa';
 import { Sheet, SheetDescription, SheetFooter, SheetHeader, SheetPanel, SheetTitle } from '../ui/sheet';
+import { aplicarPotenciaPadrao, contextoDoAmbiente, potenciaPadraoVA, conjuntoMolhadoPassaDeSeis } from '../../utils/blueprintPotenciaPadrao';
 import {
   BITOLAS_DE_ELETRODUTO_MM,
   HIPOTESES_ELETRODUTO_PADRAO,
@@ -1507,7 +1508,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     if (!levelId) return 0;
     const pontos = distribuirAoLongo(lados, n, editor.model.walls, editor.model.openings);
     if (pontos.length === 0) return 0;
-    const criados = editor.runBatch(comandosDeTomadasSugeridas(levelId, pontos));
+    // Com a potência da norma já preenchida — 600 VA nas três primeiras de
+    // cozinha/banheiro, 100 VA nas demais e nos outros cômodos.
+    const criados = editor.runBatch(aplicarPotenciaPadrao(editor.model, comandosDeTomadasSugeridas(levelId, pontos)));
     if (criados.length > 0) selecionar(criados);
     return criados.length;
   }
@@ -1555,7 +1558,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       ),
     );
     if (comandos.length === 0) return 0;
-    const criados = editor.runBatch(comandos);
+    // A luz sugerida já traz o mínimo; as tomadas ganham a potência da norma aqui.
+    const criados = editor.runBatch(aplicarPotenciaPadrao(editor.model, comandos));
     if (criados.length > 0) selecionar(criados);
     return criados.length;
   }
@@ -3744,7 +3748,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
   function adicionarTerminal(at: Point) {
     if (!levelId) return;
-    const criados = editor.run({
+    // A POTÊNCIA da norma já vem preenchida (13/09/2026: "ao incluir os pontos
+    // trazer essas características por padrão") — ver `blueprintPotenciaPadrao`.
+    const [comando] = aplicarPotenciaPadrao(editor.model, [{
       type: 'AddTerminal',
       levelId,
       disciplina: disciplinaDeRede,
@@ -3762,7 +3768,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         : COTA_TERMINAL_PADRAO_MM[disciplinaDeRede],
       tipoEletrico: disciplinaDeRede === 'ELETRICA' ? tipoDePontoEletrico : null,
       interruptor: tipoDePontoEletrico === 'INTERRUPTOR' ? tipoDeInterruptor : null,
-    });
+    }]);
+    const criados = editor.run(comando);
     if (criados.length > 0) selecionar(criados);
   }
 
@@ -6665,14 +6672,26 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       trechoSel &&
                       editor.run({ type: 'SetTrechoProps', trechoId: trechoSel.id, ...campos })
                     }
-                    onTerminal={(campos) =>
-                      terminalSel &&
+                    onTerminal={(campos) => {
+                      if (!terminalSel) return;
+                      // CLASSIFICAR um ponto que ainda não tem potência é uma
+                      // forma de incluí-lo: a potência da norma vem junto do
+                      // tipo, e o projetista troca se quiser.
+                      const padrao =
+                        campos.tipoEletrico && campos.potenciaW === undefined && terminalSel.potenciaW == null
+                          ? potenciaPadraoVA(
+                              campos.tipoEletrico,
+                              contextoDoAmbiente(editor.model, terminalSel.levelId, terminalSel.at),
+                              conjuntoMolhadoPassaDeSeis(editor.model, terminalSel.levelId),
+                            )
+                          : null;
                       editor.run({
                         type: 'SetTerminalProps',
                         terminalId: terminalSel.id,
                         ...campos,
-                      })
-                    }
+                        ...(padrao != null ? { potenciaW: padrao } : {}),
+                      });
+                    }}
                   />
 
                   <PainelEstruturaSelecionada

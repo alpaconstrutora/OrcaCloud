@@ -34,6 +34,23 @@ memória.)
 | 9.5.3.2 | tomadas de cozinha/serviço: circuito exclusivo | ✅ (`AMBIENTES_9532` = COZINHA_SERVICO; banheiro fica fora, como no texto) |
 | 9.5.3.3 a/b/c | comum ≤ 16 A; nem toda a luz nem todas as tomadas num só comum | ✅ |
 
+## Potência da norma já preenchida ao criar o ponto (mesmo dia)
+
+Pedido: *"ao incluir os pontos trazer essas características já definidas por
+padrão. Se o usuário quiser alterar ele altera. Isso economiza tempo"*.
+
+`utils/blueprintPotenciaPadrao.ts`: `potenciaPadraoVA(tipo, contexto)` —
+tomada 100 VA; em banheiro/cozinha 600 VA nos três primeiros pontos do cômodo
+(dois, se o conjunto passa de seis) e 100 VA nos excedentes, contando o que já
+existe **e o que nasce no mesmo lote** ("distribuir 4" → 600, 600, 600, 100);
+luz: a primeira do cômodo leva o mínimo da área de 9.5.2.1.2, as demais 100 VA;
+interruptor, dados e ligação direta ficam sem padrão (função do equipamento —
+dito). Fora de ambiente ou sem tipo: 100 VA. `aplicarPotenciaPadrao(model,
+comandos)` preenche só o que veio sem potência. Aplicado ao clique da
+ferramenta, a "Distribuir N", a "Completar pela norma" e a **classificar** um
+ponto sem potência no painel. É padrão, não decisão: o campo continua editável
+e a conferência 9.5.2.2.2 confere o declarado.
+
 **Prova**: `__tests__/blueprintNbr5410Notas.test.ts` (6): e.1 conta a 500 mm e
 não a 1.200 mm; varanda < 2 m² e varanda de 0,7 m de profundidade; texto da
 bancada; distância ao anel; lavabo com arandela admitido; sala/depósito grande

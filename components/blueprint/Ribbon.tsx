@@ -155,14 +155,20 @@ export function BotaoDoRibbon({
   onClick,
   contagem,
   ajuda,
+  disabled,
+  perigo,
 }: {
   icone: React.ComponentType<{ className?: string }>;
   rotulo: string;
-  ativo: boolean;
+  /** `undefined` = ação pontual (sem `aria-pressed`): excluir, dividir, copiar. */
+  ativo?: boolean;
   onClick: () => void;
   /** Número depois do rótulo — conflitos, circuitos, formas medidas. */
   contagem?: number;
   ajuda?: string;
+  disabled?: boolean;
+  /** Ação destrutiva (Excluir): vermelha, como o `ActionIconButton kind="delete"`. */
+  perigo?: boolean;
 }) {
   return (
     <button
@@ -170,8 +176,13 @@ export function BotaoDoRibbon({
       aria-pressed={ativo}
       onClick={onClick}
       title={ajuda}
-      className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
-        ativo ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+      disabled={disabled}
+      className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+        ativo
+          ? 'bg-blue-600 text-white'
+          : perigo
+            ? 'text-red-600 hover:bg-red-50'
+            : 'text-slate-600 hover:bg-slate-100'
       }`}
     >
       <Icone className="h-4 w-4" />

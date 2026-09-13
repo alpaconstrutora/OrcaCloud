@@ -965,6 +965,34 @@ describe('BlueprintEditor · ribbon', () => {
     expect(botao(/^do dxf$/i)).toHaveAttribute('aria-pressed', 'false');
   });
 
+  it('a aba contextual Modificar só existe com seleção — e traz Copiar, Excluir e as ações da peça', async () => {
+    loadBranchModel.mockResolvedValue(comDuasParedesSoltas());
+    await montar();
+    expect(screen.queryByRole('tab', { name: 'Modificar' })).not.toBeInTheDocument();
+
+    // Selecionar pela lista de vãos (o canvas é opaco em jsdom) marca as duas paredes.
+    await userEvent.setup().click(await screen.findByRole('button', { name: /Vão 1 · 1,00 m/ }));
+    const modificar = screen.getByRole('tab', { name: 'Modificar' });
+    expect(modificar).toBeInTheDocument();
+    // Não pula sozinha na primeira seleção: quem está desenhando continua onde estava.
+    expect(screen.getByRole('tab', { name: 'Arquitetura' })).toHaveAttribute('aria-selected', 'true');
+
+    await userEvent.setup().click(modificar);
+    expect(modificar).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('group', { name: /2 selecionados/i })).toBeInTheDocument();
+    expect(botao(/^copiar$/i)).toBeInTheDocument();
+    // Dividir/Unir são de UMA parede; com duas, não aparecem.
+    expect(screen.queryByRole('button', { name: /^dividir$/i })).not.toBeInTheDocument();
+
+    // Excluir esvazia a seleção: a aba some e o ribbon volta à aba de trabalho.
+    // (Escopado ao ribbon: o painel de seleção múltipla também tem "Excluir".)
+    await userEvent
+      .setup()
+      .click(within(screen.getByRole('toolbar')).getByRole('button', { name: /^excluir$/i }));
+    expect(screen.queryByRole('tab', { name: 'Modificar' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Arquitetura' })).toHaveAttribute('aria-selected', 'true');
+  });
+
   it('"Dados do lote" (aba Terreno) abre o painel do terreno como tarefa', async () => {
     await montar();
     await abrirAba(/^terreno$/i);

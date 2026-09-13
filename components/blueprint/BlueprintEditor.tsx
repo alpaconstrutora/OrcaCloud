@@ -7,11 +7,15 @@ import {
   Boxes,
   Calculator,
   FileText,
+  FlipHorizontal2,
+  FlipVertical2,
   History,
   Landmark,
+  Merge,
   MessageSquare,
   MessagesSquare,
   PenTool,
+  Split,
   Table2,
   CheckCircle2,
   ClipboardPaste,
@@ -454,6 +458,9 @@ const ABAS_DO_RIBBON = [
   { id: 'analisar', rotulo: 'Analisar', naVista: true },
   { id: 'colaborar', rotulo: 'Colaborar', naVista: true },
   { id: 'vista', rotulo: 'Vista', naVista: true },
+  // A CONTEXTUAL (a "Modificar" do Revit): só existe com algo selecionado na
+  // planta, por último e em verde. Nunca é persistida — ver `emModificar`.
+  { id: 'modificar', rotulo: 'Modificar', naVista: false, contextual: true },
 ] as const;
 type AbaDoRibbonDoEditor = (typeof ABAS_DO_RIBBON)[number]['id'];
 
@@ -676,11 +683,39 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   /** Elevacao OU corte - as duas vistas que o `ElevationCanvas` desenha. */
   const vistaEhProjecao = ehVistaDeProjecao(vista) && (!corteDaVista(vista) || !!corteAtual);
   const em3d = vista === '3d';
-  // As abas que esta vista admite, e a que está aberta de fato.
-  const abasDoRibbon = ABAS_DO_RIBBON.filter((a) => !emVista || a.naVista);
+  // As abas que esta vista admite, e a que está aberta de fato. "Modificar" só
+  // com seleção na planta.
+  const modificarDisponivel = !emVista && editor.selectedIds.length > 0;
+  const abasDoRibbon = ABAS_DO_RIBBON.filter(
+    (a) => (!emVista || a.naVista) && (a.id !== 'modificar' || modificarDisponivel),
+  );
+  /**
+   * Se a pessoa está na aba contextual. Estado de sessão, separado da aba
+   * salva: quando a seleção some, volta-se à aba de trabalho sem perdê-la; e
+   * na próxima seleção Modificar reabre sozinha — é o que faz a aba ser
+   * "contextual" e não só mais uma aba. Não é auto-aberta na PRIMEIRA
+   * seleção: quem está em Instalações clicando pontos não quer o ribbon
+   * pulando a cada clique. Quem a escolheu uma vez, a recebe.
+   */
+  const [emModificar, setEmModificar] = useState(false);
   // Fora da planta, a aba de Arquitetura não existe — e o que se quer ali é
   // olhar (Exibir, Enquadrar, Inverter o lado), então a preferida é Vista.
-  const aba = abaEfetiva(abasDoRibbon, abaSalva, 'vista');
+  const aba: AbaDoRibbonDoEditor =
+    emModificar && modificarDisponivel
+      ? 'modificar'
+      : abaEfetiva(
+          abasDoRibbon.filter((a) => a.id !== 'modificar'),
+          abaSalva,
+          'vista',
+        );
+  const escolherAba = (id: AbaDoRibbonDoEditor) => {
+    if (id === 'modificar') {
+      setEmModificar(true);
+      return;
+    }
+    setEmModificar(false);
+    setAbaSalva(id);
+  };
 
   /**
    * A TAREFA aberta no painel e o RELATÓRIO aberto no dock. Estado de sessão,
@@ -4366,7 +4401,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       <Ribbon
         abas={abasDoRibbon}
         ativa={aba}
-        onEscolher={setAbaSalva}
+        onEscolher={escolherAba}
         ariaLabel="Ferramentas de desenho"
         esquerda={
           <SeletorDeVista
@@ -4717,6 +4752,132 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 />
               )}
             </GrupoDoRibbon>
+          </>
+        )}
+
+        {aba === 'modificar' && modificarDisponivel && (
+          <>
+            {/* ─── MODIFICAR (F4): o que se faz COM a seleção ─────────────────
+                As mesmas ações dos painéis de propriedades, à mão no ribbon —
+                a aba contextual do Revit. Cada grupo só existe para a peça que
+                o tem: parede divide e une; porta gira e espelha; estrutura
+                corta parede e emenda ponta; corte vira e se vê. */}
+            <GrupoDoRibbon
+              rotulo={
+                editor.selectedIds.length > 1
+                  ? `${editor.selectedIds.length} selecionados`
+                  : (rotuloDoSelecionado ?? 'Seleção')
+              }
+            >
+              <BotaoDoRibbon
+                icone={Copy}
+                rotulo="Copiar"
+                onClick={copiar}
+                ajuda="Copiar seleção (Ctrl+C) — cole com Ctrl+V sob o cursor"
+              />
+              <BotaoDoRibbon
+                icone={Trash2}
+                rotulo="Excluir"
+                perigo
+                onClick={removerSelecionada}
+                ajuda="Excluir a seleção (Delete)"
+              />
+            </GrupoDoRibbon>
+
+            {paredeSel && (
+              <GrupoDoRibbon rotulo="Parede">
+                <BotaoDoRibbon
+                  icone={Split}
+                  rotulo="Dividir"
+                  onClick={dividirSelecionada}
+                  ajuda="Divide a parede ao meio, em duas com o mesmo eixo"
+                />
+                <BotaoDoRibbon
+                  icone={Merge}
+                  rotulo="Unir"
+                  onClick={unirSelecionada}
+                  disabled={!vizinhaParaUnir}
+                  ajuda={
+                    vizinhaParaUnir
+                      ? 'Une com a vizinha colinear que encosta na ponta'
+                      : 'Não há parede colinear encostada numa ponta para unir'
+                  }
+                />
+              </GrupoDoRibbon>
+            )}
+
+            {aberturaSel && (aberturaSel.kind === 'door' || aberturaSel.kind === 'sliding') && (
+              <GrupoDoRibbon rotulo={nomeDoTipoDeAbertura(aberturaSel.kind)}>
+                <BotaoDoRibbon
+                  icone={FlipHorizontal2}
+                  rotulo="Girar"
+                  onClick={() => flipAbertura('hinge')}
+                  ajuda={
+                    aberturaSel.kind === 'sliding'
+                      ? 'Recolhe a folha para a outra ponta do vão'
+                      : 'Move a dobradiça para a outra ponta do vão'
+                  }
+                />
+                {/* ESPELHAR só onde há duas faces: na de correr EMBUTIDA a
+                    folha vai no eixo e o botão não mudaria um pixel. */}
+                {!(aberturaSel.kind === 'sliding' && aberturaSel.embutida) && (
+                  <BotaoDoRibbon
+                    icone={FlipVertical2}
+                    rotulo="Espelhar"
+                    onClick={() => flipAbertura('swing')}
+                    ajuda={
+                      aberturaSel.kind === 'sliding'
+                        ? 'Faz a folha correr pela outra face da parede'
+                        : 'Abre para o outro lado da parede'
+                    }
+                  />
+                )}
+              </GrupoDoRibbon>
+            )}
+
+            {estruturaSel && (
+              <GrupoDoRibbon rotulo="Estrutura">
+                <BotaoDoRibbon
+                  icone={Scissors}
+                  rotulo="Cortar paredes"
+                  contagem={paredesQueAPecaAtravessa.aCortar.length}
+                  onClick={cortarParedesDaSelecionada}
+                  disabled={paredesQueAPecaAtravessa.aCortar.length === 0}
+                  ajuda="Interrompe na peça as paredes que ela atravessa"
+                />
+                <BotaoDoRibbon
+                  icone={CornerDownRight}
+                  rotulo="Emendar pontas"
+                  contagem={pontasCurtasDaSelecionada.length}
+                  onClick={emendarPontasDaSelecionada}
+                  disabled={pontasCurtasDaSelecionada.length === 0}
+                  ajuda="Leva até a peça as pontas de parede que pararam antes dela"
+                />
+              </GrupoDoRibbon>
+            )}
+
+            {corteSel && (
+              <GrupoDoRibbon rotulo="Corte">
+                <BotaoDoRibbon
+                  icone={Eye}
+                  rotulo="Ver o corte"
+                  onClick={() => setVista(`corte:${corteSel.id}`)}
+                  ajuda="Abre a vista deste corte"
+                />
+                <BotaoDoRibbon
+                  icone={ArrowLeftRight}
+                  rotulo="Inverter o lado"
+                  onClick={() =>
+                    editor.run({
+                      type: 'SetCorteProps',
+                      corteId: corteSel.id,
+                      olharPara: corteSel.olharPara === 'ESQUERDA' ? 'DIREITA' : 'ESQUERDA',
+                    })
+                  }
+                  ajuda="Vira o corte para o outro lado. As setas na planta acompanham."
+                />
+              </GrupoDoRibbon>
+            )}
           </>
         )}
 

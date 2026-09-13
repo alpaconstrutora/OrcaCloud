@@ -4,10 +4,11 @@
 
 > Atualize o status de implementação do plano e pendências
 
-Status consolidado do roadmap que nasceu do pedido *"o que falta implementar para
-transformar o módulo planta inteligente em um BIM completo"*, com "BIM completo"
-definido pelo usuário como: **modelo arquitetônico completo + interoperar com
-Revit/Archicad + 4D/5D ligado ao ÒPURA + instalações (MEP)**.
+Feito em 09/09/2026 e **atualizado em 13/09/2026** (segundo pedido, mesmas
+palavras). Status consolidado do roadmap que nasceu do pedido *"o que falta
+implementar para transformar o módulo planta inteligente em um BIM completo"*,
+com "BIM completo" definido pelo usuário como: **modelo arquitetônico completo +
+interoperar com Revit/Archicad + 4D/5D ligado ao ÒPURA + instalações (MEP)**.
 
 Este documento **não replaneja nada**. Ele diz o que está feito, o que está
 provado, e — a parte que mais importa — **o que está feito e ainda não foi
@@ -24,116 +25,147 @@ provado**.
 | 5 | Colaboração e governança | ✅ | comentário ancorado, aprovação, GED e Portal |
 | 6 | Instalações (MEP) e clash | ✅ | replanejada e executada em 5 fatias |
 
-**O kernel está em `blueprint-kernel-ts-0.19.0`, com 15 famílias no modelo.**
+**Kernel em `blueprint-kernel-ts-0.27.0`** (era 0.19.0 em 09/09 — oito bumps
+em quatro dias, cada um com as goldens provadas neutras na versão ANTIGA antes
+de subir). As famílias do modelo continuam 15; o que cresceu foi a SEMÂNTICA
+dentro delas.
 
 ## O que a Etapa 6 virou, depois de replanejada
 
 O plano antigo pedia **25 dias**; a execução levou **13**, e a diferença não foi
-otimismo — foi medição:
-
-- os 5 dias de "absorver o elétrico" **já tinham sido gastos** no arranjo único;
-- o "grafo de trechos" (15 dias) **existia como código** e nunca carregara uma
-  rede: **zero eletrodutos** no banco;
-- o clash **não partia do zero**: `sobreposicao.ts` já media interseção
-  volumétrica.
-
-E ela terminou com o que o plano não previa: o módulo elétrico **saiu**
-(5.812 linhas), depois de o kernel ganhar `Quadro`, `Circuito` e o quadro de
-cargas — na ordem que transformou "apagar e perder" em "apagar e não perder".
+otimismo — foi medição: os 5 dias de "absorver o elétrico" já tinham sido
+gastos no arranjo único; o "grafo de trechos" existia como código e nunca
+carregara uma rede (zero eletrodutos no banco); o clash não partia do zero
+(`sobreposicao.ts` já media interseção volumétrica). Ela terminou com o módulo
+elétrico antigo **fora** (5.812 linhas e 11 tabelas), depois de o kernel
+ganhar `Quadro`, `Circuito` e o quadro de cargas.
 
 ## Depois das seis etapas
 
 | o quê | situação |
 |---|---|
-| **BCF 2.1 — exportar** | ✅ conflitos e comentários, com `Header/File` apontando o IFC |
-| **BCF 2.1 — importar** | ✅ leitor, casamento com o modelo, tela e persistência idempotente |
-| **MEP no IFC** | ✅ trechos, terminais, quadro e circuito, com `IfcDistributionSystem` por disciplina e `Pset_OpuraEletrica` |
+| **BCF 2.1 — exportar / importar** | ✅ nos dois sentidos, XSD oficial, guids dentro do IFC |
+| **MEP no IFC** | ✅ trechos, terminais, quadro e circuito, `IfcDistributionSystem` por disciplina |
+| **Elétrica de verdade — testada à mão (09–10/09)** | ✅ ver a seção abaixo: 22 pedidos/defeitos do usuário, todos publicados |
+| **NBR 5410 — distribuição e conferência (10/09)** | ✅ três fatias + interruptor + iluminação mínima + pareamento de comandos |
+| **Topografia (10–12/09, sessão paralela)** | ✅ 17 fases publicadas — status próprio em `2026-09-10-planta-inteligente-topografia.md` |
+
+### A elétrica saiu do "nunca usado" (09–10/09/2026)
+
+A maior pendência de 09/09 era *"feito, mas não provado no uso"*. O usuário
+usou — e cada relato virou correção, quase sempre no mesmo dia:
+
+| relato do usuário | o que era de verdade | plano |
+|---|---|---|
+| zoom da roda rolava a página | `onWheel` do React é PASSIVO; listener nativo `{passive:false}` | `…zoom-da-roda-rolava-a-pagina` |
+| componentes de rede não selecionáveis | família nova ligada só no desenho — não no clique, laço, Ctrl+A, prévia | `…rede-nao-era-selecionavel` |
+| quadro minúsculo; medidas reais em planta e 3D | `larguraMm/alturaMm/profundidadeMm` + giro, cota = CENTRO (IFC) | `…medidas-de-quadro-e-terminal`, `…giro-da-peca-e-bitola-em-planta` |
+| "sinto falta de um snap" | motor de encaixe (sobre, meio, interseção, centro, perpendicular, extensão) | `…imã-do-desenho-osnap` |
+| ponto fora de circuito sem como ligar | lista dos soltos com select no próprio aviso | — |
+| "onde se edita o ponto?" / tudo de elétrica num grupo só | seção Componentes abre para rede; "Quadro de cargas" | `…onde-cada-coisa-se-edita` |
+| circuito só aparecia selecionado | "TUG · C1" ao lado de todo ponto; "?" âmbar quando falta | — |
+| grupo dos elétricos no painel lateral (3 rodadas) | o caminho da PLANTA BAIXA não estava ligado — só o do 3D | `…taxonomia-do-ponto-eletrico` |
+| taxonomia: iluminação / tomadas / dados | `tipoEletrico` fechado (9 → 11 valores), IFC por tipo | idem |
+| NBR 5410: linha contínua × pontilhada; trecho automático entre peças | `embutidoNoPiso`, `encaixarEmPecaEletrica` | — |
+| potência no círculo, `#2,5`, traços de condutor, letra do comando | `Trecho.circuitoId/condutores`, `Terminal.comando` | — |
+| simbologia TUG/TUE por altura | triângulo vazio / meio / cheio / no quadrado | — |
+| conexão mantida ao mover | `pontasPresasAsPecas` no `TranslateEntities` | — |
+| eletroduto segue parede/teto/piso no 3D | caminho em L (só elétrica — o esgoto com caimento é diagonal de verdade) | — |
+| **distribuição automática + N por ambiente/parede** | fatias 1–3 abaixo | `…distribuicao-automatica-de-tomadas-fatia-{1,2,3}` |
+| **simbologia de interruptores (print)** | 5 variantes, letras por seção | `…simbologia-de-interruptores` |
+
+### NBR 5410 no módulo (10/09/2026)
+
+| fatia | o que faz | fronteira |
+|---|---|---|
+| 1 | tipo do ambiente; "N tomadas neste ambiente / nesta parede"; ponto **sugerido** (tracejado; mover confirma; "Aceitar todas") | o sistema **não decide** onde a tomada fica — gera posição provisória e marca |
+| 2 | mínimo 9.5.2.2.1 por tipo/perímetro interno/área; "Completar pela norma" só o **déficit**, fora de portas, janelas e das existentes; 2 na altura média da cozinha "sobre a bancada"; **W → VA** | nunca sugere remover; ponto sem tipo não conta, e é dito |
+| 3 | painel **Conferência NBR 5410** (9.5.2.1, 9.5.2.2.1, 9.5.2.2.2, 9.5.2.3, 9.5.3.1, 9.5.3.2, 9.5.3.3, sugeridas) com falta / aviso / atende e o que ficou **fora da avaliação**; ponto de **ligação direta** (`IfcJunctionBox.POWER`) com "Converter" | confere o declarado; não atribui potência, não divide circuito, não escolhe disjuntor |
+| + | **interruptor** (11º tipo, `IfcSwitchingDevice`), iluminação mínima 9.5.2.1 (luz de teto + interruptor + 100 VA/6 m² + 60 VA/4 m²), Completar cria luz no meio e interruptor junto à porta com a mesma letra | paralelo/intermediário nunca são criados: qual porta faz par é projeto |
+| + | **pareamento das letras**: luz "a" exige interruptor "a"; paralelo só aos pares; intermediário exige dois paralelos; Completar escolhe 1/2/3 seções pelas letras | par do paralelo procurado no PAVIMENTO (letra se repete por cômodo — pode deixar passar, nunca inventa falta) |
 
 ---
 
 ## ⚠️ PENDÊNCIAS — e a distinção que importa
 
-### A. Feito, mas NÃO PROVADO no uso
+### A. Feito, mas NÃO PROVADO no uso — o que MUDOU
 
-**Esta é a maior pendência do módulo, e não é uma funcionalidade.**
+Em 09/09 esta era a maior pendência. Desde então:
 
-Tudo o que saiu em 07–09/09/2026 — instalações, clash, BCF nos dois sentidos,
-quadro de cargas — está verificado por **teste**, por **norma** e pelo **harness**,
-e **nunca foi usado por uma pessoa num desenho real**. Isso pega o defeito que
-existe no código; não pega o que existe no uso: a cota padrão errada para como a
-empresa constrói, o gesto que atrapalha, a lista de conflitos vazia ou
-barulhenta, o painel no lugar errado.
+- **Elétrica básica** (quadro, circuito, ponto, eletroduto, snap, medidas):
+  ✅ **provada pelo usuário à mão** — 22 relatos, todos fechados.
+- **NBR 5410 (fatias 1–3, interruptor, pareamento)**: ⚠️ provado por teste,
+  por harness **e no editor real** (Playwright com a conta do `.env.local`,
+  escritas ao PostgREST abortadas na rede — zero gravação): select de tipo,
+  linha da norma, Distribuir/Completar, VA e o painel de conferência aparecem
+  e funcionam. **Ainda não usado por uma pessoa.** As perguntas para quem
+  usar: a posição sugerida é um ponto de partida útil ou atrapalha? o "faltam
+  2 sobre a bancada" faz sentido na cozinha real? o painel de conferência tem
+  ruído (avisos demais) ou silêncio (regra que não pegou o que devia)?
+- **Topografia**: ✅ 17 fases "provadas de fora e dirigidas em produção com a
+  conta de leitura" (registro próprio).
 
-⚠️ A sessão inteira mostrou que medir vence raciocinar — abrir o IFC no Revit
-achou **cinco** defeitos; comparar com o arquivo do buildingSMART achou **dois**;
-consultar o banco do elétrico **reescreveu um plano**. Nenhum deles apareceria
-por inspeção.
+### B. A mão da porta — metade fechada (inalterado)
 
-**O que pedir a quem usar**: 20 minutos desenhando instalação num projeto real —
-um quadro, dois circuitos, algumas tomadas, um eletroduto. As perguntas: a cota
-padrão faz sentido? prumada com dois cliques no mesmo ponto é natural? o clash
-trouxe algo útil ou só ruído? o quadro de cargas tem o que se preencheria?
+✅ BIMvision lê `SINGLE_SWING_LEFT/RIGHT`. ⚠️ Não conferido se o nosso `LEFT`
+é o da norma — só decide um receptor que desenhe o arco (Revit, criando a
+vista de planta à mão). Se estiver espelhado, é uma linha em
+`operacaoIfcDaAbertura`.
 
-### B. A mão da porta — metade fechada
+### C. O BCF num receptor de verdade (inalterado)
 
-✅ Conferido no BIMvision: as portas saem com `SINGLE_SWING_LEFT` e
-`SINGLE_SWING_RIGHT` — **a mão não se perde**, e o pior cenário está eliminado.
-
-⚠️ **Não conferido**: se o nosso `LEFT` é o `LEFT` da norma. Um espelho GLOBAL
-passaria por aquela leitura sem rastro. Duas tentativas de decidir medindo os
-arquivos reais foram **negativas** (a assimetria de massa não tem sentido
-consistente; o que parecia ferragem é o batente). Só decide um receptor que
-**desenhe o arco** — no Revit, criando a planta do pavimento à mão, porque o
-importador traz os níveis e **não cria as vistas de planta** deles.
-
-Risco: se estiver espelhado, é **uma linha** em `operacaoIfcDaAbertura`.
-
-### C. O BCF num receptor de verdade — risco baixo, não zero
-
-Não achamos software: o Solibri Anywhere foi descontinuado e o BIMcollab não
-abriu o arquivo. Em compensação há **três provas independentes**:
-
-1. o arquivo é válido contra o **XSD oficial** do buildingSMART (7 casos);
-2. os guids dos tópicos estão **dentro do IFC** do mesmo desenho;
-3. um leitor construído pela especificação entende o **arquivo real** do
-   buildingSMART, e o nosso.
-
-⏳ Falta só o que um receptor mostraria: **clicar no tópico destaca a peça**.
-Arquivos de prova em `C:/Users/altai/Desktop/prova-bcf/`. Gratuitos que leem
-BCF hoje: **BCFier** (plugin de Revit) e **usBIM**.
+Três provas independentes (XSD oficial, guids no IFC, leitor pela
+especificação lê o arquivo do buildingSMART). ⏳ Falta "clicar no tópico
+destaca a peça" num receptor: **BCFier** (Revit) ou **usBIM**.
 
 ### D. Lacunas declaradas, cada uma com o motivo
 
 | o quê | por que ficou de fora |
 |---|---|
-| ~~Quadro e circuito no IFC~~ | ✅ feito em 09/09 — e ⚠️ **a entidade exata não pôde ser usada**: `IfcDistributionBoard` só existe a partir do **IFC4 ADD2**, e o nosso arquivo declara `IFC4`. Medido: o `web-ifc` ACHA a linha e falha ao desserializá-la; `IfcDistributionCircuit`, no mesmo arquivo, lê perfeito. Sai como `IfcFlowController` — o **pai** dele na taxonomia —, e o motivo está escrito dentro da cobertura do próprio IFC |
-| **Dimensionamento elétrico** | queda de tensão, seção por corrente, demanda normativa. É cálculo de projeto, com norma e ART atrás — somar é registro, decidir é projeto |
-| **Conexões MEP** (joelho, tê, luva), registro, ar-condicionado, gás, incêndio | a estrutura de `disciplina` os aceita sem mudança; entram quando alguém os pedir |
-| **Snapshot PNG no tópico BCF** | o canvas sabe gerar imagem; falta decidir o recorte, e um recorte errado é pior que nenhuma imagem |
-| ~~Arrastar e apagar trecho~~ | ✅ feito em 09/09 — e ⚠️ **não era miudeza**: `DeleteTrecho`, `DeleteTerminal` e `DeleteQuadro` **não existiam**. Publiquei famílias que só saíam apagando o pavimento inteiro |
-| ~~Trecho em elevação e corte~~ | ✅ feito em 09/09 — a PRUMADA era o caso que quebrava a implementação ingênua, e o caimento exige interpolar a cota no ponto do cruzamento |
-| ~~Botão de compartilhar a planta com o cliente~~ | ✅ feito em 09/09 — e ⚠️ **não era só um botão**: ele age sobre os arquivos que ACABARAM de ser publicados, porque o caminho por Documentos obrigava a achar o arquivo certo entre os da obra, com a revisão anterior ao lado e a cobertura de nome parecido. O caso que quebrava a versão ingênua era **trocar de versão depois de publicar**: os ids ficavam da revisão antiga e o cliente receberia a errada sem aviso nenhum |
-| ~~As 11 tabelas do módulo elétrico~~ | ✅ apagadas em 09/09, a pedido — `aplicar_20270920000008_drop_modulo_eletrico.sql`. Antes: as 17 linhas gravadas íntegras em `2026-09-09-dump-tabelas-eletricas.json`, e medido no banco que **nada** dependia delas (view, função, FK de fora, tipo, sequence, código: zero). O `DROP` é **sem `CASCADE`** de propósito — se a medição estivesse errada, `CASCADE` derrubaria em silêncio o que eu não vi |
+| **Dimensionamento elétrico** (queda de tensão, seção por corrente, demanda, disjuntor) | cálculo de projeto, com norma e ART — a conferência lê o declarado |
+| **9.1.4.2 (distância do lavatório)**, nota da varanda < 2 m², arandela a ≥ 60 cm do box | o sistema não sabe onde estão lavatório, box e a profundidade útil |
+| **Par de paralelo entre pavimentos** (escada de dois andares) | a busca é por pavimento; vira busca no modelo inteiro se pedirem |
+| **Tipo do ambiente no IFC** (`IfcSpace` ObjectType/Pset) | classificado no kernel, não levado ao IFC — pequeno |
+| **Símbolo do ponto de ligação direta** | quadrado com diagonal é escolha minha, não da NBR 5444 — troco com o print |
+| **Conexões MEP** (joelho, tê), registro, ar-condicionado, gás, incêndio | a `disciplina` aceita; entram quando pedirem |
+| **Snapshot PNG no tópico BCF** | falta decidir o recorte |
+| `IfcDistributionBoard` | só existe no IFC4 ADD2; o `web-ifc` acha e não desserializa — sai como `IfcFlowController` (pai), motivo escrito na cobertura do IFC |
+| **Topografia** — água com poropressão por fatia, NBR 11682 por tipo de solo, consulta CREA/CAU | ver o quadro "O que falta" no plano da topografia |
+
+### E. Bugs achados de passagem e fechados
+
+| o quê | como apareceu |
+|---|---|
+| **91.863.221.361.873 m² construídos** | vi no painel de ambientes ao abrir o editor real; ponta solta no contorno → `tan(90°)`; giro limitado a 160° (`quant-1.10.0`) |
+| área/perímetro com ponto ao lado da norma com vírgula | mesmo print |
+| campo "N tomadas" não deixava apagar para digitar | teste de componente falhou na 1ª rodada (virava `14`) |
+| potência do LD sobre "LD · C1"; haste do interruptor sobre "Int · C1" | screenshots do harness — a contagem de pixels não pegaria |
+| interruptor **sem ficha** no inventário | teste da taxonomia (chave sem a variante) |
 
 ---
 
 ## O que este módulo passou a garantir, e que não garantia
 
 - **Identidade estável**: a mesma parede tem o mesmo `GlobalId` na revisão
-  seguinte. É o que sustenta IFC, BCF, comentário ancorado, 4D e clash.
-- **Hash de versão neutro a mudanças de forma**: cinco famílias novas entraram
-  (telhado, escada, corte, instalações, quadro/circuito) e o payload de todo
-  desenho sem elas continuou byte a byte o mesmo — provado ANTES de cada bump.
-- **Nada que o desenho não saiba é inventado**: cota, bitola, disjuntor e seção
-  são declarados; o que falta aparece como faltando.
-- **O que o arquivo NÃO contém está escrito dentro dele** — a cobertura do IFC é
-  requisito, não cortesia.
+  seguinte. Sustenta IFC, BCF, comentário ancorado, 4D e clash.
+- **Hash de versão neutro a mudanças de forma**: oito bumps em quatro dias e
+  o payload de todo desenho sem os campos novos continuou byte a byte o
+  mesmo — provado ANTES de cada bump.
+- **Nada que o desenho não saiba é inventado**: cota, bitola, disjuntor,
+  seção e potência são declarados; o que falta aparece como faltando — e a
+  conferência diz o que ficou **fora da avaliação** em vez de dar "✓" em
+  cima de dado ausente.
+- **Ajuda ≠ decisão disfarçada**: tudo o que o sistema posiciona nasce
+  **sugerido**; mover é o ato de decidir.
+- **O que o arquivo NÃO contém está escrito dentro dele** — a cobertura do IFC
+  é requisito, não cortesia.
 
-## Verificação desta sessão
+## Verificação
 
-| o quê | número |
-|---|---|
-| suíte | **3.247** casos, 0 falhas |
-| publicações em `main` | 80 desde 07/09 |
-| kernel | 0.17.0 → **0.19.0**, cada bump com as goldens passando na versão ANTIGA primeiro |
-| migrations | aplicadas com `db query -f`, conferidas de fora, com a escrita provada por sessão autenticada e revertida |
+| o quê | 09/09 | 13/09 |
+|---|---|---|
+| suíte | 3.247 casos | **3.972** casos, 0 falhas |
+| publicações em `main` tocando a planta | 80 desde 07/09 | **83** commits desde 07/09 só em `components/blueprint` + `utils/blueprint*` (topografia e elétrica somadas) |
+| kernel | 0.17.0 → 0.19.0 | 0.19.0 → **0.27.0** |
+| política de quantidades | quant-1.8.0 | **quant-1.10.0** |
+| verificação em tela | harness | harness **+ editor real** com escritas bloqueadas |

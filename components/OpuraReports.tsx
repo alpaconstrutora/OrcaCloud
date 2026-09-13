@@ -133,6 +133,10 @@ function pivotColumns(dimLabel: string, tree: boolean): StandardTableColumn[] {
         { key: 'realizado', label: 'Realizado', sortable: !tree, width: 170, align: 'right' },
         { key: 'previsto',  label: 'Previsto',  sortable: !tree, width: 170, align: 'right' },
         { key: 'vencido',   label: 'Vencido',   sortable: !tree, width: 170, align: 'right' },
+        // Barra de proporção do realizado (|realizado| ÷ maior da lista) — última
+        // coluna, depois de Vencido (pedido de 2026-09-13; antes vivia dentro do
+        // rótulo). Ordena por |realizado|.
+        { key: 'progresso', label: 'Progresso', sortable: !tree, width: 130 },
     ];
 }
 
@@ -372,14 +376,10 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
             case 'label':
                 return (
                     <div className="flex items-center gap-3 min-w-0" style={{ paddingLeft: r.depth * 24 }}>
-                        {r.isGroup ? (
+                        {r.isGroup && (
                             r.collapsed
                                 ? <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                                 : <ChevronDown className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                        ) : (
-                            <div className="h-1.5 rounded-full bg-blue-100 overflow-hidden flex-shrink-0" style={{ width: 60 }}>
-                                <div className="h-full bg-blue-500" style={{ width: `${Math.abs(r.realizado) / maxAbs * 100}%` }} />
-                            </div>
                         )}
                         {r.code && <span className="text-sm font-normal text-gray-400 tabular-nums flex-shrink-0">{r.code}</span>}
                         <span
@@ -398,6 +398,14 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
                 return <span className="text-sm font-normal text-gray-600 tabular-nums">{fBRL(r.previsto)}</span>;
             case 'vencido':
                 return <span className={`text-sm font-medium tabular-nums ${r.vencido > 0 ? 'text-amber-600' : 'text-gray-300'}`}>{r.vencido > 0 ? fBRL(r.vencido) : '—'}</span>;
+            case 'progresso': {
+                const pct = Math.abs(r.realizado) / maxAbs * 100;
+                return (
+                    <div className="h-1.5 rounded-full bg-blue-100 overflow-hidden" title={`${pct.toFixed(0)}% do maior realizado`}>
+                        <div className="h-full bg-blue-500" style={{ width: `${pct}%` }} />
+                    </div>
+                );
+            }
             default:
                 return null;
         }
@@ -550,7 +558,7 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
                     rowKey={r => r.rowId}
                     searchText={r => r.searchText}
                     searchPlaceholder={`Buscar por ${dimLabel.toLowerCase()}...`}
-                    sortValue={(key, r) => key === 'label' ? r.label : (r as unknown as Record<string, number>)[key]}
+                    sortValue={(key, r) => key === 'label' ? r.label : key === 'progresso' ? Math.abs(r.realizado) : (r as unknown as Record<string, number>)[key]}
                     renderCell={renderPivotCell}
                     onRowClick={onRowClick}
                     rowClassName={r => r.isGroup ? 'bg-gray-50/60' : ''}

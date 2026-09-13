@@ -375,11 +375,11 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 </div>
             )}
 
-            {/* Header — título à esquerda e, na mesma linha, logo ao lado dele, as ações:
+            {/* Header — título à esquerda e, na mesma linha, na borda direita, as ações:
                 extras do pai (Templates) + ação primária (§17, "ação frequente → alinhada
-                ao título", tamanho compacto). Ficam à esquerda, coladas ao título, por
-                pedido do usuário (2026-09-13) — não empurradas para a borda direita. */}
-            <div className="flex flex-wrap items-center gap-4">
+                ao título", tamanho compacto). Posição confirmada por print do usuário
+                (2026-09-13). */}
+            <div className="flex flex-wrap items-center justify-between gap-4">
                 {!hideHeader && (
                     <div>
                         <h1 className="text-3xl font-black text-gray-900 tracking-tight">{title}</h1>

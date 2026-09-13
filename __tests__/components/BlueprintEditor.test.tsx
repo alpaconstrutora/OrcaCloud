@@ -993,6 +993,20 @@ describe('BlueprintEditor · ribbon', () => {
     expect(screen.getByRole('tab', { name: 'Arquitetura' })).toHaveAttribute('aria-selected', 'true');
   });
 
+  it('"Distribuir tomadas" (aba Instalações) abre a tarefa com os ambientes — é onde se procura o lançamento automático', async () => {
+    // 13/09/2026: "não encontrei a funcionalidade de lançamento automático de
+    // tomadas" — ela morava só dentro de cada cartão de ambiente.
+    await montar();
+    await abrirAba(/^instalações$/i);
+    await userEvent.setup().click(botao(/^distribuir tomadas$/i));
+    const tarefa = screen.getByRole('region', { name: /tomadas pela nbr 5410/i });
+    expect(tarefa).toHaveTextContent(/completar pela norma/i);
+    // Planta vazia: diz que a norma conta por cômodo, em vez de uma lista vazia.
+    expect(tarefa).toHaveTextContent(/nenhum ambiente fechado/i);
+    // Sem sugerida pendente, "Aceitar sugeridas" existe mas está apagado.
+    expect(botao(/^aceitar sugeridas/i)).toBeDisabled();
+  });
+
   it('"Dados do lote" (aba Terreno) abre o painel do terreno como tarefa', async () => {
     await montar();
     await abrirAba(/^terreno$/i);

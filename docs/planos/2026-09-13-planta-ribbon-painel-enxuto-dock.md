@@ -120,6 +120,15 @@ unir, excluir, inverter o lado) — hoje essas ações continuam no painel de
 Propriedades da peça.
 | F4 | ✅ 13/09 | Aba contextual **Modificar** (verde, última, só com seleção na planta): grupo da seleção (rótulo da peça ou "N selecionados") com Copiar e Excluir; Parede → Dividir/Unir; Porta e de correr → Girar/Espelhar (sem Espelhar na embutida); Estrutura → Cortar paredes (n)/Emendar pontas (n); Corte → Ver o corte/Inverter o lado. `emModificar` é estado de sessão separado da aba salva: **não pula sozinha na primeira seleção** (quem está em Instalações clicando pontos não quer o ribbon pulando), mas quem a escolheu uma vez a recebe de volta a cada seleção; sem seleção o ribbon volta à aba de trabalho. As ações continuam também nos painéis de Propriedades |
 
+**Achado do usuário depois da F4** (*"não encontrei a funcionalidade de
+lançamento automático de tomadas"*): a distribuição morava só dentro de cada
+cartão de ambiente do navegador e na parede selecionada — comando escondido
+em navegação. Entrou a tarefa **Tomadas pela NBR 5410** (aba Instalações ›
+grupo Tomadas › "Distribuir tomadas", com a contagem de ambientes em déficit)
+listando todos os ambientes com tipo, conferência e Completar/Distribuir, mais
+o botão **"Aceitar sugeridas"** (contagem do pavimento). Os controles são uma
+função só (`controlesDeTomadas`), usada no cartão e na tarefa.
+
 **F4 — prova**: teste com duas paredes selecionadas pela lista de vãos (aba
 aparece, não é auto-selecionada, "2 selecionados", sem Dividir/Unir, Excluir
 esvazia e a aba some); app real com escritas bloqueadas: Parede 1 selecionada →

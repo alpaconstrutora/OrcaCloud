@@ -15,6 +15,7 @@ import {
   MessageSquare,
   MessagesSquare,
   PenTool,
+  Plug,
   Split,
   Table2,
   CheckCircle2,
@@ -471,6 +472,10 @@ type AbaDoRibbonDoEditor = (typeof ABAS_DO_RIBBON)[number]['id'];
  */
 const ROTULO_DA_TAREFA = {
   terreno: 'Dados do lote, zona e topografia',
+  // Todos os ambientes num lugar só: tipo, conferência 9.5.2 e a distribuição
+  // automática. O mesmo controle continua em cada cartão do navegador — aqui
+  // é a porta de quem procura "lançamento automático de tomadas" no ribbon.
+  tomadas: 'Tomadas pela NBR 5410',
   'gerar-paredes': 'Gerar paredes do PDF',
   'importar-ifc': 'Importar do IFC',
   'importar-dxf': 'Importar do DXF',
@@ -4139,6 +4144,68 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     }
   };
 
+  /** Os ambientes classificados que ainda devem tomada (9.5.2.2.1) — a contagem do botão. */
+  const ambientesComDeficit = ambientes.filter(
+    (a) => !!a.conferencia && (a.conferencia.deficit > 0 || a.conferencia.deficitMedias > 0),
+  );
+  /** Quantas tomadas sugeridas ainda esperam confirmação neste pavimento. */
+  const sugeridasNoNivel = (editor.model.terminais ?? []).filter(
+    (t) => t.sugerida && (!levelId || t.levelId === levelId),
+  ).length;
+
+  /**
+   * Os controles de TOMADAS de um ambiente — tipo do cômodo, conferência 9.5.2
+   * e distribuição automática. Uma função porque aparecem em DOIS lugares: no
+   * cartão do ambiente (navegador) e na tarefa "Tomadas pela NBR 5410"
+   * (ribbon › Instalações). Duas cópias divergiriam na primeira correção.
+   */
+  const controlesDeTomadas = (a: (typeof ambientes)[number]) => (
+    <>
+      {/* O TIPO do ambiente é o que a NBR 5410 usa para contar tomadas
+          (9.5.2.2.1) — banheiro, cozinha, varanda, sala/dormitório. Sem
+          tipo, o ambiente fica "a classificar": estado legítimo, visível. */}
+      <label className="mt-1 flex items-center gap-2 text-xs text-slate-600">
+        Tipo
+        <select
+          value={a.tipoDeAmbiente ?? ''}
+          onChange={(e) => {
+            const tipoDeAmbiente = (e.target.value || null) as TipoDeAmbiente | null;
+            if (a.etiquetaId) {
+              editor.run({ type: 'SetSpaceLabelProps', labelId: a.etiquetaId, tipoDeAmbiente });
+            } else {
+              // Sem etiqueta ainda: classificar cria uma, com o nome que a
+              // lista já mostra — o tipo mora na etiqueta.
+              editor.run({ type: 'NameSpace', spaceId: a.id, name: a.rotulo, tipoDeAmbiente });
+            }
+          }}
+          aria-label={`Tipo do ambiente ${a.rotulo}`}
+          className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+        >
+          <option value="">A classificar</option>
+          {TIPOS_DE_AMBIENTE.map((t) => (
+            <option key={t} value={t}>
+              {ROTULO_DO_TIPO_DE_AMBIENTE[t]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <ConferenciaDoAmbiente
+        conferencia={a.conferencia}
+        luz={a.luz}
+        onCompletar={() => completarPelaNorma(a.id)}
+      />
+      <DistribuirTomadas
+        escopo="neste ambiente"
+        onDistribuir={(n) => {
+          const space = editor.model.spaces.find((s) => s.id === a.id);
+          if (!space) return 0;
+          const paredes = editor.model.walls.filter((w) => w.levelId === space.levelId);
+          return distribuirTomadas(ladosDePiso(space, paredes), n);
+        }}
+      />
+    </>
+  );
+
   /** Espessura e alinhamento só fazem sentido para o que nasce parede. */
   const ehFerramentaDeParede =
     editor.tool === 'parede' || editor.tool === 'retangulo' || editor.tool === 'poligono';
@@ -4603,6 +4670,31 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   familia="INSTALACOES"
                   rotulo="Instalações"
                   onEscolher={escolherComponente}
+                />
+              </GrupoDoRibbon>
+            )}
+            {/* TOMADAS PELA NORMA — a distribuição automática (fatias 1–3 de
+                10/09) e o "completar pela norma". Já existiam em cada cartão de
+                ambiente e na parede selecionada; aqui é onde se PROCURA por
+                elas (13/09/2026: "não encontrei a funcionalidade de lançamento
+                automático de tomadas"). */}
+            {!emVista && (
+              <GrupoDoRibbon rotulo="Tomadas">
+                <BotaoDoRibbon
+                  icone={Plug}
+                  rotulo="Distribuir tomadas"
+                  contagem={ambientesComDeficit.length || undefined}
+                  ativo={tarefaAberta === 'tomadas'}
+                  onClick={() => alternarTarefa('tomadas')}
+                  ajuda="Por ambiente: tipo do cômodo, conferência NBR 5410 9.5.2 e distribuição automática — completar pela norma ou N tomadas ao longo das paredes"
+                />
+                <BotaoDoRibbon
+                  icone={CheckCircle2}
+                  rotulo="Aceitar sugeridas"
+                  contagem={sugeridasNoNivel}
+                  disabled={sugeridasNoNivel === 0}
+                  onClick={aceitarSugeridas}
+                  ajuda="As tomadas distribuídas nascem SUGERIDAS (anel tracejado); mover uma confirma. Isto confirma todas as do pavimento de uma vez."
                 />
               </GrupoDoRibbon>
             )}
@@ -6437,48 +6529,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       </>
                     )}
                   </div>
-                  {/* O TIPO do ambiente é o que a NBR 5410 usa para contar tomadas
-                      (9.5.2.2.1) — banheiro, cozinha, varanda, sala/dormitório. Sem
-                      tipo, o ambiente fica "a classificar": estado legítimo, visível. */}
-                  <label className="mt-1 flex items-center gap-2 text-xs text-slate-600">
-                    Tipo
-                    <select
-                      value={a.tipoDeAmbiente ?? ''}
-                      onChange={(e) => {
-                        const tipoDeAmbiente = (e.target.value || null) as TipoDeAmbiente | null;
-                        if (a.etiquetaId) {
-                          editor.run({ type: 'SetSpaceLabelProps', labelId: a.etiquetaId, tipoDeAmbiente });
-                        } else {
-                          // Sem etiqueta ainda: classificar cria uma, com o nome que a
-                          // lista já mostra — o tipo mora na etiqueta.
-                          editor.run({ type: 'NameSpace', spaceId: a.id, name: a.rotulo, tipoDeAmbiente });
-                        }
-                      }}
-                      aria-label={`Tipo do ambiente ${a.rotulo}`}
-                      className="rounded-md border border-slate-300 px-2 py-1 text-xs"
-                    >
-                      <option value="">A classificar</option>
-                      {TIPOS_DE_AMBIENTE.map((t) => (
-                        <option key={t} value={t}>
-                          {ROTULO_DO_TIPO_DE_AMBIENTE[t]}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <ConferenciaDoAmbiente
-                    conferencia={a.conferencia}
-                    luz={a.luz}
-                    onCompletar={() => completarPelaNorma(a.id)}
-                  />
-                  <DistribuirTomadas
-                    escopo="neste ambiente"
-                    onDistribuir={(n) => {
-                      const space = editor.model.spaces.find((s) => s.id === a.id);
-                      if (!space) return 0;
-                      const paredes = editor.model.walls.filter((w) => w.levelId === space.levelId);
-                      return distribuirTomadas(ladosDePiso(space, paredes), n);
-                    }}
-                  />
+                  {controlesDeTomadas(a)}
                   <dl className="mt-1 flex gap-4 text-xs text-slate-500">
                     <div>
                       <dt className="inline">Área </dt>
@@ -6527,6 +6578,41 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   onVerPropriedades={() => setTarefa(null)}
                 >
                   {tarefaAberta === 'terreno' && painelDoTerreno}
+
+                  {tarefaAberta === 'tomadas' && (
+                    <div>
+                      <p className="border-b border-slate-200 px-4 py-2 text-xs text-slate-500">
+                        Por ambiente: classifique o cômodo, veja o que a NBR 5410 (9.5.2) pede
+                        e distribua — <strong>Completar pela norma</strong> lança só o que
+                        falta; <strong>Distribuir</strong> lança N ao longo das paredes. As
+                        tomadas nascem <em>sugeridas</em>: mover uma confirma; "Aceitar
+                        sugeridas" confirma todas.
+                      </p>
+                      {ambientes.length === 0 ? (
+                        <p className="px-4 py-3 text-xs text-slate-400">
+                          Nenhum ambiente fechado ainda. Feche um contorno de paredes — a
+                          norma conta tomadas por cômodo.
+                        </p>
+                      ) : (
+                        <ul className="divide-y divide-slate-100">
+                          {ambientes.map((a) => (
+                            <li key={a.id} className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <span className="truncate text-sm font-medium text-slate-700">
+                                  {a.rotulo}
+                                </span>
+                                <span className="ml-auto shrink-0 text-xs text-slate-500">
+                                  {a.areaM2.toFixed(2).replace('.', ',')} m² ·{' '}
+                                  {a.perimetroM.toFixed(2).replace('.', ',')} m
+                                </span>
+                              </div>
+                              {controlesDeTomadas(a)}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
 
                   {tarefaAberta === 'gerar-paredes' && (
                     <PainelGerarParedes

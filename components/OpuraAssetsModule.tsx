@@ -36,6 +36,9 @@ import {
 } from 'lucide-react';
 import { assetService } from '../services/assetService';
 import { laborService } from '../services/laborService';
+import { financialRegistryService } from '../services/financialRegistryService';
+import CostCenterSelect from './CostCenterSelect';
+import type { CostCenter } from '../types/financial';
 import { useStore } from '../store/useStore';
 import { AssetImportModal } from './AssetImportModal';
 import Button from './ui/Button';
@@ -114,12 +117,13 @@ const MAINTENANCE_COLUMNS: ColumnConfig[] = [
   { key: 'description', label: 'Serviço / Descrição', sortable: true },
   { key: 'scheduled_date', label: 'Data Programada', sortable: true },
   { key: 'cost', label: 'Custo', sortable: true },
+  { key: 'cost_center', label: 'Centro de custo', sortable: true },
   { key: 'status', label: 'Status', sortable: true },
   { key: 'actions', label: 'Ações', sortable: false },
 ];
 // `actions` em 250 como em Ativos: texto da transição dominante (Iniciar/Concluir)
 // + ver · editar · excluir (28px cada) + o ⋮ (32px) + vãos de 6px + `px-6` do §6.6.
-const MAINTENANCE_COL_WIDTHS: Record<string, number> = { asset: 190, type: 110, description: 260, scheduled_date: 140, cost: 120, status: 120, actions: 250 };
+const MAINTENANCE_COL_WIDTHS: Record<string, number> = { asset: 190, type: 110, description: 240, scheduled_date: 130, cost: 120, cost_center: 240, status: 120, actions: 250 };
 
 // Tabela "Custos & Rateio" — sem coluna de ações (tela só de leitura/relatório)
 const RATEIO_COLUMNS: ColumnConfig[] = [
@@ -221,6 +225,7 @@ const MAINTENANCE_COLUMN_HEADERS: Record<string, { label: string; sortable?: boo
   description: { label: 'Serviço / Descrição', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   scheduled_date: { label: 'Data Programada', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   cost: { label: 'Custo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  cost_center: { label: 'Centro de custo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
 };
 
@@ -228,7 +233,7 @@ const MAINTENANCE_COLUMN_HEADERS: Record<string, { label: string; sortable?: boo
 function renderMaintenanceCell(
   key: string,
   m: OpuraAssetMaintenance,
-  ctx: { asset?: OpuraAsset; typeLabels: Record<string, string>; statusColor: Record<string, string> },
+  ctx: { asset?: OpuraAsset; typeLabels: Record<string, string>; statusColor: Record<string, string>; costCenterName: (id?: string | null) => string },
 ): React.ReactNode {
   switch (key) {
     case 'asset':
@@ -248,6 +253,12 @@ function renderMaintenanceCell(
       return <span className="text-sm font-normal text-gray-600">{formatDate(m.scheduled_date)}</span>;
     case 'cost':
       return <span className="text-sm font-medium text-gray-800">R$ {m.cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>;
+    case 'cost_center': {
+      const nome = ctx.costCenterName(m.cost_center_id);
+      return nome
+        ? <span className="block truncate text-sm font-normal text-gray-700" title={nome}>{nome}</span>
+        : <span className="text-sm font-normal text-gray-400">—</span>;
+    }
     case 'status':
       return <span className={`text-sm font-normal ${ctx.statusColor[m.status] || 'text-gray-600'}`}>{m.status === 'em_execucao' ? 'Em Oficina' : m.status}</span>;
     default:
@@ -430,6 +441,10 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   // título, quais campos ficam travados e o que o submit faz.
   const [maintModalMode, setMaintModalMode] = React.useState<'create' | 'edit' | 'view'>('create');
   const [editingMaintenanceId, setEditingMaintenanceId] = React.useState<string | null>(null);
+  // Snapshot do form ao abrir/salvar — base do `dirty` que liga a guarda de saída
+  // do Sheet (§25). Mesmo mecanismo do cadastro de ativo.
+  const [maintFormSnapshot, setMaintFormSnapshot] = React.useState('');
+  const [costCenters, setCostCenters] = React.useState<CostCenter[]>([]);
   const [isFinishMaintModalOpen, setIsFinishMaintModalOpen] = React.useState(false);
   const [selectedMaintenance, setSelectedMaintenance] = React.useState<OpuraAssetMaintenance | null>(null);
   
@@ -481,7 +496,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     cost: '' as string | number,
     status: 'agendada' as MaintenanceStatus,
     current_odometer: '' as string | number,
-    current_hourmeter: '' as string | number
+    current_hourmeter: '' as string | number,
+    cost_center_id: ''
   });
 
   const [finishMaintForm, setFinishMaintForm] = React.useState({
@@ -553,6 +569,14 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
       const loadedMaint = await assetService.listMaintenances(orgIdParam);
       setMaintenances(loadedMaint);
+
+      // Centros de custo (coluna e campo da aba Manutenções). Em "Todas" vem sem
+      // filtro — a RLS recorta. Falha aqui não pode derrubar a tela inteira.
+      try {
+        setCostCenters(await financialRegistryService.listCostCenters(orgIdParam));
+      } catch (err) {
+        console.error('[OpuraAssetsModule] Erro ao carregar centros de custo:', err);
+      }
 
       // Carregar marcas
       const loadedBrands = await assetService.listBrands(orgIdParam);
@@ -874,7 +898,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     cost: 0 as string | number,
     status: 'agendada' as MaintenanceStatus,
     current_odometer: '' as string | number,
-    current_hourmeter: '' as string | number
+    current_hourmeter: '' as string | number,
+    cost_center_id: ''
   });
 
   // Ver e Editar leem os MESMOS campos da ordem — só o modo muda (mesmo motivo
@@ -887,36 +912,51 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     cost: m.cost || 0,
     status: m.status,
     current_odometer: m.current_odometer ?? '',
-    current_hourmeter: m.current_hourmeter ?? ''
+    current_hourmeter: m.current_hourmeter ?? '',
+    cost_center_id: m.cost_center_id ?? ''
   });
 
-  const abrirCadastroManutencao = (assetId = '') => {
-    setMaintForm(maintFormVazio(assetId));
-    setEditingMaintenanceId(null);
-    setMaintModalMode('create');
+  const abrirFormularioManutencao = (form: ReturnType<typeof maintFormVazio>, modo: 'create' | 'edit' | 'view', id: string | null) => {
+    setMaintForm(form);
+    setMaintFormSnapshot(JSON.stringify(form));
+    setEditingMaintenanceId(id);
+    setMaintModalMode(modo);
     setIsNewMaintModalOpen(true);
   };
 
-  const abrirEdicaoManutencao = (m: OpuraAssetMaintenance) => {
-    setMaintForm(formularioDaManutencao(m));
-    setEditingMaintenanceId(m.id);
-    setMaintModalMode('edit');
-    setIsNewMaintModalOpen(true);
-  };
-
-  // "Ver" = o mesmo modal travado. Guarda o id também: o botão "Editar" do rodapé
+  const abrirCadastroManutencao = (assetId = '') => abrirFormularioManutencao(maintFormVazio(assetId), 'create', null);
+  const abrirEdicaoManutencao = (m: OpuraAssetMaintenance) => abrirFormularioManutencao(formularioDaManutencao(m), 'edit', m.id);
+  // "Ver" = o mesmo drawer travado. Guarda o id também: o botão "Editar" do rodapé
   // só precisa destravar o modo, sem remapear o formulário.
-  const abrirVisualizacaoManutencao = (m: OpuraAssetMaintenance) => {
-    setMaintForm(formularioDaManutencao(m));
-    setEditingMaintenanceId(m.id);
-    setMaintModalMode('view');
-    setIsNewMaintModalOpen(true);
-  };
+  const abrirVisualizacaoManutencao = (m: OpuraAssetMaintenance) => abrirFormularioManutencao(formularioDaManutencao(m), 'view', m.id);
+
+  const maintFormDirty = isNewMaintModalOpen && maintModalMode !== 'view' && JSON.stringify(maintForm) !== maintFormSnapshot;
+
+  // `listCostCenters` já devolve o nome achatado "Grupo > Filho" — é o que a
+  // célula e a ordenação mostram. Vazio quando a ordem não tem centro de custo.
+  const costCenterName = React.useCallback(
+    (id?: string | null) => (id ? costCenters.find(c => c.id === id)?.name ?? '' : ''),
+    [costCenters],
+  );
 
   const fecharModalManutencao = () => {
     setIsNewMaintModalOpen(false);
     setEditingMaintenanceId(null);
     setMaintModalMode('create');
+    setMaintFormSnapshot('');
+  };
+
+  // X do cabeçalho e botão Voltar/Cancelar. ESC e backdrop não passam por aqui:
+  // quem os guarda é o `dirty` do próprio Sheet.
+  const pedirParaFecharModalManutencao = async () => {
+    if (maintFormDirty && !await confirm({
+      title: 'Sair sem salvar?',
+      message: 'Há alterações não salvas. Se sair agora, elas serão perdidas.',
+      variant: 'warning',
+      confirmLabel: 'Sair e descartar',
+      cancelLabel: 'Continuar editando',
+    })) return;
+    fecharModalManutencao();
   };
 
   // Salvar alterações de uma ordem existente. Status NÃO passa por aqui: as
@@ -933,7 +973,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
         scheduled_date: maintForm.scheduled_date,
         cost: Number(maintForm.cost) || 0,
         current_odometer: maintForm.current_odometer !== '' ? Number(maintForm.current_odometer) : undefined,
-        current_hourmeter: maintForm.current_hourmeter !== '' ? Number(maintForm.current_hourmeter) : undefined
+        current_hourmeter: maintForm.current_hourmeter !== '' ? Number(maintForm.current_hourmeter) : undefined,
+        cost_center_id: maintForm.cost_center_id || null
       });
       setMaintenances(prev => prev.map(m => (m.id === salva.id ? salva : m)));
       alert('Ordem de manutenção atualizada com sucesso!');
@@ -970,7 +1011,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
         scheduled_date: maintForm.scheduled_date,
         cost: Number(maintForm.cost) || 0,
         current_odometer: maintForm.current_odometer ? Number(maintForm.current_odometer) : undefined,
-        current_hourmeter: maintForm.current_hourmeter ? Number(maintForm.current_hourmeter) : undefined
+        current_hourmeter: maintForm.current_hourmeter ? Number(maintForm.current_hourmeter) : undefined,
+        cost_center_id: maintForm.cost_center_id || null
       });
       alert('Ordem de manutenção agendada com sucesso!');
       fecharModalManutencao();
@@ -1986,6 +2028,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   });
                   const sortedMaint = sortRows(filteredMaint, maintenanceTableColumns.sortColumn, maintenanceTableColumns.sortDirection, (m, key) => {
                     if (key === 'asset') return assets.find(a => a.id === m.asset_id)?.name || '';
+                    if (key === 'cost_center') return costCenterName(m.cost_center_id);
                     return (m as unknown as Record<string, unknown>)[key];
                   });
                   const visible = MAINTENANCE_COLUMNS.filter(c => c.key !== 'actions' && maintenanceTableColumns.visibleColumns.includes(c.key));
@@ -2044,7 +2087,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                                 <tr key={m.id} className="hover:bg-blue-50/50 transition-colors">
                                   {orderedVisibleKeys.map(key => (
                                     <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                      {renderMaintenanceCell(key, m, { asset, typeLabels, statusColor })}
+                                      {renderMaintenanceCell(key, m, { asset, typeLabels, statusColor, costCenterName })}
                                     </td>
                                   ))}
                                   <td aria-hidden="true"></td>
@@ -2843,8 +2886,11 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
         </div>
       )}
 
-      {/* 9. MODAL: CADASTRAR / EDITAR / VER ORDEM DE MANUTENÇÃO */}
-      {isNewMaintModalOpen && (() => {
+      {/* 9. DRAWER: AGENDAR / EDITAR / VER ORDEM DE MANUTENÇÃO
+          Era modal central até 2026-09-13. Mesmo desenho do drawer de ativo (4):
+          painel lateral (UI_PATTERNS §3) mantém a tabela à vista; `dirty` liga a
+          guarda de saída do próprio Sheet (ESC e backdrop). */}
+      {(() => {
         const somenteLeitura = maintModalMode === 'view';
         // Em editar/ver o ativo da ordem é fixo — vem do registro, não do `selectedAsset`
         // (que pode apontar para outro bem, escolhido na aba Ativos).
@@ -2855,171 +2901,189 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
           : maintModalMode === 'edit' ? 'Editar Ordem de Manutenção' : 'Ordem de Manutenção';
         const subtitulo = maintModalMode === 'create' ? 'Abra ou agende uma intervenção corretiva ou preventiva em um bem.'
           : maintModalMode === 'edit' ? 'Altere os dados da ordem. Para mudar o status use Iniciar/Concluir/Cancelar na tabela.'
-          : 'Somente leitura.';
+          : 'Ordem em modo de leitura. Use "Editar" para alterar.';
         const campo = 'w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold disabled:bg-gray-100 disabled:text-gray-600 disabled:cursor-default';
+        const rotulo = 'text-xs font-semibold text-slate-500';
         return (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto space-y-6 relative animate-in zoom-in-95 duration-200">
-            <button
-              onClick={fecharModalManutencao}
-              className="absolute right-4 top-4 p-2 bg-gray-50 hover:bg-gray-100 rounded-full text-gray-500"
-            >
-              <X className="w-4 h-4" />
-            </button>
+        <Sheet
+          open={isNewMaintModalOpen}
+          onClose={fecharModalManutencao}
+          size="xl"
+          dirty={maintFormDirty}
+        >
+          <SheetHeader onClose={pedirParaFecharModalManutencao}>
+            <SheetTitle>{titulo}</SheetTitle>
+            <SheetDescription>{subtitulo}</SheetDescription>
+          </SheetHeader>
 
-            <div>
-              <h3 className="font-bold text-gray-800 text-lg">{titulo}</h3>
-              <p className="text-gray-400 text-xs">{subtitulo}</p>
-            </div>
+          {/* `min-h-0` é o que deixa o SheetPanel rolar (ver drawer de ativo). */}
+          <form onSubmit={handleCreateMaintenance} className="flex-1 flex flex-col min-h-0">
+            <SheetPanel className="px-6 py-5">
+              {/* `<fieldset disabled>` trava TODO controle descendente de uma vez no
+                  modo leitura; `min-w-0` porque fieldset estoura a largura do painel. */}
+              <fieldset disabled={somenteLeitura} className="min-w-0 space-y-4">
+                <div className="space-y-1">
+                  <label className={rotulo}>Ativo Patrimonial</label>
+                  {ativoFixo ? (
+                    <div className="w-full px-4 py-2.5 border border-gray-150 rounded-xl bg-gray-100 text-gray-600 font-bold text-sm">
+                      {ativoFixo.name} ({ativoFixo.code})
+                    </div>
+                  ) : (
+                    <select
+                      required
+                      value={maintForm.asset_id}
+                      onChange={(e) => setMaintForm(prev => ({ ...prev, asset_id: e.target.value }))}
+                      className={campo}
+                    >
+                      <option value="">Selecione o Ativo...</option>
+                      {assets.map(a => (
+                        <option key={a.id} value={a.id}>{a.name} ({a.code})</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
 
-            <form onSubmit={handleCreateMaintenance} className="space-y-4 text-xs font-semibold">
-              <fieldset disabled={somenteLeitura} className="space-y-4 min-w-0">
-              <div className="space-y-1">
-                <label className="text-gray-400 uppercase tracking-widest text-[9px]">Ativo Patrimonial</label>
-                {ativoFixo ? (
-                  <div className="w-full px-4 py-2.5 border border-gray-150 rounded-xl bg-gray-100 text-gray-600 font-bold text-sm">
-                    {ativoFixo.name} ({ativoFixo.code})
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className={rotulo}>Tipo de Manutenção</label>
+                    <select
+                      value={maintForm.type}
+                      onChange={(e) => setMaintForm(prev => ({ ...prev, type: e.target.value as MaintenanceType }))}
+                      className={campo}
+                    >
+                      <option value="preventiva">Preventiva</option>
+                      <option value="corretiva">Corretiva</option>
+                      <option value="calibracao">Calibração</option>
+                    </select>
                   </div>
-                ) : (
-                  <select
+
+                  <div className="space-y-1">
+                    <label className={rotulo}>{maintModalMode === 'create' ? 'Status Inicial' : 'Status'}</label>
+                    {/* Em edição o status é só mostrado: mudar de estado passa pelas
+                        transições da linha (que também atualizam o ativo). */}
+                    <select
+                      value={maintForm.status}
+                      disabled={maintModalMode !== 'create'}
+                      onChange={(e) => setMaintForm(prev => ({ ...prev, status: e.target.value as MaintenanceStatus }))}
+                      className={campo}
+                    >
+                      <option value="agendada">Agendada</option>
+                      <option value="em_execucao">Em Oficina (Em Execução)</option>
+                      {maintModalMode !== 'create' && (
+                        <>
+                          <option value="concluida">Concluída</option>
+                          <option value="cancelada">Cancelada</option>
+                        </>
+                      )}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className={rotulo}>Descrição do Serviço / Sintomas</label>
+                  <textarea
                     required
-                    value={maintForm.asset_id}
-                    onChange={(e) => setMaintForm(prev => ({ ...prev, asset_id: e.target.value }))}
-                    className={campo}
-                  >
-                    <option value="">Selecione o Ativo...</option>
-                    {assets.map(a => (
-                      <option key={a.id} value={a.id}>{a.name} ({a.code})</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Tipo de Manutenção</label>
-                  <select
-                    value={maintForm.type}
-                    onChange={(e) => setMaintForm(prev => ({ ...prev, type: e.target.value as MaintenanceType }))}
-                    className={campo}
-                  >
-                    <option value="preventiva">Preventiva</option>
-                    <option value="corretiva">Corretiva</option>
-                    <option value="calibracao">Calibração</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">{maintModalMode === 'create' ? 'Status Inicial' : 'Status'}</label>
-                  {/* Em edição o status é só mostrado: mudar de estado passa pelas
-                      transições da linha (que também atualizam o ativo). */}
-                  <select
-                    value={maintForm.status}
-                    disabled={maintModalMode !== 'create'}
-                    onChange={(e) => setMaintForm(prev => ({ ...prev, status: e.target.value as MaintenanceStatus }))}
-                    className={campo}
-                  >
-                    <option value="agendada">Agendada</option>
-                    <option value="em_execucao">Em Oficina (Em Execução)</option>
-                    {maintModalMode !== 'create' && (
-                      <>
-                        <option value="concluida">Concluída</option>
-                        <option value="cancelada">Cancelada</option>
-                      </>
-                    )}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-gray-400 uppercase tracking-widest text-[9px]">Descrição do Serviço / Sintomas</label>
-                <textarea
-                  required
-                  value={maintForm.description}
-                  onChange={(e) => setMaintForm(prev => ({ ...prev, description: e.target.value }))}
-                  className={`${campo} py-2 h-20 resize-none`}
-                  placeholder="Descreva detalhadamente o serviço ou as falhas apresentadas..."
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Data Agendada</label>
-                  <input
-                    type="date"
-                    required
-                    value={maintForm.scheduled_date}
-                    onChange={(e) => setMaintForm(prev => ({ ...prev, scheduled_date: e.target.value }))}
-                    className={campo}
+                    value={maintForm.description}
+                    onChange={(e) => setMaintForm(prev => ({ ...prev, description: e.target.value }))}
+                    className={`${campo} py-2 h-20 resize-none`}
+                    placeholder="Descreva detalhadamente o serviço ou as falhas apresentadas..."
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Custo Estimado (R$)</label>
-                  <input
-                    type="number"
-                    value={maintForm.cost || ''}
-                    onChange={(e) => setMaintForm(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
-                    className={campo}
-                    placeholder="Opcional"
-                  />
-                </div>
-              </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className={rotulo}>Data Agendada</label>
+                    <input
+                      type="date"
+                      required
+                      value={maintForm.scheduled_date}
+                      onChange={(e) => setMaintForm(prev => ({ ...prev, scheduled_date: e.target.value }))}
+                      className={campo}
+                    />
+                  </div>
 
-              <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className={rotulo}>Custo Estimado (R$)</label>
+                    <input
+                      type="number"
+                      value={maintForm.cost || ''}
+                      onChange={(e) => setMaintForm(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
+                      className={campo}
+                      placeholder="Opcional"
+                    />
+                  </div>
+                </div>
+
+                {/* Centro de custo — seletor padrão do app (drawer com busca), a
+                    mesma dimensão contábil da folha e do financeiro. */}
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Odômetro Inicial (Km)</label>
-                  <input
-                    type="number"
-                    value={maintForm.current_odometer || ''}
-                    onChange={(e) => setMaintForm(prev => ({ ...prev, current_odometer: parseInt(e.target.value, 10) || '' }))}
-                    className={campo}
-                    placeholder="Se aplicável a frotas"
+                  <label className={rotulo}>Centro de Custo</label>
+                  <CostCenterSelect
+                    costCenters={costCenters}
+                    value={maintForm.cost_center_id}
+                    onChange={(v) => setMaintForm(prev => ({ ...prev, cost_center_id: v }))}
+                    placeholder="Sem centro de custo"
+                    disabled={somenteLeitura}
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Horímetro Inicial (Horas)</label>
-                  <input
-                    type="number"
-                    value={maintForm.current_hourmeter || ''}
-                    onChange={(e) => setMaintForm(prev => ({ ...prev, current_hourmeter: parseInt(e.target.value, 10) || '' }))}
-                    className={campo}
-                    placeholder="Se aplicável a máquinas pesadas"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className={rotulo}>Odômetro Inicial (Km)</label>
+                    <input
+                      type="number"
+                      value={maintForm.current_odometer || ''}
+                      onChange={(e) => setMaintForm(prev => ({ ...prev, current_odometer: parseInt(e.target.value, 10) || '' }))}
+                      className={campo}
+                      placeholder="Se aplicável a frotas"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className={rotulo}>Horímetro Inicial (Horas)</label>
+                    <input
+                      type="number"
+                      value={maintForm.current_hourmeter || ''}
+                      onChange={(e) => setMaintForm(prev => ({ ...prev, current_hourmeter: parseInt(e.target.value, 10) || '' }))}
+                      className={campo}
+                      placeholder="Se aplicável a máquinas pesadas"
+                    />
+                  </div>
                 </div>
-              </div>
               </fieldset>
+            </SheetPanel>
 
-              <div className="flex gap-3 justify-end pt-4 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={fecharModalManutencao}
-                  className="px-5 py-2.5 border border-gray-200 text-gray-500 rounded-xl hover:bg-gray-50 font-bold"
+            <SheetFooter>
+              {/* §25: em edição o secundário é "Voltar"; em leitura, "Fechar". */}
+              <button
+                type="button"
+                onClick={pedirParaFecharModalManutencao}
+                className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px] transition-all"
+              >
+                {somenteLeitura ? 'Fechar' : maintModalMode === 'edit' ? 'Voltar' : 'Cancelar'}
+              </button>
+              {somenteLeitura ? (
+                // `key` + preventDefault: sem eles o React reaproveita este <button>,
+                // que já está como `type="submit"` quando o navegador executa a ação
+                // padrão do clique — e o form era enviado só de destravar o modo
+                // (medido no navegador em 2026-09-12).
+                <Button key="destravar" type="button" onClick={(e) => { e.preventDefault(); setMaintModalMode('edit'); }}>
+                  <Edit className="w-4 h-4" />
+                  Editar
+                </Button>
+              ) : (
+                <Button
+                  key="salvar"
+                  type="submit"
+                  disabled={actionLoading}
                 >
-                  {somenteLeitura ? 'Fechar' : 'Cancelar'}
-                </button>
-                {somenteLeitura ? (
-                  // `key` + preventDefault: sem eles o React reaproveita este <button>,
-                  // que já está como `type="submit"` quando o navegador executa a ação
-                  // padrão do clique — e o form era enviado só de destravar o modo.
-                  <Button key="destravar" type="button" onClick={(e) => { e.preventDefault(); setMaintModalMode('edit'); }}>
-                    Editar
-                  </Button>
-                ) : (
-                  <Button
-                    key="salvar"
-                    type="submit"
-                    disabled={actionLoading}
-                  >
-                    {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {maintModalMode === 'edit' ? 'Salvar alterações' : 'Confirmar Abertura'}
-                  </Button>
-                )}
-              </div>
-            </form>
-          </div>
-        </div>
+                  {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {maintModalMode === 'edit' ? 'Salvar alterações' : 'Confirmar Abertura'}
+                </Button>
+              )}
+            </SheetFooter>
+          </form>
+        </Sheet>
         );
       })()}
 

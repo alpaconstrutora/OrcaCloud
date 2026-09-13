@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Search } from 'lucide-react';
 import { getCodeLevel, getLevelStyle, sortByCode } from '../utils/codeHierarchy';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
@@ -119,7 +120,11 @@ const HierarchicalSelect: React.FC<Props> = ({
     const [expandidos, setExpandidos] = useState<Record<string, boolean>>({});
     const wrapperRef = useRef<HTMLDivElement>(null);
 
+    // Clique fora só fecha o painel ANCORADO (dropdown). No modo drawer o
+    // painel sai por portal — todo clique dentro dele seria "fora" do wrapper e
+    // o fecharia no mousedown; ali quem fecha é o backdrop/ESC do próprio Sheet.
     useEffect(() => {
+        if (panelVariant === 'drawer') return;
         const handleClickOutside = (e: MouseEvent) => {
             if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
                 setOpen(false);
@@ -128,7 +133,28 @@ const HierarchicalSelect: React.FC<Props> = ({
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    }, [panelVariant]);
+
+    // Drawer por PORTAL em `document.body`, montado só enquanto aberto — igual ao
+    // `ClientSelect`. Este campo vive dentro de formulários em `Sheet`, cujo
+    // painel tem `transform` + `overflow-hidden`: um `fixed` filho fica preso ao
+    // painel, e o "deslocamento de saída" do Sheet fechado caía DENTRO da área
+    // visível (medido em 2026-09-13: o seletor de centro de custo aparecia
+    // aberto ao abrir o drawer de manutenção, sem ninguém clicar). `shown` vira
+    // true um frame depois, para a transição de entrada acontecer.
+    const [mounted, setMounted] = useState(false);
+    const [shown, setShown] = useState(false);
+    useEffect(() => {
+        if (panelVariant !== 'drawer') return;
+        if (open) {
+            setMounted(true);
+            const r = requestAnimationFrame(() => setShown(true));
+            return () => cancelAnimationFrame(r);
+        }
+        setShown(false);
+        const t = window.setTimeout(() => setMounted(false), 300);
+        return () => window.clearTimeout(t);
+    }, [open, panelVariant]);
 
     const getItemValue = (item: HierarchicalSelectItem): string => {
         if (valueField === 'code') return item.code ?? '';
@@ -291,7 +317,10 @@ const HierarchicalSelect: React.FC<Props> = ({
         return (
             <div ref={wrapperRef}>
                 {triggerButton}
-                <Sheet open={open} onClose={closeAndClear} side="right" size="sm">
+                {/* zIndex 10000: por portal, fica FORA do overlay que o abriu e precisa
+                    vencer o z-index dele (mesma camada do `ClientSelect`). */}
+                {mounted && createPortal(
+                <Sheet open={shown} onClose={closeAndClear} side="right" size="sm" zIndex={10000}>
                     <SheetHeader onClose={closeAndClear}>
                         <SheetTitle>{drawerTitle || placeholder}</SheetTitle>
                         <SheetDescription>{drawerDescription}</SheetDescription>
@@ -320,7 +349,8 @@ const HierarchicalSelect: React.FC<Props> = ({
                         )}
                     </div>
                     <SheetPanel>{listBody}</SheetPanel>
-                </Sheet>
+                </Sheet>,
+                document.body)}
             </div>
         );
     }

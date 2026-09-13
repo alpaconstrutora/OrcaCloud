@@ -391,43 +391,14 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 <KpiCard shadow={false} size="sm" label="Pendentes de Medição" value={stats.pendingMeasurements} icon={<Clock className="w-4 h-4" />} color="amber" />
             </div>
 
-            {/* Toolbar de botões (§5.3) — separada da busca por pedido explícito do
-                usuário (2026-07-29). Layout canônico do §5.3: escopo à esquerda, ação
-                primária à direita, `justify-between`. O escopo aqui é o toggle "esta
-                obra × todos os projetos" — ele decide QUAL CONJUNTO a tela olha, então
-                mora nesta barra e não na toolbar de busca (que decide qual LINHA). */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center gap-2">
-                    {projectId && (
-                        <button
-                            onClick={() => setLocalShowAll(!localShowAll)}
-                            title={!localShowAll ? 'Mostrando apenas contratos desta obra — clique para ver todos' : 'Filtrar contratos por esta obra'}
-                            className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] transition-all active:scale-95 text-sm font-medium whitespace-nowrap ${!localShowAll
-                                ? 'bg-blue-50 text-blue-700'
-                                : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
-                                }`}
-                        >
-                            <Building2 className="w-4 h-4" />
-                            {localShowAll ? 'Filtrar por Obra' : 'Ver Todos Projetos'}
-                        </button>
-                    )}
-                </div>
-                <div className="flex items-center gap-2">
-                {extraActions}
-                <button
-                    onClick={onCreateNew}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                >
-                    <Plus className="w-[15px] h-[15px]" />
-                    Novo contrato
-                </button>
-                </div>
-            </div>
-
             {/* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — toolbar e
                 conteúdo dividem um único card (border/rounded/shadow só no container pai);
                 a costura visível entre os dois é o border-b da toolbar. Componente
-                compartilhado (Suprimentos/Locação/Serviços/Vendas via prop domain/direction). */}
+                compartilhado (Suprimentos/Locação/Serviços/Vendas via prop domain/direction).
+                A ação primária ("Novo contrato") e as ações extras do pai (Templates)
+                moram aqui, à direita — a toolbar de botões (§5.3) foi removida a pedido
+                do usuário (2026-09-13); o toggle de escopo "esta obra × todos" ficou
+                junto dos filtros. */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
             <div className="flex flex-col md:flex-row gap-2.5 items-center p-2 border-b border-gray-100 bg-white">
                 <div className="flex-1 relative w-full">
@@ -440,6 +411,20 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                         className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                     />
                 </div>
+
+                {projectId && (
+                    <button
+                        onClick={() => setLocalShowAll(!localShowAll)}
+                        title={!localShowAll ? 'Mostrando apenas contratos desta obra — clique para ver todos' : 'Filtrar contratos por esta obra'}
+                        className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] transition-all active:scale-95 text-sm font-medium whitespace-nowrap shrink-0 ${!localShowAll
+                            ? 'bg-blue-50 text-blue-700'
+                            : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
+                            }`}
+                    >
+                        <Building2 className="w-4 h-4" />
+                        {localShowAll ? 'Filtrar por Obra' : 'Ver Todos Projetos'}
+                    </button>
+                )}
 
                 <select
                     value={statusFilter}
@@ -508,6 +493,16 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                         <Table2 className="w-4 h-4" />
                     </button>
                 </div>
+
+                {/* Ações extras do pai (ex.: Templates) + ação primária (§17, compacta) */}
+                {extraActions}
+                <button
+                    onClick={onCreateNew}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                >
+                    <Plus className="w-[15px] h-[15px]" />
+                    Novo contrato
+                </button>
             </div>
 
             {/* Content List — sem bg/border/rounded próprios: já está dentro do card

@@ -1018,6 +1018,20 @@ describe('BlueprintEditor · ribbon', () => {
     expect(botao(/^distribuir tomadas$/i)).toHaveAttribute('aria-pressed', 'false');
   });
 
+  it('"Lançar eletrodutos" (aba Instalações) abre o drawer com as hipóteses e a tabela por circuito', async () => {
+    await montar();
+    await abrirAba(/^instalações$/i);
+    await userEvent.setup().click(botao(/^lançar eletrodutos/i));
+    const drawer = await screen.findByRole('dialog');
+    expect(drawer).toHaveTextContent(/eletrodutos por circuito/i);
+    expect(drawer).toHaveTextContent(/hipóteses do lançamento/i);
+    expect(drawer).toHaveTextContent(/menor comprimento/i);
+    // Planta sem quadro: diz o que falta em vez de uma tabela vazia.
+    expect(drawer).toHaveTextContent(/nenhum circuito ainda/i);
+    expect(within(drawer).getByRole('combobox', { name: /bitola do eletroduto/i })).toHaveValue('25');
+    for (const b of within(drawer).getAllByRole('button', { name: /lançar em todos|aceitar sugeridos/i })) expect(b).toBeDisabled();
+  });
+
   it('"Quadro de cargas" (aba Instalações) abre em DRAWER, não no dock — é onde se edita a elétrica', async () => {
     await montar();
     await abrirAba(/^instalações$/i);

@@ -1050,6 +1050,16 @@ export interface Trecho {
    * contá-los a partir do desenho seria inventar dimensionamento.
    */
   condutores?: number | null;
+  /**
+   * Gerado pelo LANÇAMENTO AUTOMÁTICO de eletrodutos (13/09/2026) e ainda não
+   * confirmado — o irmão de `Terminal.sugerida`. Desenha-se pontilhado fino;
+   * MOVER o trecho ou aceitá-lo (SetTrechoProps `sugerido: false`) limpa a
+   * marca. É o que separa "o sistema propôs este caminho" de "o projetista
+   * decidiu este caminho" — somar é registro, decidir é projeto.
+   *
+   * Omitido no canônico quando falso, como os demais campos novos.
+   */
+  sugerido?: boolean | null;
 }
 
 /**

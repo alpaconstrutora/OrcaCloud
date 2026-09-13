@@ -4008,7 +4008,10 @@ export default function BlueprintCanvas({
       // esgoto no piso passam a ter o mesmo traço. Eles se separam pela cor e
       // pela bitola, e numa prancha ELÉTRICA — que é onde esta convenção vale —
       // todas as linhas são elétricas.
-      ctx.setLineDash(embutidoNoPiso(t) ? [6, 3] : []);
+      // SUGERIDO (lançamento automático, ainda não confirmado): pontilhado
+      // fino, o mesmo tracejado do anel da tomada sugerida — mover ou aceitar
+      // devolve o traço à convenção (contínuo / pontilhado no piso).
+      ctx.setLineDash(t.sugerido ? [3, 3] : embutidoNoPiso(t) ? [6, 3] : []);
       ctx.beginPath();
       if (p.x === q.x && p.y === q.y) {
         // A prumada vista de cima é a SEÇÃO do tubo: raio = meia bitola.

@@ -194,6 +194,13 @@
  *   tem instalação, então nenhuma delas ganha chave — só a versão embutida no
  *   payload mudou.
  *
+ *   0.29.0 → 0.30.0 (13/09/2026): `Trecho.sugerido` — o eletroduto lançado
+ *   automaticamente e ainda não confirmado (o irmão de `Terminal.sugerida`).
+ *   `true` ou ausente, nunca `false`; nenhum dos seis casos tem rede. Mesma
+ *   prova, refeita antes de tocar num hash: com a string em 0.29.0 e o campo
+ *   JÁ no lugar (modelo, comandos, canônico, canvas), as goldens passaram e as
+ *   contagens (9/49/144/3/78/4) seguiram idênticas.
+ *
  *   0.28.0 → 0.29.0 (13/09/2026): a ALIMENTAÇÃO do quadro — `Quadro.ligacao`,
  *   `tensaoV` e `alimentadorM` (F6 do pré-dimensionamento: demanda e
  *   alimentador). Declarações, omitidas quando ausentes; nenhum dos seis casos
@@ -421,17 +428,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: 'b7e253835cd7e4aa9755a50daf334e3956a97354d04fe0710fb51dea488a1aa9',
+    hash: '5064e59cd6a60e39c06c79616dec74b99550c5f22483f377a9db221ae1e4ec7a',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '83bb476594880b98cb1a61bf3da36f4d1e1aeed852fe4af9d765ce463b9a4fc2',
+    hash: 'd89a4dc04f945c11a261fecf564f5921aa73fb0a008cc58c95b637c05b38f7b7',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: 'b1b787bdabacbf98316baac53ab788279ef3712366599a7f8a6a5472d1fe1ce4',
+    hash: '4bbaf2b37806166288b512df8c6c296ef460e3fb6b02072ec2c59192290728fc',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -439,7 +446,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: 'fba69d3b830de79f865ca07c7771e9c829084fab0b6fcac4f110dea504bbba8f',
+    hash: '6c3f80038b043cd00aac4f748ac361013bb885832e0dc488204f8c50381f7bd7',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -449,7 +456,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '066e3fec9ec7f6fe9c756b69496bd0127e006341197a5bb5b0d91dab164c3439',
+    hash: '8ab4e55b9dd74fe36d0934eb97140babcf1ccc33df0a5ddd9e0afa27a3f356ae',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -460,7 +467,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: 'af554a118f8f332389a0f5646122bd8c0ac8331df1ddd2bc89a46d9b5deceb58',
+    hash: 'a6d099f7152cc70478018bfe7cfd35b3370ae42c279254bd45a501e25752259d',
   },
 };
 

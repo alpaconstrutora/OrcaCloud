@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowLeftRight,
   Boxes,
+  Cable,
   Calculator,
   FileText,
   FlipHorizontal2,
@@ -114,6 +115,14 @@ import Ribbon, { BarraDeOpcoes, BotaoDoRibbon, GrupoDoRibbon, abaEfetiva } from 
 import DockDeRelatorios, { useAlturaDoDock } from './DockDeRelatorios';
 import PainelDeTarefa from './PainelDeTarefa';
 import { Sheet, SheetDescription, SheetFooter, SheetHeader, SheetPanel, SheetTitle } from '../ui/sheet';
+import {
+  BITOLAS_DE_ELETRODUTO_MM,
+  HIPOTESES_ELETRODUTO_PADRAO,
+  eletrodutosSugeridos,
+  planejarEletrodutosDoNivel,
+  pontosSemCircuito,
+  type PlanoDeEletrodutos,
+} from '../../utils/blueprintEletrodutos';
 import SecaoAccordion from './SecaoAccordion';
 import { usePainelRedimensionavel } from './LarguraDoPainel';
 import PainelMedicoes from './PainelMedicoes';
@@ -477,6 +486,9 @@ const ROTULO_DA_TAREFA = {
   // automática. O mesmo controle continua em cada cartão do navegador — aqui
   // é a porta de quem procura "lançamento automático de tomadas" no ribbon.
   tomadas: 'Tomadas pela NBR 5410',
+  // O lançamento automático de eletrodutos (13/09/2026): por circuito, prumada
+  // em cada ponto e árvore no teto a partir do quadro — sugerido, desfazível.
+  eletrodutos: 'Eletrodutos por circuito',
   'gerar-paredes': 'Gerar paredes do PDF',
   'importar-ifc': 'Importar do IFC',
   'importar-dxf': 'Importar do DXF',
@@ -4172,6 +4184,37 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const ambientesComDeficit = ambientes.filter(
     (a) => !!a.conferencia && (a.conferencia.deficit > 0 || a.conferencia.deficitMedias > 0),
   );
+  /**
+   * O LANÇAMENTO AUTOMÁTICO DE ELETRODUTOS — ver `blueprintEletrodutos.ts`.
+   * A bitola é a única hipótese que se troca aqui; as outras (rede no teto,
+   * prumada no ponto, árvore a partir do quadro, condutores por ligação) estão
+   * escritas no drawer. Os planos são derivados a cada render: mudam com o
+   * desenho e com a bitola, e planejar é barato (dezenas de pontos).
+   */
+  const [bitolaDeEletroduto, setBitolaDeEletroduto] = useState<number>(HIPOTESES_ELETRODUTO_PADRAO.bitolaMm);
+  const hipotesesDeEletroduto = useMemo(
+    () => ({ ...HIPOTESES_ELETRODUTO_PADRAO, bitolaMm: bitolaDeEletroduto }),
+    [bitolaDeEletroduto],
+  );
+  const planosDeEletrodutos = useMemo(
+    () => (levelId ? planejarEletrodutosDoNivel(editor.model, levelId, hipotesesDeEletroduto) : []),
+    [editor.model, levelId, hipotesesDeEletroduto],
+  );
+  const pontosALigar = planosDeEletrodutos.reduce((n, p) => n + p.aLigar, 0);
+  const pontosEletricosSemCircuito = levelId ? pontosSemCircuito(editor.model, levelId) : [];
+  const eletrodutosSugeridosNoNivel = eletrodutosSugeridos(editor.model, levelId);
+  /** Aplica UM plano (ou todos) num lote só — Ctrl+Z desfaz o lote; os trechos nascem selecionados. */
+  const lancarEletrodutos = (planos: PlanoDeEletrodutos[]) => {
+    const comandos = planos.flatMap((p) => p.comandos);
+    if (comandos.length === 0) return;
+    const criados = editor.runBatch(comandos);
+    if (criados.length > 0) selecionar(criados);
+  };
+  const aceitarEletrodutos = () =>
+    editor.runBatch(
+      eletrodutosSugeridosNoNivel.map((t) => ({ type: 'SetTrechoProps' as const, trechoId: t.id, sugerido: false })),
+    );
+
   /** O que está selecionado, para rodapé de drawer: a peça, ou "N selecionados". */
   const rotuloDaSelecao =
     editor.selectedIds.length > 1
@@ -4738,6 +4781,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               </GrupoDoRibbon>
             )}
             <GrupoDoRibbon rotulo="Elétrica">
+              {!emVista && (
+                <BotaoDoRibbon
+                  icone={Cable}
+                  rotulo="Lançar eletrodutos"
+                  contagem={pontosALigar || undefined}
+                  ativo={tarefaAberta === 'eletrodutos'}
+                  onClick={() => alternarTarefa('eletrodutos')}
+                  ajuda="Por circuito: prumada em cada ponto e rede no teto a partir do quadro, pelo menor caminho — sugerido; mover ou aceitar confirma"
+                />
+              )}
               <BotaoDoRibbon
                 icone={Zap}
                 rotulo="Quadro de cargas"
@@ -6813,6 +6866,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           <SheetTitle>
             <span className="flex items-center gap-2">
               {tarefaAberta === 'tomadas' && <Plug className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'eletrodutos' && <Cable className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -6830,6 +6884,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 <em>sugeridas</em> — mover uma confirma.
               </>
             )}
+            {tarefaAberta === 'eletrodutos' && (
+              <>
+                Para cada circuito, o sistema <strong>propõe</strong> o caminho: prumada na posição
+                de cada ponto até o teto e, no teto, a árvore de menor comprimento a partir do
+                quadro. Os trechos nascem <em>sugeridos</em> (pontilhado fino) — mover um confirma;
+                "Aceitar sugeridos" confirma todos. Ctrl+Z desfaz o lote.
+              </>
+            )}
             {tarefaAberta === 'terreno' &&
               'Área da escritura, papel de cada divisa, recuos e zona urbanística, topografia, corte e aterro, projeto executivo de terraplenagem. Traçar perfil ou drenagem fecha este painel — volte por Terreno › Dados do lote.'}
             {tarefaAberta === 'gerar-paredes' &&
@@ -6842,8 +6904,117 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           </SheetDescription>
         </SheetHeader>
 
-        <SheetPanel className={tarefaAberta === 'tomadas' ? 'px-6 py-4' : 'p-0'}>
+        <SheetPanel className={tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' ? 'px-6 py-4' : 'p-0'}>
           {tarefaAberta === 'terreno' && painelDoTerreno}
+
+          {tarefaAberta === 'eletrodutos' && (
+            <div className="space-y-4">
+              {/* As HIPÓTESES, escritas — o molde da topografia e do pré-dimensionamento. */}
+              <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <p className="font-semibold text-slate-700">Hipóteses do lançamento</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  <li>
+                    Rede embutida no <strong>teto</strong>, na cota do pé-direito do pavimento
+                    {levelId
+                      ? ` (${editor.model.levels.find((l) => l.id === levelId)?.defaultHeightMm ?? '—'} mm)`
+                      : ''}
+                    ; prumada vertical na posição de cada ponto e do quadro.
+                  </li>
+                  <li>Árvore de <strong>menor comprimento</strong> a partir do quadro, em linha reta — não desvia de viga nem de laje, que o desenho não conhece.</li>
+                  <li>
+                    Condutores por ligação: FN e FF <strong>3</strong> (fase, neutro/fase, terra) ·
+                    FFF <strong>4</strong>. Editáveis no trecho, depois.
+                  </li>
+                  <li>Ponto <strong>sem circuito</strong> não entra — atribuir circuito é decisão do projetista.</li>
+                </ul>
+                <label className="mt-2 flex items-center gap-2">
+                  Bitola do eletroduto
+                  <select
+                    value={bitolaDeEletroduto}
+                    onChange={(e) => setBitolaDeEletroduto(Number(e.target.value))}
+                    aria-label="Bitola do eletroduto lançado"
+                    className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                  >
+                    {BITOLAS_DE_ELETRODUTO_MM.map((mm) => (
+                      <option key={mm} value={mm}>
+                        {mm} mm
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              {planosDeEletrodutos.length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  Nenhum circuito ainda. Coloque um quadro de distribuição (Instalações › Quadro de
+                  distribuição) e crie os circuitos no Quadro de cargas.
+                </p>
+              ) : (
+                <table className="w-full table-fixed text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-500">
+                      <th className="py-1.5 pr-2 font-medium">Circuito</th>
+                      <th className="w-20 py-1.5 pr-2 font-medium">Quadro</th>
+                      <th className="w-24 py-1.5 pr-2 font-medium">Pontos</th>
+                      <th className="w-20 py-1.5 pr-2 font-medium">Previsto</th>
+                      <th className="w-24 py-1.5 text-right font-medium">Lançar</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {planosDeEletrodutos.map((plano) => {
+                      const c = (editor.model.circuitos ?? []).find((x) => x.id === plano.circuitoId);
+                      const q = (editor.model.quadros ?? []).find((x) => x.id === c?.quadroId);
+                      return (
+                        <tr key={plano.circuitoId}>
+                          <td className="py-1.5 pr-2 font-medium text-slate-700">
+                            {c?.nome ?? '—'}
+                            {plano.motivo && plano.aLigar === 0 && (
+                              <span className="ml-1 font-normal text-slate-400">· {plano.motivo}</span>
+                            )}
+                          </td>
+                          <td className="truncate py-1.5 pr-2 text-slate-600">{q?.nome ?? '—'}</td>
+                          <td className="py-1.5 pr-2 text-slate-600">
+                            {plano.ligados}/{plano.pontos} ligados
+                          </td>
+                          <td className="py-1.5 pr-2 text-slate-600">
+                            {plano.aLigar > 0 ? `${plano.metrosPrevistos.toFixed(1).replace('.', ',')} m` : '—'}
+                          </td>
+                          <td className="py-1.5 text-right">
+                            <button
+                              type="button"
+                              onClick={() => lancarEletrodutos([plano])}
+                              disabled={plano.aLigar === 0}
+                              className="inline-flex items-center gap-1 rounded-[6px] border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              <Cable className="h-3.5 w-3.5" />
+                              {plano.aLigar > 0 ? `${plano.aLigar} ponto(s)` : 'Nada'}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+
+              {pontosEletricosSemCircuito.length > 0 && (
+                <p className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  <span className="flex-1">
+                    <strong>{pontosEletricosSemCircuito.length} ponto(s) sem circuito</strong> — o
+                    eletroduto carrega o circuito, então ficam de fora até serem atribuídos (no
+                    painel do ponto ou no Quadro de cargas).
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => selecionar(pontosEletricosSemCircuito.map((p) => p.id))}
+                    className="shrink-0 rounded-[6px] border border-amber-400 bg-white px-2 py-0.5 font-medium hover:bg-amber-100"
+                  >
+                    ver
+                  </button>
+                </p>
+              )}
+            </div>
+          )}
 
           {tarefaAberta === 'gerar-paredes' && (
             <PainelGerarParedes
@@ -6950,7 +7121,34 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               </button>
             </>
           )}
-          {tarefaAberta !== 'tomadas' && rotuloDaSelecao && (
+          {tarefaAberta === 'eletrodutos' && (
+            <>
+              <span className="mr-auto text-xs text-slate-500">
+                {eletrodutosSugeridosNoNivel.length === 0
+                  ? 'Nenhum sugerido pendente.'
+                  : `${eletrodutosSugeridosNoNivel.length} sugerido(s) pendente(s).`}
+              </span>
+              <button
+                type="button"
+                onClick={() => lancarEletrodutos(planosDeEletrodutos)}
+                disabled={pontosALigar === 0}
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Cable className="h-4 w-4" />
+                Lançar em todos ({pontosALigar})
+              </button>
+              <button
+                type="button"
+                onClick={aceitarEletrodutos}
+                disabled={eletrodutosSugeridosNoNivel.length === 0}
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Aceitar sugeridos
+              </button>
+            </>
+          )}
+          {tarefaAberta !== 'tomadas' && tarefaAberta !== 'eletrodutos' && rotuloDaSelecao && (
             <span className="mr-auto truncate text-xs text-slate-500">
               Selecionado: {rotuloDaSelecao}
             </span>

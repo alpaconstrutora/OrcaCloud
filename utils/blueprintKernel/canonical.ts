@@ -439,6 +439,8 @@ function projetar(model: BlueprintModel): {
       // `circuito` no terminal.
       circuito: t.circuitoId != null ? (indiceDoCircuito.get(t.circuitoId) ?? 0) : undefined,
       condutores: t.condutores ?? undefined,
+      // `true` ou AUSENTE — nunca `false`, pela razão do `sugerida` do terminal.
+      sugerido: t.sugerido ? (true as const) : undefined,
     }),
     (x, y) =>
       nivel(x.levelId) - nivel(y.levelId) ||
@@ -814,6 +816,8 @@ export interface CanonicalPayload {
     circuito?: number;
     /** Quantos fios passam no eletroduto. Ausente sob kernel < 0.23.0. */
     condutores?: number;
+    /** Lançado pelo sistema e ainda não confirmado. Ausente sob kernel < 0.30.0 e quando falso. */
+    sugerido?: true;
   }[];
   /** Terminais de instalação. Ausente sob kernel < 0.18.0 e em desenho sem rede. */
   terminais?: {
@@ -1180,6 +1184,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       rotulo: t.rotulo,
       circuitoId: t.circuito != null ? idsDeCircuito[t.circuito] : null,
       condutores: t.condutores ?? null,
+      sugerido: t.sugerido ? true : null,
     });
   });
 

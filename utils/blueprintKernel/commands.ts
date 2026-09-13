@@ -298,6 +298,12 @@ export type Command =
       bitolaMm: number;
       itemCode?: string | null;
       rotulo?: string | null;
+      /** Circuito já conhecido ao criar (lançamento automático). Só em `ELETRICA`. */
+      circuitoId?: ObjectId | null;
+      /** Condutores já conhecidos ao criar. */
+      condutores?: number | null;
+      /** Gerado pelo lançamento automático — ver `Trecho.sugerido`. */
+      sugerido?: boolean | null;
     }
   | {
       type: 'SetTrechoProps';
@@ -312,6 +318,8 @@ export type Command =
       circuitoId?: ObjectId | null;
       /** Quantos condutores passam no eletroduto. `null` = não informado. */
       condutores?: number | null;
+      /** `false` aceita o caminho sugerido — ver `Trecho.sugerido`. */
+      sugerido?: boolean | null;
     }
   | {
       type: 'AddTerminal';
@@ -1378,6 +1386,11 @@ function aplicarSemHash(
           bitolaMm: assertIntegerMm(roundToMm(command.bitolaMm), 'bitolaMm'),
           itemCode: command.itemCode?.trim() || null,
           rotulo: command.rotulo?.trim() || null,
+          // Só quando informados — a chave ausente é o estado de todo trecho
+          // anterior, e é o que a invariante e o canônico esperam.
+          ...(command.circuitoId != null ? { circuitoId: command.circuitoId } : {}),
+          ...(command.condutores != null ? { condutores: command.condutores } : {}),
+          ...(command.sugerido ? { sugerido: true } : {}),
         },
       ];
       diff.created.push(id);
@@ -1403,6 +1416,7 @@ function aplicarSemHash(
       if (command.rotulo !== undefined) trecho.rotulo = command.rotulo?.trim() || null;
       if (command.circuitoId !== undefined) trecho.circuitoId = command.circuitoId;
       if (command.condutores !== undefined) trecho.condutores = command.condutores;
+      if (command.sugerido !== undefined) trecho.sugerido = command.sugerido ? true : null;
       diff.updated.push(trecho.id);
       break;
     }
@@ -1922,6 +1936,9 @@ function aplicarSemHash(
         if (!t) throw new KernelError('RUN_NOT_FOUND', `Trecho não encontrado: ${id}`);
         t.a = { x: inteiro(t.a.x + dx), y: inteiro(t.a.y + dy) };
         t.b = { x: inteiro(t.b.x + dx), y: inteiro(t.b.y + dy) };
+        // MOVER É DECIDIR, como na tomada sugerida: o caminho que a pessoa
+        // arrastou deixou de ser proposta do sistema.
+        if (t.sugerido) t.sugerido = null;
         diff.updated.push(t.id);
       }
 

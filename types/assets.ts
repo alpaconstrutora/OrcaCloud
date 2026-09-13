@@ -76,7 +76,7 @@ export interface OpuraAssetMaintenance {
   cost: number;
   current_odometer?: number;
   current_hourmeter?: number;
-  /** cost_centers_v2 — a dimensão contábil do gasto (migration 20270921000015). */
+  /** cost_centers_v2 — a dimensão contábil do gasto (migration 20270921000019). */
   cost_center_id?: string | null;
   checklist_responses?: Record<string, any>;
   created_at: string;

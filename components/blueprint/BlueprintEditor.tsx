@@ -113,6 +113,7 @@ import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
 import Ribbon, { BarraDeOpcoes, BotaoDoRibbon, GrupoDoRibbon, abaEfetiva } from './Ribbon';
 import DockDeRelatorios, { useAlturaDoDock } from './DockDeRelatorios';
 import PainelDeTarefa from './PainelDeTarefa';
+import { Sheet, SheetDescription, SheetFooter, SheetHeader, SheetPanel, SheetTitle } from '../ui/sheet';
 import SecaoAccordion from './SecaoAccordion';
 import { usePainelRedimensionavel } from './LarguraDoPainel';
 import PainelMedicoes from './PainelMedicoes';
@@ -731,6 +732,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [tarefa, setTarefa] = useState<TarefaDoPainel | null>(null);
   const [relatorio, setRelatorio] = useState<RelatorioDoDock | null>(null);
   const tarefaAberta = emVista ? null : tarefa;
+  /**
+   * TESTE DE FORMATO (pedido de 13/09/2026: *"o painel ainda está com bastante
+   * informação. Vamos adotar drawer para teste em Distribuir Tomadas"*): a
+   * tarefa de tomadas abre num DRAWER (`Sheet`, §26 do guia) por cima da tela,
+   * e não na metade de baixo do painel. As demais tarefas continuam no painel
+   * até o teste dizer qual formato fica.
+   */
+  const tarefaNoPainel = tarefaAberta === 'tomadas' ? null : tarefaAberta;
   const relatorioVisivel = useCallback(
     (id: RelatorioDoDock) =>
       !emVista ||
@@ -6568,51 +6577,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               faixa azul do cabeçalho, com o caminho de volta. Sem tarefa e sem
               seleção, a metade não existe — o navegador fica com o painel
               inteiro, como antes. */}
-          {!emVista && (tarefaAberta || editor.selectedIds.length > 0) && (
+          {!emVista && (tarefaNoPainel || editor.selectedIds.length > 0) && (
             <div className="flex max-h-[62%] shrink-0 flex-col border-t-2 border-slate-200">
-              {tarefaAberta ? (
+              {tarefaNoPainel ? (
                 <PainelDeTarefa
-                  titulo={ROTULO_DA_TAREFA[tarefaAberta]}
+                  titulo={ROTULO_DA_TAREFA[tarefaNoPainel]}
                   onFechar={() => setTarefa(null)}
                   selecionado={editor.selectedIds.length > 0 ? rotuloDoSelecionado : null}
                   onVerPropriedades={() => setTarefa(null)}
                 >
                   {tarefaAberta === 'terreno' && painelDoTerreno}
-
-                  {tarefaAberta === 'tomadas' && (
-                    <div>
-                      <p className="border-b border-slate-200 px-4 py-2 text-xs text-slate-500">
-                        Por ambiente: classifique o cômodo, veja o que a NBR 5410 (9.5.2) pede
-                        e distribua — <strong>Completar pela norma</strong> lança só o que
-                        falta; <strong>Distribuir</strong> lança N ao longo das paredes. As
-                        tomadas nascem <em>sugeridas</em>: mover uma confirma; "Aceitar
-                        sugeridas" confirma todas.
-                      </p>
-                      {ambientes.length === 0 ? (
-                        <p className="px-4 py-3 text-xs text-slate-400">
-                          Nenhum ambiente fechado ainda. Feche um contorno de paredes — a
-                          norma conta tomadas por cômodo.
-                        </p>
-                      ) : (
-                        <ul className="divide-y divide-slate-100">
-                          {ambientes.map((a) => (
-                            <li key={a.id} className="px-4 py-3">
-                              <div className="flex items-center gap-2">
-                                <span className="truncate text-sm font-medium text-slate-700">
-                                  {a.rotulo}
-                                </span>
-                                <span className="ml-auto shrink-0 text-xs text-slate-500">
-                                  {a.areaM2.toFixed(2).replace('.', ',')} m² ·{' '}
-                                  {a.perimetroM.toFixed(2).replace('.', ',')} m
-                                </span>
-                              </div>
-                              {controlesDeTomadas(a)}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  )}
 
                   {tarefaAberta === 'gerar-paredes' && (
                     <PainelGerarParedes
@@ -6920,6 +6894,75 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         temParede={(disputa?.paredeIds.length ?? 0) > 0}
         onEscolher={resolverDisputa}
       />
+
+      {/* ─── TOMADAS PELA NORMA, EM DRAWER (teste de formato, 13/09/2026) ─────
+          Fora da coluna do painel, como o Quadro de Divisas: é camada sobre a
+          tela inteira. Sem "Salvar": cada clique aplica um comando do kernel na
+          hora e Ctrl+Z desfaz. */}
+      <Sheet open={tarefaAberta === 'tomadas'} onClose={() => setTarefa(null)} size="xl">
+        <SheetHeader onClose={() => setTarefa(null)}>
+          <SheetTitle>
+            <span className="flex items-center gap-2">
+              <Plug className="h-5 w-5 text-blue-700" />
+              Tomadas pela NBR 5410
+            </span>
+          </SheetTitle>
+          <SheetDescription>
+            Por ambiente: classifique o cômodo, veja o que a norma (9.5.2) pede e distribua.{' '}
+            <strong>Completar pela norma</strong> lança só o que falta; <strong>Distribuir</strong>{' '}
+            lança N ao longo das paredes. As tomadas nascem <em>sugeridas</em> — mover uma
+            confirma.
+          </SheetDescription>
+        </SheetHeader>
+
+        <SheetPanel className="px-6 py-4">
+          {ambientes.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              Nenhum ambiente fechado ainda. Feche um contorno de paredes — a norma conta
+              tomadas por cômodo.
+            </p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {ambientes.map((a) => (
+                <li key={a.id} className="py-3 first:pt-0">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium text-slate-700">{a.rotulo}</span>
+                    <span className="ml-auto shrink-0 text-xs text-slate-500">
+                      {a.areaM2.toFixed(2).replace('.', ',')} m² ·{' '}
+                      {a.perimetroM.toFixed(2).replace('.', ',')} m
+                    </span>
+                  </div>
+                  {controlesDeTomadas(a)}
+                </li>
+              ))}
+            </ul>
+          )}
+        </SheetPanel>
+
+        <SheetFooter>
+          <span className="mr-auto text-xs text-slate-500">
+            {sugeridasNoNivel === 0
+              ? 'Nenhuma tomada sugerida pendente neste pavimento.'
+              : `${sugeridasNoNivel} sugerida(s) aguardando confirmação.`}
+          </span>
+          <button
+            type="button"
+            onClick={aceitarSugeridas}
+            disabled={sugeridasNoNivel === 0}
+            className="inline-flex h-9 items-center gap-1.5 rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            Aceitar sugeridas
+          </button>
+          <button
+            type="button"
+            onClick={() => setTarefa(null)}
+            className="inline-flex h-9 items-center rounded-[6px] bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+          >
+            Fechar
+          </button>
+        </SheetFooter>
+      </Sheet>
 
       <QuadroDeDivisas
         aberto={quadroAberto}

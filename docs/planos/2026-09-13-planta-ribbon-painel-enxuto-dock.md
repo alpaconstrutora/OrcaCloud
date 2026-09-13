@@ -129,6 +129,15 @@ listando todos os ambientes com tipo, conferência e Completar/Distribuir, mais
 o botão **"Aceitar sugeridas"** (contagem do pavimento). Os controles são uma
 função só (`controlesDeTomadas`), usada no cartão e na tarefa.
 
+**Teste de formato — drawer** (pedido de 13/09: *"o painel ainda está com
+bastante informação. Vamos adotar drawer para teste em Distribuir Tomadas"*):
+a tarefa de tomadas passou a abrir num `Sheet` (§26, `size="xl"`, flutuante)
+por cima da tela, com a lista de ambientes no corpo e "Aceitar sugeridas" +
+"Fechar" no rodapé; `tarefaNoPainel` exclui `tomadas` da metade de baixo do
+painel. As demais tarefas (Dados do lote, Do PDF/IFC/DXF/BCF) continuam no
+painel até o teste dizer qual formato fica. Trade-off declarado: o drawer é
+modal — enquanto aberto não se clica no desenho; distribuir e fechar é o fluxo.
+
 **F4 — prova**: teste com duas paredes selecionadas pela lista de vãos (aba
 aparece, não é auto-selecionada, "2 selecionados", sem Dividir/Unir, Excluir
 esvazia e a aba some); app real com escritas bloqueadas: Parede 1 selecionada →

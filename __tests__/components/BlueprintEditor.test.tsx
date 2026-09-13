@@ -999,12 +999,19 @@ describe('BlueprintEditor · ribbon', () => {
     await montar();
     await abrirAba(/^instalações$/i);
     await userEvent.setup().click(botao(/^distribuir tomadas$/i));
-    const tarefa = screen.getByRole('region', { name: /tomadas pela nbr 5410/i });
-    expect(tarefa).toHaveTextContent(/completar pela norma/i);
+    // Em DRAWER (teste de formato de 13/09/2026), não na metade de baixo do painel.
+    const drawer = await screen.findByRole('dialog');
+    expect(drawer).toHaveTextContent(/tomadas pela nbr 5410/i);
+    expect(drawer).toHaveTextContent(/completar pela norma/i);
     // Planta vazia: diz que a norma conta por cômodo, em vez de uma lista vazia.
-    expect(tarefa).toHaveTextContent(/nenhum ambiente fechado/i);
-    // Sem sugerida pendente, "Aceitar sugeridas" existe mas está apagado.
-    expect(botao(/^aceitar sugeridas/i)).toBeDisabled();
+    expect(drawer).toHaveTextContent(/nenhum ambiente fechado/i);
+    expect(screen.queryByRole('region', { name: /tomadas pela nbr 5410/i })).not.toBeInTheDocument();
+    // Sem sugerida pendente, "Aceitar sugeridas" existe (ribbon e rodapé) mas está apagado.
+    for (const b of screen.getAllByRole('button', { name: /^aceitar sugeridas/i })) expect(b).toBeDisabled();
+    // Fechar no rodapé desliga a tarefa (o Sheet sai com transição; o que se
+    // afirma é o estado — o botão do ribbon deixa de estar pressionado).
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^fechar$/i }));
+    expect(botao(/^distribuir tomadas$/i)).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('"Dados do lote" (aba Terreno) abre o painel do terreno como tarefa', async () => {

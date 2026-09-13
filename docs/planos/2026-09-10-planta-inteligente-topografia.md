@@ -10,9 +10,9 @@
 
 Sessão `5a9ec3fd-30ee-4723-b0a7-4bee36bd0996` · 2026-09-10.
 
-## Status consolidado — 2026-09-12 (fases 1–16)
+## Status consolidado — 2026-09-13 (fases 1–17)
 
-Todas as 16 fases estão publicadas em `main`, provadas de fora (`conferir-producao.sh`) e dirigidas em produção com a conta de leitura. As seções abaixo guardam o pedido, as decisões e os achados de cada fase; este quadro é o resumo do que existe e do que falta.
+Todas as 17 fases estão publicadas em `main`, provadas de fora (`conferir-producao.sh`) e dirigidas em produção com a conta de leitura. As seções abaixo guardam o pedido, as decisões e os achados de cada fase; este quadro é o resumo do que existe e do que falta.
 
 ### O que existe
 
@@ -24,8 +24,9 @@ Todas as 16 fases estão publicadas em `main`, provadas de fora (`conferir-produ
 | Vistas | planta (curvas, pontos cotados, declividade, hipsometria em 8 classes / por equidistância / **arco-íris** contínuo com curvas coloridas e nós da grade), corte com o perfil do terreno, 3D com relevo, drenagem e muros, **passeio a pé sobre o relevo** | 1, 2, 4, 12, 14 |
 | Terraplenagem | platô (envelope ou lote), cota de equilíbrio, corte/aterro, talude por lado, banqueta, via de serviço, muro por lado, empolamento/contração, perfil por corte ou por linha desenhada | 2–5 |
 | Drenagem e contenção | canaletas do platô, descidas traçadas com caimento e deságue, cota de projeto; muro de arrimo por aresta | 6 |
-| Pré-dimensionamento | hidráulico (Racional + IDF SP + Manning, Kirpich) e estrutural (muro de gravidade e flexão por Rankine, dente, Bishop para estabilidade global) — "pré-dimensionamento com hipóteses declaradas", nunca executivo | 7, 8 |
-| Persistência | `blueprint_study_topografia` (versões imutáveis, fora do payload; desde a fase 15 com `linhas_de_quebra` e `tin_importada`), `blueprint_study_terraplenagem` (premissas), `blueprint_snapshot_topografia` (rastreabilidade: qual topografia estava em uso na versão publicada) — migrations 0005–0015 aplicadas | 1, 3–7, 12, 13, 15 |
+| Pré-dimensionamento | hidráulico (Racional + IDF SP + Manning, Kirpich) e estrutural (muro de gravidade e flexão por Rankine, dente, Bishop para estabilidade global) — "pré-dimensionamento com hipóteses declaradas" | 7, 8 |
+| Projeto executivo (ART) | fluxo de emissão pelo responsável técnico: registro no conselho e ART/RRT, sondagem (NBR 8036) e nível d'água, verificações refeitas com os fatores de norma e Rankine com água, emissão imutável amarrada ao hash da base, memorial em PDF, aviso das exportações trocado pela ART | 17 |
+| Persistência | `blueprint_study_topografia` (versões imutáveis, fora do payload; desde a fase 15 com `linhas_de_quebra` e `tin_importada`), `blueprint_study_terraplenagem` (premissas), `blueprint_snapshot_topografia` (rastreabilidade: qual topografia estava em uso na versão publicada) — migrations 0005–0017 aplicadas | 1, 3–7, 12, 13, 15, 17 |
 | Exportação | SVG (com células, cores e legenda no arco-íris), CSV da grade, KML (estilo por nível), DXF (camadas `TOPO-*`, drenagem e muros), perfil em SVG (com metadados exatos que reimportam sem linha) e CSV | 1, 2, 5, 8, 12, 15 |
 
 ### O que falta (técnico, aberto)
@@ -922,8 +923,8 @@ Estava em "fora do software por decisão" desde a fase 8 ("projeto executivo com
 - [x] Testes: `blueprintTopografiaFase17` (8: furos NBR 8036, Rankine seco = clássico e com água maior, responsável/sondagem/ART faltando, muro seco = pré e com água reprova, NSPT × σadm, drenagem T = 25 e taludes, hash da base, memorial, aviso nas exportações) e `PainelTopografiaFase17` (4: campos e lista por grupo, botão só com tudo atendido, emissão válida troca o aviso e leva a ART ao SVG, base mudada volta ao formulário). Ajuste: o CSV do painel passa a levar `executivo`
 - [x] Migrations `aplicar_20270921000016` (tabela) e `aplicar_20270921000017` (sem a FK para a topografia) aplicadas com `db query -f` e conferidas de fora: RLS ligada, policies read/insert/update/delete, `authenticated` com SELECT/INSERT/UPDATE/DELETE, `anon` sem nada, gatilhos `updated` e `immutable`, só a FK do estudo
 - [x] Suíte (292 arquivos, 3.972 testes, 0 falhas), typecheck, `check-ui-standard.sh` (PainelTopografia, BlueprintEditor), `check-xss-sinks.sh`, `verificar:build` e `build` verdes
-- [ ] Publicado e provado
-- [ ] Passeio logado em produção
+- [x] Publicado e provado — `9bcba2d6` (fase) e `7a1ae7e0` (sem a FK) em `main` (12–13/09/2026), `conferir-producao.sh "Emitir projeto executivo"` achou o texto no bundle servido
+- [x] **Passeio logado em produção** (`c:/tmp/pwtest/topografia-prod17.mjs`): estudo novo → lote → curvas (aviso "Curvas geradas a partir de pontos cotados… não substitui") → seção "Projeto executivo (ART)": nome, CREA 5069999999, ART 28027230240099999, data, 2 furos (mínimo para 56 m²: 2), nível d'água "não encontrado" → lista com ✓ em responsável e sondagem → botão habilitado → Emitir: `POST 201` (RASCUNHO), `PATCH 204` (respiro), `PATCH 200` com `status = EMITIDO`, `hash_da_base` e memorial de 1.962 caracteres → faixa "Emitido — ART nº … · 13/09/2026" → aviso da versão vira "Projeto executivo — ART nº …" → SVG exportado com a ART e sem "não substitui" → memorial em PDF baixado → versão apagada (depois da migration 0017). Zero erros. Estudos de teste apagados por SQL
 
 ### Achado desta fase (só a medição pegou)
 

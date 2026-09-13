@@ -52,6 +52,17 @@ por" (persistido em `blueprint:agruparPontosSoltos`) e, em grupo com 2+
 pontos, **"Ligar todos a…"** — o caso comum é o cômodo inteiro no mesmo
 circuito. Testes: `blueprintAgrupamentoDePontos` (3) e o teste do painel.
 
+**"Criar novo…" no seletor** (pedido seguinte: *"adicionar mais um item na
+lista chamado criar novo … sem ter que ir no quadro de cargas e criar um novo
+circuito"*): os seletores "Ligar a…" e "Ligar todos a…" ganharam a opção
+"Criar novo…", que abre um mini-formulário ali mesmo — nome sugerido (o
+próximo número livre; com o nome do ambiente quando é o grupo), o quadro
+quando há mais de um, "Criar e ligar" (Enter confirma, Esc cancela). O editor
+cria o circuito e liga os pontos em seguida (`onCriarCircuitoELigar`; dois
+passos de histórico, porque o id do circuito só existe depois do primeiro).
+Com quadro e sem circuito nenhum, "Criar novo…" substitui o beco "crie um
+circuito abaixo".
+
 ## Fora, por decisão
 
 - Desvio de vigas/lajes e passagem pelo piso — o desenho não conhece a

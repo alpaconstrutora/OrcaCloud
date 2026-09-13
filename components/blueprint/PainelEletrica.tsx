@@ -46,6 +46,7 @@ export default function PainelEletrica({
   onCircuitoProps,
   onSelecionar,
   onLigarAoCircuito,
+  onCriarCircuitoELigar,
   onAceitarSugeridas,
   hipoteses = HIPOTESES_PADRAO,
   onHipoteses,
@@ -80,6 +81,12 @@ export default function PainelEletrica({
   onSelecionar?: (id: string) => void;
   /** Liga um ponto solto a um circuito, direto daqui. */
   onLigarAoCircuito?: (terminalId: ObjectId, circuitoId: ObjectId) => void;
+  /**
+   * "Criar novo…" no seletor (13/09/2026): cria o circuito no quadro e já liga
+   * os pontos, sem ir ao quadro de cargas criar antes. Quem implementa é o
+   * editor (o id do circuito novo só existe depois do comando).
+   */
+  onCriarCircuitoELigar?: (quadroId: ObjectId, nome: string, terminalIds: ObjectId[]) => void;
   /** Tira a marca de SUGERIDA de todos os pontos — "onde estão está bom". */
   onAceitarSugeridas?: () => void;
 }) {
@@ -95,6 +102,22 @@ export default function PainelEletrica({
     CRITERIO_SUGERIDO,
   );
   const gruposDeSoltos = agruparPontos(model, cargas.soltos, agrupamento);
+  /**
+   * O mini-formulário de "Criar novo…" — para QUAIS pontos e com que nome
+   * sugerido. Um só de cada vez: abrir outro fecha o anterior.
+   */
+  const [criando, setCriando] = useState<{ terminalIds: ObjectId[]; sugestao: string } | null>(null);
+  const quadros = model.quadros ?? [];
+  /** "C3", ou "C3 — Ambiente 1" quando é o grupo inteiro: o próximo número livre no quadro. */
+  const nomeSugerido = (quadroId: ObjectId | undefined, sufixo: string | null) => {
+    const n = (model.circuitos ?? []).filter((c) => !quadroId || c.quadroId === quadroId).length + 1;
+    return sufixo ? `C${n} — ${sufixo}` : `C${n}`;
+  };
+  const NOVO = '__novo__';
+  /** Só há o que criar com um quadro para o circuito nascer e alguém para criá-lo. */
+  const podeCriar = quadros.length > 0 && !!onCriarCircuitoELigar;
+  const mesmosIds = (a: readonly ObjectId[], b: readonly ObjectId[]) =>
+    a.length === b.length && a.every((id, i) => id === b[i]);
   // ⚠️ A pendência das SUGERIDAS aparece com ou sem quadro: são pontos que o
   // sistema pôs e ninguém confirmou. Ver `Terminal.sugerida`.
   const sugeridas = (model.terminais ?? []).filter((t) => t.sugerida).length;
@@ -200,12 +223,19 @@ export default function PainelEletrica({
                       </span>
                       {/* Ligar o GRUPO inteiro num gesto: é o caso comum — os
                           pontos de um cômodo vão para o mesmo circuito. */}
-                      {todosOsCircuitos.length > 0 && g.itens.length > 1 && (
+                      {(todosOsCircuitos.length > 0 || podeCriar) && g.itens.length > 1 && (
                         <select
                           value=""
                           aria-label={`Circuito de todos em ${g.titulo}`}
                           onChange={(e) => {
                             if (!e.target.value) return;
+                            if (e.target.value === NOVO) {
+                              setCriando({
+                                terminalIds: g.itens.map((s) => s.terminalId),
+                                sugestao: nomeSugerido(quadros[0]?.id, g.titulo),
+                              });
+                              return;
+                            }
                             for (const s of g.itens) onLigarAoCircuito?.(s.terminalId, e.target.value);
                           }}
                           className="w-32 shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px]"
@@ -216,12 +246,26 @@ export default function PainelEletrica({
                               {c.quadro} · {c.nome}
                             </option>
                           ))}
+                          {podeCriar && <option value={NOVO}>Criar novo…</option>}
                         </select>
                       )}
                     </span>
                   )}
+                  {criando && g.itens.length > 1 && mesmosIds(criando.terminalIds, g.itens.map((s) => s.terminalId)) && (
+                    <FormularioNovoCircuito
+                      quadros={quadros}
+                      sugestao={criando.sugestao}
+                      quantos={criando.terminalIds.length}
+                      onCriar={(quadroId, nome) => {
+                        onCriarCircuitoELigar?.(quadroId, nome, criando.terminalIds);
+                        setCriando(null);
+                      }}
+                      onCancelar={() => setCriando(null)}
+                    />
+                  )}
                   {g.itens.map((s) => (
-                    <span key={s.terminalId} className="flex items-center gap-1.5">
+                    <React.Fragment key={s.terminalId}>
+                    <span className="flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => onSelecionar?.(s.terminalId)}
@@ -230,7 +274,7 @@ export default function PainelEletrica({
                       >
                         {s.rotulo}
                       </button>
-                      {todosOsCircuitos.length === 0 ? (
+                      {todosOsCircuitos.length === 0 && !podeCriar ? (
                         <span className="shrink-0 text-[10px] text-slate-500">
                           crie um circuito abaixo
                         </span>
@@ -238,9 +282,14 @@ export default function PainelEletrica({
                         <select
                           value=""
                           aria-label={`Circuito de ${s.rotulo}`}
-                          onChange={(e) =>
-                            e.target.value && onLigarAoCircuito?.(s.terminalId, e.target.value)
-                          }
+                          onChange={(e) => {
+                            if (!e.target.value) return;
+                            if (e.target.value === NOVO) {
+                              setCriando({ terminalIds: [s.terminalId], sugestao: nomeSugerido(quadros[0]?.id, null) });
+                              return;
+                            }
+                            onLigarAoCircuito?.(s.terminalId, e.target.value);
+                          }}
                           className="w-32 shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px]"
                         >
                           <option value="">Ligar a…</option>
@@ -249,9 +298,25 @@ export default function PainelEletrica({
                               {c.quadro} · {c.nome}
                             </option>
                           ))}
+                          {/* "Criar novo…" (13/09/2026): o circuito que ainda não existe
+                              nasce daqui, sem ir ao quadro criar antes. */}
+                          {podeCriar && <option value={NOVO}>Criar novo…</option>}
                         </select>
                       )}
                     </span>
+                    {criando && criando.terminalIds.length === 1 && criando.terminalIds[0] === s.terminalId && (
+                      <FormularioNovoCircuito
+                        quadros={quadros}
+                        sugestao={criando.sugestao}
+                        quantos={1}
+                        onCriar={(quadroId, nome) => {
+                          onCriarCircuitoELigar?.(quadroId, nome, criando.terminalIds);
+                          setCriando(null);
+                        }}
+                        onCancelar={() => setCriando(null)}
+                      />
+                    )}
+                    </React.Fragment>
                   ))}
                 </span>
               ))}
@@ -505,4 +570,82 @@ export default function PainelEletrica({
 /** O circuito do kernel por id — para os campos que o quadro de cargas não carrega. */
 function circuitoDoModelo(model: BlueprintModel, circuitoId: ObjectId) {
   return (model.circuitos ?? []).find((c) => c.id === circuitoId) ?? null;
+}
+
+/**
+ * O mini-formulário de "Criar novo…" (13/09/2026): nome sugerido (o próximo
+ * número livre, com o ambiente quando é o grupo inteiro), o quadro quando há
+ * mais de um, e "Criar e ligar". Nasce onde o seletor foi acionado — abaixo do
+ * ponto ou do cabeçalho do grupo — para não obrigar a procurar o quadro de
+ * cargas e voltar.
+ */
+function FormularioNovoCircuito({
+  quadros,
+  sugestao,
+  quantos,
+  onCriar,
+  onCancelar,
+}: {
+  quadros: readonly { id: ObjectId; nome: string }[];
+  sugestao: string;
+  quantos: number;
+  onCriar: (quadroId: ObjectId, nome: string) => void;
+  onCancelar: () => void;
+}) {
+  const [nome, setNome] = useState(sugestao);
+  const [quadroId, setQuadroId] = useState<ObjectId>(quadros[0]?.id ?? '');
+  const podeCriar = !!nome.trim() && !!quadroId;
+  return (
+    <span
+      role="group"
+      aria-label="Novo circuito"
+      className="flex flex-wrap items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5"
+    >
+      <input
+        type="text"
+        value={nome}
+        onChange={(e) => setNome(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && podeCriar) onCriar(quadroId, nome.trim());
+          if (e.key === 'Escape') onCancelar();
+        }}
+        autoFocus
+        // Não "Nome do novo circuito": é o rótulo do campo de criar circuito no
+        // rodapé de cada quadro, e dois campos com o mesmo nome acessível
+        // confundem leitor de tela (e o teste).
+        aria-label="Nome do circuito a criar"
+        className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[11px]"
+      />
+      {quadros.length > 1 && (
+        <select
+          value={quadroId}
+          onChange={(e) => setQuadroId(e.target.value)}
+          aria-label="Quadro do novo circuito"
+          className="shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px]"
+        >
+          {quadros.map((q) => (
+            <option key={q.id} value={q.id}>
+              {q.nome}
+            </option>
+          ))}
+        </select>
+      )}
+      <button
+        type="button"
+        onClick={() => onCriar(quadroId, nome.trim())}
+        disabled={!podeCriar}
+        className="inline-flex shrink-0 items-center gap-1 rounded-[6px] bg-blue-600 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-blue-700 disabled:opacity-40"
+      >
+        <Plus className="h-3 w-3" />
+        {quantos > 1 ? `Criar e ligar ${quantos}` : 'Criar e ligar'}
+      </button>
+      <button
+        type="button"
+        onClick={onCancelar}
+        className="shrink-0 rounded-[6px] px-1.5 py-0.5 text-[11px] text-slate-600 hover:bg-white"
+      >
+        Cancelar
+      </button>
+    </span>
+  );
 }

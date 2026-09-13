@@ -7197,6 +7197,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             onLigarAoCircuito={(terminalId, circuitoId) =>
               editor.run({ type: 'SetTerminalProps', terminalId, circuitoId })
             }
+            // "Criar novo…" no seletor: o circuito nasce e os pontos entram nele.
+            // Dois passos de histórico (o id do circuito só existe depois do
+            // primeiro) — Ctrl+Z duas vezes desfaz tudo.
+            onCriarCircuitoELigar={(quadroId, nome, terminalIds) => {
+              const [circuitoId] = editor.run({ type: 'AddCircuito', quadroId, nome });
+              if (!circuitoId) return;
+              editor.runBatch(
+                terminalIds.map((terminalId) => ({ type: 'SetTerminalProps' as const, terminalId, circuitoId })),
+              );
+            }}
             onAceitarSugeridas={aceitarSugeridas}
             hipoteses={hipotesesEletricas}
             onHipoteses={setHipotesesEletricas}

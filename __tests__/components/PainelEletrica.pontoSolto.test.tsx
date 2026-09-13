@@ -164,6 +164,38 @@ describe('PainelEletrica · o ponto fora de circuito', () => {
     expect(onLigarAoCircuito).toHaveBeenCalledWith(m.terminais[2].id, m.circuitos[0].id);
   });
 
+  it('"Criar novo…" no seletor cria o circuito e liga ali mesmo — nome sugerido, Enter confirma', async () => {
+    // 13/09/2026: "adicionar mais um item na lista chamado criar novo … sem ter
+    // que ir no quadro de cargas e criar um novo circuito".
+    const onCriarCircuitoELigar = vi.fn();
+    const m = cena();
+    const user = userEvent.setup();
+    montar(m, { onCriarCircuitoELigar });
+
+    await user.selectOptions(screen.getByLabelText('Circuito de TUG cozinha'), '__novo__');
+    const nome = screen.getByLabelText('Nome do circuito a criar') as HTMLInputElement;
+    // Já há C1 no quadro: sugere C2. Um quadro só: sem seletor de quadro.
+    expect(nome.value).toBe('C2');
+    expect(screen.queryByLabelText('Quadro do novo circuito')).toBeNull();
+
+    await user.clear(nome);
+    await user.type(nome, 'C2 — Cozinha{Enter}');
+    expect(onCriarCircuitoELigar).toHaveBeenCalledWith(m.quadros[0].id, 'C2 — Cozinha', [m.terminais[0].id]);
+    expect(screen.queryByLabelText('Nome do circuito a criar')).toBeNull();
+  });
+
+  it('sem circuito nenhum mas COM quadro, "Criar novo…" é a saída — em vez de "crie um circuito abaixo"', async () => {
+    const onCriarCircuitoELigar = vi.fn();
+    const m = cena({ comCircuito: false });
+    const user = userEvent.setup();
+    montar(m, { onCriarCircuitoELigar });
+    expect(screen.queryByText('crie um circuito abaixo')).toBeNull();
+    await user.selectOptions(screen.getByLabelText('Circuito de TUG cozinha'), '__novo__');
+    expect((screen.getByLabelText('Nome do circuito a criar') as HTMLInputElement).value).toBe('C1');
+    await user.click(screen.getByRole('button', { name: /criar e ligar/i }));
+    expect(onCriarCircuitoELigar).toHaveBeenCalledWith(m.quadros[0].id, 'C1', [m.terminais[0].id]);
+  });
+
   it('sem ponto solto, o aviso não aparece', () => {
     const m = cena();
     const ligado = applyCommand(m, {

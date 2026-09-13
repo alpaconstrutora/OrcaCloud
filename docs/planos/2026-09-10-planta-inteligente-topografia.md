@@ -894,8 +894,8 @@ O passeio JÁ acompanhava o relevo desde a fase 2 (`bfa3feb0`, F10): `Percorrer`
 - [x] F44 — `elementosDoSvg` em árvore com `<use>`; MINSERT; `arcoDoBulge`; `resolverCruzamentos`; aviso de `<use>` na prévia
 - [x] Testes: `blueprintTopografiaFase16` (6: símbolo usado 3× + alvo inexistente, use recursivo até 4, MINSERT 3×2 rodado, bulge positivo/negativo/POLYLINE + quebra com arco, cruzamento simples/vértice comum/paralelas, tronco cruzado por duas em ordem); fase 15 ajustada (cruzamento agora honrado)
 - [x] Suíte (290 arquivos, 3.960 testes, 0 falhas), typecheck, `check-xss-sinks.sh`, `verificar:build` e `build` verdes
-- [ ] Publicado e provado
-- [ ] Passeio logado em produção
+- [x] Publicado e provado — `da035acb` em `main` (12/09/2026), `conferir-producao.sh "cruzamento(s) entre linhas de quebra"` achou o texto no bundle servido
+- [x] **Passeio logado em produção** (`c:/tmp/pwtest/topografia-prod16.mjs`): CSV com crista `LQ1` a 103 m e talvegue `LQ2` a 98 m que a cruza → prévia "2 linhas de quebra" → linha "2 linhas de quebra (4 vértices)" → Gerar: `POST 201` com as duas linhas em `linhas_de_quebra` e o aviso "1 cruzamento(s) entre linhas de quebra: no ponto de cruzamento valeu a cota da linha que veio primeiro"; cotas 98,17 a 102,88 m → SVG com `<symbol>` + três `<use>`: prévia "3 pontos lidos". Zero erros. Versão apagada pela tela; estudo por SQL
 
 ## Verificação
 

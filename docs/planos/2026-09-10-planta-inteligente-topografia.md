@@ -18,23 +18,19 @@ Todas as 16 fases estão publicadas em `main`, provadas de fora (`conferir-produ
 
 | Área | Entregue | Fase |
 |---|---|---|
-| Motor | grade sobre o lote, marching squares com `nodata`, TIN dos pontos cotados, curvas/mestras, estatísticas, hashes de entrada e resultado, perfil ao longo de linha, malha 3D | 1 |
-| Fontes | pontos cotados (digitados, vértices do lote ou **importados** de CSV/TXT, SVG, GeoJSON/KML, DXF, perfil SVG/CSV do próprio ÒPURA e curvas de nível em SVG), Open-Meteo GLO-90 e SRTM 30 m por Edge Function; recusa por resolução em lote urbano (DR-08) | 1, 8, 9–11 |
+| Motor | grade sobre o lote, marching squares com `nodata`, TIN dos pontos cotados com **índice por baldes**, **linhas de quebra** honradas por densificação (cruzamentos resolvidos com vértice comum), **TIN importada** usada como está, curvas/mestras, estatísticas, hashes de entrada e resultado, perfil ao longo de linha, malha 3D | 1, 15, 16 |
+| Fontes | pontos cotados (digitados, vértices do lote ou **importados** de CSV/TXT com código `LQ<n>` de linha de quebra, SVG com `transform`, `<use>`/`<symbol>` e Bézier/arco achatados, GeoJSON/KML, DXF por seção com blocos INSERT/MINSERT, polilinhas com Z e bulge, 3DFACE, **LandXML** com superfície e breaklines, perfil SVG exato/CSV do próprio ÒPURA e curvas de nível em SVG), Open-Meteo GLO-90 e SRTM 30 m por Edge Function; recusa por resolução em lote urbano (DR-08) | 1, 8, 9–11, 15, 16 |
 | Níveis | equidistância (cotas redondas), **Intervalo** (a partir do mínimo), **Número** de níveis, **Lista**; área "só o lote" ou "retângulo inteiro" | 12, 13 |
 | Vistas | planta (curvas, pontos cotados, declividade, hipsometria em 8 classes / por equidistância / **arco-íris** contínuo com curvas coloridas e nós da grade), corte com o perfil do terreno, 3D com relevo, drenagem e muros, **passeio a pé sobre o relevo** | 1, 2, 4, 12, 14 |
 | Terraplenagem | platô (envelope ou lote), cota de equilíbrio, corte/aterro, talude por lado, banqueta, via de serviço, muro por lado, empolamento/contração, perfil por corte ou por linha desenhada | 2–5 |
 | Drenagem e contenção | canaletas do platô, descidas traçadas com caimento e deságue, cota de projeto; muro de arrimo por aresta | 6 |
 | Pré-dimensionamento | hidráulico (Racional + IDF SP + Manning, Kirpich) e estrutural (muro de gravidade e flexão por Rankine, dente, Bishop para estabilidade global) — "pré-dimensionamento com hipóteses declaradas", nunca executivo | 7, 8 |
-| Persistência | `blueprint_study_topografia` (versões imutáveis, fora do payload), `blueprint_study_terraplenagem` (premissas), `blueprint_snapshot_topografia` (rastreabilidade: qual topografia estava em uso na versão publicada) — migrations 0005–0014 aplicadas | 1, 3–7, 12, 13 |
-| Exportação | SVG (com células, cores e legenda no arco-íris), CSV da grade, KML (estilo por nível), DXF (camadas `TOPO-*`, drenagem e muros), perfil em SVG/CSV | 1, 2, 5, 8, 12 |
+| Persistência | `blueprint_study_topografia` (versões imutáveis, fora do payload; desde a fase 15 com `linhas_de_quebra` e `tin_importada`), `blueprint_study_terraplenagem` (premissas), `blueprint_snapshot_topografia` (rastreabilidade: qual topografia estava em uso na versão publicada) — migrations 0005–0015 aplicadas | 1, 3–7, 12, 13, 15 |
+| Exportação | SVG (com células, cores e legenda no arco-íris), CSV da grade, KML (estilo por nível), DXF (camadas `TOPO-*`, drenagem e muros), perfil em SVG (com metadados exatos que reimportam sem linha) e CSV | 1, 2, 5, 8, 12, 15 |
 
 ### O que falta (técnico, aberto)
 
-As cinco pendências deste quadro foram resolvidas na fase 15 e as quatro miúdas que ela declarou, na fase 16 (12/09). Não há pendência técnica aberta na topografia.
-
-| Pendência | Onde nasceu | Tamanho |
-|---|---|---|
-| — (as quatro miúdas da fase 15 fecharam na fase 16) | | |
+Nada. As cinco pendências que este quadro listava foram resolvidas na fase 15 e as quatro miúdas que ela declarou, na fase 16 (12/09). Limitações que continuam por desenho, não por falta: a triangulação não é uma CDT (as linhas de quebra são honradas por densificação na resolução da grade), e a TIN importada é descartada ao editar qualquer ponto (índices).
 
 ### Fora do software por decisão (não reabrir sem pedido)
 
@@ -45,7 +41,7 @@ As cinco pendências deste quadro foram resolvidas na fase 15 e as quatro miúda
 
 ### Fora do plano (bugs alheios vistos de passagem)
 
-- `WarrantyModule.test.tsx` ("pílula de estado") falha em `origin/main` desde `814dd59f` (outra frente, Pós-Obra & Garantia). Não é da topografia.
+- `WarrantyModule.test.tsx` ("pílula de estado") falhou em `origin/main` durante a fase 14 (outra frente, Pós-Obra & Garantia); a própria frente corrigiu e a suíte inteira voltou a passar nas fases 15 e 16.
 
 ## O que este pedido decide
 

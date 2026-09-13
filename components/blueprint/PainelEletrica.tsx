@@ -48,6 +48,7 @@ export default function PainelEletrica({
   onLigarAoCircuito,
   onCriarCircuitoELigar,
   onAceitarSugeridas,
+  onPreencherPotencias,
   hipoteses = HIPOTESES_PADRAO,
   onHipoteses,
   onQuadroProps,
@@ -89,6 +90,11 @@ export default function PainelEletrica({
   onCriarCircuitoELigar?: (quadroId: ObjectId, nome: string, terminalIds: ObjectId[]) => void;
   /** Tira a marca de SUGERIDA de todos os pontos — "onde estão está bom". */
   onAceitarSugeridas?: () => void;
+  /**
+   * Preenche a potência da NBR 5410 nos pontos que estão SEM potência (os
+   * criados antes do padrão de 13/09/2026). Nunca sobrescreve o declarado.
+   */
+  onPreencherPotencias?: () => void;
 }) {
   const [novoCircuito, setNovoCircuito] = useState<Record<string, string>>({});
   const cargas = quadroDeCargas(model);
@@ -120,6 +126,28 @@ export default function PainelEletrica({
     return { soma, sem };
   };
   const va = (n: number) => `${n.toLocaleString('pt-BR')} ${UNIDADE_DE_POTENCIA}`;
+  /**
+   * Quantos pontos a norma sabe valorar e estão sem potência — o LEGADO
+   * ("verifique por que alguns pontos não têm potência", 13/09/2026: eram
+   * anteriores ao padrão). O botão preenche todos de uma vez.
+   */
+  const semPotenciaPreenchivel = (model.terminais ?? []).filter(
+    (t) =>
+      t.disciplina === 'ELETRICA' &&
+      t.potenciaW == null &&
+      (t.tipoEletrico === 'TUG' || t.tipoEletrico === 'TUE' || (t.tipoEletrico?.startsWith('ILUMINACAO') ?? false)),
+  ).length;
+  const botaoPreencher =
+    onPreencherPotencias && semPotenciaPreenchivel > 0 ? (
+      <button
+        type="button"
+        onClick={onPreencherPotencias}
+        title="Tomadas e luzes sem potência recebem o padrão da NBR 5410 (100/600 VA; luz pelo mínimo do cômodo). Não mexe no que já foi declarado."
+        className="rounded border border-amber-400 bg-white px-1.5 py-0.5 text-[11px] font-medium text-amber-800 hover:bg-amber-100"
+      >
+        Preencher potência pela norma ({semPotenciaPreenchivel})
+      </button>
+    ) : null;
   /**
    * O mini-formulário de "Criar novo…" — para QUAIS pontos e com que nome
    * sugerido. Um só de cada vez: abrir outro fecha o anterior.
@@ -171,6 +199,7 @@ export default function PainelEletrica({
             só "nenhum quadro ainda", e os pontos que ninguém alimenta ficavam
             invisíveis até alguém criar o quadro. */}
         {avisoSugeridas}
+        {botaoPreencher}
         {cargas.pontosSemCircuito > 0 && (
           <p className="text-[11px] text-amber-700">
             E há <strong>{cargas.pontosSemCircuito}</strong>{' '}
@@ -201,6 +230,16 @@ export default function PainelEletrica({
   return (
     <div className="space-y-3">
       {avisoSugeridas}
+      {botaoPreencher && (
+        <p className="flex flex-wrap items-center gap-x-2 text-[11px] text-amber-800">
+          <span>
+            <strong>{semPotenciaPreenchivel}</strong>{' '}
+            {semPotenciaPreenchivel === 1 ? 'ponto está' : 'pontos estão'} sem potência — anteriores
+            ao padrão da norma, ou apagados à mão.
+          </span>
+          {botaoPreencher}
+        </p>
+      )}
       {cargas.pontosSemCircuito > 0 && (
         <p className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-slate-700">
           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />

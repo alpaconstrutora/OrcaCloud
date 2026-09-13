@@ -115,7 +115,13 @@ import Ribbon, { BarraDeOpcoes, BotaoDoRibbon, GrupoDoRibbon, abaEfetiva } from 
 import DockDeRelatorios, { useAlturaDoDock } from './DockDeRelatorios';
 import PainelDeTarefa from './PainelDeTarefa';
 import { Sheet, SheetDescription, SheetFooter, SheetHeader, SheetPanel, SheetTitle } from '../ui/sheet';
-import { aplicarPotenciaPadrao, contextoDoAmbiente, potenciaPadraoVA, conjuntoMolhadoPassaDeSeis } from '../../utils/blueprintPotenciaPadrao';
+import {
+  aplicarPotenciaPadrao,
+  comandosDePotenciaPadrao,
+  contextoDoAmbiente,
+  potenciaPadraoVA,
+  conjuntoMolhadoPassaDeSeis,
+} from '../../utils/blueprintPotenciaPadrao';
 import {
   BITOLAS_DE_ELETRODUTO_MM,
   HIPOTESES_ELETRODUTO_PADRAO,
@@ -7229,6 +7235,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               );
             }}
             onAceitarSugeridas={aceitarSugeridas}
+            // O legado: pontos sem potência recebem o padrão da norma, num lote (Ctrl+Z desfaz).
+            onPreencherPotencias={() => {
+              const cmds = comandosDePotenciaPadrao(editor.model, levelId);
+              if (cmds.length > 0) editor.runBatch(cmds);
+            }}
             hipoteses={hipotesesEletricas}
             onHipoteses={setHipotesesEletricas}
             onQuadroProps={(quadroId, campos) => editor.run({ type: 'SetQuadroProps', quadroId, ...campos })}

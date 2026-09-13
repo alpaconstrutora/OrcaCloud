@@ -202,6 +202,24 @@ describe('PainelEletrica · o ponto fora de circuito', () => {
     expect(onCriarCircuitoELigar).toHaveBeenCalledWith(m.quadros[0].id, 'C1', [m.terminais[0].id]);
   });
 
+  it('pontos SEM potência: o painel diz quantos e oferece "Preencher potência pela norma"', async () => {
+    // 13/09/2026: "verifique por que alguns pontos não têm potência" — eram
+    // anteriores ao padrão. O botão resolve o legado num lote.
+    const onPreencherPotencias = vi.fn();
+    // Uma TUG sem potência (a cena nasce sem tipo elétrico; sem tipo a norma não sabe valorar).
+    const m = applyCommand(cena(), { type: 'SetTerminalProps', terminalId: cena().terminais[0].id, tipoEletrico: 'TUG' }).model;
+    const primeira = montar(m, { onPreencherPotencias });
+    const b = screen.getByRole('button', { name: /preencher potência pela norma \(1\)/i });
+    await userEvent.setup().click(b);
+    expect(onPreencherPotencias).toHaveBeenCalledTimes(1);
+    primeira.unmount();
+
+    // Com potência em todos, o botão some.
+    const comPotencia = applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais[0].id, potenciaW: 100 }).model;
+    montar(comPotencia, { onPreencherPotencias });
+    expect(screen.queryByRole('button', { name: /preencher potência pela norma/i })).toBeNull();
+  });
+
   it('sem ponto solto, o aviso não aparece', () => {
     const m = cena();
     const ligado = applyCommand(m, {

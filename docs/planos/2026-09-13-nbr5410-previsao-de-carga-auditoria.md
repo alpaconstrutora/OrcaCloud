@@ -56,6 +56,17 @@ de pontos fora de circuito ganhou as colunas Ponto · Potência · Circuito — 
 de cada ponto ("—" em âmbar no que não tem) e, no cabeçalho de cada grupo, a
 soma do cômodo com ⚠ quando algum ponto ficou fora dela.
 
+**Por que alguns pontos ficaram sem VA** (pedido com print, mesmo dia): eram
+pontos criados **antes** do padrão (o desenho já existia) — e alguns a 100 VA
+em cozinha foram criados antes de o cômodo receber o tipo. Duas correções:
+(1) a regra dos 600 VA passou a contar as tomadas que **já têm 600 VA** no
+cômodo, e não quantas tomadas há — num cômodo antigo com seis tomadas sem
+potência, as três primeiras preenchidas são as de 600; (2) botão **"Preencher
+potência pela norma (n)"** no Quadro de cargas, que aplica o mesmo critério aos
+pontos sem potência (`comandosDePotenciaPadrao`), na ordem do modelo, num lote
+desfazível, sem sobrescrever nada. A luz legada leva o mínimo do cômodo menos o
+já declarado.
+
 **Prova**: `__tests__/blueprintNbr5410Notas.test.ts` (6): e.1 conta a 500 mm e
 não a 1.200 mm; varanda < 2 m² e varanda de 0,7 m de profundidade; texto da
 bancada; distância ao anel; lavabo com arandela admitido; sala/depósito grande

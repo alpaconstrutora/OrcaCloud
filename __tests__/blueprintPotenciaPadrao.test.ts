@@ -1,10 +1,18 @@
 /**
  * A potência da norma já preenchida ao criar o ponto (13/09/2026) — "se o
- * usuário quiser alterar, ele altera".
+ * usuário quiser alterar, ele altera". E o LEGADO: "verifique por que alguns
+ * pontos não têm potência" — eram pontos anteriores ao padrão; agora se
+ * preenchem pelo mesmo critério, sem sobrescrever nada.
  */
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type Command } from '../utils/blueprintKernel';
-import { aplicarPotenciaPadrao, contextoDoAmbiente, potenciaPadraoVA } from '../utils/blueprintPotenciaPadrao';
+import {
+  aplicarPotenciaPadrao,
+  comandosDePotenciaPadrao,
+  contextoDoAmbiente,
+  pontosSemPotencia,
+  potenciaPadraoVA,
+} from '../utils/blueprintPotenciaPadrao';
 
 /** Cozinha 3 × 4 (0–3000) e sala 6 × 4 (3000–9000), com tipos. */
 function casa() {
@@ -21,31 +29,33 @@ function casa() {
   return { m, t };
 }
 
-const add = (t: string, x: number, y: number, tipoEletrico: Command extends { tipoEletrico?: infer T } ? T : never, potenciaW?: number): Command => ({
-  type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: String(tipoEletrico), at: point(x, y), cotaMm: 300, tipoEletrico, ...(potenciaW != null ? { potenciaW } : {}),
+type Tipo = 'TUG' | 'TUE' | 'ILUMINACAO_TETO' | 'ILUMINACAO_PAREDE' | 'INTERRUPTOR';
+const add = (t: string, x: number, y: number, tipoEletrico: Tipo, potenciaW?: number): Command => ({
+  type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: tipoEletrico, at: point(x, y), cotaMm: 300, tipoEletrico, ...(potenciaW != null ? { potenciaW } : {}),
 });
 const potencias = (cmds: Command[]) => cmds.map((c) => (c.type === 'AddTerminal' ? (c.potenciaW ?? null) : 'x'));
 
 describe('potenciaPadraoVA — a regra', () => {
-  it('tomada: 100 VA; em banheiro/cozinha 600 VA até a 3ª (ou 2ª, se o conjunto passa de seis)', () => {
-    const cozinha = { tipo: 'COZINHA_SERVICO' as const, areaM2: 10, tomadasJa: 0, luzesJa: 0 };
+  it('tomada: 100 VA; em banheiro/cozinha 600 VA até haver 3 de 600 (2, se o conjunto passa de seis)', () => {
+    const cozinha = { tipo: 'COZINHA_SERVICO' as const, areaM2: 10, tomadasDe600Ja: 0, luzDeclaradaVA: 0 };
     expect(potenciaPadraoVA('TUG', cozinha)).toBe(600);
-    expect(potenciaPadraoVA('TUE', { ...cozinha, tomadasJa: 2 })).toBe(600);
-    expect(potenciaPadraoVA('TUG', { ...cozinha, tomadasJa: 3 })).toBe(100);
-    expect(potenciaPadraoVA('TUG', { ...cozinha, tomadasJa: 2 }, true)).toBe(100);
-    expect(potenciaPadraoVA('TUG', { tipo: 'SALA_DORMITORIO', areaM2: 20, tomadasJa: 0, luzesJa: 0 })).toBe(100);
+    expect(potenciaPadraoVA('TUE', { ...cozinha, tomadasDe600Ja: 2 })).toBe(600);
+    expect(potenciaPadraoVA('TUG', { ...cozinha, tomadasDe600Ja: 3 })).toBe(100);
+    expect(potenciaPadraoVA('TUG', { ...cozinha, tomadasDe600Ja: 2 }, true)).toBe(100);
+    expect(potenciaPadraoVA('TUG', { tipo: 'SALA_DORMITORIO', areaM2: 20, tomadasDe600Ja: 0, luzDeclaradaVA: 0 })).toBe(100);
     expect(potenciaPadraoVA('TUG', null)).toBe(100); // fora de ambiente: o mínimo genérico
   });
 
-  it('luz: a primeira do cômodo leva o mínimo da área (12 m² → 160 VA); as demais 100 VA; sem contexto 100 VA', () => {
-    const sala = { tipo: 'SALA_DORMITORIO' as const, areaM2: 12, tomadasJa: 0, luzesJa: 0 };
+  it('luz: o mínimo da área menos o já declarado, nunca abaixo de 100 VA (12 m² → 160; com 160 já declarados → 100)', () => {
+    const sala = { tipo: 'SALA_DORMITORIO' as const, areaM2: 12, tomadasDe600Ja: 0, luzDeclaradaVA: 0 };
     expect(potenciaPadraoVA('ILUMINACAO_TETO', sala)).toBe(160);
-    expect(potenciaPadraoVA('ILUMINACAO_PAREDE', { ...sala, luzesJa: 1 })).toBe(100);
+    expect(potenciaPadraoVA('ILUMINACAO_PAREDE', { ...sala, luzDeclaradaVA: 160 })).toBe(100);
+    expect(potenciaPadraoVA('ILUMINACAO_TETO', { ...sala, luzDeclaradaVA: 60 })).toBe(100);
     expect(potenciaPadraoVA('ILUMINACAO_TETO', null)).toBe(100);
   });
 
   it('interruptor, dados e ligação direta: sem padrão — é função do equipamento', () => {
-    const ctx = { tipo: 'BANHEIRO' as const, areaM2: 3, tomadasJa: 0, luzesJa: 0 };
+    const ctx = { tipo: 'BANHEIRO' as const, areaM2: 3, tomadasDe600Ja: 0, luzDeclaradaVA: 0 };
     expect(potenciaPadraoVA('INTERRUPTOR', ctx)).toBeNull();
     expect(potenciaPadraoVA('DADOS_TV', ctx)).toBeNull();
     expect(potenciaPadraoVA('LIGACAO_DIRETA', ctx)).toBeNull();
@@ -54,7 +64,7 @@ describe('potenciaPadraoVA — a regra', () => {
 });
 
 describe('aplicarPotenciaPadrao — o lote', () => {
-  it('"distribuir 4" na cozinha dá 600, 600, 600, 100; a 5ª vinda depois (já existem 4) dá 100', () => {
+  it('"distribuir 4" na cozinha dá 600, 600, 600, 100; a 5ª vinda depois dá 100', () => {
     const { m, t } = casa();
     const lote = aplicarPotenciaPadrao(m, [
       add(t, 500, 200, 'TUG'),
@@ -67,7 +77,7 @@ describe('aplicarPotenciaPadrao — o lote', () => {
     expect(potencias(aplicarPotenciaPadrao(depois, [add(t, 1500, 3800, 'TUG')]))).toEqual([100]);
   });
 
-  it('na sala: tomada 100; luz de teto 160 (área ~22 m² útil → 100 + 60 × 4); segunda luz 100; interruptor sem potência', () => {
+  it('na sala: tomada 100; luz de teto o mínimo da área; segunda luz 100; interruptor sem potência', () => {
     const { m, t } = casa();
     const ctx = contextoDoAmbiente(m, t, point(6000, 2000));
     expect(ctx?.tipo).toBe('SALA_DORMITORIO');
@@ -85,5 +95,34 @@ describe('aplicarPotenciaPadrao — o lote', () => {
     const { m, t } = casa();
     const lote = aplicarPotenciaPadrao(m, [add(t, 500, 200, 'TUG', 1500), add(t, 20000, 20000, 'TUG')]);
     expect(potencias(lote)).toEqual([1500, 100]);
+  });
+});
+
+describe('comandosDePotenciaPadrao — o legado', () => {
+  it('cozinha antiga com 6 tomadas sem potência: as três primeiras viram 600, as outras 100; a luz sem potência leva o mínimo', () => {
+    const { m, t } = casa();
+    // Criadas SEM potência — como todo ponto anterior a 13/09/2026.
+    const legado = applyBatch(m, [
+      add(t, 500, 200, 'TUG'), add(t, 1500, 200, 'TUG'), add(t, 2500, 200, 'TUG'),
+      add(t, 500, 3800, 'TUG'), add(t, 1500, 3800, 'TUG'), add(t, 2500, 3800, 'TUG'),
+      add(t, 1500, 2000, 'ILUMINACAO_TETO'),
+      add(t, 200, 200, 'INTERRUPTOR'),
+    ]).model;
+    expect(pontosSemPotencia(legado, t)).toHaveLength(7); // o interruptor não entra
+    const cmds = comandosDePotenciaPadrao(legado, t);
+    // A luz leva o mínimo do cômodo: a cozinha tem ~11 m² úteis → 100 + 60 × 1 = 160 VA.
+    expect(cmds.map((c) => (c.type === 'SetTerminalProps' ? c.potenciaW : 'x'))).toEqual([600, 600, 600, 100, 100, 100, 160]);
+    const depois = applyBatch(legado, cmds).model;
+    expect(pontosSemPotencia(depois, t)).toHaveLength(0);
+    expect(comandosDePotenciaPadrao(depois, t)).toEqual([]); // idempotente
+  });
+
+  it('respeita o que já tem 600: com uma de 600 declarada, só mais duas viram 600', () => {
+    const { m, t } = casa();
+    const legado = applyBatch(m, [
+      add(t, 500, 200, 'TUG', 600),
+      add(t, 1500, 200, 'TUG'), add(t, 2500, 200, 'TUG'), add(t, 500, 3800, 'TUG'),
+    ]).model;
+    expect(comandosDePotenciaPadrao(legado, t).map((c) => (c.type === 'SetTerminalProps' ? c.potenciaW : 'x'))).toEqual([600, 600, 100]);
   });
 });

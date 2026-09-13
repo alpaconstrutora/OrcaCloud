@@ -30,6 +30,14 @@ import {
 } from '../../utils/blueprintTopografiaAnalises';
 import { avisoDaClasse, type CoresDaExportacao, type ExtrasDaTopografia } from '../../utils/blueprintTopografiaExport';
 import {
+  avisoExecutivo,
+  type EmissaoExecutiva,
+  type ResponsavelTecnico,
+  type ResultadoDoExecutivo,
+  type Sondagem,
+} from '../../utils/blueprintTopografiaExecutivo';
+import type { BlueprintProjetoExecutivoRow } from '../../types/blueprint';
+import {
   intensidadeDeChuva,
   type DimensionamentoDoMuro,
   type DimensionamentoHidraulico,
@@ -105,6 +113,25 @@ export interface DrenagemNoPainel {
   onHidraulica?: (patch: Partial<ParametrosHidraulicos>) => void;
 }
 
+/** O projeto executivo com ART (fase 17): responsável, sondagem, verificações de norma e a emissão. */
+export interface ExecutivoNoPainel {
+  responsavel: ResponsavelTecnico;
+  onResponsavel: (patch: Partial<ResponsavelTecnico>) => void;
+  sondagem: Sondagem;
+  onSondagem: (patch: Partial<Sondagem>) => void;
+  /** As verificações refeitas com os fatores de norma sobre o que está na tela. */
+  resultado: ResultadoDoExecutivo | null;
+  emitidos: BlueprintProjetoExecutivoRow[];
+  /** A emissão que vale para a base atual (hash confere), se houver. */
+  emissaoValida: EmissaoExecutiva | null;
+  hashDaBaseAtual: string;
+  onEmitir: () => void;
+  emitindo: boolean;
+  erro: string | null;
+  onBaixarMemorial: (row: BlueprintProjetoExecutivoRow) => void;
+  persistenciaIndisponivel: boolean;
+}
+
 /** Como as classes hipsométricas são divididas (fase 4). */
 export interface HipsometriaOpcoesNoPainel {
   modo: 'IGUAIS' | 'EQUIDISTANCIA' | 'CONTINUO';
@@ -153,10 +180,13 @@ export default function PainelTopografia({
   hipsometriaOpcoes = null,
   perfil = null,
   drenagem = null,
+  executivo = null,
 }: {
   topografia: Topografia;
   temLoteFechado: boolean;
   temGeorreferencia: boolean;
+  /** Fase 17: o projeto executivo com ART. */
+  executivo?: ExecutivoNoPainel | null;
   /** "Cota do terreno" de "Onde fica" preenchida — ancora o corte e o 3D. */
   cotaDeOrigemInformada?: boolean;
   /** Declividade da versão exibida (fase 2). */
@@ -438,6 +468,7 @@ export default function PainelTopografia({
           topografia={t}
           onApagar={apagar}
           cotaDeOrigemInformada={cotaDeOrigemInformada}
+          emissao={executivo?.emissaoValida ?? null}
           // Fase 8: drenagem e muros vão junto no KML e no DXF.
           extras={{
             drenagem: drenagem?.linhas.map((l) => ({ nome: l.nome, tipo: l.tipo, pontos: l.pontos })),
@@ -484,6 +515,7 @@ export default function PainelTopografia({
 
       {t.selecionada && terraplenagem && <SecaoTerraplenagem t={terraplenagem} />}
       {t.selecionada && drenagem && <SecaoDrenagem d={drenagem} />}
+      {t.selecionada && executivo && <SecaoProjetoExecutivo e={executivo} />}
     </div>
   );
 }
@@ -581,6 +613,227 @@ function PontosCotados({ topografia: t, linhaDoPerfil }: { topografia: Topografi
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+const ROTULO_DO_GRUPO: Record<string, string> = {
+  RESPONSAVEL: 'Responsável técnico',
+  SONDAGEM: 'Sondagem e água',
+  MURO: 'Muros de arrimo',
+  DRENAGEM: 'Drenagem',
+  TALUDE: 'Taludes',
+};
+
+function CampoTexto({ rotulo, valor, onMudar, placeholder, largura = 'w-full' }: { rotulo: string; valor: string; onMudar: (v: string) => void; placeholder?: string; largura?: string }) {
+  return (
+    <label className="block text-[11px] text-slate-500">
+      {rotulo}
+      <input
+        type="text"
+        value={valor}
+        placeholder={placeholder}
+        aria-label={rotulo}
+        onChange={(e) => onMudar(e.target.value)}
+        className={`mt-0.5 ${largura} rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-800`}
+      />
+    </label>
+  );
+}
+
+/**
+ * Projeto executivo com ART (fase 17). O software não emite projeto: o
+ * responsável técnico se identifica, entra a sondagem e a água, as
+ * verificações são refeitas com os fatores de norma, e só com tudo
+ * atendido a emissão é registrada — imutável e amarrada ao hash da base.
+ */
+function SecaoProjetoExecutivo({ e }: { e: ExecutivoNoPainel }) {
+  const r = e.responsavel;
+  const s = e.sondagem;
+  const res = e.resultado;
+  const sigla = r.conselho === 'CAU' ? 'RRT' : 'ART';
+  const grupos = res ? [...new Set(res.verificacoes.map((v) => v.grupo))] : [];
+  const dataBr = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
+  return (
+    <div className="mt-3 border-t border-slate-200 pt-3" data-testid="projeto-executivo">
+      <p className="text-xs font-medium text-slate-700">Projeto executivo ({sigla})</p>
+      <p className="mt-0.5 text-[11px] text-slate-500">
+        A emissão é do responsável técnico. O programa refaz as verificações com os fatores de norma (NBR 11682, 16903, 6122, 8036)
+        e com o nível d’água, registra a emissão e amarra ao hash da topografia, das premissas e da sondagem.
+      </p>
+
+      {e.emissaoValida ? (
+        <p className="mt-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[11px] text-emerald-800" data-testid="executivo-emitido">
+          <strong className="font-semibold">Emitido</strong> — {sigla} nº {e.emissaoValida.artNumero} · {e.emissaoValida.responsavel} ({e.emissaoValida.conselho}{' '}
+          {e.emissaoValida.registro}) · {dataBr(e.emissaoValida.emitidoEm)}. As exportações desta versão saem com a {sigla}.
+        </p>
+      ) : (
+        <>
+          <p className="mt-2 text-[11px] font-medium text-slate-600">Responsável técnico</p>
+          <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1" data-testid="executivo-responsavel">
+            <CampoTexto rotulo="Nome" valor={r.nome} onMudar={(v) => e.onResponsavel({ nome: v })} />
+            <CampoTexto rotulo="Título" valor={r.titulo} onMudar={(v) => e.onResponsavel({ titulo: v })} />
+            <label className="block text-[11px] text-slate-500">
+              Conselho
+              <select
+                value={r.conselho}
+                aria-label="Conselho"
+                onChange={(ev) => e.onResponsavel({ conselho: ev.target.value as ResponsavelTecnico['conselho'] })}
+                className="mt-0.5 w-full rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-800"
+              >
+                <option value="CREA">CREA</option>
+                <option value="CAU">CAU</option>
+              </select>
+            </label>
+            <CampoTexto rotulo="Registro" valor={r.registro} onMudar={(v) => e.onResponsavel({ registro: v })} placeholder="5069…" />
+            <CampoTexto rotulo={`Número da ${sigla}`} valor={r.artNumero} onMudar={(v) => e.onResponsavel({ artNumero: v })} placeholder="28027230…" />
+            <label className="block text-[11px] text-slate-500">
+              Data da {sigla}
+              <input
+                type="date"
+                value={r.artData}
+                aria-label={`Data da ${sigla}`}
+                onChange={(ev) => e.onResponsavel({ artData: ev.target.value })}
+                className="mt-0.5 w-full rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-800"
+              />
+            </label>
+          </div>
+
+          <p className="mt-2 text-[11px] font-medium text-slate-600">Sondagem e nível d’água</p>
+          <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1" data-testid="executivo-sondagem">
+            <label className="block text-[11px] text-slate-500">
+              Furos
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={s.furos}
+                aria-label="Furos de sondagem"
+                onChange={(ev) => e.onSondagem({ furos: Math.max(0, Math.floor(Number(ev.target.value)) || 0) })}
+                className="mt-0.5 w-full rounded-md border border-slate-300 bg-white px-1.5 py-1 text-right text-xs text-slate-800"
+              />
+            </label>
+            <label className="block text-[11px] text-slate-500">
+              NSPT médio
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={s.nsptMedio ?? ''}
+                aria-label="NSPT médio"
+                onChange={(ev) => e.onSondagem({ nsptMedio: ev.target.value.trim() === '' ? null : Math.max(0, Number(ev.target.value)) })}
+                className="mt-0.5 w-full rounded-md border border-slate-300 bg-white px-1.5 py-1 text-right text-xs text-slate-800"
+              />
+            </label>
+            <label className="block text-[11px] text-slate-500">
+              Solo
+              <select
+                value={s.tipoDeSolo ?? ''}
+                aria-label="Tipo de solo"
+                onChange={(ev) => e.onSondagem({ tipoDeSolo: (ev.target.value || null) as Sondagem['tipoDeSolo'] })}
+                className="mt-0.5 w-full rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-800"
+              >
+                <option value="">—</option>
+                <option value="ARGILA">Argila</option>
+                <option value="SILTE">Silte</option>
+                <option value="AREIA">Areia</option>
+                <option value="ROCHA">Rocha</option>
+                <option value="ATERRO">Aterro</option>
+              </select>
+            </label>
+            <label className="block text-[11px] text-slate-500">
+              Nível d’água
+              <select
+                value={!s.nivelDagua.informado ? 'NAO_INFORMADO' : s.nivelDagua.encontrado ? 'ENCONTRADO' : 'NAO_ENCONTRADO'}
+                aria-label="Nível d'água"
+                onChange={(ev) => {
+                  const v = ev.target.value;
+                  e.onSondagem({ nivelDagua: { informado: v !== 'NAO_INFORMADO', encontrado: v === 'ENCONTRADO', profundidadeM: v === 'ENCONTRADO' ? (s.nivelDagua.profundidadeM ?? 0) : null } });
+                }}
+                className="mt-0.5 w-full rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-800"
+              >
+                <option value="NAO_INFORMADO">não informado</option>
+                <option value="NAO_ENCONTRADO">não encontrado</option>
+                <option value="ENCONTRADO">encontrado a…</option>
+              </select>
+            </label>
+            {s.nivelDagua.informado && s.nivelDagua.encontrado && (
+              <label className="block text-[11px] text-slate-500">
+                Profundidade (m)
+                <input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={s.nivelDagua.profundidadeM ?? 0}
+                  aria-label="Profundidade do nível d'água (m)"
+                  onChange={(ev) => e.onSondagem({ nivelDagua: { ...s.nivelDagua, profundidadeM: Math.max(0, Number(ev.target.value) || 0) } })}
+                  className="mt-0.5 w-full rounded-md border border-slate-300 bg-white px-1.5 py-1 text-right text-xs text-slate-800"
+                />
+              </label>
+            )}
+            <CampoTexto rotulo="Laudo" valor={s.laudo} onMudar={(v) => e.onSondagem({ laudo: v })} placeholder="empresa / nº" />
+          </div>
+
+          {res && (
+            <ul className="mt-2 space-y-0.5" data-testid="executivo-verificacoes">
+              {grupos.map((g) => (
+                <li key={g}>
+                  <p className="text-[11px] font-medium text-slate-600">{ROTULO_DO_GRUPO[g] ?? g}</p>
+                  <ul className="space-y-0.5">
+                    {res.verificacoes
+                      .filter((v) => v.grupo === g)
+                      .map((v, i) => (
+                        <li key={i} className={`flex items-start gap-1.5 text-[11px] ${v.atende ? 'text-slate-700' : 'text-red-700'}`}>
+                          <span className="mt-px shrink-0">{v.atende ? '✓' : '✗'}</span>
+                          <span className="min-w-0">
+                            {v.item} <span className="text-slate-400">({v.norma})</span> — exigido {v.exigido}; obtido {v.obtido}
+                          </span>
+                        </li>
+                      ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <button
+            type="button"
+            onClick={e.onEmitir}
+            disabled={!res || !res.podeEmitir || e.emitindo || e.persistenciaIndisponivel}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            <Check className="h-3.5 w-3.5" />
+            {e.emitindo ? 'Emitindo…' : `Emitir projeto executivo (${sigla})`}
+          </button>
+          {res && !res.podeEmitir && (
+            <p className="mt-1 text-[11px] text-slate-500">
+              {res.pendencias.length} verificação(ões) pendente(s): a emissão só é registrada com todas atendidas.
+            </p>
+          )}
+          {e.persistenciaIndisponivel && <p className="mt-1 text-[11px] text-amber-700">Sem a tabela do projeto executivo no banco, a emissão não é registrada.</p>}
+          {e.erro && <p className="mt-1 text-[11px] text-red-700">{e.erro}</p>}
+        </>
+      )}
+
+      {e.emitidos.length > 0 && (
+        <ul className="mt-2 space-y-1" data-testid="executivo-emitidos">
+          {e.emitidos.map((row) => {
+            const vale = row.hash_da_base === e.hashDaBaseAtual;
+            const resp = row.responsavel;
+            return (
+              <li key={row.id} className="flex items-center justify-between gap-2 text-[11px] text-slate-600">
+                <span className="min-w-0">
+                  {resp.conselho === 'CAU' ? 'RRT' : 'ART'} {resp.artNumero} · {resp.nome} · {row.emitido_em ? dataBr(row.emitido_em) : ''} · topografia v{row.topografia_versao ?? '?'}{' '}
+                  <span className={vale ? 'text-emerald-700' : 'text-amber-700'}>{vale ? '(vale para a base atual)' : '(a base mudou desde a emissão)'}</span>
+                </span>
+                <button type="button" onClick={() => e.onBaixarMemorial(row)} className="shrink-0 text-blue-700 transition-colors hover:text-blue-900">
+                  Memorial (PDF)
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );
@@ -874,13 +1127,17 @@ function Resultado({
   topografia: t,
   onApagar,
   cotaDeOrigemInformada,
-  extras,
+  extras: extrasBase,
+  emissao = null,
 }: {
   topografia: Topografia;
   onApagar: (id: string, versao: number) => void;
   cotaDeOrigemInformada: boolean;
   extras?: ExtrasDaTopografia & { cores?: CoresDaExportacao };
+  /** Fase 17: a emissão executiva válida para esta versão — troca o aviso nas exportações. */
+  emissao?: EmissaoExecutiva | null;
 }) {
+  const extras = { ...extrasBase, executivo: emissao };
   const v = t.selecionada!;
   const est = v.estatisticas;
   const [copiado, setCopiado] = useState(false);
@@ -1025,7 +1282,7 @@ function Resultado({
               ? 'Preliminar — dado público remoto.'
               : 'Levantamento digitado — pendente de validação.'}
           </strong>{' '}
-          {avisoDaClasse(v.classe_qualidade)}
+          {emissao ? avisoExecutivo(emissao) : avisoDaClasse(v.classe_qualidade)}
         </span>
       </p>
 
@@ -1042,7 +1299,7 @@ function Resultado({
         </button>
         <button
           type="button"
-          onClick={() => t.exportar('csv')}
+          onClick={() => t.exportar('csv', { executivo: emissao })}
           title="Grade de cotas, um nó por linha"
           className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-50"
         >

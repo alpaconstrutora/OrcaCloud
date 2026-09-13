@@ -153,6 +153,14 @@ import {
   svgDoPerfil,
 } from '../../utils/blueprintTopografiaExport';
 import { novoIdDeDrenagem, useBlueprintTerraplenagem } from '../../hooks/useBlueprintTerraplenagem';
+import { useBlueprintProjetoExecutivo } from '../../hooks/useBlueprintProjetoExecutivo';
+import {
+  EXECUTIVO_PADRAO,
+  hashDaBaseExecutiva,
+  memorialExecutivo,
+  verificacoesExecutivas,
+  type EmissaoExecutiva,
+} from '../../utils/blueprintTopografiaExecutivo';
 import { blueprintSnapshotTopografiaService } from '../../services/blueprintSnapshotTopografiaService';
 import { linhasDeDrenagem3d, murosDeArrimo3d, type ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
 import {
@@ -2095,6 +2103,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   }, [chaveDaTopografia]);
 
   const terraplenagem = useBlueprintTerraplenagem(study.id, study.organization_id);
+  // Fase 17: o projeto executivo com ART (responsável, sondagem, emissões).
+  const executivo = useBlueprintProjetoExecutivo(study.id, study.organization_id);
 
   /** A curva clicada na planta: índice na versão exibida + o ponto do clique. */
   const [curvaEmDestaque, setCurvaEmDestaque] = useState<{ indice: number; ponto: Point } | null>(null);
@@ -2208,6 +2218,85 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     () => (terraplenagemCalc ? terraplenagemCalc.muros.map((m) => dimensionarMuro(m, terraplenagem.estrutura)) : []),
     [terraplenagemCalc, terraplenagem.estrutura],
   );
+
+  // ── Fase 17: projeto executivo com ART ─────────────────────────────────────
+  /** A drenagem redimensionada para o tempo de retorno EXECUTIVO (25 anos), não o preliminar. */
+  const drenagemExecutiva = useMemo(() => {
+    const hid = { ...terraplenagem.hidraulica, tempoDeRetornoAnos: EXECUTIVO_PADRAO.tempoDeRetornoAnos };
+    const saida = [];
+    for (const l of terraplenagem.drenagem) {
+      const a = analisesDeDrenagem[l.id];
+      if (!a) continue;
+      saida.push(dimensionarDrenagem(l, a, l.areaContribuinteM2 ?? areasSugeridasM2[l.id] ?? 0, hid));
+    }
+    return saida;
+  }, [terraplenagem.drenagem, analisesDeDrenagem, areasSugeridasM2, terraplenagem.hidraulica]);
+  /** O que a emissão fica amarrada: mudou, a emissão deixa de valer para o que está na tela. */
+  const hashDaBaseExecutivaAtual = useMemo(
+    () =>
+      hashDaBaseExecutiva({
+        topografiaHash: topografia.selecionada?.hash_resultado ?? '',
+        terraplenagem: terraplenagem.parametros,
+        estrutura: terraplenagem.estrutura,
+        hidraulica: terraplenagem.hidraulica,
+        cotaPlatoM: terraplenagem.cotaPlatoM,
+        basePlato: terraplenagem.base,
+        sondagem: executivo.sondagem,
+      }),
+    [topografia.selecionada, terraplenagem.parametros, terraplenagem.estrutura, terraplenagem.hidraulica, terraplenagem.cotaPlatoM, terraplenagem.base, executivo.sondagem],
+  );
+  const resultadoExecutivo = useMemo(
+    () =>
+      topografia.selecionada
+        ? verificacoesExecutivas({
+            responsavel: executivo.responsavel,
+            sondagem: executivo.sondagem,
+            areaDoLoteM2: (terreno?.areaMm2 ?? 0) / 1e6,
+            estrutura: terraplenagem.estrutura,
+            hidraulica: terraplenagem.hidraulica,
+            terraplenagem: terraplenagem.parametros,
+            muros: murosDimensionados,
+            drenagemExecutiva,
+            alturaMaxDeTaludeM: terraplenagemCalc ? Math.max(terraplenagemCalc.alturaMaxCorteM, terraplenagemCalc.alturaMaxAterroM) : null,
+          })
+        : null,
+    [topografia.selecionada, executivo.responsavel, executivo.sondagem, terreno, terraplenagem.estrutura, terraplenagem.hidraulica, terraplenagem.parametros, murosDimensionados, drenagemExecutiva, terraplenagemCalc],
+  );
+  /** A emissão que vale para a base atual, se houver — é ela que troca o aviso das exportações. */
+  const emissaoValida = useMemo<EmissaoExecutiva | null>(() => {
+    const row = executivo.emitidos.find((r) => r.hash_da_base === hashDaBaseExecutivaAtual && r.emitido_em);
+    if (!row) return null;
+    return { artNumero: row.responsavel.artNumero, responsavel: row.responsavel.nome, conselho: row.responsavel.conselho, registro: row.responsavel.registro, emitidoEm: row.emitido_em! };
+  }, [executivo.emitidos, hashDaBaseExecutivaAtual]);
+  const emitirProjetoExecutivo = useCallback(async () => {
+    const v = topografia.selecionada;
+    if (!v || !resultadoExecutivo || !resultadoExecutivo.podeEmitir) return;
+    const emitidoEm = new Date().toISOString();
+    const linhas = memorialExecutivo(
+      {
+        responsavel: executivo.responsavel,
+        sondagem: executivo.sondagem,
+        areaDoLoteM2: (terreno?.areaMm2 ?? 0) / 1e6,
+        estrutura: terraplenagem.estrutura,
+        hidraulica: terraplenagem.hidraulica,
+        terraplenagem: terraplenagem.parametros,
+        muros: murosDimensionados,
+        drenagemExecutiva,
+        alturaMaxDeTaludeM: terraplenagemCalc ? Math.max(terraplenagemCalc.alturaMaxCorteM, terraplenagemCalc.alturaMaxAterroM) : null,
+      },
+      resultadoExecutivo,
+      { nomeDoEstudo: study.name, topografiaVersao: v.versao, topografiaHash: v.hash_resultado, fonte: v.fonte_nome, emitidoEm, hashDaBase: hashDaBaseExecutivaAtual },
+    );
+    await executivo.emitir({
+      topografia_id: v.id.startsWith('local-') ? null : v.id,
+      topografia_versao: v.versao,
+      topografia_hash: v.hash_resultado,
+      hash_da_base: hashDaBaseExecutivaAtual,
+      verificacoes: resultadoExecutivo.verificacoes,
+      memorial: linhas.join('\n'),
+      emitido_em: emitidoEm,
+    });
+  }, [topografia.selecionada, resultadoExecutivo, executivo, terreno, terraplenagem.estrutura, terraplenagem.hidraulica, terraplenagem.parametros, murosDimensionados, drenagemExecutiva, terraplenagemCalc, study.name, hashDaBaseExecutivaAtual]);
   /**
    * Publicar grava o vínculo com a versão de topografia em uso — a topografia
    * fica fora do hash do desenho, e este é o rastro de qual relevo a versão
@@ -5628,6 +5717,21 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   areasSugeridasM2,
                   hidraulica: terraplenagem.hidraulica,
                   onHidraulica: terraplenagem.setHidraulica,
+                }}
+                executivo={{
+                  responsavel: executivo.responsavel,
+                  onResponsavel: executivo.setResponsavel,
+                  sondagem: executivo.sondagem,
+                  onSondagem: executivo.setSondagem,
+                  resultado: resultadoExecutivo,
+                  emitidos: executivo.emitidos,
+                  emissaoValida,
+                  hashDaBaseAtual: hashDaBaseExecutivaAtual,
+                  onEmitir: () => void emitirProjetoExecutivo(),
+                  emitindo: executivo.emitindo,
+                  erro: executivo.erro,
+                  onBaixarMemorial: (row) => executivo.baixarMemorial(row, study.name),
+                  persistenciaIndisponivel: executivo.persistenciaIndisponivel,
                 }}
               />
             }

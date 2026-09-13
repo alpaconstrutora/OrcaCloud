@@ -137,7 +137,7 @@ describe('PainelTopografia', () => {
     fireEvent.click(screen.getByRole('button', { name: 'SVG' }));
     expect(t.exportar).toHaveBeenCalledWith('svg', expect.objectContaining({ cores: undefined }));
     fireEvent.click(screen.getByRole('button', { name: 'CSV' }));
-    expect(t.exportar).toHaveBeenCalledWith('csv');
+    expect(t.exportar).toHaveBeenCalledWith('csv', expect.objectContaining({ executivo: null }));
   });
 
   it('a versão de DEM leva a classe preliminar e o aviso do PRD', () => {

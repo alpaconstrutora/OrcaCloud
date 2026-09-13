@@ -19,6 +19,7 @@
 import type { Georreferencia, Point } from './blueprintKernel';
 import type { EstatisticasDoPerfil, PontoDoPerfil } from './blueprintTopografiaAnalises';
 import type { FonteDeElevacao } from './blueprintElevacaoProvedores';
+import { avisoExecutivo, type EmissaoExecutiva } from './blueprintTopografiaExecutivo';
 import {
   ALGORITMO_TOPOGRAFIA,
   AVISO_LEVANTAMENTO,
@@ -43,11 +44,22 @@ export interface ProvenienciaDaVersao {
   hashResultado: string;
   estatisticas: EstatisticasDoTerreno;
   georreferencia: Georreferencia | null;
+  /**
+   * Fase 17: a emissão do projeto executivo que vale para ESTA versão (o
+   * hash da base confere). Com ela, o aviso de "pré-dimensionamento / não
+   * substitui" dá lugar à ART e ao responsável técnico.
+   */
+  executivo?: EmissaoExecutiva | null;
 }
 
 /** O aviso obrigatório (RF-020) para a classe da versão. */
 export function avisoDaClasse(classe: ClasseDeQualidade): string {
   return classe === 'PRELIMINAR_REMOTO' ? AVISO_PRELIMINAR : AVISO_LEVANTAMENTO;
+}
+
+/** O aviso da VERSÃO: o da emissão executiva quando há uma válida, senão o da classe. */
+export function avisoDaVersao(prov: Pick<ProvenienciaDaVersao, 'classe' | 'executivo'>): string {
+  return prov.executivo ? avisoExecutivo(prov.executivo) : avisoDaClasse(prov.classe);
 }
 
 const fmt = (v: number, casas = 2) => v.toFixed(casas).replace('.', ',');
@@ -128,7 +140,7 @@ export function svgDasCurvas(
         algoritmo: `${ALGORITMO_TOPOGRAFIA.nome}@${ALGORITMO_TOPOGRAFIA.versao}`,
         hashResultado: prov.hashResultado,
         unidades: 'posição em mm do desenho; cota em m',
-        aviso: avisoDaClasse(prov.classe),
+        aviso: avisoDaVersao(prov),
       }),
     )}</metadata>`,
   );
@@ -231,7 +243,7 @@ export function svgDasCurvas(
         'normal',
         fonte * 0.8,
       ],
-      [avisoDaClasse(prov.classe), 'bold', fonte * 0.8],
+      [avisoDaVersao(prov), 'bold', fonte * 0.8],
     ];
     let yy = topoDoRodape;
     for (const [texto, peso, tamanho] of linhas) {
@@ -278,7 +290,7 @@ export function csvDaGrade(grade: GradeDeElevacao, prov: ProvenienciaDaVersao): 
     `# Gerado em ${prov.geradoEm} · algoritmo ${ALGORITMO_TOPOGRAFIA.nome}@${ALGORITMO_TOPOGRAFIA.versao} · hash ${prov.hashResultado}`,
   );
   linhas.push(`# Posição em mm do desenho (origem do estudo); cota em metros. Status: valido | nodata.`);
-  linhas.push(`# ${avisoDaClasse(prov.classe)}`);
+  linhas.push(`# ${avisoDaVersao(prov)}`);
   linhas.push('seq;linha;coluna;x_mm;y_mm;latitude;longitude;cota_m;status;fonte');
 
   const nos = nosDaGrade(grade);
@@ -347,7 +359,7 @@ export function kmlDasCurvas(
       `Equidistância ${fmt(prov.equidistanciaM)} m · gerado em ${prov.geradoEm} · ` +
       `algoritmo ${ALGORITMO_TOPOGRAFIA.nome}@${ALGORITMO_TOPOGRAFIA.versao} · hash ${prov.hashResultado}. ` +
       `A altitude das curvas é a cota da fonte; o terreno do visualizador pode usar outro datum vertical. ` +
-      avisoDaClasse(prov.classe),
+      avisoDaVersao(prov),
   );
 
   const partes: string[] = [];

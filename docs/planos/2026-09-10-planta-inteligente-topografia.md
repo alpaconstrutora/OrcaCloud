@@ -34,7 +34,7 @@ Nada. As cinco pendências que este quadro listava foram resolvidas na fase 15 e
 
 ### Fora do software por decisão (não reabrir sem pedido)
 
-- Projeto executivo com ART: dimensionamento definitivo de drenagem e muro, sondagem, água no solo (fase 8).
+- ~~Projeto executivo com ART~~ — entrou na fase 17 como FLUXO DE EMISSÃO (responsável, sondagem, água, verificações de norma, registro imutável); o dimensionamento definitivo continua responsabilidade do profissional.
 - Licença comercial do Open-Meteo (E-12) e o limite de 1.000 req/dia do OpenTopoData público — decisão de negócio (fases 1, 8).
 - DEM público em lote urbano continua recusado (DR-08) e não há pés (DR-06) — reafirmados em 12/09 ("2. ok", "3. somente metros").
 - Aprovação técnica/notificação e geometria em `commercial_properties` (fase 2).
@@ -892,6 +892,44 @@ O passeio JÁ acompanhava o relevo desde a fase 2 (`bfa3feb0`, F10): `Percorrer`
 - [x] Suíte (290 arquivos, 3.960 testes, 0 falhas), typecheck, `check-xss-sinks.sh`, `verificar:build` e `build` verdes
 - [x] Publicado e provado — `da035acb` em `main` (12/09/2026), `conferir-producao.sh "cruzamento(s) entre linhas de quebra"` achou o texto no bundle servido
 - [x] **Passeio logado em produção** (`c:/tmp/pwtest/topografia-prod16.mjs`): CSV com crista `LQ1` a 103 m e talvegue `LQ2` a 98 m que a cruza → prévia "2 linhas de quebra" → linha "2 linhas de quebra (4 vértices)" → Gerar: `POST 201` com as duas linhas em `linhas_de_quebra` e o aviso "1 cruzamento(s) entre linhas de quebra: no ponto de cruzamento valeu a cota da linha que veio primeiro"; cotas 98,17 a 102,88 m → SVG com `<symbol>` + três `<use>`: prévia "3 pontos lidos". Zero erros. Versão apagada pela tela; estudo por SQL
+
+---
+
+# Pedido posterior — 2026-09-12: fase 17 (projeto executivo com ART)
+
+## Pedido original
+
+> Implementar projeto executivo com Art
+
+Estava em "fora do software por decisão" desde a fase 8 ("projeto executivo com ART: dimensionamento definitivo da drenagem e do muro, sondagem e água no solo"). O pedido reabre — e a premissa continua: **software não substitui o responsável técnico**. O que entra é o fluxo de emissão que um escritório faz na última folha.
+
+## Decisões
+
+| Tema | Decisão |
+|---|---|
+| O que é "emitir" | O responsável técnico se identifica (nome, título, conselho CREA/CAU, registro, número e data da ART/RRT); entram a SONDAGEM (furos, NSPT, tipo de solo, laudo) e o NÍVEL D'ÁGUA; as verificações são REFEITAS com os fatores de norma e com a água; só com tudo atendido a emissão é registrada — imutável e amarrada ao hash da base |
+| Normas citadas | NBR 8036 (furos mínimos por área: 2 até 200 m², 3 até 400, 1/200 m² até 1.200, 1/400 até 2.400); NBR 11682 (FS global ≥ 1,5; lance ≤ 8 m; talude de aterro h ≥ 1,5, corte h ≥ 1,0); NBR 16903 (tombamento ≥ 2,0 gravidade / 1,5 flexão, deslizamento ≥ 1,5); NBR 6122 (σadm com FS 3); drenagem com T = 25 anos; correlação σadm ≈ 20·NSPT (Teixeira, 1996) como checagem da tensão admissível adotada |
+| Água no muro | `empuxoRankineComAgua`: acima do lençol o solo natural, abaixo o submerso (γ − γw) mais a hidrostática inteira. O pré-dimensionamento não expõe W e xW, mas a resistência não muda com a água: os FS de tombamento e deslizamento escalam pela razão dos momentos/empuxos seco ÷ com água. Estabilidade global com água: Bishop com γ' em toda a massa (conservador) |
+| Base da emissão | `hashDaBaseExecutiva` = sha256 de {hash da topografia, premissas de terraplenagem, estrutura, hidráulica, cota e base do platô, sondagem}. A emissão vale enquanto o hash da tela for o gravado; mudou, a tela volta ao formulário e o histórico diz "a base mudou" |
+| Persistência | `blueprint_study_projeto_executivo` (migration `aplicar_20270921000016`): RASCUNHO (um por estudo, editável, UPDATE/DELETE só nele) e EMITIDO (trigger bloqueia UPDATE, policy bloqueia DELETE); guarda responsável, sondagem, topografia (id/versão/hash), hash da base, verificações e o memorial como estavam. REVOKE ALL + GRANT SELECT/INSERT/UPDATE/DELETE a authenticated, RLS por `is_org_member` |
+| Exportações | `ProvenienciaDaVersao.executivo` e `avisoDaVersao`: com a emissão válida, o SVG, o CSV, o KML e o DXF saem com "Projeto executivo — ART nº … · responsável técnico … · emitido em …" no lugar do "pré-dimensionamento / não substitui"; o painel também |
+| Memorial | `memorialExecutivo` (puro, linhas) → PDF por jsPDF (`memorialEmPdf`): responsável, base, sondagem, hipóteses, muros com água, drenagem T = 25, verificações e a declaração. Guardado na emissão; baixado do histórico |
+| Sem emissão | tudo continua "pré-dimensionamento com hipóteses declaradas" — a fase 17 só acrescenta o caminho para o executivo, não afrouxa o aviso |
+
+## Estado — fase 17
+
+- [x] F45 — `utils/blueprintTopografiaExecutivo.ts` (tipos, `furosMinimosNbr8036`, `empuxoRankineComAgua`, `verificacoesExecutivas`, `hashDaBaseExecutiva`, `avisoExecutivo`, `memorialExecutivo`); export com `executivo`/`avisoDaVersao`; serviço e hook `useBlueprintProjetoExecutivo` (rascunho com respiro, emissão, PDF); painel `SecaoProjetoExecutivo`; editor (drenagem executiva a T = 25, verificações, hash da base, emissão válida, memorial)
+- [x] Testes: `blueprintTopografiaFase17` (8: furos NBR 8036, Rankine seco = clássico e com água maior, responsável/sondagem/ART faltando, muro seco = pré e com água reprova, NSPT × σadm, drenagem T = 25 e taludes, hash da base, memorial, aviso nas exportações) e `PainelTopografiaFase17` (4: campos e lista por grupo, botão só com tudo atendido, emissão válida troca o aviso e leva a ART ao SVG, base mudada volta ao formulário). Ajuste: o CSV do painel passa a levar `executivo`
+- [x] Migration `aplicar_20270921000016` aplicada com `db query -f` e conferida de fora: RLS ligada, policies read/insert/update/delete, `authenticated` com SELECT/INSERT/UPDATE/DELETE, `anon` sem nada, gatilhos `updated` e `immutable`
+- [x] Suíte (292 arquivos, 3.972 testes, 0 falhas), typecheck, `check-ui-standard.sh` (PainelTopografia, BlueprintEditor), `check-xss-sinks.sh`, `verificar:build` e `build` verdes
+- [ ] Publicado e provado
+- [ ] Passeio logado em produção
+
+### Pendências (declaradas)
+
+- A estabilidade global com água usa γ' em toda a massa (conservador); a análise com a linha freática real e poropressão por fatia é do responsável técnico, com o perfil de sondagem.
+- Talude: a NBR 11682 pede estudo específico por tipo de solo; aqui entram os limites usuais (h ≥ 1,5 aterro, h ≥ 1,0 corte, lance ≤ 8 m) como verificação mínima.
+- A ART não é consultada no CREA (não há API pública); o número é registrado como informado.
 
 ## Verificação
 

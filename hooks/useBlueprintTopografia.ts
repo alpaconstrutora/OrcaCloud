@@ -43,7 +43,7 @@ import {
   type FonteDeElevacao,
 } from '../utils/blueprintElevacaoProvedores';
 import {
-  avisoDaClasse,
+  avisoDaVersao,
   csvDaGrade,
   kmlDasCurvas,
   nomeDoArquivoDeTopografia,
@@ -53,6 +53,7 @@ import {
   type ProvenienciaDaVersao,
 } from '../utils/blueprintTopografiaExport';
 import { gerarDxfDaTopografia } from '../utils/blueprintDxf';
+import type { EmissaoExecutiva } from '../utils/blueprintTopografiaExecutivo';
 import { supabase } from '../lib/supabase';
 
 /**
@@ -155,7 +156,7 @@ export interface Topografia {
   selecionar: (id: string | null) => void;
   apagarVersao: (id: string) => Promise<void>;
   /** `extras` (fase 8): drenagem traçada e muros, que vão no KML e no DXF por cima das curvas; `cores` (fase 12): a rampa arco-íris no SVG e no KML. */
-  exportar: (formato: 'svg' | 'csv' | 'kml' | 'dxf', extras?: ExtrasDaTopografia & { cores?: CoresDaExportacao }) => void;
+  exportar: (formato: 'svg' | 'csv' | 'kml' | 'dxf', extras?: ExtrasDaTopografia & { cores?: CoresDaExportacao; executivo?: EmissaoExecutiva | null }) => void;
 
   carregando: boolean;
   persistenciaIndisponivel: boolean;
@@ -512,7 +513,7 @@ export function useBlueprintTopografia(
   );
 
   const exportar = useCallback(
-    (formato: 'svg' | 'csv' | 'kml' | 'dxf', extras: ExtrasDaTopografia & { cores?: CoresDaExportacao } = {}) => {
+    (formato: 'svg' | 'csv' | 'kml' | 'dxf', extras: ExtrasDaTopografia & { cores?: CoresDaExportacao; executivo?: EmissaoExecutiva | null } = {}) => {
       if (!selecionada) return;
       // KML sem georreferência não tem onde pôr o lote no mundo. O botão já
       // vem desabilitado; isto é a rede de segurança.
@@ -527,6 +528,8 @@ export function useBlueprintTopografia(
         hashResultado: selecionada.hash_resultado,
         estatisticas: selecionada.estatisticas,
         georreferencia: selecionada.georreferencia,
+        // Fase 17: com a emissão executiva válida, o aviso das exportações é a ART.
+        executivo: extras.executivo ?? null,
       };
       const conteudo =
         formato === 'svg'
@@ -553,7 +556,7 @@ export function useBlueprintTopografia(
                     muros: extras.muros,
                   },
                   selecionada.anel,
-                  { titulo: nomeDoEstudo, versao: selecionada.versao, aviso: avisoDaClasse(prov.classe) },
+                  { titulo: nomeDoEstudo, versao: selecionada.versao, aviso: avisoDaVersao(prov) },
                 );
       const tipo =
         formato === 'svg'

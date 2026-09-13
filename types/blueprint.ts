@@ -9,6 +9,7 @@
 import type { Georreferencia, Point } from '../utils/blueprintKernel';
 import type { LinhaDeDrenagem } from '../utils/blueprintTopografiaAnalises';
 import type { ParametrosEstruturais, ParametrosHidraulicos } from '../utils/blueprintTopografiaDimensionamento';
+import type { ResponsavelTecnico, Sondagem, VerificacaoExecutiva } from '../utils/blueprintTopografiaExecutivo';
 
 /**
  * Qual versão de topografia estava em uso quando a versão do estudo foi
@@ -81,6 +82,29 @@ export interface BlueprintTerraplenagemRow {
    * (`Point[]`) — `linhasDoPerfilDaColuna` lê as duas formas.
    */
   perfil_polilinha: Point[][] | Point[] | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Emissão do projeto executivo (fase 17, migration `aplicar_20270921000016`):
+ * RASCUNHO editável, EMITIDO imutável e amarrado ao hash da base.
+ */
+export interface BlueprintProjetoExecutivoRow {
+  id: string;
+  study_id: string;
+  organization_id: string;
+  status: 'RASCUNHO' | 'EMITIDO';
+  responsavel: ResponsavelTecnico;
+  sondagem: Sondagem;
+  topografia_id: string | null;
+  topografia_versao: number | null;
+  topografia_hash: string | null;
+  hash_da_base: string | null;
+  verificacoes: VerificacaoExecutiva[];
+  memorial: string | null;
+  emitido_em: string | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
 }

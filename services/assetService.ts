@@ -19,6 +19,56 @@ import {
   OpuraAssetDepreciationRateio,
   OpuraAssetBrand
 } from '../types';
+import { buildMaintenanceTitle, maintenanceTitleReference } from '../utils/assetMaintenanceFinance';
+
+/**
+ * Ponte Manutenção → Financeiro. Um título por manutenção (upsert pela chave
+ * `organization_id, reference_id, entry_type`). Custo zero, cancelada ou
+ * exclusão cancelam o título; título já pago (CONCILIATED) não é tocado.
+ * Ver docs/planos/2026-09-13-ativos-manutencao-financeiro.md.
+ */
+async function syncMaintenanceFinance(maint: OpuraAssetMaintenance | null | undefined): Promise<void> {
+  if (!maint) return;
+  const referenceId = maintenanceTitleReference(maint.id);
+
+  const { data: existing, error: findError } = await supabase
+    .from('internal_transactions')
+    .select('id, status')
+    .eq('organization_id', maint.organization_id)
+    .eq('reference_id', referenceId)
+    .eq('entry_type', 'PRINCIPAL')
+    .maybeSingle();
+  if (findError) throw findError;
+  if (existing?.status === 'CONCILIATED') return; // pago: o pagamento manda
+
+  const { data: asset } = await supabase
+    .from('opura_assets')
+    .select('code, name, current_project_id')
+    .eq('id', maint.asset_id)
+    .maybeSingle();
+
+  const row = buildMaintenanceTitle(maint, asset);
+  if (!row) {
+    if (!existing || existing.status === 'CANCELLED') return;
+    const { error } = await supabase
+      .from('internal_transactions')
+      .update({ status: 'CANCELLED', business_status: 'CANCELADO' })
+      .eq('id', existing.id);
+    if (error) throw error;
+    return;
+  }
+
+  const { error } = await supabase
+    .from('internal_transactions')
+    .upsert(row, { onConflict: 'organization_id,reference_id,entry_type' });
+  if (error) throw error;
+}
+
+/** A manutenção já foi salva; o erro da ponte sobe com instrução de como refazer. */
+function erroPonteFinanceira(err: unknown): Error {
+  const msg = err instanceof Error ? err.message : String((err as { message?: string })?.message ?? err);
+  return new Error(`Ordem salva, mas o lançamento financeiro falhou: ${msg} — edite a ordem e salve de novo para gerar o título.`);
+}
 
 export const assetService = {
   // ATIVOS
@@ -401,6 +451,14 @@ export const assetService = {
       }
     }
 
+    // Custo estimado já vira título pendente (decisão do usuário, 2026-09-13).
+    try {
+      await syncMaintenanceFinance(data);
+    } catch (err) {
+      console.error('[AssetService] Error syncing maintenance to finance:', err);
+      throw erroPonteFinanceira(err);
+    }
+
     return data;
   },
 
@@ -447,15 +505,35 @@ export const assetService = {
       }
     }
 
+    // Custo final / data de execução / cancelamento refletem no título.
+    try {
+      await syncMaintenanceFinance(data);
+    } catch (err) {
+      console.error('[AssetService] Error syncing maintenance to finance:', err);
+      throw erroPonteFinanceira(err);
+    }
+
     return data;
   },
 
   async deleteMaintenance(id: string): Promise<void> {
     const { data: maint } = await supabase
       .from('opura_asset_maintenances')
-      .select('asset_id, status')
+      .select('*')
       .eq('id', id)
       .maybeSingle();
+
+    // Excluir a ordem cancela o título (nunca apaga: título pago fica intacto).
+    // Antes do DELETE para que, se a ponte falhar, nada tenha sumido.
+    if (maint) {
+      try {
+        await syncMaintenanceFinance({ ...(maint as OpuraAssetMaintenance), status: 'cancelada' });
+      } catch (err) {
+        console.error('[AssetService] Error cancelling maintenance title:', err);
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`A ordem não foi excluída: falha ao cancelar o lançamento financeiro (${msg}).`);
+      }
+    }
 
     const { error } = await supabase
       .from('opura_asset_maintenances')

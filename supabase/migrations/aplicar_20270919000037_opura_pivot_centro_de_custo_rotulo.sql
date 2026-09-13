@@ -1,7 +1,11 @@
 -- ============================================================
 -- ÒPURA · Relatórios — rótulos das dimensões Centro de Custo,
 -- Subcategoria (pai), Contrato, Pedido de Compra e Usuário
--- OrçaCloud SaaS · Migration 20270919000029
+-- OrçaCloud SaaS · Migration 20270919000037
+-- (nasceu como 20270919000029 — renomeada em 2026-09-13 por colisão de
+--  prefixo com aplicar_20270919000029_blueprint_aprovacao.sql, que chegou
+--  antes. ⚠️ JÁ APLICADA em produção em 2026-09-13 com o número antigo;
+--  é idempotente, rodar de novo não faz mal, mas não é necessário.)
 -- Idempotente (CREATE OR REPLACE).
 --
 -- Sintoma: na aba "Centro de Custo" de ÒPURA · Relatórios as
@@ -130,6 +134,13 @@ LEFT JOIN public.cost_centers_v2      ccp ON ccp.id = cc.parent_id
 LEFT JOIN public.contracts            ct  ON ct.id  = it.contract_id
 LEFT JOIN public.purchase_orders      po  ON po.id  = it.purchase_order_id
 WHERE it.status <> 'CANCELLED';
+
+-- Trava de views (viewSecurityGuard): toda view recriada repete a proteção
+-- no mesmo arquivo — CREATE OR REPLACE preserva os grants, mas quem lê o
+-- arquivo precisa ver que a view nasce fechada para anon.
+REVOKE ALL ON public.vw_fact_financial_tx FROM anon;
+REVOKE ALL ON public.vw_fact_financial_tx FROM PUBLIC;
+GRANT SELECT ON public.vw_fact_financial_tx TO authenticated;
 
 -- ────────────────────────────────────────────────────────────
 -- 2. fn_opura_pivot — ramos de dim_label
@@ -271,5 +282,5 @@ END;
 $$;
 
 -- ────────────────────────────────────────────────────────────
--- FIM: aplicar_20270919000029_opura_pivot_centro_de_custo_rotulo.sql
+-- FIM: aplicar_20270919000037_opura_pivot_centro_de_custo_rotulo.sql
 -- ────────────────────────────────────────────────────────────

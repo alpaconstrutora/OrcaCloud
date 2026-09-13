@@ -51,6 +51,11 @@ ferramenta, a "Distribuir N", a "Completar pela norma" e a **classificar** um
 ponto sem potência no painel. É padrão, não decisão: o campo continua editável
 e a conferência 9.5.2.2.2 confere o declarado.
 
+**Coluna Potência no Quadro de cargas** (pedido seguinte, com print): a lista
+de pontos fora de circuito ganhou as colunas Ponto · Potência · Circuito — o VA
+de cada ponto ("—" em âmbar no que não tem) e, no cabeçalho de cada grupo, a
+soma do cômodo com ⚠ quando algum ponto ficou fora dela.
+
 **Prova**: `__tests__/blueprintNbr5410Notas.test.ts` (6): e.1 conta a 500 mm e
 não a 1.200 mm; varanda < 2 m² e varanda de 0,7 m de profundidade; texto da
 bancada; distância ao anel; lavabo com arandela admitido; sala/depósito grande

@@ -103,6 +103,24 @@ export default function PainelEletrica({
   );
   const gruposDeSoltos = agruparPontos(model, cargas.soltos, agrupamento);
   /**
+   * A POTÊNCIA de cada ponto solto (13/09/2026: "incluir coluna com Potência
+   * (VA), já que cada ponto vem com VA definido por padrão pela NBR 5410").
+   * Lida do terminal, nunca somada em silêncio: ponto sem potência mostra "—"
+   * e o grupo diz quantos ficaram fora da soma.
+   */
+  const potenciaDoPonto = new Map((model.terminais ?? []).map((t) => [t.id, t.potenciaW ?? null]));
+  const somaDoGrupo = (itens: readonly { terminalId: string }[]) => {
+    let soma = 0;
+    let sem = 0;
+    for (const s of itens) {
+      const p = potenciaDoPonto.get(s.terminalId) ?? null;
+      if (p == null) sem++;
+      else soma += p;
+    }
+    return { soma, sem };
+  };
+  const va = (n: number) => `${n.toLocaleString('pt-BR')} ${UNIDADE_DE_POTENCIA}`;
+  /**
    * O mini-formulário de "Criar novo…" — para QUAIS pontos e com que nome
    * sugerido. Um só de cada vez: abrir outro fecha o anterior.
    */
@@ -157,7 +175,14 @@ export default function PainelEletrica({
           <p className="text-[11px] text-amber-700">
             E há <strong>{cargas.pontosSemCircuito}</strong>{' '}
             {cargas.pontosSemCircuito === 1 ? 'ponto elétrico' : 'pontos elétricos'} esperando
-            circuito: {cargas.soltos.map((s) => s.rotulo).join(', ')}.
+            circuito:{' '}
+            {cargas.soltos
+              .map((s) => {
+                const p = potenciaDoPonto.get(s.terminalId);
+                return p == null ? `${s.rotulo} (sem potência)` : `${s.rotulo} (${va(p)})`;
+              })
+              .join(', ')}
+            .
           </p>
         )}
       </div>
@@ -210,7 +235,13 @@ export default function PainelEletrica({
                 ))}
               </select>
             </label>
-            <span className="mt-1.5 block space-y-2">
+            {/* As colunas, nomeadas uma vez: ponto · potência · circuito. */}
+            <span className="mt-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-slate-500">
+              <span className="min-w-0 flex-1">Ponto</span>
+              <span className="w-16 shrink-0 text-right">Potência</span>
+              <span className="w-32 shrink-0">Circuito</span>
+            </span>
+            <span className="mt-1 block space-y-2">
               {gruposDeSoltos.map((g) => (
                 <span key={g.chave} className="block space-y-1">
                   {g.titulo && (
@@ -221,6 +252,19 @@ export default function PainelEletrica({
                           ({g.itens.length})
                         </span>
                       </span>
+                      {/* A SOMA do grupo — e quantos ficaram fora dela. */}
+                      {(() => {
+                        const { soma, sem } = somaDoGrupo(g.itens);
+                        return (
+                          <span
+                            className="w-16 shrink-0 text-right text-[10px] font-semibold normal-case tabular-nums tracking-normal text-slate-700"
+                            title={sem > 0 ? `${sem} sem potência — fora da soma` : 'Soma das potências declaradas'}
+                          >
+                            {va(soma)}
+                            {sem > 0 && <span className="text-amber-700"> ⚠</span>}
+                          </span>
+                        );
+                      })()}
                       {/* Ligar o GRUPO inteiro num gesto: é o caso comum — os
                           pontos de um cômodo vão para o mesmo circuito. */}
                       {(todosOsCircuitos.length > 0 || podeCriar) && g.itens.length > 1 && (
@@ -274,6 +318,18 @@ export default function PainelEletrica({
                       >
                         {s.rotulo}
                       </button>
+                      <span
+                        className={`w-16 shrink-0 text-right text-[11px] tabular-nums ${
+                          potenciaDoPonto.get(s.terminalId) == null ? 'text-amber-700' : 'text-slate-700'
+                        }`}
+                        title={
+                          potenciaDoPonto.get(s.terminalId) == null
+                            ? 'Sem potência declarada — informe no painel do ponto'
+                            : 'Potência declarada (o padrão da NBR 5410 veio ao criar; editável no ponto)'
+                        }
+                      >
+                        {potenciaDoPonto.get(s.terminalId) == null ? '—' : va(potenciaDoPonto.get(s.terminalId) as number)}
+                      </span>
                       {todosOsCircuitos.length === 0 && !podeCriar ? (
                         <span className="shrink-0 text-[10px] text-slate-500">
                           crie um circuito abaixo

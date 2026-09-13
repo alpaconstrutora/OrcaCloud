@@ -138,11 +138,17 @@ describe('PainelEletrica · o ponto fora de circuito', () => {
       type: 'AddTerminal', levelId, disciplina: 'ELETRICA', tipo: 'Luz', at: point(2000, 2000), cotaMm: 2800, tipoEletrico: 'ILUMINACAO_TETO',
     }).model;
     m = applyCommand(m, {
-      type: 'AddTerminal', levelId, disciplina: 'ELETRICA', tipo: 'TUG sala', at: point(3000, 1000), cotaMm: 300, tipoEletrico: 'TUG',
+      type: 'AddTerminal', levelId, disciplina: 'ELETRICA', tipo: 'TUG sala', at: point(3000, 1000), cotaMm: 300, tipoEletrico: 'TUG', potenciaW: 600,
     }).model;
     const onLigarAoCircuito = vi.fn();
     const user = userEvent.setup();
     montar(m, { onLigarAoCircuito });
+
+    // A coluna de POTÊNCIA (13/09/2026): o VA de cada ponto, "—" no que não tem,
+    // e a soma do grupo com o aviso de quantos ficaram fora.
+    expect(screen.getByText('600 VA', { selector: 'span[title*="declarada"]' })).toBeTruthy();
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByTitle(/2 sem potência — fora da soma/)).toHaveTextContent('600 VA');
 
     const criterio = screen.getByLabelText(/agrupar os pontos fora de circuito por/i) as HTMLSelectElement;
     expect(criterio.value).toBe('ambiente');

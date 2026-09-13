@@ -140,9 +140,16 @@ function regra9521(model: BlueprintModel, levelId: ObjectId | null): RegraConfer
   for (const a of ambientes) {
     const paredes = model.walls.filter((w) => w.levelId === a.space.levelId);
     const areaM2 = areaRecuada(a.space.ring, paredes).areaMm2 / 1_000_000;
-    const c = conferirIluminacao(a.space, model.terminais ?? [], areaM2);
+    const c = conferirIluminacao(a.space, model.terminais ?? [], areaM2, a.tipo);
     const faltas: string[] = [];
     if (c.faltaLuzDeTeto) faltas.push('sem ponto de luz no teto');
+    if (c.luzNaParedeAdmitida) {
+      achados.push({
+        nivel: 'AVISO',
+        mensagem: `${a.nome}: luz na parede no lugar da de teto — admitido em cômodo pequeno (nota 2 de 9.5.2.1.1)`,
+        ids: [],
+      });
+    }
     if (c.faltaInterruptor) faltas.push('sem interruptor');
     if (c.deficitVA > 0) faltas.push(`${c.declaradoVA} VA declarados, mínimo ${c.minimoVA} VA`);
     if (faltas.length > 0) {
@@ -222,6 +229,15 @@ function regra95221(model: BlueprintModel, levelId: ObjectId | null): RegraConfe
         partes.push(`${c.deficitMedias} ${c.ondeAMedia}`);
       }
       achados.push({ nivel: 'FALTA', mensagem: `${a.nome}: ${partes.join(' · ')}`, ids: [] });
+    }
+    // O ponto EXTERNO que a norma admite contou — dito, para ninguém procurar
+    // dentro do cômodo a tomada que não está lá.
+    if (c.existentesFora > 0 && c.admiteFora) {
+      achados.push({
+        nivel: 'AVISO',
+        mensagem: `${a.nome}: ${plural(c.existentesFora, 'tomada externa contou', 'tomadas externas contaram')} — ${c.admiteFora.motivo}`,
+        ids: [],
+      });
     }
     if (c.semTipo > 0) {
       achados.push({

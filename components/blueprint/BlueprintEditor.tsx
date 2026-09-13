@@ -1460,6 +1460,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               s.ring,
               editor.model.walls.filter((w) => w.levelId === s.levelId),
             ).areaMm2 / 1_000_000,
+            // O tipo decide se a luz na parede vale por luz de teto (nota 2 de 9.5.2.1.1).
+            etiquetaDoAmbiente(s, editor.model.labels)?.tipoDeAmbiente,
           ),
           // O mínimo da NBR 5410 (9.5.2.2.1) frente ao que há — `null` sem tipo.
           conferencia: conferirTomadas(

@@ -338,11 +338,26 @@ export interface MinimoDeTomadas {
   regra: string;
   /** Para a sugerida de altura média: onde o projetista deve levá-la. */
   ondeAMedia: string | null;
+  /**
+   * Quando a norma ADMITE o ponto FORA do cômodo (13/09/2026, texto da norma
+   * conferido cláusula a cláusula):
+   *   · e.1 — cômodo de até 2,25 m²: o ponto pode ficar até 0,80 m da porta;
+   *   · c (nota) — varanda com menos de 2 m² ou profundidade menor que 0,80 m:
+   *     o ponto pode ficar junto ao acesso.
+   * `ateMm` é a distância ao contorno que se aceita; a norma só dá número no
+   * caso e.1 (0,80 m) — na varanda, "junto ao acesso" recebe os mesmos 800 mm,
+   * como hipótese declarada. `null` = tem de estar dentro.
+   */
+  admiteFora: { ateMm: number; motivo: string } | null;
 }
 
+/** O que a norma escreve em e.1: até 0,80 m da porta de acesso. */
+export const DISTANCIA_PONTO_EXTERNO_MM = 800;
+
 /**
- * O mínimo da norma para um ambiente de `tipo`, dado o perímetro INTERNO (m)
- * e a área útil (m²).
+ * O mínimo da norma para um ambiente de `tipo`, dado o perímetro INTERNO (m),
+ * a área útil (m²) e, quando se sabe, a menor dimensão em planta (m) — a
+ * "profundidade" da nota da varanda.
  *
  * ⚠️ "Ou fração" é teto: 14,2 m ÷ 5 = 2,84 → 3 pontos.
  */
@@ -350,31 +365,89 @@ export function minimoDeTomadas(
   tipo: TipoDeAmbiente,
   perimetroM: number,
   areaM2: number,
+  menorLadoM: number | null = null,
 ): MinimoDeTomadas {
   const porPerimetro = (passoM: number) => Math.max(1, Math.ceil(perimetroM / passoM - 1e-9));
   const p = perimetroM.toFixed(1).replace('.', ',');
+  const dentro = { admiteFora: null };
   switch (tipo) {
     case 'BANHEIRO':
-      return { minimo: 1, medias: 1, regra: '1 junto ao lavatório', ondeAMedia: 'junto ao lavatório' };
+      return { minimo: 1, medias: 1, regra: '1 junto ao lavatório', ondeAMedia: 'junto ao lavatório', ...dentro };
     case 'COZINHA_SERVICO': {
       const n = porPerimetro(3.5);
       return {
         minimo: Math.max(n, 2),
         medias: 2,
-        regra: `1 a cada 3,5 m de ${p} m, 2 delas sobre a bancada`,
+        // A norma aceita as duas tomadas da bancada NO MESMO PONTO ou em pontos
+        // distintos. O desenho só conta pontos — um ponto duplo não se distingue
+        // de um simples —, então a conta pede 2 pontos e o texto diz a alternativa.
+        regra: `1 a cada 3,5 m de ${p} m, 2 delas sobre a bancada (no mesmo ponto ou em pontos distintos)`,
         ondeAMedia: 'sobre a bancada da pia',
+        ...dentro,
       };
     }
-    case 'VARANDA':
-      return { minimo: 1, medias: 0, regra: 'pelo menos 1', ondeAMedia: null };
+    case 'VARANDA': {
+      const pequena = areaM2 < 2 || (menorLadoM != null && menorLadoM < 0.8);
+      return {
+        minimo: 1,
+        medias: 0,
+        regra: pequena ? 'pelo menos 1 — pode ficar junto ao acesso (varanda pequena)' : 'pelo menos 1',
+        ondeAMedia: null,
+        admiteFora: pequena
+          ? {
+              ateMm: DISTANCIA_PONTO_EXTERNO_MM,
+              motivo:
+                areaM2 < 2
+                  ? 'varanda com menos de 2 m² — a norma admite o ponto junto ao acesso (nota de 9.5.2.2.1 c)'
+                  : 'varanda com menos de 0,80 m de profundidade — a norma admite o ponto junto ao acesso (nota de 9.5.2.2.1 c)',
+            }
+          : null,
+      };
+    }
     case 'SALA_DORMITORIO':
-      return { minimo: porPerimetro(5), medias: 0, regra: `1 a cada 5 m de ${p} m`, ondeAMedia: null };
+      return { minimo: porPerimetro(5), medias: 0, regra: `1 a cada 5 m de ${p} m`, ondeAMedia: null, ...dentro };
     case 'OUTRO':
-      if (areaM2 <= 6) {
-        return { minimo: 1, medias: 0, regra: `pelo menos 1 (área ≤ 6 m²)`, ondeAMedia: null };
+      if (areaM2 <= 2.25) {
+        return {
+          minimo: 1,
+          medias: 0,
+          regra: 'pelo menos 1 (área ≤ 2,25 m²) — pode ficar até 0,80 m da porta',
+          ondeAMedia: null,
+          admiteFora: {
+            ateMm: DISTANCIA_PONTO_EXTERNO_MM,
+            motivo: 'cômodo de até 2,25 m² — a norma admite o ponto a até 0,80 m da porta de acesso (9.5.2.2.1 e.1)',
+          },
+        };
       }
-      return { minimo: porPerimetro(5), medias: 0, regra: `1 a cada 5 m de ${p} m (área > 6 m²)`, ondeAMedia: null };
+      if (areaM2 <= 6) {
+        return { minimo: 1, medias: 0, regra: `pelo menos 1 (área ≤ 6 m²)`, ondeAMedia: null, ...dentro };
+      }
+      return { minimo: porPerimetro(5), medias: 0, regra: `1 a cada 5 m de ${p} m (área > 6 m²)`, ondeAMedia: null, ...dentro };
   }
+}
+
+/** A menor dimensão em planta, em metros — a "profundidade" de uma varanda estreita. */
+export function menorLadoM(ring: readonly Point[]): number | null {
+  if (ring.length < 3) return null;
+  const xs = ring.map((p) => p.x);
+  const ys = ring.map((p) => p.y);
+  return Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) / 1000;
+}
+
+/** Distância (mm) de um ponto ao contorno — o menor afastamento a qualquer lado. */
+export function distanciaAoAnelMm(ring: readonly Point[], p: Point): number {
+  let melhor = Infinity;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i];
+    const b = ring[(i + 1) % ring.length];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const l2 = dx * dx + dy * dy;
+    const t = l2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2));
+    const d = Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+    if (d < melhor) melhor = d;
+  }
+  return melhor;
 }
 
 /** O que há e o que falta num ambiente, frente ao mínimo. */
@@ -389,6 +462,11 @@ export interface ConferenciaDeTomadas extends MinimoDeTomadas {
   deficitMedias: number;
   /** Pontos elétricos SEM tipo dentro do ambiente — não contam, e é dito. */
   semTipo: number;
+  /**
+   * Tomadas FORA do cômodo que a norma admite contar (e.1, nota da varanda):
+   * a até `admiteFora.ateMm` do contorno. Zero quando a norma não admite.
+   */
+  existentesFora: number;
 }
 
 const ehTomada = (t: Terminal) =>
@@ -426,18 +504,30 @@ export function conferirTomadas(
   areaM2: number,
 ): ConferenciaDeTomadas | null {
   if (!tipo) return null;
-  const minimo = minimoDeTomadas(tipo, perimetroInternoM(space, walls), areaM2);
+  const minimo = minimoDeTomadas(tipo, perimetroInternoM(space, walls), areaM2, menorLadoM(space.ring));
   const dentro = terminaisDoAmbiente(space, terminais);
   const tomadas = dentro.filter(ehTomada);
   // "Média" pela MESMA fronteira do símbolo (`alturaDaTomada`): 800 ≤ cota < 1650.
   const medias = tomadas.filter((t) => t.cotaMm >= 800 && t.cotaMm < 1650).length;
+  // O ponto EXTERNO admitido (e.1, nota da varanda): tomada do mesmo pavimento,
+  // fora do cômodo, a até `ateMm` do contorno. Só entra quando a norma admite.
+  const fora = minimo.admiteFora
+    ? terminais.filter(
+        (t) =>
+          t.levelId === space.levelId &&
+          ehTomada(t) &&
+          !dentro.includes(t) &&
+          distanciaAoAnelMm(space.ring, t.at) <= minimo.admiteFora!.ateMm,
+      ).length
+    : 0;
   return {
     ...minimo,
     existentes: tomadas.length,
     existentesMedias: medias,
-    deficit: Math.max(0, minimo.minimo - tomadas.length),
+    deficit: Math.max(0, minimo.minimo - tomadas.length - fora),
     deficitMedias: Math.max(0, minimo.medias - medias),
     semTipo: dentro.filter((t) => !t.tipoEletrico).length,
+    existentesFora: fora,
   };
 }
 
@@ -497,6 +587,15 @@ export interface ConferenciaDeIluminacao {
   /** Pontos de luz sem potência — a soma acima não os inclui. */
   semPotencia: number;
   faltaLuzDeTeto: boolean;
+  /**
+   * A luz de teto foi substituída por ponto na PAREDE e a norma admite (nota 2
+   * de 9.5.2.1.1: espaços sob escada, depósitos, despensas, lavabos e
+   * varandas, de pequenas dimensões). Aqui: ambiente VARANDA, BANHEIRO ou
+   * OUTRO com área útil ≤ 6 m² e pelo menos uma arandela — "pequenas
+   * dimensões" não tem número na norma; 6 m² é a mesma fronteira de
+   * 9.5.2.1.2, declarada. Quando é o caso, `faltaLuzDeTeto` é falso.
+   */
+  luzNaParedeAdmitida: boolean;
   /** Nenhum interruptor no cômodo. */
   faltaInterruptor: boolean;
   /** Quanto falta para o mínimo (0 quando atende ou quando não dá para saber). */
@@ -593,14 +692,26 @@ export function conferirComandos(space: Space, terminais: readonly Terminal[]): 
   return { luzesSemInterruptor, interruptoresSemLuz, paralelosSemPar, intermediariosSemParalelos };
 }
 
+/** Onde a nota 2 de 9.5.2.1.1 admite a luz na parede: lavabo, varanda, depósito/despensa/sob escada. */
+const ADMITE_LUZ_NA_PAREDE: ReadonlySet<TipoDeAmbiente> = new Set(['BANHEIRO', 'VARANDA', 'OUTRO']);
+const AREA_PEQUENA_M2 = 6;
+
 export function conferirIluminacao(
   space: Space,
   terminais: readonly Terminal[],
   areaM2: number,
+  tipo: TipoDeAmbiente | null | undefined = null,
 ): ConferenciaDeIluminacao {
   const dentro = terminaisDoAmbiente(space, terminais);
   const luzes = dentro.filter(ehLuz);
   const teto = luzes.filter((t) => t.tipoEletrico === 'ILUMINACAO_TETO');
+  const parede = luzes.filter((t) => t.tipoEletrico === 'ILUMINACAO_PAREDE');
+  const luzNaParedeAdmitida =
+    teto.length === 0 &&
+    parede.length > 0 &&
+    !!tipo &&
+    ADMITE_LUZ_NA_PAREDE.has(tipo) &&
+    areaM2 <= AREA_PEQUENA_M2;
   const interruptores = dentro.filter((t) => t.tipoEletrico === 'INTERRUPTOR');
   const minimoVA = minimoDeIluminacaoVA(areaM2);
   const comPotencia = luzes.filter((t) => t.potenciaW != null);
@@ -614,7 +725,8 @@ export function conferirIluminacao(
     interruptores: interruptores.length,
     declaradoVA,
     semPotencia,
-    faltaLuzDeTeto: teto.length === 0,
+    faltaLuzDeTeto: teto.length === 0 && !luzNaParedeAdmitida,
+    luzNaParedeAdmitida,
     faltaInterruptor: interruptores.length === 0,
     // Com luz sem potência não se afirma déficit: a soma está incompleta.
     deficitVA: semPotencia > 0 ? 0 : Math.max(0, minimoVA - declaradoVA),

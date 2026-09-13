@@ -1,5 +1,5 @@
 import React from 'react';
-import { RefreshCw, AlertTriangle, Download, BarChart3, ArrowDownUp, ChevronRight, ArrowLeftRight, TrendingUp, TrendingDown } from 'lucide-react';
+import { RefreshCw, AlertTriangle, Download, BarChart3, ArrowDownUp, ChevronRight, ChevronDown, ArrowLeftRight, TrendingUp, TrendingDown } from 'lucide-react';
 import {
     opuraAnalyticsService,
     type OpuraDimension,
@@ -13,6 +13,9 @@ import {
 import { useToast } from '../hooks/useToast';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 import Button from './ui/Button';
+import { costCenterService } from '../services/costCenterService';
+import type { CostCenterV2 } from '../types/financial';
+import { buildCostCenterTree, flattenCostCenterTree, type CostCenterTreeNode } from '../utils/opuraCostCenterTree';
 
 // ── Formatadores ──────────────────────────────────────────────────────────────
 
@@ -138,7 +141,47 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
 
     const dimLabel = DIMENSIONS.find(d => d.value === dimension)?.label ?? 'Dimensão';
 
-    const openDrill = React.useCallback(async (row: DisplayRow) => {
+    // Centro de Custo: mesma hierarquia de Organização › Centro de Custo
+    // (cost_centers_v2.parent_id). O catálogo vem da mesma fonte daquela tela;
+    // REGRA #5 — organizationId vazio ("Todas") lista todas as orgs do usuário.
+    const [costCenters, setCostCenters] = React.useState<CostCenterV2[]>([]);
+    const [collapsedCc, setCollapsedCc] = React.useState<Set<string>>(new Set());
+    React.useEffect(() => {
+        if (dimension !== 'cost_center') return;
+        let alive = true;
+        costCenterService.list(organizationId || null)
+            .then(list => { if (alive) setCostCenters(list); })
+            .catch(e => {
+                console.error('[OpuraReports/cost_centers]', e);
+                showToast(`Erro ao carregar centros de custo: ${e instanceof Error ? e.message : String(e)}`, 'error');
+            });
+        return () => { alive = false; };
+    }, [dimension, organizationId, showToast]);
+
+    const ccTree = React.useMemo(
+        () => dimension === 'cost_center' ? buildCostCenterTree(rows, costCenters) : [],
+        [dimension, rows, costCenters],
+    );
+    // Grupos nascem expandidos (é relatório: o detalhe já estava visível na
+    // lista plana); o chevron recolhe. `collapsedCc` guarda os recolhidos.
+    const ccRows = React.useMemo(() => {
+        const expanded = new Set<string>();
+        const collect = (list: CostCenterTreeNode[]) => list.forEach(n => {
+            if (n.key && n.children.length > 0 && !collapsedCc.has(n.key)) expanded.add(n.key);
+            collect(n.children);
+        });
+        collect(ccTree);
+        return flattenCostCenterTree(ccTree, expanded);
+    }, [ccTree, collapsedCc]);
+    const toggleCc = React.useCallback((key: string) => {
+        setCollapsedCc(prev => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key); else next.add(key);
+            return next;
+        });
+    }, []);
+
+    const openDrill = React.useCallback(async (row: Pick<DisplayRow, 'dimension_key' | 'dimension_label'>) => {
         const patch = opuraAnalyticsService.drillFilter(dimension, row.dimension_key);
         if (!patch) return; // dimensão sem detalhamento (não ocorre nas dimensões atuais)
         setDrill({ label: row.dimension_label });
@@ -428,7 +471,48 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
                             </tr>
                         </thead>
                         <tbody>
-                            {rows.map((r, i) => (
+                            {dimension === 'cost_center' ? ccRows.map((n, i) => {
+                                const isGroup = n.children.length > 0;
+                                const label = n.name;
+                                const rowKey = `${n.synthetic ? 'own-' : ''}${n.key ?? 'sem'}-${i}`;
+                                const onClick = () => {
+                                    if (isGroup && n.key) toggleCc(n.key);
+                                    // O nó sintético é sempre o 1º filho: a linha anterior é o grupo dele.
+                                    else openDrill({ dimension_key: n.key, dimension_label: n.synthetic ? `${ccRows[i - 1]?.name ?? ''} ${label}` : label });
+                                };
+                                return (
+                                    <tr key={rowKey} onClick={onClick}
+                                        className={`border-b border-gray-50 last:border-0 hover:bg-blue-50/40 cursor-pointer group ${isGroup ? 'bg-gray-50/60' : ''}`}>
+                                        <td className="px-5 py-2.5">
+                                            <div className="flex items-center gap-3" style={{ paddingLeft: n.depth * 24 }}>
+                                                {isGroup ? (
+                                                    n.key && collapsedCc.has(n.key)
+                                                        ? <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                                                        : <ChevronDown className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                                                ) : (
+                                                    <div className="h-1.5 rounded-full bg-blue-100 overflow-hidden flex-shrink-0" style={{ width: 60 }}>
+                                                        <div className="h-full bg-blue-500"
+                                                            style={{ width: `${Math.abs(n.totals.realizado) / maxAbs * 100}%` }} />
+                                                    </div>
+                                                )}
+                                                {n.code && <span className="text-sm font-normal text-gray-400 tabular-nums flex-shrink-0">{n.code}</span>}
+                                                <span className={`text-sm font-normal truncate group-hover:text-blue-700 ${isGroup ? 'text-gray-900' : n.synthetic ? 'text-gray-500 italic' : 'text-gray-700'}`}>
+                                                    {label}
+                                                </span>
+                                                {!isGroup && <ChevronRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-400 flex-shrink-0 ml-auto" />}
+                                            </div>
+                                        </td>
+                                        <td className="px-3 py-2.5 text-right tabular-nums text-sm font-normal text-gray-500">{n.totals.qtd}</td>
+                                        <td className={`px-3 py-2.5 text-right tabular-nums text-sm font-medium ${n.totals.realizado < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                                            {fBRLshort(n.totals.realizado)}
+                                        </td>
+                                        <td className="px-3 py-2.5 text-right tabular-nums text-sm font-normal text-gray-500">{fBRLshort(n.totals.previsto)}</td>
+                                        <td className={`px-5 py-2.5 text-right tabular-nums text-sm font-medium ${n.totals.vencido > 0 ? 'text-amber-600' : 'text-gray-300'}`}>
+                                            {n.totals.vencido > 0 ? fBRLshort(n.totals.vencido) : '—'}
+                                        </td>
+                                    </tr>
+                                );
+                            }) : rows.map((r, i) => (
                                 <tr key={r.dimension_key ?? `row-${i}`} onClick={() => openDrill(r)}
                                     className="border-b border-gray-50 last:border-0 hover:bg-blue-50/40 cursor-pointer group">
                                     <td className="px-5 py-2.5">

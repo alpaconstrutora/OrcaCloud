@@ -1,9 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowLeft,
   ArrowLeftRight,
+  Boxes,
   Calculator,
+  FileText,
+  History,
+  Landmark,
+  MessageSquare,
+  MessagesSquare,
+  PenTool,
+  Table2,
   CheckCircle2,
   ClipboardPaste,
   Contrast,
@@ -96,7 +105,9 @@ import ReguaDoTempo from './ReguaDoTempo';
 import type { PreviaOrcamento } from '../../services/blueprintBudgetService';
 import PainelVersoes from './PainelVersoes';
 import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
-import Ribbon, { BarraDeOpcoes, GrupoDoRibbon, abaEfetiva } from './Ribbon';
+import Ribbon, { BarraDeOpcoes, BotaoDoRibbon, GrupoDoRibbon, abaEfetiva } from './Ribbon';
+import DockDeRelatorios, { useAlturaDoDock } from './DockDeRelatorios';
+import PainelDeTarefa from './PainelDeTarefa';
 import SecaoAccordion from './SecaoAccordion';
 import { usePainelRedimensionavel } from './LarguraDoPainel';
 import PainelMedicoes from './PainelMedicoes';
@@ -415,28 +426,11 @@ const SECOES_DO_PAINEL = [
   // está o que se DESENHA, ali o que a topologia DERIVA do desenho.
   { id: 'componentes', rotulo: 'Componentes', naVista: false, no3d: true },
   { id: 'ambientes', rotulo: 'Ambientes', naVista: false, no3d: false },
-  { id: 'vetor', rotulo: 'Do PDF', naVista: false, no3d: false },
-  // Logo depois de "Do PDF" porque é a mesma família: trazer para dentro o
-  // que outra pessoa desenhou. O PDF vira parede por reconhecimento; o IFC,
-  // estrutura por medida declarada.
-  { id: 'ifc', rotulo: 'Do IFC', naVista: false, no3d: false },
-  // A terceira da mesma família. O DXF é o formato de quem manda projeto por
-  // e-mail e não usa BIM — e é o que os projetos arquitetônicos da empresa são.
-  { id: 'dxf', rotulo: 'Do DXF', naVista: false, no3d: false },
-  // A quarta da mesma família — e a única que traz PENDÊNCIA em vez de
-  // geometria: o BCF é a resposta do projetista voltando.
-  { id: 'bcf', rotulo: 'Do BCF', naVista: true, no3d: true },
-  // Depois das importações e antes das medições: comentar é sobre o que já
-  // está no desenho, venha de onde vier.
-  { id: 'comentarios', rotulo: 'Comentários', naVista: true, no3d: true },
-  // CONFLITOS logo depois dos comentários: os dois são pendência para alguém
-  // olhar, e a diferença é só quem os levantou — uma pessoa ou a geometria.
-  { id: 'conflitos', rotulo: 'Conflitos', naVista: true, no3d: true },
-  { id: 'eletrica', rotulo: 'Elétrica', naVista: true, no3d: true },
-  { id: 'medicoes', rotulo: 'Medições', naVista: false, no3d: false },
-  { id: 'quantitativos', rotulo: 'Quantitativos', naVista: true, no3d: false },
-  { id: 'orcamento', rotulo: 'Orçamento', naVista: false, no3d: false },
-  { id: 'versoes', rotulo: 'Versões', naVista: true, no3d: false },
+  // Até 13/09/2026 havia mais doze aqui — Do PDF, Do IFC, Do DXF, Do BCF,
+  // Comentários, Conflitos, Elétrica, Medições, Quantitativos, Orçamento,
+  // Versões. Viraram TAREFAS abertas pelo ribbon (`ROTULO_DA_TAREFA`) e
+  // RELATÓRIOS no dock (`RELATORIOS_DO_DOCK`): o painel ficou com o que é
+  // navegação, e só isso.
 ] as const;
 
 type SecaoDoPainel = (typeof SECOES_DO_PAINEL)[number]['id'];
@@ -453,12 +447,46 @@ type SecaoDoPainel = (typeof SECOES_DO_PAINEL)[number]['id'];
 const ABAS_DO_RIBBON = [
   { id: 'arquitetura', rotulo: 'Arquitetura', naVista: false },
   { id: 'terreno', rotulo: 'Terreno', naVista: false },
-  { id: 'instalacoes', rotulo: 'Instalações', naVista: false },
+  // Fora da planta só sobra o Quadro de cargas — que já se lia no 3D antes.
+  { id: 'instalacoes', rotulo: 'Instalações', naVista: true },
   { id: 'inserir', rotulo: 'Inserir', naVista: false },
-  { id: 'analisar', rotulo: 'Analisar', naVista: false },
+  // Conflitos e quantitativos também se leem na elevação e no 3D.
+  { id: 'analisar', rotulo: 'Analisar', naVista: true },
+  { id: 'colaborar', rotulo: 'Colaborar', naVista: true },
   { id: 'vista', rotulo: 'Vista', naVista: true },
 ] as const;
 type AbaDoRibbonDoEditor = (typeof ABAS_DO_RIBBON)[number]['id'];
+
+/**
+ * As TAREFAS que o ribbon abre na metade de baixo do painel lateral (F2). Cada
+ * uma era uma seção do acordeão; agora é um comando com começo e fim, no lugar
+ * onde as propriedades da seleção ficam quando não há tarefa.
+ */
+const ROTULO_DA_TAREFA = {
+  terreno: 'Dados do lote, zona e topografia',
+  'gerar-paredes': 'Gerar paredes do PDF',
+  'importar-ifc': 'Importar do IFC',
+  'importar-dxf': 'Importar do DXF',
+  'importar-bcf': 'Importar do BCF',
+} as const;
+type TarefaDoPainel = keyof typeof ROTULO_DA_TAREFA;
+
+/**
+ * Os RELATÓRIOS que o ribbon abre no dock embaixo do canvas (F3): tabelas e
+ * listas, um por vez, na largura da área de desenho. `naVista`/`no3d` são os
+ * mesmos recortes que as seções tinham — o que se lia na elevação e no 3D
+ * continua se lendo lá.
+ */
+const RELATORIOS_DO_DOCK = {
+  conflitos: { rotulo: 'Conflitos', naVista: true, no3d: true },
+  comentarios: { rotulo: 'Comentários', naVista: true, no3d: true },
+  'quadro-de-cargas': { rotulo: 'Quadro de cargas e NBR 5410', naVista: true, no3d: true },
+  medicoes: { rotulo: 'Medições', naVista: false, no3d: false },
+  quantitativos: { rotulo: 'Quantitativos', naVista: true, no3d: false },
+  orcamento: { rotulo: 'Orçamento', naVista: false, no3d: false },
+  versoes: { rotulo: 'Versões', naVista: true, no3d: false },
+} as const;
+type RelatorioDoDock = keyof typeof RELATORIOS_DO_DOCK;
 
 /**
  * O nome da ferramenta para a barra de opções — é o que responde "por que
@@ -502,40 +530,16 @@ const SECOES_NO_3D = new Set<SecaoDoPainel>(
 );
 
 /**
- * Quais nascem abertas.
- *
- * Não são todas: sete seções abertas dariam uma coluna de rolagem interminável
- * na primeira visita. Estas duas reproduzem o que o painel mostrava antes —
- * Pavimentos no topo e o conteúdo em "Ambientes", que era a aba inicial.
+ * Quais nascem abertas. As três — o navegador é curto o bastante para isso
+ * desde que comandos e relatórios saíram dele (13/09/2026). A chave persistida
+ * continua `:v2`: as chaves das seções extintas que sobraram no armazenado
+ * são ignoradas pelo spread.
  */
 const SECOES_ABERTAS_PADRAO: Record<SecaoDoPainel, boolean> = {
   pavimentos: true,
-  // Aberta por padrão porque é onde as propriedades da peça selecionada passaram
-  // a morar: fechada, clicar numa parede no canvas não teria resposta visível
-  // nenhuma. O editor também a abre sozinho ao selecionar um componente.
+  // O editor também a abre sozinho ao selecionar um componente.
   componentes: true,
   ambientes: true,
-  vetor: false,
-  // Fechada: importar IFC é gesto ocasional, e a seção aberta empurraria para
-  // baixo o que se usa a cada minuto.
-  ifc: false,
-  // Mesma razão do IFC: gesto ocasional, e aberta empurraria para baixo o que
-  // se usa a cada minuto.
-  dxf: false,
-  bcf: false,
-  // Fechada: o painel busca no banco ao abrir, e abri-lo por padrão faria uma
-  // consulta em toda entrada no editor, para quem talvez não vá comentar nada.
-  comentarios: false,
-  // FECHADA, e é decisão: a contagem no cabeçalho já avisa quando há conflito,
-  // e uma seção aberta com "nenhum conflito" ocuparia altura todo dia para
-  // dizer que não há nada. Quem tem um vê o número e abre.
-  conflitos: false,
-  // Fechada: quem não tem quadro nenhum não precisa vê-la aberta todo dia.
-  eletrica: false,
-  medicoes: false,
-  quantitativos: false,
-  orcamento: false,
-  versoes: false,
 };
 
 interface Props {
@@ -674,7 +678,30 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const em3d = vista === '3d';
   // As abas que esta vista admite, e a que está aberta de fato.
   const abasDoRibbon = ABAS_DO_RIBBON.filter((a) => !emVista || a.naVista);
-  const aba = abaEfetiva(abasDoRibbon, abaSalva);
+  // Fora da planta, a aba de Arquitetura não existe — e o que se quer ali é
+  // olhar (Exibir, Enquadrar, Inverter o lado), então a preferida é Vista.
+  const aba = abaEfetiva(abasDoRibbon, abaSalva, 'vista');
+
+  /**
+   * A TAREFA aberta no painel e o RELATÓRIO aberto no dock. Estado de sessão,
+   * não preferência: reabrir o editor com "Importar do IFC" aberto seria
+   * estranho. Fora da planta não há tarefa; o relatório que a vista não admite
+   * some (e volta quando se volta), sem apagar a escolha.
+   */
+  const [tarefa, setTarefa] = useState<TarefaDoPainel | null>(null);
+  const [relatorio, setRelatorio] = useState<RelatorioDoDock | null>(null);
+  const tarefaAberta = emVista ? null : tarefa;
+  const relatorioVisivel = useCallback(
+    (id: RelatorioDoDock) =>
+      !emVista ||
+      RELATORIOS_DO_DOCK[id].naVista ||
+      (vista === '3d' && RELATORIOS_DO_DOCK[id].no3d),
+    [emVista, vista],
+  );
+  const relatorioAberto = relatorio && relatorioVisivel(relatorio) ? relatorio : null;
+  const alternarTarefa = (id: TarefaDoPainel) => setTarefa((t) => (t === id ? null : id));
+  const alternarRelatorio = (id: RelatorioDoDock) => setRelatorio((r) => (r === id ? null : id));
+  const dock = useAlturaDoDock();
   const [ortogonal, setOrtogonal] = useState(true);
   /**
    * O que acontece nas junções quando se move PARTE do desenho.
@@ -4093,6 +4120,175 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             : 'Escada'
           : (ROTULO_DA_FERRAMENTA[editor.tool] ?? editor.tool);
 
+  /**
+   * O painel do TERRENO — escritura, papel das divisas, recuos, zona,
+   * topografia, terraplenagem, emissão. Montado uma vez e usado em dois
+   * lugares: como TAREFA "Dados do lote" (aba Terreno do ribbon) e como
+   * PROPRIEDADES da divisa selecionada. Era o miolo da seção "Ambientes".
+   */
+  const painelDoTerreno = (
+    <PainelTerreno
+      terreno={terreno}
+      georreferencia={editor.model.georreferencia ?? null}
+      onGeorreferencia={(georreferencia) =>
+        editor.run({ type: 'SetGeorreferencia', georreferencia })
+      }
+      divisaSelecionada={limiteSel}
+      onComprimento={esticarDivisa}
+      onPapel={(papel) =>
+        limiteSel && editor.run({ type: 'SetBoundaryPapel', boundaryId: limiteSel.id, papel })
+      }
+      recuos={recuos}
+      onRecuo={zona.ajustarRecuo}
+      envelope={envelope}
+      aproveitamento={aproveitamento}
+      taxaOcupacaoMax={zona.taxaOcupacaoMax}
+      coeficienteMax={zona.coeficienteMax}
+      onTaxaOcupacaoMax={zona.ajustarTaxaOcupacaoMax}
+      onCoeficienteMax={zona.ajustarCoeficienteMax}
+      empreendimentos={empreendimentos.map((e) => ({
+        id: e.id,
+        nome: e.name,
+        areaAtualM2: e.terreno_area ?? null,
+      }))}
+      empreendimentoId={zona.empreendimentoId}
+      onEmpreendimento={zona.setEmpreendimentoId}
+      onGravarArea={(id) => void gravarAreaNoEmpreendimento(id)}
+      gravando={gravandoArea}
+      erro={erroArea}
+      onAbrirQuadro={() => setQuadroAberto(true)}
+      ladosSemPapel={ladosSemPapel}
+      ladosDivergentes={ladosDivergentes}
+      gabaritoAlturaMaxM={zona.gabaritoAlturaMaxM}
+      gabaritoPavimentos={zona.gabaritoPavimentos}
+      taxaPermeabilidadeMin={zona.taxaPermeabilidadeMin}
+      pavimentosDesenhados={editor.model.levels.length}
+      alturaDesenhadaM={alturaDesenhadaM}
+      topografiaSlot={
+        <PainelTopografia
+          topografia={topografia}
+          temLoteFechado={anelDoLoteFechado !== null}
+          temGeorreferencia={!!editor.model.georreferencia}
+          cotaDeOrigemInformada={cotaDeOrigemInformada}
+          declividade={declividade}
+          terraplenagem={{
+            base: terraplenagem.base,
+            onBase: terraplenagem.setBase,
+            temEnvelope: !!envelope?.valido,
+            cotaPlatoM: terraplenagem.cotaPlatoM,
+            onCotaPlatoM: terraplenagem.setCotaPlatoM,
+            cotaDeEquilibrioM,
+            resultado: terraplenagemCalc,
+            parametros: terraplenagem.parametros,
+            onParametros: terraplenagem.setParametros,
+            arestasM: arestasDoPlatoM,
+            murosDimensionados,
+            estrutura: terraplenagem.estrutura,
+            onEstrutura: terraplenagem.setEstrutura,
+            persistenciaIndisponivel: terraplenagem.persistenciaIndisponivel,
+          }}
+          curvaSelecionada={curvaSelecionada}
+          onLimparCurva={() => setCurvaEmDestaque(null)}
+          hipsometria={mostrarHipsometria ? hipsometria : null}
+          hipsometriaOpcoes={{
+            modo: hipsometriaModo,
+            onModo: setHipsometriaModo,
+            intervaloM: hipsometriaIntervaloM,
+            intervaloEfetivoM: intervaloHipsometricoM,
+            onIntervalo: setHipsometriaIntervaloM,
+            niveis: niveisDaVersao,
+            corDaCota,
+            curvasPelaCota,
+            onCurvasPelaCota: setCurvasPelaCota,
+            casas: casasDaLegenda,
+            onCasas: setCasasDaLegenda,
+          }}
+          perfil={{
+            origem: usaLinhaDesenhada ? 'LINHA' : 'CORTE',
+            onOrigem: setOrigemDoPerfil,
+            linhas: linhasDoPerfil.length,
+            linhaIndice: indiceDaLinha,
+            onLinha: setLinhaDoPerfilIndice,
+            onTracarLinha: () => editor.setTool('perfil'),
+            onApagarLinha: () => {
+              terraplenagem.removerLinhaDoPerfil(indiceDaLinha);
+              if (linhasDoPerfil.length <= 1) setOrigemDoPerfil('CORTE');
+              else setLinhaDoPerfilIndice(Math.max(0, indiceDaLinha - 1));
+            },
+            cortes: (editor.model.sections ?? []).map((c) => ({ id: c.id, rotulo: c.rotulo })),
+            corteId: corteDoPerfil?.id ?? '',
+            onCorte: setPerfilCorteId,
+            pontos: perfilDoTerreno?.pontos ?? null,
+            estatisticas: perfilDoTerreno?.estatisticas ?? null,
+            svg: perfilDoTerreno
+              ? svgDoPerfil(perfilDoTerreno.pontos, perfilDoTerreno.estatisticas, { largura: 280, altura: 150 })
+              : null,
+            onExportar: exportarPerfil,
+          }}
+          drenagem={{
+            linhas: terraplenagem.drenagem,
+            analises: analisesDeDrenagem,
+            ativa: drenagemAtiva,
+            onAtiva: setDrenagemAtiva,
+            onTracar: () => editor.setTool('drenagem'),
+            temPlato: !!terraplenagemCalc,
+            onGerarDoPlato: gerarCanaletasDoPlato,
+            onAlterar: terraplenagem.alterarDrenagem,
+            onRemover: (id) => {
+              terraplenagem.removerDrenagem(id);
+              if (drenagemAtiva === id) setDrenagemAtiva(null);
+            },
+            caimentoMinPct: terraplenagem.parametros.caimentoMinPct ?? 0.5,
+            onCaimentoMin: (v) => terraplenagem.setParametros({ caimentoMinPct: v }),
+            dimensionamentos: dimensionamentosDeDrenagem,
+            areasSugeridasM2,
+            hidraulica: terraplenagem.hidraulica,
+            onHidraulica: terraplenagem.setHidraulica,
+          }}
+          executivo={{
+            responsavel: executivo.responsavel,
+            onResponsavel: executivo.setResponsavel,
+            sondagem: executivo.sondagem,
+            onSondagem: executivo.setSondagem,
+            resultado: resultadoExecutivo,
+            emitidos: executivo.emitidos,
+            emissaoValida,
+            hashDaBaseAtual: hashDaBaseExecutivaAtual,
+            onEmitir: () => void emitirProjetoExecutivo(),
+            emitindo: executivo.emitindo,
+            erro: executivo.erro,
+            onBaixarMemorial: (row) => executivo.baixarMemorial(row, study.name),
+            persistenciaIndisponivel: executivo.persistenciaIndisponivel,
+          }}
+        />
+      }
+      zonaSlot={
+        <PainelZonaUrbanistica
+          origemDaZona={zona.origemDaZona}
+          onOrigemDaZona={zona.setOrigemDaZona}
+          empreendimentos={empreendimentos.map((e) => ({ id: e.id, nome: e.name }))}
+          empreendimentoId={zona.empreendimentoId}
+          onEmpreendimento={zona.setEmpreendimentoId}
+          cidade={zona.cidade}
+          onCidade={zona.setCidade}
+          mapas={zona.mapas}
+          mapaId={zona.mapaId}
+          onMapa={zona.setMapaId}
+          carregandoMapas={zona.carregandoMapas}
+          zonas={zona.zonas}
+          carregandoZonas={zona.carregandoZonas}
+          zonaAplicadaId={zona.zonaAplicadaId}
+          zonaRotuloSalvo={zona.zonaRotuloSalvo}
+          ajustadoAMao={zona.ajustadoAMao}
+          derivou={zona.derivou}
+          onAplicar={zona.aplicarZona}
+          onDesligar={zona.desligar}
+          salvando={zona.salvando}
+        />
+      }
+    />
+  );
+
   const rotuloSalvamento: Record<string, string> = {
     limpo: 'Sem alterações',
     pendente: 'Alterações não salvas',
@@ -4324,6 +4520,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 rotulo="Divisa"
                 onClick={editor.setTool}
               />
+              {/* O que a escritura e a lei dizem do lote — área, papel de cada
+                  lado, recuos, zona, topografia, terraplenagem, emissão. Era o
+                  miolo da seção "Ambientes"; é TAREFA, não navegação. */}
+              <BotaoDoRibbon
+                icone={Landmark}
+                rotulo="Dados do lote"
+                ativo={tarefaAberta === 'terreno'}
+                onClick={() => alternarTarefa('terreno')}
+                ajuda="Área da escritura, papel de cada divisa, recuos e zona urbanística, topografia, corte e aterro, projeto executivo de terraplenagem"
+              />
             </GrupoDoRibbon>
             {/* PERFIL altimétrico e DRENAGEM traçada (fases 4 e 6 da topografia):
                 uma VISTA do terreno e uma premissa de terraplenagem — nenhuma das
@@ -4348,23 +4554,38 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         )}
 
         {aba === 'instalacoes' && (
-          <GrupoDoRibbon rotulo="Redes e pontos">
-            <MenuComponentes
-              tool={editor.tool}
-              tipoAbertura={tipoAbertura}
-              tipoEstrutural={tipoEstrutural}
-              tipoCirculacao={tipoCirculacao}
-              disciplinaDeRede={disciplinaDeRede}
-              tipoDePontoEletrico={tipoDePontoEletrico}
-              tipoDeInterruptor={tipoDeInterruptor}
-              familia="INSTALACOES"
-              rotulo="Instalações"
-              onEscolher={escolherComponente}
-            />
-          </GrupoDoRibbon>
+          <>
+            {!emVista && (
+              <GrupoDoRibbon rotulo="Redes e pontos">
+                <MenuComponentes
+                  tool={editor.tool}
+                  tipoAbertura={tipoAbertura}
+                  tipoEstrutural={tipoEstrutural}
+                  tipoCirculacao={tipoCirculacao}
+                  disciplinaDeRede={disciplinaDeRede}
+                  tipoDePontoEletrico={tipoDePontoEletrico}
+                  tipoDeInterruptor={tipoDeInterruptor}
+                  familia="INSTALACOES"
+                  rotulo="Instalações"
+                  onEscolher={escolherComponente}
+                />
+              </GrupoDoRibbon>
+            )}
+            <GrupoDoRibbon rotulo="Elétrica">
+              <BotaoDoRibbon
+                icone={Zap}
+                rotulo="Quadro de cargas"
+                contagem={(editor.model.circuitos ?? []).length}
+                ativo={relatorioAberto === 'quadro-de-cargas'}
+                onClick={() => alternarRelatorio('quadro-de-cargas')}
+                ajuda="Circuitos por quadro, pré-dimensionamento, conferência NBR 5410 e emissão executiva — no dock, embaixo do desenho"
+              />
+            </GrupoDoRibbon>
+          </>
         )}
 
         {aba === 'inserir' && (
+          <>
           <GrupoDoRibbon rotulo="Referência">
             <ControlesDeFundo
               linhas={fundo.linhas}
@@ -4389,34 +4610,134 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onRemover={() => void fundo.remover()}
             />
           </GrupoDoRibbon>
+          {/* IMPORTAR — trazer para dentro o que outra pessoa desenhou. O PDF
+              vira parede por reconhecimento; o IFC e o DXF, por medida
+              declarada; o BCF é a única que traz PENDÊNCIA em vez de geometria.
+              Cada uma abre como tarefa no painel lateral. */}
+          <GrupoDoRibbon rotulo="Importar">
+            <BotaoDoRibbon
+              icone={FileText}
+              rotulo="Do PDF"
+              ativo={tarefaAberta === 'gerar-paredes'}
+              onClick={() => alternarTarefa('gerar-paredes')}
+              ajuda="Gerar paredes e portas a partir da planta de fundo em PDF"
+            />
+            <BotaoDoRibbon
+              icone={Boxes}
+              rotulo="Do IFC"
+              ativo={tarefaAberta === 'importar-ifc'}
+              onClick={() => alternarTarefa('importar-ifc')}
+              ajuda="Importar paredes, aberturas e estrutura de um modelo IFC"
+            />
+            <BotaoDoRibbon
+              icone={PenTool}
+              rotulo="Do DXF"
+              ativo={tarefaAberta === 'importar-dxf'}
+              onClick={() => alternarTarefa('importar-dxf')}
+              ajuda="Importar paredes de um desenho DXF"
+            />
+            <BotaoDoRibbon
+              icone={MessagesSquare}
+              rotulo="Do BCF"
+              ativo={tarefaAberta === 'importar-bcf'}
+              onClick={() => alternarTarefa('importar-bcf')}
+              ajuda="Importar os tópicos de coordenação (BCF) que o projetista devolveu"
+            />
+          </GrupoDoRibbon>
+          </>
         )}
 
         {aba === 'analisar' && (
-          /* MEDIR ≠ DESENHAR. Estas três não produzem geometria: produzem uma
-             AFIRMAÇÃO sobre a planta de fundo — por isso moram em Analisar, e
-             não em Arquitetura. */
-          <GrupoDoRibbon rotulo="Medir">
-            <Ferramenta
-              atual={editor.tool}
-              valor="medir-area"
-              icone={Square}
-              rotulo="Área"
-              onClick={editor.setTool}
+          <>
+            {/* MEDIR ≠ DESENHAR. Estas três não produzem geometria: produzem uma
+                AFIRMAÇÃO sobre a planta de fundo — por isso moram em Analisar, e
+                não em Arquitetura. Só na planta: fora dela não se mede. */}
+            {!emVista && (
+              <GrupoDoRibbon rotulo="Medir">
+                <Ferramenta
+                  atual={editor.tool}
+                  valor="medir-area"
+                  icone={Square}
+                  rotulo="Área"
+                  onClick={editor.setTool}
+                />
+                <Ferramenta
+                  atual={editor.tool}
+                  valor="medir-linha"
+                  icone={Spline}
+                  rotulo="Linha"
+                  onClick={editor.setTool}
+                />
+                <Ferramenta
+                  atual={editor.tool}
+                  valor="contar"
+                  icone={Hash}
+                  rotulo="Contar"
+                  onClick={editor.setTool}
+                />
+              </GrupoDoRibbon>
+            )}
+            {/* RELATÓRIOS — o que o desenho DIZ: pendências da geometria,
+                formas medidas, quantidades, custo. Abrem no dock. */}
+            <GrupoDoRibbon rotulo="Relatórios">
+              <BotaoDoRibbon
+                icone={AlertTriangle}
+                rotulo="Conflitos"
+                contagem={conflitos.length}
+                ativo={relatorioAberto === 'conflitos'}
+                onClick={() => alternarRelatorio('conflitos')}
+                ajuda="Interferências entre disciplinas e com a estrutura; exportar BCF"
+              />
+              {relatorioVisivel('medicoes') && (
+                <BotaoDoRibbon
+                  icone={Ruler}
+                  rotulo="Medições"
+                  contagem={medicoes.formas.length}
+                  ativo={relatorioAberto === 'medicoes'}
+                  onClick={() => alternarRelatorio('medicoes')}
+                  ajuda="As formas medidas sobre a planta de fundo e o envio ao orçamento"
+                />
+              )}
+              {relatorioVisivel('quantitativos') && (
+                <BotaoDoRibbon
+                  icone={Table2}
+                  rotulo="Quantitativos"
+                  ativo={relatorioAberto === 'quantitativos'}
+                  onClick={() => alternarRelatorio('quantitativos')}
+                  ajuda="Áreas, volumes e comprimentos derivados do desenho; o quantitativo oficial da versão"
+                />
+              )}
+              {relatorioVisivel('orcamento') && (
+                <BotaoDoRibbon
+                  icone={Calculator}
+                  rotulo="Orçamento"
+                  ativo={relatorioAberto === 'orcamento'}
+                  onClick={() => alternarRelatorio('orcamento')}
+                  ajuda="A ponte com o orçamento da obra: prévia e aplicação por elemento"
+                />
+              )}
+            </GrupoDoRibbon>
+          </>
+        )}
+
+        {aba === 'colaborar' && (
+          <GrupoDoRibbon rotulo="Coordenação">
+            <BotaoDoRibbon
+              icone={MessageSquare}
+              rotulo="Comentários"
+              ativo={relatorioAberto === 'comentarios'}
+              onClick={() => alternarRelatorio('comentarios')}
+              ajuda="Comentários ancorados em elementos do desenho"
             />
-            <Ferramenta
-              atual={editor.tool}
-              valor="medir-linha"
-              icone={Spline}
-              rotulo="Linha"
-              onClick={editor.setTool}
-            />
-            <Ferramenta
-              atual={editor.tool}
-              valor="contar"
-              icone={Hash}
-              rotulo="Contar"
-              onClick={editor.setTool}
-            />
+            {relatorioVisivel('versoes') && (
+              <BotaoDoRibbon
+                icone={History}
+                rotulo="Versões"
+                ativo={relatorioAberto === 'versoes'}
+                onClick={() => alternarRelatorio('versoes')}
+                ajuda="Versões publicadas, diferenças entre elas e as pranchas (PDF, PNG, DXF, IFC)"
+              />
+            )}
           </GrupoDoRibbon>
         )}
 
@@ -5109,7 +5430,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       )}
 
       <div className="flex min-h-0 flex-1">
-        <div className="relative min-w-0 flex-1">
+        {/* A coluna do desenho: o canvas em cima e, quando há, o DOCK de
+            relatórios embaixo — na largura do canvas, que é a que tabela
+            precisa (ver `DockDeRelatorios.tsx`). */}
+        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="relative min-h-0 min-w-0 flex-1">
           {/* Aferição: os dois pontos já foram clicados, falta a distância real.
               O diálogo aparece SOBRE o desenho, junto de onde o usuário acabou
               de clicar — mandá-lo procurar um campo na lateral quebraria o
@@ -5367,16 +5692,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               // em `p1` justamente para o traçado não se mexer).
               enquadrarPrancha={fundo.ativaId}
               onVistaMudou={setLimitesDaVista}
-              // A arma morre junto com a SEÇÃO (era: junto com a aba). Sem este
-              // recorte, armar e fechar "Do PDF" deixaria o próximo arraste em
-              // QUALQUER ferramenta virar uma marcação de região invisível — o
-              // botão que a armou não está mais na tela para explicar o que
-              // aconteceu.
-              regiaoArmada={secoes.vetor && regiaoArmada}
-              // A região só aparece com a seção que a usa aberta. Desenhá-la
+              // A arma morre junto com a TAREFA (era: junto com a seção; antes,
+              // com a aba). Sem este recorte, armar e fechar "Do PDF" deixaria
+              // o próximo arraste em QUALQUER ferramenta virar uma marcação de
+              // região invisível — o botão que a armou não está mais na tela
+              // para explicar o que aconteceu.
+              regiaoArmada={tarefaAberta === 'gerar-paredes' && regiaoArmada}
+              // A região só aparece com a tarefa que a usa aberta. Desenhá-la
               // sempre deixaria um retângulo violeta sobre a planta enquanto se
               // traça parede, sem nada na tela explicando de onde ele veio.
-              regiao={secoes.vetor ? regiao : null}
+              regiao={tarefaAberta === 'gerar-paredes' ? regiao : null}
               onRegiaoDefinida={(r) => {
                 // `null` = desistiu do gesto. Só desarma — apagar a região
                 // confirmada por causa de um Escape seria perder trabalho.
@@ -5389,6 +5714,177 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onMedicaoPronta={(tipo, pontos) => void medicoes.criar(tipo, pontos)}
             />
           )}
+        </div>
+
+        {/* ─── O DOCK DE RELATÓRIOS (F3) ──────────────────────────────────────
+            Um por vez, aberto pelo ribbon (Analisar, Colaborar, Instalações).
+            Cada painel aqui é o MESMO que morava no acordeão lateral; só a
+            morada mudou — e a largura, que agora é a do canvas. */}
+        {relatorioAberto && (
+          <DockDeRelatorios
+            titulo={RELATORIOS_DO_DOCK[relatorioAberto].rotulo}
+            contagem={
+              relatorioAberto === 'conflitos'
+                ? conflitos.length
+                : relatorioAberto === 'quadro-de-cargas'
+                  ? (editor.model.circuitos ?? []).length
+                  : relatorioAberto === 'medicoes'
+                    ? medicoes.formas.length
+                    : undefined
+            }
+            dock={dock}
+            onFechar={() => setRelatorio(null)}
+          >
+            {relatorioAberto === 'comentarios' && (
+              <PainelComentarios
+                model={editor.model}
+                studyId={study.id}
+                // ⚠️ `orgId` do seletor do topo, e NÃO `study.organization_id` —
+                // a mesma regra que o resto do editor segue (REGRA #5).
+                organizationId={orgId ?? study.organization_id}
+                selecionadoUid={uidDoSelecionado}
+                selecionadoRotulo={rotuloDoSelecionado}
+                pontoPadrao={pontoDoSelecionado}
+              />
+            )}
+
+            {relatorioAberto === 'conflitos' && (
+              <PainelConflitos
+                model={editor.model}
+                conflitos={conflitos}
+                onSelecionar={(id) => selecionar([id])}
+                onExportarBcf={exportarBcfDoEstudo}
+              />
+            )}
+
+            {relatorioAberto === 'quadro-de-cargas' && (
+              <>
+                <PainelEletrica
+                  model={editor.model}
+                  onAddCircuito={(quadroId, nome) =>
+                    editor.run({ type: 'AddCircuito', quadroId, nome })
+                  }
+                  onCircuitoProps={(circuitoId, campos) =>
+                    editor.run({ type: 'SetCircuitoProps', circuitoId, ...campos })
+                  }
+                  onSelecionar={(id) => selecionar([id])}
+                  onLigarAoCircuito={(terminalId, circuitoId) =>
+                    editor.run({ type: 'SetTerminalProps', terminalId, circuitoId })
+                  }
+                  onAceitarSugeridas={aceitarSugeridas}
+                  hipoteses={hipotesesEletricas}
+                  onHipoteses={setHipotesesEletricas}
+                  onQuadroProps={(quadroId, campos) => editor.run({ type: 'SetQuadroProps', quadroId, ...campos })}
+                  executivoSlot={
+                    <PainelEletricaExecutivo
+                      e={{
+                        responsavel: executivoEletrico.responsavel,
+                        onResponsavel: executivoEletrico.setResponsavel,
+                        resultado: resultadoEletrico,
+                        emitidos: executivoEletrico.emitidos,
+                        emissaoValida: emissaoEletricaValida,
+                        hashDaBaseAtual: hashEletrico.base,
+                        onEmitir: () => void emitirEletrico(),
+                        emitindo: executivoEletrico.emitindo,
+                        erro: executivoEletrico.erro,
+                        onBaixarMemorial: (row) => executivoEletrico.baixarMemorial(row, study.name),
+                        persistenciaIndisponivel: executivoEletrico.persistenciaIndisponivel,
+                      }}
+                    />
+                  }
+                />
+                {/* A CONFERÊNCIA da norma vive junto do quadro de cargas: é a
+                    mesma leitura — o que foi declarado — vista pelas regras da
+                    NBR 5410, e o usuário pediu tudo de elétrica num só lugar. */}
+                <div className="mt-3 border-t border-slate-200 pt-3">
+                  <PainelConferenciaNbr
+                    conferencia={conferenciaNbr}
+                    onSelecionar={(ids) => selecionar(ids)}
+                    onConverterLigacaoDireta={(ids) =>
+                      editor.runBatch(
+                        ids.map((terminalId) => ({
+                          type: 'SetTerminalProps' as const,
+                          terminalId,
+                          tipoEletrico: 'LIGACAO_DIRETA' as const,
+                        })),
+                      )
+                    }
+                  />
+                </div>
+              </>
+            )}
+
+            {relatorioAberto === 'medicoes' && (
+              <PainelMedicoes
+                formas={medicoesVisiveis}
+                todas={medicoes.formas}
+                selecionada={medicoes.selecionada}
+                temFundo={!!fundo.linha}
+                ocupado={medicoes.ocupado}
+                camadasOcultas={camadasOcultas}
+                camadaAtiva={camadaAtiva}
+                onAlternarCamada={alternarCamada}
+                onCamadaAtiva={setCamadaAtiva}
+                onSelecionar={medicoes.setSelecionada}
+                onRenomear={(id, nome) => void medicoes.atualizar(id, { nome })}
+                onEditarItem={(id, campos) => void medicoes.atualizar(id, campos)}
+                onRemover={(id) => void medicoes.remover(id)}
+                onEnviarOrcamento={() =>
+                  void medicoes.enviarAoOrcamento(
+                    study.project_id,
+                    study.name,
+                    fundo.linha?.file_sha256 ?? null,
+                    fundo.underlay?.mmPorPixel ?? null,
+                  )
+                }
+                aviso={medicoes.aviso}
+                erro={medicoes.erro}
+              />
+            )}
+
+            {relatorioAberto === 'quantitativos' && (
+              <PainelQuantitativos
+                quant={quant}
+                fmt={fmt}
+                revisao={editor.baseRevision}
+                oficial={qtdOficial}
+                gerando={gerando}
+                onGerar={gerarQuantitativoOficial}
+                dirty={editor.dirtySincePublish}
+              />
+            )}
+
+            {relatorioAberto === 'orcamento' && (
+              <PainelOrcamento
+                study={study}
+                revisao={editor.baseRevision}
+                dirty={editor.dirtySincePublish}
+                onPrevia={setPreviaOrcamento}
+              />
+            )}
+
+            {relatorioAberto === 'versoes' && (
+              <PainelVersoes
+                study={study}
+                custoPorUid={custoPorUid}
+                hipotesesEletricas={hipotesesEletricas}
+                // As curvas vão para o DXF da prancha nas camadas TOPO-*, no
+                // mesmo mm da planta — a versão EXIBIDA, que é a que se vê.
+                topografia={
+                  topografia.selecionada
+                    ? {
+                        curvas: topografia.selecionada.curvas,
+                        pontosCotados: topografia.selecionada.pontos_cotados,
+                        // Fase 8: drenagem e muros nas camadas TOPO-DRENAGEM / TOPO-MURO.
+                        drenagem: terraplenagem.drenagem.map((l) => ({ nome: l.nome, pontos: l.pontos })),
+                        muros: (terraplenagemCalc?.muros ?? []).map((m) => ({ a: m.a, b: m.b, normal: m.normal })),
+                      }
+                    : undefined
+                }
+              />
+            )}
+          </DockDeRelatorios>
+        )}
         </div>
 
         {/* Painel lateral — é aqui que a planta vira navegável por teclado. */}
@@ -5408,10 +5904,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             faria rolar junto com o conteúdo e sumir da vista. */}
         <div ref={caixaDoPainel} className="relative shrink-0" style={{ width: larguraDoPainel }}>
           <PuxadorDeLargura />
+          {/* ─── O PAINEL ENXUTO (F2) ─────────────────────────────────────────
+              Duas metades, como Project Browser + Properties do Revit:
+              em cima o NAVEGADOR (pavimentos, componentes, ambientes — o que
+              existe no desenho), embaixo as PROPRIEDADES da seleção ou a
+              TAREFA aberta pelo ribbon. Comandos foram para o ribbon;
+              relatórios, para o dock. As quinze seções viraram três. */}
           <aside
-            className="h-full overflow-y-auto border-l border-slate-200 bg-white"
-            aria-label="Ambientes derivados"
+            className="flex h-full min-h-0 flex-col border-l border-slate-200 bg-white"
+            aria-label="Navegador e propriedades"
           >
+          <div role="region" aria-label="Navegador" className="min-h-0 flex-1 overflow-y-auto">
           <SecaoAccordion
             titulo="Pavimentos"
             contagem={editor.model.levels.length}
@@ -5488,6 +5991,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 ) : undefined
               }
             >
+              {/* Só o INVENTÁRIO: as propriedades da peça selecionada moram na
+                  metade de baixo do painel desde o F2 — o slot `propriedades`
+                  deixou de ser passado. */}
               <PainelComponentes
                 paredes={componentesDoNivel.paredes}
                 aberturas={componentesDoNivel.aberturas}
@@ -5505,228 +6011,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 ocultos={em3d ? ocultosNo3d : undefined}
                 onAlternarOculto={em3d ? alternarOcultoNo3d : undefined}
                 somenteLeitura={em3d}
-                propriedades={
-                  em3d ? undefined : (
-                  <>
-                    {editor.selectedIds.length > 1 ? (
-                      <PainelSelecaoMultipla
-                        paredes={paredesSelecionadas}
-                        limites={limitesSelecionados.length}
-                        aberturas={aberturasSelecionadas.length}
-                        medicoes={medicoesSelecionadas}
-                        modo={modoJuncao}
-                        onMover={(dx, dy) => {
-                          const aguasSelecionadas = (editor.model.roofs ?? []).filter((r) =>
-                            editor.selectedIds.includes(r.id),
-                          );
-                          if (
-                            paredesSelecionadas.length > 0 ||
-                            limitesSelecionados.length > 0 ||
-                            estruturasSelecionadas.length > 0 ||
-                            aguasSelecionadas.length > 0
-                          ) {
-                            moverSelecao(
-                              paredesSelecionadas.map((w) => w.id),
-                              limitesSelecionados.map((b) => b.id),
-                              estruturasSelecionadas.map((s) => s.id),
-                              aguasSelecionadas.map((r) => r.id),
-                              { x: dx, y: dy } as Point,
-                            );
-                          }
-                          if (medicoesSelecionadas.length > 0) {
-                            moverMedicoes(medicoesSelecionadas.map((f) => f.id), {
-                              x: dx,
-                              y: dy,
-                            } as Point);
-                          }
-                        }}
-                        onExcluir={removerSelecionada}
-                      />
-                    ) : null}
-
-                    <PainelQuadroSelecionado
-                      quadro={quadroSel}
-                      onQuadro={(campos) =>
-                        quadroSel &&
-                        editor.run({ type: 'SetQuadroProps', quadroId: quadroSel.id, ...campos })
-                      }
-                    />
-
-                    <PainelTrechoSelecionado
-                      trecho={trechoSel}
-                      terminal={terminalSel}
-                      circuitos={circuitosParaEscolher}
-                      ocupacao={
-                        trechoSel && trechoSel.disciplina === 'ELETRICA'
-                          ? ocupacaoDoTrecho(editor.model, trechoSel, hipotesesEletricas)
-                          : undefined
-                      }
-                      onTrecho={(campos) =>
-                        trechoSel &&
-                        editor.run({ type: 'SetTrechoProps', trechoId: trechoSel.id, ...campos })
-                      }
-                      onTerminal={(campos) =>
-                        terminalSel &&
-                        editor.run({
-                          type: 'SetTerminalProps',
-                          terminalId: terminalSel.id,
-                          ...campos,
-                        })
-                      }
-                    />
-
-                    <PainelEstruturaSelecionada
-                      custo={estruturaSel ? custoPorUid.get(estruturaSel.uid) : undefined}
-                      custoDesatualizado={editor.dirtySincePublish}
-                      estrutura={estruturaSel}
-                      onMedidas={(campos) =>
-                        estruturaSel &&
-                        editor.run({
-                          type: 'SetStructuralProps',
-                          structuralId: estruturaSel.id,
-                          ...campos,
-                        })
-                      }
-                      onTipo={(kind) =>
-                        estruturaSel &&
-                        editor.run({
-                          type: 'SetStructuralKind',
-                          structuralId: estruturaSel.id,
-                          kind,
-                        })
-                      }
-                      onExcluir={removerSelecionada}
-                      sobreposicaoM3={sobreposicaoDoSelecionado}
-                      onCedeSobreposicao={(cede) =>
-                        estruturaSel &&
-                        editor.run({ type: 'SetCedeSobreposicao', id: estruturaSel.id, cede })
-                      }
-                      paredesParaCortar={paredesQueAPecaAtravessa.aCortar.length}
-                      paredesJaInterrompidas={paredesQueAPecaAtravessa.jaInterrompidas}
-                      onCortarParedes={cortarParedesDaSelecionada}
-                      pontasCurtas={pontasCurtasDaSelecionada.length}
-                      onEmendarPontas={emendarPontasDaSelecionada}
-                    />
-
-                    <PainelEscadaSelecionada
-                      model={editor.model}
-                      escada={escadaSel}
-                      onProps={(campos) =>
-                        escadaSel &&
-                        editor.run({ type: 'SetEscadaProps', escadaId: escadaSel.id, ...campos })
-                      }
-                      onExcluir={removerSelecionada}
-                    />
-
-                    <PainelCorteSelecionado
-                      corte={corteSel}
-                      onProps={(campos) =>
-                        corteSel &&
-                        editor.run({ type: 'SetCorteProps', corteId: corteSel.id, ...campos })
-                      }
-                      onVer={() => corteSel && setVista(`corte:${corteSel.id}`)}
-                      onExcluir={removerSelecionada}
-                    />
-
-                    <PainelAguaSelecionada
-                      agua={aguaSel}
-                      onProps={(campos) =>
-                        aguaSel && editor.run({ type: 'SetAguaProps', aguaId: aguaSel.id, ...campos })
-                      }
-                      onExcluir={removerSelecionada}
-                    />
-
-                    <PainelParedeSelecionada
-                      custo={
-                        // A abertura tem uid próprio e pode ter linha própria
-                        // (esquadria por elemento); a parede é o caso comum.
-                        custoPorUid.get((paredeSel ?? aberturaSel)?.uid ?? '')
-                      }
-                      custoDesatualizado={editor.dirtySincePublish}
-                      parede={paredeSel}
-                      abertura={aberturaSel}
-                      pontaQueAnda={esticamento.pontaQueAnda}
-                      arrastaCanto={esticamento.arrastaCanto}
-                      aLivre={esticamento.aLivre}
-                      bLivre={esticamento.bLivre}
-                      onEscolherPonta={(end) =>
-                        paredeSel && setAncoraManual({ wallId: paredeSel.id, end })
-                      }
-                      onDestacarPonta={setPontaDestacada}
-                      onComprimento={esticarParede}
-                      onEspessura={(mm) => paredeSel && mudarEspessura(paredeSel, mm)}
-                      // As camadas MEDIDAS saem do quantitativo que já roda ao
-                      // vivo aqui. Refazer a conta dentro do painel seria uma
-                      // segunda fórmula de área de face — e a primeira a
-                      // divergir no dia em que o desconto de vão mudar.
-                      camadasSlot={
-                        paredeSel ? (
-                          <PainelCamadasParede
-                            parede={paredeSel}
-                            medidas={
-                              quant.paredes.find((p) => p.wallId === paredeSel.id)
-                                ?.camadas ?? []
-                            }
-                            aoMudar={(camadas) => mudarCamadas(paredeSel, camadas)}
-                          />
-                        ) : null
-                      }
-                      podeUnir={!!vizinhaParaUnir}
-                      // O comprimento LIVRE depende da espessura das VIZINHAS, então sai
-                      // daqui, que conhece o nível inteiro — o painel só vê a selecionada.
-                      livreMm={
-                        paredeSel
-                          ? faceInternaMm(
-                              editor.model.walls.filter((w) => w.levelId === paredeSel.levelId),
-                              paredeSel,
-                            )
-                          : null
-                      }
-                      onDividir={dividirSelecionada}
-                      onUnir={unirSelecionada}
-                      onFlipAbertura={flipAbertura}
-                      onTamanhoAbertura={redimensionarAbertura}
-                      onTipoAbertura={(kind, embutida) => {
-                        if (!aberturaSel) return;
-                        editor.run({
-                          type: 'SetOpeningKind',
-                          openingId: aberturaSel.id,
-                          kind,
-                          embutida,
-                        });
-                      }}
-                      tomadasSlot={
-                        paredeSel && levelId ? (
-                          <TomadasNaParede
-                            lados={ladosDaParede(editor.model, paredeSel.id, levelId)}
-                            onDistribuir={distribuirTomadas}
-                          />
-                        ) : null
-                      }
-                      sobreposicaoM3={sobreposicaoDoSelecionado}
-                      onCedeSobreposicao={(cede) =>
-                        paredeSel &&
-                        editor.run({ type: 'SetCedeSobreposicao', id: paredeSel.id, cede })
-                      }
-                      esquadriaSlot={
-                        aberturaSel ? (
-                          <PainelEsquadria
-                            abertura={aberturaSel}
-                            onEsquadria={(esquadria) =>
-                              editor.run({
-                                type: 'SetOpeningEsquadria',
-                                openingId: aberturaSel.id,
-                                esquadria,
-                              })
-                            }
-                            onAplicarTipo={(tipo) => aplicarTipoDeEsquadria(aberturaSel, tipo)}
-                          />
-                        ) : null
-                      }
-                    />
-                  </>
-                  )
-                }
               />
             </SecaoAccordion>
           )}
@@ -5747,171 +6031,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             </p>
           </div>
 
-          {/* A seleção — uma peça ou o conjunto — passou para a seção
-              "Componentes" (31/08/2026). Aqui ficou o que a topologia DERIVA do
-              desenho: o terreno, os vãos que impedem o anel de fechar e a lista
-              de ambientes. */}
-          <PainelTerreno
-            terreno={terreno}
-            georreferencia={editor.model.georreferencia ?? null}
-            onGeorreferencia={(georreferencia) =>
-              editor.run({ type: 'SetGeorreferencia', georreferencia })
-            }
-            divisaSelecionada={limiteSel}
-            onComprimento={esticarDivisa}
-            onPapel={(papel) =>
-              limiteSel && editor.run({ type: 'SetBoundaryPapel', boundaryId: limiteSel.id, papel })
-            }
-            recuos={recuos}
-            onRecuo={zona.ajustarRecuo}
-            envelope={envelope}
-            aproveitamento={aproveitamento}
-            taxaOcupacaoMax={zona.taxaOcupacaoMax}
-            coeficienteMax={zona.coeficienteMax}
-            onTaxaOcupacaoMax={zona.ajustarTaxaOcupacaoMax}
-            onCoeficienteMax={zona.ajustarCoeficienteMax}
-            empreendimentos={empreendimentos.map((e) => ({
-              id: e.id,
-              nome: e.name,
-              areaAtualM2: e.terreno_area ?? null,
-            }))}
-            empreendimentoId={zona.empreendimentoId}
-            onEmpreendimento={zona.setEmpreendimentoId}
-            onGravarArea={(id) => void gravarAreaNoEmpreendimento(id)}
-            gravando={gravandoArea}
-            erro={erroArea}
-            onAbrirQuadro={() => setQuadroAberto(true)}
-            ladosSemPapel={ladosSemPapel}
-            ladosDivergentes={ladosDivergentes}
-            gabaritoAlturaMaxM={zona.gabaritoAlturaMaxM}
-            gabaritoPavimentos={zona.gabaritoPavimentos}
-            taxaPermeabilidadeMin={zona.taxaPermeabilidadeMin}
-            pavimentosDesenhados={editor.model.levels.length}
-            alturaDesenhadaM={alturaDesenhadaM}
-            topografiaSlot={
-              <PainelTopografia
-                topografia={topografia}
-                temLoteFechado={anelDoLoteFechado !== null}
-                temGeorreferencia={!!editor.model.georreferencia}
-                cotaDeOrigemInformada={cotaDeOrigemInformada}
-                declividade={declividade}
-                terraplenagem={{
-                  base: terraplenagem.base,
-                  onBase: terraplenagem.setBase,
-                  temEnvelope: !!envelope?.valido,
-                  cotaPlatoM: terraplenagem.cotaPlatoM,
-                  onCotaPlatoM: terraplenagem.setCotaPlatoM,
-                  cotaDeEquilibrioM,
-                  resultado: terraplenagemCalc,
-                  parametros: terraplenagem.parametros,
-                  onParametros: terraplenagem.setParametros,
-                  arestasM: arestasDoPlatoM,
-                  murosDimensionados,
-                  estrutura: terraplenagem.estrutura,
-                  onEstrutura: terraplenagem.setEstrutura,
-                  persistenciaIndisponivel: terraplenagem.persistenciaIndisponivel,
-                }}
-                curvaSelecionada={curvaSelecionada}
-                onLimparCurva={() => setCurvaEmDestaque(null)}
-                hipsometria={mostrarHipsometria ? hipsometria : null}
-                hipsometriaOpcoes={{
-                  modo: hipsometriaModo,
-                  onModo: setHipsometriaModo,
-                  intervaloM: hipsometriaIntervaloM,
-                  intervaloEfetivoM: intervaloHipsometricoM,
-                  onIntervalo: setHipsometriaIntervaloM,
-                  niveis: niveisDaVersao,
-                  corDaCota,
-                  curvasPelaCota,
-                  onCurvasPelaCota: setCurvasPelaCota,
-                  casas: casasDaLegenda,
-                  onCasas: setCasasDaLegenda,
-                }}
-                perfil={{
-                  origem: usaLinhaDesenhada ? 'LINHA' : 'CORTE',
-                  onOrigem: setOrigemDoPerfil,
-                  linhas: linhasDoPerfil.length,
-                  linhaIndice: indiceDaLinha,
-                  onLinha: setLinhaDoPerfilIndice,
-                  onTracarLinha: () => editor.setTool('perfil'),
-                  onApagarLinha: () => {
-                    terraplenagem.removerLinhaDoPerfil(indiceDaLinha);
-                    if (linhasDoPerfil.length <= 1) setOrigemDoPerfil('CORTE');
-                    else setLinhaDoPerfilIndice(Math.max(0, indiceDaLinha - 1));
-                  },
-                  cortes: (editor.model.sections ?? []).map((c) => ({ id: c.id, rotulo: c.rotulo })),
-                  corteId: corteDoPerfil?.id ?? '',
-                  onCorte: setPerfilCorteId,
-                  pontos: perfilDoTerreno?.pontos ?? null,
-                  estatisticas: perfilDoTerreno?.estatisticas ?? null,
-                  svg: perfilDoTerreno
-                    ? svgDoPerfil(perfilDoTerreno.pontos, perfilDoTerreno.estatisticas, { largura: 280, altura: 150 })
-                    : null,
-                  onExportar: exportarPerfil,
-                }}
-                drenagem={{
-                  linhas: terraplenagem.drenagem,
-                  analises: analisesDeDrenagem,
-                  ativa: drenagemAtiva,
-                  onAtiva: setDrenagemAtiva,
-                  onTracar: () => editor.setTool('drenagem'),
-                  temPlato: !!terraplenagemCalc,
-                  onGerarDoPlato: gerarCanaletasDoPlato,
-                  onAlterar: terraplenagem.alterarDrenagem,
-                  onRemover: (id) => {
-                    terraplenagem.removerDrenagem(id);
-                    if (drenagemAtiva === id) setDrenagemAtiva(null);
-                  },
-                  caimentoMinPct: terraplenagem.parametros.caimentoMinPct ?? 0.5,
-                  onCaimentoMin: (v) => terraplenagem.setParametros({ caimentoMinPct: v }),
-                  dimensionamentos: dimensionamentosDeDrenagem,
-                  areasSugeridasM2,
-                  hidraulica: terraplenagem.hidraulica,
-                  onHidraulica: terraplenagem.setHidraulica,
-                }}
-                executivo={{
-                  responsavel: executivo.responsavel,
-                  onResponsavel: executivo.setResponsavel,
-                  sondagem: executivo.sondagem,
-                  onSondagem: executivo.setSondagem,
-                  resultado: resultadoExecutivo,
-                  emitidos: executivo.emitidos,
-                  emissaoValida,
-                  hashDaBaseAtual: hashDaBaseExecutivaAtual,
-                  onEmitir: () => void emitirProjetoExecutivo(),
-                  emitindo: executivo.emitindo,
-                  erro: executivo.erro,
-                  onBaixarMemorial: (row) => executivo.baixarMemorial(row, study.name),
-                  persistenciaIndisponivel: executivo.persistenciaIndisponivel,
-                }}
-              />
-            }
-            zonaSlot={
-              <PainelZonaUrbanistica
-                origemDaZona={zona.origemDaZona}
-                onOrigemDaZona={zona.setOrigemDaZona}
-                empreendimentos={empreendimentos.map((e) => ({ id: e.id, nome: e.name }))}
-                empreendimentoId={zona.empreendimentoId}
-                onEmpreendimento={zona.setEmpreendimentoId}
-                cidade={zona.cidade}
-                onCidade={zona.setCidade}
-                mapas={zona.mapas}
-                mapaId={zona.mapaId}
-                onMapa={zona.setMapaId}
-                carregandoMapas={zona.carregandoMapas}
-                zonas={zona.zonas}
-                carregandoZonas={zona.carregandoZonas}
-                zonaAplicadaId={zona.zonaAplicadaId}
-                zonaRotuloSalvo={zona.zonaRotuloSalvo}
-                ajustadoAMao={zona.ajustadoAMao}
-                derivou={zona.derivou}
-                onAplicar={zona.aplicarZona}
-                onDesligar={zona.desligar}
-                salvando={zona.salvando}
-              />
-            }
-          />
-
+          {/* O TERRENO saiu daqui (F2): é tarefa — "Dados do lote", na aba
+              Terreno do ribbon — e propriedade da divisa selecionada. Aqui
+              ficou o que a topologia DERIVA do desenho: os vãos que impedem o
+              anel de fechar e a lista de ambientes. */}
           {vaosCandidatos.soltas.length > 0 && (
             <div className="border-b border-amber-200 bg-amber-50 px-4 py-3">
               <p className="text-xs text-amber-800">
@@ -6225,285 +6348,314 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           </div>
           </SecaoAccordion>
           )}
+          </div>
 
-          {secaoVisivel('vetor') && (
-            <SecaoAccordion
-              titulo="Do PDF"
-              aberta={secoes.vetor}
-              onAlternar={() => alternarSecao('vetor')}
-            >
-              <PainelGerarParedes
-                underlay={fundo.underlay}
-                temFundo={!!fundo.linha}
-                semAfericao={fundo.semAfericao}
-                pranchaId={fundo.ativaId}
-                limitesDaVista={limitesDaVista}
-                regiao={regiao}
-                regiaoArmada={regiaoArmada}
-                onArmarRegiao={() => setRegiaoArmada((a) => !a)}
-                onLimparRegiao={() => setRegiao(null)}
-                ocupado={fundo.ocupado}
-                onExtrair={(arquivo, pag) => extrairSegmentosPdf(arquivo, pag)}
-                onVetorGuardado={fundo.vetorDaPranchaAtiva}
-                onRegravar={(segs, larg, alt, m, arcos) =>
-                  void fundo.regravarVetor(segs, larg, alt, m, arcos)
-                }
-                onGerar={aplicarParedesGeradas}
-                paredesDoNivel={paredesParaPortas}
-                onGerarPortas={aplicarPortasGeradas}
-              />
-            </SecaoAccordion>
-          )}
+          {/* ─── PROPRIEDADES OU TAREFA ───────────────────────────────────────
+              A metade de baixo. Só na planta (no 3D não se edita nem se
+              importa). Tarefa aberta vence; a seleção continua anunciada na
+              faixa azul do cabeçalho, com o caminho de volta. Sem tarefa e sem
+              seleção, a metade não existe — o navegador fica com o painel
+              inteiro, como antes. */}
+          {!emVista && (tarefaAberta || editor.selectedIds.length > 0) && (
+            <div className="flex max-h-[62%] shrink-0 flex-col border-t-2 border-slate-200">
+              {tarefaAberta ? (
+                <PainelDeTarefa
+                  titulo={ROTULO_DA_TAREFA[tarefaAberta]}
+                  onFechar={() => setTarefa(null)}
+                  selecionado={editor.selectedIds.length > 0 ? rotuloDoSelecionado : null}
+                  onVerPropriedades={() => setTarefa(null)}
+                >
+                  {tarefaAberta === 'terreno' && painelDoTerreno}
 
-          {secaoVisivel('ifc') && (
-            <SecaoAccordion
-              titulo="Do IFC"
-              aberta={secoes.ifc}
-              onAlternar={() => alternarSecao('ifc')}
-            >
-              <PainelImportarIfc
-                model={editor.model}
-                levelIdAtivo={levelId}
-                onImportar={importarDoIfc}
-              />
-            </SecaoAccordion>
-          )}
-
-          {secaoVisivel('dxf') && (
-            <SecaoAccordion
-              titulo="Do DXF"
-              aberta={secoes.dxf}
-              onAlternar={() => alternarSecao('dxf')}
-            >
-              <PainelImportarDxf
-                model={editor.model}
-                levelIdAtivo={levelId}
-                onImportar={importarDoIfc}
-              />
-            </SecaoAccordion>
-          )}
-
-          {secaoVisivel('bcf') && (
-            <SecaoAccordion
-              titulo="Do BCF"
-              aberta={secoes.bcf}
-              onAlternar={() => alternarSecao('bcf')}
-            >
-              <PainelImportarBcf
-                model={editor.model}
-                // ⚠️ `orgId` do seletor do topo, e não `study.organization_id`
-                // — a mesma regra que o resto do editor segue (REGRA #5).
-                organizationId={orgId ?? study.organization_id}
-                studyId={study.id}
-                onSelecionar={(uid) => {
-                  // O tópico aponta por `uid`; a seleção do editor é por `id`.
-                  // A ponte é o modelo — e ela existe porque o uid é estável.
-                  const alvo = [
-                    ...editor.model.walls,
-                    ...editor.model.openings,
-                    ...editor.model.structures,
-                    ...(editor.model.trechos ?? []),
-                    ...(editor.model.terminais ?? []),
-                    ...(editor.model.quadros ?? []),
-                    ...(editor.model.roofs ?? []),
-                    ...(editor.model.stairs ?? []),
-                  ].find((x) => x.uid === uid);
-                  if (alvo) selecionar([alvo.id]);
-                }}
-              />
-            </SecaoAccordion>
-          )}
-
-          {secaoVisivel('comentarios') && (
-            <SecaoAccordion
-              titulo="Comentários"
-              aberta={secoes.comentarios}
-              onAlternar={() => alternarSecao('comentarios')}
-            >
-              <PainelComentarios
-                model={editor.model}
-                studyId={study.id}
-                // ⚠️ `orgId` do seletor do topo, e NÃO `study.organization_id` —
-                // a mesma regra que o resto do editor segue (REGRA #5).
-                organizationId={orgId ?? study.organization_id}
-                selecionadoUid={uidDoSelecionado}
-                selecionadoRotulo={rotuloDoSelecionado}
-                pontoPadrao={pontoDoSelecionado}
-              />
-            </SecaoAccordion>
-          )}
-
-          {secaoVisivel('conflitos') && (
-            <SecaoAccordion
-              titulo="Conflitos"
-              contagem={conflitos.length}
-              aberta={secoes.conflitos}
-              onAlternar={() => alternarSecao('conflitos')}
-            >
-              <PainelConflitos
-                model={editor.model}
-                conflitos={conflitos}
-                onSelecionar={(id) => selecionar([id])}
-                onExportarBcf={exportarBcfDoEstudo}
-              />
-            </SecaoAccordion>
-          )}
-
-          {secaoVisivel('eletrica') && (
-            <SecaoAccordion
-              titulo="Quadro de cargas"
-              contagem={(editor.model.circuitos ?? []).length}
-              aberta={secoes.eletrica}
-              onAlternar={() => alternarSecao('eletrica')}
-            >
-              <PainelEletrica
-                model={editor.model}
-                onAddCircuito={(quadroId, nome) =>
-                  editor.run({ type: 'AddCircuito', quadroId, nome })
-                }
-                onCircuitoProps={(circuitoId, campos) =>
-                  editor.run({ type: 'SetCircuitoProps', circuitoId, ...campos })
-                }
-                onSelecionar={(id) => selecionar([id])}
-                onLigarAoCircuito={(terminalId, circuitoId) =>
-                  editor.run({ type: 'SetTerminalProps', terminalId, circuitoId })
-                }
-                onAceitarSugeridas={aceitarSugeridas}
-                hipoteses={hipotesesEletricas}
-                onHipoteses={setHipotesesEletricas}
-                onQuadroProps={(quadroId, campos) => editor.run({ type: 'SetQuadroProps', quadroId, ...campos })}
-                executivoSlot={
-                  <PainelEletricaExecutivo
-                    e={{
-                      responsavel: executivoEletrico.responsavel,
-                      onResponsavel: executivoEletrico.setResponsavel,
-                      resultado: resultadoEletrico,
-                      emitidos: executivoEletrico.emitidos,
-                      emissaoValida: emissaoEletricaValida,
-                      hashDaBaseAtual: hashEletrico.base,
-                      onEmitir: () => void emitirEletrico(),
-                      emitindo: executivoEletrico.emitindo,
-                      erro: executivoEletrico.erro,
-                      onBaixarMemorial: (row) => executivoEletrico.baixarMemorial(row, study.name),
-                      persistenciaIndisponivel: executivoEletrico.persistenciaIndisponivel,
-                    }}
-                  />
-                }
-              />
-              {/* A CONFERÊNCIA da norma vive junto do quadro de cargas: é a
-                  mesma leitura — o que foi declarado — vista pelas regras da
-                  NBR 5410, e o usuário pediu tudo de elétrica num só lugar. */}
-              <div className="mt-3 border-t border-slate-200 pt-3">
-                <PainelConferenciaNbr
-                  conferencia={conferenciaNbr}
-                  onSelecionar={(ids) => selecionar(ids)}
-                  onConverterLigacaoDireta={(ids) =>
-                    editor.runBatch(
-                      ids.map((terminalId) => ({
-                        type: 'SetTerminalProps' as const,
-                        terminalId,
-                        tipoEletrico: 'LIGACAO_DIRETA' as const,
-                      })),
-                    )
-                  }
-                />
-              </div>
-            </SecaoAccordion>
-          )}
-
-          {secaoVisivel('medicoes') && (
-            <SecaoAccordion
-              titulo="Medições"
-              contagem={medicoes.formas.length}
-              aberta={secoes.medicoes}
-              onAlternar={() => alternarSecao('medicoes')}
-            >
-              <PainelMedicoes
-                formas={medicoesVisiveis}
-                todas={medicoes.formas}
-                selecionada={medicoes.selecionada}
-                temFundo={!!fundo.linha}
-                ocupado={medicoes.ocupado}
-                camadasOcultas={camadasOcultas}
-                camadaAtiva={camadaAtiva}
-                onAlternarCamada={alternarCamada}
-                onCamadaAtiva={setCamadaAtiva}
-                onSelecionar={medicoes.setSelecionada}
-                onRenomear={(id, nome) => void medicoes.atualizar(id, { nome })}
-                onEditarItem={(id, campos) => void medicoes.atualizar(id, campos)}
-                onRemover={(id) => void medicoes.remover(id)}
-                onEnviarOrcamento={() =>
-                  void medicoes.enviarAoOrcamento(
-                    study.project_id,
-                    study.name,
-                    fundo.linha?.file_sha256 ?? null,
-                    fundo.underlay?.mmPorPixel ?? null,
-                  )
-                }
-                aviso={medicoes.aviso}
-                erro={medicoes.erro}
-              />
-            </SecaoAccordion>
-          )}
-
-          {secaoVisivel('quantitativos') && (
-            <SecaoAccordion
-              titulo="Quantitativos"
-              aberta={secoes.quantitativos}
-              onAlternar={() => alternarSecao('quantitativos')}
-            >
-              <PainelQuantitativos
-                quant={quant}
-                fmt={fmt}
-                revisao={editor.baseRevision}
-                oficial={qtdOficial}
-                gerando={gerando}
-                onGerar={gerarQuantitativoOficial}
-                dirty={editor.dirtySincePublish}
-              />
-            </SecaoAccordion>
-          )}
-
-          {secaoVisivel('orcamento') && (
-            <SecaoAccordion
-              titulo="Orçamento"
-              aberta={secoes.orcamento}
-              onAlternar={() => alternarSecao('orcamento')}
-            >
-              <PainelOrcamento
-                study={study}
-                revisao={editor.baseRevision}
-                dirty={editor.dirtySincePublish}
-                onPrevia={setPreviaOrcamento}
-              />
-            </SecaoAccordion>
-          )}
-
-          {secaoVisivel('versoes') && (
-            <SecaoAccordion
-              titulo="Versões"
-              aberta={secoes.versoes}
-              onAlternar={() => alternarSecao('versoes')}
-            >
-              <PainelVersoes
-                study={study}
-                custoPorUid={custoPorUid}
-                hipotesesEletricas={hipotesesEletricas}
-                // As curvas vão para o DXF da prancha nas camadas TOPO-*, no
-                // mesmo mm da planta — a versão EXIBIDA, que é a que se vê.
-                topografia={
-                  topografia.selecionada
-                    ? {
-                        curvas: topografia.selecionada.curvas,
-                        pontosCotados: topografia.selecionada.pontos_cotados,
-                        // Fase 8: drenagem e muros nas camadas TOPO-DRENAGEM / TOPO-MURO.
-                        drenagem: terraplenagem.drenagem.map((l) => ({ nome: l.nome, pontos: l.pontos })),
-                        muros: (terraplenagemCalc?.muros ?? []).map((m) => ({ a: m.a, b: m.b, normal: m.normal })),
+                  {tarefaAberta === 'gerar-paredes' && (
+                    <PainelGerarParedes
+                      underlay={fundo.underlay}
+                      temFundo={!!fundo.linha}
+                      semAfericao={fundo.semAfericao}
+                      pranchaId={fundo.ativaId}
+                      limitesDaVista={limitesDaVista}
+                      regiao={regiao}
+                      regiaoArmada={regiaoArmada}
+                      onArmarRegiao={() => setRegiaoArmada((a) => !a)}
+                      onLimparRegiao={() => setRegiao(null)}
+                      ocupado={fundo.ocupado}
+                      onExtrair={(arquivo, pag) => extrairSegmentosPdf(arquivo, pag)}
+                      onVetorGuardado={fundo.vetorDaPranchaAtiva}
+                      onRegravar={(segs, larg, alt, m, arcos) =>
+                        void fundo.regravarVetor(segs, larg, alt, m, arcos)
                       }
-                    : undefined
-                }
-              />
-            </SecaoAccordion>
+                      onGerar={aplicarParedesGeradas}
+                      paredesDoNivel={paredesParaPortas}
+                      onGerarPortas={aplicarPortasGeradas}
+                    />
+                  )}
+
+                  {tarefaAberta === 'importar-ifc' && (
+                    <PainelImportarIfc
+                      model={editor.model}
+                      levelIdAtivo={levelId}
+                      onImportar={importarDoIfc}
+                    />
+                  )}
+
+                  {tarefaAberta === 'importar-dxf' && (
+                    <PainelImportarDxf
+                      model={editor.model}
+                      levelIdAtivo={levelId}
+                      onImportar={importarDoIfc}
+                    />
+                  )}
+
+                  {tarefaAberta === 'importar-bcf' && (
+                    <PainelImportarBcf
+                      model={editor.model}
+                      // ⚠️ `orgId` do seletor do topo, e não `study.organization_id`
+                      // — a mesma regra que o resto do editor segue (REGRA #5).
+                      organizationId={orgId ?? study.organization_id}
+                      studyId={study.id}
+                      onSelecionar={(uid) => {
+                        // O tópico aponta por `uid`; a seleção do editor é por `id`.
+                        // A ponte é o modelo — e ela existe porque o uid é estável.
+                        const alvo = [
+                          ...editor.model.walls,
+                          ...editor.model.openings,
+                          ...editor.model.structures,
+                          ...(editor.model.trechos ?? []),
+                          ...(editor.model.terminais ?? []),
+                          ...(editor.model.quadros ?? []),
+                          ...(editor.model.roofs ?? []),
+                          ...(editor.model.stairs ?? []),
+                        ].find((x) => x.uid === uid);
+                        if (alvo) selecionar([alvo.id]);
+                      }}
+                    />
+                  )}
+                </PainelDeTarefa>
+              ) : (
+                <PainelDeTarefa titulo="Propriedades" subtitulo={rotuloDoSelecionado}>
+                  {editor.selectedIds.length > 1 ? (
+                    <PainelSelecaoMultipla
+                      paredes={paredesSelecionadas}
+                      limites={limitesSelecionados.length}
+                      aberturas={aberturasSelecionadas.length}
+                      medicoes={medicoesSelecionadas}
+                      modo={modoJuncao}
+                      onMover={(dx, dy) => {
+                        const aguasSelecionadas = (editor.model.roofs ?? []).filter((r) =>
+                          editor.selectedIds.includes(r.id),
+                        );
+                        if (
+                          paredesSelecionadas.length > 0 ||
+                          limitesSelecionados.length > 0 ||
+                          estruturasSelecionadas.length > 0 ||
+                          aguasSelecionadas.length > 0
+                        ) {
+                          moverSelecao(
+                            paredesSelecionadas.map((w) => w.id),
+                            limitesSelecionados.map((b) => b.id),
+                            estruturasSelecionadas.map((s) => s.id),
+                            aguasSelecionadas.map((r) => r.id),
+                            { x: dx, y: dy } as Point,
+                          );
+                        }
+                        if (medicoesSelecionadas.length > 0) {
+                          moverMedicoes(medicoesSelecionadas.map((f) => f.id), {
+                            x: dx,
+                            y: dy,
+                          } as Point);
+                        }
+                      }}
+                      onExcluir={removerSelecionada}
+                    />
+                  ) : null}
+
+                  <PainelQuadroSelecionado
+                    quadro={quadroSel}
+                    onQuadro={(campos) =>
+                      quadroSel &&
+                      editor.run({ type: 'SetQuadroProps', quadroId: quadroSel.id, ...campos })
+                    }
+                  />
+
+                  <PainelTrechoSelecionado
+                    trecho={trechoSel}
+                    terminal={terminalSel}
+                    circuitos={circuitosParaEscolher}
+                    ocupacao={
+                      trechoSel && trechoSel.disciplina === 'ELETRICA'
+                        ? ocupacaoDoTrecho(editor.model, trechoSel, hipotesesEletricas)
+                        : undefined
+                    }
+                    onTrecho={(campos) =>
+                      trechoSel &&
+                      editor.run({ type: 'SetTrechoProps', trechoId: trechoSel.id, ...campos })
+                    }
+                    onTerminal={(campos) =>
+                      terminalSel &&
+                      editor.run({
+                        type: 'SetTerminalProps',
+                        terminalId: terminalSel.id,
+                        ...campos,
+                      })
+                    }
+                  />
+
+                  <PainelEstruturaSelecionada
+                    custo={estruturaSel ? custoPorUid.get(estruturaSel.uid) : undefined}
+                    custoDesatualizado={editor.dirtySincePublish}
+                    estrutura={estruturaSel}
+                    onMedidas={(campos) =>
+                      estruturaSel &&
+                      editor.run({
+                        type: 'SetStructuralProps',
+                        structuralId: estruturaSel.id,
+                        ...campos,
+                      })
+                    }
+                    onTipo={(kind) =>
+                      estruturaSel &&
+                      editor.run({
+                        type: 'SetStructuralKind',
+                        structuralId: estruturaSel.id,
+                        kind,
+                      })
+                    }
+                    onExcluir={removerSelecionada}
+                    sobreposicaoM3={sobreposicaoDoSelecionado}
+                    onCedeSobreposicao={(cede) =>
+                      estruturaSel &&
+                      editor.run({ type: 'SetCedeSobreposicao', id: estruturaSel.id, cede })
+                    }
+                    paredesParaCortar={paredesQueAPecaAtravessa.aCortar.length}
+                    paredesJaInterrompidas={paredesQueAPecaAtravessa.jaInterrompidas}
+                    onCortarParedes={cortarParedesDaSelecionada}
+                    pontasCurtas={pontasCurtasDaSelecionada.length}
+                    onEmendarPontas={emendarPontasDaSelecionada}
+                  />
+
+                  <PainelEscadaSelecionada
+                    model={editor.model}
+                    escada={escadaSel}
+                    onProps={(campos) =>
+                      escadaSel &&
+                      editor.run({ type: 'SetEscadaProps', escadaId: escadaSel.id, ...campos })
+                    }
+                    onExcluir={removerSelecionada}
+                  />
+
+                  <PainelCorteSelecionado
+                    corte={corteSel}
+                    onProps={(campos) =>
+                      corteSel &&
+                      editor.run({ type: 'SetCorteProps', corteId: corteSel.id, ...campos })
+                    }
+                    onVer={() => corteSel && setVista(`corte:${corteSel.id}`)}
+                    onExcluir={removerSelecionada}
+                  />
+
+                  <PainelAguaSelecionada
+                    agua={aguaSel}
+                    onProps={(campos) =>
+                      aguaSel && editor.run({ type: 'SetAguaProps', aguaId: aguaSel.id, ...campos })
+                    }
+                    onExcluir={removerSelecionada}
+                  />
+
+                  <PainelParedeSelecionada
+                    custo={
+                      // A abertura tem uid próprio e pode ter linha própria
+                      // (esquadria por elemento); a parede é o caso comum.
+                      custoPorUid.get((paredeSel ?? aberturaSel)?.uid ?? '')
+                    }
+                    custoDesatualizado={editor.dirtySincePublish}
+                    parede={paredeSel}
+                    abertura={aberturaSel}
+                    pontaQueAnda={esticamento.pontaQueAnda}
+                    arrastaCanto={esticamento.arrastaCanto}
+                    aLivre={esticamento.aLivre}
+                    bLivre={esticamento.bLivre}
+                    onEscolherPonta={(end) =>
+                      paredeSel && setAncoraManual({ wallId: paredeSel.id, end })
+                    }
+                    onDestacarPonta={setPontaDestacada}
+                    onComprimento={esticarParede}
+                    onEspessura={(mm) => paredeSel && mudarEspessura(paredeSel, mm)}
+                    // As camadas MEDIDAS saem do quantitativo que já roda ao
+                    // vivo aqui. Refazer a conta dentro do painel seria uma
+                    // segunda fórmula de área de face — e a primeira a
+                    // divergir no dia em que o desconto de vão mudar.
+                    camadasSlot={
+                      paredeSel ? (
+                        <PainelCamadasParede
+                          parede={paredeSel}
+                          medidas={
+                            quant.paredes.find((p) => p.wallId === paredeSel.id)
+                              ?.camadas ?? []
+                          }
+                          aoMudar={(camadas) => mudarCamadas(paredeSel, camadas)}
+                        />
+                      ) : null
+                    }
+                    podeUnir={!!vizinhaParaUnir}
+                    // O comprimento LIVRE depende da espessura das VIZINHAS, então sai
+                    // daqui, que conhece o nível inteiro — o painel só vê a selecionada.
+                    livreMm={
+                      paredeSel
+                        ? faceInternaMm(
+                            editor.model.walls.filter((w) => w.levelId === paredeSel.levelId),
+                            paredeSel,
+                          )
+                        : null
+                    }
+                    onDividir={dividirSelecionada}
+                    onUnir={unirSelecionada}
+                    onFlipAbertura={flipAbertura}
+                    onTamanhoAbertura={redimensionarAbertura}
+                    onTipoAbertura={(kind, embutida) => {
+                      if (!aberturaSel) return;
+                      editor.run({
+                        type: 'SetOpeningKind',
+                        openingId: aberturaSel.id,
+                        kind,
+                        embutida,
+                      });
+                    }}
+                    tomadasSlot={
+                      paredeSel && levelId ? (
+                        <TomadasNaParede
+                          lados={ladosDaParede(editor.model, paredeSel.id, levelId)}
+                          onDistribuir={distribuirTomadas}
+                        />
+                      ) : null
+                    }
+                    sobreposicaoM3={sobreposicaoDoSelecionado}
+                    onCedeSobreposicao={(cede) =>
+                      paredeSel &&
+                      editor.run({ type: 'SetCedeSobreposicao', id: paredeSel.id, cede })
+                    }
+                    esquadriaSlot={
+                      aberturaSel ? (
+                        <PainelEsquadria
+                          abertura={aberturaSel}
+                          onEsquadria={(esquadria) =>
+                            editor.run({
+                              type: 'SetOpeningEsquadria',
+                              openingId: aberturaSel.id,
+                              esquadria,
+                            })
+                          }
+                          onAplicarTipo={(tipo) => aplicarTipoDeEsquadria(aberturaSel, tipo)}
+                        />
+                      ) : null
+                    }
+                  />
+
+                  {/* A DIVISA selecionada se edita no painel do terreno (comprimento,
+                      papel na escritura) — o mesmo que a tarefa "Dados do lote" abre. */}
+                  {limiteSel && painelDoTerreno}
+                </PainelDeTarefa>
+              )}
+            </div>
           )}
           </aside>
         </div>

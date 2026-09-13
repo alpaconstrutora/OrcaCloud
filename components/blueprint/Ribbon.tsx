@@ -45,9 +45,19 @@ export interface AbaDoRibbon<Id extends string = string> {
   contextual?: boolean;
 }
 
-/** A aba persistida se ainda existir; senão, a primeira. */
-export function abaEfetiva<Id extends string>(abas: readonly AbaDoRibbon<Id>[], salva: Id): Id {
-  return abas.some((a) => a.id === salva) ? salva : abas[0].id;
+/**
+ * A aba persistida se ainda existir; senão a `preferida` (a que faz sentido no
+ * estado novo — "Vista" ao sair da planta baixa); senão, a primeira.
+ */
+export function abaEfetiva<Id extends string>(
+  abas: readonly AbaDoRibbon<Id>[],
+  salva: Id,
+  preferida?: Id,
+): Id {
+  const existe = (id: Id | undefined) => id !== undefined && abas.some((a) => a.id === id);
+  if (existe(salva)) return salva;
+  if (existe(preferida)) return preferida as Id;
+  return abas[0].id;
 }
 
 export default function Ribbon<Id extends string>({
@@ -129,6 +139,53 @@ export function GrupoDoRibbon({ rotulo, children }: { rotulo: string; children: 
       <div className="flex flex-wrap items-center gap-1">{children}</div>
       <span className="text-[10px] uppercase tracking-wide text-slate-400">{rotulo}</span>
     </div>
+  );
+}
+
+/**
+ * Botão do ribbon que ABRE algo (uma tarefa no painel, um relatório no dock),
+ * em vez de escolher uma ferramenta. Mesma roupa da `Ferramenta` do editor —
+ * o olho não precisa distinguir "ferramenta" de "comando" pela cor — mas com
+ * `aria-pressed`, porque o que ele abre fica aberto até ser fechado.
+ */
+export function BotaoDoRibbon({
+  icone: Icone,
+  rotulo,
+  ativo,
+  onClick,
+  contagem,
+  ajuda,
+}: {
+  icone: React.ComponentType<{ className?: string }>;
+  rotulo: string;
+  ativo: boolean;
+  onClick: () => void;
+  /** Número depois do rótulo — conflitos, circuitos, formas medidas. */
+  contagem?: number;
+  ajuda?: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={ativo}
+      onClick={onClick}
+      title={ajuda}
+      className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+        ativo ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+      }`}
+    >
+      <Icone className="h-4 w-4" />
+      {rotulo}
+      {contagem !== undefined && (
+        <span
+          className={`rounded-[6px] px-1.5 py-0.5 text-[10px] ${
+            ativo ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+          }`}
+        >
+          {contagem}
+        </span>
+      )}
+    </button>
   );
 }
 

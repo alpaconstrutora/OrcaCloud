@@ -62,9 +62,11 @@ describe('Ribbon', () => {
     expect(screen.getByRole('tab', { name: 'Arquitetura' }).className).not.toMatch(/emerald/);
   });
 
-  it('abaEfetiva: a salva quando existe; a primeira quando não', () => {
+  it('abaEfetiva: a salva quando existe; senão a preferida; senão a primeira', () => {
     expect(abaEfetiva(ABAS, 'b')).toBe('b');
     expect(abaEfetiva(ABAS.slice(0, 1), 'b')).toBe('a');
+    expect(abaEfetiva(ABAS.slice(1), 'a', 'm')).toBe('m');
+    expect(abaEfetiva(ABAS.slice(0, 1), 'b', 'm')).toBe('a');
   });
 
   it('a barra de opções é uma região nomeada que começa pelo nome da ferramenta', () => {

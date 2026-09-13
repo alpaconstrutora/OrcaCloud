@@ -191,7 +191,10 @@ describe('BlueprintEditor · ações oferecidas', () => {
     expect(botao(/selecionar/i)).toBeInTheDocument();
     // Nasce com a Parede ativa — o editor abre pronto para desenhar.
     expect(botaoComponentes()).toHaveTextContent('Parede');
-    expect(screen.getByLabelText(/ambientes derivados/i)).toBeInTheDocument();
+    // O painel lateral é navegador + propriedades desde 13/09/2026; a seção
+    // "Ambientes" nasce aberta dentro do navegador.
+    expect(screen.getByRole('region', { name: /navegador/i })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: /^ambientes$/i })).toBeInTheDocument();
   });
 
   it('o menu reúne alvenaria, esquadria, estrutura e fundação', async () => {
@@ -417,12 +420,23 @@ function cabecalhoDaSecao(nome: RegExp) {
   return screen.getByRole('button', { name: nome });
 }
 
+/**
+ * Abre um RELATÓRIO no dock (13/09/2026): Quantitativos, Orçamento, Conflitos,
+ * Medições moram na aba Analisar do ribbon; Comentários e Versões, em
+ * Colaborar; Quadro de cargas, em Instalações. Eram seções do acordeão.
+ */
+async function abrirRelatorio(nome: RegExp, aba: RegExp = /^analisar$/i) {
+  await abrirAba(aba);
+  await userEvent.setup().click(screen.getByRole('button', { name: nome }));
+  return screen.getByRole('region', { name: /^relatório:/i });
+}
+
 describe('BlueprintEditor · quantitativos', () => {
   it('a seção existe e anuncia a versão da política', async () => {
     await montar();
     const user = userEvent.setup();
 
-    await user.click(cabecalhoDaSecao(/quantitativos/i));
+    await abrirRelatorio(/quantitativos/i);
     // RF-121: o resultado precisa dizer sob qual política foi calculado.
     expect(screen.getByText(/pol[íi]tica quant-/i)).toBeInTheDocument();
   });
@@ -431,7 +445,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
 
-    await user.click(cabecalhoDaSecao(/quantitativos/i));
+    await abrirRelatorio(/quantitativos/i);
     expect(screen.getByText(/sem contorno fechado n[ãa]o h[áa] [áa]rea/i)).toBeInTheDocument();
   });
 
@@ -439,29 +453,32 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
 
-    await user.click(cabecalhoDaSecao(/quantitativos/i));
+    await abrirRelatorio(/quantitativos/i);
     // A distinção oficial × ao vivo é o ponto do painel: o número que o orçamento
     // cita não pode vir de geometria que ainda muda.
     expect(screen.getByText(/o or[çc]amento n[ãa]o cita rascunho/i)).toBeInTheDocument();
   });
 
-  it('abrir Quantitativos NÃO fecha Ambientes — o painel é multi-aberto', async () => {
-    // Este teste trocou de sentido em 29/08/2026. Enquanto eram abas, ele
-    // afirmava o contrário: escolher uma DESLIGAVA a outra. Viraram seções
-    // irmãs de accordion justamente para poder ver as duas juntas, então a
-    // asserção que protegia o comportamento antigo passou a proteger o defeito.
+  it('abrir Quantitativos NÃO fecha Ambientes — relatório é dock, navegação é painel', async () => {
+    // Este teste trocou de sentido em 29/08/2026 (abas → seções irmãs) e de
+    // novo em 13/09/2026: Quantitativos deixou de ser seção e virou relatório
+    // no dock embaixo do canvas. O que continua valendo é a tese — ver o
+    // quantitativo não pode custar a lista de ambientes.
     await montar();
-    const user = userEvent.setup();
 
     const secAmb = cabecalhoDaSecao(/ambientes/i);
-    const secQtd = cabecalhoDaSecao(/quantitativos/i);
-
     expect(secAmb).toHaveAttribute('aria-expanded', 'true');
-    expect(secQtd).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('region', { name: /^relatório:/i })).not.toBeInTheDocument();
 
-    await user.click(secQtd);
-    expect(secQtd).toHaveAttribute('aria-expanded', 'true');
+    const dock = await abrirRelatorio(/^quantitativos$/i);
+    expect(dock).toHaveAccessibleName(/quantitativos/i);
     expect(secAmb).toHaveAttribute('aria-expanded', 'true');
+
+    // O mesmo botão fecha; e um relatório por vez — abrir Conflitos troca.
+    await userEvent.setup().click(screen.getByRole('button', { name: /^conflitos/i }));
+    expect(screen.getByRole('region', { name: /^relatório:/i })).toHaveAccessibleName(/conflitos/i);
+    await userEvent.setup().click(screen.getByRole('button', { name: /fechar o relatório/i }));
+    expect(screen.queryByRole('region', { name: /^relatório:/i })).not.toBeInTheDocument();
   });
 });
 
@@ -621,21 +638,18 @@ function comCantoAberto() {
 }
 
 describe('BlueprintEditor · caminho para o orçamento (RF-122)', () => {
-  it('a seção Orçamento existe e abre sem fechar Ambientes', async () => {
+  it('o relatório Orçamento abre no dock sem fechar Ambientes no navegador', async () => {
     await montar();
-    const user = userEvent.setup();
 
-    const secOrc = cabecalhoDaSecao(/orçamento/i);
-    expect(secOrc).toHaveAttribute('aria-expanded', 'false');
-
-    await user.click(secOrc);
-    expect(secOrc).toHaveAttribute('aria-expanded', 'true');
+    const dock = await abrirRelatorio(/^orçamento$/i);
+    expect(dock).toHaveAccessibleName(/orçamento/i);
+    expect(screen.getByRole('button', { name: /^orçamento$/i })).toHaveAttribute('aria-pressed', 'true');
     expect(cabecalhoDaSecao(/ambientes/i)).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('estudo sem obra vinculada avisa antes de o usuário montar o de-para', async () => {
     await montar();
-    await userEvent.setup().click(cabecalhoDaSecao(/orçamento/i));
+    await abrirRelatorio(/^orçamento$/i);
 
     // A tela não só avisa: oferece onde vincular. Aviso sem ação é beco sem saída.
     expect(await screen.findByLabelText(/obra a vincular/i)).toBeInTheDocument();
@@ -849,10 +863,10 @@ describe('BlueprintEditor · menu Exibir', () => {
 describe('BlueprintEditor · ribbon', () => {
   beforeEach(() => localStorage.clear());
 
-  it('nasce em Arquitetura, com as seis abas da planta baixa e o seletor de vista fora delas', async () => {
+  it('nasce em Arquitetura, com as sete abas da planta baixa e o seletor de vista fora delas', async () => {
     await montar();
     const abas = screen.getAllByRole('tab').map((t) => t.textContent);
-    expect(abas).toEqual(['Arquitetura', 'Terreno', 'Instalações', 'Inserir', 'Analisar', 'Vista']);
+    expect(abas).toEqual(['Arquitetura', 'Terreno', 'Instalações', 'Inserir', 'Analisar', 'Colaborar', 'Vista']);
     expect(screen.getByRole('tab', { name: 'Arquitetura' })).toHaveAttribute('aria-selected', 'true');
     // O seletor de vista continua dentro da barra, mas não é aba: usa-se o tempo todo.
     expect(within(screen.getByRole('toolbar')).getByRole('button', { name: /^planta$/i })).toBeInTheDocument();
@@ -908,16 +922,58 @@ describe('BlueprintEditor · ribbon', () => {
     expect(botao(/^instalações$/i)).toBeInTheDocument(); // o menu filtrado
   });
 
-  it('em 3D só existe a aba Vista, e a aba salva que sumiu cai nela em vez de deixar o painel vazio', async () => {
+  it('em 3D sobram as abas de leitura, e a aba salva que sumiu cai em Vista em vez de deixar o painel vazio', async () => {
     localStorage.setItem('blueprint:abaDoRibbon', JSON.stringify('terreno'));
     localStorage.setItem('blueprint:vista', JSON.stringify('3d'));
     await montar();
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Vista']);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
+      'Instalações',
+      'Analisar',
+      'Colaborar',
+      'Vista',
+    ]);
     expect(screen.getByRole('tab', { name: 'Vista' })).toHaveAttribute('aria-selected', 'true');
     expect(botao(/exibir/i)).toBeInTheDocument();
     // Nada de desenhar fora da planta: nem ferramentas, nem barra de opções.
     expect(screen.queryByRole('button', { name: /^selecionar$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: /opções da ferramenta/i })).not.toBeInTheDocument();
+    // Em Analisar, no 3D, só o que se lê ali: Conflitos e Quantitativos (como
+    // as seções já eram) — sem Medir, sem Orçamento.
+    await abrirAba(/^analisar$/i);
+    expect(botao(/^conflitos/i)).toBeInTheDocument();
+    expect(botao(/^quantitativos$/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^área$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^orçamento$/i })).not.toBeInTheDocument();
+  });
+
+  it('as tarefas do ribbon abrem na metade de baixo do painel e fecham pelo × ou pelo mesmo botão', async () => {
+    await montar();
+    expect(screen.queryByRole('region', { name: /importar do ifc/i })).not.toBeInTheDocument();
+
+    await abrirAba(/^inserir$/i);
+    await userEvent.setup().click(botao(/^do ifc$/i));
+    expect(screen.getByRole('region', { name: /importar do ifc/i })).toBeInTheDocument();
+    expect(botao(/^do ifc$/i)).toHaveAttribute('aria-pressed', 'true');
+
+    // Uma tarefa por vez: abrir outra troca.
+    await userEvent.setup().click(botao(/^do dxf$/i));
+    expect(screen.queryByRole('region', { name: /importar do ifc/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: /importar do dxf/i })).toBeInTheDocument();
+
+    await userEvent.setup().click(screen.getByRole('button', { name: /fechar importar do dxf/i }));
+    expect(screen.queryByRole('region', { name: /importar do dxf/i })).not.toBeInTheDocument();
+    expect(botao(/^do dxf$/i)).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('"Dados do lote" (aba Terreno) abre o painel do terreno como tarefa', async () => {
+    await montar();
+    await abrirAba(/^terreno$/i);
+    await userEvent.setup().click(botao(/^dados do lote$/i));
+    const tarefa = screen.getByRole('region', { name: /dados do lote/i });
+    // Sem lote desenhado (jsdom não desenha) o painel do terreno fica vazio —
+    // o que se afirma é a tarefa aberta e o botão marcado.
+    expect(tarefa).toBeInTheDocument();
+    expect(botao(/^dados do lote$/i)).toHaveAttribute('aria-pressed', 'true');
   });
 });
 

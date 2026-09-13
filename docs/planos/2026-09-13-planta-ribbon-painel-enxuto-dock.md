@@ -100,6 +100,22 @@ Mapa das seções → destino:
 com conteúdo; rótulo do grupo repetindo o do botão "Planta de fundo" —
 virou "Referência". Espessura/Clique agora só aparecem para as ferramentas de
 parede (antes apareciam em Selecionar, Juntar, Terreno e medições).
-| F2 | ⏳ | — |
-| F3 | ⏳ | — |
+| F2 | ✅ 13/09 | Painel = **Navegador** (Pavimentos, Componentes, Ambientes — `SECOES_DO_PAINEL` caiu de 15 para 3) em cima e **Propriedades / Tarefa** embaixo (`PainelDeTarefa.tsx`, `max-h-[62%]`, só na planta, só com seleção ou tarefa). Tarefas (`ROTULO_DA_TAREFA`): Dados do lote (aba Terreno; o `PainelTerreno` inteiro, também usado como propriedades da divisa selecionada), Do PDF, Do IFC, Do DXF, Do BCF (aba Inserir › Importar). Uma por vez; tarefa aberta + seleção mostra a faixa "Selecionado: … [Propriedades]". A região do Do PDF agora morre com a tarefa (era com a seção) |
+| F3 | ✅ 13/09 | `DockDeRelatorios.tsx` embaixo do canvas, na largura dele: altura arrastável e persistida (`blueprint:alturaDoDock`, 160–720 px, duplo clique restaura, setas ↑↓), um relatório por vez, × fecha. `RELATORIOS_DO_DOCK` com os mesmos recortes `naVista`/`no3d` das seções: Conflitos, Medições, Quantitativos, Orçamento (aba Analisar › Relatórios), Comentários e Versões (aba **Colaborar**, nova), Quadro de cargas e NBR 5410 (aba Instalações › Elétrica). Botões do ribbon com `aria-pressed` e contagem (`BotaoDoRibbon`). `abaEfetiva` ganhou `preferida`: fora da planta cai em Vista |
+
+**F2–F3 — o que os testes e a captura pegaram**: `regiaoArmada`/`regiao` do
+canvas ainda liam `secoes.vetor` (seção extinta) — passaram a ler a tarefa;
+ao sair da planta a aba salva caía na primeira disponível (Instalações), e o
+que se quer ali é olhar — `preferida: 'vista'`; Quantitativos continua
+visível no 3D, como a seção era (meu teste supunha o contrário). Prova no app
+real com escritas bloqueadas (14 abortadas, 0 erros JS): Propriedades da
+parede sob o navegador, tarefa "Dados do lote" com a faixa da seleção, Do IFC,
+dock com Quadro de cargas + NBR 5410, Quantitativos, Versões, e Conflitos no
+3D. Suíte: 4046 verdes; as 2 falhas restantes são de migration de OUTRA frente
+já em `origin/main` (`20270919000029` repetido; `vw_fact_financial_tx` sem
+REVOKE) — não tocadas aqui.
+
+**Fica para a F4**: aba contextual "Modificar" (mover, duplicar, dividir,
+unir, excluir, inverter o lado) — hoje essas ações continuam no painel de
+Propriedades da peça.
 | F4 | ⏳ | — |

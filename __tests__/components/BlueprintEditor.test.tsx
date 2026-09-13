@@ -1018,6 +1018,20 @@ describe('BlueprintEditor · ribbon', () => {
     expect(botao(/^distribuir tomadas$/i)).toHaveAttribute('aria-pressed', 'false');
   });
 
+  it('"Quadro de cargas" (aba Instalações) abre em DRAWER, não no dock — é onde se edita a elétrica', async () => {
+    await montar();
+    await abrirAba(/^instalações$/i);
+    await userEvent.setup().click(botao(/^quadro de cargas/i));
+    const drawer = await screen.findByRole('dialog');
+    expect(drawer).toHaveTextContent(/quadro de cargas e nbr 5410/i);
+    expect(drawer).toHaveTextContent(/conferência nbr 5410/i);
+    expect(screen.queryByRole('region', { name: /^relatório:/i })).not.toBeInTheDocument();
+    expect(botao(/^quadro de cargas/i)).toHaveAttribute('aria-pressed', 'true');
+
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^fechar$/i }));
+    expect(botao(/^quadro de cargas/i)).toHaveAttribute('aria-pressed', 'false');
+  });
+
   it('"Dados do lote" (aba Terreno) abre o painel do terreno como tarefa', async () => {
     await montar();
     await abrirAba(/^terreno$/i);

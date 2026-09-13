@@ -149,6 +149,14 @@ a tarefa (gesto longo, ferramenta própria) e a descrição do drawer avisa
 "volte por Terreno › Dados do lote". `PainelDeTarefa` continua sendo o
 cabeçalho das Propriedades.
 
+**Quadro de cargas em drawer** (*"implementar drawer também no quadro de cargas
+que hoje abre painel embaixo"*): `relatorioNoDock` exclui `quadro-de-cargas`
+do dock; ele abre num `Sheet` `2xl` com `PainelEletrica` + Conferência NBR
+5410, contagem de circuitos no título e "Selecionado: …" no rodapé. Critério
+que ficou: **o que se edita (tarefas, quadro de cargas) vai para drawer; o
+que se lê (Conflitos, Medições, Quantitativos, Orçamento, Comentários,
+Versões) fica no dock**, com a largura do canvas.
+
 **F4 — prova**: teste com duas paredes selecionadas pela lista de vãos (aba
 aparece, não é auto-selecionada, "2 selecionados", sem Dividir/Unir, Excluir
 esvazia e a aba some); app real com escritas bloqueadas: Parede 1 selecionada →

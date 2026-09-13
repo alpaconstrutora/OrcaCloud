@@ -755,6 +755,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     [emVista, vista],
   );
   const relatorioAberto = relatorio && relatorioVisivel(relatorio) ? relatorio : null;
+  /**
+   * O QUADRO DE CARGAS abre em DRAWER, não no dock (pedido de 13/09/2026:
+   * *"implementar drawer também no quadro de cargas que hoje abre painel
+   * embaixo"*). É o relatório em que se EDITA — circuitos, ligação, DR,
+   * hipóteses, emissão — e o formato de tarefa serviu melhor a isso. Os
+   * demais relatórios (listas e tabelas de leitura) seguem no dock.
+   */
+  const relatorioNoDock = relatorioAberto === 'quadro-de-cargas' ? null : relatorioAberto;
   const alternarTarefa = (id: TarefaDoPainel) => setTarefa((t) => (t === id ? null : id));
   const alternarRelatorio = (id: RelatorioDoDock) => setRelatorio((r) => (r === id ? null : id));
   const dock = useAlturaDoDock();
@@ -4164,6 +4172,13 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const ambientesComDeficit = ambientes.filter(
     (a) => !!a.conferencia && (a.conferencia.deficit > 0 || a.conferencia.deficitMedias > 0),
   );
+  /** O que está selecionado, para rodapé de drawer: a peça, ou "N selecionados". */
+  const rotuloDaSelecao =
+    editor.selectedIds.length > 1
+      ? `${editor.selectedIds.length} selecionados`
+      : editor.selectedIds.length === 1
+        ? rotuloDoSelecionado
+        : null;
   /** Quantas tomadas sugeridas ainda esperam confirmação neste pavimento. */
   const sugeridasNoNivel = (editor.model.terminais ?? []).filter(
     (t) => t.sugerida && (!levelId || t.levelId === levelId),
@@ -5999,17 +6014,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             Um por vez, aberto pelo ribbon (Analisar, Colaborar, Instalações).
             Cada painel aqui é o MESMO que morava no acordeão lateral; só a
             morada mudou — e a largura, que agora é a do canvas. */}
-        {relatorioAberto && (
+        {relatorioNoDock && (
           <DockDeRelatorios
-            titulo={RELATORIOS_DO_DOCK[relatorioAberto].rotulo}
+            titulo={RELATORIOS_DO_DOCK[relatorioNoDock].rotulo}
             contagem={
-              relatorioAberto === 'conflitos'
+              relatorioNoDock === 'conflitos'
                 ? conflitos.length
-                : relatorioAberto === 'quadro-de-cargas'
-                  ? (editor.model.circuitos ?? []).length
-                  : relatorioAberto === 'medicoes'
-                    ? medicoes.formas.length
-                    : undefined
+                : relatorioNoDock === 'medicoes'
+                  ? medicoes.formas.length
+                  : undefined
             }
             dock={dock}
             onFechar={() => setRelatorio(null)}
@@ -6034,63 +6047,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 onSelecionar={(id) => selecionar([id])}
                 onExportarBcf={exportarBcfDoEstudo}
               />
-            )}
-
-            {relatorioAberto === 'quadro-de-cargas' && (
-              <>
-                <PainelEletrica
-                  model={editor.model}
-                  onAddCircuito={(quadroId, nome) =>
-                    editor.run({ type: 'AddCircuito', quadroId, nome })
-                  }
-                  onCircuitoProps={(circuitoId, campos) =>
-                    editor.run({ type: 'SetCircuitoProps', circuitoId, ...campos })
-                  }
-                  onSelecionar={(id) => selecionar([id])}
-                  onLigarAoCircuito={(terminalId, circuitoId) =>
-                    editor.run({ type: 'SetTerminalProps', terminalId, circuitoId })
-                  }
-                  onAceitarSugeridas={aceitarSugeridas}
-                  hipoteses={hipotesesEletricas}
-                  onHipoteses={setHipotesesEletricas}
-                  onQuadroProps={(quadroId, campos) => editor.run({ type: 'SetQuadroProps', quadroId, ...campos })}
-                  executivoSlot={
-                    <PainelEletricaExecutivo
-                      e={{
-                        responsavel: executivoEletrico.responsavel,
-                        onResponsavel: executivoEletrico.setResponsavel,
-                        resultado: resultadoEletrico,
-                        emitidos: executivoEletrico.emitidos,
-                        emissaoValida: emissaoEletricaValida,
-                        hashDaBaseAtual: hashEletrico.base,
-                        onEmitir: () => void emitirEletrico(),
-                        emitindo: executivoEletrico.emitindo,
-                        erro: executivoEletrico.erro,
-                        onBaixarMemorial: (row) => executivoEletrico.baixarMemorial(row, study.name),
-                        persistenciaIndisponivel: executivoEletrico.persistenciaIndisponivel,
-                      }}
-                    />
-                  }
-                />
-                {/* A CONFERÊNCIA da norma vive junto do quadro de cargas: é a
-                    mesma leitura — o que foi declarado — vista pelas regras da
-                    NBR 5410, e o usuário pediu tudo de elétrica num só lugar. */}
-                <div className="mt-3 border-t border-slate-200 pt-3">
-                  <PainelConferenciaNbr
-                    conferencia={conferenciaNbr}
-                    onSelecionar={(ids) => selecionar(ids)}
-                    onConverterLigacaoDireta={(ids) =>
-                      editor.runBatch(
-                        ids.map((terminalId) => ({
-                          type: 'SetTerminalProps' as const,
-                          terminalId,
-                          tipoEletrico: 'LIGACAO_DIRETA' as const,
-                        })),
-                      )
-                    }
-                  />
-                </div>
-              </>
             )}
 
             {relatorioAberto === 'medicoes' && (
@@ -6994,14 +6950,106 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               </button>
             </>
           )}
-          {tarefaAberta !== 'tomadas' && editor.selectedIds.length > 0 && (
+          {tarefaAberta !== 'tomadas' && rotuloDaSelecao && (
             <span className="mr-auto truncate text-xs text-slate-500">
-              Selecionado: {rotuloDoSelecionado}
+              Selecionado: {rotuloDaSelecao}
             </span>
           )}
           <button
             type="button"
             onClick={() => setTarefa(null)}
+            className="inline-flex h-9 items-center rounded-[6px] bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+          >
+            Fechar
+          </button>
+        </SheetFooter>
+      </Sheet>
+      )}
+
+      {/* ─── QUADRO DE CARGAS E NBR 5410, EM DRAWER (13/09/2026) ──────────────
+          Era relatório no dock; virou drawer porque aqui se EDITA (circuito,
+          ligação, DR, hipóteses, emissão). Largo (2xl) porque é tabela — a
+          coluna Carga já sumiu uma vez por falta de largura. */}
+      {relatorioAberto === 'quadro-de-cargas' && (
+      <Sheet open onClose={() => setRelatorio(null)} size="2xl">
+        <SheetHeader onClose={() => setRelatorio(null)}>
+          <SheetTitle>
+            <span className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-blue-700" />
+              Quadro de cargas e NBR 5410
+              <span className="rounded-[6px] bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-600">
+                {(editor.model.circuitos ?? []).length} circuito(s)
+              </span>
+            </span>
+          </SheetTitle>
+          <SheetDescription>
+            Circuitos por quadro, pré-dimensionamento com hipóteses declaradas, conferência da
+            NBR 5410 e emissão do projeto executivo. Cada campo grava na hora; Ctrl+Z desfaz.
+          </SheetDescription>
+        </SheetHeader>
+
+        <SheetPanel className="px-4 py-3">
+          <PainelEletrica
+            model={editor.model}
+            onAddCircuito={(quadroId, nome) => editor.run({ type: 'AddCircuito', quadroId, nome })}
+            onCircuitoProps={(circuitoId, campos) =>
+              editor.run({ type: 'SetCircuitoProps', circuitoId, ...campos })
+            }
+            onSelecionar={(id) => selecionar([id])}
+            onLigarAoCircuito={(terminalId, circuitoId) =>
+              editor.run({ type: 'SetTerminalProps', terminalId, circuitoId })
+            }
+            onAceitarSugeridas={aceitarSugeridas}
+            hipoteses={hipotesesEletricas}
+            onHipoteses={setHipotesesEletricas}
+            onQuadroProps={(quadroId, campos) => editor.run({ type: 'SetQuadroProps', quadroId, ...campos })}
+            executivoSlot={
+              <PainelEletricaExecutivo
+                e={{
+                  responsavel: executivoEletrico.responsavel,
+                  onResponsavel: executivoEletrico.setResponsavel,
+                  resultado: resultadoEletrico,
+                  emitidos: executivoEletrico.emitidos,
+                  emissaoValida: emissaoEletricaValida,
+                  hashDaBaseAtual: hashEletrico.base,
+                  onEmitir: () => void emitirEletrico(),
+                  emitindo: executivoEletrico.emitindo,
+                  erro: executivoEletrico.erro,
+                  onBaixarMemorial: (row) => executivoEletrico.baixarMemorial(row, study.name),
+                  persistenciaIndisponivel: executivoEletrico.persistenciaIndisponivel,
+                }}
+              />
+            }
+          />
+          {/* A CONFERÊNCIA da norma vive junto do quadro de cargas: é a mesma
+              leitura — o que foi declarado — vista pelas regras da NBR 5410, e
+              o usuário pediu tudo de elétrica num só lugar. */}
+          <div className="mt-3 border-t border-slate-200 pt-3">
+            <PainelConferenciaNbr
+              conferencia={conferenciaNbr}
+              onSelecionar={(ids) => selecionar(ids)}
+              onConverterLigacaoDireta={(ids) =>
+                editor.runBatch(
+                  ids.map((terminalId) => ({
+                    type: 'SetTerminalProps' as const,
+                    terminalId,
+                    tipoEletrico: 'LIGACAO_DIRETA' as const,
+                  })),
+                )
+              }
+            />
+          </div>
+        </SheetPanel>
+
+        <SheetFooter>
+          {rotuloDaSelecao && (
+            <span className="mr-auto truncate text-xs text-slate-500">
+              Selecionado: {rotuloDaSelecao}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setRelatorio(null)}
             className="inline-flex h-9 items-center rounded-[6px] bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
           >
             Fechar

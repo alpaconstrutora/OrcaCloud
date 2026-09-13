@@ -15,6 +15,7 @@ import { useToast } from '../hooks/useToast';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 import ClientSelect from './ClientSelect';
 import Button from './ui/Button';
+import { SegmentedProgress } from './ui/SegmentedProgress';
 
 // ── Formatadores ──────────────────────────────────────────────────────────────
 function fBRL(v: number | null): string {
@@ -228,15 +229,16 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
                                             className="border-t border-gray-50 hover:bg-blue-50/40 cursor-pointer group">
                                             <td className="px-5 py-2.5">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="h-1.5 rounded-full bg-blue-100 overflow-hidden flex-shrink-0" style={{ width: 60 }}>
-                                                        <div className="h-full bg-blue-500" style={{ width: `${Math.abs(c.net_realizado) / maxProjAbs * 100}%` }} />
-                                                    </div>
-                                                    <span className="text-gray-700 font-medium truncate group-hover:text-blue-700">{c.dimension_label}</span>
+                                                    <span className="text-sm font-normal text-gray-700 truncate group-hover:text-blue-700">{c.dimension_label}</span>
                                                 </div>
                                             </td>
-                                            <td className="px-3 py-2.5 text-right tabular-nums text-gray-400">{c.qtd}</td>
-                                            <td className={`px-5 py-2.5 text-right tabular-nums font-bold ${c.net_realizado < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                                            <td className="px-3 py-2.5 text-right tabular-nums text-sm font-normal text-gray-400">{c.qtd}</td>
+                                            <td className={`px-5 py-2.5 text-right tabular-nums text-sm font-medium ${c.net_realizado < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                                                 {fBRL(c.net_realizado)}
+                                            </td>
+                                            {/* §29 — proporção desta linha em relação ao maior realizado da lista */}
+                                            <td className="px-5 py-2.5 w-44">
+                                                <SegmentedProgress percent={Math.abs(c.net_realizado) / maxProjAbs * 100} title="Realizado desta linha em relação ao maior da lista" />
                                             </td>
                                         </tr>
                                     ))}
@@ -271,7 +273,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
                                                 {e.status === 'PENDING' ? ' · previsto' : ''}
                                             </p>
                                         </td>
-                                        <td className={`px-4 py-2.5 text-right tabular-nums font-bold ${e.direction === 'DEBIT' ? 'text-red-600' : 'text-green-600'}`}>
+                                        <td className={`px-4 py-2.5 text-right tabular-nums text-sm font-medium ${e.direction === 'DEBIT' ? 'text-red-600' : 'text-green-600'}`}>
                                             {e.direction === 'DEBIT' ? '−' : '+'}{fBRL(e.amount)}
                                         </td>
                                     </tr>

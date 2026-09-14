@@ -7270,6 +7270,28 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             onLigarAoCircuito={(terminalId, circuitoId) =>
               editor.run({ type: 'SetTerminalProps', terminalId, circuitoId })
             }
+            // Excluir circuito: com pontos ou eletrodutos ligados, confirma antes —
+            // eles ficam sem circuito e voltam para a lista de pendências.
+            onExcluirCircuito={async (circuitoId) => {
+              const c = (editor.model.circuitos ?? []).find((x) => x.id === circuitoId);
+              if (!c) return;
+              const pontos = (editor.model.terminais ?? []).filter((t) => t.circuitoId === circuitoId).length;
+              const trechos = (editor.model.trechos ?? []).filter((t) => t.circuitoId === circuitoId).length;
+              if (pontos > 0 || trechos > 0) {
+                const partes = [
+                  pontos > 0 ? `${pontos} ${pontos === 1 ? 'ponto' : 'pontos'}` : null,
+                  trechos > 0 ? `${trechos} ${trechos === 1 ? 'eletroduto' : 'eletrodutos'}` : null,
+                ].filter(Boolean);
+                const ok = await confirmar({
+                  title: `Excluir o circuito ${c.nome}?`,
+                  message: `${partes.join(' e ')} ligados a ele ficam sem circuito — nada é apagado do desenho. Ctrl+Z desfaz.`,
+                  confirmLabel: 'Excluir circuito',
+                  variant: 'warning',
+                });
+                if (!ok) return;
+              }
+              editor.run({ type: 'DeleteCircuito', circuitoId });
+            }}
             // "Criar novo…" no seletor: o circuito nasce e os pontos entram nele.
             // Dois passos de histórico (o id do circuito só existe depois do
             // primeiro) — Ctrl+Z duas vezes desfaz tudo.

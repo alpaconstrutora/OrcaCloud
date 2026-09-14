@@ -63,6 +63,16 @@ passos de histórico, porque o id do circuito só existe depois do primeiro).
 Com quadro e sem circuito nenhum, "Criar novo…" substitui o beco "crie um
 circuito abaixo".
 
+**Excluir circuito** (14/09, *"como exclui circuito do quadro de cargas?"* —
+não havia como; só apagando o quadro inteiro): lixeira junto do nome de cada
+circuito no Quadro de cargas; com pontos ou eletrodutos ligados, o editor
+confirma antes ("N pontos e M eletrodutos ligados a ele ficam sem circuito —
+nada é apagado do desenho. Ctrl+Z desfaz"). Correção no kernel junto:
+`DeleteCircuito` só soltava os terminais; desde o lançamento automático o
+**trecho** também carrega `circuitoId`, e a invariante recusava — agora solta
+os dois. Prova no app real: criar circuito com 6 pontos → lixeira →
+confirmação → 0 circuitos e os 6 de volta em "fora de circuito".
+
 ## Fora, por decisão
 
 - Desvio de vigas/lajes e passagem pelo piso — o desenho não conhece a

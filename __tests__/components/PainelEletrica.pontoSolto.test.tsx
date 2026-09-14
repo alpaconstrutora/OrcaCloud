@@ -220,6 +220,18 @@ describe('PainelEletrica · o ponto fora de circuito', () => {
     expect(screen.queryByRole('button', { name: /preencher potência pela norma/i })).toBeNull();
   });
 
+  it('a lixeira do circuito chama onExcluirCircuito com o id — e o título avisa quantos pontos ficam soltos', async () => {
+    // 14/09/2026: "como exclui circuito do quadro de cargas?" — não havia como.
+    const onExcluirCircuito = vi.fn();
+    const m = cena();
+    const ligado = applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais[0].id, circuitoId: m.circuitos[0].id }).model;
+    montar(ligado, { onExcluirCircuito });
+    const lixeira = screen.getByRole('button', { name: 'Excluir circuito C1' });
+    expect(lixeira.title).toMatch(/o ponto dele fica sem circuito/i);
+    await userEvent.setup().click(lixeira);
+    expect(onExcluirCircuito).toHaveBeenCalledWith(m.circuitos[0].id);
+  });
+
   it('sem ponto solto, o aviso não aparece', () => {
     const m = cena();
     const ligado = applyCommand(m, {

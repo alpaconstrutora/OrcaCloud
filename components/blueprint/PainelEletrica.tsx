@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import CamposDeDimensao from './CamposDeDimensao';
 import { MEDIDAS_PADRAO_QUADRO, UNIDADE_DE_POTENCIA, giroDaPeca, medidasDaPeca } from '../../utils/blueprintRede';
-import { AlertTriangle, Plus, Zap } from 'lucide-react';
+import { AlertTriangle, Plus, Trash2, Zap } from 'lucide-react';
 import type { BlueprintModel, FaseDoCircuito, LigacaoDoCircuito, ObjectId } from '../../utils/blueprintKernel';
 import { LIGACOES_DO_CIRCUITO, quadroDeCargas } from '../../utils/blueprintKernel';
 import {
@@ -48,6 +48,7 @@ export default function PainelEletrica({
   onSelecionar,
   onLigarAoCircuito,
   onCriarCircuitoELigar,
+  onExcluirCircuito,
   onAceitarSugeridas,
   onPreencherPotencias,
   hipoteses = HIPOTESES_PADRAO,
@@ -83,6 +84,13 @@ export default function PainelEletrica({
   onSelecionar?: (id: string) => void;
   /** Liga um ponto solto a um circuito, direto daqui. */
   onLigarAoCircuito?: (terminalId: ObjectId, circuitoId: ObjectId) => void;
+  /**
+   * Exclui um circuito (14/09/2026: "como exclui circuito do quadro de
+   * cargas?" — não havia como). Os pontos e eletrodutos dele ficam SEM
+   * circuito, não são apagados; quem confirma é o editor, que conhece a
+   * contagem e o `useConfirm`.
+   */
+  onExcluirCircuito?: (circuitoId: ObjectId) => void;
   /**
    * "Criar novo…" no seletor (13/09/2026): cria o circuito no quadro e já liga
    * os pontos, sem ir ao quadro de cargas criar antes. Quem implementa é o
@@ -459,13 +467,33 @@ export default function PainelEletrica({
                     <React.Fragment key={c.circuitoId}>
                     <tr className="border-t border-slate-100">
                       <td className="px-2 py-1">
-                        <input
-                          type="text"
-                          value={c.nome}
-                          onChange={(e) => onCircuitoProps(c.circuitoId, { nome: e.target.value })}
-                          aria-label="Nome do circuito"
-                          className="w-full min-w-0 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-slate-300 focus:border-slate-400"
-                        />
+                        <span className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={c.nome}
+                            onChange={(e) => onCircuitoProps(c.circuitoId, { nome: e.target.value })}
+                            aria-label="Nome do circuito"
+                            className="w-full min-w-0 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-slate-300 focus:border-slate-400"
+                          />
+                          {/* A LIXEIRA do circuito (14/09/2026): junto do nome, no
+                              mesmo vocabulário da lista de componentes. Os pontos
+                              ficam sem circuito — o editor confirma quando há. */}
+                          {onExcluirCircuito && (
+                            <button
+                              type="button"
+                              onClick={() => onExcluirCircuito(c.circuitoId)}
+                              aria-label={`Excluir circuito ${c.nome}`}
+                              title={
+                                c.pontos > 0
+                                  ? `Excluir o circuito ${c.nome} — ${c.pontos === 1 ? 'o ponto dele fica' : `os ${c.pontos} pontos dele ficam`} sem circuito`
+                                  : `Excluir o circuito ${c.nome}`
+                              }
+                              className="shrink-0 rounded p-1 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          )}
+                        </span>
                       </td>
                       {/* ⚠️ Campos DECLARADOS, e vazios quando ninguém informou —
                           nunca um valor de partida "recomendado". */}

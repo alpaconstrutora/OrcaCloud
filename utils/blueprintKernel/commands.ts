@@ -1675,6 +1675,13 @@ function aplicarSemHash(
       next.terminais = (next.terminais ?? []).map((t) =>
         t.circuitoId === command.circuitoId ? { ...t, circuitoId: null } : t,
       );
+      // O ELETRODUTO também (14/09/2026): desde o lançamento automático o
+      // trecho carrega `circuitoId`, e a invariante recusa trecho apontando
+      // para circuito inexistente — sem esta linha, apagar um circuito com
+      // eletroduto lançado falhava o comando inteiro.
+      next.trechos = (next.trechos ?? []).map((t) =>
+        t.circuitoId === command.circuitoId ? { ...t, circuitoId: null } : t,
+      );
       diff.deleted.push(command.circuitoId);
       break;
     }

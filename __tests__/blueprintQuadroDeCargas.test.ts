@@ -370,6 +370,22 @@ describe('⚠️ APAGAR — o buraco que a fatia 1 deixou aberto', () => {
     expect(quadroDeCargas(sem).pontosSemCircuito).toBe(1);
   });
 
+  it('⚠️ apagar o CIRCUITO também solta o ELETRODUTO dele — antes a invariante recusava o comando', () => {
+    // 14/09/2026: desde o lançamento automático o trecho carrega `circuitoId`;
+    // sem soltá-lo, "excluir circuito" com eletroduto lançado falhava inteiro.
+    const { model, nivel, quadro } = base();
+    let m = comCircuito(model, quadro, 'C1');
+    const c1 = m.circuitos[0].id;
+    m = applyCommand(m, {
+      type: 'AddTrecho', levelId: nivel, disciplina: 'ELETRICA', a: point(0, 0), b: point(2000, 0),
+      cotaAMm: 2800, cotaBMm: 2800, bitolaMm: 25, circuitoId: c1, condutores: 3,
+    }).model;
+    const sem = applyCommand(m, { type: 'DeleteCircuito', circuitoId: c1 }).model;
+    expect(sem.circuitos).toHaveLength(0);
+    expect(sem.trechos).toHaveLength(1);
+    expect(sem.trechos![0].circuitoId).toBeNull();
+  });
+
   it('apagar o que não existe é recusado, e não silenciosamente ignorado', () => {
     const { model } = base();
     expect(() => applyCommand(model, { type: 'DeleteTrecho', trechoId: 'trc_9999' })).toThrow();

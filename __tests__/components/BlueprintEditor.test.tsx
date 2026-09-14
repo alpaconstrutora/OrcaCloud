@@ -1046,6 +1046,23 @@ describe('BlueprintEditor · ribbon', () => {
     expect(botao(/^quadro de cargas/i)).toHaveAttribute('aria-pressed', 'false');
   });
 
+  it('⚠️ a lixeira da lista APAGA um ponto elétrico (TUG) — era um return mudo', async () => {
+    // 13/09/2026: "o botão excluir no painel lateral não está funcionando.
+    // não consigo excluir TUG". `excluirComponente` não conhecia instalações.
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const comTug = k.applyCommand(nivel.model, {
+      type: 'AddTerminal', levelId: nivel.model.levels[0].id, disciplina: 'ELETRICA', tipo: 'TUG',
+      at: k.point(1000, 1000), cotaMm: 300, tipoEletrico: 'TUG', potenciaW: 100,
+    }).model;
+    loadBranchModel.mockResolvedValue(comTug);
+    await montar();
+
+    const lixeira = await screen.findByRole('button', { name: /^excluir .*tug/i });
+    await userEvent.setup().click(lixeira);
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^excluir .*tug/i })).not.toBeInTheDocument());
+  });
+
   it('"Dados do lote" (aba Terreno) abre o painel do terreno como tarefa', async () => {
     await montar();
     await abrirAba(/^terreno$/i);

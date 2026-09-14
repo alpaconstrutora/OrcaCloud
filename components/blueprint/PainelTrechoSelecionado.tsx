@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowDownRight, MoveVertical } from 'lucide-react';
+import { ArrowDownRight, MoveVertical, Trash2 } from 'lucide-react';
 import type { DisciplinaDeRede, Terminal, Trecho } from '../../utils/blueprintKernel';
 import type { OcupacaoDoEletroduto } from '../../utils/blueprintEletricaDimensionamento';
 import { DISCIPLINAS } from '../../utils/blueprintKernel';
@@ -81,6 +81,26 @@ interface Props {
   }) => void;
   /** Os circuitos do desenho, para o ponto elétrico escolher o seu. */
   circuitos?: { id: string; nome: string; quadroNome: string }[];
+  /**
+   * Exclui a peça selecionada — como os painéis de parede, estrutura e escada
+   * já ofereciam (13/09/2026: "não consigo excluir TUG"). Opcional pela razão
+   * de sempre: chamadas antigas não a conhecem.
+   */
+  onExcluir?: () => void;
+}
+
+/** O botão de excluir dos painéis de seleção, no mesmo vocabulário dos irmãos. */
+function BotaoExcluir({ rotulo, onClick }: { rotulo: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
+    >
+      <Trash2 className="h-3.5 w-3.5" />
+      {rotulo}
+    </button>
+  );
 }
 
 export default function PainelTrechoSelecionado({
@@ -90,6 +110,7 @@ export default function PainelTrechoSelecionado({
   onTrecho,
   onTerminal,
   circuitos = [],
+  onExcluir,
 }: Props) {
   if (terminal) {
     return (
@@ -282,6 +303,7 @@ export default function PainelTrechoSelecionado({
           </label>
         </div>
 
+        {onExcluir && <BotaoExcluir rotulo="Excluir ponto" onClick={onExcluir} />}
         <IdentificadorDoElemento uid={terminal.uid} familia="terminal" />
       </div>
     );
@@ -460,6 +482,7 @@ export default function PainelTrechoSelecionado({
         </label>
       </div>
 
+      {onExcluir && <BotaoExcluir rotulo="Excluir trecho" onClick={onExcluir} />}
       <IdentificadorDoElemento uid={trecho.uid} familia="trecho" />
     </div>
   );

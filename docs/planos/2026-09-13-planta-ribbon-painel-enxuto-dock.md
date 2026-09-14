@@ -157,6 +157,15 @@ que ficou: **o que se edita (tarefas, quadro de cargas) vai para drawer; o
 que se lê (Conflitos, Medições, Quantitativos, Orçamento, Comentários,
 Versões) fica no dock**, com a largura do canvas.
 
+**Defeito achado pelo usuário no uso** (*"o botão excluir no painel lateral não
+está funcionando. não consigo excluir TUG"*): a lixeira da lista do navegador
+chamava `excluirComponente`, que só conhecia parede, abertura, estrutura, água
+e escada — trecho, ponto e quadro caíam num `return` mudo. Corrigido (os três
+entram; o quadro leva os circuitos, os pontos ficam sem circuito) e o painel
+"Ponto/Trecho selecionado" ganhou o botão **Excluir** que os painéis irmãos já
+tinham. Teste: a lixeira do TUG apaga; app real: 4 → 3 pela lixeira, 3 → 2
+pelo botão do painel.
+
 **F4 — prova**: teste com duas paredes selecionadas pela lista de vãos (aba
 aparece, não é auto-selecionada, "2 selecionados", sem Dividir/Unir, Excluir
 esvazia e a aba some); app real com escritas bloqueadas: Parede 1 selecionada →

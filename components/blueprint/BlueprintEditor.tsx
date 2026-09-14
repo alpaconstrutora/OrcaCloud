@@ -4108,12 +4108,23 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     const estrutura = editor.model.structures.find((s) => s.id === id);
     const agua = (editor.model.roofs ?? []).find((r) => r.id === id);
     const escada = (editor.model.stairs ?? []).find((e) => e.id === id);
+    // ⚠️ As INSTALAÇÕES entram aqui também (13/09/2026: "o botão excluir no
+    // painel lateral não está funcionando, não consigo excluir TUG"). A lista
+    // já mostrava a lixeira em trecho, ponto e quadro, mas esta função caía
+    // num `return` mudo para os três — o clique não fazia nada e nada dizia.
+    const trecho = (editor.model.trechos ?? []).find((t) => t.id === id);
+    const terminal = (editor.model.terminais ?? []).find((t) => t.id === id);
+    const quadro = (editor.model.quadros ?? []).find((q) => q.id === id);
 
     if (parede) editor.run({ type: 'DeleteWall', wallId: parede.id });
     else if (abertura) editor.run({ type: 'DeleteOpening', openingId: abertura.id });
     else if (estrutura) editor.run({ type: 'DeleteStructural', structuralId: estrutura.id });
     else if (agua) editor.run({ type: 'DeleteAgua', aguaId: agua.id });
     else if (escada) editor.run({ type: 'DeleteEscada', escadaId: escada.id });
+    else if (trecho) editor.run({ type: 'DeleteTrecho', trechoId: trecho.id });
+    else if (terminal) editor.run({ type: 'DeleteTerminal', terminalId: terminal.id });
+    // O quadro leva os circuitos dele; os pontos ficam sem circuito, não apagados.
+    else if (quadro) editor.run({ type: 'DeleteQuadro', quadroId: quadro.id });
     else return;
 
     const some = new Set<string>([id]);
@@ -6678,6 +6689,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       trechoSel &&
                       editor.run({ type: 'SetTrechoProps', trechoId: trechoSel.id, ...campos })
                     }
+                    onExcluir={removerSelecionada}
                     onTerminal={(campos) => {
                       if (!terminalSel) return;
                       // CLASSIFICAR um ponto que ainda não tem potência é uma

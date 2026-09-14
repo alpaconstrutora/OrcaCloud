@@ -18,7 +18,15 @@ export type OpuraDimension =
   | 'tx_month'
   | 'due_month'
   | 'pay_month'
-  | 'comp_month';
+  | 'comp_month'
+  // 2026-09-13 — Minha Organização › Plano de Contas e Comercial › Vendas de
+  // Ativos / Locações (por contrato) / Gestão de Locações (por locatário) /
+  // Contratos de Serviço. As de domínio mostram SÓ o domínio (v_domain no pivot).
+  | 'plano_de_contas'
+  | 'venda_ativos'
+  | 'locacoes'
+  | 'locacoes_locatario'
+  | 'contratos_servico';
 
 /** Campo de data usado no recorte do período. */
 export type OpuraDateField = 'transaction' | 'due' | 'payment' | 'competencia';
@@ -94,6 +102,9 @@ export interface OpuraEntryFilters extends OpuraFilters {
   categoryParentId?: string;
   createdBy?: string;
   partyLabel?: string;
+  planoDeContasId?: string;
+  contractDomain?: 'VENDAS' | 'LOCACAO' | 'SERVICOS' | 'SUPRIMENTOS';
+  contractClientId?: string;
 }
 
 /** Linha de comparação entre dois períodos (A = atual, B = base/anterior). */
@@ -245,6 +256,11 @@ export const opuraAnalyticsService = {
       const to = new Date(y, m, 0).toISOString().slice(0, 10); // último dia do mês
       return { dateField: field, dateFrom: from, dateTo: to };
     }
+    // Gestão de Locações: o mesmo cliente pode ser comprador em VENDAS — o
+    // domínio vai junto. Nas dimensões chaveadas por contrato ele é redundante.
+    if (dimension === 'locacoes_locatario') {
+      return { contractClientId: key ?? undefined, contractDomain: 'LOCACAO' };
+    }
     const map: Record<string, keyof OpuraEntryFilters> = {
       supplier: 'supplierId',
       project: 'projectId',
@@ -259,6 +275,10 @@ export const opuraAnalyticsService = {
       user: 'createdBy',
       contraparte: 'partyLabel',
       dre_group: 'dreGroup',
+      plano_de_contas: 'planoDeContasId',
+      venda_ativos: 'contractId',
+      locacoes: 'contractId',
+      contratos_servico: 'contractId',
     };
     const f = map[dimension];
     if (!f) return null;
@@ -293,6 +313,9 @@ export const opuraAnalyticsService = {
       p_category_parent_id: filters.categoryParentId ?? null,
       p_created_by:         filters.createdBy ?? null,
       p_party_label:        filters.partyLabel ?? null,
+      p_plano_de_contas_id: filters.planoDeContasId ?? null,
+      p_contract_domain:    filters.contractDomain ?? null,
+      p_contract_client_id: filters.contractClientId ?? null,
       p_limit:              limit,
       p_offset:             offset,
     });

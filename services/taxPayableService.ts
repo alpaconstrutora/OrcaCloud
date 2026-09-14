@@ -627,6 +627,9 @@ export const taxPayableService = {
                 organization_id: organizationId,
                 source_system:   TAX_SOURCE_SYSTEM,
                 reference_id:    `tax-${deal.id}-${instSuffix}-${taxKey}`,
+                // Contrato da parcela (Gestão de Contratos) — liga o tributo às abas
+                // Locações/Vendas de ÒPURA Relatórios. Parcela legada `tx-…` fica sem.
+                contract_id:     contractPrefix ?? null,
                 transaction_date: parcel.fato_gerador,
                 due_date:        taxDueDate(taxName, parcel.fato_gerador),
                 amount:          Number(amount.toFixed(2)),

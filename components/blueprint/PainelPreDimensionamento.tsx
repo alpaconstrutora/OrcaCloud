@@ -40,7 +40,7 @@ export function LinhaPreDimensionamento({
 
   if (r.ibA == null) {
     return (
-      <div className="px-2 pb-1.5 text-[10px] text-slate-400" aria-label={`Pré-dimensionamento do circuito ${r.nome}`}>
+      <div className="px-2 pb-1.5 text-xs text-slate-400" aria-label={`Pré-dimensionamento do circuito ${r.nome}`}>
         Pré-dimensionamento: {r.naoAvaliado.join('; ')}.
       </div>
     );
@@ -51,7 +51,7 @@ export function LinhaPreDimensionamento({
   const sugerirDisj = r.disjuntorSugeridoA != null && r.disjuntorDeclaradoA !== r.disjuntorSugeridoA;
 
   return (
-    <div className="min-w-0 space-y-0.5 break-words px-2 pb-1.5 text-[10px]" aria-label={`Pré-dimensionamento do circuito ${r.nome}`}>
+    <div className="min-w-0 space-y-0.5 break-words px-2 pb-1.5 text-sm" aria-label={`Pré-dimensionamento do circuito ${r.nome}`}>
       <p className={cor}>
         <span className="font-semibold">IB {n1(r.ibA)} A</span>
         {r.pontosSemPotencia > 0 && <span title="há pontos sem potência — IB é um piso"> (≥)</span>}
@@ -93,7 +93,7 @@ export function LinhaPreDimensionamento({
                 })
               }
               title="Preenche seção e disjuntor declarados com os sugeridos — quem clica decide"
-              className="rounded border border-slate-300 bg-white px-1 py-0 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
             >
               usar sugerido
             </button>
@@ -102,7 +102,7 @@ export function LinhaPreDimensionamento({
       </p>
       {faltas.map((a, i) => (
         <p key={i} className="text-red-700">
-          <span className="font-mono text-[9px] text-red-500">{a.referencia}</span> {a.mensagem}
+          <span className="font-mono text-xs text-red-500">{a.referencia}</span> {a.mensagem}
         </p>
       ))}
       {r.naoAvaliado.length > 0 && (
@@ -123,22 +123,22 @@ export function HipotesesDoPreDimensionamento({
   const [aberto, setAberto] = useState(false);
   const Seta = aberto ? ChevronDown : ChevronRight;
   const resumo = `${hipoteses.metodoDeInstalacao} · ${hipoteses.temperaturaAmbienteC} °C · ${hipoteses.circuitosAgrupados} circ./eletroduto · ρ ${String(hipoteses.rhoOhmMm2PorM).replace('.', ',')} · ΔV ≤ ${hipoteses.limiteQuedaTerminalPct} %`;
-  const campo = 'w-16 rounded border border-slate-300 px-1 py-0.5 text-[11px]';
+  const campo = 'w-16 rounded border border-slate-300 px-1 py-0.5 text-sm';
   return (
     <div className="rounded-md border border-dashed border-slate-300">
       <button
         type="button"
         onClick={() => setAberto((a) => !a)}
         aria-expanded={aberto}
-        className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] text-slate-600 hover:bg-slate-50"
+        className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-sm text-slate-600 hover:bg-slate-50"
       >
         <Seta className="h-3 w-3 shrink-0 text-slate-400" />
         <Ruler className="h-3 w-3 shrink-0 text-slate-400" />
         <span className="font-medium">Hipóteses do pré-dimensionamento</span>
-        <span className="ml-auto truncate text-[10px] text-slate-400">{resumo}</span>
+        <span className="ml-auto truncate text-xs text-slate-400">{resumo}</span>
       </button>
       {aberto && (
-        <div className="space-y-1.5 border-t border-slate-200 px-2 py-2 text-[11px] text-slate-600">
+        <div className="space-y-1.5 border-t border-slate-200 px-2 py-2 text-sm text-slate-600">
           <label className="flex items-center justify-between gap-2">
             <span>Método de instalação (Tab. 33/36)</span>
             <select
@@ -170,7 +170,7 @@ export function HipotesesDoPreDimensionamento({
             <span>Queda máxima no terminal, % (6.2.7)</span>
             <input type="number" step="0.5" value={hipoteses.limiteQuedaTerminalPct} onChange={(e) => onChange({ ...hipoteses, limiteQuedaTerminalPct: Number(e.target.value) || HIPOTESES_PADRAO.limiteQuedaTerminalPct })} aria-label="Limite de queda de tensão" className={campo} />
           </label>
-          <p className="text-[10px] text-slate-400">
+          <p className="text-xs text-slate-400">
             Cobre com isolação PVC (Tabela 36); B1 = eletroduto embutido em alvenaria. Disjuntores:{' '}
             {hipoteses.catalogoDeDisjuntoresA.join(', ')} A.{' '}
             <button type="button" onClick={() => onChange(HIPOTESES_PADRAO)} className="text-blue-700 hover:underline">

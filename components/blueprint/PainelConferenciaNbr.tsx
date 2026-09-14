@@ -30,7 +30,7 @@ export default function PainelConferenciaNbr({
 
   return (
     <div className="space-y-2" aria-label="Conferência NBR 5410">
-      <p className="flex items-center gap-1.5 text-[11px] text-slate-600">
+      <p className="flex items-center gap-1.5 text-sm text-slate-600">
         <Zap className="h-3.5 w-3.5 text-amber-500" />
         <strong>Conferência NBR 5410</strong>
         <span className="text-slate-400">·</span>
@@ -58,7 +58,7 @@ export default function PainelConferenciaNbr({
           />
         ))}
       </ul>
-      <p className="text-[10px] text-slate-400">
+      <p className="text-xs text-slate-400">
         Confere o que foi declarado; não atribui potência, não divide circuito nem escolhe
         disjuntor.
       </p>
@@ -94,12 +94,12 @@ function LinhaDaRegra({
         onClick={onAlternar}
         aria-expanded={aberta}
         aria-label={`${codigo} — ${regra.titulo}: ${estado}`}
-        className="flex w-full items-start gap-1.5 px-2 py-1.5 text-left text-[11px] hover:bg-slate-50"
+        className="flex w-full items-start gap-1.5 px-2 py-1.5 text-left text-sm hover:bg-slate-50"
       >
         <Seta className="mt-0.5 h-3 w-3 shrink-0 text-slate-400" />
         <Icone className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${cor}`} />
         <span className="min-w-0 flex-1">
-          <span className="font-mono text-[10px] text-slate-500">{codigo}</span>{' '}
+          <span className="font-mono text-xs text-slate-500">{codigo}</span>{' '}
           <span className="text-slate-700">{regra.titulo}</span>
           {regra.achados.length === 0 && regra.naoAvaliado.length > 0 && (
             <span className="ml-1 text-slate-400">(parcial)</span>
@@ -107,7 +107,7 @@ function LinhaDaRegra({
         </span>
       </button>
       {aberta && (
-        <div className="space-y-1 px-2 pb-2 pl-9 text-[11px]">
+        <div className="space-y-1 px-2 pb-2 pl-9 text-sm">
           {regra.achados.map((a, i) => (
             <div key={i} className="flex flex-wrap items-start gap-x-2 gap-y-1">
               <span className={a.nivel === 'FALTA' ? 'text-red-700' : 'text-amber-700'}>
@@ -118,7 +118,7 @@ function LinhaDaRegra({
                   type="button"
                   onClick={() => onSelecionar(a.ids)}
                   title="Seleciona as peças envolvidas no desenho"
-                  className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
+                  className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-sm font-medium text-slate-600 hover:bg-slate-50"
                 >
                   <Eye className="h-3 w-3" />
                   ver
@@ -129,7 +129,7 @@ function LinhaDaRegra({
                   type="button"
                   onClick={() => onConverterLigacaoDireta(a.acao!.terminalIds)}
                   title="Troca o tipo do ponto para ligação direta — posição, circuito e potência ficam"
-                  className="inline-flex items-center gap-1 rounded border border-amber-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-amber-800 hover:bg-amber-50"
+                  className="inline-flex items-center gap-1 rounded border border-amber-300 bg-white px-2 py-1 text-sm font-medium text-amber-800 hover:bg-amber-50"
                 >
                   Converter em ligação direta
                 </button>

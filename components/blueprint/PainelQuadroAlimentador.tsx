@@ -35,9 +35,9 @@ export default function PainelQuadroAlimentador({
 }) {
   const faltas = q.achados.filter((a) => a.nivel === 'FALTA');
   const avisos = q.achados.filter((a) => a.nivel === 'AVISO');
-  const campo = 'rounded border border-slate-200 px-1 py-0 text-[10px]';
+  const campo = 'rounded border border-slate-200 px-1.5 py-0.5 text-sm';
   return (
-    <div className="space-y-1 border-t border-slate-100 px-2 py-1.5 text-[10px]" aria-label={`Alimentador do quadro ${q.nome}`}>
+    <div className="space-y-1 border-t border-slate-100 px-2 py-1.5 text-sm" aria-label={`Alimentador do quadro ${q.nome}`}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-slate-500">
         <span className="font-medium text-slate-600">Alimentação</span>
         <label className="flex items-center gap-1">
@@ -127,7 +127,7 @@ export default function PainelQuadroAlimentador({
 
       {faltas.map((a, i) => (
         <p key={`f${i}`} className="text-red-700">
-          <span className="font-mono text-[9px] text-red-500">{a.referencia}</span> {a.mensagem}
+          <span className="font-mono text-xs text-red-500">{a.referencia}</span> {a.mensagem}
         </p>
       ))}
       {avisos.map((a, i) => (

@@ -147,7 +147,7 @@ export default function PainelEletrica({
         type="button"
         onClick={onPreencherPotencias}
         title="Tomadas e luzes sem potência recebem o padrão da NBR 5410 (100/600 VA; luz pelo mínimo do cômodo), e tomadas de banheiro/cozinha abaixo de 600 VA sobem ao mínimo enquanto houver vaga nos três pontos. O resto não é tocado."
-        className="rounded border border-amber-400 bg-white px-1.5 py-0.5 text-[11px] font-medium text-amber-800 hover:bg-amber-100"
+        className="rounded border border-amber-400 bg-white px-1.5 py-0.5 text-sm font-medium text-amber-800 hover:bg-amber-100"
       >
         Preencher potência pela norma ({semPotenciaPreenchivel})
       </button>
@@ -173,7 +173,7 @@ export default function PainelEletrica({
   const sugeridas = (model.terminais ?? []).filter((t) => t.sugerida).length;
   const avisoSugeridas =
     sugeridas > 0 ? (
-      <p className="flex flex-wrap items-center gap-x-2 text-[11px] text-blue-700">
+      <p className="flex flex-wrap items-center gap-x-2 text-sm text-blue-700">
         <span>
           <strong>{sugeridas}</strong> {sugeridas === 1 ? 'tomada sugerida' : 'tomadas sugeridas'} pelo
           sistema {sugeridas === 1 ? 'aguarda' : 'aguardam'} posição — mover confirma.
@@ -183,7 +183,7 @@ export default function PainelEletrica({
             type="button"
             onClick={onAceitarSugeridas}
             title="Confirma todas onde estão — a marca de sugerida some"
-            className="rounded border border-blue-300 bg-white px-1.5 py-0.5 text-[11px] font-medium text-blue-700 hover:bg-blue-50"
+            className="rounded border border-blue-300 bg-white px-1.5 py-0.5 text-sm font-medium text-blue-700 hover:bg-blue-50"
           >
             Aceitar todas
           </button>
@@ -194,7 +194,7 @@ export default function PainelEletrica({
   if (cargas.quadros.length === 0) {
     return (
       <div className="space-y-1.5">
-        <p className="text-[11px] text-slate-500">
+        <p className="text-sm text-slate-500">
           Nenhum quadro de distribuição ainda. Use <strong>Componentes → Instalações →
           Quadro de distribuição</strong> para colocar um; os circuitos nascem dele.
         </p>
@@ -205,7 +205,7 @@ export default function PainelEletrica({
         {avisoSugeridas}
         {botaoPreencher}
         {cargas.pontosSemCircuito > 0 && (
-          <p className="text-[11px] text-amber-700">
+          <p className="text-sm text-amber-700">
             E há <strong>{cargas.pontosSemCircuito}</strong>{' '}
             {cargas.pontosSemCircuito === 1 ? 'ponto elétrico' : 'pontos elétricos'} esperando
             circuito:{' '}
@@ -235,7 +235,7 @@ export default function PainelEletrica({
     <div className="space-y-3">
       {avisoSugeridas}
       {botaoPreencher && (
-        <p className="flex flex-wrap items-center gap-x-2 text-[11px] text-amber-800">
+        <p className="flex flex-wrap items-center gap-x-2 text-sm text-amber-800">
           <span>
             <strong>{semPotenciaPreenchivel}</strong>{' '}
             {semPotenciaPreenchivel === 1 ? 'ponto' : 'pontos'} sem potência ou abaixo do mínimo da
@@ -245,13 +245,13 @@ export default function PainelEletrica({
         </p>
       )}
       {cargas.pontosSemCircuito > 0 && (
-        <p className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-slate-700">
+        <p className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-sm text-slate-700">
           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />
           <span>
             <strong>{cargas.pontosSemCircuito}</strong>{' '}
             {cargas.pontosSemCircuito === 1 ? 'ponto elétrico' : 'pontos elétricos'} fora de
             circuito.
-            <span className="mt-0.5 block text-[10px] text-slate-600">
+            <span className="mt-0.5 block text-xs text-slate-600">
               Eles não entram em soma nenhuma.
             </span>
             {/* ⚠️ A LISTA, e não só o número.
@@ -262,13 +262,13 @@ export default function PainelEletrica({
                 "porém não encontrou como conectar a um circuito". */}
             {/* O CRITÉRIO é do usuário (13/09/2026): "ofereça a forma que ele
                 quer agrupar; sugira por ambiente e ele decide". */}
-            <label className="mt-1.5 flex items-center gap-1.5 text-[10px] text-slate-600">
+            <label className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-600">
               Agrupar por
               <select
                 value={agrupamento}
                 onChange={(e) => setAgrupamento(e.target.value as CriterioDeAgrupamento)}
                 aria-label="Agrupar os pontos fora de circuito por"
-                className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px]"
+                className="rounded border border-slate-300 bg-white px-1 py-0.5 text-xs"
               >
                 {CRITERIOS_DE_AGRUPAMENTO.map((c) => (
                   <option key={c} value={c}>
@@ -279,17 +279,17 @@ export default function PainelEletrica({
               </select>
             </label>
             {/* As colunas, nomeadas uma vez: ponto · potência · circuito. */}
-            <span className="mt-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-slate-500">
+            <span className="mt-1.5 flex items-center gap-1.5 text-xs uppercase tracking-wide text-slate-500">
               <span className="min-w-0 flex-1">Ponto</span>
-              <span className="w-16 shrink-0 text-right">Potência</span>
-              <span className="w-32 shrink-0">Circuito</span>
+              <span className="w-20 shrink-0 text-right">Potência</span>
+              <span className="w-40 shrink-0">Circuito</span>
             </span>
             <span className="mt-1 block space-y-2">
               {gruposDeSoltos.map((g) => (
                 <span key={g.chave} className="block space-y-1">
                   {g.titulo && (
                     <span className="flex items-center gap-1.5 border-b border-amber-200 pb-0.5">
-                      <span className="min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                      <span className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-wide text-slate-600">
                         {g.titulo}
                         <span className="ml-1 font-normal normal-case tracking-normal text-slate-500">
                           ({g.itens.length})
@@ -300,7 +300,7 @@ export default function PainelEletrica({
                         const { soma, sem } = somaDoGrupo(g.itens);
                         return (
                           <span
-                            className="w-16 shrink-0 text-right text-[10px] font-semibold normal-case tabular-nums tracking-normal text-slate-700"
+                            className="w-20 shrink-0 text-right text-sm font-semibold normal-case tabular-nums tracking-normal text-slate-700"
                             title={sem > 0 ? `${sem} sem potência — fora da soma` : 'Soma das potências declaradas'}
                           >
                             {va(soma)}
@@ -325,7 +325,7 @@ export default function PainelEletrica({
                             }
                             for (const s of g.itens) onLigarAoCircuito?.(s.terminalId, e.target.value);
                           }}
-                          className="w-32 shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px]"
+                          className="w-40 shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-sm"
                         >
                           <option value="">Ligar todos a…</option>
                           {todosOsCircuitos.map((c) => (
@@ -357,12 +357,12 @@ export default function PainelEletrica({
                         type="button"
                         onClick={() => onSelecionar?.(s.terminalId)}
                         title="Selecionar este ponto no desenho"
-                        className="min-w-0 flex-1 truncate text-left text-[11px] text-blue-700 hover:underline"
+                        className="min-w-0 flex-1 truncate text-left text-sm text-blue-700 hover:underline"
                       >
                         {s.rotulo}
                       </button>
                       <span
-                        className={`w-16 shrink-0 text-right text-[11px] tabular-nums ${
+                        className={`w-20 shrink-0 text-right text-sm tabular-nums ${
                           potenciaDoPonto.get(s.terminalId) == null ? 'text-amber-700' : 'text-slate-700'
                         }`}
                         title={
@@ -374,7 +374,7 @@ export default function PainelEletrica({
                         {potenciaDoPonto.get(s.terminalId) == null ? '—' : va(potenciaDoPonto.get(s.terminalId) as number)}
                       </span>
                       {todosOsCircuitos.length === 0 && !podeCriar ? (
-                        <span className="shrink-0 text-[10px] text-slate-500">
+                        <span className="shrink-0 text-xs text-slate-500">
                           crie um circuito abaixo
                         </span>
                       ) : (
@@ -389,7 +389,7 @@ export default function PainelEletrica({
                             }
                             onLigarAoCircuito?.(s.terminalId, e.target.value);
                           }}
-                          className="w-32 shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px]"
+                          className="w-40 shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-sm"
                         >
                           <option value="">Ligar a…</option>
                           {todosOsCircuitos.map((c) => (
@@ -433,33 +433,33 @@ export default function PainelEletrica({
                 Editável nos dois seria duas verdades sobre o mesmo campo — e foi
                 a geometria do quadro morando aqui que gerou a confusão relatada
                 em 09/09: o QDC se editava na Elétrica e o ponto em Componentes. */}
-            <span className="min-w-0 flex-1 truncate px-1 py-0.5 text-xs font-semibold text-slate-700">
+            <span className="min-w-0 flex-1 truncate px-1 py-0.5 text-sm font-semibold text-slate-700">
               {q.nome}
             </span>
             <button
               type="button"
               onClick={() => onSelecionar?.(q.quadroId)}
-              className="shrink-0 text-[10px] text-blue-700 hover:underline"
+              className="shrink-0 text-xs text-blue-700 hover:underline"
             >
               ver
             </button>
           </div>
 
           {q.circuitos.length === 0 ? (
-            <p className="px-2 py-1.5 text-[11px] text-slate-500">Sem circuitos ainda.</p>
+            <p className="px-2 py-1.5 text-sm text-slate-500">Sem circuitos ainda.</p>
           ) : (
             <div className="overflow-x-auto">
               {/* `table-fixed` com larguras no cabeçalho: com a linha do
                   pré-dimensionamento (colSpan) o layout automático alargava a
                   tabela e a coluna Carga saía do painel — visto no harness. */}
-              <table className="w-full table-fixed text-[11px]">
+              <table className="w-full table-fixed text-sm">
                 <thead>
-                  <tr className="text-left text-[10px] uppercase tracking-wide text-slate-500">
+                  <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
                     <th className="px-2 py-1 font-semibold">Circuito</th>
-                    <th className="w-12 px-2 py-1 text-right font-semibold">Disj.</th>
-                    <th className="w-12 px-2 py-1 text-right font-semibold">Seção</th>
-                    <th className="w-12 px-2 py-1 text-right font-semibold">Pts.</th>
-                    <th className="w-16 px-2 py-1 text-right font-semibold">Carga</th>
+                    <th className="w-16 px-2 py-1 text-right font-semibold">Disj.</th>
+                    <th className="w-16 px-2 py-1 text-right font-semibold">Seção</th>
+                    <th className="w-14 px-2 py-1 text-right font-semibold">Pts.</th>
+                    <th className="w-24 px-2 py-1 text-right font-semibold">Carga</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -548,7 +548,7 @@ export default function PainelEletrica({
                           tabela e empurra a coluna Carga para fora do painel — o
                           print do harness mostrou "CARG" cortado. */}
                       <td colSpan={5} className="max-w-0 pb-0.5">
-                        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-2 text-[10px] text-slate-500">
+                        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 px-2 text-xs text-slate-500">
                           <label className="flex items-center gap-1">
                             Tensão
                             <input
@@ -561,7 +561,7 @@ export default function PainelEletrica({
                               }
                               placeholder="V"
                               aria-label={`Tensão do circuito ${c.nome}, em volts`}
-                              className="w-12 rounded border border-slate-200 px-1 py-0 text-right text-[10px]"
+                              className="w-16 rounded border border-slate-200 px-1 py-0.5 text-right text-sm"
                             />
                             V
                           </label>
@@ -573,7 +573,7 @@ export default function PainelEletrica({
                                 onCircuitoProps(c.circuitoId, { ligacao: e.target.value as LigacaoDoCircuito })
                               }
                               aria-label={`Ligação do circuito ${c.nome}`}
-                              className="rounded border border-slate-200 px-1 py-0 text-[10px]"
+                              className="rounded border border-slate-200 px-1 py-0.5 text-sm"
                             >
                               {LIGACOES_DO_CIRCUITO.map((l) => (
                                 <option key={l} value={l}>
@@ -616,7 +616,7 @@ export default function PainelEletrica({
                 </tbody>
               </table>
               {q.pontosSemPotencia > 0 && (
-                <p className="px-2 py-1 text-[10px] text-amber-700">
+                <p className="px-2 py-1 text-xs text-amber-700">
                   ⚠ {q.pontosSemPotencia}{' '}
                   {q.pontosSemPotencia === 1 ? 'ponto entra' : 'pontos entram'} na contagem e{' '}
                   <strong>não</strong> na carga — sem potência informada. A soma acima está
@@ -656,7 +656,7 @@ export default function PainelEletrica({
               }
               placeholder="Novo circuito (ex.: C3 — Tomadas cozinha)"
               aria-label="Nome do novo circuito"
-              className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1 text-[11px]"
+              className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm"
             />
             <button
               type="button"
@@ -665,7 +665,7 @@ export default function PainelEletrica({
                 onAddCircuito(q.quadroId, (novoCircuito[q.quadroId] ?? '').trim());
                 setNovoCircuito((s) => ({ ...s, [q.quadroId]: '' }));
               }}
-              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
             >
               <Plus className="h-3 w-3" /> Circuito
             </button>
@@ -677,7 +677,7 @@ export default function PainelEletrica({
 
       {executivoSlot}
 
-      <p className="text-[10px] text-slate-500">
+      <p className="text-xs text-slate-500">
         Disjuntor e seção são <strong>o que você declarou</strong>. O pré-dimensionamento abaixo
         de cada circuito é o que a NBR 5410 pede para a carga declarada, com as hipóteses
         escritas — ele sugere; quem grava é você. Dimensionamento é do responsável técnico.
@@ -733,14 +733,14 @@ function FormularioNovoCircuito({
         // rodapé de cada quadro, e dois campos com o mesmo nome acessível
         // confundem leitor de tela (e o teste).
         aria-label="Nome do circuito a criar"
-        className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[11px]"
+        className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-sm"
       />
       {quadros.length > 1 && (
         <select
           value={quadroId}
           onChange={(e) => setQuadroId(e.target.value)}
           aria-label="Quadro do novo circuito"
-          className="shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px]"
+          className="shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-xs"
         >
           {quadros.map((q) => (
             <option key={q.id} value={q.id}>
@@ -753,7 +753,7 @@ function FormularioNovoCircuito({
         type="button"
         onClick={() => onCriar(quadroId, nome.trim())}
         disabled={!podeCriar}
-        className="inline-flex shrink-0 items-center gap-1 rounded-[6px] bg-blue-600 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-blue-700 disabled:opacity-40"
+        className="inline-flex shrink-0 items-center gap-1 rounded-[6px] bg-blue-600 px-2 py-0.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40"
       >
         <Plus className="h-3 w-3" />
         {quantos > 1 ? `Criar e ligar ${quantos}` : 'Criar e ligar'}
@@ -761,7 +761,7 @@ function FormularioNovoCircuito({
       <button
         type="button"
         onClick={onCancelar}
-        className="shrink-0 rounded-[6px] px-1.5 py-0.5 text-[11px] text-slate-600 hover:bg-white"
+        className="shrink-0 rounded-[6px] px-1.5 py-0.5 text-sm text-slate-600 hover:bg-white"
       >
         Cancelar
       </button>

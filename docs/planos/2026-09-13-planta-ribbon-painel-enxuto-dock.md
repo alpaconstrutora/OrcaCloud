@@ -176,6 +176,21 @@ porque o título e a descrição já estão no cabeçalho do drawer (a captura
 mostrou os dois repetidos). Emite-se uma vez por revisão; o quadro se consulta
 o tempo todo — separá-los é a justificativa.
 
+**Fonte mínima nos drawers Quadro de cargas e Projeto executivo** (14/09,
+pedido: *"Textos secundários e legendas: 12px; corpo de texto principal: 14px é o
+limite inferior para tabelas, listas e menus"*): os cinco painéis desses
+drawers (`PainelEletrica`, `PainelEletricaExecutivo`, `PainelPreDimensionamento`,
+`PainelQuadroAlimentador`, `PainelConferenciaNbr`) foram escritos para o painel
+lateral de 307 px em 9/10/11 px. Regra aplicada: `text-[9|10|11px]` → `text-xs`
+(12 px) em legendas (código da norma, resumo recolhido, rótulo de campo) e
+`text-sm` (14 px) em corpo (tabela, campos, nomes, achados, botões de ação).
+Larguras das colunas da tabela e da lista de pontos subiram junto (Disj./Seção
+w-16, Pts. w-14, Carga w-24; Potência w-20, Circuito w-40). Prova no app real:
+medição por `getComputedStyle` em todos os nós de texto dos dois drawers = nenhum
+abaixo de 12 px; tabela sem transbordo (scrollWidth = clientWidth); capturas
+olhadas. Vale como padrão para drawers novos; os painéis do lateral (307 px)
+continuam com a escala menor até decisão própria.
+
 **Defeito achado pelo usuário no uso** (*"o botão excluir no painel lateral não
 está funcionando. não consigo excluir TUG"*): a lixeira da lista do navegador
 chamava `excluirComponente`, que só conhecia parede, abertura, estrutura, água

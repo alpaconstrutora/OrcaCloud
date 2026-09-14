@@ -4,6 +4,9 @@ import {
     Wallet, Receipt, Clock,
 } from 'lucide-react';
 import {
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
+} from 'recharts';
+import {
     opuraAnalyticsService,
     type OpuraClienteKpis,
     type OpuraEntry,
@@ -16,6 +19,8 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './
 import ClientSelect from './ClientSelect';
 import Button from './ui/Button';
 import { SegmentedProgress } from './ui/SegmentedProgress';
+import { usePersistedState } from './ui/TableUtils';
+import { montarSeriePrevistoRealizado, type Granularidade } from '../lib/opuraPrevistoRealizadoSerie';
 
 // ── Formatadores ──────────────────────────────────────────────────────────────
 function fBRL(v: number | null): string {
@@ -27,7 +32,112 @@ function fPct(v: number | null): string {
     return `${v.toFixed(1)}%`;
 }
 
+/** Tick de eixo: "12 mil" / "1,2 mi" — o eixo é régua, não valor; a moeda
+ *  está no subtítulo e no tooltip, e "R$ 10 mil" quebrava em duas linhas. */
+function compactAxis(v: number): string {
+    const abs = Math.abs(v);
+    if (abs >= 1_000_000) return `${(v / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi`;
+    if (abs >= 1_000) return `${Math.round(v / 1_000).toLocaleString('pt-BR')} mil`;
+    return String(Math.round(v));
+}
+
+/** Ticks "redondos" para o eixo de valor (0 · 1 mil · 2 mil …). O automático
+ *  do Recharts devolve 0/950/1900/2850, e o formatador compacto arredondaria
+ *  2850 para "3 mil" — rótulo mentindo sobre a linha em que está. */
+function niceTicks(max: number, count = 4): number[] {
+    if (!(max > 0)) return [0];
+    const bruto = max / count;
+    const pot = 10 ** Math.floor(Math.log10(bruto));
+    const frac = bruto / pot;
+    const passo = (frac <= 1 ? 1 : frac <= 2 ? 2 : frac <= 2.5 ? 2.5 : frac <= 5 ? 5 : 10) * pot;
+    const ticks: number[] = [];
+    for (let t = 0; t <= max + passo * 0.999; t += passo) ticks.push(Math.round(t * 1000) / 1000);
+    return ticks;
+}
+
 interface ClientLite { id: string; name: string; document: string | null; }
+
+// ── Cromo do gráfico (guia §28, mesmos valores de RentalAnalysisOverview) ──────
+const GRID = '#f1f5f9';
+const TICK = { fontSize: 11, fill: '#64748b' };
+const TOOLTIP_STYLE = {
+    backgroundColor: '#fff',
+    borderRadius: '10px',
+    border: '1px solid #e2e8f0',
+    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+    fontSize: 12,
+};
+const TOOLTIP_CURSOR = { fill: '#f8fafc' };
+/** Medida do PRIMEIRO render, antes de o container ser medido — sem isto o
+ *  Recharts avisa "width(-1)" no console a cada gráfico montado. */
+const INITIAL_DIMENSION = { width: 520, height: 200 };
+/** Forma "ênfase" (§28.4): realizado é a série, previsto é o contexto em cinza
+ *  recessivo — validado com o script do dataviz; o cinza reprova no piso de
+ *  croma DE PROPÓSITO e exige legenda + valores visíveis (abaixo). */
+const SERIE_REALIZADO = '#3b82f6';
+const SERIE_PREVISTO = '#94a3b8';
+
+const ChartCard: React.FC<{
+    title: string;
+    subtitle?: string;
+    /** Controle à direita do título (ex.: alternador de granularidade). */
+    aside?: React.ReactNode;
+    children: React.ReactNode;
+}> = ({ title, subtitle, aside, children }) => (
+    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-4 flex flex-col">
+        <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
+                {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
+            </div>
+            {aside}
+        </div>
+        <div className="mt-3 flex-1 min-h-0">{children}</div>
+    </div>
+);
+
+/** Estado vazio de um card de gráfico — texto só, sem ícone grande (§28.5). */
+const ChartEmpty: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+    <div className="flex items-center justify-center min-h-[160px] text-sm text-gray-400 text-center px-4">
+        {children}
+    </div>
+);
+
+/** Legenda HTML — obrigatória com 2+ séries (a identidade nunca fica só na cor). */
+const Legend: React.FC<{ items: { label: string; color: string }[] }> = ({ items }) => (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-2">
+        {items.map(i => (
+            <span key={i.label} className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+                <span className="w-2.5 h-2.5 rounded-[2px] shrink-0" style={{ backgroundColor: i.color }} />
+                {i.label}
+            </span>
+        ))}
+    </div>
+);
+
+/** Alternador Mensal / Anual — trilho de abas do §19.1, em `h-7`. */
+const GRANULARIDADES: { id: Granularidade; label: string }[] = [
+    { id: 'mensal', label: 'Mensal' },
+    { id: 'anual', label: 'Anual' },
+];
+const GranularidadeToggle: React.FC<{ value: Granularidade; onChange: (g: Granularidade) => void }> = ({ value, onChange }) => (
+    <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 shrink-0" role="tablist" aria-label="Período do gráfico">
+        {GRANULARIDADES.map(g => (
+            <button
+                key={g.id}
+                type="button"
+                role="tab"
+                aria-selected={value === g.id}
+                onClick={() => onChange(g.id)}
+                className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                    value === g.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
+                }`}
+            >
+                {g.label}
+            </button>
+        ))}
+    </div>
+);
 
 // ── KPI card ───────────────────────────────────────────────────────────────────
 function KPICard({ label, value, sub, icon: Icon, color }: {
@@ -62,6 +172,10 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
 
     const [kpis, setKpis]       = React.useState<OpuraClienteKpis | null>(null);
     const [byProject, setByProject] = React.useState<OpuraPivotRow[]>([]);
+    // Série do gráfico Previsto × Realizado: pivot por mês do lançamento, com
+    // o MESMO recorte (cliente + período + transaction_date) dos KPIs.
+    const [byMonth, setByMonth] = React.useState<OpuraPivotRow[]>([]);
+    const [granularidade, setGranularidade] = usePersistedState<Granularidade>('centralCliente:granularidade', 'mensal');
     const [loading, setLoading] = React.useState(false);
     const [error, setError]     = React.useState<string | null>(null);
 
@@ -92,15 +206,17 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
         setLoading(true);
         setError(null);
         try {
-            const [k, proj] = await Promise.all([
+            const [k, proj, meses] = await Promise.all([
                 opuraAnalyticsService.clienteKpis(organizationId, clientId, dateFrom, dateTo),
                 opuraAnalyticsService.pivot(organizationId, 'project', { clientId, dateFrom, dateTo }),
+                opuraAnalyticsService.pivot(organizationId, 'tx_month', { clientId, dateFrom, dateTo }),
             ]);
             setKpis(k);
             setByProject(proj);
+            setByMonth(meses);
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e);
-            setKpis(null); setByProject([]); setError(msg);
+            setKpis(null); setByProject([]); setByMonth([]); setError(msg);
             showToast(`Erro ao carregar Central de Clientes: ${msg}`, 'error');
             console.error('[CentralCliente]', e);
         } finally {
@@ -138,6 +254,19 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
         { label: 'Recebido',   value: recebido,   color: 'bg-emerald-500' },
     ];
     const maxProjAbs = Math.max(1, ...byProject.map(c => Math.abs(c.net_realizado)));
+
+    // Gráfico Previsto × Realizado — todos os períodos do intervalo, vazio = 0.
+    const serie = React.useMemo(
+        () => montarSeriePrevistoRealizado(byMonth, dateFrom, dateTo, granularidade),
+        [byMonth, dateFrom, dateTo, granularidade],
+    );
+    const serieMax = Math.max(0, ...serie.map(p => Math.max(p.previsto, p.realizado)));
+    const yTicks = niceTicks(serieMax);
+    const totalPrevisto = serie.reduce((a, p) => a + p.previsto, 0);
+    const totalRealizado = serie.reduce((a, p) => a + p.realizado, 0);
+    const pctRealizadoSerie = totalPrevisto + totalRealizado > 0 ? (totalRealizado / (totalPrevisto + totalRealizado)) * 100 : null;
+    // Acima disto os rótulos de mês colidem mesmo em card de largura inteira.
+    const MESES_MAX_VISAO_MENSAL = 60;
 
     return (
         <div className="space-y-6">
@@ -213,6 +342,76 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
                             ))}
                         </div>
                     </div>
+
+                    {/* Previsto × Realizado por período (guia §28) — mesma base
+                        dos KPIs Saldo devedor (previsto) e Recebido (realizado). */}
+                    <ChartCard
+                        title="Previsto × Realizado por período"
+                        subtitle="Lançamentos a receber deste cliente, pela data do lançamento: previsto = pendente, realizado = conciliado. A soma fecha com Saldo devedor e Recebido."
+                        aside={<GranularidadeToggle value={granularidade} onChange={setGranularidade} />}
+                    >
+                        {loading && byMonth.length === 0 ? (
+                            <ChartEmpty>Carregando...</ChartEmpty>
+                        ) : serie.length === 0 ? (
+                            <ChartEmpty>Período inválido — a data inicial precisa ser anterior à final.</ChartEmpty>
+                        ) : granularidade === 'mensal' && serie.length > MESES_MAX_VISAO_MENSAL ? (
+                            <ChartEmpty>Período longo demais para a visão mensal ({serie.length} meses). Use a visão anual ou encurte o período.</ChartEmpty>
+                        ) : serieMax === 0 ? (
+                            <ChartEmpty>Nenhum lançamento a receber deste cliente no período.</ChartEmpty>
+                        ) : (
+                            <>
+                                <Legend items={[{ label: 'Previsto', color: SERIE_PREVISTO }, { label: 'Realizado', color: SERIE_REALIZADO }]} />
+                                <div style={{ height: 220 }}>
+                                    <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL_DIMENSION}>
+                                        <BarChart data={serie} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} barGap={2} barCategoryGap="30%">
+                                            <CartesianGrid vertical={false} stroke={GRID} />
+                                            <XAxis
+                                                dataKey="label"
+                                                axisLine={false}
+                                                tickLine={false}
+                                                tick={TICK}
+                                                interval={serie.length <= 12 ? 0 : 'preserveStartEnd'}
+                                            />
+                                            <YAxis
+                                                axisLine={false}
+                                                tickLine={false}
+                                                tick={TICK}
+                                                tickFormatter={compactAxis}
+                                                width={48}
+                                                ticks={yTicks}
+                                                domain={[0, yTicks[yTicks.length - 1]]}
+                                            />
+                                            <RechartsTooltip
+                                                cursor={TOOLTIP_CURSOR}
+                                                contentStyle={TOOLTIP_STYLE}
+                                                formatter={(val, name) => [fBRL(Number(val)), name === 'realizado' ? 'Realizado' : 'Previsto']}
+                                            />
+                                            {/* Sem animação: re-renderiza ao trocar Mensal/Anual, e a
+                                                barra que "cresce" a cada clique lê como dado mudando. */}
+                                            <Bar dataKey="previsto" fill={SERIE_PREVISTO} radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
+                                            <Bar dataKey="realizado" fill={SERIE_REALIZADO} radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                                {/* A leitura sem passar o mouse — e a "vista de tabela" que o
+                                    cinza recessivo do previsto exige. */}
+                                <div className="grid grid-cols-3 gap-3 mt-2 pt-2 border-t border-gray-100">
+                                    <div className="min-w-0">
+                                        <p className="text-xs text-gray-400 truncate">Previsto no período</p>
+                                        <p className="text-sm font-medium text-gray-800 truncate">{fBRL(totalPrevisto)}</p>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-xs text-gray-400 truncate">Realizado no período</p>
+                                        <p className="text-sm font-medium text-gray-800 truncate">{fBRL(totalRealizado)}</p>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-xs text-gray-400 truncate">Realizado sobre o total</p>
+                                        <p className="text-sm font-medium text-gray-800 truncate">{fPct(pctRealizadoSerie)}</p>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </ChartCard>
 
                     {/* Cliente por Obra (clicável → extrato) */}
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

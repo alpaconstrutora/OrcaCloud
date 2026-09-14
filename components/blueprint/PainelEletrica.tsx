@@ -13,6 +13,7 @@ import { HipotesesDoPreDimensionamento, LinhaPreDimensionamento } from './Painel
 import PainelQuadroAlimentador from './PainelQuadroAlimentador';
 import { preDimensionarQuadroCompleto } from '../../utils/blueprintEletricaDimensionamento';
 import { usePersistedState } from '../ui/TableUtils';
+import { pontosAPreencher } from '../../utils/blueprintPotenciaPadrao';
 import {
   CRITERIOS_DE_AGRUPAMENTO,
   CRITERIO_SUGERIDO,
@@ -131,18 +132,13 @@ export default function PainelEletrica({
    * ("verifique por que alguns pontos não têm potência", 13/09/2026: eram
    * anteriores ao padrão). O botão preenche todos de uma vez.
    */
-  const semPotenciaPreenchivel = (model.terminais ?? []).filter(
-    (t) =>
-      t.disciplina === 'ELETRICA' &&
-      t.potenciaW == null &&
-      (t.tipoEletrico === 'TUG' || t.tipoEletrico === 'TUE' || (t.tipoEletrico?.startsWith('ILUMINACAO') ?? false)),
-  ).length;
+  const semPotenciaPreenchivel = pontosAPreencher(model, null);
   const botaoPreencher =
     onPreencherPotencias && semPotenciaPreenchivel > 0 ? (
       <button
         type="button"
         onClick={onPreencherPotencias}
-        title="Tomadas e luzes sem potência recebem o padrão da NBR 5410 (100/600 VA; luz pelo mínimo do cômodo). Não mexe no que já foi declarado."
+        title="Tomadas e luzes sem potência recebem o padrão da NBR 5410 (100/600 VA; luz pelo mínimo do cômodo), e tomadas de banheiro/cozinha abaixo de 600 VA sobem ao mínimo enquanto houver vaga nos três pontos. O resto não é tocado."
         className="rounded border border-amber-400 bg-white px-1.5 py-0.5 text-[11px] font-medium text-amber-800 hover:bg-amber-100"
       >
         Preencher potência pela norma ({semPotenciaPreenchivel})
@@ -234,8 +230,8 @@ export default function PainelEletrica({
         <p className="flex flex-wrap items-center gap-x-2 text-[11px] text-amber-800">
           <span>
             <strong>{semPotenciaPreenchivel}</strong>{' '}
-            {semPotenciaPreenchivel === 1 ? 'ponto está' : 'pontos estão'} sem potência — anteriores
-            ao padrão da norma, ou apagados à mão.
+            {semPotenciaPreenchivel === 1 ? 'ponto' : 'pontos'} sem potência ou abaixo do mínimo da
+            norma — anteriores ao padrão, ou criados antes de o cômodo receber o tipo.
           </span>
           {botaoPreencher}
         </p>

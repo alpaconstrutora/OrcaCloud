@@ -67,6 +67,17 @@ pontos sem potência (`comandosDePotenciaPadrao`), na ordem do modelo, num lote
 desfazível, sem sobrescrever nada. A luz legada leva o mínimo do cômodo menos o
 já declarado.
 
+*"ainda tem pontos sem VA e cozinha continua com 100 VA"* (em seguida): o
+preenchimento não sobrescrevia potência existente, e 100 VA em cozinha era um
+padrão dado antes de o cômodo ter tipo. Agora o mesmo botão **eleva a 600 VA**
+as tomadas de banheiro/cozinha que estão abaixo de 600, enquanto houver vaga
+nos três pontos (`tomadasMolhadasAbaixoDoMinimo`) — não é sobrescrever decisão,
+é o "não deve ser inferior" de 9.5.2.2.2 a. A conta do botão é a exata do lote
+(`pontosAPreencher`) e vale para todos os pavimentos. Reproduzido no app real:
+completar como sala (100 VA) e reclassificar como cozinha → botão "(3)" →
+600/600/600/100. Pontos "a classificar" (sem tipo elétrico) e interruptores
+continuam sem VA por definição — o tipo vem antes.
+
 **Prova**: `__tests__/blueprintNbr5410Notas.test.ts` (6): e.1 conta a 500 mm e
 não a 1.200 mm; varanda < 2 m² e varanda de 0,7 m de profundidade; texto da
 bancada; distância ao anel; lavabo com arandela admitido; sala/depósito grande

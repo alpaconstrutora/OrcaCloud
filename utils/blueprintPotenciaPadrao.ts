@@ -169,20 +169,65 @@ export function pontosSemPotencia(model: BlueprintModel, levelId: ObjectId | nul
   );
 }
 
+/** O ambiente molhado (banheiro, cozinha/serviço) que contém o ponto, se houver. */
+function emAmbienteMolhado(model: BlueprintModel, t: Terminal): boolean {
+  const space = model.spaces.find((s) => s.levelId === t.levelId && dentroDe(s.ring, s.holes, t.at));
+  if (!space) return false;
+  const tipo = etiquetaDoAmbiente(space, model.labels)?.tipoDeAmbiente;
+  return !!tipo && MOLHADOS.has(tipo);
+}
+
+/**
+ * Tomadas de banheiro/cozinha com potência ABAIXO de 600 VA — o que a norma
+ * chama de "não deve ser inferior" (9.5.2.2.2 a). Em geral são os 100 VA que
+ * o padrão deu antes de o cômodo receber o tipo (13/09/2026: "cozinha
+ * continua com 100 VA"). Elevar ao mínimo não é sobrescrever uma decisão: é
+ * cumprir a norma — e só até preencher as três vagas de 600.
+ */
+export function tomadasMolhadasAbaixoDoMinimo(model: BlueprintModel, levelId: ObjectId | null): Terminal[] {
+  return (model.terminais ?? []).filter(
+    (t) =>
+      t.disciplina === 'ELETRICA' &&
+      (!levelId || t.levelId === levelId) &&
+      ehTomada(t.tipoEletrico) &&
+      t.potenciaW != null &&
+      t.potenciaW < POTENCIA_TOMADA_MOLHADA_VA &&
+      emAmbienteMolhado(model, t),
+  );
+}
+
+/** Quantos pontos o botão "Preencher potência pela norma" vai tocar — a conta exata do lote. */
+export function pontosAPreencher(model: BlueprintModel, levelId: ObjectId | null): number {
+  return comandosDePotenciaPadrao(model, levelId).length;
+}
+
 /**
  * O LEGADO: pontos criados antes do padrão (ou com potência apagada) recebem a
  * potência da norma pelo MESMO critério, na ordem do modelo, cada um contando
- * para o seguinte. Só toca em quem está sem potência — nunca sobrescreve.
+ * para o seguinte. E tomadas de banheiro/cozinha abaixo de 600 VA sobem a
+ * 600 enquanto houver vaga (as três primeiras). Nada mais é sobrescrito.
  */
 export function comandosDePotenciaPadrao(model: BlueprintModel, levelId: ObjectId | null): Command[] {
   const resolvidos: PontoResolvido[] = [];
   const passaDeSeis = new Map<ObjectId, boolean>();
   const comandos: Command[] = [];
-  for (const t of pontosSemPotencia(model, levelId)) {
+  const candidatos = new Set([
+    ...pontosSemPotencia(model, levelId).map((t) => t.id),
+    ...tomadasMolhadasAbaixoDoMinimo(model, levelId).map((t) => t.id),
+  ]);
+  // Na ordem do modelo: quem veio antes ganha a vaga de 600 antes.
+  for (const t of (model.terminais ?? []).filter((x) => candidatos.has(x.id))) {
     if (!passaDeSeis.has(t.levelId)) passaDeSeis.set(t.levelId, conjuntoMolhadoPassaDeSeis(model, t.levelId));
     const ctx = contextoDoAmbiente(model, t.levelId, t.at, resolvidos, t.id);
     const p = potenciaPadraoVA(t.tipoEletrico, ctx, passaDeSeis.get(t.levelId));
     if (p == null) continue;
+    if (t.potenciaW != null) {
+      // Já tinha potência (abaixo de 600, em molhado): só sobe se ainda há vaga de 600.
+      if (p !== POTENCIA_TOMADA_MOLHADA_VA) continue;
+      resolvidos.push({ at: t.at, tipoEletrico: t.tipoEletrico ?? null, potenciaW: p });
+      comandos.push({ type: 'SetTerminalProps', terminalId: t.id, potenciaW: p });
+      continue;
+    }
     resolvidos.push({ at: t.at, tipoEletrico: t.tipoEletrico ?? null, potenciaW: p });
     comandos.push({ type: 'SetTerminalProps', terminalId: t.id, potenciaW: p });
   }

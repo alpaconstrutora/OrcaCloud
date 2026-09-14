@@ -7236,8 +7236,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             }}
             onAceitarSugeridas={aceitarSugeridas}
             // O legado: pontos sem potência recebem o padrão da norma, num lote (Ctrl+Z desfaz).
+            // Todos os pavimentos (`null`): o botão mostra a conta do modelo inteiro.
             onPreencherPotencias={() => {
-              const cmds = comandosDePotenciaPadrao(editor.model, levelId);
+              const cmds = comandosDePotenciaPadrao(editor.model, null);
               if (cmds.length > 0) editor.runBatch(cmds);
             }}
             hipoteses={hipotesesEletricas}

@@ -117,6 +117,23 @@ describe('comandosDePotenciaPadrao — o legado', () => {
     expect(comandosDePotenciaPadrao(depois, t)).toEqual([]); // idempotente
   });
 
+  it('cozinha com 100 VA dados antes do tipo ("cozinha continua com 100 VA"): sobem a 600 enquanto há vaga; a 4ª fica em 100; sala não é tocada', () => {
+    const { m, t } = casa();
+    const legado = applyBatch(m, [
+      add(t, 500, 200, 'TUG', 100), add(t, 1500, 200, 'TUG', 100), add(t, 2500, 200, 'TUG', 100), add(t, 500, 3800, 'TUG', 100),
+      add(t, 6000, 200, 'TUG', 100), // sala: 100 é o mínimo — fica
+    ]).model;
+    const cmds = comandosDePotenciaPadrao(legado, t);
+    expect(cmds.map((c) => (c.type === 'SetTerminalProps' ? [c.terminalId, c.potenciaW] : 'x'))).toEqual([
+      [legado.terminais![0].id, 600],
+      [legado.terminais![1].id, 600],
+      [legado.terminais![2].id, 600],
+    ]);
+    const depois = applyBatch(legado, cmds).model;
+    expect(depois.terminais!.map((x) => x.potenciaW)).toEqual([600, 600, 600, 100, 100]);
+    expect(comandosDePotenciaPadrao(depois, t)).toEqual([]);
+  });
+
   it('respeita o que já tem 600: com uma de 600 declarada, só mais duas viram 600', () => {
     const { m, t } = casa();
     const legado = applyBatch(m, [

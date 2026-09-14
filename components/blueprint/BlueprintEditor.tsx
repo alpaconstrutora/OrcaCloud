@@ -6906,7 +6906,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           </SheetDescription>
         </SheetHeader>
 
-        <SheetPanel className={tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' ? 'px-6 py-4' : 'p-0'}>
+        <SheetPanel className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' ? 'px-6 py-4' : 'p-0'}`}>
           {tarefaAberta === 'terreno' && painelDoTerreno}
 
           {tarefaAberta === 'eletrodutos' && (
@@ -6959,7 +6959,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       <th className="w-20 py-1.5 pr-2 font-medium">Quadro</th>
                       <th className="w-24 py-1.5 pr-2 font-medium">Pontos</th>
                       <th className="w-20 py-1.5 pr-2 font-medium">Previsto</th>
-                      <th className="w-24 py-1.5 text-right font-medium">Lançar</th>
+                      <th className="w-28 py-1.5 text-right font-medium">Lançar</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -6986,7 +6986,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                               type="button"
                               onClick={() => lancarEletrodutos([plano])}
                               disabled={plano.aLigar === 0}
-                              className="inline-flex items-center gap-1 rounded-[6px] border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                              className="inline-flex items-center gap-1 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               <Cable className="h-3.5 w-3.5" />
                               {plano.aLigar > 0 ? `${plano.aLigar} ponto(s)` : 'Nada'}
@@ -7125,10 +7125,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           )}
           {tarefaAberta === 'eletrodutos' && (
             <>
-              <span className="mr-auto text-xs text-slate-500">
+              <span className="mr-auto whitespace-nowrap text-xs text-slate-500">
                 {eletrodutosSugeridosNoNivel.length === 0
-                  ? 'Nenhum sugerido pendente.'
-                  : `${eletrodutosSugeridosNoNivel.length} sugerido(s) pendente(s).`}
+                  ? 'Nenhum pendente.'
+                  : `${eletrodutosSugeridosNoNivel.length} pendente(s).`}
               </span>
               <button
                 type="button"
@@ -7215,7 +7215,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           </SheetDescription>
         </SheetHeader>
 
-        <SheetPanel className={relatorioNoDrawer === 'quadro-de-cargas' ? 'px-4 py-3' : 'p-0'}>
+        <SheetPanel className={`drawer-legivel ${relatorioNoDrawer === 'quadro-de-cargas' ? 'px-4 py-3' : 'p-0'}`}>
           {relatorioNoDrawer === 'conflitos' && (
             <PainelConflitos
               model={editor.model}

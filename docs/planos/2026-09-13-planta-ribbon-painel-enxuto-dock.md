@@ -204,3 +204,22 @@ pelo botão do painel.
 aparece, não é auto-selecionada, "2 selecionados", sem Dividir/Unir, Excluir
 esvazia e a aba some); app real com escritas bloqueadas: Parede 1 selecionada →
 Modificar com Copiar, Excluir, Dividir, Unir.
+
+**Fonte mínima nos demais drawers (14/09, pedido: *"aplique o mesmo nos demais
+drawers da planta inteligente"*)**: os outros 11 drawers (Distribuir tomadas,
+Lançar eletrodutos, Dados do lote, Do PDF/IFC/DXF/BCF, Conflitos, Medições,
+Quantitativos, Orçamento) somam ~330 ocorrências de 9/10/11 px espalhadas por
+painéis que **também** montam no lateral de 307 px (`PainelTerreno`,
+`PainelTopografia`, `PainelMedicoes`, `PainelOrcamento`…). Trocar classe a
+classe imporia a escala do drawer ao lateral. A regra foi para o ponto de
+montagem: `index.css` ganhou `.drawer-legivel` (9/10/11 px → 12 px; `text-xs`
+→ 14 px), aplicada aos dois `SheetPanel` do editor. Os drawers do Quadro de
+cargas e do Executivo, já corrigidos na fonte, não mudam com a regra.
+Ajustes de layout que a fonte maior expôs: coluna Lançar da tabela de
+eletrodutos w-24 → w-28 e botão `whitespace-nowrap`; rodapé de eletrodutos
+encurtado ("Nenhum pendente." / "N pendente(s).") e sem quebra.
+Prova no app real, escritas bloqueadas: os 13 drawers abertos um a um,
+`getComputedStyle` em todo nó com texto direto/campo = nenhum abaixo de 12 px;
+nenhum painel com scrollWidth > clientWidth; capturas de tomadas, eletrodutos,
+quantitativos e orçamento olhadas. Suíte 313 arquivos / 4129 testes verde,
+build ok.

@@ -279,6 +279,29 @@
 .high-contrast.theme-midnight .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
 .high-contrast.theme-midnight .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.22); }
 
+/* ─── DRAWER LEGÍVEL (Planta Inteligente, 14/09/2026) ─────────────────────
+   Pedido: legendas ≥ 12 px, corpo ≥ 14 px nos drawers. Os painéis que os
+   drawers montam foram escritos para o painel lateral de 307 px em 9/10/11 px
+   e vários deles AINDA aparecem lá (terreno como propriedades da divisa,
+   distribuir tomadas no cartão do ambiente). Por isso a regra vive no PONTO
+   DE MONTAGEM — o SheetPanel do drawer —, e não nos componentes: dentro do
+   drawer, text-[9|10|11px] vira 12 px e text-xs vira 14 px; fora dele nada
+   muda. `!important` porque as utilidades text-* do Tailwind têm a mesma
+   especificidade e vêm depois; é o único jeito de um contêiner vencer uma
+   utilidade por elemento sem reescrever cada elemento. */
+.drawer-legivel [class*="text-[9px]"],
+.drawer-legivel [class*="text-[10px]"],
+.drawer-legivel [class*="text-[11px]"] {
+  font-size: 0.75rem !important;   /* 12 px */
+  line-height: 1rem !important;
+}
+.drawer-legivel .text-xs,
+.drawer-legivel [class*=" text-xs"],
+.drawer-legivel [class^="text-xs"] {
+  font-size: 0.875rem !important;  /* 14 px */
+  line-height: 1.25rem !important;
+}
+
 @layer components {
   .opura-page {
     @apply mx-auto flex w-full max-w-[1440px] flex-col gap-6;

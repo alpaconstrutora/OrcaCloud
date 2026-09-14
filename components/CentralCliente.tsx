@@ -267,6 +267,11 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
     const pctRealizadoSerie = totalPrevisto + totalRealizado > 0 ? (totalRealizado / (totalPrevisto + totalRealizado)) * 100 : null;
     // Acima disto os rótulos de mês colidem mesmo em card de largura inteira.
     const MESES_MAX_VISAO_MENSAL = 60;
+    // `barSize` FIXO, não `maxBarSize`: com maxBarSize o Recharts centraliza
+    // cada barra no próprio slot e o par Previsto/Realizado do mesmo período
+    // se afasta (~80px na visão anual). Com barSize fixo ele encosta as duas
+    // (barGap) e centraliza o par na banda; se não couber, reduz sozinho.
+    const barSize = serie.length <= 12 ? 24 : serie.length <= 24 ? 14 : 10;
 
     return (
         <div className="space-y-6">
@@ -388,8 +393,8 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
                                             />
                                             {/* Sem animação: re-renderiza ao trocar Mensal/Anual, e a
                                                 barra que "cresce" a cada clique lê como dado mudando. */}
-                                            <Bar dataKey="previsto" fill={SERIE_PREVISTO} radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
-                                            <Bar dataKey="realizado" fill={SERIE_REALIZADO} radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
+                                            <Bar dataKey="previsto" fill={SERIE_PREVISTO} radius={[4, 4, 0, 0]} barSize={barSize} isAnimationActive={false} />
+                                            <Bar dataKey="realizado" fill={SERIE_REALIZADO} radius={[4, 4, 0, 0]} barSize={barSize} isAnimationActive={false} />
                                         </BarChart>
                                     </ResponsiveContainer>
                                 </div>

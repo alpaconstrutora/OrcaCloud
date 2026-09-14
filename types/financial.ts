@@ -740,6 +740,10 @@ export interface Receivable {
      *  vw_receivables — a view só expõe os UUIDs. */
     cost_center_name?: string;
     plano_de_contas_name?: string;
+    /** Empreendimento de origem — derivado do contrato (`reference_id`), não é
+     *  coluna da view. Ver `receivableService.enrichWithEmpreendimento`. */
+    empreendimento_id?: string | null;
+    empreendimento_name?: string | null;
     created_at?: string;
     updated_at?: string;
 }

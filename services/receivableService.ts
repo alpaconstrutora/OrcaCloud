@@ -1,4 +1,6 @@
 import { supabase } from '../lib/supabase';
+import { originIdFromRef } from '../lib/receivableRef';
+import { empreendimentoService } from './empreendimentoService';
 import type { Receivable, ReceivableBusinessStatus, InadimplenciaFaixa } from '../types/financial';
 
 export interface ReceivableFilters {
@@ -7,6 +9,95 @@ export interface ReceivableFilters {
     dueFrom?: string;
     dueTo?: string;
     projectId?: string;
+}
+
+/** PostgREST recebe o `.in()` pela URL — lotes de 200 UUIDs ficam longe do limite. */
+function chunk<T>(list: T[], size = 200): T[][] {
+    const out: T[][] = [];
+    for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
+    return out;
+}
+
+/**
+ * Resolve o Empreendimento de cada recebível. Não é coluna da view: o vínculo
+ * mora no CONTRATO de origem (`reference_id` = `<contract_id>-p…`/`:p…`, ver
+ * lib/receivableRef), e dali por três caminhos, nesta ordem:
+ *
+ *   1. `contracts.empreendimento_id` — vínculo direto (prédio em operação);
+ *   2. `contracts.deal_id` → `commercial_deals.property_id` → unidade → torre →
+ *      empreendimento (`vw_unit_property_map`) — venda/locação de unidade. É o
+ *      caminho que resolve hoje: medido 14/09/2026, 361 de 362 títulos;
+ *   3. obra (`project_id` do título ou do contrato) → `empreendimentos.project_id`
+ *      / `empreendimento_towers.project_id` — contrato de obra.
+ *
+ * Lançamento manual e NF-e não têm contrato e ficam sem empreendimento. Falha em
+ * qualquer consulta devolve as linhas sem a coluna — a tela não pode ficar em
+ * branco por causa de uma dimensão derivada.
+ */
+async function enrichWithEmpreendimento(rows: Receivable[], organizationId: string | null): Promise<Receivable[]> {
+    const contractIds = [...new Set(rows.map(r => originIdFromRef(r.reference_id)).filter(Boolean))];
+    if (contractIds.length === 0) return rows;
+
+    try {
+        type ContractLink = { id: string; empreendimento_id: string | null; deal_id: string | null; project_id: string | null };
+        const contracts: ContractLink[] = [];
+        for (const ids of chunk(contractIds)) {
+            // Sem organização ("Todas"): não filtra por org — os ids já vieram das
+            // linhas que a RLS liberou, então o `in(...)` sozinho já é o recorte.
+            let q = supabase.from('contracts').select('id, empreendimento_id, deal_id, project_id').in('id', ids);
+            if (organizationId) q = q.eq('organization_id', organizationId);
+            const { data } = await q;
+            contracts.push(...((data || []) as ContractLink[]));
+        }
+        if (contracts.length === 0) return rows;
+        const contractById = new Map(contracts.map(c => [c.id, c]));
+
+        // Caminho 2 — negócio → imóvel.
+        const dealIds = [...new Set(contracts.map(c => c.deal_id).filter((v): v is string => !!v))];
+        const propertyByDeal = new Map<string, string>();
+        for (const ids of chunk(dealIds)) {
+            const { data } = await supabase.from('commercial_deals').select('id, property_id').in('id', ids);
+            (data || []).forEach((d: { id: string; property_id?: string | null }) => {
+                if (d.property_id) propertyByDeal.set(d.id, d.property_id);
+            });
+        }
+
+        const [byProperty, byObra] = await Promise.all([
+            propertyByDeal.size > 0
+                ? empreendimentoService.mapPropertiesToEmpreendimentos(organizationId)
+                : Promise.resolve({} as Awaited<ReturnType<typeof empreendimentoService.mapPropertiesToEmpreendimentos>>),
+            empreendimentoService.mapObrasToEmpreendimentos(organizationId),
+        ]);
+
+        // Caminho 1 — nome dos vínculos diretos (os mapas acima só trazem os
+        // empreendimentos que têm unidade/obra).
+        const nameById = new Map<string, string>();
+        Object.values(byProperty).forEach(e => nameById.set(e.id, e.name));
+        Object.values(byObra).forEach(e => nameById.set(e.id, e.name));
+        const diretos = [...new Set(contracts.map(c => c.empreendimento_id).filter((v): v is string => !!v && !nameById.has(v)))];
+        for (const ids of chunk(diretos)) {
+            const { data } = await supabase.from('empreendimentos').select('id, name').in('id', ids);
+            (data || []).forEach((e: { id: string; name?: string | null }) => nameById.set(e.id, e.name ?? ''));
+        }
+
+        return rows.map(r => {
+            const contract = contractById.get(originIdFromRef(r.reference_id));
+            let empId: string | undefined = contract?.empreendimento_id ?? undefined;
+            if (!empId && contract?.deal_id) {
+                const propertyId = propertyByDeal.get(contract.deal_id);
+                empId = propertyId ? byProperty[propertyId]?.id : undefined;
+            }
+            if (!empId) {
+                const projectId = r.project_id ?? contract?.project_id ?? undefined;
+                empId = projectId ? byObra[projectId]?.id : undefined;
+            }
+            if (!empId) return r;
+            return { ...r, empreendimento_id: empId, empreendimento_name: nameById.get(empId) ?? null };
+        });
+    } catch (e) {
+        console.warn('[RECEIVABLE] Falha ao resolver empreendimento dos recebíveis:', e);
+        return rows;
+    }
 }
 
 export const receivableService = {
@@ -33,12 +124,16 @@ export const receivableService = {
             rows = rows.filter(r => r.effective_status === filters.status);
         }
 
+        // Antes da busca: o texto digitado também casa com o nome do empreendimento.
+        rows = await enrichWithEmpreendimento(rows, organizationId);
+
         if (filters?.search) {
             const q2 = filters.search.toLowerCase();
             rows = rows.filter(r =>
                 (r.party_name ?? '').toLowerCase().includes(q2) ||
                 (r.description ?? '').toLowerCase().includes(q2) ||
                 (r.project_name ?? '').toLowerCase().includes(q2) ||
+                (r.empreendimento_name ?? '').toLowerCase().includes(q2) ||
                 (r.reference_id ?? '').toLowerCase().includes(q2),
             );
         }

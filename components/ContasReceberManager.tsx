@@ -48,6 +48,9 @@ const STATUS_TEXT_COLORS: Record<string, string> = {
 const RECEBER_COLUMNS: ColumnConfig[] = [
     { key: 'party_name', label: 'Cliente / Parte', sortable: true },
     { key: 'description', label: 'Descrição', sortable: true },
+    // Derivado do contrato de origem (receivableService.enrichWithEmpreendimento),
+    // não é coluna de vw_receivables. Antes de Obra: Empreendimento → Obra.
+    { key: 'empreendimento_name', label: 'Empreendimento', sortable: true },
     { key: 'project_name', label: 'Obra', sortable: true },
     { key: 'due_date', label: 'Vencimento', sortable: true },
     { key: 'amount', label: 'Valor', sortable: true },
@@ -68,6 +71,7 @@ const RECEBER_COLUMNS: ColumnConfig[] = [
 const RECEBER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
     party_name: { label: 'Cliente / Parte', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
     description: { label: 'Descrição', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
+    empreendimento_name: { label: 'Empreendimento', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
     project_name: { label: 'Obra', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
     due_date: { label: 'Vencimento', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
     amount: { label: 'Valor', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
@@ -77,7 +81,7 @@ const RECEBER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean
 };
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    party_name: 200, description: 220, project_name: 160, due_date: 150, amount: 140, status: 150,
+    party_name: 200, description: 220, empreendimento_name: 180, project_name: 160, due_date: 150, amount: 140, status: 150,
     cost_center_name: 180, plano_de_contas_name: 180, actions: 260,
 };
 
@@ -86,6 +90,7 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
 const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
     { key: 'party_name', label: 'Cliente / Parte', type: 'text' },
     { key: 'description', label: 'Descrição', type: 'text' },
+    { key: 'empreendimento_name', label: 'Empreendimento', type: 'text' },
     { key: 'project_name', label: 'Obra', type: 'text' },
     { key: 'amount', label: 'Valor', type: 'number' },
     { key: 'due_date', label: 'Vencimento', type: 'date' },
@@ -98,6 +103,7 @@ function getAdvancedFilterValue(r: Receivable, key: string): unknown {
     switch (key) {
         case 'party_name': return r.party_name ?? '';
         case 'description': return r.description ?? '';
+        case 'empreendimento_name': return r.empreendimento_name ?? '';
         case 'project_name': return r.project_name ?? '';
         case 'amount': return r.amount ?? null;
         case 'due_date': return r.due_date ?? null;
@@ -136,6 +142,10 @@ function renderReceberCell(key: string, r: ReceberRow): React.ReactNode {
                 : <span className="text-sm text-gray-400 italic">—</span>;
         case 'description':
             return <span className="block text-sm font-normal text-gray-700 max-w-[200px] truncate">{r.description ?? '—'}</span>;
+        case 'empreendimento_name':
+            return r.empreendimento_name
+                ? <span className="block text-sm font-normal text-gray-700 max-w-[160px] truncate" title={r.empreendimento_name}>{r.empreendimento_name}</span>
+                : <span className="text-sm text-gray-400 italic">—</span>;
         case 'project_name':
             return <span className="block text-sm font-normal text-gray-700 max-w-[140px] truncate">{r.project_name ?? '—'}</span>;
         case 'due_date': {
@@ -906,6 +916,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                 switch (tableColumns.sortColumn) {
                     case 'party_name':    va = (a.party_name ?? '').toLowerCase();    vb = (b.party_name ?? '').toLowerCase();    break;
                     case 'description':   va = (a.description ?? '').toLowerCase();   vb = (b.description ?? '').toLowerCase();   break;
+                    case 'empreendimento_name': va = (a.empreendimento_name ?? '').toLowerCase(); vb = (b.empreendimento_name ?? '').toLowerCase(); break;
                     case 'project_name':  va = (a.project_name ?? '').toLowerCase();  vb = (b.project_name ?? '').toLowerCase();  break;
                     case 'due_date':      va = a.due_date ?? '';                      vb = b.due_date ?? '';                      break;
                     case 'amount':        va = a.amount ?? 0;                         vb = b.amount ?? 0;                         break;
@@ -1089,7 +1100,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input
                                 type="text"
-                                placeholder="Buscar por cliente, descrição ou obra..."
+                                placeholder="Buscar por cliente, descrição, empreendimento ou obra..."
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
                                 className="w-full h-9 pl-9 pr-8 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"

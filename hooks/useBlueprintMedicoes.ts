@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   formaDaLinha,
   lancamentosDeMedicao,
@@ -46,11 +46,26 @@ export function useBlueprintMedicoes(
 
   const formas: FormaMedida[] = linhas.map(formaDaLinha);
 
+  // ⚠️ O hook pode ser DESMONTADO com a listagem no ar (troca de estudo, ou o
+  // fim de um teste): gravar estado depois disso é o "window is not defined"
+  // que derrubou o CI em 14/09/2026 — o `setErro` do catch rodou com o
+  // ambiente já destruído. Mesma trava do `cancelado` em `useBlueprintEditor`.
+  const vivo = useRef(true);
+  useEffect(() => {
+    vivo.current = true;
+    return () => {
+      vivo.current = false;
+    };
+  }, []);
+
   const recarregar = useCallback(async () => {
     try {
-      setLinhas(await listarMedicoes(studyId, levelId));
+      const lista = await listarMedicoes(studyId, levelId);
+      if (!vivo.current) return;
+      setLinhas(lista);
       setErro(null);
     } catch (e) {
+      if (!vivo.current) return;
       setErro(e instanceof Error ? e.message : String(e));
     }
   }, [studyId, levelId]);

@@ -513,6 +513,10 @@ const RELATORIOS_DO_DOCK = {
   conflitos: { rotulo: 'Conflitos', naVista: true, no3d: true },
   comentarios: { rotulo: 'Comentários', naVista: true, no3d: true },
   'quadro-de-cargas': { rotulo: 'Quadro de cargas e NBR 5410', naVista: true, no3d: true },
+  // Separado do quadro de cargas (14/09/2026): "no mesmo drawer não tem
+  // necessidade além de tornar o drawer excessivamente longo". Emite-se uma
+  // vez por revisão; o quadro se consulta o tempo todo.
+  'executivo-eletrico': { rotulo: 'Projeto executivo elétrico (ART)', naVista: true, no3d: true },
   medicoes: { rotulo: 'Medições', naVista: false, no3d: false },
   quantitativos: { rotulo: 'Quantitativos', naVista: true, no3d: false },
   orcamento: { rotulo: 'Orçamento', naVista: false, no3d: false },
@@ -790,6 +794,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    */
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'quadro-de-cargas',
+    'executivo-eletrico',
     'conflitos',
     'medicoes',
     'quantitativos',
@@ -4838,7 +4843,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 contagem={(editor.model.circuitos ?? []).length}
                 ativo={relatorioAberto === 'quadro-de-cargas'}
                 onClick={() => alternarRelatorio('quadro-de-cargas')}
-                ajuda="Circuitos por quadro, pré-dimensionamento, conferência NBR 5410 e emissão executiva — no dock, embaixo do desenho"
+                ajuda="Circuitos por quadro, pré-dimensionamento com hipóteses declaradas e conferência NBR 5410"
+              />
+              <BotaoDoRibbon
+                icone={FileText}
+                rotulo="Projeto executivo (ART)"
+                contagem={executivoEletrico.emitidos.length || undefined}
+                ativo={relatorioAberto === 'executivo-eletrico'}
+                onClick={() => alternarRelatorio('executivo-eletrico')}
+                ajuda="Responsável técnico, ART, verificações e emissão do projeto executivo elétrico — separado do quadro de cargas porque se emite uma vez por revisão"
               />
             </GrupoDoRibbon>
           </>
@@ -7163,6 +7176,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           <SheetTitle>
             <span className="flex items-center gap-2">
               {relatorioNoDrawer === 'quadro-de-cargas' && <Zap className="h-5 w-5 text-blue-700" />}
+              {relatorioNoDrawer === 'executivo-eletrico' && <FileText className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'conflitos' && <AlertTriangle className="h-5 w-5 text-amber-600" />}
               {relatorioNoDrawer === 'medicoes' && <Ruler className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'quantitativos' && <Table2 className="h-5 w-5 text-blue-700" />}
@@ -7187,7 +7201,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           </SheetTitle>
           <SheetDescription>
             {relatorioNoDrawer === 'quadro-de-cargas' &&
-              'Circuitos por quadro, pré-dimensionamento com hipóteses declaradas, conferência da NBR 5410 e emissão do projeto executivo. Cada campo grava na hora; Ctrl+Z desfaz.'}
+              'Circuitos por quadro, pré-dimensionamento com hipóteses declaradas e conferência da NBR 5410. Cada campo grava na hora; Ctrl+Z desfaz. A emissão com ART fica em "Projeto executivo (ART)".'}
+            {relatorioNoDrawer === 'executivo-eletrico' &&
+              'A emissão é do responsável técnico. O programa reúne a conferência NBR 5410 e o pré-dimensionamento de cada circuito e quadro, registra a emissão e a amarra ao hash do desenho e das hipóteses.'}
             {relatorioNoDrawer === 'conflitos' &&
               'Interferências entre instalações e com a estrutura, e entre disciplinas. Clicar num conflito seleciona as peças no desenho; exporte em BCF para o projetista.'}
             {relatorioNoDrawer === 'medicoes' &&
@@ -7258,6 +7274,27 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             />
           )}
 
+          {relatorioNoDrawer === 'executivo-eletrico' && (
+            <div className="px-4 py-3">
+              <PainelEletricaExecutivo
+                semCabecalho
+                e={{
+                  responsavel: executivoEletrico.responsavel,
+                  onResponsavel: executivoEletrico.setResponsavel,
+                  resultado: resultadoEletrico,
+                  emitidos: executivoEletrico.emitidos,
+                  emissaoValida: emissaoEletricaValida,
+                  hashDaBaseAtual: hashEletrico.base,
+                  onEmitir: () => void emitirEletrico(),
+                  emitindo: executivoEletrico.emitindo,
+                  erro: executivoEletrico.erro,
+                  onBaixarMemorial: (row) => executivoEletrico.baixarMemorial(row, study.name),
+                  persistenciaIndisponivel: executivoEletrico.persistenciaIndisponivel,
+                }}
+              />
+            </div>
+          )}
+
           {relatorioNoDrawer === 'quadro-de-cargas' && (
           <>
           <PainelEletrica
@@ -7312,23 +7349,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             hipoteses={hipotesesEletricas}
             onHipoteses={setHipotesesEletricas}
             onQuadroProps={(quadroId, campos) => editor.run({ type: 'SetQuadroProps', quadroId, ...campos })}
-            executivoSlot={
-              <PainelEletricaExecutivo
-                e={{
-                  responsavel: executivoEletrico.responsavel,
-                  onResponsavel: executivoEletrico.setResponsavel,
-                  resultado: resultadoEletrico,
-                  emitidos: executivoEletrico.emitidos,
-                  emissaoValida: emissaoEletricaValida,
-                  hashDaBaseAtual: hashEletrico.base,
-                  onEmitir: () => void emitirEletrico(),
-                  emitindo: executivoEletrico.emitindo,
-                  erro: executivoEletrico.erro,
-                  onBaixarMemorial: (row) => executivoEletrico.baixarMemorial(row, study.name),
-                  persistenciaIndisponivel: executivoEletrico.persistenciaIndisponivel,
-                }}
-              />
-            }
           />
           {/* A CONFERÊNCIA da norma vive junto do quadro de cargas: é a mesma
               leitura — o que foi declarado — vista pelas regras da NBR 5410, e

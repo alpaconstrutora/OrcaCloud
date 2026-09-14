@@ -53,7 +53,18 @@ function CampoTexto({ rotulo, valor, onMudar, placeholder }: { rotulo: string; v
   );
 }
 
-export default function PainelEletricaExecutivo({ e }: { e: EletricaExecutivoNoPainel }) {
+export default function PainelEletricaExecutivo({
+  e,
+  semCabecalho = false,
+}: {
+  e: EletricaExecutivoNoPainel;
+  /**
+   * No drawer próprio (14/09/2026) o título e a descrição já estão no
+   * cabeçalho do `Sheet`; repeti-los aqui era a primeira coisa que a captura
+   * mostrou. Sem moldura também — o drawer já é a moldura.
+   */
+  semCabecalho?: boolean;
+}) {
   const r = e.responsavel;
   const res = e.resultado;
   const sigla = r.conselho === 'CAU' ? 'RRT' : 'ART';
@@ -61,12 +72,16 @@ export default function PainelEletricaExecutivo({ e }: { e: EletricaExecutivoNoP
   const dataBr = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
 
   return (
-    <div className="rounded-md border border-slate-200 px-2 py-2" data-testid="eletrica-executivo">
-      <p className="text-xs font-medium text-slate-700">Projeto executivo elétrico ({sigla})</p>
-      <p className="mt-0.5 text-[11px] text-slate-500">
-        A emissão é do responsável técnico. O programa reúne a conferência NBR 5410 e o pré-dimensionamento
-        de cada circuito e quadro, registra a emissão e a amarra ao hash do desenho e das hipóteses.
-      </p>
+    <div className={semCabecalho ? '' : 'rounded-md border border-slate-200 px-2 py-2'} data-testid="eletrica-executivo">
+      {!semCabecalho && (
+        <>
+          <p className="text-xs font-medium text-slate-700">Projeto executivo elétrico ({sigla})</p>
+          <p className="mt-0.5 text-[11px] text-slate-500">
+            A emissão é do responsável técnico. O programa reúne a conferência NBR 5410 e o pré-dimensionamento
+            de cada circuito e quadro, registra a emissão e a amarra ao hash do desenho e das hipóteses.
+          </p>
+        </>
+      )}
 
       {e.emissaoValida ? (
         <p className="mt-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[11px] text-emerald-800" data-testid="eletrica-emitido">

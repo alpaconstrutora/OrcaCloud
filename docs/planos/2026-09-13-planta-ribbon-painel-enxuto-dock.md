@@ -167,6 +167,15 @@ se edita OU se consulta em tabela larga; dock para o que acompanha o desenho.
 Prova no app real com escritas bloqueadas: os quatro em drawer com dock vazio,
 Versões no dock sem drawer.
 
+**Projeto executivo (ART) em drawer próprio** (14/09, *"no mesmo drawer do
+quadro de cargas não tem necessidade além de tornar o drawer excessivamente
+longo"*): saiu do `executivoSlot` do quadro de cargas e virou o relatório
+`executivo-eletrico`, com botão próprio em Instalações › Elétrica (contagem de
+emissões) e `Sheet` próprio. `PainelEletricaExecutivo` ganhou `semCabecalho`
+porque o título e a descrição já estão no cabeçalho do drawer (a captura
+mostrou os dois repetidos). Emite-se uma vez por revisão; o quadro se consulta
+o tempo todo — separá-los é a justificativa.
+
 **Defeito achado pelo usuário no uso** (*"o botão excluir no painel lateral não
 está funcionando. não consigo excluir TUG"*): a lixeira da lista do navegador
 chamava `excluirComponente`, que só conhecia parede, abertura, estrutura, água

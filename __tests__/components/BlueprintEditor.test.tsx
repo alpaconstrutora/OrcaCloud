@@ -1053,6 +1053,10 @@ describe('BlueprintEditor · ribbon', () => {
     const drawer = await screen.findByRole('dialog');
     expect(drawer).toHaveTextContent(/quadro de cargas e nbr 5410/i);
     expect(drawer).toHaveTextContent(/conferência nbr 5410/i);
+    // 14/09/2026: a emissão com ART saiu deste drawer — "não tem necessidade
+    // além de tornar o drawer excessivamente longo".
+    expect(drawer).not.toHaveTextContent(/responsável técnico/i);
+    expect(within(drawer).queryByLabelText(/número da art/i)).toBeNull();
     expect(screen.queryByRole('region', { name: /^relatório:/i })).not.toBeInTheDocument();
     expect(botao(/^quadro de cargas/i)).toHaveAttribute('aria-pressed', 'true');
 
@@ -1075,6 +1079,20 @@ describe('BlueprintEditor · ribbon', () => {
     const lixeira = await screen.findByRole('button', { name: /^excluir .*tug/i });
     await userEvent.setup().click(lixeira);
     await waitFor(() => expect(screen.queryByRole('button', { name: /^excluir .*tug/i })).not.toBeInTheDocument());
+  });
+
+  it('"Projeto executivo (ART)" tem botão e drawer próprios em Instalações', async () => {
+    await montar();
+    await abrirAba(/^instalações$/i);
+    await userEvent.setup().click(botao(/^projeto executivo \(art\)/i));
+    const drawer = await screen.findByRole('dialog');
+    expect(drawer).toHaveTextContent(/projeto executivo elétrico \(art\)/i);
+    expect(drawer).toHaveTextContent(/responsável técnico/i);
+    // Sem a tabela do quadro de cargas: aqui só a emissão (as regras da 5410
+    // aparecem como VERIFICAÇÕES da emissão, o que é outra coisa).
+    expect(within(drawer).queryByLabelText(/nome do circuito/i)).toBeNull();
+    expect(drawer).not.toHaveTextContent(/nenhum quadro de distribuição ainda/i);
+    expect(botao(/^projeto executivo \(art\)/i)).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('"Dados do lote" (aba Terreno) abre o painel do terreno como tarefa', async () => {

@@ -34,6 +34,33 @@ describe('entries() — parâmetros da RPC', () => {
         const [fn, args] = rpc.mock.calls[0] as [string, Record<string, unknown>];
         expect(fn).toBe('fn_opura_entries');
         expect(args).toMatchObject({ p_contract_client_id: 'cli1', p_contract_domain: 'LOCACAO', p_plano_de_contas_id: null });
-        expect(Object.keys(args)).toHaveLength(25);
+        // 26 desde 2026-09-14: +p_client_ids (Central de Clientes em "Todos os clientes")
+        expect(Object.keys(args)).toHaveLength(26);
+    });
+});
+
+describe('p_client_ids — "Todos os clientes" (2026-09-14)', () => {
+    it('pivot e entries mandam p_client_ids (null quando ausente)', async () => {
+        rpc.mockClear();
+        await opuraAnalyticsService.pivot('org1', 'tx_month', { clientIds: ['a', 'b'] });
+        await opuraAnalyticsService.entries('org1', { clientIds: ['a'] });
+        await opuraAnalyticsService.pivot('org1', 'project', { clientId: 'x' });
+        const [, p1] = rpc.mock.calls[0] as [string, Record<string, unknown>];
+        const [, e1] = rpc.mock.calls[1] as [string, Record<string, unknown>];
+        const [, p2] = rpc.mock.calls[2] as [string, Record<string, unknown>];
+        expect(p1).toMatchObject({ p_client_ids: ['a', 'b'], p_client_id: null });
+        expect(e1).toMatchObject({ p_client_ids: ['a'], p_client_id: null });
+        expect(p2).toMatchObject({ p_client_ids: null, p_client_id: 'x' });
+    });
+
+    it('clienteKpis: um cliente OU a lista — nunca os dois', async () => {
+        rpc.mockClear();
+        await opuraAnalyticsService.clienteKpis('org1', null, '2026-01-01', '2026-12-31', ['a', 'b']);
+        await opuraAnalyticsService.clienteKpis('org1', 'x', '2026-01-01', '2026-12-31');
+        const [fn, k1] = rpc.mock.calls[0] as [string, Record<string, unknown>];
+        const [, k2] = rpc.mock.calls[1] as [string, Record<string, unknown>];
+        expect(fn).toBe('fn_opura_cliente_kpis');
+        expect(k1).toMatchObject({ p_client_id: null, p_client_ids: ['a', 'b'] });
+        expect(k2).toMatchObject({ p_client_id: 'x', p_client_ids: null });
     });
 });

@@ -14,6 +14,7 @@ import {
     type OpuraPivotRow,
 } from '../services/opuraAnalyticsService';
 import { supabase } from '../lib/supabase';
+import { clientCategoryService } from '../services/clientCategoryService';
 import { useToast } from '../hooks/useToast';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 import ClientSelect from './ClientSelect';
@@ -55,7 +56,12 @@ function niceTicks(max: number, count = 4): number[] {
     return ticks;
 }
 
-interface ClientLite { id: string; name: string; document: string | null; }
+interface ClientLite { id: string; name: string; document: string | null; category: string | null; }
+
+/** Valor do seletor de cliente que significa "todos os clientes (do tipo escolhido)". */
+const TODOS_CLIENTES = '__todos__';
+/** Valor do filtro de tipo que significa "todos os tipos". */
+const TODOS_TIPOS = '';
 
 // ── Cromo do gráfico (guia §28, mesmos valores de RentalAnalysisOverview) ──────
 const GRID = '#f1f5f9';
@@ -166,7 +172,13 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
     const { showToast } = useToast();
     const now = new Date();
     const [clients, setClients] = React.useState<ClientLite[]>([]);
-    const [clientId, setClientId] = React.useState<string>('');
+    // "Todos os clientes" é o padrão: a tela abria no 1º cliente em ordem
+    // alfabética, que costuma não ter lançamento — e parecia zerada (14/09/2026).
+    const [clientId, setClientId] = React.useState<string>(TODOS_CLIENTES);
+    // Tipo de cliente = clients.category (catálogo Configurações › Tipos de
+    // Clientes). Filtro de tela → persiste (§3).
+    const [tipo, setTipo] = usePersistedState<string>('centralCliente:tipo', TODOS_TIPOS);
+    const [tiposCatalogo, setTiposCatalogo] = React.useState<string[]>([]);
     const [dateFrom, setDateFrom] = React.useState(`${now.getFullYear()}-01-01`);
     const [dateTo, setDateTo]     = React.useState(`${now.getFullYear()}-12-31`);
 
@@ -189,40 +201,82 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
             // Clientes legados têm organization_id = NULL (globais) — incluí-los,
             // como faz o clientService padrão. Sem organização selecionada
             // ("Todas"), não filtra — a RLS já restringe às organizações do usuário.
-            let query = supabase.from('clients').select('id, name, document').order('name');
+            let query = supabase.from('clients').select('id, name, document, category').order('name');
             if (organizationId) query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
-            const { data, error } = await query;
+            const [{ data, error }, catalogo] = await Promise.all([
+                query,
+                // Catálogo de tipos (com os padrões virtuais). Falha aqui não
+                // derruba a tela: o filtro ainda lista os tipos presentes nos clientes.
+                clientCategoryService.list(organizationId || undefined).catch(() => []),
+            ]);
             if (error) { showToast(`Erro ao carregar clientes: ${error.message}`, 'error'); return; }
-            const list = (data || []) as ClientLite[];
-            setClients(list);
-            setClientId(prev => prev || list[0]?.id || '');
+            setClients((data || []) as ClientLite[]);
+            setTiposCatalogo(catalogo.map(c => c.name));
         })();
     }, [organizationId, showToast]);
 
-    const selected = clients.find(c => c.id === clientId) ?? null;
+    // Opções do filtro: catálogo ∪ tipos que os clientes carregados realmente
+    // têm — um tipo apagado do catálogo mas ainda usado não some do filtro.
+    const tipos = React.useMemo(() => {
+        const set = new Set<string>(tiposCatalogo.map(t => t.trim()).filter(Boolean));
+        for (const c of clients) if (c.category?.trim()) set.add(c.category.trim());
+        return [...set].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    }, [tiposCatalogo, clients]);
+    // Tipo persistido que não existe mais nesta organização = "todos os tipos".
+    const tipoAtivo = tipo && tipos.includes(tipo) ? tipo : TODOS_TIPOS;
+
+    // Clientes que o seletor oferece e que "Todos os clientes" agrega.
+    const clientesDoTipo = React.useMemo(
+        () => tipoAtivo ? clients.filter(c => (c.category ?? '').trim() === tipoAtivo) : clients,
+        [clients, tipoAtivo],
+    );
+    // Cliente escolhido saiu do recorte (trocou o tipo) → volta para "Todos".
+    React.useEffect(() => {
+        if (clientId !== TODOS_CLIENTES && !clientesDoTipo.some(c => c.id === clientId)) setClientId(TODOS_CLIENTES);
+    }, [clientesDoTipo, clientId]);
+
+    const todos = clientId === TODOS_CLIENTES;
+    const selected = todos ? null : (clients.find(c => c.id === clientId) ?? null);
+    // Lista de ids que a RPC recebe em "Todos" (já recortada por org + tipo).
+    const clientIds = React.useMemo(() => (todos ? clientesDoTipo.map(c => c.id) : undefined), [todos, clientesDoTipo]);
+    const escopoLabel = todos
+        ? (tipoAtivo ? `Todos os clientes · ${tipoAtivo}` : 'Todos os clientes')
+        : (selected?.name ?? '');
+
+    // Sequência da última carga: trocar tipo/cliente dispara nova RPC e a
+    // anterior (47 ids, mais lenta) pode responder DEPOIS — sem isto ela
+    // sobrescrevia o recorte novo com os números velhos (visto no harness, 14/09).
+    const loadSeq = React.useRef(0);
 
     const load = React.useCallback(async () => {
         if (!clientId) return;
+        const seq = ++loadSeq.current;
+        // "Todos" sem nenhum cliente no recorte: não há o que somar (e a RPC
+        // exige cliente ou lista) — zera sem ir à rede.
+        if (clientIds && clientIds.length === 0) { setKpis(null); setByProject([]); setByMonth([]); return; }
         setLoading(true);
         setError(null);
         try {
+            const filtro = clientIds ? { clientIds, dateFrom, dateTo } : { clientId, dateFrom, dateTo };
             const [k, proj, meses] = await Promise.all([
-                opuraAnalyticsService.clienteKpis(organizationId, clientId, dateFrom, dateTo),
-                opuraAnalyticsService.pivot(organizationId, 'project', { clientId, dateFrom, dateTo }),
-                opuraAnalyticsService.pivot(organizationId, 'tx_month', { clientId, dateFrom, dateTo }),
+                opuraAnalyticsService.clienteKpis(organizationId, clientIds ? null : clientId, dateFrom, dateTo, clientIds),
+                opuraAnalyticsService.pivot(organizationId, 'project', filtro),
+                opuraAnalyticsService.pivot(organizationId, 'tx_month', filtro),
             ]);
+            if (seq !== loadSeq.current) return; // resposta de um recorte que já não é o da tela
             setKpis(k);
             setByProject(proj);
             setByMonth(meses);
         } catch (e: unknown) {
+            if (seq !== loadSeq.current) return;
             const msg = e instanceof Error ? e.message : String(e);
             setKpis(null); setByProject([]); setByMonth([]); setError(msg);
             showToast(`Erro ao carregar Central de Clientes: ${msg}`, 'error');
             console.error('[CentralCliente]', e);
         } finally {
-            setLoading(false);
+            if (seq === loadSeq.current) setLoading(false);
         }
-    }, [organizationId, clientId, dateFrom, dateTo, showToast]);
+    }, [organizationId, clientId, clientIds, dateFrom, dateTo, showToast]);
 
     React.useEffect(() => { load(); }, [load]);
 
@@ -230,14 +284,16 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
         setDrill({ label: row.dimension_label });
         setEntries([]); setEntriesLoading(true);
         try {
-            const f: OpuraEntryFilters = { clientId, dateFrom, dateTo, projectId: row.dimension_key ?? undefined };
+            const f: OpuraEntryFilters = clientIds
+                ? { clientIds, dateFrom, dateTo, projectId: row.dimension_key ?? undefined }
+                : { clientId, dateFrom, dateTo, projectId: row.dimension_key ?? undefined };
             setEntries(await opuraAnalyticsService.entries(organizationId, f, 200, 0));
         } catch (e: unknown) {
             showToast(`Erro ao carregar extrato: ${e instanceof Error ? e.message : String(e)}`, 'error');
         } finally {
             setEntriesLoading(false);
         }
-    }, [organizationId, clientId, dateFrom, dateTo, showToast]);
+    }, [organizationId, clientId, clientIds, dateFrom, dateTo, showToast]);
 
     // Derivados
     const contratado = kpis?.contratado ?? 0;
@@ -284,13 +340,24 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Contratado × Faturado × Recebido — por cliente.</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                    {/* Escopo da tela: sempre há um cliente escolhido (sem "limpar"). */}
+                    {/* Tipo de cliente — recorta o seletor e o "Todos". */}
+                    <select
+                        value={tipoAtivo}
+                        onChange={e => setTipo(e.target.value)}
+                        title="Tipo de cliente"
+                        className="h-9 pl-3 pr-8 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer max-w-[220px]"
+                    >
+                        <option value={TODOS_TIPOS}>Todos os tipos</option>
+                        {tipos.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    {/* Escopo da tela: um cliente do tipo, ou todos eles (sem "limpar"). */}
                     <div className="w-[260px]">
                         <ClientSelect
-                            clients={clients}
+                            clients={clientesDoTipo}
                             value={clientId}
                             onChange={setClientId}
                             allowClear={false}
+                            allOption={{ id: TODOS_CLIENTES, label: tipoAtivo ? `Todos os clientes · ${tipoAtivo}` : 'Todos os clientes' }}
                             disabled={clients.length === 0}
                             placeholder={clients.length === 0 ? 'Nenhum cliente' : 'Selecionar cliente...'}
                             triggerClassName="w-full h-9 border border-gray-200 rounded-[6px] text-sm bg-white focus:outline-none focus:border-blue-400"
@@ -321,6 +388,10 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
                 </div>
             ) : !clientId ? (
                 <div className="flex items-center justify-center h-48 text-sm text-gray-400">Selecione um cliente.</div>
+            ) : clientIds && clientIds.length === 0 ? (
+                <div className="flex items-center justify-center h-48 text-sm text-gray-400">
+                    {clients.length === 0 ? 'Nenhum cliente cadastrado.' : `Nenhum cliente do tipo "${tipoAtivo}".`}
+                </div>
             ) : (
                 <>
                     {/* KPIs */}
@@ -352,7 +423,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
                         dos KPIs Saldo devedor (previsto) e Recebido (realizado). */}
                     <ChartCard
                         title="Previsto × Realizado por período"
-                        subtitle="Lançamentos a receber deste cliente, pela data do lançamento: previsto = pendente, realizado = conciliado. A soma fecha com Saldo devedor e Recebido."
+                        subtitle={`Lançamentos a receber ${todos ? 'dos clientes do recorte' : 'deste cliente'}, pela data do lançamento: previsto = pendente, realizado = conciliado. A soma fecha com Saldo devedor e Recebido.`}
                         aside={<GranularidadeToggle value={granularidade} onChange={setGranularidade} />}
                     >
                         {loading && byMonth.length === 0 ? (
@@ -362,7 +433,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
                         ) : granularidade === 'mensal' && serie.length > MESES_MAX_VISAO_MENSAL ? (
                             <ChartEmpty>Período longo demais para a visão mensal ({serie.length} meses). Use a visão anual ou encurte o período.</ChartEmpty>
                         ) : serieMax === 0 ? (
-                            <ChartEmpty>Nenhum lançamento a receber deste cliente no período.</ChartEmpty>
+                            <ChartEmpty>Nenhum lançamento a receber {todos ? 'dos clientes do recorte' : 'deste cliente'} no período.</ChartEmpty>
                         ) : (
                             <>
                                 <Legend items={[{ label: 'Previsto', color: SERIE_PREVISTO }, { label: 'Realizado', color: SERIE_REALIZADO }]} />
@@ -389,6 +460,8 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
                                             <RechartsTooltip
                                                 cursor={TOOLTIP_CURSOR}
                                                 contentStyle={TOOLTIP_STYLE}
+                                                itemStyle={{ color: '#1f2937' }}
+                                                labelStyle={{ color: '#64748b' }}
                                                 formatter={(val, name) => [fBRL(Number(val)), name === 'realizado' ? 'Realizado' : 'Previsto']}
                                             />
                                             {/* Sem animação: re-renderiza ao trocar Mensal/Anual, e a
@@ -457,7 +530,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
             <Sheet open={drill !== null} onClose={() => setDrill(null)} size="2xl">
                 <SheetHeader onClose={() => setDrill(null)}>
                     <SheetTitle>{drill?.label ?? 'Extrato'}</SheetTitle>
-                    <SheetDescription>{selected?.name} · {entries[0]?.total_count ?? entries.length} lançamento(s)</SheetDescription>
+                    <SheetDescription>{escopoLabel} · {entries[0]?.total_count ?? entries.length} lançamento(s)</SheetDescription>
                 </SheetHeader>
                 <SheetPanel>
                     {entriesLoading ? (

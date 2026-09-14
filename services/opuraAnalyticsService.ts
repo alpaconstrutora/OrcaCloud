@@ -36,6 +36,9 @@ export interface OpuraFilters {
   projectId?: string;
   supplierId?: string;
   clientId?: string;
+  /** Conjunto de clientes (Central de Clientes em "Todos os clientes", já
+   *  recortado por organização e tipo). Vazio = nenhum; undefined = sem filtro. */
+  clientIds?: string[];
   contractId?: string;
   purchaseOrderId?: string;
   costCenterId?: string;
@@ -168,6 +171,7 @@ export const opuraAnalyticsService = {
       p_project_id:        filters.projectId ?? null,
       p_supplier_id:       filters.supplierId ?? null,
       p_client_id:         filters.clientId ?? null,
+      p_client_ids:        filters.clientIds ?? null,
       p_contract_id:       filters.contractId ?? null,
       p_purchase_order_id: filters.purchaseOrderId ?? null,
       p_cost_center_id:    filters.costCenterId ?? null,
@@ -300,6 +304,7 @@ export const opuraAnalyticsService = {
       p_project_id:         filters.projectId ?? null,
       p_supplier_id:        filters.supplierId ?? null,
       p_client_id:          filters.clientId ?? null,
+      p_client_ids:         filters.clientIds ?? null,
       p_contract_id:        filters.contractId ?? null,
       p_purchase_order_id:  filters.purchaseOrderId ?? null,
       p_cost_center_id:     filters.costCenterId ?? null,
@@ -356,15 +361,22 @@ export const opuraAnalyticsService = {
     return (data || []) as OpuraObraMes[];
   },
 
+  /**
+   * Um cliente (`clientId`) OU um conjunto (`clientIds` — "Todos os clientes",
+   * opcionalmente de um tipo). A RPC exige um dos dois: sem nenhum ela não
+   * devolve a organização inteira por acidente.
+   */
   async clienteKpis(
     organizationId: string | null,
-    clientId: string,
+    clientId: string | null,
     dateFrom?: string,
     dateTo?: string,
+    clientIds?: string[],
   ): Promise<OpuraClienteKpis | null> {
     const { data, error } = await supabase.rpc('fn_opura_cliente_kpis', {
       p_organization_id: organizationId || null,
-      p_client_id:       clientId,
+      p_client_id:       clientId || null,
+      p_client_ids:      clientIds ?? null,
       p_date_from:       dateFrom ?? null,
       p_date_to:         dateTo ?? null,
     });

@@ -44,6 +44,10 @@ interface Props {
     /** Título do drawer — "Selecionar Cliente" por padrão; a tela troca quando
      *  o papel é outro ("Selecionar Síndico", "Adicionar comprador"). */
     title?: string;
+    /** Opção agregadora fixa no topo da lista ("Todos os clientes"), fora da
+     *  ordenação e da busca. Quando `value === allOption.id`, o gatilho mostra
+     *  o rótulo dela. Central de Clientes (2026-09-14). */
+    allOption?: { id: string; label: string };
 }
 
 type ColKey = 'name' | 'document' | 'city';
@@ -53,7 +57,7 @@ const TRIGGER_DEFAULT = 'w-full h-9 bg-gray-50 border border-gray-200 rounded-[6
 
 const ClientSelect: React.FC<Props> = ({
     clients, value, onChange, placeholder = 'Selecionar cliente...', disabled = false, icon: Icon = User, triggerClassName = TRIGGER_DEFAULT,
-    allowClear = true, disabledIds, disabledHint = 'indisponível', title = 'Selecionar Cliente',
+    allowClear = true, disabledIds, disabledHint = 'indisponível', title = 'Selecionar Cliente', allOption,
 }) => {
     const [open, setOpen] = useState(false);
     // O drawer sai por PORTAL em `document.body`, montado só enquanto aberto.
@@ -100,6 +104,7 @@ const ClientSelect: React.FC<Props> = ({
     })), [clients]);
 
     const selected = linhas.find(l => l.id === value);
+    const allSelected = !!allOption && value === allOption.id;
 
     const visiveis = useMemo(() => {
         const q = search.trim().toLowerCase();
@@ -148,7 +153,9 @@ const ClientSelect: React.FC<Props> = ({
                     aria-expanded={open}
                     className={`${triggerClassName} flex items-center justify-between gap-2 text-left cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${Icon ? 'pl-9' : 'pl-3'} pr-2`}
                 >
-                    {selected ? (
+                    {allSelected ? (
+                        <span className="text-gray-900 truncate flex-1 min-w-0">{allOption.label}</span>
+                    ) : selected ? (
                         <span className="flex items-center gap-2 flex-1 min-w-0">
                             <span className="text-gray-900 truncate">{selected.name}</span>
                             {selected.document && (
@@ -205,7 +212,15 @@ const ClientSelect: React.FC<Props> = ({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {value && allowClear && (
+                            {allOption && (
+                                <tr
+                                    onClick={() => escolher(allOption.id)}
+                                    className={`cursor-pointer transition-colors hover:bg-blue-50/50 ${allSelected ? 'bg-gray-100' : ''}`}
+                                >
+                                    <td colSpan={3} className={`${tdCls} text-gray-900`}>{allOption.label}</td>
+                                </tr>
+                            )}
+                            {value && allowClear && !allSelected && (
                                 <tr onClick={() => escolher('')} className="cursor-pointer hover:bg-gray-50 transition-colors">
                                     <td colSpan={3} className="px-4 py-2 text-form-input font-medium text-slate-400">{placeholder}</td>
                                 </tr>

@@ -421,14 +421,16 @@ function cabecalhoDaSecao(nome: RegExp) {
 }
 
 /**
- * Abre um RELATÓRIO no dock (13/09/2026): Quantitativos, Orçamento, Conflitos,
- * Medições moram na aba Analisar do ribbon; Comentários e Versões, em
- * Colaborar; Quadro de cargas, em Instalações. Eram seções do acordeão.
+ * Abre um RELATÓRIO em DRAWER (14/09/2026): Quantitativos, Orçamento,
+ * Conflitos e Medições moram na aba Analisar do ribbon e abrem num `Sheet`
+ * (pedido: "converter em drawer: analisar < conflitos; medições;
+ * quantitativos; orçamento"). Só Comentários e Versões (Colaborar) seguem no
+ * dock embaixo do canvas. Eram seções do acordeão até 13/09.
  */
 async function abrirRelatorio(nome: RegExp, aba: RegExp = /^analisar$/i) {
   await abrirAba(aba);
   await userEvent.setup().click(screen.getByRole('button', { name: nome }));
-  return screen.getByRole('region', { name: /^relatório:/i });
+  return screen.findByRole('dialog');
 }
 
 describe('BlueprintEditor · quantitativos', () => {
@@ -459,24 +461,36 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(screen.getByText(/o or[çc]amento n[ãa]o cita rascunho/i)).toBeInTheDocument();
   });
 
-  it('abrir Quantitativos NÃO fecha Ambientes — relatório é dock, navegação é painel', async () => {
-    // Este teste trocou de sentido em 29/08/2026 (abas → seções irmãs) e de
-    // novo em 13/09/2026: Quantitativos deixou de ser seção e virou relatório
-    // no dock embaixo do canvas. O que continua valendo é a tese — ver o
-    // quantitativo não pode custar a lista de ambientes.
+  it('abrir Quantitativos NÃO fecha Ambientes — relatório é drawer, navegação é painel', async () => {
+    // Este teste trocou de sentido em 29/08/2026 (abas → seções irmãs), em
+    // 13/09 (seção → dock) e em 14/09 (dock → drawer). O que continua valendo
+    // é a tese — ver o quantitativo não pode custar a lista de ambientes.
     await montar();
 
     const secAmb = cabecalhoDaSecao(/ambientes/i);
     expect(secAmb).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    const drawer = await abrirRelatorio(/^quantitativos$/i);
+    expect(drawer).toHaveTextContent(/quantitativos/i);
+    expect(secAmb).toHaveAttribute('aria-expanded', 'true');
+    // Nada no dock: os de Analisar são drawer.
     expect(screen.queryByRole('region', { name: /^relatório:/i })).not.toBeInTheDocument();
 
-    const dock = await abrirRelatorio(/^quantitativos$/i);
-    expect(dock).toHaveAccessibleName(/quantitativos/i);
-    expect(secAmb).toHaveAttribute('aria-expanded', 'true');
-
-    // O mesmo botão fecha; e um relatório por vez — abrir Conflitos troca.
+    // Fechar despressiona o botão do ribbon; abrir Conflitos troca o conteúdo.
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^fechar$/i }));
+    expect(screen.getByRole('button', { name: /^quantitativos$/i })).toHaveAttribute('aria-pressed', 'false');
     await userEvent.setup().click(screen.getByRole('button', { name: /^conflitos/i }));
-    expect(screen.getByRole('region', { name: /^relatório:/i })).toHaveAccessibleName(/conflitos/i);
+    expect(screen.getByRole('dialog')).toHaveTextContent(/conflitos/i);
+    expect(screen.getByRole('button', { name: /^conflitos/i })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('Comentários e Versões (Colaborar) continuam no dock, embaixo do canvas', async () => {
+    await montar();
+    await abrirAba(/^colaborar$/i);
+    await userEvent.setup().click(screen.getByRole('button', { name: /^versões$/i }));
+    expect(screen.getByRole('region', { name: /^relatório:/i })).toHaveAccessibleName(/versões/i);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole('button', { name: /fechar o relatório/i }));
     expect(screen.queryByRole('region', { name: /^relatório:/i })).not.toBeInTheDocument();
   });
@@ -638,11 +652,11 @@ function comCantoAberto() {
 }
 
 describe('BlueprintEditor · caminho para o orçamento (RF-122)', () => {
-  it('o relatório Orçamento abre no dock sem fechar Ambientes no navegador', async () => {
+  it('o relatório Orçamento abre em drawer sem fechar Ambientes no navegador', async () => {
     await montar();
 
-    const dock = await abrirRelatorio(/^orçamento$/i);
-    expect(dock).toHaveAccessibleName(/orçamento/i);
+    const drawer = await abrirRelatorio(/^orçamento$/i);
+    expect(drawer).toHaveTextContent(/orçamento/i);
     expect(screen.getByRole('button', { name: /^orçamento$/i })).toHaveAttribute('aria-pressed', 'true');
     expect(cabecalhoDaSecao(/ambientes/i)).toHaveAttribute('aria-expanded', 'true');
   });

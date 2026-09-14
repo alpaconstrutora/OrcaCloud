@@ -157,6 +157,16 @@ que ficou: **o que se edita (tarefas, quadro de cargas) vai para drawer; o
 que se lê (Conflitos, Medições, Quantitativos, Orçamento, Comentários,
 Versões) fica no dock**, com a largura do canvas.
 
+**Os quatro de Analisar em drawer** (14/09, pedido: *"Converter em drawer:
+analisar < conflitos; medições; quantitativos; orçamento"*): `RELATORIOS_EM_DRAWER`
+= quadro de cargas + Conflitos, Medições, Quantitativos, Orçamento — um único
+`Sheet` 2xl com título/ícone/descrição por relatório e a contagem no título
+(conflitos, medições). O dock fica só com **Comentários e Versões** (Colaborar),
+que se leem olhando o desenho ao lado. Critério atualizado: drawer para o que
+se edita OU se consulta em tabela larga; dock para o que acompanha o desenho.
+Prova no app real com escritas bloqueadas: os quatro em drawer com dock vazio,
+Versões no dock sem drawer.
+
 **Defeito achado pelo usuário no uso** (*"o botão excluir no painel lateral não
 está funcionando. não consigo excluir TUG"*): a lixeira da lista do navegador
 chamava `excluirComponente`, que só conhecia parede, abertura, estrutura, água

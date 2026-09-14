@@ -781,7 +781,22 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * hipóteses, emissão — e o formato de tarefa serviu melhor a isso. Os
    * demais relatórios (listas e tabelas de leitura) seguem no dock.
    */
-  const relatorioNoDock = relatorioAberto === 'quadro-de-cargas' ? null : relatorioAberto;
+  /**
+   * O que abre em DRAWER (13/09–14/09/2026): primeiro o quadro de cargas
+   * (onde se edita); depois, a pedido, os quatro de Analisar — *"Converter em
+   * drawer: analisar < conflitos; medições; quantitativos; orçamento"*. O dock
+   * fica só com Comentários e Versões (Colaborar), que se leem olhando o
+   * desenho ao lado.
+   */
+  const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
+    'quadro-de-cargas',
+    'conflitos',
+    'medicoes',
+    'quantitativos',
+    'orcamento',
+  ]);
+  const relatorioNoDock = relatorioAberto && !RELATORIOS_EM_DRAWER.has(relatorioAberto) ? relatorioAberto : null;
+  const relatorioNoDrawer = relatorioAberto && RELATORIOS_EM_DRAWER.has(relatorioAberto) ? relatorioAberto : null;
   const alternarTarefa = (id: TarefaDoPainel) => setTarefa((t) => (t === id ? null : id));
   const alternarRelatorio = (id: RelatorioDoDock) => setRelatorio((r) => (r === id ? null : id));
   const dock = useAlturaDoDock();
@@ -6096,13 +6111,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         {relatorioNoDock && (
           <DockDeRelatorios
             titulo={RELATORIOS_DO_DOCK[relatorioNoDock].rotulo}
-            contagem={
-              relatorioNoDock === 'conflitos'
-                ? conflitos.length
-                : relatorioNoDock === 'medicoes'
-                  ? medicoes.formas.length
-                  : undefined
-            }
             dock={dock}
             onFechar={() => setRelatorio(null)}
           >
@@ -6116,64 +6124,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 selecionadoUid={uidDoSelecionado}
                 selecionadoRotulo={rotuloDoSelecionado}
                 pontoPadrao={pontoDoSelecionado}
-              />
-            )}
-
-            {relatorioAberto === 'conflitos' && (
-              <PainelConflitos
-                model={editor.model}
-                conflitos={conflitos}
-                onSelecionar={(id) => selecionar([id])}
-                onExportarBcf={exportarBcfDoEstudo}
-              />
-            )}
-
-            {relatorioAberto === 'medicoes' && (
-              <PainelMedicoes
-                formas={medicoesVisiveis}
-                todas={medicoes.formas}
-                selecionada={medicoes.selecionada}
-                temFundo={!!fundo.linha}
-                ocupado={medicoes.ocupado}
-                camadasOcultas={camadasOcultas}
-                camadaAtiva={camadaAtiva}
-                onAlternarCamada={alternarCamada}
-                onCamadaAtiva={setCamadaAtiva}
-                onSelecionar={medicoes.setSelecionada}
-                onRenomear={(id, nome) => void medicoes.atualizar(id, { nome })}
-                onEditarItem={(id, campos) => void medicoes.atualizar(id, campos)}
-                onRemover={(id) => void medicoes.remover(id)}
-                onEnviarOrcamento={() =>
-                  void medicoes.enviarAoOrcamento(
-                    study.project_id,
-                    study.name,
-                    fundo.linha?.file_sha256 ?? null,
-                    fundo.underlay?.mmPorPixel ?? null,
-                  )
-                }
-                aviso={medicoes.aviso}
-                erro={medicoes.erro}
-              />
-            )}
-
-            {relatorioAberto === 'quantitativos' && (
-              <PainelQuantitativos
-                quant={quant}
-                fmt={fmt}
-                revisao={editor.baseRevision}
-                oficial={qtdOficial}
-                gerando={gerando}
-                onGerar={gerarQuantitativoOficial}
-                dirty={editor.dirtySincePublish}
-              />
-            )}
-
-            {relatorioAberto === 'orcamento' && (
-              <PainelOrcamento
-                study={study}
-                revisao={editor.baseRevision}
-                dirty={editor.dirtySincePublish}
-                onPrevia={setPreviaOrcamento}
               />
             )}
 
@@ -7207,25 +7157,109 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           Era relatório no dock; virou drawer porque aqui se EDITA (circuito,
           ligação, DR, hipóteses, emissão). Largo (2xl) porque é tabela — a
           coluna Carga já sumiu uma vez por falta de largura. */}
-      {relatorioAberto === 'quadro-de-cargas' && (
+      {relatorioNoDrawer && (
       <Sheet open onClose={() => setRelatorio(null)} size="2xl">
         <SheetHeader onClose={() => setRelatorio(null)}>
           <SheetTitle>
             <span className="flex items-center gap-2">
-              <Zap className="h-5 w-5 text-blue-700" />
-              Quadro de cargas e NBR 5410
-              <span className="rounded-[6px] bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-600">
-                {(editor.model.circuitos ?? []).length} circuito(s)
-              </span>
+              {relatorioNoDrawer === 'quadro-de-cargas' && <Zap className="h-5 w-5 text-blue-700" />}
+              {relatorioNoDrawer === 'conflitos' && <AlertTriangle className="h-5 w-5 text-amber-600" />}
+              {relatorioNoDrawer === 'medicoes' && <Ruler className="h-5 w-5 text-blue-700" />}
+              {relatorioNoDrawer === 'quantitativos' && <Table2 className="h-5 w-5 text-blue-700" />}
+              {relatorioNoDrawer === 'orcamento' && <Calculator className="h-5 w-5 text-blue-700" />}
+              {RELATORIOS_DO_DOCK[relatorioNoDrawer].rotulo}
+              {relatorioNoDrawer === 'quadro-de-cargas' && (
+                <span className="rounded-[6px] bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-600">
+                  {(editor.model.circuitos ?? []).length} circuito(s)
+                </span>
+              )}
+              {relatorioNoDrawer === 'conflitos' && (
+                <span className="rounded-[6px] bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-600">
+                  {conflitos.length}
+                </span>
+              )}
+              {relatorioNoDrawer === 'medicoes' && (
+                <span className="rounded-[6px] bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-600">
+                  {medicoes.formas.length}
+                </span>
+              )}
             </span>
           </SheetTitle>
           <SheetDescription>
-            Circuitos por quadro, pré-dimensionamento com hipóteses declaradas, conferência da
-            NBR 5410 e emissão do projeto executivo. Cada campo grava na hora; Ctrl+Z desfaz.
+            {relatorioNoDrawer === 'quadro-de-cargas' &&
+              'Circuitos por quadro, pré-dimensionamento com hipóteses declaradas, conferência da NBR 5410 e emissão do projeto executivo. Cada campo grava na hora; Ctrl+Z desfaz.'}
+            {relatorioNoDrawer === 'conflitos' &&
+              'Interferências entre instalações e com a estrutura, e entre disciplinas. Clicar num conflito seleciona as peças no desenho; exporte em BCF para o projetista.'}
+            {relatorioNoDrawer === 'medicoes' &&
+              'As formas medidas sobre a planta de fundo — área, linha e contagem — por camada, com o envio ao orçamento.'}
+            {relatorioNoDrawer === 'quantitativos' &&
+              'Áreas, volumes e comprimentos derivados do desenho atual, e o quantitativo oficial da versão publicada.'}
+            {relatorioNoDrawer === 'orcamento' &&
+              'A ponte com o orçamento da obra: o de-para dos itens e a prévia do que a versão publicada gera.'}
           </SheetDescription>
         </SheetHeader>
 
-        <SheetPanel className="px-4 py-3">
+        <SheetPanel className={relatorioNoDrawer === 'quadro-de-cargas' ? 'px-4 py-3' : 'p-0'}>
+          {relatorioNoDrawer === 'conflitos' && (
+            <PainelConflitos
+              model={editor.model}
+              conflitos={conflitos}
+              onSelecionar={(id) => selecionar([id])}
+              onExportarBcf={exportarBcfDoEstudo}
+            />
+          )}
+
+          {relatorioNoDrawer === 'medicoes' && (
+            <PainelMedicoes
+              formas={medicoesVisiveis}
+              todas={medicoes.formas}
+              selecionada={medicoes.selecionada}
+              temFundo={!!fundo.linha}
+              ocupado={medicoes.ocupado}
+              camadasOcultas={camadasOcultas}
+              camadaAtiva={camadaAtiva}
+              onAlternarCamada={alternarCamada}
+              onCamadaAtiva={setCamadaAtiva}
+              onSelecionar={medicoes.setSelecionada}
+              onRenomear={(id, nome) => void medicoes.atualizar(id, { nome })}
+              onEditarItem={(id, campos) => void medicoes.atualizar(id, campos)}
+              onRemover={(id) => void medicoes.remover(id)}
+              onEnviarOrcamento={() =>
+                void medicoes.enviarAoOrcamento(
+                  study.project_id,
+                  study.name,
+                  fundo.linha?.file_sha256 ?? null,
+                  fundo.underlay?.mmPorPixel ?? null,
+                )
+              }
+              aviso={medicoes.aviso}
+              erro={medicoes.erro}
+            />
+          )}
+
+          {relatorioNoDrawer === 'quantitativos' && (
+            <PainelQuantitativos
+              quant={quant}
+              fmt={fmt}
+              revisao={editor.baseRevision}
+              oficial={qtdOficial}
+              gerando={gerando}
+              onGerar={gerarQuantitativoOficial}
+              dirty={editor.dirtySincePublish}
+            />
+          )}
+
+          {relatorioNoDrawer === 'orcamento' && (
+            <PainelOrcamento
+              study={study}
+              revisao={editor.baseRevision}
+              dirty={editor.dirtySincePublish}
+              onPrevia={setPreviaOrcamento}
+            />
+          )}
+
+          {relatorioNoDrawer === 'quadro-de-cargas' && (
+          <>
           <PainelEletrica
             model={editor.model}
             onAddCircuito={(quadroId, nome) => editor.run({ type: 'AddCircuito', quadroId, nome })}
@@ -7292,6 +7326,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               }
             />
           </div>
+          </>
+          )}
         </SheetPanel>
 
         <SheetFooter>

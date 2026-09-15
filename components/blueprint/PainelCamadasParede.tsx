@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
   KeyboardSensor,
@@ -112,12 +112,27 @@ export default function PainelCamadasParede({ parede, medidas, aoMudar }: Props)
   const [tipos, setTipos] = useState<TipoDeParede[]>([]);
   const [avisoTipo, setAvisoTipo] = useState<string | null>(null);
 
+  // `vivo` fecha a resposta que chega DEPOIS de o painel sair de cena: o
+  // `setState` num componente desmontado era o "window is not defined" que
+  // derrubava o CI como unhandled rejection (15/09/2026), no mesmo molde do
+  // guardião de `useBlueprintMedicoes`.
+  const vivo = useRef(true);
+  useEffect(() => {
+    vivo.current = true;
+    return () => {
+      vivo.current = false;
+    };
+  }, []);
   const carregarTipos = useCallback(() => {
     listWallTypes(orgId)
-      .then(setTipos)
+      .then((lista) => {
+        if (vivo.current) setTipos(lista);
+      })
       // Falhar em carregar o catálogo não pode derrubar o editor de camadas: os
       // tipos são conveniência, e a composição se monta à mão sem eles.
-      .catch(() => setTipos([]));
+      .catch(() => {
+        if (vivo.current) setTipos([]);
+      });
   }, [orgId]);
 
   useEffect(() => {

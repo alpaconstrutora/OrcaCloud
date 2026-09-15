@@ -76,6 +76,12 @@ import {
   type LadoDoContorno,
 } from '../../utils/blueprintCotas';
 import {
+  curvaDoTrecho,
+  desviosDeSobreposicao,
+  entradasNoQuadro,
+  geometriaDesenhada,
+} from '../../utils/blueprintEletrodutoSobreposto';
+import {
   COR_DA_DISCIPLINA,
   SIGLA_DO_PONTO_ELETRICO,
   alturaDaTomada,
@@ -1609,6 +1615,22 @@ export default function BlueprintCanvas({
   }, [quadrosReais, movendoSelecao, selecao]);
 
   /**
+   * COMO OS ELETRODUTOS SÃO DESENHADOS (14–15/09/2026): os confundíveis
+   * (mesma reta, ou o leque que sai do mesmo nó) ganham uma leve curva, e os
+   * que chegam ao quadro entram espalhados pela frente dele. É desenho, e a
+   * mesma conta serve ao traço e ao acerto do clique — ver
+   * `blueprintEletrodutoSobreposto.ts`.
+   */
+  const desenhoDosTrechos = useMemo(() => {
+    const desvios = desviosDeSobreposicao(trechosDoNivel);
+    const entradas = entradasNoQuadro(
+      trechosDoNivel,
+      quadrosDoNivel.map((q) => ({ id: q.id, at: q.at, larguraMm: medidasDoQuadro(q).larguraMm, rotacaoGraus: giroDaPeca(q) })),
+    );
+    return { desvios, entradas };
+  }, [trechosDoNivel, quadrosDoNivel]);
+
+  /**
    * Onde cada ponta PARARIA se o arraste fosse solto agora — vazio fora dele.
    *
    * ⚠️ Paredes e limites entram JUNTOS na conta, exatamente como no comando
@@ -2421,8 +2443,26 @@ export default function BlueprintCanvas({
 
   /** Qual TRECHO está sob o cursor. A PRUMADA é o caso difícil — ver o módulo. */
   const trechoSob = useCallback(
-    (mundo: { x: number; y: number }) => acertoTrecho(trechosDoNivel, mundo, HIT_PX / vista.escala),
-    [trechosDoNivel, vista.escala],
+    (mundo: { x: number; y: number }) => {
+      // A PRUMADA continua com o acerto do módulo (círculo pela bitola). Os
+      // demais são medidos contra a geometria DESENHADA — curva e entrada no
+      // quadro —, senão o clique no arco cairia no vazio.
+      const alcance = HIT_PX / vista.escala;
+      const geometria = geometriaDesenhada(trechosDoNivel, desenhoDosTrechos.desvios, desenhoDosTrechos.entradas, vista.escala);
+      for (let i = geometria.length - 1; i >= 0; i--) {
+        const g = geometria[i];
+        const t = trechosDoNivel[i];
+        if (t.a.x === t.b.x && t.a.y === t.b.y) {
+          if (acertoTrecho([t], mundo, alcance)) return t;
+          continue;
+        }
+        for (let k = 0; k + 1 < g.pontos.length; k++) {
+          if (distanciaAoSegmento(g.pontos[k], g.pontos[k + 1], mundo) <= alcance) return t;
+        }
+      }
+      return null;
+    },
+    [trechosDoNivel, desenhoDosTrechos, vista.escala],
   );
 
   /**
@@ -3991,10 +4031,20 @@ export default function BlueprintCanvas({
     // da tela — e o trecho que sobe pela parede é o mais comum de uma
     // instalação. O círculo é a convenção de projeto para o tubo que atravessa
     // o plano do desenho.
+    // ── SOBREPOSTOS: a leve curva (14/09/2026) ─────────────────────────────
+    //
+    // Dois eletrodutos pela mesma reta viravam um traço só, e a contagem de
+    // condutores de um cobria a do outro (relato com print). A convenção da
+    // prancha é o arco leve nos repetidos, cada um para um lado. É desenho:
+    // o trecho continua reto no modelo, no 3D e no acerto do clique — o arco
+    // passa a 4 px do traço reto por nível, dentro do alcance de 8 px.
+    const { desvios, entradas } = desenhoDosTrechos;
     for (const t of trechosDoNivel) {
       const selecionado = selecao.has(t.id);
-      const p = paraTela(t.a);
-      const q = paraTela(t.b);
+      const entrada = entradas.get(t.id);
+      const p = paraTela(entrada?.a ?? t.a);
+      const q = paraTela(entrada?.b ?? t.b);
+      const curva = curvaDoTrecho(p, q, desvios.get(t.id) ?? 0);
       ctx.strokeStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA[t.disciplina];
       // A BITOLA de verdade, com piso de traço: um eletroduto de 25 mm num zoom
       // de conjunto é meio pixel, e meio pixel some. Acima do piso o que se vê
@@ -4026,7 +4076,7 @@ export default function BlueprintCanvas({
         ctx.arc(p.x, p.y, emTela(t.bitolaMm / 2), 0, Math.PI * 2);
       } else {
         ctx.moveTo(p.x, p.y);
-        ctx.lineTo(q.x, q.y);
+        ctx.quadraticCurveTo(curva.controle.x, curva.controle.y, q.x, q.y);
       }
       ctx.stroke();
 
@@ -4075,7 +4125,7 @@ export default function BlueprintCanvas({
       // eletricista lê para comprar o tubo. Só no eletroduto: a tubulação
       // hidráulica tem convenção própria, que não é esta.
       if (t.disciplina === 'ELETRICA' && mostrarCircuitos) {
-        const c = p.x === q.x && p.y === q.y ? p : { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+        const c = p.x === q.x && p.y === q.y ? p : curva.meio;
         const comp = Math.hypot(q.x - p.x, q.y - p.y);
         // Abaixo do traço e à esquerda dos condutores, para não brigar com o
         // "#2,5" que fica acima.
@@ -4097,7 +4147,8 @@ export default function BlueprintCanvas({
       // próprio aqui poderia divergir do que o quadro de cargas conta, e a
       // prancha diria 2,5 num traço que a tabela soma como 4.
       if (t.disciplina === 'ELETRICA' && mostrarCircuitos && p.x !== q.x + 0) {
-        const meio = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+        // No MEIO DA CURVA, quando há curva — senão as marcas ficam no ar.
+        const meio = curva.meio;
         const comp = Math.hypot(q.x - p.x, q.y - p.y);
         if (comp > 24) {
           const ux = (q.x - p.x) / comp;

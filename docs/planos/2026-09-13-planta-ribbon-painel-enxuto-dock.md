@@ -223,3 +223,21 @@ Prova no app real, escritas bloqueadas: os 13 drawers abertos um a um,
 nenhum painel com scrollWidth > clientWidth; capturas de tomadas, eletrodutos,
 quantitativos e orçamento olhadas. Suíte 313 arquivos / 4129 testes verde,
 build ok.
+
+**Mudanças visuais (14/09, pedido: *"1. Modo tela cheia 2. Aumentar 50%
+símbolo tomadas"*)**:
+1. **Tela cheia** — botão no acesso rápido do ribbon (único lugar visível em
+   qualquer aba, porque é por ele que se SAI). Estado de sessão. A raiz do
+   editor vira `fixed inset-0 z-40` (cobre sidebar z-20 e topo z-30; fica
+   abaixo dos Sheets z-50, do confirm 200 e dos toasts 300) e, quando o
+   navegador deixa, a janela entra em Fullscreen de verdade; sair por Esc/F11
+   do navegador dispara `fullscreenchange` e o editor acompanha. Tela cheia
+   aqui foi expressamente pedida e é um modo de editor CAD, não layout de
+   painel. Prova: teste (liga/desliga, `aria-pressed`, classe na raiz) e app
+   real com escritas bloqueadas — canvas 985×655 → 1293×726, `elementFromPoint`
+   no centro da sidebar não a alcança (coberta), sair devolve 985 px.
+2. **Símbolo da tomada 1,5×** — `FATOR_DO_SIMBOLO_DE_TOMADA = 1.5` no canvas,
+   aplicado só ao desenho do triângulo NBR 5444 (piso 10 px → 15 px); a peça,
+   o acerto do clique e o encaixe continuam na medida real. O anel tracejado
+   da sugerida passou a envolver o símbolo (0,72 × tamanho + 6 px) em vez da
+   peça. Prova: captura com zoom — triângulos maiores, anel fora da base.

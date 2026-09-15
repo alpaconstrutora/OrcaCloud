@@ -983,6 +983,25 @@ describe('BlueprintEditor · ribbon', () => {
     expect(botao(/^do dxf$/i)).toHaveAttribute('aria-pressed', 'false');
   });
 
+  it('TELA CHEIA: o acesso rápido liga e desliga o modo, e a raiz do editor cobre o shell', async () => {
+    await montar();
+    // A raiz do editor é o `flex-col` que envolve o toolbar do ribbon.
+    const raiz = screen.getByRole('toolbar').closest('[class*="flex-col"]') as HTMLElement;
+    expect(raiz).not.toHaveAttribute('data-tela-cheia');
+    expect(raiz.className).not.toMatch(/fixed/);
+
+    // Sem `requestFullscreen` (jsdom não tem) o modo interno vale sozinho.
+    await userEvent.setup().click(screen.getByRole('button', { name: /^tela cheia$/i }));
+    expect(raiz).toHaveAttribute('data-tela-cheia');
+    expect(raiz.className).toMatch(/fixed inset-0/);
+    const sair = screen.getByRole('button', { name: /^sair da tela cheia$/i });
+    expect(sair).toHaveAttribute('aria-pressed', 'true');
+
+    await userEvent.setup().click(sair);
+    expect(raiz).not.toHaveAttribute('data-tela-cheia');
+    expect(screen.getByRole('button', { name: /^tela cheia$/i })).toHaveAttribute('aria-pressed', 'false');
+  });
+
   it('a aba contextual Modificar só existe com seleção — e traz Copiar, Excluir e as ações da peça', async () => {
     loadBranchModel.mockResolvedValue(comDuasParedesSoltas());
     await montar();

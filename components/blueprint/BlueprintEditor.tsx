@@ -35,6 +35,8 @@ import {
   LandPlot,
   Layers,
   Loader2,
+  Maximize2,
+  Minimize2,
   Minus,
   MousePointer2,
   Move,
@@ -755,6 +757,47 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [tarefa, setTarefa] = useState<TarefaDoPainel | null>(null);
   const [relatorio, setRelatorio] = useState<RelatorioDoDock | null>(null);
   const tarefaAberta = emVista ? null : tarefa;
+  /**
+   * MODO TELA CHEIA (14/09/2026, pedido: *"Modo tela cheia"*). O editor sai do
+   * miolo do shell e ocupa a janela inteira — a sidebar e o topo do ÒPURA
+   * somem, o desenho ganha ~330 px de largura e 60 px de altura. Estado de
+   * SESSÃO, não preferência: reabrir a planta já em tela cheia esconderia o
+   * shell sem o usuário ter pedido desta vez.
+   *
+   * Dois níveis, um sobre o outro: a raiz vira `fixed inset-0` (z-40 — abaixo
+   * dos Sheets em z-50, do confirm em 200 e dos toasts em 300; acima da
+   * sidebar z-20 e do topo z-30) e, quando o navegador deixa, a janela entra
+   * em Fullscreen de verdade. Sair por Esc/F11 do navegador dispara
+   * `fullscreenchange`, e o editor acompanha — senão o shell voltaria a
+   * aparecer atrás de um editor que ainda se acha em tela cheia.
+   *
+   * Tela cheia aqui é EXPRESSAMENTE pedida e é um modo de um editor CAD, não
+   * o layout de um painel — ver a regra de nunca usar tela cheia para painéis.
+   */
+  const [telaCheia, setTelaCheia] = useState(false);
+  const alternarTelaCheia = useCallback(() => {
+    setTelaCheia((v) => {
+      const proximo = !v;
+      const doc = typeof document !== 'undefined' ? document : null;
+      if (proximo) {
+        void doc?.documentElement.requestFullscreen?.().catch(() => undefined);
+      } else if (doc?.fullscreenElement) {
+        void doc.exitFullscreen?.().catch(() => undefined);
+      }
+      return proximo;
+    });
+  }, []);
+  useEffect(() => {
+    if (!telaCheia || typeof document === 'undefined') return;
+    // Só reage à SAÍDA feita pelo navegador. Se `requestFullscreen` nem
+    // chegou a entrar (iframe, permissão), não há evento e o modo interno
+    // segue valendo sozinho — que é o que o botão promete.
+    const aoMudar = () => {
+      if (!document.fullscreenElement) setTelaCheia(false);
+    };
+    document.addEventListener('fullscreenchange', aoMudar);
+    return () => document.removeEventListener('fullscreenchange', aoMudar);
+  }, [telaCheia]);
   /**
    * TAREFA EM DRAWER (13/09/2026). Primeiro como teste em "Distribuir
    * tomadas" (*"o painel ainda está com bastante informação. Vamos adotar
@@ -4528,7 +4571,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   };
 
   return (
-    <div className="flex h-full flex-col bg-slate-50">
+    <div
+      className={`flex h-full flex-col bg-slate-50 ${telaCheia ? 'fixed inset-0 z-40' : ''}`}
+      data-tela-cheia={telaCheia ? '' : undefined}
+    >
       {/* Cabeçalho */}
       {/* UMA LINHA, ~32px em vez de ~57 (pedido de 27/08/2026: o topo comia
           espaço de desenho). "Revisão N · unidades em milímetros" saiu da tela
@@ -4653,6 +4699,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               title="Excluir parede selecionada (Delete)"
               onClick={removerSelecionada}
               disabled={!editor.selectedId}
+            />
+            {/* TELA CHEIA. No acesso rápido, e não numa aba, porque é o único
+                botão que precisa estar à vista em qualquer aba para SAIR do modo. */}
+            <BotaoBarra
+              icone={telaCheia ? Minimize2 : Maximize2}
+              rotulo={telaCheia ? 'Sair da tela cheia' : 'Tela cheia'}
+              onClick={alternarTelaCheia}
+              ativo={telaCheia}
             />
             <span className="ml-2 whitespace-nowrap text-xs text-slate-500">
               {editor.model.walls.length} parede(s) · {ambientes.length} ambiente(s)
@@ -7417,11 +7471,14 @@ function BotaoBarra({
   rotulo,
   onClick,
   disabled,
+  ativo,
 }: {
   icone: React.ElementType;
   rotulo: string;
   onClick: () => void;
   disabled?: boolean;
+  /** Botão de MODO (tela cheia): aceso enquanto o modo vale, com `aria-pressed`. */
+  ativo?: boolean;
 }) {
   return (
     <button
@@ -7430,7 +7487,10 @@ function BotaoBarra({
       disabled={disabled}
       title={rotulo}
       aria-label={rotulo}
-      className="rounded-md border border-slate-200 bg-white p-1.5 text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-40"
+      aria-pressed={ativo === undefined ? undefined : ativo}
+      className={`rounded-md border p-1.5 shadow-sm transition-colors disabled:pointer-events-none disabled:opacity-40 ${
+        ativo ? 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+      }`}
     >
       <Icone className="h-4 w-4" />
     </button>

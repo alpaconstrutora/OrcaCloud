@@ -336,6 +336,11 @@ export function rotuloPasso(mm: number): string {
 const SNAP_PX = 12;
 /** Distância máxima, em pixels, para o clique selecionar uma parede. */
 const HIT_PX = 8;
+/**
+ * O símbolo da tomada (triângulo NBR 5444) é desenhado 1,5× a peça/piso de
+ * 10 px — pedido de 14/09/2026. Só desenho: acerto e encaixe usam a peça.
+ */
+const FATOR_DO_SIMBOLO_DE_TOMADA = 1.5;
 /** Menor tamanho em que um símbolo de instalação ainda é visível na tela. */
 const MIN_SIMBOLO_PX = 5;
 /** Espessura da linha de contorno da parede, em pixels de tela. */
@@ -4141,7 +4146,12 @@ export default function BlueprintCanvas({
       // (a prévia do traçado, o encaixe), e azul de prévia é a cor dela. Mover
       // o ponto limpa a marca e o anel some — ver `Terminal.sugerida`.
       if (t.sugerida) {
-        const raio = Math.max(emTela(md.larguraMm / 2), 5) + 6;
+        // Na tomada o anel envolve o SÍMBOLO (1,5× a peça, canto do triângulo
+        // a ~0,71 do tamanho), não a peça — senão o tracejado cortaria a base.
+        const ehTomada = t.disciplina === 'ELETRICA' && (t.tipoEletrico === 'TUG' || t.tipoEletrico === 'TUE');
+        const raio = ehTomada
+          ? Math.max(emTela(md.larguraMm), 10) * FATOR_DO_SIMBOLO_DE_TOMADA * 0.72 + 6
+          : Math.max(emTela(md.larguraMm / 2), 5) + 6;
         ctx.save();
         ctx.setLineDash([3, 3]);
         ctx.strokeStyle = COR_PREVIA;
@@ -4161,10 +4171,15 @@ export default function BlueprintCanvas({
       //
       // ⚠️ O tamanho é de SÍMBOLO, com piso de 10 px: a norma não desenha a
       // tomada em escala, e um triângulo de 5 px com metade cheia é um borrão.
+      // Em 14/09/2026 o símbolo cresceu 50% (*"Aumentar 50% símbolo tomadas"*):
+      // no zoom de trabalho o triângulo de 10 px sumia ao lado da parede e o
+      // preenchimento de altura (vazio/meio/cheio) não se distinguia. Só o
+      // DESENHO cresce — a peça (`medidasDoTerminal`), o acerto do clique e o
+      // encaixe continuam na medida real.
       if (t.disciplina === 'ELETRICA' && (t.tipoEletrico === 'TUG' || t.tipoEletrico === 'TUE')) {
         const cor = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA.ELETRICA;
         const graus = orientacaoDaTomada(t, paredesDoNivel);
-        const tamanhoMm = Math.max(md.larguraMm, 10 / vista.escala);
+        const tamanhoMm = Math.max(md.larguraMm, 10 / vista.escala) * FATOR_DO_SIMBOLO_DE_TOMADA;
         const [b1, b2, apice] = trianguloDaTomada(t.at, graus, tamanhoMm).map(paraTela) as [
           { x: number; y: number },
           { x: number; y: number },

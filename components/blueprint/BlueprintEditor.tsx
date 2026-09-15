@@ -41,6 +41,7 @@ import {
   Minus,
   MousePointer2,
   Move,
+  Network,
   MoveDiagonal,
   MoveHorizontal,
   Mountain,
@@ -147,6 +148,7 @@ import {
 import SecaoAccordion from './SecaoAccordion';
 import { usePainelRedimensionavel } from './LarguraDoPainel';
 import PainelMedicoes from './PainelMedicoes';
+import PainelUnifilar from './PainelUnifilar';
 import PainelParedeSelecionada from './PainelParedeSelecionada';
 import PainelCamadasParede from './PainelCamadasParede';
 import PainelSelecaoMultipla from './PainelSelecaoMultipla';
@@ -534,6 +536,10 @@ const RELATORIOS_DO_DOCK = {
   // necessidade além de tornar o drawer excessivamente longo". Emite-se uma
   // vez por revisão; o quadro se consulta o tempo todo.
   'executivo-eletrico': { rotulo: 'Projeto executivo elétrico (ART)', naVista: true, no3d: true },
+  // O diagrama unifilar (15/09/2026): a leitura do quadro em uma linha —
+  // geral, barramento, um ramal por circuito. Só consulta; o que se edita é
+  // no quadro de cargas, e o desenho acompanha.
+  unifilar: { rotulo: 'Diagrama unifilar', naVista: true, no3d: true },
   medicoes: { rotulo: 'Medições', naVista: false, no3d: false },
   quantitativos: { rotulo: 'Quantitativos', naVista: true, no3d: false },
   orcamento: { rotulo: 'Orçamento', naVista: false, no3d: false },
@@ -853,6 +859,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'quadro-de-cargas',
     'executivo-eletrico',
+    'unifilar',
     'conflitos',
     'medicoes',
     'quantitativos',
@@ -4990,6 +4997,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 onClick={() => alternarRelatorio('executivo-eletrico')}
                 ajuda="Responsável técnico, ART, verificações e emissão do projeto executivo elétrico — separado do quadro de cargas porque se emite uma vez por revisão"
               />
+              <BotaoDoRibbon
+                icone={Network}
+                rotulo="Diagrama unifilar"
+                contagem={(editor.model.quadros ?? []).length || undefined}
+                ativo={relatorioAberto === 'unifilar'}
+                onClick={() => alternarRelatorio('unifilar')}
+                ajuda="O quadro em uma linha: alimentação, disjuntor geral, barramento e um ramal por circuito com disjuntor, DR, condutores e carga — o mesmo traçado que sai na prancha elétrica"
+              />
             </GrupoDoRibbon>
           </>
         )}
@@ -7535,6 +7550,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             <span className="flex items-center gap-2">
               {relatorioNoDrawer === 'quadro-de-cargas' && <Zap className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'executivo-eletrico' && <FileText className="h-5 w-5 text-blue-700" />}
+              {relatorioNoDrawer === 'unifilar' && <Network className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'conflitos' && <AlertTriangle className="h-5 w-5 text-amber-600" />}
               {relatorioNoDrawer === 'medicoes' && <Ruler className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'quantitativos' && <Table2 className="h-5 w-5 text-blue-700" />}
@@ -7562,6 +7578,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               'Circuitos por quadro, pré-dimensionamento com hipóteses declaradas e conferência da NBR 5410. Cada campo grava na hora; Ctrl+Z desfaz. A emissão com ART fica em "Projeto executivo (ART)".'}
             {relatorioNoDrawer === 'executivo-eletrico' &&
               'A emissão é do responsável técnico. O programa reúne a conferência NBR 5410 e o pré-dimensionamento de cada circuito e quadro, registra a emissão e a amarra ao hash do desenho e das hipóteses.'}
+            {relatorioNoDrawer === 'unifilar' &&
+              'A leitura do quadro em uma linha: alimentação, disjuntor geral, barramento e um ramal por circuito — disjuntor, DR, condutores e carga. Os valores vêm do quadro de cargas; "sug." é o pré-dimensionamento ainda não declarado.'}
             {relatorioNoDrawer === 'conflitos' &&
               'Interferências entre instalações e com a estrutura, e entre disciplinas. Clicar num conflito seleciona as peças no desenho; exporte em BCF para o projetista.'}
             {relatorioNoDrawer === 'medicoes' &&
@@ -7573,7 +7591,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           </SheetDescription>
         </SheetHeader>
 
-        <SheetPanel className={`drawer-legivel ${relatorioNoDrawer === 'quadro-de-cargas' ? 'px-4 py-3' : 'p-0'}`}>
+        <SheetPanel className={`drawer-legivel ${relatorioNoDrawer === 'quadro-de-cargas' || relatorioNoDrawer === 'unifilar' ? 'px-4 py-3' : 'p-0'}`}>
           {relatorioNoDrawer === 'conflitos' && (
             <PainelConflitos
               model={editor.model}
@@ -7631,6 +7649,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onPrevia={setPreviaOrcamento}
             />
           )}
+
+          {relatorioNoDrawer === 'unifilar' && <PainelUnifilar model={editor.model} hipoteses={hipotesesEletricas} />}
 
           {relatorioNoDrawer === 'executivo-eletrico' && (
             <div className="px-4 py-3">

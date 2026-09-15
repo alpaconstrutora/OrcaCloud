@@ -298,6 +298,7 @@ export const AVISO_PADRAO =
   'nem vale para aprovação legal ou execução.';
 
 import { desenharEletrica, desenharQuadroDeCargas } from './blueprintPranchaEletrica';
+import { desenharUnifilar, medidasDoUnifilar, montarUnifilar, rodapeDoUnifilar } from './blueprintUnifilar';
 import type { HipotesesEletricas } from './blueprintEletricaDimensionamento';
 
 const COR_TRACO = '#000000';
@@ -473,6 +474,37 @@ export function desenharFolhaDoQuadroDeCargas(
   enq: Enquadramento,
 ): void {
   desenharQuadroDeCargas(d, model, opcoes, enq, opcoes.hipotesesEletricas);
+  desenharCarimbo(d, opcoes, enq);
+}
+
+/**
+ * A FOLHA do diagrama unifilar (15/09/2026): um quadro por bloco, empilhados;
+ * um quadro mais largo que a folha é ENCOLHIDO para caber (o barramento é um
+ * só, não quebra linha). O rodapé lista só os símbolos que aparecem.
+ */
+export function desenharFolhaDoUnifilar(
+  d: Desenhista,
+  model: BlueprintModel,
+  opcoes: OpcoesExportacao,
+  enq: Enquadramento,
+): void {
+  const x0 = enq.offsetXMm - Math.max(0, (enq.utilLarguraMm - enq.desenhoLarguraMm) / 2);
+  let y = enq.offsetYMm - Math.max(0, (enq.utilAlturaMm - enq.desenhoAlturaMm) / 2) + 6;
+  d.texto(x0, y, 'DIAGRAMA UNIFILAR', 3.2);
+  y += 7;
+  const diagramas = montarUnifilar(model, opcoes.hipotesesEletricas);
+  if (diagramas.length === 0) d.texto(x0, y, 'Sem quadro de distribuição neste desenho.', 2.2, '#555555');
+  for (const dg of diagramas) {
+    const { larguraMm, alturaMm } = medidasDoUnifilar(dg);
+    const k = Math.min(1, enq.utilLarguraMm / larguraMm);
+    desenharUnifilar(d, dg, x0, y, k);
+    y += alturaMm * k + 8;
+  }
+  y += 2;
+  for (const l of rodapeDoUnifilar(diagramas)) {
+    d.texto(x0, y, l, 1.9, '#555555');
+    y += 3.6;
+  }
   desenharCarimbo(d, opcoes, enq);
 }
 

@@ -398,7 +398,7 @@ export default function PainelVersoes({
   // a lista reordenaria as pranchas de sempre a cada corte novo.
   const PRANCHAS: { id: PranchaExport; rotulo: string }[] = [
     { id: 'planta', rotulo: 'Planta' },
-    // F8: a planta com os símbolos elétricos + a folha do quadro de cargas.
+    // F8: a planta com os símbolos elétricos + a folha do quadro de cargas + o unifilar.
     { id: 'eletrica', rotulo: 'Elétrica' },
     { id: 'frente', rotulo: 'Frente' },
     { id: 'fundos', rotulo: 'Fundos' },

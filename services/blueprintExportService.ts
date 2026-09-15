@@ -12,6 +12,7 @@ import {
   AVISO_PADRAO,
   desenharElevacao,
   desenharFolhaDoQuadroDeCargas,
+  desenharFolhaDoUnifilar,
   desenharPlanta,
   enquadrar,
   enquadrarElevacao,
@@ -317,6 +318,7 @@ export function exportarPranchasPdf(
     proj: ProjecaoElevacao | ProjecaoCorte | null;
     /** F8: a segunda página da prancha elétrica — legenda e quadro de cargas. */
     quadroDeCargas?: boolean;
+    unifilar?: boolean;
   };
 
   // Enquadra tudo antes: uma página não pode sair e a seguinte falhar.
@@ -324,7 +326,8 @@ export function exportarPranchasPdf(
     if (p === 'planta' || p === 'eletrica') {
       const enq = enquadrar(model, o.denominador, o.papel, o.cotas);
       if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
-      if (p === 'eletrica') return [{ p, enq, proj: null }, { p, enq, proj: null, quadroDeCargas: true }];
+      // A prancha elétrica são TRÊS folhas: a planta, o quadro de cargas e o unifilar.
+      if (p === 'eletrica') return [{ p, enq, proj: null }, { p, enq, proj: null, quadroDeCargas: true }, { p, enq, proj: null, unifilar: true }];
       return [{ p, enq, proj: null }];
     }
     const proj = projecaoDaPrancha(model, p, levelIds);
@@ -341,15 +344,16 @@ export function exportarPranchasPdf(
     orientation: o.papel.larguraMm > o.papel.alturaMm ? 'landscape' : 'portrait',
   });
 
-  enquadrados.forEach(({ p, enq, proj, quadroDeCargas }, i) => {
+  enquadrados.forEach(({ p, enq, proj, quadroDeCargas, unifilar }, i) => {
     if (i > 0) doc.addPage([o.papel.larguraMm, o.papel.alturaMm]);
     const oPagina = {
       ...o,
       eletrica: p === 'eletrica',
-      titulo: `${o.titulo} — ${quadroDeCargas ? 'Quadro de cargas' : rotuloDaPrancha(model, p)}`,
+      titulo: `${o.titulo} — ${quadroDeCargas ? 'Quadro de cargas' : unifilar ? 'Diagrama unifilar' : rotuloDaPrancha(model, p)}`,
     };
     const desenhista = new DesenhistaPdf(doc);
     if (quadroDeCargas) desenharFolhaDoQuadroDeCargas(desenhista, model, oPagina, enq);
+    else if (unifilar) desenharFolhaDoUnifilar(desenhista, model, oPagina, enq);
     else if (proj) desenharElevacao(desenhista, proj, oPagina, enq);
     else desenharPlanta(desenhista, model, oPagina, enq);
   });
@@ -395,6 +399,20 @@ export function exportarPranchasPng(
           const nome2 = nomeArquivo(oArquivo, 'png').replace(/\.png$/, '-quadro-de-cargas.png');
           c2.toBlob((blob) => {
             if (blob) baixar(blob, nome2);
+          }, 'image/png');
+        }
+        // E a terceira: o diagrama unifilar.
+        const c3 = document.createElement('canvas');
+        c3.width = canvas.width;
+        c3.height = canvas.height;
+        const ctx3 = c3.getContext('2d');
+        if (ctx3) {
+          ctx3.fillStyle = '#ffffff';
+          ctx3.fillRect(0, 0, c3.width, c3.height);
+          desenharFolhaDoUnifilar(new DesenhistaCanvas(ctx3, dpi), model, { ...oArquivo, titulo: `${o.titulo} — Diagrama unifilar` }, enq);
+          const nome3 = nomeArquivo(oArquivo, 'png').replace(/\.png$/, '-unifilar.png');
+          c3.toBlob((blob) => {
+            if (blob) baixar(blob, nome3);
           }, 'image/png');
         }
       }

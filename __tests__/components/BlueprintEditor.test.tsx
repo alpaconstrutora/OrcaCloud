@@ -1188,6 +1188,38 @@ describe('BlueprintEditor · ribbon', () => {
     expect(botao(/^projeto executivo \(art\)/i)).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it('"Diagrama unifilar" (aba Instalações) abre em drawer: sem quadro pede um; com quadro e circuito desenha o SVG com C1 e o geral', async () => {
+    await montar();
+    await abrirAba(/^instalações$/i);
+    await userEvent.setup().click(botao(/^diagrama unifilar/i));
+    const drawer = await screen.findByRole('dialog');
+    expect(drawer).toHaveTextContent(/diagrama unifilar/i);
+    expect(drawer).toHaveTextContent(/nenhum quadro de distribuição ainda/i);
+    expect(botao(/^diagrama unifilar/i)).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('com QDC e um circuito, o unifilar mostra o quadro, o ramal C1 e os condutores', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    let m = k.applyCommand(nivel.model, { type: 'AddQuadro', levelId: t, nome: 'QDC', at: k.point(300, 300), cotaMm: 1500, tensaoV: 127, ligacao: 'FN' }).model;
+    m = k.applyCommand(m, { type: 'AddCircuito', quadroId: m.quadros![0].id, nome: 'C1 — TUG Sala', tensaoV: 127, secaoMm2: 2.5, disjuntorA: 16 }).model;
+    m = k.applyCommand(m, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'TUG', at: k.point(1000, 200), cotaMm: 300, tipoEletrico: 'TUG', potenciaW: 600 }).model;
+    m = k.applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais![0].id, circuitoId: m.circuitos![0].id }).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    await abrirAba(/^instalações$/i);
+    await userEvent.setup().click(botao(/^diagrama unifilar/i));
+    const drawer = await screen.findByRole('dialog');
+    const svg = within(drawer).getByRole('img', { name: /unifilar do quadro qdc/i });
+    expect(svg).toHaveTextContent(/QDC — FN 127 V/);
+    expect(svg).toHaveTextContent(/GERAL \d+ A/);
+    expect(svg).toHaveTextContent('C1');
+    expect(svg).toHaveTextContent('16 A');
+    expect(svg).toHaveTextContent('2#2,5 + T2,5');
+    expect(drawer).toHaveTextContent(/1 circuito\(s\) · instalado 600 VA/);
+  });
+
   it('"Dados do lote" (aba Terreno) abre o painel do terreno como tarefa', async () => {
     await montar();
     await abrirAba(/^terreno$/i);

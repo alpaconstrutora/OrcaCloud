@@ -345,6 +345,19 @@ export function rotuloPasso(mm: number): string {
 const SNAP_PX = 12;
 /** Distância máxima, em pixels, para o clique selecionar uma parede. */
 const HIT_PX = 8;
+
+/**
+ * ZOOM NA SIMBOLOGIA E NOS TEXTOS (15/09/2026, pedido: *"ao aplicar zoom,
+ * aplicar em simbologias e textos também"*). Rótulos, marcas de condutor e
+ * setas eram fixos em px: ao aproximar, a planta crescia e eles ficavam do
+ * mesmo tamanho — minúsculos ao lado da parede. Agora crescem com a escala a
+ * partir do zoom de trabalho (`ESCALA_DE_ANOTACAO_PX_MM`), até 3×; abaixo dele
+ * ficam no tamanho de sempre, para não encolher até sumir no zoom de conjunto.
+ */
+const ESCALA_DE_ANOTACAO_PX_MM = 0.08;
+function fatorDeAnotacao(escalaPxPorMm: number): number {
+  return Math.min(3, Math.max(1, escalaPxPorMm / ESCALA_DE_ANOTACAO_PX_MM));
+}
 /**
  * O símbolo da tomada (triângulo NBR 5444) é desenhado 1,5× a peça/piso de
  * 10 px — pedido de 14/09/2026. Só desenho: acerto e encaixe usam a peça.
@@ -2714,6 +2727,8 @@ export default function BlueprintCanvas({
     ctx.clearRect(0, 0, tamanho.w, tamanho.h);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, tamanho.w, tamanho.h);
+    // Simbologia e textos crescem com o zoom — ver `fatorDeAnotacao`.
+    const fz = fatorDeAnotacao(vista.escala);
 
     // ── Planta de fundo ──────────────────────────────────────────────────────
     //
@@ -3317,7 +3332,7 @@ export default function BlueprintCanvas({
         // SÓ SAI SE COUBER. Mesma régua da cadeia de cotas: rótulo que
         // transborda o cômodo suja o desenho fingindo informar. A largura do
         // ambiente na tela é medida pela caixa envolvente do anel.
-        ctx.font = '600 11px system-ui, sans-serif';
+        ctx.font = `600 ${Math.round(11 * fz)}px system-ui, sans-serif`;
         const larguraTexto = Math.max(...pronto.linhas.map((t) => ctx.measureText(t).width));
         const telaX = s.ring.map((p) => paraTela(p).x);
         const telaY = s.ring.map((p) => paraTela(p).y);
@@ -3329,7 +3344,7 @@ export default function BlueprintCanvas({
         const alturaLinha = 13;
         const topo = ancora.y - ((pronto.linhas.length - 1) * alturaLinha) / 2;
         pronto.linhas.forEach((texto, i) => {
-          escreverRotulo(ctx, texto, ancora.x, topo + i * alturaLinha, COR_ROTULO_AMBIENTE, 11);
+          escreverRotulo(ctx, texto, ancora.x, topo + i * alturaLinha, COR_ROTULO_AMBIENTE, Math.round(11 * fz));
         });
       }
       ctx.restore();
@@ -3375,7 +3390,7 @@ export default function BlueprintCanvas({
 
         // Rótulo só se couber: cota que não se lê suja o desenho fingindo
         // informar. A linha e os tiques ficam, e já mostram o trecho medido.
-        ctx.font = '600 11px system-ui, sans-serif';
+        ctx.font = `600 ${Math.round(11 * fz)}px system-ui, sans-serif`;
         if (compPx < ctx.measureText(cota.rotulo).width + 10) continue;
 
         let ang = Math.atan2(b.y - a.y, b.x - a.x);
@@ -3383,7 +3398,7 @@ export default function BlueprintCanvas({
         ctx.save();
         ctx.translate((a.x + b.x) / 2, (a.y + b.y) / 2);
         ctx.rotate(ang);
-        escreverRotulo(ctx, cota.rotulo, 0, 0, corTextoCotaInterna, 11, fundoCota);
+        escreverRotulo(ctx, cota.rotulo, 0, 0, corTextoCotaInterna, Math.round(11 * fz), fundoCota);
         ctx.restore();
       }
       ctx.restore();
@@ -3445,7 +3460,7 @@ export default function BlueprintCanvas({
           // porque suja o desenho fingindo informar. A linha e os tiques FICAM:
           // eles ainda mostram onde a cadeia quebra.
           const compPx = Math.hypot(b.x - a.x, b.y - a.y);
-          ctx.font = `600 11px system-ui, sans-serif`;
+          ctx.font = `600 ${Math.round(11 * fz)}px system-ui, sans-serif`;
           const larguraTexto = ctx.measureText(seg.rotulo).width;
           if (compPx < larguraTexto + 10) continue;
 
@@ -3484,7 +3499,7 @@ export default function BlueprintCanvas({
           // o rótulo já caía nos três lados que estavam certos.
           ctx.translate(meioPx.x - (fx / cf) * 7, meioPx.y - (fy / cf) * 7);
           ctx.rotate(ang);
-          escreverRotulo(ctx, seg.rotulo, 0, 0, corTextoCota, 11, fundoCota);
+          escreverRotulo(ctx, seg.rotulo, 0, 0, corTextoCota, Math.round(11 * fz), fundoCota);
           ctx.restore();
         }
       };
@@ -3670,7 +3685,7 @@ export default function BlueprintCanvas({
           ctx.beginPath();
           ctx.arc(fim.x, fim.y, 4, 0, Math.PI * 2);
           ctx.stroke();
-          ctx.font = `${ativa ? 'bold ' : ''}10px sans-serif`;
+          ctx.font = `${ativa ? 'bold ' : ''}${Math.round(10 * fz)}px sans-serif`;
           ctx.textAlign = 'left';
           ctx.textBaseline = 'bottom';
           ctx.fillText(linha.nome, pts[0].x + 6, pts[0].y - 4);
@@ -3704,7 +3719,7 @@ export default function BlueprintCanvas({
         if (cd && curvaEmDestaque) {
           const t = paraTela(curvaEmDestaque.ponto);
           const texto = `${cd.cotaM.toFixed(2).replace('.', ',')} m · ${comprimentoDaCurvaM(cd).toFixed(1).replace('.', ',')} m`;
-          ctx.font = '11px sans-serif';
+          ctx.font = `${Math.round(11 * fz)}px sans-serif`;
           const w = ctx.measureText(texto).width + 10;
           ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
           ctx.strokeStyle = COR_SELECIONADA;
@@ -3718,7 +3733,7 @@ export default function BlueprintCanvas({
           ctx.textBaseline = 'middle';
           ctx.fillText(texto, t.x + 13, t.y - 13);
         }
-        ctx.font = '10px sans-serif';
+        ctx.font = `${Math.round(10 * fz)}px sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         for (const c of curvasDeNivel) {
@@ -3763,7 +3778,7 @@ export default function BlueprintCanvas({
         ctx.strokeStyle = COR_PONTO_COTADO;
         ctx.fillStyle = COR_PONTO_COTADO;
         ctx.lineWidth = 1.2;
-        ctx.font = '10px sans-serif';
+        ctx.font = `${Math.round(10 * fz)}px sans-serif`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'bottom';
         for (const p of pontosCotados) {
@@ -3804,7 +3819,7 @@ export default function BlueprintCanvas({
             ctx.arc(t.x, t.y, ativa ? 3.5 : 3, 0, Math.PI * 2);
             ctx.fill();
           }
-          ctx.font = `${ativa ? 'bold ' : ''}10px sans-serif`;
+          ctx.font = `${ativa ? 'bold ' : ''}${Math.round(10 * fz)}px sans-serif`;
           ctx.textAlign = 'left';
           ctx.textBaseline = 'bottom';
           ctx.fillText(linhasDoPerfil.length > 1 ? `Perfil ${indice + 1}` : 'Perfil', pts[0].x + 6, pts[0].y - 4);
@@ -3947,7 +3962,7 @@ export default function BlueprintCanvas({
           const larguraPx = s.larguraMm * vista.escala;
           if (larguraPx >= MIN_PX_COTA_PAREDE) {
             ctx.fillStyle = selecionado ? COR_SELECIONADA : '#ffffff';
-            ctx.font = '600 10px ui-sans-serif, system-ui, sans-serif';
+            ctx.font = `600 ${Math.round(10 * fz)}px ui-sans-serif, system-ui, sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(s.rotulo, t.x, t.y);
@@ -4041,7 +4056,7 @@ export default function BlueprintCanvas({
 
       // O "30%" atrás da seta: a única propriedade da água que a planta mostra,
       // e a que mais se confere contra a prancha.
-      ctx.font = '600 10px ui-sans-serif, system-ui, sans-serif';
+      ctx.font = `600 ${Math.round(10 * fz)}px ui-sans-serif, system-ui, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(`${r.inclinacaoPct}%`, c.x - dx * 14, c.y - dy * 14);
@@ -4131,7 +4146,7 @@ export default function BlueprintCanvas({
         const vertical = segs.find((sg) => sg.a.x === sg.b.x && sg.a.y === sg.b.y);
         if (vertical) {
           const c = paraTela(vertical.a);
-          const comp = 14;
+          const comp = 14 * fz;
           // A seta a 45° para a direita e para cima na tela.
           const fim = { x: c.x + comp, y: c.y - comp };
           ctx.save();
@@ -4170,7 +4185,7 @@ export default function BlueprintCanvas({
         const nx = comp > 0 ? -(q.y - p.y) / comp : 0;
         const ny = comp > 0 ? (q.x - p.x) / comp : 1;
         ctx.fillStyle = '#334155';
-        ctx.font = '9px ui-sans-serif, system-ui, sans-serif';
+        ctx.font = `${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
         ctx.fillText(`Ø ${t.bitolaMm}`, c.x - nx * 9 - 26, c.y - ny * 9 + 3);
       }
 
@@ -4208,8 +4223,8 @@ export default function BlueprintCanvas({
             idsDoTrecho.map((cid) => ({ id: cid, ligacao: ligacaoPorCircuito.get(cid)?.ligacao ?? null })),
           ).map((c) => c.tipo);
           const n = condutores.length;
-          const MEIA = 5; // meia altura do traço, px
-          const PASSO = 5; // entre condutores, px
+          const MEIA = 5 * fz; // meia altura do traço, px (cresce com o zoom)
+          const PASSO = 5 * fz; // entre condutores, px
           // A "cima" do traço é o lado −n (na tela, acima de uma linha horizontal).
           const emTelaRel = (cx: number, cy: number, r: { t: number; s: number }) => ({
             x: cx + ux * r.t * MEIA + nx * r.s * MEIA,
@@ -4230,7 +4245,7 @@ export default function BlueprintCanvas({
           });
           if (n > 0) {
             ctx.fillStyle = '#334155';
-            ctx.font = 'bold 9px ui-sans-serif, system-ui, sans-serif';
+            ctx.font = `bold ${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
             ctx.textAlign = 'center';
             // O número do circuito em cima do grupo…
             const numeros = idsDoTrecho.length > 0 ? idsDoTrecho.map((cid) => numeroDoCircuito(circuitosPorId.get(cid))).join(' ') : '?';
@@ -4238,7 +4253,7 @@ export default function BlueprintCanvas({
             // …e a seção embaixo, como no exemplo: "4", "1.5".
             const secoes = [...new Set(idsDoTrecho.map((cid) => secaoPorCircuito.get(cid)).filter((v): v is number => v != null))];
             if (secoes.length > 0) {
-              ctx.font = '9px ui-sans-serif, system-ui, sans-serif';
+              ctx.font = `${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
               ctx.fillText(secoes.map((v) => String(v).replace('.', ',')).join('/'), meio.x + nx * (MEIA + 4), meio.y + ny * (MEIA + 4) + 3);
             }
             ctx.textAlign = 'start';
@@ -4371,7 +4386,7 @@ export default function BlueprintCanvas({
         if (mostrarCircuitos) {
           const circuito = circuitosPorId.get(t.circuitoId ?? '');
           const afast = Math.hypot(apice.x - meioDaBase.x, apice.y - meioDaBase.y) / 2 + 4;
-          ctx.font = 'bold 10px ui-sans-serif, system-ui, sans-serif';
+          ctx.font = `bold ${Math.round(10 * fz)}px ui-sans-serif, system-ui, sans-serif`;
           ctx.textAlign = 'center';
           // Potência em cima — só quando declarada: "0 W" numa tomada seria
           // afirmar carga zero onde ninguém informou nada.
@@ -4386,12 +4401,12 @@ export default function BlueprintCanvas({
           // que o ponto pede a quem olha, e some junto com a marca ao mover.
           if (t.sugerida && t.rotulo) {
             ctx.fillStyle = COR_PREVIA;
-            ctx.font = 'italic 10px ui-sans-serif, system-ui, sans-serif';
+            ctx.font = `italic ${Math.round(10 * fz)}px ui-sans-serif, system-ui, sans-serif`;
             ctx.fillText(t.rotulo, c.x, c.y + afast + 22);
           }
           if (t.comando) {
             ctx.fillStyle = COR_DA_DISCIPLINA.ELETRICA;
-            ctx.font = 'italic bold 11px ui-sans-serif, system-ui, sans-serif';
+            ctx.font = `italic bold ${Math.round(11 * fz)}px ui-sans-serif, system-ui, sans-serif`;
             ctx.fillText(t.comando, c.x + afast + 8, c.y + 4);
           }
           ctx.textAlign = 'start';
@@ -4485,7 +4500,7 @@ export default function BlueprintCanvas({
         // As letras, uma por seção, nas posições do símbolo.
         const letras = (t.comando ?? '').split('');
         ctx.fillStyle = COR_DA_DISCIPLINA.ELETRICA;
-        ctx.font = 'italic bold 11px ui-sans-serif, system-ui, sans-serif';
+        ctx.font = `italic bold ${Math.round(11 * fz)}px ui-sans-serif, system-ui, sans-serif`;
         const secoes = secoesDoInterruptor(t);
         const posicoes: [number, number, CanvasTextAlign][] =
           secoes === 1
@@ -4566,7 +4581,7 @@ export default function BlueprintCanvas({
         // numa prancha elétrica. Sem tipo, a sigla vira "?" também.
         const sigla = t.tipoEletrico ? SIGLA_DO_PONTO_ELETRICO[t.tipoEletrico] : null;
         const texto = `${sigla ?? '?'} · ${circuito ?? '?'}`;
-        ctx.font = 'bold 11px ui-sans-serif, system-ui, sans-serif';
+        ctx.font = `bold ${Math.round(11 * fz)}px ui-sans-serif, system-ui, sans-serif`;
         ctx.fillStyle = sigla && circuito ? '#334155' : COR_ALERTA;
         if (ehInterruptor) {
           // Embaixo e à direita: em cima estão as letras das seções.
@@ -4591,7 +4606,7 @@ export default function BlueprintCanvas({
         // print do harness mostrou os dois textos um sobre o outro.
         if (ehLigacaoDireta && t.potenciaW != null) {
           ctx.fillStyle = '#334155';
-          ctx.font = 'bold 10px ui-sans-serif, system-ui, sans-serif';
+          ctx.font = `bold ${Math.round(10 * fz)}px ui-sans-serif, system-ui, sans-serif`;
           ctx.textAlign = 'center';
           ctx.fillText(`${t.potenciaW} ${UNIDADE_DE_POTENCIA}`, c.x, c.y + raio + 12);
           ctx.textAlign = 'start';
@@ -4599,7 +4614,7 @@ export default function BlueprintCanvas({
         const ehLuz = t.tipoEletrico?.startsWith('ILUMINACAO') ?? false;
         if (ehLuz && t.potenciaW != null && raio >= 9) {
           ctx.fillStyle = '#ffffff';
-          ctx.font = `bold ${Math.min(11, raio)}px ui-sans-serif, system-ui, sans-serif`;
+          ctx.font = `bold ${Math.min(Math.round(11 * fz), raio)}px ui-sans-serif, system-ui, sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(String(t.potenciaW), c.x, c.y);
@@ -4614,7 +4629,7 @@ export default function BlueprintCanvas({
         // tipo · circuito — os dois são lidos ao mesmo tempo.
         if (t.comando && !ehInterruptor) {
           ctx.fillStyle = COR_DA_DISCIPLINA.ELETRICA;
-          ctx.font = 'italic bold 11px ui-sans-serif, system-ui, sans-serif';
+          ctx.font = `italic bold ${Math.round(11 * fz)}px ui-sans-serif, system-ui, sans-serif`;
           ctx.fillText(t.comando, c.x + raio + 3, c.y + raio + 10);
         }
       }
@@ -4652,7 +4667,7 @@ export default function BlueprintCanvas({
       ctx.stroke();
       if (q.nome) {
         ctx.fillStyle = '#334155';
-        ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+        ctx.font = `${Math.round(10 * fz)}px ui-sans-serif, system-ui, sans-serif`;
         // O rótulo fica FORA da caixa girada, à direita do canto mais à direita
         // e acima do mais alto: preso a um canto fixo, ele entraria por cima do
         // desenho em metade dos ângulos.
@@ -4715,7 +4730,7 @@ export default function BlueprintCanvas({
       ctx.arc(eixo[0].x, eixo[0].y, 3, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.font = '600 9px ui-sans-serif, system-ui, sans-serif';
+      ctx.font = `600 ${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       const prefixo = e.rotulo ? `${e.rotulo} · ` : '';
@@ -4984,7 +4999,7 @@ export default function BlueprintCanvas({
         ctx.lineWidth = 1.5;
         ctx.stroke();
         ctx.fillStyle = cor;
-        ctx.font = '600 11px ui-sans-serif, system-ui, sans-serif';
+        ctx.font = `600 ${Math.round(11 * fz)}px ui-sans-serif, system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(c.rotulo, q.x, q.y);
@@ -5710,7 +5725,7 @@ export default function BlueprintCanvas({
       ctx.setLineDash([]);
 
       const posRegiao = dentroDaTela(Math.max(a.x, b.x), Math.min(a.y, b.y) - 14);
-      escreverRotulo(ctx, 'Região da geração', posRegiao.x, posRegiao.y, COR_REGIAO, 11);
+      escreverRotulo(ctx, 'Região da geração', posRegiao.x, posRegiao.y, COR_REGIAO, Math.round(11 * fz));
     }
 
     // Região em curso — sólida, para separar "estou marcando" de "está marcada".
@@ -5760,7 +5775,7 @@ export default function BlueprintCanvas({
       ctx.setLineDash([]);
 
       const posLaco = dentroDaTela(b.x, b.y - 14);
-      escreverRotulo(ctx, soDentro ? 'Inteiro dentro' : 'Tudo que tocar', posLaco.x, posLaco.y, cor, 11);
+      escreverRotulo(ctx, soDentro ? 'Inteiro dentro' : 'Tudo que tocar', posLaco.x, posLaco.y, cor, Math.round(11 * fz));
     }
 
     // Cota do deslocamento, durante o arraste da seleção.

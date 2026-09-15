@@ -33,3 +33,15 @@
 - App real (Playwright, escritas bloqueadas): TUG inserida junto da parede — base
   do triângulo na linha da parede, haste atravessando-a, símbolo fora da faixa da
   parede; luz de teto com o dobro do diâmetro; captura ampliada 8× olhada.
+
+## Zoom na simbologia e nos textos (15/09, pedido: *"ao aplicar zoom, aplicar em simbologias e textos também"*)
+
+Rótulos (ponto, circuito, VA, Ø, seção, números do grupo), marcas de condutor,
+seta sobe/desce e rótulos de cota/ambiente eram fixos em px: ao aproximar, a
+planta crescia e eles não. `fatorDeAnotacao(escala)` = `clamp(escala / 0,08 px/mm,
+1, 3)`: abaixo do zoom de trabalho ficam do tamanho de sempre (não somem no
+zoom de conjunto); acima crescem com a escala até 3×. Aplicado a todas as
+fontes do efeito de desenho (26), aos `escreverRotulo` de tamanho fixo, a
+`MEIA`/`PASSO` dos condutores e ao comprimento da seta. Os símbolos em escala
+real (luz, tomada acima do piso, quadro) já cresciam. Prova: cena em "grade 1 m"
+e em "grade 200 mm" (≈0,135 px/mm → 1,7×) — textos e marcas maiores no segundo.

@@ -1025,11 +1025,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
     const loadPlanoContas = async (orgId: string) => {
         try {
-            // SEM o fallback "se vier vazio, busca sem filtro" que loadCostCenters tem:
-            // aqui ele trazia o plano das OUTRAS organizações (Alpa + SPE = cada código
-            // duas vezes) e deixava gravar conta de outra org no extrato desta. Org sem
-            // plano de contas = lista vazia, que é a verdade.
-            const data = await financialRegistryService.listPlanoContas(orgId);
+            // Org sem plano de contas próprio (ex.: a org da conta pessoa física, 0 contas)
+            // cai para os planos das outras orgs do usuário — mesmo fallback de
+            // loadCostCenters. O PlanoContasSelect agrupa por organização quando a lista
+            // tem mais de uma, então isso não aparece mais como "itens duplicados"
+            // (2026-09-15: sem o fallback a tela ficou vazia para essa org).
+            let data = await financialRegistryService.listPlanoContas(orgId);
+            if (!data.length) data = await financialRegistryService.listPlanoContas();
             setMasterPlanoContas(data.map(pc => ({ id: pc.id, name: pc.name, code: pc.code ?? null, organization_id: pc.organization_id ?? null })));
         } catch (error) {
             console.error('Error loading plano de contas:', error);

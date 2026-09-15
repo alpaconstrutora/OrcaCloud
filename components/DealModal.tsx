@@ -145,9 +145,11 @@ export interface InstallmentLotePatch {
     installmentType?: PaymentInstallment['installmentType'];
     /** `''` = limpar a descrição de todas. */
     description?: string;
-    /** `null` = limpar de todas. Dimensões DA LINHA (o que Contas a Receber mostra). */
-    costCenterId?: string | null;
-    planoContasId?: string | null;
+    /** Dimensões DA LINHA (o que Contas a Receber mostra). `undefined` = não
+     *  alterar; limpar em lote não existe aqui (igual ao lote do Extrato) — o
+     *  drawer da célula limpa uma a uma. */
+    costCenterId?: string;
+    planoContasId?: string;
 }
 
 /** Resolve o vencimento de UMA parcela a partir da escolha do lote. */
@@ -212,9 +214,10 @@ export const InstallmentLoteEditModal: React.FC<InstallmentLoteModalProps> = ({ 
     const [bulkInstallmentType, setBulkInstallmentType] = useState(BULK_KEEP);
     const [descMode, setDescMode] = useState<typeof BULK_KEEP | 'SET' | 'CLEAR'>(BULK_KEEP);
     const [descValue, setDescValue] = useState('');
-    const [ccMode, setCcMode] = useState<typeof BULK_KEEP | 'SET' | 'CLEAR'>(BULK_KEEP);
+    // Centro de Custo / Plano de Contas: o drawer padrão do app, DIRETO — sem
+    // select de modo na frente (regra do usuário, 15/09/2026; guia §7.1.1).
+    // `''` = não alterar, igual ao lote do Extrato (BankTxEdicaoEmLoteModal).
     const [ccValue, setCcValue] = useState('');
-    const [pcMode, setPcMode] = useState<typeof BULK_KEEP | 'SET' | 'CLEAR'>(BULK_KEEP);
     const [pcValue, setPcValue] = useState('');
 
     const fmtMoney = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -232,15 +235,13 @@ export const InstallmentLoteEditModal: React.FC<InstallmentLoteModalProps> = ({ 
     const descontoValido = !mexeuNoDesconto || discountType === '' /* limpar */ || amount > 0;
     const mexeuNaDescricao = descMode !== BULK_KEEP;
     const descricaoValida = !mexeuNaDescricao || descMode === 'CLEAR' || descValue.trim().length > 0;
-    const mexeuNoCc = ccMode !== BULK_KEEP;
-    const ccValido = !mexeuNoCc || ccMode === 'CLEAR' || ccValue !== '';
-    const mexeuNoPc = pcMode !== BULK_KEEP;
-    const pcValido = !mexeuNoPc || pcMode === 'CLEAR' || pcValue !== '';
+    const mexeuNoCc = ccValue !== '';
+    const mexeuNoPc = pcValue !== '';
 
     const nadaAMudar = !mexeuNoVencimento && !mexeuNoValor && !mexeuNoDesconto && !mexeuNaDescricao
         && !mexeuNoCc && !mexeuNoPc
         && bulkPaymentType === BULK_KEEP && bulkInstallmentType === BULK_KEEP;
-    const canSave = !nadaAMudar && vencimentoValido && valorValido && descontoValido && descricaoValida && ccValido && pcValido;
+    const canSave = !nadaAMudar && vencimentoValido && valorValido && descontoValido && descricaoValida;
 
     /** A escolha de vencimento no formato do patch (ou `undefined` se não mexeu). */
     const escolhaVencimento = (): BulkDueDate | undefined => {
@@ -271,8 +272,8 @@ export const InstallmentLoteEditModal: React.FC<InstallmentLoteModalProps> = ({ 
                 ? undefined
                 : ((bulkInstallmentType || undefined) as PaymentInstallment['installmentType']),
             description: !mexeuNaDescricao ? undefined : (descMode === 'CLEAR' ? '' : descValue.trim()),
-            costCenterId: !mexeuNoCc ? undefined : (ccMode === 'CLEAR' ? null : ccValue),
-            planoContasId: !mexeuNoPc ? undefined : (pcMode === 'CLEAR' ? null : pcValue),
+            costCenterId: mexeuNoCc ? ccValue : undefined,
+            planoContasId: mexeuNoPc ? pcValue : undefined,
         });
     };
 
@@ -423,61 +424,32 @@ export const InstallmentLoteEditModal: React.FC<InstallmentLoteModalProps> = ({ 
                     </div>
 
                     {/* Centro de Custo / Plano de Contas: dimensões DA LINHA (Contas a
-                        Receber lê a parcela, não o negócio). Mesmo drawer das células. */}
+                        Receber lê a parcela, não o negócio). O drawer padrão do app,
+                        direto no campo — sem <select> de modo na frente (§7.1.1). Vazio =
+                        não alterar; a primeira linha do drawer volta ao vazio. */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                            <label htmlFor="lote-cc" className={LABEL}>Centro de Custo</label>
-                            <select id="lote-cc"
-                                value={ccMode}
-                                onChange={(e) => { setCcMode(e.target.value as typeof ccMode); setCcValue(''); }}
-                                className={FIELD}
-                            >
-                                <option value={BULK_KEEP}>Não alterar</option>
-                                <option value="SET">Mesmo centro de custo em todas</option>
-                                <option value="CLEAR">Limpar de todas</option>
-                            </select>
+                            <label className={LABEL}>Centro de Custo</label>
+                            <CostCenterSelect
+                                costCenters={costCenters}
+                                value={ccValue}
+                                onChange={setCcValue}
+                                placeholder="Não alterar"
+                                hoverCls="hover:bg-blue-50"
+                                triggerClassName={FIELD}
+                            />
                         </div>
-                        {ccMode === 'SET' && (
-                            <div>
-                                <label className={LABEL}>Novo centro de custo</label>
-                                <CostCenterSelect
-                                    costCenters={costCenters}
-                                    value={ccValue}
-                                    onChange={setCcValue}
-                                    placeholder="Selecionar centro de custo"
-                                    hoverCls="hover:bg-blue-50"
-                                    triggerClassName={FIELD}
-                                />
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                            <label htmlFor="lote-pc" className={LABEL}>Plano de Contas</label>
-                            <select id="lote-pc"
-                                value={pcMode}
-                                onChange={(e) => { setPcMode(e.target.value as typeof pcMode); setPcValue(''); }}
-                                className={FIELD}
-                            >
-                                <option value={BULK_KEEP}>Não alterar</option>
-                                <option value="SET">Mesma conta em todas</option>
-                                <option value="CLEAR">Limpar de todas</option>
-                            </select>
+                            <label className={LABEL}>Plano de Contas</label>
+                            <PlanoContasSelect
+                                planoContas={planoContas}
+                                value={pcValue}
+                                onChange={setPcValue}
+                                placeholder="Não alterar"
+                                hoverCls="hover:bg-blue-50"
+                                triggerClassName={FIELD}
+                            />
                         </div>
-                        {pcMode === 'SET' && (
-                            <div>
-                                <label className={LABEL}>Nova conta</label>
-                                <PlanoContasSelect
-                                    planoContas={planoContas}
-                                    value={pcValue}
-                                    onChange={setPcValue}
-                                    placeholder="Selecionar conta"
-                                    hoverCls="hover:bg-blue-50"
-                                    triggerClassName={FIELD}
-                                />
-                            </div>
-                        )}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

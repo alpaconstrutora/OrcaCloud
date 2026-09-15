@@ -71,7 +71,9 @@ function montar() {
     return { onSave, onClose, aplicar };
 }
 
-const CAMPOS = ['Vencimento', 'Valor (bruto)', 'Desconto', 'Tipo', 'Forma de pagamento', 'Centro de Custo', 'Plano de Contas', 'Descrição'];
+// Campos com select de modo. Centro de Custo / Plano de Contas NÃO estão aqui:
+// são o drawer padrão do app direto no campo (§7.1.1), sem select na frente.
+const CAMPOS = ['Vencimento', 'Valor (bruto)', 'Desconto', 'Tipo', 'Forma de pagamento', 'Descrição'];
 
 describe('InstallmentLoteEditModal — todas as colunas da tabela', () => {
     it('mostra um campo por coluna editável e o cliente como leitura', () => {
@@ -79,6 +81,11 @@ describe('InstallmentLoteEditModal — todas as colunas da tabela', () => {
         for (const rotulo of CAMPOS) {
             expect(screen.getByLabelText(rotulo)).toBeTruthy();
         }
+        // CC / Plano: gatilho do drawer (aria-haspopup=dialog), nunca <select>.
+        const gatilhos = screen.getAllByRole('button', { name: /^Não alterar$/ });
+        expect(gatilhos).toHaveLength(2);
+        for (const g of gatilhos) expect(g.getAttribute('aria-haspopup')).toBe('dialog');
+        expect(screen.queryByRole('combobox', { name: /Centro de Custo|Plano de Contas/ })).toBeNull();
         expect(screen.getByText('Maria Silva')).toBeTruthy();
         expect(screen.getByText(/use a aba Dados do Cliente/i)).toBeTruthy();
         expect(screen.getByText(/Contrato 12/)).toBeTruthy();
@@ -128,21 +135,18 @@ describe('InstallmentLoteEditModal — todas as colunas da tabela', () => {
         expect(patch.description).toBeUndefined();
     });
 
-    it('centro de custo e plano de contas: definir manda o id escolhido no drawer', async () => {
+    it('centro de custo e plano de contas: escolher no drawer manda o id; vazio = não alterar', async () => {
         const user = userEvent.setup();
         const { onSave, aplicar } = montar();
+        const [gatilhoCc, gatilhoPc] = screen.getAllByRole('button', { name: /^Não alterar$/ });
 
-        await user.selectOptions(screen.getByLabelText('Centro de Custo'), 'SET');
-        expect(aplicar.disabled).toBe(true); // ainda sem escolher
-        await user.click(screen.getByRole('button', { name: /Selecionar centro de custo/i }));
+        await user.click(gatilhoCc);
         fireEvent.mouseDown(screen.getByText('Torre B'));
         expect(aplicar.disabled).toBe(false);
+        expect(gatilhoCc.textContent).toContain('Torre B'); // o gatilho passa a mostrar a escolha
 
-        await user.selectOptions(screen.getByLabelText('Plano de Contas'), 'SET');
-        expect(aplicar.disabled).toBe(true);
-        await user.click(screen.getByRole('button', { name: /Selecionar conta/i }));
+        await user.click(gatilhoPc);
         fireEvent.mouseDown(screen.getByText('Receita de locação'));
-        expect(aplicar.disabled).toBe(false);
 
         await user.click(aplicar);
         const patch = onSave.mock.calls[0][0];
@@ -151,16 +155,16 @@ describe('InstallmentLoteEditModal — todas as colunas da tabela', () => {
         expect(patch.discountType).toBeUndefined();
     });
 
-    it('centro de custo e plano de contas: limpar manda null', async () => {
+    it('só o centro de custo escolhido vai no patch; plano de contas vazio fica undefined', async () => {
         const user = userEvent.setup();
         const { onSave, aplicar } = montar();
-        await user.selectOptions(screen.getByLabelText('Centro de Custo'), 'CLEAR');
-        await user.selectOptions(screen.getByLabelText('Plano de Contas'), 'CLEAR');
-        expect(aplicar.disabled).toBe(false);
+        const [gatilhoCc] = screen.getAllByRole('button', { name: /^Não alterar$/ });
+        await user.click(gatilhoCc);
+        fireEvent.mouseDown(screen.getByText('Torre A'));
         await user.click(aplicar);
         const patch = onSave.mock.calls[0][0];
-        expect(patch.costCenterId).toBeNull();
-        expect(patch.planoContasId).toBeNull();
+        expect(patch.costCenterId).toBe('cc-1');
+        expect(patch.planoContasId).toBeUndefined();
     });
 
     it('deslocar vencimento em dias parte de cada parcela e a prévia mostra a data nova', async () => {

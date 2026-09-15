@@ -10,6 +10,12 @@ Sessão de 2026-09-15, ~19:10 (depois da primeira entrega):
 
 > trabalho mal feito heim ! por que deixou de fora plano de contas e centro de custo. verifique melhor
 
+Sessão de 2026-09-15, ~19:35:
+
+> plano de contas e centro de custo sempre abre em drawer padrao do app. Anote isso para nunca mais deixar de fazer isso
+
+> entao corrija o modal Editar Parcelas em Lote
+
 ## Diagnóstico
 
 A aba Parcelas (`components/DealModal.tsx`, `PARCELAS_COLUMNS`) tem 11 colunas:
@@ -39,7 +45,8 @@ são editáveis por parcela e no lote, e a célula tem de mostrar a LINHA.
 | 3 | ~~Cliente, Centro de Custo e Plano de Contas como leitura~~ → só **Cliente** fica como leitura (do negócio); Origem e Valor final entram na prévia por linha | teste verifica o rótulo do cliente, a frase "use a aba Dados do Cliente", a origem e o "final R$" | ✅ (revisado na 2ª rodada) |
 | 7 | `contractService.listFinancialEntries` traz `cost_center_id`/`plano_de_contas_id`; `updateFinancialEntry` grava os dois | `tsc` passa; lote grava por `updateFinancialEntry` | ✅ |
 | 8 | Célula Centro de Custo / Plano de Contas da aba Parcelas mostra o valor DA LINHA e abre o drawer padrão (`CostCenterSelect`/`PlanoContasSelect`, `compact`, mesmo desenho do Extrato); parcela paga fica bloqueada | `tsc` + `check-ui-standard.sh` sem violação | ✅ |
-| 9 | Modal de lote ganha **Centro de Custo** e **Plano de Contas** (Não alterar · Mesmo em todas via drawer · Limpar de todas); patch leva `costCenterId`/`planoContasId` (`null` = limpar) | teste jsdom: definir manda o id escolhido no drawer; limpar manda `null`; trocar só a descrição não manda os dois | ✅ |
+| 9 | Modal de lote ganha **Centro de Custo** e **Plano de Contas**; patch leva `costCenterId`/`planoContasId` | teste jsdom: escolher no drawer manda o id; trocar só a descrição não manda os dois | ✅ |
+| 10 | **3ª rodada:** os dois campos são o drawer padrão DIRETO no campo (sem `<select>` de modo na frente), como no lote do Extrato; vazio = não alterar; "limpar de todas" sai do lote (o drawer da célula limpa uma a uma) | teste: os dois gatilhos têm `aria-haspopup="dialog"`, não existe combobox com esse rótulo; escolher no drawer manda o id, vazio fica `undefined` | ✅ |
 | 4 | `applyBulkEntryEdit` grava vencimento POR LINHA (deslocar parte da data de cada parcela) e pergunta o total do contrato também quando o valor bruto mudou | `tsc` passa; `aplicarBulkDueDate` testado nos três modos | ✅ |
 | 5 | Publicar (push em main) e provar de fora | `scripts/conferir-producao.sh` mostra o commit e46b138 no ar | ✅ `conferir-producao.sh` 15/09 ~19:05: domínio serve e46b138 |
 | 6 | Conferir na interface real (Playwright, skill `rodar-app`) | print do modal com os campos | ⛔ não feito nesta sessão — a senha do agente de leitura não estava disponível (a skill exige pedir a cada sessão). Fica para a próxima sessão com `PW_SENHA`. |

@@ -46,6 +46,7 @@ import {
   nomeDoTipoEstrutural,
   pontosEsperados,
   pontasDeslocadas,
+  reservaDeAberturas,
   pontasNoVerticeMovido,
   wallLength,
   pontasPresasAsPecas,
@@ -1892,12 +1893,33 @@ function aplicarSemHash(
         [...command.wallIds, ...command.boundaryIds],
         { x: dx, y: dy },
         command.manterJuncoes,
+        reservaDeAberturas(next),
       );
 
       const inteiro = (v: number) => assertIntegerMm(v, 'coordenada deslocada');
+      const selecionadas = new Set(command.wallIds);
       for (const alvo of [...next.walls, ...next.boundaries]) {
         const destino = destinos.get(alvo.id);
         if (!destino) continue;
+        // A PONTA `a` DE UMA PAREDE SELECIONADA pode ter sido levada ao canto
+        // (estendida ou aparada sobre o próprio eixo — ver `pontasDeslocadas`).
+        // As aberturas medem `offsetMm` a partir de `a`: para ficarem no MESMO
+        // lugar do mundo, o offset anda o contrário do que `a` andou no eixo.
+        // Aparar só acontece dentro da reserva, então nenhuma sai da parede.
+        if (selecionadas.has(alvo.id)) {
+          const rigidaA = { x: alvo.a.x + dx, y: alvo.a.y + dy };
+          const ux = destino.b.x - destino.a.x;
+          const uy = destino.b.y - destino.a.y;
+          const comp = Math.hypot(ux, uy);
+          const andouA = comp === 0 ? 0 : ((destino.a.x - rigidaA.x) * ux + (destino.a.y - rigidaA.y) * uy) / comp;
+          if (Math.abs(andouA) >= 1) {
+            for (const o of next.openings) {
+              if (o.wallId !== alvo.id) continue;
+              o.offsetMm = assertIntegerMm(roundToMm(o.offsetMm - andouA), 'offsetMm');
+              diff.updated.push(o.id);
+            }
+          }
+        }
         alvo.a = { x: inteiro(destino.a.x), y: inteiro(destino.a.y) };
         alvo.b = { x: inteiro(destino.b.x), y: inteiro(destino.b.y) };
         diff.updated.push(alvo.id);

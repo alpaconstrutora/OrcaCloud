@@ -23,6 +23,7 @@ import {
   type Wall,
   point,
   pontasDeslocadas,
+  reservaDeAberturas,
   wallLength,
   faceInternaMm,
   FORMA_ESTRUTURAL,
@@ -1623,9 +1624,11 @@ export default function BlueprintCanvas({
     const d = movendoSelecao?.delta;
     const ids = [...idsDeParedesSelecionadas, ...idsDeLimitesSelecionados];
     if (!d || (d.x === 0 && d.y === 0) || ids.length === 0) return null;
-    return pontasDeslocadas([...paredesReais, ...limitesReais], ids, d, manterJuncoes);
+    // A reserva das aberturas entra na prévia pela mesma razão: é ela que
+    // decide se a ponta da parede movida pode ser aparada até o canto.
+    return pontasDeslocadas([...paredesReais, ...limitesReais], ids, d, manterJuncoes, reservaDeAberturas(model));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paredesReais, limitesReais, movendoSelecao, selecao, manterJuncoes]);
+  }, [paredesReais, limitesReais, movendoSelecao, selecao, manterJuncoes, model.openings]);
 
   const destinosDoArraste = deslocamentoDoArraste?.destinos ?? null;
 

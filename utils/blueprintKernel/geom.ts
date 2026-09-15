@@ -340,6 +340,30 @@ export function projecaoNoSegmento(p: Point, a: Point, b: Point): ProjecaoNoSegm
 }
 
 /**
+ * O ponto onde a RETA por `a1`→`a2` cruza a RETA por `b1`→`b2` — retas, não
+ * segmentos: o canto de duas paredes pode cair fora das duas pontas (é o caso
+ * do "estender até o canto"). `null` quando quase paralelas (seno abaixo de
+ * `SENO_MINIMO_CANTO`, a mesma régua de `cantoEntreEixos`) ou fora do alcance
+ * do kernel — quem chama decide o que fazer sem canto.
+ */
+export function intersecaoDeRetas(a1: Point, a2: Point, b1: Point, b2: Point): Point | null {
+  const ux = a2.x - a1.x;
+  const uy = a2.y - a1.y;
+  const vx = b2.x - b1.x;
+  const vy = b2.y - b1.y;
+  const compU = Math.hypot(ux, uy);
+  const compV = Math.hypot(vx, vy);
+  if (compU === 0 || compV === 0) return null;
+  const denom = ux * vy - uy * vx;
+  if (Math.abs(denom) / (compU * compV) < SENO_MINIMO_CANTO) return null;
+  const t = ((b1.x - a1.x) * vy - (b1.y - a1.y) * vx) / denom;
+  const x = roundToMm(a1.x + t * ux);
+  const y = roundToMm(a1.y + t * uy);
+  if (Math.abs(x) > MAX_COORD_MM || Math.abs(y) > MAX_COORD_MM) return null;
+  return point(x, y);
+}
+
+/**
  * A parte de `delta` que aponta na direção do eixo `de`→`ate`.
  *
  * É o que permite mover a ponta presa de uma parede vizinha SEM ENVIESÁ-LA:

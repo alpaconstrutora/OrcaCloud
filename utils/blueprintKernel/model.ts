@@ -27,6 +27,7 @@ import {
   cantoEntreEixos,
   cantosDaParede,
   componenteNoEixo,
+  intersecaoDeRetas,
   pointKey,
   polygonArea,
   projecaoNoSegmento,
@@ -1691,25 +1692,35 @@ function distanciaAReta(p: Point, a: Point, b: Point): number {
  *
  * Desligado, o bloco se desprende, mantendo as próprias medidas (o MOVE do CAD).
  * Ligado, a ponta de um segmento NÃO selecionado que estava presa ao bloco
- * acompanha — e **acompanha só pela componente de `delta` paralela ao eixo dela
- * mesma** (`componenteNoEixo`).
+ * acompanha — e o lugar para onde ela vai é **o canto: a interseção da reta
+ * dela com a reta NOVA do hospedeiro** (`intersecaoDeRetas`).
  *
- * Essa projeção é a regra inteira, e o motivo é este: projetada no próprio eixo,
- * a vizinha só pode mudar de COMPRIMENTO, nunca de direção. A versão anterior
- * transladava a vizinha pelo `delta` cru, e bastava arrastar uma parede ao longo
- * de si mesma para as perpendiculares presas nas pontas virarem diagonal — o que
- * é PIOR que desencostar, porque o anel continua fechado, nenhum diagnóstico
- * dispara, e a área do ambiente sai calculada num cômodo torto.
+ * Sobre a própria reta, a vizinha só pode mudar de COMPRIMENTO, nunca de
+ * direção; e terminando na reta nova do hospedeiro, ela continua ENCOSTADA.
+ * A regra anterior (até 14/09/2026) projetava o `delta` no eixo da vizinha —
+ * dava o mesmo ponto no caso perpendicular exato e errava em todos os outros:
+ * um arraste com componente ao longo da parede movida (orto solto, ou a
+ * correção do encaixe), ou uma vizinha fora do esquadro, deixava a ponta FORA
+ * da reta nova e o canto abria. Relato: *"ao mover uma parede conectada ela
+ * está sendo desconectada… a outra estica"*.
  *
- * Duas consequências, ambas desejadas:
+ * **A ponta do hospedeiro vai ao canto também.** Quando a junta era na PONTA
+ * do segmento movido (canto em L, e não um T no corpo), essa ponta é levada
+ * até a interseção — estendida ou aparada, sobre a própria reta nova. É o
+ * trim/extend do Revit, e é o que faz um deslize paralelo de uma parede presa
+ * nos dois cantos não a tirar do lugar: as juntas seguram. Aparar tem um
+ * limite: se expulsaria uma abertura (`reservaDePonta`), a ponta fica rígida e
+ * a vizinha morre no corpo do stub — ainda encostada. Estender é sempre
+ * possível. As aberturas não saem do lugar do MUNDO: `TranslateEntities`
+ * corrige o `offsetMm` pelo que a ponta `a` andou sobre o eixo.
  *
- * - Arrastar uma parede **perpendicular a si mesma** (o caso comum, "afasta 30
- *   cm") preserva toda junção: as vizinhas encurtam ou alongam, a 90°.
- * - Arrastar uma parede **paralela a si mesma** não move as perpendiculares, e um
- *   canto em L acaba se soltando. Isso é geometricamente forçado — não existe
- *   resposta que mantenha o canto sem deformar alguém — e por isso a ponta entra
- *   em `soltas` em vez de sumir em silêncio. Já um T sobre um corpo longo
- *   sobrevive: o pé só desliza para outro ponto do mesmo corpo.
+ * Duas consequências:
+ *
+ * - Um **T no corpo** desliza sobre o corpo (o pé vai ao ponto da reta nova).
+ *   Se o corpo sai de baixo dele, não há canto a inventar: a ponta entra em
+ *   `soltas` em vez de sumir em silêncio.
+ * - Vizinha quase PARALELA (sem interseção confiável) cai na regra antiga da
+ *   projeção — não há canto para ir.
  *
  * **Vizinha presa pelas DUAS pontas** (parede que faz ponte entre dois segmentos
  * selecionados) é a exceção: translada pelo `delta` cheio, porque está sendo
@@ -1719,17 +1730,13 @@ function distanciaAReta(p: Point, a: Point, b: Point): number {
  * meio do corpo do outro. Casar só por coordenada exata (`pointKey`) era o furo
  * que fazia o modo ESTICAR desencostar justamente nos T, que é o caso para o qual
  * `encostosSemJuncao` existe.
- *
- * ⚠️ **Os selecionados andam sempre rígidos.** Se a ponta de um segmento
- * SELECIONADO repousava no corpo de um não selecionado e o bloco saiu de cima
- * dele, aquela ponta solta — adaptar o selecionado quebraria a garantia de que o
- * comprimento é preservado e as aberturas não saem de posição.
  */
 export function pontasDeslocadas(
   segmentos: SegmentoIdentificado[],
   idsSelecionados: ObjectId[],
   delta: Point,
   manterJuncoes: boolean,
+  reservaDePonta?: ReservaDePonta,
 ): DeslocamentoDeSegmentos {
   const selecionados = new Set(idsSelecionados);
   const alvos = segmentos.filter((s) => selecionados.has(s.id));
@@ -1742,14 +1749,12 @@ export function pontasDeslocadas(
 
   if (!manterJuncoes || alvos.length === 0) return { destinos, soltas };
 
-  // OS ALVOS COMO ESTAVAM, ANTES DE QUALQUER DESLOCAMENTO. Procurar a vizinhança
-  // no lugar novo casaria com onde a vizinha justamente NÃO está.
-  const alvoDe = new Map(alvos.map((s) => [s.id, s]));
-
   /**
    * A qual selecionado esta ponta está presa — o mais próximo, e em empate o de
    * menor id. Determinismo não é preciosismo aqui: dois arrastes iguais têm de
    * produzir o mesmo modelo, ou o hash do rascunho passa a variar sozinho.
+   * A vizinhança é procurada ONDE OS ALVOS ESTAVAM — no lugar novo é justamente
+   * onde a vizinha não está.
    */
   const hospedeiroDe = (p: Point): SegmentoIdentificado | null => {
     let melhor: { host: SegmentoIdentificado; d: number } | null = null;
@@ -1763,11 +1768,25 @@ export function pontasDeslocadas(
     return melhor?.host ?? null;
   };
 
-  /** A junção sobreviveu? Isto é: a ponta nova ainda encosta no hospedeiro deslocado. */
+  /** Em que PONTA do hospedeiro (como estava) a junta ficava — `null` = no corpo (T). */
+  const pontaDoHost = (p: Point, host: SegmentoIdentificado): 'a' | 'b' | null => {
+    const da = Math.hypot(p.x - host.a.x, p.y - host.a.y);
+    const db = Math.hypot(p.x - host.b.x, p.y - host.b.y);
+    if (da > FAIXA_DE_PRESA_MM && db > FAIXA_DE_PRESA_MM) return null;
+    return da <= db ? 'a' : 'b';
+  };
+
+  /** A ponta nova ainda encosta no hospedeiro, onde quer que ele tenha parado. */
   const aindaEncosta = (p: Point, host: SegmentoIdentificado): boolean => {
-    const proj = projecaoNoSegmento(p, andar(host.a), andar(host.b));
+    const d = destinos.get(host.id)!;
+    const proj = projecaoNoSegmento(p, d.a, d.b);
     return !!proj && proj.distanciaMm <= FAIXA_DE_PRESA_MM;
   };
+
+  /** Os cantos que puxam a ponta de cada hospedeiro, aplicados depois de ver todas as vizinhas. */
+  const cantos = new Map<ObjectId, { a: Point[]; b: Point[] }>();
+  /** Juntas no CORPO, conferidas só no fim — o hospedeiro pode ter sido estendido até lá. */
+  const noCorpo: { id: ObjectId; end: 'a' | 'b'; novo: Point; host: SegmentoIdentificado }[] = [];
 
   for (const s of segmentos) {
     if (selecionados.has(s.id)) continue;
@@ -1791,14 +1810,10 @@ export function pontasDeslocadas(
 
     // ── VIZINHA COLINEAR ANDA INTEIRA ────────────────────────────────────────
     //
-    // Ela é a CONTINUAÇÃO do segmento movido, na mesma reta. A projeção no
-    // próprio eixo não a leva a lugar nenhum quando o deslocamento é
-    // perpendicular — e o encontro se desfaz.
-    //
-    // Não dá para resolver movendo só a ponta: a colinear ficaria DIAGONAL, e
-    // quando ela é uma DIVISA isso muda a medida e o rumo de uma linha da
-    // escritura. Andando inteira, comprimento e rumo ficam exatos e a junta se
-    // preserva.
+    // Ela é a CONTINUAÇÃO do segmento movido, na mesma reta. Não há canto para
+    // ir, e mover só a ponta a deixaria DIAGONAL — quando ela é uma DIVISA isso
+    // muda a medida e o rumo de uma linha da escritura. Andando inteira,
+    // comprimento e rumo ficam exatos e a junta se preserva.
     //
     // ⚠️ UM SALTO SÓ, de propósito. A outra ponta dela pode se soltar de quem
     // estiver lá, e isso é reportado em `soltas` como qualquer outro desencosto.
@@ -1813,8 +1828,17 @@ export function pontasDeslocadas(
       continue;
     }
 
-    const passo = componenteNoEixo(delta, fixo, movel);
-    const novo: Point = { x: movel.x + passo.x, y: movel.y + passo.y };
+    // O CANTO: onde a reta da vizinha cruza a reta nova do hospedeiro. Sem
+    // canto confiável (quase paralelas), a projeção do delta no eixo dela —
+    // que ao menos não a enviesa.
+    const canto = intersecaoDeRetas(fixo, movel, andar(host.a), andar(host.b));
+    let novo: Point;
+    if (canto) {
+      novo = canto;
+    } else {
+      const passo = componenteNoEixo(delta, fixo, movel);
+      novo = { x: movel.x + passo.x, y: movel.y + passo.y };
+    }
 
     // COLAPSO. A vizinha encolheria até o comprimento zero, que
     // `assertModelInvariants` recusa com `DEGENERATE_WALL`. Lançar aqui abortaria
@@ -1824,17 +1848,91 @@ export function pontasDeslocadas(
       soltas.push({ id: s.id, end });
       continue;
     }
+    // INVERSÃO. O canto caiu do outro lado da ponta fixa: a vizinha teria de
+    // atravessar a si mesma para chegar lá. Não é canto, é desencosto.
+    if ((novo.x - fixo.x) * (movel.x - fixo.x) + (novo.y - fixo.y) * (movel.y - fixo.y) < 0) {
+      soltas.push({ id: s.id, end });
+      continue;
+    }
 
     destinos.set(s.id, {
       a: end === 'a' ? novo : s.a,
       b: end === 'b' ? novo : s.b,
     });
-    if (!aindaEncosta(novo, host)) soltas.push({ id: s.id, end });
+
+    const ponta = canto ? pontaDoHost(movel, host) : null;
+    if (ponta) {
+      const c = cantos.get(host.id) ?? { a: [], b: [] };
+      c[ponta].push(novo);
+      cantos.set(host.id, c);
+    } else {
+      noCorpo.push({ id: s.id, end, novo, host });
+    }
+  }
+
+  // ── A PONTA DO HOSPEDEIRO VAI AO CANTO ────────────────────────────────────
+  //
+  // Com mais de um canto na mesma ponta, o mais afastado da outra ponta manda:
+  // assim os demais ficam sobre o corpo. Aparar só até onde a reserva da ponta
+  // permite (aberturas); estender sempre. Um canto que inverteria o segmento
+  // (caiu para trás da outra ponta) não é aplicado.
+  for (const host of alvos) {
+    const c = cantos.get(host.id);
+    if (!c) continue;
+    const d = destinos.get(host.id)!;
+    const ux = d.b.x - d.a.x;
+    const uy = d.b.y - d.a.y;
+    const comp = Math.hypot(ux, uy);
+    if (comp === 0) continue;
+    const reserva = reservaDePonta?.(host.id) ?? null;
+    /** Posição ao longo do eixo novo: 0 em `a`, `comp` em `b`. */
+    const aoLongo = (p: Point) => ((p.x - d.a.x) * ux + (p.y - d.a.y) * uy) / comp;
+    let novoA = d.a;
+    let novoB = d.b;
+    if (c.a.length > 0) {
+      const alvo = c.a.reduce((m, p) => (aoLongo(p) < aoLongo(m) ? p : m));
+      const t = aoLongo(alvo); // < 0 estende, > 0 apara
+      if (t < comp && (t <= 0 || reserva == null || t <= reserva.a)) novoA = alvo;
+    }
+    if (c.b.length > 0) {
+      const alvo = c.b.reduce((m, p) => (aoLongo(p) > aoLongo(m) ? p : m));
+      const t = comp - aoLongo(alvo); // < 0 estende, > 0 apara
+      if (aoLongo(alvo) > aoLongo(novoA) && (t <= 0 || reserva == null || t <= reserva.b)) novoB = alvo;
+    }
+    destinos.set(host.id, { a: novoA, b: novoB });
+  }
+
+  for (const j of noCorpo) {
+    if (!aindaEncosta(j.novo, j.host)) soltas.push({ id: j.id, end: j.end });
   }
 
   // Ordem determinística, pelo mesmo motivo do `hospedeiroDe`.
   soltas.sort((x, y) => (x.id === y.id ? x.end.localeCompare(y.end) : x.id.localeCompare(y.id)));
   return { destinos, soltas };
+}
+
+/**
+ * Quanto de cada ponta de uma parede está LIVRE de abertura, em mm: `a` = o
+ * menor `offsetMm`; `b` = o que sobra depois da abertura mais ao fim. É até
+ * onde `pontasDeslocadas` pode aparar a ponta sem expulsar uma abertura.
+ * `null` para o que não é parede (divisa) — sem limite.
+ */
+export type ReservaDePonta = (id: ObjectId) => { a: number; b: number } | null;
+
+export function reservaDeAberturas(model: Pick<BlueprintModel, 'walls' | 'openings'>): ReservaDePonta {
+  return (id) => {
+    const wall = model.walls.find((w) => w.id === id);
+    if (!wall) return null;
+    const comp = wallLength(wall);
+    let a = comp;
+    let b = comp;
+    for (const o of model.openings) {
+      if (o.wallId !== id) continue;
+      a = Math.min(a, o.offsetMm);
+      b = Math.min(b, comp - (o.offsetMm + o.widthMm));
+    }
+    return { a: Math.max(0, a), b: Math.max(0, b) };
+  };
 }
 
 /**

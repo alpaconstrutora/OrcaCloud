@@ -2136,20 +2136,18 @@ describe('TranslateEntities — mover um conjunto de paredes e limites', () => {
     expect(wallLength(depois.walls.find((w) => w.id === sul.id)!)).toBe(compAntes[sul.id]);
   });
 
-  it('deslize PARALELO não enviesa a vizinha: ela fica no esquadro, e o desencosto é reportado', () => {
-    // O defeito da regra anterior. Transladando a vizinha pelo delta cru, a
-    // LESTE (vertical) ia de (4000,0)→(4000,3000) para (4000+dx,0)→(4000,3000):
-    // uma diagonal. Pior que desencostar — o anel continua fechado, nenhum
-    // diagnóstico dispara, e a área sai de um cômodo torto.
+  it('deslize PARALELO não enviesa a vizinha: ela fica no esquadro — e os cantos SEGURAM a parede (14/09/2026)', () => {
+    // O defeito da regra de antes de 13/09: transladando a vizinha pelo delta
+    // cru, a LESTE (vertical) virava diagonal. A regra de 13/09 projetava o
+    // delta no eixo dela — no esquadro, mas a oeste ficava para trás e o canto
+    // abria ("é geometricamente forçado", dizia-se). Não é: a junta é a
+    // interseção das retas, e a ponta da parede movida vai ao canto. Presa nos
+    // dois cantos, a sul não sai do lugar — o deslize é absorvido pelas juntas,
+    // como no CAD. Nada solta.
     const { model, sul, leste, oeste } = salaComPorta();
 
     const conta = pontasDeslocadas(model.walls, [sul.id], point(500, 0), true);
-    // Deslizando 500 mm para LESTE, os dois cantos têm destinos diferentes, e a
-    // diferença é geométrica, não arbitrária: a sul passou POR BAIXO do pé da
-    // leste, que vira um T sobre o corpo dela e sobrevive; já o pé da oeste
-    // ficou para trás do começo da sul, e aí não há o que segurar.
-    expect(conta.soltas).toEqual([{ id: oeste.id, end: 'b' }]);
-    expect(conta.soltas.some((s) => s.id === leste.id)).toBe(false);
+    expect(conta.soltas).toEqual([]);
 
     const depois = applyCommand(model, {
       type: 'TranslateEntities',
@@ -2164,6 +2162,15 @@ describe('TranslateEntities — mover um conjunto de paredes e limites', () => {
       const w = depois.walls.find((x) => x.id === id)!;
       expect(w.a.x).toBe(w.b.x);
     }
+    // A ponta `a` volta ao canto (0); a porta fica no mesmo lugar do MUNDO
+    // (offset 3100 → 3600). A ponta `b` NÃO é aparada de 4500 para 4000: a porta
+    // termina exatamente em 4000 e aparar a expulsaria — fica um stub de 500,
+    // e a leste morre no corpo dele. O anel segue fechado.
+    const sulDepois = depois.walls.find((x) => x.id === sul.id)!;
+    expect(sulDepois.a).toEqual({ x: 0, y: 0 });
+    expect(sulDepois.b).toEqual({ x: 4500, y: 0 });
+    expect(depois.openings[0].offsetMm).toBe(3600);
+    expect(depois.spaces).toHaveLength(1);
   });
 
   it('junção em T acompanha — o caso que o casamento por coordenada exata nunca via', () => {

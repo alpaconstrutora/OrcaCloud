@@ -6,6 +6,7 @@ import {
   ArrowLeftRight,
   Boxes,
   Cable,
+  CircuitBoard,
   Calculator,
   FileText,
   FlipHorizontal2,
@@ -132,6 +133,17 @@ import {
   pontosSemCircuito,
   type PlanoDeEletrodutos,
 } from '../../utils/blueprintEletrodutos';
+import {
+  CRITERIOS_DE_CIRCUITO,
+  HIPOTESES_CIRCUITOS_PADRAO,
+  ROTULO_DA_FUNCAO,
+  ROTULO_DO_CRITERIO_DE_CIRCUITO,
+  conferirPlano,
+  planejarCircuitos,
+  pontosElegiveis,
+  quadrosDoNivel,
+  type HipotesesDeCircuitos,
+} from '../../utils/blueprintCircuitosAutomaticos';
 import SecaoAccordion from './SecaoAccordion';
 import { usePainelRedimensionavel } from './LarguraDoPainel';
 import PainelMedicoes from './PainelMedicoes';
@@ -498,6 +510,9 @@ const ROTULO_DA_TAREFA = {
   // O lançamento automático de eletrodutos (13/09/2026): por circuito, prumada
   // em cada ponto e árvore no teto a partir do quadro — sugerido, desfazível.
   eletrodutos: 'Eletrodutos por circuito',
+  // A criação automática de circuitos (14/09/2026): luz, TUG e TUE sempre
+  // separados; o critério só divide luz e TUG. Prévia em tabela, um lote.
+  circuitos: 'Circuitos automáticos',
   'gerar-paredes': 'Gerar paredes do PDF',
   'importar-ifc': 'Importar do IFC',
   'importar-dxf': 'Importar do DXF',
@@ -4304,6 +4319,61 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       eletrodutosSugeridosNoNivel.map((t) => ({ type: 'SetTrechoProps' as const, trechoId: t.id, sugerido: false })),
     );
 
+  /**
+   * A CRIAÇÃO AUTOMÁTICA DE CIRCUITOS (14/09/2026) — ver
+   * `blueprintCircuitosAutomaticos.ts`. Critério e carga máxima são
+   * preferência (persistidas); o quadro escolhido é do modelo (não persiste —
+   * o id muda de estudo para estudo) e cai no primeiro do pavimento. O plano é
+   * derivado a cada render, como o dos eletrodutos: é uma PRÉVIA, e a prévia
+   * tem de acompanhar o desenho. Gravar é um `runBatch` só — Ctrl+Z desfaz.
+   */
+  const [hipDeCircuitosSalvas, setHipDeCircuitosSalvas] = usePersistedState<
+    Pick<HipotesesDeCircuitos, 'criterio' | 'cargaMaximaVA'>
+  >('blueprint:circuitosAutomaticos', {
+    criterio: HIPOTESES_CIRCUITOS_PADRAO.criterio,
+    cargaMaximaVA: HIPOTESES_CIRCUITOS_PADRAO.cargaMaximaVA,
+  });
+  const hipotesesDeCircuitos = useMemo<HipotesesDeCircuitos>(
+    () => ({
+      ...HIPOTESES_CIRCUITOS_PADRAO,
+      criterio: (CRITERIOS_DE_CIRCUITO as readonly string[]).includes(hipDeCircuitosSalvas.criterio)
+        ? hipDeCircuitosSalvas.criterio
+        : HIPOTESES_CIRCUITOS_PADRAO.criterio,
+      cargaMaximaVA:
+        typeof hipDeCircuitosSalvas.cargaMaximaVA === 'number' && hipDeCircuitosSalvas.cargaMaximaVA > 0
+          ? hipDeCircuitosSalvas.cargaMaximaVA
+          : null,
+    }),
+    [hipDeCircuitosSalvas],
+  );
+  const quadrosDoNivelAtivo = useMemo(() => (levelId ? quadrosDoNivel(editor.model, levelId) : []), [editor.model, levelId]);
+  const [quadroParaCircuitos, setQuadroParaCircuitos] = useState<string | null>(null);
+  const quadroDosCircuitos = quadrosDoNivelAtivo.find((q) => q.id === quadroParaCircuitos) ?? quadrosDoNivelAtivo[0] ?? null;
+  const planoDeCircuitos = useMemo(
+    () =>
+      levelId
+        ? planejarCircuitos(editor.model, levelId, quadroDosCircuitos?.id ?? null, hipotesesDeCircuitos, hipotesesEletricas)
+        : null,
+    [editor.model, levelId, quadroDosCircuitos?.id, hipotesesDeCircuitos, hipotesesEletricas],
+  );
+  const pontosParaCircuitos = levelId ? pontosElegiveis(editor.model, levelId).length : 0;
+  /** O que aconteceu no último "Criar": sucesso (para o drawer dizer) ou a recusa da conferência. */
+  const [resultadoDeCircuitos, setResultadoDeCircuitos] = useState<{ ok: boolean; texto: string } | null>(null);
+  const criarCircuitos = () => {
+    if (!planoDeCircuitos || planoDeCircuitos.comandos.length === 0) return;
+    // A trava: simula o lote e confere que os ids previstos batem. Se não
+    // batem, nada é gravado — melhor recusar do que ligar ponto no circuito errado.
+    const prova = conferirPlano(editor.model, planoDeCircuitos);
+    if (!prova.ok) {
+      setResultadoDeCircuitos({ ok: false, texto: `Nada foi criado: ${prova.motivo}` });
+      return;
+    }
+    const n = planoDeCircuitos.circuitos.length;
+    const m = planoDeCircuitos.circuitos.reduce((s, c) => s + c.terminalIds.length, 0);
+    editor.runBatch(planoDeCircuitos.comandos);
+    setResultadoDeCircuitos({ ok: true, texto: `${n} circuito(s) criado(s) para ${m} ponto(s) — Ctrl+Z desfaz.` });
+  };
+
   /** O que está selecionado, para rodapé de drawer: a peça, ou "N selecionados". */
   const rotuloDaSelecao =
     editor.selectedIds.length > 1
@@ -4881,6 +4951,19 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               </GrupoDoRibbon>
             )}
             <GrupoDoRibbon rotulo="Elétrica">
+              {/* CIRCUITOS ANTES DE ELETRODUTOS: o eletroduto é por circuito, e um
+                  ponto sem circuito fica de fora dele. A ordem dos botões é a
+                  ordem do trabalho. */}
+              {!emVista && (
+                <BotaoDoRibbon
+                  icone={CircuitBoard}
+                  rotulo="Circuitos automáticos"
+                  contagem={pontosParaCircuitos || undefined}
+                  ativo={tarefaAberta === 'circuitos'}
+                  onClick={() => alternarTarefa('circuitos')}
+                  ajuda="Cria circuitos para os pontos sem circuito do pavimento: luz, TUG e TUE sempre separados; TUE um por ponto; luz e TUG por ambiente, por carga máxima ou um por função — prévia antes de gravar, Ctrl+Z desfaz"
+                />
+              )}
               {!emVista && (
                 <BotaoDoRibbon
                   icone={Cable}
@@ -6923,6 +7006,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             <span className="flex items-center gap-2">
               {tarefaAberta === 'tomadas' && <Plug className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'eletrodutos' && <Cable className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'circuitos' && <CircuitBoard className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -6948,6 +7032,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 "Aceitar sugeridos" confirma todos. Ctrl+Z desfaz o lote.
               </>
             )}
+            {tarefaAberta === 'circuitos' && (
+              <>
+                Para os pontos <strong>sem circuito</strong> deste pavimento, o sistema{' '}
+                <strong>propõe</strong> os circuitos: luz, TUG e TUE sempre separados; TUE um por ponto;
+                luz e TUG divididas pelo critério que você escolher. A tabela é a prévia — nada é gravado
+                até "Criar". Ctrl+Z desfaz o lote.
+              </>
+            )}
             {tarefaAberta === 'terreno' &&
               'Área da escritura, papel de cada divisa, recuos e zona urbanística, topografia, corte e aterro, projeto executivo de terraplenagem. Traçar perfil ou drenagem fecha este painel — volte por Terreno › Dados do lote.'}
             {tarefaAberta === 'gerar-paredes' &&
@@ -6960,7 +7052,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           </SheetDescription>
         </SheetHeader>
 
-        <SheetPanel className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' ? 'px-6 py-4' : 'p-0'}`}>
+        <SheetPanel
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' ? 'px-6 py-4' : 'p-0'}`}
+        >
           {tarefaAberta === 'terreno' && painelDoTerreno}
 
           {tarefaAberta === 'eletrodutos' && (
@@ -7058,8 +7152,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   <span className="flex-1">
                     <strong>{pontosEletricosSemCircuito.length} ponto(s) sem circuito</strong> — o
                     eletroduto carrega o circuito, então ficam de fora até serem atribuídos (no
-                    painel do ponto ou no Quadro de cargas).
+                    painel do ponto, no Quadro de cargas ou em Circuitos automáticos).
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => setTarefa('circuitos')}
+                    className="shrink-0 rounded-[6px] border border-amber-400 bg-white px-2 py-0.5 font-medium hover:bg-amber-100"
+                  >
+                    criar circuitos
+                  </button>
                   <button
                     type="button"
                     onClick={() => selecionar(pontosEletricosSemCircuito.map((p) => p.id))}
@@ -7067,6 +7168,191 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   >
                     ver
                   </button>
+                </p>
+              )}
+            </div>
+          )}
+
+          {tarefaAberta === 'circuitos' && planoDeCircuitos && (
+            <div className="space-y-4">
+              {/* As HIPÓTESES, escritas — o que é norma e o que é escolha, separados. */}
+              <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <p className="font-semibold text-slate-700">Hipóteses da criação</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  <li>
+                    Luz, TUG e TUE <strong>nunca</strong> no mesmo circuito (NBR 5410 9.5.3.1 / 9.5.3.3); tomadas de
+                    cozinha / área de serviço em circuito próprio (9.5.3.2). O critério só divide luz e TUG.
+                  </li>
+                  <li>TUE e ligação direta: <strong>um circuito por ponto</strong>.</li>
+                  <li>Interruptor acompanha a luz do ambiente; pontos de dados ficam de fora.</li>
+                  <li>Só pontos <strong>sem circuito</strong> deste pavimento — nada é religado.</li>
+                  <li>
+                    Cada circuito nasce com a seção mínima da função: luz <strong>1,5</strong> · TUG{' '}
+                    <strong>2,5</strong> (Tab. 47) · TUE{' '}
+                    <strong>{String(hipotesesEletricas.secaoMinimaTueMm2).replace('.', ',')}</strong> mm² (hipótese do
+                    pré-dimensionamento). Tensão e ligação vêm do quadro.
+                  </li>
+                </ul>
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  {quadrosDoNivelAtivo.length > 1 && (
+                    <label className="flex items-center gap-2">
+                      Quadro
+                      <select
+                        value={quadroDosCircuitos?.id ?? ''}
+                        onChange={(e) => setQuadroParaCircuitos(e.target.value)}
+                        aria-label="Quadro dos circuitos"
+                        className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                      >
+                        {quadrosDoNivelAtivo.map((q) => (
+                          <option key={q.id} value={q.id}>
+                            {q.nome}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  <label className="flex items-center gap-2">
+                    Dividir luz e TUG
+                    <select
+                      value={hipotesesDeCircuitos.criterio}
+                      onChange={(e) =>
+                        setHipDeCircuitosSalvas({
+                          ...hipDeCircuitosSalvas,
+                          criterio: e.target.value as HipotesesDeCircuitos['criterio'],
+                        })
+                      }
+                      aria-label="Critério de divisão dos circuitos"
+                      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                    >
+                      {CRITERIOS_DE_CIRCUITO.map((c) => (
+                        <option key={c} value={c}>
+                          {ROTULO_DO_CRITERIO_DE_CIRCUITO[c]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    Carga máxima por circuito
+                    <input
+                      type="number"
+                      min={100}
+                      step={10}
+                      value={hipotesesDeCircuitos.cargaMaximaVA ?? ''}
+                      placeholder={planoDeCircuitos.cargaMaxima ? String(planoDeCircuitos.cargaMaxima.va) : '—'}
+                      disabled={hipotesesDeCircuitos.criterio === 'funcao'}
+                      onChange={(e) =>
+                        setHipDeCircuitosSalvas({
+                          ...hipDeCircuitosSalvas,
+                          cargaMaximaVA: e.target.value === '' ? null : Number(e.target.value),
+                        })
+                      }
+                      aria-label="Carga máxima por circuito"
+                      className="w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs disabled:bg-slate-100 disabled:text-slate-400"
+                    />
+                    VA
+                  </label>
+                  {planoDeCircuitos.cargaMaxima && (
+                    <span className="text-slate-500">
+                      {planoDeCircuitos.cargaMaxima.origem === 'CALCULADA'
+                        ? `padrão ${hipotesesDeCircuitos.correnteMaximaA} A × ${planoDeCircuitos.cargaMaxima.tensaoV} V`
+                        : `declarada (padrão seria ${hipotesesDeCircuitos.correnteMaximaA} A × ${planoDeCircuitos.cargaMaxima.tensaoV} V)`}
+                      {planoDeCircuitos.cargaMaxima.tensaoAssumida ? ' — quadro sem tensão, assumida' : ''}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {!quadroDosCircuitos ? (
+                <p className="text-sm text-slate-500">
+                  Insira um Quadro de distribuição neste pavimento (Instalações › Componentes) — o circuito
+                  nasce nele.
+                </p>
+              ) : planoDeCircuitos.circuitos.length === 0 ? (
+                <p className="text-sm text-slate-500">Nenhum ponto sem circuito neste pavimento.</p>
+              ) : (
+                <table className="w-full table-fixed text-xs" aria-label="Prévia dos circuitos">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-500">
+                      <th className="py-1.5 pr-2 font-medium">Circuito</th>
+                      <th className="w-24 py-1.5 pr-2 font-medium">Ambiente</th>
+                      <th className="w-16 py-1.5 pr-2 font-medium">Pontos</th>
+                      <th className="w-20 py-1.5 pr-2 text-right font-medium">VA</th>
+                      <th className="w-16 py-1.5 text-right font-medium">Seção</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {planoDeCircuitos.circuitos.map((c) => (
+                      <tr
+                        key={c.idPrevisto}
+                        onClick={() => selecionar(c.terminalIds)}
+                        title="Clique para selecionar os pontos deste circuito no desenho"
+                        className="cursor-pointer hover:bg-slate-50"
+                      >
+                        <td className="py-1.5 pr-2 font-medium text-slate-700">
+                          {c.nome}
+                          {c.aviso && <span className="block font-normal text-amber-800">{c.aviso}</span>}
+                        </td>
+                        <td className="truncate py-1.5 pr-2 text-slate-600">{c.ambiente ?? '—'}</td>
+                        <td className="py-1.5 pr-2 text-slate-600">
+                          {c.terminalIds.length}
+                          {c.pontosSemPotencia > 0 && (
+                            <span className="text-amber-700" title="ponto(s) sem potência declarada — contam 0 VA">
+                              {' '}· {c.pontosSemPotencia} sem VA
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-1.5 pr-2 text-right text-slate-600">{c.somaVA}</td>
+                        <td className="py-1.5 text-right text-slate-600">
+                          {String(c.secaoMm2).replace('.', ',')} mm²
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              {planoDeCircuitos.circuitos.some((c) => c.pontosSemPotencia > 0) && (
+                <p className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  <span className="flex-1">
+                    Há ponto <strong>sem potência</strong> — entra contando 0 VA. Preencher pela norma antes dá
+                    circuitos divididos pela carga real.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => editor.runBatch(comandosDePotenciaPadrao(editor.model, levelId))}
+                    className="shrink-0 rounded-[6px] border border-amber-400 bg-white px-2 py-0.5 font-medium hover:bg-amber-100"
+                  >
+                    Preencher potências pela norma
+                  </button>
+                </p>
+              )}
+
+              {planoDeCircuitos.foraDoPlano.length > 0 && (
+                <p className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  <span className="flex-1">
+                    <strong>{planoDeCircuitos.foraDoPlano.length} ponto(s) fora do plano</strong> —{' '}
+                    {[...new Set(planoDeCircuitos.foraDoPlano.map((f) => f.motivo))].join('; ')}.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => selecionar(planoDeCircuitos.foraDoPlano.map((f) => f.terminalId))}
+                    className="shrink-0 rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 font-medium hover:bg-slate-100"
+                  >
+                    ver
+                  </button>
+                </p>
+              )}
+
+              {resultadoDeCircuitos && (
+                <p
+                  role="status"
+                  className={`rounded-md border px-3 py-2 text-xs ${
+                    resultadoDeCircuitos.ok
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                      : 'border-red-200 bg-red-50 text-red-700'
+                  }`}
+                >
+                  {resultadoDeCircuitos.texto}
                 </p>
               )}
             </div>
@@ -7204,7 +7490,25 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               </button>
             </>
           )}
-          {tarefaAberta !== 'tomadas' && tarefaAberta !== 'eletrodutos' && rotuloDaSelecao && (
+          {tarefaAberta === 'circuitos' && planoDeCircuitos && (
+            <>
+              <span className="mr-auto whitespace-nowrap text-xs text-slate-500">
+                {planoDeCircuitos.circuitos.length === 0
+                  ? 'Nada a criar.'
+                  : `${planoDeCircuitos.circuitos.length} circuito(s) para ${planoDeCircuitos.circuitos.reduce((s, c) => s + c.terminalIds.length, 0)} ponto(s).`}
+              </span>
+              <button
+                type="button"
+                onClick={criarCircuitos}
+                disabled={!quadroDosCircuitos || planoDeCircuitos.circuitos.length === 0}
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <CircuitBoard className="h-4 w-4" />
+                Criar {planoDeCircuitos.circuitos.length} circuito(s)
+              </button>
+            </>
+          )}
+          {tarefaAberta !== 'tomadas' && tarefaAberta !== 'eletrodutos' && tarefaAberta !== 'circuitos' && rotuloDaSelecao && (
             <span className="mr-auto truncate text-xs text-slate-500">
               Selecionado: {rotuloDaSelecao}
             </span>

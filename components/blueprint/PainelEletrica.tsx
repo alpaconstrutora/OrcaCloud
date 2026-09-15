@@ -14,6 +14,7 @@ import PainelQuadroAlimentador from './PainelQuadroAlimentador';
 import { preDimensionarQuadroCompleto } from '../../utils/blueprintEletricaDimensionamento';
 import { usePersistedState } from '../ui/TableUtils';
 import { pontosAPreencher } from '../../utils/blueprintPotenciaPadrao';
+import { proximoNumeroDeCircuito } from '../../utils/blueprintCircuitosAutomaticos';
 import {
   CRITERIOS_DE_AGRUPAMENTO,
   CRITERIO_SUGERIDO,
@@ -160,7 +161,8 @@ export default function PainelEletrica({
   const quadros = model.quadros ?? [];
   /** "C3", ou "C3 — Ambiente 1" quando é o grupo inteiro: o próximo número livre no quadro. */
   const nomeSugerido = (quadroId: ObjectId | undefined, sufixo: string | null) => {
-    const n = (model.circuitos ?? []).filter((c) => !quadroId || c.quadroId === quadroId).length + 1;
+    // A mesma conta dos Circuitos automáticos — os dois caminhos numeram igual.
+    const n = proximoNumeroDeCircuito(model, quadroId ?? null);
     return sufixo ? `C${n} — ${sufixo}` : `C${n}`;
   };
   const NOVO = '__novo__';

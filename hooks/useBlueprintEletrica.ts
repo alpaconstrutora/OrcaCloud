@@ -41,6 +41,8 @@ export function hipotesesDaColuna(raw: unknown): HipotesesEletricas {
       Array.isArray(r.catalogoDeDisjuntoresA) && r.catalogoDeDisjuntoresA.every((x) => typeof x === 'number' && x > 0)
         ? [...r.catalogoDeDisjuntoresA]
         : HIPOTESES_PADRAO.catalogoDeDisjuntoresA,
+    // Chave de 14/09/2026: coluna gravada antes dela não a tem — vale o padrão.
+    secaoMinimaTueMm2: Math.max(0, n(r.secaoMinimaTueMm2, HIPOTESES_PADRAO.secaoMinimaTueMm2)),
     demanda: {
       nome: typeof d.nome === 'string' && d.nome.trim() ? d.nome : HIPOTESES_PADRAO.demanda.nome,
       ILUMINACAO: n(d.ILUMINACAO, 1),

@@ -103,6 +103,15 @@ describe('seção mínima (Tab. 36 corrigida + Tab. 47)', () => {
     expect(tom).toMatchObject({ secaoMm2: 2.5, izA: 24, criterio: 'USO' });
   });
 
+  it('TUE de 8 A pede 4 mm² pela HIPÓTESE (14/09/2026); com a hipótese em 2,5 volta à Tab. 47; abaixo de 2,5 a norma segura', () => {
+    expect(secaoMinima(8, HIPOTESES_PADRAO, 'FN', 'TUE')).toMatchObject({ secaoMm2: 4, criterio: 'USO' });
+    expect(secaoMinima(8, { ...HIPOTESES_PADRAO, secaoMinimaTueMm2: 2.5 }, 'FN', 'TUE')).toMatchObject({ secaoMm2: 2.5 });
+    expect(secaoMinima(8, { ...HIPOTESES_PADRAO, secaoMinimaTueMm2: 1.5 }, 'FN', 'TUE')).toMatchObject({ secaoMm2: 2.5 });
+    // O padrão de TUE é 4 e o de força continua 2,5 — a hipótese não vaza para a TUG.
+    expect(HIPOTESES_PADRAO.secaoMinimaTueMm2).toBe(4);
+    expect(secaoMinima(8, HIPOTESES_PADRAO, 'FN', 'FORCA')).toMatchObject({ secaoMm2: 2.5 });
+  });
+
   it('30 A pede 4 mm² (Iz 32); 30 A em FFF pede 6 mm² (Iz 36 com 3 condutores)', () => {
     expect(secaoMinima(30, HIPOTESES_PADRAO, 'FN', 'FORCA')).toMatchObject({ secaoMm2: 4, izA: 32, criterio: 'CORRENTE' });
     expect(secaoMinima(30, HIPOTESES_PADRAO, 'FFF', 'FORCA')).toMatchObject({ secaoMm2: 6, izA: 36 });
@@ -199,6 +208,33 @@ describe('preDimensionarCircuito · o circuito no desenho', () => {
     expect(r.achados.every((a) => a.nivel === 'FALTA')).toBe(true);
   });
 
+  it('TUE declarada 2,5 mm²: AVISO da hipótese (não barra); 1,5: FALTA da Tab. 47; 4: nada', () => {
+    const tue = (secaoMm2: number) => {
+      const { m: m0, levelId } = cena();
+      const { m: m1, id } = circuito(m0, { secaoMm2 });
+      const criado = applyCommand(m1, {
+        type: 'AddTerminal', levelId, disciplina: 'ELETRICA', tipo: 'TUE', at: point(2000, 75), cotaMm: 300,
+        tipoEletrico: 'TUE', potenciaW: 600,
+      }).model;
+      const tid = criado.terminais[criado.terminais.length - 1].id;
+      const m = applyCommand(criado, { type: 'SetTerminalProps', terminalId: tid, circuitoId: id }).model;
+      return preDimensionarCircuito(m, m.circuitos[0]);
+    };
+    const r25 = tue(2.5);
+    expect(r25.uso).toBe('TUE');
+    const aviso = r25.achados.find((a) => a.referencia === 'hipótese · TUE')!;
+    expect(aviso).toMatchObject({ nivel: 'AVISO' });
+    expect(aviso.mensagem).toMatch(/TUE \/ ligação direta pede no mínimo 4 mm² \(hipótese\); declarado 2,5/);
+    expect(r25.achados.filter((a) => a.nivel === 'FALTA')).toEqual([]);
+
+    const r15 = tue(1.5);
+    const falta = r15.achados.find((a) => a.referencia === '6.2.6.1.1 / Tab. 47')!;
+    expect(falta).toMatchObject({ nivel: 'FALTA' });
+    expect(r15.achados.find((a) => a.referencia === 'hipótese · TUE')).toBeUndefined();
+
+    expect(tue(4).achados.filter((a) => /Tab\. 47|hipótese/.test(a.referencia))).toEqual([]);
+  });
+
   it('⚠️ sem tensão nada se calcula — e é DITO, não zero', () => {
     const { m: m0, levelId } = cena();
     const { m: m1, id } = circuito(m0, { tensaoV: null });
@@ -270,7 +306,10 @@ describe('uso do circuito pelos pontos', () => {
   it('luz + interruptor = iluminação; qualquer tomada/força = força; vazio = null', () => {
     expect(usoDoCircuito([{ tipoEletrico: 'ILUMINACAO_TETO' }, { tipoEletrico: 'INTERRUPTOR' }])).toBe('ILUMINACAO');
     expect(usoDoCircuito([{ tipoEletrico: 'ILUMINACAO_TETO' }, { tipoEletrico: 'TUG' }])).toBe('FORCA');
-    expect(usoDoCircuito([{ tipoEletrico: 'LIGACAO_DIRETA' }])).toBe('FORCA');
+    // TUE e ligação direta são uso próprio (14/09/2026); misturado, vale o mais exigente.
+    expect(usoDoCircuito([{ tipoEletrico: 'LIGACAO_DIRETA' }])).toBe('TUE');
+    expect(usoDoCircuito([{ tipoEletrico: 'TUG' }, { tipoEletrico: 'TUE' }])).toBe('TUE');
+    expect(usoDoCircuito([{ tipoEletrico: 'ILUMINACAO_TETO' }, { tipoEletrico: 'TUE' }])).toBe('TUE');
     expect(usoDoCircuito([])).toBeNull();
   });
 });

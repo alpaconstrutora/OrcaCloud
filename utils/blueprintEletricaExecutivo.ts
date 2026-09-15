@@ -148,7 +148,7 @@ export function memorialEletrico(
   L.push(`Hash da base (desenho + hipóteses): ${ctx.hashDaBase.slice(0, 16)}. Alterada a base, este memorial deixa de valer.`);
   L.push('');
   L.push('## 3. Hipóteses');
-  L.push(`Condutores de cobre, isolação PVC 70 °C, método de instalação ${hip.metodoDeInstalacao} (Tabela 36); temperatura ambiente ${hip.temperaturaAmbienteC} °C (Tabela 40); ${hip.circuitosAgrupados} circuito(s) por eletroduto (Tabela 42); seção mínima por uso pela Tabela 47.`);
+  L.push(`Condutores de cobre, isolação PVC 70 °C, método de instalação ${hip.metodoDeInstalacao} (Tabela 36); temperatura ambiente ${hip.temperaturaAmbienteC} °C (Tabela 40); ${hip.circuitosAgrupados} circuito(s) por eletroduto (Tabela 42); seção mínima por uso pela Tabela 47; TUE / ligação direta ≥ ${String(hip.secaoMinimaTueMm2).replace('.', ',')} mm² (hipótese de projeto).`);
   L.push(`ρ do cobre ${String(hip.rhoOhmMm2PorM).replace('.', ',')} Ω·mm²/m; queda máxima ${hip.limiteQuedaTerminalPct} % no circuito terminal e ${hip.limiteQuedaTotalPct} % da origem (6.2.7). Disjuntores: ${hip.catalogoDeDisjuntoresA.join(', ')} A (IB ≤ In ≤ Iz, 5.3.4.1).`);
   L.push(`Demanda: ${hip.demanda.nome} — iluminação ${hip.demanda.ILUMINACAO}, TUG ${hip.demanda.TUG}, força ${hip.demanda.FORCA}. Desequilíbrio de fases tolerado ${hip.desequilibrioMaxPct} %.`);
   L.push('');

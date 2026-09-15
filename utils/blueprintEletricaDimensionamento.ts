@@ -139,19 +139,52 @@ export function fatorDeAgrupamento(numeroDeCircuitos: number): number {
 // força 2,5 mm² — e a nota 2 é a que importa aqui: "os circuitos de tomadas
 // de corrente são considerados circuitos de força".
 
-export type UsoDoCircuito = 'ILUMINACAO' | 'FORCA';
-export const SECAO_MINIMA_POR_USO_MM2: Record<UsoDoCircuito, number> = {
+/**
+ * `TUE` (14/09/2026, pedido: *"TUE: a seção mínima de 4,0 mm²"*) é um uso à
+ * parte de `FORCA` porque a seção mínima dele NÃO vem da Tabela 47 — a norma
+ * pede 2,5 para qualquer circuito de força. 4,0 mm² é a prática de projeto
+ * para chuveiro, ar-condicionado e afins, e por isso entra como HIPÓTESE
+ * nomeada (`HipotesesEletricas.secaoMinimaTueMm2`), não como valor da norma.
+ * `FORCA` continua sendo o vocabulário da Tab. 47 (tomadas de uso geral).
+ */
+export type UsoDoCircuito = 'ILUMINACAO' | 'FORCA' | 'TUE';
+/** Só o que a NORMA diz (Tab. 47). TUE não está aqui de propósito — é hipótese. */
+export const SECAO_MINIMA_POR_USO_MM2: Record<'ILUMINACAO' | 'FORCA', number> = {
   ILUMINACAO: 1.5,
   FORCA: 2.5,
 };
 
 /**
- * O uso do circuito pelos PONTOS que ele alimenta: qualquer tomada, ponto de
- * força ou ligação direta faz dele circuito de força; só iluminação (e seus
- * interruptores) é iluminação. Sem pontos, `null`.
+ * A seção mínima que vale para o uso: Tab. 47 para luz e força; para TUE, a
+ * hipótese — nunca abaixo dos 2,5 da norma, que continuam valendo.
+ */
+export function secaoMinimaPorUsoMm2(uso: UsoDoCircuito, hip: HipotesesEletricas): number {
+  return uso === 'TUE'
+    ? Math.max(SECAO_MINIMA_POR_USO_MM2.FORCA, hip.secaoMinimaTueMm2)
+    : SECAO_MINIMA_POR_USO_MM2[uso];
+}
+
+/** O que a Tab. 47 pede para o uso, sem hipótese — TUE é força para a norma. */
+export function secaoMinimaDaNormaMm2(uso: UsoDoCircuito): number {
+  return uso === 'ILUMINACAO' ? SECAO_MINIMA_POR_USO_MM2.ILUMINACAO : SECAO_MINIMA_POR_USO_MM2.FORCA;
+}
+
+export const ROTULO_DO_USO: Record<UsoDoCircuito, string> = {
+  ILUMINACAO: 'iluminação',
+  FORCA: 'força (tomadas)',
+  TUE: 'TUE / ligação direta',
+};
+
+/**
+ * O uso do circuito pelos PONTOS que ele alimenta, do mais exigente para o
+ * menos: qualquer TUE ou ligação direta faz dele circuito de TUE; qualquer
+ * outra tomada ou ponto de força, circuito de força; só iluminação (e seus
+ * interruptores) é iluminação. Misturado, vale o maior mínimo — é o que
+ * "1,5 mm² quando em circuito exclusivo" quer dizer. Sem pontos, `null`.
  */
 export function usoDoCircuito(pontos: readonly Pick<Terminal, 'tipoEletrico'>[]): UsoDoCircuito | null {
   if (pontos.length === 0) return null;
+  if (pontos.some((p) => p.tipoEletrico === 'TUE' || p.tipoEletrico === 'LIGACAO_DIRETA')) return 'TUE';
   const ehForca = pontos.some(
     (p) => p.tipoEletrico && !p.tipoEletrico.startsWith('ILUMINACAO') && p.tipoEletrico !== 'INTERRUPTOR',
   );
@@ -176,6 +209,14 @@ export interface HipotesesEletricas {
   limiteQuedaTerminalPct: number;
   /** Correntes nominais de disjuntor disponíveis, em A. */
   catalogoDeDisjuntoresA: readonly number[];
+  /**
+   * Seção mínima de circuito de TUE / ligação direta, mm² (14/09/2026).
+   * HIPÓTESE de projeto, não norma: a Tab. 47 pede 2,5 para força; 4,0 é o
+   * usual para chuveiro e ar-condicionado. Abaixo de 2,5 a norma continua
+   * valendo (`secaoMinimaPorUsoMm2`). Entra no hash da base elétrica, como
+   * toda hipótese — emissões anteriores a esta chave passam a "base alterada".
+   */
+  secaoMinimaTueMm2: number;
   /**
    * F6 — fatores de demanda por grupo de carga, com o NOME da tabela de
    * origem. Padrão: sem demanda. A tabela é da concessionária, não da 5410.
@@ -212,6 +253,7 @@ export const HIPOTESES_PADRAO: HipotesesEletricas = {
   rhoOhmMm2PorM: 0.0206,
   limiteQuedaTerminalPct: 4,
   catalogoDeDisjuntoresA: [6, 10, 16, 20, 25, 32, 40, 50, 63, 70, 80, 100],
+  secaoMinimaTueMm2: 4,
   demanda: { nome: 'sem demanda (1,00)', ILUMINACAO: 1, TUG: 1, FORCA: 1 },
   limiteQuedaTotalPct: 5,
   desequilibrioMaxPct: 10,
@@ -268,7 +310,7 @@ export function secaoMinima(
   ligacao: LigacaoDoCircuito,
   uso: UsoDoCircuito | null,
 ): SecaoMinima | null {
-  const minimoPorUso = uso ? SECAO_MINIMA_POR_USO_MM2[uso] : 0;
+  const minimoPorUso = uso ? secaoMinimaPorUsoMm2(uso, hip) : 0;
   for (const secao of SECOES_NOMINAIS_MM2) {
     if (secao < minimoPorUso) continue;
     const iz = capacidadeCorrigidaA(secao, hip, ligacao);
@@ -495,12 +537,19 @@ export function preDimensionarCircuito(
           mensagem: `seção ${mm2(secaoDeclaradaMm2)} mm² conduz ${n1(izDecl)} A, abaixo de IB ${n1(ibA)} A${calc ? ` — mínimo ${mm2(calc.secaoMm2)} mm²` : ''}`,
         });
       }
-      if (uso && secaoDeclaradaMm2 < SECAO_MINIMA_POR_USO_MM2[uso]) {
-        achados.push({
-          nivel: 'FALTA',
-          referencia: '6.2.6.1.1 / Tab. 47',
-          mensagem: `circuito de ${uso === 'FORCA' ? 'força (tomadas)' : 'iluminação'} pede no mínimo ${mm2(SECAO_MINIMA_POR_USO_MM2[uso])} mm²; declarado ${mm2(secaoDeclaradaMm2)}`,
-        });
+      if (uso) {
+        // Abaixo da NORMA é falta; entre a norma e a hipótese de TUE é aviso —
+        // a hipótese é do projetista, e uma hipótese não pode barrar a emissão.
+        const minimoNorma = secaoMinimaDaNormaMm2(uso);
+        const minimoUso = secaoMinimaPorUsoMm2(uso, hip);
+        if (secaoDeclaradaMm2 < minimoUso) {
+          const abaixoDaNorma = secaoDeclaradaMm2 < minimoNorma;
+          achados.push({
+            nivel: abaixoDaNorma ? 'FALTA' : 'AVISO',
+            referencia: abaixoDaNorma ? '6.2.6.1.1 / Tab. 47' : 'hipótese · TUE',
+            mensagem: `circuito de ${ROTULO_DO_USO[uso]} pede no mínimo ${mm2(minimoUso)} mm²${abaixoDaNorma ? '' : ' (hipótese)'}; declarado ${mm2(secaoDeclaradaMm2)}`,
+          });
+        }
       }
     }
   }

@@ -1065,6 +1065,80 @@ describe('BlueprintEditor · ribbon', () => {
     for (const b of within(drawer).getAllByRole('button', { name: /lançar em todos|aceitar sugeridos/i })) expect(b).toBeDisabled();
   });
 
+  it('"Circuitos automáticos" (aba Instalações) sem quadro: o drawer pede o quadro e "Criar" fica apagado', async () => {
+    await montar();
+    await abrirAba(/^instalações$/i);
+    await userEvent.setup().click(botao(/^circuitos automáticos/i));
+    const drawer = await screen.findByRole('dialog');
+    expect(drawer).toHaveTextContent(/circuitos automáticos/i);
+    expect(drawer).toHaveTextContent(/hipóteses da criação/i);
+    expect(drawer).toHaveTextContent(/nunca no mesmo circuito/i);
+    expect(drawer).toHaveTextContent(/insira um quadro de distribuição/i);
+    expect(within(drawer).getByRole('combobox', { name: /critério de divisão/i })).toHaveValue('ambiente');
+    expect(within(drawer).getByRole('button', { name: /^criar 0 circuito/i })).toBeDisabled();
+    expect(botao(/^circuitos automáticos/i)).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('com quadro e pontos: contagem no ribbon, prévia por função, "Criar" grava num passo só e um Desfazer volta tudo', async () => {
+    // Sala fechada com QDC 127 V; luz + interruptor + 2 TUG + 1 TUE + 1 antena
+    // (a antena fica de fora: não é circuito de força).
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) =>
+      ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    let m = k.applyBatch(nivel.model, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0)]).model;
+    m = k.applyCommand(m, { type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Sala', tipoDeAmbiente: 'SALA_DORMITORIO' }).model;
+    m = k.applyCommand(m, { type: 'AddQuadro', levelId: t, nome: 'QDC', at: k.point(300, 300), cotaMm: 1500, tensaoV: 127, ligacao: 'FN' }).model;
+    const ponto = (x: number, y: number, tipoEletrico: 'ILUMINACAO_TETO' | 'INTERRUPTOR' | 'TUG' | 'TUE' | 'DADOS_TV', potenciaW?: number) =>
+      ({ type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: tipoEletrico, at: k.point(x, y), cotaMm: 300, tipoEletrico, ...(potenciaW != null ? { potenciaW } : {}) }) as const;
+    m = k.applyBatch(m, [
+      ponto(3000, 2000, 'ILUMINACAO_TETO', 160),
+      ponto(200, 1200, 'INTERRUPTOR'),
+      ponto(1000, 200, 'TUG', 100),
+      ponto(2000, 200, 'TUG', 100),
+      ponto(5000, 200, 'TUE', 1200),
+      ponto(4000, 200, 'DADOS_TV'),
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    await abrirAba(/^instalações$/i);
+    // 5 elegíveis: luz, interruptor, 2 TUG, TUE — a antena não conta.
+    expect(botao(/^circuitos automáticos/i)).toHaveTextContent('5');
+
+    await userEvent.setup().click(botao(/^circuitos automáticos/i));
+    const drawer = await screen.findByRole('dialog');
+    const previa = within(drawer).getByRole('table', { name: /prévia dos circuitos/i });
+    const linhas = within(previa).getAllByRole('row').slice(1);
+    expect(linhas.map((l) => l.textContent)).toEqual([
+      expect.stringMatching(/C1 — Iluminação Sala.*Sala.*2.*160.*1,5 mm²/),
+      expect.stringMatching(/C2 — TUG Sala.*Sala.*2.*200.*2,5 mm²/),
+      expect.stringMatching(/C3 — TUE Sala.*Sala.*1.*1200.*4 mm²/),
+    ]);
+    expect(drawer).toHaveTextContent(/1 ponto\(s\) fora do plano/i);
+
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^criar 3 circuito/i }));
+    expect(drawer).toHaveTextContent(/3 circuito\(s\) criado\(s\) para 5 ponto\(s\)/i);
+    expect(drawer).toHaveTextContent(/nenhum ponto sem circuito neste pavimento/i);
+    expect(botao(/^quadro de cargas/i)).toHaveTextContent('3');
+    expect(botao(/^circuitos automáticos/i)).not.toHaveTextContent('5');
+
+    // UM desfazer devolve os cinco: o lote foi um passo só.
+    await userEvent.setup().click(botao(/^desfazer/i));
+    expect(botao(/^circuitos automáticos/i)).toHaveTextContent('5');
+    expect(botao(/^quadro de cargas/i)).toHaveTextContent('0');
+  });
+
+  it('trocar o critério para "Um por função" persiste em localStorage e a carga máxima fica apagada', async () => {
+    await montar();
+    await abrirAba(/^instalações$/i);
+    await userEvent.setup().click(botao(/^circuitos automáticos/i));
+    const drawer = await screen.findByRole('dialog');
+    await userEvent.selectOptions(within(drawer).getByRole('combobox', { name: /critério de divisão/i }), 'funcao');
+    expect(JSON.parse(localStorage.getItem('blueprint:circuitosAutomaticos')!).criterio).toBe('funcao');
+    expect(within(drawer).getByRole('spinbutton', { name: /carga máxima por circuito/i })).toBeDisabled();
+  });
+
   it('"Quadro de cargas" (aba Instalações) abre em DRAWER, não no dock — é onde se edita a elétrica', async () => {
     await montar();
     await abrirAba(/^instalações$/i);

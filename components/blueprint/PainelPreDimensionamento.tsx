@@ -36,7 +36,10 @@ export function LinhaPreDimensionamento({
   onUsarSugerido?: (campos: { disjuntorA?: number; secaoMm2?: number }) => void;
 }) {
   const faltas = r.achados.filter((a) => a.nivel === 'FALTA');
-  const cor = faltas.length > 0 ? 'text-red-700' : r.ibA == null ? 'text-slate-400' : 'text-emerald-700';
+  // AVISO (14/09/2026): a seção de TUE abaixo da HIPÓTESE do projetista — não é
+  // norma, então não pinta a linha de vermelho nem barra a emissão, mas aparece.
+  const avisos = r.achados.filter((a) => a.nivel === 'AVISO');
+  const cor = faltas.length > 0 ? 'text-red-700' : r.ibA == null ? 'text-slate-400' : avisos.length > 0 ? 'text-amber-700' : 'text-emerald-700';
 
   if (r.ibA == null) {
     return (
@@ -58,7 +61,7 @@ export function LinhaPreDimensionamento({
         {' · '}
         seção mín.{' '}
         {r.secaoCalculada ? (
-          <span title={`Iz corrigida ${n1(r.secaoCalculada.izA)} A · critério: ${r.secaoCalculada.criterio === 'USO' ? 'Tab. 47 (uso)' : 'Tab. 36 (corrente)'}`}>
+          <span title={`Iz corrigida ${n1(r.secaoCalculada.izA)} A · critério: ${r.secaoCalculada.criterio === 'USO' ? (r.uso === 'TUE' ? 'hipótese TUE' : 'Tab. 47 (uso)') : 'Tab. 36 (corrente)'}`}>
             {mm2(r.secaoCalculada.secaoMm2)} mm²
           </span>
         ) : (
@@ -105,6 +108,11 @@ export function LinhaPreDimensionamento({
           <span className="font-mono text-xs text-red-500">{a.referencia}</span> {a.mensagem}
         </p>
       ))}
+      {avisos.map((a, i) => (
+        <p key={`aviso-${i}`} className="text-amber-700">
+          <span className="font-mono text-xs text-amber-600">{a.referencia}</span> {a.mensagem}
+        </p>
+      ))}
       {r.naoAvaliado.length > 0 && (
         <p className="text-slate-400">Fora da avaliação: {r.naoAvaliado.join('; ')}.</p>
       )}
@@ -122,7 +130,7 @@ export function HipotesesDoPreDimensionamento({
 }) {
   const [aberto, setAberto] = useState(false);
   const Seta = aberto ? ChevronDown : ChevronRight;
-  const resumo = `${hipoteses.metodoDeInstalacao} · ${hipoteses.temperaturaAmbienteC} °C · ${hipoteses.circuitosAgrupados} circ./eletroduto · ρ ${String(hipoteses.rhoOhmMm2PorM).replace('.', ',')} · ΔV ≤ ${hipoteses.limiteQuedaTerminalPct} %`;
+  const resumo = `${hipoteses.metodoDeInstalacao} · ${hipoteses.temperaturaAmbienteC} °C · ${hipoteses.circuitosAgrupados} circ./eletroduto · ρ ${String(hipoteses.rhoOhmMm2PorM).replace('.', ',')} · ΔV ≤ ${hipoteses.limiteQuedaTerminalPct} % · TUE ≥ ${String(hipoteses.secaoMinimaTueMm2).replace('.', ',')} mm²`;
   const campo = 'w-16 rounded border border-slate-300 px-1 py-0.5 text-sm';
   return (
     <div className="rounded-md border border-dashed border-slate-300">
@@ -169,6 +177,12 @@ export function HipotesesDoPreDimensionamento({
           <label className="flex items-center justify-between gap-2">
             <span>Queda máxima no terminal, % (6.2.7)</span>
             <input type="number" step="0.5" value={hipoteses.limiteQuedaTerminalPct} onChange={(e) => onChange({ ...hipoteses, limiteQuedaTerminalPct: Number(e.target.value) || HIPOTESES_PADRAO.limiteQuedaTerminalPct })} aria-label="Limite de queda de tensão" className={campo} />
+          </label>
+          {/* Hipótese de projeto, não norma: a Tab. 47 pede 2,5 para força. O
+              rótulo diz isso para ninguém ler 4,0 como exigência da 5410. */}
+          <label className="flex items-center justify-between gap-2">
+            <span>Seção mínima de TUE, mm² (hipótese; Tab. 47 pede 2,5)</span>
+            <input type="number" step="0.5" min={2.5} value={hipoteses.secaoMinimaTueMm2} onChange={(e) => onChange({ ...hipoteses, secaoMinimaTueMm2: Number(e.target.value) || HIPOTESES_PADRAO.secaoMinimaTueMm2 })} aria-label="Seção mínima de TUE" className={campo} />
           </label>
           <p className="text-xs text-slate-400">
             Cobre com isolação PVC (Tabela 36); B1 = eletroduto embutido em alvenaria. Disjuntores:{' '}

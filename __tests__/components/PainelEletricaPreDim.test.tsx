@@ -7,7 +7,7 @@
  * tensão, ligação e DR são declarações que chamam o mesmo `onCircuitoProps`.
  */
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import PainelEletrica from '../../components/blueprint/PainelEletrica';
@@ -77,5 +77,19 @@ describe('PainelEletrica · pré-dimensionamento', () => {
     await userEvent.click(botao);
     await userEvent.selectOptions(screen.getByLabelText('Método de instalação'), 'C');
     expect(onHipoteses).toHaveBeenCalledWith({ ...HIPOTESES_PADRAO, metodoDeInstalacao: 'C' });
+  });
+
+  it('a seção mínima de TUE (14/09/2026) é hipótese editável, com 4 mm² de padrão e dito que a Tab. 47 pede 2,5', async () => {
+    const onHipoteses = vi.fn();
+    render(<PainelEletrica model={cena()} onCircuitoProps={vi.fn()} hipoteses={HIPOTESES_PADRAO} onHipoteses={onHipoteses} {...props} />);
+    const botao = screen.getByRole('button', { name: /Hipóteses do pré-dimensionamento/ });
+    expect(botao.textContent).toMatch(/TUE ≥ 4 mm²/);
+    await userEvent.click(botao);
+    const campo = screen.getByLabelText('Seção mínima de TUE');
+    expect(campo).toHaveValue(4);
+    expect(screen.getByText(/Tab\. 47 pede 2,5/)).toBeInTheDocument();
+    // Campo controlado com prop fixa no teste: um change direto, não digitação acumulada.
+    fireEvent.change(campo, { target: { value: '6' } });
+    expect(onHipoteses).toHaveBeenLastCalledWith({ ...HIPOTESES_PADRAO, secaoMinimaTueMm2: 6 });
   });
 });

@@ -616,6 +616,18 @@ export function useResizableColumns(
       el.style.width = 'auto';
       el.style.maxWidth = 'none';
     });
+    // O mesmo para o que está DENTRO da célula. O texto de coluna longa vive num
+    // `<span class="block max-w-[160px] truncate">` (§6.1.2), e o `max-w` do span
+    // continuava valendo no clone: a coluna media no máximo 160 px por mais longo
+    // que fosse o conteúdo — Cliente/Parte, Descrição e Empreendimento de Contas
+    // a Receber "não ajustavam", enquanto Vencimento/Valor/Status (sem `max-w`)
+    // ajustavam. Reportado 14/09/2026; reproduzido em 208 px → 446 px.
+    clone.querySelectorAll('th *, td *').forEach(node => {
+      const el = node as HTMLElement;
+      el.style.maxWidth = 'none';
+      el.style.overflow = 'visible';
+      el.style.whiteSpace = 'nowrap';
+    });
 
     // Campo editável dentro da célula (input/select de edição inline, §7.1) vira
     // TEXTO no clone, para a coluna medir o CONTEÚDO.

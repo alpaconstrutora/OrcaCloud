@@ -131,23 +131,26 @@ type ReceberRow = Receivable & { cost_center_name: string; plano_de_contas_name:
 
 // Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
 // possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
-// repetir um bloco condicional fixo por coluna. Estilo por coluna (max-w/truncate/
+// repetir um bloco condicional fixo por coluna. Estilo por coluna (truncate/
 // whitespace-nowrap/cor) que antes vivia na className do <td> agora vai no <span>
 // interno, porque o <td> em si virou uniforme (mesmo padrão de ClientList.tsx).
+// SEM `max-w-*` no span: a largura já é a do <col> (table-layout fixed) — o
+// max-w mantinha o texto cortado mesmo depois de o usuário alargar a coluna ou
+// clicar em "ajustar ao conteúdo" (14/09/2026). Célula cortada leva `title`.
 function renderReceberCell(key: string, r: ReceberRow): React.ReactNode {
     switch (key) {
         case 'party_name':
             return r.party_name != null
-                ? <span className="block text-sm font-normal text-gray-700 max-w-[160px] truncate">{r.party_name}</span>
+                ? <span className="block text-sm font-normal text-gray-700 truncate" title={r.party_name}>{r.party_name}</span>
                 : <span className="text-sm text-gray-400 italic">—</span>;
         case 'description':
-            return <span className="block text-sm font-normal text-gray-700 max-w-[200px] truncate">{r.description ?? '—'}</span>;
+            return <span className="block text-sm font-normal text-gray-700 truncate" title={r.description ?? undefined}>{r.description ?? '—'}</span>;
         case 'empreendimento_name':
             return r.empreendimento_name
-                ? <span className="block text-sm font-normal text-gray-700 max-w-[160px] truncate" title={r.empreendimento_name}>{r.empreendimento_name}</span>
+                ? <span className="block text-sm font-normal text-gray-700 truncate" title={r.empreendimento_name}>{r.empreendimento_name}</span>
                 : <span className="text-sm text-gray-400 italic">—</span>;
         case 'project_name':
-            return <span className="block text-sm font-normal text-gray-700 max-w-[140px] truncate">{r.project_name ?? '—'}</span>;
+            return <span className="block text-sm font-normal text-gray-700 truncate" title={r.project_name ?? undefined}>{r.project_name ?? '—'}</span>;
         case 'due_date': {
             const isVencido = r.effective_status === 'VENCIDO';
             return <span className={`text-sm font-normal whitespace-nowrap ${isVencido ? 'text-red-600' : 'text-gray-600'}`}>{fmtDate(r.due_date)}</span>;
@@ -157,9 +160,9 @@ function renderReceberCell(key: string, r: ReceberRow): React.ReactNode {
         case 'status':
             return <StatusBadge status={r.effective_status} />;
         case 'cost_center_name':
-            return <span className="block text-sm font-normal text-gray-700 max-w-[180px] truncate">{r.cost_center_name || '—'}</span>;
+            return <span className="block text-sm font-normal text-gray-700 truncate" title={r.cost_center_name || undefined}>{r.cost_center_name || '—'}</span>;
         case 'plano_de_contas_name':
-            return <span className="block text-sm font-normal text-gray-700 max-w-[180px] truncate">{r.plano_de_contas_name || '—'}</span>;
+            return <span className="block text-sm font-normal text-gray-700 truncate" title={r.plano_de_contas_name || undefined}>{r.plano_de_contas_name || '—'}</span>;
         default:
             return null;
     }

@@ -88,7 +88,7 @@ import {
   cantosDaPeca,
   embutidoNoPiso,
   encaixarEmPecaEletrica,
-  orientacaoDaTomada,
+  apoioDaTomada,
   trianguloDaTomada,
   segmentosDoEletroduto,
   sentidoDoEletroduto,
@@ -348,6 +348,14 @@ const HIT_PX = 8;
  * 10 px — pedido de 14/09/2026. Só desenho: acerto e encaixe usam a peça.
  */
 const FATOR_DO_SIMBOLO_DE_TOMADA = 1.5;
+/**
+ * O ponto de LUZ (teto, parede, piso) é desenhado com o DOBRO do raio da peça
+ * — pedido de 15/09/2026 (*"Aumentar 100% símbolo Luz no teto"*). Só desenho:
+ * a peça, o acerto do clique e o encaixe continuam na medida real.
+ */
+const FATOR_DO_SIMBOLO_DE_LUZ = 2;
+const ehLuz = (t: { disciplina: string; tipoEletrico?: string | null }) =>
+  t.disciplina === 'ELETRICA' && !!t.tipoEletrico?.startsWith('ILUMINACAO');
 /** Menor tamanho em que um símbolo de instalação ainda é visível na tela. */
 const MIN_SIMBOLO_PX = 5;
 /** Espessura da linha de contorno da parede, em pixels de tela. */
@@ -2434,11 +2442,33 @@ export default function BlueprintCanvas({
     [quadrosDoNivel, vista.escala],
   );
 
+  /**
+   * Onde o SÍMBOLO da tomada está, para o clique: o triângulo é desenhado
+   * adiante do ponto (base na face da parede, meio tamanho para dentro do
+   * ambiente — ver o laço de desenho), e clicar nele tem de pegar a tomada.
+   * Cada tomada entra duas vezes no acerto: no ponto e no centro do símbolo.
+   */
+  const terminaisParaAcerto = useMemo(() => {
+    const extras: typeof terminaisDoNivel = [];
+    for (const t of terminaisDoNivel) {
+      if (t.disciplina !== 'ELETRICA' || (t.tipoEletrico !== 'TUG' && t.tipoEletrico !== 'TUE')) continue;
+      const apoio = apoioDaTomada(t, paredesDoNivel);
+      const tamanhoMm = Math.max(medidasDoTerminal(t).larguraMm, 10 / vista.escala) * FATOR_DO_SIMBOLO_DE_TOMADA;
+      const rad = (apoio.graus * Math.PI) / 180;
+      const d = apoio.recuoMm + tamanhoMm / 2;
+      extras.push({ ...t, at: { x: t.at.x + Math.cos(rad) * d, y: t.at.y + Math.sin(rad) * d }, larguraMm: tamanhoMm });
+    }
+    return [...terminaisDoNivel, ...extras];
+  }, [terminaisDoNivel, paredesDoNivel, vista.escala]);
+
   /** Qual TERMINAL está sob o cursor — em pixels, pela razão do quadro. */
   const terminalSob = useCallback(
-    (mundo: { x: number; y: number }) =>
-      acertoTerminal(terminaisDoNivel, mundo, HIT_PX / vista.escala),
-    [terminaisDoNivel, vista.escala],
+    (mundo: { x: number; y: number }) => {
+      const achado = acertoTerminal(terminaisParaAcerto, mundo, HIT_PX / vista.escala);
+      // O acerto pode ter caído na cópia (o símbolo): devolve o terminal real.
+      return achado ? (terminaisDoNivel.find((t) => t.id === achado.id) ?? null) : null;
+    },
+    [terminaisDoNivel, terminaisParaAcerto, vista.escala],
   );
 
   /** Qual TRECHO está sob o cursor. A PRUMADA é o caso difícil — ver o módulo. */
@@ -4187,11 +4217,28 @@ export default function BlueprintCanvas({
 
     for (const t of terminaisDoNivel) {
       const selecionado = selecao.has(t.id);
-      const c = paraTela(t.at);
       // EM ESCALA: o diâmetro é a largura declarada da peça. Antes disto era um
       // círculo de 4 px fixos, que num zoom de trabalho fica menor que a
       // espessura da parede ao lado — o ponto parecia um respingo de tinta.
       const md = medidasDoTerminal(t);
+      const ehTomada = t.disciplina === 'ELETRICA' && (t.tipoEletrico === 'TUG' || t.tipoEletrico === 'TUE');
+      // ── ONDE O SÍMBOLO DA TOMADA FICA (15/09/2026) ────────────────────────
+      //
+      // A BASE do triângulo encosta na FACE interna da parede e o símbolo
+      // inteiro fica no ambiente; a haste entra na parede até o eixo. O ponto
+      // (`at`) continua onde está — na face, que é onde a peça é instalada —,
+      // só o desenho anda: `recuoMm` leva a base do ponto à face (zero quando
+      // ele já está nela) e o centro do símbolo fica meio tamanho adiante.
+      const apoio = ehTomada ? apoioDaTomada(t, paredesDoNivel) : null;
+      const tamanhoMm = ehTomada ? Math.max(md.larguraMm, 10 / vista.escala) * FATOR_DO_SIMBOLO_DE_TOMADA : 0;
+      const rad = apoio ? (apoio.graus * Math.PI) / 180 : 0;
+      const u = { x: Math.cos(rad), y: Math.sin(rad) };
+      const baseDaTomada = apoio ? { x: t.at.x + u.x * apoio.recuoMm, y: t.at.y + u.y * apoio.recuoMm } : t.at;
+      const centroDoSimbolo = apoio
+        ? { x: baseDaTomada.x + (u.x * tamanhoMm) / 2, y: baseDaTomada.y + (u.y * tamanhoMm) / 2 }
+        : t.at;
+      // `c` é o CENTRO DO SÍMBOLO: na tomada, adiante do ponto; nos demais, o ponto.
+      const c = paraTela(centroDoSimbolo);
 
       // ── A SUGERIDA: um anel TRACEJADO em volta, na cor de prévia ─────────
       //
@@ -4202,10 +4249,10 @@ export default function BlueprintCanvas({
       if (t.sugerida) {
         // Na tomada o anel envolve o SÍMBOLO (1,5× a peça, canto do triângulo
         // a ~0,71 do tamanho), não a peça — senão o tracejado cortaria a base.
-        const ehTomada = t.disciplina === 'ELETRICA' && (t.tipoEletrico === 'TUG' || t.tipoEletrico === 'TUE');
+        // Na luz, o raio dobrado do símbolo.
         const raio = ehTomada
-          ? Math.max(emTela(md.larguraMm), 10) * FATOR_DO_SIMBOLO_DE_TOMADA * 0.72 + 6
-          : Math.max(emTela(md.larguraMm / 2), 5) + 6;
+          ? emTela(tamanhoMm) * 0.72 + 6
+          : Math.max(emTela(md.larguraMm / 2) * (ehLuz(t) ? FATOR_DO_SIMBOLO_DE_LUZ : 1), 5) + 6;
         ctx.save();
         ctx.setLineDash([3, 3]);
         ctx.strokeStyle = COR_PREVIA;
@@ -4230,11 +4277,9 @@ export default function BlueprintCanvas({
       // preenchimento de altura (vazio/meio/cheio) não se distinguia. Só o
       // DESENHO cresce — a peça (`medidasDoTerminal`), o acerto do clique e o
       // encaixe continuam na medida real.
-      if (t.disciplina === 'ELETRICA' && (t.tipoEletrico === 'TUG' || t.tipoEletrico === 'TUE')) {
+      if (ehTomada && apoio) {
         const cor = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA.ELETRICA;
-        const graus = orientacaoDaTomada(t, paredesDoNivel);
-        const tamanhoMm = Math.max(md.larguraMm, 10 / vista.escala) * FATOR_DO_SIMBOLO_DE_TOMADA;
-        const [b1, b2, apice] = trianguloDaTomada(t.at, graus, tamanhoMm).map(paraTela) as [
+        const [b1, b2, apice] = trianguloDaTomada(centroDoSimbolo, apoio.graus, tamanhoMm).map(paraTela) as [
           { x: number; y: number },
           { x: number; y: number },
           { x: number; y: number },
@@ -4248,9 +4293,12 @@ export default function BlueprintCanvas({
         ctx.fillStyle = cor;
         ctx.lineWidth = selecionado ? 2 : 1.5;
 
-        // A HASTE, da base para trás — em direção à parede.
-        const hx = meioDaBase.x - (apice.x - meioDaBase.x) * 0.5;
-        const hy = meioDaBase.y - (apice.y - meioDaBase.y) * 0.5;
+        // A HASTE, da base para trás — entra na parede até o EIXO (é a haste
+        // da prancha de referência); sem parede por perto, meio símbolo.
+        const alturaPx = Math.hypot(apice.x - meioDaBase.x, apice.y - meioDaBase.y);
+        const haste = apoio.aoEixoMm > 0 ? Math.max(emTela(apoio.aoEixoMm), 3) : alturaPx * 0.5;
+        const hx = meioDaBase.x - ((apice.x - meioDaBase.x) / alturaPx) * haste;
+        const hy = meioDaBase.y - ((apice.y - meioDaBase.y) / alturaPx) * haste;
         ctx.beginPath();
         ctx.moveTo(meioDaBase.x, meioDaBase.y);
         ctx.lineTo(hx, hy);
@@ -4281,7 +4329,6 @@ export default function BlueprintCanvas({
           ctx.fill();
         } else if (altura === 'PISO') {
           const lado = Math.hypot(apice.x - meioDaBase.x, apice.y - meioDaBase.y) * 1.6;
-          const c = paraTela(t.at);
           ctx.beginPath();
           ctx.rect(c.x - lado / 2, c.y - lado / 2, lado, lado);
           ctx.stroke();
@@ -4289,7 +4336,6 @@ export default function BlueprintCanvas({
         ctx.restore();
 
         if (mostrarCircuitos) {
-          const c = paraTela(t.at);
           const circuito = circuitosPorId.get(t.circuitoId ?? '');
           const afast = Math.hypot(apice.x - meioDaBase.x, apice.y - meioDaBase.y) / 2 + 4;
           ctx.font = 'bold 10px ui-sans-serif, system-ui, sans-serif';
@@ -4436,8 +4482,9 @@ export default function BlueprintCanvas({
       if (ehLigacaoDireta || ehInterruptor) {
         // Já desenhado acima; o caminho vazio abaixo não pinta nada.
       } else if (terminalEhRedondo(t)) {
-        // Redondo é o símbolo de ponto, e é o caso comum.
-        const raio = emTela(md.larguraMm / 2);
+        // Redondo é o símbolo de ponto, e é o caso comum. A LUZ sai com o
+        // dobro do raio (`FATOR_DO_SIMBOLO_DE_LUZ`).
+        const raio = emTela(md.larguraMm / 2) * (ehLuz(t) ? FATOR_DO_SIMBOLO_DE_LUZ : 1);
         ctx.arc(c.x, c.y, selecionado ? raio + 1.5 : raio, 0, Math.PI * 2);
       } else {
         // ⚠️ Quem declarou largura e profundidade DIFERENTES declarou uma peça

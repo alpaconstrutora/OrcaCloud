@@ -788,9 +788,32 @@ export function orientacaoDaTomada(
   t: { at: Point; rotacaoGraus?: number | null },
   paredes: readonly { a: Point; b: Point; thicknessMm: number }[],
 ): number {
-  if (t.rotacaoGraus != null) return t.rotacaoGraus;
+  return apoioDaTomada(t, paredes).graus;
+}
 
-  let melhor: { normal: number; d: number } | null = null;
+/**
+ * Onde o símbolo da tomada se APOIA (15/09/2026).
+ *
+ * Pedido, com prints: *"o símbolo da tomada deve ser alinhado com a face de
+ * dentro da parede"*. O triângulo era centrado no ponto — e o ponto fica na
+ * face, então metade do símbolo caía dentro da parede. Na prancha de
+ * referência a BASE do triângulo encosta na face interna, o símbolo inteiro
+ * fica no ambiente e a haste entra na parede até o eixo.
+ *
+ * Devolve, além da direção (`graus`, a mesma de `orientacaoDaTomada`):
+ *   - `recuoMm`: quanto a base tem de andar do ponto até a face — zero quando
+ *     o ponto já está na face ou além dela; meia espessura quando o ponto
+ *     está no eixo (inserção sem encaixe);
+ *   - `aoEixoMm`: da base até o eixo da parede — o comprimento da haste;
+ *     zero sem parede por perto.
+ * Com giro DECLARADO a direção é a declarada, mas o apoio continua sendo o da
+ * parede mais próxima — girar o símbolo não o tira da parede.
+ */
+export function apoioDaTomada(
+  t: { at: Point; rotacaoGraus?: number | null },
+  paredes: readonly { a: Point; b: Point; thicknessMm: number }[],
+): { graus: number; recuoMm: number; aoEixoMm: number } {
+  let melhor: { normal: number; d: number; meia: number } | null = null;
   for (const w of paredes) {
     const dx = w.b.x - w.a.x;
     const dy = w.b.y - w.a.y;
@@ -807,10 +830,13 @@ export function orientacaoDaTomada(
     const lado = dx * (t.at.y - w.a.y) - dy * (t.at.x - w.a.x);
     if (Math.abs(lado) < 1e-6) continue; // no eixo: ambíguo, não decide
     const normal = Math.atan2(dy, dx) + (lado > 0 ? Math.PI / 2 : -Math.PI / 2);
-    if (!melhor || d < melhor.d) melhor = { normal, d };
+    if (!melhor || d < melhor.d) melhor = { normal, d, meia: w.thicknessMm / 2 };
   }
-  if (!melhor) return 0;
-  return (((melhor.normal * 180) / Math.PI) % 360 + 360) % 360;
+  const grausDaParede = melhor ? (((melhor.normal * 180) / Math.PI) % 360 + 360) % 360 : 0;
+  const graus = t.rotacaoGraus != null ? t.rotacaoGraus : grausDaParede;
+  if (!melhor) return { graus, recuoMm: 0, aoEixoMm: 0 };
+  const recuoMm = Math.max(0, melhor.meia - melhor.d);
+  return { graus, recuoMm, aoEixoMm: Math.max(melhor.d, melhor.meia) };
 }
 
 /**

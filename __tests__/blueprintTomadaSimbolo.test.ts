@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { point } from '../utils/blueprintKernel';
-import { alturaDaTomada, orientacaoDaTomada, trianguloDaTomada } from '../utils/blueprintRede';
+import { alturaDaTomada, apoioDaTomada, orientacaoDaTomada, trianguloDaTomada } from '../utils/blueprintRede';
 
 describe('tomada · a classe de altura pela COTA', () => {
   it('as três alturas nominais da norma caem nas classes certas', () => {
@@ -89,5 +89,29 @@ describe('tomada · o triângulo', () => {
       expect(cx, `giro ${g}`).toBeCloseTo(1000, 6);
       expect(cy, `giro ${g}`).toBeCloseTo(2000, 6);
     }
+  });
+});
+
+describe('tomada · onde o símbolo se APOIA (15/09/2026: "alinhado com a face de dentro da parede")', () => {
+  const parede = { a: point(0, 0), b: point(5000, 0), thicknessMm: 150 };
+
+  it('ponto NA FACE: base fica no ponto (recuo 0) e a haste vai até o eixo (meia espessura)', () => {
+    expect(apoioDaTomada({ at: point(2000, 75) }, [parede])).toEqual({ graus: 90, recuoMm: 0, aoEixoMm: 75 });
+  });
+
+  it('ponto a 30 mm do eixo (inserido sem encaixe): a base anda 45 mm até a face; haste 75', () => {
+    expect(apoioDaTomada({ at: point(2000, 30) }, [parede])).toEqual({ graus: 90, recuoMm: 45, aoEixoMm: 75 });
+  });
+
+  it('ponto ALÉM da face (a 120 mm do eixo): base fica no ponto e a haste alcança o eixo (120)', () => {
+    expect(apoioDaTomada({ at: point(2000, 120) }, [parede])).toEqual({ graus: 90, recuoMm: 0, aoEixoMm: 120 });
+  });
+
+  it('giro declarado: a direção é a declarada, o apoio continua sendo o da parede', () => {
+    expect(apoioDaTomada({ at: point(2000, 30), rotacaoGraus: 45 }, [parede])).toEqual({ graus: 45, recuoMm: 45, aoEixoMm: 75 });
+  });
+
+  it('longe de parede: sem recuo e sem haste ao eixo', () => {
+    expect(apoioDaTomada({ at: point(2000, 3000) }, [parede])).toEqual({ graus: 0, recuoMm: 0, aoEixoMm: 0 });
   });
 });

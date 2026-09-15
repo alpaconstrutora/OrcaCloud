@@ -39,7 +39,7 @@ import {
   embutidoNoPiso,
   giroDaPeca,
   medidasDaPeca,
-  orientacaoDaTomada,
+  apoioDaTomada,
   secoesDoInterruptor,
   trianguloDaTomada,
 } from './blueprintRede';
@@ -250,8 +250,20 @@ export function desenharEletrica(d: Desenhista, model: BlueprintModel, proj: Pro
   // Pontos.
   for (const t of model.terminais ?? []) {
     if (t.disciplina !== 'ELETRICA') continue;
-    const c = { x: px(t.at.x), y: py(t.at.y) };
-    const graus = orientacaoDaTomada(t, paredes);
+    // A TOMADA se apoia na FACE (15/09/2026): a base do triângulo vai do
+    // ponto à face (`recuoMm`, no modelo) e o centro do símbolo fica meio
+    // tamanho adiante, já no papel — a mesma regra do canvas. O papel tem Y
+    // para baixo: a direção espelha em y.
+    const apoio = apoioDaTomada(t, paredes);
+    const graus = apoio.graus;
+    const ehTomadaAqui = t.tipoEletrico === 'TUG' || t.tipoEletrico === 'TUE';
+    const rad = (graus * Math.PI) / 180;
+    const base = ehTomadaAqui
+      ? { x: t.at.x + Math.cos(rad) * apoio.recuoMm, y: t.at.y + Math.sin(rad) * apoio.recuoMm }
+      : t.at;
+    const c = ehTomadaAqui
+      ? { x: px(base.x) + (Math.cos(rad) * TOMADA_MM) / 2, y: py(base.y) - (Math.sin(rad) * TOMADA_MM) / 2 }
+      : { x: px(t.at.x), y: py(t.at.y) };
     simboloDoPonto(d, t, c, graus, { TOMADA_MM, LUZ_R_MM, INT_R_MM, LD_MM, FINA, MEDIA });
     const circuito = t.circuitoId ? circuitosPorId.get(t.circuitoId)?.nome : null;
     const sigla = t.tipoEletrico ? SIGLA_DO_PONTO_ELETRICO[t.tipoEletrico] : '?';

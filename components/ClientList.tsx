@@ -512,7 +512,9 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
             return saved;
         } catch (error) {
             console.error("Erro ao salvar cliente:", error);
-            showToast('Erro ao salvar o cliente.', 'error');
+            // Erro do PostgREST é objeto cru (fica genérico); Error do serviço
+            // já vem com frase para o usuário (código duplicado, documento duplicado).
+            showToast(error instanceof Error && error.message ? error.message : 'Erro ao salvar o cliente.', 'error');
             return null;
         }
     };

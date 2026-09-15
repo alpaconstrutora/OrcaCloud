@@ -4,6 +4,12 @@ import { assertDocumentNotDuplicated } from './documentDuplicateCheck';
 
 type DbClientRow = Record<string, unknown>;
 
+const isDuplicateCodeError = (error: unknown) => {
+    const err = error as { code?: string; message?: string; details?: string };
+    const text = `${err?.message || ''} ${err?.details || ''}`.toLowerCase();
+    return err?.code === '23505' && text.includes('idx_clients_org_code');
+};
+
 // Helper function to map DB snake_case to Frontend camelCase
 const mapToFrontendClient = (dbClient: DbClientRow): Client => {
     return {
@@ -150,12 +156,39 @@ export const clientService = {
                 await assertDocumentNotDuplicated('client', payload.document as string, clientId);
             }
 
-            const { data, error } = await supabase
+            let { data, error } = await supabase
                 .from('clients')
                 .update(payload)
                 .eq('id', clientId)
                 .select()
                 .single();
+
+            // O `code` é sequencial único POR organização (idx_clients_org_code).
+            // O formulário de edição reenvia o código atual mesmo quando o
+            // usuário só trocou a organização — e na organização de destino
+            // esse número pode já ser de outro cliente. Mesmo molde de
+            // supplierService.updateSupplier: em vez de prever, reage à colisão
+            // gerando o próximo código da organização de destino e tentando
+            // uma única vez.
+            if (error && isDuplicateCodeError(error) && 'organization_id' in payload) {
+                const { data: nextCode } = await supabase.rpc('get_next_client_code', {
+                    p_org_id: (payload.organization_id as string | null) ?? null,
+                });
+                if (nextCode) {
+                    const retry = await supabase
+                        .from('clients')
+                        .update({ ...payload, code: nextCode })
+                        .eq('id', clientId)
+                        .select()
+                        .single();
+                    data = retry.data;
+                    error = retry.error;
+                }
+            }
+
+            if (error && isDuplicateCodeError(error)) {
+                throw new Error('Já existe um cliente com esse código na organização de destino. Altere o código do cliente e tente novamente.');
+            }
 
             if (error) {
                 console.error("Supabase Error on update client:", error);

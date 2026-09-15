@@ -2,6 +2,12 @@ import { supabase } from '../lib/supabase';
 import { sinapiService } from './sinapiService';
 import { assertDocumentNotDuplicated } from './documentDuplicateCheck';
 
+const isDuplicateCodeError = (error: unknown) => {
+    const err = error as { code?: string; message?: string; details?: string };
+    const text = `${err?.message || ''} ${err?.details || ''}`.toLowerCase();
+    return err?.code === '23505' && text.includes('idx_investors_org_code');
+};
+
 // Mapeamento NBR 12721 (padrão R8N, Tabela 5) → códigos SINAPI
 // Atualizar conforme novas versões da tabela NBR ou revisões SINAPI.
 const NBR_TO_SINAPI: Record<string, string> = {
@@ -96,12 +102,36 @@ export const investorService = {
 
             // Strip immutable fields from update payload
             const { id, created_at, ...updatePayload } = payload;
-            const { data, error } = await supabase
+            let { data, error } = await supabase
                 .from('investors')
                 .update(updatePayload)
                 .eq('id', investor.id)
                 .select(INVESTOR_COLS)
                 .single();
+
+            // `code` é sequencial único POR organização (idx_investors_org_code):
+            // ao trocar só a organização, o código antigo pode já ser de outro
+            // investidor no destino. Mesmo molde de supplierService/clientService:
+            // reage à colisão gerando o próximo código do destino, uma única vez.
+            if (error && isDuplicateCodeError(error) && 'organization_id' in updatePayload) {
+                const { data: nextCode } = await supabase.rpc('get_next_investor_code', {
+                    p_org_id: (updatePayload.organization_id as string | null) ?? null,
+                });
+                if (nextCode) {
+                    const retry = await supabase
+                        .from('investors')
+                        .update({ ...updatePayload, code: nextCode })
+                        .eq('id', investor.id)
+                        .select(INVESTOR_COLS)
+                        .single();
+                    data = retry.data;
+                    error = retry.error;
+                }
+            }
+
+            if (error && isDuplicateCodeError(error)) {
+                throw new Error('Já existe um investidor com esse código na organização de destino. Altere o código do investidor e tente novamente.');
+            }
 
             if (error) throw error;
             return data as Investor;

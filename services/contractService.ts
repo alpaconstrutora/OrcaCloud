@@ -832,6 +832,10 @@ async function syncRecurringToFinance(contract: Contract) {
                 // A cadência JÁ diz o tipo da parcela — preenchê-lo aqui evita o
                 // usuário reclassificar linha a linha na aba Parcelas.
                 installment_type: tipoDaCadencia(contract.billing_cycle),
+                // Classificação do contrato desce para a parcela (Relatórios › Plano
+                // de Contas / Centro de Custo). Antes só o parcelado copiava.
+                cost_center_id: contract.cost_center_id ?? null,
+                plano_de_contas_id: contract.plano_de_contas_id ?? null,
             })), { onConflict: 'organization_id,reference_id,entry_type' });
         }
         console.log(`[CONTRACTS] Generated ${transactions.length} recurring entries for contract ${contract.id} (from current month)`);
@@ -1088,7 +1092,7 @@ export async function generateRecurringInstallmentsForPeriod(
         status: 'PENDING',
         business_status: 'PREVISTO',
         cost_center_id: opts.costCenterId ?? contract.cost_center_id ?? null,
-        plano_de_contas_id: opts.planoDeContasId ?? null,
+        plano_de_contas_id: opts.planoDeContasId ?? contract.plano_de_contas_id ?? null,
         // Idem: o tipo sai da cadência da série (o override manda, quando existe).
         installment_type: tipoDaCadencia(cycle),
     })), { onConflict: 'organization_id,reference_id,entry_type' });
@@ -1203,6 +1207,9 @@ async function syncAVistaToFinance(contract: Contract) {
                 // Status de NEGÓCIO exibido/filtrado em Contas a Receber. Ficava nulo,
                 // e a regra de VENCIDO da view dependia dele estar preenchido.
                 business_status: 'PREVISTO',
+                // Classificação do contrato desce para o título (ver syncRecurringToFinance).
+                cost_center_id: contract.cost_center_id ?? null,
+                plano_de_contas_id: contract.plano_de_contas_id ?? null,
             });
         }
         console.log(`[CONTRACTS] Synced À Vista contract ${contract.id} to finance`);
@@ -1374,6 +1381,11 @@ export const contractService = {
         installment_value?: number;
         // Só usado se a máscara de Nomenclatura tiver {Centro de custo}.
         cost_center_id?: string | null;
+        // Plano de contas da negociação → vai para o contrato, e dele para cada
+        // parcela (syncRecurringToFinance / generateRecurringInstallmentsForPeriod).
+        // Sem isso o plano ficava só na negociação e nenhuma parcela o herdava
+        // (2026-09-14: 4 locações com "Receitas de Locação", 569 títulos sem).
+        plano_de_contas_id?: string | null;
     }, domain: 'VENDAS' | 'LOCACAO' = 'VENDAS'): Promise<Contract> => {
         if (!deal.organization_id) throw new Error('Negociação sem organização — impossível gerar contrato.');
         if (!deal.client_id) throw new Error('Negociação sem cliente — selecione o comprador antes de gerar o contrato.');
@@ -1528,6 +1540,8 @@ export const contractService = {
             deal_id: deal.id,
             organization_id: deal.organization_id,
             client_id: deal.client_id,
+            cost_center_id: deal.cost_center_id || undefined,
+            plano_de_contas_id: deal.plano_de_contas_id || undefined,
             number,
             title: unitLabel ? `${cfg.titlePrefix} — ${unitLabel}` : cfg.titleFallback,
             description: deal.notes || undefined,
@@ -1794,6 +1808,13 @@ export const contractService = {
             } catch { /* snapshot opcional */ }
         }
 
+        // Classificação ANTES da edição — só o que mudou de fato desce para os
+        // títulos (o modal manda o formulário inteiro; propagar sempre sobrescreveria
+        // parcela reclassificada à mão na Conciliação).
+        const { data: antes } = ('plano_de_contas_id' in updates || 'cost_center_id' in updates)
+            ? await supabase.from('contracts').select('plano_de_contas_id, cost_center_id').eq('id', id).maybeSingle()
+            : { data: null };
+
         const { data, error } = await supabase
             .from('contracts')
             .update(updates)
@@ -1803,6 +1824,27 @@ export const contractService = {
 
         if (error) throw error;
         const updated = data as Contract;
+
+        // Plano de contas / centro de custo editados no contrato descem para os
+        // títulos ainda PENDENTES (pago não se reclassifica por aqui). Antes a
+        // edição ficava só no cabeçalho e o Relatório continuava "Sem plano".
+        const classif: Record<string, string | null> = {};
+        if ('plano_de_contas_id' in updates && (antes?.plano_de_contas_id ?? null) !== (updated.plano_de_contas_id ?? null)) {
+            classif.plano_de_contas_id = updated.plano_de_contas_id ?? null;
+        }
+        if ('cost_center_id' in updates && (antes?.cost_center_id ?? null) !== (updated.cost_center_id ?? null)) {
+            classif.cost_center_id = updated.cost_center_id ?? null;
+        }
+        if (Object.keys(classif).length > 0) {
+            const { error: errProp } = await supabase
+                .from('internal_transactions')
+                .update(classif)
+                .eq('organization_id', updated.organization_id)
+                .in('source_system', ['CONTRACT_RECURRING', 'CONTRACT_PARCELADO', 'CONTRACT_AVISTA'])
+                .like('reference_id', `${id}%`)
+                .eq('status', 'PENDING');
+            if (errProp) console.error('[CONTRACTS] Falha ao propagar classificação para os títulos:', errProp);
+        }
 
         // Re-sync financial entries when value or schedule changes
         if ('original_value' in updates || 'payment_schedule' in updates) {

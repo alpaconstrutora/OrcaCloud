@@ -1208,6 +1208,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 // Fonte do valor da PARCELA do aluguel — `value` é o total do contrato.
                 installment_value: formData.installment_value,
                 cost_center_id: formData.cost_center_id,
+                plano_de_contas_id: formData.plano_de_contas_id,
             }, isRental ? 'LOCACAO' : 'VENDAS');
             setLinkedContract(contract);
             return contract;

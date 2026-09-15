@@ -5,6 +5,7 @@ import { onlyObras, onlyOrcamentos } from '../utils/projectClassification';
 import Button from './ui/Button';
 import { X, FileText, Calendar, Building2, DollarSign, Shield, Tag, Briefcase, Loader2, AlertCircle, HandCoins, MapPin, ClipboardList, Users } from 'lucide-react';
 import HierarchicalSelect from './HierarchicalSelect';
+import PlanoContasSelect from './PlanoContasSelect';
 import CostCenterSelect from './CostCenterSelect';
 import { Contract, ContractInstallment, Supplier, CostCenter, ChartOfAccount, ContractStatus, ContractType, ContractNature, ContractTypeRecord } from '../types';
 import { PaymentAccount } from '../types/financial';
@@ -1634,15 +1635,12 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     (Minha Organização > Plano de Contas). */}
                                 <div className="space-y-2">
                                     <label className="text-xs font-semibold text-slate-500 ml-1">Plano de Contas</label>
-                                    <HierarchicalSelect
-                                        items={planoContas}
+                                    <PlanoContasSelect
+                                        planoContas={planoContas}
                                         value={formData.plano_de_contas_id || ''}
                                         onChange={(v) => setFormData({ ...formData, plano_de_contas_id: v })}
-                                        valueField="id"
                                         placeholder="Nenhuma conta vinculada"
                                         hoverCls="hover:bg-blue-50"
-                                        panelVariant="drawer"
-                                        drawerTitle="Selecionar Plano de Contas"
                                     />
                                 </div>
                                 {/* Vínculo DIRETO, independente da obra: contrato sem obra

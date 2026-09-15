@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import CostCenterSelect, { CostCenterOption } from './CostCenterSelect';
-import HierarchicalSelect from './HierarchicalSelect';
+import PlanoContasSelect from './PlanoContasSelect';
 import { X, AlertTriangle, Loader2, Tag } from 'lucide-react';
 import { formatMoney } from './ui/Format';
 import type { BankTransaction } from '../types';
@@ -192,19 +192,13 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
 
                         <div>
                             <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Plano de Contas</label>
-                            {/* Mesmo drawer do Centro de Custo acima (HierarchicalSelect em modo drawer,
-                                como DealModal/ContractModal usam para o plano de contas). */}
-                            <HierarchicalSelect
-                                items={planoContas}
+                            {/* Mesmo drawer e mesma lista do Centro de Custo acima (accordion por nível). */}
+                            <PlanoContasSelect
+                                planoContas={planoContas}
                                 value={planoContasId}
                                 onChange={setPlanoContasId}
-                                valueField="id"
                                 placeholder="— Não alterar —"
                                 hoverCls="hover:bg-blue-50"
-                                panelVariant="drawer"
-                                drawerTitle="Selecionar Plano de Contas"
-                                drawerDescription="Busque por código ou nome da conta."
-                                searchPlaceholder="Buscar por código ou nome da conta..."
                                 disabled={saving}
                             />
                         </div>

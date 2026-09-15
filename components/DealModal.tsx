@@ -26,7 +26,7 @@ import {
 import { clientService } from '../services/clientService';
 import { organizationService } from '../services/organizationService';
 import { financialRegistryService } from '../services/financialRegistryService';
-import HierarchicalSelect from './HierarchicalSelect';
+import PlanoContasSelect from './PlanoContasSelect';
 import CostCenterSelect from './CostCenterSelect';
 import { propertyExportService } from '../services/propertyExportService';
 import { projectService, ProjectData } from '../services/projectService';
@@ -3047,15 +3047,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
                                 <div className="space-y-2">
                                     <label className="text-xs font-semibold text-slate-500">Plano de Contas</label>
-                                    <HierarchicalSelect
-                                        items={planoContas}
+                                    <PlanoContasSelect
+                                        planoContas={planoContas}
                                         value={formData.plano_de_contas_id || ''}
                                         onChange={(v) => setFormData({ ...formData, plano_de_contas_id: v || null })}
-                                        valueField="id"
                                         placeholder="Nenhuma conta vinculada"
                                         hoverCls="hover:bg-blue-50"
-                                        panelVariant="drawer"
-                                        drawerTitle="Selecionar Plano de Contas"
                                     />
                                 </div>
                             </div>

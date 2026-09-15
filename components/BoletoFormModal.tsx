@@ -4,7 +4,7 @@ import {
     Building2, Calendar, DollarSign, Hash, Eye, Save,
     ThumbsUp, Ban, Trash2, UserPlus,
 } from 'lucide-react';
-import HierarchicalSelect from './HierarchicalSelect';
+import PlanoContasSelect from './PlanoContasSelect';
 import SupplierSelect from './SupplierSelect';
 import CostCenterSelect from './CostCenterSelect';
 import { STATUS_LABELS, STATUS_TEXT_COLORS } from '../utils/boletoStatus';
@@ -589,15 +589,12 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                 </FormField>
 
                                 <FormField label="Plano de Contas">
-                                    <HierarchicalSelect
-                                        items={planoContas}
+                                    <PlanoContasSelect
+                                        planoContas={planoContas}
                                         value={planoDeContasId}
                                         onChange={setPlanoDeContasId}
-                                        valueField="id"
                                         placeholder="—"
                                         hoverCls="hover:bg-blue-50"
-                                        panelVariant="drawer"
-                                        drawerTitle="Selecionar Plano de Contas"
                                     />
                                 </FormField>
 
@@ -967,15 +964,12 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                 </FormField>
 
                                 <FormField label="Plano de Contas">
-                                    <HierarchicalSelect
-                                        items={planoContas}
+                                    <PlanoContasSelect
+                                        planoContas={planoContas}
                                         value={planoDeContasId}
                                         onChange={setPlanoDeContasId}
-                                        valueField="id"
                                         placeholder="—"
                                         hoverCls="hover:bg-blue-50"
-                                        panelVariant="drawer"
-                                        drawerTitle="Selecionar Plano de Contas"
                                     />
                                 </FormField>
 

@@ -26,14 +26,18 @@ export interface HierarchicalSelectItem {
 
 interface LinhaHierarquica {
     item: HierarchicalSelectItem;
-    isGroup: boolean;
+    /** Tem filhos na lista (mostra o chevron quando não está filtrando). */
     hasChildren: boolean;
+    /** Profundidade na árvore — 0 = raiz. Vira o recuo da linha. */
+    depth: number;
 }
 
-// Linhas visíveis no modo de hierarquia explícita — espelha `visibleRows` do
-// CostCenterModule: sem busca, grupos por código com os filhos só dos grupos
-// expandidos; com busca, lista chata (grupos e filhos que casam), sem accordion.
-// Filho cujo grupo não está na lista entra como linha solta, no fim.
+// Linhas visíveis no modo agrupado — espelha `visibleRows` do CostCenterModule:
+// sem busca, árvore por código com os filhos só dos nós expandidos; com busca,
+// lista chata (todo nó que casa), sem accordion e sem recuo. Funciona para
+// qualquer profundidade: Centro de Custo tem 2 níveis (grupo → filho), o
+// Plano de Contas tem até 4 ("1" → "1.2" → "1.2.3" → "1.2.3.9"). Nó cujo pai
+// não está na lista entra como raiz solta, no fim.
 function linhasHierarquicas(
     items: HierarchicalSelectItem[],
     casa: (i: HierarchicalSelectItem) => boolean,
@@ -41,32 +45,29 @@ function linhasHierarquicas(
     expandidos: Record<string, boolean>,
 ): LinhaHierarquica[] {
     const ids = new Set(items.map(i => i.id));
-    const grupos = sortByCode(items.filter(i => !i.parentId));
-    const filhosDe = new Map<string, HierarchicalSelectItem[]>();
+    const raizes: HierarchicalSelectItem[] = [];
     const orfaos: HierarchicalSelectItem[] = [];
+    const filhosDe = new Map<string, HierarchicalSelectItem[]>();
     for (const i of items) {
-        if (!i.parentId) continue;
+        if (!i.parentId) { raizes.push(i); continue; }
         if (!ids.has(i.parentId)) { orfaos.push(i); continue; }
         const lista = filhosDe.get(i.parentId) ?? [];
         lista.push(i);
         filhosDe.set(i.parentId, lista);
     }
     const saida: LinhaHierarquica[] = [];
-    for (const g of grupos) {
-        const filhos = sortByCode(filhosDe.get(g.id) ?? []);
+    const visita = (item: HierarchicalSelectItem, depth: number) => {
+        const filhos = sortByCode(filhosDe.get(item.id) ?? []);
         if (filtrando) {
-            if (casa(g)) saida.push({ item: g, isGroup: true, hasChildren: false });
-            for (const f of filhos) if (casa(f)) saida.push({ item: f, isGroup: false, hasChildren: false });
-        } else {
-            saida.push({ item: g, isGroup: true, hasChildren: filhos.length > 0 });
-            if (filhos.length > 0 && expandidos[g.id]) {
-                for (const f of filhos) saida.push({ item: f, isGroup: false, hasChildren: false });
-            }
+            if (casa(item)) saida.push({ item, hasChildren: false, depth: 0 });
+            for (const f of filhos) visita(f, depth + 1);
+            return;
         }
-    }
-    for (const o of sortByCode(orfaos)) {
-        if (!filtrando || casa(o)) saida.push({ item: o, isGroup: false, hasChildren: false });
-    }
+        saida.push({ item, hasChildren: filhos.length > 0, depth });
+        if (filhos.length > 0 && expandidos[item.id]) for (const f of filhos) visita(f, depth + 1);
+    };
+    for (const r of sortByCode(raizes)) visita(r, 0);
+    for (const o of sortByCode(orfaos)) visita(o, 0);
     return saida;
 }
 
@@ -94,6 +95,10 @@ interface Props {
     size?: 'md' | 'sm';
     /** Gatilho desabilitado (só o campo fechado; o drawer não abre). */
     disabled?: boolean;
+    /** Força o modo agrupado (accordion, código em texto simples, sem badge)
+     *  mesmo quando nenhum item traz `parentId` — ex.: plano de contas de uma
+     *  org que só tem contas de 1º nível. Sem isso o modo é inferido. */
+    agrupado?: boolean;
 }
 
 const HierarchicalSelect: React.FC<Props> = ({
@@ -109,6 +114,7 @@ const HierarchicalSelect: React.FC<Props> = ({
     searchPlaceholder = 'Buscar por código ou nome...',
     size = 'md',
     disabled = false,
+    agrupado = false,
 }) => {
     const [open, setOpen] = useState(false);
     // Busca transitória de propósito (exceção ao §3 do guia, que é para filtro
@@ -168,7 +174,11 @@ const HierarchicalSelect: React.FC<Props> = ({
     const casa = (item: HierarchicalSelectItem) =>
         !q || !!item.code?.toLowerCase().includes(q) || item.name.toLowerCase().includes(q);
 
-    const hierarquiaExplicita = items.some(i => i.parentId);
+    const hierarquiaExplicita = agrupado || items.some(i => i.parentId);
+    const itemPorId = new Map(items.map(i => [i.id, i]));
+    // Largura da coluna de código = o maior código da lista ("1.2.3.9" não cabe
+    // nos 36px que bastavam para "010").
+    const larguraCodigo = Math.max(4, ...items.map(i => i.code?.trim().length ?? 0));
     const filtrando = q.trim() !== '';
     // Busca no modo hierárquico também acha pelo nome do grupo (a tela de
     // Centro de Custo pesquisa "por código, grupo, centro de custo").
@@ -181,14 +191,19 @@ const HierarchicalSelect: React.FC<Props> = ({
         ? []
         : sortByCode(items).filter(casa).map(item => ({ item, level: getCodeLevel(item.code) }));
 
-    const gruposComFilhos = items.filter(g => !g.parentId && items.some(i => i.parentId === g.id)).map(g => g.id);
+    const comFilhos = new Set(items.map(i => i.parentId).filter((id): id is string => !!id && itemPorId.has(id)));
+    const gruposComFilhos = items.filter(g => comFilhos.has(g.id)).map(g => g.id);
     const todosExpandidos = gruposComFilhos.length > 0 && gruposComFilhos.every(id => expandidos[id]);
     const alternarExpansao = (id: string) => setExpandidos(prev => ({ ...prev, [id]: !prev[id] }));
     const alternarTodos = () => setExpandidos(todosExpandidos ? {} : Object.fromEntries(gruposComFilhos.map(id => [id, true])));
 
     const abrir = () => {
         setSearch('');
-        setExpandidos(selected?.parentId ? { [selected.parentId]: true } : {});
+        // Abre só o caminho até o item selecionado (todos os ancestrais), como a
+        // tela de Centro de Custo abre recolhida.
+        const caminho: Record<string, boolean> = {};
+        for (let atual = selected; atual?.parentId; atual = itemPorId.get(atual.parentId)) caminho[atual.parentId] = true;
+        setExpandidos(caminho);
         setOpen(o => !o);
     };
     const closeAndClear = () => { setOpen(false); setSearch(''); };
@@ -202,15 +217,15 @@ const HierarchicalSelect: React.FC<Props> = ({
     // gray-500 antes do nome.
     const listaHierarquica = (
         <>
-            {linhas.map(({ item, isGroup, hasChildren }) => {
+            {linhas.map(({ item, hasChildren, depth }) => {
                 const isSelected = value === getItemValue(item);
                 return (
                     <div
                         key={item.id}
                         className={`flex items-center gap-2 pr-3 py-2 transition-colors ${hoverCls} ${isSelected ? 'bg-gray-100' : ''}`}
-                        style={{ paddingLeft: isGroup || filtrando ? 12 : 32 }}
+                        style={{ paddingLeft: filtrando ? 12 : 12 + depth * 20 }}
                     >
-                        {isGroup && hasChildren ? (
+                        {hasChildren ? (
                             <button
                                 type="button"
                                 onClick={() => alternarExpansao(item.id)}
@@ -228,9 +243,9 @@ const HierarchicalSelect: React.FC<Props> = ({
                             className="flex-1 min-w-0 flex items-center gap-3 text-left"
                         >
                             {item.code && (
-                                <span className="text-xs font-normal text-gray-500 whitespace-nowrap w-9 shrink-0">{item.code}</span>
+                                <span className="text-xs font-normal text-gray-500 whitespace-nowrap shrink-0" style={{ width: `${larguraCodigo}ch` }}>{item.code}</span>
                             )}
-                            {!isGroup && filtrando && item.parentName && (
+                            {filtrando && item.parentName && (
                                 <span className="text-sm font-normal text-gray-500 truncate shrink-0 max-w-[40%]">{item.parentName}</span>
                             )}
                             <span className="text-sm font-normal text-gray-900 truncate">{item.name}</span>

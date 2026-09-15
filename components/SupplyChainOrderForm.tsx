@@ -5,7 +5,7 @@ import ActionIconButton from './ui/ActionIconButton';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedScopedSearch, useResizableColumns } from './ui/TableUtils';
 import { useConfirm } from './ui/confirm';
 import { getOrderNumberLockReason, regenerateOrderNumber } from '../services/orderNumberRegenService';
-import HierarchicalSelect from './HierarchicalSelect';
+import PlanoContasSelect from './PlanoContasSelect';
 import CostCenterSelect from './CostCenterSelect';
 import Button from './ui/Button';
 import { projectService, ProjectData } from '../services/projectService';
@@ -1266,14 +1266,12 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                         </div>
                                         <div className="space-y-3">
                                             <label className="text-xs font-black text-gray-400 uppercase tracking-[0.15em] px-1">Plano de contas</label>
-                                            <HierarchicalSelect
-                                                items={planoContas}
+                                            <PlanoContasSelect
+                                                planoContas={planoContas}
                                                 value={planoDeContasId}
                                                 onChange={setPlanoDeContasId}
                                                 placeholder="Selecione o plano de contas..."
                                                 hoverCls="hover:bg-indigo-50"
-                                                panelVariant="drawer"
-                                                drawerTitle="Selecionar Plano de Contas"
                                             />
                                         </div>
                                     </div>

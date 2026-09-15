@@ -21,6 +21,8 @@ import {
     subtotalDoBloco,
     saldoDoPlano,
     blocoParaGerador,
+    somarDias,
+    somarMeses,
     type BlocoPagamento,
 } from '../utils/paymentPlan';
 import { clientService } from '../services/clientService';
@@ -118,34 +120,77 @@ const DEFAULT_PAYMENT_TYPE_LIST: PaymentType[] = DEFAULT_PAYMENT_TYPES.map(d => 
  * também ser forçado a decidir algo pra Forma de Pagamento (e vice-versa). */
 const BULK_KEEP = '__KEEP__';
 
+/** Como o lote mexe no vencimento: a mesma data em todas, ou um deslocamento
+ *  relativo (cada parcela anda a partir da PRÓPRIA data — o cronograma inteiro
+ *  desliza sem colapsar num dia só). */
+export type BulkDueDate =
+    | { mode: 'SET'; value: string }
+    | { mode: 'SHIFT_DAYS'; days: number }
+    | { mode: 'SHIFT_MONTHS'; months: number };
+
+/** O que o modal de lote devolve. `undefined` em qualquer campo = não mexer. */
+export interface InstallmentLotePatch {
+    dueDate?: BulkDueDate;
+    /** Valor BRUTO (coluna "Valor"); o líquido é recalculado no servidor. */
+    amount?: number;
+    /** `undefined` = não mexer no desconto; `null` = limpar. */
+    discountType?: 'VALUE' | 'PERCENT' | null;
+    discountAmount: number;
+    paymentType?: PaymentInstallment['paymentType'];
+    installmentType?: PaymentInstallment['installmentType'];
+    /** `''` = limpar a descrição de todas. */
+    description?: string;
+}
+
+/** Resolve o vencimento de UMA parcela a partir da escolha do lote. */
+export const aplicarBulkDueDate = (atual: string, escolha: BulkDueDate): string => {
+    switch (escolha.mode) {
+        case 'SET': return escolha.value;
+        case 'SHIFT_DAYS': return somarDias(atual, escolha.days);
+        case 'SHIFT_MONTHS': return somarMeses(atual, escolha.months);
+    }
+};
+
+/** `YYYY-MM-DD` → `dd/mm/aaaa` por split de string (sem `new Date`: o parse é
+ *  UTC e em UTC-3 a data volta um dia). */
+const fmtDataBR = (iso: string | undefined) => {
+    if (!iso) return '—';
+    const [a, m, d] = iso.slice(0, 10).split('-');
+    return a && m && d ? `${d}/${m}/${a}` : iso;
+};
+
 /**
- * Edição em lote (Plano de Pagamento → seleção múltipla): desconto, Forma de
- * Pagamento e Tipo de Pagamento. Modelo: `components/BankTxEdicaoEmLoteModal.tsx`
+ * Edição em lote (aba Parcelas → seleção múltipla). Cobre TODAS as colunas da
+ * tabela: as editáveis por parcela (Vencimento, Valor, Desconto, Tipo, Forma de
+ * pagamento, Descrição) viram campos, e as que são dimensão do NEGÓCIO (Cliente,
+ * Centro de Custo, Plano de Contas — iguais em toda a série) aparecem como
+ * leitura, com o caminho para alterá-las. Valor final e Origem são derivados e
+ * entram na prévia de cada linha. Modelo: `components/BankTxEdicaoEmLoteModal.tsx`
  * (Financeiro → Extrato Bancário) — modal dedicado em vez de controles inline
  * na barra de seleção (guia §10).
  *
- * Desconto sempre é aplicado (setando ou removendo — igual sempre foi); Forma
- * de Pagamento e Tipo de Pagamento só são aplicados se o usuário efetivamente
- * escolher algo diferente de "Não alterar" (`BULK_KEEP`), já que nem toda
- * edição em lote quer mexer nesses dois campos.
+ * Todo campo nasce em "Não alterar" (`BULK_KEEP`): só o que o usuário escolher
+ * mexer vai no patch. Sem isso, quem abria o lote só para trocar a Forma de
+ * Pagamento APAGAVA, sem saber, o desconto de todas as parcelas selecionadas.
  *
  * Desconto recalcula o valor final de cada parcela a partir da própria base
  * (originalValue ?? value), então parcelas com valores diferentes recebem o
  * desconto proporcional (%) ou o mesmo abatimento fixo (R$) corretamente.
  */
 interface InstallmentLoteModalProps {
-    installments: PaymentInstallment[]; // selecionadas
+    /** Selecionadas; `origem` é a coluna Origem da tabela (só para a prévia). */
+    installments: (PaymentInstallment & { origem?: string })[];
     installmentTypes: PaymentType[];    // catálogo Tipos de Pagamento (ordenado)
+    /** Dimensões herdadas do negócio — só leitura no modal (mesmo valor em toda a série). */
+    dimensoes: { cliente: string; centroCusto: string; planoContas: string };
     onClose: () => void;
-    onSave: (patch: {
-        /** `undefined` = não mexer no desconto; `null` = limpar. */
-        discountType?: 'VALUE' | 'PERCENT' | null;
-        discountAmount: number;
-        paymentType?: PaymentInstallment['paymentType'];
-        installmentType?: PaymentInstallment['installmentType'];
-    }) => void;
+    onSave: (patch: InstallmentLotePatch) => void;
 }
-const InstallmentLoteDiscountModal: React.FC<InstallmentLoteModalProps> = ({ installments, installmentTypes, onClose, onSave }) => {
+export const InstallmentLoteEditModal: React.FC<InstallmentLoteModalProps> = ({ installments, installmentTypes, dimensoes, onClose, onSave }) => {
+    const [dueMode, setDueMode] = useState<typeof BULK_KEEP | 'SET' | 'SHIFT_DAYS' | 'SHIFT_MONTHS'>(BULK_KEEP);
+    const [dueValue, setDueValue] = useState('');       // data (SET) ou número (SHIFT_*)
+    const [amountMode, setAmountMode] = useState<typeof BULK_KEEP | 'SET'>(BULK_KEEP);
+    const [amountValue, setAmountValue] = useState('');
     // `BULK_KEEP` = não mexer no desconto. Sem esta terceira opção o campo
     // nascia em "Remover desconto de todas": quem abria o lote só para trocar a
     // Forma de Pagamento APAGAVA, sem saber, o desconto de todas as parcelas
@@ -154,16 +199,48 @@ const InstallmentLoteDiscountModal: React.FC<InstallmentLoteModalProps> = ({ ins
     const [discountAmount, setDiscountAmount] = useState('');
     const [bulkPaymentType, setBulkPaymentType] = useState(BULK_KEEP);
     const [bulkInstallmentType, setBulkInstallmentType] = useState(BULK_KEEP);
+    const [descMode, setDescMode] = useState<typeof BULK_KEEP | 'SET' | 'CLEAR'>(BULK_KEEP);
+    const [descValue, setDescValue] = useState('');
 
+    const fmtMoney = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
     const totalBruto = installments.reduce((s, i) => s + (i.originalValue ?? i.value), 0);
     const amount = parseFloat(discountAmount.replace(',', '.')) || 0;
+    const novoValor = parseFloat(amountValue.replace(',', '.'));
+    const deslocamento = parseInt(dueValue, 10);
+
+    const mexeuNoVencimento = dueMode !== BULK_KEEP;
+    const vencimentoValido = !mexeuNoVencimento
+        || (dueMode === 'SET' ? /^\d{4}-\d{2}-\d{2}$/.test(dueValue) : Number.isFinite(deslocamento) && deslocamento !== 0);
+    const mexeuNoValor = amountMode !== BULK_KEEP;
+    const valorValido = !mexeuNoValor || (Number.isFinite(novoValor) && novoValor > 0);
     const mexeuNoDesconto = discountType !== BULK_KEEP;
-    const nadaAMudar = !mexeuNoDesconto && bulkPaymentType === BULK_KEEP && bulkInstallmentType === BULK_KEEP;
-    const canSave = !nadaAMudar
-        && (!mexeuNoDesconto || discountType === '' /* limpar */ || amount > 0);
+    const descontoValido = !mexeuNoDesconto || discountType === '' /* limpar */ || amount > 0;
+    const mexeuNaDescricao = descMode !== BULK_KEEP;
+    const descricaoValida = !mexeuNaDescricao || descMode === 'CLEAR' || descValue.trim().length > 0;
+
+    const nadaAMudar = !mexeuNoVencimento && !mexeuNoValor && !mexeuNoDesconto && !mexeuNaDescricao
+        && bulkPaymentType === BULK_KEEP && bulkInstallmentType === BULK_KEEP;
+    const canSave = !nadaAMudar && vencimentoValido && valorValido && descontoValido && descricaoValida;
+
+    /** A escolha de vencimento no formato do patch (ou `undefined` se não mexeu). */
+    const escolhaVencimento = (): BulkDueDate | undefined => {
+        if (!mexeuNoVencimento) return undefined;
+        if (dueMode === 'SET') return { mode: 'SET', value: dueValue };
+        if (dueMode === 'SHIFT_DAYS') return { mode: 'SHIFT_DAYS', days: deslocamento };
+        return { mode: 'SHIFT_MONTHS', months: deslocamento };
+    };
+
+    /** Prévia do vencimento de cada linha depois do lote (mesma regra do save). */
+    const previaVencimento = (atual: string | undefined): string | undefined => {
+        const escolha = escolhaVencimento();
+        if (!escolha || !vencimentoValido || !atual) return undefined;
+        return aplicarBulkDueDate(atual.slice(0, 10), escolha);
+    };
 
     const handleSave = () => {
         onSave({
+            dueDate: escolhaVencimento(),
+            amount: mexeuNoValor ? novoValor : undefined,
             // `undefined` = não enviar o desconto; `null` = limpar o desconto.
             discountType: discountType === BULK_KEEP ? undefined : (discountType || null),
             discountAmount: amount,
@@ -173,17 +250,21 @@ const InstallmentLoteDiscountModal: React.FC<InstallmentLoteModalProps> = ({ ins
             installmentType: bulkInstallmentType === BULK_KEEP
                 ? undefined
                 : ((bulkInstallmentType || undefined) as PaymentInstallment['installmentType']),
+            description: !mexeuNaDescricao ? undefined : (descMode === 'CLEAR' ? '' : descValue.trim()),
         });
     };
 
+    const FIELD = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
+    const LABEL = 'text-xs font-semibold text-slate-500 mb-1 block';
+
     return (
         <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-            <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
+            <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
                 <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
                     <div>
                         <h2 className="text-lg font-black text-gray-900">Editar Parcelas em Lote</h2>
                         <p className="text-xs text-gray-400 mt-0.5">
-                            {installments.length} parcela{installments.length !== 1 ? 's' : ''} selecionada{installments.length !== 1 ? 's' : ''} · {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalBruto)} (bruto)
+                            {installments.length} parcela{installments.length !== 1 ? 's' : ''} selecionada{installments.length !== 1 ? 's' : ''} · {fmtMoney(totalBruto)} (bruto)
                         </p>
                     </div>
                     <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
@@ -192,79 +273,200 @@ const InstallmentLoteDiscountModal: React.FC<InstallmentLoteModalProps> = ({ ins
                 </div>
 
                 <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
-                    <div>
-                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Tipo de Desconto</label>
-                        <select
-                            value={discountType}
-                            onChange={(e) => setDiscountType(e.target.value as 'VALUE' | 'PERCENT' | '' | typeof BULK_KEEP)}
-                            className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                        >
-                            <option value={BULK_KEEP}>Não alterar o desconto</option>
-                            <option value="">Remover desconto de todas</option>
-                            <option value="VALUE">Desconto em R$ (mesmo valor em todas)</option>
-                            <option value="PERCENT">Desconto em % (mesmo percentual em todas)</option>
-                        </select>
-                    </div>
-
-                    {discountType !== '' && discountType !== BULK_KEEP && (
+                    {/* Campos na mesma ordem das colunas da tabela. */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                            <label className="text-xs font-semibold text-slate-500 mb-1 block">
-                                Valor do desconto {discountType === 'PERCENT' ? '(%)' : '(R$)'}
-                            </label>
-                            <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={discountAmount}
-                                onChange={(e) => setDiscountAmount(e.target.value)}
-                                placeholder={discountType === 'PERCENT' ? 'Ex: 10' : 'Ex: 100,00'}
-                                className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                            />
+                            <label htmlFor="lote-vencimento" className={LABEL}>Vencimento</label>
+                            <select id="lote-vencimento"
+                                value={dueMode}
+                                onChange={(e) => { setDueMode(e.target.value as typeof dueMode); setDueValue(''); }}
+                                className={FIELD}
+                            >
+                                <option value={BULK_KEEP}>Não alterar</option>
+                                <option value="SET">Mesma data em todas</option>
+                                <option value="SHIFT_DAYS">Deslocar em dias (+/-)</option>
+                                <option value="SHIFT_MONTHS">Deslocar em meses (+/-)</option>
+                            </select>
                         </div>
-                    )}
-
-                    <div>
-                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Forma de Pagamento</label>
-                        <select
-                            value={bulkPaymentType}
-                            onChange={(e) => setBulkPaymentType(e.target.value)}
-                            className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                        >
-                            <option value={BULK_KEEP}>Não alterar</option>
-                            <option value="">Nenhuma (limpar de todas)</option>
-                            <option value="PIX">PIX</option>
-                            <option value="TED">TED</option>
-                            <option value="DOC">DOC</option>
-                            <option value="DINHEIRO">Dinheiro</option>
-                            <option value="CHEQUE">Cheque</option>
-                            <option value="PERMUTA">Permuta</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Tipo de Pagamento</label>
-                        <select
-                            value={bulkInstallmentType}
-                            onChange={(e) => setBulkInstallmentType(e.target.value)}
-                            className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                        >
-                            <option value={BULK_KEEP}>Não alterar</option>
-                            <option value="">Nenhum (limpar de todas)</option>
-                            {installmentTypes.map(t => (
-                                <option key={t.code || t.id} value={t.code}>{t.name}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div className="bg-gray-50 rounded-[10px] border border-gray-100 divide-y divide-gray-100 max-h-40 overflow-y-auto">
-                        {installments.map(i => (
-                            <div key={i.id} className="flex items-center justify-between px-4 py-2 text-xs">
-                                <span className="text-gray-700 font-medium truncate max-w-[60%]">{i.description}</span>
-                                <span className="text-gray-500 font-bold shrink-0 ml-2">
-                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(i.originalValue ?? i.value)}
-                                </span>
+                        {dueMode === 'SET' && (
+                            <div>
+                                <label htmlFor="lote-vencimento-data" className={LABEL}>Nova data</label>
+                                <input id="lote-vencimento-data" type="date" value={dueValue} onChange={(e) => setDueValue(e.target.value)} className={FIELD} />
                             </div>
-                        ))}
+                        )}
+                        {(dueMode === 'SHIFT_DAYS' || dueMode === 'SHIFT_MONTHS') && (
+                            <div>
+                                <label htmlFor="lote-vencimento-deslocar" className={LABEL}>{dueMode === 'SHIFT_DAYS' ? 'Dias' : 'Meses'} (negativo adianta)</label>
+                                <input id="lote-vencimento-deslocar"
+                                    type="number" step="1"
+                                    value={dueValue}
+                                    onChange={(e) => setDueValue(e.target.value)}
+                                    placeholder={dueMode === 'SHIFT_DAYS' ? 'Ex: 15 ou -7' : 'Ex: 1 ou -1'}
+                                    className={FIELD}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label htmlFor="lote-valor" className={LABEL}>Valor (bruto)</label>
+                            <select id="lote-valor"
+                                value={amountMode}
+                                onChange={(e) => { setAmountMode(e.target.value as typeof amountMode); setAmountValue(''); }}
+                                className={FIELD}
+                            >
+                                <option value={BULK_KEEP}>Não alterar</option>
+                                <option value="SET">Mesmo valor em todas</option>
+                            </select>
+                        </div>
+                        {amountMode === 'SET' && (
+                            <div>
+                                <label htmlFor="lote-valor-novo" className={LABEL}>Novo valor (R$)</label>
+                                <input id="lote-valor-novo"
+                                    type="number" min="0" step="0.01"
+                                    value={amountValue}
+                                    onChange={(e) => setAmountValue(e.target.value)}
+                                    placeholder="Ex: 2500,00"
+                                    className={FIELD}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label htmlFor="lote-desconto" className={LABEL}>Desconto</label>
+                            <select id="lote-desconto"
+                                value={discountType}
+                                onChange={(e) => setDiscountType(e.target.value as 'VALUE' | 'PERCENT' | '' | typeof BULK_KEEP)}
+                                className={FIELD}
+                            >
+                                <option value={BULK_KEEP}>Não alterar</option>
+                                <option value="">Remover desconto de todas</option>
+                                <option value="VALUE">Desconto em R$ (mesmo valor em todas)</option>
+                                <option value="PERCENT">Desconto em % (mesmo percentual em todas)</option>
+                            </select>
+                        </div>
+                        {discountType !== '' && discountType !== BULK_KEEP && (
+                            <div>
+                                <label htmlFor="lote-desconto-valor" className={LABEL}>
+                                    Valor do desconto {discountType === 'PERCENT' ? '(%)' : '(R$)'}
+                                </label>
+                                <input id="lote-desconto-valor"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={discountAmount}
+                                    onChange={(e) => setDiscountAmount(e.target.value)}
+                                    placeholder={discountType === 'PERCENT' ? 'Ex: 10' : 'Ex: 100,00'}
+                                    className={FIELD}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label htmlFor="lote-tipo" className={LABEL}>Tipo</label>
+                            <select id="lote-tipo"
+                                value={bulkInstallmentType}
+                                onChange={(e) => setBulkInstallmentType(e.target.value)}
+                                className={FIELD}
+                            >
+                                <option value={BULK_KEEP}>Não alterar</option>
+                                <option value="">Nenhum (limpar de todas)</option>
+                                {installmentTypes.map(t => (
+                                    <option key={t.code || t.id} value={t.code}>{t.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="lote-forma" className={LABEL}>Forma de pagamento</label>
+                            <select id="lote-forma"
+                                value={bulkPaymentType}
+                                onChange={(e) => setBulkPaymentType(e.target.value)}
+                                className={FIELD}
+                            >
+                                <option value={BULK_KEEP}>Não alterar</option>
+                                <option value="">Nenhuma (limpar de todas)</option>
+                                <option value="PIX">PIX</option>
+                                <option value="TED">TED</option>
+                                <option value="DOC">DOC</option>
+                                <option value="DINHEIRO">Dinheiro</option>
+                                <option value="CHEQUE">Cheque</option>
+                                <option value="PERMUTA">Permuta</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label htmlFor="lote-descricao" className={LABEL}>Descrição</label>
+                            <select id="lote-descricao"
+                                value={descMode}
+                                onChange={(e) => { setDescMode(e.target.value as typeof descMode); setDescValue(''); }}
+                                className={FIELD}
+                            >
+                                <option value={BULK_KEEP}>Não alterar</option>
+                                <option value="SET">Mesmo texto em todas</option>
+                                <option value="CLEAR">Limpar de todas</option>
+                            </select>
+                        </div>
+                        {descMode === 'SET' && (
+                            <div>
+                                <label htmlFor="lote-descricao-texto" className={LABEL}>Texto</label>
+                                <input id="lote-descricao-texto"
+                                    type="text"
+                                    value={descValue}
+                                    onChange={(e) => setDescValue(e.target.value)}
+                                    placeholder="Descrição / observação"
+                                    className={FIELD}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Colunas que são dimensão do NEGÓCIO, não da parcela: iguais em toda
+                        a série, por isso só leitura aqui — mudar é na aba Financeiro
+                        (Centro de Custo / Plano de Contas) ou em Dados do Cliente. */}
+                    <div className="bg-gray-50 rounded-[10px] border border-gray-100 px-4 py-3 space-y-1.5">
+                        <p className="text-xs font-semibold text-slate-500">Herdados do negócio (iguais em toda a série)</p>
+                        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+                            <dt className="text-gray-400">Cliente</dt>
+                            <dd className="text-gray-700 truncate" title={dimensoes.cliente}>{dimensoes.cliente || '—'}</dd>
+                            <dt className="text-gray-400">Centro de Custo</dt>
+                            <dd className="text-gray-700 truncate" title={dimensoes.centroCusto}>{dimensoes.centroCusto || '—'}</dd>
+                            <dt className="text-gray-400">Plano de Contas</dt>
+                            <dd className="text-gray-700 truncate" title={dimensoes.planoContas}>{dimensoes.planoContas || '—'}</dd>
+                        </dl>
+                        <p className="text-[11px] text-gray-400">Para alterar, use a aba Financeiro ou Dados do Cliente — a mudança vale para todas as parcelas.</p>
+                    </div>
+
+                    {/* Prévia: cada parcela com origem, vencimento (atual → novo, se o
+                        lote mexer nele), bruto e valor final atual. */}
+                    <div className="bg-gray-50 rounded-[10px] border border-gray-100 divide-y divide-gray-100 max-h-40 overflow-y-auto">
+                        {installments.map(i => {
+                            const novo = previaVencimento(i.dueDate);
+                            return (
+                                <div key={i.id} className="flex items-center justify-between gap-2 px-4 py-2 text-xs">
+                                    <div className="min-w-0">
+                                        <span className="block text-gray-700 font-medium truncate">{i.description || 'Parcela'}</span>
+                                        <span className="block text-gray-400 truncate">
+                                            {i.origem ? `${i.origem} · ` : ''}
+                                            {fmtDataBR(i.dueDate)}
+                                            {novo && novo !== i.dueDate?.slice(0, 10) && <> → <span className="text-blue-600">{fmtDataBR(novo)}</span></>}
+                                        </span>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                        <span className="block text-gray-500 font-bold">{fmtMoney(i.originalValue ?? i.value)}</span>
+                                        {i.originalValue != null && i.originalValue !== i.value && (
+                                            <span className="block text-gray-400">final {fmtMoney(i.value)}</span>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -1594,45 +1796,49 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     };
 
     /**
-     * Aplica desconto / tipo / forma de pagamento às parcelas selecionadas do
-     * contrato. Usa o MESMO modal do plano de pagamento; a diferença é que aqui
-     * cada linha é gravada no banco (uma por vez, para o servidor recalcular o
-     * líquido pela mesma regra) e a série é relida no fim.
+     * Aplica o lote (vencimento, valor, desconto, tipo, forma de pagamento,
+     * descrição) às parcelas selecionadas. Cada linha é gravada no banco (o
+     * servidor recalcula o líquido pela mesma regra da célula) e a série é
+     * relida no fim.
      */
-    const applyBulkEntryEdit = async (patch: {
-        /** `undefined` = não mexer no desconto; `null` = limpar. */
-        discountType?: 'VALUE' | 'PERCENT' | null;
-        discountAmount: number;
-        paymentType?: PaymentInstallment['paymentType'];
-        installmentType?: PaymentInstallment['installmentType'];
-    }) => {
+    const applyBulkEntryEdit = async (patch: InstallmentLotePatch) => {
         const alvos = contractEntries.filter(e => selectedEntryIds.has(e.id) && e.status === 'PENDING');
         setShowEntryLoteModal(false);
         // Só o que o usuário escolheu mudar vai no patch. Mandar o desconto sempre
         // fazia o serviço entrar no ramo "mexeu no valor" e RECALCULAR o líquido —
         // trocar só a Forma de Pagamento apagava o desconto das parcelas.
         const mexeuNoDesconto = patch.discountType !== undefined;
-        const campos = {
+        const mexeuNoValor = patch.amount !== undefined;
+        const camposComuns = {
+            ...(mexeuNoValor ? { amount: patch.amount } : {}),
             ...(mexeuNoDesconto ? {
                 discount_type: patch.discountType ?? null,
                 discount_amount: patch.discountType ? patch.discountAmount : null,
             } : {}),
             ...(patch.paymentType !== undefined ? { payment_type: patch.paymentType || null } : {}),
             ...(patch.installmentType !== undefined ? { installment_type: patch.installmentType || null } : {}),
+            ...(patch.description !== undefined ? { description: patch.description } : {}),
         };
-        if (Object.keys(campos).length === 0) return;
+        if (Object.keys(camposComuns).length === 0 && !patch.dueDate) return;
+
+        // Vencimento é por linha: "deslocar" parte da data atual de CADA parcela.
+        const escolha = patch.dueDate;
+        const camposDe = (e: (typeof alvos)[number]) => ({
+            ...camposComuns,
+            ...(escolha ? { due_date: aplicarBulkDueDate(e.transaction_date.slice(0, 10), escolha) } : {}),
+        });
 
         setLoading(true);
         try {
             // Em paralelo: cada parcela custa duas leituras e uma escrita, e em
             // série 14 parcelas viravam ~40 idas ao servidor esperando uma pela
             // outra — a demora que o usuário sentiu.
-            await Promise.all(alvos.map(e => contractService.updateFinancialEntry(e.id, campos)));
+            await Promise.all(alvos.map(e => contractService.updateFinancialEntry(e.id, camposDe(e))));
             const rows = await recarregarParcelas();
             // A pergunta só faz sentido quando o VALOR cobrado mudou. Fora disso
             // ela aparecia depois de qualquer edição em lote — inclusive uma que
             // só trocou a forma de pagamento.
-            if (mexeuNoDesconto && rows.length > 0) {
+            if ((mexeuNoDesconto || mexeuNoValor) && rows.length > 0) {
                 await perguntarCorrigirTotalContrato(
                     rows.reduce((s, r) => s + (Number(r.amount) || 0), 0));
             }
@@ -4283,14 +4489,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 )}
 
                 {showEntryLoteModal && (
-                    <InstallmentLoteDiscountModal
+                    <InstallmentLoteEditModal
                         installments={contractEntries
                             .filter(e => selectedEntryIds.has(e.id))
                             .map(e => ({
-                                // O modal só lê id/valor/desconto para montar a prévia —
+                                // O modal só lê a parcela para montar a prévia —
                                 // mapear a parcela do contrato para o formato dele evita
                                 // duplicar um modal idêntico só por causa do tipo.
                                 id: e.id,
+                                origem: e.__origem || 'Contrato',
                                 dueDate: e.transaction_date.slice(0, 10),
                                 value: e.amount,
                                 originalValue: e.original_amount ?? e.amount,
@@ -4300,8 +4507,13 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 paymentType: (e.payment_type as PaymentInstallment['paymentType']) ?? undefined,
                                 status: 'PENDING',
                                 description: e.description ?? '',
-                            } as PaymentInstallment))}
+                            } as PaymentInstallment & { origem?: string }))}
                         installmentTypes={installmentTypeOptions}
+                        dimensoes={{
+                            cliente: buyerNames || selectedClient?.name || '',
+                            centroCusto: costCenterLabel,
+                            planoContas: planoContasLabel,
+                        }}
                         onClose={() => setShowEntryLoteModal(false)}
                         onSave={applyBulkEntryEdit}
                     />

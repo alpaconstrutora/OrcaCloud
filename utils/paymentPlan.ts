@@ -54,6 +54,18 @@ export function somarMeses(iso: string, meses: number): string {
     return `${ano}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
 }
 
+/**
+ * Soma dias a uma data `YYYY-MM-DD`. Aritmética em UTC de ponta a ponta
+ * (`Date.UTC` + `getUTC*`), pelo mesmo motivo de `somarMeses`: `new
+ * Date('YYYY-MM-DD')` é UTC e qualquer método local volta um dia em UTC-3.
+ */
+export function somarDias(iso: string, dias: number): string {
+    const [a, m, d] = iso.split('-').map(Number);
+    if (!a || !m || !d) return iso;
+    const alvo = new Date(Date.UTC(a, m - 1, d + dias));
+    return `${alvo.getUTCFullYear()}-${String(alvo.getUTCMonth() + 1).padStart(2, '0')}-${String(alvo.getUTCDate()).padStart(2, '0')}`;
+}
+
 /** Diferença em meses entre duas datas `YYYY-MM-DD` (só ano/mês). */
 export function mesesEntre(isoA: string, isoB: string): number {
     const [aa, ma] = isoA.split('-').map(Number);

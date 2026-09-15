@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     somarMeses,
+    somarDias,
     mesesEntre,
     expandirBloco,
     agruparPlano,
@@ -18,6 +19,28 @@ const bloco = (over: Partial<BlocoPagamento> = {}): BlocoPagamento => ({
     primeiroVencimento: '2026-10-10',
     intervaloMeses: 1,
     ...over,
+});
+
+describe('somarDias', () => {
+    it('soma e subtrai dias atravessando mês, ano e bissexto', () => {
+        expect(somarDias('2026-10-10', 5)).toBe('2026-10-15');
+        expect(somarDias('2026-10-30', 5)).toBe('2026-11-04');
+        expect(somarDias('2026-12-31', 1)).toBe('2027-01-01');
+        expect(somarDias('2028-02-28', 1)).toBe('2028-02-29');
+        expect(somarDias('2026-03-01', -1)).toBe('2026-02-28');
+        expect(somarDias('2026-01-01', -1)).toBe('2025-12-31');
+    });
+
+    // Mesma guarda de fuso do somarMeses: zero dias devolve a mesma data.
+    it('não perde um dia com deslocamento zero (fuso)', () => {
+        expect(somarDias('2026-01-01', 0)).toBe('2026-01-01');
+        expect(somarDias('2026-06-15', 0)).toBe('2026-06-15');
+    });
+
+    it('devolve a entrada intacta se não for YYYY-MM-DD', () => {
+        expect(somarDias('', 3)).toBe('');
+        expect(somarDias('abc', 3)).toBe('abc');
+    });
 });
 
 describe('somarMeses', () => {

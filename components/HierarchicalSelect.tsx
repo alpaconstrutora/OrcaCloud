@@ -22,6 +22,10 @@ export interface HierarchicalSelectItem {
      *  (ex.: exibe "Galeria Altavista", grava o achatado "Obra > Galeria
      *  Altavista", que é o que o registro legado guarda). */
     fullName?: string;
+    /** `false` = só agrupa, não é escolhível (ex.: cabeçalho de organização
+     *  quando a lista junta várias orgs). Clicar no nome expande/recolhe.
+     *  Buscando, some da lista — os filhos aparecem com ele como `parentName`. */
+    selecionavel?: boolean;
 }
 
 interface LinhaHierarquica {
@@ -59,7 +63,7 @@ function linhasHierarquicas(
     const visita = (item: HierarchicalSelectItem, depth: number) => {
         const filhos = sortByCode(filhosDe.get(item.id) ?? []);
         if (filtrando) {
-            if (casa(item)) saida.push({ item, hasChildren: false, depth: 0 });
+            if (casa(item) && item.selecionavel !== false) saida.push({ item, hasChildren: false, depth: 0 });
             for (const f of filhos) visita(f, depth + 1);
             return;
         }
@@ -179,6 +183,15 @@ const HierarchicalSelect: React.FC<Props> = ({
     // Largura da coluna de código = o maior código da lista ("1.2.3.9" não cabe
     // nos 36px que bastavam para "010").
     const larguraCodigo = Math.max(4, ...items.map(i => i.code?.trim().length ?? 0));
+    // Cabeçalho (nó não selecionável — ex.: organização) acima do item, se houver.
+    // Na busca ele vai antes do pai: "Alpa › Impostos › 1.1.1 PIS" e "SPE › Impostos ›
+    // 1.1.1 PIS" deixam de ser duas linhas iguais.
+    const cabecalhoDe = (item: HierarchicalSelectItem): string | null => {
+        for (let atual = item.parentId ? itemPorId.get(item.parentId) : undefined; atual; atual = atual.parentId ? itemPorId.get(atual.parentId) : undefined) {
+            if (atual.selecionavel === false) return atual.name;
+        }
+        return null;
+    };
     const filtrando = q.trim() !== '';
     // Busca no modo hierárquico também acha pelo nome do grupo (a tela de
     // Centro de Custo pesquisa "por código, grupo, centro de custo").
@@ -237,6 +250,15 @@ const HierarchicalSelect: React.FC<Props> = ({
                         ) : (
                             <span className="w-5 h-5 shrink-0" />
                         )}
+                        {item.selecionavel === false ? (
+                            <button
+                                type="button"
+                                onClick={() => alternarExpansao(item.id)}
+                                className="flex-1 min-w-0 flex items-center gap-3 text-left"
+                            >
+                                <span className="text-sm font-semibold text-gray-700 truncate">{item.name}</span>
+                            </button>
+                        ) : (
                         <button
                             type="button"
                             onMouseDown={() => selecionar(item)}
@@ -245,11 +267,14 @@ const HierarchicalSelect: React.FC<Props> = ({
                             {item.code && (
                                 <span className="text-xs font-normal text-gray-500 whitespace-nowrap shrink-0" style={{ width: `${larguraCodigo}ch` }}>{item.code}</span>
                             )}
-                            {filtrando && item.parentName && (
-                                <span className="text-sm font-normal text-gray-500 truncate shrink-0 max-w-[40%]">{item.parentName}</span>
+                            {filtrando && (item.parentName || cabecalhoDe(item)) && (
+                                <span className="text-sm font-normal text-gray-500 truncate shrink-0 max-w-[40%]">
+                                    {[cabecalhoDe(item), cabecalhoDe(item) === item.parentName ? null : item.parentName].filter(Boolean).join(' › ')}
+                                </span>
                             )}
                             <span className="text-sm font-normal text-gray-900 truncate">{item.name}</span>
                         </button>
+                        )}
                     </div>
                 );
             })}

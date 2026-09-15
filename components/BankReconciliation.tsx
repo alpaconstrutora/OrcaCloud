@@ -277,7 +277,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     // Plano de Contas (plano_de_contas) — terceira dimensão contábil, distinta de Centro de Custo e de Categoria.
     // `name` é o nome CRU (o drawer de seleção mostra o código ao lado sozinho); onde a
     // tela exibe texto (célula, filtro, ordenação) usa-se `rotuloPlanoContas` = "código · nome".
-    const [masterPlanoContas, setMasterPlanoContas] = useState<Array<{ id: string; name: string; code?: string | null }>>([]);
+    const [masterPlanoContas, setMasterPlanoContas] = useState<Array<{ id: string; name: string; code?: string | null; organization_id?: string | null }>>([]);
     // Código de origem por lançamento (ex: nº do boleto 0188) — keyed por internal_transaction.id
     const [originCodes, setOriginCodes] = useState<Record<string, string>>({});
     // Nome da contraparte resolvido da origem (ex: fornecedor do boleto) — keyed por internal_transaction.id
@@ -1025,10 +1025,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
     const loadPlanoContas = async (orgId: string) => {
         try {
-            // Mesmo fallback de loadCostCenters: com org; se vier vazio, sem filtro (RLS recorta)
-            let data = await financialRegistryService.listPlanoContas(orgId);
-            if (!data.length) data = await financialRegistryService.listPlanoContas();
-            setMasterPlanoContas(data.map(pc => ({ id: pc.id, name: pc.name, code: pc.code ?? null })));
+            // SEM o fallback "se vier vazio, busca sem filtro" que loadCostCenters tem:
+            // aqui ele trazia o plano das OUTRAS organizações (Alpa + SPE = cada código
+            // duas vezes) e deixava gravar conta de outra org no extrato desta. Org sem
+            // plano de contas = lista vazia, que é a verdade.
+            const data = await financialRegistryService.listPlanoContas(orgId);
+            setMasterPlanoContas(data.map(pc => ({ id: pc.id, name: pc.name, code: pc.code ?? null, organization_id: pc.organization_id ?? null })));
         } catch (error) {
             console.error('Error loading plano de contas:', error);
         }

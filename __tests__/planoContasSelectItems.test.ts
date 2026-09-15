@@ -41,3 +41,28 @@ describe('planoContasSelectItems', () => {
         expect(y11).toMatchObject({ parentId: 'y1', parentName: 'Raiz Y' });
     });
 });
+
+describe('planoContasSelectItems — várias organizações', () => {
+    const duasOrgs = [
+        { id: 'x1', code: '1', name: 'DESPESAS', organization_id: 'X' },
+        { id: 'x11', code: '1.1', name: 'Impostos', organization_id: 'X' },
+        { id: 'y1', code: '1', name: 'DESPESAS', organization_id: 'Y' },
+    ];
+    const nomes = new Map([['X', 'Alpa'], ['Y', 'SPE Garden']]);
+
+    it('cria um cabeçalho não selecionável por org e pendura as raízes nele', () => {
+        const itens = planoContasSelectItems(duasOrgs, nomes);
+        const cab = itens.filter(i => i.selecionavel === false);
+        expect(cab.map(c => c.name)).toEqual(['Alpa', 'SPE Garden']);
+        expect(itens.find(i => i.id === 'x1')).toMatchObject({ parentId: 'org:X', parentName: 'Alpa' });
+        expect(itens.find(i => i.id === 'y1')).toMatchObject({ parentId: 'org:Y', parentName: 'SPE Garden' });
+        // filho continua pendurado na conta-mãe, não na org
+        expect(itens.find(i => i.id === 'x11')).toMatchObject({ parentId: 'x1' });
+    });
+
+    it('uma org só: sem cabeçalho', () => {
+        const itens = planoContasSelectItems(duasOrgs.filter(c => c.organization_id === 'X'), nomes);
+        expect(itens.some(i => i.selecionavel === false)).toBe(false);
+        expect(itens.find(i => i.id === 'x1')?.parentId).toBeNull();
+    });
+});

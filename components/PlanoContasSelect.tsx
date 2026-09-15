@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import HierarchicalSelect, { HierarchicalSelectItem } from './HierarchicalSelect';
+import { useStore } from '../store/useStore';
 
 /**
  * Seletor de Plano de Contas — irmão do `CostCenterSelect` (2026-09-15).
@@ -36,15 +37,29 @@ interface Props {
 
 /** Itens do drawer a partir da lista crua: pai = a conta cujo código é o
  *  deste sem o último segmento (sobe quantos segmentos precisar se houver
- *  buraco na numeração — "1.2.3.9" sem "1.2.3" pendura em "1.2"). */
-export function planoContasSelectItems(planoContas: PlanoContasOption[]): HierarchicalSelectItem[] {
+ *  buraco na numeração — "1.2.3.9" sem "1.2.3" pendura em "1.2").
+ *
+ *  Quando a lista junta MAIS DE UMA organização ("Todas as organizações"),
+ *  cada org tem o próprio "1", "1.1", "1.1.1" — lado a lado parecem itens
+ *  duplicados (reportado em 2026-09-15). Aí a árvore ganha um nível acima:
+ *  um cabeçalho por organização (não selecionável), com o plano dela dentro
+ *  — o mesmo que a tela Minha Organização › Plano de Contas faz com a coluna
+ *  Organização. `orgNames` dá o nome; sem ele o cabeçalho sai "Organização". */
+export function planoContasSelectItems(
+    planoContas: PlanoContasOption[],
+    orgNames: ReadonlyMap<string, string> = new Map(),
+): HierarchicalSelectItem[] {
     const chave = (org: string | null | undefined, code: string) => `${org ?? ''}|${code}`;
     const porCodigo = new Map<string, PlanoContasOption>();
     for (const pc of planoContas) {
         const code = pc.code?.trim();
         if (code && !porCodigo.has(chave(pc.organization_id, code))) porCodigo.set(chave(pc.organization_id, code), pc);
     }
-    return planoContas.map(pc => {
+    const orgs = [...new Set(planoContas.map(pc => pc.organization_id ?? ''))];
+    const agruparPorOrg = orgs.length > 1;
+    const orgNodeId = (org: string | null | undefined) => `org:${org ?? ''}`;
+
+    const itens: HierarchicalSelectItem[] = planoContas.map(pc => {
         let pai: PlanoContasOption | null = null;
         const partes = (pc.code?.trim() ?? '').split('.').filter(Boolean);
         while (partes.length > 1 && !pai) {
@@ -52,15 +67,26 @@ export function planoContasSelectItems(planoContas: PlanoContasOption[]): Hierar
             pai = porCodigo.get(chave(pc.organization_id, partes.join('.'))) ?? null;
         }
         if (pai?.id === pc.id) pai = null;
-        return { id: pc.id, code: pc.code ?? null, name: pc.name, parentId: pai?.id ?? null, parentName: pai?.name ?? null };
+        if (pai) return { id: pc.id, code: pc.code ?? null, name: pc.name, parentId: pai.id, parentName: pai.name };
+        if (agruparPorOrg) {
+            return { id: pc.id, code: pc.code ?? null, name: pc.name, parentId: orgNodeId(pc.organization_id), parentName: orgNames.get(pc.organization_id ?? '') ?? 'Organização' };
+        }
+        return { id: pc.id, code: pc.code ?? null, name: pc.name, parentId: null, parentName: null };
     });
+    if (!agruparPorOrg) return itens;
+    const cabecalhos: HierarchicalSelectItem[] = orgs.map(org => ({
+        id: orgNodeId(org), code: null, name: orgNames.get(org) ?? 'Organização', parentId: null, parentName: null, selecionavel: false,
+    }));
+    return [...cabecalhos, ...itens];
 }
 
 const PlanoContasSelect: React.FC<Props> = ({
     planoContas, value, onChange, placeholder = '—', size, disabled,
     hoverCls = 'hover:bg-gray-50',
 }) => {
-    const items = useMemo(() => planoContasSelectItems(planoContas), [planoContas]);
+    const organizations = useStore(s => s.organizations);
+    const orgNames = useMemo(() => new Map(organizations.map(o => [o.id, o.name])), [organizations]);
+    const items = useMemo(() => planoContasSelectItems(planoContas, orgNames), [planoContas, orgNames]);
     return (
         <HierarchicalSelect
             items={items}

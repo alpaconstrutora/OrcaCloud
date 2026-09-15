@@ -48,6 +48,13 @@ interface Props {
      *  ordenação e da busca. Quando `value === allOption.id`, o gatilho mostra
      *  o rótulo dela. Central de Clientes (2026-09-14). */
     allOption?: { id: string; label: string };
+    /** Texto mostrado no gatilho quando `value` não resolve para nenhum cliente da
+     *  lista (ex.: Extrato guarda o NOME da contraparte, e ele pode não estar no
+     *  cadastro). Sem isso o gatilho cai no placeholder, como se estivesse vazio. */
+    fallbackLabel?: string;
+    /** Célula de tabela: sem padding interno no gatilho (o `pl-3 pr-2` é de campo
+     *  de formulário) e sem ícone. */
+    compact?: boolean;
 }
 
 type ColKey = 'name' | 'document' | 'city';
@@ -58,6 +65,7 @@ const TRIGGER_DEFAULT = 'w-full h-9 bg-gray-50 border border-gray-200 rounded-[6
 const ClientSelect: React.FC<Props> = ({
     clients, value, onChange, placeholder = 'Selecionar cliente...', disabled = false, icon: Icon = User, triggerClassName = TRIGGER_DEFAULT,
     allowClear = true, disabledIds, disabledHint = 'indisponível', title = 'Selecionar Cliente', allOption,
+    fallbackLabel, compact = false,
 }) => {
     const [open, setOpen] = useState(false);
     // O drawer sai por PORTAL em `document.body`, montado só enquanto aberto.
@@ -151,17 +159,19 @@ const ClientSelect: React.FC<Props> = ({
                     onClick={() => setOpen(true)}
                     aria-haspopup="dialog"
                     aria-expanded={open}
-                    className={`${triggerClassName} flex items-center justify-between gap-2 text-left cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${Icon ? 'pl-9' : 'pl-3'} pr-2`}
+                    className={`${triggerClassName} flex items-center justify-between gap-2 text-left cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${compact ? '' : `${Icon ? 'pl-9' : 'pl-3'} pr-2`}`}
                 >
                     {allSelected ? (
                         <span className="text-gray-900 truncate flex-1 min-w-0">{allOption.label}</span>
                     ) : selected ? (
                         <span className="flex items-center gap-2 flex-1 min-w-0">
                             <span className="text-gray-900 truncate">{selected.name}</span>
-                            {selected.document && (
+                            {selected.document && !compact && (
                                 <span className="text-xs font-normal text-gray-400 truncate shrink-0">{selected.document}</span>
                             )}
                         </span>
+                    ) : fallbackLabel ? (
+                        <span className="text-gray-900 truncate flex-1 min-w-0" title={fallbackLabel}>{fallbackLabel}</span>
                     ) : (
                         <span className="text-gray-400 truncate">{placeholder}</span>
                     )}

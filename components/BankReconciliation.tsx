@@ -7,6 +7,8 @@ import {
     LayoutGrid, List, Users, UserPlus, ExternalLink, Rows3, Pencil, MoveHorizontal, EyeOff, Brain
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import type { ClientOption } from './ClientSelect';
+import type { SupplierOption } from './SupplierSelect';
 import RulesTab, { RuleFormModal } from './reconciliation/RulesTab';
 import CategoriesTab from './reconciliation/CategoriesTab';
 import { LazySelect, type LazyOption } from './reconciliation/LazySelect';
@@ -273,6 +275,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const [masterClients, setMasterClients] = useState<string[]>([]);
     const [clientNameById, setClientNameById] = useState<Record<string, string>>({});
     const [masterEmployees, setMasterEmployees] = useState<string[]>([]);
+    // Cadastros com id/documento para os drawers de Cliente e Credor nas células
+    // (ClientSelect/SupplierSelect — o padrão do app). O extrato continua gravando o
+    // NOME da contraparte; os drawers só escolhem. Credor = fornecedores + colaboradores.
+    const [clienteRegistros, setClienteRegistros] = useState<ClientOption[]>([]);
+    const [supplierRegistros, setSupplierRegistros] = useState<SupplierOption[]>([]);
+    const [employeeRegistros, setEmployeeRegistros] = useState<SupplierOption[]>([]);
     const [masterProjects, setMasterProjects] = useState<Array<{ id: string; name: string; organization_id?: string | null }>>([]);
     // Guarda código/grupo além do nome: o CostCenterSelect da edição em lote monta o accordion com isso.
     const [masterCostCenters, setMasterCostCenters] = useState<Array<{ id: string; name: string; code?: string | null; parent_id?: string | null; parent_name?: string | null; organization_id?: string | null }>>([]);
@@ -659,12 +667,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         return Array.from(ents).sort();
     }, [uniqueSuppliers, masterEmployees]);
 
-    const uniqueBankClients = useMemo(() => {
-        const ents = new Set<string>();
-        masterClients.forEach(c => ents.add(c));
-        // counterparty_name do extrato bancário NÃO é incluído: pode vir sujo do banco
-        return Array.from(ents).sort();
-    }, [masterClients]);
 
     // Cliente/Credor presentes no extrato bancário (para o filtro de contraparte)
     const uniqueBankCounterparties = useMemo(() => {
@@ -685,13 +687,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         () => uniqueCategories.map(c => ({ value: c, label: c })),
         [uniqueCategories]
     );
-    const credorOptions = useMemo<LazyOption[]>(
-        () => uniqueCredores.map(n => ({ value: n, label: supplierDisplayByName[n] || n })),
-        [uniqueCredores, supplierDisplayByName]
-    );
-    const clienteOptions = useMemo<LazyOption[]>(
-        () => [...new Set([...uniqueClients, ...uniqueBankClients])].sort().map(n => ({ value: n, label: n })),
-        [uniqueClients, uniqueBankClients]
+    // Cliente/Credor nas células abrem os drawers padrão (ClientSelect/SupplierSelect),
+    // alimentados pelos cadastros com id/documento — não mais por lista de nomes.
+    const credorRegistros = useMemo<SupplierOption[]>(
+        () => [...supplierRegistros, ...employeeRegistros],
+        [supplierRegistros, employeeRegistros]
     );
 
     const [showInternalTxModal, setShowInternalTxModal] = useState(false);
@@ -921,13 +921,14 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         try {
             const { data } = await supabase
                 .from('clients')
-                .select('id, name')
+                .select('id, name, document, email, city, state')
                 .or(`organization_id.in.(${orgIds.join(',')}),organization_id.is.null`)
                 .order('name', { ascending: true })
                 .limit(10000);
             if (data) {
                 setMasterClients(data.map(c => c.name));
                 setClientNameById(Object.fromEntries(data.map(c => [c.id, c.name])));
+                setClienteRegistros(data.map(c => ({ id: c.id, name: c.name, document: c.document, email: c.email, city: c.city, state: c.state })));
             }
         } catch (error) {
             console.error('Error loading clients:', error);
@@ -938,7 +939,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         try {
             const { data, error } = await supabase
                 .from('suppliers')
-                .select('id, name, nickname')
+                .select('id, name, nickname, document, category')
                 .or(`organization_id.in.(${orgIds.join(',')}),organization_id.is.null`)
                 .order('name', { ascending: true })
                 .limit(10000);
@@ -946,6 +947,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             if (error) throw error;
             if (data) {
                 setMasterSuppliers(data.map(s => s.name));
+                setSupplierRegistros(data.map(s => ({ id: s.id, name: s.name, nickname: s.nickname, document: s.document, category: s.category })));
                 setSupplierNameById(Object.fromEntries(data.map(s => [s.id, s.name])));
                 const mode = appSettingsService.get().supplierNameDisplay;
                 setSupplierDisplayByName(Object.fromEntries(
@@ -1013,11 +1015,15 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         try {
             const { data } = await supabase
                 .from('employees')
-                .select('name')
+                .select('id, name')
                 .in('org_id', orgIds)
                 .eq('status', 'ATIVO')
                 .order('name', { ascending: true });
-            if (data) setMasterEmployees(data.map(e => e.name));
+            if (data) {
+                setMasterEmployees(data.map(e => e.name));
+                // Colaborador entra no drawer de Credor com a categoria "Colaborador" (sem documento).
+                setEmployeeRegistros(data.map(e => ({ id: `emp:${e.id}`, name: e.name, category: 'Colaborador' })));
+            }
         } catch (error) {
             console.error('Error loading employees:', error);
         }
@@ -3932,7 +3938,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     const cpRegistered = tx.direction === 'DEBIT' ? masterSuppliersLower.has(cpKey) : masterClientsLower.has(cpKey);
                                                     const statementCtx: StatementRowCtx = {
                                                         cpRegistered,
-                                                        clienteOptions, credorOptions, categoryOptions, projectOptions, costCenterOptions, planoContasOptions,
+                                                        categoryOptions, projectOptions, costCenterOptions, planoContasOptions,
+                                                        clienteRegistros, credorRegistros,
                                                         projectName, costCenterName, planoContasName,
                                                         onUpdateCounterparty: handleUpdateBankCounterparty,
                                                         onUpdateCategory: handleUpdateBankCategory,
@@ -4230,7 +4237,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     // +2: checkbox + espaçador (não estão em visibleColumns)
                                                     const visibleColCount = 2 + PENDING_BANK_COLUMNS.filter(c => pendingBankColumns.visibleColumns.includes(c.key)).length;
                                                     const pendingBankCtx: PendingBankRowCtx = {
-                                                        clienteOptions, credorOptions, categoryOptions, projectOptions, costCenterOptions,
+                                                        categoryOptions, projectOptions, costCenterOptions,
+                                                        clienteRegistros, credorRegistros,
                                                         projectName, costCenterName,
                                                         onUpdateCounterparty: handleUpdateBankCounterparty,
                                                         onUpdateCategory: handleUpdateBankCategory,

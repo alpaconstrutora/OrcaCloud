@@ -6,6 +6,8 @@ import {
 import ActionIconButton from '../ui/ActionIconButton';
 import { formatMoney, formatDateBR } from '../ui/Format';
 import { LazySelect, type LazyOption } from './LazySelect';
+import ClientSelect, { type ClientOption } from '../ClientSelect';
+import SupplierSelect, { type SupplierOption } from '../SupplierSelect';
 import type { ColumnConfig } from '../ui/TableUtils';
 import type { FilterFieldConfig } from '../ui/FilterUtils';
 import type { BankTransaction, InternalTransaction, BankTransactionStatus } from '../../types';
@@ -25,6 +27,52 @@ import type { BankTransaction, InternalTransaction, BankTransactionStatus } from
  * prop é uma chance de errar a ligação. As abas que valiam a pena (Regras, Categorias,
  * Conciliados) já saíram; o resto do ganho estava aqui.
  */
+
+// Cliente/Credor nas células abrem os drawers padrão do app (ClientSelect /
+// SupplierSelect) em vez de <select> nativo — pedido de 2026-09-15 ("por que ao
+// clicar em cliente e fornecedor não estão abrindo drawer como já padronizado?").
+// O extrato guarda o NOME da contraparte (bank_transactions.counterparty_name),
+// então o drawer resolve nome → id para destacar o selecionado e id → nome ao
+// escolher. Nome fora do cadastro continua aparecendo (fallbackLabel) — e o botão
+// de "cadastrar" ao lado continua sendo o caminho para regularizar.
+const CELULA_CONTRAPARTE_CLS = 'w-full text-sm font-normal border-b border-dashed bg-transparent focus:outline-none cursor-pointer min-w-0';
+const idPorNome = (registros: { id: string; name: string }[], nome?: string | null): string => {
+    const alvo = (nome ?? '').trim().toLowerCase();
+    if (!alvo) return '';
+    return registros.find(r => r.name.trim().toLowerCase() === alvo)?.id ?? '';
+};
+const nomePorId = (registros: { id: string; name: string }[], id: string): string =>
+    registros.find(r => r.id === id)?.name ?? '';
+
+function CelulaCliente({ tx, registros, onChange }: { tx: BankTransaction; registros: ClientOption[]; onChange: (nome: string) => void }) {
+    return (
+        <ClientSelect
+            clients={registros}
+            value={idPorNome(registros, tx.counterparty_name)}
+            onChange={id => onChange(nomePorId(registros, id))}
+            placeholder="— selecionar"
+            icon={null}
+            compact
+            fallbackLabel={tx.counterparty_name || undefined}
+            triggerClassName={`${CELULA_CONTRAPARTE_CLS} ${tx.counterparty_name ? 'text-gray-700 border-gray-300' : 'text-gray-400 border-gray-200'}`}
+        />
+    );
+}
+
+function CelulaCredor({ tx, registros, onChange }: { tx: BankTransaction; registros: SupplierOption[]; onChange: (nome: string) => void }) {
+    return (
+        <SupplierSelect
+            suppliers={registros}
+            value={idPorNome(registros, tx.counterparty_name)}
+            onChange={id => onChange(nomePorId(registros, id))}
+            placeholder="— selecionar"
+            title="Selecionar Credor"
+            compact
+            fallbackLabel={tx.counterparty_name || undefined}
+            triggerClassName={`${CELULA_CONTRAPARTE_CLS} ${tx.counterparty_name ? 'text-gray-700 border-gray-300' : 'text-gray-400 border-gray-200'}`}
+        />
+    );
+}
 
 // Id gravado que não está em nenhuma lista carregada = dimensão de uma organização que
 // esta conta NÃO atende (ver "Atende também" na conta de pagamento). Antes aparecia o
@@ -291,8 +339,9 @@ export const DEFAULT_STATEMENT_COL_WIDTHS: Record<string, number> = {
 // existe dentro do componente (opções de <select>, handlers, resolução de nome).
 export interface StatementRowCtx {
     cpRegistered: boolean;
-    clienteOptions: LazyOption[];
-    credorOptions: LazyOption[];
+    /** Cadastros com id/documento — alimentam os drawers de Cliente e Credor. */
+    clienteRegistros: ClientOption[];
+    credorRegistros: SupplierOption[];
     categoryOptions: LazyOption[];
     projectOptions: LazyOption[];
     costCenterOptions: LazyOption[];
@@ -324,14 +373,9 @@ export function renderStatementCell(key: string, tx: BankTransaction, ctx: State
         case 'client':
             return tx.direction === 'CREDIT' ? (
                 <div className="flex items-center gap-1.5 min-w-0">
-                    <LazySelect
-                        value={tx.counterparty_name || ''}
-                        currentLabel={tx.counterparty_name || ''}
-                        onChange={(v) => ctx.onUpdateCounterparty(tx.id, v)}
-                        options={ctx.clienteOptions}
-                        placeholder="— selecionar"
-                        className={`text-sm font-normal border-b border-dashed bg-transparent focus:outline-none cursor-pointer flex-1 min-w-0 truncate ${tx.counterparty_name ? 'text-gray-700 border-gray-300' : 'text-gray-400 border-gray-200'}`}
-                    />
+                    <div className="flex-1 min-w-0" onClick={e => e.stopPropagation()}>
+                        <CelulaCliente tx={tx} registros={ctx.clienteRegistros} onChange={v => ctx.onUpdateCounterparty(tx.id, v)} />
+                    </div>
                     {!ctx.cpRegistered && (
                         <button
                             onClick={() => ctx.onRegisterEntity(tx)}
@@ -348,14 +392,9 @@ export function renderStatementCell(key: string, tx: BankTransaction, ctx: State
         case 'creditor':
             return tx.direction === 'DEBIT' ? (
                 <div className="flex items-center gap-1.5 min-w-0">
-                    <LazySelect
-                        value={tx.counterparty_name || ''}
-                        currentLabel={tx.counterparty_name || ''}
-                        onChange={(v) => ctx.onUpdateCounterparty(tx.id, v)}
-                        options={ctx.credorOptions}
-                        placeholder="— selecionar"
-                        className={`text-sm font-normal border-b border-dashed bg-transparent focus:outline-none cursor-pointer flex-1 min-w-0 truncate ${tx.counterparty_name ? 'text-gray-700 border-gray-300' : 'text-gray-400 border-gray-200'}`}
-                    />
+                    <div className="flex-1 min-w-0" onClick={e => e.stopPropagation()}>
+                        <CelulaCredor tx={tx} registros={ctx.credorRegistros} onChange={v => ctx.onUpdateCounterparty(tx.id, v)} />
+                    </div>
                     {!ctx.cpRegistered && (
                         <button
                             onClick={() => ctx.onRegisterEntity(tx)}
@@ -454,8 +493,8 @@ export function renderStatementCell(key: string, tx: BankTransaction, ctx: State
 // Conteúdo de cada <td> da tabela de Pendentes › Extrato Bancário, por coluna —
 // mesmo motivo de renderStatementCell acima.
 export interface PendingBankRowCtx {
-    clienteOptions: LazyOption[];
-    credorOptions: LazyOption[];
+    clienteRegistros: ClientOption[];
+    credorRegistros: SupplierOption[];
     categoryOptions: LazyOption[];
     projectOptions: LazyOption[];
     costCenterOptions: LazyOption[];
@@ -471,14 +510,11 @@ export function renderPendingBankCell(key: string, tx: BankTransaction, ctx: Pen
     switch (key) {
         case 'counterparty':
             return (
-                <LazySelect
-                    value={tx.counterparty_name || ''}
-                    currentLabel={tx.counterparty_name || ''}
-                    onChange={(v) => ctx.onUpdateCounterparty(tx.id, v)}
-                    options={tx.direction === 'DEBIT' ? ctx.credorOptions : ctx.clienteOptions}
-                    placeholder={tx.direction === 'DEBIT' ? 'Credor' : 'Cliente'}
-                    className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.counterparty_name ? 'text-gray-700' : 'text-gray-400'}`}
-                />
+                <div className="min-w-0" onClick={e => e.stopPropagation()}>
+                    {tx.direction === 'DEBIT'
+                        ? <CelulaCredor tx={tx} registros={ctx.credorRegistros} onChange={v => ctx.onUpdateCounterparty(tx.id, v)} />
+                        : <CelulaCliente tx={tx} registros={ctx.clienteRegistros} onChange={v => ctx.onUpdateCounterparty(tx.id, v)} />}
+                </div>
             );
         case 'category':
             return (

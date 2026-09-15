@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Search, Tag } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 import { SortableHeader } from './ui/TableUtils';
@@ -30,6 +31,16 @@ interface Props {
     /** 'md' (padrão) é o campo de formulário; 'sm' é o gatilho compacto h-9
      *  para barras/linhas, no recorte dos outros controles. */
     size?: 'md' | 'sm';
+    /** Classe do gatilho quando a tela tem a própria régua (substitui a de `size`). */
+    triggerClassName?: string;
+    /** Célula de tabela: gatilho sem padding interno e sem o documento ao lado do nome. */
+    compact?: boolean;
+    /** Texto do gatilho quando `value` não resolve para ninguém da lista (o Extrato
+     *  guarda o NOME da contraparte, que pode não estar no cadastro). */
+    fallbackLabel?: string;
+    /** Título do drawer — "Selecionar Fornecedor" por padrão; o Extrato usa
+     *  "Selecionar Credor" (fornecedores + colaboradores). */
+    title?: string;
 }
 
 type ColKey = 'name' | 'document' | 'category';
@@ -37,8 +48,25 @@ const SEM_CATEGORIA = '—';
 
 const SupplierSelect: React.FC<Props> = ({
     suppliers, value, onChange, placeholder = 'Selecione um fornecedor', disabled = false, size = 'md',
+    triggerClassName, compact = false, fallbackLabel, title = 'Selecionar Fornecedor',
 }) => {
     const [open, setOpen] = useState(false);
+    // Drawer por PORTAL em `document.body`, montado só enquanto aberto — mesmo motivo
+    // do `ClientSelect`: quem usa este campo costuma estar dentro de um `Sheet`/aba com
+    // `transform`, e um `fixed` filho ficaria preso ali. `shown` vira true um frame
+    // depois para a transição de entrada acontecer.
+    const [mounted, setMounted] = useState(false);
+    const [shown, setShown] = useState(false);
+    useEffect(() => {
+        if (open) {
+            setMounted(true);
+            const r = requestAnimationFrame(() => setShown(true));
+            return () => cancelAnimationFrame(r);
+        }
+        setShown(false);
+        const t = window.setTimeout(() => setMounted(false), 300);
+        return () => window.clearTimeout(t);
+    }, [open]);
     // Busca/filtro/ordenação transitórios de propósito (exceção ao §3 do
     // guia, que é para filtro de TELA): zeram ao fechar; se persistissem, o
     // seletor reabriria filtrado e esconderia fornecedores sem aviso.
@@ -102,19 +130,23 @@ const SupplierSelect: React.FC<Props> = ({
                 type="button"
                 disabled={disabled}
                 onClick={() => setOpen(true)}
+                aria-haspopup="dialog"
+                aria-expanded={open}
                 className={`w-full flex items-center justify-between gap-2 text-left focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                    size === 'sm'
+                    triggerClassName ?? (size === 'sm'
                         ? 'h-9 bg-gray-50 border border-gray-200 rounded-[6px] pl-3 pr-2'
-                        : 'bg-gray-50/50 border border-gray-100 rounded-2xl pl-4 pr-3 py-4'
+                        : 'bg-gray-50/50 border border-gray-100 rounded-2xl pl-4 pr-3 py-4')
                 }`}
             >
                 {selected ? (
                     <span className="flex items-center gap-2 flex-1 min-w-0">
-                        <span className={`text-sm text-gray-900 truncate ${size === 'sm' ? 'font-medium' : 'font-bold'}`}>{selected.name}</span>
-                        {selected.document && (
+                        <span className={`text-sm text-gray-900 truncate ${compact ? 'font-normal' : size === 'sm' ? 'font-medium' : 'font-bold'}`}>{selected.name}</span>
+                        {selected.document && !compact && (
                             <span className="text-xs font-normal text-gray-400 truncate shrink-0">{selected.document}</span>
                         )}
                     </span>
+                ) : fallbackLabel ? (
+                    <span className="text-sm font-normal text-gray-900 truncate flex-1 min-w-0" title={fallbackLabel}>{fallbackLabel}</span>
                 ) : (
                     <span className="text-sm text-gray-400 truncate">{placeholder}</span>
                 )}
@@ -123,10 +155,12 @@ const SupplierSelect: React.FC<Props> = ({
 
             {/* `4xl` (896px): pedido expresso de 11/09/2026 — em 672px o Nome
                 cortava ("ALINE FACILITE FERRAGENS E FERRAM..."). Ver o aviso em
-                `ui/sheet.tsx`. */}
-            <Sheet open={open} onClose={fechar} side="right" size="4xl">
+                `ui/sheet.tsx`. zIndex 10000: por portal, fora do overlay que o abriu
+                (mesma camada do ClientSelect). */}
+            {mounted && createPortal(
+            <Sheet open={shown} onClose={fechar} side="right" size="4xl" zIndex={10000}>
                 <SheetHeader onClose={fechar}>
-                    <SheetTitle>Selecionar Fornecedor</SheetTitle>
+                    <SheetTitle>{title}</SheetTitle>
                     <SheetDescription>Busque por nome ou CNPJ/CPF, filtre pela categoria e clique na linha para selecionar.</SheetDescription>
                 </SheetHeader>
 
@@ -202,7 +236,8 @@ const SupplierSelect: React.FC<Props> = ({
                         </tbody>
                     </table>
                 </SheetPanel>
-            </Sheet>
+            </Sheet>,
+            document.body)}
         </div>
     );
 };

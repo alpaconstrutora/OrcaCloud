@@ -11,8 +11,12 @@ import { desenharUnifilar, medidasDoUnifilar, montarUnifilar, rodapeDoUnifilar }
  * `Desenhista`, e aqui o desenhista escreve SVG. Um `<svg>` por quadro, em
  * mm × `PX_POR_MM`, rolando na horizontal quando há muitos circuitos — o
  * diagrama não quebra linha, porque o barramento é um só.
+ *
+ * 15/09/2026: saiu do drawer (672 px) para uma TELA própria — a escala subiu
+ * de 3,4 para 4,4 px/mm, porque os textos de 9 px do ramal eram o preço da
+ * largura curta, não uma escolha.
  */
-const PX_POR_MM = 3.4;
+const PX_POR_MM = 4.4;
 
 /** Coleta as primitivas do `Desenhista` como nós SVG. */
 class DesenhistaSvg implements Desenhista {

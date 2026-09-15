@@ -1142,21 +1142,28 @@ describe('BlueprintEditor · ribbon', () => {
     expect(within(drawer).getByRole('spinbutton', { name: /carga máxima por circuito/i })).toBeDisabled();
   });
 
-  it('"Quadro de cargas" (aba Instalações) abre em DRAWER, não no dock — é onde se edita a elétrica', async () => {
+  it('"Quadro de cargas" (aba Instalações) abre uma TELA própria — título, Voltar, sem drawer nem dock; o editor fica escondido e volta inteiro', async () => {
+    // 15/09/2026: "quadro de cargas e unifilar em drawer ficou muito ruim
+    // visualização. vamos criar uma tela nova para cada um". Tela em fluxo
+    // (h1 + Voltar), nunca `fixed inset-0`, nunca Sheet.
     await montar();
     await abrirAba(/^instalações$/i);
     await userEvent.setup().click(botao(/^quadro de cargas/i));
-    const drawer = await screen.findByRole('dialog');
-    expect(drawer).toHaveTextContent(/quadro de cargas e nbr 5410/i);
-    expect(drawer).toHaveTextContent(/conferência nbr 5410/i);
-    // 14/09/2026: a emissão com ART saiu deste drawer — "não tem necessidade
-    // além de tornar o drawer excessivamente longo".
-    expect(drawer).not.toHaveTextContent(/responsável técnico/i);
-    expect(within(drawer).queryByLabelText(/número da art/i)).toBeNull();
+    const titulo = await screen.findByRole('heading', { level: 1, name: /quadro de cargas e nbr 5410/i });
+    const tela = titulo.closest('[data-tela="quadro-de-cargas"]') as HTMLElement;
+    expect(tela).not.toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByRole('region', { name: /^relatório:/i })).not.toBeInTheDocument();
-    expect(botao(/^quadro de cargas/i)).toHaveAttribute('aria-pressed', 'true');
-
-    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^fechar$/i }));
+    expect(tela).toHaveTextContent(/conferência nbr 5410/i);
+    // A emissão com ART não mora aqui (14/09/2026).
+    expect(tela).not.toHaveTextContent(/responsável técnico/i);
+    expect(within(tela).queryByLabelText(/número da art/i)).toBeNull();
+    // O editor está montado, mas escondido: a barra some da árvore acessível…
+    expect(screen.queryByRole('toolbar')).toBeNull();
+    // …e volta com o botão Voltar, com o botão do ribbon apagado.
+    await userEvent.setup().click(within(tela).getByRole('button', { name: /^voltar ao editor$/i }));
+    expect(screen.getByRole('toolbar')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1, name: /quadro de cargas/i })).toBeNull();
     expect(botao(/^quadro de cargas/i)).toHaveAttribute('aria-pressed', 'false');
   });
 
@@ -1191,14 +1198,16 @@ describe('BlueprintEditor · ribbon', () => {
     expect(botao(/^projeto executivo \(art\)/i)).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('"Diagrama unifilar" (aba Instalações) abre em drawer: sem quadro pede um; com quadro e circuito desenha o SVG com C1 e o geral', async () => {
+  it('"Diagrama unifilar" (aba Instalações) abre uma TELA própria: sem quadro pede um; Voltar devolve o editor', async () => {
     await montar();
     await abrirAba(/^instalações$/i);
     await userEvent.setup().click(botao(/^diagrama unifilar/i));
-    const drawer = await screen.findByRole('dialog');
-    expect(drawer).toHaveTextContent(/diagrama unifilar/i);
-    expect(drawer).toHaveTextContent(/nenhum quadro de distribuição ainda/i);
-    expect(botao(/^diagrama unifilar/i)).toHaveAttribute('aria-pressed', 'true');
+    const titulo = await screen.findByRole('heading', { level: 1, name: /diagrama unifilar/i });
+    const tela = titulo.closest('[data-tela="unifilar"]') as HTMLElement;
+    expect(tela).toHaveTextContent(/nenhum quadro de distribuição ainda/i);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await userEvent.setup().click(within(tela).getByRole('button', { name: /^voltar ao editor$/i }));
+    expect(botao(/^diagrama unifilar/i)).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('com QDC e um circuito, o unifilar mostra o quadro, o ramal C1 e os condutores', async () => {
@@ -1213,14 +1222,15 @@ describe('BlueprintEditor · ribbon', () => {
     await montar();
     await abrirAba(/^instalações$/i);
     await userEvent.setup().click(botao(/^diagrama unifilar/i));
-    const drawer = await screen.findByRole('dialog');
-    const svg = within(drawer).getByRole('img', { name: /unifilar do quadro qdc/i });
+    const titulo = await screen.findByRole('heading', { level: 1, name: /diagrama unifilar/i });
+    const tela = titulo.closest('[data-tela="unifilar"]') as HTMLElement;
+    const svg = within(tela).getByRole('img', { name: /unifilar do quadro qdc/i });
     expect(svg).toHaveTextContent(/QDC — FN 127 V/);
     expect(svg).toHaveTextContent(/GERAL \d+ A/);
     expect(svg).toHaveTextContent('C1');
     expect(svg).toHaveTextContent('16 A');
     expect(svg).toHaveTextContent('2#2,5 + T2,5');
-    expect(drawer).toHaveTextContent(/1 circuito\(s\) · instalado 600 VA/);
+    expect(tela).toHaveTextContent(/1 circuito\(s\) · instalado 600 VA/);
   });
 
   it('"Dados do lote" (aba Terreno) abre o painel do terreno como tarefa', async () => {

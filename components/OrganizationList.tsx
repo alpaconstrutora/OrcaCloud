@@ -781,6 +781,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         items={activeTab === 'accounts' ? paymentAccounts : chartOfAccounts}
                         showDescription={activeTab === 'accounts'}
                         showBankDetails={activeTab === 'accounts'}
+                        sheetLabels={activeTab === 'accounts' ? { create: 'Nova conta de pagamento', edit: 'Editar conta de pagamento' } : { create: 'Nova conta', edit: 'Editar conta' }}
                         showCode={true}
                         showNature={activeTab === 'chart_of_accounts'}
                         onSave={async (item) => {

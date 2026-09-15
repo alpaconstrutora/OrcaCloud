@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Plus, Trash2, Save, Search, AlertCircle, Download, FileDown, Upload, Hash, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown, MoveHorizontal } from 'lucide-react';
+import { Plus, Search, AlertCircle, Download, FileDown, Upload, Hash, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown, MoveHorizontal } from 'lucide-react';
 import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
-import Button from './ui/Button';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import { useConfirm } from './ui/confirm';
 import { KpiCard } from './ui/KpiCard';
 
@@ -74,7 +74,7 @@ function renderRegistryCell(
                     {hasChildren ? (
                         <button
                             type="button"
-                            onClick={() => toggleExpand(item.id)}
+                            onClick={(e) => { e.stopPropagation(); toggleExpand(item.id); }}
                             className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-700 shrink-0 rounded transition-colors"
                         >
                             {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
@@ -134,6 +134,9 @@ interface FinancialRegistryManagerProps {
      *  não pergunta (CLAUDE.md REGRA #5). */
     organizations?: OrgOption[];
     defaultOrganizationId?: string;
+    /** Títulos do drawer de criar/editar — a tela diz o nome da entidade no gênero certo
+     *  ("Nova conta" / "Editar conta"). Sem isso, "Novo registro" / "Editar registro". */
+    sheetLabels?: { create: string; edit: string };
     /** Coluna Organização. Em "Todas as organizações" a lista junta registros
      *  de várias orgs, com códigos repetidos entre elas (toda org tem 1.1.1) —
      *  a coluna é o que os distingue, e a árvore passa a ser por org + código. */
@@ -159,6 +162,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
     defaultOrganizationId,
     showOrganization = false,
     organizationNameById,
+    sheetLabels = { create: 'Novo registro', edit: 'Editar registro' },
 }) => {
     const orgNameOf = (item: RegistryItem) => (item.organization_id ? organizationNameById?.get(item.organization_id) : undefined);
     const [isEditing, setIsEditing] = useState<string | null>(null);
@@ -524,134 +528,6 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
 
                 {/* List Content */}
                 <div>
-                {(isAdding || isEditing) && (
-                    <div className="p-8 border-b border-gray-100 bg-blue-50/30">
-                        <form onSubmit={handleSubmit} className="p-8 bg-white border border-blue-100 rounded-3xl shadow-xl shadow-blue-900/5 animate-in fade-in slide-in-from-top-4 duration-300">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className={showCode ? '' : 'md:col-span-2'}>
-                                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Nome / Identificação</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={formData.name || ''}
-                                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold text-gray-700"
-                                        placeholder="Ex: Banco Itaú"
-                                    />
-                                </div>
-                                {showCode && (
-                                    <div>
-                                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Código Contábil</label>
-                                        <input
-                                            type="text"
-                                            required
-                                            value={formData.code || ''}
-                                            onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold text-gray-700"
-                                            placeholder="Ex: 3.01.02"
-                                        />
-                                    </div>
-                                )}
-                                {showNature && (
-                                    <div>
-                                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Natureza</label>
-                                        <select
-                                            value={formData.accounting_nature || ''}
-                                            onChange={(e) => setFormData({ ...formData, accounting_nature: (e.target.value || undefined) as 'CREDORA' | 'DEVEDORA' | undefined })}
-                                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold text-gray-700"
-                                        >
-                                            <option value="">Selecione…</option>
-                                            <option value="CREDORA">Credora</option>
-                                            <option value="DEVEDORA">Devedora</option>
-                                        </select>
-                                    </div>
-                                )}
-                                {showDescription && (
-                                    <div className={showBankDetails ? '' : 'md:col-span-2'}>
-                                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Descrição Adicional</label>
-                                        <input
-                                            type="text"
-                                            value={formData.description || ''}
-                                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold text-gray-700"
-                                            placeholder="Opcional..."
-                                        />
-                                    </div>
-                                )}
-                                {showBankDetails && (
-                                    <>
-                                        <div>
-                                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Instituição Bancária</label>
-                                            <input
-                                                type="text"
-                                                value={formData.bank || ''}
-                                                onChange={(e) => setFormData({ ...formData, bank: e.target.value })}
-                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold text-gray-700"
-                                                placeholder="Ex: Itaú, 341..."
-                                            />
-                                        </div>
-                                        {organizations && organizations.length > 0 && (
-                                            <div className="md:col-span-2">
-                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Organização</label>
-                                                <select
-                                                    required
-                                                    value={formData.organization_id || ''}
-                                                    onChange={(e) => setFormData({ ...formData, organization_id: e.target.value })}
-                                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold text-gray-700"
-                                                >
-                                                    <option value="">Selecione uma organização…</option>
-                                                    {organizations.map(org => (
-                                                        <option key={org.id} value={org.id}>{org.name}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                        )}
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Agência</label>
-                                                <input
-                                                    type="text"
-                                                    value={formData.branch || ''}
-                                                    onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
-                                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold text-gray-700"
-                                                    placeholder="0001"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Número Conta</label>
-                                                <input
-                                                    type="text"
-                                                    value={formData.account_number || ''}
-                                                    onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
-                                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold text-gray-700"
-                                                    placeholder="12345-6"
-                                                />
-                                            </div>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                            <div className="flex justify-end gap-3 mt-8">
-                                <Button
-                                    variant="ghost"
-                                    type="button"
-                                    onClick={handleCancel}
-                                    className="text-gray-700 hover:text-gray-900"
-                                >
-                                    Cancelar
-                                </Button>
-                                <button
-                                    type="submit"
-                                    disabled={loading}
-                                    className="flex items-center gap-2 bg-black text-white px-10 py-3 rounded-xl text-button font-black uppercase tracking-widest hover:bg-gray-800 transition-all disabled:opacity-50 shadow-xl shadow-gray-200"
-                                >
-                                    <Save className="w-4 h-4" />
-                                    {loading ? 'Gravando...' : 'Salvar Registro'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                )}
 
                 {/* thead em sentence case (§6.2) — obrigatório porque a tela adotou a
                     escala de radius compacta (§16), mesmo critério do resto do módulo. */}
@@ -701,7 +577,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                     const lvl = showCode ? getLevelStyle(item.code) : getLevelStyle(undefined);
                                     const expanded = !!expandedIds[item.id];
                                     return (
-                                    <tr key={item.id} className={`group hover:bg-blue-50/50 transition-colors ${lvl.rowCls}`}>
+                                    <tr key={item.id} onClick={() => handleEdit(item)} className={`group hover:bg-blue-50/50 transition-colors cursor-pointer ${lvl.rowCls}`}>
                                         {orderedVisible.map(key => (
                                             <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                 {renderRegistryCell(key, item, { lvl, hasChildren, expanded, toggleExpand, showCode, showBankDetails, organizationName: orgNameOf(item) })}
@@ -732,6 +608,142 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                 </div>
             </div>
             </div>
+
+            {/* Sheet — criar/editar. Mesmo desenho do drawer de Centro de Custo
+                (CostCenterModule.tsx): size md, rótulos §21, controles h-9 §16, rodapé
+                Cancelar/Salvar. Substituiu o card inline de escala antiga (2026-09-14,
+                pedido: "ao clicar em plano de contas abrir drawer com mesmo UI/UX do
+                drawer centro de custo"). */}
+            <Sheet open={isAdding || !!isEditing} onClose={handleCancel} size="md">
+                <SheetHeader onClose={handleCancel}>
+                    <SheetTitle>{isEditing ? sheetLabels.edit : sheetLabels.create}</SheetTitle>
+                    <SheetDescription>
+                        {isEditing && showCode && formData.code ? `Código ${formData.code}` : description}
+                    </SheetDescription>
+                </SheetHeader>
+                <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+                    <SheetPanel className="p-6 space-y-5">
+                        {showCode && (
+                            <div>
+                                <label className="text-xs font-semibold text-slate-500">Código contábil</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={formData.code || ''}
+                                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                                    placeholder="Ex: 3.01.02"
+                                    className="mt-1.5 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                />
+                            </div>
+                        )}
+
+                        <div>
+                            <label className="text-xs font-semibold text-slate-500">Nome</label>
+                            <input
+                                type="text"
+                                required
+                                autoFocus={!showCode}
+                                value={formData.name || ''}
+                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                placeholder={showBankDetails ? 'Ex: Banco Itaú' : 'Ex: Despesas administrativas'}
+                                className="mt-1.5 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            />
+                        </div>
+
+                        {showNature && (
+                            <div>
+                                <label className="text-xs font-semibold text-slate-500">Natureza</label>
+                                <select
+                                    value={formData.accounting_nature || ''}
+                                    onChange={(e) => setFormData({ ...formData, accounting_nature: (e.target.value || undefined) as 'CREDORA' | 'DEVEDORA' | undefined })}
+                                    className="mt-1.5 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                >
+                                    <option value="">Selecione…</option>
+                                    <option value="CREDORA">Credora</option>
+                                    <option value="DEVEDORA">Devedora</option>
+                                </select>
+                            </div>
+                        )}
+
+                        {showDescription && (
+                            <div>
+                                <label className="text-xs font-semibold text-slate-500">Descrição</label>
+                                <textarea
+                                    value={formData.description || ''}
+                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                    placeholder="Opcional..."
+                                    rows={3}
+                                    className="mt-1.5 w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all resize-none"
+                                />
+                            </div>
+                        )}
+
+                        {showBankDetails && (
+                            <>
+                                <div>
+                                    <label className="text-xs font-semibold text-slate-500">Instituição bancária</label>
+                                    <input
+                                        type="text"
+                                        value={formData.bank || ''}
+                                        onChange={(e) => setFormData({ ...formData, bank: e.target.value })}
+                                        placeholder="Ex: Itaú, 341..."
+                                        className="mt-1.5 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                    />
+                                </div>
+                                {organizations && organizations.length > 0 && (
+                                    <div>
+                                        <label className="text-xs font-semibold text-slate-500">Organização</label>
+                                        <select
+                                            value={formData.organization_id || ''}
+                                            onChange={(e) => setFormData({ ...formData, organization_id: e.target.value })}
+                                            className="mt-1.5 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                        >
+                                            <option value="">Selecione uma organização…</option>
+                                            {organizations.map(org => (
+                                                <option key={org.id} value={org.id}>{org.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs font-semibold text-slate-500">Agência</label>
+                                        <input
+                                            type="text"
+                                            value={formData.branch || ''}
+                                            onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
+                                            placeholder="0001"
+                                            className="mt-1.5 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-semibold text-slate-500">Número da conta</label>
+                                        <input
+                                            type="text"
+                                            value={formData.account_number || ''}
+                                            onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
+                                            placeholder="12345-6"
+                                            className="mt-1.5 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                        />
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </SheetPanel>
+                    <SheetFooter>
+                        <button type="button" onClick={handleCancel} className="h-9 px-3.5 text-gray-500 hover:text-gray-700 font-medium text-[13px] transition-all">
+                            Cancelar
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={loading || !(formData.name || '').trim()}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                        >
+                            {loading ? 'Salvando...' : 'Salvar'}
+                        </button>
+                    </SheetFooter>
+                </form>
+            </Sheet>
 
             {notification && (
                 <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${

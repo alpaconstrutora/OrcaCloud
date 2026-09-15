@@ -59,6 +59,7 @@ const PlanoDeContasModule: React.FC = () => {
                 items={items}
                 showCode={true}
                 showNature={true}
+                sheetLabels={{ create: 'Nova conta', edit: 'Editar conta' }}
                 // Seletor de organização no formulário e coluna Organização SÓ em
                 // "Todas as organizações": com org no topo, o sistema não pergunta.
                 organizations={organizationId ? undefined : orgOptions}

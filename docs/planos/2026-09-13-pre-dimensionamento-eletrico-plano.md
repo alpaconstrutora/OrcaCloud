@@ -270,3 +270,30 @@ tiver. Um número errado aqui sai "plausível" numa prancha.
    transcrever, não lembrar.
 3. Confirmar o molde da emissão: **um** `blueprint_study_projeto_executivo`
    com `disciplina`, ou tabela própria da elétrica. Recomendo o primeiro.
+
+## Atualização (15/09/2026) — catálogo de disjuntores = série comercial
+
+Pedido: *"os disjuntores são comercialmente fabricados nas seguintes correntes:
+10A, 16A, 20A, 25A, 32A, 40A, 50A, 63A, 73A, 80A, 100A, 125A, 160A, 200A"*.
+
+- `HIPOTESES_PADRAO.catalogoDeDisjuntoresA` = `10, 16, 20, 25, 32, 40, 50, 63,
+  70, 80, 100, 125, 160, 200`. Sai o 6 A (o pré-dim sugeria "In 6 A" para
+  circuitos pequenos); entram 125/160/200 para o geral de quadros grandes.
+  **Hipótese registrada:** o "73 A" da mensagem entrou como **70 A** (corrente
+  fabricada; 73 não existe em catálogo) — trocar em `blueprintEletricaDimensionamento.ts`
+  se for outro valor.
+- `hipotesesDaColuna` passa a **ignorar** o catálogo gravado na coluna e usar
+  sempre o padrão: a tela não edita a lista, e os estudos que já tinham salvo
+  hipóteses congelavam a lista antiga com 6 A. Mesmo tratamento que as tabelas
+  de diâmetro (F9). Consequência honesta: emissões existentes passam a "base
+  alterada" (o hash inclui as hipóteses).
+- Testes: memorial "sugerido 6 A" → "10 A"; catálogo exato; IB 1,3 A → 10 A;
+  IB 150 A → 160 A; coluna com `[6, 10, 16]` → padrão.
+- **Consequência no cálculo:** com o menor disjuntor em 10 A, `secaoMinima`
+  ganhou o critério `DISJUNTOR` — a seção mínima tem de conduzir o menor
+  disjuntor da série ≥ IB (5.3.4.1, In ≤ Iz), não só IB. Iluminação em 1,5 mm²
+  com 7 circuitos agrupados (Iz 9,45 A) passa a ter mínimo 2,5 mm². Quando a
+  seção DECLARADA não admite disjuntor nenhum, a sugestão vira o par completo
+  (seção calculada + disjuntor dela) e "usar sugerido" grava os dois. Provado
+  no app: os 9 circuitos do estudo de teste com "In 10 A"; nenhum "6 A" nem
+  "nenhum cabe na seção".

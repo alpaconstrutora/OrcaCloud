@@ -61,7 +61,7 @@ export function LinhaPreDimensionamento({
         {' · '}
         seção mín.{' '}
         {r.secaoCalculada ? (
-          <span title={`Iz corrigida ${n1(r.secaoCalculada.izA)} A · critério: ${r.secaoCalculada.criterio === 'USO' ? (r.uso === 'TUE' ? 'hipótese TUE' : 'Tab. 47 (uso)') : 'Tab. 36 (corrente)'}`}>
+          <span title={`Iz corrigida ${n1(r.secaoCalculada.izA)} A · critério: ${r.secaoCalculada.criterio === 'USO' ? (r.uso === 'TUE' ? 'hipótese TUE' : 'Tab. 47 (uso)') : r.secaoCalculada.criterio === 'DISJUNTOR' ? 'menor disjuntor comercial (5.3.4.1)' : 'Tab. 36 (corrente)'}`}>
             {mm2(r.secaoCalculada.secaoMm2)} mm²
           </span>
         ) : (

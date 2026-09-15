@@ -135,6 +135,39 @@ describe('disjuntor (5.3.4.1): IB ≤ In ≤ Iz', () => {
     expect(disjuntorSugeridoA(18, 24, HIPOTESES_PADRAO.catalogoDeDisjuntoresA)).toBe(20);
     expect(disjuntorSugeridoA(23.5, 24, HIPOTESES_PADRAO.catalogoDeDisjuntoresA)).toBeNull();
     expect(disjuntorSugeridoA(10, 17.5, HIPOTESES_PADRAO.catalogoDeDisjuntoresA)).toBe(10);
+    // A série COMERCIAL (15/09/2026): começa em 10 A — IB 1,3 A não recebe "6 A" —
+    // e vai até 200 A para o geral de quadros grandes.
+    expect(HIPOTESES_PADRAO.catalogoDeDisjuntoresA).toEqual([10, 16, 20, 25, 32, 40, 50, 63, 70, 80, 100, 125, 160, 200]);
+    expect(disjuntorSugeridoA(1.3, 17.5, HIPOTESES_PADRAO.catalogoDeDisjuntoresA)).toBe(10);
+    expect(disjuntorSugeridoA(150, 250, HIPOTESES_PADRAO.catalogoDeDisjuntoresA)).toBe(160);
+  });
+
+  it('a seção mínima admite o MENOR disjuntor comercial: 1,5 mm² muito agrupado (Iz < 10 A) sobe para 2,5 pelo critério DISJUNTOR', () => {
+    // 7 circuitos no mesmo eletroduto: fator 0,54 → 1,5 mm² B1 = 17,5 × 0,54 = 9,45 A.
+    // Conduz IB 1,3 A, mas nenhum disjuntor da série (≥ 10 A) cabe nela.
+    const hip = { ...HIPOTESES_PADRAO, circuitosAgrupados: 7 };
+    const luz = secaoMinima(1.3, hip, 'FN', 'ILUMINACAO')!;
+    expect(luz.secaoMm2).toBe(2.5);
+    expect(luz.criterio).toBe('DISJUNTOR');
+    expect(luz.izA).toBeGreaterThanOrEqual(10);
+    expect(disjuntorSugeridoA(1.3, luz.izA, hip.catalogoDeDisjuntoresA)).toBe(10);
+    // Sem agrupamento, 1,5 mm² conduz 17,5 A ≥ 10 A: continua 1,5 (Tab. 47 manda).
+    expect(secaoMinima(1.3, HIPOTESES_PADRAO, 'FN', 'ILUMINACAO')).toMatchObject({ secaoMm2: 1.5 });
+  });
+
+  it('com 1,5 mm² DECLARADO e Iz < 10 A, a sugestão é o par completo: 2,5 mm² e 10 A', async () => {
+    const k = await import('../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    let m = k.applyCommand(nivel.model, { type: 'AddQuadro', levelId: t, nome: 'QDC', at: k.point(0, 0), cotaMm: 1500, tensaoV: 127, ligacao: 'FN' }).model;
+    m = k.applyCommand(m, { type: 'AddCircuito', quadroId: m.quadros![0].id, nome: 'C1', tensaoV: 127, ligacao: 'FN', secaoMm2: 1.5 }).model;
+    m = k.applyCommand(m, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'Luz', at: k.point(2000, 2000), cotaMm: 2800, tipoEletrico: 'ILUMINACAO_TETO', potenciaW: 160 }).model;
+    m = k.applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais![0].id, circuitoId: m.circuitos![0].id }).model;
+    const r = preDimensionarCircuito(m, m.circuitos![0], { ...HIPOTESES_PADRAO, circuitosAgrupados: 7 });
+    expect(r.secaoDeclaradaMm2).toBe(1.5);
+    expect(r.izDeclaradaA!).toBeLessThan(10);
+    expect(r.secaoCalculada).toMatchObject({ secaoMm2: 2.5, criterio: 'DISJUNTOR' });
+    expect(r.disjuntorSugeridoA).toBe(10);
   });
 });
 
@@ -322,5 +355,16 @@ describe('sanidade do cenário', () => {
     const m = tomada(m1, levelId, 2000, 75, 600, id);
     expect(m.terminais[0].circuitoId).toBe(id);
     expect(applyBatch(m, []).model.terminais).toHaveLength(1);
+  });
+});
+
+describe('hipóteses gravadas × catálogo de disjuntores', () => {
+  it('a coluna gravada com o catálogo antigo (6 A) NÃO prevalece: o catálogo é sempre a série comercial', async () => {
+    // 15/09/2026: estudos que já tinham salvo hipóteses congelavam a lista com
+    // 6 A e continuavam sugerindo "In 6 A" mesmo depois da troca do padrão.
+    const { hipotesesDaColuna } = await import('../hooks/useBlueprintEletrica');
+    const h = hipotesesDaColuna({ catalogoDeDisjuntoresA: [6, 10, 16], temperaturaAmbienteC: 35 });
+    expect(h.catalogoDeDisjuntoresA).toEqual(HIPOTESES_PADRAO.catalogoDeDisjuntoresA);
+    expect(h.temperaturaAmbienteC).toBe(35);
   });
 });

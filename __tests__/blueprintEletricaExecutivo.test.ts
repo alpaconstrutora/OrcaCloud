@@ -116,7 +116,7 @@ describe('hash da base e memorial', () => {
     expect(texto).toMatch(/ART nº 28027230/);
     expect(texto).toMatch(/método de instalação B1/);
     const linhaC2 = L.find((l) => l.startsWith('C2 (')) ?? '(linha do C2 não encontrada)';
-    expect(linhaC2, linhaC2).toMatch(/^C2 \(FN 127 V\): 4 ponto\(s\), 400 VA, IB 3,1 A; seção declarada 2,5 mm² \(mínima 2,5 mm²\); disjuntor 20 A \(sugerido 6 A\)/);
+    expect(linhaC2, linhaC2).toMatch(/^C2 \(FN 127 V\): 4 ponto\(s\), 400 VA, IB 3,1 A; seção declarada 2,5 mm² \(mínima 2,5 mm²\); disjuntor 20 A \(sugerido 10 A\)/);
     expect(linhaC2).toMatch(/ATENDE\.$/);
     expect(texto).toMatch(/\[✓\] Todo ponto com potência declarada/);
     expect(texto).toMatch(/não substitui o profissional/);

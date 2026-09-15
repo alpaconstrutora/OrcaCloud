@@ -37,10 +37,10 @@ export function hipotesesDaColuna(raw: unknown): HipotesesEletricas {
     circuitosAgrupados: Math.max(1, Math.floor(n(r.circuitosAgrupados, HIPOTESES_PADRAO.circuitosAgrupados))),
     rhoOhmMm2PorM: n(r.rhoOhmMm2PorM, HIPOTESES_PADRAO.rhoOhmMm2PorM),
     limiteQuedaTerminalPct: n(r.limiteQuedaTerminalPct, HIPOTESES_PADRAO.limiteQuedaTerminalPct),
-    catalogoDeDisjuntoresA:
-      Array.isArray(r.catalogoDeDisjuntoresA) && r.catalogoDeDisjuntoresA.every((x) => typeof x === 'number' && x > 0)
-        ? [...r.catalogoDeDisjuntoresA]
-        : HIPOTESES_PADRAO.catalogoDeDisjuntoresA,
+    // O catálogo de disjuntores NÃO é editado pela tela: vale sempre o padrão
+    // (a série comercial). Antes a coluna gravada congelava a lista antiga
+    // (com 6 A) em cada estudo que já tinha salvo hipóteses — 15/09/2026.
+    catalogoDeDisjuntoresA: HIPOTESES_PADRAO.catalogoDeDisjuntoresA,
     // Chave de 14/09/2026: coluna gravada antes dela não a tem — vale o padrão.
     secaoMinimaTueMm2: Math.max(0, n(r.secaoMinimaTueMm2, HIPOTESES_PADRAO.secaoMinimaTueMm2)),
     demanda: {

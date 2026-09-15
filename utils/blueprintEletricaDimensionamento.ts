@@ -252,7 +252,15 @@ export const HIPOTESES_PADRAO: HipotesesEletricas = {
   circuitosAgrupados: 1,
   rhoOhmMm2PorM: 0.0206,
   limiteQuedaTerminalPct: 4,
-  catalogoDeDisjuntoresA: [6, 10, 16, 20, 25, 32, 40, 50, 63, 70, 80, 100],
+  /**
+   * A SÉRIE COMERCIAL (15/09/2026, informada pelo usuário: *"os disjuntores são
+   * comercialmente fabricados nas seguintes correntes: 10, 16, 20, 25, 32, 40,
+   * 50, 63, 7x, 80, 100, 125, 160, 200 A"*). Sem 6 A: o pré-dimensionamento
+   * sugeria "In 6 A" para circuitos pequenos e ninguém compra 6 A para tomada.
+   * O valor entre 63 e 80 entrou como 70 A (a corrente fabricada; a mensagem
+   * dizia "73", lido como grafia) — ajustar aqui se for outro.
+   */
+  catalogoDeDisjuntoresA: [10, 16, 20, 25, 32, 40, 50, 63, 70, 80, 100, 125, 160, 200],
   secaoMinimaTueMm2: 4,
   demanda: { nome: 'sem demanda (1,00)', ILUMINACAO: 1, TUG: 1, FORCA: 1 },
   limiteQuedaTotalPct: 5,
@@ -295,14 +303,24 @@ export interface SecaoMinima {
   secaoMm2: number;
   /** Iz corrigida da seção escolhida. */
   izA: number;
-  /** Qual critério mandou: a corrente (Tab. 36) ou o mínimo por uso (Tab. 47). */
-  criterio: 'CORRENTE' | 'USO';
+  /**
+   * Qual critério mandou: a corrente (Tab. 36), o mínimo por uso (Tab. 47) ou
+   * o MENOR DISJUNTOR comercial (5.3.4.1: In ≤ Iz — a seção tem de conduzir
+   * pelo menos o menor disjuntor que cabe acima de IB).
+   */
+  criterio: 'CORRENTE' | 'USO' | 'DISJUNTOR';
 }
 
 /**
- * A menor seção nominal que atende à corrente (Iz corrigida ≥ IB) E ao
- * mínimo por uso (Tabela 47). `null` quando nem a maior seção da tabela
- * alcança IB, ou quando a temperatura não tem fator.
+ * A menor seção nominal que atende à corrente (Iz corrigida ≥ IB), ao mínimo
+ * por uso (Tabela 47) E ao menor disjuntor do catálogo ≥ IB (Iz ≥ In, 5.3.4.1).
+ * `null` quando nem a maior seção da tabela alcança IB, ou quando a
+ * temperatura não tem fator.
+ *
+ * O terceiro critério entrou em 15/09/2026 com a série comercial de
+ * disjuntores (menor: 10 A): iluminação em 1,5 mm² muito agrupada tem Iz
+ * corrigida abaixo de 10 A — a seção "atendia" IB 1,3 A e nenhum disjuntor
+ * cabia nela. A resposta certa é a seção seguinte, e é ela que se sugere.
  */
 export function secaoMinima(
   ibA: number,
@@ -311,15 +329,22 @@ export function secaoMinima(
   uso: UsoDoCircuito | null,
 ): SecaoMinima | null {
   const minimoPorUso = uso ? secaoMinimaPorUsoMm2(uso, hip) : 0;
+  const menorDisjuntor = [...hip.catalogoDeDisjuntoresA].sort((a, b) => a - b).find((inA) => inA >= ibA) ?? null;
+  const izNecessaria = Math.max(ibA, menorDisjuntor ?? 0);
   for (const secao of SECOES_NOMINAIS_MM2) {
     if (secao < minimoPorUso) continue;
     const iz = capacidadeCorrigidaA(secao, hip, ligacao);
     if (iz == null) return null;
-    if (iz >= ibA) {
-      // Se uma seção MENOR já atenderia à corrente, quem mandou foi o uso.
-      const anterior = SECOES_NOMINAIS_MM2.filter((s) => s < secao).reverse()
-        .find((s) => (capacidadeCorrigidaA(s, hip, ligacao) ?? 0) >= ibA);
-      return { secaoMm2: secao, izA: iz, criterio: anterior != null ? 'USO' : 'CORRENTE' };
+    if (iz >= izNecessaria) {
+      // Se uma seção MENOR já atenderia à corrente, quem mandou foi o uso — ou o
+      // disjuntor, quando ela conduz IB mas não o menor disjuntor.
+      const menores = SECOES_NOMINAIS_MM2.filter((s) => s < secao).reverse();
+      const izDa = (s: number) => capacidadeCorrigidaA(s, hip, ligacao) ?? 0;
+      const atendeTudoMenor = menores.find((s) => izDa(s) >= izNecessaria);
+      const atendeIbMenor = menores.find((s) => izDa(s) >= ibA);
+      const criterio: SecaoMinima['criterio'] =
+        atendeTudoMenor != null ? 'USO' : atendeIbMenor != null ? 'DISJUNTOR' : 'CORRENTE';
+      return { secaoMm2: secao, izA: iz, criterio };
     }
   }
   return null;
@@ -563,6 +588,13 @@ export function preDimensionarCircuito(
   const izReferencia = base.izDeclaradaA ?? calc?.izA ?? null;
   if (izReferencia != null) {
     base.disjuntorSugeridoA = disjuntorSugeridoA(ibA, izReferencia, hip.catalogoDeDisjuntoresA);
+    // Se a seção DECLARADA não admite disjuntor nenhum (Iz abaixo do menor da
+    // série), a sugestão passa a ser o par completo: a seção calculada — que
+    // por construção admite um — e o disjuntor dela. "Usar sugerido" grava os
+    // dois de uma vez (15/09/2026).
+    if (base.disjuntorSugeridoA == null && calc && calc.izA !== izReferencia) {
+      base.disjuntorSugeridoA = disjuntorSugeridoA(ibA, calc.izA, hip.catalogoDeDisjuntoresA);
+    }
     if (disjuntorDeclaradoA != null) {
       if (disjuntorDeclaradoA < ibA) {
         achados.push({

@@ -8,6 +8,8 @@ import { formatMoney, formatDateBR } from '../ui/Format';
 import { LazySelect, type LazyOption } from './LazySelect';
 import ClientSelect, { type ClientOption } from '../ClientSelect';
 import SupplierSelect, { type SupplierOption } from '../SupplierSelect';
+import CostCenterSelect, { type CostCenterOption } from '../CostCenterSelect';
+import PlanoContasSelect, { type PlanoContasOption } from '../PlanoContasSelect';
 import type { ColumnConfig } from '../ui/TableUtils';
 import type { FilterFieldConfig } from '../ui/FilterUtils';
 import type { BankTransaction, InternalTransaction, BankTransactionStatus } from '../../types';
@@ -70,6 +72,42 @@ function CelulaCredor({ tx, registros, onChange }: { tx: BankTransaction; regist
             compact
             fallbackLabel={tx.counterparty_name || undefined}
             triggerClassName={`${CELULA_CONTRAPARTE_CLS} ${tx.counterparty_name ? 'text-gray-700 border-gray-300' : 'text-gray-400 border-gray-200'}`}
+        />
+    );
+}
+
+// Centro de Custo e Plano de Contas nas células abrem os mesmos drawers da edição
+// em lote (CostCenterSelect / PlanoContasSelect — accordion por grupo/org). O gatilho
+// mantém o desenho da célula: caixa com fundo quando preenchido, tracejada quando vazio.
+const celulaDimensaoCls = (preenchido: boolean, corPreenchido: string) =>
+    `text-sm font-normal px-2 py-1 rounded border transition-all cursor-pointer min-w-0 ${preenchido ? `text-gray-900 ${corPreenchido}` : 'text-gray-400 bg-white border-dashed border-gray-200'}`;
+
+function CelulaCentroCusto({ tx, registros, nome, onChange }: { tx: BankTransaction; registros: CostCenterOption[]; nome: string | null; onChange: (id: string) => void }) {
+    return (
+        <CostCenterSelect
+            costCenters={registros}
+            value={tx.cost_center_id || ''}
+            onChange={onChange}
+            placeholder="Centro de Custo"
+            hoverCls="hover:bg-blue-50"
+            compact
+            fallbackLabel={tx.cost_center_id && !nome ? ROTULO_OUTRA_ORG : undefined}
+            triggerClassName={celulaDimensaoCls(!!tx.cost_center_id, 'bg-violet-50 border-violet-100')}
+        />
+    );
+}
+
+function CelulaPlanoContas({ tx, registros, nome, onChange }: { tx: BankTransaction; registros: PlanoContasOption[]; nome: string | null; onChange: (id: string) => void }) {
+    return (
+        <PlanoContasSelect
+            planoContas={registros}
+            value={tx.plano_de_contas_id || ''}
+            onChange={onChange}
+            placeholder="Plano de Contas"
+            hoverCls="hover:bg-blue-50"
+            compact
+            fallbackLabel={tx.plano_de_contas_id && !nome ? ROTULO_OUTRA_ORG : undefined}
+            triggerClassName={celulaDimensaoCls(!!tx.plano_de_contas_id, 'bg-amber-50 border-amber-100')}
         />
     );
 }
@@ -342,10 +380,11 @@ export interface StatementRowCtx {
     /** Cadastros com id/documento — alimentam os drawers de Cliente e Credor. */
     clienteRegistros: ClientOption[];
     credorRegistros: SupplierOption[];
+    /** Cadastros com código/grupo/org — alimentam os drawers de Centro de Custo e Plano de Contas. */
+    costCenterRegistros: CostCenterOption[];
+    planoContasRegistros: PlanoContasOption[];
     categoryOptions: LazyOption[];
     projectOptions: LazyOption[];
-    costCenterOptions: LazyOption[];
-    planoContasOptions: LazyOption[];
     projectName: (id?: string | null) => string | null;
     costCenterName: (id?: string | null) => string | null;
     planoContasName: (id?: string | null) => string | null;
@@ -433,27 +472,15 @@ export function renderStatementCell(key: string, tx: BankTransaction, ctx: State
             );
         case 'costCenter':
             return (
-                <LazySelect
-                    value={tx.cost_center_id || ''}
-                    currentLabel={ctx.costCenterName(tx.cost_center_id) || (tx.cost_center_id ? ROTULO_OUTRA_ORG : '')}
-                    title={tx.cost_center_id && !ctx.costCenterName(tx.cost_center_id) ? `Centro de custo de outra organização (${tx.cost_center_id})` : undefined}
-                    onChange={(v) => ctx.onUpdateCostCenter(tx.id, v)}
-                    options={ctx.costCenterOptions}
-                    placeholder="Centro de Custo"
-                    className={`text-sm font-normal px-2 py-1 rounded border transition-all appearance-none cursor-pointer ${tx.cost_center_id ? 'text-gray-900 bg-violet-50 border-violet-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
-                />
+                <div className="min-w-0" onClick={e => e.stopPropagation()}>
+                    <CelulaCentroCusto tx={tx} registros={ctx.costCenterRegistros} nome={ctx.costCenterName(tx.cost_center_id)} onChange={v => ctx.onUpdateCostCenter(tx.id, v)} />
+                </div>
             );
         case 'planoContas':
             return (
-                <LazySelect
-                    value={tx.plano_de_contas_id || ''}
-                    currentLabel={ctx.planoContasName(tx.plano_de_contas_id) || (tx.plano_de_contas_id ? ROTULO_OUTRA_ORG : '')}
-                    title={tx.plano_de_contas_id && !ctx.planoContasName(tx.plano_de_contas_id) ? `Plano de contas de outra organização (${tx.plano_de_contas_id})` : undefined}
-                    onChange={(v) => ctx.onUpdatePlanoContas(tx.id, v)}
-                    options={ctx.planoContasOptions}
-                    placeholder="Plano de Contas"
-                    className={`text-sm font-normal px-2 py-1 rounded border transition-all appearance-none cursor-pointer ${tx.plano_de_contas_id ? 'text-gray-900 bg-amber-50 border-amber-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
-                />
+                <div className="min-w-0" onClick={e => e.stopPropagation()}>
+                    <CelulaPlanoContas tx={tx} registros={ctx.planoContasRegistros} nome={ctx.planoContasName(tx.plano_de_contas_id)} onChange={v => ctx.onUpdatePlanoContas(tx.id, v)} />
+                </div>
             );
         case 'date':
             return formatDateBR(tx.transaction_date);
@@ -495,9 +522,9 @@ export function renderStatementCell(key: string, tx: BankTransaction, ctx: State
 export interface PendingBankRowCtx {
     clienteRegistros: ClientOption[];
     credorRegistros: SupplierOption[];
+    costCenterRegistros: CostCenterOption[];
     categoryOptions: LazyOption[];
     projectOptions: LazyOption[];
-    costCenterOptions: LazyOption[];
     projectName: (id?: string | null) => string | null;
     costCenterName: (id?: string | null) => string | null;
     onUpdateCounterparty: (id: string, v: string) => void;
@@ -541,15 +568,18 @@ export function renderPendingBankCell(key: string, tx: BankTransaction, ctx: Pen
             );
         case 'costCenter':
             return (
-                <LazySelect
-                    value={tx.cost_center_id || ''}
-                    currentLabel={ctx.costCenterName(tx.cost_center_id) || (tx.cost_center_id ? ROTULO_OUTRA_ORG : '')}
-                    title={tx.cost_center_id && !ctx.costCenterName(tx.cost_center_id) ? `Centro de custo de outra organização (${tx.cost_center_id})` : undefined}
-                    onChange={(v) => ctx.onUpdateCostCenter(tx.id, v)}
-                    options={ctx.costCenterOptions}
-                    placeholder="—"
-                    className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.cost_center_id ? 'text-gray-700' : 'text-gray-400'}`}
-                />
+                <div className="min-w-0" onClick={e => e.stopPropagation()}>
+                    <CostCenterSelect
+                        costCenters={ctx.costCenterRegistros}
+                        value={tx.cost_center_id || ''}
+                        onChange={v => ctx.onUpdateCostCenter(tx.id, v)}
+                        placeholder="—"
+                        hoverCls="hover:bg-blue-50"
+                        compact
+                        fallbackLabel={tx.cost_center_id && !ctx.costCenterName(tx.cost_center_id) ? ROTULO_OUTRA_ORG : undefined}
+                        triggerClassName={`text-sm font-normal bg-transparent cursor-pointer min-w-0 ${tx.cost_center_id ? 'text-gray-700' : 'text-gray-400'}`}
+                    />
+                </div>
             );
         case 'date':
             return formatDateBR(tx.transaction_date);

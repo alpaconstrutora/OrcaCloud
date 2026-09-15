@@ -103,6 +103,14 @@ interface Props {
      *  mesmo quando nenhum item traz `parentId` — ex.: plano de contas de uma
      *  org que só tem contas de 1º nível. Sem isso o modo é inferido. */
     agrupado?: boolean;
+    /** Classe do gatilho quando a tela tem a própria régua (substitui a de `size`). */
+    triggerClassName?: string;
+    /** Célula de tabela: nome em peso normal, sem o "Grupo ›" antes (a coluna já é
+     *  estreita) — o drawer continua mostrando a hierarquia inteira. */
+    compact?: boolean;
+    /** Texto do gatilho quando `value` não resolve para nenhum item (ex.: centro de
+     *  custo de organização que a conta não atende). */
+    fallbackLabel?: string;
 }
 
 const HierarchicalSelect: React.FC<Props> = ({
@@ -119,6 +127,9 @@ const HierarchicalSelect: React.FC<Props> = ({
     size = 'md',
     disabled = false,
     agrupado = false,
+    triggerClassName,
+    compact = false,
+    fallbackLabel,
 }) => {
     const [open, setOpen] = useState(false);
     // Busca transitória de propósito (exceção ao §3 do guia, que é para filtro
@@ -324,15 +335,17 @@ const HierarchicalSelect: React.FC<Props> = ({
             type="button"
             onClick={abrir}
             disabled={disabled}
+            aria-haspopup={panelVariant === 'drawer' ? 'dialog' : 'listbox'}
+            aria-expanded={open}
             className={`w-full flex items-center justify-between gap-2 text-left focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                size === 'sm'
+                triggerClassName ?? (size === 'sm'
                     ? 'h-9 bg-gray-50 border border-gray-200 rounded-[6px] pl-3 pr-2'
-                    : 'bg-gray-50/50 border border-gray-100 rounded-2xl pl-4 pr-3 py-4'
+                    : 'bg-gray-50/50 border border-gray-100 rounded-2xl pl-4 pr-3 py-4')
             }`}
         >
             {selected ? (
                 <span className="flex items-center gap-2 flex-1 min-w-0">
-                    {selected.code && (hierarquiaExplicita ? (
+                    {selected.code && !compact && (hierarquiaExplicita ? (
                         <span className="shrink-0 text-xs font-normal text-gray-500">{selected.code}</span>
                     ) : (
                         <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono text-xs font-black ${getLevelStyle(getCodeLevel(selected.code), 'slate').codeCls}`}>
@@ -341,11 +354,13 @@ const HierarchicalSelect: React.FC<Props> = ({
                     ))}
                     {/* Filho de grupo: o grupo vai junto, senão "010 - Galeria Altavista"
                         fechado não diz se é Condomínios, Obra ou Assistência Técnica. */}
-                    {selected.parentName && (
+                    {selected.parentName && !compact && (
                         <span className="text-sm font-medium text-gray-400 truncate shrink-0">{selected.parentName} ›</span>
                     )}
-                    <span className={`text-sm text-gray-900 truncate ${size === 'sm' ? 'font-medium' : 'font-bold'}`}>{selected.name}</span>
+                    <span className={`text-sm text-gray-900 truncate ${compact ? 'font-normal' : size === 'sm' ? 'font-medium' : 'font-bold'}`}>{selected.name}</span>
                 </span>
+            ) : fallbackLabel ? (
+                <span className="text-sm font-normal text-gray-900 truncate flex-1 min-w-0" title={fallbackLabel}>{fallbackLabel}</span>
             ) : (
                 <span className="text-sm text-gray-400 truncate">{placeholder}</span>
             )}

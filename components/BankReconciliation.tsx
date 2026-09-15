@@ -751,20 +751,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const grupoDaOrg = (orgId?: string | null) => (orgsDaConta.length > 1 ? (orgNameById.get(orgId ?? '') ?? 'Organização') : undefined);
 
     // `group` só quando a conta atende mais de uma org — vira <optgroup> no select da célula.
+    // (Centro de Custo e Plano de Contas saíram do <select>: abrem os drawers
+    // CostCenterSelect/PlanoContasSelect, que agrupam por org sozinhos.)
     const projectOptions = useMemo<LazyOption[]>(
         () => masterProjects.map(p => ({ value: p.id, label: p.name, group: grupoDaOrg(p.organization_id) })),
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [masterProjects, orgsDaContaKey, orgNameById]
-    );
-    const costCenterOptions = useMemo<LazyOption[]>(
-        () => masterCostCenters.map(c => ({ value: c.id, label: c.name, group: grupoDaOrg(c.organization_id) })),
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [masterCostCenters, orgsDaContaKey, orgNameById]
-    );
-    const planoContasOptions = useMemo<LazyOption[]>(
-        () => masterPlanoContas.map(pc => ({ value: pc.id, label: rotuloPlanoContas(pc), group: grupoDaOrg(pc.organization_id) })),
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [masterPlanoContas, orgsDaContaKey, orgNameById]
     );
 
     useEffect(() => {
@@ -3938,8 +3930,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     const cpRegistered = tx.direction === 'DEBIT' ? masterSuppliersLower.has(cpKey) : masterClientsLower.has(cpKey);
                                                     const statementCtx: StatementRowCtx = {
                                                         cpRegistered,
-                                                        categoryOptions, projectOptions, costCenterOptions, planoContasOptions,
+                                                        categoryOptions, projectOptions,
                                                         clienteRegistros, credorRegistros,
+                                                        costCenterRegistros: masterCostCenters, planoContasRegistros: masterPlanoContas,
                                                         projectName, costCenterName, planoContasName,
                                                         onUpdateCounterparty: handleUpdateBankCounterparty,
                                                         onUpdateCategory: handleUpdateBankCategory,
@@ -4237,8 +4230,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     // +2: checkbox + espaçador (não estão em visibleColumns)
                                                     const visibleColCount = 2 + PENDING_BANK_COLUMNS.filter(c => pendingBankColumns.visibleColumns.includes(c.key)).length;
                                                     const pendingBankCtx: PendingBankRowCtx = {
-                                                        categoryOptions, projectOptions, costCenterOptions,
+                                                        categoryOptions, projectOptions,
                                                         clienteRegistros, credorRegistros,
+                                                        costCenterRegistros: masterCostCenters,
                                                         projectName, costCenterName,
                                                         onUpdateCounterparty: handleUpdateBankCounterparty,
                                                         onUpdateCategory: handleUpdateBankCategory,

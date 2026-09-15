@@ -32,6 +32,10 @@ interface Props {
     placeholder?: string;
     size?: 'md' | 'sm';
     disabled?: boolean;
+    /** Gatilho de célula de tabela — ver HierarchicalSelect. */
+    triggerClassName?: string;
+    compact?: boolean;
+    fallbackLabel?: string;
     hoverCls?: string;
 }
 
@@ -82,6 +86,7 @@ export function planoContasSelectItems(
 
 const PlanoContasSelect: React.FC<Props> = ({
     planoContas, value, onChange, placeholder = '—', size, disabled,
+    triggerClassName, compact, fallbackLabel,
     hoverCls = 'hover:bg-gray-50',
 }) => {
     const organizations = useStore(s => s.organizations);
@@ -102,6 +107,9 @@ const PlanoContasSelect: React.FC<Props> = ({
             searchPlaceholder="Buscar por código ou nome da conta..."
             size={size}
             disabled={disabled}
+            triggerClassName={triggerClassName}
+            compact={compact}
+            fallbackLabel={fallbackLabel}
         />
     );
 };

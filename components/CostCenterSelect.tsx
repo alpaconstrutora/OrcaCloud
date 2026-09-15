@@ -39,6 +39,10 @@ interface Props {
     valueField?: 'id' | 'name';
     size?: 'md' | 'sm';
     disabled?: boolean;
+    /** Gatilho de célula de tabela — ver HierarchicalSelect. */
+    triggerClassName?: string;
+    compact?: boolean;
+    fallbackLabel?: string;
     hoverCls?: string;
 }
 
@@ -70,6 +74,7 @@ export function costCenterSelectItems(costCenters: CostCenterOption[], orgNames:
 
 const CostCenterSelect: React.FC<Props> = ({
     costCenters, value, onChange, placeholder = '—', valueField = 'id', size, disabled,
+    triggerClassName, compact, fallbackLabel,
     hoverCls = 'hover:bg-gray-50',
 }) => {
     const organizations = useStore(s => s.organizations);
@@ -89,6 +94,9 @@ const CostCenterSelect: React.FC<Props> = ({
             searchPlaceholder="Buscar por código, grupo ou centro de custo..."
             size={size}
             disabled={disabled}
+            triggerClassName={triggerClassName}
+            compact={compact}
+            fallbackLabel={fallbackLabel}
         />
     );
 };

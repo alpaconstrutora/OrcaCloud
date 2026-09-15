@@ -4735,7 +4735,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               `${(editor.model.circuitos ?? []).length} circuito(s) · pré-dimensionamento com hipóteses declaradas e conferência da NBR 5410. Cada campo grava na hora; Ctrl+Z desfaz no editor. A emissão com ART fica em "Projeto executivo (ART)".`,
               Zap,
             )}
-            <div className="rounded-[6px] border border-gray-200 bg-white p-5">
+            {/* Sem cartão em volta: o painel é TabsBar + StandardTable, cada um
+                com o próprio cartão (§19.1 / §5.2) — como as telas de RH. */}
+            <div>
                 <PainelEletrica
                   model={editor.model}
                   onAddCircuito={(quadroId, nome) => editor.run({ type: 'AddCircuito', quadroId, nome })}
@@ -4791,28 +4793,29 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   hipoteses={hipotesesEletricas}
                   onHipoteses={setHipotesesEletricas}
                   onQuadroProps={(quadroId, campos) => editor.run({ type: 'SetQuadroProps', quadroId, ...campos })}
+                  // A CONFERÊNCIA da norma vive junto do quadro de cargas (aba
+                  // própria): é a mesma leitura — o que foi declarado — vista pelas
+                  // regras da NBR 5410, e o usuário pediu tudo de elétrica num só lugar.
+                  conferenciaPendencias={{ faltas: conferenciaNbr.faltas, avisos: conferenciaNbr.avisos }}
+                  conferenciaSlot={
+                    <PainelConferenciaNbr
+                      conferencia={conferenciaNbr}
+                      onSelecionar={(ids) => {
+                        selecionar(ids);
+                        setTelaAberta(null);
+                      }}
+                      onConverterLigacaoDireta={(ids) =>
+                        editor.runBatch(
+                          ids.map((terminalId) => ({
+                            type: 'SetTerminalProps' as const,
+                            terminalId,
+                            tipoEletrico: 'LIGACAO_DIRETA' as const,
+                          })),
+                        )
+                      }
+                    />
+                  }
                 />
-                {/* A CONFERÊNCIA da norma vive junto do quadro de cargas: é a mesma
-                    leitura — o que foi declarado — vista pelas regras da NBR 5410, e
-                    o usuário pediu tudo de elétrica num só lugar. */}
-                <div className="mt-3 border-t border-slate-200 pt-3">
-                  <PainelConferenciaNbr
-                    conferencia={conferenciaNbr}
-                    onSelecionar={(ids) => {
-                selecionar(ids);
-                setTelaAberta(null);
-              }}
-                    onConverterLigacaoDireta={(ids) =>
-                      editor.runBatch(
-                        ids.map((terminalId) => ({
-                          type: 'SetTerminalProps' as const,
-                          terminalId,
-                          tipoEletrico: 'LIGACAO_DIRETA' as const,
-                        })),
-                      )
-                    }
-                  />
-                </div>
             </div>
           </div>
         </div>

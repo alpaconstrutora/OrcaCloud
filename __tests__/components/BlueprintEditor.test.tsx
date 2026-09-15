@@ -1154,7 +1154,10 @@ describe('BlueprintEditor · ribbon', () => {
     expect(tela).not.toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByRole('region', { name: /^relatório:/i })).not.toBeInTheDocument();
-    expect(tela).toHaveTextContent(/conferência nbr 5410/i);
+    // 15/09/2026: TabsBar + StandardTable — a conferência é uma aba.
+    expect(within(tela).getByRole('tab', { name: /conferência nbr 5410/i })).toBeInTheDocument();
+    expect(within(tela).getByRole('tab', { name: /^circuitos/i })).toHaveAttribute('aria-selected', 'true');
+    expect(within(tela).getByRole('button', { name: /^novo circuito$/i })).toBeDisabled();
     // A emissão com ART não mora aqui (14/09/2026).
     expect(tela).not.toHaveTextContent(/responsável técnico/i);
     expect(within(tela).queryByLabelText(/número da art/i)).toBeNull();

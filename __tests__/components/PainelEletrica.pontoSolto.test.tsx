@@ -79,11 +79,25 @@ const montar = (m: BlueprintModel, extra: Record<string, unknown> = {}) =>
     />,
   );
 
+
+/**
+ * 15/09/2026: o painel virou TabsBar + StandardTable (Circuitos · Pontos fora
+ * de circuito · Quadros · Conferência · Hipóteses). O que não é a tabela de
+ * circuitos vive numa aba — os testes abrem a aba antes de olhar.
+ */
+async function abrirAba(nome: RegExp) {
+  await userEvent.setup().click(screen.getByRole('tab', { name: nome }));
+}
+
 describe('PainelEletrica · o ponto fora de circuito', () => {
-  it('⚠️ diz QUAL ponto é, e não só quantos', () => {
+  it('⚠️ diz QUAL ponto é, e não só quantos', async () => {
     // O número sozinho é um beco sem saída: manda procurar o que passou
     // despercebido. E o rótulo do projetista vence o tipo.
     montar(cena());
+    // A aba anuncia a pendência no badge, e o rodapé da tabela repete junto da soma.
+    expect(screen.getByRole('tab', { name: /pontos fora de circuito/i })).toHaveTextContent('1');
+    expect(screen.getByText(/ponto elétrico está fora de/)).toBeTruthy();
+    await abrirAba(/pontos fora de circuito/i);
     expect(screen.getByText(/1 .*ponto elétrico|ponto elétrico/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'TUG cozinha' })).toBeTruthy();
   });
@@ -93,6 +107,7 @@ describe('PainelEletrica · o ponto fora de circuito', () => {
     const m = cena();
     const user = userEvent.setup();
     montar(m, { onLigarAoCircuito });
+    await abrirAba(/pontos fora de circuito/i);
 
     await user.selectOptions(
       screen.getByLabelText('Circuito de TUG cozinha'),
@@ -106,17 +121,19 @@ describe('PainelEletrica · o ponto fora de circuito', () => {
     const m = cena();
     const user = userEvent.setup();
     montar(m, { onSelecionar });
+    await abrirAba(/pontos fora de circuito/i);
 
     await user.click(screen.getByRole('button', { name: 'TUG cozinha' }));
     expect(onSelecionar).toHaveBeenCalledWith(m.terminais[0].id);
   });
 
-  it('⚠️ sem circuito nenhum, diz o que fazer em vez de oferecer uma lista vazia', () => {
+  it('⚠️ sem circuito nenhum, diz o que fazer em vez de oferecer uma lista vazia', async () => {
     // Um seletor com uma opção só — "Ligar a…" — é uma porta que não abre, e
     // quem clica nela conclui que a tela está quebrada.
     montar(cena({ comCircuito: false }));
+    await abrirAba(/pontos fora de circuito/i);
     expect(screen.queryByLabelText('Circuito de TUG cozinha')).toBeNull();
-    expect(screen.getByText('crie um circuito abaixo')).toBeTruthy();
+    expect(screen.getByText('crie um circuito em “Novo circuito”')).toBeTruthy();
   });
 
   it('⚠️ SEM QUADRO, a pendência continua visível', () => {
@@ -143,6 +160,7 @@ describe('PainelEletrica · o ponto fora de circuito', () => {
     const onLigarAoCircuito = vi.fn();
     const user = userEvent.setup();
     montar(m, { onLigarAoCircuito });
+    await abrirAba(/pontos fora de circuito/i);
 
     // A coluna de POTÊNCIA (13/09/2026): o VA de cada ponto, "—" no que não tem,
     // e a soma do grupo com o aviso de quantos ficaram fora.
@@ -177,6 +195,7 @@ describe('PainelEletrica · o ponto fora de circuito', () => {
     const m = cena();
     const user = userEvent.setup();
     montar(m, { onCriarCircuitoELigar });
+    await abrirAba(/pontos fora de circuito/i);
 
     await user.selectOptions(screen.getByLabelText('Circuito de TUG cozinha'), '__novo__');
     const nome = screen.getByLabelText('Nome do circuito a criar') as HTMLInputElement;
@@ -190,12 +209,13 @@ describe('PainelEletrica · o ponto fora de circuito', () => {
     expect(screen.queryByLabelText('Nome do circuito a criar')).toBeNull();
   });
 
-  it('sem circuito nenhum mas COM quadro, "Criar novo…" é a saída — em vez de "crie um circuito abaixo"', async () => {
+  it('sem circuito nenhum mas COM quadro, "Criar novo…" é a saída — em vez de "crie um circuito em Novo circuito"', async () => {
     const onCriarCircuitoELigar = vi.fn();
     const m = cena({ comCircuito: false });
     const user = userEvent.setup();
     montar(m, { onCriarCircuitoELigar });
-    expect(screen.queryByText('crie um circuito abaixo')).toBeNull();
+    await abrirAba(/pontos fora de circuito/i);
+    expect(screen.queryByText(/crie um circuito em/)).toBeNull();
     await user.selectOptions(screen.getByLabelText('Circuito de TUG cozinha'), '__novo__');
     expect((screen.getByLabelText('Nome do circuito a criar') as HTMLInputElement).value).toBe('C1');
     await user.click(screen.getByRole('button', { name: /criar e ligar/i }));
@@ -240,6 +260,8 @@ describe('PainelEletrica · o ponto fora de circuito', () => {
       circuitoId: m.circuitos[0].id,
     }).model;
     montar(ligado);
-    expect(screen.queryByText(/fora de circuito/)).toBeNull();
+    // Nem no rodapé da tabela, nem no badge da aba (que só mostra contagem > 0).
+    expect(screen.queryByText(/estão? fora de circuito/)).toBeNull();
+    expect(screen.getByRole('tab', { name: /pontos fora de circuito/i })).toHaveTextContent(/^Pontos fora de circuito$/);
   });
 });

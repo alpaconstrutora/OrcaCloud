@@ -34,6 +34,16 @@ function cena(declarado: { secaoMm2?: number; disjuntorA?: number } = {}): Bluep
 
 const props = { onAddCircuito: vi.fn(), onSelecionar: vi.fn() };
 
+
+/**
+ * 15/09/2026: o painel virou TabsBar + StandardTable (Circuitos · Pontos fora
+ * de circuito · Quadros · Conferência · Hipóteses). O que não é a tabela de
+ * circuitos vive numa aba — os testes abrem a aba antes de olhar.
+ */
+async function abrirAba(nome: RegExp) {
+  await userEvent.setup().click(screen.getByRole('tab', { name: nome }));
+}
+
 describe('PainelEletrica · pré-dimensionamento', () => {
   it('mostra IB, seção mínima e In sugerido ao lado do declarado', () => {
     render(<PainelEletrica model={cena()} onCircuitoProps={vi.fn()} hipoteses={HIPOTESES_PADRAO} {...props} />);
@@ -72,6 +82,7 @@ describe('PainelEletrica · pré-dimensionamento', () => {
   it('as hipóteses aparecem recolhidas, com o resumo, e abrem para editar', async () => {
     const onHipoteses = vi.fn();
     render(<PainelEletrica model={cena()} onCircuitoProps={vi.fn()} hipoteses={HIPOTESES_PADRAO} onHipoteses={onHipoteses} {...props} />);
+    await abrirAba(/^hipóteses$/i);
     const botao = screen.getByRole('button', { name: /Hipóteses do pré-dimensionamento/ });
     expect(botao.textContent).toMatch(/B1 · 30 °C/);
     await userEvent.click(botao);
@@ -82,6 +93,7 @@ describe('PainelEletrica · pré-dimensionamento', () => {
   it('a seção mínima de TUE (14/09/2026) é hipótese editável, com 4 mm² de padrão e dito que a Tab. 47 pede 2,5', async () => {
     const onHipoteses = vi.fn();
     render(<PainelEletrica model={cena()} onCircuitoProps={vi.fn()} hipoteses={HIPOTESES_PADRAO} onHipoteses={onHipoteses} {...props} />);
+    await abrirAba(/^hipóteses$/i);
     const botao = screen.getByRole('button', { name: /Hipóteses do pré-dimensionamento/ });
     expect(botao.textContent).toMatch(/TUE ≥ 4 mm²/);
     await userEvent.click(botao);

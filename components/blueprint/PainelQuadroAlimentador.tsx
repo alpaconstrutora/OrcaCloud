@@ -62,7 +62,7 @@ export default function PainelQuadroAlimentador({
             onChange={(e) => onQuadro({ tensaoV: e.target.value === '' ? null : Number(e.target.value) })}
             placeholder={q.tensaoV ? String(q.tensaoV) : 'V'}
             aria-label={`Tensão do quadro ${q.nome}, em volts`}
-            className={`w-12 text-right ${campo}`}
+            className={`w-16 text-right ${campo}`}
           />
           V
         </label>
@@ -75,7 +75,7 @@ export default function PainelQuadroAlimentador({
             onChange={(e) => onQuadro({ alimentadorM: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}
             placeholder="m"
             aria-label={`Comprimento do alimentador do quadro ${q.nome}, em metros`}
-            className={`w-12 text-right ${campo}`}
+            className={`w-16 text-right ${campo}`}
           />
           m
         </label>

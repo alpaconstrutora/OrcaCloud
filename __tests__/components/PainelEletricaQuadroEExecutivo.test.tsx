@@ -35,6 +35,16 @@ function cena(): BlueprintModel {
   return m;
 }
 
+
+/**
+ * 15/09/2026: o painel virou TabsBar + StandardTable (Circuitos · Pontos fora
+ * de circuito · Quadros · Conferência · Hipóteses). O que não é a tabela de
+ * circuitos vive numa aba — os testes abrem a aba antes de olhar.
+ */
+async function abrirAba(nome: RegExp) {
+  await userEvent.setup().click(screen.getByRole('tab', { name: nome }));
+}
+
 describe('PainelEletrica · quadro e alimentador (F6)', () => {
   it('mostra carga instalada, IB do alimentador e as fases; declarar alimentador chama onQuadroProps', async () => {
     const onQuadroProps = vi.fn();
@@ -42,6 +52,7 @@ describe('PainelEletrica · quadro e alimentador (F6)', () => {
     render(
       <PainelEletrica model={cena()} onAddCircuito={vi.fn()} onCircuitoProps={onCircuitoProps} onQuadroProps={onQuadroProps} hipoteses={HIPOTESES_PADRAO} />,
     );
+    await abrirAba(/^quadros/i);
     const bloco = screen.getByLabelText('Alimentador do quadro QDC');
     expect(bloco.textContent).toMatch(/1200 VA instalados/);
     expect(bloco.textContent).toMatch(/IB/);
@@ -55,8 +66,9 @@ describe('PainelEletrica · quadro e alimentador (F6)', () => {
     expect(onCircuitoProps).toHaveBeenLastCalledWith(expect.any(String), { fase: 'S' });
   });
 
-  it('sem onQuadroProps o bloco não aparece (o harness antigo e as telas só de leitura)', () => {
+  it('sem onQuadroProps o bloco não aparece (o harness antigo e as telas só de leitura)', async () => {
     render(<PainelEletrica model={cena()} onAddCircuito={vi.fn()} onCircuitoProps={vi.fn()} hipoteses={HIPOTESES_PADRAO} />);
+    await abrirAba(/^quadros/i);
     expect(screen.queryByLabelText('Alimentador do quadro QDC')).toBeNull();
   });
 });

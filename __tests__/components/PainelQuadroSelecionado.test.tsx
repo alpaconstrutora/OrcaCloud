@@ -85,17 +85,19 @@ describe('PainelQuadroSelecionado', () => {
 });
 
 describe('⚠️ a medida do quadro existe num LUGAR SÓ', () => {
-  it('o painel de cargas não edita mais geometria nem nome', () => {
+  it('o painel de cargas não edita mais geometria nem nome', async () => {
     // Dois lugares para o mesmo campo são duas verdades sobre ele, e foi a
     // geometria morando no painel de cargas que gerou a assimetria relatada:
     // o QDC se editava na Elétrica e o ponto em Componentes.
     render(
       <PainelEletrica model={cena()} onAddCircuito={() => {}} onCircuitoProps={() => {}} />,
     );
+    // 15/09/2026: o painel virou abas; o quadro mora na aba "Quadros".
+    await userEvent.setup().click(screen.getByRole('tab', { name: /^quadros/i }));
     expect(screen.queryByLabelText('Largura da peça, em milímetros')).toBeNull();
     expect(screen.queryByLabelText('Giro da peça em planta, em graus')).toBeNull();
     expect(screen.queryByLabelText('Nome do quadro')).toBeNull();
-    // Mas o nome continua LEGÍVEL — ele é o cabeçalho que agrupa os circuitos.
+    // Mas o nome continua LEGÍVEL — ele é o cabeçalho do quadro.
     expect(screen.getByText('QDC')).toBeTruthy();
   });
 

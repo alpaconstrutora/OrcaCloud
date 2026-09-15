@@ -9,6 +9,7 @@
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import PainelEletrica from '../../components/blueprint/PainelEletrica';
 import {
   applyCommand,
@@ -65,12 +66,24 @@ const vazio = {
   onQuadroProps: vi.fn(),
 };
 
+
+/**
+ * 15/09/2026: o painel virou TabsBar + StandardTable (Circuitos · Pontos fora
+ * de circuito · Quadros · Conferência · Hipóteses). O que não é a tabela de
+ * circuitos vive numa aba — os testes abrem a aba antes de olhar.
+ */
+async function abrirAba(nome: RegExp) {
+  await userEvent.setup().click(screen.getByRole('tab', { name: nome }));
+}
+
 describe('PainelEletrica', () => {
   it('mostra a carga somada e o disjuntor DECLARADO', () => {
     render(<PainelEletrica model={modelo({ comPotencia: true, soltos: 0 })} {...vazio} />);
     // Em VA, e não W: a NBR 5410 dimensiona por potência aparente (10/09/2026).
-    expect(screen.getAllByText('160 VA').length).toBeGreaterThan(0);
-    expect(screen.queryByText('160 W')).toBeNull();
+    // A coluna "Carga (VA)" traz o número; o total do quadro, "160 VA".
+    expect(screen.getByRole('columnheader', { name: /carga \(va\)/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/160 VA/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/160 W/)).toBeNull();
     expect(screen.getByLabelText(/Disjuntor do circuito C1/i)).toHaveValue(10);
     expect(screen.getByLabelText(/Seção do circuito C1/i)).toHaveValue(1.5);
   });
@@ -82,12 +95,14 @@ describe('PainelEletrica', () => {
     expect(screen.getByText(/soma acima está\s+incompleta/i)).toBeInTheDocument();
   });
 
-  it('⚠️ mostra os pontos FORA DE CIRCUITO, que não entram em soma nenhuma', () => {
+  it('⚠️ mostra os pontos FORA DE CIRCUITO, que não entram em soma nenhuma', async () => {
     render(<PainelEletrica model={modelo({ comPotencia: true, soltos: 3 })} {...vazio} />);
-    // O número do aviso ("3 pontos elétricos fora de circuito") — o cabeçalho do
-    // grupo também mostra "(3)" desde o agrupamento de 13/09, daí o `getAllBy`.
-    expect(screen.getAllByText(/3/).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText(/fora de\s+circuito/i)).toBeInTheDocument();
+    // O badge da aba diz 3; o rodapé da tabela repete a pendência junto da soma
+    // (uma soma que esconde o que não entrou nela parece completa).
+    expect(screen.getByRole('tab', { name: /pontos fora de circuito/i })).toHaveTextContent('3');
+    expect(screen.getByText(/3 pontos elétricos estão fora de/)).toBeInTheDocument();
+    await abrirAba(/pontos fora de circuito/i);
+    expect(screen.getByText(/pontos elétricos fora de\s+circuito/i)).toBeInTheDocument();
   });
 
   it('⚠️ o campo DECLARADO fica vazio sem declaração — a sugestão vive ao lado, nunca dentro dele', () => {

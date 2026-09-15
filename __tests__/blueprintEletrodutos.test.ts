@@ -25,6 +25,7 @@ import {
   planejarEletrodutos,
   planejarEletrodutosDoModelo,
   pontosSemCircuito,
+  relancarEletrodutos,
 } from '../utils/blueprintEletrodutos';
 import { HIPOTESES_PADRAO, agrupamentoDoCircuito, comprimentoDoCircuito } from '../utils/blueprintEletricaDimensionamento';
 
@@ -190,6 +191,43 @@ describe('planejarEletrodutos — UMA rede por quadro, compartilhada', () => {
     const semPontos = applyCommand(soQuadro, { type: 'AddCircuito', quadroId: soQuadro.quadros[0].id, nome: 'C1' }).model;
     expect(planejarEletrodutos(semPontos, semPontos.quadros[0]).motivo).toBe('nenhum ponto com circuito deste quadro');
     expect(planejarEletrodutosDoModelo(m)).toHaveLength(1);
+  });
+});
+
+describe('relancarEletrodutos — mover ponto ou quadro devolve o botão (15/09/2026)', () => {
+  it('depois de mover uma TUG, o plano não tem nada a ligar mas conta os SUGERIDOS; relançar apaga só eles e refaz a rede no lugar novo', () => {
+    const { m, c2 } = casa();
+    const plano = planejarEletrodutos(m, quadroDe(m));
+    const lancado = applyBatch(m, plano.comandos).model;
+    const tug = lancado.terminais.find((t) => t.circuitoId === c2 && t.at.x === 2000)!;
+    // Mover a TUG: a rede acompanha (conexão mantida) e continua ligada.
+    const movido = applyCommand(lancado, {
+      type: 'TranslateEntities', wallIds: [], boundaryIds: [], terminalIds: [tug.id], delta: point(0, 1500), manterJuncoes: false,
+    }).model;
+    const parado = planejarEletrodutos(movido, quadroDe(movido));
+    expect(parado.comandos).toEqual([]);
+    expect(parado.sugeridos).toBe(adds(plano.comandos).length);
+
+    // Um trecho confirmado à mão (aceito) não é tocado pelo relançar.
+    const confirmadoId = movido.trechos![0].id;
+    const comConfirmado = applyCommand(movido, { type: 'SetTrechoProps', trechoId: confirmadoId, sugerido: false }).model;
+    const re = relancarEletrodutos(comConfirmado, quadroDe(comConfirmado));
+    const apagados = re.comandos.filter((c) => c.type === 'DeleteTrecho');
+    expect(apagados).toHaveLength(adds(plano.comandos).length - 1);
+    expect(apagados.some((c) => c.type === 'DeleteTrecho' && c.trechoId === confirmadoId)).toBe(false);
+    expect(adds(re.comandos).length).toBeGreaterThan(0);
+    expect(re.sugeridos).toBe(0);
+
+    const refeito = applyBatch(comConfirmado, re.comandos).model;
+    // O confirmado sobreviveu; a prumada da TUG está na posição NOVA; nada mais a fazer.
+    expect(refeito.trechos!.some((t) => t.id === confirmadoId)).toBe(true);
+    expect(refeito.trechos!.some((t) => t.a.x === 2000 && t.a.y === 1575 && t.a.x === t.b.x && t.a.y === t.b.y)).toBe(true);
+    expect(planejarEletrodutos(refeito, quadroDe(refeito)).comandos).toEqual([]);
+  });
+
+  it('sem sugeridos, relançar é o plano normal', () => {
+    const { m } = casa();
+    expect(relancarEletrodutos(m, quadroDe(m)).comandos).toEqual(planejarEletrodutos(m, quadroDe(m)).comandos);
   });
 });
 

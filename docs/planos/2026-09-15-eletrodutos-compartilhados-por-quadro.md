@@ -53,3 +53,18 @@ Fora: desvio de viga/laje, caminho por parede, atribuir circuito a ponto solto, 
 
 - Acervo: trechos antigos continuam com um circuito (lido como lista de um); o primeiro lançamento por quadro pode propor `SetTrechoProps` neles (ganham os circuitos que passam) — é o "atualizar" da tabela.
 - Emissões do projeto executivo elétrico: hash da base não muda por si (o hash é do desenho + hipóteses), mas o desenho muda ao lançar — como qualquer edição.
+
+## Relançar (15/09, pedido: *"Ao realizar qualquer movimentação em pontos ou no quadro o botão de lançar eletrodutos deveria ficar disponível para lançamento novamente"*)
+
+Mover um ponto ou o quadro leva a rede junto (conexão mantida), então o plano
+continuava "todos os pontos já têm eletroduto" e o botão ficava apagado.
+Agora o plano conta os trechos **sugeridos** do quadro (`PlanoDeEletrodutos.sugeridos`)
+e, sem nada novo a ligar mas com sugeridos, o botão da linha vira **"Relançar (n)"**
+(e "Lançar em todos" fica habilitado): `relancarEletrodutos` apaga só os sugeridos
+do quadro (`DeleteTrecho` primeiro no lote) e refaz a rede com o que sobrou — os
+trechos **confirmados** (movidos/aceitos) nunca são tocados. Um Ctrl+Z desfaz.
+
+Prova: teste puro (mover a TUG → `comandos []` e `sugeridos` = n; relançar apaga
+n−1 quando um trecho foi confirmado, preserva o confirmado, refaz a prumada na
+posição nova e zera o plano) e app real (QDC 2 após lançar: "Relançar (4)"
+habilitado; relançar reconstrói e continua disponível enquanto a rede for sugerida).

@@ -131,6 +131,7 @@ import {
   HIPOTESES_ELETRODUTO_PADRAO,
   eletrodutosSugeridos,
   planejarEletrodutosDoModelo,
+  relancarEletrodutos,
   pontosSemCircuito,
   type PlanoDeEletrodutos,
 } from '../../utils/blueprintEletrodutos';
@@ -4317,12 +4318,25 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const pontosEletricosSemCircuito = levelId ? pontosSemCircuito(editor.model, levelId) : [];
   const eletrodutosSugeridosNoNivel = eletrodutosSugeridos(editor.model, levelId);
   /** Aplica UM plano (ou todos) num lote só — Ctrl+Z desfaz o lote; os trechos nascem selecionados. */
+  /**
+   * Lança (ou RELANÇA) os quadros pedidos num lote só. Quadro com plano novo
+   * recebe o plano; quadro sem nada a ligar mas com trechos SUGERIDOS tem os
+   * sugeridos apagados e a rede refeita — é o que devolve o botão depois de
+   * mover um ponto ou o quadro (15/09/2026). Confirmados nunca são tocados.
+   */
   const lancarEletrodutos = (planos: PlanoDeEletrodutos[]) => {
-    const comandos = planos.flatMap((p) => p.comandos);
+    const comandos = planos.flatMap((p) => {
+      if (p.comandos.length > 0) return p.comandos;
+      if (p.sugeridos === 0) return [];
+      const quadro = (editor.model.quadros ?? []).find((q) => q.id === p.quadroId);
+      return quadro ? relancarEletrodutos(editor.model, quadro, hipotesesDeEletroduto, hipotesesEletricas).comandos : [];
+    });
     if (comandos.length === 0) return;
     const criados = editor.runBatch(comandos);
     if (criados.length > 0) selecionar(criados);
   };
+  /** Há o que lançar ou relançar em algum quadro? */
+  const haOQueLancar = planosDeEletrodutos.some((p) => p.comandos.length > 0 || p.sugeridos > 0);
   const aceitarEletrodutos = () =>
     editor.runBatch(
       eletrodutosSugeridosNoNivel.map((t) => ({ type: 'SetTrechoProps' as const, trechoId: t.id, sugerido: false })),
@@ -7162,11 +7176,22 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                             <button
                               type="button"
                               onClick={() => lancarEletrodutos([plano])}
-                              disabled={!temComandos}
+                              disabled={!temComandos && plano.sugeridos === 0}
+                              title={
+                                !temComandos && plano.sugeridos > 0
+                                  ? `Apaga os ${plano.sugeridos} trecho(s) sugerido(s) deste quadro e refaz a rede — os confirmados ficam`
+                                  : undefined
+                              }
                               className="inline-flex items-center gap-1 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               <Cable className="h-3.5 w-3.5" />
-                              {temComandos ? (plano.aLigar > 0 ? `${plano.aLigar} ponto(s)` : 'atualizar') : 'Nada'}
+                              {temComandos
+                                ? plano.aLigar > 0
+                                  ? `${plano.aLigar} ponto(s)`
+                                  : 'atualizar'
+                                : plano.sugeridos > 0
+                                  ? `Relançar (${plano.sugeridos})`
+                                  : 'Nada'}
                             </button>
                           </td>
                         </tr>
@@ -7502,7 +7527,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               <button
                 type="button"
                 onClick={() => lancarEletrodutos(planosDeEletrodutos)}
-                disabled={!planosDeEletrodutos.some((p) => p.comandos.length > 0)}
+                disabled={!haOQueLancar}
                 className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Cable className="h-4 w-4" />

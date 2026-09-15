@@ -43,6 +43,7 @@ import {
   secoesDoInterruptor,
   trianguloDaTomada,
 } from './blueprintRede';
+import { condutoresDoTrecho, numeroDoCircuito, tracosDoCondutor } from './blueprintCondutores';
 import {
   HIPOTESES_PADRAO,
   preDimensionarQuadroCompleto,
@@ -216,17 +217,36 @@ export function desenharEletrica(d: Desenhista, model: BlueprintModel, proj: Pro
     const comp = Math.hypot(b.x - a.x, b.y - a.y);
     const nx = -(b.y - a.y) / comp;
     const ny = (b.x - a.x) / comp;
-    // Traços dos condutores cruzando a linha (a convenção da prancha).
-    const n = t.condutores ?? 0;
-    for (let i = 0; i < n; i++) {
+    // Os condutores na simbologia da NBR 5444 (15/09/2026): fase reto, neutro
+    // com o pé, retorno só de um lado, terra com a barra — a MESMA lista que o
+    // canvas desenha (`condutoresDoTrecho`). Número do circuito em cima do
+    // grupo, seção embaixo; o Ø à esquerda.
+    const circuito = t.circuitoId ? circuitosPorId.get(t.circuitoId) : null;
+    const condutores = condutoresDoTrecho(t, circuito ? { ligacao: circuito.ligacao ?? null } : null);
+    const n = condutores.length;
+    const ux = (b.x - a.x) / comp;
+    const uy = (b.y - a.y) / comp;
+    const MEIA = 1.2 * k;
+    const rel = (cx: number, cy: number, r: { t: number; s: number }) => ({
+      x: cx + ux * r.t * MEIA + nx * r.s * MEIA,
+      y: cy + uy * r.t * MEIA + ny * r.s * MEIA,
+    });
+    condutores.forEach((tipo, i) => {
       const off = (i - (n - 1) / 2) * 1.2 * k;
-      const cx = meio.x + ((b.x - a.x) / comp) * off;
-      const cy = meio.y + ((b.y - a.y) / comp) * off;
-      d.linha(cx - nx * 1.2 * k, cy - ny * 1.2 * k, cx + nx * 1.2 * k, cy + ny * 1.2 * k, { espessuraMm: FINA, cor: COR });
+      const cx = meio.x + ux * off;
+      const cy = meio.y + uy * off;
+      for (const seg of tracosDoCondutor(tipo)) {
+        const p1 = rel(cx, cy, seg.de);
+        const p2 = rel(cx, cy, seg.ate);
+        d.linha(p1.x, p1.y, p2.x, p2.y, { espessuraMm: FINA, cor: COR });
+      }
+    });
+    const secao = circuito?.secaoMm2 ?? null;
+    if (n > 0) {
+      d.texto(meio.x - nx * 2.4 * k - 0.8 * k, meio.y - ny * 2.4 * k + 0.6 * k, numeroDoCircuito(circuito?.nome), TEXTO_MM * 0.9);
+      if (secao != null) d.texto(meio.x + nx * 2.4 * k - 0.8 * k, meio.y + ny * 2.4 * k + 1.4 * k, mm2(secao), TEXTO_MM * 0.9, COR_FRACA);
     }
-    const secao = t.circuitoId ? circuitosPorId.get(t.circuitoId)?.secaoMm2 : null;
-    const rotulo = `Ø${t.bitolaMm}${secao != null ? ` #${mm2(secao)}` : ''}`;
-    d.texto(meio.x + nx * 2.2 * k, meio.y + ny * 2.2 * k + 0.6 * k, rotulo, TEXTO_MM * 0.9, COR_FRACA);
+    d.texto(meio.x + nx * 2.2 * k - (n + 2) * 1.2 * k, meio.y + ny * 2.2 * k + 0.6 * k, `Ø${t.bitolaMm}`, TEXTO_MM * 0.8, COR_FRACA);
   }
 
   // Quadros: retângulo em escala (piso de 4 mm) com o nome.
@@ -300,7 +320,7 @@ export function linhasDaLegenda(model: BlueprintModel): string[] {
   if (f.has('INTERRUPTOR')) L.push('INTERRUPTOR — círculo; uma seção (letra), duas (diâmetro, a|b), três (Y, a b c); paralelo = cheio; intermediário = metade hachurada');
   if (f.has('LIGACAO_DIRETA')) L.push('LIGAÇÃO DIRETA — quadrado com diagonal (chuveiro, aquecedor: sem tomada, NBR 5410 9.5.2.3)');
   if (['DADOS_TELEFONE', 'DADOS_TV', 'DADOS_REDE', 'DADOS_USB'].some((x) => f.has(x))) L.push('DADOS — círculo pequeno com traço (telefone, TV, rede, USB)');
-  if (f.has('ELETRODUTO')) L.push('ELETRODUTO — linha contínua = embutido na parede ou teto; Ø nominal e #seção do circuito ao lado; traços cruzando = condutores');
+  if (f.has('ELETRODUTO')) L.push('ELETRODUTO — linha contínua = embutido na parede ou teto; Ø nominal ao lado; condutores (NBR 5444): traço reto = fase, com pé = neutro, só de um lado = retorno, com barra = terra; número do circuito em cima, seção (mm²) embaixo');
   if (f.has('ELETRODUTO_PISO')) L.push('ELETRODUTO NO PISO — linha tracejada');
   if (f.has('SEM_TIPO')) L.push('● — ponto elétrico sem tipo (a classificar)');
   L.push('Ao lado de cada ponto: SIGLA · circuito; "?" = sem circuito ou sem tipo. Letra em itálico = comando (interruptor ↔ luz).');

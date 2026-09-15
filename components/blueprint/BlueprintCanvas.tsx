@@ -75,6 +75,7 @@ import {
   pontoDaCota,
   type LadoDoContorno,
 } from '../../utils/blueprintCotas';
+import { condutoresDoTrecho, numeroDoCircuito, tracosDoCondutor } from '../../utils/blueprintCondutores';
 import {
   curvaDoTrecho,
   desviosDeSobreposicao,
@@ -1451,6 +1452,12 @@ export default function BlueprintCanvas({
   /** Nome do circuito por id — o desenho escreve "C1", não o identificador. */
   const circuitosPorId = useMemo(
     () => new Map((model.circuitos ?? []).map((c) => [c.id, c.nome])),
+    [model.circuitos],
+  );
+
+  /** Ligação por circuito — é ela que diz quais condutores o eletroduto carrega (fase/neutro/terra). */
+  const ligacaoPorCircuito = useMemo(
+    () => new Map((model.circuitos ?? []).map((c) => [c.id, { ligacao: c.ligacao ?? null }])),
     [model.circuitos],
   );
 
@@ -4157,21 +4164,23 @@ export default function BlueprintCanvas({
       if (t.disciplina === 'ELETRICA' && mostrarCircuitos) {
         const c = p.x === q.x && p.y === q.y ? p : curva.meio;
         const comp = Math.hypot(q.x - p.x, q.y - p.y);
-        // Abaixo do traço e à esquerda dos condutores, para não brigar com o
-        // "#2,5" que fica acima.
+        // Abaixo do traço e à esquerda do grupo de condutores, para não
+        // brigar com a seção, que fica embaixo do grupo.
         const nx = comp > 0 ? -(q.y - p.y) / comp : 0;
         const ny = comp > 0 ? (q.x - p.x) / comp : 1;
         ctx.fillStyle = '#334155';
         ctx.font = '9px ui-sans-serif, system-ui, sans-serif';
-        ctx.fillText(`Ø ${t.bitolaMm}`, c.x - nx * 9 - 10, c.y - ny * 9 + 3);
+        ctx.fillText(`Ø ${t.bitolaMm}`, c.x - nx * 9 - 26, c.y - ny * 9 + 3);
       }
 
-      // ── OS CONDUTORES E A SEÇÃO, na convenção da prancha ─────────────────
+      // ── OS CONDUTORES, na simbologia da NBR 5444 (15/09/2026) ────────────
       //
-      // Traços cruzando a linha = quantos fios passam. Ao lado, `#2,5` = a
-      // seção do CIRCUITO a que o trecho pertence, declarada no quadro de
-      // cargas. As duas coisas juntas são o que se lê de relance para saber se
-      // ali vão fase e neutro, com retorno ou com terra.
+      // Cada condutor é um traço cruzando a linha, e o DESENHO do traço diz o
+      // que ele é: fase reto; neutro com o pé no topo; retorno só de um lado;
+      // terra com a barra no topo (o "T"). Em cima do grupo, o NÚMERO do
+      // circuito; embaixo, a SEÇÃO — é como a prancha do exemplo se lê. A lista
+      // vem de `condutoresDoTrecho`: a contagem do trecho decomposta pela
+      // ligação do circuito (FN/FF/FFF); o que passa da base é retorno.
       //
       // ⚠️ A seção NÃO é um campo do trecho: ela é a do circuito. Um número
       // próprio aqui poderia divergir do que o quadro de cargas conta, e a
@@ -4189,26 +4198,42 @@ export default function BlueprintCanvas({
           ctx.setLineDash([]);
           ctx.lineWidth = 1.25;
           ctx.strokeStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA.ELETRICA;
-          const n = t.condutores ?? 0;
-          for (let k = 0; k < n; k++) {
-            // Centradas no meio do traço, com 4 px entre elas.
-            const d = (k - (n - 1) / 2) * 4;
+          const condutores = condutoresDoTrecho(t, t.circuitoId ? ligacaoPorCircuito.get(t.circuitoId) : null);
+          const n = condutores.length;
+          const MEIA = 5; // meia altura do traço, px
+          const PASSO = 5; // entre condutores, px
+          // A "cima" do traço é o lado −n (na tela, acima de uma linha horizontal).
+          const emTelaRel = (cx: number, cy: number, r: { t: number; s: number }) => ({
+            x: cx + ux * r.t * MEIA + nx * r.s * MEIA,
+            y: cy + uy * r.t * MEIA + ny * r.s * MEIA,
+          });
+          condutores.forEach((tipo, k) => {
+            const d = (k - (n - 1) / 2) * PASSO;
             const cx = meio.x + ux * d;
             const cy = meio.y + uy * d;
-            ctx.beginPath();
-            ctx.moveTo(cx + nx * 5 - ux * 2.5, cy + ny * 5 - uy * 2.5);
-            ctx.lineTo(cx - nx * 5 + ux * 2.5, cy - ny * 5 + uy * 2.5);
-            ctx.stroke();
-          }
-          const secao = t.circuitoId ? secaoPorCircuito.get(t.circuitoId) : null;
-          if (secao != null) {
+            for (const seg of tracosDoCondutor(tipo)) {
+              const a = emTelaRel(cx, cy, seg.de);
+              const b = emTelaRel(cx, cy, seg.ate);
+              ctx.beginPath();
+              ctx.moveTo(a.x, a.y);
+              ctx.lineTo(b.x, b.y);
+              ctx.stroke();
+            }
+          });
+          if (n > 0) {
             ctx.fillStyle = '#334155';
-            ctx.font = '9px ui-sans-serif, system-ui, sans-serif';
-            ctx.fillText(
-              `#${String(secao).replace('.', ',')}`,
-              meio.x + nx * 9,
-              meio.y + ny * 9 + 3,
-            );
+            ctx.font = 'bold 9px ui-sans-serif, system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            // O número do circuito em cima do grupo…
+            const nome = t.circuitoId ? circuitosPorId.get(t.circuitoId) : null;
+            ctx.fillText(numeroDoCircuito(nome), meio.x - nx * (MEIA + 4), meio.y - ny * (MEIA + 4) + 3);
+            // …e a seção embaixo, como no exemplo: "4", "1.5".
+            const secao = t.circuitoId ? secaoPorCircuito.get(t.circuitoId) : null;
+            if (secao != null) {
+              ctx.font = '9px ui-sans-serif, system-ui, sans-serif';
+              ctx.fillText(String(secao).replace('.', ','), meio.x + nx * (MEIA + 4), meio.y + ny * (MEIA + 4) + 3);
+            }
+            ctx.textAlign = 'start';
           }
         }
       }

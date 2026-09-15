@@ -69,7 +69,7 @@ describe('a planta elétrica no papel', () => {
     expect(textos).not.toMatch(/TUG|QDC|Ø25|VA/);
   });
 
-  it('com `eletrica`: QDC, "TUG · C1", "Luz teto · C1", a letra do comando, "Ø25 #2,5" e a potência', () => {
+  it('com `eletrica`: QDC, "TUG · C1", "Luz teto · C1", a letra do comando, o Ø, o número do circuito e a seção no eletroduto, e a potência', () => {
     const m = casa();
     const d = new DesenhistaDeProva();
     const antes = new DesenhistaDeProva();
@@ -80,7 +80,11 @@ describe('a planta elétrica no papel', () => {
     expect(textos.filter((t) => t === 'TUG · C1')).toHaveLength(2);
     expect(textos).toContain('Luz teto · C1');
     expect(textos).toContain('a');
-    expect(textos).toContain('Ø25 #2,5');
+    // 15/09/2026 (NBR 5444): o Ø sozinho; o número do circuito em cima do
+    // grupo de condutores e a seção embaixo, como na prancha de referência.
+    expect(textos).toContain('Ø25');
+    expect(textos).toContain('1');
+    expect(textos).toContain('2,5');
     expect(textos.filter((t) => t === '600 VA')).toHaveLength(2);
     // Mais traços que a arquitetônica: os símbolos existem de fato, não só o texto.
     expect(d.chamadas.length).toBeGreaterThan(antes.chamadas.length + 20);

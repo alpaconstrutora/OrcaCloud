@@ -1184,6 +1184,14 @@ texto comum**. Ser interativo não é motivo para `text-xs`, `font-bold` ou
 > ❌ **NUNCA** `text-xs`, `font-bold`, `font-black` ou `uppercase tracking-wider`
 > num campo editável dentro de TD, mesmo que pareça um "chip". Para badge visual
 > de verdade, use §8.
+> ⚠️ **O `text-gray-400` do estado vazio vaza para o popup de opções.** Em
+> `<select>` nativo o Chromium herda a `color` do campo para cada `<option>` —
+> com o campo vazio em cinza-placeholder, a lista inteira abria em cinza claro
+> (Credor no Extrato, 2026-09-15: "prejudica a leitura"). Resolvido de uma vez
+> em `index.css` (`@layer base`): `select option { color: gray-900 }`, só a
+> opção de `value=""` fica gray-500, `optgroup` em gray-500 semibold. Não é
+> preciso (nem correto) repetir classe de cor em cada `<option>`; se um select
+> novo abrir cinza, é o `index.css` que foi quebrado, não a tela.
 
 ### 7.2 Altura da linha — padding vertical padrão
 

@@ -58,6 +58,28 @@
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
+  /* Opções de <select> nativo SEMPRE em cor de texto.
+     O campo fechado usa text-gray-400 como placeholder quando está vazio
+     (Categoria/Obra/Centro de Custo do Extrato, selects de formulário); o
+     Chromium herda essa cor para o popup inteiro e a lista sai em cinza claro
+     — reportado pelo usuário em 15/09/2026 ("prejudica a leitura"), mesmo
+     critério de contraste do guia §19.1. A regra vale para o app todo; só a
+     opção-placeholder (value vazio) continua cinza, para se distinguir. */
+  select option {
+    color: #111827;               /* gray-900 */
+    font-weight: 400;
+    background-color: #ffffff;
+  }
+  select option[value=""] {
+    color: #6b7280;               /* gray-500 — placeholder / "— Não alterar —" */
+  }
+  select optgroup {
+    color: #6b7280;               /* rótulo do grupo (ex.: nome da organização) */
+    font-weight: 600;
+    font-style: normal;
+    background-color: #ffffff;
+  }
+
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;

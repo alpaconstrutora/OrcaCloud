@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
+  circuitosDoTrecho,
   travarOrtogonal,
   isFreeWallEnd,
   extensaoDeCanto,
@@ -75,7 +76,7 @@ import {
   pontoDaCota,
   type LadoDoContorno,
 } from '../../utils/blueprintCotas';
-import { condutoresDoTrecho, numeroDoCircuito, tracosDoCondutor } from '../../utils/blueprintCondutores';
+import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor } from '../../utils/blueprintCondutores';
 import {
   curvaDoTrecho,
   desviosDeSobreposicao,
@@ -4198,7 +4199,14 @@ export default function BlueprintCanvas({
           ctx.setLineDash([]);
           ctx.lineWidth = 1.25;
           ctx.strokeStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA.ELETRICA;
-          const condutores = condutoresDoTrecho(t, t.circuitoId ? ligacaoPorCircuito.get(t.circuitoId) : null);
+          // VÁRIOS circuitos no mesmo eletroduto (15/09/2026): os condutores de
+          // cada um, na ordem; em cima, os números de todos; embaixo, a seção
+          // (uma só quando todos têm a mesma; senão, separadas por "/").
+          const idsDoTrecho = circuitosDoTrecho(t);
+          const condutores = condutoresDoEletroduto(
+            t,
+            idsDoTrecho.map((cid) => ({ id: cid, ligacao: ligacaoPorCircuito.get(cid)?.ligacao ?? null })),
+          ).map((c) => c.tipo);
           const n = condutores.length;
           const MEIA = 5; // meia altura do traço, px
           const PASSO = 5; // entre condutores, px
@@ -4225,13 +4233,13 @@ export default function BlueprintCanvas({
             ctx.font = 'bold 9px ui-sans-serif, system-ui, sans-serif';
             ctx.textAlign = 'center';
             // O número do circuito em cima do grupo…
-            const nome = t.circuitoId ? circuitosPorId.get(t.circuitoId) : null;
-            ctx.fillText(numeroDoCircuito(nome), meio.x - nx * (MEIA + 4), meio.y - ny * (MEIA + 4) + 3);
+            const numeros = idsDoTrecho.length > 0 ? idsDoTrecho.map((cid) => numeroDoCircuito(circuitosPorId.get(cid))).join(' ') : '?';
+            ctx.fillText(numeros, meio.x - nx * (MEIA + 4), meio.y - ny * (MEIA + 4) + 3);
             // …e a seção embaixo, como no exemplo: "4", "1.5".
-            const secao = t.circuitoId ? secaoPorCircuito.get(t.circuitoId) : null;
-            if (secao != null) {
+            const secoes = [...new Set(idsDoTrecho.map((cid) => secaoPorCircuito.get(cid)).filter((v): v is number => v != null))];
+            if (secoes.length > 0) {
               ctx.font = '9px ui-sans-serif, system-ui, sans-serif';
-              ctx.fillText(String(secao).replace('.', ','), meio.x + nx * (MEIA + 4), meio.y + ny * (MEIA + 4) + 3);
+              ctx.fillText(secoes.map((v) => String(v).replace('.', ',')).join('/'), meio.x + nx * (MEIA + 4), meio.y + ny * (MEIA + 4) + 3);
             }
             ctx.textAlign = 'start';
           }

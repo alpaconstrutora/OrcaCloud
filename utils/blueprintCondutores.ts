@@ -101,3 +101,34 @@ export function tracosDoCondutor(
       return [cruzando, { de: { t: -pe, s: -1 }, ate: { t: pe, s: -1 } }];
   }
 }
+
+/** Um condutor com o circuito a que pertence — para o eletroduto compartilhado. */
+export interface CondutorIdentificado {
+  tipo: TipoDeCondutor;
+  circuitoId: string | null;
+}
+
+/**
+ * Os condutores de um eletroduto que carrega VÁRIOS circuitos (15/09/2026):
+ * a base de cada circuito pela ligação dele, na ordem dos circuitos; o que a
+ * contagem do trecho tiver além da soma das bases é retorno (sem dono certo —
+ * fica sem circuito); abaixo da soma, a contagem declarada vence e a lista é
+ * cortada pelo fim. Um circuito só cai em `condutoresDoTrecho`.
+ */
+export function condutoresDoEletroduto(
+  trecho: { condutores?: number | null },
+  circuitos: readonly { id: string; ligacao?: LigacaoDoCircuito | null }[],
+): CondutorIdentificado[] {
+  if (circuitos.length <= 1) {
+    const c = circuitos[0] ?? null;
+    return condutoresDoTrecho(trecho, c).map((tipo) => ({ tipo, circuitoId: c?.id ?? null }));
+  }
+  const n = Math.max(0, Math.floor(trecho.condutores ?? 0));
+  const bases = circuitos.map((c) => BASE_POR_LIGACAO[c.ligacao ?? 'FN'].map((tipo) => ({ tipo, circuitoId: c.id })));
+  const soma = bases.reduce((t, b) => t + b.length, 0);
+  const lista = bases.flat();
+  if (n === 0) return lista;
+  if (n <= soma) return lista.slice(0, n);
+  const retornos = Array.from({ length: n - soma }, (): CondutorIdentificado => ({ tipo: 'RETORNO', circuitoId: null }));
+  return [...lista, ...retornos];
+}

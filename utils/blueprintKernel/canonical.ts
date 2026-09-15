@@ -435,9 +435,12 @@ function projetar(model: BlueprintModel): {
       itemCode: t.itemCode ?? null,
       rotulo: t.rotulo ?? null,
       // ⚠️ `undefined` quando não há: emitir a chave em todo trecho mudaria a
-      // forma canônica — e o hash — dos desenhos anteriores. Mesma decisão do
-      // `circuito` no terminal.
-      circuito: t.circuitoId != null ? (indiceDoCircuito.get(t.circuitoId) ?? 0) : undefined,
+      // forma canônica — e o hash — dos desenhos anteriores. Vários circuitos
+      // (0.31): índices em ordem crescente, sem repetição.
+      circuitos:
+        t.circuitoIds && t.circuitoIds.length > 0
+          ? [...new Set(t.circuitoIds.map((cid) => indiceDoCircuito.get(cid) ?? 0))].sort((p, q) => p - q)
+          : undefined,
       condutores: t.condutores ?? undefined,
       // `true` ou AUSENTE — nunca `false`, pela razão do `sugerida` do terminal.
       sugerido: t.sugerido ? (true as const) : undefined,
@@ -813,7 +816,10 @@ export interface CanonicalPayload {
     itemCode: string | null;
     rotulo: string | null;
     /** ÍNDICE do circuito na ordem canônica. Ausente = trecho sem circuito. */
+    /** Legado (um circuito por trecho, até 0.30). Lido como lista de um. */
     circuito?: number;
+    /** Índices dos circuitos que passam pelo eletroduto (0.31+). */
+    circuitos?: number[];
     /** Quantos fios passam no eletroduto. Ausente sob kernel < 0.23.0. */
     condutores?: number;
     /** Lançado pelo sistema e ainda não confirmado. Ausente sob kernel < 0.30.0 e quando falso. */
@@ -1182,7 +1188,13 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       bitolaMm: t.bitolaMm,
       itemCode: t.itemCode,
       rotulo: t.rotulo,
-      circuitoId: t.circuito != null ? idsDeCircuito[t.circuito] : null,
+      // `circuitos` (0.31) ou o `circuito` escalar antigo como lista de um.
+      circuitoIds:
+        t.circuitos && t.circuitos.length > 0
+          ? t.circuitos.map((k) => idsDeCircuito[k])
+          : t.circuito != null
+            ? [idsDeCircuito[t.circuito]]
+            : null,
       condutores: t.condutores ?? null,
       sugerido: t.sugerido ? true : null,
     });

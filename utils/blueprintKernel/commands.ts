@@ -33,6 +33,7 @@ import {
   type Esquadria,
   type StructuralKind,
   type TipoCirculacao,
+  type Trecho,
   FORMA_ESTRUTURAL,
   findAgua,
   findCorte,
@@ -299,8 +300,10 @@ export type Command =
       bitolaMm: number;
       itemCode?: string | null;
       rotulo?: string | null;
-      /** Circuito já conhecido ao criar (lançamento automático). Só em `ELETRICA`. */
+      /** Um circuito já conhecido ao criar — açúcar para `circuitoIds: [id]`. Só em `ELETRICA`. */
       circuitoId?: ObjectId | null;
+      /** Os circuitos que passam pelo eletroduto (lançamento automático compartilhado). */
+      circuitoIds?: ObjectId[] | null;
       /** Condutores já conhecidos ao criar. */
       condutores?: number | null;
       /** Gerado pelo lançamento automático — ver `Trecho.sugerido`. */
@@ -315,8 +318,10 @@ export type Command =
       bitolaMm?: number;
       itemCode?: string | null;
       rotulo?: string | null;
-      /** Circuito a que o trecho pertence. `null` desliga; ausente não mexe. */
+      /** UM circuito: `null` desliga todos; um id = só ele. Açúcar de `circuitoIds`. Ausente não mexe. */
       circuitoId?: ObjectId | null;
+      /** Os circuitos do trecho, sem repetição; `[]` desliga. Ausente não mexe. */
+      circuitoIds?: ObjectId[] | null;
       /** Quantos condutores passam no eletroduto. `null` = não informado. */
       condutores?: number | null;
       /** `false` aceita o caminho sugerido — ver `Trecho.sugerido`. */
@@ -1389,7 +1394,11 @@ function aplicarSemHash(
           rotulo: command.rotulo?.trim() || null,
           // Só quando informados — a chave ausente é o estado de todo trecho
           // anterior, e é o que a invariante e o canônico esperam.
-          ...(command.circuitoId != null ? { circuitoId: command.circuitoId } : {}),
+          ...(command.circuitoIds && command.circuitoIds.length > 0
+            ? { circuitoIds: [...new Set(command.circuitoIds)] }
+            : command.circuitoId != null
+              ? { circuitoIds: [command.circuitoId] }
+              : {}),
           ...(command.condutores != null ? { condutores: command.condutores } : {}),
           ...(command.sugerido ? { sugerido: true } : {}),
         },
@@ -1415,7 +1424,11 @@ function aplicarSemHash(
       }
       if (command.itemCode !== undefined) trecho.itemCode = command.itemCode?.trim() || null;
       if (command.rotulo !== undefined) trecho.rotulo = command.rotulo?.trim() || null;
-      if (command.circuitoId !== undefined) trecho.circuitoId = command.circuitoId;
+      if (command.circuitoIds !== undefined) {
+        trecho.circuitoIds = command.circuitoIds && command.circuitoIds.length > 0 ? [...new Set(command.circuitoIds)] : null;
+      } else if (command.circuitoId !== undefined) {
+        trecho.circuitoIds = command.circuitoId ? [command.circuitoId] : null;
+      }
       if (command.condutores !== undefined) trecho.condutores = command.condutores;
       if (command.sugerido !== undefined) trecho.sugerido = command.sugerido ? true : null;
       diff.updated.push(trecho.id);
@@ -1658,6 +1671,7 @@ function aplicarSemHash(
       next.terminais = (next.terminais ?? []).map((t) =>
         t.circuitoId && idsFilhos.has(t.circuitoId) ? { ...t, circuitoId: null } : t,
       );
+      next.trechos = (next.trechos ?? []).map((t) => semCircuitos(t, idsFilhos));
       next.quadros = (next.quadros ?? []).filter((q) => q.id !== quadro.id);
       diff.deleted.push(quadro.id, ...filhos.map((c) => c.id));
       break;
@@ -1680,9 +1694,7 @@ function aplicarSemHash(
       // trecho carrega `circuitoId`, e a invariante recusa trecho apontando
       // para circuito inexistente — sem esta linha, apagar um circuito com
       // eletroduto lançado falhava o comando inteiro.
-      next.trechos = (next.trechos ?? []).map((t) =>
-        t.circuitoId === command.circuitoId ? { ...t, circuitoId: null } : t,
-      );
+      next.trechos = (next.trechos ?? []).map((t) => semCircuitos(t, new Set([command.circuitoId])));
       diff.deleted.push(command.circuitoId);
       break;
     }
@@ -2464,6 +2476,7 @@ function aplicarSemHash(
       next.terminais = (next.terminais ?? []).map((t) =>
         t.circuitoId && idsCircuito.has(t.circuitoId) ? { ...t, circuitoId: null } : t,
       );
+      next.trechos = (next.trechos ?? []).map((t) => semCircuitos(t, idsCircuito));
       next.labels = next.labels.filter((l) => l.levelId !== level.id);
       next.levels = next.levels.filter((l) => l.id !== level.id);
 
@@ -2738,6 +2751,18 @@ function aplicarMedidas(peca: MedidasEditaveis, command: MedidasEditaveis): void
     const g = command.rotacaoGraus;
     peca.rotacaoGraus = g == null ? null : ((Math.round(g) % 360) + 360) % 360;
   }
+}
+
+/**
+ * O trecho sem os circuitos apagados: os que sobram ficam; sem nenhum, `null`.
+ * Antes o eletroduto perdia "o" circuito; agora perde só os que se foram — o
+ * tronco compartilhado continua alimentando os outros.
+ */
+function semCircuitos(t: Trecho, apagados: ReadonlySet<ObjectId>): Trecho {
+  const ids = t.circuitoIds ?? [];
+  if (!ids.some((id) => apagados.has(id))) return t;
+  const restantes = ids.filter((id) => !apagados.has(id));
+  return { ...t, circuitoIds: restantes.length > 0 ? restantes : null };
 }
 
 export function applyCommand(model: BlueprintModel, command: Command): CommandResult {

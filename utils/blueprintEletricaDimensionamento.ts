@@ -380,7 +380,7 @@ const chaveDePonta = (x: number, y: number, cota: number) => `${x},${y},${cota}`
 export function comprimentoDoCircuito(model: BlueprintModel, circuito: Circuito): ComprimentoDoCircuito | null {
   const quadro = (model.quadros ?? []).find((q) => q.id === circuito.quadroId);
   if (!quadro) return null;
-  const trechos = (model.trechos ?? []).filter((t) => t.circuitoId === circuito.id);
+  const trechos = (model.trechos ?? []).filter((t) => (t.circuitoIds ?? []).includes(circuito.id));
   const pontos = (model.terminais ?? []).filter((t) => t.circuitoId === circuito.id);
 
   // Grafo pelas pontas coincidentes (mesmo x, y e cota).
@@ -466,8 +466,12 @@ export interface PreDimensionamentoDoCircuito {
 export function preDimensionarCircuito(
   model: BlueprintModel,
   circuito: Circuito,
-  hip: HipotesesEletricas = HIPOTESES_PADRAO,
+  hipDeclaradas: HipotesesEletricas = HIPOTESES_PADRAO,
 ): PreDimensionamentoDoCircuito {
+  // AGRUPAMENTO MEDIDO (15/09/2026): com eletroduto lançado, a Tabela 42 usa
+  // quantos circuitos dividem o pior trecho do caminho deste — é a conta que a
+  // norma cobra pelo eletroduto compartilhado. Sem eletroduto, a hipótese.
+  const hip: HipotesesEletricas = { ...hipDeclaradas, circuitosAgrupados: agrupamentoDoCircuito(model, circuito.id, hipDeclaradas) };
   // O INTERRUPTOR está no circuito mas não é carga: não conta ponto nem
   // potência — senão todo circuito de luz apareceria com "1 sem potência".
   const pontos = (model.terminais ?? []).filter((t) => t.circuitoId === circuito.id && t.tipoEletrico !== 'INTERRUPTOR');
@@ -888,6 +892,102 @@ export function ocupacaoDoEletroduto(
  * e a seção DECLARADA do circuito (ou a mínima calculada, quando não há
  * declarada). Devolve também o motivo quando não dá para avaliar.
  */
+/**
+ * Quantos condutores de cada seção passam no trecho, repartindo a contagem
+ * declarada entre os circuitos pela base da ligação de cada um (FN/FF = 3,
+ * FFF = 4) — o excedente é retorno na seção do primeiro circuito.
+ */
+export function condutoresPorCircuitoNoTrecho(
+  condutores: number,
+  circuitos: readonly { ligacao?: LigacaoDoCircuito | null }[],
+  secoes: readonly number[],
+): { secaoMm2: number; quantidade: number }[] {
+  const base = circuitos.map((c) => ((c.ligacao ?? 'FN') === 'FFF' ? 4 : 3));
+  const soma = base.reduce((t, b) => t + b, 0);
+  const saida: { secaoMm2: number; quantidade: number }[] = [];
+  if (condutores >= soma) {
+    circuitos.forEach((_, i) => saida.push({ secaoMm2: secoes[i], quantidade: base[i] + (i === 0 ? condutores - soma : 0) }));
+    return saida;
+  }
+  let restam = condutores;
+  circuitos.forEach((_, i) => {
+    const q = Math.min(base[i], restam);
+    restam -= q;
+    if (q > 0) saida.push({ secaoMm2: secoes[i], quantidade: q });
+  });
+  return saida;
+}
+
+/**
+ * A ocupação com condutores de seções DIFERENTES (6.2.11.1.6): soma das áreas
+ * externas sobre a área interna. Mesmo formato de `ocupacaoDoEletroduto`; a
+ * seção e o diâmetro informados são os MAIORES presentes.
+ */
+export function ocupacaoDoEletrodutoCompartilhado(
+  bitolaMm: number,
+  condutores: readonly { secaoMm2: number; quantidade: number }[],
+  hip: Pick<HipotesesEletricas, 'diametroExternoCondutorMm' | 'diametroInternoEletrodutoMm'> = HIPOTESES_PADRAO,
+): OcupacaoDoEletroduto | null {
+  const interno = procurar(hip.diametroInternoEletrodutoMm, bitolaMm);
+  if (interno == null) return null;
+  let area = 0;
+  let total = 0;
+  let maiorSecao = 0;
+  let maiorDiametro = 0;
+  for (const c of condutores) {
+    const ext = procurar(hip.diametroExternoCondutorMm, c.secaoMm2);
+    if (ext == null) return null;
+    area += c.quantidade * Math.PI * (ext / 2) ** 2;
+    total += c.quantidade;
+    maiorSecao = Math.max(maiorSecao, c.secaoMm2);
+    maiorDiametro = Math.max(maiorDiametro, ext);
+  }
+  if (total === 0) return null;
+  const ocupacao = (internoMm: number) => (area / (Math.PI * (internoMm / 2) ** 2)) * 100;
+  const ocupacaoPct = ocupacao(interno);
+  const limitePct = limiteDeOcupacaoPct(total);
+  const atende = ocupacaoPct <= limitePct;
+  let bitolaQueAtendeMm: number | null = null;
+  if (!atende) {
+    for (const [b, i] of hip.diametroInternoEletrodutoMm) {
+      if (b > bitolaMm && ocupacao(i) <= limitePct) {
+        bitolaQueAtendeMm = b;
+        break;
+      }
+    }
+  }
+  return { condutores: total, secaoMm2: maiorSecao, bitolaMm, diametroInternoMm: interno, diametroCondutorMm: maiorDiametro, ocupacaoPct, limitePct, atende, bitolaQueAtendeMm };
+}
+
+/**
+ * A MENOR bitola comercial (≥ `minimaMm`) cuja ocupação respeita o limite da
+ * 6.2.11.1.6 para estes condutores. `null` quando nem a maior atende.
+ */
+export function bitolaMinimaPorOcupacao(
+  condutores: readonly { secaoMm2: number; quantidade: number }[],
+  minimaMm: number,
+  hip: Pick<HipotesesEletricas, 'diametroExternoCondutorMm' | 'diametroInternoEletrodutoMm'> = HIPOTESES_PADRAO,
+  comerciais: readonly number[] = [20, 25, 32, 40],
+): number | null {
+  for (const b of comerciais) {
+    if (b < minimaMm) continue;
+    const oc = ocupacaoDoEletrodutoCompartilhado(b, condutores, hip);
+    if (oc?.atende) return b;
+  }
+  return null;
+}
+
+/**
+ * Quantos circuitos dividem eletroduto com este, no pior trecho do caminho
+ * dele — o número que a Tabela 42 pede. Sem eletroduto lançado, a hipótese
+ * declarada (`hip.circuitosAgrupados`) continua valendo.
+ */
+export function agrupamentoDoCircuito(model: BlueprintModel, circuitoId: string, hip: Pick<HipotesesEletricas, 'circuitosAgrupados'>): number {
+  const trechos = (model.trechos ?? []).filter((t) => (t.circuitoIds ?? []).includes(circuitoId));
+  if (trechos.length === 0) return hip.circuitosAgrupados;
+  return Math.max(1, ...trechos.map((t) => (t.circuitoIds ?? []).length));
+}
+
 export function ocupacaoDoTrecho(
   model: BlueprintModel,
   trecho: Trecho,
@@ -895,11 +995,19 @@ export function ocupacaoDoTrecho(
 ): { ocupacao: OcupacaoDoEletroduto | null; motivo: string | null } {
   if (trecho.disciplina !== 'ELETRICA') return { ocupacao: null, motivo: 'não é eletroduto' };
   if (!trecho.condutores) return { ocupacao: null, motivo: 'condutores não declarados' };
-  const circuito = (model.circuitos ?? []).find((c) => c.id === trecho.circuitoId);
-  if (!circuito) return { ocupacao: null, motivo: 'sem circuito — a seção vem do circuito' };
-  const secao = circuito.secaoMm2 ?? preDimensionarCircuito(model, circuito, hip).secaoCalculada?.secaoMm2 ?? null;
-  if (secao == null) return { ocupacao: null, motivo: 'circuito sem seção declarada nem calculável' };
-  const oc = ocupacaoDoEletroduto(trecho.bitolaMm, trecho.condutores, secao, hip);
-  if (!oc) return { ocupacao: null, motivo: `bitola ${trecho.bitolaMm} mm ou seção ${String(secao).replace('.', ',')} mm² fora das tabelas` };
+  const ids = trecho.circuitoIds ?? [];
+  const circuitos = (model.circuitos ?? []).filter((c) => ids.includes(c.id));
+  if (circuitos.length === 0) return { ocupacao: null, motivo: 'sem circuito — a seção vem do circuito' };
+  // VÁRIOS circuitos no mesmo eletroduto (15/09/2026): a seção de cada um, e
+  // a ocupação é a soma das áreas de todos os condutores. Sem declaração em
+  // algum, a mínima calculada dele; sem nem isso, não se avalia.
+  const secoes = circuitos.map((c) => c.secaoMm2 ?? preDimensionarCircuito(model, c, hip).secaoCalculada?.secaoMm2 ?? null);
+  if (secoes.some((v) => v == null)) return { ocupacao: null, motivo: 'circuito sem seção declarada nem calculável' };
+  const oc = ocupacaoDoEletrodutoCompartilhado(
+    trecho.bitolaMm,
+    condutoresPorCircuitoNoTrecho(trecho.condutores, circuitos, secoes as number[]),
+    hip,
+  );
+  if (!oc) return { ocupacao: null, motivo: `bitola ${trecho.bitolaMm} mm ou seção fora das tabelas` };
   return { ocupacao: oc, motivo: null };
 }

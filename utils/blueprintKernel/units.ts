@@ -254,7 +254,19 @@
  * dos goldens passaram sem alteração, o que só acontece se a chave de fato não
  * aparece em abertura sem tipo.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.30.0';
+/*
+ * ─── 0.30.0 → 0.31.0 (15/09/2026) — VÁRIOS CIRCUITOS POR ELETRODUTO ─────────
+ *
+ * O trecho deixou de apontar para UM circuito (`circuito`, índice) e passou a
+ * carregar a LISTA (`circuitos`, índices crescentes sem repetição). A norma
+ * admite compartilhar o eletroduto; o tronco que sai do quadro é compartilhado
+ * por construção. É conteúdo — muda condutores, ocupação e agrupamento —,
+ * então entra no hash e a versão sobe. O escalar antigo é lido como lista de
+ * um; a chave só é emitida quando há circuito, então desenho sem rede elétrica
+ * mantém a forma canônica (os goldens, só de paredes, mudam apenas pela
+ * string da versão).
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.31.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

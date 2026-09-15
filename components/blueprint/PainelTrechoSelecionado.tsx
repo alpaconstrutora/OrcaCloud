@@ -61,7 +61,7 @@ interface Props {
     bitolaMm?: number;
     itemCode?: string | null;
     rotulo?: string | null;
-    circuitoId?: string | null;
+    circuitoIds?: string[] | null;
     condutores?: number | null;
   }) => void;
   onTerminal: (campos: {
@@ -383,27 +383,45 @@ export default function PainelTrechoSelecionado({
             preencher com qualquer coisa. */}
         {trecho.disciplina === 'ELETRICA' && (
           <>
-            <label className="block">
-              <span className="text-[11px] font-medium text-slate-600">Circuito</span>
-              <select
-                value={trecho.circuitoId ?? ''}
-                onChange={(e) => onTrecho({ circuitoId: e.target.value || null })}
-                aria-label="Circuito do trecho"
-                className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
-              >
-                <option value="">Sem circuito</option>
-                {circuitos.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.quadroNome} · {c.nome}
-                  </option>
-                ))}
-              </select>
-              <span className="mt-0.5 block text-[10px] text-slate-500">
-                A <strong>seção</strong> escrita ao lado do traço (<code>#2,5</code>) é a
-                declarada neste circuito — ela não se digita aqui, para a prancha não
-                divergir do quadro de cargas.
-              </span>
-            </label>
+            {/* VÁRIOS circuitos no mesmo eletroduto (15/09/2026): a norma admite,
+                e o tronco que sai do quadro é compartilhado por construção. Cada
+                caixa liga/desliga um circuito neste trecho. A SEÇÃO escrita ao
+                lado do traço continua sendo a do circuito — não se digita aqui. */}
+            <fieldset className="block">
+              <legend className="text-[11px] font-medium text-slate-600">
+                Circuitos neste eletroduto
+                <span className="ml-1 font-normal text-slate-400">({(trecho.circuitoIds ?? []).length})</span>
+              </legend>
+              {circuitos.length === 0 ? (
+                <p className="mt-0.5 text-xs text-slate-400">Nenhum circuito criado — crie no Quadro de cargas.</p>
+              ) : (
+                <ul className="mt-0.5 max-h-40 space-y-0.5 overflow-y-auto rounded-md border border-slate-200 px-2 py-1">
+                  {circuitos.map((c) => {
+                    const ligado = (trecho.circuitoIds ?? []).includes(c.id);
+                    return (
+                      <li key={c.id}>
+                        <label className="flex items-center gap-2 text-xs text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={ligado}
+                            aria-label={`Circuito ${c.nome} neste trecho`}
+                            onChange={(e) => {
+                              const atuais = trecho.circuitoIds ?? [];
+                              onTrecho({
+                                circuitoIds: e.target.checked ? [...atuais, c.id] : atuais.filter((id) => id !== c.id),
+                              });
+                            }}
+                          />
+                          <span className="truncate">
+                            {c.quadroNome} · {c.nome}
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </fieldset>
             <CampoMedida
               rotulo="Condutores"
               valor={trecho.condutores ?? 0}

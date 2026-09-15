@@ -1040,8 +1040,19 @@ export interface Trecho {
    * dizer 2,5 num traço que o quadro de cargas conta como 4.
    *
    * Só faz sentido em `disciplina: 'ELETRICA'`; a invariante recusa nas outras.
+   *
+   * ─── VÁRIOS CIRCUITOS NO MESMO ELETRODUTO (15/09/2026) ───────────────────
+   *
+   * Era UM circuito por trecho — hipótese minha, não norma. A NBR 5410 admite
+   * vários circuitos no mesmo eletroduto (6.2.5.6, 6.2.11), com a taxa de
+   * ocupação (6.2.11.1.6) e o fator de agrupamento (Tab. 42) cobrando por
+   * isso. O tronco que sai do quadro é compartilhado por construção. Então o
+   * trecho carrega o CONJUNTO dos circuitos que passam por ele, sem repetição,
+   * na ordem em que foram declarados. Vazio/ausente = eletroduto sem circuito
+   * (o "solto" do quadro de cargas). No canônico sai como `circuitos`
+   * (índices), e o `circuito` escalar antigo é lido como lista de um.
    */
-  circuitoId?: ObjectId | null;
+  circuitoIds?: ObjectId[] | null;
   /**
    * Quantos CONDUTORES passam dentro do eletroduto.
    *
@@ -2017,6 +2028,11 @@ export function pontasNoVerticeMovido(
 }
 
 /** Comprimento do eixo da parede, em mm inteiros. */
+/** Os circuitos de um trecho, sempre como lista (ausente = vazio). */
+export function circuitosDoTrecho(t: Pick<Trecho, 'circuitoIds'>): ObjectId[] {
+  return t.circuitoIds ?? [];
+}
+
 export function wallLength(wall: Wall): number {
   const dx = wall.b.x - wall.a.x;
   const dy = wall.b.y - wall.a.y;
@@ -2944,18 +2960,24 @@ export function assertModelInvariants(model: BlueprintModel): void {
       throw new KernelError('LEVEL_NOT_FOUND', `Trecho ${t.id} num nível inexistente: ${t.levelId}`);
     }
 
-    if (t.circuitoId != null) {
+    const circuitosDoTrechoAqui = t.circuitoIds ?? [];
+    if (circuitosDoTrechoAqui.length > 0) {
       if (t.disciplina !== 'ELETRICA') {
         throw new KernelError(
           'BAD_RUN_CIRCUIT',
           `Trecho ${t.id} é ${t.disciplina} e não pode ter circuito`,
         );
       }
-      if (!(model.circuitos ?? []).some((c) => c.id === t.circuitoId)) {
-        throw new KernelError(
-          'CIRCUIT_NOT_FOUND',
-          `Trecho ${t.id} aponta para um circuito inexistente: ${t.circuitoId}`,
-        );
+      if (new Set(circuitosDoTrechoAqui).size !== circuitosDoTrechoAqui.length) {
+        throw new KernelError('BAD_RUN_CIRCUIT', `Trecho ${t.id} repete circuito`);
+      }
+      for (const cid of circuitosDoTrechoAqui) {
+        if (!(model.circuitos ?? []).some((c) => c.id === cid)) {
+          throw new KernelError(
+            'CIRCUIT_NOT_FOUND',
+            `Trecho ${t.id} aponta para um circuito inexistente: ${cid}`,
+          );
+        }
       }
     }
     if (t.condutores != null && (!Number.isInteger(t.condutores) || t.condutores < 1)) {

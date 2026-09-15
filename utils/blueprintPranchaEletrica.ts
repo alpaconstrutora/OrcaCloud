@@ -43,7 +43,7 @@ import {
   secoesDoInterruptor,
   trianguloDaTomada,
 } from './blueprintRede';
-import { condutoresDoTrecho, numeroDoCircuito, tracosDoCondutor } from './blueprintCondutores';
+import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor } from './blueprintCondutores';
 import {
   HIPOTESES_PADRAO,
   preDimensionarQuadroCompleto,
@@ -221,8 +221,11 @@ export function desenharEletrica(d: Desenhista, model: BlueprintModel, proj: Pro
     // com o pé, retorno só de um lado, terra com a barra — a MESMA lista que o
     // canvas desenha (`condutoresDoTrecho`). Número do circuito em cima do
     // grupo, seção embaixo; o Ø à esquerda.
-    const circuito = t.circuitoId ? circuitosPorId.get(t.circuitoId) : null;
-    const condutores = condutoresDoTrecho(t, circuito ? { ligacao: circuito.ligacao ?? null } : null);
+    const circuitosDoEletroduto = (t.circuitoIds ?? []).map((cid) => circuitosPorId.get(cid)).filter((c): c is NonNullable<typeof c> => !!c);
+    const condutores = condutoresDoEletroduto(
+      t,
+      circuitosDoEletroduto.map((c) => ({ id: c.id, ligacao: c.ligacao ?? null })),
+    ).map((c) => c.tipo);
     const n = condutores.length;
     const ux = (b.x - a.x) / comp;
     const uy = (b.y - a.y) / comp;
@@ -241,10 +244,11 @@ export function desenharEletrica(d: Desenhista, model: BlueprintModel, proj: Pro
         d.linha(p1.x, p1.y, p2.x, p2.y, { espessuraMm: FINA, cor: COR });
       }
     });
-    const secao = circuito?.secaoMm2 ?? null;
+    const secoesDistintas = [...new Set(circuitosDoEletroduto.map((c) => c.secaoMm2).filter((v): v is number => v != null))];
+    const secao = secoesDistintas.length > 0 ? secoesDistintas[0] : null;
     if (n > 0) {
-      d.texto(meio.x - nx * 2.4 * k - 0.8 * k, meio.y - ny * 2.4 * k + 0.6 * k, numeroDoCircuito(circuito?.nome), TEXTO_MM * 0.9);
-      if (secao != null) d.texto(meio.x + nx * 2.4 * k - 0.8 * k, meio.y + ny * 2.4 * k + 1.4 * k, mm2(secao), TEXTO_MM * 0.9, COR_FRACA);
+      d.texto(meio.x - nx * 2.4 * k - 0.8 * k, meio.y - ny * 2.4 * k + 0.6 * k, circuitosDoEletroduto.length > 0 ? circuitosDoEletroduto.map((c) => numeroDoCircuito(c.nome)).join(' ') : '?', TEXTO_MM * 0.9);
+      if (secao != null) d.texto(meio.x + nx * 2.4 * k - 0.8 * k, meio.y + ny * 2.4 * k + 1.4 * k, secoesDistintas.map((v) => mm2(v)).join('/'), TEXTO_MM * 0.9, COR_FRACA);
     }
     d.texto(meio.x + nx * 2.2 * k - (n + 2) * 1.2 * k, meio.y + ny * 2.2 * k + 0.6 * k, `Ø${t.bitolaMm}`, TEXTO_MM * 0.8, COR_FRACA);
   }

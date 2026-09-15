@@ -1060,7 +1060,10 @@ describe('BlueprintEditor · ribbon', () => {
     expect(drawer).toHaveTextContent(/hipóteses do lançamento/i);
     expect(drawer).toHaveTextContent(/menor comprimento/i);
     // Planta sem quadro: diz o que falta em vez de uma tabela vazia.
-    expect(drawer).toHaveTextContent(/nenhum circuito ainda/i);
+    expect(drawer).toHaveTextContent(/nenhum quadro ainda/i);
+    // 15/09/2026: uma rede por quadro, compartilhada, atravessando a laje.
+    expect(drawer).toHaveTextContent(/uma rede por quadro/i);
+    expect(drawer).toHaveTextContent(/prumada na posição do quadro/i);
     expect(within(drawer).getByRole('combobox', { name: /bitola do eletroduto/i })).toHaveValue('25');
     for (const b of within(drawer).getAllByRole('button', { name: /lançar em todos|aceitar sugeridos/i })) expect(b).toBeDisabled();
   });

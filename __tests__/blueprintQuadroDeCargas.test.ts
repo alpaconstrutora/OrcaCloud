@@ -383,7 +383,7 @@ describe('⚠️ APAGAR — o buraco que a fatia 1 deixou aberto', () => {
     const sem = applyCommand(m, { type: 'DeleteCircuito', circuitoId: c1 }).model;
     expect(sem.circuitos).toHaveLength(0);
     expect(sem.trechos).toHaveLength(1);
-    expect(sem.trechos![0].circuitoId).toBeNull();
+    expect(sem.trechos![0].circuitoIds ?? null).toBeNull();
   });
 
   it('apagar o que não existe é recusado, e não silenciosamente ignorado', () => {

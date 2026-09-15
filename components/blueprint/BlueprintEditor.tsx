@@ -130,7 +130,7 @@ import {
   BITOLAS_DE_ELETRODUTO_MM,
   HIPOTESES_ELETRODUTO_PADRAO,
   eletrodutosSugeridos,
-  planejarEletrodutosDoNivel,
+  planejarEletrodutosDoModelo,
   pontosSemCircuito,
   type PlanoDeEletrodutos,
 } from '../../utils/blueprintEletrodutos';
@@ -4307,9 +4307,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     () => ({ ...HIPOTESES_ELETRODUTO_PADRAO, bitolaMm: bitolaDeEletroduto }),
     [bitolaDeEletroduto],
   );
+  // POR QUADRO, todos os pavimentos (15/09/2026): a rede é uma por quadro,
+  // compartilhada entre os circuitos, e atravessa a laje na posição do quadro.
   const planosDeEletrodutos = useMemo(
-    () => (levelId ? planejarEletrodutosDoNivel(editor.model, levelId, hipotesesDeEletroduto) : []),
-    [editor.model, levelId, hipotesesDeEletroduto],
+    () => planejarEletrodutosDoModelo(editor.model, hipotesesDeEletroduto, hipotesesEletricas),
+    [editor.model, hipotesesDeEletroduto, hipotesesEletricas],
   );
   const pontosALigar = planosDeEletrodutos.reduce((n, p) => n + p.aLigar, 0);
   const pontosEletricosSemCircuito = levelId ? pontosSemCircuito(editor.model, levelId) : [];
@@ -7079,21 +7081,24 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 <p className="font-semibold text-slate-700">Hipóteses do lançamento</p>
                 <ul className="mt-1 list-disc space-y-0.5 pl-4">
                   <li>
-                    Rede embutida no <strong>teto</strong>, na cota do pé-direito do pavimento
-                    {levelId
-                      ? ` (${editor.model.levels.find((l) => l.id === levelId)?.defaultHeightMm ?? '—'} mm)`
-                      : ''}
-                    ; prumada vertical na posição de cada ponto e do quadro.
+                    <strong>Uma rede por quadro</strong>, compartilhada pelos circuitos dele (NBR 5410 6.2.5.6 / 6.2.11):
+                    cada trecho carrega os circuitos que passam por ele; o tronco que sai do quadro é comum.
                   </li>
-                  <li>Árvore de <strong>menor comprimento</strong> a partir do quadro, em linha reta — não desvia de viga nem de laje, que o desenho não conhece.</li>
                   <li>
-                    Condutores por ligação: FN e FF <strong>3</strong> (fase, neutro/fase, terra) ·
-                    FFF <strong>4</strong>. Editáveis no trecho, depois.
+                    Rede embutida no <strong>teto</strong> de cada pavimento (cota do pé-direito); prumada vertical na
+                    posição de cada ponto e do quadro. Pavimentos acima ou abaixo do quadro são alcançados por uma{' '}
+                    <strong>prumada na posição do quadro</strong>, atravessando a laje.
                   </li>
-                  <li>Ponto <strong>sem circuito</strong> não entra — atribuir circuito é decisão do projetista.</li>
+                  <li>Por pavimento, árvore de <strong>menor comprimento</strong> com todos os pontos do quadro, em linha reta — não desvia de viga nem de laje, que o desenho não conhece.</li>
+                  <li>
+                    Condutores por circuito: FN e FF <strong>3</strong> · FFF <strong>4</strong>, somados no trecho. A{' '}
+                    <strong>bitola</strong> é a menor comercial que respeita a taxa de ocupação (6.2.11.1.6), nunca abaixo
+                    da mínima abaixo; o agrupamento medido entra na Tabela 42 do pré-dimensionamento.
+                  </li>
+                  <li>Ponto <strong>sem circuito</strong> não entra — atribuir circuito é decisão do projetista (Circuitos automáticos).</li>
                 </ul>
                 <label className="mt-2 flex items-center gap-2">
-                  Bitola do eletroduto
+                  Bitola mínima do eletroduto
                   <select
                     value={bitolaDeEletroduto}
                     onChange={(e) => setBitolaDeEletroduto(Number(e.target.value))}
@@ -7111,48 +7116,57 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
               {planosDeEletrodutos.length === 0 ? (
                 <p className="text-sm text-slate-500">
-                  Nenhum circuito ainda. Coloque um quadro de distribuição (Instalações › Quadro de
-                  distribuição) e crie os circuitos no Quadro de cargas.
+                  Nenhum quadro ainda. Coloque um quadro de distribuição (Instalações › Componentes) e crie os
+                  circuitos em Circuitos automáticos ou no Quadro de cargas.
                 </p>
               ) : (
-                <table className="w-full table-fixed text-xs">
+                <table className="w-full table-fixed text-xs" aria-label="Eletrodutos por quadro">
                   <thead>
                     <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-500">
-                      <th className="py-1.5 pr-2 font-medium">Circuito</th>
-                      <th className="w-20 py-1.5 pr-2 font-medium">Quadro</th>
-                      <th className="w-24 py-1.5 pr-2 font-medium">Pontos</th>
+                      <th className="w-24 py-1.5 pr-2 font-medium">Quadro</th>
+                      <th className="py-1.5 pr-2 font-medium">Pavimentos · pontos ligados</th>
                       <th className="w-20 py-1.5 pr-2 font-medium">Previsto</th>
                       <th className="w-28 py-1.5 text-right font-medium">Lançar</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {planosDeEletrodutos.map((plano) => {
-                      const c = (editor.model.circuitos ?? []).find((x) => x.id === plano.circuitoId);
-                      const q = (editor.model.quadros ?? []).find((x) => x.id === c?.quadroId);
+                      const temComandos = plano.comandos.length > 0;
                       return (
-                        <tr key={plano.circuitoId}>
-                          <td className="py-1.5 pr-2 font-medium text-slate-700">
-                            {c?.nome ?? '—'}
-                            {plano.motivo && plano.aLigar === 0 && (
-                              <span className="ml-1 font-normal text-slate-400">· {plano.motivo}</span>
+                        <tr key={plano.quadroId}>
+                          <td className="truncate py-1.5 pr-2 font-medium text-slate-700">{plano.nome}</td>
+                          <td className="py-1.5 pr-2 text-slate-600">
+                            {plano.pavimentos.length === 0 ? (
+                              <span className="text-slate-400">{plano.motivo ?? '—'}</span>
+                            ) : (
+                              <>
+                                {plano.pavimentos.map((pv) => (
+                                  <span key={pv.levelId} className="mr-2 inline-block whitespace-nowrap">
+                                    {pv.nome}: {pv.ligados}/{pv.pontos}
+                                  </span>
+                                ))}
+                                {plano.prumadasEntrePavimentos > 0 && (
+                                  <span className="text-slate-400">· {plano.prumadasEntrePavimentos} prumada(s) entre pavimentos</span>
+                                )}
+                                {plano.trechosAtualizados > 0 && (
+                                  <span className="text-slate-400"> · {plano.trechosAtualizados} trecho(s) ganham circuitos</span>
+                                )}
+                                {plano.motivo && !temComandos && <span className="text-slate-400"> · {plano.motivo}</span>}
+                              </>
                             )}
                           </td>
-                          <td className="truncate py-1.5 pr-2 text-slate-600">{q?.nome ?? '—'}</td>
                           <td className="py-1.5 pr-2 text-slate-600">
-                            {plano.ligados}/{plano.pontos} ligados
-                          </td>
-                          <td className="py-1.5 pr-2 text-slate-600">
-                            {plano.aLigar > 0 ? `${plano.metrosPrevistos.toFixed(1).replace('.', ',')} m` : '—'}
+                            {temComandos && plano.metrosPrevistos > 0 ? `${plano.metrosPrevistos.toFixed(1).replace('.', ',')} m` : '—'}
                           </td>
                           <td className="py-1.5 text-right">
                             <button
                               type="button"
                               onClick={() => lancarEletrodutos([plano])}
-                              disabled={plano.aLigar === 0}
+                              disabled={!temComandos}
                               className="inline-flex items-center gap-1 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               <Cable className="h-3.5 w-3.5" />
-                              {plano.aLigar > 0 ? `${plano.aLigar} ponto(s)` : 'Nada'}
+                              {temComandos ? (plano.aLigar > 0 ? `${plano.aLigar} ponto(s)` : 'atualizar') : 'Nada'}
                             </button>
                           </td>
                         </tr>
@@ -7488,7 +7502,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               <button
                 type="button"
                 onClick={() => lancarEletrodutos(planosDeEletrodutos)}
-                disabled={pontosALigar === 0}
+                disabled={!planosDeEletrodutos.some((p) => p.comandos.length > 0)}
                 className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Cable className="h-4 w-4" />
@@ -7691,7 +7705,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               const c = (editor.model.circuitos ?? []).find((x) => x.id === circuitoId);
               if (!c) return;
               const pontos = (editor.model.terminais ?? []).filter((t) => t.circuitoId === circuitoId).length;
-              const trechos = (editor.model.trechos ?? []).filter((t) => t.circuitoId === circuitoId).length;
+              const trechos = (editor.model.trechos ?? []).filter((t) => (t.circuitoIds ?? []).includes(circuitoId)).length;
               if (pontos > 0 || trechos > 0) {
                 const partes = [
                   pontos > 0 ? `${pontos} ${pontos === 1 ? 'ponto' : 'pontos'}` : null,

@@ -120,6 +120,11 @@ const DEFAULT_PAYMENT_TYPE_LIST: PaymentType[] = DEFAULT_PAYMENT_TYPES.map(d => 
  * também ser forçado a decidir algo pra Forma de Pagamento (e vice-versa). */
 const BULK_KEEP = '__KEEP__';
 
+/** Id de centro de custo / plano de contas gravado na parcela que não está na
+ *  lista carregada = dimensão de outra organização. Mesmo texto do Extrato
+ *  (`ROTULO_OUTRA_ORG` em reconciliation/tabelasDaConciliacao.tsx). */
+const ROTULO_OUTRA_ORG = '— outra organização —';
+
 /** Como o lote mexe no vencimento: a mesma data em todas, ou um deslocamento
  *  relativo (cada parcela anda a partir da PRÓPRIA data — o cronograma inteiro
  *  desliza sem colapsar num dia só). */
@@ -140,6 +145,9 @@ export interface InstallmentLotePatch {
     installmentType?: PaymentInstallment['installmentType'];
     /** `''` = limpar a descrição de todas. */
     description?: string;
+    /** `null` = limpar de todas. Dimensões DA LINHA (o que Contas a Receber mostra). */
+    costCenterId?: string | null;
+    planoContasId?: string | null;
 }
 
 /** Resolve o vencimento de UMA parcela a partir da escolha do lote. */
@@ -162,10 +170,10 @@ const fmtDataBR = (iso: string | undefined) => {
 /**
  * Edição em lote (aba Parcelas → seleção múltipla). Cobre TODAS as colunas da
  * tabela: as editáveis por parcela (Vencimento, Valor, Desconto, Tipo, Forma de
- * pagamento, Descrição) viram campos, e as que são dimensão do NEGÓCIO (Cliente,
- * Centro de Custo, Plano de Contas — iguais em toda a série) aparecem como
- * leitura, com o caminho para alterá-las. Valor final e Origem são derivados e
- * entram na prévia de cada linha. Modelo: `components/BankTxEdicaoEmLoteModal.tsx`
+ * pagamento, Centro de Custo, Plano de Contas, Descrição) viram campos; Cliente
+ * é do NEGÓCIO (compradores, todos com o mesmo peso) e aparece como leitura com
+ * o caminho para alterá-lo. Valor final e Origem são derivados e entram na
+ * prévia de cada linha. Modelo: `components/BankTxEdicaoEmLoteModal.tsx`
  * (Financeiro → Extrato Bancário) — modal dedicado em vez de controles inline
  * na barra de seleção (guia §10).
  *
@@ -181,12 +189,15 @@ interface InstallmentLoteModalProps {
     /** Selecionadas; `origem` é a coluna Origem da tabela (só para a prévia). */
     installments: (PaymentInstallment & { origem?: string })[];
     installmentTypes: PaymentType[];    // catálogo Tipos de Pagamento (ordenado)
-    /** Dimensões herdadas do negócio — só leitura no modal (mesmo valor em toda a série). */
-    dimensoes: { cliente: string; centroCusto: string; planoContas: string };
+    /** Cliente do negócio — só leitura no modal (mesmo valor em toda a série). */
+    clienteLabel: string;
+    /** Catálogos para os drawers de Centro de Custo / Plano de Contas. */
+    costCenters: CostCenter[];
+    planoContas: CostCenter[];
     onClose: () => void;
     onSave: (patch: InstallmentLotePatch) => void;
 }
-export const InstallmentLoteEditModal: React.FC<InstallmentLoteModalProps> = ({ installments, installmentTypes, dimensoes, onClose, onSave }) => {
+export const InstallmentLoteEditModal: React.FC<InstallmentLoteModalProps> = ({ installments, installmentTypes, clienteLabel, costCenters, planoContas, onClose, onSave }) => {
     const [dueMode, setDueMode] = useState<typeof BULK_KEEP | 'SET' | 'SHIFT_DAYS' | 'SHIFT_MONTHS'>(BULK_KEEP);
     const [dueValue, setDueValue] = useState('');       // data (SET) ou número (SHIFT_*)
     const [amountMode, setAmountMode] = useState<typeof BULK_KEEP | 'SET'>(BULK_KEEP);
@@ -201,6 +212,10 @@ export const InstallmentLoteEditModal: React.FC<InstallmentLoteModalProps> = ({ 
     const [bulkInstallmentType, setBulkInstallmentType] = useState(BULK_KEEP);
     const [descMode, setDescMode] = useState<typeof BULK_KEEP | 'SET' | 'CLEAR'>(BULK_KEEP);
     const [descValue, setDescValue] = useState('');
+    const [ccMode, setCcMode] = useState<typeof BULK_KEEP | 'SET' | 'CLEAR'>(BULK_KEEP);
+    const [ccValue, setCcValue] = useState('');
+    const [pcMode, setPcMode] = useState<typeof BULK_KEEP | 'SET' | 'CLEAR'>(BULK_KEEP);
+    const [pcValue, setPcValue] = useState('');
 
     const fmtMoney = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
     const totalBruto = installments.reduce((s, i) => s + (i.originalValue ?? i.value), 0);
@@ -217,10 +232,15 @@ export const InstallmentLoteEditModal: React.FC<InstallmentLoteModalProps> = ({ 
     const descontoValido = !mexeuNoDesconto || discountType === '' /* limpar */ || amount > 0;
     const mexeuNaDescricao = descMode !== BULK_KEEP;
     const descricaoValida = !mexeuNaDescricao || descMode === 'CLEAR' || descValue.trim().length > 0;
+    const mexeuNoCc = ccMode !== BULK_KEEP;
+    const ccValido = !mexeuNoCc || ccMode === 'CLEAR' || ccValue !== '';
+    const mexeuNoPc = pcMode !== BULK_KEEP;
+    const pcValido = !mexeuNoPc || pcMode === 'CLEAR' || pcValue !== '';
 
     const nadaAMudar = !mexeuNoVencimento && !mexeuNoValor && !mexeuNoDesconto && !mexeuNaDescricao
+        && !mexeuNoCc && !mexeuNoPc
         && bulkPaymentType === BULK_KEEP && bulkInstallmentType === BULK_KEEP;
-    const canSave = !nadaAMudar && vencimentoValido && valorValido && descontoValido && descricaoValida;
+    const canSave = !nadaAMudar && vencimentoValido && valorValido && descontoValido && descricaoValida && ccValido && pcValido;
 
     /** A escolha de vencimento no formato do patch (ou `undefined` se não mexeu). */
     const escolhaVencimento = (): BulkDueDate | undefined => {
@@ -251,6 +271,8 @@ export const InstallmentLoteEditModal: React.FC<InstallmentLoteModalProps> = ({ 
                 ? undefined
                 : ((bulkInstallmentType || undefined) as PaymentInstallment['installmentType']),
             description: !mexeuNaDescricao ? undefined : (descMode === 'CLEAR' ? '' : descValue.trim()),
+            costCenterId: !mexeuNoCc ? undefined : (ccMode === 'CLEAR' ? null : ccValue),
+            planoContasId: !mexeuNoPc ? undefined : (pcMode === 'CLEAR' ? null : pcValue),
         });
     };
 
@@ -400,6 +422,64 @@ export const InstallmentLoteEditModal: React.FC<InstallmentLoteModalProps> = ({ 
                         </div>
                     </div>
 
+                    {/* Centro de Custo / Plano de Contas: dimensões DA LINHA (Contas a
+                        Receber lê a parcela, não o negócio). Mesmo drawer das células. */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label htmlFor="lote-cc" className={LABEL}>Centro de Custo</label>
+                            <select id="lote-cc"
+                                value={ccMode}
+                                onChange={(e) => { setCcMode(e.target.value as typeof ccMode); setCcValue(''); }}
+                                className={FIELD}
+                            >
+                                <option value={BULK_KEEP}>Não alterar</option>
+                                <option value="SET">Mesmo centro de custo em todas</option>
+                                <option value="CLEAR">Limpar de todas</option>
+                            </select>
+                        </div>
+                        {ccMode === 'SET' && (
+                            <div>
+                                <label className={LABEL}>Novo centro de custo</label>
+                                <CostCenterSelect
+                                    costCenters={costCenters}
+                                    value={ccValue}
+                                    onChange={setCcValue}
+                                    placeholder="Selecionar centro de custo"
+                                    hoverCls="hover:bg-blue-50"
+                                    triggerClassName={FIELD}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label htmlFor="lote-pc" className={LABEL}>Plano de Contas</label>
+                            <select id="lote-pc"
+                                value={pcMode}
+                                onChange={(e) => { setPcMode(e.target.value as typeof pcMode); setPcValue(''); }}
+                                className={FIELD}
+                            >
+                                <option value={BULK_KEEP}>Não alterar</option>
+                                <option value="SET">Mesma conta em todas</option>
+                                <option value="CLEAR">Limpar de todas</option>
+                            </select>
+                        </div>
+                        {pcMode === 'SET' && (
+                            <div>
+                                <label className={LABEL}>Nova conta</label>
+                                <PlanoContasSelect
+                                    planoContas={planoContas}
+                                    value={pcValue}
+                                    onChange={setPcValue}
+                                    placeholder="Selecionar conta"
+                                    hoverCls="hover:bg-blue-50"
+                                    triggerClassName={FIELD}
+                                />
+                            </div>
+                        )}
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label htmlFor="lote-descricao" className={LABEL}>Descrição</label>
@@ -427,20 +507,14 @@ export const InstallmentLoteEditModal: React.FC<InstallmentLoteModalProps> = ({ 
                         )}
                     </div>
 
-                    {/* Colunas que são dimensão do NEGÓCIO, não da parcela: iguais em toda
-                        a série, por isso só leitura aqui — mudar é na aba Financeiro
-                        (Centro de Custo / Plano de Contas) ou em Dados do Cliente. */}
-                    <div className="bg-gray-50 rounded-[10px] border border-gray-100 px-4 py-3 space-y-1.5">
-                        <p className="text-xs font-semibold text-slate-500">Herdados do negócio (iguais em toda a série)</p>
+                    {/* Cliente é do NEGÓCIO (compradores, mesmo peso), não da parcela —
+                        leitura aqui; mudar é em Dados do Cliente. */}
+                    <div className="bg-gray-50 rounded-[10px] border border-gray-100 px-4 py-3 space-y-1">
                         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
                             <dt className="text-gray-400">Cliente</dt>
-                            <dd className="text-gray-700 truncate" title={dimensoes.cliente}>{dimensoes.cliente || '—'}</dd>
-                            <dt className="text-gray-400">Centro de Custo</dt>
-                            <dd className="text-gray-700 truncate" title={dimensoes.centroCusto}>{dimensoes.centroCusto || '—'}</dd>
-                            <dt className="text-gray-400">Plano de Contas</dt>
-                            <dd className="text-gray-700 truncate" title={dimensoes.planoContas}>{dimensoes.planoContas || '—'}</dd>
+                            <dd className="text-gray-700 truncate" title={clienteLabel}>{clienteLabel || '—'}</dd>
                         </dl>
-                        <p className="text-[11px] text-gray-400">Para alterar, use a aba Financeiro ou Dados do Cliente — a mudança vale para todas as parcelas.</p>
+                        <p className="text-[11px] text-gray-400">Cliente é do negócio, igual em toda a série — para alterar, use a aba Dados do Cliente.</p>
                     </div>
 
                     {/* Prévia: cada parcela com origem, vencimento (atual → novo, se o
@@ -537,8 +611,8 @@ const PARCELAS_COLUMNS: ColumnConfig[] = [
     { key: 'origem', label: 'Origem', sortable: false },
     { key: 'tipo', label: 'Tipo', sortable: false },
     { key: 'forma_pagto', label: 'Forma pagto.', sortable: false },
-    // Herdadas do cabeçalho (aba Financeiro) — leitura, sem edição por
-    // linha: o valor é do NEGÓCIO, não da parcela.
+    // Dimensões DA LINHA (internal_transactions) — editáveis por parcela e no
+    // lote; é o que Contas a Receber exibe. Nascem iguais ao cabeçalho.
     { key: 'centro_custo', label: 'Centro de Custo', sortable: false },
     { key: 'plano_contas', label: 'Plano de Contas', sortable: false },
     { key: 'descricao', label: 'Descrição', sortable: false },
@@ -1155,6 +1229,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         transaction_date: string; amount: number; status: string; description: string | null;
         original_amount?: number | null; discount_type?: string | null; discount_amount?: number | null;
         installment_type?: string | null; payment_type?: string | null;
+        /** Dimensões DA LINHA — o que Contas a Receber mostra. */
+        cost_center_id?: string | null; plano_de_contas_id?: string | null;
         /** Rótulo do contrato de origem — alimenta a coluna "Origem" da série única. */
         __origem?: string;
     }[]>([]);
@@ -1328,17 +1404,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         return () => { ativo = false; };
     }, [isOpen, formData.organization_id, organizationId]);
 
-    /** Rótulos das duas dimensões do cabeçalho, resolvidos uma vez para as
-     *  colunas (de leitura) da aba Parcelas — toda parcela do negócio herda o
-     *  mesmo valor, então não faz sentido resolver linha a linha. */
-    const costCenterLabel = useMemo(
-        () => costCenters.find(c => c.id === formData.cost_center_id)?.name ?? '—',
-        [costCenters, formData.cost_center_id]
-    );
-    const planoContasLabel = useMemo(
-        () => planoContas.find(c => c.id === formData.plano_de_contas_id)?.name ?? '—',
-        [planoContas, formData.plano_de_contas_id]
-    );
+    /** Nome por id para as células de Centro de Custo / Plano de Contas da aba
+     *  Parcelas. Id gravado que não está na lista carregada = dimensão de outra
+     *  organização (mesmo caso do Extrato, `ROTULO_OUTRA_ORG`). */
+    const costCenterNameById = useMemo(() => new Map(costCenters.map(c => [c.id, c.name])), [costCenters]);
+    const planoContasNameById = useMemo(() => new Map(planoContas.map(c => [c.id, c.name])), [planoContas]);
 
     // Contexto de emissão do documento. `useCallback` porque o EmitDocumentModal
     // o usa como dependência de efeito — uma arrow nova a cada render refaria a
@@ -1718,6 +1788,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         due_date?: string; amount?: number; description?: string;
         discount_type?: string | null; discount_amount?: number | null;
         installment_type?: string | null; payment_type?: string | null;
+        cost_center_id?: string | null; plano_de_contas_id?: string | null;
     }) => {
         setContractEntries(prev => prev.map(e => e.id === entryId
             ? {
@@ -1729,6 +1800,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 ...(patch.discount_amount !== undefined ? { discount_amount: patch.discount_amount } : {}),
                 ...(patch.installment_type !== undefined ? { installment_type: patch.installment_type } : {}),
                 ...(patch.payment_type !== undefined ? { payment_type: patch.payment_type } : {}),
+                ...(patch.cost_center_id !== undefined ? { cost_center_id: patch.cost_center_id } : {}),
+                ...(patch.plano_de_contas_id !== undefined ? { plano_de_contas_id: patch.plano_de_contas_id } : {}),
             }
             : e));
         // Valor e desconto são recalculados no servidor (bruto → líquido), então
@@ -1797,7 +1870,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
     /**
      * Aplica o lote (vencimento, valor, desconto, tipo, forma de pagamento,
-     * descrição) às parcelas selecionadas. Cada linha é gravada no banco (o
+     * centro de custo, plano de contas, descrição) às parcelas selecionadas. Cada linha é gravada no banco (o
      * servidor recalcula o líquido pela mesma regra da célula) e a série é
      * relida no fim.
      */
@@ -1818,6 +1891,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             ...(patch.paymentType !== undefined ? { payment_type: patch.paymentType || null } : {}),
             ...(patch.installmentType !== undefined ? { installment_type: patch.installmentType || null } : {}),
             ...(patch.description !== undefined ? { description: patch.description } : {}),
+            ...(patch.costCenterId !== undefined ? { cost_center_id: patch.costCenterId } : {}),
+            ...(patch.planoContasId !== undefined ? { plano_de_contas_id: patch.planoContasId } : {}),
         };
         if (Object.keys(camposComuns).length === 0 && !patch.dueDate) return;
 
@@ -3419,16 +3494,49 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             <option value="PERMUTA">Permuta</option>
                                         </select>
                                     );
-                                // Dimensões do CABEÇALHO: iguais em toda a série, por isso leitura —
-                                // mudar é na aba Financeiro (Cliente) ou na aba Dados do Cliente.
+                                // Cliente é do CABEÇALHO (compradores da negociação, todos com o
+                                // mesmo peso) — leitura; mudar é na aba Dados do Cliente.
                                 case 'cliente': {
                                     const clientLabel = buyerNames || selectedClient?.name || '—';
                                     return <span className="block truncate text-table-body text-gray-600" title={clientLabel}>{clientLabel}</span>;
                                 }
-                                case 'centro_custo':
-                                    return <span className="block truncate text-table-body text-gray-600" title={costCenterLabel}>{costCenterLabel}</span>;
-                                case 'plano_contas':
-                                    return <span className="block truncate text-table-body text-gray-600" title={planoContasLabel}>{planoContasLabel}</span>;
+                                // Centro de Custo / Plano de Contas são DA LINHA: é o que Contas a
+                                // Receber mostra e filtra. Nascem iguais ao cabeçalho, mas a parcela
+                                // pode ser reclassificada (aqui, no lote, na Conciliação). Até
+                                // 15/09/2026 a célula mostrava o valor do negócio — mentia quando a
+                                // linha divergia. Mesmo drawer das células do Extrato.
+                                case 'centro_custo': {
+                                    const nome = e.cost_center_id ? costCenterNameById.get(e.cost_center_id) : undefined;
+                                    return (
+                                        <CostCenterSelect
+                                            costCenters={costCenters}
+                                            value={e.cost_center_id || ''}
+                                            onChange={(v) => patchContractEntry(e.id, { cost_center_id: v || null })}
+                                            placeholder="Centro de Custo"
+                                            hoverCls="hover:bg-blue-50"
+                                            compact
+                                            disabled={pago}
+                                            fallbackLabel={e.cost_center_id && !nome ? ROTULO_OUTRA_ORG : undefined}
+                                            triggerClassName={`${pago ? CELL_RO : CELL} cursor-pointer`}
+                                        />
+                                    );
+                                }
+                                case 'plano_contas': {
+                                    const nome = e.plano_de_contas_id ? planoContasNameById.get(e.plano_de_contas_id) : undefined;
+                                    return (
+                                        <PlanoContasSelect
+                                            planoContas={planoContas}
+                                            value={e.plano_de_contas_id || ''}
+                                            onChange={(v) => patchContractEntry(e.id, { plano_de_contas_id: v || null })}
+                                            placeholder="Plano de Contas"
+                                            hoverCls="hover:bg-blue-50"
+                                            compact
+                                            disabled={pago}
+                                            fallbackLabel={e.plano_de_contas_id && !nome ? ROTULO_OUTRA_ORG : undefined}
+                                            triggerClassName={`${pago ? CELL_RO : CELL} cursor-pointer`}
+                                        />
+                                    );
+                                }
                                 case 'descricao':
                                     return (
                                         <input
@@ -4509,11 +4617,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 description: e.description ?? '',
                             } as PaymentInstallment & { origem?: string }))}
                         installmentTypes={installmentTypeOptions}
-                        dimensoes={{
-                            cliente: buyerNames || selectedClient?.name || '',
-                            centroCusto: costCenterLabel,
-                            planoContas: planoContasLabel,
-                        }}
+                        clienteLabel={buyerNames || selectedClient?.name || ''}
+                        costCenters={costCenters}
+                        planoContas={planoContas}
                         onClose={() => setShowEntryLoteModal(false)}
                         onSave={applyBulkEntryEdit}
                     />

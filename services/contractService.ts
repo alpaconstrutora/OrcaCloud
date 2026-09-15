@@ -2251,10 +2251,16 @@ export const contractService = {
 
     // Lançamentos financeiros gerados a partir deste contrato (Conciliação / internal_transactions)
     /**
-     * Edita UMA parcela lançada pelo contrato (vencimento, valor, descrição).
+     * Edita UMA parcela lançada pelo contrato (vencimento, valor, descrição,
+     * desconto, tipo/forma de pagamento, centro de custo, plano de contas).
      * Mesma regra da exclusão: paga ou conciliada não se altera por aqui.
      * `transaction_date` acompanha `due_date` — as duas datas nascem iguais na
      * geração e Contas a Receber usa a segunda para calcular atraso.
+     *
+     * Centro de custo / plano de contas são POR LINHA (é o que Contas a Receber
+     * exibe). Editar o cabeçalho do contrato continua propagando para os títulos
+     * pendentes (`updateContract`) — a edição por parcela vale até a próxima
+     * mudança do cabeçalho, igual à reclassificação feita na Conciliação.
      */
     updateFinancialEntry: async (
         entryId: string,
@@ -2262,6 +2268,7 @@ export const contractService = {
             due_date?: string; amount?: number; description?: string;
             discount_type?: string | null; discount_amount?: number | null;
             installment_type?: string | null; payment_type?: string | null;
+            cost_center_id?: string | null; plano_de_contas_id?: string | null;
         },
     ): Promise<void> => {
         const { data } = await supabase
@@ -2280,6 +2287,8 @@ export const contractService = {
         if (patch.description != null) payload.description = patch.description;
         if (patch.installment_type !== undefined) payload.installment_type = patch.installment_type || null;
         if (patch.payment_type !== undefined) payload.payment_type = patch.payment_type || null;
+        if (patch.cost_center_id !== undefined) payload.cost_center_id = patch.cost_center_id || null;
+        if (patch.plano_de_contas_id !== undefined) payload.plano_de_contas_id = patch.plano_de_contas_id || null;
 
         // Desconto: `original_amount` guarda o bruto e `amount` passa a ser o
         // LÍQUIDO — é ele que Contas a Receber cobra. Mesma regra do plano de
@@ -2345,6 +2354,9 @@ export const contractService = {
         description: string | null; category: string | null; status: string;
         original_amount?: number | null; discount_type?: string | null; discount_amount?: number | null;
         installment_type?: string | null; payment_type?: string | null;
+        /** Dimensões contábeis DA LINHA — são estas que Contas a Receber mostra e
+         *  filtra (vw_receivables), não as do cabeçalho do negócio/contrato. */
+        cost_center_id?: string | null; plano_de_contas_id?: string | null;
     }[]> => {
         if (!contract.organization_id) return [];
 
@@ -2357,7 +2369,7 @@ export const contractService = {
         const measurementSources = ['CONTRACT_AVISTA', 'CONTRACT_PARCELADO', 'CONTRACT_RECURRING', 'CONTRACT_MEASUREMENT'];
         const { data: byContract, error: e1 } = await supabase
             .from('internal_transactions')
-            .select('id, source_system, reference_id, transaction_date, amount, direction, description, category, status, original_amount, discount_type, discount_amount, installment_type, payment_type')
+            .select('id, source_system, reference_id, transaction_date, amount, direction, description, category, status, original_amount, discount_type, discount_amount, installment_type, payment_type, cost_center_id, plano_de_contas_id')
             .eq('organization_id', contract.organization_id)
             .in('source_system', measurementSources)
             .like('reference_id', `${contract.id}%`);

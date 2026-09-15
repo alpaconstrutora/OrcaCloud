@@ -68,3 +68,19 @@ Prova: teste puro (mover a TUG → `comandos []` e `sugeridos` = n; relançar ap
 n−1 quando um trecho foi confirmado, preserva o confirmado, refaz a prumada na
 posição nova e zera o plano) e app real (QDC 2 após lançar: "Relançar (4)"
 habilitado; relançar reconstrói e continua disponível enquanto a rede for sugerida).
+
+## Rota máxima (15/09, pedido com print: *"o encaminhamento do eletroduto faz um percurso muito maior do que poderia, resultando em gastos desnecessários. implemente novo critério para lançamento de eletroduto levando em conta a menor rota"*)
+
+A árvore de menor eletroduto total (Prim) encadeava pontos distantes e o cabo de
+um circuito dava a volta na casa. Critério novo, hipótese nomeada
+`rotaMaximaVezes` (padrão **1,5×**; opções 1,25× · 1,5× · 2× · sem limite, persistida
+em `blueprint:eletrodutosRotaMaxima`): a cada passo entra o pendente que exige o
+menor eletroduto novo, mas só pendurado num nó cujo caminho até a raiz do
+pavimento (rota do nó + trecho novo, medida pela rede que já existe — Dijkstra
+sobre as arestas) fique dentro de `rotaMaxima × linha reta em planta` até o quadro.
+Sem nó que caiba, o mais próximo. `null` = árvore mínima antiga; `1` = leque.
+
+Prova: cenário Q(0,0), C(1500,3000), B(4000,3000), A(4000,0) — sem limite: Q→C→B→A
+(8,9 m; A a 8,85 m por 4 m em reta); 1,5×: A direto ao quadro, B por C (9,9 m);
+1,1×: B também direto (12,4 m). Os testes anteriores (casa, pavimentos, relançar)
+seguem iguais — a rota de 1,5× não altera aquelas árvores.

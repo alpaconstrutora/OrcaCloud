@@ -194,6 +194,60 @@ describe('planejarEletrodutos — UMA rede por quadro, compartilhada', () => {
   });
 });
 
+describe('rota máxima — a árvore mínima não pode fazer o cabo dar a volta na casa (15/09/2026)', () => {
+  /**
+   * Quadro no canto (0,0) e três pontos: C (1500,3000), B (4000,3000), A (4000,0).
+   * A árvore mínima vai Q→C (3,35 m) → B (2,5 m) → A (3 m): A fica a 8,85 m do
+   * quadro por um caminho de 4 m em linha reta — a volta do print.
+   */
+  function emU() {
+    const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = base.levels[0].id;
+    let m = applyCommand(base, { type: 'AddQuadro', levelId: t, nome: 'QDC', at: point(0, 0), cotaMm: 2800 }).model;
+    const quadroId = m.quadros[0].id;
+    m = applyCommand(m, { type: 'AddCircuito', quadroId, nome: 'C1', ligacao: 'FN' }).model;
+    const c1 = m.circuitos[0].id;
+    for (const [x, y] of [[4000, 0], [4000, 3000], [1500, 3000]]) {
+      m = applyCommand(m, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'ILUMINACAO_TETO', at: point(x, y), cotaMm: 2800, tipoEletrico: 'ILUMINACAO_TETO', potenciaW: 100 }).model;
+      m = applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais[m.terminais.length - 1].id, circuitoId: c1 }).model;
+    }
+    return m;
+  }
+  const liga = (cmds: Command[], a: [number, number], b: [number, number]) =>
+    horizontais(cmds).some(
+      (c) =>
+        (c.a.x === a[0] && c.a.y === a[1] && c.b.x === b[0] && c.b.y === b[1]) ||
+        (c.a.x === b[0] && c.a.y === b[1] && c.b.x === a[0] && c.b.y === a[1]),
+    );
+
+  it('SEM limite (árvore mínima): Q→C→B→A — A fica a 8,85 m do quadro por um caminho de 4 m em linha reta', () => {
+    const m = emU();
+    const plano = planejarEletrodutos(m, quadroDe(m), { ...HIPOTESES_ELETRODUTO_PADRAO, rotaMaximaVezes: null });
+    expect(liga(plano.comandos, [0, 0], [1500, 3000])).toBe(true);
+    expect(liga(plano.comandos, [1500, 3000], [4000, 3000])).toBe(true);
+    expect(liga(plano.comandos, [4000, 3000], [4000, 0])).toBe(true);
+    expect(plano.metrosPrevistos).toBe(8.9);
+  });
+
+  it('com 1,5× (padrão): A vai DIRETO ao quadro (4 m, e não 8,85); B continua por C (5,85 m ≤ 1,5 × 5 m)', () => {
+    const m = emU();
+    const plano = planejarEletrodutos(m, quadroDe(m));
+    expect(liga(plano.comandos, [0, 0], [1500, 3000])).toBe(true);
+    expect(liga(plano.comandos, [1500, 3000], [4000, 3000])).toBe(true);
+    expect(liga(plano.comandos, [0, 0], [4000, 0])).toBe(true);
+    expect(liga(plano.comandos, [4000, 3000], [4000, 0])).toBe(false);
+    expect(plano.metrosPrevistos).toBe(9.9);
+  });
+
+  it('com 1,1×: B também vai direto (5,85 m > 1,1 × 5 m) — vira o leque, mais eletroduto e menos cabo', () => {
+    const m = emU();
+    const plano = planejarEletrodutos(m, quadroDe(m), { ...HIPOTESES_ELETRODUTO_PADRAO, rotaMaximaVezes: 1.1 });
+    expect(liga(plano.comandos, [0, 0], [4000, 3000])).toBe(true);
+    expect(liga(plano.comandos, [1500, 3000], [4000, 3000])).toBe(false);
+    expect(plano.metrosPrevistos).toBe(12.4);
+  });
+});
+
 describe('relancarEletrodutos — mover ponto ou quadro devolve o botão (15/09/2026)', () => {
   it('depois de mover uma TUG, o plano não tem nada a ligar mas conta os SUGERIDOS; relançar apaga só eles e refaz a rede no lugar novo', () => {
     const { m, c2 } = casa();

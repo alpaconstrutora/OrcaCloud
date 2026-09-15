@@ -31,9 +31,17 @@
  *      do pavimento de baixo o encontra no teto dele — a laje é o encontro
  *      (cota 0 de um pavimento ≡ teto do pavimento imediatamente abaixo);
  *   3. no teto de cada pavimento, TODOS os pontos do quadro ali entram numa
- *      única árvore de menor comprimento (Prim), em linha reta, a partir do
- *      que já está alcançado (o nó do quadro ou da prumada, e as pontas da
- *      rede existente no teto);
+ *      única árvore, em linha reta, a partir do que já está alcançado (o nó
+ *      do quadro ou da prumada, e as pontas da rede existente no teto). A
+ *      árvore é a de MENOR ELETRODUTO (Prim) COM ROTA LIMITADA (15/09/2026,
+ *      pedido com print: *"o encaminhamento do eletroduto faz um percurso
+ *      muito maior do que poderia, resultando em gastos desnecessários"*): a
+ *      árvore de menor comprimento total encadeava pontos distantes e o cabo
+ *      de um circuito dava a volta na casa. Agora um ponto só se pendura num
+ *      nó cujo caminho até o quadro fique dentro de `rotaMaximaVezes` × a
+ *      linha reta; entre os que cabem, o de menor eletroduto novo. É o meio
+ *      termo entre a árvore mínima (pouco eletroduto, muito cabo) e o leque
+ *      (pouco cabo, muito eletroduto);
  *   4. cada trecho recebe os CIRCUITOS de todos os pontos cujo caminho até o
  *      quadro passa por ele; os condutores são a soma; a BITOLA é a menor
  *      comercial que respeita a taxa de ocupação, nunca abaixo da mínima do
@@ -71,12 +79,28 @@ export interface HipotesesDeEletroduto {
   bitolaMm: number;
   /** Quantos condutores cada circuito põe no eletroduto, pela ligação dele. */
   condutoresPorLigacao: Record<LigacaoDoCircuito, number>;
+  /**
+   * ROTA MÁXIMA (15/09/2026): o caminho de um ponto até o quadro pela rede não
+   * pode passar de `rotaMaximaVezes` × a linha reta entre os dois. `null` =
+   * sem limite (a árvore de menor eletroduto, que faz voltas). `1` = todo
+   * ponto em linha reta ao quadro (o leque). Ver o cabeçalho.
+   */
+  rotaMaximaVezes: number | null;
 }
 
 export const HIPOTESES_ELETRODUTO_PADRAO: HipotesesDeEletroduto = {
   bitolaMm: 25,
   condutoresPorLigacao: { FN: 3, FF: 3, FFF: 4 },
+  rotaMaximaVezes: 1.5,
 };
+
+/** As rotas máximas oferecidas na hipótese. */
+export const ROTAS_MAXIMAS = [
+  { valor: 1.25 as number | null, rotulo: '1,25× a linha reta (rota curta)' },
+  { valor: 1.5, rotulo: '1,5× a linha reta (sugerido)' },
+  { valor: 2, rotulo: '2× a linha reta' },
+  { valor: null, rotulo: 'Sem limite (menos eletroduto)' },
+] as const;
 
 /** Bitolas comerciais de eletroduto oferecidas na hipótese e escolhidas pela ocupação. */
 export const BITOLAS_DE_ELETRODUTO_MM = [20, 25, 32, 40] as const;
@@ -143,6 +167,34 @@ interface Aresta {
   ref: { existente: ObjectId } | { novo: number };
   de: No;
   para: No;
+  /** Comprimento do trecho, em mm — para medir a rota de cada ponto até o quadro. */
+  mm: number;
+}
+
+/** Menor caminho (em mm) de `origem` a cada nó, pelas arestas dadas — Dijkstra simples. */
+function distanciasDesde(origem: No, arestas: readonly Aresta[]): Map<No, number> {
+  const viz = new Map<No, { para: No; mm: number }[]>();
+  for (const a of arestas) {
+    viz.set(a.de, [...(viz.get(a.de) ?? []), { para: a.para, mm: a.mm }]);
+    viz.set(a.para, [...(viz.get(a.para) ?? []), { para: a.de, mm: a.mm }]);
+  }
+  const dist = new Map<No, number>([[origem, 0]]);
+  const abertos = new Set<No>([origem]);
+  while (abertos.size > 0) {
+    let atual: No | null = null;
+    for (const n of abertos) if (atual == null || (dist.get(n) ?? Infinity) < (dist.get(atual) ?? Infinity)) atual = n;
+    if (atual == null) break;
+    abertos.delete(atual);
+    const dAtual = dist.get(atual) ?? Infinity;
+    for (const v of viz.get(atual) ?? []) {
+      const nova = dAtual + v.mm;
+      if (nova < (dist.get(v.para) ?? Infinity)) {
+        dist.set(v.para, nova);
+        abertos.add(v.para);
+      }
+    }
+  }
+  return dist;
 }
 
 /**
@@ -221,6 +273,7 @@ export function planejarEletrodutos(
       ref: { existente: t.id },
       de: chave(t.levelId, t.a.x, t.a.y, t.cotaAMm),
       para: chave(t.levelId, t.b.x, t.b.y, t.cotaBMm),
+      mm: comprimentoMm(t),
     });
   }
   const temAresta = (de: No, para: No) => arestas.some((a) => (a.de === de && a.para === para) || (a.de === para && a.para === de));
@@ -243,8 +296,9 @@ export function planejarEletrodutos(
       bitolaMm: hip.bitolaMm,
       sugerido: true,
     });
-    arestas.push({ ref: { novo: novos.length - 1 }, de, para });
-    mmNovos += comprimentoMm({ a, b, cotaAMm: cotaA, cotaBMm: cotaB });
+    const mm = comprimentoMm({ a, b, cotaAMm: cotaA, cotaBMm: cotaB });
+    arestas.push({ ref: { novo: novos.length - 1 }, de, para, mm });
+    mmNovos += mm;
   };
 
   // ── O quadro no teto do próprio pavimento ────────────────────────────────
@@ -315,6 +369,19 @@ export function planejarEletrodutos(
       if (t.cotaAMm === teto) alcancados.set(chave(nivel.id, t.a.x, t.a.y, teto), { x: t.a.x, y: t.a.y });
       if (t.cotaBMm === teto) alcancados.set(chave(nivel.id, t.b.x, t.b.y, teto), { x: t.b.x, y: t.b.y });
     }
+    // A ROTA de cada nó alcançado até o quadro, pela rede que existe até aqui
+    // (existente + prumadas + o que os pavimentos anteriores acrescentaram).
+    // Nó que a rede não alcança fica com rota infinita: só entra se for o
+    // único jeito.
+    // Medida a partir da RAIZ do pavimento (o nó do quadro, ou da prumada, no
+    // teto): é a parte planar do caminho, comparável à linha reta em planta —
+    // a prumada do quadro e as entre pavimentos são iguais para todo ponto.
+    const raizDoNivel = raizNoTeto.get(nivel.id)!;
+    const rotaAteOQuadro = distanciasDesde(raizDoNivel, arestas);
+    const rota = new Map<No, number>();
+    for (const k of alcancados.keys()) rota.set(k, rotaAteOQuadro.get(k) ?? Infinity);
+    rota.set(raizDoNivel, 0);
+    const retaAteOQuadro = (p: { x: number; y: number }) => Math.hypot(p.x - quadro.at.x, p.y - quadro.at.y);
     // Cada pendente sobe (ou desce) ao teto na própria posição.
     const pendentesNoTeto = new Map<No, { x: number; y: number }>();
     for (const p of pendentes) {
@@ -322,20 +389,36 @@ export function planejarEletrodutos(
       const k = chave(nivel.id, p.at.x, p.at.y, teto);
       if (!alcancados.has(k)) pendentesNoTeto.set(k, { x: p.at.x, y: p.at.y });
     }
-    // Prim a partir do alcançado, desempate determinístico (distância, x, y).
+    // Prim COM ROTA LIMITADA: a cada passo entra o pendente que exige o menor
+    // eletroduto novo — mas só se pendurando num nó cujo caminho até o quadro
+    // (rota do nó + trecho novo) fique dentro de `rotaMaximaVezes` × a linha
+    // reta do pendente ao quadro. Se nenhum nó cabe (não acontece: a raiz
+    // sempre cabe quando a rota dela é conhecida), vale o mais próximo.
+    // Desempate determinístico (distância, x, y).
+    const limite = hip.rotaMaximaVezes;
     const restantes = [...pendentesNoTeto.entries()].sort(([, p], [, q]) => p.x - q.x || p.y - q.y);
     while (restantes.length > 0) {
-      let melhor: { i: number; de: { x: number; y: number }; d: number } | null = null;
+      let melhor: { i: number; de: No; d: number; rota: number } | null = null;
+      let reserva: { i: number; de: No; d: number; rota: number } | null = null;
       for (let i = 0; i < restantes.length; i++) {
-        for (const de of alcancados.values()) {
-          const d = Math.hypot(restantes[i][1].x - de.x, restantes[i][1].y - de.y);
-          if (!melhor || d < melhor.d) melhor = { i, de, d };
+        const alvo = restantes[i][1];
+        const reta = retaAteOQuadro(alvo);
+        for (const [kDe, de] of alcancados) {
+          const d = Math.hypot(alvo.x - de.x, alvo.y - de.y);
+          const rotaNova = (rota.get(kDe) ?? Infinity) + d;
+          const candidato = { i, de: kDe, d, rota: rotaNova };
+          if (!reserva || d < reserva.d) reserva = candidato;
+          const cabe = limite == null || !Number.isFinite(rotaNova) ? limite == null : rotaNova <= limite * reta + 1;
+          if (cabe && (!melhor || d < melhor.d)) melhor = candidato;
         }
       }
-      if (!melhor) break;
-      const [[k, para]] = restantes.splice(melhor.i, 1);
-      addTrecho(nivel.id, melhor.de, teto, para, teto);
+      const escolha = melhor ?? reserva;
+      if (!escolha) break;
+      const [[k, para]] = restantes.splice(escolha.i, 1);
+      const de = alcancados.get(escolha.de)!;
+      addTrecho(nivel.id, de, teto, para, teto);
       alcancados.set(k, para);
+      rota.set(k, escolha.rota);
     }
   }
 

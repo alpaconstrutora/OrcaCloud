@@ -129,6 +129,7 @@ import {
 import {
   BITOLAS_DE_ELETRODUTO_MM,
   HIPOTESES_ELETRODUTO_PADRAO,
+  ROTAS_MAXIMAS,
   eletrodutosSugeridos,
   planejarEletrodutosDoModelo,
   relancarEletrodutos,
@@ -4304,9 +4305,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * desenho e com a bitola, e planejar é barato (dezenas de pontos).
    */
   const [bitolaDeEletroduto, setBitolaDeEletroduto] = useState<number>(HIPOTESES_ELETRODUTO_PADRAO.bitolaMm);
+  // ROTA MÁXIMA (15/09/2026): preferência de trabalho, persistida — quem quer
+  // a árvore mínima ou o leque não quer escolher de novo a cada planta.
+  const [rotaMaxima, setRotaMaxima] = usePersistedState<number | null>(
+    'blueprint:eletrodutosRotaMaxima',
+    HIPOTESES_ELETRODUTO_PADRAO.rotaMaximaVezes,
+  );
   const hipotesesDeEletroduto = useMemo(
-    () => ({ ...HIPOTESES_ELETRODUTO_PADRAO, bitolaMm: bitolaDeEletroduto }),
-    [bitolaDeEletroduto],
+    () => ({ ...HIPOTESES_ELETRODUTO_PADRAO, bitolaMm: bitolaDeEletroduto, rotaMaximaVezes: rotaMaxima }),
+    [bitolaDeEletroduto, rotaMaxima],
   );
   // POR QUADRO, todos os pavimentos (15/09/2026): a rede é uma por quadro,
   // compartilhada entre os circuitos, e atravessa a laje na posição do quadro.
@@ -7103,7 +7110,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     posição de cada ponto e do quadro. Pavimentos acima ou abaixo do quadro são alcançados por uma{' '}
                     <strong>prumada na posição do quadro</strong>, atravessando a laje.
                   </li>
-                  <li>Por pavimento, árvore de <strong>menor comprimento</strong> com todos os pontos do quadro, em linha reta — não desvia de viga nem de laje, que o desenho não conhece.</li>
+                  <li>
+                    Por pavimento, árvore de <strong>menor eletroduto</strong> com todos os pontos do quadro, em linha
+                    reta, com <strong>rota limitada</strong>: nenhum ponto faz até o quadro um caminho maior que a rota
+                    máxima abaixo × a linha reta — sem isso a árvore mínima encadeava pontos distantes e o cabo dava a
+                    volta na casa. Não desvia de viga nem de laje, que o desenho não conhece.
+                  </li>
                   <li>
                     Condutores por circuito: FN e FF <strong>3</strong> · FFF <strong>4</strong>, somados no trecho. A{' '}
                     <strong>bitola</strong> é a menor comercial que respeita a taxa de ocupação (6.2.11.1.6), nunca abaixo
@@ -7122,6 +7134,21 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     {BITOLAS_DE_ELETRODUTO_MM.map((mm) => (
                       <option key={mm} value={mm}>
                         {mm} mm
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="mt-1.5 flex items-center gap-2">
+                  Rota máxima até o quadro
+                  <select
+                    value={rotaMaxima == null ? 'sem' : String(rotaMaxima)}
+                    onChange={(e) => setRotaMaxima(e.target.value === 'sem' ? null : Number(e.target.value))}
+                    aria-label="Rota máxima do eletroduto até o quadro"
+                    className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                  >
+                    {ROTAS_MAXIMAS.map((r) => (
+                      <option key={r.rotulo} value={r.valor == null ? 'sem' : String(r.valor)}>
+                        {r.rotulo}
                       </option>
                     ))}
                   </select>

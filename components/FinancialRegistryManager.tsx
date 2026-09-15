@@ -17,6 +17,9 @@ interface RegistryItem {
     account_number?: string;
     organization_id?: string;
     accounting_nature?: 'CREDORA' | 'DEVEDORA';
+    // Conta de pagamento: "atende também" (ver docs/planos/2026-09-15-conta-atende-outras-organizacoes.md)
+    serves_all_organizations?: boolean;
+    served_organization_ids?: string[];
 }
 
 const NATURE_LABELS: Record<'CREDORA' | 'DEVEDORA', string> = {
@@ -137,6 +140,9 @@ interface FinancialRegistryManagerProps {
     /** Títulos do drawer de criar/editar — a tela diz o nome da entidade no gênero certo
      *  ("Nova conta" / "Editar conta"). Sem isso, "Novo registro" / "Editar registro". */
     sheetLabels?: { create: string; edit: string };
+    /** Conta de pagamento: organizações que ela pode ATENDER além da dona (todas as do
+     *  usuário). Com isso o drawer mostra o bloco "Atende também". */
+    servedOrgOptions?: OrgOption[];
     /** Coluna Organização. Em "Todas as organizações" a lista junta registros
      *  de várias orgs, com códigos repetidos entre elas (toda org tem 1.1.1) —
      *  a coluna é o que os distingue, e a árvore passa a ser por org + código. */
@@ -163,6 +169,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
     showOrganization = false,
     organizationNameById,
     sheetLabels = { create: 'Novo registro', edit: 'Editar registro' },
+    servedOrgOptions,
 }) => {
     const orgNameOf = (item: RegistryItem) => (item.organization_id ? organizationNameById?.get(item.organization_id) : undefined);
     const [isEditing, setIsEditing] = useState<string | null>(null);
@@ -179,6 +186,9 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
 
     // Form state
     const [formData, setFormData] = useState<Partial<RegistryItem>>({});
+    // "Atende também" — o modo é estado próprio: derivar da lista faria "Organizações
+    // específicas" voltar para "Só esta" enquanto nenhuma caixa está marcada.
+    const [atendeModo, setAtendeModo] = useState<'own' | 'some' | 'all'>('own');
 
     // Build column config dynamically based on props
     const registryColumns = useMemo<ColumnConfig[]>(() => {
@@ -237,11 +247,13 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
 
     const handleEdit = (item: RegistryItem) => {
         setFormData(item);
+        setAtendeModo(item.serves_all_organizations ? 'all' : (item.served_organization_ids?.length ? 'some' : 'own'));
         setIsEditing(item.id);
         setIsAdding(false);
     };
 
     const handleAdd = () => {
+        setAtendeModo('own');
         setFormData({ name: '', code: '', description: '', organization_id: defaultOrganizationId, accounting_nature: undefined });
         setIsAdding(true);
         setIsEditing(null);
@@ -727,6 +739,68 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                         />
                                     </div>
                                 </div>
+
+                                {/* "Atende também" — a conta tem UMA org dona; pode atender outras (algumas ou
+                                    todas) e aí o extrato dela classifica com centro de custo / plano de contas /
+                                    obra / fornecedor dessas orgs. Regra de produto de 2026-09-15. */}
+                                {servedOrgOptions && servedOrgOptions.length > 1 && (() => {
+                                    const dona = formData.organization_id || '';
+                                    const outras = servedOrgOptions.filter(o => o.id !== dona);
+                                    const modo = atendeModo;
+                                    const setModo = (m: 'own' | 'some' | 'all') => {
+                                        setAtendeModo(m);
+                                        setFormData({
+                                            ...formData,
+                                            serves_all_organizations: m === 'all',
+                                            served_organization_ids: m === 'some' ? (formData.served_organization_ids ?? []) : [],
+                                        });
+                                    };
+                                    const marcadas = new Set(formData.served_organization_ids ?? []);
+                                    const alternar = (id: string) => {
+                                        const prox = new Set(marcadas);
+                                        if (prox.has(id)) prox.delete(id); else prox.add(id);
+                                        setFormData({ ...formData, serves_all_organizations: false, served_organization_ids: [...prox] });
+                                    };
+                                    const opcoes: { id: 'own' | 'some' | 'all'; label: string }[] = [
+                                        { id: 'own',  label: 'Só esta organização' },
+                                        { id: 'some', label: 'Organizações específicas' },
+                                        { id: 'all',  label: 'Todas as organizações' },
+                                    ];
+                                    return (
+                                        <div>
+                                            <label className="text-xs font-semibold text-slate-500">Atende também</label>
+                                            <p className="text-xs text-gray-400 mt-0.5">O extrato desta conta poderá ser classificado com centro de custo, plano de contas, obra e fornecedor das organizações atendidas.</p>
+                                            <div className="mt-1.5 flex flex-col gap-2">
+                                                {opcoes.map(o => (
+                                                    <button
+                                                        key={o.id}
+                                                        type="button"
+                                                        onClick={() => setModo(o.id)}
+                                                        className={`h-9 px-3 rounded-[6px] text-sm font-medium border text-left transition-all ${modo === o.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                                                    >
+                                                        {o.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {modo === 'some' && (
+                                                <div className="mt-2 border border-gray-200 rounded-[6px] divide-y divide-gray-100 max-h-48 overflow-y-auto">
+                                                    {outras.map(o => (
+                                                        <label key={o.id} className="flex items-center gap-2.5 px-3 h-9 text-sm font-normal text-gray-700 cursor-pointer hover:bg-gray-50">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={marcadas.has(o.id)}
+                                                                onChange={() => alternar(o.id)}
+                                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                            />
+                                                            <span className="truncate">{o.name}</span>
+                                                        </label>
+                                                    ))}
+                                                    {outras.length === 0 && <p className="px-3 py-2 text-xs text-gray-400">Nenhuma outra organização disponível.</p>}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
                             </>
                         )}
                     </SheetPanel>

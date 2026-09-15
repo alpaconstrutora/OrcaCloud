@@ -782,6 +782,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         showDescription={activeTab === 'accounts'}
                         showBankDetails={activeTab === 'accounts'}
                         sheetLabels={activeTab === 'accounts' ? { create: 'Nova conta de pagamento', edit: 'Editar conta de pagamento' } : { create: 'Nova conta', edit: 'Editar conta' }}
+                        servedOrgOptions={activeTab === 'accounts' ? registryOrgOptions : undefined}
                         showCode={true}
                         showNature={activeTab === 'chart_of_accounts'}
                         onSave={async (item) => {
@@ -790,10 +791,15 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                             if (!currentOrgId) throw new Error('Selecione uma organização para vincular a conta.');
 
                             // Remover apenas campos gerados pelo servidor (id, created_at)
-                            const { id: _id, created_at: _ca, ...rest } = item as { id?: string; created_at?: string; name: string; description?: string; bank?: string; branch?: string; account_number?: string; code?: string; organization_id?: string; accounting_nature?: 'CREDORA' | 'DEVEDORA' };
+                            const { id: _id, created_at: _ca, ...rest } = item as { id?: string; created_at?: string; name: string; description?: string; bank?: string; branch?: string; account_number?: string; code?: string; organization_id?: string; accounting_nature?: 'CREDORA' | 'DEVEDORA'; serves_all_organizations?: boolean; served_organization_ids?: string[] };
                             if (activeTab === 'accounts') {
                                 // code: em branco = auto-gerado pelo service (001/002/003...); preenchido = respeita a edição manual.
-                                const payload = { name: rest.name, description: rest.description, bank: rest.bank, branch: rest.branch, account_number: rest.account_number, code: rest.code || undefined };
+                                const payload = {
+                                    name: rest.name, description: rest.description, bank: rest.bank, branch: rest.branch, account_number: rest.account_number, code: rest.code || undefined,
+                                    // "Atende também": todas (bool) ou lista específica (tabela payment_account_organizations)
+                                    serves_all_organizations: !!rest.serves_all_organizations,
+                                    served_organization_ids: rest.serves_all_organizations ? [] : (rest.served_organization_ids ?? []),
+                                };
                                 if (item.id) await financialRegistryService.updatePaymentAccount(item.id, { ...payload, organization_id: currentOrgId });
                                 else await financialRegistryService.createPaymentAccount({ ...payload, organization_id: currentOrgId });
                             } else {

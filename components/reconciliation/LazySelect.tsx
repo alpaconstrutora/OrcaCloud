@@ -1,6 +1,8 @@
 import React from 'react';
 
-export type LazyOption = { value: string; label: string };
+/** `group`: nome do <optgroup> — usado quando a lista junta mais de uma organização
+ *  (conta que "atende também" outras orgs), para cada item dizer de quem é. */
+export type LazyOption = { value: string; label: string; group?: string };
 
 /**
  * <select> que só materializa a lista completa de <option> ao ser aberto/focado.
@@ -37,9 +39,19 @@ export const LazySelect: React.FC<{
             {revealed && value !== '' && !options.some(o => o.value === value) && (
                 <option value={value}>{currentLabel || value}</option>
             )}
-            {revealed && options.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
+            {revealed && (() => {
+                const grupos = options.some(o => o.group)
+                    ? [...new Set(options.map(o => o.group ?? ''))]
+                    : null;
+                if (!grupos) return options.map(o => <option key={o.value} value={o.value}>{o.label}</option>);
+                return grupos.map(g => (
+                    <optgroup key={g || '__sem_grupo'} label={g || '—'}>
+                        {options.filter(o => (o.group ?? '') === g).map(o => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                    </optgroup>
+                ));
+            })()}
         </select>
     );
 };

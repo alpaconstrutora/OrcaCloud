@@ -108,6 +108,8 @@ import {
 const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId, defaultView }) => {
     const confirm = useConfirm();
     const navigateToFocus = useStore(s => s.navigateToFocus);
+    // Organizações do usuário — "Atende também: todas" da conta resolve para elas (nunca NULL).
+    const userOrganizations = useStore(s => s.organizations);
     const categoriesLoadedForOrg = useRef<string | null>(null);
     const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
     const [selectedBankTxIds, setSelectedBankTxIds] = useState<Set<string>>(new Set());
@@ -271,9 +273,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const [masterClients, setMasterClients] = useState<string[]>([]);
     const [clientNameById, setClientNameById] = useState<Record<string, string>>({});
     const [masterEmployees, setMasterEmployees] = useState<string[]>([]);
-    const [masterProjects, setMasterProjects] = useState<Array<{ id: string; name: string }>>([]);
+    const [masterProjects, setMasterProjects] = useState<Array<{ id: string; name: string; organization_id?: string | null }>>([]);
     // Guarda código/grupo além do nome: o CostCenterSelect da edição em lote monta o accordion com isso.
-    const [masterCostCenters, setMasterCostCenters] = useState<Array<{ id: string; name: string; code?: string | null; parent_id?: string | null; parent_name?: string | null }>>([]);
+    const [masterCostCenters, setMasterCostCenters] = useState<Array<{ id: string; name: string; code?: string | null; parent_id?: string | null; parent_name?: string | null; organization_id?: string | null }>>([]);
     // Plano de Contas (plano_de_contas) — terceira dimensão contábil, distinta de Centro de Custo e de Categoria.
     // `name` é o nome CRU (o drawer de seleção mostra o código ao lado sozinho); onde a
     // tela exibe texto (célula, filtro, ordenação) usa-se `rotuloPlanoContas` = "código · nome".
@@ -683,18 +685,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         () => uniqueCategories.map(c => ({ value: c, label: c })),
         [uniqueCategories]
     );
-    const projectOptions = useMemo<LazyOption[]>(
-        () => masterProjects.map(p => ({ value: p.id, label: p.name })),
-        [masterProjects]
-    );
-    const costCenterOptions = useMemo<LazyOption[]>(
-        () => masterCostCenters.map(c => ({ value: c.id, label: c.name })),
-        [masterCostCenters]
-    );
-    const planoContasOptions = useMemo<LazyOption[]>(
-        () => masterPlanoContas.map(pc => ({ value: pc.id, label: rotuloPlanoContas(pc) })),
-        [masterPlanoContas]
-    );
     const credorOptions = useMemo<LazyOption[]>(
         () => uniqueCredores.map(n => ({ value: n, label: supplierDisplayByName[n] || n })),
         [uniqueCredores, supplierDisplayByName]
@@ -743,21 +733,55 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         loadRules();
     }, [organizationId]);
 
+    // Organizações cujas dimensões (CC, plano de contas, obra, fornecedor, cliente,
+    // colaborador) a conta selecionada pode usar: a DONA + as que ela "atende também"
+    // (lista específica, ou todas as do usuário). Regra de produto de 2026-09-15 — ver
+    // docs/planos/2026-09-15-conta-atende-outras-organizacoes.md. Sem conta: só a org efetiva.
+    const orgsDaConta = useMemo<string[]>(() => {
+        if (!effectiveOrgId) return [];
+        const acc = accounts.find(a => a.id === selectedAccountId);
+        const atendidas = acc
+            ? financialRegistryService.servedOrganizationIds(acc, userOrganizations.map(o => o.id))
+            : [];
+        return [...new Set([effectiveOrgId, ...atendidas])];
+    }, [effectiveOrgId, selectedAccountId, accounts, userOrganizations]);
+    const orgsDaContaKey = orgsDaConta.join(',');
+    const orgNameById = useMemo(() => new Map(userOrganizations.map(o => [o.id, o.name])), [userOrganizations]);
+    // Rótulo de grupo nos selects da tabela: só quando a lista junta mais de uma org.
+    const grupoDaOrg = (orgId?: string | null) => (orgsDaConta.length > 1 ? (orgNameById.get(orgId ?? '') ?? 'Organização') : undefined);
+
+    // `group` só quando a conta atende mais de uma org — vira <optgroup> no select da célula.
+    const projectOptions = useMemo<LazyOption[]>(
+        () => masterProjects.map(p => ({ value: p.id, label: p.name, group: grupoDaOrg(p.organization_id) })),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [masterProjects, orgsDaContaKey, orgNameById]
+    );
+    const costCenterOptions = useMemo<LazyOption[]>(
+        () => masterCostCenters.map(c => ({ value: c.id, label: c.name, group: grupoDaOrg(c.organization_id) })),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [masterCostCenters, orgsDaContaKey, orgNameById]
+    );
+    const planoContasOptions = useMemo<LazyOption[]>(
+        () => masterPlanoContas.map(pc => ({ value: pc.id, label: rotuloPlanoContas(pc), group: grupoDaOrg(pc.organization_id) })),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [masterPlanoContas, orgsDaContaKey, orgNameById]
+    );
+
     useEffect(() => {
-        if (effectiveOrgId) {
-            loadSuppliers(effectiveOrgId);
-            loadClients(effectiveOrgId);
-            loadEmployees(effectiveOrgId);
-            loadProjects(effectiveOrgId);
-            loadCostCenters(effectiveOrgId);
-            loadPlanoContas(effectiveOrgId);
-            // Carrega categorias uma única vez por org (não re-carrega ao trocar de conta)
-            if (categoriesLoadedForOrg.current !== effectiveOrgId) {
-                categoriesLoadedForOrg.current = effectiveOrgId;
-                loadManagedCategories(effectiveOrgId);
-            }
+        if (orgsDaConta.length === 0) return;
+        loadSuppliers(orgsDaConta);
+        loadClients(orgsDaConta);
+        loadEmployees(orgsDaConta);
+        loadProjects(orgsDaConta);
+        loadCostCenters(orgsDaConta);
+        loadPlanoContas(orgsDaConta);
+        // Carrega categorias uma única vez por org (não re-carrega ao trocar de conta)
+        if (effectiveOrgId && categoriesLoadedForOrg.current !== effectiveOrgId) {
+            categoriesLoadedForOrg.current = effectiveOrgId;
+            loadManagedCategories(effectiveOrgId);
         }
-    }, [effectiveOrgId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [orgsDaContaKey]);
 
     // Persistência da aba ativa
     useEffect(() => {
@@ -856,12 +880,16 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         try {
             const { data, error } = await supabase
                 .from('payment_accounts')
-                .select('id, organization_id, empresa_id, bank, branch, account_number, name, description')
+                .select('id, organization_id, empresa_id, bank, branch, account_number, name, description, serves_all_organizations, payment_account_organizations(organization_id)')
                 .order('name');
 
             if (error) throw error;
 
-            setAccounts(data || []);
+            type Row = PaymentAccount & { payment_account_organizations?: { organization_id: string }[] | null };
+            setAccounts(((data || []) as Row[]).map(({ payment_account_organizations, ...acc }) => ({
+                ...acc,
+                served_organization_ids: (payment_account_organizations ?? []).map(r => r.organization_id),
+            })));
             if (data && data.length > 0 && (!selectedAccountId || selectedAccountId === 'mock-acc-1')) {
                 setSelectedAccountId(data[0].id);
             }
@@ -889,12 +917,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         }
     };
 
-    const loadClients = async (orgId: string) => {
+    const loadClients = async (orgIds: string[]) => {
         try {
             const { data } = await supabase
                 .from('clients')
                 .select('id, name')
-                .or(`organization_id.eq.${orgId},organization_id.is.null`)
+                .or(`organization_id.in.(${orgIds.join(',')}),organization_id.is.null`)
                 .order('name', { ascending: true })
                 .limit(10000);
             if (data) {
@@ -906,12 +934,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         }
     };
 
-    const loadSuppliers = async (orgId: string) => {
+    const loadSuppliers = async (orgIds: string[]) => {
         try {
             const { data, error } = await supabase
                 .from('suppliers')
                 .select('id, name, nickname')
-                .or(`organization_id.eq.${orgId},organization_id.is.null`)
+                .or(`organization_id.in.(${orgIds.join(',')}),organization_id.is.null`)
                 .order('name', { ascending: true })
                 .limit(10000);
 
@@ -981,12 +1009,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         }
     };
 
-    const loadEmployees = async (orgId: string) => {
+    const loadEmployees = async (orgIds: string[]) => {
         try {
             const { data } = await supabase
                 .from('employees')
                 .select('name')
-                .eq('org_id', orgId)
+                .in('org_id', orgIds)
                 .eq('status', 'ATIVO')
                 .order('name', { ascending: true });
             if (data) setMasterEmployees(data.map(e => e.name));
@@ -995,16 +1023,19 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         }
     };
 
-    const loadProjects = async (orgId: string) => {
+    const loadProjects = async (orgIds: string[]) => {
         try {
             const { data } = await supabase
                 .from('projects')
-                .select('id, name')
-                .filter('settings->>organizationId', 'eq', orgId)
+                .select('id, name, settings')
+                .filter('settings->>organizationId', 'in', `(${orgIds.join(',')})`)
                 .not('name', 'in', SYSTEM_PROJECT_NAMES_SQL) // utils/systemProjects.ts
                 .order('name', { ascending: true });
             if (data) {
-                const uniqueProjects = Array.from(new Map(data.map(p => [p.name, p])).values());
+                type Row = { id: string; name: string; settings?: { organizationId?: string } | null };
+                const rows = (data as Row[]).map(p => ({ id: p.id, name: p.name, organization_id: p.settings?.organizationId ?? null }));
+                // Dedup por nome DENTRO da org (duas orgs podem ter obra homônima).
+                const uniqueProjects = Array.from(new Map(rows.map(p => [`${p.organization_id}|${p.name}`, p])).values());
                 setMasterProjects(uniqueProjects);
             }
         } catch (error) {
@@ -1012,27 +1043,25 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         }
     };
 
-    const loadCostCenters = async (orgId: string) => {
+    const loadCostCenters = async (orgIds: string[]) => {
         try {
-            // Tenta com org; se vier vazio, tenta sem filtro (RLS garante escopo)
-            let data = await financialRegistryService.listCostCenters(orgId);
-            if (!data.length) data = await financialRegistryService.listCostCenters();
-            setMasterCostCenters(data.map(c => ({ id: c.id, name: c.name, code: c.code ?? null, parent_id: c.parent_id ?? null, parent_name: c.parent_name ?? null })));
+            // Uma consulta por org atendida, somadas. SEM o antigo fallback "se vier vazio,
+            // busca sem filtro": ele oferecia centro de custo de org que a conta não atende
+            // (foi assim que 13 + 175 movimentos ficaram apontando para CC alheio).
+            const listas = await Promise.all(orgIds.map(orgId => financialRegistryService.listCostCenters(orgId)));
+            setMasterCostCenters(listas.flat().map(c => ({ id: c.id, name: c.name, code: c.code ?? null, parent_id: c.parent_id ?? null, parent_name: c.parent_name ?? null, organization_id: c.organization_id ?? null })));
         } catch (error) {
             console.error('Error loading cost centers:', error);
         }
     };
 
-    const loadPlanoContas = async (orgId: string) => {
+    const loadPlanoContas = async (orgIds: string[]) => {
         try {
-            // Org sem plano de contas próprio (ex.: a org da conta pessoa física, 0 contas)
-            // cai para os planos das outras orgs do usuário — mesmo fallback de
-            // loadCostCenters. O PlanoContasSelect agrupa por organização quando a lista
-            // tem mais de uma, então isso não aparece mais como "itens duplicados"
-            // (2026-09-15: sem o fallback a tela ficou vazia para essa org).
-            let data = await financialRegistryService.listPlanoContas(orgId);
-            if (!data.length) data = await financialRegistryService.listPlanoContas();
-            setMasterPlanoContas(data.map(pc => ({ id: pc.id, name: pc.name, code: pc.code ?? null, organization_id: pc.organization_id ?? null })));
+            // Uma consulta por org atendida, somadas — sem fallback cruzado (idem loadCostCenters).
+            // Org sem plano próprio e sem "atende também" = lista vazia, e a conta precisa
+            // ser configurada para atender a org dona do plano.
+            const listas = await Promise.all(orgIds.map(orgId => financialRegistryService.listPlanoContas(orgId)));
+            setMasterPlanoContas(listas.flat().map(pc => ({ id: pc.id, name: pc.name, code: pc.code ?? null, organization_id: pc.organization_id ?? null })));
         } catch (error) {
             console.error('Error loading plano de contas:', error);
         }

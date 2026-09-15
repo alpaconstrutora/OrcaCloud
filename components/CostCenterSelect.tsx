@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import HierarchicalSelect, { HierarchicalSelectItem } from './HierarchicalSelect';
+import { useStore } from '../store/useStore';
 
 /**
  * Seletor de Centro de Custo — o padrão do app inteiro (2026-09-10, ver
@@ -22,6 +23,9 @@ export interface CostCenterOption {
     code?: string | null;
     parent_id?: string | null;
     parent_name?: string | null;
+    /** Quando a lista junta mais de uma org (conta que "atende também" outras), a
+     *  árvore ganha um cabeçalho por organização — mesmo desenho do PlanoContasSelect. */
+    organization_id?: string | null;
 }
 
 interface Props {
@@ -40,24 +44,37 @@ interface Props {
 
 /** Itens do drawer a partir da lista crua. Exportado para quem precisa da
  *  mesma resolução fora do seletor (ex.: rótulo em célula). */
-export function costCenterSelectItems(costCenters: CostCenterOption[]): HierarchicalSelectItem[] {
+export function costCenterSelectItems(costCenters: CostCenterOption[], orgNames: ReadonlyMap<string, string> = new Map()): HierarchicalSelectItem[] {
     const porId = new Map(costCenters.map(c => [c.id, c]));
-    return costCenters.map(cc => {
+    const orgs = [...new Set(costCenters.map(c => c.organization_id ?? ''))];
+    const agruparPorOrg = orgs.length > 1;
+    const orgNodeId = (org: string | null | undefined) => `org:${org ?? ''}`;
+    const itens: HierarchicalSelectItem[] = costCenters.map(cc => {
         const parentId = cc.parent_id ?? null;
         const parentName = cc.parent_name ?? (parentId ? porId.get(parentId)?.name ?? null : null);
         // `listCostCenters` já devolve "Grupo > Filho"; o grupo vira a linha de
         // cima / o prefixo em cinza, então o nome volta a ser só o filho.
         const prefixo = parentName ? `${parentName} > ` : null;
         const name = prefixo && cc.name.startsWith(prefixo) ? cc.name.slice(prefixo.length) : cc.name;
+        if (!parentId && agruparPorOrg) {
+            return { id: cc.id, code: cc.code ?? null, name, parentId: orgNodeId(cc.organization_id), parentName: orgNames.get(cc.organization_id ?? '') ?? 'Organização', fullName: cc.name };
+        }
         return { id: cc.id, code: cc.code ?? null, name, parentId, parentName, fullName: cc.name };
     });
+    if (!agruparPorOrg) return itens;
+    const cabecalhos: HierarchicalSelectItem[] = orgs.map(org => ({
+        id: orgNodeId(org), code: null, name: orgNames.get(org) ?? 'Organização', parentId: null, parentName: null, selecionavel: false,
+    }));
+    return [...cabecalhos, ...itens];
 }
 
 const CostCenterSelect: React.FC<Props> = ({
     costCenters, value, onChange, placeholder = '—', valueField = 'id', size, disabled,
     hoverCls = 'hover:bg-gray-50',
 }) => {
-    const items = useMemo(() => costCenterSelectItems(costCenters), [costCenters]);
+    const organizations = useStore(s => s.organizations);
+    const orgNames = useMemo(() => new Map(organizations.map(o => [o.id, o.name])), [organizations]);
+    const items = useMemo(() => costCenterSelectItems(costCenters, orgNames), [costCenters, orgNames]);
     return (
         <HierarchicalSelect
             items={items}

@@ -26,6 +26,12 @@ import type { BankTransaction, InternalTransaction, BankTransactionStatus } from
  * Conciliados) já saíram; o resto do ganho estava aqui.
  */
 
+// Id gravado que não está em nenhuma lista carregada = dimensão de uma organização que
+// esta conta NÃO atende (ver "Atende também" na conta de pagamento). Antes aparecia o
+// UUID cru no select — reportado em 2026-09-15 (CC "Coronel Lambert 316" da Alpa num
+// movimento da conta Itaú da org Altair).
+export const ROTULO_OUTRA_ORG = '— outra organização —';
+
 export const STATEMENT_COLUMNS: ColumnConfig[] = [
     { key: 'description',  label: 'Descrição',          sortable: true },
     { key: 'client',       label: 'Cliente',            sortable: true },
@@ -378,7 +384,8 @@ export function renderStatementCell(key: string, tx: BankTransaction, ctx: State
             return (
                 <LazySelect
                     value={tx.project_id || ''}
-                    currentLabel={ctx.projectName(tx.project_id) || ''}
+                    currentLabel={ctx.projectName(tx.project_id) || (tx.project_id ? ROTULO_OUTRA_ORG : '')}
+                    title={tx.project_id && !ctx.projectName(tx.project_id) ? `Obra de outra organização (${tx.project_id})` : undefined}
                     onChange={(v) => ctx.onUpdateProject(tx.id, v)}
                     options={ctx.projectOptions}
                     placeholder="Obra"
@@ -389,7 +396,8 @@ export function renderStatementCell(key: string, tx: BankTransaction, ctx: State
             return (
                 <LazySelect
                     value={tx.cost_center_id || ''}
-                    currentLabel={ctx.costCenterName(tx.cost_center_id) || ''}
+                    currentLabel={ctx.costCenterName(tx.cost_center_id) || (tx.cost_center_id ? ROTULO_OUTRA_ORG : '')}
+                    title={tx.cost_center_id && !ctx.costCenterName(tx.cost_center_id) ? `Centro de custo de outra organização (${tx.cost_center_id})` : undefined}
                     onChange={(v) => ctx.onUpdateCostCenter(tx.id, v)}
                     options={ctx.costCenterOptions}
                     placeholder="Centro de Custo"
@@ -400,7 +408,8 @@ export function renderStatementCell(key: string, tx: BankTransaction, ctx: State
             return (
                 <LazySelect
                     value={tx.plano_de_contas_id || ''}
-                    currentLabel={ctx.planoContasName(tx.plano_de_contas_id) || ''}
+                    currentLabel={ctx.planoContasName(tx.plano_de_contas_id) || (tx.plano_de_contas_id ? ROTULO_OUTRA_ORG : '')}
+                    title={tx.plano_de_contas_id && !ctx.planoContasName(tx.plano_de_contas_id) ? `Plano de contas de outra organização (${tx.plano_de_contas_id})` : undefined}
                     onChange={(v) => ctx.onUpdatePlanoContas(tx.id, v)}
                     options={ctx.planoContasOptions}
                     placeholder="Plano de Contas"
@@ -486,7 +495,8 @@ export function renderPendingBankCell(key: string, tx: BankTransaction, ctx: Pen
             return (
                 <LazySelect
                     value={tx.project_id || ''}
-                    currentLabel={ctx.projectName(tx.project_id) || ''}
+                    currentLabel={ctx.projectName(tx.project_id) || (tx.project_id ? ROTULO_OUTRA_ORG : '')}
+                    title={tx.project_id && !ctx.projectName(tx.project_id) ? `Obra de outra organização (${tx.project_id})` : undefined}
                     onChange={(v) => ctx.onUpdateProject(tx.id, v)}
                     options={ctx.projectOptions}
                     placeholder="—"
@@ -497,7 +507,8 @@ export function renderPendingBankCell(key: string, tx: BankTransaction, ctx: Pen
             return (
                 <LazySelect
                     value={tx.cost_center_id || ''}
-                    currentLabel={ctx.costCenterName(tx.cost_center_id) || ''}
+                    currentLabel={ctx.costCenterName(tx.cost_center_id) || (tx.cost_center_id ? ROTULO_OUTRA_ORG : '')}
+                    title={tx.cost_center_id && !ctx.costCenterName(tx.cost_center_id) ? `Centro de custo de outra organização (${tx.cost_center_id})` : undefined}
                     onChange={(v) => ctx.onUpdateCostCenter(tx.id, v)}
                     options={ctx.costCenterOptions}
                     placeholder="—"

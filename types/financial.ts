@@ -153,6 +153,12 @@ export interface PaymentAccount {
     account_number?: string;
     opening_balance?: number;
     opening_balance_date?: string;
+    /** A conta tem UMA org dona (organization_id) e pode ATENDER outras: todas as do
+     *  usuário (`serves_all_organizations`) ou uma lista (`served_organization_ids`,
+     *  tabela payment_account_organizations). Regra de produto de 2026-09-15 — ver
+     *  docs/planos/2026-09-15-conta-atende-outras-organizacoes.md. */
+    serves_all_organizations?: boolean;
+    served_organization_ids?: string[];
     created_at?: string;
 }
 

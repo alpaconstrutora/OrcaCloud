@@ -6,7 +6,7 @@ export const financialRegistryService = {
     async listPaymentAccounts(organizationId?: string, empresaId?: string): Promise<PaymentAccount[]> {
         let query = supabase
             .from('payment_accounts')
-            .select('id, code, organization_id, empresa_id, name, description, bank, branch, account_number, created_at');
+            .select('id, code, organization_id, empresa_id, name, description, bank, branch, account_number, serves_all_organizations, created_at, payment_account_organizations(organization_id)');
 
         if (empresaId) {
             query = query.eq('empresa_id', empresaId);
@@ -17,11 +17,50 @@ export const financialRegistryService = {
         const { data, error } = await query.order('name');
 
         if (error) throw error;
-        return data || [];
+        type Row = PaymentAccount & { payment_account_organizations?: { organization_id: string }[] | null };
+        return ((data || []) as Row[]).map(({ payment_account_organizations, ...acc }) => ({
+            ...acc,
+            served_organization_ids: (payment_account_organizations ?? []).map(r => r.organization_id),
+        }));
+    },
+
+    /** Orgs que a conta atende ALÉM da dona: todas as `candidatas` (as do usuário) quando
+     *  `serves_all_organizations`, senão a lista gravada. A dona nunca entra aqui. */
+    servedOrganizationIds(account: Pick<PaymentAccount, 'organization_id' | 'serves_all_organizations' | 'served_organization_ids'>, candidatas: string[]): string[] {
+        const outras = account.serves_all_organizations
+            ? candidatas
+            : (account.served_organization_ids ?? []);
+        return [...new Set(outras.filter(id => id && id !== account.organization_id))];
+    },
+
+    /** Sincroniza payment_account_organizations com a lista desejada (apaga o que saiu,
+     *  insere o que entrou). A dona é filtrada: ela já é organization_id. */
+    async syncServedOrganizations(accountId: string, ownerOrgId: string, desejadas: string[] | undefined): Promise<void> {
+        if (desejadas === undefined) return; // chamador não mexeu no campo
+        const alvo = [...new Set(desejadas.filter(id => id && id !== ownerOrgId))];
+        const { data: atuais, error: e1 } = await supabase
+            .from('payment_account_organizations')
+            .select('organization_id')
+            .eq('payment_account_id', accountId);
+        if (e1) throw e1;
+        const atuaisIds = (atuais ?? []).map(r => r.organization_id as string);
+        const remover = atuaisIds.filter(id => !alvo.includes(id));
+        const inserir = alvo.filter(id => !atuaisIds.includes(id));
+        if (remover.length) {
+            const { error } = await supabase.from('payment_account_organizations')
+                .delete().eq('payment_account_id', accountId).in('organization_id', remover);
+            if (error) throw error;
+        }
+        if (inserir.length) {
+            const { error } = await supabase.from('payment_account_organizations')
+                .insert(inserir.map(organization_id => ({ payment_account_id: accountId, organization_id })));
+            if (error) throw error;
+        }
     },
 
     async createPaymentAccount(account: Omit<PaymentAccount, 'id' | 'created_at'>): Promise<PaymentAccount> {
-        const payload: Record<string, unknown> = { ...account };
+        const { served_organization_ids, ...resto } = account;
+        const payload: Record<string, unknown> = { ...resto };
         // Código sequencial 001/002/003... único por organização (§ui_ux_guia_unificado.md).
         if (!payload.code) {
             const { data: nextCode } = await supabase.rpc('get_next_payment_account_code', { p_org_id: account.organization_id });
@@ -34,18 +73,21 @@ export const financialRegistryService = {
             .single();
 
         if (error) throw error;
-        return data;
+        await this.syncServedOrganizations(data.id, account.organization_id, served_organization_ids);
+        return { ...data, served_organization_ids: served_organization_ids ?? [] };
     },
 
     async updatePaymentAccount(id: string, account: Partial<PaymentAccount>): Promise<PaymentAccount> {
+        const { served_organization_ids, ...resto } = account;
         const { data, error } = await supabase
             .from('payment_accounts')
-            .update(account)
+            .update(resto)
             .eq('id', id)
             .select()
             .single();
 
         if (error) throw error;
+        await this.syncServedOrganizations(id, data.organization_id, served_organization_ids);
         return data;
     },
 

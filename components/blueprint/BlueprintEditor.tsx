@@ -4728,109 +4728,108 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   return (
     <>
       {telaAberta === 'quadro-de-cargas' && (
-        <div className="h-full overflow-y-auto bg-slate-50" data-tela="quadro-de-cargas">
-          <div className="mx-auto max-w-7xl space-y-6 px-6 py-6 pb-8 animate-in fade-in duration-300">
-            {cabecalhoDaTela(
-              RELATORIOS_DO_DOCK['quadro-de-cargas'].rotulo,
-              `${(editor.model.circuitos ?? []).length} circuito(s) · pré-dimensionamento com hipóteses declaradas e conferência da NBR 5410. Cada campo grava na hora; Ctrl+Z desfaz no editor. A emissão com ART fica em "Projeto executivo (ART)".`,
-              Zap,
-            )}
-            {/* Sem cartão em volta: o painel é TabsBar + StandardTable, cada um
-                com o próprio cartão (§19.1 / §5.2) — como as telas de RH. */}
-            <div>
-                <PainelEletrica
-                  model={editor.model}
-                  onAddCircuito={(quadroId, nome) => editor.run({ type: 'AddCircuito', quadroId, nome })}
-                  onCircuitoProps={(circuitoId, campos) =>
-                    editor.run({ type: 'SetCircuitoProps', circuitoId, ...campos })
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="quadro-de-cargas">
+        {/* Sem padding nem largura máxima próprios: o gutter (p-4 md:p-6) é do
+            <main> do Layout — §20.2 do guia. A raiz da tela é `space-y-6 pb-20`,
+            como as demais telas do app. */}
+          {cabecalhoDaTela(
+            RELATORIOS_DO_DOCK['quadro-de-cargas'].rotulo,
+            `${(editor.model.circuitos ?? []).length} circuito(s) · pré-dimensionamento com hipóteses declaradas e conferência da NBR 5410. Cada campo grava na hora; Ctrl+Z desfaz no editor. A emissão com ART fica em "Projeto executivo (ART)".`,
+            Zap,
+          )}
+          {/* Sem cartão em volta: o painel é TabsBar + StandardTable, cada um
+              com o próprio cartão (§19.1 / §5.2) — como as telas de RH. */}
+          <div>
+              <PainelEletrica
+                model={editor.model}
+                onAddCircuito={(quadroId, nome) => editor.run({ type: 'AddCircuito', quadroId, nome })}
+                onCircuitoProps={(circuitoId, campos) =>
+                  editor.run({ type: 'SetCircuitoProps', circuitoId, ...campos })
+                }
+                onSelecionar={(id) => {
+            selecionar([id]);
+            setTelaAberta(null);
+          }}
+                onLigarAoCircuito={(terminalId, circuitoId) =>
+                  editor.run({ type: 'SetTerminalProps', terminalId, circuitoId })
+                }
+                // Excluir circuito: com pontos ou eletrodutos ligados, confirma antes —
+                // eles ficam sem circuito e voltam para a lista de pendências.
+                onExcluirCircuito={async (circuitoId) => {
+                  const c = (editor.model.circuitos ?? []).find((x) => x.id === circuitoId);
+                  if (!c) return;
+                  const pontos = (editor.model.terminais ?? []).filter((t) => t.circuitoId === circuitoId).length;
+                  const trechos = (editor.model.trechos ?? []).filter((t) => (t.circuitoIds ?? []).includes(circuitoId)).length;
+                  if (pontos > 0 || trechos > 0) {
+                    const partes = [
+                      pontos > 0 ? `${pontos} ${pontos === 1 ? 'ponto' : 'pontos'}` : null,
+                      trechos > 0 ? `${trechos} ${trechos === 1 ? 'eletroduto' : 'eletrodutos'}` : null,
+                    ].filter(Boolean);
+                    const ok = await confirmar({
+                      title: `Excluir o circuito ${c.nome}?`,
+                      message: `${partes.join(' e ')} ligados a ele ficam sem circuito — nada é apagado do desenho. Ctrl+Z desfaz.`,
+                      confirmLabel: 'Excluir circuito',
+                      variant: 'warning',
+                    });
+                    if (!ok) return;
                   }
-                  onSelecionar={(id) => {
-              selecionar([id]);
-              setTelaAberta(null);
-            }}
-                  onLigarAoCircuito={(terminalId, circuitoId) =>
-                    editor.run({ type: 'SetTerminalProps', terminalId, circuitoId })
-                  }
-                  // Excluir circuito: com pontos ou eletrodutos ligados, confirma antes —
-                  // eles ficam sem circuito e voltam para a lista de pendências.
-                  onExcluirCircuito={async (circuitoId) => {
-                    const c = (editor.model.circuitos ?? []).find((x) => x.id === circuitoId);
-                    if (!c) return;
-                    const pontos = (editor.model.terminais ?? []).filter((t) => t.circuitoId === circuitoId).length;
-                    const trechos = (editor.model.trechos ?? []).filter((t) => (t.circuitoIds ?? []).includes(circuitoId)).length;
-                    if (pontos > 0 || trechos > 0) {
-                      const partes = [
-                        pontos > 0 ? `${pontos} ${pontos === 1 ? 'ponto' : 'pontos'}` : null,
-                        trechos > 0 ? `${trechos} ${trechos === 1 ? 'eletroduto' : 'eletrodutos'}` : null,
-                      ].filter(Boolean);
-                      const ok = await confirmar({
-                        title: `Excluir o circuito ${c.nome}?`,
-                        message: `${partes.join(' e ')} ligados a ele ficam sem circuito — nada é apagado do desenho. Ctrl+Z desfaz.`,
-                        confirmLabel: 'Excluir circuito',
-                        variant: 'warning',
-                      });
-                      if (!ok) return;
+                  editor.run({ type: 'DeleteCircuito', circuitoId });
+                }}
+                // "Criar novo…" no seletor: o circuito nasce e os pontos entram nele.
+                // Dois passos de histórico (o id do circuito só existe depois do
+                // primeiro) — Ctrl+Z duas vezes desfaz tudo.
+                onCriarCircuitoELigar={(quadroId, nome, terminalIds) => {
+                  const [circuitoId] = editor.run({ type: 'AddCircuito', quadroId, nome });
+                  if (!circuitoId) return;
+                  editor.runBatch(
+                    terminalIds.map((terminalId) => ({ type: 'SetTerminalProps' as const, terminalId, circuitoId })),
+                  );
+                }}
+                onAceitarSugeridas={aceitarSugeridas}
+                // O legado: pontos sem potência recebem o padrão da norma, num lote (Ctrl+Z desfaz).
+                // Todos os pavimentos (`null`): o botão mostra a conta do modelo inteiro.
+                onPreencherPotencias={() => {
+                  const cmds = comandosDePotenciaPadrao(editor.model, null);
+                  if (cmds.length > 0) editor.runBatch(cmds);
+                }}
+                hipoteses={hipotesesEletricas}
+                onHipoteses={setHipotesesEletricas}
+                onQuadroProps={(quadroId, campos) => editor.run({ type: 'SetQuadroProps', quadroId, ...campos })}
+                // A CONFERÊNCIA da norma vive junto do quadro de cargas (aba
+                // própria): é a mesma leitura — o que foi declarado — vista pelas
+                // regras da NBR 5410, e o usuário pediu tudo de elétrica num só lugar.
+                conferenciaPendencias={{ faltas: conferenciaNbr.faltas, avisos: conferenciaNbr.avisos }}
+                conferenciaSlot={
+                  <PainelConferenciaNbr
+                    conferencia={conferenciaNbr}
+                    onSelecionar={(ids) => {
+                      selecionar(ids);
+                      setTelaAberta(null);
+                    }}
+                    onConverterLigacaoDireta={(ids) =>
+                      editor.runBatch(
+                        ids.map((terminalId) => ({
+                          type: 'SetTerminalProps' as const,
+                          terminalId,
+                          tipoEletrico: 'LIGACAO_DIRETA' as const,
+                        })),
+                      )
                     }
-                    editor.run({ type: 'DeleteCircuito', circuitoId });
-                  }}
-                  // "Criar novo…" no seletor: o circuito nasce e os pontos entram nele.
-                  // Dois passos de histórico (o id do circuito só existe depois do
-                  // primeiro) — Ctrl+Z duas vezes desfaz tudo.
-                  onCriarCircuitoELigar={(quadroId, nome, terminalIds) => {
-                    const [circuitoId] = editor.run({ type: 'AddCircuito', quadroId, nome });
-                    if (!circuitoId) return;
-                    editor.runBatch(
-                      terminalIds.map((terminalId) => ({ type: 'SetTerminalProps' as const, terminalId, circuitoId })),
-                    );
-                  }}
-                  onAceitarSugeridas={aceitarSugeridas}
-                  // O legado: pontos sem potência recebem o padrão da norma, num lote (Ctrl+Z desfaz).
-                  // Todos os pavimentos (`null`): o botão mostra a conta do modelo inteiro.
-                  onPreencherPotencias={() => {
-                    const cmds = comandosDePotenciaPadrao(editor.model, null);
-                    if (cmds.length > 0) editor.runBatch(cmds);
-                  }}
-                  hipoteses={hipotesesEletricas}
-                  onHipoteses={setHipotesesEletricas}
-                  onQuadroProps={(quadroId, campos) => editor.run({ type: 'SetQuadroProps', quadroId, ...campos })}
-                  // A CONFERÊNCIA da norma vive junto do quadro de cargas (aba
-                  // própria): é a mesma leitura — o que foi declarado — vista pelas
-                  // regras da NBR 5410, e o usuário pediu tudo de elétrica num só lugar.
-                  conferenciaPendencias={{ faltas: conferenciaNbr.faltas, avisos: conferenciaNbr.avisos }}
-                  conferenciaSlot={
-                    <PainelConferenciaNbr
-                      conferencia={conferenciaNbr}
-                      onSelecionar={(ids) => {
-                        selecionar(ids);
-                        setTelaAberta(null);
-                      }}
-                      onConverterLigacaoDireta={(ids) =>
-                        editor.runBatch(
-                          ids.map((terminalId) => ({
-                            type: 'SetTerminalProps' as const,
-                            terminalId,
-                            tipoEletrico: 'LIGACAO_DIRETA' as const,
-                          })),
-                        )
-                      }
-                    />
-                  }
-                />
-            </div>
+                  />
+                }
+              />
           </div>
         </div>
       )}
       {telaAberta === 'unifilar' && (
-        <div className="h-full overflow-y-auto bg-slate-50" data-tela="unifilar">
-          <div className="mx-auto max-w-7xl space-y-6 px-6 py-6 pb-8 animate-in fade-in duration-300">
-            {cabecalhoDaTela(
-              RELATORIOS_DO_DOCK.unifilar.rotulo,
-              'A leitura do quadro em uma linha: alimentação, disjuntor geral, barramento e um ramal por circuito — disjuntor, DR, condutores e carga. Os valores vêm do quadro de cargas; "sug." é o pré-dimensionamento ainda não declarado.',
-              Network,
-            )}
-            <div className="rounded-[6px] border border-gray-200 bg-white p-5">
-              <PainelUnifilar model={editor.model} hipoteses={hipotesesEletricas} />
-            </div>
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="unifilar">
+          {cabecalhoDaTela(
+            RELATORIOS_DO_DOCK.unifilar.rotulo,
+            'A leitura do quadro em uma linha: alimentação, disjuntor geral, barramento e um ramal por circuito — disjuntor, DR, condutores e carga. Os valores vêm do quadro de cargas; "sug." é o pré-dimensionamento ainda não declarado.',
+            Network,
+          )}
+          <div className="rounded-[6px] border border-gray-200 bg-white p-5">
+            <PainelUnifilar model={editor.model} hipoteses={hipotesesEletricas} />
           </div>
         </div>
       )}

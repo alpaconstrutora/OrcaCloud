@@ -43,3 +43,12 @@ tela e seleciona no desenho, porque é lá que se vê o ponto.
 - `npx tsc --noEmit` ✅ · `bash scripts/check-ui-standard.sh components/blueprint/BlueprintEditor.tsx` ✅
 - `npx vitest run` — 322 arquivos / 4220 testes ✅ · `npm run build` ✅
 - App real (vite 3147, Playwright, POST/PATCH/PUT/DELETE a `/rest/v1/**` abortados — 18 bloqueadas, 0 erros JS): Quadro de cargas → `h1` "Quadro de cargas e NBR 5410", **fora de `[role=dialog]`**, nenhum ancestral `position: fixed`, sidebar visível, toolbar escondida, menor fonte 12 px, miolo 1280 px; Voltar → toolbar de volta e rodapé (zoom) igual ao de antes. Unifilar → idem, dois QDCs lado a lado sem rolagem. Capturas `tela-01-quadro.png`, `tela-02-unifilar.png`, `tela-03-editor-de-volta.png`.
+
+## Correção (15/09/2026, "corrigir padding conforme padrão do app")
+
+As duas telas duplicavam o gutter: `mx-auto max-w-7xl px-6 py-6` em cima do
+`p-4 md:p-6` do `<main>` do Layout (§20.2: *"a tela não declara padding lateral
+nem superior própria; a raiz é `space-y-6 pb-20`"*). Raiz agora é
+`space-y-6 pb-20`, sem largura máxima nem fundo próprio. Medido no app: tela a
+24 px da borda do `<main>` (esquerda e topo) e com a largura útil inteira
+(1292 px em 1600 de viewport); a tabela cabe com a coluna Ações visível.

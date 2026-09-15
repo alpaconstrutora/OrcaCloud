@@ -84,3 +84,22 @@ Prova: cenário Q(0,0), C(1500,3000), B(4000,3000), A(4000,0) — sem limite: Q�
 (8,9 m; A a 8,85 m por 4 m em reta); 1,5×: A direto ao quadro, B por C (9,9 m);
 1,1×: B também direto (12,4 m). Os testes anteriores (casa, pavimentos, relançar)
 seguem iguais — a rota de 1,5× não altera aquelas árvores.
+
+## "Não resolveu" → Refazer (15/09)
+
+Depois da rota máxima o usuário respondeu *"nao resolveu"*. Reproduzido no
+estudo dele (Planta 14/09/2026, QDC com 28 pontos, 61 trechos): a rede estava
+toda **confirmada** (nenhum sugerido), então nem "Lançar" nem "Relançar" tinham
+o que fazer — o critério novo só alcançava redes novas ou sugeridas. Entrou
+**"Refazer (n)"**: quando o quadro tem rede mas nada a lançar nem relançar, o
+botão da linha apaga TODOS os eletrodutos do quadro (inclusive confirmados) e
+lança de novo com as hipóteses atuais — com confirmação (`useConfirm`, variante
+de aviso) e um Ctrl+Z para desfazer. `refazerEletrodutos` no planejador;
+`PlanoDeEletrodutos.trechosDoQuadro`.
+
+Prova no estudo do usuário (escritas bloqueadas): "atualizar" → "Refazer (61)" →
+confirmação → 53 trechos sugeridos; na captura, o Ambiente 2 passou de uma
+cadeia TUG→TUG→TUG a uma estrela em torno da luz de teto (o nó mais próximo de
+todos), e o tronco QDC→luz subiu para Ø 32 pela ocupação. Teste puro: rede
+aceita → `trechosDoQuadro` = n, refazer apaga n e recria os mesmos trechos, todos
+sugeridos.

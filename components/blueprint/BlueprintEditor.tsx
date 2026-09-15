@@ -132,6 +132,7 @@ import {
   ROTAS_MAXIMAS,
   eletrodutosSugeridos,
   planejarEletrodutosDoModelo,
+  refazerEletrodutos,
   relancarEletrodutos,
   pontosSemCircuito,
   type PlanoDeEletrodutos,
@@ -4342,6 +4343,22 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     const criados = editor.runBatch(comandos);
     if (criados.length > 0) selecionar(criados);
   };
+  /** REFAZER a rede de um quadro: apaga tudo (confirmados também) e lança de novo — com confirmação. */
+  const refazerRedeDoQuadro = async (plano: PlanoDeEletrodutos) => {
+    const quadro = (editor.model.quadros ?? []).find((q) => q.id === plano.quadroId);
+    if (!quadro) return;
+    const ok = await confirmar({
+      title: `Refazer os eletrodutos de ${quadro.nome}?`,
+      message: `Apaga os ${plano.trechosDoQuadro} eletroduto(s) deste quadro — inclusive os que você já confirmou — e lança de novo com as hipóteses atuais (bitola mínima, rota máxima). Ctrl+Z desfaz.`,
+      confirmLabel: 'Refazer',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    const re = refazerEletrodutos(editor.model, quadro, hipotesesDeEletroduto, hipotesesEletricas);
+    if (re.comandos.length === 0) return;
+    const criados = editor.runBatch(re.comandos);
+    if (criados.length > 0) selecionar(criados);
+  };
   /** Há o que lançar ou relançar em algum quadro? */
   const haOQueLancar = planosDeEletrodutos.some((p) => p.comandos.length > 0 || p.sugeridos > 0);
   const aceitarEletrodutos = () =>
@@ -7202,12 +7219,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                           <td className="py-1.5 text-right">
                             <button
                               type="button"
-                              onClick={() => lancarEletrodutos([plano])}
-                              disabled={!temComandos && plano.sugeridos === 0}
+                              onClick={() =>
+                                !temComandos && plano.sugeridos === 0 && plano.trechosDoQuadro > 0
+                                  ? void refazerRedeDoQuadro(plano)
+                                  : lancarEletrodutos([plano])
+                              }
+                              disabled={!temComandos && plano.sugeridos === 0 && plano.trechosDoQuadro === 0}
                               title={
                                 !temComandos && plano.sugeridos > 0
                                   ? `Apaga os ${plano.sugeridos} trecho(s) sugerido(s) deste quadro e refaz a rede — os confirmados ficam`
-                                  : undefined
+                                  : !temComandos && plano.trechosDoQuadro > 0
+                                    ? `Apaga os ${plano.trechosDoQuadro} eletroduto(s) deste quadro, inclusive os confirmados, e lança de novo com as hipóteses atuais — pede confirmação`
+                                    : undefined
                               }
                               className="inline-flex items-center gap-1 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                             >
@@ -7218,7 +7241,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                                   : 'atualizar'
                                 : plano.sugeridos > 0
                                   ? `Relançar (${plano.sugeridos})`
-                                  : 'Nada'}
+                                  : plano.trechosDoQuadro > 0
+                                    ? `Refazer (${plano.trechosDoQuadro})`
+                                    : 'Nada'}
                             </button>
                           </td>
                         </tr>

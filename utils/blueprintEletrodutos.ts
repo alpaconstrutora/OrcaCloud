@@ -138,6 +138,8 @@ export interface PlanoDeEletrodutos {
    * de lançar eletrodutos deveria ficar disponível para lançamento novamente"*).
    */
   sugeridos: number;
+  /** Todos os trechos da rede deste quadro (sugeridos + confirmados) — o que "Refazer" apaga. */
+  trechosDoQuadro: number;
   /** `AddTrecho` (sugeridos) e depois `SetTrechoProps` dos existentes — vazio quando não há o que ligar. */
   comandos: Command[];
   /** Metros de eletroduto que o plano acrescenta. */
@@ -229,7 +231,7 @@ export function planejarEletrodutos(
   hip: HipotesesDeEletroduto = HIPOTESES_ELETRODUTO_PADRAO,
   hipEletricas: HipotesesEletricas = HIPOTESES_PADRAO,
 ): PlanoDeEletrodutos {
-  const vazio = (motivo: string | null, pavimentos: PavimentoDoPlano[] = [], sugeridos = 0): PlanoDeEletrodutos => ({
+  const vazio = (motivo: string | null, pavimentos: PavimentoDoPlano[] = [], sugeridos = 0, trechosDoQuadro = 0): PlanoDeEletrodutos => ({
     quadroId: quadro.id,
     nome: quadro.nome,
     pavimentos,
@@ -239,6 +241,7 @@ export function planejarEletrodutos(
     prumadasEntrePavimentos: 0,
     trechosAtualizados: 0,
     sugeridos,
+    trechosDoQuadro,
     comandos: [],
     metrosPrevistos: 0,
     motivo,
@@ -250,14 +253,13 @@ export function planejarEletrodutos(
   if (circuitos.length === 0) return vazio('o quadro não tem circuitos');
   const idsDosCircuitos = new Set(circuitos.map((c) => c.id));
   const circuitoPorId = new Map(circuitos.map((c) => [c.id, c]));
-  const sugeridosDoQuadro = (model.trechos ?? []).filter(
-    (t) => t.sugerido && (t.circuitoIds ?? []).some((cid) => idsDosCircuitos.has(cid)),
-  ).length;
+  const trechosDoQuadro = (model.trechos ?? []).filter((t) => (t.circuitoIds ?? []).some((cid) => idsDosCircuitos.has(cid)));
+  const sugeridosDoQuadro = trechosDoQuadro.filter((t) => t.sugerido).length;
 
   const pontos = (model.terminais ?? []).filter(
     (t) => t.disciplina === 'ELETRICA' && t.circuitoId != null && idsDosCircuitos.has(t.circuitoId),
   );
-  if (pontos.length === 0) return vazio('nenhum ponto com circuito deste quadro', [], sugeridosDoQuadro);
+  if (pontos.length === 0) return vazio('nenhum ponto com circuito deste quadro', [], sugeridosDoQuadro, trechosDoQuadro.length);
 
   const chave = fazerChave(model.levels);
   const niveisPorElevacao = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm);
@@ -514,7 +516,7 @@ export function planejarEletrodutos(
   });
 
   if (novos.length === 0 && atualizacoes.length === 0) {
-    return vazio('todos os pontos já têm eletroduto', pavimentos, sugeridosDoQuadro);
+    return vazio('todos os pontos já têm eletroduto', pavimentos, sugeridosDoQuadro, trechosDoQuadro.length);
   }
 
   return {
@@ -527,6 +529,7 @@ export function planejarEletrodutos(
     prumadasEntrePavimentos,
     trechosAtualizados: atualizacoes.length,
     sugeridos: sugeridosDoQuadro,
+    trechosDoQuadro: trechosDoQuadro.length,
     comandos: [...novos, ...atualizacoes],
     metrosPrevistos: Math.round(mmNovos / 100) / 10,
     motivo: null,
@@ -554,6 +557,28 @@ export function relancarEletrodutos(
   const plano = planejarEletrodutos(semSugeridos, quadro, hip, hipEletricas);
   const remocoes: Command[] = sugeridos.map((t) => ({ type: 'DeleteTrecho', trechoId: t.id }));
   return { ...plano, sugeridos: 0, comandos: [...remocoes, ...plano.comandos], motivo: null };
+}
+
+/**
+ * REFAZER: apaga TODOS os eletrodutos da rede do quadro — sugeridos e
+ * confirmados — e lança de novo com o critério atual. É o que aplica um
+ * critério novo (a rota máxima, por exemplo) a uma rede que já foi aceita;
+ * por isso quem chama pede confirmação antes. Um Ctrl+Z desfaz.
+ */
+export function refazerEletrodutos(
+  model: BlueprintModel,
+  quadro: Quadro,
+  hip: HipotesesDeEletroduto = HIPOTESES_ELETRODUTO_PADRAO,
+  hipEletricas: HipotesesEletricas = HIPOTESES_PADRAO,
+): PlanoDeEletrodutos {
+  const ids = new Set((model.circuitos ?? []).filter((c) => c.quadroId === quadro.id).map((c) => c.id));
+  const daRede = (model.trechos ?? []).filter((t) => (t.circuitoIds ?? []).some((cid) => ids.has(cid)));
+  if (daRede.length === 0) return planejarEletrodutos(model, quadro, hip, hipEletricas);
+  const apagados = new Set(daRede.map((t) => t.id));
+  const semRede: BlueprintModel = { ...model, trechos: (model.trechos ?? []).filter((t) => !apagados.has(t.id)) };
+  const plano = planejarEletrodutos(semRede, quadro, hip, hipEletricas);
+  const remocoes: Command[] = daRede.map((t) => ({ type: 'DeleteTrecho', trechoId: t.id }));
+  return { ...plano, sugeridos: 0, trechosDoQuadro: 0, comandos: [...remocoes, ...plano.comandos], motivo: null };
 }
 
 /** Os planos de todos os quadros do desenho, na ordem do modelo. */

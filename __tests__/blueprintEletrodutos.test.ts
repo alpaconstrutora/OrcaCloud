@@ -25,6 +25,7 @@ import {
   planejarEletrodutos,
   planejarEletrodutosDoModelo,
   pontosSemCircuito,
+  refazerEletrodutos,
   relancarEletrodutos,
 } from '../utils/blueprintEletrodutos';
 import { HIPOTESES_PADRAO, agrupamentoDoCircuito, comprimentoDoCircuito } from '../utils/blueprintEletricaDimensionamento';
@@ -277,6 +278,24 @@ describe('relancarEletrodutos — mover ponto ou quadro devolve o botão (15/09/
     expect(refeito.trechos!.some((t) => t.id === confirmadoId)).toBe(true);
     expect(refeito.trechos!.some((t) => t.a.x === 2000 && t.a.y === 1575 && t.a.x === t.b.x && t.a.y === t.b.y)).toBe(true);
     expect(planejarEletrodutos(refeito, quadroDe(refeito)).comandos).toEqual([]);
+  });
+
+  it('REFAZER apaga também os confirmados e lança de novo com o critério atual — é como um critério novo chega a uma rede aceita', () => {
+    const { m } = casa();
+    const plano = planejarEletrodutos(m, quadroDe(m));
+    const lancado = applyBatch(m, plano.comandos).model;
+    // Aceita tudo: nada mais é sugerido → nem "Lançar" nem "Relançar".
+    const aceito = applyBatch(lancado, lancado.trechos!.map((t) => ({ type: 'SetTrechoProps' as const, trechoId: t.id, sugerido: false }))).model;
+    const parado = planejarEletrodutos(aceito, quadroDe(aceito));
+    expect(parado.comandos).toEqual([]);
+    expect(parado.sugeridos).toBe(0);
+    expect(parado.trechosDoQuadro).toBe(lancado.trechos!.length);
+    const re = refazerEletrodutos(aceito, quadroDe(aceito));
+    expect(re.comandos.filter((c) => c.type === 'DeleteTrecho')).toHaveLength(lancado.trechos!.length);
+    expect(adds(re.comandos)).toHaveLength(adds(plano.comandos).length);
+    const refeito = applyBatch(aceito, re.comandos).model;
+    expect(refeito.trechos).toHaveLength(lancado.trechos!.length);
+    expect(refeito.trechos!.every((t) => t.sugerido)).toBe(true);
   });
 
   it('sem sugeridos, relançar é o plano normal', () => {

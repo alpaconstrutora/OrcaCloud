@@ -16,18 +16,21 @@ interface BankTxEdicaoEmLoteModalProps {
     supplierOptions: string[];
     projects: ItemOption[];
     costCenters: CostCenterOption[];
+    /** Plano de Contas (plano_de_contas) — dimensão distinta de Centro de Custo e de Categoria. */
+    planoContas: ItemOption[];
     onClose: () => void;
-    onSave: (fields: Partial<Pick<BankTransaction, 'category' | 'counterparty_name' | 'project_id' | 'cost_center_id'>>) => Promise<void>;
+    onSave: (fields: Partial<Pick<BankTransaction, 'category' | 'counterparty_name' | 'project_id' | 'cost_center_id' | 'plano_de_contas_id'>>) => Promise<void>;
 }
 
 const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
-    transactions, categories, clientOptions, supplierOptions, projects, costCenters, onClose, onSave,
+    transactions, categories, clientOptions, supplierOptions, projects, costCenters, planoContas, onClose, onSave,
 }) => {
     const [category, setCategory] = useState('');
     const [clientName, setClientName] = useState('');
     const [supplierName, setSupplierName] = useState('');
     const [projectId, setProjectId] = useState('');
     const [costCenterId, setCostCenterId] = useState('');
+    const [planoContasId, setPlanoContasId] = useState('');
     const [saving, setSaving] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -37,17 +40,18 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
     const mixedContraparte = contrapartes.length > 1;
 
     const entityName = clientName || supplierName;
-    const noneChanged = !category && !entityName && !projectId && !costCenterId;
+    const noneChanged = !category && !entityName && !projectId && !costCenterId && !planoContasId;
 
     async function handleSalvar() {
         setSaving(true);
         setErrorMsg(null);
         try {
-            const fields: Partial<Pick<BankTransaction, 'category' | 'counterparty_name' | 'project_id' | 'cost_center_id'>> = {};
+            const fields: Partial<Pick<BankTransaction, 'category' | 'counterparty_name' | 'project_id' | 'cost_center_id' | 'plano_de_contas_id'>> = {};
             if (category) fields.category = category;
             if (entityName) fields.counterparty_name = entityName;
             if (projectId) fields.project_id = projectId;
             if (costCenterId) fields.cost_center_id = costCenterId;
+            if (planoContasId) fields.plano_de_contas_id = planoContasId;
             await onSave(fields);
             onClose();
         } catch (err: unknown) {
@@ -182,6 +186,19 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
                                 disabled={saving}
                                 hoverCls="hover:bg-blue-50"
                             />
+                        </div>
+
+                        <div>
+                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Plano de Contas</label>
+                            <select
+                                value={planoContasId}
+                                onChange={e => setPlanoContasId(e.target.value)}
+                                disabled={saving}
+                                className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
+                            >
+                                <option value="">— Não alterar —</option>
+                                {planoContas.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            </select>
                         </div>
 
                         {noneChanged && (

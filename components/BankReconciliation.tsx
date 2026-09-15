@@ -2005,7 +2005,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
     // Salva vários campos do extrato bancário de uma vez (usado pelo modal "Editar em Lote")
     const handleBulkUpdateBankFields = async (
-        fields: Partial<Pick<BankTransaction, 'category' | 'counterparty_name' | 'project_id' | 'cost_center_id'>>
+        fields: Partial<Pick<BankTransaction, 'category' | 'counterparty_name' | 'project_id' | 'cost_center_id' | 'plano_de_contas_id'>>
     ) => {
         const ids = Array.from(selectedBankTxIds);
         if (ids.length === 0) return;
@@ -3213,6 +3213,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     supplierOptions={uniqueCredores}
                     projects={masterProjects}
                     costCenters={masterCostCenters}
+                    planoContas={masterPlanoContas}
                     onClose={() => setIsLoteEditOpen(false)}
                     onSave={handleBulkUpdateBankFields}
                 />

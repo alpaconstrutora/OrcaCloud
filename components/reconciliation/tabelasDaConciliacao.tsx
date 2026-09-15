@@ -81,16 +81,44 @@ export const STATEMENT_TD_CLASS: Record<string, string> = {
     status:      'text-center',
 };
 
+// Status simples colorido (guia UI/UX seção 8) — sem pílula/fundo/uppercase.
+export const STATEMENT_STATUS_LABELS: Partial<Record<BankTransactionStatus, string>> = {
+    IMPORTED: 'Importado',
+    NORMALIZED: 'Normalizado',
+    RULE_APPLIED: 'Regra aplicada',
+    CONFIRMED: 'Confirmado',
+    MATCHED: 'Conciliado',
+    LOCKED: 'Período fechado',
+    IGNORED: 'Ignorado',
+    TRANSFER: 'Transferência entre contas',
+};
+export const STATEMENT_STATUS_COLORS: Partial<Record<BankTransactionStatus, string>> = {
+    IMPORTED: 'text-gray-500',
+    NORMALIZED: 'text-gray-600',
+    CONFIRMED: 'text-blue-700',
+    MATCHED: 'text-emerald-700',
+    LOCKED: 'text-gray-500',
+    IGNORED: 'text-gray-400',
+    TRANSFER: 'text-indigo-700',
+};
+
 // Filtro avançado do Extrato (guia §5.1 / paridade com SupplierList.tsx). Cobre
-// campos que os chips de categoria/contraparte/fluxo/data não cobrem (descrição,
-// valor) — permite regras tipo "valor > 1000" ou "descrição contém PIX".
+// TODAS as colunas da tabela (pedido de 2026-09-14: "incluir no filtro avançado
+// todas as colunas disponíveis") — as chaves são as mesmas de STATEMENT_COLUMNS,
+// mais 'direction' (o sinal do valor), que não é coluna mas é o recorte mais pedido.
 export const STATEMENT_FILTER_FIELDS: FilterFieldConfig[] = [
     { key: 'description',  label: 'Descrição',          type: 'text'   },
     { key: 'client',       label: 'Cliente',            type: 'text'   },
     { key: 'creditor',     label: 'Credor',             type: 'text'   },
     { key: 'category',     label: 'Categoria',          type: 'text'   },
+    { key: 'project',      label: 'Obra',               type: 'text'   },
+    { key: 'costCenter',   label: 'Centro de Custo',    type: 'text'   },
     { key: 'planoContas',  label: 'Plano de Contas',    type: 'text'   },
+    { key: 'date',         label: 'Data',               type: 'date'   },
     { key: 'amount',       label: 'Valor',              type: 'number' },
+    { key: 'status',       label: 'Status', type: 'select', options:
+        (Object.entries(STATEMENT_STATUS_LABELS) as [BankTransactionStatus, string][]).map(([value, label]) => ({ value, label })),
+    },
     { key: 'direction',    label: 'Tipo', type: 'select', options: [
         { value: 'CREDIT', label: 'Entrada (crédito)' }, { value: 'DEBIT', label: 'Saída (débito)' },
     ] },
@@ -106,16 +134,27 @@ export function isStatementColumnVisibleForFlow(key: string, flowFilter: 'ALL' |
     return true;
 }
 
-// `planoContasName` resolve o id para o nome exibido — o filtro de texto compara com o
-// que o usuário lê na célula, não com o UUID.
-export function getBankTxFilterValue(tx: BankTransaction, key: string, planoContasName?: (id?: string | null) => string | null): unknown {
+// Resolvedores de id → nome. Obra, Centro de Custo e Plano de Contas guardam UUID na
+// linha; o filtro de texto tem de comparar com o que o usuário lê na célula, não com o id.
+export interface BankTxFilterResolvers {
+    projectName: (id?: string | null) => string | null;
+    costCenterName: (id?: string | null) => string | null;
+    planoContasName: (id?: string | null) => string | null;
+}
+
+export function getBankTxFilterValue(tx: BankTransaction, key: string, r: BankTxFilterResolvers): unknown {
     switch (key) {
         case 'description':  return tx.description_normalized || tx.description_raw || '';
         case 'client':       return tx.direction === 'CREDIT' ? (tx.counterparty_name ?? '') : '';
         case 'creditor':     return tx.direction === 'DEBIT' ? (tx.counterparty_name ?? '') : '';
         case 'category':     return tx.category ?? '';
-        case 'planoContas':  return planoContasName?.(tx.plano_de_contas_id) ?? '';
+        case 'project':      return r.projectName(tx.project_id) ?? '';
+        case 'costCenter':   return r.costCenterName(tx.cost_center_id) ?? '';
+        case 'planoContas':  return r.planoContasName(tx.plano_de_contas_id) ?? '';
+        // transaction_date é 'YYYY-MM-DD' — compara como string com o <input type="date"> (FilterUtils).
+        case 'date':         return tx.transaction_date ?? '';
         case 'amount':       return tx.amount ?? 0;
+        case 'status':       return tx.status ?? '';
         case 'direction':    return tx.direction ?? '';
         default: return null;
     }
@@ -238,27 +277,6 @@ export const DEFAULT_STATEMENT_COL_WIDTHS: Record<string, number> = {
     status: 150,
     actions: 90,
 };
-
-// Status simples colorido (guia UI/UX seção 8) — sem pílula/fundo/uppercase.
-export const STATEMENT_STATUS_LABELS: Partial<Record<BankTransactionStatus, string>> = {
-    IMPORTED: 'Importado',
-    NORMALIZED: 'Normalizado',
-    CONFIRMED: 'Confirmado',
-    MATCHED: 'Conciliado',
-    LOCKED: 'Período fechado',
-    IGNORED: 'Ignorado',
-    TRANSFER: 'Transferência entre contas',
-};
-export const STATEMENT_STATUS_COLORS: Partial<Record<BankTransactionStatus, string>> = {
-    IMPORTED: 'text-gray-500',
-    NORMALIZED: 'text-gray-600',
-    CONFIRMED: 'text-blue-700',
-    MATCHED: 'text-emerald-700',
-    LOCKED: 'text-gray-500',
-    IGNORED: 'text-gray-400',
-    TRANSFER: 'text-indigo-700',
-};
-
 
 // Conteúdo de cada <td> da tabela de Extrato (aba "Extrato Bancário"), por coluna —
 // extraído para função pura para que o <tbody> possa mapear

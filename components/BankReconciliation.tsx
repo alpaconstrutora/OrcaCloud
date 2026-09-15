@@ -95,6 +95,7 @@ import {
     STATEMENT_TD_CLASS,
     StatementRowCtx,
     getBankTxFilterValue,
+    type BankTxFilterResolvers,
     isStatementColumnVisibleForFlow,
     renderPendingBankCell,
     renderPendingInternalCell,
@@ -366,10 +367,17 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             );
         }
         // Filtro avançado (regras compostas — descrição/valor/tipo etc.)
-        // Nome do plano de contas por id — o filtro e a ordenação comparam o que a célula mostra, não o UUID.
+        // Nomes por id — o filtro e a ordenação comparam o que a célula mostra, não o UUID.
+        const projectById = new Map(masterProjects.map(p => [p.id, p.name]));
+        const costCenterById = new Map(masterCostCenters.map(c => [c.id, c.name]));
         const planoContasById = new Map(masterPlanoContas.map(pc => [pc.id, pc.name]));
         const planoContasLabel = (id?: string | null) => (id ? planoContasById.get(id) ?? null : null);
-        filtered = applyFilterRules(filtered, statementAdvancedFilters.rules, STATEMENT_FILTER_FIELDS, (tx, key) => getBankTxFilterValue(tx, key, planoContasLabel));
+        const resolvers: BankTxFilterResolvers = {
+            projectName: id => (id ? projectById.get(id) ?? null : null),
+            costCenterName: id => (id ? costCenterById.get(id) ?? null : null),
+            planoContasName: planoContasLabel,
+        };
+        filtered = applyFilterRules(filtered, statementAdvancedFilters.rules, STATEMENT_FILTER_FIELDS, (tx, key) => getBankTxFilterValue(tx, key, resolvers));
         return filtered.sort((a, b) => {
             let valA: string | number = '';
             let valB: string | number = '';

@@ -20,6 +20,7 @@ import {
 import { KpiCard } from '../ui/KpiCard';
 import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
 import ActionIconButton from '../ui/ActionIconButton';
+import CostCenterSelect from '../CostCenterSelect';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { useConfirm } from '../ui/confirm';
 import {
@@ -524,18 +525,17 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                         <div className="bg-white p-4 rounded-[10px] border border-gray-200">
                             <label className="text-xs font-semibold text-slate-500">Já existe um centro de custo para este condomínio?</label>
                             <div className="flex gap-2 mt-1">
-                                <select
-                                    value={escolhido}
-                                    onChange={ev => setEscolhido(ev.target.value)}
-                                    className="flex-1 h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                                >
-                                    <option value="">Selecione para vincular</option>
-                                    {disponiveis.map(d => (
-                                        <option key={d.id} value={d.id}>
-                                            {d.code} — {d.name}{d.grupo ? ` (${d.grupo})` : ''}
-                                        </option>
-                                    ))}
-                                </select>
+                                {/* Drawer padrão de Centro de Custo (§7.1.1) — só os livres. */}
+                                <div className="flex-1 min-w-0">
+                                    <CostCenterSelect
+                                        costCenters={disponiveis.map(d => ({ id: d.id, name: d.name, code: d.code, parent_name: d.grupo ?? null }))}
+                                        value={escolhido}
+                                        onChange={setEscolhido}
+                                        placeholder="Selecione para vincular"
+                                        size="sm"
+                                        hoverCls="hover:bg-blue-50"
+                                    />
+                                </div>
                                 <button
                                     onClick={vincularCentro}
                                     disabled={!escolhido}

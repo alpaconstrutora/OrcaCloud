@@ -1206,6 +1206,14 @@ cadastro, id de outra organização) em vez de cair no placeholder.
 > ✅ Propagado em 2026-09-15 (pedido: "propague no app"): Extrato e Pendentes
 > (células), Edição em lote, Folha (ciclo e detalhe), Colaborador, Alocações,
 > Dívidas, Sala de crédito, Almoxarifado (item), ProOrçamento (cliente).
+> ✅ 2ª propagação, 2026-09-15 à noite (regra do usuário: *"plano de contas e
+> centro de custo sempre abre em drawer padrao do app"*): Venda de Ativos ›
+> Parcelas (célula e lote — sem `<select>` de modo na frente do drawer),
+> Extrato › Pendentes (barra de lote escura), Obra › Centros de custo
+> ("vincular existente"), Condomínio › Financeiro ("vincular existente").
+> ❌ **Nunca** pôr um `<select>` "Não alterar / Definir / Limpar" na frente do
+> drawer numa edição em lote: o campo É o drawer, vazio = não alterar (modelo:
+> `BankTxEdicaoEmLoteModal.tsx`).
 > ❌ Continua `<select>` de propósito: filtro de escopo na toolbar (§5.3 — "qual
 > obra/conta/mês estou vendo", não "qual entidade gravar") e listas com opção
 > especial embutida ("Autor do projeto" com "Outro", "Fornecedor / Prestador"

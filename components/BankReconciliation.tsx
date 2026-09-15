@@ -42,6 +42,7 @@ import AnomaliesPanel from './AnomaliesPanel';
 import SmartReconciliationCenter from './SmartReconciliationCenter';
 import ProlaboreReconciliationPanel from './ProlaboreReconciliationPanel';
 import BankTxEdicaoEmLoteModal from './BankTxEdicaoEmLoteModal';
+import CostCenterSelect from './CostCenterSelect';
 import BankStatementImportDrawer, { type CompletudeDaConta } from './BankStatementImportDrawer';
 import { SYSTEM_PROJECT_NAMES_SQL } from '../utils/systemProjects';
 import { originIdFromRef } from '../lib/receivableRef';
@@ -284,6 +285,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const [masterProjects, setMasterProjects] = useState<Array<{ id: string; name: string; organization_id?: string | null }>>([]);
     // Guarda código/grupo além do nome: o CostCenterSelect da edição em lote monta o accordion com isso.
     const [masterCostCenters, setMasterCostCenters] = useState<Array<{ id: string; name: string; code?: string | null; parent_id?: string | null; parent_name?: string | null; organization_id?: string | null }>>([]);
+    // Centro de Custo escolhido na barra de lote dos Pendentes — o campo é o
+    // drawer padrão (CostCenterSelect), não mais um <select> lido por
+    // getElementById (regra: CC/Plano SEMPRE no drawer — guia §7.1.1).
+    const [bulkCostCenterId, setBulkCostCenterId] = useState('');
     // Plano de Contas (plano_de_contas) — terceira dimensão contábil, distinta de Centro de Custo e de Categoria.
     // `name` é o nome CRU (o drawer de seleção mostra o código ao lado sozinho); onde a
     // tela exibe texto (célula, filtro, ordenação) usa-se `rotuloPlanoContas` = "código · nome".
@@ -3448,27 +3453,26 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         <div className="w-px h-8 bg-white/20 mx-1" />
 
                         <div className="flex items-center gap-2">
-                            <div className="relative group">
-                                <Briefcase className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none group-focus-within:text-violet-400 transition-colors" />
-                                <select
-                                    id="bulk-costcenter-select"
-                                    defaultValue=""
-                                    className="bg-white/10 border border-white/20 text-white text-xs font-black pl-9 pr-8 py-2.5 rounded-2xl uppercase tracking-wider cursor-pointer focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all appearance-none min-w-[200px] hover:bg-white/20"
-                                >
-                                    <option value="" disabled className="text-gray-900 bg-white">Centro de Custo em lote...</option>
-                                    {masterCostCenters.map(c => (
-                                        <option key={c.id} value={c.id} className="text-gray-900 bg-white font-bold">{c.name}</option>
-                                    ))}
-                                </select>
+                            {/* Centro de Custo em lote: drawer padrão do app (§7.1.1), com o
+                                gatilho na paleta escura da barra. */}
+                            <div className="min-w-[220px]">
+                                <CostCenterSelect
+                                    costCenters={masterCostCenters}
+                                    value={bulkCostCenterId}
+                                    onChange={setBulkCostCenterId}
+                                    placeholder="Centro de Custo em lote..."
+                                    hoverCls="hover:bg-blue-50"
+                                    compact
+                                    triggerClassName="h-9 bg-white/10 border border-white/20 text-white text-sm font-medium pl-3 pr-2 rounded-[6px] hover:bg-white/15 focus:bg-white/20"
+                                />
                             </div>
 
                             <div className="flex items-center bg-white/5 p-1 rounded-2xl border border-white/10">
                                 {bankCount > 0 && (
                                     <button
                                         onClick={() => {
-                                            const sel = document.getElementById('bulk-costcenter-select') as HTMLSelectElement;
-                                            if (!sel?.value) { alert('Selecione um centro de custo.'); return; }
-                                            handleBulkUpdateCostCenter('bank', sel.value);
+                                            if (!bulkCostCenterId) { alert('Selecione um centro de custo.'); return; }
+                                            handleBulkUpdateCostCenter('bank', bulkCostCenterId);
                                         }}
                                         className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-blue-600 hover:bg-blue-500 transition-all shadow-lg active:scale-95 flex items-center gap-2"
                                     >
@@ -3479,9 +3483,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 {internalCount > 0 && (
                                     <button
                                         onClick={() => {
-                                            const sel = document.getElementById('bulk-costcenter-select') as HTMLSelectElement;
-                                            if (!sel?.value) { alert('Selecione um centro de custo.'); return; }
-                                            handleBulkUpdateCostCenter('internal', sel.value);
+                                            if (!bulkCostCenterId) { alert('Selecione um centro de custo.'); return; }
+                                            handleBulkUpdateCostCenter('internal', bulkCostCenterId);
                                         }}
                                         className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-500 transition-all shadow-lg active:scale-95 flex items-center gap-2"
                                     >

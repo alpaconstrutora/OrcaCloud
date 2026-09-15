@@ -12,6 +12,7 @@ import { Client, Investor, Empreendimento, CostCenterV2 } from '../types';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import CityStateSelect from './CityStateSelect';
+import CostCenterSelect from './CostCenterSelect';
 import Button from './ui/Button';
 import SaveStatus from './ui/SaveStatus';
 import { useConfirm } from './ui/confirm';
@@ -1948,18 +1949,16 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           <label className="block text-form-label font-medium text-gray-600 mb-1">
                             Vincular um centro de custo existente
                           </label>
-                          <select
-                            className="w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                          {/* Drawer padrão de Centro de Custo (§7.1.1) — só os livres. */}
+                          <CostCenterSelect
+                            costCenters={centrosDisponiveis}
                             value={centroParaVincular}
-                            onChange={(e) => setCentroParaVincular(e.target.value)}
-                          >
-                            <option value="">
-                              {centrosDisponiveis.length ? 'Selecione...' : 'Nenhum centro de custo livre'}
-                            </option>
-                            {centrosDisponiveis.map(centro => (
-                              <option key={centro.id} value={centro.id}>{centro.code} · {centro.name}</option>
-                            ))}
-                          </select>
+                            onChange={setCentroParaVincular}
+                            placeholder={centrosDisponiveis.length ? 'Selecione...' : 'Nenhum centro de custo livre'}
+                            disabled={centrosDisponiveis.length === 0}
+                            size="sm"
+                            hoverCls="hover:bg-blue-50"
+                          />
                         </div>
                         <div className="col-span-12 md:col-span-3 flex items-end">
                           <button

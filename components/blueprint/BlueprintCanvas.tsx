@@ -76,7 +76,7 @@ import {
   pontoDaCota,
   type LadoDoContorno,
 } from '../../utils/blueprintCotas';
-import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor } from '../../utils/blueprintCondutores';
+import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor, type TipoDeCondutor } from '../../utils/blueprintCondutores';
 import {
   curvaDoTrecho,
   desviosDeSobreposicao,
@@ -4172,92 +4172,113 @@ export default function BlueprintCanvas({
         }
       }
 
-      // ── Ø, a BITOLA escrita junto do traço ───────────────────────────────
-      //
-      // "Ø 25" ao lado da linha é como a prancha diz a bitola — e é o que o
-      // eletricista lê para comprar o tubo. Só no eletroduto: a tubulação
-      // hidráulica tem convenção própria, que não é esta.
-      if (t.disciplina === 'ELETRICA' && mostrarCircuitos) {
-        const c = p.x === q.x && p.y === q.y ? p : curva.meio;
-        const comp = Math.hypot(q.x - p.x, q.y - p.y);
-        // Abaixo do traço e à esquerda do grupo de condutores, para não
-        // brigar com a seção, que fica embaixo do grupo.
-        const nx = comp > 0 ? -(q.y - p.y) / comp : 0;
-        const ny = comp > 0 ? (q.x - p.x) / comp : 1;
-        ctx.fillStyle = '#334155';
-        ctx.font = `${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
-        ctx.fillText(`Ø ${t.bitolaMm}`, c.x - nx * 9 - 26, c.y - ny * 9 + 3);
-      }
-
-      // ── OS CONDUTORES, na simbologia da NBR 5444 (15/09/2026) ────────────
+      // ── Ø, CONDUTORES POR CIRCUITO — a simbologia da NBR 5444 ─────────────
       //
       // Cada condutor é um traço cruzando a linha, e o DESENHO do traço diz o
       // que ele é: fase reto; neutro com o pé no topo; retorno só de um lado;
-      // terra com a barra no topo (o "T"). Em cima do grupo, o NÚMERO do
-      // circuito; embaixo, a SEÇÃO — é como a prancha do exemplo se lê. A lista
-      // vem de `condutoresDoTrecho`: a contagem do trecho decomposta pela
-      // ligação do circuito (FN/FF/FFF); o que passa da base é retorno.
+      // terra com a barra no topo (o "T").
+      //
+      // UM GRUPO POR CIRCUITO (15/09/2026, pedido com print: *"a representação
+      // dos circuitos está confusa. Precisa haver uma separação entre um
+      // circuito e outro"*): num tronco com cinco circuitos os quinze traços
+      // saíam colados e os números "3 4 7 8 9" em cima de tudo. Agora os
+      // condutores de cada circuito formam um grupo, com um vão entre grupos;
+      // em cima de CADA grupo o número do circuito dele, embaixo a seção dele.
+      // O "Ø 25" fica à esquerda de tudo, abaixo da linha, sem brigar com os
+      // números. Quando o trecho é curto, o passo encolhe até caber.
       //
       // ⚠️ A seção NÃO é um campo do trecho: ela é a do circuito. Um número
       // próprio aqui poderia divergir do que o quadro de cargas conta, e a
       // prancha diria 2,5 num traço que a tabela soma como 4.
-      if (t.disciplina === 'ELETRICA' && mostrarCircuitos && p.x !== q.x + 0) {
-        // No MEIO DA CURVA, quando há curva — senão as marcas ficam no ar.
-        const meio = curva.meio;
+      if (t.disciplina === 'ELETRICA' && mostrarCircuitos) {
+        const prumada = p.x === q.x && p.y === q.y;
         const comp = Math.hypot(q.x - p.x, q.y - p.y);
-        if (comp > 24) {
+        ctx.fillStyle = '#334155';
+        if (prumada || comp <= 24) {
+          // Prumada (círculo) ou trecho curtíssimo: só o Ø, ao lado.
+          const c = prumada ? p : curva.meio;
+          ctx.font = `${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+          ctx.textAlign = 'start';
+          ctx.fillText(`Ø ${t.bitolaMm}`, c.x + 8 * fz, c.y - 6 * fz);
+        } else {
+          const meio = curva.meio;
           const ux = (q.x - p.x) / comp;
           const uy = (q.y - p.y) / comp;
-          // A marca é PERPENDICULAR ao traço, inclinada, como na prancha.
+          // A marca é PERPENDICULAR ao traço, inclinada, como na prancha; a
+          // "cima" é o lado −n (na tela, acima de uma linha horizontal).
           const nx = -uy;
           const ny = ux;
-          ctx.setLineDash([]);
-          ctx.lineWidth = 1.25;
-          ctx.strokeStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA.ELETRICA;
-          // VÁRIOS circuitos no mesmo eletroduto (15/09/2026): os condutores de
-          // cada um, na ordem; em cima, os números de todos; embaixo, a seção
-          // (uma só quando todos têm a mesma; senão, separadas por "/").
+          const MEIA = 5 * fz; // meia altura do traço, px (cresce com o zoom)
+          let passo = 5 * fz; // entre condutores do mesmo circuito
+          let vao = 11 * fz; // entre grupos (circuitos)
           const idsDoTrecho = circuitosDoTrecho(t);
-          const condutores = condutoresDoEletroduto(
+          const lista = condutoresDoEletroduto(
             t,
             idsDoTrecho.map((cid) => ({ id: cid, ligacao: ligacaoPorCircuito.get(cid)?.ligacao ?? null })),
-          ).map((c) => c.tipo);
-          const n = condutores.length;
-          const MEIA = 5 * fz; // meia altura do traço, px (cresce com o zoom)
-          const PASSO = 5 * fz; // entre condutores, px
-          // A "cima" do traço é o lado −n (na tela, acima de uma linha horizontal).
+          );
+          // Grupos consecutivos por circuito (retornos sem dono viram grupo próprio).
+          const grupos: { circuitoId: string | null; tipos: TipoDeCondutor[] }[] = [];
+          for (const c of lista) {
+            const ultimo = grupos[grupos.length - 1];
+            if (ultimo && ultimo.circuitoId === c.circuitoId) ultimo.tipos.push(c.tipo);
+            else grupos.push({ circuitoId: c.circuitoId, tipos: [c.tipo] });
+          }
+          let total = grupos.reduce((w, g) => w + (g.tipos.length - 1) * passo, 0) + Math.max(0, grupos.length - 1) * vao;
+          // Encolhe o passo e o vão até caber no trecho (com 8 px de folga em cada ponta).
+          const util = Math.max(8, comp - 16);
+          if (total > util) {
+            const f = Math.max(0.45, util / total);
+            passo *= f;
+            vao *= f;
+            total *= f;
+          }
           const emTelaRel = (cx: number, cy: number, r: { t: number; s: number }) => ({
             x: cx + ux * r.t * MEIA + nx * r.s * MEIA,
             y: cy + uy * r.t * MEIA + ny * r.s * MEIA,
           });
-          condutores.forEach((tipo, k) => {
-            const d = (k - (n - 1) / 2) * PASSO;
-            const cx = meio.x + ux * d;
-            const cy = meio.y + uy * d;
-            for (const seg of tracosDoCondutor(tipo)) {
-              const a = emTelaRel(cx, cy, seg.de);
-              const b = emTelaRel(cx, cy, seg.ate);
-              ctx.beginPath();
-              ctx.moveTo(a.x, a.y);
-              ctx.lineTo(b.x, b.y);
-              ctx.stroke();
-            }
-          });
-          if (n > 0) {
+          ctx.setLineDash([]);
+          ctx.lineWidth = 1.25;
+          ctx.strokeStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA.ELETRICA;
+          ctx.textAlign = 'center';
+          let cursor = -total / 2;
+          for (const g of grupos) {
+            const larg = (g.tipos.length - 1) * passo;
+            g.tipos.forEach((tipo, k) => {
+              const d = cursor + k * passo;
+              const cx = meio.x + ux * d;
+              const cy = meio.y + uy * d;
+              for (const seg of tracosDoCondutor(tipo)) {
+                const a = emTelaRel(cx, cy, seg.de);
+                const b = emTelaRel(cx, cy, seg.ate);
+                ctx.beginPath();
+                ctx.moveTo(a.x, a.y);
+                ctx.lineTo(b.x, b.y);
+                ctx.stroke();
+              }
+            });
+            const centro = cursor + larg / 2;
+            const gx = meio.x + ux * centro;
+            const gy = meio.y + uy * centro;
+            // O número do circuito em cima do SEU grupo…
             ctx.fillStyle = '#334155';
             ctx.font = `bold ${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
-            ctx.textAlign = 'center';
-            // O número do circuito em cima do grupo…
-            const numeros = idsDoTrecho.length > 0 ? idsDoTrecho.map((cid) => numeroDoCircuito(circuitosPorId.get(cid))).join(' ') : '?';
-            ctx.fillText(numeros, meio.x - nx * (MEIA + 4), meio.y - ny * (MEIA + 4) + 3);
-            // …e a seção embaixo, como no exemplo: "4", "1.5".
-            const secoes = [...new Set(idsDoTrecho.map((cid) => secaoPorCircuito.get(cid)).filter((v): v is number => v != null))];
-            if (secoes.length > 0) {
+            const numero = g.circuitoId ? numeroDoCircuito(circuitosPorId.get(g.circuitoId)) : 'r';
+            ctx.fillText(numero, gx - nx * (MEIA + 4 * fz), gy - ny * (MEIA + 4 * fz) + 3 * fz);
+            // …e a seção dele embaixo.
+            const secao = g.circuitoId ? secaoPorCircuito.get(g.circuitoId) : null;
+            if (secao != null) {
               ctx.font = `${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
-              ctx.fillText(secoes.map((v) => String(v).replace('.', ',')).join('/'), meio.x + nx * (MEIA + 4), meio.y + ny * (MEIA + 4) + 3);
+              ctx.fillText(String(secao).replace('.', ','), gx + nx * (MEIA + 4 * fz), gy + ny * (MEIA + 4 * fz) + 3 * fz);
             }
-            ctx.textAlign = 'start';
+            cursor += larg + vao;
           }
+          // O Ø à esquerda do conjunto, abaixo da linha — fora do caminho dos números.
+          ctx.font = `${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+          ctx.textAlign = 'end';
+          const ox = meio.x - ux * (total / 2 + 6 * fz) + nx * (MEIA + 4 * fz);
+          const oy = meio.y - uy * (total / 2 + 6 * fz) + ny * (MEIA + 4 * fz) + 3 * fz;
+          ctx.fillText(`Ø ${t.bitolaMm}`, ox, oy);
+          ctx.textAlign = 'start';
         }
       }
     }

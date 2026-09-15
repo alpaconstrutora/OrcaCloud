@@ -38,3 +38,13 @@ O modelo não mudou (o trecho continua com `condutores` = contagem); sem bump.
 - App real (Playwright, escritas bloqueadas): dois eletrodutos automáticos FN —
   cada um com fase, neutro (pé) e terra (barra), "1"/"2" em cima e "1,5"/"2,5"
   embaixo; captura ampliada 10× conferida.
+
+## Um grupo por circuito (15/09, pedido com print: *"a representação (simbologia) dos circuitos está confusa. Precisa haver uma separação entre um circuito de outro"*)
+
+Num tronco com cinco circuitos os quinze traços saíam colados e "3 4 7 8 9" em
+cima de tudo. Agora (canvas e prancha) os condutores de cada circuito formam um
+**grupo** com um vão entre grupos; em cima de cada grupo o **número do circuito
+dele**, embaixo a **seção dele**; o "Ø 25" fica à esquerda do conjunto, abaixo
+da linha. Retorno sem dono é grupo "r". Trecho curto: passo e vão encolhem até
+caber (mínimo 45 %). Prova: tronco QDC→luz com C1 e C2 — dois grupos separados,
+"1 / 1,5" e "2 / 2,5", Ø 25 à esquerda; ramal luz→TUG só com o grupo "2".

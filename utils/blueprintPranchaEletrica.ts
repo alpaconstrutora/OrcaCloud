@@ -43,7 +43,7 @@ import {
   secoesDoInterruptor,
   trianguloDaTomada,
 } from './blueprintRede';
-import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor } from './blueprintCondutores';
+import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor, type TipoDeCondutor } from './blueprintCondutores';
 import {
   HIPOTESES_PADRAO,
   preDimensionarQuadroCompleto,
@@ -219,38 +219,59 @@ export function desenharEletrica(d: Desenhista, model: BlueprintModel, proj: Pro
     const ny = (b.x - a.x) / comp;
     // Os condutores na simbologia da NBR 5444 (15/09/2026): fase reto, neutro
     // com o pé, retorno só de um lado, terra com a barra — a MESMA lista que o
-    // canvas desenha (`condutoresDoTrecho`). Número do circuito em cima do
-    // grupo, seção embaixo; o Ø à esquerda.
+    // canvas desenha (`condutoresDoEletroduto`), UM GRUPO POR CIRCUITO com um
+    // vão entre grupos; número do circuito em cima do seu grupo, seção embaixo;
+    // o Ø à esquerda do conjunto.
     const circuitosDoEletroduto = (t.circuitoIds ?? []).map((cid) => circuitosPorId.get(cid)).filter((c): c is NonNullable<typeof c> => !!c);
-    const condutores = condutoresDoEletroduto(
+    const lista = condutoresDoEletroduto(
       t,
       circuitosDoEletroduto.map((c) => ({ id: c.id, ligacao: c.ligacao ?? null })),
-    ).map((c) => c.tipo);
-    const n = condutores.length;
+    );
+    const grupos: { circuitoId: string | null; tipos: TipoDeCondutor[] }[] = [];
+    for (const c of lista) {
+      const ultimo = grupos[grupos.length - 1];
+      if (ultimo && ultimo.circuitoId === c.circuitoId) ultimo.tipos.push(c.tipo);
+      else grupos.push({ circuitoId: c.circuitoId, tipos: [c.tipo] });
+    }
     const ux = (b.x - a.x) / comp;
     const uy = (b.y - a.y) / comp;
     const MEIA = 1.2 * k;
+    let passo = 1.2 * k;
+    let vao = 2.6 * k;
+    let total = grupos.reduce((w, g) => w + (g.tipos.length - 1) * passo, 0) + Math.max(0, grupos.length - 1) * vao;
+    const util = Math.max(2 * k, comp - 4 * k);
+    if (total > util) {
+      const f = Math.max(0.45, util / total);
+      passo *= f;
+      vao *= f;
+      total *= f;
+    }
     const rel = (cx: number, cy: number, r: { t: number; s: number }) => ({
       x: cx + ux * r.t * MEIA + nx * r.s * MEIA,
       y: cy + uy * r.t * MEIA + ny * r.s * MEIA,
     });
-    condutores.forEach((tipo, i) => {
-      const off = (i - (n - 1) / 2) * 1.2 * k;
-      const cx = meio.x + ux * off;
-      const cy = meio.y + uy * off;
-      for (const seg of tracosDoCondutor(tipo)) {
-        const p1 = rel(cx, cy, seg.de);
-        const p2 = rel(cx, cy, seg.ate);
-        d.linha(p1.x, p1.y, p2.x, p2.y, { espessuraMm: FINA, cor: COR });
-      }
-    });
-    const secoesDistintas = [...new Set(circuitosDoEletroduto.map((c) => c.secaoMm2).filter((v): v is number => v != null))];
-    const secao = secoesDistintas.length > 0 ? secoesDistintas[0] : null;
-    if (n > 0) {
-      d.texto(meio.x - nx * 2.4 * k - 0.8 * k, meio.y - ny * 2.4 * k + 0.6 * k, circuitosDoEletroduto.length > 0 ? circuitosDoEletroduto.map((c) => numeroDoCircuito(c.nome)).join(' ') : '?', TEXTO_MM * 0.9);
-      if (secao != null) d.texto(meio.x + nx * 2.4 * k - 0.8 * k, meio.y + ny * 2.4 * k + 1.4 * k, secoesDistintas.map((v) => mm2(v)).join('/'), TEXTO_MM * 0.9, COR_FRACA);
+    let cursor = -total / 2;
+    for (const g of grupos) {
+      const larg = (g.tipos.length - 1) * passo;
+      g.tipos.forEach((tipo, i) => {
+        const off = cursor + i * passo;
+        const cx = meio.x + ux * off;
+        const cy = meio.y + uy * off;
+        for (const seg of tracosDoCondutor(tipo)) {
+          const p1 = rel(cx, cy, seg.de);
+          const p2 = rel(cx, cy, seg.ate);
+          d.linha(p1.x, p1.y, p2.x, p2.y, { espessuraMm: FINA, cor: COR });
+        }
+      });
+      const centro = cursor + larg / 2;
+      const gx = meio.x + ux * centro;
+      const gy = meio.y + uy * centro;
+      const circuito = g.circuitoId ? circuitosPorId.get(g.circuitoId) : null;
+      d.texto(gx - nx * 2.4 * k - 0.8 * k, gy - ny * 2.4 * k + 0.6 * k, circuito ? numeroDoCircuito(circuito.nome) : 'r', TEXTO_MM * 0.9);
+      if (circuito?.secaoMm2 != null) d.texto(gx + nx * 2.4 * k - 0.8 * k, gy + ny * 2.4 * k + 1.4 * k, mm2(circuito.secaoMm2), TEXTO_MM * 0.9, COR_FRACA);
+      cursor += larg + vao;
     }
-    d.texto(meio.x + nx * 2.2 * k - (n + 2) * 1.2 * k, meio.y + ny * 2.2 * k + 0.6 * k, `Ø${t.bitolaMm}`, TEXTO_MM * 0.8, COR_FRACA);
+    d.texto(meio.x - ux * (total / 2 + 1.5 * k) + nx * 2.2 * k - 3.2 * k, meio.y - uy * (total / 2 + 1.5 * k) + ny * 2.2 * k + 0.6 * k, `Ø${t.bitolaMm}`, TEXTO_MM * 0.8, COR_FRACA);
   }
 
   // Quadros: retângulo em escala (piso de 4 mm) com o nome.

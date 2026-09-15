@@ -12,7 +12,7 @@ import {
 } from '../../types/debt';
 import type { Company } from '../../types/company';
 import type { Supplier } from '../../types/users';
-import { getSupplierDisplayName } from '../../services/supplierService';
+import SupplierSelect from '../SupplierSelect';
 import { verificarDatasDoContrato } from '../../utils/debtAmortization';
 
 interface Props {
@@ -220,12 +220,13 @@ export default function DebtForm({ open, onClose, contract, draft, companies, su
                         ) : (
                             <div className="space-y-1">
                                 <Label>Instituição financeira</Label>
-                                <select className={campo} value={form.institutionSupplierId ?? ''} onChange={e => set('institutionSupplierId', e.target.value || undefined)}>
-                                    <option value="">Selecione…</option>
-                                    {suppliers.map(s => (
-                                        <option key={s.id} value={s.id}>{getSupplierDisplayName(s, 'razao')}</option>
-                                    ))}
-                                </select>
+                                <SupplierSelect
+                                    suppliers={suppliers}
+                                    value={form.institutionSupplierId ?? ''}
+                                    onChange={v => set('institutionSupplierId', v || undefined)}
+                                    placeholder="Selecione…"
+                                    size="sm"
+                                />
                             </div>
                         )}
 

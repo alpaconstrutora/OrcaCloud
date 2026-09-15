@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import CostCenterSelect from './CostCenterSelect';
+import PlanoContasSelect from './PlanoContasSelect';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { payrollService, PayrollRun, PayrollRubric, PayrollEvent, PayrollResultWithEmployee } from '../services/payrollService';
@@ -566,16 +567,13 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, initialTab = 'ciclos
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-xs font-semibold text-slate-500">Plano de Contas</label>
-                                        <select
+                                        <PlanoContasSelect
+                                            planoContas={planoContas}
                                             value={newRunPlanoContas}
-                                            onChange={e => setNewRunPlanoContas(e.target.value)}
-                                            className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
-                                        >
-                                            <option value="">Sem plano de contas</option>
-                                            {planoContas.map(pc => (
-                                                <option key={pc.id} value={pc.id}>{pc.code ? `${pc.code} — ${pc.name}` : pc.name}</option>
-                                            ))}
-                                        </select>
+                                            onChange={setNewRunPlanoContas}
+                                            placeholder="Sem plano de contas"
+                                            size="sm"
+                                        />
                                         <p className="text-xs text-slate-400 font-medium">
                                             Herdados por todos os lançamentos financeiros desta folha. O colaborador com classificação própria sobrepõe os dois nas linhas dele.
                                         </p>

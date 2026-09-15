@@ -6,6 +6,7 @@ import Button from '../ui/Button';
 import { inventoryService } from '../../services/inventoryService';
 import { masterDataService, type MasterUnit } from '../../services/masterDataService';
 import { supplierService } from '../../services/supplierService';
+import SupplierSelect from '../SupplierSelect';
 import type { StockItem, CreateStockItemInput } from '../../types/inventory';
 
 /**
@@ -163,14 +164,13 @@ const StockItemSheet: React.FC<Props> = ({ open, onClose, organizationId, item, 
                             />
                         </Campo>
                         <Campo label="Fornecedor padrão">
-                            <select
+                            <SupplierSelect
+                                suppliers={suppliers}
                                 value={form.defaultSupplierId ?? ''}
-                                onChange={e => set('defaultSupplierId', e.target.value || null)}
-                                className={inputCls}
-                            >
-                                <option value="">Nenhum</option>
-                                {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
+                                onChange={v => set('defaultSupplierId', v || null)}
+                                placeholder="Nenhum"
+                                size="sm"
+                            />
                         </Campo>
                     </div>
 

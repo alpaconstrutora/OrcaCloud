@@ -1193,6 +1193,24 @@ texto comum**. Ser interativo não é motivo para `text-xs`, `font-bold` ou
 > preciso (nem correto) repetir classe de cor em cada `<option>`; se um select
 > novo abrir cinza, é o `index.css` que foi quebrado, não a tela.
 
+### 7.1.1 Escolher cliente / fornecedor / centro de custo / plano de contas = drawer, não `<select>`
+
+Campo de formulário ou célula que escolhe uma dessas quatro entidades usa o
+componente de drawer correspondente — `ClientSelect`, `SupplierSelect`,
+`CostCenterSelect`, `PlanoContasSelect` (os dois últimos sobre
+`HierarchicalSelect`, accordion por grupo/organização). Todos têm gatilho `h-9`
+para formulário (`size="sm"`) e `compact` + `triggerClassName` para célula de
+tabela; `fallbackLabel` mostra um valor que não está na lista (nome fora do
+cadastro, id de outra organização) em vez de cair no placeholder.
+
+> ✅ Propagado em 2026-09-15 (pedido: "propague no app"): Extrato e Pendentes
+> (células), Edição em lote, Folha (ciclo e detalhe), Colaborador, Alocações,
+> Dívidas, Sala de crédito, Almoxarifado (item), ProOrçamento (cliente).
+> ❌ Continua `<select>` de propósito: filtro de escopo na toolbar (§5.3 — "qual
+> obra/conta/mês estou vendo", não "qual entidade gravar") e listas com opção
+> especial embutida ("Autor do projeto" com "Outro", "Fornecedor / Prestador"
+> com sufixo de portal). **Obra** ainda não tem drawer padrão (`ProjectSelect`).
+
 ### 7.2 Altura da linha — padding vertical padrão
 
 Todo `<td>` de dado usa `py-2.5` (10px), inclusive a célula de checkbox. Não é

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import CostCenterSelect from './CostCenterSelect';
+import PlanoContasSelect from './PlanoContasSelect';
 import { X, ArrowLeft, User, Users, MapPin, Phone, Mail, FileText, DollarSign, Calendar, Building2, ChevronDown, Loader2, CheckSquare, Square, Calculator, Wallet, CheckCircle2, Info, AlertTriangle, CreditCard, Briefcase, AlertCircle } from 'lucide-react';
 import { Employee, ContractType, EmployeeStatus, laborService } from '../services/laborService';
 import { payrollService, PayrollRubric } from '../services/payrollService';
@@ -974,12 +975,13 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                         />
                                     </InputGroup>
                                     <InputGroup label="Plano de Contas">
-                                        <select value={form.plano_de_contas_id ?? ''} onChange={e => setField('plano_de_contas_id', e.target.value)} className={inputCls}>
-                                            <option value="">Herdar da folha</option>
-                                            {planoContas.map(pc => (
-                                                <option key={pc.id} value={pc.id}>{pc.code ? `${pc.code} — ${pc.name}` : pc.name}</option>
-                                            ))}
-                                        </select>
+                                        <PlanoContasSelect
+                                            planoContas={planoContas}
+                                            value={form.plano_de_contas_id ?? ''}
+                                            onChange={v => setField('plano_de_contas_id', v)}
+                                            placeholder="Herdar da folha"
+                                            size="sm"
+                                        />
                                     </InputGroup>
                                     <InputGroup label="Sindicato">
                                         <input value={form.sindicato} onChange={e => setField('sindicato', e.target.value)} className={inputCls} placeholder="Ex: SINDUSCON-MG" />

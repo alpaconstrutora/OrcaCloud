@@ -19,6 +19,7 @@ import {
     type CreditRoomInput,
     type CreditRoomStatus,
 } from '../../types/creditRoom';
+import SupplierSelect from '../SupplierSelect';
 import {
     ELIGIBLE_FLOW_PT,
     GUARANTEE_KIND_PT,
@@ -239,10 +240,7 @@ export default function CreditRoomForm({ open, onClose, room, onSave }: Props) {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <label className={rotulo}>Fornecedor cadastrado</label>
-                            <select value={form.institutionSupplierId ?? ''} onChange={e => onSupplier(e.target.value)} className={campo}>
-                                <option value="">—</option>
-                                {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
+                            <SupplierSelect suppliers={suppliers} value={form.institutionSupplierId ?? ''} onChange={onSupplier} placeholder="—" size="sm" />
                         </div>
                         <div className="space-y-1.5">
                             <label className={rotulo}>Nome (se não cadastrado)</label>

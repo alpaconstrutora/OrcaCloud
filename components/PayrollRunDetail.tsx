@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import CostCenterSelect from './CostCenterSelect';
+import PlanoContasSelect from './PlanoContasSelect';
 import {
     Play, FileText, CheckCircle2, History, Loader2, AlertCircle,
     ArrowLeft, X, ShieldAlert, Plus, RefreshCw, Search, MoveHorizontal,
@@ -165,17 +166,15 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
                                     size="sm"
                                 />
                             </div>
-                            <select
-                                value={run.plano_de_contas_id ?? ''}
-                                onChange={e => onChangeClassification({ plano_de_contas_id: e.target.value || null })}
-                                title="Plano de Contas da folha"
-                                className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer"
-                            >
-                                <option value="">Plano de Contas…</option>
-                                {planoContas.map(pc => (
-                                    <option key={pc.id} value={pc.id}>{pc.code ? `${pc.code} — ${pc.name}` : pc.name}</option>
-                                ))}
-                            </select>
+                            <div className="w-64" title="Plano de Contas da folha">
+                                <PlanoContasSelect
+                                    planoContas={planoContas}
+                                    value={run.plano_de_contas_id ?? ''}
+                                    onChange={v => onChangeClassification({ plano_de_contas_id: v || null })}
+                                    placeholder="Plano de Contas…"
+                                    size="sm"
+                                />
+                            </div>
                         </>
                     ) : (
                         <span className="text-sm font-normal text-gray-600">

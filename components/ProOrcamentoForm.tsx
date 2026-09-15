@@ -1,6 +1,7 @@
 import React from 'react';
 import { proService } from '../services/proService';
 import { ProCliente, ProOrcamento } from '../types';
+import ClientSelect from './ClientSelect';
 import jsPDF from 'jspdf';
 
 interface ProOrcamentoFormProps {
@@ -476,25 +477,26 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
           {/* Seletor de Cliente */}
           <div className="space-y-1.5">
             <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Cliente</label>
-            <select
-              value={isNovoCliente ? 'NOVO' : clienteId}
-              onChange={(e) => {
-                if (e.target.value === 'NOVO') {
-                  setIsNovoCliente(true);
-                  setClienteId('');
-                } else {
-                  setIsNovoCliente(false);
-                  setClienteId(e.target.value);
-                }
-              }}
-              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
-            >
-              <option value="">Selecione um cliente...</option>
-              {clientes.map(c => (
-                <option key={c.id} value={c.id}>{c.nome}</option>
-              ))}
-              <option value="NOVO">+ Cadastrar Novo Cliente</option>
-            </select>
+            {/* Drawer padrão do app; "Cadastrar novo" deixou de ser uma <option> disfarçada
+                e virou o botão ao lado, que abre o formulário inline abaixo. */}
+            <div className="flex items-center gap-2">
+              <div className="flex-1 min-w-0">
+                <ClientSelect
+                  clients={clientes.map(c => ({ id: c.id, name: c.nome }))}
+                  value={isNovoCliente ? '' : clienteId}
+                  onChange={(id) => { setIsNovoCliente(false); setClienteId(id); }}
+                  placeholder={isNovoCliente ? 'Novo cliente (preencha abaixo)' : 'Selecione um cliente...'}
+                  icon={null}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => { setIsNovoCliente(v => !v); setClienteId(''); }}
+                className={`h-9 px-3.5 rounded-[6px] text-[13px] font-medium border transition-all shrink-0 ${isNovoCliente ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50'}`}
+              >
+                {isNovoCliente ? 'Cancelar novo' : '+ Novo cliente'}
+              </button>
+            </div>
           </div>
 
           {/* Form Novo Cliente Inline */}

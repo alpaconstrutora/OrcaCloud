@@ -11,6 +11,8 @@ import { Employee } from '../services/laborService';
 import PaystubModal from './PaystubModal';
 import { KpiCard } from './ui/KpiCard';
 import { formatMoney } from './ui/Format';
+import CostCenterSelect from './CostCenterSelect';
+import PlanoContasSelect from './PlanoContasSelect';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import {
     ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton,
@@ -1079,29 +1081,23 @@ const AllocationSheet: React.FC<AllocationSheetProps> = ({
                                     <div key={idx} className="flex items-center gap-3 p-3 bg-gray-50 rounded-[10px] border border-transparent hover:border-gray-200 transition-all">
                                         <div className="flex-1 min-w-0">
                                             <label className="text-xs font-semibold text-slate-500 mb-1 block">Centro de Custo</label>
-                                            <select
+                                            <CostCenterSelect
+                                                costCenters={costCenters}
                                                 value={linha.cost_center_id}
-                                                onChange={e => setSplits(splits.map((l, i) => i === idx ? { ...l, cost_center_id: e.target.value } : l))}
-                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                                            >
-                                                <option value="">—</option>
-                                                {costCenters.map(cc => (
-                                                    <option key={cc.id} value={cc.id}>{cc.code ? `${cc.code} — ${cc.name}` : cc.name}</option>
-                                                ))}
-                                            </select>
+                                                onChange={v => setSplits(splits.map((l, i) => i === idx ? { ...l, cost_center_id: v } : l))}
+                                                placeholder="—"
+                                                size="sm"
+                                            />
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <label className="text-xs font-semibold text-slate-500 mb-1 block">Plano de Contas</label>
-                                            <select
+                                            <PlanoContasSelect
+                                                planoContas={planoContas}
                                                 value={linha.plano_de_contas_id}
-                                                onChange={e => setSplits(splits.map((l, i) => i === idx ? { ...l, plano_de_contas_id: e.target.value } : l))}
-                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                                            >
-                                                <option value="">—</option>
-                                                {planoContas.map(pc => (
-                                                    <option key={pc.id} value={pc.id}>{pc.code ? `${pc.code} — ${pc.name}` : pc.name}</option>
-                                                ))}
-                                            </select>
+                                                onChange={v => setSplits(splits.map((l, i) => i === idx ? { ...l, plano_de_contas_id: v } : l))}
+                                                placeholder="—"
+                                                size="sm"
+                                            />
                                         </div>
                                         <div className="w-24">
                                             <label className="text-xs font-semibold text-slate-500 mb-1 block">%</label>

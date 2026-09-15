@@ -270,6 +270,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const [masterProjects, setMasterProjects] = useState<Array<{ id: string; name: string }>>([]);
     // Guarda código/grupo além do nome: o CostCenterSelect da edição em lote monta o accordion com isso.
     const [masterCostCenters, setMasterCostCenters] = useState<Array<{ id: string; name: string; code?: string | null; parent_id?: string | null; parent_name?: string | null }>>([]);
+    // Plano de Contas (plano_de_contas) — terceira dimensão contábil, distinta de Centro de Custo e de Categoria.
+    const [masterPlanoContas, setMasterPlanoContas] = useState<Array<{ id: string; name: string; code?: string | null }>>([]);
     // Código de origem por lançamento (ex: nº do boleto 0188) — keyed por internal_transaction.id
     const [originCodes, setOriginCodes] = useState<Record<string, string>>({});
     // Nome da contraparte resolvido da origem (ex: fornecedor do boleto) — keyed por internal_transaction.id
@@ -313,7 +315,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     });
     const [internalEntityDropdownOpen, setInternalEntityDropdownOpen] = useState(false);
     const [bankSortOrder, setBankSortOrder] = useState<'desc' | 'asc'>('desc');
-    const [bankSortField, setBankSortField] = useState<'date' | 'amount' | 'description' | 'category' | 'counterparty' | 'project' | 'costCenter'>('date');
+    const [bankSortField, setBankSortField] = useState<BankSortField>('date');
     const [internalSortOrder, setInternalSortOrder] = useState<'desc' | 'asc'>('desc');
     const [internalSortField, setInternalSortField] = useState<'date' | 'amount' | 'description' | 'category' | 'entity'>('date');
     // Clique no header ordena pelo campo `field` (mesmo toggle asc/desc de sempre); usado
@@ -364,7 +366,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             );
         }
         // Filtro avançado (regras compostas — descrição/valor/tipo etc.)
-        filtered = applyFilterRules(filtered, statementAdvancedFilters.rules, STATEMENT_FILTER_FIELDS, getBankTxFilterValue);
+        // Nome do plano de contas por id — o filtro e a ordenação comparam o que a célula mostra, não o UUID.
+        const planoContasById = new Map(masterPlanoContas.map(pc => [pc.id, pc.name]));
+        const planoContasLabel = (id?: string | null) => (id ? planoContasById.get(id) ?? null : null);
+        filtered = applyFilterRules(filtered, statementAdvancedFilters.rules, STATEMENT_FILTER_FIELDS, (tx, key) => getBankTxFilterValue(tx, key, planoContasLabel));
         return filtered.sort((a, b) => {
             let valA: string | number = '';
             let valB: string | number = '';
@@ -389,12 +394,15 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             } else if (bankSortField === 'costCenter') {
                 valA = (masterCostCenters.find(c => c.id === a.cost_center_id)?.name || '').toLowerCase();
                 valB = (masterCostCenters.find(c => c.id === b.cost_center_id)?.name || '').toLowerCase();
+            } else if (bankSortField === 'planoContas') {
+                valA = (planoContasLabel(a.plano_de_contas_id) || '').toLowerCase();
+                valB = (planoContasLabel(b.plano_de_contas_id) || '').toLowerCase();
             }
             if (valA < valB) return bankSortOrder === 'asc' ? -1 : 1;
             if (valA > valB) return bankSortOrder === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [bankTransactions, bankSortOrder, bankSortField, bankSearch, bankCategoryFilter, bankCounterpartyFilter, flowFilter, masterProjects, masterCostCenters, statementAdvancedFilters.rules]);
+    }, [bankTransactions, bankSortOrder, bankSortField, bankSearch, bankCategoryFilter, bankCounterpartyFilter, flowFilter, masterProjects, masterCostCenters, masterPlanoContas, statementAdvancedFilters.rules]);
 
     const statementTotalPages = Math.max(1, Math.ceil(sortedBankTransactions.length / statementPageSize));
     // Se o recorte encolheu e a página atual não existe mais, cai na última válida
@@ -576,6 +584,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         () => new Map(masterCostCenters.map(c => [c.id, c.name])),
         [masterCostCenters]
     );
+    const planoContasNameById = useMemo(
+        () => new Map(masterPlanoContas.map(pc => [pc.id, pc.name])),
+        [masterPlanoContas]
+    );
     const masterSuppliersLower = useMemo(
         () => new Set(masterSuppliers.map(s => s.toLowerCase())),
         [masterSuppliers]
@@ -590,6 +602,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
     const costCenterName = (id?: string | null) =>
         id ? (costCenterNameById.get(id) ?? null) : null;
+
+    const planoContasName = (id?: string | null) =>
+        id ? (planoContasNameById.get(id) ?? null) : null;
 
     // Listas separadas de parceiros para sugestão nas regras
     const uniqueClients = useMemo(() => {
@@ -663,6 +678,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         () => masterCostCenters.map(c => ({ value: c.id, label: c.name })),
         [masterCostCenters]
     );
+    const planoContasOptions = useMemo<LazyOption[]>(
+        () => masterPlanoContas.map(pc => ({ value: pc.id, label: pc.name })),
+        [masterPlanoContas]
+    );
     const credorOptions = useMemo<LazyOption[]>(
         () => uniqueCredores.map(n => ({ value: n, label: supplierDisplayByName[n] || n })),
         [uniqueCredores, supplierDisplayByName]
@@ -718,6 +737,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             loadEmployees(effectiveOrgId);
             loadProjects(effectiveOrgId);
             loadCostCenters(effectiveOrgId);
+            loadPlanoContas(effectiveOrgId);
             // Carrega categorias uma única vez por org (não re-carrega ao trocar de conta)
             if (categoriesLoadedForOrg.current !== effectiveOrgId) {
                 categoriesLoadedForOrg.current = effectiveOrgId;
@@ -987,6 +1007,21 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             setMasterCostCenters(data.map(c => ({ id: c.id, name: c.name, code: c.code ?? null, parent_id: c.parent_id ?? null, parent_name: c.parent_name ?? null })));
         } catch (error) {
             console.error('Error loading cost centers:', error);
+        }
+    };
+
+    const loadPlanoContas = async (orgId: string) => {
+        try {
+            // Mesmo fallback de loadCostCenters: com org; se vier vazio, sem filtro (RLS recorta)
+            let data = await financialRegistryService.listPlanoContas(orgId);
+            if (!data.length) data = await financialRegistryService.listPlanoContas();
+            setMasterPlanoContas(data.map(pc => ({
+                id: pc.id,
+                name: pc.code ? `${pc.code} · ${pc.name}` : pc.name,
+                code: pc.code ?? null,
+            })));
+        } catch (error) {
+            console.error('Error loading plano de contas:', error);
         }
     };
 
@@ -2389,6 +2424,23 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             if (costCenterId) lembrarClassificacao(txId, { cost_center_id: costCenterId });
         } catch (error) {
             console.error('Error updating cost center:', error);
+        }
+    };
+
+    const handleUpdateBankPlanoContas = async (txId: string, planoContasId: string) => {
+        try {
+            const { error } = await supabase
+                .from('bank_transactions')
+                .update({ plano_de_contas_id: planoContasId || null })
+                .eq('id', txId);
+            if (error) throw error;
+            setBankTransactions(prev => prev.map(tx =>
+                tx.id === txId ? { ...tx, plano_de_contas_id: planoContasId || undefined } : tx
+            ));
+            // A memória de classificação (reconciliationMemoryService) ainda não guarda
+            // plano de contas — só categoria/obra/centro de custo/contraparte.
+        } catch (error) {
+            console.error('Error updating plano de contas:', error);
         }
     };
 
@@ -3837,12 +3889,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     const cpRegistered = tx.direction === 'DEBIT' ? masterSuppliersLower.has(cpKey) : masterClientsLower.has(cpKey);
                                                     const statementCtx: StatementRowCtx = {
                                                         cpRegistered,
-                                                        clienteOptions, credorOptions, categoryOptions, projectOptions, costCenterOptions,
-                                                        projectName, costCenterName,
+                                                        clienteOptions, credorOptions, categoryOptions, projectOptions, costCenterOptions, planoContasOptions,
+                                                        projectName, costCenterName, planoContasName,
                                                         onUpdateCounterparty: handleUpdateBankCounterparty,
                                                         onUpdateCategory: handleUpdateBankCategory,
                                                         onUpdateProject: handleUpdateBankProject,
                                                         onUpdateCostCenter: handleUpdateBankCostCenter,
+                                                        onUpdatePlanoContas: handleUpdateBankPlanoContas,
                                                         onRegisterEntity: openRegisterEntity,
                                                         onRejectRule: handleRejectRule,
                                                         onConfirmMatch: handleConfirmMatch,

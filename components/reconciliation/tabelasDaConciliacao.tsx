@@ -33,6 +33,7 @@ export const STATEMENT_COLUMNS: ColumnConfig[] = [
     { key: 'category',     label: 'Categoria',          sortable: true },
     { key: 'project',      label: 'Obra',               sortable: true },
     { key: 'costCenter',   label: 'Centro de Custo',    sortable: true },
+    { key: 'planoContas',  label: 'Plano de Contas',    sortable: true },
     { key: 'date',         label: 'Data',               sortable: true },
     { key: 'amount',       label: 'Valor',              sortable: true },
     // Status mistura dado (situação da conciliação) com ação inline (Aceitar/Rejeitar
@@ -44,7 +45,7 @@ export const STATEMENT_COLUMNS: ColumnConfig[] = [
 // Campo de bankSortField que cada coluna ordena (state próprio da toolbar, não o
 // sortColumn genérico de useTableColumns — ver bankSortField/bankSortOrder no
 // componente). Ausente = não ordenável (ex: status mistura dado com ação inline).
-export type BankSortField = 'date' | 'amount' | 'description' | 'category' | 'counterparty' | 'project' | 'costCenter';
+export type BankSortField = 'date' | 'amount' | 'description' | 'category' | 'counterparty' | 'project' | 'costCenter' | 'planoContas';
 export type InternalSortField = 'date' | 'amount' | 'description' | 'category' | 'entity';
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -58,6 +59,7 @@ export const STATEMENT_COLUMN_HEADERS: Record<string, { label: string; className
     category:    { label: 'Categoria',       sortField: 'category',     className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     project:     { label: 'Obra',            sortField: 'project',      className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     costCenter:  { label: 'Centro de Custo', sortField: 'costCenter',   className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    planoContas: { label: 'Plano de Contas', sortField: 'planoContas',  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     date:        { label: 'Data',            sortField: 'date',         className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
     amount:      { label: 'Valor',           sortField: 'amount',       className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
     status:      { label: 'Status',                                     className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
@@ -73,6 +75,7 @@ export const STATEMENT_TD_CLASS: Record<string, string> = {
     category:    'text-sm font-normal text-gray-700 overflow-hidden',
     project:     'text-sm font-normal text-gray-700 overflow-hidden',
     costCenter:  'text-sm font-normal text-gray-700 overflow-hidden',
+    planoContas: 'text-sm font-normal text-gray-700 overflow-hidden',
     date:        'text-sm font-normal text-gray-600 text-center whitespace-nowrap',
     amount:      'text-sm font-medium text-right whitespace-nowrap',
     status:      'text-center',
@@ -86,6 +89,7 @@ export const STATEMENT_FILTER_FIELDS: FilterFieldConfig[] = [
     { key: 'client',       label: 'Cliente',            type: 'text'   },
     { key: 'creditor',     label: 'Credor',             type: 'text'   },
     { key: 'category',     label: 'Categoria',          type: 'text'   },
+    { key: 'planoContas',  label: 'Plano de Contas',    type: 'text'   },
     { key: 'amount',       label: 'Valor',              type: 'number' },
     { key: 'direction',    label: 'Tipo', type: 'select', options: [
         { value: 'CREDIT', label: 'Entrada (crédito)' }, { value: 'DEBIT', label: 'Saída (débito)' },
@@ -102,12 +106,15 @@ export function isStatementColumnVisibleForFlow(key: string, flowFilter: 'ALL' |
     return true;
 }
 
-export function getBankTxFilterValue(tx: BankTransaction, key: string): unknown {
+// `planoContasName` resolve o id para o nome exibido — o filtro de texto compara com o
+// que o usuário lê na célula, não com o UUID.
+export function getBankTxFilterValue(tx: BankTransaction, key: string, planoContasName?: (id?: string | null) => string | null): unknown {
     switch (key) {
         case 'description':  return tx.description_normalized || tx.description_raw || '';
         case 'client':       return tx.direction === 'CREDIT' ? (tx.counterparty_name ?? '') : '';
         case 'creditor':     return tx.direction === 'DEBIT' ? (tx.counterparty_name ?? '') : '';
         case 'category':     return tx.category ?? '';
+        case 'planoContas':  return planoContasName?.(tx.plano_de_contas_id) ?? '';
         case 'amount':       return tx.amount ?? 0;
         case 'direction':    return tx.direction ?? '';
         default: return null;
@@ -225,6 +232,7 @@ export const DEFAULT_STATEMENT_COL_WIDTHS: Record<string, number> = {
     category: 160,
     project: 160,
     costCenter: 179,
+    planoContas: 179,
     date: 110,
     amount: 130,
     status: 150,
@@ -264,12 +272,15 @@ export interface StatementRowCtx {
     categoryOptions: LazyOption[];
     projectOptions: LazyOption[];
     costCenterOptions: LazyOption[];
+    planoContasOptions: LazyOption[];
     projectName: (id?: string | null) => string | null;
     costCenterName: (id?: string | null) => string | null;
+    planoContasName: (id?: string | null) => string | null;
     onUpdateCounterparty: (id: string, v: string) => void;
     onUpdateCategory: (id: string, v: string) => void;
     onUpdateProject: (id: string, v: string) => void;
     onUpdateCostCenter: (id: string, v: string) => void;
+    onUpdatePlanoContas: (id: string, v: string) => void;
     onRegisterEntity: (tx: BankTransaction) => void;
     onRejectRule: (id: string) => void;
     onConfirmMatch: (bankTxId: string, internalTxId?: string) => void;
@@ -365,6 +376,17 @@ export function renderStatementCell(key: string, tx: BankTransaction, ctx: State
                     options={ctx.costCenterOptions}
                     placeholder="Centro de Custo"
                     className={`text-sm font-normal px-2 py-1 rounded border transition-all appearance-none cursor-pointer ${tx.cost_center_id ? 'text-gray-900 bg-violet-50 border-violet-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
+                />
+            );
+        case 'planoContas':
+            return (
+                <LazySelect
+                    value={tx.plano_de_contas_id || ''}
+                    currentLabel={ctx.planoContasName(tx.plano_de_contas_id) || ''}
+                    onChange={(v) => ctx.onUpdatePlanoContas(tx.id, v)}
+                    options={ctx.planoContasOptions}
+                    placeholder="Plano de Contas"
+                    className={`text-sm font-normal px-2 py-1 rounded border transition-all appearance-none cursor-pointer ${tx.plano_de_contas_id ? 'text-gray-900 bg-amber-50 border-amber-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
                 />
             );
         case 'date':

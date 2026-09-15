@@ -288,6 +288,8 @@ export interface BankTransaction {
     status: BankTransactionStatus;
     project_id?: string;
     cost_center_id?: string;
+    /** Plano de Contas (plano_de_contas) — dimensão distinta de cost_center_id e de category. */
+    plano_de_contas_id?: string;
     created_at?: string;
 }
 

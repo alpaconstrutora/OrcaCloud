@@ -47,6 +47,9 @@ import { originIdFromRef } from '../lib/receivableRef';
 // silencioso (a tela sumia com janeiro–junho de uma conta movimentada). Paginamos até esgotar.
 import { fetchAllPages } from '../lib/supabasePaginate';
 
+// Rótulo de texto do plano de contas ("1.1.1 · PIS") — célula, filtro e ordenação do Extrato.
+const rotuloPlanoContas = (pc: { name: string; code?: string | null }) => (pc.code ? `${pc.code} · ${pc.name}` : pc.name);
+
 type ReconciliationView = 'dashboard' | 'center' | 'divergences' | 'anomalies' | 'statement' | 'pending' | 'conciliated' | 'rules' | 'categories' | 'close' | 'prolabore';
 
 // Título/subtítulo de tela por aba — guia §20 (toda tela com título tem que TER um título).
@@ -272,6 +275,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     // Guarda código/grupo além do nome: o CostCenterSelect da edição em lote monta o accordion com isso.
     const [masterCostCenters, setMasterCostCenters] = useState<Array<{ id: string; name: string; code?: string | null; parent_id?: string | null; parent_name?: string | null }>>([]);
     // Plano de Contas (plano_de_contas) — terceira dimensão contábil, distinta de Centro de Custo e de Categoria.
+    // `name` é o nome CRU (o drawer de seleção mostra o código ao lado sozinho); onde a
+    // tela exibe texto (célula, filtro, ordenação) usa-se `rotuloPlanoContas` = "código · nome".
     const [masterPlanoContas, setMasterPlanoContas] = useState<Array<{ id: string; name: string; code?: string | null }>>([]);
     // Código de origem por lançamento (ex: nº do boleto 0188) — keyed por internal_transaction.id
     const [originCodes, setOriginCodes] = useState<Record<string, string>>({});
@@ -370,7 +375,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         // Nomes por id — o filtro e a ordenação comparam o que a célula mostra, não o UUID.
         const projectById = new Map(masterProjects.map(p => [p.id, p.name]));
         const costCenterById = new Map(masterCostCenters.map(c => [c.id, c.name]));
-        const planoContasById = new Map(masterPlanoContas.map(pc => [pc.id, pc.name]));
+        const planoContasById = new Map(masterPlanoContas.map(pc => [pc.id, rotuloPlanoContas(pc)]));
         const planoContasLabel = (id?: string | null) => (id ? planoContasById.get(id) ?? null : null);
         const resolvers: BankTxFilterResolvers = {
             projectName: id => (id ? projectById.get(id) ?? null : null),
@@ -593,7 +598,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         [masterCostCenters]
     );
     const planoContasNameById = useMemo(
-        () => new Map(masterPlanoContas.map(pc => [pc.id, pc.name])),
+        () => new Map(masterPlanoContas.map(pc => [pc.id, rotuloPlanoContas(pc)])),
         [masterPlanoContas]
     );
     const masterSuppliersLower = useMemo(
@@ -687,7 +692,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         [masterCostCenters]
     );
     const planoContasOptions = useMemo<LazyOption[]>(
-        () => masterPlanoContas.map(pc => ({ value: pc.id, label: pc.name })),
+        () => masterPlanoContas.map(pc => ({ value: pc.id, label: rotuloPlanoContas(pc) })),
         [masterPlanoContas]
     );
     const credorOptions = useMemo<LazyOption[]>(
@@ -1023,11 +1028,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             // Mesmo fallback de loadCostCenters: com org; se vier vazio, sem filtro (RLS recorta)
             let data = await financialRegistryService.listPlanoContas(orgId);
             if (!data.length) data = await financialRegistryService.listPlanoContas();
-            setMasterPlanoContas(data.map(pc => ({
-                id: pc.id,
-                name: pc.code ? `${pc.code} · ${pc.name}` : pc.name,
-                code: pc.code ?? null,
-            })));
+            setMasterPlanoContas(data.map(pc => ({ id: pc.id, name: pc.name, code: pc.code ?? null })));
         } catch (error) {
             console.error('Error loading plano de contas:', error);
         }

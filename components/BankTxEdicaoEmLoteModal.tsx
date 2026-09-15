@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import CostCenterSelect, { CostCenterOption } from './CostCenterSelect';
+import HierarchicalSelect from './HierarchicalSelect';
 import { X, AlertTriangle, Loader2, Tag } from 'lucide-react';
 import { formatMoney } from './ui/Format';
 import type { BankTransaction } from '../types';
@@ -16,8 +17,9 @@ interface BankTxEdicaoEmLoteModalProps {
     supplierOptions: string[];
     projects: ItemOption[];
     costCenters: CostCenterOption[];
-    /** Plano de Contas (plano_de_contas) — dimensão distinta de Centro de Custo e de Categoria. */
-    planoContas: ItemOption[];
+    /** Plano de Contas (plano_de_contas) — dimensão distinta de Centro de Custo e de Categoria.
+     *  `name` cru (o drawer já mostra o código ao lado). */
+    planoContas: Array<ItemOption & { code?: string | null }>;
     onClose: () => void;
     onSave: (fields: Partial<Pick<BankTransaction, 'category' | 'counterparty_name' | 'project_id' | 'cost_center_id' | 'plano_de_contas_id'>>) => Promise<void>;
 }
@@ -190,15 +192,21 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
 
                         <div>
                             <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Plano de Contas</label>
-                            <select
+                            {/* Mesmo drawer do Centro de Custo acima (HierarchicalSelect em modo drawer,
+                                como DealModal/ContractModal usam para o plano de contas). */}
+                            <HierarchicalSelect
+                                items={planoContas}
                                 value={planoContasId}
-                                onChange={e => setPlanoContasId(e.target.value)}
+                                onChange={setPlanoContasId}
+                                valueField="id"
+                                placeholder="— Não alterar —"
+                                hoverCls="hover:bg-blue-50"
+                                panelVariant="drawer"
+                                drawerTitle="Selecionar Plano de Contas"
+                                drawerDescription="Busque por código ou nome da conta."
+                                searchPlaceholder="Buscar por código ou nome da conta..."
                                 disabled={saving}
-                                className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
-                            >
-                                <option value="">— Não alterar —</option>
-                                {planoContas.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                            </select>
+                            />
                         </div>
 
                         {noneChanged && (

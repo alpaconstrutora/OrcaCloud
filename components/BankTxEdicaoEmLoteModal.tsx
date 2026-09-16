@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import CostCenterSelect, { CostCenterOption } from './CostCenterSelect';
 import PlanoContasSelect from './PlanoContasSelect';
+import ClientSelect, { type ClientOption } from './ClientSelect';
+import SupplierSelect, { type SupplierOption } from './SupplierSelect';
 import { X, AlertTriangle, Loader2, Tag } from 'lucide-react';
 import { formatMoney } from './ui/Format';
 import type { BankTransaction } from '../types';
@@ -13,8 +15,10 @@ interface ItemOption {
 interface BankTxEdicaoEmLoteModalProps {
     transactions: BankTransaction[];
     categories: string[];
-    clientOptions: string[];
-    supplierOptions: string[];
+    /** Cadastros com id/documento — abrem os drawers padrão (ClientSelect/SupplierSelect).
+     *  O extrato grava o NOME da contraparte; o drawer resolve id → nome ao escolher. */
+    clienteRegistros: ClientOption[];
+    credorRegistros: SupplierOption[];
     projects: ItemOption[];
     costCenters: CostCenterOption[];
     /** Plano de Contas (plano_de_contas) — dimensão distinta de Centro de Custo e de Categoria.
@@ -25,7 +29,7 @@ interface BankTxEdicaoEmLoteModalProps {
 }
 
 const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
-    transactions, categories, clientOptions, supplierOptions, projects, costCenters, planoContas, onClose, onSave,
+    transactions, categories, clienteRegistros, credorRegistros, projects, costCenters, planoContas, onClose, onSave,
 }) => {
     const [category, setCategory] = useState('');
     const [clientName, setClientName] = useState('');
@@ -141,27 +145,30 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
                         <div className="grid grid-cols-2 gap-3">
                             <div>
                                 <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Cliente</label>
-                                <select
-                                    value={clientName}
-                                    onChange={e => { setClientName(e.target.value); if (e.target.value) setSupplierName(''); }}
+                                {/* Drawers padrão do app (mesmos das células do Extrato). O estado continua
+                                    sendo o NOME — é o que bank_transactions.counterparty_name guarda. */}
+                                <ClientSelect
+                                    clients={clienteRegistros}
+                                    value={clienteRegistros.find(c => c.name === clientName)?.id ?? ''}
+                                    onChange={id => { const nome = clienteRegistros.find(c => c.id === id)?.name ?? ''; setClientName(nome); if (nome) setSupplierName(''); }}
+                                    placeholder="— Não alterar —"
+                                    icon={null}
                                     disabled={saving || !!supplierName}
-                                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
-                                >
-                                    <option value="">— Não alterar —</option>
-                                    {clientOptions.map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
+                                    fallbackLabel={clientName || undefined}
+                                />
                             </div>
                             <div>
-                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Fornecedor</label>
-                                <select
-                                    value={supplierName}
-                                    onChange={e => { setSupplierName(e.target.value); if (e.target.value) setClientName(''); }}
+                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Credor</label>
+                                <SupplierSelect
+                                    suppliers={credorRegistros}
+                                    value={credorRegistros.find(s => s.name === supplierName)?.id ?? ''}
+                                    onChange={id => { const nome = credorRegistros.find(s => s.id === id)?.name ?? ''; setSupplierName(nome); if (nome) setClientName(''); }}
+                                    placeholder="— Não alterar —"
+                                    title="Selecionar Credor"
+                                    size="sm"
                                     disabled={saving || !!clientName}
-                                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
-                                >
-                                    <option value="">— Não alterar —</option>
-                                    {supplierOptions.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
+                                    fallbackLabel={supplierName || undefined}
+                                />
                             </div>
                         </div>
 

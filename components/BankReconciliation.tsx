@@ -3246,8 +3246,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 <BankTxEdicaoEmLoteModal
                     transactions={sortedBankTransactions.filter(tx => selectedBankTxIds.has(tx.id))}
                     categories={uniqueCategories}
-                    clientOptions={uniqueClients}
-                    supplierOptions={uniqueCredores}
+                    clienteRegistros={clienteRegistros}
+                    credorRegistros={credorRegistros}
                     projects={masterProjects}
                     costCenters={masterCostCenters}
                     planoContas={masterPlanoContas}

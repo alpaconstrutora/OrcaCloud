@@ -2039,3 +2039,34 @@ describe('BlueprintEditor · grupo de fundação', () => {
     expect(within(screen.getByRole('button', { name: /^B1 · Bloco de coroamento/ }).closest('li')!).getAllByRole('button', { name: /^E[0-9]+ · Estaca/ })).toHaveLength(1);
   });
 });
+
+/**
+ * ESC NO 3D (16/09/2026): *"quando clico na tecla ESC a seleção se desfaz. O
+ * mesmo comportamento não acontece na visualização 3D"*.
+ */
+describe('BlueprintEditor · Escape limpa a seleção no 3D', () => {
+  it('seleciona pela lista no 3D, Escape na cena desfaz a seleção e fecha as Propriedades', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const m = k.applyBatch(nivel.model, [
+      { type: 'AddWall', levelId: t, a: k.point(0, 0), b: k.point(6000, 0), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(3000, 1500)], larguraMm: 200, profundidadeMm: 200, alturaMm: 2800, rotulo: 'P1' },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    localStorage.setItem('blueprint:vista', JSON.stringify('3d'));
+    await montar();
+    const user = userEvent.setup();
+    const secao = document.querySelector<HTMLButtonElement>('button[aria-controls="secao-componentes-corpo"]')!;
+    if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
+    await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
+    expect(await screen.findByRole('region', { name: /propriedades/i })).toBeInTheDocument();
+    // A cena 3D é o contêiner focável; a tecla chega a ele como chegaria no clique.
+    const cena = screen.getByTestId('cena-3d');
+    expect(cena).toBeTruthy();
+    cena.focus();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('region', { name: /propriedades/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^P1 · Pilar/ })).toHaveAttribute('aria-pressed', 'false');
+  });
+});

@@ -50,9 +50,30 @@ const Carregando = () => (
 );
 
 export default function Blueprint3DTab(props: Props) {
+  const { onSelecionar, selecionados } = props;
   return (
-    <Suspense fallback={<Carregando />}>
-      <Blueprint3DViewer {...props} />
-    </Suspense>
+    // ESC LIMPA A SELEÇÃO NO 3D (16/09/2026: *"quando clico na tecla ESC a
+    // seleção se desfaz. O mesmo comportamento não acontece na visualização
+    // 3D"*). O invólucro é focável para receber a tecla — clicar na cena já lhe
+    // dá o foco, porque o canvas WebGL não é focável e o foco sobe para o
+    // ancestral mais próximo que é — e o gesto é o mesmo do canvas 2D:
+    // `onSelecionar([])`. Fica AQUI, fora do `lazy`, para valer desde o primeiro
+    // quadro. Só age quando há o que limpar, para não engolir o Escape de um
+    // diálogo aberto por cima.
+    <div
+      className="h-full w-full outline-none"
+      data-testid="cena-3d"
+      tabIndex={onSelecionar ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && onSelecionar && (selecionados?.size ?? 0) > 0) {
+          e.preventDefault();
+          onSelecionar([]);
+        }
+      }}
+    >
+      <Suspense fallback={<Carregando />}>
+        <Blueprint3DViewer {...props} />
+      </Suspense>
+    </div>
   );
 }

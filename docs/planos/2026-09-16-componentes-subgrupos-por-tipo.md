@@ -72,3 +72,16 @@ para P7 renomeia a linha) · suíte 328/4326 · tsc · build. App real na planta
 (escritas bloqueadas, 0 erros JS): pela lista, P3 acende na cena e "Propriedades C-340C · P3 ·
 Pilar · 0,185 m³" abre com Tipo/Seção/Largura/Profundidade/Altura/Cota/Rótulo; clique na cena
 numa parede abre "PAREDE SELECIONADA". Capturas `out-p3d/p3d-0{1,2}-*.png`.
+
+## Escape limpa a seleção no 3D (16/09/2026)
+
+> ao clicar em um componente, este fica selecionado e quando clico na tecla ESC a seleção se desfaz. O mesmo comportamento não acontece na visualização 3D.
+
+`Blueprint3DTab` (fora do `lazy`, para valer desde o primeiro quadro) ganhou um invólucro focável
+(`tabIndex=0`, `data-testid="cena-3d"`): clicar na cena dá o foco a ele (o canvas WebGL não é
+focável; o foco sobe) e `Escape`, com algo selecionado, chama `onSelecionar([])` — o mesmo gesto
+do canvas 2D. Só age com seleção, para não engolir o Escape de um diálogo por cima.
+
+Prova: editor (+1: selecionar no 3D pela lista → Escape na cena → sem Propriedades, linha
+despressionada) · app real na planta do usuário (clique na cena abre Propriedades; Escape fecha;
+foco em `cena-3d`; 0 erros JS, escritas bloqueadas) · suíte 330/4361 · tsc · build.

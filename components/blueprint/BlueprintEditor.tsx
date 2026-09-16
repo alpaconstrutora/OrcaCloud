@@ -10,6 +10,7 @@ import {
   Calculator,
   FileText,
   RectangleVertical,
+  SquareStack,
   FlipHorizontal2,
   FlipVertical2,
   History,
@@ -179,6 +180,19 @@ import {
   type HipotesesDeLajes,
   type HipotesesDeVigas,
 } from '../../utils/blueprintVigasLajesAutomaticas';
+import {
+  ALTURAS_DE_BLOCO,
+  ARRASAMENTOS,
+  COMPRIMENTOS_DE_ESTACA,
+  DIAMETROS_DE_ESTACA,
+  ESTACAS_POR_BLOCO,
+  HIPOTESES_FUNDACOES_PADRAO,
+  conferirPlanoDeFundacoes,
+  fundacoesExistentesNoNivel,
+  planejarFundacoes,
+  relancarFundacoes,
+  type HipotesesDeFundacoes,
+} from '../../utils/blueprintFundacoesAutomaticas';
 import SecaoAccordion from './SecaoAccordion';
 import { usePainelRedimensionavel } from './LarguraDoPainel';
 import PainelMedicoes from './PainelMedicoes';
@@ -555,6 +569,8 @@ const ROTULO_DA_TAREFA = {
   // Vigas e lajes (16/09/2026): o mesmo molde, uma gaveta cada.
   vigas: 'Vigas automáticas',
   lajes: 'Lajes automáticas',
+  // Fundações (16/09/2026): bloco + estaca(s) sob cada pilar, uma gaveta.
+  fundacoes: 'Fundações automáticas',
   'gerar-paredes': 'Gerar paredes do PDF',
   'importar-ifc': 'Importar do IFC',
   'importar-dxf': 'Importar do DXF',
@@ -4666,6 +4682,71 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     });
   };
   /**
+   * FUNDAÇÕES AUTOMÁTICAS (16/09/2026) — ver `blueprintFundacoesAutomaticas.ts`.
+   * Um bloco por pilar do pavimento e a(s) estaca(s) dele, num lote.
+   */
+  const [hipDeFundacoesSalvas, setHipDeFundacoesSalvas] = usePersistedState<HipotesesDeFundacoes>(
+    'blueprint:fundacoesAutomaticas',
+    HIPOTESES_FUNDACOES_PADRAO,
+  );
+  const hipotesesDeFundacoes = useMemo<HipotesesDeFundacoes>(() => {
+    const em = (lista: readonly number[], v: unknown, padrao: number) =>
+      typeof v === 'number' && lista.includes(v) ? v : padrao;
+    const h = hipDeFundacoesSalvas ?? HIPOTESES_FUNDACOES_PADRAO;
+    return {
+      estacasPorBloco: h.estacasPorBloco === 2 ? 2 : 1,
+      diametroDaEstacaMm: em(DIAMETROS_DE_ESTACA, h.diametroDaEstacaMm, HIPOTESES_FUNDACOES_PADRAO.diametroDaEstacaMm),
+      comprimentoDaEstacaMm: em(COMPRIMENTOS_DE_ESTACA, h.comprimentoDaEstacaMm, HIPOTESES_FUNDACOES_PADRAO.comprimentoDaEstacaMm),
+      alturaDoBlocoMm: em(ALTURAS_DE_BLOCO, h.alturaDoBlocoMm, HIPOTESES_FUNDACOES_PADRAO.alturaDoBlocoMm),
+      arrasamentoMm: em(ARRASAMENTOS, h.arrasamentoMm, HIPOTESES_FUNDACOES_PADRAO.arrasamentoMm),
+    };
+  }, [hipDeFundacoesSalvas]);
+  const planoDeFundacoes = useMemo(
+    () => (levelId ? planejarFundacoes(editor.model, levelId, hipotesesDeFundacoes) : null),
+    [editor.model, levelId, hipotesesDeFundacoes],
+  );
+  const fundacoesNoNivel = levelId ? fundacoesExistentesNoNivel(editor.model, levelId).length : 0;
+  const planoDeRelancamentoDeFundacoes = useMemo(
+    () => (levelId && fundacoesNoNivel > 0 ? relancarFundacoes(editor.model, levelId, hipotesesDeFundacoes) : null),
+    [editor.model, levelId, hipotesesDeFundacoes, fundacoesNoNivel],
+  );
+  const [resultadoDeFundacoes, setResultadoDeFundacoes] = useState<{ ok: boolean; texto: string } | null>(null);
+  const lancarFundacoes = () => {
+    if (!planoDeFundacoes || planoDeFundacoes.comandos.length === 0) return;
+    const prova = conferirPlanoDeFundacoes(editor.model, planoDeFundacoes);
+    if (!prova.ok) {
+      setResultadoDeFundacoes({ ok: false, texto: `Nada foi lançado: ${prova.motivo}` });
+      return;
+    }
+    const criados = editor.runBatch(planoDeFundacoes.comandos);
+    if (criados.length > 0) selecionar(criados);
+    setResultadoDeFundacoes({
+      ok: true,
+      texto: `${planoDeFundacoes.blocos.length} bloco(s) e ${planoDeFundacoes.estacas.length} estaca(s) lançado(s) — Ctrl+Z desfaz.`,
+    });
+  };
+  const relancarFundacoesDoNivel = async () => {
+    if (!planoDeRelancamentoDeFundacoes || planoDeRelancamentoDeFundacoes.comandos.length === 0) return;
+    const ok = await confirmar({
+      title: 'Relançar as fundações deste pavimento?',
+      message: `Apaga ${planoDeRelancamentoDeFundacoes.apagados.length} bloco(s)/estaca(s) do pavimento — inclusive os desenhados à mão — e lança ${planoDeRelancamentoDeFundacoes.blocos.length} bloco(s) e ${planoDeRelancamentoDeFundacoes.estacas.length} estaca(s) com as hipóteses atuais (Ø ${hipotesesDeFundacoes.diametroDaEstacaMm / 10} cm × ${hipotesesDeFundacoes.comprimentoDaEstacaMm / 1000} m, bloco h ${hipotesesDeFundacoes.alturaDoBlocoMm / 10} cm). Ctrl+Z desfaz.`,
+      confirmLabel: 'Relançar',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    const prova = conferirPlanoDeFundacoes(editor.model, planoDeRelancamentoDeFundacoes);
+    if (!prova.ok) {
+      setResultadoDeFundacoes({ ok: false, texto: `Nada foi relançado: ${prova.motivo}` });
+      return;
+    }
+    const criados = editor.runBatch(planoDeRelancamentoDeFundacoes.comandos);
+    if (criados.length > 0) selecionar(criados);
+    setResultadoDeFundacoes({
+      ok: true,
+      texto: `${planoDeRelancamentoDeFundacoes.apagados.length} peça(s) apagada(s); ${planoDeRelancamentoDeFundacoes.blocos.length} bloco(s) e ${planoDeRelancamentoDeFundacoes.estacas.length} estaca(s) lançado(s) — Ctrl+Z desfaz.`,
+    });
+  };
+  /**
    * As PEÇAS PREVISTAS que o canvas desenha tracejadas: as da tarefa aberta.
    * Memoizado para o canvas não redesenhar em loop (identidade estável).
    */
@@ -4700,8 +4781,28 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         rotulo: l.rotulo,
       }));
     }
+    if (tarefaAberta === 'fundacoes' && planoDeFundacoes) {
+      return [
+        ...planoDeFundacoes.blocos.map((b) => ({
+          kind: 'BLOCO_COROAMENTO' as const,
+          pontos: [b.at],
+          larguraMm: b.larguraMm,
+          profundidadeMm: b.profundidadeMm,
+          rotacaoDeg: b.rotacaoDeg,
+          rotulo: b.rotulo,
+        })),
+        ...planoDeFundacoes.estacas.map((e) => ({
+          kind: 'ESTACA' as const,
+          pontos: [e.at],
+          larguraMm: e.diametroMm,
+          profundidadeMm: e.diametroMm,
+          rotacaoDeg: 0,
+          circular: true,
+        })),
+      ];
+    }
     return undefined;
-  }, [tarefaAberta, planoDePilares, planoDeVigas, planoDeLajes]);
+  }, [tarefaAberta, planoDePilares, planoDeVigas, planoDeLajes, planoDeFundacoes]);
   /** A pílula sobre o desenho quando a gaveta está recolhida: o que está em prévia e como lançar. */
   const previaRecolhida =
     drawerRecolhido && tarefaAberta === 'pilares' && planoDePilares
@@ -4710,7 +4811,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         ? { n: planoDeVigas.vigas.length, nome: 'viga(s)', lancar: lancarVigas, Icone: RectangleHorizontal }
         : drawerRecolhido && tarefaAberta === 'lajes' && planoDeLajes
           ? { n: planoDeLajes.lajes.length, nome: 'laje(s)', lancar: lancarLajes, Icone: Layers }
-          : null;
+          : drawerRecolhido && tarefaAberta === 'fundacoes' && planoDeFundacoes
+            ? { n: planoDeFundacoes.blocos.length, nome: 'bloco(s) com estaca(s)', lancar: lancarFundacoes, Icone: SquareStack }
+            : null;
   /**
    * RELANÇAR (16/09/2026): mudou a seção ou o vão depois de lançar? O pilar não
    * tem marca de "automático", então relançar é apagar os pilares do pavimento
@@ -5377,6 +5480,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   ativo={tarefaAberta === 'lajes'}
                   onClick={() => alternarTarefa('lajes')}
                   ajuda="Uma laje por ambiente fechado, apoiada no topo das paredes — prévia antes de gravar, Ctrl+Z desfaz"
+                />
+                <BotaoDoRibbon
+                  icone={SquareStack}
+                  rotulo="Fundações automáticas"
+                  contagem={planoDeFundacoes?.blocos.length || undefined}
+                  ativo={tarefaAberta === 'fundacoes'}
+                  onClick={() => alternarTarefa('fundacoes')}
+                  ajuda="Um bloco de coroamento sob cada pilar do pavimento, com uma ou duas estacas — prévia antes de gravar, Ctrl+Z desfaz"
                 />
               </GrupoDoRibbon>
             )}
@@ -7615,6 +7726,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               {tarefaAberta === 'pilares' && <RectangleVertical className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'vigas' && <RectangleHorizontal className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'lajes' && <Layers className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'fundacoes' && <SquareStack className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -7630,6 +7742,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               'Uma viga por parede, de pilar a pilar, no topo da alvenaria do pavimento ativo. Prévia tracejada no desenho; gravar é um passo só, e Ctrl+Z desfaz.'}
             {tarefaAberta === 'lajes' &&
               'Uma laje por ambiente fechado, apoiada no topo das paredes do pavimento ativo. Prévia tracejada no desenho; gravar é um passo só, e Ctrl+Z desfaz.'}
+            {tarefaAberta === 'fundacoes' &&
+              'Um bloco de coroamento sob cada pilar do pavimento ativo, com a(s) estaca(s) dele. Prévia tracejada no desenho; gravar é um passo só, e Ctrl+Z desfaz.'}
             {tarefaAberta === 'tomadas' && (
               <>
                 Por ambiente: classifique o cômodo, veja o que a norma (9.5.2) pede e distribua.{' '}
@@ -7667,7 +7781,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
 
@@ -7833,6 +7947,183 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   >
                     ver
                   </button>
+                </p>
+              )}
+            </div>
+          )}
+
+          {tarefaAberta === 'fundacoes' && planoDeFundacoes && (
+            <div className="space-y-4">
+              <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <p className="font-semibold text-slate-700">Hipóteses do lançamento</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  <li>
+                    <strong>Um bloco por pilar</strong> do pavimento, centrado e girado com ele — <strong>lance os pilares
+                    antes</strong>. Pilar que já tem bloco é respeitado.
+                  </li>
+                  <li>
+                    {hipotesesDeFundacoes.estacasPorBloco === 2 ? 'Duas estacas' : 'Uma estaca'} por bloco, Ø{' '}
+                    {hipotesesDeFundacoes.diametroDaEstacaMm / 10} cm × {hipotesesDeFundacoes.comprimentoDaEstacaMm / 1000} m
+                    {hipotesesDeFundacoes.estacasPorBloco === 2 ? ', a 3Ø uma da outra, ao longo do eixo do pilar' : ', no centro'}.
+                  </li>
+                  <li>
+                    Lado do bloco = o maior entre Ø + 30 cm e lado do pilar + 20 cm, a cada 5 cm; altura{' '}
+                    {hipotesesDeFundacoes.alturaDoBlocoMm / 10} cm; topo {hipotesesDeFundacoes.arrasamentoMm / 100} cm abaixo do piso
+                    (arrasamento). A estaca começa na base do bloco.
+                  </li>
+                  <li>Peça enterrada não sobrepõe parede nem muda ambiente. No canto, o bloco avança além da parede — é o normal.</li>
+                  <li>
+                    <strong>Não dimensiona</strong>: fundação se define com a sondagem (NBR 6122) — capacidade de carga,
+                    comprimento útil e armadura são do responsável técnico.
+                  </li>
+                </ul>
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <label className="flex items-center gap-2">
+                    Estacas
+                    <select
+                      value={hipotesesDeFundacoes.estacasPorBloco}
+                      onChange={(e) => setHipDeFundacoesSalvas((h) => ({ ...h, estacasPorBloco: Number(e.target.value) === 2 ? 2 : 1 }))}
+                      aria-label="Estacas por bloco"
+                      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                    >
+                      {ESTACAS_POR_BLOCO.map((n) => (
+                        <option key={n} value={n}>
+                          {n} por bloco{n === HIPOTESES_FUNDACOES_PADRAO.estacasPorBloco ? ' (sugerido)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    Ø
+                    <select
+                      value={hipotesesDeFundacoes.diametroDaEstacaMm}
+                      onChange={(e) => setHipDeFundacoesSalvas((h) => ({ ...h, diametroDaEstacaMm: Number(e.target.value) }))}
+                      aria-label="Diâmetro da estaca"
+                      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                    >
+                      {DIAMETROS_DE_ESTACA.map((d) => (
+                        <option key={d} value={d}>
+                          {d / 10} cm
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    Comprimento
+                    <select
+                      value={hipotesesDeFundacoes.comprimentoDaEstacaMm}
+                      onChange={(e) => setHipDeFundacoesSalvas((h) => ({ ...h, comprimentoDaEstacaMm: Number(e.target.value) }))}
+                      aria-label="Comprimento da estaca"
+                      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                    >
+                      {COMPRIMENTOS_DE_ESTACA.map((c) => (
+                        <option key={c} value={c}>
+                          {c / 1000} m
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    Bloco h
+                    <select
+                      value={hipotesesDeFundacoes.alturaDoBlocoMm}
+                      onChange={(e) => setHipDeFundacoesSalvas((h) => ({ ...h, alturaDoBlocoMm: Number(e.target.value) }))}
+                      aria-label="Altura do bloco"
+                      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                    >
+                      {ALTURAS_DE_BLOCO.map((a) => (
+                        <option key={a} value={a}>
+                          {a / 10} cm
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    Arrasamento
+                    <select
+                      value={hipotesesDeFundacoes.arrasamentoMm}
+                      onChange={(e) => setHipDeFundacoesSalvas((h) => ({ ...h, arrasamentoMm: Number(e.target.value) }))}
+                      aria-label="Arrasamento do bloco"
+                      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                    >
+                      {ARRASAMENTOS.map((a) => (
+                        <option key={a} value={a}>
+                          {a / 10} cm
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {planoDeFundacoes.blocos.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setDrawerRecolhido(true)}
+                      title="Recolhe a gaveta para ver blocos e estacas propostos, tracejados em azul, sobre o desenho"
+                      className="rounded-[6px] border border-blue-300 bg-white px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
+                    >
+                      Ver prévia no desenho
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {planoDeFundacoes.motivo ? (
+                <p className="text-sm text-slate-500">
+                  {planoDeFundacoes.motivo === 'lance os pilares antes'
+                    ? 'Nenhum pilar neste pavimento — lance os pilares antes: a fundação nasce embaixo deles.'
+                    : planoDeFundacoes.motivo === 'todos os pilares já têm bloco'
+                      ? 'Todos os pilares já têm bloco. Para mudar Ø, comprimento ou bloco, ajuste as hipóteses e use Relançar.'
+                      : `Nada a lançar: ${planoDeFundacoes.motivo}.`}
+                </p>
+              ) : (
+                <table className="w-full table-fixed text-xs" aria-label="Prévia das fundações">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-500">
+                      <th className="w-16 py-1.5 pr-2 font-medium">Pilar</th>
+                      <th className="py-1.5 pr-2 font-medium">Bloco (cm)</th>
+                      <th className="py-1.5 pr-2 font-medium">Estacas</th>
+                      <th className="w-24 py-1.5 text-right font-medium">Topo (m)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {planoDeFundacoes.blocos.map((b) => (
+                      <tr key={b.idPrevisto}>
+                        <td className="py-1.5 pr-2 font-medium text-slate-700">
+                          {b.pilarRotulo ?? '—'}
+                          {b.aviso && <span className="block font-normal text-amber-800">{b.aviso}</span>}
+                        </td>
+                        <td className="py-1.5 pr-2 tabular-nums text-slate-600">
+                          {b.rotulo} · {b.larguraMm / 10} × {b.profundidadeMm / 10} × {b.alturaMm / 10}
+                        </td>
+                        <td className="py-1.5 pr-2 tabular-nums text-slate-600">
+                          {b.estacas.length} × Ø {b.estacas[0].diametroMm / 10} · {(b.estacas[0].comprimentoMm / 1000).toFixed(2).replace('.', ',')} m
+                        </td>
+                        <td className="py-1.5 text-right tabular-nums text-slate-600">
+                          {((b.baseMm + b.alturaMm) / 1000).toFixed(2).replace('.', ',')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              {planoDeFundacoes.pilaresComBloco > 0 && (
+                <p className="text-xs text-slate-500">{planoDeFundacoes.pilaresComBloco} pilar(es) já com bloco — mantidos.</p>
+              )}
+              {planoDeFundacoes.avisos.length > 0 && (
+                <ul className="list-disc space-y-0.5 pl-4 text-xs text-amber-800">
+                  {planoDeFundacoes.avisos.map((a) => (
+                    <li key={a}>{a}</li>
+                  ))}
+                </ul>
+              )}
+              {resultadoDeFundacoes && (
+                <p
+                  role="status"
+                  className={`rounded-md border px-3 py-2 text-xs ${
+                    resultadoDeFundacoes.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-700'
+                  }`}
+                >
+                  {resultadoDeFundacoes.texto}
                 </p>
               )}
             </div>
@@ -8583,6 +8874,35 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               </button>
             </>
           )}
+          {tarefaAberta === 'fundacoes' && planoDeFundacoes && (
+            <>
+              <span className="mr-auto whitespace-nowrap text-xs text-slate-500">
+                {planoDeFundacoes.blocos.length === 0
+                  ? 'Nada a lançar.'
+                  : `${planoDeFundacoes.blocos.length} bloco(s) · ${planoDeFundacoes.estacas.length} estaca(s).`}
+              </span>
+              {planoDeRelancamentoDeFundacoes && (
+                <button
+                  type="button"
+                  onClick={() => void relancarFundacoesDoNivel()}
+                  disabled={planoDeRelancamentoDeFundacoes.comandos.length === 0}
+                  title="Apaga blocos e estacas deste pavimento e lança de novo com as hipóteses atuais — confirma antes; Ctrl+Z desfaz"
+                  className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-amber-300 bg-white px-3.5 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Relançar {planoDeRelancamentoDeFundacoes.blocos.length}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={lancarFundacoes}
+                disabled={planoDeFundacoes.blocos.length === 0}
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <SquareStack className="h-4 w-4" />
+                Lançar {planoDeFundacoes.blocos.length} bloco(s) e {planoDeFundacoes.estacas.length} estaca(s)
+              </button>
+            </>
+          )}
           {tarefaAberta === 'vigas' && planoDeVigas && (
             <>
               <span className="mr-auto whitespace-nowrap text-xs text-slate-500">
@@ -8688,7 +9008,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               </button>
             </>
           )}
-          {tarefaAberta !== 'tomadas' && tarefaAberta !== 'eletrodutos' && tarefaAberta !== 'circuitos' && tarefaAberta !== 'pilares' && tarefaAberta !== 'vigas' && tarefaAberta !== 'lajes' && rotuloDaSelecao && (
+          {tarefaAberta !== 'tomadas' && tarefaAberta !== 'eletrodutos' && tarefaAberta !== 'circuitos' && tarefaAberta !== 'pilares' && tarefaAberta !== 'vigas' && tarefaAberta !== 'lajes' && tarefaAberta !== 'fundacoes' && rotuloDaSelecao && (
             <span className="mr-auto truncate text-xs text-slate-500">
               Selecionado: {rotuloDaSelecao}
             </span>

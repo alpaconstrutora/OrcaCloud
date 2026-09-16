@@ -4051,15 +4051,24 @@ export default function BlueprintCanvas({
       ctx.lineWidth = 1.5;
       ctx.setLineDash([6, 4]);
       for (const p of pecasPrevistas) {
-        const anel = pegadaDaPecaPrevista(p).map(paraTela);
-        if (anel.length < 3) continue;
         ctx.fillStyle = p.kind === 'LAJE' ? 'rgba(37, 99, 235, 0.06)' : 'rgba(37, 99, 235, 0.10)';
-        ctx.beginPath();
-        ctx.moveTo(anel[0].x, anel[0].y);
-        for (const k of anel.slice(1)) ctx.lineTo(k.x, k.y);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
+        if (p.circular) {
+          // Estaca: círculo de verdade, como o canvas desenha a peça circular.
+          const c = paraTela(p.pontos[0]);
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, Math.max(2, emTela(p.larguraMm / 2)), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        } else {
+          const anel = pegadaDaPecaPrevista(p).map(paraTela);
+          if (anel.length < 3) continue;
+          ctx.beginPath();
+          ctx.moveTo(anel[0].x, anel[0].y);
+          for (const k of anel.slice(1)) ctx.lineTo(k.x, k.y);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
         const centroDoRotulo =
           p.kind === 'LAJE'
             ? interiorPoint(p.pontos)

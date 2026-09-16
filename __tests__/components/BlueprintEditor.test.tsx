@@ -1313,6 +1313,59 @@ describe('BlueprintEditor · ribbon', () => {
     expect(botao(/^lajes automáticas/i)).toHaveTextContent('2');
   });
 
+  // ── Fundações automáticas (16/09/2026) ───────────────────────────────────
+  it('"Fundações automáticas" sem pilar: pede os pilares, hipóteses, "Lançar 0" apagado', async () => {
+    await montar();
+    await abrirAba(/^arquitetura$/i);
+    await userEvent.setup().click(botao(/^fundações automáticas/i));
+    const drawer = await screen.findByRole('dialog');
+    expect(drawer).toHaveTextContent(/hipóteses do lançamento/i);
+    expect(drawer).toHaveTextContent(/lance os pilares antes/i);
+    expect(drawer).toHaveTextContent(/não dimensiona/i);
+    expect(within(drawer).getByRole('combobox', { name: /estacas por bloco/i })).toHaveValue('1');
+    expect(within(drawer).getByRole('combobox', { name: /diâmetro da estaca/i })).toHaveValue('300');
+    expect(within(drawer).getByRole('button', { name: /^lançar 0 bloco/i })).toBeDisabled();
+    expect(botao(/^fundações automáticas/i)).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('fundações: depois dos pilares, um bloco e uma estaca por pilar; "Lançar" grava num passo só; 2 estacas muda a prévia; Desfazer volta', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) =>
+      ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    const m = k.applyBatch(nivel.model, [w(0, 0, 4000, 0), w(4000, 0, 4000, 3000), w(4000, 3000, 0, 3000), w(0, 3000, 0, 0)]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    await abrirAba(/^arquitetura$/i);
+    // Sem pilar, o botão não tem contagem.
+    expect(botao(/^fundações automáticas/i)).not.toHaveTextContent('4');
+    await userEvent.setup().click(botao(/^pilares automáticos/i));
+    let drawer = await screen.findByRole('dialog');
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^lançar 4 pilar/i }));
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^fechar$/i }));
+    expect(botao(/^fundações automáticas/i)).toHaveTextContent('4');
+
+    await userEvent.setup().click(botao(/^fundações automáticas/i));
+    drawer = await screen.findByRole('dialog');
+    const previa = within(drawer).getByRole('table', { name: /prévia das fundações/i });
+    const linhas = within(previa).getAllByRole('row').slice(1);
+    expect(linhas).toHaveLength(4);
+    expect(linhas[0]).toHaveTextContent(/P1.*B1 · 60 × 60 × 60.*1 × Ø 30 · 8,00 m.*-0,50/);
+    expect(drawer).toHaveTextContent(/4 bloco\(s\) · 4 estaca\(s\)/i);
+    await userEvent.selectOptions(within(drawer).getByRole('combobox', { name: /estacas por bloco/i }), '2');
+    expect(JSON.parse(localStorage.getItem('blueprint:fundacoesAutomaticas')!).estacasPorBloco).toBe(2);
+    expect(within(previa).getAllByRole('row')[1]).toHaveTextContent(/150 × 60 × 60.*2 × Ø 30/);
+    expect(drawer).toHaveTextContent(/4 bloco\(s\) · 8 estaca\(s\)/i);
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^lançar 4 bloco\(s\) e 8 estaca/i }));
+    expect(drawer).toHaveTextContent(/4 bloco\(s\) e 8 estaca\(s\) lançado\(s\)/i);
+    expect(drawer).toHaveTextContent(/todos os pilares já têm bloco/i);
+    expect(within(drawer).getByRole('button', { name: /^relançar 4/i })).toBeEnabled();
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^fechar$/i }));
+    await userEvent.setup().click(botao(/^desfazer/i));
+    expect(botao(/^fundações automáticas/i)).toHaveTextContent('4');
+  });
+
   it('vão máximo e seção escolhidos persistem em localStorage e mudam a prévia', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });

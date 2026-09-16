@@ -239,6 +239,8 @@ export interface PecaPrevista {
   profundidadeMm: number;
   rotacaoDeg: number;
   rotulo?: string;
+  /** Estaca: `larguraMm` é o diâmetro; a pegada polígono é o quadrado envolvente (ver `contornoEmPlanta`). */
+  circular?: boolean;
 }
 
 /** O contorno em planta de uma peça prevista — o mesmo cálculo da peça de verdade (`contornoEmPlanta`). */
@@ -253,7 +255,7 @@ export function pegadaDaPecaPrevista(p: PecaPrevista): Point[] {
     profundidadeMm: p.profundidadeMm,
     alturaMm: 1,
     baseMm: 0,
-    circular: false,
+    circular: p.circular ?? false,
     rotacaoDeg: p.rotacaoDeg,
   };
   return contornoEmPlanta(s);

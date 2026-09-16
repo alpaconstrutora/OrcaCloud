@@ -1904,10 +1904,15 @@ describe('BlueprintEditor · ocultar componentes na planta baixa', () => {
     loadBranchModel.mockResolvedValue(await comPilar());
     await montar();
     const user = userEvent.setup();
-    const secao = screen.getAllByRole('button', { name: /^Componentes/ }).find((b) => b.hasAttribute('aria-expanded'))!;
+    // Pelo `aria-controls` da seção, e não pelo nome: o menu "Componentes" do
+    // ribbon também é um botão com `aria-expanded`, e qual dos dois vem primeiro
+    // depende da ferramenta ativa — foi o que fez este teste passar aqui e
+    // falhar no CI.
+    const secao = document.querySelector<HTMLButtonElement>('button[aria-controls="secao-componentes-corpo"]')!;
+    expect(secao).toBeTruthy();
     if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
     // Seleciona o pilar pela lista.
-    await user.click(screen.getByRole('button', { name: /^P1 · Pilar/ }));
+    await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
     expect(screen.getByRole('button', { name: /^P1 · Pilar/ })).toHaveAttribute('aria-pressed', 'true');
     // O olho, na planta baixa.
     await user.click(screen.getByRole('button', { name: 'Ocultar P1 · Pilar no desenho' }));

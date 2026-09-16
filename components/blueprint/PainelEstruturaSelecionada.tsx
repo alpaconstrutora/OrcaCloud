@@ -8,6 +8,7 @@ import {
   type StructuralKind,
 } from '../../utils/blueprintKernel';
 import { CampoMedida } from './PainelParedeSelecionada';
+import type { ArmaduraDaPeca } from '../../utils/blueprintArmadura';
 import ControleDeSobreposicao from './ControleDeSobreposicao';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
 import CustoDoElemento from './CustoDoElemento';
@@ -90,6 +91,12 @@ interface Props {
    * devolve o grupo — onde mora a quantidade de estacas.
    */
   grupo?: { rotuloDoBloco: string; estacas: number; onEditarGrupo: () => void };
+  /**
+   * O aço esquemático desta peça (16/09/2026): kg pelos mínimos da NBR 6118 ou
+   * pelo piso da taxa do estudo, com o esquema em uma linha. Ausente = não
+   * mostra (o painel da ferramenta, antes de haver peça, não tem o que dizer).
+   */
+  armadura?: ArmaduraDaPeca;
   /** Volume que esta peça divide com outro componente, em m³. `0` = nenhum. */
   sobreposicaoM3?: number;
   onCedeSobreposicao?: (cede: boolean) => void;
@@ -125,6 +132,7 @@ export default function PainelEstruturaSelecionada({
   onTipo,
   onExcluir,
   grupo,
+  armadura,
   sobreposicaoM3 = 0,
   onCedeSobreposicao,
   paredesParaCortar = 0,
@@ -161,6 +169,19 @@ export default function PainelEstruturaSelecionada({
               : (m.volumeMm3 / 1_000_000_000).toFixed(3).replace('.', ',')}{' '}
             m³ de concreto · {(m.areaFormaMm2 / 1_000_000).toFixed(2).replace('.', ',')} m² de fôrma
           </p>
+          {armadura && (
+            <p
+              className="mt-0.5 text-[11px] text-slate-500"
+              title={
+                armadura.origem === 'TAXA'
+                  ? `Piso da taxa de referência (${armadura.taxaEfetivaKgM3} kg/m³ × volume): o esquema mínimo daria ${armadura.kgEsquema.toFixed(1).replace('.', ',')} kg. Pré-quantitativo, não detalhamento.`
+                  : `Esquema pelos mínimos da NBR 6118 com perda; ${armadura.taxaEfetivaKgM3} kg/m³. Pré-quantitativo, não detalhamento.`
+              }
+            >
+              ≈ {armadura.kg.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg de aço ·{' '}
+              {armadura.descricao} ({armadura.origem === 'TAXA' ? 'taxa de referência' : 'mínimos NBR 6118'})
+            </p>
+          )}
           <IdentificadorDoElemento uid={estrutura.uid} familia="structural" />
           <CustoDoElemento custo={custo} desatualizado={!!custoDesatualizado} />
         </div>

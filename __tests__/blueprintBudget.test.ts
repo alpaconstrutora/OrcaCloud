@@ -33,6 +33,7 @@ import {
 } from '../utils/blueprintBudget';
 import type { BudgetEntry, SinapiItem } from '../types/budget';
 import { SinapiType } from '../types/budget';
+import { HIPOTESES_ARMADURA_PADRAO, armaduraDoModelo } from '../utils/blueprintArmadura';
 
 const H = 2800;
 const T = 150;
@@ -173,7 +174,7 @@ describe('de-para · a trava de unidade', () => {
     // Trava de coerência do próprio catálogo: medida sem dimensão passaria pela
     // verificação de unidade sem ser verificada.
     for (const m of MEDIDAS) {
-      expect(['M2', 'M', 'M3', 'UN'], `medida ${m.id}`).toContain(m.dimensao);
+      expect(['M2', 'M', 'M3', 'UN', 'KG'], `medida ${m.id}`).toContain(m.dimensao);
     }
   });
 });
@@ -598,7 +599,7 @@ describe('de-para · estrutura', () => {
     return computeQuantities(built);
   }
 
-  it('as onze medidas de estrutura estão no catálogo, com a dimensão certa', () => {
+  it('as dezesseis medidas de estrutura estão no catálogo, com a dimensão certa', () => {
     const porId = new Map(MEDIDAS.map((m) => [m.id, m]));
     const esperado: [string, string][] = [
       ['VOLUME_CONCRETO_PILAR', 'M3'],
@@ -612,12 +613,57 @@ describe('de-para · estrutura', () => {
       ['COMPRIMENTO_ESTACA', 'M'],
       ['CONTAGEM_PILARES', 'UN'],
       ['CONTAGEM_ESTACAS', 'UN'],
+      ['PESO_ACO_PILAR', 'KG'],
+      ['PESO_ACO_VIGA', 'KG'],
+      ['PESO_ACO_LAJE', 'KG'],
+      ['PESO_ACO_FUNDACAO', 'KG'],
+      ['PESO_ACO_TOTAL', 'KG'],
     ];
     for (const [id, dimensao] of esperado) {
       expect(porId.get(id), `medida ${id} não está no catálogo`).toBeDefined();
       expect(porId.get(id)!.dimensao, `dimensão de ${id}`).toBe(dimensao);
       expect(porId.get(id)!.escopo).toBe('ESTRUTURA');
     }
+  });
+
+  // ── Aço — armadura esquemática (16/09/2026) ─────────────────────────────
+  it('PESO_ACO_PILAR num item por kg gera o kg da armadura do P1; TOTAL soma pilar + laje; POR_ELEMENTO abre uma linha por uid', () => {
+    const q = quantEstrutural();
+    const modelo = (() => {
+      const r = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: H });
+      const levelId = r.model.levels[0].id;
+      return applyBatch(r.model, [
+        { type: 'AddStructural', levelId, kind: 'PILAR', pontos: [point(1000, 1000)], larguraMm: 200, profundidadeMm: 400, alturaMm: 2800, rotulo: 'P1' },
+        { type: 'AddStructural', levelId, kind: 'LAJE', pontos: [point(0, 0), point(4000, 0), point(4000, 3000), point(0, 3000)], alturaMm: 120, baseMm: 2800 },
+      ] as Command[]).model;
+    })();
+    const armadura = armaduraDoModelo(modelo, q, HIPOTESES_ARMADURA_PADRAO);
+    const pilar = armadura.pecas.find((p) => p.kind === 'PILAR')!;
+    expect(pilar.kg).toBeGreaterThan(0);
+
+    const r = gerarLancamentos(q, resolvido(mapa({ medida: 'PESO_ACO_PILAR' }), item('92775', 'KG')), CTX, { armadura });
+    expect(r.divergencias).toHaveLength(0);
+    expect(r.entries).toHaveLength(1);
+    expect(r.entries[0].quantity).toBeCloseTo(pilar.kg, 2);
+    expect(r.entries[0].calculationMemory?.formula).toMatch(/esquema mínimo NBR 6118|taxa de referência/);
+
+    const total = gerarLancamentos(q, resolvido(mapa({ medida: 'PESO_ACO_TOTAL' }), item('92775', 'kg')), CTX, { armadura });
+    expect(total.entries[0].quantity).toBeCloseTo(armadura.totais.totalKg, 2);
+
+    const porPeca = gerarLancamentos(q, resolvido(mapa({ medida: 'PESO_ACO_TOTAL', agrupamento: 'POR_ELEMENTO' }), item('92775', 'KG')), CTX, { armadura });
+    expect(porPeca.entries).toHaveLength(2);
+    expect(porPeca.entries.map((e) => e.id)).toEqual(armadura.pecas.map((p) => `bp:${CTX.studyId}:m1:${p.uid}`));
+  });
+
+  it('A TRAVA vale para o aço: kg apontado para item em m³ é recusado; sem a armadura calculada, a medida não gera nada', () => {
+    const q = quantEstrutural();
+    const r = gerarLancamentos(q, resolvido(mapa({ medida: 'PESO_ACO_PILAR' }), item('92873', 'M3')), CTX, {});
+    expect(r.entries).toHaveLength(0);
+    expect(r.divergencias).toHaveLength(1);
+    expect(r.divergencias[0].motivo).toContain('produz KG');
+    expect(r.divergencias[0].motivo).toContain('cotado em "M3"');
+    const semArmadura = gerarLancamentos(q, resolvido(mapa({ medida: 'PESO_ACO_PILAR' }), item('92775', 'KG')), CTX);
+    expect(semArmadura.entries).toHaveLength(0);
   });
 
   it('gera o volume de concreto do pilar num item por m³', () => {

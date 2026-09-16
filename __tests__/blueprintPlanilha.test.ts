@@ -21,6 +21,7 @@ import {
   type Command,
 } from '../utils/blueprintKernel';
 import { COBERTURA_PLANILHA, abasDoQuantitativo } from '../utils/blueprintPlanilha';
+import { HIPOTESES_ARMADURA_PADRAO, armaduraDoModelo } from '../utils/blueprintArmadura';
 
 const T = 150;
 const H = 2800;
@@ -152,12 +153,36 @@ describe('planilha · aba vazia não é neutra', () => {
 });
 
 describe('planilha · a cobertura diz o que falta', () => {
-  it('declara que NÃO há armadura nem preço', () => {
+  it('declara que a armadura é ESQUEMÁTICA (não detalhamento) e que NÃO há preço', () => {
     const texto = COBERTURA_PLANILHA.join(' ');
-    // Os dois que alguém assume que existem: aço, porque a aba se chama
-    // "Estrutura"; e preço, porque a planilha parece um orçamento.
-    expect(texto).toMatch(/N[ÃA]O CONT[ÉE]M ARMADURA/i);
+    // Aço entrou em 16/09/2026 como pré-quantitativo: a cobertura tem de dizer
+    // o que ele é e o que não é; preço continua fora.
+    expect(texto).toMatch(/ARMADURA ESQUEM[ÁA]TICA/i);
+    expect(texto).toMatch(/n[ãa]o detalhamento/i);
     expect(texto).toMatch(/N[ÃA]O CONT[ÉE]M pre[çc]o/i);
+  });
+
+  it('aba "Armadura" (16/09/2026): uma linha por peça, kg numérico, origem e esquema; sem a armadura não há aba nem linhas de aço', () => {
+    const m = soEstrutura();
+    const quant = computeQuantities(m);
+    const armadura = armaduraDoModelo(m, quant, HIPOTESES_ARMADURA_PADRAO);
+    const abas = abasDoQuantitativo(quant, CTX, armadura);
+    const arm = abas.find((a) => a.nome === 'Armadura')!;
+    expect(arm).toBeTruthy();
+    expect(arm.linhas[0]).toContain('Aço (kg)');
+    const linha = arm.linhas[1];
+    expect(linha[0]).toBe('P1');
+    expect(linha[1]).toBe('Pilar');
+    expect(typeof linha[3]).toBe('number');
+    expect(linha[3]).toBeCloseTo(armadura.pecas[0].kg, 1);
+    expect(['esquema mínimo', 'taxa de referência']).toContain(linha[7]);
+    expect(String(linha[8])).toMatch(/Ø 12,5/);
+    const totais = abas.find((a) => a.nome === 'Totais')!;
+    expect(totais.linhas.some((l) => l[0] === 'Aço — pilares' && typeof l[1] === 'number')).toBe(true);
+    // Sem armadura: comportamento de antes.
+    const sem = abasDoQuantitativo(quant, CTX);
+    expect(sem.find((a) => a.nome === 'Armadura')).toBeUndefined();
+    expect(sem.find((a) => a.nome === 'Totais')!.linhas.some((l) => l[0] === 'Aço — pilares')).toBe(false);
   });
 
   it('a capa carrega versão, hash e política — é o que liga a planilha ao desenho', () => {

@@ -35,9 +35,13 @@ import {
   nomeDoTipoDeAbertura as nomeDoTipo,
   nomeDoTipoEstrutural,
 } from './blueprintKernel';
+import { familiaDaPeca, type ArmaduraQuantificada } from './blueprintArmadura';
 
-/** Dimensão física de uma medida. É o que a unidade do item tem que respeitar. */
-export type Dimensao = 'M2' | 'M' | 'M3' | 'UN';
+/**
+ * Dimensão física de uma medida. É o que a unidade do item tem que respeitar.
+ * `KG` entrou com a armadura esquemática (16/09/2026): o aço se compra por peso.
+ */
+export type Dimensao = 'M2' | 'M' | 'M3' | 'UN' | 'KG';
 
 /**
  * `EDIFICACAO` é o escopo do TODO — um valor por nível, não por elemento.
@@ -248,6 +252,45 @@ export const MEDIDAS: DefinicaoMedida[] = [
     dimensao: 'UN',
     descricao: 'Uma unidade por estaca. Serve para mobilização e arrasamento, cotados por peça.',
   },
+  // ── Aço — armadura esquemática (16/09/2026) ──────────────────────────────
+  // Pré-quantitativo: mínimos da NBR 6118 por peça + piso pela taxa de
+  // referência do estudo (hipóteses em `blueprint_study_armadura`). Não é
+  // detalhamento; a descrição de cada medida diz isso a quem mapeia.
+  {
+    id: 'PESO_ACO_PILAR',
+    rotulo: 'Peso de aço — pilares',
+    escopo: 'ESTRUTURA',
+    dimensao: 'KG',
+    descricao: 'kg de aço dos pilares pela armadura esquemática (mínimos NBR 6118 + taxa de referência do estudo). Pré-quantitativo, não detalhamento.',
+  },
+  {
+    id: 'PESO_ACO_VIGA',
+    rotulo: 'Peso de aço — vigas',
+    escopo: 'ESTRUTURA',
+    dimensao: 'KG',
+    descricao: 'kg de aço das vigas (as de fundação contam em fundação) pela armadura esquemática.',
+  },
+  {
+    id: 'PESO_ACO_LAJE',
+    rotulo: 'Peso de aço — lajes',
+    escopo: 'ESTRUTURA',
+    dimensao: 'KG',
+    descricao: 'kg de aço das lajes pela armadura esquemática (malha inferior nas duas direções + taxa de referência).',
+  },
+  {
+    id: 'PESO_ACO_FUNDACAO',
+    rotulo: 'Peso de aço — fundação',
+    escopo: 'ESTRUTURA',
+    dimensao: 'KG',
+    descricao: 'kg de aço de estacas, blocos de coroamento e vigas de fundação pela armadura esquemática.',
+  },
+  {
+    id: 'PESO_ACO_TOTAL',
+    rotulo: 'Peso de aço — toda a estrutura',
+    escopo: 'ESTRUTURA',
+    dimensao: 'KG',
+    descricao: 'kg de aço de todas as peças estruturais da planta. Não combine com as medidas por família — contaria duas vezes.',
+  },
 
   // ── Telhado ──────────────────────────────────────────────────────────────
   //
@@ -360,6 +403,7 @@ export function dimensaoDaUnidade(unidade: string | undefined | null): Dimensao 
   if (['M3', 'M³', 'MT3', 'METROCUBICO'].includes(u)) return 'M3';
   if (['M', 'ML', 'MT', 'METRO', 'METROLINEAR'].includes(u)) return 'M';
   if (['UN', 'UND', 'UNID', 'UNIDADE', 'PC', 'PÇ', 'CJ', 'CONJ'].includes(u)) return 'UN';
+  if (['KG', 'KGF', 'QUILO', 'QUILOGRAMA'].includes(u)) return 'KG';
   return null;
 }
 
@@ -385,8 +429,17 @@ interface ValorMedido {
   variaveis: Record<string, number | string>;
 }
 
+/**
+ * O que acompanha o quantitativo sem estar nele: a armadura esquemática, que
+ * depende das hipóteses do ESTUDO (e por isso não entra em `computeQuantities`,
+ * cujo cache é por snapshot e versão da política).
+ */
+export interface ExtrasDaGeracao {
+  armadura?: ArmaduraQuantificada;
+}
+
 /** Extrai da leitura do quantitativo os valores de uma medida, elemento a elemento. */
-function medir(quant: Quantitativos, medidaId: string, filtro: string[]): ValorMedido[] {
+function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras: ExtrasDaGeracao = {}): ValorMedido[] {
   const combina = (nome: string | undefined) => {
     if (filtro.length === 0) return true;
     const n = (nome ?? '').toLowerCase();
@@ -517,6 +570,35 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[]): ValorM
         }));
     }
 
+    case 'PESO_ACO_PILAR':
+    case 'PESO_ACO_VIGA':
+    case 'PESO_ACO_LAJE':
+    case 'PESO_ACO_FUNDACAO':
+    case 'PESO_ACO_TOTAL': {
+      // Sem a armadura calculada não há o que medir — quem gera sem ela (uma
+      // chamada antiga) recebe lista vazia, e o de-para fica sem lançamento em
+      // vez de ganhar um zero que pareceria medido.
+      const pecas = extras.armadura?.pecas ?? [];
+      const familia = medidaId.replace('PESO_ACO_', '');
+      return pecas
+        .filter((p) => familia === 'TOTAL' || familiaDaPeca(p.kind) === familia)
+        .map((p) => ({
+          ref: p.uid,
+          rotulo: p.rotulo ? `${p.rotulo} · ${nomeDoTipoEstrutural(p.kind)}` : nomeDoTipoEstrutural(p.kind),
+          valor: p.kg,
+          formula: p.origem === 'TAXA' ? 'taxa de referência × volume de concreto' : `esquema mínimo NBR 6118 (${p.descricao}) × (1 + perda)`,
+          variaveis: {
+            tipo: nomeDoTipoEstrutural(p.kind),
+            rotulo: p.rotulo || p.structuralId,
+            volumeConcretoM3: p.volumeConcretoM3,
+            kg: p.kg,
+            taxaKgM3: p.taxaEfetivaKgM3,
+            descricao: p.descricao,
+            origem: p.origem,
+          },
+        }));
+    }
+
     case 'DEGRAUS':
     case 'AREA_ESCADA': {
       return (quant.escadas ?? []).map((e, i) => ({
@@ -591,6 +673,7 @@ export function gerarLancamentos(
   quant: Quantitativos,
   resolvidos: MapeamentoResolvido[],
   ctx: ContextoGeracao,
+  extras: ExtrasDaGeracao = {},
 ): ResultadoGeracao {
   const entries: BudgetEntry[] = [];
   const divergencias: Divergencia[] = [];
@@ -639,7 +722,7 @@ export function gerarLancamentos(
       continue;
     }
 
-    const medidos = medir(quant, m.medida, m.filtro_ambiente ?? []);
+    const medidos = medir(quant, m.medida, m.filtro_ambiente ?? [], extras);
     if (medidos.length === 0) continue;
 
     const base = {

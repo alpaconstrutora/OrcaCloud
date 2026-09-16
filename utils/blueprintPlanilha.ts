@@ -27,6 +27,7 @@
 
 import type { Quantitativos } from './blueprintKernel';
 import { nomeDoTipoDeAbertura, nomeDoTipoEstrutural } from './blueprintKernel';
+import type { ArmaduraQuantificada } from './blueprintArmadura';
 
 export type Celula = string | number | null;
 export type Aba = { nome: string; linhas: Celula[][] };
@@ -43,7 +44,7 @@ export const COBERTURA_PLANILHA = [
   'QUADRO DE ESQUADRIAS: uma linha por tipo (kind, medidas, nome de projeto e item), com quantidade e área total. Portas sem nome aparecem agrupadas por medida. Vão livre fica fora — não há caixilho.',
   'Área de telhado é a da SUPERFÍCIE INCLINADA (área projetada × √(1 + inclinação²)) — a 30% são 4,4% a mais que a planta; a 100%, 41%. É a área real que compra telha.',
   'Área de piso é o contorno RECUADO em meia espessura de parede — não é a área de eixo, e a diferença chega a 9%.',
-  'NÃO CONTÉM ARMADURA. A estrutura aqui é a forma do concreto; nenhuma barra de aço, estribo ou cobrimento.',
+  'ARMADURA ESQUEMÁTICA (aba "Armadura", quando há estrutura): kg de aço por peça pelos MÍNIMOS da NBR 6118 (barras, estribos ou malha) com um piso por taxa de referência (kg/m³) — hipóteses do estudo. É pré-quantitativo, não detalhamento: sem dobras, sem lista de barras, sem esforços. A coluna "Origem" diz se valeu o esquema ou a taxa.',
   'NÃO CONTÉM preço. Para virar orçamento, use o de-para da aba Orçamento do editor, que trava a unidade do item.',
   'Fôrma de peça estrutural segue a política do módulo: pilar pelo perímetro da seção, viga em duas laterais mais o fundo, laje só o fundo. A borda da laje não entra.',
   'Estudo preliminar assistido; requer validação de profissional habilitado.',
@@ -77,6 +78,8 @@ export interface ContextoPlanilha {
 export function abasDoQuantitativo(
   quant: Quantitativos,
   ctx: ContextoPlanilha,
+  /** A armadura esquemática, calculada com as hipóteses do estudo. Ausente = sem aba e sem linhas de aço. */
+  armadura?: ArmaduraQuantificada | null,
 ): Aba[] {
   const abas: Aba[] = [];
   const t = quant.totais;
@@ -134,6 +137,16 @@ export function abasDoQuantitativo(
       ['Estacas — metro perfurado', n2(t.comprimentoEstacasM), 'm'],
       ['Pilares', t.pilares, 'un'],
       ['Blocos de coroamento', t.blocosCoroamento, 'un'],
+      ...(armadura
+        ? ([
+            ['Aço — pilares', n2(armadura.totais.pilarKg), 'kg'],
+            ['Aço — vigas', n2(armadura.totais.vigaKg), 'kg'],
+            ['Aço — lajes', n2(armadura.totais.lajeKg), 'kg'],
+            ['Aço — fundação', n2(armadura.totais.fundacaoKg), 'kg'],
+            ['Aço — total (CA-50)', n2(armadura.totais.ca50Kg), 'kg'],
+            ['Aço — total (CA-60)', n2(armadura.totais.ca60Kg), 'kg'],
+          ] as Celula[][])
+        : []),
     );
   }
   // As DUAS áreas, sempre: a real é a que compra, a projetada é a que se
@@ -258,6 +271,27 @@ export function abasDoQuantitativo(
           n3(e.volumeConcretoM3),
           n2(e.areaFormaM2),
           e.formula,
+        ]),
+      ],
+    });
+  }
+
+  // ── Armadura (esquemática) ──────────────────────────────────────────────
+  if (armadura && armadura.pecas.length > 0) {
+    abas.push({
+      nome: 'Armadura',
+      linhas: [
+        ['Rótulo', 'Tipo', 'Concreto (m³)', 'Aço (kg)', 'Taxa (kg/m³)', 'CA-50 (kg)', 'CA-60 (kg)', 'Origem', 'Esquema (mínimos NBR 6118)'],
+        ...armadura.pecas.map((p) => [
+          p.rotulo || p.structuralId,
+          nomeDoTipoEstrutural(p.kind),
+          n3(p.volumeConcretoM3),
+          n2(p.kg),
+          n2(p.taxaEfetivaKgM3),
+          n2(p.kgCa50),
+          n2(p.kgCa60),
+          p.origem === 'TAXA' ? 'taxa de referência' : 'esquema mínimo',
+          p.descricao,
         ]),
       ],
     });

@@ -2070,3 +2070,67 @@ describe('BlueprintEditor · Escape limpa a seleção no 3D', () => {
     expect(screen.getByRole('button', { name: /^P1 · Pilar/ })).toHaveAttribute('aria-pressed', 'false');
   });
 });
+
+/**
+ * ARMADURA ESQUEMÁTICA (16/09/2026): *"implementar armadura em vigas, lajes,
+ * pilares, blocos e estacas"*. A gaveta "Armadura" (aba Analisar) tem as
+ * hipóteses e o kg por família e por peça; mudar fck/bitola muda o kg; o
+ * painel da peça e os Quantitativos mostram o aço.
+ */
+describe('BlueprintEditor · armadura esquemática', () => {
+  async function comEstrutura() {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    return k.applyBatch(nivel.model, [
+      { type: 'AddWall', levelId: t, a: k.point(0, 0), b: k.point(6000, 0), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(3000, 1500)], larguraMm: 600, profundidadeMm: 600, alturaMm: 2800, rotulo: 'P1' },
+      { type: 'AddStructural', levelId: t, kind: 'VIGA', pontos: [k.point(0, 1500), k.point(6000, 1500)], larguraMm: 150, alturaMm: 400, baseMm: 2400, rotulo: 'V1' },
+    ]).model;
+  }
+
+  it('a gaveta Armadura lista as hipóteses e o aço por família e por peça; trocar a taxa do pilar muda o kg; Quantitativos e painel da peça mostram aço', async () => {
+    loadBranchModel.mockResolvedValue(await comEstrutura());
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^analisar$/i);
+    await user.click(botao(/^armadura/i));
+    const drawer = await screen.findByRole('dialog');
+    expect(drawer).toHaveTextContent(/Hipóteses da armadura/);
+    expect(drawer).toHaveTextContent(/Não dimensiona nem detalha/);
+    const porFamilia = within(drawer).getByRole('table', { name: /aço por família/i });
+    expect(porFamilia).toHaveTextContent(/Pilares/);
+    expect(porFamilia).toHaveTextContent(/Vigas/);
+    const porPeca = within(drawer).getByRole('table', { name: /aço por peça/i });
+    const linhaP1 = within(porPeca).getAllByRole('row').find((r) => /P1/.test(r.textContent ?? ''))!;
+    // Pilar 60 × 60: o piso da taxa (100 kg/m³ × 1,008 m³ ≈ 100,8 kg) vence o mínimo.
+    expect(linhaP1).toHaveTextContent(/taxa de referência/);
+    expect(linhaP1).toHaveTextContent(/100,8/);
+    // Taxa do pilar → 0: passa a valer o esquema mínimo (12 Ø 12,5 + estribos).
+    const taxaPilar = within(drawer).getByRole('spinbutton', { name: /taxa de referência — pilar/i });
+    await user.clear(taxaPilar);
+    await user.type(taxaPilar, '0');
+    const linhaP1b = within(within(drawer).getByRole('table', { name: /aço por peça/i })).getAllByRole('row').find((r) => /P1/.test(r.textContent ?? ''))!;
+    expect(linhaP1b).toHaveTextContent(/esquema mínimo/);
+    expect(linhaP1b).toHaveTextContent(/12 Ø 12,5/);
+    // fck 40 sobe ρmin da viga: mais barras que com 25.
+    const linhaV1 = () => within(within(drawer).getByRole('table', { name: /aço por peça/i })).getAllByRole('row').find((r) => /V1/.test(r.textContent ?? ''))!;
+    expect(linhaV1()).toHaveTextContent(/2 Ø 10,0 inf\./);
+    await user.selectOptions(within(drawer).getByRole('combobox', { name: /fck do concreto/i }), '40');
+    expect(linhaV1()).toHaveTextContent(/2 Ø 10,0 inf\./); // 0,23 % × 15 × 40 = 1,38 cm² → ainda 2 Ø 10
+    await user.click(within(drawer).getByRole('button', { name: /^fechar$/i }));
+
+    // Quantitativos (dock) — as linhas de aço.
+    await user.click(botao(/^quantitativos$/i));
+    expect(await screen.findByText(/Aço — pilares/)).toBeInTheDocument();
+    expect(screen.getByText(/Aço — total \(esquemático\)/)).toBeInTheDocument();
+
+    // Painel da peça: selecionar P1 pela lista → "kg de aço".
+    const secao = document.querySelector<HTMLButtonElement>('button[aria-controls="secao-componentes-corpo"]')!;
+    if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
+    await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
+    const props = await screen.findByRole('region', { name: /propriedades/i });
+    expect(props).toHaveTextContent(/kg de aço/);
+    expect(props).toHaveTextContent(/12 Ø 12,5/);
+  });
+});

@@ -29,6 +29,7 @@ import {
   computeQuantities,
   type BlueprintModel,
 } from '../utils/blueprintKernel';
+import { HIPOTESES_ARMADURA_PADRAO, armaduraDoModelo } from '../utils/blueprintArmadura';
 import {
   projetarElevacao,
   type DirecaoElevacao,
@@ -596,12 +597,16 @@ export function montarQuantitativoXlsx(
   o: OpcoesExportacao,
 ): ArtefatoExportado[] {
   const quant = computeQuantities(model, POLITICA_PADRAO, KERNEL_VERSION);
-  const abas = abasDoQuantitativo(quant, {
-    titulo: o.titulo,
-    revisao: o.revisao,
-    hash: o.hash,
-    kernelVersion: KERNEL_VERSION,
-  });
+  const abas = abasDoQuantitativo(
+    quant,
+    {
+      titulo: o.titulo,
+      revisao: o.revisao,
+      hash: o.hash,
+      kernelVersion: KERNEL_VERSION,
+    },
+    armaduraDoModelo(model, quant, o.armadura ?? HIPOTESES_ARMADURA_PADRAO),
+  );
 
   const wb = XLSX.utils.book_new();
   for (const aba of abas) {

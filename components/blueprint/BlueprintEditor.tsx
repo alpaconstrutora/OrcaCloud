@@ -37,6 +37,7 @@ import {
   Hexagon,
   LandPlot,
   Layers,
+  Grip,
   Loader2,
   Maximize2,
   Minimize2,
@@ -356,6 +357,9 @@ import DistribuirTomadas, { ConferenciaDoAmbiente, TomadasNaParede } from './Dis
 import PainelConferenciaNbr from './PainelConferenciaNbr';
 import { conferirNbr5410 } from '../../utils/blueprintNbr5410';
 import { useBlueprintEletrica } from '../../hooks/useBlueprintEletrica';
+import { useBlueprintArmadura } from '../../hooks/useBlueprintArmadura';
+import { armaduraDoModelo } from '../../utils/blueprintArmadura';
+import PainelArmadura from './PainelArmadura';
 import { hashDaBaseEletrica, memorialEletrico, verificacoesEletricas } from '../../utils/blueprintEletricaExecutivo';
 import { ocupacaoDoTrecho } from '../../utils/blueprintEletricaDimensionamento';
 import PainelEletricaExecutivo from './PainelEletricaExecutivo';
@@ -577,6 +581,8 @@ const ROTULO_DA_TAREFA = {
   lajes: 'Lajes automáticas',
   // Fundações (16/09/2026): bloco + estaca(s) sob cada pilar, uma gaveta.
   fundacoes: 'Fundações automáticas',
+  // Armadura esquemática (16/09/2026): hipóteses do estudo e o kg por peça/família.
+  armadura: 'Armadura',
   'gerar-paredes': 'Gerar paredes do PDF',
   'importar-ifc': 'Importar do IFC',
   'importar-dxf': 'Importar do DXF',
@@ -773,6 +779,13 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const eletricaDoEstudo = useBlueprintEletrica(study.id, study.organization_id);
   const hipotesesEletricas = eletricaDoEstudo.hipoteses;
   const setHipotesesEletricas = eletricaDoEstudo.setHipoteses;
+  /**
+   * ARMADURA ESQUEMÁTICA (16/09/2026): as hipóteses são do ESTUDO pela mesma
+   * razão das elétricas — o kg entra no quantitativo e no orçamento, e duas
+   * pessoas no mesmo estudo têm de ver o mesmo aço.
+   */
+  const armaduraDoEstudo = useBlueprintArmadura(study.id, study.organization_id);
+  const hipotesesDeArmadura = armaduraDoEstudo.hipoteses;
   const [mostrarArestas3d, setMostrarArestas3d] = usePersistedState(
     'blueprint:vista3dArestas',
     true,
@@ -1784,6 +1797,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     [editor.model],
   );
   const fmt = (v: number) => formatarQuantidade(v, POLITICA_PADRAO);
+  /** O aço de cada peça e por família — a mesma conta do orçamento e da planilha. */
+  const armadura = useMemo(
+    () => armaduraDoModelo(editor.model, quant, hipotesesDeArmadura),
+    [editor.model, quant, hipotesesDeArmadura],
+  );
+  const armaduraPorId = useMemo(() => new Map(armadura.pecas.map((p) => [p.structuralId, p])), [armadura]);
 
   /**
    * Quantitativo OFICIAL da última versão publicada.
@@ -5885,6 +5904,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   ajuda="Áreas, volumes e comprimentos derivados do desenho; o quantitativo oficial da versão"
                 />
               )}
+              {(!emVista || em3d) && (
+                <BotaoDoRibbon
+                  icone={Grip}
+                  rotulo="Armadura"
+                  contagem={armadura.pecas.length || undefined}
+                  ativo={tarefaAberta === 'armadura'}
+                  onClick={() => alternarTarefa('armadura')}
+                  ajuda="Aço por peça e por família — mínimos da NBR 6118 + taxa de referência; hipóteses do estudo"
+                />
+              )}
               {relatorioVisivel('orcamento') && (
                 <BotaoDoRibbon
                   icone={Calculator}
@@ -7086,6 +7115,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 study={study}
                 custoPorUid={custoPorUid}
                 hipotesesEletricas={hipotesesEletricas}
+                hipotesesDeArmadura={hipotesesDeArmadura}
                 // As curvas vão para o DXF da prancha nas camadas TOPO-*, no
                 // mesmo mm da planta — a versão EXIBIDA, que é a que se vê.
                 topografia={
@@ -7645,6 +7675,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     custo={estruturaSel ? custoPorUid.get(estruturaSel.uid) : undefined}
                     custoDesatualizado={editor.dirtySincePublish}
                     estrutura={grupoSel ? null : estruturaSel}
+                    armadura={estruturaSel ? armaduraPorId.get(estruturaSel.id) : undefined}
                     grupo={
                       estruturaSel && !grupoSel
                         ? (() => {
@@ -7854,6 +7885,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               {tarefaAberta === 'vigas' && <RectangleHorizontal className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'lajes' && <Layers className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'fundacoes' && <SquareStack className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'armadura' && <Grip className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -7869,6 +7901,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               'Uma viga por parede, de pilar a pilar, no topo da alvenaria do pavimento ativo. Prévia tracejada no desenho; gravar é um passo só, e Ctrl+Z desfaz.'}
             {tarefaAberta === 'lajes' &&
               'Uma laje por ambiente fechado, apoiada no topo das paredes do pavimento ativo. Prévia tracejada no desenho; gravar é um passo só, e Ctrl+Z desfaz.'}
+            {tarefaAberta === 'armadura' &&
+              'Pré-quantitativo de aço: o esquema mínimo da NBR 6118 de cada peça, com um piso por taxa de referência. Hipóteses gravadas no estudo; o kg vai ao painel da peça, aos Quantitativos, à planilha e ao orçamento.'}
             {tarefaAberta === 'fundacoes' &&
               'Um bloco de coroamento sob cada pilar do pavimento ativo, com a(s) estaca(s) dele, e a viga baldrame sobre os blocos ao longo de cada parede. Prévia tracejada no desenho; gravar é um passo só, e Ctrl+Z desfaz.'}
             {tarefaAberta === 'tomadas' && (
@@ -7908,7 +7942,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'armadura' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
 
@@ -8526,6 +8560,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             </div>
           )}
 
+          {tarefaAberta === 'armadura' && (
+            <PainelArmadura
+              hipoteses={hipotesesDeArmadura}
+              onHipoteses={armaduraDoEstudo.setHipoteses}
+              armadura={armadura}
+              onSelecionarPeca={(id) => selecionar([id])}
+              carregando={armaduraDoEstudo.carregando}
+              persistenciaIndisponivel={armaduraDoEstudo.persistenciaIndisponivel}
+            />
+          )}
           {tarefaAberta === 'lajes' && planoDeLajes && (
             <div className="space-y-4">
               <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
@@ -9347,6 +9391,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           {relatorioNoDrawer === 'quantitativos' && (
             <PainelQuantitativos
               quant={quant}
+              armadura={armadura}
               fmt={fmt}
               revisao={editor.baseRevision}
               oficial={qtdOficial}
@@ -9449,6 +9494,7 @@ function BotaoBarra({
  */
 function PainelQuantitativos({
   quant,
+  armadura,
   fmt,
   revisao,
   oficial,
@@ -9457,6 +9503,8 @@ function PainelQuantitativos({
   dirty,
 }: {
   quant: ReturnType<typeof computeQuantities>;
+  /** O aço esquemático (16/09/2026) — mesma conta do orçamento; opcional para quem lê só o concreto. */
+  armadura?: import('../../utils/blueprintArmadura').ArmaduraQuantificada;
   fmt: (v: number) => string;
   revisao: number;
   oficial: BlueprintQuantitySnapshot | null;
@@ -9584,6 +9632,27 @@ function PainelQuantitativos({
                     forte
                   />
                 ) : null}
+              {armadura && armadura.totais.totalKg > 0 ? (
+                <>
+                  {armadura.totais.pilarKg > 0 ? (
+                    <Linha rotulo="Aço — pilares" valor={`${fmt(armadura.totais.pilarKg)} kg · ${fmt(armadura.totais.taxaPilarKgM3)} kg/m³`} />
+                  ) : null}
+                  {armadura.totais.vigaKg > 0 ? (
+                    <Linha rotulo="Aço — vigas" valor={`${fmt(armadura.totais.vigaKg)} kg · ${fmt(armadura.totais.taxaVigaKgM3)} kg/m³`} />
+                  ) : null}
+                  {armadura.totais.lajeKg > 0 ? (
+                    <Linha rotulo="Aço — lajes" valor={`${fmt(armadura.totais.lajeKg)} kg · ${fmt(armadura.totais.taxaLajeKgM3)} kg/m³`} />
+                  ) : null}
+                  {armadura.totais.fundacaoKg > 0 ? (
+                    <Linha rotulo="Aço — fundação" valor={`${fmt(armadura.totais.fundacaoKg)} kg · ${fmt(armadura.totais.taxaFundacaoKgM3)} kg/m³`} />
+                  ) : null}
+                  <Linha
+                    rotulo="Aço — total (esquemático)"
+                    valor={`${fmt(armadura.totais.totalKg)} kg · CA-50 ${fmt(armadura.totais.ca50Kg)} · CA-60 ${fmt(armadura.totais.ca60Kg)}`}
+                    forte
+                  />
+                </>
+              ) : null}
                 {t.estacas > 0 ? (
                   <Linha
                     rotulo="Estacas"
@@ -9620,6 +9689,17 @@ function PainelQuantitativos({
                       </dd>
                       <dt>Fôrma</dt>
                       <dd className="text-right">{fmt(s.areaFormaM2)} m²</dd>
+                      {armadura?.pecas.find((p) => p.structuralId === s.structuralId) ? (
+                        <>
+                          <dt>Aço</dt>
+                          <dd className="text-right">
+                            {fmt(armadura.pecas.find((p) => p.structuralId === s.structuralId)!.kg)} kg
+                            <span className="block text-[10px] font-normal text-slate-400">
+                              {armadura.pecas.find((p) => p.structuralId === s.structuralId)!.descricao}
+                            </span>
+                          </dd>
+                        </>
+                      ) : null}
                       {/* A FÓRMULA junto do número, como manda a rastreabilidade
                           (RF-121): um volume de concreto que não diz de onde
                           veio não pode ser conferido contra a prancha. */}

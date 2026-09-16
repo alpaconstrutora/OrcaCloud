@@ -10,6 +10,8 @@
 import { supabase } from '../lib/supabase';
 import { sinapiService } from './sinapiService';
 import { getSnapshot, getStudy, recordAudit } from './blueprintService';
+import { blueprintArmaduraService } from './blueprintArmaduraService';
+import { HIPOTESES_ARMADURA_PADRAO, armaduraDoModelo, hipotesesDeArmaduraDaColuna } from '../utils/blueprintArmadura';
 import {
   gerarLancamentos,
   gerarLancamentosDeCamadas,
@@ -193,7 +195,19 @@ export async function preverLancamentos(
     revision: snapshot.revision,
   };
 
-  const doDePara = gerarLancamentos(quant, resolvidos, contexto);
+  // A ARMADURA vem das hipóteses do ESTUDO (fck, bitolas, taxas): não está no
+  // snapshot nem no cache do quantitativo. Sem a tabela (migration ausente)
+  // vale o padrão — dito no console, e o kg continua saindo.
+  let hipotesesDeArmadura = HIPOTESES_ARMADURA_PADRAO;
+  try {
+    const row = await blueprintArmaduraService.get(study.id);
+    if (row) hipotesesDeArmadura = hipotesesDeArmaduraDaColuna(row.hipoteses);
+  } catch (e) {
+    console.warn('[armadura] orçamento com as hipóteses padrão (persistência indisponível):', e);
+  }
+  const armadura = armaduraDoModelo(model, quant, hipotesesDeArmadura);
+
+  const doDePara = gerarLancamentos(quant, resolvidos, contexto, { armadura });
   const dasCamadas = gerarLancamentosDeCamadas(quant, itens, contexto);
   const dasEsquadrias = gerarLancamentosDeEsquadrias(quant, itens, contexto);
 

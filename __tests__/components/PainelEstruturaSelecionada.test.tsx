@@ -12,6 +12,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import PainelEstruturaSelecionada, { camposDaNovaAltura } from '../../components/blueprint/PainelEstruturaSelecionada';
 import { point, type Structural } from '../../utils/blueprintKernel';
+import { HIPOTESES_ARMADURA_PADRAO, armaduraDaPeca } from '../../utils/blueprintArmadura';
 
 const estaca: Structural = {
   id: 'str_1', uid: 'u1', levelId: 'lvl_1', kind: 'ESTACA', pontos: [point(0, 0)],
@@ -29,6 +30,19 @@ describe('camposDaNovaAltura', () => {
   });
   it('pilar que desce até o bloco (base −0,50, topo +2,80) continua crescendo para cima — base fica', () => {
     expect(camposDaNovaAltura(pilar, 3500)).toEqual({ alturaMm: 3500 });
+  });
+});
+
+describe('PainelEstruturaSelecionada · aço esquemático (16/09/2026)', () => {
+  it('mostra o kg e o esquema da peça, com a origem; sem `armadura` não fala de aço', () => {
+    const a = armaduraDaPeca(pilar, { volumeConcretoM3: 0.119, comprimentoM: 3.3, areaPlantaM2: 0 }, HIPOTESES_ARMADURA_PADRAO);
+    const { rerender } = render(
+      <PainelEstruturaSelecionada estrutura={pilar} armadura={a} onMedidas={vi.fn()} onTipo={vi.fn()} onExcluir={vi.fn()} />,
+    );
+    expect(screen.getByText(/kg de aço/)).toHaveTextContent(/4 Ø 12,5 \+ estribos Ø 5,0 c\/15/);
+    expect(screen.getByText(/kg de aço/)).toHaveTextContent(/mínimos NBR 6118|taxa de referência/);
+    rerender(<PainelEstruturaSelecionada estrutura={pilar} onMedidas={vi.fn()} onTipo={vi.fn()} onExcluir={vi.fn()} />);
+    expect(screen.queryByText(/kg de aço/)).toBeNull();
   });
 });
 

@@ -131,6 +131,20 @@ export interface BlueprintEletricaRow {
   updated_at: string;
 }
 
+/**
+ * Hipóteses da armadura esquemática de um estudo — linha de
+ * `blueprint_study_armadura` (migration `aplicar_20270921000023`). Uma por
+ * estudo; JSONB parcial, completado com `HIPOTESES_ARMADURA_PADRAO` na leitura.
+ */
+export interface BlueprintArmaduraRow {
+  id: string;
+  study_id: string;
+  organization_id: string;
+  hipoteses: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface BlueprintTopografiaRow {
   id: string;
   study_id: string;

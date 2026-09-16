@@ -48,16 +48,20 @@ import {
  * que diz 1:100 e mede outra coisa — e alguém vai medir com escalímetro.
  */
 import type { HipotesesEletricas } from '../../utils/blueprintEletricaDimensionamento';
+import type { HipotesesDeArmadura } from '../../utils/blueprintArmadura';
 
 export default function PainelVersoes({
   study,
   custoPorUid,
   topografia,
   hipotesesEletricas,
+  hipotesesDeArmadura,
 }: {
   study: BlueprintStudy;
   /** F8: as hipóteses do pré-dimensionamento, para o quadro de cargas da prancha elétrica. */
   hipotesesEletricas?: HipotesesEletricas;
+  /** Hipóteses da armadura esquemática do estudo — a planilha de quantitativos as usa (aba "Armadura"). */
+  hipotesesDeArmadura?: HipotesesDeArmadura;
   /**
    * Curvas de nível e pontos cotados da versão de topografia exibida, para as
    * camadas `TOPO-*` do DXF. Vem do editor porque a topografia vive fora do
@@ -324,6 +328,7 @@ export default function PainelVersoes({
       // no PDF/PNG cada prancha decide por si (`exportarPranchasPdf`).
       eletrica: comEletrica || undefined,
       hipotesesEletricas,
+      armadura: hipotesesDeArmadura,
       // Custo no IFC só quando explicitamente marcado nesta exportação — ver o
       // comentário da caixa, abaixo. `undefined`, e não um mapa vazio, para o
       // gerador não declarar moeda à toa.

@@ -279,6 +279,12 @@ export interface OpcoesExportacao {
    */
   custoPorUid?: ReadonlyMap<string, number>;
   /**
+   * Hipóteses da ARMADURA esquemática do estudo (16/09/2026). Só a planilha
+   * de quantitativos as usa (aba "Armadura"). Ausente = as hipóteses padrão —
+   * o kg sai igual, com fck 25, CAA II e as taxas de referência de fábrica.
+   */
+  armadura?: import('./blueprintArmadura').HipotesesDeArmadura;
+  /**
    * PRANCHA ELÉTRICA (F8, 13/09/2026): desenha os símbolos elétricos por cima
    * da planta e, na página seguinte, legenda + quadro de cargas. Ausente =
    * planta arquitetônica, como sempre foi.

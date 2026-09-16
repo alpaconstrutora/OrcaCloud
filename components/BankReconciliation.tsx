@@ -2268,12 +2268,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
      * a linha continua visível no Extrato como "Ignorado", sai do saldo e das pendências,
      * e o motivo fica na auditoria (fn_reconcile_ignore). Reversível.
      */
-    const handleDeleteBankTransactions = async (ids: string[]) => {
-        if (ids.length === 0) return;
+    const handleDeleteBankTransactions = async (ids: string[]): Promise<boolean> => {
+        if (ids.length === 0) return false;
         const msg = ids.length === 1
             ? 'O lançamento sai do saldo e das pendências e fica marcado como "Ignorado" no Extrato. Use para duplicata ou linha que não é movimento real. Pode ser revertido.'
             : `${ids.length} lançamentos saem do saldo e das pendências e ficam marcados como "Ignorado" no Extrato. Use para duplicatas ou linhas que não são movimento real. Pode ser revertido.`;
-        if (!await confirm({ title: ids.length === 1 ? 'Ignorar este lançamento do extrato?' : 'Ignorar lançamentos do extrato?', message: msg, variant: 'warning', confirmLabel: 'Ignorar' })) return;
+        if (!await confirm({ title: ids.length === 1 ? 'Ignorar este lançamento do extrato?' : 'Ignorar lançamentos do extrato?', message: msg, variant: 'warning', confirmLabel: 'Ignorar' })) return false;
 
         setIsLoading(true);
         try {
@@ -2288,9 +2288,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             setActionFeedback({ message: `${n} lançamento${n > 1 ? 's' : ''} marcado${n > 1 ? 's' : ''} como ignorado${n > 1 ? 's' : ''}.`, type: 'success' });
             setTimeout(() => setActionFeedback(null), 3000);
             await loadStats();
+            return true;
         } catch (err: unknown) {
             const msg2 = err instanceof Error ? err.message : (err as { message?: string })?.message ?? String(err);
             alert('Não foi possível ignorar: ' + msg2);
+            return false;
         } finally {
             setIsLoading(false);
         }
@@ -3251,6 +3253,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     projects={masterProjects}
                     costCenters={masterCostCenters}
                     planoContas={masterPlanoContas}
+                    onIgnore={() => handleDeleteBankTransactions(Array.from(selectedBankTxIds))}
                     onClose={() => setIsLoteEditOpen(false)}
                     onSave={handleBulkUpdateBankFields}
                 />

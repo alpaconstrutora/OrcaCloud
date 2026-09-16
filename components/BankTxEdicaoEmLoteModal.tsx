@@ -3,7 +3,7 @@ import CostCenterSelect, { CostCenterOption } from './CostCenterSelect';
 import PlanoContasSelect from './PlanoContasSelect';
 import ClientSelect, { type ClientOption } from './ClientSelect';
 import SupplierSelect, { type SupplierOption } from './SupplierSelect';
-import { X, AlertTriangle, Loader2, Tag } from 'lucide-react';
+import { X, AlertTriangle, Loader2, Tag, EyeOff } from 'lucide-react';
 import { formatMoney } from './ui/Format';
 import type { BankTransaction } from '../types';
 
@@ -25,12 +25,29 @@ interface BankTxEdicaoEmLoteModalProps {
      *  `name` cru (o drawer já mostra o código ao lado). */
     planoContas: Array<ItemOption & { code?: string | null }>;
     onClose: () => void;
+    /** "Ignorar lançamentos": marca os selecionados como IGNORED (saem do saldo e das
+     *  pendências, ficam no Extrato como "Ignorado"; reversível). O pai confirma com
+     *  useConfirm e grava; devolve true se ignorou — aí o modal fecha. */
+    onIgnore?: () => Promise<boolean>;
     onSave: (fields: Partial<Pick<BankTransaction, 'category' | 'counterparty_name' | 'project_id' | 'cost_center_id' | 'plano_de_contas_id'>>) => Promise<void>;
 }
 
 const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
-    transactions, categories, clienteRegistros, credorRegistros, projects, costCenters, planoContas, onClose, onSave,
+    transactions, categories, clienteRegistros, credorRegistros, projects, costCenters, planoContas, onClose, onIgnore, onSave,
 }) => {
+    const [ignoring, setIgnoring] = useState(false);
+    async function handleIgnorar() {
+        if (!onIgnore) return;
+        setIgnoring(true);
+        setErrorMsg(null);
+        try {
+            if (await onIgnore()) onClose();
+        } catch (err: unknown) {
+            setErrorMsg(err instanceof Error ? err.message : String(err));
+        } finally {
+            setIgnoring(false);
+        }
+    }
     const [category, setCategory] = useState('');
     const [clientName, setClientName] = useState('');
     const [supplierName, setSupplierName] = useState('');
@@ -216,18 +233,30 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
                     </div>
                 </div>
 
-                {/* Footer */}
+                {/* Footer — "Ignorar" à esquerda, separado das ações de gravar: não depende de
+                    campo escolhido e é a saída para duplicata / linha que não é movimento real. */}
                 <div className="px-6 pb-6 pt-4 border-t border-gray-100 flex items-center gap-3">
+                    {onIgnore && (
+                        <button
+                            onClick={handleIgnorar}
+                            disabled={saving || ignoring}
+                            title="Marcar os lançamentos selecionados como ignorados (não são movimento real). Pode ser revertido."
+                            className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-amber-50 text-amber-700 border border-amber-200 font-bold text-button uppercase tracking-widest hover:bg-amber-100 transition-colors disabled:opacity-50 shrink-0"
+                        >
+                            {ignoring ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <EyeOff className="w-3.5 h-3.5" />}
+                            Ignorar ({transactions.length})
+                        </button>
+                    )}
                     <button
                         onClick={onClose}
-                        disabled={saving}
+                        disabled={saving || ignoring}
                         className="flex-1 px-4 py-3 rounded-2xl bg-gray-100 text-gray-700 font-bold text-button uppercase tracking-widest hover:bg-gray-200 transition-colors disabled:opacity-50"
                     >
                         Cancelar
                     </button>
                     <button
                         onClick={handleSalvar}
-                        disabled={saving || noneChanged}
+                        disabled={saving || ignoring || noneChanged}
                         className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-blue-600 text-white font-bold text-button uppercase tracking-widest hover:bg-blue-700 transition-colors disabled:opacity-40 shadow-lg shadow-blue-900/20"
                     >
                         {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}

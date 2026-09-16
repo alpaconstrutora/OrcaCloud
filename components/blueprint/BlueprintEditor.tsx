@@ -786,6 +786,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    */
   const armaduraDoEstudo = useBlueprintArmadura(study.id, study.organization_id);
   const hipotesesDeArmadura = armaduraDoEstudo.hipoteses;
+  /** ARMADURA no 3D (16/09/2026): as barras do esquema, com o concreto translúcido. Nasce desligada. */
+  const [mostrarArmadura3d, setMostrarArmadura3d] = usePersistedState<boolean>('blueprint:vista3dArmadura', false);
   const [mostrarArestas3d, setMostrarArestas3d] = usePersistedState(
     'blueprint:vista3dArestas',
     true,
@@ -6137,6 +6139,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                           ajuda: 'Realça as quinas das paredes com um traço.',
                         },
                         {
+                          chave: 'armadura-3d',
+                          rotulo: 'Armadura',
+                          icone: Grip,
+                          ligado: mostrarArmadura3d,
+                          alternar: () => setMostrarArmadura3d((v) => !v),
+                          ajuda:
+                            'As barras do esquema de armadura (mínimos NBR 6118 + taxa) dentro do concreto, que fica translúcido. Pré-quantitativo: sem dobras nem ancoragem.',
+                        },
+                        {
                           chave: 'terreno-3d',
                           rotulo: 'Terreno',
                           icone: LandPlot,
@@ -6837,6 +6848,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               levelIds={levelIdsDaVista}
               mostrarLaje={mostrarLaje3d}
               mostrarArestas={mostrarArestas3d}
+              armadura={mostrarArmadura3d ? { pecas: armadura.pecas, hipoteses: hipotesesDeArmadura } : undefined}
               // A guarda vive aqui, e não só no menu: o estado é persistido, e
               // ligar o terreno num estudo que tem lote e depois abrir outro que
               // não tem deixaria a combinação gravada no localStorage.

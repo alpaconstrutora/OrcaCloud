@@ -157,6 +157,8 @@ export interface ArmaduraDaPeca {
   /** "4 Ø 12,5 + estribos Ø 5,0 c/15" */
   descricao: string;
   avisos: string[];
+  /** Cobrimento nominal usado (mm) — quem desenha a seção precisa dele. */
+  cobrimentoMm: number;
 }
 
 export interface TotaisDeArmadura {
@@ -233,11 +235,13 @@ export function armaduraDaPeca(s: Structural, quant: Pick<QuantidadeEstrutural, 
   const fctmMpa = 0.3 * fck ** (2 / 3);
   const perda = 1 + Math.max(0, hip.perdaPct) / 100;
   let descricao = '';
+  let cobrimentoMm = 0;
 
   if (s.kind === 'PILAR') {
     const bCm = s.larguraMm / 10;
     const hCm = s.circular ? bCm : s.profundidadeMm / 10;
     const c = getCobrimentoNominalCm(hip.caa, 'pilar');
+    cobrimentoMm = c * 10;
     const acCm2 = s.circular ? (Math.PI * bCm ** 2) / 4 : bCm * hCm;
     const asMin = 0.004 * acCm2;
     const bit = hip.bitolaPilarMm;
@@ -257,6 +261,7 @@ export function armaduraDaPeca(s: Structural, quant: Pick<QuantidadeEstrutural, 
     const bCm = (secaoT ? secaoT.almaLarguraMm : s.larguraMm) / 10;
     const hCm = s.alturaMm / 10;
     const c = getCobrimentoNominalCm(hip.caa, 'viga');
+    cobrimentoMm = c * 10;
     const bit = hip.bitolaVigaMm;
     const bt = hip.bitolaEstriboMm;
     const dCm = hCm - c - bt / 10 - bit / 20;
@@ -278,6 +283,7 @@ export function armaduraDaPeca(s: Structural, quant: Pick<QuantidadeEstrutural, 
     descricao = `${nInf} Ø ${fmtBitola(bit)} inf. + ${nSup} Ø ${fmtBitola(bit)} sup. + estribos Ø ${fmtBitola(bt)} c/${sCm}`;
   } else if (s.kind === 'LAJE') {
     const hCm = s.alturaMm / 10;
+    cobrimentoMm = getCobrimentoNominalCm(hip.caa, 'laje') * 10;
     const bit = hip.bitolaLajeMm;
     const asMinPorM = rhoMinDeFlexao(fck) * 100 * hCm; // cm²/m por direção
     const sCm = Math.max(5, Math.floor(Math.min(20, 2 * hCm, (areaDaBarraCm2(bit) * 100) / Math.max(1e-6, asMinPorM))));
@@ -292,6 +298,7 @@ export function armaduraDaPeca(s: Structural, quant: Pick<QuantidadeEstrutural, 
     const pCm = s.circular ? bCm : s.profundidadeMm / 10;
     const hCm = s.alturaMm / 10;
     const c = getCobrimentoNominalCm(hip.caa, 'sapata');
+    cobrimentoMm = c * 10;
     const bit = hip.bitolaBlocoMm;
     const aphi = areaDaBarraCm2(bit);
     // Malha inferior: em cada direção, As,min = 0,15 % × (largura transversal) × h.
@@ -311,6 +318,7 @@ export function armaduraDaPeca(s: Structural, quant: Pick<QuantidadeEstrutural, 
     // ESTACA
     const dCm = s.larguraMm / 10;
     const c = getCobrimentoNominalCm(hip.caa, 'sapata');
+    cobrimentoMm = c * 10;
     const bit = hip.bitolaEstacaMm;
     const acCm2 = (Math.PI * dCm ** 2) / 4;
     const as = 0.005 * acCm2;
@@ -356,6 +364,7 @@ export function armaduraDaPeca(s: Structural, quant: Pick<QuantidadeEstrutural, 
     taxaEfetivaKgM3: volume > 0 ? arredonda(kg / volume, 1) : 0,
     descricao,
     avisos,
+    cobrimentoMm,
   };
 }
 

@@ -10,6 +10,7 @@ import React, { Suspense } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { BlueprintModel } from '../../utils/blueprintKernel';
 import type { MalhaDoTerreno } from '../../utils/blueprintTopografia';
+import type { ArmaduraDaPeca, HipotesesDeArmadura } from '../../utils/blueprintArmadura';
 import type { ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
 
 const Blueprint3DViewer = React.lazy(() => import('./Blueprint3DViewer'));
@@ -40,6 +41,8 @@ interface Props {
   selecionados?: Set<string>;
   /** Clique numa peça, com o id do KERNEL. Ausente = cena não clicável. */
   onSelecionar?: (ids: string[]) => void;
+  /** As barras do esquema de armadura, como linhas; o concreto fica translúcido. Ver `Blueprint3DViewer`. */
+  armadura?: { pecas: readonly ArmaduraDaPeca[]; hipoteses: HipotesesDeArmadura };
 }
 
 const Carregando = () => (

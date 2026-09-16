@@ -9,6 +9,7 @@ import {
 } from '../../utils/blueprintKernel';
 import { CampoMedida } from './PainelParedeSelecionada';
 import type { ArmaduraDaPeca } from '../../utils/blueprintArmadura';
+import SecaoArmadaSvg from './SecaoArmadaSvg';
 import ControleDeSobreposicao from './ControleDeSobreposicao';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
 import CustoDoElemento from './CustoDoElemento';
@@ -182,6 +183,7 @@ export default function PainelEstruturaSelecionada({
               {armadura.descricao} ({armadura.origem === 'TAXA' ? 'taxa de referência' : 'mínimos NBR 6118'})
             </p>
           )}
+          {armadura && <SecaoArmadaSvg estrutura={estrutura} armadura={armadura} />}
           <IdentificadorDoElemento uid={estrutura.uid} familia="structural" />
           <CustoDoElemento custo={custo} desatualizado={!!custoDesatualizado} />
         </div>

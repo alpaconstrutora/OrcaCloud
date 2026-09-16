@@ -61,6 +61,8 @@ import {
 } from '../../utils/blueprint3dEnquadramento';
 import type { MalhaDoTerreno } from '../../utils/blueprintTopografia';
 import type { ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
+import type { ArmaduraDaPeca, HipotesesDeArmadura } from '../../utils/blueprintArmadura';
+import { ehTransversal, segmentosDaArmaduraDoModelo } from '../../utils/blueprintArmaduraGeometria';
 
 interface Props {
   model: BlueprintModel;
@@ -114,7 +116,19 @@ interface Props {
    * leitura não deveriam pagar por raycast que ninguém vai consumir.
    */
   onSelecionar?: (ids: string[]) => void;
+  /**
+   * ARMADURA DESENHADA (16/09/2026: *"implementar exibição gráfica das
+   * armaduras"*): as barras do esquema de cada peça, como linhas, e o
+   * concreto fica translúcido para elas aparecerem. Ausente = cena de sempre.
+   * `pecas` é o esquema já calculado (`armaduraDoModelo`); `hipoteses` dá o
+   * cobrimento. É o desenho do pré-quantitativo — sem dobras nem ancoragem.
+   */
+  armadura?: { pecas: readonly ArmaduraDaPeca[]; hipoteses: HipotesesDeArmadura };
 }
+
+/** Cores das barras: longitudinal em ferro-oxidado, transversal (estribo/espiral/malha) em vermelho. */
+const COR_BARRA_LONGITUDINAL = '#7c2d12';
+const COR_BARRA_TRANSVERSAL = '#dc2626';
 
 /** mm → m: o resto do viewer (câmera, grade, luzes) trabalha em metros. */
 const S = 0.001;
@@ -876,7 +890,7 @@ function usarCliqueDePeca(onSelecionar?: (ids: string[]) => void) {
       : {};
 }
 
-function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, relevo, relevoChave, extrasDoRelevo, extrasChave, ocultos, coresPorUid, selecionados, onSelecionar }: Props) {
+function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, relevo, relevoChave, extrasDoRelevo, extrasChave, ocultos, coresPorUid, selecionados, onSelecionar, armadura }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
 
@@ -952,6 +966,35 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, re
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [model, levelIds?.join(','), chaveOcultos],
   );
+
+  // ─── AS BARRAS ───────────────────────────────────────────────────────────
+  //
+  // Duas geometrias de segmentos (longitudinal e transversal), uma cor cada,
+  // montadas de uma vez: milhares de segmentos num `LineSegments` só custam
+  // um draw call por cor; um `<Line>` por barra travaria a cena numa planta
+  // com dezesseis pilares e quatro lajes. Peças ocultas e de pavimentos fora
+  // da vista não entram — o mesmo recorte das malhas de concreto.
+  const barras = useMemo(() => {
+    if (!armadura) return null;
+    const segs = segmentosDaArmaduraDoModelo(
+      model,
+      armadura.pecas,
+      armadura.hipoteses,
+      (s) => idsVisiveis.has(s.levelId) && !escondida(s.id),
+    );
+    const montar = (filtro: (papel: string) => boolean) => {
+      const pos: number[] = [];
+      for (const g of segs) {
+        if (!filtro(g.papel)) continue;
+        pos.push(g.a.x * S, g.a.z * S, g.a.y * S, g.b.x * S, g.b.z * S, g.b.y * S);
+      }
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      return geom;
+    };
+    return { longitudinais: montar((p) => !ehTransversal(p) && p !== 'malha'), transversais: montar((p) => ehTransversal(p) || p === 'malha') };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model, armadura, levelIds?.join(','), chaveOcultos]);
 
   // Os furos que as escadas abrem, por laje — derivados a cada leitura, como
   // o desconto do quantitativo. Escada escondida NÃO refecha a laje: a
@@ -1246,10 +1289,26 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, re
             }
             roughness={0.9}
             side={THREE.DoubleSide}
+            // Com a armadura ligada o concreto vira vidro fosco: as barras
+            // estão DENTRO dele, e opaco ninguém as veria. `depthWrite` falso
+            // para as barras de trás não sumirem atrás da face da frente.
+            transparent={!!armadura}
+            opacity={armadura ? 0.28 : 1}
+            depthWrite={!armadura}
           />
           {mostrarArestas && <Edges color="#334155" threshold={20} />}
         </mesh>
       ))}
+      {barras && (
+        <>
+          <lineSegments geometry={barras.longitudinais} renderOrder={2}>
+            <lineBasicMaterial color={COR_BARRA_LONGITUDINAL} />
+          </lineSegments>
+          <lineSegments geometry={barras.transversais} renderOrder={2}>
+            <lineBasicMaterial color={COR_BARRA_TRANSVERSAL} />
+          </lineSegments>
+        </>
+      )}
       {/* TELHADO por cima de tudo, na cor de telha cerâmica: é o que o olho
           procura primeiro numa casa vista de fora, e a cor o separa da laje
           (cinza) que às vezes fica logo abaixo dele. A malha já vem em

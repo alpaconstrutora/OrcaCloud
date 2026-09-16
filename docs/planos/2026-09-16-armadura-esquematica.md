@@ -78,3 +78,35 @@ Números são pré-quantitativo (mínimos + piso) e ficam ABAIXO de um projeto r
 carregadas — dito em toda superfície · negativos de laje e tirantes de bloco não estão no esquema ·
 hipóteses por estudo, não por versão (republicar não as congela; o orçamento usa as do estudo no
 momento da prévia) · o GED exporta a planilha com as hipóteses padrão.
+
+## Exibição gráfica das armaduras (16/09/2026)
+
+> implementar exibição gráfica das armaduras
+
+- **Geometria** (`utils/blueprintArmaduraGeometria.ts`, puro): do esquema de cada peça saem segmentos
+  em mm (z absoluto, com a elevação do pavimento). Pilar: barras verticais nos cantos/lados do
+  retângulo interno ao cobrimento (`posicoesNoRetangulo`) ou no círculo, estribos retangulares/anéis
+  no passo; viga/baldrame: inferiores e superiores de ponta a ponta (`posicoesNaLinha`), estribos
+  no eixo; laje: malha nas duas direções, cada linha **recortada ao contorno** (`recortarAoPoligono`,
+  vale para L e furos); bloco: malha inferior nas duas direções + estribos verticais; estaca: barras
+  só no trecho armado (+ arranque 40 Ø acima do topo, entrando no bloco) e **espiral** contínua.
+  Sem dobras nem ganchos — é o desenho do pré-quantitativo.
+- **3D**: item **Exibir › Armadura** (só na vista 3D, persistido em `blueprint:vista3dArmadura`,
+  nasce desligado). Dois `LineSegments` (longitudinal ferro-oxidado, transversal/malha vermelho)
+  montados de uma vez — milhares de segmentos em dois draw calls; o **concreto fica translúcido**
+  (opacity 0,28, sem depthWrite) para as barras aparecerem. Respeita pavimentos visíveis e peças
+  ocultas.
+- **Painel da peça**: `SecaoArmadaSvg` — o corte transversal com contorno, estribo no cobrimento e
+  barras como pontos, na MESMA distribuição do 3D (uma regra só); laje = faixa de 1 m; bloco = corte
+  pela largura; estaca = círculo com espiral. Legenda "Seção esquemática · 40 × 14 cm · cobrimento 3 cm".
+- `ArmaduraDaPeca.cobrimentoMm` passou a sair do esquema (quem desenha precisa dele).
+
+Prova: `__tests__/blueprintArmaduraGeometria.test.ts` (7: barras dentro do cobrimento, do pé ao topo,
+estribos no passo; giro e elevação; viga nas cotas certas; laje em L recortada; bloco e estaca —
+trecho armado, arranque, espiral; filtro por pavimento) · painel (+1: SVG com 4 barras + estribo;
+estaca redonda; viga com barras embaixo e em cima) · editor (+1: item Exibir › Armadura no 3D,
+persistido) · suíte 332/4388 · tsc · build. App real na planta do usuário (escritas bloqueadas,
+0 erros JS): painel de P3 "≈ 17,5 kg · 4 Ø 12,5 + estribos Ø 5,0 c/14" com a seção 40 × 14; no 3D,
+Exibir › Armadura mostra barras e estribos nos 16 pilares, vigas, malha das 4 lajes, blocos,
+baldrames e o trecho armado das estacas com espiral, concreto translúcido. Capturas
+`out-a3d/a3d-0{1,2,3}-*.png`.

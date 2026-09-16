@@ -2134,3 +2134,23 @@ describe('BlueprintEditor · armadura esquemática', () => {
     expect(props).toHaveTextContent(/12 Ø 12,5/);
   });
 });
+
+/**
+ * ARMADURA NO 3D (16/09/2026): *"implementar exibição gráfica das armaduras"*.
+ * A cena é WebGL (opaca em jsdom); o que se prova aqui é a porta: o item
+ * "Armadura" no menu Exibir do 3D, persistido, e o painel da peça com a seção.
+ */
+describe('BlueprintEditor · armadura desenhada', () => {
+  it('no 3D, Exibir tem "Armadura" (nasce desligada) e a escolha persiste', async () => {
+    localStorage.clear();
+    localStorage.setItem('blueprint:vista', JSON.stringify('3d'));
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^vista$/i);
+    await user.click(botao(/exibir/i));
+    const item = screen.getByRole('menuitemcheckbox', { name: /armadura/i });
+    expect(item).toHaveAttribute('aria-checked', 'false');
+    await user.click(item);
+    expect(JSON.parse(localStorage.getItem('blueprint:vista3dArmadura')!)).toBe(true);
+  });
+});

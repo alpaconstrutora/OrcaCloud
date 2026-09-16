@@ -41,8 +41,32 @@ describe('PainelEstruturaSelecionada · aço esquemático (16/09/2026)', () => {
     );
     expect(screen.getByText(/kg de aço/)).toHaveTextContent(/4 Ø 12,5 \+ estribos Ø 5,0 c\/15/);
     expect(screen.getByText(/kg de aço/)).toHaveTextContent(/mínimos NBR 6118|taxa de referência/);
+    // A SEÇÃO desenhada: 4 barras (círculos), o estribo e o contorno.
+    const svg = screen.getByRole('img', { name: /seção armada/i });
+    expect(svg.querySelectorAll('circle').length).toBe(4);
+    expect(svg.querySelectorAll('rect').length).toBe(2); // concreto + estribo
+    expect(screen.getByText(/Seção esquemática/)).toHaveTextContent(/19 × 19 cm/);
     rerender(<PainelEstruturaSelecionada estrutura={pilar} onMedidas={vi.fn()} onTipo={vi.fn()} onExcluir={vi.fn()} />);
     expect(screen.queryByText(/kg de aço/)).toBeNull();
+    expect(screen.queryByRole('img', { name: /seção armada/i })).toBeNull();
+  });
+
+  it('seção da estaca é redonda (6 barras no círculo, espiral como círculo); a da viga tem barras embaixo e em cima', () => {
+    const a = armaduraDaPeca(estaca, { volumeConcretoM3: 0.565, comprimentoM: 8, areaPlantaM2: 0 }, HIPOTESES_ARMADURA_PADRAO);
+    const { rerender } = render(
+      <PainelEstruturaSelecionada estrutura={estaca} armadura={a} onMedidas={vi.fn()} onTipo={vi.fn()} onExcluir={vi.fn()} />,
+    );
+    const svg = screen.getByRole('img', { name: /seção armada/i });
+    // 1 contorno + 1 espiral + 6 barras = 8 círculos, nenhum retângulo.
+    expect(svg.querySelectorAll('circle').length).toBe(8);
+    expect(svg.querySelectorAll('rect').length).toBe(0);
+    const viga: Structural = { ...pilar, id: 'str_3', kind: 'VIGA', pontos: [point(0, 0), point(6000, 0)], larguraMm: 150, profundidadeMm: 0, alturaMm: 400, baseMm: 2400 };
+    const av = armaduraDaPeca(viga, { volumeConcretoM3: 0.36, comprimentoM: 6, areaPlantaM2: 0 }, HIPOTESES_ARMADURA_PADRAO);
+    rerender(<PainelEstruturaSelecionada estrutura={viga} armadura={av} onMedidas={vi.fn()} onTipo={vi.fn()} onExcluir={vi.fn()} />);
+    const svg2 = screen.getByRole('img', { name: /seção armada/i });
+    const cys = [...svg2.querySelectorAll('circle')].map((c) => Number(c.getAttribute('cy')));
+    expect(cys.filter((y) => y > 0)).toHaveLength(2); // inferiores (y para baixo no SVG)
+    expect(cys.filter((y) => y < 0)).toHaveLength(2); // superiores
   });
 });
 

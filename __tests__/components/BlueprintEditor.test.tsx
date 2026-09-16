@@ -2089,36 +2089,42 @@ describe('BlueprintEditor · armadura esquemática', () => {
     ]).model;
   }
 
-  it('a gaveta Armadura lista as hipóteses e o aço por família e por peça; trocar a taxa do pilar muda o kg; Quantitativos e painel da peça mostram aço', async () => {
+  it('a TELA Armadura (Analisar) tem abas Por peça / Por família / Hipóteses; trocar a taxa do pilar muda o kg; voltar fecha; Quantitativos e painel da peça mostram aço', async () => {
     loadBranchModel.mockResolvedValue(await comEstrutura());
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^analisar$/i);
     await user.click(botao(/^armadura/i));
-    const drawer = await screen.findByRole('dialog');
-    expect(drawer).toHaveTextContent(/Hipóteses da armadura/);
-    expect(drawer).toHaveTextContent(/Não dimensiona nem detalha/);
-    const porFamilia = within(drawer).getByRole('table', { name: /aço por família/i });
-    expect(porFamilia).toHaveTextContent(/Pilares/);
-    expect(porFamilia).toHaveTextContent(/Vigas/);
-    const porPeca = within(drawer).getByRole('table', { name: /aço por peça/i });
-    const linhaP1 = within(porPeca).getAllByRole('row').find((r) => /P1/.test(r.textContent ?? ''))!;
+    // É TELA em fluxo, não gaveta: raiz `space-y-6 pb-20`, h1, voltar; o editor some.
+    const tela = document.querySelector<HTMLElement>('[data-tela="armadura"]')!;
+    expect(tela).toBeTruthy();
+    expect(tela.className).toMatch(/space-y-6/);
+    expect(within(tela).getByRole('heading', { level: 1 })).toHaveTextContent(/Armadura/);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(within(tela).getByRole('tab', { name: /por peça/i })).toHaveAttribute('aria-selected', 'true');
+    const linhaP1 = () => within(tela).getAllByRole('row').find((r) => /P1/.test(r.textContent ?? ''))!;
     // Pilar 60 × 60: o piso da taxa (100 kg/m³ × 1,008 m³ ≈ 100,8 kg) vence o mínimo.
-    expect(linhaP1).toHaveTextContent(/taxa de referência/);
-    expect(linhaP1).toHaveTextContent(/100,8/);
-    // Taxa do pilar → 0: passa a valer o esquema mínimo (12 Ø 12,5 + estribos).
-    const taxaPilar = within(drawer).getByRole('spinbutton', { name: /taxa de referência — pilar/i });
+    expect(linhaP1()).toHaveTextContent(/taxa de referência/);
+    expect(linhaP1()).toHaveTextContent(/100,8/);
+    // Por família.
+    await user.click(within(tela).getByRole('tab', { name: /por família/i }));
+    expect(within(tela).getAllByRole('row').some((r) => /Pilares/.test(r.textContent ?? ''))).toBe(true);
+    expect(within(tela).getAllByRole('row').some((r) => /Vigas/.test(r.textContent ?? ''))).toBe(true);
+    // Hipóteses: taxa do pilar → 0 faz valer o esquema mínimo (12 Ø 12,5 + estribos).
+    await user.click(within(tela).getByRole('tab', { name: /hipóteses/i }));
+    expect(tela).toHaveTextContent(/Não dimensiona nem detalha/);
+    const taxaPilar = within(tela).getByRole('spinbutton', { name: /taxa de referência — pilar/i });
     await user.clear(taxaPilar);
     await user.type(taxaPilar, '0');
-    const linhaP1b = within(within(drawer).getByRole('table', { name: /aço por peça/i })).getAllByRole('row').find((r) => /P1/.test(r.textContent ?? ''))!;
-    expect(linhaP1b).toHaveTextContent(/esquema mínimo/);
-    expect(linhaP1b).toHaveTextContent(/12 Ø 12,5/);
-    // fck 40 sobe ρmin da viga: mais barras que com 25.
-    const linhaV1 = () => within(within(drawer).getByRole('table', { name: /aço por peça/i })).getAllByRole('row').find((r) => /V1/.test(r.textContent ?? ''))!;
-    expect(linhaV1()).toHaveTextContent(/2 Ø 10,0 inf\./);
-    await user.selectOptions(within(drawer).getByRole('combobox', { name: /fck do concreto/i }), '40');
-    expect(linhaV1()).toHaveTextContent(/2 Ø 10,0 inf\./); // 0,23 % × 15 × 40 = 1,38 cm² → ainda 2 Ø 10
-    await user.click(within(drawer).getByRole('button', { name: /^fechar$/i }));
+    await user.selectOptions(within(tela).getByRole('combobox', { name: /fck do concreto/i }), '40');
+    await user.click(within(tela).getByRole('tab', { name: /por peça/i }));
+    expect(linhaP1()).toHaveTextContent(/esquema mínimo/);
+    expect(linhaP1()).toHaveTextContent(/12 Ø 12,5/);
+    const linhaV1 = within(tela).getAllByRole('row').find((r) => /V1/.test(r.textContent ?? ''))!;
+    expect(linhaV1).toHaveTextContent(/2 Ø 10,0 inf\./); // fck 40: 0,23 % × 15 × 40 = 1,38 cm² → ainda 2 Ø 10
+    // Voltar ao editor.
+    await user.click(within(tela).getByRole('button', { name: /voltar ao editor/i }));
+    expect(document.querySelector('[data-tela="armadura"]')).toBeNull();
 
     // Quantitativos (dock) — as linhas de aço.
     await user.click(botao(/^quantitativos$/i));
@@ -2184,15 +2190,16 @@ describe('BlueprintEditor · armadura manual', () => {
     await user.type(barras, '8');
     expect(props).toHaveTextContent(/8 Ø 12,5/);
     expect(props).toHaveTextContent(/\(manual\)/);
-    // A gaveta Armadura vê a peça manual.
+    // A tela Armadura vê a peça manual.
     await abrirAba(/^analisar$/i);
     await user.click(botao(/^armadura/i));
-    const drawer = await screen.findByRole('dialog');
-    expect(drawer).toHaveTextContent(/1 peça\(s\) com armadura lançada manualmente/);
-    const linhaP1 = within(within(drawer).getByRole('table', { name: /aço por peça/i })).getAllByRole('row').find((r) => /P1/.test(r.textContent ?? ''))!;
+    const tela = document.querySelector<HTMLElement>('[data-tela="armadura"]')!;
+    const linhaP1 = within(tela).getAllByRole('row').find((r) => /P1/.test(r.textContent ?? ''))!;
     expect(linhaP1).toHaveTextContent(/manual/);
     expect(linhaP1).toHaveTextContent(/8 Ø 12,5/);
-    await user.click(within(drawer).getByRole('button', { name: /voltar todas ao automático/i }));
-    expect(drawer).not.toHaveTextContent(/com armadura lançada manualmente/);
+    await user.click(within(tela).getByRole('tab', { name: /hipóteses/i }));
+    expect(tela).toHaveTextContent(/1 peça\(s\) com armadura lançada manualmente/);
+    await user.click(within(tela).getByRole('button', { name: /voltar todas ao automático/i }));
+    expect(tela).not.toHaveTextContent(/com armadura lançada manualmente/);
   });
 });

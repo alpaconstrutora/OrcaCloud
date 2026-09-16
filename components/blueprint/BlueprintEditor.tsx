@@ -359,7 +359,7 @@ import { conferirNbr5410 } from '../../utils/blueprintNbr5410';
 import { useBlueprintEletrica } from '../../hooks/useBlueprintEletrica';
 import { useBlueprintArmadura } from '../../hooks/useBlueprintArmadura';
 import { armaduraDoModelo, armaduraManualDe } from '../../utils/blueprintArmadura';
-import PainelArmadura from './PainelArmadura';
+import TelaArmadura from './TelaArmadura';
 import { hashDaBaseEletrica, memorialEletrico, verificacoesEletricas } from '../../utils/blueprintEletricaExecutivo';
 import { ocupacaoDoTrecho } from '../../utils/blueprintEletricaDimensionamento';
 import PainelEletricaExecutivo from './PainelEletricaExecutivo';
@@ -581,8 +581,6 @@ const ROTULO_DA_TAREFA = {
   lajes: 'Lajes automáticas',
   // Fundações (16/09/2026): bloco + estaca(s) sob cada pilar, uma gaveta.
   fundacoes: 'Fundações automáticas',
-  // Armadura esquemática (16/09/2026): hipóteses do estudo e o kg por peça/família.
-  armadura: 'Armadura',
   'gerar-paredes': 'Gerar paredes do PDF',
   'importar-ifc': 'Importar do IFC',
   'importar-dxf': 'Importar do DXF',
@@ -949,7 +947,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * fica só com Comentários e Versões (Colaborar), que se leem olhando o
    * desenho ao lado.
    */
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico';
+  // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'medicoes',
@@ -5220,7 +5219,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     erro: 'Falha ao salvar',
   };
 
-  const cabecalhoDaTela = (titulo: string, subtitulo: string, Icone: React.ElementType) => (
+  const cabecalhoDaTela = (titulo: string, subtitulo: string, Icone: React.ElementType, secao = 'Instalações') => (
     <div className="flex items-center gap-4">
       <button
         type="button"
@@ -5235,7 +5234,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         <div className="flex items-center gap-2 mb-1">
           <span className="text-xs font-medium text-blue-600">{study.name}</span>
           <span className="w-1 h-1 bg-gray-300 rounded-full" />
-          <span className="text-xs font-medium text-gray-400">Planta Inteligente · Instalações</span>
+          <span className="text-xs font-medium text-gray-400">Planta Inteligente · {secao}</span>
         </div>
         <h1 className="flex items-center gap-2 text-2xl font-black text-gray-900 tracking-tight">
           <Icone className="h-6 w-6 text-blue-700" />
@@ -5339,6 +5338,29 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   />
                 }
               />
+          </div>
+        </div>
+      )}
+      {telaAberta === 'armadura' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="armadura">
+          {cabecalhoDaTela(
+            'Armadura',
+            `${armadura.pecas.length} peça(s) · ${armadura.totais.totalKg.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} kg de aço pelo esquema mínimo da NBR 6118 com piso por taxa de referência — pré-quantitativo, não detalhamento. Hipóteses gravadas no estudo; o kg vai ao painel da peça, aos Quantitativos, à planilha e ao orçamento. Lançamento manual por peça fica no painel dela.`,
+            Grip,
+            'Analisar',
+          )}
+          <div>
+            <TelaArmadura
+              hipoteses={hipotesesDeArmadura}
+              onHipoteses={armaduraDoEstudo.setHipoteses}
+              armadura={armadura}
+              onSelecionarPeca={(id) => {
+                selecionar([id]);
+                setTelaAberta(null);
+              }}
+              carregando={armaduraDoEstudo.carregando}
+              persistenciaIndisponivel={armaduraDoEstudo.persistenciaIndisponivel}
+            />
           </div>
         </div>
       )}
@@ -5911,8 +5933,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   icone={Grip}
                   rotulo="Armadura"
                   contagem={armadura.pecas.length || undefined}
-                  ativo={tarefaAberta === 'armadura'}
-                  onClick={() => alternarTarefa('armadura')}
+                  ativo={telaAberta === 'armadura'}
+                  onClick={() => alternarTela('armadura')}
                   ajuda="Aço por peça e por família — mínimos da NBR 6118 + taxa de referência; hipóteses do estudo"
                 />
               )}
@@ -7909,7 +7931,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               {tarefaAberta === 'vigas' && <RectangleHorizontal className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'lajes' && <Layers className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'fundacoes' && <SquareStack className="h-5 w-5 text-blue-700" />}
-              {tarefaAberta === 'armadura' && <Grip className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -7925,8 +7946,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               'Uma viga por parede, de pilar a pilar, no topo da alvenaria do pavimento ativo. Prévia tracejada no desenho; gravar é um passo só, e Ctrl+Z desfaz.'}
             {tarefaAberta === 'lajes' &&
               'Uma laje por ambiente fechado, apoiada no topo das paredes do pavimento ativo. Prévia tracejada no desenho; gravar é um passo só, e Ctrl+Z desfaz.'}
-            {tarefaAberta === 'armadura' &&
-              'Pré-quantitativo de aço: o esquema mínimo da NBR 6118 de cada peça, com um piso por taxa de referência. Hipóteses gravadas no estudo; o kg vai ao painel da peça, aos Quantitativos, à planilha e ao orçamento.'}
             {tarefaAberta === 'fundacoes' &&
               'Um bloco de coroamento sob cada pilar do pavimento ativo, com a(s) estaca(s) dele, e a viga baldrame sobre os blocos ao longo de cada parede. Prévia tracejada no desenho; gravar é um passo só, e Ctrl+Z desfaz.'}
             {tarefaAberta === 'tomadas' && (
@@ -7966,7 +7985,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'armadura' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
 
@@ -8584,16 +8603,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             </div>
           )}
 
-          {tarefaAberta === 'armadura' && (
-            <PainelArmadura
-              hipoteses={hipotesesDeArmadura}
-              onHipoteses={armaduraDoEstudo.setHipoteses}
-              armadura={armadura}
-              onSelecionarPeca={(id) => selecionar([id])}
-              carregando={armaduraDoEstudo.carregando}
-              persistenciaIndisponivel={armaduraDoEstudo.persistenciaIndisponivel}
-            />
-          )}
           {tarefaAberta === 'lajes' && planoDeLajes && (
             <div className="space-y-4">
               <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">

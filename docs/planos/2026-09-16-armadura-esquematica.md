@@ -137,3 +137,26 @@ manda null) · editor (+1: origem manual no painel, contagem e linha "manual" na
 suíte 332/4393 · tsc · build. App real na planta do usuário (escritas bloqueadas, 0 erros JS): P3
 lançado com 8 Ø 12,5 + estribos Ø 6,3 c/14 → "≈ 33,6 kg (manual)", seção com 8 barras. Captura
 `out-man/man-01-painel.png`.
+
+## Tela própria para a armadura (16/09/2026)
+
+> criar tela para o propria para armadura
+
+A gaveta "Armadura" virou **tela em fluxo** (`TelaArmadura.tsx`, antes `PainelArmadura`), no molde
+do Quadro de cargas: `telaAberta = 'armadura'` (botão Analisar › Relatórios › Armadura), raiz
+`space-y-6 pb-20` com `data-tela="armadura"`, cabeçalho padrão (voltar, trilha "Planta Inteligente ·
+Analisar", `h1`), editor escondido enquanto aberta. Sem cartão em volta: `TabsBar` (§19.1) +
+`StandardTable` (§5.2) com toolbar acoplada (busca, filtro por família, ajuste de colunas).
+
+- **Por peça**: Peça · Tipo · Concreto (m³) · Aço (kg) · kg/m³ · CA-50 · CA-60 · Origem (chip:
+  esquema mínimo / taxa de referência / manual) · Esquema (com os avisos); ordenação, busca, filtro
+  por família, totais do recorte; clicar na linha seleciona a peça e volta ao editor.
+- **Por família**: peças, concreto, aço, kg/m³ efetivo e a taxa de referência da hipótese.
+- **Hipóteses**: a caixa de antes (fck, CAA, perda, estribo, trecho da estaca, bitolas, taxas,
+  "Voltar ao padrão", contagem e limpeza dos manuais, estado de persistência).
+- `cabecalhoDaTela` ganhou o parâmetro `secao` (padrão "Instalações").
+
+Prova: editor (2 testes reescritos para a tela: `data-tela`, `h1`, abas, taxa 0 → esquema mínimo,
+voltar; manual visto na tela) · suíte 332/4393 · tsc · `check-ui-standard.sh` · build · app real
+na planta do usuário (0 erros JS, escritas bloqueadas): tela com 67 peças, abas "Por peça 67 · Por
+família 4 · Hipóteses", total 2.430,3 kg. Capturas `out-tela/tela-0{1,2,3}-*.png`.

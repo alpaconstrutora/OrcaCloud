@@ -73,3 +73,20 @@ Na planta do usuário, depois de Relançar vigas: pilar × viga 26 → 12 (só o
 pilar intermediário, todos cedidos), viga × viga 10 → 4 (0,001 m³, cedidos), **zero pares contados
 duas vezes**. Teste novo: casa com pilares automáticos → 0 viga × viga, 5 pilar × viga (3
 intermediários + 2 Ts), todas as vigas cedendo.
+
+## Alvenaria × viga no 3D (16/09/2026, print: "ainda existe sobreposição alvenaria × viga")
+
+O quantitativo já descontava (parede cede), mas o 3D desenhava a viga DENTRO da parede: as
+faces coplanares davam o serrilhado do print. Duas causas, duas correções:
+
+1. `perfilDaParedeComVaos` (`utils/blueprintElevation.ts`) só considerava peça PONTO que cruza
+   o piso como interrupção — a viga estava fora por decisão de 01/09 ("passa por cima"). A viga
+   EMBUTIDA (base abaixo do topo da parede) agora entra como furo estrutural; viga acima do topo
+   e laje continuam fora. Teste `blueprint3dCorte` atualizado (embutida → 1 furo 2300..2800;
+   por cima → 0).
+2. `geometriaDaParede` (`Blueprint3DViewer.tsx`): furo que encosta no topo/base é ENTALHE, e o
+   `ExtrudeGeometry` ignora furo que toca a borda. O trecho da parede é fatiado nas abscissas em
+   que a peça encostada começa/termina e cada fatia é um retângulo da altura que SOBRA; porta e
+   janela seguem furos dentro da fatia. Teste novo `blueprint3dParedeEntalhe` (5): topo da malha
+   em 2,40 sob a viga; sem ceder 2,80; porta preservada; viga parcial → fatias 2,4/2,8/2,8;
+   peça no meio da altura continua furo. Provado na Planta 14/09/2026 do usuário no 3D real.

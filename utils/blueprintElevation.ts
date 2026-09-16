@@ -784,13 +784,15 @@ export function perfilDaParedeComVaos(model: BlueprintModel, wall: Wall): Perfil
           // Visto na planta real do usuário em 01/09/2026: a laje encostava em
           // 2,69 m de uma parede, e isso viraria um rasgo de 2,69 m nela.
           //
-          // Fisicamente é óbvio: laje e viga não interrompem parede — uma
-          // passa por baixo e a outra por cima. Quem interrompe é o pilar.
+          // Fisicamente: a laje não interrompe parede — passa por baixo ou por
+          // cima. Quem interrompe é o pilar; e a VIGA EMBUTIDA no topo da
+          // alvenaria (base abaixo do topo da parede) abre um entalhe nela —
+          // 16/09/2026, print do 3D: "ainda existe sobreposição alvenaria ×
+          // viga". Viga acima do topo da parede (passa por cima) continua fora.
           .filter(
             (s) =>
-              FORMA_ESTRUTURAL[s.kind] === 'PONTO' &&
-              s.baseMm <= 0 &&
-              s.baseMm + s.alturaMm > 0,
+              (FORMA_ESTRUTURAL[s.kind] === 'PONTO' && s.baseMm <= 0 && s.baseMm + s.alturaMm > 0) ||
+              (FORMA_ESTRUTURAL[s.kind] === 'LINHA' && s.baseMm < wall.heightMm && s.baseMm + s.alturaMm > 0),
           )
           // Com a MITRA: o retângulo desenhado avança além do vértice do eixo, e
           // o vão precisa avançar junto — senão sobra um toco de alvenaria solto

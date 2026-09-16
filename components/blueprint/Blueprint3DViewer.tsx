@@ -203,7 +203,7 @@ function biselarPonta(
  * A origem local continua em `wall.a`, e é por isso que `position` e os furos
  * (medidos a partir de `a`) não mudam com a mitra.
  */
-function geometriaDaParede(
+export function geometriaDaParede(
   model: BlueprintModel,
   wall: BlueprintModel['walls'][number],
   ocultos?: Set<string>,
@@ -312,28 +312,40 @@ function geometriaDaParede(
   const pecas: { geom: THREE.BufferGeometry; quaternion: THREE.Quaternion; position: THREE.Vector3 }[] =
     [];
 
-  for (const tr of trechos) {
-    if (tr.x1 - tr.x0 <= EPS) continue;
-
+  // ─── PEÇA MAIS BAIXA QUE A PAREDE ENCOSTADA NO TOPO: É ENTALHE, NÃO FURO ─────
+  //
+  // A viga embutida no topo da alvenaria (16/09/2026, print do 3D do usuário:
+  // *"ainda existe sobreposição alvenaria × viga"*) caía aqui como FURO com o
+  // topo a 1 mm da borda — e o `ExtrudeGeometry` não abre furo que encosta na
+  // borda: a parede saía inteira, a face dela ficava coplanar com a face da
+  // viga e o que se via era o serrilhado do z-fighting. É a mesma armadilha do
+  // pilar de ponta (acima), só que na vertical.
+  //
+  // O remédio é o mesmo: em vez de furo, o PERFIL muda. O trecho é fatiado nas
+  // abscissas em que uma peça encostada no topo ou na base começa e termina, e
+  // cada fatia é um retângulo da altura que SOBRA (de 0 até a base da viga, por
+  // exemplo). Porta e janela continuam furos dentro da fatia que as contém.
+  const montarFatia = (
+    sx0: number,
+    sx1: number,
+    ya: number,
+    yb: number,
+    furosDaFatia: readonly { x0: number; x1: number; y0: number; y1: number }[],
+  ) => {
     const shape = new THREE.Shape();
-    shape.moveTo(tr.x0, 0);
-    shape.lineTo(tr.x1, 0);
-    shape.lineTo(tr.x1, A);
-    shape.lineTo(tr.x0, A);
-    shape.lineTo(tr.x0, 0);
+    shape.moveTo(sx0, ya);
+    shape.lineTo(sx1, ya);
+    shape.lineTo(sx1, yb);
+    shape.lineTo(sx0, yb);
+    shape.lineTo(sx0, ya);
 
-    // A abertura vai para o trecho que a contém — e continua sendo FURO, porque
+    // A abertura vai para a fatia que a contém — e continua sendo FURO, porque
     // porta e janela são interiores por natureza: elas não encostam na borda.
-    // A peça de concreto que NÃO atravessa toda a altura entra aqui pelo mesmo
-    // caminho: ela deixa alvenaria acima, então é furo, não corte.
-    for (const f of [
-      ...furosVisiveis,
-      ...perfil.furosEstruturais.filter((x) => !atravessaTudo(x)),
-    ]) {
-      const x0 = Math.max(tr.x0 + EPS, f.x0 * S);
-      const x1 = Math.min(tr.x1 - EPS, f.x1 * S);
-      const y0 = Math.max(EPS, f.y0 * S);
-      const y1 = Math.min(A - EPS, f.y1 * S);
+    for (const f of furosDaFatia) {
+      const x0 = Math.max(sx0 + EPS, f.x0);
+      const x1 = Math.min(sx1 - EPS, f.x1);
+      const y0 = Math.max(ya + EPS, f.y0);
+      const y1 = Math.min(yb - EPS, f.y1);
       if (x1 <= x0 || y1 <= y0) continue;
       const furo = new THREE.Path();
       furo.moveTo(x0, y0);
@@ -379,10 +391,48 @@ function geometriaDaParede(
       // Só a ponta da PAREDE entra — a borda de um trecho interrompido pelo
       // concreto é corte reto e continua reto.
       if (!semMitra) {
-        if (Math.abs(tr.x0 - xIni) < TOL_PONTA) biselarPonta(geom, xIni, (z) => -avancoA(z));
-        if (Math.abs(tr.x1 - xFim) < TOL_PONTA) biselarPonta(geom, xFim, (z) => L + avancoB(z));
+        if (Math.abs(sx0 - xIni) < TOL_PONTA) biselarPonta(geom, xIni, (z) => -avancoA(z));
+        if (Math.abs(sx1 - xFim) < TOL_PONTA) biselarPonta(geom, xFim, (z) => L + avancoB(z));
       }
       pecas.push({ geom, quaternion, position, funcao: faixa.funcao });
+    }
+  };
+
+  for (const tr of trechos) {
+    if (tr.x1 - tr.x0 <= EPS) continue;
+
+    // As peças que NÃO atravessam tudo, recortadas ao trecho, em metros.
+    const parciais = perfil.furosEstruturais
+      .filter((f) => !atravessaTudo(f))
+      .map((f) => ({ x0: Math.max(tr.x0, f.x0 * S), x1: Math.min(tr.x1, f.x1 * S), y0: f.y0 * S, y1: f.y1 * S }))
+      .filter((f) => f.x1 - f.x0 > EPS && f.y1 - f.y0 > EPS);
+    const encostaNaBorda = (f: { y0: number; y1: number }) => f.y0 <= EPS || f.y1 >= A - EPS;
+    const entalhes = parciais.filter(encostaNaBorda);
+    const furosDoTrecho = [
+      ...furosVisiveis.map((f) => ({ x0: f.x0 * S, x1: f.x1 * S, y0: f.y0 * S, y1: f.y1 * S })),
+      ...parciais.filter((f) => !encostaNaBorda(f)),
+    ];
+
+    const cortes = [...new Set([tr.x0, tr.x1, ...entalhes.flatMap((e) => [e.x0, e.x1])])].sort((p, q) => p - q);
+    for (let i = 0; i + 1 < cortes.length; i++) {
+      const sx0 = cortes[i];
+      const sx1 = cortes[i + 1];
+      if (sx1 - sx0 <= EPS) continue;
+      const meio = (sx0 + sx1) / 2;
+      // O que sobra da altura nesta fatia: [0, A] menos os entalhes que a cobrem.
+      let faixasY: { ya: number; yb: number }[] = [{ ya: 0, yb: A }];
+      for (const e of entalhes) {
+        if (!(e.x0 <= meio && e.x1 >= meio)) continue;
+        const y0 = e.y0 <= EPS ? 0 : e.y0;
+        const y1 = e.y1 >= A - EPS ? A : e.y1;
+        faixasY = faixasY.flatMap(({ ya, yb }) => {
+          const sobra: { ya: number; yb: number }[] = [];
+          if (y0 > ya) sobra.push({ ya, yb: Math.min(yb, y0) });
+          if (y1 < yb) sobra.push({ ya: Math.max(ya, y1), yb });
+          return sobra.filter((f) => f.yb - f.ya > EPS);
+        });
+      }
+      for (const { ya, yb } of faixasY) montarFatia(sx0, sx1, ya, yb, furosDoTrecho);
     }
   }
 

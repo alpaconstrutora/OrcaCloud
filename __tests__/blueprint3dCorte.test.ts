@@ -201,8 +201,12 @@ describe('3D · o que NÃO interrompe a parede', () => {
     expect(perfilDaParedeComVaos(m, m.walls[0]).furosEstruturais).toHaveLength(0);
   });
 
-  it('VIGA no topo não abre vão nenhum na parede', () => {
-    const m = comPeca({
+  it('VIGA EMBUTIDA no topo abre o entalhe (16/09/2026); viga ACIMA do topo não abre nada', () => {
+    // Antes (01/09) a viga ficava fora por decisão: "passa por cima". Mas a
+    // viga lançada no topo da alvenaria (base 2300 numa parede de 2800) está
+    // DENTRO dela, e o 3D mostrava as duas coplanares — print do usuário,
+    // 16/09/2026: "ainda existe sobreposição alvenaria × viga".
+    const embutida = comPeca({
       type: 'AddStructural',
       kind: 'VIGA',
       pontos: [
@@ -214,8 +218,23 @@ describe('3D · o que NÃO interrompe a parede', () => {
       alturaMm: 500,
       baseMm: 2300,
     } as unknown as Command);
+    const furos = perfilDaParedeComVaos(embutida, embutida.walls[0]).furosEstruturais;
+    expect(furos).toHaveLength(1);
+    expect([furos[0].y0, furos[0].y1]).toEqual([2300, 2800]);
 
-    expect(perfilDaParedeComVaos(m, m.walls[0]).furosEstruturais).toHaveLength(0);
+    const porCima = comPeca({
+      type: 'AddStructural',
+      kind: 'VIGA',
+      pontos: [
+        { x: 0, y: 0 },
+        { x: 5000, y: 0 },
+      ],
+      larguraMm: 150,
+      profundidadeMm: 0,
+      alturaMm: 500,
+      baseMm: 2800,
+    } as unknown as Command);
+    expect(perfilDaParedeComVaos(porCima, porCima.walls[0]).furosEstruturais).toHaveLength(0);
   });
 
   it('PILAR mais BAIXO que a parede não vira trecho removido — vira furo', () => {

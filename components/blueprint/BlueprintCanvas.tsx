@@ -3341,8 +3341,23 @@ export default function BlueprintCanvas({
         if (larguraPx < larguraTexto + 8) continue;
         if (alturaPx < pronto.linhas.length * 13 + 6) continue;
 
-        const alturaLinha = 13;
-        const topo = ancora.y - ((pronto.linhas.length - 1) * alturaLinha) / 2;
+        const alturaLinha = Math.round(13 * fz);
+        let topo = ancora.y - ((pronto.linhas.length - 1) * alturaLinha) / 2;
+        // A LUZ DE TETO nasce no centro do cômodo — o mesmo ponto do rótulo.
+        // Com uma luz a menos de 24 px da âncora, o bloco do nome sobe para
+        // cima do símbolo e do rótulo dele ("Luz teto · C4", que fica à
+        // direita, acima do círculo): nome do ambiente e luminária deixam de
+        // se escrever um por cima do outro (15/09/2026).
+        const luzNoCentro = terminaisDoNivel.find((t) => {
+          if (!ehLuz(t)) return false;
+          const q = paraTela(t.at);
+          return Math.hypot(q.x - ancora.x, q.y - ancora.y) < 24 * fz;
+        });
+        if (luzNoCentro) {
+          const raioDaLuz = emTela(medidasDoTerminal(luzNoCentro).larguraMm / 2) * FATOR_DO_SIMBOLO_DE_LUZ;
+          const fundoDoBloco = ancora.y - raioDaLuz - 14 * fz;
+          topo = fundoDoBloco - (pronto.linhas.length - 1) * alturaLinha;
+        }
         pronto.linhas.forEach((texto, i) => {
           escreverRotulo(ctx, texto, ancora.x, topo + i * alturaLinha, COR_ROTULO_AMBIENTE, Math.round(11 * fz));
         });
@@ -4226,12 +4241,27 @@ export default function BlueprintCanvas({
           let total = grupos.reduce((w, g) => w + (g.tipos.length - 1) * passo, 0) + Math.max(0, grupos.length - 1) * vao;
           // Encolhe o passo e o vão até caber no trecho (com 8 px de folga em cada ponta).
           const util = Math.max(8, comp - 16);
+          let fator = 1;
           if (total > util) {
-            const f = Math.max(0.45, util / total);
-            passo *= f;
-            vao *= f;
-            total *= f;
+            fator = Math.max(0.45, util / total);
+            passo *= fator;
+            vao *= fator;
+            total *= fator;
           }
+          // ── MENOS TEXTO (15/09/2026, print: *"olha que confusão de sobreposições"*) ──
+          // Num trecho curto os grupos encolhem até se tocar e os números em
+          // cima viram uma mancha: quando o passo teve de encolher abaixo de
+          // 75 %, ficam só os traços — o número do circuito está no ponto e no
+          // trecho vizinho, mais longo. A seção sai UMA vez, centrada, quando
+          // é a mesma em todos os circuitos do trecho (o caso comum: 2,5 em
+          // tudo); só se diferem é que cada grupo leva a sua. E o Ø só quando
+          // há folga além dos grupos — repeti-lo em cada trechinho não informa.
+          const cabeTexto = fator >= 0.75;
+          const secoesDoTrecho = grupos
+            .map((g) => (g.circuitoId ? secaoPorCircuito.get(g.circuitoId) ?? null : null))
+            .filter((x): x is number => x != null);
+          const secaoUnica = secoesDoTrecho.length > 0 && secoesDoTrecho.every((x) => x === secoesDoTrecho[0]) ? secoesDoTrecho[0] : null;
+          const cabeDiametro = comp - total >= 44 * fz;
           const emTelaRel = (cx: number, cy: number, r: { t: number; s: number }) => ({
             x: cx + ux * r.t * MEIA + nx * r.s * MEIA,
             y: cy + uy * r.t * MEIA + ny * r.s * MEIA,
@@ -4259,25 +4289,36 @@ export default function BlueprintCanvas({
             const centro = cursor + larg / 2;
             const gx = meio.x + ux * centro;
             const gy = meio.y + uy * centro;
-            // O número do circuito em cima do SEU grupo…
-            ctx.fillStyle = '#334155';
-            ctx.font = `bold ${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
-            const numero = g.circuitoId ? numeroDoCircuito(circuitosPorId.get(g.circuitoId)) : 'r';
-            ctx.fillText(numero, gx - nx * (MEIA + 4 * fz), gy - ny * (MEIA + 4 * fz) + 3 * fz);
-            // …e a seção dele embaixo.
-            const secao = g.circuitoId ? secaoPorCircuito.get(g.circuitoId) : null;
-            if (secao != null) {
-              ctx.font = `${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
-              ctx.fillText(String(secao).replace('.', ','), gx + nx * (MEIA + 4 * fz), gy + ny * (MEIA + 4 * fz) + 3 * fz);
+            if (cabeTexto) {
+              // O número do circuito em cima do SEU grupo…
+              ctx.fillStyle = '#334155';
+              ctx.font = `bold ${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+              const numero = g.circuitoId ? numeroDoCircuito(circuitosPorId.get(g.circuitoId)) : 'r';
+              ctx.fillText(numero, gx - nx * (MEIA + 4 * fz), gy - ny * (MEIA + 4 * fz) + 3 * fz);
+              // …e a seção dele embaixo, só quando os circuitos do trecho diferem.
+              const secao = g.circuitoId ? secaoPorCircuito.get(g.circuitoId) : null;
+              if (secao != null && secaoUnica == null) {
+                ctx.font = `${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+                ctx.fillText(String(secao).replace('.', ','), gx + nx * (MEIA + 4 * fz), gy + ny * (MEIA + 4 * fz) + 3 * fz);
+              }
             }
             cursor += larg + vao;
           }
-          // O Ø à esquerda do conjunto, abaixo da linha — fora do caminho dos números.
-          ctx.font = `${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
-          ctx.textAlign = 'end';
-          const ox = meio.x - ux * (total / 2 + 6 * fz) + nx * (MEIA + 4 * fz);
-          const oy = meio.y - uy * (total / 2 + 6 * fz) + ny * (MEIA + 4 * fz) + 3 * fz;
-          ctx.fillText(`Ø ${t.bitolaMm}`, ox, oy);
+          if (cabeTexto && secaoUnica != null) {
+            // A seção comum a todos, uma vez, embaixo do conjunto.
+            ctx.fillStyle = '#334155';
+            ctx.font = `${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+            ctx.fillText(String(secaoUnica).replace('.', ','), meio.x + nx * (MEIA + 4 * fz), meio.y + ny * (MEIA + 4 * fz) + 3 * fz);
+          }
+          if (cabeDiametro) {
+            // O Ø à esquerda do conjunto, abaixo da linha — fora do caminho dos números.
+            ctx.fillStyle = '#334155';
+            ctx.font = `${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+            ctx.textAlign = 'end';
+            const ox = meio.x - ux * (total / 2 + 6 * fz) + nx * (MEIA + 4 * fz);
+            const oy = meio.y - uy * (total / 2 + 6 * fz) + ny * (MEIA + 4 * fz) + 3 * fz;
+            ctx.fillText(`Ø ${t.bitolaMm}`, ox, oy);
+          }
           ctx.textAlign = 'start';
         }
       }
@@ -4406,29 +4447,63 @@ export default function BlueprintCanvas({
 
         if (mostrarCircuitos) {
           const circuito = circuitosPorId.get(t.circuitoId ?? '');
-          const afast = Math.hypot(apice.x - meioDaBase.x, apice.y - meioDaBase.y) / 2 + 4;
+          const alturaDoTriangulo = Math.hypot(apice.x - meioDaBase.x, apice.y - meioDaBase.y);
+          // A direção do ÁPICE é o lado do ambiente; a base está na parede — e
+          // na parede passa o eletroduto, com os números dos condutores. Os
+          // textos da tomada vão todos para o lado do ambiente, um embaixo do
+          // outro, na direção do ápice (15/09/2026: a potência "em cima" caía
+          // em cima do eletroduto, e o número lia-se misturado aos dos
+          // condutores). E só o NÚMERO do circuito entre traços, como na
+          // norma — o nome inteiro ("C9 — TUG Ambiente 4 2") atravessava a
+          // parede vizinha.
+          const dx = alturaDoTriangulo > 0 ? (apice.x - meioDaBase.x) / alturaDoTriangulo : 0;
+          const dy = alturaDoTriangulo > 0 ? (apice.y - meioDaBase.y) / alturaDoTriangulo : 1;
+          const passoTexto = 11 * fz;
+          const folga = alturaDoTriangulo / 2 + 4;
+          // As linhas empilham SEMPRE na vertical (texto é horizontal): com o
+          // ápice para cima/baixo, o bloco fica abaixo/acima do símbolo,
+          // centrado; com o ápice para um lado, o bloco fica desse lado,
+          // alinhado pela borda que encosta no símbolo, centrado na altura.
+          const vertical = Math.abs(dy) >= Math.abs(dx);
+          const linhas = t.potenciaW != null ? (t.sugerida && t.rotulo ? 3 : 2) : t.sugerida && t.rotulo ? 2 : 1;
+          const linha = (k: number) =>
+            vertical
+              ? { x: c.x, y: c.y + Math.sign(dy || 1) * (folga + passoTexto * k + passoTexto / 2) }
+              : { x: c.x + Math.sign(dx) * folga, y: c.y - ((linhas - 1) * passoTexto) / 2 + passoTexto * k };
           ctx.font = `bold ${Math.round(10 * fz)}px ui-sans-serif, system-ui, sans-serif`;
-          ctx.textAlign = 'center';
-          // Potência em cima — só quando declarada: "0 W" numa tomada seria
-          // afirmar carga zero onde ninguém informou nada.
-          if (t.potenciaW != null) {
-            ctx.fillStyle = '#334155';
-            ctx.fillText(`${t.potenciaW} ${UNIDADE_DE_POTENCIA}`, c.x, c.y - afast - 3);
-          }
-          // Circuito embaixo, entre traços como na norma; "?" quando falta.
+          ctx.textAlign = vertical ? 'center' : dx > 0 ? 'start' : 'end';
+          ctx.textBaseline = 'middle';
+          // Circuito entre traços, como na norma; "?" quando falta.
+          const p0 = linha(0);
           ctx.fillStyle = circuito ? '#334155' : COR_ALERTA;
-          ctx.fillText(`-${circuito ?? '?'}-`, c.x, c.y + afast + 11);
+          ctx.fillText(`-${circuito ? numeroDoCircuito(circuito) : '?'}-`, p0.x, p0.y);
+          // Potência na linha seguinte — só quando declarada: "0 W" numa tomada
+          // seria afirmar carga zero onde ninguém informou nada.
+          if (t.potenciaW != null) {
+            const p1 = linha(1);
+            ctx.fillStyle = '#334155';
+            ctx.fillText(`${t.potenciaW} ${UNIDADE_DE_POTENCIA}`, p1.x, p1.y);
+          }
+          ctx.textBaseline = 'alphabetic';
           // A instrução da sugerida ("Posicione sobre a bancada da pia"): é o
           // que o ponto pede a quem olha, e some junto com a marca ao mover.
           if (t.sugerida && t.rotulo) {
+            const p2 = linha(t.potenciaW != null ? 2 : 1);
+            ctx.textBaseline = 'middle';
             ctx.fillStyle = COR_PREVIA;
             ctx.font = `italic ${Math.round(10 * fz)}px ui-sans-serif, system-ui, sans-serif`;
-            ctx.fillText(t.rotulo, c.x, c.y + afast + 22);
+            ctx.fillText(t.rotulo, p2.x, p2.y);
+            ctx.textBaseline = 'alphabetic';
           }
           if (t.comando) {
+            // A letra do comando do outro lado do bloco de texto.
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
             ctx.fillStyle = COR_DA_DISCIPLINA.ELETRICA;
             ctx.font = `italic bold ${Math.round(11 * fz)}px ui-sans-serif, system-ui, sans-serif`;
-            ctx.fillText(t.comando, c.x + afast + 8, c.y + 4);
+            const pc = vertical ? { x: c.x + folga + 6 * fz, y: c.y } : { x: c.x, y: c.y - Math.sign(dy || 1) * (folga + 6 * fz) };
+            ctx.fillText(t.comando, pc.x, pc.y);
+            ctx.textBaseline = 'alphabetic';
           }
           ctx.textAlign = 'start';
         }
@@ -4586,7 +4661,9 @@ export default function BlueprintCanvas({
       // conta de quem lê. Âmbar é a cor de alerta do sistema.
       if (t.disciplina === 'ELETRICA' && mostrarCircuitos) {
         const circuito = circuitosPorId.get(t.circuitoId ?? '');
-        const raio = emTela(md.larguraMm / 2);
+        // O raio DESENHADO (a luz sai 2× maior): com o raio da peça, o rótulo
+        // da luz nascia dentro do círculo.
+        const raio = emTela(md.larguraMm / 2) * (ehLuz(t) ? FATOR_DO_SIMBOLO_DE_LUZ : 1);
         // ⚠️ O ponto sem circuito escreve "?" NO MESMO LUGAR do nome — e não
         // ganha um anel em volta, como eu tinha feito primeiro.
         //
@@ -4601,7 +4678,11 @@ export default function BlueprintCanvas({
         // que é e quem alimenta — as duas perguntas que se faz olhando um ponto
         // numa prancha elétrica. Sem tipo, a sigla vira "?" também.
         const sigla = t.tipoEletrico ? SIGLA_DO_PONTO_ELETRICO[t.tipoEletrico] : null;
-        const texto = `${sigla ?? '?'} · ${circuito ?? '?'}`;
+        // Só o NÚMERO do circuito ("Luz teto · C4"), não o nome inteiro — o
+        // nome ("C4 — Iluminação Ambiente 4") atravessava o cômodo e caía em
+        // cima do rótulo do ambiente e dos condutores (15/09/2026). O nome
+        // completo está no quadro de cargas e no painel do ponto.
+        const texto = `${sigla ?? '?'} · ${circuito ? `C${numeroDoCircuito(circuito)}` : '?'}`;
         ctx.font = `bold ${Math.round(11 * fz)}px ui-sans-serif, system-ui, sans-serif`;
         ctx.fillStyle = sigla && circuito ? '#334155' : COR_ALERTA;
         if (ehInterruptor) {
@@ -4632,8 +4713,8 @@ export default function BlueprintCanvas({
           ctx.fillText(`${t.potenciaW} ${UNIDADE_DE_POTENCIA}`, c.x, c.y + raio + 12);
           ctx.textAlign = 'start';
         }
-        const ehLuz = t.tipoEletrico?.startsWith('ILUMINACAO') ?? false;
-        if (ehLuz && t.potenciaW != null && raio >= 9) {
+        const luminaria = t.tipoEletrico?.startsWith('ILUMINACAO') ?? false;
+        if (luminaria && t.potenciaW != null && raio >= 9) {
           ctx.fillStyle = '#ffffff';
           ctx.font = `bold ${Math.min(Math.round(11 * fz), raio)}px ui-sans-serif, system-ui, sans-serif`;
           ctx.textAlign = 'center';

@@ -48,3 +48,27 @@ dele**, embaixo a **seção dele**; o "Ø 25" fica à esquerda do conjunto, abai
 da linha. Retorno sem dono é grupo "r". Trecho curto: passo e vão encolhem até
 caber (mínimo 45 %). Prova: tronco QDC→luz com C1 e C2 — dois grupos separados,
 "1 / 1,5" e "2 / 2,5", Ø 25 à esquerda; ramal luz→TUG só com o grupo "2".
+
+## Sobreposições (15/09/2026, print: "olha que confusão de sobreposições")
+
+Quatro causas no canvas, todas tratadas em `BlueprintCanvas.tsx`:
+
+1. **Rótulo do ponto** escrevia o nome inteiro do circuito ("Luz teto · C4 —
+   Iluminação Ambiente 4"), atravessando o cômodo. Agora só sigla + número
+   ("Luz teto · C4"); a tomada leva `-4-` entre traços, como na norma. O nome
+   completo vive no quadro de cargas e no painel do ponto. O rótulo da luz usa
+   o raio DESENHADO (2×) — nascia dentro do círculo.
+2. **Tomada**: potência ia "para cima" (lado da parede, onde passa o eletroduto
+   com os números dos condutores). Número do circuito e potência (e a instrução
+   da sugerida) formam um bloco do lado do ambiente (direção do ápice), linhas
+   sempre empilhadas na vertical; letra do comando do lado oposto.
+3. **Condutores**: números/seções só quando os grupos couberam sem encolher
+   abaixo de 75 % (senão só os traços); seção UMA vez, centrada, quando é a
+   mesma em todos os circuitos do trecho; Ø só com ≥ 44 px de folga além dos grupos.
+4. **Nome do ambiente** sobe para cima do símbolo e do rótulo da luz quando há
+   luz de teto a menos de 24 px da âncora (a luz nasce no centróide, onde o
+   nome ficava).
+
+Prova: harness Playwright (escritas bloqueadas, 0 erros JS) com quadro, luz,
+tomadas e eletrodutos: "Luz teto · C1", tomadas com "-2- / 100 VA" empilhados do
+lado do ambiente, seção 2,5 uma vez por trecho, Ø só nos trechos longos.

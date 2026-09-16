@@ -54,3 +54,22 @@ Minhas:
 
 - `npx tsc --noEmit` ✅ · suíte completa 325 arquivos / 4294 testes ✅ · `npm run build` ✅ · goldens intactos.
 - App real (vite 3147, Playwright, escritas a `/rest/v1/**` abortadas — 18, 0 erros JS), estudo com 45 paredes + retângulo e interna: Pilares 66 → Lançar; Vigas 38 (prévia tracejada ao longo de cada parede, rótulos V34…, tabela com seção por vão) → Lançar pela pílula; Lajes 7 (prévia preenchendo cada ambiente, L6/L7; "Cozinha 6,70 m²") → Lançar; três Desfazer devolvem 66 / 38 / 7. Capturas `out-vl/vl-0*.png`.
+
+## Sobreposições (16/09/2026, prints do 3D: "existem sobreposições")
+
+Medido na planta do usuário (Planta 14/09/2026, payload lido do banco) com `sobreposicoesDoModelo`
++ `computeQuantities`: parede × pilar (26) e parede × viga (27) já descontavam da parede; mas
+**pilar × viga (26 pares, 0,39 m³) e viga × viga nos cantos (10 pares) eram contados duas vezes**
+— ninguém cedia. Laje × parede e laje × viga: nenhuma (a laje apoia no topo, cotas encostam).
+
+Correção em `planejarVigas`: (1) as pontas da viga **recuam até a face do pilar** que as contém
+(interseção do eixo com a pegada do pilar) — some a viga atravessando o pilar do canto e as duas
+vigas do canto deixam de se cruzar; o vão/altura continuam medidos de eixo a eixo; (2) a viga
+nasce marcada para **ceder** (`SetCedeSobreposicao` pelo id previsto, no mesmo lote): o que
+sobrepõe um pilar intermediário ou de T sai do concreto da viga, não do pilar; parede × viga
+segue descontando da parede (o kernel desempata pela parede quando os dois cedem).
+
+Na planta do usuário, depois de Relançar vigas: pilar × viga 26 → 12 (só onde a viga passa sobre
+pilar intermediário, todos cedidos), viga × viga 10 → 4 (0,001 m³, cedidos), **zero pares contados
+duas vezes**. Teste novo: casa com pilares automáticos → 0 viga × viga, 5 pilar × viga (3
+intermediários + 2 Ts), todas as vigas cedendo.

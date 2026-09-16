@@ -72,10 +72,11 @@ describe('planejarVigas — uma viga por parede, de pilar a pilar', () => {
     const plano = vigas(m, t);
     expect(plano.motivo).toBeNull();
     expect(plano.vigas).toHaveLength(5);
+    // As pontas que caem no pilar P3 (19×19 em (0,0)) recuam até a face dele (95).
     expect(plano.vigas.map(eixo)).toEqual([
-      '0,0→6000,0',
       '0,2000→6000,2000',
-      '0,4000→0,0',
+      '0,4000→0,95',
+      '95,0→6000,0',
       '6000,0→6000,4000',
       '6000,4000→0,4000',
     ]);
@@ -89,11 +90,13 @@ describe('planejarVigas — uma viga por parede, de pilar a pilar', () => {
     const w1 = plano.vigas.find((v) => v.a.y === 0 && v.b.y === 0)!;
     const w3 = plano.vigas.find((v) => v.a.y === 4000 && v.b.y === 4000)!;
     // w1: apoios em 0 (canto), 3000 (P4 existente) e 6000 → maior vão 3 m → 300 (mínimo).
-    expect([w1.maiorVaoMm, w1.alturaMm, w1.apoios]).toEqual([3000, 300, 3]);
+    // O vão é medido de EIXO a eixo; o recuo até a face de P3 só encurta a peça (5905).
+    expect([w1.maiorVaoMm, w1.alturaMm, w1.apoios, w1.comprimentoMm]).toEqual([3000, 300, 3, 5905]);
     // w3: só os cantos → 6 m → 600.
     expect([w3.maiorVaoMm, w3.alturaMm, w3.apoios]).toEqual([6000, 600, 2]);
     // w4 (vertical, 4 m) tem o T em (0,2000): 2 m → mínimo 300.
     const w4 = plano.vigas.find((v) => v.a.x === 0 && v.b.x === 0)!;
+    expect(eixo(w4)).toBe('0,4000→0,95');
     expect([w4.maiorVaoMm, w4.alturaMm]).toEqual([2000, 300]);
     // Divisor 12: 6 m → 500. Mínimo 400: onde L/10 < 400, fica 400.
     expect(vigas(m, t, { divisorDaAltura: 12 }).vigas.find((v) => v.a.y === 4000 && v.b.y === 4000)!.alturaMm).toBe(500);
@@ -163,8 +166,10 @@ describe('planejarVigas — uma viga por parede, de pilar a pilar', () => {
     expect(r.diff.created.filter((id) => id.startsWith('str_'))).toEqual(plano.vigas.map((v) => v.idPrevisto));
     expect(r.model.walls.every((w) => w.cedeSobreposicao === true)).toBe(true);
     expect(conferirPlanoDeVigas(m, plano)).toEqual({ ok: true });
-    const v1 = r.model.structures.find((s) => s.rotulo === 'V1')!;
-    expect(v1).toMatchObject({ kind: 'VIGA', pontos: [{ x: 0, y: 0 }, { x: 6000, y: 0 }], larguraMm: 150, alturaMm: 300, baseMm: 2500 });
+    // A viga nasce CEDENDO: o que sobrepõe o pilar intermediário P4 sai dela, não do pilar.
+    const daW1 = r.model.structures.find((s) => s.kind === 'VIGA' && s.pontos[0].y === 0 && s.pontos[1].y === 0)!;
+    expect(daW1).toMatchObject({ pontos: [{ x: 95, y: 0 }, { x: 6000, y: 0 }], larguraMm: 150, alturaMm: 300, baseMm: 2500, cedeSobreposicao: true });
+    expect(r.model.structures.filter((s) => s.kind === 'VIGA').every((s) => s.cedeSobreposicao === true)).toBe(true);
     const antes = snapshotHash(m);
     expect(() => applyBatch(m, [...plano.comandos, { type: 'SetCedeSobreposicao', id: 'wall_nope', cede: true }])).toThrow();
     expect(snapshotHash(m)).toBe(antes);
@@ -184,6 +189,21 @@ describe('planejarVigas — uma viga por parede, de pilar a pilar', () => {
     expect(final.structures.filter((s) => s.kind === 'VIGA')).toHaveLength(5);
     expect(final.structures.find((s) => s.kind === 'VIGA' && s.pontos[0].y === 4000 && s.pontos[1].y === 4000)!.alturaMm).toBe(500);
     expect(conferirPlanoDeVigas(depois, re)).toEqual({ ok: true });
+  });
+
+  it('depois dos pilares automáticos, nenhuma viga atravessa pilar de ponta e as vigas do canto não se cruzam', async () => {
+    const { sobreposicoesDoModelo } = await import('../utils/blueprintKernel/sobreposicao');
+    const { m, t } = casa({ pilares: false });
+    const comPilares = applyBatch(m, planejarPilares(m, t, HIPOTESES_PILARES_PADRAO).comandos).model;
+    const final = applyBatch(comPilares, vigas(comPilares, t).comandos).model;
+    const porKind = (id: string) => final.structures.find((s) => s.id === id)?.kind ?? 'PAREDE';
+    const pares = sobreposicoesDoModelo(final).map((s) => [porKind(s.aId), porKind(s.bId)].sort().join('×'));
+    // Viga × viga: zero (recuaram até a face do pilar do canto).
+    expect(pares.filter((p) => p === 'VIGA×VIGA')).toHaveLength(0);
+    // Pilar × viga só onde a viga PASSA POR CIMA de um pilar: os 3 intermediários
+    // e os 2 Ts (a viga da parede atravessada é contínua) — e a viga cede.
+    expect(pares.filter((p) => p === 'PILAR×VIGA')).toHaveLength(5);
+    expect(final.structures.filter((s) => s.kind === 'VIGA').every((s) => s.cedeSobreposicao === true)).toBe(true);
   });
 
   it('sem parede: motivo', () => {

@@ -126,8 +126,17 @@ describe('planejarFundacoes — um bloco por pilar, estacas embaixo', () => {
     const plano = fundar(m, t);
     const tipos = plano.comandos.map((c) => (c.type === 'AddStructural' ? c.kind : c.type));
     expect(tipos.slice(0, 9).every((k) => k === 'BLOCO_COROAMENTO')).toBe(true);
-    expect(tipos.slice(9).every((k) => k === 'ESTACA')).toBe(true);
+    expect(tipos.slice(9, 18).every((k) => k === 'ESTACA')).toBe(true);
+    // Depois, os pilares DESCEM até o topo do bloco (−0,50): um SetStructuralProps por pilar.
+    expect(tipos.slice(18)).toEqual(Array(9).fill('SetStructuralProps'));
+    expect(plano.pilaresQueDescem).toHaveLength(9);
     const r = applyBatch(m, plano.comandos);
+    const pilares = r.model.structures.filter((s) => s.kind === 'PILAR');
+    expect(pilares.every((p) => p.baseMm === -500 && p.baseMm + p.alturaMm === 2800)).toBe(true);
+    // Continua cruzando o piso: os ambientes não mudam.
+    expect(r.model.spaces.map((s) => s.areaMm2).sort()).toEqual(m.spaces.map((s) => s.areaMm2).sort());
+    // Segunda rodada: nada a fazer — nem pilar para descer.
+    expect(planejarFundacoes(r.model, t).pilaresQueDescem).toEqual([]);
     expect(r.diff.created.filter((id) => id.startsWith('str_'))).toEqual([
       ...plano.blocos.map((b) => b.idPrevisto),
       ...plano.estacas.map((e) => e.idPrevisto),

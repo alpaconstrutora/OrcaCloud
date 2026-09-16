@@ -4722,7 +4722,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     if (criados.length > 0) selecionar(criados);
     setResultadoDeFundacoes({
       ok: true,
-      texto: `${planoDeFundacoes.blocos.length} bloco(s) e ${planoDeFundacoes.estacas.length} estaca(s) lançado(s) — Ctrl+Z desfaz.`,
+      texto: `${planoDeFundacoes.blocos.length} bloco(s) e ${planoDeFundacoes.estacas.length} estaca(s) lançado(s)${planoDeFundacoes.pilaresQueDescem.length ? ` · ${planoDeFundacoes.pilaresQueDescem.length} pilar(es) desceram até o bloco` : ''} — Ctrl+Z desfaz.`,
     });
   };
   const relancarFundacoesDoNivel = async () => {
@@ -7971,7 +7971,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     {hipotesesDeFundacoes.alturaDoBlocoMm / 10} cm; topo {hipotesesDeFundacoes.arrasamentoMm / 100} cm abaixo do piso
                     (arrasamento). A estaca começa na base do bloco.
                   </li>
-                  <li>Peça enterrada não sobrepõe parede nem muda ambiente. No canto, o bloco avança além da parede — é o normal.</li>
+                  <li>
+                    O <strong>pilar desce até o topo do bloco</strong> no mesmo lote. Peça enterrada não sobrepõe parede nem
+                    muda ambiente. No canto, o bloco avança além da parede — é o normal.
+                  </li>
                   <li>
                     <strong>Não dimensiona</strong>: fundação se define com a sondagem (NBR 6122) — capacidade de carga,
                     comprimento útil e armadura são do responsável técnico.
@@ -8144,6 +8147,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     pilares já desenhados — <strong>lance os pilares antes</strong>: um pilar no meio da parede baixa a viga.
                   </li>
                   <li>Largura = espessura da parede (mín. 12 cm, NBR 6118 13.2.2), no eixo da alvenaria.</li>
+                  <li>
+                    As pontas <strong>recuam até a face do pilar</strong>; onde a viga passa por cima de um pilar
+                    intermediário, o volume disputado sai da viga (o pilar é contínuo).
+                  </li>
                   <li>
                     Topo no pé-direito
                     {peDireitoDoNivelAtivo != null ? ` (${(peDireitoDoNivelAtivo / 1000).toFixed(2).replace('.', ',')} m)` : ''}; as

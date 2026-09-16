@@ -32,6 +32,11 @@ import { idsPrevistosDeEstrutura, pilaresExistentesNoNivel, proximoNumeroDoRotul
  *     a estaca começa na base do bloco e desce o comprimento declarado.
  *  5. Peça enterrada não cruza o piso: não sobrepõe parede (nada cede) e não
  *     entra no arranjo dos ambientes.
+ *  6. O PILAR DESCE até o topo do bloco (16/09/2026, print do 3D do usuário:
+ *     a casa flutuava 50 cm acima dos blocos). O lote acrescenta um
+ *     `SetStructuralProps` por pilar cujo pé está acima do arrasamento: base =
+ *     −arrasamento, altura = topo − base. O pilar continua cruzando o piso
+ *     (base ≤ 0 < topo), então nada muda no arranjo nem no desconto da parede.
  *
  * ─── O QUE É NORMA E O QUE É HIPÓTESE ───────────────────────────────────────
  *
@@ -113,8 +118,10 @@ export interface PlanoDeFundacoes {
   blocos: BlocoPrevisto[];
   /** Todas as estacas, na ordem dos comandos. */
   estacas: EstacaPrevista[];
-  /** Todos os `AddStructural` de BLOCO (ordem de `blocos`) e depois os de ESTACA. */
+  /** Todos os `AddStructural` de BLOCO (ordem de `blocos`), depois os de ESTACA, depois os pilares que descem. */
   comandos: Command[];
+  /** Pilares cujo pé desce até o topo do bloco (`SetStructuralProps`). */
+  pilaresQueDescem: ObjectId[];
   /** Pilares que já têm bloco — mantidos. */
   pilaresComBloco: number;
   avisos: string[];
@@ -139,6 +146,7 @@ export function planejarFundacoes(
     blocos: [],
     estacas: [],
     comandos: [],
+    pilaresQueDescem: [],
     pilaresComBloco: 0,
     avisos: [],
     motivo,
@@ -221,6 +229,10 @@ export function planejarFundacoes(
     }),
   }));
   const estacas = blocos.flatMap((b) => b.estacas);
+  // O pilar desce até o topo do bloco (todos os do pavimento, inclusive os que
+  // já tinham bloco): pé em −arrasamento, topo onde estava.
+  const topoDoBloco = -arrasamento;
+  const descem = pilares.filter((p) => p.baseMm > topoDoBloco);
   const comandos: Command[] = [
     ...blocos.map(
       (b): Command => ({
@@ -251,8 +263,16 @@ export function planejarFundacoes(
         rotulo: e.rotulo,
       }),
     ),
+    ...descem.map(
+      (p): Command => ({
+        type: 'SetStructuralProps',
+        structuralId: p.id,
+        baseMm: topoDoBloco,
+        alturaMm: p.baseMm + p.alturaMm - topoDoBloco,
+      }),
+    ),
   ];
-  return { levelId, blocos, estacas, comandos, pilaresComBloco, avisos, motivo: null };
+  return { levelId, blocos, estacas, comandos, pilaresQueDescem: descem.map((p) => p.id), pilaresComBloco, avisos, motivo: null };
 }
 
 /** Apaga blocos e estacas do pavimento e lança de novo — ver `relancarPilares`. */
@@ -280,6 +300,10 @@ export function conferirPlanoDeFundacoes(
     const previstos = [...plano.blocos.map((b) => b.idPrevisto), ...plano.estacas.map((e) => e.idPrevisto)];
     if (criados.length !== previstos.length || criados.some((id, i) => id !== previstos[i])) {
       return { ok: false, motivo: `ids previstos (${previstos.join(', ')}) diferem dos criados (${criados.join(', ')})` };
+    }
+    for (const id of plano.pilaresQueDescem) {
+      const p = r.model.structures.find((x) => x.id === id);
+      if (!p || p.baseMm > 0) return { ok: false, motivo: `pilar ${id} não desceu até o bloco` };
     }
     return { ok: true };
   } catch (e) {

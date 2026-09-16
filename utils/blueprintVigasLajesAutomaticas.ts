@@ -1,6 +1,8 @@
 import {
   applyBatch,
+  contornoEmPlanta,
   interiorPoint,
+  intersectSegments,
   pointInPolygon,
   polygonArea,
   projecaoNoSegmento,
@@ -51,6 +53,12 @@ import {
  *     antes: um pilar intermediário divide o vão e baixa a viga.
  *  4. Topo da viga no pé-direito (`baseMm = pé-direito − h`); as paredes da
  *     cadeia passam a ceder o volume (a viga ocupa o topo da alvenaria).
+ *  5. A viga RECUA até a face do pilar em cada ponta (16/09/2026, print do 3D
+ *     do usuário: *"existem sobreposições"* — a viga atravessava o pilar e as
+ *     duas vigas do canto se cruzavam dentro dele; medido na planta dele: 26
+ *     pares pilar × viga e 10 viga × viga contados duas vezes). E a viga nasce
+ *     marcada para CEDER: o que ainda sobrepõe um pilar intermediário no meio
+ *     dela sai do concreto da viga, não do pilar — o pilar é contínuo.
  *
  * ─── LAJES ─────────────────────────────────────────────────────────────────
  *
@@ -203,6 +211,29 @@ export function planejarVigas(
   const pilares = pilaresExistentesNoNivel(model, levelId);
   const porId = new Map(walls.map((w) => [w.id, w]));
 
+  /**
+   * Recua a ponta `ponta` da viga (que segue para `outra`) até a face do pilar
+   * que a contém: o ponto em que o eixo sai da pegada do pilar. Sem pilar na
+   * ponta, fica onde está.
+   */
+  const recuarAteAFace = (ponta: Point, outra: Point): Point => {
+    const pilar = pilares.find((p) => pointInPolygon(contornoEmPlanta(p), ponta));
+    if (!pilar) return ponta;
+    const anel = contornoEmPlanta(pilar);
+    let melhor: Point | null = null;
+    let melhorT = -1;
+    for (let k = 0; k < anel.length; k++) {
+      const r = intersectSegments({ a: ponta, b: outra }, { a: anel[k], b: anel[(k + 1) % anel.length] });
+      if (r.kind !== 'point' || !r.at) continue;
+      const t = dist(ponta, r.at);
+      if (t > melhorT) {
+        melhorT = t;
+        melhor = { x: r.at.x, y: r.at.y };
+      }
+    }
+    return melhor ?? ponta;
+  };
+
   interface Candidata {
     a: Point;
     b: Point;
@@ -255,7 +286,15 @@ export function planejarVigas(
     const alturaMm = alturaDaViga(maiorVao, hip);
     const fina = Math.min(...espessuras);
     const aviso = larguraMm > fina + 40 ? `${larguraMm - fina} mm mais larga que a parede de ${fina} mm` : null;
-    candidatas.push({ a, b, comprimentoMm: c.comprimentoMm, larguraMm, alturaMm, maiorVaoMm: maiorVao, apoios: ordenados.length, wallIds, aviso });
+    // As pontas recuam até a face dos pilares (o vão e a altura já foram medidos de eixo a eixo).
+    const a2 = recuarAteAFace(a, b);
+    const b2 = recuarAteAFace(b, a);
+    const comprimento = Math.round(dist(a2, b2));
+    if (comprimento <= tol) {
+      foraDoPlano.push({ a, b, wallIds, motivo: 'viga inteira dentro do pilar' });
+      continue;
+    }
+    candidatas.push({ a: a2, b: b2, comprimentoMm: comprimento, larguraMm, alturaMm, maiorVaoMm: maiorVao, apoios: ordenados.length, wallIds, aviso });
   }
 
   if (candidatas.length === 0) {
@@ -291,6 +330,10 @@ export function planejarVigas(
         rotulo: v.rotulo,
       }),
     ),
+    // A viga CEDE: o que ela sobrepõe num pilar intermediário sai do concreto
+    // dela (o pilar é contínuo). Parede × viga continua descontando da parede —
+    // quando os dois cedem, o kernel desempata pela parede.
+    ...vigas.map((v): Command => ({ type: 'SetCedeSobreposicao', id: v.idPrevisto, cede: true })),
     ...paredesQueCedem.map((id): Command => ({ type: 'SetCedeSobreposicao', id, cede: true })),
   ];
   return { levelId, vigas, comandos, paredesQueCedem, cadeiasComViga, foraDoPlano, avisos, motivo: null };
@@ -326,6 +369,11 @@ export function conferirPlanoDeVigas(
       const w = r.model.walls.find((x) => x.id === id);
       if (!w) return { ok: false, motivo: `parede ${id} não existe` };
       if (w.cedeSobreposicao !== true) return { ok: false, motivo: `parede ${id} não passou a ceder` };
+    }
+    for (const id of previstos) {
+      if (r.model.structures.find((x) => x.id === id)?.cedeSobreposicao !== true) {
+        return { ok: false, motivo: `viga ${id} não nasceu cedendo` };
+      }
     }
     return { ok: true };
   } catch (e) {

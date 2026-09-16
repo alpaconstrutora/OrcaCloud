@@ -53,3 +53,12 @@ Minhas:
 
 - `npx tsc --noEmit` ✅ · suíte completa 326 arquivos / 4305 testes ✅ · `npm run build` ✅ · goldens intactos.
 - App real (vite 3147, Playwright, escritas a `/rest/v1/**` abortadas — 18, 0 erros JS): pilares lançados (66 + 2 existentes) → "Fundações automáticas 68" → prévia "P1 · B2 · 60 × 60 × 60 · 1 × Ø 30 · 8,00 m · −0,50"; 2 estacas por bloco → rodapé "68 bloco(s) · 136 estaca(s)" e prévia com blocos alongados girados com a parede e dois círculos cada; Lançar pela pílula → status; botão zera e "Relançar" aparece; dois Desfazer devolvem pilares (66) e fundações (2 pilares pré-existentes sem bloco). Captura `out-fd/fd-01-previa.png`.
+
+## O pilar desce até o bloco (16/09/2026, print do 3D: casa flutuando sobre os blocos)
+
+O pilar parava no piso (base 0) e o bloco começava em −0,50 m: 50 cm de vazio. O lote das
+fundações passou a acrescentar, depois das estacas, um `SetStructuralProps` por pilar do
+pavimento cujo pé está acima do arrasamento: `baseMm = −arrasamento`, `alturaMm = topo − base`
+(`pilaresQueDescem`). O pilar continua cruzando o piso, então arranjo e desconto da parede não
+mudam; `conferirPlanoDeFundacoes` confere que desceram. Idempotente (segunda rodada: nenhum
+pilar a descer). Na planta do usuário: 16 pilares descem para −0,50 ao Relançar as fundações.

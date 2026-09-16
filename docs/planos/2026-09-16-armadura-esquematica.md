@@ -110,3 +110,30 @@ persistido) · suíte 332/4388 · tsc · build. App real na planta do usuário (
 Exibir › Armadura mostra barras e estribos nos 16 pilares, vigas, malha das 4 lajes, blocos,
 baldrames e o trecho armado das estacas com espiral, concreto translúcido. Capturas
 `out-a3d/a3d-0{1,2,3}-*.png`.
+
+## Lançamento manual de armadura (16/09/2026)
+
+> implemente lançamento manual de armadura
+
+No painel da peça, abaixo da seção, **"Lançar manualmente"** troca o esquema automático pelo do
+projetista (`ArmaduraManualForm.tsx`): pilar/estaca = barras + Ø + estribo/espiral Ø + c/;
+viga/baldrame = inferiores, superiores (n e Ø próprios) + estribos; laje = malha Ø + c/; bloco =
+barras na largura e na profundidade + Ø + estribos. Os valores nascem do esquema automático atual
+(`manualAPartirDoEsquema`) e o projetista ajusta. "Voltar ao automático" apaga o lançamento.
+
+- Gravado nas hipóteses do estudo por `uid` (`HipotesesDeArmadura.porPeca`, saneado em
+  `hipotesesDeArmaduraDaColuna`) — mesma persistência, mesma leitura em toda parte: kg, 3D, seção,
+  Quantitativos, planilha e orçamento (`origem: 'MANUAL'`, rótulo "manual", memória de cálculo
+  "armadura lançada manualmente (…) × (1 + perda)"). `armaduraDaPeca` usa os números do lançamento e
+  o automático só como régua: abaixo do mínimo da NBR 6118 (As, nº de barras, estribo acima do
+  máximo) vira **aviso**, não impedimento. **O piso da taxa não se aplica** à peça manual.
+- A gaveta Armadura conta "N peça(s) com armadura lançada manualmente" e oferece "Voltar todas ao
+  automático".
+
+Prova: módulo (+3, 16: pilar 8 Ø 16 + Ø 6,3 c/10 → MANUAL sem piso; 4 Ø 10 e c/30 → avisos de
+mínimo/máximo; outra peça segue automática; viga/laje/bloco/estaca manuais; `porPeca` saneado) ·
+painel (+1: Lançar manualmente parte de 4 Ø 12,5 c/15; mudar barras/estribo chama o callback; Voltar
+manda null) · editor (+1: origem manual no painel, contagem e linha "manual" na gaveta, limpar) ·
+suíte 332/4393 · tsc · build. App real na planta do usuário (escritas bloqueadas, 0 erros JS): P3
+lançado com 8 Ø 12,5 + estribos Ø 6,3 c/14 → "≈ 33,6 kg (manual)", seção com 8 barras. Captura
+`out-man/man-01-painel.png`.

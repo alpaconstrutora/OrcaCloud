@@ -2154,3 +2154,45 @@ describe('BlueprintEditor · armadura desenhada', () => {
     expect(JSON.parse(localStorage.getItem('blueprint:vista3dArmadura')!)).toBe(true);
   });
 });
+
+/**
+ * LANÇAMENTO MANUAL DE ARMADURA (16/09/2026): no painel da peça, o esquema
+ * automático dá lugar ao lançado; vale no kg da gaveta Armadura e a gaveta
+ * conta as peças manuais.
+ */
+describe('BlueprintEditor · armadura manual', () => {
+  it('lançar manualmente no painel do pilar muda a origem para manual, o kg e a contagem na gaveta; voltar ao automático limpa', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const m = k.applyBatch(nivel.model, [
+      { type: 'AddWall', levelId: t, a: k.point(0, 0), b: k.point(6000, 0), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(3000, 1500)], larguraMm: 190, profundidadeMm: 190, alturaMm: 2800, rotulo: 'P1' },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    const secao = document.querySelector<HTMLButtonElement>('button[aria-controls="secao-componentes-corpo"]')!;
+    if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
+    await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
+    const props = await screen.findByRole('region', { name: /propriedades/i });
+    expect(props).toHaveTextContent(/mínimos NBR 6118/);
+    await user.click(within(props).getByRole('button', { name: /lançar manualmente/i }));
+    expect(props).toHaveTextContent(/Armadura lançada manualmente/);
+    const barras = within(props).getByRole('spinbutton', { name: /barras longitudinais/i });
+    await user.clear(barras);
+    await user.type(barras, '8');
+    expect(props).toHaveTextContent(/8 Ø 12,5/);
+    expect(props).toHaveTextContent(/\(manual\)/);
+    // A gaveta Armadura vê a peça manual.
+    await abrirAba(/^analisar$/i);
+    await user.click(botao(/^armadura/i));
+    const drawer = await screen.findByRole('dialog');
+    expect(drawer).toHaveTextContent(/1 peça\(s\) com armadura lançada manualmente/);
+    const linhaP1 = within(within(drawer).getByRole('table', { name: /aço por peça/i })).getAllByRole('row').find((r) => /P1/.test(r.textContent ?? ''))!;
+    expect(linhaP1).toHaveTextContent(/manual/);
+    expect(linhaP1).toHaveTextContent(/8 Ø 12,5/);
+    await user.click(within(drawer).getByRole('button', { name: /voltar todas ao automático/i }));
+    expect(drawer).not.toHaveTextContent(/com armadura lançada manualmente/);
+  });
+});

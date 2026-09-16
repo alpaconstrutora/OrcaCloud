@@ -27,7 +27,7 @@
 
 import type { Quantitativos } from './blueprintKernel';
 import { nomeDoTipoDeAbertura, nomeDoTipoEstrutural } from './blueprintKernel';
-import type { ArmaduraQuantificada } from './blueprintArmadura';
+import { ROTULO_DA_ORIGEM, type ArmaduraQuantificada } from './blueprintArmadura';
 
 export type Celula = string | number | null;
 export type Aba = { nome: string; linhas: Celula[][] };
@@ -290,7 +290,7 @@ export function abasDoQuantitativo(
           n2(p.taxaEfetivaKgM3),
           n2(p.kgCa50),
           n2(p.kgCa60),
-          p.origem === 'TAXA' ? 'taxa de referência' : 'esquema mínimo',
+          ROTULO_DA_ORIGEM[p.origem],
           p.descricao,
         ]),
       ],

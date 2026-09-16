@@ -7,7 +7,7 @@
  * 8 m que virou 10 m ganhava 2 m para CIMA, atravessando bloco e baldrame.
  */
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import PainelEstruturaSelecionada, { camposDaNovaAltura } from '../../components/blueprint/PainelEstruturaSelecionada';
@@ -67,6 +67,33 @@ describe('PainelEstruturaSelecionada · aço esquemático (16/09/2026)', () => {
     const cys = [...svg2.querySelectorAll('circle')].map((c) => Number(c.getAttribute('cy')));
     expect(cys.filter((y) => y > 0)).toHaveLength(2); // inferiores (y para baixo no SVG)
     expect(cys.filter((y) => y < 0)).toHaveLength(2); // superiores
+  });
+});
+
+describe('PainelEstruturaSelecionada · lançamento manual de armadura (16/09/2026)', () => {
+  it('"Lançar manualmente" parte do esquema automático; mudar as barras chama onArmaduraManual; "Voltar ao automático" manda null', async () => {
+    const a = armaduraDaPeca(pilar, { volumeConcretoM3: 0.119, comprimentoM: 3.3, areaPlantaM2: 0 }, HIPOTESES_ARMADURA_PADRAO);
+    const onArmaduraManual = vi.fn();
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <PainelEstruturaSelecionada estrutura={pilar} armadura={a} armaduraManual={null} onArmaduraManual={onArmaduraManual} onMedidas={vi.fn()} onTipo={vi.fn()} onExcluir={vi.fn()} />,
+    );
+    await user.click(screen.getByRole('button', { name: /lançar manualmente/i }));
+    expect(onArmaduraManual).toHaveBeenCalledWith({ nLongitudinal: 4, bitolaLongitudinalMm: 12.5, bitolaTransversalMm: 5, espacamentoTransversalCm: 15 });
+    const manual = onArmaduraManual.mock.calls[0][0];
+    const am = armaduraDaPeca(pilar, { volumeConcretoM3: 0.119, comprimentoM: 3.3, areaPlantaM2: 0 }, { ...HIPOTESES_ARMADURA_PADRAO, porPeca: { [pilar.uid]: manual } });
+    rerender(
+      <PainelEstruturaSelecionada estrutura={pilar} armadura={am} armaduraManual={manual} onArmaduraManual={onArmaduraManual} onMedidas={vi.fn()} onTipo={vi.fn()} onExcluir={vi.fn()} />,
+    );
+    expect(screen.getByText(/Armadura lançada manualmente/)).toBeInTheDocument();
+    const barras = screen.getByRole('spinbutton', { name: /barras longitudinais/i });
+    // Campo controlado pelo pai (que aqui não re-renderiza): um change direto.
+    fireEvent.change(barras, { target: { value: '8' } });
+    expect(onArmaduraManual).toHaveBeenLastCalledWith(expect.objectContaining({ nLongitudinal: 8 }));
+    await user.selectOptions(screen.getByRole('combobox', { name: /bitola — estribo/i }), '6.3');
+    expect(onArmaduraManual).toHaveBeenLastCalledWith(expect.objectContaining({ bitolaTransversalMm: 6.3 }));
+    await user.click(screen.getByRole('button', { name: /voltar ao automático/i }));
+    expect(onArmaduraManual).toHaveBeenLastCalledWith(null);
   });
 });
 

@@ -8,8 +8,9 @@ import {
   type StructuralKind,
 } from '../../utils/blueprintKernel';
 import { CampoMedida } from './PainelParedeSelecionada';
-import type { ArmaduraDaPeca } from '../../utils/blueprintArmadura';
+import type { ArmaduraDaPeca, ArmaduraManual } from '../../utils/blueprintArmadura';
 import SecaoArmadaSvg from './SecaoArmadaSvg';
+import ArmaduraManualForm from './ArmaduraManualForm';
 import ControleDeSobreposicao from './ControleDeSobreposicao';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
 import CustoDoElemento from './CustoDoElemento';
@@ -98,6 +99,9 @@ interface Props {
    * mostra (o painel da ferramenta, antes de haver peça, não tem o que dizer).
    */
   armadura?: ArmaduraDaPeca;
+  /** Lançamento MANUAL da armadura desta peça (16/09/2026) — `null` = automático. Com `onArmaduraManual`, o painel oferece o formulário. */
+  armaduraManual?: ArmaduraManual | null;
+  onArmaduraManual?: (spec: ArmaduraManual | null) => void;
   /** Volume que esta peça divide com outro componente, em m³. `0` = nenhum. */
   sobreposicaoM3?: number;
   onCedeSobreposicao?: (cede: boolean) => void;
@@ -134,6 +138,8 @@ export default function PainelEstruturaSelecionada({
   onExcluir,
   grupo,
   armadura,
+  armaduraManual = null,
+  onArmaduraManual,
   sobreposicaoM3 = 0,
   onCedeSobreposicao,
   paredesParaCortar = 0,
@@ -176,14 +182,19 @@ export default function PainelEstruturaSelecionada({
               title={
                 armadura.origem === 'TAXA'
                   ? `Piso da taxa de referência (${armadura.taxaEfetivaKgM3} kg/m³ × volume): o esquema mínimo daria ${armadura.kgEsquema.toFixed(1).replace('.', ',')} kg. Pré-quantitativo, não detalhamento.`
-                  : `Esquema pelos mínimos da NBR 6118 com perda; ${armadura.taxaEfetivaKgM3} kg/m³. Pré-quantitativo, não detalhamento.`
+                  : armadura.origem === 'MANUAL'
+                    ? `Armadura lançada manualmente, com perda; ${armadura.taxaEfetivaKgM3} kg/m³.`
+                    : `Esquema pelos mínimos da NBR 6118 com perda; ${armadura.taxaEfetivaKgM3} kg/m³. Pré-quantitativo, não detalhamento.`
               }
             >
               ≈ {armadura.kg.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg de aço ·{' '}
-              {armadura.descricao} ({armadura.origem === 'TAXA' ? 'taxa de referência' : 'mínimos NBR 6118'})
+              {armadura.descricao} ({armadura.origem === 'TAXA' ? 'taxa de referência' : armadura.origem === 'MANUAL' ? 'manual' : 'mínimos NBR 6118'})
             </p>
           )}
           {armadura && <SecaoArmadaSvg estrutura={estrutura} armadura={armadura} />}
+          {armadura && onArmaduraManual && (
+            <ArmaduraManualForm estrutura={estrutura} armadura={armadura} manual={armaduraManual} onManual={onArmaduraManual} />
+          )}
           <IdentificadorDoElemento uid={estrutura.uid} familia="structural" />
           <CustoDoElemento custo={custo} desatualizado={!!custoDesatualizado} />
         </div>

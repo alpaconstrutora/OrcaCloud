@@ -586,7 +586,12 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
           ref: p.uid,
           rotulo: p.rotulo ? `${p.rotulo} · ${nomeDoTipoEstrutural(p.kind)}` : nomeDoTipoEstrutural(p.kind),
           valor: p.kg,
-          formula: p.origem === 'TAXA' ? 'taxa de referência × volume de concreto' : `esquema mínimo NBR 6118 (${p.descricao}) × (1 + perda)`,
+          formula:
+            p.origem === 'TAXA'
+              ? 'taxa de referência × volume de concreto'
+              : p.origem === 'MANUAL'
+                ? `armadura lançada manualmente (${p.descricao}) × (1 + perda)`
+                : `esquema mínimo NBR 6118 (${p.descricao}) × (1 + perda)`,
           variaveis: {
             tipo: nomeDoTipoEstrutural(p.kind),
             rotulo: p.rotulo || p.structuralId,

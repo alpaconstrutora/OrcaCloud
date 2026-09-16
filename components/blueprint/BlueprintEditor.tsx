@@ -358,7 +358,7 @@ import PainelConferenciaNbr from './PainelConferenciaNbr';
 import { conferirNbr5410 } from '../../utils/blueprintNbr5410';
 import { useBlueprintEletrica } from '../../hooks/useBlueprintEletrica';
 import { useBlueprintArmadura } from '../../hooks/useBlueprintArmadura';
-import { armaduraDoModelo } from '../../utils/blueprintArmadura';
+import { armaduraDoModelo, armaduraManualDe } from '../../utils/blueprintArmadura';
 import PainelArmadura from './PainelArmadura';
 import { hashDaBaseEletrica, memorialEletrico, verificacoesEletricas } from '../../utils/blueprintEletricaExecutivo';
 import { ocupacaoDoTrecho } from '../../utils/blueprintEletricaDimensionamento';
@@ -7688,6 +7688,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     custoDesatualizado={editor.dirtySincePublish}
                     estrutura={grupoSel ? null : estruturaSel}
                     armadura={estruturaSel ? armaduraPorId.get(estruturaSel.id) : undefined}
+                    armaduraManual={estruturaSel ? armaduraManualDe(hipotesesDeArmadura, estruturaSel.uid) : null}
+                    onArmaduraManual={(spec) => {
+                      if (!estruturaSel) return;
+                      // Gravado no estudo por uid (junto das hipóteses): mesma
+                      // persistência, mesma leitura em todo lugar.
+                      const porPeca = { ...(hipotesesDeArmadura.porPeca ?? {}) };
+                      if (spec) porPeca[estruturaSel.uid] = spec;
+                      else delete porPeca[estruturaSel.uid];
+                      const { porPeca: _antigo, ...resto } = hipotesesDeArmadura;
+                      void _antigo;
+                      armaduraDoEstudo.setHipoteses(Object.keys(porPeca).length ? { ...resto, porPeca } : resto);
+                    }}
                     grupo={
                       estruturaSel && !grupoSel
                         ? (() => {

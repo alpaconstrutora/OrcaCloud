@@ -7,6 +7,7 @@ import {
   FCKS_MPA,
   HIPOTESES_ARMADURA_PADRAO,
   PERDAS_PCT,
+  ROTULO_DA_ORIGEM,
   TRECHOS_ARMADOS_DA_ESTACA_M,
   familiaDaPeca,
   tipoDeAco,
@@ -196,6 +197,25 @@ export default function PainelArmadura({ hipoteses: h, onHipoteses, armadura, on
             Voltar ao padrão
           </button>
         </div>
+        {Object.keys(h.porPeca ?? {}).length > 0 && (
+          <p className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+            <span>
+              <strong>{Object.keys(h.porPeca ?? {}).length}</strong> peça(s) com armadura lançada manualmente (no painel da peça) — valem o
+              que foi lançado, sem piso de taxa.
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                const { porPeca: _p, ...resto } = h;
+                void _p;
+                onHipoteses(resto);
+              }}
+              className="rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-700 hover:bg-slate-50"
+            >
+              Voltar todas ao automático
+            </button>
+          </p>
+        )}
         <p className="mt-2 text-[11px] text-slate-500">
           {carregando
             ? 'Carregando as hipóteses do estudo…'
@@ -273,7 +293,7 @@ export default function PainelArmadura({ hipoteses: h, onHipoteses, armadura, on
                     {kg(p.kg)}
                     <span className="block text-[11px] font-normal text-slate-400">{kg(p.taxaEfetivaKgM3)} kg/m³</span>
                   </td>
-                  <td className="py-1.5 text-right text-[11px] text-slate-500">{p.origem === 'TAXA' ? 'taxa de referência' : 'esquema mínimo'}</td>
+                  <td className="py-1.5 text-right text-[11px] text-slate-500">{ROTULO_DA_ORIGEM[p.origem]}</td>
                 </tr>
               ))}
             </tbody>

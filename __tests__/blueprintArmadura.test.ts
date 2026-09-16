@@ -205,6 +205,44 @@ describe('armaduraDoModelo — totais', () => {
   });
 });
 
+describe('armadura MANUAL por peça (16/09/2026)', () => {
+  it('pilar com 8 Ø 16 e estribo Ø 6,3 c/10: origem MANUAL, camadas do lançamento, piso da taxa não se aplica; abaixo do mínimo avisa', () => {
+    const s = peca({ larguraMm: 600, profundidadeMm: 600 });
+    const manual = { ...H, porPeca: { u1: { nLongitudinal: 8, bitolaLongitudinalMm: 16, bitolaTransversalMm: 6.3, espacamentoTransversalCm: 10 } } };
+    const a = armaduraDaPeca(s, quantDe(s), manual);
+    expect(a.origem).toBe('MANUAL');
+    expect(a.camadas[0]).toMatchObject({ n: 8, bitolaMm: 16 });
+    expect(a.camadas[1]).toMatchObject({ bitolaMm: 6.3, espacamentoCm: 10, aco: 'CA-50' });
+    expect(a.kg).toBe(a.kgEsquema); // sem piso
+    expect(a.descricao).toBe('8 Ø 16,0 + estribos Ø 6,3 c/10');
+    expect(a.avisos.some((x) => /abaixo do mínimo/.test(x))).toBe(false);
+    // Abaixo do mínimo (0,4 % × 3600 = 14,4 cm²): 4 Ø 10 = 3,14 cm² → aviso; estribo c/30 acima do máximo (20) → aviso.
+    const pouco = armaduraDaPeca(s, quantDe(s), { ...H, porPeca: { u1: { nLongitudinal: 4, bitolaLongitudinalMm: 10, bitolaTransversalMm: 5, espacamentoTransversalCm: 30 } } });
+    expect(pouco.avisos.some((x) => /armadura longitudinal abaixo do mínimo/.test(x))).toBe(true);
+    expect(pouco.avisos.some((x) => /acima do máximo/.test(x))).toBe(true);
+    // Outra peça (uid diferente) segue automática.
+    const outra = armaduraDaPeca({ ...s, uid: 'u2' }, quantDe(s), manual);
+    expect(outra.origem).not.toBe('MANUAL');
+  });
+
+  it('viga manual com superiores próprias; laje manual muda a malha; bloco manual as duas direções; estaca manual barras e passo', () => {
+    const viga = peca({ kind: 'VIGA', pontos: [{ x: 0, y: 0 }, { x: 6000, y: 0 }], larguraMm: 150, alturaMm: 400, baseMm: 2400 });
+    const av = armaduraDaPeca(viga, quantDe(viga), { ...H, porPeca: { u1: { nLongitudinal: 3, bitolaLongitudinalMm: 12.5, nSuperior: 2, bitolaSuperiorMm: 8, bitolaTransversalMm: 5, espacamentoTransversalCm: 15 } } });
+    expect(av.descricao).toBe('3 Ø 12,5 inf. + 2 Ø 8,0 sup. + estribos Ø 5,0 c/15');
+    const laje = peca({ kind: 'LAJE', pontos: [{ x: 0, y: 0 }, { x: 4000, y: 0 }, { x: 4000, y: 3000 }, { x: 0, y: 3000 }], alturaMm: 100, baseMm: 2800 });
+    const al = armaduraDaPeca(laje, quantDe(laje), { ...H, porPeca: { u1: { nLongitudinal: 1, bitolaLongitudinalMm: 6.3, bitolaTransversalMm: 6.3, espacamentoTransversalCm: 15 } } });
+    expect(al.descricao).toBe('malha inferior Ø 6,3 c/15 nas duas direções');
+    expect(al.camadas[0].comprimentoUnitM).toBeCloseTo((12 * 100) / 15, 3);
+    const bloco = peca({ kind: 'BLOCO_COROAMENTO', larguraMm: 600, profundidadeMm: 600, alturaMm: 600, baseMm: -1100 });
+    const ab = armaduraDaPeca(bloco, quantDe(bloco), { ...H, porPeca: { u1: { nLongitudinal: 6, nSuperior: 4, bitolaLongitudinalMm: 10, bitolaTransversalMm: 6.3, espacamentoTransversalCm: 15 } } });
+    expect(ab.descricao).toBe('malha inferior 6 + 4 Ø 10,0 + estribos Ø 6,3 c/15');
+    const estaca = peca({ kind: 'ESTACA', circular: true, larguraMm: 300, profundidadeMm: 300, alturaMm: 8000, baseMm: -9100 });
+    const ae = armaduraDaPeca(estaca, quantDe(estaca), { ...H, porPeca: { u1: { nLongitudinal: 8, bitolaLongitudinalMm: 12.5, bitolaTransversalMm: 6.3, espacamentoTransversalCm: 15 } } });
+    expect(ae.descricao).toBe('8 Ø 12,5 no trecho armado de 6,0 m + espiral Ø 6,3 passo 15');
+    expect(ae.camadas[1].n).toBe(Math.floor(600 / 15) + 1);
+  });
+});
+
 describe('hipotesesDeArmaduraDaColuna', () => {
   it('completa JSON parcial com o padrão e rejeita valores fora das listas; null no trecho = total', () => {
     expect(hipotesesDeArmaduraDaColuna(null)).toEqual(H);
@@ -212,5 +250,16 @@ describe('hipotesesDeArmaduraDaColuna', () => {
     expect(hipotesesDeArmaduraDaColuna({ fckMpa: 27, caa: 'V', bitolaEstriboMm: 8, perdaPct: -3 })).toMatchObject({ fckMpa: 25, caa: 'II', bitolaEstriboMm: 5, perdaPct: 10 });
     expect(hipotesesDeArmaduraDaColuna({ trechoArmadoDaEstacaM: null }).trechoArmadoDaEstacaM).toBeNull();
     expect(hipotesesDeArmaduraDaColuna({ trechoArmadoDaEstacaM: 4 }).trechoArmadoDaEstacaM).toBe(4);
+  });
+  it('porPeca: entradas válidas passam, inválidas caem, vazio some', () => {
+    const h = hipotesesDeArmaduraDaColuna({
+      porPeca: {
+        a: { nLongitudinal: 6, bitolaLongitudinalMm: 12.5, bitolaTransversalMm: 5, espacamentoTransversalCm: 12, nSuperior: 2 },
+        b: { nLongitudinal: 'x', bitolaLongitudinalMm: 10 },
+        c: null,
+      },
+    });
+    expect(h.porPeca).toEqual({ a: { nLongitudinal: 6, bitolaLongitudinalMm: 12.5, bitolaTransversalMm: 5, espacamentoTransversalCm: 12, nSuperior: 2 } });
+    expect(hipotesesDeArmaduraDaColuna({ porPeca: { b: {} } }).porPeca).toBeUndefined();
   });
 });

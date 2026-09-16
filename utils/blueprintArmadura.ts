@@ -1,5 +1,4 @@
 import type { BlueprintModel, Structural, StructuralKind } from './blueprintKernel';
-import { FORMA_ESTRUTURAL } from './blueprintKernel';
 import { secaoTValida } from './blueprintKernel/secaoT';
 import type { QuantidadeEstrutural, Quantitativos } from './blueprintKernel';
 import { getCobrimentoNominalCm } from './structuralMath';
@@ -79,6 +78,8 @@ export interface HipotesesDeArmadura {
   taxaLajeKgM3: number;
   taxaBlocoKgM3: number;
   taxaEstacaKgM3: number;
+  /** Armadura MANUAL por peça, pelo `uid` — sobrepõe o esquema automático daquela peça. */
+  porPeca?: Record<string, ArmaduraManual>;
 }
 
 export const HIPOTESES_ARMADURA_PADRAO: HipotesesDeArmadura = {
@@ -150,7 +151,7 @@ export interface ArmaduraDaPeca {
   kgPiso: number;
   /** O kg que vale: max(esquema, piso). */
   kg: number;
-  origem: 'ESQUEMA' | 'TAXA';
+  origem: 'ESQUEMA' | 'TAXA' | 'MANUAL';
   kgCa50: number;
   kgCa60: number;
   taxaEfetivaKgM3: number;
@@ -223,19 +224,65 @@ function camada(papel: string, bitolaMm: number, n: number, comprimentoUnitM: nu
 const ganchoCm = (bitolaMm: number) => Math.max(bitolaMm, 7.5);
 
 /**
+ * ARMADURA MANUAL de uma peça (16/09/2026: *"implemente lançamento manual de
+ * armadura"*): o projetista fixa barras, bitolas e espaçamento, e o esquema
+ * automático sai de cena para ESTA peça. O kg vem do que foi lançado (com a
+ * perda); o piso da taxa NÃO se aplica — quem lançou, decidiu. O que ficar
+ * abaixo do mínimo da norma vira aviso, não impedimento.
+ *
+ * Um formato só para as cinco famílias, cada uma lendo o que lhe cabe:
+ *  - pilar/estaca: `nLongitudinal` barras Ø `bitolaLongitudinalMm`; estribo/espiral
+ *    Ø `bitolaTransversalMm` c/ `espacamentoTransversalCm`;
+ *  - viga/baldrame: inferiores (`nLongitudinal`), superiores (`nSuperior`,
+ *    `bitolaSuperiorMm`), estribos;
+ *  - laje: malha Ø `bitolaTransversalMm` c/ `espacamentoTransversalCm` nas duas direções;
+ *  - bloco: `nLongitudinal` ao longo da largura e `nSuperior` ao longo da
+ *    profundidade, Ø `bitolaLongitudinalMm`; estribos.
+ * Gravada nas hipóteses do estudo por `uid` (`porPeca`), porque o uid é a
+ * identidade estável da peça entre publicações.
+ */
+export interface ArmaduraManual {
+  nLongitudinal: number;
+  bitolaLongitudinalMm: number;
+  nSuperior?: number;
+  bitolaSuperiorMm?: number;
+  bitolaTransversalMm: number;
+  espacamentoTransversalCm: number;
+}
+
+/** Como a origem do kg se lê nas tabelas e no orçamento. */
+export const ROTULO_DA_ORIGEM: Record<ArmaduraDaPeca['origem'], string> = {
+  ESQUEMA: 'esquema mínimo',
+  TAXA: 'taxa de referência',
+  MANUAL: 'manual',
+};
+
+/** A armadura manual de uma peça, ou `null` quando ela segue o automático. */
+export function armaduraManualDe(hip: HipotesesDeArmadura, uid: string): ArmaduraManual | null {
+  return hip.porPeca?.[uid] ?? null;
+}
+
+/**
  * O esquema de UMA peça. `quant` traz o volume LÍQUIDO (já com sobreposição
  * descontada) — é o que o piso multiplica; a geometria do esquema sai da própria
- * peça (b, h, L), que é a forma antes de qualquer desconto.
+ * peça (b, h, L), que é a forma antes de qualquer desconto. Com armadura MANUAL
+ * (`hip.porPeca[uid]`), os números vêm dela e o automático só serve de régua
+ * para os avisos.
  */
-export function armaduraDaPeca(s: Structural, quant: Pick<QuantidadeEstrutural, 'volumeConcretoM3' | 'comprimentoM' | 'areaPlantaM2'> , hip: HipotesesDeArmadura): ArmaduraDaPeca {
-  const forma = FORMA_ESTRUTURAL[s.kind];
+export function armaduraDaPeca(s: Structural, quant: Pick<QuantidadeEstrutural, 'volumeConcretoM3' | 'comprimentoM' | 'areaPlantaM2'>, hip: HipotesesDeArmadura): ArmaduraDaPeca {
   const avisos: string[] = [];
   const camadas: CamadaDeArmadura[] = [];
   const fck = Math.max(15, hip.fckMpa);
   const fctmMpa = 0.3 * fck ** (2 / 3);
   const perda = 1 + Math.max(0, hip.perdaPct) / 100;
+  const manual = armaduraManualDe(hip, s.uid);
   let descricao = '';
   let cobrimentoMm = 0;
+  const n1 = (v: number | undefined, padrao: number) => (v != null && Number.isFinite(v) && v >= 1 ? Math.round(v) : padrao);
+  const pos = (v: number | undefined, padrao: number) => (v != null && Number.isFinite(v) && v > 0 ? v : padrao);
+  const abaixoDoMinimo = (asCm2: number, asMinCm2: number, oQue: string) => {
+    if (asCm2 + 1e-9 < asMinCm2) avisos.push(`${oQue} abaixo do mínimo NBR 6118 (${asCm2.toFixed(2).replace('.', ',')} < ${asMinCm2.toFixed(2).replace('.', ',')} cm²)`);
+  };
 
   if (s.kind === 'PILAR') {
     const bCm = s.larguraMm / 10;
@@ -244,17 +291,23 @@ export function armaduraDaPeca(s: Structural, quant: Pick<QuantidadeEstrutural, 
     cobrimentoMm = c * 10;
     const acCm2 = s.circular ? (Math.PI * bCm ** 2) / 4 : bCm * hCm;
     const asMin = 0.004 * acCm2;
-    const bit = hip.bitolaPilarMm;
     const nMin = s.circular ? 6 : 4;
-    const n = Math.max(nMin, Math.ceil(asMin / areaDaBarraCm2(bit)));
+    const bit = manual ? pos(manual.bitolaLongitudinalMm, hip.bitolaPilarMm) : hip.bitolaPilarMm;
+    const n = manual ? n1(manual.nLongitudinal, nMin) : Math.max(nMin, Math.ceil(asMin / areaDaBarraCm2(bit)));
     const alturaM = s.alturaMm / 1000;
     camadas.push(camada('longitudinal', bit, n, alturaM + (40 * bit) / 1000, null));
-    const bt = hip.bitolaEstriboMm;
-    const sCm = Math.max(5, Math.floor(Math.min(20, Math.min(bCm, hCm), 1.2 * bit)));
+    const bt = manual ? pos(manual.bitolaTransversalMm, hip.bitolaEstriboMm) : hip.bitolaEstriboMm;
+    const sAuto = Math.max(5, Math.floor(Math.min(20, Math.min(bCm, hCm), 1.2 * bit)));
+    const sCm = manual ? Math.max(1, Math.round(pos(manual.espacamentoTransversalCm, sAuto))) : sAuto;
     const nEst = Math.floor((alturaM * 100) / sCm) + 1;
     const perimetroCm = s.circular ? Math.PI * (bCm - 2 * c) : 2 * (bCm + hCm) - 8 * c;
     if (perimetroCm <= 0) avisos.push('seção menor que o cobrimento — estribo não fecha');
     camadas.push(camada('estribo', bt, nEst, (Math.max(0, perimetroCm) + 2 * ganchoCm(bt)) / 100, sCm));
+    if (manual) {
+      abaixoDoMinimo(n * areaDaBarraCm2(bit), asMin, 'armadura longitudinal');
+      if (n < nMin) avisos.push(`menos de ${nMin} barras (mínimo da seção)`);
+      if (sCm > sAuto) avisos.push(`estribo c/${sCm} acima do máximo da norma (${sAuto} cm)`);
+    }
     descricao = `${n} Ø ${fmtBitola(bit)} + estribos Ø ${fmtBitola(bt)} c/${sCm}`;
   } else if (s.kind === 'VIGA' || s.kind === 'VIGA_FUNDACAO') {
     const secaoT = secaoTValida(s);
@@ -262,35 +315,44 @@ export function armaduraDaPeca(s: Structural, quant: Pick<QuantidadeEstrutural, 
     const hCm = s.alturaMm / 10;
     const c = getCobrimentoNominalCm(hip.caa, 'viga');
     cobrimentoMm = c * 10;
-    const bit = hip.bitolaVigaMm;
-    const bt = hip.bitolaEstriboMm;
+    const bit = manual ? pos(manual.bitolaLongitudinalMm, hip.bitolaVigaMm) : hip.bitolaVigaMm;
+    const bt = manual ? pos(manual.bitolaTransversalMm, hip.bitolaEstriboMm) : hip.bitolaEstriboMm;
     const dCm = hCm - c - bt / 10 - bit / 20;
     const asMin = rhoMinDeFlexao(fck) * bCm * hCm;
-    const nInf = Math.max(2, Math.ceil(asMin / areaDaBarraCm2(bit)));
+    const nInfAuto = Math.max(2, Math.ceil(asMin / areaDaBarraCm2(bit)));
+    const nInf = manual ? n1(manual.nLongitudinal, nInfAuto) : nInfAuto;
     const LM = quant.comprimentoM;
-    const barraM = LM + (2 * 30 * bit) / 1000;
-    camadas.push(camada('longitudinal', bit, nInf, barraM, null));
-    const nSup = s.kind === 'VIGA_FUNDACAO' ? Math.max(2, Math.ceil(Math.max(0.5 * nInf * areaDaBarraCm2(bit), asMin) / areaDaBarraCm2(bit))) : 2;
-    camadas.push(camada('superior', bit, nSup, barraM, null));
+    camadas.push(camada('longitudinal', bit, nInf, LM + (2 * 30 * bit) / 1000, null));
+    const nSupAuto = s.kind === 'VIGA_FUNDACAO' ? Math.max(2, Math.ceil(Math.max(0.5 * nInfAuto * areaDaBarraCm2(bit), asMin) / areaDaBarraCm2(bit))) : 2;
+    const bitSup = manual ? pos(manual.bitolaSuperiorMm, bit) : bit;
+    const nSup = manual ? n1(manual.nSuperior, nSupAuto) : nSupAuto;
+    camadas.push(camada('superior', bitSup, nSup, LM + (2 * 30 * bitSup) / 1000, null));
     // Estribos: taxa mínima transversal; s pelo Asw de DOIS ramos.
     const aswSMin = (0.2 * fctmMpa * bCm) / 500; // cm²/cm
     const sPorTaxa = (2 * areaDaBarraCm2(bt)) / Math.max(1e-6, aswSMin);
-    const sCm = Math.max(5, Math.floor(Math.min(30, 0.6 * Math.max(dCm, 1), sPorTaxa)));
+    const sAuto = Math.max(5, Math.floor(Math.min(30, 0.6 * Math.max(dCm, 1), sPorTaxa)));
+    const sCm = manual ? Math.max(1, Math.round(pos(manual.espacamentoTransversalCm, sAuto))) : sAuto;
     const nEst = Math.floor((LM * 100) / sCm) + 1;
     const perimetroCm = 2 * (bCm + hCm) - 8 * c;
     if (perimetroCm <= 0) avisos.push('seção menor que o cobrimento — estribo não fecha');
     camadas.push(camada('estribo', bt, nEst, (Math.max(0, perimetroCm) + 2 * ganchoCm(bt)) / 100, sCm));
-    descricao = `${nInf} Ø ${fmtBitola(bit)} inf. + ${nSup} Ø ${fmtBitola(bit)} sup. + estribos Ø ${fmtBitola(bt)} c/${sCm}`;
+    if (manual) {
+      abaixoDoMinimo(nInf * areaDaBarraCm2(bit), asMin, 'armadura inferior');
+      if (sCm > sAuto) avisos.push(`estribo c/${sCm} acima do máximo da norma (${sAuto} cm)`);
+    }
+    descricao = `${nInf} Ø ${fmtBitola(bit)} inf. + ${nSup} Ø ${fmtBitola(bitSup)} sup. + estribos Ø ${fmtBitola(bt)} c/${sCm}`;
   } else if (s.kind === 'LAJE') {
     const hCm = s.alturaMm / 10;
     cobrimentoMm = getCobrimentoNominalCm(hip.caa, 'laje') * 10;
-    const bit = hip.bitolaLajeMm;
     const asMinPorM = rhoMinDeFlexao(fck) * 100 * hCm; // cm²/m por direção
-    const sCm = Math.max(5, Math.floor(Math.min(20, 2 * hCm, (areaDaBarraCm2(bit) * 100) / Math.max(1e-6, asMinPorM))));
+    const bit = manual ? pos(manual.bitolaTransversalMm, hip.bitolaLajeMm) : hip.bitolaLajeMm;
+    const sAuto = Math.max(5, Math.floor(Math.min(20, 2 * hCm, (areaDaBarraCm2(bit) * 100) / Math.max(1e-6, asMinPorM))));
+    const sCm = manual ? Math.max(1, Math.round(pos(manual.espacamentoTransversalCm, sAuto))) : sAuto;
     const areaM2 = quant.areaPlantaM2;
     // Cada direção: (100 / s) barras por metro de largura, cada uma com 1 m por metro de comprimento → área × 100/s metros.
     const comprimentoPorDirecaoM = (areaM2 * 100) / sCm;
     camadas.push(camada('malha', bit, 2, comprimentoPorDirecaoM, sCm));
+    if (manual) abaixoDoMinimo((areaDaBarraCm2(bit) * 100) / sCm, asMinPorM, 'malha (cm²/m)');
     descricao = `malha inferior Ø ${fmtBitola(bit)} c/${sCm} nas duas direções`;
     avisos.push('negativos de apoio fora do esquema — o piso da taxa cobre');
   } else if (s.kind === 'BLOCO_COROAMENTO') {
@@ -299,19 +361,25 @@ export function armaduraDaPeca(s: Structural, quant: Pick<QuantidadeEstrutural, 
     const hCm = s.alturaMm / 10;
     const c = getCobrimentoNominalCm(hip.caa, 'sapata');
     cobrimentoMm = c * 10;
-    const bit = hip.bitolaBlocoMm;
+    const bit = manual ? pos(manual.bitolaLongitudinalMm, hip.bitolaBlocoMm) : hip.bitolaBlocoMm;
     const aphi = areaDaBarraCm2(bit);
     // Malha inferior: em cada direção, As,min = 0,15 % × (largura transversal) × h.
-    const nAoLongoDeB = Math.max(3, Math.ceil((0.0015 * pCm * hCm) / aphi));
-    const nAoLongoDeP = Math.max(3, Math.ceil((0.0015 * bCm * hCm) / aphi));
+    const nBAuto = Math.max(3, Math.ceil((0.0015 * pCm * hCm) / aphi));
+    const nPAuto = Math.max(3, Math.ceil((0.0015 * bCm * hCm) / aphi));
+    const nAoLongoDeB = manual ? n1(manual.nLongitudinal, nBAuto) : nBAuto;
+    const nAoLongoDeP = manual ? n1(manual.nSuperior, nPAuto) : nPAuto;
     const gancho = (10 * bit) / 10; // cm
     camadas.push(camada('malha', bit, nAoLongoDeB, (bCm - 2 * c + 2 * gancho) / 100, null));
     camadas.push(camada('malha', bit, nAoLongoDeP, (pCm - 2 * c + 2 * gancho) / 100, null));
-    const bt = 8;
-    const sCm = 20;
+    const bt = manual ? pos(manual.bitolaTransversalMm, 8) : 8;
+    const sCm = manual ? Math.max(1, Math.round(pos(manual.espacamentoTransversalCm, 20))) : 20;
     const nEst = Math.floor((Math.max(bCm, pCm) * 1) / sCm) + 1;
     const perimetroCm = 2 * (Math.min(bCm, pCm) + hCm) - 8 * c;
     camadas.push(camada('estribo', bt, nEst, (Math.max(0, perimetroCm) + 2 * ganchoCm(bt)) / 100, sCm));
+    if (manual) {
+      abaixoDoMinimo(nAoLongoDeB * aphi, 0.0015 * pCm * hCm, 'malha ao longo da largura');
+      abaixoDoMinimo(nAoLongoDeP * aphi, 0.0015 * bCm * hCm, 'malha ao longo da profundidade');
+    }
     descricao = `malha inferior ${nAoLongoDeB} + ${nAoLongoDeP} Ø ${fmtBitola(bit)} + estribos Ø ${fmtBitola(bt)} c/${sCm}`;
     avisos.push('tirantes por carga fora do esquema — o piso da taxa cobre');
   } else {
@@ -319,19 +387,24 @@ export function armaduraDaPeca(s: Structural, quant: Pick<QuantidadeEstrutural, 
     const dCm = s.larguraMm / 10;
     const c = getCobrimentoNominalCm(hip.caa, 'sapata');
     cobrimentoMm = c * 10;
-    const bit = hip.bitolaEstacaMm;
+    const bit = manual ? pos(manual.bitolaLongitudinalMm, hip.bitolaEstacaMm) : hip.bitolaEstacaMm;
     const acCm2 = (Math.PI * dCm ** 2) / 4;
     const as = 0.005 * acCm2;
-    const n = Math.max(6, Math.ceil(as / areaDaBarraCm2(bit)));
+    const nAuto = Math.max(6, Math.ceil(as / areaDaBarraCm2(bit)));
+    const n = manual ? n1(manual.nLongitudinal, nAuto) : nAuto;
     const LM = s.alturaMm / 1000;
     const trechoM = hip.trechoArmadoDaEstacaM == null ? LM : Math.min(LM, Math.max(0, hip.trechoArmadoDaEstacaM));
     camadas.push(camada('longitudinal', bit, n, trechoM + (40 * bit) / 1000, null));
-    const bt = hip.bitolaEstriboMm;
-    const passoCm = 20;
+    const bt = manual ? pos(manual.bitolaTransversalMm, hip.bitolaEstriboMm) : hip.bitolaEstriboMm;
+    const passoCm = manual ? Math.max(1, Math.round(pos(manual.espacamentoTransversalCm, 20))) : 20;
     const voltas = Math.floor((trechoM * 100) / passoCm) + 1;
     const perimetroCm = Math.PI * (dCm - 2 * c);
     if (perimetroCm <= 0) avisos.push('diâmetro menor que o cobrimento — espiral não fecha');
     camadas.push(camada('espiral', bt, voltas, Math.max(0, perimetroCm) / 100, passoCm));
+    if (manual) {
+      abaixoDoMinimo(n * areaDaBarraCm2(bit), as, 'armadura longitudinal');
+      if (n < 6) avisos.push('menos de 6 barras (mínimo da estaca)');
+    }
     descricao = `${n} Ø ${fmtBitola(bit)} no trecho armado de ${trechoM.toFixed(1).replace('.', ',')} m + espiral Ø ${fmtBitola(bt)} passo ${passoCm}`;
   }
 
@@ -340,7 +413,8 @@ export function armaduraDaPeca(s: Structural, quant: Pick<QuantidadeEstrutural, 
   const taxa = Math.max(0, taxaDeReferencia(s.kind, hip));
   const volume = Math.max(0, quant.volumeConcretoM3);
   const kgPiso = arredonda(taxa * volume, 2);
-  const origem: ArmaduraDaPeca['origem'] = kgPiso > kgEsquema ? 'TAXA' : 'ESQUEMA';
+  // Manual: vale o que foi lançado — o piso é régua do esquema automático.
+  const origem: ArmaduraDaPeca['origem'] = manual ? 'MANUAL' : kgPiso > kgEsquema ? 'TAXA' : 'ESQUEMA';
   const kg = origem === 'TAXA' ? kgPiso : kgEsquema;
   if (origem === 'TAXA') avisos.unshift(`piso da taxa (${taxa} kg/m³) acima do esquema mínimo (${kgEsquema.toFixed(1).replace('.', ',')} kg)`);
   // A divisão por tipo de aço segue a proporção do esquema — o piso não sabe de bitola.
@@ -430,5 +504,31 @@ export function hipotesesDeArmaduraDaColuna(raw: unknown): HipotesesDeArmadura {
     taxaLajeKgM3: num(r.taxaLajeKgM3, P.taxaLajeKgM3),
     taxaBlocoKgM3: num(r.taxaBlocoKgM3, P.taxaBlocoKgM3),
     taxaEstacaKgM3: num(r.taxaEstacaKgM3, P.taxaEstacaKgM3),
+    ...(porPecaDaColuna(r.porPeca) ? { porPeca: porPecaDaColuna(r.porPeca)! } : {}),
   };
+}
+
+/** `porPeca` saneado: só entradas com números válidos; vazio vira ausente. */
+function porPecaDaColuna(raw: unknown): Record<string, ArmaduraManual> | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const out: Record<string, ArmaduraManual> = {};
+  const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null);
+  for (const [uid, spec] of Object.entries(raw as Record<string, unknown>)) {
+    if (!spec || typeof spec !== 'object') continue;
+    const m = spec as Record<string, unknown>;
+    const nLong = n(m.nLongitudinal);
+    const bit = n(m.bitolaLongitudinalMm);
+    const bt = n(m.bitolaTransversalMm);
+    const sCm = n(m.espacamentoTransversalCm);
+    if (nLong == null || bit == null || bt == null || sCm == null) continue;
+    out[uid] = {
+      nLongitudinal: Math.round(nLong),
+      bitolaLongitudinalMm: bit,
+      bitolaTransversalMm: bt,
+      espacamentoTransversalCm: sCm,
+      ...(n(m.nSuperior) != null ? { nSuperior: Math.round(n(m.nSuperior)!) } : {}),
+      ...(n(m.bitolaSuperiorMm) != null ? { bitolaSuperiorMm: n(m.bitolaSuperiorMm)! } : {}),
+    };
+  }
+  return Object.keys(out).length ? out : null;
 }

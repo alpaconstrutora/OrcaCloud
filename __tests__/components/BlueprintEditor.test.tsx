@@ -1403,7 +1403,9 @@ describe('BlueprintEditor · ribbon', () => {
     expect(JSON.parse(localStorage.getItem('blueprint:fundacoesAutomaticas')!).posicaoDaBaldrame).toBe('NO_NIVEL_DO_BLOCO');
     await userEvent.selectOptions(within(drawer).getByRole('combobox', { name: /altura da baldrame/i }), '300');
     const baldrames = within(drawer).getByRole('table', { name: /prévia das vigas baldrame/i });
-    expect(within(baldrames).getAllByRole('row')[1]).toHaveTextContent(/15 × 30 · topo -0,50 m/);
+    // No nível do bloco a casa assenta na viga: topo no piso; o arrasamento fica desabilitado.
+    expect(within(baldrames).getAllByRole('row')[1]).toHaveTextContent(/15 × 30 · topo no piso/);
+    expect(within(drawer).getByRole('combobox', { name: /arrasamento do bloco/i })).toBeDisabled();
   });
 
   it('vão máximo e seção escolhidos persistem em localStorage e mudam a prévia', async () => {

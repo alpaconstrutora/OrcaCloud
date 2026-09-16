@@ -8099,8 +8099,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   </li>
                   <li>
                     Lado do bloco = o maior entre Ø + 30 cm e lado do pilar + 20 cm, a cada 5 cm; altura{' '}
-                    {hipotesesDeFundacoes.alturaDoBlocoMm / 10} cm; topo {hipotesesDeFundacoes.arrasamentoMm / 100} cm abaixo do piso
-                    (arrasamento). A estaca começa na base do bloco.
+                    {hipotesesDeFundacoes.alturaDoBlocoMm / 10} cm; topo{' '}
+                    {hipotesesDeFundacoes.vigaBaldrame && hipotesesDeFundacoes.posicaoDaBaldrame === 'NO_NIVEL_DO_BLOCO'
+                      ? 'no piso (baldrame no nível do bloco)'
+                      : `${hipotesesDeFundacoes.arrasamentoMm / 10} cm abaixo do piso (arrasamento)`}
+                    . A estaca começa na base do bloco.
                   </li>
                   <li>
                     O <strong>pilar desce até o topo do bloco</strong> no mesmo lote. Peça enterrada não sobrepõe parede nem
@@ -8111,9 +8114,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     {hipotesesDeFundacoes.vigaBaldrame ? '' : ' (desligada)'}: uma por parede, largura da parede (mín. 15 cm).{' '}
                     {hipotesesDeFundacoes.posicaoDaBaldrame === 'NO_NIVEL_DO_BLOCO' ? (
                       <>
-                        <strong>No nível do bloco</strong>: topo no arrasamento ({hipotesesDeFundacoes.arrasamentoMm / 10} cm abaixo do
-                        piso), h {hipotesesDeFundacoes.alturaDaBaldrameMm / 10} cm, entrando no bloco até o eixo do encontro — o pilar
-                        começa acima dela.
+                        <strong>No nível do bloco</strong>: a casa assenta na face superior da viga — topo da baldrame e do bloco{' '}
+                        <strong>no piso</strong> (o arrasamento não se aplica), h {hipotesesDeFundacoes.alturaDaBaldrameMm / 10} cm, entrando
+                        no bloco até o eixo do encontro; o pilar começa no piso.
                       </>
                     ) : (
                       <>
@@ -8195,6 +8198,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       value={hipotesesDeFundacoes.arrasamentoMm}
                       onChange={(e) => setHipDeFundacoesSalvas((h) => ({ ...h, arrasamentoMm: Number(e.target.value) }))}
                       aria-label="Arrasamento do bloco"
+                      disabled={hipotesesDeFundacoes.vigaBaldrame && hipotesesDeFundacoes.posicaoDaBaldrame === 'NO_NIVEL_DO_BLOCO'}
+                      title={
+                        hipotesesDeFundacoes.vigaBaldrame && hipotesesDeFundacoes.posicaoDaBaldrame === 'NO_NIVEL_DO_BLOCO'
+                          ? 'Com a baldrame no nível do bloco, o topo do bloco fica no piso — o arrasamento não se aplica'
+                          : undefined
+                      }
                       className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
                     >
                       {ARRASAMENTOS.map((a) => (

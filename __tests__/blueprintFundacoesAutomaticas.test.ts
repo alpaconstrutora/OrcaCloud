@@ -234,11 +234,15 @@ describe('planejarFundacoes — a viga baldrame', () => {
     expect(r.spaces.map((s) => s.areaMm2).sort()).toEqual(m.spaces.map((s) => s.areaMm2).sort());
   });
 
-  it('NO NÍVEL DO BLOCO: topo no arrasamento, desce a altura escolhida, vai até o eixo (entra no bloco) e cede', () => {
+  it('NO NÍVEL DO BLOCO: a casa assenta na face superior da viga — topo da baldrame e do bloco no piso, arrasamento ignorado; vai até o eixo (entra no bloco) e cede', () => {
     const { m, t } = casa();
     const plano = fundar(m, t, { posicaoDaBaldrame: 'NO_NIVEL_DO_BLOCO', alturaDaBaldrameMm: 400 });
     expect(plano.baldrames).toHaveLength(5);
-    for (const v of plano.baldrames) expect(v).toMatchObject({ larguraMm: 150, alturaMm: 400, baseMm: -900 });
+    for (const v of plano.baldrames) expect(v).toMatchObject({ larguraMm: 150, alturaMm: 400, baseMm: -400 });
+    // Bloco com o topo no piso (base = −h do bloco), estaca a partir da base dele; pilar fica no piso.
+    for (const b of plano.blocos) expect(b).toMatchObject({ baseMm: -600, alturaMm: 600 });
+    expect(plano.estacas.every((e) => e.baseMm === -600 - 8000)).toBe(true);
+    expect(plano.pilaresQueDescem).toEqual([]);
     // Sem recuo: a de baixo vai de (0,0) a (6000,0), morrendo dentro dos blocos de canto.
     const baixo = plano.baldrames.find((v) => v.a.y === 0 && v.b.y === 0)!;
     expect([Math.min(baixo.a.x, baixo.b.x), Math.max(baixo.a.x, baixo.b.x)]).toEqual([0, 6000]);
@@ -255,6 +259,12 @@ describe('planejarFundacoes — a viga baldrame', () => {
     // Sobre o bloco (padrão): h = arrasamento, base −500, recuada.
     const sobre = fundar(m, t, { posicaoDaBaldrame: 'SOBRE_O_BLOCO', alturaDaBaldrameMm: 400 }).baldrames[0];
     expect(sobre).toMatchObject({ alturaMm: 500, baseMm: -500 });
+    // Relançar de "sobre" (pilares desceram a −0,50) para "no nível": os pilares VOLTAM ao piso.
+    const comSobre = applyBatch(m, fundar(m, t).comandos).model;
+    expect(comSobre.structures.filter((s) => s.kind === 'PILAR').every((p) => p.baseMm === -500)).toBe(true);
+    const re = relancarFundacoes(comSobre, t, { ...HIPOTESES_FUNDACOES_PADRAO, posicaoDaBaldrame: 'NO_NIVEL_DO_BLOCO' });
+    const final = applyBatch(comSobre, re.comandos).model;
+    expect(final.structures.filter((s) => s.kind === 'PILAR').every((p) => p.baseMm === 0 && p.baseMm + p.alturaMm === 2800)).toBe(true);
   });
 
   it('desligada na hipótese: nenhuma baldrame; cadeia que já tem baldrame é mantida (idempotente)', () => {

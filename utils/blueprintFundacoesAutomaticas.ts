@@ -81,9 +81,10 @@ export interface HipotesesDeFundacoes {
    * sobre ou dentro (no mesmo nível) do bloco de coroamento"*):
    *  - `SOBRE_O_BLOCO`: apoiada no topo do bloco e subindo até o piso
    *    (base = −arrasamento, h = arrasamento); recua até a face do pilar.
-   *  - `NO_NIVEL_DO_BLOCO`: topo no arrasamento, junto com o topo do bloco, e
-   *    descendo `alturaDaBaldrameMm`; entra no bloco (cede o volume) e vai até
-   *    o eixo do encontro — o pilar começa acima dela.
+   *  - `NO_NIVEL_DO_BLOCO`: topo da baldrame E do bloco no PISO (a casa assenta
+   *    na face superior da viga; o arrasamento não se aplica), descendo
+   *    `alturaDaBaldrameMm`; entra no bloco (cede o volume) e vai até o eixo do
+   *    encontro — o pilar começa acima dela.
    */
   posicaoDaBaldrame: PosicaoDaBaldrame;
   /** Altura da baldrame quando está no nível do bloco (sobre o bloco, h = arrasamento). */
@@ -227,7 +228,13 @@ export function planejarFundacoes(
   const diametro = Math.max(100, Math.round(hip.diametroDaEstacaMm));
   const comprimento = Math.max(1000, Math.round(hip.comprimentoDaEstacaMm));
   const hBloco = Math.max(200, Math.round(hip.alturaDoBlocoMm));
-  const arrasamento = Math.max(0, Math.round(hip.arrasamentoMm));
+  // NO NÍVEL DO BLOCO (16/09/2026, print do 3D: *"ficou um espaço entre a viga e
+  // o piso"* → *"tudo move até a face superior da viga"*): a casa assenta na face
+  // superior da baldrame, então o topo da baldrame — e o do bloco, que é o
+  // mesmo — fica NO PISO. O arrasamento não se aplica nesse modo: com ele, a
+  // parede começaria 50 cm acima da viga, no ar.
+  const noNivelDoBloco = hip.posicaoDaBaldrame === 'NO_NIVEL_DO_BLOCO';
+  const arrasamento = noNivelDoBloco ? 0 : Math.max(0, Math.round(hip.arrasamentoMm));
   const porBloco = Math.max(1, Math.min(QUANTIDADE_MAXIMA_DE_ESTACAS, Math.round(hip.estacasPorBloco)));
   // O arranjo é o mesmo para todos os blocos: centro de carga no pilar, 3Ø, simétrico.
   const arranjo = arranjoDeEstacas(porBloco, diametro);
@@ -271,7 +278,6 @@ export function planejarFundacoes(
   type CandidataBaldrame = Omit<BaldramePrevista, 'idPrevisto' | 'rotulo'>;
   const baldramesCandidatas: CandidataBaldrame[] = [];
   let cadeiasComBaldrame = 0;
-  const noNivelDoBloco = hip.posicaoDaBaldrame === 'NO_NIVEL_DO_BLOCO';
   const alturaDaBaldrame = noNivelDoBloco ? Math.max(100, Math.round(hip.alturaDaBaldrameMm)) : arrasamento;
   if (hip.vigaBaldrame && alturaDaBaldrame > 0) {
     const walls = paredesDoNivel(model, levelId, true);
@@ -286,8 +292,8 @@ export function planejarFundacoes(
       }
       const { a, b } = pontasDaCadeia(c);
       // Sobre o bloco ela divide a faixa do pilar (−arrasamento..0) e recua até a
-      // face dele; no nível do bloco o pilar já acabou (pé em −arrasamento) e a
-      // baldrame vai até o eixo, morrendo dentro do bloco.
+      // face dele; no nível do bloco o pilar acaba no piso, onde ela também
+      // acaba, e a baldrame vai até o eixo, morrendo dentro do bloco.
       const a2 = noNivelDoBloco ? a : recuarAteAFaceDoPilar(pilares, a, b);
       const b2 = noNivelDoBloco ? b : recuarAteAFaceDoPilar(pilares, b, a);
       const comprimento = Math.round(dist(a2, b2));
@@ -332,10 +338,11 @@ export function planejarFundacoes(
     idPrevisto: ids[candidatos.length + totalEstacas + k],
     rotulo: `VB${nVB + k}`,
   }));
-  // O pilar desce até o topo do bloco (todos os do pavimento, inclusive os que
-  // já tinham bloco): pé em −arrasamento, topo onde estava.
+  // O pé do pilar vai ao topo do bloco (todos os do pavimento, inclusive os que
+  // já tinham bloco): desce até −arrasamento, ou VOLTA ao piso quando o modo é
+  // "no nível do bloco" e ele tinha descido antes. Topo onde estava.
   const topoDoBloco = -arrasamento;
-  const descem = pilares.filter((p) => p.baseMm > topoDoBloco);
+  const descem = pilares.filter((p) => p.baseMm !== topoDoBloco && p.baseMm <= 0);
   const comandos: Command[] = [
     ...blocos.map(
       (b): Command => ({

@@ -118,3 +118,20 @@ Hipótese nova `posicaoDaBaldrame` (select "Posição", visível com a baldrame 
 
 Prova: puro (+1, 13) · editor (ampliado: posição some sem baldrame; "No nível do bloco" mostra
 altura e a prévia "15 × 30 · topo -0,50 m") · suíte 328/4332 · tsc · build.
+
+## No nível do bloco: a casa assenta na face superior da viga (16/09/2026)
+
+> Ao optar pela viga de fundação (baldrame) dentro do bloco de fundação (coroamento) ficou um espaço entre a viga e o piso. → "Tudo move até a face superior da viga"
+
+No modo "no nível do bloco" o topo da baldrame ficava no arrasamento (−0,50) e a parede começava
+no piso: 50 cm de ar. Decisão do usuário: a casa assenta na face superior da viga. Então nesse
+modo o **arrasamento não se aplica**: topo da baldrame E do bloco no piso (bloco base = −h do
+bloco; baldrame base = −h da baldrame; estaca a partir da base do bloco); o pilar começa no piso —
+e **volta** ao piso se tinha descido a −0,50 num lançamento "sobre o bloco" anterior
+(`pilaresQueDescem` agora ajusta nos dois sentidos). Select "Arrasamento" desabilitado nesse modo,
+com o motivo no `title`; gaveta e prévia dizem "topo no piso". Corrigido de quebra o texto do
+arrasamento na gaveta, que dividia por 100 ("topo 5 cm abaixo do piso").
+
+Prova: puro (14: bases −400/−600, pilares não descem; relançar de "sobre" para "no nível" devolve
+os pilares a 0) · editor ("15 × 30 · topo no piso", arrasamento desabilitado) · suíte 330/4360 ·
+tsc · build.

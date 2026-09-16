@@ -167,6 +167,12 @@ export const bankReconciliationService = {
                     });
                     continue;
                 }
+                // O parser leu o arquivo e não achou movimento, mas SABE por quê (datas sem
+                // ano, HTML sem tabela...). Isso é recusa com motivo, não "extrato vazio".
+                if (parsed.transactions.length === 0 && parsed.avisos.length > 0) {
+                    rejected.push({ file: file.name, reason: parsed.avisos.join(' ') });
+                    continue;
+                }
                 headers.push({ file: file.name, format: parsed.format, header: parsed.header });
                 skipped += parsed.skipped;
                 const linhas = await this.toNormalizedRows(parsed.transactions, bankAccountId, organizationId);

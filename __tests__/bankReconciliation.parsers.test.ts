@@ -12,6 +12,7 @@ import * as XLSX from 'xlsx';
 import {
     parseOFX, parseCSV, parseXLSX, parseCNAB400, detectDelimiter, splitCsvLine,
     isBalanceLine, accountMatches, parseAmountBR, parseDateCell, parseStatementFile,
+    parseHTML, parseHTMLTable, pareceHTML, inferirDataDeReferencia, extrairContaDoCabecalho,
 } from '../services/bankStatementParsers';
 
 // ── OFX 1.x (SGML, sem fechamento de folha) — estilo Itaú ────────────────────
@@ -236,6 +237,129 @@ describe('parseXLSX', () => {
     });
 });
 
+// ── Itaú re-salvo pelo Excel: cabeçalho institucional + datas "dd/mm" sem ano ──
+function planilhaItau(): ArrayBuffer {
+    const ws = XLSX.utils.aoa_to_sheet([
+        ['Logotipo Itaú', '', '', ''],
+        ['Atualização:', '', '', ''],
+        ['Nome:', 'FULANO DE TAL', '', ''],
+        ['Agência:', 7824, '', ''],
+        ['Conta:', '12263-9', '', ''],
+        ['', '', '', ''],
+        ['Lançamentos', '', '', ''],
+        ['', '', '', ''],
+        ['data', 'lançamento', 'ag./origem', 'valor (R$)'],
+        ['28/02  ', 'SALDO ANTERIOR', '', ''],
+        ['01/03  ', 'RSHOP-PARKFACIL E-01/03', '', -35],
+        ['01/03  ', 'INT TED 826757 TUMA', '', -1013.21],
+        ['01/03  ', 'SDO CTA/APL AUTOMATICAS', '', ''],
+        ['29/03  ', 'REMUNERACAO/SALARIO', '', 3563.08],
+        ['31/03  ', 'SALDO DO DIA', '', ''],
+    ]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Lançamentos');
+    return XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
+}
+
+describe('parseXLSX — Itaú (data dd/mm sem ano) — defeito real de 15/09/2026', () => {
+    it('com mês/ano no nome do arquivo, resolve o ano e lê os movimentos', () => {
+        const r = parseXLSX(planilhaItau(), { fileName: '03-2019.xlsx' });
+        expect(r.avisos).toEqual([]);
+        expect(r.skipped).toBe(2);
+        expect(r.transactions).toEqual([
+            { date: '2019-03-01', amount: -35, description: 'RSHOP-PARKFACIL E-01/03' },
+            { date: '2019-03-01', amount: -1013.21, description: 'INT TED 826757 TUMA' },
+            { date: '2019-03-29', amount: 3563.08, description: 'REMUNERACAO/SALARIO' },
+        ]);
+    });
+    it('lê a conta do cabeçalho institucional, para accountMatches valer em Excel', () => {
+        const r = parseXLSX(planilhaItau(), { fileName: '03-2019.xlsx' });
+        expect(r.header.acctId).toBe('12263-9');
+        expect(accountMatches(r.header.acctId, '12263-9')).toBe(true);
+        expect(accountMatches(r.header.acctId, '99999-1')).toBe(false);
+    });
+    it('sem nenhuma pista de ano: 0 movimentos e um aviso que diz o que fazer (antes: silêncio)', () => {
+        const r = parseXLSX(planilhaItau(), { fileName: 'extrato.xlsx' });
+        expect(r.transactions).toEqual([]);
+        expect(r.avisos).toHaveLength(1);
+        expect(r.avisos[0]).toMatch(/6 linha\(s\) têm data sem ano/);
+        expect(r.avisos[0]).toMatch(/03-2019\.xlsx/);
+    });
+    it('parseStatementFile passa o nome do arquivo como pista', async () => {
+        const r = await parseStatementFile(new File([planilhaItau()], '03-19.xls'));
+        expect(r.transactions).toHaveLength(3);
+        expect(r.transactions[0].date).toBe('2019-03-01');
+    });
+});
+
+// ── O ".xls" que o Itaú exporta é HTML (windows-1252, <td /> auto-fechado, x:num) ──
+const HTML_ITAU = `<html xmlns:x="urn:schemas-microsoft-com:office:excel">
+<head><meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<style>.DataHeader {font-weight:700;}</style></head>
+<body>
+<table border="0"><tr><td>
+<table cellpadding="0">
+<tr><td></td><td>Nome:</td><td></td><td></td><td>FULANO DE TAL</td><td>Agência/Conta:</td><td>7824/\r\n              12263-9</td><td></td></tr>
+<tr><td></td><td>Data:</td><td></td><td></td><td>04/04/2019</td><td>Horário:</td><td>17:26:37h</td><td></td></tr>
+<tr><td class="Titulo" colspan="6">Extrato de Conta Corrente</td><td></td></tr>
+<tr><td></td><td class="DataHeader">Data</td><td class="HistoricoHeader"></td><td class="HistoricoHeader"></td><td class="HistoricoHeader">Lançamento</td><td class="ValorHeader">Valor (R$)</td><td class="SaldoHeader">Saldo (R$)</td><td></td></tr>
+<tr><td></td><td>28/02</td><td class="DataLinhaImpar" /><td></td><td>SALDO ANTERIOR</td><td class="ValorLinhaImpar" /><td x:num="10.00">10.00</td><td></td></tr>
+<tr><td></td><td>01/03</td><td class="DataLinhaPar" /><td></td><td>RSHOP-PARKFACIL E-01/03</td><td x:num="-35.00">-35.00</td><td class="ValorLinhaPar" /><td></td></tr>
+<tr><td></td><td>01/03</td><td class="DataLinhaImpar" /><td></td><td>INT TED&nbsp; 826757 TUMA</td><td x:num="-1013.21">-1,013.21</td><td class="ValorLinhaImpar" /><td></td></tr>
+<tr><td></td><td>01/03</td><td /><td></td><td>SDO CTA/APL AUTOMATICAS</td><td /><td x:num="52309.37">52,309.37</td><td></td></tr>
+<tr><td></td><td>29/03</td><td /><td></td><td>REMUNERACAO/SALARIO</td><td>3,563.08</td><td /><td></td></tr>
+<tr><td></td><td>31/03</td><td /><td></td><td>SALDO DO DIA</td><td /><td x:num="10.00">10.00</td><td></td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+
+describe('parseHTML — extrato Itaú disfarçado de .xls (defeito real de 15/09/2026)', () => {
+    it('<td /> auto-fechado e colspan mantêm as colunas alinhadas; x:num traz o valor limpo', () => {
+        const rows = parseHTMLTable(HTML_ITAU);
+        const cabecalho = rows.find(r => r[1] === 'Data');
+        expect(cabecalho).toEqual(['', 'Data', '', '', 'Lançamento', 'Valor (R$)', 'Saldo (R$)', '']);
+        const titulo = rows.find(r => r[0] === 'Extrato de Conta Corrente');
+        expect(titulo).toHaveLength(7); // colspan=6 + 1
+        const tuma = rows.find(r => String(r[4]).startsWith('INT TED'));
+        expect(tuma).toEqual(['', '01/03', '', '', 'INT TED 826757 TUMA', -1013.21, '', '']);
+    });
+    it('lê os movimentos com o ano da data de extração, pula saldos e ignora a coluna Saldo', () => {
+        const r = parseHTML(HTML_ITAU);
+        expect(r.avisos).toEqual([]);
+        expect(r.skipped).toBe(2);
+        expect(r.transactions).toEqual([
+            { date: '2019-03-01', amount: -35, description: 'RSHOP-PARKFACIL E-01/03' },
+            { date: '2019-03-01', amount: -1013.21, description: 'INT TED 826757 TUMA' },
+            { date: '2019-03-29', amount: 3563.08, description: 'REMUNERACAO/SALARIO' }, // valor US sem x:num
+        ]);
+        expect(r.header.acctId).toBe('7824/12263-9');
+        expect(accountMatches(r.header.acctId, '12263-9')).toBe(true);
+    });
+    it('parseStatementFile reconhece HTML pelos bytes, não pela extensão, e decodifica windows-1252', async () => {
+        // "Agência" em latin1 é o byte 0xEA — lido como UTF-8 vira lixo e o rótulo não seria achado
+        const bytes = new Uint8Array(HTML_ITAU.length);
+        for (let i = 0; i < HTML_ITAU.length; i++) bytes[i] = HTML_ITAU.charCodeAt(i) & 0xff;
+        expect(pareceHTML(bytes.buffer)).toBe(true);
+        const r = await parseStatementFile(new File([bytes], '03-19.xls'));
+        expect(r.format).toBe('XLSX');
+        expect(r.transactions).toHaveLength(3);
+        expect(r.header.acctId).toBe('7824/12263-9');
+    });
+    it('HTML sem tabela: 0 movimentos com aviso, não silêncio', () => {
+        const r = parseHTML('<html><body><p>Sessão expirada</p></body></html>');
+        expect(r.transactions).toEqual([]);
+        expect(r.avisos[0]).toMatch(/HTML sem tabela/);
+    });
+    it('xlsx de verdade não é confundido com HTML', () => {
+        expect(pareceHTML(planilhaItau())).toBe(false);
+    });
+    it('extrairContaDoCabecalho aceita "Conta:" e "Agência/Conta:"', () => {
+        expect(extrairContaDoCabecalho([['Conta:', '12263-9']]).acctId).toBe('12263-9');
+        expect(extrairContaDoCabecalho([['x', 'Ag./Conta:', '', '7824/ 12263-9']]).acctId).toBe('7824/12263-9');
+        expect(extrairContaDoCabecalho([['Conta corrente', 'sem número']]).acctId).toBeUndefined();
+    });
+});
+
 describe('isBalanceLine', () => {
     it('reconhece as variantes de saldo e o TOTAL isolado', () => {
         for (const s of ['SALDO DO DIA', 'Saldo anterior', ' SALDO FINAL DISPONIVEL', 'SALDO EM CONTA', 'TOTAL', 'Total do dia']) {
@@ -275,6 +399,10 @@ describe('utilidades', () => {
         expect(parseAmountBR('150,00 C')).toBe(150);
         expect(parseAmountBR(7)).toBe(7);
         expect(parseAmountBR('')).toBeNaN();
+        // formato US (HTML do Itaú): o ÚLTIMO separador é o decimal
+        expect(parseAmountBR('-1,013.21')).toBe(-1013.21);
+        expect(parseAmountBR('52,309.37')).toBe(52309.37);
+        expect(parseAmountBR('10.00')).toBe(10);
     });
     it('parseDateCell', () => {
         expect(parseDateCell('05/03/2026')).toBe('2026-03-05');
@@ -283,6 +411,25 @@ describe('utilidades', () => {
         expect(parseDateCell('20260305120000[-3:BRT]')).toBe('2026-03-05');
         expect(parseDateCell('')).toBeNull();
         expect(parseDateCell('SALDO')).toBeNull();
+    });
+    it('parseDateCell — dd/mm sem ano só resolve com data de referência', () => {
+        expect(parseDateCell('01/03  ')).toBeNull();                                   // sem referência: não inventa
+        expect(parseDateCell('01/03  ', { y: 2019, m: 4, d: 4 })).toBe('2019-03-01');  // extraído em 04/04/2019
+        expect(parseDateCell('28/02', { y: 2019, m: 3, d: 31 })).toBe('2019-02-28');   // saldo anterior do mês
+        expect(parseDateCell('28/12', { y: 2020, m: 1, d: 5 })).toBe('2019-12-28');    // dezembro extraído em janeiro
+        expect(parseDateCell('05/01', { y: 2020, m: 1, d: 5 })).toBe('2020-01-05');    // o próprio dia da referência
+        expect(parseDateCell('31/13', { y: 2020, m: 1, d: 5 })).toBeNull();            // mês inválido
+    });
+    it('inferirDataDeReferencia — planilha primeiro, nome do arquivo depois', () => {
+        expect(inferirDataDeReferencia([['Nome:', 'X'], ['Data:', '', '04/04/2019']], 'qualquer.xls')).toEqual({ y: 2019, m: 4, d: 4 });
+        expect(inferirDataDeReferencia([['Data:', new Date(2019, 3, 4)]])).toEqual({ y: 2019, m: 4, d: 4 });
+        expect(inferirDataDeReferencia([], '03-2019.xlsx')).toEqual({ y: 2019, m: 3, d: 31 });
+        expect(inferirDataDeReferencia([], '2019-03.xlsx')).toEqual({ y: 2019, m: 3, d: 31 });
+        expect(inferirDataDeReferencia([], '03-19.xls')).toEqual({ y: 2019, m: 3, d: 31 });
+        expect(inferirDataDeReferencia([], 'extrato-15-09-2026.xlsx')).toEqual({ y: 2026, m: 9, d: 15 });
+        expect(inferirDataDeReferencia([], 'extrato_2019.xlsx')).toEqual({ y: 2019, m: 12, d: 31 });
+        expect(inferirDataDeReferencia([], 'extrato.xlsx')).toBeNull();
+        expect(inferirDataDeReferencia([['Lançamentos']])).toBeNull();
     });
     it('parseStatementFile recusa extensão desconhecida com mensagem clara', async () => {
         const f = new File(['x'], 'extrato.pdf');

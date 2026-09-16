@@ -15,6 +15,9 @@
  *  - o arquivo nunca dizia de QUE conta era: `BANKACCTFROM/ACCTID` era ignorado,
  *    assim como o saldo de fechamento `LEDGERBAL`, que é a única prova de que a
  *    importação está completa.
+ *  - (15/09/2026) o ".xls" do Itaú é HTML e as datas vêm "dd/mm" sem ano: oito
+ *    importações seguidas com 0 linhas e a tela dizendo "extrato inválido". Daí o
+ *    parser HTML, a data de referência para o ano e o campo `avisos`.
  */
 import * as XLSX from 'xlsx';
 
@@ -53,7 +56,16 @@ export interface ParsedStatement {
     header: StatementHeader;
     /** Linhas reconhecidas como saldo/total e descartadas de propósito. */
     skipped: number;
+    /**
+     * Por que o parser devolveu menos do que o arquivo parecia ter (datas sem ano,
+     * datas ilegíveis, HTML sem tabela). Vazio quando não há o que explicar. É o que
+     * impede "0 transações" de virar "extrato inválido" na tela.
+     */
+    avisos: string[];
 }
+
+/** Data de referência para resolver `dd/mm` sem ano: o movimento nunca é DEPOIS dela. */
+export interface DataReferencia { y: number; m: number; d: number }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utilidades compartilhadas
@@ -78,7 +90,10 @@ export function parseAmountBR(raw: unknown): number {
     const neg = /^-/.test(s) || /\(.*\)/.test(s) || /D$/i.test(s); // -123 · (123) · 123D
     s = s.replace(/[()]/g, '').replace(/^-/, '').replace(/[CD]$/i, '');
     if (s.includes('.') && s.includes(',')) {
-        s = s.replace(/\./g, '').replace(',', '.'); // '.' milhar, ',' decimal
+        // O ÚLTIMO separador é o decimal: "1.234,56" (BR) · "1,013.21" (US — o HTML do
+        // Itaú vem assim, e a regra antiga lia 1,013.21 como 1.01321).
+        if (s.lastIndexOf(',') > s.lastIndexOf('.')) s = s.replace(/\./g, '').replace(',', '.');
+        else s = s.replace(/,/g, '');
     } else if (s.includes(',')) {
         s = s.replace(',', '.');
     }
@@ -87,8 +102,14 @@ export function parseAmountBR(raw: unknown): number {
     return neg ? -n : n;
 }
 
-/** Normaliza uma data (Date, serial Excel, dd/mm/aaaa, aaaa-mm-dd, AAAAMMDD) para 'YYYY-MM-DD'. */
-export function parseDateCell(raw: unknown): string | null {
+/**
+ * Normaliza uma data (Date, serial Excel, dd/mm/aaaa, aaaa-mm-dd, AAAAMMDD) para 'YYYY-MM-DD'.
+ *
+ * `dd/mm` SEM ano (Itaú exporta assim) só resolve com `ref`: o ano é o da referência,
+ * ou o anterior quando dd/mm cai depois dela — extrato de dezembro extraído em janeiro.
+ * Sem referência devolve null, e quem chama conta a linha como "sem ano".
+ */
+export function parseDateCell(raw: unknown, ref?: DataReferencia | null): string | null {
     if (raw instanceof Date && !isNaN(raw.getTime())) {
         return `${raw.getFullYear()}-${String(raw.getMonth() + 1).padStart(2, '0')}-${String(raw.getDate()).padStart(2, '0')}`;
     }
@@ -107,6 +128,51 @@ export function parseDateCell(raw: unknown): string | null {
     }
     m = s.match(/^(\d{4})(\d{2})(\d{2})/); // AAAAMMDD (OFX)
     if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+    m = s.match(/^(\d{1,2})[-/](\d{1,2})$/); // dd/mm sem ano
+    if (m && ref) {
+        const dd = Number(m[1]), mm = Number(m[2]);
+        if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
+        const depoisDaRef = mm > ref.m || (mm === ref.m && dd > ref.d);
+        const year = depoisDaRef ? ref.y - 1 : ref.y;
+        return `${year}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+    }
+    return null;
+}
+
+/** `dd/mm` sem ano? (só para contar o que foi perdido por falta de referência) */
+export const isDateSemAno = (raw: unknown): boolean => /^\d{1,2}[-/]\d{1,2}$/.test(String(raw ?? '').trim());
+
+const ultimoDiaDoMes = (y: number, m: number) => new Date(y, m, 0).getDate();
+
+/**
+ * De onde tirar o ano quando as datas vêm `dd/mm`:
+ *  1. uma data completa nas primeiras linhas da planilha (Itaú: "Data: 04/04/2019",
+ *     que é a data da extração — limite superior perfeito);
+ *  2. o nome do arquivo: `dd-mm-aaaa`, `mm-aaaa`, `aaaa-mm`, `mm-aa` (03-19.xls) ou um
+ *     ano solto; mês/ano vira o último dia do mês.
+ * Nada disso → null, e o parser avisa em vez de perder as linhas em silêncio.
+ */
+export function inferirDataDeReferencia(rows: unknown[][], fileName?: string): DataReferencia | null {
+    for (const row of rows.slice(0, 20)) {
+        for (const cell of row || []) {
+            if (cell instanceof Date && !isNaN(cell.getTime())) {
+                return { y: cell.getFullYear(), m: cell.getMonth() + 1, d: cell.getDate() };
+            }
+            const m = String(cell ?? '').match(/(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+            if (m && Number(m[2]) >= 1 && Number(m[2]) <= 12) return { y: Number(m[3]), m: Number(m[2]), d: Number(m[1]) };
+        }
+    }
+    const nome = (fileName ?? '').replace(/\.[^.]+$/, '');
+    let m = nome.match(/(\d{1,2})[-_. ](\d{1,2})[-_. ]((?:19|20)\d{2})/);           // dd-mm-aaaa
+    if (m && Number(m[2]) >= 1 && Number(m[2]) <= 12) return { y: Number(m[3]), m: Number(m[2]), d: Number(m[1]) };
+    m = nome.match(/(?:^|\D)(\d{1,2})[-_. ]?((?:19|20)\d{2})(?:\D|$)/);               // mm-aaaa
+    if (m && Number(m[1]) >= 1 && Number(m[1]) <= 12) return { y: Number(m[2]), m: Number(m[1]), d: ultimoDiaDoMes(Number(m[2]), Number(m[1])) };
+    m = nome.match(/((?:19|20)\d{2})[-_. ]?(\d{1,2})(?:\D|$)/);                       // aaaa-mm
+    if (m && Number(m[2]) >= 1 && Number(m[2]) <= 12) return { y: Number(m[1]), m: Number(m[2]), d: ultimoDiaDoMes(Number(m[1]), Number(m[2])) };
+    m = nome.match(/(?:^|\D)(\d{1,2})[-_. ](\d{2})(?:\D|$)/);                          // mm-aa (03-19)
+    if (m && Number(m[1]) >= 1 && Number(m[1]) <= 12) return { y: 2000 + Number(m[2]), m: Number(m[1]), d: ultimoDiaDoMes(2000 + Number(m[2]), Number(m[1])) };
+    m = nome.match(/(?:^|\D)((?:19|20)\d{2})(?:\D|$)/);                                // ano solto
+    if (m) return { y: Number(m[1]), m: 12, d: 31 };
     return null;
 }
 
@@ -140,24 +206,43 @@ export function detectColumns(rows: unknown[][]): { headerIdx: number; cols: Col
     return null;
 }
 
-/** Converte linhas de planilha (já em células) em movimentos, pulando linhas de saldo/total. */
-export function rowsToTransactions(rows: unknown[][]): { transactions: RawTransaction[]; skipped: number } {
+export interface PlanilhaOptions {
+    /** Nome do arquivo — pista de mês/ano quando as datas vêm `dd/mm`. */
+    fileName?: string;
+}
+
+/**
+ * Converte linhas de planilha (já em células) em movimentos, pulando linhas de saldo/total.
+ * Devolve também `avisos` quando perdeu linhas por um motivo que o usuário precisa saber.
+ */
+export function rowsToTransactions(rows: unknown[][], opts: PlanilhaOptions = {}): { transactions: RawTransaction[]; skipped: number; avisos: string[] } {
     const transactions: RawTransaction[] = [];
+    const avisos: string[] = [];
     let skipped = 0;
-    if (rows.length === 0) return { transactions, skipped };
+    if (rows.length === 0) return { transactions, skipped, avisos: ['o arquivo não tem nenhuma linha.'] };
 
     const detected = detectColumns(rows);
     // Sem cabeçalho reconhecido: fallback posicional (data, valor, descrição) desde a 1ª linha —
     // a linha de cabeçalho, se existir, cai fora sozinha por não ter data.
     const cols: ColumnMap = detected?.cols ?? { date: 0, amount: 1, credit: -1, debit: -1, desc: 2, type: -1 };
     const start = detected ? detected.headerIdx + 1 : 0;
+    const ref = inferirDataDeReferencia(rows, opts.fileName);
+
+    let semAno = 0;
+    let dataIlegivel = 0;
+    let exemploIlegivel = '';
 
     for (let i = start; i < rows.length; i++) {
         const row = rows[i];
         if (!row || row.length === 0) continue;
 
-        const date = parseDateCell(row[cols.date]);
-        if (!date) continue;
+        const rawDate = row[cols.date];
+        const date = parseDateCell(rawDate, ref);
+        if (!date) {
+            if (isDateSemAno(rawDate)) semAno++;
+            else if (String(rawDate ?? '').trim()) { dataIlegivel++; exemploIlegivel ||= String(rawDate).trim(); }
+            continue;
+        }
 
         const description = cols.desc >= 0 ? String(row[cols.desc] ?? '').trim() : '';
         if (isBalanceLine(description)) { skipped++; continue; }
@@ -179,16 +264,130 @@ export function rowsToTransactions(rows: unknown[][]): { transactions: RawTransa
 
         transactions.push({ date, amount, description: description || 'Sem descrição' });
     }
-    return { transactions, skipped };
+
+    // Linha com `dd/mm` e nenhuma referência de ano é movimento REAL perdido — avisa sempre.
+    if (semAno > 0) {
+        avisos.push(`${semAno} linha(s) têm data sem ano (ex.: "01/03") e nem o arquivo nem o nome dele dizem o ano. Renomeie o arquivo com mês e ano (ex.: "03-2019.xlsx") ou exporte em OFX.`);
+    }
+    // Data ilegível só explica quando NADA foi lido — rodapé de planilha com texto na
+    // coluna de data é normal e não merece alarme.
+    if (transactions.length === 0 && dataIlegivel > 0) {
+        avisos.push(`${dataIlegivel} linha(s) com data em formato não reconhecido (ex.: "${exemploIlegivel}"). Aceitos: dd/mm/aaaa, aaaa-mm-dd, data do Excel.`);
+    }
+    if (transactions.length === 0 && !detected && avisos.length === 0) {
+        avisos.push('não encontrei um cabeçalho com colunas de data e valor nas 20 primeiras linhas.');
+    }
+    return { transactions, skipped, avisos };
+}
+
+/**
+ * Cabeçalho de planilha de extrato (Itaú: "Agência:" 7824 / "Conta:" 12263-9, ou
+ * "Agência/Conta:" "7824/12263-9") → `acctId`, para `accountMatches` recusar arquivo
+ * de outra conta também em Excel/HTML, não só em OFX.
+ */
+export function extrairContaDoCabecalho(rows: unknown[][]): StatementHeader {
+    const header: StatementHeader = {};
+    const primeiraCelulaCheia = (row: unknown[], apos: number) =>
+        row.slice(apos + 1).map(c => String(c ?? '').trim()).find(Boolean) ?? '';
+    for (const row of rows.slice(0, 20)) {
+        const cells = (row || []).map(c => String(c ?? '').trim());
+        for (let i = 0; i < cells.length; i++) {
+            const rotulo = normHeader(cells[i]);
+            if (/^ag(encia)?\.?\s*\/\s*conta:?$/.test(rotulo) || /^conta( corrente)?:?$/.test(rotulo)) {
+                const v = primeiraCelulaCheia(row, i).replace(/\s+/g, '');
+                if (/\d/.test(v)) { header.acctId = v; return header; }
+            }
+        }
+    }
+    return header;
 }
 
 /** XLSX/XLS: primeira aba, cabeçalho detectado pelo nome das colunas. */
-export function parseXLSX(buffer: ArrayBuffer): ParsedStatement {
+export function parseXLSX(buffer: ArrayBuffer, opts: PlanilhaOptions = {}): ParsedStatement {
     const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
     const ws = wb.Sheets[wb.SheetNames[0]];
-    if (!ws) return { format: 'XLSX', transactions: [], header: {}, skipped: 0 };
+    if (!ws) return { format: 'XLSX', transactions: [], header: {}, skipped: 0, avisos: ['a planilha não tem nenhuma aba.'] };
     const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
-    return { format: 'XLSX', header: {}, ...rowsToTransactions(rows) };
+    return { format: 'XLSX', header: extrairContaDoCabecalho(rows), ...rowsToTransactions(rows, opts) };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HTML disfarçado de .xls (Itaú exporta "Excel" assim: <html xmlns:x=...>)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function decodeHtmlText(s: string): string {
+    return s
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
+        .replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
+        .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+/**
+ * Tabela(s) HTML → linhas de células, como `sheet_to_json(header: 1)` faria.
+ * Trata o que o `XLSX.read` não trata no arquivo do Itaú: `<td />` auto-fechado
+ * (sem ele as colunas desalinham), `colspan`, e o atributo `x:num="-35.00"`, que
+ * traz o valor limpo quando existe.
+ */
+export function parseHTMLTable(html: string): unknown[][] {
+    const corpo = html
+        .slice(Math.max(0, html.search(/<body\b/i)))
+        .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
+        .replace(/<!--[\s\S]*?-->/g, '');
+    const rows: unknown[][] = [];
+    const reTr = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
+    const reTd = /<t([dh])\b([^>]*?)(\/?)>/gi;
+    let tr: RegExpExecArray | null;
+    while ((tr = reTr.exec(corpo))) {
+        const conteudo = tr[1];
+        const cells: unknown[] = [];
+        let td: RegExpExecArray | null;
+        reTd.lastIndex = 0;
+        while ((td = reTd.exec(conteudo))) {
+            const attrs = td[2];
+            let valor: unknown;
+            if (td[3] === '/') {
+                valor = '';
+            } else {
+                const inicio = td.index + td[0].length;
+                const fecha = conteudo.slice(inicio).search(new RegExp(`</t${td[1]}\\b|<t[dh]\\b`, 'i'));
+                const inner = fecha >= 0 ? conteudo.slice(inicio, inicio + fecha) : conteudo.slice(inicio);
+                const xnum = attrs.match(/\bx:num="([^"]*)"/i);
+                valor = xnum && xnum[1] !== '' && !isNaN(Number(xnum[1])) ? Number(xnum[1]) : decodeHtmlText(inner);
+            }
+            cells.push(valor);
+            const span = Number((attrs.match(/\bcolspan="?(\d+)/i) || [])[1] || 1);
+            for (let k = 1; k < span; k++) cells.push('');
+        }
+        if (cells.length > 0) rows.push(cells);
+    }
+    return rows;
+}
+
+/** Extrato em HTML (com qualquer extensão). */
+export function parseHTML(html: string, opts: PlanilhaOptions = {}): ParsedStatement {
+    const rows = parseHTMLTable(html);
+    if (rows.length === 0) {
+        return { format: 'XLSX', transactions: [], header: {}, skipped: 0, avisos: ['o arquivo é uma página HTML sem tabela de lançamentos.'] };
+    }
+    return { format: 'XLSX', header: extrairContaDoCabecalho(rows), ...rowsToTransactions(rows, opts) };
+}
+
+/** É HTML? Olha os primeiros bytes, não a extensão — o Itaú chama de .xls. */
+export function pareceHTML(buffer: ArrayBuffer): boolean {
+    const inicio = new TextDecoder('latin1').decode(buffer.slice(0, 512)).replace(/^\uFEFF/, '').trimStart();
+    return /^(<!doctype\s+html|<html|<table|<\?xml[^>]*>\s*<html)/i.test(inicio);
+}
+
+/** Decodifica pelo charset do <meta>, ou windows-1252 (padrão dos bancos brasileiros). */
+export function decodeHTMLBuffer(buffer: ArrayBuffer): string {
+    const cabeca = new TextDecoder('latin1').decode(buffer.slice(0, 4096));
+    const charset = (cabeca.match(/charset=["']?([\w-]+)/i) || [])[1] || 'windows-1252';
+    try { return new TextDecoder(charset).decode(buffer); }
+    catch { return new TextDecoder('windows-1252').decode(buffer); }
 }
 
 /** Escolhe o delimitador pela primeira linha não vazia: o que aparecer mais vezes fora de aspas. */
@@ -220,11 +419,11 @@ export function splitCsvLine(line: string, delimiter: string): string[] {
 }
 
 /** CSV com `;` (padrão BR), `,`, tab ou `|`; cabeçalho detectado pelo nome das colunas. */
-export function parseCSV(text: string): ParsedStatement {
+export function parseCSV(text: string, opts: PlanilhaOptions = {}): ParsedStatement {
     const clean = text.replace(/^﻿/, ''); // BOM
     const delimiter = detectDelimiter(clean);
     const rows = clean.split(/\r?\n/).filter(l => l.trim()).map(l => splitCsvLine(l, delimiter));
-    return { format: 'CSV', header: {}, ...rowsToTransactions(rows) };
+    return { format: 'CSV', header: {}, ...rowsToTransactions(rows, opts) };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -312,7 +511,7 @@ export function parseOFX(text: string): ParsedStatement {
     // SGML sem fechamento final (arquivo truncado): fecha o que ficou aberto.
     while (stack.length) closeAggregate(stack[stack.length - 1].name);
 
-    return { format: 'OFX', transactions, header, skipped: 0 };
+    return { format: 'OFX', transactions, header, skipped: 0, avisos: [] };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -340,7 +539,7 @@ export function parseCNAB240(text: string): ParsedStatement {
             });
         }
     }
-    return { format: 'CNAB240', transactions, header: {}, skipped: 0 };
+    return { format: 'CNAB240', transactions, header: {}, skipped: 0, avisos: [] };
 }
 
 /**
@@ -363,7 +562,7 @@ export function parseCNAB400(text: string): ParsedStatement {
             id: line.substring(37, 62).trim() || undefined,
         });
     }
-    return { format: 'CNAB400', transactions, header: {}, skipped: 0 };
+    return { format: 'CNAB400', transactions, header: {}, skipped: 0, avisos: [] };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -373,8 +572,12 @@ export function parseCNAB400(text: string): ParsedStatement {
 /** Lê o arquivo pelo nome/extensão. Lança se a extensão não for reconhecida. */
 export async function parseStatementFile(file: File): Promise<ParsedStatement> {
     const name = file.name.toLowerCase();
-    if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
-        return parseXLSX(await file.arrayBuffer());
+    const opts: PlanilhaOptions = { fileName: file.name };
+    if (name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.html') || name.endsWith('.htm')) {
+        const buffer = await file.arrayBuffer();
+        // O "Excel" do Itaú é HTML: o XLSX.read abre sem erro e devolve zero linhas.
+        if (pareceHTML(buffer)) return parseHTML(decodeHTMLBuffer(buffer), opts);
+        return parseXLSX(buffer, opts);
     }
     if (name.endsWith('.ofx')) {
         // OFX de bancos brasileiros costuma vir em Windows-1252/ISO-8859-1
@@ -385,12 +588,12 @@ export async function parseStatementFile(file: File): Promise<ParsedStatement> {
         return parseOFX(text);
     }
     const text = await file.text();
-    if (name.endsWith('.csv')) return parseCSV(text);
+    if (name.endsWith('.csv')) return parseCSV(text, opts);
     if (name.endsWith('.ret') || name.endsWith('.txt') || name.endsWith('.cnab')) {
         const firstLine = text.split('\n')[0] || '';
         return firstLine.length >= 400 ? parseCNAB400(text) : parseCNAB240(text);
     }
-    throw new Error(`Formato não reconhecido: ${file.name}. Aceitos: OFX, CSV, XLSX/XLS, CNAB (.ret/.txt).`);
+    throw new Error(`Formato não reconhecido: ${file.name}. Aceitos: OFX, CSV, XLSX/XLS, HTML, CNAB (.ret/.txt).`);
 }
 
 /** Só dígitos — para comparar ACCTID do OFX com o número da conta cadastrado. */

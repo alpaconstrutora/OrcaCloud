@@ -244,6 +244,10 @@ export function geometriaDaParede(
     xIni = 0;
     xFim = L;
   }
+  // Até onde a mitra EMPURRA a ponta (a face mais avançada). É o alcance real
+  // da parede no canto — o corpo nasce recuado, mas o bisel chega até aqui.
+  const xIniExt = semMitra ? xIni : -Math.max(perfil.mitraA.esquerdaMm, perfil.mitraA.direitaMm) * S;
+  const xFimExt = semMitra ? xFim : L + Math.max(perfil.mitraB.esquerdaMm, perfil.mitraB.direitaMm) * S;
 
   // ─── ESCONDER UMA ESQUADRIA FECHA O VÃO ────────────────────────────────────
   //
@@ -285,9 +289,17 @@ export function geometriaDaParede(
   const atravessaTudo = (f: { y0: number; y1: number }) =>
     f.y0 * S <= EPS && f.y1 * S >= A - EPS;
 
+  // ⚠️ Recortado ao ALCANCE da mitra (`xIniExt`/`xFimExt`), não ao corpo
+  // recuado (`xIni`/`xFim`). Num canto de paredes de 15 cm o corpo nasce em
+  // +75 mm e o bisel o empurra até −75 mm; o pilar de canto 14 × 40 ocupa
+  // [−70, +70] — recortado ao corpo virava [75, 70], vazio, e sumia da lista:
+  // a parede saía inteira, era biselada até −75 e atravessava o pilar. Foi o
+  // *"nos quatro cantos a alvenaria e o pilar ainda estão se sobrepondo"* de
+  // 16/09/2026, medido na planta do usuário: 0,021 m² em comum em cada canto,
+  // enquanto o pilar de T da mesma parede (longe da mitra) era recortado certo.
   const removidos = perfil.furosEstruturais
     .filter(atravessaTudo)
-    .map((f) => ({ x0: Math.max(xIni, f.x0 * S), x1: Math.min(xFim, f.x1 * S) }))
+    .map((f) => ({ x0: Math.max(xIniExt, f.x0 * S), x1: Math.min(xFimExt, f.x1 * S) }))
     .filter((r) => r.x1 > r.x0)
     .sort((a, b) => a.x0 - b.x0);
 
@@ -300,10 +312,30 @@ export function geometriaDaParede(
   // sai do desenho: obra nenhuma assenta 5 mm de bloco ao lado de um pilar.
   const LASCA_M = 0.02;
   const trechos: { x0: number; x1: number }[] = [];
+  // ─── CONCRETO NA PONTA COME A MITRA ────────────────────────────────────────
+  //
+  // Quando o pilar ocupa a ponta, a parede não chega ao canto: ela morre na
+  // FACE do pilar, em corte reto — o bisel é encontro de alvenaria com
+  // alvenaria, e ali não há outra alvenaria, há concreto. Por isso o primeiro
+  // trecho nasce em `r.x1` (a face do pilar), mesmo que isso fique AQUÉM do
+  // corpo recuado, e a ponta correspondente perde o bisel (`biselarA`/`B`).
+  // Sem isso o trecho nascia em `xIni` e era empurrado de volta ao canto.
   let cursor = xIni;
+  let biselarA = !semMitra;
+  let biselarB = !semMitra;
   for (const r of removidos) {
-    if (r.x0 - cursor > LASCA_M) trechos.push({ x0: cursor, x1: r.x0 });
-    cursor = Math.max(cursor, r.x1);
+    if (r.x0 - cursor > LASCA_M) {
+      trechos.push({ x0: cursor, x1: r.x0 });
+      cursor = Math.max(cursor, r.x1);
+    } else if (trechos.length === 0) {
+      // Encosta na ponta A: a primeira peça leva o cursor à SUA face, ainda que
+      // fique aquém de `xIni`; as seguintes só avançam.
+      cursor = biselarA ? r.x1 : Math.max(cursor, r.x1);
+      biselarA = false;
+    } else {
+      cursor = Math.max(cursor, r.x1);
+    }
+    if (r.x1 >= xFim - LASCA_M) biselarB = false;
   }
   if (xFim - cursor > LASCA_M) trechos.push({ x0: cursor, x1: xFim });
 
@@ -398,10 +430,8 @@ export function geometriaDaParede(
       // real dentro da espessura, e o avanço da mitra é função dessa cota.
       // Só a ponta da PAREDE entra — a borda de um trecho interrompido pelo
       // concreto é corte reto e continua reto.
-      if (!semMitra) {
-        if (Math.abs(sx0 - xIni) < TOL_PONTA) biselarPonta(geom, xIni, (z) => -avancoA(z));
-        if (Math.abs(sx1 - xFim) < TOL_PONTA) biselarPonta(geom, xFim, (z) => L + avancoB(z));
-      }
+      if (biselarA && Math.abs(sx0 - xIni) < TOL_PONTA) biselarPonta(geom, xIni, (z) => -avancoA(z));
+      if (biselarB && Math.abs(sx1 - xFim) < TOL_PONTA) biselarPonta(geom, xFim, (z) => L + avancoB(z));
       pecas.push({ geom, quaternion, position, funcao: faixa.funcao });
     }
   };

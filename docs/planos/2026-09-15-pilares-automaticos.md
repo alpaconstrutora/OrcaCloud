@@ -96,3 +96,24 @@ raio em que `pontesEstruturais` e o "já tem pilar aqui" reconhecem o nó.
 Prova: unitário novo (face mínima da pegada = −75 mm = face externa, no canto, no T e no
 intermediário; 14 cm em 15 fica em (0,0)); expectativas da casa atualizadas (20/3980/5980);
 editor "0,02 · 0,02". Nos estudos já lançados, **Relançar** reposiciona.
+
+## O pilar de canto come a mitra no 3D (16/09/2026)
+
+> nos quatro cantos a alvenaria e o pilar ainda estao se sobreponto.
+
+Medido na planta do usuário (7 paredes de 15 cm, pilares 14 × 40): as peças 3D das paredes
+externas verticais começavam em −75 mm e dividiam 0,021 m² com P1/P3/P14/P15, embora o perfil
+(`perfilDaParedeComVaos`) já trouxesse a faixa [−70, 70] de altura inteira do pilar — e o pilar
+de T da mesma parede fosse recortado certo. Causa em `geometriaDaParede`: o corpo da parede
+nasce no RECUO da mitra (+75) e o bisel o empurra até −75; o vão do pilar recortado ao corpo
+virava [75, 70] (vazio) e sumia de `removidos`; a parede saía inteira e biselada até o canto.
+
+Correção (`Blueprint3DViewer.tsx`): o vão é recortado ao **alcance** da mitra
+(`xIniExt`/`xFimExt`, a face mais avançada); o primeiro trecho nasce na face do pilar mesmo
+aquém de `xIni`; a ponta ocupada por concreto perde o bisel (`biselarA`/`biselarB`). Sem pilar,
+o bisel é o de sempre. Não é preciso marcar "Cede o volume sobreposto" à mão: o lote dos
+pilares já marca as paredes, e a faixa já estava no perfil — o defeito era só do desenho 3D.
+
+Prova: `__tests__/blueprint3dPilarDeCanto.test.ts` (4: controle com bisel; nenhuma peça na
+pegada do pilar; ponta livre intacta; parede que não cede segue inteira) — falha no código
+anterior. Planta do usuário: peças de `wal_0001` agora [0,075; 3,525] e [3,675; 6,975].

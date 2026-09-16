@@ -87,3 +87,19 @@ botão = blocos + baldrames; rodapé e status listam os três.
 Prova: `blueprintFundacoesAutomaticas.test.ts` (+3, 12) · editor (+1, 91: prévia com 4 baldrames
 "15 × 50 · topo no piso", Lançar "4 bloco(s), 8 estaca(s) e 4 baldrame(s)", checkbox persiste e
 some da prévia) · suíte 328/4321 · tsc · build.
+
+## Peça enterrada cresce para baixo (16/09/2026, print do 3D: estaca esticada atravessando o bloco)
+
+> ao alterar o comprimento da estaca, deve aumentar no sentido do terreno e não no sentido do bloco de coroamento
+
+`SetStructuralProps { alturaMm }` mantém a base e empurra o topo — certo para pilar e viga. Na
+estaca o topo é o que está amarrado (base do bloco). `PainelEstruturaSelecionada` ganhou
+`camposDaNovaAltura(estrutura, alturaMm)`: peça com topo no piso ou abaixo (`base + altura ≤ 0`)
+mantém o topo e desce a base (`baseMm = topo − altura`); vale para estaca, bloco (topo no
+arrasamento) e baldrame (topo no piso). Pilar que desce até o bloco (topo +2,80) segue crescendo
+para cima. O campo da estaca se chama **Comprimento** e a ajuda diz "cresce para baixo". Sem
+mudança no kernel.
+
+Prova: `__tests__/components/PainelEstruturaSelecionada.test.tsx` (5: estaca 8→10 m → base
+−11,10; bloco e baldrame; pilar só altura; campo Comprimento manda altura e base; pilar só
+altura) · suíte 328/4331 · tsc · build.

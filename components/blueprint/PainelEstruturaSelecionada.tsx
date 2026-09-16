@@ -40,6 +40,29 @@ function tiposCompativeis(kind: StructuralKind): StructuralKind[] {
   );
 }
 
+/**
+ * Peça ENTERRADA cresce para baixo (16/09/2026, print do 3D do usuário: *"ao
+ * alterar o comprimento da estaca, deve aumentar no sentido do terreno e não no
+ * sentido do bloco de coroamento"*).
+ *
+ * `alturaMm` sozinho mantém a BASE e empurra o topo — certo para pilar e viga,
+ * que nascem no piso e sobem. Numa estaca, o topo é o que está amarrado (a base
+ * do bloco) e a base é o que vai fundo: a estaca de 8 m que virou 10 m ganhava
+ * 2 m PARA CIMA, atravessando bloco e baldrame. O mesmo vale para o bloco (topo
+ * no arrasamento) e para a baldrame (topo no piso).
+ *
+ * Regra por GEOMETRIA, não por tipo: peça cujo topo está no piso ou abaixo dele
+ * (`baseMm + alturaMm ≤ 0`) mantém o topo e desce a base. Pilar que desce até o
+ * bloco (base −0,50, topo +2,80) continua crescendo para cima.
+ */
+export function camposDaNovaAltura(
+  estrutura: Pick<Structural, 'baseMm' | 'alturaMm'>,
+  alturaMm: number,
+): { alturaMm: number; baseMm?: number } {
+  const topo = estrutura.baseMm + estrutura.alturaMm;
+  return topo <= 0 ? { alturaMm, baseMm: topo - alturaMm } : { alturaMm };
+}
+
 interface Props {
   estrutura: Structural | null;
   /**
@@ -106,6 +129,8 @@ export default function PainelEstruturaSelecionada({
   if (!estrutura) return null;
 
   const forma = FORMA_ESTRUTURAL[estrutura.kind];
+  const enterrada = estrutura.baseMm + estrutura.alturaMm <= 0;
+  const rotuloDaAltura = forma === 'AREA' ? 'Espessura' : estrutura.kind === 'ESTACA' ? 'Comprimento' : 'Altura';
   const compativeis = tiposCompativeis(estrutura.kind);
   const m = medirEstrutura(estrutura);
   const cm = (mm: number) => (mm / 10).toFixed(0);
@@ -202,13 +227,13 @@ export default function PainelEstruturaSelecionada({
       ) : null}
 
       <CampoMedida
-        rotulo={forma === 'AREA' ? 'Espessura' : 'Altura'}
+        rotulo={rotuloDaAltura}
         valor={estrutura.alturaMm / 10}
         casas={0}
         sufixo="cm"
         chave={`${estrutura.id}-altura-${estrutura.alturaMm}`}
-        aoAplicar={(cmValor) => onMedidas({ alturaMm: Math.round(cmValor * 10) })}
-        ariaLabel={`${forma === 'AREA' ? 'Espessura' : 'Altura'}, em centímetros. Agora: ${cm(estrutura.alturaMm)}`}
+        aoAplicar={(cmValor) => onMedidas(camposDaNovaAltura(estrutura, Math.round(cmValor * 10)))}
+        ariaLabel={`${rotuloDaAltura}, em centímetros. Agora: ${cm(estrutura.alturaMm)}${enterrada ? ' — cresce para baixo; o topo fica onde está' : ''}`}
       />
 
       {/* A COTA em metro, e não em centímetro como a seção: ela é posição na

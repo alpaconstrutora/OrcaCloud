@@ -9,6 +9,7 @@ import {
   CircuitBoard,
   Calculator,
   FileText,
+  RectangleVertical,
   FlipHorizontal2,
   FlipVertical2,
   History,
@@ -148,6 +149,16 @@ import {
   quadrosDoNivel,
   type HipotesesDeCircuitos,
 } from '../../utils/blueprintCircuitosAutomaticos';
+import {
+  HIPOTESES_PILARES_PADRAO,
+  ROTULO_DO_ONDE,
+  SECOES_SUGERIDAS,
+  VAOS_MAXIMOS,
+  conferirPlanoDePilares,
+  planejarPilares,
+  type HipotesesDePilares,
+  type SecaoSugeridaId,
+} from '../../utils/blueprintPilaresAutomaticos';
 import SecaoAccordion from './SecaoAccordion';
 import { usePainelRedimensionavel } from './LarguraDoPainel';
 import PainelMedicoes from './PainelMedicoes';
@@ -518,6 +529,9 @@ const ROTULO_DA_TAREFA = {
   // A criação automática de circuitos (14/09/2026): luz, TUG e TUE sempre
   // separados; o critério só divide luz e TUG. Prévia em tabela, um lote.
   circuitos: 'Circuitos automáticos',
+  // O lançamento automático de pilares (15/09/2026): um pilar por encontro de
+  // paredes e nos vãos longos; prévia tracejada no desenho, um lote, Ctrl+Z.
+  pilares: 'Pilares automáticos',
   'gerar-paredes': 'Gerar paredes do PDF',
   'importar-ifc': 'Importar do IFC',
   'importar-dxf': 'Importar do DXF',
@@ -884,7 +898,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   ]);
   const relatorioNoDock = relatorioAberto && !RELATORIOS_EM_DRAWER.has(relatorioAberto) ? relatorioAberto : null;
   const relatorioNoDrawer = relatorioAberto && RELATORIOS_EM_DRAWER.has(relatorioAberto) ? relatorioAberto : null;
-  const alternarTarefa = (id: TarefaDoPainel) => setTarefa((t) => (t === id ? null : id));
+  const alternarTarefa = (id: TarefaDoPainel) => {
+    setDrawerRecolhido(false);
+    setTarefa((t) => (t === id ? null : id));
+  };
   const alternarRelatorio = (id: RelatorioDoDock) => setRelatorio((r) => (r === id ? null : id));
   const dock = useAlturaDoDock();
   const [ortogonal, setOrtogonal] = useState(true);
@@ -4435,6 +4452,66 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     setResultadoDeCircuitos({ ok: true, texto: `${n} circuito(s) criado(s) para ${m} ponto(s) — Ctrl+Z desfaz.` });
   };
 
+  /**
+   * O LANÇAMENTO AUTOMÁTICO DE PILARES (15/09/2026) — ver `blueprintPilaresAutomaticos.ts`.
+   *
+   * Vão máximo, seção e "incluir internas" são preferência de trabalho
+   * (persistidas); o plano é derivado a cada render — muda com o desenho e com
+   * as hipóteses, e planejar é barato (dezenas de paredes). Enquanto a gaveta
+   * está aberta, o canvas desenha os pilares propostos tracejados; gravar é um
+   * `runBatch` só, provado antes por `conferirPlanoDePilares`.
+   */
+  const [hipDePilaresSalvas, setHipDePilaresSalvas] = usePersistedState<{
+    vaoMaximoMm: number;
+    secao: SecaoSugeridaId;
+    incluirInternas: boolean;
+  }>('blueprint:pilaresAutomaticos', {
+    vaoMaximoMm: HIPOTESES_PILARES_PADRAO.vaoMaximoMm,
+    secao: '190x190',
+    incluirInternas: HIPOTESES_PILARES_PADRAO.incluirInternas,
+  });
+  const hipotesesDePilares = useMemo<HipotesesDePilares>(() => {
+    // O que veio do localStorage é validado campo a campo — o hook não valida nada.
+    const secao = SECOES_SUGERIDAS.find((x) => x.id === hipDePilaresSalvas.secao) ?? SECOES_SUGERIDAS[0];
+    const vao =
+      typeof hipDePilaresSalvas.vaoMaximoMm === 'number' &&
+      hipDePilaresSalvas.vaoMaximoMm >= 1000 &&
+      hipDePilaresSalvas.vaoMaximoMm <= 20000
+        ? hipDePilaresSalvas.vaoMaximoMm
+        : HIPOTESES_PILARES_PADRAO.vaoMaximoMm;
+    return {
+      ...HIPOTESES_PILARES_PADRAO,
+      vaoMaximoMm: vao,
+      larguraMm: secao.larguraMm,
+      profundidadeMm: secao.profundidadeMm,
+      incluirInternas: hipDePilaresSalvas.incluirInternas !== false,
+    };
+  }, [hipDePilaresSalvas]);
+  const secaoDePilarEscolhida =
+    SECOES_SUGERIDAS.find((x) => x.id === hipDePilaresSalvas.secao)?.id ?? SECOES_SUGERIDAS[0].id;
+  const planoDePilares = useMemo(
+    () => (levelId ? planejarPilares(editor.model, levelId, hipotesesDePilares) : null),
+    [editor.model, levelId, hipotesesDePilares],
+  );
+  const [resultadoDePilares, setResultadoDePilares] = useState<{ ok: boolean; texto: string } | null>(null);
+  const lancarPilares = () => {
+    if (!planoDePilares || planoDePilares.comandos.length === 0) return;
+    const prova = conferirPlanoDePilares(editor.model, planoDePilares);
+    if (!prova.ok) {
+      setResultadoDePilares({ ok: false, texto: `Nada foi lançado: ${prova.motivo}` });
+      return;
+    }
+    const n = planoDePilares.pilares.length;
+    const m = planoDePilares.paredesQueCedem.length;
+    const criados = editor.runBatch(planoDePilares.comandos);
+    if (criados.length > 0) selecionar(criados);
+    setResultadoDePilares({
+      ok: true,
+      texto: `${n} pilar(es) lançado(s) · ${m} parede(s) passaram a ceder — Ctrl+Z desfaz.`,
+    });
+  };
+  const peDireitoDoNivelAtivo = editor.model.levels.find((l) => l.id === levelId)?.defaultHeightMm ?? null;
+
   /** O que está selecionado, para rodapé de drawer: a peça, ou "N selecionados". */
   const rotuloDaSelecao =
     editor.selectedIds.length > 1
@@ -5039,6 +5116,22 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 onClick={editor.setTool}
               />
             </GrupoDoRibbon>
+
+            {/* ESTRUTURAL (15/09/2026): o lançamento automático de pilares. O
+                pilar avulso continua no menu Componentes; aqui é a proposta em
+                lote — prévia tracejada no desenho, um passo de desfazer. */}
+            {!emVista && (
+              <GrupoDoRibbon rotulo="Estrutural">
+                <BotaoDoRibbon
+                  icone={RectangleVertical}
+                  rotulo="Pilares automáticos"
+                  contagem={planoDePilares?.pilares.length || undefined}
+                  ativo={tarefaAberta === 'pilares'}
+                  onClick={() => alternarTarefa('pilares')}
+                  ajuda="Um pilar em cada encontro de paredes (canto, T, cruzamento) e intermediários quando o vão passa do máximo — prévia antes de gravar, Ctrl+Z desfaz"
+                />
+              </GrupoDoRibbon>
+            )}
 
             {/* CORTE. Não é construção nem medida: o que sai daqui é uma VISTA.
                 Grupo próprio, e não o menu Componentes — a lista de componentes é
@@ -6468,6 +6561,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               // sempre deixaria um retângulo violeta sobre a planta enquanto se
               // traça parede, sem nada na tela explicando de onde ele veio.
               regiao={tarefaAberta === 'gerar-paredes' ? regiao : null}
+              pilaresPrevistos={tarefaAberta === 'pilares' && planoDePilares ? planoDePilares.pilares : undefined}
               onRegiaoDefinida={(r) => {
                 // `null` = desistiu do gesto. Só desarma — apagar a região
                 // confirmada por causa de um Escape seria perder trabalho.
@@ -6481,6 +6575,39 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               medicaoSelecionada={medicoes.selecionada}
               onMedicaoPronta={(tipo, pontos) => void medicoes.criar(tipo, pontos)}
             />
+          )}
+
+          {/* PRÉVIA DOS PILARES NO DESENHO (15/09/2026). A gaveta é modal e
+              cobre o canvas com o véu; "Ver prévia no desenho" a recolhe, e
+              esta pílula é o caminho de volta — ou de lançar dali mesmo. */}
+          {tarefaAberta === 'pilares' && drawerRecolhido && planoDePilares && (
+            <div
+              role="status"
+              className="absolute bottom-14 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-[10px] border border-blue-200 bg-white/95 px-3 py-2 text-sm text-slate-700 shadow-lg"
+            >
+              <RectangleVertical className="h-4 w-4 text-blue-700" />
+              <span>
+                Prévia: <strong>{planoDePilares.pilares.length}</strong> pilar(es) tracejado(s) em azul.
+              </span>
+              <button
+                type="button"
+                onClick={() => setDrawerRecolhido(false)}
+                className="rounded-[6px] border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Voltar à gaveta
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  lancarPilares();
+                  setDrawerRecolhido(false);
+                }}
+                disabled={planoDePilares.pilares.length === 0}
+                className="rounded-[6px] bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-40"
+              >
+                Lançar {planoDePilares.pilares.length} pilar(es)
+              </button>
+            </div>
           )}
         </div>
 
@@ -7237,6 +7364,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               {tarefaAberta === 'tomadas' && <Plug className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'eletrodutos' && <Cable className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'circuitos' && <CircuitBoard className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'pilares' && <RectangleVertical className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -7246,6 +7374,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             </span>
           </SheetTitle>
           <SheetDescription>
+            {tarefaAberta === 'pilares' &&
+              'Pilar em cada encontro de paredes e nos vãos longos, no pavimento ativo. Prévia tracejada no desenho; gravar é um passo só, e Ctrl+Z desfaz.'}
             {tarefaAberta === 'tomadas' && (
               <>
                 Por ambiente: classifique o cômodo, veja o que a norma (9.5.2) pede e distribua.{' '}
@@ -7283,7 +7413,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
 
@@ -7449,6 +7579,170 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   >
                     ver
                   </button>
+                </p>
+              )}
+            </div>
+          )}
+
+          {tarefaAberta === 'pilares' && planoDePilares && (
+            <div className="space-y-4">
+              {/* As HIPÓTESES, escritas — o que é norma e o que é escolha, separados. */}
+              <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <p className="font-semibold text-slate-700">Hipóteses do lançamento</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  <li>
+                    Um pilar em cada <strong>encontro de paredes</strong> — canto, T e cruzamento. Emenda em linha reta
+                    e ponta solta não contam.
+                  </li>
+                  <li>
+                    <strong>Intermediários</strong> quando a distância entre apoios passa do vão máximo: o trecho é
+                    dividido em vãos iguais, desviando de porta, janela e vão livre.
+                  </li>
+                  <li>
+                    Seção com o lado maior ao longo da parede; em parede mais fina que a seção o pilar sobressai
+                    (19 cm numa parede de 15 cm: 2 cm por lado).
+                  </li>
+                  <li>
+                    Altura = pé-direito do pavimento
+                    {peDireitoDoNivelAtivo != null ? ` (${(peDireitoDoNivelAtivo / 1000).toFixed(2).replace('.', ',')} m)` : ''}, base no
+                    piso. Outro pavimento: rode lá.
+                  </li>
+                  <li>As paredes atravessadas passam a <strong>ceder</strong> o volume ao pilar — o quantitativo não paga duas vezes.</li>
+                  <li>
+                    <strong>Não dimensiona</strong>: 19 cm é o mínimo da NBR 6118 (13.2.3); seção, armadura e verificação
+                    são do responsável técnico. Pilar já desenhado é respeitado e conta como apoio.
+                  </li>
+                </ul>
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <label className="flex items-center gap-2">
+                    Vão máximo
+                    <select
+                      value={hipotesesDePilares.vaoMaximoMm}
+                      onChange={(e) => setHipDePilaresSalvas((h) => ({ ...h, vaoMaximoMm: Number(e.target.value) }))}
+                      aria-label="Vão máximo entre pilares"
+                      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                    >
+                      {VAOS_MAXIMOS.map((v) => (
+                        <option key={v} value={v}>
+                          {v / 1000} m{v === HIPOTESES_PILARES_PADRAO.vaoMaximoMm ? ' (sugerido)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    Seção
+                    <select
+                      value={secaoDePilarEscolhida}
+                      onChange={(e) => setHipDePilaresSalvas((h) => ({ ...h, secao: e.target.value as SecaoSugeridaId }))}
+                      aria-label="Seção do pilar"
+                      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                    >
+                      {SECOES_SUGERIDAS.map((x) => (
+                        <option key={x.id} value={x.id}>
+                          {x.rotulo}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={hipotesesDePilares.incluirInternas}
+                      onChange={(e) => setHipDePilaresSalvas((h) => ({ ...h, incluirInternas: e.target.checked }))}
+                      aria-label="Incluir paredes internas"
+                    />
+                    Incluir paredes internas
+                  </label>
+                  {planoDePilares.pilares.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setDrawerRecolhido(true)}
+                      title="Recolhe a gaveta para ver os pilares propostos, tracejados em azul, sobre o desenho"
+                      className="rounded-[6px] border border-blue-300 bg-white px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
+                    >
+                      Ver prévia no desenho
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {planoDePilares.motivo ? (
+                <p className="text-sm text-slate-500">
+                  {planoDePilares.motivo === 'sem parede no pavimento'
+                    ? 'Desenhe paredes neste pavimento — o pilar nasce no encontro delas.'
+                    : planoDePilares.motivo === 'todos os encontros já têm pilar'
+                      ? 'Todos os encontros de paredes já têm pilar.'
+                      : `Nada a lançar: ${planoDePilares.motivo}.`}
+                </p>
+              ) : (
+                <table className="w-full table-fixed text-xs" aria-label="Prévia dos pilares">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-500">
+                      <th className="w-14 py-1.5 pr-2 font-medium">Pilar</th>
+                      <th className="w-24 py-1.5 pr-2 font-medium">Onde</th>
+                      <th className="w-20 py-1.5 pr-2 font-medium">Paredes</th>
+                      <th className="py-1.5 pr-2 font-medium">Posição (m)</th>
+                      <th className="w-24 py-1.5 text-right font-medium">Seção</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {planoDePilares.pilares.map((p) => (
+                      <tr key={p.idPrevisto}>
+                        <td className="py-1.5 pr-2 font-medium text-slate-700">{p.rotulo}</td>
+                        <td className="py-1.5 pr-2 text-slate-600">
+                          {ROTULO_DO_ONDE[p.onde]}
+                          {p.aviso && <span className="block text-amber-800">{p.aviso}</span>}
+                        </td>
+                        <td className="py-1.5 pr-2 text-slate-600">{p.wallIds.length}</td>
+                        <td className="py-1.5 pr-2 tabular-nums text-slate-600">
+                          {(p.at.x / 1000).toFixed(2).replace('.', ',')} · {(p.at.y / 1000).toFixed(2).replace('.', ',')}
+                        </td>
+                        <td className="py-1.5 text-right tabular-nums text-slate-600">
+                          {p.larguraMm / 10} × {p.profundidadeMm / 10} cm
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              {(planoDePilares.nosComPilarExistente > 0 || planoDePilares.pontasSoltas > 0) && (
+                <p className="text-xs text-slate-500">
+                  {planoDePilares.nosComPilarExistente > 0 &&
+                    `${planoDePilares.nosComPilarExistente} encontro(s) já com pilar — mantidos. `}
+                  {planoDePilares.pontasSoltas > 0 && `${planoDePilares.pontasSoltas} ponta(s) solta(s) sem pilar.`}
+                </p>
+              )}
+
+              {planoDePilares.foraDoPlano.length > 0 && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  <p className="font-medium">{planoDePilares.foraDoPlano.length} posição(ões) fora do plano</p>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                    {[...new Set(planoDePilares.foraDoPlano.map((f) => f.motivo))].map((motivo) => (
+                      <li key={motivo}>{motivo}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {planoDePilares.avisos.length > 0 && (
+                <ul className="list-disc space-y-0.5 pl-4 text-xs text-amber-800">
+                  {planoDePilares.avisos.map((a) => (
+                    <li key={a}>{a}</li>
+                  ))}
+                </ul>
+              )}
+
+              {resultadoDePilares && (
+                <p
+                  role="status"
+                  className={`rounded-md border px-3 py-2 text-xs ${
+                    resultadoDePilares.ok
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                      : 'border-red-200 bg-red-50 text-red-700'
+                  }`}
+                >
+                  {resultadoDePilares.texto}
                 </p>
               )}
             </div>
@@ -7771,6 +8065,24 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               </button>
             </>
           )}
+          {tarefaAberta === 'pilares' && planoDePilares && (
+            <>
+              <span className="mr-auto whitespace-nowrap text-xs text-slate-500">
+                {planoDePilares.pilares.length === 0
+                  ? 'Nada a lançar.'
+                  : `${planoDePilares.pilares.length} pilar(es) · ${planoDePilares.paredesQueCedem.length} parede(s) cedem.`}
+              </span>
+              <button
+                type="button"
+                onClick={lancarPilares}
+                disabled={planoDePilares.pilares.length === 0}
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <RectangleVertical className="h-4 w-4" />
+                Lançar {planoDePilares.pilares.length} pilar(es)
+              </button>
+            </>
+          )}
           {tarefaAberta === 'circuitos' && planoDeCircuitos && (
             <>
               <span className="mr-auto whitespace-nowrap text-xs text-slate-500">
@@ -7789,7 +8101,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               </button>
             </>
           )}
-          {tarefaAberta !== 'tomadas' && tarefaAberta !== 'eletrodutos' && tarefaAberta !== 'circuitos' && rotuloDaSelecao && (
+          {tarefaAberta !== 'tomadas' && tarefaAberta !== 'eletrodutos' && tarefaAberta !== 'circuitos' && tarefaAberta !== 'pilares' && rotuloDaSelecao && (
             <span className="mr-auto truncate text-xs text-slate-500">
               Selecionado: {rotuloDaSelecao}
             </span>

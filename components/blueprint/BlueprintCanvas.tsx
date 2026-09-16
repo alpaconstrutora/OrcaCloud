@@ -77,6 +77,7 @@ import {
   type LadoDoContorno,
 } from '../../utils/blueprintCotas';
 import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor, type TipoDeCondutor } from '../../utils/blueprintCondutores';
+import { pegadaDoPilarPrevisto } from '../../utils/blueprintPilaresAutomaticos';
 import {
   curvaDoTrecho,
   desviosDeSobreposicao,
@@ -178,6 +179,17 @@ const COR_CAMADA_PAREDE: Record<FuncaoCamada, string> = {
  */
 const LIMIAR_CAMADAS_PX = 12;
 const COR_PREVIA = '#2563eb';
+
+/** Um pilar PROPOSTO pela tarefa "Pilares automáticos" — só desenho, sem clique. */
+export interface PilarPrevistoNoCanvas {
+  at: Point;
+  larguraMm: number;
+  profundidadeMm: number;
+  rotacaoDeg: number;
+  rotulo?: string;
+}
+/** Identidade estável para o padrão: `[]` literal a cada render redesenharia o canvas sem parar. */
+const SEM_PILARES_PREVISTOS: readonly PilarPrevistoNoCanvas[] = [];
 /** Âmbar: vão em aberto e ponta solta. Mesma cor do aviso no painel. */
 const COR_ALERTA = '#d97706';
 const COR_AMBIENTE = 'rgba(37, 99, 235, 0.08)';
@@ -1087,6 +1099,12 @@ interface Props {
   /** A região já marcada, desenhada por cima do desenho. `null` = usa a vista. */
   regiao?: { x0: number; y0: number; x1: number; y1: number } | null;
   /**
+   * Pilares PROPOSTOS pelo lançamento automático (15/09/2026): tracejados em
+   * `COR_PREVIA` enquanto a gaveta da tarefa está aberta. O editor passa só os
+   * do pavimento ativo; vazio = nada. Prévia é só desenho — sem acerto de clique.
+   */
+  pilaresPrevistos?: readonly PilarPrevistoNoCanvas[];
+  /**
    * Emite a região ao soltar.
    *
    * ⚠️ `null` significa **desistiu do gesto** (arraste curto demais, ou
@@ -1242,6 +1260,7 @@ export default function BlueprintCanvas({
   mostrarCircuitos = true,
   regiaoArmada = false,
   regiao = null,
+  pilaresPrevistos = SEM_PILARES_PREVISTOS,
   onRegiaoDefinida,
   mostrarCotas = false,
   mostrarCotaInterna = false,
@@ -4023,6 +4042,44 @@ export default function BlueprintCanvas({
       }
     }
 
+    // ── Pilares PROPOSTOS (lançamento automático, 15/09/2026) ────────────────
+    //
+    // Tracejado na cor de prévia, por cima do concreto de verdade: é a
+    // convenção de "ainda não é" em toda a planta (a prévia do traçado, a tomada
+    // sugerida). O contorno é o MESMO cálculo do pilar de verdade
+    // (`pegadaDoPilarPrevisto` → `contornoEmPlanta`) — o que se vê é o que se
+    // grava ao clicar em "Lançar".
+    if (pilaresPrevistos.length > 0) {
+      ctx.save();
+      ctx.strokeStyle = COR_PREVIA;
+      ctx.fillStyle = 'rgba(37, 99, 235, 0.10)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      for (const p of pilaresPrevistos) {
+        const anel = pegadaDoPilarPrevisto(p).map(paraTela);
+        ctx.beginPath();
+        ctx.moveTo(anel[0].x, anel[0].y);
+        for (const k of anel.slice(1)) ctx.lineTo(k.x, k.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        if (p.rotulo && p.larguraMm * vista.escala >= MIN_PX_COTA_PAREDE) {
+          const c = paraTela(p.at);
+          ctx.setLineDash([]);
+          ctx.fillStyle = COR_PREVIA;
+          ctx.font = `bold ${Math.round(10 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(p.rotulo, c.x, c.y);
+          ctx.textAlign = 'start';
+          ctx.textBaseline = 'alphabetic';
+          ctx.fillStyle = 'rgba(37, 99, 235, 0.10)';
+          ctx.setLineDash([6, 4]);
+        }
+      }
+      ctx.restore();
+    }
+
     // ── Telhado ──────────────────────────────────────────────────────────────
     //
     // Depois do concreto: a cobertura é o que está mais ALTO, e desenhada por
@@ -6076,6 +6133,7 @@ export default function BlueprintCanvas({
     movendoSelecao,
     laco,
     regiao,
+    pilaresPrevistos,
     arrastoRegiao,
     mostrarCotas,
     mostrarCotaInterna,

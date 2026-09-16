@@ -1142,6 +1142,76 @@ describe('BlueprintEditor · ribbon', () => {
     expect(within(drawer).getByRole('spinbutton', { name: /carga máxima por circuito/i })).toBeDisabled();
   });
 
+  // ── Pilares automáticos (15/09/2026) ─────────────────────────────────────
+  it('"Pilares automáticos" (aba Arquitetura › Estrutural) sem parede: hipóteses, o que não faz, e "Lançar 0" apagado', async () => {
+    await montar();
+    await abrirAba(/^arquitetura$/i);
+    await userEvent.setup().click(botao(/^pilares automáticos/i));
+    const drawer = await screen.findByRole('dialog');
+    expect(drawer).toHaveTextContent(/hipóteses do lançamento/i);
+    expect(drawer).toHaveTextContent(/não dimensiona/i);
+    expect(drawer).toHaveTextContent(/desenhe paredes neste pavimento/i);
+    expect(within(drawer).getByRole('combobox', { name: /vão máximo entre pilares/i })).toHaveValue('5000');
+    expect(within(drawer).getByRole('combobox', { name: /seção do pilar/i })).toHaveValue('190x190');
+    expect(within(drawer).getByRole('button', { name: /^lançar 0 pilar/i })).toBeDisabled();
+    expect(botao(/^pilares automáticos/i)).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('com paredes: contagem no ribbon, prévia, "Lançar" grava num passo só (paredes cedem) e um Desfazer volta tudo', async () => {
+    // Retângulo 6×4 com uma interna a meia altura: 4 cantos + 2 Ts + 3
+    // intermediários (as três paredes de 6 m passam do vão de 5 m).
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) =>
+      ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    const m = k.applyBatch(nivel.model, [
+      w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0), w(0, 2000, 6000, 2000),
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    await abrirAba(/^arquitetura$/i);
+    expect(botao(/^pilares automáticos/i)).toHaveTextContent('9');
+
+    await userEvent.setup().click(botao(/^pilares automáticos/i));
+    const drawer = await screen.findByRole('dialog');
+    const previa = within(drawer).getByRole('table', { name: /prévia dos pilares/i });
+    const linhas = within(previa).getAllByRole('row').slice(1);
+    expect(linhas).toHaveLength(9);
+    expect(linhas[0]).toHaveTextContent(/P1.*canto.*0,00 · 0,00.*19 × 19 cm/);
+    expect(drawer).toHaveTextContent(/9 pilar\(es\) · 5 parede\(s\) cedem/i);
+
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^lançar 9 pilar/i }));
+    expect(drawer).toHaveTextContent(/9 pilar\(es\) lançado\(s\) · 5 parede\(s\) passaram a ceder/i);
+    expect(drawer).toHaveTextContent(/todos os encontros de paredes já têm pilar/i);
+    expect(botao(/^pilares automáticos/i)).not.toHaveTextContent('9');
+
+    // UM desfazer devolve os nove: o lote foi um passo só.
+    await userEvent.setup().click(botao(/^desfazer/i));
+    expect(botao(/^pilares automáticos/i)).toHaveTextContent('9');
+  });
+
+  it('vão máximo e seção escolhidos persistem em localStorage e mudam a prévia', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) =>
+      ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    const m = k.applyBatch(nivel.model, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0)]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    await abrirAba(/^arquitetura$/i);
+    expect(botao(/^pilares automáticos/i)).toHaveTextContent('6'); // 4 cantos + 2 intermediários (paredes de 6 m)
+    await userEvent.setup().click(botao(/^pilares automáticos/i));
+    const drawer = await screen.findByRole('dialog');
+    await userEvent.selectOptions(within(drawer).getByRole('combobox', { name: /vão máximo entre pilares/i }), '6000');
+    expect(JSON.parse(localStorage.getItem('blueprint:pilaresAutomaticos')!).vaoMaximoMm).toBe(6000);
+    expect(botao(/^pilares automáticos/i)).toHaveTextContent('4'); // 6 m cabe no vão: só os cantos
+    await userEvent.selectOptions(within(drawer).getByRole('combobox', { name: /seção do pilar/i }), '140x400');
+    expect(JSON.parse(localStorage.getItem('blueprint:pilaresAutomaticos')!).secao).toBe('140x400');
+    expect(within(drawer).getByRole('table', { name: /prévia dos pilares/i })).toHaveTextContent(/40 × 14 cm/);
+  });
+
   it('"Quadro de cargas" (aba Instalações) abre uma TELA própria — título, Voltar, sem drawer nem dock; o editor fica escondido e volta inteiro', async () => {
     // 15/09/2026: "quadro de cargas e unifilar em drawer ficou muito ruim
     // visualização. vamos criar uma tela nova para cada um". Tela em fluxo

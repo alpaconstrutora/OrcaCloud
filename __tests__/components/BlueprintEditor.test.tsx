@@ -1881,3 +1881,42 @@ describe('BlueprintEditor · inverter o lado do corte', () => {
     expect(screen.queryByRole('button', { name: /inverter o lado/i })).not.toBeInTheDocument();
   });
 });
+
+/**
+ * O OLHO NA PLANTA BAIXA (16/09/2026): *"os botões de exibir e ocultar presentes
+ * nos componentes na visualização 3D devem estar disponíveis na visualização em
+ * planta"*. O canvas é opaco em jsdom; o que se prova aqui é o que o painel
+ * promete: o olho existe na planta, esconder tira a peça da seleção e oferece
+ * "Mostrar tudo", que devolve.
+ */
+describe('BlueprintEditor · ocultar componentes na planta baixa', () => {
+  async function comPilar() {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    return k.applyBatch(nivel.model, [
+      { type: 'AddWall', levelId: t, a: k.point(0, 0), b: k.point(6000, 0), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(3000, 1500)], larguraMm: 200, profundidadeMm: 200, alturaMm: 2800 },
+    ]).model;
+  }
+
+  it('o olho está na planta; ocultar deseleciona a peça e "Mostrar tudo" devolve', async () => {
+    loadBranchModel.mockResolvedValue(await comPilar());
+    await montar();
+    const user = userEvent.setup();
+    const secao = screen.getAllByRole('button', { name: /^Componentes/ }).find((b) => b.hasAttribute('aria-expanded'))!;
+    if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
+    // Seleciona o pilar pela lista.
+    await user.click(screen.getByRole('button', { name: /^P1 · Pilar/ }));
+    expect(screen.getByRole('button', { name: /^P1 · Pilar/ })).toHaveAttribute('aria-pressed', 'true');
+    // O olho, na planta baixa.
+    await user.click(screen.getByRole('button', { name: 'Ocultar P1 · Pilar no desenho' }));
+    expect(screen.getByRole('button', { name: 'Exibir P1 · Pilar no desenho' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: /^P1 · Pilar/ })).toHaveAttribute('aria-pressed', 'false');
+    // Pelo tipo também: "Pilar" inteiro.
+    expect(screen.getByRole('button', { name: 'Exibir Pilar no desenho' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /mostrar tudo/i }));
+    expect(screen.getByRole('button', { name: 'Ocultar P1 · Pilar no desenho' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /mostrar tudo/i })).toBeNull();
+  });
+});

@@ -184,6 +184,7 @@ const COR_PREVIA = '#2563eb';
 export type PecaPrevistaNoCanvas = PecaPrevista;
 /** Identidade estável para o padrão: `[]` literal a cada render redesenharia o canvas sem parar. */
 const SEM_PECAS_PREVISTAS: readonly PecaPrevistaNoCanvas[] = [];
+const SEM_OCULTOS: ReadonlySet<string> = new Set();
 /** Âmbar: vão em aberto e ponta solta. Mesma cor do aviso no painel. */
 const COR_ALERTA = '#d97706';
 const COR_AMBIENTE = 'rgba(37, 99, 235, 0.08)';
@@ -1100,6 +1101,15 @@ interface Props {
    */
   pecasPrevistas?: readonly PecaPrevistaNoCanvas[];
   /**
+   * Peças ESCONDIDAS no desenho — o olho do painel Componentes (16/09/2026:
+   * *"os botões de exibir e ocultar presentes nos componentes na visualização
+   * 3D devem estar disponíveis na visualização em planta"*). É o mesmo conjunto
+   * que o 3D usa. Filtra o DESENHO e o acerto do clique, e nada mais: a peça
+   * continua no modelo, no quantitativo e no arranjo dos ambientes; parede
+   * oculta leva as esquadrias dela junto. Vazio = tudo aparece.
+   */
+  ocultos?: ReadonlySet<string>;
+  /**
    * Emite a região ao soltar.
    *
    * ⚠️ `null` significa **desistiu do gesto** (arraste curto demais, ou
@@ -1256,6 +1266,7 @@ export default function BlueprintCanvas({
   regiaoArmada = false,
   regiao = null,
   pecasPrevistas = SEM_PECAS_PREVISTAS,
+  ocultos = SEM_OCULTOS,
   onRegiaoDefinida,
   mostrarCotas = false,
   mostrarCotaInterna = false,
@@ -1530,9 +1541,21 @@ export default function BlueprintCanvas({
   // Memoizadas porque o efeito de DESENHO depende delas: um filtro solto devolve
   // array novo a cada render e faria a planta ser repintada por qualquer mudança
   // de estado da tela, inclusive as que não mexem em geometria nenhuma.
-  const paredesReais = useMemo(
+  // ⚠️ `paredesTodasDoNivel` é o que EXISTE; `paredesReais` é o que se VÊ (sem
+  // as ocultas). A prévia do arraste usa as que existem: a junção com uma
+  // parede escondida continua existindo, e calcular sem ela faria a prévia
+  // divergir do commit.
+  const paredesTodasDoNivel = useMemo(
     () => model.walls.filter((w) => !levelId || w.levelId === levelId),
     [model.walls, levelId],
+  );
+  const paredesReais = useMemo(
+    () => (ocultos.size ? paredesTodasDoNivel.filter((w) => !ocultos.has(w.id)) : paredesTodasDoNivel),
+    [paredesTodasDoNivel, ocultos],
+  );
+  const aberturasVisiveis = useMemo(
+    () => (ocultos.size ? model.openings.filter((o) => !ocultos.has(o.id)) : model.openings),
+    [model.openings, ocultos],
   );
   const limitesReais = useMemo(
     () => model.boundaries.filter((b) => !levelId || b.levelId === levelId),
@@ -1543,32 +1566,32 @@ export default function BlueprintCanvas({
     [model.spaces, levelId],
   );
   const estruturasReais = useMemo(
-    () => (model.structures ?? []).filter((s) => !levelId || s.levelId === levelId),
-    [model.structures, levelId],
+    () => (model.structures ?? []).filter((s) => (!levelId || s.levelId === levelId) && !ocultos.has(s.id)),
+    [model.structures, levelId, ocultos],
   );
   const aguasDoNivel = useMemo(
-    () => (model.roofs ?? []).filter((r) => !levelId || r.levelId === levelId),
-    [model.roofs, levelId],
+    () => (model.roofs ?? []).filter((r) => (!levelId || r.levelId === levelId) && !ocultos.has(r.id)),
+    [model.roofs, levelId, ocultos],
   );
   const escadasDoNivel = useMemo(
-    () => (model.stairs ?? []).filter((e) => !levelId || e.levelId === levelId),
-    [model.stairs, levelId],
+    () => (model.stairs ?? []).filter((e) => (!levelId || e.levelId === levelId) && !ocultos.has(e.id)),
+    [model.stairs, levelId, ocultos],
   );
   // ⚠️ `...Reais` é o que está NO MODELO; `...DoNivel`, mais abaixo, é o que
   // aparece na tela durante um arraste. Os ids selecionados saem dos REAIS: sair
   // dos deslocados criaria um ciclo (o deslocamento depende de quem está
   // selecionado), e é a mesma separação de `estruturasReais`.
   const trechosReais = useMemo(
-    () => (model.trechos ?? []).filter((t) => !levelId || t.levelId === levelId),
-    [model.trechos, levelId],
+    () => (model.trechos ?? []).filter((t) => (!levelId || t.levelId === levelId) && !ocultos.has(t.id)),
+    [model.trechos, levelId, ocultos],
   );
   const terminaisReais = useMemo(
-    () => (model.terminais ?? []).filter((t) => !levelId || t.levelId === levelId),
-    [model.terminais, levelId],
+    () => (model.terminais ?? []).filter((t) => (!levelId || t.levelId === levelId) && !ocultos.has(t.id)),
+    [model.terminais, levelId, ocultos],
   );
   const quadrosReais = useMemo(
-    () => (model.quadros ?? []).filter((q) => !levelId || q.levelId === levelId),
-    [model.quadros, levelId],
+    () => (model.quadros ?? []).filter((q) => (!levelId || q.levelId === levelId) && !ocultos.has(q.id)),
+    [model.quadros, levelId, ocultos],
   );
   // SEM recorte por nível, ao contrário de todas as outras famílias: o plano
   // de corte atravessa a edificação inteira, e a marca dele tem de aparecer em
@@ -1691,9 +1714,9 @@ export default function BlueprintCanvas({
     if (!d || (d.x === 0 && d.y === 0) || ids.length === 0) return null;
     // A reserva das aberturas entra na prévia pela mesma razão: é ela que
     // decide se a ponta da parede movida pode ser aparada até o canto.
-    return pontasDeslocadas([...paredesReais, ...limitesReais], ids, d, manterJuncoes, reservaDeAberturas(model));
+    return pontasDeslocadas([...paredesTodasDoNivel, ...limitesReais], ids, d, manterJuncoes, reservaDeAberturas(model));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paredesReais, limitesReais, movendoSelecao, selecao, manterJuncoes, model.openings]);
+  }, [paredesTodasDoNivel, limitesReais, movendoSelecao, selecao, manterJuncoes, model.openings]);
 
   const destinosDoArraste = deslocamentoDoArraste?.destinos ?? null;
 
@@ -2287,12 +2310,12 @@ export default function BlueprintCanvas({
     (w: Wall, mundo: { x: number; y: number }): Opening | null => {
       const d = distanciaNoEixo(w, mundo);
       return (
-        model.openings.find(
+        aberturasVisiveis.find(
           (o) => o.wallId === w.id && d >= o.offsetMm && d <= o.offsetMm + o.widthMm,
         ) ?? null
       );
     },
-    [model.openings, distanciaNoEixo],
+    [aberturasVisiveis, distanciaNoEixo],
   );
 
   const paredeSob = useCallback(
@@ -3039,7 +3062,7 @@ export default function BlueprintCanvas({
     // dentro dele, que e o erro classico de quem so apaga o trecho.
     const paredePorId = new Map(paredesDoNivel.map((w) => [w.id, w]));
 
-    for (const o of model.openings) {
+    for (const o of aberturasVisiveis) {
       const w = paredePorId.get(o.wallId);
       if (!w) continue;
 

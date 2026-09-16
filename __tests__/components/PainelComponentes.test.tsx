@@ -176,7 +176,7 @@ describe('PainelComponentes', () => {
       onAlternarOculto,
       somenteLeitura: true,
     });
-    await usuario.click(screen.getByRole('button', { name: 'Ocultar Pilar no 3D' }));
+    await usuario.click(screen.getByRole('button', { name: 'Ocultar Pilar no desenho' }));
     expect(onAlternarOculto).toHaveBeenCalledWith(['str_1', 'str_4'], true);
   });
 

@@ -35,3 +35,22 @@ subgrupo fica dentro do bloco do pavimento.
   planta do usuário: subgrupos "Parede: 7 peças", "Porta: 4", "Janela: 2", "Pilar: 16",
   "Viga: 7", "Laje: 4", "Estaca: 16"…; Pilar recolhido; no 3D o olho de "Laje" oculta as 4
   lajes de uma vez. Capturas `out-sub/sub-0{1,2,3}-*.png`.
+
+## O olho também na planta baixa (16/09/2026)
+
+> os botoes de exibir e ocultar presente nos componentes na visualizacao 3d devem estar disponivei na visualiuzacao em planta
+
+O conjunto de ocultos (`ocultosNoDesenho`, antes `ocultosNo3d`) passou a valer nas DUAS vistas —
+é a mesma peça. `BlueprintCanvas` ganhou a prop `ocultos`: filtra `paredesReais`, aberturas
+(`aberturasVisiveis`, inclusive no acerto do clique), estruturas, águas, escadas, trechos,
+terminais e quadros — só desenho e acerto de clique; modelo, quantitativo e ambientes não mudam.
+⚠️ A prévia do arraste continua usando TODAS as paredes do nível (`paredesTodasDoNivel`): a junção
+com uma parede escondida existe, e calcular sem ela faria a prévia divergir do commit. Peça
+escondida sai da seleção. "Mostrar tudo" no cabeçalho do acordeão aparece nas duas vistas.
+Rótulos dos olhos: "Ocultar X no desenho".
+
+Prova: editor (+1, 92: olho na planta, ocultar deseleciona, olho do tipo, Mostrar tudo) ·
+painel (10) · suíte 328/4325 · tsc · build. App real na planta do usuário (escritas bloqueadas,
+0 erros JS): 184 olhos na planta; "Ocultar Pilar" + "Ocultar Viga" somem do desenho 2D (ficam
+blocos e baldrames tracejados) e o 3D abre sem pilares e vigas — mesmo conjunto. Capturas
+`out-oc/oc-0{1,2,3}-*.png`.

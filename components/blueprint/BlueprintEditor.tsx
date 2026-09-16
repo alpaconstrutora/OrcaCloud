@@ -2309,7 +2309,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   );
 
   /**
-   * Peças escondidas na vista 3D (pedido de 01/09/2026).
+   * Peças escondidas no DESENHO — 3D (pedido de 01/09/2026) e planta baixa
+   * (16/09/2026: *"os botões de exibir e ocultar presentes nos componentes na
+   * visualização 3D devem estar disponíveis na visualização em planta"*). Um
+   * conjunto só para as duas vistas: o que se esconde na planta some do 3D e
+   * vice-versa — é a mesma peça.
    *
    * `useState` e NÃO `usePersistedState`, pela mesma razão já documentada em
    * `camadasOcultas`: são ids de peça, e id não sobrevive a troca de branch nem
@@ -2320,23 +2324,34 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * Filtra o DESENHO e nada mais: não é comando de kernel, não entra no
    * histórico, não muda quantitativo.
    */
-  const [ocultosNo3d, setOcultosNo3d] = useState<Set<string>>(new Set());
+  const [ocultosNoDesenho, setOcultosNoDesenho] = useState<Set<string>>(new Set());
 
   /**
    * Alterna em LOTE — a linha manda um id, o cabeçalho da família manda todos os
    * dela. Um `setState` por id faria o clique em "Alvenaria" numa planta de
    * quarenta paredes disparar quarenta atualizações em sequência.
    */
-  const alternarOcultoNo3d = useCallback((ids: string[], ocultar: boolean) => {
-    setOcultosNo3d((atual) => {
-      const proximo = new Set(atual);
-      for (const id of ids) {
-        if (ocultar) proximo.add(id);
-        else proximo.delete(id);
+  const alternarOcultoNoDesenho = useCallback(
+    (ids: string[], ocultar: boolean) => {
+      setOcultosNoDesenho((atual) => {
+        const proximo = new Set(atual);
+        for (const id of ids) {
+          if (ocultar) proximo.add(id);
+          else proximo.delete(id);
+        }
+        return proximo;
+      });
+      // Peça escondida sai da seleção: um painel de propriedades de algo que
+      // não está na tela, com alças invisíveis, é a seleção fantasma.
+      if (ocultar) {
+        const escondidos = new Set(ids);
+        if (editor.selectedIds.some((id) => escondidos.has(id))) {
+          editor.setSelectedIds(editor.selectedIds.filter((id) => !escondidos.has(id)));
+        }
       }
-      return proximo;
-    });
-  }, []);
+    },
+    [editor.selectedIds, editor.setSelectedIds],
+  );
 
   /**
    * Selecionar uma peça no canvas ABRE a seção que mostra as propriedades dela.
@@ -6751,7 +6766,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               alturaDoChao={mostrarTerreno3d ? alturaDoChao3d : undefined}
               extrasDoRelevo={mostrarTerreno3d ? extrasDoRelevo3d : null}
               extrasChave={extrasDoRelevo3dChave}
-              ocultos={ocultosNo3d}
+              ocultos={ocultosNoDesenho}
               coresPorUid={coresPorUid.size > 0 ? coresPorUid : undefined}
               // A MESMA seleção do canvas 2D, e o mesmo `selecionar`: escolher
               // uma parede no 3D e voltar para a planta tem de mostrar a mesma
@@ -6941,6 +6956,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               // traça parede, sem nada na tela explicando de onde ele veio.
               regiao={tarefaAberta === 'gerar-paredes' ? regiao : null}
               pecasPrevistas={pecasPrevistas}
+              ocultos={ocultosNoDesenho}
               onRegiaoDefinida={(r) => {
                 // `null` = desistiu do gesto. Só desarma — apagar a região
                 // confirmada por causa de um Escape seria perder trabalho.
@@ -7138,10 +7154,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               acoes={
                 // A saída de emergência de quem escondeu trinta peças e não quer
                 // reacender uma a uma. Só aparece quando há o que devolver.
-                em3d && ocultosNo3d.size > 0 ? (
+                ocultosNoDesenho.size > 0 ? (
                   <button
                     type="button"
-                    onClick={() => setOcultosNo3d(new Set())}
+                    onClick={() => setOcultosNoDesenho(new Set())}
                     className="inline-flex items-center gap-1 rounded-[6px] border border-slate-300 px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-50"
                   >
                     <Eye className="h-3 w-3" /> Mostrar tudo
@@ -7162,12 +7178,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 selecionados={editor.selectedIds}
                 onSelecionar={selecionar}
                 onExcluir={excluirComponente}
-                // No 3D a lista troca de fonte (os pavimentos empilhados) e ganha
-                // o olho; na planta baixa nada disso é passado e o painel se
-                // comporta exatamente como antes.
+                // No 3D a lista troca de fonte (os pavimentos empilhados) e é
+                // só leitura; o olho vale nas duas vistas (16/09/2026).
                 blocos={em3d ? componentesDo3d : undefined}
-                ocultos={em3d ? ocultosNo3d : undefined}
-                onAlternarOculto={em3d ? alternarOcultoNo3d : undefined}
+                ocultos={ocultosNoDesenho}
+                onAlternarOculto={alternarOcultoNoDesenho}
                 somenteLeitura={em3d}
               />
             </SecaoAccordion>

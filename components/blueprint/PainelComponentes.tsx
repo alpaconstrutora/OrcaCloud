@@ -105,8 +105,9 @@ interface Props {
    */
   blocos?: BlocoDeNivel[];
   /**
-   * Ids escondidos no desenho. **Presente = cada linha e cada família ganham o
-   * olho.** Ausente = a lista não fala de visibilidade nenhuma.
+   * Ids escondidos no desenho. **Presente = cada linha, cada tipo e cada família
+   * ganham o olho** — na planta baixa e no 3D (16/09/2026). Ausente = a lista
+   * não fala de visibilidade nenhuma.
    */
   ocultos?: Set<string>;
   /**
@@ -353,12 +354,13 @@ export default function PainelComponentes({
           ) : blocos ? (
             <>
               {totalDeLinhas} {totalDeLinhas === 1 ? 'peça' : 'peças'} nos pavimentos
-              visíveis. Use o olho para ocultar no 3D.
+              visíveis. Use o olho para ocultar no desenho.
             </>
           ) : (
             <>
               {totalDeLinhas} {totalDeLinhas === 1 ? 'peça' : 'peças'} neste pavimento.
-              Clique para selecionar no desenho; Ctrl+clique acrescenta à seleção.
+              Clique para selecionar no desenho; Ctrl+clique acrescenta à seleção
+              {podeOcultar ? '; o olho oculta no desenho' : ''}.
             </>
           )}
         </p>
@@ -403,8 +405,8 @@ export default function PainelComponentes({
                     oculto={!algumVisivel}
                     titulo={
                       algumVisivel
-                        ? `Ocultar ${grupo.titulo} no 3D`
-                        : `Exibir ${grupo.titulo} no 3D`
+                        ? `Ocultar ${grupo.titulo} no desenho`
+                        : `Exibir ${grupo.titulo} no desenho`
                     }
                     onClick={() => onAlternarOculto?.(grupo.ids, algumVisivel)}
                   />
@@ -463,7 +465,7 @@ export default function PainelComponentes({
                                 <div className="shrink-0 pr-2">
                                   <Olho
                                     oculto={!sgVisivel}
-                                    titulo={sgVisivel ? `Ocultar ${sg.rotulo} no 3D` : `Exibir ${sg.rotulo} no 3D`}
+                                    titulo={sgVisivel ? `Ocultar ${sg.rotulo} no desenho` : `Exibir ${sg.rotulo} no desenho`}
                                     onClick={() => onAlternarOculto?.(sg.ids, sgVisivel)}
                                   />
                                 </div>
@@ -550,8 +552,8 @@ export default function PainelComponentes({
                                             oculto={oculto}
                                             titulo={
                                               oculto
-                                                ? `Exibir ${linha.rotulo} no 3D`
-                                                : `Ocultar ${linha.rotulo} no 3D`
+                                                ? `Exibir ${linha.rotulo} no desenho`
+                                                : `Ocultar ${linha.rotulo} no desenho`
                                             }
                                             onClick={() => onAlternarOculto?.([linha.id], !oculto)}
                                           />

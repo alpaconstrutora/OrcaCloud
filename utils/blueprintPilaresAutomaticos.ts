@@ -3,6 +3,7 @@ import {
   contornoEmPlanta,
   intersectSegments,
   paredeEhExterna,
+  pointInPolygon,
   projecaoNoSegmento,
   wallLength,
   DEFAULT_TOLERANCE_MM,
@@ -29,9 +30,15 @@ import {
  * ─── ONDE NASCE UM PILAR (decidido com o usuário em 15/09/2026) ────────────
  *
  *  1. Em cada ENCONTRO de paredes: canto (L), T e cruzamento (X). Os nós são
- *     os do grafo de EIXOS (`Wall.a`/`Wall.b`), e o pilar fica centrado no nó —
- *     é o ponto que `pontesEstruturais` (arrangement.ts) já reconhece, então
- *     ambiente, área e perímetro não mudam com o lançamento.
+ *     os do grafo de EIXOS (`Wall.a`/`Wall.b`). O pilar nasce no nó e, quando é
+ *     mais grosso que a parede, é EMPURRADO para dentro até a face dele coincidir
+ *     com a face externa da parede (16/09/2026, print do usuário: *"alguns
+ *     pilares estão ultrapassando os limites das paredes, principalmente nos
+ *     cantos"*): no canto, para o quadrante onde as duas paredes seguem; no T,
+ *     para o lado do ramo; no intermediário, para o lado do ambiente. O
+ *     deslocamento é de poucos cm — `pontesEstruturais` continua reconhecendo
+ *     o pilar (a ponta da parede cai dentro da pegada), e ambiente, área e
+ *     perímetro não mudam.
  *  2. INTERMEDIÁRIOS ao longo da parede sempre que a distância entre dois
  *     apoios consecutivos (pilar proposto ou existente, canto, ponta) passa do
  *     vão máximo: o trecho é dividido em vãos iguais. O intermediário desvia
@@ -268,6 +275,62 @@ function meiaDiagonal(s: Structural): number {
   const b = s.larguraMm;
   const h = s.circular ? s.larguraMm : s.profundidadeMm;
   return Math.hypot(b, h) / 2;
+}
+
+/** Meia extensão da pegada do pilar (centrada na origem) projetada numa direção unitária. */
+function meiaExtensaoNaDirecao(
+  secao: { larguraMm: number; profundidadeMm: number; rotacaoDeg: number },
+  n: Point,
+): number {
+  const anel = pegadaDoPilarPrevisto({ at: { x: 0, y: 0 }, ...secao });
+  return Math.max(...anel.map((c) => Math.abs(c.x * n.x + c.y * n.y)));
+}
+
+/** Normal esquerda unitária do sentido a→b da parede. */
+function normalDaParede(w: Wall): Point {
+  const L = wallLength(w);
+  return { x: -(w.b.y - w.a.y) / L, y: (w.b.x - w.a.x) / L };
+}
+
+/**
+ * Para que lado da parede fica o AMBIENTE (+1 = normal esquerda, −1 = direita,
+ * 0 = não se sabe: dos dois lados ou de nenhum) — a mesma amostragem de
+ * `paredeEhExterna`, só que devolvendo o lado.
+ */
+function ladoDoAmbiente(model: BlueprintModel, w: Wall, tol: number): -1 | 0 | 1 {
+  const n = normalDaParede(w);
+  const mx = (w.a.x + w.b.x) / 2;
+  const my = (w.a.y + w.b.y) / 2;
+  const d = w.thicknessMm / 2 + 2 * tol + 1;
+  const dentro = (p: Point) =>
+    model.spaces.some(
+      (sp) => sp.levelId === w.levelId && pointInPolygon(sp.ring, p) && !sp.holes.some((h) => pointInPolygon(h, p)),
+    );
+  const esq = dentro({ x: mx + n.x * d, y: my + n.y * d });
+  const dir = dentro({ x: mx - n.x * d, y: my - n.y * d });
+  if (esq === dir) return 0;
+  return esq ? 1 : -1;
+}
+
+/**
+ * O EMPURRÃO que tira o pilar de fora da parede: para cada parede `w` que o
+ * pilar atravessa, se a meia extensão dele através de `w` passa da meia
+ * espessura, desloca o centro pelo excesso na direção `paraDentro` (unitária,
+ * perpendicular a `w`). O que sobra do pilar fica todo do lado de dentro.
+ */
+function empurraoParaDentro(
+  secao: { larguraMm: number; profundidadeMm: number; rotacaoDeg: number },
+  w: Wall,
+  paraDentro: Point,
+): Point {
+  const n = normalDaParede(w);
+  const meia = meiaExtensaoNaDirecao(secao, n);
+  const excesso = meia - w.thicknessMm / 2;
+  if (excesso <= 0) return { x: 0, y: 0 };
+  // `paraDentro` pode não ser exatamente perpendicular (canto oblíquo): usa a
+  // componente ao longo da normal, com o sinal do lado de dentro.
+  const sinal = Math.sign(paraDentro.x * n.x + paraDentro.y * n.y) || 0;
+  return { x: n.x * sinal * excesso, y: n.y * sinal * excesso };
 }
 
 // ─── Os nós do grafo de paredes ─────────────────────────────────────────────
@@ -563,7 +626,7 @@ export function planejarPilares(
     const fina = Math.min(...espessuras);
     const porLado = (atraves - fina) / 2;
     return porLado > SOBRESSAI_AVISO_MM
-      ? `sobressai ${Math.ceil(porLado)} mm de cada lado (parede de ${fina} mm)`
+      ? `${atraves - fina} mm mais grosso que a parede de ${fina} mm — encostado na face externa, avança para dentro`
       : null;
   };
 
@@ -600,11 +663,46 @@ export function planejarPilares(
     const hospedeira = [...incidentes].sort(
       (p, q) => q.thicknessMm - p.thicknessMm || wallLength(q) - wallLength(p) || (p.id < q.id ? -1 : 1),
     )[0];
+    const rotacaoDeg = anguloDaParedeDeg(hospedeira);
+    const secaoAqui = { larguraMm: aoLongo, profundidadeMm: atraves, rotacaoDeg };
+    // O empurrão para dentro (ver cabeçalho). Canto: cada parede empurra o
+    // pilar para o lado em que a OUTRA segue. T: a parede atravessada empurra
+    // para o lado do ramo. Cruzamento: fica no nó.
+    let dx = 0;
+    let dy = 0;
+    if (no.tipo === 'CANTO' || no.tipo === 'T') {
+      const braco = (i: IncidenciaNoNo): Point | null => {
+        const w = porId.get(i.wallId)!;
+        const L = wallLength(w);
+        if (i.end === 'meio') return null;
+        const sx = (w.b.x - w.a.x) / L;
+        const sy = (w.b.y - w.a.y) / L;
+        return i.end === 'a' ? { x: sx, y: sy } : { x: -sx, y: -sy };
+      };
+      for (const i of no.incidencias) {
+        const w = porId.get(i.wallId)!;
+        // Para dentro = para onde as OUTRAS pontas seguem (soma dos outros braços).
+        let px = 0;
+        let py = 0;
+        for (const j of no.incidencias) {
+          if (j === i) continue;
+          const b = braco(j);
+          if (b) {
+            px += b.x;
+            py += b.y;
+          }
+        }
+        if (px === 0 && py === 0) continue;
+        const e = empurraoParaDentro(secaoAqui, w, { x: px, y: py });
+        dx += e.x;
+        dy += e.y;
+      }
+    }
     candidatos.push({
       onde: no.tipo,
-      at: no.at,
+      at: { x: Math.round(no.at.x + dx), y: Math.round(no.at.y + dy) },
       wallIds: incidentes.map((w) => w.id),
-      rotacaoDeg: anguloDaParedeDeg(hospedeira),
+      rotacaoDeg,
       aviso: avisoDeSobressair(incidentes.map((w) => w.thicknessMm)),
     });
     for (const i of no.incidencias) apoiar(i.wallId, i.tMm);
@@ -665,11 +763,24 @@ export function planejarPilares(
           }
         }
         const sobressai = avisoDeSobressair([w.thicknessMm]);
+        const rotacaoDeg = anguloDaParedeDeg(w);
+        // Para o lado do ambiente, quando se sabe qual é; senão fica no eixo.
+        const lado = ladoDoAmbiente(model, w, tol);
+        const normal = normalDaParede(w);
+        const e =
+          lado === 0
+            ? { x: 0, y: 0 }
+            : empurraoParaDentro(
+                { larguraMm: aoLongo, profundidadeMm: atraves, rotacaoDeg },
+                w,
+                { x: normal.x * lado, y: normal.y * lado },
+              );
+        const noEixo = pontoNaParede(w, Math.round(t));
         candidatos.push({
           onde: 'INTERMEDIARIO',
-          at: pontoNaParede(w, Math.round(t)),
+          at: { x: Math.round(noEixo.x + e.x), y: Math.round(noEixo.y + e.y) },
           wallIds: [w.id],
-          rotacaoDeg: anguloDaParedeDeg(w),
+          rotacaoDeg,
           aviso: [aviso, sobressai].filter(Boolean).join(' · ') || null,
         });
       }

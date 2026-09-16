@@ -1178,7 +1178,7 @@ describe('BlueprintEditor · ribbon', () => {
     const previa = within(drawer).getByRole('table', { name: /prévia dos pilares/i });
     const linhas = within(previa).getAllByRole('row').slice(1);
     expect(linhas).toHaveLength(9);
-    expect(linhas[0]).toHaveTextContent(/P1.*canto.*0,00 · 0,00.*19 × 19 cm/);
+    expect(linhas[0]).toHaveTextContent(/P1.*canto.*0,02 · 0,02.*19 × 19 cm/); // 20 mm para dentro: face na face
     expect(drawer).toHaveTextContent(/9 pilar\(es\) · 5 parede\(s\) cedem/i);
 
     await userEvent.setup().click(within(drawer).getByRole('button', { name: /^lançar 9 pilar/i }));

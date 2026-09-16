@@ -78,3 +78,21 @@ Prova: unitários (+2: apaga 9, relança com 25×25, ids batem, rótulos P1…P9
 lançar) e editor (+1: lança 4 → muda seção → "Relançar 4" → confirmação com "25 × 25 cm" →
 status → Desfazer). App real: "Relançar 68" com confirmação e status "68 apagado(s) e 68
 lançado(s) com 25 × 25 cm".
+
+## Face na face (16/09/2026)
+
+> veja que alguns pilares estao ultrapassando os limites das paredes. principalmente nos cantos mas nao somente.
+
+O pilar nascia centrado no eixo: 19 cm numa parede de 15 (ou 12) deixava metade do excesso
+para fora. Agora, quando o pilar é mais grosso que a parede, ele é EMPURRADO para dentro até a
+face dele coincidir com a face externa (`empurraoParaDentro`, pela extensão da pegada projetada
+na normal da parede): no canto, para o quadrante onde as duas paredes seguem (nos dois eixos);
+no T, através da parede atravessada, para o lado do ramo; no intermediário, para o lado do
+ambiente (`ladoDoAmbiente`, a mesma amostragem de `paredeEhExterna`; parede interna com
+ambiente dos dois lados fica no eixo); no cruzamento, no nó. Pilar mais fino que a parede fica
+centrado. O deslocamento é de poucos cm (20 mm para 19 em 15; 35 mm para 19 em 12), dentro do
+raio em que `pontesEstruturais` e o "já tem pilar aqui" reconhecem o nó.
+
+Prova: unitário novo (face mínima da pegada = −75 mm = face externa, no canto, no T e no
+intermediário; 14 cm em 15 fica em (0,0)); expectativas da casa atualizadas (20/3980/5980);
+editor "0,02 · 0,02". Nos estudos já lançados, **Relançar** reposiciona.

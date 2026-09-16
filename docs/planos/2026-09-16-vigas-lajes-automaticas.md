@@ -90,3 +90,14 @@ faces coplanares davam o serrilhado do print. Duas causas, duas correções:
    janela seguem furos dentro da fatia. Teste novo `blueprint3dParedeEntalhe` (5): topo da malha
    em 2,40 sob a viga; sem ceder 2,80; porta preservada; viga parcial → fatias 2,4/2,8/2,8;
    peça no meio da altura continua furo. Provado na Planta 14/09/2026 do usuário no 3D real.
+
+## Lascas ao lado do pilar no 3D (16/09/2026, print: "ainda existe sobreposição de pilar com alvenaria")
+
+Medido na planta do usuário com `geometriaDaParede`: trechos de **0,005 m** nas paredes 1 e 5.
+Duas origens: (1) pilar 14 × 40 empurrado para dentro só num eixo deixa 5 mm entre a face
+dele e o avanço da mitra da parede vizinha; (2) a viga de 15 que atravessa a parede é 5 mm mais
+larga que o pilar de 14 embutido, e o entalhe sobrava uma fatia rebaixada de 5 mm de cada lado
+do corte. Extrudadas e biseladas, essas lascas apareciam como serrilhado colado ao pilar.
+`geometriaDaParede` passou a descartar trecho e fatia mais estreitos que **2 cm** (`LASCA_M`):
+obra nenhuma assenta 5 mm de bloco ao lado de um pilar. Na planta do usuário o menor trecho
+passou de 0,005 m para 0,983 m. Testes +2 em `blueprint3dParedeEntalhe`.

@@ -291,13 +291,21 @@ export function geometriaDaParede(
     .filter((r) => r.x1 > r.x0)
     .sort((a, b) => a.x0 - b.x0);
 
+  // ⚠️ LASCA não é parede. Um pilar 14 × 40 num canto de paredes de 15 cm
+  // (16/09/2026, print do 3D do usuário: *"ainda existe sobreposição de pilar
+  // com alvenaria"*) deixava um trecho de 5 mm entre a face do pilar e o
+  // avanço da mitra da parede vizinha — medido na planta dele: trechos de
+  // 0,005 m nas duas paredes do canto. Extrudado e biselado, esse filete
+  // aparecia como um serrilhado colado ao pilar. Trecho mais curto que 2 cm
+  // sai do desenho: obra nenhuma assenta 5 mm de bloco ao lado de um pilar.
+  const LASCA_M = 0.02;
   const trechos: { x0: number; x1: number }[] = [];
   let cursor = xIni;
   for (const r of removidos) {
-    if (r.x0 > cursor) trechos.push({ x0: cursor, x1: r.x0 });
+    if (r.x0 - cursor > LASCA_M) trechos.push({ x0: cursor, x1: r.x0 });
     cursor = Math.max(cursor, r.x1);
   }
-  if (cursor < xFim) trechos.push({ x0: cursor, x1: xFim });
+  if (xFim - cursor > LASCA_M) trechos.push({ x0: cursor, x1: xFim });
 
   // Orientação: local X → direção do eixo (no plano XZ do mundo three, com
   // model.y → three.z); local Y → altura (three +Y); local Z → normal horizontal.
@@ -417,7 +425,11 @@ export function geometriaDaParede(
     for (let i = 0; i + 1 < cortes.length; i++) {
       const sx0 = cortes[i];
       const sx1 = cortes[i + 1];
-      if (sx1 - sx0 <= EPS) continue;
+      // A mesma régua da lasca: a viga de 15 cm que atravessa a parede é 5 mm
+      // mais larga que o pilar de 14 embutido nela, e o entalhe sobrava 5 mm de
+      // fatia rebaixada de cada lado do corte do pilar (medido na planta do
+      // usuário, 16/09/2026). Fatia mais estreita que 2 cm não é parede.
+      if (sx1 - sx0 <= LASCA_M) continue;
       const meio = (sx0 + sx1) / 2;
       // O que sobra da altura nesta fatia: [0, A] menos os entalhes que a cobrem.
       let faixasY: { ya: number; yb: number }[] = [{ ya: 0, yb: A }];

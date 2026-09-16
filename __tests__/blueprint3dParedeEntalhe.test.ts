@@ -84,3 +84,47 @@ describe('geometriaDaParede — o entalhe da viga', () => {
     expect(topo(pecas[0].geom)).toBeCloseTo(2.8, 3);
   });
 });
+
+describe('geometriaDaParede — lasca no canto', () => {
+  it('pilar 14 × 40 no canto de paredes de 15: não sobra trecho de 5 mm entre o pilar e a mitra', () => {
+    // A cena do print (16/09/2026): parede vertical em x = 4275, horizontal em
+    // y = −525, pilar 400 × 140 (0°) empurrado para dentro só em x. No sentido
+    // da parede vertical o pilar cobre y ∈ [−595, −455]; a mitra da parede vai a
+    // −600 → sobrava um filete de 5 mm.
+    const nivel = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    let m = applyBatch(nivel.model, [
+      { type: 'AddWall', levelId: t, a: { x: 4275, y: -525 }, b: { x: 4275, y: 6525 }, thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddWall', levelId: t, a: { x: 4275, y: -525 }, b: { x: 18325, y: -525 }, thicknessMm: 150, heightMm: 2800 },
+    ]).model;
+    m = applyCommand(m, { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [{ x: 4400, y: -525 }], larguraMm: 400, profundidadeMm: 140, alturaMm: 2800, rotacaoDeg: 0 }).model;
+    m = applyBatch(m, m.walls.map((w) => ({ type: 'SetCedeSobreposicao' as const, id: w.id, cede: true }))).model;
+    for (const w of m.walls) {
+      const larguras = geometriaDaParede(m, w).map((p) => { p.geom.computeBoundingBox(); const b = p.geom.boundingBox!; return b.max.x - b.min.x; });
+      expect(larguras.length).toBeGreaterThan(0);
+      expect(Math.min(...larguras)).toBeGreaterThan(0.02);
+    }
+  });
+});
+
+describe('geometriaDaParede — lasca do entalhe', () => {
+  it('viga de 15 atravessando uma parede com pilar de 14 embutido: não sobra fatia de 5 mm ao lado do corte', () => {
+    // A planta do usuário (16/09/2026): parede vertical com pilar 400 × 140 no T
+    // e a viga da parede interna (150 de largura) atravessando — o entalhe da
+    // viga sobrava 5 mm de cada lado do corte do pilar.
+    const nivel = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    let m = applyBatch(nivel.model, [
+      { type: 'AddWall', levelId: t, a: { x: 4275, y: -525 }, b: { x: 4275, y: 6525 }, thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddWall', levelId: t, a: { x: 4275, y: 3075 }, b: { x: 11725, y: 3075 }, thicknessMm: 150, heightMm: 2800 },
+    ]).model;
+    m = applyBatch(m, [
+      { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [{ x: 4400, y: 3075 }], larguraMm: 400, profundidadeMm: 140, alturaMm: 2800, rotacaoDeg: 0 },
+      { type: 'AddStructural', levelId: t, kind: 'VIGA', pontos: [{ x: 4275, y: 3075 }, { x: 11725, y: 3075 }], larguraMm: 150, alturaMm: 400, baseMm: 2400 },
+    ]).model;
+    m = applyBatch(m, m.walls.map((w) => ({ type: 'SetCedeSobreposicao' as const, id: w.id, cede: true }))).model;
+    const vertical = m.walls[0];
+    const larguras = geometriaDaParede(m, vertical).map((p) => { p.geom.computeBoundingBox(); const b = p.geom.boundingBox!; return b.max.x - b.min.x; });
+    expect(Math.min(...larguras)).toBeGreaterThan(0.02);
+  });
+});

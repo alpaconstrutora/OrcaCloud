@@ -84,7 +84,11 @@ describe('PainelEletrica', () => {
     expect(screen.getByRole('columnheader', { name: /carga \(va\)/i })).toBeInTheDocument();
     expect(screen.getAllByText(/160 VA/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/160 W/)).toBeNull();
-    expect(screen.getByLabelText(/Disjuntor do circuito C1/i)).toHaveValue(10);
+    // Disjuntor é SELETOR da série comercial (15/09/2026): o valor é string.
+    const disj = screen.getByLabelText(/Disjuntor do circuito C1/i) as HTMLSelectElement;
+    expect(disj.tagName).toBe('SELECT');
+    expect(disj).toHaveValue('10');
+    expect(Array.from(disj.options).map((o) => o.value).filter(Boolean).map(Number)).toEqual([10, 16, 20, 25, 32, 40, 50, 63, 73, 80, 100, 125, 160, 200]);
     expect(screen.getByLabelText(/Seção do circuito C1/i)).toHaveValue(1.5);
   });
 
@@ -127,7 +131,7 @@ describe('PainelEletrica', () => {
     m = applyCommand(m, { type: 'AddCircuito', quadroId: m.quadros[0].id, nome: 'C1' }).model;
 
     render(<PainelEletrica model={m} {...vazio} />);
-    expect(screen.getByLabelText(/Disjuntor do circuito C1/i)).toHaveValue(null);
+    expect(screen.getByLabelText(/Disjuntor do circuito C1/i)).toHaveValue('');
     expect(screen.getByLabelText(/Seção do circuito C1/i)).toHaveValue(null);
     expect(screen.getByText(/quem grava é você/i)).toBeInTheDocument();
     // Sem tensão nem pontos, o pré-dimensionamento diz por que não calculou.

@@ -5,6 +5,7 @@ import type { BlueprintModel, FaseDoCircuito, LigacaoDoCircuito, ObjectId } from
 import { LIGACOES_DO_CIRCUITO, quadroDeCargas } from '../../utils/blueprintKernel';
 import {
   HIPOTESES_PADRAO,
+  SERIE_COMERCIAL_DE_DISJUNTORES_A,
   preDimensionarCircuito,
   preDimensionarQuadroCompleto,
   type HipotesesEletricas,
@@ -425,16 +426,32 @@ export default function PainelEletrica({
             className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
           />
         );
-      case 'disjuntorA':
+      case 'disjuntorA': {
+        // SELETOR com a série comercial (15/09/2026: "aba disjuntor (A), trazer
+        // disjuntores 10A … 200A"), não campo livre: disjuntor é peça de
+        // catálogo, e um valor fora da série (15 A) era erro de digitação que
+        // o pré-dim não pegava. Um valor legado fora da série continua visível,
+        // marcado — nunca some em silêncio.
+        const serie = hipoteses.catalogoDeDisjuntoresA.length ? hipoteses.catalogoDeDisjuntoresA : SERIE_COMERCIAL_DE_DISJUNTORES_A;
+        const foraDaSerie = l.disjuntorA != null && !serie.includes(l.disjuntorA);
         return (
-          <input
-            type="number"
+          <select
             value={l.disjuntorA ?? ''}
             onChange={(e) => onCircuitoProps(l.circuitoId, { disjuntorA: numeroOuNulo(e.target.value) })}
             aria-label={`Disjuntor do circuito ${l.nome}, em ampères`}
-            className={`${CAMPO_NA_CELULA} text-right`}
-          />
+            title={foraDaSerie ? `${l.disjuntorA} A não é da série comercial — escolha um da lista` : undefined}
+            className={`${CAMPO_NA_CELULA} ${foraDaSerie ? 'text-amber-700' : ''}`}
+          >
+            <option value="">—</option>
+            {foraDaSerie && <option value={l.disjuntorA as number}>{l.disjuntorA} A (fora da série)</option>}
+            {serie.map((inA) => (
+              <option key={inA} value={inA}>
+                {inA} A
+              </option>
+            ))}
+          </select>
         );
+      }
       case 'secaoMm2':
         return (
           <input

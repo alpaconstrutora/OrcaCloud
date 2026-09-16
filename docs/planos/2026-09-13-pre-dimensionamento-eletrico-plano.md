@@ -297,3 +297,17 @@ Pedido: *"os disjuntores são comercialmente fabricados nas seguintes correntes:
   (seção calculada + disjuntor dela) e "usar sugerido" grava os dois. Provado
   no app: os 9 circuitos do estudo de teste com "In 10 A"; nenhum "6 A" nem
   "nenhum cabe na seção".
+
+### 15/09/2026 — "aba disjuntor (A), trazer disjuntores 10A … 200A. propague também"
+
+- O "73 A" veio de novo depois do meu aviso: fica **73 A**, como decisão do usuário.
+- `SERIE_COMERCIAL_DE_DISJUNTORES_A` é a **fonte única** (`blueprintEletricaDimensionamento.ts`):
+  alimenta `HIPOTESES_PADRAO.catalogoDeDisjuntoresA` (pré-dim, critério de seção
+  mínima, memorial, prancha, texto das hipóteses) e o seletor da tabela.
+- Coluna "Disjuntor (A)" do quadro de cargas virou `<select>` com a série
+  ("—" para não declarado). Valor legado fora da série continua visível como
+  "N A (fora da série)" em âmbar, nunca some em silêncio.
+- É o único ponto onde um disjuntor é DECLARADO — o geral do quadro é
+  calculado (`disjuntorGeralA`) e já usa a série pelo catálogo.
+- Prova no app: 16 seletores, 0 inputs numéricos de disjuntor; opções
+  `— · 10 · 16 · 20 · 25 · 32 · 40 · 50 · 63 · 73 · 80 · 100 · 125 · 160 · 200 A`.

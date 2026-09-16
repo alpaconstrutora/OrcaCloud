@@ -137,7 +137,7 @@ describe('disjuntor (5.3.4.1): IB ≤ In ≤ Iz', () => {
     expect(disjuntorSugeridoA(10, 17.5, HIPOTESES_PADRAO.catalogoDeDisjuntoresA)).toBe(10);
     // A série COMERCIAL (15/09/2026): começa em 10 A — IB 1,3 A não recebe "6 A" —
     // e vai até 200 A para o geral de quadros grandes.
-    expect(HIPOTESES_PADRAO.catalogoDeDisjuntoresA).toEqual([10, 16, 20, 25, 32, 40, 50, 63, 70, 80, 100, 125, 160, 200]);
+    expect(HIPOTESES_PADRAO.catalogoDeDisjuntoresA).toEqual([10, 16, 20, 25, 32, 40, 50, 63, 73, 80, 100, 125, 160, 200]);
     expect(disjuntorSugeridoA(1.3, 17.5, HIPOTESES_PADRAO.catalogoDeDisjuntoresA)).toBe(10);
     expect(disjuntorSugeridoA(150, 250, HIPOTESES_PADRAO.catalogoDeDisjuntoresA)).toBe(160);
   });

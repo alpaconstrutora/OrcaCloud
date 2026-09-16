@@ -246,21 +246,26 @@ export const DIAMETRO_INTERNO_ELETRODUTO_MM: readonly (readonly [number, number]
 ];
 
 
+/**
+ * A SÉRIE COMERCIAL de disjuntores (15/09/2026, informada pelo usuário: *"os
+ * disjuntores são comercialmente fabricados nas seguintes correntes: 10A, 16A,
+ * 20A, 25A, 32A, 40A, 50A, 63A, 73A, 80A, 100A, 125A, 160A, 200A"*, repetida
+ * com o 73 A depois de questionada — é a lista dele). Sem 6 A: o pré-dim
+ * sugeria "In 6 A" e ninguém compra 6 A para tomada.
+ *
+ * FONTE ÚNICA: o seletor "Disjuntor (A)" do quadro de cargas, o catálogo do
+ * pré-dimensionamento (IB ≤ In ≤ Iz), o critério de seção mínima, o memorial e
+ * a prancha leem daqui. Mudou a série, mudou em todos.
+ */
+export const SERIE_COMERCIAL_DE_DISJUNTORES_A: readonly number[] = [10, 16, 20, 25, 32, 40, 50, 63, 73, 80, 100, 125, 160, 200];
+
 export const HIPOTESES_PADRAO: HipotesesEletricas = {
   metodoDeInstalacao: 'B1',
   temperaturaAmbienteC: 30,
   circuitosAgrupados: 1,
   rhoOhmMm2PorM: 0.0206,
   limiteQuedaTerminalPct: 4,
-  /**
-   * A SÉRIE COMERCIAL (15/09/2026, informada pelo usuário: *"os disjuntores são
-   * comercialmente fabricados nas seguintes correntes: 10, 16, 20, 25, 32, 40,
-   * 50, 63, 7x, 80, 100, 125, 160, 200 A"*). Sem 6 A: o pré-dimensionamento
-   * sugeria "In 6 A" para circuitos pequenos e ninguém compra 6 A para tomada.
-   * O valor entre 63 e 80 entrou como 70 A (a corrente fabricada; a mensagem
-   * dizia "73", lido como grafia) — ajustar aqui se for outro.
-   */
-  catalogoDeDisjuntoresA: [10, 16, 20, 25, 32, 40, 50, 63, 70, 80, 100, 125, 160, 200],
+  catalogoDeDisjuntoresA: SERIE_COMERCIAL_DE_DISJUNTORES_A,
   secaoMinimaTueMm2: 4,
   demanda: { nome: 'sem demanda (1,00)', ILUMINACAO: 1, TUG: 1, FORCA: 1 },
   limiteQuedaTotalPct: 5,

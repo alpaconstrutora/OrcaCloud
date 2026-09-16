@@ -77,7 +77,7 @@ import {
   type LadoDoContorno,
 } from '../../utils/blueprintCotas';
 import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor, type TipoDeCondutor } from '../../utils/blueprintCondutores';
-import { pegadaDoPilarPrevisto } from '../../utils/blueprintPilaresAutomaticos';
+import { pegadaDaPecaPrevista, type PecaPrevista } from '../../utils/blueprintPilaresAutomaticos';
 import {
   curvaDoTrecho,
   desviosDeSobreposicao,
@@ -180,16 +180,10 @@ const COR_CAMADA_PAREDE: Record<FuncaoCamada, string> = {
 const LIMIAR_CAMADAS_PX = 12;
 const COR_PREVIA = '#2563eb';
 
-/** Um pilar PROPOSTO pela tarefa "Pilares automáticos" — só desenho, sem clique. */
-export interface PilarPrevistoNoCanvas {
-  at: Point;
-  larguraMm: number;
-  profundidadeMm: number;
-  rotacaoDeg: number;
-  rotulo?: string;
-}
+/** Uma peça PROPOSTA por um lançamento automático (pilar, viga, laje) — só desenho, sem clique. */
+export type PecaPrevistaNoCanvas = PecaPrevista;
 /** Identidade estável para o padrão: `[]` literal a cada render redesenharia o canvas sem parar. */
-const SEM_PILARES_PREVISTOS: readonly PilarPrevistoNoCanvas[] = [];
+const SEM_PECAS_PREVISTAS: readonly PecaPrevistaNoCanvas[] = [];
 /** Âmbar: vão em aberto e ponta solta. Mesma cor do aviso no painel. */
 const COR_ALERTA = '#d97706';
 const COR_AMBIENTE = 'rgba(37, 99, 235, 0.08)';
@@ -1099,11 +1093,12 @@ interface Props {
   /** A região já marcada, desenhada por cima do desenho. `null` = usa a vista. */
   regiao?: { x0: number; y0: number; x1: number; y1: number } | null;
   /**
-   * Pilares PROPOSTOS pelo lançamento automático (15/09/2026): tracejados em
-   * `COR_PREVIA` enquanto a gaveta da tarefa está aberta. O editor passa só os
-   * do pavimento ativo; vazio = nada. Prévia é só desenho — sem acerto de clique.
+   * Peças PROPOSTAS por um lançamento automático (pilares 15/09, vigas e lajes
+   * 16/09/2026): tracejadas em `COR_PREVIA` enquanto a gaveta da tarefa está
+   * aberta. O editor passa só as do pavimento ativo; vazio = nada. Prévia é só
+   * desenho — sem acerto de clique.
    */
-  pilaresPrevistos?: readonly PilarPrevistoNoCanvas[];
+  pecasPrevistas?: readonly PecaPrevistaNoCanvas[];
   /**
    * Emite a região ao soltar.
    *
@@ -1260,7 +1255,7 @@ export default function BlueprintCanvas({
   mostrarCircuitos = true,
   regiaoArmada = false,
   regiao = null,
-  pilaresPrevistos = SEM_PILARES_PREVISTOS,
+  pecasPrevistas = SEM_PECAS_PREVISTAS,
   onRegiaoDefinida,
   mostrarCotas = false,
   mostrarCotaInterna = false,
@@ -4042,29 +4037,38 @@ export default function BlueprintCanvas({
       }
     }
 
-    // ── Pilares PROPOSTOS (lançamento automático, 15/09/2026) ────────────────
+    // ── Peças PROPOSTAS (lançamentos automáticos: pilares, vigas, lajes) ─────
     //
     // Tracejado na cor de prévia, por cima do concreto de verdade: é a
     // convenção de "ainda não é" em toda a planta (a prévia do traçado, a tomada
-    // sugerida). O contorno é o MESMO cálculo do pilar de verdade
-    // (`pegadaDoPilarPrevisto` → `contornoEmPlanta`) — o que se vê é o que se
-    // grava ao clicar em "Lançar".
-    if (pilaresPrevistos.length > 0) {
+    // sugerida). O contorno é o MESMO cálculo da peça de verdade
+    // (`pegadaDaPecaPrevista` → `contornoEmPlanta`) — o que se vê é o que se
+    // grava ao clicar em "Lançar". A laje, que cobre um cômodo inteiro, leva
+    // preenchimento mais leve para não apagar o que está embaixo.
+    if (pecasPrevistas.length > 0) {
       ctx.save();
       ctx.strokeStyle = COR_PREVIA;
-      ctx.fillStyle = 'rgba(37, 99, 235, 0.10)';
       ctx.lineWidth = 1.5;
       ctx.setLineDash([6, 4]);
-      for (const p of pilaresPrevistos) {
-        const anel = pegadaDoPilarPrevisto(p).map(paraTela);
+      for (const p of pecasPrevistas) {
+        const anel = pegadaDaPecaPrevista(p).map(paraTela);
+        if (anel.length < 3) continue;
+        ctx.fillStyle = p.kind === 'LAJE' ? 'rgba(37, 99, 235, 0.06)' : 'rgba(37, 99, 235, 0.10)';
         ctx.beginPath();
         ctx.moveTo(anel[0].x, anel[0].y);
         for (const k of anel.slice(1)) ctx.lineTo(k.x, k.y);
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
-        if (p.rotulo && p.larguraMm * vista.escala >= MIN_PX_COTA_PAREDE) {
-          const c = paraTela(p.at);
+        const centroDoRotulo =
+          p.kind === 'LAJE'
+            ? interiorPoint(p.pontos)
+            : p.kind === 'VIGA'
+              ? { x: (p.pontos[0].x + p.pontos[1].x) / 2, y: (p.pontos[0].y + p.pontos[1].y) / 2 }
+              : p.pontos[0];
+        const cabe = p.kind === 'PILAR' ? p.larguraMm * vista.escala >= MIN_PX_COTA_PAREDE : true;
+        if (p.rotulo && cabe) {
+          const c = paraTela(centroDoRotulo);
           ctx.setLineDash([]);
           ctx.fillStyle = COR_PREVIA;
           ctx.font = `bold ${Math.round(10 * fz)}px ui-sans-serif, system-ui, sans-serif`;
@@ -6133,7 +6137,7 @@ export default function BlueprintCanvas({
     movendoSelecao,
     laco,
     regiao,
-    pilaresPrevistos,
+    pecasPrevistas,
     arrastoRegiao,
     mostrarCotas,
     mostrarCotaInterna,

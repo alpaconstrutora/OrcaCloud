@@ -14,6 +14,7 @@ import {
   type Opening,
   type Point,
   type Structural,
+  type StructuralKind,
   type Wall,
 } from './blueprintKernel';
 
@@ -194,14 +195,20 @@ export function pilaresExistentesNoNivel(model: BlueprintModel, levelId: ObjectI
   );
 }
 
-/** O próximo número livre de "P<n>" no modelo inteiro — a prancha numera o edifício. */
-export function proximoNumeroDePilar(model: BlueprintModel): number {
+/** O próximo número livre de "<prefixo><n>" no modelo inteiro — a prancha numera o edifício. */
+export function proximoNumeroDoRotulo(model: BlueprintModel, prefixo: string): number {
+  const re = new RegExp(`^${prefixo}\\s*0*(\\d+)$`, 'i');
   let maior = 0;
   for (const s of model.structures ?? []) {
-    const m = /^P\s*0*(\d+)$/i.exec((s.rotulo ?? '').trim());
+    const m = re.exec((s.rotulo ?? '').trim());
     if (m) maior = Math.max(maior, Number(m[1]));
   }
   return maior + 1;
+}
+
+/** "P<n>" — ver `proximoNumeroDoRotulo`. */
+export function proximoNumeroDePilar(model: BlueprintModel): number {
+  return proximoNumeroDoRotulo(model, 'P');
 }
 
 /**
@@ -224,16 +231,24 @@ export function normalizarSecao(hip: Pick<HipotesesDePilares, 'larguraMm' | 'pro
   return { larguraMm: Math.max(a, b), profundidadeMm: Math.min(a, b) };
 }
 
-/** O contorno em planta de um pilar previsto — o mesmo cálculo do pilar de verdade. */
-export function pegadaDoPilarPrevisto(
-  p: Pick<PilarPrevisto, 'at' | 'larguraMm' | 'profundidadeMm' | 'rotacaoDeg'>,
-): Point[] {
+/** Uma peça PREVISTA (pilar, viga ou laje) — o bastante para desenhar a pegada dela. */
+export interface PecaPrevista {
+  kind: StructuralKind;
+  pontos: Point[];
+  larguraMm: number;
+  profundidadeMm: number;
+  rotacaoDeg: number;
+  rotulo?: string;
+}
+
+/** O contorno em planta de uma peça prevista — o mesmo cálculo da peça de verdade (`contornoEmPlanta`). */
+export function pegadaDaPecaPrevista(p: PecaPrevista): Point[] {
   const s: Structural = {
     id: 'previsto',
     uid: 'previsto',
     levelId: 'previsto',
-    kind: 'PILAR',
-    pontos: [p.at],
+    kind: p.kind,
+    pontos: p.pontos,
     larguraMm: p.larguraMm,
     profundidadeMm: p.profundidadeMm,
     alturaMm: 1,
@@ -242,6 +257,13 @@ export function pegadaDoPilarPrevisto(
     rotacaoDeg: p.rotacaoDeg,
   };
   return contornoEmPlanta(s);
+}
+
+/** O contorno em planta de um pilar previsto — ver `pegadaDaPecaPrevista`. */
+export function pegadaDoPilarPrevisto(
+  p: Pick<PilarPrevisto, 'at' | 'larguraMm' | 'profundidadeMm' | 'rotacaoDeg'>,
+): Point[] {
+  return pegadaDaPecaPrevista({ kind: 'PILAR', pontos: [p.at], larguraMm: p.larguraMm, profundidadeMm: p.profundidadeMm, rotacaoDeg: p.rotacaoDeg });
 }
 
 // ─── Geometria de apoio ─────────────────────────────────────────────────────
@@ -439,7 +461,7 @@ export function nosDeParede(
 
 // ─── Cadeias colineares ─────────────────────────────────────────────────────
 
-interface EloDaCadeia {
+export interface EloDaCadeia {
   wall: Wall;
   /** `true` quando a parede é percorrida de b para a dentro da cadeia. */
   invertida: boolean;
@@ -447,7 +469,7 @@ interface EloDaCadeia {
   offsetMm: number;
 }
 
-interface Cadeia {
+export interface Cadeia {
   elos: EloDaCadeia[];
   comprimentoMm: number;
 }
@@ -457,7 +479,7 @@ interface Cadeia {
  * se divide em vãos. Só a emenda de grau 2 entre duas pontas encadeia; `meio`,
  * cantos e Ts fecham a cadeia.
  */
-function montarCadeias(walls: Wall[], nos: NoDeParede[]): Cadeia[] {
+export function cadeiasDeParedes(walls: Wall[], nos: NoDeParede[]): Cadeia[] {
   const porId = new Map(walls.map((w) => [w.id, w]));
   // Ligações: para cada emenda, o par (parede, ponta) ↔ (parede, ponta).
   const vizinho = new Map<string, { wallId: ObjectId; end: 'a' | 'b' }>();
@@ -507,7 +529,7 @@ function montarCadeias(walls: Wall[], nos: NoDeParede[]): Cadeia[] {
 }
 
 /** Posição (mm ao longo de a→b) de uma coordenada `s` da cadeia dentro da parede que a contém. */
-function paredeEm(cadeia: Cadeia, s: number): { elo: EloDaCadeia; tMm: number } {
+export function paredeEm(cadeia: Cadeia, s: number): { elo: EloDaCadeia; tMm: number } {
   let escolhido = cadeia.elos[0];
   for (const elo of cadeia.elos) {
     if (s >= elo.offsetMm) escolhido = elo;
@@ -519,14 +541,14 @@ function paredeEm(cadeia: Cadeia, s: number): { elo: EloDaCadeia; tMm: number } 
 }
 
 /** A coordenada de cadeia de um ponto que está sobre uma das paredes dela (ou `null`). */
-function coordenadaNaCadeia(cadeia: Cadeia, wallId: ObjectId, tMm: number): number | null {
+export function coordenadaNaCadeia(cadeia: Cadeia, wallId: ObjectId, tMm: number): number | null {
   const elo = cadeia.elos.find((e) => e.wall.id === wallId);
   if (!elo) return null;
   const L = wallLength(elo.wall);
   return elo.offsetMm + (elo.invertida ? L - tMm : tMm);
 }
 
-function pontoNaParede(w: Wall, tMm: number): Point {
+export function pontoNaParede(w: Wall, tMm: number): Point {
   const L = wallLength(w);
   if (L === 0) return { x: w.a.x, y: w.a.y };
   const u = tMm / L;
@@ -606,7 +628,7 @@ export function planejarPilares(
 
   const { nos, sobrepostas } = nosDeParede(model, levelId, tol, walls);
   for (const [p, q] of sobrepostas) avisos.push(`paredes ${p} e ${q} sobrepostas — confira o desenho`);
-  const cadeias = montarCadeias(walls, nos);
+  const cadeias = cadeiasDeParedes(walls, nos);
 
   const candidatos: Candidato[] = [];
   const foraDoPlano: ForaDoPlanoDePilares[] = [];

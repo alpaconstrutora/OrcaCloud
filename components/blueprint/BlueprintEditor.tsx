@@ -159,8 +159,26 @@ import {
   planejarPilares,
   relancarPilares,
   type HipotesesDePilares,
+  type PecaPrevista,
   type SecaoSugeridaId,
 } from '../../utils/blueprintPilaresAutomaticos';
+import {
+  ALTURAS_MINIMAS_DE_VIGA,
+  DIVISORES_DA_ALTURA,
+  ESPESSURAS_DE_LAJE,
+  HIPOTESES_LAJES_PADRAO,
+  HIPOTESES_VIGAS_PADRAO,
+  conferirPlanoDeLajes,
+  conferirPlanoDeVigas,
+  lajesExistentesNoNivel,
+  planejarLajes,
+  planejarVigas,
+  relancarLajes,
+  relancarVigas,
+  vigasExistentesNoNivel,
+  type HipotesesDeLajes,
+  type HipotesesDeVigas,
+} from '../../utils/blueprintVigasLajesAutomaticas';
 import SecaoAccordion from './SecaoAccordion';
 import { usePainelRedimensionavel } from './LarguraDoPainel';
 import PainelMedicoes from './PainelMedicoes';
@@ -534,6 +552,9 @@ const ROTULO_DA_TAREFA = {
   // O lançamento automático de pilares (15/09/2026): um pilar por encontro de
   // paredes e nos vãos longos; prévia tracejada no desenho, um lote, Ctrl+Z.
   pilares: 'Pilares automáticos',
+  // Vigas e lajes (16/09/2026): o mesmo molde, uma gaveta cada.
+  vigas: 'Vigas automáticas',
+  lajes: 'Lajes automáticas',
   'gerar-paredes': 'Gerar paredes do PDF',
   'importar-ifc': 'Importar do IFC',
   'importar-dxf': 'Importar do DXF',
@@ -4513,6 +4534,183 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     });
   };
   const peDireitoDoNivelAtivo = editor.model.levels.find((l) => l.id === levelId)?.defaultHeightMm ?? null;
+
+  /**
+   * VIGAS E LAJES AUTOMÁTICAS (16/09/2026) — ver `blueprintVigasLajesAutomaticas.ts`.
+   * O mesmo molde dos pilares: hipóteses persistidas, plano derivado a cada
+   * render, prévia tracejada, um `runBatch`, "Relançar" sempre que há peça do
+   * tipo no pavimento.
+   */
+  const [hipDeVigasSalvas, setHipDeVigasSalvas] = usePersistedState<{
+    divisorDaAltura: number;
+    alturaMinimaMm: number;
+    incluirInternas: boolean;
+  }>('blueprint:vigasAutomaticas', {
+    divisorDaAltura: HIPOTESES_VIGAS_PADRAO.divisorDaAltura,
+    alturaMinimaMm: HIPOTESES_VIGAS_PADRAO.alturaMinimaMm,
+    incluirInternas: HIPOTESES_VIGAS_PADRAO.incluirInternas,
+  });
+  const hipotesesDeVigas = useMemo<HipotesesDeVigas>(
+    () => ({
+      ...HIPOTESES_VIGAS_PADRAO,
+      divisorDaAltura: (DIVISORES_DA_ALTURA as readonly number[]).includes(hipDeVigasSalvas.divisorDaAltura)
+        ? hipDeVigasSalvas.divisorDaAltura
+        : HIPOTESES_VIGAS_PADRAO.divisorDaAltura,
+      alturaMinimaMm: (ALTURAS_MINIMAS_DE_VIGA as readonly number[]).includes(hipDeVigasSalvas.alturaMinimaMm)
+        ? hipDeVigasSalvas.alturaMinimaMm
+        : HIPOTESES_VIGAS_PADRAO.alturaMinimaMm,
+      incluirInternas: hipDeVigasSalvas.incluirInternas !== false,
+    }),
+    [hipDeVigasSalvas],
+  );
+  const [hipDeLajesSalvas, setHipDeLajesSalvas] = usePersistedState<{ espessuraMm: number }>('blueprint:lajesAutomaticas', {
+    espessuraMm: HIPOTESES_LAJES_PADRAO.espessuraMm,
+  });
+  const hipotesesDeLajes = useMemo<HipotesesDeLajes>(
+    () => ({
+      espessuraMm: (ESPESSURAS_DE_LAJE as readonly number[]).includes(hipDeLajesSalvas.espessuraMm)
+        ? hipDeLajesSalvas.espessuraMm
+        : HIPOTESES_LAJES_PADRAO.espessuraMm,
+    }),
+    [hipDeLajesSalvas],
+  );
+  const planoDeVigas = useMemo(
+    () => (levelId ? planejarVigas(editor.model, levelId, hipotesesDeVigas) : null),
+    [editor.model, levelId, hipotesesDeVigas],
+  );
+  const planoDeLajes = useMemo(
+    () => (levelId ? planejarLajes(editor.model, levelId, hipotesesDeLajes) : null),
+    [editor.model, levelId, hipotesesDeLajes],
+  );
+  const vigasNoNivel = levelId ? vigasExistentesNoNivel(editor.model, levelId).length : 0;
+  const lajesNoNivel = levelId ? lajesExistentesNoNivel(editor.model, levelId).length : 0;
+  const planoDeRelancamentoDeVigas = useMemo(
+    () => (levelId && vigasNoNivel > 0 ? relancarVigas(editor.model, levelId, hipotesesDeVigas) : null),
+    [editor.model, levelId, hipotesesDeVigas, vigasNoNivel],
+  );
+  const planoDeRelancamentoDeLajes = useMemo(
+    () => (levelId && lajesNoNivel > 0 ? relancarLajes(editor.model, levelId, hipotesesDeLajes) : null),
+    [editor.model, levelId, hipotesesDeLajes, lajesNoNivel],
+  );
+  const [resultadoDeVigas, setResultadoDeVigas] = useState<{ ok: boolean; texto: string } | null>(null);
+  const [resultadoDeLajes, setResultadoDeLajes] = useState<{ ok: boolean; texto: string } | null>(null);
+  const lancarVigas = () => {
+    if (!planoDeVigas || planoDeVigas.comandos.length === 0) return;
+    const prova = conferirPlanoDeVigas(editor.model, planoDeVigas);
+    if (!prova.ok) {
+      setResultadoDeVigas({ ok: false, texto: `Nada foi lançado: ${prova.motivo}` });
+      return;
+    }
+    const criados = editor.runBatch(planoDeVigas.comandos);
+    if (criados.length > 0) selecionar(criados);
+    setResultadoDeVigas({
+      ok: true,
+      texto: `${planoDeVigas.vigas.length} viga(s) lançada(s) · ${planoDeVigas.paredesQueCedem.length} parede(s) passaram a ceder — Ctrl+Z desfaz.`,
+    });
+  };
+  const relancarVigasDoNivel = async () => {
+    if (!planoDeRelancamentoDeVigas || planoDeRelancamentoDeVigas.comandos.length === 0) return;
+    const ok = await confirmar({
+      title: 'Relançar as vigas deste pavimento?',
+      message: `Apaga as ${planoDeRelancamentoDeVigas.apagados.length} viga(s) do pavimento — inclusive as desenhadas à mão — e lança ${planoDeRelancamentoDeVigas.vigas.length} de novo com as hipóteses atuais (h = vão ÷ ${hipotesesDeVigas.divisorDaAltura}, mín. ${hipotesesDeVigas.alturaMinimaMm / 10} cm). Ctrl+Z desfaz.`,
+      confirmLabel: 'Relançar',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    const prova = conferirPlanoDeVigas(editor.model, planoDeRelancamentoDeVigas);
+    if (!prova.ok) {
+      setResultadoDeVigas({ ok: false, texto: `Nada foi relançado: ${prova.motivo}` });
+      return;
+    }
+    const criados = editor.runBatch(planoDeRelancamentoDeVigas.comandos);
+    if (criados.length > 0) selecionar(criados);
+    setResultadoDeVigas({
+      ok: true,
+      texto: `${planoDeRelancamentoDeVigas.apagados.length} viga(s) apagada(s) e ${planoDeRelancamentoDeVigas.vigas.length} lançada(s) — Ctrl+Z desfaz.`,
+    });
+  };
+  const lancarLajes = () => {
+    if (!planoDeLajes || planoDeLajes.comandos.length === 0) return;
+    const prova = conferirPlanoDeLajes(editor.model, planoDeLajes);
+    if (!prova.ok) {
+      setResultadoDeLajes({ ok: false, texto: `Nada foi lançado: ${prova.motivo}` });
+      return;
+    }
+    const criados = editor.runBatch(planoDeLajes.comandos);
+    if (criados.length > 0) selecionar(criados);
+    const area = planoDeLajes.lajes.reduce((a, l) => a + l.areaMm2, 0) / 1_000_000;
+    setResultadoDeLajes({
+      ok: true,
+      texto: `${planoDeLajes.lajes.length} laje(s) lançada(s) · ${area.toFixed(2).replace('.', ',')} m² — Ctrl+Z desfaz.`,
+    });
+  };
+  const relancarLajesDoNivel = async () => {
+    if (!planoDeRelancamentoDeLajes || planoDeRelancamentoDeLajes.comandos.length === 0) return;
+    const ok = await confirmar({
+      title: 'Relançar as lajes deste pavimento?',
+      message: `Apaga as ${planoDeRelancamentoDeLajes.apagados.length} laje(s) do pavimento — inclusive as desenhadas à mão — e lança ${planoDeRelancamentoDeLajes.lajes.length} de novo com ${hipotesesDeLajes.espessuraMm / 10} cm. Ctrl+Z desfaz.`,
+      confirmLabel: 'Relançar',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    const prova = conferirPlanoDeLajes(editor.model, planoDeRelancamentoDeLajes);
+    if (!prova.ok) {
+      setResultadoDeLajes({ ok: false, texto: `Nada foi relançado: ${prova.motivo}` });
+      return;
+    }
+    const criados = editor.runBatch(planoDeRelancamentoDeLajes.comandos);
+    if (criados.length > 0) selecionar(criados);
+    setResultadoDeLajes({
+      ok: true,
+      texto: `${planoDeRelancamentoDeLajes.apagados.length} laje(s) apagada(s) e ${planoDeRelancamentoDeLajes.lajes.length} lançada(s) com ${hipotesesDeLajes.espessuraMm / 10} cm — Ctrl+Z desfaz.`,
+    });
+  };
+  /**
+   * As PEÇAS PREVISTAS que o canvas desenha tracejadas: as da tarefa aberta.
+   * Memoizado para o canvas não redesenhar em loop (identidade estável).
+   */
+  const pecasPrevistas = useMemo<readonly PecaPrevista[] | undefined>(() => {
+    if (tarefaAberta === 'pilares' && planoDePilares) {
+      return planoDePilares.pilares.map((p) => ({
+        kind: 'PILAR' as const,
+        pontos: [p.at],
+        larguraMm: p.larguraMm,
+        profundidadeMm: p.profundidadeMm,
+        rotacaoDeg: p.rotacaoDeg,
+        rotulo: p.rotulo,
+      }));
+    }
+    if (tarefaAberta === 'vigas' && planoDeVigas) {
+      return planoDeVigas.vigas.map((v) => ({
+        kind: 'VIGA' as const,
+        pontos: [v.a, v.b],
+        larguraMm: v.larguraMm,
+        profundidadeMm: 0,
+        rotacaoDeg: 0,
+        rotulo: v.rotulo,
+      }));
+    }
+    if (tarefaAberta === 'lajes' && planoDeLajes) {
+      return planoDeLajes.lajes.map((l) => ({
+        kind: 'LAJE' as const,
+        pontos: l.pontos,
+        larguraMm: 0,
+        profundidadeMm: 0,
+        rotacaoDeg: 0,
+        rotulo: l.rotulo,
+      }));
+    }
+    return undefined;
+  }, [tarefaAberta, planoDePilares, planoDeVigas, planoDeLajes]);
+  /** A pílula sobre o desenho quando a gaveta está recolhida: o que está em prévia e como lançar. */
+  const previaRecolhida =
+    drawerRecolhido && tarefaAberta === 'pilares' && planoDePilares
+      ? { n: planoDePilares.pilares.length, nome: 'pilar(es)', lancar: lancarPilares, Icone: RectangleVertical }
+      : drawerRecolhido && tarefaAberta === 'vigas' && planoDeVigas
+        ? { n: planoDeVigas.vigas.length, nome: 'viga(s)', lancar: lancarVigas, Icone: RectangleHorizontal }
+        : drawerRecolhido && tarefaAberta === 'lajes' && planoDeLajes
+          ? { n: planoDeLajes.lajes.length, nome: 'laje(s)', lancar: lancarLajes, Icone: Layers }
+          : null;
   /**
    * RELANÇAR (16/09/2026): mudou a seção ou o vão depois de lançar? O pilar não
    * tem marca de "automático", então relançar é apagar os pilares do pavimento
@@ -5163,6 +5361,22 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   ativo={tarefaAberta === 'pilares'}
                   onClick={() => alternarTarefa('pilares')}
                   ajuda="Um pilar em cada encontro de paredes (canto, T, cruzamento) e intermediários quando o vão passa do máximo — prévia antes de gravar, Ctrl+Z desfaz"
+                />
+                <BotaoDoRibbon
+                  icone={RectangleHorizontal}
+                  rotulo="Vigas automáticas"
+                  contagem={planoDeVigas?.vigas.length || undefined}
+                  ativo={tarefaAberta === 'vigas'}
+                  onClick={() => alternarTarefa('vigas')}
+                  ajuda="Uma viga por parede, de pilar a pilar, com a largura da parede e altura pelo maior vão (L/10) — prévia antes de gravar, Ctrl+Z desfaz"
+                />
+                <BotaoDoRibbon
+                  icone={Layers}
+                  rotulo="Lajes automáticas"
+                  contagem={planoDeLajes?.lajes.length || undefined}
+                  ativo={tarefaAberta === 'lajes'}
+                  onClick={() => alternarTarefa('lajes')}
+                  ajuda="Uma laje por ambiente fechado, apoiada no topo das paredes — prévia antes de gravar, Ctrl+Z desfaz"
                 />
               </GrupoDoRibbon>
             )}
@@ -6595,7 +6809,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               // sempre deixaria um retângulo violeta sobre a planta enquanto se
               // traça parede, sem nada na tela explicando de onde ele veio.
               regiao={tarefaAberta === 'gerar-paredes' ? regiao : null}
-              pilaresPrevistos={tarefaAberta === 'pilares' && planoDePilares ? planoDePilares.pilares : undefined}
+              pecasPrevistas={pecasPrevistas}
               onRegiaoDefinida={(r) => {
                 // `null` = desistiu do gesto. Só desarma — apagar a região
                 // confirmada por causa de um Escape seria perder trabalho.
@@ -6614,14 +6828,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           {/* PRÉVIA DOS PILARES NO DESENHO (15/09/2026). A gaveta é modal e
               cobre o canvas com o véu; "Ver prévia no desenho" a recolhe, e
               esta pílula é o caminho de volta — ou de lançar dali mesmo. */}
-          {tarefaAberta === 'pilares' && drawerRecolhido && planoDePilares && (
+          {previaRecolhida && (
             <div
               role="status"
               className="absolute bottom-14 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-[10px] border border-blue-200 bg-white/95 px-3 py-2 text-sm text-slate-700 shadow-lg"
             >
-              <RectangleVertical className="h-4 w-4 text-blue-700" />
+              <previaRecolhida.Icone className="h-4 w-4 text-blue-700" />
               <span>
-                Prévia: <strong>{planoDePilares.pilares.length}</strong> pilar(es) tracejado(s) em azul.
+                Prévia: <strong>{previaRecolhida.n}</strong> {previaRecolhida.nome} em azul tracejado.
               </span>
               <button
                 type="button"
@@ -6633,13 +6847,13 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               <button
                 type="button"
                 onClick={() => {
-                  lancarPilares();
+                  previaRecolhida.lancar();
                   setDrawerRecolhido(false);
                 }}
-                disabled={planoDePilares.pilares.length === 0}
+                disabled={previaRecolhida.n === 0}
                 className="rounded-[6px] bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-40"
               >
-                Lançar {planoDePilares.pilares.length} pilar(es)
+                Lançar {previaRecolhida.n} {previaRecolhida.nome}
               </button>
             </div>
           )}
@@ -7399,6 +7613,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               {tarefaAberta === 'eletrodutos' && <Cable className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'circuitos' && <CircuitBoard className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'pilares' && <RectangleVertical className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'vigas' && <RectangleHorizontal className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'lajes' && <Layers className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -7410,6 +7626,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           <SheetDescription>
             {tarefaAberta === 'pilares' &&
               'Pilar em cada encontro de paredes e nos vãos longos, no pavimento ativo. Prévia tracejada no desenho; gravar é um passo só, e Ctrl+Z desfaz.'}
+            {tarefaAberta === 'vigas' &&
+              'Uma viga por parede, de pilar a pilar, no topo da alvenaria do pavimento ativo. Prévia tracejada no desenho; gravar é um passo só, e Ctrl+Z desfaz.'}
+            {tarefaAberta === 'lajes' &&
+              'Uma laje por ambiente fechado, apoiada no topo das paredes do pavimento ativo. Prévia tracejada no desenho; gravar é um passo só, e Ctrl+Z desfaz.'}
             {tarefaAberta === 'tomadas' && (
               <>
                 Por ambiente: classifique o cômodo, veja o que a norma (9.5.2) pede e distribua.{' '}
@@ -7447,7 +7667,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
 
@@ -7613,6 +7833,270 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   >
                     ver
                   </button>
+                </p>
+              )}
+            </div>
+          )}
+
+          {tarefaAberta === 'vigas' && planoDeVigas && (
+            <div className="space-y-4">
+              <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <p className="font-semibold text-slate-700">Hipóteses do lançamento</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  <li>
+                    <strong>Uma viga por parede</strong>, de pilar a pilar — paredes emendadas em linha reta viram uma viga
+                    só; canto, T e cruzamento terminam a viga.
+                  </li>
+                  <li>
+                    Altura por pré-dimensionamento: <strong>h = maior vão ÷ {hipotesesDeVigas.divisorDaAltura}</strong>, a
+                    cada 5 cm, nunca abaixo de {hipotesesDeVigas.alturaMinimaMm / 10} cm. Apoios: pontas, encontros e
+                    pilares já desenhados — <strong>lance os pilares antes</strong>: um pilar no meio da parede baixa a viga.
+                  </li>
+                  <li>Largura = espessura da parede (mín. 12 cm, NBR 6118 13.2.2), no eixo da alvenaria.</li>
+                  <li>
+                    Topo no pé-direito
+                    {peDireitoDoNivelAtivo != null ? ` (${(peDireitoDoNivelAtivo / 1000).toFixed(2).replace('.', ',')} m)` : ''}; as
+                    paredes passam a <strong>ceder</strong> o volume à viga.
+                  </li>
+                  <li>
+                    <strong>Não dimensiona</strong>: L/10 é regra de lançamento; cálculo, armadura e flecha são do responsável
+                    técnico. Viga já desenhada na parede é respeitada.
+                  </li>
+                </ul>
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <label className="flex items-center gap-2">
+                    Altura
+                    <select
+                      value={hipotesesDeVigas.divisorDaAltura}
+                      onChange={(e) => setHipDeVigasSalvas((h) => ({ ...h, divisorDaAltura: Number(e.target.value) }))}
+                      aria-label="Divisor da altura da viga"
+                      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                    >
+                      {DIVISORES_DA_ALTURA.map((d) => (
+                        <option key={d} value={d}>
+                          vão ÷ {d}{d === HIPOTESES_VIGAS_PADRAO.divisorDaAltura ? ' (sugerido)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    Mínimo
+                    <select
+                      value={hipotesesDeVigas.alturaMinimaMm}
+                      onChange={(e) => setHipDeVigasSalvas((h) => ({ ...h, alturaMinimaMm: Number(e.target.value) }))}
+                      aria-label="Altura mínima da viga"
+                      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                    >
+                      {ALTURAS_MINIMAS_DE_VIGA.map((a) => (
+                        <option key={a} value={a}>
+                          {a / 10} cm
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={hipotesesDeVigas.incluirInternas}
+                      onChange={(e) => setHipDeVigasSalvas((h) => ({ ...h, incluirInternas: e.target.checked }))}
+                      aria-label="Incluir paredes internas nas vigas"
+                    />
+                    Incluir paredes internas
+                  </label>
+                  {planoDeVigas.vigas.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setDrawerRecolhido(true)}
+                      title="Recolhe a gaveta para ver as vigas propostas, tracejadas em azul, sobre o desenho"
+                      className="rounded-[6px] border border-blue-300 bg-white px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
+                    >
+                      Ver prévia no desenho
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {planoDeVigas.motivo ? (
+                <p className="text-sm text-slate-500">
+                  {planoDeVigas.motivo === 'sem parede no pavimento'
+                    ? 'Desenhe paredes neste pavimento — a viga nasce sobre elas.'
+                    : planoDeVigas.motivo === 'todas as paredes já têm viga'
+                      ? 'Todas as paredes já têm viga. Para mudar a altura, ajuste as hipóteses e use Relançar.'
+                      : `Nada a lançar: ${planoDeVigas.motivo}.`}
+                </p>
+              ) : (
+                <table className="w-full table-fixed text-xs" aria-label="Prévia das vigas">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-500">
+                      <th className="w-12 py-1.5 pr-2 font-medium">Viga</th>
+                      <th className="w-16 py-1.5 pr-2 font-medium">Paredes</th>
+                      <th className="py-1.5 pr-2 text-right font-medium">Compr. (m)</th>
+                      <th className="w-24 py-1.5 pr-2 text-right font-medium">Seção (cm)</th>
+                      <th className="w-24 py-1.5 text-right font-medium">Maior vão (m)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {planoDeVigas.vigas.map((v) => (
+                      <tr key={v.idPrevisto}>
+                        <td className="py-1.5 pr-2 font-medium text-slate-700">
+                          {v.rotulo}
+                          {v.aviso && <span className="block font-normal text-amber-800">{v.aviso}</span>}
+                        </td>
+                        <td className="py-1.5 pr-2 text-slate-600">{v.wallIds.length}</td>
+                        <td className="py-1.5 pr-2 text-right tabular-nums text-slate-600">
+                          {(v.comprimentoMm / 1000).toFixed(2).replace('.', ',')}
+                        </td>
+                        <td className="py-1.5 pr-2 text-right tabular-nums text-slate-600">
+                          {v.larguraMm / 10} × {v.alturaMm / 10}
+                        </td>
+                        <td className="py-1.5 text-right tabular-nums text-slate-600">
+                          {(v.maiorVaoMm / 1000).toFixed(2).replace('.', ',')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              {planoDeVigas.cadeiasComViga > 0 && (
+                <p className="text-xs text-slate-500">{planoDeVigas.cadeiasComViga} parede(s) já com viga — mantidas.</p>
+              )}
+              {planoDeVigas.foraDoPlano.length > 0 && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  <p className="font-medium">{planoDeVigas.foraDoPlano.length} parede(s) fora do plano</p>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                    {[...new Set(planoDeVigas.foraDoPlano.map((f) => f.motivo))].map((motivo) => (
+                      <li key={motivo}>{motivo}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {planoDeVigas.avisos.length > 0 && (
+                <ul className="list-disc space-y-0.5 pl-4 text-xs text-amber-800">
+                  {planoDeVigas.avisos.map((a) => (
+                    <li key={a}>{a}</li>
+                  ))}
+                </ul>
+              )}
+              {resultadoDeVigas && (
+                <p
+                  role="status"
+                  className={`rounded-md border px-3 py-2 text-xs ${
+                    resultadoDeVigas.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-700'
+                  }`}
+                >
+                  {resultadoDeVigas.texto}
+                </p>
+              )}
+            </div>
+          )}
+
+          {tarefaAberta === 'lajes' && planoDeLajes && (
+            <div className="space-y-4">
+              <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <p className="font-semibold text-slate-700">Hipóteses do lançamento</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  <li>
+                    <strong>Uma laje por ambiente fechado</strong> — o anel do cômodo, no eixo das paredes: o painel entre
+                    vigas.
+                  </li>
+                  <li>
+                    Espessura <strong>{hipotesesDeLajes.espessuraMm / 10} cm</strong> (NBR 6118 13.2.4.1 pede de 7 a 10 cm
+                    conforme o uso), apoiada no topo das paredes
+                    {peDireitoDoNivelAtivo != null ? ` (${(peDireitoDoNivelAtivo / 1000).toFixed(2).replace('.', ',')} m)` : ''}.
+                  </li>
+                  <li>Ambiente com ilha: a laje cobre a ilha (dito na linha). Ambientes com menos de 0,5 m² ficam de fora.</li>
+                  <li>
+                    <strong>Não dimensiona</strong>: espessura é hipótese; cálculo, armadura e flecha são do responsável técnico.
+                    Laje já desenhada no ambiente é respeitada.
+                  </li>
+                </ul>
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <label className="flex items-center gap-2">
+                    Espessura
+                    <select
+                      value={hipotesesDeLajes.espessuraMm}
+                      onChange={(e) => setHipDeLajesSalvas({ espessuraMm: Number(e.target.value) })}
+                      aria-label="Espessura da laje"
+                      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                    >
+                      {ESPESSURAS_DE_LAJE.map((x) => (
+                        <option key={x} value={x}>
+                          {x / 10} cm{x === HIPOTESES_LAJES_PADRAO.espessuraMm ? ' (sugerido)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {planoDeLajes.lajes.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setDrawerRecolhido(true)}
+                      title="Recolhe a gaveta para ver as lajes propostas, tracejadas em azul, sobre o desenho"
+                      className="rounded-[6px] border border-blue-300 bg-white px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
+                    >
+                      Ver prévia no desenho
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {planoDeLajes.motivo ? (
+                <p className="text-sm text-slate-500">
+                  {planoDeLajes.motivo === 'nenhum ambiente fechado no pavimento'
+                    ? 'Feche os ambientes com paredes — a laje nasce de cada cômodo fechado.'
+                    : planoDeLajes.motivo === 'todos os ambientes já têm laje'
+                      ? 'Todos os ambientes já têm laje. Para mudar a espessura, ajuste a hipótese e use Relançar.'
+                      : `Nada a lançar: ${planoDeLajes.motivo}.`}
+                </p>
+              ) : (
+                <table className="w-full table-fixed text-xs" aria-label="Prévia das lajes">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-500">
+                      <th className="w-12 py-1.5 pr-2 font-medium">Laje</th>
+                      <th className="py-1.5 pr-2 font-medium">Ambiente</th>
+                      <th className="w-24 py-1.5 pr-2 text-right font-medium">Área (m²)</th>
+                      <th className="w-24 py-1.5 text-right font-medium">Espessura</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {planoDeLajes.lajes.map((l) => (
+                      <tr key={l.idPrevisto}>
+                        <td className="py-1.5 pr-2 font-medium text-slate-700">
+                          {l.rotulo}
+                          {l.aviso && <span className="block font-normal text-amber-800">{l.aviso}</span>}
+                        </td>
+                        <td className="truncate py-1.5 pr-2 text-slate-600">{l.ambiente ?? '—'}</td>
+                        <td className="py-1.5 pr-2 text-right tabular-nums text-slate-600">
+                          {(l.areaMm2 / 1_000_000).toFixed(2).replace('.', ',')}
+                        </td>
+                        <td className="py-1.5 text-right tabular-nums text-slate-600">{l.espessuraMm / 10} cm</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              {planoDeLajes.ambientesComLaje > 0 && (
+                <p className="text-xs text-slate-500">{planoDeLajes.ambientesComLaje} ambiente(s) já com laje — mantidos.</p>
+              )}
+              {planoDeLajes.foraDoPlano.length > 0 && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  <p className="font-medium">{planoDeLajes.foraDoPlano.length} ambiente(s) fora do plano</p>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                    {[...new Set(planoDeLajes.foraDoPlano.map((f) => f.motivo))].map((motivo) => (
+                      <li key={motivo}>{motivo}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {resultadoDeLajes && (
+                <p
+                  role="status"
+                  className={`rounded-md border px-3 py-2 text-xs ${
+                    resultadoDeLajes.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-700'
+                  }`}
+                >
+                  {resultadoDeLajes.texto}
                 </p>
               )}
             </div>
@@ -8099,6 +8583,64 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               </button>
             </>
           )}
+          {tarefaAberta === 'vigas' && planoDeVigas && (
+            <>
+              <span className="mr-auto whitespace-nowrap text-xs text-slate-500">
+                {planoDeVigas.vigas.length === 0
+                  ? 'Nada a lançar.'
+                  : `${planoDeVigas.vigas.length} viga(s) · ${planoDeVigas.paredesQueCedem.length} parede(s) cedem.`}
+              </span>
+              {planoDeRelancamentoDeVigas && (
+                <button
+                  type="button"
+                  onClick={() => void relancarVigasDoNivel()}
+                  disabled={planoDeRelancamentoDeVigas.comandos.length === 0}
+                  title="Apaga as vigas deste pavimento e lança de novo com as hipóteses atuais — confirma antes; Ctrl+Z desfaz"
+                  className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-amber-300 bg-white px-3.5 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Relançar {planoDeRelancamentoDeVigas.vigas.length}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={lancarVigas}
+                disabled={planoDeVigas.vigas.length === 0}
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <RectangleHorizontal className="h-4 w-4" />
+                Lançar {planoDeVigas.vigas.length} viga(s)
+              </button>
+            </>
+          )}
+          {tarefaAberta === 'lajes' && planoDeLajes && (
+            <>
+              <span className="mr-auto whitespace-nowrap text-xs text-slate-500">
+                {planoDeLajes.lajes.length === 0
+                  ? 'Nada a lançar.'
+                  : `${planoDeLajes.lajes.length} laje(s) · ${(planoDeLajes.lajes.reduce((a, l) => a + l.areaMm2, 0) / 1_000_000).toFixed(2).replace('.', ',')} m².`}
+              </span>
+              {planoDeRelancamentoDeLajes && (
+                <button
+                  type="button"
+                  onClick={() => void relancarLajesDoNivel()}
+                  disabled={planoDeRelancamentoDeLajes.comandos.length === 0}
+                  title="Apaga as lajes deste pavimento e lança de novo com a espessura atual — confirma antes; Ctrl+Z desfaz"
+                  className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-amber-300 bg-white px-3.5 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Relançar {planoDeRelancamentoDeLajes.lajes.length}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={lancarLajes}
+                disabled={planoDeLajes.lajes.length === 0}
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Layers className="h-4 w-4" />
+                Lançar {planoDeLajes.lajes.length} laje(s)
+              </button>
+            </>
+          )}
           {tarefaAberta === 'pilares' && planoDePilares && (
             <>
               <span className="mr-auto whitespace-nowrap text-xs text-slate-500">
@@ -8146,7 +8688,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               </button>
             </>
           )}
-          {tarefaAberta !== 'tomadas' && tarefaAberta !== 'eletrodutos' && tarefaAberta !== 'circuitos' && tarefaAberta !== 'pilares' && rotuloDaSelecao && (
+          {tarefaAberta !== 'tomadas' && tarefaAberta !== 'eletrodutos' && tarefaAberta !== 'circuitos' && tarefaAberta !== 'pilares' && tarefaAberta !== 'vigas' && tarefaAberta !== 'lajes' && rotuloDaSelecao && (
             <span className="mr-auto truncate text-xs text-slate-500">
               Selecionado: {rotuloDaSelecao}
             </span>

@@ -1226,6 +1226,93 @@ describe('BlueprintEditor · ribbon', () => {
     expect(await screen.findByRole('dialog')).toHaveTextContent(/todos os encontros de paredes já têm pilar/i);
   });
 
+  // ── Vigas e lajes automáticas (16/09/2026) ───────────────────────────────
+  it('"Vigas automáticas" sem parede: hipóteses, "lance os pilares antes", e "Lançar 0" apagado', async () => {
+    await montar();
+    await abrirAba(/^arquitetura$/i);
+    await userEvent.setup().click(botao(/^vigas automáticas/i));
+    const drawer = await screen.findByRole('dialog');
+    expect(drawer).toHaveTextContent(/hipóteses do lançamento/i);
+    expect(drawer).toHaveTextContent(/lance os pilares antes/i);
+    expect(drawer).toHaveTextContent(/não dimensiona/i);
+    expect(drawer).toHaveTextContent(/desenhe paredes neste pavimento/i);
+    expect(within(drawer).getByRole('combobox', { name: /divisor da altura da viga/i })).toHaveValue('10');
+    expect(within(drawer).getByRole('button', { name: /^lançar 0 viga/i })).toBeDisabled();
+    expect(botao(/^vigas automáticas/i)).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('vigas: contagem no ribbon, prévia com seção por vão, "Lançar" grava num passo só, Relançar com L/12 muda a altura, Desfazer volta', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) =>
+      ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    const m = k.applyBatch(nivel.model, [
+      w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0), w(0, 2000, 6000, 2000),
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    await abrirAba(/^arquitetura$/i);
+    expect(botao(/^vigas automáticas/i)).toHaveTextContent('5');
+    await userEvent.setup().click(botao(/^vigas automáticas/i));
+    const drawer = await screen.findByRole('dialog');
+    const previa = within(drawer).getByRole('table', { name: /prévia das vigas/i });
+    const linhas = within(previa).getAllByRole('row').slice(1);
+    expect(linhas).toHaveLength(5);
+    // A de 6 m sem apoio no meio: 15 × 60 (L/10); a vertical de 4 m com o T: 15 × 30 (mínimo).
+    expect(linhas[0]).toHaveTextContent(/V1.*6,00.*15 × 60.*6,00/);
+    expect(drawer).toHaveTextContent(/5 viga\(s\) · 5 parede\(s\) cedem/i);
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^lançar 5 viga/i }));
+    expect(drawer).toHaveTextContent(/5 viga\(s\) lançada\(s\) · 5 parede\(s\) passaram a ceder/i);
+    expect(drawer).toHaveTextContent(/todas as paredes já têm viga/i);
+    // Relançar com L/12: 6 m → 50.
+    await userEvent.selectOptions(within(drawer).getByRole('combobox', { name: /divisor da altura da viga/i }), '12');
+    expect(JSON.parse(localStorage.getItem('blueprint:vigasAutomaticas')!).divisorDaAltura).toBe(12);
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^relançar 5/i }));
+    await screen.findByText(/apaga as 5 viga\(s\) do pavimento/i);
+    await userEvent.setup().click(screen.getByRole('button', { name: /^relançar$/i }));
+    expect(drawer).toHaveTextContent(/5 viga\(s\) apagada\(s\) e 5 lançada\(s\)/i);
+    // UM desfazer devolve as de L/10 (e a prévia continua vazia: ainda há viga em toda parede).
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^fechar$/i }));
+    await userEvent.setup().click(botao(/^desfazer/i));
+    expect(botao(/^vigas automáticas/i)).not.toHaveTextContent('5');
+    await userEvent.setup().click(botao(/^desfazer/i));
+    expect(botao(/^vigas automáticas/i)).toHaveTextContent('5');
+  });
+
+  it('lajes: uma por ambiente fechado, "Lançar 2 laje(s)" grava e um Desfazer volta; espessura persiste', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) =>
+      ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    let m = k.applyBatch(nivel.model, [
+      w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0), w(0, 2000, 6000, 2000),
+    ]).model;
+    m = k.applyCommand(m, { type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Sala', tipoDeAmbiente: 'SALA_DORMITORIO' }).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    await abrirAba(/^arquitetura$/i);
+    expect(botao(/^lajes automáticas/i)).toHaveTextContent('2');
+    await userEvent.setup().click(botao(/^lajes automáticas/i));
+    const drawer = await screen.findByRole('dialog');
+    const previa = within(drawer).getByRole('table', { name: /prévia das lajes/i });
+    expect(within(previa).getAllByRole('row').slice(1)).toHaveLength(2);
+    expect(previa).toHaveTextContent(/Sala/);
+    expect(previa).toHaveTextContent(/12,00/);
+    expect(drawer).toHaveTextContent(/2 laje\(s\) · 24,00 m²/i);
+    await userEvent.selectOptions(within(drawer).getByRole('combobox', { name: /espessura da laje/i }), '120');
+    expect(JSON.parse(localStorage.getItem('blueprint:lajesAutomaticas')!).espessuraMm).toBe(120);
+    expect(previa).toHaveTextContent(/12 cm/);
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^lançar 2 laje/i }));
+    expect(drawer).toHaveTextContent(/2 laje\(s\) lançada\(s\) · 24,00 m²/i);
+    expect(drawer).toHaveTextContent(/todos os ambientes já têm laje/i);
+    expect(within(drawer).getByRole('button', { name: /^relançar 2/i })).toBeEnabled();
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^fechar$/i }));
+    await userEvent.setup().click(botao(/^desfazer/i));
+    expect(botao(/^lajes automáticas/i)).toHaveTextContent('2');
+  });
+
   it('vão máximo e seção escolhidos persistem em localStorage e mudam a prévia', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });

@@ -1969,3 +1969,71 @@ describe('BlueprintEditor · propriedades no 3D', () => {
     expect(await screen.findByRole('button', { name: /^P7 · Pilar/ })).toBeInTheDocument();
   });
 });
+
+/**
+ * GRUPO DE FUNDAÇÃO (16/09/2026): *"um bloco e estaca forma um grupo… ao clicar
+ * no grupo implementar opção de duplicação de estacas ou campo quantidade"*,
+ * com os critérios de distribuição (centro de carga, ≥ 3φ, simetria).
+ */
+describe('BlueprintEditor · grupo de fundação', () => {
+  async function comFundacao() {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    return k.applyBatch(nivel.model, [
+      { type: 'AddWall', levelId: t, a: k.point(0, 0), b: k.point(6000, 0), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(3000, 1500)], larguraMm: 190, profundidadeMm: 190, alturaMm: 3300, baseMm: -500, rotulo: 'P1' },
+      { type: 'AddStructural', levelId: t, kind: 'BLOCO_COROAMENTO', pontos: [k.point(3000, 1500)], larguraMm: 600, profundidadeMm: 600, alturaMm: 600, baseMm: -1100, rotulo: 'B1' },
+      { type: 'AddStructural', levelId: t, kind: 'ESTACA', pontos: [k.point(3000, 1500)], larguraMm: 300, profundidadeMm: 300, alturaMm: 8000, baseMm: -9100, circular: true, rotulo: 'E1' },
+    ]).model;
+  }
+
+  it('um clique na estaca seleciona o grupo; Quantidade 3 redistribui em triângulo; duplo clique isola a peça; Desfazer volta', async () => {
+    loadBranchModel.mockResolvedValue(await comFundacao());
+    await montar();
+    const user = userEvent.setup();
+    const secao = document.querySelector<HTMLButtonElement>('button[aria-controls="secao-componentes-corpo"]')!;
+    if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
+
+    // 1 clique na ESTACA → o grupo inteiro (bloco + estaca), painel do grupo.
+    await user.click(await screen.findByRole('button', { name: /^E1 · Estaca/ }));
+    const props = await screen.findByRole('region', { name: /propriedades/i });
+    expect(props).toHaveTextContent(/Grupo de fundação/);
+    expect(props).toHaveTextContent(/B1 · 1 estaca/);
+    expect(props).toHaveTextContent(/sob o pilar P1/);
+    expect(screen.getByRole('button', { name: /^B1 · Bloco de coroamento/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^E1 · Estaca/ })).toHaveAttribute('aria-pressed', 'true');
+
+    // Quantidade 3: triângulo, 3Ø = 90 cm, bloco 150 × 140; rótulos E1 (reaproveitado), E2, E3.
+    await user.click(within(props).getByRole('button', { name: /^3 estacas em triângulo/ }));
+    const props2 = await screen.findByRole('region', { name: /propriedades/i });
+    expect(props2).toHaveTextContent(/B1 · 3 estacas/);
+    expect(props2).toHaveTextContent(/Arranjo triângulo/);
+    expect(props2).toHaveTextContent(/90 cm/);
+    expect(props2).toHaveTextContent(/Bloco 150 × 140 × 60 cm/);
+    const linhaBloco = screen.getByRole('button', { name: /^B1 · Bloco de coroamento/ }).closest('li')!;
+    expect(within(linhaBloco).getAllByRole('button', { name: /^E[0-9]+ · Estaca/ })).toHaveLength(3);
+    expect(within(linhaBloco).getByRole('button', { name: /^E3 · Estaca/ })).toBeInTheDocument();
+
+    // Campo livre: 7 → hexágono com centro.
+    const campo = within(props2).getByRole('spinbutton', { name: /quantidade de estacas/i });
+    await user.clear(campo);
+    await user.type(campo, '7{Enter}');
+    expect(await screen.findByText(/hexágono com centro/)).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: /propriedades/i })).toHaveTextContent(/B1 · 7 estacas/);
+
+    // Duplo clique na estaca isola a peça: painel da estaca, com o atalho de volta ao grupo.
+    await user.dblClick(screen.getByRole('button', { name: /^E2 · Estaca/ }));
+    const props3 = await screen.findByRole('region', { name: /propriedades/i });
+    expect(props3).toHaveTextContent(/Estaca do bloco B1 · 7 estacas/);
+    expect(props3).toHaveTextContent(/Comprimento/);
+    await user.click(within(props3).getByRole('button', { name: /editar o grupo/i }));
+    expect(await screen.findByText(/Grupo de fundação/)).toBeInTheDocument();
+
+    // Desfazer duas vezes: 3 estacas, depois 1.
+    await user.click(botao(/^desfazer/i));
+    await user.click(botao(/^desfazer/i));
+    expect(screen.getByRole('button', { name: 'Bloco de coroamento: 1 peça' })).toBeInTheDocument();
+    expect(within(screen.getByRole('button', { name: /^B1 · Bloco de coroamento/ }).closest('li')!).getAllByRole('button', { name: /^E[0-9]+ · Estaca/ })).toHaveLength(1);
+  });
+});

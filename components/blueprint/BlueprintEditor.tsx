@@ -187,6 +187,7 @@ import {
   COMPRIMENTOS_DE_ESTACA,
   POSICOES_DA_BALDRAME,
   ROTULO_DA_POSICAO_DA_BALDRAME,
+  nomeDoArranjo,
   DIAMETROS_DE_ESTACA,
   ESTACAS_POR_BLOCO,
   HIPOTESES_FUNDACOES_PADRAO,
@@ -203,6 +204,8 @@ import PainelUnifilar from './PainelUnifilar';
 import PainelParedeSelecionada from './PainelParedeSelecionada';
 import PainelCamadasParede from './PainelCamadasParede';
 import PainelSelecaoMultipla from './PainelSelecaoMultipla';
+import PainelGrupoDeFundacao from './PainelGrupoDeFundacao';
+import { grupoDaSelecao, grupoDeFundacao, idsDoGrupo, planejarEstacasDoBloco } from '../../utils/blueprintGrupoDeFundacao';
 import PainelGerarParedes from './PainelGerarParedes';
 import PainelTerreno from './PainelTerreno';
 import PainelZonaUrbanistica from './PainelZonaUrbanistica';
@@ -2085,12 +2088,32 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    */
   const uidDoSelecionado =
     paredeSel?.uid ?? aberturaSel?.uid ?? estruturaSel?.uid ?? null;
-  const rotuloDoSelecionado = uidDoSelecionado
-    ? rotuloCurto(
-        uidDoSelecionado,
-        paredeSel ? 'wall' : aberturaSel ? 'opening' : 'structural',
-      )
-    : null;
+  /**
+   * GRUPO DE FUNDAÇÃO selecionado (16/09/2026): a seleção é exatamente o bloco
+   * e as estacas dele. Um clique em qualquer um deles seleciona o grupo (ver
+   * `selecionar`); o painel de propriedades vira o do grupo.
+   */
+  const grupoSel = useMemo(() => grupoDaSelecao(editor.model, editor.selectedIds), [editor.model, editor.selectedIds]);
+  const [selecaoPendente, setSelecaoPendente] = useState<string | null>(null);
+  useEffect(() => {
+    if (!selecaoPendente) return;
+    const ids = idsDoGrupo(editor.model, selecaoPendente);
+    editor.setSelectedIds(ids ?? [selecaoPendente]);
+    setSelecaoPendente(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selecaoPendente, editor.model]);
+  const planoDoGrupoSel = useMemo(
+    () => (grupoSel ? planejarEstacasDoBloco(editor.model, grupoSel.bloco.id, { quantidade: Math.max(1, grupoSel.estacas.length) }) : null),
+    [editor.model, grupoSel],
+  );
+  const rotuloDoSelecionado = grupoSel
+    ? `${grupoSel.bloco.rotulo?.trim() || 'Bloco'} · ${grupoSel.estacas.length} estaca${grupoSel.estacas.length === 1 ? '' : 's'}`
+    : uidDoSelecionado
+      ? rotuloCurto(
+          uidDoSelecionado,
+          paredeSel ? 'wall' : aberturaSel ? 'opening' : 'structural',
+        )
+      : null;
   // O ponto vai junto do comentário mesmo quando há elemento: se a peça for
   // apagada depois, é ele que diz onde o assunto era.
   const pontoDoSelecionado = useMemo(() => {
@@ -4058,9 +4081,32 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * A lista destaca uma medição só, então só a seleção de UMA a alimenta.
    */
   function selecionar(ids: string[]) {
-    editor.setSelectedIds(ids);
-    const unica = ids.length === 1 ? ids[0] : null;
+    // Um clique numa estaca ou num bloco pega o GRUPO de fundação (16/09/2026:
+    // *"a estaca e seu bloco deve estar agrupado"*) — é assim que mover e
+    // excluir levam o conjunto sem comando novo. A peça sozinha é o duplo
+    // clique (`selecionarSoAPeca`).
+    const grupo = ids.length === 1 ? idsDoGrupo(editor.model, ids[0]) : null;
+    const efetivos = grupo ?? ids;
+    editor.setSelectedIds(efetivos);
+    const unica = efetivos.length === 1 ? efetivos[0] : null;
     medicoes.setSelecionada(unica && medicoes.formas.some((f) => f.id === unica) ? unica : null);
+  }
+
+  /** Seleciona SÓ a peça, sem expandir para o grupo — o duplo clique. */
+  function selecionarSoAPeca(id: string) {
+    editor.setSelectedIds([id]);
+    medicoes.setSelecionada(null);
+  }
+
+  /** Refaz as estacas do grupo selecionado num lote e mantém o grupo selecionado. */
+  function redistribuirEstacasDoGrupo(opts: { quantidade: number; diametroMm?: number; comprimentoMm?: number }) {
+    if (!grupoSel) return;
+    const plano = planejarEstacasDoBloco(editor.model, grupoSel.bloco.id, opts);
+    if (plano.motivo || plano.comandos.length === 0) return;
+    editor.runBatch(plano.comandos);
+    // A seleção reexpande com as estacas novas na próxima renderização: os ids
+    // antigos morreram no lote, e `selecionar([bloco])` os troca pelos atuais.
+    setSelecaoPendente(grupoSel.bloco.id);
   }
 
   /**
@@ -4712,7 +4758,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       typeof v === 'number' && lista.includes(v) ? v : padrao;
     const h = hipDeFundacoesSalvas ?? HIPOTESES_FUNDACOES_PADRAO;
     return {
-      estacasPorBloco: h.estacasPorBloco === 2 ? 2 : 1,
+      estacasPorBloco: em(ESTACAS_POR_BLOCO, h.estacasPorBloco, HIPOTESES_FUNDACOES_PADRAO.estacasPorBloco),
       diametroDaEstacaMm: em(DIAMETROS_DE_ESTACA, h.diametroDaEstacaMm, HIPOTESES_FUNDACOES_PADRAO.diametroDaEstacaMm),
       comprimentoDaEstacaMm: em(COMPRIMENTOS_DE_ESTACA, h.comprimentoDaEstacaMm, HIPOTESES_FUNDACOES_PADRAO.comprimentoDaEstacaMm),
       alturaDoBlocoMm: em(ALTURAS_DE_BLOCO, h.alturaDoBlocoMm, HIPOTESES_FUNDACOES_PADRAO.alturaDoBlocoMm),
@@ -6806,6 +6852,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               levelId={levelId}
               selectedIds={editor.selectedIds}
               onSelecionar={selecionar}
+              onSelecionarPeca={selecionarSoAPeca}
               onMoverSelecao={moverSelecao}
               onMoverMedicoes={moverMedicoes}
               manterJuncoes={modoJuncao === 'MANTER'}
@@ -7182,6 +7229,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 rede={componentesDoNivel.rede}
                 selecionados={editor.selectedIds}
                 onSelecionar={selecionar}
+                onSelecionarPeca={selecionarSoAPeca}
                 onExcluir={excluirComponente}
                 // No 3D a lista troca de fonte (os pavimentos empilhados); o olho
                 // vale nas duas vistas, e desde 16/09/2026 a linha também
@@ -7502,7 +7550,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           {(!emVista || em3d) && editor.selectedIds.length > 0 && (
             <div className="flex max-h-[62%] shrink-0 flex-col border-t-2 border-slate-200">
                 <PainelDeTarefa titulo="Propriedades" subtitulo={rotuloDoSelecionado}>
-                  {editor.selectedIds.length > 1 ? (
+                  {grupoSel && planoDoGrupoSel ? (
+                    <PainelGrupoDeFundacao
+                      grupo={grupoSel}
+                      plano={planoDoGrupoSel}
+                      onQuantidade={(n) => redistribuirEstacasDoGrupo({ quantidade: n })}
+                      onDiametro={(mm) => redistribuirEstacasDoGrupo({ quantidade: Math.max(1, grupoSel.estacas.length), diametroMm: mm })}
+                      onComprimento={(mm) => redistribuirEstacasDoGrupo({ quantidade: Math.max(1, grupoSel.estacas.length), comprimentoMm: mm })}
+                      onMover={(dx, dy) => moverSelecao([], [], editor.selectedIds, [], { x: dx, y: dy } as Point)}
+                      onExcluirGrupo={removerSelecionada}
+                      onSelecionarPeca={selecionarSoAPeca}
+                    />
+                  ) : editor.selectedIds.length > 1 ? (
                     <PainelSelecaoMultipla
                       paredes={paredesSelecionadas}
                       limites={limitesSelecionados.length}
@@ -7585,7 +7644,21 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   <PainelEstruturaSelecionada
                     custo={estruturaSel ? custoPorUid.get(estruturaSel.uid) : undefined}
                     custoDesatualizado={editor.dirtySincePublish}
-                    estrutura={estruturaSel}
+                    estrutura={grupoSel ? null : estruturaSel}
+                    grupo={
+                      estruturaSel && !grupoSel
+                        ? (() => {
+                            const g = grupoDeFundacao(editor.model, estruturaSel.id);
+                            return g
+                              ? {
+                                  rotuloDoBloco: g.bloco.rotulo?.trim() || 'Bloco',
+                                  estacas: g.estacas.length,
+                                  onEditarGrupo: () => selecionar([g.bloco.id]),
+                                }
+                              : undefined;
+                          })()
+                        : undefined
+                    }
                     onMedidas={(campos) =>
                       estruturaSel &&
                       editor.run({
@@ -8016,9 +8089,13 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     antes</strong>. Pilar que já tem bloco é respeitado.
                   </li>
                   <li>
-                    {hipotesesDeFundacoes.estacasPorBloco === 2 ? 'Duas estacas' : 'Uma estaca'} por bloco, Ø{' '}
+                    <strong>{hipotesesDeFundacoes.estacasPorBloco} estaca(s)</strong> por bloco em{' '}
+                    <strong>{nomeDoArranjo(hipotesesDeFundacoes.estacasPorBloco)}</strong>, Ø{' '}
                     {hipotesesDeFundacoes.diametroDaEstacaMm / 10} cm × {hipotesesDeFundacoes.comprimentoDaEstacaMm / 1000} m
-                    {hipotesesDeFundacoes.estacasPorBloco === 2 ? ', a 3Ø uma da outra, ao longo do eixo do pilar' : ', no centro'}.
+                    {hipotesesDeFundacoes.estacasPorBloco > 1
+                      ? ` — centro de carga no eixo do pilar, 3Ø (${(3 * hipotesesDeFundacoes.diametroDaEstacaMm) / 10} cm) entre eixos, arranjo simétrico`
+                      : ', no eixo do pilar'}
+                    .
                   </li>
                   <li>
                     Lado do bloco = o maior entre Ø + 30 cm e lado do pilar + 20 cm, a cada 5 cm; altura{' '}
@@ -8056,13 +8133,13 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     Estacas
                     <select
                       value={hipotesesDeFundacoes.estacasPorBloco}
-                      onChange={(e) => setHipDeFundacoesSalvas((h) => ({ ...h, estacasPorBloco: Number(e.target.value) === 2 ? 2 : 1 }))}
+                      onChange={(e) => setHipDeFundacoesSalvas((h) => ({ ...h, estacasPorBloco: Number(e.target.value) }))}
                       aria-label="Estacas por bloco"
                       className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
                     >
                       {ESTACAS_POR_BLOCO.map((n) => (
                         <option key={n} value={n}>
-                          {n} por bloco{n === HIPOTESES_FUNDACOES_PADRAO.estacasPorBloco ? ' (sugerido)' : ''}
+                          {n} por bloco · {nomeDoArranjo(n)}{n === HIPOTESES_FUNDACOES_PADRAO.estacasPorBloco ? ' (sugerido)' : ''}
                         </option>
                       ))}
                     </select>

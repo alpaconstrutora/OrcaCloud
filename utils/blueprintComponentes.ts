@@ -23,6 +23,7 @@ import {
   UNIDADE_DE_POTENCIA,
   comprimentoDoTrecho,
 } from './blueprintRede';
+import { contornoEmPlanta, pointInPolygon } from './blueprintKernel';
 
 /**
  * O INVENTÁRIO do desenho — a lista do que já foi construído, para o painel
@@ -57,6 +58,14 @@ export interface LinhaDeComponente {
   medida: string;
   /** Segunda linha, quando há o que acrescentar. `null` = não mostrar. */
   detalhe: string | null;
+  /**
+   * A peça de que esta é PARTE — hoje só a estaca dentro do seu bloco de
+   * coroamento (16/09/2026: *"a estaca e seu bloco deve estar agrupado"*). O
+   * gerenciador aninha a linha sob a do pai. Derivado por geometria, como o
+   * grupo em `blueprintGrupoDeFundacao`: centro da estaca dentro do contorno do
+   * bloco, mesmo pavimento; blocos sobrepostos → o primeiro.
+   */
+  paiId?: string;
 }
 
 /** Metro com vírgula, como o resto do editor escreve. */
@@ -158,9 +167,14 @@ export function linhasDeComponentes(
       (o.sillMm > 0 ? ` · peitoril ${cm(o.sillMm)} cm` : ''),
   }));
 
+  const blocos = estruturas.filter((s) => s.kind === 'BLOCO_COROAMENTO').map((b) => ({ b, anel: contornoEmPlanta(b) }));
+  const blocoDaEstaca = (e: Structural) =>
+    blocos.find(({ b, anel }) => b.levelId === e.levelId && pointInPolygon(anel, e.pontos[0]))?.b ?? null;
+
   const linhasDeEstrutura: LinhaDeComponente[] = estruturas.map((s) => {
     const forma = FORMA_ESTRUTURAL[s.kind];
     const medida = medirEstrutura(s);
+    const pai = s.kind === 'ESTACA' ? blocoDaEstaca(s) : null;
     // O rótulo do calculista (P1, V3) manda quando existe: é por ele que a peça
     // é chamada na prancha, e substituí-lo por "Pilar 7" obrigaria a conferência
     // a traduzir duas numerações.
@@ -186,6 +200,7 @@ export function linhasDeComponentes(
         // o que distingue a peça, e no resto do desenho seria "0,00 m" repetido
         // em toda linha.
         (s.baseMm !== 0 ? ` · cota ${m(s.baseMm)} m` : ''),
+      ...(pai ? { paiId: pai.id } : {}),
     };
   });
 

@@ -78,6 +78,7 @@ import {
 } from '../../utils/blueprintCotas';
 import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor, type TipoDeCondutor } from '../../utils/blueprintCondutores';
 import { pegadaDaPecaPrevista, type PecaPrevista } from '../../utils/blueprintPilaresAutomaticos';
+import { idsDoGrupo } from '../../utils/blueprintGrupoDeFundacao';
 import {
   curvaDoTrecho,
   desviosDeSobreposicao,
@@ -747,6 +748,13 @@ interface Props {
   selectedIds: string[];
   onSelecionar: (ids: string[]) => void;
   /**
+   * DUPLO clique numa peça que faz parte de um GRUPO de fundação (bloco +
+   * estacas, 16/09/2026): seleciona SÓ ela. O clique simples seleciona o grupo
+   * (o editor expande em `onSelecionar`). Sem grupo, o duplo clique não faz
+   * nada novo — a peça já estava selecionada pelo primeiro clique.
+   */
+  onSelecionarPeca?: (id: string) => void;
+  /**
    * Desloca paredes e limites selecionados. Sem isto o arraste mostra a prévia e
    * não grava nada — o mesmo contrato de `onMoveVertex`.
    *
@@ -1221,6 +1229,7 @@ export default function BlueprintCanvas({
   levelId,
   selectedIds,
   onSelecionar,
+  onSelecionarPeca,
   onMoverSelecao,
   onMoverMedicoes,
   manterJuncoes = false,
@@ -7247,7 +7256,18 @@ export default function BlueprintCanvas({
   }
 
   /** Duplo clique encerra a forma em curso — a saída para quem não quer fechar. */
-  function aoDuploClique() {
+  function aoDuploClique(e: React.MouseEvent<HTMLCanvasElement>) {
+    // SELECIONAR: a peça sozinha, dentro do grupo de fundação. A mesma ordem
+    // de acerto do clique (estrutura antes de parede); só estrutura entra em
+    // grupo hoje, então só ela é consultada.
+    if (tool === 'selecionar' && onSelecionarPeca) {
+      const { px, py } = posicao(e);
+      const peca = estruturaSob(paraMundo(px, py));
+      if (peca && idsDoGrupo(model, peca.id)) {
+        onSelecionarPeca(peca.id);
+        return;
+      }
+    }
     // ESCADA encerra no duplo clique com o que ja tem. O segundo clique do par
     // JA entrou como vertice pelo `click`, entao ele sai daqui: senao o ultimo
     // ponto ficaria duplicado e o percurso ganharia um trecho de comprimento

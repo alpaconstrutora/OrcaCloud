@@ -84,6 +84,12 @@ interface Props {
   }) => void;
   onTipo: (kind: StructuralKind) => void;
   onExcluir: () => void;
+  /**
+   * A peça é parte de um GRUPO de fundação (bloco + estacas, 16/09/2026): quem
+   * chegou aqui foi por duplo clique. A linha diz de que bloco ela é e o botão
+   * devolve o grupo — onde mora a quantidade de estacas.
+   */
+  grupo?: { rotuloDoBloco: string; estacas: number; onEditarGrupo: () => void };
   /** Volume que esta peça divide com outro componente, em m³. `0` = nenhum. */
   sobreposicaoM3?: number;
   onCedeSobreposicao?: (cede: boolean) => void;
@@ -118,6 +124,7 @@ export default function PainelEstruturaSelecionada({
   onMedidas,
   onTipo,
   onExcluir,
+  grupo,
   sobreposicaoM3 = 0,
   onCedeSobreposicao,
   paredesParaCortar = 0,
@@ -165,6 +172,22 @@ export default function PainelEstruturaSelecionada({
           Excluir
         </button>
       </div>
+
+      {grupo && (
+        <p className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-600">
+          <span>
+            {estrutura.kind === 'ESTACA' ? 'Estaca do bloco' : 'Bloco'} <strong>{grupo.rotuloDoBloco}</strong> ·{' '}
+            {grupo.estacas} estaca{grupo.estacas === 1 ? '' : 's'}
+          </span>
+          <button
+            type="button"
+            onClick={grupo.onEditarGrupo}
+            className="rounded-[6px] border border-blue-300 bg-white px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-50"
+          >
+            Editar o grupo
+          </button>
+        </p>
+      )}
 
       {compativeis.length > 1 ? (
         <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-500">

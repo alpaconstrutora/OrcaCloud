@@ -14,13 +14,13 @@ import { sobreposicoesDoModelo } from '../utils/blueprintKernel/sobreposicao';
 import { HIPOTESES_PILARES_PADRAO, planejarPilares } from '../utils/blueprintPilaresAutomaticos';
 import {
   HIPOTESES_FUNDACOES_PADRAO,
-  comprimentoDoBlocoDeDuas,
   conferirPlanoDeFundacoes,
   ladoDoBloco,
   planejarFundacoes,
   relancarFundacoes,
   type HipotesesDeFundacoes,
 } from '../utils/blueprintFundacoesAutomaticas';
+import { arranjoDeEstacas, dimensoesDoBloco } from '../utils/blueprintGrupoDeFundacao';
 
 function parede(levelId: ObjectId, x1: number, y1: number, x2: number, y2: number, thicknessMm = 150): Command {
   return { type: 'AddWall', levelId, a: { x: x1, y: y1 }, b: { x: x2, y: y2 }, thicknessMm, heightMm: 2800 };
@@ -79,8 +79,27 @@ describe('planejarFundacoes — um bloco por pilar, estacas embaixo', () => {
     expect(ladoDoBloco(400, 190)).toBe(700);
     expect(ladoDoBloco(250, 500)).toBe(700);
     expect(ladoDoBloco(300, 420)).toBe(650); // 620 → 650
-    expect(comprimentoDoBlocoDeDuas(300)).toBe(1500);
-    expect(comprimentoDoBlocoDeDuas(400)).toBe(1900);
+    // O bloco de duas estacas (4Ø + 30) sai do arranjo — ver blueprintGrupoDeFundacao.
+    expect(dimensoesDoBloco(arranjoDeEstacas(2, 300).offsets, 300, null).larguraMm).toBe(1500);
+    expect(dimensoesDoBloco(arranjoDeEstacas(2, 400).offsets, 400, null).larguraMm).toBe(1900);
+  });
+
+  it('TRÊS estacas por bloco (16/09/2026): triângulo com centro de carga no pilar, 3Ø entre eixos, bloco envolvente 150 × 140', () => {
+    const { m, t } = casa();
+    const plano = fundar(m, t, { estacasPorBloco: 3 });
+    expect(plano.estacas).toHaveLength(27);
+    for (const b of plano.blocos) {
+      expect(b.estacas).toHaveLength(3);
+      expect(b).toMatchObject({ larguraMm: 1500, profundidadeMm: 1400 });
+      const cx = b.estacas.reduce((s, e) => s + e.at.x, 0) / 3;
+      const cy = b.estacas.reduce((s, e) => s + e.at.y, 0) / 3;
+      expect(Math.abs(cx - b.at.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(cy - b.at.y)).toBeLessThanOrEqual(1);
+      for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) {
+        expect(Math.hypot(b.estacas[i].at.x - b.estacas[j].at.x, b.estacas[i].at.y - b.estacas[j].at.y)).toBeGreaterThanOrEqual(898);
+      }
+    }
+    expect(conferirPlanoDeFundacoes(m, plano)).toEqual({ ok: true });
   });
 
   it('duas estacas: bloco 150 × 60 ao longo do eixo do pilar, estacas a ±45 cm — pilar a 90° alonga em y', () => {

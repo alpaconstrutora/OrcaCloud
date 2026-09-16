@@ -18,6 +18,7 @@ import {
   proximoNumeroDoRotulo,
 } from './blueprintPilaresAutomaticos';
 import { cadeiaJaTemViga, pontasDaCadeia, recuarAteAFaceDoPilar } from './blueprintVigasLajesAutomaticas';
+import { QUANTIDADE_MAXIMA_DE_ESTACAS, arranjoDeEstacas, dimensoesDoBloco, nomeDoArranjo, posicionarEstacas } from './blueprintGrupoDeFundacao';
 
 /**
  * LANÇAMENTO AUTOMÁTICO DE FUNDAÇÕES — blocos de coroamento e estacas (16/09/2026).
@@ -66,7 +67,8 @@ import { cadeiaJaTemViga, pontasDaCadeia, recuarAteAFaceDoPilar } from './bluepr
  */
 
 export interface HipotesesDeFundacoes {
-  estacasPorBloco: 1 | 2;
+  /** 1 a 12 — arranjo pelo critério de distribuição (`blueprintGrupoDeFundacao`). */
+  estacasPorBloco: number;
   diametroDaEstacaMm: number;
   comprimentoDaEstacaMm: number;
   alturaDoBlocoMm: number;
@@ -106,29 +108,20 @@ export const HIPOTESES_FUNDACOES_PADRAO: HipotesesDeFundacoes = {
   alturaDoBlocoMm: 600,
   arrasamentoMm: 500,
 };
-export const ESTACAS_POR_BLOCO = [1, 2] as const;
+export const ESTACAS_POR_BLOCO: readonly number[] = Array.from({ length: QUANTIDADE_MAXIMA_DE_ESTACAS }, (_, i) => i + 1);
+export { nomeDoArranjo };
 export const DIAMETROS_DE_ESTACA = [250, 300, 400] as const;
 export const COMPRIMENTOS_DE_ESTACA = [6000, 8000, 10000, 12000] as const;
 export const ALTURAS_DE_BLOCO = [400, 500, 600, 800] as const;
 export const ARRASAMENTOS = [300, 500, 800] as const;
 
-/** Folga do bloco além da estaca (15 cm por lado) e além do pilar (10 cm por lado). */
-const FOLGA_DA_ESTACA_MM = 300;
-const FOLGA_DO_PILAR_MM = 200;
-/** Espaçamento entre estacas de um bloco, em diâmetros. */
-const ESPACAMENTO_EM_DIAMETROS = 3;
-const PASSO_MM = 50;
-
-const arred5 = (mm: number) => Math.ceil(mm / PASSO_MM) * PASSO_MM;
-
-/** Lado (transversal) do bloco: o maior entre Ø + 30 cm e lado do pilar + 20 cm, a cada 5 cm. */
+/**
+ * Lado do bloco de UMA estaca sob um pilar de lado `ladoMaiorDoPilarMm`: o
+ * maior entre Ø + 30 cm e pilar + 20 cm, a cada 5 cm — o caso n = 1 de
+ * `dimensoesDoBloco`, mantido pelo nome.
+ */
 export function ladoDoBloco(diametroMm: number, ladoMaiorDoPilarMm: number): number {
-  return arred5(Math.max(diametroMm + FOLGA_DA_ESTACA_MM, ladoMaiorDoPilarMm + FOLGA_DO_PILAR_MM));
-}
-
-/** Comprimento do bloco de duas estacas, ao longo do eixo do pilar: 3Ø entre eixos + Ø + folgas. */
-export function comprimentoDoBlocoDeDuas(diametroMm: number): number {
-  return arred5(ESPACAMENTO_EM_DIAMETROS * diametroMm + diametroMm + FOLGA_DA_ESTACA_MM);
+  return dimensoesDoBloco([{ x: 0, y: 0 }], diametroMm, { larguraMm: ladoMaiorDoPilarMm, profundidadeMm: ladoMaiorDoPilarMm, circular: false }).larguraMm;
 }
 
 export interface EstacaPrevista {
@@ -235,7 +228,10 @@ export function planejarFundacoes(
   const comprimento = Math.max(1000, Math.round(hip.comprimentoDaEstacaMm));
   const hBloco = Math.max(200, Math.round(hip.alturaDoBlocoMm));
   const arrasamento = Math.max(0, Math.round(hip.arrasamentoMm));
-  const duas = hip.estacasPorBloco === 2;
+  const porBloco = Math.max(1, Math.min(QUANTIDADE_MAXIMA_DE_ESTACAS, Math.round(hip.estacasPorBloco)));
+  // O arranjo é o mesmo para todos os blocos: centro de carga no pilar, 3Ø, simétrico.
+  const arranjo = arranjoDeEstacas(porBloco, diametro);
+  if (arranjo.aviso) avisos.push(arranjo.aviso);
   const baseDoBloco = -(arrasamento + hBloco);
   const baseDaEstaca = baseDoBloco - comprimento;
 
@@ -249,19 +245,13 @@ export function planejarFundacoes(
       pilaresComBloco++;
       continue;
     }
-    const ladoMaior = Math.max(p.larguraMm, p.circular ? p.larguraMm : p.profundidadeMm);
-    const lb = ladoDoBloco(diametro, ladoMaior);
-    const lc = duas ? Math.max(lb, comprimentoDoBlocoDeDuas(diametro)) : lb;
-    const rad = (p.rotacaoDeg * Math.PI) / 180;
-    const u = { x: Math.cos(rad), y: Math.sin(rad) };
-    const meio = (ESPACAMENTO_EM_DIAMETROS * diametro) / 2;
-    const estacas = (duas
-      ? [
-          { x: Math.round(centro.x - u.x * meio), y: Math.round(centro.y - u.y * meio) },
-          { x: Math.round(centro.x + u.x * meio), y: Math.round(centro.y + u.y * meio) },
-        ]
-      : [{ x: centro.x, y: centro.y }]
-    ).map((at) => ({ at, diametroMm: diametro, comprimentoMm: comprimento, baseMm: baseDaEstaca }));
+    const { larguraMm: lc, profundidadeMm: lb } = dimensoesDoBloco(arranjo.offsets, diametro, p);
+    const estacas = posicionarEstacas(centro, p.rotacaoDeg, arranjo.offsets).map((at) => ({
+      at,
+      diametroMm: diametro,
+      comprimentoMm: comprimento,
+      baseMm: baseDaEstaca,
+    }));
     // Dois pilares mais perto que um bloco: os blocos se sobrepõem — avisado, não impedido.
     const vizinho = pilares.find((q) => q !== p && dist(q.pontos[0], centro) < Math.max(lb, lc));
     candidatos.push({

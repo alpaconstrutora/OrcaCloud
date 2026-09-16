@@ -13,7 +13,7 @@
  * outro.
  */
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import PainelComponentes from '../../components/blueprint/PainelComponentes';
@@ -178,6 +178,44 @@ describe('PainelComponentes', () => {
     });
     await usuario.click(screen.getByRole('button', { name: 'Ocultar Pilar no desenho' }));
     expect(onAlternarOculto).toHaveBeenCalledWith(['str_1', 'str_4'], true);
+  });
+
+  // ── Grupo de fundação (16/09/2026): a estaca aninhada no bloco ──────────
+  const bloco = (id: string, x = 0): Structural => ({
+    id, levelId: 'lvl_1', kind: 'BLOCO_COROAMENTO', pontos: [point(x, 0)],
+    larguraMm: 1500, profundidadeMm: 600, alturaMm: 600, baseMm: -1100, circular: false, rotacaoDeg: 0, rotulo: id === 'str_b1' ? 'B1' : 'B2',
+  });
+  const estaca = (id: string, x: number, rotulo: string): Structural => ({
+    id, levelId: 'lvl_1', kind: 'ESTACA', pontos: [point(x, 0)],
+    larguraMm: 300, profundidadeMm: 300, alturaMm: 8000, baseMm: -9100, circular: true, rotacaoDeg: 0, rotulo,
+  });
+
+  it('as estacas aparecem DENTRO do bloco delas; "Estaca" só lista as órfãs; o olho de "Bloco" leva as estacas', async () => {
+    const onAlternarOculto = vi.fn();
+    montar({
+      estruturas: [bloco('str_b1'), estaca('str_e1', -450, 'E1'), estaca('str_e2', 450, 'E2'), estaca('str_e9', 9000, 'E9')],
+      ocultos: new Set<string>(),
+      onAlternarOculto,
+    });
+    const linhaBloco = screen.getByRole('button', { name: /^B1 · Bloco de coroamento/ }).closest('li')!;
+    // E1 e E2 estão aninhadas no <li> do bloco; E9 não.
+    expect(within(linhaBloco).getByRole('button', { name: /^E1 · Estaca/ })).toBeInTheDocument();
+    expect(within(linhaBloco).getByRole('button', { name: /^E2 · Estaca/ })).toBeInTheDocument();
+    expect(within(linhaBloco).queryByRole('button', { name: /^E9 · Estaca/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Estaca: 1 peça' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bloco de coroamento: 1 peça' })).toBeInTheDocument();
+    const usuario = userEvent.setup();
+    await usuario.click(screen.getByRole('button', { name: 'Ocultar Bloco de coroamento no desenho' }));
+    expect(onAlternarOculto).toHaveBeenCalledWith(['str_b1', 'str_e1', 'str_e2'], true);
+  });
+
+  it('duplo clique na linha chama onSelecionarPeca; clique simples segue por onSelecionar', async () => {
+    const onSelecionarPeca = vi.fn();
+    const props = montar({ estruturas: [bloco('str_b1'), estaca('str_e1', 0, 'E1')], onSelecionarPeca });
+    const usuario = userEvent.setup();
+    await usuario.dblClick(screen.getByRole('button', { name: /^E1 · Estaca/ }));
+    expect(onSelecionarPeca).toHaveBeenCalledWith('str_e1');
+    expect(props.onSelecionar).toHaveBeenCalledWith(['str_e1']);
   });
 
   it('as propriedades da peça vêm ANTES da lista', () => {

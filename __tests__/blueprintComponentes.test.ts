@@ -163,6 +163,25 @@ describe('componentes · 3. a medida que identifica cada família', () => {
     // A cota é o que distingue a peça de fundação — e por isso ela aparece
     // aqui, mas não numa peça assentada no piso do pavimento.
     expect(linha.detalhe).toContain('cota -9,10 m');
+    // Sem bloco por cima, a estaca é órfã: sem `paiId`.
+    expect(linha.paiId).toBeUndefined();
+  });
+
+  it('estaca dentro do bloco de coroamento é PARTE dele: `paiId` (16/09/2026)', () => {
+    const base = comNivel();
+    const t = base.levels[0].id;
+    const m = applyBatch(base, [
+      { type: 'AddStructural', levelId: t, kind: 'BLOCO_COROAMENTO', pontos: [{ x: 0, y: 0 }], larguraMm: 1500, profundidadeMm: 600, alturaMm: 600, baseMm: -1100, rotulo: 'B1' },
+      { type: 'AddStructural', levelId: t, kind: 'ESTACA', pontos: [{ x: -450, y: 0 }], larguraMm: 300, profundidadeMm: 300, alturaMm: 8000, baseMm: -9100, circular: true, rotulo: 'E1' },
+      { type: 'AddStructural', levelId: t, kind: 'ESTACA', pontos: [{ x: 450, y: 0 }], larguraMm: 300, profundidadeMm: 300, alturaMm: 8000, baseMm: -9100, circular: true, rotulo: 'E2' },
+      { type: 'AddStructural', levelId: t, kind: 'ESTACA', pontos: [{ x: 5000, y: 5000 }], larguraMm: 300, profundidadeMm: 300, alturaMm: 8000, baseMm: -9100, circular: true, rotulo: 'E3' },
+    ] as Command[]).model;
+    const linhas = inventario(m);
+    const bloco = linhas.find((l) => l.chave === 'BLOCO_COROAMENTO')!;
+    expect(linhas.find((l) => l.rotulo.startsWith('E1'))?.paiId).toBe(bloco.id);
+    expect(linhas.find((l) => l.rotulo.startsWith('E2'))?.paiId).toBe(bloco.id);
+    expect(linhas.find((l) => l.rotulo.startsWith('E3'))?.paiId).toBeUndefined();
+    expect(bloco.paiId).toBeUndefined();
   });
 });
 

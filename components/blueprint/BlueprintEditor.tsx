@@ -790,10 +790,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * fluxo (título + botão Voltar, sidebar e casca visíveis), no lugar do
    * editor, que fica montado mas escondido — zoom, seleção e histórico
    * sobrevivem ao ir e voltar. Nada de `fixed inset-0`, nada de Sheet.
-   * "Projeto executivo (ART)" continua em drawer: é um formulário curto.
+   * "Projeto executivo (ART)" foi junto em 15/09/2026 ("transformar drawer
+   * Projeto executivo elétrico (ART) também em tela"): a lista de verificações
+   * e as emissões anteriores são leitura longa, não um formulário curto.
    */
-  const [telaAberta, setTelaAberta] = useState<'quadro-de-cargas' | 'unifilar' | null>(null);
-  const alternarTela = (id: 'quadro-de-cargas' | 'unifilar') => setTelaAberta((t) => (t === id ? null : id));
+  const [telaAberta, setTelaAberta] = useState<TelaDaEletrica | null>(null);
+  const alternarTela = (id: TelaDaEletrica) => setTelaAberta((t) => (t === id ? null : id));
   const tarefaAberta = emVista ? null : tarefa;
   /**
    * MODO TELA CHEIA (14/09/2026, pedido: *"Modo tela cheia"*). O editor sai do
@@ -873,8 +875,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * fica só com Comentários e Versões (Colaborar), que se leem olhando o
    * desenho ao lado.
    */
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
-    'executivo-eletrico',
     'conflitos',
     'medicoes',
     'quantitativos',
@@ -4833,6 +4835,33 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           </div>
         </div>
       )}
+      {telaAberta === 'executivo-eletrico' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="executivo-eletrico">
+          {cabecalhoDaTela(
+            RELATORIOS_DO_DOCK['executivo-eletrico'].rotulo,
+            'A emissão é do responsável técnico. O programa reúne a conferência NBR 5410 e o pré-dimensionamento de cada circuito e quadro, registra a emissão e a amarra ao hash do desenho e das hipóteses.',
+            FileText,
+          )}
+          <div className="rounded-[6px] border border-gray-200 bg-white p-5">
+            <PainelEletricaExecutivo
+              semCabecalho
+              e={{
+                responsavel: executivoEletrico.responsavel,
+                onResponsavel: executivoEletrico.setResponsavel,
+                resultado: resultadoEletrico,
+                emitidos: executivoEletrico.emitidos,
+                emissaoValida: emissaoEletricaValida,
+                hashDaBaseAtual: hashEletrico.base,
+                onEmitir: () => void emitirEletrico(),
+                emitindo: executivoEletrico.emitindo,
+                erro: executivoEletrico.erro,
+                onBaixarMemorial: (row) => executivoEletrico.baixarMemorial(row, study.name),
+                persistenciaIndisponivel: executivoEletrico.persistenciaIndisponivel,
+              }}
+            />
+          </div>
+        </div>
+      )}
     <div
       className={`flex h-full flex-col bg-slate-50 ${telaCheia ? 'fixed inset-0 z-40' : ''}`}
       data-tela-cheia={telaCheia ? '' : undefined}
@@ -5179,8 +5208,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 icone={FileText}
                 rotulo="Projeto executivo (ART)"
                 contagem={executivoEletrico.emitidos.length || undefined}
-                ativo={relatorioAberto === 'executivo-eletrico'}
-                onClick={() => alternarRelatorio('executivo-eletrico')}
+                ativo={telaAberta === 'executivo-eletrico'}
+                onClick={() => alternarTela('executivo-eletrico')}
                 ajuda="Responsável técnico, ART, verificações e emissão do projeto executivo elétrico — separado do quadro de cargas porque se emite uma vez por revisão"
               />
               <BotaoDoRibbon
@@ -7785,7 +7814,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         <SheetHeader onClose={() => setRelatorio(null)}>
           <SheetTitle>
             <span className="flex items-center gap-2">
-              {relatorioNoDrawer === 'executivo-eletrico' && <FileText className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'conflitos' && <AlertTriangle className="h-5 w-5 text-amber-600" />}
               {relatorioNoDrawer === 'medicoes' && <Ruler className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'quantitativos' && <Table2 className="h-5 w-5 text-blue-700" />}
@@ -7804,8 +7832,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             </span>
           </SheetTitle>
           <SheetDescription>
-            {relatorioNoDrawer === 'executivo-eletrico' &&
-              'A emissão é do responsável técnico. O programa reúne a conferência NBR 5410 e o pré-dimensionamento de cada circuito e quadro, registra a emissão e a amarra ao hash do desenho e das hipóteses.'}
             {relatorioNoDrawer === 'conflitos' &&
               'Interferências entre instalações e com a estrutura, e entre disciplinas. Clicar num conflito seleciona as peças no desenho; exporte em BCF para o projetista.'}
             {relatorioNoDrawer === 'medicoes' &&
@@ -7874,27 +7900,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               dirty={editor.dirtySincePublish}
               onPrevia={setPreviaOrcamento}
             />
-          )}
-
-          {relatorioNoDrawer === 'executivo-eletrico' && (
-            <div className="px-4 py-3">
-              <PainelEletricaExecutivo
-                semCabecalho
-                e={{
-                  responsavel: executivoEletrico.responsavel,
-                  onResponsavel: executivoEletrico.setResponsavel,
-                  resultado: resultadoEletrico,
-                  emitidos: executivoEletrico.emitidos,
-                  emissaoValida: emissaoEletricaValida,
-                  hashDaBaseAtual: hashEletrico.base,
-                  onEmitir: () => void emitirEletrico(),
-                  emitindo: executivoEletrico.emitindo,
-                  erro: executivoEletrico.erro,
-                  onBaixarMemorial: (row) => executivoEletrico.baixarMemorial(row, study.name),
-                  persistenciaIndisponivel: executivoEletrico.persistenciaIndisponivel,
-                }}
-              />
-            </div>
           )}
 
         </SheetPanel>

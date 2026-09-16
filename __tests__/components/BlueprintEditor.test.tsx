@@ -1187,18 +1187,26 @@ describe('BlueprintEditor · ribbon', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: /^excluir .*tug/i })).not.toBeInTheDocument());
   });
 
-  it('"Projeto executivo (ART)" tem botão e drawer próprios em Instalações', async () => {
+  it('"Projeto executivo (ART)" tem botão e TELA próprios em Instalações — sem drawer', async () => {
+    // 15/09/2026: "transformar drawer Projeto executivo elétrico (ART) também em tela".
     await montar();
     await abrirAba(/^instalações$/i);
     await userEvent.setup().click(botao(/^projeto executivo \(art\)/i));
-    const drawer = await screen.findByRole('dialog');
-    expect(drawer).toHaveTextContent(/projeto executivo elétrico \(art\)/i);
-    expect(drawer).toHaveTextContent(/responsável técnico/i);
+    const titulo = await screen.findByRole('heading', { level: 1, name: /projeto executivo elétrico \(art\)/i });
+    const tela = titulo.closest('[data-tela="executivo-eletrico"]') as HTMLElement;
+    expect(tela).not.toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(tela).toHaveTextContent(/responsável técnico/i);
     // Sem a tabela do quadro de cargas: aqui só a emissão (as regras da 5410
     // aparecem como VERIFICAÇÕES da emissão, o que é outra coisa).
-    expect(within(drawer).queryByLabelText(/nome do circuito/i)).toBeNull();
-    expect(drawer).not.toHaveTextContent(/nenhum quadro de distribuição ainda/i);
-    expect(botao(/^projeto executivo \(art\)/i)).toHaveAttribute('aria-pressed', 'true');
+    expect(within(tela).queryByLabelText(/nome do circuito/i)).toBeNull();
+    expect(tela).not.toHaveTextContent(/nenhum quadro de distribuição ainda/i);
+    // O editor (e o ribbon) está escondido enquanto a tela está aberta — o botão
+    // segue aceso, mas fora da árvore acessível.
+    expect(screen.getByRole('button', { name: /^projeto executivo \(art\)/i, hidden: true })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.setup().click(within(tela).getByRole('button', { name: /^voltar ao editor$/i }));
+    expect(screen.getByRole('toolbar')).toBeInTheDocument();
+    expect(botao(/^projeto executivo \(art\)/i)).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('"Diagrama unifilar" (aba Instalações) abre uma TELA própria: sem quadro pede um; Voltar devolve o editor', async () => {

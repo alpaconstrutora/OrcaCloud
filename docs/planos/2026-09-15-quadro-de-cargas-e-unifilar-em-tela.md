@@ -52,3 +52,19 @@ nem superior própria; a raiz é `space-y-6 pb-20`"*). Raiz agora é
 `space-y-6 pb-20`, sem largura máxima nem fundo próprio. Medido no app: tela a
 24 px da borda do `<main>` (esquerda e topo) e com a largura útil inteira
 (1292 px em 1600 de viewport); a tabela cabe com a coluna Ações visível.
+
+## Extensão (15/09/2026, "transformar drawer Projeto executivo elétrico (ART) também em tela")
+
+O terceiro relatório elétrico segue o mesmo molde: `telaAberta` aceita
+`'executivo-eletrico'` (tipo `TelaDaEletrica`), o botão do ribbon abre a tela,
+o id sai de `RELATORIOS_EM_DRAWER` e o `PainelEletricaExecutivo` (com
+`semCabecalho`) vai para a tela `data-tela="executivo-eletrico"` — raiz
+`space-y-6 pb-20`, cabeçalho com Voltar. A lista de verificações e as emissões
+anteriores são leitura longa; no drawer o formulário do responsável ficava em
+coluna única. O drawer de relatórios agora só serve Analisar (conflitos,
+medições, quantitativos, orçamento).
+
+Prova no app (escritas bloqueadas, 0 erros JS): h1 fora de `role=dialog`, sem
+ancestral `fixed`, a 24 px do `<main>`, toolbar escondida enquanto aberta e de
+volta ao clicar em Voltar. Teste do editor adaptado (heading nível 1, botão do
+ribbon aceso via `hidden: true`, Voltar).

@@ -60,3 +60,21 @@ Minhas:
 
 - `npx tsc --noEmit` ✅ · suíte completa 324 arquivos / 4273 testes ✅ · `npm run build` ✅ · goldens intactos (sem bump).
 - App real (vite 3147, Playwright, escritas a `/rest/v1/**` abortadas — 17, 0 erros JS), estudo com 45 paredes + retângulo e interna desenhados: ribbon "Pilares automáticos 66"; gaveta com hipóteses, vão 5 m, seção 19×19; prévia com 66 linhas (P1 T · P2 canto …); rodapé "66 pilar(es) · 34 parede(s) cedem"; "Ver prévia no desenho" recolhe a gaveta e mostra os quadrados azuis tracejados nos cantos, Ts e ao longo das paredes longas; vão 6 m → 58 linhas; "Lançar 66 pilar(es)" → status verde, botão do ribbon zera, prévia vazia; UM Desfazer → 66 de novo. Capturas `out-pil/pil-01*.png`.
+
+## Relançar (16/09/2026)
+
+> caso o usuário queira alterar as dimensoes dos pilares ele precisa que o botão de relançar esteja sempre disponivel
+
+O pilar não tem marca de "automático" (decisão de 15/09: sem campo no kernel), então não há
+como apagar "só os que o lançamento pôs". O gesto é o do "Refazer" dos eletrodutos:
+`relancarPilares(model, levelId, hip)` apaga os pilares DO PAVIMENTO — inclusive os desenhados
+à mão, dito na confirmação — e lança de novo com as hipóteses atuais, num lote só
+(`DeleteStructural` × N + plano; os ids previstos seguem certos porque apagar não recua
+`seq.str`). Na gaveta, o botão **"Relançar N"** (âmbar) aparece sempre que o pavimento tem
+pilar, ao lado de "Lançar"; confirma via `useConfirm`; o beco "todos os encontros já têm
+pilar" passa a dizer como mudar seção/vão.
+
+Prova: unitários (+2: apaga 9, relança com 25×25, ids batem, rótulos P1…P9; sem pilar =
+lançar) e editor (+1: lança 4 → muda seção → "Relançar 4" → confirmação com "25 × 25 cm" →
+status → Desfazer). App real: "Relançar 68" com confirmação e status "68 apagado(s) e 68
+lançado(s) com 25 × 25 cm".

@@ -28,6 +28,7 @@ import {
   pegadaDoPilarPrevisto,
   planejarPilares,
   proximoNumeroDePilar,
+  relancarPilares,
   type HipotesesDePilares,
 } from '../utils/blueprintPilaresAutomaticos';
 
@@ -338,6 +339,35 @@ describe('planejarPilares — o lote', () => {
     const denovo = planejar(depois, t);
     expect(denovo.pilares).toHaveLength(0);
     expect(denovo.motivo).toBe('todos os encontros já têm pilar');
+  });
+
+  it('relançar: apaga os pilares do pavimento (inclusive manuais) e lança de novo com a seção nova, num lote só', () => {
+    const { m, t } = casa();
+    const lancado = applyBatch(m, planejar(m, t).comandos).model;
+    expect(lancado.structures).toHaveLength(9); // P3 manual + 8 lançados
+    expect(planejar(lancado, t).pilares).toHaveLength(0); // "Lançar" não tem mais o que fazer…
+    const re = relancarPilares(lancado, t, { ...HIP, larguraMm: 250, profundidadeMm: 250 });
+    // …mas relançar sempre tem: apaga os 9 e propõe os encontros de novo, com 25×25.
+    expect(re.apagados).toHaveLength(9);
+    expect(re.pilares.length).toBeGreaterThan(0);
+    expect(re.pilares.every((p) => p.larguraMm === 250 && p.profundidadeMm === 250)).toBe(true);
+    const tipos = re.comandos.map((c) => c.type);
+    expect(tipos.slice(0, 9).every((x) => x === 'DeleteStructural')).toBe(true);
+    expect(tipos.lastIndexOf('AddStructural')).toBeLessThan(tipos.indexOf('SetCedeSobreposicao') === -1 ? Infinity : tipos.indexOf('SetCedeSobreposicao'));
+    // Os ids previstos seguem valendo (apagar não recua o contador) e a prova passa.
+    expect(conferirPlanoDePilares(lancado, re)).toEqual({ ok: true });
+    const depois = applyBatch(lancado, re.comandos).model;
+    expect(depois.structures.every((s) => s.larguraMm === 250)).toBe(true);
+    // Sem o P3 manual em (0,0), o canto (0,0) também ganhou pilar: 9 posições.
+    expect(depois.structures).toHaveLength(9);
+    expect(depois.structures.map((s) => s.rotulo)).toEqual(['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9']);
+  });
+
+  it('relançar sem pilar no pavimento é o mesmo que lançar', () => {
+    const { m, t } = casa({ existente: false });
+    const re = relancarPilares(m, t);
+    expect(re.apagados).toEqual([]);
+    expect(re.comandos).toEqual(planejar(m, t).comandos);
   });
 
   it('paredes que já cedem não entram de novo no lote', () => {

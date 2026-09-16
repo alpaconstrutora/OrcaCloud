@@ -155,7 +155,9 @@ import {
   SECOES_SUGERIDAS,
   VAOS_MAXIMOS,
   conferirPlanoDePilares,
+  pilaresExistentesNoNivel,
   planejarPilares,
+  relancarPilares,
   type HipotesesDePilares,
   type SecaoSugeridaId,
 } from '../../utils/blueprintPilaresAutomaticos';
@@ -4511,6 +4513,38 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     });
   };
   const peDireitoDoNivelAtivo = editor.model.levels.find((l) => l.id === levelId)?.defaultHeightMm ?? null;
+  /**
+   * RELANÇAR (16/09/2026): mudou a seção ou o vão depois de lançar? O pilar não
+   * tem marca de "automático", então relançar é apagar os pilares do pavimento
+   * e lançar de novo — dito na confirmação, um lote só, Ctrl+Z devolve tudo.
+   */
+  const pilaresNoNivel = levelId ? pilaresExistentesNoNivel(editor.model, levelId).length : 0;
+  const planoDeRelancamento = useMemo(
+    () => (levelId && pilaresNoNivel > 0 ? relancarPilares(editor.model, levelId, hipotesesDePilares) : null),
+    [editor.model, levelId, hipotesesDePilares, pilaresNoNivel],
+  );
+  const relancarPilaresDoNivel = async () => {
+    if (!planoDeRelancamento || planoDeRelancamento.comandos.length === 0) return;
+    const secao = `${hipotesesDePilares.larguraMm / 10} × ${hipotesesDePilares.profundidadeMm / 10} cm`;
+    const ok = await confirmar({
+      title: `Relançar os pilares deste pavimento?`,
+      message: `Apaga os ${planoDeRelancamento.apagados.length} pilar(es) do pavimento — inclusive os desenhados à mão — e lança ${planoDeRelancamento.pilares.length} de novo com as hipóteses atuais (${secao}, vão de ${hipotesesDePilares.vaoMaximoMm / 1000} m). Ctrl+Z desfaz.`,
+      confirmLabel: 'Relançar',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    const prova = conferirPlanoDePilares(editor.model, planoDeRelancamento);
+    if (!prova.ok) {
+      setResultadoDePilares({ ok: false, texto: `Nada foi relançado: ${prova.motivo}` });
+      return;
+    }
+    const criados = editor.runBatch(planoDeRelancamento.comandos);
+    if (criados.length > 0) selecionar(criados);
+    setResultadoDePilares({
+      ok: true,
+      texto: `${planoDeRelancamento.apagados.length} pilar(es) apagado(s) e ${planoDeRelancamento.pilares.length} lançado(s) com ${secao} — Ctrl+Z desfaz.`,
+    });
+  };
 
   /** O que está selecionado, para rodapé de drawer: a peça, ou "N selecionados". */
   const rotuloDaSelecao =
@@ -7671,7 +7705,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   {planoDePilares.motivo === 'sem parede no pavimento'
                     ? 'Desenhe paredes neste pavimento — o pilar nasce no encontro delas.'
                     : planoDePilares.motivo === 'todos os encontros já têm pilar'
-                      ? 'Todos os encontros de paredes já têm pilar.'
+                      ? 'Todos os encontros de paredes já têm pilar. Para mudar a seção ou o vão, ajuste as hipóteses e use Relançar.'
                       : `Nada a lançar: ${planoDePilares.motivo}.`}
                 </p>
               ) : (
@@ -8072,6 +8106,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   ? 'Nada a lançar.'
                   : `${planoDePilares.pilares.length} pilar(es) · ${planoDePilares.paredesQueCedem.length} parede(s) cedem.`}
               </span>
+              {planoDeRelancamento && (
+                <button
+                  type="button"
+                  onClick={() => void relancarPilaresDoNivel()}
+                  disabled={planoDeRelancamento.comandos.length === 0}
+                  title="Apaga os pilares deste pavimento e lança de novo com a seção e o vão atuais — confirma antes; Ctrl+Z desfaz"
+                  className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-amber-300 bg-white px-3.5 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Relançar {planoDeRelancamento.pilares.length}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={lancarPilares}

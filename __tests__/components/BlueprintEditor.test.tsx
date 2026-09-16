@@ -1191,6 +1191,41 @@ describe('BlueprintEditor · ribbon', () => {
     expect(botao(/^pilares automáticos/i)).toHaveTextContent('9');
   });
 
+  it('depois de lançar, "Relançar" fica disponível: mudar a seção, confirmar, e os pilares nascem de novo com ela; um Desfazer volta', async () => {
+    // 16/09/2026: "caso o usuário queira alterar as dimensões dos pilares ele
+    // precisa que o botão de relançar esteja sempre disponível".
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) =>
+      ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    const m = k.applyBatch(nivel.model, [w(0, 0, 4000, 0), w(4000, 0, 4000, 3000), w(4000, 3000, 0, 3000), w(0, 3000, 0, 0)]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    await abrirAba(/^arquitetura$/i);
+    await userEvent.setup().click(botao(/^pilares automáticos/i));
+    const drawer = await screen.findByRole('dialog');
+    // Antes de lançar não há o que relançar.
+    expect(within(drawer).queryByRole('button', { name: /^relançar/i })).toBeNull();
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^lançar 4 pilar/i }));
+    expect(drawer).toHaveTextContent(/todos os encontros de paredes já têm pilar/i);
+    expect(within(drawer).getByRole('button', { name: /^lançar 0 pilar/i })).toBeDisabled();
+    // Mudou a seção: "Relançar 4" está lá, pede confirmação e regrava.
+    await userEvent.selectOptions(within(drawer).getByRole('combobox', { name: /seção do pilar/i }), '250x250');
+    const relancar = within(drawer).getByRole('button', { name: /^relançar 4/i });
+    expect(relancar).toBeEnabled();
+    await userEvent.setup().click(relancar);
+    const confirmacao = await screen.findByText(/apaga os 4 pilar\(es\) do pavimento/i);
+    expect(confirmacao).toHaveTextContent(/25 × 25 cm/);
+    await userEvent.setup().click(screen.getByRole('button', { name: /^relançar$/i }));
+    expect(drawer).toHaveTextContent(/4 pilar\(es\) apagado\(s\) e 4 lançado\(s\) com 25 × 25 cm/i);
+    // UM desfazer devolve os 19×19 (e "Relançar" continua disponível).
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^fechar$/i }));
+    await userEvent.setup().click(botao(/^desfazer/i));
+    await userEvent.setup().click(botao(/^pilares automáticos/i));
+    expect(await screen.findByRole('dialog')).toHaveTextContent(/todos os encontros de paredes já têm pilar/i);
+  });
+
   it('vão máximo e seção escolhidos persistem em localStorage e mudam a prévia', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });

@@ -734,6 +734,35 @@ export function planejarPilares(
 }
 
 /**
+ * RELANÇAR (16/09/2026, pedido: *"caso o usuário queira alterar as dimensões
+ * dos pilares ele precisa que o botão de relançar esteja sempre disponível"*).
+ *
+ * O pilar não carrega marca de "automático" (decisão de 15/09: sem campo no
+ * kernel), então não há como apagar "só os que o lançamento pôs". O que existe
+ * é o mesmo gesto do "Refazer" dos eletrodutos: apagar os pilares DO PAVIMENTO
+ * — inclusive os desenhados à mão, dito na confirmação — e lançar de novo com
+ * as hipóteses atuais (seção, vão, internas). Um lote só: `DeleteStructural`
+ * dos existentes e depois o plano; Ctrl+Z devolve tudo.
+ *
+ * Os ids previstos continuam certos: apagar não recua `model.seq.str`.
+ */
+export function relancarPilares(
+  model: BlueprintModel,
+  levelId: ObjectId,
+  hip: HipotesesDePilares = HIPOTESES_PILARES_PADRAO,
+): PlanoDePilares & { apagados: ObjectId[] } {
+  const apagados = pilaresExistentesNoNivel(model, levelId).map((s) => s.id);
+  if (apagados.length === 0) return { ...planejarPilares(model, levelId, hip), apagados };
+  const semPilares: BlueprintModel = {
+    ...model,
+    structures: (model.structures ?? []).filter((s) => !apagados.includes(s.id)),
+  };
+  const plano = planejarPilares(semPilares, levelId, hip);
+  const deletes: Command[] = apagados.map((structuralId) => ({ type: 'DeleteStructural', structuralId }));
+  return { ...plano, comandos: plano.comandos.length > 0 ? [...deletes, ...plano.comandos] : [], apagados };
+}
+
+/**
  * Prova, antes de gravar, que o lote faz o que a prévia diz: os ids criados
  * são os previstos, na ordem, e cada parede do lote passou a ceder.
  */

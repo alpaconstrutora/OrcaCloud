@@ -7178,12 +7178,13 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 selecionados={editor.selectedIds}
                 onSelecionar={selecionar}
                 onExcluir={excluirComponente}
-                // No 3D a lista troca de fonte (os pavimentos empilhados) e é
-                // só leitura; o olho vale nas duas vistas (16/09/2026).
+                // No 3D a lista troca de fonte (os pavimentos empilhados); o olho
+                // vale nas duas vistas, e desde 16/09/2026 a linha também
+                // SELECIONA no 3D — a peça acende na cena e as propriedades
+                // abrem embaixo, como na planta.
                 blocos={em3d ? componentesDo3d : undefined}
                 ocultos={ocultosNoDesenho}
                 onAlternarOculto={alternarOcultoNoDesenho}
-                somenteLeitura={em3d}
               />
             </SecaoAccordion>
           )}
@@ -7483,12 +7484,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           </div>
 
           {/* ─── PROPRIEDADES OU TAREFA ───────────────────────────────────────
-              A metade de baixo. Só na planta (no 3D não se edita nem se
-              importa). Tarefa aberta vence; a seleção continua anunciada na
+              A metade de baixo. Na planta e no 3D (16/09/2026: *"ao clicar em
+              um componente estrutural é possível editá-lo no painel lateral,
+              porém não consigo fazer o mesmo no modo de visualização em 3D"*) —
+              a seleção do 3D é a MESMA da planta (`selecionar`), e os painéis
+              de propriedades só dependem do modelo, então o que se edita aqui
+              muda a cena na hora. Elevação e corte seguem sem (não há clique em
+              peça ali). Tarefa aberta vence; a seleção continua anunciada na
               faixa azul do cabeçalho, com o caminho de volta. Sem tarefa e sem
               seleção, a metade não existe — o navegador fica com o painel
               inteiro, como antes. */}
-          {!emVista && editor.selectedIds.length > 0 && (
+          {(!emVista || em3d) && editor.selectedIds.length > 0 && (
             <div className="flex max-h-[62%] shrink-0 flex-col border-t-2 border-slate-200">
                 <PainelDeTarefa titulo="Propriedades" subtitulo={rotuloDoSelecionado}>
                   {editor.selectedIds.length > 1 ? (

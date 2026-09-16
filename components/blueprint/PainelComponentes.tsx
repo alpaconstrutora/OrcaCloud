@@ -59,10 +59,10 @@ import { ORDEM_DOS_GRUPOS, fichaDoComponente } from './MenuComponentes';
  * - **planta baixa** — `paredes`/`aberturas`/`estruturas` do pavimento ativo.
  *   Lista clicável (seleciona no canvas), lixeira, painel de propriedades.
  * - **3D** — `blocos`, o inventário dos pavimentos EMPILHADOS na cena, com o
- *   olho de exibir/ocultar por peça e por família. É read-only: no 3D não há
- *   seleção no canvas nem destaque na cena, então um clique na linha não teria
- *   resposta nenhuma — o mesmo defeito que a seleção tinha quando morava atrás
- *   da aba "Ambientes".
+ *   olho de exibir/ocultar por peça e por família. Nasceu read-only porque o 3D
+ *   não tinha seleção; desde 16/09/2026 a cena seleciona e destaca, e o editor
+ *   abre as propriedades embaixo — então a linha volta a ser clicável ali
+ *   também (`somenteLeitura` fica para quem ainda não tiver resposta ao clique).
  */
 
 interface Props {
@@ -354,7 +354,8 @@ export default function PainelComponentes({
           ) : blocos ? (
             <>
               {totalDeLinhas} {totalDeLinhas === 1 ? 'peça' : 'peças'} nos pavimentos
-              visíveis. Use o olho para ocultar no desenho.
+              visíveis.{somenteLeitura ? '' : ' Clique para selecionar na cena;'}{' '}
+              {podeOcultar ? 'o olho oculta no desenho.' : ''}
             </>
           ) : (
             <>

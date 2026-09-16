@@ -54,3 +54,21 @@ painel (10) · suíte 328/4325 · tsc · build. App real na planta do usuário (
 0 erros JS): 184 olhos na planta; "Ocultar Pilar" + "Ocultar Viga" somem do desenho 2D (ficam
 blocos e baldrames tracejados) e o 3D abre sem pilares e vigas — mesmo conjunto. Capturas
 `out-oc/oc-0{1,2,3}-*.png`.
+
+## Propriedades também no 3D (16/09/2026)
+
+> No modo de visualização em planta ao clicar em um componente estrutural é possível editá-lo no painel lateral, porém não consigo fazer o mesmo no modo de visualização em 3d. Implemente
+
+A cena 3D já selecionava (clique na peça → `selecionar`, a mesma seleção da planta) e destacava
+em azul, mas a metade de baixo do painel (Propriedades) era gateada por `!emVista` e não abria.
+Agora abre na planta E no 3D (`(!emVista || em3d)`): os painéis de peça (estrutura, parede,
+escada, água, trecho, quadro…) só dependem do modelo, então editar largura, cota, rótulo ou
+"cede o volume" muda a cena na hora. A lista de Componentes no 3D deixou de ser só leitura: a
+linha seleciona (e a lixeira exclui), como na planta. Elevação e corte seguem sem propriedades —
+não há clique em peça ali.
+
+Prova: editor (+1, 93: no 3D, clicar "P1 · Pilar" na lista abre Propriedades; trocar o rótulo
+para P7 renomeia a linha) · suíte 328/4326 · tsc · build. App real na planta do usuário
+(escritas bloqueadas, 0 erros JS): pela lista, P3 acende na cena e "Propriedades C-340C · P3 ·
+Pilar · 0,185 m³" abre com Tipo/Seção/Largura/Profundidade/Altura/Cota/Rótulo; clique na cena
+numa parede abre "PAREDE SELECIONADA". Capturas `out-p3d/p3d-0{1,2}-*.png`.

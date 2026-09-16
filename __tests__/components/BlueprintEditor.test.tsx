@@ -1925,3 +1925,38 @@ describe('BlueprintEditor · ocultar componentes na planta baixa', () => {
     expect(screen.queryByRole('button', { name: /mostrar tudo/i })).toBeNull();
   });
 });
+
+/**
+ * EDITAR NO 3D (16/09/2026): *"No modo de visualização em planta ao clicar em um
+ * componente estrutural é possível editá-lo no painel lateral, porém não consigo
+ * fazer o mesmo no modo de visualização em 3D. Implemente"*. A cena é WebGL,
+ * opaca em jsdom; o caminho provável aqui é a lista de Componentes do 3D, que
+ * passa pelo MESMO `selecionar` que o clique na cena.
+ */
+describe('BlueprintEditor · propriedades no 3D', () => {
+  it('selecionar um pilar pela lista no 3D abre as propriedades e editar muda o modelo', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const m = k.applyBatch(nivel.model, [
+      { type: 'AddWall', levelId: t, a: k.point(0, 0), b: k.point(6000, 0), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(3000, 1500)], larguraMm: 200, profundidadeMm: 200, alturaMm: 2800 },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    localStorage.setItem('blueprint:vista', JSON.stringify('3d'));
+    await montar();
+    const user = userEvent.setup();
+    const secao = document.querySelector<HTMLButtonElement>('button[aria-controls="secao-componentes-corpo"]')!;
+    if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
+    // Antes: sem seleção, sem Propriedades.
+    expect(screen.queryByRole('region', { name: /propriedades/i })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
+    const props = await screen.findByRole('region', { name: /propriedades/i });
+    const rotulo = within(props).getByRole('textbox', { name: /rótulo da peça/i });
+    expect(rotulo).toBeInTheDocument();
+    await user.clear(rotulo);
+    await user.type(rotulo, 'P7');
+    await user.tab();
+    expect(await screen.findByRole('button', { name: /^P7 · Pilar/ })).toBeInTheDocument();
+  });
+});

@@ -215,6 +215,29 @@ describe('planejarFundacoes — a viga baldrame', () => {
     expect(r.spaces.map((s) => s.areaMm2).sort()).toEqual(m.spaces.map((s) => s.areaMm2).sort());
   });
 
+  it('NO NÍVEL DO BLOCO: topo no arrasamento, desce a altura escolhida, vai até o eixo (entra no bloco) e cede', () => {
+    const { m, t } = casa();
+    const plano = fundar(m, t, { posicaoDaBaldrame: 'NO_NIVEL_DO_BLOCO', alturaDaBaldrameMm: 400 });
+    expect(plano.baldrames).toHaveLength(5);
+    for (const v of plano.baldrames) expect(v).toMatchObject({ larguraMm: 150, alturaMm: 400, baseMm: -900 });
+    // Sem recuo: a de baixo vai de (0,0) a (6000,0), morrendo dentro dos blocos de canto.
+    const baixo = plano.baldrames.find((v) => v.a.y === 0 && v.b.y === 0)!;
+    expect([Math.min(baixo.a.x, baixo.b.x), Math.max(baixo.a.x, baixo.b.x)]).toEqual([0, 6000]);
+    const r = applyBatch(m, plano.comandos).model;
+    const ids = new Set(plano.baldrames.map((b) => b.idPrevisto));
+    const blocos = new Set(r.structures.filter((s) => s.kind === 'BLOCO_COROAMENTO').map((s) => s.id));
+    const pilares = new Set(r.structures.filter((s) => s.kind === 'PILAR').map((s) => s.id));
+    const sob = sobreposicoesDoModelo(r).filter((s) => ids.has(s.aId) || ids.has(s.bId));
+    // Divide volume com os blocos (e cede), não com os pilares (que começam acima) nem com as paredes.
+    expect(sob.some((s) => blocos.has(s.aId) || blocos.has(s.bId))).toBe(true);
+    expect(sob.some((s) => pilares.has(s.aId) || pilares.has(s.bId))).toBe(false);
+    expect(sob.some((s) => s.aId.startsWith('wal_') || s.bId.startsWith('wal_'))).toBe(false);
+    expect(r.structures.filter((s) => ids.has(s.id)).every((v) => v.cedeSobreposicao === true)).toBe(true);
+    // Sobre o bloco (padrão): h = arrasamento, base −500, recuada.
+    const sobre = fundar(m, t, { posicaoDaBaldrame: 'SOBRE_O_BLOCO', alturaDaBaldrameMm: 400 }).baldrames[0];
+    expect(sobre).toMatchObject({ alturaMm: 500, baseMm: -500 });
+  });
+
   it('desligada na hipótese: nenhuma baldrame; cadeia que já tem baldrame é mantida (idempotente)', () => {
     const { m, t } = casa();
     expect(fundar(m, t, { vigaBaldrame: false }).baldrames).toEqual([]);

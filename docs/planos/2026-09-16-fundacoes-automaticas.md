@@ -103,3 +103,18 @@ mudança no kernel.
 Prova: `__tests__/components/PainelEstruturaSelecionada.test.tsx` (5: estaca 8→10 m → base
 −11,10; bloco e baldrame; pilar só altura; campo Comprimento manda altura e base; pilar só
 altura) · suíte 328/4331 · tsc · build.
+
+## Baldrame sobre ou no nível do bloco (16/09/2026)
+
+> A Viga de fundação (baldrame) pode ser inserida sobre ou dentro (no mesmo nível) do bloco de coroamento. crie opcao para o usuário
+
+Hipótese nova `posicaoDaBaldrame` (select "Posição", visível com a baldrame ligada):
+- **Sobre o bloco** (padrão, como antes): base = −arrasamento, h = arrasamento (topo no piso),
+  recua até a face do pilar.
+- **No nível do bloco**: topo no arrasamento (junto com o topo do bloco), desce
+  `alturaDaBaldrameMm` (select "Altura da baldrame": 30/40/50/60, padrão 40); vai até o EIXO do
+  encontro, morrendo dentro do bloco (cede o volume — provado: sobreposição só com blocos, não
+  com pilares nem paredes); o pilar começa acima dela. Prévia mostra "topo −0,50 m".
+
+Prova: puro (+1, 13) · editor (ampliado: posição some sem baldrame; "No nível do bloco" mostra
+altura e a prévia "15 × 30 · topo -0,50 m") · suíte 328/4332 · tsc · build.

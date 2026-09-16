@@ -72,15 +72,37 @@ export interface HipotesesDeFundacoes {
   alturaDoBlocoMm: number;
   /** Quanto o TOPO do bloco fica abaixo do piso (cota de arrasamento), em mm. */
   arrasamentoMm: number;
-  /** Viga baldrame sobre os blocos, ao longo de cada parede (base = −arrasamento, topo no piso). */
+  /** Viga baldrame ao longo de cada parede. */
   vigaBaldrame: boolean;
+  /**
+   * Onde a baldrame fica em relação ao bloco (16/09/2026: *"pode ser inserida
+   * sobre ou dentro (no mesmo nível) do bloco de coroamento"*):
+   *  - `SOBRE_O_BLOCO`: apoiada no topo do bloco e subindo até o piso
+   *    (base = −arrasamento, h = arrasamento); recua até a face do pilar.
+   *  - `NO_NIVEL_DO_BLOCO`: topo no arrasamento, junto com o topo do bloco, e
+   *    descendo `alturaDaBaldrameMm`; entra no bloco (cede o volume) e vai até
+   *    o eixo do encontro — o pilar começa acima dela.
+   */
+  posicaoDaBaldrame: PosicaoDaBaldrame;
+  /** Altura da baldrame quando está no nível do bloco (sobre o bloco, h = arrasamento). */
+  alturaDaBaldrameMm: number;
 }
+
+export type PosicaoDaBaldrame = 'SOBRE_O_BLOCO' | 'NO_NIVEL_DO_BLOCO';
+export const POSICOES_DA_BALDRAME: readonly PosicaoDaBaldrame[] = ['SOBRE_O_BLOCO', 'NO_NIVEL_DO_BLOCO'];
+export const ROTULO_DA_POSICAO_DA_BALDRAME: Record<PosicaoDaBaldrame, string> = {
+  SOBRE_O_BLOCO: 'Sobre o bloco',
+  NO_NIVEL_DO_BLOCO: 'No nível do bloco',
+};
+export const ALTURAS_DE_BALDRAME = [300, 400, 500, 600] as const;
 
 export const HIPOTESES_FUNDACOES_PADRAO: HipotesesDeFundacoes = {
   estacasPorBloco: 1,
   diametroDaEstacaMm: 300,
   comprimentoDaEstacaMm: 8000,
   vigaBaldrame: true,
+  posicaoDaBaldrame: 'SOBRE_O_BLOCO',
+  alturaDaBaldrameMm: 400,
   alturaDoBlocoMm: 600,
   arrasamentoMm: 500,
 };
@@ -259,7 +281,9 @@ export function planejarFundacoes(
   type CandidataBaldrame = Omit<BaldramePrevista, 'idPrevisto' | 'rotulo'>;
   const baldramesCandidatas: CandidataBaldrame[] = [];
   let cadeiasComBaldrame = 0;
-  if (hip.vigaBaldrame && arrasamento > 0) {
+  const noNivelDoBloco = hip.posicaoDaBaldrame === 'NO_NIVEL_DO_BLOCO';
+  const alturaDaBaldrame = noNivelDoBloco ? Math.max(100, Math.round(hip.alturaDaBaldrameMm)) : arrasamento;
+  if (hip.vigaBaldrame && alturaDaBaldrame > 0) {
     const walls = paredesDoNivel(model, levelId, true);
     const tol = DEFAULT_TOLERANCE_MM;
     const { nos } = nosDeParede(model, levelId, tol, walls);
@@ -271,8 +295,11 @@ export function planejarFundacoes(
         continue;
       }
       const { a, b } = pontasDaCadeia(c);
-      const a2 = recuarAteAFaceDoPilar(pilares, a, b);
-      const b2 = recuarAteAFaceDoPilar(pilares, b, a);
+      // Sobre o bloco ela divide a faixa do pilar (−arrasamento..0) e recua até a
+      // face dele; no nível do bloco o pilar já acabou (pé em −arrasamento) e a
+      // baldrame vai até o eixo, morrendo dentro do bloco.
+      const a2 = noNivelDoBloco ? a : recuarAteAFaceDoPilar(pilares, a, b);
+      const b2 = noNivelDoBloco ? b : recuarAteAFaceDoPilar(pilares, b, a);
       const comprimento = Math.round(dist(a2, b2));
       if (comprimento <= tol) continue;
       const larguraMm = Math.max(LARGURA_MINIMA_DA_BALDRAME_MM, ...c.elos.map((e) => e.wall.thicknessMm));
@@ -281,8 +308,8 @@ export function planejarFundacoes(
         b: b2,
         comprimentoMm: comprimento,
         larguraMm,
-        alturaMm: arrasamento,
-        baseMm: -arrasamento,
+        alturaMm: alturaDaBaldrame,
+        baseMm: -arrasamento - (noNivelDoBloco ? alturaDaBaldrame : 0),
         wallIds: c.elos.map((e) => e.wall.id),
       });
     }

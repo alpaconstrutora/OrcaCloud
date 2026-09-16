@@ -1395,6 +1395,15 @@ describe('BlueprintEditor · ribbon', () => {
     expect(drawer).toHaveTextContent(/4 bloco\(s\) · 4 estaca\(s\)\./i);
     expect(within(drawer).getByRole('button', { name: /^lançar 4 bloco\(s\) e 4 estaca\(s\)$/i })).toBeEnabled();
     expect(botao(/^fundações automáticas/i)).toHaveTextContent('4');
+    // Sem baldrame, nem posição nem altura dela aparecem.
+    expect(within(drawer).queryByRole('combobox', { name: /posição da baldrame/i })).toBeNull();
+    // Religa: posição "No nível do bloco" mostra a altura e muda a prévia (topo −0,50).
+    await userEvent.setup().click(caixa);
+    await userEvent.selectOptions(within(drawer).getByRole('combobox', { name: /posição da baldrame/i }), 'NO_NIVEL_DO_BLOCO');
+    expect(JSON.parse(localStorage.getItem('blueprint:fundacoesAutomaticas')!).posicaoDaBaldrame).toBe('NO_NIVEL_DO_BLOCO');
+    await userEvent.selectOptions(within(drawer).getByRole('combobox', { name: /altura da baldrame/i }), '300');
+    const baldrames = within(drawer).getByRole('table', { name: /prévia das vigas baldrame/i });
+    expect(within(baldrames).getAllByRole('row')[1]).toHaveTextContent(/15 × 30 · topo -0,50 m/);
   });
 
   it('vão máximo e seção escolhidos persistem em localStorage e mudam a prévia', async () => {

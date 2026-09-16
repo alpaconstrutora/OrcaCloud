@@ -181,9 +181,12 @@ import {
   type HipotesesDeVigas,
 } from '../../utils/blueprintVigasLajesAutomaticas';
 import {
+  ALTURAS_DE_BALDRAME,
   ALTURAS_DE_BLOCO,
   ARRASAMENTOS,
   COMPRIMENTOS_DE_ESTACA,
+  POSICOES_DA_BALDRAME,
+  ROTULO_DA_POSICAO_DA_BALDRAME,
   DIAMETROS_DE_ESTACA,
   ESTACAS_POR_BLOCO,
   HIPOTESES_FUNDACOES_PADRAO,
@@ -4716,6 +4719,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       arrasamentoMm: em(ARRASAMENTOS, h.arrasamentoMm, HIPOTESES_FUNDACOES_PADRAO.arrasamentoMm),
       // Hipótese nova (16/09/2026): quem já tinha as fundações salvas ganha a baldrame ligada.
       vigaBaldrame: typeof h.vigaBaldrame === 'boolean' ? h.vigaBaldrame : HIPOTESES_FUNDACOES_PADRAO.vigaBaldrame,
+      posicaoDaBaldrame: POSICOES_DA_BALDRAME.includes(h.posicaoDaBaldrame) ? h.posicaoDaBaldrame : HIPOTESES_FUNDACOES_PADRAO.posicaoDaBaldrame,
+      alturaDaBaldrameMm: em(ALTURAS_DE_BALDRAME, h.alturaDaBaldrameMm, HIPOTESES_FUNDACOES_PADRAO.alturaDaBaldrameMm),
     };
   }, [hipDeFundacoesSalvas]);
   const planoDeFundacoes = useMemo(
@@ -8026,9 +8031,20 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   </li>
                   <li>
                     <strong>Viga baldrame</strong>
-                    {hipotesesDeFundacoes.vigaBaldrame ? '' : ' (desligada)'}: uma por parede, apoiada no topo dos blocos e
-                    subindo até o piso (h = arrasamento, {hipotesesDeFundacoes.arrasamentoMm / 10} cm), largura da parede (mín. 15 cm),
-                    de face a face de pilar. Não cruza o piso — a parede não cede.
+                    {hipotesesDeFundacoes.vigaBaldrame ? '' : ' (desligada)'}: uma por parede, largura da parede (mín. 15 cm).{' '}
+                    {hipotesesDeFundacoes.posicaoDaBaldrame === 'NO_NIVEL_DO_BLOCO' ? (
+                      <>
+                        <strong>No nível do bloco</strong>: topo no arrasamento ({hipotesesDeFundacoes.arrasamentoMm / 10} cm abaixo do
+                        piso), h {hipotesesDeFundacoes.alturaDaBaldrameMm / 10} cm, entrando no bloco até o eixo do encontro — o pilar
+                        começa acima dela.
+                      </>
+                    ) : (
+                      <>
+                        <strong>Sobre o bloco</strong>: apoiada no topo dos blocos e subindo até o piso (h = arrasamento,{' '}
+                        {hipotesesDeFundacoes.arrasamentoMm / 10} cm), de face a face de pilar.
+                      </>
+                    )}{' '}
+                    Não cruza o piso — a parede não cede.
                   </li>
                   <li>
                     <strong>Não dimensiona</strong>: fundação se define com a sondagem (NBR 6122) — capacidade de carga,
@@ -8120,6 +8136,45 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     />
                     Viga baldrame
                   </label>
+                  {hipotesesDeFundacoes.vigaBaldrame && (
+                    <label className="flex items-center gap-2">
+                      Posição
+                      <select
+                        value={hipotesesDeFundacoes.posicaoDaBaldrame}
+                        onChange={(e) =>
+                          setHipDeFundacoesSalvas((h) => ({
+                            ...h,
+                            posicaoDaBaldrame: e.target.value === 'NO_NIVEL_DO_BLOCO' ? 'NO_NIVEL_DO_BLOCO' : 'SOBRE_O_BLOCO',
+                          }))
+                        }
+                        aria-label="Posição da baldrame"
+                        className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                      >
+                        {POSICOES_DA_BALDRAME.map((p) => (
+                          <option key={p} value={p}>
+                            {ROTULO_DA_POSICAO_DA_BALDRAME[p]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {hipotesesDeFundacoes.vigaBaldrame && hipotesesDeFundacoes.posicaoDaBaldrame === 'NO_NIVEL_DO_BLOCO' && (
+                    <label className="flex items-center gap-2">
+                      Altura da baldrame
+                      <select
+                        value={hipotesesDeFundacoes.alturaDaBaldrameMm}
+                        onChange={(e) => setHipDeFundacoesSalvas((h) => ({ ...h, alturaDaBaldrameMm: Number(e.target.value) }))}
+                        aria-label="Altura da baldrame"
+                        className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                      >
+                        {ALTURAS_DE_BALDRAME.map((a) => (
+                          <option key={a} value={a}>
+                            {a / 10} cm{a === HIPOTESES_FUNDACOES_PADRAO.alturaDaBaldrameMm ? ' (sugerido)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                   {planoDeFundacoes.comandos.length > 0 && (
                     <button
                       type="button"
@@ -8188,7 +8243,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       <tr key={v.idPrevisto}>
                         <td className="py-1.5 pr-2 font-medium text-slate-700">{v.rotulo}</td>
                         <td className="py-1.5 pr-2 tabular-nums text-slate-600">
-                          {v.larguraMm / 10} × {v.alturaMm / 10} · topo no piso
+                          {v.larguraMm / 10} × {v.alturaMm / 10} ·{' '}
+                          {v.baseMm + v.alturaMm === 0
+                            ? 'topo no piso'
+                            : `topo ${((v.baseMm + v.alturaMm) / 1000).toFixed(2).replace('.', ',')} m`}
                         </td>
                         <td className="py-1.5 pr-2 text-slate-600">{v.wallIds.length}</td>
                         <td className="py-1.5 text-right tabular-nums text-slate-600">

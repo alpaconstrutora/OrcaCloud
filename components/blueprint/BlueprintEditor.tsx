@@ -7121,9 +7121,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               contagem={
                 em3d
                   ? componentesDo3d.reduce((n, b) => n + b.linhas.length, 0)
-                  : componentesDoNivel.paredes.length +
+                  : // O mesmo total que o painel escreve ("161 peças neste pavimento"):
+                    // contar só parede/abertura/estrutura deixava o cabeçalho em 79
+                    // ao lado de um corpo que dizia 161 (visto em 16/09/2026).
+                    componentesDoNivel.paredes.length +
                     componentesDoNivel.aberturas.length +
-                    componentesDoNivel.estruturas.length
+                    componentesDoNivel.estruturas.length +
+                    componentesDoNivel.aguas.length +
+                    componentesDoNivel.escadas.length +
+                    componentesDoNivel.rede.trechos.length +
+                    componentesDoNivel.rede.terminais.length +
+                    componentesDoNivel.rede.quadros.length
               }
               aberta={secoes.componentes}
               onAlternar={() => alternarSecao('componentes')}

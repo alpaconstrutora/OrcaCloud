@@ -480,15 +480,22 @@ export interface FichaDeComponente {
   icone: React.ComponentType<{ className?: string }>;
   /** Título do grupo de leitura — "Alvenaria", "Esquadrias", "Estrutura", "Fundação". */
   grupo: string;
+  /**
+   * Posição no catálogo inteiro (0, 1, 2…): é a ordem dos SUBGRUPOS dentro de
+   * cada família no gerenciador (Pilar antes de Viga antes de Laje — a ordem em
+   * que o menu oferece), sem uma segunda lista para envelhecer.
+   */
+  ordem: number;
 }
 
 /** A ordem de leitura dos grupos, para quem lista sem repetir o arranjo. */
 export const ORDEM_DOS_GRUPOS: string[] = GRUPOS.map((g) => g.titulo);
 
 const FICHAS: Record<string, FichaDeComponente> = Object.fromEntries(
-  GRUPOS.flatMap((g) =>
-    g.itens.map((i) => [i.chave, { rotulo: i.rotulo, icone: i.icone, grupo: g.titulo }]),
-  ),
+  GRUPOS.flatMap((g) => g.itens.map((i) => ({ item: i, grupo: g.titulo }))).map(({ item, grupo }, ordem) => [
+    item.chave,
+    { rotulo: item.rotulo, icone: item.icone, grupo, ordem },
+  ]),
 );
 
 /**

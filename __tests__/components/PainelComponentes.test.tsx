@@ -134,6 +134,52 @@ describe('PainelComponentes', () => {
     expect(screen.getByText(/Nada desenhado neste pavimento ainda/)).toBeTruthy();
   });
 
+  // ── Subgrupos por tipo (16/09/2026) ──────────────────────────────────────
+  // Pedido: "Painel lateral › Componentes › Estrutura: implementar subgrupos
+  // (laje; viga; pilar), faça o mesmo para os demais componentes".
+  const viga = (id: string): Structural => ({
+    id, levelId: 'lvl_1', kind: 'VIGA', pontos: [point(0, 0), point(3000, 0)],
+    larguraMm: 150, profundidadeMm: 0, alturaMm: 400, baseMm: 2400, circular: false,
+  });
+  const laje = (id: string): Structural => ({
+    id, levelId: 'lvl_1', kind: 'LAJE', pontos: [point(0, 0), point(3000, 0), point(3000, 3000), point(0, 3000)],
+    larguraMm: 0, profundidadeMm: 0, alturaMm: 100, baseMm: 2800, circular: false,
+  });
+
+  it('cada família se divide em subgrupos por TIPO, na ordem do catálogo, com contagem', () => {
+    // Laje antes de pilar na lista de entrada: a ordem da tela é a do catálogo, não a do modelo.
+    montar({ estruturas: [laje('str_3'), viga('str_2'), pilar('str_1'), pilar('str_4')] });
+    const subgrupos = screen.getAllByRole('button', { name: /^(Pilar|Viga|Laje): \d+ peças?$/ });
+    expect(subgrupos.map((b) => b.getAttribute('aria-label'))).toEqual(['Pilar: 2 peças', 'Viga: 1 peça', 'Laje: 1 peça']);
+    // Os demais também: Alvenaria › Parede, Esquadrias › Porta.
+    expect(screen.getByRole('button', { name: 'Parede: 2 peças' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Porta: 1 peça' })).toBeTruthy();
+    // A família continua contando o total.
+    expect(screen.getByRole('button', { name: /Estrutura/ })).toHaveTextContent('4');
+  });
+
+  it('recolher um subgrupo esconde só as peças dele', async () => {
+    const usuario = userEvent.setup();
+    montar({ estruturas: [pilar('str_1'), viga('str_2')] });
+    await usuario.click(screen.getByRole('button', { name: 'Viga: 1 peça' }));
+    expect(screen.queryByRole('button', { name: /^V1 · Viga/ })).toBeNull();
+    expect(linha('P1 · Pilar')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Viga: 1 peça' })).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('no 3D, o olho do subgrupo alterna todas as peças do tipo de uma vez', async () => {
+    const usuario = userEvent.setup();
+    const onAlternarOculto = vi.fn();
+    montar({
+      estruturas: [pilar('str_1'), pilar('str_4'), viga('str_2')],
+      ocultos: new Set<string>(),
+      onAlternarOculto,
+      somenteLeitura: true,
+    });
+    await usuario.click(screen.getByRole('button', { name: 'Ocultar Pilar no 3D' }));
+    expect(onAlternarOculto).toHaveBeenCalledWith(['str_1', 'str_4'], true);
+  });
+
   it('as propriedades da peça vêm ANTES da lista', () => {
     montar({ propriedades: <p>Parede selecionada</p> });
     const painel = screen.getByText('Parede selecionada');

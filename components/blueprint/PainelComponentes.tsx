@@ -129,12 +129,35 @@ interface Props {
   propriedades?: React.ReactNode;
 }
 
-/** As linhas de uma família dentro de UM pavimento. */
+/**
+ * As peças de UM TIPO (Pilar, Viga, Laje…) dentro de uma família, num pavimento.
+ *
+ * Pedido do usuário (16/09/2026): *"Painel lateral › Componentes › Estrutura:
+ * implementar subgrupos (laje; viga; pilar), faça o mesmo para os demais
+ * componentes"*. Antes a família listava as peças corridas — dezesseis pilares,
+ * sete vigas e quatro lajes numa lista só de 27 linhas, e achar a viga era
+ * rolar. Agora cada TIPO do catálogo é um subgrupo recolhível, com contagem e,
+ * no 3D, o olho da família inteira dele.
+ *
+ * O subgrupo é a FICHA do componente (`fichaDoComponente`): mesmo nome, mesmo
+ * ícone e a ordem do catálogo (Pilar, Viga, Laje — a ordem em que o menu
+ * oferece). Família de um tipo só (Alvenaria › Parede) também ganha o
+ * subgrupo: a árvore é a mesma em toda família, e é isso que a torna previsível.
+ */
+interface Subgrupo {
+  chave: string;
+  rotulo: string;
+  icone: React.ComponentType<{ className?: string }>;
+  linhas: LinhaDeComponente[];
+  ids: string[];
+}
+
+/** Os subgrupos de uma família dentro de UM pavimento. */
 interface SubBloco {
   chave: string;
   /** `null` = não desenhar subcabeçalho (planta baixa, ou 3D de um pavimento só). */
   nome: string | null;
-  linhas: LinhaDeComponente[];
+  subgrupos: Subgrupo[];
 }
 
 /** Uma família de peças, já com as linhas dela. */
@@ -218,7 +241,7 @@ export default function PainelComponentes({
     // Uma fonte só na planta baixa; uma por pavimento no 3D. O subcabeçalho de
     // pavimento só aparece com MAIS DE UM bloco: com um piso só, repetir
     // "Térreo" dentro de cada família é ruído puro.
-    const fontes: SubBloco[] = blocos
+    const fontes: { chave: string; nome: string | null; linhas: LinhaDeComponente[] }[] = blocos
       ? blocos.map((b) => ({
           chave: b.levelId,
           nome: blocos.length > 1 ? b.nome : null,
@@ -228,18 +251,32 @@ export default function PainelComponentes({
 
     const porGrupo = new Map<string, SubBloco[]>();
     for (const fonte of fontes) {
-      const naFonte = new Map<string, LinhaDeComponente[]>();
+      // família → tipo → linhas. O tipo é a chave do catálogo (`PILAR`, `door`,
+      // `PONTO_TUG`…); a ficha dá nome, ícone e a posição no catálogo.
+      const naFonte = new Map<string, Map<string, Subgrupo>>();
       for (const linha of fonte.linhas) {
         const ficha = fichaDoComponente(linha.chave);
         if (!ficha) continue;
-        const atual = naFonte.get(ficha.grupo);
-        if (atual) atual.push(linha);
-        else naFonte.set(ficha.grupo, [linha]);
+        let tipos = naFonte.get(ficha.grupo);
+        if (!tipos) {
+          tipos = new Map();
+          naFonte.set(ficha.grupo, tipos);
+        }
+        const atual = tipos.get(linha.chave);
+        if (atual) {
+          atual.linhas.push(linha);
+          atual.ids.push(linha.id);
+        } else {
+          tipos.set(linha.chave, { chave: linha.chave, rotulo: ficha.rotulo, icone: ficha.icone, linhas: [linha], ids: [linha.id] });
+        }
       }
-      for (const [titulo, linhas] of naFonte) {
+      for (const [titulo, tipos] of naFonte) {
+        const subgrupos = [...tipos.values()].sort(
+          (a, b) => (fichaDoComponente(a.chave)?.ordem ?? 0) - (fichaDoComponente(b.chave)?.ordem ?? 0),
+        );
         const subs = porGrupo.get(titulo);
-        if (subs) subs.push({ ...fonte, linhas });
-        else porGrupo.set(titulo, [{ ...fonte, linhas }]);
+        if (subs) subs.push({ chave: fonte.chave, nome: fonte.nome, subgrupos });
+        else porGrupo.set(titulo, [{ chave: fonte.chave, nome: fonte.nome, subgrupos }]);
       }
     }
 
@@ -248,7 +285,7 @@ export default function PainelComponentes({
     // planta sem estacas seria ruído em quatro de cada cinco estudos.
     return ORDEM_DOS_GRUPOS.filter((t) => porGrupo.has(t)).map((titulo) => {
       const subs = porGrupo.get(titulo) ?? [];
-      return { titulo, subs, ids: subs.flatMap((s) => s.linhas.map((l) => l.id)) };
+      return { titulo, subs, ids: subs.flatMap((s) => s.subgrupos.flatMap((g) => g.ids)) };
     });
   }, [blocos, linhasDaPlanta]);
 
@@ -265,11 +302,12 @@ export default function PainelComponentes({
    * grupo escondido sem lembrar de tê-lo fechado noutro desenho.
    */
   const [recolhidos, setRecolhidos] = useState<Set<string>>(new Set());
-  function alternarGrupo(titulo: string) {
+  /** Chave da família, ou `família/pavimento/tipo` para um subgrupo — o mesmo conjunto serve aos dois níveis. */
+  function alternarGrupo(chave: string) {
     setRecolhidos((atual) => {
       const proximo = new Set(atual);
-      if (proximo.has(titulo)) proximo.delete(titulo);
-      else proximo.add(titulo);
+      if (proximo.has(chave)) proximo.delete(chave);
+      else proximo.add(chave);
       return proximo;
     });
   }
@@ -383,112 +421,162 @@ export default function PainelComponentes({
                         {sub.nome}
                       </p>
                     )}
-                    {/* Indentação com filete à esquerda quando há subcabeçalho —
-                        o vocabulário de nível 2 do §19.2 do guia, na paleta
-                        slate que o resto do módulo usa. */}
-                    <ul
-                      className={`divide-y divide-slate-100 ${
-                        sub.nome ? 'ml-4 border-l border-slate-200' : ''
-                      }`}
-                    >
-                      {sub.linhas.map((linha) => {
-                        const ficha = fichaDoComponente(linha.chave);
-                        const Icone = ficha?.icone ?? Blocks;
-                        const sel = marcados.has(linha.id);
-                        const oculto = !!ocultos?.has(linha.id);
-                        const conteudo = (
-                          <>
-                            <Icone
-                              className={`h-3.5 w-3.5 shrink-0 ${
-                                oculto
-                                  ? 'text-slate-300'
-                                  : sel
-                                    ? 'text-blue-600'
-                                    : 'text-slate-400'
-                              }`}
-                            />
-                            <span className="min-w-0 flex-1">
-                              <span
-                                className={`block truncate text-xs ${
-                                  oculto
-                                    ? 'text-slate-400'
-                                    : sel
-                                      ? 'font-medium text-blue-800'
-                                      : 'text-slate-700'
-                                }`}
-                              >
-                                {linha.rotulo}
-                              </span>
-                              {linha.detalhe && (
-                                <span
-                                  className={`block truncate text-[11px] ${
-                                    oculto ? 'text-slate-300' : 'text-slate-400'
-                                  }`}
-                                >
-                                  {linha.detalhe}
-                                </span>
-                              )}
-                            </span>
-                            <span
-                              className={`shrink-0 text-[11px] tabular-nums ${
-                                oculto ? 'text-slate-300' : 'text-slate-600'
-                              }`}
-                            >
-                              {linha.medida}
-                            </span>
-                          </>
-                        );
+                    {/* Indentação com filete à esquerda — o vocabulário de nível 2
+                        do §19.2 do guia, na paleta slate que o resto do módulo
+                        usa. Com pavimento nomeado (3D empilhado), os subgrupos
+                        descem mais um nível. */}
+                    <div className={sub.nome ? 'ml-4 border-l border-slate-200' : ''}>
+                      {sub.subgrupos.map((sg) => {
+                        const chaveSg = `${grupo.titulo}/${sub.chave}/${sg.chave}`;
+                        const sgRecolhido = recolhidos.has(chaveSg);
+                        const idSg = `${idGrupo}-${sub.chave}-${sg.chave}`.replace(/[^\w-]+/g, '-').toLowerCase();
+                        const sgVisivel = sg.ids.some((id) => !ocultos?.has(id));
+                        const IconeSg = sg.icone;
                         return (
-                          <li key={linha.id} className={sel ? 'bg-blue-50' : ''}>
-                            <div className="flex items-center gap-1 px-3 py-1.5">
-                              {somenteLeitura ? (
-                                // Sem `<button>`: no 3D não há seleção no canvas
-                                // nem destaque na cena, e um clique que não
-                                // responde é pior que nenhum afeto de clique.
-                                <span
-                                  title={`${linha.rotulo} · ${linha.medida}`}
-                                  className="flex min-w-0 flex-1 items-center gap-2 px-1 py-0.5"
-                                >
-                                  {conteudo}
-                                </span>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={(e) => aoClicar(linha.id, e)}
-                                  aria-pressed={sel}
-                                  title={`${linha.rotulo} · ${linha.medida}`}
-                                  className="flex min-w-0 flex-1 items-center gap-2 rounded-[6px] px-1 py-0.5 text-left transition-colors hover:bg-slate-50"
-                                >
-                                  {conteudo}
-                                </button>
-                              )}
-                              {podeOcultar && (
-                                <Olho
-                                  oculto={oculto}
-                                  titulo={
-                                    oculto
-                                      ? `Exibir ${linha.rotulo} no 3D`
-                                      : `Ocultar ${linha.rotulo} no 3D`
-                                  }
-                                  onClick={() => onAlternarOculto?.([linha.id], !oculto)}
+                          <div key={sg.chave}>
+                            <div className="flex items-center">
+                              <button
+                                type="button"
+                                onClick={() => alternarGrupo(chaveSg)}
+                                aria-expanded={!sgRecolhido}
+                                aria-controls={`${idSg}-corpo`}
+                                // Nome acessível explícito: "Parede" + "2" leria
+                                // "Parede 2" — o mesmo nome da segunda parede da
+                                // lista, e quem procura a peça pelo nome acharia
+                                // o cabeçalho.
+                                aria-label={`${sg.rotulo}: ${sg.ids.length} ${sg.ids.length === 1 ? 'peça' : 'peças'}`}
+                                className="flex min-w-0 flex-1 items-center gap-1.5 py-1 pl-3 pr-2 text-left text-[11px] font-medium text-slate-500 transition-colors hover:bg-slate-50"
+                              >
+                                <ChevronRight
+                                  aria-hidden
+                                  className={`h-3 w-3 shrink-0 text-slate-400 transition-transform duration-200 ${
+                                    sgRecolhido ? '' : 'rotate-90'
+                                  }`}
                                 />
-                              )}
-                              {!somenteLeitura && (
-                                <button
-                                  type="button"
-                                  onClick={() => onExcluir(linha.id)}
-                                  aria-label={`Excluir ${linha.rotulo}`}
-                                  title={`Excluir ${linha.rotulo}`}
-                                  className="shrink-0 rounded p-1 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </button>
+                                <IconeSg aria-hidden className="h-3 w-3 shrink-0 text-slate-400" />
+                                <span className="truncate">{sg.rotulo}</span>
+                                <span className="ml-auto shrink-0 rounded-[6px] bg-slate-50 px-1.5 py-0.5 text-[10px] tabular-nums text-slate-500">
+                                  {sg.ids.length}
+                                </span>
+                              </button>
+                              {podeOcultar && (
+                                <div className="shrink-0 pr-2">
+                                  <Olho
+                                    oculto={!sgVisivel}
+                                    titulo={sgVisivel ? `Ocultar ${sg.rotulo} no 3D` : `Exibir ${sg.rotulo} no 3D`}
+                                    onClick={() => onAlternarOculto?.(sg.ids, sgVisivel)}
+                                  />
+                                </div>
                               )}
                             </div>
-                          </li>
+                            {!sgRecolhido && (
+                              <ul
+                                id={`${idSg}-corpo`}
+                                className="ml-4 divide-y divide-slate-100 border-l border-slate-200"
+                              >
+                                {sg.linhas.map((linha) => {
+                                  const ficha = fichaDoComponente(linha.chave);
+                                  const Icone = ficha?.icone ?? Blocks;
+                                  const sel = marcados.has(linha.id);
+                                  const oculto = !!ocultos?.has(linha.id);
+                                  const conteudo = (
+                                    <>
+                                      <Icone
+                                        className={`h-3.5 w-3.5 shrink-0 ${
+                                          oculto
+                                            ? 'text-slate-300'
+                                            : sel
+                                              ? 'text-blue-600'
+                                              : 'text-slate-400'
+                                        }`}
+                                      />
+                                      <span className="min-w-0 flex-1">
+                                        <span
+                                          className={`block truncate text-xs ${
+                                            oculto
+                                              ? 'text-slate-400'
+                                              : sel
+                                                ? 'font-medium text-blue-800'
+                                                : 'text-slate-700'
+                                          }`}
+                                        >
+                                          {linha.rotulo}
+                                        </span>
+                                        {linha.detalhe && (
+                                          <span
+                                            className={`block truncate text-[11px] ${
+                                              oculto ? 'text-slate-300' : 'text-slate-400'
+                                            }`}
+                                          >
+                                            {linha.detalhe}
+                                          </span>
+                                        )}
+                                      </span>
+                                      <span
+                                        className={`shrink-0 text-[11px] tabular-nums ${
+                                          oculto ? 'text-slate-300' : 'text-slate-600'
+                                        }`}
+                                      >
+                                        {linha.medida}
+                                      </span>
+                                    </>
+                                  );
+                                  return (
+                                    <li key={linha.id} className={sel ? 'bg-blue-50' : ''}>
+                                      <div className="flex items-center gap-1 px-3 py-1.5">
+                                        {somenteLeitura ? (
+                                          // Sem `<button>`: no 3D não há seleção no canvas
+                                          // nem destaque na cena, e um clique que não
+                                          // responde é pior que nenhum afeto de clique.
+                                          <span
+                                            title={`${linha.rotulo} · ${linha.medida}`}
+                                            className="flex min-w-0 flex-1 items-center gap-2 px-1 py-0.5"
+                                          >
+                                            {conteudo}
+                                          </span>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => aoClicar(linha.id, e)}
+                                            aria-pressed={sel}
+                                            title={`${linha.rotulo} · ${linha.medida}`}
+                                            className="flex min-w-0 flex-1 items-center gap-2 rounded-[6px] px-1 py-0.5 text-left transition-colors hover:bg-slate-50"
+                                          >
+                                            {conteudo}
+                                          </button>
+                                        )}
+                                        {podeOcultar && (
+                                          <Olho
+                                            oculto={oculto}
+                                            titulo={
+                                              oculto
+                                                ? `Exibir ${linha.rotulo} no 3D`
+                                                : `Ocultar ${linha.rotulo} no 3D`
+                                            }
+                                            onClick={() => onAlternarOculto?.([linha.id], !oculto)}
+                                          />
+                                        )}
+                                        {!somenteLeitura && (
+                                          <button
+                                            type="button"
+                                            onClick={() => onExcluir(linha.id)}
+                                            aria-label={`Excluir ${linha.rotulo}`}
+                                            title={`Excluir ${linha.rotulo}`}
+                                            className="shrink-0 rounded p-1 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                                          >
+                                            <Trash2 className="h-3 w-3" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
+                          </div>
                         );
                       })}
-                    </ul>
+                    </div>
                   </div>
                 ))}
               </div>

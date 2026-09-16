@@ -10,6 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, snapshotHash, type BlueprintModel, type Command, type ObjectId } from '../utils/blueprintKernel';
+import { sobreposicoesDoModelo } from '../utils/blueprintKernel/sobreposicao';
 import { HIPOTESES_PILARES_PADRAO, planejarPilares } from '../utils/blueprintPilaresAutomaticos';
 import {
   HIPOTESES_FUNDACOES_PADRAO,
@@ -127,8 +128,11 @@ describe('planejarFundacoes — um bloco por pilar, estacas embaixo', () => {
     const tipos = plano.comandos.map((c) => (c.type === 'AddStructural' ? c.kind : c.type));
     expect(tipos.slice(0, 9).every((k) => k === 'BLOCO_COROAMENTO')).toBe(true);
     expect(tipos.slice(9, 18).every((k) => k === 'ESTACA')).toBe(true);
+    // Depois as baldrames (5 cadeias: 4 externas + a interna), cada uma marcada para ceder.
+    expect(tipos.slice(18, 23)).toEqual(Array(5).fill('VIGA_FUNDACAO'));
+    expect(tipos.slice(23, 28)).toEqual(Array(5).fill('SetCedeSobreposicao'));
     // Depois, os pilares DESCEM até o topo do bloco (−0,50): um SetStructuralProps por pilar.
-    expect(tipos.slice(18)).toEqual(Array(9).fill('SetStructuralProps'));
+    expect(tipos.slice(28)).toEqual(Array(9).fill('SetStructuralProps'));
     expect(plano.pilaresQueDescem).toHaveLength(9);
     const r = applyBatch(m, plano.comandos);
     const pilares = r.model.structures.filter((s) => s.kind === 'PILAR');
@@ -140,6 +144,7 @@ describe('planejarFundacoes — um bloco por pilar, estacas embaixo', () => {
     expect(r.diff.created.filter((id) => id.startsWith('str_'))).toEqual([
       ...plano.blocos.map((b) => b.idPrevisto),
       ...plano.estacas.map((e) => e.idPrevisto),
+      ...plano.baldrames.map((v) => v.idPrevisto),
     ]);
     expect(conferirPlanoDeFundacoes(m, plano)).toEqual({ ok: true });
     const e1 = r.model.structures.find((s) => s.rotulo === 'E1')!;
@@ -149,15 +154,16 @@ describe('planejarFundacoes — um bloco por pilar, estacas embaixo', () => {
     expect(snapshotHash(m)).toBe(antes);
   });
 
-  it('relançar apaga só blocos e estacas (pilares ficam) e regrava com a hipótese nova; ambientes não mudam', () => {
+  it('relançar apaga só blocos, estacas e baldrames (pilares ficam) e regrava com a hipótese nova; ambientes não mudam', () => {
     const { m, t } = casa();
     const depois = applyBatch(m, fundar(m, t).comandos).model;
     const re = relancarFundacoes(depois, t, { ...HIPOTESES_FUNDACOES_PADRAO, estacasPorBloco: 2 });
-    expect(re.apagados).toHaveLength(18);
+    expect(re.apagados).toHaveLength(23);
     const final = applyBatch(depois, re.comandos).model;
     expect(final.structures.filter((s) => s.kind === 'PILAR')).toHaveLength(9);
     expect(final.structures.filter((s) => s.kind === 'BLOCO_COROAMENTO')).toHaveLength(9);
     expect(final.structures.filter((s) => s.kind === 'ESTACA')).toHaveLength(18);
+    expect(final.structures.filter((s) => s.kind === 'VIGA_FUNDACAO')).toHaveLength(5);
     expect(conferirPlanoDeFundacoes(depois, re)).toEqual({ ok: true });
     expect(final.spaces.map((s) => s.areaMm2).sort()).toEqual(m.spaces.map((s) => s.areaMm2).sort());
   });
@@ -168,5 +174,60 @@ describe('planejarFundacoes — um bloco por pilar, estacas embaixo', () => {
     expect(fundar(comSuperior, t).avisos).toContain('fundação sob pavimento que não é o mais baixo');
     expect(fundar(m, t).avisos).toEqual([]);
     expect(JSON.stringify(fundar(m, t))).toBe(JSON.stringify(fundar(m, t)));
+  });
+});
+
+/**
+ * VIGA BALDRAME (16/09/2026): *"faltou a viga baldrame"*. Uma por cadeia de
+ * paredes, apoiada no topo dos blocos e subindo até o piso, de face a face de
+ * pilar, cedendo ao pilar intermediário. Não cruza o piso: parede não cede.
+ */
+describe('planejarFundacoes — a viga baldrame', () => {
+  it('uma por cadeia (5 na casa), 15 × 50 do topo do bloco (−0,50) ao piso (0), recuada até a face dos pilares', () => {
+    const { m, t } = casa();
+    const plano = fundar(m, t);
+    expect(plano.baldrames).toHaveLength(5);
+    for (const v of plano.baldrames) {
+      expect(v).toMatchObject({ larguraMm: 150, alturaMm: 500, baseMm: -500 });
+      expect(v.rotulo).toMatch(/^VB\d+$/);
+    }
+    // A externa de baixo (0,0 → 6000,0): pilares 19 × 19 de canto empurrados para dentro ocupam
+    // [−75, 115] em x; a baldrame começa na face interna do pilar e termina na do outro.
+    const baixo = plano.baldrames.find((v) => v.a.y === 0 && v.b.y === 0)!;
+    expect(Math.min(baixo.a.x, baixo.b.x)).toBeGreaterThan(0);
+    expect(Math.max(baixo.a.x, baixo.b.x)).toBeLessThan(6000);
+    expect(baixo.comprimentoMm).toBeLessThan(6000);
+    // A interna (0,2000 → 6000,2000) também.
+    expect(plano.baldrames.filter((v) => v.a.y === 2000 && v.b.y === 2000)).toHaveLength(1);
+  });
+
+  it('não cruza o piso: nenhuma parede cede e a sobreposição parede × baldrame é zero; a baldrame nasce cedendo', () => {
+    const { m, t } = casa();
+    const plano = fundar(m, t);
+    expect(plano.comandos.some((c) => c.type === 'SetCedeSobreposicao' && c.id.startsWith('wal_'))).toBe(false);
+    const r = applyBatch(m, plano.comandos).model;
+    const baldrames = r.structures.filter((s) => s.kind === 'VIGA_FUNDACAO');
+    expect(baldrames.every((v) => v.cedeSobreposicao === true)).toBe(true);
+    const ids = new Set(baldrames.map((v) => v.id));
+    const comParede = sobreposicoesDoModelo(r).filter((s) => (ids.has(s.bId) && s.aId.startsWith('wal_')) || (ids.has(s.aId) && s.bId.startsWith('wal_')));
+    expect(comParede).toEqual([]);
+    // Ambientes intactos.
+    expect(r.spaces.map((s) => s.areaMm2).sort()).toEqual(m.spaces.map((s) => s.areaMm2).sort());
+  });
+
+  it('desligada na hipótese: nenhuma baldrame; cadeia que já tem baldrame é mantida (idempotente)', () => {
+    const { m, t } = casa();
+    expect(fundar(m, t, { vigaBaldrame: false }).baldrames).toEqual([]);
+    const depois = applyBatch(m, fundar(m, t).comandos).model;
+    const de_novo = fundar(depois, t);
+    expect(de_novo.baldrames).toEqual([]);
+    expect(de_novo.cadeiasComBaldrame).toBe(5);
+    expect(de_novo.motivo).toBe('todos os pilares já têm bloco');
+    // Blocos já lançados, baldrame desligada na hora: ligar depois lança SÓ as baldrames.
+    const soBlocos = applyBatch(m, fundar(m, t, { vigaBaldrame: false }).comandos).model;
+    const soBaldrames = fundar(soBlocos, t);
+    expect(soBaldrames.blocos).toEqual([]);
+    expect(soBaldrames.baldrames).toHaveLength(5);
+    expect(conferirPlanoDeFundacoes(soBlocos, soBaldrames)).toEqual({ ok: true });
   });
 });

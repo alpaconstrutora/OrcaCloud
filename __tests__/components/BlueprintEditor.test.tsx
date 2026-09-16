@@ -1339,12 +1339,13 @@ describe('BlueprintEditor · ribbon', () => {
     await montar();
     await abrirAba(/^arquitetura$/i);
     // Sem pilar, o botão não tem contagem.
-    expect(botao(/^fundações automáticas/i)).not.toHaveTextContent('4');
+    expect(botao(/^fundações automáticas/i)).not.toHaveTextContent('8');
     await userEvent.setup().click(botao(/^pilares automáticos/i));
     let drawer = await screen.findByRole('dialog');
     await userEvent.setup().click(within(drawer).getByRole('button', { name: /^lançar 4 pilar/i }));
     await userEvent.setup().click(within(drawer).getByRole('button', { name: /^fechar$/i }));
-    expect(botao(/^fundações automáticas/i)).toHaveTextContent('4');
+    // 4 blocos + 4 baldrames (uma por parede).
+    expect(botao(/^fundações automáticas/i)).toHaveTextContent('8');
 
     await userEvent.setup().click(botao(/^fundações automáticas/i));
     drawer = await screen.findByRole('dialog');
@@ -1352,17 +1353,47 @@ describe('BlueprintEditor · ribbon', () => {
     const linhas = within(previa).getAllByRole('row').slice(1);
     expect(linhas).toHaveLength(4);
     expect(linhas[0]).toHaveTextContent(/P1.*B1 · 60 × 60 × 60.*1 × Ø 30 · 8,00 m.*-0,50/);
-    expect(drawer).toHaveTextContent(/4 bloco\(s\) · 4 estaca\(s\)/i);
+    expect(drawer).toHaveTextContent(/4 bloco\(s\) · 4 estaca\(s\) · 4 baldrame\(s\)/i);
+    // A baldrame: 15 × 50 do topo do bloco ao piso, uma por parede.
+    const baldrames = within(drawer).getByRole('table', { name: /prévia das vigas baldrame/i });
+    expect(within(baldrames).getAllByRole('row').slice(1)).toHaveLength(4);
+    expect(within(baldrames).getAllByRole('row')[1]).toHaveTextContent(/VB1.*15 × 50 · topo no piso/);
     await userEvent.selectOptions(within(drawer).getByRole('combobox', { name: /estacas por bloco/i }), '2');
     expect(JSON.parse(localStorage.getItem('blueprint:fundacoesAutomaticas')!).estacasPorBloco).toBe(2);
     expect(within(previa).getAllByRole('row')[1]).toHaveTextContent(/150 × 60 × 60.*2 × Ø 30/);
     expect(drawer).toHaveTextContent(/4 bloco\(s\) · 8 estaca\(s\)/i);
-    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^lançar 4 bloco\(s\) e 8 estaca/i }));
-    expect(drawer).toHaveTextContent(/4 bloco\(s\) e 8 estaca\(s\) lançado\(s\)/i);
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^lançar 4 bloco\(s\), 8 estaca\(s\) e 4 baldrame/i }));
+    expect(drawer).toHaveTextContent(/4 bloco\(s\), 8 estaca\(s\) e 4 baldrame\(s\) lançado\(s\)/i);
     expect(drawer).toHaveTextContent(/todos os pilares já têm bloco/i);
-    expect(within(drawer).getByRole('button', { name: /^relançar 4/i })).toBeEnabled();
+    expect(within(drawer).getByRole('button', { name: /^relançar 8/i })).toBeEnabled();
     await userEvent.setup().click(within(drawer).getByRole('button', { name: /^fechar$/i }));
     await userEvent.setup().click(botao(/^desfazer/i));
+    expect(botao(/^fundações automáticas/i)).toHaveTextContent('8');
+  });
+
+  it('fundações: baldrame desligada na hipótese some da prévia e do rodapé; a escolha persiste', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) =>
+      ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    const m = k.applyBatch(nivel.model, [w(0, 0, 4000, 0), w(4000, 0, 4000, 3000), w(4000, 3000, 0, 3000), w(0, 3000, 0, 0)]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    await abrirAba(/^arquitetura$/i);
+    await userEvent.setup().click(botao(/^pilares automáticos/i));
+    let drawer = await screen.findByRole('dialog');
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^lançar 4 pilar/i }));
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^fechar$/i }));
+    await userEvent.setup().click(botao(/^fundações automáticas/i));
+    drawer = await screen.findByRole('dialog');
+    const caixa = within(drawer).getByRole('checkbox', { name: /lançar viga baldrame/i });
+    expect(caixa).toBeChecked();
+    await userEvent.setup().click(caixa);
+    expect(JSON.parse(localStorage.getItem('blueprint:fundacoesAutomaticas')!).vigaBaldrame).toBe(false);
+    expect(within(drawer).queryByRole('table', { name: /prévia das vigas baldrame/i })).toBeNull();
+    expect(drawer).toHaveTextContent(/4 bloco\(s\) · 4 estaca\(s\)\./i);
+    expect(within(drawer).getByRole('button', { name: /^lançar 4 bloco\(s\) e 4 estaca\(s\)$/i })).toBeEnabled();
     expect(botao(/^fundações automáticas/i)).toHaveTextContent('4');
   });
 

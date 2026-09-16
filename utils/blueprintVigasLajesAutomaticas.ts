@@ -141,7 +141,7 @@ export function lajesExistentesNoNivel(model: BlueprintModel, levelId: ObjectId)
 const dist = (p: Point, q: Point) => Math.hypot(q.x - p.x, q.y - p.y);
 
 /** As duas pontas de uma cadeia, no sentido dela. */
-function pontasDaCadeia(c: Cadeia): { a: Point; b: Point } {
+export function pontasDaCadeia(c: Cadeia): { a: Point; b: Point } {
   const primeiro = c.elos[0];
   const ultimo = c.elos[c.elos.length - 1];
   const a = primeiro.invertida ? primeiro.wall.b : primeiro.wall.a;
@@ -153,7 +153,7 @@ function pontasDaCadeia(c: Cadeia): { a: Point; b: Point } {
  * A cadeia já tem viga quando uma VIGA existente é colinear com ela (as duas
  * pontas a ≤ tol do eixo da cadeia) e se sobrepõe a ela em mais de `tol`.
  */
-function cadeiaJaTemViga(c: Cadeia, existentes: readonly Structural[], tol: number): boolean {
+export function cadeiaJaTemViga(c: Cadeia, existentes: readonly Structural[], tol: number): boolean {
   const { a, b } = pontasDaCadeia(c);
   const L = dist(a, b);
   if (L <= 0) return false;
@@ -171,6 +171,29 @@ function cadeiaJaTemViga(c: Cadeia, existentes: readonly Structural[], tol: numb
     if ((u1 - u0) * L > tol) return true;
   }
   return false;
+}
+
+/**
+ * Recua a ponta `ponta` da viga (que segue para `outra`) até a face do pilar
+ * que a contém: o ponto em que o eixo sai da pegada do pilar. Sem pilar na
+ * ponta, fica onde está. Serve à viga e à baldrame (`blueprintFundacoesAutomaticas`).
+ */
+export function recuarAteAFaceDoPilar(pilares: readonly Structural[], ponta: Point, outra: Point): Point {
+  const pilar = pilares.find((p) => pointInPolygon(contornoEmPlanta(p), ponta));
+  if (!pilar) return ponta;
+  const anel = contornoEmPlanta(pilar);
+  let melhor: Point | null = null;
+  let melhorT = -1;
+  for (let k = 0; k < anel.length; k++) {
+    const r = intersectSegments({ a: ponta, b: outra }, { a: anel[k], b: anel[(k + 1) % anel.length] });
+    if (r.kind !== 'point' || !r.at) continue;
+    const t = dist(ponta, r.at);
+    if (t > melhorT) {
+      melhorT = t;
+      melhor = { x: r.at.x, y: r.at.y };
+    }
+  }
+  return melhor ?? ponta;
 }
 
 /** h = maior vão ÷ divisor, arredondado para cima a 5 cm, nunca abaixo do mínimo. */
@@ -211,28 +234,7 @@ export function planejarVigas(
   const pilares = pilaresExistentesNoNivel(model, levelId);
   const porId = new Map(walls.map((w) => [w.id, w]));
 
-  /**
-   * Recua a ponta `ponta` da viga (que segue para `outra`) até a face do pilar
-   * que a contém: o ponto em que o eixo sai da pegada do pilar. Sem pilar na
-   * ponta, fica onde está.
-   */
-  const recuarAteAFace = (ponta: Point, outra: Point): Point => {
-    const pilar = pilares.find((p) => pointInPolygon(contornoEmPlanta(p), ponta));
-    if (!pilar) return ponta;
-    const anel = contornoEmPlanta(pilar);
-    let melhor: Point | null = null;
-    let melhorT = -1;
-    for (let k = 0; k < anel.length; k++) {
-      const r = intersectSegments({ a: ponta, b: outra }, { a: anel[k], b: anel[(k + 1) % anel.length] });
-      if (r.kind !== 'point' || !r.at) continue;
-      const t = dist(ponta, r.at);
-      if (t > melhorT) {
-        melhorT = t;
-        melhor = { x: r.at.x, y: r.at.y };
-      }
-    }
-    return melhor ?? ponta;
-  };
+  const recuarAteAFace = (ponta: Point, outra: Point) => recuarAteAFaceDoPilar(pilares, ponta, outra);
 
   interface Candidata {
     a: Point;

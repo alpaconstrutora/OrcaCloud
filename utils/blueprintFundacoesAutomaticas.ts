@@ -2,13 +2,22 @@ import {
   applyBatch,
   contornoEmPlanta,
   pointInPolygon,
+  DEFAULT_TOLERANCE_MM,
   type BlueprintModel,
   type Command,
   type ObjectId,
   type Point,
   type Structural,
 } from './blueprintKernel';
-import { idsPrevistosDeEstrutura, pilaresExistentesNoNivel, proximoNumeroDoRotulo } from './blueprintPilaresAutomaticos';
+import {
+  cadeiasDeParedes,
+  idsPrevistosDeEstrutura,
+  nosDeParede,
+  paredesDoNivel,
+  pilaresExistentesNoNivel,
+  proximoNumeroDoRotulo,
+} from './blueprintPilaresAutomaticos';
+import { cadeiaJaTemViga, pontasDaCadeia, recuarAteAFaceDoPilar } from './blueprintVigasLajesAutomaticas';
 
 /**
  * LANÇAMENTO AUTOMÁTICO DE FUNDAÇÕES — blocos de coroamento e estacas (16/09/2026).
@@ -37,6 +46,15 @@ import { idsPrevistosDeEstrutura, pilaresExistentesNoNivel, proximoNumeroDoRotul
  *     `SetStructuralProps` por pilar cujo pé está acima do arrasamento: base =
  *     −arrasamento, altura = topo − base. O pilar continua cruzando o piso
  *     (base ≤ 0 < topo), então nada muda no arranjo nem no desconto da parede.
+ *  7. VIGA BALDRAME (16/09/2026, print do 3D do usuário: *"faltou a viga
+ *     baldrame"*): UMA por cadeia de paredes do pavimento — a mesma cadeia das
+ *     vigas —, apoiada no topo dos blocos e subindo até o piso (base =
+ *     −arrasamento, altura = arrasamento): é ela que recebe a alvenaria. Largura
+ *     = espessura da parede, nunca abaixo de 15 cm. Recua até a face do pilar
+ *     em cada ponta (o pilar desce até o bloco e ocuparia o mesmo volume) e
+ *     nasce cedendo, como a viga: o que ainda cruza um pilar intermediário sai
+ *     do concreto dela. Topo no piso (base + altura = 0) → não cruza o piso,
+ *     não entra no perfil da parede, parede nenhuma cede.
  *
  * ─── O QUE É NORMA E O QUE É HIPÓTESE ───────────────────────────────────────
  *
@@ -54,12 +72,15 @@ export interface HipotesesDeFundacoes {
   alturaDoBlocoMm: number;
   /** Quanto o TOPO do bloco fica abaixo do piso (cota de arrasamento), em mm. */
   arrasamentoMm: number;
+  /** Viga baldrame sobre os blocos, ao longo de cada parede (base = −arrasamento, topo no piso). */
+  vigaBaldrame: boolean;
 }
 
 export const HIPOTESES_FUNDACOES_PADRAO: HipotesesDeFundacoes = {
   estacasPorBloco: 1,
   diametroDaEstacaMm: 300,
   comprimentoDaEstacaMm: 8000,
+  vigaBaldrame: true,
   alturaDoBlocoMm: 600,
   arrasamentoMm: 500,
 };
@@ -113,26 +134,49 @@ export interface BlocoPrevisto {
   aviso: string | null;
 }
 
+export interface BaldramePrevista {
+  idPrevisto: ObjectId;
+  rotulo: string;
+  a: Point;
+  b: Point;
+  comprimentoMm: number;
+  larguraMm: number;
+  alturaMm: number;
+  baseMm: number;
+  wallIds: ObjectId[];
+}
+
 export interface PlanoDeFundacoes {
   levelId: ObjectId;
   blocos: BlocoPrevisto[];
   /** Todas as estacas, na ordem dos comandos. */
   estacas: EstacaPrevista[];
-  /** Todos os `AddStructural` de BLOCO (ordem de `blocos`), depois os de ESTACA, depois os pilares que descem. */
+  /** Vigas baldrame, uma por cadeia de paredes (vazio quando a hipótese está desligada). */
+  baldrames: BaldramePrevista[];
+  /**
+   * Todos os `AddStructural` de BLOCO (ordem de `blocos`), depois os de ESTACA,
+   * depois os de VIGA_FUNDACAO; um `SetCedeSobreposicao` por baldrame; depois
+   * os pilares que descem.
+   */
   comandos: Command[];
   /** Pilares cujo pé desce até o topo do bloco (`SetStructuralProps`). */
   pilaresQueDescem: ObjectId[];
   /** Pilares que já têm bloco — mantidos. */
   pilaresComBloco: number;
+  /** Cadeias de parede que já tinham baldrame — mantidas. */
+  cadeiasComBaldrame: number;
   avisos: string[];
   motivo: string | null;
 }
 
 export function fundacoesExistentesNoNivel(model: BlueprintModel, levelId: ObjectId): Structural[] {
   return (model.structures ?? []).filter(
-    (s) => s.levelId === levelId && (s.kind === 'ESTACA' || s.kind === 'BLOCO_COROAMENTO'),
+    (s) => s.levelId === levelId && (s.kind === 'ESTACA' || s.kind === 'BLOCO_COROAMENTO' || s.kind === 'VIGA_FUNDACAO'),
   );
 }
+
+/** A baldrame nunca é mais estreita que isto (obra corrente: 15 cm). */
+export const LARGURA_MINIMA_DA_BALDRAME_MM = 150;
 
 const dist = (p: Point, q: Point) => Math.hypot(q.x - p.x, q.y - p.y);
 
@@ -145,9 +189,11 @@ export function planejarFundacoes(
     levelId,
     blocos: [],
     estacas: [],
+    baldrames: [],
     comandos: [],
     pilaresQueDescem: [],
     pilaresComBloco: 0,
+    cadeiasComBaldrame: 0,
     avisos: [],
     motivo,
     ...extras,
@@ -209,14 +255,49 @@ export function planejarFundacoes(
       aviso: vizinho ? `bloco sobrepõe o do pilar ${vizinho.rotulo ?? 'vizinho'} — unifique à mão` : null,
     });
   }
-  if (candidatos.length === 0) {
-    return vazio('todos os pilares já têm bloco', { pilaresComBloco, avisos });
+  // ─── Vigas baldrame: uma por cadeia de paredes, de face a face de pilar ────
+  type CandidataBaldrame = Omit<BaldramePrevista, 'idPrevisto' | 'rotulo'>;
+  const baldramesCandidatas: CandidataBaldrame[] = [];
+  let cadeiasComBaldrame = 0;
+  if (hip.vigaBaldrame && arrasamento > 0) {
+    const walls = paredesDoNivel(model, levelId, true);
+    const tol = DEFAULT_TOLERANCE_MM;
+    const { nos } = nosDeParede(model, levelId, tol, walls);
+    const existentes = (model.structures ?? []).filter((s) => s.levelId === levelId && s.kind === 'VIGA_FUNDACAO');
+    for (const c of cadeiasDeParedes(walls, nos)) {
+      if (c.comprimentoMm <= tol) continue;
+      if (cadeiaJaTemViga(c, existentes, tol)) {
+        cadeiasComBaldrame++;
+        continue;
+      }
+      const { a, b } = pontasDaCadeia(c);
+      const a2 = recuarAteAFaceDoPilar(pilares, a, b);
+      const b2 = recuarAteAFaceDoPilar(pilares, b, a);
+      const comprimento = Math.round(dist(a2, b2));
+      if (comprimento <= tol) continue;
+      const larguraMm = Math.max(LARGURA_MINIMA_DA_BALDRAME_MM, ...c.elos.map((e) => e.wall.thicknessMm));
+      baldramesCandidatas.push({
+        a: a2,
+        b: b2,
+        comprimentoMm: comprimento,
+        larguraMm,
+        alturaMm: arrasamento,
+        baseMm: -arrasamento,
+        wallIds: c.elos.map((e) => e.wall.id),
+      });
+    }
+    baldramesCandidatas.sort((p, q) => p.a.x - q.a.x || p.a.y - q.a.y || p.b.x - q.b.x || p.b.y - q.b.y);
+  }
+
+  if (candidatos.length === 0 && baldramesCandidatas.length === 0) {
+    return vazio('todos os pilares já têm bloco', { pilaresComBloco, cadeiasComBaldrame, avisos });
   }
 
   const nB = proximoNumeroDoRotulo(model, 'B');
   const nE = proximoNumeroDoRotulo(model, 'E');
+  const nVB = proximoNumeroDoRotulo(model, 'VB');
   const totalEstacas = candidatos.reduce((n, c) => n + c.estacas.length, 0);
-  const ids = idsPrevistosDeEstrutura(model, candidatos.length + totalEstacas);
+  const ids = idsPrevistosDeEstrutura(model, candidatos.length + totalEstacas + baldramesCandidatas.length);
   let kE = 0;
   const blocos: BlocoPrevisto[] = candidatos.map((c, k) => ({
     ...c,
@@ -229,6 +310,11 @@ export function planejarFundacoes(
     }),
   }));
   const estacas = blocos.flatMap((b) => b.estacas);
+  const baldrames: BaldramePrevista[] = baldramesCandidatas.map((c, k) => ({
+    ...c,
+    idPrevisto: ids[candidatos.length + totalEstacas + k],
+    rotulo: `VB${nVB + k}`,
+  }));
   // O pilar desce até o topo do bloco (todos os do pavimento, inclusive os que
   // já tinham bloco): pé em −arrasamento, topo onde estava.
   const topoDoBloco = -arrasamento;
@@ -263,6 +349,20 @@ export function planejarFundacoes(
         rotulo: e.rotulo,
       }),
     ),
+    ...baldrames.map(
+      (v): Command => ({
+        type: 'AddStructural',
+        levelId,
+        kind: 'VIGA_FUNDACAO',
+        pontos: [v.a, v.b],
+        larguraMm: v.larguraMm,
+        alturaMm: v.alturaMm,
+        baseMm: v.baseMm,
+        rotulo: v.rotulo,
+      }),
+    ),
+    // A baldrame CEDE ao pilar intermediário que ela ainda cruza (o pilar é contínuo).
+    ...baldrames.map((v): Command => ({ type: 'SetCedeSobreposicao', id: v.idPrevisto, cede: true })),
     ...descem.map(
       (p): Command => ({
         type: 'SetStructuralProps',
@@ -272,10 +372,21 @@ export function planejarFundacoes(
       }),
     ),
   ];
-  return { levelId, blocos, estacas, comandos, pilaresQueDescem: descem.map((p) => p.id), pilaresComBloco, avisos, motivo: null };
+  return {
+    levelId,
+    blocos,
+    estacas,
+    baldrames,
+    comandos,
+    pilaresQueDescem: descem.map((p) => p.id),
+    pilaresComBloco,
+    cadeiasComBaldrame,
+    avisos,
+    motivo: null,
+  };
 }
 
-/** Apaga blocos e estacas do pavimento e lança de novo — ver `relancarPilares`. */
+/** Apaga blocos, estacas e baldrames do pavimento e lança de novo — ver `relancarPilares`. */
 export function relancarFundacoes(
   model: BlueprintModel,
   levelId: ObjectId,
@@ -297,9 +408,18 @@ export function conferirPlanoDeFundacoes(
   try {
     const r = applyBatch(model, plano.comandos);
     const criados = r.diff.created.filter((id) => id.startsWith('str_'));
-    const previstos = [...plano.blocos.map((b) => b.idPrevisto), ...plano.estacas.map((e) => e.idPrevisto)];
+    const previstos = [
+      ...plano.blocos.map((b) => b.idPrevisto),
+      ...plano.estacas.map((e) => e.idPrevisto),
+      ...plano.baldrames.map((v) => v.idPrevisto),
+    ];
     if (criados.length !== previstos.length || criados.some((id, i) => id !== previstos[i])) {
       return { ok: false, motivo: `ids previstos (${previstos.join(', ')}) diferem dos criados (${criados.join(', ')})` };
+    }
+    for (const v of plano.baldrames) {
+      if (r.model.structures.find((x) => x.id === v.idPrevisto)?.cedeSobreposicao !== true) {
+        return { ok: false, motivo: `baldrame ${v.idPrevisto} não nasceu cedendo` };
+      }
     }
     for (const id of plano.pilaresQueDescem) {
       const p = r.model.structures.find((x) => x.id === id);

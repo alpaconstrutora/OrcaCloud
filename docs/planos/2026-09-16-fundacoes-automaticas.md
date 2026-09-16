@@ -62,3 +62,28 @@ pavimento cujo pé está acima do arrasamento: `baseMm = −arrasamento`, `altur
 (`pilaresQueDescem`). O pilar continua cruzando o piso, então arranjo e desconto da parede não
 mudam; `conferirPlanoDeFundacoes` confere que desceram. Idempotente (segunda rodada: nenhum
 pilar a descer). Na planta do usuário: 16 pilares descem para −0,50 ao Relançar as fundações.
+
+## Viga baldrame (16/09/2026, print do 3D: blocos e estacas soltos)
+
+> faltou a viga baldrame
+
+O lote das fundações ganhou a **viga baldrame** (`VIGA_FUNDACAO`, tipo já do kernel): UMA por
+cadeia de paredes do pavimento (as mesmas cadeias das vigas), apoiada no topo dos blocos e
+subindo até o piso — `baseMm = −arrasamento`, `alturaMm = arrasamento` (15 × 50 com o padrão);
+largura = espessura da parede, mín. 15 cm (`LARGURA_MINIMA_DA_BALDRAME_MM`); recua até a face do
+pilar em cada ponta (`recuarAteAFaceDoPilar`, extraída do módulo de vigas e agora exportada, com
+`pontasDaCadeia` e `cadeiaJaTemViga`) e nasce cedendo ao pilar intermediário que ainda cruza.
+Topo no piso ⇒ não cruza o piso, não entra no perfil da parede, parede nenhuma cede (provado:
+zero sobreposição parede × baldrame). Rótulo `VB<n>`.
+
+Hipótese nova `vigaBaldrame` (padrão ligada; quem já tinha as hipóteses salvas ganha ligada),
+checkbox "Viga baldrame" na gaveta. Comandos: blocos, estacas, baldrames, `SetCedeSobreposicao`
+das baldrames, pilares que descem; `conferirPlanoDeFundacoes` confere os três grupos de ids e o
+cede. `fundacoesExistentesNoNivel` inclui baldrame (Relançar apaga as três). Blocos já lançados
+antes desta versão: "Fundações automáticas" propõe SÓ as baldrames (na planta do usuário: 7,
+prova ok). Prévia: segunda tabela "Prévia das vigas baldrame"; tracejado no desenho; contagem do
+botão = blocos + baldrames; rodapé e status listam os três.
+
+Prova: `blueprintFundacoesAutomaticas.test.ts` (+3, 12) · editor (+1, 91: prévia com 4 baldrames
+"15 × 50 · topo no piso", Lançar "4 bloco(s), 8 estaca(s) e 4 baldrame(s)", checkbox persiste e
+some da prévia) · suíte 328/4321 · tsc · build.

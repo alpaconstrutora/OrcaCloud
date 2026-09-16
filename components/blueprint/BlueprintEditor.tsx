@@ -4699,6 +4699,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       comprimentoDaEstacaMm: em(COMPRIMENTOS_DE_ESTACA, h.comprimentoDaEstacaMm, HIPOTESES_FUNDACOES_PADRAO.comprimentoDaEstacaMm),
       alturaDoBlocoMm: em(ALTURAS_DE_BLOCO, h.alturaDoBlocoMm, HIPOTESES_FUNDACOES_PADRAO.alturaDoBlocoMm),
       arrasamentoMm: em(ARRASAMENTOS, h.arrasamentoMm, HIPOTESES_FUNDACOES_PADRAO.arrasamentoMm),
+      // Hipótese nova (16/09/2026): quem já tinha as fundações salvas ganha a baldrame ligada.
+      vigaBaldrame: typeof h.vigaBaldrame === 'boolean' ? h.vigaBaldrame : HIPOTESES_FUNDACOES_PADRAO.vigaBaldrame,
     };
   }, [hipDeFundacoesSalvas]);
   const planoDeFundacoes = useMemo(
@@ -4710,6 +4712,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     () => (levelId && fundacoesNoNivel > 0 ? relancarFundacoes(editor.model, levelId, hipotesesDeFundacoes) : null),
     [editor.model, levelId, hipotesesDeFundacoes, fundacoesNoNivel],
   );
+  /** "4 bloco(s), 8 estaca(s) e 5 baldrame(s)" — a baldrame só entra quando há alguma. */
+  const resumoDeFundacoes = (p: { blocos: unknown[]; estacas: unknown[]; baldrames: unknown[] }) =>
+    p.baldrames.length > 0
+      ? `${p.blocos.length} bloco(s), ${p.estacas.length} estaca(s) e ${p.baldrames.length} baldrame(s)`
+      : `${p.blocos.length} bloco(s) e ${p.estacas.length} estaca(s)`;
   const [resultadoDeFundacoes, setResultadoDeFundacoes] = useState<{ ok: boolean; texto: string } | null>(null);
   const lancarFundacoes = () => {
     if (!planoDeFundacoes || planoDeFundacoes.comandos.length === 0) return;
@@ -4722,14 +4729,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     if (criados.length > 0) selecionar(criados);
     setResultadoDeFundacoes({
       ok: true,
-      texto: `${planoDeFundacoes.blocos.length} bloco(s) e ${planoDeFundacoes.estacas.length} estaca(s) lançado(s)${planoDeFundacoes.pilaresQueDescem.length ? ` · ${planoDeFundacoes.pilaresQueDescem.length} pilar(es) desceram até o bloco` : ''} — Ctrl+Z desfaz.`,
+      texto: `${resumoDeFundacoes(planoDeFundacoes)} lançado(s)${planoDeFundacoes.pilaresQueDescem.length ? ` · ${planoDeFundacoes.pilaresQueDescem.length} pilar(es) desceram até o bloco` : ''} — Ctrl+Z desfaz.`,
     });
   };
   const relancarFundacoesDoNivel = async () => {
     if (!planoDeRelancamentoDeFundacoes || planoDeRelancamentoDeFundacoes.comandos.length === 0) return;
     const ok = await confirmar({
       title: 'Relançar as fundações deste pavimento?',
-      message: `Apaga ${planoDeRelancamentoDeFundacoes.apagados.length} bloco(s)/estaca(s) do pavimento — inclusive os desenhados à mão — e lança ${planoDeRelancamentoDeFundacoes.blocos.length} bloco(s) e ${planoDeRelancamentoDeFundacoes.estacas.length} estaca(s) com as hipóteses atuais (Ø ${hipotesesDeFundacoes.diametroDaEstacaMm / 10} cm × ${hipotesesDeFundacoes.comprimentoDaEstacaMm / 1000} m, bloco h ${hipotesesDeFundacoes.alturaDoBlocoMm / 10} cm). Ctrl+Z desfaz.`,
+      message: `Apaga ${planoDeRelancamentoDeFundacoes.apagados.length} bloco(s)/estaca(s)/baldrame(s) do pavimento — inclusive os desenhados à mão — e lança ${resumoDeFundacoes(planoDeRelancamentoDeFundacoes)} com as hipóteses atuais (Ø ${hipotesesDeFundacoes.diametroDaEstacaMm / 10} cm × ${hipotesesDeFundacoes.comprimentoDaEstacaMm / 1000} m, bloco h ${hipotesesDeFundacoes.alturaDoBlocoMm / 10} cm). Ctrl+Z desfaz.`,
       confirmLabel: 'Relançar',
       variant: 'warning',
     });
@@ -4743,7 +4750,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     if (criados.length > 0) selecionar(criados);
     setResultadoDeFundacoes({
       ok: true,
-      texto: `${planoDeRelancamentoDeFundacoes.apagados.length} peça(s) apagada(s); ${planoDeRelancamentoDeFundacoes.blocos.length} bloco(s) e ${planoDeRelancamentoDeFundacoes.estacas.length} estaca(s) lançado(s) — Ctrl+Z desfaz.`,
+      texto: `${planoDeRelancamentoDeFundacoes.apagados.length} peça(s) apagada(s); ${resumoDeFundacoes(planoDeRelancamentoDeFundacoes)} lançado(s) — Ctrl+Z desfaz.`,
     });
   };
   /**
@@ -4799,6 +4806,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           rotacaoDeg: 0,
           circular: true,
         })),
+        ...planoDeFundacoes.baldrames.map((v) => ({
+          kind: 'VIGA_FUNDACAO' as const,
+          pontos: [v.a, v.b],
+          larguraMm: v.larguraMm,
+          profundidadeMm: 0,
+          rotacaoDeg: 0,
+          rotulo: v.rotulo,
+        })),
       ];
     }
     return undefined;
@@ -4812,7 +4827,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         : drawerRecolhido && tarefaAberta === 'lajes' && planoDeLajes
           ? { n: planoDeLajes.lajes.length, nome: 'laje(s)', lancar: lancarLajes, Icone: Layers }
           : drawerRecolhido && tarefaAberta === 'fundacoes' && planoDeFundacoes
-            ? { n: planoDeFundacoes.blocos.length, nome: 'bloco(s) com estaca(s)', lancar: lancarFundacoes, Icone: SquareStack }
+            ? {
+                n: planoDeFundacoes.blocos.length + planoDeFundacoes.baldrames.length,
+                nome: planoDeFundacoes.baldrames.length > 0 ? 'bloco(s), estaca(s) e baldrame(s)' : 'bloco(s) com estaca(s)',
+                lancar: lancarFundacoes,
+                Icone: SquareStack,
+              }
             : null;
   /**
    * RELANÇAR (16/09/2026): mudou a seção ou o vão depois de lançar? O pilar não
@@ -5484,7 +5504,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 <BotaoDoRibbon
                   icone={SquareStack}
                   rotulo="Fundações automáticas"
-                  contagem={planoDeFundacoes?.blocos.length || undefined}
+                  contagem={planoDeFundacoes ? planoDeFundacoes.blocos.length + planoDeFundacoes.baldrames.length || undefined : undefined}
                   ativo={tarefaAberta === 'fundacoes'}
                   onClick={() => alternarTarefa('fundacoes')}
                   ajuda="Um bloco de coroamento sob cada pilar do pavimento, com uma ou duas estacas — prévia antes de gravar, Ctrl+Z desfaz"
@@ -7743,7 +7763,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             {tarefaAberta === 'lajes' &&
               'Uma laje por ambiente fechado, apoiada no topo das paredes do pavimento ativo. Prévia tracejada no desenho; gravar é um passo só, e Ctrl+Z desfaz.'}
             {tarefaAberta === 'fundacoes' &&
-              'Um bloco de coroamento sob cada pilar do pavimento ativo, com a(s) estaca(s) dele. Prévia tracejada no desenho; gravar é um passo só, e Ctrl+Z desfaz.'}
+              'Um bloco de coroamento sob cada pilar do pavimento ativo, com a(s) estaca(s) dele, e a viga baldrame sobre os blocos ao longo de cada parede. Prévia tracejada no desenho; gravar é um passo só, e Ctrl+Z desfaz.'}
             {tarefaAberta === 'tomadas' && (
               <>
                 Por ambiente: classifique o cômodo, veja o que a norma (9.5.2) pede e distribua.{' '}
@@ -7976,6 +7996,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     muda ambiente. No canto, o bloco avança além da parede — é o normal.
                   </li>
                   <li>
+                    <strong>Viga baldrame</strong>
+                    {hipotesesDeFundacoes.vigaBaldrame ? '' : ' (desligada)'}: uma por parede, apoiada no topo dos blocos e
+                    subindo até o piso (h = arrasamento, {hipotesesDeFundacoes.arrasamentoMm / 10} cm), largura da parede (mín. 15 cm),
+                    de face a face de pilar. Não cruza o piso — a parede não cede.
+                  </li>
+                  <li>
                     <strong>Não dimensiona</strong>: fundação se define com a sondagem (NBR 6122) — capacidade de carga,
                     comprimento útil e armadura são do responsável técnico.
                   </li>
@@ -8056,11 +8082,20 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       ))}
                     </select>
                   </label>
-                  {planoDeFundacoes.blocos.length > 0 && (
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={hipotesesDeFundacoes.vigaBaldrame}
+                      onChange={(e) => setHipDeFundacoesSalvas((h) => ({ ...h, vigaBaldrame: e.target.checked }))}
+                      aria-label="Lançar viga baldrame"
+                    />
+                    Viga baldrame
+                  </label>
+                  {planoDeFundacoes.comandos.length > 0 && (
                     <button
                       type="button"
                       onClick={() => setDrawerRecolhido(true)}
-                      title="Recolhe a gaveta para ver blocos e estacas propostos, tracejados em azul, sobre o desenho"
+                      title="Recolhe a gaveta para ver blocos, estacas e baldrames propostos, tracejados em azul, sobre o desenho"
                       className="rounded-[6px] border border-blue-300 bg-white px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
                     >
                       Ver prévia no desenho
@@ -8077,7 +8112,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       ? 'Todos os pilares já têm bloco. Para mudar Ø, comprimento ou bloco, ajuste as hipóteses e use Relançar.'
                       : `Nada a lançar: ${planoDeFundacoes.motivo}.`}
                 </p>
-              ) : (
+              ) : planoDeFundacoes.blocos.length === 0 ? null : (
                 <table className="w-full table-fixed text-xs" aria-label="Prévia das fundações">
                   <thead>
                     <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-500">
@@ -8109,8 +8144,37 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 </table>
               )}
 
+              {planoDeFundacoes.baldrames.length > 0 && (
+                <table className="w-full table-fixed text-xs" aria-label="Prévia das vigas baldrame">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-500">
+                      <th className="w-16 py-1.5 pr-2 font-medium">Viga</th>
+                      <th className="py-1.5 pr-2 font-medium">Seção (cm)</th>
+                      <th className="py-1.5 pr-2 font-medium">Paredes</th>
+                      <th className="w-24 py-1.5 text-right font-medium">Compr. (m)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {planoDeFundacoes.baldrames.map((v) => (
+                      <tr key={v.idPrevisto}>
+                        <td className="py-1.5 pr-2 font-medium text-slate-700">{v.rotulo}</td>
+                        <td className="py-1.5 pr-2 tabular-nums text-slate-600">
+                          {v.larguraMm / 10} × {v.alturaMm / 10} · topo no piso
+                        </td>
+                        <td className="py-1.5 pr-2 text-slate-600">{v.wallIds.length}</td>
+                        <td className="py-1.5 text-right tabular-nums text-slate-600">
+                          {(v.comprimentoMm / 1000).toFixed(2).replace('.', ',')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
               {planoDeFundacoes.pilaresComBloco > 0 && (
-                <p className="text-xs text-slate-500">{planoDeFundacoes.pilaresComBloco} pilar(es) já com bloco — mantidos.</p>
+                <p className="text-xs text-slate-500">
+                  {planoDeFundacoes.pilaresComBloco} pilar(es) já com bloco
+                  {planoDeFundacoes.cadeiasComBaldrame > 0 ? ` e ${planoDeFundacoes.cadeiasComBaldrame} parede(s) já com baldrame` : ''} — mantidos.
+                </p>
               )}
               {planoDeFundacoes.avisos.length > 0 && (
                 <ul className="list-disc space-y-0.5 pl-4 text-xs text-amber-800">
@@ -8884,29 +8948,29 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           {tarefaAberta === 'fundacoes' && planoDeFundacoes && (
             <>
               <span className="mr-auto whitespace-nowrap text-xs text-slate-500">
-                {planoDeFundacoes.blocos.length === 0
+                {planoDeFundacoes.comandos.length === 0
                   ? 'Nada a lançar.'
-                  : `${planoDeFundacoes.blocos.length} bloco(s) · ${planoDeFundacoes.estacas.length} estaca(s).`}
+                  : `${planoDeFundacoes.blocos.length} bloco(s) · ${planoDeFundacoes.estacas.length} estaca(s)${planoDeFundacoes.baldrames.length ? ` · ${planoDeFundacoes.baldrames.length} baldrame(s)` : ''}.`}
               </span>
               {planoDeRelancamentoDeFundacoes && (
                 <button
                   type="button"
                   onClick={() => void relancarFundacoesDoNivel()}
                   disabled={planoDeRelancamentoDeFundacoes.comandos.length === 0}
-                  title="Apaga blocos e estacas deste pavimento e lança de novo com as hipóteses atuais — confirma antes; Ctrl+Z desfaz"
+                  title="Apaga blocos, estacas e baldrames deste pavimento e lança de novo com as hipóteses atuais — confirma antes; Ctrl+Z desfaz"
                   className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-amber-300 bg-white px-3.5 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  Relançar {planoDeRelancamentoDeFundacoes.blocos.length}
+                  Relançar {planoDeRelancamentoDeFundacoes.blocos.length + planoDeRelancamentoDeFundacoes.baldrames.length}
                 </button>
               )}
               <button
                 type="button"
                 onClick={lancarFundacoes}
-                disabled={planoDeFundacoes.blocos.length === 0}
+                disabled={planoDeFundacoes.comandos.length === 0}
                 className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <SquareStack className="h-4 w-4" />
-                Lançar {planoDeFundacoes.blocos.length} bloco(s) e {planoDeFundacoes.estacas.length} estaca(s)
+                Lançar {resumoDeFundacoes(planoDeFundacoes)}
               </button>
             </>
           )}

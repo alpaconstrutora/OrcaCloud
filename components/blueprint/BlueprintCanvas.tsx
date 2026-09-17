@@ -183,6 +183,9 @@ const COR_PREVIA = '#2563eb';
 
 /** Uma peça PROPOSTA por um lançamento automático (pilar, viga, laje) — só desenho, sem clique. */
 export type PecaPrevistaNoCanvas = PecaPrevista;
+
+/** O que a barra pode pedir à vista da planta (ver a prop `navegacao`). */
+export type AcaoDeNavegacao = 'ENQUADRAR' | 'ZOOM_MAIS' | 'ZOOM_MENOS' | 'ESCALA_1_100';
 /** Identidade estável para o padrão: `[]` literal a cada render redesenharia o canvas sem parar. */
 const SEM_PECAS_PREVISTAS: readonly PecaPrevistaNoCanvas[] = [];
 const SEM_OCULTOS: ReadonlySet<string> = new Set();
@@ -925,6 +928,13 @@ interface Props {
    */
   enquadrarPrancha?: string | null;
   /**
+   * COMANDO DE NAVEGAÇÃO vindo da barra (17/09/2026): enquadrar o desenho,
+   * zoom ±, escala 1:100. É um pedido com número de série (`seq`), e não um
+   * booleano, para que dois cliques seguidos no mesmo botão sejam dois
+   * pedidos — o mesmo desenho do `enquadrarToken` do `ElevationCanvas`.
+   */
+  navegacao?: { seq: number; acao: AcaoDeNavegacao } | null;
+  /**
    * O retângulo VISÍVEL, em milímetro do modelo, a cada mudança de vista.
    *
    * Existe porque a região de trabalho é o enquadramento: uma prancha de
@@ -1269,6 +1279,7 @@ export default function BlueprintCanvas({
   onMedicaoPronta,
   medicaoSelecionada = null,
   enquadrarPrancha = null,
+  navegacao = null,
   onVistaMudou,
   encaixesAtivos: encaixesAtivosProp,
   mostrarCircuitos = true,
@@ -2754,6 +2765,64 @@ export default function BlueprintCanvas({
       dy: tamanho.h / 2 + cy * escala,
     });
   }, [enquadrarPrancha, fundo, tamanho]);
+
+  // ── Navegação pela barra (17/09/2026) ─────────────────────────────────────
+  //
+  // ENQUADRAR olha o que existe NO PAVIMENTO — parede, divisa, estrutura pela
+  // seção, telhado, escada, instalações — e, sem nada disso, a prancha de
+  // fundo. Zoom ± mantém o CENTRO da tela no lugar (a roda mantém o cursor,
+  // mas aqui não há cursor sobre a planta: o clique foi na barra). 1:100 é a
+  // escala de impressão mais comum: 1 m do modelo = 1 cm na tela, a 96 dpi.
+  const navegacaoAtendida = useRef(0);
+  useEffect(() => {
+    if (!navegacao || navegacao.seq === navegacaoAtendida.current) return;
+    if (tamanho.w <= 0 || tamanho.h <= 0) return;
+    navegacaoAtendida.current = navegacao.seq;
+    const limitar = (e: number) => Math.max(0.002, Math.min(2, e));
+    const noCentro = (escala: number) => {
+      const cx = tamanho.w / 2;
+      const cy = tamanho.h / 2;
+      const antes = paraMundo(cx, cy);
+      setVista({ escala, dx: cx - antes.x * escala, dy: cy + antes.y * escala });
+    };
+    if (navegacao.acao === 'ZOOM_MAIS') return noCentro(limitar(vista.escala * 1.25));
+    if (navegacao.acao === 'ZOOM_MENOS') return noCentro(limitar(vista.escala / 1.25));
+    if (navegacao.acao === 'ESCALA_1_100') return noCentro(limitar(96 / 25.4 / 100));
+
+    const pontos: Point[] = [];
+    for (const w of paredesReais) pontos.push(w.a, w.b);
+    for (const b of limitesReais) pontos.push(b.a, b.b);
+    for (const e of estruturasReais) pontos.push(...contornoEmPlanta(e));
+    for (const r of aguasDoNivel) pontos.push(...r.pontos);
+    for (const e of escadasDoNivel) pontos.push(...e.pontos);
+    for (const t of trechosReais) pontos.push(t.a, t.b);
+    for (const t of terminaisReais) pontos.push(t.at);
+    for (const q of quadrosReais) pontos.push(q.at);
+    if (pontos.length === 0 && fundo) {
+      const lw = fundo.imagem.naturalWidth;
+      const lh = fundo.imagem.naturalHeight;
+      for (const p of [{ px: 0, py: 0 }, { px: lw, py: 0 }, { px: lw, py: lh }, { px: 0, py: lh }]) {
+        pontos.push(pixelParaModelo(fundo.underlay, p) as Point);
+      }
+    }
+    if (pontos.length === 0) return;
+    const xs = pontos.map((p) => p.x);
+    const ys = pontos.map((p) => p.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    // Um ponto só (uma tomada) não tem largura: dá-se 2 m de folga para ele
+    // aparecer em escala de trabalho, e não no zoom máximo.
+    const larguraMm = Math.max(2000, maxX - minX);
+    const alturaMm = Math.max(2000, maxY - minY);
+    const util = (v: number) => Math.max(1, v - 2 * MARGEM_INICIAL_PX);
+    const escala = limitar(Math.min(util(tamanho.w) / larguraMm, util(tamanho.h) / alturaMm));
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    setVista({ escala, dx: tamanho.w / 2 - cx * escala, dy: tamanho.h / 2 + cy * escala });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navegacao, tamanho]);
 
   // ── Desenho ───────────────────────────────────────────────────────────────
   useEffect(() => {

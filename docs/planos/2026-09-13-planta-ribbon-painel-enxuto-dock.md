@@ -282,3 +282,65 @@ símbolo tomadas"*)**:
 - App real (vite da frente, escritas bloqueadas: 14): oito botões presentes, `Vista: Planta`
   pressionado; Mover → cursor `grab`, arraste esquerdo → `grabbing` e o desenho se desloca;
   `Vista: Frente` → pressionado, seletor diz "Frente", Selecionar some da elevação.
+
+---
+
+## 17/09/2026 — acesso rápido completo ("implemente todos")
+
+### Pedido original
+
+> 4. sugira outros botões que traga boa funcionalidade ao app → (lista de 8) → **"implemente todos"**
+
+### O que entrou (todos ícones em `BotaoBarra`, com `title` + `aria-label`)
+
+Ordem da barra: Selecionar · Mover │ 6 vistas │ **Enquadrar · Zoom− · Zoom+ · 1:100** │
+**Trava 90° · Encaixe** │ Desfazer · Refazer · Copiar · Colar · **Duplicar · Espelho H · Espelho V**
+· Excluir │ **Isolar/Reexibir · Medir linha** · **Exportar a vista atual** · Tela cheia.
+
+- **Enquadrar / Zoom ± / 1:100** — prop `navegacao {seq, acao}` do `BlueprintCanvas`
+  (`AcaoDeNavegacao`); enquadrar olha paredes, divisas, estrutura (seção), telhado,
+  escada, instalações e, sem nada, a prancha de fundo; zoom ± pelo centro da tela;
+  1:100 = 96 dpi/25,4/100 px/mm. Em elevação/corte, Enquadrar usa o token já existente.
+- **Trava 90°** (= Orto/F8, mesmo estado) e **Encaixe** (liga/desliga todos os
+  `TIPOS_DE_ENCAIXE`; a escolha fina continua no menu Encaixe).
+- **Duplicar (Ctrl+D)** — `comandoDeDuplicacao` em `utils/blueprintSelecao.ts`:
+  `DuplicateEntities` com delta (+passo, −passo), passo = grade manual ou 500 mm;
+  esquadria avulsa duplica na mesma parede logo após o vão (não cabe → aviso). A cópia
+  nasce selecionada. ⚠️ Como no Ctrl+V, rótulo explícito é copiado igual ("P1" vira dois
+  "P1"); numerar cópias é assunto separado.
+- **Espelhar** — comando NOVO do kernel `MirrorEntities {eixo VERTICAL|HORIZONTAL, em}`:
+  reflexão rígida em torno do centro da caixa da seleção; parede mantém a→b (offset das
+  aberturas preservado no ponto refletido) e inverte `swingReversed`; estrutura/terminal/
+  quadro negam o giro; `em` aceita meio milímetro. Sem mudança de forma canônica → sem
+  bump de `KERNEL_VERSION`.
+- **Isolar seleção / Reexibir tudo** — `idsParaIsolar` alimenta o mesmo `ocultosNoDesenho`
+  do olho da lista (portas das paredes selecionadas ficam).
+- **Medir linha** — `setTool('medir-linha')` sem trocar de aba.
+- **Exportar a vista atual** — abre Versões com `pranchasIniciais=[vista]` (prop nova do
+  `PainelVersoes`, `key` reinicia ao trocar de vista). A exportação continua saindo da
+  versão publicada — regra do painel mantida.
+- **Sheet `topPx`** (`components/ui/sheet.tsx`): o painel de propriedades sem véu nasce
+  ABAIXO do ribbon (`ribbonRef` medido por ResizeObserver). Sem isso o drawer cobria o
+  acesso rápido e duplicar/espelhar/isolar ficavam inalcançáveis justamente com seleção —
+  achado na prova no app real.
+- Contagem "N parede(s) · N ambiente(s)" só em `2xl:`; em 1600 px com sidebar a barra
+  quebra em duas linhas (o `flex-wrap` do ribbon já cuidava disso).
+
+### Testes
+
+- `__tests__/blueprintSelecao.test.ts` (10): famílias, duplicar (delta, porta na mesma
+  parede, não cabe, seleção vazia), espelhar (pilar no lugar com giro 30→330, conjunto
+  com porta/offset/swing, HORIZONTAL com centro ,5, só porta, comando vazio), isolar.
+- `BlueprintEditor.test.tsx`: "acesso rápido: navegar, modos, duplicar/espelhar, isolar,
+  medir e exportar" e "Ctrl+D duplica". Rótulos escolhidos para não colidir com os testes
+  antigos (`/orto/i`, `/espelhar/i`, `/mostrar tudo/i`): "Trava 90°", "Espelho …",
+  "Reexibir tudo".
+
+### Verificação
+
+- tsc, check-ui-standard (Editor, Canvas, PainelVersoes, sheet), suíte cheia (4411), build.
+- App real (vite da frente, escritas bloqueadas: 16): 12 botões presentes; Afastar/1:100/
+  Enquadrar mudam o desenho; Trava e Encaixe alternam; painel de propriedades começa em
+  y=285 com o ribbon terminando em 269; Duplicar 16→17 pilares, Espelho mantém 17, Isolar
+  esconde P1 e vira Reexibir, Reexibir devolve; 2× Desfazer volta a 16; Medir muda a barra
+  de opções; Exportar abre Versões.

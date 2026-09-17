@@ -615,6 +615,44 @@ export type Command =
       delta: Point;
       manterJuncoes: boolean;
     }
+  /**
+   * ESPELHA um conjunto (17/09/2026: *"Espelhar seleção (horizontal/vertical)
+   * — plantas geminadas e apartamentos espelhados"*).
+   *
+   * Reflexão em torno de uma reta paralela a um eixo: `eixo: 'VERTICAL'` é a
+   * reta x = `em` (troca esquerda ↔ direita), `'HORIZONTAL'` é y = `em`
+   * (troca frente ↔ fundos). O conjunto anda RÍGIDO, como em `DuplicateEntities`
+   * — sem `manterJuncoes`: uma reflexão não é translação, e "esticar a vizinha
+   * até a nova posição" não tem sentido geométrico quando a peça virou do
+   * avesso. Quem espelha metade de um contorno fechado abre o anel, e o
+   * ambiente derivado some — é o mesmo que acontece ao arrastar em SOLTAR.
+   *
+   * O que a reflexão faz com cada família:
+   * - parede: `a` e `b` refletidos, SEM trocar de lugar — o `offsetMm` das
+   *   aberturas é medido de `a`, e mantê-lo em `a'` põe a porta no ponto
+   *   refletido; `swingReversed` inverte, porque o lado de abrir é relativo ao
+   *   sentido a→b e a reflexão troca esquerda por direita.
+   * - estrutura: vértices refletidos e `rotacaoDeg` negada (uma reflexão leva
+   *   o giro θ em −θ, seja qual for o eixo).
+   * - água, trecho, terminal, quadro: pontos refletidos; o giro do terminal e
+   *   do quadro também é negado. As cotas não mudam (gesto em planta).
+   *
+   * `em` é aceito em MEIO milímetro: o centro de uma caixa de largura ímpar cai
+   * em ,5, e 2·em − x continua inteiro.
+   */
+  | {
+      type: 'MirrorEntities';
+      wallIds: ObjectId[];
+      boundaryIds: ObjectId[];
+      structuralIds: ObjectId[];
+      aguaIds?: ObjectId[];
+      trechoIds?: ObjectId[];
+      terminalIds?: ObjectId[];
+      quadroIds?: ObjectId[];
+      eixo: 'VERTICAL' | 'HORIZONTAL';
+      /** Posição da reta de reflexão (x para VERTICAL, y para HORIZONTAL), em mm. */
+      em: number;
+    }
   | { type: 'SplitWall'; wallId: ObjectId; at: Point }
   | { type: 'MergeWalls'; firstId: ObjectId; secondId: ObjectId }
   | { type: 'DeleteWall'; wallId: ObjectId }
@@ -2020,6 +2058,98 @@ function aplicarSemHash(
       // andaram rígidas. `assertModelInvariants` no fim de `applyCommand` cobre
       // a abertura que ficaria fora da parede, e como a cópia é feita antes de
       // validar, o modelo original fica intacto quando isso acontece.
+      break;
+    }
+
+    case 'MirrorEntities': {
+      const aguaIds = command.aguaIds ?? [];
+      const trechoIds = command.trechoIds ?? [];
+      const terminalIds = command.terminalIds ?? [];
+      const quadroIds = command.quadroIds ?? [];
+      if (
+        command.wallIds.length === 0 &&
+        command.boundaryIds.length === 0 &&
+        command.structuralIds.length === 0 &&
+        aguaIds.length === 0 &&
+        trechoIds.length === 0 &&
+        terminalIds.length === 0 &&
+        quadroIds.length === 0
+      ) {
+        throw new KernelError('EMPTY_SELECTION', 'Nada para espelhar');
+      }
+      // 2·em inteiro: aceita o meio milímetro do centro de uma caixa ímpar e
+      // garante que toda coordenada refletida continue inteira.
+      const dobro = assertIntegerMm(Math.round(command.em * 2), 'em');
+      const vertical = command.eixo === 'VERTICAL';
+      const refletir = (p: Point): Point =>
+        vertical
+          ? { x: assertIntegerMm(dobro - p.x, 'coordenada espelhada'), y: p.y }
+          : { x: p.x, y: assertIntegerMm(dobro - p.y, 'coordenada espelhada') };
+      const giroEspelhado = (g: number) => {
+        const n = Math.round(-g) % 360;
+        return n < 0 ? n + 360 : n;
+      };
+
+      // Resolver TODOS antes de tocar em qualquer um — um id errado no meio da
+      // lista não pode deixar metade do conjunto espelhada.
+      const paredes = command.wallIds.map((id) => findWall(next, id));
+      const limites = command.boundaryIds.map((id) => findBoundary(next, id));
+      const estruturas = command.structuralIds.map((id) => findStructural(next, id));
+      const aguas = aguaIds.map((id) => findAgua(next, id));
+      const trechos = trechoIds.map((id) => {
+        const t = (next.trechos ?? []).find((x) => x.id === id);
+        if (!t) throw new KernelError('RUN_NOT_FOUND', `Trecho não encontrado: ${id}`);
+        return t;
+      });
+      const terminais = terminalIds.map((id) => {
+        const t = (next.terminais ?? []).find((x) => x.id === id);
+        if (!t) throw new KernelError('TERMINAL_NOT_FOUND', `Terminal não encontrado: ${id}`);
+        return t;
+      });
+      const quadros = quadroIds.map((id) => {
+        const q = (next.quadros ?? []).find((x) => x.id === id);
+        if (!q) throw new KernelError('BOARD_NOT_FOUND', `Quadro não encontrado: ${id}`);
+        return q;
+      });
+
+      const espelhadas = new Set(command.wallIds);
+      for (const w of [...paredes, ...limites]) {
+        w.a = refletir(w.a);
+        w.b = refletir(w.b);
+        diff.updated.push(w.id);
+      }
+      // O lado de abrir é relativo ao sentido a→b; a reflexão troca os lados.
+      for (const o of next.openings) {
+        if (!espelhadas.has(o.wallId)) continue;
+        o.swingReversed = !o.swingReversed;
+        diff.updated.push(o.id);
+      }
+      for (const s of estruturas) {
+        s.pontos = s.pontos.map(refletir);
+        if (s.rotacaoDeg) s.rotacaoDeg = giroEspelhado(s.rotacaoDeg);
+        diff.updated.push(s.id);
+      }
+      for (const a of aguas) {
+        a.pontos = a.pontos.map(refletir);
+        diff.updated.push(a.id);
+      }
+      for (const t of trechos) {
+        t.a = refletir(t.a);
+        t.b = refletir(t.b);
+        if (t.sugerido) t.sugerido = null;
+        diff.updated.push(t.id);
+      }
+      for (const t of terminais) {
+        t.at = refletir(t.at);
+        if (t.rotacaoGraus) t.rotacaoGraus = giroEspelhado(t.rotacaoGraus);
+        if (t.sugerida) t.sugerida = null;
+        diff.updated.push(t.id);
+      }
+      for (const q of quadros) {
+        q.at = refletir(q.at);
+        if (q.rotacaoGraus) q.rotacaoGraus = giroEspelhado(q.rotacaoGraus);
+        diff.updated.push(q.id);
+      }
       break;
     }
 

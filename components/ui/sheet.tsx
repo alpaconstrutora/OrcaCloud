@@ -40,6 +40,15 @@ interface SheetProps {
    */
   modal?: boolean;
   /**
+   * `topPx` (17/09/2026): no desktop, o painel começa ABAIXO desta altura (em
+   * px da viewport) em vez de encostar no topo. Serve ao painel sem véu que
+   * convive com uma barra de ferramentas: sem isto, o painel de propriedades
+   * da Planta cobria o acesso rápido do ribbon e os botões que agem sobre a
+   * seleção (duplicar, espelhar, isolar) ficavam inalcançáveis justamente
+   * quando há seleção. Ignorado no mobile (bottom sheet).
+   */
+  topPx?: number;
+  /**
    * Geometria do painel no desktop (§26 do guia):
    *  - `floating` (padrão): painel solto, 16px de respiro nos 4 lados e cantos
    *    `rounded-[10px]` — mesma escala dos demais containers (§16).
@@ -83,7 +92,7 @@ const sizeClasses: Record<NonNullable<SheetProps['size']>, string> = {
  */
 const pilhaAbertos: symbol[] = [];
 
-export function Sheet({ open, onClose, children, side = 'right', size = 'xl', dirty = false, variant = 'floating', zIndex = 50, modal = true }: SheetProps) {
+export function Sheet({ open, onClose, children, side = 'right', size = 'xl', dirty = false, variant = 'floating', zIndex = 50, modal = true, topPx }: SheetProps) {
   const confirm = useConfirm();
   const id = React.useRef(Symbol('sheet')).current;
   const requestClose = React.useCallback(async () => {
@@ -149,8 +158,10 @@ export function Sheet({ open, onClose, children, side = 'right', size = 'xl', di
         />
       )}
 
-      {/* Painel: bottom sheet no mobile, lateral no desktop */}
+      {/* Painel: bottom sheet no mobile, lateral no desktop. O topo no desktop
+          sai de uma variável CSS para `topPx` valer só a partir de `sm:`. */}
       <div
+        style={topPx != null ? ({ '--sheet-top': `${Math.max(0, topPx) + (floating ? 16 : 0)}px` } as React.CSSProperties) : undefined}
         className={[
           'fixed bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out',
           // Sem véu o painel precisa reativar o ponteiro por conta própria.
@@ -162,8 +173,8 @@ export function Sheet({ open, onClose, children, side = 'right', size = 'xl', di
           // `overflow-hidden` é o que faz o header cinza e o rodapé respeitarem
           // o raio — sem ele os cantos do painel voltam a ficar quadrados.
           floating
-            ? 'sm:top-4 sm:bottom-4 sm:rounded-[10px] sm:overflow-hidden'
-            : 'sm:top-0 sm:bottom-0 sm:rounded-none',
+            ? 'sm:top-[var(--sheet-top,1rem)] sm:bottom-4 sm:rounded-[10px] sm:overflow-hidden'
+            : 'sm:top-[var(--sheet-top,0px)] sm:bottom-0 sm:rounded-none',
           larguraMaxima,
           side === 'right'
             ? (floating ? 'sm:right-4' : 'sm:right-0')

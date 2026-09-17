@@ -56,8 +56,16 @@ export default function PainelVersoes({
   topografia,
   hipotesesEletricas,
   hipotesesDeArmadura,
+  pranchasIniciais,
 }: {
   study: BlueprintStudy;
+  /**
+   * Pranchas já marcadas ao abrir (17/09/2026): o botão "Exportar a vista
+   * atual" do acesso rápido abre este painel com a vista em que a pessoa
+   * estava. É só o ponto de partida — a exportação continua saindo da VERSÃO
+   * PUBLICADA, nunca do rascunho.
+   */
+  pranchasIniciais?: PranchaExport[];
   /** F8: as hipóteses do pré-dimensionamento, para o quadro de cargas da prancha elétrica. */
   hipotesesEletricas?: HipotesesEletricas;
   /** Hipóteses da armadura esquemática do estudo — a planilha de quantitativos as usa (aba "Armadura"). */
@@ -101,7 +109,9 @@ export default function PainelVersoes({
   const [paisagem, setPaisagem] = useState(false);
   const [cotas, setCotas] = useState(false);
   /** Quais pranchas entram no PDF/PNG/DXF — planta e/ou as quatro elevações. */
-  const [pranchas, setPranchas] = useState<PranchaExport[]>(['planta']);
+  const [pranchas, setPranchas] = useState<PranchaExport[]>(
+    pranchasIniciais && pranchasIniciais.length > 0 ? pranchasIniciais : ['planta'],
+  );
 
   const [compararCom, setCompararCom] = useState<string>('');
   const [diff, setDiff] = useState<DiffSnapshots | null>(null);

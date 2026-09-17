@@ -14,7 +14,7 @@
  * harness em docs/spikes/wall-render.
  */
 import React from 'react';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import type { BlueprintStudy } from '../../types/blueprint';
@@ -1979,6 +1979,83 @@ describe('BlueprintEditor · ocultar componentes na planta baixa', () => {
     await user.click(screen.getByRole('button', { name: /mostrar tudo/i }));
     expect(screen.getByRole('button', { name: 'Ocultar P1 · Pilar no desenho' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /mostrar tudo/i })).toBeNull();
+  });
+
+  /**
+   * 17/09/2026, *"implemente todos"*: os botões sugeridos para o acesso rápido.
+   * Enquadrar/zoom mexem na vista do canvas, que em jsdom não tem tamanho —
+   * aqui só a presença; o efeito é provado no app real. Duplicar, espelhar,
+   * isolar, orto, encaixe, medir e exportar são observáveis no DOM.
+   */
+  it('acesso rápido: navegar, modos, duplicar/espelhar, isolar, medir e exportar', async () => {
+    loadBranchModel.mockResolvedValue(await comPilar());
+    await montar();
+    const user = userEvent.setup();
+    const barra = () => within(screen.getByRole('toolbar'));
+    await abrirComponentes(user);
+
+    // Navegar
+    for (const nome of [/^enquadrar/i, /^afastar/i, /^aproximar/i, /^escala 1:100/i]) {
+      expect(barra().getByRole('button', { name: nome })).toBeInTheDocument();
+    }
+    // Modos: orto e encaixe nascem ligados e alternam
+    const orto = () => barra().getByRole('button', { name: /^trava 90°/i });
+    expect(orto()).toHaveAttribute('aria-pressed', 'true');
+    await user.click(orto());
+    expect(orto()).toHaveAttribute('aria-pressed', 'false');
+    const encaixe = () => barra().getByRole('button', { name: /^encaixe/i });
+    expect(encaixe()).toHaveAttribute('aria-pressed', 'true');
+    await user.click(encaixe());
+    expect(encaixe()).toHaveAttribute('aria-pressed', 'false');
+    await user.click(encaixe());
+    expect(encaixe()).toHaveAttribute('aria-pressed', 'true');
+
+    // Sem seleção: duplicar, espelhar e isolar desligados
+    const duplicar = () => barra().getByRole('button', { name: /^duplicar seleção/i });
+    const espelharH = () => barra().getByRole('button', { name: /^espelho horizontal/i });
+    const isolar = () => barra().getByRole('button', { name: /^isolar seleção|^reexibir tudo/i });
+    expect(duplicar()).toBeDisabled();
+    expect(espelharH()).toBeDisabled();
+    expect(isolar()).toBeDisabled();
+
+    // Seleciona o pilar e DUPLICA: nasce P2, selecionado
+    await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
+    expect(duplicar()).toBeEnabled();
+    await user.click(duplicar());
+    expect(await screen.findByRole('button', { name: /^P2 · Pilar/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^P1 · Pilar/ })).toHaveAttribute('aria-pressed', 'false');
+
+    // ESPELHA a cópia (vira no lugar — continua existindo, continua selecionada)
+    await user.click(espelharH());
+    expect(screen.getByRole('button', { name: /^P2 · Pilar/ })).toHaveAttribute('aria-pressed', 'true');
+
+    // ISOLA: P1 e a parede somem do desenho; o botão vira "Mostrar tudo" e devolve
+    await user.click(isolar());
+    expect(screen.getByRole('button', { name: 'Exibir P1 · Pilar no desenho' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ocultar P2 · Pilar no desenho' })).toBeInTheDocument();
+    expect(barra().getByRole('button', { name: /^reexibir tudo/i })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(barra().getByRole('button', { name: /^reexibir tudo/i }));
+    expect(screen.getByRole('button', { name: 'Ocultar P1 · Pilar no desenho' })).toBeInTheDocument();
+
+    // MEDIR: a régua vira a ferramenta ativa, sem trocar de aba
+    await user.click(barra().getByRole('button', { name: /^medir linha/i }));
+    expect(screen.getByRole('region', { name: /opções da ferramenta/i })).toHaveTextContent(/^Medir linha/);
+    expect(screen.getByRole('tab', { name: 'Arquitetura' })).toHaveAttribute('aria-selected', 'true');
+
+    // EXPORTAR: abre Versões (a exportação continua saindo da versão publicada)
+    await user.click(barra().getByRole('button', { name: /^exportar a vista atual/i }));
+    // Dois títulos "Versões" (o do dock e o do painel): o que importa é o painel com a regra da versão publicada.
+    expect(await screen.findByText(/Exportar sempre parte dela, nunca do/)).toBeInTheDocument();
+  });
+
+  it('Ctrl+D duplica a seleção pelo teclado', async () => {
+    loadBranchModel.mockResolvedValue(await comPilar());
+    await montar();
+    const user = userEvent.setup();
+    await abrirComponentes(user);
+    await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
+    fireEvent.keyDown(window, { key: 'd', ctrlKey: true });
+    expect(await screen.findByRole('button', { name: /^P2 · Pilar/ })).toBeInTheDocument();
   });
 });
 

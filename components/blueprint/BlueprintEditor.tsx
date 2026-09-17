@@ -26,9 +26,12 @@ import {
   ClipboardPaste,
   Contrast,
   Copy,
+  CopyPlus,
   CornerDownRight,
   DoorOpen,
   Eye,
+  EyeOff,
+  FileDown,
   Activity,
   Waves,
   Grid2x2,
@@ -39,6 +42,7 @@ import {
   Layers,
   Grip,
   Hand,
+  Magnet,
   Blocks,
   Loader2,
   Maximize2,
@@ -57,6 +61,7 @@ import {
   RectangleHorizontal,
   Redo2,
   Ruler,
+  Scan,
   Scissors,
   Spline,
   Square,
@@ -67,6 +72,8 @@ import {
   Upload,
   Waypoints,
   Zap,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
@@ -102,7 +109,7 @@ import {
 import PainelCorteSelecionado from './PainelCorteSelecionado';
 import { contornosParaTelhado } from '../../utils/blueprintTelhadoContorno';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
-import BlueprintCanvas, { rotuloPasso, type AjustePonta } from './BlueprintCanvas';
+import BlueprintCanvas, { rotuloPasso, type AjustePonta, type AcaoDeNavegacao } from './BlueprintCanvas';
 import ElevationCanvas from './ElevationCanvas';
 import Blueprint3DTab from './Blueprint3DTab';
 import PainelPavimentos from './PainelPavimentos';
@@ -240,6 +247,8 @@ import {
   type AreaDeTransferencia,
   type DestinoDeColagem,
 } from '../../utils/blueprintAreaDeTransferencia';
+import { comandoDeDuplicacao, comandoDeEspelhamento, idsParaIsolar } from '../../utils/blueprintSelecao';
+import type { PranchaExport } from '../../services/blueprintExportService';
 import { useBlueprintMedicoes } from '../../hooks/useBlueprintMedicoes';
 import { useBlueprintZonaUrbanistica } from '../../hooks/useBlueprintZonaUrbanistica';
 import { useBlueprintTopografia } from '../../hooks/useBlueprintTopografia';
@@ -750,6 +759,40 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   /** Ids dos níveis que a elevação/3D empilham. Sincronizado com os níveis reais. */
   const [niveisVisiveis, setNiveisVisiveis] = useState<string[]>([]);
   const [enquadrarVistaToken, setEnquadrarVistaToken] = useState(0);
+  /**
+   * NAVEGAÇÃO pela barra (17/09/2026): enquadrar, zoom ±, 1:100 na planta
+   * baixa. Objeto com número de série — ver a prop `navegacao` do canvas.
+   */
+  const [navegacao, setNavegacao] = useState<{ seq: number; acao: AcaoDeNavegacao } | null>(null);
+  const navegar = useCallback(
+    (acao: AcaoDeNavegacao) => setNavegacao((n) => ({ seq: (n?.seq ?? 0) + 1, acao })),
+    [],
+  );
+  /**
+   * ONDE O DESENHO COMEÇA (17/09/2026): a borda inferior do ribbon, em px da
+   * viewport. O painel de propriedades (Sheet sem véu) nasce abaixo dela para
+   * não cobrir o acesso rápido — duplicar/espelhar/isolar agem sobre a seleção,
+   * e é com seleção que o painel está aberto.
+   */
+  const ribbonRef = useRef<HTMLDivElement>(null);
+  const [topoDoDesenhoPx, setTopoDoDesenhoPx] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    const el = ribbonRef.current;
+    if (!el) return;
+    const medir = () => setTopoDoDesenhoPx(Math.round(el.getBoundingClientRect().bottom));
+    medir();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(medir) : null;
+    ro?.observe(el);
+    window.addEventListener('resize', medir);
+    window.addEventListener('scroll', medir, true);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', medir);
+      window.removeEventListener('scroll', medir, true);
+    };
+  }, []);
+  /** A prancha que "Exportar a vista atual" deixa marcada ao abrir Versões. */
+  const [pranchaParaExportar, setPranchaParaExportar] = useState<PranchaExport[] | undefined>(undefined);
   const [mostrarCotasAltura, setMostrarCotasAltura] = usePersistedState(
     'blueprint:vistaCotasAltura',
     true,
@@ -1653,6 +1696,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         return;
       }
       if (!(e.ctrlKey || e.metaKey)) return;
+      // Ctrl+D duplica a seleção ao lado (17/09/2026) — o navegador usaria a
+      // tecla para "adicionar aos favoritos", daí o preventDefault.
+      if (e.key.toLowerCase() === 'd') {
+        const alvo = e.target as HTMLElement | null;
+        if (alvo && /^(INPUT|TEXTAREA|SELECT)$/.test(alvo.tagName)) return;
+        e.preventDefault();
+        duplicarRef.current();
+        return;
+      }
       if (e.key.toLowerCase() !== 'z') return;
       e.preventDefault();
       if (e.shiftKey) editor.redo();
@@ -4493,6 +4545,51 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     if (criados.length > 0) selecionar(criados);
   }
 
+  /**
+   * ─── DUPLICAR · ESPELHAR · ISOLAR (17/09/2026) ─────────────────────────────
+   *
+   * Os botões do acesso rápido. A regra de cada um está em
+   * `utils/blueprintSelecao.ts`; aqui só o estado, o aviso e a seleção.
+   */
+  function duplicar() {
+    if (!levelId) return;
+    // Um passo de grade para o lado e para baixo; com a grade automática, 50 cm.
+    const r = comandoDeDuplicacao(editor.model, editor.selectedIds, levelId, passoGrade ?? 500);
+    if (!r.ok) {
+      setAvisoColar(r.aviso);
+      return;
+    }
+    const criados = editor.run(r.comando);
+    setAvisoColar(r.aviso);
+    if (criados.length > 0) selecionar(criados);
+  }
+  function espelhar(eixo: 'VERTICAL' | 'HORIZONTAL') {
+    const r = comandoDeEspelhamento(editor.model, editor.selectedIds, eixo);
+    if (!r.ok) {
+      setAvisoColar(r.aviso);
+      return;
+    }
+    editor.run(r.comando);
+    setAvisoColar(r.aviso);
+  }
+  const isolado = ocultosNoDesenho.size > 0;
+  function isolarOuMostrarTudo() {
+    if (isolado) {
+      setOcultosNoDesenho(new Set());
+      return;
+    }
+    if (editor.selectedIds.length === 0) return;
+    setOcultosNoDesenho(new Set(idsParaIsolar(editor.model, levelId, editor.selectedIds)));
+  }
+  /** Abre Versões com a vista em que se está já marcada como prancha. */
+  function exportarAVistaAtual() {
+    const prancha: PranchaExport = vista === '3d' ? 'planta' : (vista as PranchaExport);
+    setPranchaParaExportar([prancha]);
+    setRelatorio('versoes');
+  }
+  const duplicarRef = useRef(duplicar);
+  duplicarRef.current = duplicar;
+
 
   /**
    * O menu Componentes escolhe o par (ferramenta, subtipo) — ver `MenuComponentes`.
@@ -5835,6 +5932,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           mantido junto do botão — a razão de cada vizinhança não mudou, só o
           arranjo em abas. Ver `Ribbon.tsx` e o plano
           `docs/planos/2026-09-13-planta-ribbon-painel-enxuto-dock.md`. */}
+      <div ref={ribbonRef}>
       <Ribbon
         abas={abasDoRibbon}
         ativa={aba}
@@ -5885,6 +5983,46 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               />
             ))}
             <SeparadorDaBarra />
+            {/* NAVEGAR (17/09/2026, *"implemente todos"*): enquadrar o desenho,
+                zoom ± pelo centro (touchpad sem roda), escala 1:100. Enquadrar
+                também vale nas elevações e cortes (o mesmo token do grupo
+                Navegar); zoom e 1:100 só existem na planta baixa. */}
+            {(!emVista || vistaEhProjecao) && (
+              <BotaoBarra
+                icone={Scan}
+                rotulo="Enquadrar — o desenho inteiro na tela"
+                onClick={() => (emVista ? setEnquadrarVistaToken((t) => t + 1) : navegar('ENQUADRAR'))}
+              />
+            )}
+            {!emVista && (
+              <>
+                <BotaoBarra icone={ZoomOut} rotulo="Afastar (zoom −)" onClick={() => navegar('ZOOM_MENOS')} />
+                <BotaoBarra icone={ZoomIn} rotulo="Aproximar (zoom +)" onClick={() => navegar('ZOOM_MAIS')} />
+                <BotaoBarra
+                  texto="1:100"
+                  rotulo="Escala 1:100 na tela — 1 m do desenho = 1 cm no monitor"
+                  onClick={() => navegar('ESCALA_1_100')}
+                />
+                <SeparadorDaBarra />
+                {/* MODOS globais: a trava ortogonal (F8) e o ímã dos encaixes. O
+                    Orto também está na barra de opções; aqui é o mesmo estado,
+                    à vista em qualquer aba. Encaixe liga/desliga TODOS os tipos —
+                    a escolha fina continua no menu Encaixe da barra de opções. */}
+                <BotaoBarra
+                  icone={Grid3x3}
+                  rotulo={ortogonal ? 'Trava 90° ligada — Shift libera (F8 alterna)' : 'Trava 90° desligada — Shift trava (F8 alterna)'}
+                  onClick={() => setOrtogonal((v) => !v)}
+                  ativo={ortogonal}
+                />
+                <BotaoBarra
+                  icone={Magnet}
+                  rotulo={encaixesAtivos.size > 0 ? 'Encaixe ligado — desliga todos os ímãs' : 'Encaixe desligado — liga todos os ímãs'}
+                  onClick={() => setEncaixesLigados(encaixesAtivos.size > 0 ? [] : [...TIPOS_DE_ENCAIXE])}
+                  ativo={encaixesAtivos.size > 0}
+                />
+                <SeparadorDaBarra />
+              </>
+            )}
             <BotaoBarra
               icone={Undo2}
               rotulo="Desfazer (Ctrl+Z)"
@@ -5922,6 +6060,32 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               }}
               disabled={!areaDeTransferencia}
             />
+            {!emVista && (
+              <>
+                {/* DUPLICAR cai ao lado, sem depender do cursor — é a diferença
+                    para Colar. ESPELHAR vira a seleção em torno do próprio
+                    centro: horizontal troca esquerda ↔ direita, vertical troca
+                    frente ↔ fundos (plantas geminadas). */}
+                <BotaoBarra
+                  icone={CopyPlus}
+                  rotulo="Duplicar seleção ao lado (Ctrl+D)"
+                  onClick={duplicar}
+                  disabled={editor.selectedIds.length === 0}
+                />
+                <BotaoBarra
+                  icone={FlipHorizontal2}
+                  rotulo="Espelho horizontal — esquerda ↔ direita"
+                  onClick={() => espelhar('VERTICAL')}
+                  disabled={editor.selectedIds.length === 0}
+                />
+                <BotaoBarra
+                  icone={FlipVertical2}
+                  rotulo="Espelho vertical — frente ↔ fundos"
+                  onClick={() => espelhar('HORIZONTAL')}
+                  disabled={editor.selectedIds.length === 0}
+                />
+              </>
+            )}
             {/* Excluir é ação de linha no vocabulário do ActionIconButton, então usa
                 o componente padrão. Desfazer/refazer/voltar não estão na taxonomia
                 dele (`ActionKind` não tem esses casos) — forçar um `kind` só para
@@ -5932,6 +6096,37 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onClick={removerSelecionada}
               disabled={!editor.selectedId}
             />
+            {!emVista && (
+              <>
+                <SeparadorDaBarra />
+                {/* ISOLAR esconde tudo menos a seleção (o mesmo `ocultosNoDesenho`
+                    do olho da lista); o botão vira "Mostrar tudo" enquanto há
+                    algo escondido. MEDIR é a régua de Analisar, à mão sem trocar
+                    de aba. EXPORTAR abre Versões com a vista atual marcada — a
+                    exportação continua saindo da versão publicada. */}
+                <BotaoBarra
+                  icone={isolado ? Eye : EyeOff}
+                  rotulo={isolado ? 'Reexibir tudo — desfaz o isolar/ocultar' : 'Isolar seleção — esconde o resto do pavimento'}
+                  onClick={isolarOuMostrarTudo}
+                  disabled={!isolado && editor.selectedIds.length === 0}
+                  ativo={isolado}
+                />
+                <BotaoBarra
+                  icone={Ruler}
+                  rotulo="Medir linha — dois cliques na planta"
+                  onClick={() => editor.setTool('medir-linha')}
+                  ativo={editor.tool === 'medir-linha'}
+                />
+              </>
+            )}
+            {vista !== '3d' && (
+              <BotaoBarra
+                icone={FileDown}
+                rotulo="Exportar a vista atual (PDF/DXF) — abre Versões com esta prancha marcada"
+                onClick={exportarAVistaAtual}
+                ativo={relatorioAberto === 'versoes'}
+              />
+            )}
             {/* TELA CHEIA. No acesso rápido, e não numa aba, porque é o único
                 botão que precisa estar à vista em qualquer aba para SAIR do modo. */}
             <BotaoBarra
@@ -5940,7 +6135,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onClick={alternarTelaCheia}
               ativo={telaCheia}
             />
-            <span className="ml-2 whitespace-nowrap text-xs text-slate-500">
+            {/* A contagem some em tela estreita: com a barra cheia, é o que
+                menos faz falta — o número está no painel Componentes. */}
+            <span className="ml-2 hidden whitespace-nowrap text-xs text-slate-500 2xl:inline">
               {editor.model.walls.length} parede(s) · {ambientes.length} ambiente(s)
             </span>
           </>
@@ -6873,6 +7070,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           </>
         )}
       </Ribbon>
+      </div>
 
       {/* ─── A BARRA DE OPÇÕES DA FERRAMENTA (a Options Bar do Revit) ──────────
           Só na planta baixa — em elevação, corte e 3D não se desenha. O que era
@@ -7471,6 +7669,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               // aferir a escala mantém o id (e não deve — recalibrar pivota
               // em `p1` justamente para o traçado não se mexer).
               enquadrarPrancha={fundo.ativaId}
+              navegacao={navegacao}
               onVistaMudou={setLimitesDaVista}
               // A arma morre junto com a TAREFA (era: junto com a seção; antes,
               // com a aba). Sem este recorte, armar e fechar "Do PDF" deixaria
@@ -7558,6 +7757,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
             {relatorioAberto === 'versoes' && (
               <PainelVersoes
+                // A chave reinicia o painel quando "Exportar a vista atual" é
+                // clicado noutra vista: o estado inicial é lido uma vez só.
+                key={pranchaParaExportar?.join('|') ?? 'versoes'}
+                pranchasIniciais={pranchaParaExportar}
                 study={study}
                 custoPorUid={custoPorUid}
                 hipotesesEletricas={hipotesesEletricas}
@@ -9519,7 +9722,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         // painel lateral e não fecha mais"*): com a seleção mantida, as
         // propriedades reapareciam embaixo da lista e só sumiam clicando no
         // vazio do desenho. Quem veio pela lista volta para a lista.
-        <Sheet open onClose={fecharPropriedades} size="lg" modal={false}>
+        <Sheet open onClose={fecharPropriedades} size="lg" modal={false} topPx={topoDoDesenhoPx}>
           <SheetHeader onClose={fecharPropriedades}>
             <SheetTitle>
               <span className="flex items-center gap-2">
@@ -9681,12 +9884,15 @@ function SeparadorDaBarra() {
  *  botão só com ícone não tem nome acessível nenhum sem isso. */
 function BotaoBarra({
   icone: Icone,
+  texto,
   rotulo,
   onClick,
   disabled,
   ativo,
 }: {
-  icone: React.ElementType;
+  icone?: React.ElementType;
+  /** Em vez do ícone, um texto curto ("1:100") — para o que não tem símbolo. */
+  texto?: string;
   rotulo: string;
   onClick: () => void;
   disabled?: boolean;
@@ -9705,7 +9911,11 @@ function BotaoBarra({
         ativo ? 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
       }`}
     >
-      <Icone className="h-4 w-4" />
+      {Icone ? (
+        <Icone className="h-4 w-4" />
+      ) : (
+        <span className="block h-4 min-w-4 text-[10px] font-semibold leading-4 tabular-nums">{texto}</span>
+      )}
     </button>
   );
 }

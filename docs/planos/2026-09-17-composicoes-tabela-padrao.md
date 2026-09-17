@@ -81,11 +81,13 @@ ao lado da engrenagem.
 - **Como sei que terminou:** a nota está no §6.10.
 
 ## Estado
-- [ ] `StandardTable.tsx` — busca controlada sem filtro local
-- [ ] `DatabaseExplorer.tsx` — reescrita da tela de lista
-- [ ] guia §6.10
-- [ ] `check-ui-standard.sh` + `tsc` limpos
-- [ ] verificação visual no navegador
+- [x] `StandardTable.tsx` — busca controlada sem filtro local (e0ee1444)
+- [x] `DatabaseExplorer.tsx` — reescrita da tela de lista (e0ee1444)
+- [x] guia §6.10 (e0ee1444)
+- [x] `check-ui-standard.sh` + `tsc` + `check-xss-sinks` + `npm run build` limpos —
+      única linha restante do check é a busca interna do `GroupManagerModal`
+      (§3.1: busca de modal, filtra a lista do próprio modal — fora do escopo)
+- [ ] verificação visual no navegador (`c:/tmp/pwtest/composicoes-tabela.js`, preview em 127.0.0.1:5317)
 - [ ] push em `main`
 
 ## Verificação

@@ -108,3 +108,14 @@ Ao fechar o Sheet (X/Esc) a peça continuava selecionada e as propriedades reapa
 lateral, sem jeito de sumir a não ser clicando no vazio do desenho. Agora fechar DESMARCA (`fecharPropriedades`):
 quem veio pela lista volta para a lista, sem propriedades em lugar nenhum. Enquanto o Sheet está aberto, o painel
 lateral não mostra Propriedades (medido no app real: 0 regiões; após Esc: sheet 0, P3 desmarcado, painel 0).
+
+### Também pelo clique no desenho — Sheet SEM véu (17/09/2026)
+
+> o mesmo comportamento deve ocorrer quando eu clico em um componente na planta
+
+Selecionar pela mão (clique no desenho 2D, na cena 3D ou na lista) abre as propriedades no Sheet
+(`selecionarEAbrir`); seleções programáticas (o lote recém-lançado) seguem no painel lateral. Para o desenho
+continuar vivo, o `Sheet` ganhou `modal={false}`: sem véu, sem `aria-modal`, painel flutuante com
+`pointer-events-auto` — clicar noutra peça troca o conteúdo, clicar no vazio desmarca e fecha, arrastar continua
+funcionando, Esc fecha e desmarca. Provado no app real: com o Sheet aberto, um clique no vazio do desenho (ferramenta
+Selecionar) fecha o Sheet e desmarca P3; painel lateral sem Propriedades em nenhum momento.

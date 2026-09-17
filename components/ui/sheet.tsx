@@ -32,6 +32,14 @@ interface SheetProps {
    */
   dirty?: boolean;
   /**
+   * `modal={false}` (17/09/2026): SEM véu — a página atrás continua clicável e
+   * o painel flutua por cima. É o painel de propriedades da Planta Inteligente,
+   * que acompanha a seleção no desenho: clicar noutra peça troca o conteúdo,
+   * clicar no vazio fecha, arrastar continua funcionando. Esc ainda fecha.
+   * Padrão `true`: o Sheet de sempre, com véu.
+   */
+  modal?: boolean;
+  /**
    * Geometria do painel no desktop (§26 do guia):
    *  - `floating` (padrão): painel solto, 16px de respiro nos 4 lados e cantos
    *    `rounded-[10px]` — mesma escala dos demais containers (§16).
@@ -75,7 +83,7 @@ const sizeClasses: Record<NonNullable<SheetProps['size']>, string> = {
  */
 const pilhaAbertos: symbol[] = [];
 
-export function Sheet({ open, onClose, children, side = 'right', size = 'xl', dirty = false, variant = 'floating', zIndex = 50 }: SheetProps) {
+export function Sheet({ open, onClose, children, side = 'right', size = 'xl', dirty = false, variant = 'floating', zIndex = 50, modal = true }: SheetProps) {
   const confirm = useConfirm();
   const id = React.useRef(Symbol('sheet')).current;
   const requestClose = React.useCallback(async () => {
@@ -129,20 +137,24 @@ export function Sheet({ open, onClose, children, side = 'right', size = 'xl', di
   return (
     <div
       style={{ zIndex }}
-      className={`fixed inset-0 transition-all duration-200 ${open ? 'pointer-events-auto' : 'pointer-events-none'}`}
-      aria-modal="true"
+      className={`fixed inset-0 transition-all duration-200 ${open && modal ? 'pointer-events-auto' : 'pointer-events-none'}`}
+      aria-modal={modal ? 'true' : undefined}
       role="dialog"
     >
-      {/* Backdrop */}
-      <div
-        className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-200 ${open ? 'opacity-100' : 'opacity-0'}`}
-        onClick={requestClose}
-      />
+      {/* Backdrop — só no modal. Sem véu, o que está atrás continua vivo. */}
+      {modal && (
+        <div
+          className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-200 ${open ? 'opacity-100' : 'opacity-0'}`}
+          onClick={requestClose}
+        />
+      )}
 
       {/* Painel: bottom sheet no mobile, lateral no desktop */}
       <div
         className={[
           'fixed bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out',
+          // Sem véu o painel precisa reativar o ponteiro por conta própria.
+          modal ? '' : 'pointer-events-auto',
           // mobile: bottom sheet
           'inset-x-0 bottom-0 max-h-[90vh] rounded-t-2xl',
           // desktop: painel lateral

@@ -2127,6 +2127,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   useEffect(() => {
     if (editor.selectedIds.length === 0 && propriedadesEmSheet) setPropriedadesEmSheet(false);
   }, [editor.selectedIds.length, propriedadesEmSheet]);
+  /**
+   * Seleção feita PELA MÃO do usuário (clique no desenho 2D, na cena 3D ou na
+   * lista): abre as propriedades no Sheet. Seleções programáticas (o lote que
+   * acabou de ser lançado) não abrem — o painel lateral as mostra, como sempre.
+   */
+  function selecionarEAbrir(ids: string[]) {
+    selecionar(ids);
+    setPropriedadesEmSheet(ids.length > 0);
+  }
   /** Fecha o Sheet E desmarca: as propriedades não voltam para o painel lateral. */
   const fecharPropriedades = useCallback(() => {
     setPropriedadesEmSheet(false);
@@ -7188,7 +7197,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               // uma parede no 3D e voltar para a planta tem de mostrar a mesma
               // peça marcada. Duas seleções paralelas seriam duas verdades.
               selecionados={new Set(editor.selectedIds)}
-              onSelecionar={selecionar}
+              onSelecionar={selecionarEAbrir}
             />
           ) : vistaEhProjecao ? (
             <ElevationCanvas
@@ -7216,8 +7225,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               tool={editor.tool}
               levelId={levelId}
               selectedIds={editor.selectedIds}
-              onSelecionar={selecionar}
-              onSelecionarPeca={selecionarSoAPeca}
+              // Clique no desenho abre as propriedades no Sheet sem véu
+              // (17/09/2026: *"o mesmo comportamento deve ocorrer quando eu
+              // clico em um componente na planta"*); o desenho segue vivo.
+              onSelecionar={selecionarEAbrir}
+              onSelecionarPeca={(id) => {
+                selecionarSoAPeca(id);
+                setPropriedadesEmSheet(true);
+              }}
               onMoverSelecao={moverSelecao}
               onMoverMedicoes={moverMedicoes}
               manterJuncoes={modoJuncao === 'MANTER'}
@@ -7595,10 +7610,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 rede={componentesDoNivel.rede}
                 selecionados={editor.selectedIds}
                 // Pela LISTA, as propriedades abrem em Sheet (17/09/2026).
-                onSelecionar={(ids) => {
-                  selecionar(ids);
-                  setPropriedadesEmSheet(ids.length > 0);
-                }}
+                onSelecionar={selecionarEAbrir}
                 onSelecionarPeca={(id) => {
                   selecionarSoAPeca(id);
                   setPropriedadesEmSheet(true);
@@ -9393,7 +9405,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         // painel lateral e não fecha mais"*): com a seleção mantida, as
         // propriedades reapareciam embaixo da lista e só sumiam clicando no
         // vazio do desenho. Quem veio pela lista volta para a lista.
-        <Sheet open onClose={fecharPropriedades} size="lg">
+        <Sheet open onClose={fecharPropriedades} size="lg" modal={false}>
           <SheetHeader onClose={fecharPropriedades}>
             <SheetTitle>
               <span className="flex items-center gap-2">
@@ -9403,7 +9415,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             </SheetTitle>
             <SheetDescription>
               {rotuloDoSelecionado ?? `${editor.selectedIds.length} selecionado(s)`} · o que se edita aqui grava na hora; Ctrl+Z desfaz.
-              Fechar desmarca a peça.
+              O desenho continua ativo: clicar noutra peça troca; clicar no vazio ou fechar desmarca.
             </SheetDescription>
           </SheetHeader>
           <SheetPanel className="p-0">

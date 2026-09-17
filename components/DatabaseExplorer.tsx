@@ -60,12 +60,12 @@ const VIEW_HEADERS: Record<BaseTab, { title: string; subtitle: string }> = {
 // Colunas de DADO (§6.10) — "Ações" entra por `actions`. Larguras iniciais
 // aproximam a largura útil da tela; o autofit/arraste ajustam a partir daqui.
 const EXPLORER_COLUMNS: StandardTableColumn[] = [
-    { key: 'code', label: 'Item', sortable: true, width: 150 },
+    { key: 'code', label: 'Item', sortable: true, width: 170 },
     { key: 'type', label: 'Tipo', sortable: true, width: 130 },
     { key: 'nature', label: 'Natureza', sortable: true, width: 130 },
     { key: 'description', label: 'Descrição', sortable: true, width: 520 },
     { key: 'unit', label: 'Unid.', sortable: true, width: 90, align: 'center' },
-    { key: 'price', label: 'Preço unitário', sortable: true, width: 150, align: 'right' },
+    { key: 'price', label: 'Preço unitário', sortable: true, width: 170, align: 'right' },
     { key: 'category', label: 'Grupo', sortable: true, width: 200, defaultHidden: true },
 ];
 

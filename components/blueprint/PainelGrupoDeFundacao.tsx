@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { Move, Trash2 } from 'lucide-react';
 import type { Structural } from '../../utils/blueprintKernel';
+import type { ArmaduraDaPeca, ArmaduraManual } from '../../utils/blueprintArmadura';
+import SecaoArmadaSvg from './SecaoArmadaSvg';
+import ArmaduraManualForm from './ArmaduraManualForm';
 import {
   ARRANJOS_CANONICOS,
   ESPACAMENTO_EM_DIAMETROS,
@@ -48,6 +51,21 @@ interface Props {
   onExcluirGrupo: () => void;
   /** Seleciona SÓ a peça — o mesmo que o duplo clique no desenho. */
   onSelecionarPeca: (id: string) => void;
+  /**
+   * ARMADURA do grupo (17/09/2026: *"ao clicar em uma estaca o drawer
+   * propriedades não exibe a armadura para edição"*): um clique na estaca
+   * seleciona o grupo, então é AQUI que o bloco e as estacas mostram o esquema,
+   * a seção e o lançamento manual. O manual das estacas vale para TODAS as
+   * estacas do bloco (elas são iguais por construção).
+   */
+  armadura?: {
+    bloco?: ArmaduraDaPeca;
+    estaca?: ArmaduraDaPeca;
+    manualDoBloco: ArmaduraManual | null;
+    manualDasEstacas: ArmaduraManual | null;
+    onManualDoBloco: (spec: ArmaduraManual | null) => void;
+    onManualDasEstacas: (spec: ArmaduraManual | null) => void;
+  };
 }
 
 export default function PainelGrupoDeFundacao({
@@ -59,6 +77,7 @@ export default function PainelGrupoDeFundacao({
   onMover,
   onExcluirGrupo,
   onSelecionarPeca,
+  armadura,
 }: Props) {
   const { bloco, estacas, pilar } = grupo;
   const n = estacas.length;
@@ -192,6 +211,40 @@ export default function PainelGrupoDeFundacao({
           m
         </label>
       </div>
+
+      {/* ─── Armadura do bloco e das estacas ─────────────────────────────── */}
+      {armadura && (armadura.bloco || armadura.estaca) && (
+        <div className="mt-3 space-y-3">
+          {armadura.bloco && (
+            <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5" data-testid="armadura-do-bloco">
+              <p className="text-xs font-semibold text-slate-700">
+                Armadura do bloco {nomeDoBloco}
+                <span className="ml-1 font-normal text-slate-500">
+                  ≈ {armadura.bloco.kg.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg · {armadura.bloco.descricao} (
+                  {armadura.bloco.origem === 'MANUAL' ? 'manual' : armadura.bloco.origem === 'TAXA' ? 'taxa de referência' : 'mínimos NBR 6118'})
+                </span>
+              </p>
+              <SecaoArmadaSvg estrutura={bloco} armadura={armadura.bloco} larguraPx={180} />
+              <ArmaduraManualForm estrutura={bloco} armadura={armadura.bloco} manual={armadura.manualDoBloco} onManual={armadura.onManualDoBloco} />
+            </div>
+          )}
+          {armadura.estaca && estacas[0] && (
+            <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5" data-testid="armadura-das-estacas">
+              <p className="text-xs font-semibold text-slate-700">
+                Armadura das estacas
+                <span className="ml-1 font-normal text-slate-500">
+                  ≈ {armadura.estaca.kg.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg cada ×{' '}
+                  {n} · {armadura.estaca.descricao} (
+                  {armadura.estaca.origem === 'MANUAL' ? 'manual' : armadura.estaca.origem === 'TAXA' ? 'taxa de referência' : 'mínimos NBR 6118'})
+                </span>
+              </p>
+              <SecaoArmadaSvg estrutura={estacas[0]} armadura={armadura.estaca} larguraPx={120} />
+              <ArmaduraManualForm estrutura={estacas[0]} armadura={armadura.estaca} manual={armadura.manualDasEstacas} onManual={armadura.onManualDasEstacas} />
+              {n > 1 && <p className="mt-1 text-[10px] text-slate-500">O lançamento manual vale para as {n} estacas deste bloco.</p>}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ─── Peças do grupo ──────────────────────────────────────────────── */}
       <p className="mt-3 text-xs text-slate-500">

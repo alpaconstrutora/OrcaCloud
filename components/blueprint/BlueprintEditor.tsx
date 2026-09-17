@@ -2136,6 +2136,21 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     selecionar(ids);
     setPropriedadesEmSheet(ids.length > 0);
   }
+  /**
+   * Grava (ou apaga, com `null`) o lançamento manual de armadura de um ou mais
+   * uids nas hipóteses do estudo — mesma persistência, mesma leitura em todo
+   * lugar. Vários uids de uma vez é o caso das estacas de um bloco.
+   */
+  const gravarArmaduraManual = (uids: string[], spec: import('../../utils/blueprintArmadura').ArmaduraManual | null) => {
+    const porPeca = { ...(hipotesesDeArmadura.porPeca ?? {}) };
+    for (const uid of uids) {
+      if (spec) porPeca[uid] = spec;
+      else delete porPeca[uid];
+    }
+    const { porPeca: _antigo, ...resto } = hipotesesDeArmadura;
+    void _antigo;
+    armaduraDoEstudo.setHipoteses(Object.keys(porPeca).length ? { ...resto, porPeca } : resto);
+  };
   /** Fecha o Sheet E desmarca: as propriedades não voltam para o painel lateral. */
   const fecharPropriedades = useCallback(() => {
     setPropriedadesEmSheet(false);
@@ -5266,6 +5281,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           onMover={(dx, dy) => moverSelecao([], [], editor.selectedIds, [], { x: dx, y: dy } as Point)}
           onExcluirGrupo={removerSelecionada}
           onSelecionarPeca={selecionarSoAPeca}
+          armadura={{
+            bloco: armaduraPorId.get(grupoSel.bloco.id),
+            estaca: grupoSel.estacas[0] ? armaduraPorId.get(grupoSel.estacas[0].id) : undefined,
+            manualDoBloco: armaduraManualDe(hipotesesDeArmadura, grupoSel.bloco.uid),
+            manualDasEstacas: grupoSel.estacas[0] ? armaduraManualDe(hipotesesDeArmadura, grupoSel.estacas[0].uid) : null,
+            onManualDoBloco: (spec) => gravarArmaduraManual([grupoSel.bloco.uid], spec),
+            onManualDasEstacas: (spec) =>
+              gravarArmaduraManual(
+                grupoSel.estacas.map((e) => e.uid),
+                spec,
+              ),
+          }}
         />
       ) : editor.selectedIds.length > 1 ? (
         <PainelSelecaoMultipla
@@ -5353,17 +5380,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         estrutura={grupoSel ? null : estruturaSel}
         armadura={estruturaSel ? armaduraPorId.get(estruturaSel.id) : undefined}
         armaduraManual={estruturaSel ? armaduraManualDe(hipotesesDeArmadura, estruturaSel.uid) : null}
-        onArmaduraManual={(spec) => {
-          if (!estruturaSel) return;
-          // Gravado no estudo por uid (junto das hipóteses): mesma
-          // persistência, mesma leitura em todo lugar.
-          const porPeca = { ...(hipotesesDeArmadura.porPeca ?? {}) };
-          if (spec) porPeca[estruturaSel.uid] = spec;
-          else delete porPeca[estruturaSel.uid];
-          const { porPeca: _antigo, ...resto } = hipotesesDeArmadura;
-          void _antigo;
-          armaduraDoEstudo.setHipoteses(Object.keys(porPeca).length ? { ...resto, porPeca } : resto);
-        }}
+        onArmaduraManual={(spec) => estruturaSel && gravarArmaduraManual([estruturaSel.uid], spec)}
         grupo={
           estruturaSel && !grupoSel
             ? (() => {

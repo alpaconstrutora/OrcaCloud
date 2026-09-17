@@ -173,3 +173,16 @@ A planilha (aba Armadura) ganhou Seção, Barras (m) e Estribos (m).
 
 Prova: módulo (seção e comprimentos do pilar e da estaca) · planilha (colunas novas, numéricas) · editor (linha
 P1 60 × 60 com 39,6 m de barra e estribos Ø 5,0 c/15) · suíte 332/4393 · tsc · build · app real (colunas na tela).
+
+## Armadura no painel do grupo de fundação (17/09/2026)
+
+> ao clicar em uma estaca o drawer propriedades nao exibe a armadura para edicao
+
+Um clique na estaca seleciona o GRUPO (bloco + estacas), e o painel do grupo não falava de aço. Agora
+`PainelGrupoDeFundacao` mostra "Armadura do bloco Bn" (kg, esquema, seção, lançamento manual) e "Armadura das
+estacas" (kg cada × n, esquema, seção redonda, lançamento manual que vale para TODAS as estacas do bloco —
+`gravarArmaduraManual(uids, spec)` no editor). A legenda da seção redonda diz "Ø 30 cm".
+
+Prova: editor (+1: clique em E1 → grupo com os dois blocos de armadura; manual nas estacas → E1 e E2 manuais na
+tela Armadura, bloco não) · suíte 332/4394 · tsc · build · app real (E1 → "Armadura do bloco B1 ≈ 15,1 kg" e
+"Armadura das estacas ≈ 29,9 kg cada × 1 · 6 Ø 10,0…").

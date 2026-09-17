@@ -57,7 +57,7 @@ export default function SecaoArmadaSvg({ estrutura: s, armadura: a, larguraPx = 
       for (const p of pos) barras.push({ x: p.x, y: -p.y, r: long.bitolaMm / 2 });
     }
     if (trans) estribo = { x: -(largura / 2 - c), y: -(altura / 2 - c), w: largura - 2 * c, h: altura - 2 * c };
-    legenda = `${(largura / 10).toLocaleString('pt-BR')} × ${(altura / 10).toLocaleString('pt-BR')} cm`;
+    legenda = circular ? `Ø ${(largura / 10).toLocaleString('pt-BR')} cm` : `${(largura / 10).toLocaleString('pt-BR')} × ${(altura / 10).toLocaleString('pt-BR')} cm`;
   } else if (s.kind === 'VIGA' || s.kind === 'VIGA_FUNDACAO') {
     const t = secaoTValida(s);
     largura = t ? t.almaLarguraMm : s.larguraMm;

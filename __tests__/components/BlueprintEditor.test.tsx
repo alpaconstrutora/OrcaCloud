@@ -2213,3 +2213,56 @@ describe('BlueprintEditor · armadura manual', () => {
     expect(tela).not.toHaveTextContent(/com armadura lançada manualmente/);
   });
 });
+
+/**
+ * ARMADURA NO GRUPO DE FUNDAÇÃO (17/09/2026): *"ao clicar em uma estaca o
+ * drawer propriedades não exibe a armadura para edição"* — um clique na estaca
+ * seleciona o grupo, então bloco e estacas mostram esquema, seção e o
+ * lançamento manual ali.
+ */
+describe('BlueprintEditor · armadura no painel do grupo', () => {
+  it('clicar na estaca abre o grupo com a armadura do bloco e das estacas; lançar manualmente vale para todas as estacas', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const m = k.applyBatch(nivel.model, [
+      { type: 'AddWall', levelId: t, a: k.point(0, 0), b: k.point(6000, 0), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(3000, 1500)], larguraMm: 190, profundidadeMm: 190, alturaMm: 3300, baseMm: -500, rotulo: 'P1' },
+      { type: 'AddStructural', levelId: t, kind: 'BLOCO_COROAMENTO', pontos: [k.point(3000, 1500)], larguraMm: 1500, profundidadeMm: 600, alturaMm: 600, baseMm: -1100, rotulo: 'B1' },
+      { type: 'AddStructural', levelId: t, kind: 'ESTACA', pontos: [k.point(2550, 1500)], larguraMm: 300, profundidadeMm: 300, alturaMm: 8000, baseMm: -9100, circular: true, rotulo: 'E1' },
+      { type: 'AddStructural', levelId: t, kind: 'ESTACA', pontos: [k.point(3450, 1500)], larguraMm: 300, profundidadeMm: 300, alturaMm: 8000, baseMm: -9100, circular: true, rotulo: 'E2' },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    const secao = document.querySelector<HTMLButtonElement>('button[aria-controls="secao-componentes-corpo"]')!;
+    if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
+    await user.click(await screen.findByRole('button', { name: /^E1 · Estaca/ }));
+    const sheet = await screen.findByTestId('propriedades-sheet');
+    expect(sheet).toHaveTextContent(/Grupo de fundação/);
+    const bloco = within(sheet).getByTestId('armadura-do-bloco');
+    expect(bloco).toHaveTextContent(/Armadura do bloco B1/);
+    expect(bloco).toHaveTextContent(/malha inferior/);
+    const estacas = within(sheet).getByTestId('armadura-das-estacas');
+    expect(estacas).toHaveTextContent(/Armadura das estacas/);
+    expect(estacas).toHaveTextContent(/kg cada × 2/);
+    expect(estacas).toHaveTextContent(/6 Ø 10,0/);
+    // Lançar manualmente nas estacas: vale para E1 e E2.
+    await user.click(within(estacas).getByRole('button', { name: /lançar manualmente/i }));
+    const barras = within(within(sheet).getByTestId('armadura-das-estacas')).getByRole('spinbutton', { name: /barras longitudinais/i });
+    await user.clear(barras);
+    await user.type(barras, '8');
+    expect(within(sheet).getByTestId('armadura-das-estacas')).toHaveTextContent(/8 Ø 10,0/);
+    expect(within(sheet).getByTestId('armadura-das-estacas')).toHaveTextContent(/\(manual\)/);
+    expect(within(sheet).getByTestId('armadura-das-estacas')).toHaveTextContent(/vale para as 2 estacas/);
+    // Na tela Armadura, E1 e E2 estão manuais e o bloco não.
+    await user.keyboard('{Escape}');
+    await abrirAba(/^analisar$/i);
+    await user.click(botao(/^armadura/i));
+    const tela = document.querySelector<HTMLElement>('[data-tela="armadura"]')!;
+    const linhas = within(tela).getAllByRole('row');
+    expect(linhas.find((r) => /E1/.test(r.textContent ?? ''))).toHaveTextContent(/manual/);
+    expect(linhas.find((r) => /E2/.test(r.textContent ?? ''))).toHaveTextContent(/manual/);
+    expect(linhas.find((r) => /B1/.test(r.textContent ?? ''))).not.toHaveTextContent(/manual/);
+  });
+});

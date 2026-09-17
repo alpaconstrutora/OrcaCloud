@@ -160,3 +160,16 @@ Prova: editor (2 testes reescritos para a tela: `data-tela`, `h1`, abas, taxa 0 
 voltar; manual visto na tela) · suíte 332/4393 · tsc · `check-ui-standard.sh` · build · app real
 na planta do usuário (0 erros JS, escritas bloqueadas): tela com 67 peças, abas "Por peça 67 · Por
 família 4 · Hipóteses", total 2.430,3 kg. Capturas `out-tela/tela-0{1,2,3}-*.png`.
+
+## Seção e comprimentos na tela (17/09/2026)
+
+> analisar < armadura < por peça: incluir coluna com a seção e comprimento do aço da armadura e do estribo
+
+`ArmaduraDaPeca` ganhou `secao` ("19 × 19 cm", "15 × 40 cm", "h 10 cm", "Ø 30 cm", bloco b × p × h — `secaoDaPeca`),
+`comprimentoLongitudinalM` (n × comprimento das barras/malha) e `comprimentoTransversalM` (n × perímetro dos
+estribos/espiral). Na tela "Por peça": colunas **Seção**, **Armadura (m)** (total + "4 Ø 12,5" / "2 dir. Ø 8,0") e
+**Estribos (m)** (total + "19 × Ø 5,0 c/15"), ordenáveis e na busca; totais do recorte somam barras e estribos.
+A planilha (aba Armadura) ganhou Seção, Barras (m) e Estribos (m).
+
+Prova: módulo (seção e comprimentos do pilar e da estaca) · planilha (colunas novas, numéricas) · editor (linha
+P1 60 × 60 com 39,6 m de barra e estribos Ø 5,0 c/15) · suíte 332/4393 · tsc · build · app real (colunas na tela).

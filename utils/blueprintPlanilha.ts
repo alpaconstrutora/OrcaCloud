@@ -281,15 +281,18 @@ export function abasDoQuantitativo(
     abas.push({
       nome: 'Armadura',
       linhas: [
-        ['Rótulo', 'Tipo', 'Concreto (m³)', 'Aço (kg)', 'Taxa (kg/m³)', 'CA-50 (kg)', 'CA-60 (kg)', 'Origem', 'Esquema (mínimos NBR 6118)'],
+        ['Rótulo', 'Tipo', 'Seção', 'Concreto (m³)', 'Aço (kg)', 'Taxa (kg/m³)', 'CA-50 (kg)', 'CA-60 (kg)', 'Barras (m)', 'Estribos (m)', 'Origem', 'Esquema (mínimos NBR 6118)'],
         ...armadura.pecas.map((p) => [
           p.rotulo || p.structuralId,
           nomeDoTipoEstrutural(p.kind),
+          p.secao,
           n3(p.volumeConcretoM3),
           n2(p.kg),
           n2(p.taxaEfetivaKgM3),
           n2(p.kgCa50),
           n2(p.kgCa60),
+          n2(p.comprimentoLongitudinalM),
+          n2(p.comprimentoTransversalM),
           ROTULO_DA_ORIGEM[p.origem],
           p.descricao,
         ]),

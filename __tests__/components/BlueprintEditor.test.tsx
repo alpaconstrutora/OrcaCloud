@@ -2106,6 +2106,10 @@ describe('BlueprintEditor · armadura esquemática', () => {
     // Pilar 60 × 60: o piso da taxa (100 kg/m³ × 1,008 m³ ≈ 100,8 kg) vence o mínimo.
     expect(linhaP1()).toHaveTextContent(/taxa de referência/);
     expect(linhaP1()).toHaveTextContent(/100,8/);
+    // Seção e comprimentos (17/09/2026): 60 × 60; 12 barras de 3,3 m = 39,6 m; estribos n × Ø 5,0 c/15.
+    expect(linhaP1()).toHaveTextContent(/60 × 60 cm/);
+    expect(linhaP1()).toHaveTextContent(/39,6/);
+    expect(linhaP1()).toHaveTextContent(/Ø 5,0 c\/15/);
     // Por família.
     await user.click(within(tela).getByRole('tab', { name: /por família/i }));
     expect(within(tela).getAllByRole('row').some((r) => /Pilares/.test(r.textContent ?? ''))).toBe(true);

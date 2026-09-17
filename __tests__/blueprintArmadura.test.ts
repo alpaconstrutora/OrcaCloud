@@ -70,6 +70,10 @@ describe('armaduraDaPeca — pilar', () => {
     expect(a.descricao).toBe('4 Ø 12,5 + estribos Ø 5,0 c/15');
     expect(a.kgCa60).toBeGreaterThan(0);
     expect(a.kgCa50 + a.kgCa60).toBeCloseTo(a.kg, 1);
+    // Seção e comprimentos totais (17/09/2026): 4 × 3,3 m de barra; estribos n × 0,67 m.
+    expect(a.secao).toBe('19 × 19 cm');
+    expect(a.comprimentoLongitudinalM).toBeCloseTo(4 * 3.3, 2);
+    expect(a.comprimentoTransversalM).toBeCloseTo(est.n * 0.67, 1);
   });
 
   it('pilar grande 60 × 60: As,min 14,4 cm² → 12 Ø 12,5; circular Ø 40 → ≥ 6 barras', () => {
@@ -163,6 +167,8 @@ describe('armaduraDaPeca — laje, bloco, estaca', () => {
     const [long, esp] = a.camadas;
     expect(long).toMatchObject({ n: 6, bitolaMm: 10 });
     expect(long.comprimentoUnitM).toBeCloseTo(6.4, 3);
+    expect(a.secao).toBe('Ø 30 cm');
+    expect(a.comprimentoLongitudinalM).toBeCloseTo(6 * 6.4, 2);
     expect(esp).toMatchObject({ papel: 'espiral', bitolaMm: 5, espacamentoCm: 20 });
     expect(esp.n).toBe(Math.floor(600 / 20) + 1);
     // π (30 − 7) = 72,3 cm.

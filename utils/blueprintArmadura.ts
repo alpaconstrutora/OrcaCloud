@@ -160,6 +160,12 @@ export interface ArmaduraDaPeca {
   avisos: string[];
   /** Cobrimento nominal usado (mm) — quem desenha a seção precisa dele. */
   cobrimentoMm: number;
+  /** A seção da peça como se lê na prancha: "19 × 19 cm", "Ø 30 cm", "h 10 cm". */
+  secao: string;
+  /** Comprimento TOTAL das barras longitudinais/malha (n × comprimento), em m. */
+  comprimentoLongitudinalM: number;
+  /** Comprimento TOTAL dos estribos/espiral (n × perímetro), em m. */
+  comprimentoTransversalM: number;
 }
 
 export interface TotaisDeArmadura {
@@ -439,7 +445,33 @@ export function armaduraDaPeca(s: Structural, quant: Pick<QuantidadeEstrutural, 
     descricao,
     avisos,
     cobrimentoMm,
+    secao: secaoDaPeca(s),
+    comprimentoLongitudinalM: arredonda(
+      camadas.filter((cm) => !ehTransversalPapel(cm.papel)).reduce((acc, cm) => acc + cm.n * cm.comprimentoUnitM, 0),
+      2,
+    ),
+    comprimentoTransversalM: arredonda(
+      camadas.filter((cm) => ehTransversalPapel(cm.papel)).reduce((acc, cm) => acc + cm.n * cm.comprimentoUnitM, 0),
+      2,
+    ),
   };
+}
+
+/** Estribo e espiral são a armadura TRANSVERSAL; barras, superiores e malha são a longitudinal. */
+const ehTransversalPapel = (papel: string) => papel === 'estribo' || papel === 'espiral';
+
+const cmTxt = (mm: number) => (mm / 10).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+
+/** A seção como a prancha escreve: pilar/bloco b × h; viga b × h (alma na seção T); laje h; estaca Ø. */
+export function secaoDaPeca(s: Structural): string {
+  if (s.kind === 'LAJE') return `h ${cmTxt(s.alturaMm)} cm`;
+  if (s.circular) return `Ø ${cmTxt(s.larguraMm)} cm`;
+  if (s.kind === 'VIGA' || s.kind === 'VIGA_FUNDACAO') {
+    const t = secaoTValida(s);
+    return `${cmTxt(t ? t.almaLarguraMm : s.larguraMm)} × ${cmTxt(s.alturaMm)} cm`;
+  }
+  if (s.kind === 'BLOCO_COROAMENTO') return `${cmTxt(s.larguraMm)} × ${cmTxt(s.profundidadeMm)} × ${cmTxt(s.alturaMm)} cm`;
+  return `${cmTxt(s.larguraMm)} × ${cmTxt(s.profundidadeMm)} cm`;
 }
 
 /** A armadura de TODAS as peças do quantitativo, com os totais por família e por aço. */

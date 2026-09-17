@@ -39,6 +39,7 @@ import {
 const kg = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const m3 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 const bit = (mm: number) => mm.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const m = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 type AbaDaArmadura = 'pecas' | 'familias' | 'hipoteses';
 
@@ -56,12 +57,18 @@ interface LinhaDeFamilia {
 const COLUNAS_POR_PECA: StandardTableColumn[] = [
   { key: 'rotulo', label: 'Peça', width: 120 },
   { key: 'tipo', label: 'Tipo', width: 140 },
+  { key: 'secao', label: 'Seção', width: 130 },
   { key: 'volumeConcretoM3', label: 'Concreto (m³)', width: 120, align: 'right' },
   { key: 'kg', label: 'Aço (kg)', width: 100, align: 'right' },
   { key: 'taxaEfetivaKgM3', label: 'kg/m³', width: 90, align: 'right' },
   { key: 'kgCa50', label: 'CA-50 (kg)', width: 100, align: 'right' },
   { key: 'kgCa60', label: 'CA-60 (kg)', width: 100, align: 'right' },
   { key: 'origem', label: 'Origem', width: 140 },
+  // Pedido de 17/09/2026: *"incluir coluna com a seção e comprimento do aço da
+  // armadura e do estribo"* — as barras (longitudinal/malha) e os estribos
+  // (ou espiral) com bitola, quantidade e o comprimento TOTAL em metros.
+  { key: 'longitudinal', label: 'Armadura (m)', width: 190, align: 'right' },
+  { key: 'transversal', label: 'Estribos (m)', width: 190, align: 'right' },
   { key: 'esquema', label: 'Esquema (mínimos NBR 6118)', width: 320, sortable: false },
 ];
 const COLUNAS_POR_FAMILIA: StandardTableColumn[] = [
@@ -145,6 +152,34 @@ export default function TelaArmadura({ hipoteses: h, onHipoteses, armadura, onSe
         return <span className="block text-right text-sm tabular-nums text-gray-600">{kg(p.kgCa50)}</span>;
       case 'kgCa60':
         return <span className="block text-right text-sm tabular-nums text-gray-600">{kg(p.kgCa60)}</span>;
+      case 'secao':
+        return <span className="text-sm tabular-nums text-gray-700">{p.secao}</span>;
+      case 'longitudinal': {
+        const cam = p.camadas.filter((c) => c.papel !== 'estribo' && c.papel !== 'espiral');
+        const resumo = cam.map((c) => `${c.papel === 'malha' && p.kind === 'LAJE' ? '2 dir.' : c.n} Ø ${bit(c.bitolaMm)}`).join(' + ');
+        return (
+          <span className="block text-right text-sm tabular-nums text-gray-700">
+            {m(p.comprimentoLongitudinalM)}
+            <span className="block truncate text-[11px] text-gray-400" title={resumo}>
+              {resumo}
+            </span>
+          </span>
+        );
+      }
+      case 'transversal': {
+        const cam = p.camadas.find((c) => c.papel === 'estribo' || c.papel === 'espiral');
+        return (
+          <span className="block text-right text-sm tabular-nums text-gray-700">
+            {cam ? m(p.comprimentoTransversalM) : '—'}
+            {cam && (
+              <span className="block truncate text-[11px] text-gray-400">
+                {cam.n} × Ø {bit(cam.bitolaMm)} {cam.papel === 'espiral' ? 'passo' : 'c/'}
+                {cam.espacamentoCm}
+              </span>
+            )}
+          </span>
+        );
+      }
       case 'origem':
         return (
           <span
@@ -235,13 +270,19 @@ export default function TelaArmadura({ hipoteses: h, onHipoteses, armadura, onSe
                 return nomeDoTipoEstrutural(p.kind);
               case 'origem':
                 return ROTULO_DA_ORIGEM[p.origem];
+              case 'secao':
+                return p.secao;
+              case 'longitudinal':
+                return p.comprimentoLongitudinalM;
+              case 'transversal':
+                return p.comprimentoTransversalM;
               case 'esquema':
                 return p.descricao;
               default:
                 return (p as unknown as Record<string, number>)[key];
             }
           }}
-          searchText={(p) => `${p.rotulo} ${nomeDoTipoEstrutural(p.kind)} ${p.descricao} ${ROTULO_DA_ORIGEM[p.origem]}`}
+          searchText={(p) => `${p.rotulo} ${nomeDoTipoEstrutural(p.kind)} ${p.secao} ${p.descricao} ${ROTULO_DA_ORIGEM[p.origem]}`}
           searchPlaceholder="Buscar peça..."
           filters={
             <select
@@ -268,7 +309,9 @@ export default function TelaArmadura({ hipoteses: h, onHipoteses, armadura, onSe
                 <span className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                   <span>Total {familiaFiltro ? 'da família' : 'da estrutura'}</span>
                   <span className="tabular-nums">
-                    {m3(linhasVisiveis.reduce((a, p) => a + p.volumeConcretoM3, 0))} m³ · {kg(linhasVisiveis.reduce((a, p) => a + p.kg, 0))} kg
+                    {m3(linhasVisiveis.reduce((a, p) => a + p.volumeConcretoM3, 0))} m³ · {kg(linhasVisiveis.reduce((a, p) => a + p.kg, 0))} kg ·
+                    barras {m(linhasVisiveis.reduce((a, p) => a + p.comprimentoLongitudinalM, 0))} m · estribos{' '}
+                    {m(linhasVisiveis.reduce((a, p) => a + p.comprimentoTransversalM, 0))} m
                   </span>
                 </span>
               </td>

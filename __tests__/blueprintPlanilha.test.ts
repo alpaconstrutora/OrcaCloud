@@ -173,10 +173,14 @@ describe('planilha · a cobertura diz o que falta', () => {
     const linha = arm.linhas[1];
     expect(linha[0]).toBe('P1');
     expect(linha[1]).toBe('Pilar');
-    expect(typeof linha[3]).toBe('number');
-    expect(linha[3]).toBeCloseTo(armadura.pecas[0].kg, 1);
-    expect(['esquema mínimo', 'taxa de referência']).toContain(linha[7]);
-    expect(String(linha[8])).toMatch(/Ø 12,5/);
+    expect(linha[2]).toBe('20 × 40 cm'); // seção (17/09/2026)
+    expect(typeof linha[4]).toBe('number');
+    expect(linha[4]).toBeCloseTo(armadura.pecas[0].kg, 1);
+    expect(typeof linha[8]).toBe('number'); // barras (m)
+    expect(typeof linha[9]).toBe('number'); // estribos (m)
+    expect(linha[8]).toBeCloseTo(armadura.pecas[0].comprimentoLongitudinalM, 1);
+    expect(['esquema mínimo', 'taxa de referência']).toContain(linha[10]);
+    expect(String(linha[11])).toMatch(/Ø 12,5/);
     const totais = abas.find((a) => a.nome === 'Totais')!;
     expect(totais.linhas.some((l) => l[0] === 'Aço — pilares' && typeof l[1] === 'number')).toBe(true);
     // Sem armadura: comportamento de antes.

@@ -141,8 +141,10 @@ export function linhasDeComponentes(
       chave: 'parede',
       rotulo,
       medida: `${m(wallLength(w))} m`,
+      // 17/09/2026: abreviado ("esp.", "alt.") porque rótulo e detalhe agora
+      // dividem UMA linha no painel, e "cm de espessura" não cabia.
       detalhe:
-        `${cm(w.thicknessMm)} cm de espessura` +
+        `esp. ${cm(w.thicknessMm)} cm` +
         // A composição entra no rótulo porque duas paredes de 19 cm podem ser
         // coisas diferentes — bloco com reboco, ou concreto —, e a lista de
         // componentes é onde se escolhe qual delas editar.
@@ -194,8 +196,8 @@ export function linhasDeComponentes(
               : `${cm(s.larguraMm)} × ${cm(s.profundidadeMm)} cm`,
       detalhe:
         (forma === 'AREA'
-          ? `${cm(s.alturaMm)} cm de espessura`
-          : `${cm(s.alturaMm)} cm de altura`) +
+          ? `esp. ${cm(s.alturaMm)} cm`
+          : `alt. ${cm(s.alturaMm)} cm`) +
         // A cota só aparece quando não é o piso do pavimento: em fundação ela é
         // o que distingue a peça, e no resto do desenho seria "0,00 m" repetido
         // em toda linha.

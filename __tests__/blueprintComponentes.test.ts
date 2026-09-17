@@ -136,7 +136,7 @@ describe('componentes · 3. a medida que identifica cada família', () => {
 
     expect(linhas.find((l) => l.rotulo === 'Parede 1')?.medida).toBe('4,00 m');
     expect(linhas.find((l) => l.rotulo === 'Parede 1')?.detalhe).toBe(
-      '15 cm de espessura · 2 esquadrias',
+      'esp. 15 cm · 2 esquadrias',
     );
     expect(linhas.find((l) => l.rotulo === 'Porta 1')?.medida).toBe('0,90 × 2,10 m');
     expect(linhas.find((l) => l.chave === 'PILAR')?.medida).toBe('20 × 40 cm');

@@ -170,3 +170,12 @@ Prova: editor (+1: ordem salva `[ambientes, nada, pavimentos]` → Ambientes · 
 por promessa e, na máquina do CI, os grupos ainda não existiam quando os helpers
 `abrirComponentes`/`expandirGrupos` rodavam — nada era expandido. Corrigido com `waitFor` pelo
 primeiro botão de grupo antes de expandir (só teste; sem mudança de produto).
+
+### 17/09/2026 — "continua empilhado" (print P1 · Pilar / 280 cm de altura)
+
+O empilhado que o usuário via era a **linha da peça** (rótulo em cima, detalhe embaixo), não o
+cabeçalho. Rótulo e detalhe passaram a dividir uma linha ("P1 · Pilar · alt. 280 cm"), com
+`truncate` e o texto completo no `title`. Como "280 cm de altura" não cabia na largura do painel,
+os detalhes de parede e estrutura foram abreviados em `utils/blueprintComponentes.ts`
+("esp. 15 cm", "alt. 280 cm"); o teste `blueprintComponentes.test.ts` acompanhou. Provado no
+app real (escritas bloqueadas: 14): linha de 35 px, texto inteiro visível.

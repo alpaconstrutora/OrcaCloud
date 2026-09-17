@@ -395,24 +395,22 @@ export default function PainelComponentes({
                 : 'text-slate-400'
           }`}
         />
-        <span className="min-w-0 flex-1">
-          <span
-            className={`block truncate text-xs ${
-              oculto
-                ? 'text-slate-400'
-                : sel
-                  ? 'font-medium text-blue-800'
-                  : 'text-slate-700'
-            }`}
-          >
-            {linha.rotulo}
-          </span>
+        {/* 17/09/2026 (*"continua empilhado"*): rótulo e detalhe na MESMA linha,
+            separados por "·"; o que não couber trunca e fica no title. */}
+        <span
+          className={`min-w-0 flex-1 truncate text-xs ${
+            oculto
+              ? 'text-slate-400'
+              : sel
+                ? 'font-medium text-blue-800'
+                : 'text-slate-700'
+          }`}
+          title={linha.detalhe ? `${linha.rotulo} · ${linha.detalhe}` : linha.rotulo}
+        >
+          {linha.rotulo}
           {linha.detalhe && (
-            <span
-              className={`block truncate text-[11px] ${
-                oculto ? 'text-slate-300' : 'text-slate-400'
-              }`}
-            >
+            <span className={`font-normal ${oculto ? 'text-slate-300' : 'text-slate-400'}`}>
+              {' · '}
               {linha.detalhe}
             </span>
           )}

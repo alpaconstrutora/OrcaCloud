@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { PurchaseOrder, PurchaseOrderItem, QuotationRequest, QuotationResponse, Invoice, Supplier } from '../types';
+import { mapCompradorRow } from './pedidoCompradorService';
 import { NegotiationProposal } from './negotiationService';
 import { receiptService, PurchaseReceipt } from './receiptService';
 import { discrepancyService, PurchaseDiscrepancy } from './discrepancyService';
@@ -30,6 +31,10 @@ const mapOrderRow = (item: any): PurchaseOrder => ({
   // linhas e o cabeçalho do detalhe ficava vazio, com o dado disponível o tempo
   // todo na resposta.
   projectName: item.project_name || '-',
+  // Idem para a empresa compradora (`comprador`, só no detalhe): a RLS de
+  // `companies` barra o fornecedor, então ela vem embutida no pedido. Ver
+  // pedidoCompradorService.
+  comprador: mapCompradorRow(item.comprador),
   supplierId: item.supplier_id,
   empresaId: item.empresa_id,
   deliveryDate: item.delivery_date,

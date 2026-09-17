@@ -9,6 +9,22 @@ export interface PurchaseOrderItem {
     total: number;
 }
 
+/**
+ * A empresa que está comprando, como o FORNECEDOR precisa vê-la: o que vai na
+ * nota fiscal. É um recorte de `Company` (razão social, CNPJ, inscrições e um
+ * endereço já em linha) — nunca a linha inteira, que carrega governança e
+ * limites de alçada que não são assunto do fornecedor.
+ */
+export interface PurchaseOrderComprador {
+    razaoSocial: string;
+    nomeFantasia?: string;
+    cnpj?: string;
+    inscricaoEstadual?: string;
+    inscricaoMunicipal?: string;
+    /** Fiscal; se vazio, operacional. Já formatado em uma linha ('' = nenhum). */
+    endereco: string;
+}
+
 export interface PurchaseOrder {
     id: string;
     number?: string;
@@ -17,6 +33,8 @@ export interface PurchaseOrder {
     projectId: string;
     projectName?: string;
     empresaId?: string;
+    /** Preenchido só pela RPC do portal (a RLS de `companies` barra o fornecedor). */
+    comprador?: PurchaseOrderComprador;
     projectClassification?: 'OBRA' | 'ORCAMENTO';
     linkedProjectName?: string;
     linkedProjectId?: string;

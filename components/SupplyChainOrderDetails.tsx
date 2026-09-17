@@ -3,7 +3,7 @@ import { Package, Truck, Printer, ArrowLeft, Building2, HandCoins, Search, Chevr
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedScopedSearch, useResizableColumns } from './ui/TableUtils';
-import { PurchaseOrder, PurchaseOrderItem } from '../types';
+import { PurchaseOrder, PurchaseOrderComprador, PurchaseOrderItem } from '../types';
 import { orderService } from '../services/orderService';
 import { getOrderNumberLockReason, regenerateOrderNumber } from '../services/orderNumberRegenService';
 import { receiptService, PurchaseReceipt } from '../services/receiptService';
@@ -22,6 +22,7 @@ import NegotiationHub from './NegotiationHub';
 import SupplyChainOrderForm from './SupplyChainOrderForm';
 import { webhookService } from '../services/webhookService';
 import { supplierPortalTokenService } from '../services/supplierPortalTokenService';
+import { pedidoCompradorService } from '../services/pedidoCompradorService';
 import { ehCompradorDoPedido } from '../utils/pedidoPerfil';
 import { round2 } from '../utils/financialMath';
 
@@ -229,6 +230,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const [supplierName, setSupplierName] = React.useState('');
     const [supplierEmail, setSupplierEmail] = React.useState('');
     const [projectName, setProjectName] = React.useState('');
+    // A empresa compradora, para o FORNECEDOR: é contra ela que ele emite a
+    // nota. Só a visão do fornecedor lê isto (o comprador é a própria empresa).
+    const [comprador, setComprador] = React.useState<PurchaseOrderComprador | undefined>(undefined);
     const [loading, setLoading] = React.useState(true);
     const [showNegotiation, setShowNegotiation] = React.useState(false);
     const [currentUser, setCurrentUser] = React.useState<{ email: string; name: string } | null>(propUser || null);
@@ -450,6 +454,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         // `project_name`). Antes não vinha, e o cabeçalho do
                         // pedido ficava com o campo da obra em branco.
                         setProjectName(res.order.projectName || '');
+                        // A empresa compradora também vem no pedido (a RPC
+                        // devolve `comprador`).
+                        setComprador(res.order.comprador);
                     }
                     // Este `return` ficava AQUI, e era a causa das três abas
                     // vazias no link público: comprovante, divergência e log
@@ -484,6 +491,16 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     // RLS de `projects` e escrevia "Obra Desconhecida" — que não
                     // é verdade, é falta de permissão para aquela leitura.
                     setProjectName(foundOrder.projectName || '');
+
+                    // Mesma história para a empresa compradora: o fornecedor
+                    // logado não passa na RLS de `companies`, e o dado vem pela
+                    // RPC estreita. Só a visão do fornecedor mostra o bloco —
+                    // para o comprador seria consulta a mais sem leitor.
+                    if (!ehComprador) {
+                        const compradorDoPedido = await pedidoCompradorService.get(orderId).catch(() => undefined);
+                        if (cancelled) return;
+                        setComprador(compradorDoPedido);
+                    }
 
                     const anexos = await carregarAnexosDoPedido();
                     if (cancelled) return;
@@ -1357,6 +1374,54 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                 <div>
                                     <p className="text-xs font-semibold text-gray-500">Forma de pagamento</p>
                                     <p className="text-sm font-normal text-gray-800 mt-1">{order.paymentMethod || '—'}</p>
+                                </div>
+                            </div>
+
+                            {/* ── Comprador ──
+                                O que o fornecedor precisa para emitir a nota
+                                contra a empresa certa (pedido do usuário em
+                                2026-09-17): razão social, CNPJ, inscrições e
+                                endereço. Vem da RPC (a RLS de `companies` barra
+                                o fornecedor), e "—" aqui significa que o campo
+                                está em branco no cadastro da empresa — não que
+                                falhou. O bloco existe mesmo sem empresa
+                                resolvida, para o fornecedor ver que o dado
+                                deveria estar ali e cobrar o comprador. */}
+                            <div className="pt-5 border-t border-gray-100">
+                                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                    <Building2 className={`w-4 h-4 ${A.icon}`} />
+                                    Comprador
+                                </h4>
+                                {/* CNPJ · IE · IM lado a lado: são os três
+                                    números que o fornecedor copia para a nota,
+                                    e em duas colunas o terceiro sobrava sozinho
+                                    numa linha. */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                                    <div className="md:col-span-3">
+                                        <p className="text-xs font-semibold text-gray-500">Empresa</p>
+                                        <p className="text-sm font-normal text-gray-800 mt-1">
+                                            {comprador?.razaoSocial || '—'}
+                                            {comprador?.nomeFantasia && comprador.nomeFantasia !== comprador.razaoSocial && (
+                                                <span className="text-gray-500"> ({comprador.nomeFantasia})</span>
+                                            )}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-semibold text-gray-500">CNPJ</p>
+                                        <p className="text-sm font-normal text-gray-800 mt-1">{comprador?.cnpj || '—'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-semibold text-gray-500">Inscrição estadual</p>
+                                        <p className="text-sm font-normal text-gray-800 mt-1">{comprador?.inscricaoEstadual || '—'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-semibold text-gray-500">Inscrição municipal</p>
+                                        <p className="text-sm font-normal text-gray-800 mt-1">{comprador?.inscricaoMunicipal || '—'}</p>
+                                    </div>
+                                    <div className="md:col-span-3">
+                                        <p className="text-xs font-semibold text-gray-500">Endereço</p>
+                                        <p className="text-sm font-normal text-gray-800 mt-1">{comprador?.endereco || '—'}</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>

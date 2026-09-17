@@ -38,6 +38,7 @@ import {
   LandPlot,
   Layers,
   Grip,
+  Blocks,
   Loader2,
   Maximize2,
   Minimize2,
@@ -2115,6 +2116,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    */
   const grupoSel = useMemo(() => grupoDaSelecao(editor.model, editor.selectedIds), [editor.model, editor.selectedIds]);
   const [selecaoPendente, setSelecaoPendente] = useState<string | null>(null);
+  /**
+   * Propriedades num SHEET modal (17/09/2026). Só quem seleciona PELA LISTA de
+   * Componentes abre assim — a lista é estreita, e as propriedades embaixo dela
+   * ficavam apertadas; quem clica no desenho continua com a metade de baixo do
+   * painel, olhando o desenho ao lado. Fecha ao fechar o Sheet, ao esvaziar a
+   * seleção (Esc) ou ao abrir uma tarefa.
+   */
+  const [propriedadesEmSheet, setPropriedadesEmSheet] = useState(false);
+  useEffect(() => {
+    if (editor.selectedIds.length === 0 && propriedadesEmSheet) setPropriedadesEmSheet(false);
+  }, [editor.selectedIds.length, propriedadesEmSheet]);
   useEffect(() => {
     if (!selecaoPendente) return;
     const ids = idsDoGrupo(editor.model, selecaoPendente);
@@ -5219,6 +5231,290 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     erro: 'Falha ao salvar',
   };
 
+  /**
+   * OS PAINÉIS DA SELEÇÃO — um JSX só, montado em dois lugares: na metade de
+   * baixo do painel lateral (seleção pelo desenho) ou num Sheet modal
+   * (17/09/2026: *"ao clicar em um componente [na lista] o Propriedades deve
+   * abrir em Modal para melhorar a visualização"*). Duas cópias divergiriam no
+   * primeiro campo novo; por isso é uma variável, não dois blocos.
+   */
+  const paineisDaSelecao =
+    editor.selectedIds.length > 0 ? (
+      <>
+      {grupoSel && planoDoGrupoSel ? (
+        <PainelGrupoDeFundacao
+          grupo={grupoSel}
+          plano={planoDoGrupoSel}
+          onQuantidade={(n) => redistribuirEstacasDoGrupo({ quantidade: n })}
+          onDiametro={(mm) => redistribuirEstacasDoGrupo({ quantidade: Math.max(1, grupoSel.estacas.length), diametroMm: mm })}
+          onComprimento={(mm) => redistribuirEstacasDoGrupo({ quantidade: Math.max(1, grupoSel.estacas.length), comprimentoMm: mm })}
+          onMover={(dx, dy) => moverSelecao([], [], editor.selectedIds, [], { x: dx, y: dy } as Point)}
+          onExcluirGrupo={removerSelecionada}
+          onSelecionarPeca={selecionarSoAPeca}
+        />
+      ) : editor.selectedIds.length > 1 ? (
+        <PainelSelecaoMultipla
+          paredes={paredesSelecionadas}
+          limites={limitesSelecionados.length}
+          aberturas={aberturasSelecionadas.length}
+          medicoes={medicoesSelecionadas}
+          modo={modoJuncao}
+          onMover={(dx, dy) => {
+            const aguasSelecionadas = (editor.model.roofs ?? []).filter((r) =>
+              editor.selectedIds.includes(r.id),
+            );
+            if (
+              paredesSelecionadas.length > 0 ||
+              limitesSelecionados.length > 0 ||
+              estruturasSelecionadas.length > 0 ||
+              aguasSelecionadas.length > 0
+            ) {
+              moverSelecao(
+                paredesSelecionadas.map((w) => w.id),
+                limitesSelecionados.map((b) => b.id),
+                estruturasSelecionadas.map((s) => s.id),
+                aguasSelecionadas.map((r) => r.id),
+                { x: dx, y: dy } as Point,
+              );
+            }
+            if (medicoesSelecionadas.length > 0) {
+              moverMedicoes(medicoesSelecionadas.map((f) => f.id), {
+                x: dx,
+                y: dy,
+              } as Point);
+            }
+          }}
+          onExcluir={removerSelecionada}
+        />
+      ) : null}
+
+      <PainelQuadroSelecionado
+        quadro={quadroSel}
+        onQuadro={(campos) =>
+          quadroSel &&
+          editor.run({ type: 'SetQuadroProps', quadroId: quadroSel.id, ...campos })
+        }
+      />
+
+      <PainelTrechoSelecionado
+        trecho={trechoSel}
+        terminal={terminalSel}
+        circuitos={circuitosParaEscolher}
+        ocupacao={
+          trechoSel && trechoSel.disciplina === 'ELETRICA'
+            ? ocupacaoDoTrecho(editor.model, trechoSel, hipotesesEletricas)
+            : undefined
+        }
+        onTrecho={(campos) =>
+          trechoSel &&
+          editor.run({ type: 'SetTrechoProps', trechoId: trechoSel.id, ...campos })
+        }
+        onExcluir={removerSelecionada}
+        onTerminal={(campos) => {
+          if (!terminalSel) return;
+          // CLASSIFICAR um ponto que ainda não tem potência é uma
+          // forma de incluí-lo: a potência da norma vem junto do
+          // tipo, e o projetista troca se quiser.
+          const padrao =
+            campos.tipoEletrico && campos.potenciaW === undefined && terminalSel.potenciaW == null
+              ? potenciaPadraoVA(
+                  campos.tipoEletrico,
+                  contextoDoAmbiente(editor.model, terminalSel.levelId, terminalSel.at),
+                  conjuntoMolhadoPassaDeSeis(editor.model, terminalSel.levelId),
+                )
+              : null;
+          editor.run({
+            type: 'SetTerminalProps',
+            terminalId: terminalSel.id,
+            ...campos,
+            ...(padrao != null ? { potenciaW: padrao } : {}),
+          });
+        }}
+      />
+
+      <PainelEstruturaSelecionada
+        custo={estruturaSel ? custoPorUid.get(estruturaSel.uid) : undefined}
+        custoDesatualizado={editor.dirtySincePublish}
+        estrutura={grupoSel ? null : estruturaSel}
+        armadura={estruturaSel ? armaduraPorId.get(estruturaSel.id) : undefined}
+        armaduraManual={estruturaSel ? armaduraManualDe(hipotesesDeArmadura, estruturaSel.uid) : null}
+        onArmaduraManual={(spec) => {
+          if (!estruturaSel) return;
+          // Gravado no estudo por uid (junto das hipóteses): mesma
+          // persistência, mesma leitura em todo lugar.
+          const porPeca = { ...(hipotesesDeArmadura.porPeca ?? {}) };
+          if (spec) porPeca[estruturaSel.uid] = spec;
+          else delete porPeca[estruturaSel.uid];
+          const { porPeca: _antigo, ...resto } = hipotesesDeArmadura;
+          void _antigo;
+          armaduraDoEstudo.setHipoteses(Object.keys(porPeca).length ? { ...resto, porPeca } : resto);
+        }}
+        grupo={
+          estruturaSel && !grupoSel
+            ? (() => {
+                const g = grupoDeFundacao(editor.model, estruturaSel.id);
+                return g
+                  ? {
+                      rotuloDoBloco: g.bloco.rotulo?.trim() || 'Bloco',
+                      estacas: g.estacas.length,
+                      onEditarGrupo: () => selecionar([g.bloco.id]),
+                    }
+                  : undefined;
+              })()
+            : undefined
+        }
+        onMedidas={(campos) =>
+          estruturaSel &&
+          editor.run({
+            type: 'SetStructuralProps',
+            structuralId: estruturaSel.id,
+            ...campos,
+          })
+        }
+        onTipo={(kind) =>
+          estruturaSel &&
+          editor.run({
+            type: 'SetStructuralKind',
+            structuralId: estruturaSel.id,
+            kind,
+          })
+        }
+        onExcluir={removerSelecionada}
+        sobreposicaoM3={sobreposicaoDoSelecionado}
+        onCedeSobreposicao={(cede) =>
+          estruturaSel &&
+          editor.run({ type: 'SetCedeSobreposicao', id: estruturaSel.id, cede })
+        }
+        paredesParaCortar={paredesQueAPecaAtravessa.aCortar.length}
+        paredesJaInterrompidas={paredesQueAPecaAtravessa.jaInterrompidas}
+        onCortarParedes={cortarParedesDaSelecionada}
+        pontasCurtas={pontasCurtasDaSelecionada.length}
+        onEmendarPontas={emendarPontasDaSelecionada}
+      />
+
+      <PainelEscadaSelecionada
+        model={editor.model}
+        escada={escadaSel}
+        onProps={(campos) =>
+          escadaSel &&
+          editor.run({ type: 'SetEscadaProps', escadaId: escadaSel.id, ...campos })
+        }
+        onExcluir={removerSelecionada}
+      />
+
+      <PainelCorteSelecionado
+        corte={corteSel}
+        onProps={(campos) =>
+          corteSel &&
+          editor.run({ type: 'SetCorteProps', corteId: corteSel.id, ...campos })
+        }
+        onVer={() => corteSel && setVista(`corte:${corteSel.id}`)}
+        onExcluir={removerSelecionada}
+      />
+
+      <PainelAguaSelecionada
+        agua={aguaSel}
+        onProps={(campos) =>
+          aguaSel && editor.run({ type: 'SetAguaProps', aguaId: aguaSel.id, ...campos })
+        }
+        onExcluir={removerSelecionada}
+      />
+
+      <PainelParedeSelecionada
+        custo={
+          // A abertura tem uid próprio e pode ter linha própria
+          // (esquadria por elemento); a parede é o caso comum.
+          custoPorUid.get((paredeSel ?? aberturaSel)?.uid ?? '')
+        }
+        custoDesatualizado={editor.dirtySincePublish}
+        parede={paredeSel}
+        abertura={aberturaSel}
+        pontaQueAnda={esticamento.pontaQueAnda}
+        arrastaCanto={esticamento.arrastaCanto}
+        aLivre={esticamento.aLivre}
+        bLivre={esticamento.bLivre}
+        onEscolherPonta={(end) =>
+          paredeSel && setAncoraManual({ wallId: paredeSel.id, end })
+        }
+        onDestacarPonta={setPontaDestacada}
+        onComprimento={esticarParede}
+        onEspessura={(mm) => paredeSel && mudarEspessura(paredeSel, mm)}
+        // As camadas MEDIDAS saem do quantitativo que já roda ao
+        // vivo aqui. Refazer a conta dentro do painel seria uma
+        // segunda fórmula de área de face — e a primeira a
+        // divergir no dia em que o desconto de vão mudar.
+        camadasSlot={
+          paredeSel ? (
+            <PainelCamadasParede
+              parede={paredeSel}
+              medidas={
+                quant.paredes.find((p) => p.wallId === paredeSel.id)
+                  ?.camadas ?? []
+              }
+              aoMudar={(camadas) => mudarCamadas(paredeSel, camadas)}
+            />
+          ) : null
+        }
+        podeUnir={!!vizinhaParaUnir}
+        // O comprimento LIVRE depende da espessura das VIZINHAS, então sai
+        // daqui, que conhece o nível inteiro — o painel só vê a selecionada.
+        livreMm={
+          paredeSel
+            ? faceInternaMm(
+                editor.model.walls.filter((w) => w.levelId === paredeSel.levelId),
+                paredeSel,
+              )
+            : null
+        }
+        onDividir={dividirSelecionada}
+        onUnir={unirSelecionada}
+        onFlipAbertura={flipAbertura}
+        onTamanhoAbertura={redimensionarAbertura}
+        onTipoAbertura={(kind, embutida) => {
+          if (!aberturaSel) return;
+          editor.run({
+            type: 'SetOpeningKind',
+            openingId: aberturaSel.id,
+            kind,
+            embutida,
+          });
+        }}
+        tomadasSlot={
+          paredeSel && levelId ? (
+            <TomadasNaParede
+              lados={ladosDaParede(editor.model, paredeSel.id, levelId)}
+              onDistribuir={distribuirTomadas}
+            />
+          ) : null
+        }
+        sobreposicaoM3={sobreposicaoDoSelecionado}
+        onCedeSobreposicao={(cede) =>
+          paredeSel &&
+          editor.run({ type: 'SetCedeSobreposicao', id: paredeSel.id, cede })
+        }
+        esquadriaSlot={
+          aberturaSel ? (
+            <PainelEsquadria
+              abertura={aberturaSel}
+              onEsquadria={(esquadria) =>
+                editor.run({
+                  type: 'SetOpeningEsquadria',
+                  openingId: aberturaSel.id,
+                  esquadria,
+                })
+              }
+              onAplicarTipo={(tipo) => aplicarTipoDeEsquadria(aberturaSel, tipo)}
+            />
+          ) : null
+        }
+      />
+
+      {/* A DIVISA selecionada se edita no painel do terreno (comprimento,
+          papel na escritura) — o mesmo que a tarefa "Dados do lote" abre. */}
+      {limiteSel && painelDoTerreno}
+      </>
+    ) : null;
+
   const cabecalhoDaTela = (titulo: string, subtitulo: string, Icone: React.ElementType, secao = 'Instalações') => (
     <div className="flex items-center gap-4">
       <button
@@ -7292,8 +7588,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 escadas={{ model: editor.model, itens: componentesDoNivel.escadas }}
                 rede={componentesDoNivel.rede}
                 selecionados={editor.selectedIds}
-                onSelecionar={selecionar}
-                onSelecionarPeca={selecionarSoAPeca}
+                // Pela LISTA, as propriedades abrem em Sheet (17/09/2026).
+                onSelecionar={(ids) => {
+                  selecionar(ids);
+                  setPropriedadesEmSheet(ids.length > 0);
+                }}
+                onSelecionarPeca={(id) => {
+                  selecionarSoAPeca(id);
+                  setPropriedadesEmSheet(true);
+                }}
                 onExcluir={excluirComponente}
                 // No 3D a lista troca de fonte (os pavimentos empilhados); o olho
                 // vale nas duas vistas, e desde 16/09/2026 a linha também
@@ -7611,280 +7914,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               faixa azul do cabeçalho, com o caminho de volta. Sem tarefa e sem
               seleção, a metade não existe — o navegador fica com o painel
               inteiro, como antes. */}
-          {(!emVista || em3d) && editor.selectedIds.length > 0 && (
+          {(!emVista || em3d) && editor.selectedIds.length > 0 && !propriedadesEmSheet && (
             <div className="flex max-h-[62%] shrink-0 flex-col border-t-2 border-slate-200">
                 <PainelDeTarefa titulo="Propriedades" subtitulo={rotuloDoSelecionado}>
-                  {grupoSel && planoDoGrupoSel ? (
-                    <PainelGrupoDeFundacao
-                      grupo={grupoSel}
-                      plano={planoDoGrupoSel}
-                      onQuantidade={(n) => redistribuirEstacasDoGrupo({ quantidade: n })}
-                      onDiametro={(mm) => redistribuirEstacasDoGrupo({ quantidade: Math.max(1, grupoSel.estacas.length), diametroMm: mm })}
-                      onComprimento={(mm) => redistribuirEstacasDoGrupo({ quantidade: Math.max(1, grupoSel.estacas.length), comprimentoMm: mm })}
-                      onMover={(dx, dy) => moverSelecao([], [], editor.selectedIds, [], { x: dx, y: dy } as Point)}
-                      onExcluirGrupo={removerSelecionada}
-                      onSelecionarPeca={selecionarSoAPeca}
-                    />
-                  ) : editor.selectedIds.length > 1 ? (
-                    <PainelSelecaoMultipla
-                      paredes={paredesSelecionadas}
-                      limites={limitesSelecionados.length}
-                      aberturas={aberturasSelecionadas.length}
-                      medicoes={medicoesSelecionadas}
-                      modo={modoJuncao}
-                      onMover={(dx, dy) => {
-                        const aguasSelecionadas = (editor.model.roofs ?? []).filter((r) =>
-                          editor.selectedIds.includes(r.id),
-                        );
-                        if (
-                          paredesSelecionadas.length > 0 ||
-                          limitesSelecionados.length > 0 ||
-                          estruturasSelecionadas.length > 0 ||
-                          aguasSelecionadas.length > 0
-                        ) {
-                          moverSelecao(
-                            paredesSelecionadas.map((w) => w.id),
-                            limitesSelecionados.map((b) => b.id),
-                            estruturasSelecionadas.map((s) => s.id),
-                            aguasSelecionadas.map((r) => r.id),
-                            { x: dx, y: dy } as Point,
-                          );
-                        }
-                        if (medicoesSelecionadas.length > 0) {
-                          moverMedicoes(medicoesSelecionadas.map((f) => f.id), {
-                            x: dx,
-                            y: dy,
-                          } as Point);
-                        }
-                      }}
-                      onExcluir={removerSelecionada}
-                    />
-                  ) : null}
-
-                  <PainelQuadroSelecionado
-                    quadro={quadroSel}
-                    onQuadro={(campos) =>
-                      quadroSel &&
-                      editor.run({ type: 'SetQuadroProps', quadroId: quadroSel.id, ...campos })
-                    }
-                  />
-
-                  <PainelTrechoSelecionado
-                    trecho={trechoSel}
-                    terminal={terminalSel}
-                    circuitos={circuitosParaEscolher}
-                    ocupacao={
-                      trechoSel && trechoSel.disciplina === 'ELETRICA'
-                        ? ocupacaoDoTrecho(editor.model, trechoSel, hipotesesEletricas)
-                        : undefined
-                    }
-                    onTrecho={(campos) =>
-                      trechoSel &&
-                      editor.run({ type: 'SetTrechoProps', trechoId: trechoSel.id, ...campos })
-                    }
-                    onExcluir={removerSelecionada}
-                    onTerminal={(campos) => {
-                      if (!terminalSel) return;
-                      // CLASSIFICAR um ponto que ainda não tem potência é uma
-                      // forma de incluí-lo: a potência da norma vem junto do
-                      // tipo, e o projetista troca se quiser.
-                      const padrao =
-                        campos.tipoEletrico && campos.potenciaW === undefined && terminalSel.potenciaW == null
-                          ? potenciaPadraoVA(
-                              campos.tipoEletrico,
-                              contextoDoAmbiente(editor.model, terminalSel.levelId, terminalSel.at),
-                              conjuntoMolhadoPassaDeSeis(editor.model, terminalSel.levelId),
-                            )
-                          : null;
-                      editor.run({
-                        type: 'SetTerminalProps',
-                        terminalId: terminalSel.id,
-                        ...campos,
-                        ...(padrao != null ? { potenciaW: padrao } : {}),
-                      });
-                    }}
-                  />
-
-                  <PainelEstruturaSelecionada
-                    custo={estruturaSel ? custoPorUid.get(estruturaSel.uid) : undefined}
-                    custoDesatualizado={editor.dirtySincePublish}
-                    estrutura={grupoSel ? null : estruturaSel}
-                    armadura={estruturaSel ? armaduraPorId.get(estruturaSel.id) : undefined}
-                    armaduraManual={estruturaSel ? armaduraManualDe(hipotesesDeArmadura, estruturaSel.uid) : null}
-                    onArmaduraManual={(spec) => {
-                      if (!estruturaSel) return;
-                      // Gravado no estudo por uid (junto das hipóteses): mesma
-                      // persistência, mesma leitura em todo lugar.
-                      const porPeca = { ...(hipotesesDeArmadura.porPeca ?? {}) };
-                      if (spec) porPeca[estruturaSel.uid] = spec;
-                      else delete porPeca[estruturaSel.uid];
-                      const { porPeca: _antigo, ...resto } = hipotesesDeArmadura;
-                      void _antigo;
-                      armaduraDoEstudo.setHipoteses(Object.keys(porPeca).length ? { ...resto, porPeca } : resto);
-                    }}
-                    grupo={
-                      estruturaSel && !grupoSel
-                        ? (() => {
-                            const g = grupoDeFundacao(editor.model, estruturaSel.id);
-                            return g
-                              ? {
-                                  rotuloDoBloco: g.bloco.rotulo?.trim() || 'Bloco',
-                                  estacas: g.estacas.length,
-                                  onEditarGrupo: () => selecionar([g.bloco.id]),
-                                }
-                              : undefined;
-                          })()
-                        : undefined
-                    }
-                    onMedidas={(campos) =>
-                      estruturaSel &&
-                      editor.run({
-                        type: 'SetStructuralProps',
-                        structuralId: estruturaSel.id,
-                        ...campos,
-                      })
-                    }
-                    onTipo={(kind) =>
-                      estruturaSel &&
-                      editor.run({
-                        type: 'SetStructuralKind',
-                        structuralId: estruturaSel.id,
-                        kind,
-                      })
-                    }
-                    onExcluir={removerSelecionada}
-                    sobreposicaoM3={sobreposicaoDoSelecionado}
-                    onCedeSobreposicao={(cede) =>
-                      estruturaSel &&
-                      editor.run({ type: 'SetCedeSobreposicao', id: estruturaSel.id, cede })
-                    }
-                    paredesParaCortar={paredesQueAPecaAtravessa.aCortar.length}
-                    paredesJaInterrompidas={paredesQueAPecaAtravessa.jaInterrompidas}
-                    onCortarParedes={cortarParedesDaSelecionada}
-                    pontasCurtas={pontasCurtasDaSelecionada.length}
-                    onEmendarPontas={emendarPontasDaSelecionada}
-                  />
-
-                  <PainelEscadaSelecionada
-                    model={editor.model}
-                    escada={escadaSel}
-                    onProps={(campos) =>
-                      escadaSel &&
-                      editor.run({ type: 'SetEscadaProps', escadaId: escadaSel.id, ...campos })
-                    }
-                    onExcluir={removerSelecionada}
-                  />
-
-                  <PainelCorteSelecionado
-                    corte={corteSel}
-                    onProps={(campos) =>
-                      corteSel &&
-                      editor.run({ type: 'SetCorteProps', corteId: corteSel.id, ...campos })
-                    }
-                    onVer={() => corteSel && setVista(`corte:${corteSel.id}`)}
-                    onExcluir={removerSelecionada}
-                  />
-
-                  <PainelAguaSelecionada
-                    agua={aguaSel}
-                    onProps={(campos) =>
-                      aguaSel && editor.run({ type: 'SetAguaProps', aguaId: aguaSel.id, ...campos })
-                    }
-                    onExcluir={removerSelecionada}
-                  />
-
-                  <PainelParedeSelecionada
-                    custo={
-                      // A abertura tem uid próprio e pode ter linha própria
-                      // (esquadria por elemento); a parede é o caso comum.
-                      custoPorUid.get((paredeSel ?? aberturaSel)?.uid ?? '')
-                    }
-                    custoDesatualizado={editor.dirtySincePublish}
-                    parede={paredeSel}
-                    abertura={aberturaSel}
-                    pontaQueAnda={esticamento.pontaQueAnda}
-                    arrastaCanto={esticamento.arrastaCanto}
-                    aLivre={esticamento.aLivre}
-                    bLivre={esticamento.bLivre}
-                    onEscolherPonta={(end) =>
-                      paredeSel && setAncoraManual({ wallId: paredeSel.id, end })
-                    }
-                    onDestacarPonta={setPontaDestacada}
-                    onComprimento={esticarParede}
-                    onEspessura={(mm) => paredeSel && mudarEspessura(paredeSel, mm)}
-                    // As camadas MEDIDAS saem do quantitativo que já roda ao
-                    // vivo aqui. Refazer a conta dentro do painel seria uma
-                    // segunda fórmula de área de face — e a primeira a
-                    // divergir no dia em que o desconto de vão mudar.
-                    camadasSlot={
-                      paredeSel ? (
-                        <PainelCamadasParede
-                          parede={paredeSel}
-                          medidas={
-                            quant.paredes.find((p) => p.wallId === paredeSel.id)
-                              ?.camadas ?? []
-                          }
-                          aoMudar={(camadas) => mudarCamadas(paredeSel, camadas)}
-                        />
-                      ) : null
-                    }
-                    podeUnir={!!vizinhaParaUnir}
-                    // O comprimento LIVRE depende da espessura das VIZINHAS, então sai
-                    // daqui, que conhece o nível inteiro — o painel só vê a selecionada.
-                    livreMm={
-                      paredeSel
-                        ? faceInternaMm(
-                            editor.model.walls.filter((w) => w.levelId === paredeSel.levelId),
-                            paredeSel,
-                          )
-                        : null
-                    }
-                    onDividir={dividirSelecionada}
-                    onUnir={unirSelecionada}
-                    onFlipAbertura={flipAbertura}
-                    onTamanhoAbertura={redimensionarAbertura}
-                    onTipoAbertura={(kind, embutida) => {
-                      if (!aberturaSel) return;
-                      editor.run({
-                        type: 'SetOpeningKind',
-                        openingId: aberturaSel.id,
-                        kind,
-                        embutida,
-                      });
-                    }}
-                    tomadasSlot={
-                      paredeSel && levelId ? (
-                        <TomadasNaParede
-                          lados={ladosDaParede(editor.model, paredeSel.id, levelId)}
-                          onDistribuir={distribuirTomadas}
-                        />
-                      ) : null
-                    }
-                    sobreposicaoM3={sobreposicaoDoSelecionado}
-                    onCedeSobreposicao={(cede) =>
-                      paredeSel &&
-                      editor.run({ type: 'SetCedeSobreposicao', id: paredeSel.id, cede })
-                    }
-                    esquadriaSlot={
-                      aberturaSel ? (
-                        <PainelEsquadria
-                          abertura={aberturaSel}
-                          onEsquadria={(esquadria) =>
-                            editor.run({
-                              type: 'SetOpeningEsquadria',
-                              openingId: aberturaSel.id,
-                              esquadria,
-                            })
-                          }
-                          onAplicarTipo={(tipo) => aplicarTipoDeEsquadria(aberturaSel, tipo)}
-                        />
-                      ) : null
-                    }
-                  />
-
-                  {/* A DIVISA selecionada se edita no painel do terreno (comprimento,
-                      papel na escritura) — o mesmo que a tarefa "Dados do lote" abre. */}
-                  {limiteSel && painelDoTerreno}
+                  {paineisDaSelecao}
                 </PainelDeTarefa>
             </div>
           )}
@@ -9349,6 +9382,25 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           Era relatório no dock; virou drawer porque aqui se EDITA (circuito,
           ligação, DR, hipóteses, emissão). Largo (2xl) porque é tabela — a
           coluna Carga já sumiu uma vez por falta de largura. */}
+      {propriedadesEmSheet && !tarefaAberta && (!emVista || em3d) && paineisDaSelecao && (
+        <Sheet open onClose={() => setPropriedadesEmSheet(false)} size="lg">
+          <SheetHeader onClose={() => setPropriedadesEmSheet(false)}>
+            <SheetTitle>
+              <span className="flex items-center gap-2">
+                <Blocks className="h-5 w-5 text-blue-700" />
+                Propriedades
+              </span>
+            </SheetTitle>
+            <SheetDescription>
+              {rotuloDoSelecionado ?? `${editor.selectedIds.length} selecionado(s)`} · o que se edita aqui grava na hora; Ctrl+Z desfaz.
+              Fechar mantém a peça selecionada no desenho.
+            </SheetDescription>
+          </SheetHeader>
+          <SheetPanel className="p-0">
+            <div data-testid="propriedades-sheet">{paineisDaSelecao}</div>
+          </SheetPanel>
+        </Sheet>
+      )}
       {relatorioNoDrawer && (
       <Sheet open onClose={() => setRelatorio(null)} size="2xl">
         <SheetHeader onClose={() => setRelatorio(null)}>

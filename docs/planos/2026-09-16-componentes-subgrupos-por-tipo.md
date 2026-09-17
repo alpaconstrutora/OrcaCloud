@@ -85,3 +85,17 @@ do canvas 2D. Só age com seleção, para não engolir o Escape de um diálogo p
 Prova: editor (+1: selecionar no 3D pela lista → Escape na cena → sem Propriedades, linha
 despressionada) · app real na planta do usuário (clique na cena abre Propriedades; Escape fecha;
 foco em `cena-3d`; 0 erros JS, escritas bloqueadas) · suíte 330/4361 · tsc · build.
+
+## Propriedades em Sheet ao selecionar pela lista (17/09/2026)
+
+> painel lateral < componentes < ao clicar em um componente o Propriedades deve abrir em Modal para melhorar visualização
+
+Selecionar pela LISTA de Componentes (clique ou duplo clique) abre as propriedades num `Sheet` modal
+(size="lg", título "Propriedades", subtítulo com o rótulo da peça); selecionar pelo desenho segue na metade de
+baixo do painel lateral, olhando o desenho ao lado. Um JSX só (`paineisDaSelecao`) alimenta os dois lugares —
+duas cópias divergiriam no primeiro campo novo. O Sheet fecha pelo X/Esc (a peça continua selecionada, e as
+propriedades voltam para o painel), quando a seleção esvazia ou quando uma tarefa abre.
+
+Prova: 5 testes do editor passaram a achar `propriedades-sheet` quando selecionam pela lista · suíte 332/4393 ·
+tsc · `check-ui-standard.sh` · build · app real (duplo clique em P3 → Sheet com o painel completo; Esc fecha e P3
+segue selecionado). Captura `out-ps/ps-01-sheet.png`.

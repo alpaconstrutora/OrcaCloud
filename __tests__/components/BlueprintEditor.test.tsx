@@ -1960,9 +1960,9 @@ describe('BlueprintEditor · propriedades no 3D', () => {
     const secao = document.querySelector<HTMLButtonElement>('button[aria-controls="secao-componentes-corpo"]')!;
     if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
     // Antes: sem seleção, sem Propriedades.
-    expect(screen.queryByRole('region', { name: /propriedades/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('propriedades-sheet')).not.toBeInTheDocument();
     await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
-    const props = await screen.findByRole('region', { name: /propriedades/i });
+    const props = await screen.findByTestId('propriedades-sheet');
     const rotulo = within(props).getByRole('textbox', { name: /rótulo da peça/i });
     expect(rotulo).toBeInTheDocument();
     await user.clear(rotulo);
@@ -1999,7 +1999,7 @@ describe('BlueprintEditor · grupo de fundação', () => {
 
     // 1 clique na ESTACA → o grupo inteiro (bloco + estaca), painel do grupo.
     await user.click(await screen.findByRole('button', { name: /^E1 · Estaca/ }));
-    const props = await screen.findByRole('region', { name: /propriedades/i });
+    const props = await screen.findByTestId('propriedades-sheet');
     expect(props).toHaveTextContent(/Grupo de fundação/);
     expect(props).toHaveTextContent(/B1 · 1 estaca/);
     expect(props).toHaveTextContent(/sob o pilar P1/);
@@ -2008,7 +2008,7 @@ describe('BlueprintEditor · grupo de fundação', () => {
 
     // Quantidade 3: triângulo, 3Ø = 90 cm, bloco 150 × 140; rótulos E1 (reaproveitado), E2, E3.
     await user.click(within(props).getByRole('button', { name: /^3 estacas em triângulo/ }));
-    const props2 = await screen.findByRole('region', { name: /propriedades/i });
+    const props2 = await screen.findByTestId('propriedades-sheet');
     expect(props2).toHaveTextContent(/B1 · 3 estacas/);
     expect(props2).toHaveTextContent(/Arranjo triângulo/);
     expect(props2).toHaveTextContent(/90 cm/);
@@ -2022,11 +2022,11 @@ describe('BlueprintEditor · grupo de fundação', () => {
     await user.clear(campo);
     await user.type(campo, '7{Enter}');
     expect(await screen.findByText(/hexágono com centro/)).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: /propriedades/i })).toHaveTextContent(/B1 · 7 estacas/);
+    expect(screen.getByTestId('propriedades-sheet')).toHaveTextContent(/B1 · 7 estacas/);
 
     // Duplo clique na estaca isola a peça: painel da estaca, com o atalho de volta ao grupo.
     await user.dblClick(screen.getByRole('button', { name: /^E2 · Estaca/ }));
-    const props3 = await screen.findByRole('region', { name: /propriedades/i });
+    const props3 = await screen.findByTestId('propriedades-sheet');
     expect(props3).toHaveTextContent(/Estaca do bloco B1 · 7 estacas/);
     expect(props3).toHaveTextContent(/Comprimento/);
     await user.click(within(props3).getByRole('button', { name: /editar o grupo/i }));
@@ -2060,13 +2060,13 @@ describe('BlueprintEditor · Escape limpa a seleção no 3D', () => {
     const secao = document.querySelector<HTMLButtonElement>('button[aria-controls="secao-componentes-corpo"]')!;
     if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
     await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
-    expect(await screen.findByRole('region', { name: /propriedades/i })).toBeInTheDocument();
+    expect(await screen.findByTestId('propriedades-sheet')).toBeInTheDocument();
     // A cena 3D é o contêiner focável; a tecla chega a ele como chegaria no clique.
     const cena = screen.getByTestId('cena-3d');
     expect(cena).toBeTruthy();
     cena.focus();
     await user.keyboard('{Escape}');
-    expect(screen.queryByRole('region', { name: /propriedades/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('propriedades-sheet')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^P1 · Pilar/ })).toHaveAttribute('aria-pressed', 'false');
   });
 });
@@ -2139,7 +2139,7 @@ describe('BlueprintEditor · armadura esquemática', () => {
     const secao = document.querySelector<HTMLButtonElement>('button[aria-controls="secao-componentes-corpo"]')!;
     if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
     await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
-    const props = await screen.findByRole('region', { name: /propriedades/i });
+    const props = await screen.findByTestId('propriedades-sheet');
     expect(props).toHaveTextContent(/kg de aço/);
     expect(props).toHaveTextContent(/12 Ø 12,5/);
   });
@@ -2185,7 +2185,7 @@ describe('BlueprintEditor · armadura manual', () => {
     const secao = document.querySelector<HTMLButtonElement>('button[aria-controls="secao-componentes-corpo"]')!;
     if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
     await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
-    const props = await screen.findByRole('region', { name: /propriedades/i });
+    const props = await screen.findByTestId('propriedades-sheet');
     expect(props).toHaveTextContent(/mínimos NBR 6118/);
     await user.click(within(props).getByRole('button', { name: /lançar manualmente/i }));
     expect(props).toHaveTextContent(/Armadura lançada manualmente/);

@@ -315,7 +315,6 @@ import {
   somaDasCamadas,
   type CamadaParede,
   encostosSemJuncao,
-  formatarQuantidade,
   isFreeWallEnd,
   faceInternaMm,
   areaRecuada,
@@ -375,6 +374,7 @@ import { useBlueprintEletrica } from '../../hooks/useBlueprintEletrica';
 import { useBlueprintArmadura } from '../../hooks/useBlueprintArmadura';
 import { armaduraDoModelo, armaduraManualDe } from '../../utils/blueprintArmadura';
 import TelaArmadura from './TelaArmadura';
+import TelaQuantitativos from './TelaQuantitativos';
 import { hashDaBaseEletrica, memorialEletrico, verificacoesEletricas } from '../../utils/blueprintEletricaExecutivo';
 import { ocupacaoDoTrecho } from '../../utils/blueprintEletricaDimensionamento';
 import PainelEletricaExecutivo from './PainelEletricaExecutivo';
@@ -998,11 +998,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * desenho ao lado.
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura';
+  // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'medicoes',
-    'quantitativos',
     'orcamento',
   ]);
   const relatorioNoDock = relatorioAberto && !RELATORIOS_EM_DRAWER.has(relatorioAberto) ? relatorioAberto : null;
@@ -1885,7 +1885,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     () => computeQuantities(editor.model, POLITICA_PADRAO),
     [editor.model],
   );
-  const fmt = (v: number) => formatarQuantidade(v, POLITICA_PADRAO);
   /** O aço de cada peça e por família — a mesma conta do orçamento e da planilha. */
   const armadura = useMemo(
     () => armaduraDoModelo(editor.model, quant, hipotesesDeArmadura),
@@ -5801,6 +5800,32 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           </div>
         </div>
       )}
+      {telaAberta === 'quantitativos' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="quantitativos">
+          {cabecalhoDaTela(
+            'Quantitativos',
+            'Áreas, volumes e comprimentos derivados do desenho atual — e o quantitativo oficial da versão publicada, que é o que o orçamento cita. Clique numa peça estrutural para selecioná-la no desenho.',
+            Table2,
+            'Analisar',
+          )}
+          <div>
+            <TelaQuantitativos
+              quant={quant}
+              armadura={armadura}
+              revisao={editor.baseRevision}
+              oficial={qtdOficial}
+              gerando={gerando}
+              onGerar={gerarQuantitativoOficial}
+              dirty={editor.dirtySincePublish}
+              onSelecionarPeca={(id) => {
+                // Como o clique na lista e no desenho: seleciona E abre as propriedades.
+                selecionarEAbrir([id]);
+                setTelaAberta(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
       {telaAberta === 'armadura' && (
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="armadura">
           {cabecalhoDaTela(
@@ -6526,8 +6551,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 <BotaoDoRibbon
                   icone={Table2}
                   rotulo="Quantitativos"
-                  ativo={relatorioAberto === 'quantitativos'}
-                  onClick={() => alternarRelatorio('quantitativos')}
+                  ativo={telaAberta === 'quantitativos'}
+                  onClick={() => alternarTela('quantitativos')}
                   ajuda="Áreas, volumes e comprimentos derivados do desenho; o quantitativo oficial da versão"
                 />
               )}
@@ -9747,7 +9772,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             <span className="flex items-center gap-2">
               {relatorioNoDrawer === 'conflitos' && <AlertTriangle className="h-5 w-5 text-amber-600" />}
               {relatorioNoDrawer === 'medicoes' && <Ruler className="h-5 w-5 text-blue-700" />}
-              {relatorioNoDrawer === 'quantitativos' && <Table2 className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'orcamento' && <Calculator className="h-5 w-5 text-blue-700" />}
               {RELATORIOS_DO_DOCK[relatorioNoDrawer].rotulo}
               {relatorioNoDrawer === 'conflitos' && (
@@ -9767,8 +9791,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               'Interferências entre instalações e com a estrutura, e entre disciplinas. Clicar num conflito seleciona as peças no desenho; exporte em BCF para o projetista.'}
             {relatorioNoDrawer === 'medicoes' &&
               'As formas medidas sobre a planta de fundo — área, linha e contagem — por camada, com o envio ao orçamento.'}
-            {relatorioNoDrawer === 'quantitativos' &&
-              'Áreas, volumes e comprimentos derivados do desenho atual, e o quantitativo oficial da versão publicada.'}
             {relatorioNoDrawer === 'orcamento' &&
               'A ponte com o orçamento da obra: o de-para dos itens e a prévia do que a versão publicada gera.'}
           </SheetDescription>
@@ -9809,19 +9831,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               }
               aviso={medicoes.aviso}
               erro={medicoes.erro}
-            />
-          )}
-
-          {relatorioNoDrawer === 'quantitativos' && (
-            <PainelQuantitativos
-              quant={quant}
-              armadura={armadura}
-              fmt={fmt}
-              revisao={editor.baseRevision}
-              oficial={qtdOficial}
-              gerando={gerando}
-              onGerar={gerarQuantitativoOficial}
-              dirty={editor.dirtySincePublish}
             />
           )}
 
@@ -9917,323 +9926,6 @@ function BotaoBarra({
         <span className="block h-4 min-w-4 text-[10px] font-semibold leading-4 tabular-nums">{texto}</span>
       )}
     </button>
-  );
-}
-
-/**
- * Quantitativos derivados do desenho.
- *
- * Mostra a área de EIXO ao lado da de PISO de propósito. Elas diferem em ~9% numa
- * planta comum, e quem confere o orçamento precisa ver as duas para entender de
- * onde veio o número — a de eixo é a que aparece na aba Ambientes, a de piso é a
- * que vira material comprado.
- */
-function PainelQuantitativos({
-  quant,
-  armadura,
-  fmt,
-  revisao,
-  oficial,
-  gerando,
-  onGerar,
-  dirty,
-}: {
-  quant: ReturnType<typeof computeQuantities>;
-  /** O aço esquemático (16/09/2026) — mesma conta do orçamento; opcional para quem lê só o concreto. */
-  armadura?: import('../../utils/blueprintArmadura').ArmaduraQuantificada;
-  fmt: (v: number) => string;
-  revisao: number;
-  oficial: BlueprintQuantitySnapshot | null;
-  gerando: boolean;
-  onGerar: () => void;
-  dirty: boolean;
-}) {
-  const t = quant.totais;
-  return (
-    <div className="overflow-y-auto">
-      <div className="border-b border-slate-200 px-4 py-3">
-        <h2 className="text-sm font-semibold text-slate-800">Quantitativos</h2>
-        <p className="text-xs text-slate-500">
-          Do desenho atual. Política {quant.policy.version}.
-        </p>
-      </div>
-
-      {/* Oficial × ao vivo. A distinção é o ponto: o orçamento cita o oficial. */}
-      <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-        {revisao === 0 ? (
-          <p className="text-xs text-slate-500">
-            Publique uma versão para gerar o quantitativo oficial — o orçamento não
-            cita rascunho.
-          </p>
-        ) : oficial ? (
-          <>
-            <p className="text-xs text-emerald-700">
-              <strong>Oficial da revisão {revisao}</strong> gerado em{' '}
-              {new Date(oficial.computed_at).toLocaleDateString('pt-BR')}.
-            </p>
-            {dirty && (
-              <p className="mt-1 text-xs text-amber-700">
-                O desenho mudou desde então. Publique de novo para gerar o oficial da
-                próxima revisão.
-              </p>
-            )}
-          </>
-        ) : (
-          <>
-            <p className="text-xs text-slate-600">
-              A revisão {revisao} ainda não tem quantitativo oficial.
-            </p>
-            <BotaoTexto icone={Calculator} rotulo={gerando ? 'Gerando…' : 'Gerar oficial'} onClick={onGerar} disabled={gerando} />
-          </>
-        )}
-      </div>
-
-      {/* A GUARDA OLHA AS DUAS COISAS. Antes ela perguntava só por ambiente, e
-          com estrutura no desenho isso passou a esconder um número que existe:
-          uma planta de fôrmas — pilares e vigas, sem parede fechando cômodo —
-          cairia no aviso de "nenhum ambiente" com dezenas de m³ de concreto
-          calculados e invisíveis. */}
-      {quant.ambientes.length === 0 && quant.estruturas.length === 0 ? (
-        <p className="px-4 py-3 text-xs text-slate-400">
-          Nenhum ambiente fechado — sem contorno fechado não há área para quantificar.
-        </p>
-      ) : (
-        <>
-          <dl className="divide-y divide-slate-100">
-            {quant.ambientes.length > 0 ? (
-              <>
-                <Linha rotulo="Área de piso" valor={`${fmt(t.areaPisoM2)} m²`} forte />
-                <Linha
-                  rotulo={`Piso + perda ${(quant.policy.perdaRevestimento * 100).toFixed(0)}%`}
-                  valor={`${fmt(t.areaPisoComPerdaM2)} m²`}
-                />
-                <Linha
-                  rotulo="Parede (2 faces)"
-                  valor={`${fmt(t.areaParedeDuasFacesM2)} m²`}
-                  forte
-                />
-                <Linha rotulo="Alvenaria" valor={`${fmt(t.volumeAlvenariaM3)} m³`} />
-                {/* POR MATERIAL, logo abaixo da alvenaria — é a decomposição
-                    dela, e ler os dois juntos é o que deixa conferir que a soma
-                    fecha. Só aparece quando alguma parede tem composição: numa
-                    planta homogênea a lista seria vazia e a linha, ruído.
-                    Recuadas, para se lerem como detalhe do total acima. */}
-                {t.porMaterial.map((m) => (
-                  <Linha
-                    key={`${m.itemCode}-${m.funcao}`}
-                    rotulo={`↳ ${m.descricao || m.itemCode || 'Sem material'}`}
-                    valor={`${fmt(m.volumeM3)} m³ · ${fmt(m.areaFaceM2)} m²`}
-                  />
-                ))}
-                <Linha rotulo="Rodapé" valor={`${fmt(t.comprimentoRodapeM)} m`} />
-                <Linha
-                  rotulo="Aberturas"
-                  valor={`${t.portas} porta(s), ${t.janelas} janela(s) · ${fmt(t.areaAberturasM2)} m²`}
-                />
-              </>
-            ) : null}
-
-            {/* Concreto e fôrma SEPARADOS por família, como os totais do kernel:
-                pilar, viga, laje e fundação são itens de catálogo diferentes, e
-                um total único devolveria um número que não compra nada. Cada
-                linha só aparece se houver a peça — quatro zeros empilhados
-                seriam ruído em toda planta sem estrutura. */}
-            {quant.estruturas.length > 0 ? (
-              <>
-                {t.volumeConcretoPilarM3 > 0 ? (
-                  <Linha
-                    rotulo="Concreto — pilares"
-                    valor={`${fmt(t.volumeConcretoPilarM3)} m³ · ${fmt(t.areaFormaPilarM2)} m² fôrma`}
-                    forte
-                  />
-                ) : null}
-                {t.volumeConcretoVigaM3 > 0 ? (
-                  <Linha
-                    rotulo="Concreto — vigas"
-                    valor={`${fmt(t.volumeConcretoVigaM3)} m³ · ${fmt(t.areaFormaVigaM2)} m² fôrma`}
-                    forte
-                  />
-                ) : null}
-                {t.volumeConcretoLajeM3 > 0 ? (
-                  <Linha
-                    rotulo="Concreto — lajes"
-                    valor={`${fmt(t.volumeConcretoLajeM3)} m³ · ${fmt(t.areaLajeM2)} m²`}
-                    forte
-                  />
-                ) : null}
-                {t.volumeConcretoFundacaoM3 > 0 ? (
-                  <Linha
-                    rotulo="Concreto — fundação"
-                    valor={`${fmt(t.volumeConcretoFundacaoM3)} m³ · ${fmt(t.areaFormaFundacaoM2)} m² fôrma`}
-                    forte
-                  />
-                ) : null}
-              {armadura && armadura.totais.totalKg > 0 ? (
-                <>
-                  {armadura.totais.pilarKg > 0 ? (
-                    <Linha rotulo="Aço — pilares" valor={`${fmt(armadura.totais.pilarKg)} kg · ${fmt(armadura.totais.taxaPilarKgM3)} kg/m³`} />
-                  ) : null}
-                  {armadura.totais.vigaKg > 0 ? (
-                    <Linha rotulo="Aço — vigas" valor={`${fmt(armadura.totais.vigaKg)} kg · ${fmt(armadura.totais.taxaVigaKgM3)} kg/m³`} />
-                  ) : null}
-                  {armadura.totais.lajeKg > 0 ? (
-                    <Linha rotulo="Aço — lajes" valor={`${fmt(armadura.totais.lajeKg)} kg · ${fmt(armadura.totais.taxaLajeKgM3)} kg/m³`} />
-                  ) : null}
-                  {armadura.totais.fundacaoKg > 0 ? (
-                    <Linha rotulo="Aço — fundação" valor={`${fmt(armadura.totais.fundacaoKg)} kg · ${fmt(armadura.totais.taxaFundacaoKgM3)} kg/m³`} />
-                  ) : null}
-                  <Linha
-                    rotulo="Aço — total (esquemático)"
-                    valor={`${fmt(armadura.totais.totalKg)} kg · CA-50 ${fmt(armadura.totais.ca50Kg)} · CA-60 ${fmt(armadura.totais.ca60Kg)}`}
-                    forte
-                  />
-                </>
-              ) : null}
-                {t.estacas > 0 ? (
-                  <Linha
-                    rotulo="Estacas"
-                    valor={`${t.estacas} un · ${fmt(t.comprimentoEstacasM)} m perfurado`}
-                  />
-                ) : null}
-                {t.pilares > 0 || t.blocosCoroamento > 0 ? (
-                  <Linha
-                    rotulo="Peças"
-                    valor={`${t.pilares} pilar(es), ${t.blocosCoroamento} bloco(s)`}
-                  />
-                ) : null}
-              </>
-            ) : null}
-          </dl>
-
-          {quant.estruturas.length > 0 ? (
-            <div className="border-t border-slate-200 px-4 py-3">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Por peça estrutural
-              </h3>
-              <ul className="mt-2 space-y-2">
-                {quant.estruturas.map((s, i) => (
-                  <li key={s.structuralId} className="rounded-md border border-slate-200 p-2">
-                    <p className="text-xs font-medium text-slate-700">
-                      {s.rotulo
-                        ? `${s.rotulo} · ${nomeDoTipoEstrutural(s.kind)}`
-                        : `${nomeDoTipoEstrutural(s.kind)} ${i + 1}`}
-                    </p>
-                    <dl className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
-                      <dt>Concreto</dt>
-                      <dd className="text-right font-medium text-slate-700">
-                        {fmt(s.volumeConcretoM3)} m³
-                      </dd>
-                      <dt>Fôrma</dt>
-                      <dd className="text-right">{fmt(s.areaFormaM2)} m²</dd>
-                      {armadura?.pecas.find((p) => p.structuralId === s.structuralId) ? (
-                        <>
-                          <dt>Aço</dt>
-                          <dd className="text-right">
-                            {fmt(armadura.pecas.find((p) => p.structuralId === s.structuralId)!.kg)} kg
-                            <span className="block text-[10px] font-normal text-slate-400">
-                              {armadura.pecas.find((p) => p.structuralId === s.structuralId)!.descricao}
-                            </span>
-                          </dd>
-                        </>
-                      ) : null}
-                      {/* A FÓRMULA junto do número, como manda a rastreabilidade
-                          (RF-121): um volume de concreto que não diz de onde
-                          veio não pode ser conferido contra a prancha. */}
-                      <dt className="col-span-2 pt-0.5 text-[10px] italic text-slate-400">
-                        {s.formula}
-                      </dt>
-                    </dl>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          {/* SOBREPOSIÇÃO — o volume que dois componentes dividem.
-              A linha "contado duas vezes" é a razão desta seção existir: sem
-              ela, "Manter os dois" no aviso da criação sumiria de vista e o
-              orçamento sairia com o mesmo m³ pago em dobro, sem nada na tela
-              dizendo isso. Resolvida, a linha vira registro do que se decidiu. */}
-          {quant.sobreposicoes.length > 0 ? (
-            <div className="border-t border-slate-200 px-4 py-3">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Sobreposição entre peças
-              </h3>
-              <ul className="mt-2 space-y-1.5">
-                {quant.sobreposicoes.map((s) => (
-                  <li
-                    key={`${s.aId}-${s.bId}`}
-                    className={`rounded-md border p-2 text-[11px] ${
-                      s.quemCede === 'NINGUEM'
-                        ? 'border-amber-300 bg-amber-50 text-amber-900'
-                        : 'border-slate-200 text-slate-600'
-                    }`}
-                  >
-                    <span className="font-medium tabular-nums">{fmt(s.volumeM3)} m³</span>{' '}
-                    {s.quemCede === 'NINGUEM' ? (
-                      <>
-                        <strong>contados duas vezes</strong> — como concreto e como
-                        alvenaria. Selecione uma das duas peças e escolha quem cede.
-                      </>
-                    ) : s.quemCede === 'PAREDE' ? (
-                      'descontados da alvenaria.'
-                    ) : (
-                      'descontados do concreto.'
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          {quant.ambientes.length > 0 ? (
-          <div className="border-t border-slate-200 px-4 py-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Por ambiente
-            </h3>
-            <ul className="mt-2 space-y-2">
-              {quant.ambientes.map((a, i) => (
-                <li key={a.spaceId} className="rounded-md border border-slate-200 p-2">
-                  <p className="text-xs font-medium text-slate-700">
-                    {a.nome ?? `Ambiente ${i + 1}`}
-                  </p>
-                  <dl className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
-                    <dt>Piso</dt>
-                    <dd className="text-right font-medium text-slate-700">
-                      {fmt(a.areaPisoM2)} m²
-                    </dd>
-                    <dt title="Inclui meia espessura de parede em volta">Eixo</dt>
-                    <dd className="text-right">{fmt(a.areaEixoM2)} m²</dd>
-                    {/* SÓ QUANDO HÁ DESCONTO. A linha existe para explicar uma
-                        área de piso menor do que a conta do contorno daria — e
-                        um "− 0,00 m²" em todo ambiente sem pilar seria ruído
-                        que ensina a ignorar a linha justamente onde ela importa. */}
-                    {a.areaEstruturaM2 > 0 ? (
-                      <>
-                        <dt title="Seção dos pilares que atravessam o piso deste ambiente. Já descontada da área de piso acima.">
-                          Pilares
-                        </dt>
-                        <dd className="text-right">− {fmt(a.areaEstruturaM2)} m²</dd>
-                      </>
-                    ) : null}
-                    <dt>Rodapé</dt>
-                    <dd className="text-right">{fmt(a.comprimentoRodapeM)} m</dd>
-                  </dl>
-                </li>
-              ))}
-            </ul>
-          </div>
-          ) : null}
-
-          <p className="px-4 py-3 text-[11px] leading-relaxed text-slate-400">
-            Estudo preliminar assistido; requer validação de profissional habilitado.
-            {quant.ambientes[0]
-              ? ` Área de piso = ${quant.ambientes[0].formulaAreaPiso}`
-              : ''}
-          </p>
-        </>
-      )}
-    </div>
   );
 }
 
@@ -10504,45 +10196,6 @@ function CamposDaEstrutura({
         />
       </label>
     </>
-  );
-}
-
-function Linha({ rotulo, valor, forte }: { rotulo: string; valor: string; forte?: boolean }) {
-  return (
-    <div className="flex items-center justify-between px-4 py-2">
-      <dt className="text-xs text-slate-600">{rotulo}</dt>
-      <dd className={`text-xs ${forte ? 'font-semibold text-slate-800' : 'text-slate-700'}`}>
-        {valor}
-      </dd>
-    </div>
-  );
-}
-
-/** Botão pequeno com ícone e rótulo, para ações do painel. */
-function BotaoTexto({
-  icone: Icone,
-  rotulo,
-  onClick,
-  disabled,
-  titulo,
-}: {
-  icone: React.ElementType;
-  rotulo: string;
-  onClick: () => void;
-  disabled?: boolean;
-  titulo?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={titulo ?? rotulo}
-      className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-    >
-      <Icone className="h-3.5 w-3.5" />
-      {rotulo}
-    </button>
   );
 }
 

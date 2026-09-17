@@ -451,56 +451,89 @@ async function abrirRelatorio(nome: RegExp, aba: RegExp = /^analisar$/i) {
   return screen.findByRole('dialog');
 }
 
-describe('BlueprintEditor · quantitativos', () => {
-  it('a seção existe e anuncia a versão da política', async () => {
-    await montar();
-    const user = userEvent.setup();
+/** 17/09/2026: Quantitativos é TELA em fluxo (*"criar nova tela também em vez de drawer"*). */
+async function abrirTelaDeQuantitativos() {
+  await abrirAba(/^analisar$/i);
+  await userEvent.setup().click(screen.getByRole('button', { name: /^quantitativos$/i }));
+  const titulo = await screen.findByRole('heading', { level: 1, name: /quantitativos/i });
+  return titulo.closest('[data-tela="quantitativos"]') as HTMLElement;
+}
 
-    await abrirRelatorio(/quantitativos/i);
+describe('BlueprintEditor · quantitativos', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('a tela existe e anuncia a versão da política', async () => {
+    await montar();
+    const tela = await abrirTelaDeQuantitativos();
+    expect(tela).not.toBeNull();
     // RF-121: o resultado precisa dizer sob qual política foi calculado.
-    expect(screen.getByText(/pol[íi]tica quant-/i)).toBeInTheDocument();
+    expect(within(tela).getAllByText(/pol[íi]tica quant-/i).length).toBeGreaterThan(0);
+    // É tela, não drawer: sem dialog, com as abas do padrão.
+    expect(screen.queryByRole('dialog')).toBeNull();
+    for (const aba of ['Resumo', 'Por ambiente', 'Por peça estrutural', 'Sobreposições']) {
+      expect(within(tela).getByRole('tab', { name: new RegExp(`^${aba}`) })).toBeInTheDocument();
+    }
   });
 
   it('sem ambiente fechado, explica que não há o que quantificar', async () => {
     await montar();
-    const user = userEvent.setup();
-
-    await abrirRelatorio(/quantitativos/i);
-    expect(screen.getByText(/sem contorno fechado n[ãa]o h[áa] [áa]rea/i)).toBeInTheDocument();
+    const tela = await abrirTelaDeQuantitativos();
+    expect(within(tela).getAllByText(/sem contorno fechado n[ãa]o h[áa] [áa]rea/i).length).toBeGreaterThan(0);
   });
 
   it('sem versão publicada, explica que orçamento não cita rascunho', async () => {
     await montar();
-    const user = userEvent.setup();
-
-    await abrirRelatorio(/quantitativos/i);
-    // A distinção oficial × ao vivo é o ponto do painel: o número que o orçamento
+    const tela = await abrirTelaDeQuantitativos();
+    // A distinção oficial × ao vivo é o ponto da tela: o número que o orçamento
     // cita não pode vir de geometria que ainda muda.
-    expect(screen.getByText(/o or[çc]amento n[ãa]o cita rascunho/i)).toBeInTheDocument();
+    expect(within(tela).getByText(/o or[çc]amento n[ãa]o cita rascunho/i)).toBeInTheDocument();
   });
 
-  it('abrir Quantitativos NÃO fecha Ambientes — relatório é drawer, navegação é painel', async () => {
+  it('Quantitativos é tela: o botão acende, Voltar devolve o editor com Ambientes como estava; Conflitos segue drawer', async () => {
     // Este teste trocou de sentido em 29/08/2026 (abas → seções irmãs), em
-    // 13/09 (seção → dock) e em 14/09 (dock → drawer). O que continua valendo
-    // é a tese — ver o quantitativo não pode custar a lista de ambientes.
+    // 13/09 (seção → dock), em 14/09 (dock → drawer) e em 17/09 (drawer →
+    // tela). O que continua valendo é a tese — ver o quantitativo não pode
+    // custar a lista de ambientes.
     await montar();
-
     const secAmb = cabecalhoDaSecao(/ambientes/i);
     expect(secAmb).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
-    const drawer = await abrirRelatorio(/^quantitativos$/i);
-    expect(drawer).toHaveTextContent(/quantitativos/i);
-    expect(secAmb).toHaveAttribute('aria-expanded', 'true');
-    // Nada no dock: os de Analisar são drawer.
+    const tela = await abrirTelaDeQuantitativos();
+    // A tela toma o lugar do editor (ribbon inclusive): nada de dialog nem dock.
+    expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByRole('region', { name: /^relatório:/i })).not.toBeInTheDocument();
 
-    // Fechar despressiona o botão do ribbon; abrir Conflitos troca o conteúdo.
-    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^fechar$/i }));
+    await userEvent.setup().click(within(tela).getByRole('button', { name: /voltar ao editor/i }));
+    expect(document.querySelector('[data-tela="quantitativos"]')).toBeNull();
     expect(screen.getByRole('button', { name: /^quantitativos$/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(cabecalhoDaSecao(/ambientes/i)).toHaveAttribute('aria-expanded', 'true');
+
     await userEvent.setup().click(screen.getByRole('button', { name: /^conflitos/i }));
     expect(screen.getByRole('dialog')).toHaveTextContent(/conflitos/i);
-    expect(screen.getByRole('button', { name: /^conflitos/i })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('com estrutura, a aba Por peça lista a peça com fórmula e o clique seleciona no desenho', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [
+        { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(3000, 1500)], larguraMm: 200, profundidadeMm: 200, alturaMm: 2800, rotulo: 'P1' },
+      ]).model,
+    );
+    await montar();
+    const user = userEvent.setup();
+    const tela = await abrirTelaDeQuantitativos();
+    // Resumo: concreto dos pilares.
+    expect(within(tela).getByText(/Concreto — pilares/)).toBeInTheDocument();
+    await user.click(within(tela).getByRole('tab', { name: /^Por peça estrutural/ }));
+    const linha = within(tela).getAllByRole('row').find((r) => /P1/.test(r.textContent ?? ''))!;
+    expect(linha).toHaveTextContent(/Pilar/);
+    expect(linha).toHaveTextContent(/0[,.]112/); // 0,2 × 0,2 × 2,8 m³
+    await user.click(linha);
+    // Volta ao editor com a peça selecionada (as propriedades abrem em Sheet).
+    expect(document.querySelector('[data-tela="quantitativos"]')).toBeNull();
+    expect(await screen.findByTestId('propriedades-sheet')).toHaveTextContent(/P1/);
   });
 
   it('Comentários e Versões (Colaborar) continuam no dock, embaixo do canvas', async () => {
@@ -2255,10 +2288,12 @@ describe('BlueprintEditor · armadura esquemática', () => {
     await user.click(within(tela).getByRole('button', { name: /voltar ao editor/i }));
     expect(document.querySelector('[data-tela="armadura"]')).toBeNull();
 
-    // Quantitativos (dock) — as linhas de aço.
+    // Quantitativos (tela, 17/09) — as linhas de aço no Resumo; Voltar para seguir.
     await user.click(botao(/^quantitativos$/i));
     expect(await screen.findByText(/Aço — pilares/)).toBeInTheDocument();
     expect(screen.getByText(/Aço — total \(esquemático\)/)).toBeInTheDocument();
+    const telaQ = document.querySelector('[data-tela="quantitativos"]') as HTMLElement;
+    await user.click(within(telaQ).getByRole('button', { name: /voltar ao editor/i }));
 
     await abrirComponentes(user);
     await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));

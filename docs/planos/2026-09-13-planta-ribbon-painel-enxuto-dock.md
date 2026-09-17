@@ -344,3 +344,40 @@ Ordem da barra: Selecionar · Mover │ 6 vistas │ **Enquadrar · Zoom− · Z
   y=285 com o ribbon terminando em 269; Duplicar 16→17 pilares, Espelho mantém 17, Isolar
   esconde P1 e vira Reexibir, Reexibir devolve; 2× Desfazer volta a 16; Medir muda a barra
   de opções; Exportar abre Versões.
+
+---
+
+## 17/09/2026 — Quantitativos vira TELA (era drawer)
+
+### Pedido original
+
+> Analisar < quantitativos: criar nova tela também em vez de drawer
+
+### O que mudou
+
+- `components/blueprint/TelaQuantitativos.tsx` (novo): faixa OFICIAL × AO VIVO (revisão 0 /
+  oficial gerado / "Gerar oficial"), `TabsBar` com **Resumo** (uma grandeza por linha:
+  grupo, item, quantidade, unidade, detalhe — arquitetura, material, estrutura, aço),
+  **Por ambiente** (piso, eixo, pilares descontados, rodapé, fórmula), **Por peça
+  estrutural** (concreto, fôrma, aço, esquema, fórmula; clique → `selecionarEAbrir`) e
+  **Sobreposições** (badge "N !" quando há "contado duas vezes"). Números em pt-BR com as
+  casas da política (`formatarQuantidade` do kernel devolve `toFixed` com ponto — serve ao
+  payload, não à tela).
+- Editor: `TelaDaEletrica` ganhou `'quantitativos'`; botão de Analisar usa `alternarTela`;
+  `'quantitativos'` saiu de `RELATORIOS_EM_DRAWER`; `PainelQuantitativos`, `Linha` e
+  `BotaoTexto` removidos (código morto). Conflitos, Medições e Orçamento continuam em drawer.
+
+### Testes
+
+- `BlueprintEditor.test.tsx` › "quantitativos": helper `abrirTelaDeQuantitativos`; tela com
+  4 abas e sem dialog; textos de política/sem contorno/rascunho; Voltar devolve o editor
+  com Ambientes aberto e Conflitos segue drawer; novo: com pilar, Resumo mostra "Concreto —
+  pilares", Por peça lista P1 com 0,112 m³ e o clique abre as Propriedades. O teste da
+  armadura passou a Voltar da tela antes de abrir Componentes.
+
+### Verificação
+
+- tsc, check-ui-standard (TelaQuantitativos, Editor), suíte cheia (4412), build.
+- App real (Planta 14/09/2026, escritas bloqueadas: 14): tela sem dialog, abas Resumo 17 ·
+  Por ambiente 4 · Por peça 67 · Sobreposições 99; clique em P1 fecha a tela e abre as
+  Propriedades com "P1 · Pilar 0,157 m³…".

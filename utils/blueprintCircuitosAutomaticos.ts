@@ -177,9 +177,25 @@ export function pontosElegiveis(model: BlueprintModel, levelId: ObjectId): Termi
   return pontosSoltos(model, levelId).filter((t) => funcaoDoPonto(t.tipoEletrico) != null);
 }
 
-/** Os quadros do pavimento — o circuito automático nasce no quadro do mesmo piso. */
+/**
+ * Os quadros CANDIDATOS a receber os circuitos do pavimento: os do próprio
+ * piso primeiro, depois os dos outros.
+ *
+ * 17/09/2026 (*"elimine essa regra, não faz nenhum sentido: exige um quadro no
+ * mesmo pavimento"*): a regra antiga só aceitava quadro do mesmo piso, e uma
+ * casa de dois pavimentos com um QDC no térreo ficava sem como criar os
+ * circuitos do andar de cima. O quadro do térreo alimentar o piso superior é o
+ * caso comum, não a exceção. A ordem existe para o padrão continuar sendo o
+ * quadro do piso quando ele existe.
+ */
 export function quadrosDoNivel(model: BlueprintModel, levelId: ObjectId): Quadro[] {
-  return (model.quadros ?? []).filter((q) => q.levelId === levelId);
+  const todos = model.quadros ?? [];
+  return [...todos.filter((q) => q.levelId === levelId), ...todos.filter((q) => q.levelId !== levelId)];
+}
+
+/** O nome do pavimento do quadro, para o seletor dizer de onde ele é. */
+export function pavimentoDoQuadro(model: BlueprintModel, quadro: Quadro): string {
+  return model.levels.find((l) => l.id === quadro.levelId)?.name ?? '';
 }
 
 /**
@@ -275,8 +291,9 @@ export function planejarCircuitos(
     ...extras,
   });
   const quadro = quadroId ? (model.quadros ?? []).find((q) => q.id === quadroId) ?? null : null;
-  if (!quadro) return vazio('sem quadro no pavimento');
-  if (quadro.levelId !== levelId) return vazio('o quadro está em outro pavimento');
+  // Sem quadro NENHUM no desenho o circuito não tem onde nascer. Quadro de
+  // outro pavimento vale (17/09/2026) — ver `quadrosDoNivel`.
+  if (!quadro) return vazio('sem quadro no desenho');
 
   const cargaMaxima = cargaMaximaEfetivaVA(quadro, hip);
   const soltos = pontosSoltos(model, levelId);

@@ -159,6 +159,7 @@ import {
   planejarCircuitos,
   pontosElegiveis,
   quadrosDoNivel,
+  pavimentoDoQuadro,
   type HipotesesDeCircuitos,
 } from '../../utils/blueprintCircuitosAutomaticos';
 import {
@@ -9293,7 +9294,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   </li>
                 </ul>
                 <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-                  {quadrosDoNivelAtivo.length > 1 && (
+                  {/* O seletor mostra TODOS os quadros do desenho, com o pavimento de
+                      cada um (17/09/2026): o QDC do térreo pode receber os circuitos
+                      do andar de cima. Com um só, o nome aparece sem seletor. */}
+                  {quadrosDoNivelAtivo.length > 1 ? (
                     <label className="flex items-center gap-2">
                       Quadro
                       <select
@@ -9305,11 +9309,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                         {quadrosDoNivelAtivo.map((q) => (
                           <option key={q.id} value={q.id}>
                             {q.nome}
+                            {q.levelId !== levelId ? ` (${pavimentoDoQuadro(editor.model, q)})` : ''}
                           </option>
                         ))}
                       </select>
                     </label>
-                  )}
+                  ) : quadroDosCircuitos && quadroDosCircuitos.levelId !== levelId ? (
+                    <span>
+                      Quadro <strong>{quadroDosCircuitos.nome}</strong> ({pavimentoDoQuadro(editor.model, quadroDosCircuitos)})
+                    </span>
+                  ) : null}
                   <label className="flex items-center gap-2">
                     Dividir luz e TUG
                     <select
@@ -9363,8 +9372,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
               {!quadroDosCircuitos ? (
                 <p className="text-sm text-slate-500">
-                  Insira um Quadro de distribuição neste pavimento (Instalações › Componentes) — o circuito
-                  nasce nele.
+                  Insira um Quadro de distribuição no desenho (Instalações › Componentes) — o circuito nasce
+                  nele, em qualquer pavimento.
                 </p>
               ) : planoDeCircuitos.circuitos.length === 0 ? (
                 <p className="text-sm text-slate-500">Nenhum ponto sem circuito neste pavimento.</p>

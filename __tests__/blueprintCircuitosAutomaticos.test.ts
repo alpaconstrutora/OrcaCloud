@@ -20,6 +20,7 @@ import {
   planejarCircuitos,
   pontosElegiveis,
   proximoNumeroDeCircuito,
+  quadrosDoNivel,
   secaoMinimaDaFuncaoMm2,
   type HipotesesDeCircuitos,
 } from '../utils/blueprintCircuitosAutomaticos';
@@ -299,11 +300,26 @@ describe('planejarCircuitos — o lote', () => {
 });
 
 describe('planejarCircuitos — quadro, tensão e hipóteses', () => {
-  it('sem quadro, ou quadro de outro pavimento: motivo e nenhum comando', () => {
-    const { m, t, quadroId } = casa();
-    expect(planejar(m, t, null)).toMatchObject({ motivo: 'sem quadro no pavimento', comandos: [] });
-    const outro = applyCommand(m, { type: 'AddLevel', name: '1º', elevationMm: 2800, defaultHeightMm: 2800 }).model;
-    expect(planejar(outro, outro.levels[1].id, quadroId)).toMatchObject({ motivo: 'o quadro está em outro pavimento', comandos: [] });
+  it('sem quadro nenhum: motivo e nenhum comando', () => {
+    const { m, t } = casa();
+    expect(planejar(m, t, null)).toMatchObject({ motivo: 'sem quadro no desenho', comandos: [] });
+  });
+
+  it('quadro de OUTRO pavimento vale (17/09/2026): os pontos do andar de cima nascem no QDC do térreo', () => {
+    // "elimine essa regra. não faz nenhum sentido: exige um quadro no mesmo pavimento"
+    const { m, quadroId } = casa();
+    let outro = applyCommand(m, { type: 'AddLevel', name: '1º', elevationMm: 2800, defaultHeightMm: 2800 }).model;
+    const cima = outro.levels[1].id;
+    outro = applyCommand(outro, {
+      type: 'AddTerminal', levelId: cima, disciplina: 'ELETRICA', tipo: 'TUG', at: point(1000, 1000), cotaMm: 300,
+      tipoEletrico: 'TUG', potenciaW: 100,
+    }).model;
+    const plano = planejar(outro, cima, quadroId);
+    expect(plano.motivo).toBeNull();
+    expect(plano.circuitos).toHaveLength(1);
+    expect(plano.quadroId).toBe(quadroId);
+    // E a lista de candidatos traz o quadro do térreo para o andar de cima.
+    expect(quadrosDoNivel(outro, cima).map((q) => q.id)).toEqual([quadroId]);
   });
 
   it('carga máxima: 10 A × tensão do quadro (127 → 1270; 220 → 2200); sem tensão assume 127 e avisa; declarada vence', () => {

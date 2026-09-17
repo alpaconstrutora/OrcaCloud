@@ -63,3 +63,39 @@ Minhas (D1–D5):
 - `npx tsc --noEmit` 0 · suíte completa **314 arquivos / 4153 testes** verde · `npm run build` ok · `blueprintKernelGoldens` intacto (sem bump).
 - `bash scripts/check-ui-standard.sh` em `BlueprintEditor.tsx`, `PainelPreDimensionamento.tsx`, `PainelEletrica.tsx`: sem violação.
 - **App real** (vite 3147, Playwright, escritas a `/rest/v1/**` bloqueadas — 17 abortadas, 0 erros JS): planta com 5 pontos soltos (luz, interruptor, 2 TUG num ambiente, 1 TUG fora) e QDC sem tensão → ribbon "Circuitos automáticos 5" · prévia por ambiente: `C1 — Iluminação Ambiente 1` (2 pts, 100 VA, 1,5) · `C2 — TUG Ambiente 1` (2, 200, 2,5) · `C3 — TUG Fora de ambiente` (1, 100, 2,5); legenda "padrão 10 A × 127 V — quadro sem tensão, assumida"; fonte mínima 12 px, sem transbordo · "Um por função" → 2 linhas · "Criar 3 circuito(s)" → status "3 circuito(s) criado(s) para 5 ponto(s) — Ctrl+Z desfaz", ribbon 0 / Quadro de cargas 3 · Quadro de cargas: seções 1,5 / 2,5 / 2,5 gravadas · **um** Desfazer → 5 / 0 de novo. Capturas olhadas.
+
+---
+
+## 17/09/2026 — o quadro pode estar em OUTRO pavimento
+
+### Pedido original
+
+> verifique por que o botão para criar circuitos automáticos no primeiro pavimento da planta
+> aberta no app não está ativado? → (diagnóstico) → **"elimine essa regra. não faz nenhum
+> sentido: regra atual exige um quadro no mesmo pavimento"**
+
+### Diagnóstico (banco, leitura)
+
+Planta 14/09/2026: Térreo com 28 pontos, todos já em 9 circuitos do QDC → "Nenhum ponto sem
+circuito" (correto). Pavimento 1 com 28 pontos sem circuito e **nenhum quadro** → a regra
+"circuito nasce no quadro do mesmo piso" bloqueava o Criar.
+
+### O que mudou
+
+- `quadrosDoNivel(model, levelId)` devolve TODOS os quadros do desenho, os do próprio piso
+  primeiro (o padrão continua sendo o quadro do piso quando existe); `pavimentoDoQuadro` dá o
+  nome do piso para o seletor.
+- `planejarCircuitos` não recusa mais quadro de outro pavimento; sem quadro nenhum o motivo é
+  "sem quadro no desenho".
+- Tarefa: com 2+ quadros o seletor mostra "QDC (Térreo)" para os de outro piso; com um só de
+  outro piso, a linha "Quadro **QDC** (Térreo)"; o aviso passou a "Insira um Quadro… no
+  desenho… em qualquer pavimento".
+- Fica para depois: **Lançar eletrodutos** ainda traça a rede a partir do quadro do mesmo piso;
+  circuito no QDC do térreo para pontos do andar de cima precisará de prumada entre pisos.
+
+### Verificação
+
+- `blueprintCircuitosAutomaticos.test.ts`: "sem quadro nenhum" + novo "quadro de OUTRO pavimento
+  vale". Suíte cheia 4417, tsc, check-ui, build.
+- App real (escritas bloqueadas: 14): Pavimento 1 ativo → botão com 28, tarefa com "QDC (Térreo)",
+  prévia de 9 circuitos, **Criar 9 circuito(s)** habilitado.

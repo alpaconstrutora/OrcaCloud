@@ -1,4 +1,5 @@
 import { BudgetEntry, DiaryEntry, ProjectSchedule, PurchaseOrder, ProjectSettings, WBSGroup, WBSPhase, SchedulePeriod, ItemDistribution, ItemScheduleDetails } from '../types';
+import { totalEfetivoDoPedido } from './pedidoItemValor';
 
 interface PhaseEvent {
     id: string;
@@ -243,7 +244,7 @@ export const calculateRealizedFinancialProgress = (budget: BudgetEntry[], orders
     let totalRealized = 0;
     orders.forEach(order => {
         if (order.status !== 'Cancelado' && order.items) {
-            totalRealized += order.items.reduce((acc, item) => acc + (item.total || 0), 0);
+            totalRealized += totalEfetivoDoPedido(order.items);
         }
     });
 

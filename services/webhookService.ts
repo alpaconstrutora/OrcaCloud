@@ -1,5 +1,6 @@
 import { PurchaseOrder, PurchaseOrderItem, ContractTemplate, QuotationRequest } from '../types';
 import { supabase } from '../lib/supabase';
+import { totalEfetivoDoPedido } from '../utils/pedidoItemValor';
 
 const MAKE_WEBHOOK_URL = import.meta.env.VITE_MAKE_WEBHOOK_URL || '';
 
@@ -130,7 +131,7 @@ export const webhookService = {
                 id: order.id || '',
                 number: order.number || 'N/A',
                 status: order.status,
-                total: order.items.reduce((sum, item) => sum + (item.total || 0), 0),
+                total: totalEfetivoDoPedido(order.items),
                 items: order.items,
                 notes: order.notes
             },

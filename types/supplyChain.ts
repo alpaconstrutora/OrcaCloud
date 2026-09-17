@@ -1,5 +1,20 @@
 import type { ApprovalStep } from './financial';
 
+/**
+ * Um item do pedido carrega DOIS pares de preço:
+ *
+ *   · `unitPrice`/`total` — REFERÊNCIA: o que o comprador previa (orçamento/SINAPI,
+ *     preço da RFQ, ou o digitado no item avulso). Nunca é alterado por cotação
+ *     nem por negociação.
+ *   · `quotedUnitPrice`/`quotedTotal` — COTADO: o que o fornecedor cobra. Vem do
+ *     mapa de cotação quando o pedido nasce de lá; senão fica vazio (`null`/
+ *     ausente) para o fornecedor preencher no portal, ou o comprador no app.
+ *
+ * Quem decide "qual vale" é `utils/pedidoItemValor.ts` — cotado quando houver,
+ * senão referência. Invariante de escrita: quem grava `quotedUnitPrice` grava
+ * `quotedTotal` junto (`round2(quantity × quotedUnitPrice)`); `0` cotado é
+ * cotação válida, só `null`/ausente é "sem cotação".
+ */
 export interface PurchaseOrderItem {
     code: string;
     description: string;
@@ -7,6 +22,8 @@ export interface PurchaseOrderItem {
     quantity: number;
     unitPrice: number;
     total: number;
+    quotedUnitPrice?: number | null;
+    quotedTotal?: number | null;
 }
 
 /**

@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { PurchaseOrderItem } from '../types/supplyChain';
+import { unitarioEfetivoDoItem, valorEfetivoDoItem } from '../utils/pedidoItemValor';
 
 // ── Tipos do 3-Way Match ──────────────────────────────────────────────────────
 
@@ -109,13 +110,16 @@ export const matchService = {
     }
 
     const orderItems: PurchaseOrderItem[] = order.items ?? [];
-    const orderTotal  = orderItems.reduce((s, i) => s + (i.total ?? i.quantity * i.unitPrice), 0);
+    // Valor do item = cotado quando houver, senão referência (utils/pedidoItemValor);
+    // item sem total gravado cai no produto qty × unitário efetivo.
+    const valorDoItem = (i: PurchaseOrderItem) => valorEfetivoDoItem(i) || i.quantity * unitarioEfetivoDoItem(i);
+    const orderTotal  = orderItems.reduce((s, i) => s + valorDoItem(i), 0);
     const invoiceTotal = (invoices ?? []).reduce((s, i) => s + Number(i.total_value), 0);
 
     // ── Construir linhas ───────────────────────────────────────────────────
     const lines: MatchLine[] = orderItems.map(item => {
       const rcvd    = receivedByCode[item.code] ?? 0;
-      const weight  = orderTotal > 0 ? (item.total ?? 0) / orderTotal : 0;
+      const weight  = orderTotal > 0 ? valorDoItem(item) / orderTotal : 0;
       const invPart = invoiceTotal * weight;
 
       return {
@@ -123,11 +127,11 @@ export const matchService = {
         description:   item.description,
         unit:          item.unit,
         orderedQty:    item.quantity,
-        orderedValue:  item.total ?? item.quantity * item.unitPrice,
+        orderedValue:  valorDoItem(item),
         receivedQty:   rcvd,
         invoicedValue: invPart,
         qtyStatus:     qtyStatus(item.quantity, rcvd),
-        valueStatus:   valueStatus(item.total ?? item.quantity * item.unitPrice, invPart),
+        valueStatus:   valueStatus(valorDoItem(item), invPart),
       };
     });
 

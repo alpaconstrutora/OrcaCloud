@@ -78,6 +78,7 @@ import { useConfirm } from './ui/confirm';
 import { mergeInstallments, computeProfitabilityByProperty, type MergeInstallmentsInput } from '../utils/commercialInstallments';
 // Harness temporário da Fase 2 — remover junto com o painel após o portão.
 import ProfitabilityDiffPanel, { isProfitabilityDebugOn } from './__validation__/ProfitabilityDiffPanel';
+import { totalEfetivoDoPedido } from '../utils/pedidoItemValor';
 
 interface ProjectFinancialManagerProps {
     settings: ProjectSettings;
@@ -358,7 +359,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
 
     const orderExpenses = useMemo(() => orders.filter(o => o.status !== 'Cancelado').map(o => ({
         id: o.id ?? o.number ?? '', date: o.created_at || o.deliveryDate || '', description: `[Pedido #${o.number}]`.trim(), category: 'Material' as FinancialTransaction['category'],
-        value: o.items.reduce((s, i) => s + (i.total || 0), 0), supplier: o.supplierName || '', isOrder: true,
+        value: totalEfetivoDoPedido(o.items), supplier: o.supplierName || '', isOrder: true,
         financialStatus: o.isFinancialApproved ? 'PAGO' : 'PENDENTE', status: o.status as FinancialTransaction['status'], statusUpdatedAt: o.status_updated_at ?? o.created_at ?? '',
         orderNumber: o.number ?? '', fullOrderId: o.id ?? '', type: 'EXPENSE' as FinancialTransaction['type']
     } as RichTransaction)), [orders]);

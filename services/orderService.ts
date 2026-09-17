@@ -14,6 +14,7 @@ import { approvalService } from './approvalService';
 import { appSettingsService } from './appSettingsService';
 import { generateOrderNumber } from './orderNumberingService';
 import { processService } from './processService';
+import { valorEfetivoDoItem } from '../utils/pedidoItemValor';
 
 type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; cost_center_id?: string; chart_of_accounts?: string; plano_de_contas_id?: string; notes?: string; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; };
 
@@ -430,7 +431,7 @@ export const orderService = {
                         const projectForWa = data.project_id
                             ? await projectService.loadProject(data.project_id) : undefined;
                         const orderTotal = (data.items as PurchaseOrderItem[] || []).reduce(
-                            (s: number, i: PurchaseOrderItem) => s + (i.total || 0), 0
+                            (s: number, i: PurchaseOrderItem) => s + valorEfetivoDoItem(i), 0
                         );
                         const shareToken = await whatsappService.generateShareToken(data.id);
                         await whatsappService.sendOrderTemplate({
@@ -641,7 +642,7 @@ export const orderService = {
     },
 
     // ─── Aprovação multinível (modelo unificado — approvalService) ──────
-    // purchase_orders é escopada por empresa_id e seu valor vem de items[].total;
+    // purchase_orders é escopada por empresa_id e seu valor vem de items[] (cotado quando houver, senão referência — utils/pedidoItemValor);
     // por isso passamos organizationId e o total explicitamente ao submit.
     // is_financial_approved (pós-recebimento) permanece independente (Regra 12).
 
@@ -653,7 +654,7 @@ export const orderService = {
             .single();
         if (error) throw error;
         const total = ((po?.items as PurchaseOrderItem[]) || [])
-            .reduce((s, i) => s + (i.total || 0), 0);
+            .reduce((s, i) => s + valorEfetivoDoItem(i), 0);
         // `semFaixa: 'liberar'` — pedido abaixo do piso da alçada não entra na
         // fila. Ver a explicação em `approvalService.submit`.
         await approvalService.submit('purchase_order', orderId, {}, { organizationId, amount: total, semFaixa: 'liberar' });

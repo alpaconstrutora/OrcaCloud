@@ -4,6 +4,7 @@ import { projectService } from './projectService';
 import { invoiceService } from './invoiceService';
 import { isSystemProject } from '../utils/systemProjects';
 import { measurementRef } from '../lib/receivableRef';
+import { totalEfetivoDoPedido } from '../utils/pedidoItemValor';
 
 /**
  * Campos de `internal_transactions` que o JSONB do projeto não carrega.
@@ -339,7 +340,7 @@ export const financialService = {
         }
 
         // 6. Calculate Values and Terms
-        const total = order.items.reduce((acc: number, item: PurchaseOrderItem) => acc + (item.total || 0), 0);
+        const total = totalEfetivoDoPedido(order.items);
         const baseDate = order.actual_delivery_date || order.delivery_date || new Date().toISOString();
         const paymentMethod = order.payment_method || 'Não inf.';
         const termType = order.payment_term_type || 'Vista';

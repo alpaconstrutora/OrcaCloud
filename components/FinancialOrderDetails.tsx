@@ -21,6 +21,7 @@ import { orderService } from '../services/orderService';
 import { useOrgContext } from '../hooks/useOrgContext';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { supabase } from '../lib/supabase';
+import { totalEfetivoDoPedido } from '../utils/pedidoItemValor';
 
 interface FinancialOrderDetailsProps {
     orderId: string;
@@ -139,7 +140,7 @@ const FinancialOrderDetails: React.FC<FinancialOrderDetailsProps> = ({ orderId, 
 
     if (!order) return <div className="p-20 text-center text-gray-500 font-bold uppercase tracking-widest">Pedido não encontrado</div>;
 
-    const totalValue = order.items.reduce((sum, item) => sum + (item.total || 0), 0);
+    const totalValue = totalEfetivoDoPedido(order.items);
     const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
     // Generate installments for display

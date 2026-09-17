@@ -1,12 +1,14 @@
 import React from 'react';
 import { supabase } from '../lib/supabase';
 import { Package, Building2, Calendar, FileText, Loader2, AlertTriangle, CheckCircle2, Clock, Truck } from 'lucide-react';
+import { totalEfetivoDoPedido, valorEfetivoDoItem } from '../utils/pedidoItemValor';
 
 interface PublicOrder {
     id: string;
     number: string;
     status: string;
-    items: Array<{ description: string; quantity: number; unit: string; unit_price: number; total: number }>;
+    // `quotedUnitPrice`/`quotedTotal`: valor cotado pelo fornecedor (utils/pedidoItemValor) — a RPC devolve o JSON cru.
+    items: Array<{ description: string; quantity: number; unit: string; unit_price: number; total: number; quotedUnitPrice?: number | null; quotedTotal?: number | null }>;
     delivery_date?: string;
     delivery_method?: string;
     delivery_location?: string;
@@ -59,7 +61,7 @@ const PublicOrderView: React.FC<Props> = ({ token }) => {
     const fmtDate = (d?: string) =>
         d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
 
-    const total = order?.items?.reduce((s, i) => s + (i.total || 0), 0) ?? 0;
+    const total = totalEfetivoDoPedido(order?.items);
     const statusCfg = order ? (STATUS_CONFIG[order.status] ?? { label: order.status, color: 'bg-gray-100 text-gray-600' }) : null;
 
     if (loading) return (
@@ -173,9 +175,9 @@ const PublicOrderView: React.FC<Props> = ({ token }) => {
                             <div key={i} className="px-6 py-4 flex items-center justify-between gap-4">
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-semibold text-gray-800 truncate">{item.description}</p>
-                                    <p className="text-xs text-gray-400 mt-0.5">{item.quantity} {item.unit} × {fmtCurrency(item.unit_price)}</p>
+                                    <p className="text-xs text-gray-400 mt-0.5">{item.quantity} {item.unit} × {fmtCurrency(item.quotedUnitPrice ?? item.unit_price)}</p>
                                 </div>
-                                <p className="text-sm font-black text-gray-900 shrink-0">{fmtCurrency(item.total)}</p>
+                                <p className="text-sm font-black text-gray-900 shrink-0">{fmtCurrency(valorEfetivoDoItem(item))}</p>
                             </div>
                         ))}
                     </div>

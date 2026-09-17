@@ -7,6 +7,7 @@ import { discrepancyService, PurchaseDiscrepancy } from './discrepancyService';
 import { notificationLogService, NotificationLogEntry } from './notificationLogService';
 import { mapChatRow, OrderChatMessage } from './chatService';
 import { SupplierBankAccount } from '../types/supplierBankAccount';
+import type { CotadoDoItem } from '../utils/pedidoItemValor';
 
 export interface SupplierPortalToken {
   id: string;
@@ -229,6 +230,28 @@ export const supplierPortalTokenService = {
     });
     if (error) throw error;
     const res = data as any;
+    return res?.valid ? mapOrderRow(res.data) : null;
+  },
+
+  /**
+   * O fornecedor informa o valor COTADO de itens do pedido (só os dois campos
+   * cotados; referência, status e condições ficam como estão — ver
+   * `utils/pedidoItemValor.ts`). `expectedVersion` é a versão otimista: o
+   * banco recusa se o pedido mudou desde a leitura, e o erro sai no mesmo
+   * vocabulário `CONFLICT:` de `orderService.updateOrder`, para a tela
+   * reaproveitar o tratamento que já tem.
+   */
+  async updateItemQuotes(token: string, orderId: string, cotados: CotadoDoItem[], expectedVersion?: number | null): Promise<PurchaseOrder | null> {
+    const { data, error } = await supabase.rpc('supplier_portal_update_item_quotes', {
+      p_token: token,
+      p_order_id: orderId,
+      p_quotes: cotados,
+      p_expected_version: expectedVersion ?? null,
+    });
+    if (error) throw error;
+    const res = data as any;
+    if (res?.reason === 'conflict') throw new Error('CONFLICT: Pedido foi modificado por outro usuário. Recarregue e tente novamente.');
+    if (res?.reason === 'status') throw new Error('Este pedido não aceita mais valor cotado (já entregue, recebido ou cancelado).');
     return res?.valid ? mapOrderRow(res.data) : null;
   },
 

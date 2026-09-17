@@ -63,6 +63,7 @@ import { crewClassificationService } from '../services/crewClassificationService
 import SimulationBanner from './schedule/SimulationBanner';
 import ScheduleGridView from './schedule/ScheduleGridView';
 import ModernDateInput from './ModernDateInput';
+import { valorEfetivoDoItem } from '../utils/pedidoItemValor';
 import {
     ChevronDown,
     AlertTriangle,
@@ -1617,7 +1618,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
             if (order.status !== 'Cancelado') {
                 order.items.forEach(item => {
                     const current = totalPurchasedValueByCode.get(item.code) || 0;
-                    totalPurchasedValueByCode.set(item.code, current + (item.total || 0));
+                    totalPurchasedValueByCode.set(item.code, current + valorEfetivoDoItem(item));
                 });
             }
         });
@@ -3907,12 +3908,12 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                         if (budgetItemsMatching.length === 0) {
                             // Order total still counts for project total even if item not in budget?
                             // For simplicity, let's just add it to periodTotals realized.
-                            periodTotals[period.id].realized += (orderItem.total || 0);
+                            periodTotals[period.id].realized += valorEfetivoDoItem(orderItem);
                         } else {
                             // Weight by budget quantity
                             const totalBudgetQty = budgetItemsMatching.reduce((acc, b) => acc + b.quantity, 0) || 1;
                             budgetItemsMatching.forEach(bi => {
-                                const weightedVal = (orderItem.total || 0) * (bi.quantity / totalBudgetQty);
+                                const weightedVal = valorEfetivoDoItem(orderItem) * (bi.quantity / totalBudgetQty);
                                 itemPeriodRealized[bi.id][period.id] = (itemPeriodRealized[bi.id][period.id] || 0) + weightedVal;
                                 periodTotals[period.id].realized += weightedVal;
                             });

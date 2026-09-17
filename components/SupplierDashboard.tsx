@@ -64,6 +64,7 @@ import PortalMyData from './supplier/portal/PortalMyData';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 import { SupplierBankAccount } from '../types/supplierBankAccount';
 import { supabase } from '../lib/supabase';
+import { totalEfetivoDoPedido } from '../utils/pedidoItemValor';
 
 interface SupplierDashboardProps {
     supplierProfile?: Supplier | null;
@@ -889,7 +890,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Valor Total</p>
                                             <span className="text-lg font-bold text-gray-900">
                                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                                                    order.items?.reduce((sum: number, item: { total?: number }) => sum + (item.total || 0), 0) || 0
+                                                    totalEfetivoDoPedido(order.items)
                                                 )}
                                             </span>
                                         </div>
@@ -982,7 +983,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                                 </td>
                                                 <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-900">
                                                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                                                        order.items?.reduce((sum: number, item: { total?: number }) => sum + (item.total || 0), 0) || 0
+                                                        totalEfetivoDoPedido(order.items)
                                                     )}
                                                 </td>
                                                 <td className="px-6 py-2.5 border-r border-gray-100">
@@ -1454,7 +1455,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                     <KpiCard label="Pedidos Pendentes" value={orders.filter(o => ['Rascunho', 'Enviado'].includes(o.status)).length} icon={<Package className="w-5 h-5" />} color="violet" />
                     <KpiCard
                         label="Volume Faturado"
-                        value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 1 }).format(orders.filter(o => o.status === 'Confirmado').reduce((sum, o) => sum + (o.items?.reduce((is: number, i: { total?: number }) => is + (i.total || 0), 0) || 0), 0) / 1000) + 'k'}
+                        value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 1 }).format(orders.filter(o => o.status === 'Confirmado').reduce((sum, o) => sum + totalEfetivoDoPedido(o.items), 0) / 1000) + 'k'}
                         icon={<DollarSign className="w-5 h-5" />}
                         color="emerald"
                     />

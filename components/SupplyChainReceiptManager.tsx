@@ -11,6 +11,7 @@ import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, useP
 import { KpiCard } from './ui/KpiCard';
 import TabsBar, { TabsBarItem } from './ui/TabsBar';
 import { useToast } from '../hooks/useToast';
+import { totalEfetivoDoPedido } from '../utils/pedidoItemValor';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Número', sortable: true },
@@ -158,8 +159,7 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
     }, [orgId]);
 
     const filteredOrders = React.useMemo(() => {
-        const calculateTotal = (order: PurchaseOrder) =>
-            order.items?.reduce((sum, item) => sum + (item.total || 0), 0) || 0;
+        const calculateTotal = (order: PurchaseOrder) => totalEfetivoDoPedido(order.items);
 
         return orders
             .filter(order => {

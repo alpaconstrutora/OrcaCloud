@@ -8,6 +8,7 @@ import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 import { formatMoney, formatDateBR } from './ui/Format';
 import EmpreendimentoCell, { resolveOrderEmpreendimento } from './empreendimento/EmpreendimentoCell';
+import { totalEfetivoDoPedido } from '../utils/pedidoItemValor';
 
 // Número da NF-e (não confundir com a chave de acesso de 44 dígitos) — mesmos
 // dígitos 26-34 da chave, convenção usada em FiscalDocuments.tsx.
@@ -132,7 +133,7 @@ function renderOrderCell(
         case 'date':
             return <span className="text-sm font-normal text-gray-600">{order.created_at ? new Date(order.created_at).toLocaleDateString('pt-BR') : '-'}</span>;
         case 'value':
-            return <span className="text-sm font-medium text-gray-800">{formatMoney(order.items?.reduce((sum: number, item: any) => sum + (item.total || 0), 0) || 0)}</span>;
+            return <span className="text-sm font-medium text-gray-800">{formatMoney(totalEfetivoDoPedido(order.items))}</span>;
         case 'items':
             return <span className="text-sm font-normal text-gray-600">{order.items?.length || 0} itens</span>;
         default:
@@ -153,7 +154,7 @@ function getAdvancedFilterValue(
         case 'costCenter': return order.costCenter ?? '';
         case 'chartOfAccounts': return order.chartOfAccounts ?? '';
         case 'status': return order.status;
-        case 'value': return order.items?.reduce((sum: number, item: any) => sum + (item.total || 0), 0) || 0;
+        case 'value': return totalEfetivoDoPedido(order.items);
         case 'date': return order.created_at ? String(order.created_at).slice(0, 10) : null;
         default: return null;
     }
@@ -297,7 +298,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
     };
 
     const filteredOrders = React.useMemo(() => {
-        const calculateTotal = (order: any) => order.items?.reduce((sum: number, item: any) => sum + (item.total || 0), 0) || 0;
+        const calculateTotal = (order: any) => totalEfetivoDoPedido(order.items);
 
         let filtered = (orders || []).filter(order => {
             const matchSearch =
@@ -452,7 +453,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
             {/* Dashboard Cards */}
             {(() => {
                 const kpis = kpiService.compute(orders);
-                const valorTotal = orders.reduce((sum, order) => sum + (order.items?.reduce((is: number, i: any) => is + (i.total || 0), 0) || 0), 0);
+                const valorTotal = orders.reduce((sum, order) => sum + totalEfetivoDoPedido(order.items), 0);
                 const divergenceHigh = kpis.divergenceRate !== null && kpis.divergenceRate > 20;
                 return (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -591,7 +592,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                     <span className="flex-1 text-sm font-bold whitespace-nowrap">
                         {selectedVisible.length} selecionado{selectedVisible.length !== 1 ? 's' : ''}
                         <span className="ml-2 font-normal opacity-75">
-                            · {formatMoney(selectedVisible.reduce((sum, o) => sum + (o.items?.reduce((is: number, i: any) => is + (i.total || 0), 0) || 0), 0))}
+                            · {formatMoney(selectedVisible.reduce((sum, o) => sum + totalEfetivoDoPedido(o.items), 0))}
                         </span>
                     </span>
                     <button
@@ -806,7 +807,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                     <div className="flex flex-col">
                                         <p className="text-xs text-gray-400 font-semibold uppercase tracking-widest mb-1">Total</p>
                                         <span className="text-base font-bold text-gray-900">
-                                            {formatMoney(order.items?.reduce((sum: number, item: any) => sum + (item.total || 0), 0) || 0)}
+                                            {formatMoney(totalEfetivoDoPedido(order.items))}
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>

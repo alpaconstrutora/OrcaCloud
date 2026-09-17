@@ -1,5 +1,6 @@
 import { PillTone } from '../../portal/PortalKit';
 import { PurchaseOrder } from '../../../types';
+import { totalEfetivoDoPedido } from '../../../utils/pedidoItemValor';
 
 /**
  * Tons das pílulas do Portal do Fornecedor (vocabulário §24).
@@ -34,9 +35,8 @@ export const INVOICE_STATUS: Record<string, { label: string; tone: PillTone }> =
     rejected: { label: 'Recusado', tone: 'accent' },
 };
 
-/** Soma dos itens do pedido — o total não é coluna no banco. */
-export const orderTotal = (o: PurchaseOrder): number =>
-    o.items?.reduce((sum, item) => sum + (item.total || 0), 0) ?? 0;
+/** Soma dos itens do pedido — o total não é coluna no banco; cotado quando houver, senão referência. */
+export const orderTotal = (o: PurchaseOrder): number => totalEfetivoDoPedido(o.items);
 
 /** Pedidos que ainda estão em jogo para o fornecedor (não fechados/cancelados). */
 export const isOpenOrder = (o: PurchaseOrder) =>

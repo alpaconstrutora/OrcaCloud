@@ -148,9 +148,12 @@ const ITEM_COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão (§6.1). São o ponto de partida; o botão de auto-ajuste
 // (§6.1.2) mede o conteúdo real, que é o que resolve a Descrição longa.
+// Nove colunas somam 1.065px — cabe no card do detalhe e no portal (1440 de
+// viewport) sem rolagem lateral; com as larguras antigas as duas colunas de
+// cotação ficavam escondidas atrás da borda do card.
 const DEFAULT_ITEM_COL_WIDTHS: Record<string, number> = {
-    code: 120, description: 320, quantity: 90, unit: 80,
-    unitPrice: 130, total: 130, quotedUnitPrice: 130, quotedTotal: 130, actions: 110,
+    code: 100, description: 260, quantity: 70, unit: 70,
+    unitPrice: 115, total: 115, quotedUnitPrice: 115, quotedTotal: 120, actions: 100,
 };
 
 // Metadados por coluna, para o <thead> e os <td> saírem de
@@ -163,8 +166,8 @@ const ITEM_COLUMN_HEADERS: Record<string, { label: string; className: string }> 
     unit: { label: 'Un', className: 'px-6 py-2 border-r border-gray-100 text-right' },
     unitPrice: { label: 'Unitário', className: 'px-6 py-2 border-r border-gray-100 text-right' },
     total: { label: 'Total', className: 'px-6 py-2 border-r border-gray-100 text-right' },
-    quotedUnitPrice: { label: 'Unit. cotação', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
-    quotedTotal: { label: 'Total cotação', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
+    quotedUnitPrice: { label: 'Unit. cotação', className: 'px-6 py-2 border-r border-gray-100 text-right' },
+    quotedTotal: { label: 'Total cotação', className: 'px-6 py-2 border-r border-gray-100 text-right' },
 };
 
 const ITEM_CELL_ALIGN: Record<string, string> = {

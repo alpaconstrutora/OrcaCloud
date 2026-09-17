@@ -54,16 +54,31 @@ Fora do escopo (comportamento igual ao atual): pedidos de NF-e, `procurementServ
 continuam sem cotado; `fetchBudgetPrices` sobrescrevendo a referência carregada quando o SINAPI tem
 preço > 0 é bug pré-existente, não tratado aqui.
 
-## Estado
+## Estado — 8 de 8 itens concluídos (2026-09-17)
 
-- [ ] A1/A2 — tipo + helper + teste
-- [ ] H — migration escrita e aplicada
-- [ ] F + G — consumidores + service do portal + trava
-- [ ] B — `selectWinner`
-- [ ] C — formulário
-- [ ] D — detalhe
-- [ ] E — negociação
-- [ ] Suíte cheia + tsc + check-ui; push em main; `conferir-producao.sh "Unit. cotação"`
+| Item | Estado | Evidência |
+|---|---|---|
+| A1/A2 tipo + helper + teste | ✅ `ad4d0fc6` | `pedidoItemValor.test.ts` 27/27 |
+| H migration | ✅ `ad4d0fc6`, **APLICADA** | `pg_proc` lista as 5 funções, ACL sem PUBLIC, `mojibake=false`; `fn_pedido_itens_aplicar_cotado` com code duplicado cotou só o índice 1, tratou legado e ignorou code desconhecido |
+| F + G consumidores + service + trava | ✅ `ad4d0fc6` | `pedidoValorCotacaoTrava.test.ts` 36/36 — e 5 falhas com o código antigo (`git stash`), provando que pega |
+| B `selectWinner` | ✅ `8beb1067` | teste do helper (RFQ com preço / manual sem preço / code duplicado) |
+| C formulário | ✅ `8beb1067` | `check-ui-standard.sh` 0; UI: colunas nas tabelas de avulsos e materiais, "—" sem cotação |
+| D detalhe | ✅ `8beb1067` + larguras | UI comprador: 5 inputs, "Total cotação" recalcula, salva 9,90 (rodapé 9,90 + Referência 74,81), reverte para "—"; UI fornecedor por token: 1 input só, sem lixeira, salva 12,50, reverte; banco: `version` 1→5, `unitPrice` 74,81 intacto, status `Enviado` intacto |
+| E negociação | ✅ `8beb1067` | `aplicarCotadoNosItens`/`cotadosDaProposta` testados; RPC de aceite redefinida e aplicada |
+| Suíte + tsc + check-ui | ✅ | 338 arquivos, 4484 testes, 0 falha; `tsc` limpo; check-ui 0 nos 3 componentes |
+
+**Verificado na interface de verdade** (Playwright, servidor da frente em `:3114` — porta lida do log):
+pedido `PO-590657` (MCC), zero `pageerror`/`console.error`/4xx-5xx nos dois roteiros.
+
+**Não verificado na tela** (dito explicitamente): (i) mapa de cotação → "Fechar compra" —
+criaria um pedido novo em produção; coberto pelo teste unitário de `montarItensDoPedidoDaCotacao`.
+(iii-b) negociação com aceite — muda o status de um pedido real; coberto por
+`aplicarCotadoNosItens`/`cotadosDaProposta` e pelo teste SQL da função. Ambos ficam para a
+primeira cotação/negociação real depois do deploy.
+
+**Ajuste que a tela pediu**: com 9 colunas as larguras padrão antigas (1.240px) estouravam o card
+(1.068px no portal) — reduzidas para 1.065px; `whitespace-nowrap` tirado dos cabeçalhos novos para
+o chevron de ordenação (§6.8) aparecer.
 
 ## Verificação
 

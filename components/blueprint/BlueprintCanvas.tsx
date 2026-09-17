@@ -6674,8 +6674,9 @@ export default function BlueprintCanvas({
   }
 
   function aoApertar(e: React.PointerEvent) {
-    // Botão do meio ou direito: panorâmica, em qualquer ferramenta.
-    if (e.button === 1 || e.button === 2) {
+    // Botão do meio ou direito: panorâmica, em qualquer ferramenta. Na
+    // ferramenta MOVER, o esquerdo também — é o que ela existe para fazer.
+    if (e.button === 1 || e.button === 2 || (tool === 'mover' && e.button === 0)) {
       setArrastando(true);
       canvasRef.current?.setPointerCapture(e.pointerId);
       return;
@@ -7658,11 +7659,13 @@ export default function BlueprintCanvas({
             movendoAbertura ||
             movendoSelecao
             ? 'grabbing'
-            : laco
-              ? 'crosshair'
-              : tool !== 'selecionar' && tool !== 'abertura'
+            : tool === 'mover'
+              ? 'grab'
+              : laco
                 ? 'crosshair'
-                : 'default',
+                : tool !== 'selecionar' && tool !== 'abertura'
+                  ? 'crosshair'
+                  : 'default',
         }}
         onPointerMove={aoMover}
         onPointerDown={aoApertar}
@@ -7715,7 +7718,9 @@ export default function BlueprintCanvas({
               ? selectedIds.length > 1
                 ? `${selectedIds.length} selecionados · arraste para mover · setas ajustam · Delete remove`
                 : 'Clique para selecionar · arraste no vazio para laçar (← pega o que tocar) · Ctrl+A tudo'
-              : 'Clique numa parede para selecionar · Delete remove'}
+              : tool === 'mover'
+                ? 'Arraste para mover a vista · roda dá zoom · Selecionar (seta) volta a editar'
+                : 'Clique numa parede para selecionar · Delete remove'}
         <span className="ml-2 text-slate-400">
           · grade {rotuloPasso(passoEfetivo)}
           {/* O passo do mover só aparece quando é MANUAL — igual à grade, ele

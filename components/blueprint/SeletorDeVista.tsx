@@ -59,7 +59,13 @@ export const ehVistaDeElevacao = (v: VistaBlueprint): boolean => v in DIRECAO_DA
 export const ehVistaDeProjecao = (v: VistaBlueprint): boolean =>
   ehVistaDeElevacao(v) || corteDaVista(v) !== null;
 
-const ITENS: {
+/**
+ * As seis vistas fixas, com ícone. Exportadas (17/09/2026) porque o acesso
+ * rápido do ribbon mostra as mesmas seis como botões de ícone — um clique em
+ * vez de abrir o menu — e a lista tem de ser UMA, senão um ícone muda aqui e
+ * não lá.
+ */
+export const VISTAS_FIXAS: readonly {
   id: VistaBlueprint;
   rotulo: string;
   icone: React.ComponentType<{ className?: string }>;
@@ -71,6 +77,7 @@ const ITENS: {
   { id: 'lateral-dir', rotulo: 'Lat. direita', icone: PanelRight },
   { id: '3d', rotulo: '3D', icone: Box },
 ];
+const ITENS = VISTAS_FIXAS;
 
 export default function SeletorDeVista({
   vista,

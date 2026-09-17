@@ -38,6 +38,14 @@ const AUTOSAVE_MS = 1500;
 
 export type BlueprintTool =
   | 'selecionar'
+  /**
+   * MOVER A VISTA (17/09/2026: *"crie botão mover, mesma funcionalidade de
+   * mover do botão direito do mouse"*). A mão do CAD: o botão esquerdo faz a
+   * panorâmica que o direito e o do meio já fazem em qualquer ferramenta. Não
+   * toca no modelo — é ferramenta só para quem não tem (ou não conhece) o
+   * botão direito, como touchpad e caneta.
+   */
+  | 'mover'
   | 'parede'
   /** Contorno fechado de N lados iguais, criado num gesto só. */
   | 'poligono'

@@ -38,6 +38,7 @@ import {
   LandPlot,
   Layers,
   Grip,
+  Hand,
   Blocks,
   Loader2,
   Maximize2,
@@ -107,6 +108,7 @@ import Blueprint3DTab from './Blueprint3DTab';
 import PainelPavimentos from './PainelPavimentos';
 import SeletorDeVista, {
   type VistaBlueprint,
+  VISTAS_FIXAS,
   DIRECAO_DA_VISTA,
   ehVistaDeElevacao,
   ehVistaDeProjecao,
@@ -624,6 +626,7 @@ type RelatorioDoDock = keyof typeof RELATORIOS_DO_DOCK;
  */
 const ROTULO_DA_FERRAMENTA: Partial<Record<BlueprintTool, string>> = {
   selecionar: 'Selecionar',
+  mover: 'Mover a vista',
   parede: 'Parede',
   retangulo: 'Parede em retângulo',
   poligono: 'Parede em polígono',
@@ -5846,6 +5849,42 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         }
         direita={
           <>
+            {/* SELECIONAR · MOVER e as SEIS VISTAS no acesso rápido (17/09/2026:
+                *"ao lado do botão desfazer colocar um separador e inserir os
+                botões de vista… o botão selecionar… botão mover"*). São os
+                gestos de NAVEGAR — trocar de vista, voltar à seta, arrastar a
+                tela — e navegar acontece em qualquer aba, como desfazer. O
+                seletor à esquerda continua: é ele que dá nome à vista atual e
+                lista os cortes, que são quantos o desenho tiver. */}
+            {/* Só na planta baixa: nas elevações e no 3D não há ferramenta de
+                desenho (a regra "nada de desenhar fora da planta" do ribbon). */}
+            {!emVista && (
+              <>
+                <BotaoBarra
+                  icone={MousePointer2}
+                  rotulo="Ferramenta: Selecionar"
+                  onClick={() => editor.setTool('selecionar')}
+                  ativo={editor.tool === 'selecionar'}
+                />
+                <BotaoBarra
+                  icone={Hand}
+                  rotulo="Ferramenta: Mover a vista — arraste com o botão esquerdo (o direito arrasta em qualquer ferramenta)"
+                  onClick={() => editor.setTool('mover')}
+                  ativo={editor.tool === 'mover'}
+                />
+                <SeparadorDaBarra />
+              </>
+            )}
+            {VISTAS_FIXAS.map((v) => (
+              <BotaoBarra
+                key={v.id}
+                icone={v.icone}
+                rotulo={`Vista: ${v.rotulo}`}
+                onClick={() => setVista(v.id)}
+                ativo={vista === v.id}
+              />
+            ))}
+            <SeparadorDaBarra />
             <BotaoBarra
               icone={Undo2}
               rotulo="Desfazer (Ctrl+Z)"
@@ -5915,6 +5954,13 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 valor="selecionar"
                 icone={MousePointer2}
                 rotulo="Selecionar"
+                onClick={editor.setTool}
+              />
+              <Ferramenta
+                atual={editor.tool}
+                valor="mover"
+                icone={Hand}
+                rotulo="Mover"
                 onClick={editor.setTool}
               />
               {/* COMPONENTES — parede, esquadria, estrutura e fundação num menu só.
@@ -9624,6 +9670,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     </div>
     </>
   );
+}
+
+/** Divisória fina entre famílias do acesso rápido (navegar │ vistas │ editar). */
+function SeparadorDaBarra() {
+  return <span aria-hidden="true" className="mx-1 h-5 w-px shrink-0 bg-slate-200" />;
 }
 
 /** Controle de barra: voltar, desfazer, refazer. `title` + `aria-label` porque

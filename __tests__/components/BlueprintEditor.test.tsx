@@ -206,7 +206,7 @@ describe('BlueprintEditor · ações oferecidas', () => {
   it('monta com o menu de componentes e o painel de ambientes', async () => {
     await montar();
 
-    expect(botao(/selecionar/i)).toBeInTheDocument();
+    expect(botao(/^selecionar$/i)).toBeInTheDocument();
     // Nasce com a Parede ativa — o editor abre pronto para desenhar.
     expect(botaoComponentes()).toHaveTextContent('Parede');
     // O painel lateral é navegador + propriedades desde 13/09/2026; a seção
@@ -421,7 +421,7 @@ describe('BlueprintEditor · regressões relatadas em uso', () => {
     expect(botaoComponentes()).toHaveTextContent('Pilar');
 
     // E com uma ferramenta que NÃO é componente, o botão volta ao nome do grupo.
-    await userEvent.setup().click(botao(/selecionar/i));
+    await userEvent.setup().click(botao(/^selecionar$/i));
     expect(botaoComponentes()).toHaveTextContent('Componentes');
   });
 });
@@ -942,6 +942,37 @@ describe('BlueprintEditor · ribbon', () => {
     expect(botao(/desfazer/i)).toBeInTheDocument();
     expect(botao(/refazer/i)).toBeInTheDocument();
     expect(botao(/excluir/i)).toBeInTheDocument();
+  });
+
+  it('o acesso rápido tem Selecionar, Mover e as seis vistas em ícone; a vista troca num clique e esconde as ferramentas fora da planta', async () => {
+    // 17/09/2026: "ao lado do botão desfazer colocar um separador e inserir os
+    // botões de vista… o botão selecionar… botão mover".
+    await montar();
+    const user = userEvent.setup();
+    const barra = () => within(screen.getByRole('toolbar'));
+    expect(barra().getByRole('button', { name: /^ferramenta: selecionar$/i })).toHaveAttribute('aria-pressed', 'false');
+    for (const v of ['Planta', 'Frente', 'Fundos', 'Lat. esquerda', 'Lat. direita', '3D']) {
+      expect(barra().getByRole('button', { name: `Vista: ${v}` })).toBeInTheDocument();
+    }
+    expect(barra().getByRole('button', { name: 'Vista: Planta' })).toHaveAttribute('aria-pressed', 'true');
+
+    // Mover acende e a barra de opções passa a dizer a ferramenta.
+    await user.click(barra().getByRole('button', { name: /^ferramenta: mover/i }));
+    expect(barra().getByRole('button', { name: /^ferramenta: mover/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('region', { name: /opções da ferramenta/i })).toHaveTextContent(/^Mover a vista/);
+    // O mesmo botão vive no grupo Construir, ao lado de Selecionar.
+    expect(botao(/^mover$/i)).toHaveAttribute('aria-pressed', 'true');
+
+    // Um clique troca a vista — e o seletor à esquerda acompanha.
+    await user.click(barra().getByRole('button', { name: 'Vista: Frente' }));
+    expect(barra().getByRole('button', { name: 'Vista: Frente' })).toHaveAttribute('aria-pressed', 'true');
+    expect(barra().getByRole('button', { name: /^frente$/i })).toBeInTheDocument();
+    // Fora da planta baixa não há ferramenta de desenho: Selecionar e Mover somem.
+    expect(barra().queryByRole('button', { name: /^ferramenta: selecionar$/i })).toBeNull();
+    expect(barra().queryByRole('button', { name: /^ferramenta: mover/i })).toBeNull();
+
+    await user.click(barra().getByRole('button', { name: 'Vista: Planta' }));
+    expect(barra().getByRole('button', { name: /^ferramenta: selecionar$/i })).toBeInTheDocument();
   });
 
   it('a aba persiste entre montagens — é preferência, não gesto', async () => {

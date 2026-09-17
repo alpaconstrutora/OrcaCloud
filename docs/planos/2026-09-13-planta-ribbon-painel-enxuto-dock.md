@@ -241,3 +241,44 @@ símbolo tomadas"*)**:
    o acerto do clique e o encaixe continuam na medida real. O anel tracejado
    da sugerida passou a envolver o símbolo (0,72 × tamanho + 6 px) em vez da
    peça. Prova: captura com zoom — triângulos maiores, anel fora da base.
+
+---
+
+## 17/09/2026 — acesso rápido: Selecionar · Mover │ seis vistas │ desfazer…
+
+### Pedido original
+
+> 1. na barra de botões no canto superior direito, ao lado do botão desfazer colocar um
+> separador e inserir os botões (apenas os ícones) de vista que também você vê no print
+> (Planta, frente, fundos, lat esquerda, lat direita e 3D)
+> 2. cria lá também o botão selecionar (arquitetura < selecionar)
+> 3. crie botão mover. mesma funcionalidade de mover do botão direito no mouse.
+
+### O que mudou
+
+- **Acesso rápido** (`Ribbon direita`): `Ferramenta: Selecionar` · `Ferramenta: Mover a
+  vista` │ `Vista: Planta/Frente/Fundos/Lat. esquerda/Lat. direita/3D` (ícones de
+  `VISTAS_FIXAS`, agora exportado de `SeletorDeVista.tsx` para a lista ser uma só) │
+  Desfazer, Refazer, Copiar, Colar, Excluir, Tela cheia. Botões de vista com `aria-pressed`
+  na atual; `SeparadorDaBarra` entre as famílias. Selecionar/Mover só na planta baixa
+  (`!emVista`) — "nada de desenhar fora da planta". O seletor à esquerda continua (nome da
+  vista atual + cortes).
+- **Ferramenta `mover`** (`BlueprintTool`): no canvas, o botão esquerdo entra na mesma
+  panorâmica que o direito/meio já faziam (`aoApertar`); cursor `grab`/`grabbing`; rodapé
+  "Arraste para mover a vista…"; rótulo "Mover a vista" na barra de opções. Também no grupo
+  Arquitetura › Construir, ao lado de Selecionar.
+
+### Testes
+
+- `blueprintFerramentaMover.test.tsx` (jsdom): mão → esquerdo agarra; seta → esquerdo não,
+  direito continua agarrando.
+- `BlueprintEditor.test.tsx`: acesso rápido com os oito botões, Mover acende e a barra de
+  opções diz "Mover a vista", clique em `Vista: Frente` troca a vista e esconde as
+  ferramentas, `Vista: Planta` as devolve. Dois `botao(/selecionar/i)` viraram `/^selecionar$/i`.
+
+### Verificação
+
+- tsc, check-ui-standard (Editor, SeletorDeVista, Canvas), suíte cheia (4399), build.
+- App real (vite da frente, escritas bloqueadas: 14): oito botões presentes, `Vista: Planta`
+  pressionado; Mover → cursor `grab`, arraste esquerdo → `grabbing` e o desenho se desloca;
+  `Vista: Frente` → pressionado, seletor diz "Frente", Selecionar some da elevação.

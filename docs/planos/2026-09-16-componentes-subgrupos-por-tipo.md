@@ -119,3 +119,18 @@ continuar vivo, o `Sheet` ganhou `modal={false}`: sem véu, sem `aria-modal`, pa
 `pointer-events-auto` — clicar noutra peça troca o conteúdo, clicar no vazio desmarca e fecha, arrastar continua
 funcionando, Esc fecha e desmarca. Provado no app real: com o Sheet aberto, um clique no vazio do desenho (ferramenta
 Selecionar) fecha o Sheet e desmarca P3; painel lateral sem Propriedades em nenhum momento.
+
+## Seções do painel lateral ordenáveis (17/09/2026)
+
+> implemente sortable no painel lateral (código de referência: lista com alça `GripVertical`, `Sortable` vertical)
+
+Decisão com o usuário: ordenar as SEÇÕES do painel (Pavimentos · Componentes · Ambientes). Com o dnd-kit já do
+projeto (o mesmo de `PainelCamadasParede`): `SecaoOrdenavel.tsx` (useSortable, render-prop que entrega a ALÇA já
+ligada), `SecaoAccordion` ganha a prop `alca` (à esquerda do chevron, irmã do botão), e o editor renderiza as
+seções por `ordemDasSecoes` — persistida em `blueprint:ordemDasSecoes` (preferência de leitura, como o
+aberto/fechado), saneada (id desconhecido cai, seção nova entra no fim), filtrada pela vista (`ordemVisivel`).
+Sensores: ponteiro (4 px) e teclado (Espaço, setas, Espaço). A régua 4D segue fora das seções.
+
+Prova: editor (+1: ordem salva `[ambientes, nada, pavimentos]` → Ambientes · Pavimentos · Componentes; 3 alças)
+· suíte 332/4395 · tsc · `check-ui-standard.sh` · build · app real (arrasto com o mouse: Pavimentos foi para o fim
+— `["componentes","ambientes","pavimentos"]` salvo no navegador; 0 erros JS). Captura `out-so2/so-01-antes.png`.

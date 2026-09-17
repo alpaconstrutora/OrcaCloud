@@ -2266,3 +2266,21 @@ describe('BlueprintEditor · armadura no painel do grupo', () => {
     expect(linhas.find((r) => /B1/.test(r.textContent ?? ''))).not.toHaveTextContent(/manual/);
   });
 });
+
+/**
+ * SEÇÕES ORDENÁVEIS (17/09/2026): *"implemente sortable no painel lateral"*.
+ * A ordem persistida manda na leitura; a alça reordena e grava.
+ */
+describe('BlueprintEditor · seções do painel ordenáveis', () => {
+  const ordem = () => [...document.querySelectorAll('[data-secao-ordenavel]')].map((el) => el.getAttribute('data-secao-ordenavel'));
+
+  it('nasce Pavimentos · Componentes · Ambientes, respeita a ordem salva e ignora id desconhecido', async () => {
+    localStorage.setItem('blueprint:ordemDasSecoes', JSON.stringify(['ambientes', 'nada', 'pavimentos']));
+    await montar();
+    expect(ordem()).toEqual(['ambientes', 'pavimentos', 'componentes']);
+    expect(screen.getAllByRole('button', { name: /arrastar a seção/i })).toHaveLength(3);
+  });
+
+  // O arrasto em si não se prova em jsdom (o dnd-kit precisa de geometria
+  // real para decidir onde soltar); fica para a prova no app real — ver o plano.
+});

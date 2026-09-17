@@ -200,6 +200,9 @@ import {
   type HipotesesDeFundacoes,
 } from '../../utils/blueprintFundacoesAutomaticas';
 import SecaoAccordion from './SecaoAccordion';
+import SecaoOrdenavel from './SecaoOrdenavel';
+import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { usePainelRedimensionavel } from './LarguraDoPainel';
 import PainelMedicoes from './PainelMedicoes';
 import PainelUnifilar from './PainelUnifilar';
@@ -1330,11 +1333,40 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * O 3D ganha ainda as marcadas `no3d` — hoje só "Componentes", que ali serve
    * de régua de visibilidade da cena e não de editor (ver `SECOES_DO_PAINEL`).
    */
+  /**
+   * ORDEM das seções do painel (17/09/2026). Persistida no navegador, como o
+   * aberto/fechado: é preferência de leitura, não dado do estudo. Saneada na
+   * leitura — id desconhecido cai fora, seção nova entra no fim.
+   */
+  const [ordemSalva, setOrdemSalva] = usePersistedState<string[]>(
+    'blueprint:ordemDasSecoes',
+    SECOES_DO_PAINEL.map((s) => s.id),
+  );
+  const ordemDasSecoes = useMemo<SecaoDoPainel[]>(() => {
+    const conhecidas = SECOES_DO_PAINEL.map((s) => s.id) as SecaoDoPainel[];
+    const validas = (Array.isArray(ordemSalva) ? ordemSalva : []).filter((id): id is SecaoDoPainel => (conhecidas as string[]).includes(id));
+    return [...new Set([...validas, ...conhecidas])];
+  }, [ordemSalva]);
+  const sensoresDasSecoes = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const aoSoltarSecao = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const de = ordemDasSecoes.indexOf(active.id as SecaoDoPainel);
+    const para = ordemDasSecoes.indexOf(over.id as SecaoDoPainel);
+    if (de < 0 || para < 0) return;
+    setOrdemSalva(arrayMove(ordemDasSecoes, de, para));
+  };
+
   const secaoVisivel = useCallback(
     (id: SecaoDoPainel) =>
       !emVista || SECOES_NA_VISTA.has(id) || (vista === '3d' && SECOES_NO_3D.has(id)),
     [emVista, vista],
   );
+  /** As seções na ordem escolhida, só as que existem nesta vista. */
+  const ordemVisivel = ordemDasSecoes.filter((id) => secaoVisivel(id));
 
   /**
    * O retângulo visível, em milímetro do modelo — a região da geração de
@@ -7531,7 +7563,19 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             aria-label="Navegador e propriedades"
           >
           <div role="region" aria-label="Navegador" className="min-h-0 flex-1 overflow-y-auto">
-          <SecaoAccordion
+          {/* SEÇÕES ORDENÁVEIS (17/09/2026: *"implemente sortable no painel
+              lateral"*): a alça no cabeçalho arrasta a seção; a ordem fica no
+              navegador (`blueprint:ordemDasSecoes`), como o aberto/fechado. Os
+              blocos são os mesmos de antes — só a ORDEM em que aparecem mudou de
+              lugar: sai do JSX fixo e vai para `ordemDasSecoes`. */}
+          <DndContext sensors={sensoresDasSecoes} collisionDetection={closestCenter} onDragEnd={aoSoltarSecao}>
+            <SortableContext items={ordemVisivel} strategy={verticalListSortingStrategy}>
+              {ordemVisivel.map((idDaSecao) => (
+                <SecaoOrdenavel key={idDaSecao} id={idDaSecao}>
+                  {(alca) => (
+                    <>
+          {idDaSecao === 'pavimentos' && (
+          <SecaoAccordion alca={alca}
             titulo="Pavimentos"
             contagem={editor.model.levels.length}
             aberta={secoes.pavimentos}
@@ -7565,24 +7609,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onAdicionando={setAdicionandoPavimento}
             />
           </SecaoAccordion>
-
-          {/* A RÉGUA DO TEMPO fica FORA de accordion, e só na vista 3D.
-              Fora porque ela muda o que se está vendo na hora — esconder num
-              acordeão recolhido repetiria o que aconteceu com o "Inverter o
-              lado" do corte, que existia e ninguém achava. Só no 3D porque é
-              lá que a cor aparece; na planta ela não teria efeito visível. */}
-          {em3d && (
-            <ReguaDoTempo
-              data={data4d}
-              onData={setData4d}
-              tarefas={tarefas4d.length}
-              pecasColoridas={situacao4d.size}
-              algumRealConhecido={[...situacao4d.values()].some((s) => s.realConhecido)}
-            />
           )}
-
-          {secaoVisivel('componentes') && (
-            <SecaoAccordion
+          {idDaSecao === 'componentes' && secaoVisivel('componentes') && (
+            <SecaoAccordion alca={alca}
               titulo="Componentes"
               contagem={
                 em3d
@@ -7644,8 +7673,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             </SecaoAccordion>
           )}
 
-          {secaoVisivel('ambientes') && (
-          <SecaoAccordion
+          {idDaSecao === 'ambientes' && secaoVisivel('ambientes') && (
+          <SecaoAccordion alca={alca}
             titulo="Ambientes"
             contagem={ambientes.length}
             aberta={secoes.ambientes}
@@ -7935,6 +7964,28 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           )}
           </div>
           </SecaoAccordion>
+          )}
+                    </>
+                  )}
+                </SecaoOrdenavel>
+              ))}
+            </SortableContext>
+          </DndContext>
+
+
+          {/* A RÉGUA DO TEMPO fica FORA de accordion, e só na vista 3D.
+              Fora porque ela muda o que se está vendo na hora — esconder num
+              acordeão recolhido repetiria o que aconteceu com o "Inverter o
+              lado" do corte, que existia e ninguém achava. Só no 3D porque é
+              lá que a cor aparece; na planta ela não teria efeito visível. */}
+          {em3d && (
+            <ReguaDoTempo
+              data={data4d}
+              onData={setData4d}
+              tarefas={tarefas4d.length}
+              pecasColoridas={situacao4d.size}
+              algumRealConhecido={[...situacao4d.values()].some((s) => s.realConhecido)}
+            />
           )}
           </div>
 

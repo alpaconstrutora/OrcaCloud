@@ -30,6 +30,7 @@ export default function SecaoAccordion({
   titulo,
   contagem,
   acoes,
+  alca,
   aberta,
   onAlternar,
   children,
@@ -39,6 +40,12 @@ export default function SecaoAccordion({
   contagem?: number;
   /** Controles próprios da seção, à direita do cabeçalho. */
   acoes?: React.ReactNode;
+  /**
+   * ALÇA de arrasto (17/09/2026), à esquerda do cabeçalho — vem de
+   * `SecaoOrdenavel`, que é quem sabe reordenar. Irmã do botão do chevron,
+   * nunca filha: botão dentro de botão é HTML inválido.
+   */
+  alca?: React.ReactNode;
   aberta: boolean;
   onAlternar: () => void;
   children: React.ReactNode;
@@ -50,6 +57,7 @@ export default function SecaoAccordion({
   return (
     <section className="shrink-0 border-b border-slate-100">
       <div className="flex items-center gap-1 bg-white px-2 py-1.5">
+        {alca}
         <button
           type="button"
           onClick={onAlternar}

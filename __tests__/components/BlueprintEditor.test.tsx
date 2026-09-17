@@ -2032,6 +2032,12 @@ describe('BlueprintEditor · grupo de fundação', () => {
     await user.click(within(props3).getByRole('button', { name: /editar o grupo/i }));
     expect(await screen.findByText(/Grupo de fundação/)).toBeInTheDocument();
 
+    // Fechar o Sheet DESMARCA (17/09/2026): nada de propriedades no painel lateral.
+    expect(await screen.findByTestId('propriedades-sheet')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByTestId('propriedades-sheet')).toBeNull();
+    expect(screen.queryByRole('region', { name: /propriedades/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /^B1 · Bloco de coroamento/ })).toHaveAttribute('aria-pressed', 'false');
     // Desfazer duas vezes: 3 estacas, depois 1.
     await user.click(botao(/^desfazer/i));
     await user.click(botao(/^desfazer/i));

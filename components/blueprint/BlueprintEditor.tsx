@@ -2127,6 +2127,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   useEffect(() => {
     if (editor.selectedIds.length === 0 && propriedadesEmSheet) setPropriedadesEmSheet(false);
   }, [editor.selectedIds.length, propriedadesEmSheet]);
+  /** Fecha o Sheet E desmarca: as propriedades não voltam para o painel lateral. */
+  const fecharPropriedades = useCallback(() => {
+    setPropriedadesEmSheet(false);
+    editor.setSelectedIds([]);
+    medicoes.setSelecionada(null);
+  }, [editor, medicoes]);
   useEffect(() => {
     if (!selecaoPendente) return;
     const ids = idsDoGrupo(editor.model, selecaoPendente);
@@ -9383,8 +9389,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           ligação, DR, hipóteses, emissão). Largo (2xl) porque é tabela — a
           coluna Carga já sumiu uma vez por falta de largura. */}
       {propriedadesEmSheet && !tarefaAberta && (!emVista || em3d) && paineisDaSelecao && (
-        <Sheet open onClose={() => setPropriedadesEmSheet(false)} size="lg">
-          <SheetHeader onClose={() => setPropriedadesEmSheet(false)}>
+        // Fechar DESMARCA a peça (17/09/2026: *"continua abrindo no próprio
+        // painel lateral e não fecha mais"*): com a seleção mantida, as
+        // propriedades reapareciam embaixo da lista e só sumiam clicando no
+        // vazio do desenho. Quem veio pela lista volta para a lista.
+        <Sheet open onClose={fecharPropriedades} size="lg">
+          <SheetHeader onClose={fecharPropriedades}>
             <SheetTitle>
               <span className="flex items-center gap-2">
                 <Blocks className="h-5 w-5 text-blue-700" />
@@ -9393,7 +9403,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             </SheetTitle>
             <SheetDescription>
               {rotuloDoSelecionado ?? `${editor.selectedIds.length} selecionado(s)`} · o que se edita aqui grava na hora; Ctrl+Z desfaz.
-              Fechar mantém a peça selecionada no desenho.
+              Fechar desmarca a peça.
             </SheetDescription>
           </SheetHeader>
           <SheetPanel className="p-0">

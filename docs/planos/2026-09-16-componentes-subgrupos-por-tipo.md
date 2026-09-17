@@ -99,3 +99,12 @@ propriedades voltam para o painel), quando a seleção esvazia ou quando uma tar
 Prova: 5 testes do editor passaram a achar `propriedades-sheet` quando selecionam pela lista · suíte 332/4393 ·
 tsc · `check-ui-standard.sh` · build · app real (duplo clique em P3 → Sheet com o painel completo; Esc fecha e P3
 segue selecionado). Captura `out-ps/ps-01-sheet.png`.
+
+### Fechar o Sheet desmarca a peça (17/09/2026)
+
+> esta abrindo drawer porem continua abrindo no proprio painel lateral e nao fecha mais
+
+Ao fechar o Sheet (X/Esc) a peça continuava selecionada e as propriedades reapareciam na metade de baixo do painel
+lateral, sem jeito de sumir a não ser clicando no vazio do desenho. Agora fechar DESMARCA (`fecharPropriedades`):
+quem veio pela lista volta para a lista, sem propriedades em lugar nenhum. Enquanto o Sheet está aberto, o painel
+lateral não mostra Propriedades (medido no app real: 0 regiões; após Esc: sheet 0, P3 desmarcado, painel 0).

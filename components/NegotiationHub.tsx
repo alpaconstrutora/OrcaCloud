@@ -4,6 +4,8 @@ import { PurchaseOrder, PurchaseOrderItem } from '../types';
 import { negotiationService, NegotiationProposal } from '../services/negotiationService';
 import { supplierPortalTokenService } from '../services/supplierPortalTokenService';
 import { useConfirm } from './ui/confirm';
+import { round2 } from '../utils/financialMath';
+import { temCotacao, totalEfetivoDoPedido, unitarioEfetivoDoItem } from '../utils/pedidoItemValor';
 
 interface NegotiationHubProps {
     order: PurchaseOrder;
@@ -86,12 +88,15 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
+    // A negociação mexe SÓ no par COTADO (`quotedUnitPrice`/`quotedTotal`). A
+    // referência (`unitPrice`/`total`, o que o comprador previa) fica intacta —
+    // é contra ela que o cotado é lido depois. Ver utils/pedidoItemValor.ts.
     const handlePriceChange = (index: number, newPrice: number) => {
         const newItems = [...proposedItems];
         newItems[index] = {
             ...newItems[index],
-            unitPrice: newPrice,
-            total: newPrice * newItems[index].quantity
+            quotedUnitPrice: newPrice,
+            quotedTotal: round2(newPrice * newItems[index].quantity)
         };
         setProposedItems(newItems);
     };
@@ -233,13 +238,13 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                             {prop.items.map((item, idx) => (
                                                 <div key={idx} className="flex justify-between text-xs font-bold">
                                                     <span className="opacity-70 truncate max-w-[150px]">{item.description}</span>
-                                                    <span>{fmt(item.unitPrice)}</span>
+                                                    <span>{fmt(unitarioEfetivoDoItem(item))}</span>
                                                 </div>
                                             ))}
                                             <div className="pt-2 mt-2 border-t border-white/10 flex justify-between text-xs font-black">
                                                 <span className="uppercase tracking-widest">Total Oferecido</span>
                                                 <span className={isMine ? 'text-emerald-400' : A.text}>
-                                                    {fmt(prop.items.reduce((s, i) => s + (i.total || 0), 0))}
+                                                    {fmt(totalEfetivoDoPedido(prop.items))}
                                                 </span>
                                             </div>
                                         </div>
@@ -252,7 +257,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                         </div>
                                         <div className="flex items-center gap-1">
                                             <History className="w-3 h-3" />
-                                            {prop.paymentTermType === 'Parcelado' ? `${prop.paymentInstallments}x de ${fmt((prop.items.reduce((s, i) => s + (i.total || 0), 0)) / (prop.paymentInstallments || 1))}` : 'À Vista'}
+                                            {prop.paymentTermType === 'Parcelado' ? `${prop.paymentInstallments}x de ${fmt(totalEfetivoDoPedido(prop.items) / (prop.paymentInstallments || 1))}` : 'À Vista'}
                                         </div>
                                         {prop.paymentDays !== undefined && (
                                             <div className="flex items-center gap-1">
@@ -371,11 +376,14 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">R$</span>
                                             <input
                                                 type="number"
-                                                value={item.unitPrice}
+                                                value={unitarioEfetivoDoItem(item)}
                                                 onChange={(e) => handlePriceChange(idx, parseFloat(e.target.value) || 0)}
                                                 className={`w-full bg-white border border-gray-100 rounded-lg pl-8 pr-3 py-2 text-form-input font-black outline-none focus:ring-2 ${A.ring}`}
                                             />
                                         </div>
+                                        {temCotacao(item) && (
+                                            <p className="text-[10px] text-gray-400 mt-1">Referência: {fmt(item.unitPrice)}</p>
+                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -385,7 +393,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                             <div className="flex justify-between items-center mb-4">
                                 <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Novo Total</span>
                                 <span className={`text-sm font-black ${A.text}`}>
-                                    {fmt(proposedItems.reduce((s, i) => s + (i.total || 0), 0))}
+                                    {fmt(totalEfetivoDoPedido(proposedItems))}
                                 </span>
                             </div>
 

@@ -24,6 +24,7 @@ import { CostCenterV2 } from '../types/financial';
 // `round2` é o arredondamento canônico do projeto — não reimplementar.
 import { round2 } from '../utils/financialMath';
 import { formatCurrency } from '../utils/financialMath';
+import { temCotacao, totalEfetivoDoPedido, totalReferenciaDoPedido, valorEfetivoDoItem } from '../utils/pedidoItemValor';
 
 interface AvulsoItem {
     code: string; description: string; unit: string; quantity: number; unitPrice: number;
@@ -38,6 +39,13 @@ interface AvulsoItem {
      * mudar de R$ 6.489,75 para R$ 6.489,74 só por ter sido aberto e salvo.
      */
     total?: number;
+    /**
+     * Par COTADO (o que o fornecedor cobra) — ver utils/pedidoItemValor.ts.
+     * `null`/ausente = sem cotação, para o fornecedor preencher no portal.
+     * `quotedTotal` segue a mesma regra de preservação do `total`.
+     */
+    quotedUnitPrice?: number | null;
+    quotedTotal?: number | null;
 }
 
 // §2 — colunas das duas tabelas desta aba, definidas FORA do componente.
@@ -49,6 +57,8 @@ const AVULSO_COLUMNS: ColumnConfig[] = [
     { key: 'quantity', label: 'Qtd.', sortable: true },
     { key: 'unitPrice', label: 'Valor unit.', sortable: true },
     { key: 'total', label: 'Total', sortable: true },
+    { key: 'quotedUnitPrice', label: 'Unit. cotação', sortable: true },
+    { key: 'quotedTotal', label: 'Total cotação', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
@@ -59,6 +69,8 @@ const AVULSO_HEADERS: Record<string, { label: string; className: string }> = {
     quantity: { label: 'Qtd.', className: 'px-6 py-2 border-r border-gray-100 text-right' },
     unitPrice: { label: 'Valor unit.', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
     total: { label: 'Total', className: 'px-6 py-2 border-r border-gray-100 text-right' },
+    quotedUnitPrice: { label: 'Unit. cotação', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
+    quotedTotal: { label: 'Total cotação', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
 };
 
 const MATERIAL_COLUMNS: ColumnConfig[] = [
@@ -69,6 +81,7 @@ const MATERIAL_COLUMNS: ColumnConfig[] = [
     { key: 'aComprar', label: 'Qtd. à comprar', sortable: true },
     { key: 'unit', label: 'Unid.', sortable: true },
     { key: 'price', label: 'Valor unit.', sortable: true },
+    { key: 'quotedPrice', label: 'Unit. cotação', sortable: true },
     { key: 'pedido', label: 'Qtd. pedido', sortable: true },
 ];
 
@@ -80,6 +93,7 @@ const MATERIAL_HEADERS: Record<string, { label: string; className: string }> = {
     aComprar: { label: 'Qtd. à comprar', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
     unit: { label: 'Unid.', className: 'px-6 py-2 border-r border-gray-100 text-right' },
     price: { label: 'Valor unit.', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
+    quotedPrice: { label: 'Unit. cotação', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
     pedido: { label: 'Qtd. pedido', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
 };
 
@@ -88,12 +102,12 @@ const MATERIAL_HEADERS: Record<string, { label: string; className: string }> = {
 // Descrição, a única coluna que estoura (texto SINAPI de várias linhas).
 const DEFAULT_AVULSO_COL_WIDTHS: Record<string, number> = {
     code: 120, description: 320, unit: 90, quantity: 90,
-    unitPrice: 130, total: 130, actions: 110,
+    unitPrice: 130, total: 130, quotedUnitPrice: 130, quotedTotal: 130, actions: 110,
 };
 
 const DEFAULT_MATERIAL_COL_WIDTHS: Record<string, number> = {
     code: 130, description: 340, orcada: 120, comprada: 130,
-    aComprar: 130, unit: 90, price: 130, pedido: 130,
+    aComprar: 130, unit: 90, price: 130, quotedPrice: 130, pedido: 130,
 };
 
 // Alinhamento da célula por coluna — o <td> sai de um `.map`, então não dá para
@@ -102,10 +116,11 @@ const CELULA_A_DIREITA = 'text-right';
 const AVULSO_ALIGN: Record<string, string> = {
     code: '', description: '', unit: CELULA_A_DIREITA, quantity: CELULA_A_DIREITA,
     unitPrice: CELULA_A_DIREITA, total: CELULA_A_DIREITA,
+    quotedUnitPrice: CELULA_A_DIREITA, quotedTotal: CELULA_A_DIREITA,
 };
 const MATERIAL_ALIGN: Record<string, string> = {
     code: '', description: '', orcada: CELULA_A_DIREITA, comprada: CELULA_A_DIREITA,
-    aComprar: CELULA_A_DIREITA, unit: CELULA_A_DIREITA, price: CELULA_A_DIREITA, pedido: CELULA_A_DIREITA,
+    aComprar: CELULA_A_DIREITA, unit: CELULA_A_DIREITA, price: CELULA_A_DIREITA, quotedPrice: CELULA_A_DIREITA, pedido: CELULA_A_DIREITA,
 };
 
 // Ordena preservando o índice/linha original — a lista de avulsos é endereçada
@@ -187,6 +202,12 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     const [selectedItems, setSelectedItems] = React.useState<Set<string>>(new Set());
     const [customQuantities, setCustomQuantities] = React.useState<Map<string, number>>(new Map());
     const [customPrices, setCustomPrices] = React.useState<Map<string, number>>(new Map());
+    // Valor COTADO por código, para os itens do orçamento/insumos. Separado de
+    // `customPrices` de propósito: `fetchBudgetPrices` e a seleção de insumo só
+    // escrevem em `customPrices`, então o SINAPI nunca sobrescreve o cotado.
+    // `null` = sem cotação (o fornecedor preenche no portal). Avulso carrega o
+    // cotado na própria linha (`AvulsoItem.quotedUnitPrice`).
+    const [quotedPrices, setQuotedPrices] = React.useState<Map<string, number | null>>(new Map());
     const [selectedMaterialsData, setSelectedMaterialsData] = React.useState<Map<string, SinapiItem>>(new Map());
 
     // Composition Selection State
@@ -246,7 +267,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
      * classificar cedo e errado.
      */
     const [itensCarregados, setItensCarregados] = React.useState<
-        { code: string; description: string; unit: string; quantity: number; unitPrice: number; total?: number; avulso?: boolean }[] | null
+        { code: string; description: string; unit: string; quantity: number; unitPrice: number; total?: number; quotedUnitPrice?: number | null; quotedTotal?: number | null; avulso?: boolean }[] | null
     >(null);
 
     // Load existing order data when editing
@@ -279,11 +300,14 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     // Pre-fill quantities and prices from the order
                     const quantities = new Map<string, number>();
                     const prices = new Map<string, number>();
+                    const quoted = new Map<string, number | null>();
                     existingOrder.items.forEach((i) => {
                         if (i.quantity !== undefined) quantities.set(i.code, i.quantity);
                         if (i.unitPrice !== undefined) prices.set(i.code, i.unitPrice);
+                        if (i.quotedUnitPrice !== undefined) quoted.set(i.code, i.quotedUnitPrice);
                     });
                     setCustomQuantities(prev => new Map([...prev, ...quantities]));
+                    setQuotedPrices(prev => new Map([...prev, ...quoted]));
                     setCustomPrices(prev => {
                         const next = new Map(prev);
                         prices.forEach((v, k) => {
@@ -544,6 +568,8 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     unitPrice: item.unitPrice,
                     // Preserva o total já gravado — ver o comentário em AvulsoItem.
                     total: item.total,
+                    quotedUnitPrice: item.quotedUnitPrice ?? null,
+                    quotedTotal: item.quotedTotal ?? null,
                 });
             }
         });
@@ -563,6 +589,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
             const code = item.sinapiItem!.code;
             const qty = Number(customQuantities.get(code) ?? item.quantity);
             const price = customPrices.get(code) ?? Number(item.sinapiItem!.price || 0);
+            const cotado = quotedPrices.get(code) ?? null;
             return {
                 code: code,
                 description: item.sinapiItem!.description,
@@ -571,7 +598,9 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 unitPrice: price,
                 // Dinheiro em duas casas: `qty * price` cru gravava coisas como
                 // 4404.003465 num campo de valor.
-                total: round2(qty * price)
+                total: round2(qty * price),
+                quotedUnitPrice: cotado,
+                quotedTotal: cotado === null ? null : round2(qty * cotado),
             };
         }) || [];
 
@@ -582,13 +611,16 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 const code = insumo.code;
                 const qty = Number(customQuantities.get(code) || 0);
                 const price = customPrices.get(code) ?? Number(insumo.price || 0);
+                const cotado = quotedPrices.get(code) ?? null;
                 return {
                     code: code,
                     description: insumo.description,
                     unit: insumo.unit,
                     quantity: qty,
                     unitPrice: price,
-                    total: round2(qty * price)
+                    total: round2(qty * price),
+                    quotedUnitPrice: cotado,
+                    quotedTotal: cotado === null ? null : round2(qty * cotado),
                 };
             });
 
@@ -602,6 +634,8 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
             // Item intocado mantém o total que já estava gravado; item novo ou
             // editado recalcula — e em duas casas, não no produto cru.
             total: item.total ?? round2(item.quantity * item.unitPrice),
+            quotedUnitPrice: item.quotedUnitPrice ?? null,
+            quotedTotal: item.quotedTotal ?? (item.quotedUnitPrice == null ? null : round2(item.quantity * item.quotedUnitPrice)),
             avulso: true as const,
         }));
 
@@ -609,8 +643,11 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     }, [projectData, selectedItems, customQuantities, selectedMaterialsData, customPrices, avulsoItems]);
 
     const totalOrderValue = React.useMemo(() => {
-        return orderItems.reduce((sum, item) => sum + item.total, 0);
+        // Cotado quando houver, senão referência — utils/pedidoItemValor.
+        return totalEfetivoDoPedido(orderItems);
     }, [orderItems]);
+    const totalReferencia = React.useMemo(() => totalReferenciaDoPedido(orderItems), [orderItems]);
+    const algumItemCotado = React.useMemo(() => orderItems.some(temCotacao), [orderItems]);
 
     const toggleItem = (code: string, remainingQty?: number, budgetItemId?: string) => {
         const newSelected = new Set(selectedItems);
@@ -618,6 +655,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         if (newSelected.has(code)) {
             newSelected.delete(code);
             newQuantities.delete(code);
+            setQuotedPrices(prev => { const next = new Map(prev); next.delete(code); return next; });
         } else {
             const budgetItem = projectData?.budget.find(b => b.id === budgetItemId);
             if (budgetItem?.sinapiItem?.type === SinapiType.COMPOSITION) {
@@ -695,6 +733,15 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         const newPrices = new Map(customPrices);
         newPrices.set(code, Math.max(0, price));
         setCustomPrices(newPrices);
+    };
+
+    // `null` = campo esvaziado = sem cotação (o fornecedor preenche depois).
+    const updateItemQuotedPrice = (code: string, price: number | null) => {
+        setQuotedPrices(prev => {
+            const next = new Map(prev);
+            next.set(code, price === null ? null : Math.max(0, price));
+            return next;
+        });
     };
 
     const handleSaveOrder = async () => {
@@ -849,6 +896,8 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 case 'quantity': return item.quantity ?? 0;
                 case 'unitPrice': return item.unitPrice ?? 0;
                 case 'total': return (item.quantity ?? 0) * (item.unitPrice ?? 0);
+                case 'quotedUnitPrice': return item.quotedUnitPrice ?? 0;
+                case 'quotedTotal': return item.quotedUnitPrice == null ? 0 : (item.quantity ?? 0) * item.quotedUnitPrice;
                 default: return '';
             }
         },
@@ -863,6 +912,13 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
             case 'quantity': return <span className="text-sm font-normal text-gray-600">{item.quantity}</span>;
             case 'unitPrice': return <span className="text-sm font-medium text-gray-800">{formatCurrency(item.unitPrice)}</span>;
             case 'total': return <span className="text-sm font-medium text-gray-800">{formatCurrency(item.quantity * item.unitPrice)}</span>;
+            // Sem cotação: traço apagado — a coluna existe para o fornecedor preencher.
+            case 'quotedUnitPrice': return item.quotedUnitPrice == null
+                ? <span className="text-sm font-normal text-gray-300">—</span>
+                : <span className="text-sm font-medium text-gray-800">{formatCurrency(item.quotedUnitPrice)}</span>;
+            case 'quotedTotal': return item.quotedUnitPrice == null
+                ? <span className="text-sm font-normal text-gray-300">—</span>
+                : <span className="text-sm font-medium text-gray-800">{formatCurrency(round2(item.quantity * item.quotedUnitPrice))}</span>;
             default: return null;
         }
     };
@@ -913,6 +969,25 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 ) : (
                     <span className="text-sm font-medium text-gray-800">{formatCurrency(item.sinapiItem!.price || 0)}</span>
                 );
+            // §7.1 — mesmo desenho do `price`. Vazio = sem cotação (fica para o
+            // fornecedor); o comprador pode preencher quando cotou por fora.
+            case 'quotedPrice':
+                return selecionado ? (
+                    <div className="flex flex-col items-end gap-1">
+                        <input
+                            type="number"
+                            min={0}
+                            step="any"
+                            placeholder="—"
+                            value={quotedPrices.get(code) ?? ''}
+                            onChange={(e) => updateItemQuotedPrice(code, e.target.value === '' ? null : (parseFloat(e.target.value) || 0))}
+                            className="w-28 text-right rounded-[6px] border border-amber-300 p-1.5 text-sm font-normal text-amber-700 bg-amber-50 outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                        />
+                        <span className="text-sm font-normal text-gray-400">Cotação</span>
+                    </div>
+                ) : (
+                    <span className="text-sm font-normal text-gray-300">—</span>
+                );
             case 'pedido':
                 return selecionado ? (
                     <input
@@ -947,6 +1022,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 case 'aComprar': return (item.quantity ?? 0) - comprada;
                 case 'unit': return item.sinapiItem!.unit ?? '';
                 case 'price': return customPrices.get(item.sinapiItem!.code) ?? item.sinapiItem!.price ?? 0;
+                case 'quotedPrice': return quotedPrices.get(item.sinapiItem!.code) ?? 0;
                 case 'pedido': return customQuantities.get(item.sinapiItem!.code) ?? 0;
                 default: return '';
             }
@@ -1624,7 +1700,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                                     className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 ${MATERIAL_ALIGN[key] ?? ''} ${key === 'code' ? 'whitespace-nowrap' : ''}`}
                                                                     // As duas colunas editáveis não podem propagar o clique
                                                                     // para a linha: digitar no campo alternaria a seleção.
-                                                                    onClick={key === 'price' || key === 'pedido' ? (e) => e.stopPropagation() : undefined}
+                                                                    onClick={key === 'price' || key === 'quotedPrice' || key === 'pedido' ? (e) => e.stopPropagation() : undefined}
                                                                 >
                                                                     {renderCelulaMaterial(key, item)}
                                                                 </td>
@@ -1670,6 +1746,12 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                             {formatCurrency(totalOrderValue)}
                                         </span>
                                     </div>
+                                    {algumItemCotado && (
+                                        <div className="flex justify-between items-center text-xs -mt-2">
+                                            <span className="text-gray-400">Referência</span>
+                                            <span className="text-gray-400">{formatCurrency(totalReferencia)}</span>
+                                        </div>
+                                    )}
                                     <div className="h-px bg-gray-100" />
 
                                     {orderItems.length > 0 && (
@@ -1684,7 +1766,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                         </div>
                                                         <div className="flex justify-between items-center text-[9px] text-gray-400 font-medium">
                                                             <span>{item.code} • {formatCurrency(item.unitPrice)}</span>
-                                                            <span className="text-gray-900">Subtotal: {formatCurrency(item.total)}</span>
+                                                            <span className="text-gray-900">Subtotal: {formatCurrency(valorEfetivoDoItem(item))}</span>
                                                         </div>
                                                     </div>
                                                 ))}
@@ -1708,7 +1790,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                             // `initial` — então um total gravado sobreviveria à edição e
                             // ficaria mentindo sobre a nova quantidade. Quem passa por
                             // aqui recalcula.
-                            const editado: AvulsoItem = { ...item, total: undefined };
+                            const editado: AvulsoItem = { ...item, total: undefined, quotedTotal: undefined };
                             if (editingIndex !== null) {
                                 setAvulsoItems(prev => prev.map((a, i) => i === editingIndex ? editado : a));
                             } else {
@@ -1745,7 +1827,7 @@ interface AvulsoItemModalProps {
     onClose: () => void;
 }
 
-const EMPTY_FORM: AvulsoItem = { code: '', description: '', unit: '', quantity: 1, unitPrice: 0 };
+const EMPTY_FORM: AvulsoItem = { code: '', description: '', unit: '', quantity: 1, unitPrice: 0, quotedUnitPrice: null };
 
 // ─── Unit management ─────────────────────────────────────────────────────────
 const DEFAULT_UNITS = ['kg', 'm', 'm²', 'm³', 'l', 'pç', 'un', 'bd', 'br'];
@@ -1859,6 +1941,10 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
     const [priceDigits, setPriceDigits] = React.useState(() =>
         initial ? toCurrencyDigits(initial.unitPrice) : '0'
     );
+    // Cotado: '' = vazio = sem cotação (diferente de '0', que é cotação de R$ 0,00).
+    const [quotedDigits, setQuotedDigits] = React.useState(() =>
+        initial?.quotedUnitPrice != null ? toCurrencyDigits(initial.quotedUnitPrice) : ''
+    );
     const [units, setUnits] = React.useState<string[]>(loadUnits);
     const [showUnitManager, setShowUnitManager] = React.useState(false);
     const [pickerOpen, setPickerOpen] = React.useState(false);
@@ -1866,7 +1952,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
 
     const handlePickerSelect = (item: SinapiItem) => {
         const price = item.price || 0;
-        setForm({ code: item.code, description: item.description, unit: item.unit, quantity: 1, unitPrice: price });
+        setForm(f => ({ code: item.code, description: item.description, unit: item.unit, quantity: 1, unitPrice: price, quotedUnitPrice: f.quotedUnitPrice ?? null }));
         setPriceDigits(toCurrencyDigits(price));
         setPickerOpen(false);
     };
@@ -1984,6 +2070,32 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                                 />
                             </div>
                         </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1.5">Preço unit. da cotação (R$)</label>
+                        <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400 pointer-events-none select-none">R$</span>
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="Deixe vazio para o fornecedor preencher"
+                                value={quotedDigits === '' ? '' : displayCurrencyDigits(quotedDigits)}
+                                onChange={(e) => {
+                                    const digits = e.target.value.replace(/\D/g, '');
+                                    if (digits === '') {
+                                        setQuotedDigits('');
+                                        setForm(f => ({ ...f, quotedUnitPrice: null }));
+                                        return;
+                                    }
+                                    const trimmed = digits.replace(/^0+/, '') || '0';
+                                    setQuotedDigits(trimmed);
+                                    setForm(f => ({ ...f, quotedUnitPrice: fromCurrencyDigits(trimmed) }));
+                                }}
+                                className="w-full pl-9 rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none text-right font-bold placeholder:font-normal placeholder:text-gray-300"
+                            />
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1">Valor de referência acima; o cotado é o que o fornecedor cobra.</p>
                     </div>
 
                     {formError && (

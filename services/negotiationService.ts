@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { PurchaseOrder, PurchaseOrderItem } from '../types';
 import { orderService } from './orderService';
+import { aplicarCotadoNosItens, cotadosDaProposta } from '../utils/pedidoItemValor';
 
 export interface NegotiationProposal {
     id: string;
@@ -101,16 +102,25 @@ export const negotiationService = {
             .eq('status', 'pending')
             .neq('id', proposalId);
 
-        // 4. Update the main order with the agreed values
+        // 4. Update the main order with the agreed values.
+        //
+        // Os preços da proposta entram SÓ no par cotado dos itens atuais
+        // (`aplicarCotadoNosItens`) — antes, `items = proposal.items` trocava o
+        // array inteiro e apagava a referência (o que o comprador previa).
+        // Proposta gravada antes desta regra só tem `unitPrice`/`total`;
+        // `cotadosDaProposta` usa esses como cotado. Mesma regra da RPC de
+        // token (`supplier_portal_accept_negotiation_proposal`).
+        const atual = await orderService.getOrderById(orderId);
+        const itensAtuais = atual?.items ?? [];
         await orderService.updateOrder(orderId, {
             status: 'Confirmado',
             deliveryDate: proposal.delivery_date,
-            items: proposal.items,
+            items: aplicarCotadoNosItens(itensAtuais, cotadosDaProposta(proposal.items ?? [])),
             paymentMethod: proposal.payment_method,
             paymentTermType: proposal.payment_term_type,
             paymentDays: proposal.payment_days,
             paymentInstallments: proposal.payment_installments
-        });
+        }, atual?.version);
 
         return proposal;
     }

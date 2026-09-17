@@ -25,6 +25,7 @@ import { supplierPortalTokenService } from '../services/supplierPortalTokenServi
 import { pedidoCompradorService } from '../services/pedidoCompradorService';
 import { ehCompradorDoPedido } from '../utils/pedidoPerfil';
 import { round2 } from '../utils/financialMath';
+import { aplicarCotadoNosItens, fornecedorPodeCotar, temCotacao, totalEfetivoDoPedido, totalReferenciaDoPedido, valorEfetivoDoItem } from '../utils/pedidoItemValor';
 
 interface SupplyChainOrderDetailsProps {
     orderId: string;
@@ -138,6 +139,10 @@ const ITEM_COLUMNS: ColumnConfig[] = [
     { key: 'unit', label: 'Un', sortable: true },
     { key: 'unitPrice', label: 'Unitário', sortable: true },
     { key: 'total', label: 'Total', sortable: true },
+    // Par COTADO (utils/pedidoItemValor): importado da cotação quando o pedido
+    // nasce dela; senão vazio, para o fornecedor preencher no portal.
+    { key: 'quotedUnitPrice', label: 'Unit. cotação', sortable: true },
+    { key: 'quotedTotal', label: 'Total cotação', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
@@ -145,7 +150,7 @@ const ITEM_COLUMNS: ColumnConfig[] = [
 // (§6.1.2) mede o conteúdo real, que é o que resolve a Descrição longa.
 const DEFAULT_ITEM_COL_WIDTHS: Record<string, number> = {
     code: 120, description: 320, quantity: 90, unit: 80,
-    unitPrice: 130, total: 130, actions: 110,
+    unitPrice: 130, total: 130, quotedUnitPrice: 130, quotedTotal: 130, actions: 110,
 };
 
 // Metadados por coluna, para o <thead> e os <td> saírem de
@@ -158,10 +163,13 @@ const ITEM_COLUMN_HEADERS: Record<string, { label: string; className: string }> 
     unit: { label: 'Un', className: 'px-6 py-2 border-r border-gray-100 text-right' },
     unitPrice: { label: 'Unitário', className: 'px-6 py-2 border-r border-gray-100 text-right' },
     total: { label: 'Total', className: 'px-6 py-2 border-r border-gray-100 text-right' },
+    quotedUnitPrice: { label: 'Unit. cotação', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
+    quotedTotal: { label: 'Total cotação', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
 };
 
 const ITEM_CELL_ALIGN: Record<string, string> = {
     code: '', description: '', quantity: 'text-right', unit: 'text-right', unitPrice: 'text-right', total: 'text-right',
+    quotedUnitPrice: 'text-right', quotedTotal: 'text-right',
 };
 
 const formatBRL = (valor: number) =>
@@ -177,6 +185,8 @@ const valorDeOrdenacao = (item: PurchaseOrderItem, key: string): string | number
         case 'unit': return item.unit ?? '';
         case 'unitPrice': return item.unitPrice ?? 0;
         case 'total': return item.total ?? 0;
+        case 'quotedUnitPrice': return item.quotedUnitPrice ?? 0;
+        case 'quotedTotal': return item.quotedTotal ?? 0;
         default: return '';
     }
 };
@@ -202,6 +212,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     // A regra e o porquê dela vivem em `utils/pedidoPerfil.ts` — função pura
     // justamente para poder ter teste próprio.
     const ehComprador = ehCompradorDoPedido({ portalToken, perfil });
+    // O fornecedor edita SÓ o par cotado do item, e só enquanto o pedido está
+    // em jogo (`fornecedorPodeCotar`). Calculado mais abaixo, quando `order`
+    // existe — ver `fornecedorPodeEditarCotacao`.
     const [showReceiptModal, setShowReceiptModal] = React.useState(false);
     // Abas do pedido (§19.1). O pedido deixou de ter tela de edição separada: o
     // formulário vive DENTRO destas abas, abaixo dos cartões de leitura.
@@ -245,6 +258,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const [editPrice, setEditPrice] = React.useState<number>(0);
     const [editDescription, setEditDescription] = React.useState<string>('');
     const [editUnit, setEditUnit] = React.useState<string>('');
+    // `null` = sem cotação (campo esvaziado).
+    const [editQuotedPrice, setEditQuotedPrice] = React.useState<number | null>(null);
     const [receipts, setReceipts] = React.useState<PurchaseReceipt[]>([]);
     // Bucket 'receipts' é privado: photo_path guarda o PATH; resolvemos signed URL
     // (15min) por path para exibir a foto do comprovante. (Fase 1 privatização storage.)
@@ -370,6 +385,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
         setEditPrice(item.unitPrice);
         setEditDescription(item.description || '');
         setEditUnit(item.unit || '');
+        setEditQuotedPrice(item.quotedUnitPrice ?? null);
     };
 
     // §22 — depois de editar ou excluir UM item, atualizar o array local em vez de
@@ -389,6 +405,31 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
         if (!order) return;
         try {
             setLoading(true);
+            // ── Fornecedor: só o par cotado, pela porta certa ─────────────
+            // Por token vai pela RPC (não há sessão para a RLS); logado vai
+            // pela tabela, que a policy `po_update_org_or_supplier` permite.
+            // Nos dois casos o item atual é lido do servidor e só
+            // `quotedUnitPrice`/`quotedTotal` mudam — descrição, quantidade e
+            // referência ficam como estão.
+            if (!ehComprador) {
+                const item = order.items[idx];
+                const quotedTotal = editQuotedPrice == null ? null : round2(item.quantity * editQuotedPrice);
+                const cotados = [{ index: idx, code: item.code, quotedUnitPrice: editQuotedPrice, quotedTotal }];
+                let salvo: { items?: unknown; version?: number | null } | null;
+                if (portalToken) {
+                    salvo = await supplierPortalTokenService.updateItemQuotes(portalToken, orderId, cotados, order.version);
+                } else {
+                    const freshOrder = await orderService.getOrderById(orderId);
+                    if (!freshOrder) { notify("Erro ao carregar pedido.", "error"); return; }
+                    salvo = await orderService.updateOrder(orderId, { items: aplicarCotadoNosItens(freshOrder.items, cotados) }, freshOrder.version);
+                }
+                if (!salvo) { notify("Não foi possível salvar o valor cotado.", "error"); return; }
+                setEditingIndex(null);
+                aplicarItensSalvos(salvo);
+                notify("Valor cotado atualizado.");
+                return;
+            }
+
             const freshOrder = await orderService.getOrderById(orderId);
             if (!freshOrder) { notify("Erro ao carregar pedido.", "error"); return; }
             const newItems = [...freshOrder.items];
@@ -401,7 +442,10 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 // Dinheiro em duas casas — `round2` é o arredondamento canônico
                 // do projeto. Sem ele, editar um item aqui gravava o produto
                 // cru (ex.: 4404.003465) no campo de valor.
-                total: round2(editQty * editPrice)
+                total: round2(editQty * editPrice),
+                // Par cotado: quantidade nova × unitário cotado; vazio = sem cotação.
+                quotedUnitPrice: editQuotedPrice,
+                quotedTotal: editQuotedPrice == null ? null : round2(editQty * editQuotedPrice),
             };
             const salvo = await orderService.updateOrder(orderId, { items: newItems }, freshOrder.version);
             setEditingIndex(null);
@@ -410,7 +454,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
             console.error("Error saving item edit:", error);
-            notify("Erro ao salvar alteração do item.", "error");
+            notify(error.message.startsWith('CONFLICT') ? error.message.replace(/^CONFLICT:\s*/, '') : "Erro ao salvar alteração do item.", "error");
         } finally {
             setLoading(false);
         }
@@ -695,7 +739,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     return;
                 }
                 const shareToken = await whatsappService.generateShareToken(order.id);
-                const total = order.items.reduce((sum, item) => sum + (item.total || 0), 0);
+                const total = totalEfetivoDoPedido(order.items);
                 await whatsappService.sendOrderTemplate({
                     phone:        supplier.phone,
                     orderId:      order.id,
@@ -724,7 +768,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
         text += `Obra: ${projectName}\n`;
         text += `Status: ${order.status}\n\n`;
         const total = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-            order.items.reduce((sum, item) => sum + (item.total || 0), 0)
+            totalEfetivoDoPedido(order.items)
         );
         text += `*Valor Total:* ${total}\n\n*Itens do Pedido:*\n`;
         order.items.slice(0, 5).forEach(item => {
@@ -796,7 +840,12 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const canDeleteOrder = (status: string) =>
         !['Entregue', 'Recebido', 'Divergência'].includes(status);
 
-    const totalValue = order.items.reduce((sum, item) => sum + (item.total || 0), 0);
+    // Cotado quando houver, senão referência (utils/pedidoItemValor). A
+    // referência aparece como segunda linha do rodapé quando difere.
+    const totalValue = totalEfetivoDoPedido(order.items);
+    const totalReferencia = totalReferenciaDoPedido(order.items);
+    const algumItemCotado = order.items.some(temCotacao);
+    const fornecedorPodeEditarCotacao = !ehComprador && fornecedorPodeCotar(order.status);
 
     // Linhas da tabela de itens, na ordem escolhida no cabeçalho (§6.3).
     //
@@ -842,7 +891,11 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     // §7: `font-medium` só em valor financeiro; o resto é `font-normal`.
     const inputDaCelula = 'border border-gray-300 rounded-[6px] px-2 py-1 text-sm outline-none focus:ring-2';
     const renderCelulaDoItem = (key: string, item: PurchaseOrderItem, idx: number): React.ReactNode => {
-        const editando = editingIndex === idx;
+        // O fornecedor entra em edição também, mas só as células do par cotado
+        // viram <input> para ele; as demais continuam texto.
+        const editando = editingIndex === idx && ehComprador;
+        const editandoCotacao = editingIndex === idx;
+        const qtdEmEdicao = editando ? editQty : item.quantity;
         switch (key) {
             case 'code':
                 return <span className="text-sm font-normal text-gray-600">{item.code}</span>;
@@ -880,6 +933,28 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         {formatBRL(editando ? editQty * editPrice : item.total)}
                     </span>
                 );
+            // §7.1 — input com a tipografia da célula; vazio = sem cotação.
+            case 'quotedUnitPrice':
+                return editandoCotacao ? (
+                    <input type="number" min={0} step="any" placeholder="—"
+                        value={editQuotedPrice ?? ''}
+                        onChange={(e) => setEditQuotedPrice(e.target.value === '' ? null : (parseFloat(e.target.value) || 0))}
+                        className={`w-24 text-right ${inputDaCelula} ${A.ring}`} />
+                ) : item.quotedUnitPrice == null ? (
+                    <span className="text-sm font-normal text-gray-300">—</span>
+                ) : (
+                    <span className="text-sm font-medium text-gray-800">{formatBRL(item.quotedUnitPrice)}</span>
+                );
+            case 'quotedTotal': {
+                const unit = editandoCotacao ? editQuotedPrice : (item.quotedUnitPrice ?? null);
+                return unit == null ? (
+                    <span className="text-sm font-normal text-gray-300">—</span>
+                ) : (
+                    <span className="text-sm font-medium text-gray-800">
+                        {formatBRL(editandoCotacao ? round2(qtdEmEdicao * unit) : (item.quotedTotal ?? round2(qtdEmEdicao * unit)))}
+                    </span>
+                );
+            }
             default:
                 return null;
         }
@@ -1257,6 +1332,10 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                                             <ActionIconButton kind="edit" size="sm" onClick={() => handleStartEdit(idx, item)} />
                                                             <ActionIconButton kind="delete" size="sm" onClick={() => handleDeleteItem(idx)} />
                                                         </>
+                                                    ) : fornecedorPodeEditarCotacao ? (
+                                                        /* Fornecedor: só informa o valor cotado (a edição abre
+                                                           apenas as duas células do par cotado). */
+                                                        <ActionIconButton kind="edit" size="sm" title="Informar valor cotado" onClick={() => handleStartEdit(idx, item)} />
                                                     ) : null}
                                                 </div>
                                             </td>
@@ -1274,6 +1353,12 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                             <span className="text-sm font-normal opacity-60">Valor total do pedido</span>
                                             <span className="text-base font-semibold">{formatBRL(totalValue)}</span>
                                         </div>
+                                        {algumItemCotado && (
+                                            <div className="flex items-center justify-end gap-4 opacity-60">
+                                                <span className="text-xs font-normal">Referência</span>
+                                                <span className="text-xs font-normal">{formatBRL(totalReferencia)}</span>
+                                            </div>
+                                        )}
                                     </td>
                                 </tr>
                             </tfoot>

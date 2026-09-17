@@ -58,9 +58,11 @@ describe('trava — valor de item do pedido vem de utils/pedidoItemValor', () =>
 
     it.each(CONSUMIDORES)('%s não soma item.total cru', arquivo => {
         const src = semComentarios(readFileSync(path.join(RAIZ, arquivo), 'utf8'));
-        // `(x.total || 0)` / `(x.total ?? 0)` dentro de um reduce é a assinatura
-        // da soma antiga. `inv.total`/`total_value` (nota fiscal) não entram.
-        const cruas = src.match(/\b(item|i|it|orderItem|o)\.total\s*(\|\||\?\?)\s*0/g) ?? [];
+        // `+ (x.total || 0)` / `+ (x.total ?? 0)` é a assinatura da soma antiga
+        // (o acumulador de um reduce). Ler `item.total` para ORDENAR a coluna
+        // "Total" de referência é legítimo e não casa. `inv.total`/`total_value`
+        // (nota fiscal) também não entram.
+        const cruas = src.match(/\+\s*\(\s*(item|i|it|orderItem|o)\.total\s*(\|\||\?\?)\s*0\s*\)/g) ?? [];
         expect(cruas, `${arquivo}: soma crua de item.total — ${cruas.join(', ')}`).toEqual([]);
     });
 });

@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { QuotationRequest, QuotationResponse } from '../types';
 import { orderService } from './orderService';
 import { generateQuotationNumber } from './quotationNumberingService';
+import { montarItensDoPedidoDaCotacao } from '../utils/pedidoItemValor';
 
 export const quotationService = {
     async listRequests(projectId?: string): Promise<QuotationRequest[]> {
@@ -444,14 +445,11 @@ export const quotationService = {
                 paymentTermType: responsesRaw.payment_term_type,
                 paymentDays: responsesRaw.payment_days,
                 paymentInstallments: responsesRaw.payment_installments,
-                items: responsesRaw.items.map((item: { code: string; description: string; unit: string; quantity: number; unitPrice: number; total: number }) => ({
-                    code: item.code,
-                    description: item.description,
-                    unit: item.unit,
-                    quantity: item.quantity,
-                    unitPrice: item.unitPrice,
-                    total: item.total
-                })),
+                // Dois pares de preço por item: a REFERÊNCIA vem do item da RFQ
+                // (preço do orçamento; 0 quando foi digitado sem preço) e o COTADO
+                // é o da resposta vencedora. Até aqui o cotado ia direto para
+                // `unitPrice`, e o pedido perdia o "quanto eu previa".
+                items: montarItensDoPedidoDaCotacao(requestRaw.items ?? [], responsesRaw.items ?? []),
                 notes: `Gerado a partir da cotação ${requestRaw.number}. ${responsesRaw.notes || ''}`
             });
         }

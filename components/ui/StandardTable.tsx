@@ -52,7 +52,10 @@ interface StandardTableProps<T> {
     searchText?: (row: T) => string;
     searchPlaceholder?: string;
     /** Busca controlada pela tela (quando o mesmo termo filtra outra visão — ex.: cards/lista).
-     *  Sem estes dois, a tabela guarda a própria busca persistida. */
+     *  Sem estes dois, a tabela guarda a própria busca persistida.
+     *  Controlada e SEM `searchText`: o campo aparece, mas nada é filtrado aqui —
+     *  é o caso da busca no servidor (`DatabaseExplorer`: o modo "Palavras" casa
+     *  palavras em qualquer ordem, coisa que um `includes()` local desfaria). */
     search?: string;
     onSearchChange?: (value: string) => void;
     /** Tabela dentro de um registro (pedido, contrato): a busca é guardada por
@@ -194,7 +197,7 @@ export function StandardTable<T>({
             <div className="p-2 border-b border-gray-100 bg-white space-y-3">
                 {toolbarTop}
                 <div className="flex flex-col md:flex-row gap-2.5 items-center">
-                    {searchText && (
+                    {(searchText || controlledSearch !== undefined) && (
                         <div className="flex-1 relative w-full">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input
@@ -207,7 +210,7 @@ export function StandardTable<T>({
                         </div>
                     )}
                     {filters && <div className="flex flex-wrap items-center gap-2 shrink-0">{filters}</div>}
-                    {!searchText && !filters && <div className="flex-1" />}
+                    {!searchText && controlledSearch === undefined && !filters && <div className="flex-1" />}
                     <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
                     <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                         <ColumnConfigButton

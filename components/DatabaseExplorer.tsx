@@ -7,25 +7,15 @@ import {
     Package,
     Box,
     X,
-    Loader2,
-    Filter,
-    ChevronRight,
-    ChevronLeft,
-    ChevronDown,
     ArrowLeft,
-    BookOpen,
     Info,
     Maximize2,
     Save,
     Trash,
     Plus,
     Upload,
-    Settings,
     FileSpreadsheet,
     Star,
-    StarOff,
-    LayoutDashboard,
-    Table2,
     Edit,
     Copy,
     FolderTree,
@@ -44,95 +34,93 @@ import SinapiImportModal from './SinapiImportModal';
 import { CustomDatabase } from '../types';
 import ExcelJS from 'exceljs';
 import { formatMoney } from './ui/Format';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { usePersistedState } from './ui/TableUtils';
+import StandardTable, { StandardTableColumn } from './ui/StandardTable';
+import { TabsBar } from './ui/TabsBar';
+import { FilterPopover } from './ui/FilterPopover';
+import ActionIconButton from './ui/ActionIconButton';
+import { useConfirm } from './ui/confirm';
 
-const EXPLORER_COLUMNS: ColumnConfig[] = [
-    { key: 'code', label: 'Item', sortable: true },
-    { key: 'nature', label: 'Tipo', sortable: true },
-    { key: 'description', label: 'Descrição', sortable: true },
-    { key: 'unit', label: 'Unid', sortable: false },
-    { key: 'price', label: 'Preço Unitário', sortable: true },
-    { key: 'actions', label: 'Ações', sortable: false },
+// As duas abas (§19.1) são as duas bases que a tela consulta. O id persiste na
+// mesma chave do antigo <select> "Base de Dados", então quem já tinha a base
+// própria escolhida continua nela.
+type BaseTab = 'SINAPI' | 'GENERAL';
+
+const BASE_TABS: { id: BaseTab; label: string }[] = [
+    { id: 'SINAPI', label: 'SINAPI' },
+    { id: 'GENERAL', label: 'Base própria' },
 ];
 
-// Metadados de header por coluna — usados para renderizar o <thead> a partir de
-// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
-// uma sequência fixa de JSX (drag-and-drop estilo ClickUp, ver GUIA_TABLE_UTILS.md).
-const EXPLORER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
-    code: { label: 'Item', className: 'px-6 py-2 border-r border-gray-100 last:border-r-0' },
-    nature: { label: 'Tipo', className: 'px-6 py-2 border-r border-gray-100 last:border-r-0 text-center' },
-    description: { label: 'Descrição', className: 'px-6 py-2 border-r border-gray-100 last:border-r-0' },
-    unit: { label: 'Unid', sortable: false, className: 'px-6 py-2 border-r border-gray-100 last:border-r-0 text-center' },
-    price: { label: 'Preço Unitário', className: 'px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap' },
-    actions: { label: 'Ações', sortable: false, className: 'px-6 py-2 text-right' },
+// Título/subtítulo acompanham a aba ativa (§19.1/§20).
+const VIEW_HEADERS: Record<BaseTab, { title: string; subtitle: string }> = {
+    SINAPI: { title: 'Composições', subtitle: 'Pesquise e consulte composições, serviços e insumos do SINAPI.' },
+    GENERAL: { title: 'Composições', subtitle: 'Pesquise e mantenha composições, serviços e insumos da sua base própria.' },
 };
+
+// Colunas de DADO (§6.10) — "Ações" entra por `actions`. Larguras iniciais
+// aproximam a largura útil da tela; o autofit/arraste ajustam a partir daqui.
+const EXPLORER_COLUMNS: StandardTableColumn[] = [
+    { key: 'code', label: 'Item', sortable: true, width: 150 },
+    { key: 'type', label: 'Tipo', sortable: true, width: 130 },
+    { key: 'nature', label: 'Natureza', sortable: true, width: 130 },
+    { key: 'description', label: 'Descrição', sortable: true, width: 520 },
+    { key: 'unit', label: 'Unid.', sortable: true, width: 90, align: 'center' },
+    { key: 'price', label: 'Preço unitário', sortable: true, width: 150, align: 'right' },
+    { key: 'category', label: 'Grupo', sortable: true, width: 200, defaultHidden: true },
+];
+
+// Status em texto colorido simples (§8) — sem pílula, sem fundo, sem caixa alta.
+const TYPE_LABEL: Record<string, string> = {
+    [SinapiType.COMPOSITION]: 'Composição',
+    [SinapiType.SERVICE]: 'Serviço',
+    [SinapiType.INPUT]: 'Insumo',
+};
+const TYPE_COLOR: Record<string, string> = {
+    [SinapiType.COMPOSITION]: 'text-blue-700',
+    [SinapiType.SERVICE]: 'text-purple-700',
+    [SinapiType.INPUT]: 'text-amber-700',
+};
+const NATURE_COLOR: Record<string, string> = {
+    'Mão de Obra': 'text-orange-700',
+    'Material': 'text-blue-700',
+    'Equipamento': 'text-emerald-700',
+};
+
+// Filtros de escolha única da toolbar acoplada (§5.4) — primeira opção é sempre "sem recorte".
+const TYPE_FILTER_OPTIONS: { value: string; label: string }[] = [
+    { value: '', label: 'Todos' },
+    { value: SinapiType.SERVICE, label: 'Serviços / Composições' },
+    { value: SinapiType.INPUT, label: 'Insumos' },
+];
+const NATURE_FILTER_OPTIONS: { value: string; label: string }[] = [
+    { value: '', label: 'Todas' },
+    { value: 'Mão de Obra', label: 'Mão de obra' },
+    { value: 'Material', label: 'Materiais' },
+    { value: 'Equipamento', label: 'Equipamentos' },
+];
+type SearchScope = 'description' | 'category' | 'both';
+type SearchMode = 'exact' | 'all-words';
+const SCOPE_OPTIONS: { value: SearchScope; label: string }[] = [
+    { value: 'description', label: 'Descrição' },
+    { value: 'category', label: 'Grupo' },
+    { value: 'both', label: 'Ambos' },
+];
+const MODE_OPTIONS: { value: SearchMode; label: string }[] = [
+    { value: 'all-words', label: 'Palavras' },
+    { value: 'exact', label: 'Frase exata' },
+];
+const UFS = ['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO'];
+
+// Controles da barra de escopo (§5.3) e da toolbar acoplada: todos h-9, radius 6px (§16).
+const SCOPE_SELECT_CLASS = 'h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer';
+const SECONDARY_BUTTON_CLASS = 'flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95 shrink-0';
+const PRIMARY_BUTTON_CLASS = 'flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0';
 
 interface DatabaseExplorerProps {
     budget?: BudgetEntry[];
     favorites: string[];
     onToggleFavorite: (e: React.MouseEvent | React.TouchEvent, code: string) => void;
     onUpdateBudget?: (newBudget: BudgetEntry[]) => void;
-}
-
-// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
-// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
-// repetir um bloco condicional fixo por coluna.
-function renderExplorerCell(key: string, result: SinapiItem, ctx: {
-    favorites: string[];
-    onToggleFavorite: (e: React.MouseEvent | React.TouchEvent, code: string) => void;
-    searchDatabase: string;
-    onDeleteItem: (e: React.MouseEvent, item: SinapiItem) => void;
-}): React.ReactNode {
-    switch (key) {
-        case 'code':
-            return (
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={(e) => ctx.onToggleFavorite(e, result.code)}
-                        className="p-1 rounded-lg hover:bg-white shadow-sm transition-all z-10"
-                    >
-                        <Star className={`w-3 h-3 ${ctx.favorites.includes(result.code) ? 'fill-amber-500 text-amber-500' : 'text-gray-300'}`} />
-                    </button>
-                    <span className="font-mono text-sm font-bold text-gray-600">{result.code}</span>
-                </div>
-            );
-        case 'nature':
-            return (
-                <div className="text-center">
-                    <span className={`
-                        px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest inline-block
-                        ${result.nature === 'Mão de Obra' ? 'bg-orange-50 text-orange-600' :
-                            result.nature === 'Material' ? 'bg-blue-50 text-blue-600' :
-                                'bg-purple-50 text-purple-600'}
-                    `}>
-                        {result.nature}
-                    </span>
-                </div>
-            );
-        case 'description':
-            return <span className="text-sm font-medium text-gray-800 group-hover:text-blue-600 transition-colors leading-tight">{result.description}</span>;
-        case 'unit':
-            return <div className="text-center"><span className="text-sm font-bold text-gray-600 uppercase">{result.unit}</span></div>;
-        case 'price':
-            return <div className="text-right"><span className="text-sm font-black text-gray-900">{formatMoney(result.price)}</span></div>;
-        case 'actions':
-            return (
-                <div className="flex items-center justify-end gap-2">
-                    {(ctx.searchDatabase === 'GENERAL' || result.isOverride) && (
-                        <button
-                            onClick={(e) => ctx.onDeleteItem(e, result)}
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title={result.isOverride ? "Restaurar item SINAPI" : "Excluir item"}
-                        >
-                            <Trash className="w-4 h-4" />
-                        </button>
-                    )}
-                    <ChevronRight className="w-4 h-4 text-blue-500" />
-                </div>
-            );
-        default:
-            return null;
-    }
 }
 
 const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, onToggleFavorite, onUpdateBudget }) => {
@@ -165,23 +153,22 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
     const [searchCode, setSearchCode] = usePersistedState('databaseExplorerFilters:code', '');
     const [searchType, setSearchType] = usePersistedState('databaseExplorerFilters:type', '');
     const [searchGroup, setSearchGroup] = usePersistedState('databaseExplorerFilters:group', '');
-    const [searchDatabase, setSearchDatabase] = usePersistedState('databaseExplorerFilters:database', 'SINAPI');
+    const [searchDatabase, setSearchDatabase] = usePersistedState<BaseTab>('databaseExplorerFilters:database', 'SINAPI');
     const [searchLocation, setSearchLocation] = usePersistedState('databaseExplorerFilters:location', 'MG');
     const [searchCharges, setSearchCharges] = usePersistedState('databaseExplorerFilters:charges', 'SEM_DESONERACAO');
     const [searchReference, setSearchReference] = usePersistedState('databaseExplorerFilters:reference', '');
     const [references, setReferences] = React.useState<SinapiReference[]>([]);
     const [searchNature, setSearchNature] = usePersistedState('databaseExplorerFilters:nature', '');
-    const [searchScope, setSearchScope] = usePersistedState<'description' | 'category' | 'both'>('databaseExplorerFilters:scope', 'description');
-    const [searchMode, setSearchMode] = usePersistedState<'exact' | 'all-words'>('databaseExplorerFilters:mode', 'all-words');
-    const [searchResults, setSearchResults] = React.useState<SinapiItem[]>([]);
-    const [isSearching, setIsSearching] = React.useState(false);
+    const [searchScope, setSearchScope] = usePersistedState<SearchScope>('databaseExplorerFilters:scope', 'description');
+    const [searchMode, setSearchMode] = usePersistedState<SearchMode>('databaseExplorerFilters:mode', 'all-words');
+    const [results, setResults] = React.useState<SinapiItem[]>([]);
+    const [loadingResults, setLoadingResults] = React.useState(false);
     const [dbSize, setDbSize] = React.useState(0);
     const [categories, setCategories] = React.useState<string[]>([]);
     const [customCategories, setCustomCategories] = React.useState<Set<string>>(new Set());
     const [isGroupManagerOpen, setIsGroupManagerOpen] = React.useState(false);
     const [showOnlyFavorites, setShowOnlyFavorites] = usePersistedState('databaseExplorerFilters:onlyFavorites', false);
-    const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('databaseExplorerFilters:viewMode', 'list');
-    const tableColumns = useTableColumns(EXPLORER_COLUMNS, 'databaseExplorerColumns');
+    const confirm = useConfirm();
 
     // Notificações inline (substitui alert() nativo)
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -434,11 +421,11 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
     // Lógica de Busca
     const handleSearch = React.useCallback(async () => {
         if (searchDatabase === 'SINAPI' && !searchTerm && !searchCode && !searchGroup && !searchType && !showOnlyFavorites) {
-            setSearchResults([]);
+            setResults([]);
             return;
         }
 
-        setIsSearching(true);
+        setLoadingResults(true);
         try {
             let results: SinapiItem[] = [];
             const filters = {
@@ -469,14 +456,14 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                     codes: showOnlyFavorites ? favorites : undefined
                 });
             }
-            setSearchResults(results.map(item => ({
+            setResults(results.map(item => ({
                 ...item,
                 isFavorite: favorites.includes(item.code)
             })));
         } catch (error) {
             console.error("Erro na busca:", error);
         } finally {
-            setIsSearching(false);
+            setLoadingResults(false);
         }
     }, [searchTerm, searchCode, searchType, searchNature, searchGroup, searchDatabase, searchLocation, searchCharges, searchReference, favorites, showOnlyFavorites, currentDatabase]);
 
@@ -501,7 +488,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
         });
 
         // Também atualiza na lista de resultados para manter consistência visual
-        setSearchResults(prev => prev.map(item =>
+        setResults(prev => prev.map(item =>
             item.code === selectedItem.code ? { ...item, composition: newComposition, price: newPrice } : item
         ));
     };
@@ -665,20 +652,20 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
         const isCustomMode = searchDatabase === 'GENERAL';
         if (!isCustomMode && !item.isOverride) return;
 
-        const confirmMessage = item.isOverride
-            ? `Deseja restaurar o item ${item.code} para o padrão original do SINAPI? Suas alterações serão perdidas.`
-            : `Tem certeza que deseja excluir o item ${item.code}? Esta ação não pode ser desfeita.`;
+        // §14 — useConfirm(), nunca confirm() nativo
+        const ok = await confirm(item.isOverride
+            ? { title: `Restaurar o item ${item.code}?`, message: 'O item volta ao padrão original do SINAPI. Suas alterações serão perdidas.', variant: 'warning', confirmLabel: 'Restaurar' }
+            : { title: `Excluir o item ${item.code}?`, message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' });
+        if (!ok) return;
 
-        if (window.confirm(confirmMessage)) {
-            try {
-                await customDatabaseService.deleteItem(item.code, currentDatabase?.id);
-                notify(item.isOverride ? 'Item restaurado ao padrão original!' : 'Item excluído com sucesso!', 'success');
-                if (selectedItem?.code === item.code) setSelectedItem(null);
-                handleSearch(); // Atualiza a lista
-            } catch (error) {
-                console.error("Erro ao excluir:", error);
-                notify('Erro ao excluir item.', 'error');
-            }
+        try {
+            await customDatabaseService.deleteItem(item.code, currentDatabase?.id);
+            notify(item.isOverride ? 'Item restaurado ao padrão original!' : 'Item excluído com sucesso!', 'success');
+            if (selectedItem?.code === item.code) setSelectedItem(null);
+            handleSearch(); // Atualiza a lista
+        } catch (error) {
+            console.error("Erro ao excluir:", error);
+            notify('Erro ao excluir item.', 'error');
         }
     };
 
@@ -691,20 +678,20 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
 
         if (!isCustom && !isOverride) return;
 
-        const confirmMessage = isOverride
-            ? `Deseja restaurar o item ${selectedItem.code} para o padrão original do SINAPI? Suas alterações serão perdidas.`
-            : `Tem certeza que deseja excluir o item ${selectedItem.code}? Esta ação não pode ser desfeita.`;
+        // §14 — useConfirm(), nunca confirm() nativo
+        const ok = await confirm(isOverride
+            ? { title: `Restaurar o item ${selectedItem.code}?`, message: 'O item volta ao padrão original do SINAPI. Suas alterações serão perdidas.', variant: 'warning', confirmLabel: 'Restaurar' }
+            : { title: `Excluir o item ${selectedItem.code}?`, message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' });
+        if (!ok) return;
 
-        if (confirm(confirmMessage)) {
-            try {
-                await customDatabaseService.deleteItem(selectedItem.code, currentDatabase?.id);
-                notify(isOverride ? 'Item restaurado ao padrão original!' : 'Item excluído com sucesso!', 'success');
-                setSelectedItem(null);
-                handleSearch(); // Atualiza a lista
-            } catch (error) {
-                console.error("Erro ao excluir:", error);
-                notify('Erro ao excluir item.', 'error');
-            }
+        try {
+            await customDatabaseService.deleteItem(selectedItem.code, currentDatabase?.id);
+            notify(isOverride ? 'Item restaurado ao padrão original!' : 'Item excluído com sucesso!', 'success');
+            setSelectedItem(null);
+            handleSearch(); // Atualiza a lista
+        } catch (error) {
+            console.error("Erro ao excluir:", error);
+            notify('Erro ao excluir item.', 'error');
         }
     };
 
@@ -716,17 +703,6 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
         return () => clearTimeout(timer);
     }, [handleSearch, favorites, showOnlyFavorites]); // Search depends on favorites to update icons and filtering
 
-
-    const getTypeBadge = (type: SinapiType) => {
-        switch (type) {
-            case SinapiType.COMPOSITION:
-                return <span className="flex items-center gap-1 bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded text-xs font-bold border border-blue-100"><Layers className="w-2.5 h-2.5" /> COMPOSIÇÃO</span>;
-            case SinapiType.SERVICE:
-                return <span className="flex items-center gap-1 bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded text-xs font-bold border border-purple-100"><Package className="w-2.5 h-2.5" /> SERVIÇO</span>;
-            default:
-                return <span className="flex items-center gap-1 bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded text-xs font-bold border border-amber-100"><Box className="w-2.5 h-2.5" /> INSUMO</span>;
-        }
-    };
 
     const handleCreate = (type: SinapiType) => {
         if (!currentDatabase) {
@@ -814,451 +790,257 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
 
         } catch (error) {
             console.error("Erro ao exportar:", error);
-            alert(`Erro ao gerar arquivo de exportação: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+            notify(`Erro ao gerar arquivo de exportação: ${error instanceof Error ? error.message : 'Erro desconhecido'}`, 'error');
         }
     };
 
-    // F1/F2: ordenação client-side (mesma lista alimenta grid e lista).
-    const sortedResults = React.useMemo(() => {
-        if (!tableColumns.sortColumn) return searchResults;
-        const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
-        const col = tableColumns.sortColumn;
-        return [...searchResults].sort((a, b) => {
-            if (col === 'code') return a.code.localeCompare(b.code) * dir;
-            if (col === 'nature') return (a.nature || '').localeCompare(b.nature || '') * dir;
-            if (col === 'description') return a.description.localeCompare(b.description) * dir;
-            if (col === 'price') return ((a.price || 0) - (b.price || 0)) * dir;
-            return 0;
-        });
-    }, [searchResults, tableColumns.sortColumn, tableColumns.sortDirection]);
+    // Um "pronto para buscar" só faz sentido no SINAPI sem nenhum recorte — a base
+    // própria lista tudo de cara, então lá lista vazia é "nenhum item" mesmo.
+    const hasQuery = searchDatabase === 'GENERAL' || !!searchTerm || !!searchCode || !!searchGroup || !!searchType || showOnlyFavorites;
+    const header = VIEW_HEADERS[searchDatabase];
+
+    // Célula por coluna — tipografia §7: `text-sm font-normal`, `font-medium` só no preço.
+    const renderCell = (key: string, item: SinapiItem): React.ReactNode => {
+        switch (key) {
+            case 'code': {
+                const fav = favorites.includes(item.code);
+                return (
+                    <div className="flex items-center gap-2 min-w-0">
+                        <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onToggleFavorite(e, item.code); }}
+                            className="p-1 rounded-[6px] hover:bg-amber-50 transition-colors shrink-0"
+                            title={fav ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+                        >
+                            <Star className={`w-3.5 h-3.5 ${fav ? 'fill-amber-500 text-amber-500' : 'text-gray-300'}`} />
+                        </button>
+                        <span className="block truncate text-sm font-normal text-gray-600" title={item.code}>{item.code}</span>
+                    </div>
+                );
+            }
+            case 'type':
+                return <span className={`text-sm font-normal ${TYPE_COLOR[item.type] ?? 'text-gray-600'}`}>{TYPE_LABEL[item.type] ?? item.type}</span>;
+            case 'nature':
+                return item.nature
+                    ? <span className={`text-sm font-normal ${NATURE_COLOR[item.nature] ?? 'text-gray-600'}`}>{item.nature}</span>
+                    : <span className="text-sm font-normal text-gray-300">—</span>;
+            case 'description':
+                return <span className="block truncate text-sm font-normal text-gray-700" title={item.description}>{item.description}</span>;
+            case 'unit':
+                return <span className="text-sm font-normal text-gray-600">{item.unit}</span>;
+            case 'price':
+                return <span className="text-sm font-medium text-gray-800">{formatMoney(item.price)}</span>;
+            case 'category':
+                return <span className="block truncate text-sm font-normal text-gray-600" title={item.category || ''}>{item.category || '—'}</span>;
+            default:
+                return null;
+        }
+    };
+
+    const sortValue = (key: string, item: SinapiItem): string | number | null => {
+        switch (key) {
+            case 'code': return item.code;
+            case 'type': return TYPE_LABEL[item.type] ?? item.type;
+            case 'nature': return item.nature || '';
+            case 'description': return item.description;
+            case 'unit': return item.unit || '';
+            case 'price': return item.price || 0;
+            case 'category': return item.category || '';
+            default: return null;
+        }
+    };
 
     return (
-        <div className="h-full flex flex-col space-y-4 relative">
-            {/* Cabeçalho */}
+        // `h-full flex flex-col relative` fica por causa do modal de detalhe
+        // (`absolute inset-0` logo abaixo), que ancora neste bloco — fora do
+        // escopo desta tela de lista. O ritmo vertical é o do §20 (`space-y-6`).
+        <div className="h-full flex flex-col space-y-6 relative">
+            {/* 1. Título — §20 */}
             <div>
-                <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                    <BookOpen className="w-7 h-7 text-blue-600" />
-                    Composições
-                </h1>
-                <div className="flex justify-between items-end">
-                    <p className="text-gray-500">Pesquise e consulte composições, serviços e insumos do SINAPI ou da sua Base Própria.</p>
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => handleCreate(SinapiType.INPUT)}
-                            className="bg-white text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg text-button font-bold hover:bg-gray-50 flex items-center gap-2 shadow-sm"
-                        >
-                            <Box className="w-3.5 h-3.5" />
-                            Novo Insumo
-                        </button>
-                        <button
-                            onClick={() => handleCreate(SinapiType.COMPOSITION)}
-                            className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-button font-bold hover:bg-blue-700 flex items-center gap-2 shadow-sm shadow-blue-200"
-                        >
-                            <Layers className="w-3.5 h-3.5" />
-                            Nova Composição
-                        </button>
-                    </div>
-                </div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">{header.title}</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">{header.subtitle}</p>
             </div>
 
-            {/* Área de Busca e Filtros */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col min-h-0">
-                <div className="p-4 border-b border-gray-100">
-                    <div className="grid grid-cols-12 gap-3 mb-4">
-                        <div className="col-span-1">
-                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Código</label>
-                            <input
-                                type="text"
-                                placeholder="Ex: 98546"
-                                className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                value={searchCode}
-                                onChange={(e) => setSearchCode(e.target.value)}
-                            />
-                        </div>
-                        <div className="col-span-2">
-                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Tipo</label>
+            {/* 2. Abas — §19.1: qual base está sendo consultada */}
+            <TabsBar<BaseTab> tabs={BASE_TABS} value={searchDatabase} onChange={setSearchDatabase}>
+                <span className="text-xs text-gray-400 whitespace-nowrap">
+                    {results.length > 0 && <>{results.length.toLocaleString('pt-BR')} encontrados · </>}
+                    {dbSize.toLocaleString('pt-BR')} itens catalogados
+                </span>
+            </TabsBar>
+
+            {/* 3. Barra de escopo — §5.3: define QUAL conjunto de dados a tela olha; ação primária à direita (§17) */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center gap-2">
+                    {searchDatabase === 'SINAPI' ? (
+                        <>
                             <select
-                                className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
-                                value={searchType}
-                                onChange={(e) => setSearchType(e.target.value)}
-                            >
-                                <option value="">Todos</option>
-                                <option value={SinapiType.SERVICE}>Serviços / Composições</option>
-                                <option value={SinapiType.INPUT}>Insumos</option>
-                            </select>
-                        </div>
-                        <div className="col-span-2">
-                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Natureza</label>
-                            <select
-                                className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
-                                value={searchNature}
-                                onChange={(e) => setSearchNature(e.target.value)}
-                            >
-                                <option value="">Todos</option>
-                                <option value="Mão de Obra">Mão de Obra</option>
-                                <option value="Material">Materiais</option>
-                                <option value="Equipamento">Equipamentos</option>
-                            </select>
-                        </div>
-                        <div className="col-span-2">
-                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Grupo</label>
-                            <select
-                                className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
-                                value={searchGroup}
-                                onChange={(e) => setSearchGroup(e.target.value)}
-                            >
-                                <option value="">Todos os Grupos</option>
-                                {categories.map(cat => (
-                                    <option key={cat} value={cat}>{cat}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="col-span-5">
-                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Descrição</label>
-                            <div className="flex gap-2">
-                                <div className="relative flex-1">
-                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                                    <input
-                                        autoFocus
-                                        type="text"
-                                        placeholder="Buscar por descrição..."
-                                        className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                    />
-                                </div>
-                                <select
-                                    className="rounded-lg border border-gray-200 px-3 py-2 text-form-input font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 text-gray-600 cursor-pointer min-w-[120px]"
-                                    value={searchScope}
-                                    onChange={(e) => setSearchScope(e.target.value as 'description' | 'category' | 'both')}
-                                    title="Escopo da busca"
-                                >
-                                    <option value="description">Descrição</option>
-                                    <option value="category">Grupo</option>
-                                    <option value="both">Ambos</option>
-                                </select>
-
-                                <select
-                                    className="rounded-lg border border-gray-200 px-3 py-2 text-form-input font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-blue-50 text-blue-700 border-blue-100 cursor-pointer min-w-[130px]"
-                                    value={searchMode}
-                                    onChange={(e) => setSearchMode(e.target.value as 'exact' | 'all-words')}
-                                    title="Modo da busca"
-                                >
-                                    <option value="exact">Frase Exata</option>
-                                    <option value="all-words">Palavras</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
-                        <div className="flex items-center gap-2">
-                            <label className="text-xs font-bold text-gray-400 uppercase">Base de Dados:</label>
-                            <select
-                                className="bg-transparent text-form-input font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
-                                value={searchDatabase}
-                                onChange={(e) => setSearchDatabase(e.target.value)}
-                            >
-                                <option value="SINAPI">SINAPI</option>
-                                <option value="GENERAL">Minha Base Própria</option>
-                            </select>
-                        </div>
-
-                        {searchDatabase === 'GENERAL' && (
-                            <>
-                                <div className="flex items-center gap-2 ml-2 border-l border-gray-200 pl-4">
-                                    <label className="text-xs font-bold text-gray-400 uppercase">Selecione:</label>
-                                    <div className="flex items-center gap-2">
-                                        <select
-                                            className="bg-white text-form-input font-bold text-gray-800 outline-none border border-gray-200 rounded-md py-1 px-2 hover:border-blue-300 max-w-[150px]"
-                                            value={currentDatabase?.id || ''}
-                                            onChange={(e) => {
-                                                const db = databases.find(d => d.id === e.target.value);
-                                                setCurrentDatabase(db || null);
-                                            }}
-                                        >
-                                            <option value="GENERAL">Base Geral (Itens Avulsos)</option>
-                                            {databases.map(db => (
-                                                <option key={db.id} value={db.id}>{db.name}</option>
-                                            ))}
-                                            {databases.length === 0 && <option value="">Nenhuma base</option>}
-                                        </select>
-                                        <button
-                                            onClick={() => setIsDbManagerOpen(true)}
-                                            className="p-1.5 hover:bg-gray-200 rounded-lg transition-colors text-gray-500 hover:text-gray-700"
-                                            title="Gerenciar Bases"
-                                        >
-                                            <Settings className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={() => setIsGroupManagerOpen(true)}
-                                            className="p-1.5 hover:bg-gray-200 rounded-lg transition-colors text-blue-500 hover:text-blue-700"
-                                            title="Gerenciar Grupos"
-                                        >
-                                            <FolderTree className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {currentDatabase && (
-                                    <div className="flex items-center gap-2 ml-2">
-                                        <button
-                                            onClick={() => setIsImportModalOpen(true)}
-                                            className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors border border-emerald-100"
-                                            title="Importar itens via Excel"
-                                        >
-                                            <FileSpreadsheet className="w-3.5 h-3.5" />
-                                            Importar
-                                        </button>
-                                        <button
-                                            onClick={handleExportDatabase}
-                                            className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100"
-                                            title="Exportar base para Excel"
-                                        >
-                                            <Upload className="w-3.5 h-3.5" />
-                                            Exportar
-                                        </button>
-                                    </div>
-                                )}
-                            </>
-                        )}
-
-                        <div className="h-4 w-[1px] bg-gray-200" />
-
-                        <div className="flex items-center gap-2">
-                            <label className="text-xs font-bold text-gray-400 uppercase">Referência:</label>
-                            <select
-                                className="bg-transparent text-form-input font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
+                                className={SCOPE_SELECT_CLASS}
                                 value={searchReference}
                                 onChange={(e) => setSearchReference(e.target.value)}
+                                title="Competência de referência"
                             >
                                 {references.map(ref => (
                                     <option key={ref.referenceDate} value={ref.referenceDate}>{ref.label}</option>
                                 ))}
                             </select>
-                            {searchDatabase === 'SINAPI' && podeImportarSinapi && (
-                                <button
-                                    onClick={() => setIsSinapiImportOpen(true)}
-                                    className="flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-xs font-bold hover:bg-emerald-100 transition-colors border border-emerald-100"
-                                    title="Importar nova competência SINAPI via planilha"
-                                >
-                                    <Upload className="w-3 h-3" />
-                                    Nova
-                                </button>
-                            )}
-                        </div>
-
-                        <div className="h-4 w-[1px] bg-gray-200" />
-
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
-                                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-colors border ${showOnlyFavorites ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-white text-gray-500 border-gray-100 hover:bg-gray-50'}`}
-                            >
-                                <Star className={`w-3.5 h-3.5 ${showOnlyFavorites ? 'fill-amber-500 text-amber-500' : ''}`} />
-                                Favoritos
-                            </button>
-                        </div>
-
-                        <div className="h-4 w-[1px] bg-gray-200" />
-
-                        {/* View Toggle */}
-                        <div className="flex bg-white rounded-lg border border-gray-200 p-0.5 shadow-sm">
-                            <button
-                                onClick={() => setViewMode('grid')}
-                                className={`p-1 rounded-md transition-all ${viewMode === 'grid'
-                                    ? 'bg-blue-50 text-blue-600'
-                                    : 'text-gray-400 hover:text-gray-600'
-                                    }`}
-                                title="Visualização em Grade"
-                            >
-                                <LayoutDashboard className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                                onClick={() => setViewMode('list')}
-                                className={`p-1 rounded-md transition-all ${viewMode === 'list'
-                                    ? 'bg-blue-50 text-blue-600'
-                                    : 'text-gray-400 hover:text-gray-600'
-                                    }`}
-                                title="Visualização em Lista"
-                            >
-                                <Table2 className="w-3.5 h-3.5" />
-                            </button>
-                        </div>
-
-                        <div className="h-4 w-[1px] bg-gray-200" />
-
-                        {viewMode === 'list' && (
-                            <ColumnConfigButton
-                                columns={EXPLORER_COLUMNS}
-                                visibleColumns={tableColumns.visibleColumns}
-                                showColumnConfig={tableColumns.showColumnConfig}
-                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-                                onToggleColumn={tableColumns.toggleColumn}
-                                onReset={tableColumns.resetColumns}
-                            />
-                        )}
-
-                        <div className="h-4 w-[1px] bg-gray-200" />
-
-                        <div className="flex items-center gap-2">
-                            <label className="text-xs font-bold text-gray-400 uppercase">Estado:</label>
                             <select
-                                className="bg-transparent text-form-input font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
+                                className={SCOPE_SELECT_CLASS}
                                 value={searchLocation}
                                 onChange={(e) => setSearchLocation(e.target.value)}
+                                title="Estado (UF)"
                             >
-                                {['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO'].map(uf => (
+                                {UFS.map(uf => (
                                     <option key={uf} value={uf}>{uf}</option>
                                 ))}
                             </select>
-                        </div>
-
-                        <div className="h-4 w-[1px] bg-gray-200" />
-
-                        <div className="flex items-center gap-2">
-                            <label className="text-xs font-bold text-gray-400 uppercase">Encargos Sociais:</label>
                             <select
-                                className="bg-transparent text-form-input font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
+                                className={SCOPE_SELECT_CLASS}
                                 value={searchCharges}
                                 onChange={(e) => setSearchCharges(e.target.value)}
+                                title="Encargos sociais"
                             >
-                                <option value="SEM_DESONERACAO">Sem Desoneração</option>
-                                <option value="COM_DESONERACAO">Com Desoneração</option>
+                                <option value="SEM_DESONERACAO">Sem desoneração</option>
+                                <option value="COM_DESONERACAO">Com desoneração</option>
                             </select>
-                        </div>
-
-                        <div className="ml-auto text-xs text-gray-400 flex items-center gap-3">
-                            {searchResults.length > 0 && (
-                                <div className="flex items-center gap-1.5 bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold border border-blue-100">
-                                    <Search className="w-3 h-3" />
-                                    {searchResults.length} encontrados
-                                </div>
+                            {podeImportarSinapi && (
+                                <button
+                                    onClick={() => setIsSinapiImportOpen(true)}
+                                    className={SECONDARY_BUTTON_CLASS}
+                                    title="Importar nova competência SINAPI via planilha"
+                                >
+                                    <Upload className="w-[15px] h-[15px]" />
+                                    Nova competência
+                                </button>
                             )}
-                            <div className="flex items-center gap-1.5">
-                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                {dbSize.toLocaleString('pt-BR')} itens catalogados
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Resultados */}
-                <div className="flex-1 overflow-y-auto p-4 bg-white">
-                    {searchResults.length > 0 ? (
-                        viewMode === 'grid' ? (
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                {sortedResults
-                                    .map(result => (
-                                        <div
-                                            key={result.code}
-                                            className="p-4 hover:bg-blue-50/50 cursor-pointer border border-gray-100 rounded-xl group transition-all flex flex-col justify-between relative"
-                                            onClick={() => handleSelectItem(result)}
-                                        >
-                                            <div className="flex justify-between items-start mb-2 pt-1">
-                                                <div className="flex items-center gap-2">
-                                                    <button
-                                                        onClick={(e) => onToggleFavorite(e, result.code)}
-                                                        className="p-1 px-1.5 rounded-lg hover:bg-white shadow-sm transition-all z-10 border border-transparent hover:border-amber-200"
-                                                        title={favorites.includes(result.code) ? "Remover dos favoritos" : "Adicionar aos favoritos"}
-                                                    >
-                                                        <Star className={`w-3.5 h-3.5 ${favorites.includes(result.code) ? 'fill-amber-500 text-amber-500' : 'text-gray-300'}`} />
-                                                    </button>
-                                                    <span className="font-mono font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded text-sm">{result.code}</span>
-                                                    {getTypeBadge(result.type)}
-                                                </div>
-                                                <span className="text-emerald-600 font-bold text-lg">{formatMoney(result.price)}</span>
-                                            </div>
-                                            <p className="text-sm text-gray-700 font-medium leading-tight group-hover:text-blue-700 transition-colors uppercase">{result.description}</p>
-                                            <div className="mt-2 flex items-center gap-2 flex-wrap">
-                                                <span className="text-xs bg-gray-100 border border-gray-200 px-2 py-0.5 rounded text-gray-600 font-bold uppercase tracking-wider">{result.unit}</span>
-                                                {result.nature && (
-                                                    <span className={`text-xs px-2 py-0.5 rounded font-bold uppercase tracking-wider border ${
-                                                        result.nature === 'Mão de Obra' ? 'bg-orange-50 text-orange-600 border-orange-100' :
-                                                        result.nature === 'Material'    ? 'bg-sky-50 text-sky-600 border-sky-100' :
-                                                        result.nature === 'Equipamento' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                                                                          'bg-purple-50 text-purple-600 border-purple-100'
-                                                    }`}>{result.nature}</span>
-                                                )}
-                                                <span className="text-xs text-gray-400 uppercase font-medium truncate">{result.category}</span>
-                                            </div>
-
-                                            <div className="mt-3 flex items-center justify-between">
-                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    {(searchDatabase === 'GENERAL' || result.isOverride) && (
-                                                        <button
-                                                            onClick={(e) => handleDeleteItem(e, result)}
-                                                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                            title={result.isOverride ? "Restaurar item SINAPI" : "Excluir item"}
-                                                        >
-                                                            <Trash className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                                <span className="text-xs text-blue-600 font-bold flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    Ver Detalhes <ChevronRight className="w-3 h-3" />
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))}
-                            </div>
-                        ) : (
-                            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-                                <table className="w-full text-left border-collapse">
-                                    <thead className="bg-gray-50/50 border-b border-gray-200">
-                                        <tr className="text-xs font-bold text-gray-400 uppercase tracking-widest leading-none">
-                                            {tableColumns.orderedVisibleColumns.map(key => {
-                                                const def = EXPLORER_COLUMN_HEADERS[key];
-                                                if (!def) return null;
-                                                return (
-                                                    <SortableHeader key={key} label={def.label} colKey={key} sortable={def.sortable !== false}
-                                                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                                                        onMoveColumn={tableColumns.moveColumn}
-                                                        className={def.className} />
-                                                );
-                                            })}
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-200">
-                                        {sortedResults.map(result => (
-                                            <tr
-                                                key={result.code}
-                                                className="hover:bg-blue-50/30 transition-colors group cursor-pointer"
-                                                onClick={() => handleSelectItem(result)}
-                                            >
-                                                {tableColumns.orderedVisibleColumns.map(key => (
-                                                    <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                        {renderExplorerCell(key, result, { favorites, onToggleFavorite, searchDatabase, onDeleteItem: handleDeleteItem })}
-                                                    </td>
-                                                ))}
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )
+                        </>
                     ) : (
-                        <div className="h-full flex flex-col items-center justify-center text-gray-400 py-20">
-                            {isSearching ? (
-                                <div className="flex flex-col items-center gap-4">
-                                    <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
-                                    <span className="text-sm font-bold animate-pulse uppercase tracking-widest">Consultando {searchDatabase}...</span>
-                                </div>
-                            ) : (
-                                <div className="flex flex-col items-center gap-4">
-                                    <div className="p-6 bg-gray-50 rounded-full border border-gray-100">
-                                        <Search className="w-12 h-12 text-gray-200" />
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="text-lg font-bold text-gray-500">Pronto para buscar</p>
-                                        <p className="text-sm">Use os filtros acima para explorar a base de dados.</p>
-                                    </div>
-                                </div>
+                        <>
+                            <select
+                                className={`${SCOPE_SELECT_CLASS} max-w-[240px]`}
+                                value={currentDatabase?.id || ''}
+                                onChange={(e) => {
+                                    const db = databases.find(d => d.id === e.target.value);
+                                    setCurrentDatabase(db || null);
+                                }}
+                                title="Base própria"
+                            >
+                                <option value="">Base geral (itens avulsos)</option>
+                                {databases.map(db => (
+                                    <option key={db.id} value={db.id}>{db.name}</option>
+                                ))}
+                            </select>
+                            <ActionIconButton kind="settings" title="Gerenciar bases" onClick={() => setIsDbManagerOpen(true)} />
+                            <ActionIconButton kind="settings" title="Gerenciar grupos" icon={<FolderTree className="w-4 h-4" />} onClick={() => setIsGroupManagerOpen(true)} />
+                            {currentDatabase && (
+                                <>
+                                    <button onClick={() => setIsImportModalOpen(true)} className={SECONDARY_BUTTON_CLASS} title="Importar itens via Excel">
+                                        <FileSpreadsheet className="w-[15px] h-[15px]" />
+                                        Importar
+                                    </button>
+                                    <button onClick={handleExportDatabase} className={SECONDARY_BUTTON_CLASS} title="Exportar base para Excel">
+                                        <Upload className="w-[15px] h-[15px]" />
+                                        Exportar
+                                    </button>
+                                </>
                             )}
-                        </div>
+                        </>
                     )}
                 </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                    <button onClick={() => handleCreate(SinapiType.INPUT)} className={SECONDARY_BUTTON_CLASS}>
+                        <Box className="w-[15px] h-[15px]" />
+                        Novo insumo
+                    </button>
+                    <button onClick={() => handleCreate(SinapiType.COMPOSITION)} className={PRIMARY_BUTTON_CLASS}>
+                        <Layers className="w-[15px] h-[15px]" />
+                        Nova composição
+                    </button>
+                </div>
             </div>
+
+            {/* 4. Tabela padrão (§6.10) com toolbar acoplada (§5.2): busca no servidor
+                (controlada, sem filtro local) + recortes (§5.4) + engrenagem + autofit (§6.1.2) */}
+            <StandardTable<SinapiItem>
+                storageKey="engenharia:composicoes:tabela"
+                columns={EXPLORER_COLUMNS}
+                rows={results}
+                rowKey={item => item.code}
+                search={searchTerm}
+                onSearchChange={setSearchTerm}
+                searchPlaceholder={searchScope === 'category' ? 'Buscar por grupo...' : searchScope === 'both' ? 'Buscar por descrição ou grupo...' : 'Buscar por descrição...'}
+                filters={
+                    <>
+                        <input
+                            type="text"
+                            placeholder="Código"
+                            value={searchCode}
+                            onChange={(e) => setSearchCode(e.target.value)}
+                            className="h-9 w-28 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            title="Filtrar por código"
+                        />
+                        <FilterPopover<string> label="Tipo" value={searchType} onChange={setSearchType} options={TYPE_FILTER_OPTIONS} />
+                        {searchDatabase === 'SINAPI' && (
+                            <FilterPopover<string> label="Natureza" value={searchNature} onChange={setSearchNature} options={NATURE_FILTER_OPTIONS} />
+                        )}
+                        <select
+                            className={`${SCOPE_SELECT_CLASS} max-w-[220px]`}
+                            value={searchGroup}
+                            onChange={(e) => setSearchGroup(e.target.value)}
+                            title="Grupo"
+                        >
+                            <option value="">Todos os grupos</option>
+                            {categories.map(cat => (
+                                <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                        </select>
+                        <FilterPopover<SearchScope> label="Buscar em" value={searchScope} onChange={setSearchScope} options={SCOPE_OPTIONS} allValue="description" icon={<Search className="w-4 h-4" />} />
+                        <FilterPopover<SearchMode> label="Modo" value={searchMode} onChange={setSearchMode} options={MODE_OPTIONS} allValue="all-words" icon={<Search className="w-4 h-4" />} />
+                        <button
+                            onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
+                            className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] border text-sm font-medium whitespace-nowrap transition-all ${
+                                showOnlyFavorites ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                            }`}
+                            title="Mostrar só os favoritos"
+                        >
+                            <Star className={`w-4 h-4 ${showOnlyFavorites ? 'fill-amber-500 text-amber-500' : ''}`} />
+                            Favoritos
+                        </button>
+                    </>
+                }
+                sortValue={sortValue}
+                renderCell={renderCell}
+                onRowClick={handleSelectItem}
+                actions={{
+                    width: 190,
+                    render: item => (
+                        <>
+                            <button
+                                onClick={() => handleSelectItem(item)}
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all whitespace-nowrap"
+                            >
+                                Ver detalhes
+                            </button>
+                            {(searchDatabase === 'GENERAL' || item.isOverride) && (
+                                <ActionIconButton
+                                    kind="delete"
+                                    size="sm"
+                                    title={item.isOverride ? 'Restaurar item SINAPI' : 'Excluir item'}
+                                    onClick={(e) => handleDeleteItem(e, item)}
+                                />
+                            )}
+                        </>
+                    ),
+                }}
+                // Só mostra o spinner enquanto ainda não há nada na tela — a cada
+                // tecla a busca refaz a consulta e trocar a tabela por spinner piscaria.
+                loading={loadingResults && results.length === 0}
+                empty={hasQuery
+                    ? { icon: <Database className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhum item encontrado', subtitle: 'Tente ajustar a busca ou os filtros.' }
+                    : { icon: <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Pronto para buscar', subtitle: 'Digite uma descrição ou use os filtros para explorar a base.' }}
+                maxHeight="max(320px, calc(100vh - 400px))"
+            />
 
             {/* Modal de Detalhes do Item */}
             {
@@ -1671,10 +1453,10 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
 
             {/* Toast de notificação — Bug 10 */}
             {notification && (
-                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl text-sm font-bold border animate-in slide-in-from-bottom-2 duration-200 ${
-                    notification.type === 'success' ? 'bg-emerald-600 text-white border-emerald-700' :
-                    notification.type === 'error'   ? 'bg-red-600 text-white border-red-700' :
-                                                      'bg-blue-600 text-white border-blue-700'
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    notification.type === 'success' ? 'bg-emerald-600 text-white' :
+                    notification.type === 'error'   ? 'bg-red-600 text-white' :
+                                                      'bg-blue-600 text-white'
                 }`}>
                     {notification.message}
                     <button onClick={() => setNotification(null)} className="ml-2 opacity-70 hover:opacity-100">
@@ -1708,6 +1490,7 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
     const [newName, setNewName] = React.useState('');
     const [isDuplicating, setIsDuplicating] = React.useState<string | null>(null);
     const [duplicateName, setDuplicateName] = React.useState('');
+    const confirm = useConfirm();
 
     if (!isOpen) return null;
 
@@ -1840,9 +1623,14 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                                                         </button>
                                                         <button
                                                             onClick={async () => {
-                                                                if (confirm(`Deseja excluir o grupo "${group}"? Os itens associados serão movidos para "Itens Avulsos".`)) {
-                                                                    await onDelete(group, false);
-                                                                }
+                                                                // §14 — useConfirm(), nunca confirm() nativo
+                                                                const ok = await confirm({
+                                                                    title: `Excluir o grupo "${group}"?`,
+                                                                    message: 'Os itens associados serão movidos para "Itens Avulsos".',
+                                                                    variant: 'danger',
+                                                                    confirmLabel: 'Excluir',
+                                                                });
+                                                                if (ok) await onDelete(group, false);
                                                             }}
                                                             className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                                             title="Remover Agrupamento"

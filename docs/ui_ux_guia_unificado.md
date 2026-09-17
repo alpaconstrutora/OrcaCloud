@@ -1118,6 +1118,11 @@ const COLUMNS: StandardTableColumn[] = [                 // só colunas de DADO
 > ❌ Não passe `rows` já ordenados "na mão" e depois ignore `sortValue` — a
 > ordenação pelo cabeçalho é dele. Filtro de **escopo** (período, conta) fica
 > fora; filtro de **recorte** (status, tipo) entra em `filters`.
+> ✅ **Busca no servidor:** passe `search`/`onSearchChange` (controlada) e
+> **não** passe `searchText` — o campo aparece na toolbar, o termo vai para a
+> consulta, e o componente não filtra nada localmente (2026-09-17, Engenharia ›
+> Composições: o modo "Palavras" do SINAPI casa palavras em qualquer ordem, coisa
+> que um `includes()` local desfaria). Com `searchText`, a busca é local.
 > ℹ️ Em uso: todas as tabelas de Recursos Humanos exceto as cinco hand-rolled
 > anteriores a ele (`LaborEmployeeList`, `LaborAllocations`, `LaborRubrics`,
 > `LaborEmployeeSalaryHistory`, `LaborValeRefeicao`) e as do Academy

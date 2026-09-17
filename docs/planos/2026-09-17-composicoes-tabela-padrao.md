@@ -5,6 +5,16 @@
 > engenharia < Composições: Transformar em tabela e aplicar o padrão ui_ux_guia_unificado.md no toolbar de abas + botão de ajuste de colunas
 > Sessão: 591b297c-86e9-42b7-97b8-dfb8997e2c4f · 2026-09-17
 
+Pedido posterior (mesma sessão, 2026-09-17, depois da publicação em e8e5eca7):
+
+> 1. coluna descrição: o textp não pode ser cortado.
+> 2. mover SINAPI  e base propria o toolbar abaixo ao lado do botão de Importar Competência
+
+→ descrição em `whitespace-normal break-words` (sem `truncate`/`title`); `TabsBar`
+ganhou `bare` (só o trilho) e as abas moram na barra de escopo §5.3, depois dos
+controles da base ativa; a barra §19.1 separada saiu; o contador foi para o
+`footer` da tabela.
+
 ## Leitura do pedido
 
 A tela é `components/DatabaseExplorer.tsx` (item "Composições" do grupo Engenharia
@@ -88,7 +98,7 @@ ao lado da engrenagem.
       única linha restante do check é a busca interna do `GroupManagerModal`
       (§3.1: busca de modal, filtra a lista do próprio modal — fora do escopo)
 - [x] verificação visual no navegador (`c:/tmp/pwtest/composicoes-tabela.js`, preview em 127.0.0.1:5317) — 500 linhas, autofit 150→134/136/143/500/111/172, engrenagem, aba Base própria, sem erro JS; larguras iniciais ajustadas em 98a19e9e
-- [ ] push em `main`
+- [x] push em `main` — e8e5eca7 (1ª entrega); ajuste posterior (abas na barra + descrição sem corte) no commit desta frente
 
 ## Verificação
 1. Engenharia › Composições: aba SINAPI, digitar "concreto" → tabela com

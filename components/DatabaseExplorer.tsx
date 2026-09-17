@@ -825,7 +825,8 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                     ? <span className={`text-sm font-normal ${NATURE_COLOR[item.nature] ?? 'text-gray-600'}`}>{item.nature}</span>
                     : <span className="text-sm font-normal text-gray-300">—</span>;
             case 'description':
-                return <span className="block truncate text-sm font-normal text-gray-700" title={item.description}>{item.description}</span>;
+                // Sem `truncate`: a descrição é o dado que se lê — quebra em quantas linhas precisar (pedido do usuário, 2026-09-17).
+                return <span className="block whitespace-normal break-words text-sm font-normal text-gray-700">{item.description}</span>;
             case 'unit':
                 return <span className="text-sm font-normal text-gray-600">{item.unit}</span>;
             case 'price':
@@ -861,15 +862,10 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">{header.subtitle}</p>
             </div>
 
-            {/* 2. Abas — §19.1: qual base está sendo consultada */}
-            <TabsBar<BaseTab> tabs={BASE_TABS} value={searchDatabase} onChange={setSearchDatabase}>
-                <span className="text-xs text-gray-400 whitespace-nowrap">
-                    {results.length > 0 && <>{results.length.toLocaleString('pt-BR')} encontrados · </>}
-                    {dbSize.toLocaleString('pt-BR')} itens catalogados
-                </span>
-            </TabsBar>
-
-            {/* 3. Barra de escopo — §5.3: define QUAL conjunto de dados a tela olha; ação primária à direita (§17) */}
+            {/* 2+3. Barra de escopo — §5.3: define QUAL conjunto de dados a tela olha; ação
+                primária à direita (§17). As abas SINAPI/Base própria (§19.1) moram AQUI, ao
+                lado dos controles da base ativa — pedido do usuário em 2026-09-17: uma barra
+                a menos entre o título e a tabela. */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center gap-2">
                     {searchDatabase === 'SINAPI' ? (
@@ -946,6 +942,8 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                             )}
                         </>
                     )}
+                    <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+                    <TabsBar<BaseTab> bare tabs={BASE_TABS} value={searchDatabase} onChange={setSearchDatabase} />
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
@@ -1040,6 +1038,12 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                     ? { icon: <Database className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhum item encontrado', subtitle: 'Tente ajustar a busca ou os filtros.' }
                     : { icon: <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Pronto para buscar', subtitle: 'Digite uma descrição ou use os filtros para explorar a base.' }}
                 maxHeight="max(320px, calc(100vh - 400px))"
+                footer={
+                    <div className="px-6 py-2 border-t border-gray-100 text-xs text-gray-400">
+                        {results.length > 0 && <>{results.length.toLocaleString('pt-BR')} encontrados · </>}
+                        {dbSize.toLocaleString('pt-BR')} itens catalogados
+                    </div>
+                }
             />
 
             {/* Modal de Detalhes do Item */}

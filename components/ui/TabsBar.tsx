@@ -26,13 +26,15 @@ interface TabsBarProps<T extends string> {
     onChange: (id: T) => void;
     children?: React.ReactNode;
     className?: string;
+    /** Só o trilho, sem o card nem o `mb-3` — quando as abas moram DENTRO de outra
+     *  barra (ex.: a de escopo §5.3), que já é o card. `children` é ignorado. */
+    bare?: boolean;
 }
 
-export function TabsBar<T extends string>({ tabs, value, onChange, children, className = '' }: TabsBarProps<T>) {
-    return (
-        <div className={`flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3 ${className}`}>
-            {/* flex-wrap, nunca overflow-x-auto — rolagem horizontal esconde aba sem avisar (§19.1) */}
-            <div role="tablist" className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+export function TabsBar<T extends string>({ tabs, value, onChange, children, className = '', bare }: TabsBarProps<T>) {
+    /* flex-wrap, nunca overflow-x-auto — rolagem horizontal esconde aba sem avisar (§19.1) */
+    const trilho = (
+            <div role="tablist" className={`flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full ${bare ? className : ''}`}>
                 {tabs.map(t => {
                     const active = t.id === value;
                     return (
@@ -54,6 +56,11 @@ export function TabsBar<T extends string>({ tabs, value, onChange, children, cla
                     );
                 })}
             </div>
+    );
+    if (bare) return trilho;
+    return (
+        <div className={`flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3 ${className}`}>
+            {trilho}
             {children && <div className="flex flex-wrap items-center gap-2 shrink-0">{children}</div>}
         </div>
     );

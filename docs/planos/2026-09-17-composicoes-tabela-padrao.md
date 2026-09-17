@@ -87,7 +87,7 @@ ao lado da engrenagem.
 - [x] `check-ui-standard.sh` + `tsc` + `check-xss-sinks` + `npm run build` limpos —
       única linha restante do check é a busca interna do `GroupManagerModal`
       (§3.1: busca de modal, filtra a lista do próprio modal — fora do escopo)
-- [ ] verificação visual no navegador (`c:/tmp/pwtest/composicoes-tabela.js`, preview em 127.0.0.1:5317)
+- [x] verificação visual no navegador (`c:/tmp/pwtest/composicoes-tabela.js`, preview em 127.0.0.1:5317) — 500 linhas, autofit 150→134/136/143/500/111/172, engrenagem, aba Base própria, sem erro JS; larguras iniciais ajustadas em 98a19e9e
 - [ ] push em `main`
 
 ## Verificação

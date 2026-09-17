@@ -141,6 +141,9 @@ async function abrirComponentes(user: ReturnType<typeof userEvent.setup>) {
   const secao = document.querySelector<HTMLButtonElement>('button[aria-controls="secao-componentes-corpo"]')!;
   expect(secao).toBeTruthy();
   if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
+  // O modelo chega por promessa: no CI os grupos ainda não existiam quando o
+  // helper rodava, e nada era expandido. Espera o primeiro grupo aparecer.
+  await waitFor(() => expect(document.querySelector('button[aria-controls^="componentes-"]')).toBeTruthy());
   for (let i = 0; i < 5; i++) {
     const fechados = [...document.querySelectorAll<HTMLButtonElement>('button[aria-expanded="false"][aria-controls^="componentes-"]')];
     if (fechados.length === 0) break;

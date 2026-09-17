@@ -165,3 +165,8 @@ Prova: editor (+1: ordem salva `[ambientes, nada, pavimentos]` → Ambientes · 
 - `tsc`, `check-ui-standard` (PainelComponentes.tsx), suíte cheia (4396 passando), build.
 - App real (vite da frente, escritas bloqueadas: 14): 9 grupos com `aria-expanded=false` ao
   abrir a Planta 14/09/2026; cabeçalho com 16 px de altura e `title` com as dicas.
+
+**CI de 5c1464f7 falhou** (12 testes: "Unable to find P1 · Pilar"): o modelo do editor chega
+por promessa e, na máquina do CI, os grupos ainda não existiam quando os helpers
+`abrirComponentes`/`expandirGrupos` rodavam — nada era expandido. Corrigido com `waitFor` pelo
+primeiro botão de grupo antes de expandir (só teste; sem mudança de produto).

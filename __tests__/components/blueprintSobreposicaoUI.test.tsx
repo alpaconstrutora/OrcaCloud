@@ -144,6 +144,8 @@ async function montar() {
     </ConfirmProvider>,
   );
   await waitFor(() => expect(screen.getByRole('toolbar')).toBeInTheDocument());
+  // O modelo chega por promessa: espera o primeiro grupo existir antes de abrir.
+  await waitFor(() => expect(document.querySelector('button[aria-controls^="componentes-"]')).toBeTruthy());
   expandirGrupos();
 }
 

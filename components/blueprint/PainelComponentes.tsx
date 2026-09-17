@@ -329,17 +329,22 @@ export default function PainelComponentes({
     : linhasDaPlanta.length;
 
   /**
-   * Grupos recolhidos. Todos nascem abertos.
+   * Grupos ABERTOS. Todos nascem RECOLHIDOS (17/09/2026: *"os popover estão
+   * por padrão todos expandidos; por padrão devem ser recolhidos"*) — uma
+   * planta com 160 peças abria como uma lista de três telas de altura. O
+   * grupo que contém uma peça SELECIONADA abre sozinho enquanto ela estiver
+   * selecionada: clicar no desenho tem de mostrar a linha, senão a seleção
+   * parece sem resposta.
    *
    * Estado local, e não persistido como as seções do painel: aqui o arranjo
    * depende do que a planta TEM (uma planta sem fundação nem mostra o grupo), e
-   * guardar "Estrutura fechado" faria o usuário abrir um estudo novo com o
-   * grupo escondido sem lembrar de tê-lo fechado noutro desenho.
+   * guardar "Estrutura aberto" faria o usuário abrir um estudo novo com o
+   * grupo escancarado sem lembrar de tê-lo aberto noutro desenho.
    */
-  const [recolhidos, setRecolhidos] = useState<Set<string>>(new Set());
+  const [abertos, setAbertos] = useState<Set<string>>(new Set());
   /** Chave da família, ou `família/pavimento/tipo` para um subgrupo — o mesmo conjunto serve aos dois níveis. */
   function alternarGrupo(chave: string) {
-    setRecolhidos((atual) => {
+    setAbertos((atual) => {
       const proximo = new Set(atual);
       if (proximo.has(chave)) proximo.delete(chave);
       else proximo.add(chave);
@@ -348,6 +353,8 @@ export default function PainelComponentes({
   }
 
   const marcados = useMemo(() => new Set(selecionados), [selecionados]);
+  /** Aberto = escolhido pelo usuário, ou abriga uma peça selecionada. */
+  const aberto = (chave: string, ids: readonly string[]) => abertos.has(chave) || ids.some((id) => marcados.has(id));
 
   /**
    * Clique na linha.
@@ -494,24 +501,28 @@ export default function PainelComponentes({
                 barra para colocar parede, esquadria, estrutura ou fundação.
               </>
             )
-          ) : blocos ? (
-            <>
-              {totalDeLinhas} {totalDeLinhas === 1 ? 'peça' : 'peças'} nos pavimentos
-              visíveis.{somenteLeitura ? '' : ' Clique para selecionar na cena;'}{' '}
-              {podeOcultar ? 'o olho oculta no desenho.' : ''}
-            </>
           ) : (
-            <>
-              {totalDeLinhas} {totalDeLinhas === 1 ? 'peça' : 'peças'} neste pavimento.
-              Clique para selecionar no desenho; Ctrl+clique acrescenta à seleção
-              {podeOcultar ? '; o olho oculta no desenho' : ''}.
-            </>
+            // UMA linha (17/09/2026: *"desempilhar texto na seção
+            // componentes"*): a contagem visível; as dicas de gesto ficam no
+            // `title`, para quem parar o mouse — três linhas de instrução em
+            // cima de uma lista de 160 peças empurravam a lista para baixo.
+            <span
+              className="block truncate"
+              title={
+                blocos
+                  ? `${somenteLeitura ? '' : 'Clique para selecionar na cena. '}${podeOcultar ? 'O olho oculta no desenho.' : ''}`.trim()
+                  : `Clique para selecionar no desenho; Ctrl+clique acrescenta à seleção${podeOcultar ? '; o olho oculta no desenho' : ''}.`
+              }
+            >
+              {totalDeLinhas} {totalDeLinhas === 1 ? 'peça' : 'peças'} {blocos ? 'nos pavimentos visíveis' : 'neste pavimento'} ·{' '}
+              {grupos.length} {grupos.length === 1 ? 'família' : 'famílias'}
+            </span>
           )}
         </p>
       </div>
 
       {grupos.map((grupo) => {
-        const recolhido = recolhidos.has(grupo.titulo);
+        const recolhido = !aberto(grupo.titulo, grupo.ids);
         const idGrupo = `componentes-${grupo.titulo.replace(/\s+/g, '-').toLowerCase()}`;
         // Um clique no olho da família esconde tudo enquanto sobrar UMA peça
         // visível, e só devolve quando todas estão ocultas. Meio a meio conta
@@ -574,7 +585,7 @@ export default function PainelComponentes({
                     <div className={sub.nome ? 'ml-4 border-l border-slate-200' : ''}>
                       {sub.subgrupos.map((sg) => {
                         const chaveSg = `${grupo.titulo}/${sub.chave}/${sg.chave}`;
-                        const sgRecolhido = recolhidos.has(chaveSg);
+                        const sgRecolhido = !aberto(chaveSg, sg.ids);
                         const idSg = `${idGrupo}-${sub.chave}-${sg.chave}`.replace(/[^\w-]+/g, '-').toLowerCase();
                         const sgVisivel = sg.ids.some((id) => !ocultos?.has(id));
                         const IconeSg = sg.icone;

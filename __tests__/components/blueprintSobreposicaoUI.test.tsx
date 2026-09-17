@@ -13,7 +13,7 @@
  * uma ação inexistente é pior do que aviso nenhum.
  */
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BlueprintStudy } from '../../types/blueprint';
@@ -144,6 +144,19 @@ async function montar() {
     </ConfirmProvider>,
   );
   await waitFor(() => expect(screen.getByRole('toolbar')).toBeInTheDocument());
+  expandirGrupos();
+}
+
+/**
+ * 17/09/2026: os grupos da lista de Componentes nascem RECOLHIDOS ("por padrão
+ * deve ser recolhidos"); estes testes selecionam pela lista, então abrem tudo.
+ */
+function expandirGrupos() {
+  for (let i = 0; i < 5; i++) {
+    const fechados = [...document.querySelectorAll<HTMLButtonElement>('button[aria-expanded="false"][aria-controls^="componentes-"]')];
+    if (fechados.length === 0) break;
+    for (const b of fechados) fireEvent.click(b);
+  }
 }
 
 describe('BlueprintEditor · sobreposição entre componentes', () => {

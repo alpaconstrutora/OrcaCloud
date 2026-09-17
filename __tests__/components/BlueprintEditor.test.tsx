@@ -133,6 +133,21 @@ async function montar() {
   await waitFor(() => expect(screen.getByRole('toolbar')).toBeInTheDocument());
 }
 
+/**
+ * Abre a seção Componentes do painel e EXPANDE os grupos (nascem recolhidos
+ * desde 17/09/2026) — para os testes que procuram uma linha da lista.
+ */
+async function abrirComponentes(user: ReturnType<typeof userEvent.setup>) {
+  const secao = document.querySelector<HTMLButtonElement>('button[aria-controls="secao-componentes-corpo"]')!;
+  expect(secao).toBeTruthy();
+  if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
+  for (let i = 0; i < 5; i++) {
+    const fechados = [...document.querySelectorAll<HTMLButtonElement>('button[aria-expanded="false"][aria-controls^="componentes-"]')];
+    if (fechados.length === 0) break;
+    for (const b of fechados) await user.click(b);
+  }
+}
+
 /** Desenha paredes chamando o canvas por dentro não dá; usa-se o próprio DOM. */
 function botao(nome: RegExp) {
   return screen.getByRole('button', { name: nome });
@@ -1468,9 +1483,11 @@ describe('BlueprintEditor · ribbon', () => {
     }).model;
     loadBranchModel.mockResolvedValue(comTug);
     await montar();
+    const user = userEvent.setup();
+    await abrirComponentes(user);
 
     const lixeira = await screen.findByRole('button', { name: /^excluir .*tug/i });
-    await userEvent.setup().click(lixeira);
+    await user.click(lixeira);
     await waitFor(() => expect(screen.queryByRole('button', { name: /^excluir .*tug/i })).not.toBeInTheDocument());
   });
 
@@ -1915,13 +1932,7 @@ describe('BlueprintEditor · ocultar componentes na planta baixa', () => {
     loadBranchModel.mockResolvedValue(await comPilar());
     await montar();
     const user = userEvent.setup();
-    // Pelo `aria-controls` da seção, e não pelo nome: o menu "Componentes" do
-    // ribbon também é um botão com `aria-expanded`, e qual dos dois vem primeiro
-    // depende da ferramenta ativa — foi o que fez este teste passar aqui e
-    // falhar no CI.
-    const secao = document.querySelector<HTMLButtonElement>('button[aria-controls="secao-componentes-corpo"]')!;
-    expect(secao).toBeTruthy();
-    if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
+    await abrirComponentes(user);
     // Seleciona o pilar pela lista.
     await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
     expect(screen.getByRole('button', { name: /^P1 · Pilar/ })).toHaveAttribute('aria-pressed', 'true');
@@ -1957,8 +1968,7 @@ describe('BlueprintEditor · propriedades no 3D', () => {
     localStorage.setItem('blueprint:vista', JSON.stringify('3d'));
     await montar();
     const user = userEvent.setup();
-    const secao = document.querySelector<HTMLButtonElement>('button[aria-controls="secao-componentes-corpo"]')!;
-    if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
+    await abrirComponentes(user);
     // Antes: sem seleção, sem Propriedades.
     expect(screen.queryByTestId('propriedades-sheet')).not.toBeInTheDocument();
     await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
@@ -1994,8 +2004,7 @@ describe('BlueprintEditor · grupo de fundação', () => {
     loadBranchModel.mockResolvedValue(await comFundacao());
     await montar();
     const user = userEvent.setup();
-    const secao = document.querySelector<HTMLButtonElement>('button[aria-controls="secao-componentes-corpo"]')!;
-    if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
+    await abrirComponentes(user);
 
     // 1 clique na ESTACA → o grupo inteiro (bloco + estaca), painel do grupo.
     await user.click(await screen.findByRole('button', { name: /^E1 · Estaca/ }));
@@ -2063,8 +2072,7 @@ describe('BlueprintEditor · Escape limpa a seleção no 3D', () => {
     localStorage.setItem('blueprint:vista', JSON.stringify('3d'));
     await montar();
     const user = userEvent.setup();
-    const secao = document.querySelector<HTMLButtonElement>('button[aria-controls="secao-componentes-corpo"]')!;
-    if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
+    await abrirComponentes(user);
     await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
     expect(await screen.findByTestId('propriedades-sheet')).toBeInTheDocument();
     // A cena 3D é o contêiner focável; a tecla chega a ele como chegaria no clique.
@@ -2141,9 +2149,7 @@ describe('BlueprintEditor · armadura esquemática', () => {
     expect(await screen.findByText(/Aço — pilares/)).toBeInTheDocument();
     expect(screen.getByText(/Aço — total \(esquemático\)/)).toBeInTheDocument();
 
-    // Painel da peça: selecionar P1 pela lista → "kg de aço".
-    const secao = document.querySelector<HTMLButtonElement>('button[aria-controls="secao-componentes-corpo"]')!;
-    if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
+    await abrirComponentes(user);
     await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
     const props = await screen.findByTestId('propriedades-sheet');
     expect(props).toHaveTextContent(/kg de aço/);
@@ -2188,8 +2194,7 @@ describe('BlueprintEditor · armadura manual', () => {
     loadBranchModel.mockResolvedValue(m);
     await montar();
     const user = userEvent.setup();
-    const secao = document.querySelector<HTMLButtonElement>('button[aria-controls="secao-componentes-corpo"]')!;
-    if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
+    await abrirComponentes(user);
     await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
     const props = await screen.findByTestId('propriedades-sheet');
     expect(props).toHaveTextContent(/mínimos NBR 6118/);
@@ -2235,8 +2240,7 @@ describe('BlueprintEditor · armadura no painel do grupo', () => {
     loadBranchModel.mockResolvedValue(m);
     await montar();
     const user = userEvent.setup();
-    const secao = document.querySelector<HTMLButtonElement>('button[aria-controls="secao-componentes-corpo"]')!;
-    if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
+    await abrirComponentes(user);
     await user.click(await screen.findByRole('button', { name: /^E1 · Estaca/ }));
     const sheet = await screen.findByTestId('propriedades-sheet');
     expect(sheet).toHaveTextContent(/Grupo de fundação/);

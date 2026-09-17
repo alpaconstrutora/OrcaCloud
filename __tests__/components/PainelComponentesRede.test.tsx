@@ -23,7 +23,7 @@
  * nos dois modos.
  */
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import PainelComponentes from '../../components/blueprint/PainelComponentes';
 import { linhasDeComponentesPorNivel } from '../../utils/blueprintComponentes';
@@ -98,6 +98,7 @@ describe('PainelComponentes · planta baixa', () => {
         onExcluir={() => {}}
       />,
     );
+    expandirGrupos();
     expect(screen.getByText('Alvenaria')).toBeTruthy();
     expect(screen.getByText('Instalações — trechos')).toBeTruthy();
     expect(screen.getByText('Instalações — pontos')).toBeTruthy();
@@ -119,6 +120,7 @@ describe('PainelComponentes · planta baixa', () => {
         onExcluir={() => {}}
       />,
     );
+    expandirGrupos();
     expect(screen.getByText('Alvenaria')).toBeTruthy();
     expect(screen.queryByText('Instalações — pontos')).toBeNull();
   });
@@ -138,7 +140,17 @@ describe('PainelComponentes · vista 3D', () => {
         onExcluir={() => {}}
       />,
     );
+    expandirGrupos();
     expect(screen.getByText('Instalações — trechos')).toBeTruthy();
     expect(screen.getByText('Instalações — pontos')).toBeTruthy();
   });
 });
+
+/** Os grupos nascem recolhidos (17/09/2026): abre tudo antes de olhar as linhas. */
+function expandirGrupos() {
+  for (let i = 0; i < 5; i++) {
+    const fechados = [...document.querySelectorAll<HTMLButtonElement>('button[aria-expanded="false"][aria-controls^="componentes-"]')];
+    if (fechados.length === 0) break;
+    for (const b of fechados) fireEvent.click(b);
+  }
+}

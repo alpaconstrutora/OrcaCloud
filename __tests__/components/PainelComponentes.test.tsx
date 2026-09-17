@@ -13,7 +13,7 @@
  * outro.
  */
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import PainelComponentes from '../../components/blueprint/PainelComponentes';
@@ -59,7 +59,20 @@ function montar(over: Partial<React.ComponentProps<typeof PainelComponentes>> = 
     ...over,
   };
   render(<PainelComponentes {...props} />);
+  expandirGrupos();
   return props;
+}
+
+/**
+ * Os grupos nascem RECOLHIDOS (17/09/2026). Os testes de conteúdo abrem tudo
+ * antes de olhar as linhas — clicando cada cabeçalho fechado até não sobrar.
+ */
+function expandirGrupos() {
+  for (let i = 0; i < 5; i++) {
+    const fechados = [...document.querySelectorAll<HTMLButtonElement>('button[aria-expanded="false"][aria-controls^="componentes-"]')];
+    if (fechados.length === 0) break;
+    for (const b of fechados) fireEvent.click(b);
+  }
 }
 
 describe('PainelComponentes', () => {
@@ -216,6 +229,25 @@ describe('PainelComponentes', () => {
     await usuario.dblClick(screen.getByRole('button', { name: /^E1 · Estaca/ }));
     expect(onSelecionarPeca).toHaveBeenCalledWith('str_e1');
     expect(props.onSelecionar).toHaveBeenCalledWith(['str_e1']);
+  });
+
+  it('nasce RECOLHIDO (17/09/2026) e o grupo da peça selecionada abre sozinho', () => {
+    const props = {
+      paredes: [parede('wal_1', 4000)],
+      aberturas: [] as Opening[],
+      estruturas: [pilar('str_1')],
+      selecionados: ['str_1'],
+      onSelecionar: vi.fn(),
+      onExcluir: vi.fn(),
+    };
+    render(<PainelComponentes {...props} />);
+    // Alvenaria fechada: nenhuma linha de parede; Estrutura aberta por abrigar o selecionado.
+    expect(screen.getByRole('button', { name: /Alvenaria/ })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: /^Parede 1/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /Estrutura/ })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: /^P1 · Pilar/ })).toHaveAttribute('aria-pressed', 'true');
+    // O cabeçalho é UMA linha: contagem e famílias; as dicas ficam no title.
+    expect(screen.getByText(/2 peças neste pavimento · 2 famílias/)).toHaveAttribute('title', expect.stringMatching(/Ctrl\+clique/));
   });
 
   it('as propriedades da peça vêm ANTES da lista', () => {

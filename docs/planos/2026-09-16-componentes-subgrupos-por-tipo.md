@@ -134,3 +134,34 @@ Sensores: ponteiro (4 px) e teclado (Espaço, setas, Espaço). A régua 4D segue
 Prova: editor (+1: ordem salva `[ambientes, nada, pavimentos]` → Ambientes · Pavimentos · Componentes; 3 alças)
 · suíte 332/4395 · tsc · `check-ui-standard.sh` · build · app real (arrasto com o mouse: Pavimentos foi para o fim
 — `["componentes","ambientes","pavimentos"]` salvo no navegador; 0 erros JS). Captura `out-so2/so-01-antes.png`.
+
+---
+
+## 17/09/2026 — grupos recolhidos por padrão e cabeçalho em uma linha
+
+### Pedido original
+
+> Painel Lateral: 1. desempilhar texto na seção componentes 2. os popover estão por padrão todos expandidos. Por padrão deve ser recolhidos.
+
+### O que mudou
+
+- **Grupos e subgrupos nascem RECOLHIDOS.** O estado passou a ser `abertos` (conjunto
+  vazio na montagem) em vez de "recolhidos". Um grupo aparece aberto quando o usuário o
+  abriu **ou** quando contém uma peça selecionada (`aberto(chave, ids)`), para a seleção
+  feita no desenho/3D continuar visível na lista.
+- **Cabeçalho em UMA linha**: "163 peças neste pavimento · 9 famílias", com `truncate`;
+  as dicas de uso (clique, Ctrl+clique, olho) saíram do corpo e foram para o `title`.
+- Sem persistência: é preferência de leitura da sessão, não do estudo.
+
+### Testes
+
+- `PainelComponentes.test.tsx`: novo teste "nasce RECOLHIDO"; `montar()` expande os grupos.
+- `PainelComponentesRede.test.tsx`, `BlueprintEditor.test.tsx` (`abrirComponentes`) e
+  `blueprintSobreposicaoUI.test.tsx` (`expandirGrupos`) abrem os grupos antes de clicar em
+  linhas — o comportamento testado não mudou, só o ponto de partida.
+
+### Verificação
+
+- `tsc`, `check-ui-standard` (PainelComponentes.tsx), suíte cheia (4396 passando), build.
+- App real (vite da frente, escritas bloqueadas: 14): 9 grupos com `aria-expanded=false` ao
+  abrir a Planta 14/09/2026; cabeçalho com 16 px de altura e `title` com as dicas.

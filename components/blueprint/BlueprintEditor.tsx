@@ -5810,6 +5810,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           )}
           <div>
             <TelaQuantitativos
+              model={editor.model}
               quant={quant}
               armadura={armadura}
               revisao={editor.baseRevision}

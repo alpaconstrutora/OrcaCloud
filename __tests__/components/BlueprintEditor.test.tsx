@@ -470,7 +470,7 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(within(tela).getAllByText(/pol[íi]tica quant-/i).length).toBeGreaterThan(0);
     // É tela, não drawer: sem dialog, com as abas do padrão.
     expect(screen.queryByRole('dialog')).toBeNull();
-    for (const aba of ['Resumo', 'Por ambiente', 'Por peça estrutural', 'Sobreposições']) {
+    for (const aba of ['Resumo', 'Por ambiente', 'Por peça estrutural', 'Por pavimento', 'Sobreposições']) {
       expect(within(tela).getByRole('tab', { name: new RegExp(`^${aba}`) })).toBeInTheDocument();
     }
   });
@@ -534,6 +534,38 @@ describe('BlueprintEditor · quantitativos', () => {
     // Volta ao editor com a peça selecionada (as propriedades abrem em Sheet).
     expect(document.querySelector('[data-tela="quantitativos"]')).toBeNull();
     expect(await screen.findByTestId('propriedades-sheet')).toHaveTextContent(/P1/);
+  });
+
+  it('com dois pavimentos: aba Por pavimento lista os dois, coluna e filtro de pavimento nas peças', async () => {
+    // 17/09/2026: "incluir pavimentos em quantitativos".
+    const k = await import('../../utils/blueprintKernel');
+    let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    m = k.applyCommand(m, { type: 'AddLevel', name: 'Superior', elevationMm: 2800, defaultHeightMm: 2800 }).model;
+    const [terreo, superior] = m.levels.map((l) => l.id);
+    m = k.applyBatch(m, [
+      { type: 'AddStructural', levelId: terreo, kind: 'PILAR', pontos: [k.point(1000, 1000)], larguraMm: 200, profundidadeMm: 200, alturaMm: 2800, rotulo: 'P1' },
+      { type: 'AddStructural', levelId: superior, kind: 'PILAR', pontos: [k.point(1000, 1000)], larguraMm: 300, profundidadeMm: 300, alturaMm: 2800, rotulo: 'P2' },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    const tela = await abrirTelaDeQuantitativos();
+
+    await user.click(within(tela).getByRole('tab', { name: /^Por pavimento/ }));
+    const linhas = () => within(tela).getAllByRole('row').filter((r) => /Térreo|Superior/.test(r.textContent ?? ''));
+    expect(linhas()).toHaveLength(2);
+    expect(linhas()[0]).toHaveTextContent(/Térreo/);
+    expect(linhas()[0]).toHaveTextContent(/0[,.]11/); // 0,2 × 0,2 × 2,8 = 0,112, 2 casas da política
+    expect(linhas()[1]).toHaveTextContent(/Superior/);
+    expect(linhas()[1]).toHaveTextContent(/0[,.]25/); // 0,3 × 0,3 × 2,8 = 0,252
+
+    // Por peça: a coluna Pavimento e o filtro.
+    await user.click(within(tela).getByRole('tab', { name: /^Por peça estrutural/ }));
+    const linhaP2 = () => within(tela).getAllByRole('row').find((r) => /P2/.test(r.textContent ?? ''));
+    expect(linhaP2()).toHaveTextContent(/Superior/);
+    await user.selectOptions(within(tela).getByLabelText(/filtrar por pavimento/i), terreo);
+    expect(linhaP2()).toBeUndefined();
+    expect(within(tela).getAllByRole('row').some((r) => /P1/.test(r.textContent ?? ''))).toBe(true);
   });
 
   it('Comentários e Versões (Colaborar) continuam no dock, embaixo do canvas', async () => {

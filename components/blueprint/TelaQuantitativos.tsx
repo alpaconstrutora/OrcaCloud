@@ -1,7 +1,13 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Calculator } from 'lucide-react';
-import { nomeDoTipoEstrutural, type computeQuantities } from '../../utils/blueprintKernel';
+import { nomeDoTipoEstrutural, type BlueprintModel, type computeQuantities } from '../../utils/blueprintKernel';
 import type { ArmaduraQuantificada } from '../../utils/blueprintArmadura';
+import {
+  nomeDoPavimento,
+  pavimentoDasEntidades,
+  quantitativosPorPavimento,
+  type QuantitativoDoPavimento,
+} from '../../utils/blueprintQuantitativosPorPavimento';
 import type { BlueprintQuantitySnapshot } from '../../types/blueprint';
 import { StandardTable, type StandardTableColumn } from '../ui/StandardTable';
 import { TabsBar, type TabsBarItem } from '../ui/TabsBar';
@@ -16,8 +22,11 @@ import { usePersistedState } from '../ui/TableUtils';
  * editor), a faixa OFICIAL × AO VIVO, `TabsBar` §19.1 + `StandardTable` §5.2.
  * Abas: **Resumo** (os totais, uma grandeza por linha, com a decomposição por
  * material e o aço esquemático), **Por ambiente**, **Por peça estrutural**
- * (clique seleciona no desenho) e **Sobreposições** (o volume que duas peças
- * dividem — a linha "contado duas vezes" é a razão da aba existir).
+ * (clique seleciona no desenho), **Por pavimento** (17/09/2026, *"incluir
+ * pavimentos em quantitativos"*: os mesmos totais, um nível por linha, mais a
+ * coluna Pavimento e um filtro nas abas de ambiente e de peça) e
+ * **Sobreposições** (o volume que duas peças dividem — a linha "contado duas
+ * vezes" é a razão da aba existir).
  *
  * O CONTEÚDO não mudou de sentido: cada regra de "só aparece se houver" do
  * painel antigo virou uma linha condicional aqui — quatro zeros empilhados
@@ -25,7 +34,7 @@ import { usePersistedState } from '../ui/TableUtils';
  */
 
 type Quant = ReturnType<typeof computeQuantities>;
-type AbaDosQuantitativos = 'resumo' | 'ambientes' | 'estruturas' | 'sobreposicoes';
+type AbaDosQuantitativos = 'resumo' | 'ambientes' | 'estruturas' | 'pavimentos' | 'sobreposicoes';
 
 interface LinhaDoResumo {
   chave: string;
@@ -46,6 +55,7 @@ const COLUNAS_RESUMO: StandardTableColumn[] = [
 ];
 const COLUNAS_AMBIENTE: StandardTableColumn[] = [
   { key: 'nome', label: 'Ambiente', width: 200 },
+  { key: 'pavimento', label: 'Pavimento', width: 130 },
   { key: 'areaPisoM2', label: 'Piso (m²)', width: 110, align: 'right' },
   { key: 'areaEixoM2', label: 'Eixo (m²)', width: 110, align: 'right' },
   { key: 'areaEstruturaM2', label: 'Pilares (− m²)', width: 120, align: 'right' },
@@ -55,11 +65,27 @@ const COLUNAS_AMBIENTE: StandardTableColumn[] = [
 const COLUNAS_ESTRUTURA: StandardTableColumn[] = [
   { key: 'rotulo', label: 'Peça', width: 120 },
   { key: 'tipo', label: 'Tipo', width: 150 },
+  { key: 'pavimento', label: 'Pavimento', width: 130 },
   { key: 'volumeConcretoM3', label: 'Concreto (m³)', width: 120, align: 'right' },
   { key: 'areaFormaM2', label: 'Fôrma (m²)', width: 110, align: 'right' },
   { key: 'kg', label: 'Aço (kg)', width: 100, align: 'right' },
   { key: 'aco', label: 'Esquema do aço', width: 260, sortable: false },
   { key: 'formula', label: 'Fórmula', width: 360, sortable: false },
+];
+const COLUNAS_PAVIMENTO: StandardTableColumn[] = [
+  { key: 'nome', label: 'Pavimento', width: 160 },
+  { key: 'elevationMm', label: 'Cota (m)', width: 90, align: 'right' },
+  { key: 'ambientes', label: 'Ambientes', width: 100, align: 'right' },
+  { key: 'areaConstruidaM2', label: 'Construída (m²)', width: 130, align: 'right' },
+  { key: 'areaPisoM2', label: 'Piso (m²)', width: 110, align: 'right' },
+  { key: 'areaParedeDuasFacesM2', label: 'Parede 2 faces (m²)', width: 150, align: 'right' },
+  { key: 'volumeAlvenariaM3', label: 'Alvenaria (m³)', width: 130, align: 'right' },
+  { key: 'comprimentoRodapeM', label: 'Rodapé (m)', width: 110, align: 'right' },
+  { key: 'aberturas', label: 'Aberturas', width: 170, align: 'right' },
+  { key: 'pecas', label: 'Peças estr.', width: 100, align: 'right' },
+  { key: 'volumeConcretoM3', label: 'Concreto (m³)', width: 120, align: 'right' },
+  { key: 'areaFormaM2', label: 'Fôrma (m²)', width: 110, align: 'right' },
+  { key: 'acoKg', label: 'Aço (kg)', width: 100, align: 'right' },
 ];
 const COLUNAS_SOBREPOSICAO: StandardTableColumn[] = [
   { key: 'volumeM3', label: 'Volume (m³)', width: 120, align: 'right' },
@@ -68,6 +94,8 @@ const COLUNAS_SOBREPOSICAO: StandardTableColumn[] = [
 ];
 
 interface Props {
+  /** O modelo — é nele que se lê o pavimento de cada entidade (o quantitativo não o carrega). */
+  model: BlueprintModel;
   quant: Quant;
   /** O aço esquemático — mesma conta do orçamento; opcional para quem lê só o concreto. */
   armadura?: ArmaduraQuantificada;
@@ -83,8 +111,42 @@ interface Props {
 type Fmt = (v: number) => string;
 const num = (fmt: Fmt, v: number) => <span className="block text-right text-sm tabular-nums text-gray-700">{fmt(v)}</span>;
 
-export default function TelaQuantitativos({ quant, armadura, revisao, oficial, gerando, onGerar, dirty, onSelecionarPeca }: Props) {
+export default function TelaQuantitativos({ model, quant, armadura, revisao, oficial, gerando, onGerar, dirty, onSelecionarPeca }: Props) {
   const t = quant.totais;
+  // PAVIMENTOS: o mapa entidade → nível, as linhas por pavimento e o filtro
+  // das abas de ambiente/peça. O filtro só aparece com dois níveis ou mais —
+  // num térreo solto ele seria uma pergunta sem alternativa.
+  const mapaDePavimento = useMemo(() => pavimentoDasEntidades(model), [model]);
+  const pavimentos = useMemo(() => quantitativosPorPavimento(model, quant, armadura), [model, quant, armadura]);
+  const [pavimentoFiltro, setPavimentoFiltro] = useState('');
+  const pavimentoDe = (id: string) => nomeDoPavimento(model, mapaDePavimento, id);
+  const doPavimento = (id: string) => !pavimentoFiltro || mapaDePavimento.get(id) === pavimentoFiltro;
+  const filtroDePavimento =
+    model.levels.length > 1 ? (
+      <select
+        value={pavimentoFiltro}
+        onChange={(e) => setPavimentoFiltro(e.target.value)}
+        aria-label="Filtrar por pavimento"
+        className="h-9 rounded-[6px] border border-gray-200 bg-white px-2 text-sm text-gray-700"
+      >
+        <option value="">Todos os pavimentos</option>
+        {pavimentos.map((p) => (
+          <option key={p.levelId} value={p.levelId}>
+            {p.nome}
+          </option>
+        ))}
+      </select>
+    ) : undefined;
+  const ambientesVisiveis = useMemo(
+    () => quant.ambientes.map((a, i) => ({ ...a, indice: i + 1 })).filter((a) => doPavimento(a.spaceId)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [quant.ambientes, pavimentoFiltro, mapaDePavimento],
+  );
+  const estruturasVisiveis = useMemo(
+    () => quant.estruturas.map((e, i) => ({ ...e, indice: i + 1 })).filter((e) => doPavimento(e.structuralId)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [quant.estruturas, pavimentoFiltro, mapaDePavimento],
+  );
   // As casas vêm da POLÍTICA (é ela que define o arredondamento do quantitativo);
   // o separador é o do pt-BR — `formatarQuantidade` do kernel devolve `toFixed`
   // com ponto, que serve ao payload, não à tela.
@@ -136,6 +198,7 @@ export default function TelaQuantitativos({ quant, armadura, revisao, oficial, g
     { id: 'resumo', label: 'Resumo', badge: resumo.length },
     { id: 'ambientes', label: 'Por ambiente', badge: quant.ambientes.length },
     { id: 'estruturas', label: 'Por peça estrutural', badge: quant.estruturas.length },
+    { id: 'pavimentos', label: 'Por pavimento', badge: pavimentos.length },
     { id: 'sobreposicoes', label: 'Sobreposições', badge: conflitantes > 0 ? `${conflitantes} !` : quant.sobreposicoes.length },
   ];
 
@@ -224,12 +287,15 @@ export default function TelaQuantitativos({ quant, armadura, revisao, oficial, g
         <StandardTable<Quant['ambientes'][number] & { indice: number }>
           columns={COLUNAS_AMBIENTE}
           storageKey="blueprint:quantitativosAmbientes"
-          rows={quant.ambientes.map((a, i) => ({ ...a, indice: i + 1 }))}
+          rows={ambientesVisiveis}
           rowKey={(a) => a.spaceId}
+          filters={filtroDePavimento}
           renderCell={(key, a) => {
             switch (key) {
               case 'nome':
                 return <span className="text-sm font-medium text-gray-800">{a.nome ?? `Ambiente ${a.indice}`}</span>;
+              case 'pavimento':
+                return <span className="text-sm text-gray-600">{pavimentoDe(a.spaceId)}</span>;
               case 'areaPisoM2':
                 return <span className="block text-right text-sm font-semibold tabular-nums text-gray-900">{fmt(a.areaPisoM2)}</span>;
               case 'areaEixoM2':
@@ -245,17 +311,20 @@ export default function TelaQuantitativos({ quant, armadura, revisao, oficial, g
                 return null;
             }
           }}
-          sortValue={(key, a) => (key === 'nome' ? a.nome ?? `Ambiente ${a.indice}` : (a as unknown as Record<string, number>)[key])}
-          searchText={(a) => `${a.nome ?? ''} ${a.formulaAreaPiso}`}
+          sortValue={(key, a) =>
+            key === 'nome' ? a.nome ?? `Ambiente ${a.indice}` : key === 'pavimento' ? pavimentoDe(a.spaceId) : (a as unknown as Record<string, number>)[key]
+          }
+          searchText={(a) => `${a.nome ?? ''} ${pavimentoDe(a.spaceId)} ${a.formulaAreaPiso}`}
           searchPlaceholder="Buscar ambiente..."
           empty={{ title: 'Nenhum ambiente fechado', subtitle: 'Feche o contorno das paredes para o ambiente nascer.' }}
           renderTotals={(n) => (
             <tr className="bg-gray-50 text-sm font-semibold text-gray-700">
               <td colSpan={n} className="px-6 py-2.5">
                 <span className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                  <span>Total dos ambientes</span>
+                  <span>Total {pavimentoFiltro ? 'do pavimento' : 'dos ambientes'}</span>
                   <span className="tabular-nums">
-                    piso {fmt(t.areaPisoM2)} m² · rodapé {fmt(t.comprimentoRodapeM)} m
+                    piso {fmt(ambientesVisiveis.reduce((s, a) => s + a.areaPisoM2, 0))} m² · rodapé{' '}
+                    {fmt(ambientesVisiveis.reduce((s, a) => s + a.comprimentoRodapeM, 0))} m
                   </span>
                 </span>
               </td>
@@ -268,8 +337,9 @@ export default function TelaQuantitativos({ quant, armadura, revisao, oficial, g
         <StandardTable<Quant['estruturas'][number] & { indice: number }>
           columns={COLUNAS_ESTRUTURA}
           storageKey="blueprint:quantitativosEstruturas"
-          rows={quant.estruturas.map((s, i) => ({ ...s, indice: i + 1 }))}
+          rows={estruturasVisiveis}
           rowKey={(s) => s.structuralId}
+          filters={filtroDePavimento}
           renderCell={(key, s) => {
             const aco = acoDe(s.structuralId);
             switch (key) {
@@ -277,6 +347,8 @@ export default function TelaQuantitativos({ quant, armadura, revisao, oficial, g
                 return <span className="text-sm font-medium text-gray-800">{s.rotulo || `${nomeDoTipoEstrutural(s.kind)} ${s.indice}`}</span>;
               case 'tipo':
                 return <span className="text-sm text-gray-700">{nomeDoTipoEstrutural(s.kind)}</span>;
+              case 'pavimento':
+                return <span className="text-sm text-gray-600">{pavimentoDe(s.structuralId)}</span>;
               case 'volumeConcretoM3':
                 return <span className="block text-right text-sm font-semibold tabular-nums text-gray-900">{fmt(s.volumeConcretoM3)}</span>;
               case 'areaFormaM2':
@@ -295,10 +367,11 @@ export default function TelaQuantitativos({ quant, armadura, revisao, oficial, g
           sortValue={(key, s) => {
             if (key === 'rotulo') return s.rotulo || s.structuralId;
             if (key === 'tipo') return nomeDoTipoEstrutural(s.kind);
+            if (key === 'pavimento') return pavimentoDe(s.structuralId);
             if (key === 'kg') return acoDe(s.structuralId)?.kg ?? 0;
             return (s as unknown as Record<string, number>)[key];
           }}
-          searchText={(s) => `${s.rotulo} ${nomeDoTipoEstrutural(s.kind)} ${s.formula}`}
+          searchText={(s) => `${s.rotulo} ${nomeDoTipoEstrutural(s.kind)} ${pavimentoDe(s.structuralId)} ${s.formula}`}
           searchPlaceholder="Buscar peça..."
           onRowClick={onSelecionarPeca ? (s) => onSelecionarPeca(s.structuralId) : undefined}
           empty={{ title: 'Nenhuma peça estrutural na planta', subtitle: 'Lance pilares, vigas, lajes ou fundações (Arquitetura › Estrutural).' }}
@@ -306,10 +379,62 @@ export default function TelaQuantitativos({ quant, armadura, revisao, oficial, g
             <tr className="bg-gray-50 text-sm font-semibold text-gray-700">
               <td colSpan={n} className="px-6 py-2.5">
                 <span className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                  <span>Total da estrutura</span>
+                  <span>Total {pavimentoFiltro ? 'do pavimento' : 'da estrutura'}</span>
                   <span className="tabular-nums">
-                    {fmt(quant.estruturas.reduce((a, s) => a + s.volumeConcretoM3, 0))} m³ · {fmt(quant.estruturas.reduce((a, s) => a + s.areaFormaM2, 0))} m² fôrma
-                    {armadura ? ` · ${fmt(armadura.totais.totalKg)} kg` : ''}
+                    {fmt(estruturasVisiveis.reduce((a, s) => a + s.volumeConcretoM3, 0))} m³ · {fmt(estruturasVisiveis.reduce((a, s) => a + s.areaFormaM2, 0))} m² fôrma
+                    {armadura ? ` · ${fmt(estruturasVisiveis.reduce((a, s) => a + (acoDe(s.structuralId)?.kg ?? 0), 0))} kg` : ''}
+                  </span>
+                </span>
+              </td>
+            </tr>
+          )}
+        />
+      )}
+
+      {aba === 'pavimentos' && (
+        <StandardTable<QuantitativoDoPavimento>
+          columns={COLUNAS_PAVIMENTO}
+          storageKey="blueprint:quantitativosPavimentos"
+          rows={pavimentos}
+          rowKey={(p) => p.levelId}
+          renderCell={(key, p) => {
+            switch (key) {
+              case 'nome':
+                return <span className="text-sm font-medium text-gray-800">{p.nome}</span>;
+              case 'elevationMm':
+                return <span className="block text-right text-sm tabular-nums text-gray-600">{(p.elevationMm / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
+              case 'ambientes':
+              case 'pecas':
+                return <span className="block text-right text-sm tabular-nums text-gray-700">{p[key]}</span>;
+              case 'areaPisoM2':
+              case 'volumeConcretoM3':
+                return <span className="block text-right text-sm font-semibold tabular-nums text-gray-900">{fmt(p[key])}</span>;
+              case 'aberturas':
+                return <span className="block text-right text-xs tabular-nums text-gray-600">{p.portas} porta(s), {p.janelas} janela(s) · {fmt(p.areaAberturasM2)} m²</span>;
+              case 'areaConstruidaM2':
+              case 'areaParedeDuasFacesM2':
+              case 'volumeAlvenariaM3':
+              case 'comprimentoRodapeM':
+              case 'areaFormaM2':
+              case 'acoKg':
+                return num(fmt, p[key]);
+              default:
+                return null;
+            }
+          }}
+          sortValue={(key, p) => (key === 'nome' ? p.nome : key === 'aberturas' ? p.portas + p.janelas : (p as unknown as Record<string, number>)[key])}
+          searchText={(p) => p.nome}
+          searchPlaceholder="Buscar pavimento..."
+          empty={{ title: 'Nenhum pavimento', subtitle: 'Adicione um pavimento no painel Pavimentos.' }}
+          renderTotals={(n) => (
+            <tr className="bg-gray-50 text-sm font-semibold text-gray-700">
+              <td colSpan={n} className="px-6 py-2.5">
+                <span className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                  <span>Total dos pavimentos</span>
+                  <span className="tabular-nums">
+                    construída {fmt(t.areaConstruidaM2)} m² · piso {fmt(t.areaPisoM2)} m² · alvenaria {fmt(t.volumeAlvenariaM3)} m³ · concreto{' '}
+                    {fmt(pavimentos.reduce((s, p) => s + p.volumeConcretoM3, 0))} m³
+                    {armadura ? ` · aço ${fmt(pavimentos.reduce((s, p) => s + p.acoKg, 0))} kg` : ''}
                   </span>
                 </span>
               </td>

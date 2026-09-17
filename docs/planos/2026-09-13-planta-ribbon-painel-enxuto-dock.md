@@ -381,3 +381,18 @@ Ordem da barra: Selecionar · Mover │ 6 vistas │ **Enquadrar · Zoom− · Z
 - App real (Planta 14/09/2026, escritas bloqueadas: 14): tela sem dialog, abas Resumo 17 ·
   Por ambiente 4 · Por peça 67 · Sobreposições 99; clique em P1 fecha a tela e abre as
   Propriedades com "P1 · Pilar 0,157 m³…".
+
+### 17/09/2026 — "incluir pavimentos em quantitativos"
+
+- `utils/blueprintQuantitativosPorPavimento.ts` (novo): `pavimentoDasEntidades` (ambiente,
+  parede, abertura pela parede, estrutura → nível), `quantitativosPorPavimento(model, quant,
+  armadura?)` — um nível por linha na ordem da cota, com as MESMAS somas dos totais gerais
+  (piso, parede 2 faces, alvenaria, rodapé, aberturas, construída, concreto, fôrma, aço), para
+  a soma das linhas fechar com o total.
+- `TelaQuantitativos`: prop `model`; aba **Por pavimento** (badge = nº de níveis, total no
+  rodapé); coluna **Pavimento** em Por ambiente e Por peça; filtro "Filtrar por pavimento"
+  nas duas abas quando há 2+ níveis (os totais das abas seguem o filtro).
+- Testes: `blueprintQuantitativosPorPavimento.test.ts` (3: junção, soma fecha, mapa) e
+  editor "com dois pavimentos" (linhas Térreo/Superior com o concreto de cada, coluna e
+  filtro nas peças). Suíte cheia 4416; app real: Térreo e Pavimento 1 com 92,81 m² cada,
+  total 185,63 m² = soma; escritas bloqueadas.

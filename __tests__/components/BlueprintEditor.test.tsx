@@ -1154,6 +1154,35 @@ describe('BlueprintEditor · ribbon', () => {
     expect(botaoDistribuir()).not.toHaveTextContent('1');
   });
 
+  it("Hidráulica › Água automática (18/09/2026): a gaveta lista a caixa d'água, lança a rede sugerida e o botão zera", async () => {
+    const k = await import('../../utils/blueprintKernel');
+    let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = m.levels[0].id;
+    m = k.applyBatch(m, [
+      { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: "Caixa d'água", at: k.point(500, 500), cotaMm: 2800, tipoHidraulico: 'RESERVATORIO', volumeL: 1000 },
+      { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Chuveiro', at: k.point(1000, 2500), cotaMm: 2100, tipoHidraulico: 'CHUVEIRO' },
+      { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Lavatório', at: k.point(1600, 2500), cotaMm: 600, tipoHidraulico: 'LAVATORIO' },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+
+    await abrirAba(/^hidráulica$/i);
+    const botaoAgua = () => botao(/^água automática/i);
+    expect(botaoAgua()).toHaveTextContent('2'); // dois pontos a ligar
+    await user.click(botaoAgua());
+    const gaveta = await screen.findByTestId('tarefa-agua');
+    const linha = within(gaveta).getByRole('row', { name: /caixa d'água/i });
+    expect(linha).toHaveTextContent(/2 ponto\(s\) · 0 ligado\(s\)/);
+    expect(linha).toHaveTextContent(/DN máx\. 20/);
+    await user.click(within(linha).getByRole('button', { name: /^lançar 2$/i }));
+    await waitFor(() => expect(within(gaveta).getByRole('row', { name: /caixa d'água/i })).toHaveTextContent(/2 ligado\(s\)/));
+    expect(within(gaveta).getByRole('row', { name: /caixa d'água/i })).toHaveTextContent(/já estão ligados/);
+    // Refazer existe (há rede); o botão do ribbon não conta mais nada a ligar.
+    expect(within(gaveta).getByRole('button', { name: /^refazer$/i })).toBeInTheDocument();
+    expect(botaoAgua()).not.toHaveTextContent('2');
+  });
+
   it('a aba persiste entre montagens — é preferência, não gesto', async () => {
     await montar();
     await abrirAba(/^elétrica$/i);

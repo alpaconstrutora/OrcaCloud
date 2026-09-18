@@ -4501,6 +4501,21 @@ export default function BlueprintCanvas({
           ctx.textAlign = 'start';
         }
       }
+      // O DN do trecho HIDRÁULICO (18/09/2026): é o que o lançamento automático
+      // dimensiona, e uma rede de água sem o diâmetro escrito não se confere. Vai
+      // junto do meio do trecho, na cor da disciplina, quando o trecho tem
+      // comprimento para o texto não sobrepor o traço vizinho.
+      if (t.disciplina !== 'ELETRICA' && mostrarCircuitos) {
+        const prumada = p.x === q.x && p.y === q.y;
+        const comp = Math.hypot(q.x - p.x, q.y - p.y);
+        if (prumada || comp >= 28 * fz) {
+          const c = prumada ? p : curva.meio;
+          ctx.fillStyle = COR_DA_DISCIPLINA[t.disciplina];
+          ctx.font = `${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+          ctx.textAlign = 'start';
+          ctx.fillText(`DN ${t.bitolaMm}`, c.x + 6 * fz, c.y - 5 * fz);
+        }
+      }
     }
     ctx.setLineDash([]);
 

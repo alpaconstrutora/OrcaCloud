@@ -117,3 +117,38 @@ Aceitar). Suíte cheia 4554.
 ### App real (escritas bloqueadas: 15)
 Planta 14/09/2026, Térreo: botão "Distribuir pontos 1"; gaveta com "Ambiente 4" (cozinha) →
 "PIA (fria/quente/Esgoto) · Lançar 3" → "Completo", rodapé "3 sugerida(s)"; Desfazer devolve.
+
+## F4 — água fria e água quente automáticas — entregue em 18/09/2026
+
+- **Refactor**: `utils/blueprintGrafoDeRede.ts` (novo) recebe de `blueprintEletrodutos.ts` a
+  chave do nó com a laje como encontro (`fazerChave`), `distanciasDesde` (Dijkstra),
+  `caminhoEntre` (BFS) e `arvoreComRotaLimitada` (o Prim com rota limitada). Os eletrodutos
+  passaram a importar daí; os 26 testes deles não mudaram.
+- `utils/blueprintAguaAutomatica.ts` (novo): origens = caixa d'água (AF) e aquecedor (AQ);
+  pontos = terminais tipados com peso (o aquecedor é ponto da AF com o peso dos quentes);
+  **barrilete** no teto do pavimento da origem → **colunas** por grupo de pontos
+  (`raioDaColunaMm`, união entre pavimentos; prumada pela laje) → **ramais** a `cotaRamalMm`
+  (árvore com rota limitada) → prumada até a cota do ponto. **DN** por peso acumulado a
+  jusante (`caminhoEntre` de cada ponto à origem): Q = 0,3·√ΣP, menor DN comercial (PVC
+  soldável / CPVC, tabelas de diâmetro interno) com v ≤ `velocidadeMaxMs` (padrão 2 m/s),
+  nunca abaixo do mínimo da disciplina nem do sub-ramal da ficha. Trecho sugerido com DN
+  menor → `SetTrechoProps`; confirmado → aviso. Coluna + prumada final colineares com nó de
+  grau 2 viram UM tubo (sem luva fantasma). Idempotente; `relancarAgua` / `refazerAgua`.
+- Editor: tarefa `agua` ("Água automática" no grupo Lançamento, contagem = pontos a ligar);
+  gaveta com hipóteses (vmax, DN mín. AF/AQ, cota do ramal, raio da coluna), tabela por origem
+  (pontos/ligados, metros, colunas, ΣP, DN máx., avisos; Lançar/Relançar/Refazer com
+  confirmação), rodapé "Lançar em todas as origens". Canvas: "DN 25" escrito nos trechos
+  hidráulicos (como o Ø da elétrica).
+
+### Testes
+`blueprintAguaAutomatica.test.ts` (8): dimensionarDN (ΣP 0,3/1,0 → 20; 3,4 → 25; CPVC 22),
+barrilete/colunas/ramais/prumadas sem ponta aberta, DN por peso e v ≤ 2, idempotência e ponto
+novo, relançar + aviso de confirmado, sem origem/sem ponto, laje entre pavimentos, água
+quente a partir do aquecedor com a fria chegando nele. Editor: "Água automática" (gaveta,
+Lançar 2, ligados, Refazer). Suíte cheia 4563.
+
+### App real (escritas bloqueadas: 17)
+Planta 14/09/2026: pontos da cozinha (F3) + caixa d'água → "Água automática 1"; gaveta: "1
+ponto · 10,3 m · 1 coluna · ΣP 0,7 · DN máx. 20 · Lançar 1" → "1 ligado · todos os pontos já
+estão ligados · Relançar · Refazer"; Quantitativos › Instalações: "Água fria DN 20 10,26 m ·
+2 trechos", "Joelho 90° DN 20 · 1"; 3D com a caixa e o tubo; Desfazer devolve.

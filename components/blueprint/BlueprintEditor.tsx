@@ -64,6 +64,7 @@ import {
   Scan,
   Scissors,
   ShowerHead,
+  Droplets,
   Spline,
   Square,
   Tag,
@@ -374,6 +375,14 @@ import {
   type KitHidraulico,
 } from '../../utils/blueprintPontosHidraulicos';
 import {
+  HIPOTESES_AGUA_PADRAO,
+  planejarAguaDoModelo,
+  refazerAgua,
+  relancarAgua,
+  type HipotesesDeAgua,
+  type PlanoDeAgua,
+} from '../../utils/blueprintAguaAutomatica';
+import {
   ROTULO_DO_TIPO_DE_AMBIENTE,
   comandosDeIluminacao,
   comandosDeTomadasSugeridas,
@@ -624,6 +633,9 @@ const ROTULO_DA_TAREFA = {
   // Pontos hidráulicos por ambiente (18/09/2026, F3 da hidráulica): o kit do
   // banheiro/cozinha/serviço em posições sugeridas — mover confirma.
   pontosHidraulicos: 'Pontos hidráulicos por ambiente',
+  // Água fria e quente automáticas (18/09/2026, F4): caixa d'água → barrilete →
+  // colunas → ramais; aquecedor → pontos quentes. DN pelos pesos da NBR 5626.
+  agua: 'Água fria e quente automáticas',
   'gerar-paredes': 'Gerar paredes do PDF',
   'importar-ifc': 'Importar do IFC',
   'importar-dxf': 'Importar do DXF',
@@ -4864,6 +4876,46 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     [editor.model, levelId, hipotesesDePontos, kitsForcados],
   );
   const ambientesComPontosACriar = planosDePontos.filter((p) => p.aCriar > 0).length;
+
+  /**
+   * ─── ÁGUA FRIA E QUENTE AUTOMÁTICAS (18/09/2026, F4) ─────────────────────────
+   * Um plano por ORIGEM (caixa d'água → água fria; aquecedor → água quente).
+   * Hipóteses no navegador, escritas na gaveta. O molde é o dos eletrodutos:
+   * lançar (sugeridos), relançar (refaz os sugeridos) e refazer (apaga tudo,
+   * com confirmação).
+   */
+  const [hipDeAguaSalvas, setHipDeAguaSalvas] = usePersistedState<HipotesesDeAgua>('blueprint:aguaAutomatica', HIPOTESES_AGUA_PADRAO);
+  const hipotesesDeAgua = useMemo<HipotesesDeAgua>(() => ({ ...HIPOTESES_AGUA_PADRAO, ...(hipDeAguaSalvas ?? {}) }), [hipDeAguaSalvas]);
+  const planosDeAgua = useMemo(() => planejarAguaDoModelo(editor.model, hipotesesDeAgua), [editor.model, hipotesesDeAgua]);
+  const pontosDeAguaALigar = planosDeAgua.reduce((n, p) => n + p.aLigar, 0);
+  const origemDoPlano = (p: PlanoDeAgua) => (editor.model.terminais ?? []).find((t) => t.id === p.origemId) ?? null;
+  const lancarAgua = (planos: PlanoDeAgua[]) => {
+    const comandos = planos.flatMap((p) => {
+      if (p.comandos.length > 0) return p.comandos;
+      if (p.sugeridos === 0) return [];
+      const origem = origemDoPlano(p);
+      return origem ? relancarAgua(editor.model, origem, hipotesesDeAgua).comandos : [];
+    });
+    if (comandos.length === 0) return;
+    const criados = editor.runBatch(comandos);
+    if (criados.length > 0) selecionar(criados);
+  };
+  const refazerRedeDeAgua = async (plano: PlanoDeAgua) => {
+    const origem = origemDoPlano(plano);
+    if (!origem) return;
+    const ok = await confirmar({
+      title: `Refazer a rede de ${ROTULO_DA_DISCIPLINA[plano.disciplina].toLowerCase()}?`,
+      message: `Apaga os ${plano.trechosDaRede} trecho(s) ligados a ${plano.origemNome.toLowerCase()} — inclusive os que você já confirmou — e lança de novo com as hipóteses atuais. Ctrl+Z desfaz.`,
+      confirmLabel: 'Refazer',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    const re = refazerAgua(editor.model, origem, hipotesesDeAgua);
+    if (re.comandos.length === 0) return;
+    const criados = editor.runBatch(re.comandos);
+    if (criados.length > 0) selecionar(criados);
+  };
+  const haAguaALancar = planosDeAgua.some((p) => p.comandos.length > 0 || p.sugeridos > 0);
   const lancarPontos = (planos: typeof planosDePontos) => {
     const lote = planos.flatMap((p) => p.comandos);
     if (lote.length === 0) return;
@@ -6530,6 +6582,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 ativo={tarefaAberta === 'pontosHidraulicos'}
                 onClick={() => alternarTarefa('pontosHidraulicos')}
                 ajuda="Por ambiente classificado: o kit do banheiro (vaso, lavatório, chuveiro, caixa sifonada), da cozinha (pia) e da área de serviço (tanque, máquina, ralo) em posições sugeridas — mover confirma, Ctrl+Z desfaz"
+              />
+              <BotaoDoRibbon
+                icone={Droplets}
+                rotulo="Água automática"
+                contagem={pontosDeAguaALigar || undefined}
+                ativo={tarefaAberta === 'agua'}
+                onClick={() => alternarTarefa('agua')}
+                ajuda="Da caixa d'água aos pontos de água fria e do aquecedor aos de água quente: barrilete no forro, colunas, ramais a 2,20 m e o DN pelos pesos da NBR 5626 — sugerido; mover ou aceitar confirma"
               />
               <BotaoDoRibbon
                 icone={CheckCircle2}
@@ -8530,6 +8590,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               {tarefaAberta === 'lajes' && <Layers className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'fundacoes' && <SquareStack className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'pontosHidraulicos' && <ShowerHead className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'agua' && <Droplets className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -8553,6 +8614,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 <strong>Completar pela norma</strong> lança só o que falta;{' '}
                 <strong>Distribuir</strong> lança N ao longo das paredes. As tomadas nascem{' '}
                 <em>sugeridas</em> — mover uma confirma.
+              </>
+            )}
+            {tarefaAberta === 'agua' && (
+              <>
+                Para cada <strong>caixa d'água</strong> (água fria) e cada <strong>aquecedor</strong> (água quente), o
+                sistema propõe a rede: barrilete no forro do pavimento da origem, uma coluna por grupo de
+                pontos próximos, ramais a 2,20 m e a prumada até cada ponto. O DN de cada trecho sai do peso
+                acumulado (NBR 5626, Q = 0,3·√ΣP) pela velocidade máxima. Os trechos nascem <em>sugeridos</em>.
               </>
             )}
             {tarefaAberta === 'pontosHidraulicos' && (
@@ -8593,9 +8662,129 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
+
+          {tarefaAberta === 'agua' && (
+            <div className="space-y-4" data-testid="tarefa-agua">
+              <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <p className="font-semibold text-slate-700">Hipóteses do lançamento</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  <li>
+                    Pesos da NBR 5626 pela ficha de cada ponto (chuveiro 0,4 · lavatório 0,3 · pia 0,7 · máquina 1,0…);
+                    vazão <strong>Q = 0,3·√ΣP</strong> L/s; DN = o menor comercial com velocidade ≤ limite, nunca abaixo
+                    do mínimo. Água fria em PVC soldável; água quente em CPVC.
+                  </li>
+                  <li>Barrilete no forro do pavimento da origem; colunas por grupo de pontos; ramais na cota abaixo; o aquecedor é ponto da água fria com o peso dos pontos quentes.</li>
+                  <li><strong>Pré-dimensionamento</strong> por velocidade: sem perda de carga nem pressão disponível; não desvia de viga ou laje.</li>
+                </ul>
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <label className="flex items-center gap-2">
+                    Velocidade máx.
+                    <select
+                      value={String(hipotesesDeAgua.velocidadeMaxMs)}
+                      onChange={(e) => setHipDeAguaSalvas({ ...hipotesesDeAgua, velocidadeMaxMs: Number(e.target.value) })}
+                      aria-label="Velocidade máxima na tubulação"
+                      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                    >
+                      {[1.5, 2, 2.5, 3].map((v) => (
+                        <option key={v} value={v}>{String(v).replace('.', ',')} m/s</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    DN mín. AF
+                    <select value={hipotesesDeAgua.dnMinimoAguaFriaMm} onChange={(e) => setHipDeAguaSalvas({ ...hipotesesDeAgua, dnMinimoAguaFriaMm: Number(e.target.value) })} aria-label="DN mínimo da água fria" className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs">
+                      {[20, 25, 32].map((v) => <option key={v} value={v}>{v} mm</option>)}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    DN mín. AQ
+                    <select value={hipotesesDeAgua.dnMinimoAguaQuenteMm} onChange={(e) => setHipDeAguaSalvas({ ...hipotesesDeAgua, dnMinimoAguaQuenteMm: Number(e.target.value) })} aria-label="DN mínimo da água quente" className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs">
+                      {[15, 22, 28].map((v) => <option key={v} value={v}>{v} mm</option>)}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    Ramal a
+                    <input type="number" min={1500} step={100} value={hipotesesDeAgua.cotaRamalMm} onChange={(e) => setHipDeAguaSalvas({ ...hipotesesDeAgua, cotaRamalMm: Math.max(500, Math.round(Number(e.target.value) || 2200)) })} aria-label="Cota do ramal em mm" className="w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs tabular-nums" />
+                    mm
+                  </label>
+                  <label className="flex items-center gap-2">
+                    Raio da coluna
+                    <input type="number" min={500} step={250} value={hipotesesDeAgua.raioDaColunaMm} onChange={(e) => setHipDeAguaSalvas({ ...hipotesesDeAgua, raioDaColunaMm: Math.max(250, Math.round(Number(e.target.value) || 1500)) })} aria-label="Raio da coluna em mm" className="w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs tabular-nums" />
+                    mm
+                  </label>
+                </div>
+              </div>
+
+              {planosDeAgua.length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  Insira uma <strong>caixa d'água</strong> (Hidráulica › reservação) — é de onde a água fria parte. Para a
+                  água quente, um <strong>aquecedor</strong> com ponto de água quente.
+                </p>
+              ) : (
+                <table className="w-full table-fixed text-xs" aria-label="Rede de água por origem">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-500">
+                      <th className="py-1.5 pr-2 font-medium">Origem</th>
+                      <th className="w-28 py-1.5 pr-2 font-medium">Pontos</th>
+                      <th className="py-1.5 pr-2 font-medium">Previsto</th>
+                      <th className="w-36 py-1.5 text-right font-medium">Lançar</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {planosDeAgua.map((p) => (
+                      <tr key={p.origemId}>
+                        <td className="py-1.5 pr-2">
+                          <span className="font-medium text-slate-700">{p.origemNome}</span>
+                          <span className="block text-slate-500">{ROTULO_DA_DISCIPLINA[p.disciplina]}</span>
+                        </td>
+                        <td className="py-1.5 pr-2 text-slate-600">
+                          {p.pontos} ponto(s) · {p.ligados} ligado(s)
+                          {p.pavimentos.length > 1 ? <span className="block text-slate-400">{p.pavimentos.length} pavimentos</span> : null}
+                        </td>
+                        <td className="py-1.5 pr-2 text-slate-600">
+                          {p.motivo ? (
+                            <span className="text-slate-500">{p.motivo}</span>
+                          ) : (
+                            <>
+                              {p.metrosPrevistos.toLocaleString('pt-BR')} m · {p.colunas} coluna(s) · ΣP {p.somaDePesos.toLocaleString('pt-BR')} · DN máx. {p.dnMaximoMm}
+                            </>
+                          )}
+                          {p.avisos.map((a, i) => (
+                            <span key={i} className="block text-amber-700">{a}</span>
+                          ))}
+                        </td>
+                        <td className="py-1.5 text-right">
+                          <span className="inline-flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => lancarAgua([p])}
+                              disabled={p.comandos.length === 0 && p.sugeridos === 0}
+                              className="rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              {p.comandos.length > 0 ? `Lançar ${p.aLigar || ''}`.trim() : p.sugeridos > 0 ? 'Relançar' : 'Ligado'}
+                            </button>
+                            {p.trechosDaRede > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => void refazerRedeDeAgua(p)}
+                                title="Apaga a rede desta origem, inclusive o confirmado, e lança de novo"
+                                className="rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 font-medium text-slate-700 hover:bg-slate-50"
+                              >
+                                Refazer
+                              </button>
+                            )}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
 
           {tarefaAberta === 'pontosHidraulicos' && (
             <div className="space-y-4" data-testid="tarefa-pontos-hidraulicos">
@@ -9890,6 +10079,22 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </SheetPanel>
 
         <SheetFooter>
+          {tarefaAberta === 'agua' && (
+            <>
+              <span className="mr-auto text-xs text-slate-500">
+                {planosDeAgua.length === 0 ? 'Sem origem de água no desenho.' : `${pontosDeAguaALigar} ponto(s) a ligar.`}
+              </span>
+              <button
+                type="button"
+                onClick={() => lancarAgua(planosDeAgua)}
+                disabled={!haAguaALancar}
+                className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                <Droplets className="h-4 w-4" />
+                Lançar em todas as origens
+              </button>
+            </>
+          )}
           {tarefaAberta === 'pontosHidraulicos' && (
             <>
               <span className="mr-auto text-xs text-slate-500">

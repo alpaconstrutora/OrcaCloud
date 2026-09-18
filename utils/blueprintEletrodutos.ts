@@ -60,7 +60,6 @@ import type {
   BlueprintModel,
   Circuito,
   Command,
-  Level,
   LigacaoDoCircuito,
   ObjectId,
   Quadro,
@@ -73,6 +72,15 @@ import {
   preDimensionarCircuito,
   type HipotesesEletricas,
 } from './blueprintEletricaDimensionamento';
+import {
+  arvoreComRotaLimitada,
+  caminhoEntre,
+  comprimentoMm,
+  distanciasDesde,
+  fazerChave,
+  type Aresta,
+  type No,
+} from './blueprintGrafoDeRede';
 
 export interface HipotesesDeEletroduto {
   /** Diâmetro nominal MÍNIMO do eletroduto lançado, em mm — a ocupação pode pedir mais. */
@@ -161,65 +169,10 @@ export function eletrodutosSugeridos(model: BlueprintModel, levelId: string | nu
 }
 
 // ─── O grafo ────────────────────────────────────────────────────────────────
-
-type No = string;
-
-interface Aresta {
-  /** O trecho existente, ou o índice do trecho novo em `novos`. */
-  ref: { existente: ObjectId } | { novo: number };
-  de: No;
-  para: No;
-  /** Comprimento do trecho, em mm — para medir a rota de cada ponto até o quadro. */
-  mm: number;
-}
-
-/** Menor caminho (em mm) de `origem` a cada nó, pelas arestas dadas — Dijkstra simples. */
-function distanciasDesde(origem: No, arestas: readonly Aresta[]): Map<No, number> {
-  const viz = new Map<No, { para: No; mm: number }[]>();
-  for (const a of arestas) {
-    viz.set(a.de, [...(viz.get(a.de) ?? []), { para: a.para, mm: a.mm }]);
-    viz.set(a.para, [...(viz.get(a.para) ?? []), { para: a.de, mm: a.mm }]);
-  }
-  const dist = new Map<No, number>([[origem, 0]]);
-  const abertos = new Set<No>([origem]);
-  while (abertos.size > 0) {
-    let atual: No | null = null;
-    for (const n of abertos) if (atual == null || (dist.get(n) ?? Infinity) < (dist.get(atual) ?? Infinity)) atual = n;
-    if (atual == null) break;
-    abertos.delete(atual);
-    const dAtual = dist.get(atual) ?? Infinity;
-    for (const v of viz.get(atual) ?? []) {
-      const nova = dAtual + v.mm;
-      if (nova < (dist.get(v.para) ?? Infinity)) {
-        dist.set(v.para, nova);
-        abertos.add(v.para);
-      }
-    }
-  }
-  return dist;
-}
-
-/**
- * Chave de um ponto físico da rede. A LAJE é o encontro: a cota 0 de um
- * pavimento é o mesmo lugar que o teto do pavimento imediatamente abaixo —
- * sem isto, a prumada que sobe pela laje terminaria num nó que ninguém
- * alcança.
- */
-function fazerChave(niveis: readonly Level[]) {
-  const ordenados = [...niveis].sort((a, b) => a.elevationMm - b.elevationMm);
-  const abaixoDe = new Map<ObjectId, Level | null>();
-  ordenados.forEach((l, i) => abaixoDe.set(l.id, i > 0 ? ordenados[i - 1] : null));
-  return (levelId: ObjectId, x: number, y: number, cota: number): No => {
-    if (cota === 0) {
-      const abaixo = abaixoDe.get(levelId);
-      if (abaixo) return `${abaixo.id}|${x},${y}|${abaixo.defaultHeightMm}`;
-    }
-    return `${levelId}|${x},${y}|${cota}`;
-  };
-}
-
-const comprimentoMm = (t: { a: { x: number; y: number }; b: { x: number; y: number }; cotaAMm: number; cotaBMm: number }) =>
-  Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y, t.cotaBMm - t.cotaAMm);
+//
+// A chave do nó, o Dijkstra, o BFS até a raiz e o Prim com rota limitada
+// moram em `blueprintGrafoDeRede.ts` desde 18/09/2026: a água e o esgoto
+// automáticos usam exatamente as mesmas peças.
 
 /**
  * O plano de UM quadro — todos os pavimentos, todos os circuitos dele. Puro:
@@ -397,66 +350,23 @@ export function planejarEletrodutos(
     // reta do pendente ao quadro. Se nenhum nó cabe (não acontece: a raiz
     // sempre cabe quando a rota dela é conhecida), vale o mais próximo.
     // Desempate determinístico (distância, x, y).
-    const limite = hip.rotaMaximaVezes;
-    const restantes = [...pendentesNoTeto.entries()].sort(([, p], [, q]) => p.x - q.x || p.y - q.y);
-    while (restantes.length > 0) {
-      let melhor: { i: number; de: No; d: number; rota: number } | null = null;
-      let reserva: { i: number; de: No; d: number; rota: number } | null = null;
-      for (let i = 0; i < restantes.length; i++) {
-        const alvo = restantes[i][1];
-        const reta = retaAteOQuadro(alvo);
-        for (const [kDe, de] of alcancados) {
-          const d = Math.hypot(alvo.x - de.x, alvo.y - de.y);
-          const rotaNova = (rota.get(kDe) ?? Infinity) + d;
-          const candidato = { i, de: kDe, d, rota: rotaNova };
-          if (!reserva || d < reserva.d) reserva = candidato;
-          const cabe = limite == null || !Number.isFinite(rotaNova) ? limite == null : rotaNova <= limite * reta + 1;
-          if (cabe && (!melhor || d < melhor.d)) melhor = candidato;
-        }
-      }
-      const escolha = melhor ?? reserva;
-      if (!escolha) break;
-      const [[k, para]] = restantes.splice(escolha.i, 1);
-      const de = alcancados.get(escolha.de)!;
-      addTrecho(nivel.id, de, teto, para, teto);
-      alcancados.set(k, para);
-      rota.set(k, escolha.rota);
-    }
+    arvoreComRotaLimitada({
+      alcancados,
+      rota,
+      pendentes: pendentesNoTeto,
+      retaAteRaiz: retaAteOQuadro,
+      limite: hip.rotaMaximaVezes,
+      ligar: (de, para) => addTrecho(nivel.id, de.pos, teto, para.pos, teto),
+    });
   }
 
   const aLigar = pavimentos.reduce((n, p) => n + p.aLigar, 0);
   const ligados = pavimentos.reduce((n, p) => n + p.ligados, 0);
 
   // ── Os CIRCUITOS de cada trecho: quem passa por ele a caminho do quadro ──
-  const vizinhos = new Map<No, { para: No; aresta: number }[]>();
-  arestas.forEach((ar, i) => {
-    vizinhos.set(ar.de, [...(vizinhos.get(ar.de) ?? []), { para: ar.para, aresta: i }]);
-    vizinhos.set(ar.para, [...(vizinhos.get(ar.para) ?? []), { para: ar.de, aresta: i }]);
-  });
-  const caminhoAteOQuadro = (origem: No): number[] | null => {
-    const anterior = new Map<No, { de: No; aresta: number } | null>([[origem, null]]);
-    const fila = [origem];
-    while (fila.length > 0) {
-      const n = fila.shift()!;
-      // O destino é o QUADRO na cota dele — assim a prumada do quadro entra no
-      // caminho de todo ponto (e carrega todos os circuitos).
-      if (n === noDoQuadro) {
-        const caminho: number[] = [];
-        let atual: No = n;
-        for (let passo = anterior.get(atual); passo; passo = anterior.get(atual)) {
-          caminho.push(passo.aresta);
-          atual = passo.de;
-        }
-        return caminho;
-      }
-      for (const v of vizinhos.get(n) ?? []) {
-        if (anterior.has(v.para)) continue;
-        anterior.set(v.para, { de: n, aresta: v.aresta });
-        fila.push(v.para);
-      }
-    }
-    return null;
-  };
+  // O destino é o QUADRO na cota dele — assim a prumada do quadro entra no
+  // caminho de todo ponto (e carrega todos os circuitos).
+  const caminhoAteOQuadro = (origem: No): number[] | null => caminhoEntre(origem, noDoQuadro, arestas);
   const circuitosPorAresta = new Map<number, Set<ObjectId>>();
   for (const p of pontos) {
     const origem = noDoPonto.get(p.id);

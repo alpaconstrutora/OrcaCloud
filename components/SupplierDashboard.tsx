@@ -300,7 +300,10 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                     actualDeliveryDate: editingActualDeliveryDate
                 });
             } else {
-                await orderService.updateOrder(activeOrderId, {
+                // Este componente É o fornecedor: logado, escreve pela RPC
+                // (sem UPDATE direto desde aplicar_20270921000027). O gestor em
+                // "Visualizar como" cai no updateOrder normal dentro dela.
+                await orderService.updateAsSupplier(activeOrderId, {
                     status: editingStatus as PurchaseOrder['status'],
                     deliveryDate: editingDeliveryDate,
                     separationDate: editingSeparationDate,

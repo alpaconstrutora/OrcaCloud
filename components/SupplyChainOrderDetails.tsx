@@ -28,7 +28,7 @@ import { PAYABLE_STATUS } from './supplier/portal/status';
 import { fmtDate } from './portal/PortalKit';
 import { ehCompradorDoPedido } from '../utils/pedidoPerfil';
 import { round2 } from '../utils/financialMath';
-import { aplicarCotadoNosItens, fornecedorPodeCotar, temCotacao, totalEfetivoDoPedido, totalReferenciaDoPedido, valorEfetivoDoItem } from '../utils/pedidoItemValor';
+import { fornecedorPodeCotar, temCotacao, totalEfetivoDoPedido, totalReferenciaDoPedido, valorEfetivoDoItem } from '../utils/pedidoItemValor';
 
 interface SupplyChainOrderDetailsProps {
     orderId: string;
@@ -259,6 +259,18 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const [loading, setLoading] = React.useState(true);
     const [showNegotiation, setShowNegotiation] = React.useState(false);
     const [currentUser, setCurrentUser] = React.useState<{ email: string; name: string } | null>(propUser || null);
+    /**
+     * Os pedidos que QUEM LÊ pode ver. O comprador lê a tabela; o fornecedor
+     * logado não tem mais SELECT nela (aplicar_20270921000027) e lê pela RPC
+     * estreita — que é o que `listOrders` faz quando recebe o e-mail do
+     * fornecedor. Sem este corte, `listOrders()` sem argumentos devolvia
+     * vazio ao fornecedor puro e o detalhe ficava em branco.
+     */
+    const listarPedidosDoLeitor = () =>
+        ehComprador
+            ? orderService.listOrders()
+            : orderService.listOrders(undefined, undefined, propUser?.email || currentUser?.email || undefined);
+
     // Há de quem assinar uma mensagem? Sessão dá o remetente; pelo link público
     // quem dá é a própria RPC, a partir do token. Sem nenhum dos dois, não há
     // chat. (Precisa vir DEPOIS do state de `currentUser` — antes seria TDZ.)
@@ -371,6 +383,10 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
             setLoading(true);
             if (portalToken) {
                 await supplierPortalTokenService.updateOrderLogistics(portalToken, orderId, { status: newStatus });
+            } else if (!ehComprador) {
+                // Fornecedor logado não tem mais UPDATE direto na tabela
+                // (aplicar_20270921000027): vai pela RPC, como no token.
+                await orderService.updateAsSupplier(orderId, { status: newStatus }, order?.version);
             } else {
                 await orderService.updateOrder(orderId, { status: newStatus }, order?.version);
             }
@@ -416,9 +432,10 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
         try {
             setLoading(true);
             // ── Fornecedor: só o par cotado, pela porta certa ─────────────
-            // Por token vai pela RPC (não há sessão para a RLS); logado vai
-            // pela tabela, que a policy `po_update_org_or_supplier` permite.
-            // Nos dois casos o item atual é lido do servidor e só
+            // Por token vai pela RPC do token; logado vai pela RPC do logado
+            // (`purchase_order_update_as_supplier`) — desde
+            // aplicar_20270921000027 ele não tem UPDATE direto na tabela. Nos
+            // dois casos o item atual é lido do servidor e só
             // `quotedUnitPrice`/`quotedTotal` mudam — descrição, quantidade e
             // referência ficam como estão.
             if (!ehComprador) {
@@ -429,9 +446,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 if (portalToken) {
                     salvo = await supplierPortalTokenService.updateItemQuotes(portalToken, orderId, cotados, order.version);
                 } else {
-                    const freshOrder = await orderService.getOrderById(orderId);
-                    if (!freshOrder) { notify("Erro ao carregar pedido.", "error"); return; }
-                    salvo = await orderService.updateOrder(orderId, { items: aplicarCotadoNosItens(freshOrder.items, cotados) }, freshOrder.version);
+                    salvo = await orderService.updateAsSupplier(orderId, { quotes: cotados }, order.version);
                 }
                 if (!salvo) { notify("Não foi possível salvar o valor cotado.", "error"); return; }
                 setEditingIndex(null);
@@ -524,7 +539,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     return;
                 }
 
-                const allOrders = await orderService.listOrders();
+                const allOrders = await listarPedidosDoLeitor();
                 if (cancelled) return;
                 const foundOrder = allOrders.find(o => o.id === orderId);
 
@@ -652,7 +667,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
             }
 
             const [allOrders, anexos] = await Promise.all([
-                orderService.listOrders(),
+                listarPedidosDoLeitor(),
                 carregarAnexosDoPedido(),
             ]);
             const foundOrder = allOrders.find(o => o.id === orderId) || null;

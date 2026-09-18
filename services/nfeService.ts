@@ -338,6 +338,13 @@ export async function approveAndLink(params: {
     source_system:    'NFE',
     reference_id:     invoiceId,
     transaction_date: dueDate,
+    // Sem `due_date` o título nunca vencia (a regra de VENCIDO de vw_payables
+    // lê esta coluna) e, sem `purchase_order_id`, o pedido só existia em
+    // `nfe_invoices` — invisível para "as parcelas do pedido X" (Portal do
+    // Fornecedor). Backfill das linhas antigas em aplicar_20270921000027.
+    due_date:         dueDate,
+    business_status:  'PREVISTO',
+    purchase_order_id: purchaseOrderId ?? null,
     amount:           invoice.total_value,
     status:           'PENDING',
     journal_entry_id: journalEntryId,

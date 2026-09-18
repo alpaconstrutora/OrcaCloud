@@ -128,3 +128,36 @@ Este plano, com `## Pedido original` literal + sessão/hora, as 3 decisões, ite
 - Títulos `source_system='NFE'` (via `nfe_invoices.purchase_order_id`) não aparecem.
 - Fornecedor logado lê a linha inteira de `purchase_orders` (RLS não corta coluna); o recorte contábil cobre só o token.
 - "Próximo vencimento" é a parcela EM ABERTO de menor data — se estiver vencida, mostra "N dias em atraso" (padrão do Portal do Investidor).
+
+
+---
+
+## Pedido 2 (2026-09-17, mesma sessão, após a publicação de ac485d2b)
+
+> corrigir
+
+Perguntado o quê (AskUserQuestion): os três itens de "Não coberto / dívidas" —
+**PO-775868: 1 parcela em vez de 3**, **Fornecedor logado lê campos contábeis**,
+**Títulos de NF-e não aparecem**.
+
+### Medido antes
+
+- PO-775868: Entregue, Parcelado 3x/30d, total 14.100; razão tem 1 parcela PENDING de 14.100 (gerada quando era à vista); JSON da obra tem o mesmo tx (PENDING). PO-551252 (8/8) e PO-391474 (1/1) estão coerentes.
+- NF-e: 3 títulos `source_system='NFE'` PRINCIPAL/DEBIT, todos com `nfe_invoices.purchase_order_id` mas sem `internal_transactions.purchase_order_id` e **sem `due_date`** (nunca vencem). Os pedidos são Rascunho — hoje nenhum fornecedor os veria; a correção é estrutural. Risco anotado: pedido com NF-e aprovada no Fiscal E entregue com nota no portal geraria dois títulos (fluxos distintos, `nfe_invoices` × `invoices`).
+- Fornecedor logado: `po_select_org_or_supplier` dá SELECT na tabela crua; 22 leituras diretas no front, mas o fornecedor logado só passa por `orderService.listOrders/getOrderById/updateOrder`. Tirar o SELECT derruba o UPDATE dele (WHERE exige policy de SELECT) → escritas do logado vão por RPC, como no token. `receipts_select_supplier` (storage) lê `purchase_orders` cru → migra para `purchase_order_is_supplier`. MCC = `agente-leitura@` — dá para logar como fornecedor e testar.
+
+### Itens
+
+1. `supabase/migrations/aplicar_20270921000027_portal_fornecedor_correcoes.sql`
+   a. Reparcelar pedidos Entregue/Recebido/Divergência cujas parcelas no razão são TODAS PENDING e o nº difere de `payment_installments` (hoje só PO-775868): apaga as PENDING do razão e do JSON da obra, regera pelas condições atuais (base = actual_delivery_date||delivery_date, +dias×(i+1), resíduo na última) nos dois lugares. Pronto: PO-775868 com 3×4.700 (venc. 28/03, 27/04, 27/05/2026) no razão e no JSON.
+   b. NF-e: backfill `purchase_order_id` de `nfe_invoices.purchase_order_id` nas linhas NFE; `due_date = COALESCE(due_date, transaction_date)`; `business_status = COALESCE(business_status,'PREVISTO')`. Pronto: 0 linhas NFE PRINCIPAL sem `purchase_order_id`/`due_date` quando a NF-e tem pedido.
+   c. View `purchase_orders_fornecedor` **com `security_invoker = on`** (trava `viewSecurityGuard`: view que roda como dona é o que vazou 24 views em 08/2026) — sozinha respeita a RLS e não devolve nada ao fornecedor; a leitura é pela RPC `pedidos_do_fornecedor()` (`SETOF` da view, SECURITY DEFINER, só authenticated), que aceita `select`/filtros/`order` como tabela (pegadinha medida: `order` só por coluna que está no `select`). Colunas internas numa lista única (`purchase_order_colunas_internas()`: as 6 contábeis + `share_token` + `approval_*`), usada também pelas RPCs de token. Policy `po_select_org_or_supplier` → `po_select_org` (só membro). RPC `purchase_order_update_as_supplier(...)` gated por `purchase_order_is_supplier` (status, datas de logística, cotação; `forbidden` para quem não é o fornecedor). `receipts_select_supplier` via `purchase_order_is_supplier`. Pronto: view = tabela − internas (0 diff); `proacl` ok; com sessão MCC: RPC devolve 4 pedidos sem `bank_account` (400 ao pedir), update do próprio pedido `valid:true`, de pedido alheio `forbidden`; anon 401.
+2. `services/nfeService.ts` — `approveAndLink` grava `purchase_order_id`, `due_date` e `business_status` no par de partidas. Pronto: teste unitário.
+3. `services/orderService.ts` — `listOrders` com fornecedor lê pela RPC `pedidos_do_fornecedor`; `getOrderById` cai na RPC quando a tabela não devolve; `updateAsSupplier` → RPC, com `forbidden` caindo no `updateOrder` (gestor em "Visualizar como"). Pronto: `__tests__/fornecedorLogadoLeituraEstreita.test.ts` (7 casos; 6 falham sem a correção).
+4. `components/SupplyChainOrderDetails.tsx` e `components/SupplierDashboard.tsx` — escritas do fornecedor (status, valor cotado, logística) por `ehComprador ? updateOrder : (portalToken ? token : updateAsSupplier)`; o detalhe carrega os pedidos com `listarPedidosDoLeitor()` (fornecedor → `listOrders` com e-mail → RPC; antes `listOrders()` sem argumentos devolveria vazio ao fornecedor puro). Pronto: travas verdes; Playwright logado como MCC (perfil FORNECEDOR): 0 leituras da tabela crua, 3 pela RPC; Financeiro com PO-775868 3×4.700; detalhe com Comprador; comprador (mesmo usuário em "Portal do Colaborador") continua lendo a tabela em Suprimentos › Pedidos.
+5. Verificação — feita (17/09): itens acima + suíte 343 arquivos / 4515 testes; `check-ui-standard` exit 0. **Limite honesto:** a prova negativa "fornecedor puro não lê a tabela" não é possível com o `agente-leitura` (também é membro da org); a evidência é a policy `po_select_org` sem a perna do fornecedor + o front não consultando a tabela no perfil FORNECEDOR. Não testado: confirmar/negociar de verdade (mudaria status de pedido real); coberto pela RPC provada por curl.
+
+### Medido depois
+- PO-775868: 3 parcelas de 4.700 (28/03, 27/04, 27/05/2026) no razão e no JSON da obra.
+- NF-e: 0 títulos com pedido sem `purchase_order_id`/`due_date`; `nfeService.approveAndLink` grava os dois.
+- Risco anotado (não tratado): pedido com NF-e aprovada no Fiscal E entregue com nota no portal gera dois títulos (fluxos distintos).

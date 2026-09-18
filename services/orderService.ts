@@ -14,7 +14,7 @@ import { approvalService } from './approvalService';
 import { appSettingsService } from './appSettingsService';
 import { generateOrderNumber } from './orderNumberingService';
 import { processService } from './processService';
-import { valorEfetivoDoItem } from '../utils/pedidoItemValor';
+import { valorEfetivoDoItem, aplicarCotadoNosItens } from '../utils/pedidoItemValor';
 
 type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; cost_center_id?: string; chart_of_accounts?: string; plano_de_contas_id?: string; notes?: string; notes_visible_to_supplier?: boolean; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; };
 
@@ -128,23 +128,39 @@ export const orderService = {
             }
         }
 
-        let query = supabase
-            .from('purchase_orders')
-            .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, cost_center_id, chart_of_accounts, plano_de_contas_id, notes, notes_visible_to_supplier, items, version, created_at, updated_at, status_updated_at')
-            .order('created_at', { ascending: false });
+        // Quem lê como FORNECEDOR (supplierId/supplierEmail informados) lê pela
+        // RPC `pedidos_do_fornecedor` (SETOF da view `purchase_orders_fornecedor`):
+        // a policy de SELECT da tabela é só do comprador desde
+        // aplicar_20270921000027, porque RLS não corta coluna e a linha crua
+        // carregava conta de pagamento, centro de custo, plano de contas,
+        // aprovação e cadeia de alçada. A view já exclui rascunho e só devolve
+        // pedidos do fornecedor da sessão; `select`/filtros/`order` valem
+        // sobre o resultado como numa tabela — com uma pegadinha do PostgREST:
+        // em RPC, `order` só aceita coluna que esteja no `select` (medido em
+        // 2026-09-17: `created_at` fora do select → 42703). Está no select.
+        const comoFornecedor = supplierIds.length > 0;
+        let query = comoFornecedor
+            ? supabase
+                .rpc('pedidos_do_fornecedor')
+                .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, notes, notes_visible_to_supplier, items, version, created_at, updated_at, status_updated_at')
+                .order('created_at', { ascending: false })
+            : supabase
+                .from('purchase_orders')
+                .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, cost_center_id, chart_of_accounts, plano_de_contas_id, notes, notes_visible_to_supplier, items, version, created_at, updated_at, status_updated_at')
+                .order('created_at', { ascending: false });
 
         if (projectId) {
             query = query.eq('project_id', projectId);
         }
 
-        if (supplierIds.length > 0) {
+        if (comoFornecedor) {
             query = query.in('supplier_id', supplierIds);
-            // Hide draft orders from suppliers
-            query = query.neq('status', 'Rascunho');
         }
 
-        const { data: orders, error } = await query;
+        const { data: ordersRaw, error } = await query;
         if (error) throw error;
+        // O builder da RPC tipa o resultado como "linha ou linhas"; SETOF é sempre lista.
+        const orders = (ordersRaw ?? []) as DbOrderRow[];
 
         // Fetch suppliers separately — implicit FK join can return 404 when schema cache is stale
         const uniqueSupplierIds = Array.from(new Set((orders || []).map(o => o.supplier_id).filter(Boolean)));
@@ -249,9 +265,69 @@ export const orderService = {
             .from('purchase_orders')
             .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, cost_center_id, chart_of_accounts, plano_de_contas_id, notes, notes_visible_to_supplier, items, version, created_at, updated_at, status_updated_at')
             .eq('id', id)
-            .single();
-        if (error || !data) return null;
-        return this.mapDbOrderToType(data, {});
+            .maybeSingle();
+        if (data) return this.mapDbOrderToType(data, {});
+        if (error && error.code !== 'PGRST116') return null;
+        // Nada pela tabela = não é comprador. O fornecedor logado lê pela RPC
+        // estreita (ver listOrders). Uma consulta a mais SÓ para ele.
+        const { data: doFornecedor } = await supabase
+            .rpc('pedidos_do_fornecedor')
+            .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, notes, items, version, created_at, updated_at, status_updated_at')
+            .eq('id', id)
+            .maybeSingle();
+        return doFornecedor ? this.mapDbOrderToType(doFornecedor as DbOrderRow, {}) : null;
+    },
+
+    /**
+     * Escrita do FORNECEDOR logado — status, datas de logística e valor cotado
+     * dos itens, via RPC `purchase_order_update_as_supplier` (gate
+     * `purchase_order_is_supplier`). Ele não tem mais UPDATE direto: sem
+     * policy de SELECT na tabela, o Postgres recusa o UPDATE com WHERE.
+     *
+     * `forbidden` = a sessão não é o fornecedor deste pedido. É o caso do
+     * gestor em "Visualizar como" no Portal do Fornecedor — membro da org, com
+     * `updateOrder` normal; cai nele.
+     */
+    async updateAsSupplier(id: string, updates: {
+        status?: PurchaseOrder['status'];
+        deliveryDate?: string;
+        separationDate?: string;
+        shippedDate?: string;
+        actualDeliveryDate?: string;
+        quotes?: { index: number; code: string; quotedUnitPrice: number | null; quotedTotal: number | null }[];
+    }, expectedVersion?: number | null): Promise<PurchaseOrder | null> {
+        const { data, error } = await supabase.rpc('purchase_order_update_as_supplier', {
+            p_order_id: id,
+            p_status: updates.status ?? null,
+            p_delivery_date: updates.deliveryDate || null,
+            p_separation_date: updates.separationDate || null,
+            p_shipped_date: updates.shippedDate || null,
+            p_actual_delivery_date: updates.actualDeliveryDate || null,
+            p_quotes: updates.quotes ?? null,
+            p_expected_version: expectedVersion ?? null,
+        });
+        if (error) throw error;
+        const res = data as { valid?: boolean; reason?: string; data?: DbOrderRow } | null;
+        if (res?.valid && res.data) return this.mapDbOrderToType(res.data, {});
+        if (res?.reason === 'conflict') throw new Error('Este pedido foi alterado por outra pessoa. Recarregue e tente de novo.');
+        if (res?.reason === 'status') throw new Error('O valor cotado não pode mais ser alterado neste estágio do pedido.');
+        if (res?.reason === 'forbidden') {
+            const { quotes, ...resto } = updates;
+            const comCotacao = quotes && quotes.length > 0
+                ? { ...resto, items: await this.itensComCotacao(id, quotes) }
+                : resto;
+            // updateOrder devolve a linha crua do banco.
+            const salvo = await this.updateOrder(id, comCotacao, expectedVersion);
+            return salvo ? this.mapDbOrderToType(salvo as DbOrderRow, {}) : null;
+        }
+        return null;
+    },
+
+    /** Aplica cotações sobre os itens ATUAIS do pedido (caminho do gestor em "Visualizar como"). */
+    async itensComCotacao(id: string, quotes: { index: number; code: string; quotedUnitPrice: number | null; quotedTotal: number | null }[]): Promise<PurchaseOrderItem[]> {
+        const atual = await this.getOrderById(id);
+        if (!atual) throw new Error('Pedido não encontrado.');
+        return aplicarCotadoNosItens(atual.items, quotes);
     },
 
     async updateOrder(id: string, updates: Partial<PurchaseOrder>, expectedVersion?: number | null) {

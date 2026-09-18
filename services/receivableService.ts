@@ -1,14 +1,75 @@
 import { supabase } from '../lib/supabase';
 import { originIdFromRef } from '../lib/receivableRef';
 import { empreendimentoService } from './empreendimentoService';
-import type { Receivable, ReceivableBusinessStatus, InadimplenciaFaixa } from '../types/financial';
+import type { Receivable, ReceivableBusinessStatus, ReceivableEffectiveStatus, InadimplenciaFaixa } from '../types/financial';
 
+/**
+ * Só o que recorta a CONSULTA (período/obra). Busca por texto e status são
+ * recorte de memória — ver `filtrarRecebiveis` — porque a view já traz o
+ * conjunto inteiro da organização e refazer a requisição a cada tecla era o que
+ * deixava a tela lenta (18/09/2026: 8 requisições por tecla digitada).
+ */
 export interface ReceivableFilters {
-    search?: string;
-    status?: ReceivableBusinessStatus | 'VENCIDO' | 'all';
     dueFrom?: string;
     dueTo?: string;
     projectId?: string;
+}
+
+export interface FiltroEmMemoria {
+    search?: string;
+    status?: ReceivableEffectiveStatus | 'all';
+}
+
+/**
+ * Recorte em memória por status efetivo e texto livre. Pura, para a tela
+ * filtrar a cada tecla sem ir ao servidor. O texto casa com cliente, descrição,
+ * obra, empreendimento (quando já resolvido) e `reference_id`.
+ */
+export function filtrarRecebiveis<T extends Receivable>(rows: T[], f: FiltroEmMemoria): T[] {
+    let out = rows;
+    if (f.status && f.status !== 'all') {
+        const st = f.status;
+        out = out.filter(r => r.effective_status === st);
+    }
+    const q = (f.search ?? '').trim().toLowerCase();
+    if (q) {
+        out = out.filter(r =>
+            (r.party_name ?? '').toLowerCase().includes(q) ||
+            (r.description ?? '').toLowerCase().includes(q) ||
+            (r.project_name ?? '').toLowerCase().includes(q) ||
+            (r.empreendimento_name ?? '').toLowerCase().includes(q) ||
+            (r.reference_id ?? '').toLowerCase().includes(q),
+        );
+    }
+    return out;
+}
+
+/** Status efetivos que a view considera "em aberto" para virar VENCIDO. */
+const ABERTOS_QUE_VENCEM: ReadonlySet<string> = new Set(['PREVISTO', 'EMITIDO', 'ENVIADO', 'APROVADO']);
+
+/**
+ * Espelho, no cliente, do que `updateStatus` grava + do CASE de
+ * `vw_receivables.effective_status` (migration 20270909000000), para a tela
+ * atualizar a linha sem recarregar a lista inteira (guia §22).
+ *
+ *   RECEBIDO            → status CONCILIATED, efetivo RECEBIDO
+ *   CANCELADO           → status CANCELLED — a view exclui a linha: devolve null
+ *   PARCIAL/RENEGOCIADO → só business_status; efetivo = o próprio
+ *   demais (abertos)    → status PENDING, payment_date null; efetivo = VENCIDO se
+ *                         já venceu, senão o próprio
+ *
+ * `hoje` em 'YYYY-MM-DD' — comparação de string, igual ao `due_date < CURRENT_DATE`.
+ */
+export function aplicarStatusLocal<T extends Receivable>(r: T, novo: ReceivableBusinessStatus, hoje: string): T | null {
+    if (novo === 'CANCELADO') return null;
+    if (novo === 'RECEBIDO') {
+        return { ...r, business_status: novo, status: 'CONCILIATED', effective_status: 'RECEBIDO' };
+    }
+    if (novo === 'PARCIAL' || novo === 'RENEGOCIADO') {
+        return { ...r, business_status: novo, effective_status: novo };
+    }
+    const vencido = ABERTOS_QUE_VENCEM.has(novo) && !!r.due_date && r.due_date < hoje;
+    return { ...r, business_status: novo, status: 'PENDING', effective_status: vencido ? 'VENCIDO' : novo };
 }
 
 /** PostgREST recebe o `.in()` pela URL — lotes de 200 UUIDs ficam longe do limite. */
@@ -33,8 +94,13 @@ function chunk<T>(list: T[], size = 200): T[][] {
  * Lançamento manual e NF-e não têm contrato e ficam sem empreendimento. Falha em
  * qualquer consulta devolve as linhas sem a coluna — a tela não pode ficar em
  * branco por causa de uma dimensão derivada.
+ *
+ * ⚠️ Roda DEPOIS de a tela já ter mostrado a lista (`list` não espera por isto).
+ * Até 18/09/2026 vivia dentro de `list()` e eram 5 idas seriais ao servidor
+ * antes da primeira linha aparecer. Hoje são 2 (contratos → tudo o mais em
+ * paralelo), mais uma só se houver vínculo direto sem unidade/obra.
  */
-async function enrichWithEmpreendimento(rows: Receivable[], organizationId: string | null): Promise<Receivable[]> {
+async function resolveEmpreendimentos(rows: Receivable[], organizationId: string | null): Promise<Receivable[]> {
     const contractIds = [...new Set(rows.map(r => originIdFromRef(r.reference_id)).filter(Boolean))];
     if (contractIds.length === 0) return rows;
 
@@ -52,22 +118,22 @@ async function enrichWithEmpreendimento(rows: Receivable[], organizationId: stri
         if (contracts.length === 0) return rows;
         const contractById = new Map(contracts.map(c => [c.id, c]));
 
-        // Caminho 2 — negócio → imóvel.
+        // Caminho 2 — negócio → imóvel. O mapa imóvel → empreendimento não depende
+        // do resultado dos negócios (é a organização inteira), então as três
+        // consultas correm juntas.
         const dealIds = [...new Set(contracts.map(c => c.deal_id).filter((v): v is string => !!v))];
-        const propertyByDeal = new Map<string, string>();
-        for (const ids of chunk(dealIds)) {
-            const { data } = await supabase.from('commercial_deals').select('id, property_id').in('id', ids);
-            (data || []).forEach((d: { id: string; property_id?: string | null }) => {
-                if (d.property_id) propertyByDeal.set(d.id, d.property_id);
-            });
-        }
-
-        const [byProperty, byObra] = await Promise.all([
-            propertyByDeal.size > 0
-                ? empreendimentoService.mapPropertiesToEmpreendimentos(organizationId)
-                : Promise.resolve({} as Awaited<ReturnType<typeof empreendimentoService.mapPropertiesToEmpreendimentos>>),
+        type DealRow = { id: string; property_id?: string | null };
+        const vazio = {} as Awaited<ReturnType<typeof empreendimentoService.mapPropertiesToEmpreendimentos>>;
+        const [dealLotes, byProperty, byObra] = await Promise.all([
+            Promise.all(chunk(dealIds).map(async ids => {
+                const { data } = await supabase.from('commercial_deals').select('id, property_id').in('id', ids);
+                return (data || []) as DealRow[];
+            })),
+            dealIds.length > 0 ? empreendimentoService.mapPropertiesToEmpreendimentos(organizationId) : Promise.resolve(vazio),
             empreendimentoService.mapObrasToEmpreendimentos(organizationId),
         ]);
+        const propertyByDeal = new Map<string, string>();
+        dealLotes.flat().forEach(d => { if (d.property_id) propertyByDeal.set(d.id, d.property_id); });
 
         // Caminho 1 — nome dos vínculos diretos (os mapas acima só trazem os
         // empreendimentos que têm unidade/obra).
@@ -102,7 +168,13 @@ async function enrichWithEmpreendimento(rows: Receivable[], organizationId: stri
 
 export const receivableService = {
 
-    /** `organizationId` null = "Todas as organizações": sem filtro, a RLS recorta. */
+    /**
+     * `organizationId` null = "Todas as organizações": sem filtro, a RLS recorta.
+     *
+     * Devolve as linhas assim que `vw_receivables` responde — sem busca/status
+     * (`filtrarRecebiveis`, em memória) e sem Empreendimento
+     * (`resolveEmpreendimentos`, que a tela dispara em seguida).
+     */
     async list(organizationId: string | null, filters?: ReceivableFilters): Promise<Receivable[]> {
         let q = supabase
             .from('vw_receivables')
@@ -117,29 +189,10 @@ export const receivableService = {
 
         const { data, error } = await q;
         if (error) throw error;
-
-        let rows = (data || []) as Receivable[];
-
-        if (filters?.status && filters.status !== 'all') {
-            rows = rows.filter(r => r.effective_status === filters.status);
-        }
-
-        // Antes da busca: o texto digitado também casa com o nome do empreendimento.
-        rows = await enrichWithEmpreendimento(rows, organizationId);
-
-        if (filters?.search) {
-            const q2 = filters.search.toLowerCase();
-            rows = rows.filter(r =>
-                (r.party_name ?? '').toLowerCase().includes(q2) ||
-                (r.description ?? '').toLowerCase().includes(q2) ||
-                (r.project_name ?? '').toLowerCase().includes(q2) ||
-                (r.empreendimento_name ?? '').toLowerCase().includes(q2) ||
-                (r.reference_id ?? '').toLowerCase().includes(q2),
-            );
-        }
-
-        return rows;
+        return (data || []) as Receivable[];
     },
+
+    resolveEmpreendimentos,
 
     async updateStatus(
         id: string,

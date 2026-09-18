@@ -4,7 +4,7 @@ import {
     Loader2, Plus, RefreshCw, Search, TrendingUp, X, Filter,
     FileText, QrCode, Copy, ExternalLink, DollarSign, AlertTriangle, MoveHorizontal, Undo2,
 } from 'lucide-react';
-import { receivableService } from '../services/receivableService';
+import { receivableService, filtrarRecebiveis, aplicarStatusLocal } from '../services/receivableService';
 import { clientChargeService } from '../services/clientChargeService';
 import { asaasConfigService } from '../services/asaasConfigService';
 import { clientService } from '../services/clientService';
@@ -86,7 +86,7 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Roda client-side
-// por cima de `rows`, que já vem filtrado no servidor (search/status/período).
+// por cima de `rowsFiltrados` (período vem do servidor; busca e status, de memória).
 const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
     { key: 'party_name', label: 'Cliente / Parte', type: 'text' },
     { key: 'description', label: 'Descrição', type: 'text' },
@@ -768,27 +768,83 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     const costCenterNameById = useMemo(() => new Map(costCenters.map(c => [c.id, c.name])), [costCenters]);
     const planoContasNameById = useMemo(() => new Map(planoContas.map(c => [c.id, c.name])), [planoContas]);
 
+    /** Contador de carga: resposta de um `load()` antigo que chega depois de um
+     *  novo (troca rápida de organização/período) é descartada — inclusive a
+     *  etapa de Empreendimento, que termina bem depois da lista. */
+    const loadSeq = React.useRef(0);
+
+    /**
+     * Só organização e período vão ao servidor. Busca e status filtram em
+     * memória (`rowsFiltrados`): até 18/09/2026 eram dependências daqui e cada
+     * tecla digitada refazia as 8 requisições e trocava a tabela pelo spinner.
+     *
+     * A tabela aparece assim que `vw_receivables` responde; o Empreendimento
+     * (cadeia contratos → negócios → unidades) preenche a coluna em seguida, sem
+     * segurar a lista — antes ficava dentro do `list()` e a tela esperava por
+     * ele (medido: ~330 ms a mais com RTT de 50 ms; segundos em rede lenta).
+     */
     const load = useCallback(async () => {
+        const seq = ++loadSeq.current;
         setLoading(true);
         setError(null);
         try {
             const [data, inad, chargeMap] = await Promise.all([
-                receivableService.list(effectiveOrgId, { search, status: statusFilter, dueFrom: dueFrom || undefined, dueTo: dueTo || undefined }),
+                receivableService.list(effectiveOrgId, { dueFrom: dueFrom || undefined, dueTo: dueTo || undefined }),
                 receivableService.getInadimplencia(effectiveOrgId),
                 clientChargeService.byTransaction(effectiveOrgId).catch(() => ({} as Record<string, ClientCharge>)),
             ]);
+            if (seq !== loadSeq.current) return;
             setRows(data);
             setInad(inad.filter(f => f.count > 0));
             setCharges(chargeMap);
             setSelectedIds(new Set());
+            setLoading(false);
+
+            const comEmpreendimento = await receivableService.resolveEmpreendimentos(data, effectiveOrgId);
+            if (seq !== loadSeq.current) return;
+            // Mudança local (baixa/estorno) entre a lista e o Empreendimento chegar
+            // não pode ser desfeita: só a coluna derivada é copiada, por id.
+            const empPorId = new Map(comEmpreendimento.map(r => [r.id, r]));
+            setRows(prev => prev.map(r => {
+                const e = empPorId.get(r.id);
+                return e && e.empreendimento_id ? { ...r, empreendimento_id: e.empreendimento_id, empreendimento_name: e.empreendimento_name } : r;
+            }));
         } catch (e) {
+            if (seq !== loadSeq.current) return;
             setError(e instanceof Error ? e.message : 'Erro ao carregar');
-        } finally {
             setLoading(false);
         }
-    }, [effectiveOrgId, search, statusFilter, dueFrom, dueTo]);
+    }, [effectiveOrgId, dueFrom, dueTo]);
 
     useEffect(() => { load(); }, [load]);
+
+    /** KPI de inadimplência vem de RPC — reconsultado em silêncio (sem spinner)
+     *  depois de uma mudança de status, já que a lista é atualizada em memória. */
+    async function refreshInadimplencia() {
+        try {
+            const inad = await receivableService.getInadimplencia(effectiveOrgId);
+            setInad(inad.filter(f => f.count > 0));
+        } catch { /* KPI secundário — a lista já está certa */ }
+    }
+
+    /** §22 — aplica a mudança de status na linha local em vez de recarregar a
+     *  tabela inteira. `null` (CANCELADO) tira a linha, como a view faria. */
+    function aplicarStatusNaLista(ids: string[], novo: Parameters<typeof aplicarStatusLocal>[1]) {
+        const alvo = new Set(ids);
+        const hoje = today();
+        setRows(prev => prev.flatMap(r => {
+            if (!alvo.has(r.id)) return [r];
+            const atualizado = aplicarStatusLocal(r, novo, hoje);
+            return atualizado ? [atualizado] : [];
+        }));
+        setSelectedIds(prev => {
+            if (![...prev].some(id => alvo.has(id))) return prev;
+            const next = new Set(prev);
+            alvo.forEach(id => next.delete(id));
+            return next;
+        });
+        void refreshInadimplencia();
+    }
 
     /** competência 'YYYY-MM' → { from: 'YYYY-MM-01', to: 'YYYY-MM-<último dia>' } */
     function competenciaToRange(comp: string): { from: string; to: string } {
@@ -833,7 +889,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
         if (!ok) return;
         try {
             await receivableService.updateStatus(receivable.id, 'RECEBIDO');
-            await load();
+            aplicarStatusNaLista([receivable.id], 'RECEBIDO');
             notify('Recebível baixado com sucesso.');
         } catch (e) {
             notify('Erro: ' + (e instanceof Error ? e.message : 'Falha ao baixar'), 'error');
@@ -864,7 +920,10 @@ export default function ContasReceberManager({ organizationId, organizations }: 
         if (!ok) return;
         try {
             await receivableService.remove(r.id);
-            await load();
+            // §22 — tira a linha do array local em vez de recarregar a tabela.
+            setRows(prev => prev.filter(x => x.id !== r.id));
+            setSelectedIds(prev => { if (!prev.has(r.id)) return prev; const next = new Set(prev); next.delete(r.id); return next; });
+            void refreshInadimplencia();
             notify('Lançamento excluído.');
         } catch (e) {
             notify(e instanceof Error ? e.message : 'Falha ao excluir', 'error');
@@ -893,8 +952,9 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     async function handleChangeStatus(id: string, newStatus: string) {
         setChangingStatus(id);
         try {
-            await receivableService.updateStatus(id, newStatus as Parameters<typeof receivableService.updateStatus>[1]);
-            await load();
+            const novo = newStatus as Parameters<typeof receivableService.updateStatus>[1];
+            await receivableService.updateStatus(id, novo);
+            aplicarStatusNaLista([id], novo);
         } catch (e) {
             notify('Erro: ' + (e instanceof Error ? e.message : 'Falha'), 'error');
         } finally {
@@ -902,13 +962,21 @@ export default function ContasReceberManager({ organizationId, organizations }: 
         }
     }
 
+    /** Busca e status em memória — nenhuma requisição ao digitar. Os KPIs
+     *  seguem este recorte (como sempre seguiram: a lista filtrada era a que
+     *  voltava do servidor). */
+    const rowsFiltrados = useMemo(
+        () => filtrarRecebiveis(rows, { search, status: statusFilter }),
+        [rows, search, statusFilter],
+    );
+
     /** Injeta os nomes resolvidos de Centro de Custo/Plano de Contas — a view só
      *  traz os UUIDs (ver comentário na migration 20270847000000). */
-    const rowsWithNames = useMemo(() => rows.map(r => ({
+    const rowsWithNames = useMemo(() => rowsFiltrados.map(r => ({
         ...r,
         cost_center_name: r.cost_center_id ? (costCenterNameById.get(r.cost_center_id) ?? '') : '',
         plano_de_contas_name: r.plano_de_contas_id ? (planoContasNameById.get(r.plano_de_contas_id) ?? '') : '',
-    })), [rows, costCenterNameById, planoContasNameById]);
+    })), [rowsFiltrados, costCenterNameById, planoContasNameById]);
 
     const sorted = useMemo(() => {
         let result = applyFilterRules(rowsWithNames, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
@@ -934,7 +1002,10 @@ export default function ContasReceberManager({ organizationId, organizations }: 
             });
         }
         return result;
-    }, [rows, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection]);
+    // `rowsWithNames`, não `rows`: com `rows` o memo não reagia ao catálogo de
+    // CC/Plano chegar depois da lista — ficava mascarado enquanto a lista era a
+    // mais lenta das duas.
+    }, [rowsWithNames, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     /** Mesmo critério do botão "Baixar" por linha: só não-RECEBIDO pode ser baixado. */
     const isSelectable = (r: Receivable) => r.effective_status !== 'RECEBIDO';
@@ -1001,7 +1072,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
         }
         setSelectedIds(new Set());
         setBulkLoading(false);
-        if (okIds.length) await load();
+        if (okIds.length) aplicarStatusNaLista(okIds, 'RECEBIDO');
         if (falhas.length) {
             notify(`${okIds.length} baixado(s). Falha em ${falhas.length}: ${falhas.join(', ')}`, 'error');
         } else if (okIds.length) {
@@ -1013,7 +1084,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
         const todayStr = today();
         const inicioMes = todayStr.slice(0, 7) + '-01';
         let aReceber = 0, vencidos = 0, recebidoMes = 0;
-        rows.forEach(r => {
+        rowsFiltrados.forEach(r => {
             if (r.effective_status === 'RECEBIDO') {
                 if ((r.transaction_date ?? '') >= inicioMes) recebidoMes += r.amount;
             } else if (r.effective_status === 'VENCIDO') {
@@ -1023,7 +1094,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
             }
         });
         return { aReceber, vencidos, recebidoMes };
-    }, [rows]);
+    }, [rowsFiltrados]);
 
     const STATUS_OPTIONS: StatusFilter[] = ['all','PREVISTO','EMITIDO','ENVIADO','RECEBIDO','PARCIAL','VENCIDO','RENEGOCIADO'];
 
@@ -1040,7 +1111,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                 <KpiCard
                     label="A Receber"
                     value={fmt(summary.aReceber)}
-                    sub={`${rows.filter(r => !['CANCELADO','RECEBIDO'].includes(r.effective_status)).length} títulos em aberto`}
+                    sub={`${rowsFiltrados.filter(r => !['CANCELADO','RECEBIDO'].includes(r.effective_status)).length} títulos em aberto`}
                     icon={<DollarSign className="w-5 h-5" />}
                     color="blue"
                     onClick={() => setStatusFilter('all')}
@@ -1048,7 +1119,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                 <KpiCard
                     label="Vencidos"
                     value={fmt(summary.vencidos)}
-                    sub={`${rows.filter(r => r.effective_status === 'VENCIDO').length} títulos vencidos`}
+                    sub={`${rowsFiltrados.filter(r => r.effective_status === 'VENCIDO').length} títulos vencidos`}
                     icon={<AlertTriangle className="w-5 h-5" />}
                     color={summary.vencidos > 0 ? 'red' : 'gray'}
                     onClick={() => setStatusFilter('VENCIDO')}
@@ -1056,7 +1127,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                 <KpiCard
                     label="Recebido (mês)"
                     value={fmt(summary.recebidoMes)}
-                    sub={`${rows.filter(r => r.effective_status === 'RECEBIDO').length} títulos quitados`}
+                    sub={`${rowsFiltrados.filter(r => r.effective_status === 'RECEBIDO').length} títulos quitados`}
                     icon={<Check className="w-5 h-5" />}
                     color="emerald"
                     onClick={() => setStatusFilter('RECEBIDO')}

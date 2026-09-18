@@ -2153,11 +2153,25 @@ function fecharModal() {
 > ✅ Só recarregue a lista inteira quando o backend não devolve o registro
 > completo, ou quando a operação afeta muitos itens de forma não previsível
 > (ex: importação em lote que não retorna os itens criados).
-> ⚠️ **Pendência de propagação:** corrigido só em `BoletoManager.tsx`. Outras
-> telas do sistema (Contas a Pagar/Receber, Fornecedores, Clientes, Obras,
-> Locações etc.) ainda chamam recarga completa depois de criar/editar/excluir
-> um item — não tratar como "resolvido no app inteiro". Ao tocar em qualquer
-> tabela com esse padrão, aplicar a mesma correção.
+> ⚠️ **Pendência de propagação:** corrigido em `BoletoManager.tsx` e, em
+> 18/09/2026, em `ContasReceberManager.tsx` (baixa, estorno, troca de status,
+> exclusão e baixa em lote atualizam a linha local via
+> `aplicarStatusLocal` — espelho do CASE da view — e só o KPI de inadimplência
+> é reconsultado, sem spinner; criar/editar continua recarregando porque o
+> modal não devolve o registro). Outras telas do sistema (Contas a Pagar,
+> Fornecedores, Clientes, Obras, Locações etc.) ainda chamam recarga completa
+> depois de criar/editar/excluir um item — não tratar como "resolvido no app
+> inteiro". Ao tocar em qualquer tabela com esse padrão, aplicar a mesma
+> correção.
+>
+> **Corolário (mesma família, 18/09/2026 — Contas a Receber lenta):** busca e
+> filtro rápido de status que a tela já aplica em memória **não entram nas
+> dependências do `load()`**. Com `search` como dependência do carregamento,
+> cada tecla refazia 8 requisições e trocava a tabela pelo spinner. E uma
+> coluna derivada por cadeia de consultas (Empreendimento, resolvido por
+> contrato → negócio → unidade) **não segura a lista**: a tabela aparece com o
+> que a view devolveu e a coluna preenche depois. O guarda de resposta fora de
+> ordem (`loadSeq`) protege as duas etapas.
 
 ---
 

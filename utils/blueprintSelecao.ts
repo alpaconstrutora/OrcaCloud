@@ -1,6 +1,7 @@
 /**
  * GESTOS SOBRE A SELEÇÃO — duplicar, espelhar, isolar (17/09/2026: os botões
- * do acesso rápido, *"implemente todos"*).
+ * do acesso rápido, *"implemente todos"*); girar, alinhar e matriz (18/09/2026,
+ * roadmap E0.1 — os P0 de edição básica que faltavam).
  *
  * Regra pura, sem React: o editor só entrega `model` + `selectedIds` e recebe
  * o comando (ou o aviso) de volta. A partição por família é a mesma para os
@@ -188,6 +189,231 @@ export function comandoDeEspelhamento(
       em,
     },
     aviso: f.openingIds.length > 0 ? 'A esquadria selecionada sem a parede não foi espelhada.' : null,
+  };
+}
+
+/**
+ * GIRAR a seleção em torno do CENTRO da própria caixa, em graus inteiros
+ * (positivo = anti-horário no sistema do modelo, o sentido de `rotacaoDeg`).
+ * O centro é arredondado ao milímetro — é o que deixa o giro de 90° exato no
+ * kernel (`RotateEntities`). Abertura avulsa, como no espelho, só acompanha a
+ * parede.
+ */
+export function comandoDeRotacao(
+  model: BlueprintModel,
+  selectedIds: readonly string[],
+  anguloGraus: number,
+): Resultado {
+  const f = familiasDaSelecao(model, selectedIds);
+  const caixa = caixaDaSelecao(model, f);
+  if (!caixa) {
+    return { ok: false, aviso: 'Nada que se possa girar está selecionado (esquadria sozinha acompanha a parede).' };
+  }
+  const angulo = Math.round(anguloGraus);
+  if (angulo % 360 === 0) return { ok: false, aviso: 'Giro de 0° não muda nada.' };
+  return {
+    ok: true,
+    comando: {
+      type: 'RotateEntities',
+      wallIds: f.wallIds,
+      boundaryIds: f.boundaryIds,
+      structuralIds: f.structuralIds,
+      aguaIds: f.aguaIds,
+      trechoIds: f.trechoIds,
+      terminalIds: f.terminalIds,
+      quadroIds: f.quadroIds,
+      anguloGraus: angulo,
+      centro: { x: Math.round((caixa.minX + caixa.maxX) / 2), y: Math.round((caixa.minY + caixa.maxY) / 2) },
+    },
+    aviso: f.openingIds.length > 0 ? 'A esquadria selecionada sem a parede não foi girada.' : null,
+  };
+}
+
+/** Resultado de um gesto que pode precisar de MAIS de um comando (um lote = um passo de desfazer). */
+export type ResultadoLote = { ok: true; comandos: Command[]; aviso: string | null } | { ok: false; aviso: string };
+
+/** Cosseno do desvio angular a partir do qual duas retas ainda contam como paralelas (1°). */
+const COS_PARALELO = Math.cos((1 * Math.PI) / 180);
+
+/**
+ * ALINHAR a seleção a uma REFERÊNCIA — a parede (ou divisa) escolhida por
+ * último. Cada outra peça anda RÍGIDA, na perpendicular, até o eixo dela cair
+ * sobre a reta da referência:
+ *
+ * - parede/limite/viga PARALELA (≤ 1°): o ponto médio é projetado na reta e a
+ *   peça inteira segue o deslocamento — o comprimento não muda, então nenhuma
+ *   abertura sai do lugar. Não paralela: fica onde está, com aviso — "alinhar"
+ *   uma parede perpendicular seria girá-la, e giro é outro gesto.
+ * - pilar, terminal, quadro: o centro vai para a reta.
+ *
+ * Sai UM `TranslateEntities` por deslocamento distinto (peças que andam o mesmo
+ * tanto vão juntas), com `manterJuncoes` — as vizinhas presas esticam para
+ * acompanhar, como no arraste, e o ambiente continua fechado.
+ */
+export function comandosDeAlinhamento(
+  model: BlueprintModel,
+  selectedIds: readonly string[],
+  referenciaId: ObjectId,
+): ResultadoLote {
+  const ref = model.walls.find((w) => w.id === referenciaId) ?? model.boundaries.find((b) => b.id === referenciaId);
+  if (!ref) {
+    return { ok: false, aviso: 'Escolha uma parede ou divisa como referência (a última selecionada).' };
+  }
+  const f = familiasDaSelecao(
+    model,
+    selectedIds.filter((id) => id !== referenciaId),
+  );
+  const rx = ref.b.x - ref.a.x;
+  const ry = ref.b.y - ref.a.y;
+  const comp = Math.hypot(rx, ry);
+  if (comp === 0) return { ok: false, aviso: 'A referência não tem comprimento.' };
+  const ux = rx / comp;
+  const uy = ry / comp;
+  // Deslocamento perpendicular que leva `p` até a reta da referência.
+  const ateAReta = (p: Point): Point => {
+    const dx = p.x - ref.a.x;
+    const dy = p.y - ref.a.y;
+    const ao = dx * ux + dy * uy;
+    return { x: Math.round(ref.a.x + ao * ux - p.x), y: Math.round(ref.a.y + ao * uy - p.y) };
+  };
+  const paralela = (a: Point, b: Point) => {
+    const vx = b.x - a.x;
+    const vy = b.y - a.y;
+    const c = Math.hypot(vx, vy);
+    return c > 0 && Math.abs((vx * ux + vy * uy) / c) >= COS_PARALELO;
+  };
+  const meio = (a: Point, b: Point): Point => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+
+  type Grupo = { delta: Point; wallIds: ObjectId[]; boundaryIds: ObjectId[]; structuralIds: ObjectId[]; terminalIds: ObjectId[]; quadroIds: ObjectId[] };
+  const grupos = new Map<string, Grupo>();
+  const grupo = (delta: Point): Grupo => {
+    const chave = `${delta.x},${delta.y}`;
+    let g = grupos.get(chave);
+    if (!g) {
+      g = { delta, wallIds: [], boundaryIds: [], structuralIds: [], terminalIds: [], quadroIds: [] };
+      grupos.set(chave, g);
+    }
+    return g;
+  };
+  let naoParalelas = 0;
+  let jaAlinhadas = 0;
+  const alinharSegmento = (a: Point, b: Point, id: ObjectId, lista: 'wallIds' | 'boundaryIds' | 'structuralIds') => {
+    if (!paralela(a, b)) {
+      naoParalelas++;
+      return;
+    }
+    const d = ateAReta(meio(a, b));
+    if (d.x === 0 && d.y === 0) {
+      jaAlinhadas++;
+      return;
+    }
+    grupo(d)[lista].push(id);
+  };
+  for (const w of model.walls) if (f.wallIds.includes(w.id)) alinharSegmento(w.a, w.b, w.id, 'wallIds');
+  for (const b of model.boundaries) if (f.boundaryIds.includes(b.id)) alinharSegmento(b.a, b.b, b.id, 'boundaryIds');
+  for (const e of model.structures) {
+    if (!f.structuralIds.includes(e.id)) continue;
+    if (e.pontos.length === 1) {
+      const d = ateAReta(e.pontos[0]);
+      if (d.x === 0 && d.y === 0) jaAlinhadas++;
+      else grupo(d).structuralIds.push(e.id);
+    } else if (e.pontos.length === 2) {
+      alinharSegmento(e.pontos[0], e.pontos[1], e.id, 'structuralIds');
+    } else {
+      naoParalelas++;
+    }
+  }
+  for (const t of model.terminais ?? []) {
+    if (!f.terminalIds.includes(t.id)) continue;
+    const d = ateAReta(t.at);
+    if (d.x === 0 && d.y === 0) jaAlinhadas++;
+    else grupo(d).terminalIds.push(t.id);
+  }
+  for (const q of model.quadros ?? []) {
+    if (!f.quadroIds.includes(q.id)) continue;
+    const d = ateAReta(q.at);
+    if (d.x === 0 && d.y === 0) jaAlinhadas++;
+    else grupo(d).quadroIds.push(q.id);
+  }
+
+  const avisos: string[] = [];
+  if (naoParalelas > 0) avisos.push(`${naoParalelas} peça(s) não paralela(s) à referência ficou(aram) onde estava(m).`);
+  const ignorados = f.aguaIds.length + f.trechoIds.length + f.openingIds.length;
+  if (ignorados > 0) avisos.push(`${ignorados} peça(s) de telhado/trecho/esquadria avulsa não entram no alinhamento.`);
+  if (grupos.size === 0) {
+    return {
+      ok: false,
+      aviso:
+        jaAlinhadas > 0 && naoParalelas === 0
+          ? 'Tudo já está alinhado à referência.'
+          : avisos.length > 0
+            ? avisos.join(' ')
+            : 'Selecione a referência e pelo menos mais uma peça para alinhar.',
+    };
+  }
+  const comandos: Command[] = [...grupos.values()].map((g) => ({
+    type: 'TranslateEntities',
+    wallIds: g.wallIds,
+    boundaryIds: g.boundaryIds,
+    structuralIds: g.structuralIds,
+    terminalIds: g.terminalIds,
+    quadroIds: g.quadroIds,
+    delta: g.delta,
+    manterJuncoes: true,
+  }));
+  return { ok: true, comandos, aviso: avisos.length > 0 ? avisos.join(' ') : null };
+}
+
+export interface ParametrosDaMatriz {
+  /** Total de exemplares, o original incluído (≥ 2). */
+  quantidade: number;
+  /** Passo entre exemplares consecutivos, em mm (pode ser negativo; não pode ser 0 nos dois eixos). */
+  passoXMm: number;
+  passoYMm: number;
+}
+
+/**
+ * MATRIZ: `quantidade − 1` cópias da seleção, a k·passo do original — a
+ * fileira de pilares, o pavimento de vagas, a bateria de banheiros. Cada cópia
+ * é um `DuplicateEntities` a partir do ORIGINAL (ids conhecidos), e o lote é um
+ * passo de desfazer. Abertura avulsa fica de fora: não há "k·passo" ao longo de
+ * uma parede que não foi copiada. Telhado e instalações também, porque
+ * `DuplicateEntities` não os copia — o aviso diz o que não foi.
+ */
+export function comandosDeMatriz(
+  model: BlueprintModel,
+  selectedIds: readonly string[],
+  levelId: ObjectId,
+  parametros: ParametrosDaMatriz,
+): ResultadoLote {
+  const f = familiasDaSelecao(model, selectedIds);
+  const quantidade = Math.floor(parametros.quantidade);
+  const px = Math.round(parametros.passoXMm);
+  const py = Math.round(parametros.passoYMm);
+  if (f.wallIds.length === 0 && f.boundaryIds.length === 0 && f.structuralIds.length === 0 && f.aguaIds.length === 0) {
+    return { ok: false, aviso: 'Nada que se possa repetir está selecionado (paredes, estruturas, divisas ou telhado).' };
+  }
+  if (quantidade < 2) return { ok: false, aviso: 'A matriz precisa de pelo menos 2 exemplares.' };
+  if (quantidade > 200) return { ok: false, aviso: 'No máximo 200 exemplares por matriz.' };
+  if (px === 0 && py === 0) return { ok: false, aviso: 'Informe um passo diferente de zero em X ou em Y.' };
+  const comandos: Command[] = [];
+  for (let k = 1; k < quantidade; k++) {
+    comandos.push({
+      type: 'DuplicateEntities',
+      levelId,
+      wallIds: f.wallIds,
+      boundaryIds: f.boundaryIds,
+      structuralIds: f.structuralIds,
+      aguaIds: f.aguaIds,
+      openings: [],
+      delta: { x: px * k, y: py * k },
+    });
+  }
+  const ignorados = f.trechoIds.length + f.terminalIds.length + f.quadroIds.length + f.openingIds.length;
+  return {
+    ok: true,
+    comandos,
+    aviso: ignorados > 0 ? `${ignorados} peça(s) de instalações/esquadria avulsa não entram na matriz.` : null,
   };
 }
 

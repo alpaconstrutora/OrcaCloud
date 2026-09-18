@@ -13,6 +13,10 @@ import {
   SquareStack,
   FlipHorizontal2,
   FlipVertical2,
+  RotateCcw,
+  RotateCw,
+  AlignStartVertical,
+  LayoutGrid,
   History,
   Landmark,
   Merge,
@@ -251,7 +255,15 @@ import {
   type AreaDeTransferencia,
   type DestinoDeColagem,
 } from '../../utils/blueprintAreaDeTransferencia';
-import { comandoDeDuplicacao, comandoDeEspelhamento, idsParaIsolar } from '../../utils/blueprintSelecao';
+import {
+  comandoDeDuplicacao,
+  comandoDeEspelhamento,
+  comandoDeRotacao,
+  comandosDeAlinhamento,
+  comandosDeMatriz,
+  idsParaIsolar,
+  type ParametrosDaMatriz,
+} from '../../utils/blueprintSelecao';
 import type { PranchaExport } from '../../services/blueprintExportService';
 import { useBlueprintMedicoes } from '../../hooks/useBlueprintMedicoes';
 import { useBlueprintZonaUrbanistica } from '../../hooks/useBlueprintZonaUrbanistica';
@@ -646,6 +658,9 @@ const ROTULO_DA_TAREFA = {
   // Esgoto automático (18/09/2026, F5): aparelhos → coletores → caixa de
   // inspeção, com caimento por DN, tubo de queda e ventilação.
   esgoto: 'Esgoto automático',
+  // Matriz (18/09/2026, roadmap E0.1): N cópias da seleção a k·passo — a
+  // fileira de pilares, a bateria de banheiros. Um lote, um Ctrl+Z.
+  matriz: 'Matriz — repetir a seleção',
   'gerar-paredes': 'Gerar paredes do PDF',
   'importar-ifc': 'Importar do IFC',
   'importar-dxf': 'Importar do DXF',
@@ -744,6 +759,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [espessura, setEspessura] = useState(ESPESSURA_PADRAO_MM);
   // `null` = automatico: o passo acompanha o zoom. Qualquer numero fixa o passo.
   const [passoGrade, setPassoGrade] = useState<number | null>(null);
+  /** Parâmetros da matriz (E0.1). Lembrados entre sessões: quem repete pilar a 5 m repete de novo. */
+  const [parametrosDaMatriz, setParametrosDaMatriz] = usePersistedState<ParametrosDaMatriz>('blueprint:matriz', {
+    quantidade: 3,
+    passoXMm: 3000,
+    passoYMm: 0,
+  });
   const [passoEmVigor, setPassoEmVigor] = useState(100);
   const [larguraAbertura, setLarguraAbertura] = useState(900);
   /**
@@ -4694,6 +4715,52 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     editor.run(r.comando);
     setAvisoColar(r.aviso);
   }
+  /**
+   * ─── GIRAR · ALINHAR · MATRIZ (18/09/2026, roadmap E0.1) ────────────────────
+   *
+   * Os P0 de edição básica que faltavam. Mesma divisão: a regra em
+   * `utils/blueprintSelecao.ts`, aqui o estado, o aviso e a seleção.
+   */
+  function girar(anguloGraus: number) {
+    const r = comandoDeRotacao(editor.model, editor.selectedIds, anguloGraus);
+    if (!r.ok) {
+      setAvisoColar(r.aviso);
+      return;
+    }
+    editor.run(r.comando);
+    setAvisoColar(r.aviso);
+  }
+  /** A referência é a ÚLTIMA parede/divisa selecionada — é a que a pessoa acabou de apontar. */
+  const referenciaDoAlinhamento = [...editor.selectedIds]
+    .reverse()
+    .find((id) => editor.model.walls.some((w) => w.id === id) || editor.model.boundaries.some((b) => b.id === id));
+  function alinhar() {
+    if (!referenciaDoAlinhamento) {
+      setAvisoColar('Selecione as peças e, por último, a parede (ou divisa) que serve de referência.');
+      return;
+    }
+    const r = comandosDeAlinhamento(editor.model, editor.selectedIds, referenciaDoAlinhamento);
+    if (!r.ok) {
+      setAvisoColar(r.aviso);
+      return;
+    }
+    editor.runBatch(r.comandos);
+    setAvisoColar(r.aviso);
+  }
+  function criarMatriz() {
+    if (!levelId) return;
+    const r = comandosDeMatriz(editor.model, editor.selectedIds, levelId, parametrosDaMatriz);
+    if (!r.ok) {
+      setAvisoColar(r.aviso);
+      return;
+    }
+    const criados = editor.runBatch(r.comandos);
+    setAvisoColar(r.aviso);
+    if (criados.length > 0) selecionar(criados);
+    // A gaveta fecha: o que a pessoa quer ver agora é a matriz na planta, e a
+    // gaveta com seleção aberta cobre o desenho.
+    setTarefa(null);
+  }
   const isolado = ocultosNoDesenho.size > 0;
   function isolarOuMostrarTudo() {
     if (isolado) {
@@ -6095,6 +6162,34 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   rotulo="Espelho vertical — frente ↔ fundos"
                   onClick={() => espelhar('HORIZONTAL')}
                   disabled={editor.selectedIds.length === 0}
+                />
+                {/* GIRAR em passos de 90° em torno do centro da seleção — exato no
+                    kernel. ALINHAR leva as peças à reta da última parede selecionada.
+                    MATRIZ abre a gaveta com quantidade e passo. */}
+                <BotaoBarra
+                  icone={RotateCcw}
+                  rotulo="Rotacionar 90° à esquerda (anti-horário)"
+                  onClick={() => girar(90)}
+                  disabled={editor.selectedIds.length === 0}
+                />
+                <BotaoBarra
+                  icone={RotateCw}
+                  rotulo="Rotacionar 90° à direita (horário)"
+                  onClick={() => girar(-90)}
+                  disabled={editor.selectedIds.length === 0}
+                />
+                <BotaoBarra
+                  icone={AlignStartVertical}
+                  rotulo="Alinhar à referência — a última parede selecionada"
+                  onClick={alinhar}
+                  disabled={editor.selectedIds.length < 2}
+                />
+                <BotaoBarra
+                  icone={LayoutGrid}
+                  rotulo="Matriz — repetir a seleção N vezes a um passo"
+                  onClick={() => alternarTarefa('matriz')}
+                  ativo={tarefaAberta === 'matriz'}
+                  disabled={editor.selectedIds.length === 0 && tarefaAberta !== 'matriz'}
                 />
               </>
             ),
@@ -8721,6 +8816,65 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
+
+          {tarefaAberta === 'matriz' && (
+            <div className="space-y-3" data-testid="tarefa-matriz">
+              <p className="text-xs text-slate-600">
+                Repete a seleção atual <strong>{parametrosDaMatriz.quantidade}×</strong> (o original conta), cada
+                exemplar deslocado do anterior pelo passo em X e em Y. Paredes levam as esquadrias; instalações e
+                esquadria avulsa ficam de fora. Um lote — um Ctrl+Z desfaz tudo.
+              </p>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <label className="flex flex-col gap-1">
+                  Exemplares
+                  <input
+                    type="number"
+                    min={2}
+                    max={200}
+                    value={parametrosDaMatriz.quantidade}
+                    onChange={(e) => setParametrosDaMatriz({ ...parametrosDaMatriz, quantidade: Math.max(2, Math.min(200, Number(e.target.value) || 2)) })}
+                    aria-label="Exemplares da matriz"
+                    className="rounded-md border border-slate-300 bg-white px-2 py-1"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  Passo X (mm)
+                  <input
+                    type="number"
+                    step={50}
+                    value={parametrosDaMatriz.passoXMm}
+                    onChange={(e) => setParametrosDaMatriz({ ...parametrosDaMatriz, passoXMm: Number(e.target.value) || 0 })}
+                    aria-label="Passo X da matriz (mm)"
+                    className="rounded-md border border-slate-300 bg-white px-2 py-1"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  Passo Y (mm)
+                  <input
+                    type="number"
+                    step={50}
+                    value={parametrosDaMatriz.passoYMm}
+                    onChange={(e) => setParametrosDaMatriz({ ...parametrosDaMatriz, passoYMm: Number(e.target.value) || 0 })}
+                    aria-label="Passo Y da matriz (mm)"
+                    className="rounded-md border border-slate-300 bg-white px-2 py-1"
+                  />
+                </label>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] text-slate-500">
+                  {editor.selectedIds.length === 0 ? 'Selecione o que repetir na planta.' : `${editor.selectedIds.length} peça(s) selecionada(s).`}
+                </span>
+                <button
+                  type="button"
+                  onClick={criarMatriz}
+                  disabled={editor.selectedIds.length === 0 || !levelId}
+                  className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+                >
+                  Criar matriz
+                </button>
+              </div>
+            </div>
+          )}
 
           {tarefaAberta === 'esgoto' && (
             <div className="space-y-4" data-testid="tarefa-esgoto">

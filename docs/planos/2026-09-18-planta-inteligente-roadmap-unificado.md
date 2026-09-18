@@ -217,6 +217,25 @@ P3/P4 (não replicar): render/ray tracing/animação, gbXML/energia/carbono, cá
 analítico estrutural, estrutura metálica, detalhamento de armadura (a esquemática já existe),
 fabricação, Dynamo/marketplace, worksets/modelo central, HVAC completo, texto 3D.
 
+## Execução
+
+### E0.1 — Girar · Alinhar · Matriz (18/09/2026)
+- Kernel: `RotateEntities` (ângulo inteiro, centro inteiro; múltiplos de 90° exatos, outros
+  arredondam ao mm sem abrir junção; abertura que deixou de caber por 1 mm recua; `rotacaoDeg`
+  e `rotacaoGraus` somam o giro). Sem bump: nenhum campo novo no canônico.
+- `utils/blueprintSelecao.ts`: `comandoDeRotacao` (centro da caixa arredondado),
+  `comandosDeAlinhamento` (referência = última parede/divisa; paralelas ≤ 1° e pontos vão à reta
+  por `TranslateEntities` com `manterJuncoes`; não paralelas ficam, com aviso; agrupa por
+  deslocamento), `comandosDeMatriz` (N−1 `DuplicateEntities` a k·passo, um lote).
+- Editor: grupo Seleção ganha Rotacionar 90° esq./dir. (rótulo "Rotacionar" porque "Girar" já é
+  o eixo da porta), Alinhar (≥ 2 peças) e Matriz (gaveta `tarefa-matriz`: exemplares, passo X/Y
+  em `blueprint:matriz`; fecha ao criar).
+- Testes: `blueprintSelecao` 18 (giro exato, −90 → 270, ângulo 37° com junção fechada e porta
+  cabendo, alinhar paralela/perpendicular/pilar, já alinhado, matriz e recusas); editor "girar,
+  alinhar e matriz". Suíte 4592.
+- App real (escritas bloqueadas: 16): parede esquerda de 7,05 m girou 90° em torno do centro e
+  Desfazer devolveu; matriz 3× criou 2 cópias (7 → 9 paredes) num lote.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

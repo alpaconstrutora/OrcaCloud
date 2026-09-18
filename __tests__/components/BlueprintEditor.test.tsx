@@ -2316,6 +2316,48 @@ describe('BlueprintEditor · ocultar componentes na planta baixa', () => {
     expect(await screen.findByText(/Exportar sempre parte dela, nunca do/)).toBeInTheDocument();
   });
 
+  /**
+   * 18/09/2026, roadmap E0.1: girar, alinhar e matriz no grupo Seleção. O giro
+   * e o alinhamento são provados no kernel (`blueprintSelecao.test.ts`); aqui o
+   * que o DOM mostra — o botão age (Desfazer acende), alinhar exige duas peças,
+   * a matriz abre a gaveta e cria N−1 cópias num lote só.
+   */
+  it('girar, alinhar e matriz: o giro é desfazível, alinhar pede duas peças, a matriz cria P2 e P3 num lote', async () => {
+    loadBranchModel.mockResolvedValue(await comPilar());
+    await montar();
+    const user = userEvent.setup();
+    const barra = () => within(screen.getByRole('toolbar'));
+    await abrirComponentes(user);
+
+    const girar = () => barra().getByRole('button', { name: /^rotacionar 90° à esquerda/i });
+    const alinhar = () => barra().getByRole('button', { name: /^alinhar à referência/i });
+    const matriz = () => barra().getByRole('button', { name: /^matriz/i });
+    const desfazer = () => barra().getByRole('button', { name: /^desfazer/i });
+    expect(girar()).toBeDisabled();
+    expect(alinhar()).toBeDisabled();
+    expect(matriz()).toBeDisabled();
+
+    await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
+    expect(girar()).toBeEnabled();
+    expect(alinhar()).toBeDisabled(); // uma peça só: não há o que alinhar a quê
+    expect(desfazer()).toBeDisabled();
+    await user.click(girar());
+    expect(desfazer()).toBeEnabled(); // o giro entrou no histórico
+    expect(screen.getByRole('button', { name: /^P1 · Pilar/ })).toHaveAttribute('aria-pressed', 'true');
+
+    // MATRIZ: gaveta com quantidade e passo; criar gera P2 e P3 (3 exemplares) e seleciona as cópias
+    await user.click(matriz());
+    const gaveta = await screen.findByTestId('tarefa-matriz');
+    expect(within(gaveta).getByLabelText('Exemplares da matriz')).toHaveValue(3);
+    await user.click(within(gaveta).getByRole('button', { name: 'Criar matriz' }));
+    expect(await screen.findByRole('button', { name: /^P2 · Pilar/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^P3 · Pilar/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: /^P4 · Pilar/ })).not.toBeInTheDocument();
+    // Um lote: um Desfazer tira as duas
+    await user.click(desfazer());
+    expect(screen.queryByRole('button', { name: /^P2 · Pilar/ })).not.toBeInTheDocument();
+  });
+
   it('Ctrl+D duplica a seleção pelo teclado', async () => {
     loadBranchModel.mockResolvedValue(await comPilar());
     await montar();

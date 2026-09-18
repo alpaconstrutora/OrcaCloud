@@ -662,6 +662,43 @@ export type Command =
       /** Posição da reta de reflexão (x para VERTICAL, y para HORIZONTAL), em mm. */
       em: number;
     }
+  /**
+   * GIRA um conjunto em torno de um centro (18/09/2026, roadmap E0.1:
+   * *"Rotacionar — P0, edição básica"*).
+   *
+   * Ângulo em graus INTEIROS, no mesmo sentido de `rotacaoDeg` da estrutura
+   * (x' = cx + dx·cos − dy·sen, y' = cy + dx·sen + dy·cos). Múltiplos de 90°
+   * são EXATOS — seno e cosseno viram 0/±1 e nenhuma coordenada é arredondada;
+   * é o caso de quase todo giro em planta (virar a unidade, girar o bloco de
+   * banheiros). Outros ângulos arredondam cada vértice ao milímetro: o conjunto
+   * continua rígido a menos de 1 mm, e um vértice compartilhado por duas
+   * paredes cai no MESMO ponto arredondado — a junção não abre.
+   *
+   * O que o giro faz com cada família, como no espelhamento:
+   * - parede/limite: `a` e `b` girados; as aberturas mantêm o `offsetMm` (o
+   *   sentido a→b se preserva num giro, então `swingReversed` NÃO muda). Se o
+   *   arredondamento encurtou a parede em 1 mm e a última abertura deixou de
+   *   caber, o offset recua esse milímetro — nunca `OPENING_OUT_OF_BOUNDS` por
+   *   causa de um giro.
+   * - estrutura: vértices girados e `rotacaoDeg` somado (normalizado a [0, 360)).
+   * - água, trecho, terminal, quadro: pontos girados; o giro do terminal e do
+   *   quadro é somado. As cotas não mudam (gesto em planta).
+   *
+   * `centro` em mm INTEIROS — é o que mantém o giro de 90° exato. Quem chama
+   * arredonda o centro da caixa (`comandoDeRotacao`).
+   */
+  | {
+      type: 'RotateEntities';
+      wallIds: ObjectId[];
+      boundaryIds: ObjectId[];
+      structuralIds: ObjectId[];
+      aguaIds?: ObjectId[];
+      trechoIds?: ObjectId[];
+      terminalIds?: ObjectId[];
+      quadroIds?: ObjectId[];
+      anguloGraus: number;
+      centro: Point;
+    }
   | { type: 'SplitWall'; wallId: ObjectId; at: Point }
   | { type: 'MergeWalls'; firstId: ObjectId; secondId: ObjectId }
   | { type: 'DeleteWall'; wallId: ObjectId }
@@ -2170,6 +2207,110 @@ function aplicarSemHash(
       for (const q of quadros) {
         q.at = refletir(q.at);
         if (q.rotacaoGraus) q.rotacaoGraus = giroEspelhado(q.rotacaoGraus);
+        diff.updated.push(q.id);
+      }
+      break;
+    }
+
+    case 'RotateEntities': {
+      const aguaIds = command.aguaIds ?? [];
+      const trechoIds = command.trechoIds ?? [];
+      const terminalIds = command.terminalIds ?? [];
+      const quadroIds = command.quadroIds ?? [];
+      if (
+        command.wallIds.length === 0 &&
+        command.boundaryIds.length === 0 &&
+        command.structuralIds.length === 0 &&
+        aguaIds.length === 0 &&
+        trechoIds.length === 0 &&
+        terminalIds.length === 0 &&
+        quadroIds.length === 0
+      ) {
+        throw new KernelError('EMPTY_SELECTION', 'Nada para girar');
+      }
+      if (!Number.isInteger(command.anguloGraus)) {
+        throw new KernelError('BAD_ROTATION', `anguloGraus tem de ser inteiro: ${command.anguloGraus}`);
+      }
+      const g = ((command.anguloGraus % 360) + 360) % 360;
+      const cx = assertIntegerMm(command.centro.x, 'centro.x');
+      const cy = assertIntegerMm(command.centro.y, 'centro.y');
+      // Múltiplo de 90°: seno e cosseno inteiros, giro exato. Fora disso, o
+      // arredondamento ao milímetro é inevitável e é feito UMA vez por vértice.
+      const quarto = g % 90 === 0 ? g / 90 : -1;
+      const cos = quarto >= 0 ? [1, 0, -1, 0][quarto] : Math.cos((g * Math.PI) / 180);
+      const sen = quarto >= 0 ? [0, 1, 0, -1][quarto] : Math.sin((g * Math.PI) / 180);
+      const girar = (p: Point): Point => {
+        const dx = p.x - cx;
+        const dy = p.y - cy;
+        return {
+          x: assertIntegerMm(Math.round(cx + dx * cos - dy * sen), 'coordenada girada'),
+          y: assertIntegerMm(Math.round(cy + dx * sen + dy * cos), 'coordenada girada'),
+        };
+      };
+      const somarGiro = (atual: number | null | undefined) => (((atual ?? 0) + g) % 360 + 360) % 360;
+
+      // Resolver TODOS antes de tocar em qualquer um — como no espelhamento.
+      const paredes = command.wallIds.map((id) => findWall(next, id));
+      const limites = command.boundaryIds.map((id) => findBoundary(next, id));
+      const estruturas = command.structuralIds.map((id) => findStructural(next, id));
+      const aguas = aguaIds.map((id) => findAgua(next, id));
+      const trechos = trechoIds.map((id) => {
+        const t = (next.trechos ?? []).find((x) => x.id === id);
+        if (!t) throw new KernelError('RUN_NOT_FOUND', `Trecho não encontrado: ${id}`);
+        return t;
+      });
+      const terminais = terminalIds.map((id) => {
+        const t = (next.terminais ?? []).find((x) => x.id === id);
+        if (!t) throw new KernelError('TERMINAL_NOT_FOUND', `Terminal não encontrado: ${id}`);
+        return t;
+      });
+      const quadros = quadroIds.map((id) => {
+        const q = (next.quadros ?? []).find((x) => x.id === id);
+        if (!q) throw new KernelError('BOARD_NOT_FOUND', `Quadro não encontrado: ${id}`);
+        return q;
+      });
+
+      const giradas = new Set(command.wallIds);
+      for (const w of [...paredes, ...limites]) {
+        w.a = girar(w.a);
+        w.b = girar(w.b);
+        diff.updated.push(w.id);
+      }
+      // O arredondamento pode ter tirado 1 mm da parede; a abertura que deixou
+      // de caber recua esse milímetro em vez de derrubar o gesto inteiro.
+      for (const o of next.openings) {
+        if (!giradas.has(o.wallId)) continue;
+        const w = paredes.find((x) => x.id === o.wallId)!;
+        const comp = wallLength(w);
+        if (o.offsetMm + o.widthMm > comp && o.widthMm <= comp) {
+          o.offsetMm = comp - o.widthMm;
+          diff.updated.push(o.id);
+        }
+      }
+      for (const s of estruturas) {
+        s.pontos = s.pontos.map(girar);
+        s.rotacaoDeg = somarGiro(s.rotacaoDeg);
+        diff.updated.push(s.id);
+      }
+      for (const a of aguas) {
+        a.pontos = a.pontos.map(girar);
+        diff.updated.push(a.id);
+      }
+      for (const t of trechos) {
+        t.a = girar(t.a);
+        t.b = girar(t.b);
+        if (t.sugerido) t.sugerido = null;
+        diff.updated.push(t.id);
+      }
+      for (const t of terminais) {
+        t.at = girar(t.at);
+        if (g !== 0 || t.rotacaoGraus) t.rotacaoGraus = somarGiro(t.rotacaoGraus);
+        if (t.sugerida) t.sugerida = null;
+        diff.updated.push(t.id);
+      }
+      for (const q of quadros) {
+        q.at = girar(q.at);
+        if (g !== 0 || q.rotacaoGraus) q.rotacaoGraus = somarGiro(q.rotacaoGraus);
         diff.updated.push(q.id);
       }
       break;

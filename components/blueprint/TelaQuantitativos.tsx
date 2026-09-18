@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { Calculator } from 'lucide-react';
-import { nomeDoTipoEstrutural, type BlueprintModel, type computeQuantities } from '../../utils/blueprintKernel';
+import { ROTULO_DA_CONEXAO, nomeDoTipoEstrutural, type BlueprintModel, type DisciplinaDeRede, type TipoDePontoHidraulico, type computeQuantities } from '../../utils/blueprintKernel';
+import { ROTULO_DA_DISCIPLINA } from '../../utils/blueprintRede';
+import { ROTULO_DO_PONTO_HIDRAULICO } from '../../utils/blueprintHidraulica';
 import type { ArmaduraQuantificada } from '../../utils/blueprintArmadura';
 import {
   nomeDoPavimento,
@@ -38,7 +40,7 @@ type AbaDosQuantitativos = 'resumo' | 'ambientes' | 'estruturas' | 'pavimentos' 
 
 interface LinhaDoResumo {
   chave: string;
-  grupo: 'Arquitetura' | 'Estrutura' | 'Aço' | 'Material';
+  grupo: 'Arquitetura' | 'Estrutura' | 'Aço' | 'Material' | 'Instalações';
   item: string;
   valor: number;
   unidade: string;
@@ -188,6 +190,19 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
         add({ grupo: 'Aço', item: 'Aço — total (esquemático)', valor: a.totalKg, unidade: 'kg', detalhe: `CA-50 ${fmt(a.ca50Kg)} kg · CA-60 ${fmt(a.ca60Kg)} kg`, forte: true });
       }
     }
+    // INSTALAÇÕES (18/09/2026): tubo por disciplina e DN, pontos por classificação,
+    // conexões deduzidas dos encontros — as linhas de compra da rede.
+    for (const b of t.porBitola ?? []) {
+      add({ grupo: 'Instalações', item: `${ROTULO_DA_DISCIPLINA[b.disciplina as DisciplinaDeRede] ?? b.disciplina} DN ${b.bitolaMm}`, valor: b.comprimentoM, unidade: 'm', detalhe: `${b.trechos} trecho(s), comprimento real` });
+    }
+    for (const p of t.porTerminal ?? []) {
+      if (p.disciplina === 'ELETRICA') continue;
+      const nome = p.classificacao ? (ROTULO_DO_PONTO_HIDRAULICO[p.classificacao as TipoDePontoHidraulico] ?? p.tipo) : `${p.tipo} (sem tipo)`;
+      add({ grupo: 'Instalações', item: `${nome} · ${ROTULO_DA_DISCIPLINA[p.disciplina as DisciplinaDeRede] ?? p.disciplina}`, valor: p.quantidade, unidade: 'un', detalhe: p.classificacao ? 'ponto classificado' : 'a classificar' });
+    }
+    for (const c of t.porConexao ?? []) {
+      add({ grupo: 'Instalações', item: `${ROTULO_DA_CONEXAO[c.tipo]} DN ${c.bitolaMm}${c.paraMm != null ? `→${c.paraMm}` : ''} · ${ROTULO_DA_DISCIPLINA[c.disciplina as DisciplinaDeRede] ?? c.disciplina}`, valor: c.quantidade, unidade: 'un', detalhe: `${c.derivadas} deduzida(s) dos encontros${c.manuais ? ` + ${c.manuais} manual(is)` : ''}` });
+    }
     return linhas;
   }, [quant, armadura, fmt, t]);
 
@@ -264,7 +279,8 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
               case 'item':
                 return <span className={`text-sm ${l.forte ? 'font-semibold text-gray-900' : 'text-gray-700'} ${l.grupo === 'Material' ? 'pl-4' : ''}`}>{l.grupo === 'Material' ? '↳ ' : ''}{l.item}</span>;
               case 'valor':
-                return <span className={`block text-right text-sm tabular-nums ${l.forte ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>{fmt(l.valor)}</span>;
+                // Contagem em unidades é inteira — "1,00 un" seria precisão que não existe.
+                return <span className={`block text-right text-sm tabular-nums ${l.forte ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>{l.unidade === 'un' ? l.valor.toLocaleString('pt-BR') : fmt(l.valor)}</span>;
               case 'unidade':
                 return <span className="text-sm text-gray-500">{l.unidade}</span>;
               case 'detalhe':

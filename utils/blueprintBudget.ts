@@ -31,6 +31,7 @@
 
 import type { BudgetEntry, SinapiItem } from '../types/budget';
 import type { DisciplinaDeRede, Quantitativos, StructuralKind, TipoDePontoHidraulico } from './blueprintKernel';
+import { ROTULO_DA_CONEXAO } from './blueprintKernel';
 import {
   nomeDoTipoDeAbertura as nomeDoTipo,
   nomeDoTipoEstrutural,
@@ -329,6 +330,13 @@ export const MEDIDAS: DefinicaoMedida[] = [
     escopo: 'INSTALACAO',
     dimensao: 'M',
     descricao: 'Metros de eletroduto, uma linha por bitola.',
+  },
+  {
+    id: 'CONTAGEM_CONEXOES',
+    rotulo: 'Conexões hidráulicas',
+    escopo: 'INSTALACAO',
+    dimensao: 'UN',
+    descricao: 'Joelhos, tês, luvas e reduções por disciplina, tipo e diâmetro — deduzidas dos encontros de trechos, mais as lançadas à mão.',
   },
   {
     id: 'CONTAGEM_PONTOS_HIDRAULICOS',
@@ -703,6 +711,23 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
           valor: b.comprimentoM,
           formula: `Σ comprimento real dos ${b.trechos} trecho(s) DN ${b.bitolaMm}`,
           variaveis: { disciplina: b.disciplina, bitolaMm: b.bitolaMm, trechos: b.trechos, comprimentoM: b.comprimentoM },
+        }));
+    }
+
+    case 'CONTAGEM_CONEXOES': {
+      return (quant.totais.porConexao ?? [])
+        .filter((c) => c.quantidade > 0)
+        .map((c) => ({
+          c,
+          rotulo: `${ROTULO_DA_CONEXAO[c.tipo]} DN ${c.bitolaMm}${c.paraMm != null ? `→${c.paraMm}` : ''} · ${ROTULO_DA_DISCIPLINA[c.disciplina as DisciplinaDeRede] ?? c.disciplina}`,
+        }))
+        .filter(({ rotulo }) => combina(rotulo))
+        .map(({ c, rotulo }) => ({
+          ref: `${c.disciplina}-${c.tipo}-dn${c.bitolaMm}${c.paraMm != null ? `-${c.paraMm}` : ''}`,
+          rotulo,
+          valor: c.quantidade,
+          formula: `${c.derivadas} deduzida(s) dos encontros de trechos + ${c.manuais} lançada(s) à mão`,
+          variaveis: { disciplina: c.disciplina, tipo: c.tipo, bitolaMm: c.bitolaMm, derivadas: c.derivadas, manuais: c.manuais },
         }));
     }
 

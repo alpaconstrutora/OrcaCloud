@@ -92,3 +92,5 @@ export {
   type CargaDoQuadro,
   type CargaDoCircuito,
 } from './quadroDeCargas';
+export { conexoesDerivadas, tipoDeConexaoManual, ROTULO_DA_CONEXAO } from './conexoes';
+export type { ConexaoDerivada, ConexoesDoModelo, PontaAberta, TipoDeConexao } from './conexoes';

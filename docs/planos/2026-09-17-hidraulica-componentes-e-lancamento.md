@@ -63,3 +63,28 @@ caixa d'água → volume 1000 no painel e "CX 1000 L" no desenho; registro longe
 aviso e nada criado; sobre um trecho de AF → REGISTRO_GAVETA na cota 2200; tubo de queda num
 clique → trecho DN 100 "TQ"; lista de Componentes com "pontos de consumo 1 · reservação 1";
 Desfazer devolve tudo.
+
+## F2 — conexões derivadas — entregue em 18/09/2026
+
+- `utils/blueprintKernel/conexoes.ts` (novo): `conexoesDerivadas(model)` → `{ conexoes,
+  pontasAbertas }`. Nós por disciplina + pavimento + ponto + cota (laje como encontro, mesma
+  chave dos eletrodutos); ângulo em 3D. Regra: 1 trecho sem terminal = ponta aberta (aviso);
+  2 colineares = LUVA / REDUÇÃO (salvo peça no nó); ~90° = JOELHO_90; ~45°/135° = JOELHO_45;
+  ângulo torto = JOELHO_90 com aviso; 3 = TÊ (de redução se DNs diferem); 4+ = CRUZETA com
+  aviso. Terminal `CONEXAO_*` no nó suprime a derivada (origem MANUAL); manual no meio de um
+  trecho conta com a bitola dele; sem trecho embaixo, aviso. Determinístico.
+- `quantities.ts`: `Quantitativos.conexoes` e `totais.porConexao` (disciplina × tipo × DN[→DN],
+  com `derivadas`/`manuais`). Sem bump: derivação, não payload.
+- Orçamento: medida `CONTAGEM_CONEXOES` (UN, uma linha por tipo×DN×disciplina; filtro por
+  texto "Joelho", "DN 25"…). Tela Quantitativos › Resumo: grupo **Instalações** com tubo por
+  DN, pontos por classificação e conexões; contagens inteiras.
+- IFC: só as manuais saem (`IfcPipeFitting`, F1); as derivadas não — são derivação.
+
+### Testes
+`blueprintConexoesDerivadas.test.ts` (9): L, tê/45°/torto, luva/redução/registro no nó,
+prumada 3D e esgoto com caimento, água×esgoto não se ligam, manual suprime e manual no meio,
+determinismo, laje entre pavimentos, quantitativo + orçamento. Suíte cheia 4545.
+
+### App real (escritas bloqueadas: 15)
+Três trechos de AF desenhados → Quantitativos › Resumo › Instalações: "Água fria DN 25 12,63 m ·
+3 trecho(s)", "Joelho 90° DN 25 · Água fria 1 — 1 deduzida(s) dos encontros"; Desfazer devolve.

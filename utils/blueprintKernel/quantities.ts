@@ -26,6 +26,7 @@ import { medirAgua } from './telhado';
 import { assinaturaDaEsquadria, nomeDaEsquadria } from './model';
 import { furosDaEscada, medirEscada } from './escada';
 import { sobreposicoesDoModelo } from './sobreposicao';
+import { conexoesDerivadas, type ConexaoDerivada, type TipoDeConexao } from './conexoes';
 import {
   areCollinear,
   isBetween,
@@ -487,6 +488,18 @@ export interface QuantidadePorBitola {
   trechos: number;
 }
 
+/** Uma CONEXÃO contada: disciplina + tipo + bitola (e a menor, na redução). */
+export interface QuantidadePorConexao {
+  disciplina: string;
+  tipo: TipoDeConexao;
+  bitolaMm: number;
+  paraMm: number | null;
+  quantidade: number;
+  /** Quantas vieram da derivação e quantas foram lançadas à mão. */
+  derivadas: number;
+  manuais: number;
+}
+
 /**
  * Um TERMINAL contado. O que agrupa é a CLASSIFICAÇÃO (o tipo fechado —
  * hidráulico ou elétrico — quando há; senão o texto livre) e o item de
@@ -533,6 +546,11 @@ export interface Quantitativos {
   trechos: QuantidadeTrecho[];
   /** Onde dois componentes ocupam o mesmo espaço, e quem cedeu. */
   sobreposicoes: SobreposicaoQuantificada[];
+  /**
+   * CONEXÕES hidráulicas (18/09/2026) — derivadas dos encontros de trechos
+   * (joelho, tê, luva, redução) mais as lançadas à mão. Ver `conexoes.ts`.
+   */
+  conexoes: ConexaoDerivada[];
   totais: {
     areaPisoM2: number;
     /**
@@ -624,6 +642,8 @@ export interface Quantitativos {
     porBitola: QuantidadePorBitola[];
     /** Terminais contados por tipo e item de catálogo. */
     porTerminal: QuantidadePorTerminal[];
+    /** Conexões por disciplina, tipo e bitola — a linha de compra da conexão. */
+    porConexao: QuantidadePorConexao[];
     /** Comprimento somado de TODA a rede. Serve à conferência, não à compra. */
     comprimentoRedeM: number;
     terminais: number;
@@ -1336,6 +1356,20 @@ export function computeQuantities(
       });
     }
   }
+  const { conexoes } = conexoesDerivadas(model);
+  const porConexaoMapa = new Map<string, QuantidadePorConexao>();
+  for (const c of conexoes) {
+    const k = `${c.disciplina}|${c.tipo}|${c.bitolaMm}|${c.paraMm ?? ''}`;
+    const atual = porConexaoMapa.get(k) ?? { disciplina: c.disciplina, tipo: c.tipo, bitolaMm: c.bitolaMm, paraMm: c.paraMm ?? null, quantidade: 0, derivadas: 0, manuais: 0 };
+    atual.quantidade += 1;
+    if (c.origem === 'MANUAL') atual.manuais += 1;
+    else atual.derivadas += 1;
+    porConexaoMapa.set(k, atual);
+  }
+  const porConexao = [...porConexaoMapa.values()].sort(
+    (x, y) => x.disciplina.localeCompare(y.disciplina) || x.tipo.localeCompare(y.tipo) || x.bitolaMm - y.bitolaMm,
+  );
+
   const porTerminal = [...porTerminalMapa.values()].sort(
     (x, y) => x.disciplina.localeCompare(y.disciplina) || x.tipo.localeCompare(y.tipo),
   );
@@ -1360,6 +1394,7 @@ export function computeQuantities(
     escadas,
     trechos,
     sobreposicoes,
+    conexoes,
     totais: {
       areaPisoM2: (somaPiso),
       areaConstruidaM2: (somaConstruida),
@@ -1401,6 +1436,7 @@ export function computeQuantities(
       escadas: escadas.length,
       porBitola,
       porTerminal,
+      porConexao,
       comprimentoRedeM: trechos.reduce((soma, t) => soma + t.comprimentoM, 0),
       terminais: (model.terminais ?? []).length,
     },

@@ -66,6 +66,7 @@ export default function Ribbon<Id extends string>({
   onEscolher,
   esquerda,
   direita,
+  acessoRapido,
   ariaLabel,
   children,
 }: {
@@ -74,8 +75,14 @@ export default function Ribbon<Id extends string>({
   onEscolher: (id: Id) => void;
   /** Antes das abas — o seletor de vista. */
   esquerda?: React.ReactNode;
-  /** Depois das abas, encostado à direita — o acesso rápido. */
+  /** Depois das abas, encostado à direita. */
   direita?: React.ReactNode;
+  /**
+   * O ACESSO RÁPIDO (17/09/2026): linha PRÓPRIA sob as abas, alinhada à
+   * esquerda. Antes ia no slot `direita` e, com 27 botões, caía torto na
+   * segunda linha (*"o toolbar de botões está deslocado… alinhe à esquerda"*).
+   */
+  acessoRapido?: React.ReactNode;
   ariaLabel: string;
   /** O painel da aba ativa: `GrupoDoRibbon`s. */
   children: React.ReactNode;
@@ -115,6 +122,7 @@ export default function Ribbon<Id extends string>({
         </div>
         {direita && <div className="ml-auto flex items-center gap-1">{direita}</div>}
       </div>
+      {acessoRapido && <div className="px-4 pt-1.5">{acessoRapido}</div>}
 
       {/* O painel da aba. `flex-wrap`: em tela estreita os grupos descem de
           linha em vez de sumir — foi assim que duas abas já sumiram da barra

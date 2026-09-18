@@ -430,3 +430,40 @@ Ordem da barra: Selecionar · Mover │ 6 vistas │ **Enquadrar · Zoom− · Z
   bloqueadas: 14): abas Arquitetura · Terreno · Elétrica · Hidráulica · Inserir · Analisar ·
   Colaborar · Vista; menu Elétrica com 18 itens (eletroduto, quadro, pontos), Hidráulica com 6;
   lista de Componentes com "Elétrica — eletrodutos e quadro 55" e "Hidráulica — trechos 1".
+
+---
+
+## 17/09/2026 — acesso rápido à esquerda, em GRUPOS que o usuário reordena
+
+### Pedido original
+
+> veja print que o toolbar de botões está deslocado: 1. Alinhe à esquerda 2. crie grupos de
+> botões e crie possibilidade de mover os grupos para direita/esquerda, deixando ao usuário
+> organizar os grupos de botões conforme ele quiser
+
+### O que mudou
+
+- `Ribbon`: slot novo `acessoRapido` — linha PRÓPRIA sob as abas, alinhada à esquerda (o slot
+  `direita` continua, sem uso no editor). Era o `ml-auto` do slot à direita que, com 27 botões,
+  caía torto na segunda linha.
+- `components/blueprint/AcessoRapido.tsx` (novo): grupos com alça (`GripVertical`,
+  aria-label "Arrastar o grupo <nome>"), dnd-kit horizontal (`horizontalListSortingStrategy`,
+  Pointer + Keyboard), `role="group"` + `data-grupo-do-acesso-rapido`, divisória entre grupos,
+  `cauda` à direita (contagem, só em `2xl:`). `ordenarGrupos(grupos, ordem)`: ids salvos
+  primeiro, novos no fim; ao soltar, a ordem COMPLETA é regravada (grupos ocultos nesta vista
+  mantêm o lugar).
+- Editor: `gruposDoAcessoRapido` — Ferramenta (Selecionar, Mover) · Vistas (6) · Zoom
+  (Enquadrar, −, +, 1:100) · Modos (Trava 90°, Encaixe) · Editar (Desfazer, Refazer, Copiar,
+  Colar, Excluir) · Seleção (Duplicar, Espelho H/V) · Isolar e medir · Arquivo (Exportar, Tela
+  cheia); ordem em `blueprint:ordemDoAcessoRapido`. Grupos só da planta baixa não entram nas
+  vistas. Nomes dos grupos escolhidos para não colidir com botões existentes nos testes
+  (`/exibir/i`, `/tela cheia/i`).
+
+### Verificação
+
+- Teste "o acesso rápido é uma linha própria de GRUPOS com alça, e a ordem salva é respeitada"
+  (ordem persistida `editar, vistas, ferramenta` vem primeiro; alças; 6 vistas no grupo; linha
+  abaixo do tablist). Suíte cheia 4509, tsc, check-ui (AcessoRapido, Ribbon, Editor), build.
+- App real (escritas bloqueadas: 14): linha em x=300 (borda do container) abaixo das abas;
+  arrastar a alça de "Vistas" para a direita de "Editar" reordena
+  (`ferramenta · zoom · modos · editar · selecao · vistas · …`) e grava no localStorage.

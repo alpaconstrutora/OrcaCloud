@@ -211,6 +211,7 @@ import {
 } from '../../utils/blueprintFundacoesAutomaticas';
 import SecaoAccordion from './SecaoAccordion';
 import SecaoOrdenavel from './SecaoOrdenavel';
+import AcessoRapido, { type GrupoDoAcessoRapido } from './AcessoRapido';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { usePainelRedimensionavel } from './LarguraDoPainel';
@@ -1394,6 +1395,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     'blueprint:ordemDasSecoes',
     SECOES_DO_PAINEL.map((s) => s.id),
   );
+  /** A ordem dos GRUPOS do acesso rápido (17/09/2026) — mesma natureza: preferência de leitura. */
+  const [ordemDoAcessoRapido, setOrdemDoAcessoRapido] = usePersistedState<string[]>(
+    'blueprint:ordemDoAcessoRapido',
+    ['ferramenta', 'vistas', 'zoom', 'modos', 'editar', 'selecao', 'exibir', 'saida'],
+  );
   const ordemDasSecoes = useMemo<SecaoDoPainel[]>(() => {
     const conhecidas = SECOES_DO_PAINEL.map((s) => s.id) as SecaoDoPainel[];
     const validas = (Array.isArray(ordemSalva) ? ordemSalva : []).filter((id): id is SecaoDoPainel => (conhecidas as string[]).includes(id));
@@ -1419,6 +1425,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   );
   /** As seções na ordem escolhida, só as que existem nesta vista. */
   const ordemVisivel = ordemDasSecoes.filter((id) => secaoVisivel(id));
+
 
   /**
    * O retângulo visível, em milímetro do modelo — a região da geração de
@@ -5710,6 +5717,211 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     </div>
   );
 
+  /**
+   * ─── OS GRUPOS DO ACESSO RÁPIDO (17/09/2026) ─────────────────────────────
+   *
+   * Cada família de botões é um grupo com alça; o usuário arrasta os grupos
+   * para a ordem que preferir (`AcessoRapido`), e a ordem fica no navegador.
+   * Grupo que a vista não admite não entra na lista — Selecionar/Mover, zoom,
+   * modos, duplicar/espelhar, isolar/medir só existem na planta baixa ("nada
+   * de desenhar fora da planta"); as vistas, desfazer/refazer e tela cheia
+   * valem em qualquer lugar. Cada comentário de "por que este botão existe"
+   * ficou junto do botão.
+   */
+  const gruposDoAcessoRapido: GrupoDoAcessoRapido[] = [
+    ...(!emVista
+      ? [
+          {
+            id: 'ferramenta',
+            rotulo: 'Ferramenta',
+            botoes: (
+              <>
+                {/* Selecionar volta à seta; Mover é a mão do CAD (o botão esquerdo
+                    faz a panorâmica que o direito já faz em qualquer ferramenta). */}
+                <BotaoBarra
+                  icone={MousePointer2}
+                  rotulo="Ferramenta: Selecionar"
+                  onClick={() => editor.setTool('selecionar')}
+                  ativo={editor.tool === 'selecionar'}
+                />
+                <BotaoBarra
+                  icone={Hand}
+                  rotulo="Ferramenta: Mover a vista — arraste com o botão esquerdo (o direito arrasta em qualquer ferramenta)"
+                  onClick={() => editor.setTool('mover')}
+                  ativo={editor.tool === 'mover'}
+                />
+              </>
+            ),
+          },
+        ]
+      : []),
+    {
+      id: 'vistas',
+      rotulo: 'Vistas',
+      botoes: (
+        <>
+          {/* As SEIS vistas em ícone (VISTAS_FIXAS, a mesma lista do seletor à
+              esquerda — que continua, porque nomeia a vista atual e lista os cortes). */}
+          {VISTAS_FIXAS.map((v) => (
+            <BotaoBarra key={v.id} icone={v.icone} rotulo={`Vista: ${v.rotulo}`} onClick={() => setVista(v.id)} ativo={vista === v.id} />
+          ))}
+        </>
+      ),
+    },
+    ...(!emVista || vistaEhProjecao
+      ? [
+          {
+            id: 'zoom',
+            rotulo: 'Zoom',
+            botoes: (
+              <>
+                {/* Enquadrar vale na planta e nas elevações/cortes (o token do grupo
+                    Navegar); zoom ± pelo centro e 1:100 só existem na planta baixa. */}
+                <BotaoBarra
+                  icone={Scan}
+                  rotulo="Enquadrar — o desenho inteiro na tela"
+                  onClick={() => (emVista ? setEnquadrarVistaToken((t) => t + 1) : navegar('ENQUADRAR'))}
+                />
+                {!emVista && (
+                  <>
+                    <BotaoBarra icone={ZoomOut} rotulo="Afastar (zoom −)" onClick={() => navegar('ZOOM_MENOS')} />
+                    <BotaoBarra icone={ZoomIn} rotulo="Aproximar (zoom +)" onClick={() => navegar('ZOOM_MAIS')} />
+                    <BotaoBarra
+                      texto="1:100"
+                      rotulo="Escala 1:100 na tela — 1 m do desenho = 1 cm no monitor"
+                      onClick={() => navegar('ESCALA_1_100')}
+                    />
+                  </>
+                )}
+              </>
+            ),
+          },
+        ]
+      : []),
+    ...(!emVista
+      ? [
+          {
+            id: 'modos',
+            rotulo: 'Modos',
+            botoes: (
+              <>
+                {/* MODOS globais: a trava ortogonal (F8; o mesmo estado do Orto da barra
+                    de opções) e o ímã dos encaixes (liga/desliga TODOS; a escolha fina
+                    continua no menu Encaixe). */}
+                <BotaoBarra
+                  icone={Grid3x3}
+                  rotulo={ortogonal ? 'Trava 90° ligada — Shift libera (F8 alterna)' : 'Trava 90° desligada — Shift trava (F8 alterna)'}
+                  onClick={() => setOrtogonal((v) => !v)}
+                  ativo={ortogonal}
+                />
+                <BotaoBarra
+                  icone={Magnet}
+                  rotulo={encaixesAtivos.size > 0 ? 'Encaixe ligado — desliga todos os ímãs' : 'Encaixe desligado — liga todos os ímãs'}
+                  onClick={() => setEncaixesLigados(encaixesAtivos.size > 0 ? [] : [...TIPOS_DE_ENCAIXE])}
+                  ativo={encaixesAtivos.size > 0}
+                />
+              </>
+            ),
+          },
+        ]
+      : []),
+    {
+      id: 'editar',
+      rotulo: 'Editar',
+      botoes: (
+        <>
+          <BotaoBarra icone={Undo2} rotulo="Desfazer (Ctrl+Z)" onClick={editor.undo} disabled={!editor.canUndo} />
+          <BotaoBarra icone={Redo2} rotulo="Refazer (Ctrl+Shift+Z)" onClick={editor.redo} disabled={!editor.canRedo} />
+          {/* COPIAR / COLAR ficam com desfazer/refazer porque são da mesma família —
+              editam o desenho sem desenhar nada. Colar acontece SOB O CURSOR (Ctrl+V);
+              o botão anuncia o recurso e instrui, em vez de colar num lugar arbitrário. */}
+          <BotaoBarra icone={Copy} rotulo="Copiar seleção (Ctrl+C)" onClick={copiar} disabled={editor.selectedIds.length === 0} />
+          <BotaoBarra
+            icone={ClipboardPaste}
+            rotulo={
+              areaDeTransferencia
+                ? 'Colar no cursor (Ctrl+V) — mova o mouse sobre a planta e use o atalho'
+                : 'Colar (Ctrl+V) — nada copiado'
+            }
+            onClick={() => {
+              setAvisoColar('Passe o cursor sobre a planta e pressione Ctrl+V — a cópia cai ali.');
+            }}
+            disabled={!areaDeTransferencia}
+          />
+          {/* Excluir é ação de linha no vocabulário do ActionIconButton, então usa
+              o componente padrão. Desfazer/refazer não estão na taxonomia dele. */}
+          <ActionIconButton kind="delete" title="Excluir parede selecionada (Delete)" onClick={removerSelecionada} disabled={!editor.selectedId} />
+        </>
+      ),
+    },
+    ...(!emVista
+      ? [
+          {
+            id: 'selecao',
+            rotulo: 'Seleção',
+            botoes: (
+              <>
+                {/* DUPLICAR cai ao lado, sem depender do cursor — é a diferença para
+                    Colar. ESPELHAR vira a seleção em torno do próprio centro. */}
+                <BotaoBarra icone={CopyPlus} rotulo="Duplicar seleção ao lado (Ctrl+D)" onClick={duplicar} disabled={editor.selectedIds.length === 0} />
+                <BotaoBarra
+                  icone={FlipHorizontal2}
+                  rotulo="Espelho horizontal — esquerda ↔ direita"
+                  onClick={() => espelhar('VERTICAL')}
+                  disabled={editor.selectedIds.length === 0}
+                />
+                <BotaoBarra
+                  icone={FlipVertical2}
+                  rotulo="Espelho vertical — frente ↔ fundos"
+                  onClick={() => espelhar('HORIZONTAL')}
+                  disabled={editor.selectedIds.length === 0}
+                />
+              </>
+            ),
+          },
+          {
+            id: 'exibir',
+            rotulo: 'Isolar e medir',
+            botoes: (
+              <>
+                {/* ISOLAR esconde tudo menos a seleção (o `ocultosNoDesenho` do olho da
+                    lista); vira "Reexibir tudo" enquanto há algo escondido. MEDIR é a
+                    régua de Analisar, à mão sem trocar de aba. */}
+                <BotaoBarra
+                  icone={isolado ? Eye : EyeOff}
+                  rotulo={isolado ? 'Reexibir tudo — desfaz o isolar/ocultar' : 'Isolar seleção — esconde o resto do pavimento'}
+                  onClick={isolarOuMostrarTudo}
+                  disabled={!isolado && editor.selectedIds.length === 0}
+                  ativo={isolado}
+                />
+                <BotaoBarra icone={Ruler} rotulo="Medir linha — dois cliques na planta" onClick={() => editor.setTool('medir-linha')} ativo={editor.tool === 'medir-linha'} />
+              </>
+            ),
+          },
+        ]
+      : []),
+    {
+      id: 'saida',
+      rotulo: 'Arquivo',
+      botoes: (
+        <>
+          {/* EXPORTAR abre Versões com a vista atual marcada — a exportação continua
+              saindo da versão publicada. TELA CHEIA fica no acesso rápido porque é o
+              único botão que precisa estar à vista em qualquer aba para SAIR do modo. */}
+          {vista !== '3d' && (
+            <BotaoBarra
+              icone={FileDown}
+              rotulo="Exportar a vista atual (PDF/DXF) — abre Versões com esta prancha marcada"
+              onClick={exportarAVistaAtual}
+              ativo={relatorioAberto === 'versoes'}
+            />
+          )}
+          <BotaoBarra icone={telaCheia ? Minimize2 : Maximize2} rotulo={telaCheia ? 'Sair da tela cheia' : 'Tela cheia'} onClick={alternarTelaCheia} ativo={telaCheia} />
+        </>
+      ),
+    },
+  ];
+
   return (
     <>
       {telaAberta === 'quadro-de-cargas' && (
@@ -5977,202 +6189,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             cortes={(editor.model.sections ?? []).map((c) => ({ id: c.id, rotulo: c.rotulo }))}
           />
         }
-        direita={
-          <>
-            {/* SELECIONAR · MOVER e as SEIS VISTAS no acesso rápido (17/09/2026:
-                *"ao lado do botão desfazer colocar um separador e inserir os
-                botões de vista… o botão selecionar… botão mover"*). São os
-                gestos de NAVEGAR — trocar de vista, voltar à seta, arrastar a
-                tela — e navegar acontece em qualquer aba, como desfazer. O
-                seletor à esquerda continua: é ele que dá nome à vista atual e
-                lista os cortes, que são quantos o desenho tiver. */}
-            {/* Só na planta baixa: nas elevações e no 3D não há ferramenta de
-                desenho (a regra "nada de desenhar fora da planta" do ribbon). */}
-            {!emVista && (
-              <>
-                <BotaoBarra
-                  icone={MousePointer2}
-                  rotulo="Ferramenta: Selecionar"
-                  onClick={() => editor.setTool('selecionar')}
-                  ativo={editor.tool === 'selecionar'}
-                />
-                <BotaoBarra
-                  icone={Hand}
-                  rotulo="Ferramenta: Mover a vista — arraste com o botão esquerdo (o direito arrasta em qualquer ferramenta)"
-                  onClick={() => editor.setTool('mover')}
-                  ativo={editor.tool === 'mover'}
-                />
-                <SeparadorDaBarra />
-              </>
-            )}
-            {VISTAS_FIXAS.map((v) => (
-              <BotaoBarra
-                key={v.id}
-                icone={v.icone}
-                rotulo={`Vista: ${v.rotulo}`}
-                onClick={() => setVista(v.id)}
-                ativo={vista === v.id}
-              />
-            ))}
-            <SeparadorDaBarra />
-            {/* NAVEGAR (17/09/2026, *"implemente todos"*): enquadrar o desenho,
-                zoom ± pelo centro (touchpad sem roda), escala 1:100. Enquadrar
-                também vale nas elevações e cortes (o mesmo token do grupo
-                Navegar); zoom e 1:100 só existem na planta baixa. */}
-            {(!emVista || vistaEhProjecao) && (
-              <BotaoBarra
-                icone={Scan}
-                rotulo="Enquadrar — o desenho inteiro na tela"
-                onClick={() => (emVista ? setEnquadrarVistaToken((t) => t + 1) : navegar('ENQUADRAR'))}
-              />
-            )}
-            {!emVista && (
-              <>
-                <BotaoBarra icone={ZoomOut} rotulo="Afastar (zoom −)" onClick={() => navegar('ZOOM_MENOS')} />
-                <BotaoBarra icone={ZoomIn} rotulo="Aproximar (zoom +)" onClick={() => navegar('ZOOM_MAIS')} />
-                <BotaoBarra
-                  texto="1:100"
-                  rotulo="Escala 1:100 na tela — 1 m do desenho = 1 cm no monitor"
-                  onClick={() => navegar('ESCALA_1_100')}
-                />
-                <SeparadorDaBarra />
-                {/* MODOS globais: a trava ortogonal (F8) e o ímã dos encaixes. O
-                    Orto também está na barra de opções; aqui é o mesmo estado,
-                    à vista em qualquer aba. Encaixe liga/desliga TODOS os tipos —
-                    a escolha fina continua no menu Encaixe da barra de opções. */}
-                <BotaoBarra
-                  icone={Grid3x3}
-                  rotulo={ortogonal ? 'Trava 90° ligada — Shift libera (F8 alterna)' : 'Trava 90° desligada — Shift trava (F8 alterna)'}
-                  onClick={() => setOrtogonal((v) => !v)}
-                  ativo={ortogonal}
-                />
-                <BotaoBarra
-                  icone={Magnet}
-                  rotulo={encaixesAtivos.size > 0 ? 'Encaixe ligado — desliga todos os ímãs' : 'Encaixe desligado — liga todos os ímãs'}
-                  onClick={() => setEncaixesLigados(encaixesAtivos.size > 0 ? [] : [...TIPOS_DE_ENCAIXE])}
-                  ativo={encaixesAtivos.size > 0}
-                />
-                <SeparadorDaBarra />
-              </>
-            )}
-            <BotaoBarra
-              icone={Undo2}
-              rotulo="Desfazer (Ctrl+Z)"
-              onClick={editor.undo}
-              disabled={!editor.canUndo}
-            />
-            <BotaoBarra
-              icone={Redo2}
-              rotulo="Refazer (Ctrl+Shift+Z)"
-              onClick={editor.redo}
-              disabled={!editor.canRedo}
-            />
-            {/* COPIAR / COLAR. Ficam ao lado de desfazer/refazer porque são da mesma
-                família — editam o desenho sem desenhar nada. O atalho está no
-                rótulo porque o gesto de verdade é o teclado: colar acontece SOB O
-                CURSOR, e um clique no botão da barra tira o cursor da planta. */}
-            <BotaoBarra
-              icone={Copy}
-              rotulo="Copiar seleção (Ctrl+C)"
-              onClick={copiar}
-              disabled={editor.selectedIds.length === 0}
-            />
-            <BotaoBarra
-              icone={ClipboardPaste}
-              rotulo={
-                areaDeTransferencia
-                  ? 'Colar no cursor (Ctrl+V) — mova o mouse sobre a planta e use o atalho'
-                  : 'Colar (Ctrl+V) — nada copiado'
-              }
-              onClick={() => {
-                // Sem cursor sobre a planta não há destino. O botão existe para
-                // ANUNCIAR o recurso e mostrar que há algo copiado; quem clica
-                // recebe a instrução em vez de uma cópia num lugar arbitrário.
-                setAvisoColar('Passe o cursor sobre a planta e pressione Ctrl+V — a cópia cai ali.');
-              }}
-              disabled={!areaDeTransferencia}
-            />
-            {!emVista && (
-              <>
-                {/* DUPLICAR cai ao lado, sem depender do cursor — é a diferença
-                    para Colar. ESPELHAR vira a seleção em torno do próprio
-                    centro: horizontal troca esquerda ↔ direita, vertical troca
-                    frente ↔ fundos (plantas geminadas). */}
-                <BotaoBarra
-                  icone={CopyPlus}
-                  rotulo="Duplicar seleção ao lado (Ctrl+D)"
-                  onClick={duplicar}
-                  disabled={editor.selectedIds.length === 0}
-                />
-                <BotaoBarra
-                  icone={FlipHorizontal2}
-                  rotulo="Espelho horizontal — esquerda ↔ direita"
-                  onClick={() => espelhar('VERTICAL')}
-                  disabled={editor.selectedIds.length === 0}
-                />
-                <BotaoBarra
-                  icone={FlipVertical2}
-                  rotulo="Espelho vertical — frente ↔ fundos"
-                  onClick={() => espelhar('HORIZONTAL')}
-                  disabled={editor.selectedIds.length === 0}
-                />
-              </>
-            )}
-            {/* Excluir é ação de linha no vocabulário do ActionIconButton, então usa
-                o componente padrão. Desfazer/refazer/voltar não estão na taxonomia
-                dele (`ActionKind` não tem esses casos) — forçar um `kind` só para
-                reaproveitar o estilo mentiria na semântica do componente. */}
-            <ActionIconButton
-              kind="delete"
-              title="Excluir parede selecionada (Delete)"
-              onClick={removerSelecionada}
-              disabled={!editor.selectedId}
-            />
-            {!emVista && (
-              <>
-                <SeparadorDaBarra />
-                {/* ISOLAR esconde tudo menos a seleção (o mesmo `ocultosNoDesenho`
-                    do olho da lista); o botão vira "Mostrar tudo" enquanto há
-                    algo escondido. MEDIR é a régua de Analisar, à mão sem trocar
-                    de aba. EXPORTAR abre Versões com a vista atual marcada — a
-                    exportação continua saindo da versão publicada. */}
-                <BotaoBarra
-                  icone={isolado ? Eye : EyeOff}
-                  rotulo={isolado ? 'Reexibir tudo — desfaz o isolar/ocultar' : 'Isolar seleção — esconde o resto do pavimento'}
-                  onClick={isolarOuMostrarTudo}
-                  disabled={!isolado && editor.selectedIds.length === 0}
-                  ativo={isolado}
-                />
-                <BotaoBarra
-                  icone={Ruler}
-                  rotulo="Medir linha — dois cliques na planta"
-                  onClick={() => editor.setTool('medir-linha')}
-                  ativo={editor.tool === 'medir-linha'}
-                />
-              </>
-            )}
-            {vista !== '3d' && (
-              <BotaoBarra
-                icone={FileDown}
-                rotulo="Exportar a vista atual (PDF/DXF) — abre Versões com esta prancha marcada"
-                onClick={exportarAVistaAtual}
-                ativo={relatorioAberto === 'versoes'}
-              />
-            )}
-            {/* TELA CHEIA. No acesso rápido, e não numa aba, porque é o único
-                botão que precisa estar à vista em qualquer aba para SAIR do modo. */}
-            <BotaoBarra
-              icone={telaCheia ? Minimize2 : Maximize2}
-              rotulo={telaCheia ? 'Sair da tela cheia' : 'Tela cheia'}
-              onClick={alternarTelaCheia}
-              ativo={telaCheia}
-            />
-            {/* A contagem some em tela estreita: com a barra cheia, é o que
-                menos faz falta — o número está no painel Componentes. */}
-            <span className="ml-2 hidden whitespace-nowrap text-xs text-slate-500 2xl:inline">
-              {editor.model.walls.length} parede(s) · {ambientes.length} ambiente(s)
-            </span>
-          </>
+        acessoRapido={
+          <AcessoRapido
+            ordem={Array.isArray(ordemDoAcessoRapido) ? ordemDoAcessoRapido : []}
+            onOrdem={setOrdemDoAcessoRapido}
+            grupos={gruposDoAcessoRapido}
+            cauda={
+              <span className="hidden whitespace-nowrap text-xs text-slate-500 2xl:inline">
+                {editor.model.walls.length} parede(s) · {ambientes.length} ambiente(s)
+              </span>
+            }
+          />
         }
       >
         {aba === 'arquitetura' && (
@@ -9913,11 +9940,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     </div>
     </>
   );
-}
-
-/** Divisória fina entre famílias do acesso rápido (navegar │ vistas │ editar). */
-function SeparadorDaBarra() {
-  return <span aria-hidden="true" className="mx-1 h-5 w-px shrink-0 bg-slate-200" />;
 }
 
 /** Controle de barra: voltar, desfazer, refazer. `title` + `aria-label` porque

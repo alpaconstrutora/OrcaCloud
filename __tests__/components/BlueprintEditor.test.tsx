@@ -1068,6 +1068,30 @@ describe('BlueprintEditor · ribbon', () => {
     expect(screen.queryByRole('button', { name: /^circuitos automáticos/i })).toBeNull();
   });
 
+  it('o acesso rápido é uma linha própria de GRUPOS com alça, e a ordem salva é respeitada', async () => {
+    // 17/09/2026: "o toolbar de botões está deslocado: 1. alinhe à esquerda
+    // 2. crie grupos de botões e possibilidade de mover os grupos para
+    // direita/esquerda". O arraste em si não tem geometria em jsdom (provado no
+    // app real); aqui: os grupos, as alças e a ordem persistida.
+    localStorage.setItem('blueprint:ordemDoAcessoRapido', JSON.stringify(['editar', 'vistas', 'ferramenta']));
+    await montar();
+    const linha = screen.getByTestId('acesso-rapido');
+    const grupos = within(linha).getAllByRole('group').map((g) => g.getAttribute('data-grupo-do-acesso-rapido'));
+    // Os três salvos vêm primeiro, na ordem salva; os demais entram no fim, na ordem padrão.
+    expect(grupos.slice(0, 3)).toEqual(['editar', 'vistas', 'ferramenta']);
+    expect(grupos).toEqual(expect.arrayContaining(['zoom', 'modos', 'selecao', 'exibir', 'saida']));
+    // Cada grupo tem a alça de arrasto, e os botões estão dentro do grupo certo.
+    expect(within(linha).getByRole('button', { name: /^arrastar o grupo vistas$/i })).toBeInTheDocument();
+    const editar = within(linha).getByRole('group', { name: 'Editar' });
+    expect(within(editar).getByRole('button', { name: /desfazer/i })).toBeInTheDocument();
+    const vistas = within(linha).getByRole('group', { name: 'Vistas' });
+    expect(within(vistas).getAllByRole('button', { name: /^vista: /i })).toHaveLength(6);
+    // A linha não é o slot à direita das abas: é filha direta da toolbar, abaixo do tablist.
+    const toolbar = screen.getByRole('toolbar');
+    expect(linha.closest('[role="toolbar"]')).toBe(toolbar);
+    expect(screen.getByRole('tablist').compareDocumentPosition(linha) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('a aba persiste entre montagens — é preferência, não gesto', async () => {
     await montar();
     await abrirAba(/^elétrica$/i);

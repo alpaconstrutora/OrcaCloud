@@ -1,4 +1,5 @@
 import React from 'react';
+import type { SupplierPortalTab } from '../../SupplierDashboard';
 import { Clock, FileText, Package, Sparkles } from 'lucide-react';
 import { Invoice, PurchaseOrder, QuotationRequest } from '../../../types';
 import { SupplierAIInsight } from '../../../services/supplierAiService';
@@ -16,7 +17,7 @@ interface Props {
     loadingAI: boolean;
     onOpenOrder: (id: string, mode: 'details' | 'logistics') => void;
     onRespondQuotation: (id: string) => void;
-    onNavigate: (tab: 'negotiations' | 'quotations' | 'orders' | 'documents') => void;
+    onNavigate: (tab: Exclude<SupplierPortalTab, 'overview'>) => void;
 }
 
 const RECENT = 6;

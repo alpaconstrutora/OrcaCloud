@@ -3,7 +3,7 @@ import { Package, Truck, Printer, ArrowLeft, Building2, HandCoins, Search, Chevr
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedScopedSearch, useResizableColumns } from './ui/TableUtils';
-import { PurchaseOrder, PurchaseOrderComprador, PurchaseOrderItem } from '../types';
+import { PurchaseOrder, PurchaseOrderComprador, PurchaseOrderItem, PedidoFinanceiro } from '../types';
 import { orderService } from '../services/orderService';
 import { getOrderNumberLockReason, regenerateOrderNumber } from '../services/orderNumberRegenService';
 import { receiptService, PurchaseReceipt } from '../services/receiptService';
@@ -23,6 +23,9 @@ import SupplyChainOrderForm from './SupplyChainOrderForm';
 import { webhookService } from '../services/webhookService';
 import { supplierPortalTokenService } from '../services/supplierPortalTokenService';
 import { pedidoCompradorService } from '../services/pedidoCompradorService';
+import { pedidoFinanceiroService } from '../services/pedidoFinanceiroService';
+import { PAYABLE_STATUS } from './supplier/portal/status';
+import { fmtDate } from './portal/PortalKit';
 import { ehCompradorDoPedido } from '../utils/pedidoPerfil';
 import { round2 } from '../utils/financialMath';
 import { aplicarCotadoNosItens, fornecedorPodeCotar, temCotacao, totalEfetivoDoPedido, totalReferenciaDoPedido, valorEfetivoDoItem } from '../utils/pedidoItemValor';
@@ -249,6 +252,10 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     // A empresa compradora, para o FORNECEDOR: é contra ela que ele emite a
     // nota. Só a visão do fornecedor lê isto (o comprador é a própria empresa).
     const [comprador, setComprador] = React.useState<PurchaseOrderComprador | undefined>(undefined);
+    // Parcelas reais do pedido (Contas a Pagar), para a aba Financeiro do
+    // FORNECEDOR — a mesma fonte da aba Financeiro do portal. Só ele lê isto:
+    // o comprador tem o formulário e o Contas a Pagar.
+    const [financeiroDoPedido, setFinanceiroDoPedido] = React.useState<PedidoFinanceiro | undefined>(undefined);
     const [loading, setLoading] = React.useState(true);
     const [showNegotiation, setShowNegotiation] = React.useState(false);
     const [currentUser, setCurrentUser] = React.useState<{ email: string; name: string } | null>(propUser || null);
@@ -504,6 +511,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         // A empresa compradora também vem no pedido (a RPC
                         // devolve `comprador`).
                         setComprador(res.order.comprador);
+                        setFinanceiroDoPedido(res.order.financeiro);
                     }
                     // Este `return` ficava AQUI, e era a causa das três abas
                     // vazias no link público: comprovante, divergência e log
@@ -544,9 +552,13 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     // RPC estreita. Só a visão do fornecedor mostra o bloco —
                     // para o comprador seria consulta a mais sem leitor.
                     if (!ehComprador) {
-                        const compradorDoPedido = await pedidoCompradorService.get(orderId).catch(() => undefined);
+                        const [compradorDoPedido, financeiro] = await Promise.all([
+                            pedidoCompradorService.get(orderId).catch(() => undefined),
+                            pedidoFinanceiroService.get(orderId).catch(() => undefined),
+                        ]);
                         if (cancelled) return;
                         setComprador(compradorDoPedido);
+                        setFinanceiroDoPedido(financeiro);
                     }
 
                     const anexos = await carregarAnexosDoPedido();
@@ -1561,6 +1573,54 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                             <p className="text-sm font-normal text-gray-700 mt-1 leading-relaxed">
                                 {order.notes || 'Nenhuma observação registrada pelo comprador.'}
                             </p>
+                        </div>
+
+                        {/* ── Parcelas ──
+                            As parcelas reais do Contas a Pagar deste pedido
+                            (pedido do usuário em 2026-09-17: "conectar com
+                            Suprimentos › Pedidos › aba Financeiro"). Mesma
+                            fonte da aba Financeiro do portal
+                            (`purchase_order_financeiro_json`), então os dois
+                            lugares nunca discordam. Status como texto colorido
+                            (§8); cor semântica, fora do `accent`. */}
+                        <div className="mt-5 pt-5 border-t border-gray-100">
+                            <p className="text-xs font-semibold text-gray-500 mb-2">Parcelas</p>
+                            {!financeiroDoPedido || financeiroDoPedido.parcelas.length === 0 ? (
+                                <p className="text-sm font-normal text-gray-500 leading-relaxed">
+                                    Parcelas ainda não geradas — são geradas na entrega, com nota fiscal vinculada.
+                                </p>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full min-w-[480px] text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                <th className="px-3 py-2 text-table-header font-semibold text-gray-500">Parcela</th>
+                                                <th className="px-3 py-2 text-table-header font-semibold text-gray-500">Vencimento</th>
+                                                <th className="px-3 py-2 text-table-header font-semibold text-gray-500 text-right">Valor</th>
+                                                <th className="px-3 py-2 text-table-header font-semibold text-gray-500">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {financeiroDoPedido.parcelas.map(p => (
+                                                <tr key={p.id}>
+                                                    <td className="px-3 py-2 text-sm font-normal text-gray-700 whitespace-nowrap">{p.numero}/{p.totalParcelas}</td>
+                                                    <td className="px-3 py-2 text-sm font-normal text-gray-700 whitespace-nowrap">{fmtDate(p.dueDate)}</td>
+                                                    <td className="px-3 py-2 text-sm font-medium text-gray-800 text-right tabular-nums whitespace-nowrap">{formatBRL(p.amount)}</td>
+                                                    <td className="px-3 py-2">
+                                                        <span className={`text-sm font-normal ${
+                                                            p.status === 'PAGO' ? 'text-emerald-600'
+                                                            : p.status === 'VENCIDO' ? 'text-red-600'
+                                                            : p.status === 'CANCELADO' ? 'text-gray-500'
+                                                            : 'text-amber-600'}`}>
+                                                            {PAYABLE_STATUS[p.status].label}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

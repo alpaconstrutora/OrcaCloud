@@ -42,6 +42,52 @@ export interface PurchaseOrderComprador {
     endereco: string;
 }
 
+/** `effective_status` de `vw_payables` — a view é a dona da regra. */
+export type ParcelaStatus =
+    | 'PAGO' | 'VENCIDO' | 'PREVISTO' | 'APROVADO' | 'PARCIAL'
+    | 'RENEGOCIADO' | 'CANCELADO' | 'EMITIDO' | 'ENVIADO';
+
+/** Uma parcela real do pedido em `internal_transactions` (Contas a Pagar). */
+export interface ParcelaDoPedido {
+    id: string;
+    /** 1..n, numerada por vencimento. */
+    numero: number;
+    totalParcelas: number;
+    /** 'YYYY-MM-DD' — formatar com âncora de meio-dia (parseDate/fmtDate). */
+    dueDate: string;
+    amount: number;
+    paymentDate?: string;
+    status: ParcelaStatus;
+}
+
+/**
+ * O que o FORNECEDOR vê da aba Financeiro do pedido: as condições que o
+ * comprador definiu em Suprimentos › Pedidos › Financeiro e as parcelas reais.
+ * Sem conta de pagamento, centro de custo, plano de contas ou aprovação — são
+ * dimensões internas do comprador (decisão do usuário, 2026-09-17).
+ */
+export interface PedidoFinanceiro {
+    condicoes: {
+        paymentMethod?: string;
+        paymentTermType?: 'Vista' | 'Parcelado';
+        paymentDays?: number;
+        paymentInstallments?: number;
+        notes?: string;
+    };
+    parcelas: ParcelaDoPedido[];
+}
+
+/** Linha da aba Financeiro do portal: um pedido + seu financeiro. */
+export interface PedidoComFinanceiro {
+    orderId: string;
+    number?: string;
+    projectName: string;
+    status: PurchaseOrder['status'];
+    /** Σ items[].total — informativo; os KPIs somam PARCELAS. */
+    total: number;
+    financeiro: PedidoFinanceiro;
+}
+
 export interface PurchaseOrder {
     id: string;
     number?: string;
@@ -52,6 +98,8 @@ export interface PurchaseOrder {
     empresaId?: string;
     /** Preenchido só pela RPC do portal (a RLS de `companies` barra o fornecedor). */
     comprador?: PurchaseOrderComprador;
+    /** Idem: condições + parcelas, só pela RPC de detalhe do portal. */
+    financeiro?: PedidoFinanceiro;
     projectClassification?: 'OBRA' | 'ORCAMENTO';
     linkedProjectName?: string;
     linkedProjectId?: string;

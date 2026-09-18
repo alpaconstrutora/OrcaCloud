@@ -33,7 +33,8 @@ import {
     HelpCircle,
     EyeOff,
     Smartphone,
-    MoreHorizontal
+    MoreHorizontal,
+    HandCoins
 } from 'lucide-react';
 import { Supplier, UserProfile, PurchaseOrder, Invoice, QuotationRequest } from '../types';
 import { supplierAiService, SupplierAIInsight } from '../services/supplierAiService';
@@ -60,16 +61,25 @@ import PortalOrders from './supplier/portal/PortalOrders';
 import PortalQuotations from './supplier/portal/PortalQuotations';
 import PortalNegotiations from './supplier/portal/PortalNegotiations';
 import PortalInvoices from './supplier/portal/PortalInvoices';
+import PortalFinanceiro from './supplier/portal/PortalFinanceiro';
+import SupplierFinanceiroTab from './supplier/SupplierFinanceiroTab';
 import PortalMyData from './supplier/portal/PortalMyData';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 import { SupplierBankAccount } from '../types/supplierBankAccount';
 import { supabase } from '../lib/supabase';
 import { totalEfetivoDoPedido } from '../utils/pedidoItemValor';
 
+/**
+ * As abas do Portal do Fornecedor. Uma definição só: a união literal estava
+ * repetida em três lugares (props, useState e o cast do AppRouter) e a aba
+ * Financeiro (2026-09-17) foi a quarta vez que alguém teria de acertar os três.
+ */
+export type SupplierPortalTab = 'overview' | 'negotiations' | 'quotations' | 'orders' | 'documents' | 'financeiro';
+
 interface SupplierDashboardProps {
     supplierProfile?: Supplier | null;
     profile?: { group: string; role: string };
-    activeTab?: 'overview' | 'negotiations' | 'quotations' | 'orders' | 'documents';
+    activeTab?: SupplierPortalTab;
     initialOrderId?: string | null;
     initialOrderViewMode?: 'details' | 'logistics';
     onNavigate?: (link: string) => void;
@@ -130,7 +140,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         ? 'border-[#F3D9D1] focus:ring-[#E1553C]'
         : 'border-indigo-100 focus:ring-indigo-500';
 
-    const [activeTab, setActiveTab] = React.useState<'overview' | 'negotiations' | 'quotations' | 'orders' | 'documents'>(initialTab || 'overview');
+    const [activeTab, setActiveTab] = React.useState<SupplierPortalTab>(initialTab || 'overview');
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('supplierDashboard:viewMode', 'list');
     const [searchNegotiations, setSearchNegotiations] = usePersistedState<string>('supplierDashboard:searchNegotiations', '');
     const [insights, setInsights] = React.useState<SupplierAIInsight[]>([]);
@@ -1161,6 +1171,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         quotations: { title: 'Solicitações de Cotação', subtitle: 'Responda às solicitações de orçamento das construtoras.' },
         orders: { title: 'Gestão de Pedidos', subtitle: 'Acompanhe o ciclo de vida e logística dos suprimentos.' },
         documents: { title: 'Central de Documentos', subtitle: 'Gerencie suas Notas Fiscais, XMLs e comprovantes de entrega.' },
+        financeiro: { title: 'Financeiro', subtitle: 'Condições de pagamento e parcelas dos seus pedidos.' },
     };
 
     const TABS: { id: typeof activeTab; label: string; icon: React.ElementType }[] = [
@@ -1169,6 +1180,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         { id: 'quotations', label: 'Cotações', icon: History },
         { id: 'orders', label: 'Pedidos', icon: Package },
         { id: 'documents', label: 'Nota Fiscal', icon: FileCheck },
+        { id: 'financeiro', label: 'Financeiro', icon: HandCoins },
     ];
 
     // Abas visíveis por fornecedor (guia §3, mesmo padrão do Portal do Corretor) —
@@ -1565,6 +1577,27 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                             onChanged={loadOrders}
                         />
                     ) : renderDocuments()
+                )}
+                {/* Financeiro (2026-09-17): o que a construtora deve ao fornecedor —
+                    condições de Suprimentos › Pedidos › Financeiro + parcelas reais
+                    do Contas a Pagar. Duas cascas sobre o mesmo hook: kit coral no
+                    link público (§24), vocabulário do guia no app. Clicar num pedido
+                    abre o detalhe, cuja aba Financeiro mostra as mesmas parcelas. */}
+                {activeTab === 'financeiro' && effectiveSupplier && (
+                    isPublicExperience ? (
+                        <PortalFinanceiro
+                            supplier={effectiveSupplier}
+                            orders={orders}
+                            portalToken={portalToken}
+                            onOpenOrder={(id) => { setActiveTab('orders'); handleViewOrder(id, 'details'); }}
+                        />
+                    ) : (
+                        <SupplierFinanceiroTab
+                            supplier={effectiveSupplier}
+                            orders={orders}
+                            onOpenOrder={(id) => { setActiveTab('orders'); handleViewOrder(id, 'details'); }}
+                        />
+                    )
                 )}
             </main>
             )}

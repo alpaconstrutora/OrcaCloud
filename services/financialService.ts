@@ -32,6 +32,16 @@ type InternalTxSyncOptions = {
     partyType?: 'SUPPLIER' | 'CLIENT' | null;
     partyName?: string | null;
     supplierId?: string | null;
+    /**
+     * Vínculo PRIMÁRIO título→pedido (`internal_transactions.purchase_order_id`).
+     * Para parcela de pedido `reference_id` continua sendo o id do tx do JSON,
+     * de propósito: `financialSyncService.syncFinancialData` faz upsert de todo
+     * o JSON da obra por `(organization_id, reference_id, entry_type)` — com um
+     * `reference_id` composto aqui, o upsert não acharia a linha e criaria uma
+     * segunda (título duplicado). Quem procura "as parcelas do pedido X" usa
+     * esta coluna (`purchase_order_financeiro_json`, aplicar_20270921000026).
+     */
+    purchaseOrderId?: string | null;
 };
 
 /**
@@ -131,6 +141,7 @@ export const financialService = {
                 party_type: sync?.partyType ?? null,
                 party_name: sync?.partyName || newTx.supplier || null,
                 supplier_id: sync?.supplierId ?? null,
+                purchase_order_id: sync?.purchaseOrderId ?? null,
                 status: newTx.status === 'PAID' ? 'CONCILIATED' : 'PENDING',
                 business_status: newTx.status === 'PAID' ? 'PAGO' : 'PREVISTO',
                 /* Nasce conciliado => nasce com a data da baixa. A trigger
@@ -337,6 +348,18 @@ export const financialService = {
                     }
                 }
             });
+
+            // O razão também: até 2026-09-17 só o JSON era limpo, e cada re-sync
+            // deixava as parcelas antigas em `internal_transactions` — o Contas a
+            // Pagar (e o portal do fornecedor) somavam parcelas de duas gerações
+            // do mesmo pedido. Só as PENDING: uma parcela já baixada não entra
+            // aqui porque `hasStartedPayment` já retornou acima.
+            const { error: limpezaErr } = await supabase
+                .from('internal_transactions')
+                .delete()
+                .eq('purchase_order_id', orderId)
+                .eq('status', 'PENDING');
+            if (limpezaErr) console.error('[FINANCIAL] Falha ao limpar parcelas antigas do razão:', limpezaErr);
         }
 
         // 6. Calculate Values and Terms
@@ -372,6 +395,10 @@ export const financialService = {
                 value: installmentValue,
                 status: 'PENDING',
                 supplier: supplierName,
+                // `supplierId` no JSON: é o que `financialSyncService` copia para
+                // `supplier_id` no upsert do espelho — sem ele, o re-sync da obra
+                // zerava o fornecedor da parcela (medido em 2026-09-17: 12 de 12).
+                supplierId: order.supplier_id ?? undefined,
                 orderId: orderId,
                 bankAccount: order.bank_account,
                 costCenter: order.cost_center,
@@ -382,6 +409,7 @@ export const financialService = {
                 partyType: 'SUPPLIER',
                 partyName: supplierName,
                 supplierId: order.supplier_id ?? null,
+                purchaseOrderId: orderId,
             });
         }
 

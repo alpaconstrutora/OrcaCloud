@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
-import { PurchaseOrder, PurchaseOrderItem, QuotationRequest, QuotationResponse, Invoice, Supplier } from '../types';
+import { PurchaseOrder, PurchaseOrderItem, QuotationRequest, QuotationResponse, Invoice, Supplier, PedidoComFinanceiro } from '../types';
 import { mapCompradorRow } from './pedidoCompradorService';
+import { mapFinanceiroRow, mapPedidoComFinanceiroRow } from './pedidoFinanceiroService';
 import { NegotiationProposal } from './negotiationService';
 import { receiptService, PurchaseReceipt } from './receiptService';
 import { discrepancyService, PurchaseDiscrepancy } from './discrepancyService';
@@ -36,6 +37,8 @@ const mapOrderRow = (item: any): PurchaseOrder => ({
   // `companies` barra o fornecedor, então ela vem embutida no pedido. Ver
   // pedidoCompradorService.
   comprador: mapCompradorRow(item.comprador),
+  // Condições + parcelas (só no detalhe). Ver pedidoFinanceiroService.
+  financeiro: item.financeiro ? mapFinanceiroRow(item.financeiro) : undefined,
   supplierId: item.supplier_id,
   empresaId: item.empresa_id,
   deliveryDate: item.delivery_date,
@@ -336,6 +339,16 @@ export const supplierPortalTokenService = {
     });
     if (error) throw error;
     if (!(data as any)?.valid) throw new Error('Não foi possível responder à contraproposta.');
+  },
+
+  // Financeiro: todos os pedidos (não rascunho) com condições + parcelas reais.
+  // Uma chamada para a aba inteira — por pedido seria N+1.
+  async getFinancials(token: string): Promise<PedidoComFinanceiro[]> {
+    const { data, error } = await supabase.rpc('supplier_portal_get_financials', { p_token: token });
+    if (error) throw error;
+    const res = data as any;
+    if (!res?.valid) throw new Error('Link inválido ou expirado.');
+    return (res.data || []).map(mapPedidoComFinanceiroRow);
   },
 
   // Documentos (NFe)

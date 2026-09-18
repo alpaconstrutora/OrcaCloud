@@ -67,6 +67,8 @@ const ServiceContractsModule   = React.lazy(() => import('./ServiceContractsModu
 const SalesManagementModule    = React.lazy(() => import('./SalesManagementModule'));
 import { VIEW_TO_SALES_TAB } from '../constants/salesTabs';
 import { VIEW_TO_CONTROLADORIA_TAB } from '../constants/controladoríaTabs';
+// Só o tipo: o componente continua lazy (import type não gera chunk).
+import type { SupplierPortalTab } from './SupplierDashboard';
 const NotificationsCenter   = React.lazy(() => import('./NotificationsCenter'));
 const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplateEditor'));
 const AreaEngineModule = React.lazy(() => import('./AreaEngineModule'));
@@ -369,7 +371,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
   }
   if (currentProfile.group === ProfileGroup.SUPPLIER) {
     const supplierTab = activeView === 'supplier-area' ? 'negotiations' : (activeView === 'orders' ? 'orders' : 'overview');
-    return <SupplierDashboard profile={currentProfile} supplierProfile={supplierProfile} onNavigate={handleNavigate} activeTab={supplierTab as 'overview' | 'negotiations' | 'quotations' | 'orders' | 'documents'} />;
+    return <SupplierDashboard profile={currentProfile} supplierProfile={supplierProfile} onNavigate={handleNavigate} activeTab={supplierTab as SupplierPortalTab} />;
   }
   if (currentProfile.group === ProfileGroup.BROKER) {
     const tabMap: Record<string, string> = {

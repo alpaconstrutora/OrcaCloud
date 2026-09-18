@@ -91,8 +91,15 @@ export const financialSyncService = {
             info.transactions.forEach(tx => {
                 internalTxs.push({
                     organization_id: organizationId,
-                    source_system: sourceSystem,
+                    // Parcela de pedido de compra continua sendo de pedido depois
+                    // do re-sync da obra. Antes este upsert (mesmo reference_id
+                    // que `financialService.addTransaction` gravou) rebaixava a
+                    // linha para 'PROJECT' e apagava o vínculo — foi assim que
+                    // TODAS as parcelas de pedido em produção perderam origem e
+                    // fornecedor (2026-09-17). Ver aplicar_20270921000026.
+                    source_system: tx.orderId ? 'PURCHASE_ORDER' : sourceSystem,
                     reference_id: tx.id,
+                    purchase_order_id: tx.orderId ?? null,
                     project_id: projectId,
                     transaction_date: tx.date,
                     amount: tx.value,
@@ -101,6 +108,12 @@ export const financialSyncService = {
                     entity_name: tx.supplier,
                     // Ponte ÒPURA: custo de obra carrega o fornecedor (FK) capturado no form.
                     supplier_id: tx.type === 'EXPENSE' ? (tx.supplierId || null) : null,
+                    // Explícitos porque o ramo das parcelas (acima) emite party_*
+                    // e o PostgREST une as chaves do array: ausentes aqui, viravam
+                    // NULL no upsert e apagavam a contraparte que
+                    // `financialService.addTransaction` tinha gravado.
+                    party_type: tx.type === 'EXPENSE' && tx.supplier ? 'SUPPLIER' : null,
+                    party_name: tx.supplier || null,
                     category: tx.category || 'Despesa de Obra',
                     status: tx.status === 'PAID' ? 'CONCILIATED' : 'PENDING',
                     /* Lançamento marcado como PAGO tem que trazer a data da baixa.

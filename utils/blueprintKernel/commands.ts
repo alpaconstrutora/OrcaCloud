@@ -16,6 +16,7 @@ import {
   type DisciplinaDeRede,
   type TipoDePontoEletrico,
   type TipoDeInterruptor,
+  type TipoDePontoHidraulico,
   type LigacaoDoCircuito,
   type FaseDoCircuito,
   type TipoDeAmbiente,
@@ -346,6 +347,10 @@ export type Command =
       potenciaW?: number | null;
       /** A variante do interruptor — ver `TIPOS_DE_INTERRUPTOR`. */
       interruptor?: TipoDeInterruptor | null;
+      /** Classificação hidráulica — ver `TIPOS_DE_PONTO_HIDRAULICO`. */
+      tipoHidraulico?: TipoDePontoHidraulico | null;
+      /** Volume em litros — só faz sentido em `RESERVATORIO`; ignorado nos demais. */
+      volumeL?: number | null;
     }
   | {
       type: 'SetTerminalProps';
@@ -364,6 +369,10 @@ export type Command =
       interruptor?: TipoDeInterruptor | null;
       /** Classificação do ponto elétrico. `null` volta a "a classificar". */
       tipoEletrico?: TipoDePontoEletrico | null;
+      /** Classificação hidráulica. `null` volta a "a classificar". */
+      tipoHidraulico?: TipoDePontoHidraulico | null;
+      /** Volume em litros (reservatório). `null` apaga. */
+      volumeL?: number | null;
       /** Medidas em mm. `null` volta ao padrão da família; ausente não mexe. */
       larguraMm?: number | null;
       alturaMm?: number | null;
@@ -1501,6 +1510,11 @@ function aplicarSemHash(
           ...(command.interruptor != null && command.tipoEletrico === 'INTERRUPTOR'
             ? { interruptor: command.interruptor }
             : {}),
+          ...(command.tipoHidraulico != null ? { tipoHidraulico: command.tipoHidraulico } : {}),
+          // Volume só entra no reservatório — a invariante recusaria nos outros.
+          ...(command.volumeL != null && command.tipoHidraulico === 'RESERVATORIO'
+            ? { volumeL: assertIntegerMm(Math.round(command.volumeL), 'volumeL') }
+            : {}),
         },
       ];
       diff.created.push(id);
@@ -1533,6 +1547,14 @@ function aplicarSemHash(
       // numa tomada, e a invariante recusaria.
       if (terminal.tipoEletrico !== 'INTERRUPTOR' && terminal.interruptor != null) {
         terminal.interruptor = null;
+      }
+      if (command.tipoHidraulico !== undefined) terminal.tipoHidraulico = command.tipoHidraulico;
+      if (command.volumeL !== undefined) {
+        terminal.volumeL = command.volumeL == null ? null : assertIntegerMm(Math.round(command.volumeL), 'volumeL');
+      }
+      // Deixar de ser reservatório leva o volume junto — a invariante recusaria.
+      if (terminal.tipoHidraulico !== 'RESERVATORIO' && terminal.volumeL != null) {
+        terminal.volumeL = null;
       }
       aplicarMedidas(terminal, command);
       diff.updated.push(terminal.id);

@@ -343,7 +343,9 @@ import {
   type TipoDeAmbiente,
   type TipoDeInterruptor,
   type Wall,
+  type TipoDePontoHidraulico,
   TIPOS_DE_AMBIENTE,
+  DISCIPLINAS_DO_PONTO_HIDRAULICO,
   rotuloCurto,
 } from '../../utils/blueprintKernel';
 import {
@@ -352,9 +354,16 @@ import {
   COTA_USUAL_DO_PONTO_ELETRICO,
   ROTULO_DO_PONTO_ELETRICO,
   COTA_TERMINAL_PADRAO_MM,
+  ROTULO_DA_DISCIPLINA,
   TOLERANCIA_ENCAIXE_MM,
   encaixarEmPecaEletrica,
 } from '../../utils/blueprintRede';
+import {
+  FICHA_DO_PONTO_HIDRAULICO,
+  cotaUsualDoPontoHidraulico,
+  ehSobreOTrecho,
+  projetarNoTrecho,
+} from '../../utils/blueprintHidraulica';
 import {
   ROTULO_DO_TIPO_DE_AMBIENTE,
   comandosDeIluminacao,
@@ -1314,6 +1323,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     useState<TipoDePontoEletrico | null>(null);
   /** A variante do interruptor escolhida no menu — só vale com `INTERRUPTOR`. */
   const [tipoDeInterruptor, setTipoDeInterruptor] = useState<TipoDeInterruptor | null>(null);
+  /** A classificação HIDRÁULICA do próximo ponto (18/09/2026) — irmã da elétrica. */
+  const [tipoDePontoHidraulico, setTipoDePontoHidraulico] = useState<TipoDePontoHidraulico | null>(null);
+  /** A prumada de esgoto que a ferramenta `rede` cria num clique (tubo de queda / ventilação). */
+  const [prumadaDeRede, setPrumadaDeRede] = useState<'QUEDA' | 'VENTILACAO' | null>(null);
   const [bitolaDeRede, setBitolaDeRede] = useState(BITOLA_PADRAO_MM.ELETRICA);
   const [tipoDeTerminal, setTipoDeTerminal] = useState('Tomada baixa');
   const [larguraEscada, setLarguraEscada] = useState(1200);
@@ -4097,6 +4110,26 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     // QUADRO, e pela PEGADA da peça em vez de um raio fixo na âncora. Clicar em
     // cima do componente passa a ser clicar no componente — ver o pedido de
     // 09/09/2026, "clicar em um componente elétrico e outro".
+    // PRUMADA num clique (18/09/2026): tubo de queda desce do teto ao piso
+    // (−150, onde o esgoto corre); a ventilação sobe do ramal ao teto.
+    if (prumadaDeRede) {
+      const nivel = editor.model.levels.find((l) => l.id === levelId);
+      const teto = nivel?.defaultHeightMm ?? 2800;
+      const piso = COTA_PADRAO_MM.ESGOTO;
+      const criados = editor.run({
+        type: 'AddTrecho',
+        levelId,
+        disciplina: 'ESGOTO',
+        a,
+        b: a,
+        cotaAMm: prumadaDeRede === 'QUEDA' ? teto : piso,
+        cotaBMm: prumadaDeRede === 'QUEDA' ? piso : teto,
+        bitolaMm: prumadaDeRede === 'QUEDA' ? 100 : 50,
+        rotulo: prumadaDeRede === 'QUEDA' ? 'TQ' : 'Ventilação',
+      });
+      if (criados.length > 0) selecionar(criados);
+      return;
+    }
     const ancoraA = encaixarEmPecaEletrica(a, editor.model, levelId, TOLERANCIA_ENCAIXE_MM);
     const ancoraB = encaixarEmPecaEletrica(b, editor.model, levelId, TOLERANCIA_ENCAIXE_MM);
     const criados = editor.run({
@@ -4114,6 +4147,49 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
   function adicionarTerminal(at: Point) {
     if (!levelId) return;
+    // PONTO HIDRÁULICO TIPADO (18/09/2026): tipo, cota, medidas e volume vêm da
+    // ficha; registro/válvula/hidrômetro/conexão caem SOBRE o trecho mais
+    // próximo (a disciplina é a dele) e são recusados longe de qualquer trecho.
+    if (disciplinaDeRede !== 'ELETRICA' && tipoDePontoHidraulico) {
+      const ficha = FICHA_DO_PONTO_HIDRAULICO[tipoDePontoHidraulico];
+      const admitidas = DISCIPLINAS_DO_PONTO_HIDRAULICO[tipoDePontoHidraulico];
+      let disciplina: DisciplinaDeRede = disciplinaDeRede;
+      let ponto = at;
+      let cotaMm = cotaUsualDoPontoHidraulico(tipoDePontoHidraulico, disciplina) ?? cotaDeRede;
+      if (ehSobreOTrecho(tipoDePontoHidraulico)) {
+        const trechos = (editor.model.trechos ?? []).filter((t) => admitidas.includes(t.disciplina));
+        const candidatos = admitidas
+          .map((d) => projetarNoTrecho(at, trechos, d, levelId))
+          .filter((x): x is NonNullable<typeof x> => !!x);
+        const melhor = candidatos.sort(
+          (x, y) => Math.hypot(x.ponto.x - at.x, x.ponto.y - at.y) - Math.hypot(y.ponto.x - at.x, y.ponto.y - at.y),
+        )[0];
+        if (!melhor) {
+          setAvisoColar(`${ficha.rotulo} fica SOBRE um trecho de ${admitidas.map((d) => ROTULO_DA_DISCIPLINA[d].toLowerCase()).join(' ou ')} — clique perto de um.`);
+          return;
+        }
+        disciplina = melhor.trecho.disciplina;
+        ponto = melhor.ponto;
+        cotaMm = melhor.cotaMm;
+      }
+      const criados = editor.run({
+        type: 'AddTerminal',
+        levelId,
+        disciplina,
+        tipo: ficha.rotulo,
+        at: ponto,
+        cotaMm,
+        tipoHidraulico: tipoDePontoHidraulico,
+        volumeL: ficha.volumeL ?? null,
+      });
+      // As medidas padrão da ficha (caixa d'água, caixas, hidrômetro) entram
+      // num segundo comando do mesmo lote: `AddTerminal` não as recebe.
+      if (criados.length > 0 && ficha.medidasMm) {
+        editor.run({ type: 'SetTerminalProps', terminalId: criados[0], ...ficha.medidasMm });
+      }
+      if (criados.length > 0) selecionar(criados);
+      return;
+    }
     // A POTÊNCIA da norma já vem preenchida (13/09/2026: "ao incluir os pontos
     // trazer essas características por padrão") — ver `blueprintPotenciaPadrao`.
     const [comando] = aplicarPotenciaPadrao(editor.model, [{
@@ -4625,7 +4701,19 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       const tipo = e.tool === 'terminal' ? e.tipoEletrico : undefined;
       setTipoDePontoEletrico(tipo ?? null);
       setTipoDeInterruptor((e.tool === 'terminal' && e.interruptor) || null);
-      setCotaDeRede(tipo ? COTA_USUAL_DO_PONTO_ELETRICO[tipo] : COTA_PADRAO_MM[e.disciplina]);
+      // O tipo HIDRÁULICO (18/09/2026): cota usual da ficha; o texto do tipo
+      // passa a ser o rótulo dela, para o ponto não nascer "Tomada baixa".
+      const hidraulico = e.tool === 'terminal' ? (e.tipoHidraulico ?? null) : null;
+      setTipoDePontoHidraulico(hidraulico);
+      if (hidraulico) setTipoDeTerminal(FICHA_DO_PONTO_HIDRAULICO[hidraulico].rotulo);
+      setPrumadaDeRede(e.tool === 'rede' ? (e.prumada ?? null) : null);
+      setCotaDeRede(
+        tipo
+          ? COTA_USUAL_DO_PONTO_ELETRICO[tipo]
+          : hidraulico
+            ? (cotaUsualDoPontoHidraulico(hidraulico, e.disciplina) ?? COTA_PADRAO_MM[e.disciplina])
+            : COTA_PADRAO_MM[e.disciplina],
+      );
     }
     if (e.tool === 'estrutural') {
       setTipoEstrutural(e.estrutural);
@@ -5212,6 +5300,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const rotuloDaFerramentaAtiva =
     editor.tool === 'abertura'
       ? nomeDoTipoDeAbertura(tipoAbertura)
+      : editor.tool === 'terminal' && disciplinaDeRede !== 'ELETRICA' && tipoDePontoHidraulico
+        ? FICHA_DO_PONTO_HIDRAULICO[tipoDePontoHidraulico].rotulo
+        : editor.tool === 'rede' && prumadaDeRede
+          ? prumadaDeRede === 'QUEDA' ? 'Tubo de queda' : 'Coluna de ventilação'
       : editor.tool === 'estrutural'
         ? nomeDoTipoEstrutural(tipoEstrutural)
         : editor.tool === 'escada'
@@ -6382,6 +6474,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               disciplinaDeRede={disciplinaDeRede}
               tipoDePontoEletrico={tipoDePontoEletrico}
               tipoDeInterruptor={tipoDeInterruptor}
+              tipoDePontoHidraulico={tipoDePontoHidraulico}
+              prumadaDeRede={prumadaDeRede}
               familia="HIDRAULICA"
               rotulo="Hidráulica"
               onEscolher={escolherComponente}
@@ -7727,6 +7821,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onMoveCorteVertex={moverPontaCorte}
               onAddEscada={adicionarEscada}
               onAddTrecho={adicionarTrecho}
+              redeEmUmClique={prumadaDeRede != null}
               onAddTerminal={adicionarTerminal}
               onAddQuadro={adicionarQuadro}
               onMoveEscadaVertex={moverPontaEscada}

@@ -83,6 +83,7 @@ import {
   type Quadro,
   type Terminal,
   type TipoDePontoEletrico,
+  type TipoDePontoHidraulico,
   type Trecho,
   type StructuralKind,
   type Wall,
@@ -1995,6 +1996,66 @@ function entidadeDoPontoEletrico(
   }
 }
 
+/**
+ * A entidade IFC do ponto HIDRÁULICO classificado (18/09/2026). Todas são
+ * subtipos de IfcDistributionElement com os mesmos nove atributos do
+ * IfcFlowTerminal, e o `PredefinedType` é o do enum IFC4 quando ele tem o
+ * valor; `.USERDEFINED.` com o `ObjectType` dizendo o tipo do kernel quando não.
+ */
+function entidadeDoPontoHidraulico(
+  tipo: TipoDePontoHidraulico,
+): { entidade: string; predefinido: string } {
+  switch (tipo) {
+    case 'LAVATORIO':
+      return { entidade: 'IFCSANITARYTERMINAL', predefinido: '.WASHHANDBASIN.' };
+    case 'PIA_COZINHA':
+    case 'TANQUE':
+      return { entidade: 'IFCSANITARYTERMINAL', predefinido: '.SINK.' };
+    case 'CHUVEIRO':
+      return { entidade: 'IFCSANITARYTERMINAL', predefinido: '.SHOWER.' };
+    case 'VASO_SANITARIO':
+      return { entidade: 'IFCSANITARYTERMINAL', predefinido: '.TOILETPAN.' };
+    case 'DUCHA_HIGIENICA':
+    case 'MAQUINA_LAVAR':
+      return { entidade: 'IFCSANITARYTERMINAL', predefinido: '.USERDEFINED.' };
+    case 'TORNEIRA':
+    case 'TORNEIRA_JARDIM':
+      return { entidade: 'IFCVALVE', predefinido: '.FAUCET.' };
+    case 'RESERVATORIO':
+      return { entidade: 'IFCTANK', predefinido: '.STORAGE.' };
+    case 'BOMBA':
+      return { entidade: 'IFCPUMP', predefinido: '.USERDEFINED.' };
+    case 'AQUECEDOR':
+      return { entidade: 'IFCBOILER', predefinido: '.WATER.' };
+    case 'RALO_SECO':
+    case 'RALO_SIFONADO':
+      return { entidade: 'IFCWASTETERMINAL', predefinido: '.FLOORTRAP.' };
+    case 'CAIXA_SIFONADA':
+      return { entidade: 'IFCWASTETERMINAL', predefinido: '.FLOORWASTE.' };
+    case 'CAIXA_INSPECAO':
+      return { entidade: 'IFCDISTRIBUTIONCHAMBERELEMENT', predefinido: '.INSPECTIONCHAMBER.' };
+    case 'CAIXA_GORDURA':
+      return { entidade: 'IFCINTERCEPTOR', predefinido: '.GREASE.' };
+    case 'REGISTRO_GAVETA':
+      return { entidade: 'IFCVALVE', predefinido: '.ISOLATING.' };
+    case 'REGISTRO_PRESSAO':
+      return { entidade: 'IFCVALVE', predefinido: '.REGULATING.' };
+    case 'VALVULA_RETENCAO':
+      return { entidade: 'IFCVALVE', predefinido: '.CHECK.' };
+    case 'HIDROMETRO':
+      return { entidade: 'IFCFLOWMETER', predefinido: '.WATERMETER.' };
+    case 'CONEXAO_JOELHO_90':
+    case 'CONEXAO_JOELHO_45':
+      return { entidade: 'IFCPIPEFITTING', predefinido: '.BEND.' };
+    case 'CONEXAO_TE':
+      return { entidade: 'IFCPIPEFITTING', predefinido: '.JUNCTION.' };
+    case 'CONEXAO_LUVA':
+      return { entidade: 'IFCPIPEFITTING', predefinido: '.CONNECTOR.' };
+    case 'CONEXAO_REDUCAO':
+      return { entidade: 'IFCPIPEFITTING', predefinido: '.TRANSITION.' };
+  }
+}
+
 function emitirTerminal(t: Terminal, ctx: Ctx, localNivel: string): string {
   const { emitir, guidDe, historico } = ctx;
   const medidas = medidasDoTerminal(t);
@@ -2024,6 +2085,15 @@ function emitirTerminal(t: Terminal, ctx: Ctx, localNivel: string): string {
   // `IfcFlowTerminal`: é o que o desenho sabe dizer deles. Promovê-los a uma
   // entidade específica seria escolher por quem não escolheu.
   const eletrico = t.disciplina === 'ELETRICA' && t.tipoEletrico ? t.tipoEletrico : null;
+  if (!eletrico && t.tipoHidraulico) {
+    const { entidade, predefinido } = entidadeDoPontoHidraulico(t.tipoHidraulico);
+    // O ObjectType leva o tipo do kernel e, no reservatório, o volume ("RESERVATORIO:1000L").
+    const objectType = t.tipoHidraulico === 'RESERVATORIO' && t.volumeL != null ? `${t.tipoHidraulico}:${t.volumeL}L` : t.tipoHidraulico;
+    return emitir(
+      `${entidade}(${guidDe(t.uid, `terminal-${t.id}`)},${historico},${s(t.tipo)},$,${s(objectType)},` +
+        `${local},${produtoForma},${s(rotuloCurto(t.uid, 'terminal'))},${predefinido})`,
+    );
+  }
   if (!eletrico) {
     return emitir(
       `IFCFLOWTERMINAL(${guidDe(t.uid, `terminal-${t.id}`)},${historico},${s(t.tipo)},$,$,` +

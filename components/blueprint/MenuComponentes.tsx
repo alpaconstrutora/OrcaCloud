@@ -27,6 +27,13 @@ import {
   Lightbulb,
   Wifi,
   ToggleLeft,
+  ShowerHead,
+  Container,
+  CircleDot,
+  Gauge,
+  GitFork,
+  ArrowDownToLine,
+  ArrowUpFromLine,
 } from 'lucide-react';
 import {
   TIPOS_DE_INTERRUPTOR,
@@ -39,13 +46,18 @@ import {
   type TipoCirculacao,
   type TipoDeInterruptor,
   type TipoDePontoEletrico,
+  type TipoDePontoHidraulico,
+  DISCIPLINAS_DO_PONTO_HIDRAULICO,
+  TIPOS_DE_PONTO_HIDRAULICO,
 } from '../../utils/blueprintKernel';
 import {
   COTA_USUAL_DO_PONTO_ELETRICO,
   GRUPO_DO_PONTO_ELETRICO,
+  ROTULO_DA_DISCIPLINA,
   ROTULO_DO_INTERRUPTOR,
   ROTULO_DO_PONTO_ELETRICO,
 } from '../../utils/blueprintRede';
+import { FICHA_DO_PONTO_HIDRAULICO, GRUPO_HIDRAULICO_A_CLASSIFICAR, ehSobreOTrecho } from '../../utils/blueprintHidraulica';
 import type { BlueprintTool } from '../../hooks/useBlueprintEditor';
 
 /**
@@ -99,13 +111,25 @@ export type EscolhaComponente =
   | { tool: 'estrutural'; estrutural: StructuralKind }
   | { tool: 'telhado' }
   | { tool: 'escada'; circulacao: TipoCirculacao }
-  | { tool: 'rede'; disciplina: DisciplinaDeRede }
+  | {
+      tool: 'rede';
+      disciplina: DisciplinaDeRede;
+      /**
+       * PRUMADA num clique só (18/09/2026): tubo de queda ou coluna de
+       * ventilação do esgoto — o trecho vertical mais comum, que dois cliques
+       * no mesmo ponto também fazem, mas que merece item próprio para ter DN e
+       * rótulo certos sem digitar.
+       */
+      prumada?: 'QUEDA' | 'VENTILACAO';
+    }
   | {
       tool: 'terminal';
       disciplina: DisciplinaDeRede;
       tipoEletrico?: TipoDePontoEletrico;
       /** A variante, quando o item do menu já a escolhe (os cinco interruptores). */
       interruptor?: TipoDeInterruptor;
+      /** A classificação hidráulica — ver `TIPOS_DE_PONTO_HIDRAULICO`. */
+      tipoHidraulico?: TipoDePontoHidraulico;
     }
   | { tool: 'quadro' };
 
@@ -187,6 +211,107 @@ function gruposDoPontoEletrico(): { titulo: string; itens: ItemComponente[] }[] 
 }
 
 /**
+ * Os grupos da taxonomia HIDRÁULICA (18/09/2026), montados a partir da FICHA
+ * (`utils/blueprintHidraulica.ts`) — mesma disciplina do elétrico: a lista de
+ * tipos, o rótulo e o grupo vivem em um lugar só.
+ *
+ * Um item por (tipo, disciplina admitida): o chuveiro aparece três vezes —
+ * água fria, água quente e esgoto —, porque são três pontos distintos no
+ * desenho, com cotas distintas. As peças SOBRE O TRECHO (registros, válvulas,
+ * hidrômetro, conexões) aparecem uma vez só: a disciplina vem do trecho em que
+ * caem, não de um item por disciplina.
+ *
+ * ⚠️ A chave é `PONTO_<disciplina>_<tipo>` — a mesma que o inventário emite
+ * (`utils/blueprintComponentes.ts`); divergir deixaria a peça sem grupo.
+ */
+function gruposDoPontoHidraulico(): { titulo: string; itens: ItemComponente[] }[] {
+  const ICONE: Record<string, React.ComponentType<{ className?: string }>> = {
+    'Hidráulica — pontos de consumo': ShowerHead,
+    'Hidráulica — reservação': Container,
+    'Hidráulica — esgoto': CircleDot,
+    'Hidráulica — registros e válvulas': Gauge,
+    'Hidráulica — conexões': GitFork,
+  };
+  const porGrupo = new Map<string, ItemComponente[]>();
+  const acrescentar = (titulo: string, item: ItemComponente) => {
+    const atual = porGrupo.get(titulo);
+    if (atual) atual.push(item);
+    else porGrupo.set(titulo, [item]);
+  };
+  for (const t of TIPOS_DE_PONTO_HIDRAULICO) {
+    const ficha = FICHA_DO_PONTO_HIDRAULICO[t];
+    const disciplinas = DISCIPLINAS_DO_PONTO_HIDRAULICO[t];
+    if (ehSobreOTrecho(t)) {
+      // Uma entrada só: a disciplina é a do trecho sob o clique.
+      acrescentar(ficha.grupo, {
+        chave: `PONTO_${disciplinas[0]}_${t}`,
+        rotulo: ficha.rotulo,
+        icone: ICONE[ficha.grupo] ?? Droplet,
+        ajuda: ficha.ajuda,
+        escolha: { tool: 'terminal', disciplina: disciplinas[0], tipoHidraulico: t },
+      });
+      continue;
+    }
+    for (const d of disciplinas) {
+      const cota = ficha.cotaMm[d];
+      acrescentar(ficha.grupo, {
+        chave: `PONTO_${d}_${t}`,
+        rotulo: disciplinas.length > 1 ? `${ficha.rotulo} · ${ROTULO_DA_DISCIPLINA[d].toLowerCase()}` : ficha.rotulo,
+        icone: d === 'ESGOTO' ? Waves : d === 'AGUA_QUENTE' ? Flame : (ICONE[ficha.grupo] ?? Droplet),
+        ajuda: `${ficha.ajuda}${cota != null ? ` Cota usual ${cota} mm, ajustável no painel.` : ''}`,
+        escolha: { tool: 'terminal', disciplina: d, tipoHidraulico: t },
+      });
+    }
+  }
+  // As PRUMADAS do esgoto entram no grupo do esgoto, depois dos pontos.
+  acrescentar('Hidráulica — esgoto', {
+    chave: 'REDE_ESGOTO_QUEDA',
+    rotulo: 'Tubo de queda (prumada)',
+    icone: ArrowDownToLine,
+    ajuda: 'Um clique: a prumada de esgoto DN 100 do teto ao piso — por onde o pavimento de cima desce.',
+    escolha: { tool: 'rede', disciplina: 'ESGOTO', prumada: 'QUEDA' },
+  });
+  acrescentar('Hidráulica — esgoto', {
+    chave: 'REDE_ESGOTO_VENTILACAO',
+    rotulo: 'Coluna de ventilação (prumada)',
+    icone: ArrowUpFromLine,
+    ajuda: 'Um clique: a prumada de ventilação DN 50, do ramal ao teto.',
+    escolha: { tool: 'rede', disciplina: 'ESGOTO', prumada: 'VENTILACAO' },
+  });
+  return [
+    ...[...porGrupo].map(([titulo, itens]) => ({ titulo, itens })),
+    // O ponto SEM classificação continua existindo — "a classificar" é estado
+    // visível, e todo ponto hidráulico desenhado antes desta taxonomia está nele.
+    {
+      titulo: GRUPO_HIDRAULICO_A_CLASSIFICAR,
+      itens: [
+        {
+          chave: 'PONTO_AGUA_FRIA',
+          rotulo: 'Ponto de água fria (sem tipo)',
+          icone: Droplet,
+          ajuda: 'Um clique, para classificar depois no painel da peça.',
+          escolha: { tool: 'terminal', disciplina: 'AGUA_FRIA' } as EscolhaComponente,
+        },
+        {
+          chave: 'PONTO_AGUA_QUENTE',
+          rotulo: 'Ponto de água quente (sem tipo)',
+          icone: Flame,
+          ajuda: 'Um clique, para classificar depois no painel da peça.',
+          escolha: { tool: 'terminal', disciplina: 'AGUA_QUENTE' } as EscolhaComponente,
+        },
+        {
+          chave: 'PONTO_ESGOTO',
+          rotulo: 'Ponto de esgoto (sem tipo)',
+          icone: Waves,
+          ajuda: 'Um clique, para classificar depois no painel da peça.',
+          escolha: { tool: 'terminal', disciplina: 'ESGOTO' } as EscolhaComponente,
+        },
+      ],
+    },
+  ];
+}
+
+/**
  * O catálogo, em grupos de leitura.
  *
  * A ordem é a da OBRA, de baixo para cima na sequência em que se levanta:
@@ -207,6 +332,10 @@ function gruposDoPontoEletrico(): { titulo: string; itens: ItemComponente[] }[] 
  */
 function colunaDoGrupo(titulo: string): 1 | 2 | 3 {
   if (titulo.startsWith('Elétrica')) return 3;
+  // Na família hidráulica o menu é só dela: consumo à esquerda, trechos +
+  // reservação + esgoto no meio, registros/conexões/a classificar à direita.
+  if (titulo.startsWith('Hidráulica — pontos de consumo')) return 1;
+  if (/^Hidráulica — (registros|conexões|a classificar)/.test(titulo)) return 3;
   if (/^(Estrutura|Fundação|Hidráulica)/.test(titulo)) return 2;
   return 1;
 }
@@ -443,32 +572,8 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
   // inventário emite e que `fichaDoComponente` resolve: divergir aqui deixaria
   // a peça na lista sem grupo.
   ...gruposDoPontoEletrico(),
-  {
-    titulo: 'Hidráulica — pontos',
-    itens: [
-      {
-        chave: 'PONTO_AGUA_FRIA',
-        rotulo: 'Ponto de água fria',
-        icone: Droplet,
-        ajuda: 'Um clique. O trecho de água fria encaixa nele, e traz a cota junto.',
-        escolha: { tool: 'terminal', disciplina: 'AGUA_FRIA' },
-      },
-      {
-        chave: 'PONTO_AGUA_QUENTE',
-        rotulo: 'Ponto de água quente',
-        icone: Flame,
-        ajuda: 'Um clique — o ponto do chuveiro, da torneira quente.',
-        escolha: { tool: 'terminal', disciplina: 'AGUA_QUENTE' },
-      },
-      {
-        chave: 'PONTO_ESGOTO',
-        rotulo: 'Ponto de esgoto',
-        icone: Waves,
-        ajuda: 'Um clique: ralo, caixa sifonada, saída de vaso.',
-        escolha: { tool: 'terminal', disciplina: 'ESGOTO' },
-      },
-    ],
-  },
+  // ─── A TAXONOMIA DO PONTO HIDRÁULICO (18/09/2026) ─────────────────────────
+  ...gruposDoPontoHidraulico(),
 ];
 
 /**
@@ -507,6 +612,15 @@ const FICHAS: Record<string, FichaDeComponente> = Object.fromEntries(
     { rotulo: item.rotulo, icone: item.icone, grupo, ordem },
   ]),
 );
+// As peças SOBRE O TRECHO têm UM item no menu (a disciplina vem do trecho), mas
+// o inventário emite a chave com a disciplina REAL da peça: um registro de
+// água quente é `PONTO_AGUA_QUENTE_REGISTRO_GAVETA`. A ficha é a mesma do item.
+for (const t of TIPOS_DE_PONTO_HIDRAULICO) {
+  if (!ehSobreOTrecho(t)) continue;
+  const [primeira, ...outras] = DISCIPLINAS_DO_PONTO_HIDRAULICO[t];
+  const ficha = FICHAS[`PONTO_${primeira}_${t}`];
+  for (const d of outras) if (ficha) FICHAS[`PONTO_${d}_${t}`] = ficha;
+}
 
 /**
  * Nome, ícone e grupo de um componente pela chave. `null` quando a chave não é
@@ -564,6 +678,10 @@ interface Props {
   disciplinaDeRede?: DisciplinaDeRede;
   tipoDePontoEletrico?: TipoDePontoEletrico | null;
   tipoDeInterruptor?: TipoDeInterruptor | null;
+  /** A classificação hidráulica ativa na barra (18/09/2026). */
+  tipoDePontoHidraulico?: TipoDePontoHidraulico | null;
+  /** A prumada de esgoto ativa (tubo de queda / ventilação). */
+  prumadaDeRede?: 'QUEDA' | 'VENTILACAO' | null;
   /** Só uma família do catálogo. Ausente = o catálogo inteiro (chamadas antigas). */
   familia?: FamiliaDeComponentes;
   /** O rótulo do botão sem componente ativo. Padrão "Componentes". */
@@ -579,10 +697,20 @@ function chaveAtiva(p: Props): string | null {
   if (tool === 'estrutural') return p.tipoEstrutural;
   if (tool === 'escada') return p.tipoCirculacao ?? 'ESCADA';
   if (tool === 'quadro') return 'QUADRO';
-  if (tool === 'rede') return p.disciplinaDeRede ? `REDE_${p.disciplinaDeRede}` : null;
+  if (tool === 'rede') {
+    if (!p.disciplinaDeRede) return null;
+    if (p.prumadaDeRede) return `REDE_${p.disciplinaDeRede}_${p.prumadaDeRede}`;
+    return `REDE_${p.disciplinaDeRede}`;
+  }
   if (tool === 'terminal') {
     if (!p.disciplinaDeRede) return null;
-    if (p.disciplinaDeRede !== 'ELETRICA') return `PONTO_${p.disciplinaDeRede}`;
+    if (p.disciplinaDeRede !== 'ELETRICA') {
+      // Peça sobre o trecho tem UM item, registrado na primeira disciplina admitida.
+      if (p.tipoDePontoHidraulico && ehSobreOTrecho(p.tipoDePontoHidraulico)) {
+        return `PONTO_${DISCIPLINAS_DO_PONTO_HIDRAULICO[p.tipoDePontoHidraulico][0]}_${p.tipoDePontoHidraulico}`;
+      }
+      return p.tipoDePontoHidraulico ? `PONTO_${p.disciplinaDeRede}_${p.tipoDePontoHidraulico}` : `PONTO_${p.disciplinaDeRede}`;
+    }
     if (!p.tipoDePontoEletrico) return 'PONTO_ELETRICA';
     if (p.tipoDePontoEletrico === 'INTERRUPTOR')
       return p.tipoDeInterruptor ? `PONTO_INTERRUPTOR_${p.tipoDeInterruptor}` : null;

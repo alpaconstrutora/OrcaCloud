@@ -266,7 +266,17 @@
  * mantém a forma canônica (os goldens, só de paredes, mudam apenas pela
  * string da versão).
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.31.0';
+/*
+ * ─── 0.31.0 → 0.32.0 (18/09/2026) — A TAXONOMIA HIDRÁULICA ─────────────────
+ *
+ * O terminal ganhou `tipoHidraulico` (campo fechado, irmão do `tipoEletrico`:
+ * torneira, chuveiro, lavatório, vaso, reservatório, ralo, caixa sifonada,
+ * registro, conexão…) e `volumeL` (litros do reservatório). É conteúdo — muda
+ * o que se compra e o que o lançamento automático dimensiona —, então entra no
+ * hash e a versão sobe. As duas chaves só são emitidas quando declaradas; os
+ * goldens (só paredes) mudam apenas pela string da versão.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.32.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

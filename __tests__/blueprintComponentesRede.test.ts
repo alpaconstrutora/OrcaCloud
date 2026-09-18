@@ -112,9 +112,10 @@ describe('inventário · as instalações entram', () => {
     expect(fichaDoComponente(porId.get(m.terminais[0].id)!.chave)?.grupo).toBe(
       'Elétrica — a classificar',
     );
-    // O ponto de ESGOTO segue no grupo hidráulico.
+    // O ponto de ESGOTO sem `tipoHidraulico` (18/09/2026) fica em "a classificar"
+    // — o mesmo estado visível do elétrico sem tipo.
     expect(fichaDoComponente(porId.get(m.terminais[1].id)!.chave)?.grupo).toBe(
-      'Hidráulica — pontos',
+      'Hidráulica — a classificar',
     );
     // O quadro é elétrico — saiu de "pontos" para junto do eletroduto.
     expect(fichaDoComponente(porId.get(m.quadros[0].id)!.chave)?.grupo).toBe(

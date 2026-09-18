@@ -30,12 +30,14 @@
  */
 
 import type { BudgetEntry, SinapiItem } from '../types/budget';
-import type { Quantitativos, StructuralKind } from './blueprintKernel';
+import type { DisciplinaDeRede, Quantitativos, StructuralKind, TipoDePontoHidraulico } from './blueprintKernel';
 import {
   nomeDoTipoDeAbertura as nomeDoTipo,
   nomeDoTipoEstrutural,
 } from './blueprintKernel';
 import { familiaDaPeca, type ArmaduraQuantificada } from './blueprintArmadura';
+import { ROTULO_DA_DISCIPLINA } from './blueprintRede';
+import { ROTULO_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 
 /**
  * Dimensão física de uma medida. É o que a unidade do item tem que respeitar.
@@ -51,7 +53,7 @@ export type Dimensao = 'M2' | 'M' | 'M3' | 'UN' | 'KG';
  * linha por cômodo com o mesmo número repetido, que somaria errado no
  * orçamento.
  */
-export type EscopoMedida = 'AMBIENTE' | 'PAREDE' | 'ABERTURA' | 'EDIFICACAO' | 'ESTRUTURA' | 'TELHADO' | 'ESCADA';
+export type EscopoMedida = 'AMBIENTE' | 'PAREDE' | 'ABERTURA' | 'EDIFICACAO' | 'ESTRUTURA' | 'TELHADO' | 'ESCADA' | 'INSTALACAO';
 
 export interface DefinicaoMedida {
   id: string;
@@ -290,6 +292,50 @@ export const MEDIDAS: DefinicaoMedida[] = [
     escopo: 'ESTRUTURA',
     dimensao: 'KG',
     descricao: 'kg de aço de todas as peças estruturais da planta. Não combine com as medidas por família — contaria duas vezes.',
+  },
+
+  // ── Instalações hidráulicas (18/09/2026) ─────────────────────────────────
+  //
+  // Até aqui NENHUMA medida de instalação chegava ao orçamento: o quantitativo
+  // já somava tubo por bitola e ponto por tipo, mas o de-para não tinha como
+  // escolher. Uma linha por DN (é assim que se compra tubo) e uma por
+  // classificação de ponto (chuveiro, vaso, ralo…). O filtro por texto casa
+  // com o rótulo ("Água fria DN 25", "Chuveiro") para o de-para pegar só o DN
+  // ou só a peça que quer.
+  {
+    id: 'COMPRIMENTO_TUBO_AGUA_FRIA',
+    rotulo: 'Tubulação de água fria',
+    escopo: 'INSTALACAO',
+    dimensao: 'M',
+    descricao: 'Metros de tubo de água fria, uma linha por diâmetro (DN). O comprimento é o real, com prumadas.',
+  },
+  {
+    id: 'COMPRIMENTO_TUBO_AGUA_QUENTE',
+    rotulo: 'Tubulação de água quente',
+    escopo: 'INSTALACAO',
+    dimensao: 'M',
+    descricao: 'Metros de tubo de água quente, uma linha por diâmetro (DN).',
+  },
+  {
+    id: 'COMPRIMENTO_TUBO_ESGOTO',
+    rotulo: 'Tubulação de esgoto',
+    escopo: 'INSTALACAO',
+    dimensao: 'M',
+    descricao: 'Metros de tubo de esgoto, uma linha por diâmetro (DN), com o caimento e as prumadas.',
+  },
+  {
+    id: 'COMPRIMENTO_ELETRODUTO',
+    rotulo: 'Eletroduto',
+    escopo: 'INSTALACAO',
+    dimensao: 'M',
+    descricao: 'Metros de eletroduto, uma linha por bitola.',
+  },
+  {
+    id: 'CONTAGEM_PONTOS_HIDRAULICOS',
+    rotulo: 'Pontos hidráulicos',
+    escopo: 'INSTALACAO',
+    dimensao: 'UN',
+    descricao: 'Peças hidráulicas por tipo — chuveiro, vaso, lavatório, ralo, caixa sifonada, caixa d\'água, registro… Uma linha por tipo e disciplina.',
   },
 
   // ── Telhado ──────────────────────────────────────────────────────────────
@@ -636,6 +682,45 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
           areaRealM2: a.areaRealM2,
         },
       }));
+    }
+
+    case 'COMPRIMENTO_TUBO_AGUA_FRIA':
+    case 'COMPRIMENTO_TUBO_AGUA_QUENTE':
+    case 'COMPRIMENTO_TUBO_ESGOTO':
+    case 'COMPRIMENTO_ELETRODUTO': {
+      const disciplina =
+        medidaId === 'COMPRIMENTO_ELETRODUTO' ? 'ELETRICA' : medidaId.replace('COMPRIMENTO_TUBO_', '');
+      const nome = ROTULO_DA_DISCIPLINA[disciplina as DisciplinaDeRede] ?? disciplina;
+      // O `ref` é a linha de compra (disciplina + DN + item): estável entre
+      // publicações enquanto existir tubo daquele DN.
+      return (quant.totais.porBitola ?? [])
+        .filter((b) => b.disciplina === disciplina && b.comprimentoM > 0)
+        .map((b) => ({ b, rotulo: `${nome} DN ${b.bitolaMm}${b.itemCode ? ` · ${b.itemCode}` : ''}` }))
+        .filter(({ rotulo }) => combina(rotulo))
+        .map(({ b, rotulo }) => ({
+          ref: `${b.disciplina}-dn${b.bitolaMm}${b.itemCode ? `-${b.itemCode}` : ''}`,
+          rotulo,
+          valor: b.comprimentoM,
+          formula: `Σ comprimento real dos ${b.trechos} trecho(s) DN ${b.bitolaMm}`,
+          variaveis: { disciplina: b.disciplina, bitolaMm: b.bitolaMm, trechos: b.trechos, comprimentoM: b.comprimentoM },
+        }));
+    }
+
+    case 'CONTAGEM_PONTOS_HIDRAULICOS': {
+      return (quant.totais.porTerminal ?? [])
+        .filter((t) => t.disciplina !== 'ELETRICA' && t.quantidade > 0)
+        .map((t) => ({
+          t,
+          rotulo: `${t.classificacao ? (ROTULO_DO_PONTO_HIDRAULICO[t.classificacao as TipoDePontoHidraulico] ?? t.tipo) : t.tipo} · ${ROTULO_DA_DISCIPLINA[t.disciplina as DisciplinaDeRede] ?? t.disciplina}${t.itemCode ? ` · ${t.itemCode}` : ''}`,
+        }))
+        .filter(({ rotulo }) => combina(rotulo))
+        .map(({ t, rotulo }) => ({
+          ref: `${t.disciplina}-${t.classificacao ?? t.tipo}${t.itemCode ? `-${t.itemCode}` : ''}`,
+          rotulo,
+          valor: t.quantidade,
+          formula: 'contagem de pontos da classificação',
+          variaveis: { disciplina: t.disciplina, classificacao: t.classificacao ?? t.tipo, quantidade: t.quantidade },
+        }));
     }
 
     case 'AREA_CONSTRUIDA': {

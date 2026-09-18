@@ -1053,7 +1053,7 @@ describe('BlueprintEditor · ribbon', () => {
     expect(menu().getByRole('menuitemradio', { name: 'Eletroduto' })).toBeInTheDocument();
     expect(menu().getByRole('menuitemradio', { name: 'Quadro de distribuição' })).toBeInTheDocument();
     expect(menu().queryByRole('menuitemradio', { name: 'Água fria' })).toBeNull();
-    expect(menu().queryByRole('menuitemradio', { name: 'Ponto de esgoto' })).toBeNull();
+    expect(menu().queryByRole('menuitemradio', { name: 'Ponto de esgoto (sem tipo)' })).toBeNull();
     await user.keyboard('{Escape}');
     expect(botao(/^circuitos automáticos/i)).toBeInTheDocument();
     expect(botao(/^quadro de cargas/i)).toBeInTheDocument();
@@ -1061,7 +1061,7 @@ describe('BlueprintEditor · ribbon', () => {
     await abrirAba(/^hidráulica$/i);
     await user.click(botao(/^hidráulica$/i));
     expect(menu().getByRole('menuitemradio', { name: 'Água fria' })).toBeInTheDocument();
-    expect(menu().getByRole('menuitemradio', { name: 'Ponto de esgoto' })).toBeInTheDocument();
+    expect(menu().getByRole('menuitemradio', { name: 'Ponto de esgoto (sem tipo)' })).toBeInTheDocument();
     expect(menu().queryByRole('menuitemradio', { name: 'Eletroduto' })).toBeNull();
     expect(menu().queryByRole('menuitemradio', { name: 'Quadro de distribuição' })).toBeNull();
     await user.keyboard('{Escape}');
@@ -1090,6 +1090,33 @@ describe('BlueprintEditor · ribbon', () => {
     const toolbar = screen.getByRole('toolbar');
     expect(linha.closest('[role="toolbar"]')).toBe(toolbar);
     expect(screen.getByRole('tablist').compareDocumentPosition(linha) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("menu Hidráulica (18/09/2026): pontos tipados, caixa d'água, esgoto, registros, conexões e prumadas; escolher nomeia a barra de opções", async () => {
+    // "Hidráulica (MEP) estão faltando componentes como: conexões, caixa d'água, ralo etc."
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^hidráulica$/i);
+    await user.click(botao(/^hidráulica$/i));
+    const menu = () => within(screen.getByRole('menu', { name: /componentes do desenho/i }));
+    for (const nome of [
+      /^Chuveiro · água fria$/, /^Chuveiro · água quente$/, /^Chuveiro · esgoto$/, /^Vaso sanitário · esgoto$/,
+      /^Caixa d'água$/, /^Aquecedor · água quente$/, /^Ralo sifonado$/, /^Caixa de inspeção$/,
+      /^Registro de gaveta$/, /^Hidrômetro$/, /^Tê$/, /^Tubo de queda \(prumada\)$/, /^Ponto de esgoto \(sem tipo\)$/,
+    ]) {
+      expect(menu().getByRole('menuitemradio', { name: nome })).toBeInTheDocument();
+    }
+    // Registro tem UM item (a disciplina vem do trecho); vaso não existe em água quente.
+    expect(menu().queryByRole('menuitemradio', { name: /^Registro de gaveta · /i })).toBeNull();
+    expect(menu().queryByRole('menuitemradio', { name: /^Vaso sanitário · água quente$/ })).toBeNull();
+
+    await user.click(menu().getByRole('menuitemradio', { name: /^Caixa d'água$/ }));
+    const opcoes = () => screen.getByRole('region', { name: /opções da ferramenta/i });
+    expect(opcoes()).toHaveTextContent(/^Caixa d'água/);
+
+    await user.click(botao(/^caixa d'água$/i));
+    await user.click(menu().getByRole('menuitemradio', { name: /^Tubo de queda \(prumada\)$/ }));
+    expect(opcoes()).toHaveTextContent(/^Tubo de queda/);
   });
 
   it('a aba persiste entre montagens — é preferência, não gesto', async () => {

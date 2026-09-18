@@ -19,11 +19,13 @@ import {
 } from './blueprintKernel';
 import {
   NOME_DO_TRECHO,
+  ROTULO_DA_DISCIPLINA,
   SIGLA_DO_PONTO_ELETRICO,
   UNIDADE_DE_POTENCIA,
   comprimentoDoTrecho,
 } from './blueprintRede';
 import { contornoEmPlanta, pointInPolygon } from './blueprintKernel';
+import { SIGLA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 
 /**
  * O INVENTÁRIO do desenho — a lista do que já foi construído, para o painel
@@ -270,12 +272,18 @@ export function linhasDeComponentes(
     // porque o menu tem um item por variante e é o item que dá a ficha. Sem
     // isto o interruptor ficava sem ficha — o mesmo defeito de "família nova
     // desenha mas não alcança", pego pelo teste da taxonomia.
+    //
+    // ⚠️ O ponto HIDRÁULICO tipado (18/09/2026) leva DISCIPLINA + TIPO na chave
+    // (`PONTO_AGUA_FRIA_CHUVEIRO`): o mesmo tipo existe em mais de uma
+    // disciplina, e `PONTO_CHUVEIRO` sozinho não diria qual ponto do chuveiro é.
     const chave =
       t.disciplina === 'ELETRICA' && t.tipoEletrico === 'INTERRUPTOR'
         ? `PONTO_INTERRUPTOR_${t.interruptor ?? 'UMA_SECAO'}`
         : t.disciplina === 'ELETRICA' && t.tipoEletrico
           ? `PONTO_${t.tipoEletrico}`
-          : `PONTO_${t.disciplina}`;
+          : t.disciplina !== 'ELETRICA' && t.tipoHidraulico
+            ? `PONTO_${t.disciplina}_${t.tipoHidraulico}`
+            : `PONTO_${t.disciplina}`;
     return {
       id: t.id,
       chave,
@@ -283,9 +291,18 @@ export function linhasDeComponentes(
         t.rotulo?.trim() ||
         (t.disciplina === 'ELETRICA' && t.tipoEletrico
           ? `${SIGLA_DO_PONTO_ELETRICO[t.tipoEletrico]} ${numero(chave)}`
-          : `${t.tipo} ${numero(chave)}`),
+          : t.tipoHidraulico
+            ? `${SIGLA_DO_PONTO_HIDRAULICO[t.tipoHidraulico]} ${numero(chave)}`
+            : `${t.tipo} ${numero(chave)}`),
       medida: `cota ${cm(t.cotaMm)} cm`,
-      detalhe: t.disciplina === 'ELETRICA' ? (t.potenciaW != null ? `${t.potenciaW} ${UNIDADE_DE_POTENCIA}` : null) : null,
+      detalhe:
+        t.disciplina === 'ELETRICA'
+          ? t.potenciaW != null
+            ? `${t.potenciaW} ${UNIDADE_DE_POTENCIA}`
+            : null
+          : t.tipoHidraulico
+            ? `${ROTULO_DA_DISCIPLINA[t.disciplina]}${t.volumeL != null ? ` · ${t.volumeL} L` : ''}`
+            : null,
     };
   });
 

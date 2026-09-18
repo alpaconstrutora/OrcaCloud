@@ -1147,6 +1147,96 @@ export const TIPOS_DE_INTERRUPTOR = [
 
 export type TipoDeInterruptor = (typeof TIPOS_DE_INTERRUPTOR)[number];
 
+/**
+ * O que um ponto HIDRÁULICO é (17/09/2026: *"Hidráulica (MEP) estão faltando
+ * componentes como: conexões, caixa d'água, ralo etc."*).
+ *
+ * Campo FECHADO pela mesma razão do `tipoEletrico`: dele saem o grupo, o
+ * símbolo, a contagem, a entidade IFC e — o que a hidráulica tem a mais — o
+ * PESO da NBR 5626 (vazão de projeto) e as UHC da NBR 8160 (esgoto), que o
+ * lançamento automático usa para dar o diâmetro. `tipo` segue sendo o texto do
+ * projetista ("chuveiro da suíte").
+ *
+ * Um mesmo tipo pode existir em MAIS DE UMA disciplina (o chuveiro tem ponto
+ * de água fria, de água quente e de esgoto): um aparelho é N terminais no mesmo
+ * (x, y) com cotas diferentes — é como a instalação é de verdade, e não exige
+ * entidade nova. `DISCIPLINAS_DO_PONTO_HIDRAULICO` diz quais valem para cada um.
+ *
+ *   consumo    — torneira, torneira de jardim, chuveiro, lavatório, pia, tanque,
+ *                máquina de lavar, vaso sanitário, ducha higiênica
+ *   reservação — reservatório (caixa d'água), bomba, aquecedor
+ *   esgoto     — ralo seco, ralo sifonado, caixa sifonada, caixa de inspeção,
+ *                caixa de gordura
+ *   registros  — gaveta, pressão, válvula de retenção, hidrômetro (sobre o trecho)
+ *   conexões   — joelho 90/45, tê, luva, redução (peça FORÇADA pelo usuário; as
+ *                demais são DERIVADAS dos encontros de trechos, sem entidade)
+ */
+export const TIPOS_DE_PONTO_HIDRAULICO = [
+  'TORNEIRA',
+  'TORNEIRA_JARDIM',
+  'CHUVEIRO',
+  'LAVATORIO',
+  'PIA_COZINHA',
+  'TANQUE',
+  'MAQUINA_LAVAR',
+  'VASO_SANITARIO',
+  'DUCHA_HIGIENICA',
+  'RESERVATORIO',
+  'BOMBA',
+  'AQUECEDOR',
+  'RALO_SECO',
+  'RALO_SIFONADO',
+  'CAIXA_SIFONADA',
+  'CAIXA_INSPECAO',
+  'CAIXA_GORDURA',
+  'REGISTRO_GAVETA',
+  'REGISTRO_PRESSAO',
+  'VALVULA_RETENCAO',
+  'HIDROMETRO',
+  'CONEXAO_JOELHO_90',
+  'CONEXAO_JOELHO_45',
+  'CONEXAO_TE',
+  'CONEXAO_LUVA',
+  'CONEXAO_REDUCAO',
+] as const;
+
+export type TipoDePontoHidraulico = (typeof TIPOS_DE_PONTO_HIDRAULICO)[number];
+
+const AF_AQ: DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE'];
+const AF_AQ_ESG: DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO'];
+const ESG: DisciplinaDeRede[] = ['ESGOTO'];
+
+/** Em que disciplinas cada tipo hidráulico pode existir — a invariante recusa o resto. */
+export const DISCIPLINAS_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, DisciplinaDeRede[]> = {
+  TORNEIRA: AF_AQ,
+  TORNEIRA_JARDIM: ['AGUA_FRIA'],
+  CHUVEIRO: AF_AQ_ESG,
+  LAVATORIO: AF_AQ_ESG,
+  PIA_COZINHA: AF_AQ_ESG,
+  TANQUE: AF_AQ_ESG,
+  MAQUINA_LAVAR: AF_AQ_ESG,
+  VASO_SANITARIO: ['AGUA_FRIA', 'ESGOTO'],
+  DUCHA_HIGIENICA: AF_AQ,
+  RESERVATORIO: ['AGUA_FRIA'],
+  BOMBA: ['AGUA_FRIA'],
+  // O aquecedor é ALIMENTADO pela água fria e é a ORIGEM da rede quente.
+  AQUECEDOR: AF_AQ,
+  RALO_SECO: ESG,
+  RALO_SIFONADO: ESG,
+  CAIXA_SIFONADA: ESG,
+  CAIXA_INSPECAO: ESG,
+  CAIXA_GORDURA: ESG,
+  REGISTRO_GAVETA: AF_AQ,
+  REGISTRO_PRESSAO: AF_AQ,
+  VALVULA_RETENCAO: AF_AQ,
+  HIDROMETRO: ['AGUA_FRIA'],
+  CONEXAO_JOELHO_90: AF_AQ_ESG,
+  CONEXAO_JOELHO_45: AF_AQ_ESG,
+  CONEXAO_TE: AF_AQ_ESG,
+  CONEXAO_LUVA: AF_AQ_ESG,
+  CONEXAO_REDUCAO: AF_AQ_ESG,
+};
+
 export interface Terminal {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
@@ -1200,6 +1290,22 @@ export interface Terminal {
    * uma seção, que é o comum.
    */
   interruptor?: TipoDeInterruptor | null;
+  /**
+   * A classificação HIDRÁULICA — ver `TIPOS_DE_PONTO_HIDRAULICO`. Só faz
+   * sentido em água fria, água quente e esgoto, e só nas disciplinas que
+   * `DISCIPLINAS_DO_PONTO_HIDRAULICO` admite para o tipo; a invariante recusa o
+   * resto. Ausente é legítimo ("a classificar"), como no elétrico. Omitida no
+   * canônico quando ausente.
+   */
+  tipoHidraulico?: TipoDePontoHidraulico | null;
+  /**
+   * O VOLUME do reservatório, em litros inteiros — só em `RESERVATORIO`.
+   *
+   * É declaração de compra ("caixa de 1000 L"), não derivação das medidas: a
+   * caixa comercial de 1000 L não é o paralelepípedo das medidas de planta, e
+   * o volume é o que dimensiona a reserva. Omitido no canônico quando ausente.
+   */
+  volumeL?: number | null;
   /**
    * O ponto foi GERADO pelo sistema e ainda não foi tocado por ninguém.
    *
@@ -3053,6 +3159,29 @@ export function assertModelInvariants(model: BlueprintModel): void {
           'BAD_POINT_KIND',
           `Tipo elétrico inválido em ${t.id}: ${t.tipoEletrico}`,
         );
+      }
+    }
+    // O tipo HIDRÁULICO só nas disciplinas que o admitem — um chuveiro de
+    // esgoto existe, um vaso sanitário de água quente não.
+    if (t.tipoHidraulico != null) {
+      const admitidas = DISCIPLINAS_DO_PONTO_HIDRAULICO[t.tipoHidraulico];
+      if (!admitidas) {
+        throw new KernelError('BAD_POINT_KIND', `Tipo hidráulico inválido em ${t.id}: ${t.tipoHidraulico}`);
+      }
+      if (!admitidas.includes(t.disciplina)) {
+        throw new KernelError(
+          'BAD_POINT_KIND',
+          `Terminal ${t.id} é ${t.disciplina} e não pode ser ${t.tipoHidraulico}`,
+        );
+      }
+    }
+    // Volume só no reservatório, e em litros inteiros positivos.
+    if (t.volumeL != null) {
+      if (t.tipoHidraulico !== 'RESERVATORIO') {
+        throw new KernelError('BAD_VOLUME', `Terminal ${t.id} não é reservatório e não pode ter volume`);
+      }
+      if (!Number.isInteger(t.volumeL) || t.volumeL <= 0) {
+        throw new KernelError('BAD_VOLUME', `Volume inválido em ${t.id}: ${t.volumeL}`);
       }
     }
   }

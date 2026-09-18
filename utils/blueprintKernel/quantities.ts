@@ -487,10 +487,18 @@ export interface QuantidadePorBitola {
   trechos: number;
 }
 
-/** Um TERMINAL contado. O que agrupa é o tipo e o item de catálogo. */
+/**
+ * Um TERMINAL contado. O que agrupa é a CLASSIFICAÇÃO (o tipo fechado —
+ * hidráulico ou elétrico — quando há; senão o texto livre) e o item de
+ * catálogo. Sem isso, "Chuveiro", "chuveiro" e "Ponto de água fria" do mesmo
+ * aparelho seriam três famílias, e a contagem sairia plausível e errada.
+ */
 export interface QuantidadePorTerminal {
   disciplina: string;
+  /** O texto que representa a família: rótulo do primeiro terminal contado. */
   tipo: string;
+  /** `tipoHidraulico` ou `tipoEletrico` quando classificado; `null` no texto livre. */
+  classificacao: string | null;
   itemCode: string | null;
   quantidade: number;
 }
@@ -1314,13 +1322,15 @@ export function computeQuantities(
 
   const porTerminalMapa = new Map<string, QuantidadePorTerminal>();
   for (const t of model.terminais ?? []) {
-    const chave = `${t.disciplina} ${t.tipo} ${t.itemCode ?? ''}`;
+    const classificacao = t.tipoHidraulico ?? t.tipoEletrico ?? null;
+    const chave = `${t.disciplina} ${classificacao ?? t.tipo} ${t.itemCode ?? ''}`;
     const atual = porTerminalMapa.get(chave);
     if (atual) atual.quantidade += 1;
     else {
       porTerminalMapa.set(chave, {
         disciplina: t.disciplina,
         tipo: t.tipo,
+        classificacao,
         itemCode: t.itemCode ?? null,
         quantidade: 1,
       });

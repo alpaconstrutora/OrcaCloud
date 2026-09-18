@@ -26,7 +26,9 @@ import {
   TIPOS_DE_PONTO_ELETRICO,
   type TipoDeInterruptor,
   type TipoDePontoEletrico,
+  type TipoDePontoHidraulico,
 } from '../../utils/blueprintKernel';
+import { FICHA_DO_PONTO_HIDRAULICO, tiposHidraulicosDa } from '../../utils/blueprintHidraulica';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
 
 /**
@@ -74,6 +76,10 @@ interface Props {
     interruptor?: TipoDeInterruptor | null;
     comando?: string | null;
     tipoEletrico?: TipoDePontoEletrico | null;
+    /** Classificação hidráulica (18/09/2026). `null` volta a "a classificar". */
+    tipoHidraulico?: TipoDePontoHidraulico | null;
+    /** Volume do reservatório em litros. */
+    volumeL?: number | null;
     larguraMm?: number | null;
     alturaMm?: number | null;
     profundidadeMm?: number | null;
@@ -185,6 +191,60 @@ export default function PainelTrechoSelecionado({
                 ))}
               </select>
             </label>
+          )}
+
+          {/* O TIPO HIDRÁULICO (18/09/2026): a lista é a das classificações que
+              ESTA disciplina admite — um vaso sanitário não aparece para a
+              água quente. A ficha (peso NBR 5626, UHC NBR 8160, DN mínimo)
+              é leitura: é o que o lançamento automático vai usar. */}
+          {terminal.disciplina !== 'ELETRICA' && (
+            <>
+              <label className="block">
+                <span className="text-[11px] font-medium text-slate-600">Tipo do ponto</span>
+                <select
+                  value={terminal.tipoHidraulico ?? ''}
+                  onChange={(e) =>
+                    onTerminal({ tipoHidraulico: (e.target.value || null) as TipoDePontoHidraulico | null })
+                  }
+                  aria-label="Tipo do ponto hidráulico"
+                  className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                >
+                  <option value="">A classificar</option>
+                  {tiposHidraulicosDa(terminal.disciplina).map((t) => (
+                    <option key={t} value={t}>
+                      {FICHA_DO_PONTO_HIDRAULICO[t].grupo.replace('Hidráulica — ', '')} · {FICHA_DO_PONTO_HIDRAULICO[t].rotulo}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {terminal.tipoHidraulico === 'RESERVATORIO' && (
+                <label className="block">
+                  <span className="text-[11px] font-medium text-slate-600">Volume (L)</span>
+                  <input
+                    type="number"
+                    min={1}
+                    step={50}
+                    value={terminal.volumeL ?? ''}
+                    onChange={(e) => onTerminal({ volumeL: e.target.value === '' ? null : Math.max(1, Math.round(Number(e.target.value))) })}
+                    aria-label="Volume do reservatório em litros"
+                    className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs tabular-nums"
+                  />
+                </label>
+              )}
+              {terminal.tipoHidraulico && (
+                <p className="text-[11px] text-slate-500" data-testid="ficha-hidraulica">
+                  {(() => {
+                    const f = FICHA_DO_PONTO_HIDRAULICO[terminal.tipoHidraulico];
+                    const partes: string[] = [];
+                    if (f.pesoNbr5626 != null && terminal.disciplina !== 'ESGOTO') partes.push(`peso ${String(f.pesoNbr5626).replace('.', ',')} (NBR 5626)`);
+                    if (f.uhcNbr8160 != null && terminal.disciplina === 'ESGOTO') partes.push(`${f.uhcNbr8160} UHC (NBR 8160)`);
+                    const dn = f.dnMinimoMm[terminal.disciplina];
+                    if (dn != null) partes.push(`DN mínimo ${dn} mm`);
+                    return partes.length > 0 ? partes.join(' · ') : f.ajuda;
+                  })()}
+                </p>
+              )}
+            </>
           )}
 
           {/* ⚠️ CIRCUITO e POTÊNCIA só no ponto ELÉTRICO. Num ponto de água

@@ -53,6 +53,7 @@ import {
   type DisciplinaDeRede,
   type TipoDePontoEletrico,
   type TipoDeInterruptor,
+  type TipoDePontoHidraulico,
   type LigacaoDoCircuito,
   type FaseDoCircuito,
   type TipoDeAmbiente,
@@ -475,6 +476,8 @@ function projetar(model: BlueprintModel): {
       // acervo inteiro.
       sugerida: t.sugerida ? (true as const) : undefined,
       interruptor: t.interruptor ?? undefined,
+      tipoHidraulico: t.tipoHidraulico ?? undefined,
+      volumeL: t.volumeL ?? undefined,
       larguraMm: t.larguraMm ?? undefined,
       alturaMm: t.alturaMm ?? undefined,
       profundidadeMm: t.profundidadeMm ?? undefined,
@@ -846,6 +849,10 @@ export interface CanonicalPayload {
     interruptor?: string;
     /** Classificação do ponto. Ausente sob kernel < 0.22.0 e quando não classificado. */
     tipoEletrico?: string;
+    /** Classificação hidráulica. Ausente sob kernel < 0.32.0 e quando não classificado. */
+    tipoHidraulico?: string;
+    /** Volume do reservatório em litros. Ausente sob kernel < 0.32.0 e fora de RESERVATORIO. */
+    volumeL?: number;
     /** Medidas em mm. Ausentes sob kernel < 0.20.0 e quando não declaradas. */
     larguraMm?: number;
     alturaMm?: number;
@@ -1220,6 +1227,8 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       comando: t.comando ?? null,
       sugerida: t.sugerida ? true : null,
       interruptor: (t.interruptor as TipoDeInterruptor | undefined) ?? null,
+      tipoHidraulico: (t.tipoHidraulico as TipoDePontoHidraulico | undefined) ?? null,
+      volumeL: t.volumeL ?? null,
       larguraMm: t.larguraMm ?? null,
       alturaMm: t.alturaMm ?? null,
       profundidadeMm: t.profundidadeMm ?? null,

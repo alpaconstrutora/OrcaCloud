@@ -108,6 +108,7 @@ import {
   trechoSob as acertoTrecho,
 } from '../../utils/blueprintRede';
 import { useRodaNaoPassiva } from '../../hooks/useRodaNaoPassiva';
+import { SIGLA_DO_PONTO_HIDRAULICO } from '../../utils/blueprintHidraulica';
 import {
   ROTULO_DO_ENCAIXE,
   TIPOS_DE_ENCAIXE,
@@ -1196,6 +1197,12 @@ interface Props {
   onAddCorte?: (a: Point, b: Point) => void;
   /** Um TRECHO de rede: as duas pontas em planta. Cota e bitola vêm da barra. */
   onAddTrecho?: (a: Point, b: Point) => void;
+  /**
+   * REDE EM UM CLIQUE (18/09/2026): a ferramenta `rede` cria a PRUMADA no
+   * primeiro clique (a = b), sem esperar o segundo — é o tubo de queda e a
+   * coluna de ventilação do esgoto. As cotas continuam vindo da barra.
+   */
+  redeEmUmClique?: boolean;
   /** Um TERMINAL: onde ele fica. Tipo, cota e disciplina vêm da barra. */
   onAddTerminal?: (at: Point) => void;
   /** Um QUADRO de distribuição: onde ele fica. */
@@ -1319,6 +1326,7 @@ export default function BlueprintCanvas({
   onMoveAguaVertex,
   onAddCorte,
   onAddTrecho,
+  redeEmUmClique = false,
   onAddTerminal,
   onAddQuadro,
   onMoveCorteVertex,
@@ -4818,6 +4826,50 @@ export default function BlueprintCanvas({
       ctx.lineWidth = 1.25;
       ctx.stroke();
 
+      // ── O PONTO HIDRÁULICO TIPADO (18/09/2026) ────────────────────────────
+      //
+      // A sigla da ficha ao lado do símbolo — "CH", "VS", "CS" — é o que faz a
+      // planta hidráulica se ler sem clicar, como o "TUG · C1" faz na elétrica.
+      // E uma marca DENTRO da peça para as que têm desenho consagrado: ralo
+      // seco com a diagonal, ralo/caixa sifonada com a cruz, caixa d'água e
+      // caixas de inspeção/gordura com o nome escrito quando cabem.
+      if (t.tipoHidraulico && !selecionado) {
+        const sigla = SIGLA_DO_PONTO_HIDRAULICO[t.tipoHidraulico];
+        const meio = emTela(Math.min(md.larguraMm, md.profundidadeMm) / 2);
+        ctx.save();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.25;
+        if (t.tipoHidraulico === 'RALO_SECO' && meio >= 3) {
+          ctx.beginPath();
+          ctx.moveTo(c.x - meio * 0.6, c.y - meio * 0.6);
+          ctx.lineTo(c.x + meio * 0.6, c.y + meio * 0.6);
+          ctx.stroke();
+        } else if ((t.tipoHidraulico === 'RALO_SIFONADO' || t.tipoHidraulico === 'CAIXA_SIFONADA') && meio >= 3) {
+          ctx.beginPath();
+          ctx.moveTo(c.x - meio * 0.7, c.y);
+          ctx.lineTo(c.x + meio * 0.7, c.y);
+          ctx.moveTo(c.x, c.y - meio * 0.7);
+          ctx.lineTo(c.x, c.y + meio * 0.7);
+          ctx.stroke();
+        }
+        const grande = meio >= 14;
+        ctx.font = `bold ${Math.round(11 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+        if (grande && (t.tipoHidraulico === 'RESERVATORIO' || t.tipoHidraulico === 'CAIXA_INSPECAO' || t.tipoHidraulico === 'CAIXA_GORDURA')) {
+          // Peça grande: o nome DENTRO, em branco; o volume da caixa d'água junto.
+          ctx.fillStyle = '#ffffff';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(t.tipoHidraulico === 'RESERVATORIO' && t.volumeL != null ? `${sigla} ${t.volumeL} L` : sigla, c.x, c.y);
+        } else {
+          const raio = Math.max(meio, 4);
+          ctx.fillStyle = COR_DA_DISCIPLINA[t.disciplina];
+          ctx.textAlign = 'start';
+          ctx.textBaseline = 'alphabetic';
+          ctx.fillText(sigla, c.x + raio + 3, c.y - raio - 2);
+        }
+        ctx.restore();
+      }
+
       // ── O CIRCUITO, escrito ao lado do ponto ──────────────────────────────
       //
       // ⚠️ Ele não aparecia em lugar nenhum do desenho. Saber a que circuito uma
@@ -6945,6 +6997,12 @@ export default function BlueprintCanvas({
 
     if (tool === 'rede') {
       const ponto = capturarRede(mundo);
+      // Prumada num clique: as duas pontas no mesmo ponto — o kernel distingue
+      // pelas cotas (que vêm da barra) se é prumada ou degenerado.
+      if (redeEmUmClique) {
+        onAddTrecho?.(ponto, ponto);
+        return;
+      }
       if (!pontoRede) {
         setPontoRede(ponto);
         setPecaOrigemRede(pecaSobCursorRede.current);

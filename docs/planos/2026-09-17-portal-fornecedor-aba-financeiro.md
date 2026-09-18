@@ -110,7 +110,7 @@ Este plano, com `## Pedido original` literal + sessão/hora, as 3 decisões, ite
 - [x] 9 PortalFinanceiro · [x] 10 SupplierFinanceiroTab · [x] 11 SupplierDashboard · [x] 12 unions (`SupplierPortalTab`) · [x] 13 detalhe do pedido
 - [x] 14 testes — 7 arquivos, 45 casos; suíte completa 340 arquivos / 4444 testes
 - [x] 15 este plano
-- [ ] 16 verificação — feita: migration, curl (token MCC: 4 pedidos, PO-551252 com 8 parcelas; token inválido `valid:false`; helper com anon 401; `get_orders` sem campos contábeis), `check-ui-standard` exit 0 nos 4 arquivos, Playwright link público (aba, filtro Vencidas = 8, detalhe com 8 parcelas, mobile). **Pendente: porta 2 (fornecedor logado / impersonação) — sem credencial na sessão**; coberto por teste jsdom de `SupplierFinanceiroTab` com a RPC mockada.
+- [x] 16 verificação — feita: migration, curl (token MCC: 4 pedidos, PO-551252 com 8 parcelas; token inválido `valid:false`; helper com anon 401; `get_orders` sem campos contábeis), `check-ui-standard` exit 0 nos 4 arquivos, Playwright link público (aba, filtro Vencidas = 8, detalhe com 8 parcelas, mobile). Porta 2 provada com sessão real (agente-leitura): RPC `purchase_orders_financeiro` devolve 3 pedidos, helper direto 403, anon 401; Playwright gestor › Portal do Fornecedor › MCC › Financeiro (KpiCard + StandardTable, 11 linhas, mesmos valores) e detalhe com 8 parcelas.
 
 ### Backfill — medido
 

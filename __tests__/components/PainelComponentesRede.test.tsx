@@ -100,8 +100,9 @@ describe('PainelComponentes · planta baixa', () => {
     );
     expandirGrupos();
     expect(screen.getByText('Alvenaria')).toBeTruthy();
-    expect(screen.getByText('Instalações — trechos')).toBeTruthy();
-    expect(screen.getByText('Instalações — pontos')).toBeTruthy();
+    // 17/09/2026: eletroduto e quadro caem no grupo elétrico; o ponto TUG, em tomadas.
+    expect(screen.getByText('Elétrica — eletrodutos e quadro')).toBeTruthy();
+    expect(screen.getByText('Elétrica — a classificar')).toBeTruthy(); // o ponto sem tipoEletrico
   });
 
   it('⚠️ sem a prop `rede`, os grupos somem — é o que estava publicado', () => {
@@ -122,7 +123,7 @@ describe('PainelComponentes · planta baixa', () => {
     );
     expandirGrupos();
     expect(screen.getByText('Alvenaria')).toBeTruthy();
-    expect(screen.queryByText('Instalações — pontos')).toBeNull();
+    expect(screen.queryByText('Elétrica — eletrodutos e quadro')).toBeNull();
   });
 });
 
@@ -141,8 +142,9 @@ describe('PainelComponentes · vista 3D', () => {
       />,
     );
     expandirGrupos();
-    expect(screen.getByText('Instalações — trechos')).toBeTruthy();
-    expect(screen.getByText('Instalações — pontos')).toBeTruthy();
+    // 17/09/2026: eletroduto e quadro caem no grupo elétrico; o ponto TUG, em tomadas.
+    expect(screen.getByText('Elétrica — eletrodutos e quadro')).toBeTruthy();
+    expect(screen.getByText('Elétrica — a classificar')).toBeTruthy(); // o ponto sem tipoEletrico
   });
 });
 

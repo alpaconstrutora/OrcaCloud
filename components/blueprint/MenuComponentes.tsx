@@ -198,8 +198,8 @@ function gruposDoPontoEletrico(): { titulo: string; itens: ItemComponente[] }[] 
  * Em que COLUNA do menu cada grupo aparece.
  *
  *   1 · arquitetura — alvenaria, esquadrias, cobertura, circulação
- *   2 · estrutura e instalações — estrutura, fundação, trechos, pontos hidráulicos
- *   3 · elétrica — iluminação, tomadas, especiais e dados, a classificar
+ *   2 · estrutura e hidráulica — estrutura, fundação, trechos e pontos hidráulicos
+ *   3 · elétrica — iluminação, tomadas, especiais e dados, eletrodutos, a classificar
  *
  * Derivada do TÍTULO, e não gravada em cada grupo: é decisão de leitura do menu,
  * não propriedade da peça — e assim um grupo novo cai numa coluna sem que
@@ -207,7 +207,7 @@ function gruposDoPontoEletrico(): { titulo: string; itens: ItemComponente[] }[] 
  */
 function colunaDoGrupo(titulo: string): 1 | 2 | 3 {
   if (titulo.startsWith('Elétrica')) return 3;
-  if (/^(Estrutura|Fundação|Instalações)/.test(titulo)) return 2;
+  if (/^(Estrutura|Fundação|Hidráulica)/.test(titulo)) return 2;
   return 1;
 }
 
@@ -376,8 +376,13 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
   // a tomada. Juntá-los num item só faria a disciplina do ponto sair de estado
   // escondido ("a última que você usou"), e ninguém descobriria que colocou uma
   // tomada como ponto de esgoto até o quantitativo sair errado.
+  // ─── POR DISCIPLINA MEP (17/09/2026: *"menubar Instalações está agrupando
+  // todas as disciplinas. Melhor separar um menu para cada disciplina MEP:
+  // Elétrica; Hidráulica; Mecânica"*). Os grupos levam a disciplina no título
+  // porque é do título que saem a aba do ribbon (`gruposDaFamilia`), a coluna
+  // do menu e o grupo do painel Componentes — um lugar só decide os três.
   {
-    titulo: 'Instalações — trechos',
+    titulo: 'Elétrica — eletrodutos e quadro',
     itens: [
       {
         chave: 'REDE_ELETRICA',
@@ -388,6 +393,20 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
           'se ajusta no painel — clicar duas vezes no MESMO ponto faz uma prumada.',
         escolha: { tool: 'rede', disciplina: 'ELETRICA' },
       },
+      {
+        chave: 'QUADRO',
+        rotulo: 'Quadro de distribuição',
+        icone: LayoutGrid,
+        ajuda:
+          'Um clique. É de onde os circuitos saem — e é no painel Elétrica que ' +
+          'eles são criados e que o quadro de cargas se monta.',
+        escolha: { tool: 'quadro' },
+      },
+    ],
+  },
+  {
+    titulo: 'Hidráulica — trechos',
+    itens: [
       {
         chave: 'REDE_AGUA_FRIA',
         rotulo: 'Água fria',
@@ -425,7 +444,7 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
   // a peça na lista sem grupo.
   ...gruposDoPontoEletrico(),
   {
-    titulo: 'Instalações — pontos',
+    titulo: 'Hidráulica — pontos',
     itens: [
       {
         chave: 'PONTO_AGUA_FRIA',
@@ -447,15 +466,6 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
         icone: Waves,
         ajuda: 'Um clique: ralo, caixa sifonada, saída de vaso.',
         escolha: { tool: 'terminal', disciplina: 'ESGOTO' },
-      },
-      {
-        chave: 'QUADRO',
-        rotulo: 'Quadro de distribuição',
-        icone: LayoutGrid,
-        ajuda:
-          'Um clique. É de onde os circuitos saem — e é no painel Elétrica que ' +
-          'eles são criados e que o quadro de cargas se monta.',
-        escolha: { tool: 'quadro' },
       },
     ],
   },
@@ -524,21 +534,24 @@ const TOOLS_DE_COMPONENTE: BlueprintTool[] = [
 /**
  * A FAMÍLIA que o menu oferece.
  *
- * Com o ribbon (13/09/2026) o catálogo se divide entre duas abas: o que se
- * CONSTRÓI (alvenaria, esquadria, estrutura, fundação, cobertura, circulação)
- * fica em Arquitetura; trechos, pontos e quadro ficam em Instalações. É o mesmo
- * catálogo, filtrado — e não dois catálogos — para a ficha do componente
+ * Com o ribbon (13/09/2026) o catálogo se divide entre abas: o que se CONSTRÓI
+ * (alvenaria, esquadria, estrutura, fundação, cobertura, circulação) fica em
+ * Arquitetura; desde 17/09/2026 cada disciplina MEP tem a sua aba — ELÉTRICA
+ * (pontos, eletrodutos, quadro) e HIDRÁULICA (água fria, quente, esgoto). É o
+ * mesmo catálogo, filtrado — e não três catálogos — para a ficha do componente
  * (`fichaDoComponente`) continuar única.
  */
-export type FamiliaDeComponentes = 'CONSTRUCAO' | 'INSTALACOES';
+export type FamiliaDeComponentes = 'CONSTRUCAO' | 'ELETRICA' | 'HIDRAULICA';
 
-function ehDeInstalacoes(tituloDoGrupo: string): boolean {
-  return /^(Instalações|Elétrica)/.test(tituloDoGrupo);
+function familiaDoGrupo(tituloDoGrupo: string): FamiliaDeComponentes {
+  if (/^Elétrica/.test(tituloDoGrupo)) return 'ELETRICA';
+  if (/^Hidráulica/.test(tituloDoGrupo)) return 'HIDRAULICA';
+  return 'CONSTRUCAO';
 }
 
 function gruposDaFamilia(familia: FamiliaDeComponentes | undefined) {
   if (!familia) return GRUPOS;
-  return GRUPOS.filter((g) => ehDeInstalacoes(g.titulo) === (familia === 'INSTALACOES'));
+  return GRUPOS.filter((g) => familiaDoGrupo(g.titulo) === familia);
 }
 
 interface Props {
@@ -624,9 +637,11 @@ export default function MenuComponentes(props: Props) {
         aria-expanded={aberto}
         aria-haspopup="menu"
         title={
-          familia === 'INSTALACOES'
-            ? 'Eletroduto, água, esgoto, pontos elétricos e hidráulicos, quadro — as instalações'
-            : 'Parede, esquadria, estrutura, fundação e cobertura — tudo que o desenho constrói'
+          familia === 'ELETRICA'
+            ? 'Pontos elétricos, eletroduto e quadro de distribuição'
+            : familia === 'HIDRAULICA'
+              ? 'Água fria, água quente e esgoto — trechos e pontos'
+              : 'Parede, esquadria, estrutura, fundação e cobertura — tudo que o desenho constrói'
         }
         className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
           ativo

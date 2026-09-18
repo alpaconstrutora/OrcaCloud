@@ -559,8 +559,13 @@ type SecaoDoPainel = (typeof SECOES_DO_PAINEL)[number]['id'];
 const ABAS_DO_RIBBON = [
   { id: 'arquitetura', rotulo: 'Arquitetura', naVista: false },
   { id: 'terreno', rotulo: 'Terreno', naVista: false },
-  // Fora da planta só sobra o Quadro de cargas — que já se lia no 3D antes.
-  { id: 'instalacoes', rotulo: 'Instalações', naVista: true },
+  // UMA ABA POR DISCIPLINA MEP (17/09/2026: *"menubar Instalações está
+  // agrupando todas as disciplinas. Melhor separar um menu para cada disciplina
+  // MEP: Elétrica; Hidráulica; Mecânica"*). Mecânica entra quando houver
+  // componente mecânico no kernel — aba vazia não aparece (regra acima).
+  // Fora da planta, da Elétrica sobra o Quadro de cargas — que já se lia no 3D.
+  { id: 'eletrica', rotulo: 'Elétrica', naVista: true },
+  { id: 'hidraulica', rotulo: 'Hidráulica', naVista: false },
   { id: 'inserir', rotulo: 'Inserir', naVista: false },
   // Conflitos e quantitativos também se leem na elevação e no 3D.
   { id: 'analisar', rotulo: 'Analisar', naVista: true },
@@ -5679,7 +5684,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       </>
     ) : null;
 
-  const cabecalhoDaTela = (titulo: string, subtitulo: string, Icone: React.ElementType, secao = 'Instalações') => (
+  const cabecalhoDaTela = (titulo: string, subtitulo: string, Icone: React.ElementType, secao = 'Elétrica') => (
     <div className="flex items-center gap-4">
       <button
         type="button"
@@ -6340,10 +6345,26 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           </>
         )}
 
-        {aba === 'instalacoes' && (
+        {aba === 'hidraulica' && !emVista && (
+          <GrupoDoRibbon rotulo="Redes e pontos">
+            <MenuComponentes
+              tool={editor.tool}
+              tipoAbertura={tipoAbertura}
+              tipoEstrutural={tipoEstrutural}
+              tipoCirculacao={tipoCirculacao}
+              disciplinaDeRede={disciplinaDeRede}
+              tipoDePontoEletrico={tipoDePontoEletrico}
+              tipoDeInterruptor={tipoDeInterruptor}
+              familia="HIDRAULICA"
+              rotulo="Hidráulica"
+              onEscolher={escolherComponente}
+            />
+          </GrupoDoRibbon>
+        )}
+        {aba === 'eletrica' && (
           <>
             {!emVista && (
-              <GrupoDoRibbon rotulo="Redes e pontos">
+              <GrupoDoRibbon rotulo="Pontos e redes">
                 <MenuComponentes
                   tool={editor.tool}
                   tipoAbertura={tipoAbertura}
@@ -6352,8 +6373,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   disciplinaDeRede={disciplinaDeRede}
                   tipoDePontoEletrico={tipoDePontoEletrico}
                   tipoDeInterruptor={tipoDeInterruptor}
-                  familia="INSTALACOES"
-                  rotulo="Instalações"
+                  familia="ELETRICA"
+                  rotulo="Elétrica"
                   onEscolher={escolherComponente}
                 />
               </GrupoDoRibbon>

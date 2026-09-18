@@ -960,10 +960,11 @@ describe('BlueprintEditor · menu Exibir', () => {
 describe('BlueprintEditor · ribbon', () => {
   beforeEach(() => localStorage.clear());
 
-  it('nasce em Arquitetura, com as sete abas da planta baixa e o seletor de vista fora delas', async () => {
+  it('nasce em Arquitetura, com as oito abas da planta baixa (uma por disciplina MEP) e o seletor de vista fora delas', async () => {
     await montar();
     const abas = screen.getAllByRole('tab').map((t) => t.textContent);
-    expect(abas).toEqual(['Arquitetura', 'Terreno', 'Instalações', 'Inserir', 'Analisar', 'Colaborar', 'Vista']);
+    // 17/09/2026: "Instalações" virou Elétrica + Hidráulica (Mecânica entra quando houver componente).
+    expect(abas).toEqual(['Arquitetura', 'Terreno', 'Elétrica', 'Hidráulica', 'Inserir', 'Analisar', 'Colaborar', 'Vista']);
     expect(screen.getByRole('tab', { name: 'Arquitetura' })).toHaveAttribute('aria-selected', 'true');
     // O seletor de vista continua dentro da barra, mas não é aba: usa-se o tempo todo.
     expect(within(screen.getByRole('toolbar')).getByRole('button', { name: /^planta$/i })).toBeInTheDocument();
@@ -1040,14 +1041,41 @@ describe('BlueprintEditor · ribbon', () => {
     expect(barra().getByRole('button', { name: /^ferramenta: selecionar$/i })).toBeInTheDocument();
   });
 
+  it('uma aba por disciplina MEP: Elétrica tem pontos/eletroduto/quadro e as tarefas; Hidráulica só água e esgoto', async () => {
+    // 17/09/2026: "menubar Instalações está agrupando todas as disciplinas.
+    // Melhor separar um menu para cada disciplina MEP: Elétrica; Hidráulica; Mecânica".
+    await montar();
+    const user = userEvent.setup();
+
+    await abrirAba(/^elétrica$/i);
+    await user.click(botao(/^elétrica$/i));
+    const menu = () => within(screen.getByRole('menu', { name: /componentes do desenho/i }));
+    expect(menu().getByRole('menuitemradio', { name: 'Eletroduto' })).toBeInTheDocument();
+    expect(menu().getByRole('menuitemradio', { name: 'Quadro de distribuição' })).toBeInTheDocument();
+    expect(menu().queryByRole('menuitemradio', { name: 'Água fria' })).toBeNull();
+    expect(menu().queryByRole('menuitemradio', { name: 'Ponto de esgoto' })).toBeNull();
+    await user.keyboard('{Escape}');
+    expect(botao(/^circuitos automáticos/i)).toBeInTheDocument();
+    expect(botao(/^quadro de cargas/i)).toBeInTheDocument();
+
+    await abrirAba(/^hidráulica$/i);
+    await user.click(botao(/^hidráulica$/i));
+    expect(menu().getByRole('menuitemradio', { name: 'Água fria' })).toBeInTheDocument();
+    expect(menu().getByRole('menuitemradio', { name: 'Ponto de esgoto' })).toBeInTheDocument();
+    expect(menu().queryByRole('menuitemradio', { name: 'Eletroduto' })).toBeNull();
+    expect(menu().queryByRole('menuitemradio', { name: 'Quadro de distribuição' })).toBeNull();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('button', { name: /^circuitos automáticos/i })).toBeNull();
+  });
+
   it('a aba persiste entre montagens — é preferência, não gesto', async () => {
     await montar();
-    await abrirAba(/^instalações$/i);
+    await abrirAba(/^elétrica$/i);
     cleanup();
 
     await montar();
-    expect(screen.getByRole('tab', { name: 'Instalações' })).toHaveAttribute('aria-selected', 'true');
-    expect(botao(/^instalações$/i)).toBeInTheDocument(); // o menu filtrado
+    expect(screen.getByRole('tab', { name: 'Elétrica' })).toHaveAttribute('aria-selected', 'true');
+    expect(botao(/^elétrica$/i)).toBeInTheDocument(); // o menu filtrado
   });
 
   it('em 3D sobram as abas de leitura, e a aba salva que sumiu cai em Vista em vez de deixar o painel vazio', async () => {
@@ -1055,7 +1083,7 @@ describe('BlueprintEditor · ribbon', () => {
     localStorage.setItem('blueprint:vista', JSON.stringify('3d'));
     await montar();
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
-      'Instalações',
+      'Elétrica',
       'Analisar',
       'Colaborar',
       'Vista',
@@ -1148,7 +1176,7 @@ describe('BlueprintEditor · ribbon', () => {
     // 13/09/2026: "não encontrei a funcionalidade de lançamento automático de
     // tomadas" — ela morava só dentro de cada cartão de ambiente.
     await montar();
-    await abrirAba(/^instalações$/i);
+    await abrirAba(/^elétrica$/i);
     await userEvent.setup().click(botao(/^distribuir tomadas$/i));
     // Em DRAWER (teste de formato de 13/09/2026), não na metade de baixo do painel.
     const drawer = await screen.findByRole('dialog');
@@ -1167,7 +1195,7 @@ describe('BlueprintEditor · ribbon', () => {
 
   it('"Lançar eletrodutos" (aba Instalações) abre o drawer com as hipóteses e a tabela por circuito', async () => {
     await montar();
-    await abrirAba(/^instalações$/i);
+    await abrirAba(/^elétrica$/i);
     await userEvent.setup().click(botao(/^lançar eletrodutos/i));
     const drawer = await screen.findByRole('dialog');
     expect(drawer).toHaveTextContent(/eletrodutos por circuito/i);
@@ -1184,7 +1212,7 @@ describe('BlueprintEditor · ribbon', () => {
 
   it('"Circuitos automáticos" (aba Instalações) sem quadro: o drawer pede o quadro e "Criar" fica apagado', async () => {
     await montar();
-    await abrirAba(/^instalações$/i);
+    await abrirAba(/^elétrica$/i);
     await userEvent.setup().click(botao(/^circuitos automáticos/i));
     const drawer = await screen.findByRole('dialog');
     expect(drawer).toHaveTextContent(/circuitos automáticos/i);
@@ -1219,7 +1247,7 @@ describe('BlueprintEditor · ribbon', () => {
     ]).model;
     loadBranchModel.mockResolvedValue(m);
     await montar();
-    await abrirAba(/^instalações$/i);
+    await abrirAba(/^elétrica$/i);
     // 5 elegíveis: luz, interruptor, 2 TUG, TUE — a antena não conta.
     expect(botao(/^circuitos automáticos/i)).toHaveTextContent('5');
 
@@ -1248,7 +1276,7 @@ describe('BlueprintEditor · ribbon', () => {
 
   it('trocar o critério para "Um por função" persiste em localStorage e a carga máxima fica apagada', async () => {
     await montar();
-    await abrirAba(/^instalações$/i);
+    await abrirAba(/^elétrica$/i);
     await userEvent.setup().click(botao(/^circuitos automáticos/i));
     const drawer = await screen.findByRole('dialog');
     await userEvent.selectOptions(within(drawer).getByRole('combobox', { name: /critério de divisão/i }), 'funcao');
@@ -1548,7 +1576,7 @@ describe('BlueprintEditor · ribbon', () => {
     // visualização. vamos criar uma tela nova para cada um". Tela em fluxo
     // (h1 + Voltar), nunca `fixed inset-0`, nunca Sheet.
     await montar();
-    await abrirAba(/^instalações$/i);
+    await abrirAba(/^elétrica$/i);
     await userEvent.setup().click(botao(/^quadro de cargas/i));
     const titulo = await screen.findByRole('heading', { level: 1, name: /quadro de cargas e nbr 5410/i });
     const tela = titulo.closest('[data-tela="quadro-de-cargas"]') as HTMLElement;
@@ -1590,10 +1618,10 @@ describe('BlueprintEditor · ribbon', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: /^excluir .*tug/i })).not.toBeInTheDocument());
   });
 
-  it('"Projeto executivo (ART)" tem botão e TELA próprios em Instalações — sem drawer', async () => {
+  it('"Projeto executivo (ART)" tem botão e TELA próprios em Elétrica — sem drawer', async () => {
     // 15/09/2026: "transformar drawer Projeto executivo elétrico (ART) também em tela".
     await montar();
-    await abrirAba(/^instalações$/i);
+    await abrirAba(/^elétrica$/i);
     await userEvent.setup().click(botao(/^projeto executivo \(art\)/i));
     const titulo = await screen.findByRole('heading', { level: 1, name: /projeto executivo elétrico \(art\)/i });
     const tela = titulo.closest('[data-tela="executivo-eletrico"]') as HTMLElement;
@@ -1614,7 +1642,7 @@ describe('BlueprintEditor · ribbon', () => {
 
   it('"Diagrama unifilar" (aba Instalações) abre uma TELA própria: sem quadro pede um; Voltar devolve o editor', async () => {
     await montar();
-    await abrirAba(/^instalações$/i);
+    await abrirAba(/^elétrica$/i);
     await userEvent.setup().click(botao(/^diagrama unifilar/i));
     const titulo = await screen.findByRole('heading', { level: 1, name: /diagrama unifilar/i });
     const tela = titulo.closest('[data-tela="unifilar"]') as HTMLElement;
@@ -1634,7 +1662,7 @@ describe('BlueprintEditor · ribbon', () => {
     m = k.applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais![0].id, circuitoId: m.circuitos![0].id }).model;
     loadBranchModel.mockResolvedValue(m);
     await montar();
-    await abrirAba(/^instalações$/i);
+    await abrirAba(/^elétrica$/i);
     await userEvent.setup().click(botao(/^diagrama unifilar/i));
     const titulo = await screen.findByRole('heading', { level: 1, name: /diagrama unifilar/i });
     const tela = titulo.closest('[data-tela="unifilar"]') as HTMLElement;

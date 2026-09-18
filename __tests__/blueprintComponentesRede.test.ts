@@ -100,8 +100,10 @@ describe('inventário · as instalações entram', () => {
   it('cada disciplina cai no grupo de instalações que lhe cabe', () => {
     const m = cena();
     const porId = new Map(linhas(m).map((l) => [l.id, l]));
+    // 17/09/2026: os grupos passaram a levar a DISCIPLINA no título (uma aba
+    // do ribbon por disciplina MEP) — o eletroduto é da Elétrica.
     expect(fichaDoComponente(porId.get(m.trechos[0].id)!.chave)?.grupo).toBe(
-      'Instalações — trechos',
+      'Elétrica — eletrodutos e quadro',
     );
     // ⚠️ O ponto ELÉTRICO deixou de cair em "Instalações — pontos" quando a
     // taxonomia entrou: sem classificação ele vai para "a classificar", e com
@@ -110,12 +112,13 @@ describe('inventário · as instalações entram', () => {
     expect(fichaDoComponente(porId.get(m.terminais[0].id)!.chave)?.grupo).toBe(
       'Elétrica — a classificar',
     );
-    // O ponto de ESGOTO segue no grupo hidráulico, que não mudou.
+    // O ponto de ESGOTO segue no grupo hidráulico.
     expect(fichaDoComponente(porId.get(m.terminais[1].id)!.chave)?.grupo).toBe(
-      'Instalações — pontos',
+      'Hidráulica — pontos',
     );
+    // O quadro é elétrico — saiu de "pontos" para junto do eletroduto.
     expect(fichaDoComponente(porId.get(m.quadros[0].id)!.chave)?.grupo).toBe(
-      'Instalações — pontos',
+      'Elétrica — eletrodutos e quadro',
     );
   });
 

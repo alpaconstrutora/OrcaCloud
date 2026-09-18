@@ -396,3 +396,37 @@ Ordem da barra: Selecionar · Mover │ 6 vistas │ **Enquadrar · Zoom− · Z
   editor "com dois pavimentos" (linhas Térreo/Superior com o concreto de cada, coluna e
   filtro nas peças). Suíte cheia 4416; app real: Térreo e Pavimento 1 com 92,81 m² cada,
   total 185,63 m² = soma; escritas bloqueadas.
+
+---
+
+## 17/09/2026 — uma aba por disciplina MEP (Elétrica · Hidráulica)
+
+### Pedido original
+
+> menubar Instalações está agrupando todas as disciplinas. Melhor separar um menu para cada
+> disciplina MEP: Elétrica; Hidráulica; Mecânica
+
+### O que mudou
+
+- `ABAS_DO_RIBBON`: "Instalações" saiu; entram **Elétrica** (`naVista: true` — o Quadro de
+  cargas se lê no 3D) e **Hidráulica** (só na planta). **Mecânica não entra ainda**: não há
+  componente mecânico no kernel (`DISCIPLINAS` = ELETRICA, AGUA_FRIA, AGUA_QUENTE, ESGOTO) e
+  a regra do ribbon é "aba vazia não aparece" — entra junto com a disciplina.
+- `MenuComponentes`: `FamiliaDeComponentes = 'CONSTRUCAO' | 'ELETRICA' | 'HIDRAULICA'`; os
+  grupos passaram a levar a disciplina no título — "Elétrica — eletrodutos e quadro"
+  (Eletroduto + Quadro, que saiu de "pontos"), "Hidráulica — trechos", "Hidráulica — pontos".
+  É do título que saem a aba (`gruposDaFamilia`), a coluna do menu e o grupo do painel
+  Componentes — um lugar decide os três. Aba salva "instalacoes" cai em `abaEfetiva` → Vista/
+  primeira; `cabecalhoDaTela` padrão "Elétrica".
+- Elétrica: menu (pontos, eletroduto, quadro) + Tomadas + Circuitos/Eletrodutos/Quadro de
+  cargas/ART/Unifilar. Hidráulica: menu (água fria, quente, esgoto — trechos e pontos).
+
+### Testes
+
+- `BlueprintEditor.test.tsx`: lista das oito abas; 3D com Elétrica; `abrirAba(/^elétrica$/i)`
+  nos testes elétricos; novo "uma aba por disciplina MEP" (menus filtrados e tarefas só na
+  Elétrica). `blueprintComponentesRede`/`PainelComponentesRede`: títulos novos dos grupos.
+- Suíte cheia 4418, tsc, check-ui (Editor, MenuComponentes), build. App real (escritas
+  bloqueadas: 14): abas Arquitetura · Terreno · Elétrica · Hidráulica · Inserir · Analisar ·
+  Colaborar · Vista; menu Elétrica com 18 itens (eletroduto, quadro, pontos), Hidráulica com 6;
+  lista de Componentes com "Elétrica — eletrodutos e quadro 55" e "Hidráulica — trechos 1".

@@ -124,7 +124,8 @@ export function linhasDeComponentes(
    * desenho com o olho. Relato de uso em 09/09/2026: *"componentes elétricos
    * continuam sem grupo (accordion) em componentes"*.
    *
-   * Os grupos "Instalações — trechos" e "Instalações — pontos" já existiam no
+   * Os grupos de instalações (hoje "Elétrica — eletrodutos e quadro",
+   * "Hidráulica — trechos" e "Hidráulica — pontos") já existiam no
    * catálogo, servindo ao menu de ferramentas: faltava emitir as linhas.
    */
   rede: { trechos: Trecho[]; terminais: Terminal[]; quadros: Quadro[] } | null = null,

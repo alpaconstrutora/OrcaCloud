@@ -91,6 +91,7 @@ import ModalSobreposicao, { type EscolhaSobreposicao } from './ModalSobreposicao
 import PainelComponentes from './PainelComponentes';
 import { linhasDeComponentesPorNivel } from '../../utils/blueprintComponentes';
 import PainelParametros from './PainelParametros';
+import { variaveisDaPeca } from '../../utils/blueprintFormulas';
 import { etiquetasDasAberturas, rotuloDeNivelDoPavimento } from '../../utils/blueprintNumeracao';
 import { assinaturaDoTipo, camposDaEstrutura, camposDoTerminal, propriedadesDaEstrutura, propriedadesDoTerminal } from '../../utils/blueprintTipos';
 import { AJUSTE_DA_VISTA, ehVistaDePlanta, idsOcultosNaVista, nivelDaVista } from '../../utils/blueprintVistasDePlanta';
@@ -2451,6 +2452,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     if (quadroSel) return { familia: 'quadro', id: quadroSel.id, parametros: quadroSel.parametros };
     return null;
   }, [paredeSel, aberturaSel, estruturaSel, aguaSel, escadaSel, trechoSel, terminalSel, quadroSel]);
+  /** As variáveis das FÓRMULAS (E1.3) para a peça selecionada — derivadas do modelo. */
+  const variaveisDaSelecao = useMemo(() => {
+    if (paredeSel) return variaveisDaPeca(editor.model, { familia: 'wall', peca: paredeSel });
+    if (aberturaSel) return variaveisDaPeca(editor.model, { familia: 'opening', peca: aberturaSel });
+    if (estruturaSel) return variaveisDaPeca(editor.model, { familia: 'structural', peca: estruturaSel });
+    if (aguaSel) return variaveisDaPeca(editor.model, { familia: 'roof', peca: aguaSel });
+    if (escadaSel) return variaveisDaPeca(editor.model, { familia: 'stair', peca: escadaSel });
+    if (trechoSel) return variaveisDaPeca(editor.model, { familia: 'trecho', peca: trechoSel });
+    if (terminalSel) return variaveisDaPeca(editor.model, { familia: 'terminal', peca: terminalSel });
+    if (quadroSel) return variaveisDaPeca(editor.model, { familia: 'quadro', peca: quadroSel });
+    return undefined;
+  }, [editor.model, paredeSel, aberturaSel, estruturaSel, aguaSel, escadaSel, trechoSel, terminalSel, quadroSel]);
 
   /**
    * Quanto volume a peça selecionada divide com outra, em m³. `0` = nenhuma.
@@ -6057,6 +6070,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           pecaId={pecaComParametros.id}
           parametros={pecaComParametros.parametros}
           onSet={(valores) => editor.run({ type: 'SetParametros', familia: pecaComParametros.familia, id: pecaComParametros.id, valores })}
+          variaveis={variaveisDaSelecao}
         />
       )}
 

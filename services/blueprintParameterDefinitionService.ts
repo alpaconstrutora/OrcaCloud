@@ -22,12 +22,12 @@ export interface DefinicaoDeParametro {
   unidade: string;
   opcoes: string[];
   compartilhado: boolean;
-  /** Reservado (E1.3). */
+  /** Fórmula (E1.3): vazia = valor digitado; senão o valor é CALCULADO (`utils/blueprintFormulas.ts`). */
   formula: string;
   active: boolean;
 }
 
-export type DadosDaDefinicao = Pick<DefinicaoDeParametro, 'chave' | 'nome' | 'familia' | 'tipo' | 'unidade' | 'opcoes' | 'compartilhado'>;
+export type DadosDaDefinicao = Pick<DefinicaoDeParametro, 'chave' | 'nome' | 'familia' | 'tipo' | 'unidade' | 'opcoes' | 'compartilhado'> & { formula?: string };
 
 const COLS = 'id, organization_id, chave, nome, familia, tipo, unidade, opcoes, compartilhado, formula, active';
 
@@ -72,6 +72,7 @@ export async function saveParameterDefinition(organizationId: string, d: DadosDa
         unidade: d.unidade.trim(),
         opcoes: d.tipo === 'LISTA' ? d.opcoes.map((o) => o.trim()).filter(Boolean) : [],
         compartilhado: d.compartilhado,
+        formula: (d.formula ?? '').trim(),
         active: true,
         updated_at: new Date().toISOString(),
       },

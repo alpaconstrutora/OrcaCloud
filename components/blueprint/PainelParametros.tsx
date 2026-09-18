@@ -22,6 +22,7 @@ import {
   type TipoDeParametro,
 } from '../../services/blueprintParameterDefinitionService';
 import type { FamiliaComParametros, Parametros, ValorDeParametro } from '../../utils/blueprintKernel';
+import { VARIAVEIS_DO_PAVIMENTO, VARIAVEIS_NATIVAS, avaliarDefinicoes, erroDeSintaxe, formatarValor, type Variaveis } from '../../utils/blueprintFormulas';
 
 export const ROTULO_DA_FAMILIA_COM_PARAMETROS: Record<FamiliaComParametros, string> = {
   wall: 'parede',
@@ -48,9 +49,11 @@ interface Props {
   parametros: Parametros | undefined;
   /** Grava (valor) ou apaga (`null`) chaves — um comando. */
   onSet: (valores: Record<string, ValorDeParametro | null>) => void;
+  /** As variáveis da peça para as FÓRMULAS (E1.3) — `variaveisDaPeca(model, alvo)`. */
+  variaveis?: Variaveis;
 }
 
-export default function PainelParametros({ familia, pecaId, parametros, onSet }: Props) {
+export default function PainelParametros({ familia, pecaId, parametros, onSet, variaveis }: Props) {
   const { orgId } = useOrgContext();
   const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
   const [definicoes, setDefinicoes] = useState<DefinicaoDeParametro[]>([]);
@@ -76,13 +79,21 @@ export default function PainelParametros({ familia, pecaId, parametros, onSet }:
 
   const daFamilia = useMemo(() => definicoes.filter((d) => d.familia === null || d.familia === familia), [definicoes, familia]);
   const chavesDefinidas = new Set(daFamilia.map((d) => d.chave));
+  // FÓRMULAS (E1.3): calculadas a cada render, nunca gravadas — mudar a
+  // geometria muda o valor na hora. Uma cita a outra pela chave.
+  const calculados = useMemo(() => {
+    const r = avaliarDefinicoes(daFamilia.map((d) => ({ chave: d.chave, formula: d.formula })), variaveis ?? {});
+    return new Map(r.map((x) => [x.chave, x]));
+  }, [daFamilia, variaveis]);
   const semDefinicao = Object.entries(parametros ?? {}).filter(([k]) => !chavesDefinidas.has(k));
 
   // ── Nova definição (inline) ────────────────────────────────────────────────
-  const [nova, setNova] = useState<{ nome: string; tipo: TipoDeParametro; unidade: string; opcoes: string; todas: boolean } | null>(null);
+  const [nova, setNova] = useState<{ nome: string; tipo: TipoDeParametro; unidade: string; opcoes: string; todas: boolean; formula: string } | null>(null);
+  const [mostrarVariaveis, setMostrarVariaveis] = useState(false);
+  const erroDaFormula = nova?.formula.trim() ? erroDeSintaxe(nova.formula) : null;
   const [aviso, setAviso] = useState<string | null>(null);
   async function salvarDefinicao() {
-    if (!nova || !nova.nome.trim()) return;
+    if (!nova || !nova.nome.trim() || erroDaFormula) return;
     const chave = chaveDeParametroDoNome(nova.nome);
     const target = await resolveWriteOrg('all-allowed');
     if (!target) return;
@@ -95,6 +106,7 @@ export default function PainelParametros({ familia, pecaId, parametros, onSet }:
         unidade: nova.unidade,
         opcoes: nova.opcoes.split(/[;\n]/).map((o) => o.trim()).filter(Boolean),
         compartilhado: true,
+        formula: nova.formula,
       }),
     );
     setAviso(failed.length === 0 ? `Definição "${nova.nome.trim()}" salva (chave ${chave}).` : `Salva em ${ok}; ${failed.length} falharam.`);
@@ -108,7 +120,7 @@ export default function PainelParametros({ familia, pecaId, parametros, onSet }:
         <p className="text-xs font-semibold text-slate-500">Parâmetros personalizados</p>
         <button
           type="button"
-          onClick={() => setNova({ nome: '', tipo: 'TEXTO', unidade: '', opcoes: '', todas: false })}
+          onClick={() => setNova({ nome: '', tipo: 'TEXTO', unidade: '', opcoes: '', todas: false, formula: '' })}
           title="Cria uma definição de parâmetro da organização — o campo passa a existir em toda peça desta família"
           className="flex h-7 items-center gap-1 rounded-[6px] border border-slate-200 bg-white px-2 text-[12px] font-medium text-slate-700 transition-all hover:border-blue-300 hover:text-blue-600"
         >
@@ -125,9 +137,13 @@ export default function PainelParametros({ familia, pecaId, parametros, onSet }:
 
       {daFamilia.length > 0 && (
         <div className="mt-2 space-y-1.5">
-          {daFamilia.map((d) => (
-            <CampoDeParametro key={`${pecaId}-${d.id}`} definicao={d} valor={parametros?.[d.chave]} onSet={(v) => onSet({ [d.chave]: v })} />
-          ))}
+          {daFamilia.map((d) =>
+            d.formula.trim() ? (
+              <ValorCalculado key={`${pecaId}-${d.id}`} definicao={d} resultado={calculados.get(d.chave)} />
+            ) : (
+              <CampoDeParametro key={`${pecaId}-${d.id}`} definicao={d} valor={parametros?.[d.chave]} onSet={(v) => onSet({ [d.chave]: v })} />
+            ),
+          )}
         </div>
       )}
 
@@ -176,9 +192,33 @@ export default function PainelParametros({ familia, pecaId, parametros, onSet }:
             <input type="checkbox" checked={nova.todas} onChange={(e) => setNova({ ...nova, todas: e.target.checked })} />
             Vale para todas as famílias (não só {ROTULO_DA_FAMILIA_COM_PARAMETROS[familia]})
           </label>
+          {/* FÓRMULA (E1.3): opcional; com ela o campo vira calculado. Sintaxe
+              conferida enquanto digita; a lista de variáveis é da família. */}
+          {nova.tipo !== 'LISTA' && (
+            <div>
+              <input
+                value={nova.formula}
+                onChange={(e) => setNova({ ...nova, formula: e.target.value })}
+                aria-label="Fórmula da nova definição (opcional)"
+                placeholder="Fórmula (opcional) — ex.: area * custo_m2"
+                className={`h-8 w-full rounded-[6px] border bg-white px-2 font-mono text-xs ${erroDaFormula ? 'border-amber-400' : 'border-slate-200'}`}
+              />
+              {erroDaFormula && <p className="mt-0.5 text-[10px] text-amber-700">{erroDaFormula}</p>}
+              <button type="button" onClick={() => setMostrarVariaveis((v) => !v)} className="mt-0.5 text-[10px] text-blue-700 underline">
+                {mostrarVariaveis ? 'ocultar variáveis' : 'variáveis disponíveis'}
+              </button>
+              {mostrarVariaveis && (
+                <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
+                  {[...VARIAVEIS_NATIVAS[familia], ...VARIAVEIS_DO_PAVIMENTO].map((v) => `${v.nome} (${v.unidade})`).join(' · ')}
+                  {daFamilia.length > 0 ? ` · parâmetros: ${daFamilia.map((d) => d.chave).join(', ')}` : ''}
+                  {' · '}medidas em metro também existem em mm: largura_mm, altura_mm… · funções: se, min, max, arred, piso, teto, raiz, pot, abs, texto, numero, vazio.
+                </p>
+              )}
+            </div>
+          )}
           <p className="text-[10px] text-slate-400">Chave de programa: <code>{nova.nome.trim() ? chaveDeParametroDoNome(nova.nome) : '…'}</code></p>
           <div className="flex items-center gap-1.5">
-            <button type="button" onClick={() => void salvarDefinicao()} disabled={!nova.nome.trim()} className="h-8 rounded-[6px] bg-blue-600 px-2.5 text-[13px] font-medium text-white disabled:opacity-40">
+            <button type="button" onClick={() => void salvarDefinicao()} disabled={!nova.nome.trim() || !!erroDaFormula} className="h-8 rounded-[6px] bg-blue-600 px-2.5 text-[13px] font-medium text-white disabled:opacity-40">
               Salvar definição
             </button>
             <button type="button" onClick={() => setNova(null)} className="h-8 px-1.5 text-[13px] font-medium text-slate-500">
@@ -189,6 +229,23 @@ export default function PainelParametros({ familia, pecaId, parametros, onSet }:
       )}
       {aviso && <p className="mt-1.5 text-[11px] text-emerald-700">{aviso}</p>}
       {orgTargetModal}
+    </div>
+  );
+}
+
+/** O valor CALCULADO de uma definição com fórmula — só leitura; o erro aparece no lugar do número. */
+function ValorCalculado({ definicao: d, resultado }: { definicao: DefinicaoDeParametro; resultado: { valor: ValorDeParametro | null; erro: string | null } | undefined }) {
+  const rotulo = d.unidade ? `${d.nome} (${d.unidade})` : d.nome;
+  return (
+    <div className="flex items-center justify-between gap-2 text-xs text-slate-700" title={`= ${d.formula}`} data-testid={`parametro-calculado-${d.chave}`}>
+      <span className="shrink-0">
+        {rotulo} <span className="text-[10px] text-slate-400">ƒ</span>
+      </span>
+      {resultado?.erro ? (
+        <span className="min-w-0 truncate text-right text-[11px] text-amber-700" title={resultado.erro}>{resultado.erro}</span>
+      ) : (
+        <span className="tabular-nums font-medium text-slate-800">{resultado && resultado.valor !== null ? formatarValor(resultado.valor) : '—'}</span>
+      )}
     </div>
   );
 }

@@ -334,6 +334,25 @@ genéricos).
 - Testes: `blueprintParametros` (5), goldens, editor "E1.2". Suíte 4616. App real (escritas
   bloqueadas: 14): painel no pilar, "Nova definição" derivando `fck_do_concreto_mpa`.
 
+### E1.3 — Motor de fórmulas (18/09/2026)
+- `utils/blueprintFormulas.ts` (puro, sem `eval`): léxico + descida recursiva (ou/e/não, comparações
+  incl. `=` e `<>`, `+ − * / % ^`, unário, parênteses, texto entre aspas, vírgula OU ponto decimal),
+  funções `se, min, max, abs, arred, piso, teto, raiz, pot, texto, numero, vazio`, constantes
+  `verdadeiro/falso/sim/pi`. Erros em português com coluna; variável desconhecida é erro (nunca 0
+  silencioso); divisão por zero e resultado não finito são erro. `variaveisDaPeca(model, alvo)`:
+  nativas por família em m/m²/m³ (+ irmãs `_mm`), `pavimento.pe_direito/cota/nome`, mais os
+  parâmetros gravados (a nativa vence o gravado de mesmo nome). `avaliarDefinicoes`: fórmulas em
+  ordem de dependência, ciclo acusado nas duas pontas, erro por definição. Tudo DERIVADO, nunca
+  gravado.
+- Definição ganhou `formula` (a coluna reservada na E1.2); painel mostra a definição com fórmula
+  como valor calculado (ƒ, tooltip com a fórmula, erro em âmbar no lugar do número); "Nova
+  definição" tem campo de fórmula com sintaxe conferida ao digitar, botão travado no erro e a lista
+  de variáveis da família.
+- Fora desta fase: fórmula nas saídas (IFC/planilha exportam só o gravado — calculado é da E1.5),
+  edição de fórmula existente (recriar com o mesmo nome substitui).
+- Testes: `blueprintFormulas` (9), editor "E1.3". Suíte 4626. App real (escritas bloqueadas: 14):
+  "Faltou ")" fechando arred( (col. 27)" trava o salvar; corrigida, libera; lista de variáveis.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

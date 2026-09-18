@@ -606,6 +606,39 @@ describe('BlueprintEditor · quantitativos', () => {
     listParameterDefinitions.mockResolvedValue([]);
   });
 
+  it('fórmulas (E1.3): a definição com fórmula aparece calculada a partir da geometria e dos parâmetros; fórmula quebrada mostra o erro; a nova definição valida a sintaxe', async () => {
+    listParameterDefinitions.mockResolvedValue([
+      { id: 'pd_1', organizationId: 'org_1', chave: 'custo_m3', nome: 'Custo do concreto', familia: 'structural', tipo: 'NUMERO', unidade: 'R$/m³', opcoes: [], compartilhado: true, formula: '', active: true },
+      { id: 'pd_2', organizationId: 'org_1', chave: 'custo', nome: 'Custo da peça', familia: 'structural', tipo: 'NUMERO', unidade: 'R$', opcoes: [], compartilhado: true, formula: 'arred(volume * custo_m3, 2)', active: true },
+      { id: 'pd_3', organizationId: 'org_1', chave: 'quebrada', nome: 'Quebrada', familia: 'structural', tipo: 'NUMERO', unidade: '', opcoes: [], compartilhado: true, formula: 'volume / zero', active: true },
+    ]);
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    // Pilar 20×40×2,80 = 0,224 m³.
+    const r = k.applyCommand(nivel.model, { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(3000, 1500)], larguraMm: 200, profundidadeMm: 400, alturaMm: 2800 });
+    loadBranchModel.mockResolvedValue(
+      k.applyCommand(r.model, { type: 'SetParametros', familia: 'structural', id: r.diff.created[0], valores: { custo_m3: 1000 } }).model,
+    );
+    await montar();
+    const user = userEvent.setup();
+    await abrirComponentes(user);
+    await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
+    const painel = await screen.findByTestId('painel-parametros');
+    const custo = await within(painel).findByTestId('parametro-calculado-custo');
+    expect(custo).toHaveTextContent('224'); // 0,224 × 1000
+    expect(custo).toHaveAttribute('title', '= arred(volume * custo_m3, 2)');
+    expect(within(painel).getByTestId('parametro-calculado-quebrada')).toHaveTextContent(/Variável desconhecida "zero"/);
+    // Nova definição com fórmula errada: o botão trava e o erro aponta a coluna.
+    await user.click(within(painel).getByRole('button', { name: /nova definição/i }));
+    await user.type(screen.getByLabelText(/Nome da nova definição/), 'Teste');
+    await user.type(screen.getByLabelText(/Fórmula da nova definição/), 'volume * (2');
+    expect(screen.getByTestId('painel-parametros')).toHaveTextContent(/Faltou "\)"/);
+    expect(screen.getByRole('button', { name: /salvar definição/i })).toBeDisabled();
+    await user.keyboard('{Escape}');
+    listParameterDefinitions.mockResolvedValue([]);
+  });
+
   it('clash arquitetônico (E0.4): pilar no vão da porta entra em Conflitos, conta no botão e o clique seleciona a porta', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });

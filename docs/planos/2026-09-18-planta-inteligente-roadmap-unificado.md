@@ -418,6 +418,28 @@ telhado; fórmulas nas saídas).
 72c965ce · E1.5 esta). Kernel 0.35.0. Próxima: **E2.1 — pavimento tipo** (`Level.tipoDeId` +
 propagação; bump).
 
+### E2.1 — Pavimento tipo (18/09/2026) · kernel 0.36.0
+- **Decisão**: cópia viva MATERIALIZADA, não derivada em leitura. `Level.tipoDeId` marca o
+  pavimento cópia; ao fim de TODO comando (cauda de `aplicarSemHash`),
+  `sincronizarPavimentosVinculados` reconcilia paredes, aberturas, estrutura, telhado e etiquetas a
+  partir do tipo, com **uid determinístico** por (pavimento, peça de origem) e o MESMO id quando a
+  cópia já existe (seleção e histórico não pulam; o pilar do 3º andar é o mesmo GUID no IFC).
+  Idempotente — hash estável. Por isso canvas, quantitativos, IFC e navegador não precisaram
+  saber de nada. Instalações NÃO são copiadas (são por pavimento e têm lançamento automático).
+- Editar arquitetura/estrutura na cópia é recusado ANTES de aplicar (`LEVEL_LINKED`: "é cópia do
+  pavimento tipo X: edite o tipo (a edição propaga) ou desvincule"); instalações e as
+  propriedades do pavimento seguem livres. Sem corrente de tipos (invariante); remover o tipo
+  desvincula os dependentes e as cópias ficam. Vincular um pavimento já desenhado descarta o que
+  ele tinha (avisado na tela).
+- Kernel: `AddLevel.tipoDeId`, `SetLevelProps.tipoDeId` (null desvincula), canônico `Level.tipoDe`
+  por índice; bump 0.35.0 → 0.36.0 (goldens provados em 0.35.0 com 262 testes e recapturados).
+- UI: Pavimentos › Ações: "Repetir como pavimento tipo…" (N cópias vivas acima do topo),
+  "Vincular a um tipo…", "Desvincular do tipo"; linha diz "cópia de X — edite lá, propaga aqui" /
+  "pavimento tipo de N"; faixa no canvas do pavimento cópia com "editar o tipo" e "desvincular".
+- Testes: `blueprintPavimentoTipo` (4), goldens, editor "E2.1". Suíte 4646. App real (escritas
+  bloqueadas: 16): "Repetir 2" → Térreo 1/2 com 7 paredes, faixa, e a parede desenhada na cópia
+  recusada com a mensagem do kernel.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

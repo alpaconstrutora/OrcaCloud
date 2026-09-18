@@ -62,6 +62,7 @@ import {
   type FamiliaRestringivel,
   type Parametros,
   type ValorDeParametro,
+  type Level,
 } from './model';
 import {
   type AlinhamentoParede,
@@ -73,10 +74,11 @@ import {
 } from './geom';
 import { recomputeSpaces } from './arrangement';
 import { snapshotHash } from './canonical';
-import { novoUid, type ElementUid } from './identity';
+import { novoUid, uidDeterministico, type ElementUid } from './identity';
 
 export type Command =
-  | { type: 'AddLevel'; name: string; elevationMm: number; defaultHeightMm: number }
+  /** `tipoDeId`: nasce vinculado a este pavimento tipo (E2.1). */
+  | { type: 'AddLevel'; name: string; elevationMm: number; defaultHeightMm: number; tipoDeId?: ObjectId }
   | {
       type: 'AddWall';
       levelId: ObjectId;
@@ -819,6 +821,12 @@ export type Command =
       name?: string;
       elevationMm?: number;
       defaultHeightMm?: number;
+      /**
+       * PAVIMENTO TIPO (E2.1): id do tipo para vincular, `null` para desvincular
+       * (as cópias ficam, agora editáveis). Vincular DESCARTA o que o pavimento
+       * tinha de arquitetura/estrutura — ele passa a ser a cópia do tipo.
+       */
+      tipoDeId?: ObjectId | null;
     }
   /**
    * Remove um pavimento E tudo que vive nele (paredes, aberturas, limites,
@@ -934,17 +942,20 @@ function aplicarSemHash(
   command: Command,
 ): { model: BlueprintModel; diff: Diff } {
   const next = cloneModel(model);
+  recusarEdicaoEmPavimentoVinculado(model, command);
   const diff = emptyDiff();
 
   switch (command.type) {
     case 'AddLevel': {
       const id = nextId(next, 'lvl');
+      if (command.tipoDeId !== undefined) findLevel(next, command.tipoDeId);
       next.levels.push({
         id,
         uid: novoUid(),
         name: command.name,
         elevationMm: command.elevationMm,
         defaultHeightMm: command.defaultHeightMm,
+        ...(command.tipoDeId !== undefined ? { tipoDeId: command.tipoDeId } : {}),
       });
       diff.created.push(id);
       break;
@@ -2899,6 +2910,17 @@ function aplicarSemHash(
         level.defaultHeightMm = altura;
       }
       diff.updated.push(level.id);
+      if (command.tipoDeId !== undefined) {
+        if (command.tipoDeId === null) {
+          delete level.tipoDeId;
+        } else {
+          if (command.tipoDeId === level.id) throw new KernelError('BAD_LEVEL_LINK', 'Um pavimento não pode ser tipo de si mesmo');
+          const tipo = findLevel(next, command.tipoDeId);
+          if (tipo.tipoDeId !== undefined) throw new KernelError('BAD_LEVEL_LINK', `"${tipo.name}" já é cópia de outro pavimento — vincule ao tipo dele`);
+          if (next.levels.some((l) => l.tipoDeId === level.id)) throw new KernelError('BAD_LEVEL_LINK', `"${level.name}" é tipo de outros pavimentos — desvincule-os antes`);
+          level.tipoDeId = command.tipoDeId;
+        }
+      }
       break;
     }
 
@@ -2907,6 +2929,8 @@ function aplicarSemHash(
       if (next.levels.length <= 1) {
         throw new KernelError('LAST_LEVEL', 'Não dá para remover o único pavimento');
       }
+      // O tipo some: os pavimentos que o copiavam ficam SOLTOS, com as cópias.
+      for (const l of next.levels) if (l.tipoDeId === level.id) delete l.tipoDeId;
       const paredesDoNivel = new Set(
         next.walls.filter((w) => w.levelId === level.id).map((w) => w.id),
       );
@@ -3178,6 +3202,8 @@ function aplicarSemHash(
     }
   }
 
+  // PAVIMENTO TIPO (E2.1): as cópias vivas se re-derivam do tipo.
+  sincronizarPavimentosVinculados(next, diff);
   // Restrição sem alvo ou referência viva some com o comando que os apagou.
   diff.deleted.push(...limparRestricoesOrfas(next));
   recomputeSpaces(next);
@@ -3342,4 +3368,227 @@ export function applyBatch(model: BlueprintModel, commands: Command[]): CommandR
   }
 
   return { model: current, diff: merged, hash: snapshotHash(current) };
+}
+
+
+// ─── PAVIMENTO TIPO (E2.1) ───────────────────────────────────────────────────
+
+const FAMILIAS_SINCRONIZADAS = ['wall', 'opening', 'structural', 'roof', 'label'] as const;
+
+/** Uid determinístico da cópia de `srcUid` no pavimento vinculado `nivelUid`. */
+function uidDaCopia(nivelUid: ElementUid, srcUid: ElementUid): ElementUid {
+  return uidDeterministico(`vinculo:${nivelUid}:${srcUid}`);
+}
+
+/**
+ * Recusa comandos que editam ARQUITETURA/ESTRUTURA de um pavimento vinculado:
+ * a edição seria desfeita pela sincronização na cauda, e "não aconteceu nada"
+ * é pior que uma mensagem. Instalações, pavimentos, eixos e restrições passam.
+ */
+function recusarEdicaoEmPavimentoVinculado(model: BlueprintModel, command: Command): void {
+  const vinculados = new Map(model.levels.filter((l) => l.tipoDeId !== undefined).map((l) => [l.id, l]));
+  if (vinculados.size === 0) return;
+  const c = command as Record<string, unknown> & { type: string };
+  const nivelDe = (levelId: string | undefined): Level | null => (levelId && vinculados.get(levelId)) || null;
+  const daParede = (id: unknown) => nivelDe(model.walls.find((w) => w.id === id)?.levelId);
+  const daAbertura = (id: unknown) => daParede(model.openings.find((o) => o.id === id)?.wallId);
+  const daEstrutura = (id: unknown) => nivelDe(model.structures.find((s) => s.id === id)?.levelId);
+  const daAgua = (id: unknown) => nivelDe((model.roofs ?? []).find((r) => r.id === id)?.levelId);
+  const daEtiqueta = (id: unknown) => nivelDe((model.labels ?? []).find((l) => l.id === id)?.levelId);
+  const doAmbiente = (id: unknown) => nivelDe(model.spaces.find((x) => x.id === id)?.levelId);
+  let alvo: Level | null = null;
+  switch (c.type) {
+    case 'AddWall':
+    case 'AddOpening':
+    case 'AddStructural':
+    case 'AddAgua':
+    case 'DuplicateEntities':
+      alvo = c.type === 'AddOpening' ? daParede(c.wallId) : nivelDe(c.levelId as string);
+      break;
+    case 'MoveVertex':
+    case 'SetThickness':
+    case 'SetWallLayers':
+    case 'SplitWall':
+    case 'DeleteWall':
+    case 'SetCedeSobreposicao':
+    case 'CutWallAtStructural':
+      alvo = daParede(c.wallId);
+      break;
+    case 'MergeWalls':
+      alvo = daParede(c.firstId);
+      break;
+    case 'MoveOpening':
+    case 'FlipOpening':
+    case 'SetOpeningSize':
+    case 'SetOpeningKind':
+    case 'SetOpeningEsquadria':
+    case 'DeleteOpening':
+      alvo = daAbertura(c.openingId);
+      break;
+    case 'SetStructuralProps':
+    case 'SetStructuralKind':
+    case 'MoveStructuralVertex':
+    case 'DeleteStructural':
+      alvo = daEstrutura(c.structuralId);
+      break;
+    case 'SetAguaProps':
+    case 'MoveAguaVertex':
+    case 'DeleteAgua':
+      alvo = daAgua(c.aguaId);
+      break;
+    case 'NameSpace':
+      alvo = doAmbiente(c.spaceId);
+      break;
+    case 'SetSpaceLabelProps':
+      alvo = daEtiqueta(c.labelId);
+      break;
+    case 'TranslateEntities':
+    case 'MirrorEntities':
+    case 'RotateEntities':
+      alvo = daParede((c.wallIds as string[])[0]) ?? daEstrutura((c.structuralIds as string[])[0]) ?? daAgua(((c.aguaIds as string[] | undefined) ?? [])[0]);
+      break;
+    case 'SetParametros': {
+      const f = c.familia as string;
+      alvo = f === 'wall' ? daParede(c.id) : f === 'opening' ? daAbertura(c.id) : f === 'structural' ? daEstrutura(c.id) : f === 'roof' ? daAgua(c.id) : null;
+      break;
+    }
+    default:
+      alvo = null;
+  }
+  if (alvo) {
+    const tipo = model.levels.find((l) => l.id === alvo!.tipoDeId);
+    throw new KernelError(
+      'LEVEL_LINKED',
+      `"${alvo.name}" é cópia do pavimento tipo "${tipo?.name ?? alvo.tipoDeId}": edite o tipo (a edição propaga) ou desvincule o pavimento`,
+    );
+  }
+}
+
+/**
+ * Re-deriva paredes, aberturas, estrutura, telhado e etiquetas de cada
+ * pavimento vinculado a partir do tipo. Reconciliação por uid determinístico:
+ * a cópia que já existe é ATUALIZADA (mesmo id — seleção e histórico não
+ * pulam), a nova nasce, a órfã some. Idempotente: rodar duas vezes não muda
+ * nada, e o payload canônico é o mesmo em qualquer ordem de comandos.
+ */
+export function sincronizarPavimentosVinculados(next: BlueprintModel, diff: Diff): void {
+  const vinculados = next.levels.filter((l) => l.tipoDeId !== undefined);
+  if (vinculados.length === 0) return;
+  const tocar = (lista: ObjectId[], id: ObjectId) => {
+    if (!lista.includes(id)) lista.push(id);
+  };
+  for (const nivel of vinculados) {
+    const tipo = next.levels.find((l) => l.id === nivel.tipoDeId);
+    if (!tipo) continue;
+    // ── paredes ──
+    const paredesDoTipo = next.walls.filter((w) => w.levelId === tipo.id);
+    const paredesDaCopia = new Map(next.walls.filter((w) => w.levelId === nivel.id).map((w) => [w.uid, w]));
+    const dePara = new Map<ObjectId, ObjectId>();
+    const uidsEsperados = new Set<ElementUid>();
+    for (const w of paredesDoTipo) {
+      const uid = uidDaCopia(nivel.uid, w.uid);
+      uidsEsperados.add(uid);
+      const existente = paredesDaCopia.get(uid);
+      const campos = {
+        a: { ...w.a },
+        b: { ...w.b },
+        thicknessMm: w.thicknessMm,
+        heightMm: w.heightMm,
+        ...(w.alinhamento ? { alinhamento: w.alinhamento } : {}),
+        ...(w.cedeSobreposicao ? { cedeSobreposicao: true } : {}),
+        ...(w.camadas ? { camadas: clonarCamadas(w.camadas)! } : {}),
+        ...(w.parametros ? { parametros: { ...w.parametros } } : {}),
+      };
+      if (existente) {
+        Object.assign(existente, { ...campos, alinhamento: campos.alinhamento, cedeSobreposicao: campos.cedeSobreposicao, camadas: campos.camadas, parametros: campos.parametros });
+        for (const k of ['alinhamento', 'cedeSobreposicao', 'camadas', 'parametros'] as const) if (existente[k] === undefined) delete existente[k];
+        dePara.set(w.id, existente.id);
+        tocar(diff.updated, existente.id);
+      } else {
+        const id = nextId(next, 'wal');
+        next.walls.push({ id, uid, levelId: nivel.id, ...campos });
+        dePara.set(w.id, id);
+        tocar(diff.created, id);
+      }
+    }
+    for (const w of [...paredesDaCopia.values()]) {
+      if (uidsEsperados.has(w.uid)) continue;
+      next.walls = next.walls.filter((x) => x.id !== w.id);
+      const orfas = next.openings.filter((o) => o.wallId === w.id).map((o) => o.id);
+      next.openings = next.openings.filter((o) => o.wallId !== w.id);
+      tocar(diff.deleted, w.id);
+      for (const id of orfas) tocar(diff.deleted, id);
+    }
+    // ── aberturas ──
+    const idsDeParedeDoTipo = new Set(paredesDoTipo.map((w) => w.id));
+    const idsDeParedeDaCopia = new Set([...dePara.values()]);
+    const aberturasDaCopia = new Map(next.openings.filter((o) => idsDeParedeDaCopia.has(o.wallId)).map((o) => [o.uid, o]));
+    const uidsAbertura = new Set<ElementUid>();
+    for (const o of next.openings.filter((x) => idsDeParedeDoTipo.has(x.wallId))) {
+      const uid = uidDaCopia(nivel.uid, o.uid);
+      uidsAbertura.add(uid);
+      const { id: _id, uid: _uid, wallId: _w, ...resto } = o;
+      const campos = { ...resto, wallId: dePara.get(o.wallId)!, ...(o.esquadria ? { esquadria: { ...o.esquadria } } : {}), ...(o.parametros ? { parametros: { ...o.parametros } } : {}) };
+      const existente = aberturasDaCopia.get(uid);
+      if (existente) {
+        Object.assign(existente, campos);
+        if (!o.esquadria) delete existente.esquadria;
+        if (!o.parametros) delete existente.parametros;
+        tocar(diff.updated, existente.id);
+      } else {
+        const id = nextId(next, 'opn');
+        next.openings.push({ id, uid, ...campos });
+        tocar(diff.created, id);
+      }
+    }
+    for (const o of [...aberturasDaCopia.values()]) {
+      if (uidsAbertura.has(o.uid)) continue;
+      next.openings = next.openings.filter((x) => x.id !== o.id);
+      tocar(diff.deleted, o.id);
+    }
+    // ── estrutura, telhado, etiquetas: mesma reconciliação, por família ──
+    const sincronizarLista = <T extends { id: ObjectId; uid: ElementUid; levelId: ObjectId }>(
+      lista: T[],
+      prefixo: string,
+      copiar: (src: T) => Omit<T, 'id' | 'uid' | 'levelId'>,
+    ): T[] => {
+      const doTipo = lista.filter((x) => x.levelId === tipo.id);
+      const daCopia = new Map(lista.filter((x) => x.levelId === nivel.id).map((x) => [x.uid, x]));
+      const esperados = new Set<ElementUid>();
+      let saida = lista;
+      for (const src of doTipo) {
+        const uid = uidDaCopia(nivel.uid, src.uid);
+        esperados.add(uid);
+        const campos = copiar(src);
+        const existente = daCopia.get(uid);
+        if (existente) {
+          for (const k of Object.keys(existente)) if (!['id', 'uid', 'levelId'].includes(k) && !(k in campos)) delete (existente as Record<string, unknown>)[k];
+          Object.assign(existente, campos);
+          tocar(diff.updated, existente.id);
+        } else {
+          const id = nextId(next, prefixo);
+          saida = [...saida, { id, uid, levelId: nivel.id, ...campos } as T];
+          tocar(diff.created, id);
+        }
+      }
+      for (const x of [...daCopia.values()]) {
+        if (esperados.has(x.uid)) continue;
+        saida = saida.filter((y) => y.id !== x.id);
+        tocar(diff.deleted, x.id);
+      }
+      return saida;
+    };
+    next.structures = sincronizarLista(next.structures, 'str', (s) => {
+      const { id: _i, uid: _u, levelId: _l, ...resto } = s;
+      return { ...resto, pontos: s.pontos.map((p) => ({ ...p })), ...(s.parametros ? { parametros: { ...s.parametros } } : {}) };
+    });
+    next.roofs = sincronizarLista(next.roofs ?? [], 'agu', (r) => {
+      const { id: _i, uid: _u, levelId: _l, ...resto } = r;
+      return { ...resto, pontos: r.pontos.map((p) => ({ ...p })), ...(r.parametros ? { parametros: { ...r.parametros } } : {}) };
+    });
+    next.labels = sincronizarLista(next.labels ?? [], 'lbl', (l) => {
+      const { id: _i, uid: _u, levelId: _l, ...resto } = l;
+      return { ...resto, at: { ...l.at } };
+    });
+  }
 }

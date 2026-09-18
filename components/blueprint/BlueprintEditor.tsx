@@ -1466,6 +1466,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     if (nivelAtivoId && ids.includes(nivelAtivoId)) return nivelAtivoId;
     return ids[0] ?? null;
   }, [editor.model.levels, nivelAtivoId]);
+  /** O pavimento ativo, quando é cópia viva de um tipo (E2.1). */
+  const nivelAtivoVinculado = useMemo(() => {
+    const l = editor.model.levels.find((x) => x.id === levelId);
+    const tipo = l?.tipoDeId ? editor.model.levels.find((x) => x.id === l.tipoDeId) : null;
+    return l && tipo ? { id: l.id, name: l.name, tipo } : null;
+  }, [editor.model.levels, levelId]);
 
   // Persiste o nível resolvido quando ele diverge do guardado (remoção, primeira
   // abertura do estudo).
@@ -7958,6 +7964,28 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           "Sem perguntar" foi decisão do usuário; "sem contar" seria outra coisa —
           o editor teria movido parede dele e nada na tela diria isso. AZUL, e não
           âmbar: não é problema pendente, é trabalho já feito. */}
+      {/* PAVIMENTO TIPO (E2.1): no pavimento cópia, a arquitetura é do tipo —
+          a faixa diz isso antes que o kernel recuse o primeiro clique. */}
+      {nivelAtivoVinculado && (
+        <div role="status" data-testid="faixa-pavimento-vinculado" className="flex items-start gap-2 border-b border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800">
+          <Layers className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="flex-1">
+            <strong>{nivelAtivoVinculado.name}</strong> é cópia viva do pavimento tipo <strong>{nivelAtivoVinculado.tipo.name}</strong>: paredes, esquadrias,
+            estrutura e telhado se editam no tipo e propagam para cá. Instalações e as propriedades do pavimento são próprias.
+          </span>
+          <button type="button" onClick={() => setNivelAtivoId(nivelAtivoVinculado.tipo.id)} className="shrink-0 text-xs font-medium underline">
+            editar o tipo
+          </button>
+          <button
+            type="button"
+            onClick={() => editor.run({ type: 'SetLevelProps', levelId: nivelAtivoVinculado.id, tipoDeId: null })}
+            className="shrink-0 text-xs font-medium underline"
+          >
+            desvincular
+          </button>
+        </div>
+      )}
+
       {/* A VISTA DE PLANTA se anuncia (E0.3): qual é, o que esconde e em que
           pavimento — senão a pessoa procura a porta que "sumiu". */}
       {ajusteDaVista && (

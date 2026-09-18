@@ -48,6 +48,25 @@ export interface Level {
   name: string;
   elevationMm: number;
   defaultHeightMm: number;
+  /**
+   * PAVIMENTO TIPO (18/09/2026, roadmap E2.1: *"Pavimento tipo · Repetir
+   * pavimentos · Editar pavimento tipo e propagar — P0"*).
+   *
+   * Presente = este pavimento é CÓPIA VIVA do pavimento `tipoDeId`: paredes,
+   * aberturas, estrutura, telhado e etiquetas dele são re-derivadas ao fim de
+   * TODO comando (`sincronizarPavimentosVinculados`), com uid determinístico
+   * por (pavimento, peça de origem) — o mesmo pilar do 3º andar é o mesmo GUID
+   * no IFC da revisão seguinte. Editar essas peças aqui é recusado
+   * (`LEVEL_LINKED`): edita-se o tipo, e a edição propaga.
+   *
+   * As INSTALAÇÕES não são copiadas: colunas, quadros e circuitos são por
+   * pavimento de qualquer forma, e o lançamento automático já os faz por andar.
+   * Cota, pé-direito e nome continuam próprios do pavimento vinculado.
+   *
+   * Sem corrente: o tipo não pode ser ele mesmo vinculado (invariante), e
+   * remover o tipo DESVINCULA os dependentes — as cópias ficam, agora soltas.
+   */
+  tipoDeId?: ObjectId;
 }
 
 /**
@@ -2769,6 +2788,14 @@ export function assertModelInvariants(model: BlueprintModel): void {
   // caminho de criação do kernel o preenche), mas modelo construído à mão em
   // teste não passa pelos comandos. Na serialização ele sai como `null` e a
   // leitura deriva um — degradação conhecida, nunca silêncio sobre duplicata.
+  // Pavimento tipo (E2.1): o tipo existe, não é ele mesmo, e não é vinculado (sem corrente).
+  for (const l of model.levels) {
+    if (l.tipoDeId === undefined) continue;
+    if (l.tipoDeId === l.id) throw new KernelError('BAD_LEVEL_LINK', `Pavimento ${l.id} vinculado a si mesmo`);
+    const tipo = model.levels.find((x) => x.id === l.tipoDeId);
+    if (!tipo) throw new KernelError('BAD_LEVEL_LINK', `Pavimento ${l.id} vinculado a pavimento inexistente ${l.tipoDeId}`);
+    if (tipo.tipoDeId !== undefined) throw new KernelError('BAD_LEVEL_LINK', `Pavimento ${l.id}: o tipo ${tipo.id} também é vinculado — não há corrente de tipos`);
+  }
   const uids = new Set<ElementUid>();
   const familias: [string, { id: ObjectId; uid?: ElementUid }[]][] = [
     ['Pavimento', model.levels],

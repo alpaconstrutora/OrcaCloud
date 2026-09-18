@@ -727,6 +727,39 @@ describe('BlueprintEditor · quantitativos', () => {
     listParameterDefinitions.mockResolvedValue([]);
   });
 
+  it('pavimento tipo (E2.1): "Repetir" cria cópias vivas com as paredes, a lista diz "cópia de", a faixa aparece no andar e "desvincular" a remove', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [
+        { type: 'AddWall', levelId: t, a: k.point(0, 0), b: k.point(6000, 0), thicknessMm: 150, heightMm: 2800 },
+        { type: 'AddWall', levelId: t, a: k.point(6000, 0), b: k.point(6000, 4000), thicknessMm: 150, heightMm: 2800 },
+      ]).model,
+    );
+    await montar();
+    const user = userEvent.setup();
+    // Menu de ações do Térreo → Repetir como pavimento tipo… → 2 cópias.
+    await user.click(screen.getByRole('button', { name: 'Ações de Térreo' }));
+    await user.click(screen.getByRole('menuitem', { name: /repetir como pavimento tipo/i }));
+    const quantas = screen.getByLabelText('Quantas cópias de Térreo') as HTMLInputElement;
+    await user.clear(quantas);
+    await user.type(quantas, '2');
+    await user.click(screen.getByRole('button', { name: /^repetir$/i }));
+    expect(await screen.findByRole('radio', { name: 'Editar Térreo 1' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Editar Térreo 2' })).toBeInTheDocument();
+    expect(screen.getAllByText(/cópia de/)).toHaveLength(2);
+    expect(screen.getByText(/pavimento tipo de 2 pavimento/)).toBeInTheDocument();
+    // A cópia tem as 2 paredes; a faixa aparece ao ativá-la; "desvincular" a tira.
+    await user.click(screen.getByRole('radio', { name: 'Editar Térreo 1' }));
+    const faixa = await screen.findByTestId('faixa-pavimento-vinculado');
+    expect(faixa).toHaveTextContent(/Térreo 1.*cópia viva do pavimento tipo.*Térreo/);
+    expect(screen.getByText(/Térreo 1/, { selector: 'p' }).parentElement).toHaveTextContent(/2 parede\(s\)/);
+    await user.click(within(faixa).getByRole('button', { name: /^desvincular$/i }));
+    expect(screen.queryByTestId('faixa-pavimento-vinculado')).toBeNull();
+    expect(screen.getAllByText(/cópia de/)).toHaveLength(1);
+  });
+
   it('clash arquitetônico (E0.4): pilar no vão da porta entra em Conflitos, conta no botão e o clique seleciona a porta', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });

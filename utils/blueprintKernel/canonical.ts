@@ -131,13 +131,20 @@ function projetar(model: BlueprintModel): {
 } {
   // Níveis em ordem canônica, e o índice de cada um. Igual às paredes: o payload
   // referencia POSIÇÃO, não identificador.
-  const levels = ordenar(
+  // Dois passos: primeiro a ordem (sem o vínculo), depois o vínculo por ÍNDICE
+  // nessa ordem — o pavimento tipo (0.36.0) referencia outro pavimento, e a
+  // referência canônica é sempre posição, nunca id.
+  const ordemDosNiveis = ordenar(
     model.levels,
     (l) => ({ name: l.name, elevationMm: l.elevationMm, defaultHeightMm: l.defaultHeightMm }),
     (a, b) => a.elevationMm - b.elevationMm || a.name.localeCompare(b.name),
   );
-  const levelIndex = new Map(levels.map((l, i) => [l.item.id, i]));
+  const levelIndex = new Map(ordemDosNiveis.map((l, i) => [l.item.id, i]));
   const nivel = (levelId: string) => levelIndex.get(levelId) ?? 0;
+  const levels = ordemDosNiveis.map((l) => ({
+    ...l,
+    geom: { ...l.geom, tipoDe: l.item.tipoDeId !== undefined ? nivel(l.item.tipoDeId) : undefined },
+  }));
 
   // Ordem geométrica, não ordem de criação: duas sessões que desenham as mesmas
   // paredes em ordens diferentes precisam produzir o mesmo payload.
@@ -757,7 +764,7 @@ export interface CanonicalPayload {
     rotacaoNorteDeg?: number;
     projetada?: { lesteM: number; norteM: number; crs: string };
   };
-  levels: { name: string; elevationMm: number; defaultHeightMm: number }[];
+  levels: { name: string; elevationMm: number; defaultHeightMm: number; /** Índice do pavimento TIPO (0.36.0); ausente = pavimento próprio. */ tipoDe?: number }[];
   walls: {
     level: number;
     a: { x: number; y: number };
@@ -1068,6 +1075,10 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       defaultHeightMm: l.defaultHeightMm,
     });
     return id;
+  });
+  // O vínculo do pavimento tipo, DEPOIS de todos existirem (é índice na lista).
+  payload.levels.forEach((l, i) => {
+    if (l.tipoDe !== undefined && levelIds[l.tipoDe] && l.tipoDe !== i) model.levels[i].tipoDeId = levelIds[l.tipoDe];
   });
 
   const wallIds = payload.walls.map((w, i) => {

@@ -12,7 +12,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Copy, MoreVertical, Pencil, Trash2, Check, X } from 'lucide-react';
+import { Copy, MoreVertical, Pencil, Trash2, Check, X, Layers, Link2, Unlink } from 'lucide-react';
 import type { BlueprintModel, Command, Level } from '../../utils/blueprintKernel';
 import { useConfirm } from '../ui/confirm';
 
@@ -234,6 +234,30 @@ export default function PainelPavimentos({
     ? Math.max(...model.levels.map((l) => l.elevationMm + l.defaultHeightMm))
     : 0;
   const paredesDe = (id: string) => model.walls.filter((w) => w.levelId === id).length;
+  /** PAVIMENTO TIPO (E2.1): quem é cópia de quem, e quantos copiam cada um. */
+  const nomeDe = (id: string | undefined) => model.levels.find((l) => l.id === id)?.name ?? '?';
+  const copiasDe = (id: string) => model.levels.filter((l) => l.tipoDeId === id).length;
+  const [repetindo, setRepetindo] = useState<string | null>(null);
+  const [quantasRepeticoes, setQuantasRepeticoes] = useState('3');
+  const [vinculando, setVinculando] = useState<string | null>(null);
+  /** N cópias vivas acima do topo, uma sobre a outra, com o pé-direito do tipo. */
+  const repetir = (l: Level) => {
+    const n = Math.max(1, Math.min(60, Math.floor(Number(quantasRepeticoes)) || 1));
+    const lote: Command[] = [];
+    let cota = topoMm;
+    const jaTem = copiasDe(l.id);
+    for (let k = 1; k <= n; k++) {
+      lote.push({ type: 'AddLevel', name: `${l.name} ${jaTem + k}`, elevationMm: cota, defaultHeightMm: l.defaultHeightMm, tipoDeId: l.id });
+      cota += l.defaultHeightMm;
+    }
+    for (const c of lote) run(c);
+    setRepetindo(null);
+  };
+  const vincular = (l: Level, tipoId: string) => {
+    run({ type: 'SetLevelProps', levelId: l.id, tipoDeId: tipoId });
+    setVinculando(null);
+  };
+  const desvincular = (l: Level) => run({ type: 'SetLevelProps', levelId: l.id, tipoDeId: null });
 
   const alternarVisivel = (id: string) => {
     const tem = niveisVisiveis.includes(id);
@@ -344,12 +368,76 @@ export default function PainelPavimentos({
                   cota {mmParaM(l.elevationMm)} m · pé-direito {mmParaM(l.defaultHeightMm)} m ·{' '}
                   {paredesDe(l.id)} parede(s)
                 </p>
+                {/* PAVIMENTO TIPO (E2.1): a cópia diz de quem é; o tipo diz quantos o copiam. */}
+                {l.tipoDeId !== undefined && (
+                  <p className="mt-0.5 flex items-center gap-1 text-[11px] text-blue-700" data-testid={`vinculo-${l.id}`}>
+                    <Link2 className="h-3 w-3" /> cópia de <strong>{nomeDe(l.tipoDeId)}</strong> — edite lá, propaga aqui
+                  </p>
+                )}
+                {copiasDe(l.id) > 0 && (
+                  <p className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-600" data-testid={`tipo-${l.id}`}>
+                    <Layers className="h-3 w-3" /> pavimento tipo de {copiasDe(l.id)} pavimento(s)
+                  </p>
+                )}
+                {repetindo === l.id && (
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <input
+                      autoFocus
+                      value={quantasRepeticoes}
+                      onChange={(e) => setQuantasRepeticoes(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') repetir(l);
+                        if (e.key === 'Escape') setRepetindo(null);
+                      }}
+                      inputMode="numeric"
+                      aria-label={`Quantas cópias de ${l.name}`}
+                      className="h-7 w-14 rounded-[6px] border border-slate-200 bg-white px-2 text-xs"
+                    />
+                    <span className="text-[11px] text-slate-500">cópias vivas acima do topo</span>
+                    <button type="button" onClick={() => repetir(l)} className="h-7 rounded-[6px] bg-blue-600 px-2 text-[12px] font-medium text-white">
+                      Repetir
+                    </button>
+                    <button type="button" onClick={() => setRepetindo(null)} className="h-7 px-1 text-[12px] text-slate-500">
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+                {vinculando === l.id && (
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <select
+                      autoFocus
+                      defaultValue=""
+                      onChange={(e) => e.target.value && vincular(l, e.target.value)}
+                      aria-label={`Vincular ${l.name} a um pavimento tipo`}
+                      className="h-7 rounded-[6px] border border-slate-200 bg-white px-2 text-xs"
+                    >
+                      <option value="">Vincular a…</option>
+                      {model.levels
+                        .filter((t) => t.id !== l.id && t.tipoDeId === undefined && copiasDe(l.id) === 0)
+                        .map((t) => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                    </select>
+                    <span className="text-[11px] text-amber-700">o que este pavimento tem de arquitetura e estrutura será substituído pela cópia</span>
+                    <button type="button" onClick={() => setVinculando(null)} className="h-7 px-1 text-[12px] text-slate-500">
+                      Cancelar
+                    </button>
+                  </div>
+                )}
               </div>
               <MenuAcoesNivel
                 rotulo={`Ações de ${l.name}`}
                 acoes={[
                   { chave: 'editar', rotulo: 'Editar', icone: Pencil, onClick: () => setEditando(l.id) },
                   { chave: 'duplicar', rotulo: 'Duplicar', icone: Copy, onClick: () => duplicar(l) },
+                  ...(l.tipoDeId === undefined
+                    ? [
+                        { chave: 'repetir', rotulo: 'Repetir como pavimento tipo…', icone: Layers, onClick: () => setRepetindo(l.id), ajuda: 'Cria N cópias vivas deste pavimento; editar aqui propaga a todas' },
+                        ...(copiasDe(l.id) === 0 && model.levels.some((t) => t.id !== l.id && t.tipoDeId === undefined)
+                          ? [{ chave: 'vincular', rotulo: 'Vincular a um tipo…', icone: Link2, onClick: () => setVinculando(l.id), ajuda: 'Este pavimento passa a ser cópia viva de outro' }]
+                          : []),
+                      ]
+                    : [{ chave: 'desvincular', rotulo: 'Desvincular do tipo', icone: Unlink, onClick: () => desvincular(l), ajuda: 'As cópias ficam, agora editáveis; deixam de acompanhar o tipo' }]),
                   {
                     chave: 'remover',
                     rotulo: 'Remover',

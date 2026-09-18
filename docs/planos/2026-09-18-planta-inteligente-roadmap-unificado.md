@@ -269,6 +269,28 @@ fabricação, Dynamo/marketplace, worksets/modelo central, HVAC completo, texto 
   1…"), contorno sem interiores, envelope só na implantação, "voltar à planta" devolve as
   ferramentas.
 
+### E0.4 — Clash arquitetônico (18/09/2026) · fecha a Etapa 0
+- `utils/blueprintKernel/conflitosArquitetonicos.ts` (novo): `conflitosArquitetonicos(model)` →
+  `ConflitoArquitetonico {pecaId/uid, familia opening|stair, outroId/uid, classe, levelId,
+  medidaMm, em}`. Tipo próprio porque a peça não é um trecho; mesma natureza do clash MEP
+  (pendência, nunca desconto). Regras: **vão × estrutura** = faixa da estrutura na parede
+  (`faixaDaEstruturaNaParede`, a mesma conta do desconto) cruza o vão em planta E em altura
+  (viga-verga acima da janela não é conflito); **escada × pilar** = área comum de qualquer fatia
+  com a pegada; **escada × altura livre** = viga/laje sobre o percurso com menos de 2,10 m
+  (NBR 9077, 4.6.2) entre o topo do degrau da fatia e a face inferior da peça — peça abaixo do
+  degrau não conta.
+- Painel Conflitos lista os arquitetônicos antes dos MEP (clique seleciona a peça); contagem do
+  botão e do drawer soma os dois; BCF ganha `topicosDeConflitosArquitetonicos` (mesmo `Clash`,
+  semente por par de uids, alvo no encontro).
+- Testes: `blueprintConflitosArquitetonicos` (3: pilar no vão 200 mm, verga não conflita, viga
+  baixa conflita; pilar na escada; viga no 1º degrau livre × no fim faltando altura; viga de
+  fundação não conta), editor "E0.4". Suíte 4605. App real (escritas bloqueadas: 15): parede +
+  porta + pilar no mesmo ponto → Conflitos 385 → 386, "Porta V-28E3 encontra C-4CD3 · 200 mm do
+  vão tomados pela estrutura — a esquadria não fecha".
+
+**Etapa 0 concluída** (4 fases: a02c07cb, 20aa1015, 734429f4 e esta). Próxima: E1.1 (tipos
+genéricos).
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertTriangle, CheckCircle2, Share2 } from 'lucide-react';
-import { rotuloCurto, type BlueprintModel, type Conflito } from '../../utils/blueprintKernel';
+import { rotuloCurto, type BlueprintModel, type Conflito, type ConflitoArquitetonico } from '../../utils/blueprintKernel';
+import { nomeDoTipoDeAbertura } from '../../utils/blueprintKernel';
 import { ROTULO_DA_DISCIPLINA } from '../../utils/blueprintRede';
 
 /**
@@ -18,11 +19,14 @@ import { ROTULO_DA_DISCIPLINA } from '../../utils/blueprintRede';
 export default function PainelConflitos({
   model,
   conflitos,
+  arquitetonicos = [],
   onSelecionar,
   onExportarBcf,
 }: {
   model: BlueprintModel;
   conflitos: Conflito[];
+  /** Clash arquitetônico (E0.4): vão × estrutura, escada × pilar, escada × altura livre. */
+  arquitetonicos?: ConflitoArquitetonico[];
   onSelecionar?: (id: string) => void;
   /** Leva as pendências para fora, em BCF. Ausente = o botão não aparece. */
   onExportarBcf?: () => Promise<void>;
@@ -68,15 +72,15 @@ export default function PainelConflitos({
       </p>
     </div>
   ) : null;
-  if (conflitos.length === 0) {
+  if (conflitos.length === 0 && arquitetonicos.length === 0) {
     return (
       <>
       <p className="flex items-start gap-1.5 text-[11px] text-slate-500">
         <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600" />
         <span>
-          Nenhum conflito entre instalação e estrutura, nem entre disciplinas.
+          Nenhum conflito: instalação × estrutura, entre disciplinas, pilar × vão, escada × estrutura.
           <span className="mt-0.5 block text-[10px]">
-            Cano dentro de parede <strong>não</strong> conta — é onde ele mora.
+            Cano dentro de parede e pilar dentro de parede <strong>não</strong> contam — é onde eles moram.
           </span>
         </span>
       </p>
@@ -84,6 +88,26 @@ export default function PainelConflitos({
       </>
     );
   }
+
+  /** O nome da peça arquitetônica atingida, como o navegador a chama. */
+  const nomeDaPeca = (c: ConflitoArquitetonico) => {
+    if (c.familia === 'opening') {
+      const o = model.openings.find((x) => x.id === c.pecaId);
+      return o ? `${nomeDoTipoDeAbertura(o.kind)} ${rotuloCurto(o.uid, 'opening')}` : c.pecaId;
+    }
+    const e = (model.stairs ?? []).find((x) => x.id === c.pecaId);
+    return e ? e.rotulo || `${e.tipo === 'RAMPA' ? 'Rampa' : 'Escada'} ${rotuloCurto(e.uid, 'stair')}` : c.pecaId;
+  };
+  const nomeDaEstrutura = (id: string) => {
+    const s = model.structures.find((x) => x.id === id);
+    return s ? s.rotulo || rotuloCurto(s.uid, 'structural') : id;
+  };
+  const comoArquitetonico = (c: ConflitoArquitetonico) =>
+    c.classe === 'VAO_X_ESTRUTURA'
+      ? `${c.medidaMm} mm do vão tomados pela estrutura — a esquadria não fecha`
+      : c.classe === 'ESCADA_X_PILAR'
+        ? `pilar dentro do percurso (≈ ${c.medidaMm} mm de lado em comum)`
+        : `faltam ${c.medidaMm} mm para os 2,10 m livres sobre o degrau (NBR 9077)`;
 
   const nomeDoTrecho = (id: string) => {
     const t = (model.trechos ?? []).find((x) => x.id === id);
@@ -99,6 +123,20 @@ export default function PainelConflitos({
 
   return (
     <div className="space-y-1.5">
+      {arquitetonicos.map((c) => (
+        <button
+          key={`arq-${c.pecaId}-${c.outroId}`}
+          type="button"
+          onClick={() => onSelecionar?.(c.pecaId)}
+          className="flex w-full items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-left hover:bg-amber-100"
+        >
+          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />
+          <span className="min-w-0 text-[11px] text-slate-700">
+            <strong>{nomeDaPeca(c)}</strong> encontra <strong>{nomeDaEstrutura(c.outroId)}</strong>
+            <span className="mt-0.5 block text-[10px] text-slate-500">{comoArquitetonico(c)}</span>
+          </span>
+        </button>
+      ))}
       {conflitos.map((c) => (
         <button
           key={`${c.trechoId}-${c.outroId}`}

@@ -512,6 +512,31 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(screen.getByRole('dialog')).toHaveTextContent(/conflitos/i);
   });
 
+  it('clash arquitetônico (E0.4): pilar no vão da porta entra em Conflitos, conta no botão e o clique seleciona a porta', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const r = k.applyCommand(nivel.model, { type: 'AddWall', levelId: t, a: k.point(0, 0), b: k.point(6000, 0), thicknessMm: 150, heightMm: 2800 });
+    const wallId = r.diff.created[0];
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(r.model, [
+        { type: 'AddOpening', wallId, kind: 'door', offsetMm: 1000, widthMm: 900, heightMm: 2100, sillMm: 0 },
+        { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(1800, 0)], larguraMm: 200, profundidadeMm: 200, alturaMm: 2800 },
+      ]).model,
+    );
+    await montar();
+    await abrirAba(/^analisar$/i);
+    const conflitos = screen.getByRole('button', { name: /^conflitos/i });
+    expect(conflitos).toHaveTextContent('1');
+    await userEvent.setup().click(conflitos);
+    const dialog = screen.getByRole('dialog');
+    const linha = within(dialog).getByRole('button', { name: /Porta V-.* encontra (P1|C-)/ });
+    expect(linha).toHaveTextContent(/200 mm do vão tomados/);
+    await userEvent.setup().click(linha);
+    // A porta fica selecionada (o painel de propriedades passa a falar dela).
+    expect(await screen.findByText(/abertura selecionada/i)).toBeInTheDocument();
+  });
+
   it('com estrutura, a aba Por peça lista a peça com fórmula e o clique seleciona no desenho', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });

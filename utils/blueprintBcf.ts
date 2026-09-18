@@ -1,5 +1,5 @@
 import { ifcGuidDeUid } from './blueprintIfc';
-import type { BlueprintModel, Conflito } from './blueprintKernel';
+import type { BlueprintModel, Conflito, ConflitoArquitetonico } from './blueprintKernel';
 import { rotuloCurto } from './blueprintKernel';
 
 /**
@@ -254,6 +254,38 @@ export function topicosDeConflitos(
         'eixo declarado com a bitola declarada — não há detalhamento de conexão.',
       componentes: [ifcGuidDeUid(c.trechoUid), ifcGuidDeUid(c.outroUid)],
       alvo,
+    };
+  });
+}
+
+/**
+ * Os conflitos ARQUITETÔNICOS (E0.4) virados tópicos — mesmo tipo `Clash`, mesma
+ * semente por par de uids, alvo no ponto do encontro.
+ */
+export function topicosDeConflitosArquitetonicos(
+  model: BlueprintModel,
+  conflitos: ConflitoArquitetonico[],
+  autor: string,
+  agora: Date,
+): TopicoBcf[] {
+  const elevacao = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
+  return conflitos.map((c) => {
+    const como =
+      c.classe === 'VAO_X_ESTRUTURA'
+        ? `${c.medidaMm} mm do vão tomados pela estrutura`
+        : c.classe === 'ESCADA_X_PILAR'
+          ? `pilar dentro do percurso da escada (≈ ${c.medidaMm} mm de lado em comum)`
+          : `faltam ${c.medidaMm} mm para a altura livre de 2,10 m sobre o degrau (NBR 9077)`;
+    return {
+      guid: guidDoTopico(`clash:${c.pecaUid}:${c.outroUid}`),
+      titulo: `${rotuloCurto(c.pecaUid, c.familia)} encontra ${rotuloCurto(c.outroUid, 'structural')}`,
+      tipo: 'Clash' as const,
+      status: 'Open' as const,
+      autor,
+      criadoEm: agora,
+      descricao: `Interferência entre arquitetura e estrutura: ${como}. Detectado pela Planta Inteligente do ÒPURA.`,
+      componentes: [ifcGuidDeUid(c.pecaUid), ifcGuidDeUid(c.outroUid)],
+      alvo: { x: c.em.x, y: c.em.y, z: (elevacao.get(c.levelId) ?? 0) + 1000 },
     };
   });
 }

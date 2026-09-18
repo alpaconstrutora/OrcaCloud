@@ -106,7 +106,7 @@ import PainelImportarBcf from './PainelImportarBcf';
 import PainelComentarios from './PainelComentarios';
 import { listarComentarios } from '../../services/blueprintCommentService';
 import { baixarArtefatos, exportarBcf } from '../../services/blueprintExportService';
-import { topicosDeComentarios, topicosDeConflitos } from '../../utils/blueprintBcf';
+import { topicosDeComentarios, topicosDeConflitos, topicosDeConflitosArquitetonicos } from '../../utils/blueprintBcf';
 import { PAPEIS } from '../../utils/blueprintExport';
 import { useStore } from '../../store/useStore';
 import { posicoesPorUid } from '../../utils/blueprintComentarios';
@@ -354,6 +354,7 @@ import {
   type Point,
   type StructuralKind,
   conflitosDoModelo,
+  conflitosArquitetonicos,
   type DisciplinaDeRede,
   type TipoCirculacao,
   type TipoDeAmbiente,
@@ -2230,6 +2231,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const perfil = useStore((e) => e.currentProfile);
 
   const conflitos = useMemo(() => conflitosDoModelo(editor.model), [editor.model]);
+  /** Os arquitetônicos (E0.4): pilar no vão, pilar na escada, viga baixa sobre o degrau. */
+  const conflitosArq = useMemo(() => conflitosArquitetonicos(editor.model), [editor.model]);
+  const totalDeConflitos = conflitos.length + conflitosArq.length;
 
   /**
    * O `.bcfzip` com TODA a pendência do estudo — conflitos e comentários.
@@ -2245,6 +2249,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     const agora = new Date();
     const topicos = [
       ...topicosDeConflitos(editor.model, conflitos, autor, agora),
+      ...topicosDeConflitosArquitetonicos(editor.model, conflitosArq, autor, agora),
       ...topicosDeComentarios(
         comentarios.map((c) => ({
           id: c.id,
@@ -6966,10 +6971,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               <BotaoDoRibbon
                 icone={AlertTriangle}
                 rotulo="Conflitos"
-                contagem={conflitos.length}
+                contagem={totalDeConflitos}
                 ativo={relatorioAberto === 'conflitos'}
                 onClick={() => alternarRelatorio('conflitos')}
-                ajuda="Interferências entre disciplinas e com a estrutura; exportar BCF"
+                ajuda="Interferências entre disciplinas, com a estrutura e da estrutura com vãos e escadas; exportar BCF"
               />
               {relatorioVisivel('medicoes') && (
                 <BotaoDoRibbon
@@ -10735,7 +10740,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               {RELATORIOS_DO_DOCK[relatorioNoDrawer].rotulo}
               {relatorioNoDrawer === 'conflitos' && (
                 <span className="rounded-[6px] bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-600">
-                  {conflitos.length}
+                  {totalDeConflitos}
                 </span>
               )}
               {relatorioNoDrawer === 'medicoes' && (
@@ -10747,7 +10752,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           </SheetTitle>
           <SheetDescription>
             {relatorioNoDrawer === 'conflitos' &&
-              'Interferências entre instalações e com a estrutura, e entre disciplinas. Clicar num conflito seleciona as peças no desenho; exporte em BCF para o projetista.'}
+              'Interferências de instalações com a estrutura e entre disciplinas, e da estrutura com vãos e escadas. Clicar num conflito seleciona a peça no desenho; exporte em BCF para o projetista.'}
             {relatorioNoDrawer === 'medicoes' &&
               'As formas medidas sobre a planta de fundo — área, linha e contagem — por camada, com o envio ao orçamento.'}
             {relatorioNoDrawer === 'orcamento' &&
@@ -10760,6 +10765,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             <PainelConflitos
               model={editor.model}
               conflitos={conflitos}
+              arquitetonicos={conflitosArq}
               onSelecionar={(id) => selecionar([id])}
               onExportarBcf={exportarBcfDoEstudo}
             />

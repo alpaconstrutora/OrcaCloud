@@ -28,6 +28,9 @@
 import type { Quantitativos } from './blueprintKernel';
 import { nomeDoTipoDeAbertura, nomeDoTipoEstrutural } from './blueprintKernel';
 import { ROTULO_DA_ORIGEM, type ArmaduraQuantificada } from './blueprintArmadura';
+import { ROTULO_DA_CONEXAO, type DisciplinaDeRede, type TipoDePontoEletrico, type TipoDePontoHidraulico } from './blueprintKernel';
+import { ROTULO_DA_DISCIPLINA, ROTULO_DO_PONTO_ELETRICO } from './blueprintRede';
+import { ROTULO_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 
 export type Celula = string | number | null;
 export type Aba = { nome: string; linhas: Celula[][] };
@@ -45,6 +48,7 @@ export const COBERTURA_PLANILHA = [
   'Área de telhado é a da SUPERFÍCIE INCLINADA (área projetada × √(1 + inclinação²)) — a 30% são 4,4% a mais que a planta; a 100%, 41%. É a área real que compra telha.',
   'Área de piso é o contorno RECUADO em meia espessura de parede — não é a área de eixo, e a diferença chega a 9%.',
   'ARMADURA ESQUEMÁTICA (aba "Armadura", quando há estrutura): kg de aço por peça pelos MÍNIMOS da NBR 6118 (barras, estribos ou malha) com um piso por taxa de referência (kg/m³) — hipóteses do estudo. É pré-quantitativo, não detalhamento: sem dobras, sem lista de barras, sem esforços. A coluna "Origem" diz se valeu o esquema ou a taxa.',
+  'INSTALAÇÕES (abas "Instalações" e "Pontos e conexões", quando há rede, 18/09/2026): tubo por disciplina e DN com o comprimento REAL (prumadas e caimento inclusos), um trecho por linha com caimento em %; pontos hidráulicos e elétricos por classificação; conexões (joelho, tê, luva, redução) DEDUZIDAS dos encontros de trechos mais as lançadas à mão. Eletroduto entra pela bitola.',
   'NÃO CONTÉM preço. Para virar orçamento, use o de-para da aba Orçamento do editor, que trava a unidade do item.',
   'Fôrma de peça estrutural segue a política do módulo: pilar pelo perímetro da seção, viga em duas laterais mais o fundo, laje só o fundo. A borda da laje não entra.',
   'Estudo preliminar assistido; requer validação de profissional habilitado.',
@@ -168,6 +172,20 @@ export function abasDoQuantitativo(
       ['Degraus (espelhos)', t.degraus, 'un'],
       ['Escadas e rampas', t.escadas, 'un'],
     );
+  }
+  // INSTALAÇÕES (18/09/2026): tubo por disciplina e DN — é assim que se compra —,
+  // pontos por classificação e as conexões deduzidas dos encontros.
+  const nomeDaDisciplina = (d: string) => ROTULO_DA_DISCIPLINA[d as DisciplinaDeRede] ?? d;
+  const nomeDoPonto = (p: { tipo: string; classificacao: string | null }) =>
+    p.classificacao
+      ? (ROTULO_DO_PONTO_HIDRAULICO[p.classificacao as TipoDePontoHidraulico] ?? ROTULO_DO_PONTO_ELETRICO[p.classificacao as TipoDePontoEletrico] ?? p.classificacao)
+      : `${p.tipo} (sem tipo)`;
+  if ((t.porBitola ?? []).length > 0 || (t.porTerminal ?? []).length > 0) {
+    totais.push([], ['INSTALAÇÕES']);
+    for (const b of t.porBitola ?? []) totais.push([`${nomeDaDisciplina(b.disciplina)} DN ${b.bitolaMm}${b.itemCode ? ` · ${b.itemCode}` : ''}`, n2(b.comprimentoM), 'm']);
+    for (const p of t.porTerminal ?? []) totais.push([`${nomeDoPonto(p)} · ${nomeDaDisciplina(p.disciplina)}`, p.quantidade, 'un']);
+    for (const c of t.porConexao ?? []) totais.push([`${ROTULO_DA_CONEXAO[c.tipo]} DN ${c.bitolaMm}${c.paraMm != null ? `→${c.paraMm}` : ''} · ${nomeDaDisciplina(c.disciplina)}`, c.quantidade, 'un']);
+    totais.push(['Rede — comprimento total', n2(t.comprimentoRedeM), 'm']);
   }
   abas.push({ nome: 'Totais', linhas: totais });
 
@@ -296,6 +314,45 @@ export function abasDoQuantitativo(
           ROTULO_DA_ORIGEM[p.origem],
           p.descricao,
         ]),
+      ],
+    });
+  }
+
+  // ── Instalações ─────────────────────────────────────────────────────────
+  //
+  // Um trecho por linha, com o comprimento REAL (a prumada mede a altura; o
+  // esgoto com caimento mede a diagonal) e o caimento em % — é o que se confere
+  // na prancha e o que separa o tubo que se compra do que se desenhou.
+  if (quant.trechos.length > 0) {
+    abas.push({
+      nome: 'Instalações',
+      linhas: [
+        ['Trecho', 'Disciplina', 'DN (mm)', 'Item', 'Em planta (m)', 'Real (m)', 'Desnível (m)', 'Caimento (%)', 'Fórmula'],
+        ...quant.trechos.map((tr, i) => [
+          tr.rotulo || `${nomeDaDisciplina(tr.disciplina)} ${i + 1}`,
+          nomeDaDisciplina(tr.disciplina),
+          tr.bitolaMm,
+          tr.itemCode ?? '',
+          n2(tr.comprimentoPlantaM),
+          n2(tr.comprimentoM),
+          n3(tr.desnivelM),
+          tr.comprimentoPlantaM > 0 ? Number(((Math.abs(tr.desnivelM) / tr.comprimentoPlantaM) * 100).toFixed(1)) : '',
+          tr.formula,
+        ]),
+      ],
+    });
+  }
+  if ((t.porTerminal ?? []).length > 0 || (t.porConexao ?? []).length > 0) {
+    abas.push({
+      nome: 'Pontos e conexões',
+      linhas: [
+        ['PONTOS'],
+        ['Classificação', 'Disciplina', 'Item', 'Quantidade'],
+        ...(t.porTerminal ?? []).map((p) => [nomeDoPonto(p), nomeDaDisciplina(p.disciplina), p.itemCode ?? '', p.quantidade]),
+        [],
+        ['CONEXÕES (deduzidas dos encontros de trechos + lançadas à mão)'],
+        ['Conexão', 'Disciplina', 'DN (mm)', 'Reduz para (mm)', 'Quantidade', 'Deduzidas', 'Manuais'],
+        ...(t.porConexao ?? []).map((c) => [ROTULO_DA_CONEXAO[c.tipo], nomeDaDisciplina(c.disciplina), c.bitolaMm, c.paraMm ?? '', c.quantidade, c.derivadas, c.manuais]),
       ],
     });
   }

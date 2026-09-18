@@ -193,3 +193,20 @@ As cinco fases estão em produção. Fora do escopo entregue (registrados como e
 `SplitTrecho` para o registro partir o trecho; persistir as hipóteses hidráulicas por estudo no
 banco (hoje no navegador, como eletrodutos/circuitos); desvio de fundação/viga no esgoto;
 disciplina Mecânica (aba do ribbon nasce com ela).
+
+## Complemento (18/09/2026): "incluir hidráulica no quantitativo"
+Pedido do usuário depois das cinco fases. Duas frentes, sem mexer no kernel:
+
+- **Tela Quantitativos › aba Instalações** (`TelaQuantitativos.tsx`): linhas de compra em vez
+  de trechos — `Tubo` por disciplina × DN (m), `Ponto` por classificação (un; rótulo da ficha
+  hidráulica ou do ponto elétrico, nunca a chave crua) e `Conexão` por tipo × DN (un, "N
+  deduzidas · M manuais"). Filtro por disciplina quando há mais de uma; totais por disciplina e
+  geral ("tubo X m · N ponto(s) · N conexão(ões)"). Fonte: `totais.porBitola`, `porTerminal`,
+  `porConexao` — os mesmos números que o orçamento consome.
+- **Planilha** (`blueprintPlanilha.ts`): abas **Instalações** (trecho a trecho: em planta,
+  real, desnível, caimento % e a fórmula) e **Pontos e conexões**; seção INSTALAÇÕES em Totais;
+  a cobertura declara que as conexões são deduzidas dos encontros.
+
+Testes: `blueprintPlanilha` (abas e totais), editor ("aba Instalações"). App real (escritas
+bloqueadas: 14): "Total das instalações tubo 250,16 m · 65 ponto(s) · 9 conexão(ões)", filtro
+presente, linhas "Ponto Esgoto Caixa de inspeção 1 un", "Conexão Esgoto Tê 50→40 1 un".

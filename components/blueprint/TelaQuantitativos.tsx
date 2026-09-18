@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Calculator } from 'lucide-react';
-import { ROTULO_DA_CONEXAO, nomeDoTipoEstrutural, type BlueprintModel, type DisciplinaDeRede, type TipoDePontoHidraulico, type computeQuantities } from '../../utils/blueprintKernel';
-import { ROTULO_DA_DISCIPLINA } from '../../utils/blueprintRede';
+import { ROTULO_DA_CONEXAO, nomeDoTipoEstrutural, type BlueprintModel, type DisciplinaDeRede, type TipoDePontoEletrico, type TipoDePontoHidraulico, type computeQuantities } from '../../utils/blueprintKernel';
+import { ROTULO_DA_DISCIPLINA, ROTULO_DO_PONTO_ELETRICO } from '../../utils/blueprintRede';
 import { ROTULO_DO_PONTO_HIDRAULICO } from '../../utils/blueprintHidraulica';
 import type { ArmaduraQuantificada } from '../../utils/blueprintArmadura';
 import {
@@ -36,7 +36,19 @@ import { usePersistedState } from '../ui/TableUtils';
  */
 
 type Quant = ReturnType<typeof computeQuantities>;
-type AbaDosQuantitativos = 'resumo' | 'ambientes' | 'estruturas' | 'pavimentos' | 'sobreposicoes';
+type AbaDosQuantitativos = 'resumo' | 'ambientes' | 'estruturas' | 'pavimentos' | 'instalacoes' | 'sobreposicoes';
+
+/** Uma linha de compra das instalações: tubo por DN, ponto por classificação, conexão por tipo × DN. */
+interface LinhaDeInstalacao {
+  chave: string;
+  familia: 'Tubo' | 'Ponto' | 'Conexão';
+  disciplina: DisciplinaDeRede;
+  item: string;
+  dnMm: number | null;
+  quantidade: number;
+  unidade: 'm' | 'un';
+  detalhe: string;
+}
 
 interface LinhaDoResumo {
   chave: string;
@@ -88,6 +100,15 @@ const COLUNAS_PAVIMENTO: StandardTableColumn[] = [
   { key: 'volumeConcretoM3', label: 'Concreto (m³)', width: 120, align: 'right' },
   { key: 'areaFormaM2', label: 'Fôrma (m²)', width: 110, align: 'right' },
   { key: 'acoKg', label: 'Aço (kg)', width: 100, align: 'right' },
+];
+const COLUNAS_INSTALACAO: StandardTableColumn[] = [
+  { key: 'familia', label: 'Família', width: 100 },
+  { key: 'disciplina', label: 'Disciplina', width: 120 },
+  { key: 'item', label: 'Item', width: 240 },
+  { key: 'dnMm', label: 'DN (mm)', width: 90, align: 'right' },
+  { key: 'quantidade', label: 'Quantidade', width: 120, align: 'right' },
+  { key: 'unidade', label: 'Unidade', width: 80 },
+  { key: 'detalhe', label: 'Detalhe', width: 300, sortable: false },
 ];
 const COLUNAS_SOBREPOSICAO: StandardTableColumn[] = [
   { key: 'volumeM3', label: 'Volume (m³)', width: 120, align: 'right' },
@@ -197,7 +218,7 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
     }
     for (const p of t.porTerminal ?? []) {
       if (p.disciplina === 'ELETRICA') continue;
-      const nome = p.classificacao ? (ROTULO_DO_PONTO_HIDRAULICO[p.classificacao as TipoDePontoHidraulico] ?? p.tipo) : `${p.tipo} (sem tipo)`;
+      const nome = p.classificacao ? (ROTULO_DO_PONTO_HIDRAULICO[p.classificacao as TipoDePontoHidraulico] ?? ROTULO_DO_PONTO_ELETRICO[p.classificacao as TipoDePontoEletrico] ?? p.tipo) : `${p.tipo} (sem tipo)`;
       add({ grupo: 'Instalações', item: `${nome} · ${ROTULO_DA_DISCIPLINA[p.disciplina as DisciplinaDeRede] ?? p.disciplina}`, valor: p.quantidade, unidade: 'un', detalhe: p.classificacao ? 'ponto classificado' : 'a classificar' });
     }
     for (const c of t.porConexao ?? []) {
@@ -207,6 +228,34 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
   }, [quant, armadura, fmt, t]);
 
   const acoDe = (structuralId: string) => armadura?.pecas.find((p) => p.structuralId === structuralId);
+
+  // INSTALAÇÕES (18/09/2026: *"incluir hidráulica no quantitativo"*): as linhas
+  // de compra da rede — tubo por disciplina e DN, ponto por classificação,
+  // conexão por tipo × DN —, com filtro por disciplina. É a mesma conta do
+  // orçamento (`COMPRIMENTO_TUBO_*`, `CONTAGEM_PONTOS_HIDRAULICOS`, `CONTAGEM_CONEXOES`).
+  const [disciplinaFiltro, setDisciplinaFiltro] = useState<'' | DisciplinaDeRede>('');
+  const instalacoes = useMemo<LinhaDeInstalacao[]>(() => {
+    const nomeDaDisciplina = (d: string) => ROTULO_DA_DISCIPLINA[d as DisciplinaDeRede] ?? d;
+    const linhas: LinhaDeInstalacao[] = [];
+    for (const b of t.porBitola ?? []) {
+      linhas.push({ chave: `tubo:${b.disciplina}:${b.bitolaMm}:${b.itemCode ?? ''}`, familia: 'Tubo', disciplina: b.disciplina as DisciplinaDeRede, item: `${b.disciplina === 'ELETRICA' ? 'Eletroduto' : `Tubo ${nomeDaDisciplina(b.disciplina).toLowerCase()}`}${b.itemCode ? ` · ${b.itemCode}` : ''}`, dnMm: b.bitolaMm, quantidade: b.comprimentoM, unidade: 'm', detalhe: `${b.trechos} trecho(s) · comprimento real, com prumadas e caimento` });
+    }
+    for (const p of t.porTerminal ?? []) {
+      const nome = p.classificacao
+        ? (ROTULO_DO_PONTO_HIDRAULICO[p.classificacao as TipoDePontoHidraulico] ?? ROTULO_DO_PONTO_ELETRICO[p.classificacao as TipoDePontoEletrico] ?? p.classificacao)
+        : `${p.tipo} (sem tipo)`;
+      linhas.push({ chave: `ponto:${p.disciplina}:${p.classificacao ?? p.tipo}:${p.itemCode ?? ''}`, familia: 'Ponto', disciplina: p.disciplina as DisciplinaDeRede, item: `${nome}${p.itemCode ? ` · ${p.itemCode}` : ''}`, dnMm: null, quantidade: p.quantidade, unidade: 'un', detalhe: p.classificacao ? 'ponto classificado' : 'a classificar — escolha o tipo no painel do ponto' });
+    }
+    for (const c of t.porConexao ?? []) {
+      linhas.push({ chave: `conexao:${c.disciplina}:${c.tipo}:${c.bitolaMm}:${c.paraMm ?? ''}`, familia: 'Conexão', disciplina: c.disciplina as DisciplinaDeRede, item: `${ROTULO_DA_CONEXAO[c.tipo]}${c.paraMm != null ? ` ${c.bitolaMm}→${c.paraMm}` : ''}`, dnMm: c.bitolaMm, quantidade: c.quantidade, unidade: 'un', detalhe: `${c.derivadas} deduzida(s) dos encontros${c.manuais ? ` + ${c.manuais} manual(is)` : ''}` });
+    }
+    return linhas;
+  }, [t]);
+  const instalacoesVisiveis = useMemo(
+    () => (disciplinaFiltro ? instalacoes.filter((l) => l.disciplina === disciplinaFiltro) : instalacoes),
+    [instalacoes, disciplinaFiltro],
+  );
+  const disciplinasPresentes = [...new Set(instalacoes.map((l) => l.disciplina))];
   const conflitantes = quant.sobreposicoes.filter((s) => s.quemCede === 'NINGUEM').length;
 
   const abas: TabsBarItem<AbaDosQuantitativos>[] = [
@@ -214,6 +263,7 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
     { id: 'ambientes', label: 'Por ambiente', badge: quant.ambientes.length },
     { id: 'estruturas', label: 'Por peça estrutural', badge: quant.estruturas.length },
     { id: 'pavimentos', label: 'Por pavimento', badge: pavimentos.length },
+    { id: 'instalacoes', label: 'Instalações', badge: instalacoes.length },
     { id: 'sobreposicoes', label: 'Sobreposições', badge: conflitantes > 0 ? `${conflitantes} !` : quant.sobreposicoes.length },
   ];
 
@@ -451,6 +501,70 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
                     construída {fmt(t.areaConstruidaM2)} m² · piso {fmt(t.areaPisoM2)} m² · alvenaria {fmt(t.volumeAlvenariaM3)} m³ · concreto{' '}
                     {fmt(pavimentos.reduce((s, p) => s + p.volumeConcretoM3, 0))} m³
                     {armadura ? ` · aço ${fmt(pavimentos.reduce((s, p) => s + p.acoKg, 0))} kg` : ''}
+                  </span>
+                </span>
+              </td>
+            </tr>
+          )}
+        />
+      )}
+
+      {aba === 'instalacoes' && (
+        <StandardTable<LinhaDeInstalacao>
+          columns={COLUNAS_INSTALACAO}
+          storageKey="blueprint:quantitativosInstalacoes"
+          rows={instalacoesVisiveis}
+          rowKey={(l) => l.chave}
+          renderCell={(key, l) => {
+            switch (key) {
+              case 'familia':
+                return <span className="text-xs font-medium uppercase tracking-wide text-slate-500">{l.familia}</span>;
+              case 'disciplina':
+                return <span className="text-sm text-gray-700">{ROTULO_DA_DISCIPLINA[l.disciplina] ?? l.disciplina}</span>;
+              case 'item':
+                return <span className="text-sm font-medium text-gray-800">{l.item}</span>;
+              case 'dnMm':
+                return <span className="block text-right text-sm tabular-nums text-gray-700">{l.dnMm ?? '—'}</span>;
+              case 'quantidade':
+                return <span className="block text-right text-sm font-semibold tabular-nums text-gray-900">{l.unidade === 'un' ? l.quantidade.toLocaleString('pt-BR') : fmt(l.quantidade)}</span>;
+              case 'unidade':
+                return <span className="text-sm text-gray-500">{l.unidade}</span>;
+              case 'detalhe':
+                return <span className="text-xs text-gray-500">{l.detalhe}</span>;
+              default:
+                return null;
+            }
+          }}
+          sortValue={(key, l) => (key === 'quantidade' || key === 'dnMm' ? (l as unknown as Record<string, number>)[key] ?? 0 : key === 'disciplina' ? ROTULO_DA_DISCIPLINA[l.disciplina] : (l as unknown as Record<string, string>)[key])}
+          searchText={(l) => `${l.familia} ${ROTULO_DA_DISCIPLINA[l.disciplina]} ${l.item} ${l.dnMm ?? ''} ${l.detalhe}`}
+          searchPlaceholder="Buscar tubo, ponto ou conexão..."
+          filters={
+            disciplinasPresentes.length > 1 ? (
+              <select
+                value={disciplinaFiltro}
+                onChange={(e) => setDisciplinaFiltro(e.target.value as '' | DisciplinaDeRede)}
+                aria-label="Filtrar por disciplina"
+                className="h-9 rounded-[6px] border border-gray-200 bg-white px-2 text-sm text-gray-700"
+              >
+                <option value="">Todas as disciplinas</option>
+                {disciplinasPresentes.map((d) => (
+                  <option key={d} value={d}>
+                    {ROTULO_DA_DISCIPLINA[d]}
+                  </option>
+                ))}
+              </select>
+            ) : undefined
+          }
+          empty={{ title: 'Nenhuma instalação na planta', subtitle: 'Lance pontos e trechos em Elétrica ou Hidráulica — ou use os lançamentos automáticos.' }}
+          renderTotals={(n) => (
+            <tr className="bg-gray-50 text-sm font-semibold text-gray-700">
+              <td colSpan={n} className="px-6 py-2.5">
+                <span className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                  <span>Total {disciplinaFiltro ? `— ${ROTULO_DA_DISCIPLINA[disciplinaFiltro]}` : 'das instalações'}</span>
+                  <span className="tabular-nums">
+                    tubo {fmt(instalacoesVisiveis.filter((l) => l.familia === 'Tubo').reduce((s, l) => s + l.quantidade, 0))} m ·{' '}
+                    {instalacoesVisiveis.filter((l) => l.familia === 'Ponto').reduce((s, l) => s + l.quantidade, 0)} ponto(s) ·{' '}
+                    {instalacoesVisiveis.filter((l) => l.familia === 'Conexão').reduce((s, l) => s + l.quantidade, 0)} conexão(ões)
                   </span>
                 </span>
               </td>

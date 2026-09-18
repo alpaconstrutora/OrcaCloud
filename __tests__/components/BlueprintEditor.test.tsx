@@ -470,7 +470,7 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(within(tela).getAllByText(/pol[íi]tica quant-/i).length).toBeGreaterThan(0);
     // É tela, não drawer: sem dialog, com as abas do padrão.
     expect(screen.queryByRole('dialog')).toBeNull();
-    for (const aba of ['Resumo', 'Por ambiente', 'Por peça estrutural', 'Por pavimento', 'Sobreposições']) {
+    for (const aba of ['Resumo', 'Por ambiente', 'Por peça estrutural', 'Por pavimento', 'Instalações', 'Sobreposições']) {
       expect(within(tela).getByRole('tab', { name: new RegExp(`^${aba}`) })).toBeInTheDocument();
     }
   });
@@ -534,6 +534,34 @@ describe('BlueprintEditor · quantitativos', () => {
     // Volta ao editor com a peça selecionada (as propriedades abrem em Sheet).
     expect(document.querySelector('[data-tela="quantitativos"]')).toBeNull();
     expect(await screen.findByTestId('propriedades-sheet')).toHaveTextContent(/P1/);
+  });
+
+  it('aba Instalações (18/09/2026): tubo por DN, pontos por classificação e conexões deduzidas, com filtro por disciplina', async () => {
+    // "incluir hidráulica no quantitativo"
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [
+        { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: k.point(0, 0), b: k.point(4000, 0), cotaAMm: 2200, cotaBMm: 2200, bitolaMm: 25 },
+        { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: k.point(4000, 0), b: k.point(4000, 2000), cotaAMm: 2200, cotaBMm: 2200, bitolaMm: 25 },
+        { type: 'AddTrecho', levelId: t, disciplina: 'ELETRICA', a: k.point(0, 3000), b: k.point(2000, 3000), cotaAMm: 2800, cotaBMm: 2800, bitolaMm: 25 },
+        { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Chuveiro', at: k.point(4000, 2000), cotaMm: 2200, tipoHidraulico: 'CHUVEIRO' },
+      ]).model,
+    );
+    await montar();
+    const user = userEvent.setup();
+    const tela = await abrirTelaDeQuantitativos();
+    await user.click(within(tela).getByRole('tab', { name: /^Instalações/ }));
+    const linhas = () => within(tela).getAllByRole('row').map((r) => r.textContent ?? '');
+    expect(linhas().some((l) => /Tubo.*Água fria.*25.*6[,.]00/.test(l))).toBe(true);
+    expect(linhas().some((l) => /Ponto.*Água fria.*Chuveiro/.test(l))).toBe(true);
+    expect(linhas().some((l) => /Conexão.*Joelho 90°/.test(l))).toBe(true);
+    expect(linhas().some((l) => /Tubo.*Elétrica.*Eletroduto/.test(l))).toBe(true);
+    // Filtro por disciplina: só a água fria.
+    await user.selectOptions(within(tela).getByLabelText(/filtrar por disciplina/i), 'AGUA_FRIA');
+    expect(linhas().some((l) => /Eletroduto/.test(l))).toBe(false);
+    expect(within(tela).getByText(/Total — Água fria/)).toBeInTheDocument();
   });
 
   it('com dois pavimentos: aba Por pavimento lista os dois, coluna e filtro de pavimento nas peças', async () => {

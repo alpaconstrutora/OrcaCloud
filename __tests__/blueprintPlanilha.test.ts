@@ -189,6 +189,39 @@ describe('planilha · a cobertura diz o que falta', () => {
     expect(sem.find((a) => a.nome === 'Totais')!.linhas.some((l) => l[0] === 'Aço — pilares')).toBe(false);
   });
 
+  it('abas "Instalações" e "Pontos e conexões" (18/09/2026): tubo por trecho com caimento, pontos por classificação e conexões deduzidas; a Cobertura as declara', () => {
+    const base = soAmbiente();
+    const t = base.levels[0].id;
+    const model = applyBatch(base, [
+      { type: 'AddTrecho', levelId: t, disciplina: 'ESGOTO', a: point(0, 0), b: point(3000, 0), cotaAMm: -150, cotaBMm: -210, bitolaMm: 100 },
+      { type: 'AddTrecho', levelId: t, disciplina: 'ESGOTO', a: point(3000, 0), b: point(3000, 2000), cotaAMm: -210, cotaBMm: -250, bitolaMm: 100 },
+      { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'Vaso', at: point(0, 0), cotaMm: -150, tipoHidraulico: 'VASO_SANITARIO' },
+      { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'CI', at: point(3000, 2000), cotaMm: -250, tipoHidraulico: 'CAIXA_INSPECAO' },
+    ] as Command[]).model;
+    const inst = aba(model, 'Instalações')!;
+    expect(inst).toBeTruthy();
+    expect(inst.linhas[0]).toEqual(['Trecho', 'Disciplina', 'DN (mm)', 'Item', 'Em planta (m)', 'Real (m)', 'Desnível (m)', 'Caimento (%)', 'Fórmula']);
+    expect(inst.linhas).toHaveLength(3);
+    const primeira = inst.linhas[1];
+    expect(primeira[1]).toBe('Esgoto');
+    expect(primeira[2]).toBe(100);
+    expect(primeira[4]).toBe(3);
+    expect(primeira[7]).toBe(2); // 60 mm em 3 m
+    const pc = aba(model, 'Pontos e conexões')!;
+    expect(pc).toBeTruthy();
+    const texto = pc.linhas.map((l) => l.join(' | ')).join(String.fromCharCode(10));
+    expect(texto).toMatch(/Vaso sanitário \| Esgoto \|  \| 1/);
+    expect(texto).toMatch(/Joelho 90° \| Esgoto \| 100/);
+    // Totais: o tubo por DN e o ponto entram.
+    const totais = aba(model, 'Totais')!;
+    const linhasTotais = totais.linhas.map((l) => l.join(' | ')).join(String.fromCharCode(10));
+    expect(linhasTotais).toMatch(/Esgoto DN 100 \| \d/);
+    expect(linhasTotais).toMatch(/Vaso sanitário · Esgoto \| 1 \| un/);
+    expect(COBERTURA_PLANILHA.some((c) => /INSTALAÇÕES/.test(c) && /DEDUZIDAS/.test(c))).toBe(true);
+    // Sem rede não há aba.
+    expect(aba(soAmbiente(), 'Instalações')).toBeUndefined();
+  });
+
   it('a capa carrega versão, hash e política — é o que liga a planilha ao desenho', () => {
     // ⚠️ AS VERSÕES VÊM DAS CONSTANTES, não copiadas à mão.
     //

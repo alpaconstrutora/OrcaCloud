@@ -312,6 +312,28 @@ genéricos).
   Suíte 4610. App real (escritas bloqueadas: 14): pilar mostra "Sem tipo salvo · 32 peças iguais
   no desenho" e o nome sugerido "Pilar 40×14 · 2,80 m".
 
+### E1.2 — Parâmetros personalizados (18/09/2026) · kernel 0.33.0
+- **Kernel** (bump 0.32.0 → 0.33.0, ritual dos goldens: provado em 0.32.0 com os campos no lugar,
+  248 testes; depois recaptura dos 6 hashes): `parametros?: Record<chave, número|texto|booleano>`
+  em parede, abertura, estrutura, telhado, escada, trecho, terminal e quadro; `assertParametros`
+  (chave `[a-z][a-z0-9_]{0,39}`, texto ≤ 200, ≤ 50 por peça, nunca `{}`); comando único
+  `SetParametros {familia, id, valores}` (`null` apaga; objeto novo, nunca mutação); canônico ida e
+  volta com a chave só quando há parâmetro — o acervo não muda de hash.
+- **Definições** (significado da chave) fora do kernel: migration
+  `aplicar_20270918000050_blueprint_parameter_definitions.sql` **aplicada** (chave, nome, família
+  ou todas, tipo NUMERO/TEXTO/BOOLEANO/LISTA, unidade, opções, compartilhado, `formula` reservado
+  à E1.3); `blueprintParameterDefinitionService` com `chaveDeParametroDoNome` ("fck do concreto
+  (MPa)" → `fck_do_concreto_mpa`).
+- **UI** `PainelParametros` sob o painel de qualquer peça das oito famílias: um campo por
+  definição (número/texto gravam ao sair, lista e sim/não na hora; um Ctrl+Z por campo), valores
+  sem definição legíveis e apagáveis, "Nova definição" inline.
+- **Saídas**: IFC `Pset_OpuraPersonalizado` por peça (IfcReal/IfcBoolean/IfcLabel, chave como
+  nome); planilha ganha a aba **Parâmetros** (`linhasDeParametros(model)`).
+- Fora desta fase (declarado): filtro `compartilhado` nas saídas (hoje todo parâmetro sai), edição
+  e exclusão de definições (só criação inline), valor por TIPO (E1.1 usa assinatura, não id).
+- Testes: `blueprintParametros` (5), goldens, editor "E1.2". Suíte 4616. App real (escritas
+  bloqueadas: 14): painel no pilar, "Nova definição" derivando `fck_do_concreto_mpa`.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

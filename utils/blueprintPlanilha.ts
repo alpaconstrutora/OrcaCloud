@@ -25,7 +25,8 @@
  * uma planilha de quantitativo é lida como se fosse a lista de compras.
  */
 
-import type { Quantitativos } from './blueprintKernel';
+import type { BlueprintModel, Quantitativos } from './blueprintKernel';
+import { rotuloCurto } from './blueprintKernel';
 import { nomeDoTipoDeAbertura, nomeDoTipoEstrutural } from './blueprintKernel';
 import { ROTULO_DA_ORIGEM, type ArmaduraQuantificada } from './blueprintArmadura';
 import { ROTULO_DA_CONEXAO, type DisciplinaDeRede, type TipoDePontoEletrico, type TipoDePontoHidraulico } from './blueprintKernel';
@@ -84,6 +85,8 @@ export function abasDoQuantitativo(
   ctx: ContextoPlanilha,
   /** A armadura esquemática, calculada com as hipóteses do estudo. Ausente = sem aba e sem linhas de aço. */
   armadura?: ArmaduraQuantificada | null,
+  /** Os parâmetros personalizados das peças (`linhasDeParametros(model)`). Ausente/vazio = sem aba. */
+  parametros?: LinhaDeParametro[] | null,
 ): Aba[] {
   const abas: Aba[] = [];
   const t = quant.totais;
@@ -405,5 +408,46 @@ export function abasDoQuantitativo(
     });
   }
 
+  // ── Parâmetros personalizados (E1.2) ─────────────────────────────────────
+  if (parametros && parametros.length > 0) {
+    abas.push({
+      nome: 'Parâmetros',
+      linhas: [
+        ['Peça', 'Família', 'Chave', 'Valor'],
+        ...parametros.map((l) => [l.peca, l.familia, l.chave, typeof l.valor === 'boolean' ? (l.valor ? 'sim' : 'não') : l.valor]),
+      ],
+    });
+  }
+
   return abas;
+}
+
+/** Uma linha por (peça, chave) — a planilha lista o que cada peça afirma. */
+export interface LinhaDeParametro {
+  peca: string;
+  familia: string;
+  chave: string;
+  valor: string | number | boolean;
+}
+
+/**
+ * Os parâmetros personalizados de todas as peças, na ordem do modelo. A peça
+ * é nomeada pelo rótulo quando há, senão pelo rótulo curto do uid — o mesmo
+ * que o painel de conflitos usa.
+ */
+export function linhasDeParametros(model: BlueprintModel): LinhaDeParametro[] {
+  const saida: LinhaDeParametro[] = [];
+  const add = (familia: string, peca: string, p: Record<string, string | number | boolean> | undefined) => {
+    if (!p) return;
+    for (const chave of Object.keys(p).sort()) saida.push({ peca, familia, chave, valor: p[chave] });
+  };
+  for (const w of model.walls) add('Parede', rotuloCurto(w.uid, 'wall'), w.parametros);
+  for (const o of model.openings) add(nomeDoTipoDeAbertura(o.kind), o.esquadria?.nome || rotuloCurto(o.uid, 'opening'), o.parametros);
+  for (const x of model.structures ?? []) add(nomeDoTipoEstrutural(x.kind), x.rotulo || rotuloCurto(x.uid, 'structural'), x.parametros);
+  for (const r of model.roofs ?? []) add('Água de telhado', rotuloCurto(r.uid, 'roof'), r.parametros);
+  for (const e of model.stairs ?? []) add(e.tipo === 'RAMPA' ? 'Rampa' : 'Escada', e.rotulo || rotuloCurto(e.uid, 'stair'), e.parametros);
+  for (const t of model.trechos ?? []) add(`Trecho ${ROTULO_DA_DISCIPLINA[t.disciplina]}`, t.rotulo || rotuloCurto(t.uid, 'trecho'), t.parametros);
+  for (const t of model.terminais ?? []) add(`Ponto ${ROTULO_DA_DISCIPLINA[t.disciplina]}`, t.rotulo || rotuloCurto(t.uid, 'terminal'), t.parametros);
+  for (const q of model.quadros ?? []) add('Quadro', q.nome || rotuloCurto(q.uid, 'quadro'), q.parametros);
+  return saida;
 }

@@ -87,6 +87,7 @@ import {
   type Trecho,
   type StructuralKind,
   type Wall,
+  type Parametros,
 } from './blueprintKernel';
 import { contornoDaSecaoT, secaoTValida } from './blueprintKernel/secaoT';
 import { ROTULO_DO_TIPO_DE_AMBIENTE } from './blueprintDistribuicao';
@@ -114,6 +115,7 @@ export const COBERTURA_IFC = [
   'CONTÉM escada e rampa: IfcStair e IfcRamp (PredefinedType STRAIGHT_RUN / QUARTER_TURN / HALF_TURN pela contagem de vértices do eixo), com um sólido por degrau (ou por trecho de rampa) — o perfil lateral extrudado pela largura —, Pset_StairCommon (NumberOfRiser, NumberOfTreads, RiserHeight, TreadLength), Pset_RampCommon.RequiredSlope e Qto_Stair/RampBaseQuantities. O número de degraus é o DERIVADO do desnível, o mesmo do desenho. O furo na laje NÃO é IfcOpeningElement: a laje sai inteira e o desconto fica no Qto.',
   'CONTÉM a CLASSIFICAÇÃO do catálogo: IfcClassification nomeando a fonte (SINAPI, salvo indicação), IfcClassificationReference por código distinto e IfcRelAssociatesClassification ligando os elementos que o carregam. Elemento sem código NÃO ganha referência vazia, e a parede com várias camadas aparece na referência de CADA código, porque eleger uma camada principal exigiria um critério que ninguém informou.',
   'GEORREFERÊNCIA: quando o desenho tem lugar informado, saem IfcSite.RefLatitude/RefLongitude/RefElevation e o norte verdadeiro no contexto geométrico. IfcMapConversion + IfcProjectedCRS só saem quando alguém informou a coordenada PROJETADA (leste, norte e o código do CRS) — ela NUNCA é calculada a partir de latitude e longitude, porque a conta depende do fuso e errar o fuso põe o modelo a centenas de quilômetros do lugar com a forma perfeita.',
+  'PARÂMETROS PERSONALIZADOS: a peça que os carrega ganha Pset_OpuraPersonalizado com a chave de programa como nome da propriedade (número → IfcReal, sim/não → IfcBoolean, texto → IfcLabel). O nome legível e a unidade são da definição na organização e NÃO viajam.',
   'APROVAÇÃO: quando a revisão foi aprovada no sistema, Pset_OpuraPlanta traz ApprovalStatus, ApprovedBy e ApprovedAt em cada elemento, ao lado do SnapshotHash — é o par (o que foi aprovado, quem aprovou) que vale. Revisão que não passou por aprovação NÃO menciona o assunto: dizer "não aprovado" afirmaria que alguém olhou e recusou.',
   'CONTÉM instalações: cada trecho sai como IfcFlowSegment — um cilindro na bitola ' +
     'declarada, ao longo do eixo, com as DUAS COTAS que o desenho tem (é o que distingue ' +
@@ -689,6 +691,30 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
    */
   const produtosPorCodigo = new Map<string, string[]>();
 
+  // PARÂMETROS PERSONALIZADOS (E1.2, kernel 0.33.0): `Pset_OpuraPersonalizado`
+  // por peça que os carrega, com a chave de programa como nome da propriedade.
+  // Número → IfcReal, sim/não → IfcBoolean, texto → IfcLabel. Sai por uid,
+  // então só as famílias com uid entram — as oito do kernel têm.
+  const parametrosPorUid = new Map<string, Parametros>();
+  for (const lista of [model.walls, model.openings, model.structures ?? [], model.roofs ?? [], model.stairs ?? [], model.trechos ?? [], model.terminais ?? [], model.quadros ?? []]) {
+    for (const x of lista as { uid?: string; parametros?: Parametros }[]) {
+      if (x.uid && x.parametros && Object.keys(x.parametros).length > 0) parametrosPorUid.set(x.uid, x.parametros);
+    }
+  }
+  const psetPersonalizado = (produto: string, uid: string | undefined) => {
+    const p = uid ? parametrosPorUid.get(uid) : undefined;
+    if (!p) return;
+    const props: [string, ValorIfc][] = Object.keys(p)
+      .sort()
+      .map((k) => {
+        const v = p[k];
+        if (typeof v === 'number') return [k, { tipo: 'IFCREAL', v }];
+        if (typeof v === 'boolean') return [k, { tipo: 'IFCBOOLEAN', v }];
+        return [k, { tipo: 'IFCLABEL', v: String(v) }];
+      });
+    emitirPset(ctx, produto, uid, 'Pset_OpuraPersonalizado', props);
+  };
+
   /** Procedência comum a todo elemento — o `Pset_OpuraPlanta`. */
   const psetOpura = (
     produto: string,
@@ -733,6 +759,7 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
       if (custo !== undefined) props.push(['Cost', { tipo: 'IFCMONETARYMEASURE', v: custo }]);
     }
     emitirPset(ctx, produto, uid, 'Pset_OpuraPlanta', props);
+    psetPersonalizado(produto, uid);
   };
 
   // ── Pavimentos ────────────────────────────────────────────────────────────

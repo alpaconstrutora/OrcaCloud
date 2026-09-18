@@ -90,6 +90,7 @@ import MenuComponentes, { type EscolhaComponente } from './MenuComponentes';
 import ModalSobreposicao, { type EscolhaSobreposicao } from './ModalSobreposicao';
 import PainelComponentes from './PainelComponentes';
 import { linhasDeComponentesPorNivel } from '../../utils/blueprintComponentes';
+import PainelParametros from './PainelParametros';
 import { etiquetasDasAberturas, rotuloDeNivelDoPavimento } from '../../utils/blueprintNumeracao';
 import { assinaturaDoTipo, camposDaEstrutura, camposDoTerminal, propriedadesDaEstrutura, propriedadesDoTerminal } from '../../utils/blueprintTipos';
 import { AJUSTE_DA_VISTA, ehVistaDePlanta, idsOcultosNaVista, nivelDaVista } from '../../utils/blueprintVistasDePlanta';
@@ -351,6 +352,8 @@ import {
   type BoundaryKind,
   type AlinhamentoParede,
   type Command,
+  type FamiliaComParametros,
+  type Parametros,
   type Opening,
   type Point,
   type StructuralKind,
@@ -2436,6 +2439,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     return m;
   }, [situacao4d]);
   const escadaSel = (editor.model.stairs ?? []).find((e) => e.id === editor.selectedId) ?? null;
+  /** A peça selecionada que carrega parâmetros personalizados (E1.2), com a chave da família. */
+  const pecaComParametros = useMemo((): { familia: FamiliaComParametros; id: string; parametros: Parametros | undefined } | null => {
+    if (paredeSel) return { familia: 'wall', id: paredeSel.id, parametros: paredeSel.parametros };
+    if (aberturaSel) return { familia: 'opening', id: aberturaSel.id, parametros: aberturaSel.parametros };
+    if (estruturaSel) return { familia: 'structural', id: estruturaSel.id, parametros: estruturaSel.parametros };
+    if (aguaSel) return { familia: 'roof', id: aguaSel.id, parametros: aguaSel.parametros };
+    if (escadaSel) return { familia: 'stair', id: escadaSel.id, parametros: escadaSel.parametros };
+    if (trechoSel) return { familia: 'trecho', id: trechoSel.id, parametros: trechoSel.parametros };
+    if (terminalSel) return { familia: 'terminal', id: terminalSel.id, parametros: terminalSel.parametros };
+    if (quadroSel) return { familia: 'quadro', id: quadroSel.id, parametros: quadroSel.parametros };
+    return null;
+  }, [paredeSel, aberturaSel, estruturaSel, aguaSel, escadaSel, trechoSel, terminalSel, quadroSel]);
 
   /**
    * Quanto volume a peça selecionada divide com outra, em m³. `0` = nenhuma.
@@ -6033,6 +6048,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           ) : null
         }
       />
+
+      {/* PARÂMETROS PERSONALIZADOS (E1.2): abaixo do painel da família, para
+          qualquer peça que os carregue. Um comando por campo. */}
+      {pecaComParametros && (
+        <PainelParametros
+          familia={pecaComParametros.familia}
+          pecaId={pecaComParametros.id}
+          parametros={pecaComParametros.parametros}
+          onSet={(valores) => editor.run({ type: 'SetParametros', familia: pecaComParametros.familia, id: pecaComParametros.id, valores })}
+        />
+      )}
 
       {/* A DIVISA selecionada se edita no painel do terreno (comprimento,
           papel na escritura) — o mesmo que a tarefa "Dados do lote" abre. */}

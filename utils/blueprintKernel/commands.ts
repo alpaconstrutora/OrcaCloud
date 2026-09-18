@@ -52,6 +52,9 @@ import {
   pontasNoVerticeMovido,
   wallLength,
   pontasPresasAsPecas,
+  assertParametros,
+  type Parametros,
+  type ValorDeParametro,
 } from './model';
 import {
   type AlinhamentoParede,
@@ -699,6 +702,18 @@ export type Command =
       anguloGraus: number;
       centro: Point;
     }
+  /**
+   * PARÂMETROS PERSONALIZADOS (18/09/2026, E1.2): grava/apaga chaves de
+   * `parametros` numa peça. `null` apaga a chave; o objeto que ficar vazio some
+   * (nunca `{}`). Um comando para as oito famílias, pela chave da família + id —
+   * oito comandos seriam oito cópias da mesma regra.
+   */
+  | {
+      type: 'SetParametros';
+      familia: FamiliaComParametros;
+      id: ObjectId;
+      valores: Record<string, ValorDeParametro | null>;
+    }
   | { type: 'SplitWall'; wallId: ObjectId; at: Point }
   | { type: 'MergeWalls'; firstId: ObjectId; secondId: ObjectId }
   | { type: 'DeleteWall'; wallId: ObjectId }
@@ -835,6 +850,9 @@ export type Command =
       openings: { openingId: ObjectId; wallId: ObjectId; offsetMm: number }[];
       delta: Point;
     };
+
+/** As famílias que carregam `parametros` — as mesmas de `assertParametros`. */
+export type FamiliaComParametros = 'wall' | 'opening' | 'structural' | 'roof' | 'stair' | 'trecho' | 'terminal' | 'quadro';
 
 export interface Diff {
   created: ObjectId[];
@@ -2313,6 +2331,36 @@ function aplicarSemHash(
         if (g !== 0 || q.rotacaoGraus) q.rotacaoGraus = somarGiro(q.rotacaoGraus);
         diff.updated.push(q.id);
       }
+      break;
+    }
+
+    case 'SetParametros': {
+      const listaDe = (f: FamiliaComParametros): { id: ObjectId; parametros?: Parametros }[] => {
+        switch (f) {
+          case 'wall': return next.walls;
+          case 'opening': return next.openings;
+          case 'structural': return next.structures;
+          case 'roof': return next.roofs ?? [];
+          case 'stair': return next.stairs ?? [];
+          case 'trecho': return next.trechos ?? [];
+          case 'terminal': return next.terminais ?? [];
+          case 'quadro': return next.quadros ?? [];
+        }
+      };
+      const peca = listaDe(command.familia).find((x) => x.id === command.id);
+      if (!peca) throw new KernelError('NOT_FOUND', `Peça não encontrada para parâmetros: ${command.familia} ${command.id}`);
+      // Objeto NOVO, nunca mutação: `cloneModel` copia as peças rasas, e mutar
+      // o objeto aqui alteraria o modelo anterior do histórico (Ctrl+Z quebrado).
+      const novo: Parametros = { ...(peca.parametros ?? {}) };
+      for (const [chave, valor] of Object.entries(command.valores)) {
+        if (valor === null) delete novo[chave];
+        else novo[chave] = typeof valor === 'string' ? valor.trim() : valor;
+      }
+      if (Object.keys(novo).length === 0) delete peca.parametros;
+      else peca.parametros = novo;
+      // A validação fina (chave, tamanho, contagem) é da invariante, ao fim do comando.
+      assertParametros(peca.parametros, `${command.familia} ${command.id}`);
+      diff.updated.push(command.id);
       break;
     }
 

@@ -108,6 +108,8 @@ export interface Wall {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
   uid: ElementUid;
+  /** Parâmetros personalizados — ver `assertParametros`. Ausente = nenhum. */
+  parametros?: Parametros;
   levelId: ObjectId;
   a: Point;
   b: Point;
@@ -301,11 +303,69 @@ export interface Esquadria {
   descricao: string;
 }
 
+/**
+ * PARÂMETROS PERSONALIZADOS (18/09/2026, roadmap E1.2: *"Parâmetros
+ * personalizados — P0"*).
+ *
+ * ─── VALOR NA PEÇA, DEFINIÇÃO NA ORGANIZAÇÃO ────────────────────────────────
+ *
+ * A peça carrega `parametros: { chave: valor }` — e SÓ isso. O que a chave
+ * significa (nome legível, unidade, tipo, lista de opções, fórmula) é a
+ * DEFINIÇÃO, que mora no catálogo da organização (`blueprint_parameter_
+ * definitions`) e fora do kernel, pela mesma razão do tipo de parede: o
+ * snapshot publicado não pode mudar porque alguém renomeou um parâmetro hoje.
+ * Valor sem definição continua valendo — aparece como "sem definição" na tela.
+ *
+ * ─── POR QUE ENTRA NO HASH ──────────────────────────────────────────────────
+ *
+ * É CONTEÚDO: "fabricante = X" ou "acabamento = porcelanato" numa porta muda o
+ * que o desenho afirma, vai para o IFC (Pset) e para a planilha. Mesmo argumento
+ * de `labels` e de `areaEscrituraMm2`. A chave só é emitida quando há ao menos
+ * um parâmetro — o acervo sem parâmetro não muda de hash.
+ *
+ * Chave: `[a-z][a-z0-9_]{0,39}` (é a chave de programa, não o nome legível).
+ * Valor: número finito, texto ≤ 200 caracteres ou booleano. Até 50 por peça.
+ * Objeto presente = ao menos uma chave (nunca `{}`, para não haver duas
+ * escritas do mesmo estado — a regra de `camadas`).
+ */
+export type ValorDeParametro = number | string | boolean;
+export type Parametros = Record<string, ValorDeParametro>;
+export const CHAVE_DE_PARAMETRO = /^[a-z][a-z0-9_]{0,39}$/;
+export const MAX_PARAMETROS_POR_PECA = 50;
+export const MAX_TEXTO_DE_PARAMETRO = 200;
+
+/** Valida o objeto de parâmetros de uma peça; `undefined` é sempre válido. */
+export function assertParametros(parametros: Parametros | undefined, onde: string): void {
+  if (parametros === undefined) return;
+  const chaves = Object.keys(parametros);
+  if (chaves.length === 0) {
+    throw new KernelError('EMPTY_PARAMS', `${onde}: parametros presente e vazio — omita o campo`);
+  }
+  if (chaves.length > MAX_PARAMETROS_POR_PECA) {
+    throw new KernelError('TOO_MANY_PARAMS', `${onde}: ${chaves.length} parâmetros (máximo ${MAX_PARAMETROS_POR_PECA})`);
+  }
+  for (const chave of chaves) {
+    if (!CHAVE_DE_PARAMETRO.test(chave)) {
+      throw new KernelError('BAD_PARAM_KEY', `${onde}: chave de parâmetro inválida: "${chave}"`);
+    }
+    const v = parametros[chave];
+    const ok =
+      (typeof v === 'number' && Number.isFinite(v)) ||
+      (typeof v === 'string' && v.length <= MAX_TEXTO_DE_PARAMETRO) ||
+      typeof v === 'boolean';
+    if (!ok) {
+      throw new KernelError('BAD_PARAM_VALUE', `${onde}: valor inválido em "${chave}"`);
+    }
+  }
+}
+
 /** Abertura hospedada numa parede. `offsetMm` é medido a partir de `wall.a`. */
 export interface Opening {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
   uid: ElementUid;
+  /** Parâmetros personalizados — ver `assertParametros`. Ausente = nenhum. */
+  parametros?: Parametros;
   wallId: ObjectId;
   /**
    * `passage` é o vão SEM ESQUADRIA — "vão livre" na tela. Não é decoração de
@@ -625,6 +685,8 @@ export interface Structural {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
   uid: ElementUid;
+  /** Parâmetros personalizados — ver `assertParametros`. Ausente = nenhum. */
+  parametros?: Parametros;
   levelId: ObjectId;
   kind: StructuralKind;
   /** Vértices em mm inteiro. Cardinalidade governada por `FORMA_ESTRUTURAL`. */
@@ -794,6 +856,8 @@ export interface Agua {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
   uid: ElementUid;
+  /** Parâmetros personalizados — ver `assertParametros`. Ausente = nenhum. */
+  parametros?: Parametros;
   levelId: ObjectId;
   /**
    * Contorno em PLANTA, em mm inteiro, no mínimo 3 vértices.
@@ -924,6 +988,8 @@ export interface Escada {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
   uid: ElementUid;
+  /** Parâmetros personalizados — ver `assertParametros`. Ausente = nenhum. */
+  parametros?: Parametros;
   /** O pavimento de PARTIDA. Removê-lo leva a escada junto. */
   levelId: ObjectId;
   tipo: TipoCirculacao;
@@ -1009,6 +1075,8 @@ export interface Trecho {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
   uid: ElementUid;
+  /** Parâmetros personalizados — ver `assertParametros`. Ausente = nenhum. */
+  parametros?: Parametros;
   /** O pavimento de onde as cotas são medidas. Removê-lo leva o trecho junto. */
   levelId: ObjectId;
   disciplina: DisciplinaDeRede;
@@ -1241,6 +1309,8 @@ export interface Terminal {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
   uid: ElementUid;
+  /** Parâmetros personalizados — ver `assertParametros`. Ausente = nenhum. */
+  parametros?: Parametros;
   levelId: ObjectId;
   disciplina: DisciplinaDeRede;
   /** "Tomada baixa", "Ponto de água fria", "Ralo sifonado". Texto livre. */
@@ -1359,6 +1429,8 @@ export interface Quadro {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
   uid: ElementUid;
+  /** Parâmetros personalizados — ver `assertParametros`. Ausente = nenhum. */
+  parametros?: Parametros;
   levelId: ObjectId;
   /** "QDC Principal", "QF Cozinha". */
   nome: string;
@@ -2590,6 +2662,21 @@ export function assertModelInvariants(model: BlueprintModel): void {
     if (l.tipoDeAmbiente != null && !(TIPOS_DE_AMBIENTE as readonly string[]).includes(l.tipoDeAmbiente)) {
       throw new KernelError('BAD_SPACE_KIND', `Tipo de ambiente inválido em ${l.id}: ${l.tipoDeAmbiente}`);
     }
+  }
+
+  // Parâmetros personalizados, nas famílias que os carregam.
+  const comParametros: [string, { id: ObjectId; parametros?: Parametros }[]][] = [
+    ['Parede', model.walls],
+    ['Abertura', model.openings],
+    ['Peça estrutural', model.structures ?? []],
+    ['Água de telhado', model.roofs ?? []],
+    ['Escada', model.stairs ?? []],
+    ['Trecho', model.trechos ?? []],
+    ['Terminal', model.terminais ?? []],
+    ['Quadro', model.quadros ?? []],
+  ];
+  for (const [nome, itens] of comParametros) {
+    for (const item of itens) assertParametros(item.parametros, `${nome} ${item.id}`);
   }
 
   for (const [nome, itens] of familias) {

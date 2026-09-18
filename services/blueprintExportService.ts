@@ -45,7 +45,7 @@ import {
   type PendenciaImportada,
 } from '../utils/blueprintBcfLeitura';
 import * as XLSX from 'xlsx';
-import { COBERTURA_PLANILHA, abasDoQuantitativo } from '../utils/blueprintPlanilha';
+import { COBERTURA_PLANILHA, abasDoQuantitativo, linhasDeParametros } from '../utils/blueprintPlanilha';
 
 /**
  * As pranchas que a aba Versões pode marcar.
@@ -606,6 +606,7 @@ export function montarQuantitativoXlsx(
       kernelVersion: KERNEL_VERSION,
     },
     armaduraDoModelo(model, quant, o.armadura ?? HIPOTESES_ARMADURA_PADRAO),
+    linhasDeParametros(model),
   );
 
   const wb = XLSX.utils.book_new();

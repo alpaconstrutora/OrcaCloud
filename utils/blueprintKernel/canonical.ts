@@ -59,6 +59,7 @@ import {
   type TipoDeAmbiente,
   type FuncaoCamada,
   type StructuralKind,
+  type Parametros,
   assinaturaDasCamadas,
   emptyModel,
   nextId,
@@ -113,6 +114,15 @@ function ordenar<T extends { uid?: ElementUid }, G>(
  * dois modelos com a mesma geometria construída por caminhos diferentes têm
  * contadores diferentes e mesmo assim são o mesmo desenho.
  */
+/**
+ * Parâmetros personalizados (0.33.0): a chave só sai quando há ao menos um;
+ * `stableStringify` ordena as chaves internas. Cópia, para o payload não
+ * apontar para o objeto do modelo.
+ */
+function parametrosCanonicos(p: Parametros | undefined): Parametros | undefined {
+  return p && Object.keys(p).length > 0 ? { ...p } : undefined;
+}
+
 function projetar(model: BlueprintModel): {
   geometria: Omit<CanonicalPayload, 'identity'>;
   identidade: IdentidadeCanonica;
@@ -153,6 +163,7 @@ function projetar(model: BlueprintModel): {
       // ausente significam o mesmo, e emitir `false` mudaria a forma canônica
       // de todo desenho que nunca teve um pilar embutido.
       cedeSobreposicao: w.cedeSobreposicao ? true : undefined,
+      parametros: parametrosCanonicos(w.parametros),
       // A COMPOSIÇÃO. Mesma disciplina das três chaves acima: emitida só quando
       // existe, para não acrescentar `camadas` a toda parede homogênea do
       // acervo e mudar a forma canônica de desenhos que não têm composição
@@ -228,6 +239,7 @@ function projetar(model: BlueprintModel): {
       esquadria: o.esquadria
         ? { nome: o.esquadria.nome, itemCode: o.esquadria.itemCode, descricao: o.esquadria.descricao }
         : undefined,
+      parametros: parametrosCanonicos(o.parametros),
     }),
     (x, y) => parede(x.wallId) - parede(y.wallId) || x.offsetMm - y.offsetMm,
   );
@@ -283,6 +295,7 @@ function projetar(model: BlueprintModel): {
       // já é o padrão de toda peça, e a chave só aparece na que recebeu a
       // decisão do usuário.
       cedeSobreposicao: s.cedeSobreposicao ? true : undefined,
+      parametros: parametrosCanonicos(s.parametros),
       // Seção T: mesma regra da linha acima, e pela mesma razão. Toda peça do
       // acervo é de seção cheia, então a chave ausente mantém o payload —
       // e o hash — byte a byte como estava.
@@ -310,6 +323,7 @@ function projetar(model: BlueprintModel): {
       inclinacaoPct: r.inclinacaoPct,
       baseMm: r.baseMm,
       espessuraMm: r.espessuraMm,
+      parametros: parametrosCanonicos(r.parametros),
     }),
     (x, y) =>
       nivel(x.levelId) - nivel(y.levelId) ||
@@ -350,6 +364,7 @@ function projetar(model: BlueprintModel): {
       larguraMm: e.larguraMm,
       alvoEspelhoMm: e.alvoEspelhoMm,
       rotulo: e.rotulo ?? null,
+      parametros: parametrosCanonicos(e.parametros),
     }),
     (x, y) =>
       nivel(x.levelId) - nivel(y.levelId) ||
@@ -390,6 +405,7 @@ function projetar(model: BlueprintModel): {
       ligacao: q.ligacao ?? undefined,
       tensaoV: q.tensaoV ?? undefined,
       alimentadorM: q.alimentadorM ?? undefined,
+      parametros: parametrosCanonicos(q.parametros),
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y,
   );
@@ -445,6 +461,7 @@ function projetar(model: BlueprintModel): {
       condutores: t.condutores ?? undefined,
       // `true` ou AUSENTE — nunca `false`, pela razão do `sugerida` do terminal.
       sugerido: t.sugerido ? (true as const) : undefined,
+      parametros: parametrosCanonicos(t.parametros),
     }),
     (x, y) =>
       nivel(x.levelId) - nivel(y.levelId) ||
@@ -482,6 +499,7 @@ function projetar(model: BlueprintModel): {
       alturaMm: t.alturaMm ?? undefined,
       profundidadeMm: t.profundidadeMm ?? undefined,
       rotacaoGraus: t.rotacaoGraus ?? undefined,
+      parametros: parametrosCanonicos(t.parametros),
     }),
     (x, y) =>
       nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y || x.cotaMm - y.cotaMm,
@@ -719,6 +737,8 @@ export interface CanonicalPayload {
       descricao: string;
       funcao: FuncaoCamada;
     }[];
+    /** Ausente sob kernel < 0.33.0 e em toda peça sem parâmetro. */
+    parametros?: Parametros;
   }[];
   openings: {
     wall: number;
@@ -734,6 +754,7 @@ export interface CanonicalPayload {
     embutida?: boolean;
     /** Ausente em payload sob kernel < 0.15.0 e em abertura sem tipo. */
     esquadria?: { nome: string; itemCode: string; descricao: string };
+    parametros?: Parametros;
   }[];
   boundaries: {
     level: number;
@@ -761,6 +782,7 @@ export interface CanonicalPayload {
     rotulo?: string | null;
     /** Ausente sob kernel < 0.10.0 e em toda peça que não cede volume. */
     cedeSobreposicao?: boolean;
+    parametros?: Parametros;
   }[];
   /**
    * Águas de telhado. Ausente em payload gravado sob kernel < 0.12.0 e em
@@ -770,6 +792,7 @@ export interface CanonicalPayload {
     level: number;
     pontos: { x: number; y: number }[];
     beiralIndex: number;
+    parametros?: Parametros;
     inclinacaoPct: number;
     baseMm: number;
     espessuraMm: number;
@@ -799,6 +822,7 @@ export interface CanonicalPayload {
     larguraMm: number;
     alvoEspelhoMm: number;
     rotulo: string | null;
+    parametros?: Parametros;
   }[];
   /**
    * Trechos de instalação. Ausente sob kernel < 0.18.0 e em desenho sem rede.
@@ -827,6 +851,7 @@ export interface CanonicalPayload {
     condutores?: number;
     /** Lançado pelo sistema e ainda não confirmado. Ausente sob kernel < 0.30.0 e quando falso. */
     sugerido?: true;
+    parametros?: Parametros;
   }[];
   /** Terminais de instalação. Ausente sob kernel < 0.18.0 e em desenho sem rede. */
   terminais?: {
@@ -863,6 +888,7 @@ export interface CanonicalPayload {
     ligacao?: string;
     tensaoV?: number;
     alimentadorM?: number;
+    parametros?: Parametros;
   }[];
   /** Quadros de distribuição. Ausente sob kernel < 0.19.0 e em desenho sem um. */
   quadros?: {
@@ -880,6 +906,7 @@ export interface CanonicalPayload {
     ligacao?: string;
     tensaoV?: number;
     alimentadorM?: number;
+    parametros?: Parametros;
   }[];
   /**
    * Circuitos. Ausente sob kernel < 0.19.0 e em desenho sem nenhum.
@@ -999,6 +1026,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       // Mesma regra do alinhamento: ausente não volta como `false`, volta como
       // nada — é o que mantém o round-trip fechando byte a byte.
       ...(w.cedeSobreposicao ? { cedeSobreposicao: true } : {}),
+      ...(w.parametros && Object.keys(w.parametros).length > 0 ? { parametros: { ...w.parametros } } : {}),
       // Idem: ausente (e `[]`, que payload nenhum deveria ter) não volta como
       // lista vazia, volta como nada — parede homogênea, que é o que um payload
       // de antes de 0.11.0 significa.
@@ -1036,6 +1064,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       ...(o.esquadria
         ? { esquadria: { nome: o.esquadria.nome, itemCode: o.esquadria.itemCode, descricao: o.esquadria.descricao } }
         : {}),
+      ...(o.parametros && Object.keys(o.parametros).length > 0 ? { parametros: { ...o.parametros } } : {}),
     });
   });
 
@@ -1079,6 +1108,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       rotacaoDeg: s.rotacaoDeg,
       rotulo: s.rotulo ?? null,
       ...(s.cedeSobreposicao ? { cedeSobreposicao: true } : {}),
+      ...(s.parametros && Object.keys(s.parametros).length > 0 ? { parametros: { ...s.parametros } } : {}),
       ...(s.secaoT ? { secaoT: s.secaoT } : {}),
     });
   });
@@ -1097,6 +1127,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       inclinacaoPct: r.inclinacaoPct,
       baseMm: r.baseMm,
       espessuraMm: r.espessuraMm,
+      ...(r.parametros && Object.keys(r.parametros).length > 0 ? { parametros: { ...r.parametros } } : {}),
     });
   });
 
@@ -1127,6 +1158,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       larguraMm: e.larguraMm,
       alvoEspelhoMm: e.alvoEspelhoMm,
       rotulo: e.rotulo,
+      ...(e.parametros && Object.keys(e.parametros).length > 0 ? { parametros: { ...e.parametros } } : {}),
     });
   });
 
@@ -1153,6 +1185,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       ligacao: (q.ligacao as LigacaoDoCircuito | undefined) ?? null,
       tensaoV: q.tensaoV ?? null,
       alimentadorM: q.alimentadorM ?? null,
+      ...(q.parametros && Object.keys(q.parametros).length > 0 ? { parametros: { ...q.parametros } } : {}),
     });
   });
 
@@ -1204,6 +1237,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
             : null,
       condutores: t.condutores ?? null,
       sugerido: t.sugerido ? true : null,
+      ...(t.parametros && Object.keys(t.parametros).length > 0 ? { parametros: { ...t.parametros } } : {}),
     });
   });
 
@@ -1233,6 +1267,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       alturaMm: t.alturaMm ?? null,
       profundidadeMm: t.profundidadeMm ?? null,
       rotacaoGraus: t.rotacaoGraus ?? null,
+      ...(t.parametros && Object.keys(t.parametros).length > 0 ? { parametros: { ...t.parametros } } : {}),
     });
   });
 

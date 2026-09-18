@@ -194,6 +194,13 @@
  *   tem instalação, então nenhuma delas ganha chave — só a versão embutida no
  *   payload mudou.
  *
+ *   0.32.0 → 0.33.0 (18/09/2026): PARÂMETROS PERSONALIZADOS — `parametros:
+ *   {chave: valor}` em parede, abertura, estrutura, telhado, escada, trecho,
+ *   terminal e quadro (E1.2 do roadmap). A chave só sai quando há ao menos um
+ *   parâmetro; nenhum dos seis casos tem. Mesma prova, refeita antes de tocar
+ *   num hash: com a string em 0.32.0 e os campos JÁ no lugar (modelo, comando
+ *   `SetParametros`, canônico ida e volta, invariantes), os sete testes passaram
+ *   (248 com o kernel); as seis falhas foram todas de hash — recapturados.
  *   0.31.0 → 0.32.0 (18/09/2026): a TAXONOMIA HIDRÁULICA — `Terminal.tipoHidraulico`
  *   (campo fechado: torneira, chuveiro, vaso, reservatório, ralo, caixa sifonada,
  *   registro, conexão…) e `volumeL` (litros do reservatório). As duas chaves só
@@ -439,17 +446,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '2f503d2124a38862dd4e49ada43c977d61d94d2328728d034d8b886b7987e0d7',
+    hash: '29281ce76aec51f71d8f9df6d9dea866363c3d86d669a958bd5ecbf165165098',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '8e372bfdf3371b3dd75adb0982c59a3379d34fab187d8839f1dc090862da350c',
+    hash: '8b02633892f54e495003012bee2fb85371a32b662f18510f130f8979c2699a8f',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '1bd673cd9ac2864732f7b5e588d58e5af12fd37c08c98019e173aca4fee4b1e1',
+    hash: '6433e64e9cb23e2ae6f2d0342b8519e080bc332ef0530448118aa637bc747ba2',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -457,7 +464,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: 'e1b7a57d1da2b040a29d6f6afd8255f1385a0aba56f1ef37ffbf2a4a404553d9',
+    hash: 'a4fa5d1eb95c41faad4b71e24f7c350deb026f82199176c35e4af415cc051a0f',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -467,7 +474,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: 'ca578f2d5a7d032bc9d081b7a5c3d7e54ea8d365c38bb63744f23ca83702dd7b',
+    hash: '051d1f544ae981880be9a8cb458dbc6fd7aeb16abe225c0117963de5a4fc70fc',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -478,7 +485,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '53be5f8d3728fe7ed804b8f0bea1f54778c6d31de8eabe4bed869cc507754b3c',
+    hash: 'a91e3624dea5a3e6c008000ce0fd77cfc421faa6a5e5210aa0a40ebb35102397',
   },
 };
 

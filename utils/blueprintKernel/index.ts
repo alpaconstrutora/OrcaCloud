@@ -77,7 +77,9 @@ export type {
   SobreposicaoQuantificada,
 } from './quantities';
 
-export type { Command, CommandResult, Diff } from './commands';
+export type { Command, CommandResult, Diff, FamiliaComParametros } from './commands';
+export { assertParametros, CHAVE_DE_PARAMETRO, MAX_PARAMETROS_POR_PECA, MAX_TEXTO_DE_PARAMETRO } from './model';
+export type { Parametros, ValorDeParametro } from './model';
 export { applyCommand, applyBatch, ModelHistory } from './commands';
 
 // CLASH de instalação. Saída PRÓPRIA, de propósito: ela NÃO vira desconto no

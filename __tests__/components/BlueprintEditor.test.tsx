@@ -83,6 +83,18 @@ vi.mock('../../services/blueprintElementTypeService', () => ({
   deleteElementType: vi.fn(),
 }));
 
+// Definições de parâmetro (E1.2): controláveis, como os tipos de elemento.
+const listParameterDefinitions = vi.fn(async () => [] as unknown[]);
+vi.mock('../../services/blueprintParameterDefinitionService', async () => {
+  const real = await vi.importActual<typeof import('../../services/blueprintParameterDefinitionService')>('../../services/blueprintParameterDefinitionService');
+  return {
+    ...real,
+    listParameterDefinitions: (...a: unknown[]) => listParameterDefinitions(...(a as [])),
+    saveParameterDefinition: vi.fn(async () => ({})),
+    deleteParameterDefinition: vi.fn(),
+  };
+});
+
 vi.mock('../../services/blueprintBudgetService', () => ({
   listMappings: vi.fn(async () => []),
   saveMapping: vi.fn(async () => ({})),
@@ -557,6 +569,41 @@ describe('BlueprintEditor · quantitativos', () => {
     await user.keyboard('{Escape}');
     expect(screen.queryByLabelText(/Nome do tipo de estrutura/)).toBeNull();
     listElementTypes.mockResolvedValue([]);
+  });
+
+  it('parâmetros personalizados (E1.2): o pilar mostra os campos das definições da família, grava ao sair do campo (Desfazer acende) e a nova definição deriva a chave', async () => {
+    listParameterDefinitions.mockResolvedValue([
+      { id: 'pd_1', organizationId: 'org_1', chave: 'fck_mpa', nome: 'fck', familia: 'structural', tipo: 'NUMERO', unidade: 'MPa', opcoes: [], compartilhado: true, formula: '', active: true },
+      { id: 'pd_2', organizationId: 'org_1', chave: 'fabricante', nome: 'Fabricante', familia: null, tipo: 'TEXTO', unidade: '', opcoes: [], compartilhado: true, formula: '', active: true },
+      { id: 'pd_3', organizationId: 'org_1', chave: 'largura_folha', nome: 'Largura da folha', familia: 'opening', tipo: 'NUMERO', unidade: 'cm', opcoes: [], compartilhado: true, formula: '', active: true },
+    ]);
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    loadBranchModel.mockResolvedValue(
+      k.applyCommand(nivel.model, { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(3000, 1500)], larguraMm: 200, profundidadeMm: 200, alturaMm: 2800 }).model,
+    );
+    await montar();
+    const user = userEvent.setup();
+    const barra = () => within(screen.getByRole('toolbar'));
+    await abrirComponentes(user);
+    await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
+    const painel = await screen.findByTestId('painel-parametros');
+    // Da família + de todas; a de esquadria não.
+    const fck = (await within(painel).findByLabelText('fck (MPa)')) as HTMLInputElement;
+    expect(within(painel).getByLabelText('Fabricante')).toBeInTheDocument();
+    expect(within(painel).queryByLabelText(/Largura da folha/)).toBeNull();
+    expect(barra().getByRole('button', { name: /^desfazer/i })).toBeDisabled();
+    await user.type(fck, '30');
+    await user.tab();
+    await waitFor(() => expect(barra().getByRole('button', { name: /^desfazer/i })).toBeEnabled());
+    expect((within(screen.getByTestId('painel-parametros')).getByLabelText('fck (MPa)') as HTMLInputElement).value).toBe('30');
+    // Nova definição: a chave é derivada do nome.
+    await user.click(within(screen.getByTestId('painel-parametros')).getByRole('button', { name: /nova definição/i }));
+    await user.type(screen.getByLabelText(/Nome da nova definição/), 'Índice de esbeltez (λ)');
+    expect(screen.getByTestId('painel-parametros')).toHaveTextContent(/Chave de programa: indice_de_esbeltez/);
+    await user.keyboard('{Escape}');
+    listParameterDefinitions.mockResolvedValue([]);
   });
 
   it('clash arquitetônico (E0.4): pilar no vão da porta entra em Conflitos, conta no botão e o clique seleciona a porta', async () => {

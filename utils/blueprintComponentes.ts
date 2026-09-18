@@ -17,6 +17,7 @@ import {
   type Trecho,
   type Wall,
 } from './blueprintKernel';
+import { etiquetasDasAberturas } from './blueprintNumeracao';
 import {
   NOME_DO_TRECHO,
   ROTULO_DA_DISCIPLINA,
@@ -160,10 +161,14 @@ export function linhasDeComponentes(
     };
   });
 
+  // O NÚMERO é o de `etiquetasDasAberturas` — o mesmo que o desenho escreve
+  // ("PT1" ↔ "Porta 1"). Duas contas divergiriam na primeira abertura de
+  // parede de outro pavimento.
+  const etiquetas = etiquetasDasAberturas(paredes, aberturas);
   const linhasDeAbertura: LinhaDeComponente[] = aberturas.map((o) => ({
     id: o.id,
     chave: o.kind,
-    rotulo: `${nomeDoTipoDeAbertura(o.kind)} ${numero(o.kind)}`,
+    rotulo: `${nomeDoTipoDeAbertura(o.kind)} ${etiquetas.get(o.id)?.numero ?? numero(o.kind)}`,
     medida: `${m(o.widthMm)} × ${m(o.heightMm)} m`,
     // A parede hospedeira é o que localiza a esquadria: sem ela, "Janela 4" não
     // diz onde está, e o clique na lista vira tentativa e erro.

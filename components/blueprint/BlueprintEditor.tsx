@@ -90,6 +90,7 @@ import MenuComponentes, { type EscolhaComponente } from './MenuComponentes';
 import ModalSobreposicao, { type EscolhaSobreposicao } from './ModalSobreposicao';
 import PainelComponentes from './PainelComponentes';
 import { linhasDeComponentesPorNivel } from '../../utils/blueprintComponentes';
+import { etiquetasDasAberturas, rotuloDeNivelDoPavimento } from '../../utils/blueprintNumeracao';
 import PainelEstruturaSelecionada from './PainelEstruturaSelecionada';
 import PainelTrechoSelecionado from './PainelTrechoSelecionado';
 import PainelQuadroSelecionado from './PainelQuadroSelecionado';
@@ -1937,18 +1938,26 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * mesmo cômodo não pode ter um número na lista e outro no desenho. Se a área
    * da lista mudar de definição amanhã, o desenho acompanha sozinho.
    */
-  const rotulosDeAmbiente = useMemo(
-    () =>
-      ambientes.map((a) => ({
-        spaceId: a.id,
-        linhas: [
-          a.rotulo,
-          `${a.areaM2.toFixed(2).replace('.', ',')} m²`,
-          `${a.perimetroM.toFixed(2).replace('.', ',')} m`,
-        ],
-      })),
-    [ambientes],
-  );
+  const rotulosDeAmbiente = useMemo(() => {
+    // A COTA DE NÍVEL (E0.2) é a do pavimento: "±0,00" no térreo, "+2,80" no
+    // andar. Vai na última linha, como a prancha escreve — abaixo do nome e da
+    // área, onde o olho procura o nível do piso.
+    const nivel = levelId ? rotuloDeNivelDoPavimento(editor.model.levels, levelId) : null;
+    return ambientes.map((a) => ({
+      spaceId: a.id,
+      linhas: [
+        a.rotulo,
+        `${a.areaM2.toFixed(2).replace('.', ',')} m²`,
+        `${a.perimetroM.toFixed(2).replace('.', ',')} m`,
+        ...(nivel ? [nivel] : []),
+      ],
+    }));
+  }, [ambientes, editor.model.levels, levelId]);
+  /** "PT1", "J2" ao lado de cada vão — a mesma numeração do navegador. */
+  const etiquetasDeAbertura = useMemo(() => {
+    const paredes = editor.model.walls.filter((w) => !levelId || w.levelId === levelId);
+    return new Map([...etiquetasDasAberturas(paredes, editor.model.openings)].map(([id, e]) => [id, e.texto]));
+  }, [editor.model.walls, editor.model.openings, levelId]);
 
   /**
    * ÁREA CONSTRUÍDA do nível — pela face externa.
@@ -7314,11 +7323,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     },
                     {
                       chave: 'nomes',
-                      rotulo: 'Nome, área e perímetro',
+                      rotulo: 'Nome, área, nível e etiquetas',
                       icone: Tag,
                       ligado: mostrarRotulos,
                       alternar: () => setMostrarRotulos((v) => !v),
-                      ajuda: 'Escreve nome, área e perímetro dentro de cada ambiente.',
+                      ajuda: 'Escreve nome, área, perímetro e cota de nível (±0,00) dentro de cada ambiente, e a etiqueta de cada esquadria (PT1, J2) ao lado do vão — a mesma numeração do navegador.',
                     },
                   ],
                   [
@@ -7997,6 +8006,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               mostrarCotaInterna={mostrarCotaInterna}
               mostrarRotulosAmbiente={mostrarRotulos}
               rotulosDeAmbiente={rotulosDeAmbiente}
+              etiquetasDeAbertura={etiquetasDeAbertura}
               mostrarGrade={mostrarGrade}
               mostrarPreenchimentoAmbientes={mostrarPreenchimento}
               mostrarPreenchimentoTerreno={mostrarPreenchimentoTerreno}

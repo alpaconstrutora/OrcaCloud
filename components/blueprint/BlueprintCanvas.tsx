@@ -999,6 +999,12 @@ interface Props {
   /** Rótulo pronto por ambiente, na ordem de `model.spaces` do nível. */
   rotulosDeAmbiente?: { spaceId: string; linhas: string[] }[];
   /**
+   * Etiqueta de cada abertura ("PT1", "J2"), pronta — `etiquetasDasAberturas`.
+   * Sai com os rótulos de ambiente (mesmo botão): são as duas anotações de
+   * identificação da planta, e ligar uma sem a outra não tem uso.
+   */
+  etiquetasDeAbertura?: ReadonlyMap<string, string>;
+  /**
    * Desenha a grade.
    *
    * ⚠️ **Desligar a grade NÃO desliga o ENCAIXE.** O passo continua valendo — é o
@@ -1299,6 +1305,7 @@ export default function BlueprintCanvas({
   mostrarCotaInterna = false,
   mostrarRotulosAmbiente = false,
   rotulosDeAmbiente = [],
+  etiquetasDeAbertura,
   mostrarGrade = true,
   mostrarPreenchimentoAmbientes = true,
   mostrarPreenchimentoTerreno = true,
@@ -3316,6 +3323,22 @@ export default function BlueprintCanvas({
         ctx.beginPath();
         ctx.arc(piv.x, piv.y, raio, angEixo, angFolha, antiHorario);
         ctx.stroke();
+      }
+
+      // ETIQUETA ("PT1", "J2"): do lado OPOSTO ao da cota da parede (`lado −1`),
+      // para as duas não se escreverem uma sobre a outra; só a partir de 14 px
+      // de vão, senão vira ruído no zoom afastado.
+      const etiqueta = etiquetasDeAbertura?.get(o.id);
+      if (etiqueta && mostrarRotulosAmbiente && larguraTela >= 14 && movendoAbertura?.openingId !== o.id) {
+        rotuloDoTraco(
+          ctx,
+          etiqueta,
+          paraTela(ini as Point),
+          paraTela(fim as Point),
+          Math.max(w.thicknessMm * vista.escala, 2),
+          selecao.has(o.id) ? COR_SELECIONADA : COR_PAREDE,
+          -1,
+        );
       }
 
       // Durante o arraste, a distância até o início da parede — é o número que

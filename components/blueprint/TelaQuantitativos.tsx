@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { volumeDoAmbienteM3 } from '../../utils/blueprintNumeracao';
 import { Calculator } from 'lucide-react';
 import { ROTULO_DA_CONEXAO, nomeDoTipoEstrutural, type BlueprintModel, type DisciplinaDeRede, type TipoDePontoEletrico, type TipoDePontoHidraulico, type computeQuantities } from '../../utils/blueprintKernel';
 import { ROTULO_DA_DISCIPLINA, ROTULO_DO_PONTO_ELETRICO } from '../../utils/blueprintRede';
@@ -74,6 +75,10 @@ const COLUNAS_AMBIENTE: StandardTableColumn[] = [
   { key: 'areaEixoM2', label: 'Eixo (m²)', width: 110, align: 'right' },
   { key: 'areaEstruturaM2', label: 'Pilares (− m²)', width: 120, align: 'right' },
   { key: 'comprimentoRodapeM', label: 'Rodapé (m)', width: 110, align: 'right' },
+  // Pé-direito do PAVIMENTO e volume = piso × pé-direito (E0.2). O ambiente não
+  // tem altura própria no modelo; a coluna diz de onde o número veio.
+  { key: 'peDireitoM', label: 'Pé-direito (m)', width: 120, align: 'right' },
+  { key: 'volumeM3', label: 'Volume (m³)', width: 110, align: 'right' },
   { key: 'formulaAreaPiso', label: 'Fórmula da área de piso', width: 380, sortable: false },
 ];
 const COLUNAS_ESTRUTURA: StandardTableColumn[] = [
@@ -161,9 +166,16 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
       </select>
     ) : undefined;
   const ambientesVisiveis = useMemo(
-    () => quant.ambientes.map((a, i) => ({ ...a, indice: i + 1 })).filter((a) => doPavimento(a.spaceId)),
+    () =>
+      quant.ambientes
+        .map((a, i) => {
+          const nivel = model.levels.find((l) => l.id === mapaDePavimento.get(a.spaceId));
+          const peDireitoM = nivel ? nivel.defaultHeightMm / 1000 : 0;
+          return { ...a, indice: i + 1, peDireitoM, volumeM3: nivel ? volumeDoAmbienteM3(a.areaPisoM2, nivel.defaultHeightMm) : 0 };
+        })
+        .filter((a) => doPavimento(a.spaceId)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [quant.ambientes, pavimentoFiltro, mapaDePavimento],
+    [quant.ambientes, pavimentoFiltro, mapaDePavimento, model.levels],
   );
   const estruturasVisiveis = useMemo(
     () => quant.estruturas.map((e, i) => ({ ...e, indice: i + 1 })).filter((e) => doPavimento(e.structuralId)),
@@ -350,7 +362,7 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
       )}
 
       {aba === 'ambientes' && (
-        <StandardTable<Quant['ambientes'][number] & { indice: number }>
+        <StandardTable<Quant['ambientes'][number] & { indice: number; peDireitoM: number; volumeM3: number }>
           columns={COLUNAS_AMBIENTE}
           storageKey="blueprint:quantitativosAmbientes"
           rows={ambientesVisiveis}
@@ -371,6 +383,10 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
                 return a.areaEstruturaM2 > 0 ? <span className="block text-right text-sm tabular-nums text-gray-700">− {fmt(a.areaEstruturaM2)}</span> : <span className="block text-right text-sm text-gray-300">—</span>;
               case 'comprimentoRodapeM':
                 return num(fmt, a.comprimentoRodapeM);
+              case 'peDireitoM':
+                return num(fmt, a.peDireitoM);
+              case 'volumeM3':
+                return num(fmt, a.volumeM3);
               case 'formulaAreaPiso':
                 return <span className="text-xs italic text-gray-400">{a.formulaAreaPiso}</span>;
               default:

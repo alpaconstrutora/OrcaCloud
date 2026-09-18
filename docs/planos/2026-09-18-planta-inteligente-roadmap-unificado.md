@@ -236,6 +236,20 @@ fabricação, Dynamo/marketplace, worksets/modelo central, HVAC completo, texto 
 - App real (escritas bloqueadas: 16): parede esquerda de 7,05 m girou 90° em torno do centro e
   Desfazer devolveu; matriz 3× criou 2 cópias (7 → 9 paredes) num lote.
 
+### E0.2 — Etiquetas de esquadria, cota de nível e volume (18/09/2026)
+- `utils/blueprintNumeracao.ts` (novo, puro): `etiquetasDasAberturas` (por tipo, ordem de criação,
+  por pavimento; siglas PT/J/PC/VL — "P" já é pilar), `rotuloDeNivel` (±0,00 / +2,80 / −1,20, em cm
+  antes do sinal), `volumeDoAmbienteM3` (piso × pé-direito do pavimento). O navegador passou a
+  numerar pela mesma função ("Porta 2" ↔ "PT2").
+- Canvas: prop `etiquetasDeAbertura`; a etiqueta sai do lado oposto ao da cota da parede, com
+  o mesmo botão dos rótulos de ambiente (renomeado "Nome, área, nível e etiquetas"); o rótulo do
+  ambiente ganhou a 4ª linha com a cota de nível do pavimento.
+- Tela Quantitativos › Por ambiente: colunas Pé-direito (m) e Volume (m³). A planilha não
+  ganhou volume porque não recebe o modelo (só `Quantitativos`) — fica para quando o volume
+  entrar em `quantities.ts`.
+- Testes: `blueprintNumeracao` (4), editor "Por ambiente (E0.2)". Suíte 4597. App real (escritas
+  bloqueadas: 14): "±0,00" em cada ambiente, "PT1" ao lado da porta, colunas 2,80 / 70,52 na tela.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

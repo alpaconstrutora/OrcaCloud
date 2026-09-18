@@ -536,6 +536,29 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(await screen.findByTestId('propriedades-sheet')).toHaveTextContent(/P1/);
   });
 
+  it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2500 });
+    const t = nivel.model.levels[0].id;
+    // Sala 4 × 3 de eixo, paredes de 150: piso (3,85 × 2,85) = 10,97 m²; volume 10,97 × 2,50 = 27,43 m³.
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [
+        { type: 'AddWall', levelId: t, a: k.point(0, 0), b: k.point(4000, 0), thicknessMm: 150, heightMm: 2500 },
+        { type: 'AddWall', levelId: t, a: k.point(4000, 0), b: k.point(4000, 3000), thicknessMm: 150, heightMm: 2500 },
+        { type: 'AddWall', levelId: t, a: k.point(4000, 3000), b: k.point(0, 3000), thicknessMm: 150, heightMm: 2500 },
+        { type: 'AddWall', levelId: t, a: k.point(0, 3000), b: k.point(0, 0), thicknessMm: 150, heightMm: 2500 },
+      ]).model,
+    );
+    await montar();
+    const user = userEvent.setup();
+    const tela = await abrirTelaDeQuantitativos();
+    await user.click(within(tela).getByRole('tab', { name: /^Por ambiente/ }));
+    expect(within(tela).getByRole('columnheader', { name: /Pé-direito \(m\)/ })).toBeInTheDocument();
+    expect(within(tela).getByRole('columnheader', { name: /Volume \(m³\)/ })).toBeInTheDocument();
+    const linhas = within(tela).getAllByRole('row').map((r) => (r.textContent ?? '').replace(/\s+/g, ' '));
+    expect(linhas.some((l) => /10,97.*2,50.*27,43/.test(l))).toBe(true);
+  });
+
   it('aba Instalações (18/09/2026): tubo por DN, pontos por classificação e conexões deduzidas, com filtro por disciplina', async () => {
     // "incluir hidráulica no quantitativo"
     const k = await import('../../utils/blueprintKernel');

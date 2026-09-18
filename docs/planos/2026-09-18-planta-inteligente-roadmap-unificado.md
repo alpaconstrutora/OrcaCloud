@@ -399,6 +399,25 @@ genéricos).
 **Etapa 1 restante:** E1.5 (Objeto Inteligente — ficha unificada; seletor de tipo em escada e
 telhado; fórmulas nas saídas).
 
+### E1.5 — Objeto Inteligente (18/09/2026) · fecha a Etapa 1
+- `utils/blueprintFicha.ts` (puro, só leitura): `fichaDoElemento(model, id, {definicoes,
+  conferencias, custo})` → seções Geometria (por família; a porta diz hospedeira, offset, os dois
+  ambientes que liga e se é acessível NBR 9050), Tipo (peças iguais por assinatura), Parâmetros
+  (gravados + calculados ƒ), Custo (orçamento), Restrições (atendida/violada com desvio);
+  `fichaComoTexto` para copiar. `FichaDoElemento` recolhida sob os painéis, com "Copiar".
+- **Seletor de tipo** (E1.1) chegou à escada e ao telhado (`camposDaEscada/camposDoTelhado`).
+- **Fórmulas nas saídas**: `parametrosCalculadosDoModelo(model, definições)` (só o que avaliou);
+  `OpcoesExportacao.definicoesDeParametro` (PainelVersoes carrega as com fórmula) → IFC mescla os
+  calculados no `Pset_OpuraPersonalizado`; planilha ganha a coluna **Origem** (gravado/fórmula).
+- Definições de parâmetro carregadas UMA vez no editor e entregues ao painel e à ficha.
+- Testes: `blueprintFicha` (3), editor "E1.5" (ficha do pilar com 224 calculado; seletor na
+  escada). Suíte 4641. App real (escritas bloqueadas: 14): ficha da porta "Liga Ambiente 4 ↔
+  Ambiente 3 · Acessível sim · Térreo · pé-direito 2,80 m".
+
+**Etapa 1 concluída** (E1.1 32d6c5c · E1.2 afab5ffc · E1.3 53002b37 · E1.4a 6b8f2957 · E1.4b
+72c965ce · E1.5 esta). Kernel 0.35.0. Próxima: **E2.1 — pavimento tipo** (`Level.tipoDeId` +
+propagação; bump).
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

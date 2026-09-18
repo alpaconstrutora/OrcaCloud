@@ -292,6 +292,12 @@ export interface OpcoesExportacao {
   eletrica?: boolean;
   /** Hipóteses do pré-dimensionamento, para o quadro de cargas da prancha. */
   hipotesesEletricas?: HipotesesEletricas;
+  /**
+   * As definições de parâmetro COM FÓRMULA da organização (E1.5). Com elas, o
+   * IFC e a planilha levam também os valores calculados — a ficha completa da
+   * peça, não só o que foi digitado. Ausente = só os gravados.
+   */
+  definicoesDeParametro?: readonly { chave: string; formula: string; familia: import('./blueprintKernel').FamiliaComParametros | null }[];
 }
 
 /**

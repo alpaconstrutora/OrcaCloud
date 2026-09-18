@@ -695,6 +695,38 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(screen.getByTestId('painel-restricoes-peca')).not.toHaveTextContent(/sobre o eixo A/);
   });
 
+  it('ficha do elemento (E1.5): recolhida sob o painel do pilar, expande com geometria, tipo e o parâmetro calculado; a escada ganha o seletor de tipo', async () => {
+    listParameterDefinitions.mockResolvedValue([
+      { id: 'pd_1', organizationId: 'org_1', chave: 'custo_m3', nome: 'Custo do concreto', familia: 'structural', tipo: 'NUMERO', unidade: 'R$/m³', opcoes: [], compartilhado: true, formula: '', active: true },
+      { id: 'pd_2', organizationId: 'org_1', chave: 'custo', nome: 'Custo da peça', familia: 'structural', tipo: 'NUMERO', unidade: 'R$', opcoes: [], compartilhado: true, formula: 'arred(volume * custo_m3, 2)', active: true },
+    ]);
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const r = k.applyBatch(nivel.model, [
+      { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(3000, 1500)], larguraMm: 200, profundidadeMm: 400, alturaMm: 2800 },
+      { type: 'AddEscada', levelId: t, pontos: [k.point(6000, 0), k.point(9000, 0)], larguraMm: 1200 },
+    ]);
+    loadBranchModel.mockResolvedValue(k.applyCommand(r.model, { type: 'SetParametros', familia: 'structural', id: r.model.structures[0].id, valores: { custo_m3: 1000 } }).model);
+    await montar();
+    const user = userEvent.setup();
+    await abrirComponentes(user);
+    await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
+    const ficha = await screen.findByTestId('ficha-do-elemento');
+    expect(ficha).toHaveTextContent(/Ficha · Pilar C-/); // sem rótulo declarado, vale o identificador
+    expect(within(ficha).getByRole('button', { name: /copiar ficha/i })).toBeInTheDocument();
+    await user.click(within(ficha).getByRole('button', { name: /^Ficha · Pilar/ }));
+    expect(ficha).toHaveTextContent(/Geometria/);
+    expect(ficha).toHaveTextContent(/Pilar 20×40 · 2,80 m/);
+    expect(ficha).toHaveTextContent(/Peças iguais no desenho/);
+    await waitFor(() => expect(ficha).toHaveTextContent(/Custo da peça \(R\$\)/));
+    expect(ficha).toHaveTextContent(/224/); // 0,224 m³ × 1000
+    // Escada: o seletor de tipo (E1.5 estende E1.1).
+    await user.click(await screen.findByRole('button', { name: /^Escada 1/ }));
+    expect(await screen.findByTestId('seletor-de-tipo-escada')).toHaveTextContent(/só esta peça/);
+    listParameterDefinitions.mockResolvedValue([]);
+  });
+
   it('clash arquitetônico (E0.4): pilar no vão da porta entra em Conflitos, conta no botão e o clique seleciona a porta', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });

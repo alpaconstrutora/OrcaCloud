@@ -1,3 +1,5 @@
+import SeletorDeTipo from './SeletorDeTipo';
+import { propriedadesDaEscada, type PropriedadesDeEscada } from '../../utils/blueprintTipos';
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import {
@@ -40,11 +42,14 @@ interface Props {
     rotulo?: string | null;
   }) => void;
   onExcluir: () => void;
+  /** TIPO × INSTÂNCIA (E1.5): copia largura/espelho/tipo de um tipo salvo. */
+  onAplicarTipo?: (p: PropriedadesDeEscada) => void;
+  comAMesmaAssinatura?: number;
 }
 
 const m = (mm: number) => (mm / 1000).toFixed(2).replace('.', ',');
 
-export default function PainelEscadaSelecionada({ model, escada, onProps, onExcluir }: Props) {
+export default function PainelEscadaSelecionada({ model, escada, onProps, onExcluir, onAplicarTipo, comAMesmaAssinatura }: Props) {
   if (!escada) return null;
 
   const med = medirEscada(model, escada);
@@ -151,6 +156,9 @@ export default function PainelEscadaSelecionada({ model, escada, onProps, onExcl
         {m(med.comprimentoMm)} m em planta · {m(med.comprimentoInclinadoMm)} m na inclinada ·{' '}
         {(med.areaPlantaMm2 / 1_000_000).toFixed(2).replace('.', ',')} m² de pegada.
       </p>
+      {onAplicarTipo && (
+        <SeletorDeTipo familia="ESCADA" atual={propriedadesDaEscada(escada)} onAplicar={(p) => onAplicarTipo(p as PropriedadesDeEscada)} comAMesmaAssinatura={comAMesmaAssinatura} />
+      )}
     </div>
   );
 }

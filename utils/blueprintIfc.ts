@@ -491,6 +491,12 @@ export interface OpcoesIfc {
   /** Versão do kernel para o `Pset_OpuraPlanta`. Padrão: a do módulo. */
   kernelVersion?: string;
   /**
+   * Valores CALCULADOS por fórmula, por uid (E1.5) — entram no
+   * `Pset_OpuraPersonalizado` ao lado dos gravados; em choque de chave, o
+   * calculado vence (é a definição da organização falando).
+   */
+  parametrosCalculadosPorUid?: ReadonlyMap<string, Parametros>;
+  /**
    * Custo por `uid` de elemento. Ausente = o IFC sai SEM custo nenhum.
    *
    * ─── ⚠️ POR QUE ISTO É OPCIONAL, E POR QUE O PADRÃO É NÃO MANDAR ────────────
@@ -698,8 +704,12 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   const parametrosPorUid = new Map<string, Parametros>();
   for (const lista of [model.walls, model.openings, model.structures ?? [], model.roofs ?? [], model.stairs ?? [], model.trechos ?? [], model.terminais ?? [], model.quadros ?? []]) {
     for (const x of lista as { uid?: string; parametros?: Parametros }[]) {
-      if (x.uid && x.parametros && Object.keys(x.parametros).length > 0) parametrosPorUid.set(x.uid, x.parametros);
+      if (x.uid && x.parametros && Object.keys(x.parametros).length > 0) parametrosPorUid.set(x.uid, { ...x.parametros });
     }
+  }
+  // Os calculados (E1.5) por cima dos gravados, quando quem exportou os trouxe.
+  for (const [uid, calc] of o.parametrosCalculadosPorUid ?? []) {
+    parametrosPorUid.set(uid, { ...(parametrosPorUid.get(uid) ?? {}), ...calc });
   }
   const psetPersonalizado = (produto: string, uid: string | undefined) => {
     const p = uid ? parametrosPorUid.get(uid) : undefined;

@@ -431,7 +431,7 @@ function comLengths(base: Variaveis): Variaveis {
   return saida;
 }
 
-type Peca =
+export type Peca =
   | { familia: 'wall'; peca: Wall }
   | { familia: 'opening'; peca: Opening }
   | { familia: 'structural'; peca: Structural }
@@ -578,4 +578,45 @@ export function formatarValor(v: Valor): string {
     return String(arred).replace('.', ',');
   }
   return v;
+}
+
+// ─── Calculados do modelo inteiro (E1.5): o que sai no IFC, na planilha e na ficha ──
+
+export interface DefinicaoComFamilia extends DefinicaoAvaliavel {
+  /** `null` = todas as famílias. */
+  familia: FamiliaComParametros | null;
+}
+
+/** Todas as peças com parâmetros, com a chave da família — um lugar só para as oito listas. */
+export function pecasComParametros(model: BlueprintModel): Peca[] {
+  return [
+    ...model.walls.map((peca): Peca => ({ familia: 'wall', peca })),
+    ...model.openings.map((peca): Peca => ({ familia: 'opening', peca })),
+    ...(model.structures ?? []).map((peca): Peca => ({ familia: 'structural', peca })),
+    ...(model.roofs ?? []).map((peca): Peca => ({ familia: 'roof', peca })),
+    ...(model.stairs ?? []).map((peca): Peca => ({ familia: 'stair', peca })),
+    ...(model.trechos ?? []).map((peca): Peca => ({ familia: 'trecho', peca })),
+    ...(model.terminais ?? []).map((peca): Peca => ({ familia: 'terminal', peca })),
+    ...(model.quadros ?? []).map((peca): Peca => ({ familia: 'quadro', peca })),
+  ];
+}
+
+/**
+ * Os valores CALCULADOS por fórmula, por uid de peça — só os que avaliaram
+ * sem erro. É o que as saídas (IFC, planilha) e a ficha consomem; o painel
+ * mostra também os erros, por isso usa `avaliarDefinicoes` direto.
+ */
+export function parametrosCalculadosDoModelo(model: BlueprintModel, definicoes: readonly DefinicaoComFamilia[]): Map<string, Record<string, Valor>> {
+  const saida = new Map<string, Record<string, Valor>>();
+  const comFormula = definicoes.filter((d) => d.formula.trim() !== '');
+  if (comFormula.length === 0) return saida;
+  for (const alvo of pecasComParametros(model)) {
+    const defs = comFormula.filter((d) => d.familia === null || d.familia === alvo.familia);
+    if (defs.length === 0) continue;
+    const r = avaliarDefinicoes(defs, variaveisDaPeca(model, alvo));
+    const ok = r.filter((x) => x.erro === null && x.valor !== null);
+    if (ok.length === 0) continue;
+    saida.set(alvo.peca.uid, Object.fromEntries(ok.map((x) => [x.chave, x.valor as Valor])));
+  }
+  return saida;
 }

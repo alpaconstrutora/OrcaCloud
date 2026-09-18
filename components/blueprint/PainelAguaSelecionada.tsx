@@ -1,3 +1,5 @@
+import SeletorDeTipo from './SeletorDeTipo';
+import { propriedadesDoTelhado, type PropriedadesDeTelhado } from '../../utils/blueprintTipos';
 import React from 'react';
 import { medirAgua, type Agua } from '../../utils/blueprintKernel';
 import { CampoMedida } from './PainelParedeSelecionada';
@@ -34,11 +36,14 @@ interface Props {
     espessuraMm?: number;
   }) => void;
   onExcluir: () => void;
+  /** TIPO × INSTÂNCIA (E1.5): copia inclinação/base/espessura de um tipo salvo. */
+  onAplicarTipo?: (p: PropriedadesDeTelhado) => void;
+  comAMesmaAssinatura?: number;
 }
 
 const m2 = (v: number) => v.toFixed(2).replace('.', ',');
 
-export default function PainelAguaSelecionada({ agua, onProps, onExcluir }: Props) {
+export default function PainelAguaSelecionada({ agua, onProps, onExcluir, onAplicarTipo, comAMesmaAssinatura }: Props) {
   if (!agua) return null;
 
   const med = medirAgua(agua);
@@ -135,6 +140,9 @@ export default function PainelAguaSelecionada({ agua, onProps, onExcluir }: Prop
         Ponto mais alto a {(med.alturaMaximaMm / 1000).toFixed(2).replace('.', ',')} m do piso ·
         beiral de {med.comprimentoBeiralM.toFixed(2).replace('.', ',')} m.
       </p>
+      {onAplicarTipo && (
+        <SeletorDeTipo familia="TELHADO" atual={propriedadesDoTelhado(agua)} onAplicar={(p) => onAplicarTipo(p as PropriedadesDeTelhado)} comAMesmaAssinatura={comAMesmaAssinatura} />
+      )}
     </div>
   );
 }

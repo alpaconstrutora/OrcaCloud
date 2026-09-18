@@ -121,6 +121,10 @@ import {
 import PainelCorteSelecionado from './PainelCorteSelecionado';
 import PainelEixoSelecionado from './PainelEixoSelecionado';
 import PainelRestricoes from './PainelRestricoes';
+import FichaDoElemento from './FichaDoElemento';
+import { fichaDoElemento } from '../../utils/blueprintFicha';
+import { listParameterDefinitions, type DefinicaoDeParametro } from '../../services/blueprintParameterDefinitionService';
+import { camposDaEscada, camposDoTelhado, propriedadesDaEscada, propriedadesDoTelhado } from '../../utils/blueprintTipos';
 import { conferirRestricoes, violacoes } from '../../utils/blueprintRestricoes';
 import { contornosParaTelhado } from '../../utils/blueprintTelhadoContorno';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
@@ -1688,6 +1692,19 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       vivo = false;
     };
   }, [orgId]);
+  /**
+   * As DEFINIÇÕES de parâmetro da organização (E1.5): carregadas uma vez aqui
+   * e entregues ao painel de parâmetros e à ficha. Falhar = lista vazia.
+   */
+  const [definicoesDeParametro, setDefinicoesDeParametro] = useState<DefinicaoDeParametro[]>([]);
+  const recarregarDefinicoes = useCallback(() => {
+    listParameterDefinitions(orgId)
+      .then(setDefinicoesDeParametro)
+      .catch(() => setDefinicoesDeParametro([]));
+  }, [orgId]);
+  useEffect(() => {
+    recarregarDefinicoes();
+  }, [recarregarDefinicoes]);
 
   /**
    * Empreendimentos do CONTEXTO DO TOPO — para a zona urbanística e para o
@@ -5984,6 +6001,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           editor.run({ type: 'SetEscadaProps', escadaId: escadaSel.id, ...campos })
         }
         onExcluir={removerSelecionada}
+        onAplicarTipo={(p) => escadaSel && editor.run({ type: 'SetEscadaProps', escadaId: escadaSel.id, ...camposDaEscada(p) })}
+        comAMesmaAssinatura={escadaSel ? (editor.model.stairs ?? []).filter((e) => assinaturaDoTipo(propriedadesDaEscada(e)) === assinaturaDoTipo(propriedadesDaEscada(escadaSel))).length : undefined}
       />
 
       <PainelEixoSelecionado
@@ -6009,6 +6028,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           aguaSel && editor.run({ type: 'SetAguaProps', aguaId: aguaSel.id, ...campos })
         }
         onExcluir={removerSelecionada}
+        onAplicarTipo={(p) => aguaSel && editor.run({ type: 'SetAguaProps', aguaId: aguaSel.id, ...camposDoTelhado(p) })}
+        comAMesmaAssinatura={aguaSel ? (editor.model.roofs ?? []).filter((r) => assinaturaDoTipo(propriedadesDoTelhado(r)) === assinaturaDoTipo(propriedadesDoTelhado(aguaSel))).length : undefined}
       />
 
       <PainelParedeSelecionada
@@ -6109,6 +6130,24 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           parametros={pecaComParametros.parametros}
           onSet={(valores) => editor.run({ type: 'SetParametros', familia: pecaComParametros.familia, id: pecaComParametros.id, valores })}
           variaveis={variaveisDaSelecao}
+          definicoes={definicoesDeParametro}
+          onDefinicoesMudaram={recarregarDefinicoes}
+        />
+      )}
+
+      {/* A FICHA (E1.5): tudo o que o desenho sabe da peça, numa ordem só,
+          copiável. Depois dos painéis de edição — primeiro se edita, depois se lê. */}
+      {pecaComParametros && (
+        <FichaDoElemento
+          ficha={fichaDoElemento(editor.model, pecaComParametros.id, {
+            definicoes: definicoesDeParametro,
+            conferencias: conferenciaDeRestricoes,
+            custo: custoPorUid.get(
+              (editor.model.walls.find((w) => w.id === pecaComParametros.id) ??
+                editor.model.openings.find((o) => o.id === pecaComParametros.id) ??
+                (editor.model.structures ?? []).find((s) => s.id === pecaComParametros.id))?.uid ?? '',
+            ),
+          })}
         />
       )}
 

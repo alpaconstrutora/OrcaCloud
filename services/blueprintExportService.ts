@@ -38,6 +38,7 @@ import {
 import { type ProjecaoCorte, projetarCorte } from '../utils/blueprintCorte';
 import { COBERTURA_DXF, gerarDxf, type TopografiaParaDxf } from '../utils/blueprintDxf';
 import { COBERTURA_IFC, gerarIfc, ifcGuidDoProjeto } from '../utils/blueprintIfc';
+import { parametrosCalculadosDoModelo } from '../utils/blueprintFormulas';
 import { arquivosDoBcf, type TopicoBcf } from '../utils/blueprintBcf';
 import {
   lerComponentes,
@@ -525,6 +526,7 @@ export function montarIfc(model: BlueprintModel, o: OpcoesExportacao): ArtefatoE
     // Só vai custo se quem exportou pediu — ver `custoPorUid`.
     custoPorUid: o.custoPorUid,
     aprovacao: o.aprovacao,
+    parametrosCalculadosPorUid: o.definicoesDeParametro ? parametrosCalculadosDoModelo(model, o.definicoesDeParametro) : undefined,
   });
 
   return [
@@ -606,7 +608,7 @@ export function montarQuantitativoXlsx(
       kernelVersion: KERNEL_VERSION,
     },
     armaduraDoModelo(model, quant, o.armadura ?? HIPOTESES_ARMADURA_PADRAO),
-    linhasDeParametros(model),
+    linhasDeParametros(model, o.definicoesDeParametro ? parametrosCalculadosDoModelo(model, o.definicoesDeParametro) : undefined),
   );
 
   const wb = XLSX.utils.book_new();

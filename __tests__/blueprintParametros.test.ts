@@ -107,7 +107,7 @@ describe('saídas: IFC e planilha', () => {
     const quant = computeQuantities(x, POLITICA_PADRAO, KERNEL_VERSION);
     const abas = abasDoQuantitativo(quant, { titulo: 'x', revisao: 1, hash: 'h', kernelVersion: KERNEL_VERSION }, null, linhas);
     const aba = abas.find((a) => a.nome === 'Parâmetros')!;
-    expect(aba.linhas[0]).toEqual(['Peça', 'Família', 'Chave', 'Valor']);
+    expect(aba.linhas[0]).toEqual(['Peça', 'Família', 'Chave', 'Valor', 'Origem']);
     expect(aba.linhas.some((l) => l[1] === 'Pilar' && l[2] === 'protendido' && l[3] === 'não')).toBe(true);
     expect(abasDoQuantitativo(quant, { titulo: 'x', revisao: 1, hash: 'h', kernelVersion: KERNEL_VERSION }, null, []).some((a) => a.nome === 'Parâmetros')).toBe(false);
   });

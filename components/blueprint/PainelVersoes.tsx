@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { listParameterDefinitions } from '../../services/blueprintParameterDefinitionService';
+import { useOrgContext } from '../../hooks/useOrgContext';
 import { Boxes, Download, FileText, GitCompare, Image, Maximize2, Ruler, Shapes, Share2, Table, UploadCloud } from 'lucide-react';
 import type { BlueprintStudy, BlueprintSnapshotSummary } from '../../types/blueprint';
 import {
@@ -323,8 +325,22 @@ export default function PainelVersoes({
     }
   }
 
+  const { orgId: orgIdDasDefinicoes } = useOrgContext();
+  const [definicoesComFormula, setDefinicoesComFormula] = useState<{ chave: string; formula: string; familia: import('../../utils/blueprintKernel').FamiliaComParametros | null }[]>([]);
+  useEffect(() => {
+    let vivo = true;
+    listParameterDefinitions(orgIdDasDefinicoes)
+      .then((ds) => vivo && setDefinicoesComFormula(ds.filter((d) => d.formula.trim() !== '').map((d) => ({ chave: d.chave, formula: d.formula, familia: d.familia }))))
+      .catch(() => vivo && setDefinicoesComFormula([]));
+    return () => {
+      vivo = false;
+    };
+  }, [orgIdDasDefinicoes]);
+
   function opcoes(): OpcoesExportacao {
     return {
+      // As definições com fórmula (E1.5): o IFC e a planilha levam os calculados.
+      definicoesDeParametro: definicoesComFormula.length ? definicoesComFormula : undefined,
       denominador,
       papel,
       titulo: study.name,

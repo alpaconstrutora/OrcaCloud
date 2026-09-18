@@ -51,12 +51,18 @@ interface Props {
   onSet: (valores: Record<string, ValorDeParametro | null>) => void;
   /** As variáveis da peça para as FÓRMULAS (E1.3) — `variaveisDaPeca(model, alvo)`. */
   variaveis?: Variaveis;
+  /** As definições já carregadas pelo editor (E1.5) — evita uma ida ao banco por painel. */
+  definicoes?: DefinicaoDeParametro[];
+  /** Avisa o editor que uma definição nova foi salva, para ele recarregar. */
+  onDefinicoesMudaram?: () => void;
 }
 
-export default function PainelParametros({ familia, pecaId, parametros, onSet, variaveis }: Props) {
+export default function PainelParametros({ familia, pecaId, parametros, onSet, variaveis, definicoes: definicoesDeFora, onDefinicoesMudaram }: Props) {
   const { orgId } = useOrgContext();
   const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
-  const [definicoes, setDefinicoes] = useState<DefinicaoDeParametro[]>([]);
+  const [definicoesLocais, setDefinicoesLocais] = useState<DefinicaoDeParametro[]>([]);
+  const definicoes = definicoesDeFora ?? definicoesLocais;
+  const setDefinicoes = setDefinicoesLocais;
   const vivo = useRef(true);
   useEffect(() => {
     vivo.current = true;
@@ -65,6 +71,10 @@ export default function PainelParametros({ familia, pecaId, parametros, onSet, v
     };
   }, []);
   const carregar = useCallback(() => {
+    if (definicoesDeFora) {
+      onDefinicoesMudaram?.();
+      return;
+    }
     listParameterDefinitions(orgId)
       .then((lista) => {
         if (vivo.current) setDefinicoes(lista);
@@ -72,10 +82,10 @@ export default function PainelParametros({ familia, pecaId, parametros, onSet, v
       .catch(() => {
         if (vivo.current) setDefinicoes([]);
       });
-  }, [orgId]);
+  }, [orgId, definicoesDeFora, onDefinicoesMudaram]);
   useEffect(() => {
-    carregar();
-  }, [carregar]);
+    if (!definicoesDeFora) carregar();
+  }, [carregar, definicoesDeFora]);
 
   const daFamilia = useMemo(() => definicoes.filter((d) => d.familia === null || d.familia === familia), [definicoes, familia]);
   const chavesDefinidas = new Set(daFamilia.map((d) => d.chave));

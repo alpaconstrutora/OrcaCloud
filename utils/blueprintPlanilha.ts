@@ -413,8 +413,8 @@ export function abasDoQuantitativo(
     abas.push({
       nome: 'Parâmetros',
       linhas: [
-        ['Peça', 'Família', 'Chave', 'Valor'],
-        ...parametros.map((l) => [l.peca, l.familia, l.chave, typeof l.valor === 'boolean' ? (l.valor ? 'sim' : 'não') : l.valor]),
+        ['Peça', 'Família', 'Chave', 'Valor', 'Origem'],
+        ...parametros.map((l) => [l.peca, l.familia, l.chave, typeof l.valor === 'boolean' ? (l.valor ? 'sim' : 'não') : l.valor, l.origem === 'formula' ? 'fórmula' : 'gravado']),
       ],
     });
   }
@@ -428,6 +428,8 @@ export interface LinhaDeParametro {
   familia: string;
   chave: string;
   valor: string | number | boolean;
+  /** Digitado na peça, ou calculado por fórmula da definição (E1.5). */
+  origem: 'gravado' | 'formula';
 }
 
 /**
@@ -435,19 +437,26 @@ export interface LinhaDeParametro {
  * é nomeada pelo rótulo quando há, senão pelo rótulo curto do uid — o mesmo
  * que o painel de conflitos usa.
  */
-export function linhasDeParametros(model: BlueprintModel): LinhaDeParametro[] {
+const rc = (uid: string | undefined, familia: Parameters<typeof rotuloCurto>[1]) => (uid ? rotuloCurto(uid, familia) : '—');
+
+export function linhasDeParametros(
+  model: BlueprintModel,
+  /** Os calculados por fórmula, por uid (E1.5) — `parametrosCalculadosDoModelo`. */
+  calculados?: ReadonlyMap<string, Record<string, string | number | boolean>>,
+): LinhaDeParametro[] {
   const saida: LinhaDeParametro[] = [];
-  const add = (familia: string, peca: string, p: Record<string, string | number | boolean> | undefined) => {
-    if (!p) return;
-    for (const chave of Object.keys(p).sort()) saida.push({ peca, familia, chave, valor: p[chave] });
+  const add = (familia: string, peca: string, uid: string, p: Record<string, string | number | boolean> | undefined) => {
+    for (const chave of Object.keys(p ?? {}).sort()) saida.push({ peca, familia, chave, valor: p![chave], origem: 'gravado' });
+    const calc = calculados?.get(uid);
+    for (const chave of Object.keys(calc ?? {}).sort()) saida.push({ peca, familia, chave, valor: calc![chave], origem: 'formula' });
   };
-  for (const w of model.walls) add('Parede', rotuloCurto(w.uid, 'wall'), w.parametros);
-  for (const o of model.openings) add(nomeDoTipoDeAbertura(o.kind), o.esquadria?.nome || rotuloCurto(o.uid, 'opening'), o.parametros);
-  for (const x of model.structures ?? []) add(nomeDoTipoEstrutural(x.kind), x.rotulo || rotuloCurto(x.uid, 'structural'), x.parametros);
-  for (const r of model.roofs ?? []) add('Água de telhado', rotuloCurto(r.uid, 'roof'), r.parametros);
-  for (const e of model.stairs ?? []) add(e.tipo === 'RAMPA' ? 'Rampa' : 'Escada', e.rotulo || rotuloCurto(e.uid, 'stair'), e.parametros);
-  for (const t of model.trechos ?? []) add(`Trecho ${ROTULO_DA_DISCIPLINA[t.disciplina]}`, t.rotulo || rotuloCurto(t.uid, 'trecho'), t.parametros);
-  for (const t of model.terminais ?? []) add(`Ponto ${ROTULO_DA_DISCIPLINA[t.disciplina]}`, t.rotulo || rotuloCurto(t.uid, 'terminal'), t.parametros);
-  for (const q of model.quadros ?? []) add('Quadro', q.nome || rotuloCurto(q.uid, 'quadro'), q.parametros);
+  for (const w of model.walls) add('Parede', rc(w.uid, 'wall'), w.uid, w.parametros);
+  for (const o of model.openings) add(nomeDoTipoDeAbertura(o.kind), o.esquadria?.nome || rc(o.uid, 'opening'), o.uid, o.parametros);
+  for (const x of model.structures ?? []) add(nomeDoTipoEstrutural(x.kind), x.rotulo || rc(x.uid, 'structural'), x.uid, x.parametros);
+  for (const r of model.roofs ?? []) add('Água de telhado', rc(r.uid, 'roof'), r.uid, r.parametros);
+  for (const e of model.stairs ?? []) add(e.tipo === 'RAMPA' ? 'Rampa' : 'Escada', e.rotulo || rc(e.uid, 'stair'), e.uid, e.parametros);
+  for (const t of model.trechos ?? []) add(`Trecho ${ROTULO_DA_DISCIPLINA[t.disciplina]}`, t.rotulo || rc(t.uid, 'trecho'), t.uid, t.parametros);
+  for (const t of model.terminais ?? []) add(`Ponto ${ROTULO_DA_DISCIPLINA[t.disciplina]}`, t.rotulo || rc(t.uid, 'terminal'), t.uid, t.parametros);
+  for (const q of model.quadros ?? []) add('Quadro', q.nome || rc(q.uid, 'quadro'), q.uid, q.parametros);
   return saida;
 }

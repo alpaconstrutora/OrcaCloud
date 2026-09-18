@@ -171,3 +171,10 @@ export function camposDoTerminal(p: PropriedadesDeTerminal) {
     volumeL: p.volumeL ?? null,
   };
 }
+
+export function camposDaEscada(p: PropriedadesDeEscada) {
+  return { tipo: p.tipo, larguraMm: p.larguraMm, alvoEspelhoMm: p.alvoEspelhoMm };
+}
+export function camposDoTelhado(p: PropriedadesDeTelhado) {
+  return { inclinacaoPct: p.inclinacaoPct, baseMm: p.baseMm, espessuraMm: p.espessuraMm };
+}

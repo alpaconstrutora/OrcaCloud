@@ -62,3 +62,12 @@ a lista, o defeito ficaria visível (coluna CC/Plano vazia até o próximo load)
 3. Após o push (deploy), `c:/tmp/pwtest/receber-perf2.js` contra produção: cenário B
    tem de mostrar 0 requisições ao digitar e spinner em 0 amostras; cenário A a tabela
    visível antes de `contracts` responder.
+
+## Publicado e provado — 2026-09-18
+
+- Commit `f5833838` em `main`; `scripts/conferir-producao.sh` confirmou o domínio servindo esse commit.
+- Produção, Playwright (`receber-perf2.js` / `receber-filtros.js`, agente-leitura):
+  - abrir a tela: tabela visível em **608 ms** (antes 952 ms), sem esperar a cadeia de Empreendimento;
+  - digitar 4 teclas: **0 requisições, spinner em 0 de 40 amostras** (antes 32 requisições);
+  - busca "Igreja" → 31 linhas, status Recebido → 128, Vencido → 99, Todos → 362, tudo com 0 requisições e KPIs iguais aos de antes.
+- Não exercitado em produção (exige escrita): baixa/estorno/exclusão atualizando a linha local — coberto por `__tests__/receivableService.test.ts` (`aplicarStatusLocal`).

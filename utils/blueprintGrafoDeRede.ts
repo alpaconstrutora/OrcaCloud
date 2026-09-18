@@ -37,9 +37,13 @@ export function fazerChave(niveis: readonly Level[]) {
   const abaixoDe = new Map<ObjectId, Level | null>();
   ordenados.forEach((l, i) => abaixoDe.set(l.id, i > 0 ? ordenados[i - 1] : null));
   return (levelId: ObjectId, x: number, y: number, cota: number): No => {
-    if (cota === 0) {
+    // Cota ≤ 0 num pavimento que tem outro embaixo é o MESMO lugar visto do
+    // pavimento de baixo: 0 é o teto dele, e −150 (o esgoto sob o piso) é o
+    // teto dele menos 150. Sem isto o ramal do andar de cima e o tubo de
+    // queda que o recebe no térreo seriam dois nós que ninguém liga.
+    if (cota <= 0) {
       const abaixo = abaixoDe.get(levelId);
-      if (abaixo) return `${abaixo.id}|${x},${y}|${abaixo.defaultHeightMm}`;
+      if (abaixo) return `${abaixo.id}|${x},${y}|${abaixo.defaultHeightMm + cota}`;
     }
     return `${levelId}|${x},${y}|${cota}`;
   };

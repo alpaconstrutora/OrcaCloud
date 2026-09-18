@@ -4513,7 +4513,11 @@ export default function BlueprintCanvas({
           ctx.fillStyle = COR_DA_DISCIPLINA[t.disciplina];
           ctx.font = `${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
           ctx.textAlign = 'start';
-          ctx.fillText(`DN ${t.bitolaMm}`, c.x + 6 * fz, c.y - 5 * fz);
+          // No esgoto com caimento, o "i" vai junto: é o que se confere na prancha.
+          const compMm = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
+          const desnivel = Math.abs(t.cotaBMm - t.cotaAMm);
+          const caimento = t.disciplina === 'ESGOTO' && !prumada && compMm > 0 && desnivel > 0 ? ` · i ${((desnivel / compMm) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} %` : '';
+          ctx.fillText(`DN ${t.bitolaMm}${caimento}`, c.x + 6 * fz, c.y - 5 * fz);
         }
       }
     }

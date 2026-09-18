@@ -1183,6 +1183,38 @@ describe('BlueprintEditor · ribbon', () => {
     expect(botaoAgua()).not.toHaveTextContent('2');
   });
 
+  it('Hidráulica › Esgoto automático (18/09/2026): a gaveta mostra o pavimento, lança a rede sugerida até a caixa de inspeção e o botão zera', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = m.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) =>
+      ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    m = k.applyBatch(m, [
+      w(0, 0, 2000, 0), w(2000, 0, 2000, 3000), w(2000, 3000, 0, 3000), w(0, 3000, 0, 0),
+      { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'Lavatório', at: k.point(600, 2500), cotaMm: 500, tipoHidraulico: 'LAVATORIO' },
+      { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'Caixa sifonada', at: k.point(1200, 2100), cotaMm: 0, tipoHidraulico: 'CAIXA_SIFONADA' },
+      { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'Vaso', at: k.point(600, 800), cotaMm: 0, tipoHidraulico: 'VASO_SANITARIO' },
+      { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'CI', at: k.point(4000, -1000), cotaMm: -700, tipoHidraulico: 'CAIXA_INSPECAO' },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+
+    await abrirAba(/^hidráulica$/i);
+    const botaoEsgoto = () => botao(/^esgoto automático/i);
+    expect(botaoEsgoto()).toHaveTextContent('3'); // lavatório, caixa sifonada e vaso
+    await user.click(botaoEsgoto());
+    const gaveta = await screen.findByTestId('tarefa-esgoto');
+    const linha = within(gaveta).getByRole('row', { name: /térreo/i });
+    expect(linha).toHaveTextContent(/3/);
+    expect(gaveta).toHaveTextContent(/DN máx\. 100/);
+    const dialog = gaveta.closest('[role="dialog"]') as HTMLElement;
+    await user.click(within(dialog).getByRole('button', { name: /^lançar \(3\)$/i }));
+    await waitFor(() => expect(screen.getByTestId('tarefa-esgoto')).toHaveTextContent(/já estão ligados/));
+    expect(within(dialog).getByRole('button', { name: /^refazer$/i })).toBeInTheDocument();
+    expect(botaoEsgoto()).not.toHaveTextContent('3');
+  });
+
   it('a aba persiste entre montagens — é preferência, não gesto', async () => {
     await montar();
     await abrirAba(/^elétrica$/i);

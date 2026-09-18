@@ -99,9 +99,12 @@ function fazerChave(niveis: readonly Level[]) {
   const abaixoDe = new Map<ObjectId, Level | null>();
   ordenados.forEach((l, i) => abaixoDe.set(l.id, i > 0 ? ordenados[i - 1] : null));
   return (levelId: ObjectId, disciplina: DisciplinaDeRede, x: number, y: number, cota: number): { chave: Chave; levelId: ObjectId; cotaMm: number } => {
-    if (cota === 0) {
+    // Cota ≤ 0 com pavimento embaixo é o mesmo lugar visto de baixo (o esgoto
+    // sob o piso do andar corre no teto do térreo) — mesma regra de
+    // `blueprintGrafoDeRede.fazerChave`.
+    if (cota <= 0) {
       const abaixo = abaixoDe.get(levelId);
-      if (abaixo) return { chave: `${disciplina}|${abaixo.id}|${x},${y}|${abaixo.defaultHeightMm}`, levelId: abaixo.id, cotaMm: abaixo.defaultHeightMm };
+      if (abaixo) return { chave: `${disciplina}|${abaixo.id}|${x},${y}|${abaixo.defaultHeightMm + cota}`, levelId: abaixo.id, cotaMm: abaixo.defaultHeightMm + cota };
     }
     return { chave: `${disciplina}|${levelId}|${x},${y}|${cota}`, levelId, cotaMm: cota };
   };

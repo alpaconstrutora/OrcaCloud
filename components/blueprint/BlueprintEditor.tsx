@@ -383,6 +383,13 @@ import {
   type PlanoDeAgua,
 } from '../../utils/blueprintAguaAutomatica';
 import {
+  HIPOTESES_ESGOTO_PADRAO,
+  planejarEsgoto,
+  refazerEsgoto,
+  relancarEsgoto,
+  type HipotesesDeEsgoto,
+} from '../../utils/blueprintEsgotoAutomatico';
+import {
   ROTULO_DO_TIPO_DE_AMBIENTE,
   comandosDeIluminacao,
   comandosDeTomadasSugeridas,
@@ -636,6 +643,9 @@ const ROTULO_DA_TAREFA = {
   // Água fria e quente automáticas (18/09/2026, F4): caixa d'água → barrilete →
   // colunas → ramais; aquecedor → pontos quentes. DN pelos pesos da NBR 5626.
   agua: 'Água fria e quente automáticas',
+  // Esgoto automático (18/09/2026, F5): aparelhos → coletores → caixa de
+  // inspeção, com caimento por DN, tubo de queda e ventilação.
+  esgoto: 'Esgoto automático',
   'gerar-paredes': 'Gerar paredes do PDF',
   'importar-ifc': 'Importar do IFC',
   'importar-dxf': 'Importar do DXF',
@@ -4916,6 +4926,34 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     if (criados.length > 0) selecionar(criados);
   };
   const haAguaALancar = planosDeAgua.some((p) => p.comandos.length > 0 || p.sugeridos > 0);
+
+  /** ─── ESGOTO AUTOMÁTICO (18/09/2026, F5) ─────────────────────────────────── */
+  const [hipDeEsgotoSalvas, setHipDeEsgotoSalvas] = usePersistedState<HipotesesDeEsgoto>('blueprint:esgotoAutomatico', HIPOTESES_ESGOTO_PADRAO);
+  const hipotesesDeEsgoto = useMemo<HipotesesDeEsgoto>(() => ({ ...HIPOTESES_ESGOTO_PADRAO, ...(hipDeEsgotoSalvas ?? {}) }), [hipDeEsgotoSalvas]);
+  const planoDeEsgoto = useMemo(() => planejarEsgoto(editor.model, hipotesesDeEsgoto), [editor.model, hipotesesDeEsgoto]);
+  const lancarEsgoto = () => {
+    const comandos = planoDeEsgoto.comandos.length > 0
+      ? planoDeEsgoto.comandos
+      : planoDeEsgoto.sugeridos > 0
+        ? relancarEsgoto(editor.model, hipotesesDeEsgoto).comandos
+        : [];
+    if (comandos.length === 0) return;
+    const criados = editor.runBatch(comandos);
+    if (criados.length > 0) selecionar(criados);
+  };
+  const refazerRedeDeEsgoto = async () => {
+    const ok = await confirmar({
+      title: 'Refazer a rede de esgoto?',
+      message: `Apaga os ${planoDeEsgoto.trechosDaRede} trecho(s) ligados à caixa de inspeção — inclusive os que você já confirmou — e lança de novo com as hipóteses atuais. Ctrl+Z desfaz.`,
+      confirmLabel: 'Refazer',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    const re = refazerEsgoto(editor.model, hipotesesDeEsgoto);
+    if (re.comandos.length === 0) return;
+    const criados = editor.runBatch(re.comandos);
+    if (criados.length > 0) selecionar(criados);
+  };
   const lancarPontos = (planos: typeof planosDePontos) => {
     const lote = planos.flatMap((p) => p.comandos);
     if (lote.length === 0) return;
@@ -6590,6 +6628,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 ativo={tarefaAberta === 'agua'}
                 onClick={() => alternarTarefa('agua')}
                 ajuda="Da caixa d'água aos pontos de água fria e do aquecedor aos de água quente: barrilete no forro, colunas, ramais a 2,20 m e o DN pelos pesos da NBR 5626 — sugerido; mover ou aceitar confirma"
+              />
+              <BotaoDoRibbon
+                icone={Waves}
+                rotulo="Esgoto automático"
+                contagem={planoDeEsgoto.aLigar || undefined}
+                ativo={tarefaAberta === 'esgoto'}
+                onClick={() => alternarTarefa('esgoto')}
+                ajuda="Dos aparelhos aos coletores (caixa sifonada, caixa de gordura) e à caixa de inspeção, com caimento por DN (NBR 8160), tubo de queda e ventilação no sobrado — sugerido; mover ou aceitar confirma"
               />
               <BotaoDoRibbon
                 icone={CheckCircle2}
@@ -8591,6 +8637,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               {tarefaAberta === 'fundacoes' && <SquareStack className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'pontosHidraulicos' && <ShowerHead className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'agua' && <Droplets className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'esgoto' && <Waves className="h-5 w-5 text-slate-700" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -8614,6 +8661,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 <strong>Completar pela norma</strong> lança só o que falta;{' '}
                 <strong>Distribuir</strong> lança N ao longo das paredes. As tomadas nascem{' '}
                 <em>sugeridas</em> — mover uma confirma.
+              </>
+            )}
+            {tarefaAberta === 'esgoto' && (
+              <>
+                Lavatório, chuveiro, ralo, tanque e máquina vão ao <strong>coletor do ambiente</strong> (caixa
+                sifonada); o vaso vai <strong>direto</strong>; a pia passa pela <strong>caixa de gordura</strong>; tudo
+                termina na <strong>caixa de inspeção</strong>. Os ramais correm sob o piso e descem com o caimento
+                da NBR 8160; no sobrado, um tubo de queda desce ao térreo e uma coluna de ventilação sobe ao teto. Os
+                trechos nascem <em>sugeridos</em>.
               </>
             )}
             {tarefaAberta === 'agua' && (
@@ -8662,9 +8718,94 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
+
+          {tarefaAberta === 'esgoto' && (
+            <div className="space-y-4" data-testid="tarefa-esgoto">
+              <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <p className="font-semibold text-slate-700">Hipóteses do lançamento</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  <li>
+                    DN pelas <strong>UHC</strong> da NBR 8160 acumuladas (lavatório 1 · chuveiro 2 · pia/tanque/máquina 3 ·
+                    vaso 6): ≤3 → 40 · ≤6 → 50 · ≤20 → 75 · acima → 100 — nunca abaixo do ramal de descarga do aparelho
+                    (vaso 100, pia 50).
+                  </li>
+                  <li>
+                    Ramais sob o piso, a partir de {hipotesesDeEsgoto.cotaMinimaSobPisoMm} mm, descendo{' '}
+                    <strong>{hipotesesDeEsgoto.caimentoPctAte75} %</strong> até DN 75 e{' '}
+                    <strong>{hipotesesDeEsgoto.caimentoPctDe100} %</strong> em DN 100; a cota de um nó é a menor das
+                    chegadas.
+                  </li>
+                  <li>
+                    Sobrado: tubo de queda DN {hipotesesDeEsgoto.dnTuboQuedaMm} na posição do ponto de maior UHC do andar,
+                    ventilação DN {hipotesesDeEsgoto.dnVentilacaoMm} até o teto. <strong>Pré-dimensionamento</strong>: não
+                    desvia de fundação, viga ou laje.
+                  </li>
+                </ul>
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <label className="flex items-center gap-2">
+                    Caimento até DN 75
+                    <select value={String(hipotesesDeEsgoto.caimentoPctAte75)} onChange={(e) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, caimentoPctAte75: Number(e.target.value) })} aria-label="Caimento até DN 75" className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs">
+                      {[1, 1.5, 2, 3].map((v) => <option key={v} value={v}>{String(v).replace('.', ',')} %</option>)}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    Caimento DN 100
+                    <select value={String(hipotesesDeEsgoto.caimentoPctDe100)} onChange={(e) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, caimentoPctDe100: Number(e.target.value) })} aria-label="Caimento DN 100" className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs">
+                      {[1, 1.5, 2].map((v) => <option key={v} value={v}>{String(v).replace('.', ',')} %</option>)}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    Sob o piso
+                    <input type="number" max={0} step={50} value={hipotesesDeEsgoto.cotaMinimaSobPisoMm} onChange={(e) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, cotaMinimaSobPisoMm: Math.min(0, Math.round(Number(e.target.value) || -150)) })} aria-label="Cota do ramal sob o piso em mm" className="w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs tabular-nums" />
+                    mm
+                  </label>
+                </div>
+              </div>
+
+              {planoDeEsgoto.motivo && planoDeEsgoto.pavimentos.length === 0 ? (
+                <p className="text-sm text-slate-500">{planoDeEsgoto.motivo}</p>
+              ) : (
+                <>
+                  <table className="w-full table-fixed text-xs" aria-label="Esgoto por pavimento">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-500">
+                        <th className="py-1.5 pr-2 font-medium">Pavimento</th>
+                        <th className="w-24 py-1.5 pr-2 font-medium">Fontes</th>
+                        <th className="w-24 py-1.5 pr-2 font-medium">Ligadas</th>
+                        <th className="w-24 py-1.5 pr-2 font-medium">A ligar</th>
+                        <th className="w-28 py-1.5 font-medium">Tubo de queda</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {planoDeEsgoto.pavimentos.map((p) => (
+                        <tr key={p.levelId}>
+                          <td className="py-1.5 pr-2 font-medium text-slate-700">{p.nome}</td>
+                          <td className="py-1.5 pr-2 text-slate-600">{p.fontes}</td>
+                          <td className="py-1.5 pr-2 text-slate-600">{p.ligadas}</td>
+                          <td className="py-1.5 pr-2 text-slate-600">{p.aLigar}</td>
+                          <td className="py-1.5 text-slate-600">{p.tuboDeQueda ? 'sim' : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="text-xs text-slate-600">
+                    {planoDeEsgoto.motivo
+                      ? planoDeEsgoto.motivo
+                      : <>
+                          {planoDeEsgoto.metrosPrevistos.toLocaleString('pt-BR')} m · {planoDeEsgoto.uhcTotal} UHC · DN máx. {planoDeEsgoto.dnMaximoMm}
+                          {planoDeEsgoto.cotaDeChegadaMm != null ? ` · chega à caixa de inspeção a ${planoDeEsgoto.cotaDeChegadaMm} mm` : ''}
+                        </>}
+                  </p>
+                  {planoDeEsgoto.avisos.map((a, i) => (
+                    <p key={i} className="rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-800">{a}</p>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
 
           {tarefaAberta === 'agua' && (
             <div className="space-y-4" data-testid="tarefa-agua">
@@ -10079,6 +10220,31 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </SheetPanel>
 
         <SheetFooter>
+          {tarefaAberta === 'esgoto' && (
+            <>
+              <span className="mr-auto text-xs text-slate-500">
+                {planoDeEsgoto.destinoId == null ? 'Sem caixa de inspeção no desenho.' : `${planoDeEsgoto.aLigar} fonte(s) a ligar.`}
+              </span>
+              {planoDeEsgoto.trechosDaRede > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void refazerRedeDeEsgoto()}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                >
+                  Refazer
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={lancarEsgoto}
+                disabled={planoDeEsgoto.comandos.length === 0 && planoDeEsgoto.sugeridos === 0}
+                className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                <Waves className="h-4 w-4" />
+                {planoDeEsgoto.comandos.length > 0 ? `Lançar (${planoDeEsgoto.aLigar})` : planoDeEsgoto.sugeridos > 0 ? 'Relançar' : 'Lançar'}
+              </button>
+            </>
+          )}
           {tarefaAberta === 'agua' && (
             <>
               <span className="mr-auto text-xs text-slate-500">

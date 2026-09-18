@@ -152,3 +152,44 @@ Planta 14/09/2026: pontos da cozinha (F3) + caixa d'água → "Água automática
 ponto · 10,3 m · 1 coluna · ΣP 0,7 · DN máx. 20 · Lançar 1" → "1 ligado · todos os pontos já
 estão ligados · Relançar · Refazer"; Quantitativos › Instalações: "Água fria DN 20 10,26 m ·
 2 trechos", "Joelho 90° DN 20 · 1"; 3D com a caixa e o tubo; Desfazer devolve.
+
+## F5 — esgoto automático — entregue em 18/09/2026
+
+- Grafo: `fazerChave` (grafo de rede e conexões) passou a mapear **cota ≤ 0** de um pavimento
+  para o pavimento de baixo (teto + cota): o ramal sob o piso do andar e o tubo de queda que o
+  recebe no térreo são o mesmo nó. Eletrodutos, água e conexões inalteradas (testes verdes).
+- `utils/blueprintEsgotoAutomatico.ts` (novo): destino = caixa de inspeção do pavimento mais
+  baixo (a mais central); topologia: lavatório/chuveiro/ralo/tanque/máquina → coletor do
+  ambiente (caixa sifonada, senão ralo sifonado; sem coletor → direto com aviso), vaso →
+  direto, pia → caixa de gordura → CI (sem CG → direto com aviso). Árvores com rota limitada
+  (subárvore de cada coletor/CG, depois a principal até a CI). **UHC** (NBR 8160) acumuladas a
+  montante → DN (≤3 → 40, ≤6 → 50, ≤20 → 75, > → 100), nunca abaixo do ramal de descarga da
+  ficha (vaso 100). **Cotas** das folhas à raiz sob o piso (−150) com caimento 2 % (≤75) / 1 %
+  (100); nó = menor chegada; prumada do aparelho ao ramal; prumada final à cota da CI; chegada
+  abaixo do fundo → aviso "aprofunde". **Sobrado**: árvore do andar até a posição do ponto de
+  maior UHC (vaso), tubo de queda DN 100 (rótulo "TQ") do teto do térreo + cota do andar até o
+  ramal do térreo (entra na árvore do térreo como fonte com as UHC de cima), coluna de
+  ventilação DN 50 ao teto do andar. Idempotente; `relancarEsgoto`/`refazerEsgoto`.
+- Editor: tarefa `esgoto` ("Esgoto automático", contagem = fontes a ligar), gaveta com
+  hipóteses (caimentos, cota sob o piso), tabela por pavimento (fontes/ligadas/a ligar/TQ),
+  resumo (m, UHC, DN máx., cota de chegada), avisos; rodapé Lançar/Relançar + Refazer.
+  Canvas: "DN 100 · i 1 %" nos trechos de esgoto com caimento.
+
+### Testes
+`blueprintEsgotoAutomatico.test.ts` (7): tabelas, topologia da casa (lavatório→CS 40, vaso→CI
+100, CS→CI 50 por UHC, pia→CG→CI), toda aresta desce com o caimento mínimo e sem ponta aberta,
+chegada × fundo da CI (aviso), sem CI / sem coletor, idempotente + relançar, sobrado com TQ e
+ventilação (única ponta aberta = o topo da ventilação). Editor: "Esgoto automático". Suíte
+cheia 4571.
+
+### App real (escritas bloqueadas: 17)
+Planta 14/09/2026: kit de banheiro (F3) + caixa de inspeção → "Esgoto automático 3"; gaveta
+"Térreo 3 0 3 · 19,7 m · 8 UHC · DN máx. 100 · chega à caixa de inspeção a −425 mm" → Lançar →
+"3 ligadas · todos os pontos já estão ligados"; canvas com "DN 40 · i 2 %" e "DN 100 · i 1 %";
+Quantitativos › Instalações: esgoto DN 40/50/100 por metro, joelhos e tês de redução deduzidos.
+
+## Fecho do plano
+As cinco fases estão em produção. Fora do escopo entregue (registrados como evolução):
+`SplitTrecho` para o registro partir o trecho; persistir as hipóteses hidráulicas por estudo no
+banco (hoje no navegador, como eletrodutos/circuitos); desvio de fundação/viga no esgoto;
+disciplina Mecânica (aba do ribbon nasce com ela).

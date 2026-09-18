@@ -347,6 +347,17 @@ function projetar(model: BlueprintModel): {
     (x, y) => x.a.x - y.a.x || x.a.y - y.a.y || x.b.x - y.b.x || x.b.y - y.b.y,
   );
 
+  // EIXOS (0.34.0). Sem nível, como o corte; omitidos quando não há nenhum.
+  const eixos = ordenar(
+    model.eixos ?? [],
+    (e) => ({
+      nome: e.nome,
+      a: { x: e.a.x, y: e.a.y },
+      b: { x: e.b.x, y: e.b.y },
+    }),
+    (x, y) => x.a.x - y.a.x || x.a.y - y.a.y || x.b.x - y.b.x || x.b.y - y.b.y,
+  );
+
   // ESCADAS E RAMPAS. Mesma disciplina de `structures`, `roofs` e `sections`:
   // a chave é OMITIDA quando não há nenhuma, para que o payload — e o hash — de
   // todo desenho sem circulação vertical continue exatamente o que era.
@@ -596,6 +607,7 @@ function projetar(model: BlueprintModel): {
     structures: structures.length ? structures.map((s) => s.geom) : undefined,
     roofs: roofs.length ? roofs.map((r) => r.geom) : undefined,
     sections: sections.length ? sections.map((c) => c.geom) : undefined,
+    eixos: eixos.length ? eixos.map((e) => e.geom) : undefined,
     stairs: stairs.length ? stairs.map((e) => e.geom) : undefined,
     trechos: trechos.length ? trechos.map((t) => t.geom) : undefined,
     terminais: terminais.length ? terminais.map((t) => t.geom) : undefined,
@@ -618,6 +630,7 @@ function projetar(model: BlueprintModel): {
     structures: structures.map((s) => s.item.uid ?? null),
     roofs: roofs.map((r) => r.item.uid ?? null),
     sections: sections.map((c) => c.item.uid ?? null),
+    eixos: eixos.map((e) => e.item.uid ?? null),
     stairs: stairs.map((e) => e.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
@@ -685,6 +698,8 @@ export interface IdentidadeCanonica {
   roofs?: (ElementUid | null)[];
   /** Ausente em payload gravado sob kernel anterior a 0.13.0. */
   sections?: (ElementUid | null)[];
+  /** Ausente em payload gravado sob kernel anterior a 0.34.0. */
+  eixos?: (ElementUid | null)[];
   /** Ausente em payload gravado sob kernel anterior a 0.14.0. */
   stairs?: (ElementUid | null)[];
   trechos?: (ElementUid | null)[];
@@ -807,6 +822,12 @@ export interface CanonicalPayload {
     b: { x: number; y: number };
     olharPara: 'ESQUERDA' | 'DIREITA';
     rotulo: string;
+  }[];
+  /** Eixos da malha. Ausente sob kernel < 0.34.0 e em desenho sem eixo. */
+  eixos?: {
+    nome: string;
+    a: { x: number; y: number };
+    b: { x: number; y: number };
   }[];
   /**
    * Escadas e rampas. Ausente sob kernel < 0.14.0 e em desenho sem nenhuma.
@@ -1142,6 +1163,17 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       b: { x: c.b.x, y: c.b.y },
       olharPara: c.olharPara,
       rotulo: c.rotulo,
+    });
+  });
+
+  const eixos = payload.eixos ?? [];
+  eixos.forEach((e, i) => {
+    model.eixos.push({
+      id: nextId(model, 'eix'),
+      uid: uidDe('eixos', i, eixos.length),
+      nome: e.nome,
+      a: { x: e.a.x, y: e.a.y },
+      b: { x: e.b.x, y: e.b.y },
     });
   });
 

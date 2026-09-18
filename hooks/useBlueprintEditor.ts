@@ -112,6 +112,8 @@ export type BlueprintTool =
    * que aparece em planta. Por isso NÃO entra no menu Componentes.
    */
   | 'corte'
+  /** EIXO da malha (E1.4): dois cliques, como o corte. */
+  | 'eixo'
   /**
    * ESCADA E RAMPA — polilinha do eixo, fechada com duplo clique. O tipo (escada
    * ou rampa) e a largura são estado da barra, como a inclinação do telhado.

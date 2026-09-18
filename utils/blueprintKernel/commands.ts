@@ -53,6 +53,8 @@ import {
   wallLength,
   pontasPresasAsPecas,
   assertParametros,
+  findEixo,
+  MAX_NOME_DE_EIXO,
   type Parametros,
   type ValorDeParametro,
 } from './model';
@@ -258,6 +260,15 @@ export type Command =
   /** Move UMA ponta da linha. Espelha `MoveBoundaryVertex`. */
   | { type: 'MoveCorteVertex'; corteId: ObjectId; end: 'a' | 'b'; to: Point }
   | { type: 'DeleteCorte'; corteId: ObjectId }
+  /**
+   * EIXO da malha (E1.4). `nome` omitido = palpite pela direção: horizontal
+   * (|dx| ≥ |dy|) ganha a próxima LETRA, vertical o próximo NÚMERO — a
+   * convenção de prancha. `nome: ''` explícito = linha de referência sem bolha.
+   */
+  | { type: 'AddEixo'; a: Point; b: Point; nome?: string }
+  | { type: 'SetEixoProps'; eixoId: ObjectId; nome?: string }
+  | { type: 'MoveEixoVertex'; eixoId: ObjectId; end: 'a' | 'b'; to: Point }
+  | { type: 'DeleteEixo'; eixoId: ObjectId }
   /**
    * ESCADA ou RAMPA pelo PERCURSO.
    *
@@ -1414,6 +1425,69 @@ function aplicarSemHash(
       const corte = findCorte(next, command.corteId);
       next.sections = (next.sections ?? []).filter((c) => c.id !== corte.id);
       diff.deleted.push(corte.id);
+      break;
+    }
+
+    // ── Eixos ────────────────────────────────────────────────────────────────
+
+    case 'AddEixo': {
+      if (pointsEqual(command.a, command.b)) {
+        throw new KernelError('DEGENERATE_AXIS', 'Eixo de comprimento zero');
+      }
+      const id = nextId(next, 'eix');
+      let nome = command.nome !== undefined ? command.nome.trim().slice(0, MAX_NOME_DE_EIXO) : null;
+      if (nome === null) {
+        // Palpite: horizontal = letra, vertical = número, contando só os da
+        // mesma família de nome já existentes (A, B, C… / 1, 2, 3…).
+        const horizontal = Math.abs(command.b.x - command.a.x) >= Math.abs(command.b.y - command.a.y);
+        const usados = new Set((next.eixos ?? []).map((e) => e.nome));
+        if (horizontal) {
+          let i = 0;
+          while (usados.has(String.fromCharCode(65 + (i % 26)) + (i >= 26 ? String(Math.floor(i / 26)) : ''))) i++;
+          nome = String.fromCharCode(65 + (i % 26)) + (i >= 26 ? String(Math.floor(i / 26)) : '');
+        } else {
+          let i = 1;
+          while (usados.has(String(i))) i++;
+          nome = String(i);
+        }
+      }
+      next.eixos = [
+        ...(next.eixos ?? []),
+        {
+          id,
+          uid: novoUid(),
+          nome,
+          a: { x: assertIntegerMm(roundToMm(command.a.x), 'a.x'), y: assertIntegerMm(roundToMm(command.a.y), 'a.y') },
+          b: { x: assertIntegerMm(roundToMm(command.b.x), 'b.x'), y: assertIntegerMm(roundToMm(command.b.y), 'b.y') },
+        },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetEixoProps': {
+      const e = findEixo(next, command.eixoId);
+      if (command.nome !== undefined) e.nome = command.nome.trim().slice(0, MAX_NOME_DE_EIXO);
+      diff.updated.push(e.id);
+      break;
+    }
+
+    case 'MoveEixoVertex': {
+      const e = findEixo(next, command.eixoId);
+      const outra = command.end === 'a' ? e.b : e.a;
+      if (pointsEqual(command.to, outra)) throw new KernelError('DEGENERATE_AXIS', 'Mover a ponta colapsaria o eixo');
+      e[command.end] = {
+        x: assertIntegerMm(roundToMm(command.to.x), 'to.x'),
+        y: assertIntegerMm(roundToMm(command.to.y), 'to.y'),
+      };
+      diff.updated.push(e.id);
+      break;
+    }
+
+    case 'DeleteEixo': {
+      const e = findEixo(next, command.eixoId);
+      next.eixos = (next.eixos ?? []).filter((x) => x.id !== e.id);
+      diff.deleted.push(e.id);
       break;
     }
 

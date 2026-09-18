@@ -919,6 +919,36 @@ export interface Agua {
  * significa, e é a regra que não depende de o usuário ter esticado a linha até
  * o fim da casa.
  */
+/**
+ * EIXO (linha de referência da malha — "A, B, C" / "1, 2, 3") (18/09/2026,
+ * roadmap E1.4: *"Eixos/grids — P0; planos de referência — P1"*).
+ *
+ * ─── UMA LINHA NOMEADA, DE TODO O PROJETO ───────────────────────────────────
+ *
+ * Sem pavimento, como o corte: o eixo A é o mesmo do térreo ao último andar —
+ * é isso que faz o pilar continuar na vertical. Não participa do arranjo
+ * planar nem do quantitativo: é REFERÊNCIA, não construção. O que ele dá:
+ * encaixe (o ímã puxa para a linha e para os cruzamentos), pilares
+ * automáticos nos cruzamentos e, com as restrições (E1.4b), "esta parede
+ * está sobre o eixo B".
+ *
+ * `nome` é o que a prancha escreve na bolha das pontas. Convenção sugerida
+ * pelo comando: horizontal ganha letra, vertical ganha número — palpite de
+ * rótulo, o usuário troca. Dois eixos com o mesmo nome não quebram nada.
+ *
+ * Planos e linhas de referência (P1 do roadmap) são eixos sem nome: o mesmo
+ * tipo, `nome: ''` — a bolha não sai, o encaixe sim.
+ */
+export interface Eixo {
+  id: ObjectId;
+  /** Identidade persistente — ver `identity.ts`. Fora do hash. */
+  uid: ElementUid;
+  /** Até 8 caracteres. Vazio = linha de referência sem bolha. */
+  nome: string;
+  a: Point;
+  b: Point;
+}
+
 export interface Corte {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
@@ -1562,6 +1592,8 @@ export interface BlueprintModel {
    * inteira — ver o cabeçalho de `Corte`.
    */
   sections: Corte[];
+  /** Eixos da malha e linhas de referência. Sem pavimento, como os cortes. */
+  eixos: Eixo[];
   /**
    * Escadas e rampas. Como a estrutura e o telhado, NÃO participam do arranjo
    * planar: uma escada dentro da sala não parte o ambiente. O que ela faz ao
@@ -1670,6 +1702,7 @@ export function emptyModel(): BlueprintModel {
     structures: [],
     roofs: [],
     sections: [],
+    eixos: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -1728,6 +1761,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
       pontos: r.pontos.map((p) => ({ ...p })),
     })),
     sections: (model.sections ?? []).map((c) => ({ ...c, a: { ...c.a }, b: { ...c.b } })),
+    eixos: (model.eixos ?? []).map((e) => ({ ...e, a: { ...e.a }, b: { ...e.b } })),
     // Mesma cópia profunda de `structures.pontos`, pelo mesmo motivo.
     stairs: (model.stairs ?? []).map((e) => ({
       ...e,
@@ -1790,6 +1824,14 @@ export function findCorte(model: BlueprintModel, id: ObjectId): Corte {
   if (!c) throw new KernelError('SECTION_NOT_FOUND', `Corte inexistente: ${id}`);
   return c;
 }
+
+export function findEixo(model: BlueprintModel, id: ObjectId): Eixo {
+  const e = (model.eixos ?? []).find((x) => x.id === id);
+  if (!e) throw new KernelError('AXIS_NOT_FOUND', `Eixo inexistente: ${id}`);
+  return e;
+}
+
+export const MAX_NOME_DE_EIXO = 8;
 
 export function findEscada(model: BlueprintModel, id: ObjectId): Escada {
   // `?? []` como no resto do módulo: modelo construído à mão em teste (e
@@ -2651,6 +2693,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Peça estrutural', model.structures ?? []],
     ['Água de telhado', model.roofs ?? []],
     ['Corte', model.sections ?? []],
+    ['Eixo', model.eixos ?? []],
     ['Trecho', model.trechos ?? []],
     ['Terminal', model.terminais ?? []],
     ['Quadro', model.quadros ?? []],
@@ -3014,6 +3057,21 @@ export function assertModelInvariants(model: BlueprintModel): void {
   // inteira some), e um lado que não é 'ESQUERDA' nem 'DIREITA' faria a
   // classificação cair no ramo errado e mostrar a metade que devia ser
   // descartada — um corte que parece um corte e mostra a casa ao contrário.
+  // Eixos: comprimento não nulo, nome curto, coordenadas inteiras.
+  const idsDeEixo = new Set<ObjectId>();
+  for (const e of model.eixos ?? []) {
+    if (idsDeEixo.has(e.id)) throw new KernelError('DUPLICATE_ID', `Eixo duplicado: ${e.id}`);
+    idsDeEixo.add(e.id);
+    if (e.a.x === e.b.x && e.a.y === e.b.y) throw new KernelError('DEGENERATE_AXIS', `Eixo ${e.id} tem comprimento zero`);
+    if (typeof e.nome !== 'string' || e.nome.length > MAX_NOME_DE_EIXO || e.nome !== e.nome.trim()) {
+      throw new KernelError('BAD_AXIS_NAME', `Eixo ${e.id}: nome inválido "${e.nome}"`);
+    }
+    assertIntegerMm(e.a.x, `${e.id}.a.x`);
+    assertIntegerMm(e.a.y, `${e.id}.a.y`);
+    assertIntegerMm(e.b.x, `${e.id}.b.x`);
+    assertIntegerMm(e.b.y, `${e.id}.b.y`);
+  }
+
   const idsDeCorte = new Set<ObjectId>();
   for (const c of model.sections ?? []) {
     if (idsDeCorte.has(c.id)) {

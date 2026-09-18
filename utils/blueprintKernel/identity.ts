@@ -126,6 +126,8 @@ export const PREFIXO_ROTULO_UID = {
   roof: 'T',
   /** Corte — S de seção; `C` já é o concreto. */
   section: 'S',
+  /** Eixo da malha — X de eixo; `E` já é a escada. */
+  eixo: 'X',
   stair: 'E',
   label: 'R',
   /**

@@ -639,6 +639,30 @@ describe('BlueprintEditor · quantitativos', () => {
     listParameterDefinitions.mockResolvedValue([]);
   });
 
+  it('eixos da malha (E1.4): a ferramenta Eixo está no grupo Estrutural e Pilares automáticos contam os cruzamentos', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const m = k.applyBatch(nivel.model, [
+      { type: 'AddWall', levelId: t, a: k.point(0, 0), b: k.point(6000, 0), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddEixo', a: k.point(-500, 0), b: k.point(6500, 0) },
+      { type: 'AddEixo', a: k.point(0, -500), b: k.point(0, 4500) },
+      { type: 'AddEixo', a: k.point(6000, -500), b: k.point(6000, 4500) },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    expect(botao(/^eixo$/i)).toBeInTheDocument();
+    await user.click(botao(/^eixo$/i));
+    expect(botao(/^eixo$/i)).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('region', { name: /opções da ferramenta/i })).toHaveTextContent(/^Eixo da malha/);
+    // Pilares automáticos: 2 cruzamentos (A×1, A×2 — os nós da parede coincidem com eles) + 1 intermediário
+    // (a parede de 6 m passa do vão máximo de 5 m) → 3.
+    expect(botao(/^pilares automáticos/i)).toHaveTextContent('3');
+    // O painel do eixo selecionado (nome, cruzamentos, Excluir) nasce do clique
+    // na linha do canvas — sem geometria em jsdom; é provado no app real.
+  });
+
   it('clash arquitetônico (E0.4): pilar no vão da porta entra em Conflitos, conta no botão e o clique seleciona a porta', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });

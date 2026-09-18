@@ -353,6 +353,26 @@ genéricos).
 - Testes: `blueprintFormulas` (9), editor "E1.3". Suíte 4626. App real (escritas bloqueadas: 14):
   "Faltou ")" fechando arred( (col. 27)" trava o salvar; corrigida, libera; lista de variáveis.
 
+### E1.4a — Eixos da malha (18/09/2026) · kernel 0.34.0
+- **Kernel** (bump 0.33.0 → 0.34.0, goldens provados em 0.33.0 com 268 testes e recapturados):
+  entidade `Eixo {nome, a, b}` sem pavimento (como o corte — o eixo A é o mesmo em todos os
+  andares), `model.eixos`, comandos `AddEixo` (nome por palpite: horizontal = letra, vertical =
+  número; `''` = linha de referência sem bolha), `SetEixoProps`, `MoveEixoVertex`, `DeleteEixo`;
+  canônico `eixos` só quando há; identidade `X-`; invariantes (comprimento, nome ≤ 8).
+- **Canvas**: traço-ponto cinza-azulado com bolha e nome nas duas pontas; ferramenta `eixo` (dois
+  cliques, orto, Escape cancela); seleção pela linha (depois do corte); o eixo entra nos alvos do
+  **encaixe** (SOBRE/PERPENDICULAR/INTERSECAO) — o ímã puxa para a linha e para os cruzamentos.
+- **Editor**: ferramenta "Eixo" no grupo Estrutural da Arquitetura; `PainelEixoSelecionado` (nome,
+  direção, comprimento, cruzamentos, Excluir); exclusão no lote da seleção.
+- **Pilares automáticos**: `cruzamentosDeEixos(model)`; um pilar por cruzamento (`onde: 'EIXO'`,
+  sem giro, paredes que passam pelo ponto cedem), antes dos nós de parede e ganhando a disputa por
+  proximidade; idempotente.
+- Planos/linhas de referência (P1) = eixo sem nome — mesmo tipo, sem bolha.
+- Testes: `blueprintEixos` (3), goldens, editor "E1.4". Suíte 4630. App real (escritas bloqueadas:
+  14): eixos "1" e "A" desenhados com bolhas, painel "Eixo A · horizontal · 17,00 m · 1
+  cruzamento", "Pilares automáticos 1".
+- Restrições (`Restricao` + conferência/ajuste) ficam na **E1.4b**, próxima publicação.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

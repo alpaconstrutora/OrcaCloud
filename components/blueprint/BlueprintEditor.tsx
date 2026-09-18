@@ -118,6 +118,7 @@ import {
   type TipoDeEsquadria,
 } from '../../services/blueprintOpeningTypeService';
 import PainelCorteSelecionado from './PainelCorteSelecionado';
+import PainelEixoSelecionado from './PainelEixoSelecionado';
 import { contornosParaTelhado } from '../../utils/blueprintTelhadoContorno';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
 import BlueprintCanvas, { rotuloPasso, type AjustePonta, type AcaoDeNavegacao } from './BlueprintCanvas';
@@ -185,6 +186,7 @@ import {
   type HipotesesDePilares,
   type PecaPrevista,
   type SecaoSugeridaId,
+  cruzamentosDeEixos,
 } from '../../utils/blueprintPilaresAutomaticos';
 import {
   ALTURAS_MINIMAS_DE_VIGA,
@@ -706,6 +708,16 @@ type RelatorioDoDock = keyof typeof RELATORIOS_DO_DOCK;
  * está saindo janela?" quando o ribbon está noutra aba. Os tipos com subtipo
  * (abertura, estrutura, escada) são resolvidos no chamador.
  */
+/** Distância de um ponto a um segmento, em mm — para contar os cruzamentos de um eixo. */
+function distanciaPontoSegmento(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const den = dx * dx + dy * dy;
+  if (den === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / den));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
 const ROTULO_DA_FERRAMENTA: Partial<Record<BlueprintTool, string>> = {
   selecionar: 'Selecionar',
   mover: 'Mover a vista',
@@ -722,6 +734,7 @@ const ROTULO_DA_FERRAMENTA: Partial<Record<BlueprintTool, string>> = {
   perfil: 'Perfil altimétrico',
   drenagem: 'Drenagem',
   corte: 'Corte',
+  eixo: 'Eixo da malha',
   telhado: 'Água de telhado',
   rede: 'Trecho de rede',
   terminal: 'Ponto',
@@ -2383,6 +2396,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   }, [editor.model, uidDoSelecionado]);
   const aguaSel = (editor.model.roofs ?? []).find((r) => r.id === editor.selectedId) ?? null;
   const corteSel = (editor.model.sections ?? []).find((c) => c.id === editor.selectedId) ?? null;
+  const eixoSel = (editor.model.eixos ?? []).find((e) => e.id === editor.selectedId) ?? null;
 
   /**
    * O custo por elemento, quando a aba Orçamento já calculou uma prévia.
@@ -4371,6 +4385,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     }
   }
 
+  /** EIXO da malha (E1.4): dois cliques; o nome é palpite (letra/número) e se troca no painel. */
+  function adicionarEixo(a: Point, b: Point) {
+    const criados = editor.run({ type: 'AddEixo', a, b });
+    if (criados.length > 0) selecionar(criados);
+  }
+
   function moverPontaCorte(corteId: string, end: 'a' | 'b', to: Point) {
     editor.run({ type: 'MoveCorteVertex', corteId, end, to });
   }
@@ -4631,6 +4651,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     const estruturas = ids.filter((id) => editor.model.structures.some((s) => s.id === id));
     const aguas = ids.filter((id) => (editor.model.roofs ?? []).some((r) => r.id === id));
     const cortes = ids.filter((id) => (editor.model.sections ?? []).some((c) => c.id === id));
+    const eixos = ids.filter((id) => (editor.model.eixos ?? []).some((e) => e.id === id));
     const escadas = ids.filter((id) => (editor.model.stairs ?? []).some((e) => e.id === id));
     // Instalações. ⚠️ O QUADRO sai por último no lote e leva os circuitos dele
     // junto (ver `DeleteQuadro`); os pontos que os citavam ficam sem circuito,
@@ -4651,6 +4672,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       // A linha de corte sai junto com o resto da selecao. Ela nao hospeda
       // nada e nada a hospeda, entao a ordem dela no lote e indiferente.
       ...cortes.map((corteId) => ({ type: 'DeleteCorte', corteId }) as const),
+      ...eixos.map((eixoId) => ({ type: 'DeleteEixo', eixoId }) as const),
       ...escadas.map((escadaId) => ({ type: 'DeleteEscada', escadaId }) as const),
       ...trechos.map((trechoId) => ({ type: 'DeleteTrecho', trechoId }) as const),
       ...terminais.map((terminalId) => ({ type: 'DeleteTerminal', terminalId }) as const),
@@ -5955,6 +5977,13 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         onExcluir={removerSelecionada}
       />
 
+      <PainelEixoSelecionado
+        eixo={eixoSel}
+        onProps={(campos) => eixoSel && editor.run({ type: 'SetEixoProps', eixoId: eixoSel.id, ...campos })}
+        onExcluir={removerSelecionada}
+        cruzamentos={eixoSel ? cruzamentosDeEixos(editor.model).filter((p) => distanciaPontoSegmento(p, eixoSel.a, eixoSel.b) <= 1).length : undefined}
+      />
+
       <PainelCorteSelecionado
         corte={corteSel}
         onProps={(campos) =>
@@ -6665,6 +6694,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 lote — prévia tracejada no desenho, um passo de desfazer. */}
             {!emVista && (
               <GrupoDoRibbon rotulo="Estrutural">
+                {/* EIXO da malha (E1.4): a linha nomeada que o calculista risca
+                    antes do pilar. Dois cliques; o ímã e os pilares automáticos
+                    passam a olhar para ela. */}
+                <Ferramenta atual={editor.tool} valor="eixo" icone={Hash} rotulo="Eixo" onClick={editor.setTool} />
                 <BotaoDoRibbon
                   icone={RectangleVertical}
                   rotulo="Pilares automáticos"
@@ -8212,6 +8245,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onAddAgua={adicionarAgua}
               onMoveAguaVertex={moverPontaAgua}
               onAddCorte={adicionarCorte}
+              onAddEixo={adicionarEixo}
               onMoveCorteVertex={moverPontaCorte}
               onAddEscada={adicionarEscada}
               onAddTrecho={adicionarTrecho}

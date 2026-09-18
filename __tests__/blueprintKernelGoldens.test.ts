@@ -194,6 +194,12 @@
  *   tem instalação, então nenhuma delas ganha chave — só a versão embutida no
  *   payload mudou.
  *
+ *   0.33.0 → 0.34.0 (18/09/2026): EIXOS da malha — `eixos: [{nome, a, b}]`, sem
+ *   pavimento como os cortes, omitidos quando não há nenhum (E1.4 do roadmap).
+ *   Nenhum dos seis casos tem eixo. Mesma prova, refeita antes de tocar num
+ *   hash: com a string em 0.33.0 e a família JÁ no lugar (modelo, quatro
+ *   comandos, canônico ida e volta, identidade, invariantes), 268 testes
+ *   passaram; as seis falhas foram todas de hash — recapturados.
  *   0.32.0 → 0.33.0 (18/09/2026): PARÂMETROS PERSONALIZADOS — `parametros:
  *   {chave: valor}` em parede, abertura, estrutura, telhado, escada, trecho,
  *   terminal e quadro (E1.2 do roadmap). A chave só sai quando há ao menos um
@@ -446,17 +452,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '29281ce76aec51f71d8f9df6d9dea866363c3d86d669a958bd5ecbf165165098',
+    hash: '6abb08b10591370def51e1b31169259fb487c2a5d576803f34df9c9e018933b5',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '8b02633892f54e495003012bee2fb85371a32b662f18510f130f8979c2699a8f',
+    hash: '7275458e5554870714676058beaa5443dd45d4af902b7fa2bbafc5a0c4a9b20f',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '6433e64e9cb23e2ae6f2d0342b8519e080bc332ef0530448118aa637bc747ba2',
+    hash: '4e9822270190223f9228c6ee76e0f2a92c1753d6f75ad2f46b089a4acf13e983',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -464,7 +470,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: 'a4fa5d1eb95c41faad4b71e24f7c350deb026f82199176c35e4af415cc051a0f',
+    hash: 'e312ccf6805af6c23b1333eae444fd9566faa33bbef87323c02536829c45f8a5',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -474,7 +480,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '051d1f544ae981880be9a8cb458dbc6fd7aeb16abe225c0117963de5a4fc70fc',
+    hash: 'bcbd3fa94aa8a44d4d1f56f282e22d110501538fa1147e755dc205cf0a96cb3c',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -485,7 +491,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: 'a91e3624dea5a3e6c008000ce0fd77cfc421faa6a5e5210aa0a40ebb35102397',
+    hash: '204d6634a7da29959bbee362583f515291c1559b1831ed876822785e908b1d6e',
   },
 };
 

@@ -34,6 +34,7 @@ import {
   degrausDaEscada,
   type Agua,
   type Corte,
+  type Eixo,
   type Escada,
   pontosDeConexaoEstrutural,
   nomeDoTipoEstrutural,
@@ -114,6 +115,7 @@ import {
   TIPOS_DE_ENCAIXE,
   encaixeGeometrico,
   type TipoDeEncaixe,
+  type SegmentoParaEncaixe,
 } from '../../utils/blueprintEncaixe';
 
 /**
@@ -303,6 +305,8 @@ const COR_ESCADA = '#475569';
 const COR_ESCADA_FUNDO = 'rgba(148, 163, 184, 0.18)';
 /** A MARCA do corte em planta — azul de anotação, não de construção. */
 const COR_CORTE = '#0284c7';
+/** Eixo da malha: cinza-azulado discreto — referência, não construção. */
+const COR_EIXO = '#64748b';
 
 /**
  * A marca da conexão automática que pegou no arraste.
@@ -1201,6 +1205,8 @@ interface Props {
   // ── Corte ─────────────────────────────────────────────────────────────────
   /** Confirma uma LINHA DE CORTE: dois cliques, como a viga. */
   onAddCorte?: (a: Point, b: Point) => void;
+  /** EIXO da malha (E1.4): dois cliques. */
+  onAddEixo?: (a: Point, b: Point) => void;
   /** Um TRECHO de rede: as duas pontas em planta. Cota e bitola vêm da barra. */
   onAddTrecho?: (a: Point, b: Point) => void;
   /**
@@ -1332,6 +1338,7 @@ export default function BlueprintCanvas({
   onAddAgua,
   onMoveAguaVertex,
   onAddCorte,
+  onAddEixo,
   onAddTrecho,
   redeEmUmClique = false,
   onAddTerminal,
@@ -1482,6 +1489,8 @@ export default function BlueprintCanvas({
   const [movendoEscada, setMovendoEscada] = useState<{ escadaId: string; index: number } | null>(null);
   /** Primeira ponta da linha de corte em curso. */
   const [pontoCorte, setPontoCorte] = useState<Point | null>(null);
+  /** Primeiro clique do EIXO em curso (E1.4). */
+  const [pontoEixo, setPontoEixo] = useState<Point | null>(null);
   /**
    * A primeira ponta do TRECHO de rede em curso.
    *
@@ -1633,6 +1642,8 @@ export default function BlueprintCanvas({
   // qualquer pavimento que se esteja editando — é assim que se sabe onde o
   // corte passa enquanto se desenha o segundo piso.
   const cortes = useMemo(() => (model.sections ?? []).filter((c) => !ocultos.has(c.id)), [model.sections, ocultos]);
+  /** Os EIXOS da malha (E1.4): de todo o projeto, como os cortes. */
+  const eixos = useMemo(() => (model.eixos ?? []).filter((e) => !ocultos.has(e.id)), [model.eixos, ocultos]);
 
   // ── Seleção ───────────────────────────────────────────────────────────────
   //
@@ -2010,15 +2021,18 @@ export default function BlueprintCanvas({
    * `PERPENDICULAR` e `EXTENSAO` precisam da RETA, não de uma lista de pontos.
    */
   const segmentosParaEncaixe = useMemo(() => {
-    const saida = paredesDoNivel.map((w) => ({
+    const saida: SegmentoParaEncaixe[] = paredesDoNivel.map((w) => ({
       id: w.id,
       a: w.a,
       b: w.b,
       espessuraMm: w.thicknessMm,
     }));
     for (const t of trechosReais) saida.push({ id: t.id, a: t.a, b: t.b, espessuraMm: t.bitolaMm });
+    // EIXOS: linha sem corpo — o ímã puxa para a linha (SOBRE/PERPENDICULAR) e
+    // para os cruzamentos (INTERSECAO), que é para isso que a malha existe.
+    for (const e of eixos) saida.push({ id: e.id, a: e.a, b: e.b });
     return saida;
-  }, [paredesDoNivel, trechosReais]);
+  }, [paredesDoNivel, trechosReais, eixos]);
 
   /** As peças circulares, para o encaixe no CENTRO. */
   const circulosParaEncaixe = useMemo(
@@ -2466,6 +2480,18 @@ export default function BlueprintCanvas({
       return null;
     },
     [escadasDoNivel, vista.escala],
+  );
+
+  /** Qual EIXO está sob o cursor — pela linha. */
+  const eixoSob = useCallback(
+    (mundo: { x: number; y: number }): Eixo | null => {
+      const folga = HIT_PX / vista.escala;
+      for (let i = eixos.length - 1; i >= 0; i--) {
+        if (distanciaAoSegmento(eixos[i].a, eixos[i].b, mundo) <= folga) return eixos[i];
+      }
+      return null;
+    },
+    [eixos, vista.escala],
   );
 
   /** Qual LINHA DE CORTE está sob o cursor — pela linha, que é tudo que ela é. */
@@ -5311,6 +5337,73 @@ export default function BlueprintCanvas({
     //
     // As SETAS são o que diz para que lado se olha, e sem elas a marca não
     // significa nada: a mesma linha produz dois desenhos opostos.
+    // EIXOS DA MALHA (E1.4): traço-ponto fino, cinza-azulado, com a BOLHA e o
+    // nome nas duas pontas — a convenção de prancha. Sem nome, só a linha
+    // (linha de referência). Desenhados antes dos cortes, por baixo deles.
+    for (const e of eixos) {
+      const selecionado = selecao.has(e.id);
+      const cor = selecionado ? COR_SELECIONADA : COR_EIXO;
+      const ta = paraTela(e.a);
+      const tb = paraTela(e.b);
+      ctx.strokeStyle = cor;
+      ctx.lineWidth = selecionado ? 2 : 1;
+      ctx.setLineDash([14, 4, 2, 4]);
+      ctx.beginPath();
+      ctx.moveTo(ta.x, ta.y);
+      ctx.lineTo(tb.x, tb.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      if (e.nome) {
+        const dx = tb.x - ta.x;
+        const dy = tb.y - ta.y;
+        const comp = Math.hypot(dx, dy) || 1;
+        const ux = dx / comp;
+        const uy = dy / comp;
+        const raio = 10;
+        for (const [t, s] of [[ta, -1], [tb, 1]] as const) {
+          const q = { x: t.x + ux * s * (raio + 2), y: t.y + uy * s * (raio + 2) };
+          ctx.beginPath();
+          ctx.arc(q.x, q.y, raio, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+          ctx.strokeStyle = cor;
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+          ctx.fillStyle = cor;
+          ctx.font = `600 ${Math.round(10 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(e.nome, q.x, q.y);
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'alphabetic';
+        }
+      }
+      if (selecionado && unicoSelecionado === e.id && !movendoSelecao) {
+        for (const t of [ta, tb]) {
+          ctx.fillStyle = '#ffffff';
+          ctx.strokeStyle = COR_SELECIONADA;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.rect(t.x - 4, t.y - 4, 8, 8);
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+    }
+    // Prévia do eixo em curso.
+    if (tool === 'eixo' && pontoEixo && cursor) {
+      const a = paraTela(pontoEixo);
+      const z = paraTela(cursor);
+      ctx.strokeStyle = COR_EIXO;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([14, 4, 2, 4]);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(z.x, z.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
     for (const c of cortes) {
       const selecionado = selecao.has(c.id);
       const cor = selecionado ? COR_SELECIONADA : COR_CORTE;
@@ -6192,7 +6285,8 @@ export default function BlueprintCanvas({
         tool === 'divisa' ||
         tool === 'estrutural' ||
         tool === 'telhado' ||
-        tool === 'corte')
+        tool === 'corte' ||
+        tool === 'eixo')
     ) {
       const c = paraTela(cursor);
       ctx.strokeStyle = COR_PREVIA;
@@ -6766,6 +6860,13 @@ export default function BlueprintCanvas({
       return;
     }
 
+    if (tool === 'eixo') {
+      let alvo = capturarTracado(paraMundo(px, py));
+      if (pontoEixo && ortoAtivo(e)) alvo = travarOrtogonal(pontoEixo, alvo);
+      setCursor(alvo);
+      return;
+    }
+
     if (tool === 'rede') {
       let alvo = capturarRede(paraMundo(px, py));
       if (pontoRede && ortoAtivo(e)) alvo = travarOrtogonal(pontoRede, alvo);
@@ -7024,6 +7125,19 @@ export default function BlueprintCanvas({
     //
     // Dois cliques, como a viga — e com o orto pelo mesmo caminho: um corte que
     // não trava em 90° não serve numa planta que travou.
+    if (tool === 'eixo') {
+      const ponto = capturarTracado(mundo);
+      if (!pontoEixo) {
+        setPontoEixo(ponto);
+        return;
+      }
+      const fim = ortoAtivo(e) ? travarOrtogonal(pontoEixo, ponto) : ponto;
+      if (fim.x === pontoEixo.x && fim.y === pontoEixo.y) return;
+      onAddEixo?.(pontoEixo, fim);
+      setPontoEixo(null);
+      return;
+    }
+
     if (tool === 'corte') {
       const ponto = capturarTracado(mundo);
       if (!pontoCorte) {
@@ -7236,6 +7350,8 @@ export default function BlueprintCanvas({
       // cruza por cima de quase tudo. Vindo antes, clicar em qualquer parede
       // que a linha cruzasse pegaria o corte.
       const corteClicado = corteSob(mundo);
+      // O EIXO vem junto com o corte, no fim: também atravessa a planta inteira.
+      const eixoClicado = eixoSob(mundo);
       // QUADRO e TERMINAL logo depois da abertura: são símbolos PEQUENOS, de
       // tamanho fixo na tela, e ninguém acerta um por acidente — clicar em cima
       // de um é sempre intenção. Vindo depois da parede, a tomada na parede
@@ -7259,6 +7375,7 @@ export default function BlueprintCanvas({
         aguaClicada?.id ??
         f?.id ??
         corteClicado?.id ??
+        eixoClicado?.id ??
         null;
       const acumular = e.ctrlKey || e.metaKey || e.shiftKey;
 
@@ -7788,6 +7905,7 @@ export default function BlueprintCanvas({
       setAnelAgua([]);
       setCaminhoEscada([]);
       setPontoCorte(null);
+      setPontoEixo(null);
       // ⚠️ E o TRECHO em curso, que o Escape não cancelava: o primeiro clique
       // ficava pendurado, e o clique seguinte — dado noutro lugar, já sem
       // lembrança do gesto — fechava um trecho que ninguém quis.

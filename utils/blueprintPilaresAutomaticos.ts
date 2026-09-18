@@ -16,6 +16,7 @@ import {
   type Structural,
   type StructuralKind,
   type Wall,
+  intersecaoDeRetas,
 } from './blueprintKernel';
 
 /**
@@ -112,13 +113,14 @@ export const FOLGA_DA_ABERTURA_MM = 50;
 const SOBRESSAI_AVISO_MM = 50;
 
 export type TipoDeNo = 'CANTO' | 'T' | 'CRUZAMENTO' | 'EMENDA' | 'PONTA';
-export type OndeDoPilar = 'CANTO' | 'T' | 'CRUZAMENTO' | 'INTERMEDIARIO';
+export type OndeDoPilar = 'CANTO' | 'T' | 'CRUZAMENTO' | 'INTERMEDIARIO' | 'EIXO';
 
 export const ROTULO_DO_ONDE: Record<OndeDoPilar, string> = {
   CANTO: 'canto',
   T: 'T',
   CRUZAMENTO: 'cruzamento',
   INTERMEDIARIO: 'intermediário',
+  EIXO: 'cruzamento de eixos',
 };
 
 export interface IncidenciaNoNo {
@@ -585,9 +587,56 @@ interface Candidato {
   aviso: string | null;
 }
 
-const pesoDoOnde: Record<OndeDoPilar, number> = { CANTO: 0, T: 0, CRUZAMENTO: 0, INTERMEDIARIO: 1 };
+const pesoDoOnde: Record<OndeDoPilar, number> = { EIXO: -1, CANTO: 0, T: 0, CRUZAMENTO: 0, INTERMEDIARIO: 1 };
 
 const m = (mm: number) => `${(mm / 1000).toFixed(2).replace('.', ',')} m`;
+
+/** Os pontos onde dois eixos da malha se cruzam (inteiros, sem repetição, em ordem XY). */
+export function cruzamentosDeEixos(model: BlueprintModel): Point[] {
+  const eixos = model.eixos ?? [];
+  const vistos = new Set<string>();
+  const saida: Point[] = [];
+  for (let i = 0; i < eixos.length; i++) {
+    for (let j = i + 1; j < eixos.length; j++) {
+      const p = intersecaoDeRetas(eixos[i].a, eixos[i].b, eixos[j].a, eixos[j].b);
+      if (!p) continue;
+      // Só dentro dos DOIS segmentos (com 1 mm de folga): eixos que não se
+      // alcançam não formam cruzamento, mesmo que as retas se cruzem longe.
+      const dentro = (e: { a: Point; b: Point }) => {
+        const ux = e.b.x - e.a.x;
+        const uy = e.b.y - e.a.y;
+        const comp = Math.hypot(ux, uy) || 1;
+        const t = ((p.x - e.a.x) * ux + (p.y - e.a.y) * uy) / comp;
+        return t >= -1 && t <= comp + 1;
+      };
+      if (!dentro(eixos[i]) || !dentro(eixos[j])) continue;
+      const q = { x: Math.round(p.x), y: Math.round(p.y) };
+      const chave = `${q.x},${q.y}`;
+      if (vistos.has(chave)) continue;
+      vistos.add(chave);
+      saida.push(q);
+    }
+  }
+  return saida.sort(ordemXY);
+}
+
+/** Distância de um ponto a um segmento, em mm. */
+function distanciaAoSegmento(a: Point, b: Point, p: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const den = dx * dx + dy * dy;
+  if (den === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / den));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+/** A coordenada do ponto ao longo do eixo da parede, em mm a partir de `a`. */
+function projecaoNoEixoDaParede(w: Wall, p: Point): number {
+  const dx = w.b.x - w.a.x;
+  const dy = w.b.y - w.a.y;
+  const comp = Math.hypot(dx, dy) || 1;
+  return ((p.x - w.a.x) * dx + (p.y - w.a.y) * dy) / comp;
+}
 
 export function planejarPilares(
   model: BlueprintModel,
@@ -653,6 +702,27 @@ export function planejarPilares(
       ? `${atraves - fina} mm mais grosso que a parede de ${fina} mm — encostado na face externa, avança para dentro`
       : null;
   };
+
+  // 0. Pilares nos CRUZAMENTOS DE EIXOS (E1.4). A malha é a intenção do
+  // calculista: onde dois eixos se cruzam nasce um pilar, com ou sem parede
+  // ali. Vem antes dos nós de parede e ganha a disputa por proximidade
+  // (`pesoDoOnde`), para o pilar do canto que coincide com o eixo A/1 ser
+  // contado uma vez, no eixo. Sem giro: o pilar da malha segue a malha.
+  for (const cruz of cruzamentosDeEixos(model)) {
+    const existente = existentes.find((s) => dist(s.pontos[0], cruz) <= Math.max(meiaDiagonal(s) + tol, raioDeOcupacao));
+    if (existente) {
+      nosComPilarExistente++;
+      continue;
+    }
+    if (candidatos.some((c) => dist(c.at, cruz) < raioDeOcupacao)) continue;
+    // As paredes que passam pelo cruzamento cedem volume para ele.
+    const hospedeiras = walls.filter((w) => distanciaAoSegmento(w.a, w.b, cruz) <= w.thicknessMm / 2 + tol).map((w) => w.id);
+    candidatos.push({ onde: 'EIXO', at: cruz, wallIds: hospedeiras, rotacaoDeg: 0, aviso: null });
+    for (const id of hospedeiras) {
+      const w = porId.get(id)!;
+      apoiar(id, Math.round(projecaoNoEixoDaParede(w, cruz)));
+    }
+  }
 
   // 1. Pilares de nó.
   for (const no of nos) {

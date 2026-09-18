@@ -949,6 +949,58 @@ export interface Eixo {
   b: Point;
 }
 
+/**
+ * RESTRIÇÃO (18/09/2026, roadmap E1.4b: *"Restrições geométricas — P0;
+ * travamento de dimensões — P1"*).
+ *
+ * ─── ACUSA, NÃO TRAVA ───────────────────────────────────────────────────────
+ *
+ * A restrição é a INTENÇÃO declarada ("esta parede fica sobre o eixo B", "esta
+ * parede tem 4,00 m"). O kernel NÃO a impõe no arraste: um solver escondido
+ * que "corrige" o gesto é o que faz o usuário brigar com o desenho. O que
+ * existe é a CONFERÊNCIA derivada (`utils/blueprintRestricoes.ts`): a lista
+ * do que está violado, com o desvio medido, e um "Ajustar" que emite o
+ * comando corretivo — visível, um Ctrl+Z. É a mesma postura de
+ * `pontasPresasAsPecas`: mantém o gesto e mostra a consequência.
+ *
+ * As referências são por `uid` (identidade que sobrevive à publicação e ao
+ * `SplitWall`, que herda o uid no primeiro fragmento). Restrição cujo alvo ou
+ * referência deixou de existir some sozinha ao fim do comando
+ * (`limparRestricoesOrfas`) — não há restrição pendurada no ar.
+ *
+ * Tipos e o que cada um pede:
+ * - ALINHADO_A_EIXO: alvo parede/viga/pilar, referência eixo. O eixo da peça
+ *   sobre a reta do eixo (paralela e a 0 mm).
+ * - DISTANCIA_AO_EIXO: alvo parede/viga, referência eixo, `valorMm` — a
+ *   distância do eixo da peça à reta do eixo (paralela).
+ * - TRAVA_COMPRIMENTO: alvo parede/viga, `valorMm`.
+ * - IGUAL_COMPRIMENTO: alvo parede/viga, referência parede/viga.
+ * - PARALELO: alvo parede/viga, referência eixo/parede/viga.
+ */
+export type TipoDeRestricao = 'ALINHADO_A_EIXO' | 'DISTANCIA_AO_EIXO' | 'TRAVA_COMPRIMENTO' | 'IGUAL_COMPRIMENTO' | 'PARALELO';
+export const TIPOS_DE_RESTRICAO: readonly TipoDeRestricao[] = ['ALINHADO_A_EIXO', 'DISTANCIA_AO_EIXO', 'TRAVA_COMPRIMENTO', 'IGUAL_COMPRIMENTO', 'PARALELO'];
+export type FamiliaRestringivel = 'wall' | 'structural' | 'eixo';
+
+export interface Restricao {
+  id: ObjectId;
+  uid: ElementUid;
+  tipo: TipoDeRestricao;
+  alvo: { familia: 'wall' | 'structural'; uid: ElementUid };
+  /** Ausente em TRAVA_COMPRIMENTO. */
+  referencia?: { familia: FamiliaRestringivel; uid: ElementUid };
+  /** mm inteiro; obrigatório em DISTANCIA_AO_EIXO e TRAVA_COMPRIMENTO. */
+  valorMm?: number;
+}
+
+/** O que cada tipo exige — a invariante e o comando leem daqui. */
+export const EXIGENCIAS_DA_RESTRICAO: Record<TipoDeRestricao, { referencia: FamiliaRestringivel[] | null; valor: boolean }> = {
+  ALINHADO_A_EIXO: { referencia: ['eixo'], valor: false },
+  DISTANCIA_AO_EIXO: { referencia: ['eixo'], valor: true },
+  TRAVA_COMPRIMENTO: { referencia: null, valor: true },
+  IGUAL_COMPRIMENTO: { referencia: ['wall', 'structural'], valor: false },
+  PARALELO: { referencia: ['eixo', 'wall', 'structural'], valor: false },
+};
+
 export interface Corte {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
@@ -1594,6 +1646,8 @@ export interface BlueprintModel {
   sections: Corte[];
   /** Eixos da malha e linhas de referência. Sem pavimento, como os cortes. */
   eixos: Eixo[];
+  /** Restrições declaradas — conferidas, nunca impostas. Ver `Restricao`. */
+  restricoes: Restricao[];
   /**
    * Escadas e rampas. Como a estrutura e o telhado, NÃO participam do arranjo
    * planar: uma escada dentro da sala não parte o ambiente. O que ela faz ao
@@ -1703,6 +1757,7 @@ export function emptyModel(): BlueprintModel {
     roofs: [],
     sections: [],
     eixos: [],
+    restricoes: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -1762,6 +1817,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     })),
     sections: (model.sections ?? []).map((c) => ({ ...c, a: { ...c.a }, b: { ...c.b } })),
     eixos: (model.eixos ?? []).map((e) => ({ ...e, a: { ...e.a }, b: { ...e.b } })),
+    restricoes: (model.restricoes ?? []).map((r) => ({ ...r, alvo: { ...r.alvo }, ...(r.referencia ? { referencia: { ...r.referencia } } : {}) })),
     // Mesma cópia profunda de `structures.pontos`, pelo mesmo motivo.
     stairs: (model.stairs ?? []).map((e) => ({
       ...e,
@@ -1832,6 +1888,35 @@ export function findEixo(model: BlueprintModel, id: ObjectId): Eixo {
 }
 
 export const MAX_NOME_DE_EIXO = 8;
+
+export function findRestricao(model: BlueprintModel, id: ObjectId): Restricao {
+  const r = (model.restricoes ?? []).find((x) => x.id === id);
+  if (!r) throw new KernelError('CONSTRAINT_NOT_FOUND', `Restrição inexistente: ${id}`);
+  return r;
+}
+
+/** A peça referenciada por (família, uid), ou `null`. */
+export function pecaPorUid(model: BlueprintModel, familia: FamiliaRestringivel, uid: ElementUid): Wall | Structural | Eixo | null {
+  if (familia === 'wall') return model.walls.find((w) => w.uid === uid) ?? null;
+  if (familia === 'structural') return (model.structures ?? []).find((s) => s.uid === uid) ?? null;
+  return (model.eixos ?? []).find((e) => e.uid === uid) ?? null;
+}
+
+/**
+ * Remove as restrições cujo alvo ou referência não existe mais. Roda ao fim
+ * de TODO comando (cauda de `applyCommand`): apagar a parede leva a restrição
+ * dela junto, sem cada `Delete*` ter de lembrar.
+ */
+export function limparRestricoesOrfas(model: BlueprintModel): ObjectId[] {
+  const antes = model.restricoes ?? [];
+  const vivas = antes.filter(
+    (r) => pecaPorUid(model, r.alvo.familia, r.alvo.uid) !== null && (!r.referencia || pecaPorUid(model, r.referencia.familia, r.referencia.uid) !== null),
+  );
+  if (vivas.length === antes.length) return [];
+  const removidas = antes.filter((r) => !vivas.includes(r)).map((r) => r.id);
+  model.restricoes = vivas;
+  return removidas;
+}
 
 export function findEscada(model: BlueprintModel, id: ObjectId): Escada {
   // `?? []` como no resto do módulo: modelo construído à mão em teste (e
@@ -2694,6 +2779,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Água de telhado', model.roofs ?? []],
     ['Corte', model.sections ?? []],
     ['Eixo', model.eixos ?? []],
+    ['Restrição', model.restricoes ?? []],
     ['Trecho', model.trechos ?? []],
     ['Terminal', model.terminais ?? []],
     ['Quadro', model.quadros ?? []],
@@ -3057,6 +3143,27 @@ export function assertModelInvariants(model: BlueprintModel): void {
   // inteira some), e um lado que não é 'ESQUERDA' nem 'DIREITA' faria a
   // classificação cair no ramo errado e mostrar a metade que devia ser
   // descartada — um corte que parece um corte e mostra a casa ao contrário.
+  // Restrições: tipo conhecido, alvo/referência existentes e da família admitida, valor quando exigido.
+  for (const r of model.restricoes ?? []) {
+    const ex = EXIGENCIAS_DA_RESTRICAO[r.tipo];
+    if (!ex) throw new KernelError('BAD_CONSTRAINT', `Restrição ${r.id}: tipo desconhecido ${String(r.tipo)}`);
+    if (!pecaPorUid(model, r.alvo.familia, r.alvo.uid)) throw new KernelError('BAD_CONSTRAINT', `Restrição ${r.id}: alvo inexistente`);
+    if (ex.referencia === null) {
+      if (r.referencia) throw new KernelError('BAD_CONSTRAINT', `Restrição ${r.id}: ${r.tipo} não tem referência`);
+    } else {
+      if (!r.referencia || !ex.referencia.includes(r.referencia.familia)) {
+        throw new KernelError('BAD_CONSTRAINT', `Restrição ${r.id}: ${r.tipo} pede referência ${ex.referencia.join('/')}`);
+      }
+      if (!pecaPorUid(model, r.referencia.familia, r.referencia.uid)) throw new KernelError('BAD_CONSTRAINT', `Restrição ${r.id}: referência inexistente`);
+      if (r.referencia.familia === r.alvo.familia && r.referencia.uid === r.alvo.uid) throw new KernelError('BAD_CONSTRAINT', `Restrição ${r.id}: a peça não pode referenciar a si mesma`);
+    }
+    if (ex.valor) {
+      if (r.valorMm === undefined || !Number.isInteger(r.valorMm) || r.valorMm < 0) throw new KernelError('BAD_CONSTRAINT', `Restrição ${r.id}: ${r.tipo} pede valorMm inteiro ≥ 0`);
+    } else if (r.valorMm !== undefined) {
+      throw new KernelError('BAD_CONSTRAINT', `Restrição ${r.id}: ${r.tipo} não tem valor`);
+    }
+  }
+
   // Eixos: comprimento não nulo, nome curto, coordenadas inteiras.
   const idsDeEixo = new Set<ObjectId>();
   for (const e of model.eixos ?? []) {

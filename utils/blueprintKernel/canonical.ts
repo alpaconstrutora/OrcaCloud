@@ -60,6 +60,8 @@ import {
   type FuncaoCamada,
   type StructuralKind,
   type Parametros,
+  type TipoDeRestricao,
+  type FamiliaRestringivel,
   assinaturaDasCamadas,
   emptyModel,
   nextId,
@@ -358,6 +360,33 @@ function projetar(model: BlueprintModel): {
     (x, y) => x.a.x - y.a.x || x.a.y - y.a.y || x.b.x - y.b.x || x.b.y - y.b.y,
   );
 
+  // RESTRIÇÕES (0.35.0): referências por ÍNDICE na ordem canônica da família —
+  // nunca uid nem id. Omitidas quando não há nenhuma. Ordenadas por (tipo,
+  // alvo, referência, valor) para o hash não depender da ordem de criação.
+  const indiceDaParede = new Map(walls.map((w, i) => [w.item.uid, i]));
+  const indiceDaEstrutura = new Map(structures.map((s, i) => [s.item.uid, i]));
+  const indiceDoEixo = new Map(eixos.map((e, i) => [e.item.uid, i]));
+  const indiceDe = (familia: 'wall' | 'structural' | 'eixo', uid: string | undefined): number =>
+    (familia === 'wall' ? indiceDaParede : familia === 'structural' ? indiceDaEstrutura : indiceDoEixo).get(uid ?? '') ?? -1;
+  const restricoes = ordenar(
+    (model.restricoes ?? []).filter(
+      (r) => indiceDe(r.alvo.familia, r.alvo.uid) >= 0 && (!r.referencia || indiceDe(r.referencia.familia, r.referencia.uid) >= 0),
+    ),
+    (r) => ({
+      tipo: r.tipo,
+      alvo: { familia: r.alvo.familia, indice: indiceDe(r.alvo.familia, r.alvo.uid) },
+      referencia: r.referencia ? { familia: r.referencia.familia, indice: indiceDe(r.referencia.familia, r.referencia.uid) } : undefined,
+      valorMm: r.valorMm,
+    }),
+    (x, y) =>
+      cmpStr(x.tipo, y.tipo) ||
+      cmpStr(x.alvo.familia, y.alvo.familia) ||
+      indiceDe(x.alvo.familia, x.alvo.uid) - indiceDe(y.alvo.familia, y.alvo.uid) ||
+      cmpStr(x.referencia?.familia ?? '', y.referencia?.familia ?? '') ||
+      (x.referencia ? indiceDe(x.referencia.familia, x.referencia.uid) : -1) - (y.referencia ? indiceDe(y.referencia.familia, y.referencia.uid) : -1) ||
+      (x.valorMm ?? -1) - (y.valorMm ?? -1),
+  );
+
   // ESCADAS E RAMPAS. Mesma disciplina de `structures`, `roofs` e `sections`:
   // a chave é OMITIDA quando não há nenhuma, para que o payload — e o hash — de
   // todo desenho sem circulação vertical continue exatamente o que era.
@@ -608,6 +637,7 @@ function projetar(model: BlueprintModel): {
     roofs: roofs.length ? roofs.map((r) => r.geom) : undefined,
     sections: sections.length ? sections.map((c) => c.geom) : undefined,
     eixos: eixos.length ? eixos.map((e) => e.geom) : undefined,
+    restricoes: restricoes.length ? restricoes.map((r) => r.geom) : undefined,
     stairs: stairs.length ? stairs.map((e) => e.geom) : undefined,
     trechos: trechos.length ? trechos.map((t) => t.geom) : undefined,
     terminais: terminais.length ? terminais.map((t) => t.geom) : undefined,
@@ -631,6 +661,7 @@ function projetar(model: BlueprintModel): {
     roofs: roofs.map((r) => r.item.uid ?? null),
     sections: sections.map((c) => c.item.uid ?? null),
     eixos: eixos.map((e) => e.item.uid ?? null),
+    restricoes: restricoes.map((r) => r.item.uid ?? null),
     stairs: stairs.map((e) => e.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
@@ -700,6 +731,8 @@ export interface IdentidadeCanonica {
   sections?: (ElementUid | null)[];
   /** Ausente em payload gravado sob kernel anterior a 0.34.0. */
   eixos?: (ElementUid | null)[];
+  /** Ausente em payload gravado sob kernel anterior a 0.35.0. */
+  restricoes?: (ElementUid | null)[];
   /** Ausente em payload gravado sob kernel anterior a 0.14.0. */
   stairs?: (ElementUid | null)[];
   trechos?: (ElementUid | null)[];
@@ -828,6 +861,13 @@ export interface CanonicalPayload {
     nome: string;
     a: { x: number; y: number };
     b: { x: number; y: number };
+  }[];
+  /** Restrições. Ausente sob kernel < 0.35.0 e em desenho sem nenhuma. Referências por índice. */
+  restricoes?: {
+    tipo: TipoDeRestricao;
+    alvo: { familia: 'wall' | 'structural'; indice: number };
+    referencia?: { familia: FamiliaRestringivel; indice: number };
+    valorMm?: number;
   }[];
   /**
    * Escadas e rampas. Ausente sob kernel < 0.14.0 e em desenho sem nenhuma.
@@ -1174,6 +1214,26 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       nome: e.nome,
       a: { x: e.a.x, y: e.a.y },
       b: { x: e.b.x, y: e.b.y },
+    });
+  });
+
+  // Restrições: DEPOIS de paredes, estruturas e eixos, porque referenciam os
+  // três por índice. Referência fora da lista é descartada, não erro — payload
+  // editado à mão não pode derrubar a leitura do desenho inteiro.
+  const restricoesLidas = payload.restricoes ?? [];
+  const uidPorIndice = (familia: 'wall' | 'structural' | 'eixo', i: number): string | null =>
+    (familia === 'wall' ? model.walls[i] : familia === 'structural' ? model.structures[i] : model.eixos[i])?.uid ?? null;
+  restricoesLidas.forEach((r, i) => {
+    const alvoUid = uidPorIndice(r.alvo.familia, r.alvo.indice);
+    const refUid = r.referencia ? uidPorIndice(r.referencia.familia, r.referencia.indice) : null;
+    if (!alvoUid || (r.referencia && !refUid)) return;
+    model.restricoes.push({
+      id: nextId(model, 'rst'),
+      uid: uidDe('restricoes', i, restricoesLidas.length),
+      tipo: r.tipo,
+      alvo: { familia: r.alvo.familia, uid: alvoUid },
+      ...(r.referencia && refUid ? { referencia: { familia: r.referencia.familia, uid: refUid } } : {}),
+      ...(r.valorMm !== undefined ? { valorMm: r.valorMm } : {}),
     });
   });
 

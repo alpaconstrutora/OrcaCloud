@@ -54,7 +54,12 @@ import {
   pontasPresasAsPecas,
   assertParametros,
   findEixo,
+  findRestricao,
+  limparRestricoesOrfas,
   MAX_NOME_DE_EIXO,
+  type Restricao,
+  type TipoDeRestricao,
+  type FamiliaRestringivel,
   type Parametros,
   type ValorDeParametro,
 } from './model';
@@ -269,6 +274,18 @@ export type Command =
   | { type: 'SetEixoProps'; eixoId: ObjectId; nome?: string }
   | { type: 'MoveEixoVertex'; eixoId: ObjectId; end: 'a' | 'b'; to: Point }
   | { type: 'DeleteEixo'; eixoId: ObjectId }
+  /**
+   * RESTRIÇÃO (E1.4b): declara a intenção; a conferência é derivada. Alvo e
+   * referência por ID de peça (o comando resolve o uid). Ver `Restricao`.
+   */
+  | {
+      type: 'AddRestricao';
+      tipo: TipoDeRestricao;
+      alvo: { familia: 'wall' | 'structural'; id: ObjectId };
+      referencia?: { familia: FamiliaRestringivel; id: ObjectId };
+      valorMm?: number;
+    }
+  | { type: 'DeleteRestricao'; restricaoId: ObjectId }
   /**
    * ESCADA ou RAMPA pelo PERCURSO.
    *
@@ -1488,6 +1505,40 @@ function aplicarSemHash(
       const e = findEixo(next, command.eixoId);
       next.eixos = (next.eixos ?? []).filter((x) => x.id !== e.id);
       diff.deleted.push(e.id);
+      break;
+    }
+
+    // ── Restrições ───────────────────────────────────────────────────────────
+
+    case 'AddRestricao': {
+      const alvoPeca = command.alvo.familia === 'wall' ? findWall(next, command.alvo.id) : findStructural(next, command.alvo.id);
+      let referencia: Restricao['referencia'];
+      if (command.referencia) {
+        const f = command.referencia.familia;
+        const p = f === 'wall' ? findWall(next, command.referencia.id) : f === 'structural' ? findStructural(next, command.referencia.id) : findEixo(next, command.referencia.id);
+        referencia = { familia: f, uid: p.uid };
+      }
+      const id = nextId(next, 'rst');
+      // Uma restrição igual (tipo, alvo, referência) não se repete: a segunda substitui a primeira.
+      next.restricoes = (next.restricoes ?? []).filter(
+        (r) => !(r.tipo === command.tipo && r.alvo.uid === alvoPeca.uid && (r.referencia?.uid ?? null) === (referencia?.uid ?? null)),
+      );
+      next.restricoes.push({
+        id,
+        uid: novoUid(),
+        tipo: command.tipo,
+        alvo: { familia: command.alvo.familia, uid: alvoPeca.uid },
+        ...(referencia ? { referencia } : {}),
+        ...(command.valorMm !== undefined ? { valorMm: assertIntegerMm(roundToMm(command.valorMm), 'valorMm') } : {}),
+      });
+      diff.created.push(id);
+      break;
+    }
+
+    case 'DeleteRestricao': {
+      const r = findRestricao(next, command.restricaoId);
+      next.restricoes = (next.restricoes ?? []).filter((x) => x.id !== r.id);
+      diff.deleted.push(r.id);
       break;
     }
 
@@ -3127,6 +3178,8 @@ function aplicarSemHash(
     }
   }
 
+  // Restrição sem alvo ou referência viva some com o comando que os apagou.
+  diff.deleted.push(...limparRestricoesOrfas(next));
   recomputeSpaces(next);
   assertModelInvariants(next);
 

@@ -373,6 +373,32 @@ genéricos).
   cruzamento", "Pilares automáticos 1".
 - Restrições (`Restricao` + conferência/ajuste) ficam na **E1.4b**, próxima publicação.
 
+### E1.4b — Restrições (18/09/2026) · kernel 0.35.0 · fecha a E1.4
+- **Decisão**: restrição ACUSA, não trava. Nada de solver escondido no arraste (o usuário brigaria
+  com o desenho): a restrição é a intenção declarada no kernel, a conferência é derivada e cada
+  violação oferece **Ajustar** — um comando visível, um Ctrl+Z. É a postura de
+  `pontasPresasAsPecas`.
+- **Kernel** (bump 0.34.0 → 0.35.0, goldens provados em 0.34.0 com 256 testes e recapturados):
+  `Restricao {tipo, alvo, referencia?, valorMm?}` com referências por **uid** no modelo (sobrevive
+  ao `SplitWall`) e por **índice** no canônico; tipos `ALINHADO_A_EIXO`, `DISTANCIA_AO_EIXO`,
+  `TRAVA_COMPRIMENTO`, `IGUAL_COMPRIMENTO`, `PARALELO` com `EXIGENCIAS_DA_RESTRICAO`; comandos
+  `AddRestricao` (a igual substitui) e `DeleteRestricao`; `limparRestricoesOrfas` na cauda de todo
+  comando (apagar a parede leva a restrição, sem cada `Delete*` lembrar); invariantes.
+- `utils/blueprintRestricoes.ts`: `conferirRestricoes(model)` → atendida/desvio (mm ou °)/
+  descrição/`correcao` (`TranslateEntities` perpendicular com junções mantidas, `MoveVertex` da
+  ponta B para comprimento, `RotateEntities` inteiro em torno do centro para paralela) ou
+  `semCorrecaoPorque` (parede não paralela ao eixo → "gire-a antes"). Tolerâncias 1 mm / 0,5°.
+- **UI** `PainelRestricoes`: sob o painel da parede/peça (lista da peça + "Nova restrição" com
+  tipo, referência — eixos, paredes, vigas — e valor) e no drawer **Restrições** (Analisar ›
+  Relatórios, contagem = violadas). Linha: ✓/⚠, descrição, Ajustar, Remover, clique seleciona.
+- Testes: `blueprintRestricoes` (6), goldens, editor "E1.4b" (declara, viola 300 mm, conta 1,
+  Ajustar zera, Remover apaga). Suíte 4637. App real (escritas bloqueadas: 17): parede
+  perpendicular ao eixo A → "não é paralela ao eixo A (90.0°) — gire-a antes de alinhar", botão
+  Restrições 1, sem Ajustar (correto).
+
+**Etapa 1 restante:** E1.5 (Objeto Inteligente — ficha unificada; seletor de tipo em escada e
+telhado; fórmulas nas saídas).
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

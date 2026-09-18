@@ -663,6 +663,38 @@ describe('BlueprintEditor · quantitativos', () => {
     // na linha do canvas — sem geometria em jsdom; é provado no app real.
   });
 
+  it('restrições (E1.4b): a parede declara "sobre o eixo", a violação aparece com o desvio e conta no botão Restrições, Ajustar corrige e Remover apaga', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const m = k.applyBatch(nivel.model, [
+      { type: 'AddWall', levelId: t, a: k.point(0, 300), b: k.point(6000, 300), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddEixo', a: k.point(-500, 0), b: k.point(6500, 0), nome: 'A' },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirComponentes(user);
+    await user.click(await screen.findByRole('button', { name: /^Parede 1/ }));
+    const bloco = await screen.findByTestId('painel-restricoes-peca');
+    expect(bloco).toHaveTextContent(/Restrições/);
+    // Tipo padrão "Sobre o eixo"; a referência lista o eixo A.
+    await user.selectOptions(within(bloco).getByLabelText(/Referência da nova restrição/), 'eixo:' + m.eixos[0].id);
+    await user.click(within(bloco).getByRole('button', { name: /adicionar restrição/i }));
+    // Violada: está a 300 mm do eixo.
+    const linha = await within(screen.getByTestId('painel-restricoes-peca')).findByText(/está a 300 mm do eixo A/);
+    expect(linha).toBeInTheDocument();
+    await abrirAba(/^analisar$/i);
+    expect(botao(/^restrições/i)).toHaveTextContent('1');
+    // Ajustar: a parede vai para o eixo e a violação some do botão.
+    await user.click(within(screen.getByTestId('painel-restricoes-peca')).getByRole('button', { name: /^ajustar$/i }));
+    await waitFor(() => expect(botao(/^restrições/i)).not.toHaveTextContent('1'));
+    expect(screen.getByTestId('painel-restricoes-peca')).toHaveTextContent(/sobre o eixo A/);
+    // Remover apaga a restrição.
+    await user.click(within(screen.getByTestId('painel-restricoes-peca')).getByRole('button', { name: /remover restrição/i }));
+    expect(screen.getByTestId('painel-restricoes-peca')).not.toHaveTextContent(/sobre o eixo A/);
+  });
+
   it('clash arquitetônico (E0.4): pilar no vão da porta entra em Conflitos, conta no botão e o clique seleciona a porta', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });

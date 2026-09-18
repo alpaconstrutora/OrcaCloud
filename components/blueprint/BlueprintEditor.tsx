@@ -15,6 +15,7 @@ import {
   FlipVertical2,
   RotateCcw,
   RotateCw,
+  Link2,
   AlignStartVertical,
   LayoutGrid,
   History,
@@ -119,6 +120,8 @@ import {
 } from '../../services/blueprintOpeningTypeService';
 import PainelCorteSelecionado from './PainelCorteSelecionado';
 import PainelEixoSelecionado from './PainelEixoSelecionado';
+import PainelRestricoes from './PainelRestricoes';
+import { conferirRestricoes, violacoes } from '../../utils/blueprintRestricoes';
 import { contornosParaTelhado } from '../../utils/blueprintTelhadoContorno';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
 import BlueprintCanvas, { rotuloPasso, type AjustePonta, type AcaoDeNavegacao } from './BlueprintCanvas';
@@ -686,6 +689,8 @@ type TarefaDoPainel = keyof typeof ROTULO_DA_TAREFA;
  */
 const RELATORIOS_DO_DOCK = {
   conflitos: { rotulo: 'Conflitos', naVista: true, no3d: true },
+  // Restrições (E1.4b): a conferência das intenções declaradas, com o ajuste.
+  restricoes: { rotulo: 'Restrições', naVista: true, no3d: true },
   comentarios: { rotulo: 'Comentários', naVista: true, no3d: true },
   'quadro-de-cargas': { rotulo: 'Quadro de cargas e NBR 5410', naVista: true, no3d: true },
   // Separado do quadro de cargas (14/09/2026): "no mesmo drawer não tem
@@ -1106,6 +1111,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
+    'restricoes',
     'medicoes',
     'orcamento',
   ]);
@@ -2252,6 +2258,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   /** Os arquitetônicos (E0.4): pilar no vão, pilar na escada, viga baixa sobre o degrau. */
   const conflitosArq = useMemo(() => conflitosArquitetonicos(editor.model), [editor.model]);
   const totalDeConflitos = conflitos.length + conflitosArq.length;
+  /** As restrições conferidas (E1.4b) — derivadas a cada mudança do modelo. */
+  const conferenciaDeRestricoes = useMemo(() => conferirRestricoes(editor.model), [editor.model]);
+  const restricoesVioladas = violacoes(conferenciaDeRestricoes).length;
 
   /**
    * O `.bcfzip` com TODA a pendência do estudo — conflitos e comentários.
@@ -6103,6 +6112,22 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         />
       )}
 
+      {/* RESTRIÇÕES da peça (E1.4b): parede e estrutura declaram intenção aqui;
+          a conferência e o Ajustar vivem na mesma lista. */}
+      {(paredeSel || estruturaSel) && (
+        <PainelRestricoes
+          model={editor.model}
+          conferencias={conferenciaDeRestricoes}
+          onComando={(c) => editor.run(c)}
+          onSelecionar={(id) => id && selecionar([id])}
+          peca={
+            paredeSel
+              ? { familia: 'wall', id: paredeSel.id, uid: paredeSel.uid, ehLinear: true }
+              : { familia: 'structural', id: estruturaSel!.id, uid: estruturaSel!.uid, ehLinear: estruturaSel!.pontos.length === 2 }
+          }
+        />
+      )}
+
       {/* A DIVISA selecionada se edita no painel do terreno (comprimento,
           papel na escritura) — o mesmo que a tarefa "Dados do lote" abre. */}
       {limiteSel && painelDoTerreno}
@@ -7076,6 +7101,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 ativo={relatorioAberto === 'conflitos'}
                 onClick={() => alternarRelatorio('conflitos')}
                 ajuda="Interferências entre disciplinas, com a estrutura e da estrutura com vãos e escadas; exportar BCF"
+              />
+              <BotaoDoRibbon
+                icone={Link2}
+                rotulo="Restrições"
+                contagem={restricoesVioladas || undefined}
+                ativo={relatorioAberto === 'restricoes'}
+                onClick={() => alternarRelatorio('restricoes')}
+                ajuda="As restrições declaradas (sobre o eixo, distância, comprimento, paralela) conferidas contra o desenho; a violada oferece Ajustar"
               />
               {relatorioVisivel('medicoes') && (
                 <BotaoDoRibbon
@@ -10837,6 +10870,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           <SheetTitle>
             <span className="flex items-center gap-2">
               {relatorioNoDrawer === 'conflitos' && <AlertTriangle className="h-5 w-5 text-amber-600" />}
+              {relatorioNoDrawer === 'restricoes' && <Link2 className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'medicoes' && <Ruler className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'orcamento' && <Calculator className="h-5 w-5 text-blue-700" />}
               {RELATORIOS_DO_DOCK[relatorioNoDrawer].rotulo}
@@ -10850,6 +10884,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   {medicoes.formas.length}
                 </span>
               )}
+              {relatorioNoDrawer === 'restricoes' && (
+                <span className="rounded-[6px] bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-600">
+                  {restricoesVioladas}/{conferenciaDeRestricoes.length}
+                </span>
+              )}
             </span>
           </SheetTitle>
           <SheetDescription>
@@ -10857,6 +10896,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               'Interferências de instalações com a estrutura e entre disciplinas, e da estrutura com vãos e escadas. Clicar num conflito seleciona a peça no desenho; exporte em BCF para o projetista.'}
             {relatorioNoDrawer === 'medicoes' &&
               'As formas medidas sobre a planta de fundo — área, linha e contagem — por camada, com o envio ao orçamento.'}
+            {relatorioNoDrawer === 'restricoes' &&
+              'As intenções declaradas — sobre o eixo, distância ao eixo, comprimento travado, mesmo comprimento, paralela — conferidas contra o desenho. A restrição não trava o gesto: a violada mostra o desvio e oferece Ajustar (um comando, Ctrl+Z desfaz).'}
             {relatorioNoDrawer === 'orcamento' &&
               'A ponte com o orçamento da obra: o de-para dos itens e a prévia do que a versão publicada gera.'}
           </SheetDescription>
@@ -10871,6 +10912,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onSelecionar={(id) => selecionar([id])}
               onExportarBcf={exportarBcfDoEstudo}
             />
+          )}
+
+          {relatorioNoDrawer === 'restricoes' && (
+            <div className="p-3">
+              <PainelRestricoes model={editor.model} conferencias={conferenciaDeRestricoes} onComando={(c) => editor.run(c)} onSelecionar={(id) => id && selecionar([id])} />
+            </div>
           )}
 
           {relatorioNoDrawer === 'medicoes' && (

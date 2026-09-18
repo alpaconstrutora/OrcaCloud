@@ -163,7 +163,9 @@ BEGIN
                     'number',       o.number,
                     'status',       o.status,
                     'project_name', (SELECT p.name FROM public.projects p WHERE p.id = o.project_id),
-                    'total',        (SELECT COALESCE(SUM((i->>'total')::numeric), 0)
+                    -- Cotado quando houver, senão referência — a MESMA regra de
+                    -- `utils/pedidoItemValor.ts` e de aplicar_20270921000025.
+                    'total',        (SELECT COALESCE(SUM(COALESCE((i->>'quotedTotal')::numeric, (i->>'total')::numeric)), 0)
                                      FROM jsonb_array_elements(COALESCE(o.items, '[]'::jsonb)) i),
                     'financeiro',   public.purchase_order_financeiro_json(o.id)
                 )

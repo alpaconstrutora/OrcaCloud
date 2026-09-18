@@ -1140,7 +1140,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
             </div>
 
             {/* Duas colunas SÓ na aba Dados Gerais: lá a coluna da direita
-                (Status interno + Observações) é o resumo do que a aba mostra.
+                (Status interno) é o resumo do que a aba mostra.
                 Nas outras quatro ela repetia o mesmo cartão ao lado de conteúdo
                 que não tem relação com ele, roubando um terço da largura de
                 tabelas que já rolavam na horizontal. Removida a pedido do
@@ -1383,9 +1383,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 </div>
                 )}
 
-                {/* O cartão "Observações" saiu daqui: passou para a coluna da
-                    direita, logo abaixo do cartão de Status interno (pedido do
-                    usuário em 2026-09-04). */}
+                {/* "Notas / Observações" vive no painel Dados Gerais do formulário
+                    embutido (pedido de 2026-09-17), com o checkbox "Visível para o
+                    fornecedor". */}
 
                 {/* Formulário do pedido, embutido: é o conteúdo que morava na tela
                     "Editar pedido". UMA instância só, com a aba mandando em qual
@@ -1450,6 +1450,12 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                     <p className="text-sm font-normal text-gray-800 mt-1">{supplierName || '—'}</p>
                                 </div>
                                 <div>
+                                    <p className="text-xs font-semibold text-gray-500">Empreendimento</p>
+                                    {/* Vem da RPC (`empreendimento_name`): a RLS de `empreendimentos`
+                                        barra o fornecedor. "—" = obra sem empreendimento vinculado. */}
+                                    <p className="text-sm font-normal text-gray-800 mt-1">{order.empreendimentoName || '—'}</p>
+                                </div>
+                                <div>
                                     <p className="text-xs font-semibold text-gray-500">Obra</p>
                                     <p className="text-sm font-normal text-gray-800 mt-1">{projectName || '—'}</p>
                                 </div>
@@ -1476,6 +1482,18 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                     <p className="text-sm font-normal text-gray-800 mt-1">{order.paymentMethod || '—'}</p>
                                 </div>
                             </div>
+
+                            {/* Só quando o comprador marcou "Visível para o fornecedor" nas
+                                Notas / Observações. Por token a RPC já devolve `notes` nulo;
+                                logado, a linha vem inteira da tabela e o corte é este. */}
+                            {order.notesVisibleToSupplier !== false && (
+                                <div className="pt-5 border-t border-gray-100">
+                                    <p className="text-xs font-semibold text-gray-500">Observações do comprador</p>
+                                    <p className="text-sm font-normal text-gray-700 mt-1 leading-relaxed">
+                                        {order.notes || 'Nenhuma observação registrada pelo comprador.'}
+                                    </p>
+                                </div>
+                            )}
 
                             {/* ── Comprador ──
                                 O que o fornecedor precisa para emitir a nota
@@ -1568,12 +1586,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                             </div>
                         </div>
 
-                        <div className="mt-5 pt-5 border-t border-gray-100">
-                            <p className="text-xs font-semibold text-gray-500">Observações do comprador</p>
-                            <p className="text-sm font-normal text-gray-700 mt-1 leading-relaxed">
-                                {order.notes || 'Nenhuma observação registrada pelo comprador.'}
-                            </p>
-                        </div>
+                        {/* "Observações do comprador" passou para o bloco Dados gerais
+                            (espelho do formulário do comprador, 2026-09-17). */}
 
                         {/* ── Parcelas ──
                             As parcelas reais do Contas a Pagar deste pedido
@@ -2075,24 +2089,10 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         </div>
                     </div>
 
-                    {/* Observações do comprador — leitura. Fica logo abaixo do
-                        Status interno, na mesma coluna (§16: escala compacta,
-                        igual ao cartão de cima). A coluna inteira já só existe na
-                        aba Dados Gerais, então aqui não cabe mais condição. */}
-                    <div className="bg-white p-5 rounded-[10px] shadow-sm border border-gray-100">
-                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                            <div className={`p-1.5 rounded-[6px] ${A.chip}`}>
-                                <FileText className={`w-3.5 h-3.5 ${A.icon}`} />
-                            </div>
-                            Observações
-                        </h3>
-                        <div className="relative">
-                            <div className={`absolute top-0 left-0 w-1 h-full rounded-full ${A.barSoft}`} />
-                            <p className="text-sm text-gray-600 pl-4 py-1 italic leading-relaxed">
-                                {order.notes || "Nenhuma observação registrada pelo comprador."}
-                            </p>
-                        </div>
-                    </div>
+                    {/* O cartão "Observações" saiu daqui em 2026-09-17: o comprador
+                        edita as notas em Dados Gerais (com a opção "Visível para o
+                        fornecedor") e o fornecedor as lê no bloco Dados gerais dele —
+                        aqui seria a mesma coisa pela terceira vez. */}
                 </div>
                 )}
             </div>

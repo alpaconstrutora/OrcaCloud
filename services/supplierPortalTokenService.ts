@@ -33,6 +33,11 @@ const mapOrderRow = (item: any): PurchaseOrder => ({
   // linhas e o cabeçalho do detalhe ficava vazio, com o dado disponível o tempo
   // todo na resposta.
   projectName: item.project_name || '-',
+  // Nome do empreendimento da obra, resolvido na RPC (RLS de `empreendimentos`).
+  empreendimentoName: item.empreendimento_name || undefined,
+  // Com a flag em FALSE a RPC já devolve `notes` nulo; a flag vem junto para a
+  // tela esconder o bloco inteiro, não só o texto.
+  notesVisibleToSupplier: item.notes_visible_to_supplier ?? true,
   // Idem para a empresa compradora (`comprador`, só no detalhe): a RLS de
   // `companies` barra o fornecedor, então ela vem embutida no pedido. Ver
   // pedidoCompradorService.

@@ -9,6 +9,7 @@ import PlanoContasSelect from './PlanoContasSelect';
 import CostCenterSelect from './CostCenterSelect';
 import Button from './ui/Button';
 import { projectService, ProjectData } from '../services/projectService';
+import { empreendimentoService } from '../services/empreendimentoService';
 import { resolveProjectBudget } from '../services/budgetResolver';
 import { supplierService } from '../services/supplierService';
 import { orderService } from '../services/orderService';
@@ -187,6 +188,17 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     const [paymentDays, setPaymentDays] = React.useState(30);
     const [paymentInstallments, setPaymentInstallments] = React.useState(1);
     const [notes, setNotes] = React.useState('');
+    // O comprador decide, por pedido, se as observações vão para o fornecedor
+    // (portal por token e área logada). Default TRUE: é o comportamento que
+    // sempre existiu — a RPC do portal corta `notes` quando FALSE.
+    const [notesVisibleToSupplier, setNotesVisibleToSupplier] = React.useState(true);
+    // Empreendimento: NÃO é campo do pedido — é derivado da obra (como a
+    // lista e a numeração PC-{empreend}-{obra}-{seq} já fazem). O seletor
+    // existe para filtrar as obras e para o usuário ver a hierarquia
+    // Empreendimento → Obra no próprio pedido.
+    const [empreendimentos, setEmpreendimentos] = React.useState<{ id: string; name: string }[]>([]);
+    const [empreendimentoByProject, setEmpreendimentoByProject] = React.useState<Record<string, { id: string; name: string; towerName?: string }>>({});
+    const [selectedEmpreendimentoId, setSelectedEmpreendimentoId] = React.useState('');
     const [bankAccount, setBankAccount] = React.useState('');
     // FK de verdade (cost_centers_v2) — costCenter (nome, texto legado) é
     // derivado dela no submit, só para não quebrar telas que ainda leem o
@@ -224,12 +236,17 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         let cancelled = false;
         (async () => {
             try {
-                const [suppliersList, projectsList] = await Promise.all([
+                const [suppliersList, projectsList, empsList, empsByProject] = await Promise.all([
                     supplierService.listSuppliers(),
                     projectService.listProjects(),
+                    // `contextOrgId` null = "Todas": o service não filtra e a RLS recorta (regra #5).
+                    empreendimentoService.list(contextOrgId ?? undefined).catch(() => []),
+                    empreendimentoService.mapObrasToEmpreendimentos(contextOrgId).catch(() => ({})),
                 ]);
                 if (cancelled) return;
                 setSuppliers(suppliersList);
+                setEmpreendimentos(empsList.map(e => ({ id: e.id, name: e.name })));
+                setEmpreendimentoByProject(empsByProject);
                 // Só obras: é o default de listProjects desde a virada da
                 // assinatura (regra #3 segura por padrão). Projeto de sistema
                 // também já sai no service — utils/systemProjects.ts.
@@ -289,6 +306,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     setPaymentDays(existingOrder.paymentDays || 30);
                     setPaymentInstallments(existingOrder.paymentInstallments || 1);
                     setNotes(existingOrder.notes || '');
+                    setNotesVisibleToSupplier(existingOrder.notesVisibleToSupplier ?? true);
                     setBankAccount(existingOrder.bankAccount || '');
                     setCostCenterId(existingOrder.costCenterId || '');
                     setPlanoDeContasId(existingOrder.planoDeContasId || '');
@@ -777,7 +795,12 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
             const planoDeContasName = planoContas.find(c => c.id === planoDeContasId)?.name || '';
 
             if (isEditing && editingOrderId) {
-                await orderService.updateOrder(editingOrderId, {
+                // A linha gravada volta com a versão nova. Embutido no detalhe,
+                // este formulário NÃO é remontado depois de salvar — sem
+                // reatualizar `editingVersion` o SEGUNDO "Salvar alterações"
+                // caía em CONFLICT (visto em 2026-09-17 ao salvar a flag das
+                // observações duas vezes seguidas).
+                const salvo = await orderService.updateOrder(editingOrderId, {
                     projectId: selectedProjectId,
                     supplierId: selectedSupplierId,
                     deliveryDate: deliveryDate,
@@ -786,6 +809,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     paymentDays: paymentDays,
                     paymentInstallments: paymentInstallments,
                     notes: notes,
+                    notesVisibleToSupplier,
                     bankAccount: bankAccount,
                     costCenterId: costCenterId || undefined,
                     costCenter: costCenterName,
@@ -795,6 +819,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     deliveryLocation: deliveryLocation,
                     items: orderItems,
                 }, editingVersion);
+                if (salvo?.version !== undefined && salvo.version !== null) setEditingVersion(salvo.version);
             } else {
                 await orderService.createOrder({
                     projectId: selectedProjectId,
@@ -806,6 +831,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     paymentInstallments: paymentInstallments,
                     status: 'Rascunho',
                     notes: notes,
+                    notesVisibleToSupplier,
                     bankAccount: bankAccount,
                     costCenterId: costCenterId || undefined,
                     costCenter: costCenterName,
@@ -836,6 +862,35 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     // detalhe (prop `painel`); na criação, aparecem os três — fluxo único, um
     // formulário só de cima a baixo.
     const mostrarDadosGerais = !embedded || painel === 'dados';
+
+    // Obra escolhida (ou carregada do pedido) puxa o empreendimento dela para o
+    // seletor. Roda também quando o mapa chega depois do pedido.
+    React.useEffect(() => {
+        if (!selectedProjectId) return;
+        const emp = empreendimentoByProject[selectedProjectId];
+        if (emp) setSelectedEmpreendimentoId(emp.id);
+    }, [selectedProjectId, empreendimentoByProject]);
+
+    // Obras oferecidas: as do empreendimento escolhido, ou todas.
+    const projectsDoEmpreendimento = React.useMemo(() => {
+        if (!selectedEmpreendimentoId) return projects;
+        const filtradas = projects.filter(p => empreendimentoByProject[p.id]?.id === selectedEmpreendimentoId);
+        // A obra atual fica na lista mesmo fora do empreendimento (vínculo
+        // desfeito depois do pedido) — senão o <select> mostraria vazio.
+        if (selectedProjectId && !filtradas.some(p => p.id === selectedProjectId)) {
+            const atual = projects.find(p => p.id === selectedProjectId);
+            if (atual) return [atual, ...filtradas];
+        }
+        return filtradas;
+    }, [projects, selectedEmpreendimentoId, empreendimentoByProject, selectedProjectId]);
+
+    const handleEmpreendimentoChange = (empId: string) => {
+        setSelectedEmpreendimentoId(empId);
+        // Trocar de empreendimento limpa a obra que não pertence a ele.
+        if (empId && selectedProjectId && empreendimentoByProject[selectedProjectId]?.id !== empId) {
+            setSelectedProjectId('');
+        }
+    };
     const mostrarItens = !embedded || painel === 'itens';
     const mostrarFinanceiro = !embedded || painel === 'financeiro';
 
@@ -1166,6 +1221,20 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                     </div>
 
                                     <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Empreendimento</label>
+                                        <select
+                                            value={selectedEmpreendimentoId}
+                                            onChange={(e) => handleEmpreendimentoChange(e.target.value)}
+                                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                        >
+                                            <option value="">Todos os empreendimentos</option>
+                                            {empreendimentos.map(e => (
+                                                <option key={e.id} value={e.id}>{e.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Obra</label>
                                         <select
                                             value={selectedProjectId}
@@ -1173,7 +1242,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                             className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                                         >
                                             <option value="">Selecione a obra...</option>
-                                            {projects.map(p => (
+                                            {projectsDoEmpreendimento.map(p => (
                                                 <option key={p.id} value={p.id}>{p.name}</option>
                                             ))}
                                         </select>
@@ -1229,6 +1298,28 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                             <option value="Transferência">Transferência Bancária</option>
                                             <option value="Dinheiro">Dinheiro</option>
                                         </select>
+                                    </div>
+
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Notas / Observações</label>
+                                        <textarea
+                                            value={notes}
+                                            onChange={(e) => setNotes(e.target.value)}
+                                            rows={3}
+                                            placeholder="Ex: Entregar no portão lateral..."
+                                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                                        />
+                                        {/* Desmarcado, a RPC do portal não entrega `notes` ao
+                                            fornecedor e a área logada dele também esconde. */}
+                                        <label className="mt-2 flex items-center gap-2 text-sm font-normal text-gray-700 cursor-pointer select-none">
+                                            <input
+                                                type="checkbox"
+                                                checked={notesVisibleToSupplier}
+                                                onChange={(e) => setNotesVisibleToSupplier(e.target.checked)}
+                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                            />
+                                            Visível para o fornecedor
+                                        </label>
                                     </div>
                                 </div>
                             </div>
@@ -1297,17 +1388,8 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                     )}
                                 </div>
 
-                                <div className="mt-4">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Notas / Observações</label>
-                                    <textarea
-                                        value={notes}
-                                        onChange={(e) => setNotes(e.target.value)}
-                                        rows={3}
-                                        placeholder="Ex: Entregar no portão lateral..."
-                                        className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                                    />
-                                </div>
-
+                                {/* "Notas / Observações" passou para Dados Gerais (pedido do
+                                    usuário em 2026-09-17). */}
                                 <div className="mt-8 space-y-6 pt-6 border-t border-gray-100">
                                     <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.2em] flex items-center gap-3">
                                         <Filter className="w-4 h-4 text-indigo-600" />

@@ -138,6 +138,10 @@ export interface PurchaseOrder {
     chartOfAccounts?: string;
     planoDeContasId?: string;
     notes?: string;
+    /** FALSE = as observações não são entregues ao fornecedor (portal/área logada). Default TRUE. */
+    notesVisibleToSupplier?: boolean;
+    /** Nome do empreendimento da obra — só a RPC do portal preenche (a RLS de `empreendimentos` barra o fornecedor). */
+    empreendimentoName?: string;
     items: PurchaseOrderItem[];
     version?: number;
     // Aprovação multinível unificada (approvalService). Independente de isFinancialApproved.

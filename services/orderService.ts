@@ -16,7 +16,7 @@ import { generateOrderNumber } from './orderNumberingService';
 import { processService } from './processService';
 import { valorEfetivoDoItem } from '../utils/pedidoItemValor';
 
-type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; cost_center_id?: string; chart_of_accounts?: string; plano_de_contas_id?: string; notes?: string; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; };
+type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; cost_center_id?: string; chart_of_accounts?: string; plano_de_contas_id?: string; notes?: string; notes_visible_to_supplier?: boolean; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; };
 
 /**
  * Traduz a violação do índice único de `purchase_orders.number` (23505) para uma
@@ -67,6 +67,7 @@ export const orderService = {
                 chart_of_accounts: order.chartOfAccounts,
                 plano_de_contas_id: order.planoDeContasId,
                 notes: order.notes,
+                notes_visible_to_supplier: order.notesVisibleToSupplier ?? true,
                 items: order.items
             })
             .select()
@@ -129,7 +130,7 @@ export const orderService = {
 
         let query = supabase
             .from('purchase_orders')
-            .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, cost_center_id, chart_of_accounts, plano_de_contas_id, notes, items, version, created_at, updated_at, status_updated_at')
+            .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, cost_center_id, chart_of_accounts, plano_de_contas_id, notes, notes_visible_to_supplier, items, version, created_at, updated_at, status_updated_at')
             .order('created_at', { ascending: false });
 
         if (projectId) {
@@ -195,7 +196,7 @@ export const orderService = {
             });
         }
 
-        type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; cost_center_id?: string; chart_of_accounts?: string; plano_de_contas_id?: string; notes?: string; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; };
+        type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; cost_center_id?: string; chart_of_accounts?: string; plano_de_contas_id?: string; notes?: string; notes_visible_to_supplier?: boolean; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; };
         // Map database columns to type
         return (orders || []).map((item: DbOrderRow) => {
             const project = projectMap[item.project_id];
@@ -234,6 +235,7 @@ export const orderService = {
                 chartOfAccounts: item.chart_of_accounts,
                 planoDeContasId: item.plano_de_contas_id,
                 notes: item.notes,
+                notesVisibleToSupplier: item.notes_visible_to_supplier ?? true,
                 items: item.items,
                 version: item.version,
                 created_at: item.created_at,
@@ -245,7 +247,7 @@ export const orderService = {
     async getOrderById(id: string): Promise<PurchaseOrder | null> {
         const { data, error } = await supabase
             .from('purchase_orders')
-            .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, cost_center_id, chart_of_accounts, plano_de_contas_id, notes, items, version, created_at, updated_at, status_updated_at')
+            .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, cost_center_id, chart_of_accounts, plano_de_contas_id, notes, notes_visible_to_supplier, items, version, created_at, updated_at, status_updated_at')
             .eq('id', id)
             .single();
         if (error || !data) return null;
@@ -256,7 +258,7 @@ export const orderService = {
         // Pre-flight checks (single SELECT before the update)
         const { data: currentRow, error: fetchError } = await supabase
             .from('purchase_orders')
-            .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, cost_center_id, chart_of_accounts, plano_de_contas_id, notes, items, version, created_at, updated_at, status_updated_at')
+            .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, cost_center_id, chart_of_accounts, plano_de_contas_id, notes, notes_visible_to_supplier, items, version, created_at, updated_at, status_updated_at')
             .eq('id', id)
             .single();
 
@@ -286,6 +288,7 @@ export const orderService = {
                     status_updated_at: new Date().toISOString()
                 }),
                 ...(updates.notes !== undefined && { notes: updates.notes }),
+                ...(updates.notesVisibleToSupplier !== undefined && { notes_visible_to_supplier: updates.notesVisibleToSupplier }),
                 ...(updates.paymentMethod !== undefined && { payment_method: updates.paymentMethod }),
                 ...(updates.paymentTermType !== undefined && { payment_term_type: updates.paymentTermType }),
                 ...(updates.paymentDays !== undefined && { payment_days: updates.paymentDays }),
@@ -319,7 +322,7 @@ export const orderService = {
         // Fetch the updated row separately — avoids PostgREST RETURNING quirks
         const { data, error: refetchError } = await supabase
             .from('purchase_orders')
-            .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, cost_center_id, chart_of_accounts, plano_de_contas_id, notes, items, version, created_at, updated_at, status_updated_at')
+            .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, cost_center_id, chart_of_accounts, plano_de_contas_id, notes, notes_visible_to_supplier, items, version, created_at, updated_at, status_updated_at')
             .eq('id', id)
             .single();
 
@@ -484,6 +487,7 @@ export const orderService = {
             chartOfAccounts: item.chart_of_accounts,
             planoDeContasId: item.plano_de_contas_id,
             notes: item.notes,
+            notesVisibleToSupplier: item.notes_visible_to_supplier ?? true,
             items: item.items,
             version: item.version,
             created_at: item.created_at,
@@ -606,7 +610,7 @@ export const orderService = {
         // 1. Fetch current order
         const { data: original, error: fetchError } = await supabase
             .from('purchase_orders')
-            .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, cost_center_id, chart_of_accounts, plano_de_contas_id, notes, items, version, created_at, updated_at, status_updated_at')
+            .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, cost_center_id, chart_of_accounts, plano_de_contas_id, notes, notes_visible_to_supplier, items, version, created_at, updated_at, status_updated_at')
             .eq('id', id)
             .single();
 

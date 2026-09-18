@@ -1632,7 +1632,7 @@ export default function BlueprintCanvas({
   // de corte atravessa a edificação inteira, e a marca dele tem de aparecer em
   // qualquer pavimento que se esteja editando — é assim que se sabe onde o
   // corte passa enquanto se desenha o segundo piso.
-  const cortes = useMemo(() => model.sections ?? [], [model.sections]);
+  const cortes = useMemo(() => (model.sections ?? []).filter((c) => !ocultos.has(c.id)), [model.sections, ocultos]);
 
   // ── Seleção ───────────────────────────────────────────────────────────────
   //

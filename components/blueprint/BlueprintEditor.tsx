@@ -91,6 +91,7 @@ import ModalSobreposicao, { type EscolhaSobreposicao } from './ModalSobreposicao
 import PainelComponentes from './PainelComponentes';
 import { linhasDeComponentesPorNivel } from '../../utils/blueprintComponentes';
 import { etiquetasDasAberturas, rotuloDeNivelDoPavimento } from '../../utils/blueprintNumeracao';
+import { AJUSTE_DA_VISTA, ehVistaDePlanta, idsOcultosNaVista, nivelDaVista } from '../../utils/blueprintVistasDePlanta';
 import PainelEstruturaSelecionada from './PainelEstruturaSelecionada';
 import PainelTrechoSelecionado from './PainelTrechoSelecionado';
 import PainelQuadroSelecionado from './PainelQuadroSelecionado';
@@ -919,6 +920,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
   const emVista = vista !== 'planta';
   const vistaEhElevacao = ehVistaDeElevacao(vista);
+  /**
+   * SITUAÇÃO · IMPLANTAÇÃO · COBERTURA (E0.3): a planta baixa com o pavimento e
+   * o recorte que o módulo decide. O canvas é o mesmo; o que muda são o
+   * `levelId`, os `ocultos` e as anotações forçadas — por cima do estado do
+   * usuário, sem gravá-lo (voltar à Planta devolve tudo como estava).
+   */
+  const vistaDePlanta = ehVistaDePlanta(vista) ? vista : null;
+  const nivelDaVistaDePlanta = useMemo(
+    () => (vistaDePlanta ? nivelDaVista(editor.model, vistaDePlanta) : null),
+    [vistaDePlanta, editor.model],
+  );
+  const ajusteDaVista = vistaDePlanta ? AJUSTE_DA_VISTA[vistaDePlanta] : null;
   /**
    * O corte que esta SENDO VISTO, quando a vista e um.
    *
@@ -2589,6 +2602,13 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * histórico, não muda quantitativo.
    */
   const [ocultosNoDesenho, setOcultosNoDesenho] = useState<Set<string>>(new Set());
+  /** O olho do usuário + o recorte da vista de planta (E0.3). */
+  const ocultosNoCanvas = useMemo(() => {
+    if (!vistaDePlanta) return ocultosNoDesenho;
+    const daVista = idsOcultosNaVista(editor.model, vistaDePlanta, nivelDaVistaDePlanta);
+    for (const id of ocultosNoDesenho) daVista.add(id);
+    return daVista;
+  }, [ocultosNoDesenho, vistaDePlanta, editor.model, nivelDaVistaDePlanta]);
 
   /**
    * Alterna em LOTE — a linha manda um id, o cabeçalho da família manda todos os
@@ -4781,7 +4801,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   }
   /** Abre Versões com a vista em que se está já marcada como prancha. */
   function exportarAVistaAtual() {
-    const prancha: PranchaExport = vista === '3d' ? 'planta' : (vista as PranchaExport);
+    const prancha: PranchaExport = vista === '3d' || vistaDePlanta ? 'planta' : (vista as PranchaExport);
     setPranchaParaExportar([prancha]);
     setRelatorio('versoes');
   }
@@ -7185,7 +7205,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                               : 'Pilares, vigas e lajes na fachada. A fundação aparece tracejada, abaixo da linha do solo.',
                         },
                       ]
-                    : [
+                    : vistaDePlanta
+                      ? [
+                          {
+                            chave: 'preenchimento-terreno-vista',
+                            rotulo: 'Preenchimento do terreno',
+                            icone: PaintBucket,
+                            ligado: mostrarPreenchimentoTerreno,
+                            alternar: () => setMostrarPreenchimentoTerreno((v) => !v),
+                            ajuda: 'A hachura do lote. O resto do recorte desta vista é fixo — volte à Planta para ligar interiores, instalações e rótulos.',
+                          },
+                        ]
+                      : [
                         {
                           chave: 'laje-3d',
                           rotulo: 'Piso / laje',
@@ -7749,6 +7780,25 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           "Sem perguntar" foi decisão do usuário; "sem contar" seria outra coisa —
           o editor teria movido parede dele e nada na tela diria isso. AZUL, e não
           âmbar: não é problema pendente, é trabalho já feito. */}
+      {/* A VISTA DE PLANTA se anuncia (E0.3): qual é, o que esconde e em que
+          pavimento — senão a pessoa procura a porta que "sumiu". */}
+      {ajusteDaVista && (
+        <div
+          role="status"
+          data-testid="faixa-vista-de-planta"
+          className="flex items-start gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700"
+        >
+          <Layers className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
+          <span className="flex-1">
+            <strong>{ajusteDaVista.rotulo}</strong>
+            {nivelDaVistaDePlanta ? ` · ${nivelDaVistaDePlanta.name}` : ''} — {ajusteDaVista.descricao}
+          </span>
+          <button type="button" onClick={() => setVista('planta')} className="shrink-0 text-xs font-medium underline">
+            voltar à planta
+          </button>
+        </div>
+      )}
+
       {avisoConexaoT && (
         <div
           role="status"
@@ -7952,10 +8002,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           ) : (
             <BlueprintCanvas
               encaixesAtivos={encaixesAtivos}
-              mostrarCircuitos={mostrarCircuitos}
+              mostrarCircuitos={ajusteDaVista ? false : mostrarCircuitos}
               model={editor.model}
-              tool={editor.tool}
-              levelId={levelId}
+              tool={vistaDePlanta ? 'selecionar' : editor.tool}
+              levelId={nivelDaVistaDePlanta ? nivelDaVistaDePlanta.id : levelId}
               selectedIds={editor.selectedIds}
               // Clique no desenho abre as propriedades no Sheet sem véu
               // (17/09/2026: *"o mesmo comportamento deve ocorrer quando eu
@@ -8000,15 +8050,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               }}
               onJuntarPontas={juntarPontas}
               ortogonal={ortogonal}
-              mostrarMedidasParedes={mostrarMedidas}
-              mostrarCamadasParedes={mostrarCamadas}
-              mostrarCotas={mostrarCotas}
-              mostrarCotaInterna={mostrarCotaInterna}
-              mostrarRotulosAmbiente={mostrarRotulos}
+              mostrarMedidasParedes={ajusteDaVista ? false : mostrarMedidas}
+              mostrarCamadasParedes={ajusteDaVista ? false : mostrarCamadas}
+              mostrarCotas={ajusteDaVista ? ajusteDaVista.mostrarCotas : mostrarCotas}
+              mostrarCotaInterna={ajusteDaVista ? false : mostrarCotaInterna}
+              mostrarRotulosAmbiente={ajusteDaVista ? false : mostrarRotulos}
               rotulosDeAmbiente={rotulosDeAmbiente}
               etiquetasDeAbertura={etiquetasDeAbertura}
-              mostrarGrade={mostrarGrade}
-              mostrarPreenchimentoAmbientes={mostrarPreenchimento}
+              mostrarGrade={ajusteDaVista ? false : mostrarGrade}
+              mostrarPreenchimentoAmbientes={ajusteDaVista ? false : mostrarPreenchimento}
               mostrarPreenchimentoTerreno={mostrarPreenchimentoTerreno}
               curvasDeNivel={mostrarCurvasDeNivel ? topografia.selecionada?.curvas : undefined}
               // Os pontos aparecem enquanto se digita, só na fonte que os usa:
@@ -8078,7 +8128,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               passoMoverMm={passoMover === 'grade' ? null : passoMover}
               onMoveVertex={moverPonta}
               envelope={envelope?.valido ? envelope.anel : []}
-              mostrarEnvelope={mostrarEnvelope}
+              mostrarEnvelope={ajusteDaVista ? ajusteDaVista.mostrarEnvelope : mostrarEnvelope}
               onAddLimite={adicionarLimite}
               onMoveBoundaryVertex={moverPontaLimite}
               limiteEmDestaque={limiteEmDestaque}
@@ -8123,7 +8173,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               // traça parede, sem nada na tela explicando de onde ele veio.
               regiao={tarefaAberta === 'gerar-paredes' ? regiao : null}
               pecasPrevistas={pecasPrevistas}
-              ocultos={ocultosNoDesenho}
+              ocultos={ocultosNoCanvas}
               onRegiaoDefinida={(r) => {
                 // `null` = desistiu do gesto. Só desarma — apagar a região
                 // confirmada por causa de um Escape seria perder trabalho.

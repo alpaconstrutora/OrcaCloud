@@ -250,6 +250,25 @@ fabricação, Dynamo/marketplace, worksets/modelo central, HVAC completo, texto 
 - Testes: `blueprintNumeracao` (4), editor "Por ambiente (E0.2)". Suíte 4597. App real (escritas
   bloqueadas: 14): "±0,00" em cada ambiente, "PT1" ao lado da porta, colunas 2,80 / 70,52 na tela.
 
+### E0.3 — Situação · Implantação · Cobertura (18/09/2026)
+- `utils/blueprintVistasDePlanta.ts` (novo, puro): `AJUSTE_DA_VISTA` (nível, cotas, envelope, só
+  contorno), `nivelDaVista` (mais baixo; cobertura = mais alto com telhado), `paredesExternasDoNivel`
+  (ponto médio sobre aresta paralela do `contornoExternoDoNivel` — o anel tem vértice em toda
+  junção), `idsOcultosNaVista` (instalações, estrutura, escadas, cortes, esquadrias e internas do
+  pavimento da vista).
+- `VistaBlueprint` ganhou `situacao | implantacao | cobertura` (9 vistas fixas, ícones no acesso
+  rápido). O canvas é o mesmo da planta: o editor força `levelId`, soma os ocultos da vista ao olho
+  do usuário e desliga rótulos/medidas/grade/circuitos; cotas e envelope conforme o ajuste. Faixa
+  `faixa-vista-de-planta` diz vista, pavimento e recorte, com "voltar à planta". Read-only como as
+  elevações (sem ferramentas); aba Vista só oferece o preenchimento do terreno. Cortes passaram a
+  respeitar `ocultos` no canvas. Exportar a vista atual cai na prancha de planta.
+- Limite declarado: a cadeia de cotas continua a do modelo (inclui os vãos escondidos) — a cota
+  por vista é da E8.2 (templates de vista).
+- Testes: `blueprintVistasDePlanta` (3), editor "E0.3" + contagem de 9 vistas. Suíte 4601. App
+  real (escritas bloqueadas: 14): as três faixas ("Situação · Térreo…", "Cobertura · Pavimento
+  1…"), contorno sem interiores, envelope só na implantação, "voltar à planta" devolve as
+  ferramentas.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

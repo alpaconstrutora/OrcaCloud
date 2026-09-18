@@ -14,6 +14,9 @@ import {
   Box,
   Check,
   ChevronDown,
+  Home,
+  LandPlot,
+  Map,
   PanelBottom,
   PanelLeft,
   PanelRight,
@@ -25,6 +28,14 @@ import type { DirecaoElevacao } from '../../utils/blueprintElevation';
 
 export type VistaBlueprint =
   | 'planta'
+  /**
+   * SITUAÇÃO, IMPLANTAÇÃO e COBERTURA (18/09/2026, E0.3): a mesma planta baixa
+   * com outro pavimento e outro recorte — ver `utils/blueprintVistasDePlanta.ts`.
+   * São fixas como as elevações, e read-only como elas.
+   */
+  | 'situacao'
+  | 'implantacao'
+  | 'cobertura'
   | 'frente'
   | 'fundos'
   | 'lateral-esq'
@@ -71,6 +82,9 @@ export const VISTAS_FIXAS: readonly {
   icone: React.ComponentType<{ className?: string }>;
 }[] = [
   { id: 'planta', rotulo: 'Planta', icone: Ruler },
+  { id: 'situacao', rotulo: 'Situação', icone: Map },
+  { id: 'implantacao', rotulo: 'Implantação', icone: LandPlot },
+  { id: 'cobertura', rotulo: 'Cobertura', icone: Home },
   { id: 'frente', rotulo: 'Frente', icone: PanelTop },
   { id: 'fundos', rotulo: 'Fundos', icone: PanelBottom },
   { id: 'lateral-esq', rotulo: 'Lat. esquerda', icone: PanelLeft },

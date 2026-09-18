@@ -1092,6 +1092,30 @@ describe('BlueprintEditor · ribbon', () => {
     expect(barra().getByRole('button', { name: /^ferramenta: selecionar$/i })).toBeInTheDocument();
   });
 
+  it('Situação, Implantação e Cobertura (E0.3): vistas fixas, read-only, com faixa que diz o pavimento e o recorte', async () => {
+    await montar();
+    const user = userEvent.setup();
+    const barra = () => within(screen.getByRole('toolbar'));
+    for (const v of ['Situação', 'Implantação', 'Cobertura']) {
+      expect(barra().getByRole('button', { name: `Vista: ${v}` })).toBeInTheDocument();
+    }
+    await user.click(barra().getByRole('button', { name: 'Vista: Situação' }));
+    const faixa = await screen.findByTestId('faixa-vista-de-planta');
+    expect(faixa).toHaveTextContent(/Situação · Térreo — Lote, divisas/);
+    // Read-only como as elevações: sem ferramenta de desenho; o canvas da planta continua (não é elevação).
+    expect(barra().queryByRole('button', { name: /^ferramenta: selecionar$/i })).toBeNull();
+    expect(screen.getByRole('application', { name: /área de desenho da planta/i })).toBeInTheDocument();
+    // A aba Vista oferece só o preenchimento do terreno.
+    await abrirAba(/^vista$/i);
+    await user.click(botao(/exibir/i));
+    expect(screen.getByRole('menuitemcheckbox', { name: /preenchimento do terreno/i })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitemcheckbox', { name: /piso \/ laje/i })).toBeNull();
+    // "voltar à planta" devolve o editor.
+    await user.click(within(faixa).getByRole('button', { name: /voltar à planta/i }));
+    expect(screen.queryByTestId('faixa-vista-de-planta')).toBeNull();
+    expect(barra().getByRole('button', { name: /^ferramenta: selecionar$/i })).toBeInTheDocument();
+  });
+
   it('uma aba por disciplina MEP: Elétrica tem pontos/eletroduto/quadro e as tarefas; Hidráulica só água e esgoto', async () => {
     // 17/09/2026: "menubar Instalações está agrupando todas as disciplinas.
     // Melhor separar um menu para cada disciplina MEP: Elétrica; Hidráulica; Mecânica".
@@ -1136,7 +1160,7 @@ describe('BlueprintEditor · ribbon', () => {
     const editar = within(linha).getByRole('group', { name: 'Editar' });
     expect(within(editar).getByRole('button', { name: /desfazer/i })).toBeInTheDocument();
     const vistas = within(linha).getByRole('group', { name: 'Vistas' });
-    expect(within(vistas).getAllByRole('button', { name: /^vista: /i })).toHaveLength(6);
+    expect(within(vistas).getAllByRole('button', { name: /^vista: /i })).toHaveLength(9);
     // A linha não é o slot à direita das abas: é filha direta da toolbar, abaixo do tablist.
     const toolbar = screen.getByRole('toolbar');
     expect(linha.closest('[role="toolbar"]')).toBe(toolbar);

@@ -1119,6 +1119,41 @@ describe('BlueprintEditor · ribbon', () => {
     expect(opcoes()).toHaveTextContent(/^Tubo de queda/);
   });
 
+  it('Hidráulica › Distribuir pontos (18/09/2026): a gaveta lista o banheiro classificado, lança o kit sugerido e Aceitar confirma', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = m.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) =>
+      ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    m = k.applyBatch(m, [w(0, 0, 2000, 0), w(2000, 0, 2000, 3000), w(2000, 3000, 0, 3000), w(0, 3000, 0, 0)]).model;
+    m = k.applyCommand(m, { type: 'AddOpening', wallId: m.walls[0].id, kind: 'door', offsetMm: 600, widthMm: 700, heightMm: 2100, sillMm: 0 }).model;
+    m = k.applyCommand(m, { type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Banho', tipoDeAmbiente: 'BANHEIRO' }).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+
+    await abrirAba(/^hidráulica$/i);
+    const botaoDistribuir = () => botao(/^distribuir pontos/i);
+    expect(botaoDistribuir()).toHaveTextContent('1'); // um ambiente com kit a criar
+    await user.click(botaoDistribuir());
+    const gaveta = await screen.findByTestId('tarefa-pontos-hidraulicos');
+    const linha = within(gaveta).getByRole('row', { name: /banho/i });
+    expect(within(linha).getByLabelText(/kit de banho/i)).toHaveValue('BANHEIRO');
+    expect(linha).toHaveTextContent(/VS \(fria\/Esgoto\)/);
+    expect(linha).toHaveTextContent(/CH \(fria\/quente\)/);
+
+    await user.click(within(linha).getByRole('button', { name: /^lançar 8$/i }));
+    // Oito pontos nasceram sugeridos; a linha diz que o kit está completo.
+    await waitFor(() => expect(within(gaveta).getByRole('row', { name: /banho/i })).toHaveTextContent(/completo/i));
+    // O Sheet não tem nome acessível; a gaveta é o dialog que contém a tarefa.
+    const dialog = gaveta.closest('[role="dialog"]') as HTMLElement;
+    expect(within(dialog).getByText(/8 sugerida\(s\)/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: /aceitar sugeridas/i }));
+    expect(within(dialog).getByText(/nenhuma peça sugerida/i)).toBeInTheDocument();
+    // O botão do ribbon não conta mais nada a criar.
+    expect(botaoDistribuir()).not.toHaveTextContent('1');
+  });
+
   it('a aba persiste entre montagens — é preferência, não gesto', async () => {
     await montar();
     await abrirAba(/^elétrica$/i);

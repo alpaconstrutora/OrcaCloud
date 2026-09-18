@@ -88,3 +88,32 @@ determinismo, laje entre pavimentos, quantitativo + orçamento. Suíte cheia 454
 ### App real (escritas bloqueadas: 15)
 Três trechos de AF desenhados → Quantitativos › Resumo › Instalações: "Água fria DN 25 12,63 m ·
 3 trecho(s)", "Joelho 90° DN 25 · Água fria 1 — 1 deduzida(s) dos encontros"; Desfazer devolve.
+
+## F3 — distribuir pontos por ambiente — entregue em 18/09/2026
+
+- `utils/blueprintPontosHidraulicos.ts` (novo): `kitDoAmbiente` (BANHEIRO → banheiro;
+  COZINHA_SERVICO → área de serviço se o nome tem "serv"/"lavand", senão cozinha);
+  `HipotesesDePontos { aguaQuenteEm, coletorDoBanheiro, recuoDaParedeMm }`;
+  `planejarPontosDoAmbiente` — kits: banheiro (vaso AF+ESG, lavatório AF[+AQ]+ESG, chuveiro
+  AF[+AQ], coletor ESG), cozinha (pia AF[+AQ]+ESG), serviço (tanque, máquina AF+ESG, ralo seco);
+  posições no anel recuado (`ladosDePiso`, `pontoJuntoAPorta`): vaso no maior lado sem porta,
+  lavatório junto à porta, chuveiro no canto mais longe, coletor a 300 mm, pia no maior lado
+  oposto à porta, tanque/máquina lado a lado, ralo perto do tanque; N terminais por aparelho no
+  mesmo (x,y), cotas da ficha, `sugerida: true`, rótulo "Kit · Ambiente"; **idempotente** por
+  (tipo, disciplina) — a disciplina que falta nasce no lugar do irmão; kit forçado por ambiente.
+- Editor: tarefa `pontosHidraulicos`; aba Hidráulica ganhou o grupo **Lançamento** com
+  "Distribuir pontos" (contagem = ambientes com algo a criar) e "Aceitar sugeridas" (já era
+  agnóstico de disciplina). Gaveta: hipóteses (AQ em CH/LV/PIA/TQ/ML/DH, coletor, recuo), tabela
+  por ambiente (kit trocável, siglas a criar por disciplina, Lançar por linha), rodapé com
+  "Lançar em todos (N)" e "Aceitar sugeridas". Hipóteses em `blueprint:pontosHidraulicos`.
+
+### Testes
+`blueprintPontosHidraulicos.test.ts` (8): kit por tipo/nome, banheiro completo com
+disciplinas e cotas, todos os pontos dentro do anel e sem colisão, cozinha/serviço, hipótese de
+AQ e coletor, idempotência + AQ depois no lugar do irmão, sem tipo × kit forçado, pavimento
+inteiro num lote válido. Editor: "Hidráulica › Distribuir pontos" (gaveta, Lançar 8, Completo,
+Aceitar). Suíte cheia 4554.
+
+### App real (escritas bloqueadas: 15)
+Planta 14/09/2026, Térreo: botão "Distribuir pontos 1"; gaveta com "Ambiente 4" (cozinha) →
+"PIA (fria/quente/Esgoto) · Lançar 3" → "Completo", rodapé "3 sugerida(s)"; Desfazer devolve.

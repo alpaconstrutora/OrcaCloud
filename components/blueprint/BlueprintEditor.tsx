@@ -63,6 +63,7 @@ import {
   Ruler,
   Scan,
   Scissors,
+  ShowerHead,
   Spline,
   Square,
   Tag,
@@ -360,10 +361,18 @@ import {
 } from '../../utils/blueprintRede';
 import {
   FICHA_DO_PONTO_HIDRAULICO,
+  SIGLA_DO_PONTO_HIDRAULICO,
   cotaUsualDoPontoHidraulico,
   ehSobreOTrecho,
   projetarNoTrecho,
 } from '../../utils/blueprintHidraulica';
+import {
+  HIPOTESES_PONTOS_PADRAO,
+  ROTULO_DO_KIT,
+  planejarPontosDoNivel,
+  type HipotesesDePontos,
+  type KitHidraulico,
+} from '../../utils/blueprintPontosHidraulicos';
 import {
   ROTULO_DO_TIPO_DE_AMBIENTE,
   comandosDeIluminacao,
@@ -612,6 +621,9 @@ const ROTULO_DA_TAREFA = {
   lajes: 'Lajes automáticas',
   // Fundações (16/09/2026): bloco + estaca(s) sob cada pilar, uma gaveta.
   fundacoes: 'Fundações automáticas',
+  // Pontos hidráulicos por ambiente (18/09/2026, F3 da hidráulica): o kit do
+  // banheiro/cozinha/serviço em posições sugeridas — mover confirma.
+  pontosHidraulicos: 'Pontos hidráulicos por ambiente',
   'gerar-paredes': 'Gerar paredes do PDF',
   'importar-ifc': 'Importar do IFC',
   'importar-dxf': 'Importar do DXF',
@@ -4832,6 +4844,32 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     [editor.model, levelId, quadroDosCircuitos?.id, hipotesesDeCircuitos, hipotesesEletricas],
   );
   const pontosParaCircuitos = levelId ? pontosElegiveis(editor.model, levelId).length : 0;
+
+  /**
+   * ─── PONTOS HIDRÁULICOS POR AMBIENTE (18/09/2026, F3) ─────────────────────
+   * Hipóteses no navegador (molde dos eletrodutos); o kit de cada ambiente pode
+   * ser trocado na gaveta (`kitsForcados`, estado de sessão — decisão do gesto).
+   */
+  const [hipDePontosSalvas, setHipDePontosSalvas] = usePersistedState<HipotesesDePontos>(
+    'blueprint:pontosHidraulicos',
+    HIPOTESES_PONTOS_PADRAO,
+  );
+  const hipotesesDePontos = useMemo<HipotesesDePontos>(
+    () => ({ ...HIPOTESES_PONTOS_PADRAO, ...(hipDePontosSalvas ?? {}) }),
+    [hipDePontosSalvas],
+  );
+  const [kitsForcados, setKitsForcados] = useState<Record<string, KitHidraulico | null>>({});
+  const planosDePontos = useMemo(
+    () => planejarPontosDoNivel(editor.model, levelId, hipotesesDePontos, kitsForcados),
+    [editor.model, levelId, hipotesesDePontos, kitsForcados],
+  );
+  const ambientesComPontosACriar = planosDePontos.filter((p) => p.aCriar > 0).length;
+  const lancarPontos = (planos: typeof planosDePontos) => {
+    const lote = planos.flatMap((p) => p.comandos);
+    if (lote.length === 0) return;
+    const criados = editor.runBatch(lote);
+    if (criados.length > 0) selecionar(criados);
+  };
   /** O que aconteceu no último "Criar": sucesso (para o drawer dizer) ou a recusa da conferência. */
   const [resultadoDeCircuitos, setResultadoDeCircuitos] = useState<{ ok: boolean; texto: string } | null>(null);
   const criarCircuitos = () => {
@@ -6465,22 +6503,44 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         )}
 
         {aba === 'hidraulica' && !emVista && (
-          <GrupoDoRibbon rotulo="Redes e pontos">
-            <MenuComponentes
-              tool={editor.tool}
-              tipoAbertura={tipoAbertura}
-              tipoEstrutural={tipoEstrutural}
-              tipoCirculacao={tipoCirculacao}
-              disciplinaDeRede={disciplinaDeRede}
-              tipoDePontoEletrico={tipoDePontoEletrico}
-              tipoDeInterruptor={tipoDeInterruptor}
-              tipoDePontoHidraulico={tipoDePontoHidraulico}
-              prumadaDeRede={prumadaDeRede}
-              familia="HIDRAULICA"
-              rotulo="Hidráulica"
-              onEscolher={escolherComponente}
-            />
-          </GrupoDoRibbon>
+          <>
+            <GrupoDoRibbon rotulo="Redes e pontos">
+              <MenuComponentes
+                tool={editor.tool}
+                tipoAbertura={tipoAbertura}
+                tipoEstrutural={tipoEstrutural}
+                tipoCirculacao={tipoCirculacao}
+                disciplinaDeRede={disciplinaDeRede}
+                tipoDePontoEletrico={tipoDePontoEletrico}
+                tipoDeInterruptor={tipoDeInterruptor}
+                tipoDePontoHidraulico={tipoDePontoHidraulico}
+                prumadaDeRede={prumadaDeRede}
+                familia="HIDRAULICA"
+                rotulo="Hidráulica"
+                onEscolher={escolherComponente}
+              />
+            </GrupoDoRibbon>
+            {/* LANÇAMENTO automático hidráulico (18/09/2026): os pontos por ambiente
+                (F3); água fria/quente e esgoto entram nas fases seguintes. */}
+            <GrupoDoRibbon rotulo="Lançamento">
+              <BotaoDoRibbon
+                icone={ShowerHead}
+                rotulo="Distribuir pontos"
+                contagem={ambientesComPontosACriar || undefined}
+                ativo={tarefaAberta === 'pontosHidraulicos'}
+                onClick={() => alternarTarefa('pontosHidraulicos')}
+                ajuda="Por ambiente classificado: o kit do banheiro (vaso, lavatório, chuveiro, caixa sifonada), da cozinha (pia) e da área de serviço (tanque, máquina, ralo) em posições sugeridas — mover confirma, Ctrl+Z desfaz"
+              />
+              <BotaoDoRibbon
+                icone={CheckCircle2}
+                rotulo="Aceitar sugeridas"
+                contagem={sugeridasNoNivel}
+                disabled={sugeridasNoNivel === 0}
+                onClick={aceitarSugeridas}
+                ajuda="Confirma todas as peças sugeridas do pavimento (tomadas e pontos hidráulicos) de uma vez."
+              />
+            </GrupoDoRibbon>
+          </>
         )}
         {aba === 'eletrica' && (
           <>
@@ -8469,6 +8529,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               {tarefaAberta === 'vigas' && <RectangleHorizontal className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'lajes' && <Layers className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'fundacoes' && <SquareStack className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'pontosHidraulicos' && <ShowerHead className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -8492,6 +8553,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 <strong>Completar pela norma</strong> lança só o que falta;{' '}
                 <strong>Distribuir</strong> lança N ao longo das paredes. As tomadas nascem{' '}
                 <em>sugeridas</em> — mover uma confirma.
+              </>
+            )}
+            {tarefaAberta === 'pontosHidraulicos' && (
+              <>
+                Por ambiente classificado, o KIT do seu tipo em posições provisórias: vaso, lavatório,
+                chuveiro e coletor no banheiro; pia na cozinha; tanque, máquina e ralo na área de
+                serviço. Cada aparelho gera um ponto por disciplina (água fria, quente, esgoto) no
+                mesmo lugar. As peças nascem <em>sugeridas</em> — mover confirma; rodar de novo não
+                duplica.
               </>
             )}
             {tarefaAberta === 'eletrodutos' && (
@@ -8523,9 +8593,133 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
+
+          {tarefaAberta === 'pontosHidraulicos' && (
+            <div className="space-y-4" data-testid="tarefa-pontos-hidraulicos">
+              <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <p className="font-semibold text-slate-700">Hipóteses da distribuição</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  <li>
+                    <strong>Banheiro</strong>: vaso no maior lado sem porta, lavatório junto à porta, chuveiro
+                    no canto mais longe da porta, coletor a 30 cm do chuveiro. <strong>Cozinha</strong>: pia no
+                    maior lado oposto à porta. <strong>Área de serviço</strong>: tanque e máquina lado a lado,
+                    ralo seco perto do tanque.
+                  </li>
+                  <li>Cozinha × área de serviço decide pelo nome do ambiente ("serviço", "lavanderia") — troque na tabela.</li>
+                  <li>Cotas pela ficha (NBR 5626/8160); o esgoto do chuveiro vai pelo coletor; a caixa de gordura fica fora do ambiente e é sua.</li>
+                </ul>
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <span className="flex items-center gap-2">
+                    Água quente em
+                    {(['CHUVEIRO', 'LAVATORIO', 'PIA_COZINHA', 'TANQUE', 'MAQUINA_LAVAR', 'DUCHA_HIGIENICA'] as const).map((t) => (
+                      <label key={t} className="flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={hipotesesDePontos.aguaQuenteEm.includes(t)}
+                          onChange={(e) =>
+                            setHipDePontosSalvas({
+                              ...hipotesesDePontos,
+                              aguaQuenteEm: e.target.checked
+                                ? [...hipotesesDePontos.aguaQuenteEm, t]
+                                : hipotesesDePontos.aguaQuenteEm.filter((x) => x !== t),
+                            })
+                          }
+                          aria-label={`Água quente em ${FICHA_DO_PONTO_HIDRAULICO[t].rotulo}`}
+                        />
+                        {SIGLA_DO_PONTO_HIDRAULICO[t]}
+                      </label>
+                    ))}
+                  </span>
+                  <label className="flex items-center gap-2">
+                    Coletor do banheiro
+                    <select
+                      value={hipotesesDePontos.coletorDoBanheiro}
+                      onChange={(e) => setHipDePontosSalvas({ ...hipotesesDePontos, coletorDoBanheiro: e.target.value as HipotesesDePontos['coletorDoBanheiro'] })}
+                      aria-label="Coletor do banheiro"
+                      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                    >
+                      <option value="CAIXA_SIFONADA">Caixa sifonada</option>
+                      <option value="RALO_SIFONADO">Ralo sifonado</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    Recuo da parede
+                    <input
+                      type="number"
+                      min={50}
+                      step={50}
+                      value={hipotesesDePontos.recuoDaParedeMm}
+                      onChange={(e) => setHipDePontosSalvas({ ...hipotesesDePontos, recuoDaParedeMm: Math.max(50, Math.round(Number(e.target.value) || 150)) })}
+                      aria-label="Recuo da parede em mm"
+                      className="w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs tabular-nums"
+                    />
+                    mm
+                  </label>
+                </div>
+              </div>
+
+              {planosDePontos.length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  Nenhum ambiente classificado como banheiro ou cozinha/serviço neste pavimento. Classifique o
+                  tipo do cômodo (Tomadas pela NBR 5410 ou o cartão do ambiente) — o kit depende dele.
+                </p>
+              ) : (
+                <table className="w-full table-fixed text-xs" aria-label="Pontos hidráulicos por ambiente">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-500">
+                      <th className="py-1.5 pr-2 font-medium">Ambiente</th>
+                      <th className="w-36 py-1.5 pr-2 font-medium">Kit</th>
+                      <th className="py-1.5 pr-2 font-medium">A criar</th>
+                      <th className="w-20 py-1.5 text-right font-medium">Lançar</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {planosDePontos.map((p) => (
+                      <tr key={p.spaceId}>
+                        <td className="py-1.5 pr-2 font-medium text-slate-700">{p.nome}</td>
+                        <td className="py-1.5 pr-2">
+                          <select
+                            value={p.kit ?? ''}
+                            onChange={(e) => setKitsForcados((k) => ({ ...k, [p.spaceId]: (e.target.value || null) as KitHidraulico | null }))}
+                            aria-label={`Kit de ${p.nome}`}
+                            className="w-full rounded-md border border-slate-300 bg-white px-1.5 py-0.5 text-xs"
+                          >
+                            <option value="">Nenhum</option>
+                            {(Object.keys(ROTULO_DO_KIT) as KitHidraulico[]).map((k) => (
+                              <option key={k} value={k}>
+                                {ROTULO_DO_KIT[k]}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="py-1.5 pr-2 text-slate-600">
+                          {p.aCriar > 0
+                            ? p.pecas
+                                .filter((x) => x.disciplinas.some((d) => !x.existentes.includes(d)))
+                                .map((x) => `${SIGLA_DO_PONTO_HIDRAULICO[x.tipo]} (${x.disciplinas.filter((d) => !x.existentes.includes(d)).map((d) => ROTULO_DA_DISCIPLINA[d].replace('Água ', '')).join('/')})`)
+                                .join(' · ')
+                            : (p.motivo ?? '—')}
+                        </td>
+                        <td className="py-1.5 text-right">
+                          <button
+                            type="button"
+                            onClick={() => lancarPontos([p])}
+                            disabled={p.aCriar === 0}
+                            className="rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {p.aCriar > 0 ? `Lançar ${p.aCriar}` : 'Completo'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
 
           {tarefaAberta === 'eletrodutos' && (
             <div className="space-y-4">
@@ -9696,6 +9890,33 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </SheetPanel>
 
         <SheetFooter>
+          {tarefaAberta === 'pontosHidraulicos' && (
+            <>
+              <span className="mr-auto text-xs text-slate-500">
+                {sugeridasNoNivel === 0
+                  ? 'Nenhuma peça sugerida pendente neste pavimento.'
+                  : `${sugeridasNoNivel} sugerida(s) aguardando confirmação.`}
+              </span>
+              <button
+                type="button"
+                onClick={aceitarSugeridas}
+                disabled={sugeridasNoNivel === 0}
+                className="inline-flex h-9 items-center gap-1.5 rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Aceitar sugeridas
+              </button>
+              <button
+                type="button"
+                onClick={() => lancarPontos(planosDePontos)}
+                disabled={ambientesComPontosACriar === 0}
+                className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                <ShowerHead className="h-4 w-4" />
+                Lançar em todos ({planosDePontos.reduce((n, p) => n + p.aCriar, 0)})
+              </button>
+            </>
+          )}
           {tarefaAberta === 'tomadas' && (
             <>
               <span className="mr-auto text-xs text-slate-500">

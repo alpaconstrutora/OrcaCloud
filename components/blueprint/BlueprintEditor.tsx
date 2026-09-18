@@ -91,6 +91,7 @@ import ModalSobreposicao, { type EscolhaSobreposicao } from './ModalSobreposicao
 import PainelComponentes from './PainelComponentes';
 import { linhasDeComponentesPorNivel } from '../../utils/blueprintComponentes';
 import { etiquetasDasAberturas, rotuloDeNivelDoPavimento } from '../../utils/blueprintNumeracao';
+import { assinaturaDoTipo, camposDaEstrutura, camposDoTerminal, propriedadesDaEstrutura, propriedadesDoTerminal } from '../../utils/blueprintTipos';
 import { AJUSTE_DA_VISTA, ehVistaDePlanta, idsOcultosNaVista, nivelDaVista } from '../../utils/blueprintVistasDePlanta';
 import PainelEstruturaSelecionada from './PainelEstruturaSelecionada';
 import PainelTrechoSelecionado from './PainelTrechoSelecionado';
@@ -5817,6 +5818,19 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           editor.run({ type: 'SetTrechoProps', trechoId: trechoSel.id, ...campos })
         }
         onExcluir={removerSelecionada}
+        onAplicarTipoDoTerminal={(p) => {
+          if (!terminalSel) return;
+          if (p.disciplina !== terminalSel.disciplina) {
+            setAvisoColar(`Este tipo é de ${ROTULO_DA_DISCIPLINA[p.disciplina].toLowerCase()}; o ponto selecionado é de ${ROTULO_DA_DISCIPLINA[terminalSel.disciplina].toLowerCase()}.`);
+            return;
+          }
+          editor.run({ type: 'SetTerminalProps', terminalId: terminalSel.id, ...camposDoTerminal(p) });
+        }}
+        comAMesmaAssinatura={
+          terminalSel
+            ? (editor.model.terminais ?? []).filter((t) => assinaturaDoTipo(propriedadesDoTerminal(t)) === assinaturaDoTipo(propriedadesDoTerminal(terminalSel))).length
+            : undefined
+        }
         onTerminal={(campos) => {
           if (!terminalSel) return;
           // CLASSIFICAR um ponto que ainda não tem potência é uma
@@ -5875,6 +5889,20 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             structuralId: estruturaSel.id,
             kind,
           })
+        }
+        // TIPO × INSTÂNCIA (E1.1): um lote — troca de família (se a forma
+        // permitir) e medidas — um passo de desfazer.
+        onAplicarTipo={(p) => {
+          if (!estruturaSel) return;
+          editor.runBatch([
+            ...(p.kind !== estruturaSel.kind ? [{ type: 'SetStructuralKind' as const, structuralId: estruturaSel.id, kind: p.kind }] : []),
+            { type: 'SetStructuralProps', structuralId: estruturaSel.id, ...camposDaEstrutura(p) },
+          ]);
+        }}
+        comAMesmaAssinatura={
+          estruturaSel
+            ? editor.model.structures.filter((s) => assinaturaDoTipo(propriedadesDaEstrutura(s)) === assinaturaDoTipo(propriedadesDaEstrutura(estruturaSel))).length
+            : undefined
         }
         onExcluir={removerSelecionada}
         sobreposicaoM3={sobreposicaoDoSelecionado}

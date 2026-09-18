@@ -14,6 +14,8 @@ import ArmaduraManualForm from './ArmaduraManualForm';
 import ControleDeSobreposicao from './ControleDeSobreposicao';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
 import CustoDoElemento from './CustoDoElemento';
+import SeletorDeTipo from './SeletorDeTipo';
+import { propriedadesDaEstrutura, type PropriedadesDeEstrutura } from '../../utils/blueprintTipos';
 
 /**
  * Caixa "Estrutura selecionada" do painel lateral.
@@ -86,6 +88,14 @@ interface Props {
     rotulo?: string | null;
   }) => void;
   onTipo: (kind: StructuralKind) => void;
+  /**
+   * TIPO × INSTÂNCIA (E1.1): copia as propriedades de um tipo do catálogo para
+   * esta peça, num comando só. Opcional pela razão de sempre: chamadas antigas
+   * não a conhecem, e sem ela o seletor não aparece.
+   */
+  onAplicarTipo?: (propriedades: PropriedadesDeEstrutura) => void;
+  /** Quantas peças do desenho têm a mesma assinatura (esta inclusive). */
+  comAMesmaAssinatura?: number;
   onExcluir: () => void;
   /**
    * A peça é parte de um GRUPO de fundação (bloco + estacas, 16/09/2026): quem
@@ -134,6 +144,8 @@ export default function PainelEstruturaSelecionada({
   custo,
   custoDesatualizado,
   onMedidas,
+  onAplicarTipo,
+  comAMesmaAssinatura,
   onTipo,
   onExcluir,
   grupo,
@@ -312,6 +324,17 @@ export default function PainelEstruturaSelecionada({
         />
         m
       </label>
+
+      {/* TIPO salvo: aplicar/salvar as propriedades acima como um tipo da
+          organização (E1.1). Abaixo das medidas porque é delas que se faz o tipo. */}
+      {onAplicarTipo && (
+        <SeletorDeTipo
+          familia="ESTRUTURA"
+          atual={propriedadesDaEstrutura(estrutura)}
+          onAplicar={(p) => onAplicarTipo(p as PropriedadesDeEstrutura)}
+          comAMesmaAssinatura={comAMesmaAssinatura}
+        />
+      )}
 
       <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-500">
         Rótulo

@@ -291,6 +291,27 @@ fabricação, Dynamo/marketplace, worksets/modelo central, HVAC completo, texto 
 **Etapa 0 concluída** (4 fases: a02c07cb, 20aa1015, 734429f4 e esta). Próxima: E1.1 (tipos
 genéricos).
 
+### E1.1 — Tipo × instância para estrutura, ponto, escada e telhado (18/09/2026)
+- **Decisão revista contra o kernel**: o plano dizia `tipoId` no canônico; o kernel já decidiu
+  duas vezes (`CamadaParede`, `Esquadria`) que o tipo é MOLDE no catálogo, a peça carrega o VALOR
+  COPIADO e "são do mesmo tipo" é ASSINATURA — um `tipoId` faria a revisão publicada mudar quando
+  o catálogo mudasse. E1.1 generaliza essa decisão em vez de contrariá-la: **sem bump**.
+- `utils/blueprintTipos.ts` (puro): `PropriedadesDoTipo` por família (ESTRUTURA: kind, seção,
+  altura, base, circular · TERMINAL: disciplina, tipo, cota, classificação, potência, medidas,
+  volume · ESCADA · TELHADO), `propriedadesDa*`, `assinaturaDoTipo` (sem vazios — sobrevive ao
+  JSON), `resumoDoTipo`, `camposDa*` (volta para `Set*Props`). Posição, giro, rótulo e vínculo
+  ficam fora.
+- Migration `aplicar_20270918000040_blueprint_element_types.sql` **aplicada** (tabela=1, RLS,
+  4 policies, anon 0): uma tabela para as quatro famílias, `propriedades` JSONB. Parede e
+  esquadria ficam nas tabelas próprias. `services/blueprintElementTypeService.ts`.
+- `components/blueprint/SeletorDeTipo.tsx` (compartilhado): "Aplicar tipo…" (copia num comando;
+  estrutura troca de família + medidas num lote), "Salvar tipo" com nome inline sugerido, "Tipo X
+  · N peças iguais no desenho". Nos painéis de Estrutura e de Ponto (terminal); escada e telhado
+  ganham o mesmo bloco na E1.5.
+- Testes: `blueprintTipos` (4), editor "E1.1" (seletor, contagem, aplicar 30×30, nome sugerido).
+  Suíte 4610. App real (escritas bloqueadas: 14): pilar mostra "Sem tipo salvo · 32 peças iguais
+  no desenho" e o nome sugerido "Pilar 40×14 · 2,80 m".
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

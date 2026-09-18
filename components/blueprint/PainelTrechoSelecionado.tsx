@@ -30,6 +30,8 @@ import {
 } from '../../utils/blueprintKernel';
 import { FICHA_DO_PONTO_HIDRAULICO, tiposHidraulicosDa } from '../../utils/blueprintHidraulica';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
+import SeletorDeTipo from './SeletorDeTipo';
+import { propriedadesDoTerminal, type PropriedadesDeTerminal } from '../../utils/blueprintTipos';
 
 /**
  * Caixa "Trecho selecionado" / "Ponto selecionado" do painel lateral.
@@ -87,6 +89,9 @@ interface Props {
   }) => void;
   /** Os circuitos do desenho, para o ponto elétrico escolher o seu. */
   circuitos?: { id: string; nome: string; quadroNome: string }[];
+  /** TIPO × INSTÂNCIA (E1.1): copia as propriedades de um tipo salvo para este ponto. */
+  onAplicarTipoDoTerminal?: (propriedades: PropriedadesDeTerminal) => void;
+  comAMesmaAssinatura?: number;
   /**
    * Exclui a peça selecionada — como os painéis de parede, estrutura e escada
    * já ofereciam (13/09/2026: "não consigo excluir TUG"). Opcional pela razão
@@ -113,6 +118,8 @@ export default function PainelTrechoSelecionado({
   ocupacao,
   trecho,
   terminal,
+  onAplicarTipoDoTerminal,
+  comAMesmaAssinatura,
   onTrecho,
   onTerminal,
   circuitos = [],
@@ -147,6 +154,14 @@ export default function PainelTrechoSelecionado({
             aoAplicar={(v) => onTerminal({ cotaMm: v })}
             ariaLabel="Cota do ponto, em milímetros do piso"
           />
+          {onAplicarTipoDoTerminal && (
+            <SeletorDeTipo
+              familia="TERMINAL"
+              atual={propriedadesDoTerminal(terminal)}
+              onAplicar={(p) => onAplicarTipoDoTerminal(p as PropriedadesDeTerminal)}
+              comAMesmaAssinatura={comAMesmaAssinatura}
+            />
+          )}
           <CamposDeDimensao
             id={terminal.id}
             medidas={medidasDaPeca(terminal, MEDIDAS_PADRAO_TERMINAL)}

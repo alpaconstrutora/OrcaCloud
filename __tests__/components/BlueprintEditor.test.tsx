@@ -74,6 +74,15 @@ vi.mock('../../services/blueprintService', () => ({
 }));
 
 // O painel de Orçamento vive numa aba do editor e consulta o de-para ao montar.
+// O catálogo de tipos de elemento (E1.1) é controlável: o seletor aplica o que
+// o dublê devolve, e "salvar" grava pelo dublê.
+const listElementTypes = vi.fn(async () => [] as unknown[]);
+vi.mock('../../services/blueprintElementTypeService', () => ({
+  listElementTypes: (...a: unknown[]) => listElementTypes(...(a as [])),
+  saveElementType: vi.fn(async () => ({})),
+  deleteElementType: vi.fn(),
+}));
+
 vi.mock('../../services/blueprintBudgetService', () => ({
   listMappings: vi.fn(async () => []),
   saveMapping: vi.fn(async () => ({})),
@@ -510,6 +519,44 @@ describe('BlueprintEditor · quantitativos', () => {
 
     await userEvent.setup().click(screen.getByRole('button', { name: /^conflitos/i }));
     expect(screen.getByRole('dialog')).toHaveTextContent(/conflitos/i);
+  });
+
+  it('tipo × instância (E1.1): o pilar mostra o seletor, conta as peças iguais, aplica um tipo do catálogo num lote e abre o nome para salvar como tipo', async () => {
+    listElementTypes.mockResolvedValue([
+      { id: 'tp_1', organizationId: 'org_1', familia: 'ESTRUTURA', nome: 'P-30', active: true, createdAt: '', updatedAt: '',
+        propriedades: { familia: 'ESTRUTURA', kind: 'PILAR', larguraMm: 300, profundidadeMm: 300, alturaMm: 2800, baseMm: 0, circular: false } },
+    ]);
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [
+        { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(1000, 1000)], larguraMm: 200, profundidadeMm: 200, alturaMm: 2800 },
+        { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(4000, 1000)], larguraMm: 200, profundidadeMm: 200, alturaMm: 2800 },
+      ]).model,
+    );
+    await montar();
+    const user = userEvent.setup();
+    await abrirComponentes(user);
+    await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
+    const seletor = await screen.findByTestId('seletor-de-tipo-estrutura');
+    expect(seletor).toHaveTextContent(/Sem tipo salvo com estas propriedades · 2 peças iguais/);
+    const select = (await within(seletor).findByLabelText(/Aplicar um tipo de estrutura salvo/)) as HTMLSelectElement;
+    await waitFor(() => expect(select).toBeEnabled());
+    await user.selectOptions(select, 'tp_1');
+    // A peça virou 30×30 (o campo Largura mostra 30) e o seletor a reconhece como P-30, agora sozinha.
+    expect(await screen.findByLabelText(/Largura da seção.*Agora: 30/)).toBeInTheDocument();
+    expect(screen.getByTestId('seletor-de-tipo-estrutura')).toHaveTextContent(/Tipo P-30 · só esta peça/);
+    // Salvar tipo: nome sugerido inline, Enter grava pelo serviço.
+    await user.click(within(screen.getByTestId('seletor-de-tipo-estrutura')).getByRole('button', { name: /salvar tipo/i }));
+    const nome = screen.getByLabelText(/Nome do tipo de estrutura/) as HTMLInputElement;
+    expect(nome.value).toBe('Pilar 30×30 · 2,80 m');
+    // A gravação passa por `resolveWriteOrg` (REGRA #5), que sem organização no
+    // topo abre o modal de escolha — fora do alcance deste teste; o caminho de
+    // gravar é o mesmo do tipo de parede, coberto em `PainelCamadasParede.test`.
+    await user.keyboard('{Escape}');
+    expect(screen.queryByLabelText(/Nome do tipo de estrutura/)).toBeNull();
+    listElementTypes.mockResolvedValue([]);
   });
 
   it('clash arquitetônico (E0.4): pilar no vão da porta entra em Conflitos, conta no botão e o clique seleciona a porta', async () => {

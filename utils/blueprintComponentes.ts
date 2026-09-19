@@ -18,6 +18,8 @@ import {
   type Wall,
 } from './blueprintKernel';
 import { etiquetasDasAberturas } from './blueprintNumeracao';
+import { medirNucleo, nomeDoTipoDeNucleo, pavimentosDoNucleo, type Nucleo } from './blueprintKernel';
+import { caixaDoNucleo, nucleosDoNivel } from './blueprintNucleoVertical';
 import {
   NOME_DO_TRECHO,
   ROTULO_DA_DISCIPLINA,
@@ -117,7 +119,7 @@ export function linhasDeComponentes(
   /** Opcional pela razão do `aguaIds` dos comandos: as chamadas existentes não sabem dela. */
   aguas: Agua[] = [],
   /** Opcional pela mesma razão. Precisa do MODELO porque o número de degraus vem do desnível. */
-  escadas: { model: BlueprintModel; itens: Escada[] } | null = null,
+  escadas: { model: BlueprintModel; itens: Escada[]; nucleos?: Nucleo[] } | null = null,
   /**
    * As INSTALAÇÕES do pavimento.
    *
@@ -248,6 +250,23 @@ export function linhasDeComponentes(
     };
   });
 
+  // NÚCLEO VERTICAL (E2.4): shaft/elevador — a caixa e quantos pavimentos atravessa.
+  const linhasDeNucleo: LinhaDeComponente[] = (escadas?.nucleos ?? []).map((n) => {
+    const med = medirNucleo(escadas!.model, n);
+    const caixa = caixaDoNucleo(n);
+    const pavs = pavimentosDoNucleo(escadas!.model, n);
+    return {
+      id: n.id,
+      chave: n.tipo,
+      rotulo: n.rotulo || `${nomeDoTipoDeNucleo(n.tipo)} ${numero(n.tipo)}`,
+      medida: `${m(caixa.larguraMm)} × ${m(caixa.profundidadeMm)} m`,
+      detalhe:
+        `${med.pavimentos} pavimento(s)` +
+        (pavs.length > 1 ? ` · ${pavs[0].name} → ${pavs[pavs.length - 1].name}` : '') +
+        (n.tipo === 'ELEVADOR' && n.capacidade ? ` · ${n.capacidade} pass.` : ''),
+    };
+  });
+
   // ── INSTALAÇÕES ───────────────────────────────────────────────────────────
   //
   // A chave é a MESMA do menu de ferramentas (`REDE_ELETRICA`, `PONTO_ESGOTO`,
@@ -325,6 +344,7 @@ export function linhasDeComponentes(
     ...linhasDeEstrutura,
     ...linhasDeAgua,
     ...linhasDeEscada,
+    ...linhasDeNucleo,
     ...linhasDeTrecho,
     ...linhasDeTerminal,
     ...linhasDeQuadro,
@@ -388,6 +408,7 @@ export function linhasDeComponentesPorNivel(
         const estruturas = (model.structures ?? []).filter((s) => s.levelId === level.id);
         const aguas = (model.roofs ?? []).filter((r) => r.levelId === level.id);
         const escadas = (model.stairs ?? []).filter((e) => e.levelId === level.id);
+        const nucleos = nucleosDoNivel(model, level.id);
         return {
           levelId: level.id,
           nome: level.name,
@@ -396,7 +417,7 @@ export function linhasDeComponentesPorNivel(
             aberturas,
             estruturas,
             aguas,
-            { model, itens: escadas },
+            { model, itens: escadas, nucleos },
             {
               trechos: (model.trechos ?? []).filter((t) => t.levelId === level.id),
               terminais: (model.terminais ?? []).filter((t) => t.levelId === level.id),

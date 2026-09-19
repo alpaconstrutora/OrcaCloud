@@ -119,6 +119,8 @@ export type BlueprintTool =
    * ou rampa) e a largura são estado da barra, como a inclinação do telhado.
    */
   | 'escada'
+  /** NÚCLEO VERTICAL (E2.4): shaft/elevador por dois cantos, como o retângulo. */
+  | 'nucleo'
   /**
    * INSTALAÇÕES — o TRECHO de rede, com dois cliques, como a viga.
    *

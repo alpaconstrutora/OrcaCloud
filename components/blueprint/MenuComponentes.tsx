@@ -18,6 +18,8 @@ import {
   Triangle,
   Footprints,
   TrendingUp,
+  ArrowUpDown,
+  SquareDashed,
   Zap,
   Droplet,
   Flame,
@@ -44,6 +46,7 @@ import {
   type DisciplinaDeRede,
   type StructuralKind,
   type TipoCirculacao,
+  type TipoDeNucleo,
   type TipoDeInterruptor,
   type TipoDePontoEletrico,
   type TipoDePontoHidraulico,
@@ -111,6 +114,7 @@ export type EscolhaComponente =
   | { tool: 'estrutural'; estrutural: StructuralKind }
   | { tool: 'telhado' }
   | { tool: 'escada'; circulacao: TipoCirculacao }
+  | { tool: 'nucleo'; nucleo: TipoDeNucleo }
   | {
       tool: 'rede';
       disciplina: DisciplinaDeRede;
@@ -496,6 +500,24 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
           'acima de 8,33% o painel avisa.',
         escolha: { tool: 'escada', circulacao: 'RAMPA' },
       },
+      {
+        chave: 'SHAFT',
+        rotulo: 'Shaft',
+        icone: SquareDashed,
+        ajuda:
+          'Dois cantos opostos, como o retângulo. Atravessa do pavimento atual ao mais alto (ajuste no painel), ' +
+          'fura a laje e atrai as prumadas de água e esgoto automáticas.',
+        escolha: { tool: 'nucleo', nucleo: 'SHAFT' },
+      },
+      {
+        chave: 'ELEVADOR',
+        rotulo: 'Elevador',
+        icone: ArrowUpDown,
+        ajuda:
+          'A caixa do elevador por dois cantos. Poço, casa de máquinas e capacidade vêm da ficha no painel; ' +
+          'pilar ou viga dentro dela é conflito.',
+        escolha: { tool: 'nucleo', nucleo: 'ELEVADOR' },
+      },
     ],
   },
   // INSTALAÇÕES no fim: elas atravessam tudo o que veio antes, e desenhá-las
@@ -640,6 +662,7 @@ const TOOLS_DE_COMPONENTE: BlueprintTool[] = [
   'estrutural',
   'telhado',
   'escada',
+  'nucleo',
   'rede',
   'terminal',
   'quadro',
@@ -674,6 +697,8 @@ interface Props {
   tipoEstrutural: StructuralKind;
   /** Opcional pela razão de `aguas` no painel: chamadas antigas não a conhecem. */
   tipoCirculacao?: TipoCirculacao;
+  /** O núcleo vertical ativo (E2.4). */
+  tipoDeNucleo?: TipoDeNucleo;
   /** Para o botão DIZER qual trecho/ponto está ativo. Sem eles, rede e ponto não acendem. */
   disciplinaDeRede?: DisciplinaDeRede;
   tipoDePontoEletrico?: TipoDePontoEletrico | null;
@@ -696,6 +721,7 @@ function chaveAtiva(p: Props): string | null {
   if (tool === 'abertura') return p.tipoAbertura;
   if (tool === 'estrutural') return p.tipoEstrutural;
   if (tool === 'escada') return p.tipoCirculacao ?? 'ESCADA';
+  if (tool === 'nucleo') return p.tipoDeNucleo ?? 'SHAFT';
   if (tool === 'quadro') return 'QUADRO';
   if (tool === 'rede') {
     if (!p.disciplinaDeRede) return null;

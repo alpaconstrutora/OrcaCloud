@@ -275,7 +275,9 @@ export function topicosDeConflitosArquitetonicos(
         ? `${c.medidaMm} mm do vão tomados pela estrutura`
         : c.classe === 'ESCADA_X_PILAR'
           ? `pilar dentro do percurso da escada (≈ ${c.medidaMm} mm de lado em comum)`
-          : `faltam ${c.medidaMm} mm para a altura livre de 2,10 m sobre o degrau (NBR 9077)`;
+          : c.classe === 'NUCLEO_X_ESTRUTURA'
+            ? `estrutura dentro do núcleo vertical (≈ ${c.medidaMm} mm de lado em comum)`
+            : `faltam ${c.medidaMm} mm para a altura livre de 2,10 m sobre o degrau (NBR 9077)`;
     return {
       guid: guidDoTopico(`clash:${c.pecaUid}:${c.outroUid}`),
       titulo: `${rotuloCurto(c.pecaUid, c.familia)} encontra ${rotuloCurto(c.outroUid, 'structural')}`,

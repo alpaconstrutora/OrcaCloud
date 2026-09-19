@@ -33,6 +33,7 @@ import {
   projecaoNoSegmento,
   type AlinhamentoParede,
   type Point,
+  isSimplePolygon,
 } from './geom';
 // `telhado.ts` importa só `units` e `geom`, então não há ciclo: o teto de
 // inclinação mora junto da geometria que o consome, e o invariante o lê de lá em
@@ -1222,6 +1223,58 @@ export interface Escada {
    * mesma razão do rótulo da peça estrutural. `null` = sem rótulo.
    */
   rotulo?: string | null;
+  /**
+   * ESCADA MULTIANDARES (19/09/2026, E2.4): o pavimento de CHEGADA, quando não
+   * é o imediatamente acima. Tem de estar acima do de partida. Ausente/null =
+   * o próximo acima (o comportamento de sempre); o desnível é a diferença de
+   * cota e a escada fura toda laje entre os dois.
+   */
+  ateLevelId?: ObjectId | null;
+}
+
+/**
+ * NÚCLEO VERTICAL (19/09/2026, roadmap E2.4): SHAFT (prumada de instalações,
+ * poço de luz) ou ELEVADOR (caixa + poço + casa de máquinas).
+ *
+ * É um POLÍGONO em planta que atravessa os pavimentos de `levelId` (partida)
+ * até `ateLevelId` (chegada, ausente = o mais alto). Como a escada, fica FORA
+ * do arranjo planar — a caixa do elevador dentro do hall não parte o
+ * ambiente — e o que faz ao quantitativo é DESCONTAR a laje que atravessa
+ * (`furosDoNucleo`, no molde de `furosDaEscada`). Pilar ou viga dentro dele é
+ * conflito arquitetônico (`NUCLEO_X_ESTRUTURA`). Água/esgoto automáticos
+ * preferem o shaft para as prumadas (`shaftPreferido`).
+ *
+ * As medidas do ELEVADOR (poço abaixo do piso de partida, casa de máquinas
+ * acima do último piso, capacidade) vêm da FICHA (`FICHA_DO_ELEVADOR`, por
+ * capacidade — NBR NM 207 / NBR 5665 como referência de ordem de grandeza), e
+ * são copiadas para a peça: valor, não vínculo, como o tipo × instância da
+ * E1.1.
+ */
+export type TipoDeNucleo = 'SHAFT' | 'ELEVADOR';
+export const TIPOS_DE_NUCLEO: readonly TipoDeNucleo[] = ['SHAFT', 'ELEVADOR'];
+
+export interface Nucleo {
+  id: ObjectId;
+  uid: ElementUid;
+  parametros?: Parametros;
+  /** Pavimento de PARTIDA (base). Removê-lo leva o núcleo junto. */
+  levelId: ObjectId;
+  /** Pavimento de CHEGADA (topo). Ausente/null = o mais alto acima da partida. */
+  ateLevelId?: ObjectId | null;
+  tipo: TipoDeNucleo;
+  /** Contorno em planta, mm inteiro, ≥ 3 vértices, simples. */
+  ring: Point[];
+  rotulo?: string | null;
+  /** Só ELEVADOR: profundidade do poço abaixo do piso de partida, mm. */
+  pocoMm?: number | null;
+  /** Só ELEVADOR: altura da casa de máquinas acima do último piso, mm. */
+  casaDeMaquinasMm?: number | null;
+  /** Só ELEVADOR: passageiros. */
+  capacidade?: number | null;
+}
+
+export function nomeDoTipoDeNucleo(tipo: TipoDeNucleo): string {
+  return tipo === 'ELEVADOR' ? 'Elevador' : 'Shaft';
 }
 
 /**
@@ -1771,6 +1824,8 @@ export interface BlueprintModel {
   unidades: Unidade[];
   /** Grupos com origem e instâncias materializadas. Ver `Grupo`. */
   grupos: Grupo[];
+  /** Núcleos verticais — shafts e elevadores. Ver `Nucleo`. */
+  nucleos: Nucleo[];
   /**
    * Escadas e rampas. Como a estrutura e o telhado, NÃO participam do arranjo
    * planar: uma escada dentro da sala não parte o ambiente. O que ela faz ao
@@ -1883,6 +1938,7 @@ export function emptyModel(): BlueprintModel {
     restricoes: [],
     unidades: [],
     grupos: [],
+    nucleos: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -1944,6 +2000,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     eixos: (model.eixos ?? []).map((e) => ({ ...e, a: { ...e.a }, b: { ...e.b } })),
     restricoes: (model.restricoes ?? []).map((r) => ({ ...r, alvo: { ...r.alvo }, ...(r.referencia ? { referencia: { ...r.referencia } } : {}) })),
     unidades: (model.unidades ?? []).map((u) => ({ ...u, etiquetaUids: [...u.etiquetaUids] })),
+    nucleos: (model.nucleos ?? []).map((n) => ({ ...n, ring: n.ring.map((p) => ({ ...p })), ...(n.parametros ? { parametros: { ...n.parametros } } : {}) })),
     grupos: (model.grupos ?? []).map((g) => ({
       ...g,
       pivo: { ...g.pivo },
@@ -2078,6 +2135,31 @@ export function limparEtiquetasOrfasDasUnidades(model: BlueprintModel): ObjectId
     }
   }
   return tocadas;
+}
+
+export function findNucleo(model: BlueprintModel, id: ObjectId): Nucleo {
+  const n = (model.nucleos ?? []).find((x) => x.id === id);
+  if (!n) throw new KernelError('CORE_NOT_FOUND', `Núcleo vertical inexistente: ${id}`);
+  return n;
+}
+
+/**
+ * O pavimento mais alto do modelo — a chegada padrão do núcleo sem `ateLevelId`.
+ * `null` só sem pavimento nenhum.
+ */
+export function pavimentoMaisAlto(model: BlueprintModel): Level | null {
+  let melhor: Level | null = null;
+  for (const l of model.levels) if (!melhor || l.elevationMm > melhor.elevationMm) melhor = l;
+  return melhor;
+}
+
+/** Os pavimentos que o núcleo atravessa, da partida à chegada, por cota. */
+export function pavimentosDoNucleo(model: BlueprintModel, n: Pick<Nucleo, 'levelId' | 'ateLevelId'>): Level[] {
+  const partida = model.levels.find((l) => l.id === n.levelId);
+  if (!partida) return [];
+  const chegada = (n.ateLevelId && model.levels.find((l) => l.id === n.ateLevelId)) || pavimentoMaisAlto(model) || partida;
+  const topo = Math.max(partida.elevationMm, chegada.elevationMm);
+  return model.levels.filter((l) => l.elevationMm >= partida.elevationMm && l.elevationMm <= topo).sort((a, b) => a.elevationMm - b.elevationMm);
 }
 
 export function findGrupo(model: BlueprintModel, id: ObjectId): Grupo {
@@ -3031,6 +3113,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Restrição', model.restricoes ?? []],
     ['Unidade', model.unidades ?? []],
     ['Grupo', model.grupos ?? []],
+    ['Núcleo vertical', model.nucleos ?? []],
     ['Trecho', model.trechos ?? []],
     ['Terminal', model.terminais ?? []],
     ['Quadro', model.quadros ?? []],
@@ -3472,6 +3555,39 @@ export function assertModelInvariants(model: BlueprintModel): void {
         if (!nivel) throw new KernelError('BAD_GROUP', `Grupo ${g.id}: instância em pavimento inexistente`);
         if (nivel.tipoDeId !== undefined) throw new KernelError('BAD_GROUP', `Grupo ${g.id}: instância em pavimento cópia "${nivel.name}" — instancie no tipo`);
       }
+    }
+  }
+
+  // Escada multiandares: a chegada declarada existe e está ACIMA da partida.
+  for (const e of model.stairs ?? []) {
+    if (e.ateLevelId) {
+      const partida = model.levels.find((l) => l.id === e.levelId);
+      const chegada = model.levels.find((l) => l.id === e.ateLevelId);
+      if (!chegada) throw new KernelError('BAD_STAIR_LEVELS', `Escada ${e.id}: pavimento de chegada inexistente`);
+      if (partida && chegada.elevationMm <= partida.elevationMm) throw new KernelError('BAD_STAIR_LEVELS', `Escada ${e.id}: a chegada tem de estar acima da partida`);
+    }
+  }
+
+  // Núcleos verticais: polígono simples inteiro, pavimentos existentes (chegada acima), medidas do elevador só no elevador.
+  for (const n of model.nucleos ?? []) {
+    if (!TIPOS_DE_NUCLEO.includes(n.tipo)) throw new KernelError('BAD_CORE', `Núcleo ${n.id}: tipo desconhecido ${String(n.tipo)}`);
+    if (n.ring.length < 3) throw new KernelError('BAD_CORE', `Núcleo ${n.id}: o contorno precisa de pelo menos 3 vértices`);
+    n.ring.forEach((p, i) => {
+      assertIntegerMm(p.x, `${n.id}.ring[${i}].x`);
+      assertIntegerMm(p.y, `${n.id}.ring[${i}].y`);
+    });
+    if (!isSimplePolygon(n.ring) || Math.abs(polygonArea(n.ring)) <= 0) throw new KernelError('BAD_CORE', `Núcleo ${n.id}: contorno degenerado ou que se cruza`);
+    const partida = model.levels.find((l) => l.id === n.levelId);
+    if (!partida) throw new KernelError('BAD_CORE', `Núcleo ${n.id}: pavimento de partida inexistente`);
+    if (n.ateLevelId) {
+      const chegada = model.levels.find((l) => l.id === n.ateLevelId);
+      if (!chegada) throw new KernelError('BAD_CORE', `Núcleo ${n.id}: pavimento de chegada inexistente`);
+      if (chegada.elevationMm < partida.elevationMm) throw new KernelError('BAD_CORE', `Núcleo ${n.id}: a chegada tem de estar acima da partida`);
+    }
+    for (const [k, v] of [['pocoMm', n.pocoMm], ['casaDeMaquinasMm', n.casaDeMaquinasMm], ['capacidade', n.capacidade]] as const) {
+      if (v == null) continue;
+      if (n.tipo !== 'ELEVADOR') throw new KernelError('BAD_CORE', `Núcleo ${n.id}: ${k} só existe no elevador`);
+      if (!Number.isInteger(v) || v < 0) throw new KernelError('BAD_CORE', `Núcleo ${n.id}: ${k} tem de ser inteiro ≥ 0`);
     }
   }
 

@@ -104,6 +104,8 @@ import PainelConflitos from './PainelConflitos';
 import PainelEletrica from './PainelEletrica';
 import PainelAguaSelecionada from './PainelAguaSelecionada';
 import PainelEscadaSelecionada from './PainelEscadaSelecionada';
+import PainelNucleoSelecionado from './PainelNucleoSelecionado';
+import { nucleosDoNivel } from '../../utils/blueprintNucleoVertical';
 import PainelEsquadria from './PainelEsquadria';
 import PainelImportarIfc from './PainelImportarIfc';
 import PainelImportarDxf from './PainelImportarDxf';
@@ -372,6 +374,7 @@ import {
   conflitosArquitetonicos,
   type DisciplinaDeRede,
   type TipoCirculacao,
+  type TipoDeNucleo,
   type TipoDeAmbiente,
   type TipoDeInterruptor,
   type Wall,
@@ -1409,6 +1412,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * fechou (ver `escada.ts`).
    */
   const [tipoCirculacao, setTipoCirculacao] = useState<TipoCirculacao>('ESCADA');
+  /** NÚCLEO VERTICAL (E2.4): shaft ou elevador na próxima caixa desenhada. */
+  const [tipoDeNucleo, setTipoDeNucleo] = useState<TipoDeNucleo>('SHAFT');
 
   /**
    * INSTALAÇÕES: disciplina, cota e bitola do que está sendo desenhado.
@@ -2502,6 +2507,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     return m;
   }, [situacao4d]);
   const escadaSel = (editor.model.stairs ?? []).find((e) => e.id === editor.selectedId) ?? null;
+  const nucleoSel = (editor.model.nucleos ?? []).find((n) => n.id === editor.selectedId) ?? null;
+  /** Os núcleos que atravessam o pavimento ativo (E2.4) — o canvas os desenha em cada um. */
+  const nucleosDoNivelAtivo = useMemo(() => nucleosDoNivel(editor.model, levelId), [editor.model, levelId]);
   /** A peça selecionada que carrega parâmetros personalizados (E1.2), com a chave da família. */
   const pecaComParametros = useMemo((): { familia: FamiliaComParametros; id: string; parametros: Parametros | undefined } | null => {
     if (paredeSel) return { familia: 'wall', id: paredeSel.id, parametros: paredeSel.parametros };
@@ -4263,6 +4271,13 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   }
 
   /** Lanca a escada/rampa pelo eixo que o canvas fechou. */
+  /** O núcleo nasce do pavimento ativo até o mais alto; o painel ajusta a chegada. */
+  function adicionarNucleo(ring: Point[]) {
+    if (!levelId) return;
+    const criados = editor.run({ type: 'AddNucleo', levelId, tipo: tipoDeNucleo, ring });
+    if (criados.length > 0) selecionar(criados);
+  }
+
   function adicionarEscada(pontos: Point[]) {
     if (!levelId) return;
     const criados = editor.run({
@@ -4701,6 +4716,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     const cortes = ids.filter((id) => (editor.model.sections ?? []).some((c) => c.id === id));
     const eixos = ids.filter((id) => (editor.model.eixos ?? []).some((e) => e.id === id));
     const escadas = ids.filter((id) => (editor.model.stairs ?? []).some((e) => e.id === id));
+    const nucleos = ids.filter((id) => (editor.model.nucleos ?? []).some((n) => n.id === id));
     // Instalações. ⚠️ O QUADRO sai por último no lote e leva os circuitos dele
     // junto (ver `DeleteQuadro`); os pontos que os citavam ficam sem circuito,
     // e não apagados — quem tirou o quadro não decidiu tirar as tomadas.
@@ -4722,6 +4738,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       ...cortes.map((corteId) => ({ type: 'DeleteCorte', corteId }) as const),
       ...eixos.map((eixoId) => ({ type: 'DeleteEixo', eixoId }) as const),
       ...escadas.map((escadaId) => ({ type: 'DeleteEscada', escadaId }) as const),
+      ...nucleos.map((nucleoId) => ({ type: 'DeleteNucleo', nucleoId }) as const),
       ...trechos.map((trechoId) => ({ type: 'DeleteTrecho', trechoId }) as const),
       ...terminais.map((terminalId) => ({ type: 'DeleteTerminal', terminalId }) as const),
       ...quadros.map((quadroId) => ({ type: 'DeleteQuadro', quadroId }) as const),
@@ -4922,6 +4939,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     editor.setTool(e.tool);
     if (e.tool === 'abertura') setTipoAbertura(e.abertura);
     if (e.tool === 'escada') setTipoCirculacao(e.circulacao);
+    if (e.tool === 'nucleo') setTipoDeNucleo(e.nucleo);
     // A disciplina é estado da BARRA, e trocá-la traz cota e bitola usuais
     // junto: escolher "esgoto" e continuar desenhando na cota do eletroduto
     // seria pior que não ter padrão nenhum.
@@ -6027,6 +6045,13 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         comAMesmaAssinatura={escadaSel ? (editor.model.stairs ?? []).filter((e) => assinaturaDoTipo(propriedadesDaEscada(e)) === assinaturaDoTipo(propriedadesDaEscada(escadaSel))).length : undefined}
       />
 
+      <PainelNucleoSelecionado
+        model={editor.model}
+        nucleo={nucleoSel}
+        onProps={(campos) => nucleoSel && editor.run({ type: 'SetNucleoProps', nucleoId: nucleoSel.id, ...campos })}
+        onExcluir={removerSelecionada}
+      />
+
       <PainelEixoSelecionado
         eixo={eixoSel}
         onProps={(campos) => eixoSel && editor.run({ type: 'SetEixoProps', eixoId: eixoSel.id, ...campos })}
@@ -6790,6 +6815,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 tipoAbertura={tipoAbertura}
                 tipoEstrutural={tipoEstrutural}
                 tipoCirculacao={tipoCirculacao}
+                tipoDeNucleo={tipoDeNucleo}
                 familia="CONSTRUCAO"
                 onEscolher={escolherComponente}
               />
@@ -6946,6 +6972,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 tipoAbertura={tipoAbertura}
                 tipoEstrutural={tipoEstrutural}
                 tipoCirculacao={tipoCirculacao}
+                tipoDeNucleo={tipoDeNucleo}
                 disciplinaDeRede={disciplinaDeRede}
                 tipoDePontoEletrico={tipoDePontoEletrico}
                 tipoDeInterruptor={tipoDeInterruptor}
@@ -7003,6 +7030,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   tipoAbertura={tipoAbertura}
                   tipoEstrutural={tipoEstrutural}
                   tipoCirculacao={tipoCirculacao}
+                  tipoDeNucleo={tipoDeNucleo}
                   disciplinaDeRede={disciplinaDeRede}
                   tipoDePontoEletrico={tipoDePontoEletrico}
                   tipoDeInterruptor={tipoDeInterruptor}
@@ -8405,6 +8433,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onAddEixo={adicionarEixo}
               onMoveCorteVertex={moverPontaCorte}
               onAddEscada={adicionarEscada}
+              nucleos={nucleosDoNivelAtivo}
+              onAddNucleo={adicionarNucleo}
               onAddTrecho={adicionarTrecho}
               redeEmUmClique={prumadaDeRede != null}
               onAddTerminal={adicionarTerminal}
@@ -8656,7 +8686,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 aberturas={componentesDoNivel.aberturas}
                 estruturas={componentesDoNivel.estruturas}
                 aguas={componentesDoNivel.aguas}
-                escadas={{ model: editor.model, itens: componentesDoNivel.escadas }}
+                escadas={{ model: editor.model, itens: componentesDoNivel.escadas, nucleos: nucleosDoNivelAtivo }}
                 rede={componentesDoNivel.rede}
                 selecionados={editor.selectedIds}
                 // Pela LISTA, as propriedades abrem em Sheet (17/09/2026).

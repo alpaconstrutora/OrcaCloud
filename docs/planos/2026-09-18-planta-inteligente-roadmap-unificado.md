@@ -523,6 +523,41 @@ propagação; bump).
   sobrescrever a faixa); gaveta: "#1 · espelho X · Térreo", remover → "Sem instâncias ainda",
   desagrupar → volta a "Agrupar a seleção".
 
+### E2.4 — Núcleo vertical (19/09/2026) · kernel 0.39.0
+- **Decisão**: UMA entidade, `Nucleo {tipo: SHAFT | ELEVADOR, levelId (partida), ateLevelId?
+  (chegada; ausente = o mais alto), ring, rotulo, pocoMm?/casaDeMaquinasMm?/capacidade? (só
+  elevador)}` — o elevador é um shaft com ficha, não uma segunda família. Como a escada, fica
+  FORA do arranjo planar; o que faz ao quantitativo é FURAR a laje que atravessa
+  (`furosDoNucleo`, irmão de `furosDaEscada`: lajes com cota entre o piso de partida
+  (exclusive) e o teto do último pavimento (inclusive)), descontada em área e volume e no 3D.
+  Desenhado em todo pavimento que atravessa (`pavimentosDoNucleo`, por cota).
+- **Escada multiandares** = `Escada.ateLevelId?` (chegada declarada, acima da partida): o
+  desnível vira a diferença de cota e a escada fura toda laje no caminho — sem `levelIds[]`
+  redundante. Remover a chegada volta ao próximo acima; remover a partida leva a peça.
+- **Clash** `NUCLEO_X_ESTRUTURA` (E0.4): pilar/viga com área comum com o contorno em qualquer
+  pavimento atravessado (a laje fica de fora: é furada). Rótulos no painel de conflitos e no BCF.
+- **Prumadas MEP presas ao shaft**: `shaftPreferido(model, ponto, nível, raio)` — a coluna de água
+  (`posicaoDaColuna`) e o tubo de queda do esgoto sobem pelo shaft mais próximo ao alcance
+  (`raioDoShaftMm`, padrão 3000, nas duas hipóteses); sem shaft, como antes. Só SHAFT atrai;
+  elevador não.
+- **Ficha do elevador** (`FICHA_DO_ELEVADOR`, 4/6/8/10/13 passageiros: cabina, caixa, poço, casa
+  de máquinas — ordem de grandeza NBR NM 207 / NBR 5665, "confirmar com o fabricante"):
+  "Aplicar ficha" COPIA para a peça (valor, não vínculo); o painel avisa quando a caixa
+  desenhada é menor que a da ficha.
+- Kernel: `AddNucleo/SetNucleoProps/MoveNucleoVertex/DeleteNucleo`, `SetEscadaProps.ateLevelId`,
+  RemoveLevel limpa chegadas; canônico `nucleos` (+ `stairs[].ate`) por índice, omitidos sem
+  núcleo; prefixo `H`; bump 0.38.0 → 0.39.0 (goldens provados em 0.38.0 com 301 testes e
+  recapturados).
+- UI: Componentes › Circulação ganha **Shaft** e **Elevador** (ferramenta `nucleo`: dois cantos,
+  como o retângulo; prévia com as medidas); canvas desenha a caixa com as diagonais (tracejadas
+  no shaft) e o rótulo, seleção pela caixa; `PainelNucleoSelecionado` (tipo, rótulo, de/até,
+  medidas e ficha); navegador lista com caixa e pavimentos; escada ganha "Até".
+- Testes: `blueprintNucleoVertical` (5), goldens, editor "E2.4". Suíte 4664. App real (escritas
+  bloqueadas: 15): Elevador e Shaft desenhados por dois cliques, painel com "2 pavimento(s) ·
+  5,60 m", ficha de 8 aplicada com o aviso da caixa menor, símbolos na planta.
+- Fora desta fase (registrado): caixa do elevador no 3D (só o furo aparece); mover o núcleo por
+  arraste/`TranslateEntities` (como a escada, ainda não entra na seleção transformável).
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

@@ -31,6 +31,7 @@ import {
   contornoEmPlanta,
   planoDaAgua,
   contornoDaEscada,
+  type Nucleo,
   degrausDaEscada,
   type Agua,
   type Corte,
@@ -303,6 +304,10 @@ const COR_TELHADO = '#9a3412';
 /** Escada e rampa: cinza de pedra, entre a parede e o concreto. */
 const COR_ESCADA = '#475569';
 const COR_ESCADA_FUNDO = 'rgba(148, 163, 184, 0.18)';
+/** Núcleo vertical (E2.4): violeta escuro — o mesmo tom da família "unidade/grupo", mais fechado. */
+const COR_NUCLEO = '#5b21b6';
+const COR_NUCLEO_FUNDO = 'rgba(139, 92, 246, 0.14)';
+const SEM_NUCLEOS: Nucleo[] = [];
 /** A MARCA do corte em planta — azul de anotação, não de construção. */
 const COR_CORTE = '#0284c7';
 /** Eixo da malha: cinza-azulado discreto — referência, não construção. */
@@ -1209,6 +1214,10 @@ interface Props {
   onAddCorte?: (a: Point, b: Point) => void;
   /** EIXO da malha (E1.4): dois cliques. */
   onAddEixo?: (a: Point, b: Point) => void;
+  /** NÚCLEO VERTICAL (E2.4): os que atravessam este pavimento, já filtrados pelo editor. */
+  nucleos?: Nucleo[];
+  /** Retângulo por dois cantos opostos; o editor põe tipo e pavimentos. */
+  onAddNucleo?: (ring: Point[]) => void;
   /** Um TRECHO de rede: as duas pontas em planta. Cota e bitola vêm da barra. */
   onAddTrecho?: (a: Point, b: Point) => void;
   /**
@@ -1342,6 +1351,8 @@ export default function BlueprintCanvas({
   onMoveAguaVertex,
   onAddCorte,
   onAddEixo,
+  nucleos = SEM_NUCLEOS,
+  onAddNucleo,
   onAddTrecho,
   redeEmUmClique = false,
   onAddTerminal,
@@ -1494,6 +1505,8 @@ export default function BlueprintCanvas({
   const [pontoCorte, setPontoCorte] = useState<Point | null>(null);
   /** Primeiro clique do EIXO em curso (E1.4). */
   const [pontoEixo, setPontoEixo] = useState<Point | null>(null);
+  /** O primeiro canto do núcleo em curso (E2.4). */
+  const [pontoNucleo, setPontoNucleo] = useState<Point | null>(null);
   /**
    * A primeira ponta do TRECHO de rede em curso.
    *
@@ -2483,6 +2496,23 @@ export default function BlueprintCanvas({
       return null;
     },
     [escadasDoNivel, vista.escala],
+  );
+
+  /** Qual NÚCLEO VERTICAL está sob o cursor — pela caixa inteira, como a escada. */
+  const nucleoSob = useCallback(
+    (mundo: { x: number; y: number }): Nucleo | null => {
+      const folga = HIT_PX / vista.escala;
+      for (let i = nucleos.length - 1; i >= 0; i--) {
+        const n = nucleos[i];
+        if (ocultos.has(n.id) || n.ring.length < 3) continue;
+        if (pointInPolygon(n.ring, arredondar(mundo))) return n;
+        for (let k = 0; k < n.ring.length; k++) {
+          if (distanciaAoSegmento(n.ring[k], n.ring[(k + 1) % n.ring.length], mundo) <= folga) return n;
+        }
+      }
+      return null;
+    },
+    [nucleos, ocultos, vista.escala],
   );
 
   /** Qual EIXO está sob o cursor — pela linha. */
@@ -5134,6 +5164,60 @@ export default function BlueprintCanvas({
       ctx.textBaseline = 'alphabetic';
     }
 
+    // ── NÚCLEO VERTICAL (E2.4): caixa com as diagonais (o símbolo de vazio na
+    // planta) e o rótulo. Desenhado em todo pavimento que atravessa.
+    for (const n of nucleos) {
+      if (ocultos.has(n.id) || n.ring.length < 3) continue;
+      const selecionado = selecao.has(n.id);
+      const cor = selecionado ? COR_SELECIONADA : COR_NUCLEO;
+      const anel = n.ring.map(paraTela);
+      ctx.fillStyle = COR_NUCLEO_FUNDO;
+      ctx.strokeStyle = cor;
+      ctx.lineWidth = selecionado ? 2 : 1.5;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(anel[0].x, anel[0].y);
+      for (const q of anel.slice(1)) ctx.lineTo(q.x, q.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      // Diagonais: canto a canto oposto (no retângulo, o X clássico).
+      const xs = anel.map((p) => p.x);
+      const ys = anel.map((p) => p.y);
+      const c0 = { x: Math.min(...xs), y: Math.min(...ys) };
+      const c1 = { x: Math.max(...xs), y: Math.max(...ys) };
+      ctx.lineWidth = 1;
+      ctx.setLineDash(n.tipo === 'SHAFT' ? [4, 3] : []);
+      ctx.beginPath();
+      ctx.moveTo(c0.x, c0.y);
+      ctx.lineTo(c1.x, c1.y);
+      ctx.moveTo(c1.x, c0.y);
+      ctx.lineTo(c0.x, c1.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      if (c1.x - c0.x >= 28) {
+        ctx.font = `600 ${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = cor;
+        const texto = n.rotulo || (n.tipo === 'ELEVADOR' ? 'ELEV.' : 'SHAFT');
+        ctx.fillText(texto, (c0.x + c1.x) / 2, (c0.y + c1.y) / 2);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+      }
+    }
+    // Prévia do núcleo em curso: retângulo tracejado do primeiro canto ao cursor.
+    if (tool === 'nucleo' && pontoNucleo && cursor) {
+      const a = paraTela(pontoNucleo);
+      const z = paraTela(cursor);
+      ctx.strokeStyle = COR_NUCLEO;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeRect(Math.min(a.x, z.x), Math.min(a.y, z.y), Math.abs(z.x - a.x), Math.abs(z.y - a.y));
+      ctx.setLineDash([]);
+      rotuloDoTraco(ctx, `${(Math.abs(cursor.x - pontoNucleo.x) / 1000).toFixed(2).replace('.', ',')} × ${(Math.abs(cursor.y - pontoNucleo.y) / 1000).toFixed(2).replace('.', ',')} m`, a, z, 2, COR_NUCLEO);
+    }
+
     // Alcas da escada selecionada: nos vertices do EIXO, que e o que se
     // arrasta. A pegada segue sozinha.
     const escadaParaAlca = escadasDoNivel.find((e) => e.id === unicoSelecionado);
@@ -6289,7 +6373,8 @@ export default function BlueprintCanvas({
         tool === 'estrutural' ||
         tool === 'telhado' ||
         tool === 'corte' ||
-        tool === 'eixo')
+        tool === 'eixo' ||
+        tool === 'nucleo')
     ) {
       const c = paraTela(cursor);
       ctx.strokeStyle = COR_PREVIA;
@@ -6454,6 +6539,8 @@ export default function BlueprintCanvas({
     cortes,
     pontoCorte,
     movendoCorte,
+    nucleos,
+    pontoNucleo,
     conexaoArmada,
     eixoEstrutural,
     anelEstrutural,
@@ -6901,6 +6988,11 @@ export default function BlueprintCanvas({
       return;
     }
 
+    if (tool === 'nucleo') {
+      setCursor(capturarTracado(paraMundo(px, py)));
+      return;
+    }
+
     if (tool === 'rede') {
       let alvo = capturarRede(paraMundo(px, py));
       if (pontoRede && ortoAtivo(e)) alvo = travarOrtogonal(pontoRede, alvo);
@@ -7172,6 +7264,23 @@ export default function BlueprintCanvas({
       return;
     }
 
+    // NÚCLEO VERTICAL (E2.4): dois cantos opostos, como o retângulo de paredes.
+    if (tool === 'nucleo') {
+      const ponto = capturarTracado(mundo);
+      if (!pontoNucleo) {
+        setPontoNucleo(ponto);
+        return;
+      }
+      if (ponto.x === pontoNucleo.x || ponto.y === pontoNucleo.y) return;
+      const x0 = Math.min(pontoNucleo.x, ponto.x);
+      const x1 = Math.max(pontoNucleo.x, ponto.x);
+      const y0 = Math.min(pontoNucleo.y, ponto.y);
+      const y1 = Math.max(pontoNucleo.y, ponto.y);
+      onAddNucleo?.([{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }]);
+      setPontoNucleo(null);
+      return;
+    }
+
     if (tool === 'corte') {
       const ponto = capturarTracado(mundo);
       if (!pontoCorte) {
@@ -7377,6 +7486,8 @@ export default function BlueprintCanvas({
       // ESCADA ANTES DA PAREDE, pela razao da estrutura: e pequena, solida e
       // costuma encostar numa parede. Quem clica na escada quer a escada.
       const escadaClicada = escadaSob(mundo);
+      // NÚCLEO logo depois da escada: caixa sólida, pequena, encostada em parede.
+      const nucleoClicado = nucleoSob(mundo);
       // ÁGUA DEPOIS DA PAREDE: ela cobre a casa e só se pega pela borda (ver
       // `aguaSob`); tudo o que está debaixo dela continua clicável.
       const aguaClicada = aguaSob(mundo);
@@ -7404,6 +7515,7 @@ export default function BlueprintCanvas({
         limiteClicado?.id ??
         estruturaClicada?.id ??
         escadaClicada?.id ??
+        nucleoClicado?.id ??
         trechoClicado?.id ??
         w?.id ??
         aguaClicada?.id ??
@@ -7940,6 +8052,7 @@ export default function BlueprintCanvas({
       setCaminhoEscada([]);
       setPontoCorte(null);
       setPontoEixo(null);
+      setPontoNucleo(null);
       // ⚠️ E o TRECHO em curso, que o Escape não cancelava: o primeiro clique
       // ficava pendurado, e o clique seguinte — dado noutro lugar, já sem
       // lembrança do gesto — fechava um trecho que ninguém quis.

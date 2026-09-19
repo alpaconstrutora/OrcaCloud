@@ -45,6 +45,7 @@ import {
   type Ponto2,
 } from './blueprintGrafoDeRede';
 import { FICHA_DO_PONTO_HIDRAULICO, ehPontoDeConsumo } from './blueprintHidraulica';
+import { shaftPreferido } from './blueprintNucleoVertical';
 
 export type TabelaDeTubo = 'PVC_SOLDAVEL' | 'CPVC';
 
@@ -85,6 +86,8 @@ export interface HipotesesDeAgua {
   raioDaColunaMm: number;
   /** Rota máxima do ramal (× a linha reta) — ver `arvoreComRotaLimitada`. */
   rotaMaximaVezes: number | null;
+  /** Raio em que um SHAFT (E2.4) atrai a coluna do grupo — a prumada sobe por ele. Ausente = 3000. */
+  raioDoShaftMm?: number;
 }
 
 export const HIPOTESES_AGUA_PADRAO: HipotesesDeAgua = {
@@ -94,6 +97,7 @@ export const HIPOTESES_AGUA_PADRAO: HipotesesDeAgua = {
   cotaRamalMm: 2200,
   raioDaColunaMm: 1500,
   rotaMaximaVezes: 1.5,
+  raioDoShaftMm: 3000,
 };
 
 /** Vazão de projeto da NBR 5626, em L/s: Q = 0,3 · √ΣP. */
@@ -311,9 +315,14 @@ export function planejarAgua(
   const rota = new Map<No, number>();
   for (const k of alcancadosNoBarrilete.keys()) rota.set(k, rotaBarrilete.get(k) ?? Infinity);
   rota.set(noDaOrigemNoTeto, 0);
+  // NÚCLEO VERTICAL (E2.4): o grupo perto de um shaft sobe por ele.
+  const posicaoDaColuna = (grupo: Terminal[]): Ponto2 => {
+    const base = { x: grupo[0].at.x, y: grupo[0].at.y };
+    return shaftPreferido(model, base, grupo[0].levelId, hip.raioDoShaftMm ?? 3000) ?? base;
+  };
   const cabecas = new Map<No, Ponto2>();
   for (const grupo of colunas) {
-    const pos = { x: grupo[0].at.x, y: grupo[0].at.y };
+    const pos = posicaoDaColuna(grupo);
     const k = chave(origem.levelId, pos.x, pos.y, tetoO);
     if (!alcancadosNoBarrilete.has(k)) cabecas.set(k, pos);
   }
@@ -328,7 +337,7 @@ export function planejarAgua(
 
   // ── Cada coluna desce (ou sobe) até o ramal de cada pavimento com pontos ─
   for (const grupo of colunas) {
-    const pos = { x: grupo[0].at.x, y: grupo[0].at.y };
+    const pos = posicaoDaColuna(grupo);
     const niveisDoGrupo = niveis.filter((l) => grupo.some((p) => p.levelId === l.id));
     for (const nivel of niveisDoGrupo) {
       const idx = indice.get(nivel.id) ?? 0;

@@ -33,7 +33,7 @@
 import { polygonArea, type Point } from './geom';
 import { fatiasDaEscada } from './escada';
 import type { BlueprintModel, ObjectId, Structural } from './model';
-import { FORMA_ESTRUTURAL } from './model';
+import { FORMA_ESTRUTURAL, pavimentosDoNucleo } from './model';
 import { faixaDaEstruturaNaParede, pegadaEmPlanta, recorteComum } from './sobreposicao';
 
 /** Altura livre mínima sobre o degrau — NBR 9077, 4.6.2. */
@@ -43,11 +43,11 @@ export interface ConflitoArquitetonico {
   /** A peça arquitetônica atingida. */
   pecaId: ObjectId;
   pecaUid: string;
-  familia: 'opening' | 'stair';
+  familia: 'opening' | 'stair' | 'nucleo';
   /** A peça estrutural. */
   outroId: ObjectId;
   outroUid: string;
-  classe: 'VAO_X_ESTRUTURA' | 'ESCADA_X_PILAR' | 'ESCADA_X_ALTURA_LIVRE';
+  classe: 'VAO_X_ESTRUTURA' | 'ESCADA_X_PILAR' | 'ESCADA_X_ALTURA_LIVRE' | 'NUCLEO_X_ESTRUTURA';
   levelId: ObjectId;
   /**
    * O tamanho do problema, em mm: no vão, quanto do vão está tomado ao longo
@@ -176,6 +176,35 @@ export function conflitosArquitetonicos(model: BlueprintModel): ConflitoArquitet
         medidaMm: Math.round(faltaMaxMm),
         em: onde,
       });
+    }
+  }
+
+  // ── Núcleo vertical × estrutura (E2.4) ─────────────────────────────────
+  // Pilar ou viga dentro do shaft/elevador em QUALQUER pavimento atravessado.
+  // A laje fica de fora: ela é furada (`furosDoNucleo`), não é conflito.
+  for (const n of model.nucleos ?? []) {
+    if (n.ring.length < 3) continue;
+    for (const nivel of pavimentosDoNucleo(model, n)) {
+      for (const s of estruturasPorNivel.get(nivel.id) ?? []) {
+        if (s.kind === 'LAJE') continue;
+        const pegada = pegadaEmPlanta(s);
+        if (pegada.length < 3) continue;
+        const comum = recorteComum(n.ring, pegada);
+        if (comum.length < 3) continue;
+        const areaComumMm2 = areaDe(comum);
+        if (areaComumMm2 <= 0) continue;
+        saida.push({
+          pecaId: n.id,
+          pecaUid: n.uid,
+          familia: 'nucleo',
+          outroId: s.id,
+          outroUid: s.uid,
+          classe: 'NUCLEO_X_ESTRUTURA',
+          levelId: nivel.id,
+          medidaMm: Math.round(Math.sqrt(areaComumMm2)),
+          em: centro(comum),
+        });
+      }
     }
   }
 

@@ -45,6 +45,7 @@ import {
   type Ponto2,
 } from './blueprintGrafoDeRede';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
+import { shaftPreferido } from './blueprintNucleoVertical';
 import { redeDaOrigem } from './blueprintAguaAutomatica';
 
 export interface HipotesesDeEsgoto {
@@ -56,6 +57,8 @@ export interface HipotesesDeEsgoto {
   dnTuboQuedaMm: number;
   dnVentilacaoMm: number;
   rotaMaximaVezes: number | null;
+  /** Raio em que um SHAFT (E2.4) atrai o tubo de queda. Ausente = 3000. */
+  raioDoShaftMm?: number;
 }
 
 export const HIPOTESES_ESGOTO_PADRAO: HipotesesDeEsgoto = {
@@ -65,6 +68,7 @@ export const HIPOTESES_ESGOTO_PADRAO: HipotesesDeEsgoto = {
   dnTuboQuedaMm: 100,
   dnVentilacaoMm: 50,
   rotaMaximaVezes: 1.5,
+  raioDoShaftMm: 3000,
 };
 
 /** DN do ramal pelas UHC acumuladas (NBR 8160, simplificado). */
@@ -314,7 +318,8 @@ export function planejarEsgoto(model: BlueprintModel, hip: HipotesesDeEsgoto = H
     // O TQ na posição do ponto de maior UHC do andar (o vaso, em geral); um TQ já
     // desenhado (rótulo "TQ") na mesma posição é reaproveitado pela idempotência.
     const maior = [...doNivel].sort((a, b) => b.uhc - a.uhc || a.terminal.at.x - b.terminal.at.x || a.terminal.at.y - b.terminal.at.y)[0];
-    const tq = { x: maior.terminal.at.x, y: maior.terminal.at.y };
+    // NÚCLEO VERTICAL (E2.4): com um shaft ao alcance, o TQ desce por ele.
+    const tq = shaftPreferido(model, { x: maior.terminal.at.x, y: maior.terminal.at.y }, nivel.id, hip.raioDoShaftMm ?? 3000) ?? { x: maior.terminal.at.x, y: maior.terminal.at.y };
     const { cotaRaiz, uhc, dnMinimo } = construirArvoreDoNivel(nivel.id, tq, doNivel, null);
     // Ventilação: do nó do TQ ao teto do andar.
     novos.push({ type: 'AddTrecho', levelId: nivel.id, disciplina: 'ESGOTO', a: { ...tq }, b: { ...tq }, cotaAMm: cotaRaiz, cotaBMm: nivel.defaultHeightMm, bitolaMm: hip.dnVentilacaoMm, sugerido: true, rotulo: 'Ventilação' });

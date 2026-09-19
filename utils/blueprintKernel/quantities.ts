@@ -25,6 +25,7 @@ import { contornoExternoDoNivel } from './arrangement';
 import { medirAgua } from './telhado';
 import { assinaturaDaEsquadria, nomeDaEsquadria } from './model';
 import { furosDaEscada, medirEscada } from './escada';
+import { furosDoNucleo } from './nucleo';
 import { sobreposicoesDoModelo } from './sobreposicao';
 import { conexoesDerivadas, type ConexaoDerivada, type TipoDeConexao } from './conexoes';
 import {
@@ -1158,6 +1159,10 @@ export function computeQuantities(
   for (const f of furos) {
     furoMm2PorLaje.set(f.structuralId, (furoMm2PorLaje.get(f.structuralId) ?? 0) + f.areaMm2);
     furoMm2PorEscada.set(f.escadaId, (furoMm2PorEscada.get(f.escadaId) ?? 0) + f.areaMm2);
+  }
+  // NÚCLEO VERTICAL (E2.4): shaft e elevador furam a laje como a escada.
+  for (const f of furosDoNucleo(model)) {
+    furoMm2PorLaje.set(f.structuralId, (furoMm2PorLaje.get(f.structuralId) ?? 0) + f.areaMm2);
   }
   const escadas: QuantidadeEscada[] = (model.stairs ?? []).map((e) => {
     const m = medirEscada(model, e);

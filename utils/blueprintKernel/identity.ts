@@ -134,6 +134,8 @@ export const PREFIXO_ROTULO_UID = {
   unidade: 'U',
   /** Grupo com origem — G. */
   grupo: 'G',
+  /** Núcleo vertical (shaft, elevador) — H (hollow). */
+  nucleo: 'H',
   stair: 'E',
   label: 'R',
   /**

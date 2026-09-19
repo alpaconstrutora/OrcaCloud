@@ -25,6 +25,7 @@ import {
   FORMA_ESTRUTURAL,
   fatiasDaEscada,
   furosDaEscada,
+  furosDoNucleo,
   medirAgua,
   pointInPolygon,
   normalDaAgua,
@@ -946,6 +947,12 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, re
   const furosPorLaje = useMemo(() => {
     const porLaje = new Map<string, { x: number; y: number }[][]>();
     for (const f of furosDaEscada(model)) {
+      const lista = porLaje.get(f.structuralId) ?? [];
+      lista.push(f.contorno);
+      porLaje.set(f.structuralId, lista);
+    }
+    // NÚCLEO VERTICAL (E2.4): shaft e elevador furam a laje como a escada.
+    for (const f of furosDoNucleo(model)) {
       const lista = porLaje.get(f.structuralId) ?? [];
       lista.push(f.contorno);
       porLaje.set(f.structuralId, lista);

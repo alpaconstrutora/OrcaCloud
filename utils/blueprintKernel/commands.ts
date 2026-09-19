@@ -59,6 +59,8 @@ import {
   findUnidade,
   limparEtiquetasOrfasDasUnidades,
   findGrupo,
+  findNucleo,
+  type TipoDeNucleo,
   uidDaCopia,
   transformarPontoDoGrupo,
   giroTransformadoDoGrupo,
@@ -363,7 +365,36 @@ export type Command =
       larguraMm?: number;
       alvoEspelhoMm?: number;
       rotulo?: string | null;
+      /** Escada multiandares (E2.4): `null` volta ao próximo pavimento acima. */
+      ateLevelId?: ObjectId | null;
     }
+  /**
+   * NÚCLEO VERTICAL (E2.4): shaft ou elevador, polígono em planta que atravessa
+   * de `levelId` a `ateLevelId` (ausente = o mais alto). Ver `Nucleo`.
+   */
+  | {
+      type: 'AddNucleo';
+      levelId: ObjectId;
+      tipo: TipoDeNucleo;
+      ring: Point[];
+      ateLevelId?: ObjectId | null;
+      rotulo?: string | null;
+      pocoMm?: number | null;
+      casaDeMaquinasMm?: number | null;
+      capacidade?: number | null;
+    }
+  | {
+      type: 'SetNucleoProps';
+      nucleoId: ObjectId;
+      tipo?: TipoDeNucleo;
+      ateLevelId?: ObjectId | null;
+      rotulo?: string | null;
+      pocoMm?: number | null;
+      casaDeMaquinasMm?: number | null;
+      capacidade?: number | null;
+    }
+  | { type: 'MoveNucleoVertex'; nucleoId: ObjectId; index: number; to: Point }
+  | { type: 'DeleteNucleo'; nucleoId: ObjectId }
   /**
    * Um TRECHO de instalação — ver o cabeçalho de `Trecho` em `model.ts`.
    *
@@ -1639,6 +1670,80 @@ function aplicarSemHash(
       break;
     }
 
+    // ── Núcleo vertical ──────────────────────────────────────────────────────
+
+    case 'AddNucleo': {
+      findLevel(next, command.levelId);
+      if (command.ateLevelId) findLevel(next, command.ateLevelId);
+      if (command.ring.length < 3) throw new KernelError('BAD_CORE', `O contorno precisa de pelo menos 3 vértices; recebeu ${command.ring.length}`);
+      const ring = command.ring.map((p, i) => ({ x: assertIntegerMm(roundToMm(p.x), `ring[${i}].x`), y: assertIntegerMm(roundToMm(p.y), `ring[${i}].y`) }));
+      const id = nextId(next, 'nuc');
+      const elevador = command.tipo === 'ELEVADOR';
+      next.nucleos = [
+        ...(next.nucleos ?? []),
+        {
+          id,
+          uid: novoUid(),
+          levelId: command.levelId,
+          ...(command.ateLevelId ? { ateLevelId: command.ateLevelId } : {}),
+          tipo: command.tipo,
+          ring,
+          rotulo: command.rotulo?.trim() || null,
+          ...(elevador && command.pocoMm != null ? { pocoMm: assertIntegerMm(roundToMm(command.pocoMm), 'pocoMm') } : {}),
+          ...(elevador && command.casaDeMaquinasMm != null ? { casaDeMaquinasMm: assertIntegerMm(roundToMm(command.casaDeMaquinasMm), 'casaDeMaquinasMm') } : {}),
+          ...(elevador && command.capacidade != null ? { capacidade: Math.round(command.capacidade) } : {}),
+        },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetNucleoProps': {
+      const n = findNucleo(next, command.nucleoId);
+      if (command.tipo !== undefined) {
+        n.tipo = command.tipo;
+        // Virar shaft apaga as medidas de elevador: não há poço num shaft.
+        if (n.tipo !== 'ELEVADOR') {
+          delete n.pocoMm;
+          delete n.casaDeMaquinasMm;
+          delete n.capacidade;
+        }
+      }
+      if (command.ateLevelId !== undefined) {
+        if (command.ateLevelId) {
+          findLevel(next, command.ateLevelId);
+          n.ateLevelId = command.ateLevelId;
+        } else delete n.ateLevelId;
+      }
+      if (command.rotulo !== undefined) n.rotulo = command.rotulo?.trim() || null;
+      const medida = (k: 'pocoMm' | 'casaDeMaquinasMm' | 'capacidade', v: number | null | undefined) => {
+        if (v === undefined) return;
+        if (n.tipo !== 'ELEVADOR') throw new KernelError('BAD_CORE', `${k} só existe no elevador`);
+        if (v === null) delete n[k];
+        else n[k] = k === 'capacidade' ? Math.round(v) : assertIntegerMm(roundToMm(v), k);
+      };
+      medida('pocoMm', command.pocoMm);
+      medida('casaDeMaquinasMm', command.casaDeMaquinasMm);
+      medida('capacidade', command.capacidade);
+      diff.updated.push(n.id);
+      break;
+    }
+
+    case 'MoveNucleoVertex': {
+      const n = findNucleo(next, command.nucleoId);
+      if (command.index < 0 || command.index >= n.ring.length) throw new KernelError('BAD_CORE', `Vértice ${command.index} fora do contorno`);
+      n.ring = n.ring.map((p, i) => (i === command.index ? { x: assertIntegerMm(roundToMm(command.to.x), 'to.x'), y: assertIntegerMm(roundToMm(command.to.y), 'to.y') } : p));
+      diff.updated.push(n.id);
+      break;
+    }
+
+    case 'DeleteNucleo': {
+      const n = findNucleo(next, command.nucleoId);
+      next.nucleos = (next.nucleos ?? []).filter((x) => x.id !== n.id);
+      diff.deleted.push(n.id);
+      break;
+    }
+
     // ── Grupos com origem ────────────────────────────────────────────────────
 
     case 'AddGrupo': {
@@ -2064,6 +2169,11 @@ function aplicarSemHash(
         escada.alvoEspelhoMm = assertIntegerMm(roundToMm(command.alvoEspelhoMm), 'alvoEspelhoMm');
       }
       if (command.rotulo !== undefined) escada.rotulo = command.rotulo?.trim() || null;
+      if (command.ateLevelId !== undefined) {
+        if (command.ateLevelId) findLevel(next, command.ateLevelId);
+        escada.ateLevelId = command.ateLevelId || undefined;
+        if (escada.ateLevelId === undefined) delete escada.ateLevelId;
+      }
       diff.updated.push(escada.id);
       break;
     }
@@ -3154,7 +3264,9 @@ function aplicarSemHash(
       next.boundaries = next.boundaries.filter((b) => b.levelId !== level.id);
       next.structures = next.structures.filter((s) => s.levelId !== level.id);
       next.roofs = (next.roofs ?? []).filter((r) => r.levelId !== level.id);
-      next.stairs = (next.stairs ?? []).filter((e) => e.levelId !== level.id);
+      next.stairs = (next.stairs ?? []).filter((e) => e.levelId !== level.id).map((e) => (e.ateLevelId === level.id ? { ...e, ateLevelId: undefined } : e));
+      const nucleosDoNivel = (next.nucleos ?? []).filter((n) => n.levelId === level.id);
+      next.nucleos = (next.nucleos ?? []).filter((n) => n.levelId !== level.id).map((n) => (n.ateLevelId === level.id ? { ...n, ateLevelId: undefined } : n));
       next.trechos = (next.trechos ?? []).filter((t) => t.levelId !== level.id);
       next.terminais = (next.terminais ?? []).filter((t) => t.levelId !== level.id);
       // ⚠️ O quadro vai junto (é peça deste piso); os CIRCUITOS dele vão junto
@@ -3181,6 +3293,7 @@ function aplicarSemHash(
         ...estruturasDoNivel.map((s) => s.id),
         ...aguasDoNivel.map((r) => r.id),
         ...escadasDoNivel.map((e) => e.id),
+        ...nucleosDoNivel.map((n) => n.id),
         ...trechosDoNivel.map((t) => t.id),
         ...terminaisDoNivel.map((t) => t.id),
         ...quadrosDoNivel.map((q) => q.id),

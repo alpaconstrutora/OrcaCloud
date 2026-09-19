@@ -98,6 +98,11 @@ export interface MedidaEscada {
 export function nivelDeChegada(model: BlueprintModel, escada: Escada): Level | null {
   const partida = model.levels.find((l) => l.id === escada.levelId);
   if (!partida) return null;
+  // Escada multiandares (E2.4): chegada declarada, se existir e estiver acima.
+  if (escada.ateLevelId) {
+    const declarada = model.levels.find((l) => l.id === escada.ateLevelId);
+    if (declarada && declarada.elevationMm > partida.elevationMm) return declarada;
+  }
 
   let melhor: Level | null = null;
   for (const l of model.levels) {

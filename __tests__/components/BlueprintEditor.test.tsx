@@ -202,7 +202,7 @@ async function abrirAba(nome: RegExp) {
  * seletor casa com qualquer um dos nomes possíveis.
  */
 const NOMES_DO_BOTAO =
-  /^(Componentes|Parede|Parede em retângulo|Parede em polígono|Porta|Porta de correr|Janela|Vão livre|Pilar|Viga|Laje|Estaca|Bloco de coroamento|Viga de fundação)$/;
+  /^(Componentes|Parede|Parede em retângulo|Parede em polígono|Porta|Porta de correr|Janela|Vão livre|Pilar|Viga|Laje|Estaca|Bloco de coroamento|Viga de fundação|Shaft|Elevador)$/;
 
 /**
  * O botão do menu.
@@ -904,6 +904,48 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(within(gaveta).getByText(/Sem instâncias ainda/)).toBeInTheDocument();
     await user.click(within(gaveta).getByRole('button', { name: /^desagrupar/i }));
     expect(within(gaveta).getByText(/Agrupar a seleção/)).toBeInTheDocument();
+  });
+
+  it('núcleo vertical (E2.4): o elevador aparece no navegador, o painel aplica a ficha e muda a chegada; o menu oferece Shaft/Elevador; a escada ganha "Até"', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    let m = k.applyBatch(k.emptyModel(), [
+      { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 },
+      { type: 'AddLevel', name: '1º', elevationMm: 2800, defaultHeightMm: 2800 },
+      { type: 'AddLevel', name: '2º', elevationMm: 5600, defaultHeightMm: 2800 },
+    ]).model;
+    const [t, , p2] = m.levels.map((l) => l.id);
+    m = k.applyBatch(m, [
+      { type: 'AddNucleo', levelId: t, tipo: 'ELEVADOR', ring: [k.point(1000, 1000), k.point(2800, 1000), k.point(2800, 3100), k.point(1000, 3100)], rotulo: 'E1' },
+      { type: 'AddEscada', levelId: t, pontos: [k.point(6000, 0), k.point(9000, 0)], larguraMm: 1200 },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirComponentes(user);
+    const linha = await screen.findByRole('button', { name: /^E1/ });
+    expect(linha).toHaveTextContent(/1,80 × 2,10 m/);
+    expect(linha).toHaveTextContent(/3 pavimento\(s\) · Térreo → 2º/);
+    await user.click(linha);
+    const painel = await screen.findByTestId('painel-nucleo');
+    expect(painel).toHaveTextContent(/Elevador E1/);
+    expect(painel).toHaveTextContent(/3 pavimento\(s\) · 8,40 m/);
+    // Ficha de 8 passageiros: capacidade, poço e casa de máquinas entram na peça.
+    await user.selectOptions(within(painel).getByLabelText('Aplicar ficha do elevador por capacidade'), '8');
+    expect((within(painel).getByLabelText('Capacidade do elevador (passageiros)') as HTMLInputElement).value).toBe('8');
+    expect((within(painel).getByLabelText('Profundidade do poço (mm)') as HTMLInputElement).value).toBe('1500');
+    expect(painel).toHaveTextContent(/Ficha de 8 passageiros/);
+    expect(painel).toHaveTextContent(/12,50 m com poço e casa de máquinas/);
+    // Chegada no 1º: 2 pavimentos.
+    await user.selectOptions(within(painel).getByLabelText('Pavimento de chegada do núcleo vertical'), m.levels[1].id);
+    expect(painel).toHaveTextContent(/2 pavimento\(s\) · 5,60 m/);
+    // A escada ganhou "Até": escolher o 2º dobra o desnível.
+    await user.click(await screen.findByRole('button', { name: /^Escada 1/ }));
+    const ate = await screen.findByLabelText('Pavimento de chegada da escada (vazio = o próximo acima)');
+    await user.selectOptions(ate, p2);
+    expect(screen.getByRole('button', { name: /^Escada 1/ })).toHaveTextContent(/vence 5,60 m até 2º/);
+    // O menu de componentes oferece Shaft e Elevador (Circulação), e o botão passa a dizer o ativo.
+    await escolherComponente(/^Shaft$/);
+    expect(botaoComponentes()).toHaveTextContent('Shaft');
   });
 
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {

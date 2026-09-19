@@ -4,6 +4,7 @@ import type {
   Agua,
   BlueprintModel,
   Escada,
+  Nucleo,
   Opening,
   Quadro,
   Structural,
@@ -78,7 +79,7 @@ interface Props {
    * Escadas e rampas do pavimento ativo, com o MODELO: a linha diz quantos
    * degraus, e isso vem do desnível entre pavimentos.
    */
-  escadas?: { model: BlueprintModel; itens: Escada[] };
+  escadas?: { model: BlueprintModel; itens: Escada[]; nucleos?: Nucleo[] };
   /**
    * As INSTALAÇÕES do pavimento.
    *

@@ -40,6 +40,8 @@ interface Props {
     larguraMm?: number;
     alvoEspelhoMm?: number;
     rotulo?: string | null;
+    /** Escada multiandares (E2.4): `null` = o próximo pavimento acima. */
+    ateLevelId?: string | null;
   }) => void;
   onExcluir: () => void;
   /** TIPO × INSTÂNCIA (E1.5): copia largura/espelho/tipo de um tipo salvo. */
@@ -107,6 +109,30 @@ export default function PainelEscadaSelecionada({ model, escada, onProps, onExcl
         >
           <option value="ESCADA">Escada</option>
           <option value="RAMPA">Rampa</option>
+        </select>
+      </label>
+
+      {/* ESCADA MULTIANDARES (E2.4): a chegada declarada. O padrão é o próximo
+          pavimento acima; escolher um mais alto faz a escada vencer o desnível
+          inteiro e furar toda laje no caminho. */}
+      <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-500">
+        Até
+        <select
+          value={escada.ateLevelId ?? ''}
+          onChange={(e) => onProps({ ateLevelId: e.target.value || null })}
+          aria-label="Pavimento de chegada da escada (vazio = o próximo acima)"
+          className="rounded-md border border-slate-300 px-2 py-1 text-xs font-normal text-slate-800"
+        >
+          <option value="">O próximo acima</option>
+          {model.levels
+            .filter((l) => {
+              const partida = model.levels.find((x) => x.id === escada.levelId);
+              return partida ? l.elevationMm > partida.elevationMm : false;
+            })
+            .sort((a, b) => a.elevationMm - b.elevationMm)
+            .map((l) => (
+              <option key={l.id} value={l.id}>{l.name}</option>
+            ))}
         </select>
       </label>
 

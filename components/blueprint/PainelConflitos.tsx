@@ -95,6 +95,10 @@ export default function PainelConflitos({
       const o = model.openings.find((x) => x.id === c.pecaId);
       return o ? `${nomeDoTipoDeAbertura(o.kind)} ${rotuloCurto(o.uid, 'opening')}` : c.pecaId;
     }
+    if (c.familia === 'nucleo') {
+      const n = (model.nucleos ?? []).find((x) => x.id === c.pecaId);
+      return n ? n.rotulo || `${n.tipo === 'ELEVADOR' ? 'Elevador' : 'Shaft'} ${rotuloCurto(n.uid, 'nucleo')}` : c.pecaId;
+    }
     const e = (model.stairs ?? []).find((x) => x.id === c.pecaId);
     return e ? e.rotulo || `${e.tipo === 'RAMPA' ? 'Rampa' : 'Escada'} ${rotuloCurto(e.uid, 'stair')}` : c.pecaId;
   };
@@ -107,7 +111,9 @@ export default function PainelConflitos({
       ? `${c.medidaMm} mm do vão tomados pela estrutura — a esquadria não fecha`
       : c.classe === 'ESCADA_X_PILAR'
         ? `pilar dentro do percurso (≈ ${c.medidaMm} mm de lado em comum)`
-        : `faltam ${c.medidaMm} mm para os 2,10 m livres sobre o degrau (NBR 9077)`;
+        : c.classe === 'NUCLEO_X_ESTRUTURA'
+          ? `estrutura dentro do núcleo vertical (≈ ${c.medidaMm} mm de lado em comum) — o vazio não passa`
+          : `faltam ${c.medidaMm} mm para os 2,10 m livres sobre o degrau (NBR 9077)`;
 
   const nomeDoTrecho = (id: string) => {
     const t = (model.trechos ?? []).find((x) => x.id === id);

@@ -64,6 +64,7 @@ import {
   type FamiliaRestringivel,
   type RotacaoDoGrupo,
   type EspelhoDoGrupo,
+  type TipoDeNucleo,
   assinaturaDasCamadas,
   emptyModel,
   nextId,
@@ -414,11 +415,32 @@ function projetar(model: BlueprintModel): {
       alvoEspelhoMm: e.alvoEspelhoMm,
       rotulo: e.rotulo ?? null,
       parametros: parametrosCanonicos(e.parametros),
+      // Escada multiandares (0.39.0): chegada por índice; ausente = próximo acima.
+      ate: e.ateLevelId && model.levels.some((l) => l.id === e.ateLevelId) ? nivel(e.ateLevelId) : undefined,
     }),
     (x, y) =>
       nivel(x.levelId) - nivel(y.levelId) ||
       x.pontos[0].x - y.pontos[0].x ||
       x.pontos[0].y - y.pontos[0].y,
+  );
+
+  // NÚCLEOS VERTICAIS (0.39.0): como as escadas — pavimentos por índice,
+  // contorno inteiro, medidas do elevador só quando declaradas. Omitidos
+  // quando não há nenhum.
+  const nucleos = ordenar(
+    model.nucleos ?? [],
+    (n) => ({
+      level: nivel(n.levelId),
+      ate: n.ateLevelId && model.levels.some((l) => l.id === n.ateLevelId) ? nivel(n.ateLevelId) : undefined,
+      tipo: n.tipo,
+      ring: n.ring.map((p) => ({ x: p.x, y: p.y })),
+      rotulo: n.rotulo ?? null,
+      pocoMm: n.pocoMm ?? undefined,
+      casaDeMaquinasMm: n.casaDeMaquinasMm ?? undefined,
+      capacidade: n.capacidade ?? undefined,
+      parametros: parametrosCanonicos(n.parametros),
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.ring[0].x - y.ring[0].x || x.ring[0].y - y.ring[0].y || cmpStr(x.tipo, y.tipo),
   );
 
   // QUADROS e CIRCUITOS, ANTES das instalações.
@@ -693,6 +715,7 @@ function projetar(model: BlueprintModel): {
     eixos: eixos.length ? eixos.map((e) => e.geom) : undefined,
     restricoes: restricoes.length ? restricoes.map((r) => r.geom) : undefined,
     stairs: stairs.length ? stairs.map((e) => e.geom) : undefined,
+    nucleos: nucleos.length ? nucleos.map((n) => n.geom) : undefined,
     trechos: trechos.length ? trechos.map((t) => t.geom) : undefined,
     terminais: terminais.length ? terminais.map((t) => t.geom) : undefined,
     quadros: quadros.length ? quadros.map((q) => q.geom) : undefined,
@@ -719,6 +742,7 @@ function projetar(model: BlueprintModel): {
     eixos: eixos.map((e) => e.item.uid ?? null),
     restricoes: restricoes.map((r) => r.item.uid ?? null),
     stairs: stairs.map((e) => e.item.uid ?? null),
+    nucleos: nucleos.map((n) => n.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
     quadros: quadros.map((q) => q.item.uid ?? null),
@@ -794,6 +818,8 @@ export interface IdentidadeCanonica {
   restricoes?: (ElementUid | null)[];
   /** Ausente em payload gravado sob kernel anterior a 0.14.0. */
   stairs?: (ElementUid | null)[];
+  /** Ausente em payload gravado sob kernel anterior a 0.39.0. */
+  nucleos?: (ElementUid | null)[];
   trechos?: (ElementUid | null)[];
   terminais?: (ElementUid | null)[];
   quadros?: (ElementUid | null)[];
@@ -947,6 +973,20 @@ export interface CanonicalPayload {
     larguraMm: number;
     alvoEspelhoMm: number;
     rotulo: string | null;
+    parametros?: Parametros;
+    /** Chegada declarada (índice). Ausente sob kernel < 0.39.0 e quando é o próximo acima. */
+    ate?: number;
+  }[];
+  /** Núcleos verticais. Ausente sob kernel < 0.39.0 e em desenho sem nenhum. */
+  nucleos?: {
+    level: number;
+    ate?: number;
+    tipo: TipoDeNucleo;
+    ring: { x: number; y: number }[];
+    rotulo: string | null;
+    pocoMm?: number;
+    casaDeMaquinasMm?: number;
+    capacidade?: number;
     parametros?: Parametros;
   }[];
   /**
@@ -1334,6 +1374,24 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       alvoEspelhoMm: e.alvoEspelhoMm,
       rotulo: e.rotulo,
       ...(e.parametros && Object.keys(e.parametros).length > 0 ? { parametros: { ...e.parametros } } : {}),
+      ...(e.ate !== undefined && levelIds[e.ate] ? { ateLevelId: levelIds[e.ate] } : {}),
+    });
+  });
+
+  const nucleos = payload.nucleos ?? [];
+  nucleos.forEach((n, i) => {
+    model.nucleos.push({
+      id: nextId(model, 'nuc'),
+      uid: uidDe('nucleos', i, nucleos.length),
+      levelId: levelIds[n.level],
+      ...(n.ate !== undefined && levelIds[n.ate] ? { ateLevelId: levelIds[n.ate] } : {}),
+      tipo: n.tipo,
+      ring: n.ring.map((p) => ({ x: p.x, y: p.y })),
+      rotulo: n.rotulo,
+      ...(n.pocoMm !== undefined ? { pocoMm: n.pocoMm } : {}),
+      ...(n.casaDeMaquinasMm !== undefined ? { casaDeMaquinasMm: n.casaDeMaquinasMm } : {}),
+      ...(n.capacidade !== undefined ? { capacidade: n.capacidade } : {}),
+      ...(n.parametros && Object.keys(n.parametros).length > 0 ? { parametros: { ...n.parametros } } : {}),
     });
   });
 

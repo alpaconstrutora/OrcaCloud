@@ -765,7 +765,7 @@ propagação; bump).
 
 **Prova no app real (escritas bloqueadas: 14).** 29 sugestões (6 altas, 8 médias, 7 baixas, 8 desbloqueios): altas = os erros de iluminação natural (legislação) por ambiente e pavimento; médias = modulação (geral + por parede: 7,05 m, 14,05 m…); "Copiar" → "Copiado"; "Abrir Programa" abre a tela do programa; "Ir para Ambiente 1 (Térreo)…" fecha a tela e seleciona. 0 erros. Testes: `__tests__/blueprintSugestoes.test.ts` (2) e editor "sugestões (E5.3)"; suíte 373 arquivos / 4701 testes; build OK.
 
-**Etapa 5 fechada** (5.1 insolação/ventilação, 5.2 score, 5.3 sugestões). Próxima: Etapa 6 (6.1 alternativas, 6.2 gerador determinístico, 6.3 operações de edição em massa, 6.4 IA).
+**Etapa 5 fechada** (5.1 insolação/ventilação, 5.2 score, 5.3 sugestões). Próxima: Etapa 6 (6.1 Design Options, 6.2 gerador determinístico, 6.3 mobiliário e circulação automáticos, 6.4 IA conversacional).
 
 ## Verificação (por fase)
 

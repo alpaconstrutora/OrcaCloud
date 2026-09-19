@@ -9,8 +9,10 @@
  * é a mesma informação que os painéis mostram, numa ordem só, legível e
  * copiável — o que se cola num e-mail ou se confere numa reunião.
  *
- * Porta: hospedeira e os ambientes dos dois lados (do arranjo planar), como
- * o roadmap descreveu ("ambiente origem = sala, destino = corredor").
+ * Porta: hospedeira e os ambientes dos dois lados — pelo GRAFO ESPACIAL
+ * (E4.2), a mesma aresta que a gaveta e a conferência do programa leem — como
+ * o roadmap descreveu ("ambiente origem = sala, destino = corredor"); a
+ * amostragem local fica de reserva para porta em parede solta.
  */
 import type { BlueprintModel, Opening, Point, Space, Structural, Wall } from './blueprintKernel';
 import { FORMA_ESTRUTURAL, nomeDoTipoDeAbertura, nomeDoTipoEstrutural, pointInPolygon, rotuloCurto, wallLength } from './blueprintKernel';
@@ -18,6 +20,7 @@ import { avaliarDefinicoes, formatarValor, variaveisDaPeca, type DefinicaoComFam
 import { assinaturaDoTipo, propriedadesDaEscada, propriedadesDaEstrutura, propriedadesDoTelhado, propriedadesDoTerminal, resumoDoTipo } from './blueprintTipos';
 import { ROTULO_DA_RESTRICAO, type Conferencia } from './blueprintRestricoes';
 import { ROTULO_DA_DISCIPLINA } from './blueprintRede';
+import { construirGrafoEspacial } from './blueprintGrafoEspacial';
 
 export interface LinhaDaFicha {
   rotulo: string;
@@ -114,9 +117,15 @@ export function fichaDoElemento(model: BlueprintModel, id: string, ctx: Contexto
         const uy = (w.b.y - w.a.y) / comp;
         const meio = { x: w.a.x + ux * (o.offsetMm + o.widthMm / 2), y: w.a.y + uy * (o.offsetMm + o.widthMm / 2) };
         const off = w.thicknessMm / 2 + 50;
-        const lado1 = ambienteEm(model, w.levelId, { x: meio.x - uy * off, y: meio.y + ux * off });
-        const lado2 = ambienteEm(model, w.levelId, { x: meio.x + uy * off, y: meio.y - ux * off });
-        geo.push({ rotulo: 'Liga', valor: `${nomeDoAmbiente(model, lado1)} ↔ ${nomeDoAmbiente(model, lado2)}` });
+        const aresta = o.kind === 'window' ? null : construirGrafoEspacial(model, w.levelId).arestas.find((a) => a.openingId === o.id) ?? null;
+        if (aresta) {
+          const nome = (id: string | null) => (id === null ? 'exterior' : nomeDoAmbiente(model, model.spaces.find((s) => s.id === id) ?? null));
+          geo.push({ rotulo: 'Liga', valor: `${nome(aresta.de)} ↔ ${nome(aresta.para)}${aresta.para === null ? ' (saída)' : ''}` });
+        } else {
+          const lado1 = ambienteEm(model, w.levelId, { x: meio.x - uy * off, y: meio.y + ux * off });
+          const lado2 = ambienteEm(model, w.levelId, { x: meio.x + uy * off, y: meio.y - ux * off });
+          geo.push({ rotulo: 'Liga', valor: `${nomeDoAmbiente(model, lado1)} ↔ ${nomeDoAmbiente(model, lado2)}` });
+        }
       }
       if (o.esquadria?.itemCode) geo.push({ rotulo: 'Item de catálogo', valor: `${o.esquadria.itemCode}${o.esquadria.descricao ? ` — ${o.esquadria.descricao}` : ''}` });
       if (o.kind === 'door') geo.push({ rotulo: 'Acessível (NBR 9050, vão ≥ 800)', valor: o.widthMm >= 800 ? 'sim' : `não — ${o.widthMm} mm` });

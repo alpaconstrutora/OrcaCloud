@@ -79,6 +79,51 @@ export function distanciasDesde(origem: No, arestas: readonly Aresta[]): Map<No,
 }
 
 /**
+ * MENOR CAMINHO (Dijkstra com predecessor) de `origem` a `destino`: o
+ * comprimento em mm, os nós na ordem e os índices das arestas percorridas —
+ * `null` quando a rede não os liga. `caminhoEntre` (abaixo) é BFS em saltos e
+ * serve a quem quer saber POR ONDE passa; este serve a quem quer saber QUANTO
+ * anda (o grafo espacial, E4.2: percurso entre ambientes pelos centros das
+ * portas).
+ */
+export function menorCaminhoEntre(origem: No, destino: No, arestas: readonly Aresta[]): { mm: number; nos: No[]; arestas: number[] } | null {
+  const viz = new Map<No, { para: No; mm: number; aresta: number }[]>();
+  arestas.forEach((a, i) => {
+    viz.set(a.de, [...(viz.get(a.de) ?? []), { para: a.para, mm: a.mm, aresta: i }]);
+    viz.set(a.para, [...(viz.get(a.para) ?? []), { para: a.de, mm: a.mm, aresta: i }]);
+  });
+  const dist = new Map<No, number>([[origem, 0]]);
+  const anterior = new Map<No, { de: No; aresta: number }>();
+  const abertos = new Set<No>([origem]);
+  while (abertos.size > 0) {
+    let atual: No | null = null;
+    for (const n of abertos) if (atual == null || (dist.get(n) ?? Infinity) < (dist.get(atual) ?? Infinity)) atual = n;
+    if (atual == null) break;
+    if (atual === destino) break;
+    abertos.delete(atual);
+    const dAtual = dist.get(atual) ?? Infinity;
+    for (const v of viz.get(atual) ?? []) {
+      const nova = dAtual + v.mm;
+      if (nova < (dist.get(v.para) ?? Infinity)) {
+        dist.set(v.para, nova);
+        anterior.set(v.para, { de: atual, aresta: v.aresta });
+        abertos.add(v.para);
+      }
+    }
+  }
+  if (!dist.has(destino)) return null;
+  const nos: No[] = [destino];
+  const idx: number[] = [];
+  for (let n = destino; n !== origem; ) {
+    const p = anterior.get(n)!;
+    idx.push(p.aresta);
+    n = p.de;
+    nos.push(n);
+  }
+  return { mm: dist.get(destino)!, nos: nos.reverse(), arestas: idx.reverse() };
+}
+
+/**
  * O caminho (índices de arestas) de `origem` até `destino`, por BFS — `null`
  * quando a rede não os liga. É por ele que cada trecho fica sabendo quem passa
  * por ali (os circuitos no eletroduto, os pesos na água, as UHC no esgoto).

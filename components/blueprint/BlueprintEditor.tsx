@@ -38,6 +38,7 @@ import {
   CarFront,
   Scale,
   ClipboardList,
+  Footprints,
   Eye,
   EyeOff,
   FileDown,
@@ -461,6 +462,8 @@ import TelaQuantitativos from './TelaQuantitativos';
 import TelaUnidades from './TelaUnidades';
 import TelaLegislacao from './TelaLegislacao';
 import TelaPrograma from './TelaPrograma';
+import PainelGrafoEspacial from './PainelGrafoEspacial';
+import { construirGrafoEspacial, descreverFachadas, percursoAteASaida, vizinhosDe } from '../../utils/blueprintGrafoEspacial';
 import { useBlueprintPrograma } from '../../hooks/useBlueprintPrograma';
 import { avaliarRegras, REGRAS_SEMENTE, type Regra, type ResultadoDeRegra } from '../../utils/blueprintRegras';
 import { blueprintRuleSetService, type ConjuntoDeRegras } from '../../services/blueprintRuleSetService';
@@ -710,6 +713,9 @@ const ROTULO_DA_TAREFA = {
   grupo: 'Grupo com origem — agrupar e instanciar',
   // Vagas automáticas (19/09/2026, roadmap E2.5): fileiras com circulação na garagem.
   vagas: 'Vagas de garagem — lançamento automático',
+  // GRAFO ESPACIAL (19/09/2026, E4.2): a planta como rede de ambientes —
+  // vizinhos por porta e por parede, percursos, circulação %, fachadas.
+  grafo: 'Grafo espacial — vizinhos, percursos e fachadas',
   'gerar-paredes': 'Gerar paredes do PDF',
   'importar-ifc': 'Importar do IFC',
   'importar-dxf': 'Importar do DXF',
@@ -1945,6 +1951,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
   /** UNIDADES (E2.2): medidas, fração ideal e paredes geminadas — derivadas do desenho. */
   const quadroDeUnidadesDoModelo = useMemo(() => quadroDeUnidades(editor.model), [editor.model]);
+  /**
+   * GRAFO ESPACIAL (E4.2) do pavimento ativo: adjacência, portas, saídas,
+   * fachadas com orientação, circulação %. Derivado; alimenta o cartão do
+   * ambiente, a gaveta e (E4.3) a conferência do programa.
+   */
+  const grafoDoNivel = useMemo(() => (levelId ? construirGrafoEspacial(editor.model, levelId) : null), [editor.model, levelId]);
   const ambientes = useMemo(
     () => {
     const unidadeDe = unidadePorEtiqueta(editor.model);
@@ -7517,6 +7529,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   ajuda="Programa de necessidades do estudo: ambientes pedidos, áreas, exigências e matriz de proximidade; sementes por tipologia"
                 />
               )}
+              {relatorioVisivel('quantitativos') && (
+                <BotaoDoRibbon
+                  icone={Footprints}
+                  rotulo="Grafo"
+                  contagem={grafoDoNivel?.nos.length || undefined}
+                  ativo={tarefaAberta === 'grafo'}
+                  onClick={() => alternarTarefa('grafo')}
+                  ajuda="Grafo espacial do pavimento: quem se liga a quem por porta e por parede, percursos pelas portas, circulação %, fachada e orientação de cada ambiente"
+                />
+              )}
               {(!emVista || em3d) && (
                 <BotaoDoRibbon
                   icone={Grip}
@@ -9328,6 +9350,21 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       </dd>
                     </div>
                   </dl>
+                  {/* GRAFO ESPACIAL (E4.2): com quem se liga, o que dá para fora, quão longe da saída. */}
+                  {grafoDoNivel && (() => {
+                    const no = grafoDoNivel.nos.find((n) => n.spaceId === a.id);
+                    if (!no) return null;
+                    const porPorta = vizinhosDe(grafoDoNivel, a.id).filter((v) => v.arestas.some((x) => x.tipo !== 'PAREDE'));
+                    const saida = percursoAteASaida(grafoDoNivel, a.id);
+                    return (
+                      <p className="mt-1 text-xs text-slate-500" data-testid={`grafo-do-ambiente-${a.id}`}>
+                        <span className={no.ilhado ? 'text-red-700' : ''}>Liga-se a: {porPorta.length ? porPorta.map((v) => v.no?.rotulo ?? 'exterior').join(', ') : 'ninguém (sem porta)'}</span>
+                        {' · '}
+                        <span className={no.fachadas.length === 0 ? 'text-amber-800' : ''}>Fachada: {descreverFachadas(no.fachadas)}</span>
+                        {saida && <> · Saída: {(saida.mm / 1000).toFixed(2).replace('.', ',')} m</>}
+                      </p>
+                    );
+                  })()}
                 </div>
               </li>
             ))}
@@ -9439,6 +9476,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             </span>
           </SheetTitle>
           <SheetDescription>
+            {tarefaAberta === 'grafo' &&
+              'A planta do pavimento como rede: cada ambiente é um nó; parede dividida e porta são as arestas. Percursos medidos pelos centros das portas; fachada e orientação pelo norte do desenho. Só leitura.'}
             {tarefaAberta === 'pilares' &&
               'Pilar em cada encontro de paredes e nos vãos longos, no pavimento ativo. Prévia tracejada no desenho; gravar é um passo só, e Ctrl+Z desfaz.'}
             {tarefaAberta === 'vigas' &&
@@ -9510,9 +9549,20 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
+
+          {tarefaAberta === 'grafo' && (
+            <PainelGrafoEspacial
+              grafo={grafoDoNivel}
+              nomeDoPavimento={editor.model.levels.find((l) => l.id === levelId)?.name ?? 'pavimento'}
+              onSelecionar={(id) => {
+                setTarefa(null);
+                selecionar([id]);
+              }}
+            />
+          )}
 
           {tarefaAberta === 'vagas' && planoDeVagas && (
             <PainelVagas

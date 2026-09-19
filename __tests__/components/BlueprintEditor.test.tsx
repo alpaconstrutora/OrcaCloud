@@ -1199,6 +1199,58 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(botaoPrograma()).toHaveTextContent('11');
   });
 
+  it('grafo espacial (E4.2): a gaveta resume o pavimento e lista vizinhos, fachadas e saída; o percurso cozinha → dormitório passa pela sala; o cartão do ambiente e a ficha da porta leem o grafo', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    let m = k.applyBatch(nivel.model, [w(0, 0, 8000, 0), w(8000, 0, 8000, 6000), w(8000, 6000, 0, 6000), w(0, 6000, 0, 0), w(4000, 0, 4000, 6000), w(4000, 3000, 8000, 3000)]).model;
+    const sala = m.spaces.find((s) => s.ring.some((p) => p.x === 0))!;
+    const coz = m.spaces.find((s) => s.ring.every((p) => p.x >= 4000) && s.ring.every((p) => p.y <= 3000))!;
+    const dorm = m.spaces.find((s) => s.ring.every((p) => p.x >= 4000) && s.ring.every((p) => p.y >= 3000))!;
+    const baixo = m.walls.find((x) => x.a.y === 0 && x.b.y === 0)!;
+    const meio = m.walls.find((x) => x.a.x === 4000 && x.b.x === 4000)!;
+    const direita = m.walls.find((x) => x.a.x === 8000 && x.b.x === 8000)!;
+    m = k.applyBatch(m, [
+      { type: 'NameSpace', spaceId: sala.id, name: 'Sala', tipoDeAmbiente: 'SALA_DORMITORIO' },
+      { type: 'NameSpace', spaceId: coz.id, name: 'Cozinha', tipoDeAmbiente: 'COZINHA_SERVICO' },
+      { type: 'NameSpace', spaceId: dorm.id, name: 'Dormitório 1', tipoDeAmbiente: 'SALA_DORMITORIO' },
+      { type: 'AddOpening', wallId: baixo.id, kind: 'door', offsetMm: 1000, widthMm: 900, heightMm: 2100, sillMm: 0 },
+      { type: 'AddOpening', wallId: meio.id, kind: 'door', offsetMm: 1000, widthMm: 800, heightMm: 2100, sillMm: 0 },
+      { type: 'AddOpening', wallId: meio.id, kind: 'door', offsetMm: 4000, widthMm: 700, heightMm: 2100, sillMm: 0 },
+      { type: 'AddOpening', wallId: direita.id, kind: 'window', offsetMm: 4000, widthMm: 1200, heightMm: 1200, sillMm: 1000 },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    // O cartão do ambiente já traz o grafo (Ambientes nasce aberta).
+    const dormId = m.spaces.find((s) => s.name === 'Dormitório 1')!.id;
+    const cartao = await screen.findByTestId(`grafo-do-ambiente-${dormId}`);
+    expect(cartao).toHaveTextContent(/Liga-se a: Sala/);
+    expect(cartao).toHaveTextContent(/Fachada: N 4,00 m · L 3,00 m \(1 jan\.\)/);
+    expect(cartao).toHaveTextContent(/Saída: 7,05 m/);
+    // Gaveta Analisar › Grafo.
+    await abrirAba(/^analisar$/i);
+    const botaoGrafo = screen.getAllByRole('button', { name: /^grafo/i }).find((b) => b.getAttribute('title')?.startsWith('Grafo espacial'))!;
+    expect(botaoGrafo).toHaveTextContent('3');
+    await user.click(botaoGrafo);
+    const gaveta = await screen.findByTestId('tarefa-grafo');
+    const resumo = within(gaveta).getByTestId('resumo-do-grafo');
+    expect(resumo).toHaveTextContent(/3 ambiente\(s\) · 3 porta\(s\), 0 passagem\(ns\), 3 parede\(s\) dividida\(s\) · 1 saída\(s\)/);
+    expect(resumo).toHaveTextContent(/circulação 0,0 %/);
+    expect(resumo).toHaveTextContent(/Percurso mais longo até a saída: Dormitório 1, 7,05 m/);
+    expect(resumo).toHaveTextContent(/Porta\(s\) com vão < 0,80 m: .*\(700 mm\)/);
+    const linha = within(gaveta).getByRole('row', { name: 'Ambiente Cozinha' });
+    expect(linha).toHaveTextContent(/Cozinha.*Cozinha.*12,00 m².*Sala \(porta 0,80\).*Dormitório 1 \(4,00 m\).*L 3,00 m · S 4,00 m.*4,91 m · 2 porta\(s\)/);
+    // Percurso cozinha → dormitório: pela sala, 2 portas, menor vão 0,70.
+    await user.selectOptions(within(gaveta).getByLabelText('Percurso: de'), coz.id);
+    await user.selectOptions(within(gaveta).getByLabelText('Percurso: para'), dormId);
+    expect(within(gaveta).getByTestId('resultado-do-percurso')).toHaveTextContent(/6,96 m · Cozinha → Sala → Dormitório 1 · 2 porta\(s\) · menor vão 0,70 m/);
+    // Clique na linha seleciona a etiqueta do ambiente e fecha a gaveta.
+    await user.click(within(gaveta).getByRole('row', { name: 'Ambiente Dormitório 1' }));
+    await waitFor(() => expect(screen.queryByTestId('tarefa-grafo')).toBeNull());
+  });
+
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2500 });

@@ -43,6 +43,7 @@ import {
   Gauge,
   GitBranch,
   Wand2,
+  Bot,
   Eye,
   EyeOff,
   FileDown,
@@ -357,6 +358,9 @@ import {
 import TelaAlternativas from './TelaAlternativas';
 import TelaGerador from './TelaGerador';
 import PainelMobiliario from './PainelMobiliario';
+import PainelIa, { concluirTurno, novoTurno, turnoComMudancas, type TurnoDaConversa } from './PainelIa';
+import { aplicarMudancas, interpretarPedidoLocal } from '../../utils/blueprintIa';
+import { pedirMudancasAIa } from '../../services/plantaIaService';
 import { HIPOTESES_MOBILIARIO_PADRAO, mobiliarNivel, sugerirShaft, type HipotesesDeMobiliario } from '../../utils/blueprintMobiliario';
 import { useGerador } from '../../hooks/useGerador';
 import { comandosDeGeometria, HIPOTESES_DO_GERADOR_PADRAO, nomesParaOModelo, type HipotesesDoGerador, type ResultadoDoGerador } from '../../utils/blueprintGerador';
@@ -746,6 +750,8 @@ const ROTULO_DA_TAREFA = {
   // MOBILIÁRIO mínimo e circulação livre (19/09/2026, E6.3): kit por uso,
   // circulação de 0,90/1,20 verificada; vagas e shaft quando o programa pede.
   mobiliario: 'Mobiliário e circulação',
+  // IA conversacional (19/09/2026, E6.4): pedido → mudanças no programa/hipóteses → re-geração → delta.
+  ia: 'Conversar com a planta',
   'gerar-paredes': 'Gerar paredes do PDF',
   'importar-ifc': 'Importar do IFC',
   'importar-dxf': 'Importar do DXF',
@@ -3574,6 +3580,61 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     editor.runBatch(geo);
     if (nomes.length) editor.runBatch(nomes);
     setTelaAberta(null);
+  };
+  /**
+   * CONVERSA (E6.4): cada pedido vira mudanças estruturadas (IA ou intérprete
+   * local), aplicadas ao programa/hipóteses; o gerador re-gera com as mesmas
+   * sementes e o turno fecha com o delta contra a melhor alternativa anterior.
+   */
+  const [turnos, setTurnos] = useState<TurnoDaConversa[]>([]);
+  const [pensando, setPensando] = useState(false);
+  const [iaDisponivel, setIaDisponivel] = useState<boolean | null>(null);
+  const regeracaoPendente = useRef<{ turnoId: string; antes: ResultadoDoGerador | null } | null>(null);
+  const melhorGerada = useMemo(() => [...gerador.resultados].sort((a, b) => (b.avaliacao.notaGeral ?? -1) - (a.avaliacao.notaGeral ?? -1) || a.resumo.objetivoFinal - b.resumo.objetivoFinal || a.semente - b.semente)[0] ?? null, [gerador.resultados]);
+  useEffect(() => {
+    const pend = regeracaoPendente.current;
+    if (!pend || gerador.rodando) return;
+    regeracaoPendente.current = null;
+    setTurnos((ts) => ts.map((t) => (t.id === pend.turnoId ? concluirTurno(t, pend.antes, melhorGerada) : t)));
+  }, [gerador.rodando, melhorGerada]);
+  const pedirAIa = async (pedido: string) => {
+    const turno = novoTurno(pedido);
+    setTurnos((ts) => [...ts, turno]);
+    setPensando(true);
+    try {
+      const contexto = {
+        programa: programaDoEstudo.programa,
+        hipotesesDoGerador,
+        pesos: hipotesesDaAvaliacao.pesos,
+        indicadores: (melhorGerada?.avaliacao ?? avaliacao).indicadores.map((i) => ({ chave: i.chave, nota: i.nota, explicacao: i.explicacao })),
+        decisoes: melhorGerada?.decisoes ?? [],
+      };
+      const resposta = await pedirMudancasAIa(pedido, contexto);
+      let origem: 'IA' | 'LOCAL' = 'IA';
+      let mudancas = resposta.mudancas;
+      if (!mudancas) {
+        setIaDisponivel(false);
+        origem = 'LOCAL';
+        mudancas = interpretarPedidoLocal(pedido, programaDoEstudo.programa);
+      } else setIaDisponivel(true);
+      if (!mudancas) {
+        setTurnos((ts) => ts.map((t) => (t.id === turno.id ? { ...t, origem, entendimento: `Não entendi o pedido${resposta.indisponivel ? ` (${resposta.indisponivel})` : ''}.`, estado: 'SEM_MUDANCA' } : t)));
+        return;
+      }
+      const r = aplicarMudancas(mudancas, programaDoEstudo.programa, hipotesesDoGerador, hipotesesDaAvaliacao);
+      programaDoEstudo.setPrograma(r.programa);
+      setHipotesesDoGerador(r.gerador);
+      setHipotesesDaAvaliacao(r.avaliacao);
+      setTurnos((ts) => ts.map((t) => (t.id === turno.id ? turnoComMudancas(t, origem, mudancas!, r) : t)));
+      if (r.aplicadas.length > 0) {
+        regeracaoPendente.current = { turnoId: turno.id, antes: melhorGerada };
+        gerador.gerar({ ...entradaDoGerador.entrada, programa: r.programa }, r.gerador, Array.from({ length: r.gerador.sementes }, (_, i) => i + 1));
+      }
+    } catch (e) {
+      setTurnos((ts) => ts.map((t) => (t.id === turno.id ? { ...t, estado: 'ERRO', erro: e instanceof Error ? e.message : String(e), origem: t.origem ?? 'LOCAL' } : t)));
+    } finally {
+      setPensando(false);
+    }
   };
   const avaliacao = useMemo(
     () =>
@@ -7826,6 +7887,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               )}
               {relatorioVisivel('quantitativos') && (
                 <BotaoDoRibbon
+                  icone={Bot}
+                  rotulo="Conversar"
+                  contagem={turnos.length || undefined}
+                  ativo={tarefaAberta === 'ia'}
+                  onClick={() => alternarTarefa('ia')}
+                  ajuda="Conversar com a planta: pedido em linguagem natural → mudanças no programa/hipóteses (nunca geometria) → re-geração → delta dos indicadores; explicar a solução"
+                />
+              )}
+              {relatorioVisivel('quantitativos') && (
+                <BotaoDoRibbon
                   icone={Footprints}
                   rotulo="Grafo"
                   contagem={grafoDoNivel?.nos.length || undefined}
@@ -9812,6 +9883,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             </span>
           </SheetTitle>
           <SheetDescription>
+            {tarefaAberta === 'ia' &&
+              'Peça em português: "suíte +2 m²", "3 dormitórios", "corredor de 1,20 m". O pedido vira mudança no programa ou nas hipóteses, o gerador re-gera e você lê o delta dos indicadores. Nunca desenha direto.'}
             {tarefaAberta === 'mobiliario' &&
               'O kit mínimo de cada ambiente colocado no retângulo interno (porta e janelas respeitadas) e a circulação livre medida da porta à frente de cada peça. Sugestão desenhada; vagas e shaft entram no modelo pelo kernel.'}
             {tarefaAberta === 'insolacao' &&
@@ -9889,9 +9962,30 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' || tarefaAberta === 'mobiliario' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' || tarefaAberta === 'mobiliario' || tarefaAberta === 'ia' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
+
+          {tarefaAberta === 'ia' && (
+            <PainelIa
+              turnos={turnos}
+              pensando={pensando}
+              gerando={gerador.rodando}
+              temPrograma={programaDoEstudo.programa.itens.length > 0}
+              iaDisponivel={iaDisponivel}
+              onPedir={(p) => void pedirAIa(p)}
+              melhor={melhorGerada}
+              avaliacaoAtual={avaliacao}
+              onAbrirPrograma={() => {
+                setTarefa(null);
+                setTelaAberta('programa');
+              }}
+              onAbrirGerador={() => {
+                setTarefa(null);
+                setTelaAberta('gerar');
+              }}
+            />
+          )}
 
           {tarefaAberta === 'mobiliario' && (
             <PainelMobiliario

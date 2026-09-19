@@ -122,6 +122,12 @@ vi.mock('../../services/blueprintProgramService', () => ({
   },
 }));
 
+// IA da planta (E6.4): a Edge Function é controlável — por padrão "não configurada" (o intérprete local responde).
+const pedirMudancasAIa = vi.fn(async () => ({ mudancas: null, indisponivel: 'IA não configurada ou indisponível' }) as unknown);
+vi.mock('../../services/plantaIaService', () => ({
+  pedirMudancasAIa: (...a: unknown[]) => pedirMudancasAIa(...(a as [])),
+}));
+
 vi.mock('../../services/blueprintBudgetService', () => ({
   listMappings: vi.fn(async () => []),
   saveMapping: vi.fn(async () => ({})),
@@ -147,6 +153,7 @@ beforeEach(() => {
   getPrograma.mockResolvedValue(null);
   savePrograma.mockClear();
   listBranches.mockResolvedValue([RAMO_LIMPO]);
+  pedirMudancasAIa.mockResolvedValue({ mudancas: null, indisponivel: 'IA não configurada ou indisponível' });
   createAlternative.mockClear();
   setPrincipalBranch.mockClear();
   deleteBranch.mockClear();
@@ -1674,6 +1681,60 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(toggle.checked).toBe(true);
     expect(localStorage.getItem('blueprint:mostrarMobiliario')).toBe('true');
   });
+
+  it('conversar (E6.4): sem IA configurada o intérprete local aplica "suíte +2 m²" ao programa, re-gera e mostra o delta; a IA, quando responde, é usada; "explicar solução" é determinístico', async () => {
+    const prog = await import('../../utils/blueprintPrograma');
+    const programa = prog.programaSemente('APTO_3Q_SUITE');
+    getPrograma.mockResolvedValue({ id: 'p1', study_id: 'std_1', organization_id: 'org_1', nome: programa.nome, programa, created_at: '', updated_at: '' });
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^analisar$/i);
+    // Menos sementes/iterações para o teste: pela tela Gerar.
+    await user.click(screen.getAllByRole('button', { name: /^gerar/i }).find((b) => b.getAttribute('title')?.startsWith('Gerar plantas'))!);
+    const telaGerar = (await screen.findByRole('heading', { level: 1, name: /^gerar plantas$/i })).closest('[data-tela="gerar"]') as HTMLElement;
+    fireEvent.change(within(telaGerar).getByLabelText('Número de sementes'), { target: { value: '1' } });
+    fireEvent.change(within(telaGerar).getByLabelText('Iterações do recozimento'), { target: { value: '40' } });
+    fireEvent.click(within(telaGerar).getByLabelText('Lançar automáticos'));
+    await user.click(screen.getByRole('button', { name: /^voltar ao editor$/i }));
+    await abrirAba(/^analisar$/i);
+    await user.click(screen.getAllByRole('button', { name: /^conversar/i }).find((b) => b.getAttribute('title')?.startsWith('Conversar'))!);
+    const gaveta = await screen.findByTestId('tarefa-ia');
+    // Explicar sem alternativa: explica o desenho aberto (vazio → nota —).
+    await user.click(within(gaveta).getByTestId('explicar-solucao'));
+    expect(within(gaveta).getByTestId('explicacao-da-solucao')).toHaveTextContent(/^Nota geral/);
+    await user.click(within(gaveta).getByTestId('explicar-solucao'));
+    // Pedido pelo campo: intérprete local.
+    await user.type(within(gaveta).getByLabelText('Pedido em linguagem natural'), 'Suíte +2 m² e corredor de 1,20 m{Enter}');
+    await waitFor(() => expect(pedirMudancasAIa).toHaveBeenCalled());
+    const turno = () => within(gaveta).getAllByTestId(/^turno-/)[0];
+    await waitFor(() => expect(turno()).toHaveTextContent(/intérprete local/));
+    expect(within(gaveta).getByTestId('estado-da-ia')).toHaveTextContent(/IA não configurada/);
+    expect(turno()).toHaveTextContent(/Entendi \(intérprete local\): suite \+2,00 m²; corredor 1,20 m/);
+    expect(turno()).toHaveTextContent(/Aplicado: Suíte: área ideal 15,00 → 17,00 m² · corredor de 1,20 m/);
+    // A re-geração termina e o delta aparece (sem "antes": só a nota e as áreas).
+    await waitFor(() => expect(within(turno()).getByTestId('delta')).toBeInTheDocument(), { timeout: 20000 });
+    expect(within(turno()).getByTestId('delta')).toHaveTextContent(/nota \d+/);
+    expect(within(turno()).getByTestId('delta')).toHaveTextContent(/Áreas: .*Suíte \d+,\d\d m²/);
+    // Agora há alternativa: o botão de explicar muda e a explicação traz as decisões.
+    expect(within(gaveta).getByTestId('explicar-solucao')).toHaveTextContent(/Explicar a alternativa #1/);
+    await user.click(within(gaveta).getByTestId('explicar-solucao'));
+    expect(within(gaveta).getByTestId('explicacao-da-solucao')).toHaveTextContent(/Como a planta foi decidida:/);
+    // Segundo pedido com a IA respondendo: as mudanças da IA são aplicadas e o delta compara com a anterior.
+    pedirMudancasAIa.mockResolvedValueOnce({ mudancas: { entendimento: 'Vou tirar a varanda.', itens: [{ op: 'remover', alvo: 'Varanda' }] }, indisponivel: null });
+    await user.click(within(gaveta).getAllByTestId('exemplo-de-pedido').find((b) => /Tire a varanda/.test(b.textContent ?? ''))!);
+    const turno2 = () => within(gaveta).getAllByTestId(/^turno-/)[1];
+    await waitFor(() => expect(turno2()).toHaveTextContent(/Vou tirar a varanda\./));
+    expect(turno2()).toHaveTextContent(/Aplicado: − Varanda/);
+    await waitFor(() => expect(within(turno2()).getByTestId('delta')).toBeInTheDocument(), { timeout: 20000 });
+    expect(within(turno2()).getByTestId('delta')).toHaveTextContent(/nota \d+ → \d+/);
+    expect(within(turno2()).getByTestId('delta')).toHaveTextContent(/Varanda removido/);
+    expect(within(gaveta).getByTestId('estado-da-ia')).toHaveTextContent(/IA ligada/);
+    // Pedido incompreensível: sem mudança, sem re-geração.
+    await user.type(within(gaveta).getByLabelText('Pedido em linguagem natural'), 'bom dia{Enter}');
+    const turno3 = () => within(gaveta).getAllByTestId(/^turno-/)[2];
+    await waitFor(() => expect(turno3()).toHaveTextContent(/Não entendi o pedido/));
+    expect(turno3()).toHaveTextContent(/Nada a aplicar/);
+  }, 60000);
 
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {
     const k = await import('../../utils/blueprintKernel');

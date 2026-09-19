@@ -61,6 +61,9 @@ import {
   findGrupo,
   findNucleo,
   type TipoDeNucleo,
+  findVaga,
+  DIMENSAO_DA_VAGA,
+  type TipoDeVaga,
   uidDaCopia,
   transformarPontoDoGrupo,
   giroTransformadoDoGrupo,
@@ -395,6 +398,15 @@ export type Command =
     }
   | { type: 'MoveNucleoVertex'; nucleoId: ObjectId; index: number; to: Point }
   | { type: 'DeleteNucleo'; nucleoId: ObjectId }
+  /**
+   * VAGA DE GARAGEM (E2.5). Medidas omitidas = as do tipo (`DIMENSAO_DA_VAGA`).
+   * `sugerida: true` vem do lançamento automático; mover confirma.
+   */
+  | { type: 'AddVaga'; levelId: ObjectId; at: Point; tipo?: TipoDeVaga; larguraMm?: number; comprimentoMm?: number; rotacaoGraus?: number; numero?: string | null; sugerida?: boolean }
+  /** Trocar o tipo sem medidas leva as medidas do tipo novo. */
+  | { type: 'SetVagaProps'; vagaId: ObjectId; tipo?: TipoDeVaga; larguraMm?: number; comprimentoMm?: number; rotacaoGraus?: number; numero?: string | null; sugerida?: boolean | null }
+  | { type: 'MoveVaga'; vagaId: ObjectId; to: Point }
+  | { type: 'DeleteVaga'; vagaId: ObjectId }
   /**
    * Um TRECHO de instalação — ver o cabeçalho de `Trecho` em `model.ts`.
    *
@@ -1741,6 +1753,67 @@ function aplicarSemHash(
       const n = findNucleo(next, command.nucleoId);
       next.nucleos = (next.nucleos ?? []).filter((x) => x.id !== n.id);
       diff.deleted.push(n.id);
+      break;
+    }
+
+    // ── Vagas de garagem ─────────────────────────────────────────────────────
+
+    case 'AddVaga': {
+      findLevel(next, command.levelId);
+      const tipo = command.tipo ?? 'COMUM';
+      const padrao = DIMENSAO_DA_VAGA[tipo];
+      const id = nextId(next, 'vag');
+      next.vagas = [
+        ...(next.vagas ?? []),
+        {
+          id,
+          uid: novoUid(),
+          levelId: command.levelId,
+          at: { x: assertIntegerMm(roundToMm(command.at.x), 'at.x'), y: assertIntegerMm(roundToMm(command.at.y), 'at.y') },
+          larguraMm: assertIntegerMm(roundToMm(command.larguraMm ?? padrao.larguraMm), 'larguraMm'),
+          comprimentoMm: assertIntegerMm(roundToMm(command.comprimentoMm ?? padrao.comprimentoMm), 'comprimentoMm'),
+          rotacaoGraus: ((Math.round(command.rotacaoGraus ?? 0) % 360) + 360) % 360,
+          tipo,
+          numero: command.numero?.trim() || null,
+          ...(command.sugerida ? { sugerida: true } : {}),
+        },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetVagaProps': {
+      const v = findVaga(next, command.vagaId);
+      if (command.tipo !== undefined && command.tipo !== v.tipo) {
+        v.tipo = command.tipo;
+        if (command.larguraMm === undefined) v.larguraMm = DIMENSAO_DA_VAGA[command.tipo].larguraMm;
+        if (command.comprimentoMm === undefined) v.comprimentoMm = DIMENSAO_DA_VAGA[command.tipo].comprimentoMm;
+      }
+      if (command.larguraMm !== undefined) v.larguraMm = assertIntegerMm(roundToMm(command.larguraMm), 'larguraMm');
+      if (command.comprimentoMm !== undefined) v.comprimentoMm = assertIntegerMm(roundToMm(command.comprimentoMm), 'comprimentoMm');
+      if (command.rotacaoGraus !== undefined) v.rotacaoGraus = ((Math.round(command.rotacaoGraus) % 360) + 360) % 360;
+      if (command.numero !== undefined) v.numero = command.numero?.trim() || null;
+      if (command.sugerida !== undefined) {
+        if (command.sugerida) v.sugerida = true;
+        else delete v.sugerida;
+      }
+      diff.updated.push(v.id);
+      break;
+    }
+
+    case 'MoveVaga': {
+      const v = findVaga(next, command.vagaId);
+      v.at = { x: assertIntegerMm(roundToMm(command.to.x), 'to.x'), y: assertIntegerMm(roundToMm(command.to.y), 'to.y') };
+      // Mover confirma: a vaga sugerida deixa de ser sugestão, como o terminal.
+      delete v.sugerida;
+      diff.updated.push(v.id);
+      break;
+    }
+
+    case 'DeleteVaga': {
+      const v = findVaga(next, command.vagaId);
+      next.vagas = (next.vagas ?? []).filter((x) => x.id !== v.id);
+      diff.deleted.push(v.id);
       break;
     }
 
@@ -3258,6 +3331,7 @@ function aplicarSemHash(
       // Instalação também vai junto: as cotas dela são medidas DESTE piso.
       const trechosDoNivel = (next.trechos ?? []).filter((t) => t.levelId === level.id);
       const terminaisDoNivel = (next.terminais ?? []).filter((t) => t.levelId === level.id);
+      const vagasDoNivel = (next.vagas ?? []).filter((v) => v.levelId === level.id);
 
       next.walls = next.walls.filter((w) => w.levelId !== level.id);
       next.openings = next.openings.filter((o) => !paredesDoNivel.has(o.wallId));
@@ -3269,6 +3343,7 @@ function aplicarSemHash(
       next.nucleos = (next.nucleos ?? []).filter((n) => n.levelId !== level.id).map((n) => (n.ateLevelId === level.id ? { ...n, ateLevelId: undefined } : n));
       next.trechos = (next.trechos ?? []).filter((t) => t.levelId !== level.id);
       next.terminais = (next.terminais ?? []).filter((t) => t.levelId !== level.id);
+      next.vagas = (next.vagas ?? []).filter((v) => v.levelId !== level.id);
       // ⚠️ O quadro vai junto (é peça deste piso); os CIRCUITOS dele vão junto
       // também, senão ficariam apontando para um quadro que não existe mais. E
       // os terminais que os citavam já saíram, ou perdem a referência.
@@ -3296,6 +3371,7 @@ function aplicarSemHash(
         ...nucleosDoNivel.map((n) => n.id),
         ...trechosDoNivel.map((t) => t.id),
         ...terminaisDoNivel.map((t) => t.id),
+        ...vagasDoNivel.map((v) => v.id),
         ...quadrosDoNivel.map((q) => q.id),
         ...circuitosOrfaos.map((c) => c.id),
         ...etiquetasDoNivel.map((l) => l.id),

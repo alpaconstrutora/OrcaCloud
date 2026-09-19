@@ -136,6 +136,8 @@ export const PREFIXO_ROTULO_UID = {
   grupo: 'G',
   /** Núcleo vertical (shaft, elevador) — H (hollow). */
   nucleo: 'H',
+  /** Vaga de garagem — W; `V` já é o vão. */
+  vaga: 'W',
   stair: 'E',
   label: 'R',
   /**

@@ -18,7 +18,7 @@ import {
   type Wall,
 } from './blueprintKernel';
 import { etiquetasDasAberturas } from './blueprintNumeracao';
-import { medirNucleo, nomeDoTipoDeNucleo, pavimentosDoNucleo, type Nucleo } from './blueprintKernel';
+import { medirNucleo, nomeDoTipoDeNucleo, pavimentosDoNucleo, ROTULO_DO_TIPO_DE_VAGA, type Nucleo, type Vaga } from './blueprintKernel';
 import { caixaDoNucleo, nucleosDoNivel } from './blueprintNucleoVertical';
 import {
   NOME_DO_TRECHO,
@@ -119,7 +119,7 @@ export function linhasDeComponentes(
   /** Opcional pela razão do `aguaIds` dos comandos: as chamadas existentes não sabem dela. */
   aguas: Agua[] = [],
   /** Opcional pela mesma razão. Precisa do MODELO porque o número de degraus vem do desnível. */
-  escadas: { model: BlueprintModel; itens: Escada[]; nucleos?: Nucleo[] } | null = null,
+  escadas: { model: BlueprintModel; itens: Escada[]; nucleos?: Nucleo[]; vagas?: Vaga[] } | null = null,
   /**
    * As INSTALAÇÕES do pavimento.
    *
@@ -267,6 +267,18 @@ export function linhasDeComponentes(
     };
   });
 
+  // VAGAS (E2.5): a chave do menu (`VAGA_COMUM`…), número e medidas.
+  const linhasDeVaga: LinhaDeComponente[] = (escadas?.vagas ?? []).map((v) => {
+    const chave = `VAGA_${v.tipo}`;
+    return {
+      id: v.id,
+      chave,
+      rotulo: v.numero ? `Vaga ${v.numero}` : `Vaga ${numero(chave)}`,
+      medida: `${m(v.larguraMm)} × ${m(v.comprimentoMm)} m`,
+      detalhe: `${ROTULO_DO_TIPO_DE_VAGA[v.tipo]}${v.rotacaoGraus ? ` · giro ${v.rotacaoGraus}°` : ''}${v.sugerida ? ' · sugerida' : ''}`,
+    };
+  });
+
   // ── INSTALAÇÕES ───────────────────────────────────────────────────────────
   //
   // A chave é a MESMA do menu de ferramentas (`REDE_ELETRICA`, `PONTO_ESGOTO`,
@@ -345,6 +357,7 @@ export function linhasDeComponentes(
     ...linhasDeAgua,
     ...linhasDeEscada,
     ...linhasDeNucleo,
+    ...linhasDeVaga,
     ...linhasDeTrecho,
     ...linhasDeTerminal,
     ...linhasDeQuadro,
@@ -409,6 +422,7 @@ export function linhasDeComponentesPorNivel(
         const aguas = (model.roofs ?? []).filter((r) => r.levelId === level.id);
         const escadas = (model.stairs ?? []).filter((e) => e.levelId === level.id);
         const nucleos = nucleosDoNivel(model, level.id);
+        const vagas = (model.vagas ?? []).filter((v) => v.levelId === level.id);
         return {
           levelId: level.id,
           nome: level.name,
@@ -417,7 +431,7 @@ export function linhasDeComponentesPorNivel(
             aberturas,
             estruturas,
             aguas,
-            { model, itens: escadas, nucleos },
+            { model, itens: escadas, nucleos, vagas },
             {
               trechos: (model.trechos ?? []).filter((t) => t.levelId === level.id),
               terminais: (model.terminais ?? []).filter((t) => t.levelId === level.id),

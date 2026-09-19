@@ -65,6 +65,7 @@ import {
   type RotacaoDoGrupo,
   type EspelhoDoGrupo,
   type TipoDeNucleo,
+  type TipoDeVaga,
   assinaturaDasCamadas,
   emptyModel,
   nextId,
@@ -443,6 +444,24 @@ function projetar(model: BlueprintModel): {
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.ring[0].x - y.ring[0].x || x.ring[0].y - y.ring[0].y || cmpStr(x.tipo, y.tipo),
   );
 
+  // VAGAS (0.40.0): centro, medidas, giro, tipo, número; `sugerida` só quando
+  // verdadeira. Omitidas quando não há nenhuma.
+  const vagas = ordenar(
+    model.vagas ?? [],
+    (v) => ({
+      level: nivel(v.levelId),
+      at: { x: v.at.x, y: v.at.y },
+      larguraMm: v.larguraMm,
+      comprimentoMm: v.comprimentoMm,
+      rotacaoGraus: v.rotacaoGraus,
+      tipo: v.tipo,
+      numero: v.numero ?? null,
+      sugerida: v.sugerida ? true : undefined,
+      parametros: parametrosCanonicos(v.parametros),
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y || cmpStr(x.tipo, y.tipo),
+  );
+
   // QUADROS e CIRCUITOS, ANTES das instalações.
   //
   // ⚠️ A ordem é OBRIGATÓRIA, não estética: a projeção do terminal referencia
@@ -716,6 +735,7 @@ function projetar(model: BlueprintModel): {
     restricoes: restricoes.length ? restricoes.map((r) => r.geom) : undefined,
     stairs: stairs.length ? stairs.map((e) => e.geom) : undefined,
     nucleos: nucleos.length ? nucleos.map((n) => n.geom) : undefined,
+    vagas: vagas.length ? vagas.map((v) => v.geom) : undefined,
     trechos: trechos.length ? trechos.map((t) => t.geom) : undefined,
     terminais: terminais.length ? terminais.map((t) => t.geom) : undefined,
     quadros: quadros.length ? quadros.map((q) => q.geom) : undefined,
@@ -743,6 +763,7 @@ function projetar(model: BlueprintModel): {
     restricoes: restricoes.map((r) => r.item.uid ?? null),
     stairs: stairs.map((e) => e.item.uid ?? null),
     nucleos: nucleos.map((n) => n.item.uid ?? null),
+    vagas: vagas.map((v) => v.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
     quadros: quadros.map((q) => q.item.uid ?? null),
@@ -820,6 +841,8 @@ export interface IdentidadeCanonica {
   stairs?: (ElementUid | null)[];
   /** Ausente em payload gravado sob kernel anterior a 0.39.0. */
   nucleos?: (ElementUid | null)[];
+  /** Ausente em payload gravado sob kernel anterior a 0.40.0. */
+  vagas?: (ElementUid | null)[];
   trechos?: (ElementUid | null)[];
   terminais?: (ElementUid | null)[];
   quadros?: (ElementUid | null)[];
@@ -976,6 +999,18 @@ export interface CanonicalPayload {
     parametros?: Parametros;
     /** Chegada declarada (índice). Ausente sob kernel < 0.39.0 e quando é o próximo acima. */
     ate?: number;
+  }[];
+  /** Vagas de garagem. Ausente sob kernel < 0.40.0 e em desenho sem nenhuma. */
+  vagas?: {
+    level: number;
+    at: { x: number; y: number };
+    larguraMm: number;
+    comprimentoMm: number;
+    rotacaoGraus: number;
+    tipo: TipoDeVaga;
+    numero: string | null;
+    sugerida?: boolean;
+    parametros?: Parametros;
   }[];
   /** Núcleos verticais. Ausente sob kernel < 0.39.0 e em desenho sem nenhum. */
   nucleos?: {
@@ -1375,6 +1410,23 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       rotulo: e.rotulo,
       ...(e.parametros && Object.keys(e.parametros).length > 0 ? { parametros: { ...e.parametros } } : {}),
       ...(e.ate !== undefined && levelIds[e.ate] ? { ateLevelId: levelIds[e.ate] } : {}),
+    });
+  });
+
+  const vagas = payload.vagas ?? [];
+  vagas.forEach((v, i) => {
+    model.vagas.push({
+      id: nextId(model, 'vag'),
+      uid: uidDe('vagas', i, vagas.length),
+      levelId: levelIds[v.level],
+      at: { x: v.at.x, y: v.at.y },
+      larguraMm: v.larguraMm,
+      comprimentoMm: v.comprimentoMm,
+      rotacaoGraus: v.rotacaoGraus,
+      tipo: v.tipo,
+      numero: v.numero,
+      ...(v.sugerida ? { sugerida: true } : {}),
+      ...(v.parametros && Object.keys(v.parametros).length > 0 ? { parametros: { ...v.parametros } } : {}),
     });
   });
 

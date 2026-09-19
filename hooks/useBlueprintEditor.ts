@@ -121,6 +121,8 @@ export type BlueprintTool =
   | 'escada'
   /** NÚCLEO VERTICAL (E2.4): shaft/elevador por dois cantos, como o retângulo. */
   | 'nucleo'
+  /** VAGA DE GARAGEM (E2.5): um clique no centro; o tipo vem da barra. */
+  | 'vaga'
   /**
    * INSTALAÇÕES — o TRECHO de rede, com dois cliques, como a viga.
    *

@@ -1273,6 +1273,65 @@ export interface Nucleo {
   capacidade?: number | null;
 }
 
+/**
+ * VAGA DE GARAGEM (19/09/2026, roadmap E2.5): retângulo tipado em planta,
+ * centrado em `at` e girado de `rotacaoGraus`. Como a escada e o núcleo, fica
+ * FORA do arranjo planar: demarcação de piso, não parede.
+ *
+ * Tipos e medidas de referência (`DIMENSAO_DA_VAGA`): COMUM 2,50 × 5,00 m;
+ * PCD 2,50 × 5,00 + faixa de circulação de 1,20 m ao lado (NBR 9050 → 3,70 m
+ * de largura); IDOSO 2,50 × 5,00 (só a sinalização muda — Lei 10.741);
+ * MOTO 1,00 × 2,00. Os mínimos legais (PCD 2 % e ≥ 1; idoso 5 % e ≥ 1) são
+ * CONFERIDOS pelo lançamento automático, nunca impostos — o código de obras
+ * de cada município pode pedir mais.
+ *
+ * `sugerida` é o irmão de `Terminal.sugerida`: nasceu do lançamento
+ * automático e ainda não foi confirmada — desenha-se tracejada; mover ou
+ * aceitar confirma.
+ */
+export type TipoDeVaga = 'COMUM' | 'PCD' | 'IDOSO' | 'MOTO';
+export const TIPOS_DE_VAGA: readonly TipoDeVaga[] = ['COMUM', 'PCD', 'IDOSO', 'MOTO'];
+export const DIMENSAO_DA_VAGA: Record<TipoDeVaga, { larguraMm: number; comprimentoMm: number }> = {
+  COMUM: { larguraMm: 2500, comprimentoMm: 5000 },
+  PCD: { larguraMm: 3700, comprimentoMm: 5000 },
+  IDOSO: { larguraMm: 2500, comprimentoMm: 5000 },
+  MOTO: { larguraMm: 1000, comprimentoMm: 2000 },
+};
+export const ROTULO_DO_TIPO_DE_VAGA: Record<TipoDeVaga, string> = { COMUM: 'Comum', PCD: 'PCD', IDOSO: 'Idoso', MOTO: 'Moto' };
+
+export interface Vaga {
+  id: ObjectId;
+  uid: ElementUid;
+  parametros?: Parametros;
+  levelId: ObjectId;
+  /** Centro, mm inteiro. */
+  at: Point;
+  /** Largura (transversal ao carro) e comprimento (no sentido do carro), mm inteiros > 0. */
+  larguraMm: number;
+  comprimentoMm: number;
+  /** Giro do comprimento em relação ao eixo Y, graus inteiros [0, 360). 0 = carro "de pé". */
+  rotacaoGraus: number;
+  tipo: TipoDeVaga;
+  /** "12", "PCD 1". `null` = sem número. */
+  numero?: string | null;
+  sugerida?: boolean | null;
+}
+
+/** Os quatro cantos da vaga em planta (anel), inteiros. */
+export function contornoDaVaga(v: Pick<Vaga, 'at' | 'larguraMm' | 'comprimentoMm' | 'rotacaoGraus'>): Point[] {
+  const hl = v.larguraMm / 2;
+  const hc = v.comprimentoMm / 2;
+  const rad = (v.rotacaoGraus * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sen = Math.sin(rad);
+  return [
+    [-hl, -hc],
+    [hl, -hc],
+    [hl, hc],
+    [-hl, hc],
+  ].map(([x, y]) => ({ x: Math.round(v.at.x + x * cos - y * sen), y: Math.round(v.at.y + x * sen + y * cos) }));
+}
+
 export function nomeDoTipoDeNucleo(tipo: TipoDeNucleo): string {
   return tipo === 'ELEVADOR' ? 'Elevador' : 'Shaft';
 }
@@ -1826,6 +1885,8 @@ export interface BlueprintModel {
   grupos: Grupo[];
   /** Núcleos verticais — shafts e elevadores. Ver `Nucleo`. */
   nucleos: Nucleo[];
+  /** Vagas de garagem. Ver `Vaga`. */
+  vagas: Vaga[];
   /**
    * Escadas e rampas. Como a estrutura e o telhado, NÃO participam do arranjo
    * planar: uma escada dentro da sala não parte o ambiente. O que ela faz ao
@@ -1939,6 +2000,7 @@ export function emptyModel(): BlueprintModel {
     unidades: [],
     grupos: [],
     nucleos: [],
+    vagas: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -2001,6 +2063,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     restricoes: (model.restricoes ?? []).map((r) => ({ ...r, alvo: { ...r.alvo }, ...(r.referencia ? { referencia: { ...r.referencia } } : {}) })),
     unidades: (model.unidades ?? []).map((u) => ({ ...u, etiquetaUids: [...u.etiquetaUids] })),
     nucleos: (model.nucleos ?? []).map((n) => ({ ...n, ring: n.ring.map((p) => ({ ...p })), ...(n.parametros ? { parametros: { ...n.parametros } } : {}) })),
+    vagas: (model.vagas ?? []).map((v) => ({ ...v, at: { ...v.at }, ...(v.parametros ? { parametros: { ...v.parametros } } : {}) })),
     grupos: (model.grupos ?? []).map((g) => ({
       ...g,
       pivo: { ...g.pivo },
@@ -2135,6 +2198,12 @@ export function limparEtiquetasOrfasDasUnidades(model: BlueprintModel): ObjectId
     }
   }
   return tocadas;
+}
+
+export function findVaga(model: BlueprintModel, id: ObjectId): Vaga {
+  const v = (model.vagas ?? []).find((x) => x.id === id);
+  if (!v) throw new KernelError('PARKING_NOT_FOUND', `Vaga inexistente: ${id}`);
+  return v;
 }
 
 export function findNucleo(model: BlueprintModel, id: ObjectId): Nucleo {
@@ -3114,6 +3183,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Unidade', model.unidades ?? []],
     ['Grupo', model.grupos ?? []],
     ['Núcleo vertical', model.nucleos ?? []],
+    ['Vaga', model.vagas ?? []],
     ['Trecho', model.trechos ?? []],
     ['Terminal', model.terminais ?? []],
     ['Quadro', model.quadros ?? []],
@@ -3589,6 +3659,17 @@ export function assertModelInvariants(model: BlueprintModel): void {
       if (n.tipo !== 'ELEVADOR') throw new KernelError('BAD_CORE', `Núcleo ${n.id}: ${k} só existe no elevador`);
       if (!Number.isInteger(v) || v < 0) throw new KernelError('BAD_CORE', `Núcleo ${n.id}: ${k} tem de ser inteiro ≥ 0`);
     }
+  }
+
+  // Vagas: pavimento existente, tipo conhecido, medidas inteiras positivas, giro inteiro em [0, 360).
+  for (const v of model.vagas ?? []) {
+    if (!model.levels.some((l) => l.id === v.levelId)) throw new KernelError('BAD_PARKING', `Vaga ${v.id}: pavimento inexistente`);
+    if (!TIPOS_DE_VAGA.includes(v.tipo)) throw new KernelError('BAD_PARKING', `Vaga ${v.id}: tipo desconhecido ${String(v.tipo)}`);
+    assertIntegerMm(v.at.x, `${v.id}.at.x`);
+    assertIntegerMm(v.at.y, `${v.id}.at.y`);
+    if (!Number.isInteger(v.larguraMm) || v.larguraMm <= 0 || !Number.isInteger(v.comprimentoMm) || v.comprimentoMm <= 0) throw new KernelError('BAD_PARKING', `Vaga ${v.id}: largura e comprimento têm de ser inteiros positivos`);
+    if (!Number.isInteger(v.rotacaoGraus) || v.rotacaoGraus < 0 || v.rotacaoGraus >= 360) throw new KernelError('BAD_PARKING', `Vaga ${v.id}: giro tem de ser inteiro em [0, 360)`);
+    if (v.numero != null && (typeof v.numero !== 'string' || v.numero.length > 12)) throw new KernelError('BAD_PARKING', `Vaga ${v.id}: número maior que 12 caracteres`);
   }
 
   // Eixos: comprimento não nulo, nome curto, coordenadas inteiras.

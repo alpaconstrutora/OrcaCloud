@@ -202,7 +202,7 @@ async function abrirAba(nome: RegExp) {
  * seletor casa com qualquer um dos nomes possíveis.
  */
 const NOMES_DO_BOTAO =
-  /^(Componentes|Parede|Parede em retângulo|Parede em polígono|Porta|Porta de correr|Janela|Vão livre|Pilar|Viga|Laje|Estaca|Bloco de coroamento|Viga de fundação|Shaft|Elevador)$/;
+  /^(Componentes|Parede|Parede em retângulo|Parede em polígono|Porta|Porta de correr|Janela|Vão livre|Pilar|Viga|Laje|Estaca|Bloco de coroamento|Viga de fundação|Shaft|Elevador|Vaga|Vaga PCD|Vaga idoso|Vaga de moto)$/;
 
 /**
  * O botão do menu.
@@ -946,6 +946,58 @@ describe('BlueprintEditor · quantitativos', () => {
     // O menu de componentes oferece Shaft e Elevador (Circulação), e o botão passa a dizer o ativo.
     await escolherComponente(/^Shaft$/);
     expect(botaoComponentes()).toHaveTextContent('Shaft');
+  });
+
+  it('vagas (E2.5): Terreno › Vagas planeja 7 na garagem (1 PCD, 1 idoso), lança sugeridas, aceita; o painel da vaga troca o tipo; o menu oferece Vaga', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Subsolo', elevationMm: -2800, defaultHeightMm: 2600 });
+    const t = nivel.model.levels[0].id;
+    let m = k.applyBatch(nivel.model, [
+      { type: 'AddWall', levelId: t, a: k.point(0, 0), b: k.point(20000, 0), thicknessMm: 200, heightMm: 2600 },
+      { type: 'AddWall', levelId: t, a: k.point(20000, 0), b: k.point(20000, 15000), thicknessMm: 200, heightMm: 2600 },
+      { type: 'AddWall', levelId: t, a: k.point(20000, 15000), b: k.point(0, 15000), thicknessMm: 200, heightMm: 2600 },
+      { type: 'AddWall', levelId: t, a: k.point(0, 15000), b: k.point(0, 0), thicknessMm: 200, heightMm: 2600 },
+    ]).model;
+    m = k.applyCommand(m, { type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Garagem' }).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    await user.click(screen.getByRole('button', { name: /^vagas$/i }));
+    const gaveta = await screen.findByTestId('tarefa-vagas');
+    const plano = within(gaveta).getByTestId('plano-de-vagas');
+    expect(plano).toHaveTextContent(/Em "Garagem": 7 vaga\(s\) a lançar/);
+    expect(plano).toHaveTextContent(/PCD: 1 de 1 mínimas/);
+    expect(plano).toHaveTextContent(/Idoso: 1 de 1 mínimas/);
+    expect(plano).toHaveTextContent(/Sem exigência declarada/);
+    // Exigência manual de 12: faltam 5.
+    await user.clear(within(gaveta).getByLabelText('Exigência de vagas (número)'));
+    await user.type(within(gaveta).getByLabelText('Exigência de vagas (número)'), '12');
+    expect(plano).toHaveTextContent(/Faltam 5 para a exigência de 12/);
+    await user.click(within(gaveta).getByRole('button', { name: /^lançar$/i }));
+    expect(await within(gaveta).findByText(/7 vaga\(s\) lançada\(s\) como sugeridas/)).toBeInTheDocument();
+    const botaoVagas = () => screen.getAllByRole('button', { name: /^vagas/i }).find((b) => b.getAttribute('title')?.startsWith('Lança'))!;
+    expect(botaoVagas()).toHaveTextContent('7');
+    // Relançar substitui; aceitar confirma e zera a contagem de sugeridas.
+    expect(within(gaveta).getByRole('button', { name: /^relançar$/i })).toBeInTheDocument();
+    await user.click(within(gaveta).getByRole('button', { name: /^aceitar 7 sugerida/i }));
+    expect(botaoVagas()).not.toHaveTextContent('7');
+    expect(plano).toHaveTextContent(/PCD: 1 de 1 mínimas/);
+    // Painel da vaga: fecha a gaveta, seleciona a 1 pelo navegador, troca para moto → 1,00 × 2,00.
+    await user.click(botaoVagas());
+    await abrirComponentes(user);
+    const linhaVaga1 = screen.getAllByRole('button').find((b) => /^Vaga 1 · PCD/.test(b.textContent ?? ''))!;
+    expect(linhaVaga1).toBeTruthy();
+    await user.click(linhaVaga1);
+    const painel = await screen.findByTestId('painel-vaga');
+    expect(painel).toHaveTextContent(/Vaga 1 · PCD/);
+    expect(painel).toHaveTextContent(/3,70 × 5,00 m/);
+    await user.selectOptions(within(painel).getByLabelText('Tipo da vaga'), 'MOTO');
+    expect(painel).toHaveTextContent(/1,00 × 2,00 m/);
+    // O menu oferece a vaga avulsa (aba Arquitetura).
+    await abrirAba(/^arquitetura$/i);
+    await escolherComponente(/^Vaga PCD$/);
+    expect(botaoComponentes()).toHaveTextContent('Vaga PCD');
   });
 
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {

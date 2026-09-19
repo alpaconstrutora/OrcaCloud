@@ -35,6 +35,7 @@ import {
   CornerDownRight,
   DoorOpen,
   Building2,
+  CarFront,
   Eye,
   EyeOff,
   FileDown,
@@ -105,6 +106,9 @@ import PainelEletrica from './PainelEletrica';
 import PainelAguaSelecionada from './PainelAguaSelecionada';
 import PainelEscadaSelecionada from './PainelEscadaSelecionada';
 import PainelNucleoSelecionado from './PainelNucleoSelecionado';
+import PainelVagaSelecionada from './PainelVagaSelecionada';
+import PainelVagas from './PainelVagas';
+import { comandosDeAceite as aceitarVagas, comandosDeLimpeza as limparVagas, HIPOTESES_VAGAS_PADRAO, planejarVagas, type HipotesesDeVagas, type RegiaoDeVagas } from '../../utils/blueprintVagasAutomaticas';
 import { nucleosDoNivel } from '../../utils/blueprintNucleoVertical';
 import PainelEsquadria from './PainelEsquadria';
 import PainelImportarIfc from './PainelImportarIfc';
@@ -375,6 +379,7 @@ import {
   type DisciplinaDeRede,
   type TipoCirculacao,
   type TipoDeNucleo,
+  type TipoDeVaga,
   type TipoDeAmbiente,
   type TipoDeInterruptor,
   type Wall,
@@ -689,6 +694,8 @@ const ROTULO_DA_TAREFA = {
   // Grupo com origem (19/09/2026, roadmap E2.3): agrupar a seleção e instanciar
   // espelhado/girado/deslocado; editar a origem propaga às cópias.
   grupo: 'Grupo com origem — agrupar e instanciar',
+  // Vagas automáticas (19/09/2026, roadmap E2.5): fileiras com circulação na garagem.
+  vagas: 'Vagas de garagem — lançamento automático',
   'gerar-paredes': 'Gerar paredes do PDF',
   'importar-ifc': 'Importar do IFC',
   'importar-dxf': 'Importar do DXF',
@@ -1414,6 +1421,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [tipoCirculacao, setTipoCirculacao] = useState<TipoCirculacao>('ESCADA');
   /** NÚCLEO VERTICAL (E2.4): shaft ou elevador na próxima caixa desenhada. */
   const [tipoDeNucleo, setTipoDeNucleo] = useState<TipoDeNucleo>('SHAFT');
+  /** VAGA (E2.5): o tipo do próximo clique; hipóteses do lançamento lembradas entre sessões. */
+  const [tipoDeVaga, setTipoDeVaga] = useState<TipoDeVaga>('COMUM');
+  const [hipotesesDeVagas, setHipotesesDeVagas] = usePersistedState<HipotesesDeVagas>('blueprint:vagas', HIPOTESES_VAGAS_PADRAO);
+  const [regiaoDeVagasPedida, setRegiaoDeVagasPedida] = useState<RegiaoDeVagas | null>(null);
+  const [resultadoDeVagas, setResultadoDeVagas] = useState<string | null>(null);
 
   /**
    * INSTALAÇÕES: disciplina, cota e bitola do que está sendo desenhado.
@@ -2508,6 +2520,20 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   }, [situacao4d]);
   const escadaSel = (editor.model.stairs ?? []).find((e) => e.id === editor.selectedId) ?? null;
   const nucleoSel = (editor.model.nucleos ?? []).find((n) => n.id === editor.selectedId) ?? null;
+  const vagaSel = (editor.model.vagas ?? []).find((v) => v.id === editor.selectedId) ?? null;
+  const vagasDoNivelAtivo = useMemo(() => (editor.model.vagas ?? []).filter((v) => !levelId || v.levelId === levelId), [editor.model.vagas, levelId]);
+  const vagasSugeridasNoNivel = vagasDoNivelAtivo.filter((v) => v.sugerida).length;
+  /** O plano das vagas automáticas (E2.5), derivado a cada mudança — a gaveta só mostra. */
+  const planoDeVagas = useMemo(
+    () => (levelId ? planejarVagas(editor.model, levelId, hipotesesDeVagas, regiaoDeVagasPedida) : null),
+    [editor.model, levelId, hipotesesDeVagas, regiaoDeVagasPedida],
+  );
+  const lancarVagas = () => {
+    if (!planoDeVagas || planoDeVagas.comandos.length === 0) return;
+    const criados = editor.runBatch(planoDeVagas.comandos);
+    setResultadoDeVagas(`${planoDeVagas.vagas.length} vaga(s) lançada(s) como sugeridas${planoDeVagas.substituidas.length ? `, ${planoDeVagas.substituidas.length} substituída(s)` : ''} — aceite, mova ou Ctrl+Z.`);
+    if (criados.length > 0) selecionar(criados);
+  };
   /** Os núcleos que atravessam o pavimento ativo (E2.4) — o canvas os desenha em cada um. */
   const nucleosDoNivelAtivo = useMemo(() => nucleosDoNivel(editor.model, levelId), [editor.model, levelId]);
   /** A peça selecionada que carrega parâmetros personalizados (E1.2), com a chave da família. */
@@ -4271,6 +4297,13 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   }
 
   /** Lanca a escada/rampa pelo eixo que o canvas fechou. */
+  /** A vaga avulsa nasce com as medidas do tipo, de pé; o painel gira e ajusta. */
+  function adicionarVaga(at: Point) {
+    if (!levelId) return;
+    const criados = editor.run({ type: 'AddVaga', levelId, at, tipo: tipoDeVaga });
+    if (criados.length > 0) selecionar(criados);
+  }
+
   /** O núcleo nasce do pavimento ativo até o mais alto; o painel ajusta a chegada. */
   function adicionarNucleo(ring: Point[]) {
     if (!levelId) return;
@@ -4717,6 +4750,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     const eixos = ids.filter((id) => (editor.model.eixos ?? []).some((e) => e.id === id));
     const escadas = ids.filter((id) => (editor.model.stairs ?? []).some((e) => e.id === id));
     const nucleos = ids.filter((id) => (editor.model.nucleos ?? []).some((n) => n.id === id));
+    const vagas = ids.filter((id) => (editor.model.vagas ?? []).some((v) => v.id === id));
     // Instalações. ⚠️ O QUADRO sai por último no lote e leva os circuitos dele
     // junto (ver `DeleteQuadro`); os pontos que os citavam ficam sem circuito,
     // e não apagados — quem tirou o quadro não decidiu tirar as tomadas.
@@ -4739,6 +4773,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       ...eixos.map((eixoId) => ({ type: 'DeleteEixo', eixoId }) as const),
       ...escadas.map((escadaId) => ({ type: 'DeleteEscada', escadaId }) as const),
       ...nucleos.map((nucleoId) => ({ type: 'DeleteNucleo', nucleoId }) as const),
+      ...vagas.map((vagaId) => ({ type: 'DeleteVaga', vagaId }) as const),
       ...trechos.map((trechoId) => ({ type: 'DeleteTrecho', trechoId }) as const),
       ...terminais.map((terminalId) => ({ type: 'DeleteTerminal', terminalId }) as const),
       ...quadros.map((quadroId) => ({ type: 'DeleteQuadro', quadroId }) as const),
@@ -4940,6 +4975,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     if (e.tool === 'abertura') setTipoAbertura(e.abertura);
     if (e.tool === 'escada') setTipoCirculacao(e.circulacao);
     if (e.tool === 'nucleo') setTipoDeNucleo(e.nucleo);
+    if (e.tool === 'vaga') setTipoDeVaga(e.vaga);
     // A disciplina é estado da BARRA, e trocá-la traz cota e bitola usuais
     // junto: escolher "esgoto" e continuar desenhando na cota do eletroduto
     // seria pior que não ter padrão nenhum.
@@ -6052,6 +6088,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         onExcluir={removerSelecionada}
       />
 
+      <PainelVagaSelecionada
+        vaga={vagaSel}
+        onProps={(campos) => vagaSel && editor.run({ type: 'SetVagaProps', vagaId: vagaSel.id, ...campos })}
+        onExcluir={removerSelecionada}
+      />
+
       <PainelEixoSelecionado
         eixo={eixoSel}
         onProps={(campos) => eixoSel && editor.run({ type: 'SetEixoProps', eixoId: eixoSel.id, ...campos })}
@@ -6816,6 +6858,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 tipoEstrutural={tipoEstrutural}
                 tipoCirculacao={tipoCirculacao}
                 tipoDeNucleo={tipoDeNucleo}
+                tipoDeVaga={tipoDeVaga}
                 familia="CONSTRUCAO"
                 onEscolher={escolherComponente}
               />
@@ -6942,6 +6985,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 ajuda="Área da escritura, papel de cada divisa, recuos e zona urbanística, topografia, corte e aterro, projeto executivo de terraplenagem"
               />
             </GrupoDoRibbon>
+            {/* GARAGEM (19/09/2026, E2.5): vagas em fileiras com circulação, por ambiente
+                ou pelo contorno do pavimento; os mínimos PCD/idoso e a exigência conferidos. */}
+            <GrupoDoRibbon rotulo="Garagem">
+              <BotaoDoRibbon
+                icone={CarFront}
+                rotulo="Vagas"
+                contagem={vagasSugeridasNoNivel || undefined}
+                ativo={tarefaAberta === 'vagas'}
+                onClick={() => alternarTarefa('vagas')}
+                ajuda="Lança vagas em fileiras (2,50 × 5,00 m) com faixa de circulação, desviando de pilares e paredes; PCD e idoso nos mínimos legais; confere com a exigência — sugeridas até aceitar"
+              />
+            </GrupoDoRibbon>
             {/* PERFIL altimétrico e DRENAGEM traçada (fases 4 e 6 da topografia):
                 uma VISTA do terreno e uma premissa de terraplenagem — nenhuma das
                 duas passa pelo kernel. */}
@@ -6973,6 +7028,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 tipoEstrutural={tipoEstrutural}
                 tipoCirculacao={tipoCirculacao}
                 tipoDeNucleo={tipoDeNucleo}
+                tipoDeVaga={tipoDeVaga}
                 disciplinaDeRede={disciplinaDeRede}
                 tipoDePontoEletrico={tipoDePontoEletrico}
                 tipoDeInterruptor={tipoDeInterruptor}
@@ -7031,6 +7087,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   tipoEstrutural={tipoEstrutural}
                   tipoCirculacao={tipoCirculacao}
                   tipoDeNucleo={tipoDeNucleo}
+                  tipoDeVaga={tipoDeVaga}
                   disciplinaDeRede={disciplinaDeRede}
                   tipoDePontoEletrico={tipoDePontoEletrico}
                   tipoDeInterruptor={tipoDeInterruptor}
@@ -8435,6 +8492,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onAddEscada={adicionarEscada}
               nucleos={nucleosDoNivelAtivo}
               onAddNucleo={adicionarNucleo}
+              vagas={vagasDoNivelAtivo}
+              tipoDeVaga={tipoDeVaga}
+              onAddVaga={adicionarVaga}
               onAddTrecho={adicionarTrecho}
               redeEmUmClique={prumadaDeRede != null}
               onAddTerminal={adicionarTerminal}
@@ -8686,7 +8746,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 aberturas={componentesDoNivel.aberturas}
                 estruturas={componentesDoNivel.estruturas}
                 aguas={componentesDoNivel.aguas}
-                escadas={{ model: editor.model, itens: componentesDoNivel.escadas, nucleos: nucleosDoNivelAtivo }}
+                escadas={{ model: editor.model, itens: componentesDoNivel.escadas, nucleos: nucleosDoNivelAtivo, vagas: vagasDoNivelAtivo }}
                 rede={componentesDoNivel.rede}
                 selecionados={editor.selectedIds}
                 // Pela LISTA, as propriedades abrem em Sheet (17/09/2026).
@@ -9200,9 +9260,32 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
+
+          {tarefaAberta === 'vagas' && planoDeVagas && (
+            <PainelVagas
+              model={editor.model}
+              levelId={levelId}
+              hipoteses={hipotesesDeVagas}
+              onHipoteses={setHipotesesDeVagas}
+              regiao={regiaoDeVagasPedida}
+              onRegiao={setRegiaoDeVagasPedida}
+              plano={planoDeVagas}
+              sugeridasNoNivel={vagasSugeridasNoNivel}
+              onLancar={lancarVagas}
+              onAceitar={() => {
+                editor.runBatch(aceitarVagas(editor.model, levelId));
+                setResultadoDeVagas('Sugeridas aceitas — agora são vagas do projeto.');
+              }}
+              onApagarSugeridas={() => {
+                editor.runBatch(limparVagas(editor.model, levelId));
+                setResultadoDeVagas('Sugeridas apagadas.');
+              }}
+              resultado={resultadoDeVagas}
+            />
+          )}
 
           {tarefaAberta === 'grupo' && (
             <PainelGrupo

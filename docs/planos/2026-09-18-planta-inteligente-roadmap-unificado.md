@@ -558,6 +558,39 @@ propagação; bump).
 - Fora desta fase (registrado): caixa do elevador no 3D (só o furo aparece); mover o núcleo por
   arraste/`TranslateEntities` (como a escada, ainda não entra na seleção transformável).
 
+### E2.5 — Garagem e vagas (19/09/2026) · kernel 0.40.0
+- **Kernel**: `Vaga {levelId, at (centro), larguraMm, comprimentoMm, rotacaoGraus, tipo COMUM | PCD |
+  IDOSO | MOTO, numero?, sugerida?}` — demarcação de piso, fora do arranjo planar;
+  `DIMENSAO_DA_VAGA` (comum 2,50 × 5,00; PCD 3,70 × 5,00 com a faixa de 1,20 m da NBR 9050; idoso
+  2,50 × 5,00; moto 1,00 × 2,00); `contornoDaVaga`. Comandos `AddVaga` (medidas do tipo quando
+  omitidas), `SetVagaProps` (trocar o tipo sem medidas leva as do tipo novo), `MoveVaga` (mover
+  confirma a sugerida, como o terminal), `DeleteVaga`; RemoveLevel leva as vagas; canônico `vagas`
+  omitido sem vaga; prefixo `W`; bump 0.39.0 → 0.40.0 (goldens provados em 0.39.0 com 257 testes e
+  recapturados).
+- **Vagas automáticas** (`utils/blueprintVagasAutomaticas.ts`, molde dos pilares automáticos):
+  região = ambiente escolhido ("Garagem" por nome, por padrão) ou o maior contorno externo do
+  pavimento; bandas `vaga | circulação | vaga vaga | circulação | …` no eixo mais comprido (ou o da
+  hipótese), toda fileira encostada numa circulação (a 2ª do par só nasce se a circulação seguinte
+  couber); dentro da fileira as vagas se encostam e o que estiver no caminho (parede, pilar/viga,
+  núcleo, escada, vaga confirmada) é obstáculo — a seguinte tenta 250 mm adiante. Recuo padrão de
+  200 mm porque o anel do ambiente corre no eixo da parede. PCD (2 %, ≥ 1, 3,70 m, no começo da
+  1ª fileira) e idoso (5 %, ≥ 1) por hipótese; moto só se pedida. Exigência: número manual ou
+  `vagas por unidade × unidades` (E2.2); o resumo ACUSA "faltam N", nunca trava. Idempotente:
+  relançar substitui as sugeridas do pavimento; `comandosDeAceite` / `comandosDeLimpeza`.
+- UI: aba Terreno › **Garagem › Vagas** (gaveta `PainelVagas`: hipóteses, região, plano por tipo,
+  conferência PCD/idoso/exigência, Lançar/Relançar, Aceitar N sugeridas, Apagar sugeridas);
+  Componentes › **Vagas** (Vaga, Vaga PCD, Vaga idoso, Vaga de moto — um clique no centro); canvas
+  desenha número + sigla, sugerida tracejada, faixa hachurada na PCD; seleção pelo retângulo;
+  `PainelVagaSelecionada` (tipo, número, medidas, giro, Aceitar); navegador lista por tipo.
+- Testes: `blueprintVagas` (4: entidade/canônico, garagem 20 × 15 → 7 = 1 PCD + 1 idoso + 5,
+  pilar desvia, 2 e 3 fileiras conforme o fundo, exigência), goldens, editor "E2.5". Suíte 4669.
+  App real (escritas bloqueadas: 16): na casa de 13,7 × 6,7 m o plano explica "não cabe uma fileira
+  com circulação (10,0 m)"; com um retângulo de 52 × 15 m desenhado, 20 vagas (1 PCD, 1 idoso, 18
+  comuns) lançadas como sugeridas, botão do ribbon "Vagas 20"; vaga PCD avulsa pelo menu com o
+  painel (3,70 × 5,00 m).
+- Fora desta fase (registrado): espinha de peixe (45°) e vagas em fila (paralelas), mover a vaga por
+  arraste no canvas (hoje pelo painel/giro), e a exigência vinda da zona (E3.1).
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

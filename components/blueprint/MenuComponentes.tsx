@@ -20,6 +20,9 @@ import {
   TrendingUp,
   ArrowUpDown,
   SquareDashed,
+  CarFront,
+  Accessibility,
+  Bike,
   Zap,
   Droplet,
   Flame,
@@ -47,6 +50,7 @@ import {
   type StructuralKind,
   type TipoCirculacao,
   type TipoDeNucleo,
+  type TipoDeVaga,
   type TipoDeInterruptor,
   type TipoDePontoEletrico,
   type TipoDePontoHidraulico,
@@ -115,6 +119,7 @@ export type EscolhaComponente =
   | { tool: 'telhado' }
   | { tool: 'escada'; circulacao: TipoCirculacao }
   | { tool: 'nucleo'; nucleo: TipoDeNucleo }
+  | { tool: 'vaga'; vaga: TipoDeVaga }
   | {
       tool: 'rede';
       disciplina: DisciplinaDeRede;
@@ -520,6 +525,41 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
       },
     ],
   },
+  // VAGAS (E2.5): demarcação de piso, um clique no centro. O lançamento
+  // automático mora na aba Terreno › Garagem; aqui é a vaga avulsa.
+  {
+    titulo: 'Vagas',
+    itens: [
+      {
+        chave: 'VAGA_COMUM',
+        rotulo: 'Vaga',
+        icone: CarFront,
+        ajuda: 'Um clique no centro: 2,50 × 5,00 m, de pé. Gire e redimensione no painel. Lançamento em fileiras: Terreno › Vagas.',
+        escolha: { tool: 'vaga', vaga: 'COMUM' },
+      },
+      {
+        chave: 'VAGA_PCD',
+        rotulo: 'Vaga PCD',
+        icone: Accessibility,
+        ajuda: '2,50 × 5,00 m mais a faixa de circulação de 1,20 m (NBR 9050): 3,70 m de largura.',
+        escolha: { tool: 'vaga', vaga: 'PCD' },
+      },
+      {
+        chave: 'VAGA_IDOSO',
+        rotulo: 'Vaga idoso',
+        icone: CarFront,
+        ajuda: '2,50 × 5,00 m com sinalização própria (Lei 10.741).',
+        escolha: { tool: 'vaga', vaga: 'IDOSO' },
+      },
+      {
+        chave: 'VAGA_MOTO',
+        rotulo: 'Vaga de moto',
+        icone: Bike,
+        ajuda: '1,00 × 2,00 m.',
+        escolha: { tool: 'vaga', vaga: 'MOTO' },
+      },
+    ],
+  },
   // INSTALAÇÕES no fim: elas atravessam tudo o que veio antes, e desenhá-las
   // exige que parede e pavimento já existam para o trecho ter onde se apoiar.
   //
@@ -663,6 +703,7 @@ const TOOLS_DE_COMPONENTE: BlueprintTool[] = [
   'telhado',
   'escada',
   'nucleo',
+  'vaga',
   'rede',
   'terminal',
   'quadro',
@@ -699,6 +740,8 @@ interface Props {
   tipoCirculacao?: TipoCirculacao;
   /** O núcleo vertical ativo (E2.4). */
   tipoDeNucleo?: TipoDeNucleo;
+  /** O tipo de vaga ativo (E2.5). */
+  tipoDeVaga?: TipoDeVaga;
   /** Para o botão DIZER qual trecho/ponto está ativo. Sem eles, rede e ponto não acendem. */
   disciplinaDeRede?: DisciplinaDeRede;
   tipoDePontoEletrico?: TipoDePontoEletrico | null;
@@ -722,6 +765,7 @@ function chaveAtiva(p: Props): string | null {
   if (tool === 'estrutural') return p.tipoEstrutural;
   if (tool === 'escada') return p.tipoCirculacao ?? 'ESCADA';
   if (tool === 'nucleo') return p.tipoDeNucleo ?? 'SHAFT';
+  if (tool === 'vaga') return `VAGA_${p.tipoDeVaga ?? 'COMUM'}`;
   if (tool === 'quadro') return 'QUADRO';
   if (tool === 'rede') {
     if (!p.disciplinaDeRede) return null;

@@ -31,7 +31,11 @@ import {
   contornoEmPlanta,
   planoDaAgua,
   contornoDaEscada,
+  contornoDaVaga,
+  DIMENSAO_DA_VAGA,
   type Nucleo,
+  type Vaga,
+  type TipoDeVaga,
   degrausDaEscada,
   type Agua,
   type Corte,
@@ -308,6 +312,10 @@ const COR_ESCADA_FUNDO = 'rgba(148, 163, 184, 0.18)';
 const COR_NUCLEO = '#5b21b6';
 const COR_NUCLEO_FUNDO = 'rgba(139, 92, 246, 0.14)';
 const SEM_NUCLEOS: Nucleo[] = [];
+/** Vaga (E2.5): azul-petróleo; sugerida tracejada. */
+const COR_VAGA = '#0f766e';
+const COR_VAGA_FUNDO = 'rgba(20, 184, 166, 0.10)';
+const SEM_VAGAS: Vaga[] = [];
 /** A MARCA do corte em planta — azul de anotação, não de construção. */
 const COR_CORTE = '#0284c7';
 /** Eixo da malha: cinza-azulado discreto — referência, não construção. */
@@ -1218,6 +1226,11 @@ interface Props {
   nucleos?: Nucleo[];
   /** Retângulo por dois cantos opostos; o editor põe tipo e pavimentos. */
   onAddNucleo?: (ring: Point[]) => void;
+  /** VAGAS (E2.5) do pavimento; a ferramenta `vaga` pede o tipo para a prévia. */
+  vagas?: Vaga[];
+  tipoDeVaga?: TipoDeVaga;
+  onAddVaga?: (at: Point) => void;
+  onMoveVaga?: (vagaId: string, to: Point) => void;
   /** Um TRECHO de rede: as duas pontas em planta. Cota e bitola vêm da barra. */
   onAddTrecho?: (a: Point, b: Point) => void;
   /**
@@ -1353,6 +1366,10 @@ export default function BlueprintCanvas({
   onAddEixo,
   nucleos = SEM_NUCLEOS,
   onAddNucleo,
+  vagas = SEM_VAGAS,
+  tipoDeVaga = 'COMUM',
+  onAddVaga,
+  onMoveVaga,
   onAddTrecho,
   redeEmUmClique = false,
   onAddTerminal,
@@ -2513,6 +2530,19 @@ export default function BlueprintCanvas({
       return null;
     },
     [nucleos, ocultos, vista.escala],
+  );
+
+  /** Qual VAGA está sob o cursor — pelo retângulo. */
+  const vagaSob = useCallback(
+    (mundo: { x: number; y: number }): Vaga | null => {
+      for (let i = vagas.length - 1; i >= 0; i--) {
+        const v = vagas[i];
+        if (ocultos.has(v.id)) continue;
+        if (pointInPolygon(contornoDaVaga(v), arredondar(mundo))) return v;
+      }
+      return null;
+    },
+    [vagas, ocultos],
   );
 
   /** Qual EIXO está sob o cursor — pela linha. */
@@ -5164,6 +5194,65 @@ export default function BlueprintCanvas({
       ctx.textBaseline = 'alphabetic';
     }
 
+    // ── VAGAS (E2.5): retângulo com o tipo e o número; sugerida tracejada. ──
+    for (const v of vagas) {
+      if (ocultos.has(v.id)) continue;
+      const selecionado = selecao.has(v.id);
+      const cor = selecionado ? COR_SELECIONADA : COR_VAGA;
+      const anel = contornoDaVaga(v).map(paraTela);
+      ctx.fillStyle = COR_VAGA_FUNDO;
+      ctx.strokeStyle = cor;
+      ctx.lineWidth = selecionado ? 2 : 1.25;
+      ctx.setLineDash(v.sugerida ? [5, 4] : []);
+      ctx.beginPath();
+      ctx.moveTo(anel[0].x, anel[0].y);
+      for (const q of anel.slice(1)) ctx.lineTo(q.x, q.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Faixa da PCD: a terça parte do lado direito, hachurada com a diagonal.
+      if (v.tipo === 'PCD') {
+        const t = 1200 / v.larguraMm;
+        const p0 = { x: anel[0].x + (anel[1].x - anel[0].x) * (1 - t), y: anel[0].y + (anel[1].y - anel[0].y) * (1 - t) };
+        const p3 = { x: anel[3].x + (anel[2].x - anel[3].x) * (1 - t), y: anel[3].y + (anel[2].y - anel[3].y) * (1 - t) };
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p3.x, p3.y);
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(anel[2].x, anel[2].y);
+        ctx.stroke();
+      }
+      const cx = (anel[0].x + anel[2].x) / 2;
+      const cy = (anel[0].y + anel[2].y) / 2;
+      const larguraPx = Math.hypot(anel[1].x - anel[0].x, anel[1].y - anel[0].y);
+      if (larguraPx >= 18) {
+        ctx.font = `600 ${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = cor;
+        const sigla = v.tipo === 'COMUM' ? '' : v.tipo === 'PCD' ? 'PCD' : v.tipo === 'IDOSO' ? 'IDOSO' : 'MOTO';
+        ctx.fillText([v.numero ?? '', sigla].filter(Boolean).join(' ') || 'vaga', cx, cy);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+      }
+    }
+    // Prévia da vaga sob o cursor.
+    if (tool === 'vaga' && cursor) {
+      const d = DIMENSAO_DA_VAGA[tipoDeVaga];
+      const anel = contornoDaVaga({ at: cursor, larguraMm: d.larguraMm, comprimentoMm: d.comprimentoMm, rotacaoGraus: 0 }).map(paraTela);
+      ctx.strokeStyle = COR_VAGA;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(anel[0].x, anel[0].y);
+      for (const q of anel.slice(1)) ctx.lineTo(q.x, q.y);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
     // ── NÚCLEO VERTICAL (E2.4): caixa com as diagonais (o símbolo de vazio na
     // planta) e o rótulo. Desenhado em todo pavimento que atravessa.
     for (const n of nucleos) {
@@ -6374,7 +6463,8 @@ export default function BlueprintCanvas({
         tool === 'telhado' ||
         tool === 'corte' ||
         tool === 'eixo' ||
-        tool === 'nucleo')
+        tool === 'nucleo' ||
+        tool === 'vaga')
     ) {
       const c = paraTela(cursor);
       ctx.strokeStyle = COR_PREVIA;
@@ -6541,6 +6631,8 @@ export default function BlueprintCanvas({
     movendoCorte,
     nucleos,
     pontoNucleo,
+    vagas,
+    tipoDeVaga,
     conexaoArmada,
     eixoEstrutural,
     anelEstrutural,
@@ -6988,7 +7080,7 @@ export default function BlueprintCanvas({
       return;
     }
 
-    if (tool === 'nucleo') {
+    if (tool === 'nucleo' || tool === 'vaga') {
       setCursor(capturarTracado(paraMundo(px, py)));
       return;
     }
@@ -7264,6 +7356,12 @@ export default function BlueprintCanvas({
       return;
     }
 
+    // VAGA (E2.5): um clique no centro.
+    if (tool === 'vaga') {
+      onAddVaga?.(capturarTracado(mundo));
+      return;
+    }
+
     // NÚCLEO VERTICAL (E2.4): dois cantos opostos, como o retângulo de paredes.
     if (tool === 'nucleo') {
       const ponto = capturarTracado(mundo);
@@ -7488,6 +7586,8 @@ export default function BlueprintCanvas({
       const escadaClicada = escadaSob(mundo);
       // NÚCLEO logo depois da escada: caixa sólida, pequena, encostada em parede.
       const nucleoClicado = nucleoSob(mundo);
+      // VAGA depois do núcleo e antes do trecho: é demarcação de piso, grande e sem parede em cima.
+      const vagaClicada = vagaSob(mundo);
       // ÁGUA DEPOIS DA PAREDE: ela cobre a casa e só se pega pela borda (ver
       // `aguaSob`); tudo o que está debaixo dela continua clicável.
       const aguaClicada = aguaSob(mundo);
@@ -7517,6 +7617,7 @@ export default function BlueprintCanvas({
         escadaClicada?.id ??
         nucleoClicado?.id ??
         trechoClicado?.id ??
+        vagaClicada?.id ??
         w?.id ??
         aguaClicada?.id ??
         f?.id ??

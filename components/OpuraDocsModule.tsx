@@ -2306,17 +2306,62 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           troca de conteúdo no mesmo espaço, sem overlay. */}
       {!showSettings && (
         <>
-      {/* ─── TÍTULO (§1: h1 solto, nunca dentro de card/hero) ─── */}
-      <div className="flex items-center gap-2">
-        <span className="p-2 bg-blue-50 text-blue-600 rounded-[10px]">
-          <FolderOpen className="w-6 h-6" />
-        </span>
-        <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Gestão de Documentos</h1>
-          <p className="text-slate-400 text-sm mt-1.5 font-medium">
-            Governança e centralização de documentos integrados ao ecossistema ÒPURA.
-          </p>
+      {/* ─── TÍTULO (§20: h1 solto, nunca dentro de card/hero) + AÇÕES À DIREITA ───
+          Os botões Nova pasta / Upload em lote / Novo documento moram na linha do
+          título (pedido de 2026-09-19). A toolbar de botões (§5.3) que os abrigava
+          ficou sem controle de escopo depois que o seletor de obra saiu de lá —
+          o seletor de contexto do topo é a autoridade (REGRA #5) — e uma barra só
+          com ações, sem escopo, não tem razão de existir (§5.3: "se a tela não tem
+          controles de escopo, ela simplesmente não tem esta barra"). */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="p-2 bg-blue-50 text-blue-600 rounded-[10px]">
+            <FolderOpen className="w-6 h-6" />
+          </span>
+          <div>
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Gestão de Documentos</h1>
+            <p className="text-slate-400 text-sm mt-1.5 font-medium">
+              Governança e centralização de documentos integrados ao ecossistema ÒPURA.
+            </p>
+          </div>
         </div>
+
+        {canAccessTab(activeTab) && (
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              onClick={() => setCreateFolderModalOpen(true)}
+              className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
+            >
+              <FolderPlus className="w-[15px] h-[15px] text-blue-600" />
+              Nova pasta
+            </button>
+            {/* Upload em lote — mesmo racional de "Nova pasta"/"Novo documento" abaixo:
+                em "Todas as Organizações" o próprio Sheet mostra o seletor de organização,
+                então o botão nunca fica desabilitado (REGRA #5). */}
+            <button
+              onClick={() => setBatchUploadOpen(true)}
+              className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
+            >
+              <UploadCloud className="w-[15px] h-[15px] text-blue-600" />
+              Upload em lote
+            </button>
+            {/* Em "Todas as Organizações" (activeOrganizationId nulo) o botão
+                continua ativo: o próprio modal mostra um seletor de organização
+                (igual ao "Nova pasta"), então dá pra criar sem trocar o seletor
+                global antes. REGRA #5: leitura/criação nunca fica bloqueada. */}
+            <button
+              onClick={() => {
+                setNewDocCategory(activeTab);
+                setNewDocOrgId('');
+                setUploadModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+            >
+              <Plus className="w-[15px] h-[15px]" />
+              Novo documento
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ─── TOOLBAR DE ABAS (§3) — card branco + trilho bg-gray-50, flex-wrap (nunca overflow-x-auto) ─── */}
@@ -2371,51 +2416,6 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <UserCheck className="w-4 h-4" />
             Pendências ({pendingApprovals.length})
           </button>
-        )}
-      </div>
-
-      {/* ─── TOOLBAR DE BOTÕES (§4) — só ações; o escopo de obra é do seletor do topo ───
-          O seletor "🏢 Todos os Empreendimentos / 🚧 obra" que ficava aqui foi removido:
-          o seletor de contexto do topo já navega Organização › Empreendimento › Obra e
-          é a autoridade sobre o escopo. Dois seletores para a mesma coisa podiam
-          discordar entre si, sem o usuário perceber qual estava valendo. */}
-      <div className="flex flex-col lg:flex-row gap-3 items-center justify-end bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-        {/* Botões de Ações (Nova Pasta e Novo Documento) */}
-        {canAccessTab(activeTab) && (
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => setCreateFolderModalOpen(true)}
-              className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
-            >
-              <FolderPlus className="w-[15px] h-[15px] text-blue-600" />
-              Nova pasta
-            </button>
-            {/* Upload em lote — mesmo racional de "Nova pasta"/"Novo documento" abaixo:
-                em "Todas as Organizações" o próprio Sheet mostra o seletor de organização,
-                então o botão nunca fica desabilitado (REGRA #5). */}
-            <button
-              onClick={() => setBatchUploadOpen(true)}
-              className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
-            >
-              <UploadCloud className="w-[15px] h-[15px] text-blue-600" />
-              Upload em lote
-            </button>
-            {/* Em "Todas as Organizações" (activeOrganizationId nulo) o botão
-                continua ativo: o próprio modal mostra um seletor de organização
-                (igual ao "Nova pasta"), então dá pra criar sem trocar o seletor
-                global antes. REGRA #5: leitura/criação nunca fica bloqueada. */}
-            <button
-              onClick={() => {
-                setNewDocCategory(activeTab);
-                setNewDocOrgId('');
-                setUploadModalOpen(true);
-              }}
-              className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
-            >
-              <Plus className="w-[15px] h-[15px]" />
-              Novo documento
-            </button>
-          </div>
         )}
       </div>
 

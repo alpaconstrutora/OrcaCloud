@@ -25,6 +25,7 @@ import {
   type QuadroDeUnidades,
   type UnidadeExterna,
 } from '../../utils/blueprintUnidades';
+import { numeroSugerido, planoDeRepeticaoDaUnidade, ROTULO_DO_MODO, type ModoDeRepeticao } from '../../utils/blueprintGrupos';
 import ActionIconButton from '../ui/ActionIconButton';
 import { StandardTable, type StandardTableColumn } from '../ui/StandardTable';
 
@@ -68,6 +69,13 @@ export default function TelaUnidades({ model, quadro, onRun, onRunBatch, carrega
   const [externas, setExternas] = useState<UnidadeExterna[] | null>(null);
   const [importando, setImportando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  /** REPETIR UNIDADE (E2.3): a linha escolhida, o lado e o número da cópia. */
+  const [repetindo, setRepetindo] = useState<string | null>(null);
+  const [modo, setModo] = useState<ModoDeRepeticao>('ESPELHO_DIREITA');
+  const [numeroDaCopia, setNumeroDaCopia] = useState('');
+  const [dx, setDx] = useState('0');
+  const [dy, setDy] = useState('0');
+  const [avisoDaRepeticao, setAvisoDaRepeticao] = useState<string | null>(null);
 
   const nomeDoNivel = (id: string) => model.levels.find((l) => l.id === id)?.name ?? '?';
   const numeroDe = (id: string) => quadro.unidades.find((u) => u.id === id)?.numero ?? '?';
@@ -76,6 +84,24 @@ export default function TelaUnidades({ model, quadro, onRun, onRunBatch, carrega
   const semUnidade = model.spaces.filter((s) => !s.labelUid || !quadro.unidades.some((u) => u.ambientes.some((a) => a.id === s.id))).length;
 
   const tentar = (c: Command) => onRun(c);
+
+  const abrirRepeticao = (u: Linha) => {
+    setRepetindo(u.id);
+    setNumeroDaCopia(numeroSugerido(model, u.numero));
+    setAvisoDaRepeticao(null);
+  };
+  const repetir = () => {
+    if (!repetindo) return;
+    const r = planoDeRepeticaoDaUnidade(model, repetindo, modo, { numero: numeroDaCopia, deslocamento: { x: Math.round(Number(dx) || 0), y: Math.round(Number(dy) || 0) } });
+    if (!r.ok) {
+      setAvisoDaRepeticao(r.aviso);
+      return;
+    }
+    onRun(r.comando);
+    setRepetindo(null);
+    // O aviso do plano (parede da divisa fora, paredes que extrapolam) fica no rodapé da tabela: o painel fechou.
+    setAviso(r.aviso ? `Unidade ${numeroDaCopia} criada como cópia viva. ${r.aviso}` : `Unidade ${numeroDaCopia} criada como cópia viva — editar a original propaga.`);
+  };
 
   const criar = () => {
     const numero = novoNumero.trim();
@@ -191,6 +217,58 @@ export default function TelaUnidades({ model, quadro, onRun, onRunBatch, carrega
         </p>
       </div>
 
+      {repetindo && (
+        <div className="rounded-[6px] border border-blue-200 bg-blue-50 px-5 py-3 text-sm text-slate-700" data-testid="repetir-unidade">
+          <p className="font-semibold text-gray-900">
+            Repetir a unidade {quadro.unidades.find((u) => u.id === repetindo)?.numero}
+          </p>
+          <p className="mt-0.5 text-xs text-slate-600">
+            Cria um <strong>grupo</strong> com as paredes, a estrutura e as etiquetas da unidade e uma <strong>instância</strong> espelhada encostada no lado escolhido (ou deslocada), já
+            como a unidade nova. Editar a original propaga para a cópia; a parede da divisa vira geminada. Um Ctrl+Z desfaz.
+          </p>
+          <div className="mt-2 flex flex-wrap items-end gap-2">
+            {(Object.keys(ROTULO_DO_MODO) as ModoDeRepeticao[]).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setModo(m)}
+                aria-pressed={modo === m}
+                className={`h-8 rounded-[6px] border px-2.5 text-xs font-medium ${modo === m ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-slate-700'}`}
+              >
+                {ROTULO_DO_MODO[m]}
+              </button>
+            ))}
+            {modo === 'DESLOCADA' && (
+              <>
+                <label className="flex flex-col text-[11px] text-slate-600">
+                  ΔX (mm)
+                  <input type="number" step={50} value={dx} onChange={(e) => setDx(e.target.value)} aria-label="Deslocamento X da cópia (mm)" className="h-8 w-24 rounded-[6px] border border-slate-300 px-2 text-xs" />
+                </label>
+                <label className="flex flex-col text-[11px] text-slate-600">
+                  ΔY (mm)
+                  <input type="number" step={50} value={dy} onChange={(e) => setDy(e.target.value)} aria-label="Deslocamento Y da cópia (mm)" className="h-8 w-24 rounded-[6px] border border-slate-300 px-2 text-xs" />
+                </label>
+              </>
+            )}
+            <label className="flex flex-col text-[11px] text-slate-600">
+              Número da cópia
+              <input value={numeroDaCopia} onChange={(e) => setNumeroDaCopia(e.target.value)} aria-label="Número da unidade copiada" className="h-8 w-28 rounded-[6px] border border-slate-300 px-2 text-xs" />
+            </label>
+            <button type="button" onClick={repetir} className="h-8 rounded-[6px] bg-blue-600 px-3 text-xs font-semibold text-white">
+              Repetir
+            </button>
+            <button type="button" onClick={() => setRepetindo(null)} className="h-8 px-2 text-xs text-slate-600">
+              Cancelar
+            </button>
+          </div>
+          {avisoDaRepeticao && (
+            <p role="status" className="mt-2 text-xs text-amber-700">
+              {avisoDaRepeticao}
+            </p>
+          )}
+        </div>
+      )}
+
       <StandardTable<Linha>
         columns={COLUNAS}
         storageKey="blueprint:unidades"
@@ -207,7 +285,13 @@ export default function TelaUnidades({ model, quadro, onRun, onRunBatch, carrega
         searchText={(u) => `${u.numero} ${u.tipologia ?? ''} ${u.ambientes.map((s) => s.name ?? '').join(' ')}`}
         searchPlaceholder="Buscar unidade ou ambiente…"
         actions={{
-          render: (u) => <ActionIconButton kind="delete" title={`Excluir a unidade ${u.numero} (os ambientes ficam)`} onClick={() => tentar({ type: 'DeleteUnidade', unidadeId: u.id })} />,
+          width: 96,
+          render: (u) => (
+            <div className="flex items-center gap-1">
+              <ActionIconButton kind="duplicate" title={`Repetir a unidade ${u.numero} (espelhada ou deslocada)`} aria-label={`Repetir a unidade ${u.numero}`} onClick={() => abrirRepeticao(u)} disabled={u.ambientes.length === 0} />
+              <ActionIconButton kind="delete" title={`Excluir a unidade ${u.numero} (os ambientes ficam)`} onClick={() => tentar({ type: 'DeleteUnidade', unidadeId: u.id })} />
+            </div>
+          ),
         }}
         toolbarRight={
           <div className="flex items-center gap-2">

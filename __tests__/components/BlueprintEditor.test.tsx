@@ -863,6 +863,49 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(linhas.some((l) => /Térreo.*2.*26,20/.test(l))).toBe(true);
   });
 
+  it('grupo com origem (E2.3): "Repetir" a unidade espelhada cria a 102 com paredes copiadas; a gaveta Grupo mostra a instância, remove e desagrupa', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    let m = k.applyBatch(nivel.model, [
+      { type: 'AddWall', levelId: t, a: k.point(0, 0), b: k.point(6000, 0), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddWall', levelId: t, a: k.point(6000, 0), b: k.point(6000, 4000), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddWall', levelId: t, a: k.point(6000, 4000), b: k.point(0, 4000), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddWall', levelId: t, a: k.point(0, 4000), b: k.point(0, 0), thicknessMm: 150, heightMm: 2800 },
+    ]).model;
+    m = k.applyCommand(m, { type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Sala' }).model;
+    m = k.applyCommand(m, { type: 'AddUnidade', numero: '101', labelIds: [m.labels[0].id] }).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^analisar$/i);
+    await user.click(screen.getByRole('button', { name: /^unidades/i }));
+    const tela = (await screen.findByRole('heading', { level: 1, name: /^unidades$/i })).closest('[data-tela="unidades"]') as HTMLElement;
+    await user.click(within(tela).getByRole('button', { name: 'Repetir a unidade 101' }));
+    const painel = within(tela).getByTestId('repetir-unidade');
+    expect((within(painel).getByLabelText('Número da unidade copiada') as HTMLInputElement).value).toBe('102');
+    expect(within(painel).getByRole('button', { name: 'Espelhada à direita' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(within(painel).getByRole('button', { name: /^repetir$/i }));
+    // A 102 existe, com a Sala copiada, mesma privativa e geminada com a 101.
+    const linhas = () => within(tela).getAllByRole('row').map((r) => (r.textContent ?? '').replace(/\s+/g, ' '));
+    expect(within(tela).getByLabelText('Número da unidade 102')).toBeInTheDocument();
+    expect(linhas().filter((l) => /Sala.*25,20.*500,000 ‰/.test(l))).toHaveLength(2); // as duas, geminadas entre si
+    expect(linhas().some((l) => /Sala.*500,000 ‰.*—101/.test(l))).toBe(true);
+    expect(linhas().some((l) => /Térreo.*2/.test(l))).toBe(true);
+    // Gaveta Grupo: selecionar a origem lista o grupo "Unidade 101" com 1 instância; remover a instância tira a cópia; desagrupar.
+    await user.click(within(tela).getByRole('button', { name: /^voltar ao editor$/i }));
+    await abrirAba(/^vista$/i);
+    await user.click(screen.getByRole('button', { name: /^grupo com origem/i }));
+    const gaveta = await screen.findByTestId('tarefa-grupo');
+    expect(gaveta).toHaveTextContent(/Unidade 101.*3 parede\(s\).*1 instância\(s\)/);
+    await user.click(within(gaveta).getByRole('button', { name: /selecionar a origem/i }));
+    expect(within(gaveta).getByText(/espelho X · Térreo/)).toBeInTheDocument();
+    await user.click(within(gaveta).getByRole('button', { name: 'Remover a instância 1' }));
+    expect(within(gaveta).getByText(/Sem instâncias ainda/)).toBeInTheDocument();
+    await user.click(within(gaveta).getByRole('button', { name: /^desagrupar/i }));
+    expect(within(gaveta).getByText(/Agrupar a seleção/)).toBeInTheDocument();
+  });
+
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2500 });

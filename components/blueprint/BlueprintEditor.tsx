@@ -442,6 +442,7 @@ import { armaduraDoModelo, armaduraManualDe } from '../../utils/blueprintArmadur
 import TelaArmadura from './TelaArmadura';
 import TelaQuantitativos from './TelaQuantitativos';
 import TelaUnidades from './TelaUnidades';
+import PainelGrupo from './PainelGrupo';
 import { quadroDeUnidades, rotuloDaUnidade, unidadePorEtiqueta } from '../../utils/blueprintUnidades';
 import { blueprintUnidadesPlantaAiService } from '../../services/blueprintUnidadesPlantaAiService';
 import { hashDaBaseEletrica, memorialEletrico, verificacoesEletricas } from '../../utils/blueprintEletricaExecutivo';
@@ -682,6 +683,9 @@ const ROTULO_DA_TAREFA = {
   // Matriz (18/09/2026, roadmap E0.1): N cópias da seleção a k·passo — a
   // fileira de pilares, a bateria de banheiros. Um lote, um Ctrl+Z.
   matriz: 'Matriz — repetir a seleção',
+  // Grupo com origem (19/09/2026, roadmap E2.3): agrupar a seleção e instanciar
+  // espelhado/girado/deslocado; editar a origem propaga às cópias.
+  grupo: 'Grupo com origem — agrupar e instanciar',
   'gerar-paredes': 'Gerar paredes do PDF',
   'importar-ifc': 'Importar do IFC',
   'importar-dxf': 'Importar do DXF',
@@ -6404,6 +6408,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   ativo={tarefaAberta === 'matriz'}
                   disabled={editor.selectedIds.length === 0 && tarefaAberta !== 'matriz'}
                 />
+                <BotaoBarra
+                  icone={Boxes}
+                  rotulo="Grupo com origem — agrupar a seleção e instanciar espelhado, girado ou deslocado"
+                  onClick={() => alternarTarefa('grupo')}
+                  ativo={tarefaAberta === 'grupo'}
+                />
               </>
             ),
           },
@@ -9160,9 +9170,20 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
+
+          {tarefaAberta === 'grupo' && (
+            <PainelGrupo
+              model={editor.model}
+              selectedIds={editor.selectedIds}
+              levelId={levelId}
+              onRun={(c) => editor.run(c)}
+              onSelecionar={(ids) => selecionar(ids)}
+              erro={editor.lastError}
+            />
+          )}
 
           {tarefaAberta === 'matriz' && (
             <div className="space-y-3" data-testid="tarefa-matriz">

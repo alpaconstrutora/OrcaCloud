@@ -58,6 +58,17 @@ import {
   limparRestricoesOrfas,
   findUnidade,
   limparEtiquetasOrfasDasUnidades,
+  findGrupo,
+  uidDaCopia,
+  transformarPontoDoGrupo,
+  giroTransformadoDoGrupo,
+  copiasDeInstancia,
+  limparOrigensOrfasDosGrupos,
+  MAX_NOME_DE_GRUPO,
+  type Grupo,
+  type InstanciaDeGrupo,
+  type RotacaoDoGrupo,
+  type EspelhoDoGrupo,
   MAX_NUMERO_DE_UNIDADE,
   MAX_TIPOLOGIA_DE_UNIDADE,
   MAX_NOME_DE_EIXO,
@@ -68,6 +79,7 @@ import {
   type ValorDeParametro,
   type Level,
   type SpaceLabel,
+  type Structural,
 } from './model';
 import {
   type AlinhamentoParede,
@@ -79,7 +91,7 @@ import {
 } from './geom';
 import { recomputeSpaces } from './arrangement';
 import { snapshotHash } from './canonical';
-import { novoUid, uidDeterministico, type ElementUid } from './identity';
+import { novoUid, type ElementUid } from './identity';
 
 export type Command =
   /** `tipoDeId`: nasce vinculado a este pavimento tipo (E2.1). */
@@ -307,6 +319,23 @@ export type Command =
    * etiqueta ganha uma com `nome` — a unidade só sabe falar de etiquetas.
    */
   | { type: 'SetUnidadeDoAmbiente'; spaceId: ObjectId; unidadeId: ObjectId | null; nome?: string }
+  /**
+   * GRUPO COM ORIGEM (E2.3). A origem são peças que já existem, do mesmo
+   * pavimento; as aberturas das paredes vão junto. `pivo` omitido = canto
+   * inferior-esquerdo da caixa das peças. Ver `Grupo`.
+   */
+  | { type: 'AddGrupo'; nome: string; wallIds: ObjectId[]; structuralIds?: ObjectId[]; labelIds?: ObjectId[]; pivo?: Point; instancias?: EspecificacaoDeInstancia[] }
+  | { type: 'SetGrupoProps'; grupoId: ObjectId; nome?: string; pivo?: Point }
+  /**
+   * Nova instância: espelho e giro em torno do pivô, depois translação. As
+   * cópias nascem no MESMO comando. Com `unidade`, as etiquetas copiadas já
+   * nascem numa unidade nova ("unidade tipo" = grupo + unidade).
+   */
+  | ({ type: 'AddInstanciaDeGrupo'; grupoId: ObjectId } & EspecificacaoDeInstancia)
+  | { type: 'SetInstanciaDeGrupo'; grupoId: ObjectId; instanciaUid: ElementUid; translacao?: Point; rotacaoGraus?: RotacaoDoGrupo; espelho?: EspelhoDoGrupo }
+  | { type: 'DeleteInstanciaDeGrupo'; grupoId: ObjectId; instanciaUid: ElementUid }
+  /** `manterInstancias` = desagrupar: as cópias ficam, livres. Senão somem. */
+  | { type: 'DeleteGrupo'; grupoId: ObjectId; manterInstancias: boolean }
   /**
    * ESCADA ou RAMPA pelo PERCURSO.
    *
@@ -962,6 +991,9 @@ function aplicarSemHash(
 ): { model: BlueprintModel; diff: Diff } {
   const next = cloneModel(model);
   recusarEdicaoEmPavimentoVinculado(model, command);
+  recusarEdicaoEmInstanciaDeGrupo(model, command);
+  /** Cópias de instância de grupo que existem agora — a sincronização apaga as que deixarem de ser esperadas. */
+  const copiasAntes: ReadonlySet<ElementUid> = new Set(copiasDeInstancia(model).keys());
   const diff = emptyDiff();
 
   switch (command.type) {
@@ -1604,6 +1636,89 @@ function aplicarSemHash(
         destino.etiquetaUids.push(label.uid);
         diff.updated.push(destino.id);
       }
+      break;
+    }
+
+    // ── Grupos com origem ────────────────────────────────────────────────────
+
+    case 'AddGrupo': {
+      const nome = command.nome.trim();
+      if (!nome || nome.length > MAX_NOME_DE_GRUPO) throw new KernelError('BAD_GROUP', `Nome do grupo vazio ou maior que ${MAX_NOME_DE_GRUPO} caracteres`);
+      const paredes = command.wallIds.map((id) => findWall(next, id));
+      const estruturas = (command.structuralIds ?? []).map((id) => findStructural(next, id));
+      const etiquetas = (command.labelIds ?? []).map((id) => findLabel(next, id));
+      const pecas = [...paredes, ...estruturas, ...etiquetas];
+      if (pecas.length === 0) throw new KernelError('EMPTY_SELECTION', 'Nada para agrupar');
+      const levelId = pecas[0].levelId;
+      if (pecas.some((p) => p.levelId !== levelId)) throw new KernelError('BAD_GROUP', 'As peças da origem têm de estar no mesmo pavimento');
+      const pontos = [...paredes.flatMap((w) => [w.a, w.b]), ...estruturas.flatMap((s) => s.pontos), ...etiquetas.map((l) => l.at)];
+      const pivo = command.pivo
+        ? { x: assertIntegerMm(command.pivo.x, 'pivo.x'), y: assertIntegerMm(command.pivo.y, 'pivo.y') }
+        : { x: Math.min(...pontos.map((p) => p.x)), y: Math.min(...pontos.map((p) => p.y)) };
+      const id = nextId(next, 'grp');
+      next.grupos = next.grupos ?? [];
+      const grupo: Grupo = {
+        id,
+        uid: novoUid(),
+        nome,
+        levelId,
+        pivo,
+        origem: { walls: [...new Set(paredes.map((w) => w.uid))], structures: [...new Set(estruturas.map((s) => s.uid))], labels: [...new Set(etiquetas.map((l) => l.uid))] },
+        instancias: [],
+      };
+      next.grupos.push(grupo);
+      diff.created.push(id);
+      // Instâncias iniciais no MESMO comando: "Repetir unidade" é agrupar + instanciar, um Ctrl+Z.
+      for (const spec of command.instancias ?? []) adicionarInstancia(next, diff, grupo, spec, copiasAntes);
+      break;
+    }
+
+    case 'SetGrupoProps': {
+      const g = findGrupo(next, command.grupoId);
+      if (command.nome !== undefined) {
+        const nome = command.nome.trim();
+        if (!nome || nome.length > MAX_NOME_DE_GRUPO) throw new KernelError('BAD_GROUP', `Nome do grupo vazio ou maior que ${MAX_NOME_DE_GRUPO} caracteres`);
+        g.nome = nome;
+      }
+      if (command.pivo !== undefined) g.pivo = { x: assertIntegerMm(command.pivo.x, 'pivo.x'), y: assertIntegerMm(command.pivo.y, 'pivo.y') };
+      diff.updated.push(g.id);
+      break;
+    }
+
+    case 'AddInstanciaDeGrupo': {
+      adicionarInstancia(next, diff, findGrupo(next, command.grupoId), command, copiasAntes);
+      break;
+    }
+
+    case 'SetInstanciaDeGrupo': {
+      const g = findGrupo(next, command.grupoId);
+      const i = g.instancias.find((x) => x.uid === command.instanciaUid);
+      if (!i) throw new KernelError('GROUP_NOT_FOUND', `Instância inexistente: ${command.instanciaUid}`);
+      if (command.translacao !== undefined) i.translacao = { x: assertIntegerMm(command.translacao.x, 'translacao.x'), y: assertIntegerMm(command.translacao.y, 'translacao.y') };
+      if (command.rotacaoGraus !== undefined) i.rotacaoGraus = command.rotacaoGraus;
+      if (command.espelho !== undefined) i.espelho = command.espelho;
+      diff.updated.push(g.id);
+      break;
+    }
+
+    case 'DeleteInstanciaDeGrupo': {
+      const g = findGrupo(next, command.grupoId);
+      if (!g.instancias.some((x) => x.uid === command.instanciaUid)) throw new KernelError('GROUP_NOT_FOUND', `Instância inexistente: ${command.instanciaUid}`);
+      g.instancias = g.instancias.filter((x) => x.uid !== command.instanciaUid);
+      diff.updated.push(g.id);
+      // As cópias somem na sincronização da cauda (uid esperado deixou de existir).
+      break;
+    }
+
+    case 'DeleteGrupo': {
+      const g = findGrupo(next, command.grupoId);
+      if (!command.manterInstancias) {
+        // Apaga as cópias ANTES de esquecer o grupo: depois ninguém mais sabe que eram cópias.
+        g.instancias = [];
+        sincronizarGrupos(next, diff, copiasAntes);
+      }
+      next.grupos = (next.grupos ?? []).filter((x) => x.id !== g.id);
+      diff.deleted.push(g.id);
       break;
     }
 
@@ -3290,7 +3405,10 @@ function aplicarSemHash(
     }
   }
 
-  // PAVIMENTO TIPO (E2.1): as cópias vivas se re-derivam do tipo.
+  // GRUPOS (E2.3): origem sem peça viva perde a peça; as instâncias se re-derivam da origem.
+  diff.updated.push(...limparOrigensOrfasDosGrupos(next));
+  sincronizarGrupos(next, diff, copiasAntes);
+  // PAVIMENTO TIPO (E2.1): as cópias vivas se re-derivam do tipo (inclusive as cópias de grupo).
   sincronizarPavimentosVinculados(next, diff);
   // Restrição sem alvo ou referência viva some com o comando que os apagou.
   diff.deleted.push(...limparRestricoesOrfas(next));
@@ -3300,6 +3418,47 @@ function aplicarSemHash(
   assertModelInvariants(next);
 
   return { model: next, diff };
+}
+
+/** O que uma instância nova pede — em `AddInstanciaDeGrupo` e nas iniciais de `AddGrupo`. */
+export interface EspecificacaoDeInstancia {
+  levelId?: ObjectId;
+  translacao?: Point;
+  rotacaoGraus?: RotacaoDoGrupo;
+  espelho?: EspelhoDoGrupo;
+  /** "Unidade tipo": as etiquetas copiadas já nascem numa unidade nova. */
+  unidade?: { numero: string; tipologia?: string | null; pcd?: boolean };
+}
+
+function adicionarInstancia(next: BlueprintModel, diff: Diff, g: Grupo, spec: EspecificacaoDeInstancia, copiasAntes: ReadonlySet<ElementUid>): void {
+  const levelId = spec.levelId ?? g.levelId;
+  findLevel(next, levelId);
+  const t = spec.translacao ?? { x: 0, y: 0 };
+  const instancia: InstanciaDeGrupo = {
+    uid: novoUid(),
+    levelId,
+    translacao: { x: assertIntegerMm(t.x, 'translacao.x'), y: assertIntegerMm(t.y, 'translacao.y') },
+    rotacaoGraus: spec.rotacaoGraus ?? 0,
+    espelho: spec.espelho ?? 'NENHUM',
+  };
+  if (instancia.rotacaoGraus === 0 && instancia.espelho === 'NENHUM' && instancia.translacao.x === 0 && instancia.translacao.y === 0 && levelId === g.levelId) {
+    throw new KernelError('BAD_GROUP', 'A instância cairia exatamente sobre a origem: espelhe, gire ou desloque');
+  }
+  g.instancias.push(instancia);
+  if (!diff.updated.includes(g.id)) diff.updated.push(g.id);
+  // As cópias nascem AGORA (a sincronização é idempotente; a da cauda só confirma),
+  // porque a unidade tipo precisa das etiquetas copiadas já existindo.
+  sincronizarGrupos(next, diff, copiasAntes);
+  if (spec.unidade) {
+    const numero = spec.unidade.numero.trim();
+    if (!numero || numero.length > MAX_NUMERO_DE_UNIDADE) throw new KernelError('BAD_UNIT', `Número da unidade vazio ou maior que ${MAX_NUMERO_DE_UNIDADE} caracteres`);
+    if ((next.unidades ?? []).some((u) => u.numero === numero)) throw new KernelError('BAD_UNIT', `Já existe a unidade "${numero}"`);
+    const etiquetasCopiadas = g.origem.labels.map((uid) => uidDaCopia(instancia.uid, uid)).filter((uid) => next.labels.some((l) => l.uid === uid));
+    const id = nextId(next, 'und');
+    next.unidades = next.unidades ?? [];
+    next.unidades.push({ id, uid: novoUid(), numero, tipologia: tipologiaValida(spec.unidade.tipologia), pcd: spec.unidade.pcd ?? false, etiquetaUids: etiquetasCopiadas });
+    diff.created.push(id);
+  }
 }
 
 function findLabel(model: BlueprintModel, id: ObjectId): SpaceLabel {
@@ -3492,35 +3651,32 @@ export function applyBatch(model: BlueprintModel, commands: Command[]): CommandR
 
 const FAMILIAS_SINCRONIZADAS = ['wall', 'opening', 'structural', 'roof', 'label'] as const;
 
-/** Uid determinístico da cópia de `srcUid` no pavimento vinculado `nivelUid`. */
-function uidDaCopia(nivelUid: ElementUid, srcUid: ElementUid): ElementUid {
-  return uidDeterministico(`vinculo:${nivelUid}:${srcUid}`);
-}
+// `uidDaCopia` mora em `model.ts` desde a E2.3: grupos e pavimento tipo usam a mesma função.
 
 /**
  * Recusa comandos que editam ARQUITETURA/ESTRUTURA de um pavimento vinculado:
  * a edição seria desfeita pela sincronização na cauda, e "não aconteceu nada"
  * é pior que uma mensagem. Instalações, pavimentos, eixos e restrições passam.
  */
-function recusarEdicaoEmPavimentoVinculado(model: BlueprintModel, command: Command): void {
-  const vinculados = new Map(model.levels.filter((l) => l.tipoDeId !== undefined).map((l) => [l.id, l]));
-  if (vinculados.size === 0) return;
+/**
+ * O que um comando de EDIÇÃO toca, por família de id — a base das duas recusas
+ * (pavimento cópia, E2.1; instância de grupo, E2.3). Comando fora da lista não
+ * toca peça nenhuma (pavimentos, eixos, unidades…).
+ */
+function alvosDoComando(command: Command): { levelIds: string[]; wallIds: string[]; openingIds: string[]; structuralIds: string[]; aguaIds: string[]; labelIds: string[]; spaceIds: string[] } {
   const c = command as Record<string, unknown> & { type: string };
-  const nivelDe = (levelId: string | undefined): Level | null => (levelId && vinculados.get(levelId)) || null;
-  const daParede = (id: unknown) => nivelDe(model.walls.find((w) => w.id === id)?.levelId);
-  const daAbertura = (id: unknown) => daParede(model.openings.find((o) => o.id === id)?.wallId);
-  const daEstrutura = (id: unknown) => nivelDe(model.structures.find((s) => s.id === id)?.levelId);
-  const daAgua = (id: unknown) => nivelDe((model.roofs ?? []).find((r) => r.id === id)?.levelId);
-  const daEtiqueta = (id: unknown) => nivelDe((model.labels ?? []).find((l) => l.id === id)?.levelId);
-  const doAmbiente = (id: unknown) => nivelDe(model.spaces.find((x) => x.id === id)?.levelId);
-  let alvo: Level | null = null;
+  const a = { levelIds: [] as string[], wallIds: [] as string[], openingIds: [] as string[], structuralIds: [] as string[], aguaIds: [] as string[], labelIds: [] as string[], spaceIds: [] as string[] };
+  const str = (v: unknown) => (typeof v === 'string' ? [v] : []);
+  const lista = (v: unknown) => (Array.isArray(v) ? (v as string[]) : []);
   switch (c.type) {
     case 'AddWall':
-    case 'AddOpening':
     case 'AddStructural':
     case 'AddAgua':
     case 'DuplicateEntities':
-      alvo = c.type === 'AddOpening' ? daParede(c.wallId) : nivelDe(c.levelId as string);
+      a.levelIds = str(c.levelId);
+      break;
+    case 'AddOpening':
+      a.wallIds = str(c.wallId);
       break;
     case 'MoveVertex':
     case 'SetThickness':
@@ -3529,10 +3685,10 @@ function recusarEdicaoEmPavimentoVinculado(model: BlueprintModel, command: Comma
     case 'DeleteWall':
     case 'SetCedeSobreposicao':
     case 'CutWallAtStructural':
-      alvo = daParede(c.wallId);
+      a.wallIds = str(c.wallId);
       break;
     case 'MergeWalls':
-      alvo = daParede(c.firstId);
+      a.wallIds = [...str(c.firstId), ...str(c.secondId)];
       break;
     case 'MoveOpening':
     case 'FlipOpening':
@@ -3540,46 +3696,246 @@ function recusarEdicaoEmPavimentoVinculado(model: BlueprintModel, command: Comma
     case 'SetOpeningKind':
     case 'SetOpeningEsquadria':
     case 'DeleteOpening':
-      alvo = daAbertura(c.openingId);
+      a.openingIds = str(c.openingId);
       break;
     case 'SetStructuralProps':
     case 'SetStructuralKind':
     case 'MoveStructuralVertex':
     case 'DeleteStructural':
-      alvo = daEstrutura(c.structuralId);
+      a.structuralIds = str(c.structuralId);
       break;
     case 'SetAguaProps':
     case 'MoveAguaVertex':
     case 'DeleteAgua':
-      alvo = daAgua(c.aguaId);
+      a.aguaIds = str(c.aguaId);
       break;
     case 'NameSpace':
-      alvo = doAmbiente(c.spaceId);
+      a.spaceIds = str(c.spaceId);
       break;
     case 'SetSpaceLabelProps':
-      alvo = daEtiqueta(c.labelId);
+      a.labelIds = str(c.labelId);
       break;
     case 'TranslateEntities':
     case 'MirrorEntities':
     case 'RotateEntities':
-      alvo = daParede((c.wallIds as string[])[0]) ?? daEstrutura((c.structuralIds as string[])[0]) ?? daAgua(((c.aguaIds as string[] | undefined) ?? [])[0]);
+      a.wallIds = lista(c.wallIds);
+      a.structuralIds = lista(c.structuralIds);
+      a.aguaIds = lista(c.aguaIds);
       break;
     case 'SetParametros': {
       const f = c.familia as string;
-      alvo = f === 'wall' ? daParede(c.id) : f === 'opening' ? daAbertura(c.id) : f === 'structural' ? daEstrutura(c.id) : f === 'roof' ? daAgua(c.id) : null;
+      if (f === 'wall') a.wallIds = str(c.id);
+      else if (f === 'opening') a.openingIds = str(c.id);
+      else if (f === 'structural') a.structuralIds = str(c.id);
+      else if (f === 'roof') a.aguaIds = str(c.id);
       break;
     }
     default:
-      alvo = null;
+      break;
   }
+  return a;
+}
+
+function recusarEdicaoEmPavimentoVinculado(model: BlueprintModel, command: Command): void {
+  const vinculados = new Map(model.levels.filter((l) => l.tipoDeId !== undefined).map((l) => [l.id, l]));
+  if (vinculados.size === 0) return;
+  const al = alvosDoComando(command);
+  const nivelDe = (levelId: string | undefined): Level | null => (levelId && vinculados.get(levelId)) || null;
+  const daParede = (id: string) => nivelDe(model.walls.find((w) => w.id === id)?.levelId);
+  const candidatos: (Level | null)[] = [
+    ...al.levelIds.map(nivelDe),
+    ...al.wallIds.map(daParede),
+    ...al.openingIds.map((id) => daParede(model.openings.find((o) => o.id === id)?.wallId ?? '')),
+    ...al.structuralIds.map((id) => nivelDe(model.structures.find((s) => s.id === id)?.levelId)),
+    ...al.aguaIds.map((id) => nivelDe((model.roofs ?? []).find((r) => r.id === id)?.levelId)),
+    ...al.labelIds.map((id) => nivelDe((model.labels ?? []).find((l) => l.id === id)?.levelId)),
+    ...al.spaceIds.map((id) => nivelDe(model.spaces.find((x) => x.id === id)?.levelId)),
+  ];
+  const alvo = candidatos.find((x) => x !== null) ?? null;
   if (alvo) {
-    const tipo = model.levels.find((l) => l.id === alvo!.tipoDeId);
+    const tipo = model.levels.find((l) => l.id === alvo.tipoDeId);
     throw new KernelError(
       'LEVEL_LINKED',
       `"${alvo.name}" é cópia do pavimento tipo "${tipo?.name ?? alvo.tipoDeId}": edite o tipo (a edição propaga) ou desvincule o pavimento`,
     );
   }
 }
+
+/** Cópia de instância de grupo não se edita: edita-se a origem (propaga) ou desagrupa-se. */
+function recusarEdicaoEmInstanciaDeGrupo(model: BlueprintModel, command: Command): void {
+  if (!(model.grupos ?? []).some((g) => g.instancias.length > 0)) return;
+  const copias = copiasDeInstancia(model);
+  const al = alvosDoComando(command);
+  const uids: (ElementUid | undefined)[] = [
+    ...al.wallIds.map((id) => model.walls.find((w) => w.id === id)?.uid),
+    ...al.openingIds.map((id) => model.openings.find((o) => o.id === id)?.uid),
+    ...al.structuralIds.map((id) => model.structures.find((s) => s.id === id)?.uid),
+    ...al.labelIds.map((id) => (model.labels ?? []).find((l) => l.id === id)?.uid),
+    ...al.spaceIds.map((id) => model.spaces.find((x) => x.id === id)?.labelUid),
+  ];
+  for (const uid of uids) {
+    const dono = uid ? copias.get(uid) : undefined;
+    if (dono) {
+      throw new KernelError('GROUP_INSTANCE', `É instância do grupo "${dono.grupo.nome}": edite a origem (a edição propaga) ou desagrupe`);
+    }
+  }
+}
+
+/**
+ * Re-deriva as cópias de cada instância de grupo a partir da origem, com a
+ * transformação da instância. Mesma reconciliação do pavimento tipo: uid
+ * determinístico por (instância, peça), cópia existente ATUALIZADA com o
+ * mesmo id, nova nasce, órfã some. Idempotente.
+ */
+export function sincronizarGrupos(next: BlueprintModel, diff: Diff, copiasAntes: ReadonlySet<ElementUid>): void {
+  const grupos = next.grupos ?? [];
+  if (grupos.length === 0) return;
+  const tocar = (lista: ObjectId[], id: ObjectId) => {
+    if (!lista.includes(id)) lista.push(id);
+  };
+  // Cópias que DEVEM existir ao fim; toda cópia de grupo fora deste conjunto some.
+  const esperadas = new Set<ElementUid>();
+  const paredePorUid = new Map(next.walls.map((w) => [w.uid, w]));
+  const estruturaPorUid = new Map(next.structures.map((s) => [s.uid, s]));
+  const etiquetaPorUid = new Map((next.labels ?? []).map((l) => [l.uid, l]));
+  for (const g of grupos) {
+    const paredesDaOrigem = g.origem.walls.map((u) => paredePorUid.get(u)).filter((w): w is Wall => !!w);
+    const idsDeParedeDaOrigem = new Set(paredesDaOrigem.map((w) => w.id));
+    const aberturasDaOrigem = next.openings.filter((o) => idsDeParedeDaOrigem.has(o.wallId));
+    const estruturasDaOrigem = g.origem.structures.map((u) => estruturaPorUid.get(u)).filter((s): s is Structural => !!s);
+    const etiquetasDaOrigem = g.origem.labels.map((u) => etiquetaPorUid.get(u)).filter((l): l is SpaceLabel => !!l);
+    for (const i of g.instancias) {
+      const T = (p: Point) => transformarPontoDoGrupo(g, i, p);
+      const espelhada = i.espelho !== 'NENHUM';
+      const dePara = new Map<ObjectId, ObjectId>();
+      // paredes
+      for (const w of paredesDaOrigem) {
+        const uid = uidDaCopia(i.uid, w.uid);
+        esperadas.add(uid);
+        const campos = {
+          levelId: i.levelId,
+          a: T(w.a),
+          b: T(w.b),
+          thicknessMm: w.thicknessMm,
+          heightMm: w.heightMm,
+          ...(w.alinhamento ? { alinhamento: w.alinhamento } : {}),
+          ...(w.cedeSobreposicao ? { cedeSobreposicao: true } : {}),
+          ...(w.camadas ? { camadas: clonarCamadas(w.camadas)! } : {}),
+          ...(w.parametros ? { parametros: { ...w.parametros } } : {}),
+        };
+        const existente = paredePorUid.get(uid);
+        if (existente) {
+          for (const k of ['alinhamento', 'cedeSobreposicao', 'camadas', 'parametros'] as const) if (!(k in campos)) delete existente[k];
+          Object.assign(existente, campos);
+          dePara.set(w.id, existente.id);
+          tocar(diff.updated, existente.id);
+        } else {
+          const id = nextId(next, 'wal');
+          const nova: Wall = { id, uid, ...campos };
+          next.walls.push(nova);
+          paredePorUid.set(uid, nova);
+          dePara.set(w.id, id);
+          tocar(diff.created, id);
+        }
+      }
+      // aberturas: offset conta da ponta `a`, que é a imagem de `a`; o lado de abrir troca no espelho.
+      for (const o of aberturasDaOrigem) {
+        const uid = uidDaCopia(i.uid, o.uid);
+        esperadas.add(uid);
+        const { id: _id, uid: _uid, wallId: _w, ...resto } = o;
+        const campos = {
+          ...resto,
+          wallId: dePara.get(o.wallId)!,
+          swingReversed: espelhada ? !o.swingReversed : o.swingReversed,
+          ...(o.esquadria ? { esquadria: { ...o.esquadria } } : {}),
+          ...(o.parametros ? { parametros: { ...o.parametros } } : {}),
+        };
+        const existente = next.openings.find((x) => x.uid === uid);
+        if (existente) {
+          Object.assign(existente, campos);
+          if (!o.esquadria) delete existente.esquadria;
+          if (!o.parametros) delete existente.parametros;
+          tocar(diff.updated, existente.id);
+        } else {
+          const id = nextId(next, 'opn');
+          next.openings.push({ id, uid, ...campos });
+          tocar(diff.created, id);
+        }
+      }
+      // estrutura
+      for (const s of estruturasDaOrigem) {
+        const uid = uidDaCopia(i.uid, s.uid);
+        esperadas.add(uid);
+        const { id: _i, uid: _u, levelId: _l, ...resto } = s;
+        const campos = { ...resto, levelId: i.levelId, pontos: s.pontos.map(T), rotacaoDeg: giroTransformadoDoGrupo(i, s.rotacaoDeg), ...(s.parametros ? { parametros: { ...s.parametros } } : {}) };
+        const existente = estruturaPorUid.get(uid);
+        if (existente) {
+          for (const k of Object.keys(existente)) if (!['id', 'uid'].includes(k) && !(k in campos)) delete (existente as unknown as Record<string, unknown>)[k];
+          Object.assign(existente, campos);
+          tocar(diff.updated, existente.id);
+        } else {
+          const id = nextId(next, 'str');
+          const nova = { id, uid, ...campos } as Structural;
+          next.structures.push(nova);
+          estruturaPorUid.set(uid, nova);
+          tocar(diff.created, id);
+        }
+      }
+      // etiquetas
+      for (const l of etiquetasDaOrigem) {
+        const uid = uidDaCopia(i.uid, l.uid);
+        esperadas.add(uid);
+        const campos = { levelId: i.levelId, at: T(l.at), name: l.name, tipoDeAmbiente: l.tipoDeAmbiente ?? null };
+        const existente = etiquetaPorUid.get(uid);
+        if (existente) {
+          Object.assign(existente, campos);
+          tocar(diff.updated, existente.id);
+        } else {
+          const id = nextId(next, 'lbl');
+          const nova: SpaceLabel = { id, uid, ...campos };
+          next.labels.push(nova);
+          etiquetaPorUid.set(uid, nova);
+          tocar(diff.created, id);
+        }
+      }
+    }
+  }
+  // Órfãs: cópia que existia ANTES do comando (uid derivado de uma instância) e não é mais esperada.
+  apagarCopiasNaoEsperadas(next, diff, copiasAntes, esperadas);
+}
+
+/**
+ * Apaga as cópias de instância que existiam antes do comando (`conhecidas`,
+ * levantadas em `aplicarSemHash` antes de aplicar) e não são mais esperadas.
+ * Uma cópia só é reconhecível pelo uid da instância que a gerou — por isso o
+ * levantamento é ANTES: depois de `DeleteGrupo` ninguém mais sabe.
+ */
+function apagarCopiasNaoEsperadas(next: BlueprintModel, diff: Diff, conhecidas: ReadonlySet<ElementUid>, esperadas: Set<ElementUid>): void {
+  const tocar = (lista: ObjectId[], id: ObjectId) => {
+    if (!lista.includes(id)) lista.push(id);
+  };
+  if (conhecidas.size === 0) return;
+  const apagar = (uid: ElementUid) => conhecidas.has(uid) && !esperadas.has(uid);
+  for (const w of next.walls.filter((x) => apagar(x.uid))) {
+    next.walls = next.walls.filter((x) => x.id !== w.id);
+    for (const o of next.openings.filter((o) => o.wallId === w.id)) tocar(diff.deleted, o.id);
+    next.openings = next.openings.filter((o) => o.wallId !== w.id);
+    tocar(diff.deleted, w.id);
+  }
+  for (const o of next.openings.filter((x) => apagar(x.uid))) {
+    next.openings = next.openings.filter((x) => x.id !== o.id);
+    tocar(diff.deleted, o.id);
+  }
+  for (const s of next.structures.filter((x) => apagar(x.uid))) {
+    next.structures = next.structures.filter((x) => x.id !== s.id);
+    tocar(diff.deleted, s.id);
+  }
+  for (const l of (next.labels ?? []).filter((x) => apagar(x.uid))) {
+    next.labels = next.labels.filter((x) => x.id !== l.id);
+    tocar(diff.deleted, l.id);
+  }
+}
+
 
 /**
  * Re-deriva paredes, aberturas, estrutura, telhado e etiquetas de cada

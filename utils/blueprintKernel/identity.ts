@@ -132,6 +132,8 @@ export const PREFIXO_ROTULO_UID = {
   restricao: 'K',
   /** Unidade autônoma — U. */
   unidade: 'U',
+  /** Grupo com origem — G. */
+  grupo: 'G',
   stair: 'E',
   label: 'R',
   /**

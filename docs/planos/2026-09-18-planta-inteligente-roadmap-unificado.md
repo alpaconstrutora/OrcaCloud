@@ -478,6 +478,51 @@ propagação; bump).
   entre eles tracejada, tela com 27,65 / 26,52 m², 510,419 ‰ / 489,581 ‰, comum 48,07 m², "Já
   existe a unidade "101"" na recusa.
 
+### E2.3 — Grupo com origem (19/09/2026) · kernel 0.38.0
+- **Decisão**: a mesma disciplina do pavimento tipo, em planta. `Grupo {nome, levelId, pivo,
+  origem: {walls, structures, labels} por uid, instancias: [{uid, levelId, translacao,
+  rotacaoGraus ∈ {0,90,180,270}, espelho ∈ {NENHUM,X,Y}}]}`. Transformação rígida inteira:
+  espelho e giro em torno do pivô, depois translação. As cópias são MATERIALIZADAS ao fim de
+  todo comando (`sincronizarGrupos`, antes da sincronização do pavimento tipo, que então as
+  copia para os pavimentos vinculados): paredes (+ aberturas, com `swingReversed` trocado no
+  espelho e offset preservado a partir da imagem de `a`), estrutura (`rotacaoDeg`
+  espelhado/girado) e etiquetas, uid determinístico `uidDaCopia(instância, origem)` — a
+  mesma função do pavimento tipo, agora em `model.ts`. Cópia que existia antes do comando
+  (`copiasAntes`, levantada em `aplicarSemHash`) e deixou de ser esperada é apagada — é assim
+  que remover instância / excluir grupo limpam sem que ninguém "lembre".
+- Editar cópia é recusado ANTES de aplicar (`GROUP_INSTANCE`: "É instância do grupo X: edite a
+  origem (a edição propaga) ou desagrupe"). A recusa do pavimento tipo e a do grupo agora
+  partilham `alvosDoComando(command)` (ids que cada comando de edição toca). Invariantes: sem
+  corrente (origem não pode ser cópia), peça em uma origem só, instância nunca em pavimento
+  cópia (E2.1), giro/espelho/translação válidos. Peça apagada sai da origem (cauda); o grupo
+  fica.
+- Comandos: `AddGrupo` (com `instancias` iniciais — "Repetir unidade" é UM comando), `SetGrupoProps`,
+  `AddInstanciaDeGrupo` (recusa a instância exatamente sobre a origem; `unidade` cria a unidade
+  nova com as etiquetas copiadas = **unidade tipo**), `SetInstanciaDeGrupo`,
+  `DeleteInstanciaDeGrupo`, `DeleteGrupo {manterInstancias}` (desagrupar × excluir com cópias).
+  Canônico `grupos` por (pavimento, pivô, nome) com origem por índice e instâncias ordenadas;
+  identidade `grupos` + `instanciasDeGrupo` (achatadas) para as cópias voltarem com os mesmos
+  uids; bump 0.37.0 → 0.38.0 (goldens provados em 0.37.0 com 280 testes e recapturados).
+- `utils/blueprintGrupos.ts`: `grupoDaSelecao`, `comandoDeAgrupar`, `descreverInstancia`,
+  `numeroSugerido` ("101"→"102", "Casa 3"→"Casa 3 B"), `planoDeRepeticaoDaUnidade(modo)` —
+  espelhada à direita/esquerda/acima/abaixo (pivô na aresta da caixa dos ambientes) ou
+  deslocada; a parede (e o pilar) SOBRE a linha do espelho ficam fora da origem, então a original
+  passa a ser a geminada entre as duas (E2.2); paredes que passam do contorno são copiadas
+  inteiras, com aviso ("divida-as antes").
+- UI: ribbon Seleção › "Grupo com origem" (gaveta `PainelGrupo`: agrupar a seleção; grupo da
+  seleção com ΔX/ΔY/giro/espelho + Instanciar, lista de instâncias com remover, Desagrupar,
+  Excluir grupo e cópias; lista dos grupos do pavimento com "selecionar a origem"); tela
+  Unidades › ação "Repetir a unidade N" (lado, número sugerido, deslocamento) com o resultado no
+  rodapé.
+- Testes: `blueprintGrupos` (5: transformação, materialização/propagação/recusa/sem corrente,
+  remover/desagrupar/excluir/órfã, canônico ida e volta com uids das cópias, repetir unidade →
+  102 geminada com 500 ‰), goldens, editor "E2.3". Suíte 4658. App real (escritas bloqueadas:
+  17): "Repetir a unidade 101 espelhada à esquerda" → 102 criada com o aviso das 2 paredes que
+  extrapolam, 7 → 10 paredes, cópia visível à esquerda com a geminada tracejada; renomear o
+  ambiente copiado recusado com a mensagem do kernel (lida antes do autosave bloqueado
+  sobrescrever a faixa); gaveta: "#1 · espelho X · Térreo", remover → "Sem instâncias ainda",
+  desagrupar → volta a "Agrupar a seleção".
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

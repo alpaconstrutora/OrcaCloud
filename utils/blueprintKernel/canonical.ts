@@ -62,6 +62,8 @@ import {
   type Parametros,
   type TipoDeRestricao,
   type FamiliaRestringivel,
+  type RotacaoDoGrupo,
+  type EspelhoDoGrupo,
   assinaturaDasCamadas,
   emptyModel,
   nextId,
@@ -611,6 +613,33 @@ function projetar(model: BlueprintModel): {
     (x, y) => cmpStr(x.numero, y.numero),
   );
 
+  // GRUPOS (0.38.0): origem por ÍNDICE nas famílias ordenadas; instâncias com a
+  // transformação. Omitidos quando não há nenhum. Ordenados por (pavimento,
+  // pivô, nome); as instâncias por (pavimento, translação, giro, espelho).
+  const indiceDeParede = new Map(walls.map((w, i) => [w.item.uid, i]));
+  const indiceDeEstruturaG = new Map(structures.map((s, i) => [s.item.uid, i]));
+  const indiceDeEtiquetaG = new Map(labels.map((l, i) => [l.item.uid, i]));
+  const indices = (uids: string[], m: Map<string | undefined, number>) => uids.map((u) => m.get(u)).filter((i): i is number => i !== undefined).sort((x, y) => x - y);
+  const grupos = ordenar(
+    (model.grupos ?? []).filter((g) => model.levels.some((l) => l.id === g.levelId)),
+    (g) => ({
+      nome: g.nome,
+      level: nivel(g.levelId),
+      pivo: { x: g.pivo.x, y: g.pivo.y },
+      origem: { walls: indices(g.origem.walls, indiceDeParede), structures: indices(g.origem.structures, indiceDeEstruturaG), labels: indices(g.origem.labels, indiceDeEtiquetaG) },
+      instancias: [...g.instancias]
+        .filter((i) => model.levels.some((l) => l.id === i.levelId))
+        .sort((x, y) => nivel(x.levelId) - nivel(y.levelId) || x.translacao.x - y.translacao.x || x.translacao.y - y.translacao.y || x.rotacaoGraus - y.rotacaoGraus || cmpStr(x.espelho, y.espelho))
+        .map((i) => ({ level: nivel(i.levelId), translacao: { x: i.translacao.x, y: i.translacao.y }, rotacaoGraus: i.rotacaoGraus, espelho: i.espelho })),
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pivo.x - y.pivo.x || x.pivo.y - y.pivo.y || cmpStr(x.nome, y.nome),
+  );
+  const instanciasOrdenadas = grupos.flatMap((g) =>
+    [...g.item.instancias]
+      .filter((i) => model.levels.some((l) => l.id === i.levelId))
+      .sort((x, y) => nivel(x.levelId) - nivel(y.levelId) || x.translacao.x - y.translacao.x || x.translacao.y - y.translacao.y || x.rotacaoGraus - y.rotacaoGraus || cmpStr(x.espelho, y.espelho)),
+  );
+
   const geometria: Omit<CanonicalPayload, 'identity'> = {
     kernel: KERNEL_VERSION,
     toleranceMm: DEFAULT_TOLERANCE_MM,
@@ -670,6 +699,7 @@ function projetar(model: BlueprintModel): {
     circuitos: circuitos.length ? circuitos.map((c) => c.geom) : undefined,
     labels: labels.map((l) => l.geom),
     unidades: unidades.length ? unidades.map((u) => u.geom) : undefined,
+    grupos: grupos.length ? grupos.map((g) => g.geom) : undefined,
     spaces: spaces.map((s) => s.geom),
   };
 
@@ -695,6 +725,8 @@ function projetar(model: BlueprintModel): {
     circuitos: circuitos.map((c) => c.item.uid ?? null),
     labels: labels.map((l) => l.item.uid ?? null),
     unidades: unidades.map((u) => u.item.uid ?? null),
+    grupos: grupos.map((g) => g.item.uid ?? null),
+    instanciasDeGrupo: instanciasOrdenadas.map((i) => i.uid ?? null),
     spaces: spaces.map((s) => s.item.uid ?? null),
   };
 
@@ -769,6 +801,9 @@ export interface IdentidadeCanonica {
   labels: (ElementUid | null)[];
   /** Ausente em payload gravado sob kernel anterior a 0.37.0. */
   unidades?: (ElementUid | null)[];
+  /** Ausentes em payload gravado sob kernel anterior a 0.38.0. As instâncias, achatadas na ordem canônica. */
+  grupos?: (ElementUid | null)[];
+  instanciasDeGrupo?: (ElementUid | null)[];
   spaces: (ElementUid | null)[];
 }
 
@@ -1029,6 +1064,14 @@ export interface CanonicalPayload {
     tipologia?: string;
     pcd: boolean;
     etiquetas: number[];
+  }[];
+  /** Grupos com origem. Ausente sob kernel < 0.38.0 e em desenho sem nenhum. Origem por índice. */
+  grupos?: {
+    nome: string;
+    level: number;
+    pivo: { x: number; y: number };
+    origem: { walls: number[]; structures: number[]; labels: number[] };
+    instancias: { level: number; translacao: { x: number; y: number }; rotacaoGraus: number; espelho: string }[];
   }[];
   spaces: {
     level: number;
@@ -1429,6 +1472,31 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       tipologia: u.tipologia ?? null,
       pcd: u.pcd,
       etiquetaUids: u.etiquetas.map((k) => model.labels[k]?.uid).filter((x): x is string => typeof x === 'string'),
+    });
+  });
+
+  // Grupos: DEPOIS de paredes, estruturas e etiquetas (origem por índice). As
+  // cópias já estão materializadas no payload como peças normais; a próxima
+  // sincronização as reencontra pelo uid da instância.
+  const gruposLidos = payload.grupos ?? [];
+  let k = 0;
+  const totalDeInstancias = gruposLidos.reduce((s, g) => s + g.instancias.length, 0);
+  gruposLidos.forEach((g, i) => {
+    const uidsDe = (idx: number[], lista: { uid: string }[]) => idx.map((j) => lista[j]?.uid).filter((x): x is string => typeof x === 'string');
+    model.grupos.push({
+      id: nextId(model, 'grp'),
+      uid: uidDe('grupos', i, gruposLidos.length),
+      nome: g.nome,
+      levelId: levelIds[g.level],
+      pivo: { x: g.pivo.x, y: g.pivo.y },
+      origem: { walls: uidsDe(g.origem.walls, model.walls), structures: uidsDe(g.origem.structures, model.structures), labels: uidsDe(g.origem.labels, model.labels) },
+      instancias: g.instancias.map((inst) => ({
+        uid: uidDe('instanciasDeGrupo', k++, totalDeInstancias),
+        levelId: levelIds[inst.level],
+        translacao: { x: inst.translacao.x, y: inst.translacao.y },
+        rotacaoGraus: inst.rotacaoGraus as RotacaoDoGrupo,
+        espelho: inst.espelho as EspelhoDoGrupo,
+      })),
     });
   });
 

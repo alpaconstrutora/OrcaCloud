@@ -22,7 +22,7 @@
  */
 
 import { DEFAULT_TOLERANCE_MM, KernelError, assertIntegerMm, roundToMm } from './units';
-import { EH_UID, type ElementUid } from './identity';
+import { EH_UID, uidDeterministico, type ElementUid } from './identity';
 import {
   cantoEntreEixos,
   cantosDaParede,
@@ -1055,6 +1055,68 @@ export interface Unidade {
   etiquetaUids: ElementUid[];
 }
 
+/**
+ * GRUPO COM ORIGEM (19/09/2026, roadmap E2.3: *"editar a origem propaga às
+ * instâncias; Repetir unidade = criar grupo e instanciar espelhada/rotacionada"*).
+ *
+ * ─── A MESMA DISCIPLINA DO PAVIMENTO TIPO, EM PLANTA ────────────────────────
+ *
+ * A ORIGEM é um conjunto de peças que já existem (paredes — com as aberturas
+ * que hospedam —, estrutura e etiquetas de ambiente), todas do mesmo
+ * pavimento. Cada INSTÂNCIA é uma transformação rígida em planta — espelho
+ * e/ou giro de 90° em torno do `pivo`, depois translação — e as cópias são
+ * MATERIALIZADAS no modelo ao fim de todo comando (`sincronizarGrupos`), com
+ * uid determinístico por (instância, peça de origem): a cópia que já existe
+ * é atualizada com o MESMO id, a nova nasce, a órfã some. Por isso canvas,
+ * quantitativos, IFC e unidades não sabem de grupo: veem paredes.
+ *
+ * Editar uma cópia é recusado (`GROUP_INSTANCE`): edita-se a origem, e
+ * propaga. Desagrupar deixa as cópias como peças livres.
+ *
+ * Instância em pavimento CÓPIA (E2.1) é recusada — o pavimento cópia já é
+ * re-derivado do tipo; instanciar lá seria duas fontes para o mesmo lugar.
+ * Peça de origem não pode ser cópia de instância (sem corrente).
+ *
+ * "Unidade tipo" = grupo (as paredes) + unidade (as etiquetas): ao instanciar
+ * com `unidade`, a etiqueta copiada já nasce numa unidade nova.
+ */
+export type EspelhoDoGrupo = 'NENHUM' | 'X' | 'Y';
+export const ESPELHOS_DO_GRUPO: readonly EspelhoDoGrupo[] = ['NENHUM', 'X', 'Y'];
+export type RotacaoDoGrupo = 0 | 90 | 180 | 270;
+export const ROTACOES_DO_GRUPO: readonly RotacaoDoGrupo[] = [0, 90, 180, 270];
+
+export interface InstanciaDeGrupo {
+  /** Identidade da instância; os uids das cópias derivam dela. */
+  uid: ElementUid;
+  /** Pavimento onde a instância vive (o da origem, por padrão). */
+  levelId: ObjectId;
+  /** Aplicada por último, em mm inteiros. */
+  translacao: Point;
+  /** Giro anti-horário em torno do `pivo`, depois do espelho. */
+  rotacaoGraus: RotacaoDoGrupo;
+  /** `X` reflete em torno da reta vertical pelo pivô (x' = 2·px − x); `Y`, da horizontal. */
+  espelho: EspelhoDoGrupo;
+}
+
+export interface Grupo {
+  id: ObjectId;
+  uid: ElementUid;
+  /** Até 40 caracteres. */
+  nome: string;
+  /** Pavimento da origem. */
+  levelId: ObjectId;
+  /** Ponto fixo do espelho e do giro, em mm inteiros. */
+  pivo: Point;
+  origem: {
+    walls: ElementUid[];
+    structures: ElementUid[];
+    labels: ElementUid[];
+  };
+  instancias: InstanciaDeGrupo[];
+}
+
+export const MAX_NOME_DE_GRUPO = 40;
+
 export const MAX_NUMERO_DE_UNIDADE = 16;
 export const MAX_TIPOLOGIA_DE_UNIDADE = 40;
 
@@ -1707,6 +1769,8 @@ export interface BlueprintModel {
   restricoes: Restricao[];
   /** Unidades autônomas — conjuntos de etiquetas de ambiente. Ver `Unidade`. */
   unidades: Unidade[];
+  /** Grupos com origem e instâncias materializadas. Ver `Grupo`. */
+  grupos: Grupo[];
   /**
    * Escadas e rampas. Como a estrutura e o telhado, NÃO participam do arranjo
    * planar: uma escada dentro da sala não parte o ambiente. O que ela faz ao
@@ -1818,6 +1882,7 @@ export function emptyModel(): BlueprintModel {
     eixos: [],
     restricoes: [],
     unidades: [],
+    grupos: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -1879,6 +1944,12 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     eixos: (model.eixos ?? []).map((e) => ({ ...e, a: { ...e.a }, b: { ...e.b } })),
     restricoes: (model.restricoes ?? []).map((r) => ({ ...r, alvo: { ...r.alvo }, ...(r.referencia ? { referencia: { ...r.referencia } } : {}) })),
     unidades: (model.unidades ?? []).map((u) => ({ ...u, etiquetaUids: [...u.etiquetaUids] })),
+    grupos: (model.grupos ?? []).map((g) => ({
+      ...g,
+      pivo: { ...g.pivo },
+      origem: { walls: [...g.origem.walls], structures: [...g.origem.structures], labels: [...g.origem.labels] },
+      instancias: g.instancias.map((i) => ({ ...i, translacao: { ...i.translacao } })),
+    })),
     // Mesma cópia profunda de `structures.pontos`, pelo mesmo motivo.
     stairs: (model.stairs ?? []).map((e) => ({
       ...e,
@@ -2007,6 +2078,85 @@ export function limparEtiquetasOrfasDasUnidades(model: BlueprintModel): ObjectId
     }
   }
   return tocadas;
+}
+
+export function findGrupo(model: BlueprintModel, id: ObjectId): Grupo {
+  const g = (model.grupos ?? []).find((x) => x.id === id);
+  if (!g) throw new KernelError('GROUP_NOT_FOUND', `Grupo inexistente: ${id}`);
+  return g;
+}
+
+/** Uid determinístico da cópia de `srcUid` na instância `instanciaUid` (ou no pavimento vinculado). */
+export function uidDaCopia(donoUid: ElementUid, srcUid: ElementUid): ElementUid {
+  return uidDeterministico(`vinculo:${donoUid}:${srcUid}`);
+}
+
+/**
+ * A transformação rígida da instância: espelho e giro em torno do pivô,
+ * depois translação. Inteira para inteiros (só múltiplos de 90°).
+ */
+export function transformarPontoDoGrupo(g: Pick<Grupo, 'pivo'>, i: Pick<InstanciaDeGrupo, 'translacao' | 'rotacaoGraus' | 'espelho'>, p: Point): Point {
+  let x = p.x;
+  let y = p.y;
+  if (i.espelho === 'X') x = 2 * g.pivo.x - x;
+  if (i.espelho === 'Y') y = 2 * g.pivo.y - y;
+  const dx = x - g.pivo.x;
+  const dy = y - g.pivo.y;
+  const q = i.rotacaoGraus / 90;
+  const cos = [1, 0, -1, 0][q];
+  const sen = [0, 1, 0, -1][q];
+  return { x: g.pivo.x + dx * cos - dy * sen + i.translacao.x, y: g.pivo.y + dx * sen + dy * cos + i.translacao.y };
+}
+
+/** O giro de uma peça (pilar, terminal) depois da transformação da instância. */
+export function giroTransformadoDoGrupo(i: Pick<InstanciaDeGrupo, 'rotacaoGraus' | 'espelho'>, giro: number | null | undefined): number {
+  const base = giro ?? 0;
+  const espelhado = i.espelho === 'NENHUM' ? base : -base;
+  return (((espelhado + i.rotacaoGraus) % 360) + 360) % 360;
+}
+
+/**
+ * Toda cópia de instância viva: uid da cópia → (grupo, instância). É o que
+ * a recusa de edição e a invariante "sem corrente" consultam.
+ */
+export function copiasDeInstancia(model: BlueprintModel): Map<ElementUid, { grupo: Grupo; instancia: InstanciaDeGrupo }> {
+  const m = new Map<ElementUid, { grupo: Grupo; instancia: InstanciaDeGrupo }>();
+  for (const g of model.grupos ?? []) {
+    const paredesDaOrigem = new Set(g.origem.walls);
+    const aberturas = model.openings.filter((o) => {
+      const w = model.walls.find((x) => x.id === o.wallId);
+      return w && paredesDaOrigem.has(w.uid);
+    });
+    for (const i of g.instancias) {
+      for (const uid of [...g.origem.walls, ...g.origem.structures, ...g.origem.labels, ...aberturas.map((o) => o.uid)]) {
+        m.set(uidDaCopia(i.uid, uid), { grupo: g, instancia: i });
+      }
+    }
+  }
+  return m;
+}
+
+/**
+ * Tira das origens as peças que não existem mais. Roda ao fim de TODO comando:
+ * apagar a parede a tira do grupo (e a sincronização apaga as cópias dela).
+ * O grupo fica, mesmo vazio — sumir com ele em silêncio esconderia o que a
+ * edição fez.
+ */
+export function limparOrigensOrfasDosGrupos(model: BlueprintModel): ObjectId[] {
+  const paredes = new Set(model.walls.map((w) => w.uid));
+  const estruturas = new Set((model.structures ?? []).map((s) => s.uid));
+  const etiquetas = new Set((model.labels ?? []).map((l) => l.uid));
+  const tocados: ObjectId[] = [];
+  for (const g of model.grupos ?? []) {
+    const w = g.origem.walls.filter((u) => paredes.has(u));
+    const s = g.origem.structures.filter((u) => estruturas.has(u));
+    const l = g.origem.labels.filter((u) => etiquetas.has(u));
+    if (w.length !== g.origem.walls.length || s.length !== g.origem.structures.length || l.length !== g.origem.labels.length) {
+      g.origem = { walls: w, structures: s, labels: l };
+      tocados.push(g.id);
+    }
+  }
+  return tocados;
 }
 
 export function findEscada(model: BlueprintModel, id: ObjectId): Escada {
@@ -2880,6 +3030,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Eixo', model.eixos ?? []],
     ['Restrição', model.restricoes ?? []],
     ['Unidade', model.unidades ?? []],
+    ['Grupo', model.grupos ?? []],
     ['Trecho', model.trechos ?? []],
     ['Terminal', model.terminais ?? []],
     ['Quadro', model.quadros ?? []],
@@ -3283,6 +3434,43 @@ export function assertModelInvariants(model: BlueprintModel): void {
         if (!vivas.has(uid)) throw new KernelError('BAD_UNIT', `Unidade ${u.id}: etiqueta inexistente ${uid}`);
         if (etiquetas.has(uid)) throw new KernelError('BAD_UNIT', `Unidade ${u.id}: a etiqueta ${uid} já pertence a outra unidade`);
         etiquetas.add(uid);
+      }
+    }
+  }
+
+  // Grupos: nome curto, pavimento da origem existente, peças da origem existentes e daquele
+  // pavimento, em UM grupo só e nunca cópia de instância (sem corrente); instância com giro
+  // de 90°, espelho conhecido, translação inteira e pavimento existente que não é cópia (E2.1).
+  {
+    const copias = copiasDeInstancia(model);
+    const emOrigem = new Set<ElementUid>();
+    const paredePorUid = new Map(model.walls.map((w) => [w.uid, w]));
+    const estruturaPorUid = new Map((model.structures ?? []).map((s) => [s.uid, s]));
+    const etiquetaPorUid = new Map((model.labels ?? []).map((l) => [l.uid, l]));
+    for (const g of model.grupos ?? []) {
+      if (typeof g.nome !== 'string' || !g.nome.trim() || g.nome.length > MAX_NOME_DE_GRUPO) throw new KernelError('BAD_GROUP', `Grupo ${g.id}: nome vazio ou maior que ${MAX_NOME_DE_GRUPO} caracteres`);
+      if (!model.levels.some((l) => l.id === g.levelId)) throw new KernelError('BAD_GROUP', `Grupo ${g.id}: pavimento inexistente`);
+      if (!Number.isInteger(g.pivo.x) || !Number.isInteger(g.pivo.y)) throw new KernelError('BAD_GROUP', `Grupo ${g.id}: pivô não inteiro`);
+      const conferir = (uid: ElementUid, peca: { levelId: ObjectId } | undefined, familia: string) => {
+        if (!peca) throw new KernelError('BAD_GROUP', `Grupo ${g.id}: ${familia} de origem inexistente ${uid}`);
+        if (peca.levelId !== g.levelId) throw new KernelError('BAD_GROUP', `Grupo ${g.id}: ${familia} de origem em outro pavimento`);
+        if (copias.has(uid)) throw new KernelError('BAD_GROUP', `Grupo ${g.id}: ${familia} de origem é cópia de instância (sem corrente de grupos)`);
+        if (emOrigem.has(uid)) throw new KernelError('BAD_GROUP', `Grupo ${g.id}: ${familia} já pertence à origem de outro grupo`);
+        emOrigem.add(uid);
+      };
+      for (const u of g.origem.walls) conferir(u, paredePorUid.get(u), 'parede');
+      for (const u of g.origem.structures) conferir(u, estruturaPorUid.get(u), 'peça estrutural');
+      for (const u of g.origem.labels) conferir(u, etiquetaPorUid.get(u), 'etiqueta');
+      const uidsDeInstancia = new Set<string>();
+      for (const i of g.instancias) {
+        if (uidsDeInstancia.has(i.uid)) throw new KernelError('BAD_GROUP', `Grupo ${g.id}: instância repetida`);
+        uidsDeInstancia.add(i.uid);
+        if (!(ROTACOES_DO_GRUPO as readonly number[]).includes(i.rotacaoGraus)) throw new KernelError('BAD_GROUP', `Grupo ${g.id}: giro de instância tem de ser 0, 90, 180 ou 270`);
+        if (!ESPELHOS_DO_GRUPO.includes(i.espelho)) throw new KernelError('BAD_GROUP', `Grupo ${g.id}: espelho desconhecido ${String(i.espelho)}`);
+        if (!Number.isInteger(i.translacao.x) || !Number.isInteger(i.translacao.y)) throw new KernelError('BAD_GROUP', `Grupo ${g.id}: translação não inteira`);
+        const nivel = model.levels.find((l) => l.id === i.levelId);
+        if (!nivel) throw new KernelError('BAD_GROUP', `Grupo ${g.id}: instância em pavimento inexistente`);
+        if (nivel.tipoDeId !== undefined) throw new KernelError('BAD_GROUP', `Grupo ${g.id}: instância em pavimento cópia "${nivel.name}" — instancie no tipo`);
       }
     }
   }

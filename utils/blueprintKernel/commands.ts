@@ -27,6 +27,8 @@ import {
   assertModelInvariants,
   assinaturaDasCamadas,
   clonarCamadas,
+  acabamentosOuAusente,
+  type AcabamentosDoAmbiente,
   cloneModel,
   somaDasCamadas,
   type BoundaryKind,
@@ -915,9 +917,13 @@ export type Command =
    */
   | { type: 'SetOpeningEsquadria'; openingId: ObjectId; esquadria: Esquadria | null }
   /** Nome vazio remove a etiqueta. */
-  | { type: 'NameSpace'; spaceId: ObjectId; name: string; tipoDeAmbiente?: TipoDeAmbiente | null }
-  /** Classifica a ETIQUETA de um ambiente. `null` volta a "a classificar". */
-  | { type: 'SetSpaceLabelProps'; labelId: ObjectId; tipoDeAmbiente?: TipoDeAmbiente | null }
+  | { type: 'NameSpace'; spaceId: ObjectId; name: string; tipoDeAmbiente?: TipoDeAmbiente | null; acabamentos?: AcabamentosDoAmbiente | null }
+  /**
+   * Classifica a ETIQUETA de um ambiente. `null` volta a "a classificar".
+   * `acabamentos` (E7.2) SUBSTITUI o conjunto inteiro (piso, forro e rodapé);
+   * `null` limpa. Ausente não mexe.
+   */
+  | { type: 'SetSpaceLabelProps'; labelId: ObjectId; tipoDeAmbiente?: TipoDeAmbiente | null; acabamentos?: AcabamentosDoAmbiente | null }
   /**
    * Renomeia e reposiciona um pavimento. Campo omitido fica como está — o painel
    * edita uma propriedade de cada vez.
@@ -3358,6 +3364,7 @@ function aplicarSemHash(
                 name: nome,
                 // Ausente não mexe no tipo: renomear não é reclassificar.
                 ...(command.tipoDeAmbiente !== undefined ? { tipoDeAmbiente: command.tipoDeAmbiente } : {}),
+                ...(command.acabamentos !== undefined ? { acabamentos: acabamentosOuAusente(command.acabamentos) } : {}),
               }
             : l,
         );
@@ -3371,6 +3378,7 @@ function aplicarSemHash(
           at: ancora,
           name: nome,
           tipoDeAmbiente: command.tipoDeAmbiente ?? null,
+          ...(command.acabamentos ? { acabamentos: acabamentosOuAusente(command.acabamentos) } : {}),
         });
         diff.created.push(id);
       }
@@ -3381,6 +3389,11 @@ function aplicarSemHash(
       const label = next.labels.find((l) => l.id === command.labelId);
       if (!label) throw new KernelError('LABEL_NOT_FOUND', `Etiqueta inexistente: ${command.labelId}`);
       if (command.tipoDeAmbiente !== undefined) label.tipoDeAmbiente = command.tipoDeAmbiente;
+      if (command.acabamentos !== undefined) {
+        const a = acabamentosOuAusente(command.acabamentos);
+        if (a) label.acabamentos = a;
+        else delete label.acabamentos;
+      }
       diff.updated.push(label.id);
       break;
     }

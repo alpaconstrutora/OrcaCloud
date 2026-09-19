@@ -19,10 +19,10 @@
  * escada, inclinação do telhado. Posição, rotação, pavimento, rótulo e vínculo
  * (circuito, parede) ficam de fora — são da instância.
  */
-import type { Agua, Componente, Escada, Structural, Terminal } from './blueprintKernel';
+import type { AcabamentosDoAmbiente, Agua, CamadaParede, Componente, Escada, Rodape, Structural, Terminal } from './blueprintKernel';
 import { CATALOGO_DE_COMPONENTES, nomeDoTipoEstrutural } from './blueprintKernel';
 
-export type FamiliaDeTipo = 'ESTRUTURA' | 'TERMINAL' | 'ESCADA' | 'TELHADO' | 'COMPONENTE';
+export type FamiliaDeTipo = 'ESTRUTURA' | 'TERMINAL' | 'ESCADA' | 'TELHADO' | 'COMPONENTE' | 'PISO' | 'FORRO';
 
 export const ROTULO_DA_FAMILIA_DE_TIPO: Record<FamiliaDeTipo, string> = {
   ESTRUTURA: 'estrutura',
@@ -30,6 +30,8 @@ export const ROTULO_DA_FAMILIA_DE_TIPO: Record<FamiliaDeTipo, string> = {
   ESCADA: 'escada / rampa',
   TELHADO: 'água de telhado',
   COMPONENTE: 'componente (mobiliário, louça…)',
+  PISO: 'piso (camadas + rodapé)',
+  FORRO: 'forro (camadas + rebaixo)',
 };
 
 export interface PropriedadesDeEstrutura {
@@ -75,7 +77,24 @@ export interface PropriedadesDeComponente {
   profundidadeMm: number;
   alturaMm: number;
 }
-export type PropriedadesDoTipo = PropriedadesDeEstrutura | PropriedadesDeTerminal | PropriedadesDeEscada | PropriedadesDeTelhado | PropriedadesDeComponente;
+/**
+ * PISO e FORRO (E7.2): a composição do ambiente como tipo da organização —
+ * "porcelanato 10 mm sobre contrapiso 50 + rodapé 7 cm" salvo uma vez e
+ * aplicado ambiente a ambiente. O rodapé anda com o piso (é o mesmo material
+ * que sobe a parede); `null` = o tipo declara "sem rodapé"; ausente = pela
+ * política. O forro leva o rebaixo, que é o que muda o pé-direito útil.
+ */
+export interface PropriedadesDePiso {
+  familia: 'PISO';
+  camadas: CamadaParede[];
+  rodape?: Rodape | null;
+}
+export interface PropriedadesDeForro {
+  familia: 'FORRO';
+  camadas: CamadaParede[];
+  rebaixoMm: number;
+}
+export type PropriedadesDoTipo = PropriedadesDeEstrutura | PropriedadesDeTerminal | PropriedadesDeEscada | PropriedadesDeTelhado | PropriedadesDeComponente | PropriedadesDePiso | PropriedadesDeForro;
 
 // ─── Extrair da instância ────────────────────────────────────────────────────
 
@@ -125,9 +144,13 @@ export function assinaturaDoTipo(p: PropriedadesDoTipo): string {
   // Vazio (null/undefined) NÃO entra: o catálogo devolve JSON, que perde as
   // chaves undefined, e a assinatura de ida tem de ser a de volta.
   return Object.keys(plano)
-    .filter((k) => plano[k] !== undefined && plano[k] !== null)
+    .filter((k) => plano[k] !== undefined)
     .sort()
-    .map((k) => `${k}=${String(plano[k])}`)
+    // Composições (piso/forro) são arrays de objetos: `String()` daria
+    // "[object Object]" e todo piso teria a mesma assinatura. JSON com as
+    // chaves ordenadas é estável na ida e na volta do banco. `null` fica
+    // explícito onde tem significado (rodapé "sem").
+    .map((k) => `${k}=${plano[k] === null ? 'null' : typeof plano[k] === 'object' ? JSON.stringify(plano[k], (_c, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.keys(v as object).sort().reduce<Record<string, unknown>>((o, kk) => ((o[kk] = (v as Record<string, unknown>)[kk]), o), {}) : v)) : String(plano[k])}`)
     .join('|');
 }
 
@@ -149,7 +172,17 @@ export function resumoDoTipo(p: PropriedadesDoTipo): string {
       return `${p.inclinacaoPct} % · base ${m(p.baseMm)} m`;
     case 'COMPONENTE':
       return `${CATALOGO_DE_COMPONENTES[p.tipoId]?.rotulo ?? p.tipoId} ${cm(p.larguraMm)}×${cm(p.profundidadeMm)} · ${m(p.alturaMm)} m`;
+    case 'PISO':
+      return `${resumoDasCamadas(p.camadas)}${p.rodape === null ? ' · sem rodapé' : p.rodape ? ` · rodapé ${cm(p.rodape.alturaMm)} cm` : ''}`;
+    case 'FORRO':
+      return `${resumoDasCamadas(p.camadas)} · rebaixo ${cm(p.rebaixoMm)} cm`;
   }
+}
+
+/** "Porcelanato 10 + argamassa 5 + contrapiso 50 (65 mm)". */
+export function resumoDasCamadas(camadas: CamadaParede[]): string {
+  const total = camadas.reduce((s, c) => s + c.espessuraMm, 0);
+  return `${camadas.map((c) => `${c.descricao || c.funcao.toLowerCase()} ${c.espessuraMm}`).join(' + ')} (${total} mm)`;
 }
 
 /** Nome sugerido ao salvar — o usuário edita antes de gravar. */
@@ -194,4 +227,27 @@ export function propriedadesDoComponente(c: Componente): PropriedadesDeComponent
 }
 export function camposDoComponente(p: PropriedadesDeComponente) {
   return { tipoId: p.tipoId, familia: p.familiaDoComponente, larguraMm: p.larguraMm, profundidadeMm: p.profundidadeMm, alturaMm: p.alturaMm };
+}
+
+// ─── Piso e forro (E7.2): tipo ↔ acabamentos da etiqueta ─────────────────────
+
+export function propriedadesDoPiso(a: AcabamentosDoAmbiente | undefined): PropriedadesDePiso {
+  return { familia: 'PISO', camadas: (a?.piso ?? []).map((c) => ({ ...c })), ...(a && a.rodape !== undefined ? { rodape: a.rodape ? { ...a.rodape } : null } : {}) };
+}
+export function propriedadesDoForro(a: AcabamentosDoAmbiente | undefined): PropriedadesDeForro {
+  return { familia: 'FORRO', camadas: (a?.forro?.camadas ?? []).map((c) => ({ ...c })), rebaixoMm: a?.forro?.rebaixoMm ?? 0 };
+}
+/** Aplica o tipo de PISO por cima dos acabamentos atuais — forro fica como está. */
+export function aplicarTipoDePiso(atual: AcabamentosDoAmbiente | undefined, p: PropriedadesDePiso): AcabamentosDoAmbiente {
+  const out: AcabamentosDoAmbiente = { ...(atual?.forro ? { forro: atual.forro } : {}) };
+  if (p.camadas.length > 0) out.piso = p.camadas.map((c) => ({ ...c }));
+  if (p.rodape !== undefined) out.rodape = p.rodape ? { ...p.rodape } : null;
+  else if (atual && atual.rodape !== undefined) out.rodape = atual.rodape;
+  return out;
+}
+/** Aplica o tipo de FORRO por cima dos acabamentos atuais — piso e rodapé ficam. */
+export function aplicarTipoDeForro(atual: AcabamentosDoAmbiente | undefined, p: PropriedadesDeForro): AcabamentosDoAmbiente {
+  const out: AcabamentosDoAmbiente = { ...(atual?.piso ? { piso: atual.piso } : {}), ...(atual && atual.rodape !== undefined ? { rodape: atual.rodape } : {}) };
+  if (p.camadas.length > 0) out.forro = { camadas: p.camadas.map((c) => ({ ...c })), rebaixoMm: p.rebaixoMm };
+  return out;
 }

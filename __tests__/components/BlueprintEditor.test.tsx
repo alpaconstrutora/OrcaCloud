@@ -1793,6 +1793,79 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(linhaCama).toHaveTextContent(/sugerido/);
   }, 60000);
 
+  it('acabamentos (E7.2): a gaveta lista os ambientes; sugerir pelo tipo grava presets na etiqueta; o editor troca o rodapé para "sem" (comprimento zero); aplicar aos iguais copia; tipo PISO salvo aplica a composição; o cartão e o quantitativo refletem', async () => {
+    listElementTypes.mockResolvedValue([
+      { id: 'tp_piso', organizationId: 'org_1', familia: 'PISO', nome: 'Piso vinílico', active: true, createdAt: '', updatedAt: '',
+        propriedades: { familia: 'PISO', camadas: [{ espessuraMm: 30, itemCode: 'CP', descricao: 'Contrapiso', funcao: 'REVESTIMENTO' }, { espessuraMm: 3, itemCode: 'VIN', descricao: 'Vinílico', funcao: 'ACABAMENTO' }], rodape: { alturaMm: 50, itemCode: 'RV', descricao: 'Rodapé vinílico' } } },
+    ]);
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    // Dois dormitórios 4 × 3 lado a lado e um banheiro 2 × 3; portas ao sul.
+    let m = k.applyBatch(nivel.model, [w(0, 0, 10000, 0), w(10000, 0, 10000, 3000), w(10000, 3000, 0, 3000), w(0, 3000, 0, 0), w(4000, 0, 4000, 3000), w(8000, 0, 8000, 3000)]).model;
+    const sul = m.walls.find((x) => x.a.y === 0 && x.b.y === 0)!;
+    const dormA = m.spaces.find((s) => s.ring.every((p) => p.x <= 4000))!;
+    const dormB = m.spaces.find((s) => s.ring.every((p) => p.x >= 4000 && p.x <= 8000))!;
+    const banho = m.spaces.find((s) => s.ring.every((p) => p.x >= 8000))!;
+    m = k.applyBatch(m, [
+      { type: 'NameSpace', spaceId: dormA.id, name: 'Dormitório 1', tipoDeAmbiente: 'SALA_DORMITORIO' },
+      { type: 'NameSpace', spaceId: dormB.id, name: 'Dormitório 2', tipoDeAmbiente: 'SALA_DORMITORIO' },
+      { type: 'NameSpace', spaceId: banho.id, name: 'Banheiro', tipoDeAmbiente: 'BANHEIRO' },
+      { type: 'AddOpening', wallId: sul.id, kind: 'door', offsetMm: 1000, widthMm: 800, heightMm: 2100, sillMm: 0 },
+      { type: 'AddOpening', wallId: sul.id, kind: 'door', offsetMm: 5000, widthMm: 800, heightMm: 2100, sillMm: 0 },
+      { type: 'AddOpening', wallId: sul.id, kind: 'door', offsetMm: 9000, widthMm: 700, heightMm: 2100, sillMm: 0 },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    // O cartão do ambiente diz "sem declaração" e tem o botão que abre a gaveta.
+    expect(screen.getByTestId(`acabamentos-do-ambiente-${dormA.id}`)).toHaveTextContent(/sem declaração/);
+    await user.click(screen.getByRole('button', { name: 'Acabamentos de Dormitório 1' }));
+    const gaveta = await screen.findByTestId('tarefa-acabamentos');
+    expect(within(gaveta).getByTestId('resumo-dos-acabamentos')).toHaveTextContent(/0 de 3 ambiente\(s\) com acabamentos declarados · 3 sem piso · 3 sem forro/);
+    // Abriu já no Dormitório 1 (foco do cartão).
+    expect(within(gaveta).getByTestId('editor-de-acabamentos')).toHaveTextContent(/Dormitório 1/);
+    // Sugerir pelo tipo: dormitórios porcelanato + gesso, banheiro cerâmica sem rodapé + PVC.
+    await user.click(within(gaveta).getByTestId('sugerir-acabamentos'));
+    const g = () => screen.getByTestId('tarefa-acabamentos');
+    expect(within(g()).getByTestId('resumo-dos-acabamentos')).toHaveTextContent(/3 de 3 ambiente\(s\)/);
+    const linha = (nome: string) => within(g()).getByRole('row', { name: `Ambiente ${nome}` });
+    expect(linha('Dormitório 1')).toHaveTextContent(/Porcelanato · 55 mm/);
+    expect(linha('Dormitório 1')).toHaveTextContent(/Placa de gesso acartonado · rebaixo 30 cm/);
+    expect(linha('Dormitório 1')).toHaveTextContent(/Rodapé de porcelanato 7 cm/);
+    expect(linha('Banheiro')).toHaveTextContent(/Cerâmica antiderrapante/);
+    expect(linha('Banheiro')).toHaveTextContent(/sem/);
+    // Pé-direito útil do dormitório: 2,80 − 0,055 − 0,30 − 0,014 = 2,43 m.
+    expect(linha('Dormitório 1')).toHaveTextContent(/2,43 m/);
+    // Editor do Dormitório 1: rodapé → "sem" zera o comprimento na linha.
+    const editor1 = within(g()).getByTestId('editor-de-acabamentos');
+    await user.selectOptions(within(editor1).getByLabelText('Rodapé de Dormitório 1'), 'SEM');
+    expect(linha('Dormitório 1')).toHaveTextContent(/0,00/);
+    // Aplicar aos iguais: o Dormitório 2 (mesmo tipo) recebe a mesma composição, inclusive "sem rodapé".
+    await user.click(within(g()).getByTestId('aplicar-aos-iguais'));
+    expect(linha('Dormitório 2')).toHaveTextContent(/Porcelanato · 55 mm/);
+    expect(linha('Dormitório 2')).toHaveTextContent(/0,00/);
+    // Tipo PISO salvo na organização: aplicar troca as camadas e o rodapé (3,3 cm de piso, rodapé 5 cm).
+    const seletorPiso = await within(within(g()).getByTestId('editor-de-acabamentos')).findByTestId('seletor-de-tipo-piso');
+    const selectTipo = (await within(seletorPiso).findByLabelText(/Aplicar um tipo de piso/)) as HTMLSelectElement;
+    await waitFor(() => expect(selectTipo).toBeEnabled());
+    await user.selectOptions(selectTipo, 'tp_piso');
+    expect(linha('Dormitório 1')).toHaveTextContent(/Vinílico · 33 mm/);
+    expect(linha('Dormitório 1')).toHaveTextContent(/Rodapé vinílico 5 cm/);
+    // Materiais do desenho inteiro: o vinílico aparece com código.
+    expect(within(g()).getByTestId('materiais-de-acabamento')).toHaveTextContent(/Vinílico/);
+    // O cartão do navegador reflete; o quantitativo (Por ambiente) mostra as colunas.
+    await user.keyboard('{Escape}');
+    expect(screen.getByTestId(`acabamentos-do-ambiente-${dormA.id}`)).toHaveTextContent(/Piso: Vinílico \(33 mm\)/);
+    const tela = await abrirTelaDeQuantitativos();
+    await user.click(within(tela).getByRole('tab', { name: /^Por ambiente/ }));
+    const linhas = within(tela).getAllByRole('row').map((r) => (r.textContent ?? '').replace(/\s+/g, ' '));
+    expect(linhas.some((l) => /Dormitório 1.*Vinílico · 33 mm.*Placa de gesso acartonado · rebaixo 0,30 m.*Rodapé vinílico · 5 cm/.test(l))).toBe(true);
+    expect(linhas.some((l) => /Banheiro.*sem rodapé/.test(l))).toBe(true);
+    listElementTypes.mockResolvedValue([]);
+  }, 60000);
+
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2500 });

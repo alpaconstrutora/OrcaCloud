@@ -96,7 +96,9 @@ import ActionIconButton from '../ui/ActionIconButton';
 import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
 import MenuEncaixe from './MenuEncaixe';
 import { TIPOS_DE_ENCAIXE, ROTULO_DO_ENCAIXE } from '../../utils/blueprintEncaixe';
-import type { TipoDePontoEletrico } from '../../utils/blueprintKernel';
+import type { TipoDePontoEletrico, AcabamentosDoAmbiente, ObjectId } from '../../utils/blueprintKernel';
+import { acabamentosDoAmbiente } from '../../utils/blueprintKernel';
+import type { Quantitativos } from '../../utils/blueprintKernel/quantities';
 import MenuComponentes, { type EscolhaComponente } from './MenuComponentes';
 import ModalSobreposicao, { type EscolhaSobreposicao } from './ModalSobreposicao';
 import PainelComponentes from './PainelComponentes';
@@ -362,6 +364,8 @@ import {
 import TelaAlternativas from './TelaAlternativas';
 import TelaGerador from './TelaGerador';
 import PainelMobiliario from './PainelMobiliario';
+import PainelAcabamentos, { type AmbienteComAcabamento } from './PainelAcabamentos';
+import { resumirAcabamentos } from '../../utils/blueprintAcabamentos';
 import PainelIa, { concluirTurno, novoTurno, turnoComMudancas, type TurnoDaConversa } from './PainelIa';
 import { aplicarMudancas, interpretarPedidoLocal } from '../../utils/blueprintIa';
 import { pedirMudancasAIa } from '../../services/plantaIaService';
@@ -756,6 +760,8 @@ const ROTULO_DA_TAREFA = {
   // MOBILIÁRIO mínimo e circulação livre (19/09/2026, E6.3): kit por uso,
   // circulação de 0,90/1,20 verificada; vagas e shaft quando o programa pede.
   mobiliario: 'Mobiliário e circulação',
+  // PISO, FORRO E RODAPÉ (19/09/2026, E7.2): camadas por ambiente na etiqueta, tipos da organização, material por camada.
+  acabamentos: 'Piso, forro e rodapé por ambiente',
   // IA conversacional (19/09/2026, E6.4): pedido → mudanças no programa/hipóteses → re-geração → delta.
   ia: 'Conversar com a planta',
   'gerar-paredes': 'Gerar paredes do PDF',
@@ -1495,6 +1501,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [tipoDeComponente, setTipoDeComponente] = useState<TipoDeComponente>('CAMA_CASAL');
   const [hipotesesDeVagas, setHipotesesDeVagas] = usePersistedState<HipotesesDeVagas>('blueprint:vagas', HIPOTESES_VAGAS_PADRAO);
   const [regiaoDeVagasPedida, setRegiaoDeVagasPedida] = useState<RegiaoDeVagas | null>(null);
+  /** ACABAMENTOS (E7.2): o ambiente que a gaveta abre já expandido (vindo do cartão). */
+  const [ambienteDeAcabamentos, setAmbienteDeAcabamentos] = useState<ObjectId | null>(null);
   const [resultadoDeVagas, setResultadoDeVagas] = useState<string | null>(null);
 
   /**
@@ -2210,10 +2218,45 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     return areaConstruidaMm2(editor.model, nivel) / 1_000_000;
   }, [editor.model, levelId]);
 
+  const quantRef = useRef<Quantitativos | null>(null);
+  /**
+   * ACABAMENTOS (E7.2): os ambientes do pavimento com o que a etiqueta declarou
+   * e a medida do quantitativo ao vivo (área de piso líquida, rodapé derivado).
+   */
+  const ambientesParaAcabamento = useMemo<AmbienteComAcabamento[]>(() => {
+    const nivel = editor.model.levels.find((l) => l.id === levelId);
+    return ambientes.map((a) => {
+      const s = editor.model.spaces.find((x) => x.id === a.id)!;
+      const q = quantRef.current?.ambientes.find((x) => x.spaceId === a.id);
+      return {
+        spaceId: a.id,
+        rotulo: a.rotulo,
+        tipoDeAmbiente: a.tipoDeAmbiente,
+        areaPisoM2: q?.areaPisoM2 ?? a.areaM2,
+        comprimentoRodapeM: q ? (q.rodapeDeclarado === null ? q.comprimentoRodapeM : q.comprimentoRodapeM) : a.perimetroM,
+        peDireitoMm: nivel?.defaultHeightMm ?? 2800,
+        acabamentos: acabamentosDoAmbiente(editor.model, s),
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ambientes, editor.model, levelId]);
+
+  /** Grava os acabamentos de UM ambiente: pela etiqueta se ela existe, criando-a pelo nome exibido se não. */
+  const aplicarAcabamentos = useCallback(
+    (spaceId: ObjectId, acabamentos: AcabamentosDoAmbiente | null) => {
+      const a = ambientes.find((x) => x.id === spaceId);
+      if (!a) return;
+      if (a.etiquetaId) editor.run({ type: 'SetSpaceLabelProps', labelId: a.etiquetaId, acabamentos });
+      else if (acabamentos) editor.run({ type: 'NameSpace', spaceId, name: a.rotulo, acabamentos });
+    },
+    [ambientes, editor],
+  );
+
   const quant = useMemo(
     () => computeQuantities(editor.model, POLITICA_PADRAO),
     [editor.model],
   );
+  quantRef.current = quant;
   /** O aço de cada peça e por família — a mesma conta do orçamento e da planilha. */
   const armadura = useMemo(
     () => armaduraDoModelo(editor.model, quant, hipotesesDeArmadura),
@@ -7507,6 +7550,25 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               </GrupoDoRibbon>
             )}
 
+            {/* ACABAMENTOS (19/09/2026, E7.2): piso, forro e rodapé por ambiente —
+                camadas na etiqueta (kernel 0.43.0), tipos da organização, material
+                por camada; o quantitativo e o orçamento saem por material. */}
+            {!emVista && (
+              <GrupoDoRibbon rotulo="Acabamentos">
+                <BotaoDoRibbon
+                  icone={Layers}
+                  rotulo="Piso e forro"
+                  contagem={ambientesParaAcabamento.filter((a) => !a.acabamentos).length || undefined}
+                  ativo={tarefaAberta === 'acabamentos'}
+                  onClick={() => {
+                    setAmbienteDeAcabamentos(null);
+                    alternarTarefa('acabamentos');
+                  }}
+                  ajuda="Piso (camadas de baixo para cima), forro (camadas + rebaixo) e rodapé (pela política, declarado ou sem) por ambiente; presets, tipos salvos na organização e material por camada — quantitativo e orçamento por material"
+                />
+              </GrupoDoRibbon>
+            )}
+
             {/* CORTE. Não é construção nem medida: o que sai daqui é uma VISTA.
                 Grupo próprio, e não o menu Componentes — a lista de componentes é
                 o que se constrói, e uma linha de corte não se constrói. */}
@@ -9809,6 +9871,21 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                       </dd>
                     </div>
                   </dl>
+                  {/* ACABAMENTOS (E7.2): o que a etiqueta declarou; o botão abre a gaveta neste ambiente. */}
+                  <p className="mt-1 flex items-center gap-1 text-xs text-slate-500" data-testid={`acabamentos-do-ambiente-${a.id}`}>
+                    <span className="truncate">{resumirAcabamentos(ambientesParaAcabamento.find((x) => x.spaceId === a.id)?.acabamentos)}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAmbienteDeAcabamentos(a.id);
+                        setTarefa('acabamentos');
+                      }}
+                      aria-label={`Acabamentos de ${a.rotulo}`}
+                      className="ml-auto shrink-0 rounded border border-slate-300 px-1.5 py-0.5 text-[11px] text-slate-700 hover:bg-slate-50"
+                    >
+                      Piso/forro
+                    </button>
+                  </p>
                   {/* GRAFO ESPACIAL (E4.2): com quem se liga, o que dá para fora, quão longe da saída. */}
                   {grafoDoNivel && (() => {
                     const no = grafoDoNivel.nos.find((n) => n.spaceId === a.id);
@@ -9922,6 +9999,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'pilares' && <RectangleVertical className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'vigas' && <RectangleHorizontal className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'lajes' && <Layers className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'acabamentos' && <Layers className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'fundacoes' && <SquareStack className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'pontosHidraulicos' && <ShowerHead className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'agua' && <Droplets className="h-5 w-5 text-blue-700" />}
@@ -9937,6 +10015,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           <SheetDescription>
             {tarefaAberta === 'ia' &&
               'Peça em português: "suíte +2 m²", "3 dormitórios", "corredor de 1,20 m". O pedido vira mudança no programa ou nas hipóteses, o gerador re-gera e você lê o delta dos indicadores. Nunca desenha direto.'}
+            {tarefaAberta === 'acabamentos' &&
+              'Piso, forro e rodapé de cada ambiente, gravados na etiqueta do ambiente. Cada mudança é um passo de desfazer; o material é item do catálogo (SINAPI ou base própria) e é ele que leva a camada ao orçamento.'}
             {tarefaAberta === 'mobiliario' &&
               'O kit mínimo de cada ambiente colocado no retângulo interno (porta e janelas respeitadas) e a circulação livre medida da porta à frente de cada peça. Sugestão desenhada; vagas e shaft entram no modelo pelo kernel.'}
             {tarefaAberta === 'insolacao' &&
@@ -10014,7 +10094,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' || tarefaAberta === 'mobiliario' || tarefaAberta === 'ia' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' || tarefaAberta === 'mobiliario' || tarefaAberta === 'ia' || tarefaAberta === 'acabamentos' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
 
@@ -10035,6 +10115,32 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onAbrirGerador={() => {
                 setTarefa(null);
                 setTelaAberta('gerar');
+              }}
+            />
+          )}
+
+          {tarefaAberta === 'acabamentos' && (
+            <PainelAcabamentos
+              ambientes={ambientesParaAcabamento}
+              nomeDoPavimento={editor.model.levels.find((l) => l.id === levelId)?.name ?? 'pavimento'}
+              alturaRodapePoliticaMm={POLITICA_PADRAO.alturaRodapeMm}
+              porAcabamento={quant.totais.porAcabamento ?? []}
+              foco={ambienteDeAcabamentos}
+              onAplicar={aplicarAcabamentos}
+              onAplicarEmVarios={(ids, acabamentos) => {
+                // Um lote, um Ctrl+Z: etiqueta existente recebe as props; ambiente
+                // sem etiqueta ganha uma pelo nome exibido.
+                const cmds: Command[] = [];
+                for (const id of ids) {
+                  const a = ambientes.find((x) => x.id === id);
+                  if (!a) continue;
+                  cmds.push(a.etiquetaId ? { type: 'SetSpaceLabelProps', labelId: a.etiquetaId, acabamentos } : { type: 'NameSpace', spaceId: id, name: a.rotulo, acabamentos });
+                }
+                if (cmds.length) editor.runBatch(cmds);
+              }}
+              onSelecionar={(spaceId) => {
+                setTarefa(null);
+                selecionar([spaceId]);
               }}
             />
           )}

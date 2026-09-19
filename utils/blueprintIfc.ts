@@ -111,7 +111,7 @@ export const COBERTURA_IFC = [
   'CONTÉM estrutura de concreto: IfcColumn (pilar), IfcBeam (viga), IfcSlab (laje), IfcPile (estaca), IfcFooting (bloco de coroamento e viga de fundação).',
   'CONTÉM propriedades e quantidades: Pset_*Common só com o que o desenho sabe derivar (IsExternal, LoadBearing), Pset_OpuraPlanta com a identidade e a procedência de cada elemento, e Qto_*BaseQuantities calculadas pelo mesmo motor da aba Quantitativos.',
   'CUSTO: só quando a exportação foi marcada para incluí-lo. Vem como Pset_OpuraPlanta.Cost (IfcMonetaryMeasure, moeda BRL declarada em IfcMonetaryUnit) e só nos elementos com custo apurado — elemento sem linha de orçamento NÃO ganha a propriedade, porque "não orçado" e "custa zero" são coisas diferentes. Sem a marcação, o arquivo não menciona dinheiro em lugar nenhum.',
-  'PISO e FORRO: saem como IfcCovering (.FLOORING. e .CEILING.) por ambiente, ligados a ele por IfcRelCoversSpaces, com a ÁREA em Qto_CoveringBaseQuantities. SEM GEOMETRIA, de propósito: o desenho sabe a área e NÃO sabe a espessura, e inventar uma poria volume de argamassa num arquivo de coordenação. NÃO CONTÉM revestimento de parede (CLADDING): dizer quais faces recebem acabamento exigiria uma informação que o desenho não tem.',
+  'PISO e FORRO: saem como IfcCovering (.FLOORING. e .CEILING.) por ambiente, ligados a ele por IfcRelCoversSpaces, com a ÁREA em Qto_CoveringBaseQuantities. SEM GEOMETRIA, de propósito: o desenho sabe a área e, sem declaração, NÃO sabe a espessura — inventar uma poria volume de argamassa num arquivo de coordenação. Quando o ambiente DECLAROU as camadas (piso de baixo para cima, forro de cima para baixo), elas saem como IfcMaterialLayerSet associado ao IfcCovering, a espessura total em Qto_CoveringBaseQuantities.Width e o rebaixo do forro em Pset_OpuraAcabamento; o RODAPÉ declarado sai como IfcCovering .SKIRTINGBOARD. com Length (perímetro menos os vãos que chegam ao piso) e Height, e o material associado. Ambiente que declarou "sem rodapé" não emite rodapé. Continua sem sólido: a área e a espessura estão lá para quem quiser extrudar, e o arquivo não afirma uma laje de acabamento que ninguém modelou. NÃO CONTÉM revestimento de parede (CLADDING): dizer quais faces recebem acabamento exigiria uma informação que o desenho não tem.',
   'O GlobalId de cada elemento é ESTÁVEL entre versões publicadas do mesmo estudo: a mesma parede tem o mesmo GUID na revisão seguinte.',
   'CONTÉM telhado: um IfcRoof por pavimento agregando uma IfcSlab .ROOF. por água — sólido inclinado extrudado ao longo da normal do plano —, com Pset_RoofCommon (ProjectedArea e TotalArea), Pset_SlabCommon.PitchAngle e Qto_Roof/SlabBaseQuantities. A área TOTAL é a da superfície inclinada, não a projeção.',
   'CONTÉM escada e rampa: IfcStair e IfcRamp (PredefinedType STRAIGHT_RUN / QUARTER_TURN / HALF_TURN pela contagem de vértices do eixo), com um sólido por degrau (ou por trecho de rampa) — o perfil lateral extrudado pela largura —, Pset_StairCommon (NumberOfRiser, NumberOfTreads, RiserHeight, TreadLength), Pset_RampCommon.RequiredSlope e Qto_Stair/RampBaseQuantities. O número de degraus é o DERIVADO do desnível, o mesmo do desenho. O furo na laje NÃO é IfcOpeningElement: a laje sai inteira e o desconto fica no Qto.',
@@ -2305,12 +2305,28 @@ function emitirRevestimentos(
   ctx: Ctx,
   espacoProduto: string,
   espaco: Space,
-  q: { areaPisoM2: number; perimetroEixoM: number } | undefined,
+  q: Pick<QuantidadeAmbiente, 'areaPisoM2' | 'perimetroEixoM'> & Partial<Pick<QuantidadeAmbiente, 'piso' | 'forro' | 'rodapeDeclarado' | 'comprimentoRodapeM' | 'areaRodapeM2'>> | undefined,
   psetOpura: (produto: string, uid: string | undefined, rotulo: string | undefined) => void,
 ): void {
-  const { emitir, guidDe, historico } = ctx;
+  const { emitir, guidDe, guid, historico } = ctx;
   const areaM2 = q?.areaPisoM2;
   if (!areaM2 || areaM2 <= 0) return;
+
+  // CAMADAS DECLARADAS (E7.2): o mesmo IfcMaterialLayerSet da parede, sem
+  // "usage" porque o revestimento não tem corpo — o receptor lê o material e a
+  // espessura de cada camada e a espessura total em Width.
+  const associarCamadas = (produto: string, camadas: { espessuraM: number; descricao: string; itemCode: string }[], rotulo: string, semente: string) => {
+    if (camadas.length === 0) return 0;
+    const layers = camadas.map((c) => {
+      const nome = c.descricao || c.itemCode || 'Material não especificado';
+      const material = emitir(`IFCMATERIAL(${s(nome)},$,$)`);
+      return emitir(`IFCMATERIALLAYER(${material},${n(Math.round(c.espessuraM * 1000))},$,${s(nome)},$,$,$)`);
+    });
+    const total = camadas.reduce((acc, c) => acc + Math.round(c.espessuraM * 1000), 0);
+    const conjunto = emitir(`IFCMATERIALLAYERSET((${layers.join(',')}),${s(`${rotulo} ${total} mm`)},$)`);
+    emitir(`IFCRELASSOCIATESMATERIAL(${guid(semente)},${historico},$,$,(${produto}),${conjunto})`);
+    return total;
+  };
 
   for (const [tipo, sufixo, nome] of [
     ['.FLOORING.', 'piso', 'Piso'],
@@ -2328,13 +2344,45 @@ function emitirRevestimentos(
       `IFCCOVERING(${guidDe(uidDoRevestimento, `cov-${sufixo}-${espaco.id}`)},` +
         `${historico},${s(`${nome} — ${espaco.name ?? 'Ambiente'}`)},$,$,$,$,$,${tipo})`,
     );
+    const camadas = sufixo === 'piso' ? q?.piso?.camadas ?? [] : q?.forro?.camadas ?? [];
+    const espessuraMm = associarCamadas(produto, camadas, nome, `mat-${sufixo}-${espaco.labelUid ?? espaco.id}`);
     emitirQto(ctx, produto, undefined, 'Qto_CoveringBaseQuantities', [
       { classe: 'IFCQUANTITYAREA', nome: 'GrossArea', valor: areaM2, formula: 'área do ambiente' },
       { classe: 'IFCQUANTITYAREA', nome: 'NetArea', valor: areaM2, formula: 'área do ambiente' },
+      ...(espessuraMm > 0 ? [{ classe: 'IFCQUANTITYLENGTH' as const, nome: 'Width', valor: espessuraMm, formula: 'soma das camadas declaradas' }] : []),
     ]);
     psetOpura(produto, undefined, undefined);
+    if (sufixo === 'forro' && q?.forro) {
+      emitirPset(ctx, produto, undefined, 'Pset_OpuraAcabamento', [
+        ['RebaixoMm', { tipo: 'IFCREAL', v: Math.round(q.forro.rebaixoM * 1000) }],
+        ['Camadas', { tipo: 'IFCLABEL', v: q.forro.camadas.map((c) => `${c.descricao || c.funcao} ${Math.round(c.espessuraM * 1000)}`).join(' + ') }],
+      ]);
+    }
     emitir(
       `IFCRELCOVERSSPACES(${guidDe(undefined, `cobre-${sufixo}-${espaco.id}`)},${historico},$,$,` +
+        `${espacoProduto},(${produto}))`,
+    );
+  }
+
+  // RODAPÉ DECLARADO (E7.2): comprimento derivado (perímetro − vãos que chegam
+  // ao piso), altura e material declarados. `null` = o ambiente não tem.
+  const r = q?.rodapeDeclarado;
+  if (r && (q?.comprimentoRodapeM ?? 0) > 0) {
+    const uidDoRodape = espaco.labelUid ? uidDeterministico(`${espaco.labelUid}:rodape`) : undefined;
+    const produto = emitir(
+      `IFCCOVERING(${guidDe(uidDoRodape, `cov-rodape-${espaco.id}`)},` +
+        `${historico},${s(`Rodapé — ${espaco.name ?? 'Ambiente'}`)},$,${s(r.descricao || r.itemCode || 'Rodapé')},$,$,$,.SKIRTINGBOARD.)`,
+    );
+    emitirQto(ctx, produto, undefined, 'Qto_CoveringBaseQuantities', [
+      { classe: 'IFCQUANTITYLENGTH', nome: 'Length', valor: (q?.comprimentoRodapeM ?? 0) * 1000, formula: 'perímetro − vãos que chegam ao piso' },
+      { classe: 'IFCQUANTITYLENGTH', nome: 'Height', valor: r.alturaMm, formula: 'altura declarada' },
+      { classe: 'IFCQUANTITYAREA', nome: 'NetArea', valor: q?.areaRodapeM2 ?? 0, formula: 'comprimento × altura' },
+    ]);
+    const material = emitir(`IFCMATERIAL(${s(r.descricao || r.itemCode || 'Rodapé')},$,$)`);
+    emitir(`IFCRELASSOCIATESMATERIAL(${guid(`mat-rodape-${espaco.labelUid ?? espaco.id}`)},${historico},$,$,(${produto}),${material})`);
+    psetOpura(produto, undefined, undefined);
+    emitir(
+      `IFCRELCOVERSSPACES(${guidDe(undefined, `cobre-rodape-${espaco.id}`)},${historico},$,$,` +
         `${espacoProduto},(${produto}))`,
     );
   }

@@ -55,7 +55,7 @@ interface LinhaDeInstalacao {
 
 interface LinhaDoResumo {
   chave: string;
-  grupo: 'Arquitetura' | 'Estrutura' | 'Aço' | 'Material' | 'Instalações';
+  grupo: 'Arquitetura' | 'Estrutura' | 'Aço' | 'Material' | 'Acabamento' | 'Instalações';
   item: string;
   valor: number;
   unidade: string;
@@ -77,6 +77,10 @@ const COLUNAS_AMBIENTE: StandardTableColumn[] = [
   { key: 'areaEixoM2', label: 'Eixo (m²)', width: 110, align: 'right' },
   { key: 'areaEstruturaM2', label: 'Pilares (− m²)', width: 120, align: 'right' },
   { key: 'comprimentoRodapeM', label: 'Rodapé (m)', width: 110, align: 'right' },
+  // ACABAMENTOS DECLARADOS (E7.2): o que a etiqueta do ambiente diz; "—" sem declaração.
+  { key: 'piso', label: 'Piso', width: 170, sortable: false },
+  { key: 'forro', label: 'Forro', width: 170, sortable: false },
+  { key: 'rodapeDeclarado', label: 'Rodapé (material)', width: 150, sortable: false },
   // Pé-direito do PAVIMENTO e volume = piso × pé-direito (E0.2). O ambiente não
   // tem altura própria no modelo; a coluna diz de onde o número veio.
   { key: 'peDireitoM', label: 'Pé-direito (m)', width: 120, align: 'right' },
@@ -209,7 +213,18 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
       for (const m of t.porMaterial) {
         add({ grupo: 'Material', item: m.descricao || m.itemCode || 'Sem material', valor: m.volumeM3, unidade: 'm³', detalhe: `${fmt(m.areaFaceM2)} m² de face · função ${m.funcao}` });
       }
-      add({ grupo: 'Arquitetura', item: 'Rodapé', valor: t.comprimentoRodapeM, unidade: 'm', detalhe: 'Perímetro interno menos os vãos de porta' });
+      add({ grupo: 'Arquitetura', item: 'Rodapé', valor: t.comprimentoRodapeM, unidade: 'm', detalhe: 'Perímetro interno menos os vãos de porta; zero onde o ambiente declarou "sem rodapé"' });
+      // ACABAMENTOS DECLARADOS (E7.2): piso e forro por material (m² e m³), rodapé declarado por material (m).
+      for (const m of t.porAcabamento ?? []) {
+        const escopo = m.escopo === 'PISO' ? 'Piso' : m.escopo === 'FORRO' ? 'Forro' : 'Rodapé';
+        add({
+          grupo: 'Acabamento',
+          item: `${escopo} · ${m.descricao || m.itemCode || 'sem material'}`,
+          valor: m.escopo === 'RODAPE' ? m.comprimentoM : m.areaM2,
+          unidade: m.escopo === 'RODAPE' ? 'm' : 'm²',
+          detalhe: m.escopo === 'RODAPE' ? `${fmt(m.areaM2)} m² (comprimento × altura declarada) · ${m.ambientes} ambiente(s)` : `${fmt(m.volumeM3)} m³ · função ${m.funcao ?? '—'} · ${m.ambientes} ambiente(s)`,
+        });
+      }
       add({ grupo: 'Arquitetura', item: 'Aberturas', valor: t.areaAberturasM2, unidade: 'm²', detalhe: `${t.portas} porta(s), ${t.janelas} janela(s)` });
     }
     if (quant.estruturas.length > 0) {
@@ -389,6 +404,16 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
                 return a.areaEstruturaM2 > 0 ? <span className="block text-right text-sm tabular-nums text-gray-700">− {fmt(a.areaEstruturaM2)}</span> : <span className="block text-right text-sm text-gray-300">—</span>;
               case 'comprimentoRodapeM':
                 return num(fmt, a.comprimentoRodapeM);
+              case 'piso': {
+                const topo = a.piso?.camadas[a.piso.camadas.length - 1];
+                return topo ? <span className="text-xs text-gray-700">{topo.descricao || topo.funcao.toLowerCase()} · {Math.round(a.piso!.camadas.reduce((s, c) => s + c.espessuraM, 0) * 1000)} mm</span> : <span className="text-xs text-gray-300">—</span>;
+              }
+              case 'forro': {
+                const face = a.forro?.camadas[0];
+                return face ? <span className="text-xs text-gray-700">{face.descricao || face.funcao.toLowerCase()}{a.forro!.rebaixoM ? ` · rebaixo ${fmt(a.forro!.rebaixoM)} m` : ' · colado'}</span> : <span className="text-xs text-gray-300">—</span>;
+              }
+              case 'rodapeDeclarado':
+                return a.rodapeDeclarado === null ? <span className="text-xs text-gray-700">sem rodapé</span> : a.rodapeDeclarado ? <span className="text-xs text-gray-700">{a.rodapeDeclarado.descricao || a.rodapeDeclarado.itemCode || 'declarado'} · {Math.round(a.rodapeDeclarado.alturaMm / 10)} cm</span> : <span className="text-xs text-gray-300">política</span>;
               case 'peDireitoM':
                 return num(fmt, a.peDireitoM);
               case 'volumeM3':

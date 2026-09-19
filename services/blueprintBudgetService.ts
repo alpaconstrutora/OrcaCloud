@@ -15,6 +15,7 @@ import { HIPOTESES_ARMADURA_PADRAO, armaduraDoModelo, hipotesesDeArmaduraDaColun
 import {
   gerarLancamentos,
   gerarLancamentosDeCamadas,
+  gerarLancamentosDeAcabamentos,
   gerarLancamentosDeEsquadrias,
   prefixoDoEstudo,
   aplicarNoOrcamento,
@@ -174,9 +175,11 @@ export async function preverLancamentos(
   // Os códigos das CAMADAS entram na mesma resolução dos códigos do de-para: é o
   // mesmo espaço de códigos (SINAPI + base própria), e uma segunda ida ao
   // catálogo só duplicaria a consulta e a chance de as duas divergirem.
-  const codigosDeCamada = (quant.totais.porMaterial ?? [])
-    .map((m) => m.itemCode)
-    .filter((c) => c !== '');
+  const codigosDeCamada = [
+    ...(quant.totais.porMaterial ?? []).map((m) => m.itemCode),
+    // Acabamentos (E7.2): mesmo espaço de códigos, mesma resolução.
+    ...(quant.totais.porAcabamento ?? []).map((m) => m.itemCode),
+  ].filter((c) => c !== '');
   const itens = await resolverItens([
     ...mapeamentos.map((m) => m.item_code),
     ...codigosDeCamada,
@@ -209,6 +212,7 @@ export async function preverLancamentos(
 
   const doDePara = gerarLancamentos(quant, resolvidos, contexto, { armadura });
   const dasCamadas = gerarLancamentosDeCamadas(quant, itens, contexto);
+  const dosAcabamentos = gerarLancamentosDeAcabamentos(quant, itens, contexto);
   const dasEsquadrias = gerarLancamentosDeEsquadrias(quant, itens, contexto);
 
   // Os dois conjuntos são somados, e não escolhidos: eles medem coisas
@@ -220,10 +224,11 @@ export async function preverLancamentos(
   // alvenaria genérica e outra por material. A prévia mostra os dois blocos
   // separados justamente para que isso fique visível ANTES de aplicar.
   const resultado: ResultadoGeracao = {
-    entries: [...doDePara.entries, ...dasCamadas.entries, ...dasEsquadrias.entries],
+    entries: [...doDePara.entries, ...dasCamadas.entries, ...dosAcabamentos.entries, ...dasEsquadrias.entries],
     divergencias: [
       ...doDePara.divergencias,
       ...dasCamadas.divergencias,
+      ...dosAcabamentos.divergencias,
       ...dasEsquadrias.divergencias,
     ],
   };

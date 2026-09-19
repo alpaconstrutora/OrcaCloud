@@ -1065,6 +1065,85 @@ export function gerarLancamentosDeCamadas(
 }
 
 /**
+ * Lançamentos dos ACABAMENTOS DECLARADOS (19/09/2026, E7.2) — piso, forro e
+ * rodapé por material, pelo item que o usuário escolheu no ambiente.
+ *
+ * Espelha `gerarLancamentosDeCamadas`: não passa pelo de-para (a escolha do
+ * item já foi feita no desenho), sempre agrupado por escopo × material ×
+ * função, e a UNIDADE do item decide a grandeza — piso e forro: m³ leva o
+ * volume, m² leva a área; rodapé: m leva o comprimento, m² leva comprimento ×
+ * altura. Item em outra unidade é divergência, não aproximação.
+ *
+ * ⚠️ Quem declara piso no ambiente e AINDA mapeia `AREA_PISO` no de-para
+ * compra o piso duas vezes — a prévia mostra os blocos separados para que isso
+ * fique visível antes de aplicar (mesma nota das camadas de parede).
+ */
+export function gerarLancamentosDeAcabamentos(
+  quant: Quantitativos,
+  itensPorCodigo: Map<string, SinapiItem>,
+  ctx: ContextoGeracao,
+): ResultadoGeracao {
+  const entries: BudgetEntry[] = [];
+  const divergencias: Divergencia[] = [];
+  const ROTULO = { PISO: 'Piso', FORRO: 'Forro', RODAPE: 'Rodapé' } as const;
+  const procedencia =
+    `Gerado dos acabamentos declarados por ambiente na planta "${ctx.studyName}", versão ${ctx.revision} ` +
+    `(hash ${ctx.snapshotHash.slice(0, 12)}). Política ${quant.policy.version}, ` +
+    `kernel ${quant.kernelVersion || '—'}.`;
+
+  for (const m of quant.totais.porAcabamento ?? []) {
+    const rotulo = ROTULO[m.escopo];
+    const grandeza = m.escopo === 'RODAPE' ? `${m.comprimentoM.toFixed(2)} m` : `${m.areaM2.toFixed(2)} m²`;
+    if (!m.itemCode) {
+      divergencias.push({
+        mapeamentoId: `acabamento:${m.escopo}:${m.funcao ?? ''}`,
+        medida: 'ACABAMENTO',
+        itemCode: '',
+        motivo: `${grandeza} de ${rotulo.toLowerCase()}${m.funcao ? ` (${m.funcao.toLowerCase()})` : ''} sem material vinculado em ${m.ambientes} ambiente(s). Escolha o item nos acabamentos do ambiente.`,
+      });
+      continue;
+    }
+    const item = itensPorCodigo.get(m.itemCode);
+    if (!item) {
+      divergencias.push({ mapeamentoId: `acabamento:${m.escopo}:${m.itemCode}`, medida: 'ACABAMENTO', itemCode: m.itemCode, motivo: `Item ${m.itemCode} não encontrado no catálogo (SINAPI nem base própria).` });
+      continue;
+    }
+    const dim = dimensaoDaUnidade(item.unit);
+    const aceitas: Dimensao[] = m.escopo === 'RODAPE' ? ['M', 'M2'] : ['M3', 'M2'];
+    if (!dim || !aceitas.includes(dim)) {
+      divergencias.push({
+        mapeamentoId: `acabamento:${m.escopo}:${m.itemCode}`,
+        medida: 'ACABAMENTO',
+        itemCode: m.itemCode,
+        motivo: `O ${rotulo.toLowerCase()} produz ${aceitas.join(' ou ')}, mas o item ${m.itemCode} é cotado em "${item.unit}". Nenhuma linha foi gerada.`,
+      });
+      continue;
+    }
+    const valor = dim === 'M3' ? m.volumeM3 : dim === 'M' ? m.comprimentoM : m.areaM2;
+    if (valor <= 0) continue;
+    entries.push({
+      id: `bp:${ctx.studyId}:acabamento:${m.escopo}:${m.itemCode}:${m.funcao ?? ''}`,
+      sinapiItem: item,
+      quantity: valor,
+      phase: '',
+      group: `Acabamentos — ${rotulo.toLowerCase()}`,
+      discipline: 'Planta Inteligente',
+      notes: procedencia,
+      calculationMemory: {
+        formula:
+          m.escopo === 'RODAPE'
+            ? dim === 'M' ? 'Σ (perímetro − vãos que chegam ao piso), por ambiente com rodapé declarado' : 'Σ (comprimento de rodapé × altura declarada), por ambiente'
+            : dim === 'M3' ? 'Σ (área de piso líquida × espessura da camada), por ambiente' : 'Σ (área de piso líquida), por ambiente',
+        variables: { escopo: m.escopo, material: m.descricao || m.itemCode, funcao: m.funcao ?? '', areaM2: m.areaM2, volumeM3: m.volumeM3, comprimentoM: m.comprimentoM, ambientes: m.ambientes, snapshot: ctx.snapshotId },
+        result: valor,
+        justification: procedencia,
+      },
+    });
+  }
+  return { entries, divergencias };
+}
+
+/**
  * Lançamentos por TIPO DE ESQUADRIA — uma linha por tipo, pelo item dele.
  *
  * Espelha `gerarLancamentosDeCamadas`, decisão por decisão: sempre agrupado

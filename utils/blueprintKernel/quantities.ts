@@ -18,9 +18,9 @@
  * ligada ao snapshot que a originou.
  */
 
-import type { BlueprintModel, FuncaoCamada, Level, Opening, Space, Structural, StructuralKind, Wall } from './model';
+import type { AcabamentosDoAmbiente, BlueprintModel, FuncaoCamada, Level, Opening, Rodape, Space, Structural, StructuralKind, Wall } from './model';
 import { areaDaSecaoT, perimetroDeFormaDaSecaoT, secaoTValida } from './secaoT';
-import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural } from './model';
+import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural, acabamentosDoAmbiente } from './model';
 import { contornoExternoDoNivel } from './arrangement';
 import { medirAgua } from './telhado';
 import { assinaturaDaEsquadria, nomeDaEsquadria } from './model';
@@ -154,9 +154,18 @@ export interface QuantityPolicy {
  * explodir no giro de 180° (ponta solta no contorno — `tan(90°)`). Uma planta
  * real mostrava 91.863.221.361.873 m² construídos. Polígono sem ponta solta
  * não muda de número; o que tinha ponta passa de infinito para finito.
+ *
+ * 1.10.0 → 1.11.0 (19/09/2026, E7.2): ACABAMENTOS. O ambiente que declara piso,
+ * forro e rodapé na etiqueta (kernel 0.43.0) passa a sair com as camadas
+ * MEDIDAS (área = área de piso líquida; volume = área × espessura), com
+ * `forro.rebaixoM` e com o rodapé DECLARADO — altura do ambiente em vez da
+ * política, e `null` zera o comprimento (banheiro azulejado até o chão não tem
+ * rodapé a comprar). `totais.porAcabamento` agrupa por escopo × material ×
+ * função, como `porMaterial` faz para a parede. Ambiente sem declaração não
+ * muda de número.
  */
 export const POLITICA_PADRAO: QuantityPolicy = {
-  version: 'quant-1.10.0',
+  version: 'quant-1.11.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -193,6 +202,42 @@ export interface QuantidadeAmbiente {
   areaEstruturaM2: number;
   /** Explica de onde saiu a área de piso, para conferência. */
   formulaAreaPiso: string;
+  /**
+   * ACABAMENTOS declarados na etiqueta (E7.2), já medidos. Ausente quando o
+   * ambiente nada declarou — o número acima vale igual.
+   */
+  piso?: { camadas: CamadaDeAcabamentoMedida[] };
+  forro?: { rebaixoM: number; camadas: CamadaDeAcabamentoMedida[] };
+  /** `null` = o ambiente declarou NÃO ter rodapé; ausente = pela política. */
+  rodapeDeclarado?: Rodape | null;
+}
+
+/** Uma camada de piso ou forro, medida: a área é a de piso LÍQUIDA do ambiente. */
+export interface CamadaDeAcabamentoMedida {
+  indice: number;
+  itemCode: string;
+  descricao: string;
+  funcao: FuncaoCamada;
+  espessuraM: number;
+  areaM2: number;
+  volumeM3: number;
+}
+
+/**
+ * Material de acabamento somado no desenho inteiro, por escopo — a lista de
+ * compras do piso, do forro e do rodapé (razão de `QuantidadePorMaterial`).
+ * PISO e FORRO trazem área e volume; RODAPÉ traz comprimento e área
+ * (comprimento × altura declarada).
+ */
+export interface QuantidadePorAcabamento {
+  escopo: 'PISO' | 'FORRO' | 'RODAPE';
+  itemCode: string;
+  descricao: string;
+  funcao: FuncaoCamada | null;
+  areaM2: number;
+  volumeM3: number;
+  comprimentoM: number;
+  ambientes: number;
 }
 
 /**
@@ -582,6 +627,8 @@ export interface Quantitativos {
      * diferentes, e um total único devolveria um número que não compra nada.
      */
     porMaterial: QuantidadePorMaterial[];
+    /** Piso, forro e rodapé DECLARADOS, por material (E7.2). Vazio quando nada foi declarado. */
+    porAcabamento: QuantidadePorAcabamento[];
     comprimentoRodapeM: number;
     portas: number;
     janelas: number;
@@ -1080,6 +1127,7 @@ export function computeQuantities(
     (a, b) => a.itemCode.localeCompare(b.itemCode) || a.funcao.localeCompare(b.funcao),
   );
 
+
   // ── Aberturas ─────────────────────────────────────────────────────────────
   const aberturas: QuantidadeAbertura[] = model.openings.map((o) => ({
     openingId: o.id,
@@ -1264,9 +1312,29 @@ export function computeQuantities(
       (o) => o.sillMm === 0,
     );
     const vaoPortasMm = interrompemRodape.reduce((soma, o) => soma + o.widthMm, 0);
-    const rodapeMm = Math.max(0, s.perimeterMm - vaoPortasMm);
+    const rodapeDerivadoMm = Math.max(0, s.perimeterMm - vaoPortasMm);
+
+    // ACABAMENTOS (E7.2): o que a etiqueta declarou. Rodapé `null` zera o
+    // comprimento — o ambiente disse que não tem; altura declarada vence a da
+    // política. Piso e forro: cada camada com a área de piso líquida.
+    const acab: AcabamentosDoAmbiente | undefined = acabamentosDoAmbiente(model, s);
+    const rodapeMm = acab?.rodape === null ? 0 : rodapeDerivadoMm;
+    const alturaRodapeMm = acab?.rodape ? acab.rodape.alturaMm : policy.alturaRodapeMm;
+    const medirCamadas = (camadas: { espessuraMm: number; itemCode: string; descricao: string; funcao: FuncaoCamada }[]): CamadaDeAcabamentoMedida[] =>
+      camadas.map((c, indice) => ({
+        indice,
+        itemCode: c.itemCode,
+        descricao: c.descricao,
+        funcao: c.funcao,
+        espessuraM: c.espessuraMm / 1000,
+        areaM2: pisoLiquidoMm2 / MM2_PARA_M2,
+        volumeM3: (pisoLiquidoMm2 * c.espessuraMm) / 1e9,
+      }));
 
     return {
+      ...(acab?.piso ? { piso: { camadas: medirCamadas(acab.piso) } } : {}),
+      ...(acab?.forro ? { forro: { rebaixoM: acab.forro.rebaixoMm / 1000, camadas: medirCamadas(acab.forro.camadas) } } : {}),
+      ...(acab && acab.rodape !== undefined ? { rodapeDeclarado: acab.rodape ? { ...acab.rodape } : null } : {}),
       spaceId: s.id,
       uid: s.labelUid ?? null,
       nome: s.name,
@@ -1275,12 +1343,36 @@ export function computeQuantities(
       areaPisoComPerdaM2: ((pisoLiquidoMm2 * (1 + policy.perdaRevestimento)) / MM2_PARA_M2),
       perimetroEixoM: (s.perimeterMm / 1000),
       comprimentoRodapeM: (rodapeMm / 1000),
-      areaRodapeM2: ((rodapeMm * policy.alturaRodapeMm) / MM2_PARA_M2),
+      areaRodapeM2: ((rodapeMm * alturaRodapeMm) / MM2_PARA_M2),
       areaEstruturaM2: (estruturaMm2 / MM2_PARA_M2),
       formulaAreaPiso:
         estruturaMm2 > 0 ? `${formula} − seção dos pilares no ambiente` : formula,
     };
   });
+
+  // ── Acabamentos por material (E7.2) ───────────────────────────────────────
+  const acabamentos = new Map<string, QuantidadePorAcabamento>();
+  const somarAcabamento = (escopo: QuantidadePorAcabamento['escopo'], itemCode: string, descricao: string, funcao: FuncaoCamada | null, areaM2: number, volumeM3: number, comprimentoM: number) => {
+    const chave = `${escopo} ${itemCode} ${funcao ?? ''}`;
+    const atual = acabamentos.get(chave);
+    if (atual) {
+      atual.areaM2 += areaM2;
+      atual.volumeM3 += volumeM3;
+      atual.comprimentoM += comprimentoM;
+      atual.ambientes += 1;
+    } else {
+      acabamentos.set(chave, { escopo, itemCode, descricao, funcao, areaM2, volumeM3, comprimentoM, ambientes: 1 });
+    }
+  };
+  for (const a of ambientes) {
+    for (const c of a.piso?.camadas ?? []) somarAcabamento('PISO', c.itemCode, c.descricao, c.funcao, c.areaM2, c.volumeM3, 0);
+    for (const c of a.forro?.camadas ?? []) somarAcabamento('FORRO', c.itemCode, c.descricao, c.funcao, c.areaM2, c.volumeM3, 0);
+    if (a.rodapeDeclarado) somarAcabamento('RODAPE', a.rodapeDeclarado.itemCode, a.rodapeDeclarado.descricao, null, a.areaRodapeM2, 0, a.comprimentoRodapeM);
+  }
+  const ORDEM_ESCOPO = { PISO: 0, FORRO: 1, RODAPE: 2 } as const;
+  const porAcabamento = [...acabamentos.values()].sort(
+    (a, b) => ORDEM_ESCOPO[a.escopo] - ORDEM_ESCOPO[b.escopo] || a.itemCode.localeCompare(b.itemCode) || (a.funcao ?? '').localeCompare(b.funcao ?? ''),
+  );
 
   // ── Instalações ───────────────────────────────────────────────────────────
   //
@@ -1408,6 +1500,7 @@ export function computeQuantities(
       areaParedeDuasFacesM2: (somaFace * 2),
       volumeAlvenariaM3: (paredes.reduce((s, p) => s + p.volumeM3, 0)),
       porMaterial,
+      porAcabamento,
       comprimentoRodapeM: (ambientes.reduce((s, a) => s + a.comprimentoRodapeM, 0)),
       portas: aberturas.filter((o) => o.tipo === 'door').length,
       janelas: aberturas.filter((o) => o.tipo === 'window').length,

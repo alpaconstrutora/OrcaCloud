@@ -86,6 +86,8 @@ export type FuncaoCamada =
   | 'ACABAMENTO'
   | 'CAMARA_AR';
 
+export const FUNCOES_DE_CAMADA: readonly FuncaoCamada[] = ['ESTRUTURAL', 'VEDACAO', 'REVESTIMENTO', 'ISOLAMENTO', 'ACABAMENTO', 'CAMARA_AR'];
+
 /**
  * Uma faixa de material dentro da espessura da parede.
  *
@@ -620,6 +622,83 @@ export const TIPOS_DE_AMBIENTE = [
 
 export type TipoDeAmbiente = (typeof TIPOS_DE_AMBIENTE)[number];
 
+/**
+ * ACABAMENTOS DO AMBIENTE (19/09/2026, E7.2) — piso, forro e rodapé.
+ *
+ * ─── POR QUE MORAM NA ETIQUETA ──────────────────────────────────────────────
+ *
+ * Ambiente é DERIVADO (ver `Space`): mover uma parede recria todos, com ids
+ * novos. O que o ambiente "sabe de si" — nome, tipo, unidade — já vive na
+ * ETIQUETA ancorada num ponto, religada a cada rederivação. O piso e o forro
+ * são mais uma coisa que o ambiente sabe de si, e a mesma âncora serve: um
+ * "elemento piso" com contorno próprio duplicaria a geometria do ambiente e
+ * divergiria dela na primeira parede movida.
+ *
+ * As CAMADAS reusam `CamadaParede` de propósito (molde da composição da
+ * parede): mesmo código opaco de catálogo, mesma função construtiva, mesma
+ * assinatura para "duas peças são do mesmo tipo". O piso lista de BAIXO para
+ * CIMA (contrapiso → assentamento → revestimento); o forro, de CIMA para BAIXO
+ * (estrutura → placa → pintura). A área das duas é a ÁREA DE PISO líquida do
+ * ambiente (recuada, sem ilhas nem pilares) — o quantitativo faz a conta.
+ *
+ * O RODAPÉ é DERIVADO no comprimento (perímetro − vãos que chegam ao piso,
+ * regra de `quantities.ts`) e DECLARADO no material e na altura. `null`
+ * explícito = "este ambiente não tem rodapé" (banheiro com cerâmica até o
+ * chão), diferente de ausente = "não disse; vale a altura da política".
+ */
+export interface Forro {
+  /** De cima para baixo. Vazia é inválida — use `forro` ausente. */
+  camadas: CamadaParede[];
+  /** Distância da laje/teto à face inferior do forro, em mm inteiro ≥ 0. 0 = colado (pintura na laje). */
+  rebaixoMm: number;
+}
+export interface Rodape {
+  /** Altura em mm inteiro, 1 a `MAX_ALTURA_DE_RODAPE_MM`. */
+  alturaMm: number;
+  /** Código no catálogo, como em `CamadaParede`. `''` = ainda sem vínculo. */
+  itemCode: string;
+  /** Descrição em CACHE — rótulo de tela. */
+  descricao: string;
+}
+export interface AcabamentosDoAmbiente {
+  /** De baixo para cima. Vazia é inválida — use ausente. */
+  piso?: CamadaParede[];
+  forro?: Forro;
+  /** `null` = sem rodapé (declarado). Ausente = pela política do quantitativo. */
+  rodape?: Rodape | null;
+}
+export const MAX_REBAIXO_DE_FORRO_MM = 2000;
+export const MAX_ALTURA_DE_RODAPE_MM = 500;
+
+export function clonarAcabamentos(a: AcabamentosDoAmbiente | undefined): AcabamentosDoAmbiente | undefined {
+  if (!a) return undefined;
+  const out: AcabamentosDoAmbiente = {};
+  if (a.piso) out.piso = clonarCamadas(a.piso)!;
+  if (a.forro) out.forro = { camadas: clonarCamadas(a.forro.camadas)!, rebaixoMm: a.forro.rebaixoMm };
+  if (a.rodape !== undefined) out.rodape = a.rodape ? { ...a.rodape } : null;
+  return out;
+}
+
+/** `{}` vira ausente: duas escritas para "nada declarado" quebrariam o round-trip. */
+export function acabamentosOuAusente(a: AcabamentosDoAmbiente | null | undefined): AcabamentosDoAmbiente | undefined {
+  if (!a) return undefined;
+  const c = clonarAcabamentos(a)!;
+  return c.piso || c.forro || c.rodape !== undefined ? c : undefined;
+}
+
+/** Assinatura para "mesmo tipo de piso/forro/rodapé" — pela mesma razão de `assinaturaDasCamadas`. */
+export function assinaturaDosAcabamentos(a: AcabamentosDoAmbiente | undefined): string {
+  if (!a) return '';
+  const r = a.rodape === undefined ? '' : a.rodape === null ? 'sem' : `${a.rodape.alturaMm}|${a.rodape.itemCode}`;
+  return `P:${assinaturaDasCamadas(a.piso)};F:${a.forro ? `${a.forro.rebaixoMm}@${assinaturaDasCamadas(a.forro.camadas)}` : ''};R:${r}`;
+}
+
+/** Os acabamentos que o AMBIENTE herda da etiqueta que o nomeia. */
+export function acabamentosDoAmbiente(model: BlueprintModel, space: Space): AcabamentosDoAmbiente | undefined {
+  if (!space.labelUid) return undefined;
+  return (model.labels ?? []).find((l) => l.uid === space.labelUid)?.acabamentos;
+}
+
 export interface SpaceLabel {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
@@ -629,6 +708,8 @@ export interface SpaceLabel {
   name: string;
   /** Ver `TIPOS_DE_AMBIENTE`. Omitido no canônico quando ausente. */
   tipoDeAmbiente?: TipoDeAmbiente | null;
+  /** Piso, forro e rodapé (E7.2). Omitido no canônico quando ausente. */
+  acabamentos?: AcabamentosDoAmbiente;
 }
 
 /**
@@ -2219,7 +2300,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     terminais: (model.terminais ?? []).map((t) => ({ ...t, at: { ...t.at } })),
     quadros: (model.quadros ?? []).map((q) => ({ ...q, at: { ...q.at } })),
     circuitos: (model.circuitos ?? []).map((c) => ({ ...c })),
-    labels: (model.labels ?? []).map((l) => ({ ...l, at: { ...l.at } })),
+    labels: (model.labels ?? []).map((l) => ({ ...l, at: { ...l.at }, ...(l.acabamentos ? { acabamentos: clonarAcabamentos(l.acabamentos)! } : {}) })),
     spaces: model.spaces.map((s) => ({
       ...s,
       ring: s.ring.map((p) => ({ ...p })),
@@ -3355,6 +3436,35 @@ export function assertModelInvariants(model: BlueprintModel): void {
   for (const l of model.labels ?? []) {
     if (l.tipoDeAmbiente != null && !(TIPOS_DE_AMBIENTE as readonly string[]).includes(l.tipoDeAmbiente)) {
       throw new KernelError('BAD_SPACE_KIND', `Tipo de ambiente inválido em ${l.id}: ${l.tipoDeAmbiente}`);
+    }
+    // ACABAMENTOS (E7.2): lista vazia é erro (use ausente — a razão de
+    // `EMPTY_LAYERS`); camada com espessura inteira positiva e função da lista;
+    // rebaixo e altura de rodapé em faixas que uma obra real tem.
+    const a = l.acabamentos;
+    if (a !== undefined) {
+      if (!a.piso && !a.forro && a.rodape === undefined) {
+        throw new KernelError('BAD_FINISH', `Etiqueta ${l.id} com acabamentos vazios — use ausente`);
+      }
+      const camadasOk = (camadas: CamadaParede[], onde: string) => {
+        if (camadas.length === 0) throw new KernelError('BAD_FINISH', `${onde} de ${l.id} sem camadas — use ausente`);
+        for (const [i, c] of camadas.entries()) {
+          assertIntegerMm(c.espessuraMm, `${l.id}.${onde}[${i}].espessuraMm`);
+          if (c.espessuraMm <= 0) throw new KernelError('BAD_FINISH', `Camada ${i + 1} do ${onde} de ${l.id} com espessura não positiva`);
+          if (!FUNCOES_DE_CAMADA.includes(c.funcao)) throw new KernelError('BAD_FINISH', `Função de camada inválida no ${onde} de ${l.id}: ${String(c.funcao)}`);
+          if (typeof c.itemCode !== 'string' || typeof c.descricao !== 'string') throw new KernelError('BAD_FINISH', `Camada ${i + 1} do ${onde} de ${l.id} sem código/descrição em texto`);
+        }
+      };
+      if (a.piso) camadasOk(a.piso, 'piso');
+      if (a.forro) {
+        camadasOk(a.forro.camadas, 'forro');
+        assertIntegerMm(a.forro.rebaixoMm, `${l.id}.forro.rebaixoMm`);
+        if (a.forro.rebaixoMm < 0 || a.forro.rebaixoMm > MAX_REBAIXO_DE_FORRO_MM) throw new KernelError('BAD_FINISH', `Rebaixo do forro de ${l.id} fora de 0–${MAX_REBAIXO_DE_FORRO_MM} mm`);
+      }
+      if (a.rodape) {
+        assertIntegerMm(a.rodape.alturaMm, `${l.id}.rodape.alturaMm`);
+        if (a.rodape.alturaMm <= 0 || a.rodape.alturaMm > MAX_ALTURA_DE_RODAPE_MM) throw new KernelError('BAD_FINISH', `Altura do rodapé de ${l.id} fora de 1–${MAX_ALTURA_DE_RODAPE_MM} mm`);
+        if (typeof a.rodape.itemCode !== 'string' || typeof a.rodape.descricao !== 'string') throw new KernelError('BAD_FINISH', `Rodapé de ${l.id} sem código/descrição em texto`);
+      }
     }
   }
 

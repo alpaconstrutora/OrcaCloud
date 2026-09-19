@@ -633,6 +633,18 @@ function projetar(model: BlueprintModel): {
       // `undefined` quando ausente: a chave some, e o hash dos desenhos que
       // nunca souberam de tipo de ambiente não muda.
       tipoDeAmbiente: l.tipoDeAmbiente ?? undefined,
+      // ACABAMENTOS (0.43.0): só quando declarados, campo a campo na ordem
+      // fixa — o `stableStringify` ordena chaves, mas a forma tem de ser a
+      // mesma na ida e na volta.
+      acabamentos: l.acabamentos
+        ? {
+            piso: l.acabamentos.piso?.map((c) => ({ espessuraMm: c.espessuraMm, itemCode: c.itemCode, descricao: c.descricao, funcao: c.funcao })),
+            forro: l.acabamentos.forro
+              ? { camadas: l.acabamentos.forro.camadas.map((c) => ({ espessuraMm: c.espessuraMm, itemCode: c.itemCode, descricao: c.descricao, funcao: c.funcao })), rebaixoMm: l.acabamentos.forro.rebaixoMm }
+              : undefined,
+            rodape: l.acabamentos.rodape === undefined ? undefined : l.acabamentos.rodape === null ? null : { alturaMm: l.acabamentos.rodape.alturaMm, itemCode: l.acabamentos.rodape.itemCode, descricao: l.acabamentos.rodape.descricao },
+          }
+        : undefined,
     }),
     (x, y) =>
       nivel(x.levelId) - nivel(y.levelId) ||
@@ -1176,6 +1188,12 @@ export interface CanonicalPayload {
     name: string;
     /** Tipo do ambiente (NBR 5410). Ausente sob kernel < 0.24.0 e quando não classificado. */
     tipoDeAmbiente?: string;
+    /** Piso, forro e rodapé (E7.2). Ausente sob kernel < 0.43.0 e quando nada foi declarado. */
+    acabamentos?: {
+      piso?: { espessuraMm: number; itemCode: string; descricao: string; funcao: string }[];
+      forro?: { camadas: { espessuraMm: number; itemCode: string; descricao: string; funcao: string }[]; rebaixoMm: number };
+      rodape?: { alturaMm: number; itemCode: string; descricao: string } | null;
+    };
   }[];
   /** Unidades. Ausente sob kernel < 0.37.0 e em desenho sem nenhuma. Etiquetas por índice em `labels`. */
   unidades?: {
@@ -1632,6 +1650,15 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       at: { x: l.at.x, y: l.at.y },
       name: l.name,
       tipoDeAmbiente: (l.tipoDeAmbiente as TipoDeAmbiente) ?? null,
+      ...(l.acabamentos
+        ? {
+            acabamentos: {
+              ...(l.acabamentos.piso ? { piso: l.acabamentos.piso.map((c) => ({ espessuraMm: c.espessuraMm, itemCode: c.itemCode, descricao: c.descricao, funcao: c.funcao as FuncaoCamada })) } : {}),
+              ...(l.acabamentos.forro ? { forro: { camadas: l.acabamentos.forro.camadas.map((c) => ({ espessuraMm: c.espessuraMm, itemCode: c.itemCode, descricao: c.descricao, funcao: c.funcao as FuncaoCamada })), rebaixoMm: l.acabamentos.forro.rebaixoMm } } : {}),
+              ...(l.acabamentos.rodape !== undefined ? { rodape: l.acabamentos.rodape === null ? null : { alturaMm: l.acabamentos.rodape.alturaMm, itemCode: l.acabamentos.rodape.itemCode, descricao: l.acabamentos.rodape.descricao } } : {}),
+            },
+          }
+        : {}),
     });
   });
 

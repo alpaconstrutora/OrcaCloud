@@ -356,6 +356,8 @@ import {
 } from '../../services/blueprintService';
 import TelaAlternativas from './TelaAlternativas';
 import TelaGerador from './TelaGerador';
+import PainelMobiliario from './PainelMobiliario';
+import { HIPOTESES_MOBILIARIO_PADRAO, mobiliarNivel, sugerirShaft, type HipotesesDeMobiliario } from '../../utils/blueprintMobiliario';
 import { useGerador } from '../../hooks/useGerador';
 import { comandosDeGeometria, HIPOTESES_DO_GERADOR_PADRAO, nomesParaOModelo, type HipotesesDoGerador, type ResultadoDoGerador } from '../../utils/blueprintGerador';
 import { conferirPrograma as conferirProgramaDeOutro } from '../../utils/blueprintConferenciaDoPrograma';
@@ -741,6 +743,9 @@ const ROTULO_DA_TAREFA = {
   // INSOLAÇÃO (19/09/2026, E5.1): sol por data/hora solar, horas por fachada e
   // ambiente, sombra do entorno, ventilação cruzada; sol no 3D.
   insolacao: 'Insolação e ventilação',
+  // MOBILIÁRIO mínimo e circulação livre (19/09/2026, E6.3): kit por uso,
+  // circulação de 0,90/1,20 verificada; vagas e shaft quando o programa pede.
+  mobiliario: 'Mobiliário e circulação',
   'gerar-paredes': 'Gerar paredes do PDF',
   'importar-ifc': 'Importar do IFC',
   'importar-dxf': 'Importar do DXF',
@@ -1984,6 +1989,21 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * ambiente, a gaveta e (E4.3) a conferência do programa.
    */
   const grafoDoNivel = useMemo(() => (levelId ? construirGrafoEspacial(editor.model, levelId) : null), [editor.model, levelId]);
+  /** MOBILIÁRIO (E6.3): sugestão por ambiente do pavimento ativo; overlay opcional no canvas. */
+  const [hipotesesDeMobiliario, setHipotesesDeMobiliario] = usePersistedState<HipotesesDeMobiliario>('blueprint:mobiliario', HIPOTESES_MOBILIARIO_PADRAO);
+  const [mostrarMobiliario, setMostrarMobiliario] = usePersistedState('blueprint:mostrarMobiliario', false);
+  const mobiliarioDoNivel = useMemo(() => (levelId ? mobiliarNivel(editor.model, levelId, hipotesesDeMobiliario) : []), [editor.model, levelId, hipotesesDeMobiliario]);
+  const mobiliarioParaOCanvas = useMemo(
+    () =>
+      mostrarMobiliario
+        ? mobiliarioDoNivel.flatMap((a) => {
+            const ok = hipotesesDeMobiliario.acessivel ? a.circulacao.ok120 : a.circulacao.ok90;
+            return a.pecas.map((p) => ({ ret: p.ret, rotulo: p.peca.rotulo, ok }));
+          })
+        : undefined,
+    [mostrarMobiliario, mobiliarioDoNivel, hipotesesDeMobiliario.acessivel],
+  );
+  const shaftSugerido = useMemo(() => (levelId ? sugerirShaft(editor.model, levelId) : { comando: null, motivo: 'sem pavimento' }), [editor.model, levelId]);
   /**
    * INSOLAÇÃO (E5.1): hipóteses do navegador (data, hora solar, latitude
    * suposta, vizinhos, sol no 3D); a análise do pavimento ativo pelo grafo.
@@ -7826,6 +7846,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               )}
               {relatorioVisivel('quantitativos') && (
                 <BotaoDoRibbon
+                  icone={Grid2x2}
+                  rotulo="Mobiliário"
+                  contagem={mobiliarioDoNivel.filter((a) => a.pecas.length > 0 && !(hipotesesDeMobiliario.acessivel ? a.circulacao.ok120 : a.circulacao.ok90)).length || undefined}
+                  ativo={tarefaAberta === 'mobiliario'}
+                  onClick={() => alternarTarefa('mobiliario')}
+                  ajuda="Mobiliário mínimo por ambiente (cama/armário, sofá/mesa, bancada/geladeira/fogão, tanque/máquina, box/vaso/lavatório) e circulação livre de 0,90/1,20 m verificada; vagas e shaft quando o programa pede"
+                />
+              )}
+              {relatorioVisivel('quantitativos') && (
+                <BotaoDoRibbon
                   icone={Gauge}
                   rotulo="Avaliação"
                   contagem={avaliacao.notaGeral ?? undefined}
@@ -8980,6 +9010,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               rotulosDeAmbiente={rotulosDeAmbiente}
               etiquetasDeAbertura={etiquetasDeAbertura}
               paredesGeminadas={quadroDeUnidadesDoModelo.paredesGeminadas}
+              mobiliario={mobiliarioParaOCanvas}
               mostrarGrade={ajusteDaVista ? false : mostrarGrade}
               mostrarPreenchimentoAmbientes={ajusteDaVista ? false : mostrarPreenchimento}
               mostrarPreenchimentoTerreno={mostrarPreenchimentoTerreno}
@@ -9781,6 +9812,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             </span>
           </SheetTitle>
           <SheetDescription>
+            {tarefaAberta === 'mobiliario' &&
+              'O kit mínimo de cada ambiente colocado no retângulo interno (porta e janelas respeitadas) e a circulação livre medida da porta à frente de cada peça. Sugestão desenhada; vagas e shaft entram no modelo pelo kernel.'}
             {tarefaAberta === 'insolacao' &&
               'Sol por data e hora solar (latitude da georreferência), horas de sol por fachada e por ambiente nas três datas de referência, sombra dos vizinhos declarados e ventilação cruzada. Ligue "Sol e sombras no 3D" e mude a hora para ver a sombra andar.'}
             {tarefaAberta === 'grafo' &&
@@ -9856,9 +9889,42 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' || tarefaAberta === 'mobiliario' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
+
+          {tarefaAberta === 'mobiliario' && (
+            <PainelMobiliario
+              lista={mobiliarioDoNivel}
+              hipoteses={hipotesesDeMobiliario}
+              onHipoteses={setHipotesesDeMobiliario}
+              mostrarNoDesenho={mostrarMobiliario}
+              onMostrarNoDesenho={setMostrarMobiliario}
+              nomeDoPavimento={editor.model.levels.find((l) => l.id === levelId)?.name ?? 'pavimento'}
+              onSelecionar={(spaceId) => {
+                const etiqueta = ambientes.find((a) => a.id === spaceId)?.etiquetaId;
+                if (etiqueta) {
+                  setTarefa(null);
+                  selecionar([etiqueta]);
+                }
+              }}
+              garagens={mobiliarioDoNivel.filter((a) => a.uso === 'GARAGEM').map((a) => ({ spaceId: a.spaceId, rotulo: a.rotulo }))}
+              onLancarVagas={(spaceId) => {
+                setRegiaoDeVagasPedida({ tipo: 'AMBIENTE', spaceId });
+                setTarefa('vagas');
+              }}
+              vagasResultado={resultadoDeVagas}
+              shaft={{ possivel: !!shaftSugerido.comando, motivo: shaftSugerido.motivo }}
+              onSugerirShaft={() => {
+                if (!shaftSugerido.comando) return;
+                const criados = editor.runBatch([shaftSugerido.comando]);
+                if (criados.length > 0) {
+                  setTarefa(null);
+                  selecionarEAbrir(criados);
+                }
+              }}
+            />
+          )}
 
           {tarefaAberta === 'insolacao' && (
             <PainelInsolacao

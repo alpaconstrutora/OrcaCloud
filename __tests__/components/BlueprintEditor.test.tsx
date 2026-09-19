@@ -1616,6 +1616,65 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(screen.getByLabelText('Unidade do ambiente Dormitório 2')).toBeInTheDocument();
   }, 40000);
 
+  it('mobiliário (E6.3): a gaveta lista o kit por ambiente e a circulação livre; o toggle desenha no canvas; o dormitório estreito não passa 0,90; garagem oferece vagas; shaft só com 2 pavimentos', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    // Sala 4 × 6 à esquerda; à direita, dormitório 4 × 3 (em cima) e garagem 4 × 3 (embaixo); portas da sala para os dois e para fora; janela no dormitório.
+    let m = k.applyBatch(nivel.model, [w(0, 0, 8000, 0), w(8000, 0, 8000, 6000), w(8000, 6000, 0, 6000), w(0, 6000, 0, 0), w(4000, 0, 4000, 6000), w(4000, 3000, 8000, 3000)]).model;
+    const sala = m.spaces.find((s) => s.ring.some((p) => p.x === 0))!;
+    const garagem = m.spaces.find((s) => s.ring.every((p) => p.x >= 4000) && s.ring.every((p) => p.y <= 3000))!;
+    const dorm = m.spaces.find((s) => s.ring.every((p) => p.x >= 4000) && s.ring.every((p) => p.y >= 3000))!;
+    const baixo = m.walls.find((x) => x.a.y === 0 && x.b.y === 0)!;
+    const meio = m.walls.find((x) => x.a.x === 4000 && x.b.x === 4000)!;
+    const direita = m.walls.find((x) => x.a.x === 8000 && x.b.x === 8000)!;
+    m = k.applyBatch(m, [
+      { type: 'NameSpace', spaceId: sala.id, name: 'Sala', tipoDeAmbiente: 'SALA_DORMITORIO' },
+      { type: 'NameSpace', spaceId: garagem.id, name: 'Garagem' },
+      { type: 'NameSpace', spaceId: dorm.id, name: 'Dormitório', tipoDeAmbiente: 'SALA_DORMITORIO' },
+      { type: 'AddOpening', wallId: baixo.id, kind: 'door', offsetMm: 1000, widthMm: 900, heightMm: 2100, sillMm: 0 },
+      { type: 'AddOpening', wallId: meio.id, kind: 'door', offsetMm: 1000, widthMm: 800, heightMm: 2100, sillMm: 0 },
+      { type: 'AddOpening', wallId: meio.id, kind: 'door', offsetMm: 4000, widthMm: 800, heightMm: 2100, sillMm: 0 },
+      { type: 'AddOpening', wallId: direita.id, kind: 'window', offsetMm: 4000, widthMm: 1200, heightMm: 1200, sillMm: 1000 },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^analisar$/i);
+    const botao = screen.getAllByRole('button', { name: /^mobiliário/i }).find((b) => b.getAttribute('title')?.startsWith('Mobiliário mínimo'))!;
+    await user.click(botao);
+    const gaveta = await screen.findByTestId('tarefa-mobiliario');
+    expect(within(gaveta).getByTestId('resumo-do-mobiliario')).toHaveTextContent(/2 ambiente\(s\) com kit de 3 em Térreo/);
+    expect(within(gaveta).getByRole('row', { name: 'Ambiente Sala' })).toHaveTextContent(/Sofá, Mesa de jantar, Rack\/TV/);
+    expect(within(gaveta).getByRole('row', { name: 'Ambiente Sala' })).toHaveTextContent(/passa/);
+    const linhaDorm = within(gaveta).getByRole('row', { name: 'Ambiente Dormitório' });
+    expect(linhaDorm).toHaveTextContent(/Cama de casal/);
+    expect(linhaDorm).toHaveTextContent(/\d,\d\d m/);
+    expect(within(gaveta).getByRole('row', { name: 'Ambiente Garagem' })).toHaveTextContent(/Garagem.*—/);
+    // Rota acessível (1,20): o resumo muda a régua.
+    await user.click(within(gaveta).getByLabelText('Exigir rota acessível (1,20 m)'));
+    expect(within(gaveta).getByTestId('resumo-do-mobiliario')).toHaveTextContent(/circulação de 1,20 m passa em \d de 2/);
+    // Quando o programa pede: a garagem oferece vagas; o shaft não (um pavimento só).
+    expect(within(gaveta).getByRole('button', { name: /Lançar vagas em Garagem/ })).toBeInTheDocument();
+    expect(within(gaveta).getByTestId('sugerir-shaft')).toBeDisabled();
+    expect(within(gaveta).getByTestId('gerados-pelo-programa')).toHaveTextContent(/um pavimento só/);
+    // Lançar vagas leva à gaveta de vagas com a região = a garagem.
+    await user.click(within(gaveta).getByRole('button', { name: /Lançar vagas em Garagem/ }));
+    const vagas = await screen.findByTestId('tarefa-vagas');
+    expect(vagas).toHaveTextContent(/Garagem/);
+    // Toggle "Mostrar no desenho" persiste e a gaveta do mobiliário o reflete.
+    await user.keyboard('{Escape}');
+    await abrirAba(/^analisar$/i);
+    await user.click(screen.getAllByRole('button', { name: /^mobiliário/i }).find((b) => b.getAttribute('title')?.startsWith('Mobiliário mínimo'))!);
+    const gaveta2 = await screen.findByTestId('tarefa-mobiliario');
+    const toggle = within(gaveta2).getByLabelText('Mostrar mobiliário no desenho') as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+    await user.click(toggle);
+    expect(toggle.checked).toBe(true);
+    expect(localStorage.getItem('blueprint:mostrarMobiliario')).toBe('true');
+  });
+
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2500 });

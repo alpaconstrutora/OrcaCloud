@@ -1027,6 +1027,8 @@ interface Props {
   etiquetasDeAbertura?: ReadonlyMap<string, string>;
   /** Paredes divididas por duas UNIDADES (E2.2): tracejado violeta sobre o eixo. */
   paredesGeminadas?: ReadonlySet<string>;
+  /** MOBILIÁRIO sugerido (E6.3): retângulos no mundo (mm) com rótulo — desenho, não peça. */
+  mobiliario?: { ret: { x0: number; y0: number; x1: number; y1: number }; rotulo: string; ok: boolean }[];
   /**
    * Desenha a grade.
    *
@@ -1347,6 +1349,7 @@ export default function BlueprintCanvas({
   rotulosDeAmbiente = [],
   etiquetasDeAbertura,
   paredesGeminadas,
+  mobiliario,
   mostrarGrade = true,
   mostrarPreenchimentoAmbientes = true,
   mostrarPreenchimentoTerreno = true,
@@ -6622,6 +6625,35 @@ export default function BlueprintCanvas({
     // marca da NBR 12721 na prancha ("metade de cada"). É a ÚLTIMA coisa
     // pintada, com halo branco: desenhada junto das paredes ficava embaixo da
     // laje, do preenchimento e da elétrica e sumia (visto em 19/09/2026).
+    // ── MOBILIÁRIO SUGERIDO (E6.3) ──────────────────────────────────────────
+    // Retângulos tracejados com o rótulo, por cima do piso e abaixo das cotas:
+    // é sugestão derivada do nome do ambiente, não peça do modelo.
+    if (mobiliario && mobiliario.length > 0) {
+      ctx.save();
+      for (const p of mobiliario) {
+        const a = paraTela({ x: p.ret.x0, y: p.ret.y0 });
+        const b = paraTela({ x: p.ret.x1, y: p.ret.y1 });
+        const x = Math.min(a.x, b.x);
+        const y = Math.min(a.y, b.y);
+        const w = Math.abs(b.x - a.x);
+        const h = Math.abs(b.y - a.y);
+        ctx.fillStyle = p.ok ? 'rgba(14,116,144,0.10)' : 'rgba(220,38,38,0.10)';
+        ctx.fillRect(x, y, w, h);
+        ctx.setLineDash([5, 4]);
+        ctx.strokeStyle = p.ok ? '#0e7490' : '#dc2626';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(x, y, w, h);
+        if (w > 28 && h > 12) {
+          ctx.setLineDash([]);
+          ctx.fillStyle = p.ok ? '#155e75' : '#991b1b';
+          ctx.font = '10px system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(p.rotulo.length > 14 ? `${p.rotulo.slice(0, 13)}…` : p.rotulo, x + w / 2, y + h / 2, w - 4);
+        }
+      }
+      ctx.restore();
+    }
     if (paredesGeminadas && paredesGeminadas.size > 0) {
             ctx.save();
       for (const w of paredesDoNivel) {
@@ -6717,6 +6749,7 @@ export default function BlueprintCanvas({
     rotulosDeAmbiente,
     etiquetasDeAbertura,
     paredesGeminadas,
+    mobiliario,
     ancoraDaForma,
     verticesPoligono,
     eixosDoPoligono,

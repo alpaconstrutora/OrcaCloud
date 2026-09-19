@@ -28,6 +28,7 @@ const SOURCE_LABELS: Record<StockItemSource, string> = {
     orcamento: 'Orçamento',
     planilha: 'Planilha',
     recebimento: 'Recebimento',
+    ativos: 'Gestão de Ativos',
 };
 
 interface Props {

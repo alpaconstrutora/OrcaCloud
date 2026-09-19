@@ -1,23 +1,28 @@
 // components/inventory/StockItemImportModal.tsx — importar itens para o catálogo do Almoxarifado
 //
-// Três origens (pedido do usuário): base de dados (SINAPI/Base Própria),
-// obra/orçamento existente ("itens importados de obras antigas") e planilha
-// Excel (obras que nunca entraram no sistema). Todas convergem numa única
-// pré-visualização antes de confirmar. Ver
-// docs/planos/2026-08-21-almoxarifado-cadastro-de-itens.md.
+// Quatro origens (pedido do usuário): base de dados (SINAPI/Base Própria),
+// obra/orçamento existente ("itens importados de obras antigas"), planilha
+// Excel (obras que nunca entraram no sistema) e Gestão de Ativos (ativos
+// patrimoniais — código patrimonial vira input_code, 1 UN cada). Todas
+// convergem numa única pré-visualização antes de confirmar. Ver
+// docs/planos/2026-08-21-almoxarifado-cadastro-de-itens.md e
+// docs/planos/2026-09-19-almoxarifado-importar-itens-gestao-de-ativos.md.
 import React from 'react';
 import ExcelJS from 'exceljs';
 import {
     X, Search, FileSpreadsheet, Upload, Loader2, Package, Trash2,
-    CheckCircle2, AlertCircle, Database, FolderOpen,
+    CheckCircle2, AlertCircle, Database, FolderOpen, Wrench,
 } from 'lucide-react';
 import { inventoryService } from '../../services/inventoryService';
 import { projectService } from '../../services/projectService';
+import { assetService } from '../../services/assetService';
 import { useStore } from '../../store/useStore';
 import { onlyClassifications } from '../../utils/projectClassification';
+import { assetToStockItemRow, ASSET_CATEGORY_LABELS } from '../../utils/assetToStockItemRow';
 import DatabasePickerModal from '../DatabasePickerModal';
 import BudgetPickerModal from '../BudgetPickerModal';
 import { SinapiItem, SinapiType, BudgetEntry } from '../../types';
+import type { AssetCategory, AssetStatus, OpuraAsset } from '../../types/assets';
 import type { StockItem, StockItemImportRow, Warehouse } from '../../types/inventory';
 
 interface Props {
@@ -26,12 +31,24 @@ interface Props {
     organizationId: string;
     existingItems: StockItem[];
     warehouses: Warehouse[];
-    onImported: () => void;
+    /** `stockLaunched` = houve movimento de saldo inicial → quem chama recarrega saldos, não só o catálogo. */
+    onImported: (info: { stockLaunched: boolean }) => void;
 }
 
-type SourceTab = 'catalogo' | 'orcamento' | 'planilha';
+type SourceTab = 'catalogo' | 'orcamento' | 'planilha' | 'ativos';
 
 const rowKey = (r: StockItemImportRow) => (r.inputCode ? `code:${r.inputCode}` : `desc:${r.inputDescription.toLowerCase()}|${r.inputUnit.toLowerCase()}`);
+
+// Status de ativo como texto colorido (§8) — mesmo vocabulário de OpuraAssetsModule.
+const ASSET_STATUS: Record<AssetStatus, { label: string; className: string }> = {
+    disponivel: { label: 'Disponível', className: 'text-green-700' },
+    em_uso: { label: 'Em Uso', className: 'text-blue-700' },
+    manutencao: { label: 'Manutenção', className: 'text-amber-700' },
+    ocioso: { label: 'Ocioso', className: 'text-gray-600' },
+    baixado: { label: 'Baixado', className: 'text-red-600' },
+};
+
+const formatBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId, existingItems, warehouses, onImported }) => {
     const { allProjects } = useStore();
@@ -60,6 +77,15 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
     const [launchInitialStock, setLaunchInitialStock] = React.useState(false);
     const [initialStockWarehouseId, setInitialStockWarehouseId] = React.useState('');
 
+    // (d) Gestão de Ativos — lista carregada só ao entrar na aba (null = ainda não pedida).
+    // Busca/filtro são transitórios (§3.1 do guia: seletor dentro de modal, zera ao fechar).
+    const [assets, setAssets] = React.useState<OpuraAsset[] | null>(null);
+    const [loadingAssets, setLoadingAssets] = React.useState(false);
+    const [assetsError, setAssetsError] = React.useState('');
+    const [assetSearch, setAssetSearch] = React.useState('');
+    const [assetCategory, setAssetCategory] = React.useState<AssetCategory | ''>('');
+    const [selectedAssetIds, setSelectedAssetIds] = React.useState<Set<string>>(new Set());
+
     // importação
     const [importing, setImporting] = React.useState(false);
     const [importError, setImportError] = React.useState('');
@@ -78,6 +104,12 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
             setImportError('');
             setImportSummary(null);
             setSkippedNonInsumo(0);
+            setAssets(null);
+            setLoadingAssets(false);
+            setAssetsError('');
+            setAssetSearch('');
+            setAssetCategory('');
+            setSelectedAssetIds(new Set());
         }
     }, [isOpen]);
 
@@ -98,6 +130,57 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
     };
 
     const removeRow = (idx: number) => setPendingRows(prev => prev.filter((_, i) => i !== idx));
+
+    // ── (d) Gestão de Ativos ─────────────────────────────────────────────────
+    // Carrega na primeira entrada na aba (e no "Tentar novamente"). Baixados
+    // ficam fora (decisão do usuário, 2026-09-19): não existem mais fisicamente.
+    const loadAssets = async () => {
+        setLoadingAssets(true);
+        setAssetsError('');
+        try {
+            const list = await assetService.list(organizationId);
+            setAssets(list.filter(a => a.status !== 'baixado'));
+        } catch (e: unknown) {
+            setAssets([]);
+            setAssetsError((e as Error).message);
+        } finally {
+            setLoadingAssets(false);
+        }
+    };
+
+    const openTab = (tab: SourceTab) => {
+        setSource(tab);
+        if (tab === 'ativos' && assets === null && !loadingAssets) void loadAssets();
+    };
+
+    const visibleAssets = (assets ?? []).filter(a => {
+        if (assetCategory && a.category !== assetCategory) return false;
+        const q = assetSearch.trim().toLowerCase();
+        if (!q) return true;
+        return [a.name, a.code, a.brand, a.model].some(s => s && s.toLowerCase().includes(q));
+    });
+    const allVisibleSelected = visibleAssets.length > 0 && visibleAssets.every(a => selectedAssetIds.has(a.id));
+
+    const toggleAsset = (id: string) => setSelectedAssetIds(prev => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+    });
+
+    // "Selecionar todos" marca só o que está visível (busca/categoria aplicados) — §6.7.
+    const toggleAllVisible = () => setSelectedAssetIds(prev => {
+        const next = new Set(prev);
+        if (allVisibleSelected) visibleAssets.forEach(a => next.delete(a.id));
+        else visibleAssets.forEach(a => next.add(a.id));
+        return next;
+    });
+
+    const handleAddAssets = () => {
+        const chosen = (assets ?? []).filter(a => selectedAssetIds.has(a.id));
+        if (chosen.length === 0) return;
+        addRows(chosen.map(assetToStockItemRow));
+        setSelectedAssetIds(new Set());
+    };
 
     // ── (a) base de dados ────────────────────────────────────────────────────
     const handleDbSelectMany = (items: SinapiItem[]) => {
@@ -207,6 +290,7 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
         setImportError('');
         try {
             const result = await inventoryService.importStockItems(organizationId, pendingRows);
+            let stockLaunched = false;
             if (launchInitialStock && initialStockWarehouseId) {
                 for (const r of result.results) {
                     const qty = r.row.initialQuantity;
@@ -221,11 +305,12 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
                             unitCost: r.row.unitCostHint,
                             notes: 'Saldo inicial importado',
                         });
+                        stockLaunched = true;
                     }
                 }
             }
             setImportSummary({ created: result.created, updated: result.updated, skipped: result.skipped });
-            onImported();
+            onImported({ stockLaunched });
         } catch (e: unknown) {
             setImportError((e as Error).message);
         } finally {
@@ -237,6 +322,7 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
         { key: 'catalogo', label: 'Base de dados', icon: <Database className="w-4 h-4" /> },
         { key: 'orcamento', label: 'Obra / Orçamento', icon: <FolderOpen className="w-4 h-4" /> },
         { key: 'planilha', label: 'Planilha', icon: <FileSpreadsheet className="w-4 h-4" /> },
+        { key: 'ativos', label: 'Gestão de Ativos', icon: <Wrench className="w-4 h-4" /> },
     ];
 
     return (
@@ -274,7 +360,7 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
                     {TABS.map(t => (
                         <button
                             key={t.key}
-                            onClick={() => setSource(t.key)}
+                            onClick={() => openTab(t.key)}
                             className={`flex items-center gap-2 px-3 h-9 rounded-t-[6px] text-sm font-medium transition-all border-b-2 ${
                                 source === t.key ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
                             }`}
@@ -350,29 +436,143 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
                                 </label>
                             </div>
                             {parseError && <p className="text-sm text-red-500 flex items-center gap-1.5"><AlertCircle className="w-4 h-4" /> {parseError}</p>}
+                        </div>
+                    )}
 
-                            {hasInitialQuantities && (
-                                <div className="bg-gray-50 border border-gray-200 rounded-[10px] p-4 space-y-2">
-                                    <label className="flex items-center gap-2.5 text-sm font-normal text-gray-700 cursor-pointer">
-                                        <input type="checkbox" checked={launchInitialStock} onChange={e => setLaunchInitialStock(e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-blue-600" />
-                                        Lançar saldo inicial das quantidades da planilha
-                                    </label>
-                                    {launchInitialStock && (
+                    {source === 'ativos' && (
+                        <div className="space-y-3">
+                            <p className="text-sm text-gray-500">Selecione ativos patrimoniais para cadastrar no almoxarifado. O código patrimonial vira o código do item e cada ativo conta como 1 UN.</p>
+
+                            {loadingAssets ? (
+                                <div className="text-center py-12">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                                    <p className="mt-2 text-gray-500">Carregando ativos...</p>
+                                </div>
+                            ) : assetsError ? (
+                                <div className="flex items-center justify-between gap-3 bg-red-50 border border-red-100 rounded-[10px] px-4 py-3">
+                                    <p className="text-sm text-red-600 flex items-center gap-1.5"><AlertCircle className="w-4 h-4 shrink-0" /> {assetsError}</p>
+                                    <button onClick={() => void loadAssets()} className="h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 transition-all font-medium text-[13px] shrink-0">Tentar novamente</button>
+                                </div>
+                            ) : (assets ?? []).length === 0 ? (
+                                <div className="text-center py-12">
+                                    <Wrench className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum ativo cadastrado</h3>
+                                    <p className="text-sm text-gray-500">Cadastre ativos em Corporativo › Gestão de Ativos para importá-los aqui.</p>
+                                </div>
+                            ) : (
+                                <div className="border border-gray-100 rounded-[10px] overflow-hidden">
+                                    {/* Toolbar acoplada (§5.2) — busca e categoria são transitórias (§3.1) */}
+                                    <div className="p-2 border-b border-gray-100 bg-white flex flex-col md:flex-row gap-2.5 items-center">
+                                        <div className="flex-1 relative w-full">
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                            <input
+                                                type="text"
+                                                placeholder="Buscar por nome, código, marca ou modelo..."
+                                                value={assetSearch}
+                                                onChange={e => setAssetSearch(e.target.value)}
+                                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                            />
+                                        </div>
                                         <select
-                                            value={initialStockWarehouseId}
-                                            onChange={e => setInitialStockWarehouseId(e.target.value)}
-                                            className="w-full max-w-xs h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                            value={assetCategory}
+                                            onChange={e => setAssetCategory(e.target.value as AssetCategory | '')}
+                                            className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer shrink-0"
                                         >
-                                            <option value="">Selecione o almoxarifado...</option>
-                                            {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                                            <option value="">Todas as categorias</option>
+                                            {(Object.keys(ASSET_CATEGORY_LABELS) as AssetCategory[]).map(c => <option key={c} value={c}>{ASSET_CATEGORY_LABELS[c]}</option>)}
                                         </select>
+                                    </div>
+
+                                    {visibleAssets.length === 0 ? (
+                                        <div className="text-center py-12">
+                                            <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum ativo encontrado</h3>
+                                            <p className="text-sm text-gray-500">Tente ajustar a busca ou a categoria.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="overflow-auto max-h-[40vh]">
+                                            <table className="w-full text-sm text-left border-collapse">
+                                                <thead>
+                                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                        <th className="w-10 px-3 py-2 border-r border-gray-100 text-center">
+                                                            <input
+                                                                type="checkbox"
+                                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                                checked={allVisibleSelected}
+                                                                onChange={toggleAllVisible}
+                                                                title="Selecionar todos os ativos visíveis"
+                                                            />
+                                                        </th>
+                                                        <th className="px-4 py-2 border-r border-gray-100">Código</th>
+                                                        <th className="px-4 py-2 border-r border-gray-100">Ativo</th>
+                                                        <th className="px-4 py-2 border-r border-gray-100">Categoria</th>
+                                                        <th className="px-4 py-2 border-r border-gray-100">Status</th>
+                                                        <th className="px-4 py-2 text-right">Valor de aquisição</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                    {visibleAssets.map(a => {
+                                                        const checked = selectedAssetIds.has(a.id);
+                                                        const status = ASSET_STATUS[a.status] ?? { label: a.status, className: 'text-gray-600' };
+                                                        const marcaModelo = [a.brand, a.model].filter(Boolean).join(' ');
+                                                        return (
+                                                            <tr key={a.id} onClick={() => toggleAsset(a.id)} className={`cursor-pointer transition-colors ${checked ? 'bg-blue-50/60' : 'hover:bg-blue-50/50'}`}>
+                                                                <td className="px-3 py-2.5 border-r border-gray-100 text-center" onClick={e => e.stopPropagation()}>
+                                                                    <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" checked={checked} onChange={() => toggleAsset(a.id)} />
+                                                                </td>
+                                                                <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{a.code}</td>
+                                                                <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
+                                                                    <span className="block truncate" title={a.name}>{a.name}</span>
+                                                                    {marcaModelo && <span className="block truncate text-xs text-gray-400" title={marcaModelo}>{marcaModelo}</span>}
+                                                                </td>
+                                                                <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{ASSET_CATEGORY_LABELS[a.category] ?? a.category}</td>
+                                                                <td className="px-4 py-2.5 border-r border-gray-100"><span className={`text-sm font-normal ${status.className}`}>{status.label}</span></td>
+                                                                <td className="px-4 py-2.5 text-right text-sm font-medium text-gray-800">{a.purchase_value > 0 ? formatBRL(a.purchase_value) : '—'}</td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     )}
+
+                                    <div className="px-4 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
+                                        <span className="text-sm text-gray-500">{selectedAssetIds.size} {selectedAssetIds.size === 1 ? 'ativo selecionado' : 'ativos selecionados'}</span>
+                                        <button
+                                            onClick={handleAddAssets}
+                                            disabled={selectedAssetIds.size === 0}
+                                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 disabled:opacity-50"
+                                        >
+                                            Adicionar {selectedAssetIds.size > 0 ? selectedAssetIds.size : ''}
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                         </div>
                     )}
 
-                    {/* Pré-visualização — comum às três origens */}
+                    {/* Saldo inicial — vale para toda origem que traz quantidade
+                        (planilha: coluna 6; Gestão de Ativos: 1 UN por ativo). */}
+                    {hasInitialQuantities && (
+                        <div className="bg-gray-50 border border-gray-200 rounded-[10px] p-4 space-y-2">
+                            <label className="flex items-center gap-2.5 text-sm font-normal text-gray-700 cursor-pointer">
+                                <input type="checkbox" checked={launchInitialStock} onChange={e => setLaunchInitialStock(e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-blue-600" />
+                                Lançar saldo inicial das quantidades informadas (planilha: coluna 6 · ativos: 1 UN cada)
+                            </label>
+                            {launchInitialStock && (
+                                <select
+                                    value={initialStockWarehouseId}
+                                    onChange={e => setInitialStockWarehouseId(e.target.value)}
+                                    className="w-full max-w-xs h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                >
+                                    <option value="">Selecione o almoxarifado...</option>
+                                    {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                                </select>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Pré-visualização — comum às quatro origens */}
                     <div className="border-t border-gray-100 pt-4">
                         <p className="text-xs font-semibold text-gray-500 mb-2">Pré-visualização ({pendingRows.length} {pendingRows.length === 1 ? 'item' : 'itens'})</p>
                         {pendingRows.length === 0 ? (

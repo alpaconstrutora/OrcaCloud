@@ -283,7 +283,7 @@ export interface CreateMaterialRequestInput {
 
 // ── Catálogo de Itens (Cadastro de Itens) ────────────────────────────────────
 
-export type StockItemSource = 'avulso' | 'catalogo' | 'orcamento' | 'planilha' | 'recebimento';
+export type StockItemSource = 'avulso' | 'catalogo' | 'orcamento' | 'planilha' | 'recebimento' | 'ativos';
 
 export interface StockItem {
     id: string;

@@ -98,6 +98,7 @@ Tipos novos em `types/inventory.ts`: `StockItem`, `CreateStockItemInput`, `Stock
 - (a) Base de dados: reusa [DatabasePickerModal.tsx](../../components/DatabasePickerModal.tsx) com nova prop `multiple?: boolean` para acumular seleção.
 - (b) Obra/orçamento existente: seletor com `useStore().allProjects` + `onlyClassifications(lista,'OBRA','ORCAMENTO')`; `projectService.loadProject`; seleção via [BudgetPickerModal.tsx](../../components/BudgetPickerModal.tsx); composições explodem via [MaterialSelectionModal.tsx](../../components/MaterialSelectionModal.tsx).
 - (c) Planilha Excel: componente novo no molde de [DatabaseExcelImportModal.tsx](../../components/DatabaseExcelImportModal.tsx), colunas por posição (código opc./descrição/unidade/categoria/custo opc./qtd. saldo inicial opc.); checkbox "Lançar saldo inicial" gera movimento `in` quando marcado.
+- (d) Gestão de Ativos — **acrescentada em 2026-09-19**, ver `docs/planos/2026-09-19-almoxarifado-importar-itens-gestao-de-ativos.md` (ativo patrimonial → item UN, código patrimonial = `input_code`, `source = 'ativos'`; o bloco "Lançar saldo inicial" passou a ser comum a Planilha e Ativos).
 
 **3.4 `StockItemSelect.tsx`** — combobox de busca (debounce 300ms) com "＋ Cadastrar item novo" no rodapé; substitui os 3 `<input>` livres em `MovementModal`, `RequestModal`, `TransferModal`.
 

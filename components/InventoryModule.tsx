@@ -29,6 +29,7 @@ import {
 import { inventoryService } from '../services/inventoryService';
 import Button from './ui/Button';
 import ActionIconButton from './ui/ActionIconButton';
+import { useConfirm } from './ui/confirm';
 import { useStore } from '../store/useStore';
 import { useOrgWriteTarget } from '../hooks/useOrgContext';
 import { formatMoney, formatDateBR, formatPercent } from './ui/Format';
@@ -481,6 +482,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
     const [loading, setLoading] = React.useState(false);
 
     const [warehouses, setWarehouses] = React.useState<WarehouseType[]>([]);
+    const confirm = useConfirm();
     const [balances, setBalances] = React.useState<StockBalance[]>([]);
     const [movements, setMovements] = React.useState<StockMovement[]>([]);
     const [leadTimes, setLeadTimes] = React.useState<SupplierLeadTime[]>([]);
@@ -766,7 +768,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                         <tfoot>
                                             <tr className="border-t border-gray-100 bg-gray-50/80">
                                                 <td colSpan={tableSaldos.visibleColumns.length - 1} className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Total em Estoque</td>
-                                                <td className="px-4 py-3 text-right font-bold text-gray-900">{fmtBrl(filteredBalances.reduce((s, b) => s + b.totalValue, 0))}</td>
+                                                <td className="px-4 py-3 text-right text-sm font-medium text-gray-800">{fmtBrl(filteredBalances.reduce((s, b) => s + b.totalValue, 0))}</td>
                                             </tr>
                                         </tfoot>
                                     </table>
@@ -1066,7 +1068,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                                                     variant="secondary"
                                                                     className="!py-2 text-gray-600 hover:text-red-600 border-gray-200"
                                                                     onClick={async () => {
-                                                                        if (!confirm('Cancelar transferência?')) return;
+                                                                        if (!await confirm({ title: 'Cancelar transferência?', message: 'A transferência em trânsito é marcada como cancelada. Os movimentos já lançados não são revertidos.', variant: 'warning', confirmLabel: 'Cancelar transferência' })) return;
                                                                         await inventoryService.cancelTransfer(t.id);
                                                                         load();
                                                                     }}
@@ -1118,7 +1120,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                                         kind="delete"
                                                         title="Desativar"
                                                         onClick={async () => {
-                                                            if (!confirm(`Desativar "${w.name}"?`)) return;
+                                                            if (!await confirm({ title: `Desativar "${w.name}"?`, message: 'O almoxarifado some das listas de novos lançamentos. Saldos e histórico não são afetados.', variant: 'warning', confirmLabel: 'Desativar' })) return;
                                                             await inventoryService.updateWarehouse(w.id, { isActive: false });
                                                             load();
                                                         }}
@@ -1264,7 +1266,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                     existingItems={stockItems}
                     warehouses={warehouses.filter(w => w.isActive)}
                     onClose={() => setImportOrgId(undefined)}
-                    onImported={refreshStockItems}
+                    onImported={({ stockLaunched }) => (stockLaunched ? load() : refreshStockItems())}
                 />
             )}
         </div>

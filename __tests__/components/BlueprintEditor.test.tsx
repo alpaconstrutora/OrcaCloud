@@ -48,6 +48,9 @@ const RAMO_LIMPO = {
   draft_hash: null,
   draft_saved_at: null,
   created_by: null,
+  principal: true,
+  descricao: null as string | null,
+  origem_snapshot_id: null as string | null,
   created_at: '',
   updated_at: '',
 };
@@ -59,8 +62,21 @@ const getSnapshotIdentity = vi.fn(async () => null as unknown);
 // exercitar a comparação. Foi o que aconteceu na primeira versão destes casos —
 // eles aprovavam o código defeituoso.
 const getBranch = vi.fn(async () => RAMO_LIMPO as unknown);
+// DESIGN OPTIONS (E6.1): a lista de ramos e as mutações são controláveis.
+const listBranches = vi.fn(async () => [RAMO_LIMPO] as unknown[]);
+const createAlternative = vi.fn(async () => ({}) as unknown);
+const setPrincipalBranch = vi.fn(async () => {});
+const deleteBranch = vi.fn(async () => {});
+const renameBranch = vi.fn(async () => {});
+const onTrocarRamo = vi.fn();
 
 vi.mock('../../services/blueprintService', () => ({
+  listBranches: (...a: unknown[]) => listBranches(...(a as [])),
+  createAlternative: (...a: unknown[]) => createAlternative(...(a as [])),
+  setPrincipalBranch: (...a: unknown[]) => setPrincipalBranch(...(a as [])),
+  deleteBranch: (...a: unknown[]) => deleteBranch(...(a as [])),
+  renameBranch: (...a: unknown[]) => renameBranch(...(a as [])),
+  ramoPrincipal: (bs: { principal?: boolean; name: string }[]) => bs.find((b) => b.principal) ?? bs.find((b) => b.name === 'principal') ?? bs[0] ?? null,
   loadBranchModel: (...a: unknown[]) => loadBranchModel(...(a as [])),
   getSnapshotIdentity: (...a: unknown[]) => getSnapshotIdentity(...(a as [])),
   getBranch: (...a: unknown[]) => getBranch(...(a as [])),
@@ -130,6 +146,11 @@ beforeEach(() => {
   getBranch.mockResolvedValue(RAMO_LIMPO);
   getPrograma.mockResolvedValue(null);
   savePrograma.mockClear();
+  listBranches.mockResolvedValue([RAMO_LIMPO]);
+  createAlternative.mockClear();
+  setPrincipalBranch.mockClear();
+  deleteBranch.mockClear();
+  onTrocarRamo.mockClear();
 
   (globalThis as any).ResizeObserver = class {
     observe() {}
@@ -160,7 +181,7 @@ async function montar() {
   // `useConfirm` antes de substituir a área do empreendimento na ficha.
   render(
     <ConfirmProvider>
-      <BlueprintEditor study={study} branchId="brc_1" onBack={() => {}} />
+      <BlueprintEditor study={study} branchId="brc_1" onBack={() => {}} onTrocarRamo={onTrocarRamo} />
     </ConfirmProvider>,
   );
   // O nível "Térreo" é criado num efeito depois do carregamento.
@@ -1498,6 +1519,54 @@ describe('BlueprintEditor · quantitativos', () => {
     await user.click(within(within(tela2).getByTestId('sugestao-corredores-0')).getByRole('button', { name: 'Ir para Porta 0,70 m' }));
     expect(screen.queryByRole('heading', { level: 1, name: /^avaliação$/i })).toBeNull();
     expect(await screen.findByText(/^Abertura selecionada$/i)).toBeInTheDocument();
+  });
+
+  it('alternativas (E6.1): Colaborar › Alternativas lista os ramos, cria uma a partir da atual (copiando o modelo), compara lado a lado com diff e indicadores, promove e abre (troca o ramo)', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    const m = k.applyBatch(nivel.model, [w(0, 0, 8000, 0), w(8000, 0, 8000, 6000), w(8000, 6000, 0, 6000), w(0, 6000, 0, 0), w(4000, 0, 4000, 6000)]).model;
+    // A outra alternativa tem a divisória em x = 5000 (paredes diferentes) e uma porta.
+    let m2 = k.applyBatch(nivel.model, [w(0, 0, 8000, 0), w(8000, 0, 8000, 6000), w(8000, 6000, 0, 6000), w(0, 6000, 0, 0), w(5000, 0, 5000, 6000)]).model;
+    const baixo = m2.walls.find((x) => x.a.y === 0 && x.b.y === 0)!;
+    m2 = k.applyCommand(m2, { type: 'AddOpening', wallId: baixo.id, kind: 'door', offsetMm: 1000, widthMm: 900, heightMm: 2100, sillMm: 0 }).model;
+    loadBranchModel.mockImplementation(async (id: unknown) => (id === 'brc_2' ? m2 : m));
+    const outro = { ...RAMO_LIMPO, id: 'brc_2', name: 'Suíte ao norte', principal: false, descricao: 'divisória a 5 m', base_revision: 2, draft_saved_at: '2026-09-19T12:00:00Z' };
+    listBranches.mockResolvedValue([RAMO_LIMPO, outro]);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^colaborar$/i);
+    const botao = screen.getByRole('button', { name: /^alternativas/i });
+    expect(botao).toHaveTextContent('2');
+    await user.click(botao);
+    const tela = (await screen.findByRole('heading', { level: 1, name: /^alternativas$/i })).closest('[data-tela="alternativas"]') as HTMLElement;
+    expect(within(tela).getByTestId('resumo-alternativas')).toHaveTextContent(/2 alternativa\(s\) · aberta: principal/);
+    expect(within(tela).getByLabelText('Nome da alternativa Suíte ao norte')).toBeInTheDocument();
+    expect(within(tela).getByLabelText('Descrição da alternativa Suíte ao norte')).toHaveValue('divisória a 5 m');
+    expect(within(tela).getAllByRole('row').some((r) => /rev\. 2/.test(r.textContent ?? ''))).toBe(true);
+    // Nova a partir da atual: o serviço recebe o modelo aberto e o ramo de origem.
+    await user.type(within(tela).getByLabelText('Nome da nova alternativa'), 'Garagem dupla');
+    await user.click(within(tela).getByTestId('nova-alternativa'));
+    await waitFor(() => expect(createAlternative).toHaveBeenCalled());
+    const chamada = createAlternative.mock.calls[0][0] as { studyId: string; fromBranchId: string; nome: string; model: { walls: unknown[] } };
+    expect(chamada).toMatchObject({ studyId: 'std_1', fromBranchId: 'brc_1', nome: 'Garagem dupla' });
+    expect(chamada.model.walls).toHaveLength(5);
+    // Comparar: duas miniaturas, o diff (paredes/porta) e os indicadores lado a lado.
+    await user.click(within(tela).getByRole('button', { name: 'Comparar com a alternativa Suíte ao norte' }));
+    const comparacao = await within(tela).findByTestId('comparacao');
+    expect(within(comparacao).getAllByTestId('mini-planta')).toHaveLength(2);
+    expect(within(comparacao).getByTestId('diff-alternativas')).toHaveTextContent(/Paredes 5 → 5 · ambientes 2 → 2/);
+    expect(within(comparacao).getByTestId('diff-alternativas')).not.toHaveTextContent(/Idênticas/);
+    const indicadores = within(comparacao).getByTestId('indicadores-comparados');
+    expect(within(indicadores).getAllByTestId('nota-geral')).toHaveLength(2);
+    expect(indicadores).toHaveTextContent(/Eficiência \(útil \/ construída\)/);
+    // Tornar principal e Abrir.
+    await user.click(within(tela).getByRole('button', { name: 'Tornar principal a alternativa Suíte ao norte' }));
+    await waitFor(() => expect(setPrincipalBranch).toHaveBeenCalledWith('std_1', 'brc_2', 'org_1'));
+    await user.click(within(tela).getByRole('button', { name: 'Abrir a alternativa Suíte ao norte' }));
+    expect(onTrocarRamo).toHaveBeenCalledWith('brc_2');
+    expect(screen.queryByRole('heading', { level: 1, name: /^alternativas$/i })).toBeNull();
   });
 
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {

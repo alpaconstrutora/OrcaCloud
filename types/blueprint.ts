@@ -228,6 +228,11 @@ export interface BlueprintBranch {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  /** DESIGN OPTIONS (E6.1): a alternativa principal do estudo (uma por estudo). */
+  principal: boolean;
+  descricao: string | null;
+  /** A versão publicada de onde a alternativa nasceu (informativo). */
+  origem_snapshot_id: string | null;
 }
 
 export interface BlueprintSnapshot {

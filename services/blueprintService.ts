@@ -41,7 +41,7 @@ import {
 const STUDY_COLS =
   'id, organization_id, project_id, name, unit_system, status, created_by, created_at, updated_at';
 const BRANCH_COLS =
-  'id, study_id, organization_id, name, parent_snapshot_id, base_revision, draft_payload, draft_kernel_version, draft_hash, draft_saved_at, created_by, created_at, updated_at';
+  'id, study_id, organization_id, name, parent_snapshot_id, base_revision, draft_payload, draft_kernel_version, draft_hash, draft_saved_at, created_by, created_at, updated_at, principal, descricao, origem_snapshot_id';
 const SNAPSHOT_SUMMARY_COLS =
   'id, study_id, branch_id, organization_id, revision, hash, kernel_version, notes, published_by, published_at';
 const SNAPSHOT_FULL_COLS = `${SNAPSHOT_SUMMARY_COLS}, payload`;
@@ -144,7 +144,7 @@ export async function duplicateStudy(studyId: string): Promise<BlueprintStudy> {
   if (!original) throw new Error('blueprint/duplicateStudy: estudo não encontrado');
 
   const branches = await listBranches(studyId);
-  const principal = branches.find((b) => b.name === 'principal') ?? branches[0];
+  const principal = ramoPrincipal(branches);
   const model = principal ? await loadBranchModel(principal.id) : null;
 
   const { data: study, error } = await supabase
@@ -285,6 +285,90 @@ export async function loadBranchModel(branchId: string): Promise<BlueprintModel 
   }
 
   return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DESIGN OPTIONS / alternativas (19/09/2026, E6.1)
+//
+// A alternativa É um ramo: nome, rascunho, publicações e histórico próprios.
+// Nasce como CÓPIA do conteúdo editável de outro ramo (rascunho se houver,
+// senão a última versão publicada) e nunca aponta o snapshot da origem como
+// pai — editar a alternativa não pode mexer no histórico de quem a gerou
+// (mesma regra de `duplicateStudy`). `origem_snapshot_id` é só informação.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** O ramo principal do estudo (o marcado; por compatibilidade, o chamado 'principal'; senão o mais antigo). */
+export function ramoPrincipal(branches: readonly BlueprintBranch[]): BlueprintBranch | null {
+  return branches.find((b) => b.principal) ?? branches.find((b) => b.name === 'principal') ?? branches[0] ?? null;
+}
+
+export async function createAlternative(input: {
+  studyId: string;
+  organizationId: string;
+  fromBranchId: string;
+  nome: string;
+  descricao?: string | null;
+  /** O modelo já carregado no editor (evita reler o rascunho). */
+  model?: BlueprintModel | null;
+}): Promise<BlueprintBranch> {
+  const nome = input.nome.trim();
+  if (!nome) throw new Error('blueprint/createAlternative: dê um nome à alternativa');
+  const origem = await getBranch(input.fromBranchId);
+  const model = input.model ?? (await loadBranchModel(input.fromBranchId));
+  const { data, error } = await supabase
+    .from('blueprint_branches')
+    .insert({
+      study_id: input.studyId,
+      organization_id: input.organizationId,
+      name: nome,
+      descricao: input.descricao?.trim() || null,
+      principal: false,
+      origem_snapshot_id: origem?.parent_snapshot_id ?? null,
+      draft_payload: model ? JSON.parse(canonicalPayload(model)) : null,
+      draft_kernel_version: model ? KERNEL_VERSION : null,
+      draft_hash: model ? snapshotHash(model) : null,
+      draft_saved_at: model ? new Date().toISOString() : null,
+    })
+    .select(BRANCH_COLS)
+    .single();
+  if (error) fail('createAlternative', error);
+  await recordAudit({
+    organizationId: input.organizationId,
+    studyId: input.studyId,
+    action: 'ALTERNATIVA_CRIADA',
+    targetType: 'BRANCH',
+    targetId: (data as BlueprintBranch).id,
+    metadata: { from_branch_id: input.fromBranchId, nome },
+  });
+  return data as BlueprintBranch;
+}
+
+export async function renameBranch(branchId: string, nome: string, descricao?: string | null): Promise<void> {
+  const n = nome.trim();
+  if (!n) throw new Error('blueprint/renameBranch: nome vazio');
+  const { error } = await supabase
+    .from('blueprint_branches')
+    .update({ name: n, ...(descricao !== undefined ? { descricao: descricao?.trim() || null } : {}) })
+    .eq('id', branchId);
+  if (error) fail('renameBranch', error);
+}
+
+/** Promove a alternativa: desmarca a principal atual e marca esta (o índice parcial garante uma por estudo). */
+export async function setPrincipalBranch(studyId: string, branchId: string, organizationId: string): Promise<void> {
+  const { error: e1 } = await supabase.from('blueprint_branches').update({ principal: false }).eq('study_id', studyId).eq('principal', true);
+  if (e1) fail('setPrincipalBranch/desmarcar', e1);
+  const { error: e2 } = await supabase.from('blueprint_branches').update({ principal: true }).eq('id', branchId);
+  if (e2) fail('setPrincipalBranch/marcar', e2);
+  await recordAudit({ organizationId, studyId, action: 'ALTERNATIVA_PROMOVIDA', targetType: 'BRANCH', targetId: branchId });
+}
+
+/** Apaga uma alternativa NÃO principal. Snapshots publicados dela ficam (são citáveis); só o ramo some. */
+export async function deleteBranch(branchId: string): Promise<void> {
+  const b = await getBranch(branchId);
+  if (!b) return;
+  if (b.principal) throw new Error('blueprint/deleteBranch: a alternativa principal não pode ser excluída — promova outra antes');
+  const { error } = await supabase.from('blueprint_branches').delete().eq('id', branchId);
+  if (error) fail('deleteBranch', error);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

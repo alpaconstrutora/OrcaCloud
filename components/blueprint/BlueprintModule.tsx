@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, PencilRuler, Loader2, AlertCircle, Search, MoveHorizontal } from 'lucide-react';
 import { useOrgContext, useOrgWriteTarget } from '../../hooks/useOrgContext';
-import { archiveStudy, createStudy, duplicateStudy, listBranches, listStudies } from '../../services/blueprintService';
+import { archiveStudy, createStudy, duplicateStudy, listBranches, listStudies, ramoPrincipal } from '../../services/blueprintService';
 import type { BlueprintStudy } from '../../types/blueprint';
 import BlueprintEditor from './BlueprintEditor';
 import ActionIconButton from '../ui/ActionIconButton';
@@ -103,7 +103,7 @@ export default function BlueprintModule() {
     setErro(null);
     try {
       const branches = await listBranches(study.id);
-      const principal = branches.find((b) => b.name === 'principal') ?? branches[0];
+      const principal = ramoPrincipal(branches);
       if (!principal) {
         setErro('Este estudo não tem ramo de trabalho. Crie um novo estudo.');
         return;
@@ -163,8 +163,12 @@ export default function BlueprintModule() {
   if (aberto) {
     return (
       <BlueprintEditor
+        // A chave é o ramo: trocar de alternativa (E6.1) remonta o editor com o
+        // modelo daquele ramo — histórico, seleção e zoom são do ramo anterior.
+        key={aberto.branchId}
         study={aberto.study}
         branchId={aberto.branchId}
+        onTrocarRamo={(branchId) => setAberto((a) => (a ? { ...a, branchId } : a))}
         onBack={() => {
           setAberto(null);
           carregar();

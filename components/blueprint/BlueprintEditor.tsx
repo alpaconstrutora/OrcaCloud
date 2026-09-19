@@ -41,6 +41,7 @@ import {
   Footprints,
   Sun,
   Gauge,
+  GitBranch,
   Eye,
   EyeOff,
   FileDown,
@@ -339,13 +340,21 @@ import { useBlueprintUnderlay } from '../../hooks/useBlueprintUnderlay';
 import type { PontoPx } from '../../utils/blueprintUnderlay';
 import type { ParedeGerada, PortaGerada } from '../../utils/blueprintVetor';
 import { extrairSegmentosPdf } from '../../services/blueprintUnderlayService';
-import type { BlueprintQuantitySnapshot, BlueprintStudy } from '../../types/blueprint';
+import type { BlueprintBranch, BlueprintQuantitySnapshot, BlueprintStudy } from '../../types/blueprint';
 import {
   computeAndStoreQuantities,
+  createAlternative,
+  deleteBranch,
   getQuantitySnapshot,
+  listBranches,
   listSnapshots,
+  loadBranchModel,
+  renameBranch,
+  setPrincipalBranch,
   tarefasDoCronograma,
 } from '../../services/blueprintService';
+import TelaAlternativas from './TelaAlternativas';
+import { conferirPrograma as conferirProgramaDeOutro } from '../../utils/blueprintConferenciaDoPrograma';
 import {
   POLITICA_PADRAO,
   KernelError,
@@ -399,6 +408,7 @@ import {
   TIPOS_DE_AMBIENTE,
   DISCIPLINAS_DO_PONTO_HIDRAULICO,
   rotuloCurto,
+  type BlueprintModel,
 } from '../../utils/blueprintKernel';
 import {
   BITOLA_PADRAO_MM,
@@ -830,9 +840,11 @@ interface Props {
   study: BlueprintStudy;
   branchId: string;
   onBack: () => void;
+  /** DESIGN OPTIONS (E6.1): abrir outra alternativa (ramo) do estudo — quem monta o editor troca o `branchId`. */
+  onTrocarRamo?: (branchId: string) => void;
 }
 
-export default function BlueprintEditor({ study, branchId, onBack }: Props) {
+export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo }: Props) {
   const editor = useBlueprintEditor(branchId);
   const [espessura, setEspessura] = useState(ESPESSURA_PADRAO_MM);
   // `null` = automatico: o passo acompanha o zoom. Qualquer numero fixa o passo.
@@ -1164,7 +1176,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -3464,6 +3476,45 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [hipotesesDaAvaliacaoCruas, setHipotesesDaAvaliacao] = usePersistedState<HipotesesDaAvaliacao>('blueprint:avaliacao', HIPOTESES_DA_AVALIACAO_PADRAO);
   const hipotesesDaAvaliacao = useMemo(() => hipotesesDaAvaliacaoDaColuna(hipotesesDaAvaliacaoCruas), [hipotesesDaAvaliacaoCruas]);
   const custoTotalDaPrevia = useMemo(() => (previaOrcamento ? previaOrcamento.entries.reduce((s, en) => s + en.quantity * (en.sinapiItem?.price ?? 0), 0) : null), [previaOrcamento]);
+  /**
+   * DESIGN OPTIONS (E6.1): as alternativas do estudo são os ramos. Lista ao
+   * montar e depois de cada mudança; a comparação avalia a outra com o mesmo
+   * programa, regras e hipóteses (sem custo — a prévia do orçamento é desta).
+   */
+  const [ramos, setRamos] = useState<BlueprintBranch[]>([]);
+  const [ramosCarregando, setRamosCarregando] = useState(true);
+  const [ramosErro, setRamosErro] = useState<string | null>(null);
+  const recarregarRamos = useCallback(async () => {
+    try {
+      setRamos(await listBranches(study.id));
+      setRamosErro(null);
+    } catch (e) {
+      setRamosErro(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRamosCarregando(false);
+    }
+  }, [study.id]);
+  useEffect(() => {
+    void recarregarRamos();
+  }, [recarregarRamos]);
+  const avaliarOutroModelo = useCallback(
+    (m: BlueprintModel) =>
+      avaliar(
+        {
+          model: m,
+          programa: programaDoEstudo.programa,
+          conferencia: programaDoEstudo.programa.itens.length > 0 ? conferirProgramaDeOutro(m, programaDoEstudo.programa) : null,
+          resultadosDeRegras: avaliarRegras(m, [...REGRAS_SEMENTE, ...regrasDaOrganizacao], {
+            zona: { taxaOcupacaoMax: zona.taxaOcupacaoMax, coeficienteMax: zona.coeficienteMax, gabaritoAlturaMaxM: zona.gabaritoAlturaMaxM, gabaritoPavimentos: zona.gabaritoPavimentos, taxaPermeabilidadeMin: zona.taxaPermeabilidadeMin, testadaMinimaMm: zona.testadaMinimaMm, areaMinimaDoLoteM2: zona.areaMinimaDoLoteM2, insolacaoMinimaH: zona.insolacaoMinimaH },
+          }),
+          insolacao: { latitudeGraus: latitudeDoEstudo ?? hipotesesDeInsolacao.latitudeManual, rotacaoNorteDeg: norteDoDesenho, prismas: prismasDoEntornoDoEstudo },
+          insolacaoMinimaH: zona.insolacaoMinimaH,
+          custoTotalBRL: null,
+        },
+        hipotesesDaAvaliacao,
+      ),
+    [programaDoEstudo.programa, regrasDaOrganizacao, zona, latitudeDoEstudo, hipotesesDeInsolacao.latitudeManual, norteDoDesenho, prismasDoEntornoDoEstudo, hipotesesDaAvaliacao],
+  );
   const avaliacao = useMemo(
     () =>
       avaliar(
@@ -6868,6 +6919,48 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           </div>
         </div>
       )}
+      {telaAberta === 'alternativas' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="alternativas">
+          {cabecalhoDaTela(
+            'Alternativas',
+            'Design Options: cada alternativa é um ramo do estudo com rascunho, versões e histórico próprios. Abra outra, crie uma a partir da atual, compare duas (mesma escala, o que muda, indicadores lado a lado) e promova a melhor a principal.',
+            GitBranch,
+            'Colaborar',
+          )}
+          <div>
+            <TelaAlternativas
+              ramos={ramos}
+              ramoAtualId={branchId}
+              model={editor.model}
+              avaliacaoAtual={avaliacao}
+              carregando={ramosCarregando}
+              erro={ramosErro}
+              onAbrir={(id) => {
+                setTelaAberta(null);
+                onTrocarRamo?.(id);
+              }}
+              onCriar={async (nome, descricao) => {
+                await createAlternative({ studyId: study.id, organizationId: study.organization_id, fromBranchId: branchId, nome, descricao, model: editor.model });
+                await recarregarRamos();
+              }}
+              onRenomear={async (id, nome, descricao) => {
+                await renameBranch(id, nome, descricao);
+                await recarregarRamos();
+              }}
+              onPromover={async (id) => {
+                await setPrincipalBranch(study.id, id, study.organization_id);
+                await recarregarRamos();
+              }}
+              onExcluir={async (id) => {
+                await deleteBranch(id);
+                await recarregarRamos();
+              }}
+              carregarModelo={loadBranchModel}
+              avaliarModelo={avaliarOutroModelo}
+            />
+          </div>
+        </div>
+      )}
       {telaAberta === 'avaliacao' && (
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="avaliacao">
           {cabecalhoDaTela(
@@ -7831,6 +7924,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 ajuda="Versões publicadas, diferenças entre elas e as pranchas (PDF, PNG, DXF, IFC)"
               />
             )}
+            <BotaoDoRibbon
+              icone={GitBranch}
+              rotulo="Alternativas"
+              contagem={ramos.length > 1 ? ramos.length : undefined}
+              ativo={telaAberta === 'alternativas'}
+              onClick={() => alternarTela('alternativas')}
+              ajuda="Design Options: alternativas do estudo (ramos) — abrir, criar a partir da atual, comparar lado a lado e tornar principal"
+            />
           </GrupoDoRibbon>
         )}
 

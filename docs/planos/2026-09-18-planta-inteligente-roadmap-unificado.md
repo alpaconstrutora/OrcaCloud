@@ -767,6 +767,21 @@ propagação; bump).
 
 **Etapa 5 fechada** (5.1 insolação/ventilação, 5.2 score, 5.3 sugestões). Próxima: Etapa 6 (6.1 Design Options, 6.2 gerador determinístico, 6.3 mobiliário e circulação automáticos, 6.4 IA conversacional).
 
+### E6.1 — Design Options (19/09/2026)
+
+**O que entrou** (sem mexer no kernel — alternativa é outro snapshot):
+
+- **A alternativa É um ramo** (`blueprint_branches`): sem tabela paralela. Migration `aplicar_20270919000047_blueprint_alternativas.sql` (APLICADA): colunas `principal` (UM por estudo — índice parcial `blueprint_branches_um_principal_por_estudo`), `descricao`, `origem_snapshot_id` (a versão publicada de onde nasceu — informativo; a base de carga continua `parent_snapshot_id`); backfill marcou o ramo "principal" (ou o mais antigo) de cada estudo.
+- **Serviço** (`blueprintService.ts`): `ramoPrincipal(branches)`, `createAlternative({studyId, organizationId, fromBranchId, nome, descricao, model})` (cópia do conteúdo editável — rascunho ou última versão — para um ramo novo, NUNCA apontando o snapshot da origem como pai, como `duplicateStudy`), `renameBranch`, `setPrincipalBranch` (desmarca e marca; o índice garante um), `deleteBranch` (recusa a principal). `BRANCH_COLS` e `BlueprintBranch` com os campos novos. `duplicateStudy` e `BlueprintModule` passam a usar `ramoPrincipal`.
+- **Trocar de alternativa troca o modelo carregado**: `BlueprintEditor` ganhou `onTrocarRamo`; `BlueprintModule` remonta o editor com `key={branchId}` — histórico, seleção e zoom são do ramo.
+- **Tela Colaborar › Alternativas** (`TelaAlternativas.tsx`, testids `tela-alternativas`, `resumo-alternativas`, `nova-alternativa`, `comparacao`, `diff-alternativas`, `indicadores-comparados`): tabela dos ramos (nome e descrição editáveis na célula, aberta/principal, revisão publicada, rascunho salvo, criada), "Nova a partir desta", Abrir, **Comparar**, Tornar principal (estrela), Excluir (não principal, com confirmação). **Comparação**: duas `MiniPlanta` (SVG só leitura, novo `MiniPlanta.tsx`) na MESMA escala e enquadramento (caixa da união dos dois modelos), com as peças do diff em laranja; seletor de pavimento; diff semântico (`diffSnapshots(outra, aberta)`: paredes/ambientes/piso e a lista de alterações); tabela de indicadores da E5.2 lado a lado com Δ (a outra avaliada com o mesmo programa, regras e hipóteses; sem custo — a prévia é da aberta; e sem lote/envelope — por isso "legal" pode diferir em modelos idênticos).
+
+**Decisões.** (1) Ramo = alternativa: já tinha nome, rascunho, publicações e histórico; inventar `blueprint_study_alternatives` duplicaria tudo. (2) Comparar com miniaturas SVG sincronizadas pela caixa, não com dois Konva: barato, determinístico e suficiente para ler o que muda; o diff pinta as peças. (3) Promover não move conteúdo — só troca a marca; o orçamento cita snapshots, então nada quebra.
+
+**Prova no app real (escritas bloqueadas: 15).** Colaborar › "Alternativas 2"; tabela com as duas (aberta/principal, rev., rascunho); Comparar → 2 miniaturas, "Idênticas — nada mudou", indicadores lado a lado (nota geral 86 × 85, Δ +1); "Nova a partir desta" com a escrita bloqueada → alerta "Failed to fetch" (1 bloqueada no clique); Abrir a outra → o editor remonta e a tela diz "aberta: Teste E6.1". 0 erros. Testes: editor "alternativas (E6.1)" (lista, criação com o modelo, comparação com diff e indicadores, promover, abrir); suíte 373 arquivos / 4702 testes; build OK.
+
+**⚠️ Incidente na prova (19/09/2026, registrado em memória):** a primeira rodada do harness usou um segundo `page.route` (dublê de leitura de `blueprint_branches`) com `route.continue()` para métodos não-GET — isso NÃO passa pelo bloqueador de escritas, e o clique "Nova alternativa" fez um INSERT real: ramo **"Teste E6.1"** (`c72fd7a8-…`) no estudo "Planta 14/09/2026", cópia do rascunho da principal, 0 snapshots, não principal. Corrigido o harness (`route.fallback()`); a remoção do ramo fica a cargo do usuário (a tela Alternativas exclui, ou `DELETE FROM blueprint_branches WHERE id = 'c72fd7a8-896b-46ee-8d9c-062b48c24814'`).
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

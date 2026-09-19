@@ -141,6 +141,7 @@ Ao aplicar o padrão numa nova tela, marque cada item:
 - [ ] **Salvar não fecha a edição (§25)** — se o formulário é multi-aba/edição longa, salvar grava e permanece aberto (só criar fecha); dirty-tracking + `useConfirm()` na saída com pendência
 - [ ] **Drawer (§26)** — painel lateral vem do `Sheet` (já flutua, com respiro nos 4 lados e `rounded-[10px]`); painel feito à mão precisa das 3 peças da §26
 - [ ] **Identificador técnico só-leitura (§27)** — uid/hash/código exibido como rótulo curto + `title` com o valor inteiro + `<ActionIconButton>` de copiar; nunca `<input readOnly>`, nunca o valor de 36 caracteres cru na tela
+- [ ] **Malha do formulário (§30)** — rótulo→campo `space-y-1.5`, campos `gap-x-6 gap-y-4`, seção `space-y-4` com título `pb-3`, seções `space-y-8` no card; campo curto (data/select/valor) nunca em coluna única; sem `pb-10` morto
 - [ ] **Gráficos (§28)** — card `ChartCard` (título §21 + subtítulo com a base do dado), grade hairline sólida, marcas finas com ponta arredondada, rótulo direto só na ponta em cor de TEXTO, legenda HTML quando há 2+ séries, paleta validada, estado vazio próprio, `—`/vazio em vez de zero quando não medido
 
 ---
@@ -212,6 +213,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §26 Geometria do drawer — se a tela abre painel lateral: usa `Sheet` (herda o painel solto) ou, se é painel à mão, tem respiro + raio + deslocamento de saída somando o respiro
 - [ ] §28 Gráficos — se a tela tem gráfico: cromo, marcas, rótulo, legenda, paleta e estado vazio conferidos item a item
 - [ ] §29 Barra de progresso segmentada — se a tela mostra proporção/percentual em barra: usa `SegmentedProgress` (percentual em texto + quadradinhos), não barra contínua à mão
+- [ ] §30 Malha do formulário — se a tela tem formulário: rótulo 6px / campo 16px / seção 32px / card 24px; seções do mesmo formulário no mesmo card; campos curtos em grade
 
 **Critério de "auditoria completa" cumprido:** todas as linhas acima aparecem
 na resposta final com veredito. Não é permitido dizer "X% do padrão auditado"
@@ -2648,6 +2650,77 @@ abaixo N quadradinhos `h-2.5 w-2 rounded-[2px]` com `gap-0.5` — os
   isso `font-medium`.
 - Não é a barra fina contínua (`h-1.5 rounded-full`) usada como "mini-gráfico"
   em algumas telas antigas — ao tocar numa dessas, migrar para este componente.
+
+---
+
+## 30. MALHA DO FORMULÁRIO — espaçamento por nível (rótulo · campo · seção · card)
+
+**Criado em 2026-09-19 (Suprimentos › Contratos › aba Resumo), a pedido do
+usuário** ("parece estar com muitos espaços"). O §20.1 governa o cromo da tela
+e o §21 a tipografia do rótulo; nenhum deles dizia **quanto** respira um
+formulário por dentro — e sem número escrito, `ContractModal.tsx` tinha
+acumulado 24px entre campos, 24px entre título de seção e primeiro campo, 40px
+entre seções e mais 40px de `pb-10` morto antes da borda do card. Tudo igual
+= o olho não vê hierarquia, e a tela "parece vazia" mesmo com valores
+moderados.
+
+**A régua — cada nível ≈ o dobro do anterior:**
+
+| Relação | Valor | Classe |
+|---|---|---|
+| Rótulo → campo | **6px** | `space-y-1.5` no par `<div>` |
+| Campo ↔ campo (mesmo grupo) | **16px** vertical, 24px horizontal | `grid grid-cols-2 gap-x-6 gap-y-4` |
+| Título de seção → primeiro campo | 12px + linha + 16px | título `border-b border-gray-100 pb-3`; seção `space-y-4` |
+| Seção ↔ seção (mesmo card) | **32px** | `space-y-8` no card |
+| Card ↔ card | 24px | `space-y-6` — já é o §20.1 |
+| Padding do card | 24px | `p-6` |
+
+```tsx
+<div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-8">
+  <div className="space-y-4">                                       {/* seção */}
+    <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+      <Tag className="w-4 h-4 text-blue-600" />
+      <h3 className="text-sm font-semibold text-gray-900">Identificação do Contrato</h3>
+    </div>
+    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+      <div className="space-y-1.5">                                 {/* par rótulo+campo */}
+        <label className="text-xs font-semibold text-slate-500">Número do Contrato</label>
+        <input className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm ..." />
+      </div>
+    </div>
+  </div>
+  <div className="space-y-4">{/* próxima seção — 32px acima */}</div>
+</div>
+```
+
+**Card ou título+linha?** Card = unidade de leitura/decisão, não = título de
+seção. Bloco com estado ou ação próprios (resumo calculado, valor do contrato,
+aviso de divergência) ganha card. Campos editáveis que o usuário preenche em
+sequência (Identificação → Obra → Cronograma) são **um** formulário: mesmo
+card, seções separadas por título + `border-b`. Três cards empilhados obrigam
+o olho a "entrar e sair" três vezes e gastam 3× padding + 3× gap só de
+moldura.
+
+> ✅ **Campo curto não ocupa a linha inteira.** `<input type="date">` ou
+> `<select>` de 1600px não ganha nada em largura — data/select/valor vão em
+> `grid-cols-2`/`grid-cols-3` como os outros; só texto livre longo (descrição,
+> objeto) merece `col-span-2`.
+> ✅ Rodapé de formulário embutido numa aba: linha solta abaixo do card
+> (`flex items-center justify-end gap-4`), sem card cinza próprio — o card
+> em volta de um único botão é moldura sem conteúdo.
+> ❌ `pb-10`/`mb-10` "para dar respiro" no último bloco de um card que já tem
+> `p-6` — é espaço morto duas vezes.
+> ❌ Não repetir num banner de rodapé um valor que já está num card da mesma
+> tela (era o caso da faixa azul "Exposição Financeira" abaixo de "Valor
+> Atual do Contrato") — §18. Se precisa ficar à mão em toda aba, vira texto
+> `text-xs text-gray-500` ao lado do botão de salvar.
+> ℹ️ Medido com Playwright em `ContractModal.tsx` (modo `inline`, 2026-09-19):
+> título→rótulo 34px, rótulo→campo 3–6px, último campo→próximo título 32px; o
+> formulário (3 seções + rodapé) passou de ~2 telas para 1 em 1600×1000.
+> ⚠️ **Pendência de propagação:** aplicado só em `ContractModal.tsx` (drawer e
+> embutido). `SupplierModal.tsx`, `ClientModal.tsx`, `ProjectModal.tsx`,
+> `DealModal.tsx` etc. ainda usam `space-y-2`/`gap-6`/`space-y-10` — ao tocar
+> em qualquer formulário, aplicar esta régua.
 
 ---
 

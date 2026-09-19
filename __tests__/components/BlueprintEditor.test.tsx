@@ -1569,6 +1569,53 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(screen.queryByRole('heading', { level: 1, name: /^alternativas$/i })).toBeNull();
   });
 
+  it('gerador (E6.2): Analisar › Gerar roda as sementes (sem Worker, no fio principal), lista ranqueadas com Pareto, mostra decisões e ambientes; "Aplicar neste pavimento" põe as paredes e os nomes no desenho; "Criar alternativa" grava um ramo com o modelo gerado', async () => {
+    const prog = await import('../../utils/blueprintPrograma');
+    const programa = prog.programaSemente('APTO_2Q');
+    getPrograma.mockResolvedValue({ id: 'p1', study_id: 'std_1', organization_id: 'org_1', nome: programa.nome, programa, created_at: '', updated_at: '' });
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^analisar$/i);
+    const botao = () => screen.getAllByRole('button', { name: /^gerar/i }).find((b) => b.getAttribute('title')?.startsWith('Gerar plantas'))!;
+    await user.click(botao());
+    const tela = (await screen.findByRole('heading', { level: 1, name: /^gerar plantas$/i })).closest('[data-tela="gerar"]') as HTMLElement;
+    expect(within(tela).getByTestId('contexto-do-gerador')).toHaveTextContent(/Programa: 7 item\(ns\), 9 relação\(ões\)\. Sem lote\/envelope: usa o retângulo declarado acima\. Frente suposta ao sul/);
+    // 2 sementes, 60 iterações (rápido no teste).
+    fireEvent.change(within(tela).getByLabelText('Número de sementes'), { target: { value: '2' } });
+    fireEvent.change(within(tela).getByLabelText('Iterações do recozimento'), { target: { value: '60' } });
+    fireEvent.click(within(tela).getByLabelText('Lançar automáticos')); // desliga: só geometria
+    await user.click(within(tela).getByTestId('gerar'));
+    await waitFor(() => expect(within(tela).getAllByRole('row').filter((r) => /^#\d/.test(r.textContent ?? ''))).toHaveLength(2), { timeout: 15000 });
+    const linhas = within(tela).getAllByRole('row').filter((r) => /^#\d/.test(r.textContent ?? ''));
+    expect(linhas[0]).toHaveTextContent(/m²/);
+    expect(linhas.some((l) => /na frente/.test(l.textContent ?? ''))).toBe(true);
+    // A escolhida (a primeira do ranking): miniatura, ambientes, decisões.
+    const escolhida = within(tela).getByTestId('alternativa-escolhida');
+    expect(within(escolhida).getByTestId('mini-planta')).toBeInTheDocument();
+    expect(within(escolhida).getByTestId('ambientes-gerados')).toHaveTextContent(/Sala de estar\/jantar.*social/);
+    expect(within(escolhida).getByTestId('ambientes-gerados')).toHaveTextContent(/Dormitório 1.*intimo/);
+    expect(within(escolhida).getByTestId('decisoes-do-gerador')).toHaveTextContent(/Sem envelope: retângulo declarado 10,00 × 12,00 m/);
+    expect(within(escolhida).getByTestId('decisoes-do-gerador')).toHaveTextContent(/Recozimento simulado: 60 iterações com a semente \d/);
+    expect(within(escolhida).getByTestId('decisoes-do-gerador')).toHaveTextContent(/Entrada de 0,90 m pela frente/);
+    // Criar alternativa: o serviço recebe o modelo gerado (com paredes e nomes).
+    await user.click(within(escolhida).getByTestId('criar-alternativa-gerada'));
+    await waitFor(() => expect(createAlternative).toHaveBeenCalled());
+    const chamada = createAlternative.mock.calls[0][0] as { nome: string; model: { walls: unknown[]; spaces: { name?: string }[] } };
+    expect(chamada.nome).toMatch(/^Gerada #\d \(nota \d+\)$/);
+    expect(chamada.model.walls.length).toBeGreaterThanOrEqual(10);
+    expect(chamada.model.spaces.map((s) => s.name)).toContain('Cozinha');
+    // Volta e aplica no pavimento aberto: as paredes e os nomes entram no desenho.
+    expect(await screen.findByRole('heading', { level: 1, name: /^alternativas$/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^voltar ao editor$/i }));
+    await abrirAba(/^analisar$/i);
+    await user.click(botao());
+    const tela2 = (await screen.findByRole('heading', { level: 1, name: /^gerar plantas$/i })).closest('[data-tela="gerar"]') as HTMLElement;
+    await user.click(within(within(tela2).getByTestId('alternativa-escolhida')).getByTestId('aplicar-gerada'));
+    await waitFor(() => expect(screen.queryByRole('heading', { level: 1, name: /^gerar plantas$/i })).toBeNull());
+    expect(await screen.findByLabelText('Unidade do ambiente Cozinha')).toBeInTheDocument();
+    expect(screen.getByLabelText('Unidade do ambiente Dormitório 2')).toBeInTheDocument();
+  }, 40000);
+
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2500 });

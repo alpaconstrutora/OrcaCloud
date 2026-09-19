@@ -42,6 +42,7 @@ import {
   Sun,
   Gauge,
   GitBranch,
+  Wand2,
   Eye,
   EyeOff,
   FileDown,
@@ -354,6 +355,9 @@ import {
   tarefasDoCronograma,
 } from '../../services/blueprintService';
 import TelaAlternativas from './TelaAlternativas';
+import TelaGerador from './TelaGerador';
+import { useGerador } from '../../hooks/useGerador';
+import { comandosDeGeometria, HIPOTESES_DO_GERADOR_PADRAO, nomesParaOModelo, type HipotesesDoGerador, type ResultadoDoGerador } from '../../utils/blueprintGerador';
 import { conferirPrograma as conferirProgramaDeOutro } from '../../utils/blueprintConferenciaDoPrograma';
 import {
   POLITICA_PADRAO,
@@ -408,6 +412,7 @@ import {
   TIPOS_DE_AMBIENTE,
   DISCIPLINAS_DO_PONTO_HIDRAULICO,
   rotuloCurto,
+  polygonArea,
   type BlueprintModel,
 } from '../../utils/blueprintKernel';
 import {
@@ -1176,7 +1181,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -3515,6 +3520,41 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       ),
     [programaDoEstudo.programa, regrasDaOrganizacao, zona, latitudeDoEstudo, hipotesesDeInsolacao.latitudeManual, norteDoDesenho, prismasDoEntornoDoEstudo, hipotesesDaAvaliacao],
   );
+  /**
+   * GERADOR (E6.2): hipóteses do navegador; a entrada é o envelope do pavimento
+   * ativo (E3.3), a frente pela divisa FRENTE (direção do meio dela a partir
+   * do centro do lote), o norte e a latitude da georreferência, o programa.
+   */
+  const gerador = useGerador();
+  const [hipotesesDoGerador, setHipotesesDoGerador] = usePersistedState<HipotesesDoGerador>('blueprint:gerador', HIPOTESES_DO_GERADOR_PADRAO);
+  const entradaDoGerador = useMemo(() => {
+    const prisma = envelope3d?.prismas.find((p) => p.levelId === levelId) ?? null;
+    const anel = prisma && prisma.anel.length >= 3 ? prisma.anel : envelope?.valido ? envelope.anel : null;
+    let direcaoDaFrente: { x: number; y: number } | null = null;
+    const frentes = limitesDoNivel.filter((b) => b.kind === 'TERRENO' && b.papel === 'FRENTE');
+    if (terreno && frentes.length) {
+      const c = { x: terreno.anel.reduce((s, p) => s + p.x, 0) / terreno.anel.length, y: terreno.anel.reduce((s, p) => s + p.y, 0) / terreno.anel.length };
+      const m = { x: frentes.reduce((s, b) => s + (b.a.x + b.b.x) / 2, 0) / frentes.length, y: frentes.reduce((s, b) => s + (b.a.y + b.b.y) / 2, 0) / frentes.length };
+      const d = { x: m.x - c.x, y: m.y - c.y };
+      const n = Math.hypot(d.x, d.y);
+      if (n > 1) direcaoDaFrente = { x: d.x / n, y: d.y / n };
+    }
+    return {
+      entrada: { programa: programaDoEstudo.programa, envelope: anel, direcaoDaFrente, rotacaoNorteDeg: norteDoDesenho, latitudeGraus: latitudeDoEstudo ?? hipotesesDeInsolacao.latitudeManual },
+      contexto: { temPrograma: programaDoEstudo.programa.itens.length > 0, temEnvelope: !!anel, frenteDeclarada: !!direcaoDaFrente, envelopeM2: anel ? Math.round(Math.abs(polygonArea(anel)) / 10_000) / 100 : null },
+    };
+  }, [envelope3d, envelope, levelId, limitesDoNivel, terreno, programaDoEstudo.programa, norteDoDesenho, latitudeDoEstudo, hipotesesDeInsolacao.latitudeManual]);
+  /** "Aplicar neste pavimento": geometria num lote (paredes por uid + aberturas por wallUid), nomes no segundo. */
+  const aplicarAlternativaGerada = async (r: ResultadoDoGerador) => {
+    if (!levelId) throw new Error('Abra um pavimento para aplicar.');
+    const geo = comandosDeGeometria(r, levelId);
+    // O kernel é determinístico: simular o lote dá os mesmos ids que o editor vai criar.
+    const simulado = applyBatch(editor.model, geo).model;
+    const nomes = nomesParaOModelo(r, simulado, levelId);
+    editor.runBatch(geo);
+    if (nomes.length) editor.runBatch(nomes);
+    setTelaAberta(null);
+  };
   const avaliacao = useMemo(
     () =>
       avaliar(
@@ -6919,6 +6959,33 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           </div>
         </div>
       )}
+      {telaAberta === 'gerar' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="gerar">
+          {cabecalhoDaTela(
+            'Gerar plantas',
+            'Do programa e do envelope, N alternativas determinísticas: zona por fluxo (social à frente, íntimo protegido), alocação por treemap, recozimento simulado com semente, paredes na malha, portas e janelas, automáticos e avaliação. Cada semente é uma planta; a frente de Pareto separa as não dominadas.',
+            Wand2,
+            'Analisar',
+          )}
+          <div>
+            <TelaGerador
+              gerador={gerador}
+              entrada={entradaDoGerador.entrada}
+              hipoteses={hipotesesDoGerador}
+              onHipoteses={setHipotesesDoGerador}
+              contexto={entradaDoGerador.contexto}
+              pavimentoTemParedes={editor.model.walls.some((w) => w.levelId === levelId)}
+              onAbrirPrograma={() => setTelaAberta('programa')}
+              onCriarAlternativa={async (r) => {
+                await createAlternative({ studyId: study.id, organizationId: study.organization_id, fromBranchId: branchId, nome: `Gerada #${r.semente} (nota ${r.avaliacao.notaGeral ?? '—'})`, descricao: r.decisoes.slice(2, 4).join(' '), model: r.model });
+                await recarregarRamos();
+                setTelaAberta('alternativas');
+              }}
+              onAplicarAqui={aplicarAlternativaGerada}
+            />
+          </div>
+        </div>
+      )}
       {telaAberta === 'alternativas' && (
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="alternativas">
           {cabecalhoDaTela(
@@ -7725,6 +7792,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   ativo={telaAberta === 'programa'}
                   onClick={() => alternarTela('programa')}
                   ajuda="Programa de necessidades do estudo: ambientes pedidos, áreas, exigências e matriz de proximidade; sementes por tipologia"
+                />
+              )}
+              {relatorioVisivel('quantitativos') && (
+                <BotaoDoRibbon
+                  icone={Wand2}
+                  rotulo="Gerar"
+                  contagem={gerador.resultados.length || undefined}
+                  ativo={telaAberta === 'gerar'}
+                  onClick={() => alternarTela('gerar')}
+                  ajuda="Gerar plantas: do programa e do envelope, N alternativas determinísticas (zona por fluxo, treemap, recozimento com semente, paredes, portas, janelas, automáticos, avaliação)"
                 />
               )}
               {relatorioVisivel('quantitativos') && (

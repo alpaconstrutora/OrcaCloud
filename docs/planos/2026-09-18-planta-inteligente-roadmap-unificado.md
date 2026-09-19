@@ -754,6 +754,19 @@ propagação; bump).
 
 **Prova no app real (escritas bloqueadas: 14).** Botão "Avaliação 86"; 10 avaliados, 8 sem dado (ambientes sem nome: insolação, privacidade, fachada, shafts não avaliados e dizem por quê); eficiência 100 (185,63/204,48 = 90,8 %), compacidade 89, estrutura 70 (14 de 46 com aviso), modulação 14 (2 de 14 paredes), hidráulica 83 (4,57 m/ponto); zerar o peso da legislação move a nota geral 86 → 89; detalhes da legislação listam os erros com o alvo; clique em "Ambiente 1: Iluminação natural" fecha a tela e seleciona; cartão no Resumo dos Quantitativos com "Ver avaliação". 0 erros. Testes: `__tests__/blueprintAvaliacao.test.ts` (3) e editor "avaliação (E5.2)"; suíte 372 arquivos / 4698 testes; build OK.
 
+### E5.3 — Sugestões (19/09/2026) · fecha a Etapa 5
+
+**O que entrou** (sem bump; sem LLM):
+
+- **`utils/blueprintSugestoes.ts`**: `sugerirMelhorias(avaliacao)` → `Sugestao {id, indicador, prioridade ALTA|MEDIA|BAIXA, titulo (imperativo), texto (com os números), alvo {id, rotulo, levelId} | null, destino (programa | legislacao | insolacao | orcamento | terreno | grafo | quantitativos) | null, desbloqueio, impacto}`. Indicador avaliado abaixo de 75 gera sugestões — uma por alvo (máx. 6, "… e mais N"), com molde de texto próprio por indicador (alargar porta para 0,80/corredor para 0,90/1,20; dar sol de inverno; cruzar ventilação; proteger privacidade; encurtar vão de viga; trazer pilar ao eixo; modular parede; aproximar par da matriz; agrupar áreas molhadas; aproximar de shaft; etc.). Prioridade pelo IMPACTO (100 − nota) × peso, em terços (ordem estável: impacto desc, depois a ordem canônica). Indicador **não avaliado por dado barato** vira DESBLOQUEIO (prioridade baixa, badge "dado") com a porta de entrada: definir programa, nomear ambientes, pedir prévia do orçamento, informar custo de referência, porta para o exterior, matriz de proximidade. `resumirSugestoes`, `textoDasSugestoes` (markdown simples: cabeçalho com a nota, seções por prioridade, "Para avaliar o que falta") — o que se cola numa reunião e o que a IA da E6.4 vai receber.
+- **Tela Avaliação › aba Sugestões** (testids `sugestoes`, `resumo-das-sugestoes`, `sugestao-<id>`, `copiar-sugestoes`): lista com badge de prioridade, título, indicador de origem, texto, "Ir para <alvo>" (seleciona e fecha a tela) e "Abrir <destino>" (tela ou gaveta via `onNavegar`); "Copiar como texto" (clipboard).
+
+**Decisões.** (1) Determinístico e explicável: a mesma avaliação sempre dá a mesma lista, na mesma ordem; a E6.4 recebe este texto pronto em vez de inventar. (2) Uma sugestão por alvo, não por indicador — é o alvo que o projetista clica. (3) Desbloqueios separados das melhorias: "falta dado" não é defeito de projeto. (4) Peso 0 no indicador silencia as sugestões dele (mesma régua da nota geral).
+
+**Prova no app real (escritas bloqueadas: 14).** 29 sugestões (6 altas, 8 médias, 7 baixas, 8 desbloqueios): altas = os erros de iluminação natural (legislação) por ambiente e pavimento; médias = modulação (geral + por parede: 7,05 m, 14,05 m…); "Copiar" → "Copiado"; "Abrir Programa" abre a tela do programa; "Ir para Ambiente 1 (Térreo)…" fecha a tela e seleciona. 0 erros. Testes: `__tests__/blueprintSugestoes.test.ts` (2) e editor "sugestões (E5.3)"; suíte 373 arquivos / 4701 testes; build OK.
+
+**Etapa 5 fechada** (5.1 insolação/ventilação, 5.2 score, 5.3 sugestões). Próxima: Etapa 6 (6.1 alternativas, 6.2 gerador determinístico, 6.3 operações de edição em massa, 6.4 IA).
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

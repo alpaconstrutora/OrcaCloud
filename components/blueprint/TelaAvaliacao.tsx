@@ -5,9 +5,16 @@
  * clicáveis (o ambiente/porta/peça que puxou a nota). As hipóteses (pesos,
  * custo/m² de referência, vão de viga, módulo, raio do shaft) são do
  * navegador. Só leitura do desenho; nada trava.
+ *
+ * Aba **Sugestões** (E5.3): o texto determinístico derivado dos piores
+ * indicadores, com prioridade, alvo clicável, porta de entrada (tela/gaveta)
+ * e o botão Copiar (o texto corrido que a IA da E6.4 vai receber).
  */
-import React, { useState } from 'react';
-import { AlertTriangle, ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { AlertTriangle, ChevronDown, ChevronRight, Copy, RotateCcw } from 'lucide-react';
+import { resumirSugestoes, ROTULO_DA_PRIORIDADE, sugerirMelhorias, textoDasSugestoes, type DestinoDaSugestao, type PrioridadeDaSugestao } from '../../utils/blueprintSugestoes';
+import { TabsBar, type TabsBarItem } from '../ui/TabsBar';
+import { usePersistedState } from '../ui/TableUtils';
 import {
   CHAVES_DOS_INDICADORES,
   corDaNota,
@@ -24,7 +31,11 @@ interface Props {
   hipoteses: HipotesesDaAvaliacao;
   onHipoteses: (h: HipotesesDaAvaliacao) => void;
   onSelecionar: (id: string) => void;
+  /** Para onde a sugestão leva quando não é um elemento (tela ou gaveta). */
+  onNavegar?: (destino: DestinoDaSugestao) => void;
 }
+
+type AbaDaAvaliacao = 'indicadores' | 'sugestoes';
 
 const TOM: Record<ReturnType<typeof corDaNota>, { texto: string; barra: string; fundo: string }> = {
   verde: { texto: 'text-emerald-700', barra: 'bg-emerald-500', fundo: 'bg-emerald-50' },
@@ -54,8 +65,25 @@ function Barra({ nota }: { nota: number | null }) {
   );
 }
 
-export default function TelaAvaliacao({ avaliacao, hipoteses, onHipoteses, onSelecionar }: Props) {
+export default function TelaAvaliacao({ avaliacao, hipoteses, onHipoteses, onSelecionar, onNavegar }: Props) {
   const [aberto, setAberto] = useState<string | null>(null);
+  const [aba, setAba] = usePersistedState<AbaDaAvaliacao>('blueprint:avaliacao:aba', 'indicadores');
+  const sugestoes = useMemo(() => sugerirMelhorias(avaliacao), [avaliacao]);
+  const resumoDasSugestoes = useMemo(() => resumirSugestoes(sugestoes), [sugestoes]);
+  const [copiado, setCopiado] = useState(false);
+  const abas: TabsBarItem[] = [
+    { id: 'indicadores', label: 'Indicadores', badge: avaliacao.avaliados },
+    { id: 'sugestoes', label: 'Sugestões', badge: resumoDasSugestoes.total },
+  ];
+  const copiar = async () => {
+    try {
+      await navigator.clipboard.writeText(textoDasSugestoes(avaliacao, sugestoes));
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    } catch {
+      setCopiado(false);
+    }
+  };
   const [mostrarHipoteses, setMostrarHipoteses] = useState(false);
   const setPeso = (chave: Indicador['chave'], v: number) => onHipoteses({ ...hipoteses, pesos: { ...hipoteses.pesos, [chave]: Math.max(0, Math.min(10, Math.round(v))) } });
   const campo = 'h-8 w-24 rounded-[6px] border border-slate-300 bg-white px-2 text-right text-sm tabular-nums';
@@ -123,7 +151,55 @@ export default function TelaAvaliacao({ avaliacao, hipoteses, onHipoteses, onSel
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-[6px] border border-gray-200 bg-white">
+      <div className="rounded-[6px] border border-gray-200 bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-4 py-2">
+          <TabsBar tabs={abas} value={aba} onChange={(id) => setAba(id as AbaDaAvaliacao)} bare />
+          {aba === 'sugestoes' && (
+            <button type="button" onClick={() => void copiar()} className="inline-flex h-8 items-center gap-1 rounded-[6px] border border-slate-300 bg-white px-2 text-xs font-medium text-gray-700 hover:bg-slate-50" data-testid="copiar-sugestoes">
+              <Copy className="h-3.5 w-3.5" /> {copiado ? 'Copiado' : 'Copiar como texto'}
+            </button>
+          )}
+        </div>
+        {aba === 'sugestoes' && (
+          <div className="px-4 py-3" data-testid="sugestoes">
+            <p className="text-xs text-slate-600" data-testid="resumo-das-sugestoes">
+              <strong className="text-gray-900">{resumoDasSugestoes.total} sugestão(ões)</strong> · {resumoDasSugestoes.altas} alta(s), {resumoDasSugestoes.medias} média(s), {resumoDasSugestoes.baixas} baixa(s)
+              {resumoDasSugestoes.desbloqueios > 0 && <> · {resumoDasSugestoes.desbloqueios} para destravar avaliações</>} — derivadas dos indicadores abaixo de 75, na ordem do impacto (100 − nota) × peso. Texto determinístico, sem IA.
+            </p>
+            {sugestoes.length === 0 ? (
+              <p className="py-6 text-center text-sm text-slate-500">Nada a sugerir: todos os indicadores avaliados estão em 75 ou mais.</p>
+            ) : (
+              <ul className="mt-2 divide-y divide-slate-100">
+                {sugestoes.map((s) => (
+                  <li key={s.id} className="flex flex-wrap items-start gap-3 py-2" data-testid={`sugestao-${s.id}`}>
+                    <PrioridadeBadge prioridade={s.prioridade} desbloqueio={s.desbloqueio} />
+                    <div className="min-w-[14rem] flex-1">
+                      <p className="text-sm font-medium text-gray-800">
+                        {s.titulo}
+                        <span className="ml-2 text-xs font-normal text-slate-400">{s.rotuloDoIndicador}</span>
+                      </p>
+                      <p className="text-xs text-gray-600">{s.texto}</p>
+                    </div>
+                    <span className="flex items-center gap-1">
+                      {s.alvo && (
+                        <button type="button" onClick={() => onSelecionar(s.alvo!.id)} className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs text-blue-700 hover:bg-blue-50">
+                          Ir para {s.alvo.rotulo}
+                        </button>
+                      )}
+                      {s.destino && onNavegar && (
+                        <button type="button" onClick={() => onNavegar(s.destino!)} className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs text-blue-700 hover:bg-blue-50">
+                          Abrir {ROTULO_DO_DESTINO[s.destino]}
+                        </button>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+        {aba === 'indicadores' && (
+        <div className="overflow-x-auto">
         <table className="w-full text-sm" data-testid="tabela-de-indicadores">
           <thead>
             <tr className="border-b border-gray-200 text-left text-xs text-slate-500">
@@ -182,9 +258,27 @@ export default function TelaAvaliacao({ avaliacao, hipoteses, onHipoteses, onSel
             })}
           </tbody>
         </table>
+        </div>
+        )}
       </div>
     </div>
   );
+}
+
+const ROTULO_DO_DESTINO: Record<DestinoDaSugestao, string> = {
+  programa: 'Programa',
+  legislacao: 'Legislação',
+  insolacao: 'Insolação',
+  orcamento: 'Orçamento',
+  terreno: 'Dados do lote',
+  grafo: 'Grafo espacial',
+  quantitativos: 'Quantitativos',
+};
+
+function PrioridadeBadge({ prioridade, desbloqueio }: { prioridade: PrioridadeDaSugestao; desbloqueio: boolean }) {
+  if (desbloqueio) return <span className="mt-0.5 w-16 shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-center text-[11px] font-medium text-slate-600">dado</span>;
+  const tom = prioridade === 'ALTA' ? 'bg-red-50 text-red-700' : prioridade === 'MEDIA' ? 'bg-amber-50 text-amber-800' : 'bg-blue-50 text-blue-700';
+  return <span className={`mt-0.5 w-16 shrink-0 rounded-full px-2 py-0.5 text-center text-[11px] font-medium ${tom}`}>{ROTULO_DA_PRIORIDADE[prioridade]}</span>;
 }
 
 /** Cartão compacto para o Resumo dos Quantitativos: nota geral + os três piores. */

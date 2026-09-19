@@ -6885,6 +6885,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 selecionarEAbrir([id]);
                 setTelaAberta(null);
               }}
+              onNavegar={(destino) => {
+                // Sugestão (E5.3) aponta a porta de entrada: tela própria ou gaveta.
+                if (destino === 'programa' || destino === 'legislacao' || destino === 'quantitativos') {
+                  setTelaAberta(destino);
+                  return;
+                }
+                setTelaAberta(null);
+                if (destino === 'orcamento') alternarRelatorio('orcamento');
+                else alternarTarefa(destino);
+              }}
             />
           </div>
         </div>

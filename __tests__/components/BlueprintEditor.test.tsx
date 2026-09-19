@@ -1447,6 +1447,59 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(await screen.findByRole('heading', { level: 1, name: /^avaliação$/i })).toBeInTheDocument();
   });
 
+  it('sugestões (E5.3): a aba lista as melhorias por prioridade com o alvo e a porta de entrada; "Ir para" seleciona a porta; "Abrir Programa" leva à tela; o texto copiado é o corrido', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    let m = k.applyBatch(nivel.model, [w(0, 0, 8000, 0), w(8000, 0, 8000, 6000), w(8000, 6000, 0, 6000), w(0, 6000, 0, 0), w(4000, 0, 4000, 6000), w(4000, 3000, 8000, 3000)]).model;
+    const sala = m.spaces.find((s) => s.ring.some((p) => p.x === 0))!;
+    const dorm = m.spaces.find((s) => s.ring.every((p) => p.x >= 4000) && s.ring.every((p) => p.y >= 3000))!;
+    const baixo = m.walls.find((x) => x.a.y === 0 && x.b.y === 0)!;
+    const meio = m.walls.find((x) => x.a.x === 4000 && x.b.x === 4000)!;
+    const direita = m.walls.find((x) => x.a.x === 8000 && x.b.x === 8000)!;
+    m = k.applyBatch(m, [
+      { type: 'NameSpace', spaceId: sala.id, name: 'Sala', tipoDeAmbiente: 'SALA_DORMITORIO' },
+      { type: 'NameSpace', spaceId: dorm.id, name: 'Dormitório', tipoDeAmbiente: 'SALA_DORMITORIO' },
+      { type: 'AddOpening', wallId: baixo.id, kind: 'door', offsetMm: 1000, widthMm: 900, heightMm: 2100, sillMm: 0 },
+      { type: 'AddOpening', wallId: meio.id, kind: 'door', offsetMm: 4000, widthMm: 700, heightMm: 2100, sillMm: 0 },
+      { type: 'AddOpening', wallId: direita.id, kind: 'window', offsetMm: 4000, widthMm: 1200, heightMm: 1200, sillMm: 1000 },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^analisar$/i);
+    await user.click(screen.getAllByRole('button', { name: /^avaliação/i }).find((b) => b.getAttribute('title')?.startsWith('Avaliação'))!);
+    const tela = (await screen.findByRole('heading', { level: 1, name: /^avaliação$/i })).closest('[data-tela="avaliacao"]') as HTMLElement;
+    await user.click(within(tela).getByRole('tab', { name: /^Sugestões/ }));
+    const lista = within(tela).getByTestId('sugestoes');
+    expect(within(lista).getByTestId('resumo-das-sugestoes')).toHaveTextContent(/\d+ sugestão\(ões\) · \d+ alta\(s\)/);
+    // A porta de 0,70 aparece como sugestão de corredores e de acessibilidade, com "Ir para".
+    const daPorta = within(lista).getByTestId('sugestao-corredores-0');
+    expect(daPorta).toHaveTextContent(/Alargue a porta 0,70 m para 0,80 m/);
+    expect(daPorta).toHaveTextContent(/porta 0,70 m em Sala/);
+    // Desbloqueio do programa com a porta de entrada.
+    const desbloqueio = within(lista).getByTestId('sugestao-programa-desbloqueio');
+    expect(desbloqueio).toHaveTextContent(/dado.*Defina o programa de necessidades/);
+    // Copiar: o texto corrido.
+    await user.click(within(tela).getByTestId('copiar-sugestoes'));
+    await waitFor(() => expect(within(tela).getByTestId('copiar-sugestoes')).toHaveTextContent('Copiado'));
+    const copiado = await navigator.clipboard.readText(); // o stub do user-event guarda o que foi escrito
+    expect(copiado).toMatch(/^# Avaliação: nota geral \d+/);
+    expect(copiado).toMatch(/\[Corredores e passagens\] Alargue a porta 0,70 m para 0,80 m — Porta 0,70 m/);
+    // "Abrir Programa" leva à tela do programa.
+    await user.click(within(desbloqueio).getByRole('button', { name: /^Abrir Programa$/ }));
+    expect(await screen.findByRole('heading', { level: 1, name: /programa de necessidades/i })).toBeInTheDocument();
+    // De volta: "Ir para Porta 0,70 m" fecha a tela e seleciona a abertura.
+    await user.click(screen.getByRole('button', { name: /^voltar ao editor$/i }));
+    await abrirAba(/^analisar$/i);
+    await user.click(screen.getAllByRole('button', { name: /^avaliação/i }).find((b) => b.getAttribute('title')?.startsWith('Avaliação'))!);
+    const tela2 = (await screen.findByRole('heading', { level: 1, name: /^avaliação$/i })).closest('[data-tela="avaliacao"]') as HTMLElement;
+    await user.click(within(within(tela2).getByTestId('sugestao-corredores-0')).getByRole('button', { name: 'Ir para Porta 0,70 m' }));
+    expect(screen.queryByRole('heading', { level: 1, name: /^avaliação$/i })).toBeNull();
+    expect(await screen.findByText(/^Abertura selecionada$/i)).toBeInTheDocument();
+  });
+
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2500 });

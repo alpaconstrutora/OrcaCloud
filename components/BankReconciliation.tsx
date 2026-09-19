@@ -30,6 +30,7 @@ import { financialSyncService } from '../services/financialSyncService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { useStore } from '../store/useStore';
+import { useOrgWriteTarget, errorMessage } from '../hooks/useOrgContext';
 import { useConfirm } from './ui/confirm';
 import { KpiCardCompact } from './ui/KpiCardCompact';
 import { formatMoney, formatDateBR } from './ui/Format';
@@ -110,6 +111,8 @@ import {
 
 const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId, defaultView }) => {
     const confirm = useConfirm();
+    // Destino de CRIAÇÃO (credor/cliente a partir do extrato) obedece ao topo — REGRA #5.
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
     const navigateToFocus = useStore(s => s.navigateToFocus);
     // Organizações do usuário — "Atende também: todas" da conta resolve para elas (nunca NULL).
     const userOrganizations = useStore(s => s.organizations);
@@ -2407,36 +2410,65 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const handleSaveNewEntity = async () => {
         if (!registerEntityModal) return;
         const { txId, kind, name, document, type } = registerEntityModal;
-        if (!name.trim()) { alert('Informe o nome do ' + (kind === 'supplier' ? 'fornecedor' : 'cliente') + '.'); return; }
-        const orgId = effectiveOrgId || organizationId;
-        if (!orgId) { alert('Organização não identificada.'); return; }
+        const rotulo = kind === 'supplier' ? 'Credor' : 'Cliente';
+        const avisar = (message: string, feedbackType: 'success' | 'error') => {
+            setActionFeedback({ message, type: feedbackType });
+            setTimeout(() => setActionFeedback(null), 4500);
+        };
+        if (!name.trim()) { avisar(`Informe o nome do ${rotulo.toLowerCase()}.`, 'error'); return; }
+
+        // A organização do CREDOR é a do seletor do topo — não a da conta bancária.
+        // Até 2026-09-19 gravava `effectiveOrgId` (= org da conta selecionada quando o
+        // topo está em "Todas"), ignorando o seletor. Ver
+        // docs/planos/2026-09-19-conciliacao-cadastrar-credor-obedece-seletor-de-org.md.
+        //
+        // "Todas as organizações" em fornecedor/cliente NÃO é replicação por org
+        // (CPF/CNPJ e e-mail são únicos): é UM cadastro com dono + `is_shared`, e o
+        // trigger `fn_share_com_minhas_orgs` compartilha com as orgs do usuário. O dono,
+        // nesse caso, é a organização da conta bancária do lançamento — é o único vínculo
+        // concreto que o registro tem quando o topo não aponta para ninguém.
+        const target = await resolveWriteOrg('all-allowed');
+        if (!target) return;
+        const isShared = target.kind === 'all';
+        const ownerOrgId = target.kind === 'org' ? target.orgId : effectiveOrgId;
+        if (!ownerOrgId) { avisar('Selecione uma conta bancária para definir a organização dona do cadastro.', 'error'); return; }
+
         setSavingEntity(true);
         try {
             if (kind === 'supplier') {
-                await supplierService.addSupplier({
+                const salvo = await supplierService.addSupplier({
                     name: name.trim(),
                     document: document || undefined,
                     type,
-                    organization_id: orgId,
+                    organization_id: ownerOrgId,
+                    is_shared: isShared,
                 } as Omit<Supplier, 'id' | 'created_at'>);
                 setMasterSuppliers(prev => [...new Set([...prev, name.trim()])].sort());
+                // §22: o drawer da célula Credor lê `supplierRegistros` — entra sem recarregar.
+                setSupplierRegistros(prev => [...prev, { id: salvo.id, name: salvo.name, nickname: salvo.nickname, document: salvo.document, category: salvo.category }]
+                    .sort((a, b) => a.name.localeCompare(b.name)));
+                setSupplierNameById(prev => ({ ...prev, [salvo.id]: salvo.name }));
             } else {
-                await clientService.saveClient({
+                const salvo = await clientService.saveClient({
                     name: name.trim(),
                     document: document || undefined,
                     type,
-                    organization_id: orgId,
+                    organization_id: ownerOrgId,
+                    is_shared: isShared,
                 });
                 setMasterClients(prev => [...new Set([...prev, name.trim()])].sort());
+                if (salvo?.id) {
+                    setClienteRegistros(prev => [...prev, { id: salvo.id, name: salvo.name, document: salvo.document, email: salvo.email, city: salvo.city, state: salvo.state }]
+                        .sort((a, b) => a.name.localeCompare(b.name)));
+                    setClientNameById(prev => ({ ...prev, [salvo.id]: salvo.name }));
+                }
             }
             // Vincula a contraparte recém-cadastrada ao extrato
             await handleUpdateBankCounterparty(txId, name.trim());
             setRegisterEntityModal(null);
-            setActionFeedback({ message: `${kind === 'supplier' ? 'Credor' : 'Cliente'} cadastrado e vinculado!`, type: 'success' });
-            setTimeout(() => setActionFeedback(null), 3000);
+            avisar(isShared ? `${rotulo} cadastrado em todas as organizações e vinculado!` : `${rotulo} cadastrado e vinculado!`, 'success');
         } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? String(err);
-            alert('Erro ao cadastrar: ' + msg);
+            avisar('Erro ao cadastrar: ' + errorMessage(err, 'erro desconhecido'), 'error');
         } finally {
             setSavingEntity(false);
         }
@@ -2712,6 +2744,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 onTestarRegra={handleTestarRegra}
                 onSugerirRegrasDaMemoria={handleSugerirRegrasDaMemoria}
             />
+
+            {orgTargetModal}
 
             {registerEntityModal && (
                 <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300" onClick={() => !savingEntity && setRegisterEntityModal(null)}>

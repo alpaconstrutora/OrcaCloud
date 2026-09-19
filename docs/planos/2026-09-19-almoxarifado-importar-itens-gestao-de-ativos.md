@@ -9,6 +9,9 @@
 > 1. limpe o almoxarifado para iniciarmos com os dados corretos.
 > 2. ao importar incluir campo com o campo com o qual alnoxarifado o usuário quer destinar o item importado
 
+> **Pedido posterior — 2026-09-20 (mesma sessão):**
+> Almoxarifado não pertence à organização.
+
 ## Decisões tomadas com o usuário
 | Data | Pergunta | Resposta |
 |---|---|---|
@@ -57,6 +60,12 @@ saldo inicial.
 |---|---|---|---|
 | 11 | `components/inventory/StockItemImportModal.tsx` | `launchInitialStock`/`initialStockWarehouseId` → `destinationWarehouseId` ( = só catálogo). Seletor **no rodapé** do modal (visível com qualquer rolagem; a primeira versão, acima da prévia, ficava abaixo da dobra com lista longa), frase explicativa sob o título da prévia (quantos itens trazem quantidade e para onde vão), coluna "Qtd. inicial" na prévia. Com destino escolhido, cada linha com `initialQuantity` vira movimento `in` lá; sem destino, só catálogo | prévia mostra Qtd; escolher destino + Importar → Saldos mostra o item sem F5; sem destino → só na aba Itens |
 
+### Fase 3 — 2026-09-20: "Almoxarifado não pertence à organização"
+
+| # | Arquivo | O que muda | Como sei que terminou |
+|---|---|---|---|
+| 12 | `components/inventory/StockItemImportModal.tsx` | O seletor de destino oferecia `warehouses` do contexto do topo — em "Todas as organizações", as de todas as orgs — enquanto o lote vai para a org escolhida no modal de organização; escolher o almoxarifado da outra org caía na validação de `createMovement`. Agora `orgWarehouses = warehouses.filter(w => w.organizationId === organizationId)` alimenta o seletor, as mensagens e a gravação | Reproduzido no código antigo (Playwright, contexto Todas, org SPE → 2 opções) e corrigido (SPE → só "Almoxarifado - Garden"; Alpa → só "Almoxarifado Central"), 0 erros |
+
 ## Fora do escopo (registrado, não feito)
 - Coluna `origin_asset_id` em `stock_items` (FK para `opura_assets`): `input_code = code do
   ativo` já faz a ponte; FK só se surgir tela que navegue do item para o ativo.
@@ -83,7 +92,9 @@ saldo inicial.
 - [x] push em `main` (`1d651d1c`) + `conferir-producao.sh` ✅ (domínio serve o commit, texto da aba presente)
 - [x] 2026-09-20 — limpeza do almoxarifado (itens/movimentos/saldos zerados; almoxarifados mantidos)
 - [x] 11 — seletor "Almoxarifado de destino" no rodapé; verificado com Playwright (org Alpa: destino visível com 2 opções, Qtd. inicial 1 na prévia, frase muda ao escolher destino, importar 1 ativo → Saldos mostra; 0 erros fora do ruído 57014 da Central de Controle); registros do teste apagados em seguida
-- [ ] push em `main` + `conferir-producao.sh` (fase 2)
+- [x] push em `main` (`e32a3dd2`) + `conferir-producao.sh` ✅ (fase 2)
+- [x] 12 — destino só da organização de gravação; reproduzido e verificado
+- [ ] push em `main` + `conferir-producao.sh` (fase 3)
 
 ## Verificação
 1. `npm run typecheck`

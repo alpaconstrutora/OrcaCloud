@@ -281,7 +281,13 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
     };
 
     const rowsWithQuantity = pendingRows.filter(r => r.initialQuantity && r.initialQuantity > 0).length;
-    const destinationWarehouse = warehouses.find(w => w.id === destinationWarehouseId);
+    // Só almoxarifados da organização em que o lote vai ser gravado. A lista que
+    // chega do módulo é a do contexto do topo — em "Todas as organizações" traz
+    // as de todas — enquanto `organizationId` é a escolhida no modal de
+    // organização; oferecer as outras acabava em "Almoxarifado não pertence à
+    // organização" no createMovement (reportado em 2026-09-20).
+    const orgWarehouses = warehouses.filter(w => w.organizationId === organizationId);
+    const destinationWarehouse = orgWarehouses.find(w => w.id === destinationWarehouseId);
 
     // ── confirmação ───────────────────────────────────────────────────────────
     const handleImport = async () => {
@@ -291,12 +297,12 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
         try {
             const result = await inventoryService.importStockItems(organizationId, pendingRows);
             let stockLaunched = false;
-            if (destinationWarehouseId) {
+            if (destinationWarehouse) {
                 for (const r of result.results) {
                     const qty = r.row.initialQuantity;
                     if (r.status !== 'error' && r.item && qty && qty > 0) {
                         await inventoryService.createMovement(organizationId, {
-                            warehouseId: destinationWarehouseId,
+                            warehouseId: destinationWarehouse.id,
                             inputCode: r.item.inputCode,
                             inputDescription: r.item.inputDescription,
                             inputUnit: r.item.inputUnit,
@@ -555,7 +561,7 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
                     <div className="border-t border-gray-100 pt-4">
                         <p className="text-xs font-semibold text-gray-500">Pré-visualização ({pendingRows.length} {pendingRows.length === 1 ? 'item' : 'itens'})</p>
                         <p className="text-xs text-gray-400 mb-2">
-                            {warehouses.length === 0
+                            {orgWarehouses.length === 0
                                 ? 'Nenhum almoxarifado ativo nesta organização — os itens entram só no catálogo. Cadastre um na aba Almoxarifados para dar entrada em saldo.'
                                 : destinationWarehouse
                                     ? `Itens com quantidade entram em "${destinationWarehouse.name}" como saldo inicial (planilha: coluna 6 · Gestão de Ativos: 1 UN por ativo)${pendingRows.length > 0 ? ` — ${rowsWithQuantity} de ${pendingRows.length}` : ''}. Sem quantidade, só cadastro.`
@@ -617,12 +623,12 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
                             id="stock-import-destination"
                             value={destinationWarehouseId}
                             onChange={e => setDestinationWarehouseId(e.target.value)}
-                            disabled={warehouses.length === 0}
-                            title={warehouses.length === 0 ? 'Nenhum almoxarifado ativo nesta organização' : 'Onde as quantidades importadas dão entrada'}
+                            disabled={orgWarehouses.length === 0}
+                            title={orgWarehouses.length === 0 ? 'Nenhum almoxarifado ativo nesta organização' : 'Onde as quantidades importadas dão entrada'}
                             className="h-9 w-full md:w-64 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:opacity-50"
                         >
                             <option value="">Só cadastrar no catálogo (sem saldo)</option>
-                            {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                            {orgWarehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                         </select>
                     </div>
                     {importError && <p className="text-red-500 text-sm font-medium md:ml-auto">{importError}</p>}

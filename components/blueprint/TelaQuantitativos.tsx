@@ -15,6 +15,8 @@ import type { BlueprintQuantitySnapshot } from '../../types/blueprint';
 import { StandardTable, type StandardTableColumn } from '../ui/StandardTable';
 import { TabsBar, type TabsBarItem } from '../ui/TabsBar';
 import { usePersistedState } from '../ui/TableUtils';
+import { CartaoDaAvaliacao } from './TelaAvaliacao';
+import type { Avaliacao } from '../../utils/blueprintAvaliacao';
 
 /**
  * TELA de Quantitativos (17/09/2026: *"Analisar < quantitativos: criar nova
@@ -134,12 +136,15 @@ interface Props {
   dirty: boolean;
   /** Selecionar a peça no desenho a partir da linha. */
   onSelecionarPeca?: (id: string) => void;
+  /** SCORE (E5.2): o cartão no Resumo, com o atalho para a tela Avaliação. */
+  avaliacao?: Avaliacao | null;
+  onAbrirAvaliacao?: () => void;
 }
 
 type Fmt = (v: number) => string;
 const num = (fmt: Fmt, v: number) => <span className="block text-right text-sm tabular-nums text-gray-700">{fmt(v)}</span>;
 
-export default function TelaQuantitativos({ model, quant, armadura, revisao, oficial, gerando, onGerar, dirty, onSelecionarPeca }: Props) {
+export default function TelaQuantitativos({ model, quant, armadura, revisao, oficial, gerando, onGerar, dirty, onSelecionarPeca, avaliacao, onAbrirAvaliacao }: Props) {
   const t = quant.totais;
   // PAVIMENTOS: o mapa entidade → nível, as linhas por pavimento e o filtro
   // das abas de ambiente/peça. O filtro só aparece com dois níveis ou mais —
@@ -328,6 +333,7 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
         </span>
       </TabsBar>
 
+      {aba === 'resumo' && avaliacao && onAbrirAvaliacao && <CartaoDaAvaliacao avaliacao={avaliacao} onAbrir={onAbrirAvaliacao} />}
       {aba === 'resumo' && (
         <StandardTable<LinhaDoResumo>
           columns={COLUNAS_RESUMO}

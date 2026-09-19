@@ -40,6 +40,7 @@ import {
   ClipboardList,
   Footprints,
   Sun,
+  Gauge,
   Eye,
   EyeOff,
   FileDown,
@@ -465,6 +466,8 @@ import TelaLegislacao from './TelaLegislacao';
 import TelaPrograma from './TelaPrograma';
 import PainelGrafoEspacial from './PainelGrafoEspacial';
 import PainelInsolacao, { HIPOTESES_DE_INSOLACAO_PADRAO, type HipotesesDeInsolacao } from './PainelInsolacao';
+import TelaAvaliacao from './TelaAvaliacao';
+import { avaliar, hipotesesDaAvaliacaoDaColuna, HIPOTESES_DA_AVALIACAO_PADRAO, type HipotesesDaAvaliacao } from '../../utils/blueprintAvaliacao';
 import { analisarInsolacao, diaDoAno, direcaoDoSol, insolacaoParaRegras, posicaoSolar, prismasDoEntorno } from '../../utils/blueprintInsolacao';
 import { conferirPrograma, linhasParaLegislacao } from '../../utils/blueprintConferenciaDoPrograma';
 import { construirGrafoEspacial, descreverFachadas, percursoAteASaida, vizinhosDe } from '../../utils/blueprintGrafoEspacial';
@@ -1161,7 +1164,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -3454,6 +3457,29 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     return [...doMotor, ...da5410, ...doPrograma];
   }, [editor.model, regrasDaOrganizacao, conferenciaDoPrograma, programaDoEstudo.programa, insolacaoDoNivel, zona.insolacaoMinimaH, limitesDoNivel, terreno, aproveitamento, alturaDesenhadaM, envelope3d, zona.taxaOcupacaoMax, zona.coeficienteMax, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos, zona.taxaPermeabilidadeMin, zona.testadaMinimaMm, zona.areaMinimaDoLoteM2, ambientes, levelId]);
   const errosDeLegislacao = useMemo(() => resultadosDeRegras.filter((r) => r.estado === 'VIOLADA' && r.regra.severidade === 'ERRO').length, [resultadosDeRegras]);
+  /**
+   * SCORE (E5.2): os dezoito indicadores com explicação, pesos do navegador.
+   * O custo vem da prévia do orçamento (só depois que alguém a pediu).
+   */
+  const [hipotesesDaAvaliacaoCruas, setHipotesesDaAvaliacao] = usePersistedState<HipotesesDaAvaliacao>('blueprint:avaliacao', HIPOTESES_DA_AVALIACAO_PADRAO);
+  const hipotesesDaAvaliacao = useMemo(() => hipotesesDaAvaliacaoDaColuna(hipotesesDaAvaliacaoCruas), [hipotesesDaAvaliacaoCruas]);
+  const custoTotalDaPrevia = useMemo(() => (previaOrcamento ? previaOrcamento.entries.reduce((s, en) => s + en.quantity * (en.sinapiItem?.price ?? 0), 0) : null), [previaOrcamento]);
+  const avaliacao = useMemo(
+    () =>
+      avaliar(
+        {
+          model: editor.model,
+          programa: programaDoEstudo.programa,
+          conferencia: conferenciaDoPrograma,
+          resultadosDeRegras,
+          insolacao: { latitudeGraus: latitudeDoEstudo ?? hipotesesDeInsolacao.latitudeManual, rotacaoNorteDeg: norteDoDesenho, prismas: prismasDoEntornoDoEstudo },
+          insolacaoMinimaH: zona.insolacaoMinimaH,
+          custoTotalBRL: custoTotalDaPrevia,
+        },
+        hipotesesDaAvaliacao,
+      ),
+    [editor.model, programaDoEstudo.programa, conferenciaDoPrograma, resultadosDeRegras, latitudeDoEstudo, hipotesesDeInsolacao.latitudeManual, norteDoDesenho, prismasDoEntornoDoEstudo, zona.insolacaoMinimaH, custoTotalDaPrevia, hipotesesDaAvaliacao],
+  );
 
   // ── Quadro de divisas — papéis, medidas da escritura e confrontantes ──────
 
@@ -6836,6 +6862,29 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 selecionarEAbrir([id]);
                 setTelaAberta(null);
               }}
+              avaliacao={avaliacao}
+              onAbrirAvaliacao={() => setTelaAberta('avaliacao')}
+            />
+          </div>
+        </div>
+      )}
+      {telaAberta === 'avaliacao' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="avaliacao">
+          {cabecalhoDaTela(
+            'Avaliação',
+            'Dezoito indicadores de 0 a 100 com a explicação de cada nota — programa, legislação, eficiência, circulação, compacidade, insolação, ventilação, corredores, adjacências, privacidade, acessibilidade, estrutura, modulação, custo, paredes, fachada, shafts e hidráulica. Pesos editáveis; o que falta dado fica "não avaliado".',
+            Gauge,
+            'Analisar',
+          )}
+          <div>
+            <TelaAvaliacao
+              avaliacao={avaliacao}
+              hipoteses={hipotesesDaAvaliacao}
+              onHipoteses={setHipotesesDaAvaliacao}
+              onSelecionar={(id) => {
+                selecionarEAbrir([id]);
+                setTelaAberta(null);
+              }}
             />
           </div>
         </div>
@@ -7593,6 +7642,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   ativo={tarefaAberta === 'insolacao'}
                   onClick={() => alternarTarefa('insolacao')}
                   ajuda="Insolação e ventilação: posição do sol por data e hora solar, horas de sol por fachada e ambiente (21/06, 21/03, 21/12), sombra do entorno, ventilação cruzada; sol e sombras no 3D"
+                />
+              )}
+              {relatorioVisivel('quantitativos') && (
+                <BotaoDoRibbon
+                  icone={Gauge}
+                  rotulo="Avaliação"
+                  contagem={avaliacao.notaGeral ?? undefined}
+                  ativo={telaAberta === 'avaliacao'}
+                  onClick={() => alternarTela('avaliacao')}
+                  ajuda="Avaliação: nota geral 0–100 e dezoito indicadores com explicação (programa, legislação, eficiência, circulação, insolação, acessibilidade, custo…); pesos editáveis"
                 />
               )}
               {(!emVista || em3d) && (

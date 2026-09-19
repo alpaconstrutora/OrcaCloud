@@ -1388,6 +1388,65 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(linhas().some((l) => /Não avaliada.*insolação mínima no inverno.*falta o dado "insolacao_minima"/.test(l))).toBe(true);
   });
 
+  it('avaliação (E5.2): a tela mostra a nota geral, os piores, dezoito indicadores com explicação; peso 0 muda a média; o detalhe leva à porta estreita; o Resumo dos Quantitativos tem o cartão', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    let m = k.applyBatch(nivel.model, [w(0, 0, 8000, 0), w(8000, 0, 8000, 6000), w(8000, 6000, 0, 6000), w(0, 6000, 0, 0), w(4000, 0, 4000, 6000), w(4000, 3000, 8000, 3000)]).model;
+    const sala = m.spaces.find((s) => s.ring.some((p) => p.x === 0))!;
+    const dorm = m.spaces.find((s) => s.ring.every((p) => p.x >= 4000) && s.ring.every((p) => p.y >= 3000))!;
+    const baixo = m.walls.find((x) => x.a.y === 0 && x.b.y === 0)!;
+    const esquerda = m.walls.find((x) => x.a.x === 0 && x.b.x === 0)!;
+    const meio = m.walls.find((x) => x.a.x === 4000 && x.b.x === 4000)!;
+    const direita = m.walls.find((x) => x.a.x === 8000 && x.b.x === 8000)!;
+    m = k.applyBatch(m, [
+      { type: 'NameSpace', spaceId: sala.id, name: 'Sala', tipoDeAmbiente: 'SALA_DORMITORIO' },
+      { type: 'NameSpace', spaceId: dorm.id, name: 'Dormitório', tipoDeAmbiente: 'SALA_DORMITORIO' },
+      { type: 'AddOpening', wallId: baixo.id, kind: 'door', offsetMm: 1000, widthMm: 900, heightMm: 2100, sillMm: 0 },
+      { type: 'AddOpening', wallId: esquerda.id, kind: 'window', offsetMm: 2000, widthMm: 1500, heightMm: 1200, sillMm: 1000 },
+      { type: 'AddOpening', wallId: meio.id, kind: 'door', offsetMm: 4000, widthMm: 700, heightMm: 2100, sillMm: 0 },
+      { type: 'AddOpening', wallId: direita.id, kind: 'window', offsetMm: 4000, widthMm: 1200, heightMm: 1200, sillMm: 1000 },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^analisar$/i);
+    const botao = () => screen.getAllByRole('button', { name: /^avaliação/i }).find((b) => b.getAttribute('title')?.startsWith('Avaliação'))!;
+    expect(botao()).toHaveTextContent(/\d{2}/); // a nota geral no botão
+    await user.click(botao());
+    const tela = (await screen.findByRole('heading', { level: 1, name: /^avaliação$/i })).closest('[data-tela="avaliacao"]') as HTMLElement;
+    const notaGeral = () => Number(within(within(tela).getByTestId('resumo-da-avaliacao')).getByTestId('nota-geral').textContent);
+    const antes = notaGeral();
+    expect(antes).toBeGreaterThan(0);
+    expect(within(tela).getByTestId('resumo-da-avaliacao')).toHaveTextContent(/média ponderada de \d+ indicador\(es\) avaliado\(s\) · \d+ não avaliado\(s\)/);
+    expect(within(tela).getByTestId('piores')).toHaveTextContent(/Pesam mais para baixo:/);
+    // Dezoito linhas; a de corredores explica a porta de 0,70 e o detalhe leva a ela.
+    expect(within(tela).getByTestId('tabela-de-indicadores').querySelectorAll('tbody tr[aria-label^="Indicador "]')).toHaveLength(18);
+    const corredores = within(tela).getByRole('row', { name: 'Indicador Corredores e passagens' });
+    expect(corredores).toHaveTextContent(/1 de 2: circulações com ≥ 0,90 m livres e portas com vão ≥ 0,80 m/);
+    expect(within(tela).getByRole('row', { name: 'Indicador Programa de necessidades' })).toHaveTextContent(/não avaliado.*Sem programa de necessidades/);
+    expect(within(tela).getByRole('row', { name: 'Indicador Legislação e normas' })).toHaveTextContent(/conforme\(s\), \d+ erro\(s\)/);
+    expect(within(tela).getByRole('row', { name: 'Indicador Insolação' })).toHaveTextContent(/2 de 2 ambiente\(s\) de permanência/);
+    // Peso 0 na legislação muda a média geral.
+    fireEvent.change(within(tela).getByLabelText('Peso de Legislação e normas'), { target: { value: '0' } });
+    expect(notaGeral()).not.toBe(antes);
+    // Detalhes: abre e clica no alvo (porta) → a tela fecha e a abertura fica selecionada.
+    await user.click(corredores);
+    const detalhes = within(tela).getByTestId('detalhes-corredores');
+    expect(detalhes).toHaveTextContent(/porta 0,70 m em Sala/);
+    await user.click(within(detalhes).getByRole('button', { name: 'Porta 0,70 m' }));
+    expect(screen.queryByRole('heading', { level: 1, name: /^avaliação$/i })).toBeNull();
+    expect(await screen.findByText(/^Abertura selecionada$/i)).toBeInTheDocument();
+    // Cartão no Resumo dos Quantitativos.
+    await abrirAba(/^analisar$/i);
+    await user.click(screen.getByRole('button', { name: /^quantitativos$/i }));
+    const cartao = await screen.findByTestId('cartao-da-avaliacao');
+    expect(cartao).toHaveTextContent(/Avaliação · \d+ indicador\(es\) avaliado\(s\)/);
+    await user.click(within(cartao).getByRole('button', { name: /ver avaliação/i }));
+    expect(await screen.findByRole('heading', { level: 1, name: /^avaliação$/i })).toBeInTheDocument();
+  });
+
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2500 });

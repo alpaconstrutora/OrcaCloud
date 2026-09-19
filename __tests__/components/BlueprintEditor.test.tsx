@@ -740,7 +740,9 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     // Menu de ações do Térreo → Repetir como pavimento tipo… → 2 cópias.
-    await user.click(screen.getByRole('button', { name: 'Ações de Térreo' }));
+    // `findBy`: o modelo do mock chega depois da toolbar; no CI (mais lento)
+    // o `getBy` síncrono via "Pavimentos 0" e não achava o menu.
+    await user.click(await screen.findByRole('button', { name: 'Ações de Térreo' }));
     await user.click(screen.getByRole('menuitem', { name: /repetir como pavimento tipo/i }));
     const quantas = screen.getByLabelText('Quantas cópias de Térreo') as HTMLInputElement;
     await user.clear(quantas);

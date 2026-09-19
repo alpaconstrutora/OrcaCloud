@@ -64,7 +64,7 @@ CPF/CNPJ (`assertDocumentNotDuplicated`) e e-mail (`suppliers_email_key`) são
   2026-09-19): topo em "Todas" → Cadastrar credor → "Cadastrar e vincular" → modal
   "Selecionar organização" com "Todas as organizações" + 2 orgs; cancelado, 0 escritas,
   0 erros de página (`concil-credor-03-apos-clicar.png`).
-- [ ] Publicado em `main` e provado no domínio.
+- [x] Publicado em `main` — `8a0f9dc9`; `conferir-producao.sh` provou o SHA no domínio em 2026-09-19.
 
 ## Verificação
 

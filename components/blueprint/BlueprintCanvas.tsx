@@ -37,6 +37,8 @@ import {
   CATALOGO_DE_COMPONENTES,
   type Componente,
   type TipoDeComponente,
+  type GuardaCorpo,
+  type TipoDeGuardaCorpo,
   type Nucleo,
   type Vaga,
   type TipoDeVaga,
@@ -332,6 +334,8 @@ const SEM_COMPONENTES: Componente[] = [];
 const COR_CORTE = '#0284c7';
 /** Eixo da malha: cinza-azulado discreto — referência, não construção. */
 const COR_EIXO = '#64748b';
+/** Guarda-corpo (E7.3): linha dupla com balaústres; corrimão linha simples grossa. */
+const COR_GUARDA_CORPO = '#0f766e';
 
 /**
  * A marca da conexão automática que pegou no arraste.
@@ -1240,6 +1244,9 @@ interface Props {
   onAddCorte?: (a: Point, b: Point) => void;
   /** EIXO da malha (E1.4): dois cliques. */
   onAddEixo?: (a: Point, b: Point) => void;
+  /** GUARDA-CORPO (E7.3): dois cliques; o tipo ativo vem da barra. */
+  tipoDeGuardaCorpo?: TipoDeGuardaCorpo;
+  onAddGuardaCorpo?: (a: Point, b: Point) => void;
   /** NÚCLEO VERTICAL (E2.4): os que atravessam este pavimento, já filtrados pelo editor. */
   nucleos?: Nucleo[];
   /** Retângulo por dois cantos opostos; o editor põe tipo e pavimentos. */
@@ -1389,6 +1396,8 @@ export default function BlueprintCanvas({
   onMoveAguaVertex,
   onAddCorte,
   onAddEixo,
+  tipoDeGuardaCorpo = 'GUARDA_CORPO',
+  onAddGuardaCorpo,
   nucleos = SEM_NUCLEOS,
   onAddNucleo,
   vagas = SEM_VAGAS,
@@ -1550,6 +1559,7 @@ export default function BlueprintCanvas({
   const [pontoCorte, setPontoCorte] = useState<Point | null>(null);
   /** Primeiro clique do EIXO em curso (E1.4). */
   const [pontoEixo, setPontoEixo] = useState<Point | null>(null);
+  const [pontoGuardaCorpo, setPontoGuardaCorpo] = useState<Point | null>(null);
   /** O primeiro canto do núcleo em curso (E2.4). */
   const [pontoNucleo, setPontoNucleo] = useState<Point | null>(null);
   /**
@@ -1705,6 +1715,8 @@ export default function BlueprintCanvas({
   const cortes = useMemo(() => (model.sections ?? []).filter((c) => !ocultos.has(c.id)), [model.sections, ocultos]);
   /** Os EIXOS da malha (E1.4): de todo o projeto, como os cortes. */
   const eixos = useMemo(() => (model.eixos ?? []).filter((e) => !ocultos.has(e.id)), [model.eixos, ocultos]);
+  /** GUARDA-CORPOS (E7.3) do pavimento. */
+  const guardaCorpos = useMemo(() => (model.guardaCorpos ?? []).filter((g) => (!levelId || g.levelId === levelId) && !ocultos.has(g.id)), [model.guardaCorpos, levelId, ocultos]);
 
   // ── Seleção ───────────────────────────────────────────────────────────────
   //
@@ -2595,6 +2607,21 @@ export default function BlueprintCanvas({
       return null;
     },
     [eixos, vista.escala],
+  );
+
+  /** Qual GUARDA-CORPO está sob o cursor — por qualquer trecho da polilinha. */
+  const guardaCorpoSob = useCallback(
+    (mundo: { x: number; y: number }): GuardaCorpo | null => {
+      const folga = HIT_PX / vista.escala;
+      for (let i = guardaCorpos.length - 1; i >= 0; i--) {
+        const g = guardaCorpos[i];
+        for (let k = 1; k < g.pontos.length; k++) {
+          if (distanciaAoSegmento(g.pontos[k - 1], g.pontos[k], mundo) <= folga) return g;
+        }
+      }
+      return null;
+    },
+    [guardaCorpos, vista.escala],
   );
 
   /** Qual LINHA DE CORTE está sob o cursor — pela linha, que é tudo que ela é. */
@@ -5793,6 +5820,53 @@ export default function BlueprintCanvas({
         }
       }
     }
+    // ── GUARDA-CORPOS (E7.3): guarda-corpo = linha dupla com balaústres a cada
+    // 12 cm; corrimão = linha simples grossa. Sugerido tracejado. ──
+    const desenharGuardaCorpo = (pontos: Point[], tipo: TipoDeGuardaCorpo, cor: string, tracejado: boolean, largura: number) => {
+      const tela = pontos.map(paraTela);
+      ctx.strokeStyle = cor;
+      ctx.setLineDash(tracejado ? [6, 4] : []);
+      ctx.lineWidth = tipo === 'CORRIMAO' ? largura + 1.5 : largura;
+      ctx.beginPath();
+      ctx.moveTo(tela[0].x, tela[0].y);
+      for (const q of tela.slice(1)) ctx.lineTo(q.x, q.y);
+      ctx.stroke();
+      if (tipo === 'GUARDA_CORPO') {
+        // segunda linha deslocada 4 px e balaústres perpendiculares
+        for (let k = 1; k < tela.length; k++) {
+          const a = tela[k - 1];
+          const b = tela[k];
+          const L = Math.hypot(b.x - a.x, b.y - a.y);
+          if (L < 1) continue;
+          const nx = (-(b.y - a.y) / L) * 4;
+          const ny = ((b.x - a.x) / L) * 4;
+          ctx.lineWidth = largura * 0.7;
+          ctx.beginPath();
+          ctx.moveTo(a.x + nx, a.y + ny);
+          ctx.lineTo(b.x + nx, b.y + ny);
+          ctx.stroke();
+          const passo = Math.max(6, 120 * vista.escala);
+          ctx.lineWidth = 1;
+          for (let d = passo / 2; d < L; d += passo) {
+            const px = a.x + ((b.x - a.x) * d) / L;
+            const py = a.y + ((b.y - a.y) * d) / L;
+            ctx.beginPath();
+            ctx.moveTo(px, py);
+            ctx.lineTo(px + nx, py + ny);
+            ctx.stroke();
+          }
+        }
+      }
+      ctx.setLineDash([]);
+    };
+    for (const g of guardaCorpos) {
+      const selecionado = selecao.has(g.id);
+      desenharGuardaCorpo(g.pontos, g.tipo, selecionado ? COR_SELECIONADA : COR_GUARDA_CORPO, !!g.sugerido, selecionado ? 2.5 : 1.6);
+    }
+    if (tool === 'guardacorpo' && pontoGuardaCorpo && cursor) {
+      desenharGuardaCorpo([pontoGuardaCorpo, cursor], tipoDeGuardaCorpo, COR_GUARDA_CORPO, true, 1.4);
+    }
+
     // Prévia do eixo em curso.
     if (tool === 'eixo' && pontoEixo && cursor) {
       const a = paraTela(pontoEixo);
@@ -6690,6 +6764,7 @@ export default function BlueprintCanvas({
         tool === 'telhado' ||
         tool === 'corte' ||
         tool === 'eixo' ||
+        tool === 'guardacorpo' ||
         tool === 'nucleo' ||
         tool === 'vaga' ||
         tool === 'componente')
@@ -6886,6 +6961,9 @@ export default function BlueprintCanvas({
     cortes,
     pontoCorte,
     movendoCorte,
+    guardaCorpos,
+    pontoGuardaCorpo,
+    tipoDeGuardaCorpo,
     faixasRestritas,
     nucleos,
     pontoNucleo,
@@ -7340,6 +7418,12 @@ export default function BlueprintCanvas({
       setCursor(alvo);
       return;
     }
+    if (tool === 'guardacorpo') {
+      let alvo = capturarTracado(paraMundo(px, py));
+      if (pontoGuardaCorpo && ortoAtivo(e)) alvo = travarOrtogonal(pontoGuardaCorpo, alvo);
+      setCursor(alvo);
+      return;
+    }
 
     if (tool === 'nucleo' || tool === 'vaga' || tool === 'componente') {
       setCursor(capturarTracado(paraMundo(px, py)));
@@ -7617,6 +7701,20 @@ export default function BlueprintCanvas({
       return;
     }
 
+    // GUARDA-CORPO (E7.3): dois cliques, como o eixo.
+    if (tool === 'guardacorpo') {
+      const ponto = capturarTracado(mundo);
+      if (!pontoGuardaCorpo) {
+        setPontoGuardaCorpo(ponto);
+        return;
+      }
+      const fim = ortoAtivo(e) ? travarOrtogonal(pontoGuardaCorpo, ponto) : ponto;
+      if (fim.x === pontoGuardaCorpo.x && fim.y === pontoGuardaCorpo.y) return;
+      onAddGuardaCorpo?.(pontoGuardaCorpo, fim);
+      setPontoGuardaCorpo(null);
+      return;
+    }
+
     // COMPONENTE (E7.1): um clique no centro.
     if (tool === 'componente') {
       onAddComponente?.(capturarTracado(mundo));
@@ -7876,8 +7974,11 @@ export default function BlueprintCanvas({
       // Depois dela, o cano embutido nunca seria pego. E depois das peças de
       // corpo (estrutura, escada), porque ali quem clicou mirou o corpo.
       const trechoClicado = trechoSob(mundo);
+      // GUARDA-CORPO (E7.3): linha sobre a borda da laje — antes da estrutura e da parede.
+      const guardaCorpoClicado = guardaCorpoSob(mundo);
       const clicado =
         aberturaClicada?.id ??
+        guardaCorpoClicado?.id ??
         quadroClicado?.id ??
         terminalClicado?.id ??
         limiteClicado?.id ??
@@ -8422,6 +8523,7 @@ export default function BlueprintCanvas({
       setCaminhoEscada([]);
       setPontoCorte(null);
       setPontoEixo(null);
+      setPontoGuardaCorpo(null);
       setPontoNucleo(null);
       // ⚠️ E o TRECHO em curso, que o Escape não cancelava: o primeiro clique
       // ficava pendurado, e o clique seguinte — dado noutro lugar, já sem

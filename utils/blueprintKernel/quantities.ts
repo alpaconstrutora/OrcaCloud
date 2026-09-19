@@ -18,9 +18,9 @@
  * ligada ao snapshot que a originou.
  */
 
-import type { AcabamentosDoAmbiente, BlueprintModel, FuncaoCamada, Level, Opening, Rodape, Space, Structural, StructuralKind, Wall } from './model';
+import type { AcabamentosDoAmbiente, BlueprintModel, FuncaoCamada, Level, MaterialDeGuardaCorpo, Opening, Rodape, Space, Structural, StructuralKind, TipoDeGuardaCorpo, Wall } from './model';
 import { areaDaSecaoT, perimetroDeFormaDaSecaoT, secaoTValida } from './secaoT';
-import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural, acabamentosDoAmbiente } from './model';
+import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural, acabamentosDoAmbiente, comprimentoDoGuardaCorpo } from './model';
 import { contornoExternoDoNivel } from './arrangement';
 import { medirAgua } from './telhado';
 import { assinaturaDaEsquadria, nomeDaEsquadria } from './model';
@@ -163,9 +163,15 @@ export interface QuantityPolicy {
  * rodapé a comprar). `totais.porAcabamento` agrupa por escopo × material ×
  * função, como `porMaterial` faz para a parede. Ambiente sem declaração não
  * muda de número.
+ *
+ * 1.11.0 → 1.12.0 (19/09/2026, E7.3): GUARDA-CORPOS E CORRIMÃOS. Cada peça sai
+ * com o comprimento da polilinha (m) e a área (comprimento × altura, m² — o
+ * vidro e o gradil se cotam assim); `totais.comprimentoGuardaCorpoM`,
+ * `totais.comprimentoCorrimaoM` e `totais.porGuardaCorpo` (tipo × material ×
+ * código). Desenho sem peça não muda de número.
  */
 export const POLITICA_PADRAO: QuantityPolicy = {
-  version: 'quant-1.11.0',
+  version: 'quant-1.12.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -462,6 +468,33 @@ export interface QuantidadeAgua {
  * conferir exige o número que o desenho usou. `areaFuroLajeM2` é a soma dos
  * furos que ela abre — o desconto que a laje já recebeu em `areaLajeM2`.
  */
+/** Guarda-corpo ou corrimão medido (E7.3): comprimento da polilinha e área = comprimento × altura. */
+export interface QuantidadeGuardaCorpo {
+  guardaCorpoId: string;
+  uid: string;
+  tipo: TipoDeGuardaCorpo;
+  material: MaterialDeGuardaCorpo;
+  itemCode: string;
+  descricao: string;
+  rotulo: string | null;
+  comprimentoM: number;
+  alturaM: number;
+  areaM2: number;
+  trechos: number;
+  sugerido: boolean;
+}
+
+/** Guarda-corpos somados por tipo × material × código — a lista de compras. */
+export interface QuantidadePorGuardaCorpo {
+  tipo: TipoDeGuardaCorpo;
+  material: MaterialDeGuardaCorpo;
+  itemCode: string;
+  descricao: string;
+  comprimentoM: number;
+  areaM2: number;
+  pecas: number;
+}
+
 export interface QuantidadeEscada {
   escadaId: string;
   /**
@@ -588,6 +621,8 @@ export interface Quantitativos {
   telhados: QuantidadeAgua[];
   /** Escadas e rampas, com o número de degraus que o desenho usou. */
   escadas: QuantidadeEscada[];
+  /** Guarda-corpos e corrimãos (E7.3). */
+  guardaCorpos: QuantidadeGuardaCorpo[];
   /** Trechos de instalação, um a um, com o comprimento REAL de cada. */
   trechos: QuantidadeTrecho[];
   /** Onde dois componentes ocupam o mesmo espaço, e quem cedeu. */
@@ -629,6 +664,10 @@ export interface Quantitativos {
     porMaterial: QuantidadePorMaterial[];
     /** Piso, forro e rodapé DECLARADOS, por material (E7.2). Vazio quando nada foi declarado. */
     porAcabamento: QuantidadePorAcabamento[];
+    /** Guarda-corpos (E7.3): metros por tipo e a lista por tipo × material × código. */
+    comprimentoGuardaCorpoM: number;
+    comprimentoCorrimaoM: number;
+    porGuardaCorpo: QuantidadePorGuardaCorpo[];
     comprimentoRodapeM: number;
     portas: number;
     janelas: number;
@@ -1374,6 +1413,38 @@ export function computeQuantities(
     (a, b) => ORDEM_ESCOPO[a.escopo] - ORDEM_ESCOPO[b.escopo] || a.itemCode.localeCompare(b.itemCode) || (a.funcao ?? '').localeCompare(b.funcao ?? ''),
   );
 
+  // ── Guarda-corpos e corrimãos (E7.3) ──────────────────────────────────────
+  const guardaCorpos: QuantidadeGuardaCorpo[] = (model.guardaCorpos ?? []).map((g) => {
+    const comprimentoM = comprimentoDoGuardaCorpo(g) / 1000;
+    return {
+      guardaCorpoId: g.id,
+      uid: g.uid,
+      tipo: g.tipo,
+      material: g.material,
+      itemCode: g.itemCode,
+      descricao: g.descricao,
+      rotulo: g.rotulo ?? null,
+      comprimentoM,
+      alturaM: g.alturaMm / 1000,
+      areaM2: (comprimentoM * g.alturaMm) / 1000,
+      trechos: g.pontos.length - 1,
+      sugerido: !!g.sugerido,
+    };
+  });
+  const gruposDeGuardaCorpo = new Map<string, QuantidadePorGuardaCorpo>();
+  for (const g of guardaCorpos) {
+    const chave = `${g.tipo} ${g.material} ${g.itemCode}`;
+    const atual = gruposDeGuardaCorpo.get(chave);
+    if (atual) {
+      atual.comprimentoM += g.comprimentoM;
+      atual.areaM2 += g.areaM2;
+      atual.pecas += 1;
+    } else {
+      gruposDeGuardaCorpo.set(chave, { tipo: g.tipo, material: g.material, itemCode: g.itemCode, descricao: g.descricao, comprimentoM: g.comprimentoM, areaM2: g.areaM2, pecas: 1 });
+    }
+  }
+  const porGuardaCorpo = [...gruposDeGuardaCorpo.values()].sort((a, b) => a.tipo.localeCompare(b.tipo) || a.material.localeCompare(b.material) || a.itemCode.localeCompare(b.itemCode));
+
   // ── Instalações ───────────────────────────────────────────────────────────
   //
   // ⚠️ O comprimento é o REAL, em três dimensões. Medir só a planta daria ZERO
@@ -1489,6 +1560,7 @@ export function computeQuantities(
     estruturas,
     telhados,
     escadas,
+    guardaCorpos,
     trechos,
     sobreposicoes,
     conexoes,
@@ -1501,6 +1573,9 @@ export function computeQuantities(
       volumeAlvenariaM3: (paredes.reduce((s, p) => s + p.volumeM3, 0)),
       porMaterial,
       porAcabamento,
+      comprimentoGuardaCorpoM: guardaCorpos.filter((g) => g.tipo === 'GUARDA_CORPO').reduce((s, g) => s + g.comprimentoM, 0),
+      comprimentoCorrimaoM: guardaCorpos.filter((g) => g.tipo === 'CORRIMAO').reduce((s, g) => s + g.comprimentoM, 0),
+      porGuardaCorpo,
       comprimentoRodapeM: (ambientes.reduce((s, a) => s + a.comprimentoRodapeM, 0)),
       portas: aberturas.filter((o) => o.tipo === 'door').length,
       janelas: aberturas.filter((o) => o.tipo === 'window').length,

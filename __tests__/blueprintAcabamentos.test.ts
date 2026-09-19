@@ -50,7 +50,7 @@ const ACAB: AcabamentosDoAmbiente = {
 
 describe('acabamentos do ambiente (E7.2)', () => {
   it('NameSpace cria a etiqueta já com acabamentos; SetSpaceLabelProps substitui o conjunto e `null` limpa; `{}` vira ausente; invariantes recusam vazio, função inválida, rebaixo e altura fora da faixa', () => {
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.43.0');
+    expect(KERNEL_VERSION).toMatch(/^blueprint-kernel-ts-0\.(4[3-9]|[5-9][0-9])\.\d+$/); // ≥ 0.43.0 — os acabamentos entraram nela; bumps posteriores não a invalidam
     const { m, spaceId } = sala();
     let r = applyCommand(m, { type: 'NameSpace', spaceId, name: 'Sala', tipoDeAmbiente: 'SALA_DORMITORIO', acabamentos: ACAB });
     const lbl = r.model.labels[0];
@@ -99,7 +99,7 @@ describe('acabamentos do ambiente (E7.2)', () => {
   });
 
   it('quantitativo 1.11.0: camadas medidas pela área de piso líquida, rodapé declarado vence a política e `null` zera; porAcabamento por escopo × material; ambiente sem declaração não muda', () => {
-    expect(POLITICA_PADRAO.version).toBe('quant-1.11.0');
+    expect(POLITICA_PADRAO.version).toBe('quant-1.12.0');
     const { m, spaceId } = sala();
     const antes = computeQuantities(m, POLITICA_PADRAO).ambientes[0];
     expect(antes.areaPisoM2).toBeCloseTo(10.9725, 3);

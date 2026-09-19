@@ -50,6 +50,8 @@
 import {
   CATALOGO_DE_COMPONENTES,
   type Componente,
+  type GuardaCorpo,
+  comprimentoDoGuardaCorpo,
   FORMA_ESTRUTURAL,
   KERNEL_VERSION,
   POLITICA_PADRAO,
@@ -153,6 +155,7 @@ export const COBERTURA_IFC = [
     'diria o contrário. NÃO CONTÉM conexão (joelho, tê, luva), registro, nem ' +
     'dimensionamento de qualquer espécie: bitola e cota são o que alguém desenhou, e ' +
     'não resultado de cálculo de queda de tensão nem de perda de carga.',
+  'CONTÉM guarda-corpos e corrimãos (IfcRailing .GUARDRAIL. / .HANDRAIL.): um sólido por trecho da polilinha — 50 mm de espessura, na altura declarada, apoiado no piso do pavimento —, Qto_RailingBaseQuantities.Length (comprimento da polilinha) e Pset_OpuraGuardaCorpo (material, altura, item). A espessura é MARCA DE LUGAR, não perfil: o desenho sabe onde a proteção está e quanto mede, não o desenho do gradil.',
   'NÃO CONTÉM ar-condicionado, gás nem incêndio.',
   'NÃO CONTÉM ARMADURA. Nenhuma barra de aço, estribo ou cobrimento — a estrutura aqui é só a forma do concreto.',
   'CONTÉM tipos de porta e janela: um IfcDoorType/IfcWindowType por ASSINATURA (kind, largura, altura, nome de projeto e item de catálogo), com IfcRelDefinesByType ligando as instâncias — inclusive as SEM nome, agrupadas por medida, como o Revit pensa uma família. O nome do tipo é o de projeto ("P1"); o item de catálogo vai em Pset_OpuraPlanta.ItemCode do tipo.',
@@ -915,6 +918,23 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
         ['Familia', { tipo: 'IFCLABEL', v: c.familia }],
         ['Sugerido', { tipo: 'IFCBOOLEAN', v: !!c.sugerido }],
       ]);
+    }
+    // GUARDA-CORPOS (E7.3): IfcRailing, um sólido por trecho.
+    for (const g of (model.guardaCorpos ?? []).filter((x) => x.levelId === nivel.id)) {
+      const produto = emitirGuardaCorpo(g, ctx, localNivel);
+      produtos.push(produto);
+      psetOpura(produto, g.uid, rotuloCurto(g.uid, 'guardaCorpo'));
+      emitirQto(ctx, produto, g.uid, 'Qto_RailingBaseQuantities', [
+        { classe: 'IFCQUANTITYLENGTH', nome: 'Length', valor: comprimentoDoGuardaCorpo(g), formula: 'Σ comprimento dos trechos da polilinha' },
+      ]);
+      emitirPset(ctx, produto, g.uid, 'Pset_OpuraGuardaCorpo', [
+        ['Tipo', { tipo: 'IFCLABEL', v: g.tipo }],
+        ['Material', { tipo: 'IFCLABEL', v: g.material }],
+        ['AlturaMm', { tipo: 'IFCREAL', v: g.alturaMm }],
+        ['ItemCode', { tipo: 'IFCLABEL', v: g.itemCode }],
+        ['Sugerido', { tipo: 'IFCBOOLEAN', v: !!g.sugerido }],
+      ]);
+      if (g.itemCode) produtosPorCodigo.set(g.itemCode, [...(produtosPorCodigo.get(g.itemCode) ?? []), produto]);
     }
     for (const t of (model.terminais ?? []).filter((x) => x.levelId === nivel.id)) {
       const produto = emitirTerminal(t, ctx, localNivel);
@@ -2112,6 +2132,36 @@ function entidadeDoPontoHidraulico(
  * `IfcFurniture` (IFC4: 8 atributos + PredefinedType). Mesma caixa do terminal,
  * apoiada no piso (base em z = 0 do pavimento).
  */
+/**
+ * O GUARDA-CORPO (E7.3) como IfcRailing: um sólido por trecho da polilinha —
+ * retângulo comprimento × 50 mm no centro do trecho, girado pelo azimute do
+ * trecho, extrudado na altura declarada a partir do piso do pavimento.
+ */
+function emitirGuardaCorpo(g: GuardaCorpo, ctx: Ctx, localNivel: string): string {
+  const { emitir, guidDe, historico } = ctx;
+  const ESPESSURA = 50;
+  const solidos: string[] = [];
+  for (let i = 1; i < g.pontos.length; i++) {
+    const a = g.pontos[i - 1];
+    const b = g.pontos[i];
+    const L = Math.hypot(b.x - a.x, b.y - a.y);
+    if (L < 1) continue;
+    const graus = Math.round(((Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI) * 1e6) / 1e6;
+    const centro = emitir(`IFCCARTESIANPOINT((${n((a.x + b.x) / 2)},${n((a.y + b.y) / 2)},0.))`);
+    const posPerfil = emitir(`IFCAXIS2PLACEMENT2D(${emitir('IFCCARTESIANPOINT((0.,0.))')},$)`);
+    const perfil = emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,${posPerfil},${n(L)},${n(ESPESSURA)})`);
+    const posicao = emitir(`IFCAXIS2PLACEMENT3D(${centro},$,${direcaoDaPeca(graus, ctx)})`);
+    solidos.push(emitir(`IFCEXTRUDEDAREASOLID(${perfil},${posicao},${ctx.dirZ},${n(g.alturaMm)})`));
+  }
+  const origem = emitir('IFCCARTESIANPOINT((0.,0.,0.))');
+  const local = emitir(`IFCLOCALPLACEMENT(${localNivel},${emitir(`IFCAXIS2PLACEMENT3D(${origem},$,$)`)})`);
+  const forma = emitir(`IFCSHAPEREPRESENTATION(${ctx.subContexto},'Body','SweptSolid',(${solidos.join(',')}))`);
+  const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
+  const nome = g.rotulo || (g.tipo === 'CORRIMAO' ? 'Corrimão' : 'Guarda-corpo');
+  const predefinido = g.tipo === 'CORRIMAO' ? '.HANDRAIL.' : '.GUARDRAIL.';
+  return emitir(`IFCRAILING(${guidDe(g.uid, `guarda-corpo-${g.id}`)},${historico},${s(nome)},$,${s(g.material)},${local},${produtoForma},${s(rotuloCurto(g.uid, 'guardaCorpo'))},${predefinido})`);
+}
+
 function emitirComponente(c: Componente, ctx: Ctx, localNivel: string): string {
   const { emitir, guidDe, historico } = ctx;
   const L = c.larguraMm;

@@ -68,6 +68,8 @@ import {
   type TipoDeVaga,
   type TipoDeComponente,
   type FamiliaDeComponente,
+  type TipoDeGuardaCorpo,
+  type MaterialDeGuardaCorpo,
   type TipoDeRestricaoDoLote,
   assinaturaDasCamadas,
   emptyModel,
@@ -487,6 +489,25 @@ function projetar(model: BlueprintModel): {
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y || cmpStr(x.tipoId, y.tipoId),
   );
 
+  // GUARDA-CORPOS (0.44.0): polilinha, altura, tipo, material, código,
+  // descrição, rótulo; `sugerido` só quando verdadeiro. Omitidos quando não há.
+  const guardaCorpos = ordenar(
+    model.guardaCorpos ?? [],
+    (g) => ({
+      level: nivel(g.levelId),
+      pontos: g.pontos.map((p) => ({ x: p.x, y: p.y })),
+      alturaMm: g.alturaMm,
+      tipo: g.tipo,
+      material: g.material,
+      itemCode: g.itemCode,
+      descricao: g.descricao,
+      rotulo: g.rotulo ?? null,
+      sugerido: g.sugerido ? true : undefined,
+      parametros: parametrosCanonicos(g.parametros),
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.tipo, y.tipo),
+  );
+
   // QUADROS e CIRCUITOS, ANTES das instalações.
   //
   // ⚠️ A ordem é OBRIGATÓRIA, não estética: a projeção do terminal referencia
@@ -774,6 +795,7 @@ function projetar(model: BlueprintModel): {
     nucleos: nucleos.length ? nucleos.map((n) => n.geom) : undefined,
     vagas: vagas.length ? vagas.map((v) => v.geom) : undefined,
     componentes: componentes.length ? componentes.map((c) => c.geom) : undefined,
+    guardaCorpos: guardaCorpos.length ? guardaCorpos.map((g) => g.geom) : undefined,
     trechos: trechos.length ? trechos.map((t) => t.geom) : undefined,
     terminais: terminais.length ? terminais.map((t) => t.geom) : undefined,
     quadros: quadros.length ? quadros.map((q) => q.geom) : undefined,
@@ -803,6 +825,7 @@ function projetar(model: BlueprintModel): {
     nucleos: nucleos.map((n) => n.item.uid ?? null),
     vagas: vagas.map((v) => v.item.uid ?? null),
     componentes: componentes.map((c) => c.item.uid ?? null),
+    guardaCorpos: guardaCorpos.map((g) => g.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
     quadros: quadros.map((q) => q.item.uid ?? null),
@@ -883,6 +906,7 @@ export interface IdentidadeCanonica {
   /** Ausente em payload gravado sob kernel anterior a 0.40.0. */
   vagas?: (ElementUid | null)[];
   componentes?: (ElementUid | null)[];
+  guardaCorpos?: (ElementUid | null)[];
   trechos?: (ElementUid | null)[];
   terminais?: (ElementUid | null)[];
   quadros?: (ElementUid | null)[];
@@ -1064,6 +1088,19 @@ export interface CanonicalPayload {
     rotacaoGraus: number;
     tipoId: TipoDeComponente;
     familia: FamiliaDeComponente;
+    rotulo: string | null;
+    sugerido?: boolean;
+    parametros?: Parametros;
+  }[];
+  /** Guarda-corpos e corrimãos. Ausente sob kernel < 0.44.0 e em desenho sem nenhum. */
+  guardaCorpos?: {
+    level: number;
+    pontos: { x: number; y: number }[];
+    alturaMm: number;
+    tipo: TipoDeGuardaCorpo;
+    material: MaterialDeGuardaCorpo;
+    itemCode: string;
+    descricao: string;
     rotulo: string | null;
     sugerido?: boolean;
     parametros?: Parametros;
@@ -1509,6 +1546,24 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       rotulo: c.rotulo,
       ...(c.sugerido ? { sugerido: true } : {}),
       ...(c.parametros && Object.keys(c.parametros).length > 0 ? { parametros: { ...c.parametros } } : {}),
+    });
+  });
+
+  const guardaCorpos = payload.guardaCorpos ?? [];
+  guardaCorpos.forEach((g, i) => {
+    model.guardaCorpos.push({
+      id: nextId(model, 'grc'),
+      uid: uidDe('guardaCorpos', i, guardaCorpos.length),
+      levelId: levelIds[g.level],
+      pontos: g.pontos.map((p) => ({ x: p.x, y: p.y })),
+      alturaMm: g.alturaMm,
+      tipo: g.tipo,
+      material: g.material,
+      itemCode: g.itemCode,
+      descricao: g.descricao,
+      rotulo: g.rotulo,
+      ...(g.sugerido ? { sugerido: true } : {}),
+      ...(g.parametros && Object.keys(g.parametros).length > 0 ? { parametros: { ...g.parametros } } : {}),
     });
   });
 

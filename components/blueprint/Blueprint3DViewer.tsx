@@ -1235,6 +1235,27 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, en
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model.componentes, model.levels, levelIds, ocultos]);
 
+  /** GUARDA-CORPOS (E7.3): um painel fino por trecho, na altura declarada; vidro translúcido, sugerido mais ainda. */
+  const paineisDeGuardaCorpo = useMemo(() => {
+    const out: { id: string; chave: string; geom: THREE.BufferGeometry; pos: [number, number, number]; rot: number; material: string; sugerido: boolean }[] = [];
+    for (const g of model.guardaCorpos ?? []) {
+      if (!levelIds || !levelIds.includes(g.levelId)) continue;
+      if (ocultos?.has(g.id)) continue;
+      const nivel = model.levels.find((l) => l.id === g.levelId);
+      if (!nivel) continue;
+      for (let i = 1; i < g.pontos.length; i++) {
+        const a = g.pontos[i - 1];
+        const b = g.pontos[i];
+        const L = Math.hypot(b.x - a.x, b.y - a.y);
+        if (L < 1) continue;
+        const geom = new THREE.BoxGeometry(L * S, g.alturaMm * S, 50 * S);
+        out.push({ id: g.id, chave: `${g.id}-${i}`, geom, pos: [((a.x + b.x) / 2) * S, (nivel.elevationMm + g.alturaMm / 2) * S, -((a.y + b.y) / 2) * S], rot: Math.atan2(b.y - a.y, b.x - a.x), material: g.material, sugerido: !!g.sugerido });
+      }
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model.guardaCorpos, model.levels, levelIds, ocultos]);
+
   /** Os vizinhos do entorno (E5.1): prismas opacos que projetam sombra. */
   const prismasDoEntorno = useMemo(() => {
     if (!entorno) return [];
@@ -1253,6 +1274,11 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, en
       {caixasDeComponentes.map((c) => (
         <mesh key={`componente-${c.id}`} geometry={c.geom} position={c.pos} rotation={[0, c.rot, 0]} castShadow receiveShadow onClick={(e) => { e.stopPropagation(); onSelecionar?.([c.id]); }}>
           <meshStandardMaterial color={selecionados?.has(c.id) ? '#2563eb' : c.cor} transparent={c.sugerido} opacity={c.sugerido ? 0.55 : 1} roughness={0.85} />
+        </mesh>
+      ))}
+      {paineisDeGuardaCorpo.map((g) => (
+        <mesh key={`guarda-corpo-${g.chave}`} geometry={g.geom} position={g.pos} rotation={[0, g.rot, 0]} castShadow receiveShadow onClick={(e) => { e.stopPropagation(); onSelecionar?.([g.id]); }}>
+          <meshStandardMaterial color={selecionados?.has(g.id) ? '#2563eb' : g.material === 'VIDRO' ? '#bae6fd' : g.material === 'MADEIRA' ? '#a16207' : g.material === 'ALVENARIA' ? '#e7e5e4' : '#334155'} transparent={g.material === 'VIDRO' || g.sugerido} opacity={g.sugerido ? 0.45 : g.material === 'VIDRO' ? 0.4 : 1} roughness={g.material === 'INOX' ? 0.2 : 0.7} metalness={g.material === 'INOX' || g.material === 'METALICO' ? 0.6 : 0} />
         </mesh>
       ))}
       {prismasDoEntorno.map((p) => (

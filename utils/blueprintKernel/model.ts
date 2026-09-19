@@ -1508,6 +1508,68 @@ export interface Componente {
   sugerido?: boolean | null;
 }
 
+/**
+ * GUARDA-CORPO E CORRIMÃO (19/09/2026, roadmap E7.3): peça LINEAR — polilinha
+ * de 2+ vértices em planta, altura acima do piso do pavimento, material e
+ * item de catálogo — sobre a borda de laje, varanda, mezanino ou escada.
+ *
+ * ─── O QUE A NBR 14718 PEDE, E O QUE O KERNEL GUARDA ────────────────────────
+ *
+ * A norma (guarda-corpos para edificação) pede altura mínima de 1,10 m medida
+ * do piso acabado e corrimão entre 0,80 e 0,92 m (NBR 9050 6.9.4). O kernel
+ * NÃO impõe: guarda-corpo de 0,90 m é desenho válido (uma reforma, um
+ * levantamento do existente) — o que não pode é o número sumir. A conferência
+ * mora em `blueprintGuardaCorpo.ts` e na Legislação; o painel avisa.
+ *
+ * Como a vaga e o componente, fica FORA do arranjo planar: não fecha ambiente,
+ * não é parede. O comprimento é DERIVADO da polilinha (`comprimentoDoGuardaCorpo`)
+ * e é o que o quantitativo compra (m); a área (comprimento × altura) serve ao
+ * vidro e ao gradil cotados por m².
+ */
+export type TipoDeGuardaCorpo = 'GUARDA_CORPO' | 'CORRIMAO';
+export const TIPOS_DE_GUARDA_CORPO: readonly TipoDeGuardaCorpo[] = ['GUARDA_CORPO', 'CORRIMAO'];
+export const ROTULO_DO_TIPO_DE_GUARDA_CORPO: Record<TipoDeGuardaCorpo, string> = { GUARDA_CORPO: 'Guarda-corpo', CORRIMAO: 'Corrimão' };
+export type MaterialDeGuardaCorpo = 'METALICO' | 'VIDRO' | 'ALVENARIA' | 'MADEIRA' | 'INOX';
+export const MATERIAIS_DE_GUARDA_CORPO: readonly MaterialDeGuardaCorpo[] = ['METALICO', 'VIDRO', 'ALVENARIA', 'MADEIRA', 'INOX'];
+export const ROTULO_DO_MATERIAL_DE_GUARDA_CORPO: Record<MaterialDeGuardaCorpo, string> = { METALICO: 'Metálico (gradil)', VIDRO: 'Vidro', ALVENARIA: 'Alvenaria (mureta)', MADEIRA: 'Madeira', INOX: 'Aço inox' };
+/** Altura padrão por tipo: 1,10 m (NBR 14718) e 0,92 m (NBR 9050). */
+export const ALTURA_PADRAO_DO_GUARDA_CORPO_MM: Record<TipoDeGuardaCorpo, number> = { GUARDA_CORPO: 1100, CORRIMAO: 920 };
+export const ALTURA_MINIMA_DO_GUARDA_CORPO_MM = 1100;
+export const FAIXA_DO_CORRIMAO_MM: readonly [number, number] = [800, 920];
+export const MAX_ROTULO_DE_GUARDA_CORPO = 40;
+
+export interface GuardaCorpo {
+  id: ObjectId;
+  uid: ElementUid;
+  parametros?: Parametros;
+  levelId: ObjectId;
+  tipo: TipoDeGuardaCorpo;
+  /** Polilinha em planta, mm inteiros, ≥ 2 vértices, sem trecho nulo. */
+  pontos: Point[];
+  /** Altura acima do piso do pavimento, mm inteiro > 0. */
+  alturaMm: number;
+  material: MaterialDeGuardaCorpo;
+  /** Código no catálogo (SINAPI ou base própria), como `CamadaParede.itemCode`. `''` = sem vínculo. */
+  itemCode: string;
+  /** Descrição em CACHE. */
+  descricao: string;
+  rotulo?: string | null;
+  /** Nasceu da sugestão automática (borda de laje/escada) e ainda não foi confirmado. */
+  sugerido?: boolean | null;
+}
+
+export function comprimentoDoGuardaCorpo(g: Pick<GuardaCorpo, 'pontos'>): number {
+  let s = 0;
+  for (let i = 1; i < g.pontos.length; i++) s += Math.hypot(g.pontos[i].x - g.pontos[i - 1].x, g.pontos[i].y - g.pontos[i - 1].y);
+  return s;
+}
+
+export function findGuardaCorpo(model: BlueprintModel, id: ObjectId): GuardaCorpo {
+  const g = (model.guardaCorpos ?? []).find((x) => x.id === id);
+  if (!g) throw new KernelError('RAILING_NOT_FOUND', `Guarda-corpo inexistente: ${id}`);
+  return g;
+}
+
 /** Os quatro cantos do componente em planta (anel), inteiros. */
 export function contornoDoComponente(c: Pick<Componente, 'at' | 'larguraMm' | 'profundidadeMm' | 'rotacaoGraus'>): Point[] {
   return contornoDaVaga({ at: c.at, larguraMm: c.larguraMm, comprimentoMm: c.profundidadeMm, rotacaoGraus: c.rotacaoGraus });
@@ -2103,6 +2165,8 @@ export interface BlueprintModel {
   vagas: Vaga[];
   /** Componentes — mobiliário, louças, bancadas, armários, equipamentos. Ver `Componente`. */
   componentes: Componente[];
+  /** Guarda-corpos e corrimãos. Ver `GuardaCorpo`. */
+  guardaCorpos: GuardaCorpo[];
   /**
    * Escadas e rampas. Como a estrutura e o telhado, NÃO participam do arranjo
    * planar: uma escada dentro da sala não parte o ambiente. O que ela faz ao
@@ -2218,6 +2282,7 @@ export function emptyModel(): BlueprintModel {
     nucleos: [],
     vagas: [],
     componentes: [],
+    guardaCorpos: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -2282,6 +2347,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     nucleos: (model.nucleos ?? []).map((n) => ({ ...n, ring: n.ring.map((p) => ({ ...p })), ...(n.parametros ? { parametros: { ...n.parametros } } : {}) })),
     vagas: (model.vagas ?? []).map((v) => ({ ...v, at: { ...v.at }, ...(v.parametros ? { parametros: { ...v.parametros } } : {}) })),
     componentes: (model.componentes ?? []).map((c) => ({ ...c, at: { ...c.at }, ...(c.parametros ? { parametros: { ...c.parametros } } : {}) })),
+    guardaCorpos: (model.guardaCorpos ?? []).map((g) => ({ ...g, pontos: g.pontos.map((p) => ({ ...p })), ...(g.parametros ? { parametros: { ...g.parametros } } : {}) })),
     grupos: (model.grupos ?? []).map((g) => ({
       ...g,
       pivo: { ...g.pivo },
@@ -3426,6 +3492,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Núcleo vertical', model.nucleos ?? []],
     ['Vaga', model.vagas ?? []],
     ['Componente', model.componentes ?? []],
+    ['Guarda-corpo', model.guardaCorpos ?? []],
     ['Trecho', model.trechos ?? []],
     ['Terminal', model.terminais ?? []],
     ['Quadro', model.quadros ?? []],
@@ -3963,6 +4030,22 @@ export function assertModelInvariants(model: BlueprintModel): void {
     }
     if (!Number.isInteger(c.rotacaoGraus) || c.rotacaoGraus < 0 || c.rotacaoGraus >= 360) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: giro tem de ser inteiro em [0, 360)`);
     if (c.rotulo != null && (typeof c.rotulo !== 'string' || c.rotulo.length > MAX_ROTULO_DE_COMPONENTE)) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: rótulo maior que ${MAX_ROTULO_DE_COMPONENTE} caracteres`);
+  }
+
+  // Guarda-corpos (E7.3): pavimento existente, tipo e material da lista, ≥ 2 vértices inteiros sem trecho nulo, altura inteira positiva, rótulo curto.
+  for (const g of model.guardaCorpos ?? []) {
+    if (!model.levels.some((l) => l.id === g.levelId)) throw new KernelError('BAD_RAILING', `Guarda-corpo ${g.id}: pavimento inexistente`);
+    if (!TIPOS_DE_GUARDA_CORPO.includes(g.tipo)) throw new KernelError('BAD_RAILING', `Guarda-corpo ${g.id}: tipo desconhecido ${String(g.tipo)}`);
+    if (!MATERIAIS_DE_GUARDA_CORPO.includes(g.material)) throw new KernelError('BAD_RAILING', `Guarda-corpo ${g.id}: material desconhecido ${String(g.material)}`);
+    if (!Array.isArray(g.pontos) || g.pontos.length < 2) throw new KernelError('BAD_RAILING', `Guarda-corpo ${g.id}: precisa de 2 vértices ou mais`);
+    for (const [i, p] of g.pontos.entries()) {
+      assertIntegerMm(p.x, `${g.id}.pontos[${i}].x`);
+      assertIntegerMm(p.y, `${g.id}.pontos[${i}].y`);
+      if (i > 0 && p.x === g.pontos[i - 1].x && p.y === g.pontos[i - 1].y) throw new KernelError('BAD_RAILING', `Guarda-corpo ${g.id}: trecho ${i} de comprimento zero`);
+    }
+    if (!Number.isInteger(g.alturaMm) || g.alturaMm <= 0) throw new KernelError('BAD_RAILING', `Guarda-corpo ${g.id}: altura tem de ser inteira e positiva`);
+    if (typeof g.itemCode !== 'string' || typeof g.descricao !== 'string') throw new KernelError('BAD_RAILING', `Guarda-corpo ${g.id}: código/descrição têm de ser texto`);
+    if (g.rotulo != null && (typeof g.rotulo !== 'string' || g.rotulo.length > MAX_ROTULO_DE_GUARDA_CORPO)) throw new KernelError('BAD_RAILING', `Guarda-corpo ${g.id}: rótulo maior que ${MAX_ROTULO_DE_GUARDA_CORPO} caracteres`);
   }
 
   // Eixos: comprimento não nulo, nome curto, coordenadas inteiras.

@@ -18,7 +18,7 @@ import {
   type Wall,
 } from './blueprintKernel';
 import { etiquetasDasAberturas } from './blueprintNumeracao';
-import { CATALOGO_DE_COMPONENTES, medirNucleo, nomeDoTipoDeNucleo, pavimentosDoNucleo, ROTULO_DA_FAMILIA_DE_COMPONENTE, ROTULO_DO_TIPO_DE_VAGA, type Componente, type Nucleo, type Vaga } from './blueprintKernel';
+import { CATALOGO_DE_COMPONENTES, comprimentoDoGuardaCorpo, medirNucleo, nomeDoTipoDeNucleo, pavimentosDoNucleo, ROTULO_DA_FAMILIA_DE_COMPONENTE, ROTULO_DO_MATERIAL_DE_GUARDA_CORPO, ROTULO_DO_TIPO_DE_GUARDA_CORPO, ROTULO_DO_TIPO_DE_VAGA, type Componente, type GuardaCorpo, type Nucleo, type Vaga } from './blueprintKernel';
 import { caixaDoNucleo, nucleosDoNivel } from './blueprintNucleoVertical';
 import {
   NOME_DO_TRECHO,
@@ -119,7 +119,7 @@ export function linhasDeComponentes(
   /** Opcional pela razão do `aguaIds` dos comandos: as chamadas existentes não sabem dela. */
   aguas: Agua[] = [],
   /** Opcional pela mesma razão. Precisa do MODELO porque o número de degraus vem do desnível. */
-  escadas: { model: BlueprintModel; itens: Escada[]; nucleos?: Nucleo[]; vagas?: Vaga[]; componentes?: Componente[] } | null = null,
+  escadas: { model: BlueprintModel; itens: Escada[]; nucleos?: Nucleo[]; vagas?: Vaga[]; componentes?: Componente[]; guardaCorpos?: GuardaCorpo[] } | null = null,
   /**
    * As INSTALAÇÕES do pavimento.
    *
@@ -292,6 +292,17 @@ export function linhasDeComponentes(
     };
   });
 
+  // GUARDA-CORPOS (E7.3): chave do menu (GUARDA_CORPO / CORRIMAO), metros e altura.
+  const linhasDeGuardaCorpo: LinhaDeComponente[] = (escadas?.guardaCorpos ?? []).map((g) => {
+    const chave = g.tipo;
+    return {
+      id: g.id,
+      chave,
+      rotulo: g.rotulo || `${ROTULO_DO_TIPO_DE_GUARDA_CORPO[g.tipo]} ${numero(chave)}`,
+      medida: `${m(comprimentoDoGuardaCorpo(g))} m · h ${m(g.alturaMm)} m`,
+      detalhe: `${ROTULO_DO_MATERIAL_DE_GUARDA_CORPO[g.material]}${g.itemCode ? ` · ${g.itemCode}` : ''}${g.sugerido ? ' · sugerido' : ''}`,
+    };
+  });
   // ── INSTALAÇÕES ───────────────────────────────────────────────────────────
   //
   // A chave é a MESMA do menu de ferramentas (`REDE_ELETRICA`, `PONTO_ESGOTO`,
@@ -372,6 +383,7 @@ export function linhasDeComponentes(
     ...linhasDeNucleo,
     ...linhasDeVaga,
     ...linhasDeComponente,
+    ...linhasDeGuardaCorpo,
     ...linhasDeTrecho,
     ...linhasDeTerminal,
     ...linhasDeQuadro,
@@ -438,6 +450,7 @@ export function linhasDeComponentesPorNivel(
         const nucleos = nucleosDoNivel(model, level.id);
         const vagas = (model.vagas ?? []).filter((v) => v.levelId === level.id);
         const componentesDoNivel = (model.componentes ?? []).filter((c) => c.levelId === level.id);
+        const guardaCorposDoNivel = (model.guardaCorpos ?? []).filter((g) => g.levelId === level.id);
         return {
           levelId: level.id,
           nome: level.name,
@@ -446,7 +459,7 @@ export function linhasDeComponentesPorNivel(
             aberturas,
             estruturas,
             aguas,
-            { model, itens: escadas, nucleos, vagas, componentes: componentesDoNivel },
+            { model, itens: escadas, nucleos, vagas, componentes: componentesDoNivel, guardaCorpos: guardaCorposDoNivel },
             {
               trechos: (model.trechos ?? []).filter((t) => t.levelId === level.id),
               terminais: (model.terminais ?? []).filter((t) => t.levelId === level.id),

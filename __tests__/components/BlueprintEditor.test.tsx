@@ -243,7 +243,7 @@ async function abrirAba(nome: RegExp) {
  * seletor casa com qualquer um dos nomes possíveis.
  */
 const NOMES_DO_BOTAO =
-  /^(Componentes|Parede|Parede em retângulo|Parede em polígono|Porta|Porta de correr|Janela|Vão livre|Pilar|Viga|Laje|Estaca|Bloco de coroamento|Viga de fundação|Shaft|Elevador|Vaga|Vaga PCD|Vaga idoso|Vaga de moto)$/;
+  /^(Componentes|Parede|Parede em retângulo|Parede em polígono|Porta|Porta de correr|Janela|Vão livre|Pilar|Viga|Laje|Estaca|Bloco de coroamento|Viga de fundação|Shaft|Elevador|Vaga|Vaga PCD|Vaga idoso|Vaga de moto|Guarda-corpo|Corrimão)$/;
 
 /**
  * O botão do menu.
@@ -1865,6 +1865,66 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(linhas.some((l) => /Dormitório 1.*Vinílico · 33 mm.*Placa de gesso acartonado · rebaixo 0,30 m.*Rodapé vinílico · 5 cm/.test(l))).toBe(true);
     expect(linhas.some((l) => /Banheiro.*sem rodapé/.test(l))).toBe(true);
     listElementTypes.mockResolvedValue([]);
+  }, 60000);
+
+  it('guarda-corpos (E7.3): a gaveta sugere a borda livre da laje e os corrimãos da escada; lançar grava sugeridos; o painel avisa altura abaixo de 1,10 m e aceita; o menu oferece Guarda-corpo/Corrimão; o navegador lista', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    m = k.applyCommand(m, { type: 'AddLevel', name: 'Superior', elevationMm: 2800, defaultHeightMm: 2800 }).model;
+    const [t, sup] = m.levels.map((l) => l.id);
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: sup, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    // Superior: laje 8 × 6 com ambiente fechado na metade norte; a borda sul (8 m) é varanda sem parede.
+    m = k.applyBatch(m, [
+      { type: 'AddStructural', levelId: sup, kind: 'LAJE', pontos: [k.point(0, 0), k.point(8000, 0), k.point(8000, 6000), k.point(0, 6000)], larguraMm: 0, profundidadeMm: 0, alturaMm: 120, rotulo: 'L2' },
+      w(0, 2000, 8000, 2000), w(8000, 2000, 8000, 6000), w(8000, 6000, 0, 6000), w(0, 6000, 0, 2000),
+      { type: 'AddEscada', levelId: t, tipo: 'ESCADA', pontos: [k.point(1000, 1000), k.point(5000, 1000)], larguraMm: 1200, alvoEspelhoMm: 175 },
+      // Um guarda-corpo baixo já desenhado no térreo, para a conferência.
+      { type: 'AddGuardaCorpo', levelId: t, tipo: 'GUARDA_CORPO', pontos: [k.point(6000, 0), k.point(6000, 3000)], alturaMm: 900, rotulo: 'Mureta' },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    // Térreo: a gaveta sugere 2 corrimãos; a laje no chão não.
+    await abrirAba(/^arquitetura$/i);
+    const botao = () => screen.getAllByRole('button', { name: /^guarda-corpos/i }).find((b) => b.getAttribute('title')?.startsWith('Guarda-corpo (1,10 m'))!;
+    expect(botao()).toHaveTextContent('3'); // 2 sugestões + 1 erro de altura
+    await user.click(botao());
+    const gaveta = await screen.findByTestId('tarefa-guarda-corpos');
+    expect(within(gaveta).getByTestId('resumo-dos-guarda-corpos')).toHaveTextContent(/1 peça\(s\) · guarda-corpo 3,00 m · corrimão 0,00 m/);
+    expect(within(gaveta).getByTestId('resumo-dos-guarda-corpos')).toHaveTextContent(/1 abaixo de 1,10 m/);
+    expect(within(gaveta).getAllByRole('row', { name: /^Sugestão Escada · corrimão/ })).toHaveLength(2);
+    expect(within(gaveta).getByRole('row', { name: 'Peça Mureta' })).toHaveTextContent(/NBR 14718/);
+    // Lançar tudo: 2 corrimãos sugeridos; aceitar confirma.
+    await user.click(within(gaveta).getByTestId('lancar-guarda-corpos'));
+    const g = () => screen.getByTestId('tarefa-guarda-corpos');
+    expect(within(g()).getByTestId('resumo-dos-guarda-corpos')).toHaveTextContent(/3 peça\(s\) · guarda-corpo 3,00 m · corrimão 8,00 m · 2 sugerida\(s\)/);
+    expect(g()).toHaveTextContent(/Sugestões \(0 · 2 já cobertas\)/); // idempotente: o que foi lançado não volta
+    await user.click(within(g()).getByTestId('aceitar-guarda-corpos'));
+    expect(within(g()).getByTestId('resumo-dos-guarda-corpos')).not.toHaveTextContent(/sugerida/);
+    // Painel da mureta: aviso NBR 14718; subir para 1,10 m limpa o aviso.
+    await user.click(within(g()).getByRole('button', { name: 'Mureta' }));
+    const painel = await screen.findByTestId('painel-guarda-corpo');
+    expect(within(painel).getByTestId('avisos-do-guarda-corpo')).toHaveTextContent(/NBR 14718: altura 0,90 m abaixo do mínimo/);
+    const altura = within(painel).getByLabelText('Altura do guarda-corpo (mm)');
+    await user.clear(altura);
+    await user.type(altura, '1100{Enter}');
+    expect(within(screen.getByTestId('painel-guarda-corpo')).queryByTestId('avisos-do-guarda-corpo')).toBeNull();
+    await user.selectOptions(within(screen.getByTestId('painel-guarda-corpo')).getByLabelText('Material do guarda-corpo'), 'VIDRO');
+    expect(screen.getByTestId('painel-guarda-corpo')).toHaveTextContent(/Vidro · 3,00 m · h 1,10 m · 3,30 m²/);
+    // Menu Componentes › Circulação oferece Guarda-corpo e Corrimão; escolher arma a ferramenta.
+    await escolherComponente(/^Corrimão$/);
+    expect(botaoComponentes()).toHaveTextContent('Corrimão');
+    // Navegador lista as peças com a chave do menu.
+    await abrirComponentes(user);
+    expect(screen.getAllByRole('button').filter((b) => /^Escada · corrimão (esquerdo|direito)/.test(b.textContent ?? ''))).toHaveLength(2);
+    expect(screen.getAllByRole('button').find((b) => /^Mureta/.test(b.textContent ?? ''))).toHaveTextContent(/3,00 m · h 1,10 m/);
+    // Superior: a borda sul da laje vira sugestão de guarda-corpo de 8 m.
+    await user.click(screen.getByRole('radio', { name: /Editar Superior/ }));
+    await abrirAba(/^arquitetura$/i);
+    await user.click(botao());
+    const g2 = await screen.findByTestId('tarefa-guarda-corpos');
+    expect(within(g2).getByRole('row', { name: 'Sugestão L2 · borda 1' })).toHaveTextContent(/Guarda-corpo.*8,00.*1,10/);
+    expect(within(g2).getAllByRole('row', { name: /^Sugestão/ })).toHaveLength(1);
   }, 60000);
 
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {

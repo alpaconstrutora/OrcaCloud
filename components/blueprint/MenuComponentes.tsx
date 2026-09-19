@@ -9,6 +9,7 @@ import {
   Hexagon,
   Layers,
   Minus,
+  Fence,
   MoveHorizontal,
   RectangleHorizontal,
   RectangleVertical,
@@ -52,7 +53,7 @@ import {
   Tv,
   Lamp,
 } from 'lucide-react';
-import {
+import { type TipoDeGuardaCorpo,
   TIPOS_DE_INTERRUPTOR,
   TIPOS_DE_PONTO_ELETRICO,
   nomeDoTipoDeAbertura,
@@ -131,6 +132,7 @@ export type EscolhaComponente =
   | { tool: 'estrutural'; estrutural: StructuralKind }
   | { tool: 'telhado' }
   | { tool: 'escada'; circulacao: TipoCirculacao }
+  | { tool: 'guardacorpo'; guardaCorpo: TipoDeGuardaCorpo }
   | { tool: 'nucleo'; nucleo: TipoDeNucleo }
   | { tool: 'vaga'; vaga: TipoDeVaga }
   | { tool: 'componente'; componente: TipoDeComponente }
@@ -539,6 +541,23 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
           'pilar ou viga dentro dela é conflito.',
         escolha: { tool: 'nucleo', nucleo: 'ELEVADOR' },
       },
+      // GUARDA-CORPO E CORRIMÃO (E7.3): linear, dois cliques, sobre a borda de
+      // laje/varanda ou ao longo da escada. A sugestão automática mora em
+      // Arquitetura › Acabamentos › Guarda-corpos.
+      {
+        chave: 'GUARDA_CORPO',
+        rotulo: 'Guarda-corpo',
+        icone: Fence,
+        ajuda: 'Dois cliques ao longo da borda (varanda, mezanino, laje). 1,10 m (NBR 14718); material e item no painel. Sugestão automática: Arquitetura › Guarda-corpos.',
+        escolha: { tool: 'guardacorpo', guardaCorpo: 'GUARDA_CORPO' },
+      },
+      {
+        chave: 'CORRIMAO',
+        rotulo: 'Corrimão',
+        icone: Minus,
+        ajuda: 'Dois cliques ao longo da escada ou rampa. 0,92 m (NBR 9050: 0,80–0,92 m).',
+        escolha: { tool: 'guardacorpo', guardaCorpo: 'CORRIMAO' },
+      },
     ],
   },
   // VAGAS (E2.5): demarcação de piso, um clique no centro. O lançamento
@@ -751,6 +770,7 @@ const TOOLS_DE_COMPONENTE: BlueprintTool[] = [
   'telhado',
   'escada',
   'nucleo',
+  'guardacorpo',
   'vaga',
   'componente',
   'rede',
@@ -790,6 +810,8 @@ interface Props {
   tipoCirculacao?: TipoCirculacao;
   /** O núcleo vertical ativo (E2.4). */
   tipoDeNucleo?: TipoDeNucleo;
+  /** O tipo de guarda-corpo ativo (E7.3). */
+  tipoDeGuardaCorpo?: TipoDeGuardaCorpo;
   /** O tipo de vaga ativo (E2.5). */
   tipoDeVaga?: TipoDeVaga;
   /** O componente ativo (E7.1). */
@@ -817,6 +839,7 @@ function chaveAtiva(p: Props): string | null {
   if (tool === 'estrutural') return p.tipoEstrutural;
   if (tool === 'escada') return p.tipoCirculacao ?? 'ESCADA';
   if (tool === 'nucleo') return p.tipoDeNucleo ?? 'SHAFT';
+  if (tool === 'guardacorpo') return p.tipoDeGuardaCorpo ?? 'GUARDA_CORPO';
   if (tool === 'vaga') return `VAGA_${p.tipoDeVaga ?? 'COMUM'}`;
   if (tool === 'componente') return `COMPONENTE_${p.tipoDeComponente ?? 'CAMA_CASAL'}`;
   if (tool === 'quadro') return 'QUADRO';

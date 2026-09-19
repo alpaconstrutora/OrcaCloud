@@ -67,6 +67,11 @@ import {
   DIMENSAO_DA_VAGA,
   type TipoDeVaga,
   findComponente,
+  findGuardaCorpo,
+  ALTURA_PADRAO_DO_GUARDA_CORPO_MM,
+  MAX_ROTULO_DE_GUARDA_CORPO,
+  type TipoDeGuardaCorpo,
+  type MaterialDeGuardaCorpo,
   CATALOGO_DE_COMPONENTES,
   MAX_ROTULO_DE_COMPONENTE,
   type TipoDeComponente,
@@ -429,6 +434,15 @@ export type Command =
   | { type: 'SetComponenteProps'; componenteId: ObjectId; tipoId?: TipoDeComponente; familia?: FamiliaDeComponente; larguraMm?: number; profundidadeMm?: number; alturaMm?: number; rotacaoGraus?: number; rotulo?: string | null; sugerido?: boolean | null }
   | { type: 'MoveComponente'; componenteId: ObjectId; to: Point }
   | { type: 'DeleteComponente'; componenteId: ObjectId }
+  /**
+   * GUARDA-CORPO / CORRIMÃO (E7.3). Altura omitida = a padrão do tipo (1,10 m /
+   * 0,92 m); material omitido = METALICO. `MoveGuardaCorpo` desloca a polilinha
+   * inteira por um vetor; vértice a vértice vai por `SetGuardaCorpoProps.pontos`.
+   */
+  | { type: 'AddGuardaCorpo'; levelId: ObjectId; tipo: TipoDeGuardaCorpo; pontos: Point[]; alturaMm?: number; material?: MaterialDeGuardaCorpo; itemCode?: string; descricao?: string; rotulo?: string | null; sugerido?: boolean }
+  | { type: 'SetGuardaCorpoProps'; guardaCorpoId: ObjectId; tipo?: TipoDeGuardaCorpo; pontos?: Point[]; alturaMm?: number; material?: MaterialDeGuardaCorpo; itemCode?: string; descricao?: string; rotulo?: string | null; sugerido?: boolean | null }
+  | { type: 'MoveGuardaCorpo'; guardaCorpoId: ObjectId; dx: number; dy: number }
+  | { type: 'DeleteGuardaCorpo'; guardaCorpoId: ObjectId }
   /**
    * Um TRECHO de instalação — ver o cabeçalho de `Trecho` em `model.ts`.
    *
@@ -1929,6 +1943,71 @@ function aplicarSemHash(
       const c = findComponente(next, command.componenteId);
       next.componentes = (next.componentes ?? []).filter((x) => x.id !== c.id);
       diff.deleted.push(c.id);
+      break;
+    }
+
+    // ── Guarda-corpos (E7.3) ────────────────────────────────────────────────
+
+    case 'AddGuardaCorpo': {
+      findLevel(next, command.levelId);
+      const id = nextId(next, 'grc');
+      next.guardaCorpos = [
+        ...(next.guardaCorpos ?? []),
+        {
+          id,
+          uid: novoUid(),
+          levelId: command.levelId,
+          tipo: command.tipo,
+          pontos: command.pontos.map((p, i) => ({ x: assertIntegerMm(roundToMm(p.x), `pontos[${i}].x`), y: assertIntegerMm(roundToMm(p.y), `pontos[${i}].y`) })),
+          alturaMm: assertIntegerMm(roundToMm(command.alturaMm ?? ALTURA_PADRAO_DO_GUARDA_CORPO_MM[command.tipo] ?? 1100), 'alturaMm'),
+          material: command.material ?? 'METALICO',
+          itemCode: command.itemCode ?? '',
+          descricao: command.descricao ?? '',
+          rotulo: command.rotulo?.trim().slice(0, MAX_ROTULO_DE_GUARDA_CORPO) || null,
+          ...(command.sugerido ? { sugerido: true } : {}),
+        },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetGuardaCorpoProps': {
+      const g = findGuardaCorpo(next, command.guardaCorpoId);
+      if (command.tipo !== undefined && command.tipo !== g.tipo) {
+        // Trocar o tipo puxa a altura padrão do novo quando a atual era a padrão do antigo.
+        const eraPadrao = g.alturaMm === ALTURA_PADRAO_DO_GUARDA_CORPO_MM[g.tipo];
+        g.tipo = command.tipo;
+        if (eraPadrao && command.alturaMm === undefined) g.alturaMm = ALTURA_PADRAO_DO_GUARDA_CORPO_MM[command.tipo];
+      }
+      if (command.pontos !== undefined) g.pontos = command.pontos.map((p, i) => ({ x: assertIntegerMm(roundToMm(p.x), `pontos[${i}].x`), y: assertIntegerMm(roundToMm(p.y), `pontos[${i}].y`) }));
+      if (command.alturaMm !== undefined) g.alturaMm = assertIntegerMm(roundToMm(command.alturaMm), 'alturaMm');
+      if (command.material !== undefined) g.material = command.material;
+      if (command.itemCode !== undefined) g.itemCode = command.itemCode;
+      if (command.descricao !== undefined) g.descricao = command.descricao;
+      if (command.rotulo !== undefined) g.rotulo = command.rotulo?.trim().slice(0, MAX_ROTULO_DE_GUARDA_CORPO) || null;
+      if (command.sugerido !== undefined) {
+        if (command.sugerido) g.sugerido = true;
+        else delete g.sugerido;
+      }
+      diff.updated.push(g.id);
+      break;
+    }
+
+    case 'MoveGuardaCorpo': {
+      const g = findGuardaCorpo(next, command.guardaCorpoId);
+      const dx = assertIntegerMm(roundToMm(command.dx), 'dx');
+      const dy = assertIntegerMm(roundToMm(command.dy), 'dy');
+      g.pontos = g.pontos.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+      // Mover confirma, como o terminal, a vaga e o componente.
+      delete g.sugerido;
+      diff.updated.push(g.id);
+      break;
+    }
+
+    case 'DeleteGuardaCorpo': {
+      const g = findGuardaCorpo(next, command.guardaCorpoId);
+      next.guardaCorpos = (next.guardaCorpos ?? []).filter((x) => x.id !== g.id);
+      diff.deleted.push(g.id);
       break;
     }
 
@@ -3455,6 +3534,7 @@ function aplicarSemHash(
       const terminaisDoNivel = (next.terminais ?? []).filter((t) => t.levelId === level.id);
       const vagasDoNivel = (next.vagas ?? []).filter((v) => v.levelId === level.id);
       const componentesDoNivel = (next.componentes ?? []).filter((c) => c.levelId === level.id);
+      const guardaCorposDoNivel = (next.guardaCorpos ?? []).filter((g) => g.levelId === level.id);
 
       next.walls = next.walls.filter((w) => w.levelId !== level.id);
       next.openings = next.openings.filter((o) => !paredesDoNivel.has(o.wallId));
@@ -3468,6 +3548,7 @@ function aplicarSemHash(
       next.terminais = (next.terminais ?? []).filter((t) => t.levelId !== level.id);
       next.vagas = (next.vagas ?? []).filter((v) => v.levelId !== level.id);
       next.componentes = (next.componentes ?? []).filter((c) => c.levelId !== level.id);
+      next.guardaCorpos = (next.guardaCorpos ?? []).filter((g) => g.levelId !== level.id);
       // ⚠️ O quadro vai junto (é peça deste piso); os CIRCUITOS dele vão junto
       // também, senão ficariam apontando para um quadro que não existe mais. E
       // os terminais que os citavam já saíram, ou perdem a referência.
@@ -3497,6 +3578,7 @@ function aplicarSemHash(
         ...terminaisDoNivel.map((t) => t.id),
         ...vagasDoNivel.map((v) => v.id),
         ...componentesDoNivel.map((c) => c.id),
+        ...guardaCorposDoNivel.map((g) => g.id),
         ...quadrosDoNivel.map((q) => q.id),
         ...circuitosOrfaos.map((c) => c.id),
         ...etiquetasDoNivel.map((l) => l.id),

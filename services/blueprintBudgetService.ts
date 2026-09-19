@@ -16,6 +16,7 @@ import {
   gerarLancamentos,
   gerarLancamentosDeCamadas,
   gerarLancamentosDeAcabamentos,
+  gerarLancamentosDeGuardaCorpos,
   gerarLancamentosDeEsquadrias,
   prefixoDoEstudo,
   aplicarNoOrcamento,
@@ -179,6 +180,7 @@ export async function preverLancamentos(
     ...(quant.totais.porMaterial ?? []).map((m) => m.itemCode),
     // Acabamentos (E7.2): mesmo espaço de códigos, mesma resolução.
     ...(quant.totais.porAcabamento ?? []).map((m) => m.itemCode),
+    ...(quant.totais.porGuardaCorpo ?? []).map((m) => m.itemCode),
   ].filter((c) => c !== '');
   const itens = await resolverItens([
     ...mapeamentos.map((m) => m.item_code),
@@ -213,6 +215,7 @@ export async function preverLancamentos(
   const doDePara = gerarLancamentos(quant, resolvidos, contexto, { armadura });
   const dasCamadas = gerarLancamentosDeCamadas(quant, itens, contexto);
   const dosAcabamentos = gerarLancamentosDeAcabamentos(quant, itens, contexto);
+  const dosGuardaCorpos = gerarLancamentosDeGuardaCorpos(quant, itens, contexto);
   const dasEsquadrias = gerarLancamentosDeEsquadrias(quant, itens, contexto);
 
   // Os dois conjuntos são somados, e não escolhidos: eles medem coisas
@@ -224,11 +227,12 @@ export async function preverLancamentos(
   // alvenaria genérica e outra por material. A prévia mostra os dois blocos
   // separados justamente para que isso fique visível ANTES de aplicar.
   const resultado: ResultadoGeracao = {
-    entries: [...doDePara.entries, ...dasCamadas.entries, ...dosAcabamentos.entries, ...dasEsquadrias.entries],
+    entries: [...doDePara.entries, ...dasCamadas.entries, ...dosAcabamentos.entries, ...dosGuardaCorpos.entries, ...dasEsquadrias.entries],
     divergencias: [
       ...doDePara.divergencias,
       ...dasCamadas.divergencias,
       ...dosAcabamentos.divergencias,
+      ...dosGuardaCorpos.divergencias,
       ...dasEsquadrias.divergencias,
     ],
   };

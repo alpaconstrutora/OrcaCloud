@@ -226,6 +226,12 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
         });
       }
       add({ grupo: 'Arquitetura', item: 'Aberturas', valor: t.areaAberturasM2, unidade: 'm²', detalhe: `${t.portas} porta(s), ${t.janelas} janela(s)` });
+      // GUARDA-CORPOS (E7.3): metros por tipo e a lista por material/item.
+      if ((t.comprimentoGuardaCorpoM ?? 0) > 0) add({ grupo: 'Arquitetura', item: 'Guarda-corpo', valor: t.comprimentoGuardaCorpoM, unidade: 'm', detalhe: 'Comprimento das polilinhas (NBR 14718: h ≥ 1,10 m)' });
+      if ((t.comprimentoCorrimaoM ?? 0) > 0) add({ grupo: 'Arquitetura', item: 'Corrimão', valor: t.comprimentoCorrimaoM, unidade: 'm', detalhe: 'Comprimento das polilinhas (NBR 9050: 0,80–0,92 m)' });
+      for (const g of t.porGuardaCorpo ?? []) {
+        add({ grupo: 'Acabamento', item: `${g.tipo === 'CORRIMAO' ? 'Corrimão' : 'Guarda-corpo'} · ${g.material.toLowerCase()}${g.descricao || g.itemCode ? ` · ${g.descricao || g.itemCode}` : ''}`, valor: g.comprimentoM, unidade: 'm', detalhe: `${fmt(g.areaM2)} m² (comprimento × altura) · ${g.pecas} peça(s)${g.itemCode ? '' : ' · sem item de catálogo'}` });
+      }
     }
     if (quant.estruturas.length > 0) {
       if (t.volumeConcretoPilarM3 > 0) add({ grupo: 'Estrutura', item: 'Concreto — pilares', valor: t.volumeConcretoPilarM3, unidade: 'm³', detalhe: `${fmt(t.areaFormaPilarM2)} m² de fôrma`, forte: true });

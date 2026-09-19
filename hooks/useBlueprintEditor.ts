@@ -114,6 +114,8 @@ export type BlueprintTool =
   | 'corte'
   /** EIXO da malha (E1.4): dois cliques, como o corte. */
   | 'eixo'
+  /** GUARDA-CORPO / CORRIMÃO (E7.3): dois cliques, como o eixo; o tipo é estado da barra. */
+  | 'guardacorpo'
   /**
    * ESCADA E RAMPA — polilinha do eixo, fechada com duplo clique. O tipo (escada
    * ou rampa) e a largura são estado da barra, como a inclinação do telhado.

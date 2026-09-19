@@ -54,7 +54,7 @@ export type Dimensao = 'M2' | 'M' | 'M3' | 'UN' | 'KG';
  * linha por cômodo com o mesmo número repetido, que somaria errado no
  * orçamento.
  */
-export type EscopoMedida = 'AMBIENTE' | 'PAREDE' | 'ABERTURA' | 'EDIFICACAO' | 'ESTRUTURA' | 'TELHADO' | 'ESCADA' | 'INSTALACAO';
+export type EscopoMedida = 'AMBIENTE' | 'PAREDE' | 'ABERTURA' | 'EDIFICACAO' | 'ESTRUTURA' | 'TELHADO' | 'ESCADA' | 'INSTALACAO' | 'GUARDA_CORPO';
 
 export interface DefinicaoMedida {
   id: string;
@@ -387,6 +387,30 @@ export const MEDIDAS: DefinicaoMedida[] = [
     dimensao: 'M2',
     descricao: 'Área da pegada de cada escada ou rampa em planta. É o que sai do piso e o que se reveste na rampa.',
   },
+  // GUARDA-CORPO E CORRIMÃO (E7.3): metro linear é como se compra; a área
+  // (comprimento × altura) serve ao vidro e ao gradil cotados por m². Peça com
+  // item de catálogo declarado também sai direto por `gerarLancamentosDeGuardaCorpos`.
+  {
+    id: 'COMPRIMENTO_GUARDA_CORPO',
+    rotulo: 'Guarda-corpo — comprimento',
+    escopo: 'GUARDA_CORPO',
+    dimensao: 'M',
+    descricao: 'Comprimento da polilinha de cada guarda-corpo (não inclui corrimão).',
+  },
+  {
+    id: 'AREA_GUARDA_CORPO',
+    rotulo: 'Guarda-corpo — área (comprimento × altura)',
+    escopo: 'GUARDA_CORPO',
+    dimensao: 'M2',
+    descricao: 'Para vidro e gradil cotados por m².',
+  },
+  {
+    id: 'COMPRIMENTO_CORRIMAO',
+    rotulo: 'Corrimão — comprimento',
+    escopo: 'GUARDA_CORPO',
+    dimensao: 'M',
+    descricao: 'Comprimento da polilinha de cada corrimão.',
+  },
 ];
 
 export const MEDIDA_POR_ID = new Map(MEDIDAS.map((m) => [m.id, m]));
@@ -657,6 +681,19 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
           },
         }));
     }
+
+    case 'COMPRIMENTO_GUARDA_CORPO':
+    case 'AREA_GUARDA_CORPO':
+    case 'COMPRIMENTO_CORRIMAO':
+      return (quant.guardaCorpos ?? [])
+        .filter((g) => (medidaId === 'COMPRIMENTO_CORRIMAO' ? g.tipo === 'CORRIMAO' : g.tipo === 'GUARDA_CORPO'))
+        .map((g, i) => ({
+          ref: g.uid,
+          rotulo: `${g.rotulo || `${g.tipo === 'CORRIMAO' ? 'Corrimão' : 'Guarda-corpo'} ${i + 1}`} · ${g.material.toLowerCase()} · h ${g.alturaM.toFixed(2)} m`,
+          valor: medidaId === 'AREA_GUARDA_CORPO' ? g.areaM2 : g.comprimentoM,
+          formula: medidaId === 'AREA_GUARDA_CORPO' ? 'Σ comprimento dos trechos × altura' : 'Σ comprimento dos trechos da polilinha',
+          variaveis: { comprimentoM: g.comprimentoM, alturaM: g.alturaM, areaM2: g.areaM2, trechos: g.trechos, material: g.material },
+        }));
 
     case 'DEGRAUS':
     case 'AREA_ESCADA': {
@@ -1135,6 +1172,57 @@ export function gerarLancamentosDeAcabamentos(
             ? dim === 'M' ? 'Σ (perímetro − vãos que chegam ao piso), por ambiente com rodapé declarado' : 'Σ (comprimento de rodapé × altura declarada), por ambiente'
             : dim === 'M3' ? 'Σ (área de piso líquida × espessura da camada), por ambiente' : 'Σ (área de piso líquida), por ambiente',
         variables: { escopo: m.escopo, material: m.descricao || m.itemCode, funcao: m.funcao ?? '', areaM2: m.areaM2, volumeM3: m.volumeM3, comprimentoM: m.comprimentoM, ambientes: m.ambientes, snapshot: ctx.snapshotId },
+        result: valor,
+        justification: procedencia,
+      },
+    });
+  }
+  return { entries, divergencias };
+}
+
+/**
+ * Lançamentos dos GUARDA-CORPOS com item declarado (E7.3) — por tipo × material
+ * × código, pelo item escolhido na peça. Mesmo contrato dos acabamentos: m leva
+ * o comprimento, m² leva comprimento × altura; outra unidade ou sem código é
+ * divergência. Peça sem código continua disponível ao de-para
+ * (`COMPRIMENTO_GUARDA_CORPO`/`CORRIMAO`).
+ */
+export function gerarLancamentosDeGuardaCorpos(
+  quant: Quantitativos,
+  itensPorCodigo: Map<string, SinapiItem>,
+  ctx: ContextoGeracao,
+): ResultadoGeracao {
+  const entries: BudgetEntry[] = [];
+  const divergencias: Divergencia[] = [];
+  const procedencia =
+    `Gerado dos guarda-corpos e corrimãos da planta "${ctx.studyName}", versão ${ctx.revision} ` +
+    `(hash ${ctx.snapshotHash.slice(0, 12)}). Política ${quant.policy.version}, kernel ${quant.kernelVersion || '—'}.`;
+  for (const m of quant.totais.porGuardaCorpo ?? []) {
+    const rotulo = m.tipo === 'CORRIMAO' ? 'Corrimão' : 'Guarda-corpo';
+    if (!m.itemCode) continue; // sem código: fica para o de-para, não é divergência
+    const item = itensPorCodigo.get(m.itemCode);
+    if (!item) {
+      divergencias.push({ mapeamentoId: `guarda-corpo:${m.tipo}:${m.itemCode}`, medida: 'GUARDA_CORPO', itemCode: m.itemCode, motivo: `Item ${m.itemCode} não encontrado no catálogo (SINAPI nem base própria).` });
+      continue;
+    }
+    const dim = dimensaoDaUnidade(item.unit);
+    if (dim !== 'M' && dim !== 'M2') {
+      divergencias.push({ mapeamentoId: `guarda-corpo:${m.tipo}:${m.itemCode}`, medida: 'GUARDA_CORPO', itemCode: m.itemCode, motivo: `O ${rotulo.toLowerCase()} produz M ou M2, mas o item ${m.itemCode} é cotado em "${item.unit}". Nenhuma linha foi gerada.` });
+      continue;
+    }
+    const valor = dim === 'M' ? m.comprimentoM : m.areaM2;
+    if (valor <= 0) continue;
+    entries.push({
+      id: `bp:${ctx.studyId}:guarda-corpo:${m.tipo}:${m.material}:${m.itemCode}`,
+      sinapiItem: item,
+      quantity: valor,
+      phase: '',
+      group: `Guarda-corpos — ${rotulo.toLowerCase()}`,
+      discipline: 'Planta Inteligente',
+      notes: procedencia,
+      calculationMemory: {
+        formula: dim === 'M' ? 'Σ comprimento das polilinhas' : 'Σ comprimento × altura',
+        variables: { tipo: m.tipo, material: m.material, comprimentoM: m.comprimentoM, areaM2: m.areaM2, pecas: m.pecas, snapshot: ctx.snapshotId },
         result: valor,
         justification: procedencia,
       },

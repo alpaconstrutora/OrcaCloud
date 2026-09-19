@@ -55,6 +55,7 @@ import {
   Hexagon,
   LandPlot,
   Layers,
+  Fence,
   Grip,
   Hand,
   Magnet,
@@ -365,6 +366,9 @@ import TelaAlternativas from './TelaAlternativas';
 import TelaGerador from './TelaGerador';
 import PainelMobiliario from './PainelMobiliario';
 import PainelAcabamentos, { type AmbienteComAcabamento } from './PainelAcabamentos';
+import PainelGuardaCorpoSelecionado from './PainelGuardaCorpoSelecionado';
+import PainelGuardaCorpos from './PainelGuardaCorpos';
+import { HIPOTESES_DE_GUARDA_CORPO_PADRAO, resumirGuardaCorpos, sugerirGuardaCorpos, type HipotesesDeGuardaCorpo } from '../../utils/blueprintGuardaCorpo';
 import { resumirAcabamentos } from '../../utils/blueprintAcabamentos';
 import PainelIa, { concluirTurno, novoTurno, turnoComMudancas, type TurnoDaConversa } from './PainelIa';
 import { aplicarMudancas, interpretarPedidoLocal } from '../../utils/blueprintIa';
@@ -416,6 +420,7 @@ import {
   type TipoDeNucleo,
   type TipoDeVaga,
   type TipoDeComponente,
+  type TipoDeGuardaCorpo,
   pontoHidraulicoDoComponente,
   type TipoDeRestricaoDoLote,
   TIPOS_DE_RESTRICAO_DO_LOTE,
@@ -762,6 +767,8 @@ const ROTULO_DA_TAREFA = {
   mobiliario: 'Mobiliário e circulação',
   // PISO, FORRO E RODAPÉ (19/09/2026, E7.2): camadas por ambiente na etiqueta, tipos da organização, material por camada.
   acabamentos: 'Piso, forro e rodapé por ambiente',
+  // GUARDA-CORPOS (19/09/2026, E7.3): borda livre de laje e escada → sugestão; conferência NBR 14718/9050.
+  guardaCorpos: 'Guarda-corpos e corrimãos',
   // IA conversacional (19/09/2026, E6.4): pedido → mudanças no programa/hipóteses → re-geração → delta.
   ia: 'Conversar com a planta',
   'gerar-paredes': 'Gerar paredes do PDF',
@@ -1499,6 +1506,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [tipoDeVaga, setTipoDeVaga] = useState<TipoDeVaga>('COMUM');
   /** COMPONENTE (E7.1): o tipo do catálogo do próximo clique. */
   const [tipoDeComponente, setTipoDeComponente] = useState<TipoDeComponente>('CAMA_CASAL');
+  /** GUARDA-CORPO (E7.3): o tipo do próximo par de cliques; hipóteses da sugestão lembradas entre sessões. */
+  const [tipoDeGuardaCorpo, setTipoDeGuardaCorpo] = useState<TipoDeGuardaCorpo>('GUARDA_CORPO');
+  const [hipotesesDeGuardaCorpo, setHipotesesDeGuardaCorpo] = usePersistedState<HipotesesDeGuardaCorpo>('blueprint:guardaCorpos', HIPOTESES_DE_GUARDA_CORPO_PADRAO);
   const [hipotesesDeVagas, setHipotesesDeVagas] = usePersistedState<HipotesesDeVagas>('blueprint:vagas', HIPOTESES_VAGAS_PADRAO);
   const [regiaoDeVagasPedida, setRegiaoDeVagasPedida] = useState<RegiaoDeVagas | null>(null);
   /** ACABAMENTOS (E7.2): o ambiente que a gaveta abre já expandido (vindo do cartão). */
@@ -2710,6 +2720,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const nucleoSel = (editor.model.nucleos ?? []).find((n) => n.id === editor.selectedId) ?? null;
   const vagaSel = (editor.model.vagas ?? []).find((v) => v.id === editor.selectedId) ?? null;
   const componenteSel = (editor.model.componentes ?? []).find((c) => c.id === editor.selectedId) ?? null;
+  const guardaCorpoSel = (editor.model.guardaCorpos ?? []).find((g) => g.id === editor.selectedId) ?? null;
+  const guardaCorposDoNivelAtivo = useMemo(() => (editor.model.guardaCorpos ?? []).filter((g) => !levelId || g.levelId === levelId), [editor.model.guardaCorpos, levelId]);
+  const sugestaoDeGuardaCorpos = useMemo(() => (levelId ? sugerirGuardaCorpos(editor.model, levelId, hipotesesDeGuardaCorpo) : { sugestoes: [], motivos: [], jaExistentes: 0 }), [editor.model, levelId, hipotesesDeGuardaCorpo]);
+  const resumoDeGuardaCorpos = useMemo(() => resumirGuardaCorpos(editor.model, levelId), [editor.model, levelId]);
   const componentesDoNivelAtivo = useMemo(() => (editor.model.componentes ?? []).filter((c) => !levelId || c.levelId === levelId), [editor.model.componentes, levelId]);
   const vagasDoNivelAtivo = useMemo(() => (editor.model.vagas ?? []).filter((v) => !levelId || v.levelId === levelId), [editor.model.vagas, levelId]);
   const vagasSugeridasNoNivel = vagasDoNivelAtivo.filter((v) => v.sugerida).length;
@@ -4739,6 +4753,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     if (criados.length > 0) selecionar(criados);
   }
 
+  /** O guarda-corpo/corrimão nasce de dois cliques, com a altura padrão do tipo; o painel ajusta. */
+  function adicionarGuardaCorpo(a: Point, b: Point) {
+    if (!levelId) return;
+    const criados = editor.run({ type: 'AddGuardaCorpo', levelId, tipo: tipoDeGuardaCorpo, pontos: [a, b] });
+    if (criados.length > 0) selecionar(criados);
+  }
   /** O componente nasce com as medidas do catálogo, de pé; o painel gira e ajusta. */
   function adicionarComponente(at: Point) {
     if (!levelId) return;
@@ -5194,6 +5214,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     const nucleos = ids.filter((id) => (editor.model.nucleos ?? []).some((n) => n.id === id));
     const vagas = ids.filter((id) => (editor.model.vagas ?? []).some((v) => v.id === id));
     const componentesSel = ids.filter((id) => (editor.model.componentes ?? []).some((c) => c.id === id));
+    const guardaCorposSel = ids.filter((id) => (editor.model.guardaCorpos ?? []).some((g) => g.id === id));
     // Instalações. ⚠️ O QUADRO sai por último no lote e leva os circuitos dele
     // junto (ver `DeleteQuadro`); os pontos que os citavam ficam sem circuito,
     // e não apagados — quem tirou o quadro não decidiu tirar as tomadas.
@@ -5218,6 +5239,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       ...nucleos.map((nucleoId) => ({ type: 'DeleteNucleo', nucleoId }) as const),
       ...vagas.map((vagaId) => ({ type: 'DeleteVaga', vagaId }) as const),
       ...componentesSel.map((componenteId) => ({ type: 'DeleteComponente', componenteId }) as const),
+      ...guardaCorposSel.map((guardaCorpoId) => ({ type: 'DeleteGuardaCorpo', guardaCorpoId }) as const),
       ...trechos.map((trechoId) => ({ type: 'DeleteTrecho', trechoId }) as const),
       ...terminais.map((terminalId) => ({ type: 'DeleteTerminal', terminalId }) as const),
       ...quadros.map((quadroId) => ({ type: 'DeleteQuadro', quadroId }) as const),
@@ -5421,6 +5443,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     if (e.tool === 'nucleo') setTipoDeNucleo(e.nucleo);
     if (e.tool === 'vaga') setTipoDeVaga(e.vaga);
     if (e.tool === 'componente') setTipoDeComponente(e.componente);
+    if (e.tool === 'guardacorpo') setTipoDeGuardaCorpo(e.guardaCorpo);
     // A disciplina é estado da BARRA, e trocá-la traz cota e bitola usuais
     // junto: escolher "esgoto" e continuar desenhando na cota do eletroduto
     // seria pior que não ter padrão nenhum.
@@ -6563,6 +6586,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         }
       />
 
+      <PainelGuardaCorpoSelecionado
+        guardaCorpo={guardaCorpoSel}
+        onProps={(campos) => guardaCorpoSel && editor.run({ type: 'SetGuardaCorpoProps', guardaCorpoId: guardaCorpoSel.id, ...campos })}
+        onExcluir={removerSelecionada}
+      />
+
       <PainelEixoSelecionado
         eixo={eixoSel}
         onProps={(campos) => eixoSel && editor.run({ type: 'SetEixoProps', eixoId: eixoSel.id, ...campos })}
@@ -7480,6 +7509,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 tipoCirculacao={tipoCirculacao}
                 tipoDeNucleo={tipoDeNucleo}
                 tipoDeVaga={tipoDeVaga}
+                tipoDeGuardaCorpo={tipoDeGuardaCorpo}
                 familia="CONSTRUCAO"
                 onEscolher={escolherComponente}
               />
@@ -7565,6 +7595,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                     alternarTarefa('acabamentos');
                   }}
                   ajuda="Piso (camadas de baixo para cima), forro (camadas + rebaixo) e rodapé (pela política, declarado ou sem) por ambiente; presets, tipos salvos na organização e material por camada — quantitativo e orçamento por material"
+                />
+                <BotaoDoRibbon
+                  icone={Fence}
+                  rotulo="Guarda-corpos"
+                  contagem={sugestaoDeGuardaCorpos.sugestoes.length + resumoDeGuardaCorpos.erros || undefined}
+                  ativo={tarefaAberta === 'guardaCorpos'}
+                  onClick={() => alternarTarefa('guardaCorpos')}
+                  ajuda="Guarda-corpo (1,10 m, NBR 14718) sobre borda livre de laje em pavimento elevado e corrimão (0,92 m, NBR 9050) dos dois lados da escada — sugestão com prévia, material e item por peça, metros no quantitativo e no orçamento"
                 />
               </GrupoDoRibbon>
             )}
@@ -9288,6 +9326,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               componentes={componentesDoNivelAtivo}
               tipoDeComponente={tipoDeComponente}
               onAddComponente={adicionarComponente}
+              tipoDeGuardaCorpo={tipoDeGuardaCorpo}
+              onAddGuardaCorpo={adicionarGuardaCorpo}
               onAddTrecho={adicionarTrecho}
               redeEmUmClique={prumadaDeRede != null}
               onAddTerminal={adicionarTerminal}
@@ -9539,7 +9579,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 aberturas={componentesDoNivel.aberturas}
                 estruturas={componentesDoNivel.estruturas}
                 aguas={componentesDoNivel.aguas}
-                escadas={{ model: editor.model, itens: componentesDoNivel.escadas, nucleos: nucleosDoNivelAtivo, vagas: vagasDoNivelAtivo, componentes: componentesDoNivelAtivo }}
+                escadas={{ model: editor.model, itens: componentesDoNivel.escadas, nucleos: nucleosDoNivelAtivo, vagas: vagasDoNivelAtivo, componentes: componentesDoNivelAtivo, guardaCorpos: guardaCorposDoNivelAtivo }}
                 rede={componentesDoNivel.rede}
                 selecionados={editor.selectedIds}
                 // Pela LISTA, as propriedades abrem em Sheet (17/09/2026).
@@ -10000,6 +10040,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'vigas' && <RectangleHorizontal className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'lajes' && <Layers className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'acabamentos' && <Layers className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'guardaCorpos' && <Fence className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'fundacoes' && <SquareStack className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'pontosHidraulicos' && <ShowerHead className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'agua' && <Droplets className="h-5 w-5 text-blue-700" />}
@@ -10015,6 +10056,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           <SheetDescription>
             {tarefaAberta === 'ia' &&
               'Peça em português: "suíte +2 m²", "3 dormitórios", "corredor de 1,20 m". O pedido vira mudança no programa ou nas hipóteses, o gerador re-gera e você lê o delta dos indicadores. Nunca desenha direto.'}
+            {tarefaAberta === 'guardaCorpos' &&
+              'Onde falta proteção: borda de laje sem parede em pavimento elevado e escadas sem corrimão. Lançar grava peças sugeridas (tracejadas); mover ou Aceitar confirma. A altura mínima da norma é conferida peça a peça.'}
             {tarefaAberta === 'acabamentos' &&
               'Piso, forro e rodapé de cada ambiente, gravados na etiqueta do ambiente. Cada mudança é um passo de desfazer; o material é item do catálogo (SINAPI ou base própria) e é ele que leva a camada ao orçamento.'}
             {tarefaAberta === 'mobiliario' &&
@@ -10094,7 +10137,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' || tarefaAberta === 'mobiliario' || tarefaAberta === 'ia' || tarefaAberta === 'acabamentos' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' || tarefaAberta === 'mobiliario' || tarefaAberta === 'ia' || tarefaAberta === 'acabamentos' || tarefaAberta === 'guardaCorpos' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
 
@@ -10115,6 +10158,31 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onAbrirGerador={() => {
                 setTarefa(null);
                 setTelaAberta('gerar');
+              }}
+            />
+          )}
+
+          {tarefaAberta === 'guardaCorpos' && (
+            <PainelGuardaCorpos
+              nomeDoPavimento={editor.model.levels.find((l) => l.id === levelId)?.name ?? 'pavimento'}
+              pecas={guardaCorposDoNivelAtivo}
+              resumo={resumoDeGuardaCorpos}
+              sugestao={sugestaoDeGuardaCorpos}
+              hipoteses={hipotesesDeGuardaCorpo}
+              onHipoteses={setHipotesesDeGuardaCorpo}
+              onLancar={(quais) => {
+                const cmds = quais.map((s) => s.comando);
+                if (cmds.length === 0) return;
+                const criados = editor.runBatch(cmds);
+                if (criados.length > 0) selecionar(criados);
+              }}
+              onAceitarTodos={() => {
+                const cmds: Command[] = guardaCorposDoNivelAtivo.filter((g) => g.sugerido).map((g) => ({ type: 'SetGuardaCorpoProps', guardaCorpoId: g.id, sugerido: false }));
+                if (cmds.length) editor.runBatch(cmds);
+              }}
+              onSelecionar={(id) => {
+                setTarefa(null);
+                selecionar([id]);
               }}
             />
           )}

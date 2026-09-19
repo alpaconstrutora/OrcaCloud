@@ -140,6 +140,8 @@ export const PREFIXO_ROTULO_UID = {
   vaga: 'W',
   /** Componente (mobiliário, louça…) — M de mobiliário. */
   componente: 'M',
+  /** Guarda-corpo e corrimão — B de balaustrada (G já é o grupo). */
+  guardaCorpo: 'B',
   stair: 'E',
   label: 'R',
   /**

@@ -7,6 +7,7 @@ import type {
   Nucleo,
   Vaga,
   Componente,
+  GuardaCorpo,
   Opening,
   Quadro,
   Structural,
@@ -81,7 +82,7 @@ interface Props {
    * Escadas e rampas do pavimento ativo, com o MODELO: a linha diz quantos
    * degraus, e isso vem do desnível entre pavimentos.
    */
-  escadas?: { model: BlueprintModel; itens: Escada[]; nucleos?: Nucleo[]; vagas?: Vaga[]; componentes?: Componente[] };
+  escadas?: { model: BlueprintModel; itens: Escada[]; nucleos?: Nucleo[]; vagas?: Vaga[]; componentes?: Componente[]; guardaCorpos?: GuardaCorpo[] };
   /**
    * As INSTALAÇÕES do pavimento.
    *

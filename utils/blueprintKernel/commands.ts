@@ -64,6 +64,8 @@ import {
   findVaga,
   DIMENSAO_DA_VAGA,
   type TipoDeVaga,
+  FAIXA_PADRAO_DA_RESTRICAO,
+  type TipoDeRestricaoDoLote,
   uidDaCopia,
   transformarPontoDoGrupo,
   giroTransformadoDoGrupo,
@@ -185,7 +187,11 @@ export type Command =
       b: Point;
       kind?: BoundaryKind;
       papel?: BoundaryPapel | null;
+      /** Obrigatório com `kind = 'RESTRICAO'`; omitido = faixa padrão do tipo. */
+      restricao?: { tipo: TipoDeRestricaoDoLote; faixaMm?: number };
     }
+  /** Tipo e faixa da RESTRICAO; trocar o tipo sem faixa leva a faixa padrão do tipo novo. */
+  | { type: 'SetBoundaryRestricao'; boundaryId: ObjectId; tipo?: TipoDeRestricaoDoLote; faixaMm?: number }
   | { type: 'MoveBoundaryVertex'; boundaryId: ObjectId; end: 'a' | 'b'; to: Point }
   | { type: 'DeleteBoundary'; boundaryId: ObjectId }
   /**
@@ -1140,8 +1146,28 @@ function aplicarSemHash(
         b: { ...command.b },
         kind: command.kind ?? 'DIVISA',
         papel: command.papel ?? null,
+        ...(command.kind === 'RESTRICAO'
+          ? {
+              restricao: {
+                tipo: command.restricao?.tipo ?? 'NAO_EDIFICAVEL',
+                faixaMm: assertIntegerMm(roundToMm(command.restricao?.faixaMm ?? FAIXA_PADRAO_DA_RESTRICAO[command.restricao?.tipo ?? 'NAO_EDIFICAVEL']), 'faixaMm'),
+              },
+            }
+          : {}),
       });
       diff.created.push(id);
+      break;
+    }
+
+    case 'SetBoundaryRestricao': {
+      const boundary = findBoundary(next, command.boundaryId);
+      if (boundary.kind !== 'RESTRICAO') throw new KernelError('BAD_RESTRICTION', 'Só a faixa restrita tem tipo e faixa');
+      const atual = boundary.restricao ?? { tipo: 'NAO_EDIFICAVEL' as const, faixaMm: FAIXA_PADRAO_DA_RESTRICAO.NAO_EDIFICAVEL };
+      const tipo = command.tipo ?? atual.tipo;
+      const faixaMm = command.faixaMm !== undefined ? assertIntegerMm(roundToMm(command.faixaMm), 'faixaMm') : command.tipo && command.tipo !== atual.tipo ? FAIXA_PADRAO_DA_RESTRICAO[command.tipo] : atual.faixaMm;
+      if (faixaMm <= 0) throw new KernelError('BAD_RESTRICTION', 'A faixa tem de ser positiva');
+      boundary.restricao = { tipo, faixaMm };
+      diff.updated.push(boundary.id);
       break;
     }
 

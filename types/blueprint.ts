@@ -303,6 +303,16 @@ export interface BlueprintUrbanContext {
   gabarito_altura_max_m: number | null;
   gabarito_pavimentos: number | null;
   /**
+   * VOCABULÁRIO COMPLEMENTAR (E3.1, migration `aplicar_20270919000044`). `null`
+   * = a lei não disse (ou linha anterior à migration).
+   */
+  testada_minima_mm?: number | null;
+  area_minima_lote_m2?: number | null;
+  vagas_por_unidade?: number | null;
+  insolacao_minima_h?: number | null;
+  afastamento_progressivo_a_partir_m?: number | null;
+  afastamento_progressivo_formula?: string | null;
+  /**
    * Em qual tabela procurar `regulatory_zone_id`. `null` em linha anterior à
    * migration `aplicar_20270914000001` — lida como EMPREENDIMENTO, que é o que
    * ela era: à época o catálogo ainda não era um caminho.

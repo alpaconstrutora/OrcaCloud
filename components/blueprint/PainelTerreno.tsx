@@ -1,3 +1,5 @@
+import { ROTULO_DA_RESTRICAO_DO_LOTE, TIPOS_DE_RESTRICAO_DO_LOTE, type TipoDeRestricaoDoLote } from '../../utils/blueprintKernel';
+import type { AvisoDoLote } from '../../utils/blueprintZonaUrbanistica';
 import React, { useState } from 'react';
 import { AlertTriangle, LandPlot, Save, Table2 } from 'lucide-react';
 import type { Boundary, BoundaryPapel, Georreferencia } from '../../utils/blueprintKernel';
@@ -145,6 +147,12 @@ interface Props {
   divisaSelecionada: Boundary | null;
   onComprimento: (mm: number) => void;
   onPapel: (papel: BoundaryPapel | null) => void;
+  /** Faixa restrita selecionada (E3.1): tipo e faixa. */
+  onRestricao?: (campos: { tipo?: TipoDeRestricaoDoLote; faixaMm?: number }) => void;
+  /** Afastamento progressivo aplicado na altura desenhada (mm), quando supera os recuos fixos. */
+  afastamentoProgressivoMm?: number | null;
+  /** Conferência do lote contra o vocabulário (testada e área mínimas). */
+  avisosDoLote?: AvisoDoLote[];
   /** Recuos em MILÍMETRO, por papel. */
   recuos: Recuos;
   onRecuo: (papel: BoundaryPapel, mm: number) => void;
@@ -218,6 +226,9 @@ export default function PainelTerreno({
   divisaSelecionada,
   onComprimento,
   onPapel,
+  onRestricao,
+  afastamentoProgressivoMm = null,
+  avisosDoLote = [],
   recuos,
   onRecuo,
   envelope,
@@ -302,6 +313,25 @@ export default function PainelTerreno({
           porque escolher a lei não depende de já haver lote desenhado. */}
       {zonaSlot}
 
+      {/* VOCABULÁRIO (E3.1): o que o lote e a altura desenhada dizem contra a lei. */}
+      {(avisosDoLote.length > 0 || afastamentoProgressivoMm != null) && (
+        <ul className="mt-2 space-y-1 text-xs" data-testid="conferencia-do-lote">
+          {avisosDoLote.map((a) => (
+            <li key={a.campo} className={`flex items-start gap-1.5 rounded-md border px-2 py-1 ${a.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+              <span>{a.texto}</span>
+            </li>
+          ))}
+          {afastamentoProgressivoMm != null && (
+            <li className="flex items-start gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-blue-800">
+              <span>
+                Afastamento progressivo em vigor: laterais e fundos a{' '}
+                <strong>{(afastamentoProgressivoMm / 1000).toFixed(2).replace('.', ',')} m</strong> pela altura desenhada — o envelope já o usa.
+              </span>
+            </li>
+          )}
+        </ul>
+      )}
+
       {terreno && (
         <div className="mt-3 border-t border-slate-200 pt-3">
           {/* O quadro é onde os papéis são definidos de uma vez, a partir da
@@ -371,13 +401,15 @@ export default function PainelTerreno({
 
           {envelope &&
             (envelope.valido ? (
-              envelope.areaMm2 < terreno.areaMm2 && (
+              (envelope.areaMm2 < terreno.areaMm2 || (envelope.areaRestritaMm2 ?? 0) > 0) && (
                 <p className="mt-2 text-xs text-slate-600">
                   Área construtível{' '}
                   <strong className="text-slate-800">
                     {(envelope.areaMm2 / 1_000_000).toFixed(2).replace('.', ',')} m²
                   </strong>{' '}
-                  depois dos recuos.
+                  depois dos recuos
+                  {envelope.areaRestritaMm2 ? ` e das faixas restritas (${(envelope.areaRestritaMm2 / 1_000_000).toFixed(2).replace('.', ',')} m² restritos)` : ''}.
+                  {envelope.restricoesNaoRecortadas ? ` ${envelope.restricoesNaoRecortadas} faixa(s) no meio do lote: a área conta, o contorno não a recorta.` : ''}
                 </p>
               )
             ) : (
@@ -538,9 +570,40 @@ export default function PainelTerreno({
       {divisaSelecionada && (
         <div className="mt-3 border-t border-slate-200 pt-3">
           <p className="text-xs font-medium text-slate-700">
-            {divisaSelecionada.kind === 'TERRENO' ? 'Divisa do lote' : 'Limite solto'}{' '}
+            {divisaSelecionada.kind === 'TERRENO' ? 'Divisa do lote' : divisaSelecionada.kind === 'RESTRICAO' ? 'Faixa restrita' : 'Limite solto'}{' '}
             selecionado
           </p>
+
+          {/* FAIXA RESTRITA (E3.1): tipo e largura da faixa. A faixa fica para
+              dentro do lote e é subtraída do envelope quando a linha corre pela
+              divisa. Trocar o tipo sem mexer na faixa leva a faixa padrão dele. */}
+          {divisaSelecionada.kind === 'RESTRICAO' && divisaSelecionada.restricao && onRestricao && (
+            <div className="mt-2 flex flex-wrap items-center gap-3" data-testid="restricao-do-lote">
+              <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                Tipo
+                <select
+                  value={divisaSelecionada.restricao.tipo}
+                  onChange={(e) => onRestricao({ tipo: e.target.value as TipoDeRestricaoDoLote })}
+                  aria-label="Tipo da faixa restrita"
+                  className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800"
+                >
+                  {TIPOS_DE_RESTRICAO_DO_LOTE.map((t) => (
+                    <option key={t} value={t}>{ROTULO_DA_RESTRICAO_DO_LOTE[t]}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                Faixa
+                <CampoEmMetros
+                  valorMm={divisaSelecionada.restricao.faixaMm}
+                  chave={`${divisaSelecionada.id}-faixa-${divisaSelecionada.restricao.faixaMm}`}
+                  ariaLabel="Largura da faixa restrita em metros"
+                  aoAplicar={(mm) => mm !== null && mm > 0 && onRestricao({ faixaMm: mm })}
+                />
+                m
+              </label>
+            </div>
+          )}
 
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-1.5 text-xs text-slate-600">

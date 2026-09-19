@@ -591,6 +591,44 @@ propagação; bump).
 - Fora desta fase (registrado): espinha de peixe (45°) e vagas em fila (paralelas), mover a vaga por
   arraste no canvas (hoje pelo painel/giro), e a exigência vinda da zona (E3.1).
 
+### E3.1 — Vocabulário (19/09/2026) · kernel 0.41.0
+- **Zona ganha** testada mínima, área mínima do lote, vagas por unidade, insolação mínima e
+  **afastamento progressivo por altura** (`{aPartirDeM, formula em h}`, avaliado pelo motor da
+  E1.3: "acima de 6 m: (H − 6)/10", "H > 9: (H-9)/8" e variantes são lidos por
+  `lerAfastamentoProgressivo`; o ilegível entra em `naoAplicados`, como sempre). Onde mora: os
+  catálogos de zona não têm os campos, então vivem em `blueprint_study_urban_context`
+  (migration `aplicar_20270919000044`, APLICADA), digitados à mão no painel da zona
+  ("Vocabulário complementar") e marcados MANUAL; `lerZona` já os aceita como texto quando a
+  zona os trouxer, e a deriva os compara.
+- **Recuos efetivos** (`recuosEfetivos`): laterais e fundos = máx(recuo fixo, fórmula(altura
+  desenhada)); frente não muda; o envelope usa os efetivos e o painel do terreno diz "afastamento
+  progressivo em vigor: X m". **Conferência do lote** (`conferirLote`): testada (Σ divisas FRENTE)
+  e área vs. mínimas — acusa, não trava; sem frente marcada, diz que não pôde conferir.
+  **Vagas por unidade** da zona alimenta o lançamento de vagas (E2.5) por cima da hipótese.
+- **Restrição em planta**: `Boundary.kind = 'RESTRICAO'` + `restricao {tipo APP | CURSO_DAGUA |
+  SERVIDAO | NAO_EDIFICAVEL, faixaMm}` (faixas padrão 30 / 15 / 3 / 15 m — a lei local decide);
+  não divide ambiente (fora do arranjo planar, como o TERRENO). `faixasRestritas`: o retângulo da
+  linha até a paralela a `faixaMm` para o lado do centro do lote; `naDivisa` quando as duas pontas
+  estão sobre o MESMO lado do lote. `envelopeConstrutivo` recorta o anel pelo semiplano além da
+  faixa quando ela corre pela divisa (APP na margem "empurra" o envelope como um recuo maior) e,
+  para a faixa no meio do lote (servidão), desconta a área e avisa "o contorno não a recorta" —
+  um anel só não representa duas peças. Comandos `AddBoundary.restricao`, `SetBoundaryRestricao`;
+  canônico `boundaries[].restricao` só onde há; bump 0.40.0 → 0.41.0 (goldens provados em 0.40.0
+  com 280 testes e recapturados).
+- UI: ferramenta **Divisa** ganha "A linha é: Limite solto / Faixa restrita do lote" + tipo (com a
+  faixa padrão); canvas hachura a faixa em terracota com o rótulo; painel do terreno edita tipo
+  e faixa da restrição selecionada, mostra "Área construtível … depois dos recuos e das faixas
+  restritas (N m² restritos)", a conferência do lote e o afastamento em vigor; painel da zona
+  ganha o vocabulário complementar com validação da fórmula.
+- Testes: `blueprintVocabularioDaZona` (2: leitura/afastamento/recuos efetivos/conferência/deriva;
+  faixa na divisa recorta 17 × 22 → 17 × 15 m, servidão no meio só desconta, não divide ambiente,
+  SetBoundaryRestricao, canônico), goldens, editor "E3.1". Suíte 4672. App real (escritas
+  bloqueadas: 17): servidão de 3 m pelo meio do lote hachurada, "198,00 m² … (53,30 m² restritos).
+  1 faixa(s) no meio do lote: a área conta, o contorno não a recorta"; testada mínima 25 m →
+  "nenhuma divisa marcada como frente para conferir" (o lote da prova não tem papéis).
+- Fora desta fase (registrado): insolação mínima é só vocabulário (a conferência é da E5, com o
+  norte georreferenciado); recorte do envelope em duas peças para a servidão no meio.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

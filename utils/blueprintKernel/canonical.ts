@@ -66,6 +66,7 @@ import {
   type EspelhoDoGrupo,
   type TipoDeNucleo,
   type TipoDeVaga,
+  type TipoDeRestricaoDoLote,
   assinaturaDasCamadas,
   emptyModel,
   nextId,
@@ -269,6 +270,8 @@ function projetar(model: BlueprintModel): {
       // digitou o nome da rua com outra grafia.
       medidaEscrituraMm: b.medidaEscrituraMm ?? null,
       confrontante: b.confrontante ?? null,
+      // Restrição (0.41.0): só na RESTRICAO; ausente nas demais — a chave some.
+      restricao: b.restricao ? { tipo: b.restricao.tipo, faixaMm: b.restricao.faixaMm } : undefined,
       a: { x: b.a.x, y: b.a.y },
       b: { x: b.b.x, y: b.b.y },
     }),
@@ -925,6 +928,8 @@ export interface CanonicalPayload {
     /** Ausentes em payload gravado sob kernel < 0.6.0. */
     medidaEscrituraMm?: number | null;
     confrontante?: string | null;
+    /** Só na RESTRICAO (kernel ≥ 0.41.0). */
+    restricao?: { tipo: TipoDeRestricaoDoLote; faixaMm: number };
     a: { x: number; y: number };
     b: { x: number; y: number };
   }[];
@@ -1305,6 +1310,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       // contra uma medida que nunca foi digitada.
       medidaEscrituraMm: b.medidaEscrituraMm ?? null,
       confrontante: b.confrontante ?? null,
+      ...(b.restricao ? { restricao: { tipo: b.restricao.tipo, faixaMm: b.restricao.faixaMm } } : {}),
     });
   });
 

@@ -19,6 +19,7 @@
 
 import { lerMilimetros, lerPorcentagem, lerValorRegulatorio } from './regulatoryValue';
 import { RECUOS_ZERO, type Recuos } from './blueprintTerreno';
+import { avaliar, erroDeSintaxe } from './blueprintFormulas';
 
 /**
  * O que este módulo precisa de uma zona — e só isso.
@@ -46,6 +47,17 @@ export interface ZonaRegulatoria {
   gabarito_pavimentos?: string;
   lei_referencia?: string;
   nivel_confianca?: string;
+  /**
+   * VOCABULÁRIO COMPLEMENTAR (19/09/2026, roadmap E3.1). Opcionais porque os
+   * catálogos de hoje não os têm: quando vierem, são lidos; até lá, o estudo
+   * os digita à mão (`blueprint_study_urban_context`).
+   */
+  testada_minima?: string;
+  area_minima_lote?: string;
+  vagas_por_unidade?: string;
+  insolacao_minima?: string;
+  /** "acima de 6 m: (H − 6)/10" — ver `lerAfastamentoProgressivo`. */
+  afastamento_progressivo?: string;
 }
 
 
@@ -59,7 +71,12 @@ export type CampoDaZona =
   | 'coeficiente_max'
   | 'gabarito_altura_max'
   | 'gabarito_pavimentos'
-  | 'taxa_permeabilidade_min';
+  | 'taxa_permeabilidade_min'
+  | 'testada_minima'
+  | 'area_minima_lote'
+  | 'vagas_por_unidade'
+  | 'insolacao_minima'
+  | 'afastamento_progressivo';
 
 export const ROTULO_DO_CAMPO: Record<CampoDaZona, string> = {
   recuo_frente: 'recuo de frente',
@@ -71,6 +88,11 @@ export const ROTULO_DO_CAMPO: Record<CampoDaZona, string> = {
   gabarito_altura_max: 'gabarito (altura)',
   gabarito_pavimentos: 'gabarito (pavimentos)',
   taxa_permeabilidade_min: 'taxa de permeabilidade',
+  testada_minima: 'testada mínima',
+  area_minima_lote: 'área mínima do lote',
+  vagas_por_unidade: 'vagas por unidade',
+  insolacao_minima: 'insolação mínima',
+  afastamento_progressivo: 'afastamento progressivo',
 };
 
 /** O que o editor consome. `null` em qualquer campo = a lei não disse. */
@@ -84,6 +106,105 @@ export interface ValoresDaZona {
   /** Em METRO. */
   gabaritoAlturaMaxM: number | null;
   gabaritoPavimentos: number | null;
+  /** Vocabulário complementar (E3.1). `null` = a lei não disse. */
+  testadaMinimaMm: number | null;
+  areaMinimaDoLoteM2: number | null;
+  vagasPorUnidade: number | null;
+  /** Horas de sol no solstício de inverno exigidas nos dormitórios. */
+  insolacaoMinimaH: number | null;
+  afastamentoProgressivo: AfastamentoProgressivo | null;
+}
+
+/**
+ * AFASTAMENTO PROGRESSIVO: acima de `aPartirDeM` de altura, o afastamento
+ * lateral/de fundos passa a ser `formula(h)` em metros (h = altura da
+ * edificação em m), quando maior que o recuo fixo. A fórmula usa o motor da
+ * E1.3 — variável `h`; "H" e "−" são normalizados na leitura.
+ */
+export interface AfastamentoProgressivo {
+  aPartirDeM: number;
+  /** Expressão em `h` (metros). Ex.: "(h - 6) / 10". */
+  formula: string;
+}
+
+/**
+ * Lê "acima de 6 m: (H − 6)/10", "H > 6: (H-6)/10", "(H-6)/10 a partir de 6 m"
+ * ou só "(H-6)/10" (a partir de 0). `null` quando não há fórmula válida.
+ */
+export function lerAfastamentoProgressivo(texto?: string | null): AfastamentoProgressivo | null {
+  const t = (texto ?? '').trim();
+  if (!t) return null;
+  const limiar = /(?:acima de|a partir de|h\s*>=?)\s*(\d+(?:[.,]\d+)?)\s*m?/i.exec(t);
+  const aPartirDeM = limiar ? Number(limiar[1].replace(',', '.')) : 0;
+  // A fórmula: o trecho com H, números e operadores; tira o que é prosa.
+  const semLimiar = limiar ? t.replace(limiar[0], ' ') : t;
+  const candidato = semLimiar
+    .replace(/[−–—]/g, '-')
+    .replace(/×/g, '*')
+    .replace(/÷/g, '/')
+    .replace(/[A-Za-z]{2,}[^()0-9hH+\-*/.,\s]*/g, ' ') // palavras (prosa) fora
+    .replace(/[:=]/g, ' ')
+    .replace(/\bH\b/g, 'h')
+    .replace(/(\d),(\d)/g, '$1.$2')
+    .trim();
+  const formula = candidato.replace(/\s+/g, ' ');
+  if (!/h/.test(formula) || erroDeSintaxe(formula)) return null;
+  return { aPartirDeM, formula };
+}
+
+/** O afastamento (m) que a fórmula pede na altura `alturaM`; `null` abaixo do limiar ou fórmula inválida. */
+export function afastamentoNaAltura(ap: AfastamentoProgressivo | null, alturaM: number | null): number | null {
+  if (!ap || alturaM == null || alturaM <= ap.aPartirDeM) return null;
+  try {
+    const v = avaliar(ap.formula, { h: alturaM });
+    return typeof v === 'number' && v > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Os recuos que o envelope deve usar NA ALTURA desenhada: laterais e fundos
+ * ganham o afastamento progressivo quando ele supera o recuo fixo. A frente
+ * não muda — o afastamento progressivo da lei é dos lados e do fundo.
+ */
+export function recuosEfetivos(recuos: Recuos, valores: Pick<ValoresDaZona, 'afastamentoProgressivo'>, alturaM: number | null): { recuos: Recuos; afastamentoMm: number | null } {
+  const a = afastamentoNaAltura(valores.afastamentoProgressivo, alturaM);
+  if (a == null) return { recuos, afastamentoMm: null };
+  const mm = Math.round(a * 1000);
+  return {
+    recuos: {
+      FRENTE: recuos.FRENTE,
+      FUNDOS: Math.max(recuos.FUNDOS, mm),
+      LATERAL_DIREITA: Math.max(recuos.LATERAL_DIREITA, mm),
+      LATERAL_ESQUERDA: Math.max(recuos.LATERAL_ESQUERDA, mm),
+    },
+    afastamentoMm: mm,
+  };
+}
+
+export interface AvisoDoLote {
+  campo: 'testada_minima' | 'area_minima_lote';
+  ok: boolean;
+  texto: string;
+}
+
+/** Confere o lote contra a testada e a área mínimas (só acusa; nada trava). */
+export function conferirLote(lote: { areaM2: number; testadaMm: number | null }, valores: Pick<ValoresDaZona, 'testadaMinimaMm' | 'areaMinimaDoLoteM2'>): AvisoDoLote[] {
+  const avisos: AvisoDoLote[] = [];
+  const m = (mm: number) => (mm / 1000).toFixed(2).replace('.', ',');
+  if (valores.testadaMinimaMm != null) {
+    if (lote.testadaMm == null) avisos.push({ campo: 'testada_minima', ok: false, texto: `Testada mínima de ${m(valores.testadaMinimaMm)} m — nenhuma divisa marcada como frente para conferir.` });
+    else {
+      const ok = lote.testadaMm >= valores.testadaMinimaMm;
+      avisos.push({ campo: 'testada_minima', ok, texto: `Testada ${m(lote.testadaMm)} m ${ok ? '≥' : '<'} mínima ${m(valores.testadaMinimaMm)} m.` });
+    }
+  }
+  if (valores.areaMinimaDoLoteM2 != null) {
+    const ok = lote.areaM2 >= valores.areaMinimaDoLoteM2;
+    avisos.push({ campo: 'area_minima_lote', ok, texto: `Lote ${lote.areaM2.toFixed(2).replace('.', ',')} m² ${ok ? '≥' : '<'} mínimo ${valores.areaMinimaDoLoteM2.toFixed(2).replace('.', ',')} m².` });
+  }
+  return avisos;
 }
 
 export interface LeituraDaZona {
@@ -145,6 +266,12 @@ export function lerZona(zona: ZonaRegulatoria): LeituraDaZona {
         const n = lerValorRegulatorio(v);
         return n === null ? null : Math.round(n);
       }),
+      testadaMinimaMm: ler('testada_minima', zona.testada_minima, lerMilimetros),
+      areaMinimaDoLoteM2: ler('area_minima_lote', zona.area_minima_lote, lerValorRegulatorio),
+      vagasPorUnidade: ler('vagas_por_unidade', zona.vagas_por_unidade, lerValorRegulatorio),
+      // Horas: "2 h", "2 horas" — o leitor genérico só conhece m/m²/%.
+      insolacaoMinimaH: ler('insolacao_minima', zona.insolacao_minima, (v) => lerValorRegulatorio((v ?? '').replace(/\s*(horas?|h)\s*$/i, ''))),
+      afastamentoProgressivo: ler('afastamento_progressivo', zona.afastamento_progressivo, lerAfastamentoProgressivo),
     },
     naoAplicados,
   };
@@ -212,7 +339,14 @@ export function zonaDerivou(
     ['coeficiente_max', aplicados.coeficienteMax, hoje.coeficienteMax],
     ['gabarito_altura_max', aplicados.gabaritoAlturaMaxM, hoje.gabaritoAlturaMaxM],
     ['gabarito_pavimentos', aplicados.gabaritoPavimentos, hoje.gabaritoPavimentos],
+    ['testada_minima', aplicados.testadaMinimaMm ?? null, hoje.testadaMinimaMm],
+    ['area_minima_lote', aplicados.areaMinimaDoLoteM2 ?? null, hoje.areaMinimaDoLoteM2],
+    ['vagas_por_unidade', aplicados.vagasPorUnidade ?? null, hoje.vagasPorUnidade],
+    ['insolacao_minima', aplicados.insolacaoMinimaH ?? null, hoje.insolacaoMinimaH],
   ];
+  const apAplicado = aplicados.afastamentoProgressivo ?? null;
+  const apHoje = hoje.afastamentoProgressivo;
+  const afastamentoDerivou = daZona('afastamento_progressivo') && (apAplicado?.aPartirDeM ?? null) !== (apHoje?.aPartirDeM ?? null) || (daZona('afastamento_progressivo') && (apAplicado?.formula ?? null) !== (apHoje?.formula ?? null));
 
-  return pares.some(([campo, aplicado, atual]) => daZona(campo) && aplicado !== atual);
+  return afastamentoDerivou || pares.some(([campo, aplicado, atual]) => daZona(campo) && aplicado !== atual);
 }

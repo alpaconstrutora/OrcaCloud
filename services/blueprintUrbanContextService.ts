@@ -18,7 +18,9 @@ const COLS =
   'recuo_frente_mm, recuo_fundos_mm, ' +
   'recuo_lateral_direita_mm, recuo_lateral_esquerda_mm, taxa_ocupacao_max, ' +
   'taxa_permeabilidade_min, coeficiente_max, gabarito_altura_max_m, ' +
-  'gabarito_pavimentos, origem_valores, aplicado_em, created_at, updated_at';
+  'gabarito_pavimentos, testada_minima_mm, area_minima_lote_m2, vagas_por_unidade, ' +
+  'insolacao_minima_h, afastamento_progressivo_a_partir_m, afastamento_progressivo_formula, ' +
+  'origem_valores, aplicado_em, created_at, updated_at';
 
 function fail(context: string, error: { message: string } | null): never {
   throw new Error(`blueprintUrbanContext/${context}: ${error?.message ?? 'erro desconhecido'}`);

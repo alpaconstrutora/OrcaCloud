@@ -438,7 +438,7 @@ function segmentosDoNivel(model: BlueprintModel, level: Level): Segment[] {
   return [
     ...model.walls.filter((w) => w.levelId === level.id).map((w) => ({ a: w.a, b: w.b })),
     ...model.boundaries
-      .filter((b) => b.levelId === level.id && b.kind !== 'TERRENO')
+      .filter((b) => b.levelId === level.id && b.kind !== 'TERRENO' && b.kind !== 'RESTRICAO')
       .map((b) => ({ a: b.a, b: b.b })),
     ...pontesEstruturais(model, level),
   ];
@@ -772,7 +772,7 @@ export function vertexDegrees(
     // material divide o ambiente como uma parede dividiria): dividir cômodo é
     // justamente o que ela sempre significou.
     ...model.boundaries
-      .filter((b) => b.levelId === level.id && b.kind !== 'TERRENO')
+      .filter((b) => b.levelId === level.id && b.kind !== 'TERRENO' && b.kind !== 'RESTRICAO')
       .map((b) => ({ a: b.a, b: b.b })),
   ];
   const split = splitAtIntersections(rawSegments);

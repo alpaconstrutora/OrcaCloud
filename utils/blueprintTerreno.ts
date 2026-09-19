@@ -32,6 +32,7 @@ import {
   type ObjectId,
   type Point,
   type Space,
+  recorteComum,
 } from './blueprintKernel';
 
 export interface Terreno {
@@ -51,6 +52,96 @@ export interface Terreno {
    * ninguém saberia de quanto foi a licença que ele tomou.
    */
   erroFechamentoMm: number;
+}
+
+/** As RESTRIÇÕES do lote (E3.1): linhas com faixa não edificável. */
+export function restricoesDoLote(limites: Boundary[]): Boundary[] {
+  return limites.filter((b) => b.kind === 'RESTRICAO' && !!b.restricao);
+}
+
+/** Uma faixa restrita em planta, pronta para desenhar e para subtrair. */
+export interface FaixaRestrita {
+  boundaryId: ObjectId;
+  tipo: NonNullable<Boundary['restricao']>['tipo'];
+  faixaMm: number;
+  /** O retângulo da faixa: a linha e a paralela a `faixaMm`, para dentro do lote. */
+  anel: Point[];
+  /** `true` quando a linha corre por um lado do lote — só aí a faixa RECORTA o envelope. */
+  naDivisa: boolean;
+  /** Área da faixa DENTRO do lote, mm². */
+  areaNoLoteMm2: number;
+}
+
+/**
+ * Para que lado da linha fica o lote: o da normal que aponta para o centro do
+ * anel do terreno (sem terreno, o lado esquerdo da linha a→b).
+ */
+function ladoDoLote(a: Point, b: Point, terreno: Terreno | null): 1 | -1 {
+  if (!terreno || terreno.anel.length < 3) return 1;
+  const c = terreno.anel.reduce((s, p) => ({ x: s.x + p.x / terreno.anel.length, y: s.y + p.y / terreno.anel.length }), { x: 0, y: 0 });
+  const cruz = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  return cruz >= 0 ? 1 : -1;
+}
+
+/** Distância de um ponto a um segmento. */
+function distanciaAoSegmento(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const l2 = dx * dx + dy * dy || 1;
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+/**
+ * As faixas restritas do lote. A faixa é o retângulo da linha até a paralela a
+ * `faixaMm` para o lado do lote; `naDivisa` quando as duas pontas da linha
+ * estão sobre o contorno do lote (é o caso da APP na margem e da faixa de
+ * domínio na frente). A área no lote é a interseção com o anel do terreno.
+ */
+export function faixasRestritas(terreno: Terreno | null, limites: Boundary[], toleranciaMm = 50): FaixaRestrita[] {
+  return restricoesDoLote(limites).map((b) => {
+    const r = b.restricao!;
+    const lado = ladoDoLote(b.a, b.b, terreno);
+    const dx = b.b.x - b.a.x;
+    const dy = b.b.y - b.a.y;
+    const c = Math.hypot(dx, dy) || 1;
+    // Normal para o lado do lote: giro de +90° (anti-horário no sistema do desenho) × lado.
+    const nx = (-dy / c) * lado * r.faixaMm;
+    const ny = (dx / c) * lado * r.faixaMm;
+    const anel: Point[] = [b.a, b.b, { x: Math.round(b.b.x + nx), y: Math.round(b.b.y + ny) }, { x: Math.round(b.a.x + nx), y: Math.round(b.a.y + ny) }];
+    // Na divisa = as DUAS pontas sobre o MESMO lado do lote (a linha corre por
+    // ele). Pontas em lados diferentes é a servidão que atravessa o lote.
+    const naDivisa =
+      !!terreno &&
+      terreno.anel.length >= 3 &&
+      terreno.anel.some((q, i) => {
+        const r2 = terreno.anel[(i + 1) % terreno.anel.length];
+        return distanciaAoSegmento(b.a, q, r2) <= toleranciaMm && distanciaAoSegmento(b.b, q, r2) <= toleranciaMm;
+      });
+    const areaNoLoteMm2 = terreno && terreno.anel.length >= 3 ? Math.round(Math.abs(polygonArea(recorteComum(anel, terreno.anel)))) : Math.round(Math.abs(polygonArea(anel)));
+    return { boundaryId: b.id, tipo: r.tipo, faixaMm: r.faixaMm, anel, naDivisa, areaNoLoteMm2 };
+  });
+}
+
+/** Recorta o anel pelo semiplano `(p − o) · n ≥ 0` (Sutherland–Hodgman com uma aresta). */
+function recortarPorSemiplano(anel: Point[], o: Point, n: Point): Point[] {
+  if (anel.length < 3) return [];
+  const dentro = (p: Point) => (p.x - o.x) * n.x + (p.y - o.y) * n.y >= 0;
+  const saida: Point[] = [];
+  for (let i = 0; i < anel.length; i++) {
+    const p = anel[i];
+    const q = anel[(i + 1) % anel.length];
+    const dp = dentro(p);
+    const dq = dentro(q);
+    if (dp) saida.push(p);
+    if (dp !== dq) {
+      const fp = (p.x - o.x) * n.x + (p.y - o.y) * n.y;
+      const fq = (q.x - o.x) * n.x + (q.y - o.y) * n.y;
+      const t = fp / (fp - fq);
+      saida.push({ x: Math.round(p.x + (q.x - p.x) * t), y: Math.round(p.y + (q.y - p.y) * t) });
+    }
+  }
+  return saida;
 }
 
 /** Só as divisas que formam o lote. Limite solto (`DIVISA`) não entra. */
@@ -213,10 +304,21 @@ export interface Envelope {
    * de exceção.
    */
   valido: boolean;
+  /** Área das faixas restritas dentro do lote (E3.1), mm² — recortadas ou não. */
+  areaRestritaMm2?: number;
+  /** Restrições fora da divisa (no meio do lote): a área conta, o anel não é recortado. */
+  restricoesNaoRecortadas?: number;
 }
 
 /**
- * O envelope construtivo: o lote recuado por lado, segundo o papel de cada divisa.
+ * O envelope construtivo: o lote recuado por lado, segundo o papel de cada divisa,
+ * MENOS as faixas restritas que correm pela divisa (E3.1).
+ *
+ * A faixa na divisa recorta o anel pelo semiplano além dela (a APP na margem
+ * "empurra" o envelope para dentro, como um recuo maior). A faixa no MEIO do
+ * lote (servidão que o atravessa) não é um semiplano — recortá-la deixaria
+ * duas peças, e o envelope é um anel só: a área dela é descontada e a tela
+ * avisa que o anel não a mostra.
  *
  * Divisa sem papel não recua. É deliberado: inventar um recuo padrão para um lado
  * que ninguém classificou desenharia uma restrição que não existe no projeto —
@@ -243,15 +345,40 @@ export function envelopeConstrutivo(
   if (recuoDoLado.every((r) => r === 0)) {
     // Sem nenhum recuo, o envelope É o lote — e dizer isso é mais honesto que
     // devolver vazio, que a tela leria como "não cabe".
-    return { anel: terreno.anel, areaMm2: terreno.areaMm2, valido: true };
+    // — mas a faixa restrita (E3.1) recorta mesmo sem recuo nenhum.
+    return aplicarRestricoes({ anel: terreno.anel, areaMm2: terreno.areaMm2, valido: true }, terreno, limites);
   }
 
   const anel = anelRecuado(terreno.anel, recuoDoLado);
   const valido = envelopeValido(terreno.anel, anel);
+  return aplicarRestricoes({ anel: valido ? anel : [], areaMm2: valido ? Math.abs(polygonArea(anel)) : 0, valido }, terreno, limites);
+}
+
+function aplicarRestricoes(envelope: Envelope, terreno: Terreno, limites: Boundary[]): Envelope {
+  const faixas = faixasRestritas(terreno, limites);
+  if (faixas.length === 0) return envelope;
+  let anel = envelope.anel;
+  let naoRecortadas = 0;
+  let areaRestrita = 0;
+  for (const f of faixas) {
+    areaRestrita += f.areaNoLoteMm2;
+    if (!f.naDivisa) {
+      naoRecortadas++;
+      continue;
+    }
+    if (anel.length < 3) continue;
+    // Semiplano permitido: além da paralela interna da faixa (anel[3] → anel[2]), no sentido da normal.
+    const o = f.anel[3];
+    const n = { x: f.anel[3].x - f.anel[0].x, y: f.anel[3].y - f.anel[0].y };
+    anel = recortarPorSemiplano(anel, o, n);
+  }
+  const valido = envelope.valido && anel.length >= 3 && Math.abs(polygonArea(anel)) > 0;
   return {
     anel: valido ? anel : [],
     areaMm2: valido ? Math.abs(polygonArea(anel)) : 0,
     valido,
+    areaRestritaMm2: Math.round(areaRestrita),
+    restricoesNaoRecortadas: naoRecortadas,
   };
 }
 

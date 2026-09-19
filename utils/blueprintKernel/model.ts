@@ -487,7 +487,38 @@ export function nomeDoTipoDeAbertura(kind: Opening['kind'], embutida = false): s
  * significado jurídico, e misturar os dois faria a área do terreno mudar quando
  * alguém traçasse uma divisória qualquer.
  */
-export type BoundaryKind = 'TERRENO' | 'DIVISA';
+/**
+ * `RESTRICAO` (19/09/2026, roadmap E3.1): uma LINHA com uma FAIXA não edificável
+ * de `faixaMm` para o lado de dentro do lote — APP de curso d'água (Código
+ * Florestal: 30 m para curso de até 10 m), recuo municipal de curso d'água,
+ * servidão (rede pública, passagem) e faixa não edificável (domínio de rodovia,
+ * linha de transmissão). Não divide ambiente (fica FORA do arranjo planar, como
+ * o TERRENO) e não é lado do lote: é o que se SUBTRAI do envelope construtivo
+ * (`envelopeConstrutivo`) e se acusa no aproveitamento.
+ */
+export type BoundaryKind = 'TERRENO' | 'DIVISA' | 'RESTRICAO';
+
+export type TipoDeRestricaoDoLote = 'APP' | 'CURSO_DAGUA' | 'SERVIDAO' | 'NAO_EDIFICAVEL';
+export const TIPOS_DE_RESTRICAO_DO_LOTE: readonly TipoDeRestricaoDoLote[] = ['APP', 'CURSO_DAGUA', 'SERVIDAO', 'NAO_EDIFICAVEL'];
+/** Faixa padrão por tipo, mm — ordem de grandeza legal; a lei local decide. */
+export const FAIXA_PADRAO_DA_RESTRICAO: Record<TipoDeRestricaoDoLote, number> = {
+  APP: 30000,
+  CURSO_DAGUA: 15000,
+  SERVIDAO: 3000,
+  NAO_EDIFICAVEL: 15000,
+};
+export const ROTULO_DA_RESTRICAO_DO_LOTE: Record<TipoDeRestricaoDoLote, string> = {
+  APP: 'APP (Código Florestal)',
+  CURSO_DAGUA: "Recuo de curso d'água",
+  SERVIDAO: 'Servidão',
+  NAO_EDIFICAVEL: 'Faixa não edificável',
+};
+
+export interface RestricaoDoLote {
+  tipo: TipoDeRestricaoDoLote;
+  /** Largura da faixa a partir da linha, para dentro do lote, mm inteiro > 0. */
+  faixaMm: number;
+}
 
 /**
  * Papel da divisa no lote, para os recuos.
@@ -531,6 +562,8 @@ export interface Boundary {
    * um catálogo de confrontantes obrigaria a cadastrar a rua antes de desenhar.
    */
   confrontante?: string | null;
+  /** Só em `kind = 'RESTRICAO'`: o tipo e a faixa. Ver `BoundaryKind`. */
+  restricao?: RestricaoDoLote | null;
 }
 
 /** Ambiente derivado do arranjo planar. Contorno NUNCA é declarado pelo usuário. */
@@ -3383,6 +3416,13 @@ export function assertModelInvariants(model: BlueprintModel): void {
     }
     if (!model.levels.some((l) => l.id === b.levelId)) {
       throw new KernelError('LEVEL_NOT_FOUND', `Limite ${b.id} num nível inexistente: ${b.levelId}`);
+    }
+    // Restrição do lote: só a RESTRICAO tem faixa, e tem sempre.
+    if (b.kind === 'RESTRICAO') {
+      if (!b.restricao || !TIPOS_DE_RESTRICAO_DO_LOTE.includes(b.restricao.tipo)) throw new KernelError('BAD_RESTRICTION', `Limite ${b.id}: restrição sem tipo conhecido`);
+      if (!Number.isInteger(b.restricao.faixaMm) || b.restricao.faixaMm <= 0) throw new KernelError('BAD_RESTRICTION', `Limite ${b.id}: faixa tem de ser inteira e positiva`);
+    } else if (b.restricao) {
+      throw new KernelError('BAD_RESTRICTION', `Limite ${b.id}: só a restrição tem faixa`);
     }
 
     // Medida de escritura: mesma disciplina de milímetro inteiro do resto do

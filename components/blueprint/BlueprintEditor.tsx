@@ -133,6 +133,7 @@ import { fichaDoElemento } from '../../utils/blueprintFicha';
 import { listParameterDefinitions, type DefinicaoDeParametro } from '../../services/blueprintParameterDefinitionService';
 import { camposDaEscada, camposDoTelhado, propriedadesDaEscada, propriedadesDoTelhado } from '../../utils/blueprintTipos';
 import { conferirRestricoes, violacoes } from '../../utils/blueprintRestricoes';
+import { conferirLote, recuosEfetivos } from '../../utils/blueprintZonaUrbanistica';
 import { contornosParaTelhado } from '../../utils/blueprintTelhadoContorno';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
 import BlueprintCanvas, { rotuloPasso, type AjustePonta, type AcaoDeNavegacao } from './BlueprintCanvas';
@@ -264,6 +265,7 @@ import {
   calcularAproveitamento,
   divergente,
   envelopeConstrutivo,
+  faixasRestritas,
   linhasDoQuadro,
   medidasPorPapel,
   medirTerreno,
@@ -380,6 +382,10 @@ import {
   type TipoCirculacao,
   type TipoDeNucleo,
   type TipoDeVaga,
+  type TipoDeRestricaoDoLote,
+  TIPOS_DE_RESTRICAO_DO_LOTE,
+  ROTULO_DA_RESTRICAO_DO_LOTE,
+  FAIXA_PADRAO_DA_RESTRICAO,
   type TipoDeAmbiente,
   type TipoDeInterruptor,
   type Wall,
@@ -1794,7 +1800,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     empreendimentoSugerido,
     orgId,
   );
-  const recuos = zona.recuos;
 
   /**
    * Altura do que está desenhado, em metros — para confrontar com o gabarito.
@@ -1809,6 +1814,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     const topoMm = Math.max(...editor.model.levels.map((l) => l.elevationMm + l.defaultHeightMm));
     return Number((topoMm / 1000).toFixed(2));
   }, [editor.model.levels]);
+  /**
+   * RECUOS EFETIVOS (E3.1): os da zona, mais o afastamento progressivo pela
+   * altura desenhada quando ele supera o recuo fixo. É o que o envelope usa.
+   */
+  const recuosEfetivosDaZona = useMemo(
+    () => recuosEfetivos(zona.recuos, { afastamentoProgressivo: zona.afastamentoProgressivo }, alturaDesenhadaM),
+    [zona.recuos, zona.afastamentoProgressivo, alturaDesenhadaM],
+  );
+  const recuos = recuosEfetivosDaZona.recuos;
 
   const fundo = useBlueprintUnderlay(study.id, study.organization_id, levelId);
   const [camadaAtiva, setCamadaAtiva] = useState('Geral');
@@ -2525,8 +2539,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const vagasSugeridasNoNivel = vagasDoNivelAtivo.filter((v) => v.sugerida).length;
   /** O plano das vagas automáticas (E2.5), derivado a cada mudança — a gaveta só mostra. */
   const planoDeVagas = useMemo(
-    () => (levelId ? planejarVagas(editor.model, levelId, hipotesesDeVagas, regiaoDeVagasPedida) : null),
-    [editor.model, levelId, hipotesesDeVagas, regiaoDeVagasPedida],
+    () => (levelId ? planejarVagas(editor.model, levelId, zona.vagasPorUnidade != null ? { ...hipotesesDeVagas, vagasPorUnidade: zona.vagasPorUnidade } : hipotesesDeVagas, regiaoDeVagasPedida) : null),
+    [editor.model, levelId, hipotesesDeVagas, regiaoDeVagasPedida, zona.vagasPorUnidade],
   );
   const lancarVagas = () => {
     if (!planoDeVagas || planoDeVagas.comandos.length === 0) return;
@@ -2950,6 +2964,21 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     () => (terreno ? envelopeConstrutivo(terreno, limitesDoNivel, recuos) : null),
     [terreno, limitesDoNivel, recuos],
   );
+  /** FAIXAS RESTRITAS (E3.1) do pavimento, para o canvas hachurar. */
+  const faixasRestritasDoNivel = useMemo(
+    () => faixasRestritas(terreno, limitesDoNivel).map((f) => ({ boundaryId: f.boundaryId, anel: f.anel, rotulo: `${ROTULO_DA_RESTRICAO_DO_LOTE[f.tipo]} · ${(f.faixaMm / 1000).toFixed(2).replace('.', ',')} m` })),
+    [terreno, limitesDoNivel],
+  );
+  /** Conferência do lote contra o vocabulário da zona (E3.1): testada e área mínimas. */
+  const avisosDoLote = useMemo(() => {
+    if (!terreno) return [];
+    const frentes = limitesDoNivel.filter((b) => b.kind === 'TERRENO' && b.papel === 'FRENTE');
+    const testadaMm = frentes.length ? Math.round(frentes.reduce((s, b) => s + Math.hypot(b.b.x - b.a.x, b.b.y - b.a.y), 0)) : null;
+    return conferirLote({ areaM2: terreno.areaMm2 / 1_000_000, testadaMm }, { testadaMinimaMm: zona.testadaMinimaMm, areaMinimaDoLoteM2: zona.areaMinimaDoLoteM2 });
+  }, [terreno, limitesDoNivel, zona.testadaMinimaMm, zona.areaMinimaDoLoteM2]);
+  /** O que a ferramenta Divisa desenha (E3.1): limite solto ou faixa restrita, com o tipo. */
+  const [kindDaDivisa, setKindDaDivisa] = useState<'DIVISA' | 'RESTRICAO'>('DIVISA');
+  const [tipoDeRestricaoDoLote, setTipoDeRestricaoDoLote] = useState<TipoDeRestricaoDoLote>('APP');
 
   /**
    * Onde o platô de terraplenagem se apoia. ENVELOPE só vale com envelope
@@ -4107,7 +4136,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
   /** Nasce uma divisa. `TERRENO` entra no anel do lote; `DIVISA` fica solta. */
   function adicionarLimite(a: Point, b: Point, kind: BoundaryKind) {
-    editor.run({ type: 'AddBoundary', levelId: levelId ?? '', a, b, kind });
+    editor.run({ type: 'AddBoundary', levelId: levelId ?? '', a, b, kind, ...(kind === 'RESTRICAO' ? { restricao: { tipo: tipoDeRestricaoDoLote } } : {}) });
   }
 
   /**
@@ -5712,6 +5741,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       onPapel={(papel) =>
         limiteSel && editor.run({ type: 'SetBoundaryPapel', boundaryId: limiteSel.id, papel })
       }
+      onRestricao={(campos) => limiteSel && editor.run({ type: 'SetBoundaryRestricao', boundaryId: limiteSel.id, ...campos })}
+      afastamentoProgressivoMm={recuosEfetivosDaZona.afastamentoMm}
+      avisosDoLote={avisosDoLote}
       recuos={recuos}
       onRecuo={zona.ajustarRecuo}
       envelope={envelope}
@@ -5866,6 +5898,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           onAplicar={zona.aplicarZona}
           onDesligar={zona.desligar}
           salvando={zona.salvando}
+          vocabulario={{ testadaMinimaMm: zona.testadaMinimaMm, areaMinimaDoLoteM2: zona.areaMinimaDoLoteM2, vagasPorUnidade: zona.vagasPorUnidade, insolacaoMinimaH: zona.insolacaoMinimaH, afastamentoProgressivo: zona.afastamentoProgressivo }}
+          onVocabulario={zona.ajustarVocabulario}
         />
       }
     />
@@ -7883,6 +7917,40 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               alvoEspelhoMm={alvoEspelho}
               onAlvoEspelho={setAlvoEspelho}
             />
+          ) : editor.tool === 'divisa' ? (
+            /* O que a linha É (E3.1): limite solto que divide ambiente, ou faixa
+               restrita do lote (APP, servidão…) com a largura padrão do tipo. */
+            <>
+              <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                A linha é
+                <select
+                  value={kindDaDivisa}
+                  onChange={(e) => setKindDaDivisa(e.target.value as 'DIVISA' | 'RESTRICAO')}
+                  aria-label="O que a ferramenta Divisa desenha"
+                  className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800"
+                >
+                  <option value="DIVISA">Limite solto</option>
+                  <option value="RESTRICAO">Faixa restrita do lote</option>
+                </select>
+              </label>
+              {kindDaDivisa === 'RESTRICAO' && (
+                <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                  Tipo
+                  <select
+                    value={tipoDeRestricaoDoLote}
+                    onChange={(e) => setTipoDeRestricaoDoLote(e.target.value as TipoDeRestricaoDoLote)}
+                    aria-label="Tipo da faixa restrita a desenhar"
+                    className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800"
+                  >
+                    {TIPOS_DE_RESTRICAO_DO_LOTE.map((t) => (
+                      <option key={t} value={t}>
+                        {ROTULO_DA_RESTRICAO_DO_LOTE[t]} · {(FAIXA_PADRAO_DA_RESTRICAO[t] / 1000).toFixed(0)} m
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </>
           ) : editor.tool === 'telhado' ? (
             /* A PRÓXIMA água: inclinação e beiral, mais o atalho do contorno. */
             <CamposDoTelhado
@@ -8478,6 +8546,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               envelope={envelope?.valido ? envelope.anel : []}
               mostrarEnvelope={ajusteDaVista ? ajusteDaVista.mostrarEnvelope : mostrarEnvelope}
               onAddLimite={adicionarLimite}
+              kindDaDivisa={kindDaDivisa}
+              faixasRestritas={faixasRestritasDoNivel}
               onMoveBoundaryVertex={moverPontaLimite}
               limiteEmDestaque={limiteEmDestaque}
               onMoveOpening={moverAbertura}

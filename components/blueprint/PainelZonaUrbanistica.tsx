@@ -1,3 +1,4 @@
+import { erroDeSintaxe } from '../../utils/blueprintFormulas';
 import React from 'react';
 import { AlertTriangle, Map, RefreshCw, Scale } from 'lucide-react';
 import CitySearchSelect, { type CitySearchValue } from '../regulatoryMap/CitySearchSelect';
@@ -9,6 +10,7 @@ import {
   rotuloDaZona,
   type LeituraDaZona,
   type ZonaRegulatoria,
+  type ValoresDaZona,
 } from '../../utils/blueprintZonaUrbanistica';
 
 /**
@@ -73,6 +75,9 @@ interface Props {
   derivou: boolean;
   onAplicar: (zonaId: string) => void;
   onDesligar: () => void;
+  /** VOCABULÁRIO COMPLEMENTAR (E3.1): o que está em vigor e o ajuste manual. */
+  vocabulario?: Pick<ValoresDaZona, 'testadaMinimaMm' | 'areaMinimaDoLoteM2' | 'vagasPorUnidade' | 'insolacaoMinimaH' | 'afastamentoProgressivo'>;
+  onVocabulario?: (patch: Partial<Pick<ValoresDaZona, 'testadaMinimaMm' | 'areaMinimaDoLoteM2' | 'vagasPorUnidade' | 'insolacaoMinimaH' | 'afastamentoProgressivo'>>) => void;
   salvando?: boolean;
 }
 
@@ -97,6 +102,8 @@ export default function PainelZonaUrbanistica({
   onAplicar,
   onDesligar,
   salvando = false,
+  vocabulario,
+  onVocabulario,
 }: Props) {
   const [escolhida, setEscolhida] = React.useState<string>('');
   const zonaSelecionada = escolhida || zonaAplicadaId || '';
@@ -313,6 +320,64 @@ export default function PainelZonaUrbanistica({
           {zona.nivel_confianca ? ` · ${zona.nivel_confianca}` : ''}
         </p>
       )}
+
+      {/* VOCABULÁRIO COMPLEMENTAR (E3.1). Os catálogos de hoje não têm estes
+          campos, então nascem à mão lendo a lei; quando a zona os trouxer, a
+          aplicação os preenche. Vazio = a lei não disse. */}
+      {vocabulario && onVocabulario && (
+        <VocabularioComplementar vocabulario={vocabulario} onVocabulario={onVocabulario} />
+      )}
+    </div>
+  );
+}
+
+function VocabularioComplementar({
+  vocabulario: v,
+  onVocabulario,
+}: {
+  vocabulario: NonNullable<Props['vocabulario']>;
+  onVocabulario: NonNullable<Props['onVocabulario']>;
+}) {
+  const campo = 'w-24 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800';
+  const num = (texto: string): number | null => {
+    const t = texto.trim().replace(',', '.');
+    if (!t) return null;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : null;
+  };
+  const ap = v.afastamentoProgressivo;
+  const erroFormula = ap ? erroDeSintaxe(ap.formula) : null;
+  return (
+    <div className="mt-3 border-t border-slate-200 pt-2" data-testid="vocabulario-da-zona">
+      <p className="text-xs font-medium text-slate-700">Vocabulário complementar da zona</p>
+      <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs text-slate-600">
+        <label className="flex items-center justify-between gap-1.5">
+          Testada mín. (m)
+          <input type="text" inputMode="decimal" key={`t-${v.testadaMinimaMm ?? ''}`} defaultValue={v.testadaMinimaMm != null ? (v.testadaMinimaMm / 1000).toString().replace('.', ',') : ''} placeholder="—" aria-label="Testada mínima do lote (m)" onBlur={(e) => { const n = num(e.target.value); onVocabulario({ testadaMinimaMm: n == null ? null : Math.round(n * 1000) }); }} className={campo} />
+        </label>
+        <label className="flex items-center justify-between gap-1.5">
+          Área mín. (m²)
+          <input type="text" inputMode="decimal" key={`a-${v.areaMinimaDoLoteM2 ?? ''}`} defaultValue={v.areaMinimaDoLoteM2 != null ? String(v.areaMinimaDoLoteM2).replace('.', ',') : ''} placeholder="—" aria-label="Área mínima do lote (m²)" onBlur={(e) => onVocabulario({ areaMinimaDoLoteM2: num(e.target.value) })} className={campo} />
+        </label>
+        <label className="flex items-center justify-between gap-1.5">
+          Vagas/unidade
+          <input type="text" inputMode="decimal" key={`v-${v.vagasPorUnidade ?? ''}`} defaultValue={v.vagasPorUnidade != null ? String(v.vagasPorUnidade).replace('.', ',') : ''} placeholder="—" aria-label="Vagas exigidas por unidade" onBlur={(e) => onVocabulario({ vagasPorUnidade: num(e.target.value) })} className={campo} />
+        </label>
+        <label className="flex items-center justify-between gap-1.5">
+          Insolação mín. (h)
+          <input type="text" inputMode="decimal" key={`i-${v.insolacaoMinimaH ?? ''}`} defaultValue={v.insolacaoMinimaH != null ? String(v.insolacaoMinimaH).replace('.', ',') : ''} placeholder="—" aria-label="Insolação mínima nos dormitórios (h)" onBlur={(e) => onVocabulario({ insolacaoMinimaH: num(e.target.value) })} className={campo} />
+        </label>
+      </div>
+      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+        <span>Afastamento progressivo: acima de</span>
+        <input type="text" inputMode="decimal" key={`ap-h-${ap?.aPartirDeM ?? ''}`} defaultValue={ap ? String(ap.aPartirDeM).replace('.', ',') : ''} placeholder="6" aria-label="Altura a partir da qual vale o afastamento progressivo (m)" onBlur={(e) => { const n = num(e.target.value); if (ap) onVocabulario({ afastamentoProgressivo: { ...ap, aPartirDeM: n ?? 0 } }); }} className="w-12 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800" />
+        <span>m, afastamento (m) =</span>
+        <input type="text" key={`ap-f-${ap?.formula ?? ''}`} defaultValue={ap?.formula ?? ''} placeholder="(h - 6) / 10" aria-label="Fórmula do afastamento progressivo em h (metros)" onBlur={(e) => { const f = e.target.value.trim(); onVocabulario({ afastamentoProgressivo: f ? { aPartirDeM: ap?.aPartirDeM ?? 0, formula: f } : null }); }} className="w-32 rounded-md border border-slate-300 px-2 py-1 font-mono text-xs text-slate-800" />
+        {erroFormula && <span className="text-amber-700">fórmula inválida: {erroFormula}</span>}
+      </div>
+      <p className="mt-1 text-[11px] text-slate-400">
+        <code>h</code> é a altura da edificação em metros; a fórmula vale nas laterais e no fundo quando supera o recuo fixo. Digitados à mão até o catálogo trazê-los; vagas/unidade alimenta o lançamento de vagas.
+      </p>
     </div>
   );
 }

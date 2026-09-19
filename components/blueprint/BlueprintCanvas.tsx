@@ -240,6 +240,10 @@ const COR_COTA_LINHA_FORTE = '#334155';
  * coisas sem relação nenhuma amarradas por um `const` compartilhado.
  */
 const COR_DIVISA = '#64748b';
+/** Faixa restrita (E3.1): terracota — nem lote (verde) nem envelope (âmbar). */
+const COR_RESTRICAO = '#b45309';
+const COR_RESTRICAO_FUNDO = 'rgba(180, 83, 9, 0.10)';
+const SEM_FAIXAS: { boundaryId: string; anel: Point[]; rotulo: string }[] = [];
 /** Divisa do LOTE. Verde de topografia, distante do azul da prévia e do vermelho da seleção. */
 const COR_TERRENO = '#15803d';
 /** Preenchimento do lote — fraco, só para dizer "a área é esta". */
@@ -1179,6 +1183,10 @@ interface Props {
    * para mitrar. O vértice clicado é o vértice, e é isso.
    */
   onAddLimite?: (a: Point, b: Point, kind: BoundaryKind) => void;
+  /** O que a ferramenta `divisa` desenha: limite solto ou faixa restrita (E3.1). */
+  kindDaDivisa?: 'DIVISA' | 'RESTRICAO';
+  /** Faixas restritas do lote, prontas (`faixasRestritas`), para hachurar. */
+  faixasRestritas?: { boundaryId: string; anel: Point[]; rotulo: string }[];
   /** Move a ponta de um limite. Espelha `onMoveVertex`. */
   onMoveBoundaryVertex?: (boundaryId: string, end: 'a' | 'b', to: Point) => void;
   /**
@@ -1314,6 +1322,8 @@ export default function BlueprintCanvas({
   fundo = null,
   onMoveVertex,
   onAddLimite,
+  kindDaDivisa = 'DIVISA',
+  faixasRestritas = SEM_FAIXAS,
   onMoveBoundaryVertex,
   limiteEmDestaque = null,
   onMoveOpening,
@@ -4077,6 +4087,54 @@ export default function BlueprintCanvas({
         ctx.restore();
       }
 
+      // FAIXAS RESTRITAS (E3.1): a faixa hachurada, ANTES das linhas, para a
+      // linha da restrição ficar por cima. O rótulo no meio da faixa.
+      for (const f of faixasRestritas) {
+        if (f.anel.length < 3) continue;
+        const pts = f.anel.map(paraTela);
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
+        ctx.closePath();
+        ctx.fillStyle = COR_RESTRICAO_FUNDO;
+        ctx.fill();
+        ctx.clip();
+        ctx.strokeStyle = COR_RESTRICAO;
+        ctx.lineWidth = 1;
+        const xs = pts.map((p) => p.x);
+        const ys = pts.map((p) => p.y);
+        const x0 = Math.min(...xs);
+        const x1 = Math.max(...xs);
+        const y0 = Math.min(...ys);
+        const y1 = Math.max(...ys);
+        for (let d = x0 - (y1 - y0); d < x1; d += 12) {
+          ctx.beginPath();
+          ctx.moveTo(d, y1);
+          ctx.lineTo(d + (y1 - y0), y0);
+          ctx.stroke();
+        }
+        ctx.restore();
+        ctx.strokeStyle = COR_RESTRICAO;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.setLineDash([]);
+        if (x1 - x0 >= 40) {
+          ctx.font = `600 ${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = COR_RESTRICAO;
+          ctx.fillText(f.rotulo, (x0 + x1) / 2, (y0 + y1) / 2);
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'alphabetic';
+        }
+      }
+
       for (const b of limitesDoNivel) {
         const a = paraTela(b.a);
         const z = paraTela(b.b);
@@ -4086,7 +4144,9 @@ export default function BlueprintCanvas({
           ? COR_SELECIONADA
           : b.kind === 'TERRENO'
             ? COR_TERRENO
-            : COR_DIVISA;
+            : b.kind === 'RESTRICAO'
+              ? COR_RESTRICAO
+              : COR_DIVISA;
         // Destaque engrossa sem trocar a cor: cor é o que distingue TERRENO de
         // DIVISA de selecionado, e pintar o destaque por cima dela apagaria a
         // informação em vez de somar.
@@ -6629,6 +6689,7 @@ export default function BlueprintCanvas({
     cortes,
     pontoCorte,
     movendoCorte,
+    faixasRestritas,
     nucleos,
     pontoNucleo,
     vagas,
@@ -7714,7 +7775,7 @@ export default function BlueprintCanvas({
       if (ortoAtivo(e) && !fechandoContorno(ponto)) ponto = travarOrtogonal(inicio, ponto);
       if (ponto.x === inicio.x && ponto.y === inicio.y) return;
 
-      const kind: BoundaryKind = tool === 'terreno' ? 'TERRENO' : 'DIVISA';
+      const kind: BoundaryKind = tool === 'terreno' ? 'TERRENO' : kindDaDivisa;
       onAddLimite?.(inicio, ponto, kind);
 
       // Voltar ao primeiro vértice FECHA o contorno e encerra a polilinha — o

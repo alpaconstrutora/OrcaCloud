@@ -1000,6 +1000,46 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(botaoComponentes()).toHaveTextContent('Vaga PCD');
   });
 
+  it('vocabulário e restrição (E3.1): a APP nos fundos reduz a área construtível; testada mínima digitada é conferida; a ferramenta Divisa oferece a faixa restrita', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number, papel: 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA') =>
+      ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO', papel }) as const;
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [
+        d(0, 0, 20000, 0, 'FRENTE'),
+        d(20000, 0, 20000, 30000, 'LATERAL_DIREITA'),
+        d(20000, 30000, 0, 30000, 'FUNDOS'),
+        d(0, 30000, 0, 0, 'LATERAL_ESQUERDA'),
+        { type: 'AddBoundary', levelId: t, a: k.point(20000, 30000), b: k.point(0, 30000), kind: 'RESTRICAO', restricao: { tipo: 'APP', faixaMm: 10000 } },
+      ]).model,
+    );
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    await user.click(botao(/^dados do lote$/i));
+    const drawer = (await screen.findAllByRole('dialog')).find((d) => /dados do lote/i.test(d.textContent ?? ''))!;
+    // Lote 600 m²; sem recuos o envelope seria o lote — a APP de 10 m nos fundos deixa 400 m².
+    expect(drawer).toHaveTextContent(/600,00 m²/);
+    expect(drawer).toHaveTextContent(/Área construtível 400,00 m²/);
+    // Vocabulário: testada mínima 25 m → o lote de 20 m de frente é acusado.
+    const testada = within(drawer).getByLabelText('Testada mínima do lote (m)');
+    await user.type(testada, '25');
+    await user.tab();
+    const conferencia = await within(drawer).findByTestId('conferencia-do-lote');
+    expect(conferencia).toHaveTextContent(/Testada 20,00 m < mínima 25,00 m/);
+    // Afastamento progressivo (h − 6)/10 acima de 6 m: a casa tem 2,80 m — não se aplica ainda.
+    await user.type(within(drawer).getByLabelText('Fórmula do afastamento progressivo em h (metros)'), '(h - 6) / 10');
+    await user.tab();
+    expect(within(drawer).queryByText(/Afastamento progressivo em vigor/)).toBeNull();
+    // A ferramenta Divisa oferece "Faixa restrita do lote" com o tipo e a faixa padrão.
+    await user.click(botao(/^divisa$/i));
+    const oQue = screen.getByLabelText('O que a ferramenta Divisa desenha');
+    await user.selectOptions(oQue, 'RESTRICAO');
+    expect(screen.getByLabelText('Tipo da faixa restrita a desenhar')).toHaveTextContent(/APP \(Código Florestal\) · 30 m/);
+  });
+
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2500 });

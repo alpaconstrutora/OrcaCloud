@@ -664,6 +664,29 @@ propagação; bump).
   da organização; regra de UNIDADE/PAVIMENTO só tem as variáveis básicas; E3.3 leva o resultado ao
   BCF/relatório e às fases de projeto.
 
+### E3.3 — Envelope 3D (19/09/2026)
+- **Prisma edificável por pavimento** (`utils/blueprintEnvelope3d.ts`, `envelopeVertical`): para
+  cada pavimento, os recuos EFETIVOS na altura do topo dele (afastamento progressivo da E3.1) →
+  `envelopeConstrutivo` (recuos fixos + faixas restritas) → anel × [piso, teto]. Gabarito em altura
+  (topo > gabarito) e em pavimentos (ordem entre os de cota ≥ 0; subsolo não conta) marcam o
+  pavimento "acima do gabarito", com o motivo. **"Cabe?"**: o contorno externo desenhado (eixo)
+  dentro do anel do envelope (vértices, 1 mm de folga) e a área que sobra fora quando o recorte é
+  possível. Volume e área máximos = Σ dos pavimentos dentro do gabarito. Tudo derivado.
+- **Conferência**: painel do terreno ganha "Envelope por pavimento" (envelope, desenhado, cabe / N m²
+  fora / acima do gabarito, afastamento em vigor, máximos); as regras de PAVIMENTO (E3.2) ganham
+  `area_envelope`, `area_fora_envelope`, `cabe_no_envelope`, `acima_do_gabarito` e a semente duas
+  regras ("Pavimento dentro do envelope edificável", "Pavimento dentro do gabarito", fonte Zona) —
+  aparecem na tela Legislação, não avaliadas sem lote.
+- **3D**: um prisma translúcido por pavimento (âmbar; vermelho acima do gabarito), sem escrever
+  profundidade, por cima da edificação; toggle "Envelope edificável" no menu Exibir do 3D (ligado
+  por padrão; desabilitado sem lote).
+- Testes: `blueprintEnvelope3d` (2: recuos por pavimento com (h−3)/2, gabarito em altura e em
+  pavimentos com subsolo, cabe?/área fora, volume máximo, ponte com as regras), editor "E3.3".
+  Suíte 4679. App real (escritas bloqueadas: 14): "máx. 396,00 m² e 1.109 m³ dentro do gabarito ·
+  Térreo 198,00 m² 102,24 m² cabe · Pavimento 1 …", dois prismas no 3D em volta da casa.
+- Fora desta fase (registrado): envelope com recuos por lado diferentes por pavimento além do
+  progressivo (ex.: recuo de frente maior a partir do 3º); "cabe?" pela face externa (hoje eixo).
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

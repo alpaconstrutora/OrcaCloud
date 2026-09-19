@@ -1,5 +1,6 @@
 import { ROTULO_DA_RESTRICAO_DO_LOTE, TIPOS_DE_RESTRICAO_DO_LOTE, type TipoDeRestricaoDoLote } from '../../utils/blueprintKernel';
 import type { AvisoDoLote } from '../../utils/blueprintZonaUrbanistica';
+import type { EnvelopeVertical } from '../../utils/blueprintEnvelope3d';
 import React, { useState } from 'react';
 import { AlertTriangle, LandPlot, Save, Table2 } from 'lucide-react';
 import type { Boundary, BoundaryPapel, Georreferencia } from '../../utils/blueprintKernel';
@@ -158,6 +159,8 @@ interface Props {
   onRecuo: (papel: BoundaryPapel, mm: number) => void;
   envelope: Envelope | null;
   aproveitamento: Aproveitamento | null;
+  /** ENVELOPE 3D (E3.3): o prisma por pavimento — área, cabe?, gabarito. */
+  envelopeVertical?: EnvelopeVertical | null;
   /** Limites da zona, digitados. `null` = não informado, e aí não se compara. */
   taxaOcupacaoMax: number | null;
   coeficienteMax: number | null;
@@ -233,6 +236,7 @@ export default function PainelTerreno({
   onRecuo,
   envelope,
   aproveitamento,
+  envelopeVertical = null,
   taxaOcupacaoMax,
   coeficienteMax,
   onTaxaOcupacaoMax,
@@ -503,6 +507,48 @@ export default function PainelTerreno({
           <p className="mt-1.5 text-xs text-slate-500">
             Um nível desenhado: o coeficiente ainda não soma pavimentos.
           </p>
+        </div>
+      )}
+
+      {/* ── ENVELOPE 3D (E3.3): por pavimento, o que a lei deixa e o que foi
+          desenhado. O afastamento progressivo estreita os andares de cima; o
+          gabarito corta os de cima de tudo. O 3D mostra os prismas. */}
+      {terreno && envelopeVertical && envelopeVertical.prismas.length > 0 && (
+        <div className="mt-3 border-t border-slate-200 pt-3" data-testid="envelope-por-pavimento">
+          <p className="text-xs font-medium text-slate-700">
+            Envelope por pavimento
+            <span className="ml-1 font-normal text-slate-500">
+              · máx. {envelopeVertical.areaMaxM2.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m² e {envelopeVertical.volumeMaxM3.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} m³ dentro do gabarito
+            </span>
+          </p>
+          <table className="mt-1.5 w-full text-[11px]">
+            <thead>
+              <tr className="text-left text-slate-500">
+                <th className="py-0.5 font-medium">Pavimento</th>
+                <th className="py-0.5 text-right font-medium">Envelope</th>
+                <th className="py-0.5 text-right font-medium">Desenhado</th>
+                <th className="py-0.5 text-right font-medium">Cabe?</th>
+              </tr>
+            </thead>
+            <tbody>
+              {envelopeVertical.prismas.map((p) => (
+                <tr key={p.levelId} className="border-t border-slate-100">
+                  <td className="py-0.5 text-slate-700">
+                    {p.nome}
+                    {p.afastamentoMm != null && <span className="text-slate-400"> · afast. {(p.afastamentoMm / 1000).toFixed(2).replace('.', ',')} m</span>}
+                  </td>
+                  <td className="py-0.5 text-right tabular-nums text-slate-700">{p.anel.length >= 3 ? `${(p.areaMm2 / 1_000_000).toFixed(2).replace('.', ',')} m²` : 'não cabe'}</td>
+                  <td className="py-0.5 text-right tabular-nums text-slate-700">{p.areaConstruidaMm2 > 0 ? `${(p.areaConstruidaMm2 / 1_000_000).toFixed(2).replace('.', ',')} m²` : '—'}</td>
+                  <td className={`py-0.5 text-right font-medium ${p.acimaDoGabarito ? 'text-red-700' : p.cabe ? 'text-emerald-700' : 'text-amber-700'}`}>
+                    {p.acimaDoGabarito ? 'acima do gabarito' : p.areaConstruidaMm2 === 0 ? 'vazio' : p.cabe ? 'cabe' : p.areaForaMm2 != null ? `${(p.areaForaMm2 / 1_000_000).toFixed(2).replace('.', ',')} m² fora` : 'fora'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {envelopeVertical.prismas.some((p) => p.motivoDoGabarito) && (
+            <p className="mt-1 text-[11px] text-red-700">{envelopeVertical.prismas.filter((p) => p.motivoDoGabarito).map((p) => `${p.nome}: ${p.motivoDoGabarito}`).join(' · ')}</p>
+          )}
         </div>
       )}
 

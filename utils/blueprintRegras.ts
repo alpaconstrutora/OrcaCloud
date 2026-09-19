@@ -102,6 +102,10 @@ export const VARIAVEIS_DO_ESCOPO: Record<EscopoDaRegra, { nome: string; descrica
     { nome: 'cota', descricao: 'cota do piso (m)' },
     { nome: 'area_construida', descricao: 'área construída do pavimento (m²)' },
     { nome: 'ambientes', descricao: 'número de ambientes' },
+    { nome: 'area_envelope', descricao: 'área do envelope edificável neste pavimento (m²) — E3.3' },
+    { nome: 'area_fora_envelope', descricao: 'área do contorno desenhado fora do envelope (m²)' },
+    { nome: 'cabe_no_envelope', descricao: 'o contorno desenhado está dentro do envelope (sim/não)' },
+    { nome: 'acima_do_gabarito', descricao: 'o pavimento passa do gabarito da zona (sim/não)' },
   ],
   UNIDADE: [
     { nome: 'numero', descricao: 'número da unidade' },
@@ -154,6 +158,8 @@ export const REGRAS_SEMENTE: readonly Regra[] = [
   { id: 'sem-gabarito-m', nome: 'Gabarito em altura', escopo: 'EDIFICACAO', expressao: 'altura <= gabarito_m', severidade: 'ERRO', fonte: 'Zona urbanística', descricao: 'Altura desenhada ≤ gabarito da zona' },
   { id: 'sem-gabarito-pav', nome: 'Gabarito em pavimentos', escopo: 'EDIFICACAO', expressao: 'pavimentos <= gabarito_pav', severidade: 'ERRO', fonte: 'Zona urbanística', descricao: 'Pavimentos ≤ gabarito da zona' },
   { id: 'sem-pav-pe-direito', nome: 'Pé-direito do pavimento', escopo: 'PAVIMENTO', expressao: 'pe_direito >= 2.5', severidade: 'AVISO', fonte: FONTE_SEMENTE, descricao: 'Pé-direito padrão ≥ 2,50 m' },
+  { id: 'sem-pav-envelope', nome: 'Pavimento dentro do envelope edificável', escopo: 'PAVIMENTO', expressao: 'cabe_no_envelope', severidade: 'ERRO', fonte: 'Zona urbanística', descricao: 'Contorno desenhado dentro dos recuos, afastamentos e faixas restritas (E3.3)' },
+  { id: 'sem-pav-gabarito', nome: 'Pavimento dentro do gabarito', escopo: 'PAVIMENTO', expressao: 'nao acima_do_gabarito', severidade: 'ERRO', fonte: 'Zona urbanística', descricao: 'Topo do pavimento ≤ gabarito em altura e ordem ≤ gabarito em pavimentos' },
 ];
 
 /** O que o motor precisa de fora do modelo (zona, lote, aproveitamento). Tudo opcional: o que falta vira NÃO AVALIADA. */
@@ -171,6 +177,8 @@ export interface ContextoDeRegras {
     testadaMinimaMm?: number | null;
     areaMinimaDoLoteM2?: number | null;
   } | null;
+  /** Envelope 3D por pavimento (E3.3): `envelopePorPavimentoParaRegras`. Ausente = variáveis ausentes. */
+  envelopePorPavimento?: Record<ObjectId, { areaEnvelopeM2: number; areaForaM2: number | null; cabe: boolean; acimaDoGabarito: boolean }> | null;
 }
 
 export type EstadoDaRegra = 'CONFORME' | 'VIOLADA' | 'NAO_AVALIADA';
@@ -295,13 +303,26 @@ export function alvosDoEscopo(model: BlueprintModel, escopo: EscopoDaRegra, ctx:
       ];
     }
     case 'PAVIMENTO':
-      return model.levels.map((l) => ({
-        id: l.id,
-        rotulo: l.name,
-        levelId: l.id,
-        selecionarId: null,
-        vars: so({ nome: l.name, pe_direito: m(l.defaultHeightMm), cota: m(l.elevationMm), area_construida: m2(areaConstruidaMm2(model, l)), ambientes: model.spaces.filter((s) => s.levelId === l.id).length }),
-      }));
+      return model.levels.map((l) => {
+        const env = ctx.envelopePorPavimento?.[l.id];
+        return {
+          id: l.id,
+          rotulo: l.name,
+          levelId: l.id,
+          selecionarId: null,
+          vars: so({
+            nome: l.name,
+            pe_direito: m(l.defaultHeightMm),
+            cota: m(l.elevationMm),
+            area_construida: m2(areaConstruidaMm2(model, l)),
+            ambientes: model.spaces.filter((s) => s.levelId === l.id).length,
+            area_envelope: env?.areaEnvelopeM2,
+            area_fora_envelope: env?.areaForaM2,
+            cabe_no_envelope: env?.cabe,
+            acima_do_gabarito: env?.acimaDoGabarito,
+          }),
+        };
+      });
     case 'UNIDADE':
       return (model.unidades ?? []).map((u) => {
         const med = medirUnidade(model, u);

@@ -73,6 +73,8 @@ interface Props {
   mostrarArestas?: boolean;
   /** O polígono do lote (divisas `TERRENO`) como um plano de chão. */
   mostrarTerreno?: boolean;
+  /** ENVELOPE 3D (E3.3): um prisma translúcido por pavimento — âmbar; vermelho acima do gabarito. */
+  envelope?: { levelId: string; nome: string; anel: { x: number; y: number }[]; baseMm: number; topoMm: number; acimaDoGabarito: boolean }[];
   /**
    * A malha do relevo (topografia gerada), já em metros de mundo — ver
    * `malhaDaGrade`. Com ela o terreno deixa de ser o plano chato. Vem de fora do
@@ -891,7 +893,7 @@ function usarCliqueDePeca(onSelecionar?: (ids: string[]) => void) {
       : {};
 }
 
-function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, relevo, relevoChave, extrasDoRelevo, extrasChave, ocultos, coresPorUid, selecionados, onSelecionar, armadura }: Props) {
+function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, envelope, relevo, relevoChave, extrasDoRelevo, extrasChave, ocultos, coresPorUid, selecionados, onSelecionar, armadura }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
 
@@ -1196,8 +1198,29 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, re
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mostrarTerreno, extrasChave]);
 
+  /** Os prismas do envelope edificável (E3.3), já na cota de cada pavimento. */
+  const prismasDoEnvelope = useMemo(() => {
+    if (!envelope) return [];
+    return envelope
+      .filter((p) => p.anel.length >= 3 && p.topoMm > p.baseMm)
+      .map((p) => {
+        const geom = new THREE.ExtrudeGeometry(shapeDoAnel(p.anel), { depth: (p.topoMm - p.baseMm) * S, bevelEnabled: false });
+        geom.rotateX(-Math.PI / 2);
+        return { levelId: p.levelId, nome: p.nome, geom, y: p.baseMm * S, acimaDoGabarito: p.acimaDoGabarito };
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [envelope]);
+
   return (
     <group>
+      {prismasDoEnvelope.map((p) => (
+        <mesh key={`env-${p.levelId}`} geometry={p.geom} position={[0, p.y, 0]} renderOrder={-1}>
+          {/* Translúcido e sem escrever profundidade: é referência, não massa —
+              a edificação continua legível por dentro dele. */}
+          <meshStandardMaterial color={p.acimaDoGabarito ? '#dc2626' : '#d97706'} transparent opacity={p.acimaDoGabarito ? 0.12 : 0.09} depthWrite={false} side={THREE.DoubleSide} />
+          <Edges color={p.acimaDoGabarito ? '#b91c1c' : '#b45309'} />
+        </mesh>
+      ))}
       {extras3d?.linhas.map((l) => (
         <line key={`dren-${l.id}`} geometry={l.geometria}>
           <lineBasicMaterial color={l.atende ? '#0284c7' : '#dc2626'} linewidth={2} />

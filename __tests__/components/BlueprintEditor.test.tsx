@@ -1091,6 +1091,48 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(within(nova).getByRole('button', { name: /adicionar regra/i })).toBeDisabled();
   });
 
+  it('envelope 3D (E3.3): Dados do lote mostra o envelope por pavimento com "cabe?"; a Legislação acusa o pavimento fora do envelope; o menu 3D tem o toggle', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    let m = k.applyBatch(k.emptyModel(), [
+      { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 },
+      { type: 'AddLevel', name: '1º', elevationMm: 3000, defaultHeightMm: 3000 },
+    ]).model;
+    const t = m.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number, papel: 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA') =>
+      ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO', papel }) as const;
+    m = k.applyBatch(m, [d(0, 0, 20000, 0, 'FRENTE'), d(20000, 0, 20000, 30000, 'LATERAL_DIREITA'), d(20000, 30000, 0, 30000, 'FUNDOS'), d(0, 30000, 0, 0, 'LATERAL_ESQUERDA')]).model;
+    // Uma APP de 10 m nos fundos: o envelope vai só até y = 20000. O térreo desenhado passa (até y = 24000).
+    m = k.applyCommand(m, { type: 'AddBoundary', levelId: t, a: k.point(20000, 30000), b: k.point(0, 30000), kind: 'RESTRICAO', restricao: { tipo: 'APP', faixaMm: 10000 } }).model;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 200, heightMm: 3000 }) as const;
+    m = k.applyBatch(m, [w(4000, 4000, 16000, 4000), w(16000, 4000, 16000, 24000), w(16000, 24000, 4000, 24000), w(4000, 24000, 4000, 4000)]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    await user.click(botao(/^dados do lote$/i));
+    const drawer = (await screen.findAllByRole('dialog')).find((x) => /dados do lote/i.test(x.textContent ?? ''))!;
+    const tabela = await within(drawer).findByTestId('envelope-por-pavimento');
+    expect(tabela).toHaveTextContent(/máx. 800,00 m² e 2\.400 m³ dentro do gabarito/); // 2 × (20 × 20 m) × 3 m
+    const linhas = within(tabela).getAllByRole('row').map((r) => (r.textContent ?? '').replace(/\s+/g, ' '));
+    expect(linhas.some((l) => /Térreo.*400,00 m².*246,44 m².*48,00 m² fora/.test(l))).toBe(true); // 12,2 × 20,2 construídos; 12 × 4 m de eixo fora
+    expect(linhas.some((l) => /1º.*400,00 m².*—.*vazio/.test(l))).toBe(true);
+    await user.click(within(drawer).getByRole('button', { name: /^fechar$/i }));
+    // Legislação: "Pavimento dentro do envelope edificável" violada no térreo.
+    await abrirAba(/^analisar$/i);
+    await user.click(screen.getAllByRole('button', { name: /^legislação/i }).find((b) => b.getAttribute('title')?.startsWith('Verificar'))!);
+    const tela = (await screen.findByRole('heading', { level: 1, name: /verificar legislação/i })).closest('[data-tela="legislacao"]') as HTMLElement;
+    await user.selectOptions(within(tela).getByLabelText('Filtrar por estado'), 'VIOLADA');
+    const rows = within(tela).getAllByRole('row').map((r) => (r.textContent ?? '').replace(/\s+/g, ' '));
+    expect(rows.some((l) => /Pavimento dentro do envelope edificável.*Térreo.*cabe_no_envelope = não/.test(l))).toBe(true);
+    expect(rows.some((l) => /Pavimento dentro do envelope edificável.*1º/.test(l))).toBe(false);
+    await user.click(within(tela).getByRole('button', { name: /^voltar ao editor$/i }));
+    // O menu 3D oferece o envelope (ligado por padrão).
+    await abrirAba(/^vista$/i);
+    await user.click(screen.getByRole('button', { name: /^vista: 3d$/i }));
+    await user.click(screen.getAllByRole('button', { name: /exibir/i })[0]);
+    expect(await screen.findByRole('menuitemcheckbox', { name: /envelope edificável/i })).toHaveAttribute('aria-checked', 'true');
+  });
+
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2500 });

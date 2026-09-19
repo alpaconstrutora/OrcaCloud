@@ -135,6 +135,7 @@ import { listParameterDefinitions, type DefinicaoDeParametro } from '../../servi
 import { camposDaEscada, camposDoTelhado, propriedadesDaEscada, propriedadesDoTelhado } from '../../utils/blueprintTipos';
 import { conferirRestricoes, violacoes } from '../../utils/blueprintRestricoes';
 import { conferirLote, recuosEfetivos } from '../../utils/blueprintZonaUrbanistica';
+import { envelopePorPavimentoParaRegras, envelopeVertical } from '../../utils/blueprintEnvelope3d';
 import { contornosParaTelhado } from '../../utils/blueprintTelhadoContorno';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
 import BlueprintCanvas, { rotuloPasso, type AjustePonta, type AcaoDeNavegacao } from './BlueprintCanvas';
@@ -973,6 +974,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     'blueprint:vista3dTerreno',
     false,
   );
+  /** ENVELOPE 3D (E3.3): os prismas edificáveis por pavimento, translúcidos. */
+  const [mostrarEnvelope3d, setMostrarEnvelope3d] = usePersistedState('blueprint:vista3dEnvelope', true);
 
   const emVista = vista !== 'planta';
   const vistaEhElevacao = ehVistaDeElevacao(vista);
@@ -3003,6 +3006,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     () => (terreno ? envelopeConstrutivo(terreno, limitesDoNivel, recuos) : null),
     [terreno, limitesDoNivel, recuos],
   );
+  /**
+   * ENVELOPE 3D (E3.3): um prisma por pavimento com os recuos efetivos no topo
+   * dele (afastamento progressivo), o gabarito e o "cabe?" pelo contorno.
+   * Parte dos recuos FIXOS da zona — o progressivo entra por pavimento.
+   */
+  const envelope3d = useMemo(
+    () => envelopeVertical(editor.model, terreno, limitesDoNivel, zona.recuos, { afastamentoProgressivo: zona.afastamentoProgressivo, gabaritoAlturaMaxM: zona.gabaritoAlturaMaxM, gabaritoPavimentos: zona.gabaritoPavimentos }),
+    [editor.model, terreno, limitesDoNivel, zona.recuos, zona.afastamentoProgressivo, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos],
+  );
   /** FAIXAS RESTRITAS (E3.1) do pavimento, para o canvas hachurar. */
   const faixasRestritasDoNivel = useMemo(
     () => faixasRestritas(terreno, limitesDoNivel).map((f) => ({ boundaryId: f.boundaryId, anel: f.anel, rotulo: `${ROTULO_DA_RESTRICAO_DO_LOTE[f.tipo]} · ${(f.faixaMm / 1000).toFixed(2).replace('.', ',')} m` })),
@@ -3360,6 +3372,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         testadaMinimaMm: zona.testadaMinimaMm,
         areaMinimaDoLoteM2: zona.areaMinimaDoLoteM2,
       },
+      envelopePorPavimento: envelopePorPavimentoParaRegras(envelope3d),
     });
     // NBR 5410 como fonte da lista: as conferências do painel do ambiente, sem
     // segunda conta — tomadas mínimas (9.5.2.2.1) e luz de teto/interruptor (9.5.2.1).
@@ -3378,7 +3391,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       return linhas;
     });
     return [...doMotor, ...da5410];
-  }, [editor.model, regrasDaOrganizacao, limitesDoNivel, terreno, aproveitamento, alturaDesenhadaM, zona.taxaOcupacaoMax, zona.coeficienteMax, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos, zona.taxaPermeabilidadeMin, zona.testadaMinimaMm, zona.areaMinimaDoLoteM2, ambientes, levelId]);
+  }, [editor.model, regrasDaOrganizacao, limitesDoNivel, terreno, aproveitamento, alturaDesenhadaM, envelope3d, zona.taxaOcupacaoMax, zona.coeficienteMax, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos, zona.taxaPermeabilidadeMin, zona.testadaMinimaMm, zona.areaMinimaDoLoteM2, ambientes, levelId]);
   const errosDeLegislacao = useMemo(() => resultadosDeRegras.filter((r) => r.estado === 'VIOLADA' && r.regra.severidade === 'ERRO').length, [resultadosDeRegras]);
 
   // ── Quadro de divisas — papéis, medidas da escritura e confrontantes ──────
@@ -5829,6 +5842,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       onRecuo={zona.ajustarRecuo}
       envelope={envelope}
       aproveitamento={aproveitamento}
+      envelopeVertical={envelope3d}
       taxaOcupacaoMax={zona.taxaOcupacaoMax}
       coeficienteMax={zona.coeficienteMax}
       onTaxaOcupacaoMax={zona.ajustarTaxaOcupacaoMax}
@@ -7727,6 +7741,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                             ? 'O polígono do lote como plano de chão, sob a edificação. O enquadramento passa a incluir o lote inteiro.'
                             : 'Não há divisa de terreno desenhada — use a ferramenta Terreno na planta baixa.',
                         },
+                        {
+                          chave: 'envelope-3d',
+                          rotulo: 'Envelope edificável',
+                          icone: Scale,
+                          ligado: mostrarEnvelope3d,
+                          alternar: () => setMostrarEnvelope3d((v) => !v),
+                          desabilitado: !temTerreno,
+                          ajuda: temTerreno
+                            ? 'O prisma que a lei deixa construir, pavimento a pavimento: recuos, afastamento progressivo, faixas restritas e gabarito (vermelho acima dele). Translúcido, por cima da edificação.'
+                            : 'Não há divisa de terreno desenhada — o envelope parte do lote.',
+                        },
                       ],
                 ]}
               />
@@ -8498,6 +8523,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               // ligar o terreno num estudo que tem lote e depois abrir outro que
               // não tem deixaria a combinação gravada no localStorage.
               mostrarTerreno={mostrarTerreno3d && temTerreno}
+              envelope={mostrarEnvelope3d && temTerreno ? envelope3d?.prismas : undefined}
               relevo={mostrarTerreno3d ? relevo3d : null}
               relevoChave={`${chaveDaTopografia}:${cotaZeroDoTerrenoM}`}
               alturaDoChao={mostrarTerreno3d ? alturaDoChao3d : undefined}

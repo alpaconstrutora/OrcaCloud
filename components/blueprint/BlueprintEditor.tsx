@@ -37,6 +37,7 @@ import {
   Building2,
   CarFront,
   Scale,
+  ClipboardList,
   Eye,
   EyeOff,
   FileDown,
@@ -459,6 +460,8 @@ import TelaArmadura from './TelaArmadura';
 import TelaQuantitativos from './TelaQuantitativos';
 import TelaUnidades from './TelaUnidades';
 import TelaLegislacao from './TelaLegislacao';
+import TelaPrograma from './TelaPrograma';
+import { useBlueprintPrograma } from '../../hooks/useBlueprintPrograma';
 import { avaliarRegras, REGRAS_SEMENTE, type Regra, type ResultadoDeRegra } from '../../utils/blueprintRegras';
 import { blueprintRuleSetService, type ConjuntoDeRegras } from '../../services/blueprintRuleSetService';
 import PainelGrupo from './PainelGrupo';
@@ -963,6 +966,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * pessoas no mesmo estudo têm de ver o mesmo aço.
    */
   const armaduraDoEstudo = useBlueprintArmadura(study.id, study.organization_id);
+  /** PROGRAMA DE NECESSIDADES (E4.1): do estudo, fora do payload. */
+  const programaDoEstudo = useBlueprintPrograma(study.id, study.organization_id);
   const hipotesesDeArmadura = armaduraDoEstudo.hipoteses;
   /** ARMADURA no 3D (16/09/2026): as barras do esquema, com o concreto translúcido. Nasce desligada. */
   const [mostrarArmadura3d, setMostrarArmadura3d] = usePersistedState<boolean>('blueprint:vista3dArmadura', false);
@@ -1143,7 +1148,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -6779,6 +6784,30 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           </div>
         </div>
       )}
+      {telaAberta === 'programa' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="programa">
+          {cabecalhoDaTela(
+            'Programa de necessidades',
+            'O que a planta tem de ter: cada ambiente pedido (uso, quantidade, áreas, largura, pé-direito, exigências, privacidade) e a matriz de proximidade entre eles. É do estudo, e alimenta a conferência do programa e o gerador.',
+            ClipboardList,
+            'Analisar',
+          )}
+          <div>
+            <TelaPrograma
+              programa={programaDoEstudo.programa}
+              onChange={programaDoEstudo.setPrograma}
+              carregando={programaDoEstudo.carregando}
+              aviso={
+                programaDoEstudo.persistenciaIndisponivel
+                  ? 'Programa sem persistência (migration ausente ou sem permissão): vale só nesta sessão.'
+                  : programaDoEstudo.erroDeGravacao
+                    ? `Não gravou o programa: ${programaDoEstudo.erroDeGravacao}`
+                    : null
+              }
+            />
+          </div>
+        </div>
+      )}
       {telaAberta === 'legislacao' && (
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="legislacao">
           {cabecalhoDaTela(
@@ -7476,6 +7505,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   ativo={telaAberta === 'legislacao'}
                   onClick={() => alternarTela('legislacao')}
                   ajuda="Verificar legislação: código de obras (semente), NBR 9050/5410, zona e regras da organização — violada, conforme ou não avaliada"
+                />
+              )}
+              {relatorioVisivel('quantitativos') && (
+                <BotaoDoRibbon
+                  icone={ClipboardList}
+                  rotulo="Programa"
+                  contagem={programaDoEstudo.programa.itens.length || undefined}
+                  ativo={telaAberta === 'programa'}
+                  onClick={() => alternarTela('programa')}
+                  ajuda="Programa de necessidades do estudo: ambientes pedidos, áreas, exigências e matriz de proximidade; sementes por tipologia"
                 />
               )}
               {(!emVista || em3d) && (

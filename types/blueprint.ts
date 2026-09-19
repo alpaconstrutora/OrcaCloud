@@ -145,6 +145,17 @@ export interface BlueprintArmaduraRow {
   updated_at: string;
 }
 
+/** PROGRAMA DE NECESSIDADES (E4.1) — uma linha por estudo; `programa` é `Programa` (utils/blueprintPrograma.ts). */
+export interface BlueprintProgramRow {
+  id: string;
+  study_id: string;
+  organization_id: string;
+  nome: string;
+  programa: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface BlueprintTopografiaRow {
   id: string;
   study_id: string;

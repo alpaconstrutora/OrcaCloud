@@ -95,6 +95,17 @@ vi.mock('../../services/blueprintParameterDefinitionService', async () => {
   };
 });
 
+// Programa de necessidades (E4.1): `get` controlável; `save` observável (gravação com respiro).
+const getPrograma = vi.fn(async () => null as unknown);
+const savePrograma = vi.fn(async () => ({}));
+vi.mock('../../services/blueprintProgramService', () => ({
+  blueprintProgramService: {
+    get: (...a: unknown[]) => getPrograma(...(a as [])),
+    save: (...a: unknown[]) => savePrograma(...(a as [])),
+    remove: vi.fn(async () => {}),
+  },
+}));
+
 vi.mock('../../services/blueprintBudgetService', () => ({
   listMappings: vi.fn(async () => []),
   saveMapping: vi.fn(async () => ({})),
@@ -117,6 +128,8 @@ beforeEach(() => {
   loadBranchModel.mockResolvedValue(null);
   getSnapshotIdentity.mockResolvedValue(null);
   getBranch.mockResolvedValue(RAMO_LIMPO);
+  getPrograma.mockResolvedValue(null);
+  savePrograma.mockClear();
 
   (globalThis as any).ResizeObserver = class {
     observe() {}
@@ -1131,6 +1144,59 @@ describe('BlueprintEditor · quantitativos', () => {
     await user.click(screen.getByRole('button', { name: /^vista: 3d$/i }));
     await user.click(screen.getAllByRole('button', { name: /exibir/i })[0]);
     expect(await screen.findByRole('menuitemcheckbox', { name: /envelope edificável/i })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('programa (E4.1): a tela abre vazia, a semente 2Q povoa itens e matriz, a célula editada grava com respiro, a matriz troca a relação e o item removido leva as relações', async () => {
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^analisar$/i);
+    const botaoPrograma = () => screen.getAllByRole('button', { name: /^programa/i }).find((b) => b.getAttribute('title')?.startsWith('Programa de necessidades'))!;
+    expect(botaoPrograma()).not.toHaveTextContent(/\d/);
+    await user.click(botaoPrograma());
+    const tela = (await screen.findByRole('heading', { level: 1, name: /programa de necessidades/i })).closest('[data-tela="programa"]') as HTMLElement;
+    expect(within(tela).getByTestId('resumo-programa')).toHaveTextContent(/0 ambiente\(s\) em 0 item\(ns\)/);
+    expect(within(tela).getByText(/^Programa vazio$/)).toBeInTheDocument();
+    // Semente 2Q sem confirmação (programa vazio).
+    await user.selectOptions(within(tela).getByLabelText('Tipologia da semente'), 'APTO_2Q');
+    await user.click(within(tela).getByTestId('aplicar-semente'));
+    expect(within(tela).getByTestId('resumo-programa')).toHaveTextContent(/8 ambiente\(s\) em 7 item\(ns\)/);
+    expect(within(tela).getByTestId('resumo-programa')).toHaveTextContent(/9 relação\(ões\) \(1 obrigatória\(s\), 2 proibida\(s\)\)/);
+    // Gravação com respiro: o serviço recebe o programa do estudo.
+    await waitFor(() => expect(savePrograma).toHaveBeenCalled(), { timeout: 2000 });
+    expect(savePrograma.mock.calls.at(-1)![0]).toBe('std_1');
+    expect((savePrograma.mock.calls.at(-1)![2] as { itens: unknown[] }).itens).toHaveLength(7);
+    // Célula editada: área ideal da sala 18 → 22; o resumo acompanha.
+    const areaSala = within(tela).getByLabelText('Área ideal do item Sala de estar/jantar') as HTMLInputElement;
+    await user.clear(areaSala);
+    await user.type(areaSala, '22{Enter}');
+    expect(within(tela).getByTestId('resumo-programa')).toHaveTextContent(/ideal 69,50 m²/); // 65,5 + 4
+    // Quantidade de dormitórios 2 → 3.
+    const qtd = within(tela).getByLabelText('Quantidade do item Dormitório') as HTMLInputElement;
+    await user.clear(qtd);
+    await user.type(qtd, '3{Enter}');
+    expect(within(tela).getByTestId('resumo-programa')).toHaveTextContent(/9 ambiente\(s\)/);
+    // Matriz: Sala × Cozinha era 8; vira Obrigatória; Cozinha × Dormitório é Proibida.
+    await user.click(within(tela).getByRole('tab', { name: /^Proximidade/ }));
+    const matriz = within(tela).getByTestId('matriz-de-proximidade');
+    const salaCoz = within(matriz).getByLabelText('Relação Sala de estar/jantar × Cozinha') as HTMLSelectElement;
+    expect(salaCoz.value).toBe('8');
+    expect((within(matriz).getByLabelText('Relação Cozinha × Dormitório') as HTMLSelectElement).value).toBe('P');
+    await user.selectOptions(salaCoz, 'O');
+    expect(within(tela).getByTestId('resumo-programa')).toHaveTextContent(/2 obrigatória\(s\)/);
+    // Remover a cozinha leva as relações dela (Sala×Coz e Coz×Serv, as duas obrigatórias, e Coz×Dorm).
+    await user.click(within(tela).getByRole('tab', { name: /^Itens/ }));
+    await user.click(within(tela).getByRole('button', { name: 'Remover o item Cozinha' }));
+    expect(within(tela).getByTestId('resumo-programa')).toHaveTextContent(/6 relação\(ões\) \(0 obrigatória\(s\), 1 proibida\(s\)\)/);
+    // Semente com itens: pede confirmação (padrão do app) e substitui.
+    await user.selectOptions(within(tela).getByLabelText('Tipologia da semente'), 'CASA_TERREA');
+    await user.click(within(tela).getByTestId('aplicar-semente'));
+    await user.click(await screen.findByRole('button', { name: /^substituir$/i }));
+    expect(within(tela).getByTestId('resumo-programa')).toHaveTextContent(/12 ambiente\(s\) em 11 item\(ns\)/);
+    expect(within(tela).getByLabelText('Nome do item Garagem (2 vagas)')).toBeInTheDocument();
+    // A contagem do botão do ribbon é o número de itens (o ribbon volta com o editor).
+    await user.click(within(tela).getByRole('button', { name: /^voltar ao editor$/i }));
+    await abrirAba(/^analisar$/i);
+    expect(botaoPrograma()).toHaveTextContent('11');
   });
 
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {

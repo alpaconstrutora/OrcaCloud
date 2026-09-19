@@ -1820,7 +1820,8 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     // O cartão do ambiente diz "sem declaração" e tem o botão que abre a gaveta.
-    expect(screen.getByTestId(`acabamentos-do-ambiente-${dormA.id}`)).toHaveTextContent(/sem declaração/);
+    // `findBy`: o modelo chega por promessa e no CI o cartão ainda não existia (falha de 19/09).
+    expect(await screen.findByTestId(`acabamentos-do-ambiente-${dormA.id}`)).toHaveTextContent(/sem declaração/);
     await user.click(screen.getByRole('button', { name: 'Acabamentos de Dormitório 1' }));
     const gaveta = await screen.findByTestId('tarefa-acabamentos');
     expect(within(gaveta).getByTestId('resumo-dos-acabamentos')).toHaveTextContent(/0 de 3 ambiente\(s\) com acabamentos declarados · 3 sem piso · 3 sem forro/);

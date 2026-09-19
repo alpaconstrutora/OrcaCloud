@@ -39,6 +39,7 @@ import {
   Scale,
   ClipboardList,
   Footprints,
+  Sun,
   Eye,
   EyeOff,
   FileDown,
@@ -463,6 +464,8 @@ import TelaUnidades from './TelaUnidades';
 import TelaLegislacao from './TelaLegislacao';
 import TelaPrograma from './TelaPrograma';
 import PainelGrafoEspacial from './PainelGrafoEspacial';
+import PainelInsolacao, { HIPOTESES_DE_INSOLACAO_PADRAO, type HipotesesDeInsolacao } from './PainelInsolacao';
+import { analisarInsolacao, diaDoAno, direcaoDoSol, insolacaoParaRegras, posicaoSolar, prismasDoEntorno } from '../../utils/blueprintInsolacao';
 import { conferirPrograma, linhasParaLegislacao } from '../../utils/blueprintConferenciaDoPrograma';
 import { construirGrafoEspacial, descreverFachadas, percursoAteASaida, vizinhosDe } from '../../utils/blueprintGrafoEspacial';
 import { useBlueprintPrograma } from '../../hooks/useBlueprintPrograma';
@@ -717,6 +720,9 @@ const ROTULO_DA_TAREFA = {
   // GRAFO ESPACIAL (19/09/2026, E4.2): a planta como rede de ambientes —
   // vizinhos por porta e por parede, percursos, circulação %, fachadas.
   grafo: 'Grafo espacial — vizinhos, percursos e fachadas',
+  // INSOLAÇÃO (19/09/2026, E5.1): sol por data/hora solar, horas por fachada e
+  // ambiente, sombra do entorno, ventilação cruzada; sol no 3D.
+  insolacao: 'Insolação e ventilação',
   'gerar-paredes': 'Gerar paredes do PDF',
   'importar-ifc': 'Importar do IFC',
   'importar-dxf': 'Importar do DXF',
@@ -1958,6 +1964,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * ambiente, a gaveta e (E4.3) a conferência do programa.
    */
   const grafoDoNivel = useMemo(() => (levelId ? construirGrafoEspacial(editor.model, levelId) : null), [editor.model, levelId]);
+  /**
+   * INSOLAÇÃO (E5.1): hipóteses do navegador (data, hora solar, latitude
+   * suposta, vizinhos, sol no 3D); a análise do pavimento ativo pelo grafo.
+   */
+  const [hipotesesDeInsolacao, setHipotesesDeInsolacao] = usePersistedState<HipotesesDeInsolacao>('blueprint:insolacao', HIPOTESES_DE_INSOLACAO_PADRAO);
+  const latitudeDoEstudo = editor.model.georreferencia?.latitude ?? null;
+  const norteDoDesenho = editor.model.georreferencia?.rotacaoNorteDeg ?? null;
+  const posicaoDoSol = useMemo(
+    () => posicaoSolar(latitudeDoEstudo ?? hipotesesDeInsolacao.latitudeManual, diaDoAno(hipotesesDeInsolacao.data), hipotesesDeInsolacao.horaSolar),
+    [latitudeDoEstudo, hipotesesDeInsolacao.latitudeManual, hipotesesDeInsolacao.data, hipotesesDeInsolacao.horaSolar],
+  );
   const ambientes = useMemo(
     () => {
     const unidadeDe = unidadePorEtiqueta(editor.model);
@@ -2883,6 +2900,20 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     [editor.model.boundaries, levelId],
   );
   const terreno = useMemo(() => medirTerreno(limitesDoNivel), [limitesDoNivel]);
+  const prismasDoEntornoDoEstudo = useMemo(() => {
+    return prismasDoEntorno(hipotesesDeInsolacao.vizinhos, limitesDoNivel, terreno?.anel ?? null);
+  }, [limitesDoNivel, terreno, hipotesesDeInsolacao.vizinhos]);
+  const insolacaoDoNivel = useMemo(() => {
+    if (!grafoDoNivel) return [];
+    const piso = editor.model.levels.find((l) => l.id === levelId)?.elevationMm ?? 0;
+    return analisarInsolacao(
+      grafoDoNivel,
+      { latitudeGraus: latitudeDoEstudo ?? hipotesesDeInsolacao.latitudeManual, rotacaoNorteDeg: norteDoDesenho, prismas: prismasDoEntornoDoEstudo, pisoMm: piso },
+      { dia: diaDoAno(hipotesesDeInsolacao.data), horaSolar: hipotesesDeInsolacao.horaSolar },
+    );
+  }, [grafoDoNivel, editor.model.levels, levelId, latitudeDoEstudo, hipotesesDeInsolacao.latitudeManual, hipotesesDeInsolacao.data, hipotesesDeInsolacao.horaSolar, norteDoDesenho, prismasDoEntornoDoEstudo]);
+  /** A direção do sol para o 3D, quando ligado e acima do horizonte. */
+  const solNo3d = useMemo(() => (hipotesesDeInsolacao.solNo3d ? direcaoDoSol(posicaoDoSol, norteDoDesenho) : null), [hipotesesDeInsolacao.solNo3d, posicaoDoSol, norteDoDesenho]);
 
   /**
    * A topografia do estudo — fora do payload canônico, como a zona urbanística
@@ -3397,8 +3428,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         taxaPermeabilidadeMin: zona.taxaPermeabilidadeMin,
         testadaMinimaMm: zona.testadaMinimaMm,
         areaMinimaDoLoteM2: zona.areaMinimaDoLoteM2,
+        insolacaoMinimaH: zona.insolacaoMinimaH,
       },
       envelopePorPavimento: envelopePorPavimentoParaRegras(envelope3d),
+      insolacaoPorAmbiente: insolacaoParaRegras(insolacaoDoNivel),
     });
     // NBR 5410 como fonte da lista: as conferências do painel do ambiente, sem
     // segunda conta — tomadas mínimas (9.5.2.2.1) e luz de teto/interruptor (9.5.2.1).
@@ -3419,7 +3452,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     // O programa de necessidades (E4.3) entra como fonte, pelas mesmas linhas.
     const doPrograma = conferenciaDoPrograma ? linhasParaLegislacao(conferenciaDoPrograma, programaDoEstudo.programa) : [];
     return [...doMotor, ...da5410, ...doPrograma];
-  }, [editor.model, regrasDaOrganizacao, conferenciaDoPrograma, programaDoEstudo.programa, limitesDoNivel, terreno, aproveitamento, alturaDesenhadaM, envelope3d, zona.taxaOcupacaoMax, zona.coeficienteMax, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos, zona.taxaPermeabilidadeMin, zona.testadaMinimaMm, zona.areaMinimaDoLoteM2, ambientes, levelId]);
+  }, [editor.model, regrasDaOrganizacao, conferenciaDoPrograma, programaDoEstudo.programa, insolacaoDoNivel, zona.insolacaoMinimaH, limitesDoNivel, terreno, aproveitamento, alturaDesenhadaM, envelope3d, zona.taxaOcupacaoMax, zona.coeficienteMax, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos, zona.taxaPermeabilidadeMin, zona.testadaMinimaMm, zona.areaMinimaDoLoteM2, ambientes, levelId]);
   const errosDeLegislacao = useMemo(() => resultadosDeRegras.filter((r) => r.estado === 'VIOLADA' && r.regra.severidade === 'ERRO').length, [resultadosDeRegras]);
 
   // ── Quadro de divisas — papéis, medidas da escritura e confrontantes ──────
@@ -7552,6 +7585,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   ajuda="Grafo espacial do pavimento: quem se liga a quem por porta e por parede, percursos pelas portas, circulação %, fachada e orientação de cada ambiente"
                 />
               )}
+              {relatorioVisivel('quantitativos') && (
+                <BotaoDoRibbon
+                  icone={Sun}
+                  rotulo="Insolação"
+                  contagem={insolacaoDoNivel.filter((a) => a.temJanela && a.horas.INVERNO === 0).length || undefined}
+                  ativo={tarefaAberta === 'insolacao'}
+                  onClick={() => alternarTarefa('insolacao')}
+                  ajuda="Insolação e ventilação: posição do sol por data e hora solar, horas de sol por fachada e ambiente (21/06, 21/03, 21/12), sombra do entorno, ventilação cruzada; sol e sombras no 3D"
+                />
+              )}
               {(!emVista || em3d) && (
                 <BotaoDoRibbon
                   icone={Grip}
@@ -8598,6 +8641,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               // não tem deixaria a combinação gravada no localStorage.
               mostrarTerreno={mostrarTerreno3d && temTerreno}
               envelope={mostrarEnvelope3d && temTerreno ? envelope3d?.prismas : undefined}
+              sol={solNo3d}
+              entorno={hipotesesDeInsolacao.solNo3d ? prismasDoEntornoDoEstudo : undefined}
               relevo={mostrarTerreno3d ? relevo3d : null}
               relevoChave={`${chaveDaTopografia}:${cotaZeroDoTerrenoM}`}
               alturaDoChao={mostrarTerreno3d ? alturaDoChao3d : undefined}
@@ -9489,6 +9534,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             </span>
           </SheetTitle>
           <SheetDescription>
+            {tarefaAberta === 'insolacao' &&
+              'Sol por data e hora solar (latitude da georreferência), horas de sol por fachada e por ambiente nas três datas de referência, sombra dos vizinhos declarados e ventilação cruzada. Ligue "Sol e sombras no 3D" e mude a hora para ver a sombra andar.'}
             {tarefaAberta === 'grafo' &&
               'A planta do pavimento como rede: cada ambiente é um nó; parede dividida e porta são as arestas. Percursos medidos pelos centros das portas; fachada e orientação pelo norte do desenho. Só leitura.'}
             {tarefaAberta === 'pilares' &&
@@ -9562,9 +9609,26 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
+
+          {tarefaAberta === 'insolacao' && (
+            <PainelInsolacao
+              hipoteses={hipotesesDeInsolacao}
+              onHipoteses={setHipotesesDeInsolacao}
+              latitudeDoEstudo={latitudeDoEstudo}
+              norteGraus={norteDoDesenho}
+              analise={insolacaoDoNivel}
+              insolacaoMinimaH={zona.insolacaoMinimaH}
+              temLote={temTerreno}
+              nomeDoPavimento={editor.model.levels.find((l) => l.id === levelId)?.name ?? 'pavimento'}
+              onSelecionar={(id) => {
+                setTarefa(null);
+                selecionar([id]);
+              }}
+            />
+          )}
 
           {tarefaAberta === 'grafo' && (
             <PainelGrafoEspacial

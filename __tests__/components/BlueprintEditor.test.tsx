@@ -1311,6 +1311,83 @@ describe('BlueprintEditor · quantitativos', () => {
     await waitFor(() => expect(screen.queryByRole('heading', { level: 1, name: /verificar legislação/i })).toBeNull());
   });
 
+  it('insolação (E5.1): a gaveta mostra o sol por data/hora solar, horas por fachada e ambiente, ventilação cruzada e "agora"; um vizinho a leste tira o sol da manhã; a Legislação lê a insolação', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    let m = k.applyBatch(nivel.model, [w(0, 0, 8000, 0), w(8000, 0, 8000, 6000), w(8000, 6000, 0, 6000), w(0, 6000, 0, 0), w(4000, 0, 4000, 6000), w(4000, 3000, 8000, 3000)]).model;
+    const sala = m.spaces.find((s) => s.ring.some((p) => p.x === 0))!;
+    const dorm = m.spaces.find((s) => s.ring.every((p) => p.x >= 4000) && s.ring.every((p) => p.y >= 3000))!;
+    const baixo = m.walls.find((x) => x.a.y === 0 && x.b.y === 0)!;
+    const esquerda = m.walls.find((x) => x.a.x === 0 && x.b.x === 0)!;
+    const meio = m.walls.find((x) => x.a.x === 4000 && x.b.x === 4000)!;
+    const direita = m.walls.find((x) => x.a.x === 8000 && x.b.x === 8000)!;
+    const d = (ax: number, ay: number, bx: number, by: number, papel: 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA') =>
+      ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO', papel }) as const;
+    m = k.applyBatch(m, [
+      { type: 'NameSpace', spaceId: sala.id, name: 'Sala', tipoDeAmbiente: 'SALA_DORMITORIO' },
+      { type: 'NameSpace', spaceId: dorm.id, name: 'Dormitório', tipoDeAmbiente: 'SALA_DORMITORIO' },
+      { type: 'AddOpening', wallId: baixo.id, kind: 'door', offsetMm: 1000, widthMm: 900, heightMm: 2100, sillMm: 0 },
+      { type: 'AddOpening', wallId: esquerda.id, kind: 'window', offsetMm: 2000, widthMm: 1500, heightMm: 1200, sillMm: 1000 },
+      { type: 'AddOpening', wallId: meio.id, kind: 'door', offsetMm: 4000, widthMm: 800, heightMm: 2100, sillMm: 0 },
+      { type: 'AddOpening', wallId: direita.id, kind: 'window', offsetMm: 4000, widthMm: 1200, heightMm: 1200, sillMm: 1000 },
+      d(-1000, -1000, 9000, -1000, 'FRENTE'),
+      d(9000, -1000, 9000, 7000, 'LATERAL_DIREITA'),
+      d(9000, 7000, -1000, 7000, 'FUNDOS'),
+      d(-1000, 7000, -1000, -1000, 'LATERAL_ESQUERDA'),
+    ]).model;
+    m = { ...m, georreferencia: { latitude: -23.55, longitude: -46.63, rotacaoNorteDeg: null } };
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^analisar$/i);
+    const botao = screen.getAllByRole('button', { name: /^insolação/i }).find((b) => b.getAttribute('title')?.startsWith('Insolação'))!;
+    await user.click(botao);
+    const gaveta = await screen.findByTestId('tarefa-insolacao');
+    // Instante padrão: 21/06 às 9 h solar, latitude da georreferência.
+    expect(within(gaveta).getByTestId('hora-solar')).toHaveTextContent('9,0 h');
+    expect(within(gaveta).getByTestId('posicao-do-sol')).toHaveTextContent(/Sol a \d+° de altura, azimute \d+° \(NE\)/);
+    expect(within(gaveta).getByTestId('posicao-do-sol')).toHaveTextContent(/latitude da georreferência \(-23,55°\)/);
+    expect(within(gaveta).getByLabelText('Latitude (graus, negativa ao sul)')).toBeDisabled();
+    // Tabela: sala com janela a oeste (sol à tarde) → "sombra" às 9 h; dormitório com janela a leste → "sol"; ventilação cruzada só na sala (O + S).
+    const linhaSala = within(gaveta).getByRole('row', { name: 'Ambiente Sala' });
+    const linhaDorm = within(gaveta).getByRole('row', { name: 'Ambiente Dormitório' });
+    expect(linhaSala).toHaveTextContent(/O \(1 jan\.\): \d,\d · \d,\d · \d,\d/);
+    expect(linhaSala).toHaveTextContent(/sim \(S\/O\)/);
+    expect(linhaSala).toHaveTextContent(/sombra/);
+    expect(linhaDorm).toHaveTextContent(/L \(1 jan\.\)/);
+    expect(linhaDorm).toHaveTextContent(/não — abertura só na fachada L/);
+    expect(linhaDorm).toHaveTextContent(/sol/);
+    const horasDoDorm = () => Number((within(gaveta).getByRole('row', { name: 'Ambiente Dormitório' }).textContent ?? '').match(/(\d+,\d+) h/)![1].replace(',', '.'));
+    const antes = horasDoDorm();
+    expect(antes).toBeGreaterThan(3);
+    // Às 15 h solar o sol está a noroeste: a sala pega, o dormitório não.
+    fireEvent.change(within(gaveta).getByLabelText('Hora solar'), { target: { value: '15' } });
+    expect(within(gaveta).getByTestId('hora-solar')).toHaveTextContent('15,0 h');
+    expect(within(gaveta).getByRole('row', { name: 'Ambiente Sala' })).toHaveTextContent(/sol/);
+    expect(within(gaveta).getByRole('row', { name: 'Ambiente Dormitório' })).toHaveTextContent(/sombra/);
+    // Vizinho de 15 m colado na lateral direita (leste): o dormitório perde horas de inverno.
+    await user.click(within(gaveta).getByTestId('novo-vizinho'));
+    await user.clear(within(gaveta).getByLabelText('Altura do vizinho 1 (m)'));
+    await user.type(within(gaveta).getByLabelText('Altura do vizinho 1 (m)'), '15');
+    await user.clear(within(gaveta).getByLabelText('Afastamento do vizinho 1 (m)'));
+    await user.type(within(gaveta).getByLabelText('Afastamento do vizinho 1 (m)'), '0');
+    expect(horasDoDorm()).toBeLessThan(antes);
+    // Legislação lê a insolação: a regra de ventilação cruzada viola no dormitório; a de insolação mínima fica não avaliada (a zona não disse).
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByTestId('tarefa-insolacao')).toBeNull());
+    await abrirAba(/^analisar$/i);
+    await user.click(screen.getAllByRole('button', { name: /^legislação/i }).find((b) => b.getAttribute('title')?.startsWith('Verificar'))!);
+    const tela = (await screen.findByRole('heading', { level: 1, name: /verificar legislação/i })).closest('[data-tela="legislacao"]') as HTMLElement;
+    await user.selectOptions(within(tela).getByLabelText('Filtrar por fonte'), 'NBR 15575-1:2021');
+    const linhas = () => within(tela).getAllByRole('row').map((r) => (r.textContent ?? '').replace(/\s+/g, ' '));
+    expect(linhas().some((l) => /Violada.*ventilação cruzada.*Dormitório/.test(l))).toBe(true);
+    expect(linhas().some((l) => /Conforme.*ventilação cruzada.*Sala/.test(l))).toBe(true);
+    await user.selectOptions(within(tela).getByLabelText('Filtrar por fonte'), 'Zona urbanística');
+    expect(linhas().some((l) => /Não avaliada.*insolação mínima no inverno.*falta o dado "insolacao_minima"/.test(l))).toBe(true);
+  });
+
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2500 });

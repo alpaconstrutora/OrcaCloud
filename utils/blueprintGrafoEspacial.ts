@@ -58,6 +58,9 @@ export interface FachadaDoAmbiente {
   orientacao: PontoCardeal;
   /** As janelas (e portas para fora) que há neste lado. */
   aberturas: { openingId: ObjectId; kind: Opening['kind']; widthMm: number }[];
+  /** Meio do (primeiro) trecho externo e a normal para fora — a insolação (E5.1) parte daqui. */
+  meio: Point;
+  normal: Point;
 }
 
 export interface NoEspacial {
@@ -223,7 +226,7 @@ export function construirGrafoEspacial(model: BlueprintModel, levelId: ObjectId)
 
   // Paredes divididas e fachadas, lado a lado do anel.
   const paredesEntre = new Map<string, ArestaEspacial>();
-  const fachadasPorNo = new Map<ObjectId, Map<ObjectId, FachadaDoAmbiente & { normal: Point }>>();
+  const fachadasPorNo = new Map<ObjectId, Map<ObjectId, FachadaDoAmbiente>>();
   for (const s of espacos) {
     for (const anel of [s.ring, ...s.holes]) {
       const n = anel.length;
@@ -249,7 +252,7 @@ export function construirGrafoEspacial(model: BlueprintModel, levelId: ObjectId)
           else paredesEntre.set(chave, { de: s.id, para: vizinho.id, tipo: 'PAREDE', wallId: w.id, comprimentoMm: Math.round(comprimentoMm), ponto: { x: Math.round(meio.x), y: Math.round(meio.y) } });
         } else {
           const normal = { x: (fora.x - meio.x) / eps, y: (fora.y - meio.y) / eps };
-          const porParede = fachadasPorNo.get(s.id) ?? new Map<ObjectId, FachadaDoAmbiente & { normal: Point }>();
+          const porParede = fachadasPorNo.get(s.id) ?? new Map<ObjectId, FachadaDoAmbiente>();
           const f = porParede.get(w.id);
           const aberturas = (aberturasDaParede.get(w.id) ?? [])
             .filter((o) => {
@@ -262,7 +265,7 @@ export function construirGrafoEspacial(model: BlueprintModel, levelId: ObjectId)
             for (const ab of aberturas) if (!f.aberturas.some((x) => x.openingId === ab.openingId)) f.aberturas.push(ab);
           } else {
             const azimuteGraus = azimuteDaDirecao(normal, norteGraus);
-            porParede.set(w.id, { wallId: w.id, comprimentoMm: Math.round(comprimentoMm), azimuteGraus, orientacao: pontoCardeal(azimuteGraus), aberturas, normal });
+            porParede.set(w.id, { wallId: w.id, comprimentoMm: Math.round(comprimentoMm), azimuteGraus, orientacao: pontoCardeal(azimuteGraus), aberturas, meio: { x: Math.round(meio.x), y: Math.round(meio.y) }, normal: { x: Math.round(normal.x * 1000) / 1000, y: Math.round(normal.y * 1000) / 1000 } });
           }
           fachadasPorNo.set(s.id, porParede);
         }
@@ -300,7 +303,7 @@ export function construirGrafoEspacial(model: BlueprintModel, levelId: ObjectId)
   const nos: NoEspacial[] = espacos.map((s, i) => {
     const nome = s.name ?? '';
     const uso = usoDoNome(nome);
-    const fachadas = [...(fachadasPorNo.get(s.id)?.values() ?? [])].map(({ normal: _n, ...f }) => f);
+    const fachadas = [...(fachadasPorNo.get(s.id)?.values() ?? [])];
     const nPortas = portas.filter((p) => p.de === s.id || p.para === s.id).length;
     return {
       spaceId: s.id,

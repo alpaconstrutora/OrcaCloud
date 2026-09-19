@@ -76,6 +76,14 @@ interface Props {
   /** ENVELOPE 3D (E3.3): um prisma translúcido por pavimento — âmbar; vermelho acima do gabarito. */
   envelope?: { levelId: string; nome: string; anel: { x: number; y: number }[]; baseMm: number; topoMm: number; acimaDoGabarito: boolean }[];
   /**
+   * SOL (E5.1): direção unitária PARA o sol no espaço do desenho (x, y em
+   * planta, z para cima) — a luz principal aponta de lá e as sombras seguem a
+   * data/hora escolhidas. Ausente = a luz fixa de sempre.
+   */
+  sol?: { x: number; y: number; z: number } | null;
+  /** ENTORNO (E5.1): vizinhos como prismas cinza que fazem sombra. */
+  entorno?: { id: string; rotulo: string; anel: { x: number; y: number }[]; alturaMm: number }[];
+  /**
    * A malha do relevo (topografia gerada), já em metros de mundo — ver
    * `malhaDaGrade`. Com ela o terreno deixa de ser o plano chato. Vem de fora do
    * modelo porque a topografia não vive no payload; `relevoChave` (o hash da
@@ -893,7 +901,7 @@ function usarCliqueDePeca(onSelecionar?: (ids: string[]) => void) {
       : {};
 }
 
-function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, envelope, relevo, relevoChave, extrasDoRelevo, extrasChave, ocultos, coresPorUid, selecionados, onSelecionar, armadura }: Props) {
+function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, envelope, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, ocultos, coresPorUid, selecionados, onSelecionar, armadura }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
 
@@ -1211,8 +1219,27 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, en
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [envelope]);
 
+  /** Os vizinhos do entorno (E5.1): prismas opacos que projetam sombra. */
+  const prismasDoEntorno = useMemo(() => {
+    if (!entorno) return [];
+    return entorno
+      .filter((p) => p.anel.length >= 3 && p.alturaMm > 0)
+      .map((p) => {
+        const geom = new THREE.ExtrudeGeometry(shapeDoAnel(p.anel), { depth: p.alturaMm * S, bevelEnabled: false });
+        geom.rotateX(-Math.PI / 2);
+        return { id: p.id, geom };
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entorno]);
+
   return (
     <group>
+      {prismasDoEntorno.map((p) => (
+        <mesh key={`entorno-${p.id}`} geometry={p.geom} castShadow receiveShadow>
+          <meshStandardMaterial color="#cbd5e1" roughness={0.9} />
+          <Edges color="#94a3b8" />
+        </mesh>
+      ))}
       {prismasDoEnvelope.map((p) => (
         <mesh key={`env-${p.levelId}`} geometry={p.geom} position={[0, p.y, 0]} renderOrder={-1}>
           {/* Translúcido e sem escrever profundidade: é referência, não massa —
@@ -1698,9 +1725,17 @@ export default function Blueprint3DViewer(props: Props) {
         {/* A câmera de sombra acompanha a CENA (`sombraDaCena`): a padrão cobre
             ±5 m, e num lote de 60 m com relevo a sombra simplesmente não
             existia fora daquele quadrado — ou virava acne com o mapa esticado. */}
+        {/* SOL (E5.1): com a direção do sol, a luz vem de lá — o desenho é Y
+            para cima e o mundo é Z para "baixo da tela" (y → −z, como no
+            rotateX(−π/2) das extrusões). Sol baixo, luz mais fraca e quente. */}
         <directionalLight
-          position={[spread, alturaTopo + spread, spread * 0.6]}
-          intensity={1.1}
+          position={
+            props.sol
+              ? [centro[0] + props.sol.x * spread * 2, Math.max(0.5, props.sol.z * spread * 2), centro[2] - props.sol.y * spread * 2]
+              : [spread, alturaTopo + spread, spread * 0.6]
+          }
+          intensity={props.sol ? (props.sol.z <= 0 ? 0.15 : 0.6 + 0.7 * Math.min(1, props.sol.z * 1.5)) : 1.1}
+          color={props.sol && props.sol.z < 0.35 ? '#ffe4b5' : '#ffffff'}
           castShadow
           shadow-mapSize-width={sombra.mapa}
           shadow-mapSize-height={sombra.mapa}

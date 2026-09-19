@@ -23,6 +23,8 @@ interface Props {
   mostrarTerreno?: boolean;
   /** ENVELOPE 3D (E3.3): prismas edificáveis por pavimento. Ver `Blueprint3DViewer`. */
   envelope?: { levelId: string; nome: string; anel: { x: number; y: number }[]; baseMm: number; topoMm: number; acimaDoGabarito: boolean }[];
+  sol?: { x: number; y: number; z: number } | null;
+  entorno?: { id: string; rotulo: string; anel: { x: number; y: number }[]; alturaMm: number }[];
   /**
    * A malha do relevo (topografia gerada). Com ela, o terreno deixa de ser o
    * plano chato e vira a superfície. `relevoChave` é o hash da versão — é a

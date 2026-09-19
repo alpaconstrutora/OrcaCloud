@@ -728,6 +728,20 @@ propagação; bump).
 
 **Etapa 4 fechada** (4.1 programa, 4.2 grafo espacial, 4.3 conferência). Próxima: Etapa 5 (5.1 insolação/ventilação, 5.2 score).
 
+### E5.1 — Insolação e ventilação (19/09/2026)
+
+**O que entrou** (sem bump; tudo derivado):
+
+- **`utils/blueprintInsolacao.ts`**: `posicaoSolar(latitude, diaDoAno, horaSolar)` (declinação de Cooper; altura pelo triângulo de posição; azimute a partir do norte, horário, válido nos dois hemisférios), `direcaoDoSol(pos, rotacaoNorteDeg)` no espaço do desenho (norte do desenho = `georreferencia.rotacaoNorteDeg`, +Y sem georreferência — a convenção do IFC), `horasDeSolNaFachada` (varredura de 15 min; sol ≥ 5° acima do horizonte, à frente da normal externa e sem sombra do entorno no meio do trecho a 1,20 m do piso), `analisarInsolacao(grafo, …)` → por ambiente: horas por fachada e horas do AMBIENTE (união das fachadas COM JANELA) em 21/06, 21/03 e 21/12, `ventilacaoCruzada` (aberturas para fora em fachadas não paralelas, ≥ 30° módulo 180°), "agora" (SOL/SOMBRA/SEM_JANELA/NOITE). **Entorno**: `VizinhoDoEntorno {lado, alturaM, afastamentoM, profundidadeM}` → `prismasDoEntorno` (retângulo ao longo da divisa, do lado de fora do lote) e `sombreado` (marcha do raio até o topo do prisma mais alto). `resumirInsolacao`, `insolacaoParaRegras`, `LATITUDE_PADRAO` (Brasília, dita como suposição).
+- **Grafo (E4.2)** ganhou `meio` e `normal` em cada fachada — a insolação parte daí.
+- **Motor de regras (E3.2)**: variáveis de AMBIENTE `horas_sol_inverno`, `horas_sol_verao`, `ventilacao_cruzada`, `insolacao_minima` (da zona, E3.1); sementes `sem-amb-insolacao` (sala/dormitório com janela: `horas_sol_inverno >= insolacao_minima`, ERRO — não avaliada até a zona dizer o mínimo) e `sem-amb-ventilacao-cruzada` (INFO, NBR 15575-1).
+- **Gaveta Analisar › Insolação** (`PainelInsolacao.tsx`, testids `tarefa-insolacao`, `instante-solar`, `posicao-do-sol`, `hora-solar`, `resumo-da-insolacao`, `tabela-de-insolacao`, `entorno`, `novo-vizinho`): data de referência ou livre, HORA SOLAR (régua 5–19 h), latitude (da georreferência, travada; senão suposta e dita), "Sol e sombras no 3D", posição do sol, resumo (sem sol no inverno / abaixo do mínimo, sem ventilação cruzada), tabela por ambiente, vizinhos do entorno (lado, altura, afastamento, profundidade). Hipóteses em `usePersistedState('blueprint:insolacao')` — do navegador, como as demais hipóteses de análise.
+- **3D**: props `sol` (direção unitária) e `entorno` (prismas cinza que projetam sombra) em `Blueprint3DViewer`/`Blueprint3DTab`; a luz direcional principal passa a vir do sol (posição = centro + direção × 2·spread; intensidade cai com sol baixo, cor quente perto do horizonte) — as sombras que já existiam (`shadows`, `castShadow`) seguem a data/hora. Botão do ribbon conta os ambientes com janela e 0 h de sol em 21/06.
+
+**Decisões.** (1) Hora SOLAR, não do relógio — a conta é astronômica e a tela diz isso; fuso/horário de verão ficariam a cargo de quem interpreta. (2) A sombra da própria edificação sobre si não entra na contagem de horas (declarado); o 3D a mostra. (3) Vizinhos declarados por divisa (não desenhados) — o desenho não tem o quarteirão; é o que se sabe numa visita ao lote. (4) Ambiente conta só fachadas com janela: sol numa parede cega não é insolação. (5) O ponto de referência é o meio do trecho externo a 1,20 m — peitoril; janelas altas ou baixas não mudam a conta (simplificação).
+
+**Prova no app real (escritas bloqueadas: 14).** Gaveta abre com 21/06 às 9 h: "Sol a 31° de altura, azimute 49° (NE) · latitude SUPOSTA"; 4 ambientes, 2 com janela a oeste (5,0 · 5,5 · 6,0 h nas três datas), "sombra" às 9 h e "sol" às 15 h (azimute 311°, NO); verão às 15 h: 47°, 252° (O); vizinho de 15 m colado na lateral direita não muda as janelas a oeste (coerente); 3D com a luz vindo do sol da tarde. 0 erros. Testes: `__tests__/blueprintInsolacao.test.ts` (2) e editor "insolação (E5.1)"; suíte 371 arquivos / 4694 testes; build OK.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

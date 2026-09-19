@@ -124,6 +124,10 @@ export const VARIAVEIS_DO_ESCOPO: Record<EscopoDaRegra, { nome: string; descrica
     { nome: 'area_portas', descricao: 'soma das áreas das portas do ambiente (m²)' },
     { nome: 'unidade_pcd', descricao: 'o ambiente pertence a uma unidade PCD (sim/não)' },
     { nome: 'pavimento', descricao: 'nome do pavimento' },
+    { nome: 'horas_sol_inverno', descricao: 'horas de sol pelas janelas no solstício de inverno (E5.1)' },
+    { nome: 'horas_sol_verao', descricao: 'horas de sol pelas janelas no solstício de verão (E5.1)' },
+    { nome: 'ventilacao_cruzada', descricao: 'aberturas para fora em fachadas não paralelas (sim/não)' },
+    { nome: 'insolacao_minima', descricao: 'horas mínimas de sol exigidas pela zona' },
   ],
   PORTA: [
     { nome: 'largura', descricao: 'vão (m)' },
@@ -160,6 +164,9 @@ export const REGRAS_SEMENTE: readonly Regra[] = [
   { id: 'sem-pav-pe-direito', nome: 'Pé-direito do pavimento', escopo: 'PAVIMENTO', expressao: 'pe_direito >= 2.5', severidade: 'AVISO', fonte: FONTE_SEMENTE, descricao: 'Pé-direito padrão ≥ 2,50 m' },
   { id: 'sem-pav-envelope', nome: 'Pavimento dentro do envelope edificável', escopo: 'PAVIMENTO', expressao: 'cabe_no_envelope', severidade: 'ERRO', fonte: 'Zona urbanística', descricao: 'Contorno desenhado dentro dos recuos, afastamentos e faixas restritas (E3.3)' },
   { id: 'sem-pav-gabarito', nome: 'Pavimento dentro do gabarito', escopo: 'PAVIMENTO', expressao: 'nao acima_do_gabarito', severidade: 'ERRO', fonte: 'Zona urbanística', descricao: 'Topo do pavimento ≤ gabarito em altura e ordem ≤ gabarito em pavimentos' },
+  // Insolação e ventilação (E5.1): sol de inverno pelas janelas dos ambientes de permanência prolongada; ventilação cruzada como recomendação.
+  { id: 'sem-amb-insolacao', nome: 'Sala/dormitório: insolação mínima no inverno', escopo: 'AMBIENTE', quando: "tipo == 'SALA_DORMITORIO' e area_janelas > 0", expressao: 'horas_sol_inverno >= insolacao_minima', severidade: 'ERRO', fonte: 'Zona urbanística', descricao: 'Horas de sol pelas janelas em 21/06 ≥ mínimo da zona' },
+  { id: 'sem-amb-ventilacao-cruzada', nome: 'Sala/dormitório: ventilação cruzada', escopo: 'AMBIENTE', quando: "tipo == 'SALA_DORMITORIO'", expressao: 'ventilacao_cruzada', severidade: 'INFO', fonte: 'NBR 15575-1:2021', artigo: '11 (desempenho térmico)', descricao: 'Aberturas para fora em fachadas não paralelas' },
 ];
 
 /** O que o motor precisa de fora do modelo (zona, lote, aproveitamento). Tudo opcional: o que falta vira NÃO AVALIADA. */
@@ -176,7 +183,10 @@ export interface ContextoDeRegras {
     taxaPermeabilidadeMin?: number | null;
     testadaMinimaMm?: number | null;
     areaMinimaDoLoteM2?: number | null;
+    insolacaoMinimaH?: number | null;
   } | null;
+  /** Insolação por ambiente (E5.1): `insolacaoParaRegras`. Ausente = variáveis ausentes. */
+  insolacaoPorAmbiente?: Record<ObjectId, { horasSolInverno: number; horasSolVerao: number; ventilacaoCruzada: boolean; temJanela: boolean }> | null;
   /** Envelope 3D por pavimento (E3.3): `envelopePorPavimentoParaRegras`. Ausente = variáveis ausentes. */
   envelopePorPavimento?: Record<ObjectId, { areaEnvelopeM2: number; areaForaM2: number | null; cabe: boolean; acimaDoGabarito: boolean }> | null;
 }
@@ -358,6 +368,10 @@ export function alvosDoEscopo(model: BlueprintModel, escopo: EscopoDaRegra, ctx:
             area_portas: Math.round(aberturas.filter((o) => o.kind !== 'window').reduce((t, o) => t + areaDe(o), 0) * 100) / 100,
             unidade_pcd: unidade?.pcd ?? false,
             pavimento: l?.name ?? '',
+            horas_sol_inverno: ctx.insolacaoPorAmbiente?.[s.id]?.horasSolInverno,
+            horas_sol_verao: ctx.insolacaoPorAmbiente?.[s.id]?.horasSolVerao,
+            ventilacao_cruzada: ctx.insolacaoPorAmbiente?.[s.id]?.ventilacaoCruzada,
+            insolacao_minima: ctx.zona?.insolacaoMinimaH,
           }),
         };
       });

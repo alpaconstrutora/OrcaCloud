@@ -22,6 +22,8 @@ import { somaDasCamadas } from '../../utils/blueprintKernel';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import DatabasePickerModal from '../DatabasePickerModal';
+import SeletorDeMaterial from './SeletorDeMaterial';
+import type { Material } from '../../utils/blueprintMateriais';
 import { CampoMedida } from './PainelParedeSelecionada';
 import { useOrgContext, useOrgWriteTarget, forEachTargetOrg } from '../../hooks/useOrgContext';
 import {
@@ -94,9 +96,11 @@ interface Props {
   medidas: QuantidadeCamada[];
   /** `null` devolve a parede ao estado homogêneo, preservando a espessura. */
   aoMudar: (camadas: CamadaParede[] | null) => void;
+  /** BIBLIOTECA (E7.4): materiais da organização para escolher sem abrir o catálogo. */
+  materiais?: readonly Material[];
 }
 
-export default function PainelCamadasParede({ parede, medidas, aoMudar }: Props) {
+export default function PainelCamadasParede({ parede, medidas, aoMudar, materiais = [] }: Props) {
   const confirm = useConfirm();
   const [escolhendoItemDe, setEscolhendoItemDe] = useState<number | null>(null);
 
@@ -407,6 +411,8 @@ export default function PainelCamadasParede({ parede, medidas, aoMudar }: Props)
                 onFuncao={(funcao) => trocar(i, { funcao })}
                 onEscolherItem={() => setEscolhendoItemDe(i)}
                 onLimparItem={() => trocar(i, { itemCode: '', descricao: '' })}
+                materiais={materiais}
+                onMaterial={(m) => trocar(i, { itemCode: m.codigo, descricao: m.nome, ...(m.funcao ? { funcao: m.funcao } : {}) })}
                 onDuplicar={() => duplicar(i)}
                 onExcluir={() => excluir(i)}
                 onMover={(d) => mover(i, d)}
@@ -464,6 +470,8 @@ function LinhaDeCamada({
   onFuncao,
   onEscolherItem,
   onLimparItem,
+  materiais,
+  onMaterial,
   onDuplicar,
   onExcluir,
   onMover,
@@ -477,6 +485,8 @@ function LinhaDeCamada({
   onFuncao: (funcao: FuncaoCamada) => void;
   onEscolherItem: () => void;
   onLimparItem: () => void;
+  materiais: readonly Material[];
+  onMaterial: (m: Material) => void;
   onDuplicar: () => void;
   onExcluir: () => void;
   onMover: (direcao: -1 | 1) => void;
@@ -590,6 +600,13 @@ function LinhaDeCamada({
       {/* Faixa 3 — o material, com a largura inteira do painel: é o campo com o
           texto mais longo (código + descrição do SINAPI), e espremê-lo ao lado
           de outra coisa devolve "Escolher ma…". */}
+      {/* BIBLIOTECA (E7.4): a escolha rápida vem antes do catálogo; o botão do
+          catálogo continua para o código que a biblioteca não tem. */}
+      {materiais.length > 0 && (
+        <div className="mt-1 pl-5">
+          <SeletorDeMaterial materiais={materiais} atual={camada.itemCode} onEscolher={onMaterial} onLimpar={onLimparItem} ariaLabel={`Material da biblioteca para a camada ${indice + 1}`} />
+        </div>
+      )}
       <div className="mt-1 flex items-center gap-1.5 pl-5">
         <button
           type="button"

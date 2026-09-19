@@ -56,6 +56,7 @@ import {
   LandPlot,
   Layers,
   Fence,
+  BookOpen,
   Grip,
   Hand,
   Magnet,
@@ -273,7 +274,10 @@ import PainelTopografia from './PainelTopografia';
 import QuadroDeDivisas from './QuadroDeDivisas';
 import { useConfirm } from '../ui/confirm';
 import { usePersistedState } from '../ui/TableUtils';
-import { useOrgContext } from '../../hooks/useOrgContext';
+import { useOrgContext, useOrgWriteTarget, forEachTargetOrg } from '../../hooks/useOrgContext';
+import { useBlueprintMateriais } from '../../hooks/useBlueprintMateriais';
+import TelaMateriais from './TelaMateriais';
+import type { UsoDeMaterial } from '../../utils/blueprintMateriais';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import type { Empreendimento } from '../../types/empreendimento';
 import {
@@ -1211,7 +1215,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -1798,6 +1802,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
 
   const confirmar = useConfirm();
   const { orgId } = useOrgContext();
+  /** BIBLIOTECA DE MATERIAIS (E7.4): carregada uma vez; resolve `itemCode` nas camadas, acabamentos, guarda-corpos e quantitativos. */
+  const biblioteca = useBlueprintMateriais(orgId);
+  const { resolveWriteOrg: resolverOrgDeEscrita, orgTargetModal: modalDeOrgDosMateriais } = useOrgWriteTarget();
 
   // O catálogo de tipos de esquadria da organização, para a BARRA. REGRA #5:
   // `null` ("Todas") não bloqueia — vem o que a RLS deixar ver. Falhar não
@@ -2267,6 +2274,18 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     [editor.model],
   );
   quantRef.current = quant;
+  /** USO de cada código no desenho (E7.4): o que a tela Materiais mostra ao lado de cada material. */
+  const usosPorCodigo = useMemo(() => {
+    const mapa = new Map<string, UsoDeMaterial[]>();
+    const add = (u: UsoDeMaterial) => {
+      if (!u.codigo) return;
+      mapa.set(u.codigo, [...(mapa.get(u.codigo) ?? []), u]);
+    };
+    for (const m of quant.totais.porMaterial ?? []) add({ codigo: m.itemCode, descricao: m.descricao, origem: 'PAREDE', areaM2: m.areaFaceM2, volumeM3: m.volumeM3, comprimentoM: 0 });
+    for (const m of quant.totais.porAcabamento ?? []) add({ codigo: m.itemCode, descricao: m.descricao, origem: m.escopo, areaM2: m.areaM2, volumeM3: m.volumeM3, comprimentoM: m.comprimentoM });
+    for (const m of quant.totais.porGuardaCorpo ?? []) add({ codigo: m.itemCode, descricao: m.descricao, origem: 'GUARDA_CORPO', areaM2: m.areaM2, volumeM3: 0, comprimentoM: m.comprimentoM });
+    return mapa;
+  }, [quant]);
   /** O aço de cada peça e por família — a mesma conta do orçamento e da planilha. */
   const armadura = useMemo(
     () => armaduraDoModelo(editor.model, quant, hipotesesDeArmadura),
@@ -6590,6 +6609,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         guardaCorpo={guardaCorpoSel}
         onProps={(campos) => guardaCorpoSel && editor.run({ type: 'SetGuardaCorpoProps', guardaCorpoId: guardaCorpoSel.id, ...campos })}
         onExcluir={removerSelecionada}
+        materiais={biblioteca.materiais}
       />
 
       <PainelEixoSelecionado
@@ -6651,6 +6671,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   ?.camadas ?? []
               }
               aoMudar={(camadas) => mudarCamadas(paredeSel, camadas)}
+              materiais={biblioteca.materiais}
             />
           ) : null
         }
@@ -7134,6 +7155,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               model={editor.model}
               quant={quant}
               armadura={armadura}
+              porCodigoDeMaterial={biblioteca.porCodigo}
               revisao={editor.baseRevision}
               oficial={qtdOficial}
               gerando={gerando}
@@ -7150,6 +7172,43 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           </div>
         </div>
       )}
+      {telaAberta === 'materiais' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="materiais">
+          {cabecalhoDaTela(
+            'Biblioteca de materiais',
+            'Os materiais da organização — código (SINAPI ou interno), nome, unidade, custo, fabricante, densidade e condutividade. O código é o mesmo que a camada, o piso, o rodapé e o guarda-corpo carregam no desenho; a biblioteca o resolve na tela e no orçamento.',
+            BookOpen,
+            'Arquitetura',
+          )}
+          <div>
+            <TelaMateriais
+              materiais={biblioteca.materiais}
+              carregando={biblioteca.carregando}
+              indisponivel={biblioteca.indisponivel}
+              usosPorCodigo={usosPorCodigo}
+              onCriar={async (m) => {
+                const alvo = await resolverOrgDeEscrita('all-allowed');
+                if (!alvo) throw new Error('Escolha a organização em que o material será gravado.');
+                const { failed } = await forEachTargetOrg(alvo, (org) => biblioteca.criar(org, m));
+                if (failed.length) throw new Error(failed.map((f) => (f.error instanceof Error ? f.error.message : String(f.error))).join('; '));
+              }}
+              onAtualizar={async (id, m) => {
+                await biblioteca.atualizar(id, m);
+              }}
+              onDesativar={(id) => biblioteca.desativar(id)}
+              onSemear={async (lista) => {
+                const alvo = await resolverOrgDeEscrita('all-allowed');
+                if (!alvo) return;
+                await forEachTargetOrg(alvo, async (org) => {
+                  for (const m of lista) await biblioteca.criar(org, m);
+                });
+              }}
+            />
+          </div>
+          {modalDeOrgDosMateriais}
+        </div>
+      )}
+
       {telaAberta === 'gerar' && (
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="gerar">
           {cabecalhoDaTela(
@@ -7603,6 +7662,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   ativo={tarefaAberta === 'guardaCorpos'}
                   onClick={() => alternarTarefa('guardaCorpos')}
                   ajuda="Guarda-corpo (1,10 m, NBR 14718) sobre borda livre de laje em pavimento elevado e corrimão (0,92 m, NBR 9050) dos dois lados da escada — sugestão com prévia, material e item por peça, metros no quantitativo e no orçamento"
+                />
+                <BotaoDoRibbon
+                  icone={BookOpen}
+                  rotulo="Materiais"
+                  contagem={[...usosPorCodigo.keys()].filter((c) => !biblioteca.porCodigo.has(c)).length || undefined}
+                  ativo={telaAberta === 'materiais'}
+                  onClick={() => alternarTela('materiais')}
+                  ajuda="Biblioteca de materiais da organização: código (SINAPI/interno), custo, fabricante, densidade e condutividade; resolve o código das camadas, pisos, rodapés e guarda-corpos na tela e no orçamento. O número é quantos códigos do desenho ainda não estão nela."
                 />
               </GrupoDoRibbon>
             )}
@@ -10210,6 +10277,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 setTarefa(null);
                 selecionar([spaceId]);
               }}
+              materiais={biblioteca.materiais}
             />
           )}
 

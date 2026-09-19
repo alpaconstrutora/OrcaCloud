@@ -21,6 +21,8 @@ import { PRESETS_DE_ACABAMENTO, aplicarPreset, peDireitoUtilMm, presetDeAcabamen
 import { aplicarTipoDeForro, aplicarTipoDePiso, propriedadesDoForro, propriedadesDoPiso, type PropriedadesDeForro, type PropriedadesDePiso } from '../../utils/blueprintTipos';
 import DatabasePickerModal from '../DatabasePickerModal';
 import SeletorDeTipo from './SeletorDeTipo';
+import SeletorDeMaterial from './SeletorDeMaterial';
+import { camadaDoMaterial, desempenhoTermico, type Material } from '../../utils/blueprintMateriais';
 
 export interface AmbienteComAcabamento {
   spaceId: ObjectId;
@@ -43,6 +45,8 @@ interface Props {
   onAplicar: (spaceId: ObjectId, acabamentos: AcabamentosDoAmbiente | null) => void;
   onAplicarEmVarios: (spaceIds: ObjectId[], acabamentos: AcabamentosDoAmbiente) => void;
   onSelecionar?: (spaceId: ObjectId) => void;
+  /** BIBLIOTECA (E7.4): materiais da organização — escolha rápida e desempenho térmico do piso/forro. */
+  materiais?: readonly Material[];
 }
 
 const ROTULO_FUNCAO: Record<FuncaoCamada, string> = { ESTRUTURAL: 'Estrutural', VEDACAO: 'Vedação', REVESTIMENTO: 'Revestimento', ISOLAMENTO: 'Isolamento', ACABAMENTO: 'Acabamento', CAMARA_AR: 'Câmara de ar' };
@@ -53,7 +57,7 @@ const campo = 'h-7 rounded-[6px] border border-slate-300 bg-white px-1.5 text-xs
 
 type AlvoDoMaterial = { spaceId: ObjectId; escopo: 'PISO' | 'FORRO' | 'RODAPE'; indice: number };
 
-export default function PainelAcabamentos({ ambientes, nomeDoPavimento, alturaRodapePoliticaMm, porAcabamento, foco = null, onAplicar, onAplicarEmVarios, onSelecionar }: Props) {
+export default function PainelAcabamentos({ ambientes, nomeDoPavimento, alturaRodapePoliticaMm, porAcabamento, foco = null, onAplicar, onAplicarEmVarios, onSelecionar, materiais = [] }: Props) {
   const [aberto, setAberto] = useState<ObjectId | null>(foco);
   const [alvo, setAlvo] = useState<AlvoDoMaterial | null>(null);
   const resumo = resumirAcabamentosDoNivel(ambientes);
@@ -162,6 +166,7 @@ export default function PainelAcabamentos({ ambientes, nomeDoPavimento, alturaRo
                           onLimpar={() => onAplicar(a.spaceId, null)}
                           onAplicarEmVarios={(ids) => a.acabamentos && onAplicarEmVarios(ids, a.acabamentos)}
                           onEscolherMaterial={(escopo, indice) => setAlvo({ spaceId: a.spaceId, escopo, indice })}
+                          materiais={materiais}
                         />
                       </td>
                     </tr>
@@ -217,7 +222,7 @@ export default function PainelAcabamentos({ ambientes, nomeDoPavimento, alturaRo
   );
 }
 
-function EditorDoAmbiente({ ambiente: a, alturaRodapePoliticaMm, iguais, onMudar, onLimpar, onAplicarEmVarios, onEscolherMaterial }: {
+function EditorDoAmbiente({ ambiente: a, alturaRodapePoliticaMm, iguais, onMudar, onLimpar, onAplicarEmVarios, onEscolherMaterial, materiais }: {
   ambiente: AmbienteComAcabamento;
   alturaRodapePoliticaMm: number;
   iguais: ObjectId[];
@@ -225,8 +230,14 @@ function EditorDoAmbiente({ ambiente: a, alturaRodapePoliticaMm, iguais, onMudar
   onLimpar: () => void;
   onAplicarEmVarios: (ids: ObjectId[]) => void;
   onEscolherMaterial: (escopo: 'PISO' | 'FORRO' | 'RODAPE', indice: number) => void;
+  materiais: readonly Material[];
 }) {
   const ac = a.acabamentos;
+  const porCodigo = new Map(materiais.map((m) => [m.codigo, m]));
+  // Desempenho térmico do piso/forro (P2): Rsi/Rse de superfície horizontal (fluxo descendente 0,17 / 0,04).
+  const termico = (camadas: { espessuraMm: number; itemCode: string; descricao: string; funcao: FuncaoCamada }[] | undefined) => (camadas && materiais.length ? desempenhoTermico(camadas, porCodigo, 0.17, 0.04) : null);
+  const termicoPiso = termico(ac?.piso);
+  const termicoForro = termico(ac?.forro?.camadas);
   const chave = `${a.spaceId}:${JSON.stringify(ac ?? null)}`;
   const modoRodape: 'POLITICA' | 'DECLARADO' | 'SEM' = ac?.rodape === null ? 'SEM' : ac?.rodape ? 'DECLARADO' : 'POLITICA';
   return (
@@ -246,13 +257,21 @@ function EditorDoAmbiente({ ambiente: a, alturaRodapePoliticaMm, iguais, onMudar
           <button type="button" onClick={() => onMudar((atual) => ({ ...atual, piso: [...(atual.piso ?? []), { espessuraMm: 10, itemCode: '', descricao: '', funcao: 'ACABAMENTO' }] }))} className="inline-flex items-center gap-1 rounded border border-slate-300 px-1.5 py-0.5 text-[11px] text-slate-700 hover:bg-slate-50" aria-label={`Adicionar camada de piso em ${a.rotulo}`}>
             <Plus className="h-3 w-3" /> camada
           </button>
+          {materiais.length > 0 && (
+            <SeletorDeMaterial materiais={materiais} atual="" onEscolher={(m) => onMudar((atual) => ({ ...atual, piso: [...(atual.piso ?? []), camadaDoMaterial(m)] }))} ariaLabel={`Adicionar camada de piso da biblioteca em ${a.rotulo}`} />
+          )}
           {ac?.piso && (
             <button type="button" onClick={() => onMudar((atual) => { const { piso: _p, ...resto } = atual; return resto; })} className="text-[11px] text-slate-500 underline-offset-2 hover:underline">
               remover piso
             </button>
           )}
+          {termicoPiso && ac?.piso && (
+            <span className="text-[11px] text-slate-500" data-testid="termico-do-piso">
+              R {termicoPiso.resistenciaM2KW.toFixed(2).replace('.', ',')} m²·K/W{termicoPiso.transmitanciaWm2K != null ? ` · U ${termicoPiso.transmitanciaWm2K.toFixed(2).replace('.', ',')} W/m²·K` : ` · sem λ: ${termicoPiso.camadasSemLambda.join(', ')}`}
+            </span>
+          )}
         </div>
-        <EditorDeCamadas chave={`${chave}-piso`} camadas={ac?.piso ?? []} rotuloDaOrdem="de baixo para cima" onMudar={(camadas) => onMudar((atual) => (camadas.length ? { ...atual, piso: camadas } : (({ piso: _p, ...resto }) => resto)(atual)))} onEscolherMaterial={(i) => onEscolherMaterial('PISO', i)} />
+        <EditorDeCamadas chave={`${chave}-piso`} camadas={ac?.piso ?? []} rotuloDaOrdem="de baixo para cima" onMudar={(camadas) => onMudar((atual) => (camadas.length ? { ...atual, piso: camadas } : (({ piso: _p, ...resto }) => resto)(atual)))} onEscolherMaterial={(i) => onEscolherMaterial('PISO', i)} materiais={materiais} />
         <div className="mt-2">
           <SeletorDeTipo
             familia="PISO"
@@ -277,13 +296,21 @@ function EditorDoAmbiente({ ambiente: a, alturaRodapePoliticaMm, iguais, onMudar
           <button type="button" onClick={() => onMudar((atual) => ({ ...atual, forro: { camadas: [...(atual.forro?.camadas ?? []), { espessuraMm: 13, itemCode: '', descricao: '', funcao: 'ACABAMENTO' }], rebaixoMm: atual.forro?.rebaixoMm ?? 0 } }))} className="inline-flex items-center gap-1 rounded border border-slate-300 px-1.5 py-0.5 text-[11px] text-slate-700 hover:bg-slate-50" aria-label={`Adicionar camada de forro em ${a.rotulo}`}>
             <Plus className="h-3 w-3" /> camada
           </button>
+          {materiais.length > 0 && (
+            <SeletorDeMaterial materiais={materiais} atual="" onEscolher={(m) => onMudar((atual) => ({ ...atual, forro: { camadas: [...(atual.forro?.camadas ?? []), camadaDoMaterial(m)], rebaixoMm: atual.forro?.rebaixoMm ?? 0 } }))} ariaLabel={`Adicionar camada de forro da biblioteca em ${a.rotulo}`} />
+          )}
           {ac?.forro && (
             <button type="button" onClick={() => onMudar((atual) => { const { forro: _f, ...resto } = atual; return resto; })} className="text-[11px] text-slate-500 underline-offset-2 hover:underline">
               remover forro
             </button>
           )}
+          {termicoForro && ac?.forro && (
+            <span className="text-[11px] text-slate-500" data-testid="termico-do-forro">
+              R {termicoForro.resistenciaM2KW.toFixed(2).replace('.', ',')} m²·K/W{termicoForro.transmitanciaWm2K != null ? ` · U ${termicoForro.transmitanciaWm2K.toFixed(2).replace('.', ',')} W/m²·K` : ` · sem λ: ${termicoForro.camadasSemLambda.join(', ')}`}
+            </span>
+          )}
         </div>
-        <EditorDeCamadas chave={`${chave}-forro`} camadas={ac?.forro?.camadas ?? []} rotuloDaOrdem="de cima para baixo" onMudar={(camadas) => onMudar((atual) => (camadas.length ? { ...atual, forro: { camadas, rebaixoMm: atual.forro?.rebaixoMm ?? 0 } } : (({ forro: _f, ...resto }) => resto)(atual)))} onEscolherMaterial={(i) => onEscolherMaterial('FORRO', i)} />
+        <EditorDeCamadas chave={`${chave}-forro`} camadas={ac?.forro?.camadas ?? []} rotuloDaOrdem="de cima para baixo" onMudar={(camadas) => onMudar((atual) => (camadas.length ? { ...atual, forro: { camadas, rebaixoMm: atual.forro?.rebaixoMm ?? 0 } } : (({ forro: _f, ...resto }) => resto)(atual)))} onEscolherMaterial={(i) => onEscolherMaterial('FORRO', i)} materiais={materiais} />
         <div className="mt-2">
           <SeletorDeTipo
             familia="FORRO"
@@ -309,9 +336,13 @@ function EditorDoAmbiente({ ambiente: a, alturaRodapePoliticaMm, iguais, onMudar
                 <input type="number" key={`${chave}-ra`} min={1} max={MAX_ALTURA_DE_RODAPE_MM / 10} step={0.5} defaultValue={ac.rodape.alturaMm / 10} aria-label={`Altura do rodapé de ${a.rotulo} (cm)`} onBlur={(e) => { const mm = Math.round(Number(e.target.value) * 10); if (mm > 0 && mm <= MAX_ALTURA_DE_RODAPE_MM) onMudar((atual) => (atual.rodape ? { ...atual, rodape: { ...atual.rodape, alturaMm: mm } } : atual)); }} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} className={`${campo} w-16 text-right`} />
               </label>
               <input type="text" key={`${chave}-rd`} defaultValue={ac.rodape.descricao} placeholder="Descrição" aria-label={`Descrição do rodapé de ${a.rotulo}`} onBlur={(e) => onMudar((atual) => (atual.rodape ? { ...atual, rodape: { ...atual.rodape, descricao: e.target.value } } : atual))} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} className={`${campo} w-40`} />
-              <button type="button" onClick={() => onEscolherMaterial('RODAPE', 0)} className={`rounded border px-1.5 py-0.5 text-[11px] ${ac.rodape.itemCode ? 'border-slate-300 text-slate-700' : 'border-amber-300 bg-amber-50 text-amber-900'}`} aria-label={`Material do rodapé de ${a.rotulo}`}>
-                {ac.rodape.itemCode ? `Item ${ac.rodape.itemCode}` : 'Escolher material'}
-              </button>
+              {materiais.length > 0 ? (
+                <SeletorDeMaterial materiais={materiais} atual={ac.rodape.itemCode} unidades={['m', 'm²']} onEscolher={(m) => onMudar((atual) => (atual.rodape ? { ...atual, rodape: { ...atual.rodape, itemCode: m.codigo, descricao: m.nome } } : atual))} onCatalogo={() => onEscolherMaterial('RODAPE', 0)} onLimpar={() => onMudar((atual) => (atual.rodape ? { ...atual, rodape: { ...atual.rodape, itemCode: '' } } : atual))} ariaLabel={`Material do rodapé de ${a.rotulo}`} />
+              ) : (
+                <button type="button" onClick={() => onEscolherMaterial('RODAPE', 0)} className={`rounded border px-1.5 py-0.5 text-[11px] ${ac.rodape.itemCode ? 'border-slate-300 text-slate-700' : 'border-amber-300 bg-amber-50 text-amber-900'}`} aria-label={`Material do rodapé de ${a.rotulo}`}>
+                  {ac.rodape.itemCode ? `Item ${ac.rodape.itemCode}` : 'Escolher material'}
+                </button>
+              )}
               <span className="text-slate-500">{fmt(a.comprimentoRodapeM)} m · {fmt((a.comprimentoRodapeM * ac.rodape.alturaMm) / 1000)} m²</span>
             </>
           )}
@@ -330,12 +361,13 @@ function EditorDoAmbiente({ ambiente: a, alturaRodapePoliticaMm, iguais, onMudar
   );
 }
 
-function EditorDeCamadas({ chave, camadas, rotuloDaOrdem, onMudar, onEscolherMaterial }: {
+function EditorDeCamadas({ chave, camadas, rotuloDaOrdem, onMudar, onEscolherMaterial, materiais }: {
   chave: string;
   camadas: CamadaParede[];
   rotuloDaOrdem: string;
   onMudar: (camadas: CamadaParede[]) => void;
   onEscolherMaterial: (indice: number) => void;
+  materiais: readonly Material[];
 }) {
   if (camadas.length === 0) return <p className="mt-1 text-[11px] text-slate-400">Sem camadas — escolha um preset, um tipo salvo ou adicione uma camada.</p>;
   const trocar = (i: number, parte: Partial<CamadaParede>) => onMudar(camadas.map((c, k) => (k === i ? { ...c, ...parte } : c)));
@@ -360,10 +392,14 @@ function EditorDeCamadas({ chave, camadas, rotuloDaOrdem, onMudar, onEscolherMat
               {FUNCOES_DE_CAMADA.map((f) => <option key={f} value={f}>{ROTULO_FUNCAO[f]}</option>)}
             </select>
             <input type="text" defaultValue={c.descricao} placeholder="Descrição" aria-label={`Descrição da camada ${i + 1}`} onBlur={(e) => e.target.value !== c.descricao && trocar(i, { descricao: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} className={`${campo} w-40`} />
-            <button type="button" onClick={() => onEscolherMaterial(i)} className={`rounded border px-1.5 py-0.5 text-[11px] ${c.itemCode ? 'border-slate-300 text-slate-700' : 'border-amber-300 bg-amber-50 text-amber-900'}`} aria-label={`Material da camada ${i + 1}`} title={c.itemCode ? 'Trocar o item de catálogo' : 'Sem item de catálogo — não entra no orçamento'}>
-              {c.itemCode ? `Item ${c.itemCode}` : 'Escolher material'}
-            </button>
-            {c.itemCode && (
+            {materiais.length > 0 ? (
+              <SeletorDeMaterial materiais={materiais} atual={c.itemCode} onEscolher={(m) => trocar(i, { itemCode: m.codigo, descricao: m.nome, ...(m.funcao ? { funcao: m.funcao } : {}) })} onCatalogo={() => onEscolherMaterial(i)} onLimpar={() => trocar(i, { itemCode: '' })} ariaLabel={`Material da camada ${i + 1}`} />
+            ) : (
+              <button type="button" onClick={() => onEscolherMaterial(i)} className={`rounded border px-1.5 py-0.5 text-[11px] ${c.itemCode ? 'border-slate-300 text-slate-700' : 'border-amber-300 bg-amber-50 text-amber-900'}`} aria-label={`Material da camada ${i + 1}`} title={c.itemCode ? 'Trocar o item de catálogo' : 'Sem item de catálogo — não entra no orçamento'}>
+                {c.itemCode ? `Item ${c.itemCode}` : 'Escolher material'}
+              </button>
+            )}
+            {c.itemCode && materiais.length === 0 && (
               <button type="button" onClick={() => trocar(i, { itemCode: '' })} className="text-[10px] text-slate-400 hover:text-slate-600" aria-label={`Limpar material da camada ${i + 1}`}>limpar</button>
             )}
             <button type="button" onClick={() => mover(i, -1)} disabled={i === 0} className="rounded p-0.5 text-slate-400 hover:text-slate-700 disabled:opacity-30" aria-label={`Subir camada ${i + 1}`}><ArrowUp className="h-3 w-3" /></button>

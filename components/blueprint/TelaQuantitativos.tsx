@@ -12,6 +12,7 @@ import {
   type QuantitativoDoPavimento,
 } from '../../utils/blueprintQuantitativosPorPavimento';
 import type { BlueprintQuantitySnapshot } from '../../types/blueprint';
+import { custoDe, massaKg, type Material } from '../../utils/blueprintMateriais';
 import { StandardTable, type StandardTableColumn } from '../ui/StandardTable';
 import { TabsBar, type TabsBarItem } from '../ui/TabsBar';
 import { usePersistedState } from '../ui/TableUtils';
@@ -143,12 +144,14 @@ interface Props {
   /** SCORE (E5.2): o cartão no Resumo, com o atalho para a tela Avaliação. */
   avaliacao?: Avaliacao | null;
   onAbrirAvaliacao?: () => void;
+  /** BIBLIOTECA (E7.4): resolve o código → nome, massa (densidade) e custo. */
+  porCodigoDeMaterial?: Map<string, Material>;
 }
 
 type Fmt = (v: number) => string;
 const num = (fmt: Fmt, v: number) => <span className="block text-right text-sm tabular-nums text-gray-700">{fmt(v)}</span>;
 
-export default function TelaQuantitativos({ model, quant, armadura, revisao, oficial, gerando, onGerar, dirty, onSelecionarPeca, avaliacao, onAbrirAvaliacao }: Props) {
+export default function TelaQuantitativos({ model, quant, armadura, revisao, oficial, gerando, onGerar, dirty, onSelecionarPeca, avaliacao, onAbrirAvaliacao, porCodigoDeMaterial }: Props) {
   const t = quant.totais;
   // PAVIMENTOS: o mapa entidade → nível, as linhas por pavimento e o filtro
   // das abas de ambiente/peça. O filtro só aparece com dois níveis ou mais —
@@ -211,7 +214,10 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
       add({ grupo: 'Arquitetura', item: 'Alvenaria', valor: t.volumeAlvenariaM3, unidade: 'm³', detalhe: 'Volume das paredes, descontadas aberturas e o que cede à estrutura' });
       // POR MATERIAL: a decomposição da alvenaria — só quando alguma parede tem composição.
       for (const m of t.porMaterial) {
-        add({ grupo: 'Material', item: m.descricao || m.itemCode || 'Sem material', valor: m.volumeM3, unidade: 'm³', detalhe: `${fmt(m.areaFaceM2)} m² de face · função ${m.funcao}` });
+        const mat = porCodigoDeMaterial?.get(m.itemCode);
+        const kg = massaKg(m.volumeM3, mat);
+        const custo = mat ? custoDe(mat, { areaM2: m.areaFaceM2, volumeM3: m.volumeM3 }) : null;
+        add({ grupo: 'Material', item: m.descricao || mat?.nome || m.itemCode || 'Sem material', valor: m.volumeM3, unidade: 'm³', detalhe: `${fmt(m.areaFaceM2)} m² de face · função ${m.funcao}${kg != null ? ` · ≈ ${Math.round(kg).toLocaleString('pt-BR')} kg` : ''}${custo ? ` · R$ ${fmt(custo)}` : ''}${m.itemCode && !mat && porCodigoDeMaterial ? ' · fora da biblioteca' : ''}` });
       }
       add({ grupo: 'Arquitetura', item: 'Rodapé', valor: t.comprimentoRodapeM, unidade: 'm', detalhe: 'Perímetro interno menos os vãos de porta; zero onde o ambiente declarou "sem rodapé"' });
       // ACABAMENTOS DECLARADOS (E7.2): piso e forro por material (m² e m³), rodapé declarado por material (m).
@@ -222,7 +228,13 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
           item: `${escopo} · ${m.descricao || m.itemCode || 'sem material'}`,
           valor: m.escopo === 'RODAPE' ? m.comprimentoM : m.areaM2,
           unidade: m.escopo === 'RODAPE' ? 'm' : 'm²',
-          detalhe: m.escopo === 'RODAPE' ? `${fmt(m.areaM2)} m² (comprimento × altura declarada) · ${m.ambientes} ambiente(s)` : `${fmt(m.volumeM3)} m³ · função ${m.funcao ?? '—'} · ${m.ambientes} ambiente(s)`,
+          detalhe: (() => {
+            const mat = porCodigoDeMaterial?.get(m.itemCode);
+            const kg = m.escopo === 'RODAPE' ? null : massaKg(m.volumeM3, mat);
+            const custo = mat ? custoDe(mat, { areaM2: m.areaM2, volumeM3: m.volumeM3, comprimentoM: m.comprimentoM }) : null;
+            const extra = `${kg != null ? ` · ≈ ${Math.round(kg).toLocaleString('pt-BR')} kg` : ''}${custo ? ` · R$ ${fmt(custo)}` : ''}`;
+            return m.escopo === 'RODAPE' ? `${fmt(m.areaM2)} m² (comprimento × altura declarada) · ${m.ambientes} ambiente(s)${extra}` : `${fmt(m.volumeM3)} m³ · função ${m.funcao ?? '—'} · ${m.ambientes} ambiente(s)${extra}`;
+          })(),
         });
       }
       add({ grupo: 'Arquitetura', item: 'Aberturas', valor: t.areaAberturasM2, unidade: 'm²', detalhe: `${t.portas} porta(s), ${t.janelas} janela(s)` });

@@ -18,16 +18,20 @@ import {
 import { conferirGuardaCorpo } from '../../utils/blueprintGuardaCorpo';
 import DatabasePickerModal from '../DatabasePickerModal';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
+import SeletorDeMaterial from './SeletorDeMaterial';
+import type { Material } from '../../utils/blueprintMateriais';
 
 interface Props {
   guardaCorpo: GuardaCorpo | null;
   onProps: (campos: { tipo?: TipoDeGuardaCorpo; alturaMm?: number; material?: MaterialDeGuardaCorpo; itemCode?: string; descricao?: string; rotulo?: string | null; sugerido?: boolean | null }) => void;
   onExcluir: () => void;
+  /** BIBLIOTECA (E7.4): materiais da organização em m / m². */
+  materiais?: readonly Material[];
 }
 
 const m = (mm: number) => (mm / 1000).toFixed(2).replace('.', ',');
 
-export default function PainelGuardaCorpoSelecionado({ guardaCorpo: g, onProps, onExcluir }: Props) {
+export default function PainelGuardaCorpoSelecionado({ guardaCorpo: g, onProps, onExcluir, materiais = [] }: Props) {
   const [escolhendoItem, setEscolhendoItem] = useState(false);
   if (!g) return null;
   const campo = 'rounded-md border border-slate-300 px-2 py-1 text-xs font-normal text-slate-800';
@@ -93,7 +97,10 @@ export default function PainelGuardaCorpoSelecionado({ guardaCorpo: g, onProps, 
         </label>
         <div className="col-span-2 flex flex-col gap-1">
           Item de catálogo
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {materiais.length > 0 && (
+              <SeletorDeMaterial materiais={materiais} atual={g.itemCode} unidades={['m', 'm²']} onEscolher={(mat) => onProps({ itemCode: mat.codigo, descricao: mat.nome })} onLimpar={() => onProps({ itemCode: '', descricao: '' })} ariaLabel="Material da biblioteca para o guarda-corpo" />
+            )}
             <button type="button" onClick={() => setEscolhendoItem(true)} className={`rounded border px-2 py-1 text-xs font-normal ${g.itemCode ? 'border-slate-300 text-slate-700' : 'border-amber-300 bg-amber-50 text-amber-900'}`} aria-label="Item de catálogo do guarda-corpo" data-testid="item-do-guarda-corpo">
               {g.itemCode ? `${g.itemCode} · ${g.descricao || 'sem descrição'}` : 'Escolher material no catálogo (m ou m²)'}
             </button>

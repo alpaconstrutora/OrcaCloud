@@ -156,6 +156,27 @@ export interface BlueprintProgramRow {
   updated_at: string;
 }
 
+/** Biblioteca de materiais da organização (E7.4) — `blueprint_materials`. */
+export interface BlueprintMaterialRow {
+  id: string;
+  organization_id: string;
+  codigo: string;
+  nome: string;
+  fonte: 'SINAPI' | 'INTERNA';
+  unidade: string;
+  custo: number;
+  fabricante: string | null;
+  densidade_kg_m3: number | null;
+  condutividade_w_mk: number | null;
+  cor: string | null;
+  funcao: string | null;
+  espessura_padrao_mm: number | null;
+  propriedades: Record<string, unknown>;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface BlueprintTopografiaRow {
   id: string;
   study_id: string;

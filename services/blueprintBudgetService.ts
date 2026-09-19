@@ -33,7 +33,9 @@ import {
   type QuantityPolicy,
 } from '../utils/blueprintKernel';
 import { garantirCaminhosNaWbs } from '../utils/wbsFromBudget';
-import type { BudgetEntry, SinapiItem } from '../types/budget';
+import { SinapiType, type BudgetEntry, type SinapiItem } from '../types/budget';
+import { blueprintMaterialService } from './blueprintMaterialService';
+import { itemDoMaterial } from '../utils/blueprintMateriais';
 import type { ProjectSettings } from '../types';
 
 const MAP_COLS =
@@ -103,7 +105,7 @@ export async function deleteMapping(id: string): Promise<void> {
  * Código que não existe em lugar nenhum volta ausente do mapa — e vira
  * divergência explícita na geração, nunca linha silenciosa.
  */
-export async function resolverItens(codes: string[]): Promise<Map<string, SinapiItem>> {
+export async function resolverItens(codes: string[], organizationId: string | null = null): Promise<Map<string, SinapiItem>> {
   const unicos = [...new Set(codes.map((c) => c.trim()).filter(Boolean))];
   if (unicos.length === 0) return new Map();
 
@@ -133,6 +135,20 @@ export async function resolverItens(codes: string[]): Promise<Map<string, Sinapi
       source: 'Própria',
       isOverride: true,
     });
+  }
+
+  // BIBLIOTECA DE MATERIAIS (E7.4): o código interno ("INT-PORC-60") só existe
+  // nela, e o SINAPI importado com custo preenchido é o preço que a ORGANIZAÇÃO
+  // paga. Regra: material com custo > 0 SOBREPÕE o oficial/próprio; com custo
+  // zero só preenche o que ninguém resolveu (importado sem preço não pode zerar
+  // um item que o SINAPI cota). Indisponível (migration ausente) = segue sem.
+  try {
+    const materiais = await blueprintMaterialService.byCodigos(organizationId, unicos);
+    for (const m of materiais) {
+      if (m.custo > 0 || !mapa.has(m.codigo)) mapa.set(m.codigo, itemDoMaterial(m, SinapiType.INPUT));
+    }
+  } catch (e) {
+    console.warn('blueprintBudget/resolverItens: biblioteca de materiais indisponível', e);
   }
 
   return mapa;
@@ -185,7 +201,7 @@ export async function preverLancamentos(
   const itens = await resolverItens([
     ...mapeamentos.map((m) => m.item_code),
     ...codigosDeCamada,
-  ]);
+  ], snapshot.organization_id);
 
   const resolvidos: MapeamentoResolvido[] = mapeamentos.map((m) => ({
     mapeamento: m,

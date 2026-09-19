@@ -122,6 +122,22 @@ vi.mock('../../services/blueprintProgramService', () => ({
   },
 }));
 
+// Biblioteca de materiais (E7.4): lista controlável; gravação registrada.
+const listMateriais = vi.fn(async () => [] as unknown[]);
+const createMaterial = vi.fn(async (_org: string, m: Record<string, unknown>) => ({ id: 'mat_novo', organization_id: _org, active: true, created_at: '', updated_at: '', ...m }));
+vi.mock('../../services/blueprintMaterialService', async () => {
+  const puro = await import('../../utils/blueprintMateriais');
+  return {
+    blueprintMaterialService: {
+      list: async (...a: unknown[]) => (await listMateriais(...(a as []))).map((r) => puro.materialDaLinha(r as never)),
+      byCodigos: async () => [],
+      create: async (org: string, m: Record<string, unknown>) => puro.materialDaLinha((await createMaterial(org, m)) as never),
+      update: vi.fn(async () => ({})),
+      deactivate: vi.fn(async () => {}),
+    },
+  };
+});
+
 // IA da planta (E6.4): a Edge Function é controlável — por padrão "não configurada" (o intérprete local responde).
 const pedirMudancasAIa = vi.fn(async () => ({ mudancas: null, indisponivel: 'IA não configurada ou indisponível' }) as unknown);
 vi.mock('../../services/plantaIaService', () => ({
@@ -1925,6 +1941,68 @@ describe('BlueprintEditor · quantitativos', () => {
     const g2 = await screen.findByTestId('tarefa-guarda-corpos');
     expect(within(g2).getByRole('row', { name: 'Sugestão L2 · borda 1' })).toHaveTextContent(/Guarda-corpo.*8,00.*1,10/);
     expect(within(g2).getAllByRole('row', { name: /^Sugestão/ })).toHaveLength(1);
+  }, 60000);
+
+  it('biblioteca de materiais (E7.4): a tela lista os materiais e o uso no desenho; criar valida e grava; o seletor da biblioteca põe o código na camada do piso; o quantitativo mostra massa e custo; o ribbon conta os códigos fora da biblioteca', async () => {
+    const porcelanato = { id: 'mat_1', organization_id: 'org_1', codigo: 'INT-PORCELANATO', nome: 'Porcelanato', fonte: 'INTERNA', unidade: 'm²', custo: 120, fabricante: 'Portobello', densidade_kg_m3: 2300, condutividade_w_mk: 1.05, cor: '#f1f5f9', funcao: 'ACABAMENTO', espessura_padrao_mm: 10, propriedades: {}, active: true, created_at: '', updated_at: '' };
+    const contrapiso = { ...porcelanato, id: 'mat_2', codigo: 'INT-CONTRAPISO', nome: 'Contrapiso', unidade: 'm³', custo: 600, densidade_kg_m3: 2000, condutividade_w_mk: 1.15, funcao: 'REVESTIMENTO', espessura_padrao_mm: 40 };
+    listMateriais.mockResolvedValue([porcelanato, contrapiso]);
+    // Gravar passa por `resolveWriteOrg` (REGRA #5): com UMA organização na loja o alvo não é ambíguo e não abre modal.
+    const { useStore } = await import('../../store/useStore');
+    const orgsAntes = useStore.getState().organizations;
+    useStore.setState({ organizations: [{ id: 'org_1', name: 'Org de teste', members: [] }] as never });
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    let m = k.applyBatch(nivel.model, [w(0, 0, 4000, 0), w(4000, 0, 4000, 3000), w(4000, 3000, 0, 3000), w(0, 3000, 0, 0)]).model;
+    // Sala com piso declarado: contrapiso da biblioteca (40 mm) + uma camada com código que a biblioteca não tem.
+    m = k.applyCommand(m, {
+      type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Sala', tipoDeAmbiente: 'SALA_DORMITORIO',
+      acabamentos: { piso: [{ espessuraMm: 40, itemCode: 'INT-CONTRAPISO', descricao: 'Contrapiso', funcao: 'REVESTIMENTO' }, { espessuraMm: 10, itemCode: 'X-FORA', descricao: 'Fora', funcao: 'ACABAMENTO' }] },
+    }).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^arquitetura$/i);
+    // O botão do ribbon conta 1 código fora da biblioteca (X-FORA).
+    const botao = () => screen.getAllByRole('button', { name: /^materiais/i }).find((b) => b.getAttribute('title')?.startsWith('Biblioteca de materiais'))!;
+    await waitFor(() => expect(botao()).toHaveTextContent('1'));
+    await user.click(botao());
+    const tela = await screen.findByTestId('tela-materiais');
+    expect(within(tela).getByTestId('resumo-dos-materiais')).toHaveTextContent(/2 material\(is\) na biblioteca · 2 código\(s\) em uso no desenho · 1 código\(s\) do desenho fora da biblioteca: X-FORA/);
+    // Uso no desenho: contrapiso 10,97 m² × 0,04 = 0,439 m³ → 878 kg (ρ 2000) e R$ 263,35 (m³ × 600).
+    const linhaContrapiso = within(tela).getAllByRole('row').find((r) => /INT-CONTRAPISO/.test(r.textContent ?? ''))!;
+    expect(linhaContrapiso).toHaveTextContent(/10,97 m² · 0,439 m³ · ≈ 878 kg · R\$ 263,34/);
+    // Criar: validação e gravação.
+    await user.click(within(tela).getByTestId('novo-material'));
+    await user.click(within(tela).getByTestId('salvar-material'));
+    expect(within(tela).getByTestId('erros-do-material')).toHaveTextContent(/código é obrigatório/);
+    await user.type(within(tela).getByLabelText('Código do material'), 'INT-GESSO');
+    await user.type(within(tela).getByLabelText('Nome do material'), 'Gesso acartonado');
+    await user.clear(within(tela).getByLabelText('Custo do material'));
+    await user.type(within(tela).getByLabelText('Custo do material'), '45');
+    await user.click(within(tela).getByTestId('salvar-material'));
+    await waitFor(() => expect(createMaterial).toHaveBeenCalledTimes(1));
+    expect(createMaterial.mock.calls[0][1]).toMatchObject({ codigo: 'INT-GESSO', nome: 'Gesso acartonado', custo: 45, unidade: 'm²' });
+    // Quantitativos › Resumo: o contrapiso (m³) sai com massa e custo.
+    await user.click(within(tela.closest('[data-tela="materiais"]') as HTMLElement).getByRole('button', { name: /^voltar ao editor$/i }));
+    const quant = await abrirTelaDeQuantitativos();
+    const linhas = () => within(quant).getAllByRole('row').map((r) => (r.textContent ?? '').replace(/\s+/g, ' '));
+    expect(linhas().filter((l) => /Contrapiso/.test(l)).join(' || ')).toMatch(/Piso · Contrapiso.*≈ 878 kg · R\$ 263,34/);
+    // Gaveta Acabamentos: o seletor da biblioteca troca o código da camada 2 e o térmico aparece.
+    await user.click(within(quant).getByRole('button', { name: /^voltar ao editor$/i }));
+    await user.click(screen.getByRole('button', { name: 'Acabamentos de Sala' }));
+    const gaveta = await screen.findByTestId('tarefa-acabamentos');
+    const editor1 = within(gaveta).getByTestId('editor-de-acabamentos');
+    expect(within(editor1).getByTestId('termico-do-piso')).toHaveTextContent(/sem λ: Fora/);
+    await user.selectOptions(within(editor1).getByLabelText('Material da camada 2'), 'INT-PORCELANATO');
+    const editor2 = within(screen.getByTestId('tarefa-acabamentos')).getByTestId('editor-de-acabamentos');
+    // R = 0,04/1,15 + 0,01/1,05 = 0,0443; U = 1/(0,17 + 0,0443 + 0,04) = 3,93
+    expect(within(editor2).getByTestId('termico-do-piso')).toHaveTextContent(/R 0,04 m²·K\/W · U 3,93 W\/m²·K/);
+    expect(within(screen.getByTestId('tarefa-acabamentos')).getByRole('row', { name: 'Ambiente Sala' })).toHaveTextContent(/Porcelanato · 50 mm/);
+    listMateriais.mockResolvedValue([]);
+    useStore.setState({ organizations: orgsAntes });
   }, 60000);
 
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {

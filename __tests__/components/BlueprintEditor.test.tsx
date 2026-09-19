@@ -1040,6 +1040,57 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(screen.getByLabelText('Tipo da faixa restrita a desenhar')).toHaveTextContent(/APP \(Código Florestal\) · 30 m/);
   });
 
+  it('legislação (E3.2): a tela lista violadas/conformes/não avaliadas por fonte, filtra, o clique leva ao ambiente; a aba Regras mostra a semente e valida a regra nova', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2600 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2600 }) as const;
+    let m = k.applyBatch(nivel.model, [w(0, 0, 4150, 0), w(4150, 0, 4150, 4150), w(4150, 4150, 0, 4150), w(0, 4150, 0, 0), w(4150, 0, 5400, 0), w(5400, 0, 5400, 2400), w(5400, 2400, 4150, 2400)]).model;
+    const sala = m.spaces.find((s) => s.areaMm2 > 10_000_000)!;
+    const banho = m.spaces.find((s) => s.areaMm2 < 10_000_000)!;
+    const divisa = m.walls.find((x) => x.a.x === 4150 && x.b.x === 4150)!;
+    m = k.applyBatch(m, [
+      { type: 'NameSpace', spaceId: sala.id, name: 'Sala', tipoDeAmbiente: 'SALA_DORMITORIO' },
+      { type: 'NameSpace', spaceId: banho.id, name: 'Banho', tipoDeAmbiente: 'BANHEIRO' },
+      { type: 'AddOpening', wallId: divisa.id, kind: 'door', offsetMm: 500, widthMm: 700, heightMm: 2100, sillMm: 0 },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^analisar$/i);
+    const botaoLegislacao = () => screen.getAllByRole('button', { name: /^legislação/i }).find((b) => b.getAttribute('title')?.startsWith('Verificar'))!;
+    expect(botaoLegislacao()).toHaveTextContent(/\d/); // há erros
+    await user.click(botaoLegislacao());
+    const tela = (await screen.findByRole('heading', { level: 1, name: /verificar legislação/i })).closest('[data-tela="legislacao"]') as HTMLElement;
+    const resumo = within(tela).getByTestId('resumo-legislacao');
+    expect(resumo).toHaveTextContent(/\d+ violada\(s\)/);
+    expect(resumo).toHaveTextContent(/\d+ não avaliada\(s\)/);
+    // Filtra as violadas: banheiro estreito, porta de 0,70, NBR 5410 sem tomadas.
+    await user.selectOptions(within(tela).getByLabelText('Filtrar por estado'), 'VIOLADA');
+    const linhas = () => within(tela).getAllByRole('row').map((r) => (r.textContent ?? '').replace(/\s+/g, ' '));
+    expect(linhas().some((l) => /Banheiro: largura mínima.*Banho.*largura_min = 1,1/.test(l))).toBe(true);
+    expect(linhas().some((l) => /Porta: vão livre mínimo.*Porta 0,70 m/.test(l))).toBe(true);
+    expect(linhas().some((l) => /NBR 5410.*Tomadas mínimas.*Sala/.test(l))).toBe(true);
+    expect(linhas().every((l) => !/Conforme/.test(l) || /Conforme se/.test(l))).toBe(true);
+    // Fonte: só a NBR 9050.
+    await user.selectOptions(within(tela).getByLabelText('Filtrar por fonte'), 'NBR 9050:2020');
+    expect(linhas().filter((l) => /NBR 9050/.test(l))).toHaveLength(1);
+    // O clique na linha da porta leva ao elemento: a tela fecha e a porta fica selecionada.
+    await user.click(within(tela).getByText(/^Porta 0,70 m$/));
+    expect(screen.queryByRole('heading', { level: 1, name: /verificar legislação/i })).toBeNull();
+    expect(await screen.findByText(/^Abertura selecionada$/i)).toBeInTheDocument();
+    // Aba Regras: a semente está lá; a regra nova é validada antes de salvar.
+    await user.click(botaoLegislacao());
+    const tela2 = (await screen.findByRole('heading', { level: 1, name: /verificar legislação/i })).closest('[data-tela="legislacao"]') as HTMLElement;
+    await user.click(within(tela2).getByRole('tab', { name: /^Regras/ }));
+    expect(within(tela2).getAllByText(/Código de obras genérico \(semente\)/).length).toBeGreaterThan(5);
+    const nova = within(tela2).getByTestId('nova-regra');
+    await user.type(within(nova).getByLabelText('Nome da regra'), 'Dormitório 9 m²');
+    await user.type(within(nova).getByLabelText('Expressão da regra'), 'largura >= 9');
+    expect(nova).toHaveTextContent(/variável "largura" não existe no escopo Ambiente/);
+    expect(within(nova).getByRole('button', { name: /adicionar regra/i })).toBeDisabled();
+  });
+
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2500 });

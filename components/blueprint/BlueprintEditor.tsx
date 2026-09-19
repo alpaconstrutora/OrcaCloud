@@ -36,6 +36,7 @@ import {
   DoorOpen,
   Building2,
   CarFront,
+  Scale,
   Eye,
   EyeOff,
   FileDown,
@@ -456,6 +457,9 @@ import { armaduraDoModelo, armaduraManualDe } from '../../utils/blueprintArmadur
 import TelaArmadura from './TelaArmadura';
 import TelaQuantitativos from './TelaQuantitativos';
 import TelaUnidades from './TelaUnidades';
+import TelaLegislacao from './TelaLegislacao';
+import { avaliarRegras, REGRAS_SEMENTE, type Regra, type ResultadoDeRegra } from '../../utils/blueprintRegras';
+import { blueprintRuleSetService, type ConjuntoDeRegras } from '../../services/blueprintRuleSetService';
 import PainelGrupo from './PainelGrupo';
 import { quadroDeUnidades, rotuloDaUnidade, unidadePorEtiqueta } from '../../utils/blueprintUnidades';
 import { blueprintUnidadesPlantaAiService } from '../../services/blueprintUnidadesPlantaAiService';
@@ -1136,7 +1140,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -1742,6 +1746,41 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   useEffect(() => {
     recarregarDefinicoes();
   }, [recarregarDefinicoes]);
+  /** CONJUNTOS DE REGRAS da organização (E3.2), somados à semente. */
+  const [conjuntosDeRegras, setConjuntosDeRegras] = useState<ConjuntoDeRegras[]>([]);
+  const [regrasIndisponiveis, setRegrasIndisponiveis] = useState(false);
+  const recarregarRegras = useCallback(() => {
+    blueprintRuleSetService
+      .list(orgId)
+      .then((c) => {
+        setConjuntosDeRegras(c);
+        setRegrasIndisponiveis(false);
+      })
+      .catch(() => {
+        setConjuntosDeRegras([]);
+        setRegrasIndisponiveis(true);
+      });
+  }, [orgId]);
+  useEffect(() => {
+    recarregarRegras();
+  }, [recarregarRegras]);
+  const regrasDaOrganizacao = useMemo(() => conjuntosDeRegras.flatMap((c) => c.regras), [conjuntosDeRegras]);
+  const NOME_DO_CONJUNTO_DA_ORG = 'Regras da organização';
+  const salvarRegraDaOrganizacao = orgId
+    ? async (regra: Regra) => {
+        const atual = conjuntosDeRegras.find((c) => c.nome === NOME_DO_CONJUNTO_DA_ORG && c.organizationId === orgId);
+        await blueprintRuleSetService.save(orgId, NOME_DO_CONJUNTO_DA_ORG, [...(atual?.regras ?? []), regra]);
+        recarregarRegras();
+      }
+    : null;
+  const removerRegraDaOrganizacao = orgId
+    ? async (regraId: string) => {
+        const dono = conjuntosDeRegras.find((c) => c.regras.some((r) => r.id === regraId));
+        if (!dono) return;
+        await blueprintRuleSetService.save(dono.organizationId, dono.nome, dono.regras.filter((r) => r.id !== regraId), { municipio: dono.municipio, leiReferencia: dono.leiReferencia });
+        recarregarRegras();
+      }
+    : null;
 
   /**
    * Empreendimentos do CONTEXTO DO TOPO — para a zona urbanística e para o
@@ -3299,6 +3338,48 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         : null,
     [terreno, editor.model.spaces, levelId],
   );
+
+  /**
+   * VERIFICAR LEGISLAÇÃO (E3.2): semente + regras da organização avaliadas
+   * contra o desenho, mais a NBR 5410 adaptada das conferências do ambiente.
+   */
+  const resultadosDeRegras = useMemo((): ResultadoDeRegra[] => {
+    const frentes = limitesDoNivel.filter((b) => b.kind === 'TERRENO' && b.papel === 'FRENTE');
+    const testadaM = frentes.length ? Math.round(frentes.reduce((s, b) => s + Math.hypot(b.b.x - b.a.x, b.b.y - b.a.y), 0)) / 1000 : null;
+    const doMotor = avaliarRegras(editor.model, [...REGRAS_SEMENTE, ...regrasDaOrganizacao], {
+      lote: terreno ? { areaM2: terreno.areaMm2 / 1_000_000, perimetroM: terreno.perimetroMm / 1000, testadaM } : null,
+      taxaOcupacaoPct: aproveitamento ? Math.round(aproveitamento.taxaOcupacao * 1000) / 10 : null,
+      coeficiente: aproveitamento ? Math.round(aproveitamento.coeficienteAproveitamento * 100) / 100 : null,
+      alturaM: alturaDesenhadaM,
+      zona: {
+        taxaOcupacaoMax: zona.taxaOcupacaoMax,
+        coeficienteMax: zona.coeficienteMax,
+        gabaritoAlturaMaxM: zona.gabaritoAlturaMaxM,
+        gabaritoPavimentos: zona.gabaritoPavimentos,
+        taxaPermeabilidadeMin: zona.taxaPermeabilidadeMin,
+        testadaMinimaMm: zona.testadaMinimaMm,
+        areaMinimaDoLoteM2: zona.areaMinimaDoLoteM2,
+      },
+    });
+    // NBR 5410 como fonte da lista: as conferências do painel do ambiente, sem
+    // segunda conta — tomadas mínimas (9.5.2.2.1) e luz de teto/interruptor (9.5.2.1).
+    const regraTomadas: Regra = { id: 'nbr5410-tomadas', nome: 'Tomadas mínimas por ambiente', escopo: 'AMBIENTE', expressao: 'existentes >= minimo', severidade: 'ERRO', fonte: 'NBR 5410:2004', artigo: '9.5.2.2.1' };
+    const regraLuz: Regra = { id: 'nbr5410-luz', nome: 'Ponto de luz de teto e interruptor', escopo: 'AMBIENTE', expressao: 'luz_de_teto e interruptor', severidade: 'ERRO', fonte: 'NBR 5410:2004', artigo: '9.5.2.1' };
+    const da5410: ResultadoDeRegra[] = ambientes.flatMap((a) => {
+      const base = { alvoId: a.id, alvoRotulo: a.rotulo, levelId: levelId ?? null, selecionarId: a.etiquetaId };
+      const linhas: ResultadoDeRegra[] = [];
+      if (a.conferencia) {
+        linhas.push({ regraId: regraTomadas.id, regra: regraTomadas, ...base, estado: a.conferencia.deficit > 0 ? 'VIOLADA' : 'CONFORME', valores: `existentes = ${a.conferencia.existentes} · minimo = ${a.conferencia.minimo} (${a.conferencia.regra})`, motivo: null });
+      } else {
+        linhas.push({ regraId: regraTomadas.id, regra: regraTomadas, ...base, estado: 'NAO_AVALIADA', valores: '', motivo: 'ambiente sem tipo (NBR 5410) — classifique no cartão do ambiente' });
+      }
+      const luzOk = !a.luz.faltaLuzDeTeto && !a.luz.faltaInterruptor;
+      linhas.push({ regraId: regraLuz.id, regra: regraLuz, ...base, estado: luzOk ? 'CONFORME' : 'VIOLADA', valores: `luzes de teto = ${a.luz.luzesDeTeto} · interruptores = ${a.luz.interruptores}`, motivo: null });
+      return linhas;
+    });
+    return [...doMotor, ...da5410];
+  }, [editor.model, regrasDaOrganizacao, limitesDoNivel, terreno, aproveitamento, alturaDesenhadaM, zona.taxaOcupacaoMax, zona.coeficienteMax, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos, zona.taxaPermeabilidadeMin, zona.testadaMinimaMm, zona.areaMinimaDoLoteM2, ambientes, levelId]);
+  const errosDeLegislacao = useMemo(() => resultadosDeRegras.filter((r) => r.estado === 'VIOLADA' && r.regra.severidade === 'ERRO').length, [resultadosDeRegras]);
 
   // ── Quadro de divisas — papéis, medidas da escritura e confrontantes ──────
 
@@ -6684,6 +6765,30 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           </div>
         </div>
       )}
+      {telaAberta === 'legislacao' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="legislacao">
+          {cabecalhoDaTela(
+            'Verificar legislação',
+            'Cada regra do código de obras, das normas e da organização avaliada contra o desenho: violada, conforme ou não avaliada (falta dado). Clique numa linha para ir ao elemento. A NBR 5410 entra como fonte, com as conferências do painel do ambiente.',
+            Scale,
+            'Analisar',
+          )}
+          <div>
+            <TelaLegislacao
+              resultados={resultadosDeRegras}
+              regrasDaOrganizacao={regrasDaOrganizacao}
+              nomeDoPavimento={(id) => (id ? editor.model.levels.find((l) => l.id === id)?.name ?? '—' : '—')}
+              onSelecionar={(id) => {
+                selecionarEAbrir([id]);
+                setTelaAberta(null);
+              }}
+              onSalvarRegra={regrasIndisponiveis ? null : salvarRegraDaOrganizacao}
+              onRemoverRegra={regrasIndisponiveis ? null : removerRegraDaOrganizacao}
+              avisoDePersistencia={regrasIndisponiveis ? 'Catálogo de regras indisponível (migration ausente ou sem permissão).' : null}
+            />
+          </div>
+        </div>
+      )}
       {telaAberta === 'unidades' && (
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="unidades">
           {cabecalhoDaTela(
@@ -7347,6 +7452,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   ativo={telaAberta === 'unidades'}
                   onClick={() => alternarTela('unidades')}
                   ajuda="Unidades autônomas: composição por ambiente, área privativa NBR 12721, área comum e fração ideal"
+                />
+              )}
+              {relatorioVisivel('quantitativos') && (
+                <BotaoDoRibbon
+                  icone={Scale}
+                  rotulo="Legislação"
+                  contagem={errosDeLegislacao || undefined}
+                  ativo={telaAberta === 'legislacao'}
+                  onClick={() => alternarTela('legislacao')}
+                  ajuda="Verificar legislação: código de obras (semente), NBR 9050/5410, zona e regras da organização — violada, conforme ou não avaliada"
                 />
               )}
               {(!emVista || em3d) && (

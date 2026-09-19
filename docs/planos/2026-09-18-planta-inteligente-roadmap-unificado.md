@@ -629,6 +629,41 @@ propagação; bump).
 - Fora desta fase (registrado): insolação mínima é só vocabulário (a conferência é da E5, com o
   norte georreferenciado); recorte do envelope em duas peças para a servidão no meio.
 
+### E3.2 — Motor de regras (19/09/2026)
+- **Regra declarativa** (`utils/blueprintRegras.ts`): `{escopo LOTE | EDIFICACAO | PAVIMENTO | UNIDADE |
+  AMBIENTE | PORTA, quando?, expressao, severidade ERRO | AVISO | INFO, fonte, artigo?}`, avaliada
+  pelo motor de fórmulas da E1.3 (comparações, `e`/`ou`/`nao`, textos) contra as VARIÁVEIS de cada
+  alvo (`VARIAVEIS_DO_ESCOPO`, documentadas na tela): ambiente = tipo NBR 5410, área útil, menor lado
+  pela face interna, pé-direito, área de janelas/portas nas paredes do contorno, unidade PCD; porta =
+  vão, altura, tipo; lote/edificação = do contexto (terreno, aproveitamento, altura, zona). Três
+  estados + NÃO AVALIADA quando falta dado ("falta o dado 'to_max' — taxa de ocupação máxima da
+  zona") ou a expressão não parseia — nunca conforme em silêncio; `quando` falso = não se aplica.
+  Acusa, não trava.
+- **Semente** (`REGRAS_SEMENTE`, 21 regras, dita como semente — cada município tem os seus
+  números): áreas e larguras mínimas por tipo de ambiente, pé-direito habitável/serviço,
+  iluminação 1/6 e 1/8 e ventilação 1/12, porta ≥ 0,80 m (NBR 9050 6.11.2.4) e ≥ 2,10 m, giro
+  de 1,50 m no banheiro de unidade PCD (NBR 9050 7.5), TO/CA/testada/área mínima e gabaritos da
+  zona, pé-direito do pavimento. A **NBR 5410** entra como fonte pelas conferências já feitas no
+  painel do ambiente (tomadas mínimas, luz de teto/interruptor), adaptadas no editor sem segunda
+  conta.
+- **Catálogo da organização**: `blueprint_rule_sets` (migration `aplicar_20270919000045`, APLICADA:
+  RLS por `is_org_member`, JSONB de regras) + `blueprintRuleSetService`; a tela grava no conjunto
+  "Regras da organização" e remove por regra; `problemasDaRegra` valida nome, escopo, sintaxe e
+  variáveis do escopo antes de salvar. Sem organização no topo ("Todas") não grava, e diz.
+- **Tela "Verificar legislação"** (Analisar › Legislação, contagem = erros violados; molde
+  Quantitativos): resumo (violadas com erros/avisos, conformes, não avaliadas), abas Resultados
+  (filtro por estado e por fonte, busca, clique leva ao elemento — etiqueta do ambiente, porta) e
+  Regras (semente só leitura + as da organização + formulário validado).
+- Testes: `blueprintRegras` (3: variáveis por escopo na casa de prova, semente com violadas/
+  conformes/não avaliadas e motivo, `quando` composto, expressão não booleana/inválida,
+  validação), editor "E3.2" (filtros, clique leva à porta, aba Regras). Suíte 4676. App real
+  (escritas bloqueadas: 14): "14 violada(s) (6 erro(s), 8 aviso(s)) · 50 conforme(s) · 6 não
+  avaliada(s)", fontes semente / NBR 5410 / NBR 9050 / Zona; não avaliadas nomeiam o dado que falta;
+  21 regras listadas; sem organização, o botão de gravar explica.
+- Fora desta fase (registrado): a semente é genérica — os números do município entram pelas regras
+  da organização; regra de UNIDADE/PAVIMENTO só tem as variáveis básicas; E3.3 leva o resultado ao
+  BCF/relatório e às fases de projeto.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

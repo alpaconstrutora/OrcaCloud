@@ -5,11 +5,17 @@
 >
 > Sessão: c539c51b-6e2b-4564-bc58-aff385e788e4 · 2026-09-19
 
+> **Pedido posterior — 2026-09-20 (mesma sessão):**
+> 1. limpe o almoxarifado para iniciarmos com os dados corretos.
+> 2. ao importar incluir campo com o campo com o qual alnoxarifado o usuário quer destinar o item importado
+
 ## Decisões tomadas com o usuário
 | Data | Pergunta | Resposta |
 |---|---|---|
 | 2026-09-19 | Importar ativo lança saldo (1 UN) em almoxarifado? | **Opcional**, como na aba Planilha — checkbox "Lançar saldo inicial" + seletor de almoxarifado |
 | 2026-09-19 | Quais ativos aparecem para seleção? | **Todos exceto `baixado`**, com busca (nome/código/marca/modelo) e filtro por categoria |
+| 2026-09-20 | Limpeza: o quê? | **Tudo menos os almoxarifados** — DELETE em stock_balances, stock_movements, stock_items (7 itens, 6 movimentos, 6 saldos — dados de teste, inclusive `nmnm` de 12/09). Feito 2026-09-20; refeito após os testes de tela desta fase (0/0/0, 2 almoxarifados). |
+| 2026-09-20 | Campo de destino: como? | **Um seletor para o lote, sempre visível** — substitui o checkbox "Lançar saldo inicial"; opção "Só cadastrar no catálogo (sem saldo)" + almoxarifados ativos |
 
 ## Contexto
 
@@ -45,6 +51,12 @@ saldo inicial.
 | 9 | `components/InventoryModule.tsx` | `onImported({ stockLaunched })` → `load()` quando houve saldo inicial (antes só o catálogo recarregava e Saldos/KPIs ficavam velhos até F5); de quebra, §14 (`confirm()` nativo → `useConfirm`) e §7 (`font-bold` no total) que o `check-ui-standard.sh` acusava no arquivo tocado | após Importar com saldo, aba Saldos mostra 1 UN sem F5; `check-ui-standard.sh` limpo |
 | 10 | `supabase/migrations/aplicar_20270919000049_fn_net_position_organization_id_ambigua.sql` | **achado durante a verificação** (decisão do usuário 2026-09-19: corrigir nesta frente): `fn_net_position` respondia `42702` ("organization_id" ambíguo entre coluna e OUT param, desde `20270129000004`) → `getNetPositions` lançava → `Promise.all` do `load()` rejeitava → Saldos/Movimentos/KPIs vazios para qualquer org. Corpo recriado a partir do ARQUIVO com `om.`/`bp.` + REVOKE/GRANT (REGRA #7) | `SELECT count(*) FROM fn_net_position(org)` não dá 42702; ACL sem PUBLIC/anon; aba Saldos lista os itens |
 
+### Fase 2 — 2026-09-20: almoxarifado de destino
+
+| # | Arquivo | O que muda | Como sei que terminou |
+|---|---|---|---|
+| 11 | `components/inventory/StockItemImportModal.tsx` | `launchInitialStock`/`initialStockWarehouseId` → `destinationWarehouseId` ( = só catálogo). Seletor **no rodapé** do modal (visível com qualquer rolagem; a primeira versão, acima da prévia, ficava abaixo da dobra com lista longa), frase explicativa sob o título da prévia (quantos itens trazem quantidade e para onde vão), coluna "Qtd. inicial" na prévia. Com destino escolhido, cada linha com `initialQuantity` vira movimento `in` lá; sem destino, só catálogo | prévia mostra Qtd; escolher destino + Importar → Saldos mostra o item sem F5; sem destino → só na aba Itens |
+
 ## Fora do escopo (registrado, não feito)
 - Coluna `origin_asset_id` em `stock_items` (FK para `opura_assets`): `input_code = code do
   ativo` já faz a ponte; FK só se surgir tela que navegue do item para o ativo.
@@ -68,7 +80,10 @@ saldo inicial.
 - [x] 9 — `InventoryModule.tsx` (recarga de saldos + §14/§7)
 - [x] 10 — migration `000049` escrita e **aplicada no banco** (2026-09-19; função responde, ACL só authenticated)
 - [x] verificação na interface — Playwright em servidor da frente (porta 3123), org Alpa, usuário agente-leitura: 84 ativos listados sem baixados; busca "alicate" 5 · categoria Ferramenta 5 · Veículo 0; 2 selecionados → prévia 2 (código do ativo, UN, Novo) → saldo inicial + Almoxarifado Central → "Importação concluída, 2 itens criados"; aba Itens com Origem "Gestão de Ativos"; aba Saldos com os dois códigos a 1,00 UN; reimportação marca "Já existe". 0 erros de console, 0 HTTP 4xx/5xx (portão exit 0). Dados gravados de propósito na org Alpa (decisão do usuário): 6 itens `source=ativos` + 6 movimentos de 1 UN.
-- [ ] push em `main` + `conferir-producao.sh`
+- [x] push em `main` (`1d651d1c`) + `conferir-producao.sh` ✅ (domínio serve o commit, texto da aba presente)
+- [x] 2026-09-20 — limpeza do almoxarifado (itens/movimentos/saldos zerados; almoxarifados mantidos)
+- [x] 11 — seletor "Almoxarifado de destino" no rodapé; verificado com Playwright (org Alpa: destino visível com 2 opções, Qtd. inicial 1 na prévia, frase muda ao escolher destino, importar 1 ativo → Saldos mostra; 0 erros fora do ruído 57014 da Central de Controle); registros do teste apagados em seguida
+- [ ] push em `main` + `conferir-producao.sh` (fase 2)
 
 ## Verificação
 1. `npm run typecheck`

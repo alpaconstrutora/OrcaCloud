@@ -4,7 +4,8 @@
 // obra/orçamento existente ("itens importados de obras antigas"), planilha
 // Excel (obras que nunca entraram no sistema) e Gestão de Ativos (ativos
 // patrimoniais — código patrimonial vira input_code, 1 UN cada). Todas
-// convergem numa única pré-visualização antes de confirmar. Ver
+// convergem numa única pré-visualização e num único almoxarifado de destino
+// (seletor no rodapé; vazio = só catálogo) antes de confirmar. Ver
 // docs/planos/2026-08-21-almoxarifado-cadastro-de-itens.md e
 // docs/planos/2026-09-19-almoxarifado-importar-itens-gestao-de-ativos.md.
 import React from 'react';
@@ -74,8 +75,11 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
     const [file, setFile] = React.useState<File | null>(null);
     const [isDragging, setIsDragging] = React.useState(false);
     const [parseError, setParseError] = React.useState('');
-    const [launchInitialStock, setLaunchInitialStock] = React.useState(false);
-    const [initialStockWarehouseId, setInitialStockWarehouseId] = React.useState('');
+    // Almoxarifado de destino do lote ('' = só cadastrar no catálogo). Vale para
+    // toda origem: com destino escolhido, cada linha que traz quantidade
+    // (planilha: coluna 6; Gestão de Ativos: 1 UN por ativo) entra lá como
+    // movimento de entrada. Pedido do usuário em 2026-09-20.
+    const [destinationWarehouseId, setDestinationWarehouseId] = React.useState('');
 
     // (d) Gestão de Ativos — lista carregada só ao entrar na aba (null = ainda não pedida).
     // Busca/filtro são transitórios (§3.1 do guia: seletor dentro de modal, zera ao fechar).
@@ -99,8 +103,7 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
             setProjectBudget(null);
             setFile(null);
             setParseError('');
-            setLaunchInitialStock(false);
-            setInitialStockWarehouseId('');
+            setDestinationWarehouseId('');
             setImportError('');
             setImportSummary(null);
             setSkippedNonInsumo(0);
@@ -277,26 +280,23 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
         parseSheet(f);
     };
 
-    const hasInitialQuantities = pendingRows.some(r => r.initialQuantity);
+    const rowsWithQuantity = pendingRows.filter(r => r.initialQuantity && r.initialQuantity > 0).length;
+    const destinationWarehouse = warehouses.find(w => w.id === destinationWarehouseId);
 
     // ── confirmação ───────────────────────────────────────────────────────────
     const handleImport = async () => {
         if (pendingRows.length === 0) return;
-        if (hasInitialQuantities && launchInitialStock && !initialStockWarehouseId) {
-            setImportError('Escolha o almoxarifado para lançar o saldo inicial.');
-            return;
-        }
         setImporting(true);
         setImportError('');
         try {
             const result = await inventoryService.importStockItems(organizationId, pendingRows);
             let stockLaunched = false;
-            if (launchInitialStock && initialStockWarehouseId) {
+            if (destinationWarehouseId) {
                 for (const r of result.results) {
                     const qty = r.row.initialQuantity;
                     if (r.status !== 'error' && r.item && qty && qty > 0) {
                         await inventoryService.createMovement(organizationId, {
-                            warehouseId: initialStockWarehouseId,
+                            warehouseId: destinationWarehouseId,
                             inputCode: r.item.inputCode,
                             inputDescription: r.item.inputDescription,
                             inputUnit: r.item.inputUnit,
@@ -551,30 +551,16 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
                         </div>
                     )}
 
-                    {/* Saldo inicial — vale para toda origem que traz quantidade
-                        (planilha: coluna 6; Gestão de Ativos: 1 UN por ativo). */}
-                    {hasInitialQuantities && (
-                        <div className="bg-gray-50 border border-gray-200 rounded-[10px] p-4 space-y-2">
-                            <label className="flex items-center gap-2.5 text-sm font-normal text-gray-700 cursor-pointer">
-                                <input type="checkbox" checked={launchInitialStock} onChange={e => setLaunchInitialStock(e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-blue-600" />
-                                Lançar saldo inicial das quantidades informadas (planilha: coluna 6 · ativos: 1 UN cada)
-                            </label>
-                            {launchInitialStock && (
-                                <select
-                                    value={initialStockWarehouseId}
-                                    onChange={e => setInitialStockWarehouseId(e.target.value)}
-                                    className="w-full max-w-xs h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                                >
-                                    <option value="">Selecione o almoxarifado...</option>
-                                    {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                                </select>
-                            )}
-                        </div>
-                    )}
-
                     {/* Pré-visualização — comum às quatro origens */}
                     <div className="border-t border-gray-100 pt-4">
-                        <p className="text-xs font-semibold text-gray-500 mb-2">Pré-visualização ({pendingRows.length} {pendingRows.length === 1 ? 'item' : 'itens'})</p>
+                        <p className="text-xs font-semibold text-gray-500">Pré-visualização ({pendingRows.length} {pendingRows.length === 1 ? 'item' : 'itens'})</p>
+                        <p className="text-xs text-gray-400 mb-2">
+                            {warehouses.length === 0
+                                ? 'Nenhum almoxarifado ativo nesta organização — os itens entram só no catálogo. Cadastre um na aba Almoxarifados para dar entrada em saldo.'
+                                : destinationWarehouse
+                                    ? `Itens com quantidade entram em "${destinationWarehouse.name}" como saldo inicial (planilha: coluna 6 · Gestão de Ativos: 1 UN por ativo)${pendingRows.length > 0 ? ` — ${rowsWithQuantity} de ${pendingRows.length}` : ''}. Sem quantidade, só cadastro.`
+                                    : 'Sem almoxarifado de destino (rodapé), os itens entram só no catálogo; escolha um para dar entrada nas quantidades.'}
+                        </p>
                         {pendingRows.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-10 text-gray-400 bg-gray-50/50 rounded-[10px]">
                                 <Package className="w-8 h-8 mb-2 text-gray-300" />
@@ -588,6 +574,7 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
                                             <th className="px-4 py-2 border-r border-gray-100">Código</th>
                                             <th className="px-4 py-2 border-r border-gray-100">Descrição</th>
                                             <th className="px-4 py-2 border-r border-gray-100">Unidade</th>
+                                            <th className="px-4 py-2 border-r border-gray-100 text-right">Qtd. inicial</th>
                                             <th className="px-4 py-2 border-r border-gray-100">Status</th>
                                             <th className="px-4 py-2 text-right">Ações</th>
                                         </tr>
@@ -600,6 +587,9 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
                                                     <td className="px-4 py-2 border-r border-gray-100 text-gray-600">{r.inputCode || '—'}</td>
                                                     <td className="px-4 py-2 border-r border-gray-100 text-gray-700">{r.inputDescription}</td>
                                                     <td className="px-4 py-2 border-r border-gray-100 text-gray-600">{r.inputUnit}</td>
+                                                    <td className="px-4 py-2 border-r border-gray-100 text-right text-gray-600" title={destinationWarehouse && r.initialQuantity ? `Entra em ${destinationWarehouse.name}` : undefined}>
+                                                        {r.initialQuantity ? r.initialQuantity.toLocaleString('pt-BR') : '—'}
+                                                    </td>
                                                     <td className="px-4 py-2 border-r border-gray-100">
                                                         <span className={exists ? 'text-amber-700' : 'text-green-700'}>{exists ? 'Já existe' : 'Novo'}</span>
                                                     </td>
@@ -618,9 +608,25 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
                     </div>
                 </div>
 
-                <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between shrink-0">
-                    {importError ? <p className="text-red-500 text-sm font-medium">{importError}</p> : <span />}
-                    <div className="flex items-center gap-2">
+                <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
+                    {/* Almoxarifado de destino do lote — no rodapé para ficar visível
+                        com qualquer rolagem do conteúdo (pedido de 2026-09-20). */}
+                    <div className="flex items-center gap-2 min-w-0">
+                        <label htmlFor="stock-import-destination" className="text-xs font-semibold text-slate-500 shrink-0">Almoxarifado de destino</label>
+                        <select
+                            id="stock-import-destination"
+                            value={destinationWarehouseId}
+                            onChange={e => setDestinationWarehouseId(e.target.value)}
+                            disabled={warehouses.length === 0}
+                            title={warehouses.length === 0 ? 'Nenhum almoxarifado ativo nesta organização' : 'Onde as quantidades importadas dão entrada'}
+                            className="h-9 w-full md:w-64 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:opacity-50"
+                        >
+                            <option value="">Só cadastrar no catálogo (sem saldo)</option>
+                            {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                        </select>
+                    </div>
+                    {importError && <p className="text-red-500 text-sm font-medium md:ml-auto">{importError}</p>}
+                    <div className="flex items-center gap-2 shrink-0">
                         <button onClick={onClose} className="h-9 px-3.5 text-gray-600 text-sm font-medium hover:bg-gray-100 rounded-[6px] transition-all">Cancelar</button>
                         <button
                             onClick={handleImport}

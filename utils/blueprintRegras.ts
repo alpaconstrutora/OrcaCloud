@@ -222,7 +222,7 @@ function so(vars: Record<string, Valor | null | undefined>): Variaveis {
  * no eixo das paredes, e um banheiro de 1,35 m de eixo tem 1,20 m livres — é o
  * livre que a lei mede. Lado sem parede (contorno aberto) não recua.
  */
-function larguraMinimaMm(s: Space, paredes: Wall[]): number {
+export function larguraMinimaMm(s: Space, paredes: Wall[]): number {
   const n = s.ring.length;
   const recuos = s.ring.map((a, i) => {
     const b = s.ring[(i + 1) % n];

@@ -113,6 +113,8 @@ export interface Programa {
   relacoes: RelacaoDoPrograma[];
   /** Circulação (corredores e halls) no máximo esta fração da área útil, em %. */
   circulacaoMaxPct: number;
+  /** Percurso máximo de qualquer ambiente até a saída (m), pelo grafo espacial (E4.2). `null` = não confere. */
+  percursoMaxM: number | null;
 }
 
 export const MAX_NOME_DO_PROGRAMA = 60;
@@ -127,7 +129,7 @@ export function idDeItem(): string {
 }
 
 export function programaVazio(nome = 'Programa'): Programa {
-  return { nome, itens: [], relacoes: [], circulacaoMaxPct: 15 };
+  return { nome, itens: [], relacoes: [], circulacaoMaxPct: 15, percursoMaxM: null };
 }
 
 /** Um item novo já com a ficha do uso preenchida. */
@@ -259,6 +261,7 @@ export function problemasDoPrograma(p: Programa): ProblemaDoPrograma[] {
     if (r.tipo === 'PROIBIDA' && r.peso !== 0) out.push({ itemId: null, texto: `${a.nome} × ${b.nome}: proibida tem peso 0` });
   }
   if (!(p.circulacaoMaxPct >= 0 && p.circulacaoMaxPct <= 100)) out.push({ itemId: null, texto: 'circulação máxima fora de 0–100 %' });
+  if (p.percursoMaxM != null && !(p.percursoMaxM > 0)) out.push({ itemId: null, texto: 'percurso máximo até a saída deve ser > 0' });
   return out;
 }
 
@@ -381,6 +384,7 @@ export function programaDaColuna(raw: unknown): Programa {
     itens,
     relacoes,
     circulacaoMaxPct: Math.min(100, num(r.circulacaoMaxPct, 15)),
+    percursoMaxM: typeof r.percursoMaxM === 'number' && Number.isFinite(r.percursoMaxM) && r.percursoMaxM > 0 ? r.percursoMaxM : null,
   };
 }
 
@@ -401,6 +405,7 @@ function montar(nome: string, circulacaoMaxPct: number, esbocos: EsbocoDeItem[],
   const porChave = new Map<string, ItemDoPrograma>();
   let p = programaVazio(nome);
   p.circulacaoMaxPct = circulacaoMaxPct;
+  p.percursoMaxM = 30; // referência para residência: da porta mais funda à saída
   for (const e of esbocos) {
     const item = { ...novoItem(e.uso, e.nome, e.quantidade ?? 1), id: `${e.chave}` };
     if (e.areaIdealM2 != null) item.areaIdealM2 = e.areaIdealM2;

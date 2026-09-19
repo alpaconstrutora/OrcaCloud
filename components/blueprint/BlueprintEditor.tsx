@@ -463,6 +463,7 @@ import TelaUnidades from './TelaUnidades';
 import TelaLegislacao from './TelaLegislacao';
 import TelaPrograma from './TelaPrograma';
 import PainelGrafoEspacial from './PainelGrafoEspacial';
+import { conferirPrograma, linhasParaLegislacao } from '../../utils/blueprintConferenciaDoPrograma';
 import { construirGrafoEspacial, descreverFachadas, percursoAteASaida, vizinhosDe } from '../../utils/blueprintGrafoEspacial';
 import { useBlueprintPrograma } from '../../hooks/useBlueprintPrograma';
 import { avaliarRegras, REGRAS_SEMENTE, type Regra, type ResultadoDeRegra } from '../../utils/blueprintRegras';
@@ -3372,6 +3373,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * VERIFICAR LEGISLAÇÃO (E3.2): semente + regras da organização avaliadas
    * contra o desenho, mais a NBR 5410 adaptada das conferências do ambiente.
    */
+  /**
+   * CONFERÊNCIA DO PROGRAMA (E4.3): programa do estudo × desenho, pelo grafo
+   * espacial. `null` enquanto o estudo não tem programa.
+   */
+  const conferenciaDoPrograma = useMemo(
+    () => (programaDoEstudo.programa.itens.length > 0 ? conferirPrograma(editor.model, programaDoEstudo.programa) : null),
+    [editor.model, programaDoEstudo.programa],
+  );
   const resultadosDeRegras = useMemo((): ResultadoDeRegra[] => {
     const frentes = limitesDoNivel.filter((b) => b.kind === 'TERRENO' && b.papel === 'FRENTE');
     const testadaM = frentes.length ? Math.round(frentes.reduce((s, b) => s + Math.hypot(b.b.x - b.a.x, b.b.y - b.a.y), 0)) / 1000 : null;
@@ -3407,8 +3416,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       linhas.push({ regraId: regraLuz.id, regra: regraLuz, ...base, estado: luzOk ? 'CONFORME' : 'VIOLADA', valores: `luzes de teto = ${a.luz.luzesDeTeto} · interruptores = ${a.luz.interruptores}`, motivo: null });
       return linhas;
     });
-    return [...doMotor, ...da5410];
-  }, [editor.model, regrasDaOrganizacao, limitesDoNivel, terreno, aproveitamento, alturaDesenhadaM, envelope3d, zona.taxaOcupacaoMax, zona.coeficienteMax, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos, zona.taxaPermeabilidadeMin, zona.testadaMinimaMm, zona.areaMinimaDoLoteM2, ambientes, levelId]);
+    // O programa de necessidades (E4.3) entra como fonte, pelas mesmas linhas.
+    const doPrograma = conferenciaDoPrograma ? linhasParaLegislacao(conferenciaDoPrograma, programaDoEstudo.programa) : [];
+    return [...doMotor, ...da5410, ...doPrograma];
+  }, [editor.model, regrasDaOrganizacao, conferenciaDoPrograma, programaDoEstudo.programa, limitesDoNivel, terreno, aproveitamento, alturaDesenhadaM, envelope3d, zona.taxaOcupacaoMax, zona.coeficienteMax, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos, zona.taxaPermeabilidadeMin, zona.testadaMinimaMm, zona.areaMinimaDoLoteM2, ambientes, levelId]);
   const errosDeLegislacao = useMemo(() => resultadosDeRegras.filter((r) => r.estado === 'VIOLADA' && r.regra.severidade === 'ERRO').length, [resultadosDeRegras]);
 
   // ── Quadro de divisas — papéis, medidas da escritura e confrontantes ──────
@@ -6840,6 +6851,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onSalvarRegra={regrasIndisponiveis ? null : salvarRegraDaOrganizacao}
               onRemoverRegra={regrasIndisponiveis ? null : removerRegraDaOrganizacao}
               avisoDePersistencia={regrasIndisponiveis ? 'Catálogo de regras indisponível (migration ausente ou sem permissão).' : null}
+              conferencia={conferenciaDoPrograma}
+              onAbrirPrograma={() => setTelaAberta('programa')}
             />
           </div>
         </div>

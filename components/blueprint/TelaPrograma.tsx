@@ -243,6 +243,27 @@ export default function TelaPrograma({ programa, onChange, carregando = false, a
               className="h-8 w-20 rounded-[6px] border border-slate-300 px-2 text-right text-sm tabular-nums"
             />
           </label>
+          <label className="flex items-center gap-2 text-xs text-slate-600" title="Percurso de qualquer ambiente até a porta de saída, pelo grafo espacial (vazio = não confere)">
+            Percurso máx. até a saída (m)
+            <input
+              key={programa.percursoMaxM ?? ''}
+              type="number"
+              min={1}
+              step={1}
+              defaultValue={programa.percursoMaxM ?? ''}
+              placeholder="—"
+              aria-label="Percurso máximo até a saída (m)"
+              onBlur={(e) => {
+                const t = e.target.value.trim();
+                const v = t ? Number(t) : null;
+                if (v === null || (Number.isFinite(v) && v > 0)) {
+                  if (v !== programa.percursoMaxM) onChange({ ...programa, percursoMaxM: v });
+                } else e.target.value = programa.percursoMaxM == null ? '' : String(programa.percursoMaxM);
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+              className="h-8 w-20 rounded-[6px] border border-slate-300 px-2 text-right text-sm tabular-nums"
+            />
+          </label>
           <span className="ml-auto flex items-center gap-2 text-xs text-slate-600">
             Começar de uma semente
             <select value={tipologia} onChange={(e) => setTipologia(e.target.value as TipologiaSemente)} aria-label="Tipologia da semente" className="h-8 rounded-[6px] border border-slate-300 bg-white px-2 text-sm">

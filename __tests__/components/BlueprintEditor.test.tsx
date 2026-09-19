@@ -1251,6 +1251,66 @@ describe('BlueprintEditor · quantitativos', () => {
     await waitFor(() => expect(screen.queryByTestId('tarefa-grafo')).toBeNull());
   });
 
+  it('conferência do programa (E4.3): a aba Programa da Legislação casa itens pelo nome, acusa faltas, relações e fora do programa; as linhas entram em Resultados pela fonte; o clique leva ao ambiente', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const prog = await import('../../utils/blueprintPrograma');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    let m = k.applyBatch(nivel.model, [w(0, 0, 8000, 0), w(8000, 0, 8000, 6000), w(8000, 6000, 0, 6000), w(0, 6000, 0, 0), w(4000, 0, 4000, 6000), w(4000, 3000, 8000, 3000)]).model;
+    const sala = m.spaces.find((s) => s.ring.some((p) => p.x === 0))!;
+    const coz = m.spaces.find((s) => s.ring.every((p) => p.x >= 4000) && s.ring.every((p) => p.y <= 3000))!;
+    const dorm = m.spaces.find((s) => s.ring.every((p) => p.x >= 4000) && s.ring.every((p) => p.y >= 3000))!;
+    const baixo = m.walls.find((x) => x.a.y === 0 && x.b.y === 0)!;
+    const meio = m.walls.find((x) => x.a.x === 4000 && x.b.x === 4000)!;
+    const direita = m.walls.find((x) => x.a.x === 8000 && x.b.x === 8000)!;
+    m = k.applyBatch(m, [
+      { type: 'NameSpace', spaceId: sala.id, name: 'Sala de estar' },
+      { type: 'NameSpace', spaceId: coz.id, name: 'Escritório' },
+      { type: 'NameSpace', spaceId: dorm.id, name: 'Dorm. casal' },
+      { type: 'AddOpening', wallId: baixo.id, kind: 'door', offsetMm: 1000, widthMm: 900, heightMm: 2100, sillMm: 0 },
+      { type: 'AddOpening', wallId: meio.id, kind: 'door', offsetMm: 1000, widthMm: 800, heightMm: 2100, sillMm: 0 },
+      { type: 'AddOpening', wallId: meio.id, kind: 'door', offsetMm: 4000, widthMm: 700, heightMm: 2100, sillMm: 0 },
+      { type: 'AddOpening', wallId: direita.id, kind: 'window', offsetMm: 4000, widthMm: 1200, heightMm: 1200, sillMm: 1000 },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    // O programa do estudo vem do serviço: sala, cozinha, dormitório casal, banheiro; sala × cozinha obrigatória; cozinha × dormitório proibida; percurso ≤ 7 m.
+    let programa = prog.programaVazio('Casa teste');
+    const iSala = prog.novoItem('SALA');
+    const iCoz = prog.novoItem('COZINHA');
+    const iDorm = prog.novoItem('DORMITORIO', 'Dormitório casal');
+    const iBanho = prog.novoItem('BANHEIRO');
+    programa = [iSala, iCoz, iDorm, iBanho].reduce((acc, i) => prog.adicionarItem(acc, i), programa);
+    programa = prog.definirRelacao(programa, iSala.id, iCoz.id, 10, 'OBRIGATORIA');
+    programa = prog.definirRelacao(programa, iSala.id, iDorm.id, 8);
+    programa.percursoMaxM = 7;
+    getPrograma.mockResolvedValue({ id: 'p1', study_id: 'std_1', organization_id: 'org_1', nome: programa.nome, programa, created_at: '', updated_at: '' });
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^analisar$/i);
+    const botaoLegislacao = () => screen.getAllByRole('button', { name: /^legislação/i }).find((b) => b.getAttribute('title')?.startsWith('Verificar'))!;
+    await user.click(botaoLegislacao());
+    const tela = (await screen.findByRole('heading', { level: 1, name: /verificar legislação/i })).closest('[data-tela="legislacao"]') as HTMLElement;
+    // Resultados: a fonte "Programa de necessidades" está lá, com a cozinha faltando.
+    await user.selectOptions(within(tela).getByLabelText('Filtrar por fonte'), 'Programa de necessidades');
+    const linhas = () => within(tela).getAllByRole('row').map((r) => (r.textContent ?? '').replace(/\s+/g, ' '));
+    expect(linhas().some((l) => /Cozinha: quantidade.*encontrados = 0 · pedidos = 1 · faltam 1/.test(l))).toBe(true);
+    expect(linhas().some((l) => /Ambiente fora do programa.*Escritório/.test(l))).toBe(true);
+    // Aba Programa.
+    await user.click(within(tela).getByRole('tab', { name: /^Programa/ }));
+    const conf = within(tela).getByTestId('conferencia-do-programa');
+    expect(within(conf).getByTestId('resumo-da-conferencia')).toHaveTextContent(/\d+ atendido\(s\) · \d+ falta\(s\)/);
+    expect(within(conf).getByRole('row', { name: 'Item Dormitório casal' })).toHaveTextContent(/1\/1.*Dorm\. casal \(Térreo\) · 10,97 m².*área ideal falta.*percurso até a saída falta \(7,05 m por 2 porta\(s\)/);
+    expect(within(conf).getByRole('row', { name: 'Item Banheiro' })).toHaveTextContent(/0\/1faltam 1nenhum ambiente com este uso/);
+    expect(within(conf).getByRole('row', { name: 'Item Sala' })).toHaveTextContent(/iluminação natural falta/);
+    expect(within(conf).getByRole('row', { name: 'Relação Sala × Cozinha' })).toHaveTextContent(/obrigatória.*Cozinha sem ambiente casado no desenho.*não avaliada/);
+    expect(within(conf).getByRole('row', { name: 'Relação Sala × Dormitório casal' })).toHaveTextContent(/peso 8.*porta direta.*atende/);
+    expect(within(conf).getByTestId('fora-do-programa')).toHaveTextContent(/Escritório \(Escritório\) · Térreo/);
+    // Clique no ambiente casado: a tela fecha e o ambiente fica selecionado.
+    await user.click(within(conf).getByRole('button', { name: /^Sala de estar \(Térreo\) · 22,52 m²$/ }));
+    await waitFor(() => expect(screen.queryByRole('heading', { level: 1, name: /verificar legislação/i })).toBeNull());
+  });
+
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2500 });

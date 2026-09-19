@@ -123,6 +123,8 @@ export type BlueprintTool =
   | 'nucleo'
   /** VAGA DE GARAGEM (E2.5): um clique no centro; o tipo vem da barra. */
   | 'vaga'
+  /** COMPONENTE (E7.1): mobiliário/louça/bancada, um clique no centro; o tipo vem do catálogo. */
+  | 'componente'
   /**
    * INSTALAÇÕES — o TRECHO de rede, com dois cliques, como a viga.
    *

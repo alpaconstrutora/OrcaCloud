@@ -33,6 +33,10 @@ import {
   contornoDaEscada,
   contornoDaVaga,
   DIMENSAO_DA_VAGA,
+  contornoDoComponente,
+  CATALOGO_DE_COMPONENTES,
+  type Componente,
+  type TipoDeComponente,
   type Nucleo,
   type Vaga,
   type TipoDeVaga,
@@ -320,6 +324,10 @@ const SEM_NUCLEOS: Nucleo[] = [];
 const COR_VAGA = '#0f766e';
 const COR_VAGA_FUNDO = 'rgba(20, 184, 166, 0.10)';
 const SEM_VAGAS: Vaga[] = [];
+/** Componente (E7.1): grafite; sugerido tracejado. */
+const COR_COMPONENTE = '#475569';
+const COR_COMPONENTE_FUNDO = 'rgba(148, 163, 184, 0.14)';
+const SEM_COMPONENTES: Componente[] = [];
 /** A MARCA do corte em planta — azul de anotação, não de construção. */
 const COR_CORTE = '#0284c7';
 /** Eixo da malha: cinza-azulado discreto — referência, não construção. */
@@ -1241,6 +1249,10 @@ interface Props {
   tipoDeVaga?: TipoDeVaga;
   onAddVaga?: (at: Point) => void;
   onMoveVaga?: (vagaId: string, to: Point) => void;
+  /** COMPONENTES (E7.1) do pavimento; a ferramenta `componente` pede o tipo para a prévia. */
+  componentes?: Componente[];
+  tipoDeComponente?: TipoDeComponente;
+  onAddComponente?: (at: Point) => void;
   /** Um TRECHO de rede: as duas pontas em planta. Cota e bitola vêm da barra. */
   onAddTrecho?: (a: Point, b: Point) => void;
   /**
@@ -1383,6 +1395,9 @@ export default function BlueprintCanvas({
   tipoDeVaga = 'COMUM',
   onAddVaga,
   onMoveVaga,
+  componentes = SEM_COMPONENTES,
+  tipoDeComponente = 'CAMA_CASAL',
+  onAddComponente,
   onAddTrecho,
   redeEmUmClique = false,
   onAddTerminal,
@@ -2545,6 +2560,18 @@ export default function BlueprintCanvas({
     [nucleos, ocultos, vista.escala],
   );
 
+  /** Qual COMPONENTE está sob o cursor — pelo retângulo. */
+  const componenteSob = useCallback(
+    (mundo: { x: number; y: number }): Componente | null => {
+      for (let i = componentes.length - 1; i >= 0; i--) {
+        const c = componentes[i];
+        if (ocultos.has(c.id)) continue;
+        if (pointInPolygon(contornoDoComponente(c), arredondar(mundo))) return c;
+      }
+      return null;
+    },
+    [componentes, ocultos],
+  );
   /** Qual VAGA está sob o cursor — pelo retângulo. */
   const vagaSob = useCallback(
     (mundo: { x: number; y: number }): Vaga | null => {
@@ -5257,6 +5284,143 @@ export default function BlueprintCanvas({
       ctx.textBaseline = 'alphabetic';
     }
 
+    // ── COMPONENTES (E7.1): caixa com o símbolo da ficha; sugerido tracejado. ──
+    for (const c of componentes) {
+      if (ocultos.has(c.id)) continue;
+      const selecionado = selecao.has(c.id);
+      const cor = selecionado ? COR_SELECIONADA : COR_COMPONENTE;
+      const anel = contornoDoComponente(c).map(paraTela);
+      ctx.fillStyle = COR_COMPONENTE_FUNDO;
+      ctx.strokeStyle = cor;
+      ctx.lineWidth = selecionado ? 2 : 1.1;
+      ctx.setLineDash(c.sugerido ? [5, 4] : []);
+      ctx.beginPath();
+      ctx.moveTo(anel[0].x, anel[0].y);
+      for (const q of anel.slice(1)) ctx.lineTo(q.x, q.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Símbolo: no espaço local da peça (x ao longo da largura, y da frente ao encosto),
+      // levado ao mundo pelos cantos: anel[0]→anel[1] é a largura, anel[0]→anel[3] a profundidade.
+      const ux = { x: (anel[1].x - anel[0].x), y: (anel[1].y - anel[0].y) };
+      const uy = { x: (anel[3].x - anel[0].x), y: (anel[3].y - anel[0].y) };
+      const P = (fx: number, fy: number) => ({ x: anel[0].x + ux.x * fx + uy.x * fy, y: anel[0].y + ux.y * fx + uy.y * fy });
+      const linha = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      };
+      const poli = (pts: { x: number; y: number }[]) => {
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
+        ctx.closePath();
+        ctx.stroke();
+      };
+      const larguraPx = Math.hypot(ux.x, ux.y);
+      const profPx = Math.hypot(uy.x, uy.y);
+      if (larguraPx >= 10 && profPx >= 10) {
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = cor;
+        const simbolo = CATALOGO_DE_COMPONENTES[c.tipoId]?.simbolo ?? 'CAIXA';
+        switch (simbolo) {
+          case 'CAMA': // cabeceira ao fundo (y=1), travesseiros, dobra do lençol
+            linha(P(0, 0.85), P(1, 0.85));
+            poli([P(0.08, 0.7), P(0.46, 0.7), P(0.46, 0.82), P(0.08, 0.82)]);
+            poli([P(0.54, 0.7), P(0.92, 0.7), P(0.92, 0.82), P(0.54, 0.82)]);
+            linha(P(0, 0.55), P(1, 0.55));
+            break;
+          case 'SOFA': // encosto ao fundo e braços
+            linha(P(0, 0.75), P(1, 0.75));
+            linha(P(0.12, 0), P(0.12, 0.75));
+            linha(P(0.88, 0), P(0.88, 0.75));
+            break;
+          case 'MESA': // tampo com cadeiras sugeridas nos lados longos
+            poli([P(0.1, 0.1), P(0.9, 0.1), P(0.9, 0.9), P(0.1, 0.9)]);
+            break;
+          case 'VASO': { // bacia oval + caixa ao fundo
+            const cc = P(0.5, 0.4);
+            ctx.beginPath();
+            ctx.ellipse(cc.x, cc.y, larguraPx * 0.4, profPx * 0.32, Math.atan2(ux.y, ux.x), 0, Math.PI * 2);
+            ctx.stroke();
+            poli([P(0.1, 0.78), P(0.9, 0.78), P(0.9, 1), P(0.1, 1)]);
+            break;
+          }
+          case 'LAVATORIO': {
+            const cc = P(0.5, 0.5);
+            ctx.beginPath();
+            ctx.ellipse(cc.x, cc.y, larguraPx * 0.36, profPx * 0.34, Math.atan2(ux.y, ux.x), 0, Math.PI * 2);
+            ctx.stroke();
+            break;
+          }
+          case 'BOX': // diagonal + ralo
+            linha(P(0, 0), P(1, 1));
+            linha(P(0.42, 0.5), P(0.58, 0.5));
+            break;
+          case 'PIA': // cuba à esquerda
+            poli([P(0.1, 0.2), P(0.42, 0.2), P(0.42, 0.8), P(0.1, 0.8)]);
+            break;
+          case 'FOGAO': { // quatro bocas
+            for (const [fx, fy] of [[0.28, 0.3], [0.72, 0.3], [0.28, 0.7], [0.72, 0.7]]) {
+              const cc = P(fx, fy);
+              ctx.beginPath();
+              ctx.arc(cc.x, cc.y, Math.min(larguraPx, profPx) * 0.14, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+            break;
+          }
+          case 'GELADEIRA':
+            linha(P(0, 0.6), P(1, 0.6));
+            break;
+          case 'TANQUE':
+            poli([P(0.15, 0.15), P(0.85, 0.15), P(0.85, 0.85), P(0.15, 0.85)]);
+            break;
+          case 'MAQUINA': {
+            const cc = P(0.5, 0.5);
+            ctx.beginPath();
+            ctx.arc(cc.x, cc.y, Math.min(larguraPx, profPx) * 0.3, 0, Math.PI * 2);
+            ctx.stroke();
+            break;
+          }
+          case 'ARMARIO': // portas: divisões + X de guarda-roupa
+            linha(P(0, 0), P(1, 1));
+            linha(P(1, 0), P(0, 1));
+            break;
+          case 'CADEIRA':
+            linha(P(0, 0.8), P(1, 0.8));
+            break;
+          default:
+            break;
+        }
+      }
+      if (larguraPx >= 40 && profPx >= 14) {
+        ctx.font = `${Math.round(8 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = cor;
+        const centroPx = P(0.5, 0.3);
+        ctx.fillText(c.rotulo || CATALOGO_DE_COMPONENTES[c.tipoId]?.rotulo || c.tipoId, centroPx.x, centroPx.y);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+      }
+    }
+    // Prévia do componente sob o cursor.
+    if (tool === 'componente' && cursor) {
+      const f = CATALOGO_DE_COMPONENTES[tipoDeComponente];
+      const anel = contornoDoComponente({ at: cursor, larguraMm: f.larguraMm, profundidadeMm: f.profundidadeMm, rotacaoGraus: 0 }).map(paraTela);
+      ctx.strokeStyle = COR_COMPONENTE;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(anel[0].x, anel[0].y);
+      for (const q of anel.slice(1)) ctx.lineTo(q.x, q.y);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
     // ── VAGAS (E2.5): retângulo com o tipo e o número; sugerida tracejada. ──
     for (const v of vagas) {
       if (ocultos.has(v.id)) continue;
@@ -6527,7 +6691,8 @@ export default function BlueprintCanvas({
         tool === 'corte' ||
         tool === 'eixo' ||
         tool === 'nucleo' ||
-        tool === 'vaga')
+        tool === 'vaga' ||
+        tool === 'componente')
     ) {
       const c = paraTela(cursor);
       ctx.strokeStyle = COR_PREVIA;
@@ -6726,6 +6891,8 @@ export default function BlueprintCanvas({
     pontoNucleo,
     vagas,
     tipoDeVaga,
+    componentes,
+    tipoDeComponente,
     conexaoArmada,
     eixoEstrutural,
     anelEstrutural,
@@ -7174,7 +7341,7 @@ export default function BlueprintCanvas({
       return;
     }
 
-    if (tool === 'nucleo' || tool === 'vaga') {
+    if (tool === 'nucleo' || tool === 'vaga' || tool === 'componente') {
       setCursor(capturarTracado(paraMundo(px, py)));
       return;
     }
@@ -7450,6 +7617,11 @@ export default function BlueprintCanvas({
       return;
     }
 
+    // COMPONENTE (E7.1): um clique no centro.
+    if (tool === 'componente') {
+      onAddComponente?.(capturarTracado(mundo));
+      return;
+    }
     // VAGA (E2.5): um clique no centro.
     if (tool === 'vaga') {
       onAddVaga?.(capturarTracado(mundo));
@@ -7680,6 +7852,8 @@ export default function BlueprintCanvas({
       const escadaClicada = escadaSob(mundo);
       // NÚCLEO logo depois da escada: caixa sólida, pequena, encostada em parede.
       const nucleoClicado = nucleoSob(mundo);
+      // COMPONENTE antes da vaga: é menor e fica por cima do piso.
+      const componenteClicado = componenteSob(mundo);
       // VAGA depois do núcleo e antes do trecho: é demarcação de piso, grande e sem parede em cima.
       const vagaClicada = vagaSob(mundo);
       // ÁGUA DEPOIS DA PAREDE: ela cobre a casa e só se pega pela borda (ver
@@ -7711,6 +7885,7 @@ export default function BlueprintCanvas({
         escadaClicada?.id ??
         nucleoClicado?.id ??
         trechoClicado?.id ??
+        componenteClicado?.id ??
         vagaClicada?.id ??
         w?.id ??
         aguaClicada?.id ??

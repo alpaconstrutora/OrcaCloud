@@ -48,6 +48,8 @@
  */
 
 import {
+  CATALOGO_DE_COMPONENTES,
+  type Componente,
   FORMA_ESTRUTURAL,
   KERNEL_VERSION,
   POLITICA_PADRAO,
@@ -902,6 +904,17 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
       if (t.itemCode) {
         produtosPorCodigo.set(t.itemCode, [...(produtosPorCodigo.get(t.itemCode) ?? []), produto]);
       }
+    }
+    // COMPONENTES (E7.1): louça → IfcSanitaryTerminal; o resto → IfcFurniture.
+    for (const c of (model.componentes ?? []).filter((x) => x.levelId === nivel.id)) {
+      const produto = emitirComponente(c, ctx, localNivel);
+      produtos.push(produto);
+      psetOpura(produto, c.uid, rotuloCurto(c.uid, 'componente'));
+      emitirPset(ctx, produto, c.uid, 'Pset_OpuraComponente', [
+        ['TipoId', { tipo: 'IFCLABEL', v: c.tipoId }],
+        ['Familia', { tipo: 'IFCLABEL', v: c.familia }],
+        ['Sugerido', { tipo: 'IFCBOOLEAN', v: !!c.sugerido }],
+      ]);
     }
     for (const t of (model.terminais ?? []).filter((x) => x.levelId === nivel.id)) {
       const produto = emitirTerminal(t, ctx, localNivel);
@@ -2091,6 +2104,34 @@ function entidadeDoPontoHidraulico(
     case 'CONEXAO_REDUCAO':
       return { entidade: 'IFCPIPEFITTING', predefinido: '.TRANSITION.' };
   }
+}
+
+/**
+ * O COMPONENTE (E7.1) como caixa: louça sai `IfcSanitaryTerminal` com o
+ * PredefinedType da peça (bacia, lavatório, chuveiro, pia, tanque); o resto
+ * `IfcFurniture` (IFC4: 8 atributos + PredefinedType). Mesma caixa do terminal,
+ * apoiada no piso (base em z = 0 do pavimento).
+ */
+function emitirComponente(c: Componente, ctx: Ctx, localNivel: string): string {
+  const { emitir, guidDe, historico } = ctx;
+  const L = c.larguraMm;
+  const P = c.profundidadeMm;
+  const A = c.alturaMm;
+  const origem = emitir(`IFCCARTESIANPOINT((${n(c.at.x)},${n(c.at.y)},0.))`);
+  const local = emitir(`IFCLOCALPLACEMENT(${localNivel},${emitir(`IFCAXIS2PLACEMENT3D(${origem},$,${direcaoDaPeca(c.rotacaoGraus, ctx)})`)})`);
+  const posPerfil = emitir(`IFCAXIS2PLACEMENT2D(${emitir('IFCCARTESIANPOINT((0.,0.))')},$)`);
+  const perfil = emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,${posPerfil},${n(L)},${n(P)})`);
+  const solido = emitir(`IFCEXTRUDEDAREASOLID(${perfil},${emitir(`IFCAXIS2PLACEMENT3D(${emitir('IFCCARTESIANPOINT((0.,0.,0.))')},$,$)`)},${ctx.dirZ},${n(A)})`);
+  const forma = emitir(`IFCSHAPEREPRESENTATION(${ctx.subContexto},'Body','SweptSolid',(${solido}))`);
+  const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
+  const nome = c.rotulo || CATALOGO_DE_COMPONENTES[c.tipoId]?.rotulo || c.tipoId;
+  const tag = rotuloCurto(c.uid, 'componente');
+  if (c.familia === 'LOUCA') {
+    const predefinido = c.tipoId === 'VASO' ? '.TOILETPAN.' : c.tipoId === 'LAVATORIO' ? '.WASHHANDBASIN.' : c.tipoId === 'BOX' ? '.SHOWER.' : c.tipoId === 'TANQUE' ? '.SINK.' : '.USERDEFINED.';
+    return emitir(`IFCSANITARYTERMINAL(${guidDe(c.uid, `componente-${c.id}`)},${historico},${s(nome)},$,${s(c.tipoId)},${local},${produtoForma},${s(tag)},${predefinido})`);
+  }
+  const predefinido = c.familia === 'ARMARIO' ? '.SHELF.' : c.tipoId.startsWith('CAMA') ? '.BED.' : c.tipoId === 'MESA_JANTAR' || c.tipoId === 'ESCRIVANINHA' ? '.TABLE.' : c.tipoId === 'CADEIRA' || c.tipoId === 'SOFA' || c.tipoId === 'POLTRONA' ? '.CHAIR.' : '.USERDEFINED.';
+  return emitir(`IFCFURNITURE(${guidDe(c.uid, `componente-${c.id}`)},${historico},${s(nome)},$,${s(c.tipoId)},${local},${produtoForma},${s(tag)},${predefinido})`);
 }
 
 function emitirTerminal(t: Terminal, ctx: Ctx, localNivel: string): string {

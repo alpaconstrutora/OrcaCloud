@@ -1332,6 +1332,106 @@ export const DIMENSAO_DA_VAGA: Record<TipoDeVaga, { larguraMm: number; comprimen
 };
 export const ROTULO_DO_TIPO_DE_VAGA: Record<TipoDeVaga, string> = { COMUM: 'Comum', PCD: 'PCD', IDOSO: 'Idoso', MOTO: 'Moto' };
 
+/**
+ * COMPONENTE (19/09/2026, roadmap E7.1): a peça de mobiliário, louça, bancada,
+ * armário ou equipamento — caixa em planta centrada em `at`, girada de
+ * `rotacaoGraus`, com altura para o 3D. Como a vaga, fica FORA do arranjo
+ * planar: ocupa piso, não fecha ambiente.
+ *
+ * O `tipoId` é a chave do CATÁLOGO (`CATALOGO_DE_COMPONENTES`): dá família,
+ * medidas de referência, símbolo 2D e, nas louças, o tipo de ponto hidráulico
+ * que a peça pede — a ligação ao ponto do mesmo lugar é DERIVADA
+ * (`pontoHidraulicoDoComponente`), não gravada. Custo, fabricante e código
+ * vêm do TIPO DE ELEMENTO (E1.1, família COMPONENTE), como nas demais peças.
+ * `sugerido` é o irmão de `Terminal.sugerida`/`Vaga.sugerida`: nasceu do
+ * mobiliário automático (E6.3) e ainda não foi confirmado.
+ */
+export type FamiliaDeComponente = 'MOBILIARIO' | 'LOUCA' | 'BANCADA' | 'ARMARIO' | 'EQUIPAMENTO';
+export const FAMILIAS_DE_COMPONENTE: readonly FamiliaDeComponente[] = ['MOBILIARIO', 'LOUCA', 'BANCADA', 'ARMARIO', 'EQUIPAMENTO'];
+export const ROTULO_DA_FAMILIA_DE_COMPONENTE: Record<FamiliaDeComponente, string> = { MOBILIARIO: 'Mobiliário', LOUCA: 'Louça', BANCADA: 'Bancada', ARMARIO: 'Armário', EQUIPAMENTO: 'Equipamento' };
+export type SimboloDoComponente = 'CAIXA' | 'CAMA' | 'SOFA' | 'MESA' | 'VASO' | 'LAVATORIO' | 'BOX' | 'PIA' | 'FOGAO' | 'GELADEIRA' | 'TANQUE' | 'MAQUINA' | 'ARMARIO' | 'CADEIRA';
+export interface FichaDoComponente {
+  rotulo: string;
+  familia: FamiliaDeComponente;
+  larguraMm: number;
+  profundidadeMm: number;
+  alturaMm: number;
+  simbolo: SimboloDoComponente;
+  /** Louça/equipamento hidráulico: o tipo de ponto (NBR 5626) que a peça pede. */
+  ligaAoPonto?: TipoDePontoHidraulico;
+}
+export const TIPOS_DE_COMPONENTE = [
+  'CAMA_CASAL',
+  'CAMA_SOLTEIRO',
+  'CRIADO',
+  'ARMARIO',
+  'ESTANTE',
+  'SOFA',
+  'POLTRONA',
+  'MESA_JANTAR',
+  'CADEIRA',
+  'RACK',
+  'ESCRIVANINHA',
+  'BANCADA',
+  'BANCADA_SECA',
+  'GELADEIRA',
+  'FOGAO',
+  'TANQUE',
+  'MAQUINA',
+  'VASO',
+  'LAVATORIO',
+  'BOX',
+] as const;
+export type TipoDeComponente = (typeof TIPOS_DE_COMPONENTE)[number];
+export const CATALOGO_DE_COMPONENTES: Record<TipoDeComponente, FichaDoComponente> = {
+  CAMA_CASAL: { rotulo: 'Cama de casal', familia: 'MOBILIARIO', larguraMm: 1400, profundidadeMm: 1900, alturaMm: 500, simbolo: 'CAMA' },
+  CAMA_SOLTEIRO: { rotulo: 'Cama de solteiro', familia: 'MOBILIARIO', larguraMm: 900, profundidadeMm: 1900, alturaMm: 500, simbolo: 'CAMA' },
+  CRIADO: { rotulo: 'Criado-mudo', familia: 'MOBILIARIO', larguraMm: 500, profundidadeMm: 400, alturaMm: 550, simbolo: 'CAIXA' },
+  ARMARIO: { rotulo: 'Armário', familia: 'ARMARIO', larguraMm: 1800, profundidadeMm: 600, alturaMm: 2200, simbolo: 'ARMARIO' },
+  ESTANTE: { rotulo: 'Estante', familia: 'ARMARIO', larguraMm: 900, profundidadeMm: 400, alturaMm: 1800, simbolo: 'ARMARIO' },
+  SOFA: { rotulo: 'Sofá', familia: 'MOBILIARIO', larguraMm: 2000, profundidadeMm: 900, alturaMm: 850, simbolo: 'SOFA' },
+  POLTRONA: { rotulo: 'Poltrona', familia: 'MOBILIARIO', larguraMm: 800, profundidadeMm: 850, alturaMm: 850, simbolo: 'SOFA' },
+  MESA_JANTAR: { rotulo: 'Mesa de jantar', familia: 'MOBILIARIO', larguraMm: 1400, profundidadeMm: 900, alturaMm: 750, simbolo: 'MESA' },
+  CADEIRA: { rotulo: 'Cadeira', familia: 'MOBILIARIO', larguraMm: 450, profundidadeMm: 450, alturaMm: 900, simbolo: 'CADEIRA' },
+  RACK: { rotulo: 'Rack/TV', familia: 'MOBILIARIO', larguraMm: 1600, profundidadeMm: 450, alturaMm: 600, simbolo: 'CAIXA' },
+  ESCRIVANINHA: { rotulo: 'Escrivaninha', familia: 'MOBILIARIO', larguraMm: 1200, profundidadeMm: 600, alturaMm: 750, simbolo: 'MESA' },
+  BANCADA: { rotulo: 'Bancada com pia', familia: 'BANCADA', larguraMm: 1800, profundidadeMm: 600, alturaMm: 900, simbolo: 'PIA', ligaAoPonto: 'PIA_COZINHA' },
+  BANCADA_SECA: { rotulo: 'Bancada', familia: 'BANCADA', larguraMm: 1200, profundidadeMm: 600, alturaMm: 900, simbolo: 'CAIXA' },
+  GELADEIRA: { rotulo: 'Geladeira', familia: 'EQUIPAMENTO', larguraMm: 700, profundidadeMm: 700, alturaMm: 1800, simbolo: 'GELADEIRA' },
+  FOGAO: { rotulo: 'Fogão', familia: 'EQUIPAMENTO', larguraMm: 600, profundidadeMm: 600, alturaMm: 900, simbolo: 'FOGAO' },
+  TANQUE: { rotulo: 'Tanque', familia: 'LOUCA', larguraMm: 600, profundidadeMm: 600, alturaMm: 900, simbolo: 'TANQUE', ligaAoPonto: 'TANQUE' },
+  MAQUINA: { rotulo: 'Máquina de lavar', familia: 'EQUIPAMENTO', larguraMm: 600, profundidadeMm: 650, alturaMm: 900, simbolo: 'MAQUINA', ligaAoPonto: 'MAQUINA_LAVAR' },
+  VASO: { rotulo: 'Vaso sanitário', familia: 'LOUCA', larguraMm: 400, profundidadeMm: 650, alturaMm: 400, simbolo: 'VASO', ligaAoPonto: 'VASO_SANITARIO' },
+  LAVATORIO: { rotulo: 'Lavatório', familia: 'LOUCA', larguraMm: 500, profundidadeMm: 450, alturaMm: 850, simbolo: 'LAVATORIO', ligaAoPonto: 'LAVATORIO' },
+  BOX: { rotulo: 'Box', familia: 'LOUCA', larguraMm: 900, profundidadeMm: 900, alturaMm: 2000, simbolo: 'BOX', ligaAoPonto: 'CHUVEIRO' },
+};
+export const MAX_ROTULO_DE_COMPONENTE = 40;
+
+export interface Componente {
+  id: ObjectId;
+  uid: ElementUid;
+  parametros?: Parametros;
+  levelId: ObjectId;
+  tipoId: TipoDeComponente;
+  familia: FamiliaDeComponente;
+  /** Centro, mm inteiro. */
+  at: Point;
+  /** Largura (ao longo do encosto), profundidade (para dentro do ambiente) e altura, mm inteiros > 0. */
+  larguraMm: number;
+  profundidadeMm: number;
+  alturaMm: number;
+  /** Giro em relação ao eixo Y, graus inteiros [0, 360). */
+  rotacaoGraus: number;
+  /** "Cama do casal", "Bancada da ilha". `null` = o rótulo do catálogo. */
+  rotulo?: string | null;
+  sugerido?: boolean | null;
+}
+
+/** Os quatro cantos do componente em planta (anel), inteiros. */
+export function contornoDoComponente(c: Pick<Componente, 'at' | 'larguraMm' | 'profundidadeMm' | 'rotacaoGraus'>): Point[] {
+  return contornoDaVaga({ at: c.at, larguraMm: c.larguraMm, comprimentoMm: c.profundidadeMm, rotacaoGraus: c.rotacaoGraus });
+}
+
 export interface Vaga {
   id: ObjectId;
   uid: ElementUid;
@@ -1920,6 +2020,8 @@ export interface BlueprintModel {
   nucleos: Nucleo[];
   /** Vagas de garagem. Ver `Vaga`. */
   vagas: Vaga[];
+  /** Componentes — mobiliário, louças, bancadas, armários, equipamentos. Ver `Componente`. */
+  componentes: Componente[];
   /**
    * Escadas e rampas. Como a estrutura e o telhado, NÃO participam do arranjo
    * planar: uma escada dentro da sala não parte o ambiente. O que ela faz ao
@@ -2034,6 +2136,7 @@ export function emptyModel(): BlueprintModel {
     grupos: [],
     nucleos: [],
     vagas: [],
+    componentes: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -2097,6 +2200,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     unidades: (model.unidades ?? []).map((u) => ({ ...u, etiquetaUids: [...u.etiquetaUids] })),
     nucleos: (model.nucleos ?? []).map((n) => ({ ...n, ring: n.ring.map((p) => ({ ...p })), ...(n.parametros ? { parametros: { ...n.parametros } } : {}) })),
     vagas: (model.vagas ?? []).map((v) => ({ ...v, at: { ...v.at }, ...(v.parametros ? { parametros: { ...v.parametros } } : {}) })),
+    componentes: (model.componentes ?? []).map((c) => ({ ...c, at: { ...c.at }, ...(c.parametros ? { parametros: { ...c.parametros } } : {}) })),
     grupos: (model.grupos ?? []).map((g) => ({
       ...g,
       pivo: { ...g.pivo },
@@ -2237,6 +2341,29 @@ export function findVaga(model: BlueprintModel, id: ObjectId): Vaga {
   const v = (model.vagas ?? []).find((x) => x.id === id);
   if (!v) throw new KernelError('PARKING_NOT_FOUND', `Vaga inexistente: ${id}`);
   return v;
+}
+
+export function findComponente(model: BlueprintModel, id: ObjectId): Componente {
+  const c = (model.componentes ?? []).find((x) => x.id === id);
+  if (!c) throw new KernelError('COMPONENT_NOT_FOUND', `Componente inexistente: ${id}`);
+  return c;
+}
+
+/**
+ * A louça liga-se ao PONTO HIDRÁULICO do mesmo lugar (E7.1): o terminal do
+ * tipo que a ficha pede, no mesmo pavimento, a até `raioMm` do centro da peça.
+ * Derivado — mover a peça ou o ponto refaz a ligação.
+ */
+export function pontoHidraulicoDoComponente(model: BlueprintModel, c: Componente, raioMm = 600): Terminal | null {
+  const ficha = CATALOGO_DE_COMPONENTES[c.tipoId] as FichaDoComponente | undefined;
+  if (!ficha?.ligaAoPonto) return null;
+  let melhor: { t: Terminal; d: number } | null = null;
+  for (const t of model.terminais ?? []) {
+    if (t.levelId !== c.levelId || t.tipoHidraulico !== ficha.ligaAoPonto) continue;
+    const d = Math.hypot(t.at.x - c.at.x, t.at.y - c.at.y);
+    if (d <= raioMm && (!melhor || d < melhor.d)) melhor = { t, d };
+  }
+  return melhor?.t ?? null;
 }
 
 export function findNucleo(model: BlueprintModel, id: ObjectId): Nucleo {
@@ -3217,6 +3344,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Grupo', model.grupos ?? []],
     ['Núcleo vertical', model.nucleos ?? []],
     ['Vaga', model.vagas ?? []],
+    ['Componente', model.componentes ?? []],
     ['Trecho', model.trechos ?? []],
     ['Terminal', model.terminais ?? []],
     ['Quadro', model.quadros ?? []],
@@ -3710,6 +3838,21 @@ export function assertModelInvariants(model: BlueprintModel): void {
     if (!Number.isInteger(v.larguraMm) || v.larguraMm <= 0 || !Number.isInteger(v.comprimentoMm) || v.comprimentoMm <= 0) throw new KernelError('BAD_PARKING', `Vaga ${v.id}: largura e comprimento têm de ser inteiros positivos`);
     if (!Number.isInteger(v.rotacaoGraus) || v.rotacaoGraus < 0 || v.rotacaoGraus >= 360) throw new KernelError('BAD_PARKING', `Vaga ${v.id}: giro tem de ser inteiro em [0, 360)`);
     if (v.numero != null && (typeof v.numero !== 'string' || v.numero.length > 12)) throw new KernelError('BAD_PARKING', `Vaga ${v.id}: número maior que 12 caracteres`);
+  }
+
+  // Componentes: pavimento existente, tipo do catálogo, família coerente, medidas inteiras positivas, giro em [0, 360), rótulo curto.
+  for (const c of model.componentes ?? []) {
+    if (!model.levels.some((l) => l.id === c.levelId)) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: pavimento inexistente`);
+    const ficha = CATALOGO_DE_COMPONENTES[c.tipoId] as FichaDoComponente | undefined;
+    if (!ficha) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: tipo desconhecido ${String(c.tipoId)}`);
+    if (!FAMILIAS_DE_COMPONENTE.includes(c.familia)) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: família desconhecida ${String(c.familia)}`);
+    assertIntegerMm(c.at.x, `${c.id}.at.x`);
+    assertIntegerMm(c.at.y, `${c.id}.at.y`);
+    for (const k of ['larguraMm', 'profundidadeMm', 'alturaMm'] as const) {
+      if (!Number.isInteger(c[k]) || c[k] <= 0) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: ${k} tem de ser inteiro positivo`);
+    }
+    if (!Number.isInteger(c.rotacaoGraus) || c.rotacaoGraus < 0 || c.rotacaoGraus >= 360) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: giro tem de ser inteiro em [0, 360)`);
+    if (c.rotulo != null && (typeof c.rotulo !== 'string' || c.rotulo.length > MAX_ROTULO_DE_COMPONENTE)) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: rótulo maior que ${MAX_ROTULO_DE_COMPONENTE} caracteres`);
   }
 
   // Eixos: comprimento não nulo, nome curto, coordenadas inteiras.

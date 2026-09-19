@@ -27,11 +27,14 @@ interface Props {
   /** Shaft: o motivo (quando não dá) ou a ação. */
   shaft: { possivel: boolean; motivo: string };
   onSugerirShaft: () => void;
+  /** E7.1: grava as peças sugeridas como COMPONENTES do kernel (do pavimento, ou de um ambiente). */
+  onAceitarMobiliario?: (spaceId: ObjectId | null) => void;
+  componentesExistentes?: number;
 }
 
 const m = (mm: number) => `${(mm / 1000).toFixed(2).replace('.', ',')} m`;
 
-export default function PainelMobiliario({ lista, hipoteses, onHipoteses, mostrarNoDesenho, onMostrarNoDesenho, nomeDoPavimento, onSelecionar, garagens, onLancarVagas, vagasResultado, shaft, onSugerirShaft }: Props) {
+export default function PainelMobiliario({ lista, hipoteses, onHipoteses, mostrarNoDesenho, onMostrarNoDesenho, nomeDoPavimento, onSelecionar, garagens, onLancarVagas, vagasResultado, shaft, onSugerirShaft, onAceitarMobiliario, componentesExistentes = 0 }: Props) {
   const resumo = resumirMobiliario(lista, hipoteses);
   const exigidaMm = hipoteses.acessivel ? 1200 : 900;
   return (
@@ -45,6 +48,11 @@ export default function PainelMobiliario({ lista, hipoteses, onHipoteses, mostra
           <input type="checkbox" checked={hipoteses.acessivel} onChange={(e) => onHipoteses({ ...hipoteses, acessivel: e.target.checked })} aria-label="Exigir rota acessível (1,20 m)" className="h-3.5 w-3.5 rounded border-slate-300" />
           Rota acessível (1,20 m em vez de 0,90)
         </label>
+        {onAceitarMobiliario && (
+          <button type="button" disabled={resumo.pecas === 0} onClick={() => onAceitarMobiliario(null)} className="ml-auto inline-flex h-7 items-center gap-1 rounded-[6px] bg-blue-600 px-2 text-xs font-medium text-white hover:bg-blue-700 disabled:bg-slate-300" data-testid="aceitar-mobiliario" title="Grava as peças sugeridas como componentes do desenho (sugeridos até você confirmar cada um)">
+            Aceitar como componentes ({resumo.pecas})
+          </button>
+        )}
         <label className="inline-flex items-center gap-1">
           Giro da porta (m)
           <input type="number" min={0.6} step={0.1} value={hipoteses.giroDaPortaMm / 1000} onChange={(e) => Number(e.target.value) >= 0.6 && onHipoteses({ ...hipoteses, giroDaPortaMm: Math.round(Number(e.target.value) * 1000) })} aria-label="Giro reservado à frente da porta (m)" className="h-7 w-16 rounded-[6px] border border-slate-300 bg-white px-1.5 text-right text-xs" />
@@ -62,7 +70,7 @@ export default function PainelMobiliario({ lista, hipoteses, onHipoteses, mostra
         {resumo.semUso.length > 0 && <p className="mt-1 text-slate-500">Sem kit (nome não reconhecido ou uso sem mobiliário mínimo): {resumo.semUso.map((x) => x.rotulo).join(', ')}.</p>}
         <p className="mt-1 text-[11px] text-slate-500">
           Kit mínimo por uso (cama/armário, sofá/mesa, bancada/geladeira/fogão, tanque/máquina, box/vaso/lavatório), colocado no retângulo interno respeitando o giro da porta e as janelas. A circulação é medida em grade de 5 cm, da
-          porta à frente de cada peça. Sugestão desenhada — vira peça quando o mobiliário entrar no kernel.
+          porta à frente de cada peça. "Aceitar" grava as peças como componentes do kernel (E7.1){componentesExistentes ? ` — ${componentesExistentes} já no pavimento` : ''}.
         </p>
       </div>
 

@@ -1736,6 +1736,63 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(turno3()).toHaveTextContent(/Nada a aplicar/);
   }, 60000);
 
+  it('componentes (E7.1): o menu Mobiliário arma a ferramenta; o navegador lista o vaso e o painel mostra a ficha e o ponto ligado; trocar o tipo troca a ficha; aceitar o mobiliário grava componentes sugeridos', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    // Dormitório 3,5 × 4 com porta ao sul; um vaso sanitário já lançado com o ponto de vaso a 300 mm.
+    let m = k.applyBatch(nivel.model, [w(0, 0, 3500, 0), w(3500, 0, 3500, 4000), w(3500, 4000, 0, 4000), w(0, 4000, 0, 0)]).model;
+    const sul = m.walls.find((x) => x.a.y === 0 && x.b.y === 0)!;
+    m = k.applyBatch(m, [
+      { type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Dormitório 1', tipoDeAmbiente: 'SALA_DORMITORIO' },
+      { type: 'AddOpening', wallId: sul.id, kind: 'door', offsetMm: 200, widthMm: 800, heightMm: 2100, sillMm: 0 },
+      { type: 'AddComponente', levelId: t, tipoId: 'VASO', at: k.point(3000, 3500) },
+      { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Vaso', tipoHidraulico: 'VASO_SANITARIO', at: k.point(3000, 3800), cotaMm: 300 },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    // Menu Mobiliário (Arquitetura): escolher a cama arma a ferramenta e o botão passa a dizer qual.
+    await abrirAba(/^arquitetura$/i);
+    const menuMobiliario = () => screen.getAllByRole('button', { name: /mobiliário|cama de casal/i }).find((b) => b.getAttribute('title')?.startsWith('Mobiliário, louças'))!;
+    await user.click(menuMobiliario());
+    await user.click(screen.getByRole('menuitemradio', { name: /^Cama de casal$/ }));
+    expect(menuMobiliario()).toHaveTextContent('Cama de casal');
+    // Navegador: o vaso está listado; o painel traz ficha, família e o ponto ligado.
+    await abrirComponentes(user);
+    const linhaVaso = screen.getAllByRole('button').find((b) => /^Vaso sanitário 1/.test(b.textContent ?? ''))!;
+    expect(linhaVaso).toBeTruthy();
+    expect(linhaVaso).toHaveTextContent(/0,40 × 0,65 m/);
+    await user.click(linhaVaso);
+    const painel = await screen.findByTestId('painel-componente');
+    expect(painel).toHaveTextContent(/Vaso sanitário/);
+    expect(painel).toHaveTextContent(/Louça · 0,40 × 0,65 × 0,40 m · giro 0°/);
+    expect(within(painel).getByTestId('ponto-ligado')).toHaveTextContent(/Vaso sanitário.*ligado — a 300 mm/);
+    // Trocar o tipo puxa a ficha nova; sem ponto de lavatório por perto, o painel avisa.
+    await user.selectOptions(within(painel).getByLabelText('Tipo do componente'), 'LAVATORIO');
+    expect(screen.getByTestId('painel-componente')).toHaveTextContent(/Louça · 0,50 × 0,45 × 0,85 m/);
+    expect(within(screen.getByTestId('painel-componente')).getByTestId('ponto-ligado')).toHaveTextContent(/nenhum a até 0,60 m/);
+    await user.selectOptions(within(screen.getByTestId('painel-componente')).getByLabelText('Giro do componente'), '90');
+    expect(screen.getByTestId('painel-componente')).toHaveTextContent(/giro 90°/);
+    // Analisar › Mobiliário: aceitar grava o kit do dormitório como componentes sugeridos.
+    await abrirAba(/^analisar$/i);
+    await user.click(screen.getAllByRole('button', { name: /^mobiliário/i }).find((b) => b.getAttribute('title')?.startsWith('Mobiliário mínimo'))!);
+    const gaveta = await screen.findByTestId('tarefa-mobiliario');
+    expect(gaveta).toHaveTextContent(/1 já no pavimento/);
+    await user.click(within(gaveta).getByTestId('aceitar-mobiliario'));
+    expect(await screen.findByTestId('tarefa-mobiliario')).toHaveTextContent(/4 já no pavimento/);
+    // Aceitar de novo não duplica.
+    await user.click(within(screen.getByTestId('tarefa-mobiliario')).getByTestId('aceitar-mobiliario'));
+    expect(screen.getByTestId('tarefa-mobiliario')).toHaveTextContent(/4 já no pavimento/);
+    // O navegador lista a cama como sugerida.
+    await user.keyboard('{Escape}');
+    await abrirComponentes(user);
+    const linhaCama = screen.getAllByRole('button').find((b) => /^Cama de casal 1/.test(b.textContent ?? ''))!;
+    expect(linhaCama).toBeTruthy();
+    expect(linhaCama).toHaveTextContent(/sugerido/);
+  }, 60000);
+
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2500 });

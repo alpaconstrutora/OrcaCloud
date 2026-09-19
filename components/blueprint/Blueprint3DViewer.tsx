@@ -1219,6 +1219,22 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, en
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [envelope]);
 
+  /** COMPONENTES (E7.1): caixas no piso do pavimento — mobiliário cinza-quente, louça branca. */
+  const caixasDeComponentes = useMemo(() => {
+    const out: { id: string; geom: THREE.BufferGeometry; pos: [number, number, number]; rot: number; cor: string; sugerido: boolean }[] = [];
+    for (const c of model.componentes ?? []) {
+      if (!levelIds || !levelIds.includes(c.levelId)) continue;
+      if (ocultos?.has(c.id)) continue;
+      const nivel = model.levels.find((l) => l.id === c.levelId);
+      if (!nivel) continue;
+      const geom = new THREE.BoxGeometry(c.larguraMm * S, c.alturaMm * S, c.profundidadeMm * S);
+      const cor = c.familia === 'LOUCA' ? '#f8fafc' : c.familia === 'EQUIPAMENTO' ? '#cbd5e1' : c.familia === 'ARMARIO' ? '#b08968' : '#a3b18a';
+      out.push({ id: c.id, geom, pos: [c.at.x * S, (nivel.elevationMm + c.alturaMm / 2) * S, -c.at.y * S], rot: (c.rotacaoGraus * Math.PI) / 180, cor, sugerido: !!c.sugerido });
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model.componentes, model.levels, levelIds, ocultos]);
+
   /** Os vizinhos do entorno (E5.1): prismas opacos que projetam sombra. */
   const prismasDoEntorno = useMemo(() => {
     if (!entorno) return [];
@@ -1234,6 +1250,11 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, en
 
   return (
     <group>
+      {caixasDeComponentes.map((c) => (
+        <mesh key={`componente-${c.id}`} geometry={c.geom} position={c.pos} rotation={[0, c.rot, 0]} castShadow receiveShadow onClick={(e) => { e.stopPropagation(); onSelecionar?.([c.id]); }}>
+          <meshStandardMaterial color={selecionados?.has(c.id) ? '#2563eb' : c.cor} transparent={c.sugerido} opacity={c.sugerido ? 0.55 : 1} roughness={0.85} />
+        </mesh>
+      ))}
       {prismasDoEntorno.map((p) => (
         <mesh key={`entorno-${p.id}`} geometry={p.geom} castShadow receiveShadow>
           <meshStandardMaterial color="#cbd5e1" roughness={0.9} />

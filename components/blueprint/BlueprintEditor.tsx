@@ -115,6 +115,10 @@ import PainelAguaSelecionada from './PainelAguaSelecionada';
 import PainelEscadaSelecionada from './PainelEscadaSelecionada';
 import PainelNucleoSelecionado from './PainelNucleoSelecionado';
 import PainelVagaSelecionada from './PainelVagaSelecionada';
+import PainelComponenteSelecionado from './PainelComponenteSelecionado';
+import SeletorDeTipo from './SeletorDeTipo';
+import { camposDoComponente, propriedadesDoComponente, type PropriedadesDeComponente } from '../../utils/blueprintTipos';
+import { comandosDeMobiliario } from '../../utils/blueprintMobiliario';
 import PainelVagas from './PainelVagas';
 import { comandosDeAceite as aceitarVagas, comandosDeLimpeza as limparVagas, HIPOTESES_VAGAS_PADRAO, planejarVagas, type HipotesesDeVagas, type RegiaoDeVagas } from '../../utils/blueprintVagasAutomaticas';
 import { nucleosDoNivel } from '../../utils/blueprintNucleoVertical';
@@ -407,6 +411,8 @@ import {
   type TipoCirculacao,
   type TipoDeNucleo,
   type TipoDeVaga,
+  type TipoDeComponente,
+  pontoHidraulicoDoComponente,
   type TipoDeRestricaoDoLote,
   TIPOS_DE_RESTRICAO_DO_LOTE,
   ROTULO_DA_RESTRICAO_DO_LOTE,
@@ -1485,6 +1491,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [tipoDeNucleo, setTipoDeNucleo] = useState<TipoDeNucleo>('SHAFT');
   /** VAGA (E2.5): o tipo do próximo clique; hipóteses do lançamento lembradas entre sessões. */
   const [tipoDeVaga, setTipoDeVaga] = useState<TipoDeVaga>('COMUM');
+  /** COMPONENTE (E7.1): o tipo do catálogo do próximo clique. */
+  const [tipoDeComponente, setTipoDeComponente] = useState<TipoDeComponente>('CAMA_CASAL');
   const [hipotesesDeVagas, setHipotesesDeVagas] = usePersistedState<HipotesesDeVagas>('blueprint:vagas', HIPOTESES_VAGAS_PADRAO);
   const [regiaoDeVagasPedida, setRegiaoDeVagasPedida] = useState<RegiaoDeVagas | null>(null);
   const [resultadoDeVagas, setResultadoDeVagas] = useState<string | null>(null);
@@ -2658,6 +2666,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const escadaSel = (editor.model.stairs ?? []).find((e) => e.id === editor.selectedId) ?? null;
   const nucleoSel = (editor.model.nucleos ?? []).find((n) => n.id === editor.selectedId) ?? null;
   const vagaSel = (editor.model.vagas ?? []).find((v) => v.id === editor.selectedId) ?? null;
+  const componenteSel = (editor.model.componentes ?? []).find((c) => c.id === editor.selectedId) ?? null;
+  const componentesDoNivelAtivo = useMemo(() => (editor.model.componentes ?? []).filter((c) => !levelId || c.levelId === levelId), [editor.model.componentes, levelId]);
   const vagasDoNivelAtivo = useMemo(() => (editor.model.vagas ?? []).filter((v) => !levelId || v.levelId === levelId), [editor.model.vagas, levelId]);
   const vagasSugeridasNoNivel = vagasDoNivelAtivo.filter((v) => v.sugerida).length;
   /** O plano das vagas automáticas (E2.5), derivado a cada mudança — a gaveta só mostra. */
@@ -4686,6 +4696,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     if (criados.length > 0) selecionar(criados);
   }
 
+  /** O componente nasce com as medidas do catálogo, de pé; o painel gira e ajusta. */
+  function adicionarComponente(at: Point) {
+    if (!levelId) return;
+    const criados = editor.run({ type: 'AddComponente', levelId, at, tipoId: tipoDeComponente });
+    if (criados.length > 0) selecionar(criados);
+  }
+
   /** O núcleo nasce do pavimento ativo até o mais alto; o painel ajusta a chegada. */
   function adicionarNucleo(ring: Point[]) {
     if (!levelId) return;
@@ -5133,6 +5150,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     const escadas = ids.filter((id) => (editor.model.stairs ?? []).some((e) => e.id === id));
     const nucleos = ids.filter((id) => (editor.model.nucleos ?? []).some((n) => n.id === id));
     const vagas = ids.filter((id) => (editor.model.vagas ?? []).some((v) => v.id === id));
+    const componentesSel = ids.filter((id) => (editor.model.componentes ?? []).some((c) => c.id === id));
     // Instalações. ⚠️ O QUADRO sai por último no lote e leva os circuitos dele
     // junto (ver `DeleteQuadro`); os pontos que os citavam ficam sem circuito,
     // e não apagados — quem tirou o quadro não decidiu tirar as tomadas.
@@ -5156,6 +5174,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       ...escadas.map((escadaId) => ({ type: 'DeleteEscada', escadaId }) as const),
       ...nucleos.map((nucleoId) => ({ type: 'DeleteNucleo', nucleoId }) as const),
       ...vagas.map((vagaId) => ({ type: 'DeleteVaga', vagaId }) as const),
+      ...componentesSel.map((componenteId) => ({ type: 'DeleteComponente', componenteId }) as const),
       ...trechos.map((trechoId) => ({ type: 'DeleteTrecho', trechoId }) as const),
       ...terminais.map((terminalId) => ({ type: 'DeleteTerminal', terminalId }) as const),
       ...quadros.map((quadroId) => ({ type: 'DeleteQuadro', quadroId }) as const),
@@ -5358,6 +5377,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     if (e.tool === 'escada') setTipoCirculacao(e.circulacao);
     if (e.tool === 'nucleo') setTipoDeNucleo(e.nucleo);
     if (e.tool === 'vaga') setTipoDeVaga(e.vaga);
+    if (e.tool === 'componente') setTipoDeComponente(e.componente);
     // A disciplina é estado da BARRA, e trocá-la traz cota e bitola usuais
     // junto: escolher "esgoto" e continuar desenhando na cota do eletroduto
     // seria pior que não ter padrão nenhum.
@@ -6482,6 +6502,24 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         onExcluir={removerSelecionada}
       />
 
+      <PainelComponenteSelecionado
+        componente={componenteSel}
+        pontoLigado={componenteSel ? pontoHidraulicoDoComponente(editor.model, componenteSel) : null}
+        onProps={(campos) => componenteSel && editor.run({ type: 'SetComponenteProps', componenteId: componenteSel.id, ...campos })}
+        onExcluir={removerSelecionada}
+        onSelecionarPonto={(id) => selecionarEAbrir([id])}
+        seletorDeTipo={
+          componenteSel ? (
+            <SeletorDeTipo
+              familia="COMPONENTE"
+              atual={propriedadesDoComponente(componenteSel)}
+              onAplicar={(p) => editor.run({ type: 'SetComponenteProps', componenteId: componenteSel.id, ...camposDoComponente(p as PropriedadesDeComponente) })}
+              comAMesmaAssinatura={(editor.model.componentes ?? []).filter((c) => c.tipoId === componenteSel.tipoId && c.larguraMm === componenteSel.larguraMm && c.profundidadeMm === componenteSel.profundidadeMm && c.alturaMm === componenteSel.alturaMm).length}
+            />
+          ) : null
+        }
+      />
+
       <PainelEixoSelecionado
         eixo={eixoSel}
         onProps={(campos) => eixoSel && editor.run({ type: 'SetEixoProps', eixoId: eixoSel.id, ...campos })}
@@ -7400,6 +7438,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 tipoDeNucleo={tipoDeNucleo}
                 tipoDeVaga={tipoDeVaga}
                 familia="CONSTRUCAO"
+                onEscolher={escolherComponente}
+              />
+              {/* MOBILIÁRIO (19/09/2026, E7.1): o catálogo de componentes — mobiliário,
+                  louças, bancadas, armários, equipamentos — a mesma porta, outra família. */}
+              <MenuComponentes
+                tool={editor.tool}
+                tipoAbertura={tipoAbertura}
+                tipoEstrutural={tipoEstrutural}
+                tipoDeComponente={tipoDeComponente}
+                familia="MOBILIARIO"
+                rotulo="Mobiliário"
                 onEscolher={escolherComponente}
               />
               {/* JUNTAR não desenha — CORRIGE. Fica junto das de desenho mesmo assim
@@ -9174,6 +9223,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               vagas={vagasDoNivelAtivo}
               tipoDeVaga={tipoDeVaga}
               onAddVaga={adicionarVaga}
+              componentes={componentesDoNivelAtivo}
+              tipoDeComponente={tipoDeComponente}
+              onAddComponente={adicionarComponente}
               onAddTrecho={adicionarTrecho}
               redeEmUmClique={prumadaDeRede != null}
               onAddTerminal={adicionarTerminal}
@@ -9425,7 +9477,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 aberturas={componentesDoNivel.aberturas}
                 estruturas={componentesDoNivel.estruturas}
                 aguas={componentesDoNivel.aguas}
-                escadas={{ model: editor.model, itens: componentesDoNivel.escadas, nucleos: nucleosDoNivelAtivo, vagas: vagasDoNivelAtivo }}
+                escadas={{ model: editor.model, itens: componentesDoNivel.escadas, nucleos: nucleosDoNivelAtivo, vagas: vagasDoNivelAtivo, componentes: componentesDoNivelAtivo }}
                 rede={componentesDoNivel.rede}
                 selecionados={editor.selectedIds}
                 // Pela LISTA, as propriedades abrem em Sheet (17/09/2026).
@@ -10008,6 +10060,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 setTarefa('vagas');
               }}
               vagasResultado={resultadoDeVagas}
+              onAceitarMobiliario={(spaceId) => {
+                const lista = spaceId ? mobiliarioDoNivel.filter((a) => a.spaceId === spaceId) : mobiliarioDoNivel;
+                const cmds = levelId ? comandosDeMobiliario(lista, levelId, editor.model) : [];
+                if (cmds.length === 0) return;
+                const criados = editor.runBatch(cmds);
+                if (criados.length > 0) selecionar(criados);
+              }}
+              componentesExistentes={componentesDoNivelAtivo.length}
               shaft={{ possivel: !!shaftSugerido.comando, motivo: shaftSugerido.motivo }}
               onSugerirShaft={() => {
                 if (!shaftSugerido.comando) return;

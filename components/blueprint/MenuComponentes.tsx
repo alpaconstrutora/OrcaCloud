@@ -39,6 +39,18 @@ import {
   GitFork,
   ArrowDownToLine,
   ArrowUpFromLine,
+  BedDouble,
+  Sofa,
+  Armchair,
+  UtensilsCrossed,
+  Refrigerator,
+  CookingPot,
+  WashingMachine,
+  Bath,
+  Table2,
+  BookOpen,
+  Tv,
+  Lamp,
 } from 'lucide-react';
 import {
   TIPOS_DE_INTERRUPTOR,
@@ -51,6 +63,7 @@ import {
   type TipoCirculacao,
   type TipoDeNucleo,
   type TipoDeVaga,
+  type TipoDeComponente,
   type TipoDeInterruptor,
   type TipoDePontoEletrico,
   type TipoDePontoHidraulico,
@@ -120,6 +133,7 @@ export type EscolhaComponente =
   | { tool: 'escada'; circulacao: TipoCirculacao }
   | { tool: 'nucleo'; nucleo: TipoDeNucleo }
   | { tool: 'vaga'; vaga: TipoDeVaga }
+  | { tool: 'componente'; componente: TipoDeComponente }
   | {
       tool: 'rede';
       disciplina: DisciplinaDeRede;
@@ -341,6 +355,8 @@ function gruposDoPontoHidraulico(): { titulo: string; itens: ItemComponente[] }[
  */
 function colunaDoGrupo(titulo: string): 1 | 2 | 3 {
   if (titulo.startsWith('Elétrica')) return 3;
+  if (titulo.startsWith('Mobiliário — cozinha')) return 2;
+  if (titulo.startsWith('Mobiliário')) return 1;
   // Na família hidráulica o menu é só dela: consumo à esquerda, trechos +
   // reservação + esgoto no meio, registros/conexões/a classificar à direita.
   if (titulo.startsWith('Hidráulica — pontos de consumo')) return 1;
@@ -560,6 +576,38 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
       },
     ],
   },
+  // MOBILIÁRIO (E7.1): componentes do catálogo do kernel, um clique no centro.
+  // A família do menu é "MOBILIARIO" — porta própria no ribbon (Arquitetura).
+  {
+    titulo: 'Mobiliário — dormitório e sala',
+    itens: [
+      { chave: 'COMPONENTE_CAMA_CASAL', rotulo: 'Cama de casal', icone: BedDouble, ajuda: '1,40 × 1,90 m. Um clique no centro; gire no painel.', escolha: { tool: 'componente', componente: 'CAMA_CASAL' } },
+      { chave: 'COMPONENTE_CAMA_SOLTEIRO', rotulo: 'Cama de solteiro', icone: BedDouble, ajuda: '0,90 × 1,90 m.', escolha: { tool: 'componente', componente: 'CAMA_SOLTEIRO' } },
+      { chave: 'COMPONENTE_CRIADO', rotulo: 'Criado-mudo', icone: Lamp, ajuda: '0,50 × 0,40 m.', escolha: { tool: 'componente', componente: 'CRIADO' } },
+      { chave: 'COMPONENTE_ARMARIO', rotulo: 'Armário', icone: SquareStack, ajuda: '1,80 × 0,60 × 2,20 m.', escolha: { tool: 'componente', componente: 'ARMARIO' } },
+      { chave: 'COMPONENTE_ESTANTE', rotulo: 'Estante', icone: BookOpen, ajuda: '0,90 × 0,40 × 1,80 m.', escolha: { tool: 'componente', componente: 'ESTANTE' } },
+      { chave: 'COMPONENTE_SOFA', rotulo: 'Sofá', icone: Sofa, ajuda: '2,00 × 0,90 m.', escolha: { tool: 'componente', componente: 'SOFA' } },
+      { chave: 'COMPONENTE_POLTRONA', rotulo: 'Poltrona', icone: Armchair, ajuda: '0,80 × 0,85 m.', escolha: { tool: 'componente', componente: 'POLTRONA' } },
+      { chave: 'COMPONENTE_MESA_JANTAR', rotulo: 'Mesa de jantar', icone: Table2, ajuda: '1,40 × 0,90 m.', escolha: { tool: 'componente', componente: 'MESA_JANTAR' } },
+      { chave: 'COMPONENTE_CADEIRA', rotulo: 'Cadeira', icone: Armchair, ajuda: '0,45 × 0,45 m.', escolha: { tool: 'componente', componente: 'CADEIRA' } },
+      { chave: 'COMPONENTE_RACK', rotulo: 'Rack/TV', icone: Tv, ajuda: '1,60 × 0,45 m.', escolha: { tool: 'componente', componente: 'RACK' } },
+      { chave: 'COMPONENTE_ESCRIVANINHA', rotulo: 'Escrivaninha', icone: Table2, ajuda: '1,20 × 0,60 m.', escolha: { tool: 'componente', componente: 'ESCRIVANINHA' } },
+    ],
+  },
+  {
+    titulo: 'Mobiliário — cozinha, serviço e banho',
+    itens: [
+      { chave: 'COMPONENTE_BANCADA', rotulo: 'Bancada com pia', icone: UtensilsCrossed, ajuda: '1,80 × 0,60 m; liga-se ao ponto de pia (NBR 5626) do mesmo lugar.', escolha: { tool: 'componente', componente: 'BANCADA' } },
+      { chave: 'COMPONENTE_BANCADA_SECA', rotulo: 'Bancada', icone: RectangleHorizontal, ajuda: '1,20 × 0,60 m, sem cuba.', escolha: { tool: 'componente', componente: 'BANCADA_SECA' } },
+      { chave: 'COMPONENTE_GELADEIRA', rotulo: 'Geladeira', icone: Refrigerator, ajuda: '0,70 × 0,70 × 1,80 m.', escolha: { tool: 'componente', componente: 'GELADEIRA' } },
+      { chave: 'COMPONENTE_FOGAO', rotulo: 'Fogão', icone: CookingPot, ajuda: '0,60 × 0,60 m.', escolha: { tool: 'componente', componente: 'FOGAO' } },
+      { chave: 'COMPONENTE_TANQUE', rotulo: 'Tanque', icone: Waves, ajuda: '0,60 × 0,60 m; liga-se ao ponto de tanque.', escolha: { tool: 'componente', componente: 'TANQUE' } },
+      { chave: 'COMPONENTE_MAQUINA', rotulo: 'Máquina de lavar', icone: WashingMachine, ajuda: '0,60 × 0,65 m; liga-se ao ponto de máquina.', escolha: { tool: 'componente', componente: 'MAQUINA' } },
+      { chave: 'COMPONENTE_VASO', rotulo: 'Vaso sanitário', icone: Circle, ajuda: '0,40 × 0,65 m; liga-se ao ponto de vaso.', escolha: { tool: 'componente', componente: 'VASO' } },
+      { chave: 'COMPONENTE_LAVATORIO', rotulo: 'Lavatório', icone: Droplet, ajuda: '0,50 × 0,45 m; liga-se ao ponto de lavatório.', escolha: { tool: 'componente', componente: 'LAVATORIO' } },
+      { chave: 'COMPONENTE_BOX', rotulo: 'Box', icone: Bath, ajuda: '0,90 × 0,90 m; liga-se ao ponto de chuveiro.', escolha: { tool: 'componente', componente: 'BOX' } },
+    ],
+  },
   // INSTALAÇÕES no fim: elas atravessam tudo o que veio antes, e desenhá-las
   // exige que parede e pavimento já existam para o trecho ter onde se apoiar.
   //
@@ -704,6 +752,7 @@ const TOOLS_DE_COMPONENTE: BlueprintTool[] = [
   'escada',
   'nucleo',
   'vaga',
+  'componente',
   'rede',
   'terminal',
   'quadro',
@@ -719,11 +768,12 @@ const TOOLS_DE_COMPONENTE: BlueprintTool[] = [
  * mesmo catálogo, filtrado — e não três catálogos — para a ficha do componente
  * (`fichaDoComponente`) continuar única.
  */
-export type FamiliaDeComponentes = 'CONSTRUCAO' | 'ELETRICA' | 'HIDRAULICA';
+export type FamiliaDeComponentes = 'CONSTRUCAO' | 'ELETRICA' | 'HIDRAULICA' | 'MOBILIARIO';
 
 function familiaDoGrupo(tituloDoGrupo: string): FamiliaDeComponentes {
   if (/^Elétrica/.test(tituloDoGrupo)) return 'ELETRICA';
   if (/^Hidráulica/.test(tituloDoGrupo)) return 'HIDRAULICA';
+  if (/^Mobiliário/.test(tituloDoGrupo)) return 'MOBILIARIO';
   return 'CONSTRUCAO';
 }
 
@@ -742,6 +792,8 @@ interface Props {
   tipoDeNucleo?: TipoDeNucleo;
   /** O tipo de vaga ativo (E2.5). */
   tipoDeVaga?: TipoDeVaga;
+  /** O componente ativo (E7.1). */
+  tipoDeComponente?: TipoDeComponente;
   /** Para o botão DIZER qual trecho/ponto está ativo. Sem eles, rede e ponto não acendem. */
   disciplinaDeRede?: DisciplinaDeRede;
   tipoDePontoEletrico?: TipoDePontoEletrico | null;
@@ -766,6 +818,7 @@ function chaveAtiva(p: Props): string | null {
   if (tool === 'escada') return p.tipoCirculacao ?? 'ESCADA';
   if (tool === 'nucleo') return p.tipoDeNucleo ?? 'SHAFT';
   if (tool === 'vaga') return `VAGA_${p.tipoDeVaga ?? 'COMUM'}`;
+  if (tool === 'componente') return `COMPONENTE_${p.tipoDeComponente ?? 'CAMA_CASAL'}`;
   if (tool === 'quadro') return 'QUADRO';
   if (tool === 'rede') {
     if (!p.disciplinaDeRede) return null;
@@ -839,7 +892,9 @@ export default function MenuComponentes(props: Props) {
             ? 'Pontos elétricos, eletroduto e quadro de distribuição'
             : familia === 'HIDRAULICA'
               ? 'Água fria, água quente e esgoto — trechos e pontos'
-              : 'Parede, esquadria, estrutura, fundação e cobertura — tudo que o desenho constrói'
+              : familia === 'MOBILIARIO'
+                ? 'Mobiliário, louças, bancadas, armários e equipamentos — o catálogo de componentes'
+                : 'Parede, esquadria, estrutura, fundação e cobertura — tudo que o desenho constrói'
         }
         className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
           ativo

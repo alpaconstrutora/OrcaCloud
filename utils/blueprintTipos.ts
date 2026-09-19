@@ -19,16 +19,17 @@
  * escada, inclinação do telhado. Posição, rotação, pavimento, rótulo e vínculo
  * (circuito, parede) ficam de fora — são da instância.
  */
-import type { Agua, Escada, Structural, Terminal } from './blueprintKernel';
-import { nomeDoTipoEstrutural } from './blueprintKernel';
+import type { Agua, Componente, Escada, Structural, Terminal } from './blueprintKernel';
+import { CATALOGO_DE_COMPONENTES, nomeDoTipoEstrutural } from './blueprintKernel';
 
-export type FamiliaDeTipo = 'ESTRUTURA' | 'TERMINAL' | 'ESCADA' | 'TELHADO';
+export type FamiliaDeTipo = 'ESTRUTURA' | 'TERMINAL' | 'ESCADA' | 'TELHADO' | 'COMPONENTE';
 
 export const ROTULO_DA_FAMILIA_DE_TIPO: Record<FamiliaDeTipo, string> = {
   ESTRUTURA: 'estrutura',
   TERMINAL: 'ponto de instalação',
   ESCADA: 'escada / rampa',
   TELHADO: 'água de telhado',
+  COMPONENTE: 'componente (mobiliário, louça…)',
 };
 
 export interface PropriedadesDeEstrutura {
@@ -66,7 +67,15 @@ export interface PropriedadesDeTelhado {
   baseMm: number;
   espessuraMm: number;
 }
-export type PropriedadesDoTipo = PropriedadesDeEstrutura | PropriedadesDeTerminal | PropriedadesDeEscada | PropriedadesDeTelhado;
+export interface PropriedadesDeComponente {
+  familia: 'COMPONENTE';
+  tipoId: Componente['tipoId'];
+  familiaDoComponente: Componente['familia'];
+  larguraMm: number;
+  profundidadeMm: number;
+  alturaMm: number;
+}
+export type PropriedadesDoTipo = PropriedadesDeEstrutura | PropriedadesDeTerminal | PropriedadesDeEscada | PropriedadesDeTelhado | PropriedadesDeComponente;
 
 // ─── Extrair da instância ────────────────────────────────────────────────────
 
@@ -138,6 +147,8 @@ export function resumoDoTipo(p: PropriedadesDoTipo): string {
       return `${p.tipo === 'RAMPA' ? 'Rampa' : 'Escada'} ${m(p.larguraMm)} m${p.tipo === 'ESCADA' ? ` · espelho ${p.alvoEspelhoMm} mm` : ''}`;
     case 'TELHADO':
       return `${p.inclinacaoPct} % · base ${m(p.baseMm)} m`;
+    case 'COMPONENTE':
+      return `${CATALOGO_DE_COMPONENTES[p.tipoId]?.rotulo ?? p.tipoId} ${cm(p.larguraMm)}×${cm(p.profundidadeMm)} · ${m(p.alturaMm)} m`;
   }
 }
 
@@ -177,4 +188,10 @@ export function camposDaEscada(p: PropriedadesDeEscada) {
 }
 export function camposDoTelhado(p: PropriedadesDeTelhado) {
   return { inclinacaoPct: p.inclinacaoPct, baseMm: p.baseMm, espessuraMm: p.espessuraMm };
+}
+export function propriedadesDoComponente(c: Componente): PropriedadesDeComponente {
+  return { familia: 'COMPONENTE', tipoId: c.tipoId, familiaDoComponente: c.familia, larguraMm: c.larguraMm, profundidadeMm: c.profundidadeMm, alturaMm: c.alturaMm };
+}
+export function camposDoComponente(p: PropriedadesDeComponente) {
+  return { tipoId: p.tipoId, familia: p.familiaDoComponente, larguraMm: p.larguraMm, profundidadeMm: p.profundidadeMm, alturaMm: p.alturaMm };
 }

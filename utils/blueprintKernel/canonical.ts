@@ -66,6 +66,8 @@ import {
   type EspelhoDoGrupo,
   type TipoDeNucleo,
   type TipoDeVaga,
+  type TipoDeComponente,
+  type FamiliaDeComponente,
   type TipoDeRestricaoDoLote,
   assinaturaDasCamadas,
   emptyModel,
@@ -465,6 +467,26 @@ function projetar(model: BlueprintModel): {
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y || cmpStr(x.tipo, y.tipo),
   );
 
+  // COMPONENTES (0.42.0): centro, medidas, giro, tipo do catálogo, família,
+  // rótulo; `sugerido` só quando verdadeiro. Omitidos quando não há nenhum.
+  const componentes = ordenar(
+    model.componentes ?? [],
+    (c) => ({
+      level: nivel(c.levelId),
+      at: { x: c.at.x, y: c.at.y },
+      larguraMm: c.larguraMm,
+      profundidadeMm: c.profundidadeMm,
+      alturaMm: c.alturaMm,
+      rotacaoGraus: c.rotacaoGraus,
+      tipoId: c.tipoId,
+      familia: c.familia,
+      rotulo: c.rotulo ?? null,
+      sugerido: c.sugerido ? true : undefined,
+      parametros: parametrosCanonicos(c.parametros),
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y || cmpStr(x.tipoId, y.tipoId),
+  );
+
   // QUADROS e CIRCUITOS, ANTES das instalações.
   //
   // ⚠️ A ordem é OBRIGATÓRIA, não estética: a projeção do terminal referencia
@@ -739,6 +761,7 @@ function projetar(model: BlueprintModel): {
     stairs: stairs.length ? stairs.map((e) => e.geom) : undefined,
     nucleos: nucleos.length ? nucleos.map((n) => n.geom) : undefined,
     vagas: vagas.length ? vagas.map((v) => v.geom) : undefined,
+    componentes: componentes.length ? componentes.map((c) => c.geom) : undefined,
     trechos: trechos.length ? trechos.map((t) => t.geom) : undefined,
     terminais: terminais.length ? terminais.map((t) => t.geom) : undefined,
     quadros: quadros.length ? quadros.map((q) => q.geom) : undefined,
@@ -767,6 +790,7 @@ function projetar(model: BlueprintModel): {
     stairs: stairs.map((e) => e.item.uid ?? null),
     nucleos: nucleos.map((n) => n.item.uid ?? null),
     vagas: vagas.map((v) => v.item.uid ?? null),
+    componentes: componentes.map((c) => c.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
     quadros: quadros.map((q) => q.item.uid ?? null),
@@ -846,6 +870,7 @@ export interface IdentidadeCanonica {
   nucleos?: (ElementUid | null)[];
   /** Ausente em payload gravado sob kernel anterior a 0.40.0. */
   vagas?: (ElementUid | null)[];
+  componentes?: (ElementUid | null)[];
   trechos?: (ElementUid | null)[];
   terminais?: (ElementUid | null)[];
   quadros?: (ElementUid | null)[];
@@ -1015,6 +1040,20 @@ export interface CanonicalPayload {
     tipo: TipoDeVaga;
     numero: string | null;
     sugerida?: boolean;
+    parametros?: Parametros;
+  }[];
+  /** Componentes (mobiliário, louças…). Ausente sob kernel < 0.42.0 e em desenho sem nenhum. */
+  componentes?: {
+    level: number;
+    at: { x: number; y: number };
+    larguraMm: number;
+    profundidadeMm: number;
+    alturaMm: number;
+    rotacaoGraus: number;
+    tipoId: TipoDeComponente;
+    familia: FamiliaDeComponente;
+    rotulo: string | null;
+    sugerido?: boolean;
     parametros?: Parametros;
   }[];
   /** Núcleos verticais. Ausente sob kernel < 0.39.0 e em desenho sem nenhum. */
@@ -1433,6 +1472,25 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       numero: v.numero,
       ...(v.sugerida ? { sugerida: true } : {}),
       ...(v.parametros && Object.keys(v.parametros).length > 0 ? { parametros: { ...v.parametros } } : {}),
+    });
+  });
+
+  const componentes = payload.componentes ?? [];
+  componentes.forEach((c, i) => {
+    model.componentes.push({
+      id: nextId(model, 'cmp'),
+      uid: uidDe('componentes', i, componentes.length),
+      levelId: levelIds[c.level],
+      at: { x: c.at.x, y: c.at.y },
+      larguraMm: c.larguraMm,
+      profundidadeMm: c.profundidadeMm,
+      alturaMm: c.alturaMm,
+      rotacaoGraus: c.rotacaoGraus,
+      tipoId: c.tipoId,
+      familia: c.familia,
+      rotulo: c.rotulo,
+      ...(c.sugerido ? { sugerido: true } : {}),
+      ...(c.parametros && Object.keys(c.parametros).length > 0 ? { parametros: { ...c.parametros } } : {}),
     });
   });
 

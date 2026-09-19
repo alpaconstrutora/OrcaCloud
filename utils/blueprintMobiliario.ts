@@ -30,7 +30,7 @@
  * existe; quando chegar, "aceitar" persiste o que hoje é sugestão. As vagas
  * da garagem vão pelo planejador da E2.5 (`planejarVagas`), que já persiste.
  */
-import { anelRecuado, pointInPolygon, wallLength, type BlueprintModel, type ObjectId, type Opening, type Point, type Space, type Wall } from './blueprintKernel';
+import { anelRecuado, contornoDoComponente, pointInPolygon, wallLength, type BlueprintModel, type Command, type ObjectId, type Opening, type Point, type Space, type TipoDeComponente, type Wall } from './blueprintKernel';
 import { usoDoNome, type UsoDoAmbiente } from './blueprintPrograma';
 
 export type TipoDePeca =
@@ -569,4 +569,37 @@ export function sugerirShaft(model: BlueprintModel, levelId: ObjectId): { comand
     { x: Math.round(c.x), y: Math.round(c.y + 600) },
   ];
   return { comando: { type: 'AddNucleo', levelId, tipo: 'SHAFT', ring, rotulo: 'Shaft' }, motivo: `no canto de ${melhor.s.name} mais perto do centro do pavimento` };
+}
+
+// ─── Aceitar como componentes do kernel (E7.1) ───────────────────────────────
+
+/** A chave do catálogo para cada peça do kit (a estante é ARMARIO com rótulo "Estante"). */
+export function tipoDeComponenteDaPeca(p: PecaDeMobiliario): TipoDeComponente {
+  if (p.tipo === 'ARMARIO' && p.rotulo === 'Estante') return 'ESTANTE';
+  return p.tipo as TipoDeComponente;
+}
+
+/**
+ * Os `AddComponente` (sugerido: true) das peças colocadas — no centro do
+ * retângulo, giradas quando encostam em O/L (a largura da peça corre ao longo
+ * do encosto). Pula a peça cujo retângulo já tem um componente do mesmo tipo
+ * dentro (idempotente: aceitar duas vezes não duplica).
+ */
+export function comandosDeMobiliario(lista: readonly MobiliarioDoAmbiente[], levelId: ObjectId, model: BlueprintModel): Command[] {
+  const out: Command[] = [];
+  const existentes = (model.componentes ?? []).filter((c) => c.levelId === levelId);
+  for (const a of lista) {
+    for (const p of a.pecas) {
+      const tipoId = tipoDeComponenteDaPeca(p.peca);
+      const at = { x: Math.round((p.ret.x0 + p.ret.x1) / 2), y: Math.round((p.ret.y0 + p.ret.y1) / 2) };
+      if (existentes.some((c) => c.tipoId === tipoId && pointInPolygon(contornoDoComponente(c), at))) continue;
+      const encostadaNaLateral = p.lado === 'O' || p.lado === 'L';
+      // A largura do retângulo colocado já está no eixo certo; quando a peça
+      // encosta em O/L o kernel gira 90° e troca largura/profundidade.
+      const larguraMm = encostadaNaLateral ? p.ret.y1 - p.ret.y0 : p.ret.x1 - p.ret.x0;
+      const profundidadeMm = encostadaNaLateral ? p.ret.x1 - p.ret.x0 : p.ret.y1 - p.ret.y0;
+      out.push({ type: 'AddComponente', levelId, tipoId, at, larguraMm, profundidadeMm, rotacaoGraus: encostadaNaLateral ? 90 : 0, rotulo: null, sugerido: true });
+    }
+  }
+  return out;
 }

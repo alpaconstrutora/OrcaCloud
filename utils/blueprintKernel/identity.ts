@@ -138,6 +138,8 @@ export const PREFIXO_ROTULO_UID = {
   nucleo: 'H',
   /** Vaga de garagem — W; `V` já é o vão. */
   vaga: 'W',
+  /** Componente (mobiliário, louça…) — M de mobiliário. */
+  componente: 'M',
   stair: 'E',
   label: 'R',
   /**

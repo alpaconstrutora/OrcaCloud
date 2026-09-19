@@ -64,6 +64,11 @@ import {
   findVaga,
   DIMENSAO_DA_VAGA,
   type TipoDeVaga,
+  findComponente,
+  CATALOGO_DE_COMPONENTES,
+  MAX_ROTULO_DE_COMPONENTE,
+  type TipoDeComponente,
+  type FamiliaDeComponente,
   FAIXA_PADRAO_DA_RESTRICAO,
   type TipoDeRestricaoDoLote,
   uidDaCopia,
@@ -413,6 +418,15 @@ export type Command =
   | { type: 'SetVagaProps'; vagaId: ObjectId; tipo?: TipoDeVaga; larguraMm?: number; comprimentoMm?: number; rotacaoGraus?: number; numero?: string | null; sugerida?: boolean | null }
   | { type: 'MoveVaga'; vagaId: ObjectId; to: Point }
   | { type: 'DeleteVaga'; vagaId: ObjectId }
+  /**
+   * COMPONENTE (E7.1). Medidas e família omitidas = as do catálogo
+   * (`CATALOGO_DE_COMPONENTES`); trocar o tipo em `SetComponenteProps` sem
+   * medidas puxa as do tipo novo, como a vaga.
+   */
+  | { type: 'AddComponente'; levelId: ObjectId; tipoId: TipoDeComponente; at: Point; familia?: FamiliaDeComponente; larguraMm?: number; profundidadeMm?: number; alturaMm?: number; rotacaoGraus?: number; rotulo?: string | null; sugerido?: boolean }
+  | { type: 'SetComponenteProps'; componenteId: ObjectId; tipoId?: TipoDeComponente; familia?: FamiliaDeComponente; larguraMm?: number; profundidadeMm?: number; alturaMm?: number; rotacaoGraus?: number; rotulo?: string | null; sugerido?: boolean | null }
+  | { type: 'MoveComponente'; componenteId: ObjectId; to: Point }
+  | { type: 'DeleteComponente'; componenteId: ObjectId }
   /**
    * Um TRECHO de instalação — ver o cabeçalho de `Trecho` em `model.ts`.
    *
@@ -1840,6 +1854,75 @@ function aplicarSemHash(
       const v = findVaga(next, command.vagaId);
       next.vagas = (next.vagas ?? []).filter((x) => x.id !== v.id);
       diff.deleted.push(v.id);
+      break;
+    }
+
+    // ── Componentes (E7.1) ──────────────────────────────────────────────────
+
+    case 'AddComponente': {
+      findLevel(next, command.levelId);
+      const ficha = CATALOGO_DE_COMPONENTES[command.tipoId];
+      if (!ficha) throw new KernelError('BAD_COMPONENT', `Tipo de componente desconhecido: ${String(command.tipoId)}`);
+      const id = nextId(next, 'cmp');
+      next.componentes = [
+        ...(next.componentes ?? []),
+        {
+          id,
+          uid: novoUid(),
+          levelId: command.levelId,
+          tipoId: command.tipoId,
+          familia: command.familia ?? ficha.familia,
+          at: { x: assertIntegerMm(roundToMm(command.at.x), 'at.x'), y: assertIntegerMm(roundToMm(command.at.y), 'at.y') },
+          larguraMm: assertIntegerMm(roundToMm(command.larguraMm ?? ficha.larguraMm), 'larguraMm'),
+          profundidadeMm: assertIntegerMm(roundToMm(command.profundidadeMm ?? ficha.profundidadeMm), 'profundidadeMm'),
+          alturaMm: assertIntegerMm(roundToMm(command.alturaMm ?? ficha.alturaMm), 'alturaMm'),
+          rotacaoGraus: ((Math.round(command.rotacaoGraus ?? 0) % 360) + 360) % 360,
+          rotulo: command.rotulo?.trim().slice(0, MAX_ROTULO_DE_COMPONENTE) || null,
+          ...(command.sugerido ? { sugerido: true } : {}),
+        },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetComponenteProps': {
+      const c = findComponente(next, command.componenteId);
+      if (command.tipoId !== undefined && command.tipoId !== c.tipoId) {
+        const ficha = CATALOGO_DE_COMPONENTES[command.tipoId];
+        if (!ficha) throw new KernelError('BAD_COMPONENT', `Tipo de componente desconhecido: ${String(command.tipoId)}`);
+        c.tipoId = command.tipoId;
+        if (command.familia === undefined) c.familia = ficha.familia;
+        if (command.larguraMm === undefined) c.larguraMm = ficha.larguraMm;
+        if (command.profundidadeMm === undefined) c.profundidadeMm = ficha.profundidadeMm;
+        if (command.alturaMm === undefined) c.alturaMm = ficha.alturaMm;
+      }
+      if (command.familia !== undefined) c.familia = command.familia;
+      if (command.larguraMm !== undefined) c.larguraMm = assertIntegerMm(roundToMm(command.larguraMm), 'larguraMm');
+      if (command.profundidadeMm !== undefined) c.profundidadeMm = assertIntegerMm(roundToMm(command.profundidadeMm), 'profundidadeMm');
+      if (command.alturaMm !== undefined) c.alturaMm = assertIntegerMm(roundToMm(command.alturaMm), 'alturaMm');
+      if (command.rotacaoGraus !== undefined) c.rotacaoGraus = ((Math.round(command.rotacaoGraus) % 360) + 360) % 360;
+      if (command.rotulo !== undefined) c.rotulo = command.rotulo?.trim().slice(0, MAX_ROTULO_DE_COMPONENTE) || null;
+      if (command.sugerido !== undefined) {
+        if (command.sugerido) c.sugerido = true;
+        else delete c.sugerido;
+      }
+      diff.updated.push(c.id);
+      break;
+    }
+
+    case 'MoveComponente': {
+      const c = findComponente(next, command.componenteId);
+      c.at = { x: assertIntegerMm(roundToMm(command.to.x), 'to.x'), y: assertIntegerMm(roundToMm(command.to.y), 'to.y') };
+      // Mover confirma, como o terminal e a vaga.
+      delete c.sugerido;
+      diff.updated.push(c.id);
+      break;
+    }
+
+    case 'DeleteComponente': {
+      const c = findComponente(next, command.componenteId);
+      next.componentes = (next.componentes ?? []).filter((x) => x.id !== c.id);
+      diff.deleted.push(c.id);
       break;
     }
 
@@ -3358,6 +3441,7 @@ function aplicarSemHash(
       const trechosDoNivel = (next.trechos ?? []).filter((t) => t.levelId === level.id);
       const terminaisDoNivel = (next.terminais ?? []).filter((t) => t.levelId === level.id);
       const vagasDoNivel = (next.vagas ?? []).filter((v) => v.levelId === level.id);
+      const componentesDoNivel = (next.componentes ?? []).filter((c) => c.levelId === level.id);
 
       next.walls = next.walls.filter((w) => w.levelId !== level.id);
       next.openings = next.openings.filter((o) => !paredesDoNivel.has(o.wallId));
@@ -3370,6 +3454,7 @@ function aplicarSemHash(
       next.trechos = (next.trechos ?? []).filter((t) => t.levelId !== level.id);
       next.terminais = (next.terminais ?? []).filter((t) => t.levelId !== level.id);
       next.vagas = (next.vagas ?? []).filter((v) => v.levelId !== level.id);
+      next.componentes = (next.componentes ?? []).filter((c) => c.levelId !== level.id);
       // ⚠️ O quadro vai junto (é peça deste piso); os CIRCUITOS dele vão junto
       // também, senão ficariam apontando para um quadro que não existe mais. E
       // os terminais que os citavam já saíram, ou perdem a referência.
@@ -3398,6 +3483,7 @@ function aplicarSemHash(
         ...trechosDoNivel.map((t) => t.id),
         ...terminaisDoNivel.map((t) => t.id),
         ...vagasDoNivel.map((v) => v.id),
+        ...componentesDoNivel.map((c) => c.id),
         ...quadrosDoNivel.map((q) => q.id),
         ...circuitosOrfaos.map((c) => c.id),
         ...etiquetasDoNivel.map((l) => l.id),

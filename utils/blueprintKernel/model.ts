@@ -1020,6 +1020,44 @@ export const EXIGENCIAS_DA_RESTRICAO: Record<TipoDeRestricao, { referencia: Fami
   PARALELO: { referencia: ['eixo', 'wall', 'structural'], valor: false },
 };
 
+/**
+ * UNIDADE (18/09/2026, roadmap E2.2: *"a unidade como objeto"*).
+ *
+ * ─── COMPOSIÇÃO POR ETIQUETA, NÃO POR AMBIENTE ──────────────────────────────
+ *
+ * O ambiente é DERIVADO (ids novos a cada parede movida); quem tem identidade
+ * é a ETIQUETA que o nomeia (`SpaceLabel.uid`, religada por conter o ponto).
+ * A unidade é, então, um conjunto de etiquetas: o apartamento 101 é "Sala,
+ * Suíte, Banho, Cozinha" — e continua sendo depois de qualquer edição. Uma
+ * etiqueta pertence a NO MÁXIMO uma unidade (invariante); atribuir a outra
+ * transfere.
+ *
+ * O polígono, a área privativa (NBR 12721: ambientes pelo eixo + a metade
+ * externa das paredes externas; a parede geminada já entra pela metade porque
+ * o anel do ambiente corre no EIXO), a área comum e a fração ideal são
+ * DERIVADOS em `utils/blueprintUnidades.ts` — nada disso mora aqui, para a
+ * unidade não ficar desatualizada em relação ao desenho.
+ *
+ * Uma unidade pode atravessar pavimentos (duplex): as etiquetas dizem onde.
+ * Unidade sem etiqueta é estado legítimo e visível (importada do Planta AI,
+ * ainda por compor).
+ */
+export interface Unidade {
+  id: ObjectId;
+  uid: ElementUid;
+  /** "101", "Casa 3", "Loja 2" — único no estudo, até 16 caracteres. */
+  numero: string;
+  /** "2 dorm.", "Studio", "Cobertura" — texto livre, até 40 caracteres. */
+  tipologia?: string | null;
+  /** Unidade adaptada (NBR 9050). */
+  pcd: boolean;
+  /** uids das etiquetas dos ambientes que a compõem. */
+  etiquetaUids: ElementUid[];
+}
+
+export const MAX_NUMERO_DE_UNIDADE = 16;
+export const MAX_TIPOLOGIA_DE_UNIDADE = 40;
+
 export interface Corte {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
@@ -1667,6 +1705,8 @@ export interface BlueprintModel {
   eixos: Eixo[];
   /** Restrições declaradas — conferidas, nunca impostas. Ver `Restricao`. */
   restricoes: Restricao[];
+  /** Unidades autônomas — conjuntos de etiquetas de ambiente. Ver `Unidade`. */
+  unidades: Unidade[];
   /**
    * Escadas e rampas. Como a estrutura e o telhado, NÃO participam do arranjo
    * planar: uma escada dentro da sala não parte o ambiente. O que ela faz ao
@@ -1777,6 +1817,7 @@ export function emptyModel(): BlueprintModel {
     sections: [],
     eixos: [],
     restricoes: [],
+    unidades: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -1837,6 +1878,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     sections: (model.sections ?? []).map((c) => ({ ...c, a: { ...c.a }, b: { ...c.b } })),
     eixos: (model.eixos ?? []).map((e) => ({ ...e, a: { ...e.a }, b: { ...e.b } })),
     restricoes: (model.restricoes ?? []).map((r) => ({ ...r, alvo: { ...r.alvo }, ...(r.referencia ? { referencia: { ...r.referencia } } : {}) })),
+    unidades: (model.unidades ?? []).map((u) => ({ ...u, etiquetaUids: [...u.etiquetaUids] })),
     // Mesma cópia profunda de `structures.pontos`, pelo mesmo motivo.
     stairs: (model.stairs ?? []).map((e) => ({
       ...e,
@@ -1935,6 +1977,36 @@ export function limparRestricoesOrfas(model: BlueprintModel): ObjectId[] {
   const removidas = antes.filter((r) => !vivas.includes(r)).map((r) => r.id);
   model.restricoes = vivas;
   return removidas;
+}
+
+export function findUnidade(model: BlueprintModel, id: ObjectId): Unidade {
+  const u = (model.unidades ?? []).find((x) => x.id === id);
+  if (!u) throw new KernelError('UNIT_NOT_FOUND', `Unidade inexistente: ${id}`);
+  return u;
+}
+
+/** A unidade a que a etiqueta pertence, ou `null`. */
+export function unidadeDaEtiqueta(model: BlueprintModel, labelUid: ElementUid): Unidade | null {
+  return (model.unidades ?? []).find((u) => u.etiquetaUids.includes(labelUid)) ?? null;
+}
+
+/**
+ * Tira das unidades as etiquetas que não existem mais. Roda ao fim de TODO
+ * comando (cauda de `applyCommand`): apagar o ambiente (ou a etiqueta) tira o
+ * cômodo da unidade sem cada `Delete*` ter de lembrar. A unidade FICA, mesmo
+ * vazia — sumir com ela em silêncio esconderia o que a reforma fez.
+ */
+export function limparEtiquetasOrfasDasUnidades(model: BlueprintModel): ObjectId[] {
+  const vivas = new Set((model.labels ?? []).map((l) => l.uid));
+  const tocadas: ObjectId[] = [];
+  for (const u of model.unidades ?? []) {
+    const filtradas = u.etiquetaUids.filter((uid) => vivas.has(uid));
+    if (filtradas.length !== u.etiquetaUids.length) {
+      u.etiquetaUids = filtradas;
+      tocadas.push(u.id);
+    }
+  }
+  return tocadas;
 }
 
 export function findEscada(model: BlueprintModel, id: ObjectId): Escada {
@@ -2807,6 +2879,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Corte', model.sections ?? []],
     ['Eixo', model.eixos ?? []],
     ['Restrição', model.restricoes ?? []],
+    ['Unidade', model.unidades ?? []],
     ['Trecho', model.trechos ?? []],
     ['Terminal', model.terminais ?? []],
     ['Quadro', model.quadros ?? []],
@@ -3188,6 +3261,29 @@ export function assertModelInvariants(model: BlueprintModel): void {
       if (r.valorMm === undefined || !Number.isInteger(r.valorMm) || r.valorMm < 0) throw new KernelError('BAD_CONSTRAINT', `Restrição ${r.id}: ${r.tipo} pede valorMm inteiro ≥ 0`);
     } else if (r.valorMm !== undefined) {
       throw new KernelError('BAD_CONSTRAINT', `Restrição ${r.id}: ${r.tipo} não tem valor`);
+    }
+  }
+
+  // Unidades: número único e curto, tipologia curta, etiquetas existentes e em uma unidade só.
+  {
+    const numeros = new Set<string>();
+    const etiquetas = new Set<string>();
+    const vivas = new Set((model.labels ?? []).map((l) => l.uid));
+    for (const u of model.unidades ?? []) {
+      if (typeof u.numero !== 'string' || !u.numero || u.numero !== u.numero.trim() || u.numero.length > MAX_NUMERO_DE_UNIDADE) {
+        throw new KernelError('BAD_UNIT', `Unidade ${u.id}: número vazio, com espaços nas pontas ou maior que ${MAX_NUMERO_DE_UNIDADE} caracteres`);
+      }
+      if (numeros.has(u.numero)) throw new KernelError('BAD_UNIT', `Unidade ${u.id}: já existe a unidade "${u.numero}"`);
+      numeros.add(u.numero);
+      if (u.tipologia != null && (typeof u.tipologia !== 'string' || u.tipologia.length > MAX_TIPOLOGIA_DE_UNIDADE)) {
+        throw new KernelError('BAD_UNIT', `Unidade ${u.id}: tipologia maior que ${MAX_TIPOLOGIA_DE_UNIDADE} caracteres`);
+      }
+      if (typeof u.pcd !== 'boolean') throw new KernelError('BAD_UNIT', `Unidade ${u.id}: pcd tem de ser booleano`);
+      for (const uid of u.etiquetaUids) {
+        if (!vivas.has(uid)) throw new KernelError('BAD_UNIT', `Unidade ${u.id}: etiqueta inexistente ${uid}`);
+        if (etiquetas.has(uid)) throw new KernelError('BAD_UNIT', `Unidade ${u.id}: a etiqueta ${uid} já pertence a outra unidade`);
+        etiquetas.add(uid);
+      }
     }
   }
 

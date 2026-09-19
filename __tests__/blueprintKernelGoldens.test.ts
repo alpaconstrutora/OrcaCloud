@@ -194,6 +194,14 @@
  *   tem instalação, então nenhuma delas ganha chave — só a versão embutida no
  *   payload mudou.
  *
+ *   0.36.0 → 0.37.0 (19/09/2026): UNIDADES — `unidades: [{numero, tipologia?,
+ *   pcd, etiquetas: [índices em labels]}]`, ordenadas por número, omitidas
+ *   quando não há nenhuma (E2.2 do roadmap). A área privativa, a comum e a
+ *   fração ideal são DERIVADAS (`utils/blueprintUnidades.ts`), não entram no
+ *   payload. Nenhum dos seis casos tem unidade. Mesma prova, refeita antes de
+ *   tocar num hash: com a string em 0.36.0 e a família JÁ no lugar (modelo,
+ *   quatro comandos, cascata de etiquetas órfãs, canônico ida e volta,
+ *   invariantes), 257 testes passaram; as seis falhas foram todas de hash.
  *   0.35.0 → 0.36.0 (18/09/2026): PAVIMENTO TIPO — `Level.tipoDe` (índice do
  *   pavimento tipo na ordem canônica; ausente = pavimento próprio). As cópias
  *   vivas são MATERIALIZADAS no payload como peças normais, com uid
@@ -465,17 +473,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '121277293a97268ee939e8e0bf5b37b5430e7a9f1e06e423e23eec7139fd9a14',
+    hash: '3c069971758f3fb857d8405e06881be359619ad250bdb124ebd66758e5f08706',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'b1113b90a5e2bbde2ea7c451b39962b39e2fa7164c1baa52b5e341118ca33ec5',
+    hash: '892aa695fbb148b638ba7260bc56cae880cb0dfe80c030e7cb0371efcf17d8f7',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: 'ebcda8e8af945082602472ac89bcde16a5f949e8a4a61f256f74eafc2dc886cc',
+    hash: 'adde16c17e195b6d2ca72eea6cc3854daefbfaf3af257fe176ec6ba115350106',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -483,7 +491,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '7954fd7031fff78020c01e54dbad5024fcbf6dd54f966de00a8e2ef7bbf83f45',
+    hash: '2f2c66a7daadf0bc91213a8b7ea9f7745c95eec9bb845a8133385f65189618a1',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -493,7 +501,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '649f628cbcbd6b91b8c8c0cb5674d7d143b73b38f7e8d173194959de2d3a342b',
+    hash: 'c455cf671cda911851b68af274bbecfe59c0248209133669fca4a5c7862b1901',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -504,7 +512,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: 'e82980d225c153acd0603f6d9c17d4e4eb0abf9d8c0de7602d0f20fca53a8561',
+    hash: '0aa1727203d34269cf9e0cba30da8547862b23cee4c8d31155d0b25ddb75bc86',
   },
 };
 

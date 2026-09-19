@@ -56,6 +56,10 @@ import {
   findEixo,
   findRestricao,
   limparRestricoesOrfas,
+  findUnidade,
+  limparEtiquetasOrfasDasUnidades,
+  MAX_NUMERO_DE_UNIDADE,
+  MAX_TIPOLOGIA_DE_UNIDADE,
   MAX_NOME_DE_EIXO,
   type Restricao,
   type TipoDeRestricao,
@@ -63,6 +67,7 @@ import {
   type Parametros,
   type ValorDeParametro,
   type Level,
+  type SpaceLabel,
 } from './model';
 import {
   type AlinhamentoParede,
@@ -288,6 +293,20 @@ export type Command =
       valorMm?: number;
     }
   | { type: 'DeleteRestricao'; restricaoId: ObjectId }
+  /**
+   * UNIDADE (E2.2): conjunto de etiquetas de ambiente. `labelIds` são IDs de
+   * etiqueta (o comando resolve o uid); etiqueta que estava em outra unidade
+   * é TRANSFERIDA. Número duplicado é recusado (`BAD_UNIT`).
+   */
+  | { type: 'AddUnidade'; numero: string; tipologia?: string | null; pcd?: boolean; labelIds?: ObjectId[] }
+  /** Campo omitido fica como está; `labelIds` substitui o conjunto inteiro. */
+  | { type: 'SetUnidadeProps'; unidadeId: ObjectId; numero?: string; tipologia?: string | null; pcd?: boolean; labelIds?: ObjectId[] }
+  | { type: 'DeleteUnidade'; unidadeId: ObjectId }
+  /**
+   * Põe UM ambiente numa unidade (ou tira: `unidadeId: null`). Ambiente sem
+   * etiqueta ganha uma com `nome` — a unidade só sabe falar de etiquetas.
+   */
+  | { type: 'SetUnidadeDoAmbiente'; spaceId: ObjectId; unidadeId: ObjectId | null; nome?: string }
   /**
    * ESCADA ou RAMPA pelo PERCURSO.
    *
@@ -1516,6 +1535,75 @@ function aplicarSemHash(
       const e = findEixo(next, command.eixoId);
       next.eixos = (next.eixos ?? []).filter((x) => x.id !== e.id);
       diff.deleted.push(e.id);
+      break;
+    }
+
+    // ── Unidades ─────────────────────────────────────────────────────────────
+
+    case 'AddUnidade': {
+      const numero = command.numero.trim();
+      if (!numero || numero.length > MAX_NUMERO_DE_UNIDADE) throw new KernelError('BAD_UNIT', `Número da unidade vazio ou maior que ${MAX_NUMERO_DE_UNIDADE} caracteres`);
+      if ((next.unidades ?? []).some((u) => u.numero === numero)) throw new KernelError('BAD_UNIT', `Já existe a unidade "${numero}"`);
+      const uids = (command.labelIds ?? []).map((id) => findLabel(next, id).uid);
+      const id = nextId(next, 'und');
+      next.unidades = next.unidades ?? [];
+      transferirEtiquetas(next, uids, null, diff);
+      next.unidades.push({
+        id,
+        uid: novoUid(),
+        numero,
+        tipologia: tipologiaValida(command.tipologia),
+        pcd: command.pcd ?? false,
+        etiquetaUids: [...new Set(uids)],
+      });
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetUnidadeProps': {
+      const u = findUnidade(next, command.unidadeId);
+      if (command.numero !== undefined) {
+        const numero = command.numero.trim();
+        if (!numero || numero.length > MAX_NUMERO_DE_UNIDADE) throw new KernelError('BAD_UNIT', `Número da unidade vazio ou maior que ${MAX_NUMERO_DE_UNIDADE} caracteres`);
+        if ((next.unidades ?? []).some((x) => x.id !== u.id && x.numero === numero)) throw new KernelError('BAD_UNIT', `Já existe a unidade "${numero}"`);
+        u.numero = numero;
+      }
+      if (command.tipologia !== undefined) u.tipologia = tipologiaValida(command.tipologia);
+      if (command.pcd !== undefined) u.pcd = command.pcd;
+      if (command.labelIds !== undefined) {
+        const uids = [...new Set(command.labelIds.map((id) => findLabel(next, id).uid))];
+        transferirEtiquetas(next, uids, u.id, diff);
+        u.etiquetaUids = uids;
+      }
+      diff.updated.push(u.id);
+      break;
+    }
+
+    case 'DeleteUnidade': {
+      const u = findUnidade(next, command.unidadeId);
+      next.unidades = (next.unidades ?? []).filter((x) => x.id !== u.id);
+      diff.deleted.push(u.id);
+      break;
+    }
+
+    case 'SetUnidadeDoAmbiente': {
+      const space = next.spaces.find((s) => s.id === command.spaceId);
+      if (!space) throw new KernelError('SPACE_NOT_FOUND', `Ambiente inexistente: ${command.spaceId}`);
+      let label = space.labelUid ? next.labels.find((l) => l.uid === space.labelUid) : undefined;
+      if (!label) {
+        const nome = command.nome?.trim();
+        if (!nome) throw new KernelError('BAD_UNIT', 'Ambiente sem etiqueta: informe o nome para criá-la');
+        const id = nextId(next, 'lbl');
+        label = { id, uid: novoUid(), levelId: space.levelId, at: interiorPoint(space.ring, space.holes), name: nome, tipoDeAmbiente: null };
+        next.labels.push(label);
+        diff.created.push(id);
+      }
+      const destino = command.unidadeId === null ? null : findUnidade(next, command.unidadeId);
+      transferirEtiquetas(next, [label.uid], destino?.id ?? null, diff);
+      if (destino && !destino.etiquetaUids.includes(label.uid)) {
+        destino.etiquetaUids.push(label.uid);
+        diff.updated.push(destino.id);
+      }
       break;
     }
 
@@ -3206,10 +3294,39 @@ function aplicarSemHash(
   sincronizarPavimentosVinculados(next, diff);
   // Restrição sem alvo ou referência viva some com o comando que os apagou.
   diff.deleted.push(...limparRestricoesOrfas(next));
+  // Etiqueta apagada sai da unidade; a unidade fica (E2.2).
+  diff.updated.push(...limparEtiquetasOrfasDasUnidades(next));
   recomputeSpaces(next);
   assertModelInvariants(next);
 
   return { model: next, diff };
+}
+
+function findLabel(model: BlueprintModel, id: ObjectId): SpaceLabel {
+  const l = model.labels.find((x) => x.id === id);
+  if (!l) throw new KernelError('LABEL_NOT_FOUND', `Etiqueta inexistente: ${id}`);
+  return l;
+}
+
+/** Tipologia aparada; vazia vira `null`. */
+function tipologiaValida(t: string | null | undefined): string | null {
+  const v = (t ?? '').trim();
+  if (v.length > MAX_TIPOLOGIA_DE_UNIDADE) throw new KernelError('BAD_UNIT', `Tipologia maior que ${MAX_TIPOLOGIA_DE_UNIDADE} caracteres`);
+  return v || null;
+}
+
+/**
+ * Tira as etiquetas de qualquer OUTRA unidade que as tivesse (uma etiqueta,
+ * uma unidade). `exceto` é a unidade que vai recebê-las — não é tocada.
+ */
+function transferirEtiquetas(model: BlueprintModel, uids: ElementUid[], exceto: ObjectId | null, diff: Diff): void {
+  const conjunto = new Set(uids);
+  for (const u of model.unidades ?? []) {
+    if (u.id === exceto) continue;
+    const antes = u.etiquetaUids.length;
+    u.etiquetaUids = u.etiquetaUids.filter((x) => !conjunto.has(x));
+    if (u.etiquetaUids.length !== antes) diff.updated.push(u.id);
+  }
 }
 
 /** Aplica UM comando. O hash sai daqui porque quem pede um comando só o usa. */

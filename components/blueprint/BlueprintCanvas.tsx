@@ -1008,6 +1008,8 @@ interface Props {
    * identificação da planta, e ligar uma sem a outra não tem uso.
    */
   etiquetasDeAbertura?: ReadonlyMap<string, string>;
+  /** Paredes divididas por duas UNIDADES (E2.2): tracejado violeta sobre o eixo. */
+  paredesGeminadas?: ReadonlySet<string>;
   /**
    * Desenha a grade.
    *
@@ -1312,6 +1314,7 @@ export default function BlueprintCanvas({
   mostrarRotulosAmbiente = false,
   rotulosDeAmbiente = [],
   etiquetasDeAbertura,
+  paredesGeminadas,
   mostrarGrade = true,
   mostrarPreenchimentoAmbientes = true,
   mostrarPreenchimentoTerreno = true,
@@ -6378,6 +6381,35 @@ export default function BlueprintCanvas({
         desenharMarcaDeEncaixe(ctx, c.x, c.y, tipo as TipoDeEncaixe);
       }
     }
+
+    // ── PAREDE GEMINADA (E2.2) ───────────────────────────────────────────────
+    // Tracejado violeta sobre o EIXO da parede dividida por duas unidades — a
+    // marca da NBR 12721 na prancha ("metade de cada"). É a ÚLTIMA coisa
+    // pintada, com halo branco: desenhada junto das paredes ficava embaixo da
+    // laje, do preenchimento e da elétrica e sumia (visto em 19/09/2026).
+    if (paredesGeminadas && paredesGeminadas.size > 0) {
+            ctx.save();
+      for (const w of paredesDoNivel) {
+        if (!paredesGeminadas.has(w.id)) continue;
+        const a = paraTela(w.a);
+        const b = paraTela(w.b);
+        ctx.setLineDash([]);
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        ctx.setLineDash([8, 5]);
+        ctx.strokeStyle = '#7c3aed';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
   }, [
     model,
     tamanho,
@@ -6443,6 +6475,8 @@ export default function BlueprintCanvas({
     cadeiasDeCota,
     mostrarRotulosAmbiente,
     rotulosDeAmbiente,
+    etiquetasDeAbertura,
+    paredesGeminadas,
     ancoraDaForma,
     verticesPoligono,
     eixosDoPoligono,

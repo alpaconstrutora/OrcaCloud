@@ -34,6 +34,7 @@ import {
   CopyPlus,
   CornerDownRight,
   DoorOpen,
+  Building2,
   Eye,
   EyeOff,
   FileDown,
@@ -440,6 +441,9 @@ import { useBlueprintArmadura } from '../../hooks/useBlueprintArmadura';
 import { armaduraDoModelo, armaduraManualDe } from '../../utils/blueprintArmadura';
 import TelaArmadura from './TelaArmadura';
 import TelaQuantitativos from './TelaQuantitativos';
+import TelaUnidades from './TelaUnidades';
+import { quadroDeUnidades, rotuloDaUnidade, unidadePorEtiqueta } from '../../utils/blueprintUnidades';
+import { blueprintUnidadesPlantaAiService } from '../../services/blueprintUnidadesPlantaAiService';
 import { hashDaBaseEletrica, memorialEletrico, verificacoesEletricas } from '../../utils/blueprintEletricaExecutivo';
 import { ocupacaoDoTrecho } from '../../utils/blueprintEletricaDimensionamento';
 import PainelEletricaExecutivo from './PainelEletricaExecutivo';
@@ -1112,7 +1116,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -1857,14 +1861,19 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     return () => window.removeEventListener('keydown', aoTeclar);
   }, [editor.undo, editor.redo]);
 
+  /** UNIDADES (E2.2): medidas, fração ideal e paredes geminadas — derivadas do desenho. */
+  const quadroDeUnidadesDoModelo = useMemo(() => quadroDeUnidades(editor.model), [editor.model]);
   const ambientes = useMemo(
-    () =>
-      editor.model.spaces
+    () => {
+    const unidadeDe = unidadePorEtiqueta(editor.model);
+    return editor.model.spaces
         .filter((s) => !levelId || s.levelId === levelId)
         .map((s, i) => ({
           id: s.id,
           nome: s.name ?? '',
           rotulo: s.name ?? `Ambiente ${i + 1}`,
+          /** A unidade a que o ambiente pertence (pela etiqueta), ou `null` (área comum / por compor). */
+          unidadeId: (s.labelUid ? unidadeDe.get(s.labelUid)?.id : null) ?? null,
           // O TIPO mora na etiqueta (o ambiente é derivado) — ver `TIPOS_DE_AMBIENTE`.
           etiquetaId: etiquetaDoAmbiente(s, editor.model.labels)?.id ?? null,
           tipoDeAmbiente: etiquetaDoAmbiente(s, editor.model.labels)?.tipoDeAmbiente ?? null,
@@ -1910,7 +1919,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             s,
             editor.model.walls.filter((w) => w.levelId === s.levelId),
           ),
-        })),
+        }));
+    },
     [editor.model.spaces, editor.model.walls, editor.model.labels, editor.model.terminais, levelId],
   );
 
@@ -2008,12 +2018,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       spaceId: a.id,
       linhas: [
         a.rotulo,
+        // UNIDADE (E2.2): "Un. 101 · PCD" logo abaixo do nome — a etiqueta da prancha de vendas.
+        ...(a.unidadeId ? [rotuloDaUnidade(editor.model.unidades.find((u) => u.id === a.unidadeId)!, true)] : []),
         `${a.areaM2.toFixed(2).replace('.', ',')} m²`,
         `${a.perimetroM.toFixed(2).replace('.', ',')} m`,
         ...(nivel ? [nivel] : []),
       ],
     }));
-  }, [ambientes, editor.model.levels, levelId]);
+  }, [ambientes, editor.model.levels, editor.model.unidades, levelId]);
   /** "PT1", "J2" ao lado de cada vão — a mesma numeração do navegador. */
   const etiquetasDeAbertura = useMemo(() => {
     const paredes = editor.model.walls.filter((w) => !levelId || w.levelId === levelId);
@@ -6561,6 +6573,30 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           </div>
         </div>
       )}
+      {telaAberta === 'unidades' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="unidades">
+          {cabecalhoDaTela(
+            'Unidades',
+            'A unidade autônoma como objeto: número, tipologia e PCD; os ambientes que a compõem (escolhidos no cartão de cada ambiente); área privativa pela NBR 12721, área comum por pavimento e fração ideal — derivadas do desenho, sempre atuais. A parede geminada aparece tracejada na planta.',
+            Building2,
+            'Analisar',
+          )}
+          <div>
+            <TelaUnidades
+              model={editor.model}
+              quadro={quadroDeUnidadesDoModelo}
+              onRun={(c) => editor.run(c)}
+              onRunBatch={(cs) => editor.runBatch(cs)}
+              erro={editor.lastError}
+              carregarDoPlantaAi={
+                zona.empreendimentoId || empreendimentoSugerido
+                  ? () => blueprintUnidadesPlantaAiService.listar((zona.empreendimentoId || empreendimentoSugerido)!)
+                  : null
+              }
+            />
+          </div>
+        </div>
+      )}
       {telaAberta === 'armadura' && (
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="armadura">
           {cabecalhoDaTela(
@@ -7172,6 +7208,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   ativo={telaAberta === 'quantitativos'}
                   onClick={() => alternarTela('quantitativos')}
                   ajuda="Áreas, volumes e comprimentos derivados do desenho; o quantitativo oficial da versão"
+                />
+              )}
+              {relatorioVisivel('quantitativos') && (
+                <BotaoDoRibbon
+                  icone={Building2}
+                  rotulo="Unidades"
+                  contagem={editor.model.unidades.length || undefined}
+                  ativo={telaAberta === 'unidades'}
+                  onClick={() => alternarTela('unidades')}
+                  ajuda="Unidades autônomas: composição por ambiente, área privativa NBR 12721, área comum e fração ideal"
                 />
               )}
               {(!emVista || em3d) && (
@@ -8263,6 +8309,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               mostrarRotulosAmbiente={ajusteDaVista ? false : mostrarRotulos}
               rotulosDeAmbiente={rotulosDeAmbiente}
               etiquetasDeAbertura={etiquetasDeAbertura}
+              paredesGeminadas={quadroDeUnidadesDoModelo.paredesGeminadas}
               mostrarGrade={ajusteDaVista ? false : mostrarGrade}
               mostrarPreenchimentoAmbientes={ajusteDaVista ? false : mostrarPreenchimento}
               mostrarPreenchimentoTerreno={mostrarPreenchimentoTerreno}
@@ -8882,6 +8929,39 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     )}
                   </div>
                   {controlesDeTomadas(a)}
+                  {/* UNIDADE (E2.2): a que este ambiente pertence. "Nova…" cria pelo
+                      número e já põe o ambiente nela — um gesto, um Ctrl+Z por passo. */}
+                  <label className="mt-1 flex items-center gap-2 text-xs text-slate-600">
+                    Unidade
+                    <select
+                      value={a.unidadeId ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === '__nova__') {
+                          const numero = window.prompt('Número da nova unidade (ex.: 101):', '');
+                          if (!numero?.trim()) return;
+                          try {
+                            const criados = editor.runBatch([{ type: 'AddUnidade', numero: numero.trim() }]);
+                            if (criados[0]) editor.run({ type: 'SetUnidadeDoAmbiente', spaceId: a.id, unidadeId: criados[0], nome: a.rotulo });
+                          } catch (err) {
+                            window.alert(err instanceof Error ? err.message : String(err));
+                          }
+                          return;
+                        }
+                        editor.run({ type: 'SetUnidadeDoAmbiente', spaceId: a.id, unidadeId: v || null, nome: a.rotulo });
+                      }}
+                      aria-label={`Unidade do ambiente ${a.rotulo}`}
+                      className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                    >
+                      <option value="">Área comum / sem unidade</option>
+                      {quadroDeUnidadesDoModelo.unidades.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {rotuloDaUnidade(u)}
+                        </option>
+                      ))}
+                      <option value="__nova__">+ Nova unidade…</option>
+                    </select>
+                  </label>
                   <dl className="mt-1 flex gap-4 text-xs text-slate-500">
                     <div>
                       <dt className="inline">Área </dt>

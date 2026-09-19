@@ -811,6 +811,58 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(await screen.findByTestId('propriedades-sheet')).toHaveTextContent(/P1/);
   });
 
+  it('unidades (E2.2): criar pelo número na tela, compor pelo cartão do ambiente, privativa e fração ideal na tabela, "Un." no rótulo', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    // Dois cômodos 4 × 3 de eixo lado a lado (externas 200, meio 150), etiquetados.
+    let m = k.applyBatch(nivel.model, [
+      { type: 'AddWall', levelId: t, a: k.point(0, 0), b: k.point(8000, 0), thicknessMm: 200, heightMm: 2800 },
+      { type: 'AddWall', levelId: t, a: k.point(8000, 0), b: k.point(8000, 3000), thicknessMm: 200, heightMm: 2800 },
+      { type: 'AddWall', levelId: t, a: k.point(8000, 3000), b: k.point(0, 3000), thicknessMm: 200, heightMm: 2800 },
+      { type: 'AddWall', levelId: t, a: k.point(0, 3000), b: k.point(0, 0), thicknessMm: 200, heightMm: 2800 },
+      { type: 'AddWall', levelId: t, a: k.point(4000, 0), b: k.point(4000, 3000), thicknessMm: 150, heightMm: 2800 },
+    ]).model;
+    const esq = m.spaces.find((s) => s.ring.some((p) => p.x === 0))!.id;
+    const dir = m.spaces.find((s) => s.ring.some((p) => p.x === 8000))!.id;
+    m = k.applyBatch(m, [
+      { type: 'NameSpace', spaceId: esq, name: 'Sala A' },
+      { type: 'NameSpace', spaceId: dir, name: 'Sala B' },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    // Tela: Analisar › Unidades; cria "101" e "102".
+    await abrirAba(/^analisar$/i);
+    await user.click(screen.getByRole('button', { name: /^unidades$/i }));
+    const tela = (await screen.findByRole('heading', { level: 1, name: /^unidades$/i })).closest('[data-tela="unidades"]') as HTMLElement;
+    const numero = within(tela).getByLabelText('Número da nova unidade');
+    await user.type(numero, '101{Enter}');
+    await user.type(numero, '102{Enter}');
+    expect(within(tela).getByLabelText('Número da unidade 101')).toBeInTheDocument();
+    expect(within(tela).getAllByText(/^sem ambientes —/)).toHaveLength(2);
+    // Número repetido: o kernel recusa e a tela mostra.
+    await user.type(numero, '101{Enter}');
+    expect(within(tela).getByRole('alert')).toHaveTextContent(/Já existe a unidade "101"/);
+    // Volta ao editor e compõe pelo cartão do ambiente.
+    await user.click(within(tela).getByRole('button', { name: /^voltar ao editor$/i }));
+    const selA = screen.getByLabelText('Unidade do ambiente Sala A');
+    await user.selectOptions(selA, within(selA).getByRole('option', { name: 'Un. 101' }));
+    const selB = screen.getByLabelText('Unidade do ambiente Sala B');
+    await user.selectOptions(selB, within(selB).getByRole('option', { name: 'Un. 102' }));
+    expect((screen.getByLabelText('Unidade do ambiente Sala A') as HTMLSelectElement).value).not.toBe('');
+    // Tabela: privativa = 12 m² de eixo + externas (4 + 3 + 4 m) × 0,1 = 13,10; fração 500 ‰ cada; geminadas entre si.
+    await abrirAba(/^analisar$/i);
+    // O botão do ribbon conta as unidades.
+    expect(screen.getByRole('button', { name: /^unidades/i })).toHaveTextContent('2');
+    await user.click(screen.getByRole('button', { name: /^unidades/i }));
+    const tela2 = (await screen.findByRole('heading', { level: 1, name: /^unidades$/i })).closest('[data-tela="unidades"]') as HTMLElement;
+    const linhas = within(tela2).getAllByRole('row').map((r) => (r.textContent ?? '').replace(/\s+/g, ' '));
+    expect(linhas.some((l) => /Sala A.*13,10.*500,000 ‰.*102/.test(l))).toBe(true);
+    expect(linhas.some((l) => /Sala B.*13,10.*500,000 ‰.*101/.test(l))).toBe(true);
+    expect(linhas.some((l) => /Térreo.*2.*26,20/.test(l))).toBe(true);
+  });
+
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2500 });

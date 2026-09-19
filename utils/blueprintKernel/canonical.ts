@@ -593,6 +593,24 @@ function projetar(model: BlueprintModel): {
       x.ring[0].y - y.ring[0].y,
   );
 
+  // UNIDADES (0.37.0): etiquetas por ÍNDICE na ordem canônica de `labels`,
+  // ordenadas por número (único). Omitidas quando não há nenhuma. Etiqueta
+  // fora da lista é descartada — nunca uid nem id no hash.
+  const indiceDaEtiqueta = new Map(labels.map((l, i) => [l.item.uid, i]));
+  const unidades = ordenar(
+    model.unidades ?? [],
+    (u) => ({
+      numero: u.numero,
+      tipologia: u.tipologia ?? undefined,
+      pcd: u.pcd,
+      etiquetas: u.etiquetaUids
+        .map((uid) => indiceDaEtiqueta.get(uid))
+        .filter((i): i is number => i !== undefined)
+        .sort((x, y) => x - y),
+    }),
+    (x, y) => cmpStr(x.numero, y.numero),
+  );
+
   const geometria: Omit<CanonicalPayload, 'identity'> = {
     kernel: KERNEL_VERSION,
     toleranceMm: DEFAULT_TOLERANCE_MM,
@@ -651,6 +669,7 @@ function projetar(model: BlueprintModel): {
     quadros: quadros.length ? quadros.map((q) => q.geom) : undefined,
     circuitos: circuitos.length ? circuitos.map((c) => c.geom) : undefined,
     labels: labels.map((l) => l.geom),
+    unidades: unidades.length ? unidades.map((u) => u.geom) : undefined,
     spaces: spaces.map((s) => s.geom),
   };
 
@@ -675,6 +694,7 @@ function projetar(model: BlueprintModel): {
     quadros: quadros.map((q) => q.item.uid ?? null),
     circuitos: circuitos.map((c) => c.item.uid ?? null),
     labels: labels.map((l) => l.item.uid ?? null),
+    unidades: unidades.map((u) => u.item.uid ?? null),
     spaces: spaces.map((s) => s.item.uid ?? null),
   };
 
@@ -747,6 +767,8 @@ export interface IdentidadeCanonica {
   quadros?: (ElementUid | null)[];
   circuitos?: (ElementUid | null)[];
   labels: (ElementUid | null)[];
+  /** Ausente em payload gravado sob kernel anterior a 0.37.0. */
+  unidades?: (ElementUid | null)[];
   spaces: (ElementUid | null)[];
 }
 
@@ -1000,6 +1022,13 @@ export interface CanonicalPayload {
     name: string;
     /** Tipo do ambiente (NBR 5410). Ausente sob kernel < 0.24.0 e quando não classificado. */
     tipoDeAmbiente?: string;
+  }[];
+  /** Unidades. Ausente sob kernel < 0.37.0 e em desenho sem nenhuma. Etiquetas por índice em `labels`. */
+  unidades?: {
+    numero: string;
+    tipologia?: string;
+    pcd: boolean;
+    etiquetas: number[];
   }[];
   spaces: {
     level: number;
@@ -1386,6 +1415,20 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       at: { x: l.at.x, y: l.at.y },
       name: l.name,
       tipoDeAmbiente: (l.tipoDeAmbiente as TipoDeAmbiente) ?? null,
+    });
+  });
+
+  // Unidades: DEPOIS das etiquetas, que referenciam por índice. Índice fora da
+  // lista é descartado, não erro.
+  const unidadesLidas = payload.unidades ?? [];
+  unidadesLidas.forEach((u, i) => {
+    model.unidades.push({
+      id: nextId(model, 'und'),
+      uid: uidDe('unidades', i, unidadesLidas.length),
+      numero: u.numero,
+      tipologia: u.tipologia ?? null,
+      pcd: u.pcd,
+      etiquetaUids: u.etiquetas.map((k) => model.labels[k]?.uid).filter((x): x is string => typeof x === 'string'),
     });
   });
 

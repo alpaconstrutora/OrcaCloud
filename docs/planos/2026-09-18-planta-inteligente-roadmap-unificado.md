@@ -440,6 +440,44 @@ propagação; bump).
   bloqueadas: 16): "Repetir 2" → Térreo 1/2 com 7 paredes, faixa, e a parede desenhada na cópia
   recusada com a mensagem do kernel.
 
+### E2.2 — Unidade (19/09/2026) · kernel 0.37.0
+- **Decisão**: a unidade é um conjunto de ETIQUETAS de ambiente (`Unidade {numero, tipologia?,
+  pcd, etiquetaUids[]}`), porque o ambiente é derivado e só a etiqueta tem identidade estável.
+  Uma etiqueta pertence a no máximo uma unidade (invariante; atribuir transfere). Polígono,
+  área privativa, área comum e fração ideal são DERIVADOS em `utils/blueprintUnidades.ts` —
+  nada disso entra no payload, logo nunca ficam desatualizados.
+- **Área privativa NBR 12721**: Σ área de EIXO dos ambientes (o anel do arranjo planar já corre
+  no eixo, então a geminada e a divisa com área comum já entram pela metade) + metade externa
+  das paredes externas (`comprimento × espessura/2`, por lado do anel; sem o acerto de canto —
+  declarado). Cada lado do anel é classificado olhando o outro lado: INTERNA (mesma unidade),
+  GEMINADA (outra unidade — tracejado violeta na planta, pintado por último com halo porque
+  embaixo da laje/elétrica sumia), COMUM (ambiente sem unidade), EXTERNA (nenhum ambiente).
+  Área comum do pavimento = `areaConstruidaMm2` − Σ privativas do pavimento; fração ideal =
+  privativa ÷ Σ privativas do estudo (o módulo Áreas NBR 12721 continua sendo o lugar do
+  coeficiente de padrão e do Quadro IV-B — recebe estas privativas como entrada).
+- Kernel: `AddUnidade`, `SetUnidadeProps` (`labelIds` substitui o conjunto), `DeleteUnidade`,
+  `SetUnidadeDoAmbiente {spaceId, unidadeId|null, nome?}` (cria a etiqueta se o ambiente não
+  tem); número único (`BAD_UNIT`); `limparEtiquetasOrfasDasUnidades` na cauda (a unidade fica,
+  vazia); canônico `unidades: [{numero, tipologia?, pcd, etiquetas: [índices]}]` por número,
+  omitido sem unidade; prefixo de rótulo `U`; bump 0.36.0 → 0.37.0 (goldens provados em 0.36.0
+  com 257 testes e recapturados).
+- UI: cartão do ambiente (Navegador › Ambientes) ganha "Unidade" (Área comum / Un. N / + Nova
+  unidade…); rótulo na planta "Un. 101 · PCD" abaixo do nome; tela **Analisar › Unidades**
+  (`TelaUnidades`, molde Quantitativos): número/tipologia/PCD editáveis na linha, ambientes,
+  privativa, fração ideal (‰, decimal no title), Planta AI (m²), geminada com, excluir; tabela
+  por pavimento (construída / privativa / comum); recusa do kernel visível na tela (a faixa do
+  editor fica escondida com a tela aberta).
+- **Ponte com o Planta AI** (`services/blueprintUnidadesPlantaAiService.ts`, só leitura): estudo →
+  empreendimento (zona urbanística ou sugerido pela obra) → torres com `planta_ai_scenario_id` →
+  `plant_units`; `comandosDeImportacaoDoPlantaAi` cria por número as que faltam (idempotente),
+  sem ambientes; a coluna "Planta AI (m²)" compara a privativa prevista lá com a medida aqui.
+  Estudo sem empreendimento: botão desabilitado com a explicação (foi o caso do estudo de prova).
+- Testes: `blueprintUnidades` (5: kernel, canônico, medidas exatas 37,20 m² / 500 ‰ / comum,
+  INTERNA, ponte), goldens, editor "unidades (E2.2)". Suíte 4652. App real (escritas
+  bloqueadas: 15): "+ Nova unidade…" em dois ambientes → Un. 101/102 no rótulo da planta, parede
+  entre eles tracejada, tela com 27,65 / 26,52 m², 510,419 ‰ / 489,581 ‰, comum 48,07 m², "Já
+  existe a unidade "101"" na recusa.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

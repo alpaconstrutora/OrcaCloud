@@ -130,6 +130,8 @@ export const PREFIXO_ROTULO_UID = {
   eixo: 'X',
   /** Restrição — K (constraint); `R` já é a etiqueta de ambiente. */
   restricao: 'K',
+  /** Unidade autônoma — U. */
+  unidade: 'U',
   stair: 'E',
   label: 'R',
   /**

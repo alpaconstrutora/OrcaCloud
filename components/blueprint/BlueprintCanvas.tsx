@@ -74,6 +74,7 @@ import {
   type Underlay,
 } from '../../utils/blueprintUnderlay';
 import { anelDoTerreno, ROTULO_CURTO_DO_PAPEL } from '../../utils/blueprintTerreno';
+import { COR_DA_FAMILIA, COR_PAREDE_HUMANIZADA, COR_SOMBRA, COR_VEGETACAO, sombraDaParede, tramaDoPiso, type EstiloDoPiso, type Planta } from '../../utils/blueprintHumanizada';
 import type { CurvaDeNivel, GradeDeElevacao, PontoCotado } from '../../utils/blueprintTopografia';
 import {
   comprimentoDaCurvaM,
@@ -1134,6 +1135,14 @@ interface Props {
   coresPorAmbiente?: boolean;
   /** COLORIR POR (E8.2): cor por `spaceId`; quando presente, vence `coresPorAmbiente`. */
   coresDosAmbientes?: Map<string, string>;
+  /**
+   * PLANTA HUMANIZADA (E8.4): paredes cheias com sombra, mobiliário colorido por
+   * família. `pisosHumanizados` dá cor e trama por `spaceId` (o "Colorir por"
+   * continua vencendo a cor); `vegetacao` são as árvores do lote e os arbustos.
+   */
+  humanizada?: boolean;
+  pisosHumanizados?: Map<string, EstiloDoPiso>;
+  vegetacao?: Planta[];
   /** Cota em preto sobre fundo opaco — para planta de fundo escaneada carregada. */
   cotaAltoContraste?: boolean;
   /**
@@ -1401,6 +1410,9 @@ export default function BlueprintCanvas({
   onDrenagemTracada,
   coresPorAmbiente = false,
   coresDosAmbientes,
+  humanizada = false,
+  pisosHumanizados,
+  vegetacao,
   cotaAltoContraste = false,
   passoMoverMm = null,
   estruturalKind = 'PILAR',
@@ -3027,6 +3039,18 @@ export default function BlueprintCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navegacao, tamanho]);
 
+  /** HUMANIZADA (E8.4): a trama de cada ambiente em mm, recortada uma vez por modelo/estilo — não a cada quadro. */
+  const tramasDosPisos = useMemo(() => {
+    if (!pisosHumanizados) return undefined;
+    const m = new Map<string, { segmentos: ReturnType<typeof tramaDoPiso>; cor: string }>();
+    for (const s of ambientesDoNivel) {
+      const e = pisosHumanizados.get(s.id);
+      if (!e || e.moduloMm <= 0) continue;
+      m.set(s.id, { segmentos: tramaDoPiso(s, e), cor: e.corDoTraco });
+    }
+    return m;
+  }, [pisosHumanizados, ambientesDoNivel]);
+
   // ── Desenho ───────────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -3143,7 +3167,7 @@ export default function BlueprintCanvas({
       if (s.ring.length < 3) continue;
       // O `fillStyle` entra DENTRO do laço porque com `coresPorAmbiente` ele
       // muda a cada ambiente. Fora dele só valeria para o primeiro.
-      ctx.fillStyle = coresDosAmbientes?.get(s.id) ?? (coresPorAmbiente ? corDoAmbiente(s) : COR_AMBIENTE);
+      ctx.fillStyle = coresDosAmbientes?.get(s.id) ?? pisosHumanizados?.get(s.id)?.cor ?? (coresPorAmbiente ? corDoAmbiente(s) : COR_AMBIENTE);
       ctx.beginPath();
       const p0 = paraTela(s.ring[0]);
       ctx.moveTo(p0.x, p0.y);
@@ -3164,6 +3188,34 @@ export default function BlueprintCanvas({
         ctx.closePath();
       }
       ctx.fill('evenodd');
+      // HUMANIZADA (E8.4): a trama do piso (juntas, tábuas, tufos), já recortada pelo ambiente em mm.
+      const trama = tramasDosPisos?.get(s.id);
+      if (trama && trama.segmentos.length > 0) {
+        ctx.strokeStyle = trama.cor;
+        ctx.lineWidth = 0.7;
+        ctx.beginPath();
+        for (const seg of trama.segmentos) {
+          const a = paraTela(seg.a);
+          const b = paraTela(seg.b);
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+        }
+        ctx.stroke();
+      }
+    }
+
+    // HUMANIZADA (E8.4): a SOMBRA das paredes, sob as paredes e sobre os pisos.
+    if (humanizada) {
+      ctx.fillStyle = COR_SOMBRA;
+      for (const w of paredesDoNivel) {
+        const anel = sombraDaParede(paredesDoNivel, w).map(paraTela);
+        if (anel.length < 4) continue;
+        ctx.beginPath();
+        ctx.moveTo(anel[0].x, anel[0].y);
+        for (const q of anel.slice(1)) ctx.lineTo(q.x, q.y);
+        ctx.closePath();
+        ctx.fill();
+      }
     }
 
     // Paredes — desenhadas VAZADAS, na convencao de planta arquitetonica: duas
@@ -3225,7 +3277,7 @@ export default function BlueprintCanvas({
     // Passada 1 — silhueta
     for (const t of traco) {
       if (t.comp < 0.5) continue;
-      ctx.strokeStyle = selecao.has(t.w.id) ? COR_SELECIONADA : COR_PAREDE;
+      ctx.strokeStyle = selecao.has(t.w.id) ? COR_SELECIONADA : humanizada ? COR_PAREDE_HUMANIZADA : COR_PAREDE;
       ctx.lineWidth = t.cheia;
       ctx.beginPath();
       ctx.moveTo(t.a.x - t.ux * t.extA, t.a.y - t.uy * t.extA);
@@ -3236,7 +3288,8 @@ export default function BlueprintCanvas({
     // Passada 2 — escavar o miolo, com a MESMA extensão nas junções para que o
     // interior de um cômodo continue no outro sem linha atravessando o encontro.
     ctx.strokeStyle = '#ffffff';
-    for (const t of traco) {
+    // HUMANIZADA: a parede fica CHEIA (a convenção da planta de venda) — não se escava o miolo.
+    for (const t of humanizada ? [] : traco) {
       const miolo = t.cheia - 2 * LINHA_PAREDE_PX;
       // Muito longe, a parede vira uma linha e não há miolo para escavar. Deixar
       // sólida é o certo: contorno de meio pixel viraria sujeira cinza.
@@ -3860,6 +3913,34 @@ export default function BlueprintCanvas({
         desenharCadeia(c.lado, [c.total], AFASTAMENTO_COTA.total);
       }
       ctx.restore();
+    }
+
+    // ── VEGETAÇÃO SIMBÓLICA (E8.4): copa com traço, arbusto menor; só na humanizada. ──
+    for (const v of vegetacao ?? []) {
+      const c = paraTela(v.at);
+      const r = v.raioMm * vista.escala;
+      if (r < 2) continue;
+      ctx.fillStyle = v.tipo === 'ARVORE' ? COR_VEGETACAO.copa : COR_VEGETACAO.arbusto;
+      ctx.strokeStyle = COR_VEGETACAO.traco;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      if (v.tipo === 'ARVORE' && r >= 8) {
+        // Raios curtos da copa: o símbolo clássico de árvore em planta.
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const g = (i / 8) * Math.PI * 2 + 0.3;
+          ctx.moveTo(c.x + r * 0.35 * Math.cos(g), c.y + r * 0.35 * Math.sin(g));
+          ctx.lineTo(c.x + r * 0.95 * Math.cos(g), c.y + r * 0.95 * Math.sin(g));
+        }
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, Math.max(1, r * 0.08), 0, Math.PI * 2);
+        ctx.fillStyle = COR_VEGETACAO.traco;
+        ctx.fill();
+      }
     }
 
     // ── LIMITES (divisas de terreno) ─────────────────────────────────────────
@@ -5347,9 +5428,10 @@ export default function BlueprintCanvas({
     for (const c of componentes) {
       if (ocultos.has(c.id)) continue;
       const selecionado = selecao.has(c.id);
-      const cor = selecionado ? COR_SELECIONADA : COR_COMPONENTE;
+      const familia = humanizada ? COR_DA_FAMILIA[c.familia] : null;
+      const cor = selecionado ? COR_SELECIONADA : familia ? familia.traco : COR_COMPONENTE;
       const anel = contornoDoComponente(c).map(paraTela);
-      ctx.fillStyle = COR_COMPONENTE_FUNDO;
+      ctx.fillStyle = familia ? familia.fundo : COR_COMPONENTE_FUNDO;
       ctx.strokeStyle = cor;
       ctx.lineWidth = selecionado ? 2 : 1.1;
       ctx.setLineDash(c.sugerido ? [5, 4] : []);
@@ -7165,6 +7247,10 @@ export default function BlueprintCanvas({
     drenagem,
     coresPorAmbiente,
     coresDosAmbientes,
+    humanizada,
+    pisosHumanizados,
+    tramasDosPisos,
+    vegetacao,
     cotaAltoContraste,
     paraTela,
     paredesDoNivel,

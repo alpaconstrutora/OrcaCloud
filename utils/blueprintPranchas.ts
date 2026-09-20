@@ -42,6 +42,8 @@ export interface InclusaoNoConjunto {
   ampliacoes: boolean;
   tabelas: boolean;
   eletrica: boolean;
+  /** E8.4: a planta HUMANIZADA por pavimento (venda). Ausente em templates anteriores → falso. */
+  humanizada: boolean;
 }
 export interface TemplateDePrancha {
   papel: PapelId;
@@ -63,7 +65,7 @@ export const TEMPLATE_DE_PRANCHA_PADRAO: TemplateDePrancha = {
   denominadorAmpliacao: 25,
   cotas: true,
   carimbo: { empresa: '', responsavel: '', registro: '', cliente: '', endereco: '', prefixo: 'A', camposExtras: [] },
-  incluir: { indice: true, plantas: true, cortes: true, elevacoes: true, ampliacoes: true, tabelas: true, eletrica: false },
+  incluir: { indice: true, plantas: true, cortes: true, elevacoes: true, ampliacoes: true, tabelas: true, eletrica: false, humanizada: false },
 };
 
 export interface TemplateDePranchaSalvo {
@@ -131,7 +133,7 @@ export interface Recorte {
   maxY: number;
 }
 
-export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS';
+export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'HUMANIZADA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS';
 
 export interface PranchaPlanejada {
   /** "A-01". */
@@ -174,6 +176,13 @@ export function planejarConjunto(model: BlueprintModel, t: TemplateDePrancha): P
     for (const n of niveis) {
       if (!model.walls.some((w) => w.levelId === n.id)) continue;
       numerar({ tipo: 'PLANTA', titulo: `Planta — ${n.name}`, denominador: t.denominadorPlanta, levelId: n.id });
+    }
+  }
+  // E8.4: a humanizada vem logo depois das plantas técnicas, pavimento a pavimento.
+  if (t.incluir.humanizada) {
+    for (const n of niveis) {
+      if (!model.walls.some((w) => w.levelId === n.id)) continue;
+      numerar({ tipo: 'HUMANIZADA', titulo: `Planta humanizada — ${n.name}`, denominador: t.denominadorPlanta, levelId: n.id });
     }
   }
   if (t.incluir.eletrica) {

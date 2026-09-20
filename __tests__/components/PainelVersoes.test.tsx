@@ -515,6 +515,20 @@ describe('PainelVersoes · compartilhar com o cliente', () => {
   });
 });
 
+describe('PainelVersoes · planta humanizada (E8.4)', () => {
+  it('a prancha "Humanizada" chega ao serviço como prancha própria, e o botão obedece à escala como a planta técnica', async () => {
+    await montar();
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Humanizada' }));
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Planta' }));
+    await userEvent.click(screen.getByRole('button', { name: 'PDF' }));
+    expect(exportarPranchasPdf).toHaveBeenCalledTimes(1);
+    expect(exportarPranchasPdf.mock.calls[0][2]).toEqual(['humanizada']);
+    // Escala que não cabe desabilita — a humanizada é uma planta.
+    await userEvent.selectOptions(screen.getByLabelText(/escala/i), '20');
+    expect(screen.getByRole('button', { name: 'PDF' })).toBeDisabled();
+  });
+});
+
 describe('PainelVersoes · conjunto de pranchas (E8.3)', () => {
   it('o plano do conjunto é DERIVADO do modelo: índice, planta, 4 fachadas e tabelas numerados com o prefixo; desligar as fachadas tira as folhas; gerar leva o template ao serviço', async () => {
     await montar();

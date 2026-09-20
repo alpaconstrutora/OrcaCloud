@@ -16,6 +16,7 @@ import {
   desenharPlanta,
   desenharIndice,
   desenharTabelas,
+  AVISO_HUMANIZADA,
   enquadrar,
   enquadrarElevacao,
   manifesto,
@@ -63,6 +64,8 @@ export type PranchaExport =
   | 'planta'
   /** F8: a planta com a camada elétrica + a folha do quadro de cargas. */
   | 'eletrica'
+  /** E8.4: a planta HUMANIZADA (venda) — pisos por material, sombra, mobiliário, vegetação; sem cotas, com aviso próprio. */
+  | 'humanizada'
   | 'frente'
   | 'fundos'
   | 'lateral-esq'
@@ -84,6 +87,7 @@ const DIRECAO_DA_PRANCHA: Record<string, DirecaoElevacao> = {
 const ROTULO_FIXO: Record<string, string> = {
   planta: 'Planta',
   eletrica: 'Planta elétrica',
+  humanizada: 'Planta humanizada',
   frente: 'Elevação frente',
   fundos: 'Elevação fundos',
   'lateral-esq': 'Elevação lateral esquerda',
@@ -94,6 +98,11 @@ const ROTULO_FIXO: Record<string, string> = {
  * O nome que vai no carimbo. Para o corte é a LETRA, e não o id: "Corte AA" é
  * como a prancha se chama na obra, e o id não diz nada a quem lê o papel.
  */
+/** A planta humanizada (E8.4) sai SEM cotas e com o aviso de material de venda — independentemente do que o painel marcou. */
+function opcoesDaHumanizada(p: PranchaExport): Partial<OpcoesExportacao> {
+  return p === 'humanizada' ? { humanizada: true, cotas: false, aviso: AVISO_HUMANIZADA } : {};
+}
+
 function rotuloDaPrancha(model: BlueprintModel, p: PranchaExport): string {
   const id = corteDaPrancha(p);
   if (!id) return ROTULO_FIXO[p] ?? p;
@@ -113,7 +122,7 @@ function projecaoDaPrancha(
   p: PranchaExport,
   levelIds?: string[],
 ): ProjecaoElevacao | ProjecaoCorte | null {
-  if (p === 'planta' || p === 'eletrica') return null;
+  if (p === 'planta' || p === 'eletrica' || p === 'humanizada') return null;
   const id = corteDaPrancha(p);
   if (id) {
     const corte = (model.sections ?? []).find((x) => x.id === id);
@@ -348,7 +357,7 @@ export function exportarPranchasPdf(
 
   // Enquadra tudo antes: uma página não pode sair e a seguinte falhar.
   const enquadrados = pranchas.flatMap<Pagina>((p) => {
-    if (p === 'planta' || p === 'eletrica') {
+    if (p === 'planta' || p === 'eletrica' || p === 'humanizada') {
       const enq = enquadrar(model, o.denominador, o.papel, o.cotas);
       if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
       // A prancha elétrica são TRÊS folhas: a planta, o quadro de cargas e o unifilar.
@@ -377,6 +386,7 @@ export function exportarPranchasPdf(
       anotacoes: model.anotacoes ?? [],
       eletrica: p === 'eletrica',
       titulo: `${o.titulo} — ${quadroDeCargas ? 'Quadro de cargas' : unifilar ? 'Diagrama unifilar' : rotuloDaPrancha(model, p)}`,
+      ...opcoesDaHumanizada(p),
     };
     const desenhista = new DesenhistaPdf(doc);
     if (quadroDeCargas) desenharFolhaDoQuadroDeCargas(desenhista, model, oPagina, enq);
@@ -424,15 +434,17 @@ export function desenharConjunto(
         break;
       }
       case 'PLANTA':
-      case 'ELETRICA': {
+      case 'ELETRICA':
+      case 'HUMANIZADA': {
         const m = modeloDoPavimento(model, p.levelId!);
-        let enq = enquadrar(m, p.denominador, papel, template.cotas);
+        const cotas = p.tipo === 'HUMANIZADA' ? false : template.cotas;
+        let enq = enquadrar(m, p.denominador, papel, cotas);
         let den = p.denominador;
         if (!enq.cabe && enq.escalaSugerida) {
           den = enq.escalaSugerida;
-          enq = enquadrar(m, den, papel, template.cotas);
+          enq = enquadrar(m, den, papel, cotas);
         }
-        desenharPlanta(d, m, comPrancha(den, { eletrica: p.tipo === 'ELETRICA' }), enq);
+        desenharPlanta(d, m, comPrancha(den, p.tipo === 'HUMANIZADA' ? { humanizada: true, cotas: false, aviso: AVISO_HUMANIZADA } : { eletrica: p.tipo === 'ELETRICA' }), enq);
         folhas.push({ prancha: p, denominador: den });
         break;
       }
@@ -515,8 +527,8 @@ export function exportarPranchasPng(
   const k = dpi / 25.4;
   for (const p of pranchas) {
     const proj = projecaoDaPrancha(model, p, levelIds);
-    if (p !== 'planta' && p !== 'eletrica' && !proj) continue;
-    const oArquivo = { ...o, eletrica: p === 'eletrica', titulo: `${o.titulo} — ${rotuloDaPrancha(model, p)}` };
+    if (p !== 'planta' && p !== 'eletrica' && p !== 'humanizada' && !proj) continue;
+    const oArquivo = { ...o, eletrica: p === 'eletrica', titulo: `${o.titulo} — ${rotuloDaPrancha(model, p)}`, ...opcoesDaHumanizada(p) };
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(o.papel.larguraMm * k);
     canvas.height = Math.round(o.papel.alturaMm * k);
@@ -525,7 +537,7 @@ export function exportarPranchasPng(
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    if (p === 'planta' || p === 'eletrica') {
+    if (p === 'planta' || p === 'eletrica' || p === 'humanizada') {
       const enq = enquadrar(model, o.denominador, o.papel, o.cotas);
       if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
       desenharPlanta(new DesenhistaCanvas(ctx, dpi), model, oArquivo, enq);

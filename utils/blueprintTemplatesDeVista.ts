@@ -12,6 +12,10 @@ import { MODOS_DE_COR, type ModoDeCor } from './blueprintPaletas';
 export type Estilo3d = 'SOMBREADO' | 'LINHA_OCULTA' | 'TRANSPARENTE';
 export const ESTILOS_3D: readonly Estilo3d[] = ['SOMBREADO', 'LINHA_OCULTA', 'TRANSPARENTE'];
 export const ROTULO_DO_ESTILO_3D: Record<Estilo3d, string> = { SOMBREADO: 'Sombreado', LINHA_OCULTA: 'Linha oculta', TRANSPARENTE: 'Transparente' };
+/** ESTILO DA PLANTA (E8.4): técnica (paredes vazadas, fundo neutro) ou humanizada (pisos por material, sombra, mobiliário colorido, vegetação). */
+export type EstiloDaPlanta = 'TECNICA' | 'HUMANIZADA';
+export const ESTILOS_DA_PLANTA: readonly EstiloDaPlanta[] = ['TECNICA', 'HUMANIZADA'];
+export const ROTULO_DO_ESTILO_DA_PLANTA: Record<EstiloDaPlanta, string> = { TECNICA: 'Técnica', HUMANIZADA: 'Humanizada' };
 
 export interface CamadasDaPlanta {
   medidas: boolean;
@@ -40,6 +44,8 @@ export interface ConfiguracaoDeVista {
   modoDeCor: ModoDeCor;
   vista3d: Camadas3d;
   estilo3d: Estilo3d;
+  /** Ausente em templates gravados antes da E8.4 → técnica. */
+  estiloPlanta: EstiloDaPlanta;
 }
 
 export const CONFIGURACAO_PADRAO: ConfiguracaoDeVista = {
@@ -47,6 +53,7 @@ export const CONFIGURACAO_PADRAO: ConfiguracaoDeVista = {
   modoDeCor: 'NENHUM',
   vista3d: { laje: false, arestas: true, armadura: false, terreno: false, envelope: true },
   estilo3d: 'SOMBREADO',
+  estiloPlanta: 'TECNICA',
 };
 
 export interface TemplateDeVista {
@@ -77,6 +84,7 @@ export function configuracaoDaColuna(raw: unknown): ConfiguracaoDeVista {
     modoDeCor: MODOS_DE_COR.includes(o.modoDeCor as ModoDeCor) ? (o.modoDeCor as ModoDeCor) : CONFIGURACAO_PADRAO.modoDeCor,
     vista3d,
     estilo3d: ESTILOS_3D.includes(o.estilo3d as Estilo3d) ? (o.estilo3d as Estilo3d) : CONFIGURACAO_PADRAO.estilo3d,
+    estiloPlanta: ESTILOS_DA_PLANTA.includes(o.estiloPlanta as EstiloDaPlanta) ? (o.estiloPlanta as EstiloDaPlanta) : CONFIGURACAO_PADRAO.estiloPlanta,
   };
 }
 
@@ -108,6 +116,7 @@ export function diferencas(de: ConfiguracaoDeVista, para: ConfiguracaoDeVista): 
     if (de.vista3d[k] !== para.vista3d[k]) out.push(`${ROTULO_3D[k]}: ${para.vista3d[k] ? 'ligar' : 'desligar'}`);
   }
   if (de.estilo3d !== para.estilo3d) out.push(`Estilo 3D: ${ROTULO_DO_ESTILO_3D[para.estilo3d]}`);
+  if (de.estiloPlanta !== para.estiloPlanta) out.push(`Planta: ${ROTULO_DO_ESTILO_DA_PLANTA[para.estiloPlanta]}`);
   return out;
 }
 
@@ -121,6 +130,8 @@ export const TEMPLATES_DE_FABRICA: readonly TemplateDeVista[] = [
   { id: 'fab:executivo', organizationId: '', nome: 'Executivo (cotas)', deFabrica: true, active: true, config: { ...CONFIGURACAO_PADRAO, planta: { ...CONFIGURACAO_PADRAO.planta, medidas: true, cotas: true, cotaInterna: true, camadas: true, preenchimento: false, grade: true }, modoDeCor: 'NENHUM', estilo3d: 'LINHA_OCULTA' } },
   { id: 'fab:instalacoes', organizationId: '', nome: 'Instalações', deFabrica: true, active: true, config: { ...CONFIGURACAO_PADRAO, planta: { ...CONFIGURACAO_PADRAO.planta, circuitos: true, preenchimento: false, rotulos: true }, modoDeCor: 'NENHUM', vista3d: { ...CONFIGURACAO_PADRAO.vista3d, laje: false }, estilo3d: 'TRANSPARENTE' } },
   { id: 'fab:comercial', organizationId: '', nome: 'Comercial (unidades)', deFabrica: true, active: true, config: { ...CONFIGURACAO_PADRAO, planta: { ...CONFIGURACAO_PADRAO.planta, grade: false, medidas: false, cotas: false }, modoDeCor: 'UNIDADE', vista3d: { ...CONFIGURACAO_PADRAO.vista3d, laje: true }, estilo3d: 'SOMBREADO' } },
+  // E8.4: a planta de venda — sem grade, sem medida, sem cota, sem circuito; pisos por material e mobiliário.
+  { id: 'fab:humanizada', organizationId: '', nome: 'Humanizada (venda)', deFabrica: true, active: true, config: { ...CONFIGURACAO_PADRAO, planta: { ...CONFIGURACAO_PADRAO.planta, grade: false, medidas: false, cotas: false, cotaInterna: false, camadas: false, circuitos: false, preenchimento: true, rotulos: true }, modoDeCor: 'NENHUM', vista3d: { ...CONFIGURACAO_PADRAO.vista3d, laje: true }, estilo3d: 'SOMBREADO', estiloPlanta: 'HUMANIZADA' } },
 ];
 
 /** Erros antes de gravar; vazio = pode. */

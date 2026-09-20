@@ -27,6 +27,7 @@
 import type { Anotacao, BlueprintModel, Point, Wall } from './blueprintKernel';
 import { cotaAngularDesenhada, linhasDaHachura, pontaDaSeta, COR_PADRAO_DA_ANOTACAO } from './blueprintAnotacoes';
 import { contornoEmPlanta, extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
+import { copa, COR_SOMBRA_OPACA, COR_VEGETACAO, pisosHumanizados, simboloNoMundo, sombraDaParede, tramaDoPiso, vegetacaoSimbolica } from './blueprintHumanizada';
 import type { ProjecaoElevacao } from './blueprintElevation';
 import type { ProjecaoCorte } from './blueprintCorte';
 import {
@@ -257,12 +258,22 @@ export class DesenhistaDeProva implements Desenhista {
 // Desenho
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** O aviso da planta HUMANIZADA (E8.4): é material de venda, não documento técnico. */
+export const AVISO_HUMANIZADA = 'PLANTA HUMANIZADA — ilustrativa. Mobiliário, acabamentos e vegetação são sugestão; medidas aproximadas. Não vale para execução nem para aprovação legal.';
+
 export interface OpcoesExportacao {
   /**
    * PRANCHAS (E8.3): recorte do modelo em mm (a AMPLIAÇÃO) — a planta desenha
    * só este retângulo, a escala maior, e recorta o que passar da borda.
    */
   recorte?: { minX: number; minY: number; maxX: number; maxY: number };
+  /**
+   * PLANTA HUMANIZADA (E8.4): pisos com cor e trama do material, sombra das
+   * paredes, paredes cheias, mobiliário colorido por família e vegetação
+   * simbólica. É a planta de VENDA: quem a pede também tira as cotas e troca o
+   * aviso (`AVISO_HUMANIZADA`).
+   */
+  humanizada?: boolean;
   /** PRANCHAS (E8.3): carimbo da organização e a numeração da folha no conjunto. */
   carimboDaOrg?: { empresa: string; responsavel: string; registro: string; cliente: string; endereco: string; camposExtras: { rotulo: string; valor: string }[] };
   prancha?: { numero: string; total: number; titulo: string };
@@ -374,11 +385,25 @@ export function desenharPlanta(
     enq.offsetYMm + (enq.desenhoAlturaMm - (y - (bb?.minY ?? 0) + folgaMm) / opcoes.denominador);
 
   // ── Ambientes, primeiro: fundo de tudo ────────────────────────────────────
+  // HUMANIZADA (E8.4): a cor do piso e a trama (já recortada pelo ambiente, em mm).
+  const pisos = opcoes.humanizada ? pisosHumanizados(model) : undefined;
   for (const s of model.spaces) {
+    const piso = pisos?.get(s.id);
     d.poligono(
       s.ring.map((p) => ({ x: px(p.x), y: py(p.y) })),
-      COR_AMBIENTE,
+      piso?.cor ?? COR_AMBIENTE,
     );
+    if (piso && piso.moduloMm > 0) {
+      for (const seg of tramaDoPiso(s, piso)) d.linha(px(seg.a.x), py(seg.a.y), px(seg.b.x), py(seg.b.y), { espessuraMm: 0.1, cor: piso.corDoTraco });
+    }
+  }
+
+  // HUMANIZADA: a sombra das paredes, sob as paredes e sobre os pisos. Opaca, porque o papel não compõe alfa.
+  if (opcoes.humanizada) {
+    for (const w of model.walls) {
+      const anel = sombraDaParede(model.walls, w);
+      if (anel.length === 4) d.poligono(anel.map((p) => ({ x: px(p.x), y: py(p.y) })), COR_SOMBRA_OPACA);
+    }
   }
 
   // ── Paredes, vazadas ──────────────────────────────────────────────────────
@@ -423,8 +448,8 @@ export function desenharPlanta(
     );
   }
 
-  // Passada 2 — escavar o miolo.
-  for (const t of tracos) {
+  // Passada 2 — escavar o miolo. Na HUMANIZADA a parede sai CHEIA (não se escava).
+  for (const t of opcoes.humanizada ? [] : tracos) {
     const miolo = t.cheia - 2 * ESPESSURA_FINA_MM;
     // Abaixo do mínimo imprimível a passada branca não vira nada no papel — ou
     // pior, vira artefato. Parede fina demais para a escala sai SÓLIDA, que é a
@@ -452,6 +477,9 @@ export function desenharPlanta(
       { espessuraMm: miolo, cor: '#ffffff' },
     );
   }
+
+  // ── Aberturas (E8.4): o vão aberto, os batentes e o símbolo — porta com folha e arco, janela no eixo, correr recolhida ──
+  desenharAberturas(d, model, px, py, opcoes.denominador);
 
   // ── Estrutura: contorno da peça, por cima da alvenaria ────────────────────
   //
@@ -486,6 +514,32 @@ export function desenharPlanta(
     });
   }
 
+  // ── HUMANIZADA (E8.4): mobiliário por família e vegetação simbólica ──────
+  if (opcoes.humanizada) {
+    for (const c of model.componentes ?? []) {
+      const { contorno, tracos: linhas, cores } = simboloNoMundo(c);
+      d.poligono(contorno.map((p) => ({ x: px(p.x), y: py(p.y) })), cores.fundo);
+      const fechado = [...contorno, contorno[0]];
+      for (let i = 0; i + 1 < fechado.length; i++) d.linha(px(fechado[i].x), py(fechado[i].y), px(fechado[i + 1].x), py(fechado[i + 1].y), { espessuraMm: ESPESSURA_FINA_MM, cor: cores.traco });
+      for (const poli of linhas) for (let i = 0; i + 1 < poli.length; i++) d.linha(px(poli[i].x), py(poli[i].y), px(poli[i + 1].x), py(poli[i + 1].y), { espessuraMm: 0.12, cor: cores.traco });
+    }
+    // Uma vegetação por pavimento: a planta exportada pode ter mais de um (a prancha por pavimento recorta antes).
+    for (const nivel of model.levels) {
+      for (const v of vegetacaoSimbolica(model, nivel.id)) {
+        const anel = copa(v).map((p) => ({ x: px(p.x), y: py(p.y) }));
+        d.poligono(anel, v.tipo === 'ARVORE' ? COR_VEGETACAO.copa : COR_VEGETACAO.arbusto);
+        const fechado = [...anel, anel[0]];
+        for (let i = 0; i + 1 < fechado.length; i++) d.linha(fechado[i].x, fechado[i].y, fechado[i + 1].x, fechado[i + 1].y, { espessuraMm: 0.15, cor: COR_VEGETACAO.traco });
+        if (v.tipo === 'ARVORE') {
+          for (let i = 0; i < 8; i++) {
+            const g = (i / 8) * Math.PI * 2 + 0.3;
+            d.linha(px(v.at.x + v.raioMm * 0.35 * Math.cos(g)), py(v.at.y + v.raioMm * 0.35 * Math.sin(g)), px(v.at.x + v.raioMm * 0.95 * Math.cos(g)), py(v.at.y + v.raioMm * 0.95 * Math.sin(g)), { espessuraMm: 0.12, cor: COR_VEGETACAO.traco });
+          }
+        }
+      }
+    }
+  }
+
   // ── Nome e área do ambiente ───────────────────────────────────────────────
   for (const s of model.spaces) {
     const cx = s.ring.reduce((soma, p) => soma + p.x, 0) / s.ring.length;
@@ -512,6 +566,76 @@ export function desenharPlanta(
   }
 
   desenharCarimbo(d, opcoes, enq);
+}
+
+/**
+ * ABERTURAS na planta (20/09/2026, E8.4 — a planta humanizada exigiu, e a
+ * técnica ganhou junto: até aqui o PDF saía com a parede fechada onde há
+ * porta). A mesma geometria do canvas: vão aberto (polígono branco sobre a
+ * parede), batentes, e o símbolo — porta: folha a 90° + arco de giro em 12
+ * segmentos (o `Desenhista` não tem arco); janela: linha no eixo; correr:
+ * folha recolhida; vão livre: só os batentes.
+ */
+export function desenharAberturas(d: Desenhista, model: BlueprintModel, px: (x: number) => number, py: (y: number) => number, denominador: number): void {
+  const espessura = ESPESSURA_FINA_MM;
+  for (const o of model.openings) {
+    const w = model.walls.find((x) => x.id === o.wallId);
+    if (!w) continue;
+    const comp = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+    if (comp === 0) continue;
+    const ux = (w.b.x - w.a.x) / comp;
+    const uy = (w.b.y - w.a.y) / comp;
+    const nx = -uy;
+    const ny = ux;
+    const meia = w.thicknessMm / 2;
+    const ini = { x: w.a.x + ux * o.offsetMm, y: w.a.y + uy * o.offsetMm };
+    const fim = { x: w.a.x + ux * (o.offsetMm + o.widthMm), y: w.a.y + uy * (o.offsetMm + o.widthMm) };
+    const P = (p: { x: number; y: number }) => ({ x: px(p.x), y: py(p.y) });
+    const c1 = { x: ini.x + nx * meia, y: ini.y + ny * meia };
+    const c2 = { x: ini.x - nx * meia, y: ini.y - ny * meia };
+    const c3 = { x: fim.x - nx * meia, y: fim.y - ny * meia };
+    const c4 = { x: fim.x + nx * meia, y: fim.y + ny * meia };
+    // 1. o vão: branco sobre a parede (também sobre a parede CHEIA da humanizada).
+    d.poligono([P(c1), P(c2), P(c3), P(c4)], '#ffffff');
+    // 2. batentes.
+    const linha = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+      const A = P(a);
+      const B = P(b);
+      d.linha(A.x, A.y, B.x, B.y, { espessuraMm: espessura, cor: COR_TRACO });
+    };
+    linha(c1, c2);
+    linha(c3, c4);
+    // Abaixo de 2 mm de papel o símbolo vira borrão.
+    if (o.widthMm / denominador < 2) continue;
+    // 3. símbolo.
+    if (o.kind === 'passage') continue;
+    if (o.kind === 'window') {
+      linha(ini, fim);
+      continue;
+    }
+    if (o.kind === 'sliding') {
+      const borda = o.hingeAtStart ? ini : fim;
+      const recuo = o.hingeAtStart ? -1 : 1;
+      const desloc = o.embutida ? 0 : (o.swingReversed ? -1 : 1) * (meia + 45);
+      linha({ x: borda.x + nx * desloc, y: borda.y + ny * desloc }, { x: borda.x + recuo * ux * o.widthMm + nx * desloc, y: borda.y + recuo * uy * o.widthMm + ny * desloc });
+      continue;
+    }
+    // Porta: pivô na dobradiça, folha para dentro, arco da posição fechada à aberta.
+    const lado = o.swingReversed ? -1 : 1;
+    const piv = o.hingeAtStart ? { x: ini.x + nx * meia * lado, y: ini.y + ny * meia * lado } : { x: fim.x + nx * meia * lado, y: fim.y + ny * meia * lado };
+    const eixo = { x: o.hingeAtStart ? ux : -ux, y: o.hingeAtStart ? uy : -uy };
+    const folha = { x: nx * lado, y: ny * lado };
+    const r = o.widthMm;
+    linha(piv, { x: piv.x + folha.x * r, y: piv.y + folha.y * r });
+    const N = 12;
+    let anterior = { x: piv.x + eixo.x * r, y: piv.y + eixo.y * r };
+    for (let i = 1; i <= N; i++) {
+      const t = (i / N) * (Math.PI / 2);
+      const p = { x: piv.x + (eixo.x * Math.cos(t) + folha.x * Math.sin(t)) * r, y: piv.y + (eixo.y * Math.cos(t) + folha.y * Math.sin(t)) * r };
+      linha(anterior, p);
+      anterior = p;
+    }
+  }
 }
 
 /**

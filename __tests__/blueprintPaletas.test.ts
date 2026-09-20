@@ -69,13 +69,18 @@ describe('paletas e templates de vista (E8.2)', () => {
     expect(lida.modoDeCor).toBe('NENHUM');
     expect(lida.vista3d.arestas).toBe(false);
     expect(lida.estilo3d).toBe('TRANSPARENTE');
+    expect(lida.estiloPlanta).toBe('TECNICA'); // ausente (template anterior à E8.4) → técnica
+    expect(configuracaoDaColuna({ estiloPlanta: 'HUMANIZADA' }).estiloPlanta).toBe('HUMANIZADA');
+    expect(configuracaoDaColuna({ estiloPlanta: 'AQUARELA' }).estiloPlanta).toBe('TECNICA');
+    expect(diferencas(CONFIGURACAO_PADRAO, configuracaoDaColuna({ estiloPlanta: 'HUMANIZADA' }))).toEqual(['Planta: Humanizada']);
     expect(configuracaoDaColuna(null)).toEqual(CONFIGURACAO_PADRAO);
     expect(diferencas(CONFIGURACAO_PADRAO, lida)).toEqual(['Medidas das paredes: ligar', 'Arestas (3D): desligar', 'Estilo 3D: Transparente']);
     expect(mesmaConfiguracao(CONFIGURACAO_PADRAO, configuracaoDaColuna({}))).toBe(true);
-    expect(TEMPLATES_DE_FABRICA).toHaveLength(4);
+    expect(TEMPLATES_DE_FABRICA).toHaveLength(5); // + Humanizada (venda), E8.4
     for (const tpl of TEMPLATES_DE_FABRICA) expect(configuracaoDaColuna(tpl.config)).toEqual(tpl.config); // já sanitizado
     const assinaturas = TEMPLATES_DE_FABRICA.map((tpl) => JSON.stringify(tpl.config));
-    expect(new Set(assinaturas).size).toBe(4);
+    expect(new Set(assinaturas).size).toBe(5);
+    expect(TEMPLATES_DE_FABRICA.find((t) => t.id === 'fab:humanizada')?.config.estiloPlanta).toBe('HUMANIZADA');
     expect(validarTemplate('', [])).toEqual(['nome é obrigatório']);
     expect(validarTemplate('Apresentação', TEMPLATES_DE_FABRICA)).toEqual(['já existe um template chamado "Apresentação"']);
     expect(validarTemplate('Minha vista', TEMPLATES_DE_FABRICA)).toEqual([]);

@@ -379,7 +379,8 @@ import PainelGuardaCorpoSelecionado from './PainelGuardaCorpoSelecionado';
 import PainelAnotacaoSelecionada from './PainelAnotacaoSelecionada';
 import MenuVista from './MenuVista';
 import { coresDaVista, type ModoDeCor } from '../../utils/blueprintPaletas';
-import { TEMPLATES_DE_FABRICA, type ConfiguracaoDeVista, type Estilo3d, type TemplateDeVista } from '../../utils/blueprintTemplatesDeVista';
+import { TEMPLATES_DE_FABRICA, type ConfiguracaoDeVista, type Estilo3d, type EstiloDaPlanta, type TemplateDeVista } from '../../utils/blueprintTemplatesDeVista';
+import { pisosHumanizados, resumirPisos, vegetacaoSimbolica } from '../../utils/blueprintHumanizada';
 import { blueprintViewTemplateService } from '../../services/blueprintViewTemplateService';
 import { resumirAnotacoes } from '../../utils/blueprintAnotacoes';
 import PainelGuardaCorpos from './PainelGuardaCorpos';
@@ -1439,6 +1440,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [modoDeCor, setModoDeCor] = usePersistedState<ModoDeCor>('blueprint:modoDeCor', coresPorAmbiente ? 'AMBIENTE' : 'NENHUM');
   /** ESTILO DO 3D (E8.2): sombreado, linha oculta ou transparente. */
   const [estilo3d, setEstilo3d] = usePersistedState<Estilo3d>('blueprint:vista3dEstilo', 'SOMBREADO');
+  /** ESTILO DA PLANTA (E8.4): técnica ou humanizada (pisos por material, sombra, mobiliário colorido, vegetação). */
+  const [estiloPlanta, setEstiloPlanta] = usePersistedState<EstiloDaPlanta>('blueprint:estiloPlanta', 'TECNICA');
   /** TEMPLATES DE VISTA da organização (E8.2), além dos de fábrica. */
   const [templatesDaOrg, setTemplatesDaOrg] = useState<TemplateDeVista[]>([]);
   const [templatesIndisponiveis, setTemplatesIndisponiveis] = useState<string | null>(null);
@@ -2299,6 +2302,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   quantRef.current = quant;
   /** COLORIR POR (E8.2): cor por ambiente e legenda do recorte atual. */
   const coresDoDesenho = useMemo(() => coresDaVista(editor.model, modoDeCor, levelId), [editor.model, modoDeCor, levelId]);
+  /** PLANTA HUMANIZADA (E8.4): piso por ambiente e vegetação do pavimento — só quando o estilo pede (é derivação sobre todos os ambientes). */
+  const humanizada = estiloPlanta === 'HUMANIZADA';
+  const pisosDoDesenho = useMemo(() => (humanizada ? pisosHumanizados(editor.model, levelId) : undefined), [humanizada, editor.model, levelId]);
+  const vegetacaoDoDesenho = useMemo(() => (humanizada && levelId ? vegetacaoSimbolica(editor.model, levelId) : undefined), [humanizada, editor.model, levelId]);
+  const resumoDosPisos = useMemo(() => (pisosDoDesenho ? resumirPisos(pisosDoDesenho) : []), [pisosDoDesenho]);
   /** A CONFIGURAÇÃO DE VISTA atual — o que um template salva e aplica. */
   const configuracaoDeVista = useMemo<ConfiguracaoDeVista>(
     () => ({
@@ -2320,8 +2328,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       modoDeCor,
       vista3d: { laje: mostrarLaje3d, arestas: mostrarArestas3d, armadura: mostrarArmadura3d, terreno: mostrarTerreno3d, envelope: mostrarEnvelope3d },
       estilo3d,
+      estiloPlanta,
     }),
-    [mostrarMedidas, mostrarCamadas, mostrarCotas, mostrarCotaInterna, mostrarCircuitos, mostrarRotulos, mostrarGrade, mostrarPreenchimento, mostrarPreenchimentoTerreno, mostrarCurvasDeNivel, mostrarEnvelope, cotaAltoContraste, mostrarMobiliario, modoDeCor, mostrarLaje3d, mostrarArestas3d, mostrarArmadura3d, mostrarTerreno3d, mostrarEnvelope3d, estilo3d],
+    [mostrarMedidas, mostrarCamadas, mostrarCotas, mostrarCotaInterna, mostrarCircuitos, mostrarRotulos, mostrarGrade, mostrarPreenchimento, mostrarPreenchimentoTerreno, mostrarCurvasDeNivel, mostrarEnvelope, cotaAltoContraste, mostrarMobiliario, modoDeCor, mostrarLaje3d, mostrarArestas3d, mostrarArmadura3d, mostrarTerreno3d, mostrarEnvelope3d, estilo3d, estiloPlanta],
   );
   const aplicarConfiguracaoDeVista = useCallback(
     (c: ConfiguracaoDeVista) => {
@@ -2346,6 +2355,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       setMostrarTerreno3d(c.vista3d.terreno);
       setMostrarEnvelope3d(c.vista3d.envelope);
       setEstilo3d(c.estilo3d);
+      setEstiloPlanta(c.estiloPlanta);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
@@ -2383,6 +2393,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         if (m !== 'NENHUM' && !mostrarPreenchimento) setMostrarPreenchimento(true);
       }}
       onEstilo3d={setEstilo3d}
+      onEstiloPlanta={(e) => {
+        setEstiloPlanta(e);
+        // Humanizada sem preenchimento não mostra piso nenhum: ligar junto, como o "Colorir por" faz.
+        if (e === 'HUMANIZADA' && !mostrarPreenchimento) setMostrarPreenchimento(true);
+      }}
+      resumoDosPisos={resumoDosPisos}
       onAplicar={aplicarConfiguracaoDeVista}
       onSalvar={async (nome) => {
         const alvo = await resolverOrgDeEscrita('all-allowed');
@@ -9540,6 +9556,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               // Preenchimento deixaria a combinação gravada no localStorage.
               coresPorAmbiente={mostrarPreenchimento && modoDeCor === 'AMBIENTE'}
               coresDosAmbientes={mostrarPreenchimento && modoDeCor !== 'NENHUM' ? coresDoDesenho.porAmbiente : undefined}
+              humanizada={humanizada}
+              pisosHumanizados={mostrarPreenchimento ? pisosDoDesenho : undefined}
+              vegetacao={vegetacaoDoDesenho}
               cotaAltoContraste={cotaAltoContraste}
               passoMoverMm={passoMover === 'grade' ? null : passoMover}
               onMoveVertex={moverPonta}

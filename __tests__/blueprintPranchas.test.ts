@@ -75,6 +75,16 @@ describe('pranchas (E8.3)', () => {
     expect(plano[8].recorte).toEqual({ minX: -600, minY: -600, maxX: 4600, maxY: 4600 });
     const so = planejarConjunto(m, { ...TEMPLATE_DE_PRANCHA_PADRAO, carimbo: { ...TEMPLATE_DE_PRANCHA_PADRAO.carimbo, prefixo: 'ARQ' }, incluir: { indice: false, plantas: true, cortes: false, elevacoes: false, ampliacoes: false, tabelas: false, eletrica: false } });
     expect(so.map((p) => p.numero)).toEqual(['ARQ-01', 'ARQ-02']);
+    // E8.4: humanizada ligada = uma folha por pavimento com parede, logo depois das plantas técnicas, sem cotas e com o aviso de venda.
+    const hum = planejarConjunto(m, { ...TEMPLATE_DE_PRANCHA_PADRAO, incluir: { ...TEMPLATE_DE_PRANCHA_PADRAO.incluir, humanizada: true, cortes: false, elevacoes: false, ampliacoes: false, tabelas: false } });
+    expect(hum.map((p) => [p.numero, p.tipo, p.titulo])).toEqual([
+      ['A-01', 'INDICE', 'Índice de pranchas'],
+      ['A-02', 'PLANTA', 'Planta — Térreo'],
+      ['A-03', 'PLANTA', 'Planta — Superior'],
+      ['A-04', 'HUMANIZADA', 'Planta humanizada — Térreo'],
+      ['A-05', 'HUMANIZADA', 'Planta humanizada — Superior'],
+    ]);
+    expect(templateDePranchaDaColuna({ incluir: { plantas: true } }).incluir.humanizada).toBe(false); // template anterior à E8.4
     // Elétrica sem pontos = nenhuma folha elétrica.
     expect(planejarConjunto(m, { ...TEMPLATE_DE_PRANCHA_PADRAO, incluir: { ...TEMPLATE_DE_PRANCHA_PADRAO.incluir, eletrica: true } }).filter((p) => p.tipo === 'ELETRICA')).toHaveLength(0);
   });
@@ -143,6 +153,19 @@ describe('pranchas (E8.3)', () => {
     const ambientesDe = (i: number) => folhas[i].chamadas.filter((c) => c.tipo === 'poligono' && c.args[1] === '#eef2ff').length;
     expect(ambientesDe(1)).toBeGreaterThanOrEqual(ambientesDe(2));
     expect(textosDe(9)).toEqual(expect.arrayContaining(['Quadro de áreas', 'Banheiro', 'Sala', 'Dormitório', 'Quadro de esquadrias']));
+    // A folha humanizada do conjunto: sombra (polígono cinza) e o aviso de venda; a técnica não tem nenhum dos dois.
+    const fh: DesenhistaDeProva[] = [];
+    desenharConjunto(m, OPCOES, { ...TEMPLATE_DE_PRANCHA_PADRAO, incluir: { indice: false, plantas: true, humanizada: true, cortes: false, elevacoes: false, ampliacoes: false, tabelas: false, eletrica: false } }, () => {
+      const f = new DesenhistaDeProva();
+      fh.push(f);
+      return f;
+    });
+    expect(fh).toHaveLength(4);
+    const sombras = (f: DesenhistaDeProva) => f.chamadas.filter((c) => c.tipo === 'poligono' && c.args[1] === '#c8c8c8').length;
+    expect(sombras(fh[0])).toBe(0);
+    expect(sombras(fh[2])).toBe(5); // 5 paredes do térreo
+    expect(fh[2].chamadas.some((c) => c.tipo === 'texto' && /PLANTA HUMANIZADA/.test(c.args[2] as string))).toBe(true);
+    expect(fh[0].chamadas.some((c) => c.tipo === 'texto' && /PLANTA HUMANIZADA/.test(c.args[2] as string))).toBe(false);
     // Não cabe em A4 1:50 → desce para a escala sugerida e o carimbo diz.
     const pequeno = { ...TEMPLATE_DE_PRANCHA_PADRAO, papel: 'A4' as const, denominadorPlanta: 20, incluir: { ...TEMPLATE_DE_PRANCHA_PADRAO.incluir, indice: false, cortes: false, elevacoes: false, ampliacoes: false, tabelas: false } };
     const f2: DesenhistaDeProva[] = [];

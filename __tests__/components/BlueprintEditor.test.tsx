@@ -2078,9 +2078,9 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(legenda).toHaveTextContent(/Sala \/ dormitório1/);
     expect(screen.getByTestId('menu-vista')).toHaveTextContent('Tipo de ambiente (NBR 5410)');
     expect(localStorage.getItem('blueprint:modoDeCor')).toBe(JSON.stringify('TIPO_DE_AMBIENTE'));
-    // Templates: os 4 de fábrica + o da organização.
+    // Templates: os 5 de fábrica (E8.4 trouxe "Humanizada (venda)") + o da organização.
     const lista = within(screen.getByTestId('painel-da-vista')).getByTestId('templates-de-vista');
-    expect(within(lista).getAllByRole('listitem')).toHaveLength(5);
+    expect(within(lista).getAllByRole('listitem')).toHaveLength(6);
     expect(lista).toHaveTextContent(/Minha vista/);
     // Aplicar "Executivo (cotas)": medidas e cotas ligam, preenchimento desliga, cor volta a NENHUM, estilo 3D linha oculta.
     await user.click(within(lista).getByRole('button', { name: 'Aplicar template Executivo (cotas)' }));
@@ -2108,6 +2108,47 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(createViewTemplate.mock.calls[0][2]).toMatchObject({ planta: { medidas: true, cotas: true, preenchimento: false }, modoDeCor: 'NENHUM', estilo3d: 'TRANSPARENTE' });
     listViewTemplates.mockResolvedValue([]);
     useStore.setState({ organizations: orgsAntes });
+  }, 60000);
+
+  it('planta humanizada (E8.4): o menu Vista troca o estilo, liga o preenchimento, persiste e resume os pisos; o template "Humanizada (venda)" aplica o estilo e desliga a grade; voltar à técnica limpa o resumo', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    let m = k.applyBatch(nivel.model, [w(0, 0, 8000, 0), w(8000, 0, 8000, 3000), w(8000, 3000, 0, 3000), w(0, 3000, 0, 0), w(4000, 0, 4000, 3000)]).model;
+    const [a, b] = [...m.spaces].sort((p, q) => p.ring[0].x - q.ring[0].x);
+    m = k.applyBatch(m, [
+      { type: 'NameSpace', spaceId: a.id, name: 'Banheiro', tipoDeAmbiente: 'BANHEIRO' },
+      { type: 'NameSpace', spaceId: b.id, name: 'Sala', tipoDeAmbiente: 'SALA_DORMITORIO', acabamentos: { piso: [{ espessuraMm: 10, itemCode: '', descricao: 'Porcelanato', funcao: 'ACABAMENTO' }] } },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    localStorage.setItem('blueprint:mostrarPreenchimento', 'false');
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^vista$/i);
+    await user.click(screen.getByTestId('menu-vista'));
+    const painel = await screen.findByTestId('painel-da-vista');
+    expect(within(painel).queryByTestId('resumo-dos-pisos')).toBeNull();
+    await user.selectOptions(within(painel).getByLabelText('Estilo da planta'), 'HUMANIZADA');
+    expect(localStorage.getItem('blueprint:estiloPlanta')).toBe(JSON.stringify('HUMANIZADA'));
+    // Humanizada sem preenchimento não mostra piso: liga junto.
+    expect(localStorage.getItem('blueprint:mostrarPreenchimento')).toBe('true');
+    const resumo = within(screen.getByTestId('painel-da-vista')).getByTestId('resumo-dos-pisos');
+    // Sala com porcelanato DECLARADO; banheiro sem piso → cerâmica SUPOSTA pelo tipo.
+    expect(resumo).toHaveTextContent(/Porcelanato 1(?! \()/);
+    expect(resumo).toHaveTextContent(/Cerâmica 1 \(1 suposto\)/);
+    expect(screen.getByTestId('menu-vista')).toHaveTextContent('Humanizada');
+    // O template de fábrica.
+    const lista = within(screen.getByTestId('painel-da-vista')).getByTestId('templates-de-vista');
+    await user.click(within(lista).getByRole('button', { name: 'Aplicar template Humanizada (venda)' }));
+    expect(localStorage.getItem('blueprint:estiloPlanta')).toBe(JSON.stringify('HUMANIZADA'));
+    expect(localStorage.getItem('blueprint:mostrarGrade')).toBe('false');
+    expect(localStorage.getItem('blueprint:mostrarCotas')).toBe('false');
+    expect(screen.getByTestId('menu-vista')).toHaveTextContent('Humanizada (venda)');
+    // Volta à técnica.
+    await user.selectOptions(within(screen.getByTestId('painel-da-vista')).getByLabelText('Estilo da planta'), 'TECNICA');
+    expect(localStorage.getItem('blueprint:estiloPlanta')).toBe(JSON.stringify('TECNICA'));
+    expect(within(screen.getByTestId('painel-da-vista')).queryByTestId('resumo-dos-pisos')).toBeNull();
   }, 60000);
 
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {

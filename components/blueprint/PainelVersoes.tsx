@@ -457,6 +457,8 @@ export default function PainelVersoes({
   // a lista reordenaria as pranchas de sempre a cada corte novo.
   const PRANCHAS: { id: PranchaExport; rotulo: string }[] = [
     { id: 'planta', rotulo: 'Planta' },
+    // E8.4: a planta de venda — pisos por material, sombra, mobiliário, vegetação; sem cotas, aviso próprio.
+    { id: 'humanizada', rotulo: 'Humanizada' },
     // F8: a planta com os símbolos elétricos + a folha do quadro de cargas + o unifilar.
     { id: 'eletrica', rotulo: 'Elétrica' },
     { id: 'frente', rotulo: 'Frente' },
@@ -475,8 +477,10 @@ export default function PainelVersoes({
       return PRANCHAS.map((p) => p.id).filter((p) => proximo.includes(p));
     });
   const elevacoesSelecionadas = pranchas.filter(
-    (p): p is Exclude<PranchaExport, 'planta' | 'eletrica'> => p !== 'planta' && p !== 'eletrica',
+    (p): p is Exclude<PranchaExport, 'planta' | 'eletrica' | 'humanizada'> => p !== 'planta' && p !== 'eletrica' && p !== 'humanizada',
   );
+  /** As três "plantas" (técnica, humanizada, elétrica) dependem da escala caber. */
+  const comPlanta = pranchas.includes('planta') || pranchas.includes('humanizada');
   /** A elétrica marcada vai para o DXF como camada, e para o PDF/PNG como prancha própria. */
   const comEletrica = pranchas.includes('eletrica');
 
@@ -758,13 +762,13 @@ export default function PainelVersoes({
                 icone={FileText}
                 rotulo="PDF"
                 onClick={() => exportar((m, o) => exportarPranchasPdf(m, o, pranchas))}
-                disabled={!modelo || pranchas.length === 0 || ((pranchas.includes('planta') || comEletrica) && !enq?.cabe)}
+                disabled={!modelo || pranchas.length === 0 || ((comPlanta || comEletrica) && !enq?.cabe)}
               />
               <BotaoExportar
                 icone={Image}
                 rotulo="PNG"
                 onClick={() => exportar((m, o) => exportarPranchasPng(m, o, pranchas))}
-                disabled={!modelo || pranchas.length === 0 || ((pranchas.includes('planta') || comEletrica) && !enq?.cabe)}
+                disabled={!modelo || pranchas.length === 0 || ((comPlanta || comEletrica) && !enq?.cabe)}
               />
               <BotaoExportar
                 icone={Download}

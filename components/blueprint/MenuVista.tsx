@@ -11,7 +11,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Palette, Save, Trash2 } from 'lucide-react';
 import { MODOS_DE_COR, ROTULO_DO_MODO_DE_COR, type ItemDaLegenda, type ModoDeCor } from '../../utils/blueprintPaletas';
-import { diferencas, ESTILOS_3D, mesmaConfiguracao, ROTULO_DO_ESTILO_3D, validarTemplate, type ConfiguracaoDeVista, type Estilo3d, type TemplateDeVista } from '../../utils/blueprintTemplatesDeVista';
+import { diferencas, ESTILOS_3D, ESTILOS_DA_PLANTA, mesmaConfiguracao, ROTULO_DO_ESTILO_3D, ROTULO_DO_ESTILO_DA_PLANTA, validarTemplate, type ConfiguracaoDeVista, type Estilo3d, type EstiloDaPlanta, type TemplateDeVista } from '../../utils/blueprintTemplatesDeVista';
 
 interface Props {
   em3d: boolean;
@@ -22,12 +22,16 @@ interface Props {
   legenda: ItemDaLegenda[];
   onModoDeCor: (m: ModoDeCor) => void;
   onEstilo3d: (e: Estilo3d) => void;
+  /** E8.4: técnica / humanizada. */
+  onEstiloPlanta: (e: EstiloDaPlanta) => void;
+  /** Resumo dos pisos da planta humanizada (padrão → quantos ambientes, quantos declarados). */
+  resumoDosPisos?: readonly { rotulo: string; quantidade: number; declarados: number }[];
   onAplicar: (config: ConfiguracaoDeVista) => void;
   onSalvar: (nome: string) => Promise<void>;
   onRemover: (id: string) => Promise<void>;
 }
 
-export default function MenuVista({ em3d, configuracaoAtual, templates, carregando = false, indisponivel = null, legenda, onModoDeCor, onEstilo3d, onAplicar, onSalvar, onRemover }: Props) {
+export default function MenuVista({ em3d, configuracaoAtual, templates, carregando = false, indisponivel = null, legenda, onModoDeCor, onEstilo3d, onEstiloPlanta, resumoDosPisos = [], onAplicar, onSalvar, onRemover }: Props) {
   const [aberto, setAberto] = useState(false);
   const [nomeNovo, setNomeNovo] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -90,13 +94,27 @@ export default function MenuVista({ em3d, configuracaoAtual, templates, carregan
         className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${aberto ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
       >
         <Palette className="h-3.5 w-3.5" />
-        {ativo ? ativo.nome : configuracaoAtual.modoDeCor !== 'NENHUM' ? ROTULO_DO_MODO_DE_COR[configuracaoAtual.modoDeCor] : 'Vista'}
+        {ativo ? ativo.nome : configuracaoAtual.estiloPlanta === 'HUMANIZADA' ? 'Humanizada' : configuracaoAtual.modoDeCor !== 'NENHUM' ? ROTULO_DO_MODO_DE_COR[configuracaoAtual.modoDeCor] : 'Vista'}
         <ChevronDown className="h-3 w-3" />
       </button>
 
       {aberto ? (
         <div role="dialog" aria-label="Vista: cores, estilo do 3D e templates" className="absolute left-0 top-full z-30 mt-1 w-80 rounded-[10px] border border-slate-200 bg-white p-3 shadow-lg" data-testid="painel-da-vista">
           <label className="flex flex-col gap-1 text-[11px] font-medium text-slate-500">
+            Estilo da planta
+            <select value={configuracaoAtual.estiloPlanta} onChange={(e) => onEstiloPlanta(e.target.value as EstiloDaPlanta)} aria-label="Estilo da planta" className={campo}>
+              {ESTILOS_DA_PLANTA.map((e) => (
+                <option key={e} value={e}>{ROTULO_DO_ESTILO_DA_PLANTA[e]}</option>
+              ))}
+            </select>
+          </label>
+          {configuracaoAtual.estiloPlanta === 'HUMANIZADA' && (
+            <p className="mt-1 text-[11px] text-slate-500" data-testid="resumo-dos-pisos">
+              Piso pelo material declarado (E7.2), senão pelo tipo ou pelo nome do ambiente
+              {resumoDosPisos.length > 0 ? `: ${resumoDosPisos.map((r) => `${r.rotulo} ${r.quantidade}${r.declarados < r.quantidade ? ` (${r.quantidade - r.declarados} suposto${r.quantidade - r.declarados > 1 ? 's' : ''})` : ''}`).join(' · ')}` : ''}. Mobiliário e vegetação são ilustrativos.
+            </p>
+          )}
+          <label className="mt-2 flex flex-col gap-1 text-[11px] font-medium text-slate-500">
             Colorir ambientes por
             <select value={configuracaoAtual.modoDeCor} onChange={(e) => onModoDeCor(e.target.value as ModoDeCor)} aria-label="Colorir ambientes por" className={campo}>
               {MODOS_DE_COR.map((m) => (

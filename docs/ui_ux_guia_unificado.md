@@ -1936,9 +1936,12 @@ Referência: `SupplierList.tsx`, `ClientList.tsx`, `InvestorList.tsx`.
 > ❌ **Não é a mesma coisa que os cabeçalhos "hero"** (fundo escuro/gradiente,
 > `h1` branco `text-4xl`, ex: `RentalsModule.tsx`, `SalesModule.tsx`,
 > `ProjectOverview.tsx`) nem os cabeçalhos em card com breadcrumb
-> (`OpuraAssetsModule.tsx`, `EmpreendimentoModule.tsx`, `LaborModule.tsx`) — são
-> linguagens visuais deliberadamente diferentes, não inconsistência a corrigir
-> aqui. Não migre sem decisão explícita (seria redesign).
+> (`EmpreendimentoModule.tsx`) — são linguagens visuais deliberadamente
+> diferentes, não inconsistência a corrigir aqui. Não migre sem decisão
+> explícita (seria redesign). Já migrados por decisão explícita:
+> `LaborModule.tsx`; `OpuraAssetsModule.tsx` (2026-09-20 — card + breadcrumb
+> "Corporativo / Gestão de Bens" viraram `h1` + `p`; os botões ficaram à
+> direita do título no tamanho compacto do §17).
 
 ### 20.1 Ritmo de espaçamento do cromo — 24px até as abas, 12px depois
 

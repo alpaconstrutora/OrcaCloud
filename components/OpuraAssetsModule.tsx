@@ -1369,37 +1369,31 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+      {/* Cabeçalho §20 — h1 + p direto, sem card/breadcrumb (§18/§23: o sidebar já diz onde estamos) */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-gray-400">
-            <span>Corporativo</span>
-            <span>/</span>
-            <span className="text-gray-600 font-bold">Gestão de Bens</span>
-          </div>
-          <h1 className="text-2xl font-black text-gray-900 tracking-tight mt-1.5 flex items-center gap-2">
-            Gestão de Ativos
-          </h1>
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Ativos</h1>
+          <p className="text-gray-400 text-sm mt-1.5 font-medium">Patrimônio, reservas, manutenções e rateio de custos dos bens da empresa.</p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="secondary"
             onClick={() => setIsImportModalOpen(true)}
             disabled={isWriteDisabled}
             title={isWriteDisabled ? "Selecione uma organização específica para importar ativos" : "Importar ativos via Excel"}
-            className="px-6 py-3 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[1.25rem] font-black text-button uppercase tracking-widest flex items-center gap-2 transition-all shadow-sm active:scale-95"
           >
             <FileSpreadsheet className="w-4 h-4" />
-            Importar Planilha
-          </button>
+            Importar planilha
+          </Button>
 
           <Button
             onClick={abrirCadastroAtivo}
             disabled={isWriteDisabled}
             title={isWriteDisabled ? "Selecione uma organização específica para cadastrar ativos" : "Cadastrar novo ativo"}
           >
-            <Plus className="w-4 h-4" />
-            Cadastrar Ativo
+            <Plus className="w-[15px] h-[15px]" />
+            Cadastrar ativo
           </Button>
         </div>
       </div>

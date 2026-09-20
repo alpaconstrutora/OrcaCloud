@@ -66,6 +66,10 @@ type CostCenterModuleProps = Record<string, never>;
 interface FormState {
     /** 'group' = grupo (parent_id null); 'item' = centro de custo dentro de um grupo. */
     recordType: 'group' | 'item';
+    /** Só na EDIÇÃO: organização dona do registro — trocar move o centro de custo
+     *  (e os filhos, se for grupo) via `costCenterService.moveToOrganization`.
+     *  Na criação fica vazio: o destino vem do seletor do topo (`createTarget`). */
+    organization_id: string;
     parent_id: string;
     /** Obra vinculada — só se aplica a 'item' (grupo é corporativo, sem obra). */
     project_id: string;
@@ -78,7 +82,7 @@ interface FormState {
     description: string;
 }
 
-const EMPTY_FORM: FormState = { recordType: 'group', parent_id: '', project_id: '', empreendimento_id: '', name: '', description: '' };
+const EMPTY_FORM: FormState = { recordType: 'group', organization_id: '', parent_id: '', project_id: '', empreendimento_id: '', name: '', description: '' };
 
 /** Opção do select de Empreendimento — vem de TODAS as organizações do usuário. */
 interface EmpreendimentoOpcao { id: string; name: string; organizationId: string }
@@ -348,6 +352,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
         setEditingItem(null);
         setFormData({
             recordType,
+            organization_id: '',
             parent_id: '',
             project_id: '',
             empreendimento_id: '',
@@ -361,6 +366,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
         setEditingItem(item);
         setFormData({
             recordType: item.parent_id ? 'item' : 'group',
+            organization_id: item.organization_id,
             parent_id: item.parent_id || '',
             project_id: item.project_id || '',
             empreendimento_id: item.empreendimento_id || '',
@@ -393,16 +399,23 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
             for (const g of groups) nomes.set(g.name.trim().toLowerCase(), g.name.trim());
             return [...nomes.values()].sort((a, b) => a.localeCompare(b, 'pt-BR')).map(n => ({ value: `nome:${n}`, label: n }));
         }
-        const orgAlvo = editingItem ? editingItem.organization_id : (createTarget?.kind === 'org' ? createTarget.orgId : null);
+        // Na edição, a org alvo é a do select de Organização (pode ter sido
+        // trocada): grupo e filho têm de ser da mesma organização.
+        const orgAlvo = editingItem ? (formData.organization_id || editingItem.organization_id) : (createTarget?.kind === 'org' ? createTarget.orgId : null);
         return groups
             .filter(g => g.id !== editingItem?.id && (!orgAlvo || g.organization_id === orgAlvo))
             .map(g => ({ value: g.id, label: g.name }));
-    }, [criandoEmTodas, groups, editingItem, createTarget]);
+    }, [criandoEmTodas, groups, editingItem, createTarget, formData.organization_id]);
 
     // Vínculo com Obra é por organização (a obra pertence a uma só) — só faz
     // sentido oferecer o select quando o destino da escrita é uma organização
     // única (edição, ou criação com organização específica escolhida).
-    const linkOrgId = editingItem ? editingItem.organization_id : (createTarget?.kind === 'org' ? createTarget.orgId : null);
+    const linkOrgId = editingItem ? (formData.organization_id || editingItem.organization_id) : (createTarget?.kind === 'org' ? createTarget.orgId : null);
+    const mudouOrganizacao = !!editingItem && !!formData.organization_id && formData.organization_id !== editingItem.organization_id;
+    const organizacoesOrdenadas = useMemo(
+        () => [...organizations].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+        [organizations],
+    );
 
     useEffect(() => {
         if (!sheetOpen || !linkOrgId) { setSheetObras([]); return; }
@@ -466,18 +479,38 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
         e.preventDefault();
         if (!formData.name.trim() || (!editingItem && !createTarget)) return;
         if (formData.recordType === 'item' && !editingHasChildren && !formData.parent_id) return;
+        if (editingItem && mudouOrganizacao) {
+            const filhos = childrenByParent.get(editingItem.id)?.length ?? 0;
+            const destino = orgNameById.get(formData.organization_id) || 'outra organização';
+            const ok = await confirm({
+                title: 'Mover para outra organização?',
+                message: `"${editingItem.name}"${filhos > 0 ? ` e seus ${filhos} centro${filhos > 1 ? 's' : ''} de custo passam` : ' passa'} para ${destino}. `
+                    + 'Lançamentos, pedidos e contratos já apontados para este centro de custo continuam apontando para ele. '
+                    + 'Se o código já existir no destino, um novo código é gerado.',
+                variant: 'warning',
+                confirmLabel: 'Mover',
+            });
+            if (!ok) return;
+        }
         setSaving(true);
         try {
             const parentId = formData.recordType === 'group' ? null : (formData.parent_id || null);
             const projectId = formData.recordType === 'group' ? null : (formData.project_id || null);
             const empreendimentoId = formData.recordType === 'group' ? null : (formData.empreendimento_id || null);
             if (editingItem) {
-                await costCenterService.update(editingItem.id, {
+                const campos = {
                     name: formData.name.trim(),
                     description: formData.description.trim() || null,
                     parent_id: editingHasChildren ? editingItem.parent_id : parentId,
                     project_id: projectId,
-                });
+                };
+                if (mudouOrganizacao) {
+                    // Um único PATCH para o próprio registro (campos + org + código
+                    // livre no destino); filhos de grupo vão em seguida.
+                    await costCenterService.moveToOrganization(editingItem.id, formData.organization_id, campos);
+                } else {
+                    await costCenterService.update(editingItem.id, campos);
+                }
                 // O vínculo com empreendimento passa pelo links service, não pelo
                 // update acima: é ele que grava o evento na aba Histórico do
                 // Empreendimento (link/unlink) e traduz o erro do índice 1:1.
@@ -776,6 +809,39 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
                 </SheetHeader>
                 <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
                     <SheetPanel className="p-6 space-y-5">
+                        {editingItem && (
+                            <div>
+                                <label className="text-xs font-semibold text-slate-500">Organização</label>
+                                <select
+                                    value={formData.organization_id}
+                                    onChange={(e) => {
+                                        const organization_id = e.target.value;
+                                        // Grupo e obra são por organização: trocar a org zera os dois;
+                                        // voltar para a original devolve o que o registro tinha.
+                                        const voltou = organization_id === editingItem.organization_id;
+                                        setFormData({
+                                            ...formData,
+                                            organization_id,
+                                            parent_id: voltou ? (editingItem.parent_id || '') : '',
+                                            project_id: voltou ? (editingItem.project_id || '') : '',
+                                        });
+                                    }}
+                                    className="mt-1.5 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                >
+                                    {organizacoesOrdenadas.map(o => (
+                                        <option key={o.id} value={o.id}>{o.name}</option>
+                                    ))}
+                                </select>
+                                {mudouOrganizacao && (
+                                    <p className="mt-1.5 text-xs text-amber-600">
+                                        {editingHasChildren
+                                            ? 'O grupo e todos os seus centros de custo serão movidos. A obra vinculada de cada um é desfeita — obra pertence à organização.'
+                                            : 'Grupo e obra são por organização — escolha de novo abaixo. O vínculo com empreendimento é mantido.'}
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
                         {editingItem && !editingHasChildren && (
                             <div>
                                 <label className="text-xs font-semibold text-slate-500">Tipo de registro</label>

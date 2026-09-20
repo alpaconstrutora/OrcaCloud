@@ -58,6 +58,11 @@ export const costCenterService = {
 
     async update(id: string, input: Partial<CostCenterInput>): Promise<CostCenterV2> {
         const payload: Record<string, unknown> = {};
+        // organization_id/code só chegam aqui por `moveToOrganization`, que já
+        // garantiu código livre no destino — de fora, trocar a org direto
+        // esbarra no UNIQUE (organization_id, code) e deixa os filhos para trás.
+        if (input.organization_id !== undefined) payload.organization_id = input.organization_id;
+        if (input.code !== undefined) payload.code = input.code;
         if (input.parent_id !== undefined) payload.parent_id = input.parent_id;
         if (input.name !== undefined) payload.name = input.name;
         if (input.description !== undefined) payload.description = input.description;
@@ -91,6 +96,63 @@ export const costCenterService = {
     async delete(id: string): Promise<void> {
         const { error } = await supabase.from('cost_centers_v2').delete().eq('id', id);
         if (error) throw error;
+    },
+
+    /**
+     * Move um centro de custo (e, se for grupo, os filhos junto) para outra
+     * organização. Pedido em Minha Organização › Centro de Custo › Editar
+     * (2026-09-19).
+     *
+     * O que muda além de `organization_id`, e por quê:
+     *   • `code` — UNIQUE por (organization_id, code). Mantém o atual se ninguém
+     *     o usa no destino; senão recebe o próximo da sequência de lá.
+     *   • `empresa_id` → null — empresa pertence à organização.
+     *   • `project_id` dos FILHOS → null — obra também é por organização. O do
+     *     próprio item vem em `extra` (o formulário já ofereceu a obra do destino).
+     *   • `parent_id` dos filhos fica: aponta para o grupo, que foi junto.
+     *   • `empreendimento_id` fica: o vínculo cruza organizações por desenho
+     *     (cada empreendimento é uma SPE/org própria).
+     * Lançamentos, pedidos e contratos que apontam para o centro de custo
+     * continuam apontando — as FKs são por id, não por organização.
+     *
+     * Grupo primeiro, filhos depois: se um filho falhar no meio, o grupo já
+     * está no destino e o filho que ficou é visível na lista da org antiga
+     * (com a coluna Organização diferente da do grupo) — não some.
+     */
+    async moveToOrganization(id: string, novaOrgId: string, extra: Partial<CostCenterInput> = {}): Promise<CostCenterV2> {
+        const { data: item, error } = await supabase.from('cost_centers_v2').select(COLUMNS).eq('id', id).single();
+        if (error) throw error;
+        if (item.organization_id === novaOrgId) return costCenterService.update(id, extra);
+
+        const [noDestino, naOrigem] = await Promise.all([
+            costCenterService.list(novaOrgId),
+            costCenterService.list(item.organization_id),
+        ]);
+        const emUso = new Set(noDestino.map(c => c.code));
+        const codigoLivre = async (code: string): Promise<string> => {
+            if (!emUso.has(code)) { emUso.add(code); return code; }
+            // getNextCode lê MAX(code) no banco — os movidos antes já contam.
+            const novo = await costCenterService.getNextCode(novaOrgId);
+            emUso.add(novo);
+            return novo;
+        };
+
+        const movido = await costCenterService.update(id, {
+            ...extra,
+            organization_id: novaOrgId,
+            code: await codigoLivre(item.code),
+            empresa_id: null,
+        });
+        const filhos = item.parent_id ? [] : naOrigem.filter(c => c.parent_id === id);
+        for (const filho of filhos) {
+            await costCenterService.update(filho.id, {
+                organization_id: novaOrgId,
+                code: await codigoLivre(filho.code),
+                empresa_id: null,
+                project_id: null,
+            });
+        }
+        return movido;
     },
 
     // ── Vínculo com Obra (`project_id`) ──────────────────────────────────────

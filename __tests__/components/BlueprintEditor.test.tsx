@@ -2878,11 +2878,11 @@ describe('BlueprintEditor · menu Exibir', () => {
 describe('BlueprintEditor · ribbon', () => {
   beforeEach(() => localStorage.clear());
 
-  it('nasce em Arquitetura, com as oito abas da planta baixa (uma por disciplina MEP) e o seletor de vista fora delas', async () => {
+  it('nasce em Arquitetura, com as nove abas da planta baixa (uma por disciplina MEP) e o seletor de vista fora delas', async () => {
     await montar();
     const abas = screen.getAllByRole('tab').map((t) => t.textContent);
-    // 17/09/2026: "Instalações" virou Elétrica + Hidráulica (Mecânica entra quando houver componente).
-    expect(abas).toEqual(['Arquitetura', 'Terreno', 'Elétrica', 'Hidráulica', 'Inserir', 'Analisar', 'Colaborar', 'Vista']);
+    // 17/09/2026: "Instalações" virou Elétrica + Hidráulica; 20/09/2026 (E11.1): Mecânica entrou com a disciplina no kernel.
+    expect(abas).toEqual(['Arquitetura', 'Terreno', 'Elétrica', 'Hidráulica', 'Mecânica', 'Inserir', 'Analisar', 'Colaborar', 'Vista']);
     expect(screen.getByRole('tab', { name: 'Arquitetura' })).toHaveAttribute('aria-selected', 'true');
     // O seletor de vista continua dentro da barra, mas não é aba: usa-se o tempo todo.
     expect(within(screen.getByRole('toolbar')).getByRole('button', { name: /^planta$/i })).toBeInTheDocument();
@@ -4707,5 +4707,64 @@ describe('BlueprintEditor · planta → compras (E10.3)', () => {
     await waitFor(() => expect(abrirCotacao).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'prj_1' }), ['i1', 'i2']));
     expect(await within(tela).findByTestId('aviso-de-compras')).toHaveTextContent(/Cotação COT-0007 aberta com 2 item/);
     expect(within(tela).getByTestId('abrir-cotacao')).toBeDisabled();
+  }, 60000);
+});
+
+/**
+ * HVAC MÍNIMO (20/09/2026, roadmap E11.1): a aba Mecânica nasce com o menu de
+ * reservas (condensadora, evaporadora, exaustor, casa de máquinas, shaft
+ * mecânico); o clash da reserva entra na lista de conflitos; o painel mostra a
+ * família Climatização e a cota; o shaft mecânico tem a disciplina no painel.
+ */
+describe('BlueprintEditor · HVAC mínimo (E11.1)', () => {
+  it('Mecânica: menu arma a condensadora e o shaft mecânico; conflito da reserva conta no ribbon e aparece em Conflitos; painéis mostram família/cota e disciplina', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyBatch(k.emptyModel(), [
+      { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 },
+      { type: 'AddLevel', name: 'Superior', elevationMm: 2900, defaultHeightMm: 2800 },
+    ]);
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    let m = k.applyBatch(nivel.model, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0)]).model;
+    m = k.applyBatch(m, [
+      { type: 'AddComponente', levelId: t, tipoId: 'CONDENSADORA', at: k.point(3000, 2000) },
+      { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(3000, 2000)], larguraMm: 200, profundidadeMm: 200, alturaMm: 2800, baseMm: 0 } as never,
+      { type: 'AddComponente', levelId: t, tipoId: 'EVAPORADORA', at: k.point(1000, 3800) },
+      { type: 'AddNucleo', levelId: t, tipo: 'SHAFT', ring: [k.point(5000, 3000), k.point(5600, 3000), k.point(5600, 3600), k.point(5000, 3600)], disciplina: 'MECANICA' },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^mecânica$/i);
+    const menu = () => screen.getAllByRole('button').find((b) => b.getAttribute('title')?.startsWith('Reservas de espaço de climatização'))!;
+    expect(menu()).toBeTruthy();
+    await user.click(menu());
+    for (const nome of ['Condensadora', 'Evaporadora hi-wall', 'Exaustor / ventilação', 'Casa de máquinas', 'Shaft mecânico']) {
+      expect(screen.getByRole('menuitemradio', { name: new RegExp(`^${nome.replace('/', '\/')}$`) })).toBeInTheDocument();
+    }
+    await user.click(screen.getByRole('menuitemradio', { name: /^Condensadora$/ }));
+    expect(menu()).toHaveTextContent('Condensadora');
+    await user.click(menu());
+    await user.click(screen.getByRole('menuitemradio', { name: /^Shaft mecânico$/ }));
+    expect(menu()).toHaveTextContent('Shaft mecânico');
+    // O clash da reserva: pilar dentro da condensadora — conta no ribbon e abre a lista.
+    const conflitos = screen.getByRole('button', { name: /^Conflitos das reservas/ });
+    expect(conflitos).toHaveTextContent('1');
+    await user.click(conflitos);
+    const lista = await screen.findByText(/estrutura dentro da reserva do equipamento/);
+    expect(lista).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Shafts mecânicos/ })).toHaveTextContent('1');
+    // Painéis: a condensadora é Climatização; a evaporadora tem cota 2200; o shaft tem a disciplina.
+    await abrirComponentes(user);
+    await user.click(screen.getAllByRole('button').find((b) => /^Evaporadora hi-wall 1/.test(b.textContent ?? ''))!);
+    const painel = await screen.findByTestId('painel-componente');
+    expect(painel).toHaveTextContent(/Climatização · 0,90 × 0,22 × 0,30 m/);
+    expect(within(painel).getByLabelText('Cota da base do componente (mm)')).toHaveValue(2200);
+    await user.keyboard('{Escape}');
+    await user.click(screen.getAllByRole('button').find((b) => /^Shaft 1/.test(b.textContent ?? ''))!);
+    const painelDoShaft = await screen.findByLabelText('Disciplina do shaft');
+    expect(painelDoShaft).toHaveValue('MECANICA');
+    await user.selectOptions(painelDoShaft, '');
+    expect(screen.getByLabelText('Disciplina do shaft')).toHaveValue('');
   }, 60000);
 });

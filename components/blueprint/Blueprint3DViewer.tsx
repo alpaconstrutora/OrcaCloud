@@ -1230,8 +1230,9 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, en
       const nivel = model.levels.find((l) => l.id === c.levelId);
       if (!nivel) continue;
       const geom = new THREE.BoxGeometry(c.larguraMm * S, c.alturaMm * S, c.profundidadeMm * S);
-      const cor = c.familia === 'LOUCA' ? '#f8fafc' : c.familia === 'EQUIPAMENTO' ? '#cbd5e1' : c.familia === 'ARMARIO' ? '#b08968' : '#a3b18a';
-      out.push({ id: c.id, geom, pos: [c.at.x * S, (nivel.elevationMm + c.alturaMm / 2) * S, -c.at.y * S], rot: (c.rotacaoGraus * Math.PI) / 180, cor, sugerido: !!c.sugerido });
+      const cor = c.familia === 'LOUCA' ? '#f8fafc' : c.familia === 'EQUIPAMENTO' ? '#cbd5e1' : c.familia === 'ARMARIO' ? '#b08968' : c.familia === 'CLIMATIZACAO' ? '#5eead4' : '#a3b18a';
+      // E11.1: a base pode estar acima do piso (evaporadora, exaustor).
+      out.push({ id: c.id, geom, pos: [c.at.x * S, (nivel.elevationMm + (c.cotaMm ?? 0) + c.alturaMm / 2) * S, -c.at.y * S], rot: (c.rotacaoGraus * Math.PI) / 180, cor, sugerido: !!c.sugerido });
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps

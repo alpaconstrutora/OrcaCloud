@@ -87,7 +87,7 @@ export { applyCommand, applyBatch, ModelHistory } from './commands';
 export { conflitosDoModelo, distanciaEntreEixos3D, pontasNoMundo, type Conflito } from './conflitos';
 // CLASH arquitetônico (E0.4): vão × estrutura, escada × pilar, escada × altura livre. Mesma
 // natureza (pendência, não desconto), tipo próprio porque a peça não é um trecho.
-export { conflitosArquitetonicos, ALTURA_LIVRE_MIN_MM, type ConflitoArquitetonico } from './conflitosArquitetonicos';
+export { conflitosArquitetonicos, conflitosDeReserva, contornoComFolga, ehReservaDeEquipamento, ALTURA_LIVRE_MIN_MM, type ConflitoArquitetonico } from './conflitosArquitetonicos';
 
 // O QUADRO DE CARGAS. Derivado, nunca gravado — e só SOMA o que foi declarado:
 // dimensionamento está fora do escopo por decisão. Ver o cabeçalho do arquivo.

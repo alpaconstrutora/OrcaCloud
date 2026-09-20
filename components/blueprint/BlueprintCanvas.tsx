@@ -5611,9 +5611,52 @@ export default function BlueprintCanvas({
           case 'CADEIRA':
             linha(P(0, 0.8), P(1, 0.8));
             break;
+          // HVAC (E11.1): a reserva de espaço — símbolo simples, folga tracejada em volta.
+          case 'CONDENSADORA': { // ventilador circular + diagonais de grade
+            const cc = P(0.5, 0.5);
+            ctx.beginPath();
+            ctx.arc(cc.x, cc.y, Math.min(larguraPx, profPx) * 0.38, 0, Math.PI * 2);
+            ctx.stroke();
+            linha(P(0.5, 0.5), P(0.5, 0.12));
+            linha(P(0.5, 0.5), P(0.83, 0.69));
+            linha(P(0.5, 0.5), P(0.17, 0.69));
+            break;
+          }
+          case 'EVAPORADORA': // caixa fina com a saída de ar na frente
+            linha(P(0.08, 0.35), P(0.92, 0.35));
+            linha(P(0.08, 0.2), P(0.92, 0.2));
+            break;
+          case 'EXAUSTOR': { // hélice: círculo com X
+            const cc = P(0.5, 0.5);
+            ctx.beginPath();
+            ctx.arc(cc.x, cc.y, Math.min(larguraPx, profPx) * 0.4, 0, Math.PI * 2);
+            ctx.stroke();
+            linha(P(0.2, 0.2), P(0.8, 0.8));
+            linha(P(0.8, 0.2), P(0.2, 0.8));
+            break;
+          }
+          case 'RESERVA': // hachura diagonal: é reserva, não peça
+            for (const f of [0.25, 0.5, 0.75]) linha(P(0, f), P(f, 0));
+            for (const f of [0.25, 0.5, 0.75]) linha(P(f, 1), P(1, f));
+            linha(P(0, 1), P(1, 0));
+            break;
           default:
             break;
         }
+      }
+      // A FOLGA de manutenção da reserva (E11.1), tracejada e fina: é o que o clash confere.
+      const folgaMm = c.familia === 'CLIMATIZACAO' ? (CATALOGO_DE_COMPONENTES[c.tipoId]?.folgaMm ?? 0) : 0;
+      if (folgaMm > 0) {
+        const anelDaFolga = contornoDoComponente({ at: c.at, larguraMm: c.larguraMm + 2 * folgaMm, profundidadeMm: c.profundidadeMm + 2 * folgaMm, rotacaoGraus: c.rotacaoGraus }).map(paraTela);
+        ctx.strokeStyle = cor;
+        ctx.lineWidth = 0.8;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(anelDaFolga[0].x, anelDaFolga[0].y);
+        for (const q of anelDaFolga.slice(1)) ctx.lineTo(q.x, q.y);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.setLineDash([]);
       }
       if (larguraPx >= 40 && profPx >= 14) {
         ctx.font = `${Math.round(8 * fz)}px ui-sans-serif, system-ui, sans-serif`;

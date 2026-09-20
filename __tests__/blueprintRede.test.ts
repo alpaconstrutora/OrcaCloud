@@ -203,7 +203,7 @@ describe('os padrões de partida', () => {
     expect(COTA_PADRAO_MM.ESGOTO).toBeLessThan(0);
   });
 
-  it('as quatro cores são distintas', () => {
-    expect(new Set(Object.values(COR_DA_DISCIPLINA)).size).toBe(4);
+  it('as cinco cores são distintas (MECANICA entrou na E11.1)', () => {
+    expect(new Set(Object.values(COR_DA_DISCIPLINA)).size).toBe(5);
   });
 });

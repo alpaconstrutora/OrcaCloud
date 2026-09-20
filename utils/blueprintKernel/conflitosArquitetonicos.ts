@@ -28,12 +28,22 @@
  *   `ALTURA_LIVRE_MIN_MM` (2,10 m — NBR 9077, 4.6.2) entre o degrau e a face
  *   inferior dela, em alguma fatia do percurso.
  *
+ * - **reserva de equipamento × o que a ocupa** (E11.1, HVAC mínimo): a peça de
+ *   CLIMATIZAÇÃO (condensadora, evaporadora, casa de máquinas, exaustor) é uma
+ *   RESERVA DE ESPAÇO com folga de manutenção (`folgaMm` da ficha). Pilar ou
+ *   viga dentro da caixa, na mesma faixa de altura (`RESERVA_X_ESTRUTURA`);
+ *   parede atravessando a caixa (`RESERVA_X_PAREDE`) — a condensadora encostada
+ *   na parede é normal, a parede passando por dentro dela não; e outro
+ *   componente dentro da caixa + folga (`RESERVA_X_COMPONENTE`) — o armário
+ *   colado na condensadora não deixa trocar calor nem consertar. Só as peças de
+ *   climatização acusam: mobiliário encostado em mobiliário é a vida.
+ *
  * Determinístico: ordenado por id da peça e do outro, como `conflitosDoModelo`.
  */
 import { polygonArea, type Point } from './geom';
 import { fatiasDaEscada } from './escada';
-import type { BlueprintModel, ObjectId, Structural } from './model';
-import { FORMA_ESTRUTURAL, pavimentosDoNucleo } from './model';
+import type { BlueprintModel, Componente, ObjectId, Structural } from './model';
+import { CATALOGO_DE_COMPONENTES, FORMA_ESTRUTURAL, contornoDoComponente, pavimentosDoNucleo } from './model';
 import { faixaDaEstruturaNaParede, pegadaEmPlanta, recorteComum } from './sobreposicao';
 
 /** Altura livre mínima sobre o degrau — NBR 9077, 4.6.2. */
@@ -43,11 +53,12 @@ export interface ConflitoArquitetonico {
   /** A peça arquitetônica atingida. */
   pecaId: ObjectId;
   pecaUid: string;
-  familia: 'opening' | 'stair' | 'nucleo';
-  /** A peça estrutural. */
+  familia: 'opening' | 'stair' | 'nucleo' | 'componente';
+  /** A outra peça: estrutura (nas classes de estrutura), parede ou componente (E11.1). */
   outroId: ObjectId;
   outroUid: string;
-  classe: 'VAO_X_ESTRUTURA' | 'ESCADA_X_PILAR' | 'ESCADA_X_ALTURA_LIVRE' | 'NUCLEO_X_ESTRUTURA';
+  outroFamilia?: 'structural' | 'wall' | 'componente';
+  classe: 'VAO_X_ESTRUTURA' | 'ESCADA_X_PILAR' | 'ESCADA_X_ALTURA_LIVRE' | 'NUCLEO_X_ESTRUTURA' | 'RESERVA_X_ESTRUTURA' | 'RESERVA_X_PAREDE' | 'RESERVA_X_COMPONENTE';
   levelId: ObjectId;
   /**
    * O tamanho do problema, em mm: no vão, quanto do vão está tomado ao longo
@@ -208,9 +219,72 @@ export function conflitosArquitetonicos(model: BlueprintModel): ConflitoArquitet
     }
   }
 
+  // ── Reserva de equipamento (E11.1) ─────────────────────────────────────
+  saida.push(...conflitosDeReserva(model));
+
   return saida.sort(
     (a, b) =>
       (a.pecaId < b.pecaId ? -1 : a.pecaId > b.pecaId ? 1 : 0) ||
       (a.outroId < b.outroId ? -1 : a.outroId > b.outroId ? 1 : 0),
   );
+}
+
+/** A caixa da reserva crescida da folga em todo o contorno. */
+export function contornoComFolga(c: Pick<Componente, 'at' | 'larguraMm' | 'profundidadeMm' | 'rotacaoGraus'>, folgaMm: number): Point[] {
+  return contornoDoComponente({ at: c.at, larguraMm: c.larguraMm + 2 * folgaMm, profundidadeMm: c.profundidadeMm + 2 * folgaMm, rotacaoGraus: c.rotacaoGraus });
+}
+
+/** A peça é reserva de espaço de equipamento (climatização)? */
+export function ehReservaDeEquipamento(c: Pick<Componente, 'familia'>): boolean {
+  return c.familia === 'CLIMATIZACAO';
+}
+
+/**
+ * Reserva de equipamento × estrutura, parede e componente. Só o que está no
+ * MESMO pavimento; a altura entra na estrutura (viga acima da caixa não é
+ * conflito) e a folga só vale para componente (parede e pilar encostados são
+ * o caso normal de uma condensadora no beiral).
+ */
+export function conflitosDeReserva(model: BlueprintModel): ConflitoArquitetonico[] {
+  const saida: ConflitoArquitetonico[] = [];
+  const reservas = (model.componentes ?? []).filter(ehReservaDeEquipamento);
+  if (reservas.length === 0) return saida;
+  for (const r of reservas) {
+    const caixa = contornoDoComponente(r);
+    const folga = CATALOGO_DE_COMPONENTES[r.tipoId]?.folgaMm ?? 0;
+    const caixaComFolga = folga > 0 ? contornoComFolga(r, folga) : caixa;
+    const base = r.cotaMm ?? 0;
+    const topo = base + r.alturaMm;
+    // Estrutura: pilar sempre; viga/laje só se a faixa de altura cruza a da caixa.
+    for (const s of model.structures) {
+      if (s.levelId !== r.levelId || s.kind === 'LAJE') continue;
+      if (FORMA_ESTRUTURAL[s.kind] !== 'PONTO' && (s.baseMm >= topo || s.baseMm + s.alturaMm <= base)) continue;
+      const comum = recorteComum(caixa, pegadaEmPlanta(s));
+      if (comum.length < 3) continue;
+      const a = areaDe(comum);
+      if (a <= 0) continue;
+      saida.push({ pecaId: r.id, pecaUid: r.uid, familia: 'componente', outroId: s.id, outroUid: s.uid, outroFamilia: 'structural', classe: 'RESERVA_X_ESTRUTURA', levelId: r.levelId, medidaMm: Math.round(Math.sqrt(a)), em: centro(comum) });
+    }
+    // Parede: só o corpo DENTRO da caixa (encostar não é atravessar) — pelo menos 50 mm de lado em comum.
+    for (const w of model.walls) {
+      if (w.levelId !== r.levelId) continue;
+      const comum = recorteComum(caixa, pegadaEmPlanta(w));
+      if (comum.length < 3) continue;
+      const lado = Math.sqrt(areaDe(comum));
+      if (lado < 50) continue;
+      saida.push({ pecaId: r.id, pecaUid: r.uid, familia: 'componente', outroId: w.id, outroUid: w.uid, outroFamilia: 'wall', classe: 'RESERVA_X_PAREDE', levelId: r.levelId, medidaMm: Math.round(lado), em: centro(comum) });
+    }
+    // Outro componente dentro da caixa + folga (na mesma faixa de altura).
+    for (const o of model.componentes ?? []) {
+      if (o.id === r.id || o.levelId !== r.levelId) continue;
+      const baseO = o.cotaMm ?? 0;
+      if (baseO >= topo || baseO + o.alturaMm <= base) continue;
+      const comum = recorteComum(caixaComFolga, contornoDoComponente(o));
+      if (comum.length < 3) continue;
+      const a = areaDe(comum);
+      if (a <= 0) continue;
+      saida.push({ pecaId: r.id, pecaUid: r.uid, familia: 'componente', outroId: o.id, outroUid: o.uid, outroFamilia: 'componente', classe: 'RESERVA_X_COMPONENTE', levelId: r.levelId, medidaMm: Math.round(Math.sqrt(a)), em: centro(comum) });
+    }
+  }
+  return saida;
 }

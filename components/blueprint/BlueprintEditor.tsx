@@ -69,6 +69,7 @@ import {
   Grip,
   Hand,
   ShoppingCart,
+  Wind,
   Magnet,
   Blocks,
   Loader2,
@@ -740,6 +741,9 @@ const ABAS_DO_RIBBON = [
   // Fora da planta, da Elétrica sobra o Quadro de cargas — que já se lia no 3D.
   { id: 'eletrica', rotulo: 'Elétrica', naVista: true },
   { id: 'hidraulica', rotulo: 'Hidráulica', naVista: false },
+  // MECÂNICA (20/09/2026, roadmap E11.1): nasceu com a disciplina no kernel —
+  // reservas de espaço de equipamento (climatização) e o shaft mecânico.
+  { id: 'mecanica', rotulo: 'Mecânica', naVista: false },
   { id: 'inserir', rotulo: 'Inserir', naVista: false },
   // Conflitos e quantitativos também se leem na elevação e no 3D.
   { id: 'analisar', rotulo: 'Analisar', naVista: true },
@@ -1625,6 +1629,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [tipoCirculacao, setTipoCirculacao] = useState<TipoCirculacao>('ESCADA');
   /** NÚCLEO VERTICAL (E2.4): shaft ou elevador na próxima caixa desenhada. */
   const [tipoDeNucleo, setTipoDeNucleo] = useState<TipoDeNucleo>('SHAFT');
+  /** MECÂNICA (E11.1): o shaft nasce com a disciplina escolhida no menu (`MECANICA`) ou geral (`null`). */
+  const [disciplinaDoNucleo, setDisciplinaDoNucleo] = useState<DisciplinaDeRede | null>(null);
   /** VAGA (E2.5): o tipo do próximo clique; hipóteses do lançamento lembradas entre sessões. */
   const [tipoDeVaga, setTipoDeVaga] = useState<TipoDeVaga>('COMUM');
   /** COMPONENTE (E7.1): o tipo do catálogo do próximo clique. */
@@ -2848,6 +2854,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const conflitos = useMemo(() => conflitosDoModelo(editor.model), [editor.model]);
   /** Os arquitetônicos (E0.4): pilar no vão, pilar na escada, viga baixa sobre o degrau. */
   const conflitosArq = useMemo(() => conflitosArquitetonicos(editor.model), [editor.model]);
+  /** MECÂNICA (E11.1): quantos conflitos são de reserva de equipamento, e quais shafts são mecânicos. */
+  const conflitosDeReservas = useMemo(() => conflitosArq.filter((c) => c.classe.startsWith('RESERVA_X_')).length, [conflitosArq]);
+  const shaftsMecanicos = useMemo(() => (editor.model.nucleos ?? []).filter((n) => n.tipo === 'SHAFT' && n.disciplina === 'MECANICA'), [editor.model.nucleos]);
   const totalDeConflitos = conflitos.length + conflitosArq.length;
   /** As restrições conferidas (E1.4b) — derivadas a cada mudança do modelo. */
   const conferenciaDeRestricoes = useMemo(() => conferirRestricoes(editor.model), [editor.model]);
@@ -5126,7 +5135,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   /** O núcleo nasce do pavimento ativo até o mais alto; o painel ajusta a chegada. */
   function adicionarNucleo(ring: Point[]) {
     if (!levelId) return;
-    const criados = editor.run({ type: 'AddNucleo', levelId, tipo: tipoDeNucleo, ring });
+    const criados = editor.run({ type: 'AddNucleo', levelId, tipo: tipoDeNucleo, ring, ...(tipoDeNucleo === 'SHAFT' && disciplinaDoNucleo ? { disciplina: disciplinaDoNucleo } : {}) });
     if (criados.length > 0) selecionar(criados);
   }
 
@@ -5799,7 +5808,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     editor.setTool(e.tool);
     if (e.tool === 'abertura') setTipoAbertura(e.abertura);
     if (e.tool === 'escada') setTipoCirculacao(e.circulacao);
-    if (e.tool === 'nucleo') setTipoDeNucleo(e.nucleo);
+    if (e.tool === 'nucleo') {
+      setTipoDeNucleo(e.nucleo);
+      setDisciplinaDoNucleo(e.nucleo === 'SHAFT' ? (e.disciplina ?? null) : null);
+    }
     if (e.tool === 'vaga') setTipoDeVaga(e.vaga);
     if (e.tool === 'componente') setTipoDeComponente(e.componente);
     if (e.tool === 'guardacorpo') setTipoDeGuardaCorpo(e.guardaCorpo);
@@ -8094,6 +8106,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 tipoEstrutural={tipoEstrutural}
                 tipoCirculacao={tipoCirculacao}
                 tipoDeNucleo={tipoDeNucleo}
+                disciplinaDoNucleo={disciplinaDoNucleo}
                 tipoDeVaga={tipoDeVaga}
                 tipoDeGuardaCorpo={tipoDeGuardaCorpo}
                 familia="CONSTRUCAO"
@@ -8344,6 +8357,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 tipoEstrutural={tipoEstrutural}
                 tipoCirculacao={tipoCirculacao}
                 tipoDeNucleo={tipoDeNucleo}
+                disciplinaDoNucleo={disciplinaDoNucleo}
                 tipoDeVaga={tipoDeVaga}
                 disciplinaDeRede={disciplinaDeRede}
                 tipoDePontoEletrico={tipoDePontoEletrico}
@@ -8393,6 +8407,49 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             </GrupoDoRibbon>
           </>
         )}
+        {aba === 'mecanica' && !emVista && (
+          <>
+            {/* HVAC MÍNIMO (E11.1): o LUGAR do equipamento, não o equipamento —
+                reservas com folga de manutenção, o shaft mecânico e o clash
+                que pega pilar, parede ou móvel dentro delas. Dutos ficam fora. */}
+            <GrupoDoRibbon rotulo="Reservas e shaft">
+              <MenuComponentes
+                tool={editor.tool}
+                tipoAbertura={tipoAbertura}
+                tipoEstrutural={tipoEstrutural}
+                tipoCirculacao={tipoCirculacao}
+                tipoDeNucleo={tipoDeNucleo}
+                disciplinaDoNucleo={disciplinaDoNucleo}
+                tipoDeVaga={tipoDeVaga}
+                tipoDeComponente={tipoDeComponente}
+                disciplinaDeRede={disciplinaDeRede}
+                tipoDePontoEletrico={tipoDePontoEletrico}
+                tipoDeInterruptor={tipoDeInterruptor}
+                familia="MECANICA"
+                rotulo="Mecânica"
+                onEscolher={escolherComponente}
+              />
+            </GrupoDoRibbon>
+            <GrupoDoRibbon rotulo="Conferência">
+              <BotaoDoRibbon
+                icone={AlertTriangle}
+                rotulo="Conflitos das reservas"
+                contagem={conflitosDeReservas || undefined}
+                ativo={relatorioAberto === 'conflitos'}
+                onClick={() => alternarRelatorio('conflitos')}
+                ajuda="Pilar ou parede dentro da reserva do equipamento, ou outra peça dentro da folga de manutenção — na lista de conflitos, com BCF"
+              />
+              <BotaoDoRibbon
+                icone={Wind}
+                rotulo="Shafts mecânicos"
+                contagem={shaftsMecanicos.length || undefined}
+                disabled={shaftsMecanicos.length === 0}
+                onClick={() => selecionar(shaftsMecanicos.map((n) => n.id))}
+                ajuda="Seleciona os shafts com disciplina Mecânica do desenho"
+              />
+            </GrupoDoRibbon>
+          </>
+        )}
         {aba === 'eletrica' && (
           <>
             {!emVista && (
@@ -8403,6 +8460,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   tipoEstrutural={tipoEstrutural}
                   tipoCirculacao={tipoCirculacao}
                   tipoDeNucleo={tipoDeNucleo}
+                  disciplinaDoNucleo={disciplinaDoNucleo}
                   tipoDeVaga={tipoDeVaga}
                   disciplinaDeRede={disciplinaDeRede}
                   tipoDePontoEletrico={tipoDePontoEletrico}

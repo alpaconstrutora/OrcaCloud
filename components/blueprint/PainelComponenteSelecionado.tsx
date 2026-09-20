@@ -15,7 +15,7 @@ interface Props {
   componente: Componente | null;
   /** O terminal hidráulico do mesmo lugar, quando a louça o pede e ele existe. */
   pontoLigado: Terminal | null;
-  onProps: (campos: { tipoId?: TipoDeComponente; familia?: FamiliaDeComponente; rotulo?: string | null; larguraMm?: number; profundidadeMm?: number; alturaMm?: number; rotacaoGraus?: number; sugerido?: boolean | null }) => void;
+  onProps: (campos: { tipoId?: TipoDeComponente; familia?: FamiliaDeComponente; rotulo?: string | null; larguraMm?: number; profundidadeMm?: number; alturaMm?: number; rotacaoGraus?: number; cotaMm?: number | null; sugerido?: boolean | null }) => void;
   onExcluir: () => void;
   onSelecionarPonto?: (terminalId: string) => void;
   /** Slot para o SeletorDeTipo (E1.1) — o editor o monta com a família COMPONENTE. */
@@ -84,6 +84,11 @@ export default function PainelComponenteSelecionado({ componente: c, pontoLigado
         <label className="flex flex-col gap-1">
           Altura (mm)
           <input type="number" key={`${c.id}-a`} defaultValue={c.alturaMm} min={50} step={50} aria-label="Altura do componente (mm)" onBlur={(e) => Number(e.target.value) > 0 && onProps({ alturaMm: Number(e.target.value) })} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} className={campo} />
+        </label>
+        <label className="flex flex-col gap-1">
+          Cota da base (mm)
+          {/* E11.1: a evaporadora e o exaustor moram no alto; zero = no piso. */}
+          <input type="number" key={`${c.id}-c`} defaultValue={c.cotaMm ?? 0} min={0} step={50} aria-label="Cota da base do componente (mm)" onBlur={(e) => Number(e.target.value) >= 0 && onProps({ cotaMm: Number(e.target.value) || null })} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} className={campo} />
         </label>
         <label className="flex flex-col gap-1">
           Giro (°)

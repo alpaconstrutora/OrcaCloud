@@ -80,6 +80,8 @@ export const COR_DA_FAMILIA: Record<FamiliaDeComponente, { fundo: string; traco:
   BANCADA: { fundo: '#d9dee5', traco: '#5b6b7c' },
   ARMARIO: { fundo: '#d8c3a5', traco: '#7c5f3d' },
   EQUIPAMENTO: { fundo: '#e5e7eb', traco: '#4b5563' },
+  // Climatização (E11.1): o verde-azulado da disciplina mecânica.
+  CLIMATIZACAO: { fundo: '#ccfbf1', traco: '#0f766e' },
 };
 
 /** Cores das paredes cheias e da sombra. */
@@ -466,6 +468,31 @@ export function tracosDoSimbolo(simbolo: (typeof CATALOGO_DE_COMPONENTES)[keyof 
       ];
     case 'CADEIRA':
       return [{ tipo: 'linha', a: [0, 0.8], b: [1, 0.8] }];
+    // HVAC (E11.1): os mesmos traços do canvas técnico.
+    case 'CONDENSADORA':
+      return [
+        { tipo: 'circulo', c: [0.5, 0.5], r: 0.38 },
+        { tipo: 'linha', a: [0.5, 0.5], b: [0.5, 0.12] },
+        { tipo: 'linha', a: [0.5, 0.5], b: [0.83, 0.69] },
+        { tipo: 'linha', a: [0.5, 0.5], b: [0.17, 0.69] },
+      ];
+    case 'EVAPORADORA':
+      return [
+        { tipo: 'linha', a: [0.08, 0.35], b: [0.92, 0.35] },
+        { tipo: 'linha', a: [0.08, 0.2], b: [0.92, 0.2] },
+      ];
+    case 'EXAUSTOR':
+      return [
+        { tipo: 'circulo', c: [0.5, 0.5], r: 0.4 },
+        { tipo: 'linha', a: [0.2, 0.2], b: [0.8, 0.8] },
+        { tipo: 'linha', a: [0.8, 0.2], b: [0.2, 0.8] },
+      ];
+    case 'RESERVA':
+      return [
+        { tipo: 'linha', a: [0, 0.5], b: [0.5, 0] },
+        { tipo: 'linha', a: [0, 1], b: [1, 0] },
+        { tipo: 'linha', a: [0.5, 1], b: [1, 0.5] },
+      ];
     default:
       return [];
   }

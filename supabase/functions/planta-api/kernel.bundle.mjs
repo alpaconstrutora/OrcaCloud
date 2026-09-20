@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.46.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.47.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -539,7 +539,14 @@ var CATALOGO_DE_COMPONENTES = {
   MAQUINA: { rotulo: "M\xE1quina de lavar", familia: "EQUIPAMENTO", larguraMm: 600, profundidadeMm: 650, alturaMm: 900, simbolo: "MAQUINA", ligaAoPonto: "MAQUINA_LAVAR" },
   VASO: { rotulo: "Vaso sanit\xE1rio", familia: "LOUCA", larguraMm: 400, profundidadeMm: 650, alturaMm: 400, simbolo: "VASO", ligaAoPonto: "VASO_SANITARIO" },
   LAVATORIO: { rotulo: "Lavat\xF3rio", familia: "LOUCA", larguraMm: 500, profundidadeMm: 450, alturaMm: 850, simbolo: "LAVATORIO", ligaAoPonto: "LAVATORIO" },
-  BOX: { rotulo: "Box", familia: "LOUCA", larguraMm: 900, profundidadeMm: 900, alturaMm: 2e3, simbolo: "BOX", ligaAoPonto: "CHUVEIRO" }
+  BOX: { rotulo: "Box", familia: "LOUCA", larguraMm: 900, profundidadeMm: 900, alturaMm: 2e3, simbolo: "BOX", ligaAoPonto: "CHUVEIRO" },
+  // Climatização (E11.1). Medidas de referência de split residencial 9–24 kBTU
+  // e de casa de máquinas mínima; a folga é a de manutenção/insuflamento usual
+  // dos manuais de instalação (condensadora ≥ 300 mm nas laterais/atrás).
+  CONDENSADORA: { rotulo: "Condensadora (split)", familia: "CLIMATIZACAO", larguraMm: 850, profundidadeMm: 330, alturaMm: 700, simbolo: "CONDENSADORA", folgaMm: 300 },
+  EVAPORADORA: { rotulo: "Evaporadora hi-wall", familia: "CLIMATIZACAO", larguraMm: 900, profundidadeMm: 220, alturaMm: 300, simbolo: "EVAPORADORA", cotaMm: 2200, folgaMm: 150 },
+  CASA_DE_MAQUINAS: { rotulo: "Casa de m\xE1quinas (reserva)", familia: "CLIMATIZACAO", larguraMm: 2e3, profundidadeMm: 1500, alturaMm: 2500, simbolo: "RESERVA", folgaMm: 600 },
+  EXAUSTOR: { rotulo: "Exaustor / ventila\xE7\xE3o", familia: "CLIMATIZACAO", larguraMm: 400, profundidadeMm: 400, alturaMm: 400, simbolo: "EXAUSTOR", cotaMm: 2300, folgaMm: 100 }
 };
 function comprimentoDoGuardaCorpo(g) {
   let s2 = 0;
@@ -1673,6 +1680,7 @@ function projetar(model) {
       tipo: n4.tipo,
       ring: n4.ring.map((p) => ({ x: p.x, y: p.y })),
       rotulo: n4.rotulo ?? null,
+      disciplina: n4.disciplina ?? void 0,
       pocoMm: n4.pocoMm ?? void 0,
       casaDeMaquinasMm: n4.casaDeMaquinasMm ?? void 0,
       capacidade: n4.capacidade ?? void 0,
@@ -1704,6 +1712,7 @@ function projetar(model) {
       profundidadeMm: c.profundidadeMm,
       alturaMm: c.alturaMm,
       rotacaoGraus: c.rotacaoGraus,
+      cotaMm: c.cotaMm ? c.cotaMm : void 0,
       tipoId: c.tipoId,
       familia: c.familia,
       rotulo: c.rotulo ?? null,
@@ -2228,6 +2237,7 @@ function modelFromCanonicalPayload(payload) {
       profundidadeMm: c.profundidadeMm,
       alturaMm: c.alturaMm,
       rotacaoGraus: c.rotacaoGraus,
+      ...c.cotaMm ? { cotaMm: c.cotaMm } : {},
       tipoId: c.tipoId,
       familia: c.familia,
       rotulo: c.rotulo,
@@ -2285,6 +2295,7 @@ function modelFromCanonicalPayload(payload) {
       tipo: n4.tipo,
       ring: n4.ring.map((p) => ({ x: p.x, y: p.y })),
       rotulo: n4.rotulo,
+      ...n4.disciplina ? { disciplina: n4.disciplina } : {},
       ...n4.pocoMm !== void 0 ? { pocoMm: n4.pocoMm } : {},
       ...n4.casaDeMaquinasMm !== void 0 ? { casaDeMaquinasMm: n4.casaDeMaquinasMm } : {},
       ...n4.capacidade !== void 0 ? { capacidade: n4.capacidade } : {},
@@ -3274,7 +3285,8 @@ var ROTULO_DA_DISCIPLINA = {
   ELETRICA: "El\xE9trica",
   AGUA_FRIA: "\xC1gua fria",
   AGUA_QUENTE: "\xC1gua quente",
-  ESGOTO: "Esgoto"
+  ESGOTO: "Esgoto",
+  MECANICA: "Mec\xE2nica"
 };
 var ROTULO_DO_PONTO_ELETRICO = {
   ILUMINACAO_TETO: "Luz de teto",
@@ -4338,7 +4350,7 @@ function emitirComponente(c, ctx, localNivel) {
   const L = c.larguraMm;
   const P = c.profundidadeMm;
   const A = c.alturaMm;
-  const origem = emitir(`IFCCARTESIANPOINT((${n(c.at.x)},${n(c.at.y)},0.))`);
+  const origem = emitir(`IFCCARTESIANPOINT((${n(c.at.x)},${n(c.at.y)},${c.cotaMm ? n(c.cotaMm) : "0."}))`);
   const local = emitir(`IFCLOCALPLACEMENT(${localNivel},${emitir(`IFCAXIS2PLACEMENT3D(${origem},$,${direcaoDaPeca(c.rotacaoGraus, ctx)})`)})`);
   const posPerfil = emitir(`IFCAXIS2PLACEMENT2D(${emitir("IFCCARTESIANPOINT((0.,0.))")},$)`);
   const perfil = emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,${posPerfil},${n(L)},${n(P)})`);
@@ -4350,6 +4362,12 @@ function emitirComponente(c, ctx, localNivel) {
   if (c.familia === "LOUCA") {
     const predefinido2 = c.tipoId === "VASO" ? ".TOILETPAN." : c.tipoId === "LAVATORIO" ? ".WASHHANDBASIN." : c.tipoId === "BOX" ? ".SHOWER." : c.tipoId === "TANQUE" ? ".SINK." : ".USERDEFINED.";
     return emitir(`IFCSANITARYTERMINAL(${guidDe(c.uid, `componente-${c.id}`)},${historico},${s(nome)},$,${s(c.tipoId)},${local},${produtoForma},${s(tag)},${predefinido2})`);
+  }
+  if (c.familia === "CLIMATIZACAO") {
+    const guid = guidDe(c.uid, `componente-${c.id}`);
+    if (c.tipoId === "EXAUSTOR") return emitir(`IFCFAN(${guid},${historico},${s(nome)},$,${s(c.tipoId)},${local},${produtoForma},${s(tag)},.PROPELLORAXIAL.)`);
+    if (c.tipoId === "CASA_DE_MAQUINAS") return emitir(`IFCBUILDINGELEMENTPROXY(${guid},${historico},${s(nome)},$,${s(c.tipoId)},${local},${produtoForma},${s(tag)},.PROVISIONFORSPACE.)`);
+    return emitir(`IFCUNITARYEQUIPMENT(${guid},${historico},${s(nome)},$,${s(c.tipoId)},${local},${produtoForma},${s(tag)},.SPLITSYSTEM.)`);
   }
   const predefinido = c.familia === "ARMARIO" ? ".SHELF." : c.tipoId.startsWith("CAMA") ? ".BED." : c.tipoId === "MESA_JANTAR" || c.tipoId === "ESCRIVANINHA" ? ".TABLE." : c.tipoId === "CADEIRA" || c.tipoId === "SOFA" || c.tipoId === "POLTRONA" ? ".CHAIR." : ".USERDEFINED.";
   return emitir(`IFCFURNITURE(${guidDe(c.uid, `componente-${c.id}`)},${historico},${s(nome)},$,${s(c.tipoId)},${local},${produtoForma},${s(tag)},${predefinido})`);

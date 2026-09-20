@@ -5,15 +5,16 @@
  * `PainelEixoSelecionado`. Apresentacional: o kernel decide.
  */
 import React from 'react';
-import type { BlueprintModel, Nucleo, TipoDeNucleo } from '../../utils/blueprintKernel';
-import { medirNucleo, nomeDoTipoDeNucleo, pavimentosDoNucleo } from '../../utils/blueprintKernel';
+import type { BlueprintModel, DisciplinaDeRede, Nucleo, TipoDeNucleo } from '../../utils/blueprintKernel';
+import { DISCIPLINAS, medirNucleo, nomeDoTipoDeNucleo, pavimentosDoNucleo } from '../../utils/blueprintKernel';
+import { ROTULO_DA_DISCIPLINA } from '../../utils/blueprintRede';
 import { FICHA_DO_ELEVADOR, caixaDoNucleo, fichaPorCapacidade } from '../../utils/blueprintNucleoVertical';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
 
 interface Props {
   model: BlueprintModel;
   nucleo: Nucleo | null;
-  onProps: (campos: { tipo?: TipoDeNucleo; ateLevelId?: string | null; rotulo?: string | null; pocoMm?: number | null; casaDeMaquinasMm?: number | null; capacidade?: number | null }) => void;
+  onProps: (campos: { tipo?: TipoDeNucleo; ateLevelId?: string | null; rotulo?: string | null; disciplina?: DisciplinaDeRede | null; pocoMm?: number | null; casaDeMaquinasMm?: number | null; capacidade?: number | null }) => void;
   onExcluir: () => void;
 }
 
@@ -83,6 +84,18 @@ export default function PainelNucleoSelecionado({ model, nucleo, onProps, onExcl
             ))}
           </select>
         </label>
+        {!elevador && (
+          <label className="flex flex-col gap-1">
+            Disciplina
+            {/* E11.1: o shaft MECÂNICO é a prumada de dutos/linhas frigorígenas; geral = água, esgoto e elétrica. */}
+            <select value={nucleo.disciplina ?? ''} onChange={(e) => onProps({ disciplina: (e.target.value || null) as DisciplinaDeRede | null })} aria-label="Disciplina do shaft" className={campo}>
+              <option value="">Geral</option>
+              {DISCIPLINAS.map((d) => (
+                <option key={d} value={d}>{ROTULO_DA_DISCIPLINA[d]}</option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       {elevador && (

@@ -410,6 +410,8 @@ export type Command =
       ring: Point[];
       ateLevelId?: ObjectId | null;
       rotulo?: string | null;
+      /** Só SHAFT (E11.1): a disciplina que a prumada carrega; ausente = geral. */
+      disciplina?: DisciplinaDeRede | null;
       pocoMm?: number | null;
       casaDeMaquinasMm?: number | null;
       capacidade?: number | null;
@@ -420,6 +422,7 @@ export type Command =
       tipo?: TipoDeNucleo;
       ateLevelId?: ObjectId | null;
       rotulo?: string | null;
+      disciplina?: DisciplinaDeRede | null;
       pocoMm?: number | null;
       casaDeMaquinasMm?: number | null;
       capacidade?: number | null;
@@ -440,8 +443,8 @@ export type Command =
    * (`CATALOGO_DE_COMPONENTES`); trocar o tipo em `SetComponenteProps` sem
    * medidas puxa as do tipo novo, como a vaga.
    */
-  | { type: 'AddComponente'; levelId: ObjectId; tipoId: TipoDeComponente; at: Point; familia?: FamiliaDeComponente; larguraMm?: number; profundidadeMm?: number; alturaMm?: number; rotacaoGraus?: number; rotulo?: string | null; sugerido?: boolean }
-  | { type: 'SetComponenteProps'; componenteId: ObjectId; tipoId?: TipoDeComponente; familia?: FamiliaDeComponente; larguraMm?: number; profundidadeMm?: number; alturaMm?: number; rotacaoGraus?: number; rotulo?: string | null; sugerido?: boolean | null }
+  | { type: 'AddComponente'; levelId: ObjectId; tipoId: TipoDeComponente; at: Point; familia?: FamiliaDeComponente; larguraMm?: number; profundidadeMm?: number; alturaMm?: number; rotacaoGraus?: number; cotaMm?: number | null; rotulo?: string | null; sugerido?: boolean }
+  | { type: 'SetComponenteProps'; componenteId: ObjectId; tipoId?: TipoDeComponente; familia?: FamiliaDeComponente; larguraMm?: number; profundidadeMm?: number; alturaMm?: number; rotacaoGraus?: number; cotaMm?: number | null; rotulo?: string | null; sugerido?: boolean | null }
   | { type: 'MoveComponente'; componenteId: ObjectId; to: Point }
   | { type: 'DeleteComponente'; componenteId: ObjectId }
   /**
@@ -1807,6 +1810,7 @@ function aplicarSemHash(
           tipo: command.tipo,
           ring,
           rotulo: command.rotulo?.trim() || null,
+          ...(!elevador && command.disciplina ? { disciplina: command.disciplina } : {}),
           ...(elevador && command.pocoMm != null ? { pocoMm: assertIntegerMm(roundToMm(command.pocoMm), 'pocoMm') } : {}),
           ...(elevador && command.casaDeMaquinasMm != null ? { casaDeMaquinasMm: assertIntegerMm(roundToMm(command.casaDeMaquinasMm), 'casaDeMaquinasMm') } : {}),
           ...(elevador && command.capacidade != null ? { capacidade: Math.round(command.capacidade) } : {}),
@@ -1826,6 +1830,13 @@ function aplicarSemHash(
           delete n.casaDeMaquinasMm;
           delete n.capacidade;
         }
+        // E o elevador não tem disciplina.
+        if (n.tipo !== 'SHAFT') delete n.disciplina;
+      }
+      if (command.disciplina !== undefined) {
+        if (command.disciplina && n.tipo !== 'SHAFT') throw new KernelError('BAD_CORE', 'disciplina só existe no shaft');
+        if (command.disciplina) n.disciplina = command.disciplina;
+        else delete n.disciplina;
       }
       if (command.ateLevelId !== undefined) {
         if (command.ateLevelId) {
@@ -1943,6 +1954,8 @@ function aplicarSemHash(
           profundidadeMm: assertIntegerMm(roundToMm(command.profundidadeMm ?? ficha.profundidadeMm), 'profundidadeMm'),
           alturaMm: assertIntegerMm(roundToMm(command.alturaMm ?? ficha.alturaMm), 'alturaMm'),
           rotacaoGraus: ((Math.round(command.rotacaoGraus ?? 0) % 360) + 360) % 360,
+          // Cota: a pedida, senão a da ficha (evaporadora/exaustor nascem no alto); zero não se grava.
+          ...((command.cotaMm ?? ficha.cotaMm ?? 0) > 0 ? { cotaMm: assertIntegerMm(roundToMm(command.cotaMm ?? ficha.cotaMm ?? 0), 'cotaMm') } : {}),
           rotulo: command.rotulo?.trim().slice(0, MAX_ROTULO_DE_COMPONENTE) || null,
           ...(command.sugerido ? { sugerido: true } : {}),
         },
@@ -1961,6 +1974,14 @@ function aplicarSemHash(
         if (command.larguraMm === undefined) c.larguraMm = ficha.larguraMm;
         if (command.profundidadeMm === undefined) c.profundidadeMm = ficha.profundidadeMm;
         if (command.alturaMm === undefined) c.alturaMm = ficha.alturaMm;
+        if (command.cotaMm === undefined) {
+          if ((ficha.cotaMm ?? 0) > 0) c.cotaMm = ficha.cotaMm;
+          else delete c.cotaMm;
+        }
+      }
+      if (command.cotaMm !== undefined) {
+        if (command.cotaMm == null || command.cotaMm <= 0) delete c.cotaMm;
+        else c.cotaMm = assertIntegerMm(roundToMm(command.cotaMm), 'cotaMm');
       }
       if (command.familia !== undefined) c.familia = command.familia;
       if (command.larguraMm !== undefined) c.larguraMm = assertIntegerMm(roundToMm(command.larguraMm), 'larguraMm');

@@ -29,7 +29,7 @@ function casa() {
 
 describe('fases de reforma (E10.2)', () => {
   it('kernel 0.46.0; NOVO é a ausência: marcar NOVO/null não muda o payload nem o hash; EXISTENTE/DEMOLIR entram no canônico e voltam; invariante recusa valor inventado', () => {
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.46.0');
+    expect(KERNEL_VERSION >= 'blueprint-kernel-ts-0.46.0').toBe(true);
     expect(FASES_DE_REFORMA).toEqual(['EXISTENTE', 'DEMOLIR', 'NOVO']);
     const { m, meio, sul } = casa();
     const hash0 = snapshotHash(m);

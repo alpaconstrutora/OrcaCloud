@@ -1,7 +1,7 @@
 import React from 'react';
 import { AlertTriangle, CheckCircle2, Share2 } from 'lucide-react';
 import { rotuloCurto, type BlueprintModel, type Conflito, type ConflitoArquitetonico } from '../../utils/blueprintKernel';
-import { nomeDoTipoDeAbertura } from '../../utils/blueprintKernel';
+import { CATALOGO_DE_COMPONENTES, nomeDoTipoDeAbertura } from '../../utils/blueprintKernel';
 import { ROTULO_DA_DISCIPLINA } from '../../utils/blueprintRede';
 
 /**
@@ -99,10 +99,22 @@ export default function PainelConflitos({
       const n = (model.nucleos ?? []).find((x) => x.id === c.pecaId);
       return n ? n.rotulo || `${n.tipo === 'ELEVADOR' ? 'Elevador' : 'Shaft'} ${rotuloCurto(n.uid, 'nucleo')}` : c.pecaId;
     }
+    if (c.familia === 'componente') {
+      const p = (model.componentes ?? []).find((x) => x.id === c.pecaId);
+      return p ? p.rotulo || `${CATALOGO_DE_COMPONENTES[p.tipoId]?.rotulo ?? p.tipoId} ${rotuloCurto(p.uid, 'componente')}` : c.pecaId;
+    }
     const e = (model.stairs ?? []).find((x) => x.id === c.pecaId);
     return e ? e.rotulo || `${e.tipo === 'RAMPA' ? 'Rampa' : 'Escada'} ${rotuloCurto(e.uid, 'stair')}` : c.pecaId;
   };
-  const nomeDaEstrutura = (id: string) => {
+  const nomeDaEstrutura = (id: string, familia?: 'structural' | 'wall' | 'componente') => {
+    if (familia === 'wall') {
+      const w = model.walls.find((x) => x.id === id);
+      return w ? `Parede ${rotuloCurto(w.uid, 'wall')}` : id;
+    }
+    if (familia === 'componente') {
+      const p = (model.componentes ?? []).find((x) => x.id === id);
+      return p ? p.rotulo || `${CATALOGO_DE_COMPONENTES[p.tipoId]?.rotulo ?? p.tipoId} ${rotuloCurto(p.uid, 'componente')}` : id;
+    }
     const s = model.structures.find((x) => x.id === id);
     return s ? s.rotulo || rotuloCurto(s.uid, 'structural') : id;
   };
@@ -113,7 +125,13 @@ export default function PainelConflitos({
         ? `pilar dentro do percurso (≈ ${c.medidaMm} mm de lado em comum)`
         : c.classe === 'NUCLEO_X_ESTRUTURA'
           ? `estrutura dentro do núcleo vertical (≈ ${c.medidaMm} mm de lado em comum) — o vazio não passa`
-          : `faltam ${c.medidaMm} mm para os 2,10 m livres sobre o degrau (NBR 9077)`;
+          : c.classe === 'RESERVA_X_ESTRUTURA'
+            ? `estrutura dentro da reserva do equipamento (≈ ${c.medidaMm} mm de lado em comum)`
+            : c.classe === 'RESERVA_X_PAREDE'
+              ? `parede atravessando a reserva do equipamento (≈ ${c.medidaMm} mm de lado em comum)`
+              : c.classe === 'RESERVA_X_COMPONENTE'
+                ? `peça dentro da folga de manutenção do equipamento (≈ ${c.medidaMm} mm de lado em comum)`
+                : `faltam ${c.medidaMm} mm para os 2,10 m livres sobre o degrau (NBR 9077)`;
 
   const nomeDoTrecho = (id: string) => {
     const t = (model.trechos ?? []).find((x) => x.id === id);
@@ -138,7 +156,7 @@ export default function PainelConflitos({
         >
           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />
           <span className="min-w-0 text-[11px] text-slate-700">
-            <strong>{nomeDaPeca(c)}</strong> encontra <strong>{nomeDaEstrutura(c.outroId)}</strong>
+            <strong>{nomeDaPeca(c)}</strong> encontra <strong>{nomeDaEstrutura(c.outroId, c.outroFamilia)}</strong>
             <span className="mt-0.5 block text-[10px] text-slate-500">{comoArquitetonico(c)}</span>
           </span>
         </button>

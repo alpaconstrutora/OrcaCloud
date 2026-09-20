@@ -451,6 +451,7 @@ function projetar(model: BlueprintModel): {
       tipo: n.tipo,
       ring: n.ring.map((p) => ({ x: p.x, y: p.y })),
       rotulo: n.rotulo ?? null,
+      disciplina: n.disciplina ?? undefined,
       pocoMm: n.pocoMm ?? undefined,
       casaDeMaquinasMm: n.casaDeMaquinasMm ?? undefined,
       capacidade: n.capacidade ?? undefined,
@@ -488,6 +489,7 @@ function projetar(model: BlueprintModel): {
       profundidadeMm: c.profundidadeMm,
       alturaMm: c.alturaMm,
       rotacaoGraus: c.rotacaoGraus,
+      cotaMm: c.cotaMm ? c.cotaMm : undefined,
       tipoId: c.tipoId,
       familia: c.familia,
       rotulo: c.rotulo ?? null,
@@ -1134,6 +1136,8 @@ export interface CanonicalPayload {
     profundidadeMm: number;
     alturaMm: number;
     rotacaoGraus: number;
+    /** Base acima do piso (0.47.0). Ausente = 0. */
+    cotaMm?: number;
     tipoId: TipoDeComponente;
     familia: FamiliaDeComponente;
     rotulo: string | null;
@@ -1175,6 +1179,8 @@ export interface CanonicalPayload {
     tipo: TipoDeNucleo;
     ring: { x: number; y: number }[];
     rotulo: string | null;
+    /** Só shaft (0.47.0): a disciplina da prumada. */
+    disciplina?: DisciplinaDeRede;
     pocoMm?: number;
     casaDeMaquinasMm?: number;
     capacidade?: number;
@@ -1607,6 +1613,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       profundidadeMm: c.profundidadeMm,
       alturaMm: c.alturaMm,
       rotacaoGraus: c.rotacaoGraus,
+      ...(c.cotaMm ? { cotaMm: c.cotaMm } : {}),
       tipoId: c.tipoId,
       familia: c.familia,
       rotulo: c.rotulo,
@@ -1669,6 +1676,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       tipo: n.tipo,
       ring: n.ring.map((p) => ({ x: p.x, y: p.y })),
       rotulo: n.rotulo,
+      ...(n.disciplina ? { disciplina: n.disciplina } : {}),
       ...(n.pocoMm !== undefined ? { pocoMm: n.pocoMm } : {}),
       ...(n.casaDeMaquinasMm !== undefined ? { casaDeMaquinasMm: n.casaDeMaquinasMm } : {}),
       ...(n.capacidade !== undefined ? { capacidade: n.capacidade } : {}),

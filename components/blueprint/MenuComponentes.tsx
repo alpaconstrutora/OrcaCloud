@@ -52,6 +52,11 @@ import {
   BookOpen,
   Tv,
   Lamp,
+  AirVent,
+  Fan,
+  Snowflake,
+  Server,
+  Wind,
 } from 'lucide-react';
 import { type TipoDeGuardaCorpo,
   TIPOS_DE_INTERRUPTOR,
@@ -133,7 +138,7 @@ export type EscolhaComponente =
   | { tool: 'telhado' }
   | { tool: 'escada'; circulacao: TipoCirculacao }
   | { tool: 'guardacorpo'; guardaCorpo: TipoDeGuardaCorpo }
-  | { tool: 'nucleo'; nucleo: TipoDeNucleo }
+  | { tool: 'nucleo'; nucleo: TipoDeNucleo; /** Só SHAFT (E11.1): `MECANICA` = shaft de dutos/condensação. */ disciplina?: DisciplinaDeRede | null }
   | { tool: 'vaga'; vaga: TipoDeVaga }
   | { tool: 'componente'; componente: TipoDeComponente }
   | {
@@ -359,6 +364,8 @@ function colunaDoGrupo(titulo: string): 1 | 2 | 3 {
   if (titulo.startsWith('Elétrica')) return 3;
   if (titulo.startsWith('Mobiliário — cozinha')) return 2;
   if (titulo.startsWith('Mobiliário')) return 1;
+  if (titulo.startsWith('Mecânica — ventilação')) return 2;
+  if (titulo.startsWith('Mecânica')) return 1;
   // Na família hidráulica o menu é só dela: consumo à esquerda, trechos +
   // reservação + esgoto no meio, registros/conexões/a classificar à direita.
   if (titulo.startsWith('Hidráulica — pontos de consumo')) return 1;
@@ -627,6 +634,24 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
       { chave: 'COMPONENTE_BOX', rotulo: 'Box', icone: Bath, ajuda: '0,90 × 0,90 m; liga-se ao ponto de chuveiro.', escolha: { tool: 'componente', componente: 'BOX' } },
     ],
   },
+  // MECÂNICA (20/09/2026, roadmap E11.1 — HVAC mínimo): RESERVAS DE ESPAÇO para
+  // equipamento (componentes da família CLIMATIZACAO, com folga de manutenção e
+  // clash) e o shaft mecânico. Dutos, terminais e cargas ficam fora (P3/P4).
+  {
+    titulo: 'Mecânica — climatização',
+    itens: [
+      { chave: 'COMPONENTE_CONDENSADORA', rotulo: 'Condensadora', icone: Snowflake, ajuda: 'Reserva 0,85 × 0,33 × 0,70 m com 300 mm de folga em volta; peça dentro da folga, parede ou pilar dentro da caixa é conflito.', escolha: { tool: 'componente', componente: 'CONDENSADORA' } },
+      { chave: 'COMPONENTE_EVAPORADORA', rotulo: 'Evaporadora hi-wall', icone: AirVent, ajuda: 'Reserva 0,90 × 0,22 × 0,30 m a 2,20 m do piso, com 150 mm de folga.', escolha: { tool: 'componente', componente: 'EVAPORADORA' } },
+    ],
+  },
+  {
+    titulo: 'Mecânica — ventilação e reservas',
+    itens: [
+      { chave: 'COMPONENTE_EXAUSTOR', rotulo: 'Exaustor / ventilação', icone: Fan, ajuda: 'Reserva 0,40 × 0,40 × 0,40 m a 2,30 m do piso.', escolha: { tool: 'componente', componente: 'EXAUSTOR' } },
+      { chave: 'COMPONENTE_CASA_DE_MAQUINAS', rotulo: 'Casa de máquinas', icone: Server, ajuda: 'Reserva 2,00 × 1,50 × 2,50 m com 600 mm de folga — o lugar do equipamento, não o equipamento.', escolha: { tool: 'componente', componente: 'CASA_DE_MAQUINAS' } },
+      { chave: 'SHAFT_MECANICO', rotulo: 'Shaft mecânico', icone: Wind, ajuda: 'Shaft (dois cantos) com a disciplina MECÂNICA: a prumada de dutos e linhas frigorígenas; fura a laje e acusa estrutura dentro.', escolha: { tool: 'nucleo', nucleo: 'SHAFT', disciplina: 'MECANICA' } },
+    ],
+  },
   // INSTALAÇÕES no fim: elas atravessam tudo o que veio antes, e desenhá-las
   // exige que parede e pavimento já existam para o trecho ter onde se apoiar.
   //
@@ -788,11 +813,12 @@ const TOOLS_DE_COMPONENTE: BlueprintTool[] = [
  * mesmo catálogo, filtrado — e não três catálogos — para a ficha do componente
  * (`fichaDoComponente`) continuar única.
  */
-export type FamiliaDeComponentes = 'CONSTRUCAO' | 'ELETRICA' | 'HIDRAULICA' | 'MOBILIARIO';
+export type FamiliaDeComponentes = 'CONSTRUCAO' | 'ELETRICA' | 'HIDRAULICA' | 'MOBILIARIO' | 'MECANICA';
 
 function familiaDoGrupo(tituloDoGrupo: string): FamiliaDeComponentes {
   if (/^Elétrica/.test(tituloDoGrupo)) return 'ELETRICA';
   if (/^Hidráulica/.test(tituloDoGrupo)) return 'HIDRAULICA';
+  if (/^Mecânica/.test(tituloDoGrupo)) return 'MECANICA';
   if (/^Mobiliário/.test(tituloDoGrupo)) return 'MOBILIARIO';
   return 'CONSTRUCAO';
 }
@@ -810,6 +836,8 @@ interface Props {
   tipoCirculacao?: TipoCirculacao;
   /** O núcleo vertical ativo (E2.4). */
   tipoDeNucleo?: TipoDeNucleo;
+  /** A disciplina do shaft ativo (E11.1): `MECANICA` acende "Shaft mecânico" em vez de "Shaft". */
+  disciplinaDoNucleo?: DisciplinaDeRede | null;
   /** O tipo de guarda-corpo ativo (E7.3). */
   tipoDeGuardaCorpo?: TipoDeGuardaCorpo;
   /** O tipo de vaga ativo (E2.5). */
@@ -838,7 +866,7 @@ function chaveAtiva(p: Props): string | null {
   if (tool === 'abertura') return p.tipoAbertura;
   if (tool === 'estrutural') return p.tipoEstrutural;
   if (tool === 'escada') return p.tipoCirculacao ?? 'ESCADA';
-  if (tool === 'nucleo') return p.tipoDeNucleo ?? 'SHAFT';
+  if (tool === 'nucleo') return (p.tipoDeNucleo ?? 'SHAFT') === 'SHAFT' && p.disciplinaDoNucleo === 'MECANICA' ? 'SHAFT_MECANICO' : p.tipoDeNucleo ?? 'SHAFT';
   if (tool === 'guardacorpo') return p.tipoDeGuardaCorpo ?? 'GUARDA_CORPO';
   if (tool === 'vaga') return `VAGA_${p.tipoDeVaga ?? 'COMUM'}`;
   if (tool === 'componente') return `COMPONENTE_${p.tipoDeComponente ?? 'CAMA_CASAL'}`;
@@ -917,7 +945,9 @@ export default function MenuComponentes(props: Props) {
               ? 'Água fria, água quente e esgoto — trechos e pontos'
               : familia === 'MOBILIARIO'
                 ? 'Mobiliário, louças, bancadas, armários e equipamentos — o catálogo de componentes'
-                : 'Parede, esquadria, estrutura, fundação e cobertura — tudo que o desenho constrói'
+                : familia === 'MECANICA'
+                  ? 'Reservas de espaço de climatização e ventilação, e o shaft mecânico'
+                  : 'Parede, esquadria, estrutura, fundação e cobertura — tudo que o desenho constrói'
         }
         className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
           ativo

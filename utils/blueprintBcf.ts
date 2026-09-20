@@ -277,10 +277,16 @@ export function topicosDeConflitosArquitetonicos(
           ? `pilar dentro do percurso da escada (≈ ${c.medidaMm} mm de lado em comum)`
           : c.classe === 'NUCLEO_X_ESTRUTURA'
             ? `estrutura dentro do núcleo vertical (≈ ${c.medidaMm} mm de lado em comum)`
-            : `faltam ${c.medidaMm} mm para a altura livre de 2,10 m sobre o degrau (NBR 9077)`;
+            : c.classe === 'RESERVA_X_ESTRUTURA'
+              ? `estrutura dentro da reserva de espaço do equipamento (≈ ${c.medidaMm} mm de lado em comum)`
+              : c.classe === 'RESERVA_X_PAREDE'
+                ? `parede atravessando a reserva de espaço do equipamento (≈ ${c.medidaMm} mm de lado em comum)`
+                : c.classe === 'RESERVA_X_COMPONENTE'
+                  ? `peça dentro da folga de manutenção do equipamento (≈ ${c.medidaMm} mm de lado em comum)`
+                  : `faltam ${c.medidaMm} mm para a altura livre de 2,10 m sobre o degrau (NBR 9077)`;
     return {
       guid: guidDoTopico(`clash:${c.pecaUid}:${c.outroUid}`),
-      titulo: `${rotuloCurto(c.pecaUid, c.familia)} encontra ${rotuloCurto(c.outroUid, 'structural')}`,
+      titulo: `${rotuloCurto(c.pecaUid, c.familia)} encontra ${rotuloCurto(c.outroUid, c.outroFamilia ?? 'structural')}`,
       tipo: 'Clash' as const,
       status: 'Open' as const,
       autor,

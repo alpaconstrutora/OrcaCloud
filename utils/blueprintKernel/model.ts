@@ -1408,6 +1408,11 @@ export interface Nucleo {
   /** Contorno em planta, mm inteiro, ≥ 3 vértices, simples. */
   ring: Point[];
   rotulo?: string | null;
+  /**
+   * Só SHAFT (E11.1): a disciplina que a prumada carrega — `MECANICA` é o
+   * shaft de dutos/condensação; ausente = geral (água, esgoto e elétrica).
+   */
+  disciplina?: DisciplinaDeRede | null;
   /** Só ELEVADOR: profundidade do poço abaixo do piso de partida, mm. */
   pocoMm?: number | null;
   /** Só ELEVADOR: altura da casa de máquinas acima do último piso, mm. */
@@ -1456,10 +1461,10 @@ export const ROTULO_DO_TIPO_DE_VAGA: Record<TipoDeVaga, string> = { COMUM: 'Comu
  * `sugerido` é o irmão de `Terminal.sugerida`/`Vaga.sugerida`: nasceu do
  * mobiliário automático (E6.3) e ainda não foi confirmado.
  */
-export type FamiliaDeComponente = 'MOBILIARIO' | 'LOUCA' | 'BANCADA' | 'ARMARIO' | 'EQUIPAMENTO';
-export const FAMILIAS_DE_COMPONENTE: readonly FamiliaDeComponente[] = ['MOBILIARIO', 'LOUCA', 'BANCADA', 'ARMARIO', 'EQUIPAMENTO'];
-export const ROTULO_DA_FAMILIA_DE_COMPONENTE: Record<FamiliaDeComponente, string> = { MOBILIARIO: 'Mobiliário', LOUCA: 'Louça', BANCADA: 'Bancada', ARMARIO: 'Armário', EQUIPAMENTO: 'Equipamento' };
-export type SimboloDoComponente = 'CAIXA' | 'CAMA' | 'SOFA' | 'MESA' | 'VASO' | 'LAVATORIO' | 'BOX' | 'PIA' | 'FOGAO' | 'GELADEIRA' | 'TANQUE' | 'MAQUINA' | 'ARMARIO' | 'CADEIRA';
+export type FamiliaDeComponente = 'MOBILIARIO' | 'LOUCA' | 'BANCADA' | 'ARMARIO' | 'EQUIPAMENTO' | 'CLIMATIZACAO';
+export const FAMILIAS_DE_COMPONENTE: readonly FamiliaDeComponente[] = ['MOBILIARIO', 'LOUCA', 'BANCADA', 'ARMARIO', 'EQUIPAMENTO', 'CLIMATIZACAO'];
+export const ROTULO_DA_FAMILIA_DE_COMPONENTE: Record<FamiliaDeComponente, string> = { MOBILIARIO: 'Mobiliário', LOUCA: 'Louça', BANCADA: 'Bancada', ARMARIO: 'Armário', EQUIPAMENTO: 'Equipamento', CLIMATIZACAO: 'Climatização' };
+export type SimboloDoComponente = 'CAIXA' | 'CAMA' | 'SOFA' | 'MESA' | 'VASO' | 'LAVATORIO' | 'BOX' | 'PIA' | 'FOGAO' | 'GELADEIRA' | 'TANQUE' | 'MAQUINA' | 'ARMARIO' | 'CADEIRA' | 'CONDENSADORA' | 'EVAPORADORA' | 'EXAUSTOR' | 'RESERVA';
 export interface FichaDoComponente {
   rotulo: string;
   familia: FamiliaDeComponente;
@@ -1469,6 +1474,17 @@ export interface FichaDoComponente {
   simbolo: SimboloDoComponente;
   /** Louça/equipamento hidráulico: o tipo de ponto (NBR 5626) que a peça pede. */
   ligaAoPonto?: TipoDePontoHidraulico;
+  /**
+   * HVAC (E11.1): a base da peça acima do piso, mm — a evaporadora hi-wall e o
+   * exaustor moram no alto. Ausente = no piso.
+   */
+  cotaMm?: number;
+  /**
+   * HVAC (E11.1): a FOLGA de manutenção/insuflamento em volta da reserva, mm.
+   * Outra peça dentro dela é conflito (`RESERVA_X_COMPONENTE`) — a condensadora
+   * encostada no armário não troca calor nem se conserta.
+   */
+  folgaMm?: number;
 }
 export const TIPOS_DE_COMPONENTE = [
   'CAMA_CASAL',
@@ -1491,6 +1507,12 @@ export const TIPOS_DE_COMPONENTE = [
   'VASO',
   'LAVATORIO',
   'BOX',
+  // HVAC MÍNIMO (E11.1): reserva de espaço para equipamento — não é o equipamento
+  // dimensionado, é o LUGAR dele, com folga, para o clash pegar cedo.
+  'CONDENSADORA',
+  'EVAPORADORA',
+  'CASA_DE_MAQUINAS',
+  'EXAUSTOR',
 ] as const;
 export type TipoDeComponente = (typeof TIPOS_DE_COMPONENTE)[number];
 export const CATALOGO_DE_COMPONENTES: Record<TipoDeComponente, FichaDoComponente> = {
@@ -1514,6 +1536,13 @@ export const CATALOGO_DE_COMPONENTES: Record<TipoDeComponente, FichaDoComponente
   VASO: { rotulo: 'Vaso sanitário', familia: 'LOUCA', larguraMm: 400, profundidadeMm: 650, alturaMm: 400, simbolo: 'VASO', ligaAoPonto: 'VASO_SANITARIO' },
   LAVATORIO: { rotulo: 'Lavatório', familia: 'LOUCA', larguraMm: 500, profundidadeMm: 450, alturaMm: 850, simbolo: 'LAVATORIO', ligaAoPonto: 'LAVATORIO' },
   BOX: { rotulo: 'Box', familia: 'LOUCA', larguraMm: 900, profundidadeMm: 900, alturaMm: 2000, simbolo: 'BOX', ligaAoPonto: 'CHUVEIRO' },
+  // Climatização (E11.1). Medidas de referência de split residencial 9–24 kBTU
+  // e de casa de máquinas mínima; a folga é a de manutenção/insuflamento usual
+  // dos manuais de instalação (condensadora ≥ 300 mm nas laterais/atrás).
+  CONDENSADORA: { rotulo: 'Condensadora (split)', familia: 'CLIMATIZACAO', larguraMm: 850, profundidadeMm: 330, alturaMm: 700, simbolo: 'CONDENSADORA', folgaMm: 300 },
+  EVAPORADORA: { rotulo: 'Evaporadora hi-wall', familia: 'CLIMATIZACAO', larguraMm: 900, profundidadeMm: 220, alturaMm: 300, simbolo: 'EVAPORADORA', cotaMm: 2200, folgaMm: 150 },
+  CASA_DE_MAQUINAS: { rotulo: 'Casa de máquinas (reserva)', familia: 'CLIMATIZACAO', larguraMm: 2000, profundidadeMm: 1500, alturaMm: 2500, simbolo: 'RESERVA', folgaMm: 600 },
+  EXAUSTOR: { rotulo: 'Exaustor / ventilação', familia: 'CLIMATIZACAO', larguraMm: 400, profundidadeMm: 400, alturaMm: 400, simbolo: 'EXAUSTOR', cotaMm: 2300, folgaMm: 100 },
 };
 export const MAX_ROTULO_DE_COMPONENTE = 40;
 
@@ -1532,6 +1561,8 @@ export interface Componente {
   alturaMm: number;
   /** Giro em relação ao eixo Y, graus inteiros [0, 360). */
   rotacaoGraus: number;
+  /** Base acima do piso, mm inteiro ≥ 0 (E11.1: evaporadora, exaustor). Ausente = 0. */
+  cotaMm?: number | null;
   /** "Cama do casal", "Bancada da ilha". `null` = o rótulo do catálogo. */
   rotulo?: string | null;
   sugerido?: boolean | null;
@@ -1738,7 +1769,7 @@ export function nomeDoTipoDeNucleo(tipo: TipoDeNucleo): string {
  * ficam de fora só porque ninguém os pediu ainda. Acrescentar um valor é
  * acrescentar um valor — não é mexer no modelo.
  */
-export type DisciplinaDeRede = 'ELETRICA' | 'AGUA_FRIA' | 'AGUA_QUENTE' | 'ESGOTO';
+export type DisciplinaDeRede = 'ELETRICA' | 'AGUA_FRIA' | 'AGUA_QUENTE' | 'ESGOTO' | 'MECANICA';
 
 /** As disciplinas, em lista — para os invariantes recusarem valor inventado. */
 export const DISCIPLINAS: DisciplinaDeRede[] = [
@@ -1746,6 +1777,9 @@ export const DISCIPLINAS: DisciplinaDeRede[] = [
   'AGUA_FRIA',
   'AGUA_QUENTE',
   'ESGOTO',
+  // MECÂNICA (20/09/2026, roadmap E11.1): HVAC mínimo — o shaft mecânico e as
+  // reservas de espaço de equipamento. Dutos, terminais e cargas ficam fora.
+  'MECANICA',
 ];
 
 /**
@@ -4128,6 +4162,10 @@ export function assertModelInvariants(model: BlueprintModel): void {
       if (n.tipo !== 'ELEVADOR') throw new KernelError('BAD_CORE', `Núcleo ${n.id}: ${k} só existe no elevador`);
       if (!Number.isInteger(v) || v < 0) throw new KernelError('BAD_CORE', `Núcleo ${n.id}: ${k} tem de ser inteiro ≥ 0`);
     }
+    if (n.disciplina != null) {
+      if (n.tipo !== 'SHAFT') throw new KernelError('BAD_CORE', `Núcleo ${n.id}: disciplina só existe no shaft`);
+      if (!DISCIPLINAS.includes(n.disciplina)) throw new KernelError('BAD_CORE', `Núcleo ${n.id}: disciplina desconhecida ${String(n.disciplina)}`);
+    }
   }
 
   // Vagas: pavimento existente, tipo conhecido, medidas inteiras positivas, giro inteiro em [0, 360).
@@ -4153,6 +4191,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
       if (!Number.isInteger(c[k]) || c[k] <= 0) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: ${k} tem de ser inteiro positivo`);
     }
     if (!Number.isInteger(c.rotacaoGraus) || c.rotacaoGraus < 0 || c.rotacaoGraus >= 360) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: giro tem de ser inteiro em [0, 360)`);
+    if (c.cotaMm != null && (!Number.isInteger(c.cotaMm) || c.cotaMm < 0)) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: cotaMm tem de ser inteiro ≥ 0`);
     if (c.rotulo != null && (typeof c.rotulo !== 'string' || c.rotulo.length > MAX_ROTULO_DE_COMPONENTE)) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: rótulo maior que ${MAX_ROTULO_DE_COMPONENTE} caracteres`);
   }
 

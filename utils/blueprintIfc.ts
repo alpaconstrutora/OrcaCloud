@@ -2167,7 +2167,8 @@ function emitirComponente(c: Componente, ctx: Ctx, localNivel: string): string {
   const L = c.larguraMm;
   const P = c.profundidadeMm;
   const A = c.alturaMm;
-  const origem = emitir(`IFCCARTESIANPOINT((${n(c.at.x)},${n(c.at.y)},0.))`);
+  // E11.1: a base na cota (evaporadora, exaustor); zero para o resto — o mesmo texto de antes.
+  const origem = emitir(`IFCCARTESIANPOINT((${n(c.at.x)},${n(c.at.y)},${c.cotaMm ? n(c.cotaMm) : '0.'}))`);
   const local = emitir(`IFCLOCALPLACEMENT(${localNivel},${emitir(`IFCAXIS2PLACEMENT3D(${origem},$,${direcaoDaPeca(c.rotacaoGraus, ctx)})`)})`);
   const posPerfil = emitir(`IFCAXIS2PLACEMENT2D(${emitir('IFCCARTESIANPOINT((0.,0.))')},$)`);
   const perfil = emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,${posPerfil},${n(L)},${n(P)})`);
@@ -2179,6 +2180,15 @@ function emitirComponente(c: Componente, ctx: Ctx, localNivel: string): string {
   if (c.familia === 'LOUCA') {
     const predefinido = c.tipoId === 'VASO' ? '.TOILETPAN.' : c.tipoId === 'LAVATORIO' ? '.WASHHANDBASIN.' : c.tipoId === 'BOX' ? '.SHOWER.' : c.tipoId === 'TANQUE' ? '.SINK.' : '.USERDEFINED.';
     return emitir(`IFCSANITARYTERMINAL(${guidDe(c.uid, `componente-${c.id}`)},${historico},${s(nome)},$,${s(c.tipoId)},${local},${produtoForma},${s(tag)},${predefinido})`);
+  }
+  // HVAC (E11.1): a reserva de climatização é EQUIPAMENTO, não mobiliário —
+  // split → IfcUnitaryEquipment .SPLITSYSTEM., exaustor → IfcFan, casa de
+  // máquinas → IfcBuildingElementProxy .PROVISIONFORSPACE. (é reserva de espaço).
+  if (c.familia === 'CLIMATIZACAO') {
+    const guid = guidDe(c.uid, `componente-${c.id}`);
+    if (c.tipoId === 'EXAUSTOR') return emitir(`IFCFAN(${guid},${historico},${s(nome)},$,${s(c.tipoId)},${local},${produtoForma},${s(tag)},.PROPELLORAXIAL.)`);
+    if (c.tipoId === 'CASA_DE_MAQUINAS') return emitir(`IFCBUILDINGELEMENTPROXY(${guid},${historico},${s(nome)},$,${s(c.tipoId)},${local},${produtoForma},${s(tag)},.PROVISIONFORSPACE.)`);
+    return emitir(`IFCUNITARYEQUIPMENT(${guid},${historico},${s(nome)},$,${s(c.tipoId)},${local},${produtoForma},${s(tag)},.SPLITSYSTEM.)`);
   }
   const predefinido = c.familia === 'ARMARIO' ? '.SHELF.' : c.tipoId.startsWith('CAMA') ? '.BED.' : c.tipoId === 'MESA_JANTAR' || c.tipoId === 'ESCRIVANINHA' ? '.TABLE.' : c.tipoId === 'CADEIRA' || c.tipoId === 'SOFA' || c.tipoId === 'POLTRONA' ? '.CHAIR.' : '.USERDEFINED.';
   return emitir(`IFCFURNITURE(${guidDe(c.uid, `componente-${c.id}`)},${historico},${s(nome)},$,${s(c.tipoId)},${local},${produtoForma},${s(tag)},${predefinido})`);

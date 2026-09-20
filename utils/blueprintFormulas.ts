@@ -606,6 +606,24 @@ export function pecasComParametros(model: BlueprintModel): Peca[] {
  * sem erro. É o que as saídas (IFC, planilha) e a ficha consomem; o painel
  * mostra também os erros, por isso usa `avaliarDefinicoes` direto.
  */
+/**
+ * FILTRO `compartilhado` NAS SAÍDAS (20/09/2026, backlog P2 — P2.5). A
+ * definição marcada como NÃO compartilhada é uso interno da organização: o
+ * valor fica na peça e na tela, mas NÃO sai no IFC nem na planilha. Chave sem
+ * definição (o desenho publicado é o que vale, não o catálogo) continua saindo.
+ */
+export function chavesPrivadas(definicoes: readonly { chave: string; compartilhado?: boolean }[]): Set<string> {
+  return new Set(definicoes.filter((d) => d.compartilhado === false).map((d) => d.chave));
+}
+
+/** Os parâmetros sem as chaves privadas; `undefined` quando não sobra nenhum. */
+export function semChavesPrivadas<T extends Record<string, unknown>>(p: T | undefined, privadas: ReadonlySet<string>): T | undefined {
+  if (!p || privadas.size === 0) return p;
+  const saida: Record<string, unknown> = {};
+  for (const k of Object.keys(p)) if (!privadas.has(k)) saida[k] = p[k];
+  return Object.keys(saida).length > 0 ? (saida as T) : undefined;
+}
+
 export function parametrosCalculadosDoModelo(model: BlueprintModel, definicoes: readonly DefinicaoComFamilia[]): Map<string, Record<string, Valor>> {
   const saida = new Map<string, Record<string, Valor>>();
   const comFormula = definicoes.filter((d) => d.formula.trim() !== '');

@@ -84,6 +84,23 @@ export async function saveParameterDefinition(organizationId: string, d: DadosDa
   return mapear(data as Record<string, unknown>);
 }
 
+/** Edita uma definição existente (P2.5). A CHAVE não muda: é ela que as peças carregam. */
+export async function updateParameterDefinition(
+  id: string,
+  patch: Partial<Pick<DefinicaoDeParametro, 'nome' | 'familia' | 'unidade' | 'opcoes' | 'compartilhado' | 'formula'>>,
+): Promise<DefinicaoDeParametro> {
+  const linha: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (patch.nome !== undefined) linha.nome = patch.nome.trim();
+  if (patch.familia !== undefined) linha.familia = patch.familia;
+  if (patch.unidade !== undefined) linha.unidade = patch.unidade.trim();
+  if (patch.opcoes !== undefined) linha.opcoes = patch.opcoes.map((o) => o.trim()).filter(Boolean);
+  if (patch.compartilhado !== undefined) linha.compartilhado = patch.compartilhado;
+  if (patch.formula !== undefined) linha.formula = patch.formula.trim();
+  const { data, error } = await supabase.from('blueprint_parameter_definitions').update(linha).eq('id', id).select(COLS).single();
+  if (error) fail('update', error);
+  return mapear(data as Record<string, unknown>);
+}
+
 export async function deleteParameterDefinition(id: string): Promise<void> {
   const { error } = await supabase.from('blueprint_parameter_definitions').delete().eq('id', id);
   if (error) fail('delete', error);

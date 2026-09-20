@@ -1125,6 +1125,22 @@ Próxima: P2.4 — mover núcleo e vaga por arraste.
 
 **Backlog P2 do pedido de 20/09 concluído** (P2.1 status do conflito, P2.2 dutos, P2.3 catálogo de tipos, P2.4 arraste). O restante do backlog P2 segue nomeado no fecho.
 
+### P2.5 — Definições de parâmetro: editar/excluir, fórmula e filtro `compartilhado` (20/09/2026) · backlog P2
+
+**Pedido:** *"PODE SEGUIR"* — o resto do backlog P2 nomeado no fecho, na mesma cadência. Esta fecha o que E1.2/E1.3 deixaram declarado: "filtro `compartilhado` nas saídas (hoje todo parâmetro sai), edição e exclusão de definições (só criação inline)" e "edição de fórmula existente".
+
+**O que entrou** (**sem bump, sem migration**):
+
+- **Filtro `compartilhado` nas saídas**: `chavesPrivadas(definicoes)` e `semChavesPrivadas` (`blueprintFormulas.ts`); `linhasDeParametros(model, calculados, privadas)` deixa a chave privada fora da **planilha**; `gerarIfc(…, { chavesPrivadas })` a tira do `Pset_OpuraPersonalizado` (gravada ou calculada) e não emite Pset para a peça que só tinha privadas; `blueprintExportService` passa as privadas nos dois caminhos. Chave **sem definição** continua saindo (o desenho publicado é o que vale, não o catálogo).
+- **`updateParameterDefinition(id, patch)`** no serviço (nome, família, unidade, opções, compartilhado, fórmula — a **chave não muda**: é o que a peça carrega).
+- **`TelaParametros.tsx`** (in-flow, **Arquitetura › Parâmetros**, ao lado de Tipos; contagem no ribbon): "Como funciona", `StandardTable` (nome + unidade, chave, família, tipo, fórmula, **"Sai nas saídas"** sim/privada, **no desenho** = peças que carregam a chave — `usosPorChave`, organização quando o topo está em "Todas"), **Editar** (formulário inline: nome, família, unidade, fórmula com `erroDeSintaxe`, opções, checkbox "Sai nas saídas") e **Excluir** (confirmação que diz quantas peças carregam a chave e que **continuam com o valor** — o painel passa a mostrá-lo como "sem definição").
+
+**Decisões.** (1) Privada ≠ apagada: o valor fica na peça e na tela; só as saídas para fora da organização o omitem — é o que "compartilhado" sempre quis dizer. (2) Chave imutável: renomear a chave deixaria o payload publicado apontando para uma definição que não existe; muda-se o nome de gente, não o de programa. (3) Excluir não toca peça: mesma regra do catálogo de tipos (P2.3) e da E1.1 — o desenho publicado é o que vale.
+
+**Prova.** *No app real* (estudo "Planta 14/09/2026"): **escritas bloqueadas (14)** — Arquitetura › Parâmetros abre em fluxo, lista 0 definições (não havia nenhuma), "0 privada(s) hoje". **Escrita real, autorizada ("criar, provar e apagar")**, bloqueio aberto só para `blueprint_parameter_definitions` (0 escritas fora): "Nova definição" no painel da Parede 1 (Custo interno, número, R$, fórmula) → modal de organização → Alpa → a tela lista 1 definição ("parede · Número · comprimento_m * 120 · sim"); **Editar**: fórmula `comprimento_m * altura_m * 95` + "Sai nas saídas" desligado → "atualizada", marca **privada**; **Excluir** → confirmação → 0 definições; banco de volta a 0 (POST upsert, PATCH, DELETE — nada mais). Testes: `blueprintParametrosPrivados.test.ts` (4: chaves privadas/filtro puro, planilha, IFC com contagem de Psets, usos por chave), editor "definições de parâmetro (P2.5)" (lista com usos, fórmula inválida recusada, editar grava privada, excluir com aviso de usos); suíte 404 arquivos / 4863 testes; tsc, check-ui e build OK.
+
+Próxima: P2.6 — caixa do elevador no 3D.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

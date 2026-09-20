@@ -130,9 +130,13 @@ vi.mock('../../services/blueprintParameterDefinitionService', async () => {
     ...real,
     listParameterDefinitions: (...a: unknown[]) => listParameterDefinitions(...(a as [])),
     saveParameterDefinition: vi.fn(async () => ({})),
-    deleteParameterDefinition: vi.fn(),
+    deleteParameterDefinition: (...a: unknown[]) => deleteParameterDefinition(...(a as [string])),
+    updateParameterDefinition: (...a: unknown[]) => updateParameterDefinition(...(a as [string, Record<string, unknown>])),
   };
 });
+// P2.5: editar e excluir definições, observáveis.
+const updateParameterDefinition = vi.fn(async (id: string, patch: Record<string, unknown>) => ({ id, organizationId: 'org_1', chave: 'custo_interno', nome: 'Custo interno', familia: null, tipo: 'NUMERO', unidade: 'R$', opcoes: [], compartilhado: true, formula: '', active: true, ...patch }));
+const deleteParameterDefinition = vi.fn(async () => {});
 
 // Programa de necessidades (E4.1): `get` controlável; `save` observável (gravação com respiro).
 const getPrograma = vi.fn(async () => null as unknown);
@@ -4971,5 +4975,59 @@ describe('BlueprintEditor · mover núcleo, vaga e componente (P2.4)', () => {
     const desfeito = (vi.mocked(saveDraft).mock.calls.at(-1) as unknown as [string, import('../../utils/blueprintKernel').BlueprintModel])[1];
     expect(desfeito.componentes!.find((c) => c.tipoId === 'SOFA')!.at).toEqual({ x: 2000, y: 2000 });
     expect(desfeito.nucleos![0].ring[0]).toEqual({ x: 5000, y: 5000 });
+  }, 60000);
+});
+
+/**
+ * DEFINIÇÕES DE PARÂMETRO (20/09/2026, backlog P2 — P2.5): Arquitetura ›
+ * Parâmetros lista as definições com usos; editar troca fórmula e o
+ * "sai nas saídas"; fórmula inválida é recusada; excluir avisa dos usos.
+ */
+describe('BlueprintEditor · definições de parâmetro (P2.5)', () => {
+  it('lista com usos; editar valida a fórmula e grava; privada aparece marcada; excluir passa pela confirmação com os usos', async () => {
+    listParameterDefinitions.mockResolvedValue([
+      { id: 'd1', organizationId: 'org_1', chave: 'custo_interno', nome: 'Custo interno', familia: null, tipo: 'NUMERO', unidade: 'R$', opcoes: [], compartilhado: true, formula: '', active: true },
+      { id: 'd2', organizationId: 'org_1', chave: 'area_pintura', nome: 'Área de pintura', familia: 'wall', tipo: 'NUMERO', unidade: 'm²', opcoes: [], compartilhado: false, formula: 'comprimento_m * altura_m', active: true },
+    ]);
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    let m = k.applyCommand(nivel.model, { type: 'AddWall', levelId: t, a: k.point(0, 0), b: k.point(4000, 0), thicknessMm: 150, heightMm: 2800 }).model;
+    m = k.applyCommand(m, { type: 'SetParametros', familia: 'wall', id: m.walls[0].id, valores: { custo_interno: 50 } }).model;
+    loadBranchModel.mockResolvedValue(m);
+    try {
+      await montar();
+      const user = userEvent.setup();
+      await abrirAba(/^arquitetura$/i);
+      await user.click(screen.getByRole('button', { name: /^Parâmetros/ }));
+      const tela = await screen.findByTestId('tela-parametros');
+      expect(document.querySelector('[data-tela="parametros"]')?.className).not.toMatch(/fixed|inset-0/);
+      await waitFor(() => expect(within(tela).getByText('Custo interno')).toBeInTheDocument());
+      expect(within(tela).getByTestId('usos-custo_interno')).toHaveTextContent('1');
+      expect(within(tela).getByTestId('privada-area_pintura')).toBeInTheDocument();
+      expect(tela).toHaveTextContent(/1 privada\(s\) hoje/);
+      // Editar: fórmula inválida recusa; fórmula boa + privada grava pelo serviço.
+      await user.click(within(tela).getByRole('button', { name: 'Editar Custo interno' }));
+      const formula = within(tela).getByLabelText('Fórmula da definição');
+      await user.type(formula, 'comprimento_m * (');
+      await user.click(within(tela).getByTestId('salvar-definicao'));
+      expect(within(tela).getByTestId('erro-de-parametros')).toHaveTextContent(/Fórmula inválida/);
+      await user.clear(formula);
+      await user.type(formula, 'comprimento_m * 120');
+      await user.click(within(tela).getByLabelText('Sai nas saídas (IFC e planilha)'));
+      await user.click(within(tela).getByTestId('salvar-definicao'));
+      await waitFor(() => expect(updateParameterDefinition).toHaveBeenCalledWith('d1', expect.objectContaining({ formula: 'comprimento_m * 120', compartilhado: false, nome: 'Custo interno' })));
+      await waitFor(() => expect(within(tela).getByTestId('privada-custo_interno')).toBeInTheDocument());
+      expect(within(tela).getByTestId('aviso-de-parametros')).toHaveTextContent(/atualizada/);
+      // Excluir: a confirmação diz que 1 peça carrega a chave e continua com o valor.
+      await user.click(within(tela).getByRole('button', { name: 'Excluir Custo interno' }));
+      const dialog = await screen.findByRole('dialog');
+      expect(dialog).toHaveTextContent(/1 peça\(s\) do desenho carregam a chave "custo_interno" e CONTINUAM/);
+      await user.click(within(dialog).getByRole('button', { name: /^excluir$/i }));
+      await waitFor(() => expect(deleteParameterDefinition).toHaveBeenCalledWith('d1'));
+      await waitFor(() => expect(within(tela).queryByText('Custo interno')).toBeNull());
+    } finally {
+      listParameterDefinitions.mockResolvedValue([]);
+    }
   }, 60000);
 });

@@ -71,6 +71,7 @@ import {
   ShoppingCart,
   Wind,
   BookMarked,
+  Sigma,
   Magnet,
   Blocks,
   Loader2,
@@ -160,7 +161,7 @@ import PainelEixoSelecionado from './PainelEixoSelecionado';
 import PainelRestricoes from './PainelRestricoes';
 import FichaDoElemento from './FichaDoElemento';
 import { fichaDoElemento } from '../../utils/blueprintFicha';
-import { listParameterDefinitions, type DefinicaoDeParametro } from '../../services/blueprintParameterDefinitionService';
+import { deleteParameterDefinition, listParameterDefinitions, updateParameterDefinition, type DefinicaoDeParametro } from '../../services/blueprintParameterDefinitionService';
 import { camposDaEscada, camposDoTelhado, propriedadesDaEscada, propriedadesDoTelhado } from '../../utils/blueprintTipos';
 import { conferirRestricoes, violacoes } from '../../utils/blueprintRestricoes';
 import { conferirLote, recuosEfetivos } from '../../utils/blueprintZonaUrbanistica';
@@ -294,6 +295,7 @@ import TelaMateriais from './TelaMateriais';
 import TelaChavesDeApi from './TelaChavesDeApi';
 import TelaCompras from './TelaCompras';
 import TelaCatalogoDeTipos from './TelaCatalogoDeTipos';
+import TelaParametros, { usosPorChave } from './TelaParametros';
 import { deleteElementType, listAllElementTypes, renameElementType, setElementTypeActive, upsertElementTypes, type TipoDeElemento } from '../../services/blueprintElementTypeService';
 import { usosPorAssinatura } from '../../utils/blueprintCatalogoDeTipos';
 import { abrirCotacao, lancarNoPlano, nomeDaObra, preverCompras, type PreviaDeCompras } from '../../services/blueprintComprasService';
@@ -1334,7 +1336,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais' | 'api' | 'webhooks' | 'acesso' | 'antes-depois' | 'compras' | 'tipos';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais' | 'api' | 'webhooks' | 'acesso' | 'antes-depois' | 'compras' | 'tipos' | 'parametros';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -1964,6 +1966,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       .finally(() => setCatalogoCarregando(false));
   }, [orgId]);
   const usosDeTipos = useMemo(() => usosPorAssinatura(editor.model), [editor.model]);
+  /** DEFINIÇÕES DE PARÂMETRO (P2.5): quantas peças carregam cada chave. */
+  const usosDeParametros = useMemo(() => usosPorChave(editor.model), [editor.model]);
   /** PLANTA → COMPRAS (E10.3): prévia, lançamento no Plano de Aquisições da obra e cotação. Vive enquanto o editor vive; a prévia cai quando a data padrão muda. */
   const [dataPadraoDeCompras, setDataPadraoDeCompras] = useState(() => somarDias(new Date().toISOString().slice(0, 10), 30));
   const [previaDeCompras, setPreviaDeCompras] = useState<PreviaDeCompras | null>(null);
@@ -7702,6 +7706,33 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           </div>
         </div>
       )}
+      {telaAberta === 'parametros' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="parametros">
+          {cabecalhoDaTela(
+            'Definições de parâmetro',
+            'Os parâmetros personalizados da organização (E1.2) e as fórmulas (E1.3): editar nome, família, unidade, opções e fórmula, marcar o que sai no IFC e na planilha, excluir. A chave não muda — é o que a peça carrega.',
+            Sigma,
+            'Arquitetura',
+          )}
+          <div>
+            <TelaParametros
+              definicoes={definicoesDeParametro}
+              carregando={false}
+              usos={usosDeParametros}
+              mostrarOrg={!orgId}
+              nomeDaOrg={(id) => organizacoesDaLoja.find((o) => o.id === id)?.name ?? id.slice(0, 8)}
+              onEditar={async (id, patch) => {
+                const d = await updateParameterDefinition(id, patch);
+                setDefinicoesDeParametro((lista) => lista.map((x) => (x.id === id ? d : x)));
+              }}
+              onExcluir={async (id) => {
+                await deleteParameterDefinition(id);
+                setDefinicoesDeParametro((lista) => lista.filter((x) => x.id !== id));
+              }}
+            />
+          </div>
+        </div>
+      )}
       {telaAberta === 'compras' && (
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="compras">
           {cabecalhoDaTela(
@@ -8364,6 +8395,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                     alternarTela('tipos');
                   }}
                   ajuda="Catálogo de tipos da organização (estrutura, ponto, escada, telhado, componente, piso, forro): renomear, desativar, excluir, usos no desenho, semear padrões e copiar para outra organização"
+                />
+                <BotaoDoRibbon
+                  icone={Sigma}
+                  rotulo="Parâmetros"
+                  contagem={definicoesDeParametro.length || undefined}
+                  ativo={telaAberta === 'parametros'}
+                  onClick={() => {
+                    if (telaAberta !== 'parametros') recarregarDefinicoes();
+                    alternarTela('parametros');
+                  }}
+                  ajuda="Definições de parâmetro personalizado e fórmulas da organização: editar, marcar o que sai nas saídas, excluir; usos no desenho"
                 />
               </GrupoDoRibbon>
             )}

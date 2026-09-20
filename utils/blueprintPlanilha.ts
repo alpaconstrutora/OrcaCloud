@@ -443,12 +443,15 @@ export function linhasDeParametros(
   model: BlueprintModel,
   /** Os calculados por fórmula, por uid (E1.5) — `parametrosCalculadosDoModelo`. */
   calculados?: ReadonlyMap<string, Record<string, string | number | boolean>>,
+  /** Chaves NÃO compartilhadas (P2.5) — ficam de fora da planilha. */
+  privadas?: ReadonlySet<string>,
 ): LinhaDeParametro[] {
   const saida: LinhaDeParametro[] = [];
+  const publica = (chave: string) => !privadas?.has(chave);
   const add = (familia: string, peca: string, uid: string, p: Record<string, string | number | boolean> | undefined) => {
-    for (const chave of Object.keys(p ?? {}).sort()) saida.push({ peca, familia, chave, valor: p![chave], origem: 'gravado' });
+    for (const chave of Object.keys(p ?? {}).sort()) if (publica(chave)) saida.push({ peca, familia, chave, valor: p![chave], origem: 'gravado' });
     const calc = calculados?.get(uid);
-    for (const chave of Object.keys(calc ?? {}).sort()) saida.push({ peca, familia, chave, valor: calc![chave], origem: 'formula' });
+    for (const chave of Object.keys(calc ?? {}).sort()) if (publica(chave)) saida.push({ peca, familia, chave, valor: calc![chave], origem: 'formula' });
   };
   for (const w of model.walls) add('Parede', rc(w.uid, 'wall'), w.uid, w.parametros);
   for (const o of model.openings) add(nomeDoTipoDeAbertura(o.kind), o.esquadria?.nome || rc(o.uid, 'opening'), o.uid, o.parametros);

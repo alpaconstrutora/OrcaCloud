@@ -501,6 +501,8 @@ export interface OpcoesIfc {
    * calculado vence (é a definição da organização falando).
    */
   parametrosCalculadosPorUid?: ReadonlyMap<string, Parametros>;
+  /** Chaves de parâmetro NÃO compartilhadas (P2.5): ficam fora do `Pset_OpuraPersonalizado`. */
+  chavesPrivadas?: ReadonlySet<string>;
   /**
    * Custo por `uid` de elemento. Ausente = o IFC sai SEM custo nenhum.
    *
@@ -715,6 +717,15 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   // Os calculados (E1.5) por cima dos gravados, quando quem exportou os trouxe.
   for (const [uid, calc] of o.parametrosCalculadosPorUid ?? []) {
     parametrosPorUid.set(uid, { ...(parametrosPorUid.get(uid) ?? {}), ...calc });
+  }
+  // O filtro `compartilhado` (P2.5): a chave privada não sai, gravada ou calculada.
+  if (o.chavesPrivadas && o.chavesPrivadas.size > 0) {
+    for (const [uid, p] of [...parametrosPorUid]) {
+      const filtrado: Parametros = {};
+      for (const k of Object.keys(p)) if (!o.chavesPrivadas.has(k)) filtrado[k] = p[k];
+      if (Object.keys(filtrado).length > 0) parametrosPorUid.set(uid, filtrado);
+      else parametrosPorUid.delete(uid);
+    }
   }
   const psetPersonalizado = (produto: string, uid: string | undefined) => {
     const p = uid ? parametrosPorUid.get(uid) : undefined;

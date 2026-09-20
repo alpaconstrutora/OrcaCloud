@@ -42,7 +42,7 @@ import { type ProjecaoCorte, projetarCorte } from '../utils/blueprintCorte';
 import { modeloDoPavimento, papelDoTemplate, planejarConjunto, type PranchaPlanejada, type TemplateDePrancha } from '../utils/blueprintPranchas';
 import { COBERTURA_DXF, gerarDxf, type TopografiaParaDxf } from '../utils/blueprintDxf';
 import { COBERTURA_IFC, gerarIfc, ifcGuidDoProjeto } from '../utils/blueprintIfc';
-import { parametrosCalculadosDoModelo } from '../utils/blueprintFormulas';
+import { chavesPrivadas, parametrosCalculadosDoModelo } from '../utils/blueprintFormulas';
 import { arquivosDoBcf, type TopicoBcf } from '../utils/blueprintBcf';
 import {
   lerComponentes,
@@ -680,6 +680,7 @@ export function montarIfc(model: BlueprintModel, o: OpcoesExportacao): ArtefatoE
     custoPorUid: o.custoPorUid,
     aprovacao: o.aprovacao,
     parametrosCalculadosPorUid: o.definicoesDeParametro ? parametrosCalculadosDoModelo(model, o.definicoesDeParametro) : undefined,
+    chavesPrivadas: o.definicoesDeParametro ? chavesPrivadas(o.definicoesDeParametro) : undefined,
   });
 
   return [
@@ -761,7 +762,7 @@ export function montarQuantitativoXlsx(
       kernelVersion: KERNEL_VERSION,
     },
     armaduraDoModelo(model, quant, o.armadura ?? HIPOTESES_ARMADURA_PADRAO),
-    linhasDeParametros(model, o.definicoesDeParametro ? parametrosCalculadosDoModelo(model, o.definicoesDeParametro) : undefined),
+    linhasDeParametros(model, o.definicoesDeParametro ? parametrosCalculadosDoModelo(model, o.definicoesDeParametro) : undefined, o.definicoesDeParametro ? chavesPrivadas(o.definicoesDeParametro) : undefined),
   );
 
   const wb = XLSX.utils.book_new();

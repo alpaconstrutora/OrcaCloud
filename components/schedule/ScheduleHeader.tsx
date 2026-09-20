@@ -1,9 +1,6 @@
 import React from 'react';
 import {
     ArrowLeft,
-    Calendar,
-    ChevronRight,
-    CheckCircle2,
     TrendingUp,
     FileDown,
     Users,
@@ -29,8 +26,6 @@ import { ProjectSchedule, ProjectSettings, ItemScheduleDetails } from '../../typ
 interface ScheduleHeaderProps {
     onBack?: () => void;
     settings: ProjectSettings;
-    isProjectSelectorOpen: boolean;
-    setIsProjectSelectorOpen: (open: boolean) => void;
     projects: any[];
     onLoadProject: (id: string, view: string) => void;
     viewMode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command' | 'supply' | 'eap' | 'network';
@@ -89,8 +84,6 @@ const VIEW_TABS = [
 const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
     onBack,
     settings,
-    isProjectSelectorOpen,
-    setIsProjectSelectorOpen,
     projects,
     onLoadProject,
     viewMode,
@@ -143,56 +136,43 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
     }, [overflowOpen]);
 
     const closeOverflow = () => setOverflowOpen(false);
+    const orcamentoVinculado = settings.linkedProjectId
+        ? projects.find((p) => p.id === settings.linkedProjectId && isOrcamentoOuLegado(p))
+        : undefined;
 
     return (
-        // space-y-3 (12px) entre as barras de cromo — ui_ux_guia_unificado.md: "12px entre KPIs → abas → botões".
-        <div className="space-y-3">
-        <div className="bg-white px-5 py-4 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-3">
-            {/* ── Title + Project selector ── */}
-            <div className="flex flex-col gap-1 shrink-0">
-                <div className="flex items-center gap-3">
-                    {onBack && (
-                        <Button variant="ghost" size="icon" onClick={onBack} title="Voltar para Gestão de Planejamento" className="group/back -ml-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 bg-white border border-gray-100">
-                            <ArrowLeft className="w-5 h-5 group-hover/back:-translate-x-1 transition-transform" />
-                        </Button>
-                    )}
-                    <h1 className="text-xl font-black text-gray-900 tracking-tight flex items-center gap-2">
-                        <Calendar className="w-5 h-5 text-blue-600" />
-                        Planejamento Físico-Financeiro
-                    </h1>
-                </div>
-                <div className="flex items-center gap-2 mt-0.5 relative">
-                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Orçamento:</span>
-                    <div className="relative">
-                        <Button variant="secondary" onClick={() => setIsProjectSelectorOpen(!isProjectSelectorOpen)} className="rounded-full bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100">
-                            {settings.name || 'Selecionar Orçamento'}
-                            <ChevronRight className={`w-3 h-3 transition-transform ${isProjectSelectorOpen ? 'rotate-90' : ''}`} />
-                        </Button>
-                        {isProjectSelectorOpen && (
-                            <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                                <div className="px-3 py-2 border-b border-gray-50 mb-1">
-                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Meus Orçamentos</span>
-                                </div>
-                                <div className="max-h-60 overflow-y-auto">
-                                    {projects.filter(isOrcamentoOuLegado).map((p) => (
-                                        <Button key={p.id} variant="ghost" onClick={() => { onLoadProject(p.id, 'schedule'); setIsProjectSelectorOpen(false); }} className={`w-full text-left px-4 py-2 flex items-center justify-between group rounded-none ${p.id === settings.id ? 'text-blue-600 bg-blue-50/50' : 'text-gray-600 hover:bg-gray-50'}`}>
-                                            <span className="truncate">{p.name}</span>
-                                            {p.id === settings.id && <CheckCircle2 className="w-4 h-4 text-blue-500" />}
-                                        </Button>
-                                    ))}
-                                    {projects.length === 0 && (
-                                        <div className="px-4 py-8 text-center">
-                                            <p className="text-xs font-bold text-gray-400 uppercase">Nenhum orçamento encontrado</p>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
+        // §20 / §20.1: o título fica SOLTO (sem card) e o `space-y-6` da raiz dá os
+        // 24px até as abas; daqui para baixo as barras de cromo respiram 12px
+        // (`space-y-3`). Mesmo cabeçalho de tela-detalhe com "Voltar" de
+        // `ContractDetailView.tsx` — h1 2xl, não 3xl (3xl é só lista-raiz).
+        <>
+        <div className="flex items-center gap-4">
+            {onBack && (
+                <button
+                    type="button"
+                    onClick={onBack}
+                    title="Voltar para Gestão de Planejamento"
+                    className="p-2.5 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95 group"
+                >
+                    <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                </button>
+            )}
+            <div>
+                <h1 className="text-2xl font-black text-gray-900 tracking-tight">Planejamento Físico-Financeiro</h1>
+                {/* Contexto só-leitura, no lugar do antigo seletor "Orçamento: ›" —
+                    aquele NÃO era escopo: escolher outro orçamento saía desta tela e
+                    abria o orçamento no editor (`handleLoadProject` → 'analytic').
+                    O que o usuário precisa ler aqui é qual planejamento é este e
+                    de qual orçamento ele lê (`settings.linkedProjectId`). */}
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                    {settings.name || 'Planejamento'}
+                    <span className="mx-2 text-gray-300">·</span>
+                    {orcamentoVinculado ? `Orçamento vinculado: ${orcamentoVinculado.name}` : 'Sem orçamento vinculado'}
+                </p>
             </div>
         </div>
 
+        <div className="space-y-3">
         {/* Toolbar de abas — ui_ux_guia_unificado.md §19.1 */}
         <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
             <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
@@ -372,6 +352,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
             </div>
         </div>
         </div>
+        </>
     );
 };
 

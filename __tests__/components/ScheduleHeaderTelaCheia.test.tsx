@@ -22,8 +22,6 @@ function props(extra: Partial<Props> = {}): Props {
   const nada = () => undefined;
   return {
     settings: { id: 'p1', name: 'Orçamento X' } as unknown as ProjectSettings,
-    isProjectSelectorOpen: false,
-    setIsProjectSelectorOpen: nada,
     projects: [],
     onLoadProject: nada,
     viewMode: 'gantt',
@@ -84,6 +82,33 @@ describe('ScheduleHeader — Tela cheia', () => {
     expect(sair).toHaveAttribute('aria-pressed', 'true');
     expect(sair.className).toMatch(/bg-blue-50/);
     expect(screen.queryByRole('button', { name: /^tela cheia$/i })).toBeNull();
+  });
+
+  it('título §20: h1 2xl solto (sem card) + subtítulo; "Voltar" no vestuário de tela-detalhe', () => {
+    const onBack = vi.fn();
+    render(<ScheduleHeader {...props({ onBack })} />);
+    const h1 = screen.getByRole('heading', { level: 1, name: 'Planejamento Físico-Financeiro' });
+    expect(h1.className).toMatch(/text-2xl/);
+    expect(h1.closest('[class*="shadow-sm"]')).toBeNull(); // não está dentro de card
+    expect(screen.getByText(/Orçamento X/).className).toMatch(/mt-1\.5/); // subtítulo §20
+    const voltar = screen.getByTitle('Voltar para Gestão de Planejamento');
+    expect(voltar.className).toMatch(/rounded-\[6px\]/);
+  });
+
+  it('subtítulo diz qual planejamento é e de qual orçamento ele lê (sem seletor que sai da tela)', () => {
+    const projects = [
+      { id: 'orc1', name: 'Orçamento X', settings: { classification: 'ORCAMENTO' } },
+      { id: 'o1', name: 'Obra Z', settings: { classification: 'OBRA' } },
+    ];
+    const settings = { id: 'plan1', name: 'Plano 2026', linkedProjectId: 'orc1' } as unknown as ProjectSettings;
+    render(<ScheduleHeader {...props({ projects, settings })} />);
+    expect(screen.getByText(/Plano 2026/)).toHaveTextContent('Orçamento vinculado: Orçamento X');
+    expect(screen.queryByRole('button', { name: /^Orçamento/ })).toBeNull();
+  });
+
+  it('sem vínculo, o subtítulo diz "Sem orçamento vinculado"', () => {
+    render(<ScheduleHeader {...props({ settings: { id: 'plan1', name: 'Plano' } as unknown as ProjectSettings })} />);
+    expect(screen.getByText(/Plano/)).toHaveTextContent('Sem orçamento vinculado');
   });
 
   it('o botão está à vista em toda aba — inclusive nas que escondem a escala de tempo', () => {

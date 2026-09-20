@@ -816,7 +816,6 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     onBack,
     organizationId,
 }) => {
-    const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
     const [schedule, setSchedule] = useState<ProjectSchedule>(
         settings.schedule || {
             startDate: new Date().toISOString().split('T')[0],
@@ -4022,8 +4021,6 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 telaCheia={telaCheia}
                 onAlternarTelaCheia={alternarTelaCheia}
                 settings={settings}
-                isProjectSelectorOpen={isProjectSelectorOpen}
-                setIsProjectSelectorOpen={setIsProjectSelectorOpen}
                 projects={projects}
                 onLoadProject={onLoadProject}
                 viewMode={viewMode}

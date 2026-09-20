@@ -141,6 +141,17 @@ vi.mock('../../services/blueprintMaterialService', async () => {
 // Templates de vista (E8.2): lista controlável; gravação registrada.
 const listViewTemplates = vi.fn(async () => [] as unknown[]);
 const createViewTemplate = vi.fn(async (org: string, nome: string, config: unknown) => ({ id: 'vt_novo', organizationId: org, nome, config, active: true }));
+const listApiTokens = vi.fn(async () => [] as unknown[]);
+const createApiToken = vi.fn();
+vi.mock('../../services/blueprintApiTokenService', () => ({
+  blueprintApiTokenService: {
+    list: (...a: unknown[]) => listApiTokens(...(a as [])),
+    create: (...a: unknown[]) => createApiToken(...(a as [string, string, string | null])),
+    revoke: vi.fn(async () => true),
+  },
+  urlBaseDaApi: () => 'https://x.supabase.co/functions/v1/planta-api',
+}));
+
 vi.mock('../../services/blueprintViewTemplateService', () => ({
   blueprintViewTemplateService: {
     list: (...a: unknown[]) => listViewTemplates(...(a as [])),
@@ -2149,6 +2160,41 @@ describe('BlueprintEditor · quantitativos', () => {
     await user.selectOptions(within(screen.getByTestId('painel-da-vista')).getByLabelText('Estilo da planta'), 'TECNICA');
     expect(localStorage.getItem('blueprint:estiloPlanta')).toBe(JSON.stringify('TECNICA'));
     expect(within(screen.getByTestId('painel-da-vista')).queryByTestId('resumo-dos-pisos')).toBeNull();
+  }, 60000);
+
+  it('API pública (E9.2): Colaborar › API abre a tela em fluxo com os tokens da organização, a contagem de ativos no ribbon e a documentação publicada; criar passa pela organização do topo', async () => {
+    listApiTokens.mockResolvedValue([
+      { id: 't1', organizationId: 'org_1', nome: 'Power BI', prefixo: 'opk_1a2b3c4d', escopos: ['leitura'], active: true, createdAt: '2026-09-01T10:00:00Z', expiresAt: null, lastUsedAt: null, usos: 3, revokedAt: null },
+      { id: 't2', organizationId: 'org_1', nome: 'Velho', prefixo: 'opk_00000000', escopos: ['leitura'], active: false, createdAt: '2026-08-01T10:00:00Z', expiresAt: null, lastUsedAt: null, usos: 0, revokedAt: '2026-09-01T00:00:00Z' },
+    ]);
+    createApiToken.mockResolvedValue({ id: 't3', token: 'opk_' + 'b'.repeat(48), prefixo: 'opk_bbbbbbbb' });
+    const { useStore } = await import('../../store/useStore');
+    const orgsAntes = useStore.getState().organizations;
+    useStore.setState({ organizations: [{ id: 'org_1', name: 'Org de teste', members: [] }] as never });
+    try {
+      await montar();
+      const user = userEvent.setup();
+      await abrirAba(/^colaborar$/i);
+      const botao = screen.getByRole('button', { name: /^API/ });
+      expect(botao).toHaveAttribute('title', expect.stringMatching(/tokens da organização/));
+      await user.click(botao);
+      const tela = await screen.findByTestId('tela-chaves-de-api');
+      await waitFor(() => expect(tela).toHaveTextContent('opk_1a2b3c4d…'));
+      expect(listApiTokens).toHaveBeenCalled();
+      // Em fluxo (`data-tela`), como as outras telas do editor — nunca `fixed inset-0`.
+      expect(document.querySelector('[data-tela="api"]')).toBeTruthy();
+      expect(document.querySelector('[data-tela="api"]')?.className).not.toMatch(/fixed|inset-0/);
+      expect(within(tela).getByTestId('link-docs-da-api')).toHaveAttribute('href', 'https://x.supabase.co/functions/v1/planta-api/docs');
+      // Criar: uma organização na loja → sem modal; a RPC recebe a org, o nome e a validade nula.
+      await user.click(within(tela).getByTestId('novo-token'));
+      await user.type(within(tela).getByLabelText('Nome do token'), 'Power Query');
+      await user.click(within(tela).getByTestId('salvar-token'));
+      await waitFor(() => expect(createApiToken).toHaveBeenCalledWith('org_1', 'Power Query', null));
+      expect(await within(tela).findByTestId('token-em-texto')).toHaveTextContent('opk_' + 'b'.repeat(48));
+    } finally {
+      useStore.setState({ organizations: orgsAntes });
+      listApiTokens.mockResolvedValue([]);
+    }
   }, 60000);
 
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {

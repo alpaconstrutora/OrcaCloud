@@ -412,3 +412,9 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 [functions.dwg-converter]
 verify_jwt = true
 static_files = ["./functions/dwg-converter/libredwg-web.wasm.gz"]
+
+# API pública da Planta Inteligente (E9.2, 20/09/2026). A autenticação é o token
+# `opk_…` da organização (validado no banco por hash), não um JWT — por isso o
+# gateway não verifica JWT aqui. Documentação em /planta-api/docs.
+[functions.planta-api]
+verify_jwt = false

@@ -19,6 +19,7 @@ import {
   AlignStartVertical,
   LayoutGrid,
   History,
+  KeyRound,
   Landmark,
   Merge,
   MessageSquare,
@@ -282,6 +283,8 @@ import { usePersistedState } from '../ui/TableUtils';
 import { useOrgContext, useOrgWriteTarget, forEachTargetOrg } from '../../hooks/useOrgContext';
 import { useBlueprintMateriais } from '../../hooks/useBlueprintMateriais';
 import TelaMateriais from './TelaMateriais';
+import TelaChavesDeApi from './TelaChavesDeApi';
+import { blueprintApiTokenService, urlBaseDaApi, type TokenDaApi } from '../../services/blueprintApiTokenService';
 import type { UsoDeMaterial } from '../../utils/blueprintMateriais';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import type { Empreendimento } from '../../types/empreendimento';
@@ -1229,7 +1232,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais' | 'api';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -1831,6 +1834,26 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   /** BIBLIOTECA DE MATERIAIS (E7.4): carregada uma vez; resolve `itemCode` nas camadas, acabamentos, guarda-corpos e quantitativos. */
   const biblioteca = useBlueprintMateriais(orgId);
   const { resolveWriteOrg: resolverOrgDeEscrita, orgTargetModal: modalDeOrgDosMateriais } = useOrgWriteTarget();
+  /** API PÚBLICA (E9.2): os tokens da organização (ou de todas, com o topo em "Todas" — a RLS filtra). Carregados só quando a tela abre. */
+  const [tokensDaApi, setTokensDaApi] = useState<TokenDaApi[]>([]);
+  const [tokensDaApiCarregando, setTokensDaApiCarregando] = useState(false);
+  const [tokensDaApiIndisponiveis, setTokensDaApiIndisponiveis] = useState<string | null>(null);
+  const organizacoesDaLoja = useStore((e) => e.organizations);
+  const recarregarTokensDaApi = useCallback(() => {
+    setTokensDaApiCarregando(true);
+    blueprintApiTokenService
+      .list(orgId)
+      .then((lista) => {
+        setTokensDaApi(lista);
+        setTokensDaApiIndisponiveis(null);
+      })
+      .catch((e: unknown) => {
+        console.warn('[api] tokens indisponíveis:', e);
+        setTokensDaApi([]);
+        setTokensDaApiIndisponiveis(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => setTokensDaApiCarregando(false));
+  }, [orgId]);
 
   // O catálogo de tipos de esquadria da organização, para a BARRA. REGRA #5:
   // `null` ("Todas") não bloqueia — vem o que a RLS deixar ver. Falhar não
@@ -7390,6 +7413,39 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           </div>
         </div>
       )}
+      {telaAberta === 'api' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="api">
+          {cabecalhoDaTela(
+            'API pública',
+            'Tokens de leitura da organização para ligar BI, ERP ou planilha à Planta Inteligente: estudos, versões publicadas (payload canônico + hash), quantitativos, planilha CSV, IFC e unidades/áreas. Somente leitura; só o que foi publicado. O token aparece uma vez, ao criar.',
+            KeyRound,
+            'Colaborar',
+          )}
+          <div>
+            <TelaChavesDeApi
+              tokens={tokensDaApi}
+              carregando={tokensDaApiCarregando}
+              indisponivel={tokensDaApiIndisponiveis}
+              mostrarOrg={!orgId}
+              nomeDaOrg={(id) => organizacoesDaLoja.find((o) => o.id === id)?.name ?? id.slice(0, 8)}
+              urlBase={urlBaseDaApi()}
+              onCriar={async (nome, expiresAt) => {
+                // REGRA #5: a organização vem do seletor do topo; em "Todas", o modal pergunta. Um token é de UMA organização — nunca "todas".
+                const alvo = await resolverOrgDeEscrita('single');
+                if (!alvo) throw new Error('Escolha a organização dona do token.');
+                if (alvo.kind !== 'org') throw new Error('Um token pertence a UMA organização: escolha uma.');
+                const criado = await blueprintApiTokenService.create(alvo.orgId, nome, expiresAt);
+                recarregarTokensDaApi();
+                return criado;
+              }}
+              onRevogar={async (id) => {
+                await blueprintApiTokenService.revoke(id);
+                recarregarTokensDaApi();
+              }}
+            />
+          </div>
+        </div>
+      )}
       {telaAberta === 'alternativas' && (
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="alternativas">
           {cabecalhoDaTela(
@@ -8508,6 +8564,21 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               ativo={telaAberta === 'alternativas'}
               onClick={() => alternarTela('alternativas')}
               ajuda="Design Options: alternativas do estudo (ramos) — abrir, criar a partir da atual, comparar lado a lado e tornar principal"
+            />
+          </GrupoDoRibbon>
+        )}
+        {aba === 'colaborar' && (
+          <GrupoDoRibbon rotulo="Integração">
+            <BotaoDoRibbon
+              icone={KeyRound}
+              rotulo="API"
+              contagem={tokensDaApi.filter((t) => t.active).length || undefined}
+              ativo={telaAberta === 'api'}
+              onClick={() => {
+                if (telaAberta !== 'api') recarregarTokensDaApi();
+                alternarTela('api');
+              }}
+              ajuda="API pública de leitura: tokens da organização, documentação publicada (OpenAPI) — estudos, versões com hash, quantitativos, planilha, IFC e unidades. O número é quantos tokens estão ativos."
             />
           </GrupoDoRibbon>
         )}
@@ -10269,10 +10340,6 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           inteira, e aninhá-lo numa `aside` com `overflow` recortaria o painel. */}
       {/* Fora da coluna do painel, como o Quadro de Divisas: é camada sobre a
           tela inteira, e aninhá-la numa `aside` com `overflow` a recortaria. */}
-      {/* Modal de escolha de organização (REGRA #5) para as gravações de configuração
-          da organização (materiais, templates de vista): fora de qualquer tela, para
-          existir sempre que uma delas pedir. */}
-      {modalDeOrgDosMateriais}
       <ModalSobreposicao
         aberto={disputa !== null}
         nomeDaPeca={disputa?.nome ?? ''}
@@ -12562,6 +12629,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         onDestacar={setLimiteEmDestaque}
       />
     </div>
+      {/* Modal de escolha de organização (REGRA #5) para as gravações de configuração
+          da organização (materiais, templates de vista, tokens da API): FORA do container
+          do editor, que fica `hidden` enquanto uma tela está aberta — dentro dele o
+          modal existia mas não aparecia (a tela API mostrou isso em 20/09/2026). */}
+      {modalDeOrgDosMateriais}
     </>
   );
 }

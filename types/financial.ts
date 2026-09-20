@@ -179,9 +179,9 @@ export interface CostCenter {
      *  quem precisa AGRUPAR, não só exibir. */
     parent_id?: string | null;
     parent_name?: string | null;
-    /** Só em `cost_centers_v2`: o condomínio ancorado neste centro de custo
-     *  (`aplicar_20270905000024_condominio_rateio.sql`, 1:1). Preenchido = a
-     *  despesa que cai aqui é do caixa daquele condomínio. */
+    /** Só em `cost_centers_v2`: o empreendimento deste centro de custo
+     *  (`aplicar_20270905000024_condominio_rateio.sql`; N:1 desde 20270919000030).
+     *  Preenchido = a despesa que cai aqui é do caixa daquele condomínio. */
     empreendimento_id?: string | null;
 }
 
@@ -197,9 +197,9 @@ export interface CostCenterV2 {
     /** Obra vinculada (opcional). Sem `empreendimento_id`, o Empreendimento da
      *  listagem é derivado dela. */
     project_id?: string | null;
-    /** Condomínio ancorado neste centro de custo (1:1, índice único parcial
-     *  `uidx_cost_center_por_empreendimento`). Coexiste com `project_id`: prédio
-     *  em operação/retrofit não tem obra de onde derivar o empreendimento. */
+    /** Empreendimento ao qual este centro de custo pertence (N:1 desde
+     *  20270919000030 — um empreendimento pode ter vários). Coexiste com
+     *  `project_id`: prédio em operação/retrofit não tem obra de onde derivar. */
     empreendimento_id?: string | null;
     code: string;
     name: string;

@@ -368,8 +368,8 @@ export const VinculacoesTab: React.FC<Props> = ({
   };
 
   // ── Centro de custo ────────────────────────────────────────────────────────
-  // O vínculo é 1:1 (`uidx_cost_center_por_empreendimento`): o painel some assim
-  // que existe um, e volta quando o usuário desvincula.
+  // N:1 desde 20270919000030: um empreendimento pode ter vários centros de custo,
+  // então Criar/Vincular ficam disponíveis mesmo com a seção preenchida.
   const [ccSheetOpen, setCcSheetOpen] = React.useState(false);
   const [ccMode, setCcMode] = React.useState<'list' | 'create'>('list');
   const [ccOptions, setCcOptions] = React.useState<
@@ -720,7 +720,7 @@ export const VinculacoesTab: React.FC<Props> = ({
         )}
       </LinkSection>
 
-      {/* Centro de Custo — a âncora contábil do empreendimento (1:1). */}
+      {/* Centro de Custo — a âncora contábil do empreendimento (N:1). */}
       <LinkSection
         title="Centro de Custo"
         icon={<Coins className="w-4 h-4" />}
@@ -728,7 +728,7 @@ export const VinculacoesTab: React.FC<Props> = ({
         emptyIcon={<Coins className="w-12 h-12" />}
         emptyTitle="Nenhum centro de custo vinculado"
         emptyHint="Vincule um centro de custo para segregar o caixa deste empreendimento — ou crie um novo já vinculado."
-        action={snapshot.centrosCusto.length === 0 ? (
+        action={(
           <div className="flex items-center gap-2">
             <button
               onClick={() => openCostCenterSheet('create')}
@@ -745,7 +745,7 @@ export const VinculacoesTab: React.FC<Props> = ({
               Vincular centro de custo
             </button>
           </div>
-        ) : undefined}
+        )}
       >
         {snapshot.centrosCusto.map(c => (
           <LinkRow

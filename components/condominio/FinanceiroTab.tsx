@@ -124,7 +124,11 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
     const [searchTerm, setSearchTerm] = usePersistedState<string>('condominio:financeiro:search', '');
     const tableColumns = useTableColumns(COLUMNS, 'condominioFinanceiroColumns');
     const v = tableColumns.visibleColumns;
-    const [centro, setCentro] = React.useState<{ id: string; code: string; name: string } | null>(null);
+    // Todos os centros de custo do condomínio (N desde 2026-09-19): a despesa
+    // do rateio é a soma deles. `centro` = o primeiro por código, usado como
+    // rótulo (`condominio_rateios.cost_center_id`) e nos textos.
+    const [centros, setCentros] = React.useState<{ id: string; code: string; name: string }[]>([]);
+    const centro = centros[0] ?? null;
     const [rateios, setRateios] = React.useState<Rateio[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [erro, setErro] = React.useState<string | null>(null);
@@ -272,7 +276,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
         setLoading(true);
         setErro(null);
         try {
-            setCentro(await condominioRateioService.getCentroDeCusto(empreendimento.id));
+            setCentros(await condominioRateioService.getCentrosDeCusto(empreendimento.id));
             const lista = await condominioRateioService.listar(empreendimento.id);
             setRateios(lista);
             // Contagem em LOTE (2 consultas), não uma por linha: a coluna
@@ -309,7 +313,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
             // Condomínios, e "Condomínios › Condomínio 007 - Bella Vista" lê mal.
             const c = await condominioRateioService.criarCentroDeCusto(
                 empreendimento.id, orgId, empreendimento.name);
-            setCentro(c);
+            setCentros([c]);
             notify(`Centro de custo ${c.code} criado no grupo Condomínios. Toda despesa do condomínio deve cair nele.`);
         } catch (e: any) {
             notify(e?.message || 'Erro ao criar o centro de custo.', 'error');
@@ -320,25 +324,25 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
         if (!escolhido) return;
         try {
             const c = await condominioRateioService.vincular(escolhido, empreendimento.id);
-            setCentro(c);
+            setCentros([c]);
             notify(`Centro de custo ${c.code} vinculado a este condomínio.`);
         } catch (e: any) {
             notify(e?.message || 'Erro ao vincular.', 'error');
         }
     };
 
-    const desvincularCentro = async () => {
-        if (!centro) return;
+    const desvincularCentro = async (alvo: { id: string; code: string; name: string }) => {
+        const ultimo = centros.length === 1;
         const ok = await confirm({
             title: 'Desvincular o centro de custo?',
-            message: `${centro.code} — ${centro.name} deixa de ser o caixa deste condomínio. Nada é apagado: os lançamentos e os rateios já feitos continuam onde estão, mas novos rateios ficam sem de onde tirar despesa.`,
+            message: `${alvo.code} — ${alvo.name} deixa de fazer parte do caixa deste condomínio. Nada é apagado: os lançamentos e os rateios já feitos continuam onde estão${ultimo ? ', mas novos rateios ficam sem de onde tirar despesa' : '; as despesas dele deixam de entrar nos próximos rateios'}.`,
             variant: 'warning',
             confirmLabel: 'Desvincular',
         });
         if (!ok) return;
         try {
-            await condominioRateioService.desvincular(centro.id);
-            setCentro(null);
+            await condominioRateioService.desvincular(alvo.id);
+            setCentros(prev => prev.filter(c => c.id !== alvo.id));
             notify('Centro de custo desvinculado.');
         } catch (e: any) {
             notify(e?.message || 'Erro ao desvincular.', 'error');
@@ -351,7 +355,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
         try {
             setPrevia(await condominioRateioService.previa({
                 empreendimentoId: empreendimento.id,
-                costCenterId: centro.id,
+                costCenterIds: centros.map(c => c.id),
                 competencia: form.competencia,
                 criterio: form.criterio,
                 valorFixo: Number(form.valorFixo.replace(',', '.')) || 0,
@@ -580,25 +584,33 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                 />
                 <KpiCard
                     label="ÚLTIMO RATEIO FECHADO" value={dinheiro(kpis.ultimoTotal)}
-                    sub={centro ? `Centro de custo ${centro.code}` : undefined}
+                    sub={centro ? (centros.length > 1 ? `Centros de custo ${centros.map(c => c.code).join(', ')}` : `Centro de custo ${centro.code}`) : undefined}
                     icon={<Wallet className="w-5 h-5" />} color="blue"
                 />
             </div>
 
             {/* Qual centro de custo alimenta o rateio — sem isso, "de onde vêm as
                 despesas?" só se responde abrindo o código. */}
-            {centro && (
-                <div className="flex items-center justify-between gap-3 bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                    <p className="text-sm text-gray-600 min-w-0">
-                        <span className="text-gray-400">Despesas vêm de</span>{' '}
-                        <span className="font-medium text-gray-800">{centro.code} — {centro.name}</span>
-                    </p>
-                    <button
-                        onClick={desvincularCentro}
-                        className="h-8 px-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all shrink-0 whitespace-nowrap"
-                    >
-                        Desvincular
-                    </button>
+            {centros.length > 0 && (
+                <div className="bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3 space-y-1">
+                    {/* Um por linha: com mais de um centro de custo, a despesa do
+                        rateio é a SOMA — e cada um pode ser desvinculado sozinho.
+                        Vincular mais um: Empreendimento › Vinculações, ou o
+                        campo Empreendimento no cadastro do centro de custo. */}
+                    {centros.map((c, i) => (
+                        <div key={c.id} className="flex items-center justify-between gap-3">
+                            <p className="text-sm text-gray-600 min-w-0">
+                                <span className="text-gray-400">{i === 0 ? (centros.length > 1 ? 'Despesas vêm da soma de' : 'Despesas vêm de') : 'e de'}</span>{' '}
+                                <span className="font-medium text-gray-800">{c.code} — {c.name}</span>
+                            </p>
+                            <button
+                                onClick={() => desvincularCentro(c)}
+                                className="h-8 px-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all shrink-0 whitespace-nowrap"
+                            >
+                                Desvincular
+                            </button>
+                        </div>
+                    ))}
                 </div>
             )}
 
@@ -910,7 +922,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                         <span className="text-gray-800 font-medium">{dinheiro(previa.totalRateado)}</span>
                                     </div>
                                     <div className="text-xs text-gray-400 mt-1">
-                                        {previa.despesas.length} lançamento(s) no centro de custo {centro?.code}
+                                        {previa.despesas.length} lançamento(s) {centros.length > 1 ? `nos centros de custo ${centros.map(c => c.code).join(', ')}` : `no centro de custo ${centro?.code}`}
                                     </div>
                                 </div>
 
@@ -921,8 +933,8 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                 {previa.despesas.length === 0 && (
                                     <p className="text-xs text-amber-600 flex items-start gap-1.5">
                                         <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                                        Nenhuma despesa lançada nesta competência para o centro de custo do
-                                        condomínio. Lance as despesas no Financeiro apontando para ele.
+                                        Nenhuma despesa lançada nesta competência {centros.length > 1 ? 'nos centros de custo' : 'no centro de custo'} do
+                                        condomínio. Lance as despesas no Financeiro apontando para {centros.length > 1 ? 'um deles' : 'ele'}.
                                     </p>
                                 )}
                                 {previa.semDado > 0 && (

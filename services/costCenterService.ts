@@ -9,9 +9,9 @@ export interface CostCenterInput {
     parent_id?: string | null;
     /** Obra vinculada (opcional). */
     project_id?: string | null;
-    /** Empreendimento ancorado neste centro de custo (1:1 — índice único parcial
-     *  `uidx_cost_center_por_empreendimento`). Gravado pela aba Vinculações do
-     *  Empreendimento e pelo módulo de Condomínios. */
+    /** Empreendimento ao qual este centro de custo pertence (N:1 desde
+     *  20270919000030 — um empreendimento pode ter vários). Gravado pela aba
+     *  Vinculações do Empreendimento, pelo módulo de Condomínios e pelo cadastro. */
     empreendimento_id?: string | null;
     name: string;
     description?: string | null;
@@ -80,14 +80,15 @@ export const costCenterService = {
         return data;
     },
 
-    /** `empreendimento_id` NÃO é copiado de propósito: o vínculo é 1:1 e a cópia
-     *  seria recusada pelo índice único — a cópia nasce livre para ser vinculada. */
+    /** Copia o empreendimento também: um empreendimento pode ter vários centros
+     *  de custo (desde 20270919000030), e duplicar é justamente "mais um igual". */
     async duplicate(item: CostCenterV2): Promise<CostCenterV2> {
         return costCenterService.create({
             organization_id: item.organization_id,
             empresa_id: item.empresa_id,
             parent_id: item.parent_id,
             project_id: item.project_id,
+            empreendimento_id: item.empreendimento_id,
             name: `${item.name} (cópia)`,
             description: item.description,
         });
@@ -111,7 +112,7 @@ export const costCenterService = {
      *     próprio item vem em `extra` (o formulário já ofereceu a obra do destino).
      *   • `parent_id` dos filhos fica: aponta para o grupo, que foi junto.
      *   • `empreendimento_id` fica: o vínculo cruza organizações por desenho
-     *     (cada empreendimento é uma SPE/org própria).
+     *     (cada empreendimento é uma SPE/org própria) e é N:1.
      * Lançamentos, pedidos e contratos que apontam para o centro de custo
      * continuam apontando — as FKs são por id, não por organização.
      *
@@ -157,8 +158,8 @@ export const costCenterService = {
 
     // ── Vínculo com Obra (`project_id`) ──────────────────────────────────────
     // A coluna existe desde 20270907000000 e NÃO tem índice único: uma obra pode
-    // ser vinculada a vários centros de custo (pedido do usuário em 04/09/2026),
-    // ao contrário de `empreendimento_id`, que é 1:1.
+    // ser vinculada a vários centros de custo (pedido do usuário em 04/09/2026) —
+    // e, desde 20270919000030, `empreendimento_id` também.
 
     /** Centros de custo desta obra, com o nome do grupo pai já resolvido. */
     async listByProject(projectId: string): Promise<(CostCenterV2 & { grupo: string | null })[]> {

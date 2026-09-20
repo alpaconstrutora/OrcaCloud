@@ -73,10 +73,10 @@ interface FormState {
     parent_id: string;
     /** Obra vinculada — só se aplica a 'item' (grupo é corporativo, sem obra). */
     project_id: string;
-    /** Empreendimento ancorado DIRETAMENTE (`cost_centers_v2.empreendimento_id`,
-     *  1:1 pelo índice `uidx_cost_center_por_empreendimento`). Só para 'item':
-     *  grupo é família de despesa, não recebe lançamento — vincular não segregaria
-     *  caixa nenhum. Mesmo vínculo que a aba Vinculações do Empreendimento grava. */
+    /** Empreendimento ancorado DIRETAMENTE (`cost_centers_v2.empreendimento_id`;
+     *  N:1 desde 20270919000030 — um empreendimento pode ter vários). Só para
+     *  'item': grupo é família de despesa, não recebe lançamento — vincular não
+     *  segregaria caixa nenhum. Mesmo vínculo que a aba Vinculações grava. */
     empreendimento_id: string;
     name: string;
     description: string;
@@ -86,19 +86,9 @@ const EMPTY_FORM: FormState = { recordType: 'group', organization_id: '', parent
 
 /** Opção do select de Empreendimento — vem de TODAS as organizações do usuário. */
 interface EmpreendimentoOpcao { id: string; name: string; organizationId: string }
-/** Centro de custo que já ocupa um empreendimento (1:1), de qualquer organização. */
-interface DonoDoEmpreendimento { id: string; code: string; organizationId: string }
-
-/**
- * O único erro que o usuário provoca de verdade neste formulário é o índice 1:1
- * do empreendimento — e a mensagem crua do Postgres cita o nome do índice sem
- * dizer o que fazer. `linkCostCenter` já traduz; o `create` (insert direto) não.
- */
 function mensagemDeErroAoSalvar(error: unknown): string {
     const msg = error instanceof Error ? error.message : String((error as { message?: string } | null)?.message ?? '');
-    if (msg.includes('uidx_cost_center_por_empreendimento') || msg.includes('já tem um centro de custo vinculado')) {
-        return 'Este empreendimento já tem um centro de custo vinculado. Desvincule o atual antes de apontar outro.';
-    }
+    if (msg.includes('uq_cost_centers_v2_org_code')) return 'Já existe um centro de custo com este código nesta organização.';
     return 'Erro ao salvar o registro.';
 }
 
@@ -200,7 +190,6 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
     const [sheetObrasLoading, setSheetObrasLoading] = useState(false);
     const [sheetEmpreendimentos, setSheetEmpreendimentos] = useState<EmpreendimentoOpcao[]>([]);
     const [sheetEmpreendimentosLoading, setSheetEmpreendimentosLoading] = useState(false);
-    const [donoPorEmpreendimento, setDonoPorEmpreendimento] = useState<Map<string, DonoDoEmpreendimento>>(new Map());
     const confirm = useConfirm();
 
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
@@ -433,32 +422,27 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
     // (memória de 2026-07-21) enquanto os centros de custo ficam na org do grupo.
     // Filtrar pela org do centro de custo escondia os das SPEs (reportado em
     // 11/09/2026 com o topo em "Todas as organizações"). Sem `.eq('organization_id')`,
-    // a RLS recorta (CLAUDE.md REGRA #5). A ocupação 1:1 também é lida sem org,
-    // senão um empreendimento preso a um centro de custo de OUTRA org pareceria
-    // livre e só o índice único avisaria, na gravação.
+    // a RLS recorta (CLAUDE.md REGRA #5).
+    // Um empreendimento pode ter VÁRIOS centros de custo (desde 2026-09-19) —
+    // por isso nenhuma opção vem desabilitada por "já vinculado".
     // O select continua exigindo destino único (`linkOrgId`): em criação
-    // replicada em todas as orgs, o mesmo empreendimento não pode apontar para
-    // N centros de custo.
+    // replicada em todas as orgs, cada cópia apontaria para o mesmo
+    // empreendimento a partir de organizações diferentes — decisão que é do
+    // usuário, org a org, não da replicação.
     useEffect(() => {
-        if (!sheetOpen || !linkOrgId) { setSheetEmpreendimentos([]); setDonoPorEmpreendimento(new Map()); return; }
+        if (!sheetOpen || !linkOrgId) { setSheetEmpreendimentos([]); return; }
         let cancelled = false;
         setSheetEmpreendimentosLoading(true);
-        Promise.all([
-            empreendimentoService.list(),
-            costCenterService.list(null).catch(() => [] as CostCenterV2[]),
-        ])
-            .then(([emps, ccs]) => {
+        empreendimentoService.list()
+            .then(emps => {
                 if (cancelled) return;
                 setSheetEmpreendimentos(
                     emps
                         .map(e => ({ id: e.id, name: e.name, organizationId: e.organization_id }))
                         .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true })),
                 );
-                const donos = new Map<string, DonoDoEmpreendimento>();
-                for (const cc of ccs) if (cc.empreendimento_id) donos.set(cc.empreendimento_id, { id: cc.id, code: cc.code, organizationId: cc.organization_id });
-                setDonoPorEmpreendimento(donos);
             })
-            .catch(() => { if (!cancelled) { setSheetEmpreendimentos([]); setDonoPorEmpreendimento(new Map()); } })
+            .catch(() => { if (!cancelled) setSheetEmpreendimentos([]); })
             .finally(() => { if (!cancelled) setSheetEmpreendimentosLoading(false); });
         return () => { cancelled = true; };
     }, [sheetOpen, linkOrgId]);
@@ -934,25 +918,16 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
                                                 // Um <optgroup> por organização: o vínculo cruza orgs de propósito
                                                 // (empreendimento na SPE, centro de custo na org do grupo).
                                                 <optgroup key={grupo.orgId} label={grupo.orgName}>
-                                                    {grupo.emps.map(emp => {
-                                                        // 1:1 — quem já está preso a outro centro de custo (de qualquer org) aparece, mas não se escolhe.
-                                                        const dono = donoPorEmpreendimento.get(emp.id);
-                                                        const ocupado = !!dono && dono.id !== editingItem?.id;
-                                                        const donoOutraOrg = ocupado && dono!.organizationId !== linkOrgId;
-                                                        return (
-                                                            <option key={emp.id} value={emp.id} disabled={ocupado}>
-                                                                {emp.name}
-                                                                {ocupado ? ` — já vinculado a ${dono!.code}${donoOutraOrg ? ` (${orgNameById.get(dono!.organizationId) || 'outra organização'})` : ''}` : ''}
-                                                            </option>
-                                                        );
-                                                    })}
+                                                    {grupo.emps.map(emp => (
+                                                        <option key={emp.id} value={emp.id}>{emp.name}</option>
+                                                    ))}
                                                 </optgroup>
                                             ))}
                                         </select>
-                                        <p className="mt-1.5 text-xs text-gray-400">Vínculo direto, de todas as suas organizações: cada empreendimento tem um único centro de custo. Sem ele, a coluna Empreendimento mostra o da obra vinculada.</p>
+                                        <p className="mt-1.5 text-xs text-gray-400">Vínculo direto, de todas as suas organizações: um empreendimento pode ter vários centros de custo. Sem ele, a coluna Empreendimento mostra o da obra vinculada.</p>
                                     </>
                                 ) : (
-                                    <p className="mt-1.5 text-xs text-gray-400">Ao criar em "Todas as organizações" o centro de custo é replicado em cada uma, e um empreendimento só pode ter um — escolha uma organização para vincular.</p>
+                                    <p className="mt-1.5 text-xs text-gray-400">Ao criar em "Todas as organizações" o centro de custo é replicado em cada uma — escolha uma organização para vincular a um empreendimento.</p>
                                 )}
                             </div>
                         )}

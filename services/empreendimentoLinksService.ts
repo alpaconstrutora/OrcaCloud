@@ -15,8 +15,8 @@ import { isSystemProject } from '../utils/systemProjects';
  *   - Áreas NBR:     `area_projects.empreendimento_id`
  *   - Planta IA:     `empreendimentos.planta_ai_study_id`
  *   - Viabilidade:   `empreendimentos.imovib_study_id`
- *   - Centro custo:  `cost_centers_v2.empreendimento_id` (1:1, índice único parcial
- *                    `uidx_cost_center_por_empreendimento` — 20270905000024)
+ *   - Centro custo:  `cost_centers_v2.empreendimento_id` (N:1 desde 20270919000030;
+ *                    era 1:1 pelo índice `uidx_cost_center_por_empreendimento`)
  *   - Contrato:      por DUAS vias — a obra (`contracts.project_id`) e, desde
  *                    20270905000028, o vínculo direto `contracts.empreendimento_id`,
  *                    que é o único caminho para contrato SEM obra (despesa administrativa)
@@ -64,7 +64,7 @@ export interface EmpreendimentoLinksSnapshot {
     plantaIA: EmpreendimentoLink[];
     viabilidade: EmpreendimentoLink[];
     contratos: EmpreendimentoLink[];
-    /** 0 ou 1 — o vínculo é 1:1 no banco. Lista por simetria com as demais seções. */
+    /** N:1 desde 20270919000030 — um empreendimento pode ter vários centros de custo. */
     centrosCusto: EmpreendimentoLink[];
     financeiro: EmpreendimentoFinanceSummary;
     /** Total de vínculos quebrados em todas as seções — vira KPI de atenção. */
@@ -98,15 +98,13 @@ interface ProjectRow {
 }
 
 /**
- * Traduz os dois erros que o usuário realmente encontra ao mexer no vínculo de
- * centro de custo: o índice único 1:1 e o UNIQUE de código. A mensagem crua do
- * Postgres cita o nome do índice e não diz o que fazer.
+ * Traduz o erro que o usuário realmente encontra ao mexer no vínculo de centro
+ * de custo: o UNIQUE de código. A mensagem crua do Postgres cita o nome do
+ * índice e não diz o que fazer. (O índice único 1:1 do empreendimento caiu em
+ * 20270919000030 — um empreendimento pode ter vários centros de custo.)
  */
 function mapCostCenterError(err: { message?: string } | null, prefixo: string): string {
     const msg = err?.message || '';
-    if (msg.includes('uidx_cost_center_por_empreendimento')) {
-        return 'Este empreendimento já tem um centro de custo vinculado. Desvincule o atual antes de apontar outro.';
-    }
     if (msg.includes('cost_centers_v2') && msg.includes('code')) {
         return 'Já existe um centro de custo com este código nesta organização.';
     }
@@ -409,10 +407,9 @@ export const empreendimentoLinksService = {
     },
 
     /**
-     * Centro de custo ancorado no empreendimento (`cost_centers_v2.empreendimento_id`).
-     * O índice único parcial garante 0 ou 1 — a lista existe só por simetria com as
-     * outras seções da aba. O grupo (`parent_id`) vira sublabel: é ele que diz onde a
-     * despesa cai na árvore de 2 níveis.
+     * Centros de custo ancorados no empreendimento (`cost_centers_v2.empreendimento_id`,
+     * N:1 desde 20270919000030). O grupo (`parent_id`) vira sublabel: é ele que diz
+     * onde a despesa cai na árvore de 2 níveis.
      */
     async loadCostCenters(empreendimentoId: string): Promise<EmpreendimentoLink[]> {
         try {

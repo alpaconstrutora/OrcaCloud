@@ -6,6 +6,12 @@
 // condomínio é a que cai em `cost_centers_v2` com `empreendimento_id` dele. Isso
 // separa o caixa com ou sem organização própria, e reusa a dimensão que DRE e
 // balancete já leem.
+//
+// Desde 2026-09-19 um empreendimento pode ter VÁRIOS centros de custo (caiu o
+// índice único `uidx_cost_center_por_empreendimento`, migration 20270919000030).
+// A regra do rateio virou "a despesa do condomínio é a SOMA dos lançamentos de
+// todos os seus centros de custo" — `previa` recebe a lista (`costCenterIds`).
+// Um centro de custo a mais nunca pode fazer despesa sumir do rateio em silêncio.
 
 import { supabase } from '../lib/supabase';
 import { generateDocumentNumber } from './documentNumbering';
@@ -148,15 +154,16 @@ async function proximoCodigo(organizationId: string): Promise<string> {
 }
 
 export const condominioRateioService = {
-    /** O centro de custo do condomínio — a âncora da segregação. */
-    async getCentroDeCusto(empreendimentoId: string): Promise<{ id: string; code: string; name: string } | null> {
+    /** Os centros de custo do condomínio — a âncora da segregação — por código.
+     *  Lista vazia = condomínio ainda sem centro de custo. */
+    async getCentrosDeCusto(empreendimentoId: string): Promise<{ id: string; code: string; name: string }[]> {
         const { data, error } = await supabase
             .from('cost_centers_v2')
             .select('id, code, name')
             .eq('empreendimento_id', empreendimentoId)
-            .maybeSingle();
-        if (error) throw new Error(`Falha ao carregar o centro de custo: ${error.message}`);
-        return data;
+            .order('code', { ascending: true });
+        if (error) throw new Error(`Falha ao carregar os centros de custo: ${error.message}`);
+        return data || [];
     },
 
     /**
@@ -224,10 +231,11 @@ export const condominioRateioService = {
     },
 
     /**
-     * Centros de custo que ainda não são de nenhum condomínio — candidatos ao
+     * Centros de custo que ainda não são de nenhum empreendimento — candidatos ao
      * vínculo. Só FILHOS (parent_id preenchido): grupo não recebe lançamento, e
      * apontar o condomínio para um grupo faria a despesa cair num nível que não
-     * é unidade de caixa.
+     * é unidade de caixa. (Cada centro de custo pertence a no máximo um
+     * empreendimento; o empreendimento pode ter vários.)
      */
     async listarDisponiveis(organizationId: string): Promise<{ id: string; code: string; name: string; grupo: string | null }[]> {
         const { data, error } = await supabase
@@ -264,12 +272,7 @@ export const condominioRateioService = {
             .eq('id', costCenterId)
             .select('id, code, name')
             .single();
-        if (error) {
-            if (error.message.includes('uidx_cost_center_por_empreendimento')) {
-                throw new Error('Este condomínio já tem um centro de custo vinculado.');
-            }
-            throw new Error(`Falha ao vincular: ${error.message}`);
-        }
+        if (error) throw new Error(`Falha ao vincular: ${error.message}`);
         return data;
     },
 
@@ -288,7 +291,8 @@ export const condominioRateioService = {
      */
     async previa(params: {
         empreendimentoId: string;
-        costCenterId: string;
+        /** TODOS os centros de custo do condomínio — a despesa é a soma deles. */
+        costCenterIds: string[];
         competencia: string;      // 'YYYY-MM-01'
         criterio: CriterioRateio;
         /** Só para GRUPO: as unidades que participam. */
@@ -311,19 +315,30 @@ export const condominioRateioService = {
         pagador?: PagadorDaCota;
     }): Promise<PreviaRateio> {
         const inicio = params.competencia;
-        const fim = new Date(inicio);
-        fim.setMonth(fim.getMonth() + 1);
-        const fimISO = fim.toISOString().slice(0, 10);
+        // Fim = 1º dia do mês seguinte, por aritmética de STRING. Com
+        // `new Date('2026-09-01')` + `setMonth(+1)` + `toISOString()`, em
+        // America/Sao_Paulo o resultado era '2026-10-02' (meia-noite UTC vira
+        // 21h do dia anterior no fuso local, e o setMonth estoura o dia 31) —
+        // a despesa lançada no dia 1º do mês seguinte entrava no rateio do mês
+        // anterior. Achado pelo teste condominioRateioNCentros em 2026-09-19.
+        const [anoIni, mesIni] = inicio.split('-').map(Number);
+        const fimISO = mesIni === 12
+            ? `${anoIni + 1}-01-01`
+            : `${anoIni}-${String(mesIni + 1).padStart(2, '0')}-01`;
 
-        // 1. Despesas do centro de custo na competência.
+        // 1. Despesas dos centros de custo do condomínio na competência.
         // `transaction_date`, NÃO `due_date`: é por ela que fn_dre e fn_balancete
         // recortam o período. Usar vencimento aqui faria o rateio e o balancete
         // discordarem sobre a qual mês a mesma despesa pertence — e o condômino
         // receberia uma cota que a contabilidade não confirma.
+        // Lista vazia → nenhuma despesa (não "todas"): sem CC não há de onde tirar.
+        if (params.costCenterIds.length === 0) {
+            throw new Error('Este condomínio não tem centro de custo — não há de onde tirar as despesas.');
+        }
         let queryTx = supabase
             .from('internal_transactions')
             .select('id, description, amount, transaction_date, direction')
-            .eq('cost_center_id', params.costCenterId)
+            .in('cost_center_id', params.costCenterIds)
             .eq('direction', 'DEBIT');
         queryTx = params.transactionIds && params.transactionIds.length > 0
             ? queryTx.in('id', params.transactionIds)
@@ -456,7 +471,10 @@ export const condominioRateioService = {
         return (data || []) as Rateio[];
     },
 
-    /** Grava a prévia como RASCUNHO. Fechar é ação separada e explícita. */
+    /** Grava a prévia como RASCUNHO. Fechar é ação separada e explícita.
+     *  `costCenterId` é o PRIMEIRO centro de custo do condomínio (por código) —
+     *  a coluna `condominio_rateios.cost_center_id` é única e virou rótulo; o
+     *  filtro real da despesa é a lista passada à `previa`. */
     async salvar(params: {
         empreendimentoId: string; organizationId: string; costCenterId: string;
         competencia: string; tipo: TipoRateio; criterio: CriterioRateio;

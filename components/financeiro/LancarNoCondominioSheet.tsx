@@ -22,7 +22,9 @@ interface Grupo {
     empreendimentoId: string;
     empreendimentoNome: string;
     organizationId: string;
-    costCenterId: string;
+    /** Todos os centros de custo dos títulos deste condomínio — a prévia
+     *  filtra pela lista; `salvar` rotula com o primeiro. */
+    costCenterIds: string[];
     payables: Payable[];
 }
 
@@ -82,10 +84,11 @@ export default function LancarNoCondominioSheet({ open, onClose, payables, compe
                     if (!g) {
                         g = {
                             empreendimentoId: r.empreendimentoId, empreendimentoNome: r.empreendimentoNome,
-                            organizationId: r.organizationId, costCenterId: r.costCenterId, payables: [],
+                            organizationId: r.organizationId, costCenterIds: [], payables: [],
                         };
                         porEmpreendimento.set(r.empreendimentoId, g);
                     }
+                    if (!g.costCenterIds.includes(r.costCenterId)) g.costCenterIds.push(r.costCenterId);
                     g.payables.push(p);
                 }
                 setGrupos([...porEmpreendimento.values()].sort((a, b) => a.empreendimentoNome.localeCompare(b.empreendimentoNome, 'pt-BR')));
@@ -127,7 +130,7 @@ export default function LancarNoCondominioSheet({ open, onClose, payables, compe
             const entradas = await Promise.all(grupos.map(async g => {
                 const p = await condominioRateioService.previa({
                     empreendimentoId: g.empreendimentoId,
-                    costCenterId: g.costCenterId,
+                    costCenterIds: g.costCenterIds,
                     competencia: `${competencia}-01`,
                     criterio: form.criterio,
                     valorFixo: Number(form.valorFixo.replace(',', '.')) || 0,
@@ -155,7 +158,7 @@ export default function LancarNoCondominioSheet({ open, onClose, payables, compe
                 await condominioRateioService.salvar({
                     empreendimentoId: g.empreendimentoId,
                     organizationId: g.organizationId,
-                    costCenterId: g.costCenterId,
+                    costCenterId: g.costCenterIds[0],
                     competencia: `${competencia}-01`,
                     tipo: form.tipo,
                     criterio: form.criterio,

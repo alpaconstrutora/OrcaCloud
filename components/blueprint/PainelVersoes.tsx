@@ -1,6 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { listParameterDefinitions } from '../../services/blueprintParameterDefinitionService';
-import { useOrgContext } from '../../hooks/useOrgContext';
+import { forEachTargetOrg, useOrgContext, useOrgWriteTarget } from '../../hooks/useOrgContext';
+import PainelConjuntoDePranchas from './PainelConjuntoDePranchas';
+import { blueprintSheetTemplateService } from '../../services/blueprintSheetTemplateService';
+import { TEMPLATES_DE_PRANCHA_DE_FABRICA, type TemplateDePrancha, type TemplateDePranchaSalvo } from '../../utils/blueprintPranchas';
+import { exportarConjuntoPdf } from '../../services/blueprintExportService';
 import { Boxes, Download, FileText, GitCompare, Image, Maximize2, Ruler, Shapes, Share2, Table, UploadCloud } from 'lucide-react';
 import type { BlueprintStudy, BlueprintSnapshotSummary } from '../../types/blueprint';
 import {
@@ -326,6 +330,30 @@ export default function PainelVersoes({
   }
 
   const { orgId: orgIdDasDefinicoes } = useOrgContext();
+  /** CONJUNTO DE PRANCHAS (E8.3): templates de fábrica + da organização; o escolhido vira o template em edição. */
+  const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
+  const [templatesDePranchaDaOrg, setTemplatesDePranchaDaOrg] = useState<TemplateDePranchaSalvo[]>([]);
+  const [templatesDePranchaIndisponiveis, setTemplatesDePranchaIndisponiveis] = useState<string | null>(null);
+  const [templateDePranchaId, setTemplateDePranchaId] = useState<string>(TEMPLATES_DE_PRANCHA_DE_FABRICA[0].id);
+  const [templateDePrancha, setTemplateDePrancha] = useState<TemplateDePrancha>(TEMPLATES_DE_PRANCHA_DE_FABRICA[0].template);
+  const [gerandoConjunto, setGerandoConjunto] = useState(false);
+  const recarregarTemplatesDePrancha = useCallback(() => {
+    blueprintSheetTemplateService
+      .list(orgIdDasDefinicoes)
+      .then((lista) => {
+        setTemplatesDePranchaDaOrg(lista);
+        setTemplatesDePranchaIndisponiveis(null);
+      })
+      .catch((e: unknown) => {
+        console.warn('[pranchas] templates indisponíveis:', e);
+        setTemplatesDePranchaDaOrg([]);
+        setTemplatesDePranchaIndisponiveis(e instanceof Error ? e.message : String(e));
+      });
+  }, [orgIdDasDefinicoes]);
+  useEffect(() => {
+    recarregarTemplatesDePrancha();
+  }, [recarregarTemplatesDePrancha]);
+  const templatesDePrancha = [...TEMPLATES_DE_PRANCHA_DE_FABRICA, ...templatesDePranchaDaOrg];
   const [definicoesComFormula, setDefinicoesComFormula] = useState<{ chave: string; formula: string; familia: import('../../utils/blueprintKernel').FamiliaComParametros | null }[]>([]);
   useEffect(() => {
     let vivo = true;
@@ -749,6 +777,48 @@ export default function PainelVersoes({
               O manifesto é o JSON que liga o arquivo à versão — não depende de alguém
               ter lido o carimbo.
             </p>
+
+            <PainelConjuntoDePranchas
+              modelo={modelo}
+              templates={templatesDePrancha}
+              indisponivel={templatesDePranchaIndisponiveis}
+              template={templateDePrancha}
+              onTemplate={setTemplateDePrancha}
+              templateEscolhidoId={templateDePranchaId}
+              onEscolher={(id) => {
+                setTemplateDePranchaId(id);
+                const t = templatesDePrancha.find((x) => x.id === id);
+                if (t) setTemplateDePrancha(t.template);
+              }}
+              gerando={gerandoConjunto}
+              desabilitado={!modelo}
+              onGerar={() => {
+                if (!modelo) return;
+                setGerandoConjunto(true);
+                setErro(null);
+                try {
+                  exportarConjuntoPdf(modelo, opcoes(), templateDePrancha);
+                } catch (e) {
+                  setErro(e instanceof Error ? e.message : 'falha ao gerar o conjunto');
+                } finally {
+                  setGerandoConjunto(false);
+                }
+              }}
+              onSalvar={async (nome, t) => {
+                const alvo = await resolveWriteOrg('all-allowed');
+                if (!alvo) throw new Error('Escolha a organização em que o template será gravado.');
+                const { failed } = await forEachTargetOrg(alvo, (org) => blueprintSheetTemplateService.create(org, nome, t));
+                if (failed.length) throw new Error(failed.map((f) => (f.error instanceof Error ? f.error.message : String(f.error))).join('; '));
+                recarregarTemplatesDePrancha();
+              }}
+              onRemover={async (id) => {
+                await blueprintSheetTemplateService.remove(id);
+                setTemplateDePranchaId(TEMPLATES_DE_PRANCHA_DE_FABRICA[0].id);
+                setTemplateDePrancha(TEMPLATES_DE_PRANCHA_DE_FABRICA[0].template);
+                recarregarTemplatesDePrancha();
+              }}
+            />
+            {orgTargetModal}
 
             {/* QUANTITATIVO em planilha. Grupo próprio, e não junto do PDF/PNG:
                 aqueles saem em escala de PAPEL e este não tem escala nenhuma —

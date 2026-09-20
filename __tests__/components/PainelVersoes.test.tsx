@@ -8,7 +8,7 @@
  * coisa, ou um erro depois do clique, quando já era para ter sido dito antes.
  */
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import type { BlueprintStudy } from '../../types/blueprint';
@@ -31,6 +31,18 @@ const exportarIfc = vi.fn();
 const publicarNoGed = vi.fn();
 const compartilharComCliente = vi.fn();
 const listClients = vi.fn();
+const exportarConjuntoPdf = vi.fn();
+const listSheetTemplates = vi.fn();
+const createSheetTemplate = vi.fn();
+const removeSheetTemplate = vi.fn();
+
+vi.mock('../../services/blueprintSheetTemplateService', () => ({
+  blueprintSheetTemplateService: {
+    list: (...a: unknown[]) => listSheetTemplates(...a),
+    create: (...a: unknown[]) => createSheetTemplate(...a),
+    remove: (...a: unknown[]) => removeSheetTemplate(...a),
+  },
+}));
 
 vi.mock('../../services/blueprintGedService', () => ({
   publicarNoGed: (...a: unknown[]) => publicarNoGed(...a),
@@ -52,6 +64,7 @@ vi.mock('../../services/blueprintExportService', () => ({
   exportarManifesto: (...a: unknown[]) => exportarManifesto(...a),
   exportarDxf: (...a: unknown[]) => exportarDxf(...a),
   exportarIfc: (...a: unknown[]) => exportarIfc(...a),
+  exportarConjuntoPdf: (...a: unknown[]) => exportarConjuntoPdf(...a),
 }));
 
 const study: BlueprintStudy = {
@@ -116,6 +129,7 @@ beforeEach(() => {
   // Sempre uma promessa: o painel busca os clientes assim que há o que
   // compartilhar, e um mock sem retorno derruba casos que não falam de cliente.
   listClients.mockResolvedValue([]);
+  listSheetTemplates.mockResolvedValue([]);
   getSnapshot.mockImplementation(async (id: string) =>
     id === 'snap_1' ? snap('snap_1', 1) : snap('snap_2', 2),
   );
@@ -498,5 +512,76 @@ describe('PainelVersoes · compartilhar com o cliente', () => {
     const secao = screen.getByText('Compartilhar com o cliente').closest('div');
     expect(secao).toContainElement(aviso);
     expect(screen.queryByText(/no Portal de/)).toBeNull();
+  });
+});
+
+describe('PainelVersoes · conjunto de pranchas (E8.3)', () => {
+  it('o plano do conjunto é DERIVADO do modelo: índice, planta, 4 fachadas e tabelas numerados com o prefixo; desligar as fachadas tira as folhas; gerar leva o template ao serviço', async () => {
+    await montar();
+    const painel = screen.getByTestId('conjunto-de-pranchas');
+    // Templates de fábrica no seletor; nenhum da organização.
+    const seletor = within(painel).getByLabelText('Template de prancha') as HTMLSelectElement;
+    expect(Array.from(seletor.options).map((o) => o.textContent)).toEqual(['A1 · 1:50 (padrão) (fábrica)', 'A3 · 1:100 (estudo) (fábrica)', 'A0 · 1:50 (executivo + elétrica) (fábrica)']);
+    // Topo em "Todas" (REGRA #5): a lista vem de TODAS as organizações do usuário (a RLS filtra), não da org do estudo.
+    expect(listSheetTemplates).toHaveBeenCalledWith(null);
+    // Sala 4×3 sem corte, sem molhado e sem elétrica: índice + planta + 4 fachadas + tabelas = 7 folhas.
+    // O modelo da versão chega depois da lista (getSnapshot): esperar o plano aparecer.
+    const plano = await within(painel).findByTestId('plano-do-conjunto');
+    expect(within(plano).getAllByRole('listitem')).toHaveLength(7);
+    expect(within(plano).getByLabelText('Prancha A-01')).toHaveTextContent(/Índice de pranchas/);
+    expect(within(plano).getByLabelText('Prancha A-02')).toHaveTextContent(/Planta — Térreo/);
+    expect(within(plano).getByLabelText('Prancha A-02')).toHaveTextContent(/1:50/);
+    expect(within(plano).getByLabelText('Prancha A-07')).toHaveTextContent(/Quadro de áreas/);
+    // Editar: tirar as fachadas e trocar o prefixo — o plano acompanha na hora.
+    await userEvent.click(within(painel).getByTestId('editar-template-de-prancha'));
+    const edicao = within(painel).getByTestId('edicao-do-template-de-prancha');
+    await userEvent.click(within(edicao).getByLabelText('Fachadas'));
+    const prefixo = within(edicao).getByLabelText('Prefixo da numeração das pranchas');
+    await userEvent.clear(prefixo);
+    await userEvent.type(prefixo, 'ARQ');
+    expect(within(plano).getAllByRole('listitem')).toHaveLength(3);
+    expect(within(plano).getByLabelText('Prancha ARQ-03')).toHaveTextContent(/Quadro de áreas/);
+    await userEvent.type(within(edicao).getByLabelText('Empresa no carimbo'), 'ACME');
+    // Gerar: o template editado (sem fachadas, prefixo ARQ, empresa ACME) chega ao serviço, com o modelo e as opções.
+    await userEvent.click(within(painel).getByTestId('gerar-conjunto'));
+    expect(exportarConjuntoPdf).toHaveBeenCalledTimes(1);
+    const [modelo, opcoes, template] = exportarConjuntoPdf.mock.calls[0] as [unknown, { titulo: string; revisao: number }, { incluir: { elevacoes: boolean }; carimbo: { prefixo: string; empresa: string } }];
+    expect(modelo).toBeTruthy();
+    expect(opcoes.revisao).toBe(2);
+    expect(template.incluir.elevacoes).toBe(false);
+    expect(template.carimbo).toMatchObject({ prefixo: 'ARQ', empresa: 'ACME' });
+  });
+
+  it('salvar como template: nome repetido é recusado ANTES de ir ao banco; nome novo grava na organização e o novo template entra no seletor', async () => {
+    const { useStore } = await import('../../store/useStore');
+    const orgsAntes = useStore.getState().organizations;
+    useStore.setState({ organizations: [{ id: 'org_1', name: 'Org de teste', members: [] }] as never });
+    try {
+      createSheetTemplate.mockImplementation(async (org: string, nome: string, t: unknown) => ({ id: 'tpl_1', nome, template: t, organization_id: org }));
+      await montar();
+      const painel = screen.getByTestId('conjunto-de-pranchas');
+      await userEvent.click(within(painel).getByTestId('editar-template-de-prancha'));
+      await userEvent.click(within(painel).getByTestId('salvar-template-de-prancha'));
+      const nome = within(painel).getByLabelText('Nome do template de prancha');
+      await userEvent.type(nome, 'A3 · 1:100 (estudo)');
+      await userEvent.click(within(painel).getByTestId('confirmar-template-de-prancha'));
+      expect(within(painel).getByTestId('erro-do-template-de-prancha')).toHaveTextContent(/já existe/);
+      expect(createSheetTemplate).not.toHaveBeenCalled();
+      await userEvent.clear(nome);
+      await userEvent.type(nome, 'Prefeitura');
+      listSheetTemplates.mockResolvedValue([{ id: 'tpl_1', nome: 'Prefeitura', organizationId: 'org_1', active: true, deFabrica: false, template: { papel: 'A2', paisagem: true, denominadorPlanta: 100, denominadorCortes: 100, denominadorAmpliacao: 50, cotas: true, carimbo: { empresa: '', responsavel: '', registro: '', cliente: '', endereco: '', prefixo: 'PM', camposExtras: [] }, incluir: { indice: true, plantas: true, cortes: true, elevacoes: true, ampliacoes: true, tabelas: true, eletrica: true } } }]);
+      await userEvent.click(within(painel).getByTestId('confirmar-template-de-prancha'));
+      await waitFor(() => expect(createSheetTemplate).toHaveBeenCalledTimes(1));
+      expect(createSheetTemplate.mock.calls[0][0]).toBe('org_1');
+      expect(createSheetTemplate.mock.calls[0][1]).toBe('Prefeitura');
+      // Recarregou e o template está no seletor; escolhê-lo troca o plano (prefixo PM).
+      const seletor = within(painel).getByLabelText('Template de prancha') as HTMLSelectElement;
+      await waitFor(() => expect(Array.from(seletor.options).map((o) => o.textContent)).toContain('Prefeitura'));
+      await userEvent.selectOptions(seletor, 'tpl_1');
+      expect(within(painel).getByTestId('plano-do-conjunto')).toHaveTextContent(/PM-01/);
+      expect(within(within(painel).getByTestId('plano-do-conjunto')).getByLabelText('Prancha PM-02')).toHaveTextContent(/1:100/);
+    } finally {
+      useStore.setState({ organizations: orgsAntes });
+    }
   });
 });

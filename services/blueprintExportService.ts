@@ -14,6 +14,8 @@ import {
   desenharFolhaDoQuadroDeCargas,
   desenharFolhaDoUnifilar,
   desenharPlanta,
+  desenharIndice,
+  desenharTabelas,
   enquadrar,
   enquadrarElevacao,
   manifesto,
@@ -36,6 +38,7 @@ import {
   type ProjecaoElevacao,
 } from '../utils/blueprintElevation';
 import { type ProjecaoCorte, projetarCorte } from '../utils/blueprintCorte';
+import { modeloDoPavimento, papelDoTemplate, planejarConjunto, type PranchaPlanejada, type TemplateDePrancha } from '../utils/blueprintPranchas';
 import { COBERTURA_DXF, gerarDxf, type TopografiaParaDxf } from '../utils/blueprintDxf';
 import { COBERTURA_IFC, gerarIfc, ifcGuidDoProjeto } from '../utils/blueprintIfc';
 import { parametrosCalculadosDoModelo } from '../utils/blueprintFormulas';
@@ -139,6 +142,16 @@ class DesenhistaCanvas implements Desenhista {
     this.k = dpi / 25.4;
   }
 
+  recortar(x: number, y: number, w: number, h: number): void {
+    this.ctx.save();
+    this.ctx.beginPath();
+    this.ctx.rect(x * this.k, y * this.k, w * this.k, h * this.k);
+    this.ctx.clip();
+  }
+  fimDoRecorte(): void {
+    this.ctx.restore();
+  }
+
   linha(x1: number, y1: number, x2: number, y2: number, e: EstiloTraco): void {
     this.ctx.strokeStyle = e.cor;
     // Traço de espessura zero some; meio pixel é o mínimo que ainda aparece.
@@ -184,6 +197,16 @@ class DesenhistaCanvas implements Desenhista {
 /** jsPDF, com o documento já em milímetros — daí não haver conversão nenhuma. */
 class DesenhistaPdf implements Desenhista {
   constructor(private readonly doc: jsPDF) {}
+
+  recortar(x: number, y: number, w: number, h: number): void {
+    this.doc.saveGraphicsState();
+    this.doc.rect(x, y, w, h, null as unknown as string);
+    this.doc.clip();
+    this.doc.discardPath();
+  }
+  fimDoRecorte(): void {
+    this.doc.restoreGraphicsState();
+  }
 
   linha(x1: number, y1: number, x2: number, y2: number, e: EstiloTraco): void {
     this.doc.setDrawColor(e.cor);
@@ -363,6 +386,122 @@ export function exportarPranchasPdf(
   });
 
   doc.save(nomeArquivo(o, 'pdf'));
+}
+
+/**
+ * O CONJUNTO DE PRANCHAS (20/09/2026, E8.3): índice + planta por pavimento +
+ * (elétrica, quadro de cargas, unifilar) + cortes + elevações + ampliações +
+ * tabelas, num PDF só, cada folha com o carimbo da organização e a numeração.
+ *
+ * A ESCALA do template é a pedida; quando a folha não cabe, a prancha desce
+ * para a maior escala que cabe (a sugerida) e o carimbo diz qual foi — um
+ * conjunto não pode falhar na 7ª folha por causa de um pavimento maior.
+ *
+ * Puro no que importa: `desenharConjunto` recebe o `Desenhista` (o de prova
+ * nos testes, o do jsPDF aqui) e devolve o plano executado; `exportarConjuntoPdf`
+ * só embrulha no jsPDF e baixa.
+ */
+export function desenharConjunto(
+  model: BlueprintModel,
+  o: OpcoesExportacao,
+  template: TemplateDePrancha,
+  novaFolha: (indice: number) => Desenhista,
+): { pranchas: PranchaPlanejada[]; folhas: { prancha: PranchaPlanejada; denominador: number }[] } {
+  const pranchas = planejarConjunto(model, template);
+  const papel = papelDoTemplate(template);
+  const quant = computeQuantities(model, POLITICA_PADRAO, KERNEL_VERSION);
+  const nomeDoNivel = new Map(model.levels.map((l) => [l.id, l.name]));
+  const base: OpcoesExportacao = { ...o, papel, cotas: template.cotas, anotacoes: model.anotacoes ?? [], carimboDaOrg: template.carimbo };
+  const folhas: { prancha: PranchaPlanejada; denominador: number }[] = [];
+  pranchas.forEach((p, i) => {
+    const d = novaFolha(i);
+    const comPrancha = (denominador: number, extra: Partial<OpcoesExportacao> = {}): OpcoesExportacao => ({ ...base, ...extra, denominador, prancha: { numero: p.numero, total: pranchas.length, titulo: p.titulo } });
+    switch (p.tipo) {
+      case 'INDICE': {
+        const enq = enquadrar(model, template.denominadorPlanta, papel, false);
+        desenharIndice(d, pranchas, comPrancha(0), enq);
+        folhas.push({ prancha: p, denominador: 0 });
+        break;
+      }
+      case 'PLANTA':
+      case 'ELETRICA': {
+        const m = modeloDoPavimento(model, p.levelId!);
+        let enq = enquadrar(m, p.denominador, papel, template.cotas);
+        let den = p.denominador;
+        if (!enq.cabe && enq.escalaSugerida) {
+          den = enq.escalaSugerida;
+          enq = enquadrar(m, den, papel, template.cotas);
+        }
+        desenharPlanta(d, m, comPrancha(den, { eletrica: p.tipo === 'ELETRICA' }), enq);
+        folhas.push({ prancha: p, denominador: den });
+        break;
+      }
+      case 'QUADRO_DE_CARGAS':
+      case 'UNIFILAR': {
+        const enq = enquadrar(model, template.denominadorPlanta, papel, false);
+        if (p.tipo === 'QUADRO_DE_CARGAS') desenharFolhaDoQuadroDeCargas(d, model, comPrancha(0, { eletrica: true }), enq);
+        else desenharFolhaDoUnifilar(d, model, comPrancha(0, { eletrica: true }), enq);
+        folhas.push({ prancha: p, denominador: 0 });
+        break;
+      }
+      case 'CORTE':
+      case 'ELEVACAO': {
+        const corte = p.corteId ? (model.sections ?? []).find((c) => c.id === p.corteId) : null;
+        const proj = corte ? projetarCorte(model, { corte }) : p.direcao ? projetarElevacao(model, { direcao: p.direcao }) : null;
+        if (!proj) {
+          folhas.push({ prancha: p, denominador: 0 });
+          break;
+        }
+        let den = p.denominador;
+        let enq = enquadrarElevacao(proj, den, papel);
+        if (!enq.cabe && enq.escalaSugerida) {
+          den = enq.escalaSugerida;
+          enq = enquadrarElevacao(proj, den, papel);
+        }
+        desenharElevacao(d, proj, comPrancha(den), enq);
+        folhas.push({ prancha: p, denominador: den });
+        break;
+      }
+      case 'AMPLIACAO': {
+        const m = modeloDoPavimento(model, p.levelId!);
+        let den = p.denominador;
+        let enq = enquadrar(m, den, papel, template.cotas, p.recorte);
+        if (!enq.cabe && enq.escalaSugerida) {
+          den = enq.escalaSugerida;
+          enq = enquadrar(m, den, papel, template.cotas, p.recorte);
+        }
+        desenharPlanta(d, m, comPrancha(den, { recorte: p.recorte }), enq);
+        folhas.push({ prancha: p, denominador: den });
+        break;
+      }
+      case 'TABELAS': {
+        const enq = enquadrar(model, template.denominadorPlanta, papel, false);
+        desenharTabelas(d, quant, (spaceId) => nomeDoNivel.get(model.spaces.find((s) => s.id === spaceId)?.levelId ?? '') ?? '', comPrancha(0), enq);
+        folhas.push({ prancha: p, denominador: 0 });
+        break;
+      }
+      default:
+        break;
+    }
+  });
+  return { pranchas, folhas };
+}
+
+export function montarConjuntoPdf(model: BlueprintModel, o: OpcoesExportacao, template: TemplateDePrancha): ArtefatoExportado[] {
+  const papel = papelDoTemplate(template);
+  let doc: jsPDF | null = null;
+  const { pranchas } = desenharConjunto(model, o, template, (i) => {
+    if (!doc) doc = new jsPDF({ unit: 'mm', format: [papel.larguraMm, papel.alturaMm], orientation: papel.larguraMm > papel.alturaMm ? 'landscape' : 'portrait' });
+    else if (i > 0) doc.addPage([papel.larguraMm, papel.alturaMm]);
+    return new DesenhistaPdf(doc);
+  });
+  if (!doc || pranchas.length === 0) return [];
+  const blob = (doc as jsPDF).output('blob');
+  return [{ nome: nomeArquivoSemEscala({ ...o, papel }, 'pdf').replace(/\.pdf$/, `-conjunto-${pranchas.length}pr.pdf`), blob, tipo: 'pdf' }];
+}
+
+export function exportarConjuntoPdf(model: BlueprintModel, o: OpcoesExportacao, template: TemplateDePrancha): void {
+  baixarArtefatos(montarConjuntoPdf(model, o, template));
 }
 
 /** Um PNG por prancha marcada. Cada arquivo baixa separado. */

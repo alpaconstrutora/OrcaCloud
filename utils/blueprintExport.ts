@@ -141,6 +141,7 @@ export function enquadrar(
   denominador: number,
   papel: Papel,
   comCotas = false,
+  recorte?: { minX: number; minY: number; maxX: number; maxY: number },
 ): Enquadramento {
   // A faixa de cota é fixa em MILÍMETRO DE PAPEL, não em escala: texto de cota
   // tem o mesmo tamanho em 1:50 e em 1:200. Por isso ela ENCOLHE a área útil,
@@ -150,8 +151,9 @@ export function enquadrar(
   const utilLarguraMm = papel.larguraMm - 2 * MARGEM_MM - faixa;
   const utilAlturaMm = papel.alturaMm - 2 * MARGEM_MM - CARIMBO_MM - faixa;
 
-  const bb = boundingBox(model);
-  const folgaMm = Math.max(0, ...model.walls.map((w) => w.thicknessMm)) / 2;
+  const bb = recorte ?? boundingBox(model);
+  // No recorte a folga já está no retângulo pedido.
+  const folgaMm = recorte ? 0 : Math.max(0, ...model.walls.map((w) => w.thicknessMm)) / 2;
 
   const larguraRealMm = bb ? bb.maxX - bb.minX + 2 * folgaMm : 0;
   const alturaRealMm = bb ? bb.maxY - bb.minY + 2 * folgaMm : 0;
@@ -214,14 +216,24 @@ export interface Desenhista {
   poligono(pontos: { x: number; y: number }[], preenchimento: string): void;
   texto(x: number, y: number, texto: string, alturaMm: number, cor?: string): void;
   retangulo(x: number, y: number, w: number, h: number, estilo: EstiloTraco): void;
+  /** RECORTE (E8.3): tudo desenhado entre os dois fica dentro do retângulo (mm de papel). Opcional: quem não implementa desenha sem recortar. */
+  recortar?(x: number, y: number, w: number, h: number): void;
+  fimDoRecorte?(): void;
 }
 
 /** Registra as chamadas em vez de pintar. É como a exportação vira testável. */
 export class DesenhistaDeProva implements Desenhista {
   readonly chamadas: {
-    tipo: 'linha' | 'poligono' | 'texto' | 'retangulo';
+    tipo: 'linha' | 'poligono' | 'texto' | 'retangulo' | 'recortar' | 'fimDoRecorte';
     args: unknown[];
   }[] = [];
+
+  recortar(x: number, y: number, w: number, h: number): void {
+    this.chamadas.push({ tipo: 'recortar', args: [x, y, w, h] });
+  }
+  fimDoRecorte(): void {
+    this.chamadas.push({ tipo: 'fimDoRecorte', args: [] });
+  }
 
   linha(x1: number, y1: number, x2: number, y2: number, estilo: EstiloTraco): void {
     this.chamadas.push({ tipo: 'linha', args: [x1, y1, x2, y2, estilo] });
@@ -246,6 +258,14 @@ export class DesenhistaDeProva implements Desenhista {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface OpcoesExportacao {
+  /**
+   * PRANCHAS (E8.3): recorte do modelo em mm (a AMPLIAÇÃO) — a planta desenha
+   * só este retângulo, a escala maior, e recorta o que passar da borda.
+   */
+  recorte?: { minX: number; minY: number; maxX: number; maxY: number };
+  /** PRANCHAS (E8.3): carimbo da organização e a numeração da folha no conjunto. */
+  carimboDaOrg?: { empresa: string; responsavel: string; registro: string; cliente: string; endereco: string; camposExtras: { rotulo: string; valor: string }[] };
+  prancha?: { numero: string; total: number; titulo: string };
   /**
    * ANOTAÇÕES (E8.1) do modelo, para as folhas que não recebem o modelo
    * (elevação e corte). A planta lê do próprio modelo.
@@ -340,8 +360,12 @@ export function desenharPlanta(
   opcoes: OpcoesExportacao,
   enq: Enquadramento,
 ): void {
-  const bb = boundingBox(model);
-  const folgaMm = Math.max(0, ...model.walls.map((w) => w.thicknessMm)) / 2;
+  const bb = opcoes.recorte ?? boundingBox(model);
+  const folgaMm = opcoes.recorte ? 0 : Math.max(0, ...model.walls.map((w) => w.thicknessMm)) / 2;
+  // AMPLIAÇÃO (E8.3): o que passar do retângulo é recortado no papel.
+  if (opcoes.recorte && bb) {
+    d.recortar?.(enq.offsetXMm, enq.offsetYMm, (bb.maxX - bb.minX) / opcoes.denominador, (bb.maxY - bb.minY) / opcoes.denominador);
+  }
 
   /** mm real → mm de papel. É AQUI que a escala acontece, num lugar só. */
   const px = (x: number) => enq.offsetXMm + (x - (bb?.minX ?? 0) + folgaMm) / opcoes.denominador;
@@ -481,6 +505,117 @@ export function desenharPlanta(
   // ANOTAÇÕES (E8.1) da planta, por cima de tudo — a última camada, como na tela.
   desenharAnotacoes(d, (model.anotacoes ?? []).filter((a) => a.vista.tipo === 'PLANTA'), opcoes.denominador, px, py);
 
+  if (opcoes.recorte && bb) {
+    d.fimDoRecorte?.();
+    // A moldura da ampliação: o leitor vê onde o recorte termina.
+    d.retangulo(enq.offsetXMm, enq.offsetYMm, (bb.maxX - bb.minX) / opcoes.denominador, (bb.maxY - bb.minY) / opcoes.denominador, { espessuraMm: 0.35, cor: COR_TRACO });
+  }
+
+  desenharCarimbo(d, opcoes, enq);
+}
+
+/**
+ * ÍNDICE DE PRANCHAS (E8.3): a primeira folha do conjunto — número, título e
+ * escala de cada prancha, com o carimbo. Cabe 40 linhas por coluna; passa
+ * disso, abre a segunda coluna.
+ */
+export function desenharIndice(
+  d: Desenhista,
+  pranchas: readonly { numero: string; titulo: string; denominador: number }[],
+  opcoes: OpcoesExportacao,
+  enq: Enquadramento,
+): void {
+  const x0 = MARGEM_MM + 4;
+  let y = MARGEM_MM + 10;
+  d.texto(x0, y, `${opcoes.titulo} — índice de pranchas`, 5);
+  y += 8;
+  d.texto(x0, y, `${pranchas.length} prancha(s) · versão ${opcoes.revisao} · hash ${opcoes.hash.slice(0, 12)}`, 2.6, '#555555');
+  y += 8;
+  const linhaMm = 6;
+  const porColuna = Math.max(10, Math.floor((enq.utilAlturaMm - 30) / linhaMm));
+  const larguraColuna = Math.min(140, enq.utilLarguraMm / Math.max(1, Math.ceil(pranchas.length / porColuna)));
+  pranchas.forEach((p, i) => {
+    const col = Math.floor(i / porColuna);
+    const lin = i % porColuna;
+    const x = x0 + col * larguraColuna;
+    const yy = y + lin * linhaMm;
+    if (lin === 0) {
+      d.texto(x, yy - 1.5, 'Nº', 2.4, '#555555');
+      d.texto(x + 16, yy - 1.5, 'Prancha', 2.4, '#555555');
+      d.texto(x + larguraColuna - 22, yy - 1.5, 'Escala', 2.4, '#555555');
+      d.linha(x, yy, x + larguraColuna - 6, yy, { espessuraMm: 0.2, cor: COR_TRACO });
+    }
+    d.texto(x, yy + 4.2, p.numero, 3);
+    d.texto(x + 16, yy + 4.2, p.titulo, 3);
+    d.texto(x + larguraColuna - 22, yy + 4.2, p.denominador > 0 ? `1:${p.denominador}` : '—', 3);
+  });
+  desenharCarimbo(d, opcoes, enq);
+}
+
+/**
+ * TABELAS (E8.3): quadro de áreas (ambiente, pavimento, área de piso, perímetro
+ * interno) com total e quadro de esquadrias (nome, tipo, L × A, quantidade).
+ * Os números são os do quantitativo publicado — os mesmos da aba Quantitativos.
+ */
+export function desenharTabelas(
+  d: Desenhista,
+  quant: { ambientes: { nome?: string; spaceId: string; areaPisoM2: number; perimetroEixoM: number }[]; totais: { areaPisoM2: number; porEsquadria: { nome: string; tipo: string; larguraM: number; alturaM: number; quantidade: number }[] } },
+  pavimentoDe: (spaceId: string) => string,
+  opcoes: OpcoesExportacao,
+  enq: Enquadramento,
+): void {
+  const fmt = (n: number) => n.toFixed(2).replace('.', ',');
+  const x0 = MARGEM_MM + 4;
+  let y = MARGEM_MM + 10;
+  const linhaMm = 5.2;
+  d.texto(x0, y, 'Quadro de áreas', 4.2);
+  y += 6;
+  const cab = (cols: [string, number][], yy: number) => {
+    let x = x0;
+    for (const [rotulo, w] of cols) {
+      d.texto(x, yy, rotulo, 2.4, '#555555');
+      x += w;
+    }
+    d.linha(x0, yy + 1.2, x, yy + 1.2, { espessuraMm: 0.2, cor: COR_TRACO });
+  };
+  const larg: [string, number][] = [['Ambiente', 60], ['Pavimento', 34], ['Área de piso (m²)', 32], ['Perímetro (m)', 28]];
+  cab(larg, y);
+  y += linhaMm;
+  const maxLinhas = Math.floor((enq.utilAlturaMm - 40) / linhaMm);
+  const ambientes = quant.ambientes.slice(0, maxLinhas);
+  for (const a of ambientes) {
+    d.texto(x0, y, a.nome ?? 'Ambiente', 2.8);
+    d.texto(x0 + 60, y, pavimentoDe(a.spaceId), 2.8);
+    d.texto(x0 + 94, y, fmt(a.areaPisoM2), 2.8);
+    d.texto(x0 + 126, y, fmt(a.perimetroEixoM), 2.8);
+    y += linhaMm;
+  }
+  d.linha(x0, y - 3.6, x0 + 154, y - 3.6, { espessuraMm: 0.2, cor: COR_TRACO });
+  d.texto(x0, y, `Total de piso: ${fmt(quant.totais.areaPisoM2)} m²${quant.ambientes.length > ambientes.length ? ` · ${quant.ambientes.length - ambientes.length} ambiente(s) omitido(s) por falta de espaço` : ''}`, 3);
+  // Quadro de esquadrias, à direita quando cabe; abaixo quando não.
+  const aDireita = enq.utilLarguraMm >= 320;
+  let x1 = aDireita ? x0 + 170 : x0;
+  let y1 = aDireita ? MARGEM_MM + 10 : y + 12;
+  d.texto(x1, y1, 'Quadro de esquadrias', 4.2);
+  y1 += 6;
+  const cols2: [string, number][] = [['Nome', 30], ['Tipo', 36], ['L × A (m)', 34], ['Qtd.', 16]];
+  let x = x1;
+  for (const [rotulo, w] of cols2) {
+    d.texto(x, y1, rotulo, 2.4, '#555555');
+    x += w;
+  }
+  d.linha(x1, y1 + 1.2, x, y1 + 1.2, { espessuraMm: 0.2, cor: COR_TRACO });
+  y1 += linhaMm;
+  const ROTULO_TIPO: Record<string, string> = { door: 'Porta', window: 'Janela', sliding: 'Porta de correr' };
+  for (const e of quant.totais.porEsquadria) {
+    d.texto(x1, y1, e.nome, 2.8);
+    d.texto(x1 + 30, y1, ROTULO_TIPO[e.tipo] ?? e.tipo, 2.8);
+    d.texto(x1 + 66, y1, `${fmt(e.larguraM)} × ${fmt(e.alturaM)}`, 2.8);
+    d.texto(x1 + 100, y1, String(e.quantidade), 2.8);
+    y1 += linhaMm;
+  }
+  if (quant.totais.porEsquadria.length === 0) d.texto(x1, y1, 'Sem esquadrias no desenho.', 2.8, '#555555');
+  x1 = 0;
   desenharCarimbo(d, opcoes, enq);
 }
 
@@ -950,22 +1085,44 @@ function desenharCarimbo(d: Desenhista, o: OpcoesExportacao, enq: Enquadramento)
 
   const data = (o.data ?? new Date()).toLocaleDateString('pt-BR');
 
-  d.texto(MARGEM_MM + 3, topo + 6, o.titulo, 3.2);
+  // CARIMBO DA ORGANIZAÇÃO (E8.3): bloco à esquerda com empresa, responsável,
+  // cliente e endereço; o número da prancha, grande, à direita. O título, a
+  // escala, o hash e o aviso continuam no lugar de sempre, deslocados.
+  const deslocamento = o.carimboDaOrg ? 70 : 0;
+  if (o.carimboDaOrg) {
+    const c = o.carimboDaOrg;
+    const x = MARGEM_MM + 3;
+    d.linha(MARGEM_MM + 68, topo, MARGEM_MM + 68, topo + CARIMBO_MM, { espessuraMm: 0.25, cor: COR_TRACO });
+    if (c.empresa) d.texto(x, topo + 5, c.empresa, 3.2);
+    if (c.responsavel || c.registro) d.texto(x, topo + 9.5, [c.responsavel, c.registro].filter(Boolean).join(' · '), 2.3);
+    if (c.cliente) d.texto(x, topo + 13.5, `Cliente: ${c.cliente}`, 2.3);
+    if (c.endereco) d.texto(x, topo + 17.5, c.endereco, 2.1, '#555555');
+    c.camposExtras.slice(0, 2).forEach((campo, i) => d.texto(x, topo + 21.5 + i * 3.2, `${campo.rotulo}: ${campo.valor}`, 2.0, '#555555'));
+  }
+  if (o.prancha) {
+    const xNum = MARGEM_MM + largura - 100;
+    d.linha(xNum - 4, topo, xNum - 4, topo + CARIMBO_MM, { espessuraMm: 0.25, cor: COR_TRACO });
+    d.texto(xNum, topo + 6, 'Prancha', 2.2, '#555555');
+    d.texto(xNum, topo + 15, o.prancha.numero, 8);
+    d.texto(xNum, topo + 20, `de ${o.prancha.total}`, 2.6, '#555555');
+  }
+
+  d.texto(MARGEM_MM + 3 + deslocamento, topo + 6, o.prancha ? `${o.titulo} — ${o.prancha.titulo}` : o.titulo, 3.2);
   d.texto(
-    MARGEM_MM + 3,
+    MARGEM_MM + 3 + deslocamento,
     topo + 11,
-    `Escala 1:${o.denominador}  ·  ${o.papel.id}  ·  Versão ${o.revisao}  ·  ${data}`,
+    `${o.denominador > 0 ? `Escala 1:${o.denominador}` : 'Sem escala'}  ·  ${o.papel.id}  ·  Versão ${o.revisao}  ·  ${data}`,
     2.4,
   );
   // O hash é o que liga o papel à versão publicada. Sem ele, duas impressões
   // parecidas são indistinguíveis, e é sempre a errada que vai para a obra.
-  d.texto(MARGEM_MM + 3, topo + 15.5, `Hash ${o.hash.slice(0, 16)}`, 2.0, '#555555');
-  d.texto(MARGEM_MM + 3, topo + 20, o.aviso ?? AVISO_PADRAO, 2.2, '#000000');
+  d.texto(MARGEM_MM + 3 + deslocamento, topo + 15.5, `Hash ${o.hash.slice(0, 16)}`, 2.0, '#555555');
+  d.texto(MARGEM_MM + 3 + deslocamento, topo + 20, o.aviso ?? AVISO_PADRAO, 2.2, '#000000');
   // COTA SEM DIZER DE ONDE É MEDIDA ENGANA. Quem mede a face vai achar meia
   // espessura a menos de cada lado, e vai achar que o desenho está errado.
-  if (o.cotas) d.texto(MARGEM_MM + 3, topo + 23.5, AVISO_COTA_POR_FACE, 1.9, '#555555');
+  if (o.cotas) d.texto(MARGEM_MM + 3 + deslocamento, topo + 23.5, AVISO_COTA_POR_FACE, 1.9, '#555555');
 
-  desenharEscalaGrafica(d, o, MARGEM_MM + largura - 45, topo + 20);
+  if (o.denominador > 0) desenharEscalaGrafica(d, o, MARGEM_MM + largura - 45, topo + 20);
 }
 
 /**

@@ -27,6 +27,7 @@ import {
   furosDaEscada,
   furosDoNucleo,
   medirAgua,
+  pavimentosDoNucleo,
   pointInPolygon,
   normalDaAgua,
   poligonoDaJuncao,
@@ -45,6 +46,7 @@ import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
 import { contornoDaSecaoT, secaoTValida } from '../../utils/blueprintKernel/secaoT';
 import { medirTerreno } from '../../utils/blueprintTerreno';
 import { ehClique } from '../../utils/blueprint3dSelecao';
+import { prismasDoNucleo } from '../../utils/blueprintNucleo3d';
 import {
   SEM_TECLAS,
   alturaDoOlho,
@@ -1259,6 +1261,32 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, en
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model.guardaCorpos, model.levels, levelIds, ocultos]);
 
+  /**
+   * NÚCLEOS VERTICAIS NO 3D (20/09/2026, backlog P2 — P2.6): até aqui só o furo
+   * na laje aparecia. Agora o SHAFT é um prisma translúcido do piso de partida
+   * ao teto do último pavimento (na cor da disciplina — verde-azulado se
+   * mecânico, cinza se geral) e o ELEVADOR é a caixa translúcida + o POÇO
+   * abaixo do piso de partida + a CASA DE MÁQUINAS acima do último teto (as
+   * medidas da ficha) + a CABINE opaca no pavimento de partida. Translúcido e
+   * com arestas: é vazio de projeto, não massa — a planta continua legível.
+   */
+  const prismasDeNucleo = useMemo(() => {
+    const out: { id: string; chave: string; geom: THREE.BufferGeometry; y: number; cor: string; opacidade: number; arestas: string }[] = [];
+    for (const n of model.nucleos ?? []) {
+      const pavimentos = pavimentosDoNucleo(model, n);
+      if (levelIds && !pavimentos.some((p) => levelIds.includes(p.id))) continue;
+      if (ocultos?.has(n.id)) continue;
+      // Os números vêm do módulo puro (`blueprintNucleo3d`); aqui só a geometria.
+      for (const p of prismasDoNucleo(model, n)) {
+        const geom = new THREE.ExtrudeGeometry(shapeDoAnel(p.anel), { depth: p.alturaMm * S, bevelEnabled: false });
+        geom.rotateX(-Math.PI / 2);
+        out.push({ id: n.id, chave: `${n.id}-${p.parte}`, geom, y: p.baseMm * S, cor: p.cor, opacidade: p.opacidade, arestas: p.arestas });
+      }
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model.nucleos, model.levels, levelIds, ocultos]);
+
   /** Os vizinhos do entorno (E5.1): prismas opacos que projetam sombra. */
   const prismasDoEntorno = useMemo(() => {
     if (!entorno) return [];
@@ -1282,6 +1310,12 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, en
       {paineisDeGuardaCorpo.map((g) => (
         <mesh key={`guarda-corpo-${g.chave}`} geometry={g.geom} position={g.pos} rotation={[0, g.rot, 0]} castShadow receiveShadow onClick={(e) => { e.stopPropagation(); onSelecionar?.([g.id]); }}>
           <meshStandardMaterial color={selecionados?.has(g.id) ? '#2563eb' : g.material === 'VIDRO' ? '#bae6fd' : g.material === 'MADEIRA' ? '#a16207' : g.material === 'ALVENARIA' ? '#e7e5e4' : '#334155'} transparent={g.material === 'VIDRO' || g.sugerido} opacity={g.sugerido ? 0.45 : g.material === 'VIDRO' ? 0.4 : 1} roughness={g.material === 'INOX' ? 0.2 : 0.7} metalness={g.material === 'INOX' || g.material === 'METALICO' ? 0.6 : 0} />
+        </mesh>
+      ))}
+      {prismasDeNucleo.map((p) => (
+        <mesh key={`nucleo-${p.chave}`} geometry={p.geom} position={[0, p.y, 0]} onClick={(e) => { e.stopPropagation(); onSelecionar?.([p.id]); }}>
+          <meshStandardMaterial color={selecionados?.has(p.id) ? '#2563eb' : p.cor} transparent={p.opacidade < 1} opacity={selecionados?.has(p.id) ? Math.max(0.35, p.opacidade) : p.opacidade} depthWrite={p.opacidade >= 1} side={THREE.DoubleSide} roughness={0.8} />
+          <Edges color={p.arestas} />
         </mesh>
       ))}
       {prismasDoEntorno.map((p) => (

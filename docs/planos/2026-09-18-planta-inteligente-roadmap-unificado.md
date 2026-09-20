@@ -1141,6 +1141,16 @@ Próxima: P2.4 — mover núcleo e vaga por arraste.
 
 Próxima: P2.6 — caixa do elevador no 3D.
 
+### P2.6 — Caixa do elevador e shaft no 3D (20/09/2026) · backlog P2
+
+**O que entrou** (**sem bump**): a E2.4 deixou "só o furo aparece" no 3D. Agora **`utils/blueprintNucleo3d.ts`** (puro) diz o que se desenha por núcleo: **SHAFT** = prisma translúcido do piso de partida ao teto do último pavimento atravessado (verde-azulado se `MECANICA`, cinza se geral); **ELEVADOR** = caixa translúcida (mesma altura) + **poço** abaixo do piso de partida + **casa de máquinas** acima do último teto (as medidas da ficha da E2.4) + **cabine** opaca de 2,20 m no pavimento de partida, recuada 100 mm das paredes da caixa. O viewer só extruda o anel (`ExtrudeGeometry` + `Edges`), com `depthWrite` desligado no translúcido — é vazio de projeto, não massa, e a planta continua legível por dentro. Clique seleciona o núcleo; respeita pavimentos visíveis e ocultos.
+
+**Decisões.** (1) Números fora do viewer (que está sob `@ts-nocheck`): o que dá para testar sem WebGL é a lista de prismas (cotas, alturas, cores). (2) Translúcido, não sólido: o shaft e a caixa são o que NÃO se constrói. (3) A cabine é ilustrativa (2,20 m, recuo fixo): ninguém dimensiona cabine em pré-projeto — o que importa é ver que o elevador para ali.
+
+**Prova.** *No app real* (estudo "Planta 14/09/2026", escritas bloqueadas 16): elevador por dois cantos com a ficha de 8 passageiros aplicada e shaft mecânico no rascunho; **Vista: 3D** — a caixa do elevador translúcida com a casa de máquinas acima da cobertura e o shaft verde-azulado atravessando os dois pavimentos (captura); 0 erros de página. Testes: `blueprintNucleo3d.test.ts` (2: elevador com caixa 5,80 m / poço −1,40 / casa 2,20 / cabine recuada, e sem ficha só caixa + cabine; shaft por disciplina e até o pavimento de chegada); suíte 405 arquivos / 4865 testes; tsc, check-ui e build OK.
+
+Próxima: P2.7 — vagas em espinha de peixe (45°) e em fila.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

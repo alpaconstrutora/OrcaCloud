@@ -57,6 +57,8 @@ import {
   Snowflake,
   Server,
   Wind,
+  Route,
+  Grid3x3,
 } from 'lucide-react';
 import { type TipoDeGuardaCorpo,
   TIPOS_DE_INTERRUPTOR,
@@ -160,6 +162,8 @@ export type EscolhaComponente =
       interruptor?: TipoDeInterruptor;
       /** A classificação hidráulica — ver `TIPOS_DE_PONTO_HIDRAULICO`. */
       tipoHidraulico?: TipoDePontoHidraulico;
+      /** O NOME do ponto quando o item já o define e a disciplina não tem taxonomia (mecânica: "Difusor"). */
+      tipoTexto?: string;
     }
   | { tool: 'quadro' };
 
@@ -365,6 +369,7 @@ function colunaDoGrupo(titulo: string): 1 | 2 | 3 {
   if (titulo.startsWith('Mobiliário — cozinha')) return 2;
   if (titulo.startsWith('Mobiliário')) return 1;
   if (titulo.startsWith('Mecânica — ventilação')) return 2;
+  if (titulo.startsWith('Mecânica — dutos')) return 3;
   if (titulo.startsWith('Mecânica')) return 1;
   // Na família hidráulica o menu é só dela: consumo à esquerda, trechos +
   // reservação + esgoto no meio, registros/conexões/a classificar à direita.
@@ -650,6 +655,30 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
       { chave: 'COMPONENTE_EXAUSTOR', rotulo: 'Exaustor / ventilação', icone: Fan, ajuda: 'Reserva 0,40 × 0,40 × 0,40 m a 2,30 m do piso.', escolha: { tool: 'componente', componente: 'EXAUSTOR' } },
       { chave: 'COMPONENTE_CASA_DE_MAQUINAS', rotulo: 'Casa de máquinas', icone: Server, ajuda: 'Reserva 2,00 × 1,50 × 2,50 m com 600 mm de folga — o lugar do equipamento, não o equipamento.', escolha: { tool: 'componente', componente: 'CASA_DE_MAQUINAS' } },
       { chave: 'SHAFT_MECANICO', rotulo: 'Shaft mecânico', icone: Wind, ajuda: 'Shaft (dois cantos) com a disciplina MECÂNICA: a prumada de dutos e linhas frigorígenas; fura a laje e acusa estrutura dentro.', escolha: { tool: 'nucleo', nucleo: 'SHAFT', disciplina: 'MECANICA' } },
+    ],
+  },
+  // DUTOS E TERMINAIS (20/09/2026, backlog P2 — P2.2): o duto é um TRECHO da
+  // disciplina MECANICA (mesma geometria dos canos: dois cliques, duas cotas,
+  // "bitola" = diâmetro equivalente), e o difusor/grelha é um TERMINAL com o
+  // nome em texto — sem taxonomia nem carga térmica (isso é o HVAC completo do
+  // P3/P4). Entra no clash de instalação × estrutura como as outras disciplinas.
+  {
+    titulo: 'Mecânica — dutos e terminais',
+    itens: [
+      {
+        chave: 'REDE_MECANICA',
+        rotulo: 'Duto',
+        icone: Route,
+        ajuda: 'O trecho de duto, com dois cliques, no forro (2,60 m). A bitola é o diâmetro equivalente (200 mm de partida). Conflita com viga e laje como os canos.',
+        escolha: { tool: 'rede', disciplina: 'MECANICA' },
+      },
+      {
+        chave: 'PONTO_MECANICA',
+        rotulo: 'Difusor / grelha',
+        icone: Grid3x3,
+        ajuda: 'Terminal de ar no forro: difusor de insuflamento, grelha de retorno ou tomada de ar exterior — o nome se troca no painel. 300 × 300 mm.',
+        escolha: { tool: 'terminal', disciplina: 'MECANICA', tipoTexto: 'Difusor' },
+      },
     ],
   },
   // INSTALAÇÕES no fim: elas atravessam tudo o que veio antes, e desenhá-las

@@ -482,6 +482,8 @@ import {
   COTA_USUAL_DO_PONTO_ELETRICO,
   ROTULO_DO_PONTO_ELETRICO,
   COTA_TERMINAL_PADRAO_MM,
+  MEDIDAS_PADRAO_TERMINAL_MECANICO,
+  TIPOS_DE_TERMINAL_MECANICO,
   ROTULO_DA_DISCIPLINA,
   TOLERANCIA_ENCAIXE_MM,
   encaixarEmPecaEletrica,
@@ -5296,6 +5298,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       interruptor: tipoDePontoEletrico === 'INTERRUPTOR' ? tipoDeInterruptor : null,
     }]);
     const criados = editor.run(comando);
+    // O difusor/grelha (P2.2) nasce com a medida da peça, como as caixas hidráulicas.
+    if (criados.length > 0 && disciplinaDeRede === 'MECANICA') editor.run({ type: 'SetTerminalProps', terminalId: criados[0], ...MEDIDAS_PADRAO_TERMINAL_MECANICO });
     if (criados.length > 0) selecionar(criados);
   }
 
@@ -5861,6 +5865,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       const hidraulico = e.tool === 'terminal' ? (e.tipoHidraulico ?? null) : null;
       setTipoDePontoHidraulico(hidraulico);
       if (hidraulico) setTipoDeTerminal(FICHA_DO_PONTO_HIDRAULICO[hidraulico].rotulo);
+      // O TERMINAL MECÂNICO (P2.2) traz o nome no item ("Difusor"); ao sair da
+      // mecânica esse nome não pode vazar para a tomada seguinte.
+      if (e.tool === 'terminal' && e.tipoTexto) setTipoDeTerminal(e.tipoTexto);
+      else if (e.tool === 'terminal' && e.disciplina !== 'MECANICA' && (TIPOS_DE_TERMINAL_MECANICO as readonly string[]).includes(tipoDeTerminal)) setTipoDeTerminal('');
       setPrumadaDeRede(e.tool === 'rede' ? (e.prumada ?? null) : null);
       setCotaDeRede(
         tipo

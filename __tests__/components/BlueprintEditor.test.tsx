@@ -4756,7 +4756,7 @@ describe('BlueprintEditor · HVAC mínimo (E11.1)', () => {
     const menu = () => screen.getAllByRole('button').find((b) => b.getAttribute('title')?.startsWith('Reservas de espaço de climatização'))!;
     expect(menu()).toBeTruthy();
     await user.click(menu());
-    for (const nome of ['Condensadora', 'Evaporadora hi-wall', 'Exaustor / ventilação', 'Casa de máquinas', 'Shaft mecânico']) {
+    for (const nome of ['Condensadora', 'Evaporadora hi-wall', 'Exaustor / ventilação', 'Casa de máquinas', 'Shaft mecânico', 'Duto', 'Difusor / grelha']) {
       expect(screen.getByRole('menuitemradio', { name: new RegExp(`^${nome.replace('/', '\/')}$`) })).toBeInTheDocument();
     }
     await user.click(screen.getByRole('menuitemradio', { name: /^Condensadora$/ }));
@@ -4764,6 +4764,13 @@ describe('BlueprintEditor · HVAC mínimo (E11.1)', () => {
     await user.click(menu());
     await user.click(screen.getByRole('menuitemradio', { name: /^Shaft mecânico$/ }));
     expect(menu()).toHaveTextContent('Shaft mecânico');
+    // P2.2: o duto arma a rede MECANICA e o difusor arma o terminal com o nome "Difusor".
+    await user.click(menu());
+    await user.click(screen.getByRole('menuitemradio', { name: /^Duto$/ }));
+    expect(menu()).toHaveTextContent('Duto');
+    await user.click(menu());
+    await user.click(screen.getByRole('menuitemradio', { name: /^Difusor \/ grelha$/ }));
+    expect(menu()).toHaveTextContent('Difusor / grelha');
     // O clash da reserva: pilar dentro da condensadora — conta no ribbon e abre a lista.
     const conflitos = screen.getByRole('button', { name: /^Conflitos das reservas/ });
     expect(conflitos).toHaveTextContent('1');

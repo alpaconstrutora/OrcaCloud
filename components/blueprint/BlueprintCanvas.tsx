@@ -4936,7 +4936,8 @@ export default function BlueprintCanvas({
           const compMm = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
           const desnivel = Math.abs(t.cotaBMm - t.cotaAMm);
           const caimento = t.disciplina === 'ESGOTO' && !prumada && compMm > 0 && desnivel > 0 ? ` · i ${((desnivel / compMm) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} %` : '';
-          ctx.fillText(`DN ${t.bitolaMm}${caimento}`, c.x + 6 * fz, c.y - 5 * fz);
+          // O duto (P2.2) é "Ø" (diâmetro equivalente); cano é DN.
+          ctx.fillText(`${t.disciplina === 'MECANICA' ? 'Ø' : 'DN'} ${t.bitolaMm}${caimento}`, c.x + 6 * fz, c.y - 5 * fz);
         }
       }
     }
@@ -5263,6 +5264,23 @@ export default function BlueprintCanvas({
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1.25;
       ctx.stroke();
+
+      // ── O TERMINAL MECÂNICO (P2.2): o X do difusor dentro da peça ─────────
+      if (t.disciplina === 'MECANICA' && !selecionado) {
+        const meio = emTela(Math.min(md.larguraMm, md.profundidadeMm) / 2);
+        if (meio >= 3) {
+          ctx.save();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.25;
+          ctx.beginPath();
+          ctx.moveTo(c.x - meio * 0.6, c.y - meio * 0.6);
+          ctx.lineTo(c.x + meio * 0.6, c.y + meio * 0.6);
+          ctx.moveTo(c.x + meio * 0.6, c.y - meio * 0.6);
+          ctx.lineTo(c.x - meio * 0.6, c.y + meio * 0.6);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
 
       // ── O PONTO HIDRÁULICO TIPADO (18/09/2026) ────────────────────────────
       //

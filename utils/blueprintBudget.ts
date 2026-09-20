@@ -332,6 +332,13 @@ export const MEDIDAS: DefinicaoMedida[] = [
     descricao: 'Metros de eletroduto, uma linha por bitola.',
   },
   {
+    id: 'COMPRIMENTO_DUTO',
+    rotulo: 'Duto de ar (mecânica)',
+    escopo: 'INSTALACAO',
+    dimensao: 'M',
+    descricao: 'Metros de duto da disciplina mecânica (P2.2), uma linha por diâmetro equivalente.',
+  },
+  {
     id: 'CONTAGEM_CONEXOES',
     rotulo: 'Conexões hidráulicas',
     escopo: 'INSTALACAO',
@@ -785,9 +792,10 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
     case 'COMPRIMENTO_TUBO_AGUA_FRIA':
     case 'COMPRIMENTO_TUBO_AGUA_QUENTE':
     case 'COMPRIMENTO_TUBO_ESGOTO':
-    case 'COMPRIMENTO_ELETRODUTO': {
+    case 'COMPRIMENTO_ELETRODUTO':
+    case 'COMPRIMENTO_DUTO': {
       const disciplina =
-        medidaId === 'COMPRIMENTO_ELETRODUTO' ? 'ELETRICA' : medidaId.replace('COMPRIMENTO_TUBO_', '');
+        medidaId === 'COMPRIMENTO_ELETRODUTO' ? 'ELETRICA' : medidaId === 'COMPRIMENTO_DUTO' ? 'MECANICA' : medidaId.replace('COMPRIMENTO_TUBO_', '');
       const nome = ROTULO_DA_DISCIPLINA[disciplina as DisciplinaDeRede] ?? disciplina;
       // O `ref` é a linha de compra (disciplina + DN + item): estável entre
       // publicações enquanto existir tubo daquele DN.

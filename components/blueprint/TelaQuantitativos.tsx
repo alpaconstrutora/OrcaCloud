@@ -277,8 +277,10 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
     }
     for (const p of t.porTerminal ?? []) {
       if (p.disciplina === 'ELETRICA') continue;
-      const nome = p.classificacao ? (ROTULO_DO_PONTO_HIDRAULICO[p.classificacao as TipoDePontoHidraulico] ?? ROTULO_DO_PONTO_ELETRICO[p.classificacao as TipoDePontoEletrico] ?? p.tipo) : `${p.tipo} (sem tipo)`;
-      add({ grupo: 'Instalações', item: `${nome} · ${ROTULO_DA_DISCIPLINA[p.disciplina as DisciplinaDeRede] ?? p.disciplina}`, valor: p.quantidade, unidade: 'un', detalhe: p.classificacao ? 'ponto classificado' : 'a classificar' });
+      // O terminal MECÂNICO (P2.2) não tem taxonomia: o nome em texto (Difusor, Grelha) É a classificação.
+      const mecanico = p.disciplina === 'MECANICA';
+      const nome = p.classificacao ? (ROTULO_DO_PONTO_HIDRAULICO[p.classificacao as TipoDePontoHidraulico] ?? ROTULO_DO_PONTO_ELETRICO[p.classificacao as TipoDePontoEletrico] ?? p.tipo) : mecanico ? p.tipo : `${p.tipo} (sem tipo)`;
+      add({ grupo: 'Instalações', item: `${nome} · ${ROTULO_DA_DISCIPLINA[p.disciplina as DisciplinaDeRede] ?? p.disciplina}`, valor: p.quantidade, unidade: 'un', detalhe: p.classificacao ? 'ponto classificado' : mecanico ? 'terminal de ar' : 'a classificar' });
     }
     for (const c of t.porConexao ?? []) {
       add({ grupo: 'Instalações', item: `${ROTULO_DA_CONEXAO[c.tipo]} DN ${c.bitolaMm}${c.paraMm != null ? `→${c.paraMm}` : ''} · ${ROTULO_DA_DISCIPLINA[c.disciplina as DisciplinaDeRede] ?? c.disciplina}`, valor: c.quantidade, unidade: 'un', detalhe: `${c.derivadas} deduzida(s) dos encontros${c.manuais ? ` + ${c.manuais} manual(is)` : ''}` });
@@ -303,7 +305,7 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
       const nome = p.classificacao
         ? (ROTULO_DO_PONTO_HIDRAULICO[p.classificacao as TipoDePontoHidraulico] ?? ROTULO_DO_PONTO_ELETRICO[p.classificacao as TipoDePontoEletrico] ?? p.classificacao)
         : `${p.tipo} (sem tipo)`;
-      linhas.push({ chave: `ponto:${p.disciplina}:${p.classificacao ?? p.tipo}:${p.itemCode ?? ''}`, familia: 'Ponto', disciplina: p.disciplina as DisciplinaDeRede, item: `${nome}${p.itemCode ? ` · ${p.itemCode}` : ''}`, dnMm: null, quantidade: p.quantidade, unidade: 'un', detalhe: p.classificacao ? 'ponto classificado' : 'a classificar — escolha o tipo no painel do ponto' });
+      linhas.push({ chave: `ponto:${p.disciplina}:${p.classificacao ?? p.tipo}:${p.itemCode ?? ''}`, familia: 'Ponto', disciplina: p.disciplina as DisciplinaDeRede, item: `${nome}${p.itemCode ? ` · ${p.itemCode}` : ''}`, dnMm: null, quantidade: p.quantidade, unidade: 'un', detalhe: p.classificacao ? 'ponto classificado' : p.disciplina === 'MECANICA' ? 'terminal de ar' : 'a classificar — escolha o tipo no painel do ponto' });
     }
     for (const c of t.porConexao ?? []) {
       linhas.push({ chave: `conexao:${c.disciplina}:${c.tipo}:${c.bitolaMm}:${c.paraMm ?? ''}`, familia: 'Conexão', disciplina: c.disciplina as DisciplinaDeRede, item: `${ROTULO_DA_CONEXAO[c.tipo]}${c.paraMm != null ? ` ${c.bitolaMm}→${c.paraMm}` : ''}`, dnMm: c.bitolaMm, quantidade: c.quantidade, unidade: 'un', detalhe: `${c.derivadas} deduzida(s) dos encontros${c.manuais ? ` + ${c.manuais} manual(is)` : ''}` });

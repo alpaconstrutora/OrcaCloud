@@ -1080,6 +1080,21 @@ Próxima: E10.3 — Planta → compras.
 
 Próxima: P2.2 — dutos como trechos MECANICA.
 
+### P2.2 — Dutos como trechos MECANICA (20/09/2026) · backlog P2
+
+**O que entrou** (**sem bump**: a disciplina `MECANICA` já existe no kernel desde a E11.1 — o duto é um `Trecho` e o difusor um `Terminal`, famílias que o payload já tem; nada novo no canônico):
+
+- **Menu Mecânica › "Mecânica — dutos e terminais"** (3ª coluna): **Duto** = `{tool:'rede', disciplina:'MECANICA'}` (dois cliques, no forro a **2,60 m**, "bitola" = **Ø equivalente 200 mm** de partida — `COTA_PADRAO_MM`/`BITOLA_PADRAO_MM` da E11.1, cota do terminal subida para 2600) e **Difusor / grelha** = terminal MECANICA com o **nome em texto** (`tipoTexto: 'Difusor'` — novo campo opcional de `EscolhaComponente`; "Grelha de retorno" e "Tomada de ar exterior" se trocam no painel), gravado com **300 × 300 × 50 mm** (`MEDIDAS_PADRAO_TERMINAL_MECANICO`, num segundo comando como as caixas hidráulicas). O nome mecânico não vaza para a tomada seguinte (`TIPOS_DE_TERMINAL_MECANICO` limpa o texto ao sair da mecânica).
+- **Canvas**: o duto sai na cor da disciplina (verde-azulado) com o rótulo **"Ø 200"** (cano é "DN"); o terminal mecânico leva o **X do difusor** dentro do símbolo.
+- **Quantitativos/Orçamento**: o duto entra em `porBitola` como as tubulações ("Mecânica DN 200 · 4,44 m · 1 trecho(s)"); o terminal em `porTerminal` com o nome como classificação ("Difusor · Mecânica · terminal de ar", em vez de "a classificar"); medida nova **`COMPRIMENTO_DUTO`** (escopo INSTALACAO, m, uma linha por Ø) no de-para do orçamento.
+- **Clash**: o duto no forro que atravessa a viga entra em Conflitos como qualquer trecho × estrutura — nenhuma regra nova, só a disciplina passando pela porta que já existia.
+
+**Decisões.** (1) Duto = trecho, não entidade nova: mesma geometria (a, b, duas cotas, bitola), mesmo canônico, mesmo clash, mesma prumada; o que o HVAC completo (P3/P4) acrescentaria é seção retangular, carga térmica e dimensionamento — fora. (2) Terminal mecânico sem taxonomia fechada: três nomes usuais bastam para pré-projeto, e criar `tipoMecanico` no kernel exigiria bump por um vocabulário que ainda não tem uso (cargas). (3) O texto do rótulo "Ø" no duto (diâmetro equivalente) e "DN" nos canos — é como cada disciplina lê a prancha.
+
+**Prova.** *No app real* (estudo "Planta 14/09/2026", escritas bloqueadas 16): o menu Mecânica lista "… | Duto | Difusor / grelha"; Duto por dois cliques → navegador "Duto", canvas com o trecho verde-azulado e "Ø 200" (captura); Difusor num clique → navegador "Difusor / grelha", círculo com X; **Quantitativos › Instalações: "Mecânica DN 200 · 4,44 m · 1 trecho(s), comprimento real"** e "Mecânica 1 un" para o terminal. 0 erros de página. Testes: `blueprintDutos.test.ts` (3: padrões/canônico/medidas, quantitativo + `COMPRIMENTO_DUTO`, clash duto × viga), editor E11.1 estendido (7 itens, Duto e Difusor armam a ferramenta); suíte 401 arquivos / 4852 testes; tsc, check-ui (4 tsx) e build OK.
+
+Próxima: P2.3 — catálogo de tipos por organização.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

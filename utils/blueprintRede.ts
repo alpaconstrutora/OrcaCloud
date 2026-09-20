@@ -70,7 +70,8 @@ export const COTA_TERMINAL_PADRAO_MM: Record<DisciplinaDeRede, number> = {
   AGUA_FRIA: 1100,
   AGUA_QUENTE: 1100,
   ESGOTO: 0,
-  MECANICA: 2300,
+  // Difusor/grelha no forro (P2.2).
+  MECANICA: 2600,
 };
 
 /** Quanto uma ponta de trecho pode estar longe do terminal e ainda encaixar. */
@@ -115,6 +116,18 @@ export const MEDIDAS_PADRAO_TERMINAL: MedidasDaPeca = {
   alturaMm: 100,
   profundidadeMm: 100,
 };
+
+/**
+ * O TERMINAL MECÂNICO (P2.2, 20/09/2026): difusor ou grelha de 300 × 300 no
+ * forro. É o que o item do menu grava ao criar; quem tem outra medida declara.
+ */
+export const MEDIDAS_PADRAO_TERMINAL_MECANICO: MedidasDaPeca = {
+  larguraMm: 300,
+  alturaMm: 50,
+  profundidadeMm: 300,
+};
+/** Os nomes que o menu dá ao terminal mecânico — o `tipo` é texto livre, como nas demais disciplinas sem taxonomia. */
+export const TIPOS_DE_TERMINAL_MECANICO = ['Difusor', 'Grelha de retorno', 'Tomada de ar exterior'] as const;
 
 /** As medidas declaradas, ou o padrão da família para cada uma que faltar. */
 export function medidasDaPeca(

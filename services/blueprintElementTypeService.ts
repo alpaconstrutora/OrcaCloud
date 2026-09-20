@@ -92,3 +92,50 @@ export async function deleteElementType(id: string): Promise<void> {
   const { error } = await supabase.from('blueprint_element_types').delete().eq('id', id);
   if (error) fail('deleteElementType', error);
 }
+
+// ─── CATÁLOGO (P2.3, 20/09/2026): todas as famílias, inativos inclusive; renomear, ativar, copiar ───
+
+/** Todos os tipos da organização (ou o que a RLS deixar ver com "Todas"), inativos inclusive. */
+export async function listAllElementTypes(organizationId: string | null): Promise<TipoDeElemento[]> {
+  let query = supabase.from('blueprint_element_types').select(COLS).order('familia').order('nome');
+  if (organizationId) query = query.eq('organization_id', organizationId);
+  const { data, error } = await query;
+  if (error) fail('listAllElementTypes', error);
+  return (data ?? []).map((r) => mapear(r as Record<string, unknown>));
+}
+
+export async function renameElementType(id: string, nome: string): Promise<TipoDeElemento> {
+  const { data, error } = await supabase
+    .from('blueprint_element_types')
+    .update({ nome: nome.trim(), updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select(COLS)
+    .single();
+  if (error) fail('renameElementType', error);
+  return mapear(data as Record<string, unknown>);
+}
+
+export async function setElementTypeActive(id: string, active: boolean): Promise<TipoDeElemento> {
+  const { data, error } = await supabase
+    .from('blueprint_element_types')
+    .update({ active, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select(COLS)
+    .single();
+  if (error) fail('setElementTypeActive', error);
+  return mapear(data as Record<string, unknown>);
+}
+
+/** Grava uma lista (sementes ou cópia de outra organização) numa organização: upsert por (org, família, nome). */
+export async function upsertElementTypes(organizationId: string, lista: readonly { nome: string; propriedades: PropriedadesDoTipo }[]): Promise<number> {
+  if (lista.length === 0) return 0;
+  const { data, error } = await supabase
+    .from('blueprint_element_types')
+    .upsert(
+      lista.map((t) => ({ organization_id: organizationId, familia: t.propriedades.familia, nome: t.nome.trim(), propriedades: t.propriedades, active: true, updated_at: new Date().toISOString() })),
+      { onConflict: 'organization_id,familia,nome' },
+    )
+    .select('id');
+  if (error) fail('upsertElementTypes', error);
+  return (data ?? []).length;
+}

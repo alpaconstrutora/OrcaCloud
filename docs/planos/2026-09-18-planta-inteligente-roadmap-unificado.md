@@ -1095,6 +1095,22 @@ Próxima: P2.2 — dutos como trechos MECANICA.
 
 Próxima: P2.3 — catálogo de tipos por organização.
 
+### P2.3 — Catálogo de tipos da organização (20/09/2026) · backlog P2
+
+**Correção de rumo, antes de tudo:** o fecho dizia "hoje tipos vivem no estudo" — errado. `blueprint_element_types` é **da organização desde a E1.1** (`organization_id`, RLS de membro). O que não existia era a **tela do catálogo**: os tipos só nasciam inline ("salvar tipo" no painel da peça) e não havia onde vê-los, renomear, desativar, medir o uso, semear padrões nem levar de uma organização para outra. É isso que a P2.3 entrega (fecho corrigido).
+
+**O que entrou** (**sem bump, sem migration**):
+
+- **`utils/blueprintCatalogoDeTipos.ts`** (puro): **`SEMENTES_DE_TIPOS`** (18 tipos padrão de pré-projeto: pilares 14×30, 19×40, 20×40, 25×50 e Ø30; vigas 14×40 e 19×50; laje 12; baldrame 20×40; estaca Ø30 · 6 m; TUG 100 VA a 30 e 110 cm, TUE 600 VA a 220 cm, luz de teto 100 VA; escada 1,20 · espelho 17,5 e rampa 1,20; telhados cerâmico 30 % e fibrocimento 10 % — medidas usuais, não norma), `faltamSementes` (por família + nome, sem maiúsculas), **`usosPorAssinatura(model)`** (estrutura, ponto, escada, telhado, componente — o vínculo tipo × instância que existe), `agruparPorFamilia`, `validarNomeDeTipo` (único por família), `paraCopiar`.
+- **Serviço** (`blueprintElementTypeService`): `listAllElementTypes` (todas as famílias, inativos inclusive; `null` = o que a RLS deixar), `renameElementType`, `setElementTypeActive`, `upsertElementTypes` (sementes e cópia: upsert por org + família + nome).
+- **`TelaCatalogoDeTipos.tsx`** (in-flow, **Arquitetura › Tipos**, ao lado de Materiais; contagem de ativos no ribbon): "Como funciona" (tipo é molde), `StandardTable` (família, nome, propriedades via `resumoDoTipo`, **no desenho**, organização quando o topo está em "Todas", status), ações renomear (inline, validação), desativar/reativar, excluir (confirmação que avisa quantas peças têm a assinatura e que **continuam como estão**), **Semear padrões (N)** e **Copiar para organização…** — as duas gravações passam pelo `useOrgWriteTarget('all-allowed')` (REGRA #5: o topo em "Todas" abre o modal de organização).
+
+**Decisões.** (1) Sementes no código, não no banco: são referência declarada e mudam com o produto; a organização edita as suas. (2) "No desenho" é por **assinatura** (as mesmas propriedades), fiel à E1.1 — não há `tipoId` na peça e não vai haver. (3) Desativar ≠ excluir: desativado some do seletor e fica para reativar; excluir é definitivo e nunca toca peça. (4) Piso/forro entram no catálogo (listar, renomear, desativar) mas não no "no desenho": a assinatura deles vive por ambiente, no painel de acabamentos.
+
+**Prova.** *No app real* (estudo "Planta 14/09/2026", topo em "Todas"): **escritas bloqueadas (15)** — Arquitetura › Tipos abre em fluxo, lista **0 tipos** (não havia nenhum em nenhuma organização), "Semear padrões (18)" abre o modal de organização → Alpa → upsert abortado, erro honesto. **Escrita real, autorizada ("semear na Alpa e manter")**, bloqueio aberto só para `blueprint_element_types` (0 escritas fora): semear → **18 tipos**, "18 tipo(s) padrão criados.", botão desabilitado; renomear "Rampa 1,20 m (NBR 9050)" → "Rampa acessível 1,20 m"; desativar (riscado) e reativar; excluir → confirmação "some do seletor de toda a organização" → 17; semear de novo → **"Semear padrões (1)"** recria a rampa → 18. Banco: Alpa com 18 ativos (10 estrutura, 4 terminal, 2 escada, 2 telhado). Testes: `blueprintCatalogoDeTipos.test.ts` (2: sementes aplicáveis ao kernel; faltam/usos/grupos/validação/cópia), editor "catálogo de tipos (P2.3)" (tela, semear na org do topo, usos = 2, renomear recusa duplicado, desativar, excluir com aviso de usos); suíte 402 arquivos / 4855 testes; tsc, check-ui e build OK.
+
+Próxima: P2.4 — mover núcleo e vaga por arraste.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·
@@ -1124,8 +1140,8 @@ score, sugestões) e o Gerador (design options, gerador determinístico, mobili�
 
 ### Backlog P2 nomeado (o que o plano deixou de fora, com endereço)
 
-Do corte original ("Fora do plano"): catálogo de tipos por organização (hoje tipos vivem no
-estudo, E1.1), famílias aninhadas, sub-regiões/taludes avançados, cobertura por extrusão,
+Do corte original ("Fora do plano"): catálogo de tipos (os tipos são da organização desde a E1.1;
+faltava a TELA do catálogo — feita na P2.3), famílias aninhadas, sub-regiões/taludes avançados, cobertura por extrusão,
 paredes curvas/inclinadas, cortina/brises, rodapés como elemento próprio (hoje declaração por
 ambiente, E7.2), departamento, planta de forro, vista dependente, nuvens de revisão, tabelas
 personalizadas, status do conflito (aberto/resolvido — hoje só a lista e o BCF), SKP, lock fino

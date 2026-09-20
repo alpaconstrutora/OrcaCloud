@@ -95,10 +95,31 @@ vi.mock('../../services/blueprintService', () => ({
 // O catálogo de tipos de elemento (E1.1) é controlável: o seletor aplica o que
 // o dublê devolve, e "salvar" grava pelo dublê.
 const listElementTypes = vi.fn(async () => [] as unknown[]);
+// CATÁLOGO (P2.3): a lista completa e as ações, em memória.
+const catalogoDeTipos: { id: string; organizationId: string; familia: string; nome: string; propriedades: Record<string, unknown>; active: boolean; createdAt: string; updatedAt: string }[] = [];
+const upsertElementTypes = vi.fn(async (_org: string, lista: { nome: string; propriedades: Record<string, unknown> }[]) => {
+  for (const t of lista) catalogoDeTipos.push({ id: `tp_${catalogoDeTipos.length + 1}`, organizationId: _org, familia: String(t.propriedades.familia), nome: t.nome, propriedades: t.propriedades, active: true, createdAt: '', updatedAt: '' });
+  return lista.length;
+});
 vi.mock('../../services/blueprintElementTypeService', () => ({
   listElementTypes: (...a: unknown[]) => listElementTypes(...(a as [])),
   saveElementType: vi.fn(async () => ({})),
-  deleteElementType: vi.fn(),
+  deleteElementType: vi.fn(async (id: string) => {
+    const i = catalogoDeTipos.findIndex((t) => t.id === id);
+    if (i >= 0) catalogoDeTipos.splice(i, 1);
+  }),
+  listAllElementTypes: vi.fn(async () => [...catalogoDeTipos]),
+  renameElementType: vi.fn(async (id: string, nome: string) => {
+    const t = catalogoDeTipos.find((x) => x.id === id)!;
+    t.nome = nome;
+    return { ...t };
+  }),
+  setElementTypeActive: vi.fn(async (id: string, active: boolean) => {
+    const t = catalogoDeTipos.find((x) => x.id === id)!;
+    t.active = active;
+    return { ...t };
+  }),
+  upsertElementTypes: (...a: unknown[]) => upsertElementTypes(...(a as [string, { nome: string; propriedades: Record<string, unknown> }[]])),
 }));
 
 // Definições de parâmetro (E1.2): controláveis, como os tipos de elemento.
@@ -4838,5 +4859,68 @@ describe('BlueprintEditor · status do conflito (P2.1)', () => {
     await waitFor(() => expect(within(dialog).getAllByTestId('conflito-aberto')).toHaveLength(1));
     expect(botao()).toHaveTextContent('1');
     expect(aceitesGravados).toHaveLength(0);
+  }, 60000);
+});
+
+/**
+ * CATÁLOGO DE TIPOS (20/09/2026, backlog P2 — P2.3): Arquitetura › Tipos abre a
+ * tela; semear grava os padrões na organização do topo; renomear, desativar e
+ * excluir passam pelo serviço; "no desenho" conta pela assinatura.
+ */
+describe('BlueprintEditor · catálogo de tipos (P2.3)', () => {
+  it('Tipos: tela em fluxo; semear cria os padrões; usos por assinatura; renomear valida; desativar e excluir', async () => {
+    catalogoDeTipos.length = 0;
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    // Dois pilares 19×40 — a assinatura da semente "Pilar 19×40".
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [
+        { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(1000, 1000)], larguraMm: 190, profundidadeMm: 400, alturaMm: 2800, baseMm: 0 },
+        { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(4000, 1000)], larguraMm: 190, profundidadeMm: 400, alturaMm: 2800, baseMm: 0 },
+      ]).model,
+    );
+    const { useStore } = await import('../../store/useStore');
+    const orgsAntes = useStore.getState().organizations;
+    useStore.setState({ organizations: [{ id: 'org_1', name: 'Org de teste', members: [] }] as never });
+    try {
+      await montar();
+      const user = userEvent.setup();
+      await abrirAba(/^arquitetura$/i);
+      await user.click(screen.getByRole('button', { name: /^Tipos/ }));
+      const tela = await screen.findByTestId('tela-catalogo-de-tipos');
+      expect(document.querySelector('[data-tela="tipos"]')?.className).not.toMatch(/fixed|inset-0/);
+      expect(tela).toHaveTextContent(/Nenhum tipo ainda/);
+      // Semear: uma organização na loja → sem modal; o dublê recebe a org e as 18 sementes.
+      await user.click(within(tela).getByTestId('semear-tipos'));
+      await waitFor(() => expect(upsertElementTypes).toHaveBeenCalledWith('org_1', expect.arrayContaining([expect.objectContaining({ nome: 'Pilar 19×40' })])));
+      await waitFor(() => expect(within(tela).getByText('Pilar 19×40')).toBeInTheDocument());
+      expect(within(tela).getByTestId('aviso-do-catalogo')).toHaveTextContent(/18 tipo\(s\) padrão criados/);
+      expect(within(tela).getByTestId('semear-tipos')).toBeDisabled();
+      const p1940 = catalogoDeTipos.find((x) => x.nome === 'Pilar 19×40')!;
+      expect(within(tela).getByTestId(`usos-${p1940.id}`)).toHaveTextContent('2');
+      // Renomear: duplicado na família é recusado; nome novo grava.
+      await user.click(within(tela).getByRole('button', { name: 'Renomear Pilar 19×40' }));
+      const campo = within(tela).getByLabelText('Novo nome do tipo');
+      await user.clear(campo);
+      await user.type(campo, 'pilar 20×40');
+      await user.click(within(tela).getByTestId('salvar-nome-do-tipo'));
+      expect(within(tela).getByTestId('erro-do-catalogo')).toHaveTextContent(/Já existe/);
+      await user.clear(within(tela).getByLabelText('Novo nome do tipo'));
+      await user.type(within(tela).getByLabelText('Novo nome do tipo'), 'Pilar padrão P1');
+      await user.click(within(tela).getByTestId('salvar-nome-do-tipo'));
+      await waitFor(() => expect(within(tela).getByText('Pilar padrão P1')).toBeInTheDocument());
+      // Desativar: risca e muda o status; excluir passa pela confirmação e avisa dos usos.
+      await user.click(within(tela).getByRole('button', { name: /^Desativar Pilar padrão P1/ }));
+      await waitFor(() => expect(within(tela).getByText('Pilar padrão P1').className).toMatch(/line-through/));
+      await user.click(within(tela).getByRole('button', { name: 'Excluir Pilar padrão P1' }));
+      const dialog = await screen.findByRole('dialog');
+      expect(dialog).toHaveTextContent(/2 peça\(s\) do desenho têm esta assinatura e CONTINUAM/);
+      await user.click(within(dialog).getByRole('button', { name: /^excluir$/i }));
+      await waitFor(() => expect(within(tela).queryByText('Pilar padrão P1')).toBeNull());
+      expect(catalogoDeTipos.find((x) => x.nome === 'Pilar padrão P1')).toBeUndefined();
+    } finally {
+      useStore.setState({ organizations: orgsAntes });
+    }
   }, 60000);
 });

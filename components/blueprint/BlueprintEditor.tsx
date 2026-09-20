@@ -70,6 +70,7 @@ import {
   Hand,
   ShoppingCart,
   Wind,
+  BookMarked,
   Magnet,
   Blocks,
   Loader2,
@@ -292,6 +293,9 @@ import { useBlueprintMateriais } from '../../hooks/useBlueprintMateriais';
 import TelaMateriais from './TelaMateriais';
 import TelaChavesDeApi from './TelaChavesDeApi';
 import TelaCompras from './TelaCompras';
+import TelaCatalogoDeTipos from './TelaCatalogoDeTipos';
+import { deleteElementType, listAllElementTypes, renameElementType, setElementTypeActive, upsertElementTypes, type TipoDeElemento } from '../../services/blueprintElementTypeService';
+import { usosPorAssinatura } from '../../utils/blueprintCatalogoDeTipos';
 import { abrirCotacao, lancarNoPlano, nomeDaObra, preverCompras, type PreviaDeCompras } from '../../services/blueprintComprasService';
 import { somarDias } from '../../utils/blueprintCompras';
 import TelaWebhooks from './TelaWebhooks';
@@ -1330,7 +1334,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais' | 'api' | 'webhooks' | 'acesso' | 'antes-depois' | 'compras';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais' | 'api' | 'webhooks' | 'acesso' | 'antes-depois' | 'compras' | 'tipos';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -1941,6 +1945,25 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [tokensDaApiCarregando, setTokensDaApiCarregando] = useState(false);
   const [tokensDaApiIndisponiveis, setTokensDaApiIndisponiveis] = useState<string | null>(null);
   const organizacoesDaLoja = useStore((e) => e.organizations);
+  /** CATÁLOGO DE TIPOS (P2.3): todos os tipos da organização (inativos inclusive), carregados quando a tela abre. */
+  const [tiposDoCatalogo, setTiposDoCatalogo] = useState<TipoDeElemento[]>([]);
+  const [catalogoCarregando, setCatalogoCarregando] = useState(false);
+  const [catalogoIndisponivel, setCatalogoIndisponivel] = useState<string | null>(null);
+  const recarregarCatalogoDeTipos = useCallback(() => {
+    setCatalogoCarregando(true);
+    listAllElementTypes(orgId)
+      .then((lista) => {
+        setTiposDoCatalogo(lista);
+        setCatalogoIndisponivel(null);
+      })
+      .catch((e: unknown) => {
+        console.warn('[tipos] catálogo indisponível:', e);
+        setTiposDoCatalogo([]);
+        setCatalogoIndisponivel(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => setCatalogoCarregando(false));
+  }, [orgId]);
+  const usosDeTipos = useMemo(() => usosPorAssinatura(editor.model), [editor.model]);
   /** PLANTA → COMPRAS (E10.3): prévia, lançamento no Plano de Aquisições da obra e cotação. Vive enquanto o editor vive; a prévia cai quando a data padrão muda. */
   const [dataPadraoDeCompras, setDataPadraoDeCompras] = useState(() => somarDias(new Date().toISOString().slice(0, 10), 30));
   const [previaDeCompras, setPreviaDeCompras] = useState<PreviaDeCompras | null>(null);
@@ -7628,6 +7651,52 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           </div>
         </div>
       )}
+      {telaAberta === 'tipos' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="tipos">
+          {cabecalhoDaTela(
+            'Catálogo de tipos',
+            'Os tipos de elemento da organização — estrutura, ponto de instalação, escada, telhado, componente, piso e forro — que o painel de cada peça aplica e salva. Renomear, desativar, excluir, quantas peças do desenho têm cada assinatura, semear os padrões e copiar para outra organização.',
+            BookMarked,
+            'Arquitetura',
+          )}
+          <div>
+            <TelaCatalogoDeTipos
+              tipos={tiposDoCatalogo}
+              carregando={catalogoCarregando}
+              indisponivel={catalogoIndisponivel}
+              usos={usosDeTipos}
+              mostrarOrg={!orgId}
+              nomeDaOrg={(id) => organizacoesDaLoja.find((o) => o.id === id)?.name ?? id.slice(0, 8)}
+              onRenomear={async (id, nome) => {
+                const t = await renameElementType(id, nome);
+                setTiposDoCatalogo((lista) => lista.map((x) => (x.id === id ? t : x)));
+              }}
+              onAtivar={async (id, active) => {
+                const t = await setElementTypeActive(id, active);
+                setTiposDoCatalogo((lista) => lista.map((x) => (x.id === id ? t : x)));
+              }}
+              onExcluir={async (id) => {
+                await deleteElementType(id);
+                setTiposDoCatalogo((lista) => lista.filter((x) => x.id !== id));
+              }}
+              onSemear={async (lista) => {
+                const alvo = await resolverOrgDeEscrita('all-allowed');
+                if (!alvo) throw new Error('Escolha a organização que recebe os tipos padrão.');
+                const { failed } = await forEachTargetOrg(alvo, (org) => upsertElementTypes(org, lista));
+                if (failed.length) throw new Error(failed.map((f) => (f.error instanceof Error ? f.error.message : String(f.error))).join('; '));
+                recarregarCatalogoDeTipos();
+              }}
+              onCopiar={async (lista) => {
+                const alvo = await resolverOrgDeEscrita('all-allowed');
+                if (!alvo) return;
+                const { failed } = await forEachTargetOrg(alvo, (org) => upsertElementTypes(org, lista));
+                if (failed.length) throw new Error(failed.map((f) => (f.error instanceof Error ? f.error.message : String(f.error))).join('; '));
+                recarregarCatalogoDeTipos();
+              }}
+            />
+          </div>
+        </div>
+      )}
       {telaAberta === 'compras' && (
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="compras">
           {cabecalhoDaTela(
@@ -8279,6 +8348,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   ativo={telaAberta === 'materiais'}
                   onClick={() => alternarTela('materiais')}
                   ajuda="Biblioteca de materiais da organização: código (SINAPI/interno), custo, fabricante, densidade e condutividade; resolve o código das camadas, pisos, rodapés e guarda-corpos na tela e no orçamento. O número é quantos códigos do desenho ainda não estão nela."
+                />
+                <BotaoDoRibbon
+                  icone={BookMarked}
+                  rotulo="Tipos"
+                  contagem={tiposDoCatalogo.filter((t) => t.active).length || undefined}
+                  ativo={telaAberta === 'tipos'}
+                  onClick={() => {
+                    if (telaAberta !== 'tipos') recarregarCatalogoDeTipos();
+                    alternarTela('tipos');
+                  }}
+                  ajuda="Catálogo de tipos da organização (estrutura, ponto, escada, telhado, componente, piso, forro): renomear, desativar, excluir, usos no desenho, semear padrões e copiar para outra organização"
                 />
               </GrupoDoRibbon>
             )}

@@ -377,6 +377,10 @@ import PainelMobiliario from './PainelMobiliario';
 import PainelAcabamentos, { type AmbienteComAcabamento } from './PainelAcabamentos';
 import PainelGuardaCorpoSelecionado from './PainelGuardaCorpoSelecionado';
 import PainelAnotacaoSelecionada from './PainelAnotacaoSelecionada';
+import MenuVista from './MenuVista';
+import { coresDaVista, type ModoDeCor } from '../../utils/blueprintPaletas';
+import { TEMPLATES_DE_FABRICA, type ConfiguracaoDeVista, type Estilo3d, type TemplateDeVista } from '../../utils/blueprintTemplatesDeVista';
+import { blueprintViewTemplateService } from '../../services/blueprintViewTemplateService';
 import { resumirAnotacoes } from '../../utils/blueprintAnotacoes';
 import PainelGuardaCorpos from './PainelGuardaCorpos';
 import { HIPOTESES_DE_GUARDA_CORPO_PADRAO, resumirGuardaCorpos, sugerirGuardaCorpos, type HipotesesDeGuardaCorpo } from '../../utils/blueprintGuardaCorpo';
@@ -1426,11 +1430,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     'blueprint:mostrarEnvelope',
     true,
   );
-  /** Uma cor por ambiente em vez do azul único — separa cômodos vizinhos. */
+  /** Uma cor por ambiente em vez do azul único — separa cômodos vizinhos. (Legado: hoje é o modo AMBIENTE de `modoDeCor`.) */
   const [coresPorAmbiente, setCoresPorAmbiente] = usePersistedState(
     'blueprint:coresPorAmbiente',
     false,
   );
+  /** COLORIR POR (E8.2): a paleta dos ambientes. Nasce do legado: quem tinha "uma cor por ambiente" ligado segue em AMBIENTE. */
+  const [modoDeCor, setModoDeCor] = usePersistedState<ModoDeCor>('blueprint:modoDeCor', coresPorAmbiente ? 'AMBIENTE' : 'NENHUM');
+  /** ESTILO DO 3D (E8.2): sombreado, linha oculta ou transparente. */
+  const [estilo3d, setEstilo3d] = usePersistedState<Estilo3d>('blueprint:vista3dEstilo', 'SOMBREADO');
+  /** TEMPLATES DE VISTA da organização (E8.2), além dos de fábrica. */
+  const [templatesDaOrg, setTemplatesDaOrg] = useState<TemplateDeVista[]>([]);
+  const [templatesIndisponiveis, setTemplatesIndisponiveis] = useState<string | null>(null);
+  const [templatesCarregando, setTemplatesCarregando] = useState(false);
   /** Cota em preto sobre fundo opaco, para planta de fundo escaneada carregada. */
   const [cotaAltoContraste, setCotaAltoContraste] = usePersistedState(
     'blueprint:cotaAltoContraste',
@@ -2285,6 +2297,106 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     [editor.model],
   );
   quantRef.current = quant;
+  /** COLORIR POR (E8.2): cor por ambiente e legenda do recorte atual. */
+  const coresDoDesenho = useMemo(() => coresDaVista(editor.model, modoDeCor, levelId), [editor.model, modoDeCor, levelId]);
+  /** A CONFIGURAÇÃO DE VISTA atual — o que um template salva e aplica. */
+  const configuracaoDeVista = useMemo<ConfiguracaoDeVista>(
+    () => ({
+      planta: {
+        medidas: mostrarMedidas,
+        camadas: mostrarCamadas,
+        cotas: mostrarCotas,
+        cotaInterna: mostrarCotaInterna,
+        circuitos: mostrarCircuitos,
+        rotulos: mostrarRotulos,
+        grade: mostrarGrade,
+        preenchimento: mostrarPreenchimento,
+        preenchimentoTerreno: mostrarPreenchimentoTerreno,
+        curvasDeNivel: mostrarCurvasDeNivel,
+        envelope: mostrarEnvelope,
+        cotaAltoContraste,
+        mobiliario: mostrarMobiliario,
+      },
+      modoDeCor,
+      vista3d: { laje: mostrarLaje3d, arestas: mostrarArestas3d, armadura: mostrarArmadura3d, terreno: mostrarTerreno3d, envelope: mostrarEnvelope3d },
+      estilo3d,
+    }),
+    [mostrarMedidas, mostrarCamadas, mostrarCotas, mostrarCotaInterna, mostrarCircuitos, mostrarRotulos, mostrarGrade, mostrarPreenchimento, mostrarPreenchimentoTerreno, mostrarCurvasDeNivel, mostrarEnvelope, cotaAltoContraste, mostrarMobiliario, modoDeCor, mostrarLaje3d, mostrarArestas3d, mostrarArmadura3d, mostrarTerreno3d, mostrarEnvelope3d, estilo3d],
+  );
+  const aplicarConfiguracaoDeVista = useCallback(
+    (c: ConfiguracaoDeVista) => {
+      setMostrarMedidas(c.planta.medidas);
+      setMostrarCamadas(c.planta.camadas);
+      setMostrarCotas(c.planta.cotas);
+      setMostrarCotaInterna(c.planta.cotaInterna);
+      setMostrarCircuitos(c.planta.circuitos);
+      setMostrarRotulos(c.planta.rotulos);
+      setMostrarGrade(c.planta.grade);
+      setMostrarPreenchimento(c.planta.preenchimento);
+      setMostrarPreenchimentoTerreno(c.planta.preenchimentoTerreno);
+      setMostrarCurvasDeNivel(c.planta.curvasDeNivel);
+      setMostrarEnvelope(c.planta.envelope);
+      setCotaAltoContraste(c.planta.cotaAltoContraste);
+      setMostrarMobiliario(c.planta.mobiliario);
+      setModoDeCor(c.modoDeCor);
+      setCoresPorAmbiente(c.modoDeCor === 'AMBIENTE');
+      setMostrarLaje3d(c.vista3d.laje);
+      setMostrarArestas3d(c.vista3d.arestas);
+      setMostrarArmadura3d(c.vista3d.armadura);
+      setMostrarTerreno3d(c.vista3d.terreno);
+      setMostrarEnvelope3d(c.vista3d.envelope);
+      setEstilo3d(c.estilo3d);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+  const recarregarTemplates = useCallback(() => {
+    setTemplatesCarregando(true);
+    blueprintViewTemplateService
+      .list(orgId)
+      .then((lista) => {
+        setTemplatesDaOrg(lista);
+        setTemplatesIndisponiveis(null);
+      })
+      .catch((e: unknown) => {
+        console.warn('[vista] templates indisponíveis:', e);
+        setTemplatesDaOrg([]);
+        setTemplatesIndisponiveis(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => setTemplatesCarregando(false));
+  }, [orgId]);
+  useEffect(() => {
+    recarregarTemplates();
+  }, [recarregarTemplates]);
+  const templatesDeVista = useMemo(() => [...TEMPLATES_DE_FABRICA, ...templatesDaOrg], [templatesDaOrg]);
+  const menuVista = (
+    <MenuVista
+      em3d={em3d}
+      configuracaoAtual={configuracaoDeVista}
+      templates={templatesDeVista}
+      carregando={templatesCarregando}
+      indisponivel={templatesIndisponiveis}
+      legenda={coresDoDesenho.legenda}
+      onModoDeCor={(m) => {
+        setModoDeCor(m);
+        setCoresPorAmbiente(m === 'AMBIENTE');
+        if (m !== 'NENHUM' && !mostrarPreenchimento) setMostrarPreenchimento(true);
+      }}
+      onEstilo3d={setEstilo3d}
+      onAplicar={aplicarConfiguracaoDeVista}
+      onSalvar={async (nome) => {
+        const alvo = await resolverOrgDeEscrita('all-allowed');
+        if (!alvo) throw new Error('Escolha a organização em que o template será gravado.');
+        const { failed } = await forEachTargetOrg(alvo, (org) => blueprintViewTemplateService.create(org, nome, configuracaoDeVista));
+        if (failed.length) throw new Error(failed.map((f) => (f.error instanceof Error ? f.error.message : String(f.error))).join('; '));
+        recarregarTemplates();
+      }}
+      onRemover={async (id) => {
+        await blueprintViewTemplateService.remove(id);
+        recarregarTemplates();
+      }}
+    />
+  );
   /** USO de cada código no desenho (E7.4): o que a tela Materiais mostra ao lado de cada material. */
   const usosPorCodigo = useMemo(() => {
     const mapa = new Map<string, UsoDeMaterial[]>();
@@ -7232,7 +7344,6 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               }}
             />
           </div>
-          {modalDeOrgDosMateriais}
         </div>
       )}
 
@@ -8388,6 +8499,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         {aba === 'vista' && emVista && (
           <>
             <GrupoDoRibbon rotulo="Exibir">
+              {menuVista}
               <MenuExibir
                 grupos={[
                   vistaEhProjecao
@@ -8540,6 +8652,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 de cada item virou o `title`, porque a diferença entre Medidas,
                 Cotas e Interna é exatamente o que se confunde. */}
             <GrupoDoRibbon rotulo="Exibir">
+              {menuVista}
               <MenuExibir
                 grupos={[
                   [
@@ -8704,8 +8817,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                       chave: 'cores',
                       rotulo: 'Uma cor por ambiente',
                       icone: Palette,
-                      ligado: coresPorAmbiente,
-                      alternar: () => setCoresPorAmbiente((v) => !v),
+                      ligado: modoDeCor === 'AMBIENTE',
+                      // Atalho para o modo AMBIENTE do menu Vista; outras paletas ficam lá.
+                      alternar: () => {
+                        setCoresPorAmbiente(modoDeCor !== 'AMBIENTE');
+                        setModoDeCor(modoDeCor === 'AMBIENTE' ? 'NENHUM' : 'AMBIENTE');
+                      },
                       desabilitado: !mostrarPreenchimento,
                       ajuda: mostrarPreenchimento
                         ? 'Cada ambiente ganha uma cor da paleta, em vez do azul único — separa cômodos vizinhos de relance. A cor não significa tipo de cômodo: ela distingue.'
@@ -9254,7 +9371,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               model={editor.model}
               levelIds={levelIdsDaVista}
               mostrarLaje={mostrarLaje3d}
-              mostrarArestas={mostrarArestas3d}
+              mostrarArestas={mostrarArestas3d || estilo3d === 'LINHA_OCULTA'}
+              estilo={estilo3d}
               armadura={mostrarArmadura3d ? { pecas: armadura.pecas, hipoteses: hipotesesDeArmadura } : undefined}
               // A guarda vive aqui, e não só no menu: o estado é persistido, e
               // ligar o terreno num estudo que tem lote e depois abrir outro que
@@ -9420,7 +9538,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               // Só colore se houver preenchimento. A guarda vive aqui, e não só
               // no menu: o estado é persistido, e ligar Cores e depois desligar
               // Preenchimento deixaria a combinação gravada no localStorage.
-              coresPorAmbiente={mostrarPreenchimento && coresPorAmbiente}
+              coresPorAmbiente={mostrarPreenchimento && modoDeCor === 'AMBIENTE'}
+              coresDosAmbientes={mostrarPreenchimento && modoDeCor !== 'NENHUM' ? coresDoDesenho.porAmbiente : undefined}
               cotaAltoContraste={cotaAltoContraste}
               passoMoverMm={passoMover === 'grade' ? null : passoMover}
               onMoveVertex={moverPonta}
@@ -10131,6 +10250,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           inteira, e aninhá-lo numa `aside` com `overflow` recortaria o painel. */}
       {/* Fora da coluna do painel, como o Quadro de Divisas: é camada sobre a
           tela inteira, e aninhá-la numa `aside` com `overflow` a recortaria. */}
+      {/* Modal de escolha de organização (REGRA #5) para as gravações de configuração
+          da organização (materiais, templates de vista): fora de qualquer tela, para
+          existir sempre que uma delas pedir. */}
+      {modalDeOrgDosMateriais}
       <ModalSobreposicao
         aberto={disputa !== null}
         nomeDaPeca={disputa?.nome ?? ''}

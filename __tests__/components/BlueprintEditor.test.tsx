@@ -138,6 +138,18 @@ vi.mock('../../services/blueprintMaterialService', async () => {
   };
 });
 
+// Templates de vista (E8.2): lista controlável; gravação registrada.
+const listViewTemplates = vi.fn(async () => [] as unknown[]);
+const createViewTemplate = vi.fn(async (org: string, nome: string, config: unknown) => ({ id: 'vt_novo', organizationId: org, nome, config, active: true }));
+vi.mock('../../services/blueprintViewTemplateService', () => ({
+  blueprintViewTemplateService: {
+    list: (...a: unknown[]) => listViewTemplates(...(a as [])),
+    create: (...a: unknown[]) => createViewTemplate(...(a as [string, string, unknown])),
+    update: vi.fn(async () => ({})),
+    remove: vi.fn(async () => {}),
+  },
+}));
+
 // IA da planta (E6.4): a Edge Function é controlável — por padrão "não configurada" (o intérprete local responde).
 const pedirMudancasAIa = vi.fn(async () => ({ mudancas: null, indisponivel: 'IA não configurada ou indisponível' }) as unknown);
 vi.mock('../../services/plantaIaService', () => ({
@@ -2036,6 +2048,66 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(botao(/^texto com seta/i)).toHaveAttribute('aria-pressed', 'false');
     // A seleção pelo canvas e o painel são cobertos em `blueprintAnotacaoCanvas.test.tsx` e `PainelAnotacaoSelecionada.test.tsx` (jsdom não posiciona o canvas do editor).
     expect(texto.id && cota.id && hachura.id).toBeTruthy();
+  }, 60000);
+
+  it('vista (E8.2): "Colorir por tipo" pinta e mostra a legenda; aplicar um template de fábrica liga/desliga as camadas e o estilo 3D; salvar a vista atual grava pelo serviço; o template da organização aparece na lista', async () => {
+    listViewTemplates.mockResolvedValue([{ id: 'vt_1', organization_id: 'org_1', nome: 'Minha vista', config: { planta: { medidas: true }, modoDeCor: 'UNIDADE', vista3d: {}, estilo3d: 'TRANSPARENTE' }, active: true }].map((r) => ({ id: r.id, organizationId: r.organization_id, nome: r.nome, config: r.config, active: r.active })));
+    const { useStore } = await import('../../store/useStore');
+    const orgsAntes = useStore.getState().organizations;
+    useStore.setState({ organizations: [{ id: 'org_1', name: 'Org de teste', members: [] }] as never });
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    let m = k.applyBatch(nivel.model, [w(0, 0, 8000, 0), w(8000, 0, 8000, 3000), w(8000, 3000, 0, 3000), w(0, 3000, 0, 0), w(4000, 0, 4000, 3000)]).model;
+    const [a, b] = [...m.spaces].sort((p, q) => p.ring[0].x - q.ring[0].x);
+    m = k.applyBatch(m, [
+      { type: 'NameSpace', spaceId: a.id, name: 'Banheiro', tipoDeAmbiente: 'BANHEIRO' },
+      { type: 'NameSpace', spaceId: b.id, name: 'Sala', tipoDeAmbiente: 'SALA_DORMITORIO' },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^vista$/i);
+    await user.click(screen.getByTestId('menu-vista'));
+    const painel = await screen.findByTestId('painel-da-vista');
+    // Colorir por tipo: a legenda lista as classes com contagem.
+    await user.selectOptions(within(painel).getByLabelText('Colorir ambientes por'), 'TIPO_DE_AMBIENTE');
+    const legenda = await within(screen.getByTestId('painel-da-vista')).findByTestId('legenda-de-cores');
+    expect(legenda).toHaveTextContent(/Banheiro1/);
+    expect(legenda).toHaveTextContent(/Sala \/ dormitório1/);
+    expect(screen.getByTestId('menu-vista')).toHaveTextContent('Tipo de ambiente (NBR 5410)');
+    expect(localStorage.getItem('blueprint:modoDeCor')).toBe(JSON.stringify('TIPO_DE_AMBIENTE'));
+    // Templates: os 4 de fábrica + o da organização.
+    const lista = within(screen.getByTestId('painel-da-vista')).getByTestId('templates-de-vista');
+    expect(within(lista).getAllByRole('listitem')).toHaveLength(5);
+    expect(lista).toHaveTextContent(/Minha vista/);
+    // Aplicar "Executivo (cotas)": medidas e cotas ligam, preenchimento desliga, cor volta a NENHUM, estilo 3D linha oculta.
+    await user.click(within(lista).getByRole('button', { name: 'Aplicar template Executivo (cotas)' }));
+    expect(localStorage.getItem('blueprint:mostrarMedidas')).toBe('true');
+    expect(localStorage.getItem('blueprint:mostrarCotas')).toBe('true');
+    expect(localStorage.getItem('blueprint:mostrarPreenchimento')).toBe('false');
+    expect(localStorage.getItem('blueprint:modoDeCor')).toBe(JSON.stringify('NENHUM'));
+    expect(localStorage.getItem('blueprint:vista3dEstilo')).toBe(JSON.stringify('LINHA_OCULTA'));
+    expect(screen.getByTestId('menu-vista')).toHaveTextContent('Executivo (cotas)');
+    // Estilo do 3D pelo menu.
+    await user.selectOptions(within(screen.getByTestId('painel-da-vista')).getByLabelText('Estilo do 3D'), 'TRANSPARENTE');
+    expect(localStorage.getItem('blueprint:vista3dEstilo')).toBe(JSON.stringify('TRANSPARENTE'));
+    // Salvar a vista atual: nome vazio recusa; nome repetido recusa; nome novo grava com a configuração atual.
+    await user.click(within(screen.getByTestId('painel-da-vista')).getByTestId('salvar-vista-como'));
+    await user.click(within(screen.getByTestId('painel-da-vista')).getByTestId('confirmar-template'));
+    expect(within(screen.getByTestId('painel-da-vista')).getByTestId('erro-do-template')).toHaveTextContent(/nome é obrigatório/);
+    await user.type(within(screen.getByTestId('painel-da-vista')).getByLabelText('Nome do template de vista'), 'Minha vista');
+    await user.click(within(screen.getByTestId('painel-da-vista')).getByTestId('confirmar-template'));
+    expect(within(screen.getByTestId('painel-da-vista')).getByTestId('erro-do-template')).toHaveTextContent(/já existe/);
+    await user.clear(within(screen.getByTestId('painel-da-vista')).getByLabelText('Nome do template de vista'));
+    await user.type(within(screen.getByTestId('painel-da-vista')).getByLabelText('Nome do template de vista'), 'Executivo transparente{Enter}');
+    await waitFor(() => expect(createViewTemplate).toHaveBeenCalledTimes(1));
+    expect(createViewTemplate.mock.calls[0][0]).toBe('org_1');
+    expect(createViewTemplate.mock.calls[0][1]).toBe('Executivo transparente');
+    expect(createViewTemplate.mock.calls[0][2]).toMatchObject({ planta: { medidas: true, cotas: true, preenchimento: false }, modoDeCor: 'NENHUM', estilo3d: 'TRANSPARENTE' });
+    listViewTemplates.mockResolvedValue([]);
+    useStore.setState({ organizations: orgsAntes });
   }, 60000);
 
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {

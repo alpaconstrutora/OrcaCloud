@@ -71,6 +71,8 @@ interface Props {
   levelIds?: string[];
   mostrarLaje?: boolean;
   mostrarArestas?: boolean;
+  /** ESTILO (E8.2): sombreado (padrão), linha oculta (branco + arestas) ou transparente (paredes/lajes a 35 %). */
+  estilo?: 'SOMBREADO' | 'LINHA_OCULTA' | 'TRANSPARENTE';
   /** O polígono do lote (divisas `TERRENO`) como um plano de chão. */
   mostrarTerreno?: boolean;
   /** ENVELOPE 3D (E3.3): um prisma translúcido por pavimento — âmbar; vermelho acima do gabarito. */
@@ -901,7 +903,7 @@ function usarCliqueDePeca(onSelecionar?: (ids: string[]) => void) {
       : {};
 }
 
-function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, envelope, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, ocultos, coresPorUid, selecionados, onSelecionar, armadura }: Props) {
+function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, envelope, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, ocultos, coresPorUid, selecionados, onSelecionar, armadura, estilo = 'SOMBREADO' }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
 
@@ -1348,12 +1350,17 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, en
             color={
               selecionados?.has(p.id)
                 ? COR_SELECIONADA
-                : (coresPorUid?.get(p.uid) ?? ((p.funcao && COR_CAMADA_3D[p.funcao]) || '#e2e8f0'))
+                : estilo === 'LINHA_OCULTA'
+                  ? '#ffffff'
+                  : (coresPorUid?.get(p.uid) ?? ((p.funcao && COR_CAMADA_3D[p.funcao]) || '#e2e8f0'))
             }
-            roughness={0.85}
+            roughness={estilo === 'LINHA_OCULTA' ? 1 : 0.85}
             side={THREE.DoubleSide}
+            transparent={estilo === 'TRANSPARENTE'}
+            opacity={estilo === 'TRANSPARENTE' ? 0.35 : 1}
+            depthWrite={estilo !== 'TRANSPARENTE'}
           />
-          {mostrarArestas && <Edges color="#475569" threshold={20} />}
+          {(mostrarArestas || estilo === 'LINHA_OCULTA') && <Edges color={estilo === 'LINHA_OCULTA' ? '#0f172a' : '#475569'} threshold={20} />}
         </mesh>
       ))}
       {/* O miolo da junção usa a MESMA cor e o mesmo material da parede sem
@@ -1389,18 +1396,21 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, en
             color={
               selecionados?.has(s.id)
                 ? COR_SELECIONADA
-                : (coresPorUid?.get(s.uid) ?? (s.enterrada ? '#a8a29e' : '#94a3b8'))
+                : estilo === 'LINHA_OCULTA'
+                  ? '#ffffff'
+                  : (coresPorUid?.get(s.uid) ?? (s.enterrada ? '#a8a29e' : '#94a3b8'))
             }
             roughness={0.9}
             side={THREE.DoubleSide}
             // Com a armadura ligada o concreto vira vidro fosco: as barras
             // estão DENTRO dele, e opaco ninguém as veria. `depthWrite` falso
             // para as barras de trás não sumirem atrás da face da frente.
-            transparent={!!armadura}
-            opacity={armadura ? 0.28 : 1}
-            depthWrite={!armadura}
+            // O estilo TRANSPARENTE (E8.2) faz o mesmo, mais claro.
+            transparent={!!armadura || estilo === 'TRANSPARENTE'}
+            opacity={armadura ? 0.28 : estilo === 'TRANSPARENTE' ? 0.35 : 1}
+            depthWrite={!armadura && estilo !== 'TRANSPARENTE'}
           />
-          {mostrarArestas && <Edges color="#334155" threshold={20} />}
+          {(mostrarArestas || estilo === 'LINHA_OCULTA') && <Edges color={estilo === 'LINHA_OCULTA' ? '#0f172a' : '#334155'} threshold={20} />}
         </mesh>
       ))}
       {barras && (

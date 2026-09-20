@@ -1132,6 +1132,8 @@ interface Props {
    * parede no miolo repintaria a planta inteira.
    */
   coresPorAmbiente?: boolean;
+  /** COLORIR POR (E8.2): cor por `spaceId`; quando presente, vence `coresPorAmbiente`. */
+  coresDosAmbientes?: Map<string, string>;
   /** Cota em preto sobre fundo opaco — para planta de fundo escaneada carregada. */
   cotaAltoContraste?: boolean;
   /**
@@ -1398,6 +1400,7 @@ export default function BlueprintCanvas({
   drenagem = null,
   onDrenagemTracada,
   coresPorAmbiente = false,
+  coresDosAmbientes,
   cotaAltoContraste = false,
   passoMoverMm = null,
   estruturalKind = 'PILAR',
@@ -3140,7 +3143,7 @@ export default function BlueprintCanvas({
       if (s.ring.length < 3) continue;
       // O `fillStyle` entra DENTRO do laço porque com `coresPorAmbiente` ele
       // muda a cada ambiente. Fora dele só valeria para o primeiro.
-      ctx.fillStyle = coresPorAmbiente ? corDoAmbiente(s) : COR_AMBIENTE;
+      ctx.fillStyle = coresDosAmbientes?.get(s.id) ?? (coresPorAmbiente ? corDoAmbiente(s) : COR_AMBIENTE);
       ctx.beginPath();
       const p0 = paraTela(s.ring[0]);
       ctx.moveTo(p0.x, p0.y);
@@ -7161,6 +7164,7 @@ export default function BlueprintCanvas({
     linhaDoPerfilAtiva,
     drenagem,
     coresPorAmbiente,
+    coresDosAmbientes,
     cotaAltoContraste,
     paraTela,
     paredesDoNivel,

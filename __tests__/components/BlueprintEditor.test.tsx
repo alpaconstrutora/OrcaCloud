@@ -2290,14 +2290,15 @@ describe('BlueprintEditor · quantitativos', () => {
       await montar();
       const user = userEvent.setup();
       // 1. Renomear a Sala (NameSpace com spaceId travado) é recusado, com o autor.
-      await user.click(screen.getByRole('button', { name: 'Renomear Sala' }));
+      // ⚠️ `findByRole`: o cartão de Ambientes chega depois do modelo; no CI o `getByRole` perdeu a corrida (20/09).
+      await user.click(await screen.findByRole('button', { name: 'Renomear Sala' }));
       const campoSala = screen.getByLabelText('Nome do ambiente Sala');
       await user.clear(campoSala);
       await user.type(campoSala, 'Estar{Enter}');
       expect(await screen.findByRole('alert')).toHaveTextContent(/está em edição por Zeca Lima/);
       expect(colabDifundir).not.toHaveBeenCalled();
       // 2. Renomear a Cozinha (livre) passa e é DIFUNDIDO com o hash resultante.
-      await user.click(screen.getByRole('button', { name: 'Renomear Cozinha' }));
+      await user.click(await screen.findByRole('button', { name: 'Renomear Cozinha' }));
       const campoCoz = screen.getByLabelText('Nome do ambiente Cozinha');
       await user.clear(campoCoz);
       await user.type(campoCoz, 'Copa{Enter}');

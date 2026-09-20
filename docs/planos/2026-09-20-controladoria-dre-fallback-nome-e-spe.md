@@ -69,7 +69,7 @@ Receita). Antes elas caíam em "Sem Classificação". A correção certa é o it
 ## Estado
 - [x] migration escrita — `aplicar_20270921000029_controladoria_dre_fallback_nome_e_spe.sql` (incluiu 2º defeito latente da SPE: `SUM(a.n)` numeric × `n_transacoes BIGINT` → cast)
 - [x] aplicada no banco (2026-09-20) e provada como usuário: SPE devolve 1 linha (489 lançamentos; COMPETÊNCIA custos 464.355,99) em vez de 42702; Balancete sem categoria duplicada (Mão de Obra / Serviço = 1 linha, 143); DRE "Sem Classificação" = só os 498 sem categoria (R$ 222.602,60); `prosrc` sem mojibake; ACL sem anon/PUBLIC; `segurancaMigrations` 2/2
-- [ ] commit + push em main
+- [x] commit `6d93029a` + push em main (2026-09-20). Frontend não mudou; a correção vive no banco, já aplicada.
 
 ## Verificação
 ```bash

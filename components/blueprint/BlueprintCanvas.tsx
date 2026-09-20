@@ -816,6 +816,8 @@ interface Props {
     delta: Point,
     /** Instalações — ver `TranslateEntities`. Só x e y; a cota não muda. */
     rede?: { trechoIds: string[]; terminalIds: string[]; quadroIds: string[] },
+    /** Núcleos, vagas e componentes (P2.4) — rígidos, no mesmo comando. */
+    pecas?: { nucleoIds: string[]; vagaIds: string[]; componenteIds: string[] },
   ) => void;
   /** Desloca as medições selecionadas. Camada separada, gravação separada. */
   onMoverMedicoes?: (ids: string[], delta: Point) => void;
@@ -1441,13 +1443,13 @@ export default function BlueprintCanvas({
   anotacoes = SEM_ANOTACOES,
   tipoDeAnotacao = 'TEXTO',
   onAddAnotacao,
-  nucleos = SEM_NUCLEOS,
+  nucleos: nucleosReais = SEM_NUCLEOS,
   onAddNucleo,
-  vagas = SEM_VAGAS,
+  vagas: vagasReais = SEM_VAGAS,
   tipoDeVaga = 'COMUM',
   onAddVaga,
   onMoveVaga,
-  componentes = SEM_COMPONENTES,
+  componentes: componentesReais = SEM_COMPONENTES,
   tipoDeComponente = 'CAMA_CASAL',
   onAddComponente,
   onAddTrecho,
@@ -1784,6 +1786,10 @@ export default function BlueprintCanvas({
     .filter((t) => selecao.has(t.id))
     .map((t) => t.id);
   const idsDeQuadrosSelecionados = quadrosReais.filter((q) => selecao.has(q.id)).map((q) => q.id);
+  /** P2.4: núcleos, vagas e componentes do pavimento que estão na seleção — arrastam junto. */
+  const idsDeNucleosSelecionados = nucleosReais.filter((n) => selecao.has(n.id)).map((n) => n.id);
+  const idsDeVagasSelecionadas = vagasReais.filter((v) => selecao.has(v.id)).map((v) => v.id);
+  const idsDeComponentesSelecionados = componentesReais.filter((c) => selecao.has(c.id)).map((c) => c.id);
 
   /**
    * A REDE como aparece AGORA — deslocada durante o arraste.
@@ -1843,6 +1849,33 @@ export default function BlueprintCanvas({
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quadrosReais, movendoSelecao, selecao]);
+
+  /**
+   * P2.4 — NÚCLEOS, VAGAS e COMPONENTES como aparecem AGORA: deslocados durante
+   * o arraste, rígidos, o mesmo que `TranslateEntities` vai gravar. Tudo o que
+   * desenha e testa clique usa estas listas — a prévia é o commit.
+   */
+  const nucleos = useMemo(() => {
+    const d = movendoSelecao?.delta;
+    if (!d || (d.x === 0 && d.y === 0) || idsDeNucleosSelecionados.length === 0) return nucleosReais;
+    const movidos = new Set(idsDeNucleosSelecionados);
+    return nucleosReais.map((n) => (movidos.has(n.id) ? { ...n, ring: n.ring.map((p) => ({ x: p.x + d.x, y: p.y + d.y })) } : n));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nucleosReais, movendoSelecao, selecao]);
+  const vagas = useMemo(() => {
+    const d = movendoSelecao?.delta;
+    if (!d || (d.x === 0 && d.y === 0) || idsDeVagasSelecionadas.length === 0) return vagasReais;
+    const movidos = new Set(idsDeVagasSelecionadas);
+    return vagasReais.map((v) => (movidos.has(v.id) ? { ...v, at: { x: v.at.x + d.x, y: v.at.y + d.y } } : v));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vagasReais, movendoSelecao, selecao]);
+  const componentes = useMemo(() => {
+    const d = movendoSelecao?.delta;
+    if (!d || (d.x === 0 && d.y === 0) || idsDeComponentesSelecionados.length === 0) return componentesReais;
+    const movidos = new Set(idsDeComponentesSelecionados);
+    return componentesReais.map((c) => (movidos.has(c.id) ? { ...c, at: { x: c.at.x + d.x, y: c.at.y + d.y } } : c));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [componentesReais, movendoSelecao, selecao]);
 
   /**
    * COMO OS ELETRODUTOS SÃO DESENHADOS (14–15/09/2026): os confundíveis
@@ -8349,7 +8382,7 @@ export default function BlueprintCanvas({
       // ESTRUTURA ANTES DE PAREDE, e depois do limite: um pilar embutido cai
       // por cima da parede quase sempre, e quem clica no pilar quer o pilar. A
       // parede continua alcançável em qualquer ponto fora da seção dele.
-      const estruturaClicada = estruturaSob(mundo);
+      const estruturaSobOCursor = estruturaSob(mundo);
       // ESCADA ANTES DA PAREDE, pela razao da estrutura: e pequena, solida e
       // costuma encostar numa parede. Quem clica na escada quer a escada.
       const escadaClicada = escadaSob(mundo);
@@ -8359,6 +8392,13 @@ export default function BlueprintCanvas({
       const componenteClicado = componenteSob(mundo);
       // VAGA depois do núcleo e antes do trecho: é demarcação de piso, grande e sem parede em cima.
       const vagaClicada = vagaSob(mundo);
+      // ⚠️ A LAJE cobre o ambiente inteiro e se pega pelo miolo: com ela na frente,
+      // o sofá, a vaga e o shaft desenhados SOBRE ela nunca eram clicáveis — e
+      // por isso nunca se arrastavam (P2.4, 20/09/2026). Havendo peça de piso
+      // sob o cursor, a laje cede; pilar e viga continuam na frente, porque são
+      // pequenos e quem clica neles quer eles.
+      const estruturaClicada =
+        estruturaSobOCursor?.kind === 'LAJE' && (componenteClicado || vagaClicada || nucleoClicado) ? null : estruturaSobOCursor;
       // ÁGUA DEPOIS DA PAREDE: ela cobre a casa e só se pega pela borda (ver
       // `aguaSob`); tudo o que está debaixo dela continua clicável.
       const aguaClicada = aguaSob(mundo);
@@ -8649,6 +8689,11 @@ export default function BlueprintCanvas({
       terminalIds: idsDeTerminaisSelecionados,
       quadroIds: idsDeQuadrosSelecionados,
     };
+    const pecas = {
+      nucleoIds: idsDeNucleosSelecionados,
+      vagaIds: idsDeVagasSelecionadas,
+      componenteIds: idsDeComponentesSelecionados,
+    };
     if (
       idsDeParedesSelecionadas.length > 0 ||
       idsDeLimitesSelecionados.length > 0 ||
@@ -8656,7 +8701,10 @@ export default function BlueprintCanvas({
       idsDeAguasSelecionadas.length > 0 ||
       rede.trechoIds.length > 0 ||
       rede.terminalIds.length > 0 ||
-      rede.quadroIds.length > 0
+      rede.quadroIds.length > 0 ||
+      pecas.nucleoIds.length > 0 ||
+      pecas.vagaIds.length > 0 ||
+      pecas.componenteIds.length > 0
     ) {
       onMoverSelecao?.(
         idsDeParedesSelecionadas,
@@ -8665,6 +8713,7 @@ export default function BlueprintCanvas({
         idsDeAguasSelecionadas,
         delta,
         rede,
+        pecas,
       );
     }
     if (idsDeMedicoesSelecionadas.length > 0) {

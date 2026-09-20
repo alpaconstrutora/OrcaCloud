@@ -5482,6 +5482,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     aguaIds: string[],
     delta: Point,
     rede?: { trechoIds: string[]; terminalIds: string[]; quadroIds: string[] },
+    pecas?: { nucleoIds: string[]; vagaIds: string[]; componenteIds: string[] },
   ) {
     editor.run({
       type: 'TranslateEntities',
@@ -5489,6 +5490,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       boundaryIds,
       structuralIds,
       aguaIds,
+      // Núcleos, vagas e componentes (P2.4) — rígidos, no mesmo passo de desfazer.
+      nucleoIds: pecas?.nucleoIds ?? [],
+      vagaIds: pecas?.vagaIds ?? [],
+      componenteIds: pecas?.componenteIds ?? [],
       // Instalações no MESMO comando, e não num segundo: arrastar a parede e a
       // rede em dois passos deixaria um estado intermediário em que o cano
       // atravessa a parede, e o desfazer teria de ser dado duas vezes.

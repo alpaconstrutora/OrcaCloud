@@ -809,6 +809,16 @@ export type Command =
       trechoIds?: ObjectId[];
       terminalIds?: ObjectId[];
       quadroIds?: ObjectId[];
+      /**
+       * NÚCLEOS, VAGAS e COMPONENTES deslocados junto (20/09/2026, backlog P2 —
+       * P2.4). Andam RÍGIDOS como a estrutura: o contorno do shaft, o centro da
+       * vaga e o do móvel recebem o delta e nada mais — nenhum deles entra no
+       * arranjo planar. Mover a vaga/o componente sugerido CONFIRMA, como o
+       * terminal: quem arrastou para o lugar certo já decidiu.
+       */
+      nucleoIds?: ObjectId[];
+      vagaIds?: ObjectId[];
+      componenteIds?: ObjectId[];
       delta: Point;
       manterJuncoes: boolean;
     }
@@ -2828,6 +2838,9 @@ function aplicarSemHash(
       const trechoIds = command.trechoIds ?? [];
       const terminalIds = command.terminalIds ?? [];
       const quadroIds = command.quadroIds ?? [];
+      const nucleoIds = command.nucleoIds ?? [];
+      const vagaIds = command.vagaIds ?? [];
+      const componenteIds = command.componenteIds ?? [];
       if (
         command.wallIds.length === 0 &&
         command.boundaryIds.length === 0 &&
@@ -2835,7 +2848,10 @@ function aplicarSemHash(
         aguaIds.length === 0 &&
         trechoIds.length === 0 &&
         terminalIds.length === 0 &&
-        quadroIds.length === 0
+        quadroIds.length === 0 &&
+        nucleoIds.length === 0 &&
+        vagaIds.length === 0 &&
+        componenteIds.length === 0
       ) {
         throw new KernelError('EMPTY_SELECTION', 'Nada para deslocar');
       }
@@ -2970,6 +2986,24 @@ function aplicarSemHash(
         if (!q) throw new KernelError('BOARD_NOT_FOUND', `Quadro não encontrado: ${id}`);
         q.at = { x: inteiro(q.at.x + dx), y: inteiro(q.at.y + dy) };
         diff.updated.push(q.id);
+      }
+      // P2.4: núcleo (contorno inteiro), vaga e componente (centro) — rígidos.
+      for (const id of nucleoIds) {
+        const n = findNucleo(next, id);
+        n.ring = n.ring.map((p) => ({ x: inteiro(p.x + dx), y: inteiro(p.y + dy) }));
+        diff.updated.push(n.id);
+      }
+      for (const id of vagaIds) {
+        const v = findVaga(next, id);
+        v.at = { x: inteiro(v.at.x + dx), y: inteiro(v.at.y + dy) };
+        if (v.sugerida) delete v.sugerida;
+        diff.updated.push(v.id);
+      }
+      for (const id of componenteIds) {
+        const c = findComponente(next, id);
+        c.at = { x: inteiro(c.at.x + dx), y: inteiro(c.at.y + dy) };
+        if (c.sugerido) delete c.sugerido;
+        diff.updated.push(c.id);
       }
 
       // Só as VIZINHAS podem ter mudado de comprimento — as selecionadas

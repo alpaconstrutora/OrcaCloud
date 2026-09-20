@@ -4924,3 +4924,52 @@ describe('BlueprintEditor · catálogo de tipos (P2.3)', () => {
     }
   }, 60000);
 });
+
+/**
+ * MOVER NÚCLEO, VAGA E COMPONENTE (20/09/2026, backlog P2 — P2.4): a seleção
+ * inteira anda pelas setas (o mesmo `comitarDeslocamento` do arraste), num
+ * passo de desfazer só; antes, núcleo, vaga e componente ficavam para trás.
+ */
+describe('BlueprintEditor · mover núcleo, vaga e componente (P2.4)', () => {
+  it('setas deslocam o componente e o shaft selecionados (rígidos, com a parede junto), e Ctrl+Z desfaz o gesto inteiro', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const modelo = k.applyBatch(nivel.model, [
+      { type: 'AddComponente', levelId: t, tipoId: 'SOFA', at: k.point(2000, 2000) },
+      { type: 'AddNucleo', levelId: t, tipo: 'SHAFT', ring: [k.point(5000, 5000), k.point(5600, 5000), k.point(5600, 5600), k.point(5000, 5600)] },
+    ]).model;
+    loadBranchModel.mockResolvedValue(modelo);
+    await montar();
+    const user = userEvent.setup();
+    await abrirComponentes(user);
+    // Seleciona o sofá e, com Shift, o shaft — pelo navegador.
+    await user.click(screen.getAllByRole('button').find((b) => /^Sofá 1/.test(b.textContent ?? ''))!);
+    const shaft = screen.getAllByRole('button').find((b) => /^Shaft 1/.test(b.textContent ?? ''))!;
+    await user.keyboard('{Shift>}');
+    await user.click(shaft);
+    await user.keyboard('{/Shift}');
+    const canvas = document.querySelector<HTMLCanvasElement>('canvas[role="application"]')!;
+    canvas.focus();
+    const { saveDraft } = await import('../../services/blueprintService');
+    vi.mocked(saveDraft).mockClear();
+    fireEvent.keyDown(canvas, { key: 'ArrowRight' });
+    // O gesto vira UM comando; o autosave (1,5 s) entrega o modelo resultante ao dublê.
+    await waitFor(() => expect(saveDraft).toHaveBeenCalled(), { timeout: 5000 });
+    const salvo = (vi.mocked(saveDraft).mock.calls.at(-1) as unknown as [string, import('../../utils/blueprintKernel').BlueprintModel])[1];
+    const sofa = salvo.componentes!.find((c) => c.tipoId === 'SOFA')!;
+    const shaftSalvo = salvo.nucleos![0];
+    expect(sofa.at.x).toBeGreaterThan(2000);
+    expect(sofa.at.y).toBe(2000);
+    expect(shaftSalvo.ring[0].x).toBe(5000 + (sofa.at.x - 2000)); // o mesmo passo, rígido
+    expect(shaftSalvo.ring[0].y).toBe(5000);
+    expect(shaftSalvo.ring[2]).toEqual({ x: 5600 + (sofa.at.x - 2000), y: 5600 });
+    // Ctrl+Z devolve os dois de uma vez (um passo de histórico).
+    vi.mocked(saveDraft).mockClear();
+    fireEvent.keyDown(canvas, { key: 'z', ctrlKey: true });
+    await waitFor(() => expect(saveDraft).toHaveBeenCalled(), { timeout: 5000 });
+    const desfeito = (vi.mocked(saveDraft).mock.calls.at(-1) as unknown as [string, import('../../utils/blueprintKernel').BlueprintModel])[1];
+    expect(desfeito.componentes!.find((c) => c.tipoId === 'SOFA')!.at).toEqual({ x: 2000, y: 2000 });
+    expect(desfeito.nucleos![0].ring[0]).toEqual({ x: 5000, y: 5000 });
+  }, 60000);
+});

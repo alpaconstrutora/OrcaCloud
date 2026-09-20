@@ -1111,6 +1111,20 @@ Próxima: P2.3 — catálogo de tipos por organização.
 
 Próxima: P2.4 — mover núcleo e vaga por arraste.
 
+### P2.4 — Mover núcleo, vaga e componente por arraste (20/09/2026) · backlog P2
+
+**O que entrou** (**sem bump**: `TranslateEntities` ganha três listas opcionais de ids — comando, não payload):
+
+- **Kernel**: `TranslateEntities { …, nucleoIds?, vagaIds?, componenteIds? }` — andam **rígidos** como a estrutura (contorno do shaft, centro da vaga e do componente recebem o delta e nada mais; nenhum entra no arranjo planar); **mover confirma o sugerido** (`sugerida`/`sugerido` caem, como no terminal); seleção vazia continua `EMPTY_SELECTION`; id desconhecido recusa.
+- **Canvas**: as três famílias entram no arraste da seleção (`movendoSelecao`) com **prévia = commit** (as listas `nucleos`/`vagas`/`componentes` que desenham e testam clique já saem deslocadas durante o gesto) e no `comitarDeslocamento` — que serve ao arraste **e às setas** (um passo do Mover; Shift = 10). `onMoverSelecao` leva `pecas {nucleoIds, vagaIds, componenteIds}`; o editor os põe no mesmo `TranslateEntities` — **um gesto, um Ctrl+Z**.
+- **Por que nunca tinha funcionado na prática**: a **LAJE se pega pelo miolo** e vinha antes de componente/vaga/núcleo na ordem do clique — dentro de um ambiente com laje, o sofá nunca era clicável, logo nunca arrastável. Agora, havendo peça de piso sob o cursor, a laje cede (pilar e viga continuam na frente: são pequenos, quem clica neles quer eles).
+
+**Decisões.** (1) Sem comando novo (`MoveNucleo` etc.): o gesto da seleção é um só, e a família nova entra no comando que já existe — é assim que estrutura, água, rede e quadro entraram. (2) Rígido, sem `manterJuncoes`: núcleo, vaga e componente não têm junção com nada. (3) O arraste do vértice do núcleo (`MoveNucleoVertex`, alça) continua sendo outra coisa: forma, não posição.
+
+**Prova.** *No app real* (estudo "Planta 14/09/2026", escritas bloqueadas 19): condensadora e shaft mecânico no rascunho; Selecionar → clique na condensadora **dentro do ambiente com laje** seleciona a condensadora (antes selecionava L2, a laje); arraste de 150 px → some do ponto antigo e reaparece a ~130 px à direita (orto: só x; delta 2,6–3,0 m no passo do Mover); shaft: clique no miolo seleciona (Disciplina = MECANICA), arraste de 100 px para baixo → some de cima e aparece embaixo; **Ctrl+Z devolve o shaft ao ponto antigo**. 0 erros de página. Testes: `blueprintMoverPecas.test.ts` (2: os três rígidos no mesmo comando, sugerido confirmado, volta pelo delta oposto com o hash igual; vazio/desconhecido recusados), editor "mover núcleo, vaga e componente (P2.4)" (setas deslocam sofá + shaft juntos pelo autosave, Ctrl+Z devolve os dois); suíte 403 arquivos / 4858 testes; tsc, check-ui e build OK.
+
+**Backlog P2 do pedido de 20/09 concluído** (P2.1 status do conflito, P2.2 dutos, P2.3 catálogo de tipos, P2.4 arraste). O restante do backlog P2 segue nomeado no fecho.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

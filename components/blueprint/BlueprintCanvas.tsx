@@ -74,6 +74,7 @@ import {
   type Underlay,
 } from '../../utils/blueprintUnderlay';
 import { anelDoTerreno, ROTULO_CURTO_DO_PAPEL } from '../../utils/blueprintTerreno';
+import { COR_DA_FASE } from '../../utils/blueprintFases';
 import { COR_DA_FAMILIA, COR_PAREDE_HUMANIZADA, COR_SOMBRA, COR_VEGETACAO, sombraDaParede, tramaDoPiso, type EstiloDoPiso, type Planta } from '../../utils/blueprintHumanizada';
 import type { CurvaDeNivel, GradeDeElevacao, PontoCotado } from '../../utils/blueprintTopografia';
 import {
@@ -1148,6 +1149,12 @@ interface Props {
    * para mim): um crachá na cor da pessoa junto do elemento, com as iniciais.
    */
   selecoesRemotas?: { id: string; cor: string; nome: string }[];
+  /**
+   * FASES DE REFORMA (E10.2): id → fase (só EXISTENTE / DEMOLIR; novo não entra).
+   * Existente sai em cinza; a demolir, em vermelho tracejado — a convenção de
+   * planta de reforma. Vale para parede, abertura, estrutura e componente.
+   */
+  fases?: ReadonlyMap<string, 'EXISTENTE' | 'DEMOLIR' | 'NOVO'>;
   /** Cota em preto sobre fundo opaco — para planta de fundo escaneada carregada. */
   cotaAltoContraste?: boolean;
   /**
@@ -1417,6 +1424,7 @@ export default function BlueprintCanvas({
   coresDosAmbientes,
   humanizada = false,
   selecoesRemotas,
+  fases,
   pisosHumanizados,
   vegetacao,
   cotaAltoContraste = false,
@@ -3280,22 +3288,28 @@ export default function BlueprintCanvas({
       };
     });
 
-    // Passada 1 — silhueta
+    // Passada 1 — silhueta. FASES (E10.2): existente em cinza, a demolir em vermelho tracejado.
     for (const t of traco) {
       if (t.comp < 0.5) continue;
-      ctx.strokeStyle = selecao.has(t.w.id) ? COR_SELECIONADA : humanizada ? COR_PAREDE_HUMANIZADA : COR_PAREDE;
+      const fase = fases?.get(t.w.id);
+      const corDaFase = fase && fase !== 'NOVO' ? COR_DA_FASE[fase] : null;
+      // A demolir: faixa cheia, vermelha e tracejada (meio transparente para o que está atrás continuar legível).
+      ctx.strokeStyle = selecao.has(t.w.id) ? COR_SELECIONADA : corDaFase?.tracejado ? 'rgba(220, 38, 38, 0.75)' : corDaFase ? corDaFase.traco : humanizada ? COR_PAREDE_HUMANIZADA : COR_PAREDE;
       ctx.lineWidth = t.cheia;
+      if (corDaFase?.tracejado) ctx.setLineDash([Math.max(8, t.cheia * 1.5), Math.max(5, t.cheia)]);
       ctx.beginPath();
       ctx.moveTo(t.a.x - t.ux * t.extA, t.a.y - t.uy * t.extA);
       ctx.lineTo(t.b.x + t.ux * t.extB, t.b.y + t.uy * t.extB);
       ctx.stroke();
+      if (corDaFase?.tracejado) ctx.setLineDash([]);
     }
 
     // Passada 2 — escavar o miolo, com a MESMA extensão nas junções para que o
     // interior de um cômodo continue no outro sem linha atravessando o encontro.
     ctx.strokeStyle = '#ffffff';
     // HUMANIZADA: a parede fica CHEIA (a convenção da planta de venda) — não se escava o miolo.
-    for (const t of humanizada ? [] : traco) {
+    // A DEMOLIR (E10.2) também fica cheia: o tracejado vermelho só se lê na faixa inteira.
+    for (const t of humanizada ? [] : traco.filter((x) => fases?.get(x.w.id) !== 'DEMOLIR')) {
       const miolo = t.cheia - 2 * LINHA_PAREDE_PX;
       // Muito longe, a parede vira uma linha e não há miolo para escavar. Deixar
       // sólida é o certo: contorno de meio pixel viraria sujeira cinza.
@@ -3444,7 +3458,8 @@ export default function BlueprintCanvas({
       ctx.fill();
 
       // 2. batentes
-      ctx.strokeStyle = selecao.has(o.id) ? COR_SELECIONADA : COR_PAREDE;
+      const faseDaAbertura = fases?.get(o.id) ?? fases?.get(o.wallId);
+      ctx.strokeStyle = selecao.has(o.id) ? COR_SELECIONADA : faseDaAbertura && faseDaAbertura !== 'NOVO' ? COR_DA_FASE[faseDaAbertura].traco : COR_PAREDE;
       ctx.lineWidth = LINHA_PAREDE_PX;
       ctx.beginPath();
       ctx.moveTo(t1.x, t1.y);
@@ -4450,11 +4465,14 @@ export default function BlueprintCanvas({
         // ficam indistinguíveis, e eles se sobrepõem quase sempre.
         const enterrada = s.baseMm < 0;
 
+        const faseDaPeca = fases?.get(s.id);
         const traco = selecionado
           ? COR_SELECIONADA
-          : enterrada
-            ? COR_FUNDACAO
-            : COR_ESTRUTURA;
+          : faseDaPeca && faseDaPeca !== 'NOVO'
+            ? COR_DA_FASE[faseDaPeca].traco
+            : enterrada
+              ? COR_FUNDACAO
+              : COR_ESTRUTURA;
         const preenchimento =
           s.kind === 'LAJE'
             ? COR_LAJE_FUNDO
@@ -5488,12 +5506,14 @@ export default function BlueprintCanvas({
       if (ocultos.has(c.id)) continue;
       const selecionado = selecao.has(c.id);
       const familia = humanizada ? COR_DA_FAMILIA[c.familia] : null;
-      const cor = selecionado ? COR_SELECIONADA : familia ? familia.traco : COR_COMPONENTE;
+      const faseDoComponente = fases?.get(c.id);
+      const corDaFaseDoComponente = faseDoComponente && faseDoComponente !== 'NOVO' ? COR_DA_FASE[faseDoComponente] : null;
+      const cor = selecionado ? COR_SELECIONADA : corDaFaseDoComponente ? corDaFaseDoComponente.traco : familia ? familia.traco : COR_COMPONENTE;
       const anel = contornoDoComponente(c).map(paraTela);
-      ctx.fillStyle = familia ? familia.fundo : COR_COMPONENTE_FUNDO;
+      ctx.fillStyle = corDaFaseDoComponente ? corDaFaseDoComponente.fundo : familia ? familia.fundo : COR_COMPONENTE_FUNDO;
       ctx.strokeStyle = cor;
       ctx.lineWidth = selecionado ? 2 : 1.1;
-      ctx.setLineDash(c.sugerido ? [5, 4] : []);
+      ctx.setLineDash(c.sugerido || corDaFaseDoComponente?.tracejado ? [5, 4] : []);
       ctx.beginPath();
       ctx.moveTo(anel[0].x, anel[0].y);
       for (const q of anel.slice(1)) ctx.lineTo(q.x, q.y);
@@ -7308,6 +7328,7 @@ export default function BlueprintCanvas({
     coresDosAmbientes,
     humanizada,
     selecoesRemotas,
+    fases,
     pisosHumanizados,
     tramasDosPisos,
     vegetacao,

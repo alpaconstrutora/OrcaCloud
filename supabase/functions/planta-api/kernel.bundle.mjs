@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.45.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.46.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -460,6 +460,9 @@ function medirAgua(agua) {
 }
 
 // utils/blueprintKernel/model.ts
+function faseDe(p) {
+  return p.fase ?? "NOVO";
+}
 function assinaturaDasCamadas(camadas) {
   if (!camadas || camadas.length === 0) return "";
   return camadas.map((c) => `${c.espessuraMm}|${c.itemCode}|${c.funcao}`).join(";");
@@ -1484,6 +1487,8 @@ function projetar(model) {
       // ausente significam o mesmo, e emitir `false` mudaria a forma canônica
       // de todo desenho que nunca teve um pilar embutido.
       cedeSobreposicao: w.cedeSobreposicao ? true : void 0,
+      // FASE DE REFORMA (0.46.0): só quando EXISTENTE ou DEMOLIR — NOVO é o padrão e a ausência.
+      fase: w.fase && w.fase !== "NOVO" ? w.fase : void 0,
       parametros: parametrosCanonicos(w.parametros),
       // A COMPOSIÇÃO. Mesma disciplina das três chaves acima: emitida só quando
       // existe, para não acrescentar `camadas` a toda parede homogênea do
@@ -1536,6 +1541,7 @@ function projetar(model) {
       // por um campo que não os descreve — o mesmo cuidado que a área de
       // escritura teve em 0.6.0.
       embutida: o.kind === "sliding" ? o.embutida : void 0,
+      fase: o.fase && o.fase !== "NOVO" ? o.fase : void 0,
       // O TIPO, só quando declarado — a disciplina de `camadas`: emitir sempre
       // acrescentaria a chave a toda abertura do acervo. Campos reescritos um
       // a um, e `descricao` ENTRA pela razão escrita nas camadas: é o que o
@@ -1585,6 +1591,7 @@ function projetar(model) {
       // já é o padrão de toda peça, e a chave só aparece na que recebeu a
       // decisão do usuário.
       cedeSobreposicao: s2.cedeSobreposicao ? true : void 0,
+      fase: s2.fase && s2.fase !== "NOVO" ? s2.fase : void 0,
       parametros: parametrosCanonicos(s2.parametros),
       // Seção T: mesma regra da linha acima, e pela mesma razão. Toda peça do
       // acervo é de seção cheia, então a chave ausente mantém o payload —
@@ -1701,6 +1708,7 @@ function projetar(model) {
       familia: c.familia,
       rotulo: c.rotulo ?? null,
       sugerido: c.sugerido ? true : void 0,
+      fase: c.fase && c.fase !== "NOVO" ? c.fase : void 0,
       parametros: parametrosCanonicos(c.parametros)
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y || cmpStr(x.tipoId, y.tipoId)
@@ -2048,6 +2056,7 @@ function modelFromCanonicalPayload(payload) {
       // Mesma regra do alinhamento: ausente não volta como `false`, volta como
       // nada — é o que mantém o round-trip fechando byte a byte.
       ...w.cedeSobreposicao ? { cedeSobreposicao: true } : {},
+      ...w.fase ? { fase: w.fase } : {},
       ...w.parametros && Object.keys(w.parametros).length > 0 ? { parametros: { ...w.parametros } } : {},
       // Idem: ausente (e `[]`, que payload nenhum deveria ter) não volta como
       // lista vazia, volta como nada — parede homogênea, que é o que um payload
@@ -2080,6 +2089,7 @@ function modelFromCanonicalPayload(payload) {
       hingeAtStart: o.hingeAtStart ?? true,
       swingReversed: o.swingReversed ?? false,
       embutida: o.embutida ?? false,
+      ...o.fase ? { fase: o.fase } : {},
       ...o.esquadria ? { esquadria: { nome: o.esquadria.nome, itemCode: o.esquadria.itemCode, descricao: o.esquadria.descricao } } : {},
       ...o.parametros && Object.keys(o.parametros).length > 0 ? { parametros: { ...o.parametros } } : {}
     });
@@ -2121,6 +2131,7 @@ function modelFromCanonicalPayload(payload) {
       rotacaoDeg: s2.rotacaoDeg,
       rotulo: s2.rotulo ?? null,
       ...s2.cedeSobreposicao ? { cedeSobreposicao: true } : {},
+      ...s2.fase ? { fase: s2.fase } : {},
       ...s2.parametros && Object.keys(s2.parametros).length > 0 ? { parametros: { ...s2.parametros } } : {},
       ...s2.secaoT ? { secaoT: s2.secaoT } : {}
     });
@@ -2221,6 +2232,7 @@ function modelFromCanonicalPayload(payload) {
       familia: c.familia,
       rotulo: c.rotulo,
       ...c.sugerido ? { sugerido: true } : {},
+      ...c.fase ? { fase: c.fase } : {},
       ...c.parametros && Object.keys(c.parametros).length > 0 ? { parametros: { ...c.parametros } } : {}
     });
   });
@@ -2641,7 +2653,7 @@ function conexoesDerivadas(model) {
 
 // utils/blueprintKernel/quantities.ts
 var POLITICA_PADRAO = {
-  version: "quant-1.12.0",
+  version: "quant-1.13.0",
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2
@@ -2805,7 +2817,7 @@ function computeQuantities(model, policy = POLITICA_PADRAO, kernelVersion = "") 
       quemCede: !quemCedeId ? "NINGUEM" : quemCedeId === d.aId && parede ? "PAREDE" : "CONCRETO"
     };
   });
-  const paredes = model.walls.map((w) => {
+  const paredesTodas = model.walls.map((w) => {
     const compMm = wallLength(w);
     const aberturas2 = model.openings.filter((o) => o.wallId === w.id);
     const areaAberturasMm2 = aberturas2.reduce((s2, o) => s2 + o.widthMm * o.heightMm, 0);
@@ -2828,6 +2840,7 @@ function computeQuantities(model, policy = POLITICA_PADRAO, kernelVersion = "") 
     }));
     return {
       wallId: w.id,
+      fase: faseDe(w),
       uid: w.uid,
       comprimentoM: compMm / 1e3,
       alturaM: w.heightMm / 1e3,
@@ -2840,6 +2853,7 @@ function computeQuantities(model, policy = POLITICA_PADRAO, kernelVersion = "") 
       camadas
     };
   });
+  const paredes = paredesTodas.filter((q) => q.fase === "NOVO");
   const materiais = /* @__PURE__ */ new Map();
   for (const p of paredes) {
     for (const c of p.camadas) {
@@ -2862,8 +2876,9 @@ function computeQuantities(model, policy = POLITICA_PADRAO, kernelVersion = "") 
   const porMaterial = [...materiais.values()].sort(
     (a, b) => a.itemCode.localeCompare(b.itemCode) || a.funcao.localeCompare(b.funcao)
   );
-  const aberturas = model.openings.map((o) => ({
+  const aberturasTodas = model.openings.map((o) => ({
     openingId: o.id,
+    fase: faseDe(o),
     uid: o.uid,
     tipo: o.kind,
     larguraM: o.widthMm / 1e3,
@@ -2874,6 +2889,7 @@ function computeQuantities(model, policy = POLITICA_PADRAO, kernelVersion = "") 
     itemCode: o.esquadria?.itemCode ?? "",
     descricao: o.esquadria?.descricao ?? ""
   }));
+  const aberturas = aberturasTodas.filter((q) => q.fase === "NOVO");
   const grupos = /* @__PURE__ */ new Map();
   for (const q of aberturas) {
     if (q.tipo === "passage") continue;
@@ -2944,11 +2960,12 @@ function computeQuantities(model, policy = POLITICA_PADRAO, kernelVersion = "") 
       formula: e.tipo === "RAMPA" ? `inclina\xE7\xE3o = desn\xEDvel ${m.desnivelMm} / comprimento ${m.comprimentoMm}` : `degraus = round(${m.desnivelMm} / ${e.alvoEspelhoMm}) = ${m.degraus}; espelho = ${m.desnivelMm} / ${m.degraus}`
     };
   });
-  const estruturas = (model.structures ?? []).map((s2) => {
+  const estruturasTodas = (model.structures ?? []).map((s2) => {
     const m = medirEstrutura(s2);
     const cedidoMm3 = Math.min(cedeMm3.get(s2.id) ?? 0, m.volumeMm3);
     return {
       structuralId: s2.id,
+      fase: faseDe(s2),
       uid: s2.uid,
       kind: s2.kind,
       rotulo: s2.rotulo ?? "",
@@ -2966,6 +2983,22 @@ function computeQuantities(model, policy = POLITICA_PADRAO, kernelVersion = "") 
       formula: cedidoMm3 > 0 ? `${m.formula} \u2212 volume cedido \xE0 alvenaria` : m.formula
     };
   });
+  const estruturas = estruturasTodas.filter((q) => q.fase === "NOVO");
+  const resumoDaFase = (fase) => {
+    const ps = paredesTodas.filter((q) => q.fase === fase);
+    const as = aberturasTodas.filter((q) => q.fase === fase);
+    const es = estruturasTodas.filter((q) => q.fase === fase);
+    return {
+      paredes: ps.length,
+      areaParedeM2: ps.reduce((soma, q) => soma + q.areaFaceLiquidaM2, 0),
+      volumeAlvenariaM3: ps.reduce((soma, q) => soma + q.volumeM3, 0),
+      comprimentoParedeM: ps.reduce((soma, q) => soma + q.comprimentoM, 0),
+      aberturas: as.length,
+      areaAberturasM2: as.reduce((soma, q) => soma + q.areaM2, 0),
+      estruturas: es.length,
+      volumeConcretoM3: es.reduce((soma, q) => soma + q.volumeConcretoM3, 0)
+    };
+  };
   const somaEstrutural = (tipos, campo) => estruturas.filter((e) => tipos.includes(e.kind)).reduce((s2, e) => s2 + e[campo], 0);
   const FUNDACAO = ["ESTACA", "BLOCO_COROAMENTO", "VIGA_FUNDACAO"];
   const ambientes = model.spaces.map((s2) => {
@@ -3144,9 +3177,9 @@ function computeQuantities(model, policy = POLITICA_PADRAO, kernelVersion = "") 
     policy,
     kernelVersion,
     ambientes,
-    paredes,
-    aberturas,
-    estruturas,
+    paredes: paredesTodas,
+    aberturas: aberturasTodas,
+    estruturas: estruturasTodas,
     telhados,
     escadas,
     guardaCorpos,
@@ -3154,6 +3187,9 @@ function computeQuantities(model, policy = POLITICA_PADRAO, kernelVersion = "") 
     sobreposicoes,
     conexoes,
     totais: {
+      // FASES DE REFORMA (E10.2): o que se DEMOLE e o que FICA, à parte do que se constrói.
+      demolicao: resumoDaFase("DEMOLIR"),
+      existente: resumoDaFase("EXISTENTE"),
       areaPisoM2: somaPiso,
       areaConstruidaM2: somaConstruida,
       areaPisoComPerdaM2: somaPiso * (1 + policy.perdaRevestimento),

@@ -54,7 +54,7 @@ export type Dimensao = 'M2' | 'M' | 'M3' | 'UN' | 'KG';
  * linha por cômodo com o mesmo número repetido, que somaria errado no
  * orçamento.
  */
-export type EscopoMedida = 'AMBIENTE' | 'PAREDE' | 'ABERTURA' | 'EDIFICACAO' | 'ESTRUTURA' | 'TELHADO' | 'ESCADA' | 'INSTALACAO' | 'GUARDA_CORPO';
+export type EscopoMedida = 'AMBIENTE' | 'PAREDE' | 'ABERTURA' | 'EDIFICACAO' | 'ESTRUTURA' | 'TELHADO' | 'ESCADA' | 'INSTALACAO' | 'GUARDA_CORPO' | 'DEMOLICAO';
 
 export interface DefinicaoMedida {
   id: string;
@@ -411,6 +411,37 @@ export const MEDIDAS: DefinicaoMedida[] = [
     dimensao: 'M',
     descricao: 'Comprimento da polilinha de cada corrimão.',
   },
+  // DEMOLIÇÃO (E10.2): o que está marcado A DEMOLIR. Sai por peça, como as
+  // medidas de construção, e NÃO entra nas medidas acima — parede a demolir não
+  // é parede que se compra. A existente (que fica) não sai em lugar nenhum.
+  {
+    id: 'DEMOLICAO_AREA_PAREDE',
+    rotulo: 'Demolição — área de parede',
+    escopo: 'DEMOLICAO',
+    dimensao: 'M2',
+    descricao: 'Área de face líquida (uma face) de cada parede marcada A DEMOLIR.',
+  },
+  {
+    id: 'DEMOLICAO_VOLUME_ALVENARIA',
+    rotulo: 'Demolição — volume de alvenaria',
+    escopo: 'DEMOLICAO',
+    dimensao: 'M3',
+    descricao: 'Volume de cada parede marcada A DEMOLIR (comprimento × altura × espessura, menos vãos). É também o entulho a remover.',
+  },
+  {
+    id: 'DEMOLICAO_ABERTURAS',
+    rotulo: 'Demolição — esquadrias a remover',
+    escopo: 'DEMOLICAO',
+    dimensao: 'UN',
+    descricao: 'Uma por porta, janela ou vão marcado A DEMOLIR.',
+  },
+  {
+    id: 'DEMOLICAO_VOLUME_CONCRETO',
+    rotulo: 'Demolição — volume de concreto',
+    escopo: 'DEMOLICAO',
+    dimensao: 'M3',
+    descricao: 'Volume de cada peça estrutural marcada A DEMOLIR.',
+  },
 ];
 
 export const MEDIDA_POR_ID = new Map(MEDIDAS.map((m) => [m.id, m]));
@@ -694,6 +725,28 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
           formula: medidaId === 'AREA_GUARDA_CORPO' ? 'Σ comprimento dos trechos × altura' : 'Σ comprimento dos trechos da polilinha',
           variaveis: { comprimentoM: g.comprimentoM, alturaM: g.alturaM, areaM2: g.areaM2, trechos: g.trechos, material: g.material },
         }));
+
+    case 'DEMOLICAO_AREA_PAREDE':
+    case 'DEMOLICAO_VOLUME_ALVENARIA':
+      return quant.paredes
+        .filter((p) => p.fase === 'DEMOLIR')
+        .map((p, i) => ({
+          ref: p.uid,
+          rotulo: `Parede a demolir ${i + 1} · ${p.comprimentoM.toFixed(2)} m × ${p.alturaM.toFixed(2)} m × ${(p.espessuraM * 1000).toFixed(0)} mm`,
+          valor: medidaId === 'DEMOLICAO_AREA_PAREDE' ? p.areaFaceLiquidaM2 : p.volumeM3,
+          formula: medidaId === 'DEMOLICAO_AREA_PAREDE' ? 'comprimento × altura − vãos' : '(comprimento × altura − vãos) × espessura',
+          variaveis: { comprimentoM: p.comprimentoM, alturaM: p.alturaM, espessuraM: p.espessuraM, areaAberturasM2: p.areaAberturasM2 },
+        }));
+
+    case 'DEMOLICAO_ABERTURAS':
+      return quant.aberturas
+        .filter((a) => a.fase === 'DEMOLIR')
+        .map((a) => ({ ref: a.uid, rotulo: `${a.nome} · a remover`, valor: 1, formula: '1 por esquadria marcada a demolir', variaveis: { larguraM: a.larguraM, alturaM: a.alturaM } }));
+
+    case 'DEMOLICAO_VOLUME_CONCRETO':
+      return quant.estruturas
+        .filter((e) => e.fase === 'DEMOLIR')
+        .map((e) => ({ ref: e.uid, rotulo: `${e.rotulo || e.kind} · a demolir`, valor: e.volumeConcretoM3, formula: 'volume da peça', variaveis: { volumeConcretoM3: e.volumeConcretoM3 } }));
 
     case 'DEGRAUS':
     case 'AREA_ESCADA': {

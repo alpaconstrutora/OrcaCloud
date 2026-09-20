@@ -22,6 +22,7 @@ import {
   KeyRound,
   Webhook,
   Users,
+  Hammer,
   Landmark,
   Merge,
   MessageSquare,
@@ -288,6 +289,8 @@ import TelaMateriais from './TelaMateriais';
 import TelaChavesDeApi from './TelaChavesDeApi';
 import TelaWebhooks from './TelaWebhooks';
 import TelaAcessoDoEstudo from './TelaAcessoDoEstudo';
+import TelaAntesDepois from './TelaAntesDepois';
+import { contagemPorFase, faseDaSelecao, fasePorId, idsOcultosPelaFase, type FiltroDeFase } from '../../utils/blueprintFases';
 import { useBlueprintColaboracao, type UsoDaColaboracao } from '../../hooks/useBlueprintColaboracao';
 import { blueprintStudyPermissionService, type PermissaoGravada } from '../../services/blueprintStudyPermissionService';
 import { iniciais, papelNoEstudo, travaDoComando } from '../../utils/blueprintColaboracao';
@@ -1315,7 +1318,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais' | 'api' | 'webhooks' | 'acesso';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais' | 'api' | 'webhooks' | 'acesso' | 'antes-depois';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -1528,6 +1531,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [estilo3d, setEstilo3d] = usePersistedState<Estilo3d>('blueprint:vista3dEstilo', 'SOMBREADO');
   /** ESTILO DA PLANTA (E8.4): técnica ou humanizada (pisos por material, sombra, mobiliário colorido, vegetação). */
   const [estiloPlanta, setEstiloPlanta] = usePersistedState<EstiloDaPlanta>('blueprint:estiloPlanta', 'TECNICA');
+  /** FASES DE REFORMA (E10.2): o filtro da vista (tudo / antes / depois / só demolição). */
+  const [filtroDeFase, setFiltroDeFase] = usePersistedState<FiltroDeFase>('blueprint:filtroDeFase', 'TUDO');
   /** TEMPLATES DE VISTA da organização (E8.2), além dos de fábrica. */
   const [templatesDaOrg, setTemplatesDaOrg] = useState<TemplateDeVista[]>([]);
   const [templatesIndisponiveis, setTemplatesIndisponiveis] = useState<string | null>(null);
@@ -2461,8 +2466,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       vista3d: { laje: mostrarLaje3d, arestas: mostrarArestas3d, armadura: mostrarArmadura3d, terreno: mostrarTerreno3d, envelope: mostrarEnvelope3d },
       estilo3d,
       estiloPlanta,
+      fase: filtroDeFase,
     }),
-    [mostrarMedidas, mostrarCamadas, mostrarCotas, mostrarCotaInterna, mostrarCircuitos, mostrarRotulos, mostrarGrade, mostrarPreenchimento, mostrarPreenchimentoTerreno, mostrarCurvasDeNivel, mostrarEnvelope, cotaAltoContraste, mostrarMobiliario, modoDeCor, mostrarLaje3d, mostrarArestas3d, mostrarArmadura3d, mostrarTerreno3d, mostrarEnvelope3d, estilo3d, estiloPlanta],
+    [mostrarMedidas, mostrarCamadas, mostrarCotas, mostrarCotaInterna, mostrarCircuitos, mostrarRotulos, mostrarGrade, mostrarPreenchimento, mostrarPreenchimentoTerreno, mostrarCurvasDeNivel, mostrarEnvelope, cotaAltoContraste, mostrarMobiliario, modoDeCor, mostrarLaje3d, mostrarArestas3d, mostrarArmadura3d, mostrarTerreno3d, mostrarEnvelope3d, estilo3d, estiloPlanta, filtroDeFase],
   );
   const aplicarConfiguracaoDeVista = useCallback(
     (c: ConfiguracaoDeVista) => {
@@ -2488,6 +2494,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       setMostrarEnvelope3d(c.vista3d.envelope);
       setEstilo3d(c.estilo3d);
       setEstiloPlanta(c.estiloPlanta);
+      setFiltroDeFase(c.fase);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
@@ -2531,6 +2538,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         if (e === 'HUMANIZADA' && !mostrarPreenchimento) setMostrarPreenchimento(true);
       }}
       resumoDosPisos={resumoDosPisos}
+      onFase={setFiltroDeFase}
       onAplicar={aplicarConfiguracaoDeVista}
       onSalvar={async (nome) => {
         const alvo = await resolverOrgDeEscrita('all-allowed');
@@ -3231,11 +3239,22 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [ocultosNoDesenho, setOcultosNoDesenho] = useState<Set<string>>(new Set());
   /** O olho do usuário + o recorte da vista de planta (E0.3). */
   const ocultosNoCanvas = useMemo(() => {
-    if (!vistaDePlanta) return ocultosNoDesenho;
+    // FASES DE REFORMA (E10.2): o filtro da vista esconde o que não é daquela fase.
+    const daFase = idsOcultosPelaFase(editor.model, filtroDeFase);
+    if (!vistaDePlanta) {
+      if (daFase.size === 0) return ocultosNoDesenho;
+      for (const id of ocultosNoDesenho) daFase.add(id);
+      return daFase;
+    }
     const daVista = idsOcultosNaVista(editor.model, vistaDePlanta, nivelDaVistaDePlanta);
     for (const id of ocultosNoDesenho) daVista.add(id);
+    for (const id of daFase) daVista.add(id);
     return daVista;
-  }, [ocultosNoDesenho, vistaDePlanta, editor.model, nivelDaVistaDePlanta]);
+  }, [ocultosNoDesenho, vistaDePlanta, editor.model, nivelDaVistaDePlanta, filtroDeFase]);
+  /** id → fase (só existente/a demolir), para o canvas colorir; e a fase da seleção, para os botões do ribbon. */
+  const fasesDoDesenho = useMemo(() => fasePorId(editor.model), [editor.model]);
+  const contagemDeFases = useMemo(() => contagemPorFase(editor.model), [editor.model]);
+  const faseSelecionada = useMemo(() => faseDaSelecao(editor.model, editor.selectedIds), [editor.model, editor.selectedIds]);
 
   /**
    * Alterna em LOTE — a linha manda um id, o cabeçalho da família manda todos os
@@ -7555,6 +7574,28 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           </div>
         </div>
       )}
+      {telaAberta === 'antes-depois' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="antes-depois">
+          {cabecalhoDaTela(
+            'Antes e depois',
+            'A reforma em duas plantas na mesma escala: o que existe hoje (com o que se demole em vermelho tracejado) e o que fica (existente em cinza, novo como sempre). Os quantitativos contam só o novo; a demolição sai à parte.',
+            Hammer,
+            'Arquitetura',
+          )}
+          <div>
+            <TelaAntesDepois
+              model={editor.model}
+              quant={quant}
+              levelId={levelId}
+              niveis={editor.model.levels.map((l) => ({ id: l.id, nome: l.name }))}
+              onSelecionar={(ids) => {
+                editor.setSelectedIds(ids);
+                setTelaAberta(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
       {telaAberta === 'acesso' && (
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="acesso">
           {cabecalhoDaTela(
@@ -8031,6 +8072,39 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   ativo={tarefaAberta === 'fundacoes'}
                   onClick={() => alternarTarefa('fundacoes')}
                   ajuda="Um bloco de coroamento sob cada pilar do pavimento, com uma ou duas estacas — prévia antes de gravar, Ctrl+Z desfaz"
+                />
+              </GrupoDoRibbon>
+            )}
+
+            {/* FASES DE REFORMA (20/09/2026, E10.2): marca a seleção como existente,
+                a demolir ou novo (kernel 0.46.0); o filtro da vista está no menu
+                Vista; Antes/Depois é tela com as duas miniaturas. */}
+            {!emVista && (
+              <GrupoDoRibbon rotulo="Reforma">
+                {(['EXISTENTE', 'DEMOLIR', 'NOVO'] as const).map((fase) => (
+                  <BotaoDoRibbon
+                    key={fase}
+                    icone={Hammer}
+                    rotulo={fase === 'EXISTENTE' ? 'Existente' : fase === 'DEMOLIR' ? 'A demolir' : 'Novo'}
+                    contagem={fase === 'NOVO' ? undefined : contagemDeFases[fase] || undefined}
+                    ativo={faseSelecionada.ids.length > 0 && faseSelecionada.fase === fase}
+                    disabled={faseSelecionada.ids.length === 0}
+                    onClick={() => editor.run({ type: 'SetFase', ids: faseSelecionada.ids, fase: fase === 'NOVO' ? null : fase })}
+                    ajuda={
+                      fase === 'EXISTENTE'
+                        ? 'Marca a seleção (paredes, aberturas, estrutura, mobiliário) como EXISTENTE: fica na obra; fora do quantitativo de construção e do de demolição; cinza no desenho. O número é quantas peças estão assim.'
+                        : fase === 'DEMOLIR'
+                          ? 'Marca a seleção como A DEMOLIR: sai da obra; entra nas medidas "Demolição — …" do orçamento; vermelho tracejado no desenho. O número é quantas peças estão assim.'
+                          : 'Volta a seleção a NOVO (o padrão): é o que se constrói e se orça.'
+                    }
+                  />
+                ))}
+                <BotaoDoRibbon
+                  icone={Hammer}
+                  rotulo="Antes / depois"
+                  ativo={telaAberta === 'antes-depois'}
+                  onClick={() => alternarTela('antes-depois')}
+                  ajuda="Duas plantas na mesma escala: antes (existente + a demolir) e depois (existente + novo), com o resumo do que se demole e do que se constrói."
                 />
               </GrupoDoRibbon>
             )}
@@ -9864,6 +9938,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               coresPorAmbiente={mostrarPreenchimento && modoDeCor === 'AMBIENTE'}
               coresDosAmbientes={mostrarPreenchimento && modoDeCor !== 'NENHUM' ? coresDoDesenho.porAmbiente : undefined}
               humanizada={humanizada}
+              fases={fasesDoDesenho}
               selecoesRemotas={selecoesRemotas}
               pisosHumanizados={mostrarPreenchimento ? pisosDoDesenho : undefined}
               vegetacao={vegetacaoDoDesenho}

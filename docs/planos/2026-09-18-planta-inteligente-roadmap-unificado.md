@@ -1014,6 +1014,26 @@ Próxima: E9.3 — Webhooks.
 
 Próxima: E10.2 — Fases de reforma (bump).
 
+### E10.2 — Fases de reforma (20/09/2026)
+
+**O que entrou** (**bump `blueprint-kernel-ts-0.45.0 → 0.46.0`** e **`quant-1.12.0 → quant-1.13.0`**: a fase entra no payload canônico e muda os totais; ritual dos goldens cumprido — com a string antiga e os campos no lugar, 263 testes do kernel passaram e só a política dos quantitativos acusou a versão; depois o bump e a recaptura dos 6 hashes, registrados no cabeçalho de `blueprintKernelGoldens.test.ts`. Sem migration: a fase vive no snapshot):
+
+- **Kernel** (`model.ts`): `FASES_DE_REFORMA = ['EXISTENTE','DEMOLIR','NOVO']`, `FaseDeReforma`, `ROTULO_DA_FASE`, `faseDe(peça)` (ausência = `NOVO`); campo opcional `fase` em **parede, abertura, estrutura e componente**; invariante `BAD_PHASE`. `canonical.ts` só emite `fase` quando EXISTENTE/DEMOLIR (disciplina das chaves opcionais: o acervo antigo mantém o hash). Comando **`SetFase { ids, fase }`** (`null`/`NOVO` apaga a chave; id desconhecido = `NOT_FOUND`; valor inválido = `BAD_PHASE`); cópia de grupo propaga a fase.
+- **Quantitativos** (`quantities.ts`): `fase` em cada linha de parede/abertura/estrutura; listas completas em `paredesTodas/aberturasTodas/estruturasTodas`; **`paredes/aberturas/estruturas` e todos os agregados contam só o NOVO**; `totais.demolicao` e `totais.existente` (`ResumoDeFase`: paredes, área, volume de alvenaria, aberturas, concreto) à parte.
+- **Orçamento** (`blueprintBudget.ts`): escopo `DEMOLICAO` com as medidas `DEMOLICAO_AREA_PAREDE`, `DEMOLICAO_VOLUME_ALVENARIA`, `DEMOLICAO_ABERTURAS`, `DEMOLICAO_VOLUME_CONCRETO` (só o que tem `fase === 'DEMOLIR'`).
+- **`utils/blueprintFases.ts`** (puro): `FiltroDeFase 'TUDO'|'ANTES'|'DEPOIS'|'DEMOLICAO'`, `FASES_VISIVEIS`, `COR_DA_FASE` (existente cinza; a demolir vermelho tracejado), `pecasComFase`, `idsOcultosPelaFase`, `fasePorId`, `contagemPorFase`, `faseDaSelecao`, `resumirFases`.
+- **Vista**: `ConfiguracaoDeVista.fase` (padrão `TUDO`, saneado, diff "Fase: …"), select **"Fase da reforma"** no `MenuVista` (o botão Vista mostra Antes/Depois/Demolição), `blueprint:filtroDeFase` persistido; o filtro entra em `ocultosNoCanvas` junto com camadas e pavimentos.
+- **Canvas**: parede existente em cinza; **a demolir em vermelho tracejado cheio** (a passada branca do miolo é pulada, senão o tracejado some no zoom); aberturas herdam a fase da parede; estrutura e componentes na cor da fase.
+- **Ribbon Arquitetura › Reforma**: **Existente / A demolir / Novo** agem sobre a seleção (desabilitados sem seleção; `aria-pressed` quando toda a seleção já está na fase; contagem por fase no rótulo) e **Antes / depois** abre a tela.
+- **`TelaAntesDepois.tsx`** (in-flow): duas `MiniPlanta`s na mesma caixa (esquerda = existente + a demolir tracejado; direita = existente + novo), seletor de pavimento, contagem por fase, três cartões (demolir / existente / novo) com o resumo e "Selecionar as N peças no desenho"; aviso quando nada está marcado. `MiniPlanta` ganhou `ocultos` e `fases` (`data-fase` nas linhas).
+- **Quantitativos › Demolição**: Alvenaria a demolir (m³), Esquadrias a remover, Concreto a demolir, Existente que fica (m).
+
+**Decisões.** (1) **NOVO = ausência da chave**: o acervo inteiro é "obra nova" sem migração e sem mudar hash. (2) **Totais e orçamento contam só o novo**; demolição é escopo próprio (serviço de demolição custa por m²/m³, não por m² de alvenaria nova); o existente não entra em nenhum dos dois — está escrito na tela. (3) Fase é **atributo da peça, não camada**: a mesma parede pode estar na camada "Alvenaria" e ser a demolir; o filtro de vista compõe com camadas e pavimentos. (4) Abertura sem fase própria segue a fase da parede (no canvas); no quantitativo, a fase da abertura é a dela. (5) Antes/depois reaproveita `MiniPlanta`/`caixaDosModelos` da E6.1 em vez de um segundo canvas.
+
+**Prova.** *No app real* (estudo "Planta 14/09/2026", escritas bloqueadas): "A demolir" desabilitado sem seleção; Parede 1 → A demolir (rótulo "A demolir 1", canvas com a parede vermelha tracejada); Parede 3 → Existente ("Existente 1"); Vista › "Fase da reforma" oferece Tudo/Antes/Depois/Só demolição, "Depois" some com a parede demolida e persiste em `blueprint:filtroDeFase`, "Só demolição" mostra só a parede vermelha; **Antes / depois**: 2 miniaturas, "1 existente(s) · 1 a demolir · 159 nova(s)", resumo demolir "1 parede(s) · 14,03 m² · 2,10 m³ de alvenaria", SVG do antes com 1 linha tracejada e 2 existentes; **Quantitativos › Demolição**: "Alvenaria a demolir 2,10 m³ … Existente que fica 7,45 m". **escritas bloqueadas: 16**. Testes: `blueprintFases.test.ts` (4), editor "fases de reforma (E10.2)", goldens recapturadas, pins `quant-1.13.0`. `planta-api` **redeployada (v4)** com o `kernel.bundle.mjs` regenerado (o teste de frescor da E9.2 acusou o bundle velho — é para isso que ele existe).
+
+Próxima: E10.3 — Planta → compras.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

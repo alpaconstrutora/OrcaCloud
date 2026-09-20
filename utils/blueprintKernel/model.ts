@@ -126,6 +126,29 @@ export interface CamadaParede {
  * Parede pelo EIXO, não pelas faces. Espessura é propriedade, não geometria —
  * é o que permite mudar a espessura sem reconstruir a topologia.
  */
+/**
+ * FASES DE REFORMA (20/09/2026, roadmap E10.2). Toda peça que se constrói
+ * (parede, abertura, estrutura, componente) pode dizer em que fase está:
+ *
+ *   EXISTENTE — já está na obra e FICA. Não entra no quantitativo de construção
+ *               nem no de demolição; aparece em cinza.
+ *   DEMOLIR   — está na obra e SAI. Entra no quantitativo de DEMOLIÇÃO, não no
+ *               de construção; aparece tracejada em vermelho.
+ *   NOVO      — o que se constrói. É o PADRÃO: peça sem fase é nova, e é o que
+ *               todo desenho do acervo sempre significou.
+ *
+ * Ausente = NOVO em toda leitura; o canônico só emite a chave quando a fase é
+ * EXISTENTE ou DEMOLIR — a mesma disciplina de `alinhamento`/`cedeSobreposicao`,
+ * para o hash de desenho novo não mudar.
+ */
+export const FASES_DE_REFORMA = ['EXISTENTE', 'DEMOLIR', 'NOVO'] as const;
+export type FaseDeReforma = (typeof FASES_DE_REFORMA)[number];
+export const ROTULO_DA_FASE: Record<FaseDeReforma, string> = { EXISTENTE: 'Existente', DEMOLIR: 'A demolir', NOVO: 'Novo' };
+/** A fase de uma peça, com o padrão. */
+export function faseDe(p: { fase?: FaseDeReforma | null }): FaseDeReforma {
+  return p.fase ?? 'NOVO';
+}
+
 export interface Wall {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
@@ -179,6 +202,8 @@ export interface Wall {
    * e o que não pode é ser pago duas vezes. Ver `sobreposicao.ts`.
    */
   cedeSobreposicao?: boolean;
+  /** Fase de reforma (E10.2). Ausente = NOVO. */
+  fase?: FaseDeReforma;
   /**
    * A COMPOSIÇÃO da parede: as faixas de material dentro da espessura.
    *
@@ -435,6 +460,8 @@ export interface Opening {
    * não existir, pela mesma razão que `sillMm` existe em porta.
    */
   embutida: boolean;
+  /** Fase de reforma (E10.2). Ausente = NOVO. */
+  fase?: FaseDeReforma;
   /**
    * O tipo da esquadria, quando declarado. Ausente = abertura sem tipo, que é
    * o que toda abertura do acervo era — e a chave é OMITIDA do payload
@@ -873,6 +900,8 @@ export interface Structural {
    * exemplo. Ausente/`false` = a peça é medida cheia.
    */
   cedeSobreposicao?: boolean;
+  /** Fase de reforma (E10.2). Ausente = NOVO. */
+  fase?: FaseDeReforma;
 }
 
 /**
@@ -1506,6 +1535,8 @@ export interface Componente {
   /** "Cama do casal", "Bancada da ilha". `null` = o rótulo do catálogo. */
   rotulo?: string | null;
   sugerido?: boolean | null;
+  /** Fase de reforma (E10.2). Ausente = NOVO. */
+  fase?: FaseDeReforma;
 }
 
 /**
@@ -4162,6 +4193,11 @@ export function assertModelInvariants(model: BlueprintModel): void {
     if (!Number.isInteger(g.alturaMm) || g.alturaMm <= 0) throw new KernelError('BAD_RAILING', `Guarda-corpo ${g.id}: altura tem de ser inteira e positiva`);
     if (typeof g.itemCode !== 'string' || typeof g.descricao !== 'string') throw new KernelError('BAD_RAILING', `Guarda-corpo ${g.id}: código/descrição têm de ser texto`);
     if (g.rotulo != null && (typeof g.rotulo !== 'string' || g.rotulo.length > MAX_ROTULO_DE_GUARDA_CORPO)) throw new KernelError('BAD_RAILING', `Guarda-corpo ${g.id}: rótulo maior que ${MAX_ROTULO_DE_GUARDA_CORPO} caracteres`);
+  }
+
+  // FASES DE REFORMA (E10.2): valor fora da lista é recusado; `NOVO` explícito é tolerado (o canônico o apaga).
+  for (const p of [...model.walls, ...model.openings, ...(model.structures ?? []), ...(model.componentes ?? [])]) {
+    if (p.fase !== undefined && !FASES_DE_REFORMA.includes(p.fase)) throw new KernelError('BAD_PHASE', `${p.id}: fase de reforma inválida ${String(p.fase)}`);
   }
 
   // Eixos: comprimento não nulo, nome curto, coordenadas inteiras.

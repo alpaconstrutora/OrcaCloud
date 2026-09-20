@@ -51,17 +51,26 @@ interface Props {
   destaque?: ReadonlySet<string>;
   titulo?: string;
   altura?: number;
+  /** FASES DE REFORMA (E10.2): ids que NÃO se desenham (o filtro antes/depois). */
+  ocultos?: ReadonlySet<string>;
+  /** id → fase, para colorir: existente cinza, a demolir vermelho tracejado. Ausente = tudo novo. */
+  fases?: ReadonlyMap<string, 'EXISTENTE' | 'DEMOLIR' | 'NOVO'>;
 }
 
-export default function MiniPlanta({ model, levelId, caixa, destaque, titulo, altura = 320 }: Props) {
+export default function MiniPlanta({ model, levelId, caixa, destaque, titulo, altura = 320, ocultos, fases }: Props) {
   const w = caixa.maxX - caixa.minX;
   const h = caixa.maxY - caixa.minY;
   const Y = (y: number) => caixa.maxY - y; // inverte
   const nivel = levelId ?? model.levels[0]?.id ?? null;
-  const paredes = useMemo(() => model.walls.filter((x) => x.levelId === nivel), [model, nivel]);
+  const paredes = useMemo(() => model.walls.filter((x) => x.levelId === nivel && !ocultos?.has(x.id)), [model, nivel, ocultos]);
   const espacos = useMemo(() => model.spaces.filter((s) => s.levelId === nivel && s.ring.length >= 3), [model, nivel]);
   const divisas = useMemo(() => model.boundaries.filter((b) => b.kind === 'TERRENO'), [model]);
-  const aberturas = useMemo(() => model.openings.filter((o) => paredes.some((p) => p.id === o.wallId)), [model, paredes]);
+  const aberturas = useMemo(() => model.openings.filter((o) => !ocultos?.has(o.id) && paredes.some((p) => p.id === o.wallId)), [model, paredes, ocultos]);
+  const corDaParede = (p: { id: string; uid: string }) => {
+    if (destaque?.has(p.uid)) return '#ea580c';
+    const fase = fases?.get(p.id);
+    return fase === 'EXISTENTE' ? '#94a3b8' : fase === 'DEMOLIR' ? '#dc2626' : '#1e293b';
+  };
   const traco = Math.max(w, h) / 600; // ~1 px na largura típica
   const fonte = Math.max(w, h) / 45;
 
@@ -83,7 +92,7 @@ export default function MiniPlanta({ model, levelId, caixa, destaque, titulo, al
           <line key={b.id} x1={b.a.x} y1={Y(b.a.y)} x2={b.b.x} y2={Y(b.b.y)} stroke="#0d9488" strokeWidth={traco * 1.5} strokeDasharray={`${traco * 8} ${traco * 5}`} />
         ))}
         {paredes.map((p) => (
-          <line key={p.id} x1={p.a.x} y1={Y(p.a.y)} x2={p.b.x} y2={Y(p.b.y)} stroke={destaque?.has(p.uid) ? '#ea580c' : '#1e293b'} strokeWidth={p.thicknessMm} strokeLinecap="butt" />
+          <line key={p.id} x1={p.a.x} y1={Y(p.a.y)} x2={p.b.x} y2={Y(p.b.y)} stroke={corDaParede(p)} strokeWidth={p.thicknessMm} strokeLinecap="butt" strokeDasharray={fases?.get(p.id) === 'DEMOLIR' ? `${p.thicknessMm * 1.5} ${p.thicknessMm}` : undefined} data-fase={fases?.get(p.id) ?? undefined} />
         ))}
         {aberturas.map((o) => {
           const p = paredes.find((x) => x.id === o.wallId)!;

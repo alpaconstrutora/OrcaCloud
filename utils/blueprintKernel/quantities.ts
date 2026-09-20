@@ -18,9 +18,9 @@
  * ligada ao snapshot que a originou.
  */
 
-import type { AcabamentosDoAmbiente, BlueprintModel, FuncaoCamada, Level, MaterialDeGuardaCorpo, Opening, Rodape, Space, Structural, StructuralKind, TipoDeGuardaCorpo, Wall } from './model';
+import type { AcabamentosDoAmbiente, BlueprintModel, FaseDeReforma, FuncaoCamada, Level, MaterialDeGuardaCorpo, Opening, Rodape, Space, Structural, StructuralKind, TipoDeGuardaCorpo, Wall } from './model';
 import { areaDaSecaoT, perimetroDeFormaDaSecaoT, secaoTValida } from './secaoT';
-import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural, acabamentosDoAmbiente, comprimentoDoGuardaCorpo } from './model';
+import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural, acabamentosDoAmbiente, comprimentoDoGuardaCorpo, faseDe } from './model';
 import { contornoExternoDoNivel } from './arrangement';
 import { medirAgua } from './telhado';
 import { assinaturaDaEsquadria, nomeDaEsquadria } from './model';
@@ -171,7 +171,7 @@ export interface QuantityPolicy {
  * código). Desenho sem peça não muda de número.
  */
 export const POLITICA_PADRAO: QuantityPolicy = {
-  version: 'quant-1.12.0',
+  version: 'quant-1.13.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -296,8 +296,22 @@ export interface QuantidadePorMaterial {
   areaFaceM2: number;
 }
 
+/** Resumo por fase de reforma (E10.2). */
+export interface ResumoDeFase {
+  paredes: number;
+  areaParedeM2: number;
+  volumeAlvenariaM3: number;
+  comprimentoParedeM: number;
+  aberturas: number;
+  areaAberturasM2: number;
+  estruturas: number;
+  volumeConcretoM3: number;
+}
+
 export interface QuantidadeParede {
   wallId: string;
+  /** FASES DE REFORMA (E10.2): EXISTENTE fica fora dos totais; DEMOLIR vai para `totais.demolicao`; NOVO é o que se constrói. */
+  fase: FaseDeReforma;
   /**
    * Identidade PERSISTENTE do elemento (Etapa 1), estável entre publicações.
    *
@@ -340,6 +354,7 @@ export interface QuantidadeParede {
 
 export interface QuantidadeAbertura {
   openingId: string;
+  fase: FaseDeReforma;
   /**
    * Identidade PERSISTENTE do elemento (Etapa 1), estável entre publicações.
    *
@@ -388,6 +403,7 @@ export interface QuantidadePorEsquadria {
 
 export interface QuantidadeEstrutural {
   structuralId: string;
+  fase: FaseDeReforma;
   /**
    * Identidade PERSISTENTE do elemento (Etapa 1), estável entre publicações.
    *
@@ -633,6 +649,10 @@ export interface Quantitativos {
    */
   conexoes: ConexaoDerivada[];
   totais: {
+    /** FASES DE REFORMA (E10.2): o que se demole — paredes, área e volume de alvenaria, aberturas, estrutura. */
+    demolicao: ResumoDeFase;
+    /** O que existe e fica: fora de construção e de demolição. */
+    existente: ResumoDeFase;
     areaPisoM2: number;
     /**
      * ÁREA CONSTRUÍDA — o contorno externo, pela FACE das paredes.
@@ -1068,7 +1088,7 @@ export function computeQuantities(
   });
 
   // ── Paredes ───────────────────────────────────────────────────────────────
-  const paredes: QuantidadeParede[] = model.walls.map((w) => {
+  const paredesTodas: QuantidadeParede[] = model.walls.map((w) => {
     const compMm = wallLength(w);
     const aberturas = model.openings.filter((o) => o.wallId === w.id);
     const areaAberturasMm2 = aberturas.reduce((s, o) => s + o.widthMm * o.heightMm, 0);
@@ -1116,6 +1136,7 @@ export function computeQuantities(
 
     return {
       wallId: w.id,
+      fase: faseDe(w),
       uid: w.uid,
       comprimentoM: (compMm / 1000),
       alturaM: (w.heightMm / 1000),
@@ -1128,6 +1149,10 @@ export function computeQuantities(
       camadas,
     };
   });
+  // FASES DE REFORMA (E10.2): daqui para baixo, `paredes` são as que se CONSTROEM.
+  // Existente não se compra; a demolir vai para `totais.demolicao`. A lista de
+  // saída (`paredesTodas`) continua inteira, com a fase em cada linha.
+  const paredes = paredesTodas.filter((q) => q.fase === 'NOVO');
 
   // ── Agrupamento por material ──────────────────────────────────────────────
   //
@@ -1168,8 +1193,9 @@ export function computeQuantities(
 
 
   // ── Aberturas ─────────────────────────────────────────────────────────────
-  const aberturas: QuantidadeAbertura[] = model.openings.map((o) => ({
+  const aberturasTodas: QuantidadeAbertura[] = model.openings.map((o) => ({
     openingId: o.id,
+    fase: faseDe(o),
     uid: o.uid,
     tipo: o.kind,
     larguraM: (o.widthMm / 1000),
@@ -1180,6 +1206,7 @@ export function computeQuantities(
     itemCode: o.esquadria?.itemCode ?? '',
     descricao: o.esquadria?.descricao ?? '',
   }));
+  const aberturas = aberturasTodas.filter((q) => q.fase === 'NOVO');
 
   // O QUADRO: agrupado pela assinatura, ordenado por nome — a ordem da prancha,
   // e não a de desenho, pela razão de `porMaterial`.
@@ -1275,7 +1302,7 @@ export function computeQuantities(
     };
   });
 
-  const estruturas: QuantidadeEstrutural[] = (model.structures ?? []).map((s) => {
+  const estruturasTodas: QuantidadeEstrutural[] = (model.structures ?? []).map((s) => {
     const m = medirEstrutura(s);
     // Nunca cede mais do que tem: uma peça inteiramente dentro de outra sairia
     // com volume negativo, e um número negativo num orçamento não é conservador,
@@ -1283,6 +1310,7 @@ export function computeQuantities(
     const cedidoMm3 = Math.min(cedeMm3.get(s.id) ?? 0, m.volumeMm3);
     return {
       structuralId: s.id,
+      fase: faseDe(s),
       uid: s.uid,
       kind: s.kind,
       rotulo: s.rotulo ?? '',
@@ -1301,6 +1329,23 @@ export function computeQuantities(
       formula: cedidoMm3 > 0 ? `${m.formula} − volume cedido à alvenaria` : m.formula,
     };
   });
+  const estruturas = estruturasTodas.filter((q) => q.fase === 'NOVO');
+  /** Resumo de uma fase: o que se demole (ou o que fica), nas grandezas que o orçamento compra. */
+  const resumoDaFase = (fase: FaseDeReforma) => {
+    const ps = paredesTodas.filter((q) => q.fase === fase);
+    const as = aberturasTodas.filter((q) => q.fase === fase);
+    const es = estruturasTodas.filter((q) => q.fase === fase);
+    return {
+      paredes: ps.length,
+      areaParedeM2: ps.reduce((soma, q) => soma + q.areaFaceLiquidaM2, 0),
+      volumeAlvenariaM3: ps.reduce((soma, q) => soma + q.volumeM3, 0),
+      comprimentoParedeM: ps.reduce((soma, q) => soma + q.comprimentoM, 0),
+      aberturas: as.length,
+      areaAberturasM2: as.reduce((soma, q) => soma + q.areaM2, 0),
+      estruturas: es.length,
+      volumeConcretoM3: es.reduce((soma, q) => soma + q.volumeConcretoM3, 0),
+    };
+  };
 
   /** Soma um campo das estruturas de um conjunto de tipos. */
   const somaEstrutural = (
@@ -1555,9 +1600,9 @@ export function computeQuantities(
     policy,
     kernelVersion,
     ambientes,
-    paredes,
-    aberturas,
-    estruturas,
+    paredes: paredesTodas,
+    aberturas: aberturasTodas,
+    estruturas: estruturasTodas,
     telhados,
     escadas,
     guardaCorpos,
@@ -1565,6 +1610,9 @@ export function computeQuantities(
     sobreposicoes,
     conexoes,
     totais: {
+      // FASES DE REFORMA (E10.2): o que se DEMOLE e o que FICA, à parte do que se constrói.
+      demolicao: resumoDaFase('DEMOLIR'),
+      existente: resumoDaFase('EXISTENTE'),
       areaPisoM2: (somaPiso),
       areaConstruidaM2: (somaConstruida),
       areaPisoComPerdaM2: (somaPiso * (1 + policy.perdaRevestimento)),

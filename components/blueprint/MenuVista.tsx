@@ -11,6 +11,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Palette, Save, Trash2 } from 'lucide-react';
 import { MODOS_DE_COR, ROTULO_DO_MODO_DE_COR, type ItemDaLegenda, type ModoDeCor } from '../../utils/blueprintPaletas';
+import { FILTROS_DE_FASE, ROTULO_DO_FILTRO_DE_FASE, type FiltroDeFase } from '../../utils/blueprintFases';
 import { diferencas, ESTILOS_3D, ESTILOS_DA_PLANTA, mesmaConfiguracao, ROTULO_DO_ESTILO_3D, ROTULO_DO_ESTILO_DA_PLANTA, validarTemplate, type ConfiguracaoDeVista, type Estilo3d, type EstiloDaPlanta, type TemplateDeVista } from '../../utils/blueprintTemplatesDeVista';
 
 interface Props {
@@ -24,6 +25,8 @@ interface Props {
   onEstilo3d: (e: Estilo3d) => void;
   /** E8.4: técnica / humanizada. */
   onEstiloPlanta: (e: EstiloDaPlanta) => void;
+  /** E10.2: filtro de fase da reforma. */
+  onFase: (f: FiltroDeFase) => void;
   /** Resumo dos pisos da planta humanizada (padrão → quantos ambientes, quantos declarados). */
   resumoDosPisos?: readonly { rotulo: string; quantidade: number; declarados: number }[];
   onAplicar: (config: ConfiguracaoDeVista) => void;
@@ -31,7 +34,7 @@ interface Props {
   onRemover: (id: string) => Promise<void>;
 }
 
-export default function MenuVista({ em3d, configuracaoAtual, templates, carregando = false, indisponivel = null, legenda, onModoDeCor, onEstilo3d, onEstiloPlanta, resumoDosPisos = [], onAplicar, onSalvar, onRemover }: Props) {
+export default function MenuVista({ em3d, configuracaoAtual, templates, carregando = false, indisponivel = null, legenda, onModoDeCor, onEstilo3d, onEstiloPlanta, onFase, resumoDosPisos = [], onAplicar, onSalvar, onRemover }: Props) {
   const [aberto, setAberto] = useState(false);
   const [nomeNovo, setNomeNovo] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -94,7 +97,7 @@ export default function MenuVista({ em3d, configuracaoAtual, templates, carregan
         className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${aberto ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
       >
         <Palette className="h-3.5 w-3.5" />
-        {ativo ? ativo.nome : configuracaoAtual.estiloPlanta === 'HUMANIZADA' ? 'Humanizada' : configuracaoAtual.modoDeCor !== 'NENHUM' ? ROTULO_DO_MODO_DE_COR[configuracaoAtual.modoDeCor] : 'Vista'}
+        {ativo ? ativo.nome : configuracaoAtual.fase !== 'TUDO' ? (configuracaoAtual.fase === 'ANTES' ? 'Antes' : configuracaoAtual.fase === 'DEPOIS' ? 'Depois' : 'Demolição') : configuracaoAtual.estiloPlanta === 'HUMANIZADA' ? 'Humanizada' : configuracaoAtual.modoDeCor !== 'NENHUM' ? ROTULO_DO_MODO_DE_COR[configuracaoAtual.modoDeCor] : 'Vista'}
         <ChevronDown className="h-3 w-3" />
       </button>
 
@@ -114,6 +117,14 @@ export default function MenuVista({ em3d, configuracaoAtual, templates, carregan
               {resumoDosPisos.length > 0 ? `: ${resumoDosPisos.map((r) => `${r.rotulo} ${r.quantidade}${r.declarados < r.quantidade ? ` (${r.quantidade - r.declarados} suposto${r.quantidade - r.declarados > 1 ? 's' : ''})` : ''}`).join(' · ')}` : ''}. Mobiliário e vegetação são ilustrativos.
             </p>
           )}
+          <label className="mt-2 flex flex-col gap-1 text-[11px] font-medium text-slate-500">
+            Fase da reforma
+            <select value={configuracaoAtual.fase} onChange={(e) => onFase(e.target.value as FiltroDeFase)} aria-label="Fase da reforma" className={campo}>
+              {FILTROS_DE_FASE.map((f) => (
+                <option key={f} value={f}>{ROTULO_DO_FILTRO_DE_FASE[f]}</option>
+              ))}
+            </select>
+          </label>
           <label className="mt-2 flex flex-col gap-1 text-[11px] font-medium text-slate-500">
             Colorir ambientes por
             <select value={configuracaoAtual.modoDeCor} onChange={(e) => onModoDeCor(e.target.value as ModoDeCor)} aria-label="Colorir ambientes por" className={campo}>

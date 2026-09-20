@@ -2336,6 +2336,59 @@ describe('BlueprintEditor · quantitativos', () => {
     }
   }, 60000);
 
+  it('fases de reforma (E10.2): Arquitetura › Reforma marca a seleção (pilar) como A DEMOLIR e EXISTENTE; o filtro da vista esconde por fase; Antes/Depois abre com as duas miniaturas e o resumo; Quantitativos ganha o grupo Demolição', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    let m = k.applyBatch(nivel.model, [w(0, 0, 8000, 0), w(8000, 0, 8000, 3000), w(8000, 3000, 0, 3000), w(0, 3000, 0, 0), w(4000, 0, 4000, 3000)]).model;
+    m = k.applyBatch(m, [
+      { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(0, 0)], larguraMm: 200, profundidadeMm: 200, alturaMm: 2800, baseMm: 0 } as never,
+      { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(8000, 0)], larguraMm: 200, profundidadeMm: 200, alturaMm: 2800, baseMm: 0 } as never,
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    // Sem seleção, os botões de fase ficam desligados.
+    const botaoFase = (nome: RegExp) => screen.getAllByRole('button', { name: nome }).find((b) => b.getAttribute('title')?.startsWith('Marca a seleção') || b.getAttribute('title')?.startsWith('Volta a seleção'))!;
+    expect(botaoFase(/^A demolir/)).toBeDisabled();
+    // Seleciona o pilar P1 pelo navegador e marca A DEMOLIR: o botão acende e conta 1.
+    await abrirComponentes(user);
+    await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
+    expect(botaoFase(/^A demolir/)).toBeEnabled();
+    await user.click(botaoFase(/^A demolir/));
+    await waitFor(() => expect(botaoFase(/^A demolir/)).toHaveAttribute('aria-pressed', 'true'));
+    expect(botaoFase(/^A demolir/)).toHaveTextContent('1');
+    // P2 como EXISTENTE.
+    await user.click(await screen.findByRole('button', { name: /^P2 · Pilar/ }));
+    await user.click(botaoFase(/^Existente/));
+    await waitFor(() => expect(botaoFase(/^Existente/)).toHaveTextContent('1'));
+    // Filtro da vista: "Depois" esconde o que se demole; a configuração da vista carrega a fase.
+    await abrirAba(/^vista$/i);
+    await user.click(screen.getByTestId('menu-vista'));
+    await user.selectOptions(within(await screen.findByTestId('painel-da-vista')).getByLabelText('Fase da reforma'), 'DEPOIS');
+    expect(localStorage.getItem('blueprint:filtroDeFase')).toBe(JSON.stringify('DEPOIS'));
+    expect(screen.getByTestId('menu-vista')).toHaveTextContent('Depois');
+    await user.selectOptions(within(screen.getByTestId('painel-da-vista')).getByLabelText('Fase da reforma'), 'TUDO');
+    await user.keyboard('{Escape}');
+    // Antes/Depois: tela em fluxo com as duas miniaturas, contagem e resumo; "Selecionar as 1 peça(s)" volta ao editor com a seleção.
+    await abrirAba(/^arquitetura$/i);
+    await user.click(screen.getByRole('button', { name: /^Antes \/ depois/ }));
+    const tela = await screen.findByTestId('tela-antes-depois');
+    expect(document.querySelector('[data-tela="antes-depois"]')).toBeTruthy();
+    expect(within(tela).getAllByTestId('mini-planta')).toHaveLength(2);
+    expect(within(tela).getByTestId('contagem-por-fase')).toHaveTextContent('1 existente(s) · 1 a demolir · 5 nova(s)');
+    expect(within(tela).getByTestId('resumo-demolir')).toHaveTextContent(/1 peça\(s\) estrutural\(is\)/);
+    expect(within(tela).queryByTestId('aviso-sem-reforma')).toBeNull();
+    await user.click(within(tela).getByTestId('selecionar-demolir'));
+    expect(screen.queryByTestId('tela-antes-depois')).toBeNull();
+    await waitFor(() => expect(botaoFase(/^A demolir/)).toHaveAttribute('aria-pressed', 'true'));
+    // Quantitativos: o Resumo ganha o grupo Demolição com o concreto a demolir.
+    const telaQuant = await abrirTelaDeQuantitativos();
+    expect(telaQuant).toHaveTextContent(/Concreto a demolir/);
+    expect(telaQuant).toHaveTextContent(/Existente que fica/);
+  }, 60000);
+
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2500 });

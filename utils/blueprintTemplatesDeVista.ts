@@ -8,6 +8,7 @@
  * hash — só no que a tela mostra. Por isso mora fora do kernel.
  */
 import { MODOS_DE_COR, type ModoDeCor } from './blueprintPaletas';
+import { FILTROS_DE_FASE, ROTULO_DO_FILTRO_DE_FASE, type FiltroDeFase } from './blueprintFases';
 
 export type Estilo3d = 'SOMBREADO' | 'LINHA_OCULTA' | 'TRANSPARENTE';
 export const ESTILOS_3D: readonly Estilo3d[] = ['SOMBREADO', 'LINHA_OCULTA', 'TRANSPARENTE'];
@@ -46,6 +47,8 @@ export interface ConfiguracaoDeVista {
   estilo3d: Estilo3d;
   /** Ausente em templates gravados antes da E8.4 → técnica. */
   estiloPlanta: EstiloDaPlanta;
+  /** FASES DE REFORMA (E10.2): tudo / antes / depois / só demolição. Ausente → tudo. */
+  fase: FiltroDeFase;
 }
 
 export const CONFIGURACAO_PADRAO: ConfiguracaoDeVista = {
@@ -54,6 +57,7 @@ export const CONFIGURACAO_PADRAO: ConfiguracaoDeVista = {
   vista3d: { laje: false, arestas: true, armadura: false, terreno: false, envelope: true },
   estilo3d: 'SOMBREADO',
   estiloPlanta: 'TECNICA',
+  fase: 'TUDO',
 };
 
 export interface TemplateDeVista {
@@ -85,6 +89,7 @@ export function configuracaoDaColuna(raw: unknown): ConfiguracaoDeVista {
     vista3d,
     estilo3d: ESTILOS_3D.includes(o.estilo3d as Estilo3d) ? (o.estilo3d as Estilo3d) : CONFIGURACAO_PADRAO.estilo3d,
     estiloPlanta: ESTILOS_DA_PLANTA.includes(o.estiloPlanta as EstiloDaPlanta) ? (o.estiloPlanta as EstiloDaPlanta) : CONFIGURACAO_PADRAO.estiloPlanta,
+    fase: FILTROS_DE_FASE.includes(o.fase as FiltroDeFase) ? (o.fase as FiltroDeFase) : CONFIGURACAO_PADRAO.fase,
   };
 }
 
@@ -117,6 +122,7 @@ export function diferencas(de: ConfiguracaoDeVista, para: ConfiguracaoDeVista): 
   }
   if (de.estilo3d !== para.estilo3d) out.push(`Estilo 3D: ${ROTULO_DO_ESTILO_3D[para.estilo3d]}`);
   if (de.estiloPlanta !== para.estiloPlanta) out.push(`Planta: ${ROTULO_DO_ESTILO_DA_PLANTA[para.estiloPlanta]}`);
+  if (de.fase !== para.fase) out.push(`Fase: ${ROTULO_DO_FILTRO_DE_FASE[para.fase]}`);
   return out;
 }
 

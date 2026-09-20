@@ -81,6 +81,8 @@ import {
   type TipoDeGuardaCorpo,
   type MaterialDeGuardaCorpo,
   CATALOGO_DE_COMPONENTES,
+  FASES_DE_REFORMA,
+  type FaseDeReforma,
   MAX_ROTULO_DE_COMPONENTE,
   type TipoDeComponente,
   type FamiliaDeComponente,
@@ -448,6 +450,12 @@ export type Command =
    * inteira por um vetor; vértice a vértice vai por `SetGuardaCorpoProps.pontos`.
    */
   | { type: 'AddGuardaCorpo'; levelId: ObjectId; tipo: TipoDeGuardaCorpo; pontos: Point[]; alturaMm?: number; material?: MaterialDeGuardaCorpo; itemCode?: string; descricao?: string; rotulo?: string | null; sugerido?: boolean }
+  /**
+   * FASES DE REFORMA (E10.2): marca paredes, aberturas, estruturas e componentes
+   * de uma vez. `null` ou `'NOVO'` apaga a chave (NOVO é o padrão e a ausência).
+   * Id desconhecido é recusado — marcar o que não existe é erro de quem chama.
+   */
+  | { type: 'SetFase'; ids: ObjectId[]; fase: FaseDeReforma | null }
   | { type: 'SetGuardaCorpoProps'; guardaCorpoId: ObjectId; tipo?: TipoDeGuardaCorpo; pontos?: Point[]; alturaMm?: number; material?: MaterialDeGuardaCorpo; itemCode?: string; descricao?: string; rotulo?: string | null; sugerido?: boolean | null }
   | { type: 'MoveGuardaCorpo'; guardaCorpoId: ObjectId; dx: number; dy: number }
   | { type: 'DeleteGuardaCorpo'; guardaCorpoId: ObjectId }
@@ -1428,6 +1436,24 @@ function aplicarSemHash(
       diff.created.push(primeiroId, segundoId);
       diff.ancestry[primeiroId] = [wall.id];
       diff.ancestry[segundoId] = [wall.id];
+      break;
+    }
+
+    case 'SetFase': {
+      if (command.fase !== null && !FASES_DE_REFORMA.includes(command.fase)) {
+        throw new KernelError('BAD_PHASE', `Fase de reforma inválida: ${String(command.fase)}`);
+      }
+      for (const id of command.ids) {
+        const alvo =
+          next.walls.find((w) => w.id === id) ??
+          next.openings.find((o) => o.id === id) ??
+          (next.structures ?? []).find((s) => s.id === id) ??
+          (next.componentes ?? []).find((c) => c.id === id);
+        if (!alvo) throw new KernelError('NOT_FOUND', `Peça ${id} não existe`);
+        if (command.fase && command.fase !== 'NOVO') alvo.fase = command.fase;
+        else delete alvo.fase;
+        diff.updated.push(id);
+      }
       break;
     }
 
@@ -4297,12 +4323,13 @@ export function sincronizarGrupos(next: BlueprintModel, diff: Diff, copiasAntes:
           heightMm: w.heightMm,
           ...(w.alinhamento ? { alinhamento: w.alinhamento } : {}),
           ...(w.cedeSobreposicao ? { cedeSobreposicao: true } : {}),
+          ...(w.fase ? { fase: w.fase } : {}),
           ...(w.camadas ? { camadas: clonarCamadas(w.camadas)! } : {}),
           ...(w.parametros ? { parametros: { ...w.parametros } } : {}),
         };
         const existente = paredePorUid.get(uid);
         if (existente) {
-          for (const k of ['alinhamento', 'cedeSobreposicao', 'camadas', 'parametros'] as const) if (!(k in campos)) delete existente[k];
+          for (const k of ['alinhamento', 'cedeSobreposicao', 'fase', 'camadas', 'parametros'] as const) if (!(k in campos)) delete existente[k];
           Object.assign(existente, campos);
           dePara.set(w.id, existente.id);
           tocar(diff.updated, existente.id);

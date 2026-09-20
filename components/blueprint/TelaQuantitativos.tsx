@@ -56,7 +56,7 @@ interface LinhaDeInstalacao {
 
 interface LinhaDoResumo {
   chave: string;
-  grupo: 'Arquitetura' | 'Estrutura' | 'Aço' | 'Material' | 'Acabamento' | 'Instalações';
+  grupo: 'Arquitetura' | 'Estrutura' | 'Aço' | 'Material' | 'Acabamento' | 'Instalações' | 'Demolição';
   item: string;
   valor: number;
   unidade: string;
@@ -238,6 +238,15 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
         });
       }
       add({ grupo: 'Arquitetura', item: 'Aberturas', valor: t.areaAberturasM2, unidade: 'm²', detalhe: `${t.portas} porta(s), ${t.janelas} janela(s)` });
+      // FASES DE REFORMA (E10.2): o que se demole e o que fica, à parte — os totais acima são só do que é NOVO.
+      if (t.demolicao && t.demolicao.paredes + t.demolicao.aberturas + t.demolicao.estruturas > 0) {
+        add({ grupo: 'Demolição', item: 'Alvenaria a demolir', valor: t.demolicao.volumeAlvenariaM3, unidade: 'm³', detalhe: `${t.demolicao.paredes} parede(s) · ${fmt(t.demolicao.areaParedeM2)} m² de face · ${fmt(t.demolicao.comprimentoParedeM)} m` });
+        if (t.demolicao.aberturas > 0) add({ grupo: 'Demolição', item: 'Esquadrias a remover', valor: t.demolicao.aberturas, unidade: 'un', detalhe: `${fmt(t.demolicao.areaAberturasM2)} m²` });
+        if (t.demolicao.estruturas > 0) add({ grupo: 'Demolição', item: 'Concreto a demolir', valor: t.demolicao.volumeConcretoM3, unidade: 'm³', detalhe: `${t.demolicao.estruturas} peça(s)` });
+      }
+      if (t.existente && t.existente.paredes + t.existente.aberturas + t.existente.estruturas > 0) {
+        add({ grupo: 'Demolição', item: 'Existente que fica (fora do orçamento)', valor: t.existente.comprimentoParedeM, unidade: 'm', detalhe: `${t.existente.paredes} parede(s) · ${t.existente.aberturas} esquadria(s) · ${t.existente.estruturas} peça(s) estrutural(is)` });
+      }
       // GUARDA-CORPOS (E7.3): metros por tipo e a lista por material/item.
       if ((t.comprimentoGuardaCorpoM ?? 0) > 0) add({ grupo: 'Arquitetura', item: 'Guarda-corpo', valor: t.comprimentoGuardaCorpoM, unidade: 'm', detalhe: 'Comprimento das polilinhas (NBR 14718: h ≥ 1,10 m)' });
       if ((t.comprimentoCorrimaoM ?? 0) > 0) add({ grupo: 'Arquitetura', item: 'Corrimão', valor: t.comprimentoCorrimaoM, unidade: 'm', detalhe: 'Comprimento das polilinhas (NBR 9050: 0,80–0,92 m)' });

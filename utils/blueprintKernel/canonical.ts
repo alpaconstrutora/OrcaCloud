@@ -185,6 +185,8 @@ function projetar(model: BlueprintModel): {
       // ausente significam o mesmo, e emitir `false` mudaria a forma canônica
       // de todo desenho que nunca teve um pilar embutido.
       cedeSobreposicao: w.cedeSobreposicao ? true : undefined,
+      // FASE DE REFORMA (0.46.0): só quando EXISTENTE ou DEMOLIR — NOVO é o padrão e a ausência.
+      fase: w.fase && w.fase !== 'NOVO' ? w.fase : undefined,
       parametros: parametrosCanonicos(w.parametros),
       // A COMPOSIÇÃO. Mesma disciplina das três chaves acima: emitida só quando
       // existe, para não acrescentar `camadas` a toda parede homogênea do
@@ -254,6 +256,7 @@ function projetar(model: BlueprintModel): {
       // por um campo que não os descreve — o mesmo cuidado que a área de
       // escritura teve em 0.6.0.
       embutida: o.kind === 'sliding' ? o.embutida : undefined,
+      fase: o.fase && o.fase !== 'NOVO' ? o.fase : undefined,
       // O TIPO, só quando declarado — a disciplina de `camadas`: emitir sempre
       // acrescentaria a chave a toda abertura do acervo. Campos reescritos um
       // a um, e `descricao` ENTRA pela razão escrita nas camadas: é o que o
@@ -319,6 +322,7 @@ function projetar(model: BlueprintModel): {
       // já é o padrão de toda peça, e a chave só aparece na que recebeu a
       // decisão do usuário.
       cedeSobreposicao: s.cedeSobreposicao ? true : undefined,
+      fase: s.fase && s.fase !== 'NOVO' ? s.fase : undefined,
       parametros: parametrosCanonicos(s.parametros),
       // Seção T: mesma regra da linha acima, e pela mesma razão. Toda peça do
       // acervo é de seção cheia, então a chave ausente mantém o payload —
@@ -488,6 +492,7 @@ function projetar(model: BlueprintModel): {
       familia: c.familia,
       rotulo: c.rotulo ?? null,
       sugerido: c.sugerido ? true : undefined,
+      fase: c.fase && c.fase !== 'NOVO' ? c.fase : undefined,
       parametros: parametrosCanonicos(c.parametros),
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y || cmpStr(x.tipoId, y.tipoId),
@@ -1001,6 +1006,8 @@ export interface CanonicalPayload {
     }[];
     /** Ausente sob kernel < 0.33.0 e em toda peça sem parâmetro. */
     parametros?: Parametros;
+    /** Fase de reforma (0.46.0). Ausente = NOVO. */
+    fase?: 'EXISTENTE' | 'DEMOLIR';
   }[];
   openings: {
     wall: number;
@@ -1016,6 +1023,8 @@ export interface CanonicalPayload {
     embutida?: boolean;
     /** Ausente em payload sob kernel < 0.15.0 e em abertura sem tipo. */
     esquadria?: { nome: string; itemCode: string; descricao: string };
+    /** Fase de reforma (0.46.0). Ausente = NOVO. */
+    fase?: 'EXISTENTE' | 'DEMOLIR';
     parametros?: Parametros;
   }[];
   boundaries: {
@@ -1046,6 +1055,8 @@ export interface CanonicalPayload {
     rotulo?: string | null;
     /** Ausente sob kernel < 0.10.0 e em toda peça que não cede volume. */
     cedeSobreposicao?: boolean;
+    /** Fase de reforma (0.46.0). Ausente = NOVO. */
+    fase?: 'EXISTENTE' | 'DEMOLIR';
     parametros?: Parametros;
   }[];
   /**
@@ -1127,6 +1138,8 @@ export interface CanonicalPayload {
     familia: FamiliaDeComponente;
     rotulo: string | null;
     sugerido?: boolean;
+    /** Fase de reforma (0.46.0). Ausente = NOVO. */
+    fase?: 'EXISTENTE' | 'DEMOLIR';
     parametros?: Parametros;
   }[];
   /** Guarda-corpos e corrimãos. Ausente sob kernel < 0.44.0 e em desenho sem nenhum. */
@@ -1394,6 +1407,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       // Mesma regra do alinhamento: ausente não volta como `false`, volta como
       // nada — é o que mantém o round-trip fechando byte a byte.
       ...(w.cedeSobreposicao ? { cedeSobreposicao: true } : {}),
+      ...(w.fase ? { fase: w.fase } : {}),
       ...(w.parametros && Object.keys(w.parametros).length > 0 ? { parametros: { ...w.parametros } } : {}),
       // Idem: ausente (e `[]`, que payload nenhum deveria ter) não volta como
       // lista vazia, volta como nada — parede homogênea, que é o que um payload
@@ -1429,6 +1443,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       hingeAtStart: o.hingeAtStart ?? true,
       swingReversed: o.swingReversed ?? false,
       embutida: o.embutida ?? false,
+      ...(o.fase ? { fase: o.fase } : {}),
       ...(o.esquadria
         ? { esquadria: { nome: o.esquadria.nome, itemCode: o.esquadria.itemCode, descricao: o.esquadria.descricao } }
         : {}),
@@ -1477,6 +1492,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       rotacaoDeg: s.rotacaoDeg,
       rotulo: s.rotulo ?? null,
       ...(s.cedeSobreposicao ? { cedeSobreposicao: true } : {}),
+      ...(s.fase ? { fase: s.fase } : {}),
       ...(s.parametros && Object.keys(s.parametros).length > 0 ? { parametros: { ...s.parametros } } : {}),
       ...(s.secaoT ? { secaoT: s.secaoT } : {}),
     });
@@ -1595,6 +1611,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       familia: c.familia,
       rotulo: c.rotulo,
       ...(c.sugerido ? { sugerido: true } : {}),
+      ...(c.fase ? { fase: c.fase } : {}),
       ...(c.parametros && Object.keys(c.parametros).length > 0 ? { parametros: { ...c.parametros } } : {}),
     });
   });

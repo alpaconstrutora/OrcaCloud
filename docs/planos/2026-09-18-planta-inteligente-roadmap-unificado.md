@@ -1192,6 +1192,19 @@ Próxima: P2.9 — números do município por semente e regra de UNIDADE/PAVIMEN
 
 Próxima: P2.10 — exigência de vagas vinda da zona (E2.5) e recuos por lado por pavimento (E3.3).
 
+### P2.10 — Vagas da zona em regra e recuo de frente escalonado por pavimento (20/09/2026) · backlog P2
+
+**O que entrou** (**sem bump de kernel**; migration **000059** — duas colunas em `blueprint_study_urban_context`, aplicada por `db query -f`):
+
+- **Vagas da zona fecham em regra** (E2.5 deixou "exigência vinda da zona"; a E3.1 já levava `vagas_por_unidade` ao lançamento, mas nada acusava a falta): a **EDIFICAÇÃO** ganha `unidades`, `vagas` (confirmadas), `vagas_pcd`, `vagas_idoso`, `vagas_por_unidade` (da zona) e **`vagas_exigidas`** = teto(unidades × vagas/unidade) — ausente sem unidade ou sem zona (não vira zero). Três sementes: **Vagas exigidas pela zona** (`vagas >= vagas_exigidas`, ERRO), **Vagas PCD: 2 % e ao menos 1** (Lei 10.098 / NBR 9050, ERRO, quando há vaga) e **Vagas de idoso: 5 % e ao menos 1** (Lei 10.741, AVISO) — 32 regras semente. `ContextoDeRegras.zona.vagasPorUnidade` vem do vocabulário da zona no editor.
+- **Recuo de frente escalonado** (E3.3 deixou "recuo de frente maior a partir do 3º"): vocabulário `recuo_frente_escalonado` na zona ("5 m a partir do 3º pavimento" — `lerRecuoEscalonado` lê as três formas usuais), `ValoresDaZona.recuoFrenteEscalonado {aPartirDoPavimento, recuoMm}`, edição manual em Terreno › Dados do lote ("Recuo de frente escalonado: __ m a partir do __º pavimento"), persistido nas colunas novas e coberto pela detecção de deriva da zona. **`recuosEfetivos`** recebe o **ordinal do pavimento** (`ordinalDoPavimento`: 1 = o mais baixo com cota ≥ 0; subsolo = 0, como o gabarito em pavimentos) e aplica o recuo à FRENTE quando maior que o fixo, antes do progressivo (que não mexe na frente); o **envelope 3D** calcula o ordinal antes dos recuos e o envelope 2D do pavimento ativo usa o ordinal dele.
+
+**Decisões.** (1) Regra, não trava: faltar vaga acusa na Legislação e vai ao BCF; o lançamento continua livre. (2) Percentuais PCD/idoso como semente com fonte legal, e não hipótese do lançamento: o lançamento sugere, a regra confere — dois lugares, um número. (3) Escalonado só na frente: é o caso que a E3.3 registrou; recuo lateral por pavimento continua sendo o progressivo por altura.
+
+**Prova.** *No app real* (estudo "Planta 14/09/2026", escritas bloqueadas 16): Terreno › Dados do lote mostra "Recuo de frente escalonado: __ m a partir do __º pavimento"; digitar 6 → "6 m a partir do 3º" (o PATCH foi abortado — o valor fica na tela); a tabela do envelope segue "Térreo 198,00 m² · Pavimento 1 198,00 m²" porque o estudo tem dois pavimentos (o 3º não existe). Analisar › Legislação › **Regras 32** lista as três de vagas; o escopo EDIFICAÇÃO documenta `vagas_exigidas`, `vagas_pcd`, `vagas_por_unidade`. Testes: `blueprintVagasDaZonaERecuoEscalonado.test.ts` (3: variáveis e sementes de vagas com 5 confirmadas + 1 sugerida, 1,5 e 2 vagas/unidade, sem PCD; leitura/ordinal/recuos efetivos; envelope 3D com o 2º pavimento recuando de 4 para 6 m e a área caindo de 17 × 23 para 17 × 21 m); suíte 409 arquivos / 4875 testes; tsc, check-ui e build OK.
+
+Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), ou o que você preferir do backlog.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

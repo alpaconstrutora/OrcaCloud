@@ -164,7 +164,7 @@ import { fichaDoElemento } from '../../utils/blueprintFicha';
 import { deleteParameterDefinition, listParameterDefinitions, updateParameterDefinition, type DefinicaoDeParametro } from '../../services/blueprintParameterDefinitionService';
 import { camposDaEscada, camposDoTelhado, propriedadesDaEscada, propriedadesDoTelhado } from '../../utils/blueprintTipos';
 import { conferirRestricoes, violacoes } from '../../utils/blueprintRestricoes';
-import { conferirLote, recuosEfetivos } from '../../utils/blueprintZonaUrbanistica';
+import { conferirLote, ordinalDoPavimento, recuosEfetivos } from '../../utils/blueprintZonaUrbanistica';
 import { envelopePorPavimentoParaRegras, envelopeVertical } from '../../utils/blueprintEnvelope3d';
 import { contornosParaTelhado } from '../../utils/blueprintTelhadoContorno';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
@@ -2177,8 +2177,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * altura desenhada quando ele supera o recuo fixo. É o que o envelope usa.
    */
   const recuosEfetivosDaZona = useMemo(
-    () => recuosEfetivos(zona.recuos, { afastamentoProgressivo: zona.afastamentoProgressivo }, alturaDesenhadaM),
-    [zona.recuos, zona.afastamentoProgressivo, alturaDesenhadaM],
+    // P2.10: o recuo de frente escalonado vale pelo ORDINAL do pavimento ativo (o envelope 2D é o dele).
+    () => recuosEfetivos(zona.recuos, { afastamentoProgressivo: zona.afastamentoProgressivo, recuoFrenteEscalonado: zona.recuoFrenteEscalonado }, alturaDesenhadaM, ordinalDoPavimento(editor.model.levels, levelId)),
+    [zona.recuos, zona.afastamentoProgressivo, zona.recuoFrenteEscalonado, alturaDesenhadaM, editor.model.levels, levelId],
   );
   const recuos = recuosEfetivosDaZona.recuos;
 
@@ -3591,8 +3592,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * Parte dos recuos FIXOS da zona — o progressivo entra por pavimento.
    */
   const envelope3d = useMemo(
-    () => envelopeVertical(editor.model, terreno, limitesDoNivel, zona.recuos, { afastamentoProgressivo: zona.afastamentoProgressivo, gabaritoAlturaMaxM: zona.gabaritoAlturaMaxM, gabaritoPavimentos: zona.gabaritoPavimentos }),
-    [editor.model, terreno, limitesDoNivel, zona.recuos, zona.afastamentoProgressivo, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos],
+    () => envelopeVertical(editor.model, terreno, limitesDoNivel, zona.recuos, { afastamentoProgressivo: zona.afastamentoProgressivo, recuoFrenteEscalonado: zona.recuoFrenteEscalonado, gabaritoAlturaMaxM: zona.gabaritoAlturaMaxM, gabaritoPavimentos: zona.gabaritoPavimentos }),
+    [editor.model, terreno, limitesDoNivel, zona.recuos, zona.afastamentoProgressivo, zona.recuoFrenteEscalonado, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos],
   );
   /** FAIXAS RESTRITAS (E3.1) do pavimento, para o canvas hachurar. */
   const faixasRestritasDoNivel = useMemo(
@@ -3959,6 +3960,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         testadaMinimaMm: zona.testadaMinimaMm,
         areaMinimaDoLoteM2: zona.areaMinimaDoLoteM2,
         insolacaoMinimaH: zona.insolacaoMinimaH,
+        vagasPorUnidade: zona.vagasPorUnidade,
       },
       envelopePorPavimento: envelopePorPavimentoParaRegras(envelope3d),
       insolacaoPorAmbiente: insolacaoParaRegras(insolacaoDoNivel),
@@ -6777,7 +6779,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           onAplicar={zona.aplicarZona}
           onDesligar={zona.desligar}
           salvando={zona.salvando}
-          vocabulario={{ testadaMinimaMm: zona.testadaMinimaMm, areaMinimaDoLoteM2: zona.areaMinimaDoLoteM2, vagasPorUnidade: zona.vagasPorUnidade, insolacaoMinimaH: zona.insolacaoMinimaH, afastamentoProgressivo: zona.afastamentoProgressivo }}
+          vocabulario={{ testadaMinimaMm: zona.testadaMinimaMm, areaMinimaDoLoteM2: zona.areaMinimaDoLoteM2, vagasPorUnidade: zona.vagasPorUnidade, insolacaoMinimaH: zona.insolacaoMinimaH, afastamentoProgressivo: zona.afastamentoProgressivo, recuoFrenteEscalonado: zona.recuoFrenteEscalonado }}
           onVocabulario={zona.ajustarVocabulario}
         />
       }

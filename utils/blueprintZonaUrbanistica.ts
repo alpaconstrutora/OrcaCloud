@@ -58,6 +58,8 @@ export interface ZonaRegulatoria {
   insolacao_minima?: string;
   /** "acima de 6 m: (H − 6)/10" — ver `lerAfastamentoProgressivo`. */
   afastamento_progressivo?: string;
+  /** P2.10: "5 m a partir do 3º pavimento" — ver `lerRecuoEscalonado`. */
+  recuo_frente_escalonado?: string;
 }
 
 
@@ -76,7 +78,8 @@ export type CampoDaZona =
   | 'area_minima_lote'
   | 'vagas_por_unidade'
   | 'insolacao_minima'
-  | 'afastamento_progressivo';
+  | 'afastamento_progressivo'
+  | 'recuo_frente_escalonado';
 
 export const ROTULO_DO_CAMPO: Record<CampoDaZona, string> = {
   recuo_frente: 'recuo de frente',
@@ -93,6 +96,7 @@ export const ROTULO_DO_CAMPO: Record<CampoDaZona, string> = {
   vagas_por_unidade: 'vagas por unidade',
   insolacao_minima: 'insolação mínima',
   afastamento_progressivo: 'afastamento progressivo',
+  recuo_frente_escalonado: 'recuo de frente escalonado',
 };
 
 /** O que o editor consome. `null` em qualquer campo = a lei não disse. */
@@ -113,6 +117,8 @@ export interface ValoresDaZona {
   /** Horas de sol no solstício de inverno exigidas nos dormitórios. */
   insolacaoMinimaH: number | null;
   afastamentoProgressivo: AfastamentoProgressivo | null;
+  /** P2.10: recuo de FRENTE maior a partir de um pavimento (ex.: 5 m a partir do 3º). */
+  recuoFrenteEscalonado: RecuoEscalonado | null;
 }
 
 /**
@@ -121,6 +127,38 @@ export interface ValoresDaZona {
  * edificação em m), quando maior que o recuo fixo. A fórmula usa o motor da
  * E1.3 — variável `h`; "H" e "−" são normalizados na leitura.
  */
+/**
+ * RECUO DE FRENTE ESCALONADO (20/09/2026, backlog P2 — P2.10): a partir do
+ * pavimento `aPartirDoPavimento` (1 = térreo, contando só cotas ≥ 0, como o
+ * gabarito em pavimentos), o recuo de frente passa a ser `recuoMm` quando maior
+ * que o fixo. É o "recuo de frente maior a partir do 3º" que a E3.3 deixou fora.
+ */
+export interface RecuoEscalonado {
+  aPartirDoPavimento: number;
+  recuoMm: number;
+}
+
+/** Lê "5 m a partir do 3º pavimento", "a partir do 3º: 5 m", "3º pavimento: 5,00 m". `null` sem os dois números. */
+export function lerRecuoEscalonado(texto?: string | null): RecuoEscalonado | null {
+  const t = (texto ?? '').trim().toLowerCase();
+  if (!t) return null;
+  const pav = t.match(/(\d+)\s*[ºo°]?\s*(pav|andar)/) ?? t.match(/a\s*partir\s*d[oe]\s*(\d+)/);
+  const metros = t.replace(pav?.[0] ?? '', ' ').match(/(\d+(?:[.,]\d+)?)\s*m\b/) ?? t.replace(pav?.[0] ?? '', ' ').match(/(\d+(?:[.,]\d+)?)/);
+  if (!pav || !metros) return null;
+  const aPartirDoPavimento = Number(pav[1]);
+  const recuoMm = Math.round(Number(metros[1].replace(',', '.')) * 1000);
+  if (!Number.isFinite(aPartirDoPavimento) || aPartirDoPavimento < 1 || !Number.isFinite(recuoMm) || recuoMm <= 0) return null;
+  return { aPartirDoPavimento, recuoMm };
+}
+
+/** O ordinal do pavimento para o escalonamento e o gabarito: 1 = o mais baixo com cota ≥ 0; subsolo = 0. */
+export function ordinalDoPavimento(levels: readonly { id: string; elevationMm: number }[], levelId: string | null): number {
+  if (!levelId) return 0;
+  const acima = [...levels].filter((l) => l.elevationMm >= 0).sort((a, b) => a.elevationMm - b.elevationMm);
+  const i = acima.findIndex((l) => l.id === levelId);
+  return i < 0 ? 0 : i + 1;
+}
+
 export interface AfastamentoProgressivo {
   aPartirDeM: number;
   /** Expressão em `h` (metros). Ex.: "(h - 6) / 10". */
@@ -168,7 +206,11 @@ export function afastamentoNaAltura(ap: AfastamentoProgressivo | null, alturaM: 
  * ganham o afastamento progressivo quando ele supera o recuo fixo. A frente
  * não muda — o afastamento progressivo da lei é dos lados e do fundo.
  */
-export function recuosEfetivos(recuos: Recuos, valores: Pick<ValoresDaZona, 'afastamentoProgressivo'>, alturaM: number | null): { recuos: Recuos; afastamentoMm: number | null } {
+export function recuosEfetivos(recuos: Recuos, valores: Pick<ValoresDaZona, 'afastamentoProgressivo'> & Partial<Pick<ValoresDaZona, 'recuoFrenteEscalonado'>>, alturaM: number | null, ordinalDoPav: number | null = null): { recuos: Recuos; afastamentoMm: number | null } {
+  // P2.10: o recuo de frente escalonado entra antes do progressivo (que não mexe na frente).
+  const esc = valores.recuoFrenteEscalonado ?? null;
+  const frente = esc && ordinalDoPav != null && ordinalDoPav >= esc.aPartirDoPavimento ? Math.max(recuos.FRENTE, esc.recuoMm) : recuos.FRENTE;
+  recuos = frente === recuos.FRENTE ? recuos : { ...recuos, FRENTE: frente };
   const a = afastamentoNaAltura(valores.afastamentoProgressivo, alturaM);
   if (a == null) return { recuos, afastamentoMm: null };
   const mm = Math.round(a * 1000);
@@ -272,6 +314,7 @@ export function lerZona(zona: ZonaRegulatoria): LeituraDaZona {
       // Horas: "2 h", "2 horas" — o leitor genérico só conhece m/m²/%.
       insolacaoMinimaH: ler('insolacao_minima', zona.insolacao_minima, (v) => lerValorRegulatorio((v ?? '').replace(/\s*(horas?|h)\s*$/i, ''))),
       afastamentoProgressivo: ler('afastamento_progressivo', zona.afastamento_progressivo, lerAfastamentoProgressivo),
+      recuoFrenteEscalonado: ler('recuo_frente_escalonado', zona.recuo_frente_escalonado, lerRecuoEscalonado),
     },
     naoAplicados,
   };
@@ -348,5 +391,8 @@ export function zonaDerivou(
   const apHoje = hoje.afastamentoProgressivo;
   const afastamentoDerivou = daZona('afastamento_progressivo') && (apAplicado?.aPartirDeM ?? null) !== (apHoje?.aPartirDeM ?? null) || (daZona('afastamento_progressivo') && (apAplicado?.formula ?? null) !== (apHoje?.formula ?? null));
 
-  return afastamentoDerivou || pares.some(([campo, aplicado, atual]) => daZona(campo) && aplicado !== atual);
+  const escAplicado = aplicados.recuoFrenteEscalonado ?? null;
+  const escHoje = hoje.recuoFrenteEscalonado;
+  const escalonadoDerivou = daZona('recuo_frente_escalonado') && ((escAplicado?.aPartirDoPavimento ?? null) !== (escHoje?.aPartirDoPavimento ?? null) || (escAplicado?.recuoMm ?? null) !== (escHoje?.recuoMm ?? null));
+  return afastamentoDerivou || escalonadoDerivou || pares.some(([campo, aplicado, atual]) => daZona(campo) && aplicado !== atual);
 }

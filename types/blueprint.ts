@@ -349,6 +349,9 @@ export interface BlueprintUrbanContext {
   insolacao_minima_h?: number | null;
   afastamento_progressivo_a_partir_m?: number | null;
   afastamento_progressivo_formula?: string | null;
+  /** P2.10 (migration `aplicar_20270920000059`): recuo de frente escalonado. */
+  recuo_frente_escalonado_mm?: number | null;
+  recuo_frente_escalonado_pavimento?: number | null;
   /**
    * Em qual tabela procurar `regulatory_zone_id`. `null` em linha anterior à
    * migration `aplicar_20270914000001` — lida como EMPREENDIMENTO, que é o que

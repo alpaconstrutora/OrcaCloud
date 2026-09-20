@@ -17,6 +17,7 @@ import {
   type CampoDaZona,
   type ValoresDaZona,
   type AfastamentoProgressivo,
+  type RecuoEscalonado,
   type ZonaRegulatoria,
 } from '../utils/blueprintZonaUrbanistica';
 
@@ -84,8 +85,10 @@ export interface ZonaUrbanistica {
   vagasPorUnidade: number | null;
   insolacaoMinimaH: number | null;
   afastamentoProgressivo: AfastamentoProgressivo | null;
+  /** P2.10 */
+  recuoFrenteEscalonado: RecuoEscalonado | null;
   /** Edição manual do vocabulário complementar. */
-  ajustarVocabulario: (patch: Partial<Pick<ValoresDaZona, 'testadaMinimaMm' | 'areaMinimaDoLoteM2' | 'vagasPorUnidade' | 'insolacaoMinimaH' | 'afastamentoProgressivo'>>) => void;
+  ajustarVocabulario: (patch: Partial<Pick<ValoresDaZona, 'testadaMinimaMm' | 'areaMinimaDoLoteM2' | 'vagasPorUnidade' | 'insolacaoMinimaH' | 'afastamentoProgressivo' | 'recuoFrenteEscalonado'>>) => void;
 
   /** Edição manual: grava o valor E marca o campo como digitado. */
   ajustarRecuo: (papel: keyof Recuos, mm: number) => void;
@@ -133,6 +136,7 @@ const TODOS_OS_CAMPOS: CampoDaZona[] = [
   'vagas_por_unidade',
   'insolacao_minima',
   'afastamento_progressivo',
+  'recuo_frente_escalonado',
 ];
 
 const SEM_LIMITES: Omit<ValoresDaZona, 'recuoMm'> = {
@@ -146,21 +150,23 @@ const SEM_LIMITES: Omit<ValoresDaZona, 'recuoMm'> = {
   vagasPorUnidade: null,
   insolacaoMinimaH: null,
   afastamentoProgressivo: null,
+  recuoFrenteEscalonado: null,
 };
 
 /** O vocabulário complementar, do contexto gravado para o estado. */
-function vocabularioDoContexto(ctx: BlueprintUrbanContext): Pick<ValoresDaZona, 'testadaMinimaMm' | 'areaMinimaDoLoteM2' | 'vagasPorUnidade' | 'insolacaoMinimaH' | 'afastamentoProgressivo'> {
+function vocabularioDoContexto(ctx: BlueprintUrbanContext): Pick<ValoresDaZona, 'testadaMinimaMm' | 'areaMinimaDoLoteM2' | 'vagasPorUnidade' | 'insolacaoMinimaH' | 'afastamentoProgressivo' | 'recuoFrenteEscalonado'> {
   return {
     testadaMinimaMm: ctx.testada_minima_mm ?? null,
     areaMinimaDoLoteM2: ctx.area_minima_lote_m2 ?? null,
     vagasPorUnidade: ctx.vagas_por_unidade ?? null,
     insolacaoMinimaH: ctx.insolacao_minima_h ?? null,
     afastamentoProgressivo: ctx.afastamento_progressivo_formula ? { aPartirDeM: ctx.afastamento_progressivo_a_partir_m ?? 0, formula: ctx.afastamento_progressivo_formula } : null,
+    recuoFrenteEscalonado: ctx.recuo_frente_escalonado_mm && ctx.recuo_frente_escalonado_pavimento ? { recuoMm: ctx.recuo_frente_escalonado_mm, aPartirDoPavimento: ctx.recuo_frente_escalonado_pavimento } : null,
   };
 }
 
 /** E do estado para as colunas. */
-function colunasDoVocabulario(v: Partial<Pick<ValoresDaZona, 'testadaMinimaMm' | 'areaMinimaDoLoteM2' | 'vagasPorUnidade' | 'insolacaoMinimaH' | 'afastamentoProgressivo'>>): UrbanContextInput {
+function colunasDoVocabulario(v: Partial<Pick<ValoresDaZona, 'testadaMinimaMm' | 'areaMinimaDoLoteM2' | 'vagasPorUnidade' | 'insolacaoMinimaH' | 'afastamentoProgressivo' | 'recuoFrenteEscalonado'>>): UrbanContextInput {
   const saida: UrbanContextInput = {};
   if ('testadaMinimaMm' in v) saida.testada_minima_mm = v.testadaMinimaMm ?? null;
   if ('areaMinimaDoLoteM2' in v) saida.area_minima_lote_m2 = v.areaMinimaDoLoteM2 ?? null;
@@ -170,15 +176,20 @@ function colunasDoVocabulario(v: Partial<Pick<ValoresDaZona, 'testadaMinimaMm' |
     saida.afastamento_progressivo_a_partir_m = v.afastamentoProgressivo?.aPartirDeM ?? null;
     saida.afastamento_progressivo_formula = v.afastamentoProgressivo?.formula ?? null;
   }
+  if ('recuoFrenteEscalonado' in v) {
+    saida.recuo_frente_escalonado_mm = v.recuoFrenteEscalonado?.recuoMm ?? null;
+    saida.recuo_frente_escalonado_pavimento = v.recuoFrenteEscalonado?.aPartirDoPavimento ?? null;
+  }
   return saida;
 }
 
-const CAMPO_DO_VOCABULARIO: Record<'testadaMinimaMm' | 'areaMinimaDoLoteM2' | 'vagasPorUnidade' | 'insolacaoMinimaH' | 'afastamentoProgressivo', CampoDaZona> = {
+const CAMPO_DO_VOCABULARIO: Record<'testadaMinimaMm' | 'areaMinimaDoLoteM2' | 'vagasPorUnidade' | 'insolacaoMinimaH' | 'afastamentoProgressivo' | 'recuoFrenteEscalonado', CampoDaZona> = {
   testadaMinimaMm: 'testada_minima',
   areaMinimaDoLoteM2: 'area_minima_lote',
   vagasPorUnidade: 'vagas_por_unidade',
   insolacaoMinimaH: 'insolacao_minima',
   afastamentoProgressivo: 'afastamento_progressivo',
+  recuoFrenteEscalonado: 'recuo_frente_escalonado',
 };
 
 export function useBlueprintZonaUrbanistica(
@@ -357,6 +368,7 @@ export function useBlueprintZonaUrbanistica(
         vagasPorUnidade: lidos.vagasPorUnidade,
         insolacaoMinimaH: lidos.insolacaoMinimaH,
         afastamentoProgressivo: lidos.afastamentoProgressivo,
+        recuoFrenteEscalonado: lidos.recuoFrenteEscalonado,
       });
 
       // Aplicar zera os ajustes manuais anteriores: é a ação explícita de dizer
@@ -441,7 +453,7 @@ export function useBlueprintZonaUrbanistica(
   );
 
   const ajustarVocabulario = useCallback(
-    (patch: Partial<Pick<ValoresDaZona, 'testadaMinimaMm' | 'areaMinimaDoLoteM2' | 'vagasPorUnidade' | 'insolacaoMinimaH' | 'afastamentoProgressivo'>>) => {
+    (patch: Partial<Pick<ValoresDaZona, 'testadaMinimaMm' | 'areaMinimaDoLoteM2' | 'vagasPorUnidade' | 'insolacaoMinimaH' | 'afastamentoProgressivo' | 'recuoFrenteEscalonado'>>) => {
       setLimites((s) => ({ ...s, ...patch }));
       const colunas = colunasDoVocabulario(patch);
       setOrigemDosValores((o) => {

@@ -96,6 +96,13 @@ export const VARIAVEIS_DO_ESCOPO: Record<EscopoDaRegra, { nome: string; descrica
     { nome: 'gabarito_m', descricao: 'gabarito em altura da zona (m)' },
     { nome: 'gabarito_pav', descricao: 'gabarito em pavimentos da zona' },
     { nome: 'area_construida', descricao: 'soma da área construída dos pavimentos (m²)' },
+    // P2.10 (20/09/2026): as vagas da zona fecham em regra.
+    { nome: 'unidades', descricao: 'unidades do estudo (E2.2)' },
+    { nome: 'vagas', descricao: 'vagas confirmadas (não sugeridas) em todos os pavimentos' },
+    { nome: 'vagas_pcd', descricao: 'vagas PCD confirmadas' },
+    { nome: 'vagas_idoso', descricao: 'vagas de idoso confirmadas' },
+    { nome: 'vagas_por_unidade', descricao: 'vagas exigidas por unidade pela zona — ausente se a zona não disse' },
+    { nome: 'vagas_exigidas', descricao: 'teto(unidades × vagas por unidade) — ausente sem unidade ou sem zona' },
   ],
   PAVIMENTO: [
     { nome: 'nome', descricao: 'nome do pavimento' },
@@ -183,6 +190,9 @@ export const REGRAS_SEMENTE: readonly Regra[] = [
   { id: 'sem-unidade-banheiro', nome: 'Unidade: ao menos um banheiro', escopo: 'UNIDADE', quando: 'ambientes >= 2', expressao: 'banheiros >= 1', severidade: 'ERRO', fonte: FONTE_SEMENTE, descricao: 'Toda unidade com mais de um ambiente tem banheiro' },
   { id: 'sem-unidade-dormitorio', nome: 'Unidade: ao menos um dormitório', escopo: 'UNIDADE', quando: 'ambientes >= 2', expressao: 'dormitorios >= 1', severidade: 'AVISO', fonte: FONTE_SEMENTE, descricao: 'Unidade residencial com dormitório nomeado (dormitório, quarto ou suíte)' },
   { id: 'sem-pavimento-eficiencia', nome: 'Pavimento tipo: eficiência ≥ 70 %', escopo: 'PAVIMENTO', quando: 'unidades >= 2', expressao: 'eficiencia >= 70', severidade: 'AVISO', fonte: FONTE_SEMENTE, descricao: 'Privativa ÷ construída do pavimento ≥ 70 % (referência de incorporação)' },
+  { id: 'sem-vagas-zona', nome: 'Vagas exigidas pela zona', escopo: 'EDIFICACAO', expressao: 'vagas >= vagas_exigidas', severidade: 'ERRO', fonte: 'Zona urbanística', descricao: 'Vagas confirmadas ≥ unidades × vagas por unidade da zona' },
+  { id: 'sem-vagas-pcd', nome: 'Vagas PCD: 2 % e ao menos 1', escopo: 'EDIFICACAO', quando: 'vagas >= 1', expressao: 'vagas_pcd >= 1 e vagas_pcd * 50 >= vagas', severidade: 'ERRO', fonte: 'Lei 10.098 / NBR 9050:2020', descricao: '2 % das vagas para PCD, no mínimo uma' },
+  { id: 'sem-vagas-idoso', nome: 'Vagas de idoso: 5 % e ao menos 1', escopo: 'EDIFICACAO', quando: 'vagas >= 1', expressao: 'vagas_idoso >= 1 e vagas_idoso * 20 >= vagas', severidade: 'AVISO', fonte: 'Lei 10.741 (Estatuto do Idoso)', descricao: '5 % das vagas para idosos, no mínimo uma' },
   { id: 'sem-pavimento-elevador', nome: 'Elevador acima de 12 m de cota', escopo: 'PAVIMENTO', quando: 'cota > 12', expressao: 'elevadores >= 1', severidade: 'ERRO', fonte: FONTE_SEMENTE, descricao: 'Pavimento com piso acima de 12 m atendido por elevador (códigos de obras usuais)' },
   { id: 'sem-gabarito-pav', nome: 'Gabarito em pavimentos', escopo: 'EDIFICACAO', expressao: 'pavimentos <= gabarito_pav', severidade: 'ERRO', fonte: 'Zona urbanística', descricao: 'Pavimentos ≤ gabarito da zona' },
   { id: 'sem-pav-pe-direito', nome: 'Pé-direito do pavimento', escopo: 'PAVIMENTO', expressao: 'pe_direito >= 2.5', severidade: 'AVISO', fonte: FONTE_SEMENTE, descricao: 'Pé-direito padrão ≥ 2,50 m' },
@@ -208,6 +218,8 @@ export interface ContextoDeRegras {
     testadaMinimaMm?: number | null;
     areaMinimaDoLoteM2?: number | null;
     insolacaoMinimaH?: number | null;
+    /** Vagas exigidas por unidade (E3.1) — P2.10: alimenta `vagas_exigidas` da EDIFICAÇÃO. */
+    vagasPorUnidade?: number | null;
   } | null;
   /** Insolação por ambiente (E5.1): `insolacaoParaRegras`. Ausente = variáveis ausentes. */
   insolacaoPorAmbiente?: Record<ObjectId, { horasSolInverno: number; horasSolVerao: number; ventilacaoCruzada: boolean; temJanela: boolean }> | null;
@@ -332,6 +344,16 @@ export function alvosDoEscopo(model: BlueprintModel, escopo: EscopoDaRegra, ctx:
             gabarito_m: ctx.zona?.gabaritoAlturaMaxM,
             gabarito_pav: ctx.zona?.gabaritoPavimentos,
             area_construida: m2(areaConstruida),
+            // P2.10
+            unidades: (model.unidades ?? []).length,
+            vagas: (model.vagas ?? []).filter((v) => !v.sugerida).length,
+            vagas_pcd: (model.vagas ?? []).filter((v) => !v.sugerida && v.tipo === 'PCD').length,
+            vagas_idoso: (model.vagas ?? []).filter((v) => !v.sugerida && v.tipo === 'IDOSO').length,
+            vagas_por_unidade: ctx.zona?.vagasPorUnidade,
+            vagas_exigidas:
+              ctx.zona?.vagasPorUnidade != null && ctx.zona.vagasPorUnidade > 0 && (model.unidades ?? []).length > 0
+                ? Math.ceil((model.unidades ?? []).length * ctx.zona.vagasPorUnidade)
+                : undefined,
           }),
         },
       ];

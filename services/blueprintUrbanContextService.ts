@@ -20,6 +20,7 @@ const COLS =
   'taxa_permeabilidade_min, coeficiente_max, gabarito_altura_max_m, ' +
   'gabarito_pavimentos, testada_minima_mm, area_minima_lote_m2, vagas_por_unidade, ' +
   'insolacao_minima_h, afastamento_progressivo_a_partir_m, afastamento_progressivo_formula, ' +
+  'recuo_frente_escalonado_mm, recuo_frente_escalonado_pavimento, ' +
   'origem_valores, aplicado_em, created_at, updated_at';
 
 function fail(context: string, error: { message: string } | null): never {

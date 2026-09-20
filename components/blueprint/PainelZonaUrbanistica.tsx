@@ -76,8 +76,8 @@ interface Props {
   onAplicar: (zonaId: string) => void;
   onDesligar: () => void;
   /** VOCABULÁRIO COMPLEMENTAR (E3.1): o que está em vigor e o ajuste manual. */
-  vocabulario?: Pick<ValoresDaZona, 'testadaMinimaMm' | 'areaMinimaDoLoteM2' | 'vagasPorUnidade' | 'insolacaoMinimaH' | 'afastamentoProgressivo'>;
-  onVocabulario?: (patch: Partial<Pick<ValoresDaZona, 'testadaMinimaMm' | 'areaMinimaDoLoteM2' | 'vagasPorUnidade' | 'insolacaoMinimaH' | 'afastamentoProgressivo'>>) => void;
+  vocabulario?: Pick<ValoresDaZona, 'testadaMinimaMm' | 'areaMinimaDoLoteM2' | 'vagasPorUnidade' | 'insolacaoMinimaH' | 'afastamentoProgressivo' | 'recuoFrenteEscalonado'>;
+  onVocabulario?: (patch: Partial<Pick<ValoresDaZona, 'testadaMinimaMm' | 'areaMinimaDoLoteM2' | 'vagasPorUnidade' | 'insolacaoMinimaH' | 'afastamentoProgressivo' | 'recuoFrenteEscalonado'>>) => void;
   salvando?: boolean;
 }
 
@@ -374,6 +374,13 @@ function VocabularioComplementar({
         <span>m, afastamento (m) =</span>
         <input type="text" key={`ap-f-${ap?.formula ?? ''}`} defaultValue={ap?.formula ?? ''} placeholder="(h - 6) / 10" aria-label="Fórmula do afastamento progressivo em h (metros)" onBlur={(e) => { const f = e.target.value.trim(); onVocabulario({ afastamentoProgressivo: f ? { aPartirDeM: ap?.aPartirDeM ?? 0, formula: f } : null }); }} className="w-32 rounded-md border border-slate-300 px-2 py-1 font-mono text-xs text-slate-800" />
         {erroFormula && <span className="text-amber-700">fórmula inválida: {erroFormula}</span>}
+      </div>
+      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-600" data-testid="recuo-frente-escalonado">
+        <span>Recuo de frente escalonado:</span>
+        <input type="text" inputMode="decimal" key={`re-m-${v.recuoFrenteEscalonado?.recuoMm ?? ''}`} defaultValue={v.recuoFrenteEscalonado ? (v.recuoFrenteEscalonado.recuoMm / 1000).toString().replace('.', ',') : ''} placeholder="5" aria-label="Recuo de frente escalonado (m)" onBlur={(e) => { const n = num(e.target.value); const pav = v.recuoFrenteEscalonado?.aPartirDoPavimento ?? 3; onVocabulario({ recuoFrenteEscalonado: n && n > 0 ? { recuoMm: Math.round(n * 1000), aPartirDoPavimento: pav } : null }); }} className="w-12 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800" />
+        <span>m a partir do</span>
+        <input type="text" inputMode="numeric" key={`re-p-${v.recuoFrenteEscalonado?.aPartirDoPavimento ?? ''}`} defaultValue={v.recuoFrenteEscalonado ? String(v.recuoFrenteEscalonado.aPartirDoPavimento) : ''} placeholder="3" aria-label="Pavimento a partir do qual vale o recuo de frente escalonado" onBlur={(e) => { const n = num(e.target.value); if (v.recuoFrenteEscalonado && n && n >= 1) onVocabulario({ recuoFrenteEscalonado: { ...v.recuoFrenteEscalonado, aPartirDoPavimento: Math.round(n) } }); }} className="w-10 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800" />
+        <span>º pavimento</span>
       </div>
       <p className="mt-1 text-[11px] text-slate-400">
         <code>h</code> é a altura da edificação em metros; a fórmula vale nas laterais e no fundo quando supera o recuo fixo. Digitados à mão até o catálogo trazê-los; vagas/unidade alimenta o lançamento de vagas.

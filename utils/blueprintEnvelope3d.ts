@@ -31,12 +31,14 @@ import { anelRecuado,
   type Point,
 } from './blueprintKernel';
 import { envelopeConstrutivo, type Recuos, type Terreno } from './blueprintTerreno';
-import { recuosEfetivos, type AfastamentoProgressivo } from './blueprintZonaUrbanistica';
+import { recuosEfetivos, type AfastamentoProgressivo, type RecuoEscalonado } from './blueprintZonaUrbanistica';
 
 export interface ZonaDoEnvelope {
   afastamentoProgressivo: AfastamentoProgressivo | null;
   gabaritoAlturaMaxM: number | null;
   gabaritoPavimentos: number | null;
+  /** P2.10 */
+  recuoFrenteEscalonado?: RecuoEscalonado | null;
 }
 
 export interface PrismaDoEnvelope {
@@ -89,14 +91,15 @@ export function envelopeVertical(model: BlueprintModel, terreno: Terreno | null,
   let ordinal = 0; // só pavimentos com cota ≥ 0 contam no gabarito de pavimentos
   const prismas: PrismaDoEnvelope[] = niveis.map((l: Level) => {
     const topoMm = l.elevationMm + l.defaultHeightMm;
-    const { recuos, afastamentoMm } = recuosEfetivos(recuosBase, { afastamentoProgressivo: zona.afastamentoProgressivo }, topoMm / 1000);
-    const env = envelopeConstrutivo(terreno, limites, recuos);
-    const acimaEmAltura = gabaritoMm != null && topoMm > gabaritoMm + 1;
+    // O ordinal antes dos recuos: o recuo de frente escalonado (P2.10) depende dele.
     let acimaEmPavimentos = false;
     if (l.elevationMm >= 0) {
       ordinal++;
       acimaEmPavimentos = zona.gabaritoPavimentos != null && ordinal > zona.gabaritoPavimentos;
     }
+    const { recuos, afastamentoMm } = recuosEfetivos(recuosBase, { afastamentoProgressivo: zona.afastamentoProgressivo, recuoFrenteEscalonado: zona.recuoFrenteEscalonado ?? null }, topoMm / 1000, l.elevationMm >= 0 ? ordinal : 0);
+    const env = envelopeConstrutivo(terreno, limites, recuos);
+    const acimaEmAltura = gabaritoMm != null && topoMm > gabaritoMm + 1;
     // "CABE?" PELA FACE EXTERNA (20/09/2026, backlog P2 — P2.8): o contorno do
     // nível corre no EIXO das paredes; a edificação vai até a face externa, meia
     // espessura adiante. O contorno é deslocado para fora pela meia espessura

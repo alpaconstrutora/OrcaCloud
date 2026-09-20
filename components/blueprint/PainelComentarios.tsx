@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { mencoesDoTexto, sugerirMencoes, type MembroMencionavel } from '../../utils/blueprintColaboracao';
 import { AlertTriangle, Check, Loader2, MessageSquare, Trash2, Undo2 } from 'lucide-react';
 import type { BlueprintModel } from '../../utils/blueprintKernel';
 import {
@@ -42,6 +43,8 @@ interface Props {
   selecionadoRotulo?: string | null;
   /** Centro do desenho ou do selecionado, para ancorar o comentário de lugar. */
   pontoPadrao?: { x: number; y: number } | null;
+  /** E10.1: membros da organização para `@menção` (autocompletar e notificação). */
+  membros?: MembroMencionavel[];
 }
 
 const quando = (iso: string) =>
@@ -55,6 +58,7 @@ export default function PainelComentarios({
   selecionadoUid,
   selecionadoRotulo,
   pontoPadrao,
+  membros = [],
 }: Props) {
   const [comentarios, setComentarios] = useState<BlueprintComment[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -104,6 +108,7 @@ export default function PainelComentarios({
         pontoXMm: pontoPadrao?.x ?? null,
         pontoYMm: pontoPadrao?.y ?? null,
         texto: limpo,
+        mencoes: mencoesDoTexto(limpo, membros),
       });
       setTexto('');
       await recarregar();
@@ -146,10 +151,31 @@ export default function PainelComentarios({
         value={texto}
         onChange={(e) => setTexto(e.target.value)}
         rows={2}
-        placeholder="O que precisa ser resolvido aqui?"
+        placeholder={membros.length > 0 ? 'O que precisa ser resolvido aqui? Use @nome para mencionar alguém.' : 'O que precisa ser resolvido aqui?'}
         aria-label="Texto do comentário"
         className="mt-1.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800"
       />
+      {/* MENÇÕES (E10.1): sugestões depois de um @ parcial; clicar completa. Quem for mencionado é notificado pelo banco. */}
+      {(() => {
+        const m = /(^|\s)@([\p{L}\p{N}._-]*)$/u.exec(texto);
+        if (!m || membros.length === 0) return null;
+        const sugestoes = sugerirMencoes(m[2], membros);
+        if (sugestoes.length === 0) return null;
+        return (
+          <ul className="mt-1 flex flex-wrap gap-1" data-testid="sugestoes-de-mencao">
+            {sugestoes.map((s) => (
+              <li key={s.email}>
+                <button type="button" onClick={() => setTexto(texto.slice(0, texto.length - m[2].length) + s.email.split('@')[0] + ' ')} className="rounded-[6px] border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] text-slate-700 hover:bg-slate-50" title={s.email}>
+                  @{s.nome || s.email}
+                </button>
+              </li>
+            ))}
+          </ul>
+        );
+      })()}
+      {mencoesDoTexto(texto, membros).length > 0 && (
+        <p className="mt-1 text-[11px] text-slate-500" data-testid="mencoes-do-comentario">Vai notificar: {mencoesDoTexto(texto, membros).join(', ')}</p>
+      )}
       <button
         type="button"
         onClick={() => void comentar()}

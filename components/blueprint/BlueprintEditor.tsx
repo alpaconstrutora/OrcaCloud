@@ -21,6 +21,7 @@ import {
   History,
   KeyRound,
   Webhook,
+  Users,
   Landmark,
   Merge,
   MessageSquare,
@@ -286,6 +287,11 @@ import { useBlueprintMateriais } from '../../hooks/useBlueprintMateriais';
 import TelaMateriais from './TelaMateriais';
 import TelaChavesDeApi from './TelaChavesDeApi';
 import TelaWebhooks from './TelaWebhooks';
+import TelaAcessoDoEstudo from './TelaAcessoDoEstudo';
+import { useBlueprintColaboracao, type UsoDaColaboracao } from '../../hooks/useBlueprintColaboracao';
+import { blueprintStudyPermissionService, type PermissaoGravada } from '../../services/blueprintStudyPermissionService';
+import { iniciais, papelNoEstudo, travaDoComando } from '../../utils/blueprintColaboracao';
+import { supabase } from '../../lib/supabase';
 import { blueprintWebhookService, type EntregaDeWebhook, type Webhook as WebhookDaOrg } from '../../services/blueprintWebhookService';
 import { blueprintApiTokenService, urlBaseDaApi, type TokenDaApi } from '../../services/blueprintApiTokenService';
 import type { UsoDeMaterial } from '../../utils/blueprintMateriais';
@@ -904,7 +910,81 @@ interface Props {
 }
 
 export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo }: Props) {
-  const editor = useBlueprintEditor(branchId);
+  // MULTIUSUÁRIO (E10.1): o editor pergunta aos ganchos ANTES de aplicar (trava de
+  // outra pessoa, somente leitura) e difunde DEPOIS. Os ganchos leem refs porque o
+  // canal e as permissões nascem mais abaixo, depois do próprio editor.
+  const colabRef = useRef<UsoDaColaboracao | null>(null);
+  const somenteLeituraRef = useRef(false);
+  const editor = useBlueprintEditor(branchId, {
+    antesDeAplicar: (comandos) => {
+      if (somenteLeituraRef.current) return 'Você é leitor deste estudo: pode ver tudo, mas não alterar. Peça a um editor para mudar seu papel em Colaborar › Acesso.';
+      const trava = colabRef.current ? travaDoComando(comandos, colabRef.current.travas) : null;
+      if (trava) return `"${trava.id}" está em edição por ${trava.por.nome} — espere a seleção dela ser solta.`;
+      return null;
+    },
+    depoisDeAplicar: (comandos, hashDepois) => colabRef.current?.difundir(comandos, hashDepois),
+  });
+  const editorRef = useRef(editor);
+  editorRef.current = editor;
+  /** Quem sou eu no canal: o usuário da sessão (id + e-mail); o nome vem da organização. */
+  const [sessaoAtual, setSessaoAtual] = useState<{ id: string; email: string } | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    void supabase.auth.getUser().then(({ data }) => {
+      if (vivo && data.user) setSessaoAtual({ id: data.user.id, email: data.user.email ?? '' });
+    });
+    return () => {
+      vivo = false;
+    };
+  }, []);
+  const organizacoesParaNome = useStore((e) => e.organizations);
+  const meuNome = useMemo(() => {
+    const email = sessaoAtual?.email?.toLowerCase();
+    if (!email) return null;
+    for (const o of organizacoesParaNome) for (const m of o.members ?? []) if (m.email?.toLowerCase() === email && m.name) return m.name;
+    return email.split('@')[0];
+  }, [organizacoesParaNome, sessaoAtual?.email]);
+  const colab = useBlueprintColaboracao({
+    branchId,
+    userId: sessaoAtual?.id ?? null,
+    email: sessaoAtual?.email ?? null,
+    nome: meuNome,
+    aoReceber: (msg) => editorRef.current.aplicarExterno(msg),
+  });
+  colabRef.current = colab;
+  /** PERMISSÕES POR ESTUDO (E10.1): sem linha = editor. Leitor trava os comandos aqui e a RLS recusa a gravação lá. */
+  const [permissoesDoEstudo, setPermissoesDoEstudo] = useState<PermissaoGravada[]>([]);
+  const [permissoesIndisponiveis, setPermissoesIndisponiveis] = useState<string | null>(null);
+  const [permissoesCarregando, setPermissoesCarregando] = useState(false);
+  const recarregarPermissoes = useCallback(() => {
+    setPermissoesCarregando(true);
+    blueprintStudyPermissionService
+      .list(study.id)
+      .then((lista) => {
+        setPermissoesDoEstudo(lista);
+        setPermissoesIndisponiveis(null);
+      })
+      .catch((e: unknown) => {
+        console.warn('[acesso] permissões indisponíveis:', e);
+        setPermissoesIndisponiveis(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => setPermissoesCarregando(false));
+  }, [study.id]);
+  useEffect(() => {
+    recarregarPermissoes();
+  }, [recarregarPermissoes]);
+  const meuPapel = papelNoEstudo(permissoesDoEstudo, study.id, sessaoAtual?.email);
+  const somenteLeitura = meuPapel === 'LEITOR';
+  somenteLeituraRef.current = somenteLeitura;
+  /** Com outra pessoa no ramo, desfazer/refazer ficam desligados: desfazer localmente o comando dela divergiria os desenhos. */
+  const desfazerBloqueado = colab.participantes.length > 0;
+  /** As seleções dos outros, para o canvas mostrar quem está em quê. */
+  const selecoesRemotas = useMemo(() => colab.participantes.flatMap((p) => p.selecionados.map((id) => ({ id, cor: p.cor, nome: p.nome }))), [colab.participantes]);
+  /** Os membros da organização do ESTUDO (para papéis e @menções). */
+  const membrosDaOrgDoEstudo = useMemo(() => {
+    const org = organizacoesParaNome.find((o) => o.id === study.organization_id);
+    return (org?.members ?? []).filter((m) => m.email).map((m) => ({ email: m.email, nome: m.name || m.email, papelNaOrg: String(m.role ?? '') }));
+  }, [organizacoesParaNome, study.organization_id]);
   const [espessura, setEspessura] = useState(ESPESSURA_PADRAO_MM);
   // `null` = automatico: o passo acompanha o zoom. Qualquer numero fixa o passo.
   const [passoGrade, setPassoGrade] = useState<number | null>(null);
@@ -1235,7 +1315,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais' | 'api' | 'webhooks';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais' | 'api' | 'webhooks' | 'acesso';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -2086,12 +2166,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       }
       if (e.key.toLowerCase() !== 'z') return;
       e.preventDefault();
+      if (desfazerBloqueado) return;
       if (e.shiftKey) editor.redo();
       else editor.undo();
     }
     window.addEventListener('keydown', aoTeclar);
     return () => window.removeEventListener('keydown', aoTeclar);
-  }, [editor.undo, editor.redo]);
+  }, [editor.undo, editor.redo, desfazerBloqueado]);
 
   /** UNIDADES (E2.2): medidas, fração ideal e paredes geminadas — derivadas do desenho. */
   const quadroDeUnidadesDoModelo = useMemo(() => quadroDeUnidades(editor.model), [editor.model]);
@@ -2101,6 +2182,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * ambiente, a gaveta e (E4.3) a conferência do programa.
    */
   const grafoDoNivel = useMemo(() => (levelId ? construirGrafoEspacial(editor.model, levelId) : null), [editor.model, levelId]);
+  // MULTIUSUÁRIO: publica onde estou e o que tenho selecionado (= o que está travado para os outros).
+  useEffect(() => {
+    colab.atualizarPresenca({ levelId, selecionados: editor.selectedIds });
+  }, [colab.atualizarPresenca, levelId, editor.selectedIds]);
   /** MOBILIÁRIO (E6.3): sugestão por ambiente do pavimento ativo; overlay opcional no canvas. */
   const [hipotesesDeMobiliario, setHipotesesDeMobiliario] = usePersistedState<HipotesesDeMobiliario>('blueprint:mobiliario', HIPOTESES_MOBILIARIO_PADRAO);
   const [mostrarMobiliario, setMostrarMobiliario] = usePersistedState('blueprint:mostrarMobiliario', false);
@@ -7122,8 +7207,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       rotulo: 'Editar',
       botoes: (
         <>
-          <BotaoBarra icone={Undo2} rotulo="Desfazer (Ctrl+Z)" onClick={editor.undo} disabled={!editor.canUndo} />
-          <BotaoBarra icone={Redo2} rotulo="Refazer (Ctrl+Shift+Z)" onClick={editor.redo} disabled={!editor.canRedo} />
+          <BotaoBarra icone={Undo2} rotulo={desfazerBloqueado ? 'Desfazer — desligado enquanto há outra pessoa neste ramo' : 'Desfazer (Ctrl+Z)'} onClick={editor.undo} disabled={!editor.canUndo || desfazerBloqueado} />
+          <BotaoBarra icone={Redo2} rotulo={desfazerBloqueado ? 'Refazer — desligado enquanto há outra pessoa neste ramo' : 'Refazer (Ctrl+Shift+Z)'} onClick={editor.redo} disabled={!editor.canRedo || desfazerBloqueado} />
           {/* COPIAR / COLAR ficam com desfazer/refazer porque são da mesma família —
               editam o desenho sem desenhar nada. Colar acontece SOB O CURSOR (Ctrl+V);
               o botão anuncia o recurso e instrui, em vez de colar num lugar arbitrário. */}
@@ -7465,6 +7550,35 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onRevogar={async (id) => {
                 await blueprintApiTokenService.revoke(id);
                 recarregarTokensDaApi();
+              }}
+            />
+          </div>
+        </div>
+      )}
+      {telaAberta === 'acesso' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="acesso">
+          {cabecalhoDaTela(
+            'Acesso e presença',
+            'Quem está neste ramo agora (e o que cada um está editando) e o papel de cada membro da organização neste estudo: editor (padrão) ou leitor — que vê tudo, mas não grava rascunho nem publica.',
+            Users,
+            'Colaborar',
+          )}
+          <div>
+            <TelaAcessoDoEstudo
+              membros={membrosDaOrgDoEstudo.map((m) => ({ email: m.email, nome: m.nome, papelNaOrg: m.papelNaOrg }))}
+              permissoes={permissoesDoEstudo}
+              participantes={colab.participantes}
+              conectado={colab.conectado}
+              meuEmail={sessaoAtual?.email ?? null}
+              carregando={permissoesCarregando}
+              indisponivel={permissoesIndisponiveis}
+              onDefinir={async (email, papel) => {
+                await blueprintStudyPermissionService.definir(study.id, study.organization_id, email, papel);
+                recarregarPermissoes();
+              }}
+              onVoltarAoPadrao={async (id) => {
+                await blueprintStudyPermissionService.remover(id);
+                recarregarPermissoes();
               }}
             />
           </div>
@@ -8640,6 +8754,32 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           </GrupoDoRibbon>
         )}
         {aba === 'colaborar' && (
+          <GrupoDoRibbon rotulo="Equipe">
+            {/* PRESENÇA (E10.1): um chip por pessoa no ramo, na cor dela; o título diz o que ela edita. */}
+            {colab.participantes.length > 0 && (
+              <div className="flex items-center gap-1 px-1" data-testid="presenca-no-ribbon" title="Quem está neste ramo agora">
+                {colab.participantes.slice(0, 6).map((p) => (
+                  <span key={p.userId} className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold text-white" style={{ backgroundColor: p.cor }} title={`${p.nome}${p.selecionados.length ? ` · editando ${p.selecionados.length} elemento(s)` : ''}`} aria-label={`Presente: ${p.nome}`}>
+                    {iniciais(p.nome)}
+                  </span>
+                ))}
+                {colab.participantes.length > 6 && <span className="text-[10px] text-slate-500">+{colab.participantes.length - 6}</span>}
+              </div>
+            )}
+            <BotaoDoRibbon
+              icone={Users}
+              rotulo={somenteLeitura ? 'Acesso (leitor)' : 'Acesso'}
+              contagem={colab.participantes.length || undefined}
+              ativo={telaAberta === 'acesso'}
+              onClick={() => {
+                if (telaAberta !== 'acesso') recarregarPermissoes();
+                alternarTela('acesso');
+              }}
+              ajuda="Quem está neste ramo agora e o papel de cada membro da organização neste estudo (editor / leitor). O número é quantas outras pessoas estão no ramo."
+            />
+          </GrupoDoRibbon>
+        )}
+        {aba === 'colaborar' && (
           <GrupoDoRibbon rotulo="Integração">
             <BotaoDoRibbon
               icone={KeyRound}
@@ -9306,6 +9446,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         </BarraDeOpcoes>
       )}
 
+      {somenteLeitura && (
+        <div role="status" className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-xs text-amber-800" data-testid="aviso-somente-leitura">
+          <Eye className="h-3.5 w-3.5" /> Você é <strong>leitor</strong> deste estudo: vê tudo, não altera nem publica. Um editor muda isso em Colaborar › Acesso.
+        </div>
+      )}
+      {colab.avisos.length > 0 && (
+        <div role="alert" className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800" data-testid="avisos-de-colaboracao">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="flex-1">{colab.avisos[0].texto}{colab.avisos.length > 1 ? ` (+${colab.avisos.length - 1})` : ''}</span>
+          <button type="button" onClick={editor.reload} className="shrink-0 rounded-md bg-amber-600 px-2 py-1 text-xs font-medium text-white hover:bg-amber-700">Recarregar do servidor</button>
+          <button type="button" onClick={colab.dispensarAvisos} className="text-xs font-medium underline">dispensar</button>
+        </div>
+      )}
       {editor.lastError && (
         <div
           role="alert"
@@ -9711,6 +9864,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               coresPorAmbiente={mostrarPreenchimento && modoDeCor === 'AMBIENTE'}
               coresDosAmbientes={mostrarPreenchimento && modoDeCor !== 'NENHUM' ? coresDoDesenho.porAmbiente : undefined}
               humanizada={humanizada}
+              selecoesRemotas={selecoesRemotas}
               pisosHumanizados={mostrarPreenchimento ? pisosDoDesenho : undefined}
               vegetacao={vegetacaoDoDesenho}
               cotaAltoContraste={cotaAltoContraste}
@@ -9848,6 +10002,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 selecionadoUid={uidDoSelecionado}
                 selecionadoRotulo={rotuloDoSelecionado}
                 pontoPadrao={pontoDoSelecionado}
+                membros={membrosDaOrgDoEstudo}
               />
             )}
 

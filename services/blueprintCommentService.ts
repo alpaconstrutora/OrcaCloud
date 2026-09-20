@@ -36,6 +36,8 @@ export interface BlueprintComment {
   created_at: string;
   /** GUID do tópico BCF de origem. `null` = escrito aqui dentro. */
   bcf_topic_guid: string | null;
+  /** MULTIUSUÁRIO (E10.1): e-mails mencionados com @; cada um recebeu notificação (gatilho no banco). */
+  mencoes?: string[];
 }
 
 export interface NovoComentario {
@@ -47,6 +49,8 @@ export interface NovoComentario {
   pontoYMm?: number | null;
   levelUid?: string | null;
   texto: string;
+  /** E10.1: e-mails de membros mencionados no texto (`mencoesDoTexto`). */
+  mencoes?: string[];
 }
 
 /**
@@ -62,7 +66,7 @@ export function ancoraValida(c: NovoComentario): boolean {
 }
 
 const COLUNAS =
-  'id, organization_id, study_id, snapshot_id, element_uid, ponto_x_mm, ponto_y_mm, level_uid, texto, autor_email, resolvido_em, resolvido_por, created_at, bcf_topic_guid';
+  'id, organization_id, study_id, snapshot_id, element_uid, ponto_x_mm, ponto_y_mm, level_uid, texto, autor_email, resolvido_em, resolvido_por, created_at, bcf_topic_guid, mencoes';
 
 /**
  * Os comentários de um estudo, abertos primeiro.
@@ -118,6 +122,7 @@ export async function criarComentario(c: NovoComentario): Promise<BlueprintComme
       level_uid: c.levelUid ?? null,
       texto,
       autor_email: sessao?.user?.email ?? null,
+      mencoes: (c.mencoes ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean),
     })
     .select(COLUNAS)
     .single();

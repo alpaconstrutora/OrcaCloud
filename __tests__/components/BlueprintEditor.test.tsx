@@ -14,7 +14,7 @@
  * harness em docs/spikes/wall-render.
  */
 import React from 'react';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import type { BlueprintStudy } from '../../types/blueprint';
@@ -165,6 +165,29 @@ vi.mock('../../services/blueprintWebhookService', () => ({
     remove: vi.fn(async () => {}),
     testar: (...a: unknown[]) => testarWebhook(...(a as [string])),
     reenviar: vi.fn(async () => true),
+  },
+}));
+
+// MULTIUSUÁRIO (E10.1): o canal Realtime é mockado; o teste controla os participantes e
+// captura `aoReceber` para injetar um comando "de outra pessoa".
+type EstadoColab = { participantes: unknown[]; travas: Map<string, unknown>; conectado: boolean; avisos: unknown[] };
+const colabEstado: EstadoColab = { participantes: [], travas: new Map(), conectado: true, avisos: [] };
+const colabDifundir = vi.fn();
+const colabAtualizarPresenca = vi.fn();
+let colabAoReceber: ((msg: unknown) => { ok: boolean; erro: string | null; divergiu: boolean }) | null = null;
+vi.mock('../../hooks/useBlueprintColaboracao', () => ({
+  useBlueprintColaboracao: (opcoes: { aoReceber: (msg: unknown) => { ok: boolean; erro: string | null; divergiu: boolean } }) => {
+    colabAoReceber = opcoes.aoReceber;
+    return { ...colabEstado, atualizarPresenca: colabAtualizarPresenca, difundir: colabDifundir, dispensarAvisos: vi.fn() };
+  },
+}));
+const listPermissoes = vi.fn(async () => [] as unknown[]);
+const definirPermissao = vi.fn(async () => ({}));
+vi.mock('../../services/blueprintStudyPermissionService', () => ({
+  blueprintStudyPermissionService: {
+    list: (...a: unknown[]) => listPermissoes(...(a as [])),
+    definir: (...a: unknown[]) => definirPermissao(...(a as [])),
+    remover: vi.fn(async () => {}),
   },
 }));
 
@@ -2240,6 +2263,75 @@ describe('BlueprintEditor · quantitativos', () => {
       useStore.setState({ organizations: orgsAntes });
       listWebhooks.mockResolvedValue([]);
       listEntregas.mockResolvedValue([]);
+    }
+  }, 60000);
+
+  it('multiusuário (E10.1): a seleção da outra pessoa TRAVA o elemento (comando recusado com o autor); comando livre é difundido com o hash; comando remoto entra no modelo; presença no ribbon e na tela Acesso; desfazer desliga com gente no ramo', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const { novaMensagem } = await import('../../utils/blueprintColaboracao');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    let m = k.applyBatch(nivel.model, [w(0, 0, 8000, 0), w(8000, 0, 8000, 3000), w(8000, 3000, 0, 3000), w(0, 3000, 0, 0), w(4000, 0, 4000, 3000)]).model;
+    const [a, b] = [...m.spaces].sort((p, q) => p.ring[0].x - q.ring[0].x);
+    m = k.applyBatch(m, [
+      { type: 'NameSpace', spaceId: a.id, name: 'Sala' },
+      { type: 'NameSpace', spaceId: b.id, name: 'Cozinha' },
+    ]).model;
+    const salaId = m.spaces.find((s) => s.name === 'Sala')!.id;
+    const cozinhaId = m.spaces.find((s) => s.name === 'Cozinha')!.id;
+    loadBranchModel.mockResolvedValue(m);
+    // Zeca está no ramo com a Sala selecionada (= travada para mim).
+    const zeca = { userId: 'u_zeca', email: 'zeca@x.com', nome: 'Zeca Lima', cor: '#dc2626', levelId: t, selecionados: [salaId], conexoes: 1 };
+    colabEstado.participantes = [zeca];
+    colabEstado.travas = new Map([[salaId, zeca]]);
+    colabDifundir.mockClear();
+    try {
+      await montar();
+      const user = userEvent.setup();
+      // 1. Renomear a Sala (NameSpace com spaceId travado) é recusado, com o autor.
+      await user.click(screen.getByRole('button', { name: 'Renomear Sala' }));
+      const campoSala = screen.getByLabelText('Nome do ambiente Sala');
+      await user.clear(campoSala);
+      await user.type(campoSala, 'Estar{Enter}');
+      expect(await screen.findByRole('alert')).toHaveTextContent(/está em edição por Zeca Lima/);
+      expect(colabDifundir).not.toHaveBeenCalled();
+      // 2. Renomear a Cozinha (livre) passa e é DIFUNDIDO com o hash resultante.
+      await user.click(screen.getByRole('button', { name: 'Renomear Cozinha' }));
+      const campoCoz = screen.getByLabelText('Nome do ambiente Cozinha');
+      await user.clear(campoCoz);
+      await user.type(campoCoz, 'Copa{Enter}');
+      await waitFor(() => expect(colabDifundir).toHaveBeenCalledTimes(1));
+      const [comandos, hash] = colabDifundir.mock.calls[0] as [unknown[], string];
+      expect(comandos).toEqual([{ type: 'NameSpace', spaceId: cozinhaId, name: 'Copa' }]);
+      expect(hash).toMatch(/^[0-9a-f]{64}$/);
+      // 3. Um comando REMOTO (Zeca renomeia a Sala) entra no modelo pelo `aoReceber`, sem redifundir.
+      const espelho = new k.ModelHistory(m);
+      espelho.apply({ type: 'NameSpace', spaceId: cozinhaId, name: 'Copa' });
+      const r = espelho.apply({ type: 'NameSpace', spaceId: salaId, name: 'Estar do Zeca' });
+      let resultado: { ok: boolean; divergiu: boolean } | null = null;
+      await act(async () => {
+        resultado = colabAoReceber!(novaMensagem('u_zeca', 'Zeca Lima', [{ type: 'NameSpace', spaceId: salaId, name: 'Estar do Zeca' }], r.hash));
+      });
+      expect(resultado).toMatchObject({ ok: true, divergiu: false });
+      expect(await screen.findByRole('button', { name: 'Renomear Estar do Zeca' })).toBeInTheDocument();
+      expect(colabDifundir).toHaveBeenCalledTimes(1);
+      // 4. Presença: chip no ribbon Colaborar, contagem no botão Acesso, tela com quem está e os papéis; desfazer desligado.
+      await abrirAba(/^colaborar$/i);
+      expect(screen.getByLabelText('Presente: Zeca Lima')).toHaveTextContent('ZL');
+      expect(screen.getByRole('button', { name: /^Acesso/ })).toHaveTextContent('1');
+      expect(screen.getByRole('button', { name: /^Desfazer/ })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /^Desfazer/ })).toHaveAttribute('title', expect.stringMatching(/outra pessoa/));
+      // A presença publicada leva o pavimento e a seleção.
+      expect(colabAtualizarPresenca).toHaveBeenCalledWith(expect.objectContaining({ levelId: t }));
+      await user.click(screen.getByRole('button', { name: /^Acesso/ }));
+      const tela = await screen.findByTestId('tela-acesso-do-estudo');
+      expect(within(tela).getByTestId('presenca-do-ramo')).toHaveTextContent(/Zeca Lima/);
+      expect(within(tela).getByTestId('presenca-do-ramo')).toHaveTextContent(/editando 1 elemento/);
+      expect(listPermissoes).toHaveBeenCalledWith('std_1');
+    } finally {
+      colabEstado.participantes = [];
+      colabEstado.travas = new Map();
     }
   }, 60000);
 

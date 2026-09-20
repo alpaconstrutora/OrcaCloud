@@ -9,7 +9,7 @@
  * pó junto com a peça. Metade dos casos abaixo é sobre isso.
  */
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor , within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point } from '../../utils/blueprintKernel';
@@ -145,5 +145,32 @@ describe('painel de comentários · escrever', () => {
     // A revisão em que a pessoa estava olhando vai junto: é o que permite dizer
     // depois "isto é da revisão 7, e o elemento não existe mais na 9".
     expect(arg.snapshotId).toBe('snap-7');
+  });
+
+  it('menções (E10.1): "@" sugere membros, clicar completa, e os e-mails mencionados vão em `mencoes` (quem é notificado é o banco)', async () => {
+    const m = casa();
+    const membros = [
+      { email: 'maria@alpa.com', nome: 'Maria Souza' },
+      { email: 'zeca@alpa.com', nome: 'Zeca Lima' },
+    ];
+    montar(m, { selecionadoUid: m.walls[0].uid, membros });
+    await waitFor(() => expect(screen.getByLabelText('Texto do comentário')).toBeTruthy());
+    const campo = screen.getByLabelText('Texto do comentário');
+    expect((campo as HTMLTextAreaElement).placeholder).toMatch(/@nome/);
+    await userEvent.type(campo, 'Confere isso @mar');
+    const sugestoes = await screen.findByTestId('sugestoes-de-mencao');
+    expect(sugestoes).toHaveTextContent('@Maria Souza');
+    expect(sugestoes).not.toHaveTextContent('Zeca');
+    await userEvent.click(within(sugestoes).getByRole('button', { name: '@Maria Souza' }));
+    expect(campo).toHaveValue('Confere isso @maria ');
+    expect(screen.getByTestId('mencoes-do-comentario')).toHaveTextContent('Vai notificar: maria@alpa.com');
+    await userEvent.type(campo, 'e @zeca também');
+    expect(screen.getByTestId('mencoes-do-comentario')).toHaveTextContent('maria@alpa.com, zeca@alpa.com');
+    criar.mockClear();
+    await userEvent.click(screen.getByRole('button', { name: /Comentar/ }));
+    await waitFor(() => expect(criar).toHaveBeenCalledTimes(1));
+    const arg = criar.mock.calls[0][0] as Record<string, unknown>;
+    expect(arg.mencoes).toEqual(['maria@alpa.com', 'zeca@alpa.com']);
+    expect(arg.texto).toBe('Confere isso @maria e @zeca também');
   });
 });

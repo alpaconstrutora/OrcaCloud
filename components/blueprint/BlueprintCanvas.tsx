@@ -1143,6 +1143,11 @@ interface Props {
   humanizada?: boolean;
   pisosHumanizados?: Map<string, EstiloDoPiso>;
   vegetacao?: Planta[];
+  /**
+   * MULTIUSUÁRIO (E10.1): o que OUTRAS pessoas têm selecionado (= em edição, travado
+   * para mim): um crachá na cor da pessoa junto do elemento, com as iniciais.
+   */
+  selecoesRemotas?: { id: string; cor: string; nome: string }[];
   /** Cota em preto sobre fundo opaco — para planta de fundo escaneada carregada. */
   cotaAltoContraste?: boolean;
   /**
@@ -1411,6 +1416,7 @@ export default function BlueprintCanvas({
   coresPorAmbiente = false,
   coresDosAmbientes,
   humanizada = false,
+  selecoesRemotas,
   pisosHumanizados,
   vegetacao,
   cotaAltoContraste = false,
@@ -3911,6 +3917,59 @@ export default function BlueprintCanvas({
         desenharCadeia(c.lado, c.internas, AFASTAMENTO_COTA.internas);
         desenharCadeia(c.lado, c.parcial, AFASTAMENTO_COTA.parcial);
         desenharCadeia(c.lado, [c.total], AFASTAMENTO_COTA.total);
+      }
+      ctx.restore();
+    }
+
+    // ── SELEÇÕES REMOTAS (E10.1): crachá na cor da pessoa no elemento que ela edita. ──
+    // Paredes (meio do eixo), aberturas (o vão), componentes e ambientes (o centro);
+    // o resto fica sem crachá — a trava vale igual, só não tem onde pendurar.
+    if (selecoesRemotas && selecoesRemotas.length > 0) {
+      const ancoraDe = (id: string): Point | null => {
+        const w = paredesDoNivel.find((x) => x.id === id);
+        if (w) return { x: (w.a.x + w.b.x) / 2, y: (w.a.y + w.b.y) / 2 } as Point;
+        const o = model.openings.find((x) => x.id === id);
+        if (o) {
+          const pw = paredesDoNivel.find((x) => x.id === o.wallId);
+          if (!pw) return null;
+          const comp = Math.hypot(pw.b.x - pw.a.x, pw.b.y - pw.a.y) || 1;
+          const t = (o.offsetMm + o.widthMm / 2) / comp;
+          return { x: pw.a.x + (pw.b.x - pw.a.x) * t, y: pw.a.y + (pw.b.y - pw.a.y) * t } as Point;
+        }
+        const c = componentes.find((x) => x.id === id);
+        if (c) return c.at;
+        const amb = ambientesDoNivel.find((x) => x.id === id);
+        if (amb && amb.ring.length >= 3) {
+          // O centro do anel: onde o nome do ambiente costuma estar.
+          return { x: amb.ring.reduce((soma, q) => soma + q.x, 0) / amb.ring.length, y: amb.ring.reduce((soma, q) => soma + q.y, 0) / amb.ring.length } as Point;
+        }
+        return null;
+      };
+      ctx.save();
+      ctx.font = `600 ${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (const s of selecoesRemotas) {
+        const anc = ancoraDe(s.id);
+        if (!anc) continue;
+        const p = paraTela(anc);
+        const r = 10;
+        ctx.fillStyle = s.cor;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(p.x + 12, p.y - 12, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(s.nome.split(/\s+/).map((x) => x[0] ?? '').join('').slice(0, 2).toUpperCase(), p.x + 12, p.y - 12);
+        // O laço até o elemento.
+        ctx.strokeStyle = s.cor;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x + 12 - r * 0.7, p.y - 12 + r * 0.7);
+        ctx.stroke();
       }
       ctx.restore();
     }
@@ -7248,6 +7307,7 @@ export default function BlueprintCanvas({
     coresPorAmbiente,
     coresDosAmbientes,
     humanizada,
+    selecoesRemotas,
     pisosHumanizados,
     tramasDosPisos,
     vegetacao,

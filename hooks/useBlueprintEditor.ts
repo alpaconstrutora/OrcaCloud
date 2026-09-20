@@ -32,6 +32,7 @@ import {
   saveDraft,
 } from '../services/blueprintService';
 import { BlueprintRevisionConflict } from '../types/blueprint';
+import { aplicarRemoto, type MensagemDeComando, type ResultadoRemoto } from '../utils/blueprintColaboracao';
 
 /** Intervalo do autosave. RNF-004 exige reconhecimento em até 2 s. */
 const AUTOSAVE_MS = 1500;
@@ -200,10 +201,30 @@ export interface UseBlueprintEditor {
   publishedHash: string | null;
   /** `true` quando há mudança não publicada em relação ao último snapshot. */
   dirtySincePublish: boolean;
+  /**
+   * MULTIUSUÁRIO (E10.1): aplica um lote vindo de OUTRA pessoa pelo canal —
+   * sem passar pelos ganchos (não redifunde) e com idempotência por id de
+   * mensagem. Devolve se aplicou e se o hash bateu com o do autor.
+   */
+  aplicarExterno: (msg: MensagemDeComando) => ResultadoRemoto;
 }
 
-export function useBlueprintEditor(branchId: string | null): UseBlueprintEditor {
+/**
+ * MULTIUSUÁRIO (E10.1): o editor pergunta ANTES de aplicar (trava de outra
+ * pessoa? somente leitura?) e avisa DEPOIS (para difundir). Passados por
+ * referência: a identidade da função não importa, só o valor atual.
+ */
+export interface GanchosDeColaboracao {
+  /** Devolve a mensagem de recusa, ou `null` para deixar passar. */
+  antesDeAplicar?: (comandos: Command[]) => string | null;
+  /** Chamado com o lote aplicado e o hash resultante. */
+  depoisDeAplicar?: (comandos: Command[], hashDepois: string) => void;
+}
+
+export function useBlueprintEditor(branchId: string | null, ganchos?: GanchosDeColaboracao): UseBlueprintEditor {
   const historyRef = useRef<ModelHistory>(new ModelHistory(emptyModel()));
+  const ganchosRef = useRef<GanchosDeColaboracao | undefined>(ganchos);
+  ganchosRef.current = ganchos;
   const [model, setModel] = useState<BlueprintModel>(historyRef.current.current);
   const [loading, setLoading] = useState(true);
   const [tool, setTool] = useState<BlueprintTool>('parede');
@@ -334,13 +355,21 @@ export function useBlueprintEditor(branchId: string | null): UseBlueprintEditor 
   // porta — a parede era criada, a leitura seguinte devolvia `undefined` e o
   // comando da abertura simplesmente não acontecia, sem erro nenhum na tela.
   const aplicar = useCallback(
-    (executar: () => { model: BlueprintModel; diff: { created: string[] } }): string[] => {
+    (comandos: Command[], executar: () => { model: BlueprintModel; diff: { created: string[] }; hash: string }): string[] => {
+      // MULTIUSUÁRIO: trava de outra pessoa ou somente leitura recusam ANTES do kernel.
+      const recusa = ganchosRef.current?.antesDeAplicar?.(comandos) ?? null;
+      if (recusa) {
+        setLastError(recusa);
+        force((n) => n + 1);
+        return [];
+      }
       try {
         const resultado = executar();
         setModel(resultado.model);
         setLastError(null);
         agendarAutosave(resultado.model);
         force((n) => n + 1);
+        ganchosRef.current?.depoisDeAplicar?.(comandos, resultado.hash);
         return resultado.diff.created;
       } catch (e) {
         // KernelError é recusa esperada (parede degenerada, abertura fora da
@@ -356,14 +385,26 @@ export function useBlueprintEditor(branchId: string | null): UseBlueprintEditor 
   );
 
   const run = useCallback(
-    (command: Command) => aplicar(() => historyRef.current.apply(command)),
+    (command: Command) => aplicar([command], () => historyRef.current.apply(command)),
     [aplicar],
   );
 
   const runBatch = useCallback(
     (commands: Command[]) =>
-      commands.length === 0 ? [] : aplicar(() => historyRef.current.applyMany(commands)),
+      commands.length === 0 ? [] : aplicar(commands, () => historyRef.current.applyMany(commands)),
     [aplicar],
+  );
+
+  const aplicarExterno = useCallback(
+    (msg: MensagemDeComando): ResultadoRemoto => {
+      const r = aplicarRemoto(historyRef.current, msg);
+      const atual = historyRef.current.current;
+      setModel(atual);
+      agendarAutosave(atual);
+      force((n) => n + 1);
+      return r;
+    },
+    [agendarAutosave],
   );
 
   const undo = useCallback(() => {
@@ -458,5 +499,6 @@ export function useBlueprintEditor(branchId: string | null): UseBlueprintEditor 
     publish,
     publishedHash,
     dirtySincePublish: hashAtual !== null && hashAtual !== publishedHash,
+    aplicarExterno,
   };
 }

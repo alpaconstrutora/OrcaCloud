@@ -829,7 +829,8 @@ cols.autoFit({ sampleRows: 300, fill: false });   // só ajusta ao conteúdo, se
 > ⚠️ Colunas estruturais sem `data-col-key` mas com largura fixa (o checkbox de
 > 40px de `SupplierList`) são descontadas do container — ignorá-las fazia a
 > soma estourar nesses 40px e criar scroll lateral.
-> ℹ️ Em uso: `ClientList.tsx`, `SupplierList.tsx`, `InvestorList.tsx`.
+> ℹ️ Em uso: `ClientList.tsx`, `SupplierList.tsx`, `InvestorList.tsx`,
+> `CostCenterModule.tsx` (Minha Organização › Centro de Custo, 2026-09-19).
 > `BankReconciliation.tsx` usa o hook mas ainda **não** tem o botão.
 
 #### 6.1.2 `truncate` numa célula PRECISA de `block`

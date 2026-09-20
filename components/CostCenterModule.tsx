@@ -1,9 +1,9 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import {
     Search, Plus, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown,
-    Download, Upload, FileDown, Layers, AlertCircle,
+    Download, Upload, FileDown, Layers, AlertCircle, MoveHorizontal,
 } from 'lucide-react';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
@@ -35,17 +35,25 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'actions',        label: 'Ações',                  sortable: false },
 ];
 
+// Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
+// São chutes de partida: o botão "Ajustar largura ao conteúdo" (§6.1.2) mede o
+// dado real e substitui estes valores por tela.
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    code: 100, organization: 170, group: 210, name: 190, empreendimento: 170, obra: 150, description: 220, actions: 150,
+};
+
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
 // `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta). 'actions' é
-// estrutural (fixo, fora do drag) e não entra aqui.
+// estrutural (fixo, fora do drag) e não entra aqui. `overflow-hidden` é exigido
+// pelo `ResizeHandle` filho (§6.1); a largura vem do <colgroup>, não de `w-*`.
 const COST_CENTER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
-    code:           { label: 'Código',                  className: 'px-6 py-2 border-r border-gray-100 w-24' },
-    organization:   { label: 'Organização',             className: 'px-6 py-2 border-r border-gray-100' },
-    group:          { label: 'Centro de custo (grupo)',  className: 'px-6 py-2 border-r border-gray-100' },
-    name:           { label: 'Centro de custo',          className: 'px-6 py-2 border-r border-gray-100' },
-    empreendimento: { label: 'Empreendimento',           className: 'px-6 py-2 border-r border-gray-100' },
-    obra:           { label: 'Obra',                     className: 'px-6 py-2 border-r border-gray-100' },
-    description:    { label: 'Descrição',                className: 'px-6 py-2 border-r border-gray-100' },
+    code:           { label: 'Código',                  className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    organization:   { label: 'Organização',             className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    group:          { label: 'Centro de custo (grupo)',  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    name:           { label: 'Centro de custo',          className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    empreendimento: { label: 'Empreendimento',           className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    obra:           { label: 'Obra',                     className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    description:    { label: 'Descrição',                className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
 };
 
 // Sem props de organização: o módulo lê do `useOrgContext` (CLAUDE.md REGRA #5).
@@ -123,7 +131,7 @@ function renderCostCenterCell(
                     ) : (
                         <span className="w-5 h-5 shrink-0" />
                     )}
-                    <span className={`truncate text-sm font-normal ${isGroup ? 'text-gray-900' : 'text-gray-500'}`}>
+                    <span className={`truncate text-sm font-normal ${isGroup ? 'text-gray-900' : 'text-gray-500'}`} title={isGroup ? item.name : groupNameFor(item)}>
                         {isGroup ? item.name : groupNameFor(item)}
                     </span>
                 </div>
@@ -132,18 +140,18 @@ function renderCostCenterCell(
             return isGroup ? (
                 <span className="text-sm font-normal text-gray-300">—</span>
             ) : (
-                <span className="text-sm font-normal text-gray-900 truncate">{item.name}</span>
+                <span className="block truncate text-sm font-normal text-gray-900" title={item.name}>{item.name}</span>
             );
         case 'empreendimento':
             return <EmpreendimentoCell value={empreendimentoOf(item)} />;
         case 'obra':
             return (
-                <span className="text-sm font-normal text-gray-700 truncate">
+                <span className="block truncate text-sm font-normal text-gray-700" title={item.project_id ? obraNameById[item.project_id] : undefined}>
                     {item.project_id ? (obraNameById[item.project_id] || '—') : <span className="text-gray-400 italic">—</span>}
                 </span>
             );
         case 'description':
-            return <span className="text-sm font-normal text-gray-500 truncate line-clamp-1">{item.description || '-'}</span>;
+            return <span className="block truncate text-sm font-normal text-gray-500" title={item.description || undefined}>{item.description || '-'}</span>;
         default:
             return null;
     }
@@ -163,6 +171,15 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = usePersistedState('costCenterModule:search', '');
     const tableColumns = useTableColumns(COLUMNS, 'costCenterModuleColumns');
+    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'costCenterModuleColWidths');
+    // table-layout:fixed + largura 100% faz o navegador redistribuir o espaço
+    // sobrando entre as colunas de <col> fixo (arrastar uma borda "puxava" as
+    // vizinhas). Fixar a largura total na soma exata das colunas elimina esse
+    // espaço sobrando — mesma correção de SupplierList.tsx / ClientList.tsx.
+    const tableTotalWidth = COLUMNS
+        .filter(c => c.key !== 'actions')
+        .reduce((sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) ? cols.getWidth(c.key) : 0), 0)
+        + cols.getWidth('actions');
     const [expandedIds, setExpandedIds] = usePersistedState<Record<string, boolean>>('costCenterModule:expanded', {});
     const [sheetOpen, setSheetOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<CostCenterV2 | null>(null);
@@ -638,6 +655,16 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
                         onToggleColumn={tableColumns.toggleColumn}
                         onReset={tableColumns.resetColumns}
                     />
+                    {/* Autofit sob comando explícito — nunca automático (§6.1.2): recalcular a
+                        cada busca faria as colunas dançarem enquanto o usuário digita. Duplo
+                        clique no divisor segue sendo "restaurar padrão". */}
+                    <button
+                        onClick={() => cols.autoFit()}
+                        className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                        title="Ajustar largura das colunas ao conteúdo"
+                    >
+                        <MoveHorizontal className="w-4 h-4" />
+                    </button>
 
                     <button
                         onClick={() => openCreate('group')}
@@ -673,7 +700,17 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                            <colgroup>
+                                {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                ))}
+                                {/* espaçador sem largura — absorve a folga quando a tabela é mais estreita
+                                    que o container. ANTES de "Ações" (§6.1.1): depois dela, a sobra ia toda
+                                    para a direita e a borda de "Ações" andava a cada arraste. */}
+                                <col />
+                                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                            </colgroup>
                             <thead>
                                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                     {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
@@ -684,10 +721,17 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
                                                 sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                                 onSort={tableColumns.handleColumnSort}
                                                 onMoveColumn={tableColumns.moveColumn}
-                                                className={def.className} />
+                                                className={def.className}>
+                                                <cols.ResizeHandle colKey={key} />
+                                            </SortableHeader>
                                         );
                                     })}
-                                    <th className="px-6 py-2 text-right w-32 text-table-header font-semibold text-gray-500">Ações</th>
+                                    {/* espaçador — casa com o <col /> sem largura do colgroup, na mesma ordem */}
+                                    <th aria-hidden="true" className="border-r border-gray-100" />
+                                    <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
+                                        Ações
+                                        <cols.ResizeHandle colKey="actions" />
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200 bg-white">
@@ -700,6 +744,8 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
                                                     {renderCostCenterCell(key, { item, isGroup, hasChildren, expanded, toggleExpand, groupNameFor, obraNameById, empreendimentoOf, orgNameById })}
                                                 </td>
                                             ))}
+                                            {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                            <td aria-hidden="true" className="border-r border-gray-100"></td>
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5">
                                                     <ActionIconButton kind="edit" onClick={() => openEdit(item)} />

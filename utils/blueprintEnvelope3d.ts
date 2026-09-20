@@ -18,7 +18,7 @@
  *
  * Tudo derivado; nada é gravado — como o envelope 2D.
  */
-import {
+import { anelRecuado,
   areaConstruidaMm2,
   contornoExternoDoNivel,
   pointInPolygon,
@@ -97,7 +97,17 @@ export function envelopeVertical(model: BlueprintModel, terreno: Terreno | null,
       ordinal++;
       acimaEmPavimentos = zona.gabaritoPavimentos != null && ordinal > zona.gabaritoPavimentos;
     }
-    const contornos = contornoExternoDoNivel(model, l);
+    // "CABE?" PELA FACE EXTERNA (20/09/2026, backlog P2 — P2.8): o contorno do
+    // nível corre no EIXO das paredes; a edificação vai até a face externa, meia
+    // espessura adiante. O contorno é deslocado para fora pela meia espessura
+    // da parede externa mais grossa do pavimento (`anelRecuado` com recuo
+    // negativo). Antes, uma parede de 20 cm no limite do recuo passava por 10 cm.
+    const meiaEspessuraMm = Math.round(Math.max(0, ...model.walls.filter((w) => w.levelId === l.id).map((w) => w.thicknessMm)) / 2);
+    const contornos = contornoExternoDoNivel(model, l).map((c) => {
+      if (meiaEspessuraMm <= 0 || c.length < 3) return c;
+      const face = anelRecuado(c, c.map(() => -meiaEspessuraMm));
+      return face.length >= 3 ? face : c;
+    });
     const anelEnvelope = env.valido ? env.anel : [];
     let fora: number | null = 0;
     let cabe = true;

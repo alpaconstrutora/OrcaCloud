@@ -1165,6 +1165,19 @@ Próxima: P2.7 — vagas em espinha de peixe (45°) e em fila.
 
 Próxima: P2.8 — volume do ambiente na etiqueta (E0.2) e "cabe?" pela face externa (E3.3).
 
+### P2.8 — Volume do ambiente no quantitativo e "cabe?" pela face externa (20/09/2026) · backlog P2
+
+**O que entrou** (**sem bump de kernel**; **quantitativos `quant-1.13.0 → 1.14.0`** — campo novo por ambiente; o cache é chaveado pela versão, e o `kernel.bundle.mjs` da `planta-api` foi regerado e a função **redeployada**):
+
+- **`QuantidadeAmbiente.peDireitoM` e `volumeM3`** (`quantities.ts`): pé-direito **útil** = pé-direito do pavimento − rebaixo do forro declarado (E7.2); volume = área de piso líquida × pé-direito útil. Antes a tela calculava sozinha pelo pé-direito do pavimento (sem o rebaixo) e a **planilha não tinha volume** (E0.2 deixou registrado). Agora o número é um só: a tela lê do quantitativo (com o fallback do pavimento para cache antigo) e a aba Ambientes da planilha ganha **"Pé-direito útil (m)"** e **"Volume (m³)"**.
+- **"Cabe?" pela FACE EXTERNA** (`blueprintEnvelope3d.ts`): o contorno externo do nível corre no eixo das paredes; a edificação vai até a face, meia espessura adiante. O contorno é deslocado para fora pela meia espessura da parede externa mais grossa do pavimento (`anelRecuado` com recuo negativo — a mesma mitra do envelope). Efeito: parede de 20 cm com a **face na linha do recuo cabe**; com o eixo a 5 cm além, **invade 5 cm pela face** (antes passava). Os dois testes que citavam o eixo (`blueprintEnvelope3d`, editor E3.3) foram atualizados para os números da face (12,2 × 3,1 m e 12,2 × 4,1 m fora).
+
+**Decisões.** (1) O volume entra no quantitativo, não só na tela: é o que a planilha e a API publicam. (2) Meia espessura da parede mais grossa do pavimento, e não por trecho do contorno: `contornoExternoDoNivel` não diz que parede é cada lado; o erro possível é a favor da segurança (uma parede fina no meio de grossas fica 1–2 cm mais recuada na conta). (3) Bump só dos quantitativos: o payload canônico não mudou.
+
+**Prova.** *No app real* (estudo "Planta 14/09/2026", escritas bloqueadas 14): Analisar › Quantitativos › Por ambiente lê **"quant-1.14.0"** e a linha "Ambiente 1 · … Placa de gesso acartonado · rebaixo 0,30 m · … · **2,50** · **62,96**" — pé-direito útil 2,80 − 0,30 e volume 25,19 m² × 2,50 m, do quantitativo. Testes: `blueprintVolumeEFace.test.ts` (2: pé-direito útil e volume com e sem forro + colunas da planilha; face na linha cabe e 5 cm além invade 12,2 × 0,05 m²), pins `quant-1.14.0` (5 arquivos), `plantaApi` (bundle fresco); suíte 407 arquivos / 4870 testes; tsc, check-ui e build OK; `planta-api` v6.
+
+Próxima: P2.9 — números do município por semente e regra de UNIDADE/PAVIMENTO com mais variáveis (E3.2), ou o que você preferir do backlog.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

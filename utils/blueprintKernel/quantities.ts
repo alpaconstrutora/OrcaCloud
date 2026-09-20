@@ -171,7 +171,7 @@ export interface QuantityPolicy {
  * código). Desenho sem peça não muda de número.
  */
 export const POLITICA_PADRAO: QuantityPolicy = {
-  version: 'quant-1.13.0',
+  version: 'quant-1.14.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -197,6 +197,14 @@ export interface QuantidadeAmbiente {
   /** Perímetro descontando os vãos de porta que dão para o ambiente. */
   comprimentoRodapeM: number;
   areaRodapeM2: number;
+  /**
+   * PÉ-DIREITO ÚTIL e VOLUME (quant-1.14.0, backlog P2 — P2.8): o pé-direito do
+   * pavimento menos o rebaixo do forro declarado (E7.2), e o volume = área de
+   * piso líquida × pé-direito útil. Antes a tela calculava isso sozinha e a
+   * planilha não tinha volume — agora o número é um só, do quantitativo.
+   */
+  peDireitoM: number;
+  volumeM3: number;
   /**
    * Área que a ESTRUTURA tira do piso deste ambiente, em m².
    *
@@ -1415,6 +1423,9 @@ export function computeQuantities(
         volumeM3: (pisoLiquidoMm2 * c.espessuraMm) / 1e9,
       }));
 
+    // P2.8: pé-direito útil = pavimento − rebaixo do forro declarado (E7.2).
+    const nivelDoAmbiente = model.levels.find((l) => l.id === s.levelId);
+    const peDireitoUtilMm = Math.max(0, (nivelDoAmbiente?.defaultHeightMm ?? 0) - (acab?.forro?.rebaixoMm ?? 0));
     return {
       ...(acab?.piso ? { piso: { camadas: medirCamadas(acab.piso) } } : {}),
       ...(acab?.forro ? { forro: { rebaixoM: acab.forro.rebaixoMm / 1000, camadas: medirCamadas(acab.forro.camadas) } } : {}),
@@ -1428,6 +1439,8 @@ export function computeQuantities(
       perimetroEixoM: (s.perimeterMm / 1000),
       comprimentoRodapeM: (rodapeMm / 1000),
       areaRodapeM2: ((rodapeMm * alturaRodapeMm) / MM2_PARA_M2),
+      peDireitoM: peDireitoUtilMm / 1000,
+      volumeM3: Math.round((pisoLiquidoMm2 / MM2_PARA_M2) * (peDireitoUtilMm / 1000) * 100) / 100,
       areaEstruturaM2: (estruturaMm2 / MM2_PARA_M2),
       formulaAreaPiso:
         estruturaMm2 > 0 ? `${formula} − seção dos pilares no ambiente` : formula,

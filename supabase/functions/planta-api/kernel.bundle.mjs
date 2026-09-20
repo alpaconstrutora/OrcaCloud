@@ -2664,7 +2664,7 @@ function conexoesDerivadas(model) {
 
 // utils/blueprintKernel/quantities.ts
 var POLITICA_PADRAO = {
-  version: "quant-1.13.0",
+  version: "quant-1.14.0",
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2
@@ -3037,6 +3037,8 @@ function computeQuantities(model, policy = POLITICA_PADRAO, kernelVersion = "") 
       areaM2: pisoLiquidoMm2 / MM2_PARA_M2,
       volumeM3: pisoLiquidoMm2 * c.espessuraMm / 1e9
     }));
+    const nivelDoAmbiente = model.levels.find((l) => l.id === s2.levelId);
+    const peDireitoUtilMm = Math.max(0, (nivelDoAmbiente?.defaultHeightMm ?? 0) - (acab?.forro?.rebaixoMm ?? 0));
     return {
       ...acab?.piso ? { piso: { camadas: medirCamadas(acab.piso) } } : {},
       ...acab?.forro ? { forro: { rebaixoM: acab.forro.rebaixoMm / 1e3, camadas: medirCamadas(acab.forro.camadas) } } : {},
@@ -3050,6 +3052,8 @@ function computeQuantities(model, policy = POLITICA_PADRAO, kernelVersion = "") 
       perimetroEixoM: s2.perimeterMm / 1e3,
       comprimentoRodapeM: rodapeMm / 1e3,
       areaRodapeM2: rodapeMm * alturaRodapeMm / MM2_PARA_M2,
+      peDireitoM: peDireitoUtilMm / 1e3,
+      volumeM3: Math.round(pisoLiquidoMm2 / MM2_PARA_M2 * (peDireitoUtilMm / 1e3) * 100) / 100,
       areaEstruturaM2: estruturaMm2 / MM2_PARA_M2,
       formulaAreaPiso: estruturaMm2 > 0 ? `${formula} \u2212 se\xE7\xE3o dos pilares no ambiente` : formula
     };
@@ -3536,6 +3540,14 @@ function gerarIfc(model, o) {
   }
   for (const [uid, calc] of o.parametrosCalculadosPorUid ?? []) {
     parametrosPorUid.set(uid, { ...parametrosPorUid.get(uid) ?? {}, ...calc });
+  }
+  if (o.chavesPrivadas && o.chavesPrivadas.size > 0) {
+    for (const [uid, p] of [...parametrosPorUid]) {
+      const filtrado = {};
+      for (const k of Object.keys(p)) if (!o.chavesPrivadas.has(k)) filtrado[k] = p[k];
+      if (Object.keys(filtrado).length > 0) parametrosPorUid.set(uid, filtrado);
+      else parametrosPorUid.delete(uid);
+    }
   }
   const psetPersonalizado = (produto, uid) => {
     const p = uid ? parametrosPorUid.get(uid) : void 0;
@@ -5004,7 +5016,7 @@ function abasDoQuantitativo(quant, ctx, armadura, parametros) {
     abas.push({
       nome: "Ambientes",
       linhas: [
-        ["Ambiente", "\xC1rea de piso (m\xB2)", "\xC1rea de eixo (m\xB2)", "Piso c/ perda (m\xB2)", "Per\xEDmetro (m)", "Rodap\xE9 (m)", "\xC1rea de rodap\xE9 (m\xB2)", "F\xF3rmula da \xE1rea de piso"],
+        ["Ambiente", "\xC1rea de piso (m\xB2)", "\xC1rea de eixo (m\xB2)", "Piso c/ perda (m\xB2)", "Per\xEDmetro (m)", "Rodap\xE9 (m)", "\xC1rea de rodap\xE9 (m\xB2)", "P\xE9-direito \xFAtil (m)", "Volume (m\xB3)", "F\xF3rmula da \xE1rea de piso"],
         ...quant.ambientes.map((a, i) => [
           a.nome ?? `Ambiente ${i + 1}`,
           n2(a.areaPisoM2),
@@ -5013,6 +5025,8 @@ function abasDoQuantitativo(quant, ctx, armadura, parametros) {
           n2(a.perimetroEixoM),
           n2(a.comprimentoRodapeM),
           n2(a.areaRodapeM2),
+          n2(a.peDireitoM ?? 0),
+          n2(a.volumeM3 ?? 0),
           a.formulaAreaPiso
         ])
       ]

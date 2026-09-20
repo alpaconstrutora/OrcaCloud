@@ -182,8 +182,10 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
       quant.ambientes
         .map((a, i) => {
           const nivel = model.levels.find((l) => l.id === mapaDePavimento.get(a.spaceId));
-          const peDireitoM = nivel ? nivel.defaultHeightMm / 1000 : 0;
-          return { ...a, indice: i + 1, peDireitoM, volumeM3: nivel ? volumeDoAmbienteM3(a.areaPisoM2, nivel.defaultHeightMm) : 0 };
+          // P2.8: o quantitativo traz pé-direito ÚTIL e volume (quant-1.14.0); o
+          // cache de uma versão anterior cai no pé-direito do pavimento, como antes.
+          const peDireitoM = a.peDireitoM ?? (nivel ? nivel.defaultHeightMm / 1000 : 0);
+          return { ...a, indice: i + 1, peDireitoM, volumeM3: a.volumeM3 ?? (nivel ? volumeDoAmbienteM3(a.areaPisoM2, nivel.defaultHeightMm) : 0) };
         })
         .filter((a) => doPavimento(a.spaceId)),
     // eslint-disable-next-line react-hooks/exhaustive-deps

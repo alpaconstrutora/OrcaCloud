@@ -47,7 +47,8 @@ describe('envelope vertical', () => {
     expect(p2.motivoDoGabarito).toMatch(/topo a 9,00 m > gabarito 8,00 m/);
     // Cabe? O térreo desenhado invade o recuo de frente (y = 2000 < 5000): não cabe, com a área fora.
     expect(p0.cabe).toBe(false);
-    expect(p0.areaForaMm2).toBe(12000 * 3000);
+    // Pela FACE EXTERNA (P2.8): o contorno de eixo cresce a meia espessura (100 mm) — 12,2 × 3,1 m fora do recuo.
+    expect(p0.areaForaMm2).toBe(12200 * 3100);
     expect(p0.areaConstruidaMm2).toBe(12200 * 20200);
     // Pavimentos sem parede cabem por definição.
     expect(p1.cabe).toBe(true);

@@ -1289,7 +1289,7 @@ describe('BlueprintEditor · quantitativos', () => {
     const tabela = await within(drawer).findByTestId('envelope-por-pavimento');
     expect(tabela).toHaveTextContent(/máx. 800,00 m² e 2\.400 m³ dentro do gabarito/); // 2 × (20 × 20 m) × 3 m
     const linhas = within(tabela).getAllByRole('row').map((r) => (r.textContent ?? '').replace(/\s+/g, ' '));
-    expect(linhas.some((l) => /Térreo.*400,00 m².*246,44 m².*48,00 m² fora/.test(l))).toBe(true); // 12,2 × 20,2 construídos; 12 × 4 m de eixo fora
+    expect(linhas.some((l) => /Térreo.*400,00 m².*246,44 m².*50,02 m² fora/.test(l))).toBe(true); // 12,2 × 20,2 construídos; pela FACE (P2.8): 12,2 × 4,1 m fora
     expect(linhas.some((l) => /1º.*400,00 m².*—.*vazio/.test(l))).toBe(true);
     await user.click(within(drawer).getByRole('button', { name: /^fechar$/i }));
     // Legislação: "Pavimento dentro do envelope edificável" violada no térreo.

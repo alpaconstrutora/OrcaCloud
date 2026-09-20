@@ -197,7 +197,7 @@ export function abasDoQuantitativo(
     abas.push({
       nome: 'Ambientes',
       linhas: [
-        ['Ambiente', 'Área de piso (m²)', 'Área de eixo (m²)', 'Piso c/ perda (m²)', 'Perímetro (m)', 'Rodapé (m)', 'Área de rodapé (m²)', 'Fórmula da área de piso'],
+        ['Ambiente', 'Área de piso (m²)', 'Área de eixo (m²)', 'Piso c/ perda (m²)', 'Perímetro (m)', 'Rodapé (m)', 'Área de rodapé (m²)', 'Pé-direito útil (m)', 'Volume (m³)', 'Fórmula da área de piso'],
         ...quant.ambientes.map((a, i) => [
           a.nome ?? `Ambiente ${i + 1}`,
           n2(a.areaPisoM2),
@@ -206,6 +206,8 @@ export function abasDoQuantitativo(
           n2(a.perimetroEixoM),
           n2(a.comprimentoRodapeM),
           n2(a.areaRodapeM2),
+          n2(a.peDireitoM ?? 0),
+          n2(a.volumeM3 ?? 0),
           a.formulaAreaPiso,
         ]),
       ],

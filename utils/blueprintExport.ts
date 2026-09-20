@@ -24,7 +24,8 @@
  * os dois a carregar condicional do outro.
  */
 
-import type { BlueprintModel, Point, Wall } from './blueprintKernel';
+import type { Anotacao, BlueprintModel, Point, Wall } from './blueprintKernel';
+import { cotaAngularDesenhada, linhasDaHachura, pontaDaSeta, COR_PADRAO_DA_ANOTACAO } from './blueprintAnotacoes';
 import { contornoEmPlanta, extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
 import type { ProjecaoElevacao } from './blueprintElevation';
 import type { ProjecaoCorte } from './blueprintCorte';
@@ -245,6 +246,11 @@ export class DesenhistaDeProva implements Desenhista {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface OpcoesExportacao {
+  /**
+   * ANOTAÇÕES (E8.1) do modelo, para as folhas que não recebem o modelo
+   * (elevação e corte). A planta lê do próprio modelo.
+   */
+  anotacoes?: Anotacao[];
   denominador: number;
   papel: Papel;
   /** Nome da planta, para o carimbo. */
@@ -472,7 +478,78 @@ export function desenharPlanta(
 
   if (opcoes.cotas) desenharCotas(d, model, opcoes, enq, px, py);
 
+  // ANOTAÇÕES (E8.1) da planta, por cima de tudo — a última camada, como na tela.
+  desenharAnotacoes(d, (model.anotacoes ?? []).filter((a) => a.vista.tipo === 'PLANTA'), opcoes.denominador, px, py);
+
   desenharCarimbo(d, opcoes, enq);
+}
+
+/**
+ * As anotações de UMA vista, em mm de papel. `px`/`py` são a transformação da
+ * vista (planta: x/y do modelo; corte/elevação: u/v). A geometria é a de
+ * `blueprintAnotacoes.ts` — a mesma da tela e do DXF. A altura do texto vem do
+ * modelo dividida pela escala, nunca abaixo de 1,5 mm (legível).
+ */
+export function desenharAnotacoes(
+  d: Desenhista,
+  anotacoes: readonly Anotacao[],
+  denominador: number,
+  px: (x: number) => number,
+  py: (y: number) => number,
+): void {
+  for (const a of anotacoes) {
+    const cor = a.cor || COR_PADRAO_DA_ANOTACAO;
+    const alturaPapel = Math.max(1.5, a.alturaMm / denominador);
+    const estilo: EstiloTraco = { espessuraMm: 0.25, cor };
+    const P = (p: Point) => ({ x: px(p.x), y: py(p.y) });
+    const linha = (p: Point, q: Point) => {
+      const tp = P(p);
+      const tq = P(q);
+      d.linha(tp.x, tp.y, tq.x, tq.y, estilo);
+    };
+    switch (a.tipo) {
+      case 'TEXTO': {
+        const t = P(a.pontos[0]);
+        (a.texto ?? '').split('\n').forEach((l, i) => d.texto(t.x, t.y + i * alturaPapel * 1.25, l, alturaPapel, cor));
+        break;
+      }
+      case 'LEADER': {
+        for (let i = 1; i < a.pontos.length; i++) linha(a.pontos[i - 1], a.pontos[i]);
+        const [w1, w2] = pontaDaSeta(a.pontos[1], a.pontos[0], a.alturaMm);
+        d.poligono([P(a.pontos[0]), P(w1), P(w2)], cor);
+        const fim = P(a.pontos[a.pontos.length - 1]);
+        (a.texto ?? '').split('\n').forEach((l, i) => d.texto(fim.x + 1, fim.y - 0.5 + i * alturaPapel * 1.25, l, alturaPapel, cor));
+        break;
+      }
+      case 'LINHA':
+        for (let i = 1; i < a.pontos.length; i++) linha(a.pontos[i - 1], a.pontos[i]);
+        break;
+      case 'HACHURA': {
+        for (let i = 0; i < a.pontos.length; i++) linha(a.pontos[i], a.pontos[(i + 1) % a.pontos.length]);
+        if (a.hachura === 'SOLIDA') d.poligono(a.pontos.map(P), cor);
+        else for (const [p, q] of linhasDaHachura(a.pontos, a.hachura ?? 'DIAGONAL', a.alturaMm)) linha(p, q);
+        if (a.texto) {
+          const cx = a.pontos.reduce((s, p) => s + p.x, 0) / a.pontos.length;
+          const cy = a.pontos.reduce((s, p) => s + p.y, 0) / a.pontos.length;
+          d.texto(px(cx), py(cy), a.texto, alturaPapel, cor);
+        }
+        break;
+      }
+      case 'COTA_ANGULAR': {
+        linha(a.pontos[0], a.pontos[1]);
+        linha(a.pontos[0], a.pontos[2]);
+        const c = cotaAngularDesenhada(a);
+        if (c) {
+          for (let i = 1; i < c.arco.length; i++) linha(c.arco[i - 1], c.arco[i]);
+          const r = P(c.posicaoDoRotulo);
+          d.texto(r.x, r.y, c.rotulo, alturaPapel, cor);
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
 }
 
 /**
@@ -750,6 +827,12 @@ export function desenharElevacao(
       }
     }
   }
+
+  // ANOTAÇÕES (E8.1) desta vista: as do corte (por id) ou da elevação (por direção).
+  const daVista = (opcoes.anotacoes ?? []).filter((a) =>
+    'corteId' in projecao ? a.vista.tipo === 'CORTE' && a.vista.corteId === projecao.corteId : a.vista.tipo === 'ELEVACAO' && a.vista.direcao === projecao.direcao,
+  );
+  desenharAnotacoes(d, daVista, opcoes.denominador, px, py);
 
   desenharCarimbo(d, opcoes, enq);
 }

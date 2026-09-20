@@ -350,6 +350,8 @@ export function exportarPranchasPdf(
     if (i > 0) doc.addPage([o.papel.larguraMm, o.papel.alturaMm]);
     const oPagina = {
       ...o,
+      // As anotações do corte/elevação viajam nas opções: a folha não recebe o modelo (E8.1).
+      anotacoes: model.anotacoes ?? [],
       eletrica: p === 'eletrica',
       titulo: `${o.titulo} — ${quadroDeCargas ? 'Quadro de cargas' : unifilar ? 'Diagrama unifilar' : rotuloDaPrancha(model, p)}`,
     };
@@ -421,7 +423,7 @@ export function exportarPranchasPng(
     } else {
       const enq = enquadrarElevacao(proj!, o.denominador, o.papel);
       if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
-      desenharElevacao(new DesenhistaCanvas(ctx, dpi), proj!, oArquivo, enq);
+      desenharElevacao(new DesenhistaCanvas(ctx, dpi), proj!, { ...oArquivo, anotacoes: model.anotacoes ?? [] }, enq);
     }
 
     // `corte:abc` no nome do arquivo NAO desce no Windows: dois-pontos e

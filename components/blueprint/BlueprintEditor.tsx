@@ -57,6 +57,11 @@ import {
   Layers,
   Fence,
   BookOpen,
+  Type,
+  MessageSquareText,
+  Slash,
+  Highlighter,
+  TriangleRight,
   Grip,
   Hand,
   Magnet,
@@ -371,6 +376,8 @@ import TelaGerador from './TelaGerador';
 import PainelMobiliario from './PainelMobiliario';
 import PainelAcabamentos, { type AmbienteComAcabamento } from './PainelAcabamentos';
 import PainelGuardaCorpoSelecionado from './PainelGuardaCorpoSelecionado';
+import PainelAnotacaoSelecionada from './PainelAnotacaoSelecionada';
+import { resumirAnotacoes } from '../../utils/blueprintAnotacoes';
 import PainelGuardaCorpos from './PainelGuardaCorpos';
 import { HIPOTESES_DE_GUARDA_CORPO_PADRAO, resumirGuardaCorpos, sugerirGuardaCorpos, type HipotesesDeGuardaCorpo } from '../../utils/blueprintGuardaCorpo';
 import { resumirAcabamentos } from '../../utils/blueprintAcabamentos';
@@ -425,6 +432,8 @@ import {
   type TipoDeVaga,
   type TipoDeComponente,
   type TipoDeGuardaCorpo,
+  type TipoDeAnotacao,
+  ROTULO_DO_TIPO_DE_ANOTACAO,
   pontoHidraulicoDoComponente,
   type TipoDeRestricaoDoLote,
   TIPOS_DE_RESTRICAO_DO_LOTE,
@@ -1512,6 +1521,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [tipoDeComponente, setTipoDeComponente] = useState<TipoDeComponente>('CAMA_CASAL');
   /** GUARDA-CORPO (E7.3): o tipo do próximo par de cliques; hipóteses da sugestão lembradas entre sessões. */
   const [tipoDeGuardaCorpo, setTipoDeGuardaCorpo] = useState<TipoDeGuardaCorpo>('GUARDA_CORPO');
+  /** ANOTAÇÃO (E8.1): o tipo do próximo traçado. */
+  const [tipoDeAnotacao, setTipoDeAnotacao] = useState<TipoDeAnotacao>('TEXTO');
   const [hipotesesDeGuardaCorpo, setHipotesesDeGuardaCorpo] = usePersistedState<HipotesesDeGuardaCorpo>('blueprint:guardaCorpos', HIPOTESES_DE_GUARDA_CORPO_PADRAO);
   const [hipotesesDeVagas, setHipotesesDeVagas] = usePersistedState<HipotesesDeVagas>('blueprint:vagas', HIPOTESES_VAGAS_PADRAO);
   const [regiaoDeVagasPedida, setRegiaoDeVagasPedida] = useState<RegiaoDeVagas | null>(null);
@@ -2740,6 +2751,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const vagaSel = (editor.model.vagas ?? []).find((v) => v.id === editor.selectedId) ?? null;
   const componenteSel = (editor.model.componentes ?? []).find((c) => c.id === editor.selectedId) ?? null;
   const guardaCorpoSel = (editor.model.guardaCorpos ?? []).find((g) => g.id === editor.selectedId) ?? null;
+  const anotacaoSel = (editor.model.anotacoes ?? []).find((a) => a.id === editor.selectedId) ?? null;
+  const anotacoesDoNivelAtivo = useMemo(() => (editor.model.anotacoes ?? []).filter((a) => a.vista.tipo === 'PLANTA' && (!levelId || a.vista.levelId === levelId)), [editor.model.anotacoes, levelId]);
+  const resumoDeAnotacoes = useMemo(() => resumirAnotacoes(editor.model), [editor.model]);
   const guardaCorposDoNivelAtivo = useMemo(() => (editor.model.guardaCorpos ?? []).filter((g) => !levelId || g.levelId === levelId), [editor.model.guardaCorpos, levelId]);
   const sugestaoDeGuardaCorpos = useMemo(() => (levelId ? sugerirGuardaCorpos(editor.model, levelId, hipotesesDeGuardaCorpo) : { sugestoes: [], motivos: [], jaExistentes: 0 }), [editor.model, levelId, hipotesesDeGuardaCorpo]);
   const resumoDeGuardaCorpos = useMemo(() => resumirGuardaCorpos(editor.model, levelId), [editor.model, levelId]);
@@ -4772,6 +4786,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     if (criados.length > 0) selecionar(criados);
   }
 
+  /** A anotação nasce na PLANTA do pavimento ativo; o painel edita texto, altura, traço, hachura. */
+  function adicionarAnotacao(tipo: TipoDeAnotacao, pontos: Point[]) {
+    if (!levelId) return;
+    const criados = editor.run({ type: 'AddAnotacao', vista: { tipo: 'PLANTA', levelId }, tipo, pontos });
+    if (criados.length > 0) selecionar(criados);
+  }
   /** O guarda-corpo/corrimão nasce de dois cliques, com a altura padrão do tipo; o painel ajusta. */
   function adicionarGuardaCorpo(a: Point, b: Point) {
     if (!levelId) return;
@@ -5234,6 +5254,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     const vagas = ids.filter((id) => (editor.model.vagas ?? []).some((v) => v.id === id));
     const componentesSel = ids.filter((id) => (editor.model.componentes ?? []).some((c) => c.id === id));
     const guardaCorposSel = ids.filter((id) => (editor.model.guardaCorpos ?? []).some((g) => g.id === id));
+    const anotacoesSel = ids.filter((id) => (editor.model.anotacoes ?? []).some((a) => a.id === id));
     // Instalações. ⚠️ O QUADRO sai por último no lote e leva os circuitos dele
     // junto (ver `DeleteQuadro`); os pontos que os citavam ficam sem circuito,
     // e não apagados — quem tirou o quadro não decidiu tirar as tomadas.
@@ -5259,6 +5280,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       ...vagas.map((vagaId) => ({ type: 'DeleteVaga', vagaId }) as const),
       ...componentesSel.map((componenteId) => ({ type: 'DeleteComponente', componenteId }) as const),
       ...guardaCorposSel.map((guardaCorpoId) => ({ type: 'DeleteGuardaCorpo', guardaCorpoId }) as const),
+      ...anotacoesSel.map((anotacaoId) => ({ type: 'DeleteAnotacao', anotacaoId }) as const),
       ...trechos.map((trechoId) => ({ type: 'DeleteTrecho', trechoId }) as const),
       ...terminais.map((terminalId) => ({ type: 'DeleteTerminal', terminalId }) as const),
       ...quadros.map((quadroId) => ({ type: 'DeleteQuadro', quadroId }) as const),
@@ -6605,6 +6627,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         }
       />
 
+      <PainelAnotacaoSelecionada
+        anotacao={anotacaoSel}
+        onProps={(campos) => anotacaoSel && editor.run({ type: 'SetAnotacaoProps', anotacaoId: anotacaoSel.id, ...campos })}
+        onExcluir={removerSelecionada}
+      />
       <PainelGuardaCorpoSelecionado
         guardaCorpo={guardaCorpoSel}
         onProps={(campos) => guardaCorpoSel && editor.run({ type: 'SetGuardaCorpoProps', guardaCorpoId: guardaCorpoSel.id, ...campos })}
@@ -7932,6 +7959,35 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
 
         {aba === 'inserir' && (
           <>
+          {/* ANOTAÇÕES (19/09/2026, E8.1): o que se escreve sobre a vista — texto,
+              texto com seta, linha, região hachurada, cota angular. Vão para o
+              PDF e o DXF; não são construção. Cada botão arma a ferramenta com
+              o tipo; clicar de novo desarma. */}
+          <GrupoDoRibbon rotulo="Anotações">
+            {([
+              ['TEXTO', Type, '1 clique: o texto entra no ponto; edite no painel'],
+              ['LEADER', MessageSquareText, '2 cliques: a ponta da seta e onde o texto fica'],
+              ['LINHA', Slash, 'Cliques ao longo da linha; duplo clique encerra'],
+              ['HACHURA', Highlighter, 'Cliques no contorno da região; duplo clique fecha (diagonal, cruzada, pontos ou sólida)'],
+              ['COTA_ANGULAR', TriangleRight, '3 cliques: o vértice e as duas pontas — o ângulo é derivado'],
+            ] as const).map(([tipo, Icone, ajuda]) => (
+              <BotaoDoRibbon
+                key={tipo}
+                icone={Icone}
+                rotulo={ROTULO_DO_TIPO_DE_ANOTACAO[tipo]}
+                contagem={resumoDeAnotacoes.porTipo[tipo] || undefined}
+                ativo={editor.tool === 'anotacao' && tipoDeAnotacao === tipo}
+                onClick={() => {
+                  if (editor.tool === 'anotacao' && tipoDeAnotacao === tipo) editor.setTool('selecionar');
+                  else {
+                    setTipoDeAnotacao(tipo);
+                    editor.setTool('anotacao');
+                  }
+                }}
+                ajuda={`${ROTULO_DO_TIPO_DE_ANOTACAO[tipo]} na planta do pavimento ativo — ${ajuda}. Sai no PDF e no DXF.`}
+              />
+            ))}
+          </GrupoDoRibbon>
           <GrupoDoRibbon rotulo="Referência">
             <ControlesDeFundo
               linhas={fundo.linhas}
@@ -9395,6 +9451,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onAddComponente={adicionarComponente}
               tipoDeGuardaCorpo={tipoDeGuardaCorpo}
               onAddGuardaCorpo={adicionarGuardaCorpo}
+              anotacoes={anotacoesDoNivelAtivo}
+              tipoDeAnotacao={tipoDeAnotacao}
+              onAddAnotacao={adicionarAnotacao}
               onAddTrecho={adicionarTrecho}
               redeEmUmClique={prumadaDeRede != null}
               onAddTerminal={adicionarTerminal}

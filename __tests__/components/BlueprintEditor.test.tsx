@@ -2005,6 +2005,39 @@ describe('BlueprintEditor · quantitativos', () => {
     useStore.setState({ organizations: orgsAntes });
   }, 60000);
 
+  it('anotações (E8.1): os botões de Inserir contam por tipo (planta e corte), armam a ferramenta e desarmam no segundo clique', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = m.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    m = k.applyBatch(m, [w(0, 0, 4000, 0), w(4000, 0, 4000, 3000), w(4000, 3000, 0, 3000), w(0, 3000, 0, 0)]).model;
+    m = k.applyCommand(m, { type: 'AddCorte', a: k.point(-500, 1500), b: k.point(4500, 1500), lado: 'ESQUERDA', rotulo: 'AA' } as never).model;
+    m = k.applyBatch(m, [
+      { type: 'AddAnotacao', vista: { tipo: 'PLANTA', levelId: t }, tipo: 'TEXTO', pontos: [k.point(500, 500)], texto: 'Sala' },
+      { type: 'AddAnotacao', vista: { tipo: 'PLANTA', levelId: t }, tipo: 'COTA_ANGULAR', pontos: [k.point(0, 0), k.point(4000, 0), k.point(0, 3000)] },
+      { type: 'AddAnotacao', vista: { tipo: 'PLANTA', levelId: t }, tipo: 'HACHURA', pontos: [k.point(1000, 1000), k.point(2000, 1000), k.point(2000, 2000)], texto: 'demolir' },
+      { type: 'AddAnotacao', vista: { tipo: 'CORTE', corteId: m.sections[0].id }, tipo: 'TEXTO', pontos: [k.point(0, 0)], texto: 'no corte' },
+    ]).model;
+    const [texto, cota, hachura] = m.anotacoes;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    // Inserir › Anotações: cada botão conta as suas (só as da planta contam no total do modelo — o corte também conta: é TEXTO).
+    await abrirAba(/^inserir$/i);
+    const botao = (nome: RegExp) => screen.getAllByRole('button', { name: nome }).find((b) => b.getAttribute('title')?.includes('Sai no PDF e no DXF'))!;
+    await waitFor(() => expect(botao(/^texto/i)).toHaveTextContent('2'));
+    expect(botao(/^cota angular/i)).toHaveTextContent('1');
+    expect(botao(/^região hachurada/i)).toHaveTextContent('1');
+    expect(botao(/^linha/i)).not.toHaveTextContent(/\d/);
+    // Armar a ferramenta: o botão fica ativo; clicar de novo desarma.
+    await user.click(botao(/^texto com seta/i));
+    expect(botao(/^texto com seta/i)).toHaveAttribute('aria-pressed', 'true');
+    await user.click(botao(/^texto com seta/i));
+    expect(botao(/^texto com seta/i)).toHaveAttribute('aria-pressed', 'false');
+    // A seleção pelo canvas e o painel são cobertos em `blueprintAnotacaoCanvas.test.tsx` e `PainelAnotacaoSelecionada.test.tsx` (jsdom não posiciona o canvas do editor).
+    expect(texto.id && cota.id && hachura.id).toBeTruthy();
+  }, 60000);
+
   it('Por ambiente (E0.2): pé-direito do pavimento e volume = piso × pé-direito', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2500 });

@@ -1558,6 +1558,94 @@ export interface GuardaCorpo {
   sugerido?: boolean | null;
 }
 
+/**
+ * ANOTAÇÃO (19/09/2026, roadmap E8.1): o que o desenhista escreve SOBRE a
+ * vista — texto, texto com seta (leader), linha de chamada, região hachurada,
+ * cota angular. Não é construção: não entra em ambiente, quantitativo,
+ * orçamento nem IFC. Entra no PDF e no DXF, porque prancha sem anotação não é
+ * prancha.
+ *
+ * ─── POR VISTA ──────────────────────────────────────────────────────────────
+ *
+ * A anotação pertence a UMA vista: a planta de um pavimento, um corte ou uma
+ * elevação. Na planta os pontos são (x, y) do modelo; no corte e na elevação
+ * são (u, v) do plano da vista, em mm — o mesmo referencial que a projeção
+ * usa. É por isso que `vista` está no payload e não é derivada: "esta nota
+ * fica no corte AA" é decisão do desenhista.
+ *
+ * A COTA ANGULAR é a única que mede: vértice em `pontos[0]`, as duas pontas em
+ * `pontos[1]` e `pontos[2]`, o ângulo DERIVADO (`anguloDaCota`) — nunca digitado,
+ * porque cota digitada mente quando a parede move.
+ *
+ * `alturaMm` é a altura do texto em mm do MODELO (não do papel): a nota escala
+ * com o desenho, como no CAD; a exportação divide pela escala.
+ */
+export type TipoDeAnotacao = 'TEXTO' | 'LEADER' | 'LINHA' | 'HACHURA' | 'COTA_ANGULAR';
+export const TIPOS_DE_ANOTACAO: readonly TipoDeAnotacao[] = ['TEXTO', 'LEADER', 'LINHA', 'HACHURA', 'COTA_ANGULAR'];
+export const ROTULO_DO_TIPO_DE_ANOTACAO: Record<TipoDeAnotacao, string> = { TEXTO: 'Texto', LEADER: 'Texto com seta', LINHA: 'Linha', HACHURA: 'Região hachurada', COTA_ANGULAR: 'Cota angular' };
+/** Quantos pontos cada tipo exige (mínimo). */
+export const PONTOS_MINIMOS_DA_ANOTACAO: Record<TipoDeAnotacao, number> = { TEXTO: 1, LEADER: 2, LINHA: 2, HACHURA: 3, COTA_ANGULAR: 3 };
+export type TracoDaAnotacao = 'CONTINUO' | 'TRACEJADO' | 'PONTILHADO';
+export const TRACOS_DA_ANOTACAO: readonly TracoDaAnotacao[] = ['CONTINUO', 'TRACEJADO', 'PONTILHADO'];
+export type PadraoDeHachura = 'DIAGONAL' | 'CRUZADA' | 'PONTOS' | 'SOLIDA';
+export const PADROES_DE_HACHURA: readonly PadraoDeHachura[] = ['DIAGONAL', 'CRUZADA', 'PONTOS', 'SOLIDA'];
+export type VistaDaAnotacao =
+  | { tipo: 'PLANTA'; levelId: ObjectId }
+  | { tipo: 'CORTE'; corteId: ObjectId }
+  | { tipo: 'ELEVACAO'; direcao: BoundaryPapel };
+export const MAX_TEXTO_DE_ANOTACAO = 500;
+export const ALTURA_PADRAO_DO_TEXTO_MM = 250;
+
+export interface Anotacao {
+  id: ObjectId;
+  uid: ElementUid;
+  parametros?: Parametros;
+  vista: VistaDaAnotacao;
+  tipo: TipoDeAnotacao;
+  /** Planta: (x, y) do modelo; corte/elevação: (u, v) da vista. Inteiros. */
+  pontos: Point[];
+  /** Obrigatório em TEXTO e LEADER; rótulo opcional na HACHURA; ignorado nos demais. */
+  texto: string | null;
+  /** Altura do texto em mm do modelo. */
+  alturaMm: number;
+  traco: TracoDaAnotacao;
+  /** Só na HACHURA. */
+  hachura: PadraoDeHachura | null;
+  /** Giro do TEXTO em graus inteiros [0, 360). */
+  rotacaoGraus: number;
+  /** `#rrggbb` ou null (a cor padrão da anotação). */
+  cor: string | null;
+}
+
+export function findAnotacao(model: BlueprintModel, id: ObjectId): Anotacao {
+  const a = (model.anotacoes ?? []).find((x) => x.id === id);
+  if (!a) throw new KernelError('ANNOTATION_NOT_FOUND', `Anotação inexistente: ${id}`);
+  return a;
+}
+
+/** O ângulo da COTA ANGULAR em graus [0, 180], ou `null` fora dela / com ponta no vértice. */
+export function anguloDaCota(a: Pick<Anotacao, 'tipo' | 'pontos'>): number | null {
+  if (a.tipo !== 'COTA_ANGULAR' || a.pontos.length < 3) return null;
+  const [v, p, q] = a.pontos;
+  const ax = p.x - v.x;
+  const ay = p.y - v.y;
+  const bx = q.x - v.x;
+  const by = q.y - v.y;
+  const la = Math.hypot(ax, ay);
+  const lb = Math.hypot(bx, by);
+  if (la === 0 || lb === 0) return null;
+  const cos = Math.max(-1, Math.min(1, (ax * bx + ay * by) / (la * lb)));
+  return (Math.acos(cos) * 180) / Math.PI;
+}
+
+/** Duas vistas são a mesma? */
+export function mesmaVista(a: VistaDaAnotacao, b: VistaDaAnotacao): boolean {
+  if (a.tipo !== b.tipo) return false;
+  if (a.tipo === 'PLANTA') return a.levelId === (b as { levelId: ObjectId }).levelId;
+  if (a.tipo === 'CORTE') return a.corteId === (b as { corteId: ObjectId }).corteId;
+  return a.direcao === (b as { direcao: BoundaryPapel }).direcao;
+}
+
 export function comprimentoDoGuardaCorpo(g: Pick<GuardaCorpo, 'pontos'>): number {
   let s = 0;
   for (let i = 1; i < g.pontos.length; i++) s += Math.hypot(g.pontos[i].x - g.pontos[i - 1].x, g.pontos[i].y - g.pontos[i - 1].y);
@@ -2167,6 +2255,8 @@ export interface BlueprintModel {
   componentes: Componente[];
   /** Guarda-corpos e corrimãos. Ver `GuardaCorpo`. */
   guardaCorpos: GuardaCorpo[];
+  /** Anotações por vista (texto, leader, linha, hachura, cota angular). Ver `Anotacao`. */
+  anotacoes: Anotacao[];
   /**
    * Escadas e rampas. Como a estrutura e o telhado, NÃO participam do arranjo
    * planar: uma escada dentro da sala não parte o ambiente. O que ela faz ao
@@ -2283,6 +2373,7 @@ export function emptyModel(): BlueprintModel {
     vagas: [],
     componentes: [],
     guardaCorpos: [],
+    anotacoes: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -2348,6 +2439,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     vagas: (model.vagas ?? []).map((v) => ({ ...v, at: { ...v.at }, ...(v.parametros ? { parametros: { ...v.parametros } } : {}) })),
     componentes: (model.componentes ?? []).map((c) => ({ ...c, at: { ...c.at }, ...(c.parametros ? { parametros: { ...c.parametros } } : {}) })),
     guardaCorpos: (model.guardaCorpos ?? []).map((g) => ({ ...g, pontos: g.pontos.map((p) => ({ ...p })), ...(g.parametros ? { parametros: { ...g.parametros } } : {}) })),
+    anotacoes: (model.anotacoes ?? []).map((a) => ({ ...a, vista: { ...a.vista }, pontos: a.pontos.map((p) => ({ ...p })), ...(a.parametros ? { parametros: { ...a.parametros } } : {}) })),
     grupos: (model.grupos ?? []).map((g) => ({
       ...g,
       pivo: { ...g.pivo },
@@ -3493,6 +3585,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Vaga', model.vagas ?? []],
     ['Componente', model.componentes ?? []],
     ['Guarda-corpo', model.guardaCorpos ?? []],
+    ['Anotação', model.anotacoes ?? []],
     ['Trecho', model.trechos ?? []],
     ['Terminal', model.terminais ?? []],
     ['Quadro', model.quadros ?? []],
@@ -4030,6 +4123,29 @@ export function assertModelInvariants(model: BlueprintModel): void {
     }
     if (!Number.isInteger(c.rotacaoGraus) || c.rotacaoGraus < 0 || c.rotacaoGraus >= 360) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: giro tem de ser inteiro em [0, 360)`);
     if (c.rotulo != null && (typeof c.rotulo !== 'string' || c.rotulo.length > MAX_ROTULO_DE_COMPONENTE)) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: rótulo maior que ${MAX_ROTULO_DE_COMPONENTE} caracteres`);
+  }
+
+  // Anotações (E8.1): vista existente (pavimento / corte / direção), tipo e traço da lista, pontos mínimos e inteiros, texto onde é obrigatório, hachura só na hachura.
+  for (const a of model.anotacoes ?? []) {
+    if (!TIPOS_DE_ANOTACAO.includes(a.tipo)) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: tipo desconhecido ${String(a.tipo)}`);
+    const vista = a.vista as { tipo: string; levelId?: ObjectId; corteId?: ObjectId; direcao?: string };
+    if (vista.tipo === 'PLANTA' && !model.levels.some((l) => l.id === vista.levelId)) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: pavimento inexistente`);
+    else if (vista.tipo === 'CORTE' && !(model.sections ?? []).some((c) => c.id === vista.corteId)) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: corte inexistente`);
+    else if (vista.tipo === 'ELEVACAO' && !['FRENTE', 'FUNDOS', 'LATERAL_DIREITA', 'LATERAL_ESQUERDA'].includes(vista.direcao ?? '')) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: elevação desconhecida`);
+    else if (!['PLANTA', 'CORTE', 'ELEVACAO'].includes(vista.tipo)) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: vista desconhecida`);
+    if (!Array.isArray(a.pontos) || a.pontos.length < PONTOS_MINIMOS_DA_ANOTACAO[a.tipo]) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: ${ROTULO_DO_TIPO_DE_ANOTACAO[a.tipo]} pede ${PONTOS_MINIMOS_DA_ANOTACAO[a.tipo]} ponto(s)`);
+    for (const [i, p] of a.pontos.entries()) {
+      assertIntegerMm(p.x, `${a.id}.pontos[${i}].x`);
+      assertIntegerMm(p.y, `${a.id}.pontos[${i}].y`);
+    }
+    if ((a.tipo === 'TEXTO' || a.tipo === 'LEADER') && !(typeof a.texto === 'string' && a.texto.trim().length > 0)) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: ${ROTULO_DO_TIPO_DE_ANOTACAO[a.tipo]} sem texto`);
+    if (a.texto != null && (typeof a.texto !== 'string' || a.texto.length > MAX_TEXTO_DE_ANOTACAO)) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: texto maior que ${MAX_TEXTO_DE_ANOTACAO} caracteres`);
+    if (!Number.isInteger(a.alturaMm) || a.alturaMm <= 0) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: altura do texto tem de ser inteira e positiva`);
+    if (!TRACOS_DA_ANOTACAO.includes(a.traco)) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: traço desconhecido ${String(a.traco)}`);
+    if (a.hachura != null && (a.tipo !== 'HACHURA' || !PADROES_DE_HACHURA.includes(a.hachura))) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: padrão de hachura só na região hachurada e da lista`);
+    if (a.tipo === 'HACHURA' && a.hachura == null) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: região hachurada sem padrão`);
+    if (!Number.isInteger(a.rotacaoGraus) || a.rotacaoGraus < 0 || a.rotacaoGraus >= 360) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: giro tem de ser inteiro em [0, 360)`);
+    if (a.cor != null && !/^#[0-9a-fA-F]{6}$/.test(a.cor)) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: cor tem de ser #rrggbb`);
   }
 
   // Guarda-corpos (E7.3): pavimento existente, tipo e material da lista, ≥ 2 vértices inteiros sem trecho nulo, altura inteira positiva, rótulo curto.

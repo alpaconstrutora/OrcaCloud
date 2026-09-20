@@ -31,7 +31,7 @@
  * O eixo vai junto, em camada própria: é dele que se reeditam as paredes.
  */
 
-import {
+import { type Anotacao,
   planoDaAgua,
   type Agua,
   FORMA_ESTRUTURAL,
@@ -44,6 +44,7 @@ import {
   type Wall,
 } from './blueprintKernel';
 import { AFASTAMENTO_COTA, AVISO_COTA_POR_FACE, cadeiasDoModelo, pontoDaCota } from './blueprintCotas';
+import { cotaAngularDesenhada, linhasDaHachura, pontaDaSeta } from './blueprintAnotacoes';
 import type { ProjecaoElevacao } from './blueprintElevation';
 import type { ProjecaoCorte } from './blueprintCorte';
 import { contornoDaEscada, degrausDaEscada } from './blueprintKernel';
@@ -98,6 +99,8 @@ export const CAMADAS = {
   PAREDES_CAMADAS: 'PLANTA-PAREDES-CAMADAS',
   ELEV_PAREDES: 'ELEVACAO-PAREDES',
   ELEV_ABERTURAS: 'ELEVACAO-ABERTURAS',
+  /** ANOTAÇÕES (E8.1): texto, leader, linha, hachura e cota angular — planta e vistas, mesma camada. */
+  ANOTACOES: 'PLANTA-ANOTACOES',
   ELEV_SOLO: 'ELEVACAO-SOLO',
   ELEV_ESTRUTURA: 'ELEVACAO-ESTRUTURA',
   ELEV_TELHADO: 'ELEVACAO-TELHADO',
@@ -150,6 +153,7 @@ const COR_CAMADA: Record<string, number> = {
   [CAMADAS.ABERTURAS]: 5, // azul
   [CAMADAS.TEXTO]: 2, // amarelo
   [CAMADAS.COTAS]: 8, // cinza
+  [CAMADAS.ANOTACOES]: 30, // laranja
   [CAMADAS.ESTRUTURA]: 6, // magenta — concreto, distinto do preto da alvenaria
   [CAMADAS.FUNDACAO]: 4, // ciano
   [CAMADAS.PAREDES_CAMADAS]: 8, // cinza — juntas internas, subordinadas ao contorno
@@ -527,6 +531,62 @@ export function gerarDxfDaTopografia(
  * acrescenta o que o plano atravessa. Uma segunda função divergiria da primeira
  * na primeira correção de camada.
  */
+/**
+ * ANOTAÇÕES (E8.1) como entidades DXF: TEXT, LINE, POLYLINE fechada + linhas
+ * da hachura, e a cota angular como as duas retas + o arco em POLYLINE aberta
+ * + TEXT do ângulo. `P` leva o ponto da vista ao mm do arquivo. A geometria é
+ * a de `blueprintAnotacoes.ts` — a mesma da tela e do PDF.
+ */
+function entidadesDeAnotacoes(anotacoes: readonly Anotacao[], P: (p: Ponto) => Ponto): string {
+  let saida = '';
+  for (const a of anotacoes) {
+    const alt = a.alturaMm;
+    switch (a.tipo) {
+      case 'TEXTO':
+        (a.texto ?? '').split('\n').forEach((l, i) => {
+          saida += texto(CAMADAS.ANOTACOES, P({ x: a.pontos[0].x, y: a.pontos[0].y - i * alt * 1.25 }), l, alt);
+        });
+        break;
+      case 'LEADER': {
+        for (let i = 1; i < a.pontos.length; i++) saida += linha(CAMADAS.ANOTACOES, P(a.pontos[i - 1]), P(a.pontos[i]));
+        const [w1, w2] = pontaDaSeta(a.pontos[1], a.pontos[0], alt);
+        saida += polilinha(CAMADAS.ANOTACOES, [P(a.pontos[0]), P(w1), P(w2)]);
+        const fim = a.pontos[a.pontos.length - 1];
+        (a.texto ?? '').split('\n').forEach((l, i) => {
+          saida += texto(CAMADAS.ANOTACOES, P({ x: fim.x + alt * 0.4, y: fim.y - i * alt * 1.25 }), l, alt);
+        });
+        break;
+      }
+      case 'LINHA':
+        saida += polilinhaAberta(CAMADAS.ANOTACOES, a.pontos.map(P));
+        break;
+      case 'HACHURA': {
+        saida += polilinha(CAMADAS.ANOTACOES, a.pontos.map(P));
+        for (const [p, q] of linhasDaHachura(a.pontos, a.hachura ?? 'DIAGONAL', alt)) saida += linha(CAMADAS.ANOTACOES, P(p), P(q));
+        if (a.texto) {
+          const cx = a.pontos.reduce((s, p) => s + p.x, 0) / a.pontos.length;
+          const cy = a.pontos.reduce((s, p) => s + p.y, 0) / a.pontos.length;
+          saida += texto(CAMADAS.ANOTACOES, P({ x: Math.round(cx), y: Math.round(cy) }), a.texto, alt);
+        }
+        break;
+      }
+      case 'COTA_ANGULAR': {
+        saida += linha(CAMADAS.ANOTACOES, P(a.pontos[0]), P(a.pontos[1]));
+        saida += linha(CAMADAS.ANOTACOES, P(a.pontos[0]), P(a.pontos[2]));
+        const c = cotaAngularDesenhada(a);
+        if (c) {
+          saida += polilinhaAberta(CAMADAS.ANOTACOES, c.arco.map(P));
+          saida += texto(CAMADAS.ANOTACOES, P(c.posicaoDoRotulo), c.rotulo, alt);
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  return saida;
+}
+
 function entidadesDeElevacao(proj: ProjecaoElevacao | ProjecaoCorte, offsetX: number): string {
   const dx = offsetX - proj.bbox.uMin;
   const bv = proj.bbox.vMin;
@@ -785,6 +845,8 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
   }
 
   if (o.cotas) dxf += entidadesDeCota(model);
+  // ANOTAÇÕES (E8.1) da planta, no mm do desenho.
+  dxf += entidadesDeAnotacoes((model.anotacoes ?? []).filter((a) => a.vista.tipo === 'PLANTA'), (p) => ({ x: p.x, y: p.y }));
 
   // A marca sai SEMPRE que houver corte desenhado, mesmo que a vista do
   // corte não tenha sido pedida: ela é informação da planta, e uma planta
@@ -811,6 +873,13 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
       Math.max(...o.elevacoes.map((p) => p.bbox.uMax - p.bbox.uMin), 1) + 3000;
     for (const proj of o.elevacoes) {
       dxf += entidadesDeElevacao(proj, offsetX);
+      // As anotações desta vista (E8.1), no mesmo deslocamento do bloco.
+      const daVista = (model.anotacoes ?? []).filter((a) =>
+        'corteId' in proj ? a.vista.tipo === 'CORTE' && a.vista.corteId === proj.corteId : a.vista.tipo === 'ELEVACAO' && a.vista.direcao === proj.direcao,
+      );
+      const dxV = offsetX - proj.bbox.uMin;
+      const bv = proj.bbox.vMin;
+      dxf += entidadesDeAnotacoes(daVista, (p) => ({ x: p.x + dxV, y: p.y - bv }));
       offsetX += passo;
     }
   }

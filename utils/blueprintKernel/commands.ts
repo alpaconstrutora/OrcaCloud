@@ -68,6 +68,14 @@ import {
   type TipoDeVaga,
   findComponente,
   findGuardaCorpo,
+  findAnotacao,
+  PONTOS_MINIMOS_DA_ANOTACAO,
+  ALTURA_PADRAO_DO_TEXTO_MM,
+  MAX_TEXTO_DE_ANOTACAO,
+  type TipoDeAnotacao,
+  type VistaDaAnotacao,
+  type TracoDaAnotacao,
+  type PadraoDeHachura,
   ALTURA_PADRAO_DO_GUARDA_CORPO_MM,
   MAX_ROTULO_DE_GUARDA_CORPO,
   type TipoDeGuardaCorpo,
@@ -443,6 +451,15 @@ export type Command =
   | { type: 'SetGuardaCorpoProps'; guardaCorpoId: ObjectId; tipo?: TipoDeGuardaCorpo; pontos?: Point[]; alturaMm?: number; material?: MaterialDeGuardaCorpo; itemCode?: string; descricao?: string; rotulo?: string | null; sugerido?: boolean | null }
   | { type: 'MoveGuardaCorpo'; guardaCorpoId: ObjectId; dx: number; dy: number }
   | { type: 'DeleteGuardaCorpo'; guardaCorpoId: ObjectId }
+  /**
+   * ANOTAÇÃO (E8.1). Texto omitido em TEXTO/LEADER = "Texto"; altura omitida =
+   * 250 mm do modelo; hachura omitida na HACHURA = DIAGONAL. `MoveAnotacao`
+   * desloca todos os pontos; um vértice só vai por `SetAnotacaoProps.pontos`.
+   */
+  | { type: 'AddAnotacao'; vista: VistaDaAnotacao; tipo: TipoDeAnotacao; pontos: Point[]; texto?: string | null; alturaMm?: number; traco?: TracoDaAnotacao; hachura?: PadraoDeHachura | null; rotacaoGraus?: number; cor?: string | null }
+  | { type: 'SetAnotacaoProps'; anotacaoId: ObjectId; pontos?: Point[]; texto?: string | null; alturaMm?: number; traco?: TracoDaAnotacao; hachura?: PadraoDeHachura | null; rotacaoGraus?: number; cor?: string | null }
+  | { type: 'MoveAnotacao'; anotacaoId: ObjectId; dx: number; dy: number }
+  | { type: 'DeleteAnotacao'; anotacaoId: ObjectId }
   /**
    * Um TRECHO de instalação — ver o cabeçalho de `Trecho` em `model.ts`.
    *
@@ -1606,7 +1623,10 @@ function aplicarSemHash(
     case 'DeleteCorte': {
       const corte = findCorte(next, command.corteId);
       next.sections = (next.sections ?? []).filter((c) => c.id !== corte.id);
-      diff.deleted.push(corte.id);
+      // As anotações DO corte vão junto: sem o plano, não há onde desenhá-las (E8.1).
+      const anotacoesDoCorte = (next.anotacoes ?? []).filter((a) => a.vista.tipo === 'CORTE' && a.vista.corteId === corte.id);
+      next.anotacoes = (next.anotacoes ?? []).filter((a) => !(a.vista.tipo === 'CORTE' && a.vista.corteId === corte.id));
+      diff.deleted.push(corte.id, ...anotacoesDoCorte.map((a) => a.id));
       break;
     }
 
@@ -2008,6 +2028,64 @@ function aplicarSemHash(
       const g = findGuardaCorpo(next, command.guardaCorpoId);
       next.guardaCorpos = (next.guardaCorpos ?? []).filter((x) => x.id !== g.id);
       diff.deleted.push(g.id);
+      break;
+    }
+
+    // ── Anotações (E8.1) ────────────────────────────────────────────────────
+
+    case 'AddAnotacao': {
+      const id = nextId(next, 'ant');
+      const precisaTexto = command.tipo === 'TEXTO' || command.tipo === 'LEADER';
+      const texto = command.texto?.trim().slice(0, MAX_TEXTO_DE_ANOTACAO) || (precisaTexto ? 'Texto' : null);
+      next.anotacoes = [
+        ...(next.anotacoes ?? []),
+        {
+          id,
+          uid: novoUid(),
+          vista: { ...command.vista },
+          tipo: command.tipo,
+          pontos: command.pontos.map((p, i) => ({ x: assertIntegerMm(roundToMm(p.x), `pontos[${i}].x`), y: assertIntegerMm(roundToMm(p.y), `pontos[${i}].y`) })),
+          texto: command.tipo === 'TEXTO' || command.tipo === 'LEADER' || command.tipo === 'HACHURA' ? texto : null,
+          alturaMm: assertIntegerMm(roundToMm(command.alturaMm ?? ALTURA_PADRAO_DO_TEXTO_MM), 'alturaMm'),
+          traco: command.traco ?? 'CONTINUO',
+          hachura: command.tipo === 'HACHURA' ? command.hachura ?? 'DIAGONAL' : null,
+          rotacaoGraus: ((Math.round(command.rotacaoGraus ?? 0) % 360) + 360) % 360,
+          cor: command.cor ?? null,
+        },
+      ];
+      if (command.pontos.length < PONTOS_MINIMOS_DA_ANOTACAO[command.tipo]) {
+        throw new KernelError('BAD_ANNOTATION', `${command.tipo} pede ${PONTOS_MINIMOS_DA_ANOTACAO[command.tipo]} ponto(s)`);
+      }
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetAnotacaoProps': {
+      const a = findAnotacao(next, command.anotacaoId);
+      if (command.pontos !== undefined) a.pontos = command.pontos.map((p, i) => ({ x: assertIntegerMm(roundToMm(p.x), `pontos[${i}].x`), y: assertIntegerMm(roundToMm(p.y), `pontos[${i}].y`) }));
+      if (command.texto !== undefined) a.texto = command.texto?.trim().slice(0, MAX_TEXTO_DE_ANOTACAO) || null;
+      if (command.alturaMm !== undefined) a.alturaMm = assertIntegerMm(roundToMm(command.alturaMm), 'alturaMm');
+      if (command.traco !== undefined) a.traco = command.traco;
+      if (command.hachura !== undefined) a.hachura = command.hachura;
+      if (command.rotacaoGraus !== undefined) a.rotacaoGraus = ((Math.round(command.rotacaoGraus) % 360) + 360) % 360;
+      if (command.cor !== undefined) a.cor = command.cor;
+      diff.updated.push(a.id);
+      break;
+    }
+
+    case 'MoveAnotacao': {
+      const a = findAnotacao(next, command.anotacaoId);
+      const dx = assertIntegerMm(roundToMm(command.dx), 'dx');
+      const dy = assertIntegerMm(roundToMm(command.dy), 'dy');
+      a.pontos = a.pontos.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+      diff.updated.push(a.id);
+      break;
+    }
+
+    case 'DeleteAnotacao': {
+      const a = findAnotacao(next, command.anotacaoId);
+      next.anotacoes = (next.anotacoes ?? []).filter((x) => x.id !== a.id);
+      diff.deleted.push(a.id);
       break;
     }
 
@@ -3535,6 +3613,7 @@ function aplicarSemHash(
       const vagasDoNivel = (next.vagas ?? []).filter((v) => v.levelId === level.id);
       const componentesDoNivel = (next.componentes ?? []).filter((c) => c.levelId === level.id);
       const guardaCorposDoNivel = (next.guardaCorpos ?? []).filter((g) => g.levelId === level.id);
+      const anotacoesDoNivel = (next.anotacoes ?? []).filter((a) => a.vista.tipo === 'PLANTA' && a.vista.levelId === level.id);
 
       next.walls = next.walls.filter((w) => w.levelId !== level.id);
       next.openings = next.openings.filter((o) => !paredesDoNivel.has(o.wallId));
@@ -3549,6 +3628,7 @@ function aplicarSemHash(
       next.vagas = (next.vagas ?? []).filter((v) => v.levelId !== level.id);
       next.componentes = (next.componentes ?? []).filter((c) => c.levelId !== level.id);
       next.guardaCorpos = (next.guardaCorpos ?? []).filter((g) => g.levelId !== level.id);
+      next.anotacoes = (next.anotacoes ?? []).filter((a) => !(a.vista.tipo === 'PLANTA' && a.vista.levelId === level.id));
       // ⚠️ O quadro vai junto (é peça deste piso); os CIRCUITOS dele vão junto
       // também, senão ficariam apontando para um quadro que não existe mais. E
       // os terminais que os citavam já saíram, ou perdem a referência.
@@ -3579,6 +3659,7 @@ function aplicarSemHash(
         ...vagasDoNivel.map((v) => v.id),
         ...componentesDoNivel.map((c) => c.id),
         ...guardaCorposDoNivel.map((g) => g.id),
+        ...anotacoesDoNivel.map((a) => a.id),
         ...quadrosDoNivel.map((q) => q.id),
         ...circuitosOrfaos.map((c) => c.id),
         ...etiquetasDoNivel.map((l) => l.id),

@@ -70,6 +70,10 @@ import {
   type FamiliaDeComponente,
   type TipoDeGuardaCorpo,
   type MaterialDeGuardaCorpo,
+  type TipoDeAnotacao,
+  type VistaDaAnotacao,
+  type TracoDaAnotacao,
+  type PadraoDeHachura,
   type TipoDeRestricaoDoLote,
   assinaturaDasCamadas,
   emptyModel,
@@ -508,6 +512,36 @@ function projetar(model: BlueprintModel): {
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.tipo, y.tipo),
   );
 
+  // ANOTAÇÕES (0.45.0): a vista por ÍNDICE (pavimento na ordem canônica de
+  // `levels`; corte na ordem canônica de `sections`; elevação pela direção),
+  // pontos, tipo, texto, altura, traço, hachura, giro, cor. Omitidas quando não há.
+  const indiceDoCorte = new Map(sections.map((c, i) => [c.item.id, i]));
+  const anotacoes = ordenar(
+    (model.anotacoes ?? []).filter((a) => a.vista.tipo !== 'CORTE' || indiceDoCorte.has(a.vista.corteId)),
+    (a) => ({
+      vista:
+        a.vista.tipo === 'PLANTA'
+          ? { tipo: 'PLANTA' as const, level: nivel(a.vista.levelId) }
+          : a.vista.tipo === 'CORTE'
+            ? { tipo: 'CORTE' as const, corte: indiceDoCorte.get(a.vista.corteId) ?? -1 }
+            : { tipo: 'ELEVACAO' as const, direcao: a.vista.direcao },
+      pontos: a.pontos.map((p) => ({ x: p.x, y: p.y })),
+      tipo: a.tipo,
+      texto: a.texto ?? null,
+      alturaMm: a.alturaMm,
+      traco: a.traco,
+      hachura: a.hachura ?? null,
+      rotacaoGraus: a.rotacaoGraus,
+      cor: a.cor ?? null,
+      parametros: parametrosCanonicos(a.parametros),
+    }),
+    (x, y) => {
+      const kx = x.vista.tipo === 'PLANTA' ? `0:${String(nivel(x.vista.levelId)).padStart(4, '0')}` : x.vista.tipo === 'CORTE' ? `1:${String(indiceDoCorte.get(x.vista.corteId) ?? 0).padStart(4, '0')}` : `2:${x.vista.direcao}`;
+      const ky = y.vista.tipo === 'PLANTA' ? `0:${String(nivel(y.vista.levelId)).padStart(4, '0')}` : y.vista.tipo === 'CORTE' ? `1:${String(indiceDoCorte.get(y.vista.corteId) ?? 0).padStart(4, '0')}` : `2:${y.vista.direcao}`;
+      return cmpStr(kx, ky) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.tipo, y.tipo) || cmpStr(x.texto ?? '', y.texto ?? '');
+    },
+  );
+
   // QUADROS e CIRCUITOS, ANTES das instalações.
   //
   // ⚠️ A ordem é OBRIGATÓRIA, não estética: a projeção do terminal referencia
@@ -796,6 +830,7 @@ function projetar(model: BlueprintModel): {
     vagas: vagas.length ? vagas.map((v) => v.geom) : undefined,
     componentes: componentes.length ? componentes.map((c) => c.geom) : undefined,
     guardaCorpos: guardaCorpos.length ? guardaCorpos.map((g) => g.geom) : undefined,
+    anotacoes: anotacoes.length ? anotacoes.map((a) => a.geom) : undefined,
     trechos: trechos.length ? trechos.map((t) => t.geom) : undefined,
     terminais: terminais.length ? terminais.map((t) => t.geom) : undefined,
     quadros: quadros.length ? quadros.map((q) => q.geom) : undefined,
@@ -826,6 +861,7 @@ function projetar(model: BlueprintModel): {
     vagas: vagas.map((v) => v.item.uid ?? null),
     componentes: componentes.map((c) => c.item.uid ?? null),
     guardaCorpos: guardaCorpos.map((g) => g.item.uid ?? null),
+    anotacoes: anotacoes.map((a) => a.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
     quadros: quadros.map((q) => q.item.uid ?? null),
@@ -907,6 +943,7 @@ export interface IdentidadeCanonica {
   vagas?: (ElementUid | null)[];
   componentes?: (ElementUid | null)[];
   guardaCorpos?: (ElementUid | null)[];
+  anotacoes?: (ElementUid | null)[];
   trechos?: (ElementUid | null)[];
   terminais?: (ElementUid | null)[];
   quadros?: (ElementUid | null)[];
@@ -1103,6 +1140,19 @@ export interface CanonicalPayload {
     descricao: string;
     rotulo: string | null;
     sugerido?: boolean;
+    parametros?: Parametros;
+  }[];
+  /** Anotações por vista. Ausente sob kernel < 0.45.0 e em desenho sem nenhuma. */
+  anotacoes?: {
+    vista: { tipo: 'PLANTA'; level: number } | { tipo: 'CORTE'; corte: number } | { tipo: 'ELEVACAO'; direcao: BoundaryPapel };
+    pontos: { x: number; y: number }[];
+    tipo: TipoDeAnotacao;
+    texto: string | null;
+    alturaMm: number;
+    traco: TracoDaAnotacao;
+    hachura: PadraoDeHachura | null;
+    rotacaoGraus: number;
+    cor: string | null;
     parametros?: Parametros;
   }[];
   /** Núcleos verticais. Ausente sob kernel < 0.39.0 e em desenho sem nenhum. */
@@ -1564,6 +1614,31 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       rotulo: g.rotulo,
       ...(g.sugerido ? { sugerido: true } : {}),
       ...(g.parametros && Object.keys(g.parametros).length > 0 ? { parametros: { ...g.parametros } } : {}),
+    });
+  });
+
+  // ANOTAÇÕES: depois de pavimentos e cortes, que elas referenciam por índice.
+  // Corte por índice fora da lista = anotação descartada (não erro), como as unidades.
+  const anotacoes = payload.anotacoes ?? [];
+  anotacoes.forEach((a, i) => {
+    let vista: VistaDaAnotacao | null = null;
+    if (a.vista.tipo === 'PLANTA') vista = levelIds[a.vista.level] ? { tipo: 'PLANTA', levelId: levelIds[a.vista.level] } : null;
+    else if (a.vista.tipo === 'CORTE') vista = model.sections[a.vista.corte] ? { tipo: 'CORTE', corteId: model.sections[a.vista.corte].id } : null;
+    else vista = { tipo: 'ELEVACAO', direcao: a.vista.direcao };
+    if (!vista) return;
+    model.anotacoes.push({
+      id: nextId(model, 'ant'),
+      uid: uidDe('anotacoes', i, anotacoes.length),
+      vista,
+      tipo: a.tipo,
+      pontos: a.pontos.map((p) => ({ x: p.x, y: p.y })),
+      texto: a.texto,
+      alturaMm: a.alturaMm,
+      traco: a.traco,
+      hachura: a.hachura,
+      rotacaoGraus: a.rotacaoGraus,
+      cor: a.cor,
+      ...(a.parametros && Object.keys(a.parametros).length > 0 ? { parametros: { ...a.parametros } } : {}),
     });
   });
 

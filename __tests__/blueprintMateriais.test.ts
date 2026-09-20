@@ -120,7 +120,7 @@ describe('biblioteca de materiais (E7.4)', () => {
   });
 
   it('o kernel não mudou: a camada leva só o código opaco e o hash do desenho não sabe da biblioteca (sem bump)', () => {
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.44.0');
+    expect(KERNEL_VERSION).toMatch(/^blueprint-kernel-ts-0\.(4[4-9]|[5-9][0-9])\.\d+$/); // a biblioteca não pediu bump; fases seguintes podem ter pedido o seu
     const m0 = applyCommand(emptyModel(), { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 }).model;
     const t = m0.levels[0].id;
     const com = applyBatch(m0, [{ type: 'AddWall', levelId: t, a: point(0, 0), b: point(4000, 0), thicknessMm: 190, heightMm: 2800 }]).model;

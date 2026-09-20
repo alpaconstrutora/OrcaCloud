@@ -39,6 +39,9 @@ import {
   type TipoDeComponente,
   type GuardaCorpo,
   type TipoDeGuardaCorpo,
+  type Anotacao,
+  type TipoDeAnotacao,
+  PONTOS_MINIMOS_DA_ANOTACAO,
   type Nucleo,
   type Vaga,
   type TipoDeVaga,
@@ -51,6 +54,7 @@ import {
   nomeDoTipoEstrutural,
   pontasPresasAsPecas,
 } from '../../utils/blueprintKernel';
+import { cotaAngularDesenhada, distanciaAAnotacao, linhasDaHachura, pontaDaSeta, tracejadoMm } from '../../utils/blueprintAnotacoes';
 import {
   encaixarConexao,
   pontosDeConexaoDaParede,
@@ -330,12 +334,15 @@ const SEM_VAGAS: Vaga[] = [];
 const COR_COMPONENTE = '#475569';
 const COR_COMPONENTE_FUNDO = 'rgba(148, 163, 184, 0.14)';
 const SEM_COMPONENTES: Componente[] = [];
+const SEM_ANOTACOES: Anotacao[] = [];
 /** A MARCA do corte em planta — azul de anotação, não de construção. */
 const COR_CORTE = '#0284c7';
 /** Eixo da malha: cinza-azulado discreto — referência, não construção. */
 const COR_EIXO = '#64748b';
 /** Guarda-corpo (E7.3): linha dupla com balaústres; corrimão linha simples grossa. */
 const COR_GUARDA_CORPO = '#0f766e';
+/** Anotação (E8.1): âmbar escuro — nem parede nem instalação. */
+const COR_ANOTACAO = '#b45309';
 
 /**
  * A marca da conexão automática que pegou no arraste.
@@ -1244,6 +1251,10 @@ interface Props {
   onAddCorte?: (a: Point, b: Point) => void;
   /** EIXO da malha (E1.4): dois cliques. */
   onAddEixo?: (a: Point, b: Point) => void;
+  /** ANOTAÇÃO (E8.1): as da planta deste pavimento; o tipo ativo vem da barra. */
+  anotacoes?: Anotacao[];
+  tipoDeAnotacao?: TipoDeAnotacao;
+  onAddAnotacao?: (tipo: TipoDeAnotacao, pontos: Point[]) => void;
   /** GUARDA-CORPO (E7.3): dois cliques; o tipo ativo vem da barra. */
   tipoDeGuardaCorpo?: TipoDeGuardaCorpo;
   onAddGuardaCorpo?: (a: Point, b: Point) => void;
@@ -1398,6 +1409,9 @@ export default function BlueprintCanvas({
   onAddEixo,
   tipoDeGuardaCorpo = 'GUARDA_CORPO',
   onAddGuardaCorpo,
+  anotacoes = SEM_ANOTACOES,
+  tipoDeAnotacao = 'TEXTO',
+  onAddAnotacao,
   nucleos = SEM_NUCLEOS,
   onAddNucleo,
   vagas = SEM_VAGAS,
@@ -1560,6 +1574,8 @@ export default function BlueprintCanvas({
   /** Primeiro clique do EIXO em curso (E1.4). */
   const [pontoEixo, setPontoEixo] = useState<Point | null>(null);
   const [pontoGuardaCorpo, setPontoGuardaCorpo] = useState<Point | null>(null);
+  /** ANOTAÇÃO em curso: os vértices já clicados. */
+  const [caminhoAnotacao, setCaminhoAnotacao] = useState<Point[]>([]);
   /** O primeiro canto do núcleo em curso (E2.4). */
   const [pontoNucleo, setPontoNucleo] = useState<Point | null>(null);
   /**
@@ -2607,6 +2623,19 @@ export default function BlueprintCanvas({
       return null;
     },
     [eixos, vista.escala],
+  );
+
+  /** Qual ANOTAÇÃO está sob o cursor (texto pela caixa, linha/leader/cota pelos segmentos, hachura pelo polígono). */
+  const anotacaoSob = useCallback(
+    (mundo: { x: number; y: number }): Anotacao | null => {
+      const folga = HIT_PX / vista.escala;
+      for (let i = anotacoes.length - 1; i >= 0; i--) {
+        if (ocultos.has(anotacoes[i].id)) continue;
+        if (distanciaAAnotacao(anotacoes[i], mundo) <= folga) return anotacoes[i];
+      }
+      return null;
+    },
+    [anotacoes, ocultos, vista.escala],
   );
 
   /** Qual GUARDA-CORPO está sob o cursor — por qualquer trecho da polilinha. */
@@ -5867,6 +5896,119 @@ export default function BlueprintCanvas({
       desenharGuardaCorpo([pontoGuardaCorpo, cursor], tipoDeGuardaCorpo, COR_GUARDA_CORPO, true, 1.4);
     }
 
+    // ── ANOTAÇÕES (E8.1): texto, leader, linha, hachura, cota angular — a
+    // mesma geometria do PDF/DXF (`blueprintAnotacoes.ts`). ──
+    const desenharAnotacao = (a: Pick<Anotacao, 'tipo' | 'pontos' | 'texto' | 'alturaMm' | 'traco' | 'hachura' | 'rotacaoGraus' | 'cor'>, selecionada: boolean, previa: boolean) => {
+      const cor = selecionada ? COR_SELECIONADA : a.cor || COR_ANOTACAO;
+      const tela = a.pontos.map(paraTela);
+      const pxTexto = Math.max(9, a.alturaMm * vista.escala);
+      ctx.save();
+      ctx.strokeStyle = cor;
+      ctx.fillStyle = cor;
+      ctx.lineWidth = selecionada ? 2 : 1.2;
+      ctx.setLineDash(previa ? [6, 4] : tracejadoMm(a.traco, a.alturaMm).map((d) => Math.max(2, d * vista.escala)));
+      const linhaTela = (p: { x: number; y: number }, q: { x: number; y: number }) => {
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(q.x, q.y);
+        ctx.stroke();
+      };
+      const escreverEm = (p: { x: number; y: number }, texto: string, graus: number, alinhar: CanvasTextAlign = 'left') => {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate((-graus * Math.PI) / 180);
+        ctx.font = `${pxTexto}px ui-sans-serif, system-ui, sans-serif`;
+        ctx.textAlign = alinhar;
+        ctx.textBaseline = 'alphabetic';
+        ctx.setLineDash([]);
+        texto.split('\n').forEach((linha, i) => ctx.fillText(linha, 0, i * pxTexto * 1.25));
+        ctx.restore();
+      };
+      switch (a.tipo) {
+        case 'TEXTO':
+          escreverEm(tela[0], a.texto ?? '', a.rotacaoGraus);
+          break;
+        case 'LEADER': {
+          for (let i = 1; i < tela.length; i++) linhaTela(tela[i - 1], tela[i]);
+          if (a.pontos.length >= 2) {
+            const [w1, w2] = pontaDaSeta(a.pontos[1], a.pontos[0], a.alturaMm).map(paraTela);
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.moveTo(tela[0].x, tela[0].y);
+            ctx.lineTo(w1.x, w1.y);
+            ctx.lineTo(w2.x, w2.y);
+            ctx.closePath();
+            ctx.fill();
+            const fim = tela[tela.length - 1];
+            const antes = tela[tela.length - 2];
+            const paraDireita = fim.x >= antes.x;
+            escreverEm({ x: fim.x + (paraDireita ? 4 : -4), y: fim.y - 3 }, a.texto ?? '', 0, paraDireita ? 'left' : 'right');
+          }
+          break;
+        }
+        case 'LINHA':
+          for (let i = 1; i < tela.length; i++) linhaTela(tela[i - 1], tela[i]);
+          break;
+        case 'HACHURA': {
+          if (tela.length >= 3) {
+            ctx.beginPath();
+            ctx.moveTo(tela[0].x, tela[0].y);
+            for (const q of tela.slice(1)) ctx.lineTo(q.x, q.y);
+            ctx.closePath();
+            if (a.hachura === 'SOLIDA') {
+              ctx.globalAlpha = 0.25;
+              ctx.fill();
+              ctx.globalAlpha = 1;
+            }
+            ctx.stroke();
+            if (!previa) {
+              ctx.lineWidth = 0.8;
+              for (const [p, q] of linhasDaHachura(a.pontos, a.hachura ?? 'DIAGONAL', a.alturaMm)) {
+                const tp = paraTela(p);
+                const tq = paraTela(q);
+                if (a.hachura === 'PONTOS') {
+                  ctx.beginPath();
+                  ctx.arc(tp.x, tp.y, 1.2, 0, Math.PI * 2);
+                  ctx.fill();
+                } else linhaTela(tp, tq);
+              }
+            }
+            if (a.texto) {
+              const cx = tela.reduce((s, p) => s + p.x, 0) / tela.length;
+              const cy = tela.reduce((s, p) => s + p.y, 0) / tela.length;
+              escreverEm({ x: cx, y: cy }, a.texto, 0, 'center');
+            }
+          } else for (let i = 1; i < tela.length; i++) linhaTela(tela[i - 1], tela[i]);
+          break;
+        }
+        case 'COTA_ANGULAR': {
+          for (let i = 1; i < tela.length; i++) linhaTela(tela[0], tela[i]);
+          const c = a.pontos.length >= 3 ? cotaAngularDesenhada({ ...(a as Anotacao), id: '', uid: '', vista: { tipo: 'PLANTA', levelId: '' } }) : null;
+          if (c) {
+            const arco = c.arco.map(paraTela);
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.moveTo(arco[0].x, arco[0].y);
+            for (const q of arco.slice(1)) ctx.lineTo(q.x, q.y);
+            ctx.stroke();
+            escreverEm(paraTela(c.posicaoDoRotulo), c.rotulo, 0, 'center');
+          }
+          break;
+        }
+        default:
+          break;
+      }
+      ctx.restore();
+    };
+    for (const a of anotacoes) {
+      if (ocultos.has(a.id)) continue;
+      desenharAnotacao(a, selecao.has(a.id), false);
+    }
+    if (tool === 'anotacao' && cursor && (caminhoAnotacao.length > 0 || tipoDeAnotacao === 'TEXTO')) {
+      const pontos = [...caminhoAnotacao, cursor];
+      desenharAnotacao({ tipo: tipoDeAnotacao, pontos, texto: tipoDeAnotacao === 'TEXTO' || tipoDeAnotacao === 'LEADER' ? 'Texto' : null, alturaMm: 250, traco: 'CONTINUO', hachura: tipoDeAnotacao === 'HACHURA' ? 'DIAGONAL' : null, rotacaoGraus: 0, cor: null }, false, true);
+    }
+
     // Prévia do eixo em curso.
     if (tool === 'eixo' && pontoEixo && cursor) {
       const a = paraTela(pontoEixo);
@@ -6765,6 +6907,7 @@ export default function BlueprintCanvas({
         tool === 'corte' ||
         tool === 'eixo' ||
         tool === 'guardacorpo' ||
+        tool === 'anotacao' ||
         tool === 'nucleo' ||
         tool === 'vaga' ||
         tool === 'componente')
@@ -6964,6 +7107,9 @@ export default function BlueprintCanvas({
     guardaCorpos,
     pontoGuardaCorpo,
     tipoDeGuardaCorpo,
+    anotacoes,
+    caminhoAnotacao,
+    tipoDeAnotacao,
     faixasRestritas,
     nucleos,
     pontoNucleo,
@@ -7424,6 +7570,14 @@ export default function BlueprintCanvas({
       setCursor(alvo);
       return;
     }
+    if (tool === 'anotacao') {
+      let alvo = capturarTracado(paraMundo(px, py));
+      // O orto da COTA ANGULAR é em relação ao VÉRTICE (as duas pontas saem dele); nas demais, ao vértice anterior.
+      const referencia = tipoDeAnotacao === 'COTA_ANGULAR' ? caminhoAnotacao[0] : caminhoAnotacao[caminhoAnotacao.length - 1];
+      if (referencia && ortoAtivo(e)) alvo = travarOrtogonal(referencia, alvo);
+      setCursor(alvo);
+      return;
+    }
 
     if (tool === 'nucleo' || tool === 'vaga' || tool === 'componente') {
       setCursor(capturarTracado(paraMundo(px, py)));
@@ -7698,6 +7852,25 @@ export default function BlueprintCanvas({
       if (fim.x === pontoEixo.x && fim.y === pontoEixo.y) return;
       onAddEixo?.(pontoEixo, fim);
       setPontoEixo(null);
+      return;
+    }
+
+    // ANOTAÇÃO (E8.1): texto fecha no 1º clique, leader no 2º, cota angular no 3º;
+    // linha e hachura acumulam e fecham no duplo clique.
+    if (tool === 'anotacao') {
+      let ponto = capturarTracado(mundo);
+      const anterior = caminhoAnotacao[caminhoAnotacao.length - 1] ?? null;
+      const referencia = tipoDeAnotacao === 'COTA_ANGULAR' ? caminhoAnotacao[0] ?? null : anterior;
+      if (referencia && ortoAtivo(e)) ponto = travarOrtogonal(referencia, ponto);
+      // Vértice repetido — inclusive o 2º clique do duplo, que o orto pode ter
+      // deslocado uns mm do anterior: a tolerância é a do clique, em mm do modelo.
+      if (caminhoAnotacao.some((q) => Math.hypot(q.x - ponto.x, q.y - ponto.y) <= HIT_PX / vista.escala)) return;
+      const pontos = [...caminhoAnotacao, ponto];
+      const fecha = tipoDeAnotacao === 'TEXTO' ? 1 : tipoDeAnotacao === 'LEADER' ? 2 : tipoDeAnotacao === 'COTA_ANGULAR' ? 3 : Infinity;
+      if (pontos.length >= fecha) {
+        onAddAnotacao?.(tipoDeAnotacao, pontos);
+        setCaminhoAnotacao([]);
+      } else setCaminhoAnotacao(pontos);
       return;
     }
 
@@ -7976,7 +8149,10 @@ export default function BlueprintCanvas({
       const trechoClicado = trechoSob(mundo);
       // GUARDA-CORPO (E7.3): linha sobre a borda da laje — antes da estrutura e da parede.
       const guardaCorpoClicado = guardaCorpoSob(mundo);
+      // ANOTAÇÃO (E8.1): está por cima de tudo — é a última camada desenhada.
+      const anotacaoClicada = anotacaoSob(mundo);
       const clicado =
+        anotacaoClicada?.id ??
         aberturaClicada?.id ??
         guardaCorpoClicado?.id ??
         quadroClicado?.id ??
@@ -8185,6 +8361,18 @@ export default function BlueprintCanvas({
       const pontos = duplicado ? caminhoEscada.slice(0, -1) : caminhoEscada;
       if (pontos.length >= 2) onAddEscada?.(pontos);
       setCaminhoEscada([]);
+      return;
+    }
+    // ANOTAÇÃO linha/hachura termina no duplo clique com o que tem (o segundo
+    // clique do par já entrou pelo `click`; se coincidiu, foi recusado lá).
+    if (tool === 'anotacao') {
+      const n = caminhoAnotacao.length;
+      const ultimo = caminhoAnotacao[n - 1];
+      const penultimo = caminhoAnotacao[n - 2];
+      const duplicado = !!(ultimo && penultimo && ultimo.x === penultimo.x && ultimo.y === penultimo.y);
+      const pontos = duplicado ? caminhoAnotacao.slice(0, -1) : caminhoAnotacao;
+      if (pontos.length >= PONTOS_MINIMOS_DA_ANOTACAO[tipoDeAnotacao]) onAddAnotacao?.(tipoDeAnotacao, pontos);
+      setCaminhoAnotacao([]);
       return;
     }
     // PERFIL termina no duplo clique com o que tem (o segundo clique do par já
@@ -8524,6 +8712,7 @@ export default function BlueprintCanvas({
       setPontoCorte(null);
       setPontoEixo(null);
       setPontoGuardaCorpo(null);
+      setCaminhoAnotacao([]);
       setPontoNucleo(null);
       // ⚠️ E o TRECHO em curso, que o Escape não cancelava: o primeiro clique
       // ficava pendurado, e o clique seguinte — dado noutro lugar, já sem

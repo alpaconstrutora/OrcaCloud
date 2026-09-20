@@ -152,6 +152,22 @@ vi.mock('../../services/blueprintApiTokenService', () => ({
   urlBaseDaApi: () => 'https://x.supabase.co/functions/v1/planta-api',
 }));
 
+const listWebhooks = vi.fn(async () => [] as unknown[]);
+const listEntregas = vi.fn(async () => [] as unknown[]);
+const createWebhook = vi.fn();
+const testarWebhook = vi.fn(async () => 'e_1');
+vi.mock('../../services/blueprintWebhookService', () => ({
+  blueprintWebhookService: {
+    list: (...a: unknown[]) => listWebhooks(...(a as [])),
+    listEntregas: (...a: unknown[]) => listEntregas(...(a as [])),
+    create: (...a: unknown[]) => createWebhook(...(a as [string, unknown])),
+    update: vi.fn(async () => {}),
+    remove: vi.fn(async () => {}),
+    testar: (...a: unknown[]) => testarWebhook(...(a as [string])),
+    reenviar: vi.fn(async () => true),
+  },
+}));
+
 vi.mock('../../services/blueprintViewTemplateService', () => ({
   blueprintViewTemplateService: {
     list: (...a: unknown[]) => listViewTemplates(...(a as [])),
@@ -2194,6 +2210,36 @@ describe('BlueprintEditor · quantitativos', () => {
     } finally {
       useStore.setState({ organizations: orgsAntes });
       listApiTokens.mockResolvedValue([]);
+    }
+  }, 60000);
+
+  it('webhooks (E9.3): Colaborar › Webhooks abre a tela em fluxo com as assinaturas e o log; criar passa pela organização do topo; testar chama a RPC', async () => {
+    listWebhooks.mockResolvedValue([{ id: 'w1', organizationId: 'org_1', nome: 'ERP', url: 'https://erp.exemplo.com.br/opura', segredo: 's'.repeat(48), eventos: ['versao.publicada'], active: true, createdAt: '2026-09-01T10:00:00Z', ultimaEntregaAt: null, ultimoStatus: null }]);
+    listEntregas.mockResolvedValue([{ id: 'e1', webhookId: 'w1', evento: 'versao.publicada', payload: {}, status: 'ENTREGUE', tentativas: 1, httpStatus: 204, erro: null, proximaTentativaAt: '2026-09-19T15:30:00Z', createdAt: '2026-09-19T15:29:58Z', entregueAt: '2026-09-19T15:30:00Z' }]);
+    createWebhook.mockResolvedValue({ id: 'w2' });
+    const { useStore } = await import('../../store/useStore');
+    const orgsAntes = useStore.getState().organizations;
+    useStore.setState({ organizations: [{ id: 'org_1', name: 'Org de teste', members: [] }] as never });
+    try {
+      await montar();
+      const user = userEvent.setup();
+      await abrirAba(/^colaborar$/i);
+      await user.click(screen.getByRole('button', { name: /^Webhooks/ }));
+      const tela = await screen.findByTestId('tela-webhooks');
+      await waitFor(() => expect(tela).toHaveTextContent('https://erp.exemplo.com.br/opura'));
+      expect(document.querySelector('[data-tela="webhooks"]')?.className).not.toMatch(/fixed|inset-0/);
+      expect(within(tela).getByTestId('log-de-entregas')).toHaveTextContent('entregue');
+      await user.click(screen.getByRole('button', { name: 'Testar webhook ERP' }));
+      await waitFor(() => expect(testarWebhook).toHaveBeenCalledWith('w1'));
+      await user.click(within(tela).getByTestId('novo-webhook'));
+      await user.type(within(tela).getByLabelText('Nome do webhook'), 'BI');
+      await user.type(within(tela).getByLabelText('URL do webhook'), 'https://bi.exemplo.com/h');
+      await user.click(within(tela).getByTestId('salvar-webhook'));
+      await waitFor(() => expect(createWebhook).toHaveBeenCalledWith('org_1', { nome: 'BI', url: 'https://bi.exemplo.com/h', eventos: ['versao.publicada'] }));
+    } finally {
+      useStore.setState({ organizations: orgsAntes });
+      listWebhooks.mockResolvedValue([]);
+      listEntregas.mockResolvedValue([]);
     }
   }, 60000);
 

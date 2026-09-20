@@ -418,3 +418,9 @@ static_files = ["./functions/dwg-converter/libredwg-web.wasm.gz"]
 # gateway não verifica JWT aqui. Documentação em /planta-api/docs.
 [functions.planta-api]
 verify_jwt = false
+
+# Despachante dos webhooks da Planta Inteligente (E9.3, 20/09/2026). Chamado só
+# pelo banco (pg_net nos gatilhos + pg_cron) com o CRON_SECRET no Authorization —
+# não é JWT, e o gate é `chamadaDeCron` (REGRA #7).
+[functions.planta-webhooks]
+verify_jwt = false

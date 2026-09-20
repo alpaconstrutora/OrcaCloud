@@ -20,6 +20,7 @@ import {
   LayoutGrid,
   History,
   KeyRound,
+  Webhook,
   Landmark,
   Merge,
   MessageSquare,
@@ -284,6 +285,8 @@ import { useOrgContext, useOrgWriteTarget, forEachTargetOrg } from '../../hooks/
 import { useBlueprintMateriais } from '../../hooks/useBlueprintMateriais';
 import TelaMateriais from './TelaMateriais';
 import TelaChavesDeApi from './TelaChavesDeApi';
+import TelaWebhooks from './TelaWebhooks';
+import { blueprintWebhookService, type EntregaDeWebhook, type Webhook as WebhookDaOrg } from '../../services/blueprintWebhookService';
 import { blueprintApiTokenService, urlBaseDaApi, type TokenDaApi } from '../../services/blueprintApiTokenService';
 import type { UsoDeMaterial } from '../../utils/blueprintMateriais';
 import { empreendimentoService } from '../../services/empreendimentoService';
@@ -1232,7 +1235,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais' | 'api';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais' | 'api' | 'webhooks';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -1839,6 +1842,27 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [tokensDaApiCarregando, setTokensDaApiCarregando] = useState(false);
   const [tokensDaApiIndisponiveis, setTokensDaApiIndisponiveis] = useState<string | null>(null);
   const organizacoesDaLoja = useStore((e) => e.organizations);
+  /** WEBHOOKS (E9.3): assinaturas da organização + as últimas entregas. Carregados quando a tela abre. */
+  const [webhooksDaOrg, setWebhooksDaOrg] = useState<WebhookDaOrg[]>([]);
+  const [entregasDeWebhook, setEntregasDeWebhook] = useState<EntregaDeWebhook[]>([]);
+  const [webhooksCarregando, setWebhooksCarregando] = useState(false);
+  const [webhooksIndisponiveis, setWebhooksIndisponiveis] = useState<string | null>(null);
+  const recarregarWebhooks = useCallback(() => {
+    setWebhooksCarregando(true);
+    Promise.all([blueprintWebhookService.list(orgId), blueprintWebhookService.listEntregas(null)])
+      .then(([lista, entregas]) => {
+        setWebhooksDaOrg(lista);
+        setEntregasDeWebhook(entregas);
+        setWebhooksIndisponiveis(null);
+      })
+      .catch((e: unknown) => {
+        console.warn('[webhooks] indisponíveis:', e);
+        setWebhooksDaOrg([]);
+        setEntregasDeWebhook([]);
+        setWebhooksIndisponiveis(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => setWebhooksCarregando(false));
+  }, [orgId]);
   const recarregarTokensDaApi = useCallback(() => {
     setTokensDaApiCarregando(true);
     blueprintApiTokenService
@@ -7446,6 +7470,54 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           </div>
         </div>
       )}
+      {telaAberta === 'webhooks' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="webhooks">
+          {cabecalhoDaTela(
+            'Webhooks',
+            'Avise seu ERP, BI ou canal quando algo acontecer na Planta: versão publicada, versão aprovada, comentário novo, alternativa tornada principal. O servidor faz um POST assinado (HMAC) na sua URL, com retentativa e log de cada entrega.',
+            Webhook,
+            'Colaborar',
+          )}
+          <div>
+            <TelaWebhooks
+              webhooks={webhooksDaOrg}
+              entregas={entregasDeWebhook}
+              carregando={webhooksCarregando}
+              indisponivel={webhooksIndisponiveis}
+              mostrarOrg={!orgId}
+              nomeDaOrg={(id) => organizacoesDaLoja.find((o) => o.id === id)?.name ?? id.slice(0, 8)}
+              onCriar={async (w) => {
+                // REGRA #5: um webhook é de UMA organização — a do topo, ou a escolhida no modal.
+                const alvo = await resolverOrgDeEscrita('single');
+                if (!alvo) throw new Error('Escolha a organização dona do webhook.');
+                if (alvo.kind !== 'org') throw new Error('Um webhook pertence a UMA organização: escolha uma.');
+                await blueprintWebhookService.create(alvo.orgId, w);
+                recarregarWebhooks();
+              }}
+              onAtualizar={async (id, w) => {
+                await blueprintWebhookService.update(id, w);
+                recarregarWebhooks();
+              }}
+              onApagar={async (id) => {
+                await blueprintWebhookService.remove(id);
+                recarregarWebhooks();
+              }}
+              onTestar={async (id) => {
+                await blueprintWebhookService.testar(id);
+                // O despachante responde em segundos: recarrega uma vez agora e outra logo depois.
+                recarregarWebhooks();
+                window.setTimeout(recarregarWebhooks, 4000);
+              }}
+              onReenviar={async (id) => {
+                await blueprintWebhookService.reenviar(id);
+                recarregarWebhooks();
+                window.setTimeout(recarregarWebhooks, 4000);
+              }}
+              onRecarregarEntregas={recarregarWebhooks}
+            />
+          </div>
+        </div>
+      )}
       {telaAberta === 'alternativas' && (
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="alternativas">
           {cabecalhoDaTela(
@@ -8579,6 +8651,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 alternarTela('api');
               }}
               ajuda="API pública de leitura: tokens da organização, documentação publicada (OpenAPI) — estudos, versões com hash, quantitativos, planilha, IFC e unidades. O número é quantos tokens estão ativos."
+            />
+            <BotaoDoRibbon
+              icone={Webhook}
+              rotulo="Webhooks"
+              contagem={webhooksDaOrg.filter((w) => w.active).length || undefined}
+              ativo={telaAberta === 'webhooks'}
+              onClick={() => {
+                if (telaAberta !== 'webhooks') recarregarWebhooks();
+                alternarTela('webhooks');
+              }}
+              ajuda="Webhooks da organização: POST assinado (HMAC) na sua URL quando uma versão é publicada ou aprovada, um comentário é criado ou uma alternativa vira principal; retentativa e log. O número é quantos estão ativos."
             />
           </GrupoDoRibbon>
         )}

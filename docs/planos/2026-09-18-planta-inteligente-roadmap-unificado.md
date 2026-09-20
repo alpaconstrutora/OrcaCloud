@@ -1071,3 +1071,55 @@ Próxima: E10.3 — Planta → compras.
 3. Prova no app real (Playwright, escritas bloqueadas, Desfazer ao fim) do gesto principal da fase;
    para o gerador, a mesma semente produz o mesmo hash canônico duas vezes.
 4. Doc da fase nesta pasta; commit; push; `conferir-producao.sh` + CI verdes.
+
+## Fecho do roadmap (20/09/2026)
+
+**42 de 42 fases publicadas** entre 18 e 20/09/2026 (E0.1 `a02c07cb` → E11.1 `b7fce8be`), cada uma
+num commit próprio em `main`, com prova no app real de escritas bloqueadas (e escrita real só
+quando o usuário autorizou: token da API E9.2, webhooks E9.3, itens do plano E10.3 — os dois
+últimos apagados depois). Kernel **0.32.0 → 0.47.0** (15 bumps, cada um com o ritual dos goldens
+registrado no cabeçalho de `blueprintKernelGoldens.test.ts`); quantitativos **quant-1.10.0 →
+1.13.0**; 22 migrations `blueprint_*` aplicadas por `db query -f` (000030 a 000057); 4 Edge
+Functions (`planta-ia`, `dwg-converter`, `planta-api`, `planta-webhooks`). Suíte: 4.597 → 4.845
+testes.
+
+Os cinco motores do pedido original existem e se falam: Geométrico (kernel), Paramétrico
+(tipos, parâmetros, fórmulas, restrições, eixos), Regras (vocabulário da zona, regras
+declarativas, envelope 3D), Programa/Grafo (programa, grafo, conferência), Avaliação (insolação,
+score, sugestões) e o Gerador (design options, gerador determinístico, mobiliário, IA). A cadeia
+"planta → quantitativo → orçamento → cronograma → compras" fechou na E10.3.
+
+### Backlog P2 nomeado (o que o plano deixou de fora, com endereço)
+
+Do corte original ("Fora do plano"): catálogo de tipos por organização (hoje tipos vivem no
+estudo, E1.1), famílias aninhadas, sub-regiões/taludes avançados, cobertura por extrusão,
+paredes curvas/inclinadas, cortina/brises, rodapés como elemento próprio (hoje declaração por
+ambiente, E7.2), departamento, planta de forro, vista dependente, nuvens de revisão, tabelas
+personalizadas, status do conflito (aberto/resolvido — hoje só a lista e o BCF), SKP, lock fino
+(hoje trava por seleção, E10.1), fases personalizadas (hoje EXISTENTE/DEMOLIR/NOVO, E10.2), LOD
+elevado, plugins.
+
+Registrado fase a fase ("fora desta fase"), por etapa:
+- **E0.2**: volume do ambiente na etiqueta quando o volume entrar em `quantities.ts`.
+- **E1.2/E1.3**: filtro `compartilhado` nas saídas; editar/excluir definição de parâmetro (só
+  criação inline); valor por TIPO; fórmula nas saídas; editar fórmula existente.
+- **E2.4/E2.5**: caixa do elevador no 3D (só o furo aparece); mover núcleo e vaga por arraste;
+  espinha de peixe (45°) e vagas em fila; exigência de vagas vinda da zona.
+- **E3.1–E3.3**: recorte do envelope em duas peças para servidão no meio; números do município
+  por semente (hoje regras da organização); regra de UNIDADE/PAVIMENTO com mais variáveis; recuos
+  por lado diferentes por pavimento além do progressivo; "cabe?" pela face externa.
+- **E9.2**: `/docs` em HTML (a plataforma rebaixa para text/plain — a página humana é a tela).
+- **E11.1**: dutos como trechos MECANICA no menu (a disciplina já existe no kernel), terminais e
+  cargas térmicas — é o "HVAC completo" do P3/P4.
+
+### Fora, e por decisão (P3/P4 — não replicar)
+
+Render/ray tracing/animação, gbXML/energia/carbono, cálculo e modelo analítico estrutural,
+estrutura metálica, detalhamento de armadura, fabricação, Dynamo/marketplace, worksets/modelo
+central, HVAC completo, texto 3D.
+
+### Como retomar
+
+Uma fase por commit, o mesmo ritual da seção "Regras que valem para todas as fases"; toda fase que
+mude o payload canônico sobe o kernel e recaptura os goldens; escrita real no banco só com
+autorização explícita do usuário, e apagada depois quando for prova.

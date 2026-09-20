@@ -5,6 +5,10 @@ import { taxSettingsService } from './taxSettingsService';
 import { pisRatesService } from './pisRatesService';
 import { cofinsRatesService } from './cofinsRatesService';
 import { inssBracketsService } from './inssBracketsService';
+import {
+    categoriaDoTributo, resolverCategoriaPorNomes,
+    CATEGORIA_IMPOSTO_SOBRE_RECEITA, CATEGORIA_IMPOSTO_SOBRE_RESULTADO,
+} from './financialCategoryResolver';
 
 // Regime tributário da empresa (companies.regime_tributario) → rótulo usado nas
 // tabelas oficiais tax_pis_rates/tax_cofins_rates. Simples/MEI não têm PIS/COFINS
@@ -610,10 +614,22 @@ export const taxPayableService = {
             .filter(p => p.amount > 0);
         if (validParcels.length === 0) return;
 
+        // Conta Financeira do tributo — até 2026-09-20 gravava `category: origin`
+        // ('Locação'/'Venda'), nome que não existe no plano, e a DRE deixava o
+        // imposto em "Sem Classificação". ISS/PIS/COFINS/INSS deduzem a receita
+        // bruta; IRPJ/CSLL são imposto sobre o resultado (linha própria).
+        const [catReceita, catResultado] = await Promise.all([
+            resolverCategoriaPorNomes(organizationId, [CATEGORIA_IMPOSTO_SOBRE_RECEITA]),
+            resolverCategoriaPorNomes(organizationId, [CATEGORIA_IMPOSTO_SOBRE_RESULTADO]),
+        ]);
+        const categoriaDe = (taxName: string) =>
+            categoriaDoTributo(taxName) === CATEGORIA_IMPOSTO_SOBRE_RESULTADO ? catResultado : catReceita;
+
         // Cada item = um tributo incidente sobre UMA parcela.
         const rows: Record<string, unknown>[] = [];
         const pushRow = (parcel: DealParcel, taxKey: string, taxName: string, amount: number) => {
             if (!(amount > 0)) return;
+            const categoria = categoriaDe(taxName);
             // Deriva um sufixo curto do reference_id da parcela, qualquer que seja a
             // origem: `tx-{dealId}-p1` → `p1`; `{contractId}-p2021-01-15` → `p2021-01-15`.
             const legacyPrefix = `tx-${deal.id}-`;
@@ -638,7 +654,8 @@ export const taxPayableService = {
                 party_name:      taxName,
                 party_type:      TAX_PARTY_TYPE,
                 project_id:      null,
-                category:        origin,
+                category:        categoria.category,
+                category_id:     categoria.category_id,
                 status:          'PENDING',
                 business_status: 'PREVISTO',
             });

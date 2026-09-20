@@ -8,6 +8,7 @@ import { generateRentalContractNumber } from './rentalContractNumberingService';
 import { generateUnitSaleContractNumber } from './unitSaleContractNumberingService';
 import { INITIAL_PROJECT_SETTINGS } from '../constants';
 import { BudgetEntry } from '../types/budget';
+import { resolverCategoriaDoContrato } from './financialCategoryResolver';
 import {
     Contract,
     ContractItem,
@@ -463,6 +464,11 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
     }
     try {
         const supplierName = await resolveSupplierName(contract.supplier_id, 'Fornecedor');
+        // Conta Financeira da parcela: a escolhida no contrato ou o padrão pela
+        // direção (recebível → receita; pagável → custo). Até 2026-09-20 era
+        // 'Mão de Obra / Serviço' fixo, inclusive em contrato com cliente — a DRE
+        // via a receita como custo. Ver services/financialCategoryResolver.ts.
+        const categoria = await resolverCategoriaDoContrato(contract, isReceivableContract(contract));
         const tag = `[contract:${contract.id}]`;
         const measurementIds = await getContractMeasurementIds(contract.id);
 
@@ -470,7 +476,7 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
             id: crypto.randomUUID(),
             date: inst.date + 'T12:00:00.000Z',
             type: 'EXPENSE' as const,
-            category: 'Mão de Obra / Serviço',
+            category: categoria.category,
             description: `Contrato: ${contract.title || contract.number} - Parcela ${i + 1}/${contract.payment_schedule!.length}`,
             value: inst.value,
             status: 'PENDING' as const,
@@ -585,7 +591,8 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
                 amount: tx.value,
                 direction: txDirection,
                 description: tx.description,
-                category: 'Mão de Obra / Serviço',
+                category: categoria.category,
+                category_id: categoria.category_id,
                 entity_name: party.party_name ?? supplierName,
                 supplier_id: party.supplier_id,
                 party_id: party.party_id,
@@ -732,6 +739,11 @@ async function syncRecurringToFinance(contract: Contract) {
     }
     try {
         const supplierName = await resolveSupplierName(contract.supplier_id, 'Contrato Recorrente');
+        // Conta Financeira da parcela: a escolhida no contrato ou o padrão pela
+        // direção (recebível → receita; pagável → custo). Até 2026-09-20 era
+        // 'Mão de Obra / Serviço' fixo, inclusive em contrato com cliente — a DRE
+        // via a receita como custo. Ver services/financialCategoryResolver.ts.
+        const categoria = await resolverCategoriaDoContrato(contract, isReceivableContract(contract));
 
         const today = new Date();
         today.setHours(23, 59, 59, 0);
@@ -770,7 +782,7 @@ async function syncRecurringToFinance(contract: Contract) {
                 id: crypto.randomUUID(),
                 date: cur.toISOString().split('T')[0] + 'T12:00:00.000Z',
                 type: 'EXPENSE',
-                category: 'Mão de Obra / Serviço',
+                category: categoria.category,
                 description: `Fatura Contrato ${contract.number || ''} (${n}) - ${cur.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`,
                 value: contract.original_value,
                 status: isPast ? 'PAID' : 'PENDING',
@@ -819,7 +831,8 @@ async function syncRecurringToFinance(contract: Contract) {
                 amount: tx.value,
                 direction: txDirection,
                 description: tx.description,
-                category: 'Mão de Obra / Serviço',
+                category: categoria.category,
+                category_id: categoria.category_id,
                 entity_name: party.party_name ?? supplierName,
                 supplier_id: party.supplier_id,
                 party_id: party.party_id,
@@ -985,6 +998,11 @@ export async function generateRecurringInstallmentsForPeriod(
     const rangeFim = dueDates[dueDates.length - 1] > toDate ? dueDates[dueDates.length - 1] : toDate;
 
     const supplierName = await resolveSupplierName(contract.supplier_id, 'Contrato Recorrente');
+    // Conta Financeira da parcela: a escolhida no contrato ou o padrão pela
+    // direção (recebível → receita; pagável → custo). Até 2026-09-20 era
+    // 'Mão de Obra / Serviço' fixo, inclusive em contrato com cliente — a DRE
+    // via a receita como custo. Ver services/financialCategoryResolver.ts.
+    const categoria = await resolverCategoriaDoContrato(contract, isReceivableContract(contract));
     const label = opts.label || `Contrato ${contract.number || ''}`.trim();
 
     // ── Contrato ligado a obra: parcelas no JSONB do projeto, tag [contract:id]
@@ -1003,7 +1021,7 @@ export async function generateRecurringInstallmentsForPeriod(
             await financialService.addTransactionBatch(contract.project_id, novos.map((d, i) => ({
                 date: `${d}T12:00:00.000Z`,
                 type: 'EXPENSE' as const,
-                category: 'Mão de Obra / Serviço',
+                category: categoria.category,
                 description: `${label} — parcela ${i + 1}/${novos.length} (${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)})`,
                 value: amount,
                 status: 'PENDING' as const,
@@ -1083,7 +1101,8 @@ export async function generateRecurringInstallmentsForPeriod(
         amount,
         direction: txDirection,
         description: `${label} — parcela ${i + 1}/${novos.length} (${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)})`,
-        category: 'Mão de Obra / Serviço',
+        category: categoria.category,
+        category_id: categoria.category_id,
         entity_name: party.party_name ?? supplierName,
         supplier_id: party.supplier_id,
         party_id: party.party_id,
@@ -1117,6 +1136,11 @@ async function syncAVistaToFinance(contract: Contract) {
     }
     try {
         const supplierName = await resolveSupplierName(contract.supplier_id, 'Fornecedor');
+        // Conta Financeira da parcela: a escolhida no contrato ou o padrão pela
+        // direção (recebível → receita; pagável → custo). Até 2026-09-20 era
+        // 'Mão de Obra / Serviço' fixo, inclusive em contrato com cliente — a DRE
+        // via a receita como custo. Ver services/financialCategoryResolver.ts.
+        const categoria = await resolverCategoriaDoContrato(contract, isReceivableContract(contract));
         const tag = `[contract:${contract.id}]`;
         const measurementIds = await getContractMeasurementIds(contract.id);
 
@@ -1129,7 +1153,7 @@ async function syncAVistaToFinance(contract: Contract) {
             id: crypto.randomUUID(),
             date: dueDate + 'T12:00:00.000Z',
             type: 'EXPENSE' as const,
-            category: 'Mão de Obra / Serviço',
+            category: categoria.category,
             description: `Contrato: ${contract.title || contract.number} — À Vista`,
             value: contract.original_value,
             status: 'PENDING' as const,
@@ -1197,7 +1221,8 @@ async function syncAVistaToFinance(contract: Contract) {
                 amount: contract.original_value,
                 direction: txDirection,
                 description: tx.description,
-                category: 'Mão de Obra / Serviço',
+                category: categoria.category,
+                category_id: categoria.category_id,
                 entity_name: party.party_name ?? supplierName,
                 supplier_id: party.supplier_id,
                 party_id: party.party_id,
@@ -1811,8 +1836,8 @@ export const contractService = {
         // Classificação ANTES da edição — só o que mudou de fato desce para os
         // títulos (o modal manda o formulário inteiro; propagar sempre sobrescreveria
         // parcela reclassificada à mão na Conciliação).
-        const { data: antes } = ('plano_de_contas_id' in updates || 'cost_center_id' in updates)
-            ? await supabase.from('contracts').select('plano_de_contas_id, cost_center_id').eq('id', id).maybeSingle()
+        const { data: antes } = ('plano_de_contas_id' in updates || 'cost_center_id' in updates || 'category_id' in updates)
+            ? await supabase.from('contracts').select('plano_de_contas_id, cost_center_id, category_id').eq('id', id).maybeSingle()
             : { data: null };
 
         const { data, error } = await supabase
@@ -1834,6 +1859,13 @@ export const contractService = {
         }
         if ('cost_center_id' in updates && (antes?.cost_center_id ?? null) !== (updated.cost_center_id ?? null)) {
             classif.cost_center_id = updated.cost_center_id ?? null;
+        }
+        // Conta Financeira (financial_categories) — a que a DRE lê. Limpar no
+        // contrato devolve o título ao padrão pela direção, nunca a "sem categoria".
+        if ('category_id' in updates && (antes?.category_id ?? null) !== (updated.category_id ?? null)) {
+            const cat = await resolverCategoriaDoContrato(updated, isReceivableContract(updated));
+            classif.category_id = cat.category_id;
+            classif.category    = cat.category;
         }
         if (Object.keys(classif).length > 0) {
             const { error: errProp } = await supabase

@@ -5,6 +5,7 @@ import {
     ThumbsUp, Ban, Trash2, UserPlus,
 } from 'lucide-react';
 import PlanoContasSelect from './PlanoContasSelect';
+import HierarchicalSelect from './HierarchicalSelect';
 import SupplierSelect from './SupplierSelect';
 import CostCenterSelect from './CostCenterSelect';
 import { STATUS_LABELS, STATUS_TEXT_COLORS } from '../utils/boletoStatus';
@@ -16,7 +17,7 @@ import { extractFromPdfFile } from '../utils/boletoParser';
 import { onlyDigits } from '../utils/febrabanRules';
 import { formatMoney } from './ui/Format';
 import { useConfirm } from './ui/confirm';
-import type { Boleto, BoletoExtractionResult, Supplier, CostCenter } from '../types';
+import type { Boleto, BoletoExtractionResult, Supplier, CostCenter, ChartOfAccount } from '../types';
 
 interface BoletoFormModalProps {
     organizationId: string;
@@ -49,6 +50,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
     const [planoContas, setPlanoContas] = useState<CostCenter[]>([]);
+    const [contasFinanceiras, setContasFinanceiras] = useState<ChartOfAccount[]>([]);
     const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
     const [documentoBlobUrl, setDocumentoBlobUrl] = useState<string | null>(null);
 
@@ -60,6 +62,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     const [supplierId, setSupplierId] = useState<string>(initial?.supplier_id ?? '');
     const [costCenterId, setCostCenterId] = useState<string>(initial?.cost_center_id ?? '');
     const [planoDeContasId, setPlanoDeContasId] = useState<string>(initial?.plano_de_contas_id ?? '');
+    const [categoryId, setCategoryId] = useState<string>(initial?.category_id ?? '');
     const [selectedProjectId, setSelectedProjectId] = useState<string>(initial?.project_id ?? projectId ?? '');
     const [descricao, setDescricao] = useState<string>(initial?.descricao ?? '');
     const [observacoes, setObservacoes] = useState<string>(initial?.observacoes ?? '');
@@ -87,10 +90,12 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             financialRegistryService.listCostCenters(organizationId),
             financialRegistryService.listPlanoContas(organizationId),
             projectService.listProjects().catch(() => []),
-        ]).then(([sup, cc, pc, projs]) => {
+            financialRegistryService.listChartOfAccounts(organizationId).catch(() => []),
+        ]).then(([sup, cc, pc, projs, cf]) => {
             setSuppliers(sup || []);
             setCostCenters(cc || []);
             setPlanoContas(pc || []);
+            setContasFinanceiras(cf || []);
             type ProjectRow = { id: string; name: string; settings?: { classification?: string } };
             // Sem filtro aqui de propósito: `listProjects` já devolve só OBRA
             // (regra #3) e já exclui projeto de sistema (regra #2). O filtro por
@@ -208,6 +213,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                 supplier_id:          supplierId || undefined,
                 cost_center_id:       costCenterId || undefined,
                 plano_de_contas_id:   planoDeContasId || undefined,
+                category_id:          categoryId || null,
                 project_id:           selectedProjectId || projectId || undefined,
                 descricao:            descricao.trim() || undefined,
                 observacoes:          observacoes || undefined,
@@ -276,6 +282,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                 supplier_id: supplierId || undefined,
                 cost_center_id: costCenterId || undefined,
                 plano_de_contas_id: planoDeContasId || undefined,
+                category_id: categoryId || null,
                 project_id: selectedProjectId || projectId || boleto.project_id,
                 descricao: descricao.trim() || undefined,
                 observacoes: observacoes || undefined,
@@ -595,6 +602,22 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                         onChange={setPlanoDeContasId}
                                         placeholder="—"
                                         hoverCls="hover:bg-blue-50"
+                                    />
+                                </FormField>
+
+                                {/* Conta Financeira (financial_categories) — a dimensão que a DRE
+                                    lê. Distinta de Centro de Custo e de Plano de Contas; mesmo
+                                    drawer do ContractModal. */}
+                                <FormField label="Conta Financeira">
+                                    <HierarchicalSelect
+                                        items={contasFinanceiras.map(c => ({ id: c.id, name: c.name, parentId: c.parent_id ?? null }))}
+                                        value={categoryId}
+                                        onChange={setCategoryId}
+                                        valueField="id"
+                                        placeholder="—"
+                                        hoverCls="hover:bg-blue-50"
+                                        panelVariant="drawer"
+                                        drawerTitle="Selecionar Conta Financeira"
                                     />
                                 </FormField>
 
@@ -970,6 +993,22 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                         onChange={setPlanoDeContasId}
                                         placeholder="—"
                                         hoverCls="hover:bg-blue-50"
+                                    />
+                                </FormField>
+
+                                {/* Conta Financeira (financial_categories) — a dimensão que a DRE
+                                    lê. Distinta de Centro de Custo e de Plano de Contas; mesmo
+                                    drawer do ContractModal. */}
+                                <FormField label="Conta Financeira">
+                                    <HierarchicalSelect
+                                        items={contasFinanceiras.map(c => ({ id: c.id, name: c.name, parentId: c.parent_id ?? null }))}
+                                        value={categoryId}
+                                        onChange={setCategoryId}
+                                        valueField="id"
+                                        placeholder="—"
+                                        hoverCls="hover:bg-blue-50"
+                                        panelVariant="drawer"
+                                        drawerTitle="Selecionar Conta Financeira"
                                     />
                                 </FormField>
 

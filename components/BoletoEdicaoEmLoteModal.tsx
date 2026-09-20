@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, AlertTriangle, CheckCircle2, Loader2, Users } from 'lucide-react';
 import { boletoService } from '../services/boletoService';
 import type { Boleto } from '../types';
 import { formatBRL } from './BoletoFormModal';
 import CostCenterSelect, { CostCenterOption } from './CostCenterSelect';
 import SupplierSelect, { SupplierOption } from './SupplierSelect';
+import HierarchicalSelect, { HierarchicalSelectItem } from './HierarchicalSelect';
+import { financialRegistryService } from '../services/financialRegistryService';
 
 interface ItemOption {
     id: string;
@@ -30,7 +32,16 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
     const [supplierId, setSupplierId] = useState('');
     const [projectId, setProjectId] = useState('');
     const [costCenterId, setCostCenterId] = useState('');
+    const [categoryId, setCategoryId] = useState('');
     const [descricao, setDescricao] = useState('');
+    // Conta Financeira (financial_categories) — carregada aqui mesmo: é a única
+    // dimensão do lote que o BoletoManager não tem em mãos.
+    const [contasFinanceiras, setContasFinanceiras] = useState<HierarchicalSelectItem[]>([]);
+    useEffect(() => {
+        financialRegistryService.listChartOfAccounts(organizationId)
+            .then(rows => setContasFinanceiras(rows.map(c => ({ id: c.id, name: c.name, parentId: c.parent_id ?? null }))))
+            .catch(() => setContasFinanceiras([]));
+    }, [organizationId]);
     const [saving, setSaving] = useState(false);
     const [result, setResult] = useState<ActionResult>(null);
 
@@ -40,10 +51,11 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
     const mixedBeneficiario = beneficiarios.length > 1;
 
     function buildFields() {
-        const fields: Partial<Pick<Boleto, 'supplier_id' | 'cost_center_id' | 'project_id' | 'descricao'>> = {};
+        const fields: Partial<Pick<Boleto, 'supplier_id' | 'cost_center_id' | 'category_id' | 'project_id' | 'descricao'>> = {};
         if (supplierId)        fields.supplier_id    = supplierId;
         if (projectId)         fields.project_id     = projectId;
         if (costCenterId)      fields.cost_center_id = costCenterId;
+        if (categoryId)        fields.category_id    = categoryId;
         if (descricao.trim())  fields.descricao      = descricao.trim();
         return fields;
     }
@@ -96,7 +108,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
     }
 
     const allDone = result !== null && result.errors.length === 0;
-    const noneChanged = !supplierId && !projectId && !costCenterId && !descricao.trim();
+    const noneChanged = !supplierId && !projectId && !costCenterId && !categoryId && !descricao.trim();
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -203,6 +215,21 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                                     placeholder="— Não alterar —"
                                     disabled={saving}
                                     hoverCls="hover:bg-blue-50"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Conta Financeira</label>
+                                <HierarchicalSelect
+                                    items={contasFinanceiras}
+                                    value={categoryId}
+                                    onChange={setCategoryId}
+                                    valueField="id"
+                                    placeholder="— Não alterar —"
+                                    disabled={saving}
+                                    hoverCls="hover:bg-blue-50"
+                                    panelVariant="drawer"
+                                    drawerTitle="Selecionar Conta Financeira"
                                 />
                             </div>
 

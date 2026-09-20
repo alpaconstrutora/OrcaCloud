@@ -208,11 +208,24 @@ export function viewpointDoTopico(t: TopicoBcf): ArquivoBcf {
  * ⚠️ O tipo é `Clash`, e não `Issue`: é o que faz Solibri e Navisworks
  * separarem interferência geométrica de comentário de projeto nas listas deles.
  */
+/**
+ * Aceites (P2.1): por chave `<uid>:<uid>` — o tópico sai `Closed` e a descrição
+ * leva a justificativa e o autor. Ausente = tudo `Open`, como sempre.
+ */
+export type AceitesParaBcf = ReadonlyMap<string, { justificativa: string; acceptedEmail: string | null }>;
+
+function fecharSeAceito(t: TopicoBcf, chave: string, aceites?: AceitesParaBcf): TopicoBcf {
+  const a = aceites?.get(chave);
+  if (!a) return t;
+  return { ...t, status: 'Closed', descricao: `${t.descricao} ACEITO${a.acceptedEmail ? ` por ${a.acceptedEmail}` : ''}: ${a.justificativa}` };
+}
+
 export function topicosDeConflitos(
   model: BlueprintModel,
   conflitos: Conflito[],
   autor: string,
   agora: Date,
+  aceites?: AceitesParaBcf,
 ): TopicoBcf[] {
   const elevacao = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
   const porId = new Map((model.trechos ?? []).map((t) => [t.id, t]));
@@ -233,7 +246,7 @@ export function topicosDeConflitos(
         ? `${(c.comprimentoDentroMm / 1000).toFixed(3)} m por dentro`
         : `de raspão, ${Math.round(c.folgaEntreEixosMm)} mm entre os eixos`;
 
-    return {
+    const topico: TopicoBcf = {
       // ⚠️ A semente é o PAR de uids, e não os ids: o id muda a cada
       // publicação. Ver `guidDoTopico`.
       guid: guidDoTopico(`clash:${c.trechoUid}:${c.outroUid}`),
@@ -255,6 +268,7 @@ export function topicosDeConflitos(
       componentes: [ifcGuidDeUid(c.trechoUid), ifcGuidDeUid(c.outroUid)],
       alvo,
     };
+    return fecharSeAceito(topico, `${c.trechoUid}:${c.outroUid}`, aceites);
   });
 }
 
@@ -267,6 +281,7 @@ export function topicosDeConflitosArquitetonicos(
   conflitos: ConflitoArquitetonico[],
   autor: string,
   agora: Date,
+  aceites?: AceitesParaBcf,
 ): TopicoBcf[] {
   const elevacao = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
   return conflitos.map((c) => {
@@ -284,7 +299,7 @@ export function topicosDeConflitosArquitetonicos(
                 : c.classe === 'RESERVA_X_COMPONENTE'
                   ? `peça dentro da folga de manutenção do equipamento (≈ ${c.medidaMm} mm de lado em comum)`
                   : `faltam ${c.medidaMm} mm para a altura livre de 2,10 m sobre o degrau (NBR 9077)`;
-    return {
+    const topico: TopicoBcf = {
       guid: guidDoTopico(`clash:${c.pecaUid}:${c.outroUid}`),
       titulo: `${rotuloCurto(c.pecaUid, c.familia)} encontra ${rotuloCurto(c.outroUid, c.outroFamilia ?? 'structural')}`,
       tipo: 'Clash' as const,
@@ -295,6 +310,7 @@ export function topicosDeConflitosArquitetonicos(
       componentes: [ifcGuidDeUid(c.pecaUid), ifcGuidDeUid(c.outroUid)],
       alvo: { x: c.em.x, y: c.em.y, z: (elevacao.get(c.levelId) ?? 0) + 1000 },
     };
+    return fecharSeAceito(topico, `${c.pecaUid}:${c.outroUid}`, aceites);
   });
 }
 

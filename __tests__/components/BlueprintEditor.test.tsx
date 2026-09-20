@@ -216,6 +216,23 @@ vi.mock('../../services/blueprintBudgetService', () => ({
   aplicarNoProjeto: vi.fn(async () => ({ removidas: 0, adicionadas: 0, total: 0 })),
 }));
 
+// STATUS DO CONFLITO (P2.1): aceites em memória — o dublê guarda o que foi aceito.
+const aceitesGravados: { id: string; studyId: string; chave: string; classe: string; medidaMm: number; justificativa: string; acceptedEmail: string | null; createdAt: string }[] = [];
+vi.mock('../../services/blueprintConflitoStatusService', () => ({
+  blueprintConflitoStatusService: {
+    list: vi.fn(async () => [...aceitesGravados]),
+    aceitar: vi.fn(async (e: { studyId: string; chave: string; classe: string; medidaMm: number; justificativa: string }) => {
+      const a = { id: `ac_${aceitesGravados.length + 1}`, studyId: e.studyId, chave: e.chave, classe: e.classe, medidaMm: e.medidaMm, justificativa: e.justificativa, acceptedEmail: 'eu@teste.com', createdAt: '2026-09-20T10:00:00Z' };
+      aceitesGravados.push(a);
+      return a;
+    }),
+    reabrir: vi.fn(async (id: string) => {
+      const i = aceitesGravados.findIndex((a) => a.id === id);
+      if (i >= 0) aceitesGravados.splice(i, 1);
+    }),
+  },
+}));
+
 // PLANTA → COMPRAS (E10.3): o serviço vai ao banco (orçamento, cronograma, prazos, plano);
 // aqui é dublê — a tela e a costura com o ribbon são o que se prova.
 const preverCompras = vi.fn();
@@ -4766,5 +4783,53 @@ describe('BlueprintEditor · HVAC mínimo (E11.1)', () => {
     expect(painelDoShaft).toHaveValue('MECANICA');
     await user.selectOptions(painelDoShaft, '');
     expect(screen.getByLabelText('Disciplina do shaft')).toHaveValue('');
+  }, 60000);
+});
+
+/**
+ * STATUS DO CONFLITO (20/09/2026, backlog P2 — P2.1): aceitar com justificativa
+ * tira o par da contagem e o põe na seção "Aceitos"; reabrir devolve.
+ */
+describe('BlueprintEditor · status do conflito (P2.1)', () => {
+  it('aceitar exige justificativa, tira da contagem do ribbon e lista em Aceitos; reabrir volta a contar', async () => {
+    aceitesGravados.length = 0;
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [
+        { type: 'AddComponente', levelId: t, tipoId: 'CONDENSADORA', at: k.point(3000, 3000) },
+        { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(3000, 3000)], larguraMm: 200, profundidadeMm: 200, alturaMm: 2800 },
+      ]).model,
+    );
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^analisar$/i);
+    const botao = () => screen.getByRole('button', { name: /^conflitos/i });
+    expect(botao()).toHaveTextContent('1');
+    await user.click(botao());
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getAllByTestId('conflito-aberto')).toHaveLength(1);
+    await user.click(within(dialog).getByTestId('aceitar-conflito'));
+    // Sem justificativa não aceita.
+    await user.click(within(dialog).getByTestId('confirmar-aceite'));
+    expect(within(dialog).getByTestId('erro-do-aceite')).toHaveTextContent(/mínimo 3/);
+    await user.type(within(dialog).getByLabelText('Justificativa do aceite'), 'pilar sai na etapa 2');
+    await user.click(within(dialog).getByTestId('confirmar-aceite'));
+    // Saiu dos abertos, entrou nos aceitos; o ribbon não conta mais.
+    await waitFor(() => expect(within(dialog).queryAllByTestId('conflito-aberto')).toHaveLength(0));
+    expect(within(dialog).getByTestId('sem-abertos')).toHaveTextContent(/1 aceito/);
+    const aceitos = within(dialog).getByTestId('conflitos-aceitos');
+    expect(aceitos).toHaveTextContent(/Aceitos \(1\)/);
+    expect(aceitos).toHaveTextContent(/pilar sai na etapa 2/);
+    expect(aceitos).toHaveTextContent(/eu@teste.com/);
+    expect(aceitesGravados[0]).toMatchObject({ classe: 'RESERVA_X_ESTRUTURA', medidaMm: 200, justificativa: 'pilar sai na etapa 2' });
+    expect(aceitesGravados[0].chave).toMatch(/^[0-9a-f-]+:[0-9a-f-]+$/i);
+    expect(botao()).not.toHaveTextContent('1');
+    // Reabrir.
+    await user.click(within(aceitos).getByTestId('reabrir-conflito'));
+    await waitFor(() => expect(within(dialog).getAllByTestId('conflito-aberto')).toHaveLength(1));
+    expect(botao()).toHaveTextContent('1');
+    expect(aceitesGravados).toHaveLength(0);
   }, 60000);
 });

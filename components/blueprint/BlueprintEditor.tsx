@@ -125,6 +125,8 @@ import PainelEstruturaSelecionada from './PainelEstruturaSelecionada';
 import PainelTrechoSelecionado from './PainelTrechoSelecionado';
 import PainelQuadroSelecionado from './PainelQuadroSelecionado';
 import PainelConflitos from './PainelConflitos';
+import { blueprintConflitoStatusService } from '../../services/blueprintConflitoStatusService';
+import { classificarArq, classificarMep, contarStatus, indexarAceites, type AceiteDeConflito } from '../../utils/blueprintConflitoStatus';
 import PainelEletrica from './PainelEletrica';
 import PainelAguaSelecionada from './PainelAguaSelecionada';
 import PainelEscadaSelecionada from './PainelEscadaSelecionada';
@@ -2857,7 +2859,33 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   /** MECÂNICA (E11.1): quantos conflitos são de reserva de equipamento, e quais shafts são mecânicos. */
   const conflitosDeReservas = useMemo(() => conflitosArq.filter((c) => c.classe.startsWith('RESERVA_X_')).length, [conflitosArq]);
   const shaftsMecanicos = useMemo(() => (editor.model.nucleos ?? []).filter((n) => n.tipo === 'SHAFT' && n.disciplina === 'MECANICA'), [editor.model.nucleos]);
-  const totalDeConflitos = conflitos.length + conflitosArq.length;
+  /**
+   * STATUS DO CONFLITO (P2.1): os aceites gravados do estudo. A lista continua
+   * derivada; o aceite só tira o par da contagem (e cai se o encontro crescer).
+   * Carregados uma vez por estudo; falhar (migration ausente) = sem status.
+   */
+  const [aceitesDeConflito, setAceitesDeConflito] = useState<AceiteDeConflito[]>([]);
+  useEffect(() => {
+    let vivo = true;
+    blueprintConflitoStatusService
+      .list(study.id)
+      .then((l) => vivo && setAceitesDeConflito(l))
+      .catch((e: unknown) => {
+        console.warn('[conflitos] aceites indisponíveis:', e);
+        if (vivo) setAceitesDeConflito([]);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [study.id]);
+  const mapaDeAceites = useMemo(() => indexarAceites(aceitesDeConflito), [aceitesDeConflito]);
+  const statusDosConflitos = useMemo(
+    () => contarStatus([...classificarMep(conflitos, mapaDeAceites), ...classificarArq(conflitosArq, mapaDeAceites)]),
+    [conflitos, conflitosArq, mapaDeAceites],
+  );
+  /** O que o ribbon conta: só os ABERTOS (aceito com justificativa não é pendência). */
+  const totalDeConflitos = statusDosConflitos.abertos;
+  const aceitesParaBcf = useMemo(() => new Map(aceitesDeConflito.map((a) => [a.chave, { justificativa: a.justificativa, acceptedEmail: a.acceptedEmail }])), [aceitesDeConflito]);
   /** As restrições conferidas (E1.4b) — derivadas a cada mudança do modelo. */
   const conferenciaDeRestricoes = useMemo(() => conferirRestricoes(editor.model), [editor.model]);
   const restricoesVioladas = violacoes(conferenciaDeRestricoes).length;
@@ -2875,8 +2903,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     const autor = perfil?.email || 'ÒPURA';
     const agora = new Date();
     const topicos = [
-      ...topicosDeConflitos(editor.model, conflitos, autor, agora),
-      ...topicosDeConflitosArquitetonicos(editor.model, conflitosArq, autor, agora),
+      ...topicosDeConflitos(editor.model, conflitos, autor, agora, aceitesParaBcf),
+      ...topicosDeConflitosArquitetonicos(editor.model, conflitosArq, autor, agora, aceitesParaBcf),
       ...topicosDeComentarios(
         comentarios.map((c) => ({
           id: c.id,
@@ -13012,6 +13040,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               model={editor.model}
               conflitos={conflitos}
               arquitetonicos={conflitosArq}
+              aceites={mapaDeAceites}
+              podeDecidir={!somenteLeitura}
+              onAceitar={async (e) => {
+                const a = await blueprintConflitoStatusService.aceitar({ studyId: study.id, organizationId: study.organization_id, ...e });
+                setAceitesDeConflito((lista) => [...lista.filter((x) => x.chave !== a.chave), a]);
+              }}
+              onReabrir={async (a) => {
+                await blueprintConflitoStatusService.reabrir(a.id);
+                setAceitesDeConflito((lista) => lista.filter((x) => x.id !== a.id));
+              }}
               onSelecionar={(id) => selecionar([id])}
               onExportarBcf={exportarBcfDoEstudo}
             />

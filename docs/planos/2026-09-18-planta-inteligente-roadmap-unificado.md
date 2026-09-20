@@ -1062,6 +1062,24 @@ Próxima: E10.3 — Planta → compras.
 
 **Etapa 11 fechada — e com ela as 42 fases do roadmap.** O que ficou explicitamente fora é o P3/P4 do próprio roadmap (HVAC completo — dutos, terminais e cargas —, render, energia/carbono, analítico estrutural, fabricação, Dynamo/marketplace, worksets, texto 3D).
 
+### P2.1 — Status do conflito: aceite com justificativa (20/09/2026) · backlog P2
+
+**Pedido:** *"na Planta: backlog P2 do fecho (por exemplo: status do conflito aberto/resolvido, dutos como trechos MECANICA, catálogo de tipos por organização, mover núcleo/vaga por arraste)"* — quatro fases, P2.1 a P2.4, uma publicação cada.
+
+**O que entrou** (sem bump — nada no payload; migration **000058** `blueprint_conflict_acceptances` aplicada por `db query -f`):
+
+- **A lista continua derivada; o que se grava é a DECISÃO.** `PainelConflitos` nasceu sem "resolver" (conflito se resolve no desenho), e isso fica: o status é **ACEITO**, com justificativa (3–500 caracteres), autor e data, por **par de uids** (`<uid da peça>:<uid do outro>` — a mesma semente do tópico BCF), por estudo. O aceito sai da contagem do ribbon e fica numa seção própria e visível ("Aceitos (N) — fora da contagem, com justificativa"), com **Reabrir**. Quando o desenho muda e o par some, a lista some (a derivação manda) e a linha fica órfã (`aceitesOrfaos`); quando o par volta, a decisão vale de novo.
+- **O aceite caduca se o encontro crescer**: guarda a medida (mm) no momento do aceite; se a atual passar de 25 % + 20 mm além dela (`cresceuAlemDoAceito`), o conflito volta a ABERTO com a nota "cresceu desde o aceite (X → Y mm) — volta a contar". Aceitar 13 mm de raspão não é aceitar 400 mm de viga dentro da caixa.
+- **`utils/blueprintConflitoStatus.ts`** (puro): chaves, `classificarMep/classificarArq`, `contarStatus`, `aceitesOrfaos`, `validarJustificativa`. **`services/blueprintConflitoStatusService.ts`**: `list`, `aceitar` (upsert por estudo+chave, com o e-mail de quem aceita), `reabrir` (delete). **RLS**: membro da organização lê/grava; **LEITOR do estudo (E10.1) vê, mas não aceita nem reabre** — três policies RESTRICTIVE (INSERT/UPDATE/DELETE), e não FOR ALL, para não esconder os aceites dele; `segurancaMigrations` OK.
+- **BCF**: `topicosDeConflitos`/`…Arquitetonicos` recebem os aceites e o tópico do par aceito sai **`Closed`** com "ACEITO por <e-mail>: <justificativa>" na descrição.
+- Editor: aceites carregados por estudo (falhar = sem status); o botão **Conflitos** do ribbon conta só os **abertos**; `podeDecidir = !somenteLeitura`.
+
+**Decisões.** (1) Vocabulário "aceito", não "resolvido": resolvido é o que o desenho deixou de ter, e isso a lista já faz sozinha. (2) Por par de uids e por estudo (não por ramo): a decisão é sobre as duas peças, e vale nas alternativas. (3) A tabela tem `medida_mm` para a caducidade — sem isso o aceite seria um "ignorar para sempre". (4) O leitor vê o aceite (é informação de projeto) e não decide (é decisão de projeto).
+
+**Prova.** *No app real* (estudo "Planta 14/09/2026"): **escritas bloqueadas (15)** — ribbon "Conflitos 385", 385 abertos e nenhum aceito; "Aceitar…" sem texto → "Diga por que o conflito é aceito (mínimo 3 caracteres)"; com texto → falha honesta (POST abortado), 385 continuam. **Escrita real, autorizada ("aceitar, provar e reabrir")**, bloqueio aberto só para `blueprint_conflict_acceptances` (0 escritas fora): aceitar "Elétrica I-EE31 encontra L1 · 0,013 m por dentro" → **384 abertos, ribbon "Conflitos 384"**, seção "Aceitos (1)" com *“prova P2.1 — eletroduto será desviado na revisão” — altair.rosa@…, 20/09/2026, com 13 mm*; **Reabrir** → 385 de novo; banco com 0 linhas ao fim (POST upsert + DELETE, nada mais). Testes: `blueprintConflitoStatus.test.ts` (3: contagem/chave, caducidade e órfãos, BCF Closed), editor "status do conflito (P2.1)" (aceitar exige justificativa, tira da contagem, Aceitos, reabrir); suíte 400 arquivos / 4849 testes; tsc, check-ui e build OK.
+
+Próxima: P2.2 — dutos como trechos MECANICA.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

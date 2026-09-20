@@ -12,6 +12,9 @@
 > **Pedido posterior — 2026-09-20 (mesma sessão):**
 > Almoxarifado não pertence à organização.
 
+> **Pedido posterior — 2026-09-20 (mesma sessão):**
+> mover kpis card para abaixo das abas
+
 ## Decisões tomadas com o usuário
 | Data | Pergunta | Resposta |
 |---|---|---|
@@ -66,6 +69,12 @@ saldo inicial.
 |---|---|---|---|
 | 12 | `components/inventory/StockItemImportModal.tsx` | O seletor de destino oferecia `warehouses` do contexto do topo — em "Todas as organizações", as de todas as orgs — enquanto o lote vai para a org escolhida no modal de organização; escolher o almoxarifado da outra org caía na validação de `createMovement`. Agora `orgWarehouses = warehouses.filter(w => w.organizationId === organizationId)` alimenta o seletor, as mensagens e a gravação | Reproduzido no código antigo (Playwright, contexto Todas, org SPE → 2 opções) e corrigido (SPE → só "Almoxarifado - Garden"; Alpa → só "Almoxarifado Central"), 0 erros |
 
+### Fase 4 — 2026-09-20: KPIs abaixo das abas
+
+| # | Arquivo | O que muda | Como sei que terminou |
+|---|---|---|---|
+| 13 | `components/InventoryModule.tsx` | Bloco de KPIs passa para depois da barra de abas (anatomia do guia: título → abas → KPIs). Como a edição toca KPI card (REGRA #1), a cópia local (`rounded-[1.5rem]`, classes `bg-${color}-50` montadas em runtime, invisíveis ao JIT) é trocada pelo `KpiCard` canônico (§4), `gap-3` | print: abas acima dos cards; `check-ui-standard.sh` limpo; 0 erros de console |
+
 ## Fora do escopo (registrado, não feito)
 - Coluna `origin_asset_id` em `stock_items` (FK para `opura_assets`): `input_code = code do
   ativo` já faz a ponte; FK só se surgir tela que navegue do item para o ativo.
@@ -94,7 +103,9 @@ saldo inicial.
 - [x] 11 — seletor "Almoxarifado de destino" no rodapé; verificado com Playwright (org Alpa: destino visível com 2 opções, Qtd. inicial 1 na prévia, frase muda ao escolher destino, importar 1 ativo → Saldos mostra; 0 erros fora do ruído 57014 da Central de Controle); registros do teste apagados em seguida
 - [x] push em `main` (`e32a3dd2`) + `conferir-producao.sh` ✅ (fase 2)
 - [x] 12 — destino só da organização de gravação; reproduzido e verificado
-- [ ] push em `main` + `conferir-producao.sh` (fase 3)
+- [x] push em `main` (`e6fdad0a`) + `conferir-producao.sh` ✅ (fase 3)
+- [x] 13 — KPIs abaixo das abas com `KpiCard`; verificado na tela (org Alpa), 0 erros
+- [ ] push em `main` + `conferir-producao.sh` (fase 4)
 
 ## Verificação
 1. `npm run typecheck`

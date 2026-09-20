@@ -30,6 +30,7 @@ import { inventoryService } from '../services/inventoryService';
 import Button from './ui/Button';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
+import { KpiCard } from './ui/KpiCard';
 import { useStore } from '../store/useStore';
 import { useOrgWriteTarget } from '../hooks/useOrgContext';
 import { formatMoney, formatDateBR, formatPercent } from './ui/Format';
@@ -620,26 +621,6 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                 </div>
             </div>
 
-            {/* Stats Dashboard */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {[
-                    { label: 'Almoxarifados', value: warehouses.length, icon: Warehouse, color: 'blue' as const },
-                    { label: 'Itens em Estoque', value: balances.filter(b => b.quantity > 0).length, icon: Package, color: 'green' as const },
-                    { label: 'Sem Saldo', value: lowStock, icon: AlertTriangle, color: 'amber' as const },
-                    { label: 'Valor Total', value: fmtBrl(totalValue), icon: BarChart3, color: 'purple' as const },
-                ].map((kpi, idx) => (
-                    <div key={idx} className={`bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-${kpi.color}-100 transition-all`}>
-                        <div className={`p-3.5 bg-${kpi.color}-50 text-${kpi.color}-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform`}>
-                            <kpi.icon className="w-5 h-5" />
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">{kpi.label}</p>
-                            <p className="text-2xl font-bold text-gray-900 truncate">{kpi.value}</p>
-                        </div>
-                    </div>
-                ))}
-            </div>
-
             {/* Tabs */}
             <div className="flex items-center gap-1 border-b border-gray-200">
                 {([
@@ -665,6 +646,14 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                         {t.label}
                     </button>
                 ))}
+            </div>
+
+            {/* KPIs — depois das abas (anatomia do guia: título → abas → KPIs; pedido de 2026-09-20) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                <KpiCard label="Almoxarifados" value={warehouses.length} icon={<Warehouse className="w-4 h-4" />} color="blue" />
+                <KpiCard label="Itens em estoque" value={balances.filter(b => b.quantity > 0).length} icon={<Package className="w-4 h-4" />} color="green" />
+                <KpiCard label="Sem saldo" value={lowStock} icon={<AlertTriangle className="w-4 h-4" />} color="amber" />
+                <KpiCard label="Valor total" value={fmtBrl(totalValue)} icon={<BarChart3 className="w-4 h-4" />} color="purple" />
             </div>
 
             {/* Toolbar */}

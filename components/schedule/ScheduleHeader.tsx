@@ -19,6 +19,8 @@ import {
     FlaskConical,
     FileSpreadsheet,
     FileText,
+    Maximize2,
+    Minimize2,
 } from 'lucide-react';
 import Button from '../ui/Button';
 import { isOrcamentoOuLegado } from '../../utils/projectClassification';
@@ -63,6 +65,9 @@ interface ScheduleHeaderProps {
     planningVersionsCount: number;
     hasNewerBudgetVersion: boolean;
     onAutoSchedule: () => void;
+    /** Modo tela cheia (`hooks/useTelaCheia.ts`) — aceso enquanto vale, com `aria-pressed`. */
+    telaCheia: boolean;
+    onAlternarTelaCheia: () => void;
 }
 
 // Abas de navegação da tela (padrão ui_ux_guia_unificado.md §19.1 — trilho + botões h-7).
@@ -120,6 +125,8 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
     planningVersionsCount,
     hasNewerBudgetVersion,
     onAutoSchedule,
+    telaCheia,
+    onAlternarTelaCheia,
 }) => {
     const [overflowOpen, setOverflowOpen] = React.useState(false);
     const overflowRef = React.useRef<HTMLDivElement>(null);
@@ -275,6 +282,23 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                 <button onClick={() => setIsConfigModalOpen(true)} title="Configurações do cronograma" className="flex items-center gap-1.5 h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium hover:bg-gray-100 transition-all">
                     <Settings className="w-3.5 h-3.5" />
                     Configurações
+                </button>
+
+                {/* Tela cheia — mesmo botão de MODO da Planta Inteligente (ribbon,
+                    acesso rápido): ícone só, `aria-pressed`, aceso enquanto vale.
+                    Fica à vista em qualquer aba porque é o único botão que precisa
+                    estar acessível para SAIR do modo. */}
+                <button
+                    type="button"
+                    onClick={onAlternarTelaCheia}
+                    title={telaCheia ? 'Sair da tela cheia' : 'Tela cheia'}
+                    aria-label={telaCheia ? 'Sair da tela cheia' : 'Tela cheia'}
+                    aria-pressed={telaCheia}
+                    className={`flex items-center justify-center h-9 w-9 rounded-[6px] border transition-all ${
+                        telaCheia ? 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100' : 'bg-gray-50 border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                    }`}
+                >
+                    {telaCheia ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                 </button>
 
                 {/* Overflow menu ··· */}

@@ -42,6 +42,7 @@ import { exportScheduleToXlsx, exportScheduleToCsv } from '../utils/scheduleExpo
 import { RecurrenceRule, expandRecurrenceDates } from '../utils/recurrence';
 import { applySplitToTask, removeSplitFromTask } from '../utils/scheduleSegments';
 import { useConfirm } from './ui/confirm';
+import { useTelaCheia } from '../hooks/useTelaCheia';
 import { ResourceManagement } from './ResourceManagement';
 import { ScheduleRiskDashboard } from './schedule/ScheduleRiskDashboard';
 import { ConstraintsPanel } from './schedule/ConstraintsPanel';
@@ -886,6 +887,10 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
     const [isCrewClassifModalOpen, setIsCrewClassifModalOpen] = useState(false);
     const confirm = useConfirm();
+    // Tela cheia (19/09/2026, "da mesma forma que implementado em … planta
+    // inteligente") — a mecânica mora em `hooks/useTelaCheia.ts`; aqui só a raiz
+    // muda de caixa (ver o `return`).
+    const { telaCheia, alternarTelaCheia } = useTelaCheia();
     // Outline (estrutura) — modal de criar/renomear e contexto do seletor de item de orçamento
     const [outlineEditor, setOutlineEditor] = useState<{ mode: 'create' | 'rename'; parentId: string | null; nodeId?: string; nodeType: outlineOps.OutlineNodeType; name: string; nature?: TaskNature; milestone?: boolean } | null>(null);
     const [budgetPickerParent, setBudgetPickerParent] = useState<string | null | undefined>(undefined);
@@ -2024,8 +2029,14 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     }, [snapshotCurrentPlanning, settings, onUpdateSettings]);
 
     // Restaura uma versão arquivada do planejamento (cronograma + pin + orçamento congelado).
-    const handleRestorePlanningVersion = React.useCallback((version: PlanningVersion) => {
-        if (!window.confirm(`Restaurar a versão ${version.item} do planejamento? O cronograma atual será substituído.`)) return;
+    const handleRestorePlanningVersion = React.useCallback(async (version: PlanningVersion) => {
+        const ok = await confirm({
+            title: `Restaurar a versão ${version.item} do planejamento?`,
+            message: 'O cronograma atual será substituído.',
+            variant: 'warning',
+            confirmLabel: 'Restaurar',
+        });
+        if (!ok) return;
         // Resolve o orçamento daquela versão a partir do orçamento vinculado
         let resolvedBudget: BudgetEntry[] | null = null;
         if (version.budgetVersionId) {
@@ -2048,7 +2059,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         };
         onUpdateSettings(newSettings);
         setVersionPanelOpen(false);
-    }, [budgetVersionStatus.linkedVersions, onUpdateBudget, settings, onUpdateSettings]);
+    }, [budgetVersionStatus.linkedVersions, onUpdateBudget, settings, onUpdateSettings, confirm]);
 
 
     const handleUpdateDistribution = (itemId: string, periodId: string, value: string) => {
@@ -2189,8 +2200,14 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         });
     };
 
-    const handleAutoSchedule = () => {
-        if (!window.confirm('Isso recalcula todas as datas com base em predecessores e duração, removendo ajustes manuais de data. Continuar?')) return;
+    const handleAutoSchedule = async () => {
+        const ok = await confirm({
+            title: 'Auto programar o cronograma?',
+            message: 'Isso recalcula todas as datas com base em predecessores e duração, removendo ajustes manuais de data.',
+            variant: 'warning',
+            confirmLabel: 'Continuar',
+        });
+        if (!ok) return;
         const cleaned = (schedule.itemSchedules || []).map(s => {
             const { startDate, endDate, earlyStart, earlyFinish, lateStart, lateFinish,
                     totalFloat, isCritical, constraintType, constraintDate, slippage, spi, ...rest } = s;
@@ -3988,10 +4005,22 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     const chartDataWithCumulative = chartData; // Legacy reference support if needed
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500 pb-20">
+        // TELA CHEIA: a raiz sai do <main> do shell e vira `fixed inset-0` (z-40 —
+        // abaixo dos Sheets z-50, do confirm z-[200] e dos toasts z-[300]; acima
+        // da sidebar z-20 e do topo z-30). Fora do <main> ela deixa de herdar
+        // rolagem, fundo e gutter, então os três voltam à mão: `overflow-y-auto`
+        // (um `fixed` sem rolagem própria trava a página — ver a memória do
+        // overlay absolute em main), `bg-gray-50` (o mesmo do shell) e
+        // `p-4 md:p-6` (§20.2.1 do guia: casca própria repete o gutter).
+        <div
+            className={`space-y-6 animate-in fade-in duration-500 pb-20 ${telaCheia ? 'fixed inset-0 z-40 overflow-y-auto bg-gray-50 p-4 md:p-6' : ''}`}
+            data-tela-cheia={telaCheia ? '' : undefined}
+        >
             {/* Header */}
             <ScheduleHeader
                 onBack={onBack}
+                telaCheia={telaCheia}
+                onAlternarTelaCheia={alternarTelaCheia}
                 settings={settings}
                 isProjectSelectorOpen={isProjectSelectorOpen}
                 setIsProjectSelectorOpen={setIsProjectSelectorOpen}
@@ -4028,12 +4057,17 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 budgetLength={budget.length}
                 autoCount={budget.filter(b => (schedule.itemSchedules || []).some(s => s.id === b.id && s.autoDuration)).length}
                 allAuto={budget.length > 0 && budget.filter(b => (schedule.itemSchedules || []).some(s => s.id === b.id && s.autoDuration)).length >= budget.length}
-                onClearAll={() => {
-                    if (window.confirm('Tem certeza que deseja limpar todo o planejamento?')) {
-                        const newSchedule = { ...schedule, distributions: [] };
-                        setSchedule(newSchedule);
-                        onUpdateSettings({ ...settings, schedule: newSchedule });
-                    }
+                onClearAll={async () => {
+                    const ok = await confirm({
+                        title: 'Limpar todo o planejamento?',
+                        message: 'Todas as distribuições do cronograma serão removidas.',
+                        variant: 'danger',
+                        confirmLabel: 'Limpar',
+                    });
+                    if (!ok) return;
+                    const newSchedule = { ...schedule, distributions: [] };
+                    setSchedule(newSchedule);
+                    onUpdateSettings({ ...settings, schedule: newSchedule });
                 }}
                 syncDiffCount={syncDiff.total}
                 onSyncBudget={() => setSyncModalOpen(true)}
@@ -4199,7 +4233,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                                         <div className="flex items-center gap-2">
                                                             <span className={`text-xs font-black px-1.5 py-0.5 rounded-full ${isPinned ? 'text-indigo-700 bg-indigo-200' : 'text-gray-500 bg-gray-100'}`}>v{bv.item}</span>
                                                             <span className="text-xs font-bold text-gray-800 truncate">{bv.description}</span>
-                                                            {isPinned && <span className="text-[9px] font-black text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded-full uppercase tracking-wide">atual</span>}
+                                                            {isPinned && <span className="text-xs font-normal text-indigo-600">Atual</span>}
                                                         </div>
                                                         <p className="text-xs text-gray-400 mt-0.5">
                                                             {new Date(bv.date).toLocaleDateString('pt-BR')} · {bv.budget?.length ?? 0} itens

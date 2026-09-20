@@ -306,8 +306,18 @@ export interface Envelope {
   valido: boolean;
   /** Área das faixas restritas dentro do lote (E3.1), mm² — recortadas ou não. */
   areaRestritaMm2?: number;
-  /** Restrições fora da divisa (no meio do lote): a área conta, o anel não é recortado. */
+  /**
+   * Restrições fora da divisa (no meio do lote). Até 20/09/2026 (P2.11) elas não
+   * recortavam o anel; agora recortam em PEÇAS (`pecas`) — este contador fica
+   * para dizer quantas faixas dividiram o envelope.
+   */
   restricoesNaoRecortadas?: number;
+  /**
+   * P2.11: as PEÇAS do envelope quando uma faixa no meio do lote (servidão que o
+   * atravessa) o divide. `anel` é a MAIOR peça — quem só lê `anel` continua
+   * certo; `areaMm2` é a soma das peças. Sem faixa no meio, `pecas = [anel]`.
+   */
+  pecas?: Point[][];
 }
 
 /**
@@ -316,9 +326,10 @@ export interface Envelope {
  *
  * A faixa na divisa recorta o anel pelo semiplano além dela (a APP na margem
  * "empurra" o envelope para dentro, como um recuo maior). A faixa no MEIO do
- * lote (servidão que o atravessa) não é um semiplano — recortá-la deixaria
- * duas peças, e o envelope é um anel só: a área dela é descontada e a tela
- * avisa que o anel não a mostra.
+ * lote (servidão que o atravessa) recorta em DUAS PEÇAS (P2.11, 20/09/2026):
+ * o semiplano aquém da faixa e o além dela; `pecas` guarda as duas, `anel` é
+ * a maior, e "cabe?" exige a edificação inteira numa peça só — sobre a
+ * servidão não se constrói.
  *
  * Divisa sem papel não recua. É deliberado: inventar um recuo padrão para um lado
  * que ninguém classificou desenharia uma restrição que não existe no projeto —
@@ -356,29 +367,36 @@ export function envelopeConstrutivo(
 
 function aplicarRestricoes(envelope: Envelope, terreno: Terreno, limites: Boundary[]): Envelope {
   const faixas = faixasRestritas(terreno, limites);
-  if (faixas.length === 0) return envelope;
-  let anel = envelope.anel;
-  let naoRecortadas = 0;
+  if (faixas.length === 0) return envelope.valido && envelope.anel.length >= 3 ? { ...envelope, pecas: [envelope.anel] } : envelope;
+  // As peças: começam num anel só; cada faixa na divisa recorta todas, cada
+  // faixa no meio divide todas em duas (aquém e além).
+  let pecas: Point[][] = envelope.anel.length >= 3 ? [envelope.anel] : [];
+  let noMeio = 0;
   let areaRestrita = 0;
+  const comArea = (a: Point[]) => a.length >= 3 && Math.abs(polygonArea(a)) > 0;
   for (const f of faixas) {
     areaRestrita += f.areaNoLoteMm2;
-    if (!f.naDivisa) {
-      naoRecortadas++;
+    if (pecas.length === 0) continue;
+    const n = { x: f.anel[3].x - f.anel[0].x, y: f.anel[3].y - f.anel[0].y };
+    if (f.naDivisa) {
+      // Semiplano permitido: além da paralela interna da faixa (anel[3] → anel[2]), no sentido da normal.
+      pecas = pecas.map((p) => recortarPorSemiplano(p, f.anel[3], n)).filter(comArea);
       continue;
     }
-    if (anel.length < 3) continue;
-    // Semiplano permitido: além da paralela interna da faixa (anel[3] → anel[2]), no sentido da normal.
-    const o = f.anel[3];
-    const n = { x: f.anel[3].x - f.anel[0].x, y: f.anel[3].y - f.anel[0].y };
-    anel = recortarPorSemiplano(anel, o, n);
+    noMeio++;
+    pecas = pecas
+      .flatMap((p) => [recortarPorSemiplano(p, f.anel[3], n), recortarPorSemiplano(p, f.anel[0], { x: -n.x, y: -n.y })])
+      .filter(comArea);
   }
-  const valido = envelope.valido && anel.length >= 3 && Math.abs(polygonArea(anel)) > 0;
+  pecas.sort((a, b) => Math.abs(polygonArea(b)) - Math.abs(polygonArea(a)));
+  const valido = envelope.valido && pecas.length > 0;
   return {
-    anel: valido ? anel : [],
-    areaMm2: valido ? Math.abs(polygonArea(anel)) : 0,
+    anel: valido ? pecas[0] : [],
+    areaMm2: valido ? Math.round(pecas.reduce((s, p) => s + Math.abs(polygonArea(p)), 0)) : 0,
     valido,
     areaRestritaMm2: Math.round(areaRestrita),
-    restricoesNaoRecortadas: naoRecortadas,
+    restricoesNaoRecortadas: noMeio,
+    pecas: valido ? pecas : [],
   };
 }
 

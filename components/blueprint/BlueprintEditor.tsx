@@ -10266,6 +10266,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               passoMoverMm={passoMover === 'grade' ? null : passoMover}
               onMoveVertex={moverPonta}
               envelope={envelope?.valido ? envelope.anel : []}
+              envelopePecas={envelope?.valido ? envelope.pecas : undefined}
               mostrarEnvelope={ajusteDaVista ? ajusteDaVista.mostrarEnvelope : mostrarEnvelope}
               onAddLimite={adicionarLimite}
               kindDaDivisa={kindDaDivisa}

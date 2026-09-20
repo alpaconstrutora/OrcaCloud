@@ -5,7 +5,7 @@
  * restrita no kernel, envelope − faixa, deriva e canônico.
  */
 import { describe, expect, it } from 'vitest';
-import {
+import { polygonArea,
   applyBatch,
   applyCommand,
   canonicalPayload,
@@ -97,13 +97,15 @@ describe('restrição em planta', () => {
     expect(env.areaMm2).toBe(17000 * 15000);
     expect(env.areaRestritaMm2).toBe(20000 * 10000);
     expect(env.restricoesNaoRecortadas).toBe(0);
-    // Servidão no MEIO do lote: área conta, anel não recorta, aviso.
+    // Servidão no MEIO do lote (P2.11, 20/09/2026): o envelope se divide em DUAS peças, a área é a soma delas.
     const y = applyCommand(m, { type: 'AddBoundary', levelId: t, a: point(0, 15000), b: point(20000, 15000), kind: 'RESTRICAO', restricao: { tipo: 'SERVIDAO' } }).model;
     const envMeio = envelopeConstrutivo(terreno, y.boundaries, recuos);
     expect(y.boundaries.find((b) => b.kind === 'RESTRICAO')!.restricao!.faixaMm).toBe(3000); // padrão do tipo
-    expect(envMeio.areaMm2).toBe(17000 * 22000);
+    expect(envMeio.areaMm2).toBe(17000 * 22000 - 17000 * 3000);
     expect(envMeio.areaRestritaMm2).toBe(20000 * 3000);
     expect(envMeio.restricoesNaoRecortadas).toBe(1);
+    expect(envMeio.pecas).toHaveLength(2);
+    expect(Math.abs(polygonArea(envMeio.anel))).toBe(Math.max(...envMeio.pecas!.map((p) => Math.abs(polygonArea(p))))); // o anel é a maior peça
     // A restrição não divide ambiente: um cômodo fechado atravessado por ela continua um só.
     const w = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddWall', levelId: t, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 });
     const z = applyBatch(y, [w(2000, 10000, 8000, 10000), w(8000, 10000, 8000, 20000), w(8000, 20000, 2000, 20000), w(2000, 20000, 2000, 10000)]).model;

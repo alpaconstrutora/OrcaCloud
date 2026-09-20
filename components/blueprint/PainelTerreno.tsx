@@ -413,7 +413,7 @@ export default function PainelTerreno({
                   </strong>{' '}
                   depois dos recuos
                   {envelope.areaRestritaMm2 ? ` e das faixas restritas (${(envelope.areaRestritaMm2 / 1_000_000).toFixed(2).replace('.', ',')} m² restritos)` : ''}.
-                  {envelope.restricoesNaoRecortadas ? ` ${envelope.restricoesNaoRecortadas} faixa(s) no meio do lote: a área conta, o contorno não a recorta.` : ''}
+                  {envelope.restricoesNaoRecortadas ? ` ${envelope.restricoesNaoRecortadas} faixa(s) no meio do lote dividem o envelope em ${envelope.pecas?.length ?? 1} peça(s) — a edificação tem de caber numa só.` : ''}
                 </p>
               )
             ) : (

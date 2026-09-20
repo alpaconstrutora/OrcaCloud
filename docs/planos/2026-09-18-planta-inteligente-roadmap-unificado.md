@@ -1205,6 +1205,20 @@ Próxima: P2.10 — exigência de vagas vinda da zona (E2.5) e recuos por lado p
 
 Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), ou o que você preferir do backlog.
 
+### P2.11 — Envelope recortado pela servidão no meio do lote (20/09/2026) · backlog P2
+
+**O que entrou** (**sem bump**; derivação pura): a E3.1 deixou "recorte do envelope em duas peças para a servidão no meio" — a faixa que atravessa o lote descontava área mas o anel não a mostrava.
+
+- **`Envelope.pecas`** (`blueprintTerreno.ts`): cada faixa restrita **na divisa** recorta todas as peças pelo semiplano (como antes); cada faixa **no meio do lote** divide cada peça em duas (aquém e além da faixa — os dois semiplanos das paralelas). `anel` passa a ser a **maior peça** (quem só lê `anel` continua certo), `areaMm2` é a soma das peças, `restricoesNaoRecortadas` vira a contagem de faixas que dividiram.
+- **"Cabe?" por peça** (`blueprintEnvelope3d.ts`): a edificação cabe se está **inteira numa peça** — sobre a servidão não se constrói; a área fora é a da peça que mais a contém (a menor entre as peças). `PrismaDoEnvelope.pecas`.
+- **Canvas** hachura e contorna cada peça (`envelopePecas`); **3D** extruda um prisma por peça; **Dados do lote** diz "N faixa(s) no meio do lote dividem o envelope em M peça(s) — a edificação tem de caber numa só".
+
+**Decisões.** (1) O anel único que o resto do sistema consome vira a maior peça, e não a união: união de duas peças não é um polígono, e a maior peça é onde o projeto vai. (2) Recorte por semiplanos das duas paralelas, reaproveitando `recortarPorSemiplano` da E3.1 — nenhuma geometria nova. (3) A área restrita continua declarada à parte (`areaRestritaMm2`), para a conta do aproveitamento não mudar de significado.
+
+**Prova.** *No app real* (estudo "Planta 14/09/2026", escritas bloqueadas 16): lote desenhado em volta da casa, servidão atravessando o meio → Dados do lote: "Área construtível 144,00 m² … (44,89 m² restritos). **1 faixa(s) no meio do lote dividem o envelope em 2 peça(s)** — a edificação tem de caber numa só"; envelope por pavimento "Térreo 144,00 m² · 102,24 m² · **52,19 m² fora**" (a casa atravessa a faixa); canvas com o envelope hachurado em duas peças, uma de cada lado da faixa terracota (captura). Testes: `blueprintEnvelopeServidao.test.ts` (2: duas peças 17 × 10 e 17 × 9 m, anel = a maior, APP nos fundos recorta a de trás; casa na peça da frente cabe, casa atravessando não cabe com 12,2 × 5,1 m fora), `blueprintVocabularioDaZona` atualizado para peças; suíte 411 arquivos / 4894 testes; tsc, check-ui e build OK.
+
+**Backlog "registrado por fase" do fecho concluído** (P2.5 a P2.11). Restam do corte original os itens maiores: paredes curvas/inclinadas, cobertura por extrusão, planta de forro, nuvens de revisão, tabelas personalizadas, vista dependente, famílias aninhadas, sub-regiões/taludes, cortina/brises, rodapé como elemento, departamento, SKP, LOD, plugins.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

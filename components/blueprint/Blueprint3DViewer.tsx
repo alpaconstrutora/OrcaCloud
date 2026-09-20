@@ -78,7 +78,7 @@ interface Props {
   /** O polígono do lote (divisas `TERRENO`) como um plano de chão. */
   mostrarTerreno?: boolean;
   /** ENVELOPE 3D (E3.3): um prisma translúcido por pavimento — âmbar; vermelho acima do gabarito. */
-  envelope?: { levelId: string; nome: string; anel: { x: number; y: number }[]; baseMm: number; topoMm: number; acimaDoGabarito: boolean }[];
+  envelope?: { levelId: string; nome: string; anel: { x: number; y: number }[]; pecas?: { x: number; y: number }[][]; baseMm: number; topoMm: number; acimaDoGabarito: boolean }[];
   /**
    * SOL (E5.1): direção unitária PARA o sol no espaço do desenho (x, y em
    * planta, z para cima) — a luz principal aponta de lá e as sombras seguem a
@@ -1213,13 +1213,14 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, en
   /** Os prismas do envelope edificável (E3.3), já na cota de cada pavimento. */
   const prismasDoEnvelope = useMemo(() => {
     if (!envelope) return [];
+    // P2.11: um prisma por PEÇA (a servidão no meio divide o envelope).
     return envelope
       .filter((p) => p.anel.length >= 3 && p.topoMm > p.baseMm)
-      .map((p) => {
-        const geom = new THREE.ExtrudeGeometry(shapeDoAnel(p.anel), { depth: (p.topoMm - p.baseMm) * S, bevelEnabled: false });
+      .flatMap((p) => (p.pecas?.length ? p.pecas : [p.anel]).map((anel, i) => {
+        const geom = new THREE.ExtrudeGeometry(shapeDoAnel(anel), { depth: (p.topoMm - p.baseMm) * S, bevelEnabled: false });
         geom.rotateX(-Math.PI / 2);
-        return { levelId: p.levelId, nome: p.nome, geom, y: p.baseMm * S, acimaDoGabarito: p.acimaDoGabarito };
-      });
+        return { levelId: `${p.levelId}${i > 0 ? `-${i}` : ''}`, nome: p.nome, geom, y: p.baseMm * S, acimaDoGabarito: p.acimaDoGabarito };
+      }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [envelope]);
 

@@ -46,6 +46,8 @@ export interface PrismaDoEnvelope {
   nome: string;
   baseMm: number;
   topoMm: number;
+  /** P2.11: as peças do envelope (servidão no meio divide em duas). `anel` é a maior. */
+  pecas: Point[][];
   /** Anel do envelope NA ALTURA deste pavimento. Vazio quando não cabe (recuos comem o lote). */
   anel: Point[];
   areaMm2: number;
@@ -112,11 +114,19 @@ export function envelopeVertical(model: BlueprintModel, terreno: Terreno | null,
       return face.length >= 3 ? face : c;
     });
     const anelEnvelope = env.valido ? env.anel : [];
+    // P2.11: com a servidão no meio o envelope tem PEÇAS; a edificação cabe se
+    // está inteira numa peça (sobre a servidão não se constrói) e a área fora é
+    // a menor entre as peças — a da peça que mais a contém.
+    const pecas = env.valido ? (env.pecas?.length ? env.pecas : [env.anel]) : [];
     let fora: number | null = 0;
     let cabe = true;
     for (const c of contornos) {
-      if (anelEnvelope.length < 3 || !c.every((p) => pointInPolygon(anelEnvelope, p))) cabe = false;
-      const f = anelEnvelope.length >= 3 ? areaFora(c, anelEnvelope) : Math.round(Math.abs(polygonArea(c)));
+      if (pecas.length === 0 || !pecas.some((peca) => c.every((p) => pointInPolygon(peca, p)))) cabe = false;
+      let f: number | null = pecas.length ? null : Math.round(Math.abs(polygonArea(c)));
+      for (const peca of pecas) {
+        const fp = areaFora(c, peca);
+        if (fp !== null && (f === null || fp < f)) f = fp;
+      }
       if (f === null) fora = null;
       else if (fora !== null) fora += f;
     }
@@ -126,6 +136,7 @@ export function envelopeVertical(model: BlueprintModel, terreno: Terreno | null,
       nome: l.name,
       baseMm: l.elevationMm,
       topoMm,
+      pecas,
       anel: anelEnvelope,
       areaMm2: env.valido ? Math.round(env.areaMm2) : 0,
       recuos,

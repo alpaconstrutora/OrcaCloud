@@ -2952,14 +2952,14 @@ describe('BlueprintEditor · ribbon', () => {
     expect(screen.queryByRole('region', { name: /importar do ifc/i })).not.toBeInTheDocument();
 
     // Uma tarefa por vez: abrir outra troca o conteúdo do mesmo drawer.
-    await userEvent.setup().click(botao(/^do dxf$/i));
+    await userEvent.setup().click(botao(/^do dxf\/dwg$/i));
     expect(screen.getByRole('dialog')).toHaveTextContent(/importar do dxf/i);
     expect(botao(/^do ifc$/i)).toHaveAttribute('aria-pressed', 'false');
 
     await userEvent
       .setup()
       .click(within(screen.getByRole('dialog')).getByRole('button', { name: /^fechar$/i }));
-    expect(botao(/^do dxf$/i)).toHaveAttribute('aria-pressed', 'false');
+    expect(botao(/^do dxf\/dwg$/i)).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('TELA CHEIA: o acesso rápido liga e desliga o modo, e a raiz do editor cobre o shell', async () => {

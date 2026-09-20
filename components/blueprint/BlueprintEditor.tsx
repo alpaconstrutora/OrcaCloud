@@ -791,7 +791,7 @@ const ROTULO_DA_TAREFA = {
   ia: 'Conversar com a planta',
   'gerar-paredes': 'Gerar paredes do PDF',
   'importar-ifc': 'Importar do IFC',
-  'importar-dxf': 'Importar do DXF',
+  'importar-dxf': 'Importar do DXF / DWG',
   'importar-bcf': 'Importar do BCF',
 } as const;
 type TarefaDoPainel = keyof typeof ROTULO_DA_TAREFA;
@@ -8160,10 +8160,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             />
             <BotaoDoRibbon
               icone={PenTool}
-              rotulo="Do DXF"
+              rotulo="Do DXF/DWG"
               ativo={tarefaAberta === 'importar-dxf'}
               onClick={() => alternarTarefa('importar-dxf')}
-              ajuda="Importar paredes de um desenho DXF"
+              ajuda="Importar paredes de um desenho DXF ou DWG (o DWG é convertido no servidor)"
             />
             <BotaoDoRibbon
               icone={MessagesSquare}
@@ -10398,7 +10398,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               'Paredes e portas a partir da planta de fundo em PDF. Ao marcar a região, este painel se recolhe para você arrastar sobre o desenho e volta em seguida.'}
             {tarefaAberta === 'importar-ifc' &&
               'Paredes, aberturas e estrutura de um modelo IFC, por medida declarada.'}
-            {tarefaAberta === 'importar-dxf' && 'Paredes de um desenho DXF, por camada e polilinha.'}
+            {tarefaAberta === 'importar-dxf' && 'Paredes de um desenho DXF ou DWG, por camada e polilinha.'}
             {tarefaAberta === 'importar-bcf' &&
               'Os tópicos de coordenação (BCF) que o projetista devolveu — pendência, não geometria. Clicar num tópico seleciona a peça no desenho.'}
           </SheetDescription>

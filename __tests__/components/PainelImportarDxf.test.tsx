@@ -19,6 +19,13 @@ import { describe, it, expect, vi } from 'vitest';
 import PainelImportarDxf from '../../components/blueprint/PainelImportarDxf';
 import { applyCommand, emptyModel } from '../../utils/blueprintKernel';
 
+// E9.1: o DWG passa pela Edge Function; aqui ela é o mock — o que se testa é
+// que o .dwg entra pelo MESMO pipeline do DXF e que a versão fica declarada.
+const converterDwgParaDxf = vi.fn();
+vi.mock('../../services/blueprintDwgService', () => ({
+  converterDwgParaDxf: (...a: unknown[]) => converterDwgParaDxf(...a),
+}));
+
 /** Um DXF mínimo com uma parede de 150 mm: duas faces paralelas de 4 m. */
 function dxfDeUmaParede(escala = 1): string {
   const e = (v: number) => String(v * escala);
@@ -148,5 +155,39 @@ describe('importar DXF · o que entra', () => {
     });
     expect(screen.getByText(/Nenhuma parede reconhecida/)).toBeTruthy();
     expect(screen.getByRole('button', { name: /Importar/ })).toHaveProperty('disabled', true);
+  });
+});
+
+describe('importar DWG (E9.1) · pela Edge Function, no pipeline do DXF', () => {
+  it('um .dwg vai ao conversor, volta como DXF e a tela declara a versão; o resultado é a mesma parede que o DXF daria', async () => {
+    converterDwgParaDxf.mockResolvedValue({ dxf: dxfDeUmaParede(), versao: 'AC1032', release: 'AutoCAD 2018+', bytes: 25920, codigoLibredwg: 4 });
+    const onImportar = vi.fn();
+    const { model, levelId } = comNivel();
+    const { container } = render(<PainelImportarDxf model={model} levelIdAtivo={levelId} onImportar={onImportar} />);
+    expect(screen.getByTestId('aviso-dwg').textContent).toMatch(/convertido para DXF no servidor/);
+    expect((container.querySelector('#importar-dxf-arquivo') as HTMLInputElement).accept).toBe('.dxf,.dwg');
+    const input = container.querySelector('#importar-dxf-arquivo') as HTMLInputElement;
+    const arquivo = new File([new Uint8Array([0x41, 0x43, 0x31, 0x30, 0x33, 0x32])], 'TERRENO.dwg', { type: 'application/acad' });
+    fireEvent.change(input, { target: { files: [arquivo] } });
+    await waitFor(() => expect(screen.getByText('TERRENO.dwg')).toBeTruthy());
+    expect(converterDwgParaDxf).toHaveBeenCalledTimes(1);
+    expect((converterDwgParaDxf.mock.calls[0][0] as File).name).toBe('TERRENO.dwg');
+    const versao = screen.getByTestId('versao-do-dwg');
+    expect(versao.textContent).toMatch(/DWG AC1032 · AutoCAD 2018\+ · 25 KB/);
+    expect(versao.textContent).toMatch(/libredwg avisou: código 4/);
+    fireEvent.click(screen.getByRole('button', { name: /Importar/ }));
+    const comandos = onImportar.mock.calls[0][0];
+    expect(comandos).toHaveLength(1);
+    expect(comandos[0]).toMatchObject({ type: 'AddWall', thicknessMm: 150, heightMm: 2800 });
+  });
+
+  it('a recusa do conversor aparece na tela, e nada é importado', async () => {
+    converterDwgParaDxf.mockRejectedValue(new Error('Conversão DWG → DXF falhou: O libredwg não conseguiu ler este DWG (código 256).'));
+    const { model, levelId } = comNivel();
+    const { container } = render(<PainelImportarDxf model={model} levelIdAtivo={levelId} onImportar={vi.fn()} />);
+    const input = container.querySelector('#importar-dxf-arquivo') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File([new Uint8Array(10)], 'quebrado.dwg')] } });
+    await waitFor(() => expect(screen.getByText(/código 256/)).toBeTruthy());
+    expect(screen.queryByRole('button', { name: /Importar/ })).toBeNull();
   });
 });

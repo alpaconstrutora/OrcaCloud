@@ -10,6 +10,7 @@ import {
   type ParedeDoDxf,
 } from '../../utils/dxfParaKernel';
 import type { RecusaDxf } from '../../utils/dxfLeitor';
+import { converterDwgParaDxf } from '../../services/blueprintDwgService';
 import {
   caixaDePontos,
   caixaDoDesenho,
@@ -36,6 +37,13 @@ import {
  * pareamento. Onde existe camada de EIXO — a que o nosso próprio export
  * escreve, e a que quem desenha com disciplina mantém —, o traço já É o eixo, e
  * pareá-lo trocaria dado exato por estimativa.
+ *
+ * ─── DWG (E9.1) ─────────────────────────────────────────────────────────────
+ *
+ * Um .dwg entra pelo MESMO caminho: vai à Edge Function `dwg-converter`
+ * (libredwg em wasm), volta como DXF e segue daqui como se fosse DXF. A
+ * versão do DWG (cabeçalho, "AutoCAD 2018+") fica declarada ao lado do nome.
+ * Não há o caminho inverso — exportar para o CAD é o DXF, e a tela diz isso.
  */
 interface Props {
   model: BlueprintModel;
@@ -50,6 +58,8 @@ interface Preparado {
   escalas: EscalaSugerida[];
   recusas: RecusaDxf[];
   mmPorUnidadeDeclarado: number | null;
+  /** Só quando o arquivo era DWG: a versão lida do cabeçalho e o código do libredwg. */
+  dwg?: { versao: string; release: string; bytes: number; codigoLibredwg: number };
 }
 
 type Modo = 'FACES' | 'EIXOS';
@@ -76,8 +86,14 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
     setErro(null);
     setPreparado(null);
     try {
-      const p = prepararDxf(await arquivo.text());
-      setPreparado({ nomeArquivo: arquivo.name, ...p });
+      const ehDwg = /\.dwg$/i.test(arquivo.name);
+      const convertido = ehDwg ? await converterDwgParaDxf(arquivo) : null;
+      const p = prepararDxf(convertido ? convertido.dxf : await arquivo.text());
+      setPreparado({
+        nomeArquivo: arquivo.name,
+        ...p,
+        ...(convertido ? { dwg: { versao: convertido.versao, release: convertido.release, bytes: convertido.bytes, codigoLibredwg: convertido.codigoLibredwg } } : {}),
+      });
       // A camada mais longa é o palpite inicial; quem escolhe é a pessoa.
       setCamada(p.porCamada[0]?.camada ?? '');
       setMmPorUnidade(p.escalas[0]?.mmPorUnidade ?? 1000);
@@ -134,9 +150,13 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
       {!preparado && (
         <>
           <p className="text-xs text-slate-500">
-            Traz as paredes de um DXF. O arquivo não sabe altura: ela vem do pé-direito do
+            Traz as paredes de um DXF ou DWG. O arquivo não sabe altura: ela vem do pé-direito do
             pavimento. Arco e círculo são recusados e listados — o desenho não tem parede
             curva.
+          </p>
+          <p className="mt-1 text-[11px] text-slate-400" data-testid="aviso-dwg">
+            DWG é convertido para DXF no servidor (libredwg); a versão do arquivo aparece ao lado do nome.
+            O caminho inverso não existe: para levar o desenho ao CAD, exporte DXF.
           </p>
 
           <label
@@ -144,12 +164,12 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
             className="mt-2 flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-[6px] border border-dashed border-slate-300 px-2.5 text-[13px] font-medium text-slate-600 transition-colors hover:border-slate-400 hover:text-slate-800"
           >
             {lendo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileUp className="h-3.5 w-3.5" />}
-            {lendo ? 'Lendo…' : 'Escolher arquivo DXF'}
+            {lendo ? 'Lendo…' : 'Escolher arquivo DXF ou DWG'}
           </label>
           <input
             id="importar-dxf-arquivo"
             type="file"
-            accept=".dxf"
+            accept=".dxf,.dwg"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
@@ -167,6 +187,12 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
           <h4 className="truncate text-xs font-semibold text-slate-700" title={preparado.nomeArquivo}>
             {preparado.nomeArquivo}
           </h4>
+          {preparado.dwg && (
+            <p className="text-[11px] text-slate-500" data-testid="versao-do-dwg">
+              DWG {preparado.dwg.versao} · {preparado.dwg.release} · {(preparado.dwg.bytes / 1024).toFixed(0)} KB, convertido para DXF no servidor
+              {preparado.dwg.codigoLibredwg > 0 ? ` (libredwg avisou: código ${preparado.dwg.codigoLibredwg}; entidades desconhecidas foram ignoradas)` : ''}
+            </p>
+          )}
 
           {/* ── A camada ─────────────────────────────────────────────────── */}
           <label className="mt-2 block text-[11px] font-semibold text-slate-600">

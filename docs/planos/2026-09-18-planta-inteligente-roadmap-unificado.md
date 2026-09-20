@@ -1178,6 +1178,20 @@ Próxima: P2.8 — volume do ambiente na etiqueta (E0.2) e "cabe?" pela face ext
 
 Próxima: P2.9 — números do município por semente e regra de UNIDADE/PAVIMENTO com mais variáveis (E3.2), ou o que você preferir do backlog.
 
+### P2.9 — Regras de UNIDADE e PAVIMENTO com mais variáveis (20/09/2026) · backlog P2
+
+**O que entrou** (**sem bump**: variáveis do motor de regras, derivadas do modelo; a E3.2 deixou "regra de UNIDADE/PAVIMENTO só tem as variáveis básicas"):
+
+- **UNIDADE** ganha `area_util` (Σ área de piso líquida dos ambientes — o contorno recuado, sem paredes; sempre menor que a privativa), `dormitorios` (ambientes SALA_DORMITORIO cujo nome fala em dormitório, quarto ou suíte — o kernel junta sala e dormitório num tipo só, então o nome decide), `banheiros`, `cozinhas`, `varandas` (por tipo NBR 5410), `pavimentos` (duplex = 2), `geminada` (divide parede com outra unidade), `area_por_dormitorio` (ausente sem dormitório).
+- **PAVIMENTO** ganha `unidades`, `area_privativa`, `area_comum` (construída − privativa), `eficiencia` (privativa ÷ construída, %; ausente sem unidade), `escadas`, `elevadores` (núcleos ELEVADOR que atravessam o pavimento), `vagas` (confirmadas) e `banheiros` — tudo pelo `quadroDeUnidades` da E2.2 e pelos núcleos da E2.4.
+- **Quatro sementes** (referência de mercado, não norma; a organização edita): *Unidade: ao menos um banheiro* (ERRO, quando ≥ 2 ambientes), *Unidade: ao menos um dormitório* (AVISO), *Pavimento tipo: eficiência ≥ 70 %* (AVISO, quando ≥ 2 unidades), *Elevador acima de 12 m de cota* (ERRO, quando cota > 12) — 29 regras semente no total.
+
+**Decisões.** (1) Dormitório pelo nome, dito na descrição da variável: mudar o `TipoDeAmbiente` do kernel para separar sala de dormitório seria bump por um vocabulário que a regra resolve. (2) `eficiencia` ausente sem unidade: número que não existe não vira zero. (3) As sementes novas usam `quando` para não acusar planta sem unidade — a casa térrea da prova não ganhou violação nova.
+
+**Prova.** *No app real* (estudo "Planta 14/09/2026", escritas bloqueadas 14): Analisar › Legislação — resultados "17 violada(s) · 54 conforme(s) · 13 não avaliada(s)" (nenhuma violação nova: sem unidades, as regras de unidade não têm alvo e as de pavimento caem no `quando`); aba **Regras 29** lista as quatro novas; o editor de regras documenta as variáveis novas de UNIDADE (`area_util`, `dormitorios`, `geminada`, `area_por_dormitorio`) e de PAVIMENTO (`eficiencia`, `elevadores`, `vagas`, `area_comum`). Testes: `blueprintRegrasUnidadePavimento.test.ts` (2: variáveis documentadas e nos alvos de um tipo com duas unidades geminadas; sementes — 102 sem banheiro VIOLADA, eficiência conforme, elevador a 13 m VIOLADA → conforme com elevador, sem unidades nada acusa); suíte 408 arquivos / 4872 testes; tsc e build OK.
+
+Próxima: P2.10 — exigência de vagas vinda da zona (E2.5) e recuos por lado por pavimento (E3.3).
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

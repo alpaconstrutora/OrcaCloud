@@ -44,7 +44,8 @@ import {
 } from './blueprintKernel';
 import { etiquetaDoAmbiente } from './blueprintDistribuicao';
 import { avaliar, erroDeSintaxe, formatarValor, variaveisCitadas, type Valor, type Variaveis } from './blueprintFormulas';
-import { unidadePorEtiqueta, medirUnidade } from './blueprintUnidades';
+import { unidadePorEtiqueta, medirUnidade, quadroDeUnidades } from './blueprintUnidades';
+import { nucleosDoNivel } from './blueprintNucleoVertical';
 
 export type EscopoDaRegra = 'LOTE' | 'EDIFICACAO' | 'PAVIMENTO' | 'UNIDADE' | 'AMBIENTE' | 'PORTA';
 export const ESCOPOS_DA_REGRA: readonly EscopoDaRegra[] = ['LOTE', 'EDIFICACAO', 'PAVIMENTO', 'UNIDADE', 'AMBIENTE', 'PORTA'];
@@ -106,6 +107,15 @@ export const VARIAVEIS_DO_ESCOPO: Record<EscopoDaRegra, { nome: string; descrica
     { nome: 'area_fora_envelope', descricao: 'área do contorno desenhado fora do envelope (m²)' },
     { nome: 'cabe_no_envelope', descricao: 'o contorno desenhado está dentro do envelope (sim/não)' },
     { nome: 'acima_do_gabarito', descricao: 'o pavimento passa do gabarito da zona (sim/não)' },
+    // P2.9 (20/09/2026): o que faltava para regra de pavimento de verdade.
+    { nome: 'unidades', descricao: 'unidades com ambiente neste pavimento (E2.2)' },
+    { nome: 'area_privativa', descricao: 'soma da área privativa das unidades no pavimento (m²)' },
+    { nome: 'area_comum', descricao: 'área construída − privativa (m²): circulação, prumadas, comum' },
+    { nome: 'eficiencia', descricao: 'privativa ÷ construída do pavimento (%) — ausente sem unidade' },
+    { nome: 'escadas', descricao: 'escadas e rampas com partida neste pavimento' },
+    { nome: 'elevadores', descricao: 'elevadores que atravessam o pavimento' },
+    { nome: 'vagas', descricao: 'vagas confirmadas (não sugeridas) no pavimento' },
+    { nome: 'banheiros', descricao: 'ambientes do tipo BANHEIRO no pavimento' },
   ],
   UNIDADE: [
     { nome: 'numero', descricao: 'número da unidade' },
@@ -113,6 +123,15 @@ export const VARIAVEIS_DO_ESCOPO: Record<EscopoDaRegra, { nome: string; descrica
     { nome: 'pcd', descricao: 'unidade adaptada (sim/não)' },
     { nome: 'area_privativa', descricao: 'área privativa NBR 12721 (m²)' },
     { nome: 'ambientes', descricao: 'número de ambientes' },
+    // P2.9 (20/09/2026): o que faltava para regra de unidade de verdade.
+    { nome: 'area_util', descricao: 'soma da área útil de piso dos ambientes (m²) — o contorno recuado, sem paredes' },
+    { nome: 'dormitorios', descricao: "ambientes SALA_DORMITORIO cujo nome fala em dormitório, quarto ou suíte" },
+    { nome: 'banheiros', descricao: 'ambientes do tipo BANHEIRO' },
+    { nome: 'cozinhas', descricao: 'ambientes do tipo COZINHA_SERVICO' },
+    { nome: 'varandas', descricao: 'ambientes do tipo VARANDA' },
+    { nome: 'pavimentos', descricao: 'pavimentos que a unidade ocupa (duplex = 2)' },
+    { nome: 'geminada', descricao: 'divide parede com outra unidade (sim/não)' },
+    { nome: 'area_por_dormitorio', descricao: 'área privativa ÷ dormitórios (m²) — ausente sem dormitório' },
   ],
   AMBIENTE: [
     { nome: 'nome', descricao: 'nome do ambiente' },
@@ -160,6 +179,11 @@ export const REGRAS_SEMENTE: readonly Regra[] = [
   { id: 'sem-lote-testada', nome: 'Testada mínima', escopo: 'LOTE', expressao: 'testada >= testada_min', severidade: 'ERRO', fonte: 'Zona urbanística', descricao: 'Testada ≥ mínima da zona' },
   { id: 'sem-lote-area', nome: 'Área mínima do lote', escopo: 'LOTE', expressao: 'area >= area_min', severidade: 'ERRO', fonte: 'Zona urbanística', descricao: 'Área ≥ mínima da zona' },
   { id: 'sem-gabarito-m', nome: 'Gabarito em altura', escopo: 'EDIFICACAO', expressao: 'altura <= gabarito_m', severidade: 'ERRO', fonte: 'Zona urbanística', descricao: 'Altura desenhada ≤ gabarito da zona' },
+  // P2.9 (20/09/2026): regras de UNIDADE e PAVIMENTO com as variáveis novas — referência de mercado, não norma.
+  { id: 'sem-unidade-banheiro', nome: 'Unidade: ao menos um banheiro', escopo: 'UNIDADE', quando: 'ambientes >= 2', expressao: 'banheiros >= 1', severidade: 'ERRO', fonte: FONTE_SEMENTE, descricao: 'Toda unidade com mais de um ambiente tem banheiro' },
+  { id: 'sem-unidade-dormitorio', nome: 'Unidade: ao menos um dormitório', escopo: 'UNIDADE', quando: 'ambientes >= 2', expressao: 'dormitorios >= 1', severidade: 'AVISO', fonte: FONTE_SEMENTE, descricao: 'Unidade residencial com dormitório nomeado (dormitório, quarto ou suíte)' },
+  { id: 'sem-pavimento-eficiencia', nome: 'Pavimento tipo: eficiência ≥ 70 %', escopo: 'PAVIMENTO', quando: 'unidades >= 2', expressao: 'eficiencia >= 70', severidade: 'AVISO', fonte: FONTE_SEMENTE, descricao: 'Privativa ÷ construída do pavimento ≥ 70 % (referência de incorporação)' },
+  { id: 'sem-pavimento-elevador', nome: 'Elevador acima de 12 m de cota', escopo: 'PAVIMENTO', quando: 'cota > 12', expressao: 'elevadores >= 1', severidade: 'ERRO', fonte: FONTE_SEMENTE, descricao: 'Pavimento com piso acima de 12 m atendido por elevador (códigos de obras usuais)' },
   { id: 'sem-gabarito-pav', nome: 'Gabarito em pavimentos', escopo: 'EDIFICACAO', expressao: 'pavimentos <= gabarito_pav', severidade: 'ERRO', fonte: 'Zona urbanística', descricao: 'Pavimentos ≤ gabarito da zona' },
   { id: 'sem-pav-pe-direito', nome: 'Pé-direito do pavimento', escopo: 'PAVIMENTO', expressao: 'pe_direito >= 2.5', severidade: 'AVISO', fonte: FONTE_SEMENTE, descricao: 'Pé-direito padrão ≥ 2,50 m' },
   { id: 'sem-pav-envelope', nome: 'Pavimento dentro do envelope edificável', escopo: 'PAVIMENTO', expressao: 'cabe_no_envelope', severidade: 'ERRO', fonte: 'Zona urbanística', descricao: 'Contorno desenhado dentro dos recuos, afastamentos e faixas restritas (E3.3)' },
@@ -312,9 +336,13 @@ export function alvosDoEscopo(model: BlueprintModel, escopo: EscopoDaRegra, ctx:
         },
       ];
     }
-    case 'PAVIMENTO':
+    case 'PAVIMENTO': {
+      const quadro = (model.unidades ?? []).length > 0 ? quadroDeUnidades(model) : null;
       return model.levels.map((l) => {
         const env = ctx.envelopePorPavimento?.[l.id];
+        const pav = quadro?.pavimentos.find((p) => p.levelId === l.id) ?? null;
+        const construidaMm2 = areaConstruidaMm2(model, l);
+        const banheiros = model.spaces.filter((s) => s.levelId === l.id && etiquetaDoAmbiente(s, model.labels)?.tipoDeAmbiente === 'BANHEIRO').length;
         return {
           id: l.id,
           rotulo: l.name,
@@ -324,24 +352,57 @@ export function alvosDoEscopo(model: BlueprintModel, escopo: EscopoDaRegra, ctx:
             nome: l.name,
             pe_direito: m(l.defaultHeightMm),
             cota: m(l.elevationMm),
-            area_construida: m2(areaConstruidaMm2(model, l)),
+            area_construida: m2(construidaMm2),
             ambientes: model.spaces.filter((s) => s.levelId === l.id).length,
             area_envelope: env?.areaEnvelopeM2,
             area_fora_envelope: env?.areaForaM2,
             cabe_no_envelope: env?.cabe,
             acima_do_gabarito: env?.acimaDoGabarito,
+            // P2.9
+            unidades: pav ? pav.unidades : 0,
+            area_privativa: pav ? m2(pav.areaPrivativaMm2) : 0,
+            area_comum: pav ? m2(pav.areaComumMm2) : m2(construidaMm2),
+            eficiencia: pav && pav.unidades > 0 && construidaMm2 > 0 ? Math.round((pav.areaPrivativaMm2 / construidaMm2) * 1000) / 10 : undefined,
+            escadas: (model.stairs ?? []).filter((e) => e.levelId === l.id).length,
+            elevadores: nucleosDoNivel(model, l.id).filter((n) => n.tipo === 'ELEVADOR').length,
+            vagas: (model.vagas ?? []).filter((v) => v.levelId === l.id && !v.sugerida).length,
+            banheiros,
           }),
         };
       });
+    }
     case 'UNIDADE':
       return (model.unidades ?? []).map((u) => {
         const med = medirUnidade(model, u);
+        // P2.9: contagens por tipo NBR 5410 (o dormitório pelo NOME, porque o kernel
+        // junta sala e dormitório num tipo só) e área útil pelo contorno recuado.
+        const tipos = med.ambientes.map((s) => ({ s, tipo: etiquetaDoAmbiente(s, model.labels)?.tipoDeAmbiente ?? null }));
+        const dormitorios = tipos.filter(({ s, tipo }) => tipo === 'SALA_DORMITORIO' && /dormit|quarto|su[ií]te/i.test(s.name ?? '')).length;
+        const banheiros = tipos.filter(({ tipo }) => tipo === 'BANHEIRO').length;
+        const cozinhas = tipos.filter(({ tipo }) => tipo === 'COZINHA_SERVICO').length;
+        const varandas = tipos.filter(({ tipo }) => tipo === 'VARANDA').length;
+        const areaUtilMm2 = med.ambientes.reduce((soma, s) => soma + areaRecuada(s.ring, model.walls).areaMm2, 0);
+        const areaPrivativaM2 = m2(med.areaPrivativaMm2);
         return {
           id: u.id,
           rotulo: `Un. ${u.numero}`,
           levelId: med.levelIds[0] ?? null,
           selecionarId: null,
-          vars: so({ numero: u.numero, tipologia: u.tipologia ?? '', pcd: u.pcd, area_privativa: m2(med.areaPrivativaMm2), ambientes: med.ambientes.length }),
+          vars: so({
+            numero: u.numero,
+            tipologia: u.tipologia ?? '',
+            pcd: u.pcd,
+            area_privativa: areaPrivativaM2,
+            ambientes: med.ambientes.length,
+            area_util: m2(areaUtilMm2),
+            dormitorios,
+            banheiros,
+            cozinhas,
+            varandas,
+            pavimentos: med.levelIds.length,
+            geminada: med.geminadaCom.length > 0,
+            area_por_dormitorio: dormitorios > 0 ? Math.round((areaPrivativaM2 / dormitorios) * 100) / 100 : undefined,
+          }),
         };
       });
     case 'AMBIENTE': {

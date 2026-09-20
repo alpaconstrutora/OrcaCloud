@@ -68,6 +68,7 @@ import {
   TriangleRight,
   Grip,
   Hand,
+  ShoppingCart,
   Magnet,
   Blocks,
   Loader2,
@@ -287,6 +288,9 @@ import { useOrgContext, useOrgWriteTarget, forEachTargetOrg } from '../../hooks/
 import { useBlueprintMateriais } from '../../hooks/useBlueprintMateriais';
 import TelaMateriais from './TelaMateriais';
 import TelaChavesDeApi from './TelaChavesDeApi';
+import TelaCompras from './TelaCompras';
+import { abrirCotacao, lancarNoPlano, nomeDaObra, preverCompras, type PreviaDeCompras } from '../../services/blueprintComprasService';
+import { somarDias } from '../../utils/blueprintCompras';
 import TelaWebhooks from './TelaWebhooks';
 import TelaAcessoDoEstudo from './TelaAcessoDoEstudo';
 import TelaAntesDepois from './TelaAntesDepois';
@@ -1318,7 +1322,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais' | 'api' | 'webhooks' | 'acesso' | 'antes-depois';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais' | 'api' | 'webhooks' | 'acesso' | 'antes-depois' | 'compras';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -1927,6 +1931,41 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [tokensDaApiCarregando, setTokensDaApiCarregando] = useState(false);
   const [tokensDaApiIndisponiveis, setTokensDaApiIndisponiveis] = useState<string | null>(null);
   const organizacoesDaLoja = useStore((e) => e.organizations);
+  /** PLANTA → COMPRAS (E10.3): prévia, lançamento no Plano de Aquisições da obra e cotação. Vive enquanto o editor vive; a prévia cai quando a data padrão muda. */
+  const [dataPadraoDeCompras, setDataPadraoDeCompras] = useState(() => somarDias(new Date().toISOString().slice(0, 10), 30));
+  const [previaDeCompras, setPreviaDeCompras] = useState<PreviaDeCompras | null>(null);
+  const [comprasOcupado, setComprasOcupado] = useState(false);
+  const [erroDeCompras, setErroDeCompras] = useState<string | null>(null);
+  const [idsLancados, setIdsLancados] = useState<string[]>([]);
+  const [nomeDaObraDeCompras, setNomeDaObraDeCompras] = useState<string | null>(null);
+  useEffect(() => {
+    if (telaAberta !== 'compras' || !study.project_id) return;
+    let vivo = true;
+    nomeDaObra(study.project_id)
+      .then((n) => vivo && setNomeDaObraDeCompras(n))
+      .catch(() => vivo && setNomeDaObraDeCompras(null));
+    return () => {
+      vivo = false;
+    };
+  }, [telaAberta, study.project_id]);
+  const preverComprasDaPlanta = useCallback(async () => {
+    if (!study.project_id) return;
+    setComprasOcupado(true);
+    setErroDeCompras(null);
+    setIdsLancados([]);
+    try {
+      const snaps = await listSnapshots(study.id);
+      if (snaps.length === 0) {
+        setErroDeCompras('Publique uma versão antes — insumo não sai de rascunho.');
+        return;
+      }
+      setPreviaDeCompras(await preverCompras(snaps[0].id, study.project_id, dataPadraoDeCompras));
+    } catch (e) {
+      setErroDeCompras(e instanceof Error ? e.message : String(e));
+    } finally {
+      setComprasOcupado(false);
+    }
+  }, [study.id, study.project_id, dataPadraoDeCompras]);
   /** WEBHOOKS (E9.3): assinaturas da organização + as últimas entregas. Carregados quando a tela abre. */
   const [webhooksDaOrg, setWebhooksDaOrg] = useState<WebhookDaOrg[]>([]);
   const [entregasDeWebhook, setEntregasDeWebhook] = useState<EntregaDeWebhook[]>([]);
@@ -7541,6 +7580,57 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           </div>
         </div>
       )}
+      {telaAberta === 'compras' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="compras">
+          {cabecalhoDaTela(
+            'Planta → compras',
+            'As linhas que a planta gera no orçamento, abertas em insumos (materiais e equipamentos da composição), datadas pelo cronograma da obra e lançadas no Plano de Aquisições — o mesmo plano de Suprimentos, com a linha da planta como origem. Dali, uma cotação num clique.',
+            ShoppingCart,
+            'Analisar',
+          )}
+          <div>
+            <TelaCompras
+              obra={study.project_id ? { id: study.project_id, nome: nomeDaObraDeCompras ?? 'Obra vinculada' } : null}
+              temVersaoPublicada={editor.baseRevision > 0}
+              dataPadrao={dataPadraoDeCompras}
+              onDataPadrao={(d) => {
+                setDataPadraoDeCompras(d);
+                setPreviaDeCompras(null);
+                setIdsLancados([]);
+              }}
+              previa={previaDeCompras}
+              ocupado={comprasOcupado}
+              erro={erroDeCompras}
+              onPrever={preverComprasDaPlanta}
+              lancados={idsLancados.length}
+              onLancar={async () => {
+                if (!previaDeCompras) throw new Error('Faça a prévia antes.');
+                setComprasOcupado(true);
+                try {
+                  const r = await lancarNoPlano(previaDeCompras);
+                  setIdsLancados(r.ids);
+                  setPreviaDeCompras({ ...previaDeCompras, noPlano: { ...previaDeCompras.noPlano, pendentes: r.inseridas } });
+                  return r;
+                } finally {
+                  setComprasOcupado(false);
+                }
+              }}
+              onCotar={async () => {
+                if (!previaDeCompras || idsLancados.length === 0) throw new Error('Lance no plano antes.');
+                setComprasOcupado(true);
+                try {
+                  const r = await abrirCotacao(previaDeCompras, idsLancados);
+                  setIdsLancados([]);
+                  setPreviaDeCompras({ ...previaDeCompras, noPlano: { pendentes: 0, emAndamento: previaDeCompras.noPlano.emAndamento + idsLancados.length } });
+                  return r;
+                } finally {
+                  setComprasOcupado(false);
+                }
+              }}
+            />
+          </div>
+        </div>
+      )}
       {telaAberta === 'api' && (
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="api">
           {cabecalhoDaTela(
@@ -8669,6 +8759,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   ajuda="A ponte com o orçamento da obra: prévia e aplicação por elemento"
                 />
               )}
+              <BotaoDoRibbon
+                icone={ShoppingCart}
+                rotulo="Compras"
+                ativo={telaAberta === 'compras'}
+                onClick={() => alternarTela('compras')}
+                ajuda="Da planta ao Plano de Aquisições da obra: insumos das linhas do orçamento, datados pelo cronograma; cotação num clique"
+              />
             </GrupoDoRibbon>
           </>
         )}

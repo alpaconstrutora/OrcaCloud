@@ -87,6 +87,8 @@ vi.mock('../../services/blueprintService', () => ({
   computeAndStoreQuantities: vi.fn(async () => null),
   listObrasDaOrganizacao: vi.fn(async () => [{ id: 'prj_1', name: 'Residencial Alfa' }]),
   setStudyProject: vi.fn(async () => ({})),
+  // A ponte 4D lê o cronograma da OBRA vinculada; sem obra não é chamada.
+  tarefasDoCronograma: vi.fn(async () => []),
 }));
 
 // O painel de Orçamento vive numa aba do editor e consulta o de-para ao montar.
@@ -212,6 +214,18 @@ vi.mock('../../services/blueprintBudgetService', () => ({
   deleteMapping: vi.fn(async () => {}),
   preverLancamentos: vi.fn(async () => null),
   aplicarNoProjeto: vi.fn(async () => ({ removidas: 0, adicionadas: 0, total: 0 })),
+}));
+
+// PLANTA → COMPRAS (E10.3): o serviço vai ao banco (orçamento, cronograma, prazos, plano);
+// aqui é dublê — a tela e a costura com o ribbon são o que se prova.
+const preverCompras = vi.fn();
+const lancarNoPlano = vi.fn();
+const abrirCotacao = vi.fn();
+vi.mock('../../services/blueprintComprasService', () => ({
+  preverCompras: (...a: unknown[]) => preverCompras(...(a as [])),
+  lancarNoPlano: (...a: unknown[]) => lancarNoPlano(...(a as [])),
+  abrirCotacao: (...a: unknown[]) => abrirCotacao(...(a as [])),
+  nomeDaObra: vi.fn(async () => 'Residencial Alfa'),
 }));
 
 // jsdom não implementa ResizeObserver, e o canvas o usa para acompanhar o
@@ -4610,4 +4624,88 @@ describe('BlueprintEditor · seções do painel ordenáveis', () => {
 
   // O arrasto em si não se prova em jsdom (o dnd-kit precisa de geometria
   // real para decidir onde soltar); fica para a prova no app real — ver o plano.
+});
+
+/**
+ * PLANTA → COMPRAS (20/09/2026, roadmap E10.3): Analisar › Compras abre a tela
+ * em fluxo; a prévia mostra os insumos; lançar passa pela confirmação e chama o
+ * serviço; a cotação só se habilita depois de lançar.
+ */
+describe('BlueprintEditor · planta → compras (E10.3)', () => {
+  const PREVIA = {
+    projectId: 'prj_1',
+    organizationId: 'org_1',
+    contexto: { studyId: 'std_1', studyName: 'Planta de teste', snapshotId: 'snap_1', snapshotHash: 'abc', revision: 2 },
+    explosao: { insumos: [], semComposicao: [{ linhaId: 'bp:std_1:AREA_PISO:total', descricao: 'Piso cerâmico', quantidade: 50, unidade: 'M2' }], soMaoDeObra: 1 },
+    insumos: [
+      { codigo: '37595', chave: '37595', descricao: 'Bloco cerâmico 14x19x39', unidade: 'UN', quantidade: 182, custoUnitario: 2.5, direto: false, origens: [{ linhaId: 'bp:std_1:AREA_PAREDE:w1', descricao: 'Alvenaria', quantidade: 130 }, { linhaId: 'bp:std_1:AREA_PAREDE:w2', descricao: 'Alvenaria', quantidade: 52 }], necessarioEm: '2026-11-10', doCronograma: true, prazoDias: 10, comprarAte: '2026-10-31', emEstoque: 0, aComprar: 182 },
+      { codigo: 'INT-PORTA-80', chave: 'INT-PORTA-80', descricao: 'Porta de madeira 80x210', unidade: 'UN', quantidade: 3, custoUnitario: 450, direto: true, origens: [{ linhaId: 'bp:std_1:esquadria:porta-80', descricao: 'Porta', quantidade: 3 }], necessarioEm: '2026-12-01', doCronograma: false, prazoDias: 0, comprarAte: '2026-12-01', emEstoque: 0, aComprar: 3 },
+    ],
+    linhas: [],
+    resumo: { insumos: 2, linhasDaPlanta: 3, datadosPeloCronograma: 1, totalEstimado: 182 * 2.5 + 3 * 450 },
+    noPlano: { pendentes: 1, emAndamento: 0 },
+    tarefasDatadas: 4,
+  };
+
+  it('sem obra vinculada a tela avisa e não deixa prever', async () => {
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^analisar$/i);
+    const botaoCompras = screen.getByRole('button', { name: /^Compras/ });
+    expect(botaoCompras).toHaveAttribute('title', expect.stringMatching(/Plano de Aquisições/));
+    await user.click(botaoCompras);
+    const tela = await screen.findByTestId('tela-compras');
+    expect(document.querySelector('[data-tela="compras"]')?.className).not.toMatch(/fixed|inset-0/);
+    expect(within(tela).getByTestId('aviso-sem-obra')).toBeInTheDocument();
+    expect(within(tela).getByTestId('prever-compras')).toBeDisabled();
+  }, 60000);
+
+  it('com obra e versão publicada: prévia com os insumos e os avisos; lançar confirma e chama o serviço; a cotação abre com os ids lançados', async () => {
+    preverCompras.mockResolvedValue(PREVIA);
+    lancarNoPlano.mockResolvedValue({ removidas: 1, inseridas: 2, ids: ['i1', 'i2'] });
+    abrirCotacao.mockResolvedValue({ quotationId: 'q1', quotationNumber: 'COT-0007' });
+    getBranch.mockResolvedValue({ ...RAMO_LIMPO, parent_snapshot_id: 'snap_1', base_revision: 2 });
+    const { listSnapshots } = await import('../../services/blueprintService');
+    vi.mocked(listSnapshots).mockResolvedValue([{ id: 'snap_1', revision: 2 }] as never);
+    const { default: BlueprintEditor } = await import('../../components/blueprint/BlueprintEditor');
+    render(
+      <ConfirmProvider>
+        <BlueprintEditor study={{ ...study, project_id: 'prj_1' }} branchId="brc_1" onBack={() => {}} onTrocarRamo={onTrocarRamo} />
+      </ConfirmProvider>,
+    );
+    await waitFor(() => expect(screen.getByRole('toolbar')).toBeInTheDocument());
+    const user = userEvent.setup();
+    await abrirAba(/^analisar$/i);
+    await user.click(screen.getByRole('button', { name: /^Compras/ }));
+    const tela = await screen.findByTestId('tela-compras');
+    await waitFor(() => expect(within(tela).getByTestId('obra-de-compras')).toHaveTextContent('Residencial Alfa'));
+    expect(within(tela).queryByTestId('aviso-sem-versao')).toBeNull();
+
+    await user.click(within(tela).getByTestId('prever-compras'));
+    await waitFor(() => expect(preverCompras).toHaveBeenCalledWith('snap_1', 'prj_1', expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)));
+    const resumo = await within(tela).findByTestId('resumo-de-compras');
+    expect(resumo).toHaveTextContent('1 de 2'); // datados pelo cronograma
+    expect(within(tela).getByText(/Bloco cerâmico 14x19x39/)).toBeInTheDocument();
+    expect(within(tela).getByText(/compra direta/)).toBeInTheDocument();
+    expect(within(tela).getByTestId('avisos-de-compras')).toHaveTextContent(/1 linha\(s\) sem composição/);
+    expect(within(tela).getByTestId('no-plano')).toHaveTextContent(/1 item\(ns\) pendente/);
+    expect(within(tela).getByTestId('abrir-cotacao')).toBeDisabled();
+
+    // Lançar: confirmação com o que será substituído, depois o serviço.
+    await user.click(within(tela).getByTestId('lancar-no-plano'));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent(/substituindo 1 item\(ns\) pendente/);
+    await user.click(within(dialog).getByRole('button', { name: /^lançar$/i }));
+    await waitFor(() => expect(lancarNoPlano).toHaveBeenCalledWith(PREVIA));
+    expect(await within(tela).findByTestId('aviso-de-compras')).toHaveTextContent(/2 item\(ns\) no Plano de Aquisições.*substituindo 1/);
+    expect(within(tela).getByTestId('abrir-cotacao')).toBeEnabled();
+
+    // Cotação: com os ids lançados.
+    await user.click(within(tela).getByTestId('abrir-cotacao'));
+    const dialog2 = await screen.findByRole('dialog');
+    await user.click(within(dialog2).getByRole('button', { name: /^abrir cotação$/i }));
+    await waitFor(() => expect(abrirCotacao).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'prj_1' }), ['i1', 'i2']));
+    expect(await within(tela).findByTestId('aviso-de-compras')).toHaveTextContent(/Cotação COT-0007 aberta com 2 item/);
+    expect(within(tela).getByTestId('abrir-cotacao')).toBeDisabled();
+  }, 60000);
 });

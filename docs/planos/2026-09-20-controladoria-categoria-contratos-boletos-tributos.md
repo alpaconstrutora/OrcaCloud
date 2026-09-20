@@ -94,7 +94,7 @@ prevista ≈ R$ 1,05 M e Deduções ≈ R$ 5 k; "Sem Classificação" = só bole
   Receita Bruta prev. R$ 1.046.437,14, Deduções prev. R$ 5.112,30,
   Sem Classificação R$ 222.602,60 (= só boletos conciliados)
 - [x] typecheck · testes relacionados 8 arquivos/60 + novo 10 · check-ui nos 2 modais
-- [ ] build · commit · push em main
+- [x] build (vite, exit 0) · commit `f0b52717` · push em main (2026-09-20, após 2 rebases sobre a frente Planta)
 
 ## Fora do escopo (continua pendente)
 - Classificar os 580 boletos já lançados — agora é possível pela edição em lote

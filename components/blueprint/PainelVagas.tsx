@@ -8,7 +8,7 @@
 import React from 'react';
 import type { BlueprintModel, ObjectId, TipoDeVaga } from '../../utils/blueprintKernel';
 import { ROTULO_DO_TIPO_DE_VAGA } from '../../utils/blueprintKernel';
-import {
+import { ROTULO_DO_ARRANJO, type ArranjoDasVagas,
   ambientesCandidatos,
   type HipotesesDeVagas,
   type OrientacaoDasFileiras,
@@ -70,6 +70,14 @@ export default function PainelVagas({ model, levelId, hipoteses: h, onHipoteses,
               <option value="AUTO">No eixo mais comprido</option>
               <option value="FILEIRAS_EM_X">Ao longo de X</option>
               <option value="FILEIRAS_EM_Y">Ao longo de Y</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            Arranjo
+            <select value={h.arranjo ?? 'PERPENDICULAR'} onChange={(e) => onHipoteses({ ...h, arranjo: e.target.value as ArranjoDasVagas })} aria-label="Arranjo das vagas na fileira" className={campo} title="De ré: a vaga perpendicular à circulação (90°). Espinha de peixe: 45°, banda mais funda e circulação mais estreita (3,50 m). Em fila: paralela à circulação, com 1,00 m de manobra entre vagas.">
+              {(Object.keys(ROTULO_DO_ARRANJO) as ArranjoDasVagas[]).map((a) => (
+                <option key={a} value={a}>{ROTULO_DO_ARRANJO[a]}</option>
+              ))}
             </select>
           </label>
           <label className="flex flex-col gap-1">

@@ -1151,6 +1151,20 @@ Próxima: P2.6 — caixa do elevador no 3D.
 
 Próxima: P2.7 — vagas em espinha de peixe (45°) e em fila.
 
+### P2.7 — Vagas em espinha de peixe (45°) e em fila (20/09/2026) · backlog P2
+
+**O que entrou** (**sem bump**: hipótese da tarefa, não payload — a vaga já tinha `rotacaoGraus`):
+
+- **`HipotesesDeVagas.arranjo`**: `PERPENDICULAR` (de ré, 90° — o de sempre e o padrão para o estado persistido antigo sem a chave), **`ESPINHA_45`** e **`PARALELA`** (em fila). **`geometriaDoArranjo`** dá, por arranjo, a **profundidade da banda** (c · (l+c)·sen 45° ≈ 5,30 m · l), o **passo ao longo da fileira** (l · l/sen 45° ≈ 3,54 m · c + 1,00 m de manobra), o centro dentro do passo e o **giro relativo à fileira** (0 · 45°/135° conforme o lado da circulação, para o carro entrar de frente vindo dela · 90°). `planejarVagas` usa isso nas bandas e na colocação; o comando `AddVaga` grava o giro de cada vaga.
+- **Âncora no lado oposto à circulação**: a vaga mais funda que a banda (a PCD com a faixa de 1,20 m, na espinha e na fila) cresce **para** a circulação — que é onde a faixa de embarque fica —, nunca para fora da região nem para dentro da banda vizinha. Para o de ré (profundidade = banda) nada muda.
+- **Painel** (Terreno › Garagem › Vagas): select **Arranjo** com os três, e a dica de que a espinha admite circulação mais estreita (3,50 m).
+
+**Decisões.** (1) A espinha por giro de 45° do retângulo (caixa envolvente 5,30 × 5,30, passo 3,54): é a geometria clássica e cabe na verificação de obstáculos que já existia (o contorno real, girado). (2) Fila com 1,00 m de manobra fixa: pré-projeto; o município que pedir 5,50 m de vaga paralela ajusta o comprimento. (3) O lado do giro alterna com o lado da circulação porque é isso que faz a espinha ser espinha.
+
+**Prova.** *No app real* (estudo "Planta 14/09/2026", escritas bloqueadas 16): garagem de 16,9 × 9,3 m desenhada em retângulo fora da casa; Terreno › Vagas com a região "Ambiente 1 · 166,46 m²": **de ré** não cabe ("não cabe uma fileira com circulação (10,0 m)" — honesto), **espinha de peixe** com circulação 3,50 → "3 vaga(s) a lançar · Comum 1 · PCD 1 · Idoso 1", lançadas a 45° (captura); **em fila** → "4 vaga(s) a lançar", lançadas deitadas; `blueprint:vagas.arranjo` persistido. 0 erros de página. Testes: `blueprintVagasArranjos.test.ts` (3: geometria dos três arranjos, espinha sem sobreposição com giros 45/135 e todas dentro da garagem, fila com passo c + 1,00 m e mais bandas que de ré), `blueprintVagas.test.ts` intacto; suíte 406 arquivos / 4868 testes; tsc, check-ui e build OK.
+
+Próxima: P2.8 — volume do ambiente na etiqueta (E0.2) e "cabe?" pela face externa (E3.3).
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

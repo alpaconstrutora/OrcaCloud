@@ -11,7 +11,13 @@
  * circulação | vaga vaga | …` — toda fileira encosta numa circulação. As
  * fileiras correm no eixo mais comprido da caixa da região (ou no que a
  * hipótese mandar); a vaga fica com o comprimento perpendicular à fileira
- * ("de ré", 90°). Espinha de peixe (45°) fica fora desta fase.
+ * ("de ré", 90°) — o ARRANJO padrão. Desde 20/09/2026 (backlog P2 — P2.7) há
+ * mais dois: ESPINHA DE PEIXE (45°: a vaga girada 45° em relação à fileira,
+ * banda de (l + c)·sen 45° ≈ 5,30 m, passo l/sen 45° ≈ 3,54 m, circulação
+ * pode ser mais estreita — 3,50 m é o usual de mão única) e EM FILA (paralela
+ * à circulação: banda = largura, passo = comprimento + 1,00 m de manobra). As
+ * bandas alternam o lado da circulação como antes; na espinha o giro alterna
+ * também (45°/135°), para o carro sempre entrar de frente vindo da circulação.
  *
  * Dentro da fileira as vagas se encostam lado a lado; o que estiver no caminho
  * — pilar, parede, núcleo vertical, escada, vaga já confirmada — é OBSTÁCULO:
@@ -51,6 +57,11 @@ import {
 import { nucleosDoNivel } from './blueprintNucleoVertical';
 
 export type OrientacaoDasFileiras = 'AUTO' | 'FILEIRAS_EM_X' | 'FILEIRAS_EM_Y';
+/** O arranjo da vaga na fileira (P2.7): de ré a 90°, espinha de peixe a 45°, ou em fila (paralela). */
+export type ArranjoDasVagas = 'PERPENDICULAR' | 'ESPINHA_45' | 'PARALELA';
+export const ROTULO_DO_ARRANJO: Record<ArranjoDasVagas, string> = { PERPENDICULAR: 'De ré (90°)', ESPINHA_45: 'Espinha de peixe (45°)', PARALELA: 'Em fila (paralela)' };
+/** Folga de manobra entre vagas em fila, mm. */
+export const FOLGA_DA_FILA_MM = 1000;
 
 export interface HipotesesDeVagas {
   larguraMm: number;
@@ -59,6 +70,8 @@ export interface HipotesesDeVagas {
   /** Afastamento do contorno da região, mm. */
   recuoMm: number;
   orientacao: OrientacaoDasFileiras;
+  /** P2.7. Ausente (estado persistido antigo) = PERPENDICULAR. */
+  arranjo?: ArranjoDasVagas;
   /** Percentuais mínimos por tipo (0–100). PCD e idoso têm piso de 1 quando > 0. */
   pcdPct: number;
   idosoPct: number;
@@ -76,6 +89,7 @@ export const HIPOTESES_VAGAS_PADRAO: HipotesesDeVagas = {
   // espessura (até 400 mm de parede) sem que a primeira fileira nasça encostada.
   recuoMm: 200,
   orientacao: 'AUTO',
+  arranjo: 'PERPENDICULAR',
   pcdPct: 2,
   idosoPct: 5,
   motoPct: 0,
@@ -184,12 +198,13 @@ export function planejarVagas(model: BlueprintModel, levelId: ObjectId, hip: Hip
   const fileirasEmX = hip.orientacao === 'FILEIRAS_EM_X' ? true : hip.orientacao === 'FILEIRAS_EM_Y' ? false : largX >= largY;
   // Em fileiras ao longo de X o carro fica "de pé" (comprimento em Y, giro 0);
   // em fileiras ao longo de Y, deitado (giro 90).
-  const rotacaoGraus = fileirasEmX ? 0 : 90;
+  const arranjo = geometriaDoArranjo(hip);
+  const rotacaoBase = fileirasEmX ? 0 : 90;
   const aoLongo = fileirasEmX ? largX : largY; // extensão da fileira
   const transversal = fileirasEmX ? largY : largX; // profundidade disponível para bandas
-  if (aoLongo < hip.larguraMm || transversal < hip.comprimentoMm + hip.circulacaoMm) {
+  if (aoLongo < arranjo.passoMm(hip.larguraMm, hip.comprimentoMm) || transversal < arranjo.profundidadeMm(hip.larguraMm, hip.comprimentoMm) + hip.circulacaoMm) {
     const m1 = (mm: number) => (mm / 1000).toFixed(1).replace('.', ',');
-    return vazio(`A região "${regiao.nome}" (${m1(largX)} × ${m1(largY)} m) não cabe uma fileira com circulação (${m1(hip.comprimentoMm + hip.circulacaoMm)} m).`, { anel: regiao.anel, nome: regiao.nome });
+    return vazio(`A região "${regiao.nome}" (${m1(largX)} × ${m1(largY)} m) não cabe uma fileira com circulação (${m1(arranjo.profundidadeMm(hip.larguraMm, hip.comprimentoMm) + hip.circulacaoMm)} m).`, { anel: regiao.anel, nome: regiao.nome });
   }
 
   // ── Obstáculos em planta: paredes, estrutura (menos laje), núcleos, escadas, vagas confirmadas ──
@@ -206,7 +221,8 @@ export function planejarVagas(model: BlueprintModel, levelId: ObjectId, hip: Hip
   const bandas: { inicio: number; fim: number; ladoDaCirculacao: 1 | -1 }[] = [];
   {
     let cursor = 0;
-    const c = hip.comprimentoMm;
+    // A profundidade da banda depende do arranjo: c (de ré), (l + c)·sen 45° (espinha), l (fila).
+    const c = arranjo.profundidadeMm(hip.larguraMm, hip.comprimentoMm);
     const a = hip.circulacaoMm;
     // primeira fileira + circulação obrigatória
     if (cursor + c + a <= transversal) {
@@ -227,22 +243,31 @@ export function planejarVagas(model: BlueprintModel, levelId: ObjectId, hip: Hip
   }
 
   // ── Uma passada para estimar o total (só comuns); a segunda com os tipos ──
-  const posicoesDaBanda = (banda: { inicio: number; fim: number; ladoDaCirculacao: 1 | -1 }, larguras: number[], comprimentos: number[]): { at: Point; larguraMm: number; comprimentoMm: number; k: number }[] => {
-    const saida: { at: Point; larguraMm: number; comprimentoMm: number; k: number }[] = [];
+  const posicoesDaBanda = (banda: { inicio: number; fim: number; ladoDaCirculacao: 1 | -1 }, larguras: number[], comprimentos: number[]): { at: Point; larguraMm: number; comprimentoMm: number; rotacaoGraus: number; k: number }[] => {
+    const saida: { at: Point; larguraMm: number; comprimentoMm: number; rotacaoGraus: number; k: number }[] = [];
     let pos = 0;
     let k = 0;
-    while (k < larguras.length && pos + larguras[k] <= aoLongo + 0.5) {
+    const ladoCirc = banda.ladoDaCirculacao;
+    // O giro da vaga: de ré = eixo da fileira; espinha = 45°/135° conforme o lado
+    // da circulação (o carro entra de frente vindo dela); fila = deitada na fileira.
+    const rotacaoGraus = (rotacaoBase + arranjo.giroGraus(ladoCirc)) % 360;
+    while (k < larguras.length && pos + arranjo.passoMm(larguras[k], comprimentos[k]) <= aoLongo + 0.5) {
       const w = larguras[k];
       const comp = comprimentos[k];
-      // A vaga encosta na circulação: no lado dela dentro da banda.
-      const ladoCirc = banda.ladoDaCirculacao;
-      const centroT = ladoCirc === 1 ? banda.fim - comp / 2 : banda.inicio + comp / 2;
-      const centroL = pos + w / 2;
+      const passo = arranjo.passoMm(w, comp);
+      const prof = arranjo.profundidadeMm(w, comp);
+      // A vaga se ancora no lado OPOSTO à circulação: a profundidade normal
+      // preenche a banda exata (encosta na circulação); a vaga mais funda que a
+      // banda (PCD na espinha e na fila, com a faixa de 1,20 m) cresce PARA a
+      // circulação — que é onde a faixa de embarque fica — e nunca para fora da
+      // região nem para dentro da banda vizinha.
+      const centroT = ladoCirc === 1 ? banda.inicio + prof / 2 : banda.fim - prof / 2;
+      const centroL = pos + arranjo.centroAoLongoMm(w, comp);
       const at = fileirasEmX ? { x: Math.round(caixa.minX + centroL), y: Math.round(caixa.minY + centroT) } : { x: Math.round(caixa.minX + centroT), y: Math.round(caixa.minY + centroL) };
       const anel = contornoDaVaga({ at, larguraMm: w, comprimentoMm: comp, rotacaoGraus });
       if (livre(anel)) {
-        saida.push({ at, larguraMm: w, comprimentoMm: comp, k });
-        pos += w;
+        saida.push({ at, larguraMm: w, comprimentoMm: comp, rotacaoGraus, k });
+        pos += passo;
         k++;
       } else {
         pos += 250;
@@ -267,7 +292,7 @@ export function planejarVagas(model: BlueprintModel, levelId: ObjectId, hip: Hip
   for (const banda of bandas) {
     if (restante.length === 0) break;
     const colocadas = posicoesDaBanda(banda, restante.map((f) => f.larguraMm), restante.map((f) => f.comprimentoMm));
-    for (const c of colocadas) vagas.push({ at: c.at, larguraMm: c.larguraMm, comprimentoMm: c.comprimentoMm, rotacaoGraus, tipo: restante[c.k].tipo, numero: '' });
+    for (const c of colocadas) vagas.push({ at: c.at, larguraMm: c.larguraMm, comprimentoMm: c.comprimentoMm, rotacaoGraus: c.rotacaoGraus, tipo: restante[c.k].tipo, numero: '' });
     restante = restante.slice(colocadas.length);
   }
   // Numeração: contínua depois das confirmadas.
@@ -287,6 +312,43 @@ export function planejarVagas(model: BlueprintModel, levelId: ObjectId, hip: Hip
     motivo: vagas.length === 0 ? `Nenhuma vaga coube em "${regiao.nome}": pilares e paredes tomam o espaço, ou a região é estreita.` : null,
     regiao: { anel: regiao.anel, nome: regiao.nome },
   };
+}
+
+/**
+ * A geometria de cada ARRANJO (P2.7), em função da largura `l` e do comprimento
+ * `c` da vaga: profundidade da banda, passo ao longo da fileira, onde fica o
+ * centro da vaga dentro do passo e o giro relativo ao eixo da fileira.
+ */
+export function geometriaDoArranjo(hip: Pick<HipotesesDeVagas, 'arranjo'>): {
+  arranjo: ArranjoDasVagas;
+  profundidadeMm: (l: number, c: number) => number;
+  passoMm: (l: number, c: number) => number;
+  centroAoLongoMm: (l: number, c: number) => number;
+  giroGraus: (ladoDaCirculacao: 1 | -1) => number;
+} {
+  const arranjo = hip.arranjo ?? 'PERPENDICULAR';
+  const s45 = Math.SQRT1_2;
+  if (arranjo === 'ESPINHA_45') {
+    // Retângulo l × c girado 45°: a caixa envolvente é (l + c)·sen 45° de lado;
+    // vagas vizinhas a l/sen 45° de passo encostam pelas laterais sem se cruzar.
+    return {
+      arranjo,
+      profundidadeMm: (l, c) => Math.round((l + c) * s45),
+      passoMm: (l) => Math.round(l / s45),
+      centroAoLongoMm: (l, c) => Math.round(((l + c) * s45) / 2),
+      giroGraus: (lado) => (lado === 1 ? 45 : 135),
+    };
+  }
+  if (arranjo === 'PARALELA') {
+    return {
+      arranjo,
+      profundidadeMm: (l) => l,
+      passoMm: (_l, c) => c + FOLGA_DA_FILA_MM,
+      centroAoLongoMm: (_l, c) => Math.round(c / 2),
+      giroGraus: () => 90,
+    };
+  }
+  return { arranjo, profundidadeMm: (_l, c) => c, passoMm: (l) => l, centroAoLongoMm: (l) => Math.round(l / 2), giroGraus: () => 0 };
 }
 
 /** Resumo do pavimento: confirmadas + previstas (ou + sugeridas atuais quando `previstas` está vazio). */

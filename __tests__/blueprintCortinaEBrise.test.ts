@@ -27,7 +27,7 @@ describe('cortina de vidro e brise (P2.20)', () => {
     expect(() => applyCommand(r, { type: 'SetWallCortina', wallId: frente.id, cortina: { moduloMm: 1200, montanteMm: 1300, painel: 'VIDRO' } })).toThrow(/BAD_CURTAIN|montante/);
     expect(() => applyCommand(r, { type: 'SetWallBrise', wallId: frente.id, brise: { orientacao: 'VERTICAL', laminaMm: 150, passoMm: 100, afastamentoMm: 0, lado: 'DIREITA' } })).toThrow(/BAD_BRISE|passo/);
     const q = computeQuantities(r, POLITICA_PADRAO, KERNEL_VERSION);
-    expect(POLITICA_PADRAO.version).toBe('quant-1.15.0');
+    expect(POLITICA_PADRAO.version).toBe('quant-1.16.0');
     const qc = q.paredes.find((p) => p.wallId === frente.id)!;
     expect(qc.volumeM3).toBe(0);
     expect(qc.camadas).toEqual([]);
@@ -59,7 +59,7 @@ describe('cortina de vidro e brise (P2.20)', () => {
     const { m } = casa();
     let r = applyCommand(m, { type: 'SetWallCortina', wallId: m.walls[0].id, cortina: { moduloMm: 1500, montanteMm: 80, painel: 'POLICARBONATO' } }).model;
     r = applyCommand(r, { type: 'SetWallBrise', wallId: m.walls[2].id, brise: { orientacao: 'VERTICAL', laminaMm: 100, passoMm: 250, afastamentoMm: 200, lado: 'ESQUERDA' } }).model;
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.54.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.55.0');
     const payload = parseCanonicalPayload(canonicalPayload(r));
     expect(payload.walls.filter((w) => w.cortina)).toHaveLength(1);
     expect(payload.walls.filter((w) => w.brise)).toHaveLength(1);

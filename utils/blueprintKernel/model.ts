@@ -1947,6 +1947,35 @@ export interface SubRegiao {
   /** "Jardim da frente"; null = o rótulo do material. */
   nome: string | null;
 }
+/**
+ * TRECHO DE RODAPÉ (0.55.0, backlog P2 — P2.21): o rodapé como ELEMENTO — uma
+ * polilinha ao pé da parede com altura e material próprios. A declaração por
+ * ambiente (E7.2) continua sendo a política; o trecho é o que se desenha,
+ * encurta e apaga. O quantitativo soma os trechos quando há algum no desenho;
+ * sem nenhum, continua o derivado do perímetro. Ver `blueprintRodape.ts`.
+ */
+export interface TrechoDeRodape {
+  id: ObjectId;
+  uid: ElementUid;
+  parametros?: Parametros;
+  levelId: ObjectId;
+  /** Polilinha aberta, ≥ 2 vértices, mm inteiros. */
+  pontos: Point[];
+  /** 1 a `MAX_ALTURA_DE_RODAPE_MM`. */
+  alturaMm: number;
+  itemCode: string;
+  descricao: string;
+  /** Nascido do gerador; mover ou aceitar confirma. */
+  sugerido?: boolean | null;
+  /** A etiqueta do ambiente de origem (idempotência do gerador). */
+  spaceUid?: ElementUid | null;
+}
+export function findRodape(model: BlueprintModel, id: ObjectId): TrechoDeRodape {
+  const r = (model.rodapes ?? []).find((x) => x.id === id);
+  if (!r) throw new KernelError('BASEBOARD_NOT_FOUND', `Trecho de rodapé inexistente: ${id}`);
+  return r;
+}
+
 export function findSubRegiao(model: BlueprintModel, id: ObjectId): SubRegiao {
   const s = (model.subRegioes ?? []).find((x) => x.id === id);
   if (!s) throw new KernelError('SUBREGION_NOT_FOUND', `Sub-região inexistente: ${id}`);
@@ -2571,6 +2600,8 @@ export interface BlueprintModel {
   vistasDependentes: VistaDependente[];
   /** Sub-regiões do terreno (0.53.0). Ver `SubRegiao`. */
   subRegioes: SubRegiao[];
+  /** Trechos de rodapé (0.55.0). Ver `TrechoDeRodape`. */
+  rodapes: TrechoDeRodape[];
   /**
    * Escadas e rampas. Como a estrutura e o telhado, NÃO participam do arranjo
    * planar: uma escada dentro da sala não parte o ambiente. O que ela faz ao
@@ -2690,6 +2721,7 @@ export function emptyModel(): BlueprintModel {
     anotacoes: [],
     vistasDependentes: [],
     subRegioes: [],
+    rodapes: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -2762,6 +2794,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     anotacoes: (model.anotacoes ?? []).map((a) => ({ ...a, vista: { ...a.vista }, pontos: a.pontos.map((p) => ({ ...p })), ...(a.parametros ? { parametros: { ...a.parametros } } : {}), ...(a.revisao ? { revisao: { ...a.revisao } } : {}) })),
     vistasDependentes: (model.vistasDependentes ?? []).map((v) => ({ ...v, recorte: { ...v.recorte } })),
     subRegioes: (model.subRegioes ?? []).map((s) => ({ ...s, pontos: s.pontos.map((p) => ({ ...p })), ...(s.parametros ? { parametros: { ...s.parametros } } : {}) })),
+    rodapes: (model.rodapes ?? []).map((r) => ({ ...r, pontos: r.pontos.map((p) => ({ ...p })), ...(r.parametros ? { parametros: { ...r.parametros } } : {}) })),
     grupos: (model.grupos ?? []).map((g) => ({
       ...g,
       pivo: { ...g.pivo },
@@ -3910,6 +3943,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Anotação', model.anotacoes ?? []],
     ['Vista dependente', model.vistasDependentes ?? []],
     ['Sub-região', model.subRegioes ?? []],
+    ['Trecho de rodapé', model.rodapes ?? []],
     ['Trecho', model.trechos ?? []],
     ['Terminal', model.terminais ?? []],
     ['Quadro', model.quadros ?? []],
@@ -4529,6 +4563,17 @@ export function assertModelInvariants(model: BlueprintModel): void {
   }
 
   // Guarda-corpos (E7.3): pavimento existente, tipo e material da lista, ≥ 2 vértices inteiros sem trecho nulo, altura inteira positiva, rótulo curto.
+  // TRECHO DE RODAPÉ (0.55.0): pavimento vivo, ≥ 2 vértices inteiros, altura na faixa.
+  for (const r of model.rodapes ?? []) {
+    if (!model.levels.some((l) => l.id === r.levelId)) throw new KernelError('BAD_BASEBOARD', `Rodapé ${r.id}: pavimento inexistente`);
+    if (!Array.isArray(r.pontos) || r.pontos.length < 2) throw new KernelError('BAD_BASEBOARD', `Rodapé ${r.id}: precisa de 2 vértices ou mais`);
+    r.pontos.forEach((p, i) => {
+      assertIntegerMm(p.x, `${r.id}.pontos[${i}].x`);
+      assertIntegerMm(p.y, `${r.id}.pontos[${i}].y`);
+    });
+    if (!Number.isInteger(r.alturaMm) || r.alturaMm < 1 || r.alturaMm > MAX_ALTURA_DE_RODAPE_MM) throw new KernelError('BAD_BASEBOARD', `Rodapé ${r.id}: altura tem de ser inteira entre 1 e ${MAX_ALTURA_DE_RODAPE_MM} mm`);
+    if (typeof r.itemCode !== 'string' || typeof r.descricao !== 'string') throw new KernelError('BAD_BASEBOARD', `Rodapé ${r.id}: item e descrição têm de ser texto`);
+  }
   // SUB-REGIÃO (0.53.0): pavimento vivo, material da lista, contorno inteiro com ≥ 3 vértices, nome curto.
   for (const s of model.subRegioes ?? []) {
     if (!model.levels.some((l) => l.id === s.levelId)) throw new KernelError('BAD_SUBREGION', `Sub-região ${s.id}: pavimento inexistente`);

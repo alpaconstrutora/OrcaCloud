@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.54.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.55.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -370,6 +370,8 @@ var PREFIXO_ROTULO_UID = {
   vistaDependente: "D",
   /** Sub-região do terreno — J (jardim; S é o corte, R a etiqueta). */
   subRegiao: "J",
+  /** Trecho de rodapé — F (friso; R já é a etiqueta). */
+  rodape: "F",
   stair: "E",
   label: "R",
   /**
@@ -636,6 +638,7 @@ function emptyModel() {
     anotacoes: [],
     vistasDependentes: [],
     subRegioes: [],
+    rodapes: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -1973,6 +1976,21 @@ function projetar(model) {
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.areaMm2 - y.areaMm2 || x.ring[0].x - y.ring[0].x || x.ring[0].y - y.ring[0].y
   );
+  const indiceDaEtiquetaR = new Map(labels.map((l, i) => [l.item.uid, i]));
+  const rodapes = ordenar(
+    model.rodapes ?? [],
+    (r) => ({
+      level: nivel(r.levelId),
+      pontos: r.pontos.map((p) => ({ x: p.x, y: p.y })),
+      alturaMm: r.alturaMm,
+      itemCode: r.itemCode,
+      descricao: r.descricao,
+      sugerido: r.sugerido ? true : void 0,
+      etiqueta: r.spaceUid ? indiceDaEtiquetaR.get(r.spaceUid) : void 0,
+      parametros: parametrosCanonicos(r.parametros)
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.itemCode, y.itemCode)
+  );
   const indiceDaEtiqueta = new Map(labels.map((l, i) => [l.item.uid, i]));
   const unidades = ordenar(
     model.unidades ?? [],
@@ -2052,6 +2070,7 @@ function projetar(model) {
     anotacoes: anotacoes.length ? anotacoes.map((a) => a.geom) : void 0,
     vistasDependentes: vistasDependentes.length ? vistasDependentes.map((v) => v.geom) : void 0,
     subRegioes: subRegioes.length ? subRegioes.map((s2) => s2.geom) : void 0,
+    rodapes: rodapes.length ? rodapes.map((r) => r.geom) : void 0,
     trechos: trechos.length ? trechos.map((t) => t.geom) : void 0,
     terminais: terminais.length ? terminais.map((t) => t.geom) : void 0,
     quadros: quadros.length ? quadros.map((q) => q.geom) : void 0,
@@ -2080,6 +2099,7 @@ function projetar(model) {
     anotacoes: anotacoes.map((a) => a.item.uid ?? null),
     vistasDependentes: vistasDependentes.map((v) => v.item.uid ?? null),
     subRegioes: subRegioes.map((s2) => s2.item.uid ?? null),
+    rodapes: rodapes.map((r) => r.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
     quadros: quadros.map((q) => q.item.uid ?? null),
@@ -2535,6 +2555,23 @@ function modelFromCanonicalPayload(payload) {
       } : {}
     });
   });
+  const rodapes = payload.rodapes ?? [];
+  rodapes.forEach((r, i) => {
+    if (!levelIds[r.level]) return;
+    const etiqueta = r.etiqueta !== void 0 ? model.labels[r.etiqueta] : void 0;
+    model.rodapes.push({
+      id: nextId(model, "rod"),
+      uid: uidDe("rodapes", i, rodapes.length),
+      levelId: levelIds[r.level],
+      pontos: r.pontos.map((p) => ({ x: p.x, y: p.y })),
+      alturaMm: r.alturaMm,
+      itemCode: r.itemCode,
+      descricao: r.descricao,
+      ...r.sugerido ? { sugerido: true } : {},
+      ...etiqueta ? { spaceUid: etiqueta.uid } : {},
+      ...r.parametros && Object.keys(r.parametros).length > 0 ? { parametros: { ...r.parametros } } : {}
+    });
+  });
   const unidadesLidas = payload.unidades ?? [];
   unidadesLidas.forEach((u, i) => {
     model.unidades.push({
@@ -2788,7 +2825,7 @@ function conexoesDerivadas(model) {
 
 // utils/blueprintKernel/quantities.ts
 var POLITICA_PADRAO = {
-  version: "quant-1.15.0",
+  version: "quant-1.16.0",
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2
@@ -3233,6 +3270,22 @@ function computeQuantities(model, policy = POLITICA_PADRAO, kernelVersion = "") 
       sugerido: !!g.sugerido
     };
   });
+  const rodapes = (model.rodapes ?? []).map((r) => {
+    let compMm = 0;
+    for (let i = 1; i < r.pontos.length; i++) compMm += Math.hypot(r.pontos[i].x - r.pontos[i - 1].x, r.pontos[i].y - r.pontos[i - 1].y);
+    return { rodapeId: r.id, uid: r.uid, comprimentoM: compMm / 1e3, alturaMm: r.alturaMm, areaM2: compMm * r.alturaMm / MM2_PARA_M2, itemCode: r.itemCode, descricao: r.descricao, sugerido: !!r.sugerido };
+  });
+  const gruposDeRodape = /* @__PURE__ */ new Map();
+  for (const r of rodapes) {
+    const chave = `${r.itemCode}|${r.alturaMm}`;
+    const atual = gruposDeRodape.get(chave);
+    if (atual) {
+      atual.comprimentoM += r.comprimentoM;
+      atual.areaM2 += r.areaM2;
+      atual.trechos += 1;
+    } else gruposDeRodape.set(chave, { itemCode: r.itemCode, descricao: r.descricao, alturaMm: r.alturaMm, comprimentoM: r.comprimentoM, areaM2: r.areaM2, trechos: 1 });
+  }
+  const porRodape = [...gruposDeRodape.values()].sort((a, b) => a.itemCode.localeCompare(b.itemCode) || a.alturaMm - b.alturaMm);
   const gruposDeGuardaCorpo = /* @__PURE__ */ new Map();
   for (const g of guardaCorpos) {
     const chave = `${g.tipo} ${g.material} ${g.itemCode}`;
@@ -3334,6 +3387,7 @@ function computeQuantities(model, policy = POLITICA_PADRAO, kernelVersion = "") 
     telhados,
     escadas,
     guardaCorpos,
+    rodapes,
     trechos,
     sobreposicoes,
     conexoes,
@@ -3360,7 +3414,10 @@ function computeQuantities(model, policy = POLITICA_PADRAO, kernelVersion = "") 
       comprimentoGuardaCorpoM: guardaCorpos.filter((g) => g.tipo === "GUARDA_CORPO").reduce((s2, g) => s2 + g.comprimentoM, 0),
       comprimentoCorrimaoM: guardaCorpos.filter((g) => g.tipo === "CORRIMAO").reduce((s2, g) => s2 + g.comprimentoM, 0),
       porGuardaCorpo,
-      comprimentoRodapeM: ambientes.reduce((s2, a) => s2 + a.comprimentoRodapeM, 0),
+      // P2.21: os trechos mandam quando existem; senão, o derivado de sempre.
+      comprimentoRodapeM: rodapes.length > 0 ? rodapes.reduce((s2, r) => s2 + r.comprimentoM, 0) : ambientes.reduce((s2, a) => s2 + a.comprimentoRodapeM, 0),
+      origemDoRodape: rodapes.length > 0 ? "TRECHOS" : "DERIVADO",
+      porRodape,
       portas: aberturas.filter((o) => o.tipo === "door").length,
       janelas: aberturas.filter((o) => o.tipo === "window").length,
       vaosLivres: aberturas.filter((o) => o.tipo === "passage").length,

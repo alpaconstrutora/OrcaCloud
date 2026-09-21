@@ -599,6 +599,18 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
     case 'AREA_PISO_COM_PERDA':
     case 'COMPRIMENTO_RODAPE':
     case 'AREA_RODAPE':
+      // RODAPÉ COMO ELEMENTO (P2.21): com trechos desenhados, uma linha por trecho (o filtro casa com item ou descrição); sem trecho, o derivado por ambiente abaixo.
+      if ((medidaId === 'COMPRIMENTO_RODAPE' || medidaId === 'AREA_RODAPE') && (quant.rodapes ?? []).length > 0) {
+        return quant.rodapes
+          .filter((r) => combina(r.descricao) || combina(r.itemCode))
+          .map((r) => ({
+            ref: r.uid,
+            rotulo: `Rodapé ${r.descricao || r.itemCode || ''} ${r.comprimentoM.toFixed(2)} m · ${r.alturaMm} mm${r.sugerido ? ' (sugerido)' : ''}`,
+            valor: medidaId === 'COMPRIMENTO_RODAPE' ? r.comprimentoM : r.areaM2,
+            formula: medidaId === 'COMPRIMENTO_RODAPE' ? 'comprimento do trecho desenhado' : 'comprimento do trecho × altura',
+            variaveis: { itemCode: r.itemCode, alturaMm: r.alturaMm, comprimentoM: r.comprimentoM, areaM2: r.areaM2 },
+          }));
+      }
     case 'PERIMETRO':
       return quant.ambientes
         .filter((a) => combina(a.nome))

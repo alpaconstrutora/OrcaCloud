@@ -18,7 +18,7 @@ describe('volume do ambiente no quantitativo (quant-1.14.0)', () => {
     m = applyBatch(m, [w(0, 0, 4000, 0), w(4000, 0, 4000, 4000), w(4000, 4000, 0, 4000), w(0, 4000, 0, 0)]).model;
     m = applyCommand(m, { type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Sala' }).model;
     const sem = computeQuantities(m, POLITICA_PADRAO, KERNEL_VERSION);
-    expect(sem.policy.version).toBe('quant-1.15.0');
+    expect(sem.policy.version).toBe('quant-1.16.0');
     const a = sem.ambientes[0];
     expect(a.peDireitoM).toBe(2.8);
     expect(a.volumeM3).toBe(Math.round(a.areaPisoM2 * 2.8 * 100) / 100);

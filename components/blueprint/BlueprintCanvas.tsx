@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
+  type TrechoDeRodape,
   FICHA_DO_MATERIAL_DE_SUB_REGIAO,
   polygonArea,
   type SubRegiao,
@@ -335,6 +336,7 @@ const COR_NUCLEO = '#5b21b6';
 const COR_NUCLEO_FUNDO = 'rgba(139, 92, 246, 0.14)';
 const SEM_NUCLEOS: Nucleo[] = [];
 const SEM_SUB_REGIOES: SubRegiao[] = [];
+const SEM_RODAPES: TrechoDeRodape[] = [];
 /** Vaga (E2.5): azul-petróleo; sugerida tracejada. */
 const COR_VAGA = '#0f766e';
 const COR_VAGA_FUNDO = 'rgba(20, 184, 166, 0.10)';
@@ -350,6 +352,7 @@ const COR_CORTE = '#0284c7';
 const COR_EIXO = '#64748b';
 /** Guarda-corpo (E7.3): linha dupla com balaústres; corrimão linha simples grossa. */
 const COR_GUARDA_CORPO = '#0f766e';
+const COR_RODAPE = '#92400e';
 /** Anotação (E8.1): âmbar escuro — nem parede nem instalação. */
 const COR_ANOTACAO = '#b45309';
 
@@ -1317,6 +1320,9 @@ interface Props {
   nucleos?: Nucleo[];
   /** Retângulo por dois cantos opostos; o editor põe tipo e pavimentos. */
   onAddNucleo?: (ring: Point[]) => void;
+  /** TRECHOS DE RODAPÉ (P2.21) do pavimento. */
+  rodapes?: TrechoDeRodape[];
+  onAddRodape?: (a: Point, b: Point) => void;
   /** VAGAS (E2.5) do pavimento; a ferramenta `vaga` pede o tipo para a prévia. */
   vagas?: Vaga[];
   tipoDeVaga?: TipoDeVaga;
@@ -1485,6 +1491,8 @@ export default function BlueprintCanvas({
   onAddAnotacao,
   nucleos: nucleosReais = SEM_NUCLEOS,
   onAddNucleo,
+  rodapes: rodapesReais = SEM_RODAPES,
+  onAddRodape,
   vagas: vagasReais = SEM_VAGAS,
   tipoDeVaga = 'COMUM',
   onAddVaga,
@@ -1645,6 +1653,7 @@ export default function BlueprintCanvas({
   /** Primeiro clique do EIXO em curso (E1.4). */
   const [pontoEixo, setPontoEixo] = useState<Point | null>(null);
   const [pontoGuardaCorpo, setPontoGuardaCorpo] = useState<Point | null>(null);
+  const [pontoRodape, setPontoRodape] = useState<Point | null>(null);
   /** PAREDE CURVA em curso: [início] ou [início, fim]; o 3º clique fecha. */
   const [arcoEmCurso, setArcoEmCurso] = useState<Point[]>([]);
   /** COBERTURA POR EXTRUSÃO em curso: o primeiro clique do eixo. */
@@ -1810,6 +1819,7 @@ export default function BlueprintCanvas({
   const eixos = useMemo(() => (model.eixos ?? []).filter((e) => !ocultos.has(e.id)), [model.eixos, ocultos]);
   /** GUARDA-CORPOS (E7.3) do pavimento. */
   const guardaCorpos = useMemo(() => (model.guardaCorpos ?? []).filter((g) => (!levelId || g.levelId === levelId) && !ocultos.has(g.id)), [model.guardaCorpos, levelId, ocultos]);
+  const rodapes = useMemo(() => rodapesReais.filter((r) => (!levelId || r.levelId === levelId) && !ocultos.has(r.id)), [rodapesReais, levelId, ocultos]);
 
   // ── Seleção ───────────────────────────────────────────────────────────────
   //
@@ -2769,6 +2779,19 @@ export default function BlueprintCanvas({
   );
 
   /** Qual GUARDA-CORPO está sob o cursor — por qualquer trecho da polilinha. */
+  const rodapeSob = useCallback(
+    (mundo: { x: number; y: number }): TrechoDeRodape | null => {
+      const folga = HIT_PX / vista.escala;
+      for (let i = rodapes.length - 1; i >= 0; i--) {
+        const r = rodapes[i];
+        for (let k = 1; k < r.pontos.length; k++) {
+          if (distanciaAoSegmento(r.pontos[k - 1], r.pontos[k], mundo) <= folga) return r;
+        }
+      }
+      return null;
+    },
+    [rodapes, vista.escala],
+  );
   const guardaCorpoSob = useCallback(
     (mundo: { x: number; y: number }): GuardaCorpo | null => {
       const folga = HIT_PX / vista.escala;
@@ -6459,6 +6482,35 @@ export default function BlueprintCanvas({
     if (tool === 'guardacorpo' && pontoGuardaCorpo && cursor) {
       desenharGuardaCorpo([pontoGuardaCorpo, cursor], tipoDeGuardaCorpo, COR_GUARDA_CORPO, true, 1.4);
     }
+    // TRECHOS DE RODAPÉ (P2.21): linha fina castanha ao pé da parede; sugerido tracejado.
+    const desenharRodape = (pontos: Point[], cor: string, tracejado: boolean, largura: number) => {
+      if (pontos.length < 2) return;
+      ctx.save();
+      ctx.strokeStyle = cor;
+      ctx.lineWidth = largura;
+      ctx.setLineDash(tracejado ? [5, 4] : []);
+      const tela = pontos.map(paraTela);
+      ctx.beginPath();
+      ctx.moveTo(tela[0].x, tela[0].y);
+      for (const q of tela.slice(1)) ctx.lineTo(q.x, q.y);
+      ctx.stroke();
+      // Traços curtos transversais nas pontas: o símbolo de rodapé em planta.
+      for (const p of [tela[0], tela[tela.length - 1]]) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    };
+    for (const r of rodapes) {
+      const selecionado = selecao.has(r.id);
+      ctx.fillStyle = selecionado ? COR_SELECIONADA : COR_RODAPE;
+      desenharRodape(r.pontos, selecionado ? COR_SELECIONADA : COR_RODAPE, !!r.sugerido, selecionado ? 2.5 : 1.4);
+    }
+    if (tool === 'rodape' && pontoRodape && cursor) {
+      ctx.fillStyle = COR_RODAPE;
+      desenharRodape([pontoRodape, cursor], COR_RODAPE, true, 1.2);
+    }
 
     // ── ANOTAÇÕES (E8.1): texto, leader, linha, hachura, cota angular — a
     // mesma geometria do PDF/DXF (`blueprintAnotacoes.ts`). ──
@@ -7622,6 +7674,7 @@ export default function BlueprintCanvas({
         tool === 'corte' ||
         tool === 'eixo' ||
         tool === 'guardacorpo' ||
+        tool === 'rodape' ||
         tool === 'anotacao' ||
         tool === 'nucleo' ||
         tool === 'subregiao' ||
@@ -7821,6 +7874,8 @@ export default function BlueprintCanvas({
     pontoCorte,
     movendoCorte,
     guardaCorpos,
+    rodapes,
+    pontoRodape,
     pontoGuardaCorpo,
     tipoDeGuardaCorpo,
     anotacoes,
@@ -8299,6 +8354,12 @@ export default function BlueprintCanvas({
       setCursor(alvo);
       return;
     }
+    if (tool === 'rodape') {
+      let alvo = capturarTracado(paraMundo(px, py));
+      if (pontoRodape && ortoAtivo(e)) alvo = travarOrtogonal(pontoRodape, alvo);
+      setCursor(alvo);
+      return;
+    }
     if (tool === 'cobertura-extrusao') {
       let alvo = capturarTracado(paraMundo(px, py));
       if (pontoExtrusao && ortoAtivo(e)) alvo = travarOrtogonal(pontoExtrusao, alvo);
@@ -8657,6 +8718,20 @@ export default function BlueprintCanvas({
       return;
     }
 
+    // RODAPÉ (P2.21): dois cliques, como o guarda-corpo.
+    if (tool === 'rodape') {
+      const ponto = capturarTracado(mundo);
+      if (!pontoRodape) {
+        setPontoRodape(ponto);
+        return;
+      }
+      const fim = ortoAtivo(e) ? travarOrtogonal(pontoRodape, ponto) : ponto;
+      if (fim.x === pontoRodape.x && fim.y === pontoRodape.y) return;
+      onAddRodape?.(pontoRodape, fim);
+      setPontoRodape(null);
+      return;
+    }
+
     // GUARDA-CORPO (E7.3): dois cliques, como o eixo.
     if (tool === 'guardacorpo') {
       const ponto = capturarTracado(mundo);
@@ -8961,6 +9036,7 @@ export default function BlueprintCanvas({
         anotacaoClicada?.id ??
         aberturaClicada?.id ??
         guardaCorpoClicado?.id ??
+        rodapeSob(mundo)?.id ??
         quadroClicado?.id ??
         terminalClicado?.id ??
         limiteClicado?.id ??
@@ -9528,6 +9604,7 @@ export default function BlueprintCanvas({
       setPontoCorte(null);
       setPontoEixo(null);
       setPontoGuardaCorpo(null);
+      setPontoRodape(null);
       setArcoEmCurso([]);
       setPontoExtrusao(null);
       setAnelSubRegiao([]);
@@ -9622,6 +9699,10 @@ export default function BlueprintCanvas({
           ? ancoraDaForma
             ? `Arraste para dar o tamanho e o giro · clique fecha o polígono de ${ladosPoligono} lados · Esc cancela`
             : 'Clique no CENTRO do polígono'
+          : tool === 'rodape'
+            ? pontoRodape
+              ? 'Clique no FIM do trecho de rodapé · Esc cancela'
+              : 'Clique no INÍCIO do trecho de rodapé, ao pé da parede'
           : tool === 'subregiao'
             ? anelSubRegiao.length >= 3
               ? 'Clique no próximo vértice · volte ao 1º para fechar a sub-região · Esc cancela'

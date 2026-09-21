@@ -148,6 +148,8 @@ export const PREFIXO_ROTULO_UID = {
   vistaDependente: 'D',
   /** Sub-região do terreno — J (jardim; S é o corte, R a etiqueta). */
   subRegiao: 'J',
+  /** Trecho de rodapé — F (friso; R já é a etiqueta). */
+  rodape: 'F',
   stair: 'E',
   label: 'R',
   /**

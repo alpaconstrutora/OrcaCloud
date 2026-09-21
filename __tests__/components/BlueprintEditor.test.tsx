@@ -389,7 +389,7 @@ async function abrirAba(nome: RegExp) {
  * seletor casa com qualquer um dos nomes possíveis.
  */
 const NOMES_DO_BOTAO =
-  /^(Componentes|Parede|Parede curva|Parede em retângulo|Parede em polígono|Cobertura por extrusão|Porta|Porta de correr|Janela|Vão livre|Pilar|Viga|Laje|Estaca|Bloco de coroamento|Viga de fundação|Shaft|Elevador|Vaga|Vaga PCD|Vaga idoso|Vaga de moto|Guarda-corpo|Corrimão)$/;
+  /^(Componentes|Parede|Parede curva|Parede em retângulo|Parede em polígono|Cobertura por extrusão|Rodapé (trecho)|Porta|Porta de correr|Janela|Vão livre|Pilar|Viga|Laje|Estaca|Bloco de coroamento|Viga de fundação|Shaft|Elevador|Vaga|Vaga PCD|Vaga idoso|Vaga de moto|Guarda-corpo|Corrimão)$/;
 
 /**
  * O botão do menu.
@@ -5324,5 +5324,44 @@ describe('BlueprintEditor · sub-regiões do terreno (P2.19)', () => {
     expect(painel).toHaveTextContent(/200,00 m² · 4 vértices · permeável/);
     await user.selectOptions(within(painel).getByLabelText('Material da sub-região'), 'CONCRETO');
     expect(onProps).toHaveBeenLastCalledWith({ material: 'CONCRETO' });
+  }, 60000);
+});
+
+/**
+ * RODAPÉ COMO ELEMENTO (21/09/2026, backlog P2 — P2.21): Arquitetura ›
+ * Rodapés abre a gaveta com as sugestões por ambiente; Lançar grava trechos
+ * sugeridos; Aceitar confirma; o menu oferece "Rodapé (trecho)".
+ */
+describe('BlueprintEditor · rodapé como elemento (P2.21)', () => {
+  it('gaveta sugere por ambiente (porta descontada), lança e aceita; menu com o trecho', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall' as const, levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 });
+    let m = k.applyBatch(nivel.model, [w(0, 0, 4000, 0), w(4000, 0, 4000, 3000), w(4000, 3000, 0, 3000), w(0, 3000, 0, 0)]).model;
+    m = k.applyCommand(m, { type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Sala' }).model;
+    m = k.applyCommand(m, { type: 'AddOpening', wallId: m.walls[0].id, kind: 'door', offsetMm: 1000, widthMm: 900, heightMm: 2100, sillMm: 0 } as never).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^arquitetura$/i);
+    await user.click(botao(/^rodapés/i));
+    const gaveta = await screen.findByTestId('tarefa-rodapes');
+    expect(gaveta).toHaveTextContent(/Sugestões \(5 trecho\(s\) em 1 ambiente\(s\)\)/);
+    expect(gaveta).toHaveTextContent(/Sala · 5 trecho\(s\) · 13,10 m/);
+    const { saveDraft } = await import('../../services/blueprintService');
+    vi.mocked(saveDraft).mockClear();
+    await user.click(within(gaveta).getByTestId('lancar-rodapes'));
+    await waitFor(() => expect(screen.getByTestId('tarefa-rodapes')).toHaveTextContent(/5 trecho\(s\) de rodapé desenhado\(s\), 13,10 m \(5 sugerido\(s\)\)/));
+    await user.click(within(screen.getByTestId('tarefa-rodapes')).getByTestId('aceitar-rodapes'));
+    await waitFor(() => expect(screen.getByTestId('tarefa-rodapes')).not.toHaveTextContent(/sugerido\(s\)\)/));
+    await waitFor(() => expect(saveDraft).toHaveBeenCalled(), { timeout: 5000 });
+    const salvo = (vi.mocked(saveDraft).mock.calls.at(-1) as unknown as [string, import('../../utils/blueprintKernel').BlueprintModel])[1];
+    expect(salvo.rodapes).toHaveLength(5);
+    expect(salvo.rodapes.every((r) => !r.sugerido)).toBe(true);
+    // O menu de componentes oferece o trecho à mão.
+    await user.keyboard('{Escape}');
+    await user.click(botaoComponentes());
+    expect(screen.getByRole('menuitemradio', { name: /^Rodapé \(trecho\)$/ })).toBeInTheDocument();
   }, 60000);
 });

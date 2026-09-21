@@ -785,6 +785,23 @@ function projetar(model: BlueprintModel): {
   // UNIDADES (0.37.0): etiquetas por ÍNDICE na ordem canônica de `labels`,
   // ordenadas por número (único). Omitidas quando não há nenhuma. Etiqueta
   // fora da lista é descartada — nunca uid nem id no hash.
+  // TRECHOS DE RODAPÉ (0.55.0): pavimento por índice, polilinha, altura, item, descrição; `sugerido` só quando verdadeiro; a etiqueta de origem por ÍNDICE em `labels`. Omitidos quando não há.
+  const indiceDaEtiquetaR = new Map(labels.map((l, i) => [l.item.uid, i]));
+  const rodapes = ordenar(
+    model.rodapes ?? [],
+    (r) => ({
+      level: nivel(r.levelId),
+      pontos: r.pontos.map((p) => ({ x: p.x, y: p.y })),
+      alturaMm: r.alturaMm,
+      itemCode: r.itemCode,
+      descricao: r.descricao,
+      sugerido: r.sugerido ? true : undefined,
+      etiqueta: r.spaceUid ? indiceDaEtiquetaR.get(r.spaceUid) : undefined,
+      parametros: parametrosCanonicos(r.parametros),
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.itemCode, y.itemCode),
+  );
+
   const indiceDaEtiqueta = new Map(labels.map((l, i) => [l.item.uid, i]));
   const unidades = ordenar(
     model.unidades ?? [],
@@ -887,6 +904,7 @@ function projetar(model: BlueprintModel): {
     anotacoes: anotacoes.length ? anotacoes.map((a) => a.geom) : undefined,
     vistasDependentes: vistasDependentes.length ? vistasDependentes.map((v) => v.geom) : undefined,
     subRegioes: subRegioes.length ? subRegioes.map((s) => s.geom) : undefined,
+    rodapes: rodapes.length ? rodapes.map((r) => r.geom) : undefined,
     trechos: trechos.length ? trechos.map((t) => t.geom) : undefined,
     terminais: terminais.length ? terminais.map((t) => t.geom) : undefined,
     quadros: quadros.length ? quadros.map((q) => q.geom) : undefined,
@@ -920,6 +938,7 @@ function projetar(model: BlueprintModel): {
     anotacoes: anotacoes.map((a) => a.item.uid ?? null),
     vistasDependentes: vistasDependentes.map((v) => v.item.uid ?? null),
     subRegioes: subRegioes.map((s) => s.item.uid ?? null),
+    rodapes: rodapes.map((r) => r.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
     quadros: quadros.map((q) => q.item.uid ?? null),
@@ -1004,6 +1023,7 @@ export interface IdentidadeCanonica {
   anotacoes?: (ElementUid | null)[];
   vistasDependentes?: (ElementUid | null)[];
   subRegioes?: (ElementUid | null)[];
+  rodapes?: (ElementUid | null)[];
   trechos?: (ElementUid | null)[];
   terminais?: (ElementUid | null)[];
   quadros?: (ElementUid | null)[];
@@ -1222,6 +1242,8 @@ export interface CanonicalPayload {
     sugerido?: boolean;
     parametros?: Parametros;
   }[];
+  /** Trechos de rodapé. Ausente sob kernel < 0.55.0 e em desenho sem nenhum. */
+  rodapes?: { level: number; pontos: { x: number; y: number }[]; alturaMm: number; itemCode: string; descricao: string; sugerido?: boolean; etiqueta?: number; parametros?: Parametros }[];
   /** Sub-regiões do terreno. Ausente sob kernel < 0.53.0 e em desenho sem nenhuma. */
   subRegioes?: { level: number; material: MaterialDeSubRegiao; pontos: { x: number; y: number }[]; nome: string | null; parametros?: Parametros }[];
   /** Vistas dependentes (recortes nomeados de planta). Ausente sob kernel < 0.51.0 e em desenho sem nenhuma. */
@@ -1923,6 +1945,25 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
             },
           }
         : {}),
+    });
+  });
+
+  // TRECHOS DE RODAPÉ: depois dos pavimentos e das etiquetas (a origem é índice em `labels`).
+  const rodapes = payload.rodapes ?? [];
+  rodapes.forEach((r, i) => {
+    if (!levelIds[r.level]) return;
+    const etiqueta = r.etiqueta !== undefined ? model.labels[r.etiqueta] : undefined;
+    model.rodapes.push({
+      id: nextId(model, 'rod'),
+      uid: uidDe('rodapes', i, rodapes.length),
+      levelId: levelIds[r.level],
+      pontos: r.pontos.map((p) => ({ x: p.x, y: p.y })),
+      alturaMm: r.alturaMm,
+      itemCode: r.itemCode,
+      descricao: r.descricao,
+      ...(r.sugerido ? { sugerido: true } : {}),
+      ...(etiqueta ? { spaceUid: etiqueta.uid } : {}),
+      ...(r.parametros && Object.keys(r.parametros).length > 0 ? { parametros: { ...r.parametros } } : {}),
     });
   });
 

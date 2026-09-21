@@ -1331,6 +1331,24 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 
 **Prova.** *No app real* (estudo "Planta 14/09/2026", escritas bloqueadas 16): parede nova no vazio, selecionada → seção Fachada; "Cortina de vidro" marcada → campos Vidro/1200/60 e os montantes azuis a cada módulo no canvas; "Brise" marcado → faixa tracejada afastada da face direita com lâminas horizontais (captura); 0 erros de página. Testes: `blueprintCortinaEBrise.test.ts` (2: comandos e invariantes; 6 m de cortina = 18 m², 5 painéis, 30 m de montante e volume 0; brise 12 m², 10 lâminas, 40 m; alvenaria total sem a cortina; MergeWalls recusa; canônico ida e volta; IFC com 1 `IfcCurtainWall` + 3 `IfcWall`), painel Fachada em `PainelParedeSelecionada.test.tsx`, goldens recapturadas, pins quant-1.15.0 nos 6 testes; suíte 420 arquivos / 4925 testes; tsc, check-ui e build OK; bundle regenerado e `planta-api` publicada (`plantaApi.test.ts` 3/3).
 
+### P2.21 — Rodapé como elemento (21/09/2026) · backlog P2 · kernel 0.54.0 → 0.55.0 · quant-1.15.0 → 1.16.0
+
+**O que entrou**
+- Família `rodapes` no kernel (`TrechoDeRodape`: polilinha ao pé da parede, `alturaMm`, `itemCode`, `descricao`, `sugerido?`, `spaceUid?`), identidade `F`, comandos `AddRodape` / `SetRodapeProps` / `MoveRodape` / `DeleteRodape`, limpeza em `RemoveLevel`, invariante `BAD_BASEBOARD`, canônico com `etiqueta` por índice.
+- `utils/blueprintRodape.ts`: gerador `sugerirRodapes` — cada lado do anel do ambiente vira trecho sugerido, descontados os vãos de porta/passagem/correr (`aberturasDoAmbiente`, agora exportada); pula ambiente declarado "sem rodapé" e o que já tem trecho (idempotente por etiqueta); `resumirRodapes`, `distanciaAoRodape`.
+- Quantitativos `quant-1.16.0`: `rodapes[]`, `porRodape`, `comprimentoRodapeM` = soma dos trechos quando há algum (`origemDoRodape: 'TRECHOS'`), senão o derivado de sempre (`'DERIVADO'`) — nunca soma os dois. Orçamento: `COMPRIMENTO_RODAPE` / `AREA_RODAPE` viram uma linha por trecho quando há trechos.
+- UI: Arquitetura › Acabamentos › **Rodapés** (gaveta `PainelRodapes`: hipóteses persistidas, sugestões por ambiente, Lançar / Lançar todos / Aceitar / Limpar sugeridos, lista de trechos); menu Componentes **Rodapé (trecho)** (2 cliques); canvas desenha os trechos (sugerido tracejado), hit-test e `PainelRodapeSelecionado` (altura, item do catálogo em m ou acabamento m², descrição, Aceitar, Excluir).
+
+**Decisões**
+- A declaração por ambiente (E7.2) continua sendo a política (altura/item padrão) e é dela que o gerador parte; o trecho é o que se encurta, apaga ou troca.
+- `MoveRodape` limpa `sugerido` (mexeu = confirmou), como nas demais famílias sugeridas.
+- Bump de kernel porque o payload canônico ganhou a família; goldens recapturadas (400 testes passaram com a string antiga e os campos no lugar).
+
+**Prova**
+- `npx tsc --noEmit` ok · check-ui ok nos 5 tsx · suíte cheia 421 arquivos / 4928 testes · `npm run build` ok · `planta-api` reimplantada (bundle 0.55.0/quant-1.16.0; `plantaApi.test.ts` 3/3).
+- App real (escritas bloqueadas: 17, 0 erros de página): gaveta Rodapés no Térreo → Lançar todos = 33 trechos / 78,10 m (33 sugeridos) → Aceitar = 0 sugeridos; menu "Rodapé (trecho)" → 2 cliques → seleção abre `painel-rodape` (5,00 m · 70 mm · 0,35 m² · F-9455).
+- Testes: `blueprintRodape.test.ts` (gerador 5 trechos = 13,1 m com porta descontada, Garagem pulada; quantitativo TRECHOS 15,1 m; comandos; orçamento por trecho; canônico ida e volta), editor P2.21 (gaveta, lançar, aceitar, saveDraft com 5 trechos confirmados, item de menu).
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

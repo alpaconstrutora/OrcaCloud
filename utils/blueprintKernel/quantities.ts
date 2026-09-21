@@ -171,7 +171,7 @@ export interface QuantityPolicy {
  * código). Desenho sem peça não muda de número.
  */
 export const POLITICA_PADRAO: QuantityPolicy = {
-  version: 'quant-1.15.0',
+  version: 'quant-1.16.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -502,6 +502,26 @@ export interface QuantidadeAgua {
  * furos que ela abre — o desconto que a laje já recebeu em `areaLajeM2`.
  */
 /** Guarda-corpo ou corrimão medido (E7.3): comprimento da polilinha e área = comprimento × altura. */
+/** TRECHO DE RODAPÉ (quant-1.16.0, P2.21): metros e m² por trecho desenhado. */
+export interface QuantidadeRodape {
+  rodapeId: string;
+  uid: string;
+  comprimentoM: number;
+  alturaMm: number;
+  areaM2: number;
+  itemCode: string;
+  descricao: string;
+  sugerido: boolean;
+}
+export interface QuantidadePorRodape {
+  itemCode: string;
+  descricao: string;
+  alturaMm: number;
+  comprimentoM: number;
+  areaM2: number;
+  trechos: number;
+}
+
 export interface QuantidadeGuardaCorpo {
   guardaCorpoId: string;
   uid: string;
@@ -656,6 +676,8 @@ export interface Quantitativos {
   escadas: QuantidadeEscada[];
   /** Guarda-corpos e corrimãos (E7.3). */
   guardaCorpos: QuantidadeGuardaCorpo[];
+  /** TRECHOS DE RODAPÉ (quant-1.16.0). Vazio sem trecho desenhado. */
+  rodapes: QuantidadeRodape[];
   /** Trechos de instalação, um a um, com o comprimento REAL de cada. */
   trechos: QuantidadeTrecho[];
   /** Onde dois componentes ocupam o mesmo espaço, e quem cedeu. */
@@ -711,7 +733,11 @@ export interface Quantitativos {
     comprimentoGuardaCorpoM: number;
     comprimentoCorrimaoM: number;
     porGuardaCorpo: QuantidadePorGuardaCorpo[];
+    /** Soma dos TRECHOS desenhados quando há algum; senão, o derivado por ambiente (perímetro − portas). */
     comprimentoRodapeM: number;
+    /** `TRECHOS` quando o total vem dos elementos, `DERIVADO` quando vem dos ambientes (quant-1.16.0). */
+    origemDoRodape: 'TRECHOS' | 'DERIVADO';
+    porRodape: QuantidadePorRodape[];
     portas: number;
     janelas: number;
     /** Vãos livres — sem esquadria, então contados à parte de porta e janela. */
@@ -906,7 +932,7 @@ export function areaConstruidaMm2(model: BlueprintModel, level: Level): number {
 }
 
 /** Aberturas hospedadas em paredes que compõem o contorno deste ambiente. */
-function aberturasDoAmbiente(
+export function aberturasDoAmbiente(
   space: Space,
   walls: Wall[],
   openings: Opening[],
@@ -1520,6 +1546,23 @@ export function computeQuantities(
       sugerido: !!g.sugerido,
     };
   });
+  // TRECHOS DE RODAPÉ (P2.21): um por trecho; agrupados por item × altura.
+  const rodapes: QuantidadeRodape[] = (model.rodapes ?? []).map((r) => {
+    let compMm = 0;
+    for (let i = 1; i < r.pontos.length; i++) compMm += Math.hypot(r.pontos[i].x - r.pontos[i - 1].x, r.pontos[i].y - r.pontos[i - 1].y);
+    return { rodapeId: r.id, uid: r.uid, comprimentoM: compMm / 1000, alturaMm: r.alturaMm, areaM2: (compMm * r.alturaMm) / MM2_PARA_M2, itemCode: r.itemCode, descricao: r.descricao, sugerido: !!r.sugerido };
+  });
+  const gruposDeRodape = new Map<string, QuantidadePorRodape>();
+  for (const r of rodapes) {
+    const chave = `${r.itemCode}|${r.alturaMm}`;
+    const atual = gruposDeRodape.get(chave);
+    if (atual) {
+      atual.comprimentoM += r.comprimentoM;
+      atual.areaM2 += r.areaM2;
+      atual.trechos += 1;
+    } else gruposDeRodape.set(chave, { itemCode: r.itemCode, descricao: r.descricao, alturaMm: r.alturaMm, comprimentoM: r.comprimentoM, areaM2: r.areaM2, trechos: 1 });
+  }
+  const porRodape = [...gruposDeRodape.values()].sort((a, b) => a.itemCode.localeCompare(b.itemCode) || a.alturaMm - b.alturaMm);
   const gruposDeGuardaCorpo = new Map<string, QuantidadePorGuardaCorpo>();
   for (const g of guardaCorpos) {
     const chave = `${g.tipo} ${g.material} ${g.itemCode}`;
@@ -1650,6 +1693,7 @@ export function computeQuantities(
     telhados,
     escadas,
     guardaCorpos,
+    rodapes,
     trechos,
     sobreposicoes,
     conexoes,
@@ -1678,7 +1722,10 @@ export function computeQuantities(
       comprimentoGuardaCorpoM: guardaCorpos.filter((g) => g.tipo === 'GUARDA_CORPO').reduce((s, g) => s + g.comprimentoM, 0),
       comprimentoCorrimaoM: guardaCorpos.filter((g) => g.tipo === 'CORRIMAO').reduce((s, g) => s + g.comprimentoM, 0),
       porGuardaCorpo,
-      comprimentoRodapeM: (ambientes.reduce((s, a) => s + a.comprimentoRodapeM, 0)),
+      // P2.21: os trechos mandam quando existem; senão, o derivado de sempre.
+      comprimentoRodapeM: rodapes.length > 0 ? rodapes.reduce((s, r) => s + r.comprimentoM, 0) : (ambientes.reduce((s, a) => s + a.comprimentoRodapeM, 0)),
+      origemDoRodape: rodapes.length > 0 ? 'TRECHOS' : 'DERIVADO',
+      porRodape,
       portas: aberturas.filter((o) => o.tipo === 'door').length,
       janelas: aberturas.filter((o) => o.tipo === 'window').length,
       vaosLivres: aberturas.filter((o) => o.tipo === 'passage').length,

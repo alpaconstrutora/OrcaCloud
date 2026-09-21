@@ -98,7 +98,7 @@ describe('cobertura por extrusão (P2.13)', () => {
     expect(Math.max(...aguas.map((a) => a.inclinacaoPct))).toBeLessThanOrEqual(300);
     expect(Math.max(...aguas.map((a) => a.baseMm + (a.inclinacaoPct / 100) * 0))).toBeLessThanOrEqual(5000);
 
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.54.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.55.0');
     const payload = parseCanonicalPayload(canonicalPayload(r));
     expect(payload.roofs!.every((x) => x.extrusao)).toBe(true);
     const volta = modelFromCanonicalPayload(payload);

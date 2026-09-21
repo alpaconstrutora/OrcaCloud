@@ -142,6 +142,7 @@ export type EscolhaComponente =
   | { tool: 'telhado' | 'cobertura-extrusao' }
   | { tool: 'escada'; circulacao: TipoCirculacao }
   | { tool: 'guardacorpo'; guardaCorpo: TipoDeGuardaCorpo }
+  | { tool: 'rodape' }
   | { tool: 'nucleo'; nucleo: TipoDeNucleo; /** Só SHAFT (E11.1): `MECANICA` = shaft de dutos/condensação. */ disciplina?: DisciplinaDeRede | null }
   | { tool: 'vaga'; vaga: TipoDeVaga }
   | { tool: 'componente'; componente: TipoDeComponente }
@@ -588,6 +589,14 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
         ajuda: 'Dois cliques ao longo da escada ou rampa. 0,92 m (NBR 9050: 0,80–0,92 m).',
         escolha: { tool: 'guardacorpo', guardaCorpo: 'CORRIMAO' },
       },
+      // RODAPÉ COMO ELEMENTO (P2.21): o trecho desenhado; o gerador por ambiente mora em Arquitetura › Rodapés.
+      {
+        chave: 'rodape',
+        rotulo: 'Rodapé (trecho)',
+        icone: Minus,
+        ajuda: 'Dois cliques ao pé da parede. Com trechos no desenho, o quantitativo de rodapé passa a ser a soma deles. Gerador por ambiente: Arquitetura › Rodapés.',
+        escolha: { tool: 'rodape' },
+      },
     ],
   },
   // VAGAS (E2.5): demarcação de piso, um clique no centro. O lançamento
@@ -855,6 +864,7 @@ const TOOLS_DE_COMPONENTE: BlueprintTool[] = [
   'escada',
   'nucleo',
   'guardacorpo',
+  'rodape',
   'vaga',
   'componente',
   'rede',

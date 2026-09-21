@@ -436,6 +436,9 @@ import { pisosHumanizados, resumirPisos, vegetacaoSimbolica } from '../../utils/
 import { blueprintViewTemplateService } from '../../services/blueprintViewTemplateService';
 import { proximaRevisao, revisoesDoModelo, resumirAnotacoes } from '../../utils/blueprintAnotacoes';
 import PainelGuardaCorpos from './PainelGuardaCorpos';
+import PainelRodapes from './PainelRodapes';
+import PainelRodapeSelecionado from './PainelRodapeSelecionado';
+import { HIPOTESES_DE_RODAPE_PADRAO, resumirRodapes, sugerirRodapes, type HipotesesDeRodape } from '../../utils/blueprintRodape';
 import { HIPOTESES_DE_GUARDA_CORPO_PADRAO, resumirGuardaCorpos, sugerirGuardaCorpos, type HipotesesDeGuardaCorpo } from '../../utils/blueprintGuardaCorpo';
 import { resumirAcabamentos } from '../../utils/blueprintAcabamentos';
 import PainelIa, { concluirTurno, novoTurno, turnoComMudancas, type TurnoDaConversa } from './PainelIa';
@@ -844,6 +847,7 @@ const ROTULO_DA_TAREFA = {
   acabamentos: 'Piso, forro e rodapé por ambiente',
   // GUARDA-CORPOS (19/09/2026, E7.3): borda livre de laje e escada → sugestão; conferência NBR 14718/9050.
   guardaCorpos: 'Guarda-corpos e corrimãos',
+  rodapes: 'Rodapés por ambiente',
   // IA conversacional (19/09/2026, E6.4): pedido → mudanças no programa/hipóteses → re-geração → delta.
   ia: 'Conversar com a planta',
   'gerar-paredes': 'Gerar paredes do PDF',
@@ -1716,6 +1720,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [numeroDaRevisaoEscolhido, setNumeroDaRevisaoEscolhido] = useState<number | null>(null);
   const numeroDaRevisao = numeroDaRevisaoEscolhido ?? proximaRevisao(editor.model);
   const [hipotesesDeGuardaCorpo, setHipotesesDeGuardaCorpo] = usePersistedState<HipotesesDeGuardaCorpo>('blueprint:guardaCorpos', HIPOTESES_DE_GUARDA_CORPO_PADRAO);
+  /** RODAPÉ COMO ELEMENTO (P2.21): altura/item padrão do gerador. */
+  const [hipotesesDeRodape, setHipotesesDeRodape] = usePersistedState<HipotesesDeRodape>('blueprint:rodapes', HIPOTESES_DE_RODAPE_PADRAO);
   const [hipotesesDeVagas, setHipotesesDeVagas] = usePersistedState<HipotesesDeVagas>('blueprint:vagas', HIPOTESES_VAGAS_PADRAO);
   const [regiaoDeVagasPedida, setRegiaoDeVagasPedida] = useState<RegiaoDeVagas | null>(null);
   /** ACABAMENTOS (E7.2): o ambiente que a gaveta abre já expandido (vindo do cartão). */
@@ -3224,6 +3230,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const guardaCorposDoNivelAtivo = useMemo(() => (editor.model.guardaCorpos ?? []).filter((g) => !levelId || g.levelId === levelId), [editor.model.guardaCorpos, levelId]);
   const sugestaoDeGuardaCorpos = useMemo(() => (levelId ? sugerirGuardaCorpos(editor.model, levelId, hipotesesDeGuardaCorpo) : { sugestoes: [], motivos: [], jaExistentes: 0 }), [editor.model, levelId, hipotesesDeGuardaCorpo]);
   const resumoDeGuardaCorpos = useMemo(() => resumirGuardaCorpos(editor.model, levelId), [editor.model, levelId]);
+  const rodapesDoNivelAtivo = useMemo(() => (editor.model.rodapes ?? []).filter((r) => !levelId || r.levelId === levelId), [editor.model.rodapes, levelId]);
+  const sugestaoDeRodapes = useMemo(() => (levelId ? sugerirRodapes(editor.model, levelId, hipotesesDeRodape) : { sugestoes: [], pulados: [] }), [editor.model, levelId, hipotesesDeRodape]);
+  const resumoDeRodapes = useMemo(() => resumirRodapes(editor.model, levelId), [editor.model, levelId]);
+  const rodapeSel = (editor.model.rodapes ?? []).find((r) => r.id === editor.selectedId) ?? null;
   const componentesDoNivelAtivo = useMemo(() => (editor.model.componentes ?? []).filter((c) => !levelId || c.levelId === levelId), [editor.model.componentes, levelId]);
   const vagasDoNivelAtivo = useMemo(() => (editor.model.vagas ?? []).filter((v) => !levelId || v.levelId === levelId), [editor.model.vagas, levelId]);
   const vagasSugeridasNoNivel = vagasDoNivelAtivo.filter((v) => v.sugerida).length;
@@ -5297,6 +5307,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   }
 
   /** O núcleo nasce do pavimento ativo até o mais alto; o painel ajusta a chegada. */
+  /** RODAPÉ (P2.21): o trecho nasce com a altura/item padrão do gerador; o painel ajusta. */
+  function adicionarRodape(a: Point, b: Point) {
+    if (!levelId) return;
+    const criados = editor.run({ type: 'AddRodape', levelId, pontos: [a, b], alturaMm: hipotesesDeRodape.alturaMm, itemCode: hipotesesDeRodape.itemCode, descricao: hipotesesDeRodape.descricao });
+    if (criados.length > 0) selecionar(criados);
+  }
+
   /** SUB-REGIÃO DO TERRENO (P2.19): o polígono fechado vira sub-região com o material da barra. */
   function adicionarSubRegiao(pontos: Point[]) {
     if (!levelId) return;
@@ -5760,6 +5777,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     const vagas = ids.filter((id) => (editor.model.vagas ?? []).some((v) => v.id === id));
     const componentesSel = ids.filter((id) => (editor.model.componentes ?? []).some((c) => c.id === id));
     const guardaCorposSel = ids.filter((id) => (editor.model.guardaCorpos ?? []).some((g) => g.id === id));
+    const rodapesSel = ids.filter((id) => (editor.model.rodapes ?? []).some((r) => r.id === id));
     const anotacoesSel = ids.filter((id) => (editor.model.anotacoes ?? []).some((a) => a.id === id));
     // Instalações. ⚠️ O QUADRO sai por último no lote e leva os circuitos dele
     // junto (ver `DeleteQuadro`); os pontos que os citavam ficam sem circuito,
@@ -5787,6 +5805,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       ...vagas.map((vagaId) => ({ type: 'DeleteVaga', vagaId }) as const),
       ...componentesSel.map((componenteId) => ({ type: 'DeleteComponente', componenteId }) as const),
       ...guardaCorposSel.map((guardaCorpoId) => ({ type: 'DeleteGuardaCorpo', guardaCorpoId }) as const),
+      ...rodapesSel.map((rodapeId) => ({ type: 'DeleteRodape', rodapeId }) as const),
       ...anotacoesSel.map((anotacaoId) => ({ type: 'DeleteAnotacao', anotacaoId }) as const),
       ...trechos.map((trechoId) => ({ type: 'DeleteTrecho', trechoId }) as const),
       ...terminais.map((terminalId) => ({ type: 'DeleteTerminal', terminalId }) as const),
@@ -7163,6 +7182,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         onProps={(campos) => anotacaoSel && editor.run({ type: 'SetAnotacaoProps', anotacaoId: anotacaoSel.id, ...campos })}
         onExcluir={removerSelecionada}
       />
+      <PainelRodapeSelecionado
+        rodape={rodapeSel}
+        onProps={(campos) => rodapeSel && editor.run({ type: 'SetRodapeProps', rodapeId: rodapeSel.id, ...campos })}
+        onExcluir={removerSelecionada}
+        materiais={biblioteca.materiais}
+      />
+
       <PainelGuardaCorpoSelecionado
         guardaCorpo={guardaCorpoSel}
         onProps={(campos) => guardaCorpoSel && editor.run({ type: 'SetGuardaCorpoProps', guardaCorpoId: guardaCorpoSel.id, ...campos })}
@@ -8564,6 +8590,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   ativo={tarefaAberta === 'guardaCorpos'}
                   onClick={() => alternarTarefa('guardaCorpos')}
                   ajuda="Guarda-corpo (1,10 m, NBR 14718) sobre borda livre de laje em pavimento elevado e corrimão (0,92 m, NBR 9050) dos dois lados da escada — sugestão com prévia, material e item por peça, metros no quantitativo e no orçamento"
+                />
+                <BotaoDoRibbon
+                  icone={Minus}
+                  rotulo="Rodapés"
+                  contagem={sugestaoDeRodapes.sugestoes.length || resumoDeRodapes.sugeridos || undefined}
+                  ativo={tarefaAberta === 'rodapes'}
+                  onClick={() => alternarTarefa('rodapes')}
+                  ajuda="Rodapé como elemento (P2.21): trechos ao pé das paredes por ambiente, descontadas as portas; altura e item por trecho; com trechos, o quantitativo soma os trechos e não o perímetro"
                 />
                 <BotaoDoRibbon
                   icone={BookOpen}
@@ -10600,6 +10634,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onAddEscada={adicionarEscada}
               nucleos={nucleosDoNivelAtivo}
               onAddNucleo={adicionarNucleo}
+              rodapes={editor.model.rodapes ?? []}
+              onAddRodape={adicionarRodape}
               subRegioes={(editor.model.subRegioes ?? []).filter((s) => s.levelId === levelId)}
               materialDaSubRegiao={materialDaSubRegiao}
               onAddSubRegiao={adicionarSubRegiao}
@@ -11350,6 +11386,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'lajes' && <Layers className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'acabamentos' && <Layers className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'guardaCorpos' && <Fence className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'rodapes' && <Minus className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'fundacoes' && <SquareStack className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'pontosHidraulicos' && <ShowerHead className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'agua' && <Droplets className="h-5 w-5 text-blue-700" />}
@@ -11365,6 +11402,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           <SheetDescription>
             {tarefaAberta === 'ia' &&
               'Peça em português: "suíte +2 m²", "3 dormitórios", "corredor de 1,20 m". O pedido vira mudança no programa ou nas hipóteses, o gerador re-gera e você lê o delta dos indicadores. Nunca desenha direto.'}
+            {tarefaAberta === 'rodapes' &&
+              'Cada ambiente vira trechos de rodapé ao pé das paredes, descontadas as portas — sugeridos (tracejados) até aceitar. O ambiente que declarou rodapé usa a altura e o item dele. Com trechos no desenho, o quantitativo soma os trechos.'}
             {tarefaAberta === 'guardaCorpos' &&
               'Onde falta proteção: borda de laje sem parede em pavimento elevado e escadas sem corrimão. Lançar grava peças sugeridas (tracejadas); mover ou Aceitar confirma. A altura mínima da norma é conferida peça a peça.'}
             {tarefaAberta === 'acabamentos' &&
@@ -11446,7 +11485,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' || tarefaAberta === 'mobiliario' || tarefaAberta === 'ia' || tarefaAberta === 'acabamentos' || tarefaAberta === 'guardaCorpos' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' || tarefaAberta === 'mobiliario' || tarefaAberta === 'ia' || tarefaAberta === 'acabamentos' || tarefaAberta === 'guardaCorpos' || tarefaAberta === 'rodapes' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
 
@@ -11467,6 +11506,34 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onAbrirGerador={() => {
                 setTarefa(null);
                 setTelaAberta('gerar');
+              }}
+            />
+          )}
+
+          {tarefaAberta === 'rodapes' && (
+            <PainelRodapes
+              nomeDoPavimento={editor.model.levels.find((l) => l.id === levelId)?.name ?? 'pavimento'}
+              pecas={rodapesDoNivelAtivo}
+              sugestao={sugestaoDeRodapes}
+              hipoteses={hipotesesDeRodape}
+              onHipoteses={setHipotesesDeRodape}
+              onLancar={(quais) => {
+                const cmds = quais.map((s) => s.comando);
+                if (cmds.length === 0) return;
+                const criados = editor.runBatch(cmds);
+                if (criados.length > 0) selecionar(criados);
+              }}
+              onAceitarTodos={() => {
+                const cmds: Command[] = rodapesDoNivelAtivo.filter((r) => r.sugerido).map((r) => ({ type: 'SetRodapeProps', rodapeId: r.id, sugerido: false }));
+                if (cmds.length) editor.runBatch(cmds);
+              }}
+              onLimparSugeridos={() => {
+                const cmds: Command[] = rodapesDoNivelAtivo.filter((r) => r.sugerido).map((r) => ({ type: 'DeleteRodape', rodapeId: r.id }));
+                if (cmds.length) editor.runBatch(cmds);
+              }}
+              onSelecionar={(id) => {
+                setTarefa(null);
+                selecionar([id]);
               }}
             />
           )}

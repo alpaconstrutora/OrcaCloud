@@ -36,6 +36,7 @@ import {
   type RevisaoDaNuvem,
   findVistaDependente,
   findSubRegiao,
+  findRodape,
   MATERIAIS_DE_SUB_REGIAO,
   MAX_NOME_DE_SUB_REGIAO,
   type MaterialDeSubRegiao,
@@ -505,6 +506,11 @@ export type Command =
    * inteira por um vetor; vértice a vértice vai por `SetGuardaCorpoProps.pontos`.
    */
   /** VISTA DEPENDENTE (0.51.0, P2.17): recorte nomeado de uma planta, com escala própria. */
+  /** TRECHO DE RODAPÉ (0.55.0, P2.21): polilinha ao pé da parede, com altura e item. */
+  | { type: 'AddRodape'; levelId: ObjectId; pontos: Point[]; alturaMm?: number; itemCode?: string; descricao?: string; sugerido?: boolean; spaceUid?: ElementUid | null }
+  | { type: 'SetRodapeProps'; rodapeId: ObjectId; pontos?: Point[]; alturaMm?: number; itemCode?: string; descricao?: string; sugerido?: boolean | null }
+  | { type: 'MoveRodape'; rodapeId: ObjectId; dx: number; dy: number }
+  | { type: 'DeleteRodape'; rodapeId: ObjectId }
   /** SUB-REGIÃO DO TERRENO (0.53.0, P2.19): polígono com material de superfície. */
   | { type: 'AddSubRegiao'; levelId: ObjectId; material: MaterialDeSubRegiao; pontos: Point[]; nome?: string | null }
   | { type: 'SetSubRegiaoProps'; subRegiaoId: ObjectId; material?: MaterialDeSubRegiao; nome?: string | null; pontos?: Point[] }
@@ -2290,6 +2296,62 @@ function aplicarSemHash(
       break;
     }
 
+    // ── Trechos de rodapé (P2.21) ──────────────────────────────────────────
+
+    case 'AddRodape': {
+      findLevel(next, command.levelId);
+      if (command.pontos.length < 2) throw new KernelError('BAD_BASEBOARD', `O rodapé precisa de 2 vértices ou mais; recebeu ${command.pontos.length}`);
+      const id = nextId(next, 'rod');
+      next.rodapes = [
+        ...(next.rodapes ?? []),
+        {
+          id,
+          uid: novoUid(),
+          levelId: command.levelId,
+          pontos: command.pontos.map((p, i) => ({ x: assertIntegerMm(roundToMm(p.x), `pontos[${i}].x`), y: assertIntegerMm(roundToMm(p.y), `pontos[${i}].y`) })),
+          alturaMm: assertIntegerMm(roundToMm(command.alturaMm ?? 70), 'alturaMm'),
+          itemCode: command.itemCode ?? '',
+          descricao: command.descricao ?? 'Rodapé',
+          ...(command.sugerido ? { sugerido: true } : {}),
+          ...(command.spaceUid ? { spaceUid: command.spaceUid } : {}),
+        },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetRodapeProps': {
+      const r = findRodape(next, command.rodapeId);
+      if (command.pontos !== undefined) r.pontos = command.pontos.map((p, i) => ({ x: assertIntegerMm(roundToMm(p.x), `pontos[${i}].x`), y: assertIntegerMm(roundToMm(p.y), `pontos[${i}].y`) }));
+      if (command.alturaMm !== undefined) r.alturaMm = assertIntegerMm(roundToMm(command.alturaMm), 'alturaMm');
+      if (command.itemCode !== undefined) r.itemCode = command.itemCode;
+      if (command.descricao !== undefined) r.descricao = command.descricao;
+      if (command.sugerido !== undefined) {
+        if (command.sugerido) r.sugerido = true;
+        else delete r.sugerido;
+      }
+      diff.updated.push(r.id);
+      break;
+    }
+
+    case 'MoveRodape': {
+      const r = findRodape(next, command.rodapeId);
+      const dx = assertIntegerMm(roundToMm(command.dx), 'dx');
+      const dy = assertIntegerMm(roundToMm(command.dy), 'dy');
+      r.pontos = r.pontos.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+      // Mover confirma, como o guarda-corpo.
+      delete r.sugerido;
+      diff.updated.push(r.id);
+      break;
+    }
+
+    case 'DeleteRodape': {
+      const r = findRodape(next, command.rodapeId);
+      next.rodapes = (next.rodapes ?? []).filter((x) => x.id !== r.id);
+      diff.deleted.push(r.id);
+      break;
+    }
+
     // ── Sub-regiões do terreno (P2.19) ─────────────────────────────────────
 
     case 'AddSubRegiao': {
@@ -4014,6 +4076,7 @@ function aplicarSemHash(
       const anotacoesDoNivel = (next.anotacoes ?? []).filter((a) => a.vista.tipo === 'PLANTA' && a.vista.levelId === level.id);
       const vistasDoNivel = (next.vistasDependentes ?? []).filter((v) => v.levelId === level.id);
       const subRegioesDoNivel = (next.subRegioes ?? []).filter((s) => s.levelId === level.id);
+      const rodapesDoNivel = (next.rodapes ?? []).filter((r) => r.levelId === level.id);
 
       next.walls = next.walls.filter((w) => w.levelId !== level.id);
       next.openings = next.openings.filter((o) => !paredesDoNivel.has(o.wallId));
@@ -4031,6 +4094,7 @@ function aplicarSemHash(
       next.anotacoes = (next.anotacoes ?? []).filter((a) => !(a.vista.tipo === 'PLANTA' && a.vista.levelId === level.id));
       next.vistasDependentes = (next.vistasDependentes ?? []).filter((v) => v.levelId !== level.id);
       next.subRegioes = (next.subRegioes ?? []).filter((s) => s.levelId !== level.id);
+      next.rodapes = (next.rodapes ?? []).filter((r) => r.levelId !== level.id);
       // ⚠️ O quadro vai junto (é peça deste piso); os CIRCUITOS dele vão junto
       // também, senão ficariam apontando para um quadro que não existe mais. E
       // os terminais que os citavam já saíram, ou perdem a referência.
@@ -4064,6 +4128,7 @@ function aplicarSemHash(
         ...anotacoesDoNivel.map((a) => a.id),
         ...vistasDoNivel.map((v) => v.id),
         ...subRegioesDoNivel.map((s) => s.id),
+        ...rodapesDoNivel.map((r) => r.id),
         ...quadrosDoNivel.map((q) => q.id),
         ...circuitosOrfaos.map((c) => c.id),
         ...etiquetasDoNivel.map((l) => l.id),

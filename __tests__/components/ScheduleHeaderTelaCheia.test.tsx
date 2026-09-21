@@ -23,7 +23,6 @@ function props(extra: Partial<Props> = {}): Props {
   return {
     settings: { id: 'p1', name: 'Orçamento X' } as unknown as ProjectSettings,
     projects: [],
-    onLoadProject: nada,
     viewMode: 'gantt',
     setViewMode: nada,
     timeScale: 'week',
@@ -58,6 +57,20 @@ function props(extra: Partial<Props> = {}): Props {
     onAutoSchedule: nada,
     telaCheia: false,
     onAlternarTelaCheia: nada,
+    onAddRootGroup: nada,
+    collapsedCols: new Set<string>(),
+    ganttCollapsedCols: new Set<string>(),
+    onToggleColumn: nada,
+    onToggleGanttColumn: nada,
+    onShowAllColumns: nada,
+    onShowAllGanttColumns: nada,
+    onCollapseAllGanttCols: nada,
+    visibleTableLevels: new Set(['group', 'phase', 'subphase', 'item']),
+    visibleGanttLevels: new Set(['group', 'phase', 'subphase', 'item']),
+    onToggleTableLevel: nada,
+    onToggleGanttLevel: nada,
+    visibleNatures: new Set<string>(),
+    onToggleNature: nada,
     ...extra,
   };
 }
@@ -111,7 +124,7 @@ describe('ScheduleHeader — Tela cheia', () => {
     expect(screen.getByText(/Plano/)).toHaveTextContent('Sem orçamento vinculado');
   });
 
-  it('o botão está à vista em toda aba — inclusive nas que escondem a escala de tempo', () => {
+  it('o botão está à vista em toda vista — inclusive nas que escondem a barra de opções', () => {
     for (const viewMode of ['table', 'network', 's-curve', 'resources', 'eap'] as const) {
       const { unmount } = render(<ScheduleHeader {...props({ viewMode })} />);
       expect(screen.getByRole('button', { name: /^tela cheia$/i })).toBeInTheDocument();

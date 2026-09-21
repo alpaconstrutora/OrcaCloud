@@ -1,37 +1,62 @@
 import React from 'react';
 import {
     ArrowLeft,
-    TrendingUp,
-    FileDown,
-    Users,
-    ChevronsUpDown,
+    BadgeCheck,
+    CalendarCheck,
+    ChartGantt,
+    ChartSpline,
     ChevronsDownUp,
-    Trash2,
-    Loader2,
-    RefreshCw,
-    History,
-    Wand2,
-    MoreHorizontal,
-    Settings,
-    FlaskConical,
+    ChevronsUpDown,
+    Columns3,
+    FileDown,
     FileSpreadsheet,
     FileText,
+    Filter,
+    FlaskConical,
+    FolderPlus,
+    Gauge,
+    GitBranch,
+    History,
+    ListTree,
+    Loader2,
+    Lock,
     Maximize2,
     Minimize2,
+    RefreshCw,
+    Settings,
+    ShieldAlert,
+    ShoppingCart,
+    Table2,
+    Tags,
+    Trash2,
+    TrendingUp,
+    Users,
+    UsersRound,
+    Wand2,
+    Workflow,
 } from 'lucide-react';
-import Button from '../ui/Button';
+import Ribbon, { BarraDeOpcoes, BotaoDoRibbon, GrupoDoRibbon, abaEfetiva } from '../blueprint/Ribbon';
+import MenuDeVistas, { GrupoDeVistas } from '../ui/MenuDeVistas';
+import MenuDoRibbon from '../ui/MenuDoRibbon';
+import { usePersistedState } from '../ui/TableUtils';
 import { isOrcamentoOuLegado } from '../../utils/projectClassification';
+import { TASK_NATURE_META } from '../../utils/taskNature';
 import { ProjectSchedule, ProjectSettings, ItemScheduleDetails } from '../../types';
+import { COLUNAS_DA_TABELA, COLUNAS_DO_GANTT, NIVEIS_DO_RESUMO } from './scheduleColumns';
+
+export type ScheduleViewMode =
+    | 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints'
+    | 'weekly' | 'scenarios' | 'command' | 'supply' | 'eap' | 'network';
+export type ScheduleTimeScale = 'day' | 'week' | 'month' | 'year';
 
 interface ScheduleHeaderProps {
     onBack?: () => void;
     settings: ProjectSettings;
     projects: any[];
-    onLoadProject: (id: string, view: string) => void;
-    viewMode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command' | 'supply' | 'eap' | 'network';
-    setViewMode: (mode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command' | 'supply' | 'eap' | 'network') => void;
-    timeScale: 'day' | 'week' | 'month' | 'year';
-    setTimeScale: (scale: 'day' | 'week' | 'month' | 'year') => void;
+    viewMode: ScheduleViewMode;
+    setViewMode: (mode: ScheduleViewMode) => void;
+    timeScale: ScheduleTimeScale;
+    setTimeScale: (scale: ScheduleTimeScale) => void;
     schedule: ProjectSchedule;
     setIsBaselineModalOpen: (open: boolean) => void;
     isSimulationMode: boolean;
@@ -63,29 +88,95 @@ interface ScheduleHeaderProps {
     /** Modo tela cheia (`hooks/useTelaCheia.ts`) — aceso enquanto vale, com `aria-pressed`. */
     telaCheia: boolean;
     onAlternarTelaCheia: () => void;
+
+    /* ─── O que veio do cabeçalho das grades para o ribbon (21/09/2026) ─── */
+    /** Aba Estrutura › Novo grupo — a raiz da EAP. */
+    onAddRootGroup: () => void;
+    /** Colunas ocultas da TABELA (`schedule-collapsed-cols`) e do GANTT (`gantt-collapsed-cols`). */
+    collapsedCols: Set<string>;
+    ganttCollapsedCols: Set<string>;
+    onToggleColumn: (key: string) => void;
+    onToggleGanttColumn: (key: string) => void;
+    onShowAllColumns: () => void;
+    onShowAllGanttColumns: () => void;
+    /** "Focar Gantt": oculta todas as colunas para sobrar só as barras. */
+    onCollapseAllGanttCols: () => void;
+    /** Níveis do resumo visíveis — a Tabela e o Gantt guardam o seu. */
+    visibleTableLevels: Set<string>;
+    visibleGanttLevels: Set<string>;
+    onToggleTableLevel: (level: string) => void;
+    onToggleGanttLevel: (level: string) => void;
+    /** Naturezas de tarefa visíveis (compartilhado pelas duas vistas). */
+    visibleNatures: Set<string>;
+    onToggleNature: (nature: string) => void;
 }
 
-// Abas de navegação da tela (padrão ui_ux_guia_unificado.md §19.1 — trilho + botões h-7).
-const VIEW_TABS = [
-    { key: 'table', label: 'Tabela' },
-    { key: 'gantt', label: 'Gantt' },
-    { key: 'network', label: 'Rede' },
-    { key: 's-curve', label: 'Curva S' },
-    { key: 'resources', label: 'Recursos' },
-    { key: 'risks', label: 'Riscos' },
-    { key: 'constraints', label: 'Restrições' },
-    { key: 'weekly', label: 'Last Planner' },
-    { key: 'scenarios', label: 'Cenários' },
-    { key: 'command', label: '⚡ Comando' },
-    { key: 'supply', label: '🛒 Suprimentos' },
-    { key: 'eap', label: '🏗️ EAP Física' },
+/**
+ * As doze vistas, no seletor à esquerda do ribbon (§19.5). Agrupadas porque
+ * doze itens corridos não se leem: "Cronograma" é o que se edita, "Análise" é
+ * o que se lê, "Execução" é o que se acompanha em obra. Os ids são os mesmos
+ * `viewMode` de sempre — `localStorage['schedule-view-mode']` continua valendo.
+ */
+export const VISTAS_DO_PLANEJAMENTO: readonly GrupoDeVistas<ScheduleViewMode>[] = [
+    {
+        rotulo: 'Cronograma',
+        itens: [
+            { id: 'table', rotulo: 'Tabela', icone: Table2 },
+            { id: 'gantt', rotulo: 'Gantt', icone: ChartGantt },
+            { id: 'network', rotulo: 'Rede', icone: Workflow },
+            { id: 'eap', rotulo: 'EAP Física', icone: ListTree },
+        ],
+    },
+    {
+        rotulo: 'Análise',
+        itens: [
+            { id: 's-curve', rotulo: 'Curva S', icone: ChartSpline },
+            { id: 'risks', rotulo: 'Riscos', icone: ShieldAlert },
+            { id: 'scenarios', rotulo: 'Cenários', icone: GitBranch },
+            { id: 'command', rotulo: 'Comando', icone: Gauge },
+        ],
+    },
+    {
+        rotulo: 'Execução',
+        itens: [
+            { id: 'resources', rotulo: 'Recursos', icone: Users },
+            { id: 'constraints', rotulo: 'Restrições', icone: Lock },
+            { id: 'weekly', rotulo: 'Last Planner', icone: CalendarCheck },
+            { id: 'supply', rotulo: 'Suprimentos', icone: ShoppingCart },
+        ],
+    },
+];
+
+const ROTULO_DA_VISTA: Record<ScheduleViewMode, string> = Object.fromEntries(
+    VISTAS_DO_PLANEJAMENTO.flatMap((g) => g.itens.map((i) => [i.id, i.rotulo])),
+) as Record<ScheduleViewMode, string>;
+
+/**
+ * As abas de COMANDOS do ribbon. `naGrade` = a aba só faz sentido com a EAP
+ * na tela (Tabela ou Gantt): Estrutura mexe nos nós e Vista nas colunas. Nas
+ * outras vistas elas somem (aba vazia não aparece — §19.5) e a aba salva cai
+ * em Cronograma, que é a que vale em qualquer vista.
+ */
+const ABAS_DO_PLANEJAMENTO = [
+    { id: 'estrutura', rotulo: 'Estrutura', naGrade: true },
+    { id: 'cronograma', rotulo: 'Cronograma', naGrade: false },
+    { id: 'orcamento', rotulo: 'Orçamento', naGrade: false },
+    { id: 'exportar', rotulo: 'Exportar', naGrade: false },
+    { id: 'vista', rotulo: 'Vista', naGrade: true },
 ] as const;
+type AbaDoPlanejamento = (typeof ABAS_DO_PLANEJAMENTO)[number]['id'];
+
+const ESCALAS: readonly { id: ScheduleTimeScale; rotulo: string }[] = [
+    { id: 'day', rotulo: 'Dia' },
+    { id: 'week', rotulo: 'Sem' },
+    { id: 'month', rotulo: 'Mês' },
+    { id: 'year', rotulo: 'Ano' },
+];
 
 const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
     onBack,
     settings,
     projects,
-    onLoadProject,
     viewMode,
     setViewMode,
     timeScale,
@@ -120,30 +211,47 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
     onAutoSchedule,
     telaCheia,
     onAlternarTelaCheia,
+    onAddRootGroup,
+    collapsedCols,
+    ganttCollapsedCols,
+    onToggleColumn,
+    onToggleGanttColumn,
+    onShowAllColumns,
+    onShowAllGanttColumns,
+    onCollapseAllGanttCols,
+    visibleTableLevels,
+    visibleGanttLevels,
+    onToggleTableLevel,
+    onToggleGanttLevel,
+    visibleNatures,
+    onToggleNature,
 }) => {
-    const [overflowOpen, setOverflowOpen] = React.useState(false);
-    const overflowRef = React.useRef<HTMLDivElement>(null);
-
-    React.useEffect(() => {
-        if (!overflowOpen) return;
-        const handler = (e: MouseEvent) => {
-            if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
-                setOverflowOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, [overflowOpen]);
-
-    const closeOverflow = () => setOverflowOpen(false);
     const orcamentoVinculado = settings.linkedProjectId
         ? projects.find((p) => p.id === settings.linkedProjectId && isOrcamentoOuLegado(p))
         : undefined;
 
+    const emGrade = viewMode === 'table' || viewMode === 'gantt';
+    const noGantt = viewMode === 'gantt';
+
+    const [abaSalva, setAbaSalva] = usePersistedState<AbaDoPlanejamento>('schedule:abaDoRibbon', 'estrutura');
+    const abasDoRibbon = ABAS_DO_PLANEJAMENTO.filter((a) => emGrade || !a.naGrade);
+    const aba = abaEfetiva(abasDoRibbon, abaSalva, 'cronograma');
+
+    // Colunas, níveis: cada grade guarda o seu — o ribbon fala com a que está na tela.
+    const colunas = noGantt ? COLUNAS_DO_GANTT : COLUNAS_DA_TABELA;
+    const ocultas = noGantt ? ganttCollapsedCols : collapsedCols;
+    const alternarColuna = noGantt ? onToggleGanttColumn : onToggleColumn;
+    const mostrarTodas = noGantt ? onShowAllGanttColumns : onShowAllColumns;
+    const niveis = noGantt ? visibleGanttLevels : visibleTableLevels;
+    const alternarNivel = noGantt ? onToggleGanttLevel : onToggleTableLevel;
+
+    const baselineAtiva = schedule.activeBaselineId
+        ? schedule.baselines?.find((b) => b.id === schedule.activeBaselineId)?.name || 'Baseline'
+        : 'Baseline';
+
     return (
         // §20 / §20.1: o título fica SOLTO (sem card) e o `space-y-6` da raiz dá os
-        // 24px até as abas; daqui para baixo as barras de cromo respiram 12px
-        // (`space-y-3`). Mesmo cabeçalho de tela-detalhe com "Voltar" de
+        // 24px até o ribbon. Mesmo cabeçalho de tela-detalhe com "Voltar" de
         // `ContractDetailView.tsx` — h1 2xl, não 3xl (3xl é só lista-raiz).
         <>
         <div className="flex items-center gap-4">
@@ -172,185 +280,213 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
             </div>
         </div>
 
-        <div className="space-y-3">
-        {/* Toolbar de abas — ui_ux_guia_unificado.md §19.1 */}
-        <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
-            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                {VIEW_TABS.map(({ key, label }) => (
-                    <button
-                        key={key}
-                        onClick={() => setViewMode(key)}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-                            viewMode === key ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
-                        }`}
-                    >
-                        {label}
-                    </button>
-                ))}
-            </div>
-        </div>
-
-        {/* Toolbar de botões — ui_ux_guia_unificado.md §5.3 (escopo à esquerda, ações à direita) */}
-        <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
-            {/* Escopo: escala de tempo (só Tabela/Gantt) + período do planejamento */}
-            <div className="flex flex-wrap items-center gap-2">
-                {(viewMode === 'table' || viewMode === 'gantt') && (
-                    <div className="flex items-center h-9 bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1">
-                        {(['day', 'week', 'month', 'year'] as const).map((scale) => (
-                            <button key={scale} onClick={() => setTimeScale(scale)} className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${timeScale === scale ? 'bg-white shadow-sm text-gray-900' : 'text-gray-700 hover:text-gray-900'}`}>
-                                {{ day: 'Dia', week: 'Sem', month: 'Mês', year: 'Ano' }[scale]}
-                            </button>
-                        ))}
-                    </div>
+        {/* RIBBON (§19.5) — o mesmo da Planta Inteligente, aqui dentro do card
+            de cromo da tela (§19.1): seletor de vista à esquerda, abas de
+            comandos, acesso rápido à direita e, em Tabela/Gantt, a barra de
+            opções da vista embaixo. Sem `overflow-hidden` no card: os menus
+            (vista, colunas, níveis) são `absolute` e seriam cortados. O `border-b`
+            do ribbon só fica quando há barra de opções abaixo dele. */}
+        <div className={`rounded-[10px] border border-gray-100 bg-white shadow-sm ${emGrade ? '' : '[&>[role=toolbar]]:border-b-0'}`}>
+            <Ribbon
+                abas={abasDoRibbon}
+                ativa={aba}
+                onEscolher={setAbaSalva}
+                ariaLabel="Ferramentas do planejamento"
+                esquerda={
+                    <MenuDeVistas
+                        vista={viewMode}
+                        onEscolher={setViewMode}
+                        grupos={VISTAS_DO_PLANEJAMENTO}
+                        ariaLabel="Vista do planejamento"
+                    />
+                }
+                direita={
+                    <>
+                        {/* Tela cheia — o mesmo botão de MODO da Planta: ícone só,
+                            `aria-pressed`, aceso enquanto vale. À vista em qualquer
+                            aba porque é o único caminho para SAIR do modo. */}
+                        <button
+                            type="button"
+                            onClick={onAlternarTelaCheia}
+                            title={telaCheia ? 'Sair da tela cheia' : 'Tela cheia'}
+                            aria-label={telaCheia ? 'Sair da tela cheia' : 'Tela cheia'}
+                            aria-pressed={telaCheia}
+                            className={`flex items-center justify-center h-9 w-9 rounded-[6px] border transition-all ${
+                                telaCheia ? 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100' : 'bg-gray-50 border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                            }`}
+                        >
+                            {telaCheia ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                        </button>
+                        {/* Ação primária (§17) — sempre visível, em qualquer vista. */}
+                        <button
+                            type="button"
+                            onClick={onAutoSchedule}
+                            title="Recalcula todas as datas com base em predecessores e duração"
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] hover:bg-emerald-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                        >
+                            <Wand2 className="w-[15px] h-[15px]" />
+                            Auto Programar
+                        </button>
+                    </>
+                }
+            >
+                {aba === 'estrutura' && emGrade && (
+                    <>
+                        <GrupoDoRibbon rotulo="Estrutura">
+                            <BotaoDoRibbon icone={FolderPlus} rotulo="Novo grupo" onClick={onAddRootGroup} ajuda="Adiciona um grupo na raiz da EAP" />
+                            <BotaoDoRibbon icone={ChevronsUpDown} rotulo="Expandir" onClick={handleExpandAll} disabled={allExpanded} ajuda="Expandir todos os níveis" />
+                            <BotaoDoRibbon icone={ChevronsDownUp} rotulo="Recolher" onClick={handleCollapseAll} ajuda="Recolher todos os níveis" />
+                        </GrupoDoRibbon>
+                        <GrupoDoRibbon rotulo="Filtro">
+                            <MenuDoRibbon
+                                icone={Filter}
+                                rotulo="Níveis"
+                                ajuda="Quais níveis do resumo aparecem"
+                                cabecalho={noGantt ? 'Resumo do Gantt' : 'Resumo da tabela'}
+                                itens={NIVEIS_DO_RESUMO.map((n) => ({ id: n.id, rotulo: n.rotulo, marcado: niveis.has(n.id) }))}
+                                onAlternar={alternarNivel}
+                            />
+                            <MenuDoRibbon
+                                icone={Tags}
+                                rotulo="Natureza"
+                                ajuda="Quais naturezas de tarefa aparecem"
+                                cabecalho="Natureza da tarefa"
+                                itens={[
+                                    ...Object.entries(TASK_NATURE_META).map(([id, meta]) => ({
+                                        id, rotulo: meta.label, marcado: visibleNatures.has(id), cor: meta.color,
+                                    })),
+                                    { id: '__none__', rotulo: 'Sem natureza', marcado: visibleNatures.has('__none__') },
+                                ]}
+                                onAlternar={onToggleNature}
+                            />
+                        </GrupoDoRibbon>
+                        <GrupoDoRibbon rotulo="Zerar">
+                            <BotaoDoRibbon icone={Trash2} rotulo="Limpar tudo" perigo onClick={onClearAll} ajuda="Remove todas as distribuições do cronograma" />
+                        </GrupoDoRibbon>
+                    </>
                 )}
 
-                <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-medium text-gray-400 whitespace-nowrap">Início</span>
-                    <input
-                        type="date"
-                        value={schedule.startDate ? schedule.startDate.split('T')[0] : ''}
-                        onChange={(e) => handleRecalculate(undefined, e.target.value)}
-                        className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                    />
+                {aba === 'cronograma' && (
+                    <>
+                        <GrupoDoRibbon rotulo="Programar">
+                            <BotaoDoRibbon icone={RefreshCw} rotulo="Recalcular" onClick={() => handleRecalculate()} ajuda="Recalcula as distribuições a partir das datas atuais" />
+                        </GrupoDoRibbon>
+                        <GrupoDoRibbon rotulo="Recursos">
+                            <BotaoDoRibbon icone={Users} rotulo="Nivelar" onClick={handleLevelResources} ajuda="Nivelamento automático de recursos" />
+                            <BotaoDoRibbon
+                                icone={UsersRound}
+                                rotulo="Auto Equipe"
+                                ativo={allAuto}
+                                contagem={budgetLength > 0 ? autoCount : undefined}
+                                onClick={allAuto ? handleDisableAutoAllItems : handleApplyAutoAllItems}
+                                ajuda={allAuto ? 'Desligar a duração automática pela equipe em todos os itens' : `Calcular a duração pela equipe em todos os itens (${autoCount}/${budgetLength} ligados)`}
+                            />
+                            <BotaoDoRibbon icone={BadgeCheck} rotulo="Cargos" onClick={onOpenCrewClassification} ajuda="Classificação de cargos" />
+                        </GrupoDoRibbon>
+                        <GrupoDoRibbon rotulo="Linha de base">
+                            <BotaoDoRibbon icone={TrendingUp} rotulo={baselineAtiva} onClick={() => setIsBaselineModalOpen(true)} ajuda="Linhas de base do planejamento" />
+                            <BotaoDoRibbon icone={FlaskConical} rotulo="What-If" ativo={isSimulationMode} onClick={handleToggleSimulation} ajuda="Modo de simulação: testar mudanças sem gravar" />
+                        </GrupoDoRibbon>
+                        <GrupoDoRibbon rotulo="Calendário">
+                            <BotaoDoRibbon icone={Settings} rotulo="Configurações" onClick={() => setIsConfigModalOpen(true)} ajuda="Feriados, jornada e exibição do cronograma" />
+                        </GrupoDoRibbon>
+                    </>
+                )}
+
+                {aba === 'orcamento' && (
+                    <GrupoDoRibbon rotulo="Integração">
+                        <BotaoDoRibbon
+                            icone={RefreshCw}
+                            rotulo="Sincronizar"
+                            contagem={syncDiffCount > 0 ? syncDiffCount : undefined}
+                            onClick={onSyncBudget}
+                            ajuda={syncDiffCount > 0 ? `${syncDiffCount} alteração(ões) no orçamento pendentes` : 'Planejamento sincronizado com o orçamento'}
+                        />
+                        <BotaoDoRibbon
+                            icone={History}
+                            rotulo="Versões"
+                            contagem={planningVersionsCount > 0 ? planningVersionsCount : undefined}
+                            onClick={onOpenVersions}
+                            ajuda={hasNewerBudgetVersion ? 'Há uma versão mais nova do orçamento — versões do planejamento' : 'Versões do planejamento'}
+                        />
+                    </GrupoDoRibbon>
+                )}
+
+                {aba === 'exportar' && (
+                    <GrupoDoRibbon rotulo="Exportar">
+                        <BotaoDoRibbon icone={isExportingPDF ? Loader2 : FileDown} rotulo={isExportingPDF ? 'Gerando PDF…' : 'PDF'} onClick={handleExportPDF} disabled={isExportingPDF} />
+                        <BotaoDoRibbon icone={FileSpreadsheet} rotulo="Excel" onClick={handleExportExcel} />
+                        <BotaoDoRibbon icone={FileText} rotulo="CSV" onClick={handleExportCSV} />
+                    </GrupoDoRibbon>
+                )}
+
+                {aba === 'vista' && emGrade && (
+                    <GrupoDoRibbon rotulo="Colunas">
+                        <MenuDoRibbon
+                            icone={Columns3}
+                            rotulo="Colunas"
+                            ajuda="Quais colunas aparecem"
+                            cabecalho="Colunas visíveis"
+                            contagem={ocultas.size}
+                            itens={Object.entries(colunas).map(([id, rotulo]) => ({ id, rotulo, marcado: !ocultas.has(id) }))}
+                            onAlternar={alternarColuna}
+                            rodape={
+                                <>
+                                    <BotaoDoRibbon icone={Columns3} rotulo="Ver todas" onClick={mostrarTodas} disabled={ocultas.size === 0} />
+                                    {noGantt && (
+                                        <BotaoDoRibbon icone={ChartGantt} rotulo="Focar Gantt" onClick={onCollapseAllGanttCols} ajuda="Oculta todas as colunas para sobrar só as barras" />
+                                    )}
+                                </>
+                            }
+                        />
+                    </GrupoDoRibbon>
+                )}
+            </Ribbon>
+
+            {/* Barra de opções (§19.5, linha 3): só o que a VISTA ativa pergunta —
+                escala de tempo e período do planejamento. Só em Tabela/Gantt. */}
+            {emGrade && (
+                <div className="overflow-hidden rounded-b-[10px] [&>[role=region]]:border-b-0">
+                    <BarraDeOpcoes rotulo={ROTULO_DA_VISTA[viewMode]}>
+                        <div role="group" aria-label="Escala de tempo" className="flex items-center gap-0.5 rounded-[8px] border border-gray-200 bg-white p-0.5">
+                            {ESCALAS.map((escala) => (
+                                <button
+                                    key={escala.id}
+                                    type="button"
+                                    aria-pressed={timeScale === escala.id}
+                                    onClick={() => setTimeScale(escala.id)}
+                                    className={`h-6 rounded-[6px] px-2 text-xs font-medium transition-all ${
+                                        timeScale === escala.id ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                                    }`}
+                                >
+                                    {escala.rotulo}
+                                </button>
+                            ))}
+                        </div>
+                        <label className="flex items-center gap-1.5 text-xs text-slate-500">
+                            Início
+                            <input
+                                type="date"
+                                value={schedule.startDate ? schedule.startDate.split('T')[0] : ''}
+                                onChange={(e) => handleRecalculate(undefined, e.target.value)}
+                                className="h-7 rounded-[6px] border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                            />
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs text-slate-500">
+                            Término
+                            <input
+                                type="date"
+                                value={schedule.endDate ? schedule.endDate.split('T')[0] : ''}
+                                onChange={(e) => {
+                                    const next = { ...schedule, endDate: e.target.value };
+                                    onUpdateSettings({ ...settings, schedule: next, endDate: e.target.value });
+                                }}
+                                className="h-7 rounded-[6px] border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                            />
+                        </label>
+                    </BarraDeOpcoes>
                 </div>
-                <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-medium text-gray-400 whitespace-nowrap">Término</span>
-                    <input
-                        type="date"
-                        value={schedule.endDate ? schedule.endDate.split('T')[0] : ''}
-                        onChange={(e) => {
-                            const next = { ...schedule, endDate: e.target.value };
-                            onUpdateSettings({ ...settings, schedule: next, endDate: e.target.value });
-                        }}
-                        className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                    />
-                </div>
-            </div>
-
-            {/* Ações — utilitárias à esquerda do grupo, ação primária no fim */}
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
-                <button onClick={allExpanded ? handleCollapseAll : handleExpandAll} title={allExpanded ? 'Recolher tudo' : 'Expandir tudo'} className="flex items-center gap-1.5 h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium hover:bg-gray-100 transition-all">
-                    {allExpanded ? <ChevronsDownUp className="w-3.5 h-3.5" /> : <ChevronsUpDown className="w-3.5 h-3.5" />}
-                    {allExpanded ? 'Recolher' : 'Expandir'}
-                </button>
-
-                <button onClick={onSyncBudget} title={syncDiffCount > 0 ? `${syncDiffCount} alteração(ões) no orçamento pendentes` : 'Planejamento sincronizado com o orçamento'} className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium transition-all ${syncDiffCount > 0 ? 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100' : 'bg-gray-50 border border-gray-200 text-gray-500 hover:bg-gray-100'}`}>
-                    <RefreshCw className={`w-3.5 h-3.5 ${syncDiffCount > 0 ? 'text-amber-500' : ''}`} />
-                    Sincronizar
-                    {syncDiffCount > 0 && (
-                        <span className="bg-amber-200 text-amber-800 text-[9px] px-1.5 py-0.5 rounded-full font-bold leading-none">
-                            {syncDiffCount}
-                        </span>
-                    )}
-                </button>
-
-                <button onClick={onOpenVersions} title="Versões do planejamento" className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium transition-all ${hasNewerBudgetVersion ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100' : 'bg-gray-50 border border-gray-200 text-gray-500 hover:bg-gray-100'}`}>
-                    <History className={`w-3.5 h-3.5 ${hasNewerBudgetVersion ? 'text-indigo-500' : ''}`} />
-                    Versões
-                    {planningVersionsCount > 0 && (
-                        <span className="bg-indigo-200 text-indigo-800 text-[9px] px-1.5 py-0.5 rounded-full font-bold leading-none">
-                            {planningVersionsCount}
-                        </span>
-                    )}
-                </button>
-
-                <button onClick={handleLevelResources} title="Nivelamento Automático de Recursos" className="flex items-center gap-1.5 h-9 px-3 bg-indigo-50 border border-indigo-100 rounded-[6px] text-sm font-medium text-indigo-600 hover:bg-indigo-100 transition-all">
-                    <Users className="w-3.5 h-3.5" />
-                    Nivelar
-                </button>
-
-                <button onClick={() => setIsConfigModalOpen(true)} title="Configurações do cronograma" className="flex items-center gap-1.5 h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium hover:bg-gray-100 transition-all">
-                    <Settings className="w-3.5 h-3.5" />
-                    Configurações
-                </button>
-
-                {/* Tela cheia — mesmo botão de MODO da Planta Inteligente (ribbon,
-                    acesso rápido): ícone só, `aria-pressed`, aceso enquanto vale.
-                    Fica à vista em qualquer aba porque é o único botão que precisa
-                    estar acessível para SAIR do modo. */}
-                <button
-                    type="button"
-                    onClick={onAlternarTelaCheia}
-                    title={telaCheia ? 'Sair da tela cheia' : 'Tela cheia'}
-                    aria-label={telaCheia ? 'Sair da tela cheia' : 'Tela cheia'}
-                    aria-pressed={telaCheia}
-                    className={`flex items-center justify-center h-9 w-9 rounded-[6px] border transition-all ${
-                        telaCheia ? 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100' : 'bg-gray-50 border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-                    }`}
-                >
-                    {telaCheia ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                </button>
-
-                {/* Overflow menu ··· */}
-                <div className="relative" ref={overflowRef}>
-                    <button onClick={() => setOverflowOpen(v => !v)} title="Mais opções" className={`flex items-center justify-center h-9 w-9 rounded-[6px] border transition-all ${overflowOpen ? 'bg-gray-100 border-gray-300 text-gray-700' : 'bg-gray-50 border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}>
-                        <MoreHorizontal className="w-4 h-4" />
-                    </button>
-
-                    {overflowOpen && (
-                            <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                                {/* Baseline */}
-                                <Button variant="ghost" onClick={() => { setIsBaselineModalOpen(true); closeOverflow(); }} className={`w-full justify-start rounded-none px-4 py-2 ${schedule.activeBaselineId ? 'text-blue-700 bg-blue-50/60' : 'text-gray-600 hover:bg-gray-50'}`}>
-                                    <TrendingUp className="w-3.5 h-3.5 shrink-0" />
-                                    {schedule.activeBaselineId
-                                        ? schedule.baselines?.find(b => b.id === schedule.activeBaselineId)?.name || 'Baseline'
-                                        : 'Baseline'}
-                                    {schedule.activeBaselineId && <span className="ml-auto text-[9px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-bold">ativo</span>}
-                                </Button>
-
-                                {/* What-If */}
-                                <Button variant="ghost" onClick={() => { handleToggleSimulation(); closeOverflow(); }} className={`w-full justify-start rounded-none px-4 py-2 ${isSimulationMode ? 'text-purple-700 bg-purple-50/60' : 'text-gray-600 hover:bg-gray-50'}`}>
-                                    <FlaskConical className="w-3.5 h-3.5 shrink-0" />
-                                    Modo What-If
-                                    {isSimulationMode && <span className="ml-auto text-[9px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full font-bold">ativo</span>}
-                                </Button>
-
-                                {/* Exportar */}
-                                <Button variant="ghost" onClick={() => { handleExportPDF(); closeOverflow(); }} disabled={isExportingPDF} className="w-full justify-start rounded-none px-4 py-2 text-gray-600 hover:bg-gray-50">
-                                    {isExportingPDF ? <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin text-blue-500" /> : <FileDown className="w-3.5 h-3.5 shrink-0" />}
-                                    Exportar PDF
-                                </Button>
-                                <Button variant="ghost" onClick={() => { handleExportExcel(); closeOverflow(); }} className="w-full justify-start rounded-none px-4 py-2 text-gray-600 hover:bg-gray-50">
-                                    <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
-                                    Exportar Excel
-                                </Button>
-                                <Button variant="ghost" onClick={() => { handleExportCSV(); closeOverflow(); }} className="w-full justify-start rounded-none px-4 py-2 text-gray-600 hover:bg-gray-50">
-                                    <FileText className="w-3.5 h-3.5 shrink-0" />
-                                    Exportar CSV
-                                </Button>
-
-                                <div className="h-px bg-gray-100 my-1 mx-3" />
-
-                                {/* Auto Equipe */}
-                                <Button variant="ghost" onClick={() => { (allAuto ? handleDisableAutoAllItems : handleApplyAutoAllItems)(); closeOverflow(); }} className={`w-full justify-start rounded-none px-4 py-2 ${allAuto ? 'text-green-700 bg-green-50/60' : 'text-gray-600 hover:bg-gray-50'}`}>
-                                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" /></svg>
-                                    Auto Equipe
-                                    {budgetLength > 0 && <span className="ml-auto text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-bold">{autoCount}/{budgetLength}</span>}
-                                </Button>
-
-                                {/* Classificação de Cargos */}
-                                <Button variant="ghost" onClick={() => { onOpenCrewClassification(); closeOverflow(); }} className="w-full justify-start rounded-none px-4 py-2 text-gray-600 hover:bg-gray-50">
-                                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" /></svg>
-                                    Classificação de Cargos
-                                </Button>
-
-                                <div className="h-px bg-gray-100 my-1 mx-3" />
-
-                                {/* Limpar tudo */}
-                                <Button variant="ghost" onClick={() => { onClearAll(); closeOverflow(); }} className="w-full justify-start rounded-none px-4 py-2 text-red-500 hover:bg-red-50">
-                                    <Trash2 className="w-3.5 h-3.5 shrink-0" />
-                                    Limpar tudo
-                                </Button>
-                            </div>
-                        )}
-                    </div>
-
-                <button onClick={onAutoSchedule} title="Recalcula todas as datas com base em predecessores e duração" className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] hover:bg-emerald-700 font-medium text-[13px] transition-all active:scale-95 shrink-0">
-                    <Wand2 className="w-[15px] h-[15px]" />
-                    Auto Programar
-                </button>
-            </div>
-        </div>
+            )}
         </div>
         </>
     );

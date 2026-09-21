@@ -4022,7 +4022,6 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 onAlternarTelaCheia={alternarTelaCheia}
                 settings={settings}
                 projects={projects}
-                onLoadProject={onLoadProject}
                 viewMode={viewMode}
                 setViewMode={setViewMode}
                 timeScale={timeScale}
@@ -4072,6 +4071,20 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 planningVersionsCount={(settings.planningVersions || []).length}
                 hasNewerBudgetVersion={budgetVersionStatus.hasNewerVersion}
                 onAutoSchedule={handleAutoSchedule}
+                onAddRootGroup={() => setOutlineEditor({ mode: 'create', parentId: null, nodeType: 'group', name: '' })}
+                collapsedCols={collapsedCols}
+                ganttCollapsedCols={ganttCollapsedCols}
+                onToggleColumn={handleToggleColumn}
+                onToggleGanttColumn={handleToggleGanttColumn}
+                onShowAllColumns={handleSplitterDblClick}
+                onShowAllGanttColumns={handleGanttSplitterDblClick}
+                onCollapseAllGanttCols={handleCollapseAllGanttCols}
+                visibleTableLevels={tableVisibleLevels}
+                visibleGanttLevels={ganttVisibleLevels}
+                onToggleTableLevel={handleToggleTableLevel}
+                onToggleGanttLevel={handleToggleGanttLevel}
+                visibleNatures={visibleNatures}
+                onToggleNature={handleToggleNature}
             />
 
             {/* ── Sync Budget Modal ── */}

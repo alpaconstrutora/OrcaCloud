@@ -127,7 +127,7 @@ import ModalSobreposicao, { type EscolhaSobreposicao } from './ModalSobreposicao
 import PainelComponentes from './PainelComponentes';
 import { linhasDeComponentesPorNivel } from '../../utils/blueprintComponentes';
 import PainelParametros from './PainelParametros';
-import { variaveisDaPeca } from '../../utils/blueprintFormulas';
+import { parametrosCalculadosDoModelo, variaveisDaPeca } from '../../utils/blueprintFormulas';
 import { etiquetasDasAberturas, rotuloDeNivelDoPavimento } from '../../utils/blueprintNumeracao';
 import { assinaturaDoTipo, camposDaEstrutura, camposDoTerminal, propriedadesDaEstrutura, propriedadesDoTerminal } from '../../utils/blueprintTipos';
 import { AJUSTE_DA_VISTA, ehVistaDePlanta, idsOcultosNaVista, nivelDaVista } from '../../utils/blueprintVistasDePlanta';
@@ -156,7 +156,10 @@ import PainelImportarDxf from './PainelImportarDxf';
 import PainelImportarBcf from './PainelImportarBcf';
 import PainelComentarios from './PainelComentarios';
 import { listarComentarios } from '../../services/blueprintCommentService';
-import { baixarArtefatos, exportarBcf } from '../../services/blueprintExportService';
+import { artefatoDeTabelaXlsx, baixarArtefatos, exportarBcf } from '../../services/blueprintExportService';
+import { blueprintTabelaService } from '../../services/blueprintTabelaService';
+import TelaTabelas from './TelaTabelas';
+import type { DefinicaoDeTabela, TabelaSalva } from '../../utils/blueprintTabelas';
 import { topicosDeComentarios, topicosDeConflitos, topicosDeConflitosArquitetonicos } from '../../utils/blueprintBcf';
 import { PAPEIS } from '../../utils/blueprintExport';
 import { useStore } from '../../store/useStore';
@@ -1353,7 +1356,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais' | 'api' | 'webhooks' | 'acesso' | 'antes-depois' | 'compras' | 'tipos' | 'parametros';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais' | 'api' | 'webhooks' | 'acesso' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -2091,6 +2094,24 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     listParameterDefinitions(orgId)
       .then(setDefinicoesDeParametro)
       .catch(() => setDefinicoesDeParametro([]));
+  }, [orgId]);
+  /** TABELAS PERSONALIZADAS (P2.16): as da organização; carregadas ao abrir a tela. */
+  const [tabelasSalvas, setTabelasSalvas] = useState<TabelaSalva[]>([]);
+  const [tabelasCarregando, setTabelasCarregando] = useState(false);
+  const [tabelasIndisponiveis, setTabelasIndisponiveis] = useState(false);
+  const recarregarTabelas = useCallback(() => {
+    setTabelasCarregando(true);
+    blueprintTabelaService
+      .list(orgId)
+      .then((lista) => {
+        setTabelasSalvas(lista);
+        setTabelasIndisponiveis(false);
+      })
+      .catch(() => {
+        setTabelasSalvas([]);
+        setTabelasIndisponiveis(true);
+      })
+      .finally(() => setTabelasCarregando(false));
   }, [orgId]);
   useEffect(() => {
     recarregarDefinicoes();
@@ -7788,6 +7809,54 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           </div>
         </div>
       )}
+      {telaAberta === 'tabelas' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="tabelas">
+          {cabecalhoDaTela(
+            'Tabelas personalizadas',
+            'Os quadros do projeto do seu jeito: família, colunas (as variáveis das fórmulas), filtro, agrupamento e totais. A definição fica na organização; a tabela é montada sobre este desenho e sai em .xlsx.',
+            Table2,
+            'Analisar',
+          )}
+          <div>
+            <TelaTabelas
+              model={editor.model}
+              tabelas={tabelasSalvas}
+              carregando={tabelasCarregando}
+              indisponivel={tabelasIndisponiveis}
+              definicoesDeParametro={definicoesDeParametro}
+              calculados={definicoesDeParametro.length ? parametrosCalculadosDoModelo(editor.model, definicoesDeParametro) : undefined}
+              mostrarOrg={!orgId}
+              nomeDaOrg={(id) => organizacoesDaLoja.find((o) => o.id === id)?.name ?? id.slice(0, 8)}
+              onCriar={async (d) => {
+                const alvo = await resolverOrgDeEscrita('all-allowed');
+                if (!alvo) throw new Error('Escolha a organização em que a tabela será gravada.');
+                const { failed } = await forEachTargetOrg(alvo, (org) => blueprintTabelaService.create(org, d));
+                if (failed.length) throw new Error(failed.map((f) => (f.error instanceof Error ? f.error.message : String(f.error))).join('; '));
+                recarregarTabelas();
+              }}
+              onAtualizar={async (id, d) => {
+                const t = await blueprintTabelaService.update(id, d);
+                setTabelasSalvas((lista) => lista.map((x) => (x.id === id ? t : x)));
+              }}
+              onExcluir={async (id) => {
+                await blueprintTabelaService.remove(id);
+                setTabelasSalvas((lista) => lista.filter((x) => x.id !== id));
+              }}
+              onSemear={async (lista) => {
+                const alvo = await resolverOrgDeEscrita('all-allowed');
+                if (!alvo) return;
+                await forEachTargetOrg(alvo, async (org) => {
+                  for (const d of lista) await blueprintTabelaService.create(org, d);
+                });
+                recarregarTabelas();
+              }}
+              onExportar={(nome, linhas) => baixarArtefatos([artefatoDeTabelaXlsx(nome, linhas)])}
+              onSelecionarPeca={(id) => selecionar([id])}
+            />
+          </div>
+        </div>
+      )}
+
       {telaAberta === 'compras' && (
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="compras">
           {cabecalhoDaTela(
@@ -9036,6 +9105,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   ajuda="A ponte com o orçamento da obra: prévia e aplicação por elemento"
                 />
               )}
+              <BotaoDoRibbon
+                icone={Table2}
+                rotulo="Tabelas"
+                contagem={tabelasSalvas.length || undefined}
+                ativo={telaAberta === 'tabelas'}
+                onClick={() => {
+                  if (telaAberta !== 'tabelas') recarregarTabelas();
+                  alternarTela('tabelas');
+                }}
+                ajuda="Tabelas personalizadas (schedules): família, colunas, filtro, agrupamento e totais — sobre este desenho, em .xlsx"
+              />
               <BotaoDoRibbon
                 icone={ShoppingCart}
                 rotulo="Compras"

@@ -889,3 +889,15 @@ export async function lerBcfZip(arquivo: File | ArrayBuffer): Promise<PendenciaI
 }
 
 export { AVISO_PADRAO };
+
+/**
+ * TABELAS PERSONALIZADAS (P2.16): uma tabela montada em .xlsx de uma aba só.
+ * Devolve o artefato — quem chama baixa (`baixarArtefatos`).
+ */
+export function artefatoDeTabelaXlsx(nome: string, linhas: (string | number | null)[][]): ArtefatoExportado {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(linhas), nome.slice(0, 31) || 'Tabela');
+  const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+  const limpo = nome.trim().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '').toLowerCase() || 'tabela';
+  return { blob: new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), nome: `tabela-${limpo}.xlsx`, tipo: 'xlsx' };
+}

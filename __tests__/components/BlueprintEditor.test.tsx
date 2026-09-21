@@ -218,6 +218,18 @@ vi.mock('../../services/blueprintStudyPermissionService', () => ({
   },
 }));
 
+// TABELAS PERSONALIZADAS (P2.16): o catálogo da organização, no dublê.
+const listTabelas = vi.fn(async () => [] as unknown[]);
+const createTabela = vi.fn(async (org: string, d: Record<string, unknown>) => ({ ...d, id: 'tab_novo', organizationId: org, active: true }));
+vi.mock('../../services/blueprintTabelaService', () => ({
+  blueprintTabelaService: {
+    list: (...a: unknown[]) => listTabelas(...(a as [])),
+    create: (...a: unknown[]) => createTabela(...(a as [string, Record<string, unknown>])),
+    update: vi.fn(async (id: string, d: Record<string, unknown>) => ({ ...d, id, organizationId: 'org_1', active: true })),
+    remove: vi.fn(async () => {}),
+  },
+}));
+
 vi.mock('../../services/blueprintViewTemplateService', () => ({
   blueprintViewTemplateService: {
     list: (...a: unknown[]) => listViewTemplates(...(a as [])),
@@ -5128,5 +5140,57 @@ describe('BlueprintEditor · planta de forro (P2.14)', () => {
     expect(barra().queryByRole('button', { name: /^ferramenta: selecionar$/i })).toBeNull();
     await user.click(within(faixa).getByRole('button', { name: /voltar à planta/i }));
     expect(screen.queryByTestId('faixa-vista-de-planta')).toBeNull();
+  }, 60000);
+});
+
+/**
+ * TABELAS PERSONALIZADAS (21/09/2026, backlog P2 — P2.16): Analisar › Tabelas
+ * lista as da organização, monta a ativa sobre o desenho (grupos e totais),
+ * e o rascunho novo monta ao vivo e grava pelo serviço.
+ */
+describe('BlueprintEditor · tabelas personalizadas (P2.16)', () => {
+  it('abre a tela, monta a tabela salva com grupos e totais; nova tabela monta ao vivo e grava', async () => {
+    listTabelas.mockResolvedValue([
+      { id: 'tab_1', organizationId: 'org_1', active: true, nome: 'Paredes por pavimento', familia: 'wall', colunas: [{ chave: 'comprimento', rotulo: 'Comp. (m)', total: 'SOMA' }, { chave: 'espessura', total: null }], filtro: '', agruparPor: 'pavimento.nome', ordenarPor: 'comprimento', ordem: 'DESC' },
+    ]);
+    // Gravar passa por `resolveWriteOrg` (REGRA #5): com UMA organização na loja o alvo não é ambíguo.
+    const { useStore } = await import('../../store/useStore');
+    const orgsAntes = useStore.getState().organizations;
+    useStore.setState({ organizations: [{ id: 'org_1', name: 'Org de teste', members: [] }] as never });
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall' as const, levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 3000 });
+    const m = k.applyBatch(nivel.model, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0)]).model;
+    loadBranchModel.mockResolvedValue(m);
+    try {
+      await montar();
+      const user = userEvent.setup();
+      await abrirAba(/^analisar$/i);
+      await user.click(screen.getByRole('button', { name: /^Tabelas/ }));
+      const tela = await screen.findByTestId('tela-tabelas');
+      expect(document.querySelector('[data-tela="tabelas"]')?.className).not.toMatch(/fixed|inset-0/);
+      await waitFor(() => expect(within(tela).getAllByText('Paredes por pavimento').length).toBeGreaterThan(0));
+      // A tabela salva ativa, montada: 4 paredes, 1 grupo (Térreo), total 20 m.
+      const montada = await within(tela).findByTestId('tabela-montada');
+      expect(within(tela).getByTestId('resumo-da-tabela')).toHaveTextContent(/4 de 4 peça\(s\) · Paredes · 1 grupo\(s\) por pavimento.nome/);
+      expect(within(montada).getByTestId('totais-do-grupo')).toHaveTextContent(/Comp\. \(m\): soma 20/);
+      expect(within(tela).getByTestId('total-geral')).toHaveTextContent(/soma 20/);
+      // Nova tabela: família esquadrias (nenhuma no desenho) → monta ao vivo vazia; nome → grava.
+      await user.click(within(tela).getByTestId('nova-tabela'));
+      const form = within(tela).getByTestId('form-tabela');
+      expect(within(form).getByTestId('problemas-da-tabela')).toHaveTextContent(/Dê um nome/);
+      await user.type(within(form).getByLabelText('Nome da tabela'), 'Minhas paredes');
+      await user.click(within(within(form).getByTestId('colunas-disponiveis')).getByRole('button', { name: 'area' }));
+      expect(within(tela).getByTestId('resumo-da-tabela')).toHaveTextContent(/4 de 4 peça\(s\)/);
+      await user.type(within(form).getByLabelText('Filtro da tabela'), 'comprimento > 5');
+      await waitFor(() => expect(within(tela).getByTestId('resumo-da-tabela')).toHaveTextContent(/2 de 4 peça\(s\)/));
+      await user.click(within(form).getByTestId('salvar-tabela'));
+      await waitFor(() => expect(createTabela).toHaveBeenCalledWith('org_1', expect.objectContaining({ nome: 'Minhas paredes', familia: 'wall', filtro: 'comprimento > 5', colunas: [{ chave: 'comprimento', total: 'SOMA' }, { chave: 'area', total: null }] })));
+      expect(within(tela).getByTestId('aviso-de-tabelas')).toHaveTextContent(/criada/);
+    } finally {
+      listTabelas.mockResolvedValue([]);
+      useStore.setState({ organizations: orgsAntes });
+    }
   }, 60000);
 });

@@ -230,7 +230,7 @@ window.addEventListener('message',function(ev){
   var d=ev.data; if(!d||d.tipo!=='opura.planta.modelo')return;
   modelo=d; var semNome=(d.modelo.spaces||[]).map(function(s,i){return {i:i,s:s};}).filter(function(x){return !x.s.name;});
   document.getElementById('estado').textContent=d.estudo.titulo+' · rev. '+(d.estudo.revisao==null?'rascunho':d.estudo.revisao)+' · '+(d.modelo.spaces||[]).length+' ambiente(s), '+semNome.length+' sem nome · kernel '+d.kernelVersion;
-  var ul=document.getElementById('lista'); ul.innerHTML='';
+  var ul=document.getElementById('lista'); while(ul.firstChild)ul.removeChild(ul.firstChild);
   semNome.forEach(function(x){var li=document.createElement('li');li.textContent='Ambiente '+(x.i+1)+' → "Ambiente '+(x.i+1)+'"';ul.appendChild(li);});
   document.getElementById('propor').disabled=semNome.length===0;
 });

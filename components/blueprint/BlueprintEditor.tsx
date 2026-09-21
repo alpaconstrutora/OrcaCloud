@@ -66,6 +66,7 @@ import {
   Slash,
   Highlighter,
   Cloud,
+  Crop,
   TriangleRight,
   Grip,
   Hand,
@@ -161,7 +162,7 @@ import { blueprintTabelaService } from '../../services/blueprintTabelaService';
 import TelaTabelas from './TelaTabelas';
 import type { DefinicaoDeTabela, TabelaSalva } from '../../utils/blueprintTabelas';
 import { topicosDeComentarios, topicosDeConflitos, topicosDeConflitosArquitetonicos } from '../../utils/blueprintBcf';
-import { PAPEIS } from '../../utils/blueprintExport';
+import { ESCALAS, PAPEIS } from '../../utils/blueprintExport';
 import { useStore } from '../../store/useStore';
 import { posicoesPorUid } from '../../utils/blueprintComentarios';
 import {
@@ -185,6 +186,7 @@ import ElevationCanvas from './ElevationCanvas';
 import Blueprint3DTab from './Blueprint3DTab';
 import PainelPavimentos from './PainelPavimentos';
 import SeletorDeVista, {
+  dependenteDaVista,
   type VistaBlueprint,
   VISTAS_FIXAS,
   DIRECAO_DA_VISTA,
@@ -1182,8 +1184,27 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   /** ENVELOPE 3D (E3.3): os prismas edificáveis por pavimento, translúcidos. */
   const [mostrarEnvelope3d, setMostrarEnvelope3d] = usePersistedState('blueprint:vista3dEnvelope', true);
 
-  const emVista = vista !== 'planta';
+  /**
+   * VISTA DEPENDENTE (P2.17): o recorte nomeado que está aberto. É a planta
+   * EDITÁVEL vista por uma janela — por isso NÃO conta como "em vista": abas,
+   * ferramentas e painéis são os da planta; o canvas só esmaece o que está fora.
+   */
+  const vistaDependenteAtual = (editor.model.vistasDependentes ?? []).find((v) => v.id === dependenteDaVista(vista)) ?? null;
+  const emVista = vista !== 'planta' && !vistaDependenteAtual;
   const vistaEhElevacao = ehVistaDeElevacao(vista);
+  /** Vista dependente apagada com a vista aberta nela: volta à planta. */
+  useEffect(() => {
+    if (dependenteDaVista(vista) && !vistaDependenteAtual) setVista('planta');
+  }, [vista, vistaDependenteAtual, setVista]);
+  /** A vista dependente é de UM pavimento: abri-la ativa o pavimento dela e enquadra o recorte. */
+  useEffect(() => {
+    if (!vistaDependenteAtual) return;
+    if (nivelAtivoId !== vistaDependenteAtual.levelId) setNivelAtivoId(vistaDependenteAtual.levelId);
+    navegar('ENQUADRAR');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vistaDependenteAtual?.id]);
+  /** Armar o arraste do recorte: `null` = desarmado; `'nova'` = cria; id = redefine o recorte dessa vista. */
+  const [recorteArmado, setRecorteArmado] = useState<null | 'nova' | string>(null);
   /**
    * SITUAÇÃO · IMPLANTAÇÃO · COBERTURA (E0.3): a planta baixa com o pavimento e
    * o recorte que o módulo decide. O canvas é o mesmo; o que muda são o
@@ -8329,6 +8350,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             vista={vista}
             onEscolher={setVista}
             cortes={(editor.model.sections ?? []).map((c) => ({ id: c.id, rotulo: c.rotulo }))}
+            vistasDependentes={(editor.model.vistasDependentes ?? []).map((v) => ({ id: v.id, nome: v.nome }))}
           />
         }
         acessoRapido={
@@ -8565,6 +8587,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   Inverter o lado
                 </button>
               )}
+              <BotaoDoRibbon
+                icone={Crop}
+                rotulo="Vista dependente"
+                contagem={(editor.model.vistasDependentes ?? []).filter((v) => v.levelId === levelId).length || undefined}
+                ativo={recorteArmado === 'nova'}
+                onClick={() => setRecorteArmado((r) => (r === 'nova' ? null : 'nova'))}
+                ajuda="Arraste um retângulo na planta: vira uma vista com nome e escala próprios (recorte da planta-mãe), que sai como prancha"
+              />
             </GrupoDoRibbon>
           </>
         )}
@@ -10066,6 +10096,62 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         </div>
       )}
 
+      {/* VISTA DEPENDENTE (P2.17): a faixa diz o recorte e deixa renomear, trocar a escala, redefinir o recorte e excluir. */}
+      {vistaDependenteAtual && (
+        <div role="status" data-testid="faixa-vista-dependente" className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-violet-50/60 px-4 py-2 text-sm text-slate-700">
+          <Crop className="h-4 w-4 shrink-0 text-violet-600" />
+          <strong>Vista dependente</strong>
+          <span className="text-xs text-slate-500">
+            · {editor.model.levels.find((l) => l.id === vistaDependenteAtual.levelId)?.name ?? ''} · recorte {((vistaDependenteAtual.recorte.maxX - vistaDependenteAtual.recorte.minX) / 1000).toFixed(2).replace('.', ',')} × {((vistaDependenteAtual.recorte.maxY - vistaDependenteAtual.recorte.minY) / 1000).toFixed(2).replace('.', ',')} m · o desenho continua editável; fora do recorte fica esmaecido
+          </span>
+          <label className="ml-2 flex items-center gap-1 text-xs">
+            Nome
+            <input
+              key={vistaDependenteAtual.id}
+              defaultValue={vistaDependenteAtual.nome}
+              maxLength={60}
+              aria-label="Nome da vista dependente"
+              onBlur={(e) => e.target.value.trim() && e.target.value.trim() !== vistaDependenteAtual.nome && editor.run({ type: 'SetVistaDependenteProps', vistaId: vistaDependenteAtual.id, nome: e.target.value })}
+              onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+              className="h-7 w-40 rounded-md border border-slate-300 px-2 text-xs"
+            />
+          </label>
+          <label className="flex items-center gap-1 text-xs">
+            Escala
+            <select
+              value={vistaDependenteAtual.denominador}
+              onChange={(e) => editor.run({ type: 'SetVistaDependenteProps', vistaId: vistaDependenteAtual.id, denominador: Number(e.target.value) })}
+              aria-label="Escala da vista dependente"
+              className="h-7 rounded-md border border-slate-300 px-1 text-xs"
+            >
+              {ESCALAS.filter((d) => d >= 10).map((d) => (
+                <option key={d} value={d}>
+                  1:{d}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" onClick={() => setRecorteArmado(vistaDependenteAtual.id)} className={`h-7 rounded-md border px-2 text-xs ${recorteArmado === vistaDependenteAtual.id ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}>
+            {recorteArmado === vistaDependenteAtual.id ? 'Arraste o novo recorte…' : 'Redefinir recorte'}
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              const ok = await confirmar({ title: 'Excluir vista dependente', message: `Excluir a vista "${vistaDependenteAtual.nome}"? O desenho não muda — só o recorte some (e a prancha dele).`, confirmLabel: 'Excluir', variant: 'danger' });
+              if (!ok) return;
+              editor.run({ type: 'DeleteVistaDependente', vistaId: vistaDependenteAtual.id });
+              setVista('planta');
+            }}
+            className="h-7 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700 hover:bg-red-50 hover:text-red-700"
+          >
+            Excluir
+          </button>
+          <button type="button" onClick={() => setVista('planta')} className="ml-auto shrink-0 text-xs font-medium underline">
+            voltar à planta
+          </button>
+        </div>
+      )}
+
       {/* A VISTA DE PLANTA se anuncia (E0.3): qual é, o que esconde e em que
           pavimento — senão a pessoa procura a porta que "sumiu". */}
       {ajusteDaVista && (
@@ -10491,7 +10577,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               // o próximo arraste em QUALQUER ferramenta virar uma marcação de
               // região invisível — o botão que a armou não está mais na tela
               // para explicar o que aconteceu.
-              regiaoArmada={tarefaAberta === 'gerar-paredes' && regiaoArmada}
+              regiaoArmada={(tarefaAberta === 'gerar-paredes' && regiaoArmada) || recorteArmado !== null}
+              recorteDaVista={vistaDependenteAtual ? { ...vistaDependenteAtual.recorte, nome: vistaDependenteAtual.nome, denominador: vistaDependenteAtual.denominador } : null}
+              vistasDependentesDoNivel={vistaDependenteAtual ? [] : (editor.model.vistasDependentes ?? []).filter((v) => v.levelId === levelId)}
               // A região só aparece com a tarefa que a usa aberta. Desenhá-la
               // sempre deixaria um retângulo violeta sobre a planta enquanto se
               // traça parede, sem nada na tela explicando de onde ele veio.
@@ -10499,6 +10587,23 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               pecasPrevistas={pecasPrevistas}
               ocultos={ocultosNoCanvas}
               onRegiaoDefinida={(r) => {
+                // VISTA DEPENDENTE (P2.17): o arraste armado pelo botão cria (ou
+                // redefine) o recorte; nada a ver com a região de geração.
+                if (recorteArmado !== null) {
+                  const alvo = recorteArmado;
+                  setRecorteArmado(null);
+                  if (!r || !levelId) return;
+                  const recorte = { minX: Math.round(r.x0), minY: Math.round(r.y0), maxX: Math.round(r.x1), maxY: Math.round(r.y1) };
+                  if (alvo === 'nova') {
+                    const n = (editor.model.vistasDependentes ?? []).length + 1;
+                    const criados = editor.run({ type: 'AddVistaDependente', levelId, nome: `Vista ${n}`, recorte, denominador: 50 });
+                    const id = criados.find((x) => x.startsWith('vdp'));
+                    if (id) setVista(`dependente:${id}`);
+                  } else {
+                    editor.run({ type: 'SetVistaDependenteProps', vistaId: alvo, recorte });
+                  }
+                  return;
+                }
                 // `null` = desistiu do gesto. Só desarma — apagar a região
                 // confirmada por causa de um Escape seria perder trabalho.
                 setRegiaoArmada(false);

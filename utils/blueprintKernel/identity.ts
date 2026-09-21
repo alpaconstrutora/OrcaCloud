@@ -144,6 +144,8 @@ export const PREFIXO_ROTULO_UID = {
   guardaCorpo: 'B',
   /** Anotação — A. */
   anotacao: 'A',
+  /** Vista dependente — D (recorte nomeado de planta). */
+  vistaDependente: 'D',
   stair: 'E',
   label: 'R',
   /**

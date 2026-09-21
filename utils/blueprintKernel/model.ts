@@ -1755,6 +1755,34 @@ export function comprimentoDoGuardaCorpo(g: Pick<GuardaCorpo, 'pontos'>): number
   return s;
 }
 
+/**
+ * VISTA DEPENDENTE (0.51.0, backlog P2 — P2.17): um RECORTE nomeado de uma
+ * planta, com escala própria — a "dependent view" do Revit. É o mesmo modelo
+ * visto por uma janela: serve para partir uma planta grande em pranchas
+ * (linhas de encontro) e para ampliações que não são de um ambiente só.
+ * Não tem geometria própria: `recorte` é o retângulo do MODELO, em mm; o
+ * desenho, as anotações e as peças são os do pavimento. É decisão do
+ * desenhista — por isso vive no payload, como as anotações.
+ */
+export interface VistaDependente {
+  id: ObjectId;
+  uid: ElementUid;
+  levelId: ObjectId;
+  /** 1–60 caracteres. */
+  nome: string;
+  /** Retângulo do modelo, mm inteiros, min < max nos dois eixos. */
+  recorte: { minX: number; minY: number; maxX: number; maxY: number };
+  /** Denominador da escala da vista (1:50 → 50). Inteiro ≥ 1. */
+  denominador: number;
+}
+export const MAX_NOME_DE_VISTA_DEPENDENTE = 60;
+
+export function findVistaDependente(model: BlueprintModel, id: ObjectId): VistaDependente {
+  const v = (model.vistasDependentes ?? []).find((x) => x.id === id);
+  if (!v) throw new KernelError('DEPENDENT_VIEW_NOT_FOUND', `Vista dependente inexistente: ${id}`);
+  return v;
+}
+
 export function findGuardaCorpo(model: BlueprintModel, id: ObjectId): GuardaCorpo {
   const g = (model.guardaCorpos ?? []).find((x) => x.id === id);
   if (!g) throw new KernelError('RAILING_NOT_FOUND', `Guarda-corpo inexistente: ${id}`);
@@ -2363,6 +2391,8 @@ export interface BlueprintModel {
   guardaCorpos: GuardaCorpo[];
   /** Anotações por vista (texto, leader, linha, hachura, cota angular). Ver `Anotacao`. */
   anotacoes: Anotacao[];
+  /** Vistas dependentes (recortes nomeados de planta, 0.51.0). Ver `VistaDependente`. */
+  vistasDependentes: VistaDependente[];
   /**
    * Escadas e rampas. Como a estrutura e o telhado, NÃO participam do arranjo
    * planar: uma escada dentro da sala não parte o ambiente. O que ela faz ao
@@ -2480,6 +2510,7 @@ export function emptyModel(): BlueprintModel {
     componentes: [],
     guardaCorpos: [],
     anotacoes: [],
+    vistasDependentes: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -2548,6 +2579,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     componentes: (model.componentes ?? []).map((c) => ({ ...c, at: { ...c.at }, ...(c.parametros ? { parametros: { ...c.parametros } } : {}) })),
     guardaCorpos: (model.guardaCorpos ?? []).map((g) => ({ ...g, pontos: g.pontos.map((p) => ({ ...p })), ...(g.parametros ? { parametros: { ...g.parametros } } : {}) })),
     anotacoes: (model.anotacoes ?? []).map((a) => ({ ...a, vista: { ...a.vista }, pontos: a.pontos.map((p) => ({ ...p })), ...(a.parametros ? { parametros: { ...a.parametros } } : {}), ...(a.revisao ? { revisao: { ...a.revisao } } : {}) })),
+    vistasDependentes: (model.vistasDependentes ?? []).map((v) => ({ ...v, recorte: { ...v.recorte } })),
     grupos: (model.grupos ?? []).map((g) => ({
       ...g,
       pivo: { ...g.pivo },
@@ -3694,6 +3726,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Componente', model.componentes ?? []],
     ['Guarda-corpo', model.guardaCorpos ?? []],
     ['Anotação', model.anotacoes ?? []],
+    ['Vista dependente', model.vistasDependentes ?? []],
     ['Trecho', model.trechos ?? []],
     ['Terminal', model.terminais ?? []],
     ['Quadro', model.quadros ?? []],
@@ -4290,6 +4323,14 @@ export function assertModelInvariants(model: BlueprintModel): void {
   }
 
   // Guarda-corpos (E7.3): pavimento existente, tipo e material da lista, ≥ 2 vértices inteiros sem trecho nulo, altura inteira positiva, rótulo curto.
+  // VISTA DEPENDENTE (0.51.0): pavimento vivo, nome, recorte inteiro e não degenerado, escala inteira.
+  for (const v of model.vistasDependentes ?? []) {
+    if (!model.levels.some((l) => l.id === v.levelId)) throw new KernelError('BAD_DEPENDENT_VIEW', `Vista dependente ${v.id}: pavimento inexistente`);
+    if (typeof v.nome !== 'string' || v.nome.trim().length === 0 || v.nome.length > MAX_NOME_DE_VISTA_DEPENDENTE) throw new KernelError('BAD_DEPENDENT_VIEW', `Vista dependente ${v.id}: nome vazio ou maior que ${MAX_NOME_DE_VISTA_DEPENDENTE}`);
+    for (const k of ['minX', 'minY', 'maxX', 'maxY'] as const) assertIntegerMm(v.recorte[k], `${v.id}.recorte.${k}`);
+    if (v.recorte.minX >= v.recorte.maxX || v.recorte.minY >= v.recorte.maxY) throw new KernelError('BAD_DEPENDENT_VIEW', `Vista dependente ${v.id}: recorte degenerado`);
+    if (!Number.isInteger(v.denominador) || v.denominador < 1) throw new KernelError('BAD_DEPENDENT_VIEW', `Vista dependente ${v.id}: escala tem de ser inteira ≥ 1`);
+  }
   for (const g of model.guardaCorpos ?? []) {
     if (!model.levels.some((l) => l.id === g.levelId)) throw new KernelError('BAD_RAILING', `Guarda-corpo ${g.id}: pavimento inexistente`);
     if (!TIPOS_DE_GUARDA_CORPO.includes(g.tipo)) throw new KernelError('BAD_RAILING', `Guarda-corpo ${g.id}: tipo desconhecido ${String(g.tipo)}`);

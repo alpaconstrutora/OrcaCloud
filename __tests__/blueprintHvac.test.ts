@@ -34,7 +34,7 @@ function terreo() {
 
 describe('HVAC mínimo (E11.1) · kernel', () => {
   it('kernel 0.47.0: MECANICA é disciplina; o shaft leva a disciplina (só ele) e ela vai e volta pelo canônico; o shaft geral não ganha chave', () => {
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.50.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.51.0');
     expect(DISCIPLINAS).toContain('MECANICA');
     expect(ROTULO_DA_DISCIPLINA.MECANICA).toBe('Mecânica');
     expect(COR_DA_DISCIPLINA.MECANICA).toMatch(/^#/);

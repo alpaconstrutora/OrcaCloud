@@ -1194,6 +1194,14 @@ interface Props {
   /** A região já marcada, desenhada por cima do desenho. `null` = usa a vista. */
   regiao?: { x0: number; y0: number; x1: number; y1: number } | null;
   /**
+   * VISTA DEPENDENTE (P2.17): o recorte da vista aberta. O que está fora fica
+   * esmaecido (continua editável — é o mesmo modelo); ENQUADRAR enquadra o
+   * recorte, não o pavimento. `null` = planta inteira.
+   */
+  recorteDaVista?: { minX: number; minY: number; maxX: number; maxY: number; nome: string; denominador: number } | null;
+  /** As vistas dependentes do pavimento, para as linhas de encontro na planta-mãe. */
+  vistasDependentesDoNivel?: readonly { id: string; nome: string; recorte: { minX: number; minY: number; maxX: number; maxY: number }; denominador: number }[];
+  /**
    * Peças PROPOSTAS por um lançamento automático (pilares 15/09, vigas e lajes
    * 16/09/2026): tracejadas em `COR_PREVIA` enquanto a gaveta da tarefa está
    * aberta. O editor passa só as do pavimento ativo; vazio = nada. Prévia é só
@@ -1408,6 +1416,8 @@ export default function BlueprintCanvas({
   mostrarCircuitos = true,
   regiaoArmada = false,
   regiao = null,
+  recorteDaVista = null,
+  vistasDependentesDoNivel = [],
   pecasPrevistas = SEM_PECAS_PREVISTAS,
   ocultos = SEM_OCULTOS,
   onRegiaoDefinida,
@@ -3073,7 +3083,9 @@ export default function BlueprintCanvas({
     if (navegacao.acao === 'ESCALA_1_100') return noCentro(limitar(96 / 25.4 / 100));
 
     const pontos: Point[] = [];
-    for (const w of paredesReais) pontos.push(w.a, w.b);
+    // VISTA DEPENDENTE: o enquadramento é o do recorte.
+    if (recorteDaVista) pontos.push({ x: recorteDaVista.minX, y: recorteDaVista.minY } as Point, { x: recorteDaVista.maxX, y: recorteDaVista.maxY } as Point);
+    for (const w of recorteDaVista ? [] : paredesReais) pontos.push(w.a, w.b);
     for (const b of limitesReais) pontos.push(b.a, b.b);
     for (const e of estruturasReais) pontos.push(...contornoEmPlanta(e));
     for (const r of aguasDoNivel) pontos.push(...r.pontos);
@@ -7252,6 +7264,43 @@ export default function BlueprintCanvas({
     });
 
     // REGIÃO já marcada — tracejada, para separar "está valendo" de "estou
+    // VISTA DEPENDENTE (P2.17): fora do recorte, um véu; na borda, a moldura e
+    // o nome com a escala. Dentro, tudo continua vivo.
+    if (recorteDaVista) {
+      const a = paraTela({ x: recorteDaVista.minX, y: recorteDaVista.minY } as Point);
+      const b = paraTela({ x: recorteDaVista.maxX, y: recorteDaVista.maxY } as Point);
+      const x0 = Math.min(a.x, b.x);
+      const y0 = Math.min(a.y, b.y);
+      const x1 = Math.max(a.x, b.x);
+      const y1 = Math.max(a.y, b.y);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, tamanho.w, tamanho.h);
+      ctx.rect(x0, y0, x1 - x0, y1 - y0);
+      ctx.fillStyle = 'rgba(248, 250, 252, 0.72)';
+      ctx.fill('evenodd');
+      ctx.restore();
+      ctx.strokeStyle = COR_REGIAO;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([]);
+      ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+      const pos = dentroDaTela(x0 + 4, y0 - 8);
+      escreverRotulo(ctx, `${recorteDaVista.nome} · 1:${recorteDaVista.denominador}`, pos.x, pos.y, COR_REGIAO, Math.round(11 * fz));
+    } else if (vistasDependentesDoNivel.length > 0) {
+      // LINHAS DE ENCONTRO: onde cada vista dependente recorta a planta-mãe.
+      ctx.save();
+      ctx.strokeStyle = COR_REGIAO;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([10, 5, 2, 5]);
+      for (const v of vistasDependentesDoNivel) {
+        const a = paraTela({ x: v.recorte.minX, y: v.recorte.minY } as Point);
+        const b = paraTela({ x: v.recorte.maxX, y: v.recorte.maxY } as Point);
+        ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+        escreverRotulo(ctx, `${v.nome} · 1:${v.denominador}`, Math.min(a.x, b.x) + 4, Math.min(a.y, b.y) - 8, COR_REGIAO, Math.round(10 * fz));
+      }
+      ctx.restore();
+    }
+
     // marcando agora". Fica desenhada enquanto valer, porque uma região
     // invisível que muda o resultado é a pior combinação: a contagem de paredes
     // mudaria sem nada na tela explicando por quê.
@@ -7597,6 +7646,8 @@ export default function BlueprintCanvas({
     movendoSelecao,
     laco,
     regiao,
+    recorteDaVista,
+    vistasDependentesDoNivel,
     pecasPrevistas,
     arrastoRegiao,
     mostrarCotas,

@@ -148,6 +148,8 @@ export interface PranchaPlanejada {
   recorte?: Recorte;
   /** Só na AMPLIAÇÃO: o ambiente ampliado. */
   spaceId?: ObjectId;
+  /** Só na AMPLIAÇÃO nascida de uma VISTA DEPENDENTE (P2.17). */
+  vistaDependenteId?: ObjectId;
 }
 
 const TIPOS_QUE_AMPLIAM: TipoDeAmbiente[] = ['BANHEIRO', 'COZINHA_SERVICO'];
@@ -212,6 +214,16 @@ export function planejarConjunto(model: BlueprintModel, t: TemplateDePrancha): P
         const tipo = etiquetaDe(s.labelUid)?.tipoDeAmbiente ?? null;
         if (!tipo || !TIPOS_QUE_AMPLIAM.includes(tipo)) continue;
         numerar({ tipo: 'AMPLIACAO', titulo: `Ampliação — ${s.name ?? 'Ambiente'} (${n.name})`, denominador: t.denominadorAmpliacao, levelId: n.id, spaceId: s.id, recorte: bboxDoAnel(s.ring, FOLGA_DA_AMPLIACAO_MM) });
+      }
+    }
+  }
+  // VISTAS DEPENDENTES (P2.17): cada recorte nomeado vira uma prancha na escala
+  // dele, depois das ampliações automáticas — é o desenhista quem decidiu o
+  // recorte e a escala, então entram sempre que as ampliações entram.
+  if (t.incluir.ampliacoes) {
+    for (const n of niveis) {
+      for (const v of (model.vistasDependentes ?? []).filter((x) => x.levelId === n.id)) {
+        numerar({ tipo: 'AMPLIACAO', titulo: `${v.nome} (${n.name})`, denominador: v.denominador, levelId: n.id, recorte: { ...v.recorte }, vistaDependenteId: v.id });
       }
     }
   }

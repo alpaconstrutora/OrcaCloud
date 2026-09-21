@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.50.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.51.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -366,6 +366,8 @@ var PREFIXO_ROTULO_UID = {
   guardaCorpo: "B",
   /** Anotação — A. */
   anotacao: "A",
+  /** Vista dependente — D (recorte nomeado de planta). */
+  vistaDependente: "D",
   stair: "E",
   label: "R",
   /**
@@ -600,6 +602,7 @@ function emptyModel() {
     componentes: [],
     guardaCorpos: [],
     anotacoes: [],
+    vistasDependentes: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -1754,6 +1757,16 @@ function projetar(model) {
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.tipo, y.tipo)
   );
+  const vistasDependentes = ordenar(
+    model.vistasDependentes ?? [],
+    (v) => ({
+      level: nivel(v.levelId),
+      nome: v.nome,
+      recorte: { minX: v.recorte.minX, minY: v.recorte.minY, maxX: v.recorte.maxX, maxY: v.recorte.maxY },
+      denominador: v.denominador
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.recorte.minX - y.recorte.minX || x.recorte.minY - y.recorte.minY || cmpStr(x.nome, y.nome)
+  );
   const indiceDoCorte = new Map(sections.map((c, i) => [c.item.id, i]));
   const anotacoes = ordenar(
     (model.anotacoes ?? []).filter((a) => a.vista.tipo !== "CORTE" || indiceDoCorte.has(a.vista.corteId)),
@@ -1983,6 +1996,7 @@ function projetar(model) {
     componentes: componentes.length ? componentes.map((c) => c.geom) : void 0,
     guardaCorpos: guardaCorpos.length ? guardaCorpos.map((g) => g.geom) : void 0,
     anotacoes: anotacoes.length ? anotacoes.map((a) => a.geom) : void 0,
+    vistasDependentes: vistasDependentes.length ? vistasDependentes.map((v) => v.geom) : void 0,
     trechos: trechos.length ? trechos.map((t) => t.geom) : void 0,
     terminais: terminais.length ? terminais.map((t) => t.geom) : void 0,
     quadros: quadros.length ? quadros.map((q) => q.geom) : void 0,
@@ -2009,6 +2023,7 @@ function projetar(model) {
     componentes: componentes.map((c) => c.item.uid ?? null),
     guardaCorpos: guardaCorpos.map((g) => g.item.uid ?? null),
     anotacoes: anotacoes.map((a) => a.item.uid ?? null),
+    vistasDependentes: vistasDependentes.map((v) => v.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
     quadros: quadros.map((q) => q.item.uid ?? null),
@@ -2281,6 +2296,18 @@ function modelFromCanonicalPayload(payload) {
       rotulo: g.rotulo,
       ...g.sugerido ? { sugerido: true } : {},
       ...g.parametros && Object.keys(g.parametros).length > 0 ? { parametros: { ...g.parametros } } : {}
+    });
+  });
+  const vistasDependentes = payload.vistasDependentes ?? [];
+  vistasDependentes.forEach((v, i) => {
+    if (!levelIds[v.level]) return;
+    model.vistasDependentes.push({
+      id: nextId(model, "vdp"),
+      uid: uidDe("vistasDependentes", i, vistasDependentes.length),
+      levelId: levelIds[v.level],
+      nome: v.nome,
+      recorte: { minX: v.recorte.minX, minY: v.recorte.minY, maxX: v.recorte.maxX, maxY: v.recorte.maxY },
+      denominador: v.denominador
     });
   });
   const anotacoes = payload.anotacoes ?? [];

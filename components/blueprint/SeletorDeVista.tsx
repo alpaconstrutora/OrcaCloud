@@ -14,6 +14,7 @@ import {
   Box,
   Check,
   ChevronDown,
+  Crop,
   Home,
   LandPlot,
   Lightbulb,
@@ -52,11 +53,17 @@ export type VistaBlueprint =
    * permite distinguir sem uma segunda variável de estado — e é o que faz a
    * vista persistida em `localStorage` sobreviver a um recarregamento.
    */
-  | `corte:${string}`;
+  | `corte:${string}`
+  /** VISTA DEPENDENTE (P2.17): recorte nomeado de planta, com escala própria. */
+  | `dependente:${string}`;
 
 /** O id do corte, quando a vista é um. `null` para as seis fixas. */
 export function corteDaVista(v: VistaBlueprint): string | null {
   return v.startsWith('corte:') ? v.slice('corte:'.length) : null;
+}
+
+export function dependenteDaVista(v: VistaBlueprint): string | null {
+  return v.startsWith('dependente:') ? v.slice('dependente:'.length) : null;
 }
 
 /** A elevação só existe para as quatro vistas de fachada. */
@@ -101,11 +108,14 @@ export default function SeletorDeVista({
   vista,
   onEscolher,
   cortes = [],
+  vistasDependentes = [],
 }: {
   vista: VistaBlueprint;
   onEscolher: (v: VistaBlueprint) => void;
   /** Os cortes desenhados, na ordem do modelo. Vazio = a lista fica só com as seis. */
   cortes?: { id: string; rotulo: string }[];
+  /** VISTAS DEPENDENTES (P2.17), na ordem do modelo. */
+  vistasDependentes?: { id: string; nome: string }[];
 }) {
   const [aberto, setAberto] = useState(false);
   const caixaRef = useRef<HTMLDivElement>(null);
@@ -135,6 +145,11 @@ export default function SeletorDeVista({
       id: `corte:${c.id}` as VistaBlueprint,
       rotulo: `Corte ${c.rotulo}`,
       icone: Scissors,
+    })),
+    ...vistasDependentes.map((v) => ({
+      id: `dependente:${v.id}` as VistaBlueprint,
+      rotulo: v.nome,
+      icone: Crop,
     })),
   ];
 

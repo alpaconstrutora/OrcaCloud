@@ -525,6 +525,18 @@ function projetar(model: BlueprintModel): {
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.tipo, y.tipo),
   );
 
+  // VISTAS DEPENDENTES (0.51.0): pavimento por índice, nome, recorte, escala. Omitidas quando não há.
+  const vistasDependentes = ordenar(
+    model.vistasDependentes ?? [],
+    (v) => ({
+      level: nivel(v.levelId),
+      nome: v.nome,
+      recorte: { minX: v.recorte.minX, minY: v.recorte.minY, maxX: v.recorte.maxX, maxY: v.recorte.maxY },
+      denominador: v.denominador,
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.recorte.minX - y.recorte.minX || x.recorte.minY - y.recorte.minY || cmpStr(x.nome, y.nome),
+  );
+
   // ANOTAÇÕES (0.45.0): a vista por ÍNDICE (pavimento na ordem canônica de
   // `levels`; corte na ordem canônica de `sections`; elevação pela direção),
   // pontos, tipo, texto, altura, traço, hachura, giro, cor. Omitidas quando não há.
@@ -846,6 +858,7 @@ function projetar(model: BlueprintModel): {
     componentes: componentes.length ? componentes.map((c) => c.geom) : undefined,
     guardaCorpos: guardaCorpos.length ? guardaCorpos.map((g) => g.geom) : undefined,
     anotacoes: anotacoes.length ? anotacoes.map((a) => a.geom) : undefined,
+    vistasDependentes: vistasDependentes.length ? vistasDependentes.map((v) => v.geom) : undefined,
     trechos: trechos.length ? trechos.map((t) => t.geom) : undefined,
     terminais: terminais.length ? terminais.map((t) => t.geom) : undefined,
     quadros: quadros.length ? quadros.map((q) => q.geom) : undefined,
@@ -877,6 +890,7 @@ function projetar(model: BlueprintModel): {
     componentes: componentes.map((c) => c.item.uid ?? null),
     guardaCorpos: guardaCorpos.map((g) => g.item.uid ?? null),
     anotacoes: anotacoes.map((a) => a.item.uid ?? null),
+    vistasDependentes: vistasDependentes.map((v) => v.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
     quadros: quadros.map((q) => q.item.uid ?? null),
@@ -959,6 +973,7 @@ export interface IdentidadeCanonica {
   componentes?: (ElementUid | null)[];
   guardaCorpos?: (ElementUid | null)[];
   anotacoes?: (ElementUid | null)[];
+  vistasDependentes?: (ElementUid | null)[];
   trechos?: (ElementUid | null)[];
   terminais?: (ElementUid | null)[];
   quadros?: (ElementUid | null)[];
@@ -1171,6 +1186,8 @@ export interface CanonicalPayload {
     sugerido?: boolean;
     parametros?: Parametros;
   }[];
+  /** Vistas dependentes (recortes nomeados de planta). Ausente sob kernel < 0.51.0 e em desenho sem nenhuma. */
+  vistasDependentes?: { level: number; nome: string; recorte: { minX: number; minY: number; maxX: number; maxY: number }; denominador: number }[];
   /** Anotações por vista. Ausente sob kernel < 0.45.0 e em desenho sem nenhuma. */
   anotacoes?: {
     vista: { tipo: 'PLANTA'; level: number } | { tipo: 'CORTE'; corte: number } | { tipo: 'ELEVACAO'; direcao: BoundaryPapel };
@@ -1654,6 +1671,20 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       rotulo: g.rotulo,
       ...(g.sugerido ? { sugerido: true } : {}),
       ...(g.parametros && Object.keys(g.parametros).length > 0 ? { parametros: { ...g.parametros } } : {}),
+    });
+  });
+
+  // VISTAS DEPENDENTES: depois dos pavimentos, que referenciam por índice.
+  const vistasDependentes = payload.vistasDependentes ?? [];
+  vistasDependentes.forEach((v, i) => {
+    if (!levelIds[v.level]) return;
+    model.vistasDependentes.push({
+      id: nextId(model, 'vdp'),
+      uid: uidDe('vistasDependentes', i, vistasDependentes.length),
+      levelId: levelIds[v.level],
+      nome: v.nome,
+      recorte: { minX: v.recorte.minX, minY: v.recorte.minY, maxX: v.recorte.maxX, maxY: v.recorte.maxY },
+      denominador: v.denominador,
     });
   });
 

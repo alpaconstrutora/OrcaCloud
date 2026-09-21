@@ -5194,3 +5194,47 @@ describe('BlueprintEditor · tabelas personalizadas (P2.16)', () => {
     }
   }, 60000);
 });
+
+/**
+ * VISTA DEPENDENTE (21/09/2026, backlog P2 — P2.17): o seletor lista os
+ * recortes; abrir um ativa a faixa (editável: nome e escala), o botão
+ * "Vista dependente" arma o recorte na aba Arquitetura; excluir volta à planta.
+ */
+describe('BlueprintEditor · vista dependente (P2.17)', () => {
+  it('seletor abre a vista com a faixa; renomear e trocar a escala; ribbon conta; excluir volta à planta', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall' as const, levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 3000 });
+    let m = k.applyBatch(nivel.model, [w(0, 0, 20000, 0), w(20000, 0, 20000, 8000), w(20000, 8000, 0, 8000), w(0, 8000, 0, 0)]).model;
+    m = k.applyCommand(m, { type: 'AddVistaDependente', levelId: t, nome: 'Ala esquerda', recorte: { minX: -500, minY: -500, maxX: 10500, maxY: 8500 }, denominador: 50 }).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    // Arquitetura › Vistas: o botão conta a vista do pavimento.
+    await abrirAba(/^arquitetura$/i);
+    expect(screen.getByRole('button', { name: /^Vista dependente/ })).toHaveTextContent('1');
+    // Seletor de vista: o recorte está na lista; abrir mostra a faixa e mantém a planta editável.
+    const seletor = () => within(screen.getByRole('toolbar')).getByRole('button', { expanded: false, name: /^(planta|Ala oeste|Ala esquerda)$/i });
+    await user.click(seletor());
+    await user.click(screen.getByRole('menuitemradio', { name: /Ala esquerda/ }));
+    const faixa = await screen.findByTestId('faixa-vista-dependente');
+    expect(faixa).toHaveTextContent(/Vista dependente.*Térreo · recorte 11,00 × 9,00 m/);
+    expect(within(screen.getByRole('toolbar')).getByRole('button', { name: /^ferramenta: selecionar$/i })).toBeInTheDocument();
+    // Renomear e trocar a escala gravam no modelo (a faixa reflete).
+    const nome = within(faixa).getByLabelText('Nome da vista dependente');
+    await user.clear(nome);
+    await user.type(nome, 'Ala oeste{Enter}');
+    await user.selectOptions(within(faixa).getByLabelText('Escala da vista dependente'), '25');
+    await waitFor(() => expect((within(faixa).getByLabelText('Escala da vista dependente') as HTMLSelectElement).value).toBe('25'));
+    await user.click(seletor());
+    expect(screen.getByRole('menuitemradio', { name: /Ala oeste/ })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    // Excluir passa pela confirmação e volta à planta.
+    await user.click(within(faixa).getByRole('button', { name: /^excluir$/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /^excluir$/i }));
+    await waitFor(() => expect(screen.queryByTestId('faixa-vista-dependente')).toBeNull());
+    expect(screen.getByRole('button', { name: /^Vista dependente/ })).not.toHaveTextContent(/\d/);
+  }, 60000);
+});

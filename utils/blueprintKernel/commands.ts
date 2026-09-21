@@ -32,6 +32,8 @@ import {
   clonarArco,
   type ArcoDaParede,
   type RevisaoDaNuvem,
+  findVistaDependente,
+  MAX_NOME_DE_VISTA_DEPENDENTE,
   acabamentosOuAusente,
   type AcabamentosDoAmbiente,
   cloneModel,
@@ -486,6 +488,10 @@ export type Command =
    * 0,92 m); material omitido = METALICO. `MoveGuardaCorpo` desloca a polilinha
    * inteira por um vetor; vértice a vértice vai por `SetGuardaCorpoProps.pontos`.
    */
+  /** VISTA DEPENDENTE (0.51.0, P2.17): recorte nomeado de uma planta, com escala própria. */
+  | { type: 'AddVistaDependente'; levelId: ObjectId; nome: string; recorte: { minX: number; minY: number; maxX: number; maxY: number }; denominador?: number }
+  | { type: 'SetVistaDependenteProps'; vistaId: ObjectId; nome?: string; recorte?: { minX: number; minY: number; maxX: number; maxY: number }; denominador?: number }
+  | { type: 'DeleteVistaDependente'; vistaId: ObjectId }
   | { type: 'AddGuardaCorpo'; levelId: ObjectId; tipo: TipoDeGuardaCorpo; pontos: Point[]; alturaMm?: number; material?: MaterialDeGuardaCorpo; itemCode?: string; descricao?: string; rotulo?: string | null; sugerido?: boolean }
   /**
    * FASES DE REFORMA (E10.2): marca paredes, aberturas, estruturas e componentes
@@ -2176,6 +2182,42 @@ function aplicarSemHash(
       break;
     }
 
+    // ── Vistas dependentes (P2.17) ──────────────────────────────────────────
+
+    case 'AddVistaDependente': {
+      findLevel(next, command.levelId);
+      const id = nextId(next, 'vdp');
+      next.vistasDependentes = [
+        ...(next.vistasDependentes ?? []),
+        {
+          id,
+          uid: novoUid(),
+          levelId: command.levelId,
+          nome: command.nome.trim().slice(0, MAX_NOME_DE_VISTA_DEPENDENTE) || 'Vista',
+          recorte: recorteInteiro(command.recorte),
+          denominador: Math.max(1, Math.round(command.denominador ?? 50)),
+        },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetVistaDependenteProps': {
+      const v = findVistaDependente(next, command.vistaId);
+      if (command.nome !== undefined) v.nome = command.nome.trim().slice(0, MAX_NOME_DE_VISTA_DEPENDENTE) || v.nome;
+      if (command.recorte !== undefined) v.recorte = recorteInteiro(command.recorte);
+      if (command.denominador !== undefined) v.denominador = Math.max(1, Math.round(command.denominador));
+      diff.updated.push(v.id);
+      break;
+    }
+
+    case 'DeleteVistaDependente': {
+      const v = findVistaDependente(next, command.vistaId);
+      next.vistasDependentes = (next.vistasDependentes ?? []).filter((x) => x.id !== v.id);
+      diff.deleted.push(v.id);
+      break;
+    }
+
     case 'DeleteGuardaCorpo': {
       const g = findGuardaCorpo(next, command.guardaCorpoId);
       next.guardaCorpos = (next.guardaCorpos ?? []).filter((x) => x.id !== g.id);
@@ -3803,6 +3845,7 @@ function aplicarSemHash(
       const componentesDoNivel = (next.componentes ?? []).filter((c) => c.levelId === level.id);
       const guardaCorposDoNivel = (next.guardaCorpos ?? []).filter((g) => g.levelId === level.id);
       const anotacoesDoNivel = (next.anotacoes ?? []).filter((a) => a.vista.tipo === 'PLANTA' && a.vista.levelId === level.id);
+      const vistasDoNivel = (next.vistasDependentes ?? []).filter((v) => v.levelId === level.id);
 
       next.walls = next.walls.filter((w) => w.levelId !== level.id);
       next.openings = next.openings.filter((o) => !paredesDoNivel.has(o.wallId));
@@ -3818,6 +3861,7 @@ function aplicarSemHash(
       next.componentes = (next.componentes ?? []).filter((c) => c.levelId !== level.id);
       next.guardaCorpos = (next.guardaCorpos ?? []).filter((g) => g.levelId !== level.id);
       next.anotacoes = (next.anotacoes ?? []).filter((a) => !(a.vista.tipo === 'PLANTA' && a.vista.levelId === level.id));
+      next.vistasDependentes = (next.vistasDependentes ?? []).filter((v) => v.levelId !== level.id);
       // ⚠️ O quadro vai junto (é peça deste piso); os CIRCUITOS dele vão junto
       // também, senão ficariam apontando para um quadro que não existe mais. E
       // os terminais que os citavam já saíram, ou perdem a referência.
@@ -3849,6 +3893,7 @@ function aplicarSemHash(
         ...componentesDoNivel.map((c) => c.id),
         ...guardaCorposDoNivel.map((g) => g.id),
         ...anotacoesDoNivel.map((a) => a.id),
+        ...vistasDoNivel.map((v) => v.id),
         ...quadrosDoNivel.map((q) => q.id),
         ...circuitosOrfaos.map((c) => c.id),
         ...etiquetasDoNivel.map((l) => l.id),
@@ -4098,6 +4143,15 @@ function aplicarSemHash(
  * passa pelas pontas. Roda em todo comando porque é O(paredes) e porque é a
  * única forma de nenhum caminho novo esquecer de cuidar disto.
  */
+/** O recorte da vista dependente em mm inteiros, com min/max na ordem certa. */
+function recorteInteiro(r: { minX: number; minY: number; maxX: number; maxY: number }): { minX: number; minY: number; maxX: number; maxY: number } {
+  const x0 = assertIntegerMm(roundToMm(Math.min(r.minX, r.maxX)), 'recorte.minX');
+  const x1 = assertIntegerMm(roundToMm(Math.max(r.minX, r.maxX)), 'recorte.maxX');
+  const y0 = assertIntegerMm(roundToMm(Math.min(r.minY, r.maxY)), 'recorte.minY');
+  const y1 = assertIntegerMm(roundToMm(Math.max(r.minY, r.maxY)), 'recorte.maxY');
+  return { minX: x0, minY: y0, maxX: x1, maxY: y1 };
+}
+
 function retirarArcosDesfeitos(next: BlueprintModel, diff: Diff): void {
   for (const w of next.walls) {
     if (w.arco && !arcoConsistente(w)) {

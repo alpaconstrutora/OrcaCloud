@@ -636,8 +636,9 @@ function tipoDaCadencia(cycle: string | undefined | null): string {
         case 'anual': return 'ANUAL';
         case 'semestral': return 'SEMESTRAL';
         case 'trimestral': return 'TRIMESTRAL';
-        // Bimestral não tem código próprio no catálogo; mensal é o padrão da
-        // cobrança recorrente (ver cycleOverride em generateRecurringInstallmentsForPeriod).
+        case 'bimestral': return 'BIMESTRAL';
+        // Mensal é o padrão da cobrança recorrente (ver cycleOverride em
+        // generateRecurringInstallmentsForPeriod).
         default: return 'MENSAL';
     }
 }
@@ -645,6 +646,7 @@ function tipoDaCadencia(cycle: string | undefined | null): string {
 function advanceCycle(date: Date, cycle: string | undefined) {
     if (cycle === 'Anual') date.setFullYear(date.getFullYear() + 1);
     else if (cycle === 'Semestral') date.setMonth(date.getMonth() + 6);
+    else if (cycle === 'Trimestral') date.setMonth(date.getMonth() + 3);
     else if (cycle === 'Bimestral') date.setMonth(date.getMonth() + 2);
     else date.setMonth(date.getMonth() + 1);
 }
@@ -1401,7 +1403,7 @@ export const contractService = {
         // Locação (domain='LOCACAO') — parâmetros do contrato recorrente
         payment_due_date?: string;
         end_date?: string;
-        billing_cycle?: 'Mensal' | 'Bimestral' | 'Semestral' | 'Anual';
+        billing_cycle?: 'Mensal' | 'Bimestral' | 'Trimestral' | 'Semestral' | 'Anual';
         reajuste_index?: string;
         installment_value?: number;
         // Só usado se a máscara de Nomenclatura tiver {Centro de custo}.

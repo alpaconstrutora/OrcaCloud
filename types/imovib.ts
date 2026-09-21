@@ -393,7 +393,7 @@ export interface PropertyDeal {
     /** Só locação. Fim da vigência (YYYY-MM-DD) — vira contracts.end_date e delimita as parcelas. */
     end_date?: string;
     /** Só locação. Periodicidade do faturamento; default Mensal em createFromDeal. */
-    billing_cycle?: 'Mensal' | 'Bimestral' | 'Semestral' | 'Anual';
+    billing_cycle?: 'Mensal' | 'Bimestral' | 'Trimestral' | 'Semestral' | 'Anual';
     /** Só locação. Índice de reajuste — MESMOS nomes de contract_index_values.index_name. */
     reajuste_index?: string;
     /** Checklist de documentos do cliente/comprador (mapa chave→marcado). As chaves

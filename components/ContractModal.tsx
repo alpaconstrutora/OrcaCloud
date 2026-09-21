@@ -27,6 +27,15 @@ import { useStore } from '../store/useStore';
 import { generateDocumentNumber, MissingCodeError, DocType } from '../services/documentNumbering';
 import { getNumberLockReason, regenerateContractNumber } from '../services/contractNumberRegenService';
 import { useConfirm } from './ui/confirm';
+import {
+    gerarCronogramaContrato,
+    lerParametrosDoCronograma,
+    somaDoCronograma,
+    PERIODICIDADES_CONTRATO,
+    TIPO_ENTRADA,
+    type ParametrosCronograma,
+} from '../utils/contractInstallments';
+import { DEFAULT_PAYMENT_TYPES, labelForInstallmentType } from '../constants/paymentTypes';
 
 /**
  * Seções do formulário, uma chave por bloco. Quando ele é renderizado como aba
@@ -136,31 +145,53 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const [projects, setProjects] = React.useState<{ id: string; name: string; settings?: { classification?: string } }[]>([]);
     const [showGuaranteeModal, setShowGuaranteeModal] = React.useState(false);
 
-    const buildSchedule = (count: number, value: number, startDate: string): ContractInstallment[] => {
-        const base = count > 0 ? Math.floor((value / count) * 100) / 100 : 0;
-        const remainder = Math.round((value - base * count) * 100) / 100;
-        const start = startDate ? new Date(startDate + 'T12:00:00') : new Date();
-        return Array.from({ length: count }, (_, i) => {
-            const d = new Date(start);
-            d.setMonth(d.getMonth() + i);
-            return {
-                date: d.toISOString().split('T')[0],
-                value: i === count - 1 ? Math.round((base + remainder) * 100) / 100 : base,
-            };
-        });
-    };
+    /**
+     * Cronograma do contrato PARCELADO (não recorrente).
+     *
+     * O usuário informa o que pensa — entrada, quantas parcelas, de quanto em
+     * quanto tempo, a partir de quando (`gerador`) — e `gerarCronogramaContrato`
+     * expande em linhas (`installmentSchedule`), que é o que vai para
+     * `payment_schedule` e daí para Contas a Receber/Pagar. As linhas continuam
+     * editáveis uma a uma: os campos são o ponto de partida, a lista é a verdade.
+     * Ao reabrir um contrato, os campos são lidos de volta do cronograma salvo
+     * (`lerParametrosDoCronograma`), sem coluna nova no banco.
+     *
+     * Até 2026-09-21 só havia "Nº de Parcelas": uma série mensal a partir da
+     * data de início, sem entrada nem periodicidade — e a data era somada com
+     * `Date.setMonth`, que transborda 31/jan em 03/mar.
+     */
+    type GeradorParcelas = Omit<ParametrosCronograma, 'total'>;
+    const hojeISO = () => new Date().toISOString().split('T')[0];
+    const geradorPadrao = (d: Partial<Contract> | undefined): GeradorParcelas => ({
+        entrada: 0,
+        vencimentoEntrada: d?.start_date || hojeISO(),
+        parcelas: Math.max(1, d?.payment_installments ?? 1),
+        periodicidade: 'Mensal',
+        primeiroVencimento: d?.start_date || hojeISO(),
+    });
+    const geradorDe = (d: Partial<Contract> | undefined): GeradorParcelas =>
+        lerParametrosDoCronograma(d?.payment_schedule) ?? geradorPadrao(d);
+    const [gerador, setGerador] = React.useState<GeradorParcelas>(() => geradorDe(initialData));
 
     const [installmentSchedule, setInstallmentSchedule] = React.useState<ContractInstallment[]>(() => {
         if (initialData?.payment_schedule?.length) return initialData.payment_schedule;
         if (initialData?.payment_term_type === 'Parcelado') {
-            return buildSchedule(
-                initialData.payment_installments ?? 1,
-                initialData.original_value ?? 0,
-                initialData.start_date ?? new Date().toISOString().split('T')[0]
-            );
+            return gerarCronogramaContrato({ ...geradorPadrao(initialData), total: initialData.original_value ?? 0 });
         }
         return [];
     });
+
+    /** Regera o cronograma a partir dos campos + Valor Original. */
+    const regerarCronograma = (g: GeradorParcelas, total = formData.original_value ?? 0) =>
+        setInstallmentSchedule(gerarCronogramaContrato({ ...g, total }));
+
+    /** Muda um campo do gerador: espelha o nº em `payment_installments` e regera as linhas. */
+    const atualizarGerador = (patch: Partial<GeradorParcelas>) => {
+        const g = { ...gerador, ...patch };
+        setGerador(g);
+        if (patch.parcelas !== undefined) setFormData(prev => ({ ...prev, payment_installments: g.parcelas }));
+        regerarCronograma(g);
+    };
 
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
     const [crmClients, setCrmClients] = React.useState<ClientOption[]>([]);
@@ -221,6 +252,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             ...initialData,
         });
         setInstallmentSchedule([]);
+        setGerador(geradorPadrao(initialData));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
 
@@ -239,7 +271,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const prevTermType = React.useRef(formData.payment_term_type);
     React.useEffect(() => {
         if (formData.payment_term_type === 'Parcelado' && prevTermType.current !== 'Parcelado' && installmentSchedule.length === 0) {
-            setInstallmentSchedule(buildSchedule(formData.payment_installments ?? 1, formData.original_value ?? 0, formData.start_date ?? new Date().toISOString().split('T')[0]));
+            regerarCronograma(gerador);
         }
         prevTermType.current = formData.payment_term_type;
     }, [formData.payment_term_type]);
@@ -399,14 +431,11 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         if (initialData) {
             if (initialData.number) numberInputRef.current = initialData.number;
             setFormData(prev => ({ ...prev, ...initialData }));
+            setGerador(geradorDe(initialData));
             if (initialData.payment_schedule?.length) {
                 setInstallmentSchedule(initialData.payment_schedule);
             } else if (initialData.payment_term_type === 'Parcelado') {
-                setInstallmentSchedule(buildSchedule(
-                    initialData.payment_installments ?? 1,
-                    initialData.original_value ?? 0,
-                    initialData.start_date ?? new Date().toISOString().split('T')[0]
-                ));
+                setInstallmentSchedule(gerarCronogramaContrato({ ...geradorPadrao(initialData), total: initialData.original_value ?? 0 }));
             } else {
                 setInstallmentSchedule([]);
             }
@@ -1480,25 +1509,90 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     </div>
                                 </div>
 
-                                {formData.payment_term_type === 'Parcelado' && !formData.is_recurring && (
+                                {formData.payment_term_type === 'Parcelado' && !formData.is_recurring && (() => {
+                                    const total = formData.original_value ?? 0;
+                                    const soma = somaDoCronograma(installmentSchedule);
+                                    const divergente = Math.abs(soma - total) > 0.01;
+                                    const parcelasDoPlano = installmentSchedule.filter(l => l.installment_type !== TIPO_ENTRADA);
+                                    const valorParcela = parcelasDoPlano[0]?.value ?? 0;
+                                    const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                                    const rotuloTipo = (tipo?: string | null) =>
+                                        tipo === TIPO_ENTRADA ? 'Entrada' : (labelForInstallmentType(DEFAULT_PAYMENT_TYPES, tipo ?? undefined) || '—');
+                                    const campo = 'w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200';
+                                    return (
                                     <div className="space-y-4 animate-in fade-in slide-in-from-left-2 duration-300 col-span-2">
-                                        <div className="space-y-1.5">
-                                            <label className="text-xs font-semibold text-slate-500 ml-1">Nº de Parcelas</label>
-                                            <div className="relative group">
+                                        {/* O que o usuário pensa: entrada + N parcelas de X em X meses. Os
+                                            campos regeram o cronograma abaixo; as linhas continuam editáveis
+                                            uma a uma (utils/contractInstallments.ts). Malha do §30: campo
+                                            curto em grade, nunca em coluna única. */}
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4">
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-semibold text-slate-500 ml-1">Entrada (Opcional)</label>
+                                                <div className="relative group">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">R$</span>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                        placeholder="0,00"
+                                                        value={gerador.entrada || ''}
+                                                        onChange={(e) => atualizarGerador({ entrada: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                                                        className={`${campo} pl-9`}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-semibold text-slate-500 ml-1">Vencimento da Entrada</label>
                                                 <input
-                                                    type="number"
-                                                    min="1"
-                                                    value={formData.payment_installments}
-                                                    onChange={(e) => {
-                                                        const count = parseInt(e.target.value) || 1;
-                                                        setFormData(prev => ({ ...prev, payment_installments: count }));
-                                                        setInstallmentSchedule(buildSchedule(count, formData.original_value ?? 0, formData.start_date ?? new Date().toISOString().split('T')[0]));
-                                                    }}
-                                                    className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200"
+                                                    type="date"
+                                                    value={gerador.vencimentoEntrada}
+                                                    disabled={!(gerador.entrada > 0)}
+                                                    onChange={(e) => atualizarGerador({ vencimentoEntrada: e.target.value })}
+                                                    className={`${campo} disabled:text-gray-400 disabled:cursor-not-allowed`}
                                                 />
-                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">X</span>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-semibold text-slate-500 ml-1">Nº de Parcelas</label>
+                                                <div className="relative group">
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        step="1"
+                                                        value={gerador.parcelas}
+                                                        onChange={(e) => atualizarGerador({ parcelas: Math.max(1, parseInt(e.target.value) || 1) })}
+                                                        className={campo}
+                                                    />
+                                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">X</span>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-semibold text-slate-500 ml-1">Periodicidade</label>
+                                                <select
+                                                    value={gerador.periodicidade}
+                                                    onChange={(e) => atualizarGerador({ periodicidade: e.target.value as GeradorParcelas['periodicidade'] })}
+                                                    className={`${campo} appearance-none cursor-pointer`}
+                                                >
+                                                    {PERIODICIDADES_CONTRATO.map(p => (
+                                                        <option key={p.value} value={p.value}>{p.value}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-semibold text-slate-500 ml-1">1º Vencimento das Parcelas</label>
+                                                <input
+                                                    type="date"
+                                                    value={gerador.primeiroVencimento}
+                                                    onChange={(e) => atualizarGerador({ primeiroVencimento: e.target.value })}
+                                                    className={campo}
+                                                />
                                             </div>
                                         </div>
+                                        <p className="text-xs text-gray-500 ml-1">
+                                            {gerador.entrada > 0 ? `Entrada de R$ ${fmt(Math.min(gerador.entrada, total))} + ` : ''}
+                                            {gerador.parcelas}× {gerador.periodicidade.toLowerCase()} de R$ {fmt(valorParcela)}
+                                            {total <= 0 ? ' — informe o Valor Original para calcular as parcelas.' : ''}
+                                            {gerador.entrada >= total && total > 0 ? ' — a entrada cobre o valor todo; as parcelas ficaram zeradas.' : ''}
+                                        </p>
 
                                         {installmentSchedule.length > 0 && (
                                             <div className="space-y-1.5">
@@ -1506,22 +1600,24 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                     <label className="text-xs font-semibold text-slate-500 ml-1">Cronograma de Parcelas</label>
                                                     <button
                                                         type="button"
-                                                        onClick={() => setInstallmentSchedule(buildSchedule(formData.payment_installments ?? 1, formData.original_value ?? 0, formData.start_date ?? new Date().toISOString().split('T')[0]))}
+                                                        onClick={() => regerarCronograma(gerador)}
                                                         className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                                                     >
                                                         Redistribuir igualmente
                                                     </button>
                                                 </div>
                                                 <div className="rounded-[10px] border border-gray-100 overflow-hidden">
-                                                    <div className="grid grid-cols-[40px_1fr_1fr] bg-gray-50 border-b border-gray-100 px-4 py-2 text-xs font-semibold text-gray-500">
+                                                    <div className="grid grid-cols-[40px_1fr_1fr_1fr] bg-gray-50 border-b border-gray-100 px-4 py-2 text-xs font-semibold text-gray-500">
                                                         <span>#</span>
+                                                        <span>Tipo</span>
                                                         <span>Vencimento</span>
                                                         <span className="text-right">Valor (R$)</span>
                                                     </div>
                                                     <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
                                                         {installmentSchedule.map((inst, i) => (
-                                                            <div key={i} className="grid grid-cols-[40px_1fr_1fr] items-center px-4 py-2 gap-2 hover:bg-gray-50 transition-colors">
+                                                            <div key={i} className="grid grid-cols-[40px_1fr_1fr_1fr] items-center px-4 py-2 gap-2 hover:bg-gray-50 transition-colors">
                                                                 <span className="text-xs font-semibold text-gray-500">{i + 1}</span>
+                                                                <span className="block truncate text-sm font-normal text-gray-700" title={rotuloTipo(inst.installment_type)}>{rotuloTipo(inst.installment_type)}</span>
                                                                 <input
                                                                     type="date"
                                                                     value={inst.date}
@@ -1547,23 +1643,24 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                             </div>
                                                         ))}
                                                     </div>
-                                                    <div className="grid grid-cols-[40px_1fr_1fr] bg-gray-50 border-t border-gray-100 px-4 py-2">
-                                                        <span className="col-span-2 text-xs font-semibold text-gray-500">Total</span>
-                                                        <span className={`text-right text-[13px] font-semibold ${Math.abs(installmentSchedule.reduce((s, i) => s + i.value, 0) - (formData.original_value ?? 0)) > 0.01 ? 'text-red-600' : 'text-green-600'}`}>
-                                                            R$ {installmentSchedule.reduce((s, i) => s + i.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                    <div className="grid grid-cols-[40px_1fr_1fr_1fr] bg-gray-50 border-t border-gray-100 px-4 py-2">
+                                                        <span className="col-span-3 text-xs font-semibold text-gray-500">Total</span>
+                                                        <span className={`text-right text-[13px] font-semibold ${divergente ? 'text-red-600' : 'text-green-600'}`}>
+                                                            R$ {fmt(soma)}
                                                         </span>
                                                     </div>
                                                 </div>
-                                                {Math.abs(installmentSchedule.reduce((s, i) => s + i.value, 0) - (formData.original_value ?? 0)) > 0.01 && (
+                                                {divergente && (
                                                     <p className="text-xs text-red-500 ml-1">
-                                                        Soma das parcelas difere do valor do contrato (R$ {(formData.original_value ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
+                                                        Soma das parcelas difere do valor do contrato (R$ {fmt(total)})
                                                     </p>
                                                 )}
                                             </div>
                                         )}
                                     </div>
-                                )}
-                                
+                                    );
+                                })()}
+
                                 {formData.is_recurring && (
                                     <>
                                         <div className="space-y-1.5 animate-in fade-in slide-in-from-left-2 duration-300">
@@ -1571,11 +1668,13 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             <select
                                                 required
                                                 value={formData.billing_cycle || 'Mensal'}
-                                                onChange={(e) => setFormData({ ...formData, billing_cycle: e.target.value as 'Mensal' | 'Bimestral' | 'Semestral' | 'Anual' })}
+                                                onChange={(e) => setFormData({ ...formData, billing_cycle: e.target.value as Contract['billing_cycle'] })}
                                                 className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                             >
                                                 <option value="Mensal">Mensal</option>
                                                 <option value="Bimestral">Bimestral</option>
+                                                {/* Trimestral entrou em 2026-09-21 (migration 20270921000001 refez o CHECK de billing_cycle). */}
+                                                <option value="Trimestral">Trimestral</option>
                                                 <option value="Semestral">Semestral</option>
                                                 <option value="Anual">Anual</option>
                                             </select>

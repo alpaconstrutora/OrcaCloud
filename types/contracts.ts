@@ -54,7 +54,7 @@ export interface Contract {
     start_date: string;
     end_date?: string;
     is_recurring?: boolean;
-    billing_cycle?: 'Mensal' | 'Bimestral' | 'Semestral' | 'Anual';
+    billing_cycle?: 'Mensal' | 'Bimestral' | 'Trimestral' | 'Semestral' | 'Anual';
     due_day?: number;
     status: ContractStatus;
     original_value: number;

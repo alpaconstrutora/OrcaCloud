@@ -2,12 +2,12 @@ import { PaymentType } from '../types';
 
 /**
  * Código do Tipo de Pagamento gravado em `commercial_deals.custom_installments`
- * (e em `down_payment_installment_type`). Os sete abaixo são os padrão do sistema;
+ * (e em `down_payment_installment_type`). Os oito abaixo são os padrão do sistema;
  * tipos criados pela organização geram códigos `CUSTOM_*` (sem periodicidade).
  * `(string & {})` mantém o autocomplete dos padrão e ainda aceita códigos custom.
  */
 export type InstallmentTypeCode =
-    | 'SINAL' | 'MENSAL' | 'TRIMESTRAL' | 'SEMESTRAL' | 'ANUAL' | 'AVULSA' | 'CHAVES'
+    | 'SINAL' | 'MENSAL' | 'BIMESTRAL' | 'TRIMESTRAL' | 'SEMESTRAL' | 'ANUAL' | 'AVULSA' | 'CHAVES'
     | (string & {});
 
 export interface PaymentTypeDefault {
@@ -28,6 +28,10 @@ export interface PaymentTypeDefault {
 export const DEFAULT_PAYMENT_TYPES: PaymentTypeDefault[] = [
     { code: 'SINAL',      name: 'Sinal',                 interval_months: null, generates_series: false },
     { code: 'MENSAL',     name: 'Parcelas mensais',      interval_months: 1,    generates_series: true  },
+    // Entrou em 2026-09-21 com a periodicidade do contrato parcelado
+    // (utils/contractInstallments.ts): até então "Bimestral" existia só como
+    // ciclo de contrato recorrente e caía em MENSAL na classificação da parcela.
+    { code: 'BIMESTRAL',  name: 'Parcelas bimestrais',   interval_months: 2,    generates_series: true  },
     { code: 'TRIMESTRAL', name: 'Parcelas trimestrais',  interval_months: 3,    generates_series: true  },
     { code: 'SEMESTRAL',  name: 'Parcelas semestrais',   interval_months: 6,    generates_series: true  },
     { code: 'ANUAL',      name: 'Parcelas anuais',       interval_months: 12,   generates_series: true  },

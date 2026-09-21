@@ -437,6 +437,8 @@ import { blueprintViewTemplateService } from '../../services/blueprintViewTempla
 import { proximaRevisao, revisoesDoModelo, resumirAnotacoes } from '../../utils/blueprintAnotacoes';
 import PainelGuardaCorpos from './PainelGuardaCorpos';
 import PainelRodapes from './PainelRodapes';
+import PainelDepartamentos from './PainelDepartamentos';
+import { quadroDeDepartamentos, sugestoesDeDepartamento } from '../../utils/blueprintDepartamentos';
 import PainelRodapeSelecionado from './PainelRodapeSelecionado';
 import { HIPOTESES_DE_RODAPE_PADRAO, resumirRodapes, sugerirRodapes, type HipotesesDeRodape } from '../../utils/blueprintRodape';
 import { HIPOTESES_DE_GUARDA_CORPO_PADRAO, resumirGuardaCorpos, sugerirGuardaCorpos, type HipotesesDeGuardaCorpo } from '../../utils/blueprintGuardaCorpo';
@@ -848,6 +850,8 @@ const ROTULO_DA_TAREFA = {
   // GUARDA-CORPOS (19/09/2026, E7.3): borda livre de laje e escada → sugestão; conferência NBR 14718/9050.
   guardaCorpos: 'Guarda-corpos e corrimãos',
   rodapes: 'Rodapés por ambiente',
+  // DEPARTAMENTO (21/09/2026, P2.22): setor por ambiente na etiqueta; quadro por setor e a planta colorida.
+  departamentos: 'Departamentos (setores) por ambiente',
   // IA conversacional (19/09/2026, E6.4): pedido → mudanças no programa/hipóteses → re-geração → delta.
   ia: 'Conversar com a planta',
   'gerar-paredes': 'Gerar paredes do PDF',
@@ -1237,6 +1241,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     if (vistaDePlanta !== 'forro' || !nivelDaVistaDePlanta) return null;
     const forros = forrosDoNivel(editor.model, nivelDaVistaDePlanta);
     return { forros, comForro: new Set(forros.filter((f) => f.material !== null).map((f) => f.spaceId)), resumo: resumoDaPlantaDeForro(editor.model, nivelDaVistaDePlanta) };
+  }, [vistaDePlanta, nivelDaVistaDePlanta, editor.model]);
+  /** PLANTA DE DEPARTAMENTOS (P2.22): o quadro por setor do pavimento em vista — a faixa e o rótulo saem dele. */
+  const plantaDeDepartamentos = useMemo(() => {
+    if (vistaDePlanta !== 'departamentos' || !nivelDaVistaDePlanta) return null;
+    return { quadro: quadroDeDepartamentos(editor.model, nivelDaVistaDePlanta.id) };
   }, [vistaDePlanta, nivelDaVistaDePlanta, editor.model]);
   const ajusteDaVista = vistaDePlanta ? AJUSTE_DA_VISTA[vistaDePlanta] : null;
   /**
@@ -2398,6 +2407,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           // O TIPO mora na etiqueta (o ambiente é derivado) — ver `TIPOS_DE_AMBIENTE`.
           etiquetaId: etiquetaDoAmbiente(s, editor.model.labels)?.id ?? null,
           tipoDeAmbiente: etiquetaDoAmbiente(s, editor.model.labels)?.tipoDeAmbiente ?? null,
+          // DEPARTAMENTO (P2.22): também na etiqueta.
+          departamento: etiquetaDoAmbiente(s, editor.model.labels)?.departamento ?? null,
           // A iluminação (9.5.2.1) vale para todo cômodo, com ou sem tipo.
           luz: conferirIluminacao(
             s,
@@ -2537,6 +2548,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     const nivel = levelId ? rotuloDeNivelDoPavimento(editor.model.levels, levelId) : null;
     // PLANTA DE FORRO (P2.14): o rótulo diz o forro, não a área.
     if (plantaDeForro) return plantaDeForro.forros.map((f) => ({ spaceId: f.spaceId, linhas: f.linhas }));
+    // PLANTA DE DEPARTAMENTOS (P2.22): nome, setor e área.
+    if (plantaDeDepartamentos) return ambientes.map((a) => ({ spaceId: a.id, linhas: [a.rotulo, a.departamento ?? 'sem departamento', `${a.areaM2.toFixed(2).replace('.', ',')} m²`] }));
     return ambientes.map((a) => ({
       spaceId: a.id,
       linhas: [
@@ -2548,7 +2561,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         ...(nivel ? [nivel] : []),
       ],
     }));
-  }, [ambientes, editor.model.levels, editor.model.unidades, levelId, plantaDeForro]);
+  }, [ambientes, editor.model.levels, editor.model.unidades, levelId, plantaDeForro, plantaDeDepartamentos]);
   /** "PT1", "J2" ao lado de cada vão — a mesma numeração do navegador. */
   const etiquetasDeAbertura = useMemo(() => {
     const paredes = editor.model.walls.filter((w) => !levelId || w.levelId === levelId);
@@ -2607,7 +2620,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   );
   quantRef.current = quant;
   /** COLORIR POR (E8.2): cor por ambiente e legenda do recorte atual. */
-  const coresDoDesenho = useMemo(() => coresDaVista(editor.model, modoDeCor, levelId), [editor.model, modoDeCor, levelId]);
+  // PLANTA DE DEPARTAMENTOS (P2.22): a vista força o modo DEPARTAMENTO por cima do escolhido, sem gravá-lo.
+  const coresDoDesenho = useMemo(() => coresDaVista(editor.model, vistaDePlanta === 'departamentos' ? 'DEPARTAMENTO' : modoDeCor, levelId), [editor.model, modoDeCor, levelId, vistaDePlanta]);
   /** PLANTA HUMANIZADA (E8.4): piso por ambiente e vegetação do pavimento — só quando o estilo pede (é derivação sobre todos os ambientes). */
   const humanizada = estiloPlanta === 'HUMANIZADA';
   const pisosDoDesenho = useMemo(() => (humanizada ? pisosHumanizados(editor.model, levelId) : undefined), [humanizada, editor.model, levelId]);
@@ -3233,6 +3247,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const rodapesDoNivelAtivo = useMemo(() => (editor.model.rodapes ?? []).filter((r) => !levelId || r.levelId === levelId), [editor.model.rodapes, levelId]);
   const sugestaoDeRodapes = useMemo(() => (levelId ? sugerirRodapes(editor.model, levelId, hipotesesDeRodape) : { sugestoes: [], pulados: [] }), [editor.model, levelId, hipotesesDeRodape]);
   const resumoDeRodapes = useMemo(() => resumirRodapes(editor.model, levelId), [editor.model, levelId]);
+  /** DEPARTAMENTOS (P2.22): quadro e sugestões do pavimento ativo. */
+  const quadroDeDepartamentosDoNivel = useMemo(() => quadroDeDepartamentos(editor.model, levelId), [editor.model, levelId]);
+  const sugestoesDeDepartamentoDoNivel = useMemo(() => sugestoesDeDepartamento(editor.model, levelId), [editor.model, levelId]);
   const rodapeSel = (editor.model.rodapes ?? []).find((r) => r.id === editor.selectedId) ?? null;
   const componentesDoNivelAtivo = useMemo(() => (editor.model.componentes ?? []).filter((c) => !levelId || c.levelId === levelId), [editor.model.componentes, levelId]);
   const vagasDoNivelAtivo = useMemo(() => (editor.model.vagas ?? []).filter((v) => !levelId || v.levelId === levelId), [editor.model.vagas, levelId]);
@@ -9119,6 +9136,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   ajuda="Unidades autônomas: composição por ambiente, área privativa NBR 12721, área comum e fração ideal"
                 />
               )}
+              {relatorioVisivel('quantitativos') && !emVista && (
+                <BotaoDoRibbon
+                  icone={Palette}
+                  rotulo="Departamentos"
+                  contagem={ambientes.filter((a) => !a.departamento).length || undefined}
+                  ativo={tarefaAberta === 'departamentos'}
+                  onClick={() => alternarTarefa('departamentos')}
+                  ajuda="Departamento (setor) de cada ambiente — Social, Íntimo, Serviço, Circulação, Técnico — gravado na etiqueta; quadro de áreas por setor, sugestão pelo nome/tipo e a planta de departamentos colorida com legenda. O número é quantos ambientes ainda não têm setor."
+                />
+              )}
               {relatorioVisivel('quantitativos') && (
                 <BotaoDoRibbon
                   icone={Scale}
@@ -10261,6 +10288,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           <span className="flex-1">
             <strong>{ajusteDaVista.rotulo}</strong>
             {nivelDaVistaDePlanta ? ` · ${nivelDaVistaDePlanta.name}` : ''} — {ajusteDaVista.descricao}
+            {plantaDeDepartamentos && (
+              <span className="ml-1 text-slate-500" data-testid="resumo-planta-de-departamentos">
+                · {plantaDeDepartamentos.quadro.map((l) => `${l.departamento ?? 'sem departamento'} ${l.areaM2.toFixed(2).replace('.', ',')} m² (${l.pct.toFixed(1).replace('.', ',')} %)`).join(' · ') || 'nenhum ambiente fechado'}
+              </span>
+            )}
             {plantaDeForro && (
               <span className="ml-1 text-slate-500" data-testid="resumo-planta-de-forro">
                 · {plantaDeForro.resumo.comForro} de {plantaDeForro.resumo.ambientes} ambiente(s) com forro declarado · {plantaDeForro.resumo.luminarias} luminária(s) de teto · {plantaDeForro.resumo.difusores} difusor(es)/grelha(s)
@@ -10532,14 +10564,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               mostrarCamadasParedes={ajusteDaVista ? false : mostrarCamadas}
               mostrarCotas={ajusteDaVista ? ajusteDaVista.mostrarCotas : mostrarCotas}
               mostrarCotaInterna={ajusteDaVista ? false : mostrarCotaInterna}
-              mostrarRotulosAmbiente={ajusteDaVista ? false : mostrarRotulos}
+              mostrarRotulosAmbiente={ajusteDaVista ? vistaDePlanta === 'departamentos' : mostrarRotulos}
               rotulosDeAmbiente={rotulosDeAmbiente}
               ambientesComForro={plantaDeForro?.comForro}
               etiquetasDeAbertura={etiquetasDeAbertura}
               paredesGeminadas={quadroDeUnidadesDoModelo.paredesGeminadas}
               mobiliario={mobiliarioParaOCanvas}
               mostrarGrade={ajusteDaVista ? false : mostrarGrade}
-              mostrarPreenchimentoAmbientes={ajusteDaVista ? false : mostrarPreenchimento}
+              mostrarPreenchimentoAmbientes={ajusteDaVista ? vistaDePlanta === 'departamentos' : mostrarPreenchimento}
               mostrarPreenchimentoTerreno={mostrarPreenchimentoTerreno}
               curvasDeNivel={mostrarCurvasDeNivel ? topografia.selecionada?.curvas : undefined}
               // Os pontos aparecem enquanto se digita, só na fonte que os usa:
@@ -10605,7 +10637,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               // no menu: o estado é persistido, e ligar Cores e depois desligar
               // Preenchimento deixaria a combinação gravada no localStorage.
               coresPorAmbiente={mostrarPreenchimento && modoDeCor === 'AMBIENTE'}
-              coresDosAmbientes={mostrarPreenchimento && modoDeCor !== 'NENHUM' ? coresDoDesenho.porAmbiente : undefined}
+              coresDosAmbientes={vistaDePlanta === 'departamentos' || (mostrarPreenchimento && modoDeCor !== 'NENHUM') ? coresDoDesenho.porAmbiente : undefined}
               humanizada={humanizada}
               fases={fasesDoDesenho}
               selecoesRemotas={selecoesRemotas}
@@ -11387,6 +11419,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'acabamentos' && <Layers className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'guardaCorpos' && <Fence className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'rodapes' && <Minus className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'departamentos' && <Palette className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'fundacoes' && <SquareStack className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'pontosHidraulicos' && <ShowerHead className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'agua' && <Droplets className="h-5 w-5 text-blue-700" />}
@@ -11402,6 +11435,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           <SheetDescription>
             {tarefaAberta === 'ia' &&
               'Peça em português: "suíte +2 m²", "3 dormitórios", "corredor de 1,20 m". O pedido vira mudança no programa ou nas hipóteses, o gerador re-gera e você lê o delta dos indicadores. Nunca desenha direto.'}
+            {tarefaAberta === 'departamentos' &&
+              'O setor de cada ambiente, gravado na etiqueta. O quadro soma a área útil por setor; a sugestão lê nome e tipo e só grava quando você manda; a planta de departamentos pinta pelo setor com legenda.'}
             {tarefaAberta === 'rodapes' &&
               'Cada ambiente vira trechos de rodapé ao pé das paredes, descontadas as portas — sugeridos (tracejados) até aceitar. O ambiente que declarou rodapé usa a altura e o item dele. Com trechos no desenho, o quantitativo soma os trechos.'}
             {tarefaAberta === 'guardaCorpos' &&
@@ -11485,7 +11520,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' || tarefaAberta === 'mobiliario' || tarefaAberta === 'ia' || tarefaAberta === 'acabamentos' || tarefaAberta === 'guardaCorpos' || tarefaAberta === 'rodapes' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' || tarefaAberta === 'mobiliario' || tarefaAberta === 'ia' || tarefaAberta === 'acabamentos' || tarefaAberta === 'guardaCorpos' || tarefaAberta === 'rodapes' || tarefaAberta === 'departamentos' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
 
@@ -11510,6 +11545,30 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             />
           )}
 
+          {tarefaAberta === 'departamentos' && (
+            <PainelDepartamentos
+              nomeDoPavimento={editor.model.levels.find((l) => l.id === levelId)?.name ?? 'pavimento'}
+              ambientes={ambientes.map((a) => ({ spaceId: a.id, rotulo: a.rotulo, departamento: a.departamento, areaM2: a.areaM2 }))}
+              quadro={quadroDeDepartamentosDoNivel}
+              sugestoes={sugestoesDeDepartamentoDoNivel}
+              onDepartamento={(spaceId, departamento) => {
+                const a = ambientes.find((x) => x.id === spaceId);
+                if (!a) return;
+                // Pela etiqueta se existe; criando-a pelo nome exibido se não — como o tipo e os acabamentos.
+                if (a.etiquetaId) editor.run({ type: 'SetSpaceLabelProps', labelId: a.etiquetaId, departamento });
+                else if (departamento) editor.run({ type: 'NameSpace', spaceId, name: a.rotulo, departamento });
+              }}
+              onLancarSugestoes={(quais) => {
+                const cmds = quais.map((s) => s.comando);
+                if (cmds.length) editor.runBatch(cmds);
+              }}
+              onAbrirPlanta={() => {
+                setTarefa(null);
+                setVista(vista === 'departamentos' ? 'planta' : 'departamentos');
+              }}
+              emPlanta={vista === 'departamentos'}
+            />
+          )}
           {tarefaAberta === 'rodapes' && (
             <PainelRodapes
               nomeDoPavimento={editor.model.levels.find((l) => l.id === levelId)?.name ?? 'pavimento'}

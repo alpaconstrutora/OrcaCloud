@@ -18,6 +18,7 @@ import {
   Home,
   LandPlot,
   Lightbulb,
+  Palette,
   Map,
   PanelBottom,
   PanelLeft,
@@ -40,6 +41,8 @@ export type VistaBlueprint =
   | 'cobertura'
   /** PLANTA DE FORRO (P2.14): o pavimento atual visto de baixo. */
   | 'forro'
+  /** PLANTA DE DEPARTAMENTOS (P2.22): ambientes pintados pelo setor. */
+  | 'departamentos'
   | 'frente'
   | 'fundos'
   | 'lateral-esq'
@@ -96,6 +99,7 @@ export const VISTAS_FIXAS: readonly {
   { id: 'implantacao', rotulo: 'Implantação', icone: LandPlot },
   { id: 'cobertura', rotulo: 'Cobertura', icone: Home },
   { id: 'forro', rotulo: 'Planta de forro', icone: Lightbulb },
+  { id: 'departamentos', rotulo: 'Departamentos', icone: Palette },
   { id: 'frente', rotulo: 'Frente', icone: PanelTop },
   { id: 'fundos', rotulo: 'Fundos', icone: PanelBottom },
   { id: 'lateral-esq', rotulo: 'Lat. esquerda', icone: PanelLeft },

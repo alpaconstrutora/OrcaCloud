@@ -12,9 +12,10 @@ import type { BlueprintModel, ObjectId, TipoDeAmbiente } from './blueprintKernel
 import { corDoAmbiente } from './blueprintCoresAmbiente';
 import { FICHA_DO_USO, USOS_DO_AMBIENTE, usoDoNome, type UsoDoAmbiente } from './blueprintPrograma';
 import { rotuloDaUnidade, unidadePorEtiqueta } from './blueprintUnidades';
+import { corDoDepartamento, departamentosDoModelo } from './blueprintDepartamentos';
 
-export type ModoDeCor = 'NENHUM' | 'AMBIENTE' | 'TIPO_DE_AMBIENTE' | 'UNIDADE' | 'USO' | 'PAVIMENTO';
-export const MODOS_DE_COR: readonly ModoDeCor[] = ['NENHUM', 'AMBIENTE', 'TIPO_DE_AMBIENTE', 'UNIDADE', 'USO', 'PAVIMENTO'];
+export type ModoDeCor = 'NENHUM' | 'AMBIENTE' | 'TIPO_DE_AMBIENTE' | 'UNIDADE' | 'USO' | 'PAVIMENTO' | 'DEPARTAMENTO';
+export const MODOS_DE_COR: readonly ModoDeCor[] = ['NENHUM', 'AMBIENTE', 'TIPO_DE_AMBIENTE', 'UNIDADE', 'USO', 'PAVIMENTO', 'DEPARTAMENTO'];
 export const ROTULO_DO_MODO_DE_COR: Record<ModoDeCor, string> = {
   NENHUM: 'Sem cor (cinza)',
   AMBIENTE: 'Uma cor por ambiente',
@@ -22,6 +23,8 @@ export const ROTULO_DO_MODO_DE_COR: Record<ModoDeCor, string> = {
   UNIDADE: 'Unidade',
   USO: 'Uso do programa',
   PAVIMENTO: 'Pavimento',
+  // DEPARTAMENTO (P2.22): o setor gravado na etiqueta — cor fixa por setor sugerido, paleta para os demais.
+  DEPARTAMENTO: 'Departamento (setor)',
 };
 
 /** Classes da NBR 5410 — cores fixas, sempre as mesmas em qualquer planta. */
@@ -83,6 +86,8 @@ export function coresDaVista(model: BlueprintModel, modo: ModoDeCor, levelId?: O
   const unidadeDe = unidadePorEtiqueta(model);
   const indiceDaUnidade = new Map((model.unidades ?? []).map((u, i) => [u.id, i]));
   const indiceDoNivel = new Map(model.levels.map((l, i) => [l.id, i]));
+  // DEPARTAMENTO (P2.22): a cor depende do conjunto presente no modelo inteiro (a mesma nos dois pavimentos).
+  const departamentos = modo === 'DEPARTAMENTO' ? departamentosDoModelo(model) : [];
 
   for (const s of model.spaces) {
     const noRecorte = !levelId || s.levelId === levelId;
@@ -115,6 +120,12 @@ export function coresDaVista(model: BlueprintModel, modo: ModoDeCor, levelId?: O
         const i = indiceDoNivel.get(s.levelId) ?? 0;
         cor = PALETA_CICLICA[i % PALETA_CICLICA.length];
         rotulo = model.levels[i]?.name ?? 'Pavimento';
+        break;
+      }
+      case 'DEPARTAMENTO': {
+        const d = etiquetaDe(s.labelUid)?.departamento ?? null;
+        cor = d ? corDoDepartamento(d, departamentos) : COR_SEM_TIPO;
+        rotulo = d ?? 'Sem departamento';
         break;
       }
       default:

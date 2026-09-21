@@ -26,7 +26,7 @@
 import { contornoExternoDoNivel, type BlueprintModel, type Level, type Point, type Wall } from './blueprintKernel';
 import { idsOcultosNaPlantaDeForro } from './blueprintPlantaDeForro';
 
-export const VISTAS_DE_PLANTA = ['situacao', 'implantacao', 'cobertura', 'forro'] as const;
+export const VISTAS_DE_PLANTA = ['situacao', 'implantacao', 'cobertura', 'forro', 'departamentos'] as const;
 export type VistaDePlanta = (typeof VISTAS_DE_PLANTA)[number];
 
 export const ehVistaDePlanta = (v: string): v is VistaDePlanta => (VISTAS_DE_PLANTA as readonly string[]).includes(v);
@@ -72,6 +72,15 @@ export const AJUSTE_DA_VISTA: Record<VistaDePlanta, AjusteDaVista> = {
   forro: {
     rotulo: 'Planta de forro',
     descricao: 'O pavimento visto de baixo: forro declarado por ambiente (material, rebaixo, pé-direito útil), luminárias de teto, eletrodutos altos, dutos e difusores — sem mobiliário, tomadas, hidráulica, escadas e vagas.',
+    nivel: 'ATUAL',
+    mostrarCotas: false,
+    mostrarEnvelope: false,
+    soContorno: false,
+  },
+  // PLANTA DE DEPARTAMENTOS (P2.22): o pavimento atual com cada ambiente pintado pelo setor e a legenda; sem instalações nem estrutura.
+  departamentos: {
+    rotulo: 'Departamentos',
+    descricao: 'Setorização do pavimento: cada ambiente pintado pela cor do departamento (social, íntimo, serviço, circulação…), com a legenda e o quadro de áreas por setor — sem instalações nem estrutura.',
     nivel: 'ATUAL',
     mostrarCotas: false,
     mostrarEnvelope: false,
@@ -146,6 +155,11 @@ export function idsOcultosNaVista(model: BlueprintModel, vista: VistaDePlanta, l
   if (!level) return ocultos;
   // PLANTA DE FORRO (P2.14): regra própria — fica o que está no teto.
   if (vista === 'forro') return idsOcultosNaPlantaDeForro(model, level);
+  // PLANTA DE DEPARTAMENTOS (P2.22): ficam paredes, esquadrias, escadas e mobiliário; saem instalações e estrutura.
+  if (vista === 'departamentos') {
+    for (const fam of [model.trechos, model.terminais, model.quadros, model.structures] as const) for (const x of fam ?? []) if (x.levelId === level.id) ocultos.add(x.id);
+    return ocultos;
+  }
   const doNivel = <T extends { id: string; levelId: string }>(xs: readonly T[] | undefined) =>
     (xs ?? []).filter((x) => x.levelId === level.id).forEach((x) => ocultos.add(x.id));
   doNivel(model.trechos);

@@ -758,6 +758,9 @@ export interface AcabamentosDoAmbiente {
 export const MAX_REBAIXO_DE_FORRO_MM = 2000;
 export const MAX_ALTURA_DE_RODAPE_MM = 500;
 
+/** Departamento do ambiente (P2.22): até 40 caracteres, sem espaço nas pontas. */
+export const MAX_CHARS_DO_DEPARTAMENTO = 40;
+
 export function clonarAcabamentos(a: AcabamentosDoAmbiente | undefined): AcabamentosDoAmbiente | undefined {
   if (!a) return undefined;
   const out: AcabamentosDoAmbiente = {};
@@ -768,6 +771,16 @@ export function clonarAcabamentos(a: AcabamentosDoAmbiente | undefined): Acabame
 }
 
 /** `{}` vira ausente: duas escritas para "nada declarado" quebrariam o round-trip. */
+/**
+ * DEPARTAMENTO (P2.22): aparado, espaços internos colapsados, cortado no limite;
+ * vazio vira `null` (= sem departamento).
+ */
+export function departamentoNormalizado(d: string | null | undefined): string | null {
+  if (d == null) return null;
+  const t = d.replace(/\s+/g, ' ').trim().slice(0, MAX_CHARS_DO_DEPARTAMENTO).trim();
+  return t.length > 0 ? t : null;
+}
+
 export function acabamentosOuAusente(a: AcabamentosDoAmbiente | null | undefined): AcabamentosDoAmbiente | undefined {
   if (!a) return undefined;
   const c = clonarAcabamentos(a)!;
@@ -798,6 +811,14 @@ export interface SpaceLabel {
   tipoDeAmbiente?: TipoDeAmbiente | null;
   /** Piso, forro e rodapé (E7.2). Omitido no canônico quando ausente. */
   acabamentos?: AcabamentosDoAmbiente;
+  /**
+   * DEPARTAMENTO (21/09/2026, backlog P2 — P2.22): o setor a que o ambiente
+   * pertence — "Social", "Íntimo", "Serviço", "Circulação", "Técnico"… Texto
+   * livre normalizado (aparado, até `MAX_CHARS_DO_DEPARTAMENTO`), porque cada
+   * programa tem os seus; a lista sugerida mora em `blueprintDepartamentos`.
+   * Ausente/`null` = sem departamento. Omitido no canônico quando ausente.
+   */
+  departamento?: string | null;
 }
 
 /**
@@ -3954,6 +3975,12 @@ export function assertModelInvariants(model: BlueprintModel): void {
   for (const l of model.labels ?? []) {
     if (l.tipoDeAmbiente != null && !(TIPOS_DE_AMBIENTE as readonly string[]).includes(l.tipoDeAmbiente)) {
       throw new KernelError('BAD_SPACE_KIND', `Tipo de ambiente inválido em ${l.id}: ${l.tipoDeAmbiente}`);
+    }
+    // DEPARTAMENTO (P2.22): quando declarado, texto aparado, não vazio, até o limite.
+    if (l.departamento != null) {
+      if (typeof l.departamento !== 'string' || l.departamento.trim() !== l.departamento || l.departamento.length === 0 || l.departamento.length > MAX_CHARS_DO_DEPARTAMENTO) {
+        throw new KernelError('BAD_DEPARTMENT', `Departamento inválido em ${l.id}: ${JSON.stringify(l.departamento)}`);
+      }
     }
     // ACABAMENTOS (E7.2): lista vazia é erro (use ausente — a razão de
     // `EMPTY_LAYERS`); camada com espessura inteira positiva e função da lista;

@@ -3081,8 +3081,8 @@ describe('BlueprintEditor · ribbon', () => {
     const editar = within(linha).getByRole('group', { name: 'Editar' });
     expect(within(editar).getByRole('button', { name: /desfazer/i })).toBeInTheDocument();
     const vistas = within(linha).getByRole('group', { name: 'Vistas' });
-    // 10 desde a P2.14 (Planta de forro).
-    expect(within(vistas).getAllByRole('button', { name: /^vista: /i })).toHaveLength(10);
+    // 10 desde a P2.14 (Planta de forro); 11 desde a P2.22 (Departamentos).
+    expect(within(vistas).getAllByRole('button', { name: /^vista: /i })).toHaveLength(11);
     // A linha não é o slot à direita das abas: é filha direta da toolbar, abaixo do tablist.
     const toolbar = screen.getByRole('toolbar');
     expect(linha.closest('[role="toolbar"]')).toBe(toolbar);
@@ -5363,5 +5363,54 @@ describe('BlueprintEditor · rodapé como elemento (P2.21)', () => {
     await user.keyboard('{Escape}');
     await user.click(botaoComponentes());
     expect(screen.getByRole('menuitemradio', { name: /^Rodapé \(trecho\)$/ })).toBeInTheDocument();
+  }, 60000);
+});
+
+/**
+ * DEPARTAMENTO (21/09/2026, backlog P2 — P2.22): Analisar › Departamentos abre
+ * a gaveta com o quadro por setor; Sugerir grava pelo nome; a planta de
+ * departamentos pinta pelo setor e a faixa traz o quadro.
+ */
+describe('BlueprintEditor · departamentos (P2.22)', () => {
+  it('gaveta sugere e grava, quadro por setor, planta de departamentos com faixa', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall' as const, levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 });
+    let m = k.applyBatch(nivel.model, [w(0, 0, 7000, 0), w(7000, 0, 7000, 3000), w(7000, 3000, 0, 3000), w(0, 3000, 0, 0), w(4000, 0, 4000, 3000)]).model;
+    const esq = m.spaces.find((s) => s.ring.some((p) => p.x === 0))!;
+    const dir = m.spaces.find((s) => s.id !== esq.id)!;
+    m = k.applyCommand(m, { type: 'NameSpace', spaceId: esq.id, name: 'Sala' }).model;
+    m = k.applyCommand(m, { type: 'NameSpace', spaceId: dir.id, name: 'Dormitório 1' }).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^analisar$/i);
+    await user.click(botao(/^departamentos/i));
+    const gaveta = await screen.findByTestId('tarefa-departamentos');
+    expect(gaveta).toHaveTextContent(/2 ambiente\(s\), 2 sem departamento/);
+    expect(within(gaveta).getByTestId('quadro-de-departamentos')).toHaveTextContent(/Sem departamento\s*2/);
+    const { saveDraft } = await import('../../services/blueprintService');
+    vi.mocked(saveDraft).mockClear();
+    await user.click(within(gaveta).getByTestId('sugerir-departamentos'));
+    await waitFor(() => expect(screen.getByTestId('tarefa-departamentos')).toHaveTextContent(/2 ambiente\(s\), 0 sem departamento/));
+    const quadro = within(screen.getByTestId('tarefa-departamentos')).getByTestId('quadro-de-departamentos');
+    expect(quadro).toHaveTextContent(/Íntimo\s*1\s*8,12 m²/);
+    expect(quadro).toHaveTextContent(/Social\s*1\s*10,97 m²/);
+    // Editar em linha: a Sala vira "Ateliê" (texto livre).
+    const campo = within(screen.getByTestId('tarefa-departamentos')).getByLabelText('Departamento do ambiente Sala');
+    await user.clear(campo);
+    await user.type(campo, 'Ateliê{Enter}');
+    await waitFor(() => expect(within(screen.getByTestId('tarefa-departamentos')).getByTestId('quadro-de-departamentos')).toHaveTextContent(/Ateliê/));
+    await waitFor(() => expect(saveDraft).toHaveBeenCalled(), { timeout: 5000 });
+    const salvo = (vi.mocked(saveDraft).mock.calls.at(-1) as unknown as [string, import('../../utils/blueprintKernel').BlueprintModel])[1];
+    expect(salvo.labels.map((l) => [l.name, l.departamento])).toEqual(expect.arrayContaining([['Sala', 'Ateliê'], ['Dormitório 1', 'Íntimo']]));
+    // A planta de departamentos: read-only, faixa com o quadro.
+    await user.click(within(screen.getByTestId('tarefa-departamentos')).getByTestId('abrir-planta-de-departamentos'));
+    const faixa = await screen.findByTestId('faixa-vista-de-planta');
+    expect(faixa).toHaveTextContent(/Departamentos · Térreo — Setorização do pavimento/);
+    expect(screen.getByTestId('resumo-planta-de-departamentos')).toHaveTextContent(/Ateliê 10,97 m² \(57,5 %\) · Íntimo 8,12 m² \(42,5 %\)/);
+    await user.click(within(faixa).getByRole('button', { name: /voltar à planta/i }));
+    expect(screen.queryByTestId('faixa-vista-de-planta')).toBeNull();
   }, 60000);
 });

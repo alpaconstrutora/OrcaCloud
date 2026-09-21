@@ -1349,6 +1349,26 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 - App real (escritas bloqueadas: 17, 0 erros de página): gaveta Rodapés no Térreo → Lançar todos = 33 trechos / 78,10 m (33 sugeridos) → Aceitar = 0 sugeridos; menu "Rodapé (trecho)" → 2 cliques → seleção abre `painel-rodape` (5,00 m · 70 mm · 0,35 m² · F-9455).
 - Testes: `blueprintRodape.test.ts` (gerador 5 trechos = 13,1 m com porta descontada, Garagem pulada; quantitativo TRECHOS 15,1 m; comandos; orçamento por trecho; canônico ida e volta), editor P2.21 (gaveta, lançar, aceitar, saveDraft com 5 trechos confirmados, item de menu).
 
+### P2.22 — Departamento (21/09/2026) · backlog P2 · kernel 0.55.0 → 0.56.0
+
+**O que entrou**
+- `SpaceLabel.departamento?: string | null` no kernel (setor do ambiente: Social, Íntimo, Serviço, Circulação, Técnico… texto livre normalizado — aparado, espaços colapsados, até 40 caracteres, `MAX_CHARS_DO_DEPARTAMENTO`), aceito por `NameSpace` e `SetSpaceLabelProps` (vazio/`null` apaga), invariante `BAD_DEPARTMENT`, canônico só quando declarado, cópia de pavimento-tipo leva o campo.
+- `utils/blueprintDepartamentos.ts`: `DEPARTAMENTOS_SUGERIDOS` (7, com cor fixa pastel), `corDoDepartamento` (paleta rotativa estável por ordem alfabética para os demais), `sugerirDepartamento` (nome primeiro, depois tipo NBR 5410), `sugestoesDeDepartamento` (idempotente; comando por etiqueta ou criando-a), `quadroDeDepartamentos` (ambientes, m² úteis pela face interna, %; "sem departamento" por último).
+- "Colorir por" ganhou o modo **DEPARTAMENTO** (`blueprintPaletas`, legenda com contagem; templates de vista aceitam).
+- Vista fixa **Departamentos** (`VISTAS_DE_PLANTA`, nível ATUAL): pinta pelo setor, rótulo nome/setor/área, faixa com o quadro; esconde instalações e estrutura, mantém esquadrias/escadas/mobiliário. Seletor de vistas passa a 11 fixas.
+- Analisar › Relatórios › **Departamentos** (gaveta `PainelDepartamentos`): quadro por setor, edição em linha por ambiente (datalist com os sugeridos), "Sugerir para N ambiente(s)", abrir/voltar da planta de departamentos. Contagem no botão = ambientes sem setor.
+
+**Decisões**
+- Texto livre, não enum: cada programa tem os seus setores; os 7 sugeridos ganham cor fixa para a prancha ficar reconhecível entre estudos.
+- Vive na etiqueta como o tipo e os acabamentos (o ambiente é derivado das paredes).
+- A vista força o modo de cor DEPARTAMENTO por cima do escolhido sem gravá-lo (voltar à planta devolve o modo do usuário).
+- Bump de kernel porque o payload canônico ganhou chave; goldens recapturadas (304 testes das famílias kernel/canônico/goldens/IFC passaram com a string antiga).
+
+**Prova**
+- `npx tsc --noEmit` ok · check-ui ok nos 3 tsx · suíte cheia 422 arquivos / 4932 testes · `npm run build` ok · `planta-api` reimplantada (bundle 0.56.0; `plantaApi.test.ts` 3/3).
+- App real (escritas bloqueadas: 15, 0 erros de página): Analisar › Departamentos → "4 ambiente(s), 4 sem departamento" → Sugerir → quadro "Serviço 1 · 13,17 m² · 14,2 %"; Planta de departamentos → Ambiente 4 pintado de verde com rótulo "Serviço 13,17 m²", faixa com o quadro.
+- Testes: `blueprintDepartamentos.test.ts` (normalização, canônico ida e volta só quando presente, corte no limite, sugestão/idempotência, quadro 8,12 + 10,97 m² com %, paleta fixa e rotativa, "Colorir por" com legenda), editor P2.22 (gaveta, sugerir, edição em linha "Ateliê", saveDraft, vista com faixa), contagem de vistas 10 → 11.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

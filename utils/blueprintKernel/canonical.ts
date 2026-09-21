@@ -742,6 +742,8 @@ function projetar(model: BlueprintModel): {
       // `undefined` quando ausente: a chave some, e o hash dos desenhos que
       // nunca souberam de tipo de ambiente não muda.
       tipoDeAmbiente: l.tipoDeAmbiente ?? undefined,
+      // DEPARTAMENTO (0.56.0, P2.22): só quando declarado.
+      departamento: l.departamento ?? undefined,
       // ACABAMENTOS (0.43.0): só quando declarados, campo a campo na ordem
       // fixa — o `stableStringify` ordena chaves, mas a forma tem de ser a
       // mesma na ida e na volta.
@@ -1385,6 +1387,8 @@ export interface CanonicalPayload {
     name: string;
     /** Tipo do ambiente (NBR 5410). Ausente sob kernel < 0.24.0 e quando não classificado. */
     tipoDeAmbiente?: string;
+    /** Departamento (setor) do ambiente. Ausente sob kernel < 0.56.0 e quando não declarado. */
+    departamento?: string;
     /** Piso, forro e rodapé (E7.2). Ausente sob kernel < 0.43.0 e quando nada foi declarado. */
     acabamentos?: {
       piso?: { espessuraMm: number; itemCode: string; descricao: string; funcao: string }[];
@@ -1936,6 +1940,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       at: { x: l.at.x, y: l.at.y },
       name: l.name,
       tipoDeAmbiente: (l.tipoDeAmbiente as TipoDeAmbiente) ?? null,
+      ...(l.departamento ? { departamento: l.departamento } : {}),
       ...(l.acabamentos
         ? {
             acabamentos: {

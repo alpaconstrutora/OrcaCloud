@@ -46,6 +46,7 @@ import {
   extensaoDoConjunto,
   MAX_NOME_DE_VISTA_DEPENDENTE,
   acabamentosOuAusente,
+  departamentoNormalizado,
   type AcabamentosDoAmbiente,
   cloneModel,
   somaDasCamadas,
@@ -1036,13 +1037,13 @@ export type Command =
    */
   | { type: 'SetOpeningEsquadria'; openingId: ObjectId; esquadria: Esquadria | null }
   /** Nome vazio remove a etiqueta. */
-  | { type: 'NameSpace'; spaceId: ObjectId; name: string; tipoDeAmbiente?: TipoDeAmbiente | null; acabamentos?: AcabamentosDoAmbiente | null }
+  | { type: 'NameSpace'; spaceId: ObjectId; name: string; tipoDeAmbiente?: TipoDeAmbiente | null; acabamentos?: AcabamentosDoAmbiente | null; departamento?: string | null }
   /**
    * Classifica a ETIQUETA de um ambiente. `null` volta a "a classificar".
    * `acabamentos` (E7.2) SUBSTITUI o conjunto inteiro (piso, forro e rodapé);
    * `null` limpa. Ausente não mexe.
    */
-  | { type: 'SetSpaceLabelProps'; labelId: ObjectId; tipoDeAmbiente?: TipoDeAmbiente | null; acabamentos?: AcabamentosDoAmbiente | null }
+  | { type: 'SetSpaceLabelProps'; labelId: ObjectId; tipoDeAmbiente?: TipoDeAmbiente | null; acabamentos?: AcabamentosDoAmbiente | null; departamento?: string | null }
   /**
    * Renomeia e reposiciona um pavimento. Campo omitido fica como está — o painel
    * edita uma propriedade de cada vez.
@@ -3982,6 +3983,7 @@ function aplicarSemHash(
                 // Ausente não mexe no tipo: renomear não é reclassificar.
                 ...(command.tipoDeAmbiente !== undefined ? { tipoDeAmbiente: command.tipoDeAmbiente } : {}),
                 ...(command.acabamentos !== undefined ? { acabamentos: acabamentosOuAusente(command.acabamentos) } : {}),
+                ...(command.departamento !== undefined ? { departamento: departamentoNormalizado(command.departamento) } : {}),
               }
             : l,
         );
@@ -3996,6 +3998,7 @@ function aplicarSemHash(
           name: nome,
           tipoDeAmbiente: command.tipoDeAmbiente ?? null,
           ...(command.acabamentos ? { acabamentos: acabamentosOuAusente(command.acabamentos) } : {}),
+          ...(departamentoNormalizado(command.departamento) ? { departamento: departamentoNormalizado(command.departamento) } : {}),
         });
         diff.created.push(id);
       }
@@ -4006,6 +4009,11 @@ function aplicarSemHash(
       const label = next.labels.find((l) => l.id === command.labelId);
       if (!label) throw new KernelError('LABEL_NOT_FOUND', `Etiqueta inexistente: ${command.labelId}`);
       if (command.tipoDeAmbiente !== undefined) label.tipoDeAmbiente = command.tipoDeAmbiente;
+      if (command.departamento !== undefined) {
+        const d = departamentoNormalizado(command.departamento);
+        if (d) label.departamento = d;
+        else delete label.departamento;
+      }
       if (command.acabamentos !== undefined) {
         const a = acabamentosOuAusente(command.acabamentos);
         if (a) label.acabamentos = a;
@@ -4876,7 +4884,7 @@ export function sincronizarGrupos(next: BlueprintModel, diff: Diff, copiasAntes:
       for (const l of etiquetasDaOrigem) {
         const uid = uidDaCopia(i.uid, l.uid);
         esperadas.add(uid);
-        const campos = { levelId: i.levelId, at: T(l.at), name: l.name, tipoDeAmbiente: l.tipoDeAmbiente ?? null };
+        const campos = { levelId: i.levelId, at: T(l.at), name: l.name, tipoDeAmbiente: l.tipoDeAmbiente ?? null, departamento: l.departamento ?? null };
         const existente = etiquetaPorUid.get(uid);
         if (existente) {
           Object.assign(existente, campos);

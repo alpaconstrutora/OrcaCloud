@@ -32,6 +32,8 @@ import ActionIconButton from './ui/ActionIconButton';
 import { KpiCard } from './ui/KpiCard';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 import TabsBar from './ui/TabsBar';
+import DiaryLaborFromRhSheet from './DiaryLaborFromRhSheet';
+import type { Employee } from '../services/laborService';
 import { ProjectSettings, DiaryEntry, BudgetEntry, WeatherShift, DiaryActivity, LaborEntry, ProjectSchedule } from '../types';
 import { projectService } from '../services/projectService';
 import { useStore } from '../store/useStore';
@@ -174,6 +176,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
 
     const { organizations, activeOrganizationId, fetchOrganizations } = useStore();
     const [activeLaborSearchIdx, setActiveLaborSearchIdx] = useState<number | null>(null);
+    const [rhSheetOpen, setRhSheetOpen] = useState(false);
 
     // Carregar organizações se estiverem vazias
     useEffect(() => {
@@ -572,6 +575,13 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         });
     };
 
+    /** Efetivo vindo de RH › Colaboradores: uma linha por colaborador, cargo em observações. */
+    const addLaborFromRh = (colaboradores: Employee[]) => {
+        const novos: LaborEntry[] = colaboradores.map(c => ({ category: c.name, quantity: 1, observations: c.role || '' }));
+        setFormData(prev => ({ ...prev, labor: [...(prev.labor || []), ...novos] }));
+        notify(`${novos.length} colaborador(es) adicionado(s) ao efetivo.`);
+    };
+
     const removeLabor = (index: number) => {
         setFormData({ ...formData, labor: (formData.labor || []).filter((_, i) => i !== index) });
     };
@@ -922,6 +932,14 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                         <Download className="w-4 h-4" /> Importar do Planejamento
                                                     </button>
                                                 )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setRhSheetOpen(true)}
+                                                    className="flex items-center gap-2 text-xs font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 active:scale-95 transition-all outline-none border border-indigo-100 uppercase tracking-widest"
+                                                    title="Selecionar colaboradores de Recursos Humanos › Colaboradores"
+                                                >
+                                                    <Users className="w-4 h-4" /> Adicionar do RH
+                                                </button>
                                                 <button onClick={addLabor} className="flex items-center gap-2 text-xs font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 active:scale-95 transition-all outline-none border border-indigo-100 uppercase tracking-widest">
                                                     <Plus className="w-4 h-4" /> Adicionar Mão de Obra
                                                 </button>
@@ -1347,6 +1365,13 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                     title: 'Nenhum registro ainda',
                     subtitle: 'Os registros aparecerão aqui conforme você os adiciona.',
                 }}
+            />
+
+            <DiaryLaborFromRhSheet
+                open={rhSheetOpen}
+                onClose={() => setRhSheetOpen(false)}
+                jaNoEfetivo={(formData.labor || []).map(l => l.category)}
+                onAdd={addLaborFromRh}
             />
 
             {/* Notification toast */}

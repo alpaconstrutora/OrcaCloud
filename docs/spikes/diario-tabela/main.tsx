@@ -9,6 +9,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import '../../../index.css';
 import ProjectDiaryManager from '../../../components/ProjectDiaryManager';
+import { ConfirmProvider } from '../../../components/ui/confirm';
 import type { ProjectSettings, DiaryEntry } from '../../../types';
 
 const entradas: DiaryEntry[] = [
@@ -45,7 +46,9 @@ const settings = {
     schedule: { startDate: '2026-08-01', endDate: '2026-12-20' },
 } as unknown as ProjectSettings;
 
+// ConfirmProvider: o Sheet (Adicionar do RH) usa useConfirm(); no app ele vem do App.tsx.
 createRoot(document.getElementById('raiz')!).render(
+    <ConfirmProvider>
     <ProjectDiaryManager
         settings={settings}
         projects={[{ id: 'p1', name: 'Igreja Divino Espírito Santo', settings: { classification: 'OBRA' } }]}
@@ -54,4 +57,5 @@ createRoot(document.getElementById('raiz')!).render(
         onBackToList={() => undefined}
         onGenerateReport={() => undefined}
     />
+    </ConfirmProvider>
 );

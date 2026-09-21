@@ -3078,8 +3078,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 Forma de Pagamento, Entrada. Nº Parcelas mudou para dentro do modal
                                 de Gerar Parcelas (junto com Tipo de Pagamento). O Plano de Pagamento
                                 (abaixo, fora deste container) usa a largura toda: cada parcela +
-                                desconto cabe numa linha só. */}
-                            <div className="max-w-3xl space-y-6">
+                                desconto cabe numa linha só. 4xl (896px), não 3xl: a tabela do
+                                Plano de pagamento tem 7 colunas e em 768px cortava Vencimento
+                                e Ações. */}
+                            <div className="max-w-4xl space-y-6">
                                 <div className="flex items-center gap-2 text-blue-600">
                                     <DollarSign className="w-5 h-5" />
                                     <h3 className="text-sm font-bold text-gray-800">
@@ -3225,27 +3227,74 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             </div>
                                         ) : (
                                             <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
-                                                {linhasDoPlano.map((l, i) => (
-                                                    <div key={l.chave} className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-100">
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="text-sm text-gray-900 truncate">
-                                                                {labelForInstallmentType(paymentTypes, l.bloco.tipo) || l.bloco.tipo}
-                                                            </p>
-                                                            <p className="text-xs text-gray-400 truncate">
-                                                                {l.bloco.quantidade > 1
-                                                                    ? `${l.bloco.quantidade}× ${fmtMoeda(l.bloco.valorParcela)} · a partir de ${fmtDateBR(l.bloco.primeiroVencimento)}`
-                                                                    : `1× ${fmtMoeda(l.bloco.valorParcela)} · ${fmtDateBR(l.bloco.primeiroVencimento)}`}
-                                                            </p>
+                                                {/* Tabela do plano, como o usuário lê uma proposta (pedido de
+                                                    2026-09-21): Parcela / Quantidade / Valor / Tipo / Descrição.
+                                                    "Parcela" numera sequencialmente através dos blocos
+                                                    (Parcela 1 · Parcelas 2–9 · Parcela 10). Tabela dentro de
+                                                    modal: §6.9 (px-3, texto livre px-4), §6.2, §7, §7.2. */}
+                                                {(() => {
+                                                    let proxima = 1;
+                                                    const numeradas = linhasDoPlano.map(l => {
+                                                        const de = proxima;
+                                                        const ate = de + Math.max(1, l.bloco.quantidade) - 1;
+                                                        proxima = ate + 1;
+                                                        return { ...l, rotulo: de === ate ? `Parcela ${de}` : `Parcelas ${de}–${ate}` };
+                                                    });
+                                                    const totalPlano = numeradas.reduce((t, l) => t + subtotalDoBloco(l.bloco), 0);
+                                                    const TH = 'px-3 py-2 border-r border-gray-100 whitespace-nowrap';
+                                                    const TD = 'px-3 py-2.5 border-r border-gray-100 last:border-r-0';
+                                                    return (
+                                                        <div className="overflow-x-auto">
+                                                            <table className="w-full text-left border-collapse">
+                                                                <thead>
+                                                                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                                        <th className={TH}>Parcela</th>
+                                                                        <th className={`${TH} text-right`}>Quantidade</th>
+                                                                        <th className={`${TH} text-right`}>Valor</th>
+                                                                        <th className={TH}>Tipo</th>
+                                                                        <th className="px-4 py-2 border-r border-gray-100">Descrição</th>
+                                                                        <th className={TH}>1º vencimento</th>
+                                                                        <th className="px-3 py-2 text-right">Ações</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="divide-y divide-gray-200">
+                                                                    {numeradas.map((l, i) => {
+                                                                        const tipo = labelForInstallmentType(paymentTypes, l.bloco.tipo) || l.bloco.tipo;
+                                                                        return (
+                                                                            <tr key={l.chave} className="hover:bg-blue-50/50 transition-colors">
+                                                                                <td className={`${TD} text-sm font-normal text-gray-700 whitespace-nowrap`}>{l.rotulo}</td>
+                                                                                <td className={`${TD} text-sm font-normal text-gray-600 text-right`}>{l.bloco.quantidade}</td>
+                                                                                <td className={`${TD} text-sm font-medium text-gray-800 text-right whitespace-nowrap`}>{fmtMoeda(l.bloco.valorParcela)}</td>
+                                                                                <td className={`${TD} text-sm font-normal text-gray-700`}>
+                                                                                    <span className="block truncate" title={tipo}>{tipo}</span>
+                                                                                </td>
+                                                                                <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                                                                                    <span className="block truncate" title={l.bloco.notes || ''}>{l.bloco.notes || '—'}</span>
+                                                                                </td>
+                                                                                <td className={`${TD} text-sm font-normal text-gray-600 whitespace-nowrap`}>
+                                                                                    {fmtDateBR(l.bloco.primeiroVencimento)}
+                                                                                </td>
+                                                                                <td className="px-3 py-2.5 text-right">
+                                                                                    <div className="flex items-center justify-end gap-1.5">
+                                                                                        <ActionIconButton kind="edit" title="Editar pagamento" onClick={() => abrirEdicaoBloco(i)} />
+                                                                                        <ActionIconButton kind="delete" title="Remover do plano" onClick={() => removerBloco(i)} />
+                                                                                    </div>
+                                                                                </td>
+                                                                            </tr>
+                                                                        );
+                                                                    })}
+                                                                </tbody>
+                                                                <tfoot>
+                                                                    <tr className="bg-gray-50 border-t border-gray-200">
+                                                                        <td className="px-3 py-2.5 text-sm font-normal text-gray-500" colSpan={2}>Total do plano</td>
+                                                                        <td className="px-3 py-2.5 text-sm font-medium text-gray-800 text-right whitespace-nowrap">{fmtMoeda(totalPlano)}</td>
+                                                                        <td colSpan={4}></td>
+                                                                    </tr>
+                                                                </tfoot>
+                                                            </table>
                                                         </div>
-                                                        <span className="text-sm font-medium text-gray-800 shrink-0">
-                                                            {fmtMoeda(subtotalDoBloco(l.bloco))}
-                                                        </span>
-                                                        <div className="flex items-center gap-1.5 shrink-0">
-                                                            <ActionIconButton kind="edit" title="Editar pagamento" onClick={() => abrirEdicaoBloco(i)} />
-                                                            <ActionIconButton kind="delete" title="Remover do plano" onClick={() => removerBloco(i)} />
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                                    );
+                                                })()}
                                                 <div className={`flex items-center justify-between px-4 py-3 ${saldoPlano === 0 ? 'bg-emerald-50' : saldoPlano < 0 ? 'bg-amber-50' : 'bg-gray-50'}`}>
                                                     <span className="text-sm font-normal text-gray-500">
                                                         {saldoPlano === 0
@@ -4639,13 +4688,13 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-xs font-semibold text-slate-500">Observação (opcional)</label>
+                            <label className="text-xs font-semibold text-slate-500">Descrição (opcional)</label>
                             <input
                                 type="text"
                                 value={blocoForm.notes}
                                 onChange={(e) => setBlocoForm(prev => ({ ...prev, notes: e.target.value }))}
                                 className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                placeholder="Ex: cheque pré-datado do sócio"
+                                placeholder="Ex: entrada em dinheiro, parcelas em cheque, nas chaves"
                             />
                         </div>
                     </SheetPanel>

@@ -124,3 +124,34 @@ cobranças reais) ficou como estava.
 
 **Fase 2 publicada em 2026-09-21** (`12b53f8c` em main) e provada de fora:
 `conferir-producao.sh "Montar plano de pagamento"` ✅ (domínio servindo origin/main).
+
+---
+
+## Pedido posterior (2026-09-21) — o plano como tabela
+
+> o plano de pagamento é montado adicionando conforme o usuário desejar. Veja exemplo:
+> Parcela / Quantidade / Valor / tipo / descriçao
+> Parcela 1 / 1 / 100.000,00  /Entrada / Entrada em dinheiro
+> Parcelas Mensais 2 - 8 / 8 / 10.000,00 / parcelas mensais / Parcelas mensais em cheque
+> Parcela 9 / 1 / 50.000,00 / Parcela Final / Nas chaves
+
+### Plano — Fase 3 (frente `plano-pagamento-tabela`)
+
+8. **`components/DealModal.tsx`** — a lista do Plano de pagamento (aba Financeiro)
+   vira tabela: **Parcela** (numeração sequencial através dos blocos — "Parcela
+   1", "Parcelas 2–9", "Parcela 10") / **Quantidade** / **Valor** / **Tipo** /
+   **Descrição** (a "Observação" do bloco, renomeada para Descrição no Sheet) /
+   **1º vencimento** / Ações; rodapé "Total do plano" + a faixa de saldo que já
+   existia. Tabela dentro de modal → §6.9 (`px-3`, texto livre `px-4`), §6.2,
+   §7/§7.2. Container da aba de `max-w-3xl` para `max-w-4xl` (7 colunas não
+   cabiam em 768px). **Pronto quando:** harness `?exemplo=1` reproduz o exemplo
+   do pedido linha a linha e total R$ 230.000,00 / Plano fechado.
+
+### Estado — Fase 3
+
+- [x] 8 — harness: `Parcela 1 | 1 | R$ 100.000,00 | Sinal | Entrada em dinheiro | 21/09/2026`, `Parcelas 2–9 | 8 | R$ 10.000,00 | Parcelas mensais | Parcelas mensais em cheque | 10/11/2026`, `Parcela 10 | 1 | R$ 50.000,00 | Parcela nas chaves | Nas chaves | 10/07/2027`; total R$ 230.000,00; Plano fechado. typecheck ✓ · `check-ui-standard.sh` ✓
+
+Nota: a numeração corrige o exemplo (8 mensais depois da parcela 1 são as
+parcelas 2–9, e a final é a 10). "Adicionar pagamento" continua sendo o caminho
+para montar linha a linha; o card "Montar plano" (Fase 2) só gera um primeiro
+rascunho homogêneo.

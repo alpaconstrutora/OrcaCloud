@@ -13,6 +13,13 @@ import DealModal from '../../../components/DealModal';
 import { ConfirmProvider } from '../../../components/ui/confirm';
 
 const tipo = (new URLSearchParams(location.search).get('tipo') || 'SALE') as 'SALE' | 'RENTAL';
+// `?exemplo=1`: plano já montado como o usuário descreveu em 2026-09-21 —
+// Parcela 1 entrada 100.000 · Parcelas 2–9 mensais 10.000 · Parcela 10 final 50.000.
+const exemplo = new URLSearchParams(location.search).get('exemplo') === '1';
+const mensais = Array.from({ length: 8 }, (_, i) => ({
+  id: `ex-m-${i + 1}`, dueDate: `2026-${String(11 + i).padStart(2, '0')}-10`.replace(/2026-(1[3-9])/, (_m, mm) => `2027-${String(Number(mm) - 12).padStart(2, '0')}`),
+  value: 10000, status: 'PENDING', installmentType: 'MENSAL', notes: 'Parcelas mensais em cheque',
+}));
 const ORG = '00000000-0000-0000-0000-000000000000';
 
 function Harness() {
@@ -33,6 +40,17 @@ function Harness() {
           contract_total_value: tipo === 'SALE' ? 120000 : undefined,
           payment_method: 'CASH',
           status: 'PROPOSTA',
+          ...(exemplo ? {
+            contract_total_value: 230000,
+            payment_method: 'INSTALLMENTS',
+            down_payment: 100000,
+            down_payment_installment_type: 'SINAL',
+            down_payment_notes: 'Entrada em dinheiro',
+            custom_installments: [
+              ...mensais,
+              { id: 'ex-final', dueDate: '2027-07-10', value: 50000, status: 'PENDING', installmentType: 'CHAVES', notes: 'Nas chaves' },
+            ],
+          } : {}),
         } as any}
       />
     </div>

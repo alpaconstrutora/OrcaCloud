@@ -72,6 +72,8 @@ transborda (31/jan + 1 mês = 03/mar) — `utils/paymentPlan.ts` já tem
 - [x] 4 Trimestral no recorrente — código feito; migration aplicada em 2026-09-21 (`db query -f`, autorizado pelo usuário) e o CHECK conferido no banco: `Mensal, Bimestral, Trimestral, Semestral, Anual`
 - [x] 5 harness em `docs/spikes/contrato-parcelado/` (`?recorrente=1`, `?salvo=1`)
 
+**Publicado em 2026-09-21** (`77e89a06` em main) e provado de fora: `conferir-producao.sh "1º Vencimento das Parcelas"` ✅ (domínio servindo origin/main). Suíte cheia: 4975 ✓, 3 ✗ — `migrationsPrefixo` (corrigido: migration renomeada para 000031) e 2× `TelaWebhooks` (passa isolado, não tocado; instabilidade conhecida da suíte cheia).
+
 Checagens: `npm run typecheck` ✓ · `npm run build` ✓ · `check-xss-sinks.sh` ✓ · 7 arquivos de teste relacionados (121) ✓
 
 ## Verificação

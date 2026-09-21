@@ -69,7 +69,7 @@ transborda (31/jan + 1 mês = 03/mar) — `utils/paymentPlan.ts` já tem
 - [x] 1 util + testes — `utils/contractInstallments.ts`, 16 testes verdes
 - [x] 2 BIMESTRAL no catálogo (+ rótulo na proposta em PDF, `propertyExportService`)
 - [x] 3 ContractModal — harness fotografado: entrada 20.000 + 4× trimestral → 5 linhas (Entrada + 4), soma R$ 120.000; reabertura lê Entrada/Nº/Periodicidade/1º venc. do `payment_schedule`; `check-ui-standard.sh` limpo
-- [x] 4 Trimestral no recorrente — código feito; **migration ainda NÃO aplicada** (escrita no banco: aguardando o usuário)
+- [x] 4 Trimestral no recorrente — código feito; migration aplicada em 2026-09-21 (`db query -f`, autorizado pelo usuário) e o CHECK conferido no banco: `Mensal, Bimestral, Trimestral, Semestral, Anual`
 - [x] 5 harness em `docs/spikes/contrato-parcelado/` (`?recorrente=1`, `?salvo=1`)
 
 Checagens: `npm run typecheck` ✓ · `npm run build` ✓ · `check-xss-sinks.sh` ✓ · 7 arquivos de teste relacionados (121) ✓

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { isObra } from '../utils/projectClassification'
-import { Plus, CheckSquare, AlertTriangle, Building2, Settings2, Layers, List, Kanban, LayoutGrid, FolderOpen, FolderCog, CalendarClock, Smartphone } from 'lucide-react'
+import { Plus, CheckSquare, AlertTriangle, Settings2, Layers, List, Kanban, LayoutGrid, FolderOpen, FolderCog, CalendarClock, Smartphone } from 'lucide-react'
 
 export type GroupByField = 'none' | 'status' | 'assignee' | 'priority' | 'project' | 'source'
 export type FilterView   = 'today' | 'all' | 'overdue'
@@ -20,6 +20,8 @@ import TaskSpaceManager from './TaskSpaceManager'
 import TaskSpacesSheet from './TaskSpacesSheet'
 import { FilterPopover } from './ui/FilterPopover'
 import { usePersistedState } from './ui/TableUtils'
+import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext'
+import { useStore } from '../store/useStore'
 import MobilePreviewFrame from './MobilePreviewFrame'
 import TasksMobileApp from './TasksMobileApp'
 import { isSystemProject, excludeSystemProjects, SYSTEM_PROJECT_NAMES_SQL } from '../utils/systemProjects'
@@ -33,7 +35,21 @@ interface Props {
   onChangeView?: (view: string) => void
 }
 
-const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = [], projects = [], onChangeView }) => {
+const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onChangeView }) => {
+  // REGRA #5: o seletor do topo é a autoridade. `orgId` null = "Todas as organizações"
+  // (lê tudo que a RLS deixa); para GRAVAR, `resolveWriteOrg('single')` só pergunta
+  // quando o topo está em "Todas" e o usuário grava em mais de uma organização.
+  const { orgId: ctxOrgId } = useOrgContext()
+  const orgKey = ctxOrgId ?? ''   // forma que os services aceitam ('' = sem .eq)
+  const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget()
+  const storeOrganizations = useStore(state => state.organizations)
+  const orgNameOf = useCallback((id: string) =>
+    storeOrganizations.find(o => o.id === id)?.name ?? organizations.find(o => o.id === id)?.name ?? 'Organização',
+  [storeOrganizations, organizations])
+  // Organização do formulário aberto (criar: resolvida pelo topo; editar: a da tarefa).
+  const [formOrgId, setFormOrgId]     = useState<string>('')
+  const [statusMgrOrgId, setStatusMgrOrgId] = useState<string>('')
+
   // Recorte da tela (Prazo / Espaço / Pasta) — persistido (§3); vale para Lista e Kanban.
   const [view, setView]               = usePersistedState<FilterView>('tasksModule:view', 'today')
   const [fSpace, setFSpace]           = usePersistedState('tasksListFilters:space', '')
@@ -42,13 +58,11 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
   const [loading, setLoading]         = useState(true)
   const [editing, setEditing]         = useState<TaskRecord | null>(null)
   const [showForm, setShowForm]       = useState(false)
-  const [showStatusMgr, setShowStatusMgr]       = useState(false)
   const [showMobilePreview, setShowMobilePreview] = useState(false)
   const [isMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768)
   const [groupBy, setGroupBy]             = useState<GroupByField>('none')
   const [viewMode, setViewMode]           = useState<ViewMode>('list')
   const [taskDefaults, setTaskDefaults]   = useState<TaskDefaults>({})
-  const [filterOrg, setFilterOrg]     = useState<string>(activeOrganizationId ?? '')
   const [employees, setEmployees]     = useState<EmployeeOption[]>([])
   const [obrasLocal, setObrasLocal]   = useState<ProjectOption[]>([])
   const [statuses, setStatuses]       = useState<TaskStatus[]>([])
@@ -107,24 +121,23 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
 
   // Carrega colaboradores da org selecionada + os compartilhados com ela
   const loadEmployees = useCallback(async (orgId: string) => {
-    if (!orgId) { setEmployees([]); return }
-
-    const { data: shared } = await supabase
-      .from('employee_org_shares')
-      .select('employee_id')
-      .eq('target_org_id', orgId)
-    const sharedIds = (shared ?? []).map((s: any) => s.employee_id)
-
-    const orFilter = sharedIds.length > 0
-      ? `org_id.eq.${orgId},id.in.(${sharedIds.join(',')})`
-      : `org_id.eq.${orgId}`
-
-    const { data } = await supabase
+    let q = supabase
       .from('employees')
       .select('id, name, role, email')
-      .or(orFilter)
       .eq('status', 'ATIVO')
       .order('name')
+    if (orgId) {
+      const { data: shared } = await supabase
+        .from('employee_org_shares')
+        .select('employee_id')
+        .eq('target_org_id', orgId)
+      const sharedIds = (shared ?? []).map((s: any) => s.employee_id)
+      q = q.or(sharedIds.length > 0
+        ? `org_id.eq.${orgId},id.in.(${sharedIds.join(',')})`
+        : `org_id.eq.${orgId}`)
+    }
+    // sem organização ("Todas"): a RLS recorta — nunca esvaziar a lista (REGRA #5)
+    const { data } = await q
     setEmployees((data ?? []) as EmployeeOption[])
   }, [])
 
@@ -156,14 +169,11 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
 
   useEffect(() => { load() }, [load])
   useEffect(() => {
-    const orgId = filterOrg || activeOrganizationId || ''
-    loadEmployees(orgId)
-    loadStatuses(orgId)
-    loadObras(orgId)
-    // loadSpaces recebe filterOrg diretamente: '' = todas as orgs (RLS filtra por membro)
-    // Não usar o fallback activeOrganizationId aqui para respeitar "Todas as organizações"
-    loadSpaces(filterOrg)
-  }, [filterOrg, activeOrganizationId, loadEmployees, loadStatuses, loadObras, loadSpaces])
+    loadEmployees(orgKey)
+    loadStatuses(orgKey)
+    loadObras(orgKey)
+    loadSpaces(orgKey)   // '' = todas as orgs (RLS filtra por membro)
+  }, [orgKey, loadEmployees, loadStatuses, loadObras, loadSpaces])
 
   // ── Recorte e contadores ─────────────────────────────────────────────────
   // Ordem: organização → espaço/pasta → prazo. Hoje/Atrasadas são contadas DEPOIS
@@ -174,7 +184,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     const endOfToday   = new Date(startOfToday.getTime() + 86_400_000)
 
     let byOrg = tasks
-    if (filterOrg) byOrg = byOrg.filter(t => t.org_id === filterOrg)
+    if (ctxOrgId) byOrg = byOrg.filter(t => t.org_id === ctxOrgId)
 
     // helper recursivo de descendentes
     const getAllDescendants = (ids: Set<string>): TaskRecord[] => {
@@ -211,12 +221,12 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
       today, overdue, noSpaceCount,
       visible: [...visibleParents, ...getAllDescendants(new Set(visibleParents.map(t => t.id)))],
     }
-  }, [tasks, filterOrg, view, fSpace, fFolder])
+  }, [tasks, ctxOrgId, view, fSpace, fFolder])
 
   // obras: usa obrasLocal (carregado direto do DB) como fonte primária, com fallback no prop
   const obras: ProjectOption[] = useMemo(() => {
     if (obrasLocal.length > 0) return obrasLocal
-    const orgId = filterOrg || activeOrganizationId
+    const orgId = ctxOrgId
     return projects
       .filter(p => {
         const s = p.settings
@@ -227,19 +237,46 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
         return true
       })
       .map(p => ({ id: p.id, name: p.name }))
-  }, [obrasLocal, projects, filterOrg, activeOrganizationId])
-
-  const orgForNew = filterOrg || activeOrganizationId || ''
+  }, [obrasLocal, projects, ctxOrgId])
 
   const handleCreateSpace = async (name: string) => {
-    const orgId = orgForNew
-    if (!orgId) return
+    const target = await resolveWriteOrg('single')
+    if (!target || target.kind !== 'org') return
     try {
-      await taskSpaceService.createSpace(orgId, name)
-      await loadSpaces(orgId)
+      await taskSpaceService.createSpace(target.orgId, name)
+      await loadSpaces(orgKey)
     } catch (e) {
       console.error('[spaces] create', e)
     }
+  }
+
+  // Abre o formulário já com a organização certa: a da tarefa (editar/subtarefa) ou a
+  // resolvida pelo topo (criar). Os catálogos (colaboradores, status, obras, espaços)
+  // são recarregados para ESSA organização quando ela difere do recorte da tela.
+  const openTaskForm = async (opts: { task?: TaskRecord | null; parent?: TaskRecord | null; defaults?: TaskDefaults }) => {
+    let orgId = opts.task?.org_id ?? opts.parent?.org_id ?? null
+    if (!orgId) {
+      const target = await resolveWriteOrg('single')
+      if (!target || target.kind !== 'org') return
+      orgId = target.orgId
+    }
+    if (orgId !== orgKey) { loadEmployees(orgId); loadStatuses(orgId); loadObras(orgId); loadSpaces(orgId) }
+    setFormOrgId(orgId)
+    setEditing(opts.task ?? null)
+    setParentTask(opts.parent ?? null)
+    setTaskDefaults(opts.defaults ?? {})
+    setShowForm(true)
+  }
+  const closeTaskForm = () => {
+    setShowForm(false); setParentTask(null)
+    // volta os catálogos ao recorte da tela, caso o formulário tenha carregado outra org
+    if (formOrgId !== orgKey) { loadEmployees(orgKey); loadStatuses(orgKey); loadObras(orgKey); loadSpaces(orgKey) }
+  }
+
+  const openStatusManager = async () => {
+    const target = await resolveWriteOrg('single')
+    if (!target || target.kind !== 'org') return
+    setStatusMgrOrgId(target.orgId)
   }
 
   const toggleDone = async (t: TaskRecord) => {
@@ -297,12 +334,6 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
       onChangeView(route.replace(/^\//, '').split('/')[0])
     }
   }
-
-  const orgsOptions: OrgOption[] = organizations.length
-    ? organizations
-    : activeOrganizationId
-      ? [{ id: activeOrganizationId, name: 'Minha Organização' }]
-      : []
 
   // ── Controles de recorte (§5.4) — vão para a toolbar acoplada da lista e, no
   // Kanban, para uma barra própria acima do quadro. ─────────────────────────
@@ -364,15 +395,15 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     folder_id: activeSpace && fFolder && fFolder !== FOLDER_NONE ? fFolder : null,
   }
 
-  // Mobile real: usa activeOrganizationId (prop reativo), não filterOrg (estado interno do desktop)
-  if (isMobile) return <TasksMobileApp orgId={activeOrganizationId || ''} />
+  // Mobile real
+  if (isMobile) return <TasksMobileApp orgId={orgKey} />
 
   return (
     <div className="space-y-6">
       {/* Prévia Mobile */}
       {showMobilePreview && (
         <MobilePreviewFrame onClose={() => setShowMobilePreview(false)} title="Prévia — Minhas Tarefas">
-          <TasksMobileApp orgId={filterOrg || activeOrganizationId} />
+          <TasksMobileApp orgId={orgKey} />
         </MobilePreviewFrame>
       )}
 
@@ -428,16 +459,14 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
             </select>
           </div>
 
-          {orgsOptions.length > 0 && (
-            <button
-              onClick={() => setShowStatusMgr(true)}
-              title="Gerenciar status"
-              className="flex items-center gap-2 h-9 px-3 rounded-[6px] text-sm font-medium border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-100"
-            >
-              <Settings2 className="w-4 h-4" />
-              Status
-            </button>
-          )}
+          <button
+            onClick={openStatusManager}
+            title="Gerenciar status"
+            className="flex items-center gap-2 h-9 px-3 rounded-[6px] text-sm font-medium border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+          >
+            <Settings2 className="w-4 h-4" />
+            Status
+          </button>
           <button
             onClick={() => setShowMobilePreview(true)}
             title="Prévia Mobile"
@@ -447,13 +476,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
             Mobile
           </button>
           <button
-            onClick={() => {
-              setEditing(null)
-              setTaskDefaults(scopeDefaults)
-              if (orgForNew) { loadEmployees(orgForNew); loadStatuses(orgForNew); loadObras(orgForNew) }
-              setShowForm(true)
-            }}
-            disabled={!orgForNew}
+            onClick={() => openTaskForm({ defaults: scopeDefaults })}
             className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] font-medium text-[13px] bg-blue-600 text-white hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Plus className="w-[15px] h-[15px]" />
@@ -461,28 +484,6 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           </button>
         </div>
       </div>
-
-      {/* Filtro de organização */}
-      {orgsOptions.length > 1 && (
-        <div className="flex items-center gap-2">
-          <Building2 className="w-4 h-4 text-slate-400 flex-shrink-0" />
-          <select
-            value={filterOrg}
-            onChange={(e) => setFilterOrg(e.target.value)}
-            className="h-9 text-sm font-medium text-slate-700 border border-slate-200 rounded-[6px] px-3 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
-          >
-            <option value="">Todas as organizações</option>
-            {orgsOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-          </select>
-        </div>
-      )}
-
-      {/* Aviso sem org */}
-      {!orgForNew && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs font-bold text-amber-800">
-          Selecione uma organização para criar tarefas.
-        </div>
-      )}
 
       {/* Banner atrasadas — só no modo inbox */}
       {view === 'today' && overdue.length > 0 && (
@@ -507,15 +508,10 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
               filters={scopeControls}
               groupBy={groupBy}
               onToggleDone={toggleDone}
-              onEdit={(t) => { loadEmployees(t.org_id); loadSpaces(t.org_id); loadObras(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
-              onAddSubtask={(parent) => { loadEmployees(parent.org_id); loadObras(parent.org_id); setEditing(null); setParentTask(parent); setShowForm(true) }}
+              onEdit={(t) => openTaskForm({ task: t })}
+              onAddSubtask={(parent) => openTaskForm({ parent })}
               onMakeSubtask={makeSubtask}
-              onAddTask={orgForNew ? (defaults) => {
-                setTaskDefaults({ ...(defaults ?? {}), ...scopeDefaults })
-                loadEmployees(orgForNew); loadStatuses(orgForNew); loadObras(orgForNew)
-                setEditing(null)
-                setShowForm(true)
-              } : undefined}
+              onAddTask={(defaults) => openTaskForm({ defaults: { ...(defaults ?? {}), ...scopeDefaults } })}
               onNavigate={handleNavigate}
             />
           ) : (
@@ -531,13 +527,8 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
               statuses={statuses}
               groupBy={groupBy === 'none' ? 'status' : groupBy}
               onToggleDone={toggleDone}
-              onEdit={(t) => { loadEmployees(t.org_id); loadSpaces(t.org_id); loadObras(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
-              onAddTask={orgForNew ? (defaults) => {
-                setTaskDefaults({ ...(defaults ?? {}), ...scopeDefaults })
-                loadEmployees(orgForNew); loadStatuses(orgForNew); loadObras(orgForNew)
-                setEditing(null)
-                setShowForm(true)
-              } : undefined}
+              onEdit={(t) => openTaskForm({ task: t })}
+              onAddTask={(defaults) => openTaskForm({ defaults: { ...(defaults ?? {}), ...scopeDefaults } })}
               onMoveCard={moveCard}
             />
             </>
@@ -546,8 +537,8 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
 
       {showForm && (
         <TaskForm
-          orgId={parentTask?.org_id ?? orgForNew}
-          orgs={orgsOptions}
+          orgId={formOrgId}
+          orgs={[{ id: formOrgId, name: orgNameOf(formOrgId) }]}  /* uma só: o topo já decidiu (REGRA #5) */
           employees={employees}
           projects={obras}
           statuses={statuses}
@@ -559,21 +550,19 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           } : taskDefaults}
           parentTaskId={parentTask?.id ?? null}
           parentTaskTitle={parentTask?.title ?? null}
-          onClose={() => { setShowForm(false); setParentTask(null) }}
-          onOrgChange={(id) => { loadEmployees(id); loadStatuses(id); loadObras(id); loadSpaces(id) }}
+          onClose={closeTaskForm}
           onSaved={() => {
-            setShowForm(false); setParentTask(null)
-            const orgId = filterOrg || activeOrganizationId || ''
-            load(); loadEmployees(orgId); loadObras(orgId); loadSpaces(orgId)
+            closeTaskForm()
+            load(); loadSpaces(orgKey)
           }}
         />
       )}
 
-      {showStatusMgr && (
+      {statusMgrOrgId && (
         <TaskStatusManager
-          orgId={filterOrg || activeOrganizationId || orgsOptions[0]?.id || ''}
-          onClose={() => setShowStatusMgr(false)}
-          onChanged={() => loadStatuses(filterOrg || activeOrganizationId || '')}
+          orgId={statusMgrOrgId}
+          onClose={() => setStatusMgrOrgId('')}
+          onChanged={() => loadStatuses(orgKey)}
         />
       )}
 
@@ -581,25 +570,27 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
         open={showSpacesSheet}
         spaces={spaces}
         loading={loadingSpaces}
-        canCreate={!!orgForNew}
+        canCreate
         onClose={() => setShowSpacesSheet(false)}
         onCreateSpace={handleCreateSpace}
         onManageSpace={setManagingSpace}
-        onReloaded={() => loadSpaces(filterOrg || activeOrganizationId || '')}
+        onReloaded={() => loadSpaces(orgKey)}
       />
 
       {managingSpace && (
         <TaskSpaceManager
           space={managingSpace}
-          orgId={filterOrg || activeOrganizationId || orgForNew}
+          orgId={managingSpace.org_id}
           onClose={() => setManagingSpace(null)}
-          onChanged={() => loadSpaces(filterOrg || activeOrganizationId || '')}
+          onChanged={() => loadSpaces(orgKey)}
           onDeleted={() => {
             if (fSpace === managingSpace.id) { setFSpace(''); setFFolder('') }
-            loadSpaces(filterOrg || activeOrganizationId || '')
+            loadSpaces(orgKey)
           }}
         />
       )}
+
+      {orgTargetModal}
     </div>
   )
 }

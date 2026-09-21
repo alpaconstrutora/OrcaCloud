@@ -79,3 +79,26 @@ gatilho do popover já mostra a escolha).
 3. Espaço › escolher um espaço recorta Lista e Kanban; Pasta aparece e recorta mais; "Nova"
    já nasce nesse espaço/pasta.
 4. Botão Espaços abre o painel: criar espaço, ↑/↓, engrenagem abre o gerenciador.
+
+## Pedido posterior — 2026-09-21 (mesma sessão)
+> veja print. ainda persiste um seletor de organizacao. remover e manter apenas o seletor no topo da tela
+
+### O que mudou (`components/TasksModule.tsx`) — REGRA #5
+- Sai o `<select>` "Todas as organizações" da tela e o aviso amarelo "Selecione uma
+  organização para criar tarefas"; sai o estado `filterOrg`.
+- Leitura: `useOrgContext().orgId` (null = Todas) recorta tarefas, colaboradores, status,
+  obras e espaços. Colaboradores em "Todas" passam a vir sem `.eq` (a RLS recorta) — antes a
+  lista era esvaziada por um `if (!orgId) return`.
+- Escrita: "Nova", "+ Adicionar Tarefa", "Status" (gerenciador) e "Novo espaço" resolvem a
+  organização por `resolveWriteOrg('single')` — com o topo numa organização não perguntam
+  nada; em "Todas" com mais de uma organização gravável, o modal padrão pergunta uma vez.
+  O formulário recebe **uma** organização (o topo já decidiu) e por isso não mostra mais
+  o seletor interno. Editar/subtarefa usam a organização da própria tarefa;
+  `TaskSpaceManager` usa `space.org_id`.
+- `orgContextGuard`: `TasksModule.tsx` saiu do baseline (10 → 8 → 0 ocorrências de `|| ''`,
+  e o `orgsOptions[0]` também foi embora).
+- Prova (harness `docs/spikes/tarefas-modulo/?org=o1|all`, store dirigindo o topo): sem
+  seletor e sem aviso nos dois cenários; `org=o1` → Nova abre o formulário direto, sem
+  campo Organização; `org=all` → modal "Selecionar organização" (Alpa / SPE Horizonte) →
+  formulário sem campo Organização; leitura de `employees` em "Todas" sem filtro de org;
+  0 escritas, 0 erros.

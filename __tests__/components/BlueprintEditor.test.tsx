@@ -183,6 +183,17 @@ const listWebhooks = vi.fn(async () => [] as unknown[]);
 const listEntregas = vi.fn(async () => [] as unknown[]);
 const createWebhook = vi.fn();
 const testarWebhook = vi.fn(async () => 'e_1');
+// PLUGINS (backlog P2): o cadastro é mockado; o executor roda com o plugin de exemplo (srcdoc).
+const listPlugins = vi.fn(async () => [] as unknown[]);
+const createPlugin = vi.fn(async (org: string, p: Record<string, unknown>) => ({ id: 'plg_1', organizationId: org, ...p, descricao: '', active: true, createdAt: '' }));
+vi.mock('../../services/blueprintPluginService', () => ({
+  blueprintPluginService: {
+    list: (...a: unknown[]) => listPlugins(...(a as [])),
+    create: (...a: unknown[]) => createPlugin(...(a as [string, Record<string, unknown>])),
+    update: vi.fn(async () => {}),
+    remove: vi.fn(async () => {}),
+  },
+}));
 vi.mock('../../services/blueprintWebhookService', () => ({
   blueprintWebhookService: {
     list: (...a: unknown[]) => listWebhooks(...(a as [])),
@@ -5452,5 +5463,75 @@ describe('BlueprintEditor · LOD (P2.24)', () => {
     expect(pend).toHaveTextContent(/declarar piso, forro e rodapé/);
     await user.click(within(pend).getByRole('button', { name: /Sala/ }));
     await waitFor(() => expect(screen.queryByTestId('tarefa-lod')).toBeNull());
+  }, 60000);
+});
+
+/**
+ * PLUGINS (21/09/2026, backlog P2): Colaborar › Plugins lista, cadastra (validação
+ * https), e o executor abre o plugin de exemplo num iframe com sandbox; uma
+ * proposta que chega pela janela do iframe é ensaiada e só entra ao Aplicar;
+ * proposta de outra janela é ignorada; comando ruim é recusado com motivo.
+ */
+describe('BlueprintEditor · plugins (P2.25)', () => {
+  it('tela, cadastro validado, executor com proposta ensaiada e aplicada', async () => {
+    const { useStore } = await import('../../store/useStore');
+    const orgsAntes = useStore.getState().organizations;
+    useStore.setState({ organizations: [{ id: 'org_1', name: 'Org de teste', members: [] }] as never });
+    listPlugins.mockResolvedValue([{ id: 'plg_9', organizationId: 'org_1', nome: 'Meu plugin', url: 'https://plugins.exemplo.com/x', descricao: 'faz coisas', permissoes: ['ler', 'escrever'], active: true, createdAt: '' }]);
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall' as const, levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 });
+    const m = k.applyBatch(nivel.model, [w(0, 0, 4000, 0), w(4000, 0, 4000, 3000), w(4000, 3000, 0, 3000), w(0, 3000, 0, 0)]).model;
+    loadBranchModel.mockResolvedValue(m);
+    try {
+      await montar();
+      const user = userEvent.setup();
+      await abrirAba(/^colaborar$/i);
+      await user.click(screen.getByRole('button', { name: /^Plugins/ }));
+      const tela = await screen.findByTestId('tela-plugins');
+      expect(document.querySelector('[data-tela="plugins"]')?.className).not.toMatch(/fixed|inset-0/);
+      await waitFor(() => expect(within(tela).getByText('Meu plugin')).toBeInTheDocument());
+      // Cadastro: http é recusado; https grava pela organização única.
+      await user.click(within(tela).getByTestId('novo-plugin'));
+      await user.type(within(tela).getByLabelText('Nome do plugin'), 'Novo');
+      await user.type(within(tela).getByLabelText('URL do plugin'), 'http://inseguro.com');
+      await user.click(within(tela).getByTestId('salvar-plugin'));
+      expect(within(tela).getByTestId('erros-plugin')).toHaveTextContent(/https:\/\//);
+      await user.clear(within(tela).getByLabelText('URL do plugin'));
+      await user.type(within(tela).getByLabelText('URL do plugin'), 'https://seguro.com/p');
+      await user.click(within(tela).getByLabelText('Propor comandos (você aprova antes)'));
+      await user.click(within(tela).getByTestId('salvar-plugin'));
+      await waitFor(() => expect(createPlugin).toHaveBeenCalledWith('org_1', expect.objectContaining({ nome: 'Novo', url: 'https://seguro.com/p', permissoes: ['ler', 'escrever'] })));
+      // Executor com o plugin de exemplo.
+      await user.click(within(tela).getByTestId('executar-exemplo'));
+      const exec = await screen.findByTestId('executor-de-plugin');
+      const iframe = exec.querySelector('iframe')!;
+      expect(iframe.getAttribute('sandbox')).toBe('allow-scripts allow-forms');
+      expect(iframe.getAttribute('srcdoc')).toContain('opura.planta.pronto');
+      const janela = iframe.contentWindow!;
+      const mandar = (data: unknown, source: Window | null = janela, origin = 'null') => window.dispatchEvent(new MessageEvent('message', { data, source, origin } as MessageEventInit));
+      // Handshake → o desenho vai ao plugin.
+      mandar({ tipo: 'opura.planta.pronto' });
+      await waitFor(() => expect(screen.getByTestId('registro-do-plugin')).toHaveTextContent(/Plugin carregado; desenho enviado/));
+      // Mensagem de OUTRA janela é ignorada; comando ruim é recusado com motivo; boa vira proposta.
+      mandar({ tipo: 'opura.planta.comandos', comandos: [{ type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Invasor' }] }, window);
+      mandar({ tipo: 'opura.planta.comandos', comandos: [{ type: 'NameSpace', spaceId: 'spc_9999', name: 'X' }] });
+      await waitFor(() => expect(screen.getByTestId('registro-do-plugin')).toHaveTextContent(/Proposta recusada: o kernel recusou/));
+      expect(screen.queryByTestId('propostas-do-plugin')).toBeNull();
+      mandar({ tipo: 'opura.planta.comandos', comandos: [{ type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Sala' }], descricao: 'Nomear 1 ambiente' });
+      const propostas = await screen.findByTestId('propostas-do-plugin');
+      expect(propostas).toHaveTextContent(/Nomear 1 ambiente/);
+      expect(propostas).toHaveTextContent(/NameSpace ×1 · cria 1, altera 0, apaga 0/);
+      const { saveDraft } = await import('../../services/blueprintService');
+      vi.mocked(saveDraft).mockClear();
+      await user.click(within(propostas).getByTestId('aplicar-proposta'));
+      await waitFor(() => expect(saveDraft).toHaveBeenCalled(), { timeout: 5000 });
+      const salvo = (vi.mocked(saveDraft).mock.calls.at(-1) as unknown as [string, import('../../utils/blueprintKernel').BlueprintModel])[1];
+      expect(salvo.labels.map((l) => l.name)).toEqual(['Sala']);
+      expect(screen.queryByTestId('propostas-do-plugin')).toBeNull();
+    } finally {
+      useStore.setState({ organizations: orgsAntes });
+    }
   }, 60000);
 });

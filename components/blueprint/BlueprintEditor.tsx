@@ -90,6 +90,7 @@ import {
   PaintBucket,
   Palette,
   Pencil,
+  Puzzle,
   Plus,
   RectangleHorizontal,
   Redo2,
@@ -325,6 +326,10 @@ import { usosPorAssinatura } from '../../utils/blueprintCatalogoDeTipos';
 import { abrirCotacao, lancarNoPlano, nomeDaObra, preverCompras, type PreviaDeCompras } from '../../services/blueprintComprasService';
 import { somarDias } from '../../utils/blueprintCompras';
 import TelaWebhooks from './TelaWebhooks';
+import TelaPlugins from './TelaPlugins';
+import PainelPlugin from './PainelPlugin';
+import { blueprintPluginService } from '../../services/blueprintPluginService';
+import type { PluginDaPlanta } from '../../utils/blueprintPlugins';
 import TelaAcessoDoEstudo from './TelaAcessoDoEstudo';
 import TelaAntesDepois from './TelaAntesDepois';
 import { contagemPorFase, faseDaSelecao, fasePorId, idsOcultosPelaFase, type FiltroDeFase } from '../../utils/blueprintFases';
@@ -1404,7 +1409,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais' | 'api' | 'webhooks' | 'acesso' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais' | 'api' | 'webhooks' | 'plugins' | 'plugin' | 'acesso' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -2095,6 +2100,27 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [entregasDeWebhook, setEntregasDeWebhook] = useState<EntregaDeWebhook[]>([]);
   const [webhooksCarregando, setWebhooksCarregando] = useState(false);
   const [webhooksIndisponiveis, setWebhooksIndisponiveis] = useState<string | null>(null);
+  // PLUGINS (21/09/2026, backlog P2): cadastro por organização + o plugin em execução (iframe com sandbox).
+  const [pluginsDaOrg, setPluginsDaOrg] = useState<PluginDaPlanta[]>([]);
+  const [pluginsCarregando, setPluginsCarregando] = useState(false);
+  const [pluginsIndisponiveis, setPluginsIndisponiveis] = useState<string | null>(null);
+  const [pluginEmExecucao, setPluginEmExecucao] = useState<PluginDaPlanta | null>(null);
+  const recarregarPlugins = useCallback(() => {
+    setPluginsCarregando(true);
+    blueprintPluginService
+      .list(orgId)
+      .then((lista) => {
+        setPluginsDaOrg(lista);
+        setPluginsIndisponiveis(null);
+      })
+      .catch((e) => {
+        console.warn('[plugins] indisponíveis:', e);
+        setPluginsDaOrg([]);
+        setPluginsIndisponiveis(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => setPluginsCarregando(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId]);
   const recarregarWebhooks = useCallback(() => {
     setWebhooksCarregando(true);
     Promise.all([blueprintWebhookService.list(orgId), blueprintWebhookService.listEntregas(null)])
@@ -8156,6 +8182,80 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           </div>
         </div>
       )}
+      {telaAberta === 'plugins' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="plugins">
+          {cabecalhoDaTela(
+            'Plugins',
+            'Estenda a Planta com páginas suas: cada plugin roda num quadro isolado, recebe o desenho (modelo, hash e, se permitido, quantitativos) e propõe comandos do kernel que você aprova antes de aplicar. Nada de terceiros roda nesta página.',
+            Puzzle,
+            'Colaborar',
+          )}
+          <div>
+            <TelaPlugins
+              plugins={pluginsDaOrg}
+              carregando={pluginsCarregando}
+              indisponivel={pluginsIndisponiveis}
+              mostrarOrg={!orgId}
+              nomeDaOrg={(id) => organizacoesDaLoja.find((o) => o.id === id)?.name ?? id.slice(0, 8)}
+              onCriar={async (p) => {
+                // REGRA #5: um plugin é de UMA organização — a do topo, ou a escolhida no modal.
+                const alvo = await resolverOrgDeEscrita('single');
+                if (!alvo) throw new Error('Escolha a organização dona do plugin.');
+                if (alvo.kind !== 'org') throw new Error('Um plugin pertence a UMA organização: escolha uma.');
+                await blueprintPluginService.create(alvo.orgId, p);
+                recarregarPlugins();
+              }}
+              onAtualizar={async (id, p) => {
+                await blueprintPluginService.update(id, p);
+                recarregarPlugins();
+              }}
+              onApagar={async (id) => {
+                await blueprintPluginService.remove(id);
+                recarregarPlugins();
+              }}
+              onExecutar={(p) => {
+                setPluginEmExecucao(p);
+                setTelaAberta('plugin');
+              }}
+            />
+          </div>
+        </div>
+      )}
+      {telaAberta === 'plugin' && pluginEmExecucao && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="plugin">
+          {cabecalhoDaTela(
+            `Plugin: ${pluginEmExecucao.nome}`,
+            'O plugin roda no quadro à esquerda e recebe o desenho a cada mudança. O que ele propõe aparece à direita, ensaiado pelo kernel; só entra no desenho quando você clica Aplicar.',
+            Puzzle,
+            'Colaborar',
+          )}
+          <PainelPlugin
+            plugin={pluginEmExecucao}
+            model={editor.model}
+            estudo={{ id: study.id, titulo: study.name, revisao: null, hash: '' }}
+            nivelAtivoId={levelId ?? null}
+            selecao={editor.selectedIds}
+            onAplicar={(comandos) => {
+              const criados = editor.runBatch(comandos);
+              if (criados.length > 0) selecionar(criados);
+            }}
+            onSelecionar={(uids) => {
+              // uid → id em toda família do modelo que tem os dois.
+              const quer = new Set(uids);
+              const ids: string[] = [];
+              for (const lista of Object.values(editor.model)) {
+                if (!Array.isArray(lista)) continue;
+                for (const x of lista as { id?: string; uid?: string }[]) if (x && x.uid && x.id && quer.has(x.uid)) ids.push(x.id);
+              }
+              selecionar(ids);
+            }}
+            onFechar={() => {
+              setPluginEmExecucao(null);
+              setTelaAberta('plugins');
+            }}
+          />
+        </div>
+      )}
       {telaAberta === 'alternativas' && (
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="alternativas">
           {cabecalhoDaTela(
@@ -9490,6 +9590,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 alternarTela('webhooks');
               }}
               ajuda="Webhooks da organização: POST assinado (HMAC) na sua URL quando uma versão é publicada ou aprovada, um comentário é criado ou uma alternativa vira principal; retentativa e log. O número é quantos estão ativos."
+            />
+            <BotaoDoRibbon
+              icone={Puzzle}
+              rotulo="Plugins"
+              contagem={pluginsDaOrg.filter((p) => p.active).length || undefined}
+              ativo={telaAberta === 'plugins' || telaAberta === 'plugin'}
+              onClick={() => {
+                if (telaAberta !== 'plugins') recarregarPlugins();
+                alternarTela('plugins');
+              }}
+              ajuda="Plugins da organização: páginas https suas abertas num quadro isolado (sandbox) que recebem o desenho por postMessage e propõem comandos do kernel — você aprova antes de entrar no desenho. Inclui um plugin de exemplo e o protocolo. O número é quantos estão ativos."
             />
           </GrupoDoRibbon>
         )}

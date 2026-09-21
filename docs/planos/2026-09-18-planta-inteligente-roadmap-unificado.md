@@ -1404,6 +1404,24 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 - App real (escritas bloqueadas: 14, 0 erros de página): Analisar › LOD no Térreo → "185 peça(s) avaliada(s) · LOD do conjunto: 200 · 24 abaixo do alvo"; quadro Paredes 0/7 (sem camadas), Estrutura 67/67, Ambientes 4/4, Pontos 35/36 (97 %), Trechos 55/65 (85 %); pendências "Janela V-0FC2 · LOD 200 — atribuir uma esquadria (tipo) ao vão"; alvo das paredes a 350 muda a conferência.
 - Testes `blueprintLod.test.ts` (cada família nasce em 200 com o requisito; sobe com camadas/item/rótulo/tipo/acabamentos; quadro contra alvo e teto; pendências; IFC só com `lodPorUid`), editor P2.24 (gaveta, alvo por família muda a conferência, pendência com requisito, clicar seleciona).
 
+### P2.25 — Plugins: extensões em iframe com sandbox e protocolo postMessage (21/09/2026) · backlog P2
+
+**O que entrou**
+- `utils/blueprintPlugins.ts`: o protocolo v1 — plugin manda `opura.planta.pronto`; a Planta responde `opura.planta.modelo` (modelo do kernel com ids, `estudo.hash` canônico, `kernelVersion`, nível ativo, seleção; quantitativos só com permissão) a cada mudança; o plugin devolve `opura.planta.comandos` (comandos do kernel + descrição), `opura.planta.selecionar` (uids) ou `opura.planta.aviso`. `lerMensagemDoPlugin` confere origem (URL cadastrada; `null` para o embutido), forma, permissões (`ler`, `quantitativos`, `escrever`, `selecionar`), limite de 500 comandos e comandos vedados (`RemoveLevel`…); `ensaiarProposta` aplica numa cópia e devolve resumo por tipo + diff (cria/altera/apaga) ou o motivo da recusa do kernel. `validarPlugin` (https obrigatório, `ler` obrigatória), `PLUGIN_DE_EXEMPLO` (srcdoc embutido: lê o desenho e propõe `NameSpace` nos ambientes sem nome), `guiaDoProtocolo`.
+- Migration `aplicar_20270921000061_blueprint_plugins.sql` (aplicada): `blueprint_plugins` (org, nome, url https, descrição, permissões com CHECK, ativo; RLS `is_org_member`, REVOKE/GRANT). `services/blueprintPluginService.ts`.
+- Colaborar › Integração › **Plugins** (`TelaPlugins`, in-flow): como funciona, protocolo, plugin de exemplo, cadastro (StandardTable + form com permissões), ativar/pausar, apagar, **Executar**. `PainelPlugin`: iframe `sandbox="allow-scripts allow-forms"` (sem `allow-same-origin`, `referrerPolicy=no-referrer`), `event.source` = janela do iframe, coluna de propostas ensaiadas com **Aplicar** (um `runBatch`, seleciona o que criou) / Descartar, registro da conversa.
+
+**Decisões**
+- Modelo Figma/Office add-ins, não Revit: nada de terceiro roda na página da Planta, nenhuma credencial vai ao plugin, e comando nenhum entra sem a pessoa ver e clicar Aplicar.
+- A Planta manda o MODELO (não só o canônico) porque é o que os comandos endereçam (ids); o hash vai junto para o plugin saber de que desenho falou.
+- Plugin por URL só https e a origem da mensagem tem de bater; o de exemplo roda por `srcdoc` (origem "null") e serve de guia e de prova.
+- Sem bump de kernel; sem função no servidor.
+
+**Prova**
+- `npx tsc --noEmit` ok · check-ui ok nos 3 tsx · suíte cheia 425 arquivos / 4946 testes · `npm run build` ok · migration aplicada e conferida (10 colunas).
+- App real (escritas bloqueadas: 15; os 2 `pageerror` são o script de bloqueio de service worker do Playwright dentro do iframe sandboxed — `<anonymous>:3` —, não código do app): Colaborar › Plugins (in-flow, "Nenhum plugin cadastrado") → Executar o plugin de exemplo → iframe real fez o handshake ("Plugin carregado; desenho enviado"), leu "Planta 14/09/2026 · rev. rascunho · 8 ambiente(s), 0 sem nome · kernel 0.56.0"; mensagem cross-frame de dentro do iframe propôs "Renomear Ambiente 1" (NameSpace ×1 · altera 1) → Aplicar → registro "Aplicada".
+- Testes `blueprintPlugins.test.ts` (cadastro, mensagem com hash/quantitativos por permissão, leitura com origem/forma/permissões/vedados/limite, ensaio aceito e recusado sem tocar o modelo, exemplo fala o protocolo), editor P2.25 (tela, cadastro recusa http e grava https com permissão, executor com sandbox e srcdoc, handshake, mensagem de outra janela ignorada, comando ruim recusado com motivo, proposta ensaiada aplicada → `saveDraft` com a etiqueta).
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

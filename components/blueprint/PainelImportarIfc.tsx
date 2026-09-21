@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Boxes, Check, FileUp, Loader2 } from 'lucide-react';
 import {
   nomeDoTipoEstrutural,
+  novoUid,
   type BlueprintModel,
   type Command,
   type Level,
@@ -95,7 +96,11 @@ function uniao(a: CaixaPlana | null, b: CaixaPlana | null): CaixaPlana | null {
 }
 
 /** Para onde cada pavimento do IFC vai. `''` = descartar. */
+/** expressID do pavimento do IFC → id do pavimento do desenho, `''` (não importar) ou `NOVO` (criar na cota do arquivo — P2.32). */
 type Casamento = Record<number, string>;
+const NOVO_PAVIMENTO = 'NOVO';
+/** Nome do pavimento criado na importação: "Pavimento +2,80". */
+const nomeDoNovoPavimento = (elevacaoMm: number) => `Pavimento ${elevacaoMm < 0 ? '−' : '+'}${(Math.abs(elevacaoMm) / 1000).toFixed(2).replace('.', ',')}`;
 
 const m2 = (mm: number) => (mm / 1000).toFixed(2).replace('.', ',');
 
@@ -144,7 +149,8 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
         // Tolerância de meio metro: acima disso não é "o mesmo pavimento com
         // arredondamento", é outro pavimento — e aí a tela pergunta em vez de
         // escolher.
-        c[p.expressID] = melhor && menor <= 500 ? melhor.id : (levelIdAtivo ?? '');
+        // Sem par a meio metro: CRIAR o pavimento na cota do arquivo (P2.32) — antes caía no ativo, um andar fora.
+        c[p.expressID] = melhor && menor <= 500 ? melhor.id : NOVO_PAVIMENTO;
       }
       return c;
     },
@@ -252,14 +258,34 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
     if (!preparado) return;
     const porPavimento = new Map(model.levels.map((l) => [l.id, l]));
     const comandos: Command[] = [];
+    // PAVIMENTOS NOVOS (P2.32): um `AddLevel` por pavimento do IFC casado com NOVO, antes das peças; as peças apontam pelo `levelUid`.
+    const novos = new Map<number, { uid: string; elevationMm: number; defaultHeightMm: number }>();
+    for (const pav of preparado.pavimentos) {
+      if (casamento[pav.expressID] !== NOVO_PAVIMENTO || pav.elevacaoMm === null) continue;
+      const alturas = paredesAImportar.filter((p) => p.pavimento === pav.expressID && p.alturaMm).map((p) => p.alturaMm as number).sort((a, b) => a - b);
+      const uid = novoUid();
+      const defaultHeightMm = alturas[Math.floor(alturas.length / 2)] ?? 2800;
+      novos.set(pav.expressID, { uid, elevationMm: Math.round(pav.elevacaoMm), defaultHeightMm });
+      comandos.push({ type: 'AddLevel', name: nomeDoNovoPavimento(pav.elevacaoMm), elevationMm: Math.round(pav.elevacaoMm), defaultHeightMm, uid });
+    }
+    /** O pavimento de destino de uma peça: existente (id) ou novo (uid + cota). */
+    const destino = (expressID: number): { levelId: string; levelUid?: string; elevationMm: number; defaultHeightMm: number } | null => {
+      const c = casamento[expressID];
+      if (c === NOVO_PAVIMENTO) {
+        const n = novos.get(expressID);
+        return n ? { levelId: '', levelUid: n.uid, elevationMm: n.elevationMm, defaultHeightMm: n.defaultHeightMm } : null;
+      }
+      const nivel = porPavimento.get(c);
+      return nivel ? { levelId: nivel.id, elevationMm: nivel.elevationMm, defaultHeightMm: nivel.defaultHeightMm } : null;
+    };
 
     for (const p of aImportar) {
-      const levelId = casamento[p.pavimento!];
-      const nivel = porPavimento.get(levelId);
+      const nivel = destino(p.pavimento!);
       if (!nivel) continue;
       comandos.push({
         type: 'AddStructural',
-        levelId,
+        levelId: nivel.levelId,
+        ...(nivel.levelUid ? { levelUid: nivel.levelUid } : {}),
         kind: p.kind,
         // O deslocamento é aplicado AQUI, no ponto, e não numa transformação
         // guardada: o kernel não tem noção de "modelo importado" — o que entra
@@ -280,12 +306,12 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
     }
 
     for (const p of paredesAImportar) {
-      const levelId = casamento[p.pavimento!];
-      const nivel = porPavimento.get(levelId);
+      const nivel = destino(p.pavimento!);
       if (!nivel) continue;
       comandos.push({
         type: 'AddWall',
-        levelId,
+        levelId: nivel.levelId,
+        ...(nivel.levelUid ? { levelUid: nivel.levelUid } : {}),
         a: { x: p.a.x + dx, y: p.a.y + dy },
         b: { x: p.b.x + dx, y: p.b.y + dy },
         thicknessMm: p.espessuraMm,
@@ -461,6 +487,9 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
                     className="h-7 max-w-36 rounded-[6px] border border-slate-200 px-1.5 text-[11px] text-slate-800"
                   >
                     <option value="">Não importar</option>
+                    {pav.elevacaoMm !== null && (
+                      <option value={NOVO_PAVIMENTO}>Criar «{nomeDoNovoPavimento(pav.elevacaoMm)}»</option>
+                    )}
                     {model.levels.map((l) => (
                       <option key={l.id} value={l.id}>
                         {l.name} ({m2(l.elevationMm)} m)

@@ -145,10 +145,13 @@ import { novoUid, type ElementUid } from './identity';
 
 export type Command =
   /** `tipoDeId`: nasce vinculado a este pavimento tipo (E2.1). */
-  | { type: 'AddLevel'; name: string; elevationMm: number; defaultHeightMm: number; tipoDeId?: ObjectId }
+  /** `uid` (P2.32): identidade dada por quem importa, para as peças do MESMO lote apontarem pelo `levelUid` — o id só nasce ao aplicar. */
+  | { type: 'AddLevel'; name: string; elevationMm: number; defaultHeightMm: number; tipoDeId?: ObjectId; uid?: ElementUid }
   | {
       type: 'AddWall';
       levelId: ObjectId;
+      /** P2.32: pavimento criado no mesmo lote — resolvido antes de aplicar; com ele, `levelId` pode vir vazio. */
+      levelUid?: ElementUid;
       a: Point;
       b: Point;
       thicknessMm: number;
@@ -270,6 +273,8 @@ export type Command =
   | {
       type: 'AddStructural';
       levelId: ObjectId;
+      /** P2.32: idem `AddWall.levelUid`. */
+      levelUid?: ElementUid;
       kind: StructuralKind;
       pontos: Point[];
       larguraMm?: number;
@@ -1183,11 +1188,24 @@ function emptyDiff(): Diff {
  * recomputado sempre. Adiantar essas duas economizaria menos de 1 s e mudaria
  * o que o lote garante.
  */
+/** P2.32: `AddWall`/`AddStructural` com `levelUid` apontam para um pavimento criado no mesmo lote; aqui vira `levelId`. */
+function resolverLevelUid(model: BlueprintModel, command: Command): Command {
+  if ((command.type !== 'AddWall' && command.type !== 'AddStructural') || !command.levelUid) return command;
+  const nivel = model.levels.find((l) => l.uid === command.levelUid);
+  if (!nivel) throw new KernelError('LEVEL_NOT_FOUND', `Nenhum pavimento com uid ${command.levelUid}`);
+  const { levelUid: _levelUid, ...resto } = command;
+  void _levelUid;
+  return { ...resto, levelId: nivel.id } as Command;
+}
+
 function aplicarSemHash(
   model: BlueprintModel,
-  command: Command,
+  comandoCru: Command,
 ): { model: BlueprintModel; diff: Diff } {
   const next = cloneModel(model);
+  // PAVIMENTO CRIADO NO MESMO LOTE (P2.32): `levelUid` vira `levelId` antes de tudo — inclusive antes das
+  // recusas por pavimento vinculado, que leem `levelId`.
+  const command = resolverLevelUid(next, comandoCru);
   recusarEdicaoEmPavimentoVinculado(model, command);
   recusarEdicaoEmInstanciaDeGrupo(model, command);
   /** Cópias de instância de grupo que existem agora — a sincronização apaga as que deixarem de ser esperadas. */
@@ -1198,9 +1216,10 @@ function aplicarSemHash(
     case 'AddLevel': {
       const id = nextId(next, 'lvl');
       if (command.tipoDeId !== undefined) findLevel(next, command.tipoDeId);
+      if (command.uid && next.levels.some((l) => l.uid === command.uid)) throw new KernelError('DUPLICATE_UID', `Já existe pavimento com uid ${command.uid}`);
       next.levels.push({
         id,
-        uid: novoUid(),
+        uid: command.uid ?? novoUid(),
         name: command.name,
         elevationMm: command.elevationMm,
         defaultHeightMm: command.defaultHeightMm,

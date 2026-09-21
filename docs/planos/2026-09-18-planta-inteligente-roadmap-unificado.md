@@ -1432,7 +1432,7 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 **Decisões**
 - Sem `.skp`: binário fechado da Trimble; o caminho é o .dae que o SketchUp exporta em todas as edições.
 - A malha não tem "parede": ela é RECONHECIDA nas faces, e o desenho volta tão limpo quanto a malha — a Planta 19/09 (desenho de prova, bagunçado, com paredes curvas facetadas e sobreposições) devolveu 198 paredes de 381, 146 delas de 150 mm, e 503 pares curtos (facetas de arco < 2× espessura).
-- Aberturas não são reconhecidas (o vão numa malha é só ausência de faces) — registrado → **feito na P2.29**. Pavimentos novos não são criados: cada cota lida casa com um pavimento existente.
+- Aberturas não são reconhecidas (o vão numa malha é só ausência de faces) — registrado → **feito na P2.29**. Pavimentos novos não são criados: cada cota lida casa com um pavimento existente → **feito na P2.32** (COLLADA e IFC).
 - Sem bump de kernel.
 
 **Prova**
@@ -1525,6 +1525,22 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 - `npx tsc --noEmit` ok · `check-xss-sinks.sh` ok · suíte cheia 430 arquivos / 4996 testes · `npm run build` ok.
 - App real (escritas bloqueadas: 14, 0 erros): Colaborar › Versões › SketchUp (.dae) da Planta 19/09 v1 → 603 kB, 16 materiais, nó de grupo "Arquitetura" (a versão publicada não tem instalações nem mobiliário — nenhuma versão publicada do acervo tem; publicar seria escrita real) → reimportado: 171 paredes, como na P2.29. `casa-mep.dae` (gerado por `gerarCollada` de um modelo com eletroduto, tubo de água, tomada, quadro, armário de 2 m e um conjunto de jantar: 14 geometrias, 240 triângulos, grupos Arquitetura/Instalações/Mobiliário, XML bem formado) → Inserir › Do SketchUp: **4 paredes · 192 triângulos fora** com o filtro por nome; sem o filtro, o armário vira "parede de 600 mm" e o desenho perde 4 m — a razão do filtro, vista.
 - Testes `blueprintCollada.test.ts`: eletroduto com um cilindro por segmento do L, tubo com volume ≈ π·0,015²·L, tomada de 0,25 a 0,35 m com 0,001 m³, quadro elétrico, armário girado 0,72 m³ por família, conjunto só pelas peças, nós de grupo e materiais, `incluir` desliga, ida e volta pelo importador devolve as 4 paredes; geradores com volume positivo (reto, inclinado, girado) e degenerado vazio.
+
+### P2.32 — Pavimento criado na importação (IFC e COLLADA) (21/09/2026) · fecho do "fora desta fase" da P2.26
+
+**O que entrou**
+- Kernel (sem bump — nada no payload): `AddLevel` aceita `uid` (recusa repetido, `DUPLICATE_UID`); `AddWall` e `AddStructural` aceitam `levelUid`, resolvido para `levelId` ANTES de qualquer recusa (`resolverLevelUid`, `LEVEL_NOT_FOUND` se não existe). Assim o lote de importação cria o pavimento e põe as peças nele — um passo de desfazer — sem o `id` existir quando a lista é montada (o mesmo truque do `wallUid` das aberturas).
+- `PainelImportarCollada` e `PainelImportarIfc`: cota lida sem pavimento a meio metro → sugestão **"Criar «Pavimento +2,80»"** (nome pela cota; pé-direito pela mediana das alturas das paredes daquela cota, senão 2,80 m); a opção existe no select de todo pavimento com cota. Antes, caía no pavimento ativo — um andar fora, em silêncio.
+- Leitor COLLADA: a chave de deduplicação das paredes ganhou a cota da base — um sobrado tem a mesma parede em planta em dois pavimentos e o segundo era descartado (defeito achado por este teste).
+
+**Decisões**
+- Criar é a sugestão, não a imposição: o select continua deixando escolher um pavimento existente ou "não importar" (IFC).
+- Com fator de unidade errado (o defeito de 06/09), agora nascem pavimentos esquisitos (+0,34 m, +0,78 m) VISÍVEIS na tela, em vez de tudo empilhado no ativo — o teste do painel do IFC foi reescrito para isso.
+
+**Prova**
+- `npx tsc --noEmit` ok · check-ui ok · `check-xss-sinks.sh` ok · suíte cheia 431 arquivos / 5001 testes · `npm run build` ok.
+- App real (escritas bloqueadas: 15, 0 erros): `sobrado-alto.dae` (paredes a 0 e a 5,60 m) na Planta 14/09 (Térreo e Pavimento 1 a 2,80) → "cota 0,00 → Térreo", "cota 5,60 → Criar «Pavimento +5,60»" → Importar → Pavimentos 2 → 3, **"Pavimento +5,60 · cota 5,60 m · pé-direito 2,60 m · 4 parede(s)"**, 9 selecionados (8 paredes + o pavimento).
+- Testes: `blueprintImportarPavimento.test.ts` (lote com `AddLevel` uid + parede e pilar por `levelUid`; uid desconhecido e repetido recusados; sobrado lido em dois grupos de cota), editor P2.32 (cota 2,80 sugerida como criar; `saveDraft` com 2 pavimentos e 4 paredes em cada), `PainelImportarIfc` (sem par → criar, com o nome pela cota).
 
 ## Verificação (por fase)
 

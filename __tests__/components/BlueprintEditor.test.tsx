@@ -5749,3 +5749,44 @@ describe('BlueprintEditor · etapas de obra (P2.28)', () => {
     expect(screen.queryByTestId('faixa-etapa')).toBeNull();
   }, 60000);
 });
+
+/**
+ * PAVIMENTO CRIADO NA IMPORTAÇÃO (21/09/2026, P2.32): um .dae de sobrado num
+ * desenho que só tem o Térreo — a cota 2,80 vem sugerida como "Criar
+ * «Pavimento +2,80»" e o lote cria o pavimento e põe as paredes nele.
+ */
+describe('BlueprintEditor · pavimento criado na importação (P2.32)', () => {
+  it('sugere criar o pavimento sem par e o lote cria pavimento + paredes de uma vez', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const { gerarCollada } = await import('../../utils/blueprintCollada');
+    let origem = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    origem = k.applyCommand(origem, { type: 'AddLevel', name: 'Superior', elevationMm: 2800, defaultHeightMm: 2800 }).model;
+    const [t0, s0] = origem.levels.map((l) => l.id);
+    const w = (lv: string, ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall' as const, levelId: lv, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 });
+    origem = k.applyBatch(origem, [w(t0, 0, 0, 6000, 0), w(t0, 6000, 0, 6000, 4000), w(t0, 6000, 4000, 0, 4000), w(t0, 0, 4000, 0, 0), w(s0, 0, 0, 6000, 0), w(s0, 6000, 0, 6000, 4000), w(s0, 6000, 4000, 0, 4000), w(s0, 0, 4000, 0, 0)]).model;
+    const dae = gerarCollada(origem, { titulo: 'Sobrado', revisao: 1, hash: 'h' });
+    // Destino: só o Térreo, vazio.
+    const destino = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    loadBranchModel.mockResolvedValue(destino);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^inserir$/i);
+    await user.click(botao(/^do sketchup$/i));
+    const painel = await screen.findByTestId('painel-importar-collada');
+    await user.upload(within(painel).getByTestId('arquivo-collada'), new File([dae], 'sobrado.dae', { type: 'model/vnd.collada+xml' }));
+    await waitFor(() => expect(within(painel).getByTestId('paredes-collada')).toHaveTextContent(/8 parede\(s\)/));
+    const pavs = within(painel).getByTestId('pavimentos-collada');
+    expect(within(pavs).getByLabelText('Pavimento para a cota 0,00 m')).toHaveValue(destino.levels[0].id);
+    expect(within(pavs).getByLabelText('Pavimento para a cota 2,80 m')).toHaveValue('NOVO');
+    expect(within(pavs).getByRole('option', { name: /Criar «Pavimento \+2,80»/ })).toBeInTheDocument();
+    const { saveDraft } = await import('../../services/blueprintService');
+    vi.mocked(saveDraft).mockClear();
+    await user.click(within(painel).getByTestId('importar-collada'));
+    await waitFor(() => expect(saveDraft).toHaveBeenCalled(), { timeout: 5000 });
+    const salvo = (vi.mocked(saveDraft).mock.calls.at(-1) as unknown as [string, import('../../utils/blueprintKernel').BlueprintModel])[1];
+    expect(salvo.levels.map((l) => [l.name, l.elevationMm])).toEqual([['Térreo', 0], ['Pavimento +2,80', 2800]]);
+    const novo = salvo.levels[1];
+    expect(salvo.walls.filter((x) => x.levelId === novo.id)).toHaveLength(4);
+    expect(salvo.walls.filter((x) => x.levelId === destino.levels[0].id)).toHaveLength(4);
+  }, 60000);
+});

@@ -22,6 +22,9 @@ interface Props {
 }
 
 const m2 = (mm: number) => (mm / 1000).toFixed(2).replace('.', ',');
+const NOVO_PAVIMENTO = 'NOVO';
+/** Nome do pavimento criado na importação: "Pavimento +2,80". */
+const nomeDoNovoPavimento = (elevacaoMm: number) => `Pavimento ${elevacaoMm < 0 ? '−' : '+'}${m2(Math.abs(elevacaoMm))}`;
 
 export default function PainelImportarCollada({ model, levelIdAtivo, onImportar }: Props) {
   const [lendo, setLendo] = useState(false);
@@ -31,7 +34,7 @@ export default function PainelImportarCollada({ model, levelIdAtivo, onImportar 
   const [ancoragem, setAncoragem] = useState<AncoragemIfc>('ARQUIVO');
   /** ABERTURAS (P2.29): entram por padrão; desligar traz só as paredes. */
   const [importarAberturas, setImportarAberturas] = useState(true);
-  /** Pavimento do desenho escolhido para cada grupo de cota lido (índice → levelId). */
+  /** Pavimento do desenho escolhido para cada grupo de cota lido (índice → levelId, ou `NOVO` para criar na cota — P2.32). */
   const [parPavimento, setParPavimento] = useState<Record<number, string>>({});
 
   const preparar = useCallback(async (arquivo: File) => {
@@ -65,19 +68,26 @@ export default function PainelImportarCollada({ model, levelIdAtivo, onImportar 
   const { dx, dy } = deslocamentoDaImportacao(ancoragem, pegada, caixaDoDesenho(model));
   const longe = !!pegada && Math.max(Math.abs(pegada.minX), Math.abs(pegada.maxX), Math.abs(pegada.minY), Math.abs(pegada.maxY)) > 900_000;
 
-  /** O pavimento do desenho mais próximo da cota lida (a sugestão); quem confirma é a pessoa. */
-  const sugestaoDePavimento = (elevationMm: number): string | null => {
-    if (model.levels.length === 0) return null;
-    return [...model.levels].sort((a, b) => Math.abs(a.elevationMm - elevationMm) - Math.abs(b.elevationMm - elevationMm))[0].id;
+  /** O pavimento do desenho a meio metro da cota lida (a sugestão); sem nenhum, CRIAR na cota (P2.32). Quem confirma é a pessoa. */
+  const sugestaoDePavimento = (elevationMm: number): string => {
+    const perto = [...model.levels].sort((a, b) => Math.abs(a.elevationMm - elevationMm) - Math.abs(b.elevationMm - elevationMm))[0];
+    return perto && Math.abs(perto.elevationMm - elevationMm) <= 500 ? perto.id : NOVO_PAVIMENTO;
   };
-  const pavimentoDe = (i: number, elevationMm: number) => parPavimento[i] ?? sugestaoDePavimento(elevationMm) ?? levelIdAtivo;
+  const pavimentoDe = (i: number, elevationMm: number) => parPavimento[i] ?? sugestaoDePavimento(elevationMm);
 
   function importar() {
     if (!r || paredes.length === 0) return;
     const comandos: Command[] = [];
     r.pavimentos.forEach((pav, i) => {
-      const levelId = pavimentoDe(i, pav.elevationMm);
-      if (!levelId) return;
+      const escolha = pavimentoDe(i, pav.elevationMm);
+      // PAVIMENTO NOVO (P2.32): `AddLevel` com uid próprio, antes das paredes; as paredes apontam pelo `levelUid`.
+      let levelId = escolha;
+      let levelUid: string | undefined;
+      if (escolha === NOVO_PAVIMENTO) {
+        levelUid = novoUid();
+        levelId = '';
+        comandos.push({ type: 'AddLevel', name: nomeDoNovoPavimento(pav.elevationMm), elevationMm: pav.elevationMm, defaultHeightMm: pav.alturaMm || 2800, uid: levelUid });
+      } else if (!model.levels.some((l) => l.id === levelId)) return;
       for (const p of pav.paredes) {
         // A parede depois de encostar (mesma ordem de `r.paredes`).
         const k = r.paredes.indexOf(p);
@@ -87,6 +97,7 @@ export default function PainelImportarCollada({ model, levelIdAtivo, onImportar 
         comandos.push({
           type: 'AddWall',
           levelId,
+          ...(levelUid ? { levelUid } : {}),
           a: { x: Math.round(q.a.x + dx), y: Math.round(q.a.y + dy) },
           b: { x: Math.round(q.b.x + dx), y: Math.round(q.b.y + dy) },
           thicknessMm: Math.max(1, Math.round(q.espessuraMm)),
@@ -199,7 +210,8 @@ export default function PainelImportarCollada({ model, levelIdAtivo, onImportar 
                   <span>
                     base {m2(pav.elevationMm)} m · {pav.paredes.length} parede(s) · h {m2(pav.alturaMm)} m
                   </span>
-                  <select value={pavimentoDe(i, pav.elevationMm) ?? ''} onChange={(e) => setParPavimento({ ...parPavimento, [i]: e.target.value })} aria-label={`Pavimento para a cota ${m2(pav.elevationMm)} m`} className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800">
+                  <select value={pavimentoDe(i, pav.elevationMm)} onChange={(e) => setParPavimento({ ...parPavimento, [i]: e.target.value })} aria-label={`Pavimento para a cota ${m2(pav.elevationMm)} m`} className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800">
+                    <option value={NOVO_PAVIMENTO}>Criar «{nomeDoNovoPavimento(pav.elevationMm)}»</option>
                     {model.levels.map((l) => (
                       <option key={l.id} value={l.id}>
                         {l.name} ({m2(l.elevationMm)} m)
@@ -252,7 +264,7 @@ export default function PainelImportarCollada({ model, levelIdAtivo, onImportar 
           )}
 
           <div className="mt-3 flex gap-1.5">
-            <button type="button" onClick={importar} disabled={paredes.length === 0 || model.levels.length === 0 || (ancoragem === 'ARQUIVO' && longe)} className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-[6px] bg-blue-600 px-2.5 text-[13px] font-medium text-white transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-40" data-testid="importar-collada">
+            <button type="button" onClick={importar} disabled={paredes.length === 0 || (ancoragem === 'ARQUIVO' && longe)} className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-[6px] bg-blue-600 px-2.5 text-[13px] font-medium text-white transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-40" data-testid="importar-collada">
               <Check className="h-3.5 w-3.5" />
               Importar {paredes.length}
             </button>

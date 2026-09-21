@@ -424,8 +424,9 @@ export function paredesDosPlanos(planos: readonly Plano[], o: OpcoesDeReconhecim
         const ponto = (t: number): Point => ({ x: Math.round(A.nx * dm - A.ny * t), y: Math.round(A.ny * dm + A.nx * t) });
         const pa = ponto(melhor.t0);
         const pb = ponto(melhor.t1);
-        const chave = [pa.x, pa.y, pb.x, pb.y, Math.round(espessura)].join('|');
-        const chaveInv = [pb.x, pb.y, pa.x, pa.y, Math.round(espessura)].join('|');
+        // A chave leva a COTA da base: um sobrado tem a mesma parede em planta em dois pavimentos (P2.32).
+        const chave = [pa.x, pa.y, pb.x, pb.y, Math.round(espessura), Math.round(z0)].join('|');
+        const chaveInv = [pb.x, pb.y, pa.x, pa.y, Math.round(espessura), Math.round(z0)].join('|');
         usados.add(A);
         usados.add(melhor.B);
         if (chaves.has(chave) || chaves.has(chaveInv)) continue;

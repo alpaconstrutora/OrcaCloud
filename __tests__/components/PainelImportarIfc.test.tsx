@@ -14,7 +14,7 @@
  * já está provada contra o modelo real em `ifcParaKernel`.
  */
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { applyCommand, emptyModel, point, type BlueprintModel } from '../../utils/blueprintKernel';
 
@@ -235,7 +235,8 @@ describe('PainelImportarIfc · onde o modelo cai', () => {
   it('com o fator ANTIGO (1) os dois pavimentos cairiam no mesmo andar', async () => {
     // É o defeito reproduzido: 340 e 780 lidos como MILÍMETROS. O primeiro fica
     // a 34 cm do térreo (dentro da tolerância de meio metro) e o segundo, a
-    // 78 cm de tudo, cai no pavimento ATIVO. Nenhum aponta para o Superior.
+    // 78 cm de tudo, não tem par — desde a P2.32 a sugestão é CRIAR o pavimento
+    // na cota do arquivo (antes caía no ativo, um andar fora). Nenhum aponta para o Superior.
     cenario.pavimentos = [
       { expressID: 100, nome: 'Térreo', elevacao: 340, elevacaoMm: 340 },
       { expressID: 200, nome: 'Superior', elevacao: 780, elevacaoMm: 780 },
@@ -249,8 +250,12 @@ describe('PainelImportarIfc · onde o modelo cai', () => {
     await lerArquivo(container);
 
     const selects = screen.getAllByLabelText(/Para qual pavimento do desenho vai/);
-    expect((selects[0] as HTMLSelectElement).value).toBe(model.levels[0].id);
-    expect((selects[1] as HTMLSelectElement).value).toBe(model.levels[0].id);
+    // Com o fator errado, as duas cotas (0,34 e 0,78 m) ficam longe dos pavimentos do desenho (3,40 e 7,80 m):
+    // a tela propõe CRIAR dois pavimentos esquisitos — visível, em vez de empilhar tudo no ativo.
+    expect((selects[0] as HTMLSelectElement).value).toBe('NOVO');
+    expect(within(selects[0] as HTMLElement).getByRole('option', { name: /Criar «Pavimento \+0,34»/ })).toBeInTheDocument();
+    expect((selects[1] as HTMLSelectElement).value).toBe('NOVO');
+    expect(within(selects[1] as HTMLElement).getByRole('option', { name: /Criar «Pavimento \+0,78»/ })).toBeInTheDocument();
     expect((selects[1] as HTMLSelectElement).value).not.toBe(model.levels[1].id);
   });
 

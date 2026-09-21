@@ -121,3 +121,14 @@ inbox antigo, persistido) → 0 linhas, com o banner de atrasadas acima. Carga e
 - Prova (harness, `tasksModule:view = 'today'` pré-gravado, dados só atrasadas/sem prazo):
   abre em Todas com 4 linhas; Prazo › Hoje → vazio com a mensagem e os dois botões;
   "Ver todas as tarefas" devolve as 4; 0 escritas, 0 erros.
+
+## Pedido posterior — 2026-09-21 (mesma sessão)
+> os itens com status conluido esta com a cor fraca dificultando a visualizacao
+
+- Linha concluída perdeu o `opacity-50` (esmaecia data, responsável e status abaixo do
+  legível); o sinal de "concluída" fica no check verde + título riscado em `slate-500`
+  (antes `slate-400`, e perdia para o `slate-900` da mesma classe). Mesmo ajuste no cartão
+  mobile (`opacity-60`) e no Kanban (título e subtarefas concluídas).
+- Data vencida só fica vermelha em tarefa ABERTA — concluída com prazo passado não é atraso.
+- Prova (harness `tarefas-toolbar`): linha concluída `opacity: 1`, título `slate-500`
+  riscado, data em `slate-600`; aberta vencida continua `red-600`.

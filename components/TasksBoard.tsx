@@ -145,7 +145,7 @@ function DraggableCard({
             className="text-left min-w-0 flex-1"
           >
             <div className="flex items-start gap-1.5">
-              <p className={`text-sm font-bold text-slate-900 leading-snug flex-1 ${isDone ? 'line-through text-slate-400' : ''}`}>
+              <p className={`text-sm font-bold leading-snug flex-1 ${isDone ? 'line-through text-slate-500' : 'text-slate-900'}`}>
                 {task.title}
               </p>
               {task.alert_at && (
@@ -198,7 +198,7 @@ function DraggableCard({
                       </svg>
                     )}
                   </div>
-                  <span className={`truncate ${subDone ? 'line-through text-slate-300' : ''}`}>{sub.title}</span>
+                  <span className={`truncate ${subDone ? 'line-through text-slate-500' : ''}`}>{sub.title}</span>
                 </div>
               )
             })}

@@ -395,7 +395,7 @@ const TasksList: React.FC<Props> = ({
             )}
             <button onClick={() => onEdit(t)} className="text-left min-w-0 flex-1">
               <div className="flex items-center gap-1.5 min-w-0">
-                <span title={t.title} className={`block font-normal text-slate-900 truncate leading-snug ${isDone ? 'line-through text-slate-400' : ''}`}>
+                <span title={t.title} className={`block font-normal truncate leading-snug ${isDone ? 'line-through text-slate-500' : 'text-slate-900'}`}>
                   {t.title}
                 </span>
                 {t.alert_at && (
@@ -451,7 +451,7 @@ const TasksList: React.FC<Props> = ({
       start_date: (
         <td key="start_date" className={COL}>
           {t.start_date ? (
-            <span className={isOverdue(t.start_date) ? 'text-red-600' : 'text-slate-600'}>
+            <span className={!isDone && isOverdue(t.start_date) ? 'text-red-600' : 'text-slate-600'}>
               {fmt(t.start_date)}
             </span>
           ) : (
@@ -464,7 +464,7 @@ const TasksList: React.FC<Props> = ({
       due_date: (
         <td key="due_date" className={COL}>
           {t.due_date ? (
-            <span className={isOverdue(t.due_date) ? 'text-red-600' : 'text-slate-600'}>
+            <span className={!isDone && isOverdue(t.due_date) ? 'text-red-600' : 'text-slate-600'}>
               {fmt(t.due_date)}
             </span>
           ) : (
@@ -562,7 +562,8 @@ const TasksList: React.FC<Props> = ({
           }}
           className={[
             'group border-b border-slate-100 transition-all duration-100',
-            isDone ? 'opacity-50' : '',
+            // concluída: só o título é riscado (abaixo); esmaecer a linha inteira
+            // (opacity-50) deixava data/responsável/status ilegíveis — reportado 21/09/2026
             depth > 0 ? 'bg-slate-50/50' : 'bg-white',
             isBeingDragged ? 'opacity-20' : 'hover:bg-[#f8f9ff]',
             isDropTarget ? 'bg-blue-50 shadow-[inset_0_0_0_2px_#3b82f6]' : '',
@@ -635,7 +636,7 @@ const TasksList: React.FC<Props> = ({
     return (
       <div>
         <div
-          className={`rounded-2xl border p-3.5 transition-all ${isDone ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200 shadow-sm'}`}
+          className={`rounded-2xl border p-3.5 transition-all ${isDone ? 'bg-slate-50 border-slate-100' : 'bg-white border-slate-200 shadow-sm'}`}
           style={{ marginLeft: depth * 14 }}
         >
           <div className="flex items-start gap-3">
@@ -653,7 +654,7 @@ const TasksList: React.FC<Props> = ({
             {/* conteúdo — toque para editar */}
             <button onClick={() => onEdit(t)} className="flex-1 min-w-0 text-left">
               <div className="flex items-center gap-1.5">
-                <span className={`font-bold text-[15px] leading-snug text-slate-900 ${isDone ? 'line-through text-slate-400' : ''}`}>
+                <span className={`font-bold text-[15px] leading-snug ${isDone ? 'line-through text-slate-500' : 'text-slate-900'}`}>
                   {t.title}
                 </span>
                 {t.alert_at && (
@@ -667,8 +668,8 @@ const TasksList: React.FC<Props> = ({
               {/* chips de metadados */}
               <div className="flex items-center gap-1.5 flex-wrap mt-2">
                 {t.due_date && (
-                  <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg ${isOverdue(t.due_date) ? 'bg-red-50 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
-                    {isOverdue(t.due_date) ? <AlertTriangle className="w-3 h-3" /> : <Calendar className="w-3 h-3" />}
+                  <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg ${!isDone && isOverdue(t.due_date) ? 'bg-red-50 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
+                    {!isDone && isOverdue(t.due_date) ? <AlertTriangle className="w-3 h-3" /> : <Calendar className="w-3 h-3" />}
                     {fmt(t.due_date)}
                   </span>
                 )}

@@ -102,3 +102,22 @@ gatilho do popover já mostra a escolha).
   campo Organização; `org=all` → modal "Selecionar organização" (Alpa / SPE Horizonte) →
   formulário sem campo Organização; leitura de `employees` em "Todas" sem filtro de org;
   0 escritas, 0 erros.
+
+## Pedido posterior — 2026-09-21 (mesma sessão)
+> verifique por que nao esta aparecendo nenhuma tarefa
+
+### Diagnóstico (banco, leitura como postgres)
+Tarefas raiz nas organizações do usuário: 10 abertas atrasadas, 10 abertas sem prazo,
+11 concluídas, **0 vencendo hoje**. A tela estava em **Prazo · Hoje** (padrão herdado do
+inbox antigo, persistido) → 0 linhas, com o banner de atrasadas acima. Carga e RLS OK.
+
+### Correção
+- Padrão do Prazo passa a **Todas** (chave nova `tasksModule:prazo`, para valer também
+  para quem tinha `today` persistido) — metade das abertas não tem prazo.
+- Estado vazio (§12) aparece sempre que não há linhas (antes, com `onAddTask`, sobrava uma
+  tabela só com cabeçalho) e diz o recorte ativo ("Nenhuma tarefa vence hoje", "… no espaço
+  X", "… na pasta Y") com o atalho **Ver todas as tarefas** (zera Prazo/Espaço/Pasta) e
+  **Nova tarefa**; com busca/filtros rápidos ativos, o atalho é "Limpar busca e filtros".
+- Prova (harness, `tasksModule:view = 'today'` pré-gravado, dados só atrasadas/sem prazo):
+  abre em Todas com 4 linhas; Prazo › Hoje → vazio com a mensagem e os dois botões;
+  "Ver todas as tarefas" devolve as 4; 0 escritas, 0 erros.

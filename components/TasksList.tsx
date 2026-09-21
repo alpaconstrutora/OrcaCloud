@@ -33,6 +33,10 @@ interface Props {
   onMakeSubtask: (taskId: string, newParentId: string | null) => void
   onAddTask?: (defaults?: TaskDefaults) => void
   onNavigate: (route: string) => void
+  /** Estado vazio: o pai diz qual recorte (Prazo / Espaço / Pasta) está escondendo as
+   *  tarefas e oferece o atalho para desfazê-lo — sem isso "0 tarefas" com um recorte
+   *  persistido parece defeito (21/09/2026: Prazo · Hoje com 20 tarefas abertas sem prazo). */
+  emptyHint?: { message: string; action?: { label: string; onClick: () => void } }
 }
 
 // ── Prioridade ────────────────────────────────────────────────────────────────
@@ -161,7 +165,7 @@ const HEADER_LABEL: Record<Exclude<ColKey, 'actions'>, string> = {
 
 const TasksList: React.FC<Props> = ({
   tasks, loading, employees, projects, statuses = [], filters, groupBy = 'none', resetDragSignal,
-  onToggleDone, onEdit, onAddSubtask, onMakeSubtask, onAddTask, onNavigate,
+  onToggleDone, onEdit, onAddSubtask, onMakeSubtask, onAddTask, onNavigate, emptyHint,
 }) => {
   // F2: filtros sobrevivem a navegação/reload (§3). Ordenação e ordem das colunas
   // vivem no useTableColumns (abaixo), também persistidas.
@@ -786,7 +790,9 @@ const TasksList: React.FC<Props> = ({
   }
 
   const hasRows = filtered.length > 0
-  const showEmpty = !loading && !hasRows && !onAddTask
+  // Sem linhas, o estado vazio (§12) sempre aparece — uma tabela só com o cabeçalho e
+  // "+ Adicionar Tarefa" não diz por que está vazia.
+  const showEmpty = !loading && !hasRows
 
   return (
     <div className="space-y-3">
@@ -934,7 +940,27 @@ const TasksList: React.FC<Props> = ({
         <div className="text-center py-12">
           <Inbox className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma tarefa encontrada</h3>
-          <p className="text-sm text-gray-500">{(q || activeFilters) ? 'Tente ajustar a busca ou os filtros.' : 'Nenhuma tarefa neste recorte.'}</p>
+          <p className="text-sm text-gray-500">
+            {(q || activeFilters) ? 'Tente ajustar a busca ou os filtros.' : (emptyHint?.message ?? 'Nenhuma tarefa neste recorte.')}
+          </p>
+          <div className="flex items-center justify-center gap-2 mt-4">
+            {(q || activeFilters) && (
+              <button onClick={clearFilters} className="h-9 px-3.5 rounded-[6px] border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all">
+                Limpar busca e filtros
+              </button>
+            )}
+            {!(q || activeFilters) && emptyHint?.action && (
+              <button onClick={emptyHint.action.onClick} className="h-9 px-3.5 rounded-[6px] border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all">
+                {emptyHint.action.label}
+              </button>
+            )}
+            {onAddTask && (
+              <button onClick={() => onAddTask()} className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95">
+                <Plus className="w-[15px] h-[15px]" />
+                Nova tarefa
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <>

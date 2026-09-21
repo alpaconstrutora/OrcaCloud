@@ -51,7 +51,10 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
   const [statusMgrOrgId, setStatusMgrOrgId] = useState<string>('')
 
   // Recorte da tela (Prazo / Espaço / Pasta) — persistido (§3); vale para Lista e Kanban.
-  const [view, setView]               = usePersistedState<FilterView>('tasksModule:view', 'today')
+  // Padrão "Todas": metade das tarefas abertas não tem prazo (medido em 21/09/2026: 10 sem
+  // prazo, 10 atrasadas, 0 para hoje) — "Hoje" como padrão abria a tela vazia. Chave nova
+  // ('prazo') para o padrão valer também para quem tinha 'today' persistido do rail antigo.
+  const [view, setView]               = usePersistedState<FilterView>('tasksModule:prazo', 'all')
   const [fSpace, setFSpace]           = usePersistedState('tasksListFilters:space', '')
   const [fFolder, setFFolder]         = usePersistedState('tasksListFilters:folder', '')
   const [tasks, setTasks]             = useState<TaskRecord[]>([])
@@ -389,6 +392,17 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
     </>
   )
 
+  // Estado vazio: diz qual recorte esconde as tarefas e oferece "Ver todas".
+  const scopeActive = view !== 'all' || !!fSpace
+  const emptyHint = {
+    message: [
+      view === 'today' ? 'Nenhuma tarefa vence hoje' : view === 'overdue' ? 'Nenhuma tarefa atrasada' : 'Nenhuma tarefa',
+      fSpace === SPACE_NONE ? 'sem espaço' : activeSpace ? `no espaço ${activeSpace.name}` : '',
+      activeSpace && fFolder === FOLDER_NONE ? 'sem pasta' : activeSpace && fFolder ? `na pasta ${activeSpace.folders.find(f => f.id === fFolder)?.name ?? ''}` : '',
+    ].filter(Boolean).join(' ') + '.',
+    action: scopeActive ? { label: 'Ver todas as tarefas', onClick: () => { setView('all'); setFSpace(''); setFFolder('') } } : undefined,
+  }
+
   // Espaço/pasta que uma tarefa nova herda do recorte ativo.
   const scopeDefaults: TaskDefaults = {
     space_id:  activeSpace ? activeSpace.id : null,
@@ -513,6 +527,7 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
               onMakeSubtask={makeSubtask}
               onAddTask={(defaults) => openTaskForm({ defaults: { ...(defaults ?? {}), ...scopeDefaults } })}
               onNavigate={handleNavigate}
+              emptyHint={emptyHint}
             />
           ) : (
             <>

@@ -10,9 +10,10 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { AlertTriangle, Check, FileUp, Loader2 } from 'lucide-react';
 import type { BlueprintModel, Command } from '../../utils/blueprintKernel';
+import { novoUid } from '../../utils/blueprintKernel';
 import { caixaDePontos, caixaDoDesenho, deslocamentoDaImportacao, type AncoragemIfc } from '../../utils/ancoragemImportacao';
 import { encostarNasFaces } from '../../utils/ifcEncostarParedes';
-import { OPCOES_PADRAO, prepararCollada, type ColladaPreparado, type OpcoesDeReconhecimento } from '../../utils/colladaParaKernel';
+import { IGNORAR_NOS_PADRAO, OPCOES_PADRAO, prepararCollada, type ColladaPreparado, type OpcoesDeReconhecimento } from '../../utils/colladaParaKernel';
 
 interface Props {
   model: BlueprintModel;
@@ -28,6 +29,8 @@ export default function PainelImportarCollada({ model, levelIdAtivo, onImportar 
   const [texto, setTexto] = useState<{ nome: string; xml: string } | null>(null);
   const [opcoes, setOpcoes] = useState<OpcoesDeReconhecimento>(OPCOES_PADRAO);
   const [ancoragem, setAncoragem] = useState<AncoragemIfc>('ARQUIVO');
+  /** ABERTURAS (P2.29): entram por padrão; desligar traz só as paredes. */
+  const [importarAberturas, setImportarAberturas] = useState(true);
   /** Pavimento do desenho escolhido para cada grupo de cota lido (índice → levelId). */
   const [parPavimento, setParPavimento] = useState<Record<number, string>>({});
 
@@ -79,6 +82,8 @@ export default function PainelImportarCollada({ model, levelIdAtivo, onImportar 
         // A parede depois de encostar (mesma ordem de `r.paredes`).
         const k = r.paredes.indexOf(p);
         const q = k >= 0 ? paredes[k] : p;
+        // ABERTURAS (P2.29): o vão aponta para a parede pelo `uid` — o `id` só existe depois do lote (o mesmo truque do IFC).
+        const uid = novoUid();
         comandos.push({
           type: 'AddWall',
           levelId,
@@ -86,7 +91,20 @@ export default function PainelImportarCollada({ model, levelIdAtivo, onImportar 
           b: { x: Math.round(q.b.x + dx), y: Math.round(q.b.y + dy) },
           thicknessMm: Math.max(1, Math.round(q.espessuraMm)),
           heightMm: Math.max(1, Math.round(q.alturaMm)),
+          uid,
         });
+        if (!importarAberturas) continue;
+        // Encostar pode ter movido a ponta `a` ao longo do eixo: o offset lido era desde a ponta ORIGINAL.
+        const ux = p.b.x - p.a.x;
+        const uy = p.b.y - p.a.y;
+        const Lp = Math.hypot(ux, uy) || 1;
+        const desloc = ((q.a.x - p.a.x) * ux + (q.a.y - p.a.y) * uy) / Lp;
+        const Lq = Math.hypot(q.b.x - q.a.x, q.b.y - q.a.y);
+        for (const ab of p.aberturas) {
+          const offsetMm = Math.round(ab.offsetMm - desloc);
+          if (offsetMm < 0 || offsetMm + ab.widthMm > Lq) continue;
+          comandos.push({ type: 'AddOpening', wallId: '', wallUid: uid, kind: ab.kind, offsetMm, widthMm: ab.widthMm, heightMm: Math.min(ab.heightMm, Math.max(1, Math.round(q.alturaMm))), sillMm: ab.sillMm });
+        }
       }
     });
     onImportar(comandos);
@@ -103,7 +121,7 @@ export default function PainelImportarCollada({ model, levelIdAtivo, onImportar 
             Traz as paredes de um modelo do SketchUp exportado como <strong>COLLADA (.dae)</strong>: Arquivo › Exportar › Modelo 3D › COLLADA. O arquivo só tem faces; o leitor reconhece parede onde há duas faces verticais paralelas a uma distância de parede, com a altura que elas têm. Piso, laje, telhado, mobiliário, vidro e painéis finos ficam de fora, e o que foi recusado aparece com o motivo.
           </p>
           <p className="mt-1 text-[11px] text-slate-400" data-testid="aviso-skp">
-            O .skp (binário fechado) não pode ser lido diretamente — só via .dae. Aberturas não são reconhecidas nesta versão: o vão numa malha é só ausência de faces.
+            O .skp (binário fechado) não pode ser lido diretamente — só via .dae. Portas, janelas e vãos livres são reconhecidos onde as duas faces da parede não têm triângulo (retângulo de ao menos 300 mm); grupos com nome de móvel/instalação são ignorados.
           </p>
           <label htmlFor="importar-collada-arquivo" className="mt-2 flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-[6px] border border-dashed border-slate-300 px-2.5 text-[13px] font-medium text-slate-600 transition-colors hover:border-slate-400 hover:text-slate-800">
             {lendo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileUp className="h-3.5 w-3.5" />}
@@ -150,10 +168,27 @@ export default function PainelImportarCollada({ model, levelIdAtivo, onImportar 
               <span className="flex items-center gap-1"><input type="number" value={opcoes.comprimentoMinMm} min={1} aria-label="Comprimento mínimo de parede (mm)" onChange={(e) => setOpcoes({ ...opcoes, comprimentoMinMm: Math.max(1, Number(e.target.value) || 0) })} className={campo} /><span className="w-6 text-slate-400">mm</span></span>
             </label>
             <label className="flex items-center justify-between gap-2">
+              Vão mín.
+              <span className="flex items-center gap-1"><input type="number" value={opcoes.vaoMinMm} min={50} aria-label="Menor vão reconhecido (mm)" onChange={(e) => setOpcoes({ ...opcoes, vaoMinMm: Math.max(50, Number(e.target.value) || 0) })} className={campo} /><span className="w-6 text-slate-400">mm</span></span>
+            </label>
+            <label className="flex items-center justify-between gap-2">
+              Emendar vão livre até
+              <span className="flex items-center gap-1"><input type="number" value={opcoes.vaoLivreMaxMm} min={0} step={100} aria-label="Maior vão livre emendado entre duas paredes colineares (mm; 0 = nunca)" onChange={(e) => setOpcoes({ ...opcoes, vaoLivreMaxMm: Math.max(0, Number(e.target.value) || 0) })} className={campo} /><span className="w-6 text-slate-400">mm</span></span>
+            </label>
+            <label className="flex items-center justify-between gap-2">
               Altura mín.
               <span className="flex items-center gap-1"><input type="number" value={opcoes.alturaMinMm} min={1} aria-label="Altura mínima de parede (mm)" onChange={(e) => setOpcoes({ ...opcoes, alturaMinMm: Math.max(1, Number(e.target.value) || 0) })} className={campo} /><span className="w-6 text-slate-400">mm</span></span>
             </label>
           </div>
+
+          <label className="mt-1.5 flex items-center gap-2 text-[11px] text-slate-600">
+            <input type="checkbox" checked={opcoes.ignorarNos !== null} onChange={(e) => setOpcoes({ ...opcoes, ignorarNos: e.target.checked ? IGNORAR_NOS_PADRAO : null })} aria-label="Ignorar grupos com nome de móvel ou instalação" />
+            Ignorar grupos com nome de móvel/instalação{r.resumo.triangulosIgnoradosPorNome > 0 ? ` (${r.resumo.triangulosIgnoradosPorNome} triângulos fora)` : ''}
+          </label>
+          <label className="mt-1 flex items-center gap-2 text-[11px] text-slate-600">
+            <input type="checkbox" checked={importarAberturas} onChange={(e) => setImportarAberturas(e.target.checked)} aria-label="Importar as aberturas reconhecidas" data-testid="importar-aberturas" />
+            Importar aberturas ({r.resumo.aberturas.portas} porta(s) · {r.resumo.aberturas.janelas} janela(s) · {r.resumo.aberturas.vaos} vão(s) livre(s))
+          </label>
 
           {/* ── Pavimentos ──────────────────────────────────────────────── */}
           {r.pavimentos.length > 0 && (

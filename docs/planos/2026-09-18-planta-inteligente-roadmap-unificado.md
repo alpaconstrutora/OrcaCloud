@@ -1432,7 +1432,7 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 **Decisões**
 - Sem `.skp`: binário fechado da Trimble; o caminho é o .dae que o SketchUp exporta em todas as edições.
 - A malha não tem "parede": ela é RECONHECIDA nas faces, e o desenho volta tão limpo quanto a malha — a Planta 19/09 (desenho de prova, bagunçado, com paredes curvas facetadas e sobreposições) devolveu 198 paredes de 381, 146 delas de 150 mm, e 503 pares curtos (facetas de arco < 2× espessura).
-- Aberturas não são reconhecidas (o vão numa malha é só ausência de faces) — registrado. Pavimentos novos não são criados: cada cota lida casa com um pavimento existente.
+- Aberturas não são reconhecidas (o vão numa malha é só ausência de faces) — registrado → **feito na P2.29**. Pavimentos novos não são criados: cada cota lida casa com um pavimento existente.
 - Sem bump de kernel.
 
 **Prova**
@@ -1475,6 +1475,24 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 - `npx tsc --noEmit` ok · check-ui ok · `check-xss-sinks.sh` ok · suíte cheia 428 arquivos / 4959 testes · `npm run build` ok · `planta-api` reimplantada (bundle 0.57.0; `plantaApi.test.ts` 3/3).
 - App real (escritas bloqueadas: 15, 0 erros de página): Arquitetura › Etapas → Semear → 4 etapas, 162 peças sem etapa; parede nova selecionada → "Nasce em Fase 1, Demolida em Fase 2" → quadro "Fase 1 nascem 1 · 5,80 m / Fase 2 saem 1 · 5,80 m"; etapa em vista Existente → "1 ainda não existe"; Fase 2 → "1 a demolir", faixa correspondente e a parede em vermelho tracejado no canvas (captura).
 - Testes `blueprintEtapas.test.ts` (comandos, invariantes, canônico só quando há etapa com índices e ida e volta, DeleteEtapa solta, status derivado nas três etapas, quadro por etapa, peças sem etapa), editor P2.28 (semear, seleção nasce/demolida gravadas, quadro com os metros da parede, etapa em vista com contagem e faixa).
+
+### P2.29 — Aberturas na importação COLLADA (21/09/2026) · fecho do "fora desta fase" da P2.26
+
+**O que entrou**
+- `utils/colladaParaKernel.ts`: cada `Plano` guarda também as `faces` cruas (sem união); **`aberturasDaParede`** varre a faixa da parede em colunas de 50 mm e, em cada coluna, o que sobra da união das coberturas em Z das DUAS faces é buraco; colunas vizinhas com o mesmo buraco (±30 mm) viram retângulo; fora o menor que `vaoMinMm` (300) e o que encosta nas pontas (canto/testa). Classificação: base ≤ 50 mm do piso e topo ≤ 50 mm do teto → `passage`; base no piso → `door`; senão `window` (peitoril = base − piso). `ParedeLida.aberturas: AberturaLida[]` (offset desde `a`), `resumo.aberturas` por tipo.
+- **`emendarVaosLivres`**: vão de piso a teto não deixa face nenhuma, e a malha devolve duas paredes colineares com buraco; se iguais (espessura, base, altura), na mesma reta e com buraco entre `vaoMinMm` e `vaoLivreMaxMm` (padrão 1500; 0 desliga), viram UMA parede com `passage` — as aberturas da segunda deslocam.
+- **Ignorar nós por nome** (`OpcoesDeReconhecimento.ignorarNos`, padrão `IGNORAR_NOS_PADRAO` = mobili|móvel|furniture|instala|elétric|hidr|tubo|pipe|duto|duct|lumin|ponto|quadro|trecho): um armário de 2 m tem duas faces a 600 mm e viraria parede; `resumo.triangulosIgnoradosPorNome`.
+- Painel: "Vão mín.", "Emendar vão livre até", checkbox "Ignorar grupos com nome de móvel/instalação" (com a contagem), checkbox **"Importar aberturas (N porta(s) · M janela(s) · K vão(s) livre(s))"**; ao importar, cada `AddWall` leva `uid` novo e cada abertura vira `AddOpening { wallUid, … }` no mesmo lote (o truque do IFC), com o offset corrigido pelo que `encostarNasFaces` moveu na ponta `a` e clamp no comprimento.
+
+**Decisões**
+- O vão só existe onde as DUAS faces faltam (uma face só faltando é canto de parede perpendicular).
+- Emendar vãos livres é opção com limite (1500 mm) porque muda a topologia: duas paredes com corredor entre elas são dois trechos e um ambiente só; uma parede com passagem separa os ambientes. Quem conhece o desenho decide.
+- A malha continua mandando: no `.dae` real da Planta 19/09 (desenho de prova) as portas foram desenhadas sem verga, e voltam como vãos livres — é o que a malha diz.
+
+**Prova**
+- `npx tsc --noEmit` ok · check-ui ok · `check-xss-sinks.sh` ok · suíte cheia 428 arquivos / 4963 testes (os 4 do editor que falharam numa rodada cheia passam sozinhos e na rodada seguinte — a intermitência conhecida) · `npm run build` ok.
+- App real (escritas bloqueadas: 15, 0 erros): `casa-prova.dae` (5 paredes, porta 900×2100 e janela 1200×1200 peitoril 1000, gerado por `gerarCollada`) → painel "5 parede(s) · Importar aberturas (1 porta(s) · 1 janela(s) · 0 vão(s) livre(s))" → Importar → contador 14 → 19 paredes, seleção "7 selecionados" (5 paredes + 2 aberturas); `planta-19092026-v1.dae` → 171 paredes, "0 porta(s) · 18 janela(s) · 27 vão(s) livre(s)".
+- Testes: ida e volta recupera porta e janela nas medidas (±50 mm, peitoril 1000) na parede certa e só nela; `passage` de piso a teto emendado; vão de 200 mm ignorado; nó "Mobiliário …" fora (12 triângulos) e, sem o filtro, o armário vira parede; editor P2.26 ampliado: `saveDraft` com 5 paredes e 2 aberturas (door + window, peitoril ≥ 950) na parede da frente.
 
 ## Verificação (por fase)
 

@@ -5561,6 +5561,10 @@ describe('BlueprintEditor · importar do SketchUp (P2.26)', () => {
     const t = nivel.model.levels[0].id;
     const w = (ax: number, ay: number, bx: number, by: number, e = 150) => ({ type: 'AddWall' as const, levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: e, heightMm: 2800 });
     let origem = k.applyBatch(nivel.model, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0), w(3000, 0, 3000, 4000, 100)]).model;
+    // ABERTURAS (P2.29): uma porta e uma janela na parede da frente voltam como aberturas.
+    const frenteOrigem = origem.walls.find((x) => x.a.y === 0 && x.b.y === 0 && x.thicknessMm === 150)!;
+    origem = k.applyCommand(origem, { type: 'AddOpening', wallId: frenteOrigem.id, kind: 'door', offsetMm: 1000, widthMm: 900, heightMm: 2100, sillMm: 0 }).model;
+    origem = k.applyCommand(origem, { type: 'AddOpening', wallId: frenteOrigem.id, kind: 'window', offsetMm: 4000, widthMm: 1200, heightMm: 1200, sillMm: 1000 }).model;
     origem = k.applyCommand(origem, { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(1500, 2000)], larguraMm: 300, profundidadeMm: 300, alturaMm: 2800, baseMm: 0 }).model;
     origem = k.applyCommand(origem, { type: 'AddStructural', levelId: t, kind: 'LAJE', pontos: [k.point(0, 0), k.point(6000, 0), k.point(6000, 4000), k.point(0, 4000)], larguraMm: 0, profundidadeMm: 0, alturaMm: 120, baseMm: 2800 }).model;
     const dae = gerarCollada(origem, { titulo: 'Casa', revisao: 1, hash: 'h' });
@@ -5578,7 +5582,9 @@ describe('BlueprintEditor · importar do SketchUp (P2.26)', () => {
     // .dae: reconhecimento.
     await user.upload(within(painel).getByTestId('arquivo-collada'), new File([dae], 'casa.dae', { type: 'model/vnd.collada+xml' }));
     await waitFor(() => expect(within(painel).getByTestId('paredes-collada')).toHaveTextContent(/5 parede\(s\) · 24,00 m no total · espessuras 100, 150 mm/));
-    expect(within(painel).getByTestId('resumo-collada')).toHaveTextContent(/7 instância\(s\)/);
+    expect(within(painel).getByTestId('resumo-collada')).toHaveTextContent(/9 instância\(s\)/);
+    expect(within(painel).getByTestId('importar-aberturas')).toBeChecked();
+    expect(painel).toHaveTextContent(/Importar aberturas \(1 porta\(s\) · 1 janela\(s\) · 0 vão\(s\) livre\(s\)\)/);
     expect(within(painel).getByTestId('recusas-collada')).toHaveTextContent(/par\(es\) mais curto/);
     expect(within(painel).getByTestId('pavimentos-collada')).toHaveTextContent(/base 0,00 m · 5 parede\(s\) · h 2,80 m/);
     const { saveDraft } = await import('../../services/blueprintService');
@@ -5589,6 +5595,12 @@ describe('BlueprintEditor · importar do SketchUp (P2.26)', () => {
     expect(salvo.walls).toHaveLength(5);
     expect(salvo.walls.map((x) => x.thicknessMm).sort()).toEqual([100, 150, 150, 150, 150]);
     expect(salvo.walls.every((x) => x.heightMm === 2800 && x.levelId === t)).toBe(true);
+    // As duas aberturas entraram na parede da frente (pelo uid do lote), com as medidas.
+    expect(salvo.openings).toHaveLength(2);
+    const frenteSalva = salvo.walls.find((x) => x.a.y === 0 && x.b.y === 0 && x.thicknessMm === 150)!;
+    expect(salvo.openings.every((o) => o.wallId === frenteSalva.id)).toBe(true);
+    expect(salvo.openings.map((o) => o.kind).sort()).toEqual(['door', 'window']);
+    expect(salvo.openings.find((o) => o.kind === 'window')!.sillMm).toBeGreaterThanOrEqual(950);
   }, 60000);
 });
 

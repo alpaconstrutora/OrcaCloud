@@ -47,8 +47,33 @@ export interface OpcoesDeReconhecimento {
   espessuraMaxMm: number;
   comprimentoMinMm: number;
   alturaMinMm: number;
+  /** ABERTURAS (P2.29): menor vão reconhecido (largura e altura). */
+  vaoMinMm: number;
+  /**
+   * Duas paredes colineares, iguais, separadas por um buraco de piso a teto até
+   * esta distância viram UMA parede com `passage`. 0 = nunca emendar (o buraco
+   * fica sendo dois trechos de parede — e os ambientes dos dois lados, um só).
+   */
+  vaoLivreMaxMm: number;
+  /**
+   * Nós (grupos/componentes) ignorados pelo NOME — móveis, instalações,
+   * luminárias. Um armário de 2 m tem duas faces paralelas a 600 mm e viraria
+   * parede; o nome do grupo é a única pista que a malha dá. `null` = nada.
+   */
+  ignorarNos: RegExp | null;
 }
-export const OPCOES_PADRAO: OpcoesDeReconhecimento = { espessuraMinMm: 50, espessuraMaxMm: 600, comprimentoMinMm: 300, alturaMinMm: 1000 };
+export const IGNORAR_NOS_PADRAO = /mobili|m[oó]vel|furniture|instala|el[eé]tric|hidr|tubo|pipe|duto|duct|lumin|\bponto\b|\bquadro\b|\btrecho\b/i;
+export const OPCOES_PADRAO: OpcoesDeReconhecimento = { espessuraMinMm: 50, espessuraMaxMm: 600, comprimentoMinMm: 300, alturaMinMm: 1000, vaoMinMm: 300, vaoLivreMaxMm: 1500, ignorarNos: IGNORAR_NOS_PADRAO };
+
+/** ABERTURAS (P2.29): o vão reconhecido numa parede — o retângulo onde as DUAS faces não têm triângulo. */
+export interface AberturaLida {
+  kind: 'door' | 'window' | 'passage';
+  /** Desde a ponta `a` da parede, ao longo do eixo (mm). */
+  offsetMm: number;
+  widthMm: number;
+  heightMm: number;
+  sillMm: number;
+}
 
 export interface ParedeLida {
   a: Point;
@@ -59,6 +84,8 @@ export interface ParedeLida {
   comprimentoMm: number;
   /** Nome do nó (grupo/componente) que mais contribuiu com faces. */
   origem: string | null;
+  /** ABERTURAS (P2.29), ordenadas por `offsetMm`. */
+  aberturas: AberturaLida[];
 }
 
 export interface PavimentoLido {
@@ -80,6 +107,10 @@ export interface ResumoCollada {
   planosSemPar: number;
   /** Pares recusados por altura/comprimento. */
   paresRecusados: { baixos: number; curtos: number };
+  /** ABERTURAS (P2.29): quantas de cada tipo, no total das paredes. */
+  aberturas: { portas: number; janelas: number; vaos: number };
+  /** Triângulos deixados de fora por `ignorarNos` (nome do nó). */
+  triangulosIgnoradosPorNome: number;
 }
 
 export interface ColladaPreparado {
@@ -185,7 +216,7 @@ export interface TrianguloNoMundo {
 }
 
 /** Lê o COLLADA e devolve os triângulos já em mm, no referencial do kernel (x, y em planta, z para cima). */
-export function trianguloesDoCollada(texto: string): { triangulos: TrianguloNoMundo[]; resumo: Pick<ResumoCollada, 'unidadeM' | 'upAxis' | 'geometrias' | 'instancias' | 'triangulos'>; avisos: string[] } {
+export function trianguloesDoCollada(texto: string, ignorarNos: RegExp | null = null): { triangulos: TrianguloNoMundo[]; resumo: Pick<ResumoCollada, 'unidadeM' | 'upAxis' | 'geometrias' | 'instancias' | 'triangulos' | 'triangulosIgnoradosPorNome'>; avisos: string[] } {
   const raiz = lerXml(texto);
   if (nomeLocal(raiz.nome) !== 'COLLADA') throw new Error('Não é um arquivo COLLADA (.dae): a raiz não é <COLLADA>.');
   const avisos: string[] = [];
@@ -204,6 +235,7 @@ export function trianguloesDoCollada(texto: string): { triangulos: TrianguloNoMu
 
   const triangulos: TrianguloNoMundo[] = [];
   let instancias = 0;
+  let ignoradosPorNome = 0;
   const paraKernel = (v: V3): V3 => {
     const [X, Y, Z] = v.map((c) => c * unidadeM * 1000) as V3;
     if (up === 'Z_UP') return [X, -Y, Z];
@@ -219,6 +251,11 @@ export function trianguloesDoCollada(texto: string): { triangulos: TrianguloNoMu
       const g = geometrias.get(ig.atributos.url ?? '');
       if (!g) continue;
       instancias++;
+      // Ignorar por NOME: o nó (ou um ancestral) diz que é móvel/instalação — não vira parede.
+      if (ignorarNos && nome && ignorarNos.test(nome)) {
+        ignoradosPorNome += Math.floor(g.tris.length / 3);
+        continue;
+      }
       for (let i = 0; i + 2 < g.tris.length; i += 3) {
         const p = [g.tris[i], g.tris[i + 1], g.tris[i + 2]].map((k) => paraKernel(aplicar(m, [g.posicoes[3 * k], g.posicoes[3 * k + 1], g.posicoes[3 * k + 2]]))) as [V3, V3, V3];
         if (p.some((q) => q.some((c) => !Number.isFinite(c)))) continue;
@@ -235,7 +272,7 @@ export function trianguloesDoCollada(texto: string): { triangulos: TrianguloNoMu
   const cenas = descendentes(raiz, 'visual_scene');
   if (cenas.length === 0) avisos.push('Sem <visual_scene>: nenhuma instância; as geometrias não foram posicionadas.');
   for (const cena of cenas) for (const n of filhos(cena, 'node')) visitar(n, IDENT, null, 0);
-  return { triangulos, resumo: { unidadeM, upAxis: up, geometrias: geometrias.size, instancias, triangulos: triangulos.length }, avisos };
+  return { triangulos, resumo: { unidadeM, upAxis: up, geometrias: geometrias.size, instancias, triangulos: triangulos.length, triangulosIgnoradosPorNome: ignoradosPorNome }, avisos };
 }
 
 // ─── Reconhecimento de paredes ──────────────────────────────────────────────
@@ -249,6 +286,8 @@ interface Plano {
   /** Intervalos ocupados ao longo de u = (−ny, nx), já unidos. */
   /** `origens`: nó de origem → comprimento de face que ele contribuiu (o maior dá o nome da parede). */
   trechos: { t0: number; t1: number; z0: number; z1: number; origens: Map<string, number> }[];
+  /** ABERTURAS (P2.29): as projeções CRUAS das faces (sem união) — é nelas que se procura o buraco. */
+  faces: { t0: number; t1: number; z0: number; z1: number }[];
 }
 
 /**
@@ -314,7 +353,7 @@ export function planosVerticais(triangulos: readonly TrianguloNoMundo[]): { plan
     else grupos.set(chave, { nx, ny, d, itens: [item] });
   }
   const planos: Plano[] = [];
-  for (const g of grupos.values()) planos.push({ nx: g.nx, ny: g.ny, d: g.d, trechos: unirTrechos(g.itens) });
+  for (const g of grupos.values()) planos.push({ nx: g.nx, ny: g.ny, d: g.d, trechos: unirTrechos(g.itens), faces: g.itens.map((it) => ({ t0: it.t0, t1: it.t1, z0: it.z0, z1: it.z1 })) });
   return { planos, verticais };
 }
 
@@ -394,11 +433,151 @@ export function paredesDosPlanos(planos: readonly Plano[], o: OpcoesDeReconhecim
         const origens = new Map<string, number>();
         for (const [o, c] of [...tr.origens, ...melhor.tb.origens]) origens.set(o, (origens.get(o) ?? 0) + c);
         const origem = [...origens.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] ?? null;
-        paredes.push({ a: pa, b: pb, espessuraMm: Math.round(espessura), alturaMm: Math.round(z1 - z0), baseMm: Math.round(z0), comprimentoMm: Math.round(comprimento), origem });
+        // A parede nasce em `pa` = t0 e cresce no sentido de u: o offset da abertura é medido a partir de t0.
+        const aberturas = aberturasDaParede(A, melhor.B, melhor.t0, melhor.t1, z0, z1, o).map((ab) => ({ ...ab, offsetMm: Math.round(ab.offsetMm) }));
+        paredes.push({ a: pa, b: pb, espessuraMm: Math.round(espessura), alturaMm: Math.round(z1 - z0), baseMm: Math.round(z0), comprimentoMm: Math.round(comprimento), origem, aberturas });
       }
     }
   }
-  return { paredes, semPar: planos.filter((p) => !usados.has(p) && !finos.has(p)).length, baixos, curtos };
+  return { paredes: emendarVaosLivres(paredes, o), semPar: planos.filter((p) => !usados.has(p) && !finos.has(p)).length, baixos, curtos };
+}
+
+/**
+ * ABERTURAS (P2.29): os retângulos, na faixa da parede `[t0,t1] × [z0,z1]`,
+ * onde NENHUMA das duas faces tem triângulo. Varre colunas de `PASSO_MM` ao
+ * longo do plano; em cada coluna, a união das coberturas em Z das faces de A
+ * e de B; o que sobra é buraco. Colunas vizinhas com o mesmo buraco (±30 mm)
+ * formam um retângulo. Fora: menor que `vaoMinMm`, e o que encosta nas
+ * pontas da parede (é canto/testa, não vão).
+ *
+ *   base do buraco ≤ 50 mm acima do piso e topo ≥ 50 mm abaixo do teto → passage
+ *   base ≤ 50 mm acima do piso → door · senão → window (peitoril = base − piso)
+ */
+const PASSO_MM = 50;
+const TOLERANCIA_Z_MM = 30;
+export function aberturasDaParede(A: Plano, B: Plano, t0: number, t1: number, z0: number, z1: number, o: OpcoesDeReconhecimento = OPCOES_PADRAO): AberturaLida[] {
+  const L = t1 - t0;
+  if (L < 2 * PASSO_MM || z1 - z0 < o.vaoMinMm) return [];
+  const faces = [...A.faces, ...B.faces].filter((f) => f.t1 > t0 && f.t0 < t1 && f.z1 > z0 && f.z0 < z1);
+  /** Os buracos (intervalos de Z não cobertos) na coluna centrada em `t`. */
+  const buracosEm = (t: number): [number, number][] => {
+    const cobertos = faces.filter((f) => f.t0 <= t && f.t1 >= t).map((f) => [Math.max(z0, f.z0), Math.min(z1, f.z1)] as [number, number]).sort((x, y) => x[0] - y[0]);
+    const saida: [number, number][] = [];
+    let cursor = z0;
+    for (const [a, b] of cobertos) {
+      if (a - cursor > 1) saida.push([cursor, a]);
+      cursor = Math.max(cursor, b);
+    }
+    if (z1 - cursor > 1) saida.push([cursor, z1]);
+    return saida;
+  };
+  // Retângulos abertos: buracos iguais em colunas consecutivas.
+  type Aberto = { tIni: number; tFim: number; zInf: number; zSup: number };
+  const abertos: Aberto[] = [];
+  const fechados: Aberto[] = [];
+  const n = Math.floor(L / PASSO_MM);
+  for (let k = 0; k <= n; k++) {
+    const t = t0 + Math.min(L, (k + 0.5) * PASSO_MM);
+    const tCol0 = t0 + k * PASSO_MM;
+    const tCol1 = Math.min(t1, t0 + (k + 1) * PASSO_MM);
+    const buracos = k === n && tCol1 - tCol0 < 1 ? [] : buracosEm(t);
+    const continuam = new Set<Aberto>();
+    for (const [bi, bs] of buracos) {
+      const igual = abertos.find((ab) => Math.abs(ab.zInf - bi) <= TOLERANCIA_Z_MM && Math.abs(ab.zSup - bs) <= TOLERANCIA_Z_MM && !continuam.has(ab));
+      if (igual) {
+        igual.tFim = tCol1;
+        continuam.add(igual);
+      } else {
+        const novo = { tIni: tCol0, tFim: tCol1, zInf: bi, zSup: bs };
+        abertos.push(novo);
+        continuam.add(novo);
+      }
+    }
+    for (const ab of [...abertos]) {
+      if (!continuam.has(ab)) {
+        fechados.push(ab);
+        abertos.splice(abertos.indexOf(ab), 1);
+      }
+    }
+  }
+  fechados.push(...abertos);
+  const saida: AberturaLida[] = [];
+  for (const ab of fechados) {
+    const largura = ab.tFim - ab.tIni;
+    const altura = ab.zSup - ab.zInf;
+    if (largura < o.vaoMinMm || altura < o.vaoMinMm) continue;
+    // Encosta na ponta da parede: canto ou testa, não vão.
+    if (ab.tIni - t0 < PASSO_MM || t1 - ab.tFim < PASSO_MM) continue;
+    const noPiso = ab.zInf - z0 <= 50;
+    const noTeto = z1 - ab.zSup <= 50;
+    const kind: AberturaLida['kind'] = noPiso && noTeto ? 'passage' : noPiso ? 'door' : 'window';
+    saida.push({ kind, offsetMm: ab.tIni - t0, widthMm: Math.round(largura), heightMm: Math.round(noPiso ? altura + (ab.zInf - z0) : altura), sillMm: noPiso ? 0 : Math.round(ab.zInf - z0) });
+  }
+  return saida.sort((x, y) => x.offsetMm - y.offsetMm);
+}
+
+/**
+ * VÃO LIVRE (P2.29): sem verga nem peitoril não há face nenhuma no vão, e o
+ * reconhecimento devolve duas paredes colineares com um buraco entre elas.
+ * Se são da mesma espessura, na mesma linha, na mesma faixa de Z e o buraco
+ * cabe numa passagem (≥ `vaoMinMm`, ≤ `vaoLivreMaxMm`), viram UMA parede com `passage`.
+ */
+export function emendarVaosLivres(paredes: ParedeLida[], o: OpcoesDeReconhecimento = OPCOES_PADRAO): ParedeLida[] {
+  if (!(o.vaoLivreMaxMm > 0)) return paredes;
+  const restantes = [...paredes];
+  const saida: ParedeLida[] = [];
+  const eixo = (p: ParedeLida) => {
+    const L = Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y) || 1;
+    return { ux: (p.b.x - p.a.x) / L, uy: (p.b.y - p.a.y) / L, L };
+  };
+  while (restantes.length) {
+    let p = restantes.shift()!;
+    let emendou = true;
+    while (emendou) {
+      emendou = false;
+      const e = eixo(p);
+      for (let i = 0; i < restantes.length; i++) {
+        const q = restantes[i];
+        if (Math.abs(q.espessuraMm - p.espessuraMm) > 1 || Math.abs(q.baseMm - p.baseMm) > 30 || Math.abs(q.alturaMm - p.alturaMm) > 30) continue;
+        const eq = eixo(q);
+        // Mesma direção (ou oposta) e sobre a mesma reta.
+        if (Math.abs(e.ux * eq.ux + e.uy * eq.uy) < 0.99996) continue;
+        const dist = Math.abs((q.a.x - p.a.x) * e.uy - (q.a.y - p.a.y) * e.ux);
+        if (dist > 5) continue;
+        // Posições ao longo do eixo de p.
+        const ta = (q.a.x - p.a.x) * e.ux + (q.a.y - p.a.y) * e.uy;
+        const tb = (q.b.x - p.a.x) * e.ux + (q.b.y - p.a.y) * e.uy;
+        const qMin = Math.min(ta, tb);
+        const qMax = Math.max(ta, tb);
+        let vao: { inicio: number; largura: number; antes: ParedeLida; depois: ParedeLida; depoisInvertida: boolean } | null = null;
+        if (qMin >= e.L) vao = { inicio: e.L, largura: qMin - e.L, antes: p, depois: q, depoisInvertida: ta > tb };
+        else if (qMax <= 0) vao = { inicio: qMax, largura: -qMax, antes: q, depois: p, depoisInvertida: false };
+        if (!vao || vao.largura < o.vaoMinMm || vao.largura > o.vaoLivreMaxMm) continue;
+        // Recompõe no sentido de `antes` (a → b): as aberturas de `depois` deslocam.
+        const antes = vao.antes === p ? p : q;
+        const depois = vao.antes === p ? q : p;
+        const eA = eixo(antes);
+        const depoisNoSentido = ((depois.b.x - depois.a.x) * eA.ux + (depois.b.y - depois.a.y) * eA.uy) >= 0;
+        const Ld = eixo(depois).L;
+        const abDepois = depois.aberturas.map((ab) => (depoisNoSentido ? ab : { ...ab, offsetMm: Ld - ab.offsetMm - ab.widthMm }));
+        const fimAntes = eA.L;
+        const inicioDepois = fimAntes + vao.largura;
+        const b = depoisNoSentido ? depois.b : depois.a;
+        p = {
+          ...antes,
+          b: { x: b.x, y: b.y },
+          comprimentoMm: Math.round(inicioDepois + Ld),
+          aberturas: [...antes.aberturas, { kind: 'passage' as const, offsetMm: Math.round(fimAntes), widthMm: Math.round(vao.largura), heightMm: antes.alturaMm, sillMm: 0 }, ...abDepois.map((ab) => ({ ...ab, offsetMm: Math.round(ab.offsetMm + inicioDepois) }))].sort((x, y) => x.offsetMm - y.offsetMm),
+          origem: antes.origem ?? depois.origem,
+        };
+        restantes.splice(i, 1);
+        emendou = true;
+        break;
+      }
+    }
+    saida.push(p);
+  }
+  return saida;
 }
 
 /** Agrupa as paredes por cota de base (pavimentos), a 300 mm de tolerância. */
@@ -419,7 +598,7 @@ export function pavimentosDasParedes(paredes: readonly ParedeLida[]): PavimentoL
 }
 
 export function prepararCollada(texto: string, o: OpcoesDeReconhecimento = OPCOES_PADRAO): ColladaPreparado {
-  const { triangulos, resumo: r, avisos } = trianguloesDoCollada(texto);
+  const { triangulos, resumo: r, avisos } = trianguloesDoCollada(texto, o.ignorarNos);
   const { planos, verticais } = planosVerticais(triangulos);
   const rec = paredesDosPlanos(planos, o);
   const pavimentos = pavimentosDasParedes(rec.paredes);
@@ -429,7 +608,24 @@ export function prepararCollada(texto: string, o: OpcoesDeReconhecimento = OPCOE
   return {
     paredes: rec.paredes,
     pavimentos,
-    resumo: { ...r, verticais, planos: planos.length, planosSemPar: rec.semPar, paresRecusados: { baixos: rec.baixos, curtos: rec.curtos } },
+    resumo: {
+      ...r,
+      verticais,
+      planos: planos.length,
+      planosSemPar: rec.semPar,
+      paresRecusados: { baixos: rec.baixos, curtos: rec.curtos },
+      aberturas: rec.paredes.reduce(
+        (acc, p) => {
+          for (const ab of p.aberturas) {
+            if (ab.kind === 'door') acc.portas++;
+            else if (ab.kind === 'window') acc.janelas++;
+            else acc.vaos++;
+          }
+          return acc;
+        },
+        { portas: 0, janelas: 0, vaos: 0 },
+      ),
+    },
     avisos,
   };
 }

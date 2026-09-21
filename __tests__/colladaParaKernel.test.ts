@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type Command } from '../utils/blueprintKernel';
 import { gerarCollada } from '../utils/blueprintCollada';
-import { pavimentosDasParedes, prepararCollada, trianguloesDoCollada } from '../utils/colladaParaKernel';
+import { OPCOES_PADRAO, pavimentosDasParedes, prepararCollada, trianguloesDoCollada } from '../utils/colladaParaKernel';
 import { encostarNasFaces } from '../utils/ifcEncostarParedes';
 import { lerXml } from '../utils/xmlLeve';
 
@@ -58,6 +58,22 @@ describe('COLLADA → paredes', () => {
     const frente = r.paredes.find((p) => p.a.y === 0 && p.b.y === 0 && p.espessuraMm === 150)!;
     expect(frente.comprimentoMm).toBeGreaterThanOrEqual(6000);
     expect(frente.comprimentoMm).toBeLessThanOrEqual(6150);
+    // ABERTURAS (P2.29): a porta 900×2100 (offset 1000) e a janela 1200×1200 peitoril 1000 (offset 4000) voltam — a ±50 mm (colunas de 50).
+    expect(frente.aberturas).toHaveLength(2);
+    const porta = frente.aberturas.find((ab) => ab.kind === 'door')!;
+    const janela = frente.aberturas.find((ab) => ab.kind === 'window')!;
+    // A parede pode ter voltado com a ponta `a` em 6000 (sentido invertido): o offset é medido desde `a`.
+    const desdeA = (offset: number, largura: number) => (frente.a.x > frente.b.x ? frente.comprimentoMm - offset - largura : offset);
+    expect(Math.abs(desdeA(porta.offsetMm, porta.widthMm) - 1000)).toBeLessThanOrEqual(75);
+    expect(Math.abs(porta.widthMm - 900)).toBeLessThanOrEqual(50);
+    expect(Math.abs(porta.heightMm - 2100)).toBeLessThanOrEqual(50);
+    expect(porta.sillMm).toBe(0);
+    expect(Math.abs(desdeA(janela.offsetMm, janela.widthMm) - 4000)).toBeLessThanOrEqual(75);
+    expect(Math.abs(janela.widthMm - 1200)).toBeLessThanOrEqual(50);
+    expect(Math.abs(janela.heightMm - 1200)).toBeLessThanOrEqual(50);
+    expect(Math.abs(janela.sillMm - 1000)).toBeLessThanOrEqual(50);
+    expect(r.paredes.filter((p) => p !== frente).every((p) => p.aberturas.length === 0)).toBe(true);
+    expect(r.resumo.aberturas).toEqual({ portas: 1, janelas: 1, vaos: 0 });
     // A interna (100 mm) vai de face a face das externas (3925 mm); encostar leva ao eixo.
     const interna = porEspessura(100)[0];
     expect(interna.comprimentoMm).toBeGreaterThanOrEqual(3800);
@@ -70,6 +86,34 @@ describe('COLLADA → paredes', () => {
     expect(r.resumo.planosSemPar).toBeGreaterThan(0);
     expect(pavimentosDasParedes(r.paredes)).toEqual([expect.objectContaining({ elevationMm: 0, alturaMm: 2800 })]);
     expect(r.avisos).toEqual([]);
+  });
+
+  it('ABERTURAS (P2.29): vão de piso a teto vira passage; vão menor que o mínimo é ignorado; grupos com nome de móvel/instalação ficam fora', () => {
+    const nivel = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddWall', levelId: t, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 });
+    let m = applyBatch(nivel.model, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0)]).model;
+    const frente = m.walls.find((x) => x.a.y === 0 && x.b.y === 0)!;
+    m = applyCommand(m, { type: 'AddOpening', wallId: frente.id, kind: 'passage', offsetMm: 1000, widthMm: 1200, heightMm: 2800, sillMm: 0 } as Command).model;
+    m = applyCommand(m, { type: 'AddOpening', wallId: frente.id, kind: 'window', offsetMm: 4000, widthMm: 200, heightMm: 200, sillMm: 1500 } as Command).model;
+    // Um armário alto (2 m, 600 de fundo, 2 m de largura) e uma tomada: sem o filtro por nome, o armário viraria "parede" de 600 mm.
+    m = applyCommand(m, { type: 'AddComponente', levelId: t, tipoId: 'ARMARIO', familia: 'ARMARIO', at: point(3000, 2000), larguraMm: 2000, profundidadeMm: 600, alturaMm: 2000, rotacaoGraus: 0 } as Command).model;
+    const dae = gerarCollada(m, { titulo: 'Casa', revisao: 1, hash: 'h' }).replace('name="Parede ', 'name="Parede ');
+    // Simula o nome que a P2.31 dará ao mobiliário: um nó "Mobiliário …" com uma caixa 2000×600×2000.
+    const caixa = `<geometry id="mov" name="Mobiliário armário"><mesh><source id="mov-pos"><float_array id="mov-pos-a" count="24">2 -1.7 0 4 -1.7 0 4 -2.3 0 2 -2.3 0 2 -1.7 2 4 -1.7 2 4 -2.3 2 2 -2.3 2</float_array><technique_common><accessor source="#mov-pos-a" count="8" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common></source><vertices id="mov-vtx"><input semantic="POSITION" source="#mov-pos"/></vertices><triangles count="12"><input semantic="VERTEX" source="#mov-vtx" offset="0"/><p>0 1 5 0 5 4 1 2 6 1 6 5 2 3 7 2 7 6 3 0 4 3 4 7 4 5 6 4 6 7 0 3 2 0 2 1</p></triangles></mesh></geometry>`;
+    const comMovel = dae.replace('</library_geometries>', caixa + '</library_geometries>').replace('<node id="pav-', '<node id="no-mov" name="Mobiliário armário"><instance_geometry url="#mov"/></node><node id="pav-');
+    const semFiltro = prepararCollada(comMovel, { ...OPCOES_PADRAO, ignorarNos: null });
+    const comFiltro = prepararCollada(comMovel);
+    // Com o filtro, o armário sai (12 triângulos) e sobram as 4 paredes; sem ele, o armário vira uma parede a mais.
+    expect(comFiltro.resumo.triangulosIgnoradosPorNome).toBe(12);
+    expect(comFiltro.paredes).toHaveLength(4);
+    expect(semFiltro.paredes.length).toBeGreaterThan(4);
+    // O vão de 1200 de piso a teto é passage; a janelinha de 200 (< 300) é ignorada.
+    const f = comFiltro.paredes.find((p) => p.a.y === 0 && p.b.y === 0)!;
+    expect(f.aberturas).toHaveLength(1);
+    expect(f.aberturas[0].kind).toBe('passage');
+    expect(Math.abs(f.aberturas[0].widthMm - 1200)).toBeLessThanOrEqual(50);
+    expect(comFiltro.resumo.aberturas).toEqual({ portas: 0, janelas: 0, vaos: 1 });
   });
 
   it('polylist com NORMAL de offset 1, Y_UP, unidade em cm, translate/rotate no nó e componente via library_nodes', () => {

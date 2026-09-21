@@ -46,6 +46,7 @@ import { etiquetaDoAmbiente } from './blueprintDistribuicao';
 import { avaliar, erroDeSintaxe, formatarValor, variaveisCitadas, type Valor, type Variaveis } from './blueprintFormulas';
 import { unidadePorEtiqueta, medirUnidade, quadroDeUnidades } from './blueprintUnidades';
 import { nucleosDoNivel } from './blueprintNucleoVertical';
+import { variaveisDePermeabilidade } from './blueprintSubRegioes';
 
 export type EscopoDaRegra = 'LOTE' | 'EDIFICACAO' | 'PAVIMENTO' | 'UNIDADE' | 'AMBIENTE' | 'PORTA';
 export const ESCOPOS_DA_REGRA: readonly EscopoDaRegra[] = ['LOTE', 'EDIFICACAO', 'PAVIMENTO', 'UNIDADE', 'AMBIENTE', 'PORTA'];
@@ -89,6 +90,10 @@ export const VARIAVEIS_DO_ESCOPO: Record<EscopoDaRegra, { nome: string; descrica
     { nome: 'testada_min', descricao: 'testada mínima da zona (m)' },
     { nome: 'area_min', descricao: 'área mínima do lote da zona (m²)' },
     { nome: 'permeabilidade_min', descricao: 'taxa de permeabilidade mínima da zona (%)' },
+    // P2.19 (21/09/2026): as sub-regiões do terreno respondem pela permeabilidade desenhada.
+    { nome: 'area_permeavel', descricao: 'soma das sub-regiões permeáveis do terreno (m²) — ausente sem sub-região' },
+    { nome: 'area_impermeavel', descricao: 'soma das sub-regiões impermeáveis (m²)' },
+    { nome: 'taxa_permeabilidade', descricao: 'área permeável ÷ área do lote (%)' },
   ],
   EDIFICACAO: [
     { nome: 'altura', descricao: 'altura desenhada (m): topo do pavimento mais alto' },
@@ -185,6 +190,8 @@ export const REGRAS_SEMENTE: readonly Regra[] = [
   { id: 'sem-lote-ca', nome: 'Coeficiente de aproveitamento', escopo: 'LOTE', expressao: 'coeficiente <= ca_max', severidade: 'ERRO', fonte: 'Zona urbanística', descricao: 'Coeficiente desenhado ≤ máximo da zona' },
   { id: 'sem-lote-testada', nome: 'Testada mínima', escopo: 'LOTE', expressao: 'testada >= testada_min', severidade: 'ERRO', fonte: 'Zona urbanística', descricao: 'Testada ≥ mínima da zona' },
   { id: 'sem-lote-area', nome: 'Área mínima do lote', escopo: 'LOTE', expressao: 'area >= area_min', severidade: 'ERRO', fonte: 'Zona urbanística', descricao: 'Área ≥ mínima da zona' },
+  // P2.19 (21/09/2026): a permeabilidade desenhada (sub-regiões) contra a da zona.
+  { id: 'sem-lote-permeabilidade', nome: 'Taxa de permeabilidade', escopo: 'LOTE', quando: 'permeabilidade_min > 0', expressao: 'taxa_permeabilidade >= permeabilidade_min', severidade: 'ERRO', fonte: 'Zona urbanística', descricao: 'Área permeável desenhada (sub-regiões) ÷ lote ≥ taxa mínima da zona' },
   { id: 'sem-gabarito-m', nome: 'Gabarito em altura', escopo: 'EDIFICACAO', expressao: 'altura <= gabarito_m', severidade: 'ERRO', fonte: 'Zona urbanística', descricao: 'Altura desenhada ≤ gabarito da zona' },
   // P2.9 (20/09/2026): regras de UNIDADE e PAVIMENTO com as variáveis novas — referência de mercado, não norma.
   { id: 'sem-unidade-banheiro', nome: 'Unidade: ao menos um banheiro', escopo: 'UNIDADE', quando: 'ambientes >= 2', expressao: 'banheiros >= 1', severidade: 'ERRO', fonte: FONTE_SEMENTE, descricao: 'Toda unidade com mais de um ambiente tem banheiro' },
@@ -326,6 +333,8 @@ export function alvosDoEscopo(model: BlueprintModel, escopo: EscopoDaRegra, ctx:
             testada_min: ctx.zona?.testadaMinimaMm != null ? m(ctx.zona.testadaMinimaMm) : null,
             area_min: ctx.zona?.areaMinimaDoLoteM2,
             permeabilidade_min: ctx.zona?.taxaPermeabilidadeMin,
+            // P2.19: só quando há sub-região desenhada — sem ela não se afirma permeabilidade zero.
+            ...variaveisDePermeabilidade(model, ctx.lote.areaM2),
           }),
         },
       ];

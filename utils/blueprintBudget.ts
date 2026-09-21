@@ -54,7 +54,7 @@ export type Dimensao = 'M2' | 'M' | 'M3' | 'UN' | 'KG';
  * linha por cômodo com o mesmo número repetido, que somaria errado no
  * orçamento.
  */
-export type EscopoMedida = 'AMBIENTE' | 'PAREDE' | 'ABERTURA' | 'EDIFICACAO' | 'ESTRUTURA' | 'TELHADO' | 'ESCADA' | 'INSTALACAO' | 'GUARDA_CORPO' | 'DEMOLICAO';
+export type EscopoMedida = 'AMBIENTE' | 'PAREDE' | 'ABERTURA' | 'EDIFICACAO' | 'ESTRUTURA' | 'TELHADO' | 'ESCADA' | 'INSTALACAO' | 'GUARDA_CORPO' | 'DEMOLICAO' | 'TERRENO';
 
 export interface DefinicaoMedida {
   id: string;
@@ -331,6 +331,14 @@ export const MEDIDAS: DefinicaoMedida[] = [
     dimensao: 'M',
     descricao: 'Metros de eletroduto, uma linha por bitola.',
   },
+  // SUB-REGIÕES DO TERRENO (P2.19): as áreas externas por material vêm pelos extras (não estão no quantitativo).
+  {
+    id: 'AREA_SUBREGIAO',
+    rotulo: 'Sub-região do terreno (por material)',
+    escopo: 'TERRENO',
+    dimensao: 'M2',
+    descricao: 'Área em planta de cada sub-região do terreno (grama, intertravado, concreto…), uma linha por sub-região; o filtro casa com o material ou o nome.',
+  },
   {
     id: 'COMPRIMENTO_DUTO',
     rotulo: 'Duto de ar (mecânica)',
@@ -552,6 +560,8 @@ interface ValorMedido {
  */
 export interface ExtrasDaGeracao {
   armadura?: ArmaduraQuantificada;
+  /** SUB-REGIÕES DO TERRENO (P2.19): `medirSubRegioes(model)`. */
+  subRegioes?: { uid: string; nome: string; rotuloDoMaterial: string; material: string; permeavel: boolean; areaM2: number }[];
 }
 
 /** Extrai da leitura do quantitativo os valores de uma medida, elemento a elemento. */
@@ -787,6 +797,18 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
           areaRealM2: a.areaRealM2,
         },
       }));
+    }
+
+    case 'AREA_SUBREGIAO': {
+      return (extras.subRegioes ?? [])
+        .filter((s) => s.areaM2 > 0 && (combina(s.rotuloDoMaterial) || combina(s.nome)))
+        .map((s) => ({
+          ref: s.uid,
+          rotulo: `${s.nome} · ${s.rotuloDoMaterial}${s.permeavel ? ' (permeável)' : ''}`,
+          valor: s.areaM2,
+          formula: 'área do polígono em planta',
+          variaveis: { material: s.material, permeavel: s.permeavel ? 'sim' : 'não', areaM2: s.areaM2 },
+        }));
     }
 
     case 'COMPRIMENTO_TUBO_AGUA_FRIA':

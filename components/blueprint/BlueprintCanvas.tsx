@@ -1,5 +1,9 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
+  FICHA_DO_MATERIAL_DE_SUB_REGIAO,
+  polygonArea,
+  type SubRegiao,
+  type MaterialDeSubRegiao,
   circuitosDoTrecho,
   travarOrtogonal,
   isFreeWallEnd,
@@ -330,6 +334,7 @@ const COR_ESCADA_FUNDO = 'rgba(148, 163, 184, 0.18)';
 const COR_NUCLEO = '#5b21b6';
 const COR_NUCLEO_FUNDO = 'rgba(139, 92, 246, 0.14)';
 const SEM_NUCLEOS: Nucleo[] = [];
+const SEM_SUB_REGIOES: SubRegiao[] = [];
 /** Vaga (E2.5): azul-petróleo; sugerida tracejada. */
 const COR_VAGA = '#0f766e';
 const COR_VAGA_FUNDO = 'rgba(20, 184, 166, 0.10)';
@@ -1247,6 +1252,11 @@ interface Props {
   kindDaDivisa?: 'DIVISA' | 'RESTRICAO';
   /** Faixas restritas do lote, prontas (`faixasRestritas`), para hachurar. */
   faixasRestritas?: { boundaryId: string; anel: Point[]; rotulo: string }[];
+  /** SUB-REGIÕES DO TERRENO (P2.19) do pavimento: preenchidas com a cor e a trama do material, sob tudo. */
+  subRegioes?: SubRegiao[];
+  /** O material da PRÓXIMA sub-região (prévia). */
+  materialDaSubRegiao?: MaterialDeSubRegiao;
+  onAddSubRegiao?: (pontos: Point[]) => void;
   /** Move a ponta de um limite. Espelha `onMoveVertex`. */
   onMoveBoundaryVertex?: (boundaryId: string, end: 'a' | 'b', to: Point) => void;
   /**
@@ -1402,6 +1412,9 @@ export default function BlueprintCanvas({
   onAddLimite,
   kindDaDivisa = 'DIVISA',
   faixasRestritas = SEM_FAIXAS,
+  subRegioes = SEM_SUB_REGIOES,
+  materialDaSubRegiao = 'GRAMA',
+  onAddSubRegiao,
   onMoveBoundaryVertex,
   limiteEmDestaque = null,
   onMoveOpening,
@@ -1640,6 +1653,8 @@ export default function BlueprintCanvas({
   const [caminhoAnotacao, setCaminhoAnotacao] = useState<Point[]>([]);
   /** O primeiro canto do núcleo em curso (E2.4). */
   const [pontoNucleo, setPontoNucleo] = useState<Point | null>(null);
+  /** SUB-REGIÃO em curso: vértices já clicados; fecha no 1º. */
+  const [anelSubRegiao, setAnelSubRegiao] = useState<Point[]>([]);
   /**
    * A primeira ponta do TRECHO de rede em curso.
    *
@@ -2665,6 +2680,19 @@ export default function BlueprintCanvas({
   );
 
   /** Qual NÚCLEO VERTICAL está sob o cursor — pela caixa inteira, como a escada. */
+  /** Qual SUB-REGIÃO está sob o cursor — pelo polígono (a última desenhada por cima). */
+  const subRegiaoSob = useCallback(
+    (mundo: { x: number; y: number }): SubRegiao | null => {
+      const p = arredondar(mundo);
+      for (let i = subRegioes.length - 1; i >= 0; i--) {
+        const s = subRegioes[i];
+        if (ocultos.has(s.id) || s.pontos.length < 3) continue;
+        if (pointInPolygon(s.pontos, p)) return s;
+      }
+      return null;
+    },
+    [subRegioes, ocultos],
+  );
   const nucleoSob = useCallback(
     (mundo: { x: number; y: number }): Nucleo | null => {
       const folga = HIT_PX / vista.escala;
@@ -4477,6 +4505,80 @@ export default function BlueprintCanvas({
           ctx.textBaseline = 'bottom';
           ctx.fillText(linhasDoPerfil.length > 1 ? `Perfil ${indice + 1}` : 'Perfil', pts[0].x + 6, pts[0].y - 4);
         });
+        ctx.restore();
+      }
+
+      // SUB-REGIÕES DO TERRENO (P2.19): o chão do lote — cor do material, trama
+      // leve, contorno; nome e área quando cabem. Sob as faixas e as divisas.
+      for (const s of subRegioes) {
+        if (s.pontos.length < 3 || ocultos.has(s.id)) continue;
+        const ficha = FICHA_DO_MATERIAL_DE_SUB_REGIAO[s.material];
+        const pts = s.pontos.map(paraTela);
+        const selecionada = selecao.has(s.id);
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
+        ctx.closePath();
+        ctx.fillStyle = ficha.cor;
+        ctx.globalAlpha = 0.8;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.clip();
+        const xs = pts.map((p) => p.x);
+        const ys = pts.map((p) => p.y);
+        const x0 = Math.min(...xs);
+        const x1 = Math.max(...xs);
+        const y0 = Math.min(...ys);
+        const y1 = Math.max(...ys);
+        ctx.strokeStyle = 'rgba(71, 85, 105, 0.35)';
+        ctx.fillStyle = 'rgba(71, 85, 105, 0.45)';
+        ctx.lineWidth = 0.8;
+        const passo = Math.max(8, 500 * vista.escala);
+        if (ficha.hachura === 'PONTOS') {
+          for (let x = x0; x <= x1; x += passo) for (let y = y0; y <= y1; y += passo) { ctx.beginPath(); ctx.arc(x + ((Math.round(y / passo) % 2) * passo) / 2, y, 1, 0, Math.PI * 2); ctx.fill(); }
+        } else if (ficha.hachura === 'GRADE') {
+          for (let x = x0; x <= x1; x += passo) { ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke(); }
+          for (let y = y0; y <= y1; y += passo) { ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke(); }
+        } else if (ficha.hachura === 'DIAGONAL') {
+          for (let d = x0 - (y1 - y0); d < x1; d += passo) { ctx.beginPath(); ctx.moveTo(d, y1); ctx.lineTo(d + (y1 - y0), y0); ctx.stroke(); }
+        } else if (ficha.hachura === 'ONDAS') {
+          for (let y = y0 + passo / 2; y <= y1; y += passo) { ctx.beginPath(); for (let x = x0; x <= x1; x += 4) ctx.lineTo(x, y + Math.sin(x / 6) * 2); ctx.stroke(); }
+        }
+        ctx.restore();
+        ctx.strokeStyle = selecionada ? COR_SELECIONADA : 'rgba(71, 85, 105, 0.7)';
+        ctx.lineWidth = selecionada ? 2 : 1;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
+        ctx.closePath();
+        ctx.stroke();
+        if (x1 - x0 >= 60 && y1 - y0 >= 24) {
+          const cx = (x0 + x1) / 2;
+          const cy = (y0 + y1) / 2;
+          const area = Math.abs(polygonArea(s.pontos)) / 1e6;
+          escreverRotulo(ctx, s.nome || ficha.rotulo, cx, cy - 7, '#334155', Math.round(11 * fz));
+          escreverRotulo(ctx, `${area.toFixed(2).replace('.', ',')} m²${ficha.permeavel ? ' · permeável' : ''}`, cx, cy + 7, '#475569', Math.round(10 * fz));
+        }
+      }
+      // Prévia da sub-região em curso.
+      if (tool === 'subregiao' && anelSubRegiao.length > 0 && cursor) {
+        const ficha = FICHA_DO_MATERIAL_DE_SUB_REGIAO[materialDaSubRegiao];
+        const pts = [...anelSubRegiao, cursor].map(paraTela);
+        ctx.save();
+        ctx.fillStyle = ficha.cor;
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
+        ctx.closePath();
+        if (pts.length >= 3) ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = COR_PREVIA;
+        ctx.setLineDash([6, 4]);
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
         ctx.restore();
       }
 
@@ -7438,6 +7540,7 @@ export default function BlueprintCanvas({
         tool === 'guardacorpo' ||
         tool === 'anotacao' ||
         tool === 'nucleo' ||
+        tool === 'subregiao' ||
         tool === 'vaga' ||
         tool === 'componente')
     ) {
@@ -7640,6 +7743,9 @@ export default function BlueprintCanvas({
     caminhoAnotacao,
     tipoDeAnotacao,
     faixasRestritas,
+    subRegioes,
+    anelSubRegiao,
+    materialDaSubRegiao,
     nucleos,
     pontoNucleo,
     vagas,
@@ -8135,6 +8241,13 @@ export default function BlueprintCanvas({
       setCursor(capturarTracado(paraMundo(px, py)));
       return;
     }
+    if (tool === 'subregiao') {
+      let alvo = capturarTracado(paraMundo(px, py));
+      const anterior = anelSubRegiao[anelSubRegiao.length - 1] ?? null;
+      if (anterior && ortoAtivo(e)) alvo = travarOrtogonal(anterior, alvo);
+      setCursor(alvo);
+      return;
+    }
 
     if (tool === 'rede') {
       let alvo = capturarRede(paraMundo(px, py));
@@ -8486,6 +8599,22 @@ export default function BlueprintCanvas({
     }
 
     // NÚCLEO VERTICAL (E2.4): dois cantos opostos, como o retângulo de paredes.
+    // SUB-REGIÃO (P2.19): polígono livre, fecha no primeiro vértice (como a laje).
+    if (tool === 'subregiao') {
+      let ponto = capturarTracado(mundo);
+      const fecha = anelSubRegiao.length >= 3 && Math.hypot(anelSubRegiao[0].x - ponto.x, anelSubRegiao[0].y - ponto.y) < SNAP_PX / vista.escala;
+      if (fecha) {
+        onAddSubRegiao?.(anelSubRegiao);
+        setAnelSubRegiao([]);
+        return;
+      }
+      const anterior = anelSubRegiao[anelSubRegiao.length - 1] ?? null;
+      if (anterior && ortoAtivo(e)) ponto = travarOrtogonal(anterior, ponto);
+      if (anterior && ponto.x === anterior.x && ponto.y === anterior.y) return;
+      setAnelSubRegiao((c) => [...c, ponto]);
+      return;
+    }
+
     if (tool === 'nucleo') {
       const ponto = capturarTracado(mundo);
       if (!pontoNucleo) {
@@ -8758,6 +8887,7 @@ export default function BlueprintCanvas({
         componenteClicado?.id ??
         vagaClicada?.id ??
         w?.id ??
+        subRegiaoSob(mundo)?.id ??
         aguaClicada?.id ??
         f?.id ??
         corteClicado?.id ??
@@ -9316,6 +9446,7 @@ export default function BlueprintCanvas({
       setPontoGuardaCorpo(null);
       setArcoEmCurso([]);
       setPontoExtrusao(null);
+      setAnelSubRegiao([]);
       setCaminhoAnotacao([]);
       setPontoNucleo(null);
       // ⚠️ E o TRECHO em curso, que o Escape não cancelava: o primeiro clique
@@ -9407,6 +9538,12 @@ export default function BlueprintCanvas({
           ? ancoraDaForma
             ? `Arraste para dar o tamanho e o giro · clique fecha o polígono de ${ladosPoligono} lados · Esc cancela`
             : 'Clique no CENTRO do polígono'
+          : tool === 'subregiao'
+            ? anelSubRegiao.length >= 3
+              ? 'Clique no próximo vértice · volte ao 1º para fechar a sub-região · Esc cancela'
+              : anelSubRegiao.length > 0
+                ? 'Clique nos vértices da sub-região · Esc cancela'
+                : 'Clique no 1º vértice da sub-região do terreno (material na barra)'
           : tool === 'cobertura-extrusao'
             ? pontoExtrusao
               ? 'Clique no FIM do eixo · a faixa do vão fica centrada nele · Esc cancela'

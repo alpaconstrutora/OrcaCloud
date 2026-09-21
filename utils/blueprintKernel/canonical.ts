@@ -46,6 +46,7 @@
  */
 
 import {
+  type MaterialDeSubRegiao,
   type BlueprintModel,
   type BoundaryKind,
   type BoundaryPapel,
@@ -533,6 +534,19 @@ function projetar(model: BlueprintModel): {
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.tipo, y.tipo),
   );
 
+  // SUB-REGIÕES (0.53.0): pavimento por índice, material, contorno, nome. Omitidas quando não há.
+  const subRegioes = ordenar(
+    model.subRegioes ?? [],
+    (s) => ({
+      level: nivel(s.levelId),
+      material: s.material,
+      pontos: s.pontos.map((p) => ({ x: p.x, y: p.y })),
+      nome: s.nome ?? null,
+      parametros: parametrosCanonicos(s.parametros),
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.material, y.material),
+  );
+
   // VISTAS DEPENDENTES (0.51.0): pavimento por índice, nome, recorte, escala. Omitidas quando não há.
   const vistasDependentes = ordenar(
     model.vistasDependentes ?? [],
@@ -867,6 +881,7 @@ function projetar(model: BlueprintModel): {
     guardaCorpos: guardaCorpos.length ? guardaCorpos.map((g) => g.geom) : undefined,
     anotacoes: anotacoes.length ? anotacoes.map((a) => a.geom) : undefined,
     vistasDependentes: vistasDependentes.length ? vistasDependentes.map((v) => v.geom) : undefined,
+    subRegioes: subRegioes.length ? subRegioes.map((s) => s.geom) : undefined,
     trechos: trechos.length ? trechos.map((t) => t.geom) : undefined,
     terminais: terminais.length ? terminais.map((t) => t.geom) : undefined,
     quadros: quadros.length ? quadros.map((q) => q.geom) : undefined,
@@ -899,6 +914,7 @@ function projetar(model: BlueprintModel): {
     guardaCorpos: guardaCorpos.map((g) => g.item.uid ?? null),
     anotacoes: anotacoes.map((a) => a.item.uid ?? null),
     vistasDependentes: vistasDependentes.map((v) => v.item.uid ?? null),
+    subRegioes: subRegioes.map((s) => s.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
     quadros: quadros.map((q) => q.item.uid ?? null),
@@ -982,6 +998,7 @@ export interface IdentidadeCanonica {
   guardaCorpos?: (ElementUid | null)[];
   anotacoes?: (ElementUid | null)[];
   vistasDependentes?: (ElementUid | null)[];
+  subRegioes?: (ElementUid | null)[];
   trechos?: (ElementUid | null)[];
   terminais?: (ElementUid | null)[];
   quadros?: (ElementUid | null)[];
@@ -1196,6 +1213,8 @@ export interface CanonicalPayload {
     sugerido?: boolean;
     parametros?: Parametros;
   }[];
+  /** Sub-regiões do terreno. Ausente sob kernel < 0.53.0 e em desenho sem nenhuma. */
+  subRegioes?: { level: number; material: MaterialDeSubRegiao; pontos: { x: number; y: number }[]; nome: string | null; parametros?: Parametros }[];
   /** Vistas dependentes (recortes nomeados de planta). Ausente sob kernel < 0.51.0 e em desenho sem nenhuma. */
   vistasDependentes?: { level: number; nome: string; recorte: { minX: number; minY: number; maxX: number; maxY: number }; denominador: number }[];
   /** Anotações por vista. Ausente sob kernel < 0.45.0 e em desenho sem nenhuma. */
@@ -1687,6 +1706,21 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       rotulo: g.rotulo,
       ...(g.sugerido ? { sugerido: true } : {}),
       ...(g.parametros && Object.keys(g.parametros).length > 0 ? { parametros: { ...g.parametros } } : {}),
+    });
+  });
+
+  // SUB-REGIÕES: depois dos pavimentos.
+  const subRegioes = payload.subRegioes ?? [];
+  subRegioes.forEach((s, i) => {
+    if (!levelIds[s.level]) return;
+    model.subRegioes.push({
+      id: nextId(model, 'sub'),
+      uid: uidDe('subRegioes', i, subRegioes.length),
+      levelId: levelIds[s.level],
+      material: s.material,
+      pontos: s.pontos.map((p) => ({ x: p.x, y: p.y })),
+      nome: s.nome,
+      ...(s.parametros && Object.keys(s.parametros).length > 0 ? { parametros: { ...s.parametros } } : {}),
     });
   });
 

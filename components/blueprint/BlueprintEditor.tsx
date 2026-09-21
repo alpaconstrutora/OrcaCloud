@@ -67,6 +67,7 @@ import {
   Highlighter,
   Cloud,
   Crop,
+  Trees,
   TriangleRight,
   Grip,
   Hand,
@@ -115,6 +116,9 @@ import MenuEncaixe from './MenuEncaixe';
 import { TIPOS_DE_ENCAIXE, ROTULO_DO_ENCAIXE } from '../../utils/blueprintEncaixe';
 import type { TipoDePontoEletrico, AcabamentosDoAmbiente, ObjectId } from '../../utils/blueprintKernel';
 import {
+  MATERIAIS_DE_SUB_REGIAO,
+  FICHA_DO_MATERIAL_DE_SUB_REGIAO,
+  type MaterialDeSubRegiao,
   ehConjunto,
   filhosDoConjunto,
   paiDoComponente,
@@ -137,6 +141,7 @@ import { etiquetasDasAberturas, rotuloDeNivelDoPavimento } from '../../utils/blu
 import { assinaturaDoTipo, camposDaEstrutura, camposDoTerminal, propriedadesDaEstrutura, propriedadesDoTerminal } from '../../utils/blueprintTipos';
 import { AJUSTE_DA_VISTA, ehVistaDePlanta, idsOcultosNaVista, nivelDaVista } from '../../utils/blueprintVistasDePlanta';
 import { forrosDoNivel, resumoDaPlantaDeForro } from '../../utils/blueprintPlantaDeForro';
+import { quadroDeSubRegioes } from '../../utils/blueprintSubRegioes';
 import PainelEstruturaSelecionada from './PainelEstruturaSelecionada';
 import PainelTrechoSelecionado from './PainelTrechoSelecionado';
 import PainelQuadroSelecionado from './PainelQuadroSelecionado';
@@ -147,6 +152,7 @@ import PainelEletrica from './PainelEletrica';
 import PainelAguaSelecionada from './PainelAguaSelecionada';
 import PainelEscadaSelecionada from './PainelEscadaSelecionada';
 import PainelNucleoSelecionado from './PainelNucleoSelecionado';
+import PainelSubRegiaoSelecionada from './PainelSubRegiaoSelecionada';
 import PainelVagaSelecionada from './PainelVagaSelecionada';
 import PainelComponenteSelecionado from './PainelComponenteSelecionado';
 import SeletorDeTipo from './SeletorDeTipo';
@@ -1694,6 +1700,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [tipoCirculacao, setTipoCirculacao] = useState<TipoCirculacao>('ESCADA');
   /** NÚCLEO VERTICAL (E2.4): shaft ou elevador na próxima caixa desenhada. */
   const [tipoDeNucleo, setTipoDeNucleo] = useState<TipoDeNucleo>('SHAFT');
+  /** SUB-REGIÃO DO TERRENO (P2.19): o material da próxima; persistido. */
+  const [materialDaSubRegiao, setMaterialDaSubRegiao] = usePersistedState<MaterialDeSubRegiao>('blueprint:subregiao-material', 'GRAMA');
   /** MECÂNICA (E11.1): o shaft nasce com a disciplina escolhida no menu (`MECANICA`) ou geral (`null`). */
   const [disciplinaDoNucleo, setDisciplinaDoNucleo] = useState<DisciplinaDeRede | null>(null);
   /** VAGA (E2.5): o tipo do próximo clique; hipóteses do lançamento lembradas entre sessões. */
@@ -3206,6 +3214,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   }, [situacao4d]);
   const escadaSel = (editor.model.stairs ?? []).find((e) => e.id === editor.selectedId) ?? null;
   const nucleoSel = (editor.model.nucleos ?? []).find((n) => n.id === editor.selectedId) ?? null;
+  const subRegiaoSel = (editor.model.subRegioes ?? []).find((s) => s.id === editor.selectedId) ?? null;
   const vagaSel = (editor.model.vagas ?? []).find((v) => v.id === editor.selectedId) ?? null;
   const componenteSel = (editor.model.componentes ?? []).find((c) => c.id === editor.selectedId) ?? null;
   const guardaCorpoSel = (editor.model.guardaCorpos ?? []).find((g) => g.id === editor.selectedId) ?? null;
@@ -5288,6 +5297,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   }
 
   /** O núcleo nasce do pavimento ativo até o mais alto; o painel ajusta a chegada. */
+  /** SUB-REGIÃO DO TERRENO (P2.19): o polígono fechado vira sub-região com o material da barra. */
+  function adicionarSubRegiao(pontos: Point[]) {
+    if (!levelId) return;
+    const criados = editor.run({ type: 'AddSubRegiao', levelId, material: materialDaSubRegiao, pontos });
+    if (criados.length > 0) selecionar(criados);
+  }
+
   function adicionarNucleo(ring: Point[]) {
     if (!levelId) return;
     const criados = editor.run({ type: 'AddNucleo', levelId, tipo: tipoDeNucleo, ring, ...(tipoDeNucleo === 'SHAFT' && disciplinaDoNucleo ? { disciplina: disciplinaDoNucleo } : {}) });
@@ -5740,6 +5756,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     const eixos = ids.filter((id) => (editor.model.eixos ?? []).some((e) => e.id === id));
     const escadas = ids.filter((id) => (editor.model.stairs ?? []).some((e) => e.id === id));
     const nucleos = ids.filter((id) => (editor.model.nucleos ?? []).some((n) => n.id === id));
+    const subRegioesSel = ids.filter((id) => (editor.model.subRegioes ?? []).some((s) => s.id === id));
     const vagas = ids.filter((id) => (editor.model.vagas ?? []).some((v) => v.id === id));
     const componentesSel = ids.filter((id) => (editor.model.componentes ?? []).some((c) => c.id === id));
     const guardaCorposSel = ids.filter((id) => (editor.model.guardaCorpos ?? []).some((g) => g.id === id));
@@ -5766,6 +5783,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       ...eixos.map((eixoId) => ({ type: 'DeleteEixo', eixoId }) as const),
       ...escadas.map((escadaId) => ({ type: 'DeleteEscada', escadaId }) as const),
       ...nucleos.map((nucleoId) => ({ type: 'DeleteNucleo', nucleoId }) as const),
+      ...subRegioesSel.map((subRegiaoId) => ({ type: 'DeleteSubRegiao', subRegiaoId }) as const),
       ...vagas.map((vagaId) => ({ type: 'DeleteVaga', vagaId }) as const),
       ...componentesSel.map((componenteId) => ({ type: 'DeleteComponente', componenteId }) as const),
       ...guardaCorposSel.map((guardaCorpoId) => ({ type: 'DeleteGuardaCorpo', guardaCorpoId }) as const),
@@ -6708,6 +6726,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const painelDoTerreno = (
     <PainelTerreno
       terreno={terreno}
+      subRegioes={quadroDeSubRegioes(editor.model, terreno?.areaMm2 ?? null, levelId)}
+      taxaPermeabilidadeMinPct={zona.taxaPermeabilidadeMin ?? null}
       georreferencia={editor.model.georreferencia ?? null}
       onGeorreferencia={(georreferencia) =>
         editor.run({ type: 'SetGeorreferencia', georreferencia })
@@ -7090,6 +7110,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         onExcluir={removerSelecionada}
         onAplicarTipo={(p) => escadaSel && editor.run({ type: 'SetEscadaProps', escadaId: escadaSel.id, ...camposDaEscada(p) })}
         comAMesmaAssinatura={escadaSel ? (editor.model.stairs ?? []).filter((e) => assinaturaDoTipo(propriedadesDaEscada(e)) === assinaturaDoTipo(propriedadesDaEscada(escadaSel))).length : undefined}
+      />
+
+      <PainelSubRegiaoSelecionada
+        subRegiao={subRegiaoSel}
+        onProps={(campos) => subRegiaoSel && editor.run({ type: 'SetSubRegiaoProps', subRegiaoId: subRegiaoSel.id, ...campos })}
+        onExcluir={removerSelecionada}
       />
 
       <PainelNucleoSelecionado
@@ -8629,6 +8655,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               />
               <Ferramenta
                 atual={editor.tool}
+                valor="subregiao"
+                icone={Trees}
+                rotulo="Sub-região"
+                onClick={editor.setTool}
+              />
+              <Ferramenta
+                atual={editor.tool}
                 valor="divisa"
                 icone={Waypoints}
                 rotulo="Divisa"
@@ -9783,7 +9816,21 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           mesma regra: o que já está lançado se edita no painel lateral. */}
       {!emVista && (
         <BarraDeOpcoes rotulo={rotuloDaFerramentaAtiva}>
-          {editor.tool === 'anotacao' && tipoDeAnotacao === 'NUVEM' ? (
+          {editor.tool === 'subregiao' ? (
+            /* SUB-REGIÃO DO TERRENO (P2.19): o material da próxima. */
+            <label className="flex items-center gap-2 text-xs text-slate-600">
+              Material
+              <select value={materialDaSubRegiao} onChange={(e) => setMaterialDaSubRegiao(e.target.value as MaterialDeSubRegiao)} aria-label="Material da próxima sub-região" className="rounded-md border border-slate-300 px-1.5 py-0.5 text-xs text-slate-800">
+                {MATERIAIS_DE_SUB_REGIAO.map((m) => (
+                  <option key={m} value={m}>
+                    {FICHA_DO_MATERIAL_DE_SUB_REGIAO[m].rotulo}
+                    {FICHA_DO_MATERIAL_DE_SUB_REGIAO[m].permeavel ? ' · permeável' : ''}
+                  </option>
+                ))}
+              </select>
+              <span className="text-slate-400">cliques nos vértices; volte ao 1º para fechar</span>
+            </label>
+          ) : editor.tool === 'anotacao' && tipoDeAnotacao === 'NUVEM' ? (
             /* NUVEM DE REVISÃO (P2.15): em que revisão a próxima nuvem nasce. */
             <div className="flex items-center gap-2 text-xs text-slate-600">
               <label className="flex items-center gap-1">
@@ -10551,6 +10598,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onAddEscada={adicionarEscada}
               nucleos={nucleosDoNivelAtivo}
               onAddNucleo={adicionarNucleo}
+              subRegioes={(editor.model.subRegioes ?? []).filter((s) => s.levelId === levelId)}
+              materialDaSubRegiao={materialDaSubRegiao}
+              onAddSubRegiao={adicionarSubRegiao}
               vagas={vagasDoNivelAtivo}
               tipoDeVaga={tipoDeVaga}
               onAddVaga={adicionarVaga}

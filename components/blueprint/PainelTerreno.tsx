@@ -1,6 +1,7 @@
 import { ROTULO_DA_RESTRICAO_DO_LOTE, TIPOS_DE_RESTRICAO_DO_LOTE, type TipoDeRestricaoDoLote } from '../../utils/blueprintKernel';
 import type { AvisoDoLote } from '../../utils/blueprintZonaUrbanistica';
 import type { EnvelopeVertical } from '../../utils/blueprintEnvelope3d';
+import type { QuadroDeSubRegioes } from '../../utils/blueprintSubRegioes';
 import React, { useState } from 'react';
 import { AlertTriangle, LandPlot, Save, Table2 } from 'lucide-react';
 import type { Boundary, BoundaryPapel, Georreferencia } from '../../utils/blueprintKernel';
@@ -144,6 +145,9 @@ function LimiteConferido({
 interface Props {
   /** O lote medido. `null` quando não há divisa de terreno desenhada. */
   terreno: Terreno | null;
+  /** SUB-REGIÕES DO TERRENO (P2.19): o quadro por material e a taxa de permeabilidade desenhada. */
+  subRegioes?: QuadroDeSubRegioes | null;
+  taxaPermeabilidadeMinPct?: number | null;
   /** A divisa sozinha na seleção, ou `null`. */
   divisaSelecionada: Boundary | null;
   onComprimento: (mm: number) => void;
@@ -226,6 +230,8 @@ interface Props {
 
 export default function PainelTerreno({
   terreno,
+  subRegioes = null,
+  taxaPermeabilidadeMinPct = null,
   divisaSelecionada,
   onComprimento,
   onPapel,
@@ -402,6 +408,31 @@ export default function PainelTerreno({
           <p className="mt-1.5 text-xs text-slate-500">
             Só recua a divisa que tem papel. Selecione um lado e escolha o dele abaixo.
           </p>
+
+          {subRegioes && subRegioes.linhas.length > 0 && (
+            <div className="mt-2 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700" data-testid="quadro-de-subregioes">
+              <p className="font-semibold text-slate-600">Sub-regiões do terreno</p>
+              <ul className="mt-1 space-y-0.5">
+                {subRegioes.porMaterial.map((x) => (
+                  <li key={x.material} className="flex justify-between gap-2">
+                    <span>{x.rotulo}{x.permeavel ? ' · permeável' : ''}{x.quantidade > 1 ? ` (${x.quantidade})` : ''}</span>
+                    <span className="tabular-nums">{x.areaM2.toFixed(2).replace('.', ',')} m²</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Permeável {subRegioes.areaPermeavelM2.toFixed(2).replace('.', ',')} m² · impermeável {subRegioes.areaImpermeavelM2.toFixed(2).replace('.', ',')} m²
+                {subRegioes.taxaPermeabilidadePct != null ? ` · taxa de permeabilidade desenhada ${subRegioes.taxaPermeabilidadePct.toFixed(1).replace('.', ',')} %` : ''}
+                {subRegioes.taxaPermeabilidadePct != null && taxaPermeabilidadeMinPct != null ? (
+                  subRegioes.taxaPermeabilidadePct >= taxaPermeabilidadeMinPct ? (
+                    <span className="text-emerald-700" data-testid="permeabilidade-ok"> — atende a zona ({taxaPermeabilidadeMinPct} %)</span>
+                  ) : (
+                    <span className="text-red-700" data-testid="permeabilidade-falta"> — abaixo da zona ({taxaPermeabilidadeMinPct} %)</span>
+                  )
+                ) : null}
+              </p>
+            </div>
+          )}
 
           {envelope &&
             (envelope.valido ? (

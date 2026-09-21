@@ -5282,3 +5282,47 @@ describe('BlueprintEditor · famílias aninhadas (P2.18)', () => {
     expect(salvo.componentes ?? []).toHaveLength(0);
   }, 60000);
 });
+
+/**
+ * SUB-REGIÕES DO TERRENO (21/09/2026, backlog P2 — P2.19): a ferramenta na
+ * aba Terreno com o material na barra; a sub-região selecionada mostra o
+ * painel; Dados do lote traz o quadro por material e a taxa de permeabilidade.
+ */
+describe('BlueprintEditor · sub-regiões do terreno (P2.19)', () => {
+  it('ferramenta e barra de material; painel da sub-região (material, permeável); Dados do lote com o quadro e a taxa', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
+    const t = nivel.model.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number, papel: 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA') => ({ type: 'AddBoundary' as const, levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO' as const, papel });
+    let m = k.applyBatch(nivel.model, [d(0, 0, 20000, 0, 'FRENTE'), d(20000, 0, 20000, 30000, 'LATERAL_DIREITA'), d(20000, 30000, 0, 30000, 'FUNDOS'), d(0, 30000, 0, 0, 'LATERAL_ESQUERDA')]).model;
+    m = k.applyBatch(m, [
+      { type: 'AddSubRegiao', levelId: t, material: 'GRAMA', pontos: [k.point(0, 20000), k.point(20000, 20000), k.point(20000, 30000), k.point(0, 30000)], nome: 'Quintal' },
+      { type: 'AddSubRegiao', levelId: t, material: 'INTERTRAVADO', pontos: [k.point(0, 0), k.point(5000, 0), k.point(5000, 6000), k.point(0, 6000)] },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    await user.click(botao(/^sub-região$/i));
+    const material = screen.getByLabelText('Material da próxima sub-região') as HTMLSelectElement;
+    expect(material.value).toBe('GRAMA');
+    await user.selectOptions(material, 'DECK');
+    expect(material.value).toBe('DECK');
+    // Dados do lote: o quadro por material e a taxa desenhada (220 m² permeáveis? não: 200 grama / 600 = 33,3 %).
+    await user.click(botao(/^dados do lote$/i));
+    const quadro = await screen.findByTestId('quadro-de-subregioes');
+    expect(quadro).toHaveTextContent(/Grama · permeável\s*200,00 m²/);
+    expect(quadro).toHaveTextContent(/Piso intertravado\s*30,00 m²/);
+    expect(quadro).toHaveTextContent(/taxa de permeabilidade desenhada 33,3 %/);
+    await user.keyboard('{Escape}');
+    // Painel da sub-região, isolado (jsdom não posiciona o canvas para o clique de seleção).
+    const { default: PainelSubRegiaoSelecionada } = await import('../../components/blueprint/PainelSubRegiaoSelecionada');
+    const { render: r2 } = await import('@testing-library/react');
+    const onProps = vi.fn();
+    r2(<PainelSubRegiaoSelecionada subRegiao={m.subRegioes[0]} onProps={onProps} onExcluir={() => {}} />);
+    const painel = screen.getByTestId('painel-subregiao');
+    expect(painel).toHaveTextContent(/200,00 m² · 4 vértices · permeável/);
+    await user.selectOptions(within(painel).getByLabelText('Material da sub-região'), 'CONCRETO');
+    expect(onProps).toHaveBeenLastCalledWith({ material: 'CONCRETO' });
+  }, 60000);
+});

@@ -1864,6 +1864,53 @@ export interface VistaDependente {
 }
 export const MAX_NOME_DE_VISTA_DEPENDENTE = 60;
 
+/**
+ * SUB-REGIÃO DO TERRENO (0.53.0, backlog P2 — P2.19): um polígono do lote com
+ * MATERIAL de superfície — grama, jardim, brita, piso drenante (permeáveis);
+ * intertravado, concreto, deck, asfalto, espelho d'água (impermeáveis). É a
+ * "subregion" da toposuperfície do Revit. Não participa do arranjo planar
+ * (é chão, não divisória) e não é construção coberta. Dela saem a taxa de
+ * permeabilidade desenhada e as áreas de paisagismo/pavimentação externa.
+ */
+export const MATERIAIS_DE_SUB_REGIAO = ['GRAMA', 'JARDIM', 'BRITA', 'PISO_DRENANTE', 'INTERTRAVADO', 'CONCRETO', 'DECK', 'ASFALTO', 'ESPELHO_DAGUA'] as const;
+export type MaterialDeSubRegiao = (typeof MATERIAIS_DE_SUB_REGIAO)[number];
+export interface FichaDoMaterialDeSubRegiao {
+  rotulo: string;
+  /** Conta para a taxa de permeabilidade da zona. */
+  permeavel: boolean;
+  /** Cor de preenchimento na planta (`#rrggbb`). */
+  cor: string;
+  hachura: 'PONTOS' | 'GRADE' | 'DIAGONAL' | 'ONDAS' | 'NENHUMA';
+}
+export const FICHA_DO_MATERIAL_DE_SUB_REGIAO: Record<MaterialDeSubRegiao, FichaDoMaterialDeSubRegiao> = {
+  GRAMA: { rotulo: 'Grama', permeavel: true, cor: '#bbf7d0', hachura: 'PONTOS' },
+  JARDIM: { rotulo: 'Jardim / canteiro', permeavel: true, cor: '#86efac', hachura: 'PONTOS' },
+  BRITA: { rotulo: 'Brita', permeavel: true, cor: '#e7e5e4', hachura: 'PONTOS' },
+  PISO_DRENANTE: { rotulo: 'Piso drenante', permeavel: true, cor: '#d6d3d1', hachura: 'GRADE' },
+  INTERTRAVADO: { rotulo: 'Piso intertravado', permeavel: false, cor: '#e5e7eb', hachura: 'GRADE' },
+  CONCRETO: { rotulo: 'Concreto', permeavel: false, cor: '#e2e8f0', hachura: 'NENHUMA' },
+  DECK: { rotulo: 'Deck de madeira', permeavel: false, cor: '#fde68a', hachura: 'DIAGONAL' },
+  ASFALTO: { rotulo: 'Asfalto', permeavel: false, cor: '#cbd5e1', hachura: 'NENHUMA' },
+  ESPELHO_DAGUA: { rotulo: "Espelho d'água / piscina", permeavel: false, cor: '#bae6fd', hachura: 'ONDAS' },
+};
+export const MAX_NOME_DE_SUB_REGIAO = 60;
+export interface SubRegiao {
+  id: ObjectId;
+  uid: ElementUid;
+  parametros?: Parametros;
+  levelId: ObjectId;
+  material: MaterialDeSubRegiao;
+  /** Contorno em planta, mm inteiros, ≥ 3 vértices. */
+  pontos: Point[];
+  /** "Jardim da frente"; null = o rótulo do material. */
+  nome: string | null;
+}
+export function findSubRegiao(model: BlueprintModel, id: ObjectId): SubRegiao {
+  const s = (model.subRegioes ?? []).find((x) => x.id === id);
+  if (!s) throw new KernelError('SUBREGION_NOT_FOUND', `Sub-região inexistente: ${id}`);
+  return s;
+}
+
 export function findVistaDependente(model: BlueprintModel, id: ObjectId): VistaDependente {
   const v = (model.vistasDependentes ?? []).find((x) => x.id === id);
   if (!v) throw new KernelError('DEPENDENT_VIEW_NOT_FOUND', `Vista dependente inexistente: ${id}`);
@@ -2480,6 +2527,8 @@ export interface BlueprintModel {
   anotacoes: Anotacao[];
   /** Vistas dependentes (recortes nomeados de planta, 0.51.0). Ver `VistaDependente`. */
   vistasDependentes: VistaDependente[];
+  /** Sub-regiões do terreno (0.53.0). Ver `SubRegiao`. */
+  subRegioes: SubRegiao[];
   /**
    * Escadas e rampas. Como a estrutura e o telhado, NÃO participam do arranjo
    * planar: uma escada dentro da sala não parte o ambiente. O que ela faz ao
@@ -2598,6 +2647,7 @@ export function emptyModel(): BlueprintModel {
     guardaCorpos: [],
     anotacoes: [],
     vistasDependentes: [],
+    subRegioes: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -2667,6 +2717,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     guardaCorpos: (model.guardaCorpos ?? []).map((g) => ({ ...g, pontos: g.pontos.map((p) => ({ ...p })), ...(g.parametros ? { parametros: { ...g.parametros } } : {}) })),
     anotacoes: (model.anotacoes ?? []).map((a) => ({ ...a, vista: { ...a.vista }, pontos: a.pontos.map((p) => ({ ...p })), ...(a.parametros ? { parametros: { ...a.parametros } } : {}), ...(a.revisao ? { revisao: { ...a.revisao } } : {}) })),
     vistasDependentes: (model.vistasDependentes ?? []).map((v) => ({ ...v, recorte: { ...v.recorte } })),
+    subRegioes: (model.subRegioes ?? []).map((s) => ({ ...s, pontos: s.pontos.map((p) => ({ ...p })), ...(s.parametros ? { parametros: { ...s.parametros } } : {}) })),
     grupos: (model.grupos ?? []).map((g) => ({
       ...g,
       pivo: { ...g.pivo },
@@ -3814,6 +3865,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Guarda-corpo', model.guardaCorpos ?? []],
     ['Anotação', model.anotacoes ?? []],
     ['Vista dependente', model.vistasDependentes ?? []],
+    ['Sub-região', model.subRegioes ?? []],
     ['Trecho', model.trechos ?? []],
     ['Terminal', model.terminais ?? []],
     ['Quadro', model.quadros ?? []],
@@ -4418,6 +4470,17 @@ export function assertModelInvariants(model: BlueprintModel): void {
   }
 
   // Guarda-corpos (E7.3): pavimento existente, tipo e material da lista, ≥ 2 vértices inteiros sem trecho nulo, altura inteira positiva, rótulo curto.
+  // SUB-REGIÃO (0.53.0): pavimento vivo, material da lista, contorno inteiro com ≥ 3 vértices, nome curto.
+  for (const s of model.subRegioes ?? []) {
+    if (!model.levels.some((l) => l.id === s.levelId)) throw new KernelError('BAD_SUBREGION', `Sub-região ${s.id}: pavimento inexistente`);
+    if (!MATERIAIS_DE_SUB_REGIAO.includes(s.material)) throw new KernelError('BAD_SUBREGION', `Sub-região ${s.id}: material desconhecido ${String(s.material)}`);
+    if (!Array.isArray(s.pontos) || s.pontos.length < 3) throw new KernelError('BAD_SUBREGION', `Sub-região ${s.id}: o contorno precisa de pelo menos 3 vértices`);
+    s.pontos.forEach((p, i) => {
+      assertIntegerMm(p.x, `${s.id}.pontos[${i}].x`);
+      assertIntegerMm(p.y, `${s.id}.pontos[${i}].y`);
+    });
+    if (s.nome != null && (typeof s.nome !== 'string' || s.nome.length > MAX_NOME_DE_SUB_REGIAO)) throw new KernelError('BAD_SUBREGION', `Sub-região ${s.id}: nome maior que ${MAX_NOME_DE_SUB_REGIAO} caracteres`);
+  }
   // VISTA DEPENDENTE (0.51.0): pavimento vivo, nome, recorte inteiro e não degenerado, escala inteira.
   for (const v of model.vistasDependentes ?? []) {
     if (!model.levels.some((l) => l.id === v.levelId)) throw new KernelError('BAD_DEPENDENT_VIEW', `Vista dependente ${v.id}: pavimento inexistente`);

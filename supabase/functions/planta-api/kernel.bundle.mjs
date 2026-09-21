@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.52.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.53.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -368,6 +368,8 @@ var PREFIXO_ROTULO_UID = {
   anotacao: "A",
   /** Vista dependente — D (recorte nomeado de planta). */
   vistaDependente: "D",
+  /** Sub-região do terreno — J (jardim; S é o corte, R a etiqueta). */
+  subRegiao: "J",
   stair: "E",
   label: "R",
   /**
@@ -633,6 +635,7 @@ function emptyModel() {
     guardaCorpos: [],
     anotacoes: [],
     vistasDependentes: [],
+    subRegioes: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -1794,6 +1797,17 @@ function projetar(model) {
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.tipo, y.tipo)
   );
+  const subRegioes = ordenar(
+    model.subRegioes ?? [],
+    (s2) => ({
+      level: nivel(s2.levelId),
+      material: s2.material,
+      pontos: s2.pontos.map((p) => ({ x: p.x, y: p.y })),
+      nome: s2.nome ?? null,
+      parametros: parametrosCanonicos(s2.parametros)
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.material, y.material)
+  );
   const vistasDependentes = ordenar(
     model.vistasDependentes ?? [],
     (v) => ({
@@ -2034,6 +2048,7 @@ function projetar(model) {
     guardaCorpos: guardaCorpos.length ? guardaCorpos.map((g) => g.geom) : void 0,
     anotacoes: anotacoes.length ? anotacoes.map((a) => a.geom) : void 0,
     vistasDependentes: vistasDependentes.length ? vistasDependentes.map((v) => v.geom) : void 0,
+    subRegioes: subRegioes.length ? subRegioes.map((s2) => s2.geom) : void 0,
     trechos: trechos.length ? trechos.map((t) => t.geom) : void 0,
     terminais: terminais.length ? terminais.map((t) => t.geom) : void 0,
     quadros: quadros.length ? quadros.map((q) => q.geom) : void 0,
@@ -2061,6 +2076,7 @@ function projetar(model) {
     guardaCorpos: guardaCorpos.map((g) => g.item.uid ?? null),
     anotacoes: anotacoes.map((a) => a.item.uid ?? null),
     vistasDependentes: vistasDependentes.map((v) => v.item.uid ?? null),
+    subRegioes: subRegioes.map((s2) => s2.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
     quadros: quadros.map((q) => q.item.uid ?? null),
@@ -2338,6 +2354,19 @@ function modelFromCanonicalPayload(payload) {
       rotulo: g.rotulo,
       ...g.sugerido ? { sugerido: true } : {},
       ...g.parametros && Object.keys(g.parametros).length > 0 ? { parametros: { ...g.parametros } } : {}
+    });
+  });
+  const subRegioes = payload.subRegioes ?? [];
+  subRegioes.forEach((s2, i) => {
+    if (!levelIds[s2.level]) return;
+    model.subRegioes.push({
+      id: nextId(model, "sub"),
+      uid: uidDe("subRegioes", i, subRegioes.length),
+      levelId: levelIds[s2.level],
+      material: s2.material,
+      pontos: s2.pontos.map((p) => ({ x: p.x, y: p.y })),
+      nome: s2.nome,
+      ...s2.parametros && Object.keys(s2.parametros).length > 0 ? { parametros: { ...s2.parametros } } : {}
     });
   });
   const vistasDependentes = payload.vistasDependentes ?? [];

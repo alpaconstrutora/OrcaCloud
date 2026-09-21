@@ -146,6 +146,8 @@ export const PREFIXO_ROTULO_UID = {
   anotacao: 'A',
   /** Vista dependente — D (recorte nomeado de planta). */
   vistaDependente: 'D',
+  /** Sub-região do terreno — J (jardim; S é o corte, R a etiqueta). */
+  subRegiao: 'J',
   stair: 'E',
   label: 'R',
   /**

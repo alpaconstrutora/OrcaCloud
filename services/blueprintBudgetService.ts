@@ -7,6 +7,7 @@
 // banco. Foi assim que o erro que interessa (unidade incompatível) ficou coberto
 // por teste sem precisar de rede.
 
+import { medirSubRegioes } from '../utils/blueprintSubRegioes';
 import { supabase } from '../lib/supabase';
 import { sinapiService } from './sinapiService';
 import { getSnapshot, getStudy, recordAudit } from './blueprintService';
@@ -228,7 +229,7 @@ export async function preverLancamentos(
   }
   const armadura = armaduraDoModelo(model, quant, hipotesesDeArmadura);
 
-  const doDePara = gerarLancamentos(quant, resolvidos, contexto, { armadura });
+  const doDePara = gerarLancamentos(quant, resolvidos, contexto, { armadura, subRegioes: medirSubRegioes(model) });
   const dasCamadas = gerarLancamentosDeCamadas(quant, itens, contexto);
   const dosAcabamentos = gerarLancamentosDeAcabamentos(quant, itens, contexto);
   const dosGuardaCorpos = gerarLancamentosDeGuardaCorpos(quant, itens, contexto);

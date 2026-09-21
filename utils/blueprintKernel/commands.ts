@@ -33,6 +33,10 @@ import {
   type ArcoDaParede,
   type RevisaoDaNuvem,
   findVistaDependente,
+  findSubRegiao,
+  MATERIAIS_DE_SUB_REGIAO,
+  MAX_NOME_DE_SUB_REGIAO,
+  type MaterialDeSubRegiao,
   CONJUNTOS_DE_COMPONENTES,
   ehConjunto,
   filhosDoConjunto,
@@ -495,6 +499,11 @@ export type Command =
    * inteira por um vetor; vértice a vértice vai por `SetGuardaCorpoProps.pontos`.
    */
   /** VISTA DEPENDENTE (0.51.0, P2.17): recorte nomeado de uma planta, com escala própria. */
+  /** SUB-REGIÃO DO TERRENO (0.53.0, P2.19): polígono com material de superfície. */
+  | { type: 'AddSubRegiao'; levelId: ObjectId; material: MaterialDeSubRegiao; pontos: Point[]; nome?: string | null }
+  | { type: 'SetSubRegiaoProps'; subRegiaoId: ObjectId; material?: MaterialDeSubRegiao; nome?: string | null; pontos?: Point[] }
+  | { type: 'MoveSubRegiaoVertex'; subRegiaoId: ObjectId; index: number; to: Point }
+  | { type: 'DeleteSubRegiao'; subRegiaoId: ObjectId }
   | { type: 'AddVistaDependente'; levelId: ObjectId; nome: string; recorte: { minX: number; minY: number; maxX: number; maxY: number }; denominador?: number }
   | { type: 'SetVistaDependenteProps'; vistaId: ObjectId; nome?: string; recorte?: { minX: number; minY: number; maxX: number; maxY: number }; denominador?: number }
   | { type: 'DeleteVistaDependente'; vistaId: ObjectId }
@@ -2259,6 +2268,55 @@ function aplicarSemHash(
       break;
     }
 
+    // ── Sub-regiões do terreno (P2.19) ─────────────────────────────────────
+
+    case 'AddSubRegiao': {
+      findLevel(next, command.levelId);
+      if (!MATERIAIS_DE_SUB_REGIAO.includes(command.material)) throw new KernelError('BAD_SUBREGION', `Material desconhecido: ${String(command.material)}`);
+      if (command.pontos.length < 3) throw new KernelError('BAD_SUBREGION', `A sub-região precisa de pelo menos 3 vértices; recebeu ${command.pontos.length}`);
+      const id = nextId(next, 'sub');
+      next.subRegioes = [
+        ...(next.subRegioes ?? []),
+        {
+          id,
+          uid: novoUid(),
+          levelId: command.levelId,
+          material: command.material,
+          pontos: command.pontos.map((p, i) => ({ x: assertIntegerMm(roundToMm(p.x), `pontos[${i}].x`), y: assertIntegerMm(roundToMm(p.y), `pontos[${i}].y`) })),
+          nome: command.nome?.trim().slice(0, MAX_NOME_DE_SUB_REGIAO) || null,
+        },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetSubRegiaoProps': {
+      const s = findSubRegiao(next, command.subRegiaoId);
+      if (command.material !== undefined) {
+        if (!MATERIAIS_DE_SUB_REGIAO.includes(command.material)) throw new KernelError('BAD_SUBREGION', `Material desconhecido: ${String(command.material)}`);
+        s.material = command.material;
+      }
+      if (command.nome !== undefined) s.nome = command.nome?.trim().slice(0, MAX_NOME_DE_SUB_REGIAO) || null;
+      if (command.pontos !== undefined) s.pontos = command.pontos.map((p, i) => ({ x: assertIntegerMm(roundToMm(p.x), `pontos[${i}].x`), y: assertIntegerMm(roundToMm(p.y), `pontos[${i}].y`) }));
+      diff.updated.push(s.id);
+      break;
+    }
+
+    case 'MoveSubRegiaoVertex': {
+      const s = findSubRegiao(next, command.subRegiaoId);
+      if (command.index < 0 || command.index >= s.pontos.length) throw new KernelError('BAD_SUBREGION', `Vértice ${command.index} não existe em ${s.id}`);
+      s.pontos[command.index] = { x: assertIntegerMm(roundToMm(command.to.x), 'to.x'), y: assertIntegerMm(roundToMm(command.to.y), 'to.y') };
+      diff.updated.push(s.id);
+      break;
+    }
+
+    case 'DeleteSubRegiao': {
+      const s = findSubRegiao(next, command.subRegiaoId);
+      next.subRegioes = (next.subRegioes ?? []).filter((x) => x.id !== s.id);
+      diff.deleted.push(s.id);
+      break;
+    }
+
     // ── Vistas dependentes (P2.17) ──────────────────────────────────────────
 
     case 'AddVistaDependente': {
@@ -3929,6 +3987,7 @@ function aplicarSemHash(
       const guardaCorposDoNivel = (next.guardaCorpos ?? []).filter((g) => g.levelId === level.id);
       const anotacoesDoNivel = (next.anotacoes ?? []).filter((a) => a.vista.tipo === 'PLANTA' && a.vista.levelId === level.id);
       const vistasDoNivel = (next.vistasDependentes ?? []).filter((v) => v.levelId === level.id);
+      const subRegioesDoNivel = (next.subRegioes ?? []).filter((s) => s.levelId === level.id);
 
       next.walls = next.walls.filter((w) => w.levelId !== level.id);
       next.openings = next.openings.filter((o) => !paredesDoNivel.has(o.wallId));
@@ -3945,6 +4004,7 @@ function aplicarSemHash(
       next.guardaCorpos = (next.guardaCorpos ?? []).filter((g) => g.levelId !== level.id);
       next.anotacoes = (next.anotacoes ?? []).filter((a) => !(a.vista.tipo === 'PLANTA' && a.vista.levelId === level.id));
       next.vistasDependentes = (next.vistasDependentes ?? []).filter((v) => v.levelId !== level.id);
+      next.subRegioes = (next.subRegioes ?? []).filter((s) => s.levelId !== level.id);
       // ⚠️ O quadro vai junto (é peça deste piso); os CIRCUITOS dele vão junto
       // também, senão ficariam apontando para um quadro que não existe mais. E
       // os terminais que os citavam já saíram, ou perdem a referência.
@@ -3977,6 +4037,7 @@ function aplicarSemHash(
         ...guardaCorposDoNivel.map((g) => g.id),
         ...anotacoesDoNivel.map((a) => a.id),
         ...vistasDoNivel.map((v) => v.id),
+        ...subRegioesDoNivel.map((s) => s.id),
         ...quadrosDoNivel.map((q) => q.id),
         ...circuitosOrfaos.map((c) => c.id),
         ...etiquetasDoNivel.map((l) => l.id),

@@ -177,3 +177,60 @@ export function blocoParaGerador(blocos: BlocoPagamento[]): { valor: number; qua
     const maior = periodicos.reduce((a, b) => (subtotalDoBloco(b) > subtotalDoBloco(a) ? b : a));
     return { valor: maior.valorParcela, quantidade: maior.quantidade };
 }
+
+/** Entrada do gerador rápido: o que o usuário digita ao escolher "Parcelado". */
+export interface PlanoRapido {
+    /** Valor Total do Contrato (venda) — entrada + parcelas. */
+    total: number;
+    /** Entrada/sinal; 0 = sem entrada (locação nunca tem). */
+    entrada: number;
+    parcelas: number;
+    /** Código do tipo da série (`MENSAL`, `TRIMESTRAL`, `CUSTOM_*`…). */
+    tipo: string;
+    intervaloMeses: number;
+    primeiroVencimento: string;
+    /**
+     * Valor de cada parcela já conhecido (locação: o aluguel mensal). Quando
+     * informado, as parcelas NÃO são derivadas do total — são N × este valor.
+     */
+    valorParcelaFixo?: number;
+}
+
+/**
+ * Gerador rápido do Plano de Pagamento: "entrada + N parcelas de X em X meses".
+ *
+ * Nasceu em 2026-09-21 porque a aba Financeiro da negociação tinha o select
+ * "Parcelado" sem nenhum campo ao lado — o plano por blocos existia, mas quem
+ * escolhia "Parcelado" não via onde dizer quantas parcelas, com qual entrada e
+ * de quanto em quanto tempo. Devolve os blocos no formato que a tela já usa
+ * (`aplicarBlocos`), então nada muda na persistência.
+ *
+ * As parcelas dividem `total − entrada` truncando em centavos; a sobra vai
+ * para a ÚLTIMA parcela, que vira um bloco próprio de 1× — é como
+ * `agruparPlano` reconstituiria de qualquer jeito, e a soma fecha no total.
+ */
+export function montarPlanoRapido(p: PlanoRapido): { entrada: number; blocos: BlocoPagamento[] } {
+    const total = Math.max(0, Number(p.total) || 0);
+    const n = Math.max(1, Math.floor(Number(p.parcelas) || 1));
+    const intervalo = Math.max(1, Math.floor(Number(p.intervaloMeses) || 1));
+    const fixo = Number(p.valorParcelaFixo) || 0;
+    const entrada = fixo > 0 ? 0 : Math.min(total, Math.max(0, Number(p.entrada) || 0));
+
+    const base = fixo > 0 ? dois(fixo) : Math.floor(((total - entrada) / n) * 100) / 100;
+    const sobra = fixo > 0 ? 0 : dois(total - entrada - base * n);
+    const comum = { tipo: p.tipo, primeiroVencimento: p.primeiroVencimento, intervaloMeses: intervalo };
+
+    const blocos: BlocoPagamento[] = [];
+    if (sobra === 0 || n === 1) {
+        blocos.push({ ...comum, quantidade: n, valorParcela: dois(base + (n === 1 ? sobra : 0)) });
+    } else {
+        blocos.push({ ...comum, quantidade: n - 1, valorParcela: base });
+        blocos.push({
+            ...comum,
+            quantidade: 1,
+            valorParcela: dois(base + sobra),
+            primeiroVencimento: somarMeses(p.primeiroVencimento, intervalo * (n - 1)),
+        });
+    }
+    return { entrada: dois(entrada), blocos };
+}

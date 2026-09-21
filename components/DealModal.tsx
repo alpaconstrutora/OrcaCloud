@@ -21,6 +21,7 @@ import {
     subtotalDoBloco,
     saldoDoPlano,
     blocoParaGerador,
+    montarPlanoRapido,
     somarDias,
     somarMeses,
     type BlocoPagamento,
@@ -865,6 +866,74 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             custom_installments: linhas,
             ...(espelho ? { installment_value: espelho.valor, installments: espelho.quantidade } : {}),
         }));
+    };
+
+    // ── Gerador rápido: "Parcelado" → entrada + N parcelas de X em X meses ──
+    // Até 2026-09-21 o select "Forma de Pagamento = Parcelado" não mostrava campo
+    // nenhum: o plano por blocos existia (acima), mas quem escolhia "Parcelado"
+    // não via onde dizer quantas parcelas, com qual entrada e de quanto em quanto
+    // tempo. Este gerador vive logo abaixo do select e escreve nos MESMOS lugares
+    // que o Sheet de bloco (down_payment + aplicarBlocos): nenhum formato novo.
+    // A parte pura é `montarPlanoRapido` (utils/paymentPlan.ts, testada).
+    const [planoRapido, setPlanoRapido] = useState({ entrada: '', parcelas: '12', tipo: 'MENSAL', primeiroVencimento: '' });
+    /** Tipos que geram série (Parcelas mensais/bimestrais/…), na ordem do catálogo. */
+    const tiposDeSerie = useMemo(
+        () => sortPaymentTypes(paymentTypes.filter(t => t.active !== false && t.generates_series)),
+        [paymentTypes],
+    );
+    const totalDoContrato = Number(formData.contract_total_value) || 0;
+    /** O que "Montar plano" vai gravar, calculado a cada tecla para a linha de resumo. */
+    const previaPlanoRapido = useMemo(() => montarPlanoRapido({
+        total: totalDoContrato,
+        entrada: formData.type === 'SALE' ? (parseFloat(planoRapido.entrada) || 0) : 0,
+        parcelas: Math.floor(Number(planoRapido.parcelas) || 1),
+        tipo: planoRapido.tipo,
+        intervaloMeses: intervalMonthsForType(paymentTypes, planoRapido.tipo),
+        primeiroVencimento: planoRapido.primeiroVencimento || formData.payment_due_date || formData.date || '',
+        // Locação: a parcela é o aluguel mensal (`value`), não o total ÷ nº.
+        valorParcelaFixo: formData.type === 'RENTAL' ? (Number(formData.value) || 0) : undefined,
+    }), [totalDoContrato, planoRapido, paymentTypes, formData.type, formData.value, formData.payment_due_date, formData.date]);
+
+    /** "Entrada de R$ 20.000,00 + 10× Parcelas mensais de R$ 10.000,00" */
+    const resumoPlanoRapido = (() => {
+        const { entrada, blocos } = previaPlanoRapido;
+        const n = blocos.reduce((s, b) => s + b.quantidade, 0);
+        const rotulo = (labelForInstallmentType(paymentTypes, planoRapido.tipo) || planoRapido.tipo).toLowerCase();
+        const valores = blocos.map(b => fmtMoeda(b.valorParcela));
+        const parcelas = valores.length === 2 ? `${n}× ${rotulo} (${blocos[0].quantidade}× ${valores[0]} + 1× ${valores[1]})` : `${n}× ${rotulo} de ${valores[0]}`;
+        return (entrada > 0 ? `entrada de ${fmtMoeda(entrada)} + ` : '') + parcelas;
+    })();
+
+    const montarPlano = async () => {
+        const primeiro = planoRapido.primeiroVencimento || formData.payment_due_date || formData.date || '';
+        if (!primeiro) { notifyError('Informe o 1º vencimento das parcelas.'); return; }
+        if (formData.type === 'SALE' && totalDoContrato <= 0) { notifyError('Informe o Valor Total do Contrato antes de montar o plano.'); return; }
+        if (formData.type === 'RENTAL' && (Number(formData.value) || 0) <= 0) { notifyError('Informe o valor mensal antes de montar o plano.'); return; }
+        if (linhasDoPlano.length > 0) {
+            const ok = await confirm({
+                title: 'Substituir o plano de pagamento?',
+                message: 'O plano atual será trocado por ' + resumoPlanoRapido + '. Parcelas já lançadas no financeiro não mudam.',
+                variant: 'warning',
+                confirmLabel: 'Substituir',
+            });
+            if (!ok) return;
+        }
+        const { entrada, blocos } = previaPlanoRapido;
+        setFormData(prev => ({
+            ...prev,
+            ...(prev.type === 'SALE'
+                ? (entrada > 0
+                    ? { down_payment: entrada, down_payment_installment_type: 'SINAL' }
+                    : { down_payment: 0, down_payment_installment_type: undefined, down_payment_notes: undefined })
+                : {}),
+            payment_due_date: primeiro,
+            // Locação: o total do contrato É mensal × nº (não vem das unidades,
+            // que somam o valor de UM mês). Sem isto o saldo acusava "excede o total".
+            ...(prev.type === 'RENTAL'
+                ? { contract_total_value: arredonda2(blocos.reduce((soma, b) => soma + subtotalDoBloco(b), 0)) }
+                : {}),
+        }));
+        aplicarBlocos(blocos);
     };
 
     const salvarBloco = () => {
@@ -3279,6 +3348,76 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         )}
                                     </select>
                                 </div>
+
+                                {/* Parcelado → montar o plano aqui mesmo. Os campos são o
+                                    ponto de partida; o Plano de pagamento (acima) continua
+                                    sendo a lista que vale, editável bloco a bloco. */}
+                                {formData.payment_method === 'INSTALLMENTS' && usaTrioFinanceiro && (
+                                    <div className="space-y-2 p-4 bg-gray-50 border border-gray-100 rounded-[10px]">
+                                        <label className="text-xs font-semibold text-slate-500">Montar plano de pagamento</label>
+                                        <div className={`grid grid-cols-2 gap-4 ${formData.type === 'SALE' ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
+                                            {formData.type === 'SALE' && (
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-semibold text-slate-500">Entrada (opcional)</label>
+                                                    <div className="relative">
+                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
+                                                        <input
+                                                            type="number" min="0" step="0.01" placeholder="0,00"
+                                                            value={planoRapido.entrada}
+                                                            onChange={(e) => setPlanoRapido(prev => ({ ...prev, entrada: e.target.value }))}
+                                                            className="w-full h-9 pl-12 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-semibold text-slate-500">Nº de parcelas</label>
+                                                <input
+                                                    type="number" min="1" step="1" placeholder="12"
+                                                    value={planoRapido.parcelas}
+                                                    onChange={(e) => setPlanoRapido(prev => ({ ...prev, parcelas: e.target.value }))}
+                                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-semibold text-slate-500">Periodicidade</label>
+                                                <select
+                                                    value={planoRapido.tipo}
+                                                    onChange={(e) => setPlanoRapido(prev => ({ ...prev, tipo: e.target.value }))}
+                                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
+                                                >
+                                                    {tiposDeSerie.map(t => (
+                                                        <option key={t.id} value={t.code}>{t.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-semibold text-slate-500">1º vencimento</label>
+                                                <input
+                                                    type="date"
+                                                    value={planoRapido.primeiroVencimento || formData.payment_due_date || formData.date || ''}
+                                                    onChange={(e) => setPlanoRapido(prev => ({ ...prev, primeiroVencimento: e.target.value }))}
+                                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 pt-1">
+                                            <span className="text-xs text-gray-500">
+                                                {formData.type === 'SALE' && totalDoContrato <= 0
+                                                    ? 'Informe o Valor Total do Contrato para calcular as parcelas.'
+                                                    : `Vai gerar: ${resumoPlanoRapido}.`}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => { void montarPlano(); }}
+                                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                                            >
+                                                <Layers className="w-[15px] h-[15px]" />
+                                                {linhasDoPlano.length > 0 ? 'Substituir plano' : 'Montar plano'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Dimensões contábeis do negócio. São DUAS coisas
                                     diferentes: Centro de Custo é `cost_centers_v2`

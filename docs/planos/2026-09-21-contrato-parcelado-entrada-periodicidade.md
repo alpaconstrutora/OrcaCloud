@@ -83,3 +83,41 @@ Checagens: `npm run typecheck` ✓ · `npm run build` ✓ · `check-xss-sinks.sh
 3. `npm run typecheck`
 4. Harness: `npx vite --port 3117` na frente + `node c:/tmp/pwtest/contrato-parcelado/passeio.js` → prints com os campos novos.
 5. No app: Comercial › Contratos › abrir contrato › Financeiro › Parcelado → entrada 10.000 + 12× trimestral → cronograma com 13 linhas (1 entrada + 12) e datas de 3 em 3 meses; salvar; reabrir → campos preenchidos.
+
+---
+
+## Pedido posterior (2026-09-21, mesma sessão) — a tela era a NEGOCIAÇÃO
+
+> ,Pós-Obra & Garantia" foi um erro meu e estava me referindo como voce disse negociação (DealModal › Financeiro), lá já há o "Plano de pagamento › Adicionar pagamento" por blocos (sinal, mensal, trimestral…), só não ligado ao select "Parcelado" — é outra frente, se quiser.
+
+A resposta anterior ("Contrato") veio de uma pergunta com opções; o usuário corrigiu.
+O trabalho no `ContractModal` fica (é melhoria real e já está publicado); o que
+o pedido original queria é isto:
+
+### Plano — Fase 2 (frente `negociacao-parcelado-gerador`)
+
+6. **`utils/paymentPlan.ts`** — `montarPlanoRapido({ total, entrada, parcelas,
+   tipo, intervaloMeses, primeiroVencimento, valorParcelaFixo? })` → `{ entrada,
+   blocos }` no formato que `aplicarBlocos` já consome; sobra do arredondamento
+   vira bloco de 1× na última data; locação usa o valor mensal fixo e nunca tem
+   entrada. **Pronto quando:** 6 testes novos em `__tests__/paymentPlan.test.ts`.
+7. **`components/DealModal.tsx`** — abaixo do select "Forma de Pagamento", com
+   "Parcelado Direto / Mensalidade" (venda e locação): card "Montar plano de
+   pagamento" com Entrada (só venda), Nº de parcelas, Periodicidade (tipos do
+   catálogo que geram série: mensais/bimestrais/trimestrais/semestrais/anuais) e
+   1º vencimento; linha "Vai gerar: …"; botão **Montar plano** (vira **Substituir
+   plano** com `useConfirm` quando já há blocos). Grava nos MESMOS lugares do
+   Sheet de bloco (`down_payment` + `aplicarBlocos`); em locação preenche
+   `contract_total_value = mensal × nº`. **Pronto quando:** harness
+   `docs/spikes/negociacao-parcelado/` fotografa venda (entrada 20.000 + 4×
+   trimestral → Sinal + bloco, "Plano fechado") e locação (12× mensal, fechado);
+   `check-ui-standard.sh` limpo.
+
+### Estado — Fase 2
+
+- [x] 6 `montarPlanoRapido` + 6 testes (28 no arquivo)
+- [x] 7 DealModal — harness: venda fechada com Sinal + 4× trimestrais; locação 12× fechada; substituição com confirmação e sobra em 2 blocos (7× de 120.000 → 6× 17.142,85 + 1× 17.142,90); typecheck ✓; `check-ui-standard.sh` ✓
+
+O plano por blocos continua acima do select, como antes (não foi reordenado):
+o gerador só o preenche. O botão "Ver plano de pagamento" (aba Parcelas =
+cobranças reais) ficou como estava.

@@ -8,6 +8,7 @@ import {
     subtotalDoBloco,
     saldoDoPlano,
     blocoParaGerador,
+    montarPlanoRapido,
     type BlocoPagamento,
 } from '../utils/paymentPlan';
 import { PaymentInstallment } from '../types/financial';
@@ -184,5 +185,49 @@ describe('blocoParaGerador', () => {
             expandirBloco(bloco({ tipo: 'CHAVES', quantidade: 1, valorParcela: 300000, intervaloMeses: null }), 'c'),
         );
         expect(blocoParaGerador(blocos)).toBeNull();
+    });
+});
+
+describe('montarPlanoRapido', () => {
+    const base = { total: 120000, entrada: 20000, parcelas: 10, tipo: 'MENSAL', intervaloMeses: 1, primeiroVencimento: '2026-10-10' };
+
+    it('entrada + N parcelas iguais num bloco só quando a divisão fecha', () => {
+        const r = montarPlanoRapido(base);
+        expect(r.entrada).toBe(20000);
+        expect(r.blocos).toEqual([
+            { tipo: 'MENSAL', quantidade: 10, valorParcela: 10000, primeiroVencimento: '2026-10-10', intervaloMeses: 1 },
+        ]);
+        expect(saldoDoPlano(120000, r.entrada, r.blocos.flatMap(b => expandirBloco(b, 'x')))).toBe(0);
+    });
+
+    it('sobra do arredondamento vira um bloco de 1× na última data', () => {
+        const r = montarPlanoRapido({ ...base, total: 100, entrada: 0, parcelas: 3, tipo: 'TRIMESTRAL', intervaloMeses: 3 });
+        expect(r.blocos).toEqual([
+            { tipo: 'TRIMESTRAL', quantidade: 2, valorParcela: 33.33, primeiroVencimento: '2026-10-10', intervaloMeses: 3 },
+            { tipo: 'TRIMESTRAL', quantidade: 1, valorParcela: 33.34, primeiroVencimento: '2027-04-10', intervaloMeses: 3 },
+        ]);
+        expect(saldoDoPlano(100, 0, r.blocos.flatMap(b => expandirBloco(b, 'x')))).toBe(0);
+    });
+
+    it('parcela única leva a sobra junto', () => {
+        const r = montarPlanoRapido({ ...base, total: 100.01, entrada: 0, parcelas: 1 });
+        expect(r.blocos).toEqual([{ tipo: 'MENSAL', quantidade: 1, valorParcela: 100.01, primeiroVencimento: '2026-10-10', intervaloMeses: 1 }]);
+    });
+
+    it('entrada acima do total é limitada; parcelas ficam zeradas', () => {
+        const r = montarPlanoRapido({ ...base, total: 1000, entrada: 5000, parcelas: 2 });
+        expect(r.entrada).toBe(1000);
+        expect(r.blocos[0].valorParcela).toBe(0);
+    });
+
+    it('locação: valor fixo por parcela, sem entrada e sem derivar do total', () => {
+        const r = montarPlanoRapido({ ...base, total: 0, entrada: 999, parcelas: 12, valorParcelaFixo: 2500 });
+        expect(r.entrada).toBe(0);
+        expect(r.blocos).toEqual([{ tipo: 'MENSAL', quantidade: 12, valorParcela: 2500, primeiroVencimento: '2026-10-10', intervaloMeses: 1 }]);
+    });
+
+    it('nº e intervalo inválidos caem em 1', () => {
+        const r = montarPlanoRapido({ ...base, entrada: 0, parcelas: 0, intervaloMeses: 0 });
+        expect(r.blocos).toEqual([{ tipo: 'MENSAL', quantidade: 1, valorParcela: 120000, primeiroVencimento: '2026-10-10', intervaloMeses: 1 }]);
     });
 });

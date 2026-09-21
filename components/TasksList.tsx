@@ -2,16 +2,15 @@ import React, { useMemo, useState } from 'react'
 import {
   CheckCircle2, ExternalLink, Inbox,
   Building2, ChevronDown, ChevronRight, Plus,
-  Search, X, SlidersHorizontal, LayoutGrid, MoveHorizontal,
+  Search, X, SlidersHorizontal, MoveHorizontal,
   GripVertical, CornerLeftUp, Flag, Calendar, AlertTriangle,
   ChevronsDownUp, ChevronsUpDown, Bell,
 } from 'lucide-react'
-import type { TaskRecord, EmployeeOption, ProjectOption, TaskDefaults, SpaceOption } from './TaskForm'
+import type { TaskRecord, EmployeeOption, ProjectOption, TaskDefaults } from './TaskForm'
 import type { TaskStatus } from '../services/taskService'
 import type { GroupByField } from './TasksModule'
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils'
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils'
-import { FilterPopover } from './ui/FilterPopover'
 import ActionIconButton from './ui/ActionIconButton'
 
 interface TaskGroup { key: string; label: string; color?: string; tasks: TaskRecord[] }
@@ -22,8 +21,10 @@ interface Props {
   employees: EmployeeOption[]
   projects: ProjectOption[]
   statuses?: TaskStatus[]
-  /** Espaços da organização — alimentam o filtro "Espaço" da toolbar (§5.4). */
-  spaces?: SpaceOption[]
+  /** Controles de recorte do módulo (Prazo / Espaço / Pasta / painel Espaços — §5.4),
+   *  renderizados na toolbar acoplada logo depois da busca. O estado vive no pai
+   *  porque o mesmo recorte vale para o Kanban. */
+  filters?: React.ReactNode
   groupBy?: GroupByField
   resetDragSignal?: number
   onToggleDone: (task: TaskRecord) => void
@@ -53,19 +54,19 @@ const MODULE_LABEL: Record<string, { label: string; cls: string }> = {
 // ── Colunas (visibilidade, ordem arrastável e ordenação via useTableColumns) ──
 // Toda coluna de valor único é ordenável (§6.3). 'actions' é estrutural: fica fora
 // da engrenagem, do arraste e da ordenação.
-// `defaultHidden`: a área de conteúdo de Tarefas mede ~1016px em 1600 (viewport −
-// sidebar 260 − gutter 48 − rail de espaços 256 − gap 20). Nove colunas com `px-6`
-// não cabem aí de jeito nenhum; com a coluna de Ações fora da tela a primeira
-// impressão é de defeito. Nascem visíveis as seis que cabem; as outras ligam na
+// `defaultHidden`: a área de conteúdo de Tarefas mede ~1290px em 1600 (viewport −
+// sidebar 260 − gutter 48; o rail de espaços saiu em 21/09/2026). Nove colunas com
+// `px-6` não cabem aí; com a coluna de Ações fora da tela a primeira impressão é
+// de defeito. Nascem visíveis as oito que cabem; Data inicial e Alerta ligam na
 // engrenagem (quem já tinha preferência salva mantém as colunas que via).
 const TASKS_LIST_COLUMNS: ColumnConfig[] = [
   { key: 'title',      label: 'Nome',          sortable: true  },
   { key: 'assignee',   label: 'Responsável',   sortable: true  },
-  { key: 'project',    label: 'Obra',          sortable: true, defaultHidden: true },
+  { key: 'project',    label: 'Obra',          sortable: true  },
   { key: 'start_date', label: 'Data inicial',  sortable: true, defaultHidden: true },
   { key: 'due_date',   label: 'Vencimento',    sortable: true  },
   { key: 'priority',   label: 'Prioridade',    sortable: true  },
-  { key: 'source',     label: 'Origem',        sortable: true, defaultHidden: true },
+  { key: 'source',     label: 'Origem',        sortable: true  },
   { key: 'alert',      label: 'Alerta',        sortable: true, defaultHidden: true },
   { key: 'status',     label: 'Status',        sortable: true  },
   { key: 'actions',    label: 'Ações',         sortable: false },
@@ -77,7 +78,7 @@ type ColKey = 'title' | 'assignee' | 'project' | 'start_date' | 'due_date' | 'pr
 // "Ajustar largura ao conteúdo" (§6.1.2) mede o dado real e substitui estes valores.
 // Cada coluna precisa caber o rótulo do cabeçalho + ícone de ordenação com px-6
 // (48px de respiro): "Vencimento" pede ~146px, "Prioridade" ~136px.
-// Soma alvo das visíveis por padrão: 56 (grip+checkbox) + 240+150+146+136+150+134 = 1012 ≤ 1016.
+// Soma alvo das visíveis por padrão: 56 (grip+checkbox) + 240+150+160+146+136+116+150+134 = 1288 ≤ 1290.
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
   title: 240, assignee: 150, project: 160, start_date: 146, due_date: 146,
   priority: 136, source: 116, alert: 150, status: 150, actions: 134,
@@ -86,9 +87,6 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
 // redimensionamento. Entram no <colgroup> sem data-col-key, e o autofit as desconta.
 const GRIP_COL_WIDTH  = 24
 const CHECK_COL_WIDTH = 32
-
-// Filtro rápido de escolha única (§5.4) — '' = todos, '__none__' = sem espaço.
-const SPACE_FILTER_NONE = '__none__'
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa os
 // chips de filtro (fPriority/fStatus/fAssignee/fProject) já existentes, não os
@@ -162,7 +160,7 @@ const HEADER_LABEL: Record<Exclude<ColKey, 'actions'>, string> = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const TasksList: React.FC<Props> = ({
-  tasks, loading, employees, projects, statuses = [], spaces = [], groupBy = 'none', resetDragSignal,
+  tasks, loading, employees, projects, statuses = [], filters, groupBy = 'none', resetDragSignal,
   onToggleDone, onEdit, onAddSubtask, onMakeSubtask, onAddTask, onNavigate,
 }) => {
   // F2: filtros sobrevivem a navegação/reload (§3). Ordenação e ordem das colunas
@@ -174,13 +172,6 @@ const TasksList: React.FC<Props> = ({
   const [fStatus, setFStatus]         = usePersistedState('tasksListFilters:status', '')
   const [fAssignee, setFAssignee]     = usePersistedState('tasksListFilters:assignee', '')
   const [fProject, setFProject]       = usePersistedState('tasksListFilters:project', '')
-  const [fSpace, setFSpace]           = usePersistedState('tasksListFilters:space', '')
-
-  const spaceFilterOptions = useMemo(() => [
-    { value: '', label: 'Todos' },
-    { value: SPACE_FILTER_NONE, label: 'Sem espaço' },
-    ...spaces.map(s => ({ value: s.id, label: s.name })),
-  ], [spaces])
 
   const [draggingId, setDraggingId]         = useState<string | null>(null)
   const [dragOverId, setDragOverId]         = useState<string | null>(null)
@@ -256,7 +247,7 @@ const TasksList: React.FC<Props> = ({
   const toggleExpand = (id: string)   => setExpanded(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
 
   const q = search.toLowerCase()
-  const activeFilters = !!(fPriority || fStatus || fAssignee || fProject || fSpace)
+  const activeFilters = !!(fPriority || fStatus || fAssignee || fProject)
 
   const filtered = useMemo(() => {
     let rows = parents.filter(t => {
@@ -265,8 +256,6 @@ const TasksList: React.FC<Props> = ({
       if (fStatus && (statuses.length > 0 ? t.status_id !== fStatus : t.status !== fStatus)) return false
       if (fAssignee && t.assignee_employee_id !== fAssignee) return false
       if (fProject  && t.project_id !== fProject) return false
-      if (fSpace === SPACE_FILTER_NONE) { if (t.space_id) return false }
-      else if (fSpace && t.space_id !== fSpace) return false
       return true
     })
     rows = applyFilterRules(rows, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue)
@@ -287,9 +276,9 @@ const TasksList: React.FC<Props> = ({
       })
     }
     return rows
-  }, [parents, q, fPriority, fStatus, fAssignee, fProject, fSpace, sortColumn, sortDirection, empMap, projMap, statusMap, statuses, advancedFilters.rules])
+  }, [parents, q, fPriority, fStatus, fAssignee, fProject, sortColumn, sortDirection, empMap, projMap, statusMap, statuses, advancedFilters.rules])
 
-  const clearFilters = () => { setFPriority(''); setFStatus(''); setFAssignee(''); setFProject(''); setFSpace(''); setSearch('') }
+  const clearFilters = () => { setFPriority(''); setFStatus(''); setFAssignee(''); setFProject(''); setSearch('') }
 
   // ── Agrupamento ─────────────────────────────────────────────────────────────
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
@@ -845,14 +834,8 @@ const TasksList: React.FC<Props> = ({
               )}
             </div>
 
-            {/* Filtro rápido de escolha única — Espaço (§5.4) */}
-            <FilterPopover
-              label="Espaço"
-              icon={<LayoutGrid className="w-3.5 h-3.5" />}
-              value={fSpace}
-              onChange={setFSpace}
-              options={spaceFilterOptions}
-            />
+            {/* Recorte do módulo — Prazo / Espaço / Pasta / painel Espaços (§5.4) */}
+            {filters}
 
             {/* Filtros rápidos (prioridade/status/responsável/obra) — painel abaixo */}
             <button

@@ -101,7 +101,7 @@ const RULES: Rule[] = [
             // Inteligente), e as duas rotas dele saíram junto.
             'components/AppRouter.tsx': 30,
             'components/OpuraDocsModule.tsx': 1,
-            'components/TasksModule.tsx': 10,
+            'components/TasksModule.tsx': 8,
         },
     },
     {

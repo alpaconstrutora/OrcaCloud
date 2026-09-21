@@ -1,9 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { isObra } from '../utils/projectClassification'
-import { Plus, CheckSquare, Calendar, AlertTriangle, ListChecks, Building2, Settings2, Layers, List, Kanban, LayoutGrid, X, Smartphone } from 'lucide-react'
+import { Plus, CheckSquare, AlertTriangle, Building2, Settings2, Layers, List, Kanban, LayoutGrid, FolderOpen, FolderCog, CalendarClock, Smartphone } from 'lucide-react'
 
 export type GroupByField = 'none' | 'status' | 'assignee' | 'priority' | 'project' | 'source'
 export type FilterView   = 'today' | 'all' | 'overdue'
+
+// Sentinelas dos popovers de recorte (§5.4): '' = sem recorte.
+const SPACE_NONE  = '__none__'      // tarefas sem espaço
+const FOLDER_NONE = '__no_folder__' // tarefas do espaço sem pasta
 
 import { supabase } from '../lib/supabase'
 import { taskStatusService, type TaskStatus } from '../services/taskService'
@@ -12,10 +16,10 @@ import TasksList from './TasksList'
 import TaskForm, { type TaskRecord, type EmployeeOption, type ProjectOption, type OrgOption, type TaskDefaults, type SpaceOption } from './TaskForm'
 import TaskStatusManager from './TaskStatusManager'
 import TasksBoard from './TasksBoard'
-import TaskSpaceRail from './TaskSpaceRail'
 import TaskSpaceManager from './TaskSpaceManager'
-import TaskSpaceBottomSheet from './TaskSpaceBottomSheet'
-import TaskSpaceFolderView from './TaskSpaceFolderView'
+import TaskSpacesSheet from './TaskSpacesSheet'
+import { FilterPopover } from './ui/FilterPopover'
+import { usePersistedState } from './ui/TableUtils'
 import MobilePreviewFrame from './MobilePreviewFrame'
 import TasksMobileApp from './TasksMobileApp'
 import { isSystemProject, excludeSystemProjects, SYSTEM_PROJECT_NAMES_SQL } from '../utils/systemProjects'
@@ -29,32 +33,11 @@ interface Props {
   onChangeView?: (view: string) => void
 }
 
-const TabBtn: React.FC<{
-  active: boolean
-  icon: React.ElementType
-  label: string
-  count?: number
-  onClick: () => void
-}> = ({ active, icon: Icon, label, count, onClick }) => (
-  <button
-    onClick={onClick}
-    className={`flex items-center gap-2 px-3 h-7 rounded-[6px] text-sm font-medium transition-all
-      ${active
-        ? 'bg-white text-blue-600 shadow-sm'
-        : 'text-slate-400 hover:text-slate-600'}`}
-  >
-    <Icon className="w-3.5 h-3.5" />
-    {label}
-    {count !== undefined && count > 0 && (
-      <span className={`px-1.5 py-0.5 rounded-md text-xs ${active ? 'bg-blue-50 text-blue-600' : 'bg-slate-200 text-slate-600'}`}>
-        {count}
-      </span>
-    )}
-  </button>
-)
-
 const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = [], projects = [], onChangeView }) => {
-  const [view, setView]               = useState<FilterView>('today')
+  // Recorte da tela (Prazo / Espaço / Pasta) — persistido (§3); vale para Lista e Kanban.
+  const [view, setView]               = usePersistedState<FilterView>('tasksModule:view', 'today')
+  const [fSpace, setFSpace]           = usePersistedState('tasksListFilters:space', '')
+  const [fFolder, setFFolder]         = usePersistedState('tasksListFilters:folder', '')
   const [tasks, setTasks]             = useState<TaskRecord[]>([])
   const [loading, setLoading]         = useState(true)
   const [editing, setEditing]         = useState<TaskRecord | null>(null)
@@ -71,8 +54,6 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
   const [statuses, setStatuses]       = useState<TaskStatus[]>([])
   const [parentTask, setParentTask]   = useState<TaskRecord | null>(null)
 
-  const [dragResetSignal, setDragResetSignal] = useState(0)
-
   // ── Espaços ──────────────────────────────────────────────────────────────
   const [spaces, setSpaces]                   = useState<TaskSpaceWithMeta[]>([])
   // SpaceOption para o TaskForm (subconjunto de TaskSpaceWithMeta)
@@ -81,11 +62,19 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     [spaces]
   )
   const [loadingSpaces, setLoadingSpaces]     = useState(false)
-  // null = inbox pessoal, '__none__' = sem espaço, uuid = espaço específico
-  const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null)
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
+  const [spacesLoaded, setSpacesLoaded]       = useState(false)
   const [managingSpace, setManagingSpace]   = useState<TaskSpaceWithMeta | null>(null)
-  const [showSpaceSheet, setShowSpaceSheet] = useState(false)
+  const [showSpacesSheet, setShowSpacesSheet] = useState(false)
+
+  // Espaço/pasta persistidos que não existem na organização atual (troca de org,
+  // espaço excluído) são descartados — senão a tela abre vazia com o gatilho sem rótulo.
+  const activeSpace = fSpace && fSpace !== SPACE_NONE ? spaces.find(s => s.id === fSpace) ?? null : null
+  useEffect(() => {
+    if (!spacesLoaded || loadingSpaces) return
+    if (fSpace && fSpace !== SPACE_NONE && !activeSpace) { setFSpace(''); setFFolder(''); return }
+    if (!activeSpace && fFolder) { setFFolder(''); return }
+    if (activeSpace && fFolder && fFolder !== FOLDER_NONE && !activeSpace.folders.some(f => f.id === fFolder)) setFFolder('')
+  }, [spacesLoaded, loadingSpaces, fSpace, fFolder, activeSpace, setFSpace, setFFolder])
 
   const loadSpaces = useCallback(async (orgId: string) => {
     setLoadingSpaces(true)
@@ -97,6 +86,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
       setSpaces([])
     } finally {
       setLoadingSpaces(false)
+      setSpacesLoaded(true)
     }
   }, [])
 
@@ -175,7 +165,9 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
     loadSpaces(filterOrg)
   }, [filterOrg, activeOrganizationId, loadEmployees, loadStatuses, loadObras, loadSpaces])
 
-  // ── Filtros e contadores ──────────────────────────────────────────────────
+  // ── Recorte e contadores ─────────────────────────────────────────────────
+  // Ordem: organização → espaço/pasta → prazo. Hoje/Atrasadas são contadas DEPOIS
+  // do recorte de espaço/pasta, para o número do popover bater com a tabela.
   const { today, overdue, visible, noSpaceCount } = useMemo(() => {
     const now          = new Date()
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -191,35 +183,18 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
       return [...children, ...getAllDescendants(new Set(children.map(t => t.id)))]
     }
 
-    // ── contador "sem espaço" (tarefas raiz abertas sem space_id) ────────
-    const noSpaceCount = byOrg.filter(t => !t.parent_task_id && !t.space_id && t.status !== 'done').length
+    const allParents = byOrg.filter(t => !t.parent_task_id)
+    // contador "sem espaço" (raiz, aberta, sem space_id) — sobre a organização inteira
+    const noSpaceCount = allParents.filter(t => !t.space_id && t.status !== 'done').length
 
-    // ── modo espaço: selecionar por space_id / folder_id ─────────────────
-    if (selectedSpaceId === '__none__') {
-      const parents = byOrg.filter(t => !t.parent_task_id && !t.space_id)
-      return {
-        today: [], overdue: [],
-        noSpaceCount,
-        visible: [...parents, ...getAllDescendants(new Set(parents.map(t => t.id)))],
-      }
+    let parents = allParents
+    if (fSpace === SPACE_NONE)   parents = parents.filter(t => !t.space_id)
+    else if (fSpace)             parents = parents.filter(t => t.space_id === fSpace)
+    if (fSpace && fSpace !== SPACE_NONE) {
+      if (fFolder === FOLDER_NONE) parents = parents.filter(t => !t.folder_id)
+      else if (fFolder)            parents = parents.filter(t => t.folder_id === fFolder)
     }
 
-    if (selectedSpaceId) {
-      let parents = byOrg.filter(t => !t.parent_task_id && t.space_id === selectedSpaceId)
-      if (selectedFolderId === '__no_folder__') {
-        parents = parents.filter(t => !t.folder_id)
-      } else if (selectedFolderId) {
-        parents = parents.filter(t => t.folder_id === selectedFolderId)
-      }
-      return {
-        today: [], overdue: [],
-        noSpaceCount,
-        visible: [...parents, ...getAllDescendants(new Set(parents.map(t => t.id)))],
-      }
-    }
-
-    // ── modo inbox pessoal (apenas minhas tarefas) ────────────────────────
-    const parents = byOrg.filter(t => !t.parent_task_id)
     const open    = parents.filter(t => t.status !== 'done')
     const today   = open.filter(t => {
       if (!t.due_date) return false
@@ -236,7 +211,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
       today, overdue, noSpaceCount,
       visible: [...visibleParents, ...getAllDescendants(new Set(visibleParents.map(t => t.id)))],
     }
-  }, [tasks, filterOrg, view, selectedSpaceId, selectedFolderId])
+  }, [tasks, filterOrg, view, fSpace, fFolder])
 
   // obras: usa obrasLocal (carregado direto do DB) como fonte primária, com fallback no prop
   const obras: ProjectOption[] = useMemo(() => {
@@ -256,23 +231,6 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
 
   const orgForNew = filterOrg || activeOrganizationId || ''
 
-  // ── Callbacks do rail ─────────────────────────────────────────────────────
-  const handleSelectInbox = (filter: FilterView) => {
-    setSelectedSpaceId(null)
-    setSelectedFolderId(null)
-    setView(filter)
-  }
-
-  const handleSelectSpace = (spaceId: string, folderId?: string | null) => {
-    setSelectedSpaceId(spaceId)
-    setSelectedFolderId(folderId ?? null)
-  }
-
-  const handleSelectNoSpace = () => {
-    setSelectedSpaceId('__none__')
-    setSelectedFolderId(null)
-  }
-
   const handleCreateSpace = async (name: string) => {
     const orgId = orgForNew
     if (!orgId) return
@@ -281,23 +239,6 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
       await loadSpaces(orgId)
     } catch (e) {
       console.error('[spaces] create', e)
-    }
-  }
-
-  const handleTaskDropOnFolder = useCallback(async (taskId: string, spaceId: string, folderId: string) => {
-    setDragResetSignal(s => s + 1)   // força limpeza do drag state em TasksList
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, space_id: spaceId, folder_id: folderId } : t))
-    const { error } = await supabase.from('tasks').update({ space_id: spaceId, folder_id: folderId }).eq('id', taskId)
-    if (error) { console.error('[tasks] move to folder', error); load() }
-    else loadSpaces(filterOrg || activeOrganizationId || '')
-  }, [filterOrg, activeOrganizationId, load, loadSpaces])
-
-  const handleCreateFolder = async (spaceId: string, name: string) => {
-    try {
-      await taskSpaceService.createFolder(spaceId, name)
-      await loadSpaces(filterOrg || activeOrganizationId || '')
-    } catch (e) {
-      console.error('[folders] create', e)
     }
   }
 
@@ -363,29 +304,65 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
       ? [{ id: activeOrganizationId, name: 'Minha Organização' }]
       : []
 
-  const isSpaceMode = selectedSpaceId !== null
+  // ── Controles de recorte (§5.4) — vão para a toolbar acoplada da lista e, no
+  // Kanban, para uma barra própria acima do quadro. ─────────────────────────
+  const withCount = (label: string, n: number) => (n > 0 ? `${label} (${n})` : label)
+  const viewOptions = [
+    { value: 'all' as FilterView,     label: 'Todas' },
+    { value: 'today' as FilterView,   label: withCount('Hoje', today.length) },
+    { value: 'overdue' as FilterView, label: withCount('Atrasadas', overdue.length) },
+  ]
+  const spaceFilterOptions = [
+    { value: '', label: 'Todos' },
+    { value: SPACE_NONE, label: withCount('Sem espaço', noSpaceCount) },
+    ...spaces.map(sp => ({ value: sp.id, label: withCount(sp.name, sp.open_task_count) })),
+  ]
+  const folderOptions = activeSpace ? [
+    { value: '', label: 'Todas' },
+    { value: FOLDER_NONE, label: 'Sem pasta' },
+    ...activeSpace.folders.map(f => ({ value: f.id, label: f.name })),
+  ] : []
+  const scopeControls = (
+    <>
+      <FilterPopover<FilterView>
+        label="Prazo"
+        icon={<CalendarClock className="w-3.5 h-3.5" />}
+        value={view}
+        onChange={setView}
+        allValue="all"
+        options={viewOptions}
+      />
+      <FilterPopover
+        label="Espaço"
+        icon={<LayoutGrid className="w-3.5 h-3.5" />}
+        value={fSpace}
+        onChange={v => { setFSpace(v); setFFolder('') }}
+        options={spaceFilterOptions}
+      />
+      {activeSpace && activeSpace.folders.length > 0 && (
+        <FilterPopover
+          label="Pasta"
+          icon={<FolderOpen className="w-3.5 h-3.5" />}
+          value={fFolder}
+          onChange={setFFolder}
+          options={folderOptions}
+        />
+      )}
+      <button
+        onClick={() => setShowSpacesSheet(true)}
+        title="Espaços — criar, ordenar e gerenciar"
+        className="h-9 w-9 flex items-center justify-center text-gray-500 bg-white border border-gray-200 rounded-[6px] hover:bg-gray-50 transition-all active:scale-95 shrink-0"
+      >
+        <FolderCog className="w-4 h-4" />
+      </button>
+    </>
+  )
 
-  // Espaço selecionado sem pasta → mostra grade de pastas em vez das tarefas
-  const activeSpace    = spaces.find(s => s.id === selectedSpaceId) ?? null
-  const showFolderView = selectedSpaceId !== null
-                       && selectedSpaceId !== '__none__'
-                       && selectedFolderId === null
-                       && activeSpace !== null
-
-  // Título contextual da área de conteúdo (só quando não está em folder view, que tem seu próprio header)
-  const contentTitle = useMemo(() => {
-    if (selectedSpaceId === '__none__') return 'Sem espaço'
-    if (selectedSpaceId && !showFolderView) {
-      const space = spaces.find(s => s.id === selectedSpaceId)
-      if (!space) return ''
-      if (selectedFolderId) {
-        const folder = space.folders.find(f => f.id === selectedFolderId)
-        return folder ? `${space.name} / ${folder.name}` : space.name
-      }
-      return space.name
-    }
-    return null
-  }, [selectedSpaceId, selectedFolderId, spaces, showFolderView])
+  // Espaço/pasta que uma tarefa nova herda do recorte ativo.
+  const scopeDefaults: TaskDefaults = {
+    space_id:  activeSpace ? activeSpace.id : null,
+    folder_id: activeSpace && fFolder && fFolder !== FOLDER_NONE ? fFolder : null,
+  }
 
   // Mobile real: usa activeOrganizationId (prop reativo), não filterOrg (estado interno do desktop)
   if (isMobile) return <TasksMobileApp orgId={activeOrganizationId || ''} />
@@ -406,26 +383,6 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           <p className="text-slate-400 text-sm mt-1.5 font-medium">Sua agenda pessoal de pendências</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Tabs — só no mobile (no desktop o rail substitui) */}
-          <div className="flex items-center bg-slate-50 p-1 rounded-[6px] border border-slate-100 gap-1 md:hidden">
-            <TabBtn active={!isSpaceMode && view === 'today'}   icon={Calendar}      label="Hoje"      count={today.length}   onClick={() => handleSelectInbox('today')} />
-            <TabBtn active={!isSpaceMode && view === 'overdue'} icon={AlertTriangle} label="Atrasadas" count={overdue.length} onClick={() => handleSelectInbox('overdue')} />
-            <TabBtn active={!isSpaceMode && view === 'all'}     icon={ListChecks}    label="Todas"                            onClick={() => handleSelectInbox('all')} />
-            {/* Botão "Espaços" no mobile */}
-            {spaces.length > 0 && (
-              <button
-                onClick={() => setShowSpaceSheet(true)}
-                className={`flex items-center gap-2 px-3 h-7 rounded-[6px] text-sm font-medium transition-all
-                  ${isSpaceMode
-                    ? 'bg-white text-blue-600 shadow-sm'
-                    : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-                Espaços
-              </button>
-            )}
-          </div>
-
           {/* Toggle List / Board */}
           <div className="flex items-center h-9 border border-slate-200 rounded-[6px] overflow-hidden bg-white">
             <button
@@ -492,10 +449,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           <button
             onClick={() => {
               setEditing(null)
-              setTaskDefaults({
-                space_id: selectedSpaceId && selectedSpaceId !== '__none__' ? selectedSpaceId : null,
-                folder_id: selectedFolderId && selectedFolderId !== '__no_folder__' ? selectedFolderId : null,
-              })
+              setTaskDefaults(scopeDefaults)
               if (orgForNew) { loadEmployees(orgForNew); loadStatuses(orgForNew); loadObras(orgForNew) }
               setShowForm(true)
             }}
@@ -531,107 +485,33 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
       )}
 
       {/* Banner atrasadas — só no modo inbox */}
-      {!isSpaceMode && view === 'today' && overdue.length > 0 && (
+      {view === 'today' && overdue.length > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center gap-3 text-xs font-bold text-red-700">
           <AlertTriangle className="w-4 h-4" />
           Você tem <span className="font-black">{overdue.length}</span> tarefa(s) atrasada(s).
-          <button onClick={() => handleSelectInbox('overdue')} className="ml-auto font-black uppercase tracking-wider hover:underline">
+          <button onClick={() => setView('overdue')} className="ml-auto font-black uppercase tracking-wider hover:underline">
             Ver atrasadas
           </button>
         </div>
       )}
 
-      {/* Chip de contexto ativo — mobile only */}
-      {isSpaceMode && contentTitle && (
-        <div className="flex items-center gap-2 md:hidden">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold">
-            {selectedSpaceId !== '__none__' && (
-              <span
-                className="w-2 h-2 rounded-full flex-shrink-0"
-                style={{ backgroundColor: spaces.find(s => s.id === selectedSpaceId)?.color ?? '#3b82f6' }}
-              />
-            )}
-            <span className="truncate max-w-[180px]">{contentTitle}</span>
-            <button onClick={() => handleSelectInbox(view)} className="ml-1 text-blue-400 hover:text-blue-700 flex-shrink-0">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Layout: rail (desktop) + conteúdo ── */}
-      <div className="flex gap-5 items-start">
-
-        {/* Rail de navegação — oculto no mobile */}
-        <TaskSpaceRail
-          spaces={spaces}
-          loadingSpaces={loadingSpaces}
-          selectedSpaceId={selectedSpaceId}
-          selectedFolderId={selectedFolderId}
-          activeFilter={view}
-          todayCount={today.length}
-          overdueCount={overdue.length}
-          noSpaceCount={noSpaceCount}
-          onSelectInbox={handleSelectInbox}
-          onSelectSpace={handleSelectSpace}
-          onSelectNoSpace={handleSelectNoSpace}
-          onCreateSpace={handleCreateSpace}
-          onCreateFolder={handleCreateFolder}
-          onManageSpace={setManagingSpace}
-          onReloaded={() => loadSpaces(filterOrg || activeOrganizationId || '')}
-          onTaskDropOnFolder={handleTaskDropOnFolder}
-        />
-
-        {/* Área de conteúdo */}
-        <div className="flex-1 min-w-0 space-y-3">
-          {/* Título contextual quando em modo espaço */}
-          {contentTitle && (
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-black text-slate-800">{contentTitle}</h2>
-              <button
-                onClick={() => handleSelectInbox(view)}
-                className="text-button text-slate-400 hover:text-slate-700 transition-colors"
-                title="Voltar para inbox"
-              >
-                ✕
-              </button>
-            </div>
-          )}
-
-          {showFolderView && activeSpace ? (
-            /* ── Vista de pastas do espaço ── */
-            <TaskSpaceFolderView
-              space={activeSpace}
-              tasks={tasks}
-              onSelectFolder={folderId => handleSelectSpace(selectedSpaceId!, folderId)}
-              onSelectNoFolder={() => {
-                // mostra tarefas do espaço sem pasta (usa __none__ local dentro do espaço)
-                handleSelectSpace(selectedSpaceId!, '__no_folder__')
-              }}
-              onCreateFolder={async name => {
-                await handleCreateFolder(selectedSpaceId!, name)
-              }}
-            />
-          ) : viewMode === 'list' ? (
+      {/* ── Conteúdo (sem rail: Prazo / Espaço / Pasta vivem na toolbar) ── */}
+      <div className="min-w-0">
+          {viewMode === 'list' ? (
             <TasksList
               tasks={visible}
               loading={loading}
               employees={employees}
               projects={obras}
               statuses={statuses}
-              spaces={spaceOptions}
+              filters={scopeControls}
               groupBy={groupBy}
-              resetDragSignal={dragResetSignal}
               onToggleDone={toggleDone}
               onEdit={(t) => { loadEmployees(t.org_id); loadSpaces(t.org_id); loadObras(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
               onAddSubtask={(parent) => { loadEmployees(parent.org_id); loadObras(parent.org_id); setEditing(null); setParentTask(parent); setShowForm(true) }}
               onMakeSubtask={makeSubtask}
               onAddTask={orgForNew ? (defaults) => {
-                setTaskDefaults({
-                  ...(defaults ?? {}),
-                  space_id: selectedSpaceId && selectedSpaceId !== '__none__' ? selectedSpaceId : null,
-                  folder_id: selectedFolderId && selectedFolderId !== '__no_folder__' ? selectedFolderId : null,
-                })
+                setTaskDefaults({ ...(defaults ?? {}), ...scopeDefaults })
                 loadEmployees(orgForNew); loadStatuses(orgForNew); loadObras(orgForNew)
                 setEditing(null)
                 setShowForm(true)
@@ -639,6 +519,11 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
               onNavigate={handleNavigate}
             />
           ) : (
+            <>
+            {/* Kanban não tem toolbar acoplada: os mesmos controles numa barra §5.3 */}
+            <div className="flex flex-wrap items-center gap-2.5 bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+              {scopeControls}
+            </div>
             <TasksBoard
               tasks={visible}
               employees={employees}
@@ -648,19 +533,15 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
               onToggleDone={toggleDone}
               onEdit={(t) => { loadEmployees(t.org_id); loadSpaces(t.org_id); loadObras(t.org_id); setEditing(t); setParentTask(null); setShowForm(true) }}
               onAddTask={orgForNew ? (defaults) => {
-                setTaskDefaults({
-                  ...(defaults ?? {}),
-                  space_id: selectedSpaceId && selectedSpaceId !== '__none__' ? selectedSpaceId : null,
-                  folder_id: selectedFolderId && selectedFolderId !== '__no_folder__' ? selectedFolderId : null,
-                })
+                setTaskDefaults({ ...(defaults ?? {}), ...scopeDefaults })
                 loadEmployees(orgForNew); loadStatuses(orgForNew); loadObras(orgForNew)
                 setEditing(null)
                 setShowForm(true)
               } : undefined}
               onMoveCard={moveCard}
             />
+            </>
           )}
-        </div>
       </div>
 
       {showForm && (
@@ -673,8 +554,8 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           spaces={spaceOptions}
           task={editing}
           initialDefaults={editing ? {
-            space_id:  editing.space_id  ?? (selectedSpaceId  && selectedSpaceId  !== '__none__'     ? selectedSpaceId  : null),
-            folder_id: editing.folder_id ?? (selectedFolderId && selectedFolderId !== '__no_folder__' ? selectedFolderId : null),
+            space_id:  editing.space_id  ?? scopeDefaults.space_id,
+            folder_id: editing.folder_id ?? scopeDefaults.folder_id,
           } : taskDefaults}
           parentTaskId={parentTask?.id ?? null}
           parentTaskTitle={parentTask?.title ?? null}
@@ -696,19 +577,15 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
         />
       )}
 
-      <TaskSpaceBottomSheet
-        open={showSpaceSheet}
+      <TaskSpacesSheet
+        open={showSpacesSheet}
         spaces={spaces}
-        selectedSpaceId={selectedSpaceId}
-        selectedFolderId={selectedFolderId}
-        activeFilter={view}
-        todayCount={today.length}
-        overdueCount={overdue.length}
-        noSpaceCount={noSpaceCount}
-        onSelectInbox={handleSelectInbox}
-        onSelectSpace={handleSelectSpace}
-        onSelectNoSpace={handleSelectNoSpace}
-        onClose={() => setShowSpaceSheet(false)}
+        loading={loadingSpaces}
+        canCreate={!!orgForNew}
+        onClose={() => setShowSpacesSheet(false)}
+        onCreateSpace={handleCreateSpace}
+        onManageSpace={setManagingSpace}
+        onReloaded={() => loadSpaces(filterOrg || activeOrganizationId || '')}
       />
 
       {managingSpace && (
@@ -718,10 +595,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           onClose={() => setManagingSpace(null)}
           onChanged={() => loadSpaces(filterOrg || activeOrganizationId || '')}
           onDeleted={() => {
-            if (selectedSpaceId === managingSpace.id) {
-              setSelectedSpaceId(null)
-              setSelectedFolderId(null)
-            }
+            if (fSpace === managingSpace.id) { setFSpace(''); setFFolder('') }
             loadSpaces(filterOrg || activeOrganizationId || '')
           }}
         />

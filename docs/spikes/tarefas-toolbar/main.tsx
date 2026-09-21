@@ -10,7 +10,8 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import '../../../index.css';
 import TasksList from '../../../components/TasksList';
-import type { TaskRecord, EmployeeOption, ProjectOption, SpaceOption } from '../../../components/TaskForm';
+import type { TaskRecord, EmployeeOption, ProjectOption } from '../../../components/TaskForm';
+import { FilterPopover } from '../../../components/ui/FilterPopover';
 import type { TaskStatus } from '../../../services/taskService';
 
 const employees: EmployeeOption[] = [
@@ -26,9 +27,13 @@ const statuses: TaskStatus[] = [
   { id: 's2', org_id: 'o1', name: 'Em andamento', color: '#3b82f6', position: 1, is_default: false, is_done: false },
   { id: 's3', org_id: 'o1', name: 'Concluída', color: '#10b981', position: 2, is_default: false, is_done: true },
 ] as TaskStatus[];
-const spaces: SpaceOption[] = [
-  { id: 'sp1', name: 'Engenharia', color: '#3b82f6', folders: [{ id: 'f1', space_id: 'sp1', name: 'Projetos' }] },
-  { id: 'sp2', name: 'Financeiro', color: '#10b981', folders: [] },
+// No app, os popovers Prazo/Espaço/Pasta vêm do TasksModule pelo slot `filters`;
+// aqui um popover de amostra ocupa o mesmo lugar para a prova visual da toolbar.
+const SPACE_OPTIONS = [
+  { value: '', label: 'Todos' },
+  { value: '__none__', label: 'Sem espaço' },
+  { value: 'sp1', label: 'Engenharia' },
+  { value: 'sp2', label: 'Financeiro' },
 ];
 
 const base = {
@@ -49,14 +54,16 @@ const groupBy = (new URLSearchParams(location.search).get('groupBy') ?? 'none') 
 
 function Harness() {
   const [rows, setRows] = React.useState<TaskRecord[]>(tasks);
+  const [space, setSpace] = React.useState('');
+  const shown = space === '__none__' ? rows.filter(t => !t.space_id) : space ? rows.filter(t => t.space_id === space) : rows;
   return (
     <TasksList
-      tasks={rows}
+      tasks={shown}
       loading={false}
       employees={employees}
       projects={projects}
       statuses={statuses}
-      spaces={spaces}
+      filters={<FilterPopover label="Espaço" value={space} onChange={setSpace} options={SPACE_OPTIONS} />}
       groupBy={groupBy}
       onToggleDone={t => setRows(prev => prev.map(x => x.id === t.id ? { ...x, status: x.status === 'done' ? 'open' : 'done', status_id: x.status === 'done' ? 's1' : 's3' } : x))}
       onEdit={() => {}}

@@ -3,7 +3,10 @@ import {
     BookOpen,
     Plus,
     Calendar,
-    ChevronRight,
+    CalendarClock,
+    CalendarRange,
+    ChevronDown,
+    Hourglass,
     Users,
     FileText,
     Download,
@@ -26,6 +29,7 @@ import {
     Video
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import { KpiCard } from './ui/KpiCard';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 import TabsBar from './ui/TabsBar';
 import { ProjectSettings, DiaryEntry, BudgetEntry, WeatherShift, DiaryActivity, LaborEntry, ProjectSchedule } from '../types';
@@ -230,8 +234,8 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         if (!settings.schedule?.startDate || !settings.schedule?.endDate) {
             return { remaining: 0, total: 0, elapsed: 0, period: 'datas não definidas' };
         }
-        const start = new Date(settings.schedule.startDate);
-        const end = new Date(settings.schedule.endDate);
+        const start = parseEntryDate(settings.schedule.startDate);
+        const end = parseEntryDate(settings.schedule.endDate);
         const today = new Date();
 
         const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
@@ -594,29 +598,30 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
 
     return (
         <div className="space-y-6 pb-20">
-            {/* Professional Header */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-center justify-between gap-6">
-                <div className="flex items-center gap-4">
+            {/* §20 — h1 solto + subtítulo mt-1.5 (o subtítulo carrega o seletor de obra);
+                ações na mesma linha, à direita, como na lista de diários */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
                     {onBackToList && (
                         <button
                             onClick={onBackToList}
-                            className="p-3 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-transparent hover:border-indigo-100 shadow-sm hover:shadow-md"
+                            className="h-9 w-9 flex items-center justify-center bg-white text-gray-500 border border-gray-200 rounded-[6px] hover:bg-gray-50 hover:text-gray-700 transition-all active:scale-95 shrink-0"
                             title="Voltar para a lista"
                         >
-                            <ArrowLeft className="w-5 h-5" />
+                            <ArrowLeft className="w-4 h-4" />
                         </button>
                     )}
                     <div>
-                        <h1 className="text-2xl font-medium text-gray-900 tracking-tight">Diário de Obras</h1>
-                        <div className="flex items-center gap-2 mt-1 relative">
-                            <span className="text-xs font-medium text-gray-400 uppercase tracking-widest">Obra:</span>
+                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Diário de Obras</h1>
+                        <div className="text-gray-400 text-sm mt-1.5 font-medium flex items-center gap-1.5">
+                            <span>Obra:</span>
                             <div className="relative">
                                 <button
                                     onClick={() => setIsProjectSelectorOpen(!isProjectSelectorOpen)}
-                                    className="flex items-center gap-2 text-button font-medium text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full hover:bg-indigo-100 transition-all border border-indigo-100"
+                                    className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
                                 >
-                                    {settings.name || 'Selecionar Obra'}
-                                    <ChevronRight className={`w-3 h-3 transition-transform ${isProjectSelectorOpen ? 'rotate-90' : ''}`} />
+                                    {settings.name || 'Selecionar obra'}
+                                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isProjectSelectorOpen ? 'rotate-180' : ''}`} />
                                 </button>
 
                                 {isProjectSelectorOpen && (
@@ -653,36 +658,18 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                     </div>
                 </div>
 
-                <div className="flex flex-wrap gap-8 items-center">
-                    <div className="flex flex-wrap gap-8 items-center">
-                        <div className="text-center">
-                            <span className="block text-xs font-medium text-gray-400 uppercase tracking-widest">Prazo Restante</span>
-                            <span className="text-xl font-medium text-indigo-600">{metrics.remaining} dias</span>
-                        </div>
-                        <div className="w-px h-8 bg-gray-100" />
-                        <div className="text-center">
-                            <span className="block text-xs font-medium text-gray-400 uppercase tracking-widest">Prazo Total</span>
-                            <span className="text-sm font-medium text-gray-700 bg-gray-50 px-3 py-1 rounded-lg">{metrics.total} dias</span>
-                        </div>
-                        <div className="text-center">
-                            <span className="block text-xs font-medium text-gray-400 uppercase tracking-widest">Prazo Decorrido</span>
-                            <span className="text-sm font-medium text-gray-700 bg-gray-50 px-3 py-1 rounded-lg">{metrics.elapsed} dias</span>
-                        </div>
-                        <div className="text-center">
-                            <span className="block text-xs font-medium text-gray-400 uppercase tracking-widest">Período Planejado</span>
-                            <span className="text-xs font-medium text-gray-500 bg-gray-50 px-3 py-1 rounded-lg">{metrics.period}</span>
-                        </div>
-                        <div className="w-px h-8 bg-gray-100" />
-                        <div className="relative">
+                {/* §17 — variante compacta; o vínculo de planejamento é ação secundária (borda), cor pelo estado */}
+                <div className="flex items-center gap-2 shrink-0">
+                    <div className="relative">
                             <button
                                 onClick={() => setIsLinkingPlanningOpen(!isLinkingPlanningOpen)}
-                                className={`flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full transition-all border uppercase tracking-widest ${autoLinkedProjectId
-                                    ? (settings.linkedProjectId ? 'text-emerald-600 bg-emerald-50 border-emerald-100' : 'text-blue-600 bg-blue-50 border-blue-100')
-                                    : 'text-amber-600 bg-amber-50 border-amber-100 animate-pulse'
+                                className={`flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 rounded-[6px] font-medium text-[13px] transition-all active:scale-95 ${autoLinkedProjectId
+                                    ? (settings.linkedProjectId ? 'text-emerald-600 hover:bg-emerald-50' : 'text-blue-600 hover:bg-blue-50')
+                                    : 'text-amber-600 hover:bg-amber-50'
                                     }`}
                             >
-                                <Link2 className="w-3.5 h-3.5" />
-                                {settings.linkedProjectId ? 'Planejamento Ativo' : (autoLinkedProjectId ? 'Planejamento Auto' : 'Vincular Planejamento')}
+                                <Link2 className="w-[15px] h-[15px]" />
+                                {settings.linkedProjectId ? 'Planejamento ativo' : (autoLinkedProjectId ? 'Planejamento automático' : 'Vincular planejamento')}
                             </button>
 
                             {isLinkingPlanningOpen && (
@@ -743,12 +730,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                     )}
                                 </div>
                             )}
-                        </div>
                     </div>
-                </div>
-
-                {/* §17 — variante compacta; ícones em h-9 w-9 como os da toolbar §5.2 */}
-                <div className="flex items-center gap-2">
                     <button
                         onClick={() => onGenerateReport?.()}
                         className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
@@ -769,6 +751,14 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                         </button>
                     )}
                 </div>
+            </div>
+
+            {/* §4 + §20.1 — prazos da obra como KPIs; mb-3 fecha o bloco de cromo */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+                <KpiCard label="Prazo restante" value={`${metrics.remaining} dias`} icon={<Hourglass className="w-4 h-4" />} color="blue" />
+                <KpiCard label="Prazo total" value={`${metrics.total} dias`} icon={<CalendarRange className="w-4 h-4" />} color="gray" />
+                <KpiCard label="Prazo decorrido" value={`${metrics.elapsed} dias`} icon={<CalendarClock className="w-4 h-4" />} color="emerald" />
+                <KpiCard label="Período planejado" value={metrics.period} icon={<Calendar className="w-4 h-4" />} color="gray" />
             </div>
 
             {

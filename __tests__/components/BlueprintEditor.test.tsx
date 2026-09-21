@@ -5452,13 +5452,20 @@ describe('BlueprintEditor · LOD (P2.24)', () => {
     const frente = m.walls.find((x) => x.a.y === 0 && x.b.y === 0)!;
     m = k.applyCommand(m, { type: 'SetWallLayers', wallId: frente.id, camadas: [{ espessuraMm: 150, itemCode: 'INT-BLOCO-CER-14', descricao: 'Bloco', funcao: 'VEDACAO' }] }).model;
     m = k.applyCommand(m, { type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Sala', tipoDeAmbiente: 'SALA_DORMITORIO' }).model;
+    // P2.30: um pilar com rótulo fica em 300 (sem armadura declarada) e a família mostra teto 400 e a coluna 400.
+    m = k.applyCommand(m, { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(2000, 1500)], larguraMm: 300, profundidadeMm: 300, alturaMm: 2800, baseMm: 0, rotulo: 'P1' }).model;
     loadBranchModel.mockResolvedValue(m);
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^analisar$/i);
     await user.click(botao(/^LOD/i));
     const gaveta = await screen.findByTestId('tarefa-lod');
-    expect(gaveta).toHaveTextContent(/5 peça\(s\) avaliada\(s\) · LOD do conjunto: 200 · 3 abaixo do alvo/);
+    expect(gaveta).toHaveTextContent(/6 peça\(s\) avaliada\(s\) · LOD do conjunto: 200 · 3 abaixo do alvo/);
+    const estrutura = within(gaveta).getByTestId('lod-estrutura');
+    expect(estrutura).toHaveTextContent(/teto 400/);
+    expect(estrutura).toHaveTextContent(/1\/1 · 100 %/);
+    expect(within(estrutura).getByRole('option', { name: '400' })).toBeInTheDocument();
+    expect(within(gaveta).getByRole('columnheader', { name: '400' })).toBeInTheDocument();
     const paredes = within(gaveta).getByTestId('lod-parede');
     expect(paredes).toHaveTextContent(/Paredes/);
     expect(paredes).toHaveTextContent(/1\/4 · 25 %/);

@@ -681,7 +681,8 @@ export function montarIfc(model: BlueprintModel, o: OpcoesExportacao): ArtefatoE
     // Só vai custo se quem exportou pediu — ver `custoPorUid`.
     custoPorUid: o.custoPorUid,
     // LOD derivado por elemento (backlog P2): sempre vai — é leitura do desenho, não opção.
-    lodPorUid: lodPorUid(model),
+    // P2.30: com a armadura por peça (hipóteses do estudo), a estrutura chega a 350/400.
+    lodPorUid: lodPorUid(model, contextoDeLodDoIfc(model, o)),
     aprovacao: o.aprovacao,
     parametrosCalculadosPorUid: o.definicoesDeParametro ? parametrosCalculadosDoModelo(model, o.definicoesDeParametro) : undefined,
     chavesPrivadas: o.definicoesDeParametro ? chavesPrivadas(o.definicoesDeParametro) : undefined,
@@ -695,6 +696,14 @@ export function montarIfc(model: BlueprintModel, o: OpcoesExportacao): ArtefatoE
     },
     coberturaComoArtefato(o, 'ifc', COBERTURA_IFC),
   ];
+}
+
+/** O contexto do LOD para o IFC: a armadura por peça calculada com as hipóteses que vieram na exportação. */
+function contextoDeLodDoIfc(model: BlueprintModel, o: OpcoesExportacao) {
+  const hip = o.armadura ?? HIPOTESES_ARMADURA_PADRAO;
+  const quant = computeQuantities(model, POLITICA_PADRAO, KERNEL_VERSION);
+  const arm = armaduraDoModelo(model, quant, hip);
+  return { armaduraPorUid: new Map(arm.pecas.map((p) => [p.uid, p])), manualPorUid: hip.porPeca ?? {} };
 }
 
 export function exportarIfc(model: BlueprintModel, o: OpcoesExportacao): void {

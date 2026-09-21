@@ -3335,7 +3335,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const quadroDeDepartamentosDoNivel = useMemo(() => quadroDeDepartamentos(editor.model, levelId), [editor.model, levelId]);
   const sugestoesDeDepartamentoDoNivel = useMemo(() => sugestoesDeDepartamento(editor.model, levelId), [editor.model, levelId]);
   /** LOD (P2): elementos do pavimento com o nível derivado; quadro e pendências contra o alvo. */
-  const lodDoNivel = useMemo(() => lodDosElementos(editor.model, levelId), [editor.model, levelId]);
+  // LOD (P2.30): a estrutura sobe a 350/400 pela armadura por peça — o memo `armadura` já existe.
+  const contextoDeLod = useMemo(() => ({ armaduraPorUid: new Map(armadura.pecas.map((p) => [p.uid, p])), manualPorUid: hipotesesDeArmadura.porPeca ?? {} }), [armadura, hipotesesDeArmadura]);
+  const lodDoNivel = useMemo(() => lodDosElementos(editor.model, levelId, contextoDeLod), [editor.model, levelId, contextoDeLod]);
   const quadroDeLodDoNivel = useMemo(() => quadroDeLod(lodDoNivel, { ...ALVO_DE_LOD_PADRAO, ...alvoDeLod }), [lodDoNivel, alvoDeLod]);
   const pendenciasDeLodDoNivel = useMemo(() => pendenciasDeLod(lodDoNivel, { ...ALVO_DE_LOD_PADRAO, ...alvoDeLod }), [lodDoNivel, alvoDeLod]);
   const rodapeSel = (editor.model.rodapes ?? []).find((r) => r.id === editor.selectedId) ?? null;

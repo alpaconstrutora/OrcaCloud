@@ -30,7 +30,7 @@ export default function PainelLod({ nomeDoPavimento, quadro, pendencias, alvo, o
           <strong>{nomeDoPavimento}</strong> — {pecas} peça(s) avaliada(s){minimo !== null ? ` · LOD do conjunto: ${minimo}` : ''} · {pendencias.length} abaixo do alvo.
         </p>
         <p className="mt-1 text-[11px] text-slate-500">
-          O LOD é lido do que cada peça já tem — não se declara. Parede com camadas é 300; com item de catálogo em toda camada, 350. O alvo é seu, por família; o sistema não avalia 400 (fabricação) e o teto de cada família está no quadro.
+          O LOD é lido do que cada peça já tem — não se declara. Parede com camadas é 300; com item de catálogo em toda camada, 350. O alvo é seu, por família; 400 (fabricação) só existe em estrutura — armadura declarada por peça, completa e sem avisos — e o teto de cada família está no quadro.
         </p>
         <ul className="mt-1 text-[11px] text-slate-500">
           {NIVEIS_DE_LOD.map((n) => (
@@ -54,6 +54,7 @@ export default function PainelLod({ nomeDoPavimento, quadro, pendencias, alvo, o
                 <th className="py-1 pl-3 text-right font-medium">200</th>
                 <th className="py-1 pl-3 text-right font-medium">300</th>
                 <th className="py-1 pl-3 text-right font-medium">350</th>
+                <th className="py-1 pl-3 text-right font-medium">400</th>
                 <th className="py-1 pl-3 text-right font-medium">Alvo</th>
                 <th className="py-1 pl-3 text-right font-medium">No alvo</th>
               </tr>
@@ -63,7 +64,7 @@ export default function PainelLod({ nomeDoPavimento, quadro, pendencias, alvo, o
                 <tr key={l.familia} data-testid={`lod-${l.familia}`}>
                   <td className="py-1">
                     {l.rotulo}
-                    <span className="ml-1 text-[10px] text-slate-400" title={`300: ${FICHA_DA_FAMILIA_LOD[l.familia].criterio300}${FICHA_DA_FAMILIA_LOD[l.familia].criterio350 ? ` · 350: ${FICHA_DA_FAMILIA_LOD[l.familia].criterio350}` : ''}`}>
+                    <span className="ml-1 text-[10px] text-slate-400" title={`300: ${FICHA_DA_FAMILIA_LOD[l.familia].criterio300}${FICHA_DA_FAMILIA_LOD[l.familia].criterio350 ? ` · 350: ${FICHA_DA_FAMILIA_LOD[l.familia].criterio350}` : ''}${FICHA_DA_FAMILIA_LOD[l.familia].criterio400 ? ` · 400: ${FICHA_DA_FAMILIA_LOD[l.familia].criterio400}` : ''}`}>
                       teto {l.teto}
                     </span>
                   </td>
@@ -71,6 +72,7 @@ export default function PainelLod({ nomeDoPavimento, quadro, pendencias, alvo, o
                   <td className="py-1 pl-3 text-right tabular-nums">{l.porNivel[200] || '—'}</td>
                   <td className="py-1 pl-3 text-right tabular-nums">{l.porNivel[300] || '—'}</td>
                   <td className="py-1 pl-3 text-right tabular-nums">{l.porNivel[350] || '—'}</td>
+                  <td className="py-1 pl-3 text-right tabular-nums">{l.porNivel[400] || '—'}</td>
                   <td className="py-1 pl-3 text-right">
                     <select value={alvo[l.familia]} onChange={(e) => onAlvo({ ...alvo, [l.familia]: Number(e.target.value) as NivelDeLod })} aria-label={`Alvo de LOD para ${l.rotulo}`} className={campo}>
                       {NIVEIS_DE_LOD.filter((n) => n <= l.teto).map((n) => (

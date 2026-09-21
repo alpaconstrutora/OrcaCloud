@@ -15,10 +15,12 @@
  *
  * ─── TETO POR FAMÍLIA (declarado) ───────────────────────────────────────────
  *
- * O sistema não avalia LOD 400 (fabricação) em nenhuma família, nem 350 em
- * estrutura (exigiria detalhamento de armadura por peça — P3) e telhado. O
- * teto de cada família está em `FICHA_DA_FAMILIA_LOD.teto`, e o quadro o
- * mostra para ninguém cobrar do desenho o que ele não representa.
+ * O sistema avalia LOD 400 (fabricação) SÓ em estrutura — pela armadura por
+ * peça (P2.30): 350 quando a pessoa declarou a armadura da peça (barras,
+ * bitola, estribo — `HipotesesDeArmadura.porPeca`), 400 quando ela está
+ * completa e sem avisos (dá lista de barras). Telhado para em 300. O teto de
+ * cada família está em `FICHA_DA_FAMILIA_LOD.teto`, e o quadro o mostra para
+ * ninguém cobrar do desenho o que ele não representa.
  *
  * ─── ONDE VAI ───────────────────────────────────────────────────────────────
  *
@@ -27,6 +29,7 @@
  * `OpcoesIfc.lodPorUid`, para as goldens não mudarem).
  */
 import type { BlueprintModel, ObjectId, Opening, Space, Structural, Terminal, Trecho, Wall } from './blueprintKernel';
+import type { ArmaduraDaPeca, ArmaduraManual } from './blueprintArmadura';
 import { acabamentosDoAmbiente, nomeDoTipoDeAbertura, nomeDoTipoEstrutural, rotuloCurto } from './blueprintKernel';
 import { etiquetaDoAmbiente } from './blueprintDistribuicao';
 
@@ -41,21 +44,29 @@ export const FICHA_DO_LOD: Record<NivelDeLod, { rotulo: string; descricao: strin
   200: { rotulo: 'LOD 200 · aproximado', descricao: 'Geometria aproximada: posição, forma e dimensões gerais.' },
   300: { rotulo: 'LOD 300 · preciso', descricao: 'Geometria e informação precisas: composição, tipo, classificação.' },
   350: { rotulo: 'LOD 350 · coordenação', descricao: 'Interfaces e identificação: material/item de catálogo, circuito, esquadria com código.' },
-  400: { rotulo: 'LOD 400 · fabricação', descricao: 'Detalhamento para fabricação e montagem — não avaliado pelo sistema.' },
+  400: { rotulo: 'LOD 400 · fabricação', descricao: 'Detalhamento para fabricação e montagem — avaliado só em estrutura (armadura completa por peça, sem avisos).' },
 };
 
 export const FAMILIAS_LOD = ['parede', 'abertura', 'estrutura', 'telhado', 'ambiente', 'terminal', 'trecho'] as const;
 export type FamiliaLod = (typeof FAMILIAS_LOD)[number];
 
-export const FICHA_DA_FAMILIA_LOD: Record<FamiliaLod, { rotulo: string; teto: NivelDeLod; criterio300: string; criterio350: string | null }> = {
-  parede: { rotulo: 'Paredes', teto: 350, criterio300: 'composição em camadas (ou cortina de vidro) declarada', criterio350: 'item de catálogo em toda camada' },
-  abertura: { rotulo: 'Portas e janelas', teto: 350, criterio300: 'esquadria (tipo) atribuída', criterio350: 'esquadria com item de catálogo' },
-  estrutura: { rotulo: 'Estrutura', teto: 300, criterio300: 'peça identificada (rótulo P1, V2…)', criterio350: null },
-  telhado: { rotulo: 'Telhado', teto: 300, criterio300: 'inclinação e espessura declaradas', criterio350: null },
-  ambiente: { rotulo: 'Ambientes', teto: 350, criterio300: 'nome e tipo de ambiente', criterio350: 'acabamentos (piso/forro/rodapé) declarados' },
-  terminal: { rotulo: 'Pontos (elétrica/hidráulica)', teto: 350, criterio300: 'tipo fechado e ponto confirmado (não sugerido)', criterio350: 'elétrica: circuito ligado · hidráulica: item de catálogo' },
-  trecho: { rotulo: 'Trechos (eletrodutos/tubos/dutos)', teto: 350, criterio300: 'bitola definida e trecho confirmado', criterio350: 'elétrica: circuito(s) atribuído(s) · demais: item de catálogo' },
+export const FICHA_DA_FAMILIA_LOD: Record<FamiliaLod, { rotulo: string; teto: NivelDeLod; criterio300: string; criterio350: string | null; criterio400: string | null }> = {
+  parede: { rotulo: 'Paredes', teto: 350, criterio300: 'composição em camadas (ou cortina de vidro) declarada', criterio350: 'item de catálogo em toda camada', criterio400: null },
+  abertura: { rotulo: 'Portas e janelas', teto: 350, criterio300: 'esquadria (tipo) atribuída', criterio350: 'esquadria com item de catálogo', criterio400: null },
+  estrutura: { rotulo: 'Estrutura', teto: 400, criterio300: 'peça identificada (rótulo P1, V2…)', criterio350: 'armadura declarada por peça (barras, bitola, estribo)', criterio400: 'armadura completa e sem avisos — viga e laje com a armadura superior (lista de barras)' },
+  telhado: { rotulo: 'Telhado', teto: 300, criterio300: 'inclinação e espessura declaradas', criterio350: null, criterio400: null },
+  ambiente: { rotulo: 'Ambientes', teto: 350, criterio300: 'nome e tipo de ambiente', criterio350: 'acabamentos (piso/forro/rodapé) declarados', criterio400: null },
+  terminal: { rotulo: 'Pontos (elétrica/hidráulica)', teto: 350, criterio300: 'tipo fechado e ponto confirmado (não sugerido)', criterio350: 'elétrica: circuito ligado · hidráulica: item de catálogo', criterio400: null },
+  trecho: { rotulo: 'Trechos (eletrodutos/tubos/dutos)', teto: 350, criterio300: 'bitola definida e trecho confirmado', criterio350: 'elétrica: circuito(s) atribuído(s) · demais: item de catálogo', criterio400: null },
 };
+
+/** O que o LOD precisa saber além do modelo: a armadura por peça (P2.30). */
+export interface ContextoDeLod {
+  /** `ArmaduraDaPeca` por `uid` da peça estrutural — `armaduraDoModelo(...).pecas`. */
+  armaduraPorUid?: ReadonlyMap<string, ArmaduraDaPeca>;
+  /** A armadura MANUAL declarada por `uid` — `HipotesesDeArmadura.porPeca`. */
+  manualPorUid?: Readonly<Record<string, ArmaduraManual>>;
+}
 
 export interface LodDoElemento {
   familia: FamiliaLod;
@@ -85,9 +96,23 @@ const lodDaAbertura = (o: Opening): Pick<LodDoElemento, 'lod' | 'falta'> => {
   return { lod: 350, falta: [] };
 };
 
-const lodDaEstrutura = (s: Structural): Pick<LodDoElemento, 'lod' | 'falta'> => {
+/**
+ * ESTRUTURA (P2.30): 200 sem rótulo · 300 com rótulo · 350 com armadura DECLARADA
+ * por peça (origem MANUAL: barras, bitola, estribo) · 400 quando essa armadura
+ * está completa (viga/laje/viga de fundação com a superior) e sem avisos da
+ * NBR 6118 — o que uma lista de barras exige. Sem contexto de armadura, para em 300.
+ */
+const lodDaEstrutura = (s: Structural, armadura?: ArmaduraDaPeca, manual?: ArmaduraManual | null): Pick<LodDoElemento, 'lod' | 'falta'> => {
   if (!s.rotulo?.trim()) return { lod: 200, falta: ['identificar a peça (rótulo, ex.: P1, V2, L1)'] };
-  return { lod: 300, falta: [] };
+  if (!armadura || armadura.origem !== 'MANUAL') return { lod: 300, falta: ['declarar a armadura da peça (barras, bitola, estribo) no painel da peça — hoje ela segue o esquema/taxa'] };
+  const falta: string[] = [];
+  if (armadura.avisos.length > 0) falta.push(`resolver os avisos da armadura: ${armadura.avisos.join('; ')}`);
+  // Viga: a superior (negativos) tem de ser DECLARADA, não a automática de 2 barras. Laje: a malha manual é a armadura inteira.
+  const precisaSuperior = s.kind === 'VIGA' || s.kind === 'VIGA_FUNDACAO';
+  const temSuperior = !!manual && (manual.nSuperior ?? 0) > 0 && (manual.bitolaSuperiorMm ?? 0) > 0;
+  if (precisaSuperior && !temSuperior) falta.push('declarar a armadura superior (negativos): n e bitola');
+  if (!(armadura.comprimentoLongitudinalM > 0)) falta.push('a lista de barras ficou vazia (comprimento longitudinal zero)');
+  return falta.length ? { lod: 350, falta } : { lod: 400, falta: [] };
 };
 
 const lodDoTerminal = (t: Terminal): Pick<LodDoElemento, 'lod' | 'falta'> => {
@@ -121,7 +146,7 @@ const lodDoAmbiente = (model: BlueprintModel, s: Space): Pick<LodDoElemento, 'lo
 };
 
 /** O LOD de cada elemento do modelo (ou do pavimento). */
-export function lodDosElementos(model: BlueprintModel, levelId?: ObjectId | null): LodDoElemento[] {
+export function lodDosElementos(model: BlueprintModel, levelId?: ObjectId | null, contexto: ContextoDeLod = {}): LodDoElemento[] {
   const saida: LodDoElemento[] = [];
   const noNivel = (id: ObjectId | null | undefined) => !levelId || id === levelId;
   const nivelDaParede = new Map(model.walls.map((w) => [w.id, w.levelId]));
@@ -130,7 +155,7 @@ export function lodDosElementos(model: BlueprintModel, levelId?: ObjectId | null
     const lv = nivelDaParede.get(o.wallId) ?? null;
     if (noNivel(lv)) saida.push({ familia: 'abertura', id: o.id, uid: o.uid, levelId: lv, rotulo: `${nomeDoTipoDeAbertura(o.kind)} ${curto(o.uid, 'opening', o.id)}`, ...lodDaAbertura(o) });
   }
-  for (const s of model.structures ?? []) if (noNivel(s.levelId)) saida.push({ familia: 'estrutura', id: s.id, uid: s.uid, levelId: s.levelId, rotulo: `${nomeDoTipoEstrutural(s.kind)} ${s.rotulo?.trim() || curto(s.uid, 'structural', s.id)}`, ...lodDaEstrutura(s) });
+  for (const s of model.structures ?? []) if (noNivel(s.levelId)) saida.push({ familia: 'estrutura', id: s.id, uid: s.uid, levelId: s.levelId, rotulo: `${nomeDoTipoEstrutural(s.kind)} ${s.rotulo?.trim() || curto(s.uid, 'structural', s.id)}`, ...lodDaEstrutura(s, contexto.armaduraPorUid?.get(s.uid), contexto.manualPorUid?.[s.uid] ?? null) });
   for (const a of model.roofs ?? []) if (noNivel(a.levelId)) saida.push({ familia: 'telhado', id: a.id, uid: a.uid, levelId: a.levelId, rotulo: `Água ${curto(a.uid, 'roof', a.id)}`, lod: a.inclinacaoPct > 0 && a.espessuraMm > 0 ? 300 : 200, falta: a.inclinacaoPct > 0 && a.espessuraMm > 0 ? [] : ['declarar inclinação e espessura'] });
   model.spaces.forEach((s, i) => {
     if (!noNivel(s.levelId) || s.ring.length < 3) return;
@@ -143,9 +168,9 @@ export function lodDosElementos(model: BlueprintModel, levelId?: ObjectId | null
 }
 
 /** LOD por uid — para o IFC. */
-export function lodPorUid(model: BlueprintModel): Map<string, NivelDeLod> {
+export function lodPorUid(model: BlueprintModel, contexto: ContextoDeLod = {}): Map<string, NivelDeLod> {
   const m = new Map<string, NivelDeLod>();
-  for (const e of lodDosElementos(model)) if (e.familia !== 'ambiente') m.set(e.uid, e.lod);
+  for (const e of lodDosElementos(model, null, contexto)) if (e.familia !== 'ambiente') m.set(e.uid, e.lod);
   return m;
 }
 

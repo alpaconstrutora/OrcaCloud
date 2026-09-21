@@ -1396,7 +1396,7 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 
 **Decisões**
 - LOD é leitura do desenho, não campo: declarar "350" numa parede sem camadas seria mentira que o orçamento cobraria. Sem bump de kernel.
-- Teto por família declarado: o sistema não avalia LOD 400 (fabricação) em nada, nem 350 em estrutura (exigiria armadura por peça — P3) e telhado. Alvo acima do teto conta contra o teto.
+- Teto por família declarado: o sistema não avalia LOD 400 (fabricação) em nada, nem 350 em estrutura (exigiria armadura por peça — P3) e telhado. Alvo acima do teto conta contra o teto. → **P2.30**: estrutura passou a 350/400 pela armadura por peça.
 - Rótulos curtos (`rotuloCurto`) nas pendências; fixtures sem uid caem no id.
 
 **Prova**
@@ -1493,6 +1493,23 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 - `npx tsc --noEmit` ok · check-ui ok · `check-xss-sinks.sh` ok · suíte cheia 428 arquivos / 4963 testes (os 4 do editor que falharam numa rodada cheia passam sozinhos e na rodada seguinte — a intermitência conhecida) · `npm run build` ok.
 - App real (escritas bloqueadas: 15, 0 erros): `casa-prova.dae` (5 paredes, porta 900×2100 e janela 1200×1200 peitoril 1000, gerado por `gerarCollada`) → painel "5 parede(s) · Importar aberturas (1 porta(s) · 1 janela(s) · 0 vão(s) livre(s))" → Importar → contador 14 → 19 paredes, seleção "7 selecionados" (5 paredes + 2 aberturas); `planta-19092026-v1.dae` → 171 paredes, "0 porta(s) · 18 janela(s) · 27 vão(s) livre(s)".
 - Testes: ida e volta recupera porta e janela nas medidas (±50 mm, peitoril 1000) na parede certa e só nela; `passage` de piso a teto emendado; vão de 200 mm ignorado; nó "Mobiliário …" fora (12 triângulos) e, sem o filtro, o armário vira parede; editor P2.26 ampliado: `saveDraft` com 5 paredes e 2 aberturas (door + window, peitoril ≥ 950) na parede da frente.
+
+### P2.30 — LOD 350/400 em estrutura pela armadura por peça (21/09/2026) · fecho do "fora desta fase" da P2.24
+
+**O que entrou**
+- `utils/blueprintLod.ts`: `ContextoDeLod { armaduraPorUid, manualPorUid }` em `lodDosElementos`/`lodPorUid`; `lodDaEstrutura` passa a: 200 sem rótulo · 300 com rótulo (falta: "declarar a armadura da peça no painel da peça") · **350** com armadura de origem MANUAL (a pessoa declarou barras, bitola e estribo — `HipotesesDeArmadura.porPeca[uid]`) · **400** quando essa armadura não tem avisos da NBR 6118, viga/viga de fundação têm a superior DECLARADA (n e bitola) e a lista de barras não é vazia. `FICHA_DA_FAMILIA_LOD.estrutura.teto = 400` com `criterio350`/`criterio400`; toda ficha ganhou `criterio400`; `FICHA_DO_LOD[400]` diz que é avaliado só em estrutura.
+- Editor: `contextoDeLod` a partir do memo `armadura` (já existia) e das hipóteses do estudo; `PainelLod` com a coluna 400, o critério 400 no tooltip e o alvo 400 onde o teto permite.
+- IFC: `montarIfc` calcula o contexto com `armaduraDoModelo(model, quant, o.armadura)` (as hipóteses já viajavam na exportação) → `LevelOfDevelopment` 350/400 na estrutura.
+
+**Decisões**
+- 350 = "tem armadura própria" (manual), não "tem armadura calculada": o esquema/taxa é um piso automático que toda peça tem — não é coordenação.
+- 400 exige o que uma lista de barras exige: sem avisos e, em viga, a superior declarada (a automática de 2 barras não conta). Laje: a malha manual é a armadura inteira.
+- Sem bump de kernel: a armadura por peça continua nas hipóteses do estudo (`blueprint_study_armadura`), fora do payload.
+
+**Prova**
+- `npx tsc --noEmit` ok · check-ui ok · `check-xss-sinks.sh` ok · suíte cheia 430 arquivos / 4990 testes · `npm run build` ok.
+- App real (escritas bloqueadas: 16, 0 erros): Analisar › LOD na Planta 14/09 → Estrutura "teto 400 · 67 peças: 60 em 300, 1 em 350, 6 em 400" (o estudo já tinha armaduras manuais declaradas), cabeçalho com a coluna 400; pilar novo → "Lançar manualmente" no painel da peça → "Armadura lançada manualmente"; LOD com alvo 400 → "6/68 · 9 %", pendência "Pilar C-E8DB · LOD 200 — identificar a peça".
+- Testes `blueprintLod.test.ts`: sem manual = 300 com a falta certa; pilar manual = 350/400 conforme avisos; pilar subarmado (2 Ø 5) = 350 com "avisos da armadura"; viga só inferior = 350 com "armadura superior"; viga completa = 400; alvo acima do teto conta contra o teto (parede); IFC emite `LevelOfDevelopment` 350/400 com o contexto; editor P2.24 ampliado (estrutura com teto 400, coluna e alvo 400).
 
 ## Verificação (por fase)
 

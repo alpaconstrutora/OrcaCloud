@@ -1422,6 +1422,24 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 - App real (escritas bloqueadas: 15; os 2 `pageerror` são o script de bloqueio de service worker do Playwright dentro do iframe sandboxed — `<anonymous>:3` —, não código do app): Colaborar › Plugins (in-flow, "Nenhum plugin cadastrado") → Executar o plugin de exemplo → iframe real fez o handshake ("Plugin carregado; desenho enviado"), leu "Planta 14/09/2026 · rev. rascunho · 8 ambiente(s), 0 sem nome · kernel 0.56.0"; mensagem cross-frame de dentro do iframe propôs "Renomear Ambiente 1" (NameSpace ×1 · altera 1) → Aplicar → registro "Aplicada".
 - Testes `blueprintPlugins.test.ts` (cadastro, mensagem com hash/quantitativos por permissão, leitura com origem/forma/permissões/vedados/limite, ensaio aceito e recusado sem tocar o modelo, exemplo fala o protocolo), editor P2.25 (tela, cadastro recusa http e grava https com permissão, executor com sandbox e srcdoc, handshake, mensagem de outra janela ignorada, comando ruim recusado com motivo, proposta ensaiada aplicada → `saveDraft` com a etiqueta).
 
+### P2.26 — Importar do SketchUp: COLLADA (.dae) → paredes (21/09/2026) · backlog P2 (registrado na P2.23)
+
+**O que entrou**
+- `utils/xmlLeve.ts`: leitor de XML para árvore (elementos, atributos, texto, entidades básicas, CDATA, comentários; sem namespaces resolvidos nem DTD — declarado), porque `DOMParser` não existe no Node e o COLLADA é aninhado.
+- `utils/colladaParaKernel.ts`: `trianguloesDoCollada` (unit, up_axis Z/Y/X, `triangles`/`polylist`/`polygons` com vários `input`/offset, `library_nodes` + `instance_node`, `matrix`/`translate`/`rotate`/`scale` acumulados por nó; tudo em mm no referencial do kernel); `planosVerticais` (faces com normal sem Z agrupadas por plano a 0,5°/5 mm; trechos unidos só quando se tocam ao longo do plano E se sobrepõem em Z); `paredesDosPlanos` (duas faces paralelas a 50–600 mm → parede no eixo médio; plano FINO — paralelo a < 50 mm — sai do jogo; o par escolhido é o que mais cobre a face, com sobreposição ≥ 60 % da face menor e faixa de Z comum ≥ 1000 mm; par curto < 300 mm ou < 2× espessura recusado); `pavimentosDasParedes` (grupos por cota de base); `prepararCollada` com resumo e avisos.
+- `PainelImportarCollada` (Inserir › **Do SketchUp**): arquivo, hipóteses editáveis (espessura mín/máx, comprimento e altura mín), cota lida → pavimento do desenho (sugestão pelo mais próximo, quem confirma é a pessoa), posição (arquivo/origem/desenho), o que entra (paredes, metros, espessuras, pontas encostadas/soltas por `encostarNasFaces`) e o que ficou fora com o motivo; `.skp` recusado com a instrução (Arquivo › Exportar › Modelo 3D › COLLADA). Importa num lote via `importarDoIfc`.
+
+**Decisões**
+- Sem `.skp`: binário fechado da Trimble; o caminho é o .dae que o SketchUp exporta em todas as edições.
+- A malha não tem "parede": ela é RECONHECIDA nas faces, e o desenho volta tão limpo quanto a malha — a Planta 19/09 (desenho de prova, bagunçado, com paredes curvas facetadas e sobreposições) devolveu 198 paredes de 381, 146 delas de 150 mm, e 503 pares curtos (facetas de arco < 2× espessura).
+- Aberturas não são reconhecidas (o vão numa malha é só ausência de faces) — registrado. Pavimentos novos não são criados: cada cota lida casa com um pavimento existente.
+- Sem bump de kernel.
+
+**Prova**
+- `npx tsc --noEmit` ok · check-ui ok · `check-xss-sinks.sh` ok · suíte cheia 426 arquivos / 4951 testes · `npm run build` ok.
+- App real (escritas bloqueadas: 15, 0 erros de página): Inserir › Do SketchUp → `.skp` recusado com a instrução; `planta-19092026-v1.dae` (o que a P2.23 baixou: 411 geometrias, 5 292 triângulos, 3 528 verticais em 627 planos, Z_UP, metro) → 198 paredes / 418,64 m, recusas contadas (24 baixos, 503 curtos, 310 sem par), cota 0,00 → Térreo → Importar: contador do desenho 14 → 212 paredes.
+- Testes `colladaParaKernel.test.ts` (xmlLeve; ida e volta do .dae da própria Planta: 5 paredes com espessura/altura/comprimento, porta e janela emendadas, pilar/viga/laje/esquadrias fora e contados; polylist com NORMAL offset 1, Y_UP, centímetro, translate/rotate, componente por library_nodes com o nome da instância; recusa de não-COLLADA e cena vazia), editor P2.26 (painel, .skp recusado, .dae lido com 5 paredes / 24,00 m, recusas, pavimento, Importar → saveDraft com 5 paredes no Térreo).
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

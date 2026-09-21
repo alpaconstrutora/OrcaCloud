@@ -5535,3 +5535,48 @@ describe('BlueprintEditor · plugins (P2.25)', () => {
     }
   }, 60000);
 });
+
+/**
+ * IMPORTAR DO SKETCHUP (21/09/2026, backlog P2): Inserir › Do SketchUp lê um
+ * .dae, mostra o reconhecimento (paredes, recusas, pavimento), recusa .skp com
+ * a instrução, e importa as paredes num lote.
+ */
+describe('BlueprintEditor · importar do SketchUp (P2.26)', () => {
+  it('lê o .dae exportado pela própria Planta, mostra 5 paredes e importa; .skp é recusado com instrução', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const { gerarCollada } = await import('../../utils/blueprintCollada');
+    // O arquivo: uma casa de 5 paredes com pilar e laje (que ficam de fora).
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number, e = 150) => ({ type: 'AddWall' as const, levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: e, heightMm: 2800 });
+    let origem = k.applyBatch(nivel.model, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0), w(3000, 0, 3000, 4000, 100)]).model;
+    origem = k.applyCommand(origem, { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(1500, 2000)], larguraMm: 300, profundidadeMm: 300, alturaMm: 2800, baseMm: 0 }).model;
+    origem = k.applyCommand(origem, { type: 'AddStructural', levelId: t, kind: 'LAJE', pontos: [k.point(0, 0), k.point(6000, 0), k.point(6000, 4000), k.point(0, 4000)], larguraMm: 0, profundidadeMm: 0, alturaMm: 120, baseMm: 2800 }).model;
+    const dae = gerarCollada(origem, { titulo: 'Casa', revisao: 1, hash: 'h' });
+    // O desenho de destino: só o pavimento, vazio.
+    loadBranchModel.mockResolvedValue(nivel.model);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^inserir$/i);
+    await user.click(botao(/^do sketchup$/i));
+    const painel = await screen.findByTestId('painel-importar-collada');
+    expect(painel).toHaveTextContent(/COLLADA \(\.dae\)/);
+    // .skp: recusado com a instrução de exportar .dae.
+    await user.upload(within(painel).getByTestId('arquivo-collada'), new File(['bin'], 'casa.skp', { type: 'application/octet-stream' }));
+    await waitFor(() => expect(within(painel).getByTestId('erro-collada')).toHaveTextContent(/Exportar › Modelo 3D › COLLADA/));
+    // .dae: reconhecimento.
+    await user.upload(within(painel).getByTestId('arquivo-collada'), new File([dae], 'casa.dae', { type: 'model/vnd.collada+xml' }));
+    await waitFor(() => expect(within(painel).getByTestId('paredes-collada')).toHaveTextContent(/5 parede\(s\) · 24,00 m no total · espessuras 100, 150 mm/));
+    expect(within(painel).getByTestId('resumo-collada')).toHaveTextContent(/7 instância\(s\)/);
+    expect(within(painel).getByTestId('recusas-collada')).toHaveTextContent(/par\(es\) mais curto/);
+    expect(within(painel).getByTestId('pavimentos-collada')).toHaveTextContent(/base 0,00 m · 5 parede\(s\) · h 2,80 m/);
+    const { saveDraft } = await import('../../services/blueprintService');
+    vi.mocked(saveDraft).mockClear();
+    await user.click(within(painel).getByTestId('importar-collada'));
+    await waitFor(() => expect(saveDraft).toHaveBeenCalled(), { timeout: 5000 });
+    const salvo = (vi.mocked(saveDraft).mock.calls.at(-1) as unknown as [string, import('../../utils/blueprintKernel').BlueprintModel])[1];
+    expect(salvo.walls).toHaveLength(5);
+    expect(salvo.walls.map((x) => x.thicknessMm).sort()).toEqual([100, 150, 150, 150, 150]);
+    expect(salvo.walls.every((x) => x.heightMm === 2800 && x.levelId === t)).toBe(true);
+  }, 60000);
+});

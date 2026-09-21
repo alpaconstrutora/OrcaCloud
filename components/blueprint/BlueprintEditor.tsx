@@ -443,6 +443,7 @@ import { proximaRevisao, revisoesDoModelo, resumirAnotacoes } from '../../utils/
 import PainelGuardaCorpos from './PainelGuardaCorpos';
 import PainelRodapes from './PainelRodapes';
 import PainelDepartamentos from './PainelDepartamentos';
+import PainelImportarCollada from './PainelImportarCollada';
 import PainelLod from './PainelLod';
 import { ALVO_DE_LOD_PADRAO, lodDosElementos, pendenciasDeLod, quadroDeLod, type AlvoDeLod } from '../../utils/blueprintLod';
 import { quadroDeDepartamentos, sugestoesDeDepartamento } from '../../utils/blueprintDepartamentos';
@@ -866,6 +867,8 @@ const ROTULO_DA_TAREFA = {
   'gerar-paredes': 'Gerar paredes do PDF',
   'importar-ifc': 'Importar do IFC',
   'importar-dxf': 'Importar do DXF / DWG',
+  // IMPORTAR DO SKETCHUP (21/09/2026, backlog P2): COLLADA .dae → paredes reconhecidas nas faces.
+  'importar-collada': 'Importar do SketchUp (COLLADA)',
   'importar-bcf': 'Importar do BCF',
 } as const;
 type TarefaDoPainel = keyof typeof ROTULO_DA_TAREFA;
@@ -9158,6 +9161,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               ajuda="Importar paredes de um desenho DXF ou DWG (o DWG é convertido no servidor)"
             />
             <BotaoDoRibbon
+              icone={Boxes}
+              rotulo="Do SketchUp"
+              ativo={tarefaAberta === 'importar-collada'}
+              onClick={() => alternarTarefa('importar-collada')}
+              ajuda="Importar paredes de um modelo do SketchUp exportado como COLLADA (.dae): o leitor reconhece parede onde há duas faces verticais paralelas; o .skp (binário fechado) não pode ser lido diretamente"
+            />
+            <BotaoDoRibbon
               icone={MessagesSquare}
               rotulo="Do BCF"
               ativo={tarefaAberta === 'importar-bcf'}
@@ -11560,6 +11570,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-dxf' && <PenTool className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'importar-collada' && <Boxes className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-bcf' && <MessagesSquare className="h-5 w-5 text-blue-700" />}
               {tarefaAberta ? ROTULO_DA_TAREFA[tarefaAberta] : ''}
             </span>
@@ -11648,6 +11659,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             {tarefaAberta === 'importar-ifc' &&
               'Paredes, aberturas e estrutura de um modelo IFC, por medida declarada.'}
             {tarefaAberta === 'importar-dxf' && 'Paredes de um desenho DXF ou DWG, por camada e polilinha.'}
+            {tarefaAberta === 'importar-collada' && 'Paredes de um modelo do SketchUp exportado como COLLADA (.dae): reconhecidas onde há duas faces verticais paralelas a uma distância de parede. O que foi recusado aparece com o motivo.'}
             {tarefaAberta === 'importar-bcf' &&
               'Os tópicos de coordenação (BCF) que o projetista devolveu — pendência, não geometria. Clicar num tópico seleciona a peça no desenho.'}
           </SheetDescription>
@@ -13405,6 +13417,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
 
           {tarefaAberta === 'importar-dxf' && (
             <PainelImportarDxf model={editor.model} levelIdAtivo={levelId} onImportar={importarDoIfc} />
+          )}
+          {tarefaAberta === 'importar-collada' && (
+            <PainelImportarCollada model={editor.model} levelIdAtivo={levelId} onImportar={importarDoIfc} />
           )}
 
           {tarefaAberta === 'importar-bcf' && (

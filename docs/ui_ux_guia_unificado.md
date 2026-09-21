@@ -1895,19 +1895,43 @@ const chromeSlot = (
 Quando uma tela é um **editor** com dezenas de comandos de naturezas diferentes
 (a Planta Inteligente tinha ~25 controles numa barra que quebrava em três
 linhas e 15 seções empilhadas no painel lateral), a barra única e o acordeão
-deixam de servir. O componente canônico é **`components/blueprint/Ribbon.tsx`**:
+deixam de servir. O componente canônico é **`components/blueprint/Ribbon.tsx`**
+— **genérico** (importa só React; é parametrizado por `Id extends string`) e
+importável de qualquer tela, apesar da pasta. Em uso: Planta Inteligente
+(13/09) e Engenharia › Planejamento (`schedule/ScheduleHeader.tsx`, 21/09 —
+*"se inspire na implementacao de ícones e organizacao de menu bar utilizado em
+incoporação < planta inteligente e aplique em Gestão de Planejamento"*):
 
 - **linha 1** — trilho de abas do §19.1 (`role="tab"`, ativa `bg-white
   text-blue-600 shadow-sm`), com um slot `esquerda` para o que se usa o tempo
-  todo (o seletor de vista) e um slot `direita` de acesso rápido (desfazer,
-  refazer, copiar, colar, excluir — sempre visíveis, em qualquer aba);
+  todo (o seletor de vista) e o acesso rápido — sempre visível, em qualquer
+  aba. Quando são muitos botões (a Planta tem 27: desfazer, refazer, copiar,
+  colar, vistas, zoom…), vão no slot `acessoRapido`, linha própria sob as abas,
+  alinhada à esquerda; quando são dois (Planejamento: tela cheia + a ação
+  primária §17), cabem no slot `direita`, encostados na borda;
 - **linha 2** — o painel da aba ativa: `GrupoDoRibbon`s com o rótulo em caixa
   alta `text-[10px] text-slate-400` **embaixo** dos controles, divisória à
-  direita, `flex-wrap`;
+  direita, `flex-wrap`; `BotaoDoRibbon` (ícone lucide `h-4 w-4` + rótulo,
+  `aria-pressed` quando é modo, `contagem`, `perigo` vermelho);
 - **linha 3** — `BarraDeOpcoes`: só o que a ferramenta ATIVA pergunta, começando
   pelo NOME dela (é o que responde "por que está saindo janela?" quando o
   ribbon está noutra aba). Sempre presente enquanto se desenha, para o canvas
-  não pular de altura.
+  não pular de altura. No Planejamento a "ferramenta" é a vista: em Tabela e
+  Gantt a barra traz a escala de tempo e o período; nas demais não existe.
+
+Companheiros genéricos, em `components/ui/`:
+
+- **`MenuDeVistas.tsx`** — o seletor do slot `esquerda`: botão fechado com
+  ícone + nome da vista atual, popover `role="menu"`/`menuitemradio`, itens em
+  **grupos** com cabeçalho em caixa alta (doze vistas corridas não se leem).
+  A Planta ainda usa o próprio `blueprint/SeletorDeVista.tsx` (acoplado a
+  `VistaBlueprint`) — consolidar sobre este quando alguém tocar lá.
+- **`MenuDoRibbon.tsx`** — o botão do painel que, em vez de agir, pergunta:
+  lista de itens ligáveis (`menuitemcheckbox` + `aria-checked`, bolinha de cor
+  opcional), contagem no gatilho para o menu fechado não esconder o estado,
+  `cabecalho` e `rodape` para ações da lista ("Ver todas", "Focar Gantt").
+  Substituiu os três dropdowns feitos à mão que viviam no cabeçalho das
+  grades do Planejamento (Colunas, Níveis, Natureza).
 
 > ✅ **Aba vazia não aparece.** As abas vêm filtradas pelo estado (vista, modo);
 > a persistida que deixou de existir cai na primeira (`abaEfetiva`).
@@ -1918,6 +1942,19 @@ deixam de servir. O componente canônico é **`components/blueprint/Ribbon.tsx`*
 > ⚠️ Comandos moram no ribbon; **propriedades da seleção e navegação** ficam no
 > painel lateral; **relatórios** (tabelas largas) vão para um dock inferior —
 > não misturar as quatro naturezas num acordeão só, que foi o defeito de origem.
+> ✅ **Vista ≠ comando.** As doze "abas" do Planejamento (Tabela, Gantt, Curva
+> S, Recursos…) eram VISTAS num trilho §19.1, com três emojis de ícone; no
+> ribbon elas são o seletor da esquerda (ícone lucide, três grupos), e as abas
+> viram comandos por natureza (Estrutura · Cronograma · Orçamento · Exportar ·
+> Vista). Comando que só faz sentido com a grade na tela (Estrutura, Vista)
+> some nas outras vistas; a aba salva cai na `preferida` (Cronograma).
+> ✅ Numa **página** (não num editor de tela inteira), o ribbon vai dentro do
+> card de cromo do §19.1 (`rounded-[10px] border shadow-sm`) — **sem
+> `overflow-hidden`**, porque os menus são `absolute` e seriam cortados.
+> ❌ Nenhum comando escondido num menu `···` de overflow: foi assim que oito
+> comandos do Planejamento (baseline, what-if, exportações, auto equipe,
+> cargos, limpar) ficaram invisíveis. Se não cabe na barra, a resposta é uma
+> aba, não um `···`.
 
 ## 20. CABEÇALHO DE TELA (título + subtítulo + KPIs)
 

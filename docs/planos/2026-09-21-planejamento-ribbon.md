@@ -102,5 +102,20 @@ barra de opções da ferramenta ativa.
 | fatia | estado | onde |
 |---|---|---|
 | F1 header | ✅ 21/09 | `MenuDeVistas`, `MenuDoRibbon`, `scheduleColumns.ts`, `ScheduleHeader` reescrito, `FinancialSchedule` passando as props; 20 testes verdes (`ScheduleHeaderTelaCheia` 6, `ScheduleRibbon` 10, `Ribbon` 4); `check-ui-standard.sh` exit 0 nos três arquivos |
-| F2 grades | ⏳ | — |
-| F3 guia + memória | ⏳ | — |
+| F2 grades | ✅ 21/09 | `ScheduleGantt`/`ScheduleGridView` sem COLUNAS ▾, NÍVEIS ▾, "+ Novo Grupo", `COL_LABELS` local, refs/estado dos dropdowns e as props de controle; EAP vazia mostra "Nenhum grupo ainda — Estrutura › Novo grupo"; `FinancialSchedule` deixou de passar as props às grades. De quebra, o chip de natureza na célula da Tabela (`font-bold` + pílula, violação §7 pré-existente acusada pelo `check-ui-standard.sh`) virou texto §8. Suíte inteira: 429 arquivos, 4972 testes verdes (lida). Prova no app real (vite da frente na 3177, Playwright, escritas bloqueadas — 9 POST/PATCH abortados): capturas `C:/tmp/pwtest/plan-ribbon-0*.png` — Gantt › Estrutura, menu de vistas em 3 grupos, Níveis, Vista › Colunas com "Ver todas"/"Focar Gantt", Cronograma/Orçamento/Exportar, Tabela sem cromo no cabeçalho, Curva S só com 3 abas e sem barra de opções, 1100 px quebrando linha sem sumir botão |
+| F3 guia + memória | ✅ 21/09 | §19.5 do guia: Planejamento como 2ª tela, `Ribbon` genérico, `MenuDeVistas`/`MenuDoRibbon`, "vista ≠ comando", card sem `overflow-hidden`, nada em `···`. Memória `project_planejamento_ribbon` |
+
+**O que a captura pegou antes de publicar:** os menus (Vistas, Colunas)
+nasceram com `z-30` e ficavam **por baixo** do cabeçalho fixo das grades
+(`z-60` no Gantt): a lista de colunas era cortada em "Término" e o grupo
+"Execução" do seletor sumia. Passaram a `z-[70]`. O aviso React *"Cannot
+update a component (App) while rendering FinancialSchedule"* que aparece no
+console **já existe em `origin/main`** (provado rodando a mesma prova contra
+a frente `planta-ribbon`, porta 3178) — não é desta frente.
+
+## Pendências registradas (fora do pedido)
+
+- Aba contextual "Modificar" (verde) para a linha selecionada — a grade não
+  tem seleção; hoje as ações por linha moram no `OutlineRowMenu`.
+- `blueprint/SeletorDeVista.tsx` consolidar sobre `ui/MenuDeVistas.tsx`.
+- Aviso React de setState durante render em `FinancialSchedule` (pré-existente).

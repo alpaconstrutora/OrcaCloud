@@ -4576,7 +4576,6 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                 hierarchy={hierarchy}
                                 schedule={schedule}
                                 outlineActions={outlineActions}
-                                onAddRootGroup={() => setOutlineEditor({ mode: 'create', parentId: null, nodeType: 'group', name: '' })}
                                 timelineColumns={timelineColumns}
                                 timeScale={timeScale}
                                 expandedNodes={tableExpandedNodes}
@@ -4610,11 +4609,8 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                 setCrewPopoverItem={setCrewPopoverItem}
                                 formatDateDisplay={formatDateDisplay}
                                 taskInsights={taskInsights}
-                                onToggleColumn={handleToggleColumn}
                                 visibleSummaryLevels={tableVisibleLevels}
-                                onToggleSummaryLevel={handleToggleTableLevel}
                                 visibleNatures={visibleNatures}
-                                onToggleNature={handleToggleNature}
                             />
                         </div>
 
@@ -4644,7 +4640,6 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                                 hierarchy={hierarchy}
                                                 schedule={schedule}
                                                 outlineActions={outlineActions}
-                                                onAddRootGroup={() => setOutlineEditor({ mode: 'create', parentId: null, nodeType: 'group', name: '' })}
                                                 timelineColumns={timelineColumns}
                                                 timeScale={timeScale}
                                                 showFloat={showGanttFloat}
@@ -4656,14 +4651,9 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                                 toggleNode={toggleNode}
                                                 getGanttSidebarTotal={getGanttSidebarTotal}
                                                 visibleSummaryLevels={ganttVisibleLevels}
-                                                onToggleSummaryLevel={handleToggleGanttLevel}
                                                 visibleNatures={visibleNatures}
-                                                onToggleNature={handleToggleNature}
                                                 getGanttColStyle={getGanttColStyle}
                                                 collapsedCols={ganttCollapsedCols}
-                                                onToggleColumn={handleToggleGanttColumn}
-                                                onCollapseAll={handleCollapseAllGanttCols}
-                                                handleSplitterDblClick={handleGanttSplitterDblClick}
                                                 onSidebarResizeStart={handleSidebarResizeStart}
                                                 idToUid={idToUid}
                                                 handleUpdatePredecessorField={handleUpdatePredecessorField}

@@ -1,7 +1,6 @@
 import React, { useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { ChevronDown, ChevronRight, Camera, Filter, Check, Columns3, EyeOff, ArrowRightToLine, Plus } from 'lucide-react';
-import Button from '../ui/Button';
+import { ChevronDown, ChevronRight, Camera, ArrowRightToLine } from 'lucide-react';
 
 import { HierarchyNode, ProjectSchedule, BudgetEntry, ResourceAllocation, SinapiType } from '../../types';
 import { OutlineRowMenu, OutlineActions } from './OutlineRowMenu';
@@ -65,20 +64,16 @@ interface ScheduleGanttProps {
     budget: BudgetEntry[];
     SchedulingEngine: any; // Passed from parent or utils
     taskInsights?: Record<string, { missingItems: number; missingCost: number; hasAlert: boolean; message: string }>;
+    /** Níveis/naturezas visíveis e colunas ocultas — o CONTROLE mora no ribbon
+        (`ScheduleHeader`, 21/09/2026); aqui só se lê. */
     visibleSummaryLevels: Set<string>;
-    onToggleSummaryLevel: (level: string) => void;
     visibleNatures?: Set<string>;
-    onToggleNature?: (nature: string) => void;
     collapsedCols: Set<string>;
-    onToggleColumn: (key: string) => void;
-    onCollapseAll: () => void;
-    handleSplitterDblClick: () => void;
     onSidebarResizeStart: (e: React.MouseEvent) => void;
     handleUpdateRealPct: (itemId: string, value: string) => void;
     setPredecessorModalTask: (id: string | null) => void;
     GanttResizeHandle?: React.ComponentType<{ colKey: string }>;
     outlineActions?: OutlineActions;
-    onAddRootGroup?: () => void;
     // Fase 4 — medições de empreitada por item de orçamento (para o TaskDetailModal).
     measurementRollup?: Record<string, { measured: number; approved: number; paid: number }>;
 }
@@ -118,19 +113,13 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
     SchedulingEngine,
     taskInsights,
     visibleSummaryLevels,
-    onToggleSummaryLevel,
     visibleNatures,
-    onToggleNature,
     collapsedCols,
-    onToggleColumn,
-    onCollapseAll,
-    handleSplitterDblClick,
     onSidebarResizeStart,
     handleUpdateRealPct,
     setPredecessorModalTask,
     GanttResizeHandle,
     outlineActions,
-    onAddRootGroup,
     measurementRollup,
 }) => {
 
@@ -144,10 +133,6 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
     const headerRef = useRef<HTMLDivElement>(null);
     const macroHeaderRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
-    const colMenuRef = useRef<HTMLDivElement>(null);
-    const levelsMenuRef = useRef<HTMLDivElement>(null);
-    const [showLevelsDropdown, setShowLevelsDropdown] = useState(false);
-    const [showColsDropdown, setShowColsDropdown] = useState(false);
     const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
     // Flat list of all items for predecessor name lookup
@@ -165,51 +150,15 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
         return result;
     }, [hierarchy]);
 
-    // Close dropdowns on click-outside or ESC
+    // ESC fecha o detalhe da tarefa
     React.useEffect(() => {
-        const handleClickOutside = (e: MouseEvent) => {
-            if (colMenuRef.current && !colMenuRef.current.contains(e.target as Node)) {
-                setShowColsDropdown(false);
-            }
-            if (levelsMenuRef.current && !levelsMenuRef.current.contains(e.target as Node)) {
-                setShowLevelsDropdown(false);
-            }
-        };
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                setShowColsDropdown(false);
-                setShowLevelsDropdown(false);
-                setSelectedTaskId(null);
-            }
+            if (e.key === 'Escape') setSelectedTaskId(null);
         };
-        document.addEventListener('mousedown', handleClickOutside);
         document.addEventListener('keydown', handleKeyDown);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-            document.removeEventListener('keydown', handleKeyDown);
-        };
+        return () => document.removeEventListener('keydown', handleKeyDown);
     }, []);
 
-    const COL_LABELS: Record<string, string> = {
-        gWbs: 'ITEM',
-        gId: 'ID',
-        gPred: 'Predecessora',
-        gDur: 'Duração',
-        gStart: 'Início',
-        gEnd: 'Término',
-        gEsEf: 'ES/EF',
-        gLsLf: 'LS/LF',
-        gFloat: 'Folga',
-        gBudgeted: 'Orçado (B)',
-        gBudgetedWithBdi: 'Orçado c/ BDI',
-        gPlanned: 'Planejado (C)',
-        gRealized: 'Realizado $',
-        gVariation: 'Variação $',
-        gResources: 'Recursos',
-        gRealPct: '% Físico',
-        gFinPct: '% Financeiro'
-    };
-    const TOGGLEABLE_COLS = Object.keys(COL_LABELS);
 
 
     const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -1094,132 +1043,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 >
                                     <div className="absolute right-0 top-1/4 bottom-1/4 w-px bg-gray-300 group-hover/sresize:bg-blue-400" />
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <span>Tarefa / Atividade</span>
-                                    <div className="relative" ref={colMenuRef}>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); setShowColsDropdown(!showColsDropdown); }}
-                                            className={`relative flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-bold transition-all ${showColsDropdown ? 'bg-indigo-600 border-indigo-700 text-white shadow-lg' : collapsedCols.size > 0 ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 shadow-sm'}`}
-                                            title="Gerenciar colunas visíveis"
-                                        >
-                                            <Columns3 className="w-3 h-3" />
-                                            <span>COLUNAS</span>
-                                            {collapsedCols.size > 0 && (
-                                                <span className={`text-xs font-black px-1 rounded-full ${showColsDropdown ? 'bg-white/20 text-white' : 'bg-amber-500 text-white'}`}>
-                                                    {collapsedCols.size}
-                                                </span>
-                                            )}
-                                        </button>
-                                        {showColsDropdown && (
-                                            <div className="absolute top-full left-0 mt-1 w-56 bg-white rounded-xl shadow-2xl border border-gray-200 py-2 z-[200] animate-in fade-in slide-in-from-top-2 duration-150 normal-case tracking-normal">
-                                                <div className="px-3 py-1.5 border-b border-gray-100 mb-1">
-                                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Colunas Visíveis</span>
-                                                </div>
-                                                {/* Presets rápidos */}
-                                                <div className="px-3 py-2 flex gap-2 border-b border-gray-100 mb-1">
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); onCollapseAll(); setShowColsDropdown(false); }}
-                                                        className="flex-1 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition-colors"
-                                                        title="Oculta todas as colunas para focar nas barras do Gantt"
-                                                    >
-                                                        📊 Focar Gantt
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleSplitterDblClick(); setShowColsDropdown(false); }}
-                                                        className="flex-1 py-1.5 rounded-lg text-xs font-bold bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100 transition-colors"
-                                                    >
-                                                        📋 Ver Tudo
-                                                    </button>
-                                                </div>
-                                                <div className="max-h-64 overflow-y-auto">
-                                                    {TOGGLEABLE_COLS.map(key => {
-                                                        const isVisible = !collapsedCols.has(key);
-                                                        return (
-                                                            <button
-                                                                key={key}
-                                                                onClick={(e) => { e.stopPropagation(); onToggleColumn(key); }}
-                                                                className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-gray-50 transition-colors group/col"
-                                                            >
-                                                                <div className={`flex items-center justify-center w-4 h-4 rounded border transition-all ${isVisible ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-gray-300 group-hover/col:border-indigo-300'}`}>
-                                                                    {isVisible && (
-                                                                        <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                                                        </svg>
-                                                                    )}
-                                                                </div>
-                                                                <span className={`text-xs font-medium ${isVisible ? 'text-gray-700' : 'text-gray-400'}`}>
-                                                                    {COL_LABELS[key]}
-                                                                </span>
-                                                                {!isVisible && <EyeOff className="w-3 h-3 text-gray-300 ml-auto" />}
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="relative" ref={levelsMenuRef}>
-                                    <button
-                                        onClick={() => setShowLevelsDropdown(!showLevelsDropdown)}
-                                        className={`px-2 py-1 flex items-center gap-1.5 rounded-lg border transition-all text-button font-medium ${showLevelsDropdown ? 'bg-indigo-600 border-indigo-700 text-white shadow-lg' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 shadow-sm'}`}
-                                        title="Filtrar níveis de resumo"
-                                    >
-                                        <Filter className={`w-3 h-3 ${showLevelsDropdown ? 'fill-white/20' : ''}`} />
-                                        <span>NÍVEIS</span>
-                                    </button>
-
-                                    {showLevelsDropdown && (
-                                        <>
-                                            <div className="fixed inset-0 z-40" onClick={() => setShowLevelsDropdown(false)} />
-                                            <div className="absolute top-full right-0 mt-1 w-40 bg-white border border-gray-100 rounded-xl shadow-2xl z-[70] p-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                                                <div className="text-xs font-medium text-gray-400 uppercase tracking-widest px-2 pb-2 border-b border-gray-50 mb-1">Resumo Gantt</div>
-                                                {[
-                                                    { id: 'group', label: 'Grupos' },
-                                                    { id: 'phase', label: 'Etapas' },
-                                                    { id: 'subphase', label: 'Subetapas' },
-                                                    { id: 'item', label: 'Itens' }
-                                                ].map((level) => (
-                                                    <button
-                                                        key={level.id}
-                                                        onClick={() => onToggleSummaryLevel(level.id)}
-                                                        className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-lg text-left transition-colors group/item"
-                                                    >
-                                                        <span className={`text-button font-medium ${visibleSummaryLevels.has(level.id) ? 'text-indigo-600' : 'text-gray-500'}`}>{level.label}</span>
-                                                        {visibleSummaryLevels.has(level.id) && <Check className="w-3 h-3 text-indigo-600" />}
-                                                    </button>
-                                                ))}
-                                                {visibleNatures && onToggleNature && (
-                                                    <>
-                                                        <div className="text-xs font-medium text-gray-400 uppercase tracking-widest px-2 pt-2 pb-2 border-t border-gray-50 mt-1 mb-1">Natureza</div>
-                                                        <div className="max-h-48 overflow-y-auto">
-                                                            {Object.entries(TASK_NATURE_META).map(([key, meta]) => (
-                                                                <button
-                                                                    key={key}
-                                                                    onClick={() => onToggleNature(key)}
-                                                                    className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-lg text-left transition-colors"
-                                                                >
-                                                                    <span className="flex items-center gap-1.5">
-                                                                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: meta.color }} />
-                                                                        <span className={`text-button font-medium ${visibleNatures.has(key) ? 'text-gray-700' : 'text-gray-400'}`}>{meta.label}</span>
-                                                                    </span>
-                                                                    {visibleNatures.has(key) && <Check className="w-3 h-3 text-indigo-600" />}
-                                                                </button>
-                                                            ))}
-                                                            <button
-                                                                onClick={() => onToggleNature('__none__')}
-                                                                className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-lg text-left transition-colors"
-                                                            >
-                                                                <span className={`text-button font-medium ${visibleNatures.has('__none__') ? 'text-gray-700' : 'text-gray-400'}`}>Sem natureza</span>
-                                                                {visibleNatures.has('__none__') && <Check className="w-3 h-3 text-indigo-600" />}
-                                                            </button>
-                                                        </div>
-                                                    </>
-                                                )}
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
+                                <span>Tarefa / Atividade</span>
                             </div>
 
                             <div data-gantt-col="gPred" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gPred')}>PRÉD.{GanttResizeHandle && <GanttResizeHandle colKey="gPred" />}</div>
@@ -1264,19 +1088,14 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                     <div className="relative">
                         {hierarchy.map(node => renderGanttRow(node, true))}
 
-                        {onAddRootGroup && (
+                        {/* EAP vazia: o comando mora no ribbon (Estrutura › Novo grupo). */}
+                        {hierarchy.length === 0 && (
                             <div className="flex border-b border-gray-100 h-9">
                                 <div
-                                    className="shrink-0 flex items-center sticky left-0 z-[35] bg-white border-r border-gray-200"
+                                    className="shrink-0 flex items-center sticky left-0 z-[35] bg-white border-r border-gray-200 px-4 text-sm text-gray-400"
                                     style={{ width: `${getGanttSidebarTotal()}px` }}
                                 >
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={onAddRootGroup}
-                                    >
-                                        <Plus className="w-3.5 h-3.5" /> Novo Grupo
-                                    </Button>
+                                    Nenhum grupo ainda — Estrutura › Novo grupo
                                 </div>
                             </div>
                         )}

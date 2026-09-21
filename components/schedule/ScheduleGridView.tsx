@@ -7,17 +7,11 @@ import {
     AlertCircle,
     Link2,
     Users,
-    Columns3,
-    EyeOff,
-    Filter,
-    Check
 } from 'lucide-react';
-import Button from '../ui/Button';
 import { HierarchyNode, ProjectSchedule, ItemScheduleDetails, BudgetEntry, SinapiType } from '../../types';
 import ModernDateInput from '../ModernDateInput';
 import { OutlineRowMenu, OutlineActions } from './OutlineRowMenu';
 import { TASK_NATURE_META } from '../../utils/taskNature';
-import { Plus } from 'lucide-react';
 
 interface FlatScheduleRow {
     node: HierarchyNode;
@@ -102,13 +96,11 @@ interface ScheduleGridViewProps {
     setCrewPopoverItem: (id: string | null) => void;
     formatDateDisplay: (date: any) => string;
     taskInsights?: Record<string, { missingItems: number; missingCost: number; hasAlert: boolean; message: string }>;
-    onToggleColumn?: (colKey: string) => void;
+    /** Níveis/naturezas visíveis — o CONTROLE mora no ribbon (`ScheduleHeader`,
+        21/09/2026), junto com colunas e "Novo grupo"; aqui só se lê. */
     visibleSummaryLevels?: Set<string>;
-    onToggleSummaryLevel?: (level: string) => void;
     visibleNatures?: Set<string>;
-    onToggleNature?: (nature: string) => void;
     outlineActions?: OutlineActions;
-    onAddRootGroup?: () => void;
 }
 
 const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
@@ -147,43 +139,10 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
     setCrewPopoverItem,
     formatDateDisplay,
     taskInsights,
-    onToggleColumn,
     visibleSummaryLevels,
-    onToggleSummaryLevel,
     visibleNatures,
-    onToggleNature,
     outlineActions,
-    onAddRootGroup,
 }) => {
-    const [isColMenuOpen, setIsColMenuOpen] = React.useState(false);
-    const [showLevelsDropdown, setShowLevelsDropdown] = React.useState(false);
-    const colMenuRef = React.useRef<HTMLDivElement>(null);
-    const levelsMenuRef = React.useRef<HTMLDivElement>(null);
-
-    // Close menu on click outside
-    React.useEffect(() => {
-        const handleClickOutside = (e: MouseEvent) => {
-            if (colMenuRef.current && !colMenuRef.current.contains(e.target as Node)) {
-                setIsColMenuOpen(false);
-            }
-            if (levelsMenuRef.current && !levelsMenuRef.current.contains(e.target as Node)) {
-                setShowLevelsDropdown(false);
-            }
-        };
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                setIsColMenuOpen(false);
-                setShowLevelsDropdown(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        document.addEventListener('keydown', handleKeyDown);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-            document.removeEventListener('keydown', handleKeyDown);
-        };
-    }, [isColMenuOpen, showLevelsDropdown]);
-
     const flatRows = React.useMemo(
         () => flattenScheduleHierarchy(hierarchy, expandedNodes, visibleSummaryLevels, visibleNatures),
         [hierarchy, expandedNodes, visibleSummaryLevels, visibleNatures]
@@ -200,26 +159,6 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
     const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
     const paddingBottom = virtualRows.length > 0 ? rowVirtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end : 0;
     const totalCols = 20 + timelineColumns.length;
-
-    const COL_LABELS: Record<string, string> = {
-        uid: 'ID',
-        pred: 'Predecessora',
-        duration: 'Duração',
-        start: 'Início',
-        end: 'Término',
-        esef: 'ES/EF',
-        lslf: 'LS/LF',
-        float: 'Folga',
-        budgeted: 'Orçado (B)',
-        budgetedWithBdi: 'Orçado c/ BDI',
-        planned: 'Planejado (C)',
-        realized: 'Realizado',
-        variation: 'Variação',
-        resources: 'Recursos',
-        realPct: '% Físico',
-        finPct: '% Financeiro',
-    };
-    const TOGGLEABLE_COLS = Object.keys(COL_LABELS);
 
     return (
         <div className="overflow-x-auto">
@@ -256,122 +195,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                         <th className="px-1 py-3 text-center relative">ID<ResizeHandle colKey="uid" /></th>
                         <th className="px-1 py-3 text-center relative">ITEM<ResizeHandle colKey="wbs" /></th>
                         <th className="px-4 py-3 text-left relative">
-                            <div className="flex items-center gap-2">
-                                <span>Item / Etapa</span>
-                                {onToggleColumn && (
-                                    <div className="relative" ref={colMenuRef}>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); setIsColMenuOpen(!isColMenuOpen); }}
-                                            className={`p-1 rounded-md transition-all ${isColMenuOpen ? 'bg-blue-100 text-blue-600' : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'}`}
-                                            title="Gerenciar colunas visíveis"
-                                        >
-                                            <Columns3 className="w-3.5 h-3.5" />
-                                        </button>
-                                        {isColMenuOpen && (
-                                            <div className="absolute top-full left-0 mt-1 w-52 bg-white rounded-xl shadow-2xl border border-gray-200 py-2 z-[200] animate-in fade-in slide-in-from-top-2 duration-150">
-                                                <div className="px-3 py-1.5 border-b border-gray-100 mb-1">
-                                                    <span className="text-xs font-medium text-gray-400 uppercase tracking-widest">Colunas Visíveis</span>
-                                                </div>
-                                                <div className="max-h-72 overflow-y-auto">
-                                                    {TOGGLEABLE_COLS.map(key => {
-                                                        const isVisible = !collapsedCols.has(key);
-                                                        return (
-                                                            <button
-                                                                key={key}
-                                                                onClick={(e) => { e.stopPropagation(); onToggleColumn(key); }}
-                                                                className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-gray-50 transition-colors group/col"
-                                                            >
-                                                                <div className={`flex items-center justify-center w-4 h-4 rounded border transition-all ${isVisible ? 'bg-blue-500 border-blue-500' : 'bg-white border-gray-300 group-hover/col:border-blue-300'}`}>
-                                                                    {isVisible && (
-                                                                        <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                                                        </svg>
-                                                                    )}
-                                                                </div>
-                                                                <span className={`text-xs font-medium ${isVisible ? 'text-gray-700' : 'text-gray-400'}`}>
-                                                                    {COL_LABELS[key]}
-                                                                </span>
-                                                                {!isVisible && <EyeOff className="w-3 h-3 text-gray-300 ml-auto" />}
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                                {collapsedCols.size > 0 && (
-                                                    <div className="border-t border-gray-100 mt-1 pt-1 px-3">
-                                                        <Button
-                                                            variant="ghost"
-                                                            onClick={(e) => { e.stopPropagation(); handleSplitterDblClick(); setIsColMenuOpen(false); }}
-                                                            className="w-full"
-                                                        >
-                                                            Exibir todas ({collapsedCols.size} ocultas)
-                                                        </Button>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                                {visibleSummaryLevels && onToggleSummaryLevel && (
-                                    <div className="relative ml-auto" ref={levelsMenuRef}>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); setShowLevelsDropdown(!showLevelsDropdown); }}
-                                            className={`px-2 py-1 flex items-center gap-1.5 rounded-lg border transition-all text-button font-medium ${showLevelsDropdown ? 'bg-blue-600 border-blue-700 text-white shadow-lg' : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300 hover:text-blue-600 shadow-sm'}`}
-                                            title="Filtrar níveis de resumo"
-                                        >
-                                            <Filter className={`w-3 h-3 ${showLevelsDropdown ? 'fill-white/20' : ''}`} />
-                                            <span>NÍVEIS</span>
-                                        </button>
-
-                                        {showLevelsDropdown && (
-                                            <div className="absolute top-full right-0 mt-1 w-40 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 p-2 animate-in fade-in slide-in-from-top-1 duration-200 normal-case tracking-normal">
-                                                <div className="text-xs font-medium text-gray-400 uppercase tracking-widest px-2 pb-2 border-b border-gray-50 mb-1">Resumo Planilha</div>
-                                                {[
-                                                    { id: 'group', label: 'Grupos' },
-                                                    { id: 'phase', label: 'Etapas' },
-                                                    { id: 'subphase', label: 'Subetapas' },
-                                                    { id: 'item', label: 'Itens' }
-                                                ].map((level) => (
-                                                    <button
-                                                        key={level.id}
-                                                        onClick={() => onToggleSummaryLevel(level.id)}
-                                                        className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-lg text-left transition-colors group/levelitem"
-                                                    >
-                                                        <span className={`text-button font-medium ${visibleSummaryLevels.has(level.id) ? 'text-blue-600' : 'text-gray-500'}`}>{level.label}</span>
-                                                        {visibleSummaryLevels.has(level.id) && <Check className="w-3 h-3 text-blue-600" />}
-                                                    </button>
-                                                ))}
-                                                {visibleNatures && onToggleNature && (
-                                                    <>
-                                                        <div className="text-xs font-medium text-gray-400 uppercase tracking-widest px-2 pt-2 pb-2 border-t border-gray-50 mt-1 mb-1">Natureza</div>
-                                                        <div className="max-h-48 overflow-y-auto">
-                                                            {Object.entries(TASK_NATURE_META).map(([key, meta]) => (
-                                                                <button
-                                                                    key={key}
-                                                                    onClick={() => onToggleNature(key)}
-                                                                    className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-lg text-left transition-colors"
-                                                                >
-                                                                    <span className="flex items-center gap-1.5">
-                                                                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: meta.color }} />
-                                                                        <span className={`text-button font-medium ${visibleNatures.has(key) ? 'text-gray-700' : 'text-gray-400'}`}>{meta.label}</span>
-                                                                    </span>
-                                                                    {visibleNatures.has(key) && <Check className="w-3 h-3 text-blue-600" />}
-                                                                </button>
-                                                            ))}
-                                                            <button
-                                                                onClick={() => onToggleNature('__none__')}
-                                                                className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-lg text-left transition-colors"
-                                                            >
-                                                                <span className={`text-button font-medium ${visibleNatures.has('__none__') ? 'text-gray-700' : 'text-gray-400'}`}>Sem natureza</span>
-                                                                {visibleNatures.has('__none__') && <Check className="w-3 h-3 text-blue-600" />}
-                                                            </button>
-                                                        </div>
-                                                    </>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
+                            <span>Item / Etapa</span>
                             <ResizeHandle colKey="item" />
                         </th>
                         <th className="px-1 py-3 text-center relative">Pred<ResizeHandle colKey="pred" /></th>
@@ -461,8 +285,9 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                 <div className="font-medium text-gray-700 truncate max-w-[300px] text-xs" title={item.sinapiItem.description}>
                                                     {stripWbsPrefix(item.sinapiItem.description, node.wbsCode)}
                                                 </div>
+                                                {/* §8: natureza como texto simples com a bolinha da cor — sem pílula/negrito dentro do <td>. */}
                                                 {node.nature && (
-                                                    <span className={`shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold ${TASK_NATURE_META[node.nature].badge}`} title={`Natureza: ${TASK_NATURE_META[node.nature].label}`}>
+                                                    <span className="shrink-0 inline-flex items-center gap-1 text-xs font-normal text-gray-500" title={`Natureza: ${TASK_NATURE_META[node.nature].label}`}>
                                                         <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: TASK_NATURE_META[node.nature].color }} />
                                                         {TASK_NATURE_META[node.nature].label}
                                                     </span>
@@ -824,16 +649,11 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                     {paddingBottom > 0 && (
                         <tr aria-hidden="true"><td colSpan={totalCols} style={{ height: paddingBottom, padding: 0, border: 0 }} /></tr>
                     )}
-                    {onAddRootGroup && (
+                    {/* EAP vazia: o comando mora no ribbon (Estrutura › Novo grupo). */}
+                    {hierarchy.length === 0 && (
                         <tr>
-                            <td colSpan={99} className="px-4 py-2">
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={onAddRootGroup}
-                                >
-                                    <Plus className="w-3.5 h-3.5" /> Novo Grupo
-                                </Button>
+                            <td colSpan={99} className="px-4 py-3 text-sm text-gray-400">
+                                Nenhum grupo ainda — Estrutura › Novo grupo
                             </td>
                         </tr>
                     )}

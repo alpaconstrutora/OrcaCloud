@@ -97,7 +97,8 @@ export default function MenuDoRibbon({
         <div
           role="menu"
           aria-label={ariaLabel ?? rotulo}
-          className="absolute left-0 top-full z-30 mt-1 w-56 rounded-[10px] border border-slate-200 bg-white p-1 shadow-lg"
+          // z-[70]: acima do cabeçalho fixo das grades (z-60) — ver MenuDeVistas.
+          className="absolute left-0 top-full z-[70] mt-1 w-56 rounded-[10px] border border-slate-200 bg-white p-1 shadow-lg"
         >
           {cabecalho ? (
             <div className="px-2 pb-0.5 pt-1 text-[10px] uppercase tracking-wide text-slate-400">{cabecalho}</div>

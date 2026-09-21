@@ -89,7 +89,9 @@ export default function MenuDeVistas<Id extends string>({
         <div
           role="menu"
           aria-label={ariaLabel}
-          className="absolute left-0 top-full z-30 mt-1 w-52 rounded-[10px] border border-slate-200 bg-white p-1 shadow-lg"
+          // z-[70]: o cabeçalho fixo das grades do Planejamento sobe a z-60; um
+          // menu abaixo disso aparecia cortado na altura da primeira linha.
+          className="absolute left-0 top-full z-[70] mt-1 w-52 rounded-[10px] border border-slate-200 bg-white p-1 shadow-lg"
         >
           {grupos.map((grupo, indice) => (
             <div key={grupo.rotulo} className={indice > 0 ? 'mt-1 border-t border-slate-100 pt-1' : undefined}>

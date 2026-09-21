@@ -304,12 +304,33 @@ const DiaryProjectsList: React.FC<DiaryProjectsListProps> = ({
 
     return (
         <div className="space-y-6">
-            {/* §20 — h1 solto + subtítulo mt-1.5 */}
-            <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Projetos</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                    Diários de obra da sua operação: registros, impedimentos e atualização de cada projeto.
-                </p>
+            {/* §20 — h1 solto + subtítulo mt-1.5; ações na mesma linha, à direita (mesmo arranjo de ProjectList) */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Projetos</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                        Diários de obra da sua operação: registros, impedimentos e atualização de cada projeto.
+                    </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                    {onOpenLaborAnalytics && (
+                        <button
+                            onClick={onOpenLaborAnalytics}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-blue-600 border border-gray-200 rounded-[6px] hover:bg-blue-50 font-medium text-[13px] transition-all active:scale-95"
+                        >
+                            <TrendingUp className="w-[15px] h-[15px]" />
+                            Análise de equipes
+                        </button>
+                    )}
+                    {/* §17 — variante compacta é a única válida */}
+                    <button
+                        onClick={onNewProject}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+                    >
+                        <Plus className="w-[15px] h-[15px]" />
+                        Novo diário
+                    </button>
+                </div>
             </div>
 
             {/* §4 + §20.1 — grade simétrica, cor semântica por KPI, mb-3 fecha o bloco de cromo */}
@@ -343,42 +364,6 @@ const DiaryProjectsList: React.FC<DiaryProjectsListProps> = ({
                 />
             </div>
 
-            {/* §5.3 — barra de escopo (situação) à esquerda, ação primária à direita */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center gap-2">
-                    <select
-                        value={situacaoFilter}
-                        onChange={(e) => setSituacaoFilter(e.target.value as 'all' | Situacao)}
-                        className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
-                    >
-                        <option value="all">Todas as situações</option>
-                        <option value="Em dia">Em dia</option>
-                        <option value="Desatualizado">Desatualizado</option>
-                        <option value="Sem registros">Sem registros</option>
-                    </select>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                    {onOpenLaborAnalytics && (
-                        <button
-                            onClick={onOpenLaborAnalytics}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-blue-600 border border-gray-200 rounded-[6px] hover:bg-blue-50 font-medium text-[13px] transition-all active:scale-95"
-                        >
-                            <TrendingUp className="w-[15px] h-[15px]" />
-                            Análise de equipes
-                        </button>
-                    )}
-                    {/* §17 — variante compacta é a única válida */}
-                    <button
-                        onClick={onNewProject}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
-                    >
-                        <Plus className="w-[15px] h-[15px]" />
-                        Novo diário
-                    </button>
-                </div>
-            </div>
-
             {/* §5.2 — toolbar acoplada: toolbar e tabela em um único card */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-2 border-b border-gray-100 bg-white">
@@ -393,6 +378,18 @@ const DiaryProjectsList: React.FC<DiaryProjectsListProps> = ({
                                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                             />
                         </div>
+
+                        {/* Filtro de situação — vive na toolbar acoplada, ao lado da busca */}
+                        <select
+                            value={situacaoFilter}
+                            onChange={(e) => setSituacaoFilter(e.target.value as 'all' | Situacao)}
+                            className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer shrink-0"
+                        >
+                            <option value="all">Todas as situações</option>
+                            <option value="Em dia">Em dia</option>
+                            <option value="Desatualizado">Desatualizado</option>
+                            <option value="Sem registros">Sem registros</option>
+                        </select>
 
                         <button
                             onClick={reload}

@@ -433,11 +433,12 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
           }
         };
         fetchCode();
-      } else if (initialClassification === 'PLANEJAMENTO') {
+      } else if (initialClassification === 'PLANEJAMENTO' || initialClassification === 'DIARIO') {
         setIsFetchingCode(true);
+        const rpcName = initialClassification === 'DIARIO' ? 'get_next_diario_code' : 'get_next_planejamento_code';
         const fetchCode = async () => {
           try {
-            const { data, error } = await supabase.rpc('get_next_planejamento_code', { p_org_id: organizationId });
+            const { data, error } = await supabase.rpc(rpcName, { p_org_id: organizationId });
             if (error) throw error;
             if (data) setProjectCode(data as string);
           } catch (err) {
@@ -746,7 +747,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
         ...formData,
         linkedProjectId: linkedProjectId || undefined,
         linkedProjectName: linkedProjectId ? projects.find(p => p.id === linkedProjectId)?.name : undefined,
-        code: ((formData.classification === 'OBRA' || formData.classification === 'PLANEJAMENTO') && projectCode.trim()) ? projectCode.trim() : undefined,
+        code: ((formData.classification === 'OBRA' || formData.classification === 'PLANEJAMENTO' || formData.classification === 'DIARIO') && projectCode.trim()) ? projectCode.trim() : undefined,
         organizationId: selectedOrgId,
         empresaId: selectedEmpresaId,
       });
@@ -2212,12 +2213,12 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                         )}
                       </div>
 
-                      {/* Código sequencial — visível apenas para PLANEJAMENTO */}
-                      {formData.classification === 'PLANEJAMENTO' && (
+                      {/* Código sequencial — visível para PLANEJAMENTO e DIARIO */}
+                      {(formData.classification === 'PLANEJAMENTO' || formData.classification === 'DIARIO') && (
                         <div className="col-span-2 md:col-span-1">
                           <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
                             <Hash className="w-3.5 h-3.5 text-blue-500" />
-                            Código do Planejamento
+                            {formData.classification === 'DIARIO' ? 'Código do Diário' : 'Código do Planejamento'}
                           </label>
                           <input
                             type="text"
@@ -2228,7 +2229,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                             maxLength={6}
                           />
                           <p className="text-xs text-gray-400 mt-1">
-                            {mode === 'create' ? 'Gerado automaticamente. Você pode alterar antes de salvar.' : 'Você pode corrigir o código deste planejamento.'}
+                            {mode === 'create' ? 'Gerado automaticamente. Você pode alterar antes de salvar.' : `Você pode corrigir o código deste ${formData.classification === 'DIARIO' ? 'diário' : 'planejamento'}.`}
                           </p>
                         </div>
                       )}

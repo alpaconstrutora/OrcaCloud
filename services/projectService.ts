@@ -154,6 +154,15 @@ export const projectService = {
                 }
             }
 
+            // Auto-generate sequential code for DIARIO projects if not provided
+            if (!codeToUse && classification === 'DIARIO' && orgId) {
+                const { data: rpcData, error: rpcError } = await supabase
+                    .rpc('get_next_diario_code', { p_org_id: orgId });
+                if (!rpcError && rpcData) {
+                    codeToUse = rpcData as string;
+                }
+            }
+
             const settingsWithCode = codeToUse
                 ? { ...settingsForSave, code: codeToUse }
                 : settingsForSave;

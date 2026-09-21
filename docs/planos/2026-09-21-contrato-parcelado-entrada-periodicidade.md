@@ -121,3 +121,6 @@ o pedido original queria é isto:
 O plano por blocos continua acima do select, como antes (não foi reordenado):
 o gerador só o preenche. O botão "Ver plano de pagamento" (aba Parcelas =
 cobranças reais) ficou como estava.
+
+**Fase 2 publicada em 2026-09-21** (`12b53f8c` em main) e provada de fora:
+`conferir-producao.sh "Montar plano de pagamento"` ✅ (domínio servindo origin/main).

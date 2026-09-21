@@ -359,3 +359,54 @@ describe('Correção 4 — loadAuxiliaryItems: cancelled flag evita setState ap�
         expect(callsAfter - callsBefore).toBe(0);
     });
 });
+
+// ─── Cromo da tela (pedido de 2026-09-21) ─────────────────────────────────────
+// 1. O aviso "Memória técnica pendente" deixou de ser um banner acima do <h1>
+//    (título + banner + KPIs + toolbar tomavam metade da tela). Virou um ícone
+//    com contador na linha do título, à direita, que abre o Painel de
+//    pendências técnicas.
+// 2. A toolbar de botões (BDI %, Inline/Janela, Ferramentas, Novo Grupo) vem
+//    ANTES dos KPI cards — o BDI dali é o que define o Preço Venda dos cards.
+
+describe('Cromo — aviso de memória técnica no título e toolbar antes dos KPIs', () => {
+    it('não renderiza mais o banner; mostra o ícone com o contador na linha do título', async () => {
+        // makeEntry não tem calculationMemory nem precisionClass → 1 + 1 pendências
+        renderEditor([makeEntry('e1')]);
+        await act(async () => { await new Promise(r => setTimeout(r, 50)); });
+
+        expect(screen.queryByText('Memória técnica pendente')).toBeNull();
+        expect(screen.queryByText('Clique no ícone de prancheta em cada item')).toBeNull();
+
+        const icone = screen.getByRole('button', { name: 'Abrir painel de pendências técnicas' });
+        expect(icone.getAttribute('title')).toContain('1 item(s) sem memória de cálculo');
+        expect(icone.getAttribute('title')).toContain('1 item(s) sem classe de precisão');
+        // 1 item com as duas pendências = contador 1 (itens, não pendências — bate com o painel)
+        expect(icone.parentElement?.textContent).toBe('1');
+
+        // Ícone na MESMA linha do título: irmão do bloco h1+p dentro do flex.
+        const h1 = screen.getByRole('heading', { level: 1, name: 'Orçamento Analítico' });
+        expect(icone.parentElement?.parentElement).toBe(h1.parentElement?.parentElement);
+        expect(icone.parentElement?.parentElement?.className).toContain('justify-between');
+
+        fireEvent.click(icone);
+        expect(await screen.findByText('Painel de pendências técnicas')).toBeTruthy();
+    });
+
+    it('sem pendência, não mostra ícone nenhum', async () => {
+        renderEditor([{ ...makeEntry('e1'), precisionClass: 'A', calculationMemory: { formula: '2*3', result: 6 } } as BudgetEntry]);
+        await act(async () => { await new Promise(r => setTimeout(r, 50)); });
+        expect(screen.queryByRole('button', { name: 'Abrir painel de pendências técnicas' })).toBeNull();
+    });
+
+    it('toolbar de botões vem antes dos KPI cards no DOM', async () => {
+        renderEditor([makeEntry('e1')]);
+        await act(async () => { await new Promise(r => setTimeout(r, 50)); });
+
+        const novoGrupo = screen.getByRole('button', { name: /Novo Grupo/ });
+        const kpi = screen.getByText('Preço Venda');
+        const h1 = screen.getByRole('heading', { level: 1, name: 'Orçamento Analítico' });
+        const antes = (a: Element, b: Element) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+        expect(antes(h1, novoGrupo)).toBe(true);
+        expect(antes(novoGrupo, kpi)).toBe(true);
+    });
+});

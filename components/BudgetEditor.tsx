@@ -3,6 +3,7 @@ import { BudgetEntry, ProjectSettings, SinapiItem, WBSPhase, SinapiType, BudgetV
 import { sinapiService, SinapiReference, resolveReferenceDate } from '../services/sinapiService'; // Importação do Serviço
 import { Search, Plus, Trash2, ChevronDown, ChevronRight, Folder, FolderOpen, MoreVertical, X, ArrowUp, ArrowDown, Loader2, Layers, Box, History, Save, Calendar, CheckCircle, Database, Monitor, Maximize2, ChevronsUpDown, ChevronsDownUp, Pencil, Copy, AlertTriangle, Star, StarOff, FileDown, FileText, LayoutDashboard, Wrench, ClipboardList, Wallet, Percent, Banknote, AlertCircle, MoveHorizontal } from 'lucide-react';
 import { KpiCard } from './ui/KpiCard';
+import ActionIconButton from './ui/ActionIconButton';
 import { customDatabaseService } from '../services/customDatabaseService';
 import { parametricService } from '../services/parametricService';
 import { BudgetRow } from './BudgetRow';
@@ -1760,6 +1761,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   const totalDirectCost = budget.reduce((acc, item) => acc + (item.quantity * (item.sinapiItem?.price || 0)), 0);
   const itemsWithoutCalculationMemory = budget.filter(item => !hasCalculationMemory(item)).length;
   const itemsWithoutPrecisionClass = budget.filter(item => !item.precisionClass).length;
+  // Contador do ícone no título: ITENS com pendência (um item pode ter as duas),
+  // para bater com o "Todas" do Painel de pendências técnicas.
+  const itemsComPendenciaTecnica = budget.filter(item => !hasCalculationMemory(item) || !item.precisionClass).length;
   const totalWithBDI = budget.reduce((acc, item) => acc + (item.quantity * (item.sinapiItem?.price || 0) * (1 + (item.bdi ?? settings.bdi) / 100)), 0);
 
   const calculateSubPhaseTotal = (groupName: string, phaseName: string, subPhaseName: string) => {
@@ -1991,59 +1995,36 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           </div>
         </div>
       )}
-      {(itemsWithoutCalculationMemory > 0 || itemsWithoutPrecisionClass > 0) && (
-        <div className="mx-0 p-4 bg-blue-50 border border-blue-200 rounded-[10px]">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="bg-blue-100 p-2 rounded-full text-blue-600">
-                <ClipboardList className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-blue-900 font-bold text-sm">Memória técnica pendente</p>
-                <p className="text-blue-700 text-xs">
-                  {itemsWithoutCalculationMemory} item(s) sem memória de cálculo e {itemsWithoutPrecisionClass} item(s) sem classe de precisão.
-                </p>
-              </div>
-            </div>
-            <span className="text-xs font-bold text-blue-700 bg-white border border-blue-100 rounded-full px-3 py-1 whitespace-nowrap">
-              Clique no ícone de prancheta em cada item
+      {/* Título (§20) com o indicador de pendências técnicas à direita. Era um
+          banner acima do h1 que, somado a título + KPIs + toolbar, tomava metade
+          da tela (pedido de 2026-09-21). Agora é só o ícone com o contador; o
+          detalhe fica no title e o clique abre o Painel de pendências técnicas. */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Orçamento Analítico</h1>
+          <p className="text-gray-400 text-sm mt-1.5 font-medium">Composição detalhada com WBS (Work Breakdown Structure).</p>
+        </div>
+        {(itemsWithoutCalculationMemory > 0 || itemsWithoutPrecisionClass > 0) && (
+          <div className="relative shrink-0 mt-1">
+            <ActionIconButton
+              kind="view"
+              icon={<ClipboardList className="w-4 h-4" />}
+              title={`Memória técnica pendente: ${itemsWithoutCalculationMemory} item(s) sem memória de cálculo e ${itemsWithoutPrecisionClass} item(s) sem classe de precisão. Clique para abrir o painel de pendências técnicas.`}
+              aria-label="Abrir painel de pendências técnicas"
+              onClick={() => { setTechnicalDashboardFilter('ALL'); setIsTechnicalDashboardOpen(true); }}
+            />
+            <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center pointer-events-none">
+              {itemsComPendenciaTecnica}
             </span>
           </div>
-        </div>
-      )}
-      <div>
-        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Orçamento Analítico</h1>
-        <p className="text-gray-400 text-sm mt-1.5 font-medium">Composição detalhada com WBS (Work Breakdown Structure).</p>
+        )}
       </div>
-
-      {/* Statistics — KpiCard (§4). Preço Venda é o total do qual os outros dois são a
-          decomposição (Custo Direto + BDI = Preço Venda) — quebra de simetria (§4.2). */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-        <KpiCard size="lg" className="col-span-2" label="Preço Venda" value={`R$ ${totalWithBDI.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Banknote className="w-4 h-4" />} color="emerald" />
-        <KpiCard size="sm" label="Custo Direto" value={`R$ ${totalDirectCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Wallet className="w-4 h-4" />} color="gray" />
-        <KpiCard size="sm" label={`BDI (${settings.bdi}%)`} value={`+ R$ ${(totalWithBDI - totalDirectCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Percent className="w-4 h-4" />} color="blue" />
-      </div>
-
-      {/* Banner de nova competência SINAPI + rebase */}
-      <SinapiRebaseModal
-        budget={budget}
-        references={references}
-        pinnedRaw={settings.referenceMonth}
-        location={searchLocation}
-        chargeType={searchCharges}
-        isLocked={isLocked}
-        onApply={(newBudget, targetRef) => {
-          onUpdateBudget(newBudget);
-          onUpdateSettings({ ...settings, referenceMonth: targetRef });
-          setSearchReference(targetRef);
-          setNotification({ message: `Orçamento atualizado para a competência ${references.find(r => r.referenceDate === targetRef)?.label || targetRef}.`, type: 'success' });
-          setTimeout(() => setNotification(null), 5000);
-        }}
-      />
 
       {/* Toolbar de botões (§5.3): controles de escopo/visualização + ação
           primária. Barra PRÓPRIA, acima da toolbar acoplada — muda o que a tela
-          mostra, não o recorte das linhas. */}
+          mostra, não o recorte das linhas. Vem ANTES dos KPIs (pedido de
+          2026-09-21): o BDI (%) daqui é o que define o Preço Venda e o BDI dos
+          cards — mesma razão de as abas virem antes dos KPIs (§5.3, nota). */}
       <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
         <div className="flex flex-wrap items-center gap-3">
           {isLocked && (
@@ -2251,6 +2232,31 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           </Button>
         </div>
       </div>
+
+      {/* Statistics — KpiCard (§4). Preço Venda é o total do qual os outros dois são a
+          decomposição (Custo Direto + BDI = Preço Venda) — quebra de simetria (§4.2). */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+        <KpiCard size="lg" className="col-span-2" label="Preço Venda" value={`R$ ${totalWithBDI.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Banknote className="w-4 h-4" />} color="emerald" />
+        <KpiCard size="sm" label="Custo Direto" value={`R$ ${totalDirectCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Wallet className="w-4 h-4" />} color="gray" />
+        <KpiCard size="sm" label={`BDI (${settings.bdi}%)`} value={`+ R$ ${(totalWithBDI - totalDirectCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Percent className="w-4 h-4" />} color="blue" />
+      </div>
+
+      {/* Banner de nova competência SINAPI + rebase */}
+      <SinapiRebaseModal
+        budget={budget}
+        references={references}
+        pinnedRaw={settings.referenceMonth}
+        location={searchLocation}
+        chargeType={searchCharges}
+        isLocked={isLocked}
+        onApply={(newBudget, targetRef) => {
+          onUpdateBudget(newBudget);
+          onUpdateSettings({ ...settings, referenceMonth: targetRef });
+          setSearchReference(targetRef);
+          setNotification({ message: `Orçamento atualizado para a competência ${references.find(r => r.referenceDate === targetRef)?.label || targetRef}.`, type: 'success' });
+          setTimeout(() => setNotification(null), 5000);
+        }}
+      />
 
       {/* Toolbar acoplada à tabela (§5.2): régua e WBS dividem UM card —
           border/rounded/shadow/overflow só neste pai, régua sem moldura própria,

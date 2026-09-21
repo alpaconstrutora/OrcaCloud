@@ -608,6 +608,23 @@ toolbar de busca, porque muda o escopo — não o recorte.
 > linha?"). Se a tela não tem controles de escopo (a maioria dos CRUDs —
 > Fornecedores, Clientes), ela simplesmente não tem esta barra: vai direto de
 > KPIs para a toolbar de busca.
+> ⚠️ **Exceção de ordem — quando um controle desta barra DEFINE o valor dos
+> KPIs, a barra vem ANTES dos KPIs.** É a mesma razão que pôs as abas antes
+> dos KPIs (ANATOMIA): o dado não pode aparecer antes do controle que o
+> determina. Caso concreto: Engenharia › Orçamento Analítico
+> (`BudgetEditor.tsx`, 2026-09-21, a pedido do usuário) — o campo BDI (%) da
+> toolbar de botões é o que calcula "Preço Venda" e "BDI" dos cards, então a
+> ordem ali é título → toolbar de botões → KPIs → toolbar acoplada. Não vale
+> para barra de escopo que só **recorta** (conta, competência, período): essa
+> continua depois dos KPIs, como no Extrato.
+> ⚠️ **Aviso persistente não vira banner acima do `<h1>`.** Um banner de
+> pendência (ex.: "Memória técnica pendente", que aparecia em todo orçamento
+> com item sem memória de cálculo) somado a título + KPIs + toolbar tomava
+> metade da tela antes da primeira linha. Aviso que é estado normal da tela
+> vira um `<ActionIconButton>` com contador na linha do título, à direita
+> (`flex items-start justify-between`), com o detalhe no `title` e o clique
+> abrindo o painel correspondente. Banner acima do título fica reservado a
+> situação anormal que exige ação imediata (ex.: EAP perdida, no mesmo arquivo).
 
 ### 5.4 Filtro rápido de escolha única — popover na toolbar acoplada
 

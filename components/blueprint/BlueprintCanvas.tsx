@@ -1164,7 +1164,8 @@ interface Props {
    * MULTIUSUÁRIO (E10.1): o que OUTRAS pessoas têm selecionado (= em edição, travado
    * para mim): um crachá na cor da pessoa junto do elemento, com as iniciais.
    */
-  selecoesRemotas?: { id: string; cor: string; nome: string }[];
+  /** `travado` (P2, travas explícitas): crachá quadrado em vez de redondo. */
+  selecoesRemotas?: { id: string; cor: string; nome: string; travado?: boolean }[];
   /**
    * FASES DE REFORMA (E10.2): id → fase (só EXISTENTE / DEMOLIR; novo não entra).
    * Existente sai em cinza; a demolir, em vermelho tracejado — a convenção de
@@ -4257,7 +4258,8 @@ export default function BlueprintCanvas({
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(p.x + 12, p.y - 12, r, 0, Math.PI * 2);
+        if (s.travado) ctx.rect(p.x + 12 - r, p.y - 12 - r, 2 * r, 2 * r);
+        else ctx.arc(p.x + 12, p.y - 12, r, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
         ctx.fillStyle = '#ffffff';

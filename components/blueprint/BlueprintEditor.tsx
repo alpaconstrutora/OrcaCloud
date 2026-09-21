@@ -22,6 +22,7 @@ import {
   KeyRound,
   Webhook,
   Users,
+  Lock,
   Hammer,
   Landmark,
   Merge,
@@ -331,6 +332,9 @@ import PainelPlugin from './PainelPlugin';
 import { blueprintPluginService } from '../../services/blueprintPluginService';
 import type { PluginDaPlanta } from '../../utils/blueprintPlugins';
 import TelaAcessoDoEstudo from './TelaAcessoDoEstudo';
+import TelaTravas from './TelaTravas';
+import { blueprintTravaService } from '../../services/blueprintTravaService';
+import { bloqueioDasTravas, idsTravados, type TravaExplicita } from '../../utils/blueprintColaboracao';
 import TelaAntesDepois from './TelaAntesDepois';
 import { contagemPorFase, faseDaSelecao, fasePorId, idsOcultosPelaFase, type FiltroDeFase } from '../../utils/blueprintFases';
 import { useBlueprintColaboracao, type UsoDaColaboracao } from '../../hooks/useBlueprintColaboracao';
@@ -980,11 +984,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   // canal e as permissões nascem mais abaixo, depois do próprio editor.
   const colabRef = useRef<UsoDaColaboracao | null>(null);
   const somenteLeituraRef = useRef(false);
+  // TRAVAS EXPLÍCITAS (21/09/2026, backlog P2 "lock fino"): as do ramo, lidas do banco; o portão lê a ref.
+  const travasRef = useRef<{ travas: TravaExplicita[]; meuUserId: string | null }>({ travas: [], meuUserId: null });
   const editor = useBlueprintEditor(branchId, {
     antesDeAplicar: (comandos) => {
       if (somenteLeituraRef.current) return 'Você é leitor deste estudo: pode ver tudo, mas não alterar. Peça a um editor para mudar seu papel em Colaborar › Acesso.';
       const trava = colabRef.current ? travaDoComando(comandos, colabRef.current.travas) : null;
       if (trava) return `"${trava.id}" está em edição por ${trava.por.nome} — espere a seleção dela ser solta.`;
+      const bloqueio = bloqueioDasTravas(comandos, travasRef.current.travas, editorRef.current.model, travasRef.current.meuUserId);
+      if (bloqueio) return `${bloqueio.motivo} Veja em Colaborar › Travas.`;
       return null;
     },
     depoisDeAplicar: (comandos, hashDepois) => colabRef.current?.difundir(comandos, hashDepois),
@@ -1015,8 +1023,36 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     email: sessaoAtual?.email ?? null,
     nome: meuNome,
     aoReceber: (msg) => editorRef.current.aplicarExterno(msg),
+    aoMudarTravas: (autorNome, texto) => {
+      recarregarTravasRef.current?.();
+      if (texto) setAvisoDeTrava(`${autorNome}: ${texto}`);
+    },
   });
   colabRef.current = colab;
+  const [travasDoRamo, setTravasDoRamo] = useState<TravaExplicita[]>([]);
+  const [travasCarregando, setTravasCarregando] = useState(false);
+  const [travasIndisponiveis, setTravasIndisponiveis] = useState<string | null>(null);
+  const [avisoDeTrava, setAvisoDeTrava] = useState<string | null>(null);
+  const recarregarTravasRef = useRef<(() => void) | null>(null);
+  const recarregarTravas = useCallback(() => {
+    setTravasCarregando(true);
+    blueprintTravaService
+      .list(branchId)
+      .then((lista) => {
+        setTravasDoRamo(lista);
+        setTravasIndisponiveis(null);
+      })
+      .catch((e: unknown) => {
+        console.warn('[travas] indisponíveis:', e);
+        setTravasIndisponiveis(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => setTravasCarregando(false));
+  }, [branchId]);
+  recarregarTravasRef.current = recarregarTravas;
+  useEffect(() => {
+    recarregarTravas();
+  }, [recarregarTravas]);
+  travasRef.current = { travas: travasDoRamo, meuUserId: sessaoAtual?.id ?? null };
   /** PERMISSÕES POR ESTUDO (E10.1): sem linha = editor. Leitor trava os comandos aqui e a RLS recusa a gravação lá. */
   const [permissoesDoEstudo, setPermissoesDoEstudo] = useState<PermissaoGravada[]>([]);
   const [permissoesIndisponiveis, setPermissoesIndisponiveis] = useState<string | null>(null);
@@ -1044,7 +1080,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   /** Com outra pessoa no ramo, desfazer/refazer ficam desligados: desfazer localmente o comando dela divergiria os desenhos. */
   const desfazerBloqueado = colab.participantes.length > 0;
   /** As seleções dos outros, para o canvas mostrar quem está em quê. */
-  const selecoesRemotas = useMemo(() => colab.participantes.flatMap((p) => p.selecionados.map((id) => ({ id, cor: p.cor, nome: p.nome }))), [colab.participantes]);
+  const selecoesRemotas = useMemo(
+    () => [
+      ...colab.participantes.flatMap((p) => p.selecionados.map((id) => ({ id, cor: p.cor, nome: p.nome }))),
+      // TRAVAS EXPLÍCITAS: crachá quadrado, cinza, com as iniciais de quem travou.
+      ...idsTravados(travasDoRamo, editor.model).map(({ id, trava }) => ({ id, cor: '#475569', nome: trava.holderNome || trava.holderEmail, travado: true })),
+    ],
+    [colab.participantes, travasDoRamo, editor.model],
+  );
   /** Os membros da organização do ESTUDO (para papéis e @menções). */
   const membrosDaOrgDoEstudo = useMemo(() => {
     const org = organizacoesParaNome.find((o) => o.id === study.organization_id);
@@ -1412,7 +1455,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais' | 'api' | 'webhooks' | 'plugins' | 'plugin' | 'acesso' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais' | 'api' | 'webhooks' | 'plugins' | 'plugin' | 'acesso' | 'travas' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -8137,6 +8180,41 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           </div>
         </div>
       )}
+      {telaAberta === 'travas' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="travas">
+          {cabecalhoDaTela(
+            'Travas',
+            'Exclusividade por um tempo: trave a seleção, o pavimento atual ou uma disciplina, com nota e prazo. Complementa a trava automática por seleção; fica mesmo com você fora do ramo, até soltar, alguém forçar ou vencer.',
+            Lock,
+            'Colaborar',
+          )}
+          <div>
+            <TelaTravas
+              model={editor.model}
+              travas={travasDoRamo}
+              carregando={travasCarregando}
+              indisponivel={travasIndisponiveis}
+              meuUserId={sessaoAtual?.id ?? null}
+              selecionados={editor.selectedIds}
+              nivelAtivo={(() => {
+                const l = editor.model.levels.find((x) => x.id === levelId);
+                return l ? { id: l.id, uid: l.uid, name: l.name } : null;
+              })()}
+              onTravar={async (escopo, alvos, nota, validadeHoras) => {
+                if (!sessaoAtual) throw new Error('Sem sessão.');
+                await blueprintTravaService.criar({ branchId, organizationId: study.organization_id, escopo, alvos, holderUserId: sessaoAtual.id, holderEmail: sessaoAtual.email, holderNome: meuNome ?? '', nota, validadeHoras });
+                recarregarTravas();
+                colab.avisarTravas();
+              }}
+              onSoltar={async (t, forcada) => {
+                await blueprintTravaService.soltar(t.id);
+                recarregarTravas();
+                colab.avisarTravas(forcada ? `forçou a liberação da trava de ${t.holderNome || t.holderEmail} (${t.nota || t.escopo})` : undefined);
+              }}
+            />
+          </div>
+        </div>
+      )}
       {telaAberta === 'webhooks' && (
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="webhooks">
           {cabecalhoDaTela(
@@ -9575,6 +9653,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               }}
               ajuda="Quem está neste ramo agora e o papel de cada membro da organização neste estudo (editor / leitor). O número é quantas outras pessoas estão no ramo."
             />
+            <BotaoDoRibbon
+              icone={Lock}
+              rotulo="Travas"
+              contagem={travasDoRamo.filter((t) => new Date(t.expiresAt).getTime() > Date.now()).length || undefined}
+              ativo={telaAberta === 'travas'}
+              onClick={() => {
+                if (telaAberta !== 'travas') recarregarTravas();
+                alternarTela('travas');
+              }}
+              ajuda="Travas explícitas do ramo: trave a seleção, o pavimento atual ou uma disciplina por um prazo, com nota; os outros veem quem e por quê ao tentar editar. Soltar a sua; forçar a liberação de outra com confirmação. O número é quantas estão vigentes."
+            />
           </GrupoDoRibbon>
         )}
         {aba === 'colaborar' && (
@@ -10306,6 +10395,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           <span className="flex-1">{colab.avisos[0].texto}{colab.avisos.length > 1 ? ` (+${colab.avisos.length - 1})` : ''}</span>
           <button type="button" onClick={editor.reload} className="shrink-0 rounded-md bg-amber-600 px-2 py-1 text-xs font-medium text-white hover:bg-amber-700">Recarregar do servidor</button>
           <button type="button" onClick={colab.dispensarAvisos} className="text-xs font-medium underline">dispensar</button>
+        </div>
+      )}
+      {avisoDeTrava && (
+        <div role="status" className="flex items-start gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700" data-testid="aviso-de-trava">
+          <Lock className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
+          <span className="flex-1">{avisoDeTrava}</span>
+          <button type="button" onClick={() => setAvisoDeTrava(null)} className="text-xs font-medium underline">dispensar</button>
         </div>
       )}
       {editor.lastError && (

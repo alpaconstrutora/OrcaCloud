@@ -31,6 +31,8 @@ export interface UsoDaColaboracao {
   /** Últimas mensagens de conflito (comando remoto recusado ou divergência), da mais nova para a mais velha. */
   avisos: AvisoDeColaboracao[];
   dispensarAvisos: () => void;
+  /** TRAVAS EXPLÍCITAS (P2): avisa o ramo que a lista de travas mudou (quem recebe recarrega do banco). */
+  avisarTravas: (texto?: string) => void;
 }
 
 export interface AvisoDeColaboracao {
@@ -51,9 +53,11 @@ interface Opcoes {
   aoReceber: (msg: MensagemDeComando) => { ok: boolean; erro: string | null; divergiu: boolean };
   /** Desliga tudo (testes, ou quando não há sessão). */
   habilitado?: boolean;
+  /** TRAVAS EXPLÍCITAS (P2): alguém travou/soltou no ramo — recarregar a lista; `texto` é o aviso (liberação forçada). */
+  aoMudarTravas?: (autorNome: string, texto: string | null) => void;
 }
 
-export function useBlueprintColaboracao({ branchId, userId, email, nome, aoReceber, habilitado = true }: Opcoes): UsoDaColaboracao {
+export function useBlueprintColaboracao({ branchId, userId, email, nome, aoReceber, habilitado = true, aoMudarTravas }: Opcoes): UsoDaColaboracao {
   const [estados, setEstados] = useState<EstadoDePresenca[]>([]);
   const [conectado, setConectado] = useState(false);
   const [avisos, setAvisos] = useState<AvisoDeColaboracao[]>([]);
@@ -61,6 +65,8 @@ export function useBlueprintColaboracao({ branchId, userId, email, nome, aoReceb
   const presencaRef = useRef<{ levelId: string | null; selecionados: string[] }>({ levelId: null, selecionados: [] });
   const aoReceberRef = useRef(aoReceber);
   aoReceberRef.current = aoReceber;
+  const aoMudarTravasRef = useRef(aoMudarTravas);
+  aoMudarTravasRef.current = aoMudarTravas;
   const identidadeRef = useRef({ userId, email, nome });
   identidadeRef.current = { userId, email, nome };
 
@@ -100,6 +106,10 @@ export function useBlueprintColaboracao({ branchId, userId, email, nome, aoReceb
           ]);
         }
       })
+      .on('broadcast', { event: 'travas' }, ({ payload }: { payload: { autorId: string; autorNome: string; texto: string | null } }) => {
+        if (!payload || payload.autorId === identidadeRef.current.userId) return;
+        aoMudarTravasRef.current?.(payload.autorNome, payload.texto);
+      })
       .subscribe((status: string) => {
         const ok = status === 'SUBSCRIBED';
         setConectado(ok);
@@ -132,8 +142,15 @@ export function useBlueprintColaboracao({ branchId, userId, email, nome, aoReceb
     void canal.send({ type: 'broadcast', event: 'comando', payload: msg });
   }, []);
 
+  const avisarTravas = useCallback((texto?: string) => {
+    const canal = canalRef.current;
+    const { userId: u, nome: n, email: e } = identidadeRef.current;
+    if (!canal || !u) return;
+    void canal.send({ type: 'broadcast', event: 'travas', payload: { autorId: u, autorNome: n || e || 'alguém', texto: texto ?? null } });
+  }, []);
+
   const participantes = useMemo(() => agregarPresenca(estados, userId), [estados, userId]);
   const travas = useMemo(() => travasDe(participantes), [participantes]);
 
-  return { participantes, travas, conectado, atualizarPresenca, difundir, avisos, dispensarAvisos: () => setAvisos([]) };
+  return { participantes, travas, conectado, atualizarPresenca, difundir, avisos, dispensarAvisos: () => setAvisos([]), avisarTravas };
 }

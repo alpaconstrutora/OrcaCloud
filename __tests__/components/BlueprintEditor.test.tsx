@@ -216,7 +216,18 @@ let colabAoReceber: ((msg: unknown) => { ok: boolean; erro: string | null; diver
 vi.mock('../../hooks/useBlueprintColaboracao', () => ({
   useBlueprintColaboracao: (opcoes: { aoReceber: (msg: unknown) => { ok: boolean; erro: string | null; divergiu: boolean } }) => {
     colabAoReceber = opcoes.aoReceber;
-    return { ...colabEstado, atualizarPresenca: colabAtualizarPresenca, difundir: colabDifundir, dispensarAvisos: vi.fn() };
+    return { ...colabEstado, atualizarPresenca: colabAtualizarPresenca, difundir: colabDifundir, dispensarAvisos: vi.fn(), avisarTravas: vi.fn() };
+  },
+}));
+// TRAVAS EXPLÍCITAS (P2): o cadastro é mockado; o teste controla a lista do ramo.
+const listTravas = vi.fn(async () => [] as unknown[]);
+const criarTrava = vi.fn(async (t: Record<string, unknown>) => ({ id: 'trv_novo', ...t }));
+const soltarTrava = vi.fn(async () => {});
+vi.mock('../../services/blueprintTravaService', () => ({
+  blueprintTravaService: {
+    list: (...a: unknown[]) => listTravas(...(a as [])),
+    criar: (...a: unknown[]) => criarTrava(...(a as [Record<string, unknown>])),
+    soltar: (...a: unknown[]) => soltarTrava(...(a as [])),
   },
 }));
 const listPermissoes = vi.fn(async () => [] as unknown[]);
@@ -5578,5 +5589,81 @@ describe('BlueprintEditor · importar do SketchUp (P2.26)', () => {
     expect(salvo.walls).toHaveLength(5);
     expect(salvo.walls.map((x) => x.thicknessMm).sort()).toEqual([100, 150, 150, 150, 150]);
     expect(salvo.walls.every((x) => x.heightMm === 2800 && x.levelId === t)).toBe(true);
+  }, 60000);
+});
+
+/**
+ * TRAVAS EXPLÍCITAS (21/09/2026, backlog P2 "lock fino"): a trava de outra
+ * pessoa (do banco) bloqueia o comando com nome, nota e prazo; a tela
+ * Colaborar › Travas lista, trava a seleção com nota e solta.
+ */
+describe('BlueprintEditor · travas explícitas (P2.27)', () => {
+  it('trava alheia bloqueia com o motivo; a própria não; tela trava a seleção e solta', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall' as const, levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 });
+    const m = k.applyBatch(nivel.model, [w(0, 0, 4000, 0), w(4000, 0, 4000, 3000), w(4000, 3000, 0, 3000), w(0, 3000, 0, 0)]).model;
+    const daqui8h = new Date(Date.now() + 8 * 3_600_000).toISOString();
+    listTravas.mockResolvedValue([{ id: 'trv_1', branchId: 'br_1', escopo: 'PAVIMENTO', alvos: [m.levels[0].uid], holderUserId: 'u_ana', holderEmail: 'ana@x.com', holderNome: 'Ana Lima', nota: 'revisando o térreo', createdAt: new Date().toISOString(), expiresAt: daqui8h }]);
+    loadBranchModel.mockResolvedValue(m);
+    // Quem sou eu: a tela de travas precisa da sessão para travar em meu nome.
+    const { supabase } = await import('../../lib/supabase');
+    const espiao = vi.spyOn(supabase.auth, 'getUser').mockResolvedValue({ data: { user: { id: 'u_eu', email: 'eu@x.com' } }, error: null } as never);
+    await montar();
+    const user = userEvent.setup();
+    // O pavimento está travado pela Ana: desenhar parede nele é recusado com o motivo.
+    await abrirAba(/^colaborar$/i);
+    await user.click(screen.getByRole('button', { name: /^Travas/ }));
+    const tela = await screen.findByTestId('tela-travas');
+    expect(document.querySelector('[data-tela="travas"]')?.className).not.toMatch(/fixed|inset-0/);
+    await waitFor(() => expect(tela).toHaveTextContent(/Pavimento Térreo/));
+    expect(tela).toHaveTextContent(/Ana Lima/);
+    expect(tela).toHaveTextContent(/revisando o térreo/);
+    // Forçar a liberação pede confirmação e solta.
+    await user.click(within(tela).getByRole('button', { name: /Forçar liberação da trava de Ana Lima/ }));
+    await user.click(await screen.findByRole('button', { name: /^Forçar$/ }));
+    await waitFor(() => expect(soltarTrava).toHaveBeenCalledWith('trv_1'));
+    // Travar a seleção: sem seleção o botão fica desligado; com pavimento, cria com nota e validade.
+    expect(within(tela).getByTestId('travar')).toBeDisabled();
+    await user.selectOptions(within(tela).getByLabelText('Escopo da trava'), 'PAVIMENTO');
+    await user.type(within(tela).getByLabelText('Nota da trava'), 'minha vez');
+    await user.selectOptions(within(tela).getByLabelText('Validade da trava'), '24');
+    await user.click(within(tela).getByTestId('travar'));
+    await waitFor(() => expect(criarTrava).toHaveBeenCalledWith(expect.objectContaining({ escopo: 'PAVIMENTO', alvos: [m.levels[0].uid], nota: 'minha vez', validadeHoras: 24, holderUserId: 'u_eu' })));
+    espiao.mockRestore();
+  }, 60000);
+
+  it('o portão recusa o comando com nome, nota e prazo da trava alheia (ELEMENTOS); a própria passa', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall' as const, levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 });
+    let m = k.applyBatch(nivel.model, [w(0, 0, 8000, 0), w(8000, 0, 8000, 4000), w(8000, 4000, 0, 4000), w(0, 4000, 0, 0), w(4000, 0, 4000, 4000)]).model;
+    const [a, b] = [...m.spaces].sort((p, q) => p.ring[0].x - q.ring[0].x);
+    m = k.applyBatch(m, [
+      { type: 'NameSpace', spaceId: a.id, name: 'Sala' },
+      { type: 'NameSpace', spaceId: b.id, name: 'Cozinha' },
+    ]).model;
+    const sala = m.spaces.find((s) => s.name === 'Sala')!;
+    // A Ana travou o AMBIENTE Sala (a identidade do ambiente é a etiqueta) por 1 h, com nota.
+    listTravas.mockResolvedValue([{ id: 'trv_2', branchId: 'br_1', escopo: 'ELEMENTOS', alvos: [sala.labelUid!], holderUserId: 'u_ana', holderEmail: 'ana@x.com', holderNome: 'Ana Lima', nota: 'fachada', createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 3_600_000).toISOString() }]);
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await waitFor(() => expect(listTravas).toHaveBeenCalled());
+    const { saveDraft } = await import('../../services/blueprintService');
+    vi.mocked(saveDraft).mockClear();
+    // Renomear a Sala (NameSpace com spaceId travado) é recusado com nome, nota e prazo.
+    await user.click(await screen.findByRole('button', { name: 'Renomear Sala' }));
+    await user.clear(screen.getByLabelText('Nome do ambiente Sala'));
+    await user.type(screen.getByLabelText('Nome do ambiente Sala'), 'Estar{Enter}');
+    expect(await screen.findByRole('alert')).toHaveTextContent(/está travado por Ana Lima \("fachada"\) até .*Veja em Colaborar › Travas/);
+    expect(saveDraft).not.toHaveBeenCalled();
+    // A Cozinha não está travada: renomear passa.
+    await user.click(await screen.findByRole('button', { name: 'Renomear Cozinha' }));
+    await user.clear(screen.getByLabelText('Nome do ambiente Cozinha'));
+    await user.type(screen.getByLabelText('Nome do ambiente Cozinha'), 'Copa{Enter}');
+    await waitFor(() => expect(saveDraft).toHaveBeenCalled(), { timeout: 5000 });
   }, 60000);
 });

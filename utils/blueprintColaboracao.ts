@@ -19,7 +19,7 @@
  * (a tela trava e a RLS recusa a gravação), e `@nome`/`@email` num comentário
  * vira menção para um membro da organização.
  */
-import type { Command, ModelHistory } from './blueprintKernel';
+import type { BlueprintModel, Command, ModelHistory } from './blueprintKernel';
 
 // ── Participantes e cores ───────────────────────────────────────────────────
 
@@ -212,4 +212,131 @@ export function sugerirMencoes(parcial: string, membros: readonly MembroMenciona
   const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const p = norm(parcial);
   return membros.filter((m) => !p || norm(m.nome).includes(p) || norm(m.email).includes(p)).slice(0, limite);
+}
+
+// ── Travas EXPLÍCITAS (21/09/2026, backlog P2 "lock fino") ─────────────────
+//
+// A trava por seleção (acima) é efêmera: some com a presença. A explícita é
+// PEDIDA — "estou mexendo na elétrica do térreo até amanhã" — e fica no banco
+// (`blueprint_element_locks`) até quem pediu soltar, alguém forçar ou o prazo
+// vencer. Três escopos: ELEMENTOS (uids), PAVIMENTO (uid do nível — bloqueia
+// tudo nele, inclusive criar) e DISCIPLINA (ELETRICA/HIDRAULICA/MECANICA —
+// trechos, pontos, quadros e circuitos dela, inclusive criar).
+
+export const ESCOPOS_DE_TRAVA = ['ELEMENTOS', 'PAVIMENTO', 'DISCIPLINA'] as const;
+export type EscopoDeTrava = (typeof ESCOPOS_DE_TRAVA)[number];
+export const ROTULO_DO_ESCOPO_DE_TRAVA: Record<EscopoDeTrava, string> = { ELEMENTOS: 'Elementos', PAVIMENTO: 'Pavimento', DISCIPLINA: 'Disciplina' };
+export const VALIDADES_DE_TRAVA_H = [2, 8, 24, 72] as const;
+export const MAX_NOTA_DE_TRAVA = 200;
+
+export interface TravaExplicita {
+  id: string;
+  branchId: string;
+  escopo: EscopoDeTrava;
+  /** ELEMENTOS: uids · PAVIMENTO: uid do nível · DISCIPLINA: nome da disciplina. */
+  alvos: string[];
+  holderUserId: string;
+  holderEmail: string;
+  holderNome: string;
+  nota: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+/** Só as que ainda valem. */
+export function travasVigentes(travas: readonly TravaExplicita[], agora = new Date()): TravaExplicita[] {
+  const t = agora.getTime();
+  return travas.filter((x) => new Date(x.expiresAt).getTime() > t);
+}
+
+interface PecaIndexada {
+  uid: string;
+  levelId: string | null;
+  disciplina: string | null;
+}
+
+/** id → (uid, pavimento, disciplina) de toda peça do modelo; níveis também (uid do nível pelo id). */
+export function indiceDePecas(model: BlueprintModel): Map<string, PecaIndexada> {
+  const m = new Map<string, PecaIndexada>();
+  const nivelDaParede = new Map(model.walls.map((w) => [w.id, w.levelId]));
+  for (const lista of Object.values(model as unknown as Record<string, unknown>)) {
+    if (!Array.isArray(lista)) continue;
+    for (const x of lista as { id?: string; uid?: string; levelId?: string; wallId?: string; disciplina?: string }[]) {
+      if (!x || typeof x !== 'object' || !x.id || !x.uid) continue;
+      m.set(x.id, { uid: x.uid, levelId: x.levelId ?? (x.wallId ? nivelDaParede.get(x.wallId) ?? null : null), disciplina: typeof x.disciplina === 'string' ? x.disciplina : null });
+    }
+  }
+  // Ambientes não têm uid próprio: a identidade é a da ETIQUETA (`labelUid`), como no canônico.
+  for (const s of model.spaces) if (s.labelUid) m.set(s.id, { uid: s.labelUid, levelId: s.levelId, disciplina: null });
+  // Circuitos não têm `disciplina`; são sempre elétricos.
+  for (const c of model.circuitos ?? []) if (c.id && c.uid) m.set(c.id, { uid: c.uid, levelId: null, disciplina: 'ELETRICA' });
+  return m;
+}
+
+export interface Bloqueio {
+  trava: TravaExplicita;
+  motivo: string;
+}
+
+/**
+ * A primeira trava explícita de OUTRA pessoa que o lote esbarra; `null` = livre.
+ * Diferente da trava por seleção, PAVIMENTO e DISCIPLINA bloqueiam também a
+ * CRIAÇÃO (parede nova no pavimento travado; ponto novo na disciplina travada).
+ */
+export function bloqueioDasTravas(comandos: readonly Command[], travas: readonly TravaExplicita[], model: BlueprintModel, meuUserId: string | null): Bloqueio | null {
+  const vigentes = travasVigentes(travas).filter((t) => t.holderUserId !== meuUserId);
+  if (vigentes.length === 0) return null;
+  const indice = indiceDePecas(model);
+  const uidDoNivel = new Map(model.levels.map((l) => [l.id, l.uid]));
+  const quem = (t: TravaExplicita) => `${t.holderNome || t.holderEmail}${t.nota ? ` ("${t.nota}")` : ''}`;
+  for (const c of comandos) {
+    const cmd = c as unknown as Record<string, unknown>;
+    const tocados = idsTocadosPeloComando(c).map((id) => ({ id, peca: indice.get(id) ?? null }));
+    const niveisDoComando = new Set<string>();
+    if (typeof cmd.levelId === 'string') niveisDoComando.add(cmd.levelId);
+    for (const t of tocados) if (t.peca?.levelId) niveisDoComando.add(t.peca.levelId);
+    const disciplinasDoComando = new Set<string>();
+    if (typeof cmd.disciplina === 'string') disciplinasDoComando.add(cmd.disciplina);
+    for (const t of tocados) if (t.peca?.disciplina) disciplinasDoComando.add(t.peca.disciplina);
+    if (/Circuito/.test(c.type) || /circuitoId/.test(Object.keys(cmd).join(','))) disciplinasDoComando.add('ELETRICA');
+    for (const trava of vigentes) {
+      if (trava.escopo === 'ELEMENTOS') {
+        const alvo = tocados.find((t) => t.peca && trava.alvos.includes(t.peca.uid));
+        if (alvo) return { trava, motivo: `"${alvo.id}" está travado por ${quem(trava)} até ${dataHoraBr(trava.expiresAt)}.` };
+      } else if (trava.escopo === 'PAVIMENTO') {
+        for (const lv of niveisDoComando) {
+          const uid = uidDoNivel.get(lv);
+          if (uid && trava.alvos.includes(uid)) return { trava, motivo: `O pavimento "${model.levels.find((l) => l.id === lv)?.name ?? lv}" está travado por ${quem(trava)} até ${dataHoraBr(trava.expiresAt)}.` };
+        }
+      } else {
+        for (const d of disciplinasDoComando) if (trava.alvos.includes(d)) return { trava, motivo: `A disciplina ${d} está travada por ${quem(trava)} até ${dataHoraBr(trava.expiresAt)}.` };
+      }
+    }
+  }
+  return null;
+}
+
+/** Os ids (do modelo atual) que uma trava de ELEMENTOS cobre — para o crachá no canvas. */
+export function idsTravados(travas: readonly TravaExplicita[], model: BlueprintModel): { id: string; trava: TravaExplicita }[] {
+  const porUid = new Map<string, TravaExplicita>();
+  for (const t of travasVigentes(travas)) if (t.escopo === 'ELEMENTOS') for (const u of t.alvos) if (!porUid.has(u)) porUid.set(u, t);
+  if (porUid.size === 0) return [];
+  const saida: { id: string; trava: TravaExplicita }[] = [];
+  for (const [id, p] of indiceDePecas(model)) {
+    const t = porUid.get(p.uid);
+    if (t) saida.push({ id, trava: t });
+  }
+  return saida;
+}
+
+export function dataHoraBr(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+/** Resumo de uma trava para a tela: "3 elemento(s)", "Pavimento Térreo", "Disciplina ELETRICA". */
+export function rotuloDaTrava(t: TravaExplicita, model: BlueprintModel | null): string {
+  if (t.escopo === 'ELEMENTOS') return `${t.alvos.length} elemento(s)`;
+  if (t.escopo === 'PAVIMENTO') return `Pavimento ${model?.levels.find((l) => l.uid === t.alvos[0])?.name ?? t.alvos[0]}`;
+  return `Disciplina ${t.alvos.join(', ')}`;
 }

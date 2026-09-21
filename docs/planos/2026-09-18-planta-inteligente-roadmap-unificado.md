@@ -1440,6 +1440,25 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 - App real (escritas bloqueadas: 15, 0 erros de página): Inserir › Do SketchUp → `.skp` recusado com a instrução; `planta-19092026-v1.dae` (o que a P2.23 baixou: 411 geometrias, 5 292 triângulos, 3 528 verticais em 627 planos, Z_UP, metro) → 198 paredes / 418,64 m, recusas contadas (24 baixos, 503 curtos, 310 sem par), cota 0,00 → Térreo → Importar: contador do desenho 14 → 212 paredes.
 - Testes `colladaParaKernel.test.ts` (xmlLeve; ida e volta do .dae da própria Planta: 5 paredes com espessura/altura/comprimento, porta e janela emendadas, pilar/viga/laje/esquadrias fora e contados; polylist com NORMAL offset 1, Y_UP, centímetro, translate/rotate, componente por library_nodes com o nome da instância; recusa de não-COLLADA e cena vazia), editor P2.26 (painel, .skp recusado, .dae lido com 5 paredes / 24,00 m, recusas, pavimento, Importar → saveDraft com 5 paredes no Térreo).
 
+### P2.27 — Travas explícitas ("lock fino") (21/09/2026) · backlog P2
+
+**O que entrou**
+- `utils/blueprintColaboracao.ts`: `TravaExplicita` (ramo, escopo ELEMENTOS/PAVIMENTO/DISCIPLINA, alvos, quem, nota, validade), `travasVigentes`, `indiceDePecas` (id → uid/pavimento/disciplina; ambiente pela etiqueta; circuito = ELETRICA), **`bloqueioDasTravas`** (a primeira trava de OUTRA pessoa que o lote esbarra, com nome, nota e prazo — PAVIMENTO e DISCIPLINA bloqueiam também CRIAR), `idsTravados` (crachá), `rotuloDaTrava`.
+- Migration `aplicar_20270921000062_blueprint_element_locks.sql` (aplicada): tabela por ramo com validade (8 h padrão); RLS: membro lê, só cria em nome próprio (`holder_user_id = auth.uid()`), qualquer membro apaga (= forçar liberação). `services/blueprintTravaService.ts`.
+- `useBlueprintColaboracao`: evento `travas` no canal do ramo (`avisarTravas` / `aoMudarTravas`) — quem recebe recarrega do banco; liberação forçada chega como aviso com o autor.
+- Editor: portão `antesDeAplicar` consulta as travas do ramo depois da trava por seleção (`"… está travado por Ana Lima ("fachada") até 21/09/2026, 19:00. Veja em Colaborar › Travas."`); Colaborar › Equipe › **Travas** (`TelaTravas`: como funciona, nova trava — seleção atual / pavimento atual / disciplina, nota, validade 2/8/24/72 h —, lista vigente com Soltar (própria) e Forçar liberação (confirmação)); contagem no botão; crachá QUADRADO no canvas sobre elementos travados; faixa "aviso de trava".
+
+**Decisões**
+- Complementa, não substitui, a trava por seleção (E10.1): a automática cobre o instante; a explícita cobre "até amanhã".
+- Validade obrigatória: trava esquecida não prende o ramo para sempre.
+- Qualquer membro força a liberação, com confirmação e aviso ao dono pelo canal — o banco não é a única barreira, mas não pode ser a que trava o time quando alguém saiu.
+- Sem bump de kernel; travas fora do payload.
+
+**Prova**
+- `npx tsc --noEmit` ok · check-ui ok nos 3 tsx · `check-xss-sinks.sh` ok · suíte cheia 427 arquivos / 4956 testes · `npm run build` ok · migration aplicada (11 colunas).
+- App real, escritas bloqueadas (15): Colaborar › Travas in-flow, "Travar" com POST abortado → "Falha ao travar: … Failed to fetch" (honesto). **Escrita real autorizada** ("criar, provar e soltar"), bloqueio aberto só para `blueprint_element_locks` (14 outras escritas bloqueadas): trava PAVIMENTO "prova P2.27" (2 h) criada → lista "Pavimento Térreo · altair.rosa (você) · prova P2.27 · 21/09/2026, 18:58" → Soltar → "Nenhuma trava vigente neste ramo"; banco com 0 linhas ao fim (INSERT + DELETE, nada mais).
+- Testes `blueprintTravasExplicitas.test.ts` (ELEMENTOS só o que cobre, dono passa, vencida não conta, criar não esbarra; PAVIMENTO bloqueia editar e criar, outro pavimento livre; DISCIPLINA bloqueia pontos/trechos/circuitos, outras livres), editor P2.27 (tela lista com quem/nota, forçar liberação com confirmação → `soltar`, travar pavimento com nota/validade → `criar` em meu nome; portão recusa NameSpace na Sala travada com nome/nota/prazo e deixa a Cozinha passar).
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

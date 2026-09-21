@@ -99,7 +99,7 @@ describe('acabamentos do ambiente (E7.2)', () => {
   });
 
   it('quantitativo 1.11.0: camadas medidas pela área de piso líquida, rodapé declarado vence a política e `null` zera; porAcabamento por escopo × material; ambiente sem declaração não muda', () => {
-    expect(POLITICA_PADRAO.version).toBe('quant-1.14.0');
+    expect(POLITICA_PADRAO.version).toBe('quant-1.15.0');
     const { m, spaceId } = sala();
     const antes = computeQuantities(m, POLITICA_PADRAO).ambientes[0];
     expect(antes.areaPisoM2).toBeCloseTo(10.9725, 3);

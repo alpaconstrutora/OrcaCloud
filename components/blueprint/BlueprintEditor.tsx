@@ -7209,6 +7209,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         parede={paredeSel}
         arco={paredeSel?.arco ? { raioMm: paredeSel.arco.raioMm, facetas: segmentosDoMesmoArco(editor.model.walls, paredeSel).length } : null}
         onSelecionarArco={() => paredeSel && editor.setSelectedIds(segmentosDoMesmoArco(editor.model.walls, paredeSel).map((w) => w.id))}
+        onCortina={(cortina) => paredeSel && editor.run({ type: 'SetWallCortina', wallId: paredeSel.id, cortina })}
+        onBrise={(brise) => paredeSel && editor.run({ type: 'SetWallBrise', wallId: paredeSel.id, brise })}
         abertura={aberturaSel}
         pontaQueAnda={esticamento.pontaQueAnda}
         arrastaCanto={esticamento.arrastaCanto}

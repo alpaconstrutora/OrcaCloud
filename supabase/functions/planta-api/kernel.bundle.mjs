@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.53.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.54.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -1546,6 +1546,9 @@ function projetar(model) {
       // reta não ganha chave. É conteúdo (o canvas desenha o arco e o painel o
       // reconhece), então entra no hash.
       arco: w.arco ? { centro: { x: w.arco.centro.x, y: w.arco.centro.y }, raioMm: w.arco.raioMm } : void 0,
+      // CORTINA DE VIDRO e BRISE (0.54.0): só quando existem.
+      cortina: w.cortina ? { moduloMm: w.cortina.moduloMm, montanteMm: w.cortina.montanteMm, painel: w.cortina.painel } : void 0,
+      brise: w.brise ? { orientacao: w.brise.orientacao, laminaMm: w.brise.laminaMm, passoMm: w.brise.passoMm, afastamentoMm: w.brise.afastamentoMm, lado: w.brise.lado } : void 0,
       parametros: parametrosCanonicos(w.parametros),
       // A COMPOSIÇÃO. Mesma disciplina das três chaves acima: emitida só quando
       // existe, para não acrescentar `camadas` a toda parede homogênea do
@@ -2153,6 +2156,8 @@ function modelFromCanonicalPayload(payload) {
       ...w.cedeSobreposicao ? { cedeSobreposicao: true } : {},
       ...w.fase ? { fase: w.fase } : {},
       ...w.arco ? { arco: { centro: { x: w.arco.centro.x, y: w.arco.centro.y }, raioMm: w.arco.raioMm } } : {},
+      ...w.cortina ? { cortina: { moduloMm: w.cortina.moduloMm, montanteMm: w.cortina.montanteMm, painel: w.cortina.painel } } : {},
+      ...w.brise ? { brise: { orientacao: w.brise.orientacao, laminaMm: w.brise.laminaMm, passoMm: w.brise.passoMm, afastamentoMm: w.brise.afastamentoMm, lado: w.brise.lado } } : {},
       ...w.parametros && Object.keys(w.parametros).length > 0 ? { parametros: { ...w.parametros } } : {},
       // Idem: ausente (e `[]`, que payload nenhum deveria ter) não volta como
       // lista vazia, volta como nada — parede homogênea, que é o que um payload
@@ -2783,7 +2788,7 @@ function conexoesDerivadas(model) {
 
 // utils/blueprintKernel/quantities.ts
 var POLITICA_PADRAO = {
-  version: "quant-1.14.0",
+  version: "quant-1.15.0",
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2
@@ -2978,9 +2983,21 @@ function computeQuantities(model, policy = POLITICA_PADRAO, kernelVersion = "") 
       areaFaceBrutaM2: bruta / MM2_PARA_M2,
       areaAberturasM2: areaAberturasMm2 / MM2_PARA_M2,
       areaFaceLiquidaM2: liquidaMm2 / MM2_PARA_M2,
-      volumeM3: liquidaMm2 * w.thicknessMm / MM3_PARA_M3,
+      // CORTINA (P2.20): pele de vidro não tem alvenaria.
+      volumeM3: w.cortina ? 0 : liquidaMm2 * w.thicknessMm / MM3_PARA_M3,
       volumeCedidoM3: cedidoMm3 / MM3_PARA_M3,
-      camadas
+      camadas: w.cortina ? [] : camadas,
+      ...w.cortina ? (() => {
+        const paineis = Math.max(1, Math.ceil(compMm / w.cortina.moduloMm));
+        const montantesM = ((paineis + 1) * w.heightMm + 2 * compMm) / 1e3;
+        return { cortina: { painel: w.cortina.painel, areaM2: liquidaMm2 / MM2_PARA_M2, paineis, montantesM: Math.round(montantesM * 100) / 100 } };
+      })() : {},
+      ...w.brise ? (() => {
+        const b = w.brise;
+        const laminas = b.orientacao === "HORIZONTAL" ? Math.max(1, Math.floor(w.heightMm / b.passoMm)) : Math.max(1, Math.floor(compMm / b.passoMm));
+        const compLaminaMm = b.orientacao === "HORIZONTAL" ? compMm : w.heightMm;
+        return { brise: { orientacao: b.orientacao, areaM2: bruta / MM2_PARA_M2, laminas, comprimentoLaminasM: Math.round(laminas * compLaminaMm / 1e3 * 100) / 100 } };
+      })() : {}
     };
   });
   const paredes = paredesTodas.filter((q) => q.fase === "NOVO");
@@ -3330,6 +3347,14 @@ function computeQuantities(model, policy = POLITICA_PADRAO, kernelVersion = "") 
       // Duas faces: é o que se reveste e se pinta dos dois lados.
       areaParedeDuasFacesM2: somaFace * 2,
       volumeAlvenariaM3: paredes.reduce((s2, p) => s2 + p.volumeM3, 0),
+      areaCortinaM2: paredes.reduce((s2, p) => s2 + (p.cortina?.areaM2 ?? 0), 0),
+      comprimentoMontantesM: paredes.reduce((s2, p) => s2 + (p.cortina?.montantesM ?? 0), 0),
+      porCortina: ["VIDRO", "ACM", "POLICARBONATO"].map((painel) => {
+        const ps = paredes.filter((p) => p.cortina?.painel === painel);
+        return { painel, areaM2: ps.reduce((s2, p) => s2 + p.cortina.areaM2, 0), paineis: ps.reduce((s2, p) => s2 + p.cortina.paineis, 0), montantesM: ps.reduce((s2, p) => s2 + p.cortina.montantesM, 0), paredes: ps.length };
+      }).filter((x) => x.paredes > 0),
+      areaBriseM2: paredes.reduce((s2, p) => s2 + (p.brise?.areaM2 ?? 0), 0),
+      laminasDeBrise: paredes.reduce((s2, p) => s2 + (p.brise?.laminas ?? 0), 0),
       porMaterial,
       porAcabamento,
       comprimentoGuardaCorpoM: guardaCorpos.filter((g) => g.tipo === "GUARDA_CORPO").reduce((s2, g) => s2 + g.comprimentoM, 0),
@@ -3445,7 +3470,8 @@ function segmentosDoEletroduto(t, peDireitoMm) {
 
 // utils/blueprintIfc.ts
 var COBERTURA_IFC = [
-  "CONT\xC9M: pavimentos (IfcBuildingStorey), paredes (IfcWall \u2014 eixo, espessura e altura; com IfcMaterialLayerSetUsage quando a composi\xE7\xE3o em camadas foi declarada) e ambientes (IfcSpace \u2014 contorno e \xE1rea).",
+  "CONT\xC9M: pavimentos (IfcBuildingStorey), paredes (IfcWall \u2014 eixo, espessura e altura; com IfcMaterialLayerSetUsage quando a composi\xE7\xE3o em camadas foi declarada; IfcCurtainWall quando marcada como cortina de vidro) e ambientes (IfcSpace \u2014 contorno e \xE1rea).",
+  "N\xC3O CONT\xC9M brises (P2.20): ficam no quantitativo e no or\xE7amento, n\xE3o no modelo IFC.",
   "CONT\xC9M portas e janelas: IfcDoor e IfcWindow, cada uma com o pr\xF3prio IfcOpeningElement (IfcRelVoidsElement na parede, IfcRelFillsElement no v\xE3o). V\xE3o livre sai s\xF3 como IfcOpeningElement, sem preenchimento. A folha \xE9 uma caixa simples na espessura da parede.",
   "CONT\xC9M estrutura de concreto: IfcColumn (pilar), IfcBeam (viga), IfcSlab (laje), IfcPile (estaca), IfcFooting (bloco de coroamento e viga de funda\xE7\xE3o).",
   "CONT\xC9M propriedades e quantidades: Pset_*Common s\xF3 com o que o desenho sabe derivar (IsExternal, LoadBearing), Pset_OpuraPlanta com a identidade e a proced\xEAncia de cada elemento, e Qto_*BaseQuantities calculadas pelo mesmo motor da aba Quantitativos.",
@@ -4239,8 +4265,10 @@ function emitirParede(w, ctx, localNivel, paredesDoNivel) {
   const localParede = emitir(`IFCLOCALPLACEMENT(${localNivel},${eixoParede})`);
   const tag = w.uid ? s(rotuloCurto(w.uid, "wall")) : "$";
   const produto = emitir(
-    `IFCWALL(${guidDe(w.uid, `par-${w.id}`)},${historico},${s(
-      w.camadas?.length ? `Parede ${w.thicknessMm} mm (${w.camadas.length} camadas)` : `Parede ${w.thicknessMm} mm`
+    // CORTINA DE VIDRO (P2.20): a pele de vidro é IfcCurtainWall, com a mesma
+    // geometria (o volume é o do plano dos montantes). O brise não sai no IFC.
+    (w.cortina ? `IFCCURTAINWALL(` : `IFCWALL(`) + `${guidDe(w.uid, `par-${w.id}`)},${historico},${s(
+      w.cortina ? `Cortina de ${w.cortina.painel.toLowerCase()} \xB7 m\xF3dulo ${w.cortina.moduloMm} mm` : w.camadas?.length ? `Parede ${w.thicknessMm} mm (${w.camadas.length} camadas)` : `Parede ${w.thicknessMm} mm`
     )},$,$,${localParede},${produtoForma},${tag},.NOTDEFINED.)`
   );
   return { produto, localParede, avA, comp };

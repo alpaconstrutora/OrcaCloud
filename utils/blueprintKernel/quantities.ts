@@ -18,7 +18,7 @@
  * ligada ao snapshot que a originou.
  */
 
-import type { AcabamentosDoAmbiente, BlueprintModel, FaseDeReforma, FuncaoCamada, Level, MaterialDeGuardaCorpo, Opening, Rodape, Space, Structural, StructuralKind, TipoDeGuardaCorpo, Wall } from './model';
+import type { AcabamentosDoAmbiente, BlueprintModel, PainelDeCortina, OrientacaoDeBrise, FaseDeReforma, FuncaoCamada, Level, MaterialDeGuardaCorpo, Opening, Rodape, Space, Structural, StructuralKind, TipoDeGuardaCorpo, Wall } from './model';
 import { areaDaSecaoT, perimetroDeFormaDaSecaoT, secaoTValida } from './secaoT';
 import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural, acabamentosDoAmbiente, comprimentoDoGuardaCorpo, faseDe } from './model';
 import { contornoExternoDoNivel } from './arrangement';
@@ -171,7 +171,7 @@ export interface QuantityPolicy {
  * código). Desenho sem peça não muda de número.
  */
 export const POLITICA_PADRAO: QuantityPolicy = {
-  version: 'quant-1.14.0',
+  version: 'quant-1.15.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -358,6 +358,15 @@ export interface QuantidadeParede {
    * porque alguém afrouxou o invariante, e o sintoma apareceria no orçamento.
    */
   camadas: QuantidadeCamada[];
+  /**
+   * CORTINA DE VIDRO (quant-1.15.0, P2.20): a parede é pele de vidro — m² de
+   * painel (a face líquida), nº de painéis e metros de montante (verticais a
+   * cada módulo + duas travessas). Quando presente, `volumeM3` é 0: não há
+   * alvenaria a comprar. Ausente = parede opaca.
+   */
+  cortina?: { painel: PainelDeCortina; areaM2: number; paineis: number; montantesM: number };
+  /** BRISE (quant-1.15.0): m² de fachada sombreada, nº de lâminas e metros de lâmina. */
+  brise?: { orientacao: OrientacaoDeBrise; areaM2: number; laminas: number; comprimentoLaminasM: number };
 }
 
 export interface QuantidadeAbertura {
@@ -682,6 +691,12 @@ export interface Quantitativos {
      * que é onde a distinção passou a existir de verdade.
      */
     volumeAlvenariaM3: number;
+    /** CORTINA DE VIDRO e BRISE (quant-1.15.0, P2.20). */
+    areaCortinaM2: number;
+    comprimentoMontantesM: number;
+    porCortina: { painel: PainelDeCortina; areaM2: number; paineis: number; montantesM: number; paredes: number }[];
+    areaBriseM2: number;
+    laminasDeBrise: number;
     /**
      * Volume e área por material, do desenho inteiro. Vazio sem composição.
      *
@@ -1152,9 +1167,25 @@ export function computeQuantities(
       areaFaceBrutaM2: (bruta / MM2_PARA_M2),
       areaAberturasM2: (areaAberturasMm2 / MM2_PARA_M2),
       areaFaceLiquidaM2: (liquidaMm2 / MM2_PARA_M2),
-      volumeM3: ((liquidaMm2 * w.thicknessMm) / MM3_PARA_M3),
+      // CORTINA (P2.20): pele de vidro não tem alvenaria.
+      volumeM3: w.cortina ? 0 : ((liquidaMm2 * w.thicknessMm) / MM3_PARA_M3),
       volumeCedidoM3: cedidoMm3 / MM3_PARA_M3,
-      camadas,
+      camadas: w.cortina ? [] : camadas,
+      ...(w.cortina
+        ? (() => {
+            const paineis = Math.max(1, Math.ceil(compMm / w.cortina.moduloMm));
+            const montantesM = ((paineis + 1) * w.heightMm + 2 * compMm) / 1000;
+            return { cortina: { painel: w.cortina.painel, areaM2: liquidaMm2 / MM2_PARA_M2, paineis, montantesM: Math.round(montantesM * 100) / 100 } };
+          })()
+        : {}),
+      ...(w.brise
+        ? (() => {
+            const b = w.brise;
+            const laminas = b.orientacao === 'HORIZONTAL' ? Math.max(1, Math.floor(w.heightMm / b.passoMm)) : Math.max(1, Math.floor(compMm / b.passoMm));
+            const compLaminaMm = b.orientacao === 'HORIZONTAL' ? compMm : w.heightMm;
+            return { brise: { orientacao: b.orientacao, areaM2: bruta / MM2_PARA_M2, laminas, comprimentoLaminasM: Math.round(((laminas * compLaminaMm) / 1000) * 100) / 100 } };
+          })()
+        : {}),
     };
   });
   // FASES DE REFORMA (E10.2): daqui para baixo, `paredes` são as que se CONSTROEM.
@@ -1632,6 +1663,16 @@ export function computeQuantities(
       // Duas faces: é o que se reveste e se pinta dos dois lados.
       areaParedeDuasFacesM2: (somaFace * 2),
       volumeAlvenariaM3: (paredes.reduce((s, p) => s + p.volumeM3, 0)),
+      areaCortinaM2: paredes.reduce((s, p) => s + (p.cortina?.areaM2 ?? 0), 0),
+      comprimentoMontantesM: paredes.reduce((s, p) => s + (p.cortina?.montantesM ?? 0), 0),
+      porCortina: (['VIDRO', 'ACM', 'POLICARBONATO'] as PainelDeCortina[])
+        .map((painel) => {
+          const ps = paredes.filter((p) => p.cortina?.painel === painel);
+          return { painel, areaM2: ps.reduce((s, p) => s + p.cortina!.areaM2, 0), paineis: ps.reduce((s, p) => s + p.cortina!.paineis, 0), montantesM: ps.reduce((s, p) => s + p.cortina!.montantesM, 0), paredes: ps.length };
+        })
+        .filter((x) => x.paredes > 0),
+      areaBriseM2: paredes.reduce((s, p) => s + (p.brise?.areaM2 ?? 0), 0),
+      laminasDeBrise: paredes.reduce((s, p) => s + (p.brise?.laminas ?? 0), 0),
       porMaterial,
       porAcabamento,
       comprimentoGuardaCorpoM: guardaCorpos.filter((g) => g.tipo === 'GUARDA_CORPO').reduce((s, g) => s + g.comprimentoM, 0),

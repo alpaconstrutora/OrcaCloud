@@ -12,7 +12,7 @@
  * componente foi o que tornou a interação testável.
  */
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 import PainelParedeSelecionada from '../../components/blueprint/PainelParedeSelecionada';
@@ -560,5 +560,36 @@ describe('PainelParedeSelecionada · identificador (§27)', () => {
   it('sem uid (modelo de teste) a linha não existe', () => {
     montar();
     expect(screen.queryByText(/identificador/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * CORTINA DE VIDRO E BRISE (21/09/2026, backlog P2 — P2.20): a seção Fachada
+ * só aparece com os dois callbacks; marcar a cortina emite os padrões; os
+ * campos editam por cima; desmarcar emite null. Idem para o brise.
+ */
+describe('PainelParedeSelecionada · fachada (P2.20)', () => {
+  it('sem callbacks não há seção; com eles, cortina e brise ligam/desligam e editam', async () => {
+    const { container } = render(<PainelParedeSelecionada parede={parede()} abertura={null} pontaQueAnda={null} arrastaCanto={false} onComprimento={vi.fn()} onEspessura={vi.fn()} podeUnir={false} onDividir={vi.fn()} onUnir={vi.fn()} onFlipAbertura={vi.fn()} onTamanhoAbertura={vi.fn()} onEscolherPonta={vi.fn()} onDestacarPonta={vi.fn()} aLivre bLivre />);
+    expect(container.querySelector('[data-testid="secao-fachada"]')).toBeNull();
+    const onCortina = vi.fn();
+    const onBrise = vi.fn();
+    const props = montar({ onCortina, onBrise });
+    void props;
+    const user = userEvent.setup();
+    const secao = screen.getAllByTestId('secao-fachada').at(-1)!;
+    await user.click(within(secao).getByLabelText('Cortina de vidro'));
+    expect(onCortina).toHaveBeenLastCalledWith({ moduloMm: 1200, montanteMm: 60, painel: 'VIDRO' });
+    await user.click(within(secao).getByLabelText('Brise'));
+    expect(onBrise).toHaveBeenLastCalledWith({ orientacao: 'HORIZONTAL', laminaMm: 150, passoMm: 300, afastamentoMm: 300, lado: 'DIREITA' });
+    // Com a cortina já na parede, os campos aparecem e editam.
+    cleanup();
+    const onCortina2 = vi.fn();
+    montar({ onCortina: onCortina2, onBrise: vi.fn(), parede: parede({ cortina: { moduloMm: 1200, montanteMm: 60, painel: 'VIDRO' } }) });
+    const campos = screen.getByTestId('campos-da-cortina');
+    await user.selectOptions(within(campos).getByLabelText('Painel da cortina'), 'ACM');
+    expect(onCortina2).toHaveBeenLastCalledWith({ moduloMm: 1200, montanteMm: 60, painel: 'ACM' });
+    await user.click(screen.getByLabelText('Cortina de vidro'));
+    expect(onCortina2).toHaveBeenLastCalledWith(null);
   });
 });

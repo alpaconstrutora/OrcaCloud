@@ -82,7 +82,7 @@ describe('guarda-corpo e corrimão (E7.3)', () => {
   });
 
   it('quantitativo 1.12.0 + orçamento: metros por tipo, área = comprimento × altura, porGuardaCorpo; de-para M/M2; linha direta por item (M leva metros, M2 leva área, UN é divergência)', () => {
-    expect(POLITICA_PADRAO.version).toBe('quant-1.14.0');
+    expect(POLITICA_PADRAO.version).toBe('quant-1.15.0');
     const { m, t } = doisPavimentos();
     const com = applyBatch(m, [
       { type: 'AddGuardaCorpo', levelId: t, tipo: 'GUARDA_CORPO', pontos: [point(0, 0), point(3000, 0), point(3000, 4000)], material: 'VIDRO', itemCode: 'VD', descricao: 'Vidro' },

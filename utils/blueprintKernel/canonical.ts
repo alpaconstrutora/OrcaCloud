@@ -46,6 +46,8 @@
  */
 
 import {
+  type PainelDeCortina,
+  type OrientacaoDeBrise,
   type MaterialDeSubRegiao,
   type BlueprintModel,
   type BoundaryKind,
@@ -192,6 +194,9 @@ function projetar(model: BlueprintModel): {
       // reta não ganha chave. É conteúdo (o canvas desenha o arco e o painel o
       // reconhece), então entra no hash.
       arco: w.arco ? { centro: { x: w.arco.centro.x, y: w.arco.centro.y }, raioMm: w.arco.raioMm } : undefined,
+      // CORTINA DE VIDRO e BRISE (0.54.0): só quando existem.
+      cortina: w.cortina ? { moduloMm: w.cortina.moduloMm, montanteMm: w.cortina.montanteMm, painel: w.cortina.painel } : undefined,
+      brise: w.brise ? { orientacao: w.brise.orientacao, laminaMm: w.brise.laminaMm, passoMm: w.brise.passoMm, afastamentoMm: w.brise.afastamentoMm, lado: w.brise.lado } : undefined,
       parametros: parametrosCanonicos(w.parametros),
       // A COMPOSIÇÃO. Mesma disciplina das três chaves acima: emitida só quando
       // existe, para não acrescentar `camadas` a toda parede homogênea do
@@ -1042,6 +1047,10 @@ export interface CanonicalPayload {
     cedeSobreposicao?: boolean;
     /** Ausente sob kernel < 0.48.0 e em toda parede RETA. Faceta de parede curva: o círculo dela. */
     arco?: { centro: { x: number; y: number }; raioMm: number };
+    /** Ausente sob kernel < 0.54.0 e em toda parede opaca. */
+    cortina?: { moduloMm: number; montanteMm: number; painel: PainelDeCortina };
+    /** Ausente sob kernel < 0.54.0 e em parede sem brise. */
+    brise?: { orientacao: OrientacaoDeBrise; laminaMm: number; passoMm: number; afastamentoMm: number; lado: 'ESQUERDA' | 'DIREITA' };
     /**
      * Ausente sob kernel < 0.11.0 e em toda parede HOMOGÊNEA. Nunca `[]` — lista
      * vazia é recusada pelos invariantes, para não haver duas escritas do mesmo
@@ -1475,6 +1484,8 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       ...(w.cedeSobreposicao ? { cedeSobreposicao: true } : {}),
       ...(w.fase ? { fase: w.fase } : {}),
       ...(w.arco ? { arco: { centro: { x: w.arco.centro.x, y: w.arco.centro.y }, raioMm: w.arco.raioMm } } : {}),
+      ...(w.cortina ? { cortina: { moduloMm: w.cortina.moduloMm, montanteMm: w.cortina.montanteMm, painel: w.cortina.painel } } : {}),
+      ...(w.brise ? { brise: { orientacao: w.brise.orientacao, laminaMm: w.brise.laminaMm, passoMm: w.brise.passoMm, afastamentoMm: w.brise.afastamentoMm, lado: w.brise.lado } } : {}),
       ...(w.parametros && Object.keys(w.parametros).length > 0 ? { parametros: { ...w.parametros } } : {}),
       // Idem: ausente (e `[]`, que payload nenhum deveria ter) não volta como
       // lista vazia, volta como nada — parede homogênea, que é o que um payload

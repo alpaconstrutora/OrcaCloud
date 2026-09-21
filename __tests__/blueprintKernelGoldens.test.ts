@@ -194,6 +194,17 @@
  *   tem instalação, então nenhuma delas ganha chave — só a versão embutida no
  *   payload mudou.
  *
+ *   0.53.0 → 0.54.0 (21/09/2026): CORTINA DE VIDRO E BRISE (backlog P2 —
+ *   P2.20) — `cortina: {moduloMm, montanteMm, painel}` e `brise: {orientacao,
+ *   laminaMm, passoMm, afastamentoMm, lado}` na parede, só quando existem
+ *   (parede opaca sem brise não ganha chave). Nenhum dos seis casos tem. Mesma
+ *   prova, refeita antes de tocar num hash: com a string em 0.53.0 e tudo JÁ no
+ *   lugar (modelo, comandos SetWallCortina/SetWallBrise, invariantes
+ *   `BAD_CURTAIN`/`BAD_BRISE`, MergeWalls recusando pele diferente, canônico ida
+ *   e volta, quantitativo quant-1.14.0 → 1.15.0 com painéis/montantes/lâminas e
+ *   sem alvenaria na cortina, IfcCurtainWall), 398 testes de kernel/canônico/
+ *   goldens/IFC/quantitativos/orçamento passaram; só depois do bump as seis
+ *   falhas foram todas de hash.
  *   0.52.0 → 0.53.0 (21/09/2026): SUB-REGIÕES DO TERRENO (backlog P2 — P2.19) —
  *   família `subRegioes: [{level, material, pontos[], nome}]` (polígono do
  *   lote com material de superfície; permeável ou não), identidade
@@ -612,17 +623,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '0f251fb889dc85bedbc6ea1228beaa79759ca892c26483e81226ca5d1a18f0d8',
+    hash: 'bc793314ec84c84e20310a915d8e10aa72431956cb515d78855a00c75492a84d',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '97190cb3a01537a43791a7213fca69164c2380f433d65c83ec735acf8c1f0a39',
+    hash: '99e8f57b1b96fa2130191cea5b9d0c7c7d96d0460baf12ace997d3b67610be10',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: 'c147f685abc3893af0be83a8fa27c7a09eae7587fa0515aeac594973b66c6924',
+    hash: '720ba748f70197bf95980d2bc80039f8f8bbd56c536122f59b7d3bc72b618440',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -630,7 +641,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '17acc58df16de52b541198e4ed88e53351cfbf456d97680cb4bc3df8f95e39f7',
+    hash: '9d4427fd314a0abc9bf1c7925bcef52d618940b7adf899139052ef9ffa58c17d',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -640,7 +651,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: 'defcc05542846df81bd0819070d16f2a7093ab2e1c53261414283b13e55bef34',
+    hash: '6b8e88632dc729046ae3153ae873a4511ef65b2140b0e5aa94f04ab74bd5ce60',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -651,7 +662,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: 'ae7528dd2bbe0064debe2fd960305e431473968d899d6bfad519c9174b1d3386',
+    hash: '9b009c29947ebba7973be53cb24a49897063415bc39d074aabfad92923092df8',
   },
 };
 

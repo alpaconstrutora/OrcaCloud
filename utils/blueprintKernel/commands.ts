@@ -31,6 +31,8 @@ import {
   clonarCamadas,
   clonarArco,
   type ArcoDaParede,
+  type CortinaDeVidro,
+  type Brise,
   type RevisaoDaNuvem,
   findVistaDependente,
   findSubRegiao,
@@ -177,6 +179,10 @@ export type Command =
        */
       uid?: ElementUid;
     }
+  /** CORTINA DE VIDRO (0.54.0, P2.20): `null` volta a parede opaca. */
+  | { type: 'SetWallCortina'; wallId: ObjectId; cortina: CortinaDeVidro | null }
+  /** BRISE (0.54.0, P2.20): `null` tira o brise. */
+  | { type: 'SetWallBrise'; wallId: ObjectId; brise: Brise | null }
   /**
    * PAREDE CURVA (0.48.0, P2.12): arco por três pontos — início, fim e um
    * ponto por onde passa — gravado como N paredes retas (facetas) com o
@@ -1215,6 +1221,22 @@ function aplicarSemHash(
           : {}),
       });
       diff.created.push(id);
+      break;
+    }
+
+    case 'SetWallCortina': {
+      const w = findWall(next, command.wallId);
+      if (command.cortina) w.cortina = { moduloMm: assertIntegerMm(roundToMm(command.cortina.moduloMm), 'moduloMm'), montanteMm: assertIntegerMm(roundToMm(command.cortina.montanteMm), 'montanteMm'), painel: command.cortina.painel };
+      else delete w.cortina;
+      diff.updated.push(w.id);
+      break;
+    }
+
+    case 'SetWallBrise': {
+      const w = findWall(next, command.wallId);
+      if (command.brise) w.brise = { orientacao: command.brise.orientacao, laminaMm: assertIntegerMm(roundToMm(command.brise.laminaMm), 'laminaMm'), passoMm: assertIntegerMm(roundToMm(command.brise.passoMm), 'passoMm'), afastamentoMm: assertIntegerMm(roundToMm(command.brise.afastamentoMm), 'afastamentoMm'), lado: command.brise.lado };
+      else delete w.brise;
+      diff.updated.push(w.id);
       break;
     }
 
@@ -3617,6 +3639,10 @@ function aplicarSemHash(
       if (assinaturaDasCamadas(first.camadas) !== assinaturaDasCamadas(second.camadas)) {
         throw new KernelError('MERGE_LAYERS_MISMATCH', 'Composições de camadas diferentes');
       }
+      // CORTINA/BRISE (P2.20): pele diferente não se une — uma seria apagada em silêncio.
+      if (JSON.stringify(first.cortina ?? null) !== JSON.stringify(second.cortina ?? null) || JSON.stringify(first.brise ?? null) !== JSON.stringify(second.brise ?? null)) {
+        throw new KernelError('MERGE_SKIN_MISMATCH', 'Cortina de vidro ou brise diferentes');
+      }
       if (!areCollinear(first.a, first.b, second.a) || !areCollinear(first.a, first.b, second.b)) {
         throw new KernelError('MERGE_NOT_COLLINEAR', 'Paredes não são colineares');
       }
@@ -4720,10 +4746,12 @@ export function sincronizarGrupos(next: BlueprintModel, diff: Diff, copiasAntes:
           // PAREDE CURVA: a instância leva o centro transformado; espelho e giro
           // preservam o raio.
           ...(w.arco ? { arco: { centro: T(w.arco.centro), raioMm: w.arco.raioMm } } : {}),
+          ...(w.cortina ? { cortina: { ...w.cortina } } : {}),
+          ...(w.brise ? { brise: { ...w.brise } } : {}),
         };
         const existente = paredePorUid.get(uid);
         if (existente) {
-          for (const k of ['alinhamento', 'cedeSobreposicao', 'fase', 'camadas', 'parametros', 'arco'] as const) if (!(k in campos)) delete existente[k];
+          for (const k of ['alinhamento', 'cedeSobreposicao', 'fase', 'camadas', 'parametros', 'arco', 'cortina', 'brise'] as const) if (!(k in campos)) delete existente[k];
           Object.assign(existente, campos);
           dePara.set(w.id, existente.id);
           tocar(diff.updated, existente.id);
@@ -4870,10 +4898,12 @@ export function sincronizarPavimentosVinculados(next: BlueprintModel, diff: Diff
         ...(w.camadas ? { camadas: clonarCamadas(w.camadas)! } : {}),
         ...(w.parametros ? { parametros: { ...w.parametros } } : {}),
         ...(w.arco ? { arco: { centro: { x: w.arco.centro.x, y: w.arco.centro.y }, raioMm: w.arco.raioMm } } : {}),
+        ...(w.cortina ? { cortina: { ...w.cortina } } : {}),
+        ...(w.brise ? { brise: { ...w.brise } } : {}),
       };
       if (existente) {
-        Object.assign(existente, { ...campos, alinhamento: campos.alinhamento, cedeSobreposicao: campos.cedeSobreposicao, camadas: campos.camadas, parametros: campos.parametros, arco: campos.arco });
-        for (const k of ['alinhamento', 'cedeSobreposicao', 'camadas', 'parametros', 'arco'] as const) if (existente[k] === undefined) delete existente[k];
+        Object.assign(existente, { ...campos, alinhamento: campos.alinhamento, cedeSobreposicao: campos.cedeSobreposicao, camadas: campos.camadas, parametros: campos.parametros, arco: campos.arco, cortina: campos.cortina, brise: campos.brise });
+        for (const k of ['alinhamento', 'cedeSobreposicao', 'camadas', 'parametros', 'arco', 'cortina', 'brise'] as const) if (existente[k] === undefined) delete existente[k];
         dePara.set(w.id, existente.id);
         tocar(diff.updated, existente.id);
       } else {

@@ -927,7 +927,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, en
         // Uma parede vira VÁRIOS pedaços quando o concreto a interrompe, e todos
         // são a mesma parede — logo, a mesma cor.
         .flatMap((w) =>
-          geometriaDaParede(model, w, ocultos).map((g) => ({ ...g, uid: w.uid, id: w.id })),
+          geometriaDaParede(model, w, ocultos).map((g) => ({ ...g, uid: w.uid, id: w.id, cortina: !!w.cortina })),
         ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [model, levelIds?.join(','), chaveOcultos],
@@ -1391,13 +1391,16 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, en
                 ? COR_SELECIONADA
                 : estilo === 'LINHA_OCULTA'
                   ? '#ffffff'
-                  : (coresPorUid?.get(p.uid) ?? ((p.funcao && COR_CAMADA_3D[p.funcao]) || '#e2e8f0'))
+                  : p.cortina
+                    ? '#7dd3fc'
+                    : (coresPorUid?.get(p.uid) ?? ((p.funcao && COR_CAMADA_3D[p.funcao]) || '#e2e8f0'))
             }
-            roughness={estilo === 'LINHA_OCULTA' ? 1 : 0.85}
+            roughness={estilo === 'LINHA_OCULTA' ? 1 : p.cortina ? 0.15 : 0.85}
             side={THREE.DoubleSide}
-            transparent={estilo === 'TRANSPARENTE'}
-            opacity={estilo === 'TRANSPARENTE' ? 0.35 : 1}
-            depthWrite={estilo !== 'TRANSPARENTE'}
+            // CORTINA DE VIDRO (P2.20): translúcida em qualquer estilo — é vidro.
+            transparent={estilo === 'TRANSPARENTE' || p.cortina}
+            opacity={estilo === 'TRANSPARENTE' ? 0.35 : p.cortina ? 0.45 : 1}
+            depthWrite={estilo !== 'TRANSPARENTE' && !p.cortina}
           />
           {(mostrarArestas || estilo === 'LINHA_OCULTA') && <Edges color={estilo === 'LINHA_OCULTA' ? '#0f172a' : '#475569'} threshold={20} />}
         </mesh>

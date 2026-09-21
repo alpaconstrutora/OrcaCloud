@@ -70,7 +70,7 @@ describe('fases de reforma (E10.2)', () => {
     ]).model;
     const antes = computeQuantities(m, POLITICA_PADRAO, KERNEL_VERSION);
     const depois = computeQuantities(marcado, POLITICA_PADRAO, KERNEL_VERSION);
-    expect(depois.policy.version).toBe('quant-1.14.0');
+    expect(depois.policy.version).toBe('quant-1.15.0');
     expect(depois.paredes).toHaveLength(5); // a lista continua inteira…
     expect(depois.paredes.map((p) => p.fase).sort()).toEqual(['DEMOLIR', 'EXISTENTE', 'NOVO', 'NOVO', 'NOVO']);
     // …mas os totais só têm as 3 novas.

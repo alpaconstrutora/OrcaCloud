@@ -250,7 +250,49 @@ export interface Wall {
    * arco têm o mesmo (centro, raio) no mesmo pavimento; não há id de arco.
    */
   arco?: ArcoDaParede;
+  /**
+   * CORTINA DE VIDRO (0.54.0, backlog P2 — P2.20): esta parede é uma pele de
+   * vidro (painéis entre montantes), não alvenaria. A geometria continua a da
+   * parede (eixo, espessura = profundidade do montante, altura); o que muda é
+   * o que ela É: no quantitativo vira m² de painel e metros de montante, sem
+   * volume de alvenaria; no IFC é `IfcCurtainWall`; no 3D é vidro. Ausente =
+   * parede opaca, como sempre foi.
+   */
+  cortina?: CortinaDeVidro;
+  /**
+   * BRISE (0.54.0, P2.20): lâminas de sombreamento numa das FACES da parede,
+   * afastadas dela. Não muda a parede; é uma segunda pele que se compra por
+   * m² de fachada e por lâmina. Ausente = sem brise.
+   */
+  brise?: Brise;
 }
+
+export const PAINEIS_DE_CORTINA = ['VIDRO', 'ACM', 'POLICARBONATO'] as const;
+export type PainelDeCortina = (typeof PAINEIS_DE_CORTINA)[number];
+export const ROTULO_DO_PAINEL_DE_CORTINA: Record<PainelDeCortina, string> = { VIDRO: 'Vidro', ACM: 'ACM (alumínio composto)', POLICARBONATO: 'Policarbonato' };
+export interface CortinaDeVidro {
+  /** Largura de cada painel entre montantes, mm inteiro ≥ 300. */
+  moduloMm: number;
+  /** Largura do montante, mm inteiro ≥ 20 e < módulo. */
+  montanteMm: number;
+  painel: PainelDeCortina;
+}
+export const ORIENTACOES_DE_BRISE = ['HORIZONTAL', 'VERTICAL'] as const;
+export type OrientacaoDeBrise = (typeof ORIENTACOES_DE_BRISE)[number];
+export interface Brise {
+  orientacao: OrientacaoDeBrise;
+  /** Largura da lâmina, mm inteiro ≥ 20. */
+  laminaMm: number;
+  /** Passo entre lâminas (eixo a eixo), mm inteiro ≥ lâmina. */
+  passoMm: number;
+  /** Afastamento da face da parede, mm inteiro ≥ 0. */
+  afastamentoMm: number;
+  /** A face — relativa ao sentido `a → b`, como `alinhamento` e as camadas. */
+  lado: 'ESQUERDA' | 'DIREITA';
+}
+export const MIN_MODULO_DE_CORTINA_MM = 300;
+export const MIN_MONTANTE_MM = 20;
+export const MIN_LAMINA_DE_BRISE_MM = 20;
 
 /** O círculo de uma faceta de parede curva. Inteiros em mm. */
 export interface ArcoDaParede {
@@ -2684,6 +2726,8 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
       b: { ...w.b },
       ...(w.camadas ? { camadas: clonarCamadas(w.camadas)! } : {}),
       ...clonarArco(w.arco),
+      ...(w.cortina ? { cortina: { ...w.cortina } } : {}),
+      ...(w.brise ? { brise: { ...w.brise } } : {}),
     })),
     // `esquadria` copiada a fundo pela razão de `camadas`: um `...o` cru deixaria
     // o objeto compartilhado entre o modelo novo e o antigo, e aplicar um tipo
@@ -3994,6 +4038,21 @@ export function assertModelInvariants(model: BlueprintModel): void {
     // consistência com as pontas NÃO é invariante — é `retirarArcosDesfeitos`
     // quem tira o metadado de uma faceta que saiu do círculo, para que um
     // payload antigo ou um vértice movido nunca derrubem o modelo inteiro.
+    // CORTINA DE VIDRO e BRISE (0.54.0): medidas inteiras e coerentes.
+    if (wall.cortina !== undefined) {
+      const c = wall.cortina;
+      if (!PAINEIS_DE_CORTINA.includes(c.painel)) throw new KernelError('BAD_CURTAIN', `Parede ${wall.id}: painel de cortina desconhecido ${String(c.painel)}`);
+      if (!Number.isInteger(c.moduloMm) || c.moduloMm < MIN_MODULO_DE_CORTINA_MM) throw new KernelError('BAD_CURTAIN', `Parede ${wall.id}: módulo da cortina tem de ser inteiro ≥ ${MIN_MODULO_DE_CORTINA_MM} mm`);
+      if (!Number.isInteger(c.montanteMm) || c.montanteMm < MIN_MONTANTE_MM || c.montanteMm >= c.moduloMm) throw new KernelError('BAD_CURTAIN', `Parede ${wall.id}: montante tem de ser inteiro entre ${MIN_MONTANTE_MM} mm e o módulo`);
+    }
+    if (wall.brise !== undefined) {
+      const b = wall.brise;
+      if (!ORIENTACOES_DE_BRISE.includes(b.orientacao)) throw new KernelError('BAD_BRISE', `Parede ${wall.id}: orientação de brise desconhecida ${String(b.orientacao)}`);
+      if (b.lado !== 'ESQUERDA' && b.lado !== 'DIREITA') throw new KernelError('BAD_BRISE', `Parede ${wall.id}: lado do brise tem de ser ESQUERDA ou DIREITA`);
+      if (!Number.isInteger(b.laminaMm) || b.laminaMm < MIN_LAMINA_DE_BRISE_MM) throw new KernelError('BAD_BRISE', `Parede ${wall.id}: lâmina do brise tem de ser inteira ≥ ${MIN_LAMINA_DE_BRISE_MM} mm`);
+      if (!Number.isInteger(b.passoMm) || b.passoMm < b.laminaMm) throw new KernelError('BAD_BRISE', `Parede ${wall.id}: passo do brise tem de ser inteiro ≥ lâmina`);
+      if (!Number.isInteger(b.afastamentoMm) || b.afastamentoMm < 0) throw new KernelError('BAD_BRISE', `Parede ${wall.id}: afastamento do brise tem de ser inteiro ≥ 0`);
+    }
     if (wall.arco !== undefined) {
       if (!Number.isInteger(wall.arco.raioMm) || wall.arco.raioMm <= 0) {
         throw new KernelError('BAD_ARC', `Raio do arco inválido em ${wall.id}: ${wall.arco.raioMm}`);

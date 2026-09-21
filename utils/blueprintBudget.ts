@@ -132,6 +132,28 @@ export const MEDIDAS: DefinicaoMedida[] = [
     dimensao: 'M2',
     descricao: 'O que se reveste e se pinta dos dois lados. Uma face subestima pela metade.',
   },
+  // CORTINA DE VIDRO e BRISE (P2.20): a pele da fachada, à parte da alvenaria.
+  {
+    id: 'AREA_CORTINA',
+    rotulo: 'Cortina de vidro (painéis)',
+    escopo: 'PAREDE',
+    dimensao: 'M2',
+    descricao: 'm² de painel das paredes marcadas como cortina de vidro (face líquida), uma linha por parede; o filtro casa com o painel (vidro, ACM, policarbonato).',
+  },
+  {
+    id: 'COMPRIMENTO_MONTANTE',
+    rotulo: 'Montantes e travessas da cortina',
+    escopo: 'PAREDE',
+    dimensao: 'M',
+    descricao: 'Metros de perfil da cortina de vidro: um montante por módulo mais os das pontas, e duas travessas (base e topo).',
+  },
+  {
+    id: 'AREA_BRISE',
+    rotulo: 'Brise (fachada sombreada)',
+    escopo: 'PAREDE',
+    dimensao: 'M2',
+    descricao: 'm² de fachada com brise (comprimento × altura da parede), uma linha por parede; as lâminas ficam nas variáveis.',
+  },
   {
     id: 'COMPRIMENTO_PAREDE',
     rotulo: 'Comprimento de parede',
@@ -598,6 +620,27 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
           },
         }));
 
+    case 'AREA_CORTINA':
+    case 'COMPRIMENTO_MONTANTE':
+      return quant.paredes
+        .filter((p) => p.cortina && combina(p.cortina.painel))
+        .map((p) => ({
+          ref: p.uid,
+          rotulo: `Cortina ${p.cortina!.painel.toLowerCase()} ${p.comprimentoM.toFixed(2)} m · ${p.cortina!.paineis} painel(is)`,
+          valor: medidaId === 'AREA_CORTINA' ? p.cortina!.areaM2 : p.cortina!.montantesM,
+          formula: medidaId === 'AREA_CORTINA' ? 'comprimento × altura − aberturas' : '(painéis + 1) × altura + 2 × comprimento',
+          variaveis: { painel: p.cortina!.painel, paineis: p.cortina!.paineis, comprimentoM: p.comprimentoM, alturaM: p.alturaM, areaM2: p.cortina!.areaM2, montantesM: p.cortina!.montantesM },
+        }));
+    case 'AREA_BRISE':
+      return quant.paredes
+        .filter((p) => p.brise)
+        .map((p) => ({
+          ref: p.uid,
+          rotulo: `Brise ${p.brise!.orientacao.toLowerCase()} ${p.comprimentoM.toFixed(2)} m · ${p.brise!.laminas} lâmina(s)`,
+          valor: p.brise!.areaM2,
+          formula: 'comprimento × altura',
+          variaveis: { orientacao: p.brise!.orientacao, laminas: p.brise!.laminas, comprimentoLaminasM: p.brise!.comprimentoLaminasM, areaM2: p.brise!.areaM2 },
+        }));
     case 'AREA_PAREDE_UMA_FACE':
     case 'AREA_PAREDE_DUAS_FACES':
     case 'COMPRIMENTO_PAREDE':

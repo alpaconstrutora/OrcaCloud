@@ -3466,6 +3466,90 @@ export default function BlueprintCanvas({
       ctx.stroke();
     }
 
+    // CORTINA DE VIDRO e BRISE (P2.20): marcas por cima da parede — traços
+    // curtos a cada módulo (os montantes) e um azul leve no miolo; o brise é uma
+    // faixa tracejada afastada da face, com as lâminas riscadas.
+    for (const t of traco) {
+      if (t.comp < 0.5) continue;
+      const w = t.w;
+      if (w.cortina) {
+        const nx = -t.uy;
+        const ny = t.ux;
+        ctx.save();
+        ctx.strokeStyle = '#0284c7';
+        ctx.lineWidth = 1;
+        const meia = t.cheia / 2;
+        if (t.cheia >= 4) {
+          ctx.globalAlpha = 0.35;
+          ctx.fillStyle = '#bae6fd';
+          ctx.beginPath();
+          ctx.moveTo(t.a.x + nx * meia, t.a.y + ny * meia);
+          ctx.lineTo(t.b.x + nx * meia, t.b.y + ny * meia);
+          ctx.lineTo(t.b.x - nx * meia, t.b.y - ny * meia);
+          ctx.lineTo(t.a.x - nx * meia, t.a.y - ny * meia);
+          ctx.closePath();
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        const passoPx = w.cortina.moduloMm * vista.escala;
+        if (passoPx >= 4) {
+          for (let d = 0; d <= t.comp + 0.5; d += passoPx) {
+            const x = t.a.x + t.ux * Math.min(d, t.comp);
+            const y = t.a.y + t.uy * Math.min(d, t.comp);
+            ctx.beginPath();
+            ctx.moveTo(x + nx * (meia + 3), y + ny * (meia + 3));
+            ctx.lineTo(x - nx * (meia + 3), y - ny * (meia + 3));
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+      }
+      if (w.brise) {
+        const lado = w.brise.lado === 'DIREITA' ? 1 : -1;
+        // Normal à DIREITA de a→b em tela (y invertido): (uy, -ux)·lado.
+        const nx = t.uy * lado;
+        const ny = -t.ux * lado;
+        const meia = t.cheia / 2;
+        const afast = w.brise.afastamentoMm * vista.escala;
+        const larg = Math.max(3, w.brise.laminaMm * vista.escala);
+        const d0 = meia + afast;
+        const d1 = d0 + larg;
+        ctx.save();
+        ctx.strokeStyle = '#b45309';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(t.a.x + nx * d0, t.a.y + ny * d0);
+        ctx.lineTo(t.b.x + nx * d0, t.b.y + ny * d0);
+        ctx.moveTo(t.a.x + nx * d1, t.a.y + ny * d1);
+        ctx.lineTo(t.b.x + nx * d1, t.b.y + ny * d1);
+        ctx.stroke();
+        // Lâminas: verticais em planta são traços transversais a cada passo; horizontais, uma linha central tracejada.
+        if (w.brise.orientacao === 'VERTICAL') {
+          const passoPx = w.brise.passoMm * vista.escala;
+          if (passoPx >= 3) {
+            for (let d = passoPx / 2; d < t.comp; d += passoPx) {
+              const x = t.a.x + t.ux * d;
+              const y = t.a.y + t.uy * d;
+              ctx.beginPath();
+              ctx.moveTo(x + nx * d0, y + ny * d0);
+              ctx.lineTo(x + nx * d1, y + ny * d1);
+              ctx.stroke();
+            }
+          }
+        } else {
+          ctx.setLineDash([6, 3]);
+          const dm = (d0 + d1) / 2;
+          ctx.beginPath();
+          ctx.moveTo(t.a.x + nx * dm, t.a.y + ny * dm);
+          ctx.lineTo(t.b.x + nx * dm, t.b.y + ny * dm);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        ctx.restore();
+      }
+    }
+
     // Passada 3 — as CAMADAS, pintadas dentro do miolo já escavado.
     //
     // ─── POR QUE DEPOIS DA ESCAVAÇÃO, E NÃO ENTRE AS DUAS ────────────────────

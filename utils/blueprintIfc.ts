@@ -109,7 +109,8 @@ import {
  * Escrito para ser lido por quem RECEBE o arquivo, não por quem o gera.
  */
 export const COBERTURA_IFC = [
-  'CONTÉM: pavimentos (IfcBuildingStorey), paredes (IfcWall — eixo, espessura e altura; com IfcMaterialLayerSetUsage quando a composição em camadas foi declarada) e ambientes (IfcSpace — contorno e área).',
+  'CONTÉM: pavimentos (IfcBuildingStorey), paredes (IfcWall — eixo, espessura e altura; com IfcMaterialLayerSetUsage quando a composição em camadas foi declarada; IfcCurtainWall quando marcada como cortina de vidro) e ambientes (IfcSpace — contorno e área).',
+  'NÃO CONTÉM brises (P2.20): ficam no quantitativo e no orçamento, não no modelo IFC.',
   'CONTÉM portas e janelas: IfcDoor e IfcWindow, cada uma com o próprio IfcOpeningElement (IfcRelVoidsElement na parede, IfcRelFillsElement no vão). Vão livre sai só como IfcOpeningElement, sem preenchimento. A folha é uma caixa simples na espessura da parede.',
   'CONTÉM estrutura de concreto: IfcColumn (pilar), IfcBeam (viga), IfcSlab (laje), IfcPile (estaca), IfcFooting (bloco de coroamento e viga de fundação).',
   'CONTÉM propriedades e quantidades: Pset_*Common só com o que o desenho sabe derivar (IsExternal, LoadBearing), Pset_OpuraPlanta com a identidade e a procedência de cada elemento, e Qto_*BaseQuantities calculadas pelo mesmo motor da aba Quantitativos.',
@@ -1667,11 +1668,16 @@ function emitirParede(
   const tag = w.uid ? s(rotuloCurto(w.uid, 'wall')) : '$';
 
   const produto = emitir(
-    `IFCWALL(${guidDe(w.uid, `par-${w.id}`)},${historico},` +
+    // CORTINA DE VIDRO (P2.20): a pele de vidro é IfcCurtainWall, com a mesma
+    // geometria (o volume é o do plano dos montantes). O brise não sai no IFC.
+    (w.cortina ? `IFCCURTAINWALL(` : `IFCWALL(`) +
+      `${guidDe(w.uid, `par-${w.id}`)},${historico},` +
       `${s(
-        w.camadas?.length
-          ? `Parede ${w.thicknessMm} mm (${w.camadas.length} camadas)`
-          : `Parede ${w.thicknessMm} mm`,
+        w.cortina
+          ? `Cortina de ${w.cortina.painel.toLowerCase()} · módulo ${w.cortina.moduloMm} mm`
+          : w.camadas?.length
+            ? `Parede ${w.thicknessMm} mm (${w.camadas.length} camadas)`
+            : `Parede ${w.thicknessMm} mm`,
       )},$,$,` +
       `${localParede},${produtoForma},${tag},.NOTDEFINED.)`,
   );

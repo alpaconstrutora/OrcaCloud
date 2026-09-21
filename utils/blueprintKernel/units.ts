@@ -276,7 +276,7 @@
  * hash e a versão sobe. As duas chaves só são emitidas quando declaradas; os
  * goldens (só paredes) mudam apenas pela string da versão.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.53.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.54.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

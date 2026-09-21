@@ -6,6 +6,11 @@ import {
   wallLength,
   type Opening,
   type Wall,
+  PAINEIS_DE_CORTINA,
+  ROTULO_DO_PAINEL_DE_CORTINA,
+  ORIENTACOES_DE_BRISE,
+  type CortinaDeVidro,
+  type Brise,
 } from '../../utils/blueprintKernel';
 import ControleDeSobreposicao from './ControleDeSobreposicao';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
@@ -145,6 +150,9 @@ interface Props {
   /** PAREDE CURVA (P2.12): raio e número de facetas do arco desta parede; null = reta. */
   arco?: { raioMm: number; facetas: number } | null;
   onSelecionarArco?: () => void;
+  /** CORTINA DE VIDRO e BRISE (P2.20). */
+  onCortina?: (c: CortinaDeVidro | null) => void;
+  onBrise?: (b: Brise | null) => void;
   /**
    * O painel de COMPOSIÇÃO, montado por quem tem o quantitativo em mãos.
    *
@@ -226,6 +234,8 @@ export default function PainelParedeSelecionada({
   onEspessura,
   arco,
   onSelecionarArco,
+  onCortina,
+  onBrise,
   camadasSlot,
   podeUnir,
   onDividir,
@@ -286,6 +296,8 @@ export default function PainelParedeSelecionada({
           )}
         </div>
       )}
+
+      {parede && onCortina && onBrise && <SecaoFachada parede={parede} onCortina={onCortina} onBrise={onBrise} />}
 
       {parede && tomadasSlot}
 
@@ -612,5 +624,80 @@ function BotaoTexto({
       <Icone className="h-3.5 w-3.5" />
       {rotulo}
     </button>
+  );
+}
+
+/**
+ * FACHADA (P2.20): a parede pode ser CORTINA DE VIDRO (pele de painéis entre
+ * montantes — sem alvenaria no quantitativo, IfcCurtainWall, vidro no 3D) e/ou
+ * levar BRISE numa face (lâminas afastadas; m² e nº de lâminas no quantitativo).
+ */
+function SecaoFachada({ parede, onCortina, onBrise }: { parede: Wall; onCortina: (c: CortinaDeVidro | null) => void; onBrise: (b: Brise | null) => void }) {
+  const campo = 'h-7 w-20 rounded border border-slate-300 px-1.5 text-xs text-slate-800';
+  const c = parede.cortina ?? null;
+  const b = parede.brise ?? null;
+  const numero = (valor: number, aoMudar: (v: number) => void, min: number, step = 10) => (
+    <input
+      type="number"
+      key={`${parede.id}-${valor}-${min}`}
+      defaultValue={valor}
+      min={min}
+      step={step}
+      onBlur={(e) => {
+        const v = Math.round(Number(e.target.value));
+        if (Number.isFinite(v) && v >= min && v !== valor) aoMudar(v);
+      }}
+      onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+      className={campo}
+    />
+  );
+  return (
+    <div className="mt-3 border-t border-slate-200 pt-3" data-testid="secao-fachada">
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Fachada</h4>
+      <label className="mt-2 flex items-center gap-2 text-xs text-slate-700">
+        <input type="checkbox" checked={!!c} onChange={(e) => onCortina(e.target.checked ? { moduloMm: 1200, montanteMm: 60, painel: 'VIDRO' } : null)} aria-label="Cortina de vidro" />
+        Cortina de vidro <span className="text-slate-400">(sem alvenaria; m² de painel e metros de montante)</span>
+      </label>
+      {c && (
+        <div className="mt-1.5 grid grid-cols-3 gap-2 text-[11px] text-slate-600" data-testid="campos-da-cortina">
+          <label className="flex flex-col gap-0.5">
+            Painel
+            <select value={c.painel} onChange={(e) => onCortina({ ...c, painel: e.target.value as CortinaDeVidro['painel'] })} aria-label="Painel da cortina" className="h-7 rounded border border-slate-300 px-1 text-xs">
+              {PAINEIS_DE_CORTINA.map((p) => (
+                <option key={p} value={p}>{ROTULO_DO_PAINEL_DE_CORTINA[p]}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-0.5">Módulo (mm){numero(c.moduloMm, (v) => onCortina({ ...c, moduloMm: v }), 300, 50)}</label>
+          <label className="flex flex-col gap-0.5">Montante (mm){numero(c.montanteMm, (v) => onCortina({ ...c, montanteMm: v }), 20, 5)}</label>
+        </div>
+      )}
+      <label className="mt-2 flex items-center gap-2 text-xs text-slate-700">
+        <input type="checkbox" checked={!!b} onChange={(e) => onBrise(e.target.checked ? { orientacao: 'HORIZONTAL', laminaMm: 150, passoMm: 300, afastamentoMm: 300, lado: 'DIREITA' } : null)} aria-label="Brise" />
+        Brise <span className="text-slate-400">(lâminas afastadas de uma face; m² de fachada e nº de lâminas)</span>
+      </label>
+      {b && (
+        <div className="mt-1.5 grid grid-cols-3 gap-2 text-[11px] text-slate-600" data-testid="campos-do-brise">
+          <label className="flex flex-col gap-0.5">
+            Lâminas
+            <select value={b.orientacao} onChange={(e) => onBrise({ ...b, orientacao: e.target.value as Brise['orientacao'] })} aria-label="Orientação do brise" className="h-7 rounded border border-slate-300 px-1 text-xs">
+              {ORIENTACOES_DE_BRISE.map((o) => (
+                <option key={o} value={o}>{o === 'HORIZONTAL' ? 'Horizontais' : 'Verticais'}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-0.5">
+            Face
+            <select value={b.lado} onChange={(e) => onBrise({ ...b, lado: e.target.value as Brise['lado'] })} aria-label="Face do brise" className="h-7 rounded border border-slate-300 px-1 text-xs">
+              <option value="DIREITA">Direita (de A para B)</option>
+              <option value="ESQUERDA">Esquerda (de A para B)</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-0.5">Lâmina (mm){numero(b.laminaMm, (v) => onBrise({ ...b, laminaMm: v, passoMm: Math.max(b.passoMm, v) }), 20)}</label>
+          <label className="flex flex-col gap-0.5">Passo (mm){numero(b.passoMm, (v) => onBrise({ ...b, passoMm: Math.max(v, b.laminaMm) }), 20)}</label>
+          <label className="flex flex-col gap-0.5">Afastamento (mm){numero(b.afastamentoMm, (v) => onBrise({ ...b, afastamentoMm: v }), 0, 50)}</label>
+        </div>
+      )}
+    </div>
   );
 }

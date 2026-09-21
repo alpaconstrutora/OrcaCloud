@@ -4,7 +4,6 @@ import {
     Plus,
     Calendar,
     ChevronRight,
-    Search,
     Users,
     FileText,
     Download,
@@ -18,8 +17,6 @@ import {
     Briefcase as BriefcaseIcon,
     ArrowLeft,
     Link2,
-    LayoutGrid,
-    LayoutList,
     FileDown,
     Settings,
     Sun,
@@ -29,11 +26,44 @@ import {
     Video
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import StandardTable, { StandardTableColumn } from './ui/StandardTable';
+import TabsBar from './ui/TabsBar';
 import { ProjectSettings, DiaryEntry, BudgetEntry, WeatherShift, DiaryActivity, LaborEntry, ProjectSchedule } from '../types';
 import { projectService } from '../services/projectService';
 import { useStore } from '../store/useStore';
 import Button from './ui/Button';
 
+
+// §6.10 — só colunas de DADO; "Ações" entra por `actions`.
+const DIARY_COLUMNS: StandardTableColumn[] = [
+    // soma (1170) + Ações (110) cabe na largura útil de 1290px sem rolagem horizontal
+    { key: 'date', label: 'Data', sortable: true, width: 115 },
+    { key: 'description', label: 'Relato', sortable: true, width: 290 },
+    { key: 'activities', label: 'Atividades', sortable: true, width: 110, align: 'center' },
+    { key: 'labor', label: 'Efetivo', sortable: true, width: 95, align: 'center' },
+    { key: 'weather', label: 'Clima', sortable: true, width: 125 },
+    { key: 'media', label: 'Mídia', sortable: true, width: 125, align: 'center' },
+    { key: 'impediments', label: 'Impedimentos', sortable: true, width: 190 },
+    { key: 'status', label: 'Situação', sortable: true, width: 120 },
+];
+
+/** 'YYYY-MM-DD' ancorado ao meio-dia local — `new Date('YYYY-MM-DD')` é UTC e volta um dia em UTC-3. */
+const parseEntryDate = (raw: string) => new Date(`${String(raw).slice(0, 10)}T12:00:00`);
+const formatEntryDate = (raw: string) => {
+    const d = parseEntryDate(raw);
+    return isNaN(d.getTime()) ? raw : d.toLocaleDateString('pt-BR');
+};
+
+/** §8 — texto colorido simples, sem pílula. */
+const STATUS_COLOR: Record<NonNullable<DiaryEntry['status']>, string> = {
+    'Rascunho': 'text-gray-600',
+    'Em Análise': 'text-amber-600',
+    'Aprovado': 'text-green-600',
+    'Recusado': 'text-red-600',
+};
+
+const mediaCount = (e: DiaryEntry) => (e.images?.length || 0) + (e.videos?.length || 0) + (e.documents?.length || 0);
+const laborCount = (e: DiaryEntry) => (e.labor || []).reduce((s, l) => s + (Number(l.quantity) || 0), 0);
 
 // Bug 2: tipo explícito para substituir projects: any[]
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -56,7 +86,6 @@ interface ProjectDiaryManagerProps {
 
 
 const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, projects, onLoadProject, onUpdateSettings, organizationId, onBackToList, onSave, onGenerateReport }) => {
-    const [searchTerm, setSearchTerm] = useState('');
     const [isAdding, setIsAdding] = useState(
         localStorage.getItem('diary_is_adding') === 'true'
     );
@@ -68,9 +97,6 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
     );
     const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
     const [isLinkingPlanningOpen, setIsLinkingPlanningOpen] = useState(false);
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>(
-        (localStorage.getItem('diary_view_mode') as 'grid' | 'list') || 'list'
-    );
     const [linkedSchedule, setLinkedSchedule] = useState<ProjectSchedule | null>(null);
     const [linkedBudget, setLinkedBudget] = useState<BudgetEntry[]>([]);
     const [isLoadingLinked, setIsLoadingLinked] = useState(false);
@@ -88,10 +114,6 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
     React.useEffect(() => {
         if (activeTab) localStorage.setItem('diary_active_tab', activeTab);
     }, [activeTab]);
-
-    React.useEffect(() => {
-        if (viewMode) localStorage.setItem('diary_view_mode', viewMode);
-    }, [viewMode]);
 
     // Bug 1: reset per-project state when switching projects
     const isFirstRender = React.useRef(true);
@@ -201,15 +223,8 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         return suggestions;
     }, [organizations]);
 
-    const entries = useMemo(() => {
-        const list = settings.diaryEntries || [];
-        if (!searchTerm) return list;
-        return list.filter(e =>
-            e.date.includes(searchTerm) ||
-            e.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            e.activities?.some(a => a.description.toLowerCase().includes(searchTerm.toLowerCase()))
-        );
-    }, [settings.diaryEntries, searchTerm]);
+    // A busca (data, relato, atividades) é da StandardTable — array estável para o recorte.
+    const entries = useMemo(() => settings.diaryEntries || [], [settings.diaryEntries]);
 
     const metrics = useMemo(() => {
         if (!settings.schedule?.startDate || !settings.schedule?.endDate) {
@@ -732,68 +747,29 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                     </div>
                 </div>
 
-                <div className="flex gap-2">
-                    <div className="flex bg-gray-100 p-1 rounded-xl mr-2">
-                        <button
-                            onClick={() => setViewMode('grid')}
-                            className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid'
-                                ? 'bg-white text-indigo-600 shadow-sm'
-                                : 'text-gray-400 hover:text-gray-600'
-                                }`}
-                            title="Visualização em Blocos"
-                        >
-                            <LayoutGrid className="w-5 h-5" />
-                        </button>
-                        <button
-                            onClick={() => setViewMode('list')}
-                            className={`p-1.5 rounded-lg transition-all ${viewMode === 'list'
-                                ? 'bg-white text-indigo-600 shadow-sm'
-                                : 'text-gray-400 hover:text-gray-600'
-                                }`}
-                            title="Visualização em Linhas"
-                        >
-                            <LayoutList className="w-5 h-5" />
-                        </button>
-                    </div>
+                {/* §17 — variante compacta; ícones em h-9 w-9 como os da toolbar §5.2 */}
+                <div className="flex items-center gap-2">
                     <button
                         onClick={() => onGenerateReport?.()}
-                        className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
-                        title="Gerar Relatório"
+                        className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+                        title="Gerar relatório"
                     >
-                        <FileDown className="w-5 h-5" />
+                        <FileDown className="w-4 h-4" />
                     </button>
-                    <button disabled title="Configurações (em breve)" className="p-2 bg-gray-50 text-gray-400 rounded-lg cursor-not-allowed opacity-60">
-                        <Settings className="w-5 h-5" />
+                    <button disabled title="Configurações (em breve)" className="h-9 w-9 flex items-center justify-center bg-gray-50 text-gray-400 rounded-[6px] cursor-not-allowed opacity-60">
+                        <Settings className="w-4 h-4" />
                     </button>
                     {!isAdding && (
                         <button
                             onClick={handleAddNew}
-                            className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-medium text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg active:scale-95"
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
                         >
-                            <Plus className="w-5 h-5" />
-                            NOVA ENTRADA
+                            <Plus className="w-[15px] h-[15px]" />
+                            Nova entrada
                         </button>
                     )}
                 </div>
             </div>
-
-            {/* Main Content Area */}
-            {
-                !isAdding && (
-                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 items-center">
-                        <div className="flex-1 relative w-full">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                            <input
-                                type="text"
-                                placeholder="Buscar por data ou descrição..."
-                                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-transparent rounded-xl text-sm font-medium focus:bg-white focus:border-indigo-500 outline-none transition-all"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
-                        </div>
-                    </div>
-                )
-            }
 
             {
                 isAdding && (
@@ -853,11 +829,18 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                             </div>
                         </div>
 
-                        {/* Editor Tabs */}
-                        <div className="flex border-b border-gray-100 bg-white">
-                            <button onClick={() => setActiveTab('geral')} className={`px-8 py-4 text-form-input font-medium uppercase tracking-widest border-b-2 transition-all ${activeTab === 'geral' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-700 hover:text-gray-900'}`}>Dados Gerais</button>
-                            <button onClick={() => setActiveTab('comentarios')} className={`px-8 py-4 text-button font-medium uppercase tracking-widest border-b-2 transition-all ${activeTab === 'comentarios' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-700 hover:text-gray-900'}`}>Comentários</button>
-                            <button onClick={() => setActiveTab('arquivos')} className={`px-8 py-4 text-button font-medium uppercase tracking-widest border-b-2 transition-all ${activeTab === 'arquivos' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-700 hover:text-gray-900'}`}>Arquivos ({(formData.images?.length || 0) + (formData.videos?.length || 0) + (formData.documents?.length || 0)})</button>
+                        {/* Abas do editor — §19.1 (trilho `bare`: o card do editor já é a moldura) */}
+                        <div className="p-2 border-b border-gray-100 bg-white">
+                            <TabsBar
+                                bare
+                                tabs={[
+                                    { id: 'geral', label: 'Dados gerais' },
+                                    { id: 'comentarios', label: 'Comentários' },
+                                    { id: 'arquivos', label: 'Arquivos', badge: (formData.images?.length || 0) + (formData.videos?.length || 0) + (formData.documents?.length || 0) },
+                                ]}
+                                value={activeTab}
+                                onChange={setActiveTab}
+                            />
                         </div>
 
                         <div className="p-8">
@@ -1286,152 +1269,95 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                 )
             }
 
-            {/* Entries list */}
-            <div className="space-y-4">
-                {entries.length === 0 ? (
-                    <div className="bg-white p-24 rounded-3xl border border-gray-100 flex flex-col items-center text-center">
-                        <div className="w-20 h-20 bg-gray-50 rounded-[2rem] flex items-center justify-center mb-6 shadow-inner border border-gray-100">
-                            <BookOpen className="w-10 h-10 text-gray-300" />
+            {/* Registros — §6.10 StandardTable: busca acoplada, colunas, autofit, ordenação */}
+            <StandardTable<DiaryEntry>
+                storageKey="diario:registros"
+                columns={DIARY_COLUMNS}
+                rows={entries}
+                rowKey={e => e.id}
+                searchScope={settings.name}
+                searchPlaceholder="Buscar por data, relato ou atividade..."
+                searchText={e => [
+                    e.date,
+                    formatEntryDate(e.date),
+                    e.description || '',
+                    e.impediments || '',
+                    ...(e.activities || []).map(a => a.description),
+                ].join(' ')}
+                sortValue={(key, e) => {
+                    switch (key) {
+                        case 'date': return e.date;
+                        case 'description': return e.description || '';
+                        case 'activities': return e.activities?.length || 0;
+                        case 'labor': return laborCount(e);
+                        case 'weather': return e.weather || '';
+                        case 'media': return mediaCount(e);
+                        case 'impediments': return e.impediments || '';
+                        case 'status': return e.status || 'Rascunho';
+                        default: return null;
+                    }
+                }}
+                renderCell={(key, e) => {
+                    switch (key) {
+                        case 'date':
+                            return <span className="text-sm font-normal text-gray-700 whitespace-nowrap">{formatEntryDate(e.date)}</span>;
+                        case 'description':
+                            return <span className="text-sm font-normal text-gray-700 truncate block" title={e.description}>{e.description || '-'}</span>;
+                        case 'activities': {
+                            const acts = e.activities || [];
+                            const done = acts.filter(a => a.status === 'Finalizada').length;
+                            return <span className="text-sm font-normal text-gray-700">{acts.length ? `${done}/${acts.length}` : '-'}</span>;
+                        }
+                        case 'labor': {
+                            const n = laborCount(e);
+                            return <span className="text-sm font-normal text-gray-700">{n || '-'}</span>;
+                        }
+                        case 'weather':
+                            return (
+                                <span className="flex items-center gap-1.5 text-sm font-normal text-gray-700">
+                                    <Sun className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                    <span className="truncate">{e.weather || '-'}</span>
+                                </span>
+                            );
+                        case 'media': {
+                            const img = e.images?.length || 0, vid = e.videos?.length || 0, doc = e.documents?.length || 0;
+                            if (!img && !vid && !doc) return <span className="text-sm font-normal text-gray-400">-</span>;
+                            return (
+                                <span className="flex items-center justify-center gap-3 text-sm font-normal text-gray-700">
+                                    {img > 0 && <span className="flex items-center gap-1" title="Fotos"><Camera className="w-3.5 h-3.5 text-gray-400" />{img}</span>}
+                                    {vid > 0 && <span className="flex items-center gap-1" title="Vídeos"><Video className="w-3.5 h-3.5 text-gray-400" />{vid}</span>}
+                                    {doc > 0 && <span className="flex items-center gap-1" title="Documentos"><FileText className="w-3.5 h-3.5 text-gray-400" />{doc}</span>}
+                                </span>
+                            );
+                        }
+                        case 'impediments':
+                            return e.impediments?.trim()
+                                ? <span className="text-sm font-normal text-amber-600 truncate block" title={e.impediments}>{e.impediments}</span>
+                                : <span className="text-sm font-normal text-gray-400">-</span>;
+                        case 'status': {
+                            const st = e.status || 'Rascunho';
+                            return <span className={`text-sm font-normal ${STATUS_COLOR[st]}`}>{st}</span>;
+                        }
+                        default:
+                            return null;
+                    }
+                }}
+                onRowClick={e => handleEdit(e)}
+                actions={{
+                    width: 110,
+                    render: e => (
+                        <div className="flex items-center justify-end gap-1" onClick={ev => ev.stopPropagation()}>
+                            <ActionIconButton kind="edit" onClick={() => handleEdit(e)} />
+                            <ActionIconButton kind="delete" onClick={() => handleDelete(e.id)} />
                         </div>
-                        <h3 className="text-xl font-medium text-gray-400 uppercase tracking-widest">Nenhum registro ainda</h3>
-                        <p className="text-gray-400 text-xs max-w-xs mt-2 font-medium">Os registros aparecerão aqui conforme você os adiciona.</p>
-                    </div>
-                ) : viewMode === 'grid' ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                        {entries.map((entry) => (
-                            <div key={entry.id} className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm hover:shadow-xl hover:border-indigo-100 transition-all group flex flex-col h-full">
-                                <div className="flex justify-between items-start gap-4 mb-4">
-                                    <div className="flex flex-col items-center justify-center min-w-[60px] py-2 bg-indigo-600 rounded-xl shadow-lg border border-indigo-700">
-                                        <span className="text-xl font-medium text-white leading-none">
-                                            {new Date(entry.date + 'T12:00:00').getDate()}
-                                        </span>
-                                        <span className="text-xs font-medium text-indigo-100 uppercase tracking-widest mt-0.5">
-                                            {new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(new Date(entry.date + 'T12:00:00')).replace('.', '')}
-                                        </span>
-                                    </div>
-                                    <div className="flex-1 flex flex-wrap gap-2 justify-end">
-                                        <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 rounded-lg text-amber-700 border border-amber-100">
-                                            <Sun className="w-3 h-3" />
-                                            <span className="text-xs font-medium uppercase tracking-widest">{entry.weather}</span>
-                                        </div>
-                                        <div className={`px-2 py-1 rounded-lg text-button font-medium uppercase tracking-widest border ${entry.status === 'Aprovado' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                            entry.status === 'Recusado' ? 'bg-red-50 text-red-600 border-red-100' :
-                                                'bg-indigo-50 text-indigo-600 border-indigo-100'
-                                            }`}>
-                                            {entry.status || 'Rascunho'}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex-1 space-y-4">
-                                    <p className="text-gray-700 text-sm font-medium leading-relaxed italic line-clamp-4">"{entry.description || 'Sem descrição'}"</p>
-
-                                    {entry.activities && entry.activities.length > 0 && (
-                                        <div className="space-y-1">
-                                            <span className="text-xs font-medium text-gray-400 uppercase tracking-widest block mb-1">Atividades Principais</span>
-                                            {entry.activities.slice(0, 3).map((act, i) => (
-                                                <div key={i} className="flex items-center gap-2 text-xs text-gray-600">
-                                                    <CheckCircle2 className={`w-3 h-3 shrink-0 ${act.status === 'Finalizada' ? 'text-emerald-500' : 'text-amber-500'}`} />
-                                                    <span className="truncate flex-1 font-medium">{act.description}</span>
-                                                    <span className="font-medium text-indigo-600">{act.evolution}%</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    <div className="flex flex-wrap gap-2 pt-2">
-                                        {(entry.images?.length || 0) > 0 && <span className="flex items-center gap-1 text-xs font-medium text-gray-400 bg-gray-50 px-2.5 py-1 rounded-full border border-gray-100"><Camera className="w-3 h-3" /> {entry.images?.length} fotos</span>}
-                                        {(entry.videos?.length || 0) > 0 && <span className="flex items-center gap-1 text-xs font-medium text-gray-400 bg-gray-50 px-2.5 py-1 rounded-full border border-gray-100"><Video className="w-3 h-3" /> {entry.videos?.length} vídeos</span>}
-                                        {(entry.documents?.length || 0) > 0 && <span className="flex items-center gap-1 text-xs font-medium text-gray-400 bg-gray-50 px-2.5 py-1 rounded-full border border-gray-100"><FileText className="w-3 h-3" /> {entry.documents?.length} docs</span>}
-                                    </div>
-                                </div>
-
-                                <div className="mt-6 flex justify-between items-center pt-4 border-t border-gray-50">
-                                    <div className="flex -space-x-2">
-                                        {entry.images?.slice(0, 3).map((img, i) => (
-                                            <div key={i} className="w-8 h-8 rounded-lg border border-white overflow-hidden shadow-sm">
-                                                <img src={img} className="w-full h-full object-cover" />
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <div className="flex gap-1">
-                                        <ActionIconButton kind="edit" onClick={() => handleEdit(entry)} />
-                                        <ActionIconButton kind="delete" onClick={() => handleDelete(entry.id)} />
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-                        <table className="w-full text-left">
-                            <thead className="bg-gray-50 border-b border-gray-100">
-                                <tr>
-                                    <th className="px-6 py-4 text-table-header font-medium text-gray-400 uppercase tracking-widest w-[120px]">Data</th>
-                                    <th className="px-6 py-4 text-table-header font-medium text-gray-400 uppercase tracking-widest">Relato Curto</th>
-                                    <th className="px-6 py-4 text-table-header font-medium text-gray-400 uppercase tracking-widest w-[150px]">Status</th>
-                                    <th className="px-6 py-4 text-table-header font-medium text-gray-400 uppercase tracking-widest w-[100px] text-center">Clima</th>
-                                    <th className="px-6 py-4 text-table-header font-medium text-gray-400 uppercase tracking-widest w-[120px] text-center">Mídia</th>
-                                    <th className="px-6 py-4 text-right"></th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {entries.map((entry) => (
-                                    <tr key={entry.id} className="hover:bg-gray-50/50 transition-colors group cursor-pointer" onClick={() => handleEdit(entry)}>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 flex flex-col items-center justify-center bg-indigo-50 rounded-xl text-indigo-600 border border-indigo-100">
-                                                    <span className="text-sm font-medium leading-none">{new Date(entry.date + 'T12:00:00').getDate()}</span>
-                                                    <span className="text-xs font-medium uppercase">{new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(new Date(entry.date + 'T12:00:00')).replace('.', '')}</span>
-                                                </div>
-                                                <span className="text-sm font-medium text-gray-400">{new Date(entry.date + 'T12:00:00').getFullYear()}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="space-y-1">
-                                                <p className="text-sm font-medium text-gray-700 line-clamp-1">{entry.description || 'Sem descrição'}</p>
-                                                <div className="flex gap-2">
-                                                    {entry.activities?.slice(0, 2).map((act, i) => (
-                                                        <span key={i} className="text-xs font-bold text-gray-400 border border-gray-100 px-1.5 py-0.5 rounded-md flex items-center gap-1">
-                                                            <CheckCircle2 className="w-2.5 h-2.5" /> {act.evolution}%
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className={`px-2.5 py-1 rounded-full text-button font-medium uppercase tracking-wider ${entry.status === 'Aprovado' ? 'bg-emerald-50 text-emerald-600' :
-                                                entry.status === 'Recusado' ? 'bg-red-50 text-red-600' : 'bg-indigo-50 text-indigo-600'
-                                                }`}>
-                                                {entry.status || 'Rascunho'}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-center">
-                                            <div className="flex flex-col items-center gap-1">
-                                                <Sun className="w-4 h-4 text-amber-500" />
-                                                <span className="text-xs font-medium text-gray-400 uppercase tracking-widest">{entry.weather}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-center">
-                                            <div className="flex items-center justify-center gap-3">
-                                                {(entry.images?.length || 0) > 0 && <div className="flex flex-col items-center text-indigo-400"><Camera className="w-4 h-4" /><span className="text-xs font-medium">{entry.images?.length}</span></div>}
-                                                {(entry.videos?.length || 0) > 0 && <div className="flex flex-col items-center text-blue-400"><Video className="w-4 h-4" /><span className="text-xs font-medium">{entry.videos?.length}</span></div>}
-                                                {(entry.documents?.length || 0) > 0 && <div className="flex flex-col items-center text-emerald-400"><FileText className="w-4 h-4" /><span className="text-xs font-medium">{entry.documents?.length}</span></div>}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                                                <ActionIconButton kind="edit" onClick={(e) => { e.stopPropagation(); handleEdit(entry); }} />
-                                                <ActionIconButton kind="delete" onClick={(e) => { e.stopPropagation(); handleDelete(entry.id); }} />
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </div>
+                    ),
+                }}
+                empty={{
+                    icon: <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
+                    title: 'Nenhum registro ainda',
+                    subtitle: 'Os registros aparecerão aqui conforme você os adiciona.',
+                }}
+            />
 
             {/* Notification toast */}
             {notification && (

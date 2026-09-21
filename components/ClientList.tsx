@@ -846,10 +846,45 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
 
     return (
         <div className="space-y-6">
-            {/* §19.1 — o título acompanha a aba ativa. */}
-            <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">{VIEW_HEADERS[activeView].title}</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">{VIEW_HEADERS[activeView].subtitle(portalContext)}</p>
+            {/* §19.1 — o título acompanha a aba ativa. As ações (Importar/Exportar/
+                Novo cliente) moram à direita do título (§17: ação frequente → alinhada
+                ao título, tamanho compacto) — mesmo arranjo de ClientChargesModule.tsx.
+                Só na aba Clientes: no Dashboard não há lista para exportar. */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">{VIEW_HEADERS[activeView].title}</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">{VIEW_HEADERS[activeView].subtitle(portalContext)}</p>
+                </div>
+                {activeView === 'clientes' && (
+                    <div className="flex items-center gap-2 shrink-0">
+                        {/* Excel -- exporta o recorte visivel (filtros aplicados) e importa
+                            planilha. Botoes secundarios: ficam a esquerda da acao primaria. */}
+                        <button
+                            onClick={handleExport}
+                            className="flex items-center gap-1.5 h-9 px-3 bg-white text-gray-600 border border-gray-200 rounded-[6px] hover:bg-gray-50 hover:text-emerald-600 hover:border-emerald-200 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                            title="Exportar os clientes filtrados para Excel"
+                        >
+                            <FileDown className="w-4 h-4" />
+                            Exportar
+                        </button>
+                        <button
+                            onClick={handleOpenImport}
+                            className="flex items-center gap-1.5 h-9 px-3 bg-white text-gray-600 border border-gray-200 rounded-[6px] hover:bg-gray-50 hover:text-blue-600 hover:border-blue-200 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                            title="Importar clientes de uma planilha Excel"
+                        >
+                            <Upload className="w-4 h-4" />
+                            Importar
+                        </button>
+                        {/* Ação primária — §17, variante compacta */}
+                        <button
+                            onClick={() => handleOpenForm()}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                        >
+                            <Plus className="w-[15px] h-[15px]" />
+                            Novo cliente
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Toolbar de abas — anatomia canônica do §19.1 (card branco em volta
@@ -986,7 +1021,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
 
             {/* Sem toolbar de botões (§5.3): Clientes não tem controle de escopo, então
                 vai direto das abas para a toolbar de busca — a ação primária ("Novo cliente")
-                mora dentro dela, ao lado do toggle grid/lista (mesmo padrão de InvestorList.tsx). */}
+                fica alinhada ao título (§17), não aqui. */}
 
             {/* Toolbar §5.2 (variante acoplada à tabela, escala compacta §16) — toolbar e
                 conteúdo dividem um único card; a única linha visível entre os dois é o
@@ -1080,34 +1115,8 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                     </button>
                 </div>
 
-                {/* Ação primária (§17, variante compacta) — sem toolbar de botões própria (§5.3),
-                    fica na régua junto do toggle grid/lista, igual InvestorList.tsx. */}
-                {/* Excel -- exporta o recorte visivel (filtros aplicados) e importa
-                    planilha. Botoes secundarios: ficam a esquerda da acao primaria. */}
-                <button
-                    onClick={handleExport}
-                    className="flex items-center gap-1.5 h-9 px-3 bg-white text-gray-600 border border-gray-200 rounded-[6px] hover:bg-gray-50 hover:text-emerald-600 hover:border-emerald-200 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                    title="Exportar os clientes filtrados para Excel"
-                >
-                    <FileDown className="w-4 h-4" />
-                    Exportar
-                </button>
-                <button
-                    onClick={handleOpenImport}
-                    className="flex items-center gap-1.5 h-9 px-3 bg-white text-gray-600 border border-gray-200 rounded-[6px] hover:bg-gray-50 hover:text-blue-600 hover:border-blue-200 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                    title="Importar clientes de uma planilha Excel"
-                >
-                    <Upload className="w-4 h-4" />
-                    Importar
-                </button>
-
-                <button
-                    onClick={() => handleOpenForm()}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                >
-                    <Plus className="w-[15px] h-[15px]" />
-                    Novo cliente
-                </button>
+                {/* Importar/Exportar/Novo cliente saíram daqui para a linha do título
+                    (ver cabeçalho acima). A régua termina no toggle grid/lista. */}
             </div>
             </div>
 

@@ -5238,3 +5238,47 @@ describe('BlueprintEditor · vista dependente (P2.17)', () => {
     expect(screen.getByRole('button', { name: /^Vista dependente/ })).not.toHaveTextContent(/\d/);
   }, 60000);
 });
+
+/**
+ * FAMÍLIAS ANINHADAS (21/09/2026, backlog P2 — P2.18): o menu oferece os
+ * conjuntos; o painel do pai diz quantas peças e seleciona todas; o do filho
+ * diz de que conjunto é e seleciona o pai; excluir o pai leva os filhos.
+ */
+describe('BlueprintEditor · famílias aninhadas (P2.18)', () => {
+  it('menu com conjuntos; painel do pai e do filho; excluir o conjunto apaga as peças', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const m = k.applyCommand(nivel.model, { type: 'AddConjunto', levelId: t, tipoId: 'CONJUNTO_JANTAR', at: k.point(4000, 3000) }).model;
+    expect(m.componentes).toHaveLength(6);
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    const menuMobiliario = () => screen.getAllByRole('button', { name: /mobiliário/i }).find((b) => b.getAttribute('title')?.startsWith('Mobiliário, louças'))!;
+    await user.click(menuMobiliario());
+    expect(screen.getByRole('menuitemradio', { name: /^Conjunto de banheiro$/ })).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: /^Conjunto de jantar$/ })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    // Pelo navegador: o pai ("Conjunto de jantar…") e um filho (Cadeira).
+    await abrirComponentes(user);
+    // A linha do pai (não o cabeçalho do grupo, que também começa com o nome).
+    await user.click(screen.getAllByRole('button').find((b) => /^Conjunto de jantar \(mesa/.test(b.textContent ?? ''))!);
+    let info = await screen.findByTestId('componente-conjunto-info');
+    expect(info).toHaveTextContent(/Conjunto com 5 peça\(s\)/);
+    await user.click(within(info).getByRole('button', { name: 'Selecionar as peças' }));
+    await waitFor(() => expect(screen.getByText(/^5 selecionado/)).toBeInTheDocument());
+    await user.click(screen.getAllByRole('button').find((b) => /^Cadeira 1\b/.test(b.textContent ?? ''))!);
+    info = await screen.findByTestId('componente-conjunto-info');
+    expect(info).toHaveTextContent(/Faz parte do conjunto Conjunto de jantar/);
+    await user.click(within(info).getByRole('button', { name: 'Selecionar o conjunto' }));
+    info = await screen.findByTestId('componente-conjunto-info');
+    expect(info).toHaveTextContent(/Conjunto com 5 peça\(s\)/);
+    // Excluir o pai: o autosave entrega o modelo sem nenhum componente.
+    const { saveDraft } = await import('../../services/blueprintService');
+    vi.mocked(saveDraft).mockClear();
+    await user.click(within(info.closest('[data-testid="painel-componente"]') as HTMLElement).getByRole('button', { name: /^excluir$/i }));
+    await waitFor(() => expect(saveDraft).toHaveBeenCalled(), { timeout: 5000 });
+    const salvo = (vi.mocked(saveDraft).mock.calls.at(-1) as unknown as [string, import('../../utils/blueprintKernel').BlueprintModel])[1];
+    expect(salvo.componentes ?? []).toHaveLength(0);
+  }, 60000);
+});

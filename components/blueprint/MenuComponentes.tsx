@@ -627,6 +627,16 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
   },
   // MOBILIÁRIO (E7.1): componentes do catálogo do kernel, um clique no centro.
   // A família do menu é "MOBILIARIO" — porta própria no ribbon (Arquitetura).
+  // FAMÍLIAS ANINHADAS (P2.18): conjuntos — um clique põe o pai e os filhos; os filhos seguem editáveis.
+  {
+    titulo: 'Mobiliário — conjuntos',
+    itens: [
+      { chave: 'COMPONENTE_CONJUNTO_BANHEIRO', rotulo: 'Conjunto de banheiro', icone: Bath, ajuda: 'Vaso, lavatório e box de uma vez. Mova e gire pelo conjunto; cada peça continua editável.', escolha: { tool: 'componente', componente: 'CONJUNTO_BANHEIRO' } },
+      { chave: 'COMPONENTE_CONJUNTO_JANTAR', rotulo: 'Conjunto de jantar', icone: Table2, ajuda: 'Mesa com quatro cadeiras.', escolha: { tool: 'componente', componente: 'CONJUNTO_JANTAR' } },
+      { chave: 'COMPONENTE_CONJUNTO_DORMITORIO', rotulo: 'Conjunto de dormitório', icone: BedDouble, ajuda: 'Cama de casal com dois criados-mudos.', escolha: { tool: 'componente', componente: 'CONJUNTO_DORMITORIO' } },
+      { chave: 'COMPONENTE_CONJUNTO_COZINHA', rotulo: 'Conjunto de cozinha', icone: CookingPot, ajuda: 'Bancada com pia, fogão e geladeira em linha.', escolha: { tool: 'componente', componente: 'CONJUNTO_COZINHA' } },
+    ],
+  },
   {
     titulo: 'Mobiliário — dormitório e sala',
     itens: [

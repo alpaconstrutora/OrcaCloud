@@ -48,6 +48,7 @@
  */
 
 import {
+  ehConjunto,
   CATALOGO_DE_COMPONENTES,
   type Componente,
   type GuardaCorpo,
@@ -920,7 +921,8 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
       }
     }
     // COMPONENTES (E7.1): louça → IfcSanitaryTerminal; o resto → IfcFurniture.
-    for (const c of (model.componentes ?? []).filter((x) => x.levelId === nivel.id)) {
+    // FAMÍLIAS ANINHADAS (P2.18): o conjunto-pai não é objeto — saem os filhos, cada um como o que é.
+    for (const c of (model.componentes ?? []).filter((x) => x.levelId === nivel.id && !ehConjunto(x.tipoId))) {
       const produto = emitirComponente(c, ctx, localNivel);
       produtos.push(produto);
       psetOpura(produto, c.uid, rotuloCurto(c.uid, 'componente'));

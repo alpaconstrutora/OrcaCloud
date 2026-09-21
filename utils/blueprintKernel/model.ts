@@ -1491,7 +1491,7 @@ export const ROTULO_DO_TIPO_DE_VAGA: Record<TipoDeVaga, string> = { COMUM: 'Comu
 export type FamiliaDeComponente = 'MOBILIARIO' | 'LOUCA' | 'BANCADA' | 'ARMARIO' | 'EQUIPAMENTO' | 'CLIMATIZACAO';
 export const FAMILIAS_DE_COMPONENTE: readonly FamiliaDeComponente[] = ['MOBILIARIO', 'LOUCA', 'BANCADA', 'ARMARIO', 'EQUIPAMENTO', 'CLIMATIZACAO'];
 export const ROTULO_DA_FAMILIA_DE_COMPONENTE: Record<FamiliaDeComponente, string> = { MOBILIARIO: 'Mobiliário', LOUCA: 'Louça', BANCADA: 'Bancada', ARMARIO: 'Armário', EQUIPAMENTO: 'Equipamento', CLIMATIZACAO: 'Climatização' };
-export type SimboloDoComponente = 'CAIXA' | 'CAMA' | 'SOFA' | 'MESA' | 'VASO' | 'LAVATORIO' | 'BOX' | 'PIA' | 'FOGAO' | 'GELADEIRA' | 'TANQUE' | 'MAQUINA' | 'ARMARIO' | 'CADEIRA' | 'CONDENSADORA' | 'EVAPORADORA' | 'EXAUSTOR' | 'RESERVA';
+export type SimboloDoComponente = 'CAIXA' | 'CAMA' | 'SOFA' | 'MESA' | 'VASO' | 'LAVATORIO' | 'BOX' | 'PIA' | 'FOGAO' | 'GELADEIRA' | 'TANQUE' | 'MAQUINA' | 'ARMARIO' | 'CADEIRA' | 'CONDENSADORA' | 'EVAPORADORA' | 'EXAUSTOR' | 'RESERVA' | 'CONJUNTO';
 export interface FichaDoComponente {
   rotulo: string;
   familia: FamiliaDeComponente;
@@ -1540,6 +1540,12 @@ export const TIPOS_DE_COMPONENTE = [
   'EVAPORADORA',
   'CASA_DE_MAQUINAS',
   'EXAUSTOR',
+  // FAMÍLIAS ANINHADAS (0.52.0, backlog P2 — P2.18): o CONJUNTO é um componente
+  // que contém outros (os filhos levam `paiUid`). Ver `CONJUNTOS_DE_COMPONENTES`.
+  'CONJUNTO_BANHEIRO',
+  'CONJUNTO_JANTAR',
+  'CONJUNTO_DORMITORIO',
+  'CONJUNTO_COZINHA',
 ] as const;
 export type TipoDeComponente = (typeof TIPOS_DE_COMPONENTE)[number];
 export const CATALOGO_DE_COMPONENTES: Record<TipoDeComponente, FichaDoComponente> = {
@@ -1570,8 +1576,87 @@ export const CATALOGO_DE_COMPONENTES: Record<TipoDeComponente, FichaDoComponente
   EVAPORADORA: { rotulo: 'Evaporadora hi-wall', familia: 'CLIMATIZACAO', larguraMm: 900, profundidadeMm: 220, alturaMm: 300, simbolo: 'EVAPORADORA', cotaMm: 2200, folgaMm: 150 },
   CASA_DE_MAQUINAS: { rotulo: 'Casa de máquinas (reserva)', familia: 'CLIMATIZACAO', larguraMm: 2000, profundidadeMm: 1500, alturaMm: 2500, simbolo: 'RESERVA', folgaMm: 600 },
   EXAUSTOR: { rotulo: 'Exaustor / ventilação', familia: 'CLIMATIZACAO', larguraMm: 400, profundidadeMm: 400, alturaMm: 400, simbolo: 'EXAUSTOR', cotaMm: 2300, folgaMm: 100 },
+  // Conjuntos (P2.18): as medidas são a caixa envolvente dos filhos (recalculada ao inserir).
+  CONJUNTO_BANHEIRO: { rotulo: 'Conjunto de banheiro (vaso, lavatório, box)', familia: 'LOUCA', larguraMm: 2400, profundidadeMm: 1500, alturaMm: 2000, simbolo: 'CONJUNTO' },
+  CONJUNTO_JANTAR: { rotulo: 'Conjunto de jantar (mesa + 4 cadeiras)', familia: 'MOBILIARIO', larguraMm: 1900, profundidadeMm: 1900, alturaMm: 900, simbolo: 'CONJUNTO' },
+  CONJUNTO_DORMITORIO: { rotulo: 'Conjunto de dormitório (cama + 2 criados)', familia: 'MOBILIARIO', larguraMm: 2500, profundidadeMm: 1900, alturaMm: 550, simbolo: 'CONJUNTO' },
+  CONJUNTO_COZINHA: { rotulo: 'Conjunto de cozinha (bancada, fogão, geladeira)', familia: 'EQUIPAMENTO', larguraMm: 3200, profundidadeMm: 700, alturaMm: 1800, simbolo: 'CONJUNTO' },
 };
 export const MAX_ROTULO_DE_COMPONENTE = 40;
+
+/**
+ * FAMÍLIAS ANINHADAS (0.52.0, backlog P2 — P2.18): o que cada CONJUNTO contém.
+ *
+ * Um conjunto é um componente-pai cujos filhos são componentes comuns com
+ * `paiUid`: cada filho continua sendo a peça que é (o vaso conta no
+ * quantitativo, liga no ponto hidráulico, sai no IFC), e o pai é o que se
+ * pega para mover, girar e apagar tudo de uma vez. Os deslocamentos são no
+ * referencial do pai SEM giro (x para a direita, y para cima), em mm; a
+ * rotação do filho soma-se à do pai. O pai não vai ao IFC nem ao 3D — é
+ * agrupamento, não objeto.
+ */
+export interface FilhoDoConjunto {
+  tipoId: TipoDeComponente;
+  dxMm: number;
+  dyMm: number;
+  rotacaoGraus: number;
+}
+export const CONJUNTOS_DE_COMPONENTES: Partial<Record<TipoDeComponente, readonly FilhoDoConjunto[]>> = {
+  CONJUNTO_BANHEIRO: [
+    { tipoId: 'VASO', dxMm: -900, dyMm: 350, rotacaoGraus: 0 },
+    { tipoId: 'LAVATORIO', dxMm: -150, dyMm: 450, rotacaoGraus: 0 },
+    { tipoId: 'BOX', dxMm: 750, dyMm: -300, rotacaoGraus: 0 },
+  ],
+  CONJUNTO_JANTAR: [
+    { tipoId: 'MESA_JANTAR', dxMm: 0, dyMm: 0, rotacaoGraus: 0 },
+    { tipoId: 'CADEIRA', dxMm: -350, dyMm: 700, rotacaoGraus: 180 },
+    { tipoId: 'CADEIRA', dxMm: 350, dyMm: 700, rotacaoGraus: 180 },
+    { tipoId: 'CADEIRA', dxMm: -350, dyMm: -700, rotacaoGraus: 0 },
+    { tipoId: 'CADEIRA', dxMm: 350, dyMm: -700, rotacaoGraus: 0 },
+  ],
+  CONJUNTO_DORMITORIO: [
+    { tipoId: 'CAMA_CASAL', dxMm: 0, dyMm: 0, rotacaoGraus: 0 },
+    { tipoId: 'CRIADO', dxMm: -1000, dyMm: 750, rotacaoGraus: 0 },
+    { tipoId: 'CRIADO', dxMm: 1000, dyMm: 750, rotacaoGraus: 0 },
+  ],
+  CONJUNTO_COZINHA: [
+    { tipoId: 'BANCADA', dxMm: -700, dyMm: 0, rotacaoGraus: 0 },
+    { tipoId: 'FOGAO', dxMm: 500, dyMm: 0, rotacaoGraus: 0 },
+    { tipoId: 'GELADEIRA', dxMm: 1200, dyMm: 0, rotacaoGraus: 0 },
+  ],
+};
+export const ehConjunto = (tipoId: TipoDeComponente): boolean => CONJUNTOS_DE_COMPONENTES[tipoId] !== undefined;
+/** Os filhos vivos de um conjunto (pelo `paiUid`). */
+export function filhosDoConjunto(model: BlueprintModel, pai: Pick<Componente, 'uid'>): Componente[] {
+  return (model.componentes ?? []).filter((c) => c.paiUid === pai.uid);
+}
+/** O conjunto de que este componente faz parte, se algum. */
+export function paiDoComponente(model: BlueprintModel, c: Pick<Componente, 'paiUid'>): Componente | null {
+  return c.paiUid ? (model.componentes ?? []).find((x) => x.uid === c.paiUid) ?? null : null;
+}
+/**
+ * Caixa envolvente dos filhos de um conjunto, no referencial da tabela sem giro:
+ * largura, profundidade e o CENTRO da caixa (o `at` do pai é esse centro; os
+ * filhos são deslocados por −centro ao inserir, para a caixa do pai envolvê-los).
+ */
+export function extensaoDoConjunto(tipoId: TipoDeComponente): { larguraMm: number; profundidadeMm: number; centroXMm: number; centroYMm: number } {
+  const filhos = CONJUNTOS_DE_COMPONENTES[tipoId] ?? [];
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const f of filhos) {
+    const ficha = CATALOGO_DE_COMPONENTES[f.tipoId];
+    const meiaL = (f.rotacaoGraus % 180 === 0 ? ficha.larguraMm : ficha.profundidadeMm) / 2;
+    const meiaP = (f.rotacaoGraus % 180 === 0 ? ficha.profundidadeMm : ficha.larguraMm) / 2;
+    minX = Math.min(minX, f.dxMm - meiaL);
+    maxX = Math.max(maxX, f.dxMm + meiaL);
+    minY = Math.min(minY, f.dyMm - meiaP);
+    maxY = Math.max(maxY, f.dyMm + meiaP);
+  }
+  if (!Number.isFinite(minX)) return { larguraMm: CATALOGO_DE_COMPONENTES[tipoId].larguraMm, profundidadeMm: CATALOGO_DE_COMPONENTES[tipoId].profundidadeMm, centroXMm: 0, centroYMm: 0 };
+  return { larguraMm: Math.round(maxX - minX), profundidadeMm: Math.round(maxY - minY), centroXMm: Math.round((minX + maxX) / 2), centroYMm: Math.round((minY + maxY) / 2) };
+}
 
 export interface Componente {
   id: ObjectId;
@@ -1595,6 +1680,8 @@ export interface Componente {
   sugerido?: boolean | null;
   /** Fase de reforma (E10.2). Ausente = NOVO. */
   fase?: FaseDeReforma;
+  /** FAMÍLIAS ANINHADAS (0.52.0): o CONJUNTO de que esta peça faz parte (uid do componente-pai). Ausente = solta. */
+  paiUid?: ElementUid;
 }
 
 /**
@@ -4290,6 +4377,14 @@ export function assertModelInvariants(model: BlueprintModel): void {
     if (!Number.isInteger(c.rotacaoGraus) || c.rotacaoGraus < 0 || c.rotacaoGraus >= 360) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: giro tem de ser inteiro em [0, 360)`);
     if (c.cotaMm != null && (!Number.isInteger(c.cotaMm) || c.cotaMm < 0)) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: cotaMm tem de ser inteiro ≥ 0`);
     if (c.rotulo != null && (typeof c.rotulo !== 'string' || c.rotulo.length > MAX_ROTULO_DE_COMPONENTE)) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: rótulo maior que ${MAX_ROTULO_DE_COMPONENTE} caracteres`);
+    // FAMÍLIAS ANINHADAS (0.52.0): o pai existe, é conjunto, está no mesmo pavimento e não é a própria peça; conjunto não é filho de conjunto.
+    if (c.paiUid !== undefined) {
+      const pai = (model.componentes ?? []).find((x) => x.uid === c.paiUid);
+      if (!pai || pai.id === c.id) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: conjunto-pai inexistente`);
+      if (!ehConjunto(pai.tipoId)) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: o pai ${pai.id} não é um conjunto`);
+      if (pai.levelId !== c.levelId) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: o conjunto está noutro pavimento`);
+      if (ehConjunto(c.tipoId)) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: conjunto dentro de conjunto`);
+    }
   }
 
   // Anotações (E8.1): vista existente (pavimento / corte / direção), tipo e traço da lista, pontos mínimos e inteiros, texto onde é obrigatório, hachura só na hachura.

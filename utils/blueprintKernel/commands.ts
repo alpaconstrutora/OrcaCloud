@@ -33,6 +33,10 @@ import {
   type ArcoDaParede,
   type RevisaoDaNuvem,
   findVistaDependente,
+  CONJUNTOS_DE_COMPONENTES,
+  ehConjunto,
+  filhosDoConjunto,
+  extensaoDoConjunto,
   MAX_NOME_DE_VISTA_DEPENDENTE,
   acabamentosOuAusente,
   type AcabamentosDoAmbiente,
@@ -482,6 +486,8 @@ export type Command =
   | { type: 'AddComponente'; levelId: ObjectId; tipoId: TipoDeComponente; at: Point; familia?: FamiliaDeComponente; larguraMm?: number; profundidadeMm?: number; alturaMm?: number; rotacaoGraus?: number; cotaMm?: number | null; rotulo?: string | null; sugerido?: boolean }
   | { type: 'SetComponenteProps'; componenteId: ObjectId; tipoId?: TipoDeComponente; familia?: FamiliaDeComponente; larguraMm?: number; profundidadeMm?: number; alturaMm?: number; rotacaoGraus?: number; cotaMm?: number | null; rotulo?: string | null; sugerido?: boolean | null }
   | { type: 'MoveComponente'; componenteId: ObjectId; to: Point }
+  /** FAMÍLIAS ANINHADAS (0.52.0, P2.18): insere um CONJUNTO (pai + filhos com `paiUid`) centrado em `at`. */
+  | { type: 'AddConjunto'; levelId: ObjectId; tipoId: TipoDeComponente; at: Point; rotacaoGraus?: number }
   | { type: 'DeleteComponente'; componenteId: ObjectId }
   /**
    * GUARDA-CORPO / CORRIMÃO (E7.3). Altura omitida = a padrão do tipo (1,10 m /
@@ -2075,6 +2081,47 @@ function aplicarSemHash(
       break;
     }
 
+    case 'AddConjunto': {
+      findLevel(next, command.levelId);
+      const filhos = CONJUNTOS_DE_COMPONENTES[command.tipoId];
+      if (!filhos) throw new KernelError('BAD_COMPONENT', `${String(command.tipoId)} não é um conjunto`);
+      const fichaPai = CATALOGO_DE_COMPONENTES[command.tipoId];
+      const giro = ((Math.round(command.rotacaoGraus ?? 0) % 360) + 360) % 360;
+      const rad = (giro * Math.PI) / 180;
+      const cos = Math.cos(rad);
+      const sen = Math.sin(rad);
+      const at = { x: assertIntegerMm(roundToMm(command.at.x), 'at.x'), y: assertIntegerMm(roundToMm(command.at.y), 'at.y') };
+      const ext = extensaoDoConjunto(command.tipoId);
+      const idPai = nextId(next, 'cmp');
+      const uidPai = novoUid();
+      next.componentes = [
+        ...(next.componentes ?? []),
+        { id: idPai, uid: uidPai, levelId: command.levelId, tipoId: command.tipoId, familia: fichaPai.familia, at, larguraMm: ext.larguraMm, profundidadeMm: ext.profundidadeMm, alturaMm: fichaPai.alturaMm, rotacaoGraus: giro, rotulo: null },
+      ];
+      diff.created.push(idPai);
+      for (const f of filhos) {
+        const ficha = CATALOGO_DE_COMPONENTES[f.tipoId];
+        const id = nextId(next, 'cmp');
+        next.componentes.push({
+          id,
+          uid: novoUid(),
+          levelId: command.levelId,
+          tipoId: f.tipoId,
+          familia: ficha.familia,
+          at: { x: assertIntegerMm(roundToMm(at.x + (f.dxMm - ext.centroXMm) * cos - (f.dyMm - ext.centroYMm) * sen), 'at.x'), y: assertIntegerMm(roundToMm(at.y + (f.dxMm - ext.centroXMm) * sen + (f.dyMm - ext.centroYMm) * cos), 'at.y') },
+          larguraMm: ficha.larguraMm,
+          profundidadeMm: ficha.profundidadeMm,
+          alturaMm: ficha.alturaMm,
+          rotacaoGraus: (((f.rotacaoGraus + giro) % 360) + 360) % 360,
+          ...((ficha.cotaMm ?? 0) > 0 ? { cotaMm: ficha.cotaMm } : {}),
+          rotulo: null,
+          paiUid: uidPai,
+        });
+        diff.created.push(id);
+      }
+      break;
+    }
+
     case 'SetComponenteProps': {
       const c = findComponente(next, command.componenteId);
       if (command.tipoId !== undefined && command.tipoId !== c.tipoId) {
@@ -2098,7 +2145,24 @@ function aplicarSemHash(
       if (command.larguraMm !== undefined) c.larguraMm = assertIntegerMm(roundToMm(command.larguraMm), 'larguraMm');
       if (command.profundidadeMm !== undefined) c.profundidadeMm = assertIntegerMm(roundToMm(command.profundidadeMm), 'profundidadeMm');
       if (command.alturaMm !== undefined) c.alturaMm = assertIntegerMm(roundToMm(command.alturaMm), 'alturaMm');
-      if (command.rotacaoGraus !== undefined) c.rotacaoGraus = ((Math.round(command.rotacaoGraus) % 360) + 360) % 360;
+      if (command.rotacaoGraus !== undefined) {
+        const novo = ((Math.round(command.rotacaoGraus) % 360) + 360) % 360;
+        // FAMÍLIAS ANINHADAS: girar o conjunto gira os filhos em torno do centro dele.
+        const delta = novo - c.rotacaoGraus;
+        if (delta !== 0 && ehConjunto(c.tipoId)) {
+          const rad = (delta * Math.PI) / 180;
+          const cos = Math.cos(rad);
+          const sen = Math.sin(rad);
+          for (const f of filhosDoConjunto(next, c)) {
+            const dx = f.at.x - c.at.x;
+            const dy = f.at.y - c.at.y;
+            f.at = { x: assertIntegerMm(roundToMm(c.at.x + dx * cos - dy * sen), 'at.x'), y: assertIntegerMm(roundToMm(c.at.y + dx * sen + dy * cos), 'at.y') };
+            f.rotacaoGraus = (((f.rotacaoGraus + delta) % 360) + 360) % 360;
+            diff.updated.push(f.id);
+          }
+        }
+        c.rotacaoGraus = novo;
+      }
       if (command.rotulo !== undefined) c.rotulo = command.rotulo?.trim().slice(0, MAX_ROTULO_DE_COMPONENTE) || null;
       if (command.sugerido !== undefined) {
         if (command.sugerido) c.sugerido = true;
@@ -2110,7 +2174,17 @@ function aplicarSemHash(
 
     case 'MoveComponente': {
       const c = findComponente(next, command.componenteId);
-      c.at = { x: assertIntegerMm(roundToMm(command.to.x), 'to.x'), y: assertIntegerMm(roundToMm(command.to.y), 'to.y') };
+      const destino = { x: assertIntegerMm(roundToMm(command.to.x), 'to.x'), y: assertIntegerMm(roundToMm(command.to.y), 'to.y') };
+      // FAMÍLIAS ANINHADAS: mover o conjunto leva os filhos pelo mesmo vetor.
+      const dxPai = destino.x - c.at.x;
+      const dyPai = destino.y - c.at.y;
+      if (ehConjunto(c.tipoId)) {
+        for (const f of filhosDoConjunto(next, c)) {
+          f.at = { x: f.at.x + dxPai, y: f.at.y + dyPai };
+          diff.updated.push(f.id);
+        }
+      }
+      c.at = destino;
       // Mover confirma, como o terminal e a vaga.
       delete c.sugerido;
       diff.updated.push(c.id);
@@ -2119,8 +2193,11 @@ function aplicarSemHash(
 
     case 'DeleteComponente': {
       const c = findComponente(next, command.componenteId);
-      next.componentes = (next.componentes ?? []).filter((x) => x.id !== c.id);
-      diff.deleted.push(c.id);
+      // FAMÍLIAS ANINHADAS: apagar o conjunto apaga os filhos; apagar um filho tira só ele.
+      const filhos = ehConjunto(c.tipoId) ? filhosDoConjunto(next, c) : [];
+      const fora = new Set([c.id, ...filhos.map((f) => f.id)]);
+      next.componentes = (next.componentes ?? []).filter((x) => !fora.has(x.id));
+      diff.deleted.push(...fora);
       break;
     }
 
@@ -3145,7 +3222,13 @@ function aplicarSemHash(
         if (v.sugerida) delete v.sugerida;
         diff.updated.push(v.id);
       }
+      // FAMÍLIAS ANINHADAS: os filhos dos conjuntos selecionados vão junto (uma vez só).
+      const idsDeComponente = new Set(componenteIds);
       for (const id of componenteIds) {
+        const c = findComponente(next, id);
+        if (ehConjunto(c.tipoId)) for (const f of filhosDoConjunto(next, c)) idsDeComponente.add(f.id);
+      }
+      for (const id of idsDeComponente) {
         const c = findComponente(next, id);
         c.at = { x: inteiro(c.at.x + dx), y: inteiro(c.at.y + dy) };
         if (c.sugerido) delete c.sugerido;
@@ -4128,6 +4211,13 @@ function aplicarSemHash(
   diff.updated.push(...limparEtiquetasOrfasDasUnidades(next));
   // PAREDE CURVA (P2.12): faceta que saiu do círculo perde o metadado.
   retirarArcosDesfeitos(next, diff);
+  // FAMÍLIAS ANINHADAS (P2.18): filho cujo conjunto sumiu fica solto.
+  for (const c of next.componentes ?? []) {
+    if (c.paiUid && !(next.componentes ?? []).some((x) => x.uid === c.paiUid)) {
+      delete c.paiUid;
+      if (!diff.updated.includes(c.id) && !diff.created.includes(c.id)) diff.updated.push(c.id);
+    }
+  }
   recomputeSpaces(next);
   assertModelInvariants(next);
 

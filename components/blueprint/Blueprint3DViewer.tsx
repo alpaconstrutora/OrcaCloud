@@ -19,6 +19,7 @@ import { OrbitControls, PointerLockControls, Grid, Edges } from '@react-three/dr
 import { RotateCcw, Maximize, Minimize, Footprints } from 'lucide-react';
 import type { Agua, BlueprintModel, Escada, FatiaDaEscada, Structural } from '../../utils/blueprintKernel';
 import {
+  ehConjunto,
   contornoDaAguaEm3d,
   contornoExternoDoNivel,
   DEFAULT_TOLERANCE_MM,
@@ -1230,6 +1231,8 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, en
     for (const c of model.componentes ?? []) {
       if (!levelIds || !levelIds.includes(c.levelId)) continue;
       if (ocultos?.has(c.id)) continue;
+      // FAMÍLIAS ANINHADAS (P2.18): o conjunto é agrupamento; as caixas são as dos filhos.
+      if (ehConjunto(c.tipoId)) continue;
       const nivel = model.levels.find((l) => l.id === c.levelId);
       if (!nivel) continue;
       const geom = new THREE.BoxGeometry(c.larguraMm * S, c.alturaMm * S, c.profundidadeMm * S);

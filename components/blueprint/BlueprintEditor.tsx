@@ -115,6 +115,10 @@ import MenuEncaixe from './MenuEncaixe';
 import { TIPOS_DE_ENCAIXE, ROTULO_DO_ENCAIXE } from '../../utils/blueprintEncaixe';
 import type { TipoDePontoEletrico, AcabamentosDoAmbiente, ObjectId } from '../../utils/blueprintKernel';
 import {
+  ehConjunto,
+  filhosDoConjunto,
+  paiDoComponente,
+  CATALOGO_DE_COMPONENTES,
   aguasDaMesmaExtrusao,
   perfilDeCobertura,
   TIPOS_DE_PERFIL_DE_COBERTURA,
@@ -5278,8 +5282,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   /** O componente nasce com as medidas do catálogo, de pé; o painel gira e ajusta. */
   function adicionarComponente(at: Point) {
     if (!levelId) return;
-    const criados = editor.run({ type: 'AddComponente', levelId, at, tipoId: tipoDeComponente });
-    if (criados.length > 0) selecionar(criados);
+    // FAMÍLIAS ANINHADAS (P2.18): um conjunto entra pai + filhos; a seleção fica no pai.
+    const criados = editor.run(ehConjunto(tipoDeComponente) ? { type: 'AddConjunto', levelId, at, tipoId: tipoDeComponente } : { type: 'AddComponente', levelId, at, tipoId: tipoDeComponente });
+    if (criados.length > 0) selecionar([criados[0]]);
   }
 
   /** O núcleo nasce do pavimento ativo até o mais alto; o painel ajusta a chegada. */
@@ -7106,6 +7111,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         onProps={(campos) => componenteSel && editor.run({ type: 'SetComponenteProps', componenteId: componenteSel.id, ...campos })}
         onExcluir={removerSelecionada}
         onSelecionarPonto={(id) => selecionarEAbrir([id])}
+        conjunto={
+          componenteSel
+            ? ehConjunto(componenteSel.tipoId)
+              ? { papel: 'PAI', pecas: filhosDoConjunto(editor.model, componenteSel).length, nome: null, onSelecionar: () => editor.setSelectedIds(filhosDoConjunto(editor.model, componenteSel).map((f) => f.id)) }
+              : paiDoComponente(editor.model, componenteSel)
+                ? { papel: 'FILHO', pecas: filhosDoConjunto(editor.model, paiDoComponente(editor.model, componenteSel)!).length, nome: paiDoComponente(editor.model, componenteSel)!.rotulo || CATALOGO_DE_COMPONENTES[paiDoComponente(editor.model, componenteSel)!.tipoId].rotulo, onSelecionar: () => selecionar([paiDoComponente(editor.model, componenteSel)!.id]) }
+                : null
+            : null
+        }
         seletorDeTipo={
           componenteSel ? (
             <SeletorDeTipo

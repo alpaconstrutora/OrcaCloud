@@ -505,6 +505,14 @@ function projetar(model: BlueprintModel): {
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y || cmpStr(x.tipoId, y.tipoId),
   );
+  // FAMÍLIAS ANINHADAS (0.52.0): o pai por ÍNDICE na lista canônica (uid fica fora do hash). Só nos filhos.
+  {
+    const indiceDeComponente = new Map(componentes.map((c, i) => [c.item.uid, i]));
+    for (const c of componentes) {
+      const pai = c.item.paiUid !== undefined ? indiceDeComponente.get(c.item.paiUid) : undefined;
+      (c.geom as { pai?: number }).pai = pai;
+    }
+  }
 
   // GUARDA-CORPOS (0.44.0): polilinha, altura, tipo, material, código,
   // descrição, rótulo; `sugerido` só quando verdadeiro. Omitidos quando não há.
@@ -1172,6 +1180,8 @@ export interface CanonicalPayload {
     /** Fase de reforma (0.46.0). Ausente = NOVO. */
     fase?: 'EXISTENTE' | 'DEMOLIR';
     parametros?: Parametros;
+    /** FAMÍLIAS ANINHADAS (0.52.0): índice do conjunto-pai nesta lista; ausente = solta. */
+    pai?: number;
   }[];
   /** Guarda-corpos e corrimãos. Ausente sob kernel < 0.44.0 e em desenho sem nenhum. */
   guardaCorpos?: {
@@ -1654,6 +1664,12 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       ...(c.fase ? { fase: c.fase } : {}),
       ...(c.parametros && Object.keys(c.parametros).length > 0 ? { parametros: { ...c.parametros } } : {}),
     });
+  });
+  // FAMÍLIAS ANINHADAS: o pai por índice, depois de todos existirem (pai fora da lista = filho solto).
+  componentes.forEach((c, i) => {
+    if (c.pai === undefined || c.pai === i) return;
+    const pai = model.componentes[c.pai];
+    if (pai) model.componentes[i].paiUid = pai.uid;
   });
 
   const guardaCorpos = payload.guardaCorpos ?? [];

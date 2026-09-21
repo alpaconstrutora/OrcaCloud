@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.51.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.52.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -549,8 +549,38 @@ var CATALOGO_DE_COMPONENTES = {
   CONDENSADORA: { rotulo: "Condensadora (split)", familia: "CLIMATIZACAO", larguraMm: 850, profundidadeMm: 330, alturaMm: 700, simbolo: "CONDENSADORA", folgaMm: 300 },
   EVAPORADORA: { rotulo: "Evaporadora hi-wall", familia: "CLIMATIZACAO", larguraMm: 900, profundidadeMm: 220, alturaMm: 300, simbolo: "EVAPORADORA", cotaMm: 2200, folgaMm: 150 },
   CASA_DE_MAQUINAS: { rotulo: "Casa de m\xE1quinas (reserva)", familia: "CLIMATIZACAO", larguraMm: 2e3, profundidadeMm: 1500, alturaMm: 2500, simbolo: "RESERVA", folgaMm: 600 },
-  EXAUSTOR: { rotulo: "Exaustor / ventila\xE7\xE3o", familia: "CLIMATIZACAO", larguraMm: 400, profundidadeMm: 400, alturaMm: 400, simbolo: "EXAUSTOR", cotaMm: 2300, folgaMm: 100 }
+  EXAUSTOR: { rotulo: "Exaustor / ventila\xE7\xE3o", familia: "CLIMATIZACAO", larguraMm: 400, profundidadeMm: 400, alturaMm: 400, simbolo: "EXAUSTOR", cotaMm: 2300, folgaMm: 100 },
+  // Conjuntos (P2.18): as medidas são a caixa envolvente dos filhos (recalculada ao inserir).
+  CONJUNTO_BANHEIRO: { rotulo: "Conjunto de banheiro (vaso, lavat\xF3rio, box)", familia: "LOUCA", larguraMm: 2400, profundidadeMm: 1500, alturaMm: 2e3, simbolo: "CONJUNTO" },
+  CONJUNTO_JANTAR: { rotulo: "Conjunto de jantar (mesa + 4 cadeiras)", familia: "MOBILIARIO", larguraMm: 1900, profundidadeMm: 1900, alturaMm: 900, simbolo: "CONJUNTO" },
+  CONJUNTO_DORMITORIO: { rotulo: "Conjunto de dormit\xF3rio (cama + 2 criados)", familia: "MOBILIARIO", larguraMm: 2500, profundidadeMm: 1900, alturaMm: 550, simbolo: "CONJUNTO" },
+  CONJUNTO_COZINHA: { rotulo: "Conjunto de cozinha (bancada, fog\xE3o, geladeira)", familia: "EQUIPAMENTO", larguraMm: 3200, profundidadeMm: 700, alturaMm: 1800, simbolo: "CONJUNTO" }
 };
+var CONJUNTOS_DE_COMPONENTES = {
+  CONJUNTO_BANHEIRO: [
+    { tipoId: "VASO", dxMm: -900, dyMm: 350, rotacaoGraus: 0 },
+    { tipoId: "LAVATORIO", dxMm: -150, dyMm: 450, rotacaoGraus: 0 },
+    { tipoId: "BOX", dxMm: 750, dyMm: -300, rotacaoGraus: 0 }
+  ],
+  CONJUNTO_JANTAR: [
+    { tipoId: "MESA_JANTAR", dxMm: 0, dyMm: 0, rotacaoGraus: 0 },
+    { tipoId: "CADEIRA", dxMm: -350, dyMm: 700, rotacaoGraus: 180 },
+    { tipoId: "CADEIRA", dxMm: 350, dyMm: 700, rotacaoGraus: 180 },
+    { tipoId: "CADEIRA", dxMm: -350, dyMm: -700, rotacaoGraus: 0 },
+    { tipoId: "CADEIRA", dxMm: 350, dyMm: -700, rotacaoGraus: 0 }
+  ],
+  CONJUNTO_DORMITORIO: [
+    { tipoId: "CAMA_CASAL", dxMm: 0, dyMm: 0, rotacaoGraus: 0 },
+    { tipoId: "CRIADO", dxMm: -1e3, dyMm: 750, rotacaoGraus: 0 },
+    { tipoId: "CRIADO", dxMm: 1e3, dyMm: 750, rotacaoGraus: 0 }
+  ],
+  CONJUNTO_COZINHA: [
+    { tipoId: "BANCADA", dxMm: -700, dyMm: 0, rotacaoGraus: 0 },
+    { tipoId: "FOGAO", dxMm: 500, dyMm: 0, rotacaoGraus: 0 },
+    { tipoId: "GELADEIRA", dxMm: 1200, dyMm: 0, rotacaoGraus: 0 }
+  ]
+};
+var ehConjunto = (tipoId) => CONJUNTOS_DE_COMPONENTES[tipoId] !== void 0;
 function comprimentoDoGuardaCorpo(g) {
   let s2 = 0;
   for (let i = 1; i < g.pontos.length; i++) s2 += Math.hypot(g.pontos[i].x - g.pontos[i - 1].x, g.pontos[i].y - g.pontos[i - 1].y);
@@ -1741,6 +1771,13 @@ function projetar(model) {
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y || cmpStr(x.tipoId, y.tipoId)
   );
+  {
+    const indiceDeComponente = new Map(componentes.map((c, i) => [c.item.uid, i]));
+    for (const c of componentes) {
+      const pai = c.item.paiUid !== void 0 ? indiceDeComponente.get(c.item.paiUid) : void 0;
+      c.geom.pai = pai;
+    }
+  }
   const guardaCorpos = ordenar(
     model.guardaCorpos ?? [],
     (g) => ({
@@ -2280,6 +2317,11 @@ function modelFromCanonicalPayload(payload) {
       ...c.fase ? { fase: c.fase } : {},
       ...c.parametros && Object.keys(c.parametros).length > 0 ? { parametros: { ...c.parametros } } : {}
     });
+  });
+  componentes.forEach((c, i) => {
+    if (c.pai === void 0 || c.pai === i) return;
+    const pai = model.componentes[c.pai];
+    if (pai) model.componentes[i].paiUid = pai.uid;
   });
   const guardaCorpos = payload.guardaCorpos ?? [];
   guardaCorpos.forEach((g, i) => {
@@ -3747,7 +3789,7 @@ function gerarIfc(model, o) {
         produtosPorCodigo.set(t.itemCode, [...produtosPorCodigo.get(t.itemCode) ?? [], produto]);
       }
     }
-    for (const c of (model.componentes ?? []).filter((x) => x.levelId === nivel.id)) {
+    for (const c of (model.componentes ?? []).filter((x) => x.levelId === nivel.id && !ehConjunto(x.tipoId))) {
       const produto = emitirComponente(c, ctx, localNivel);
       produtos.push(produto);
       psetOpura(produto, c.uid, rotuloCurto(c.uid, "componente"));

@@ -48,7 +48,7 @@ describe('nuvem de revisão (P2.15)', () => {
     expect(proximaRevisao(r)).toBe(3);
     expect(distanciaAAnotacao(r.anotacoes[0], point(2000, 1500))).toBe(0);
 
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.51.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.52.0');
     const payload = parseCanonicalPayload(canonicalPayload(r));
     expect(payload.anotacoes!.filter((a) => a.revisao)).toHaveLength(3);
     expect(payload.anotacoes!.some((a) => a.tipo === 'TEXTO' && 'revisao' in a)).toBe(false);

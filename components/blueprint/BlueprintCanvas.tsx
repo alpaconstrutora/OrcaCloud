@@ -2684,12 +2684,21 @@ export default function BlueprintCanvas({
   /** Qual COMPONENTE está sob o cursor — pelo retângulo. */
   const componenteSob = useCallback(
     (mundo: { x: number; y: number }): Componente | null => {
+      // FAMÍLIAS ANINHADAS (P2.18): as PEÇAS ganham do conjunto que as envolve —
+      // o pai só é pego no vão entre os filhos (ou pelo painel do filho).
+      const p = arredondar(mundo);
+      let pai: Componente | null = null;
       for (let i = componentes.length - 1; i >= 0; i--) {
         const c = componentes[i];
         if (ocultos.has(c.id)) continue;
-        if (pointInPolygon(contornoDoComponente(c), arredondar(mundo))) return c;
+        if (!pointInPolygon(contornoDoComponente(c), p)) continue;
+        if (CATALOGO_DE_COMPONENTES[c.tipoId]?.simbolo === 'CONJUNTO') {
+          pai = pai ?? c;
+          continue;
+        }
+        return c;
       }
-      return null;
+      return pai;
     },
     [componentes, ocultos],
   );
@@ -5668,17 +5677,21 @@ export default function BlueprintCanvas({
       const corDaFaseDoComponente = faseDoComponente && faseDoComponente !== 'NOVO' ? COR_DA_FASE[faseDoComponente] : null;
       const cor = selecionado ? COR_SELECIONADA : corDaFaseDoComponente ? corDaFaseDoComponente.traco : familia ? familia.traco : COR_COMPONENTE;
       const anel = contornoDoComponente(c).map(paraTela);
+      // FAMÍLIAS ANINHADAS (P2.18): o CONJUNTO é agrupamento — contorno tracejado
+      // fino, sem preenchimento, para os filhos aparecerem por dentro.
+      const ehPai = CATALOGO_DE_COMPONENTES[c.tipoId]?.simbolo === 'CONJUNTO';
       ctx.fillStyle = corDaFaseDoComponente ? corDaFaseDoComponente.fundo : familia ? familia.fundo : COR_COMPONENTE_FUNDO;
       ctx.strokeStyle = cor;
-      ctx.lineWidth = selecionado ? 2 : 1.1;
-      ctx.setLineDash(c.sugerido || corDaFaseDoComponente?.tracejado ? [5, 4] : []);
+      ctx.lineWidth = selecionado ? 2 : ehPai ? 0.9 : 1.1;
+      ctx.setLineDash(ehPai ? [7, 4] : c.sugerido || corDaFaseDoComponente?.tracejado ? [5, 4] : []);
       ctx.beginPath();
       ctx.moveTo(anel[0].x, anel[0].y);
       for (const q of anel.slice(1)) ctx.lineTo(q.x, q.y);
       ctx.closePath();
-      ctx.fill();
+      if (!ehPai) ctx.fill();
       ctx.stroke();
       ctx.setLineDash([]);
+      if (ehPai) continue;
       // Símbolo: no espaço local da peça (x ao longo da largura, y da frente ao encosto),
       // levado ao mundo pelos cantos: anel[0]→anel[1] é a largura, anel[0]→anel[3] a profundidade.
       const ux = { x: (anel[1].x - anel[0].x), y: (anel[1].y - anel[0].y) };

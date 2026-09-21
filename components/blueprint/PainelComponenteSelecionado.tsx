@@ -20,11 +20,13 @@ interface Props {
   onSelecionarPonto?: (terminalId: string) => void;
   /** Slot para o SeletorDeTipo (E1.1) — o editor o monta com a família COMPONENTE. */
   seletorDeTipo?: React.ReactNode;
+  /** FAMÍLIAS ANINHADAS (P2.18): esta peça é um CONJUNTO (pai) ou faz parte de um (filho). */
+  conjunto?: { papel: 'PAI' | 'FILHO'; pecas: number; nome: string | null; onSelecionar: () => void } | null;
 }
 
 const m = (mm: number) => (mm / 1000).toFixed(2).replace('.', ',');
 
-export default function PainelComponenteSelecionado({ componente: c, pontoLigado, onProps, onExcluir, onSelecionarPonto, seletorDeTipo }: Props) {
+export default function PainelComponenteSelecionado({ componente: c, pontoLigado, onProps, onExcluir, onSelecionarPonto, seletorDeTipo, conjunto }: Props) {
   if (!c) return null;
   const ficha = CATALOGO_DE_COMPONENTES[c.tipoId];
   const campo = 'rounded-md border border-slate-300 px-2 py-1 text-xs font-normal text-slate-800';
@@ -40,6 +42,18 @@ export default function PainelComponenteSelecionado({ componente: c, pontoLigado
             {ROTULO_DA_FAMILIA_DE_COMPONENTE[c.familia]} · {m(c.larguraMm)} × {m(c.profundidadeMm)} × {m(c.alturaMm)} m · giro {c.rotacaoGraus}°
           </p>
           <IdentificadorDoElemento uid={c.uid} familia="componente" />
+          {conjunto && (
+            <p className="mt-1 flex items-center gap-2 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600" data-testid="componente-conjunto-info">
+              {conjunto.papel === 'PAI' ? (
+                <span><strong>Conjunto</strong> com {conjunto.pecas} peça(s) — mover, girar e excluir levam todas</span>
+              ) : (
+                <span>Faz parte do conjunto <strong>{conjunto.nome}</strong> ({conjunto.pecas} peça(s))</span>
+              )}
+              <button type="button" className="text-blue-700 hover:underline" onClick={conjunto.onSelecionar}>
+                {conjunto.papel === 'PAI' ? 'Selecionar as peças' : 'Selecionar o conjunto'}
+              </button>
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-1">
           {c.sugerido && (

@@ -155,3 +155,6 @@ Nota: a numeração corrige o exemplo (8 mensais depois da parcela 1 são as
 parcelas 2–9, e a final é a 10). "Adicionar pagamento" continua sendo o caminho
 para montar linha a linha; o card "Montar plano" (Fase 2) só gera um primeiro
 rascunho homogêneo.
+
+**Fase 3 publicada em 2026-09-21** (`a07ef55a` em main) e provada de fora:
+`conferir-producao.sh "Total do plano"` ✅ (domínio servindo origin/main).

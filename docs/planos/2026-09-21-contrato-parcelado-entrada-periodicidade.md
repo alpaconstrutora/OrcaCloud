@@ -57,7 +57,7 @@ transborda (31/jan + 1 mês = 03/mar) — `utils/paymentPlan.ts` já tem
 4. **Recorrente — Trimestral:** `types/contracts.ts`, `types/imovib.ts`,
    `services/contractService.ts` (`advanceCycle`, tipo do `createContractFromDeal`)
    e o `<select>` de Periodicidade ganham `Trimestral`; migration
-   `supabase/migrations/20270921000001_contracts_billing_cycle_trimestral.sql`
+   `supabase/migrations/aplicar_20270921000031_contracts_billing_cycle_trimestral.sql`
    refaz o CHECK `contracts_billing_cycle_check`. **Pronto quando:** a migration
    foi aplicada (`db query -f`) e o CHECK no banco lista Trimestral.
 5. **`docs/spikes/contrato-parcelado/`** — harness que reproduz a tela (fica no

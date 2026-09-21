@@ -1673,7 +1673,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             >
                                                 <option value="Mensal">Mensal</option>
                                                 <option value="Bimestral">Bimestral</option>
-                                                {/* Trimestral entrou em 2026-09-21 (migration 20270921000001 refez o CHECK de billing_cycle). */}
+                                                {/* Trimestral entrou em 2026-09-21 (migration 20270921000031 refez o CHECK de billing_cycle). */}
                                                 <option value="Trimestral">Trimestral</option>
                                                 <option value="Semestral">Semestral</option>
                                                 <option value="Anual">Anual</option>

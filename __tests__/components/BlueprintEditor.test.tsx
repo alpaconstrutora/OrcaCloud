@@ -3069,7 +3069,8 @@ describe('BlueprintEditor · ribbon', () => {
     const editar = within(linha).getByRole('group', { name: 'Editar' });
     expect(within(editar).getByRole('button', { name: /desfazer/i })).toBeInTheDocument();
     const vistas = within(linha).getByRole('group', { name: 'Vistas' });
-    expect(within(vistas).getAllByRole('button', { name: /^vista: /i })).toHaveLength(9);
+    // 10 desde a P2.14 (Planta de forro).
+    expect(within(vistas).getAllByRole('button', { name: /^vista: /i })).toHaveLength(10);
     // A linha não é o slot à direita das abas: é filha direta da toolbar, abaixo do tablist.
     const toolbar = screen.getByRole('toolbar');
     expect(linha.closest('[role="toolbar"]')).toBe(toolbar);
@@ -5100,5 +5101,32 @@ describe('BlueprintEditor · cobertura por extrusão (P2.13)', () => {
     expect(info).toHaveTextContent(/2 águas do mesmo eixo/);
     await user.click(within(info).getByRole('button', { name: 'Selecionar a cobertura' }));
     await waitFor(() => expect(screen.getByText(/2 selecionado/)).toBeInTheDocument());
+  }, 60000);
+});
+
+/**
+ * PLANTA DE FORRO (20/09/2026, backlog P2 — P2.14): vista fixa do pavimento
+ * atual, com a faixa dizendo o forro declarado, as luminárias e os difusores.
+ */
+describe('BlueprintEditor · planta de forro (P2.14)', () => {
+  it('Vista: Planta de forro abre read-only no pavimento atual com o resumo do forro', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall' as const, levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 3000 });
+    let m = k.applyBatch(nivel.model, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0)]).model;
+    m = k.applyCommand(m, { type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Sala', acabamentos: { forro: { rebaixoMm: 250, camadas: [{ espessuraMm: 12, itemCode: '', descricao: 'Gesso', funcao: 'ACABAMENTO' }] } } }).model;
+    m = k.applyCommand(m, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'Luz teto', at: k.point(3000, 2000), cotaMm: 2900, tipoEletrico: 'ILUMINACAO_TETO' }).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    const barra = () => within(screen.getByRole('toolbar'));
+    await user.click(barra().getByRole('button', { name: 'Vista: Planta de forro' }));
+    const faixa = await screen.findByTestId('faixa-vista-de-planta');
+    expect(faixa).toHaveTextContent(/Planta de forro · Térreo — O pavimento visto de baixo/);
+    expect(screen.getByTestId('resumo-planta-de-forro')).toHaveTextContent(/1 de 1 ambiente\(s\) com forro declarado · 1 luminária\(s\) de teto · 0 difusor/);
+    expect(barra().queryByRole('button', { name: /^ferramenta: selecionar$/i })).toBeNull();
+    await user.click(within(faixa).getByRole('button', { name: /voltar à planta/i }));
+    expect(screen.queryByTestId('faixa-vista-de-planta')).toBeNull();
   }, 60000);
 });

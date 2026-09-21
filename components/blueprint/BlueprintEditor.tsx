@@ -130,6 +130,7 @@ import { variaveisDaPeca } from '../../utils/blueprintFormulas';
 import { etiquetasDasAberturas, rotuloDeNivelDoPavimento } from '../../utils/blueprintNumeracao';
 import { assinaturaDoTipo, camposDaEstrutura, camposDoTerminal, propriedadesDaEstrutura, propriedadesDoTerminal } from '../../utils/blueprintTipos';
 import { AJUSTE_DA_VISTA, ehVistaDePlanta, idsOcultosNaVista, nivelDaVista } from '../../utils/blueprintVistasDePlanta';
+import { forrosDoNivel, resumoDaPlantaDeForro } from '../../utils/blueprintPlantaDeForro';
 import PainelEstruturaSelecionada from './PainelEstruturaSelecionada';
 import PainelTrechoSelecionado from './PainelTrechoSelecionado';
 import PainelQuadroSelecionado from './PainelQuadroSelecionado';
@@ -1187,9 +1188,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    */
   const vistaDePlanta = ehVistaDePlanta(vista) ? vista : null;
   const nivelDaVistaDePlanta = useMemo(
-    () => (vistaDePlanta ? nivelDaVista(editor.model, vistaDePlanta) : null),
-    [vistaDePlanta, editor.model],
+    // `ATUAL` (planta de forro): o pavimento ativo — `levelId` só nasce mais
+    // abaixo, então a mesma resolução (guardado, senão o primeiro) é refeita aqui.
+    () => (vistaDePlanta ? nivelDaVista(editor.model, vistaDePlanta) ?? editor.model.levels.find((l) => l.id === nivelAtivoId) ?? editor.model.levels[0] ?? null : null),
+    [vistaDePlanta, editor.model, nivelAtivoId],
   );
+  /** PLANTA DE FORRO (P2.14): o forro de cada ambiente do pavimento em vista, e a hachura de quem tem forro. */
+  const plantaDeForro = useMemo(() => {
+    if (vistaDePlanta !== 'forro' || !nivelDaVistaDePlanta) return null;
+    const forros = forrosDoNivel(editor.model, nivelDaVistaDePlanta);
+    return { forros, comForro: new Set(forros.filter((f) => f.material !== null).map((f) => f.spaceId)), resumo: resumoDaPlantaDeForro(editor.model, nivelDaVistaDePlanta) };
+  }, [vistaDePlanta, nivelDaVistaDePlanta, editor.model]);
   const ajusteDaVista = vistaDePlanta ? AJUSTE_DA_VISTA[vistaDePlanta] : null;
   /**
    * O corte que esta SENDO VISTO, quando a vista e um.
@@ -2462,6 +2471,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     // andar. Vai na última linha, como a prancha escreve — abaixo do nome e da
     // área, onde o olho procura o nível do piso.
     const nivel = levelId ? rotuloDeNivelDoPavimento(editor.model.levels, levelId) : null;
+    // PLANTA DE FORRO (P2.14): o rótulo diz o forro, não a área.
+    if (plantaDeForro) return plantaDeForro.forros.map((f) => ({ spaceId: f.spaceId, linhas: f.linhas }));
     return ambientes.map((a) => ({
       spaceId: a.id,
       linhas: [
@@ -2473,7 +2484,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         ...(nivel ? [nivel] : []),
       ],
     }));
-  }, [ambientes, editor.model.levels, editor.model.unidades, levelId]);
+  }, [ambientes, editor.model.levels, editor.model.unidades, levelId, plantaDeForro]);
   /** "PT1", "J2" ao lado de cada vão — a mesma numeração do navegador. */
   const etiquetasDeAbertura = useMemo(() => {
     const paredes = editor.model.walls.filter((w) => !levelId || w.levelId === levelId);
@@ -9956,6 +9967,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           <span className="flex-1">
             <strong>{ajusteDaVista.rotulo}</strong>
             {nivelDaVistaDePlanta ? ` · ${nivelDaVistaDePlanta.name}` : ''} — {ajusteDaVista.descricao}
+            {plantaDeForro && (
+              <span className="ml-1 text-slate-500" data-testid="resumo-planta-de-forro">
+                · {plantaDeForro.resumo.comForro} de {plantaDeForro.resumo.ambientes} ambiente(s) com forro declarado · {plantaDeForro.resumo.luminarias} luminária(s) de teto · {plantaDeForro.resumo.difusores} difusor(es)/grelha(s)
+              </span>
+            )}
           </span>
           <button type="button" onClick={() => setVista('planta')} className="shrink-0 text-xs font-medium underline">
             voltar à planta
@@ -10224,6 +10240,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               mostrarCotaInterna={ajusteDaVista ? false : mostrarCotaInterna}
               mostrarRotulosAmbiente={ajusteDaVista ? false : mostrarRotulos}
               rotulosDeAmbiente={rotulosDeAmbiente}
+              ambientesComForro={plantaDeForro?.comForro}
               etiquetasDeAbertura={etiquetasDeAbertura}
               paredesGeminadas={quadroDeUnidadesDoModelo.paredesGeminadas}
               mobiliario={mobiliarioParaOCanvas}

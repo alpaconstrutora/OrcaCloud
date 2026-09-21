@@ -16,6 +16,7 @@ import {
   ChevronDown,
   Home,
   LandPlot,
+  Lightbulb,
   Map,
   PanelBottom,
   PanelLeft,
@@ -36,6 +37,8 @@ export type VistaBlueprint =
   | 'situacao'
   | 'implantacao'
   | 'cobertura'
+  /** PLANTA DE FORRO (P2.14): o pavimento atual visto de baixo. */
+  | 'forro'
   | 'frente'
   | 'fundos'
   | 'lateral-esq'
@@ -85,6 +88,7 @@ export const VISTAS_FIXAS: readonly {
   { id: 'situacao', rotulo: 'Situação', icone: Map },
   { id: 'implantacao', rotulo: 'Implantação', icone: LandPlot },
   { id: 'cobertura', rotulo: 'Cobertura', icone: Home },
+  { id: 'forro', rotulo: 'Planta de forro', icone: Lightbulb },
   { id: 'frente', rotulo: 'Frente', icone: PanelTop },
   { id: 'fundos', rotulo: 'Fundos', icone: PanelBottom },
   { id: 'lateral-esq', rotulo: 'Lat. esquerda', icone: PanelLeft },

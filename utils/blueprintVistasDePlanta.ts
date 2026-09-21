@@ -24,8 +24,9 @@
  * que devolve o anel pelo eixo) — ver `paredesExternasDoNivel`.
  */
 import { contornoExternoDoNivel, type BlueprintModel, type Level, type Point, type Wall } from './blueprintKernel';
+import { idsOcultosNaPlantaDeForro } from './blueprintPlantaDeForro';
 
-export const VISTAS_DE_PLANTA = ['situacao', 'implantacao', 'cobertura'] as const;
+export const VISTAS_DE_PLANTA = ['situacao', 'implantacao', 'cobertura', 'forro'] as const;
 export type VistaDePlanta = (typeof VISTAS_DE_PLANTA)[number];
 
 export const ehVistaDePlanta = (v: string): v is VistaDePlanta => (VISTAS_DE_PLANTA as readonly string[]).includes(v);
@@ -34,7 +35,8 @@ export interface AjusteDaVista {
   rotulo: string;
   /** Uma frase para a faixa de aviso da vista — o que ela mostra e o que esconde. */
   descricao: string;
-  nivel: 'MAIS_BAIXO' | 'MAIS_ALTO_COM_TELHADO';
+  /** `ATUAL` (planta de forro, P2.14): o pavimento que o usuário está editando. */
+  nivel: 'MAIS_BAIXO' | 'MAIS_ALTO_COM_TELHADO' | 'ATUAL';
   mostrarCotas: boolean;
   mostrarEnvelope: boolean;
   /** Esconde também as paredes internas (fica o contorno). */
@@ -66,11 +68,22 @@ export const AJUSTE_DA_VISTA: Record<VistaDePlanta, AjusteDaVista> = {
     mostrarEnvelope: false,
     soContorno: true,
   },
+  // PLANTA DE FORRO (P2.14): o pavimento atual visto de baixo — forro por ambiente, luminárias de teto, dutos e difusores; sem o que está no chão.
+  forro: {
+    rotulo: 'Planta de forro',
+    descricao: 'O pavimento visto de baixo: forro declarado por ambiente (material, rebaixo, pé-direito útil), luminárias de teto, eletrodutos altos, dutos e difusores — sem mobiliário, tomadas, hidráulica, escadas e vagas.',
+    nivel: 'ATUAL',
+    mostrarCotas: false,
+    mostrarEnvelope: false,
+    soContorno: false,
+  },
 };
 
 /** O pavimento que a vista mostra. `null` só num modelo sem pavimento. */
 export function nivelDaVista(model: BlueprintModel, vista: VistaDePlanta): Level | null {
   if (model.levels.length === 0) return null;
+  // `ATUAL`: quem sabe o pavimento é o editor; aqui não há "o" pavimento.
+  if (AJUSTE_DA_VISTA[vista].nivel === 'ATUAL') return null;
   const porCota = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm);
   if (AJUSTE_DA_VISTA[vista].nivel === 'MAIS_BAIXO') return porCota[0];
   const comTelhado = new Set((model.roofs ?? []).map((r) => r.levelId));
@@ -131,6 +144,8 @@ export function paredesExternasDoNivel(model: BlueprintModel, level: Level): Set
 export function idsOcultosNaVista(model: BlueprintModel, vista: VistaDePlanta, level: Level | null): Set<string> {
   const ocultos = new Set<string>();
   if (!level) return ocultos;
+  // PLANTA DE FORRO (P2.14): regra própria — fica o que está no teto.
+  if (vista === 'forro') return idsOcultosNaPlantaDeForro(model, level);
   const doNivel = <T extends { id: string; levelId: string }>(xs: readonly T[] | undefined) =>
     (xs ?? []).filter((x) => x.levelId === level.id).forEach((x) => ocultos.add(x.id));
   doNivel(model.trechos);

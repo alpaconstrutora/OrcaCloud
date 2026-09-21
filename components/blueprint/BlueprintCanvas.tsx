@@ -1046,6 +1046,8 @@ interface Props {
   mostrarRotulosAmbiente?: boolean;
   /** Rótulo pronto por ambiente, na ordem de `model.spaces` do nível. */
   rotulosDeAmbiente?: { spaceId: string; linhas: string[] }[];
+  /** PLANTA DE FORRO (P2.14): ambientes com forro declarado — recebem a hachura leve de forro. */
+  ambientesComForro?: ReadonlySet<string>;
   /**
    * Etiqueta de cada abertura ("PT1", "J2"), pronta — `etiquetasDasAberturas`.
    * Sai com os rótulos de ambiente (mesmo botão): são as duas anotações de
@@ -1413,6 +1415,7 @@ export default function BlueprintCanvas({
   mostrarCotaInterna = false,
   mostrarRotulosAmbiente = false,
   rotulosDeAmbiente = [],
+  ambientesComForro,
   etiquetasDeAbertura,
   paredesGeminadas,
   mobiliario,
@@ -3796,6 +3799,52 @@ export default function BlueprintCanvas({
           }
         }
       }
+    }
+
+    // ── PLANTA DE FORRO (P2.14): hachura leve (quadriculado) no ambiente com forro declarado ──
+    if (ambientesComForro && ambientesComForro.size > 0) {
+      ctx.save();
+      for (const s of ambientesDoNivel) {
+        if (s.ring.length < 3 || !ambientesComForro.has(s.id)) continue;
+        const pts = s.ring.map(paraTela);
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
+        ctx.closePath();
+        for (const furo of s.holes ?? []) {
+          const f = furo.map(paraTela);
+          if (f.length < 3) continue;
+          ctx.moveTo(f[0].x, f[0].y);
+          for (const q of f.slice(1)) ctx.lineTo(q.x, q.y);
+          ctx.closePath();
+        }
+        ctx.clip('evenodd');
+        ctx.strokeStyle = 'rgba(100, 116, 139, 0.28)';
+        ctx.lineWidth = 1;
+        const xs = pts.map((p) => p.x);
+        const ys = pts.map((p) => p.y);
+        const x0 = Math.min(...xs);
+        const x1 = Math.max(...xs);
+        const y0 = Math.min(...ys);
+        const y1 = Math.max(...ys);
+        // Passo de 600 mm em tela (a placa de forro), nunca menor que 10 px.
+        const passo = Math.max(10, 600 * vista.escala);
+        for (let x = x0; x <= x1; x += passo) {
+          ctx.beginPath();
+          ctx.moveTo(x, y0);
+          ctx.lineTo(x, y1);
+          ctx.stroke();
+        }
+        for (let y = y0; y <= y1; y += passo) {
+          ctx.beginPath();
+          ctx.moveTo(x0, y);
+          ctx.lineTo(x1, y);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      ctx.restore();
     }
 
     // ── RÓTULO DO AMBIENTE: nome, área e perímetro ───────────────────────────
@@ -7525,6 +7574,7 @@ export default function BlueprintCanvas({
     cadeiasDeCota,
     mostrarRotulosAmbiente,
     rotulosDeAmbiente,
+    ambientesComForro,
     etiquetasDeAbertura,
     paredesGeminadas,
     mobiliario,

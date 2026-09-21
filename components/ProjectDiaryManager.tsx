@@ -40,6 +40,8 @@ import { useStore } from '../store/useStore';
 import Button from './ui/Button';
 
 
+type DiaryEditorTab = 'clima' | 'atividades' | 'comentarios' | 'arquivos';
+
 // §6.10 — só colunas de DADO; "Ações" entra por `actions`.
 const DIARY_COLUMNS: StandardTableColumn[] = [
     // soma (1170) + Ações (110) cabe na largura útil de 1290px sem rolagem horizontal
@@ -98,9 +100,13 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
     const [editingId, setEditingId] = useState<string | null>(
         localStorage.getItem('diary_editing_id')
     );
-    const [activeTab, setActiveTab] = useState<'geral' | 'comentarios' | 'arquivos'>(
-        (localStorage.getItem('diary_active_tab') as 'geral' | 'comentarios' | 'arquivos') || 'geral'
-    );
+    // "Dados gerais" foi desmembrada em 2026-09-21: Condições Climáticas e
+    // Atividades do Dia (efetivo + atividades) viraram abas próprias. O valor
+    // persistido 'geral' cai na primeira delas.
+    const [activeTab, setActiveTab] = useState<DiaryEditorTab>(() => {
+        const salvo = localStorage.getItem('diary_active_tab') as DiaryEditorTab | 'geral' | null;
+        return salvo && salvo !== 'geral' ? salvo : 'clima';
+    });
     const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
     const [isLinkingPlanningOpen, setIsLinkingPlanningOpen] = useState(false);
     const [linkedSchedule, setLinkedSchedule] = useState<ProjectSchedule | null>(null);
@@ -486,11 +492,11 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         resetForm();
         setEditingId(null);
         setIsAdding(true);
-        setActiveTab('geral');
+        setActiveTab('clima');
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const handleEdit = (entry: DiaryEntry, targetTab: 'geral' | 'comentarios' | 'arquivos' = 'geral') => {
+    const handleEdit = (entry: DiaryEntry, targetTab: DiaryEditorTab = 'clima') => {
         setFormData(entry);
         setEditingId(entry.id);
         setIsAdding(true);
@@ -834,7 +840,8 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                             <TabsBar
                                 bare
                                 tabs={[
-                                    { id: 'geral', label: 'Dados gerais' },
+                                    { id: 'clima', label: 'Condições Climáticas' },
+                                    { id: 'atividades', label: 'Atividades do Dia', badge: (formData.labor?.length || 0) + (formData.activities?.length || 0) },
                                     { id: 'comentarios', label: 'Comentários' },
                                     { id: 'arquivos', label: 'Arquivos', badge: (formData.images?.length || 0) + (formData.videos?.length || 0) + (formData.documents?.length || 0) },
                                 ]}
@@ -844,7 +851,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                         </div>
 
                         <div className="p-8">
-                            {activeTab === 'geral' && (
+                            {activeTab === 'clima' && (
                                 <div className="space-y-10">
                                     {/* Weather Conditions */}
                                     <section>
@@ -900,7 +907,11 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                             </table>
                                         </div>
                                     </section>
+                                </div>
+                            )}
 
+                            {activeTab === 'atividades' && (
+                                <div className="space-y-10">
                                     {/* Labour List */}
                                     <section>
                                         <div className="flex justify-between items-center mb-4">

@@ -1387,6 +1387,23 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 - App real (escritas bloqueadas: 14, 0 erros de página): Planta 19/09/2026 (publicada) › Colaborar › Versões › SketchUp (.dae) → baixou `planta-19092026-v1.dae` (599 kB, XML bem formado, `Z_UP`, metros, 411 geometrias — 381 paredes + 30 esquadrias — 5 292 triângulos, 1 nó de pavimento) + `planta-19092026-v1.dae.cobertura.txt` com versão e hash.
 - Testes `blueprintCollada.test.ts`: fatias em torno de porta e janela; prisma e L côncavo com volume pela divergência (normais para fora); parede com porta+janela perde exatamente 0,4995 m³ (1,1805 m³); pilar redondo, laje na cota base, água com volume ≈ área real × espessura e subindo; XML com unidade, eixo, materiais, nós, cobertura, determinístico; serviço/GED montam `.dae` + cobertura.
 
+### P2.24 — LOD: nível de desenvolvimento por família (21/09/2026) · backlog P2
+
+**O que entrou**
+- `utils/blueprintLod.ts`: LOD **derivado** por peça (nunca declarado) — parede 200 → 300 com camadas (ou cortina) → 350 com item de catálogo em toda camada; abertura 300 com esquadria → 350 com item; estrutura 300 com rótulo (teto 300); telhado 300 com inclinação e espessura (teto 300); ambiente 300 com nome + tipo → 350 com acabamentos; ponto 300 com tipo fechado e confirmado → 350 com circuito (elétrica) ou item (hidráulica); trecho 300 com bitola e confirmado → 350 com circuito(s) ou item. Cada peça traz o que falta para o próximo nível por extenso. `quadroDeLod` por família (peças, por nível, alvo, teto, % no alvo, mínimo), `pendenciasDeLod` (piores primeiro), `resumoDeLod`, `lodPorUid`.
+- IFC: `OpcoesIfc.lodPorUid` (opcional) → `LevelOfDevelopment` (IFCINTEGER) no `Pset_OpuraPlanta` de cada elemento; o serviço de exportação passa sempre. Goldens IFC intactas (opt-in).
+- Analisar › Relatórios › **LOD** (gaveta `PainelLod`): legenda dos níveis, quadro por família com alvo editável (persistido `blueprint:lod-alvo`, limitado ao teto da família), lista das peças abaixo do alvo com o requisito — clicar seleciona a peça. Contagem no botão = peças abaixo do alvo.
+
+**Decisões**
+- LOD é leitura do desenho, não campo: declarar "350" numa parede sem camadas seria mentira que o orçamento cobraria. Sem bump de kernel.
+- Teto por família declarado: o sistema não avalia LOD 400 (fabricação) em nada, nem 350 em estrutura (exigiria armadura por peça — P3) e telhado. Alvo acima do teto conta contra o teto.
+- Rótulos curtos (`rotuloCurto`) nas pendências; fixtures sem uid caem no id.
+
+**Prova**
+- `npx tsc --noEmit` ok · check-ui ok em `PainelLod.tsx` e `BlueprintEditor.tsx` · suíte cheia 424 arquivos / 4940 testes · `npm run build` ok.
+- App real (escritas bloqueadas: 14, 0 erros de página): Analisar › LOD no Térreo → "185 peça(s) avaliada(s) · LOD do conjunto: 200 · 24 abaixo do alvo"; quadro Paredes 0/7 (sem camadas), Estrutura 67/67, Ambientes 4/4, Pontos 35/36 (97 %), Trechos 55/65 (85 %); pendências "Janela V-0FC2 · LOD 200 — atribuir uma esquadria (tipo) ao vão"; alvo das paredes a 350 muda a conferência.
+- Testes `blueprintLod.test.ts` (cada família nasce em 200 com o requisito; sobe com camadas/item/rótulo/tipo/acabamentos; quadro contra alvo e teto; pendências; IFC só com `lodPorUid`), editor P2.24 (gaveta, alvo por família muda a conferência, pendência com requisito, clicar seleciona).
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

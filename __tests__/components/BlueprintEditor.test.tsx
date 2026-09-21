@@ -5414,3 +5414,43 @@ describe('BlueprintEditor · departamentos (P2.22)', () => {
     expect(screen.queryByTestId('faixa-vista-de-planta')).toBeNull();
   }, 60000);
 });
+
+/**
+ * LOD (21/09/2026, backlog P2): Analisar › LOD abre a gaveta com o quadro por
+ * família (nível derivado), o alvo por família e as pendências; mudar o alvo
+ * muda a conferência; clicar numa pendência seleciona a peça.
+ */
+describe('BlueprintEditor · LOD (P2.24)', () => {
+  it('quadro derivado, alvo por família e pendências clicáveis', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall' as const, levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 });
+    let m = k.applyBatch(nivel.model, [w(0, 0, 4000, 0), w(4000, 0, 4000, 3000), w(4000, 3000, 0, 3000), w(0, 3000, 0, 0)]).model;
+    const frente = m.walls.find((x) => x.a.y === 0 && x.b.y === 0)!;
+    m = k.applyCommand(m, { type: 'SetWallLayers', wallId: frente.id, camadas: [{ espessuraMm: 150, itemCode: 'INT-BLOCO-CER-14', descricao: 'Bloco', funcao: 'VEDACAO' }] }).model;
+    m = k.applyCommand(m, { type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Sala', tipoDeAmbiente: 'SALA_DORMITORIO' }).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^analisar$/i);
+    await user.click(botao(/^LOD/i));
+    const gaveta = await screen.findByTestId('tarefa-lod');
+    expect(gaveta).toHaveTextContent(/5 peça\(s\) avaliada\(s\) · LOD do conjunto: 200 · 3 abaixo do alvo/);
+    const paredes = within(gaveta).getByTestId('lod-parede');
+    expect(paredes).toHaveTextContent(/Paredes/);
+    expect(paredes).toHaveTextContent(/1\/4 · 25 %/);
+    expect(within(gaveta).getByTestId('lod-ambiente')).toHaveTextContent(/1\/1 · 100 %/);
+    // Alvo das paredes para 200: nada pende nelas.
+    await user.selectOptions(within(paredes).getByLabelText('Alvo de LOD para Paredes'), '200');
+    await waitFor(() => expect(within(screen.getByTestId('tarefa-lod')).getByTestId('lod-parede')).toHaveTextContent(/4\/4 · 100 %/));
+    expect(screen.getByTestId('tarefa-lod')).toHaveTextContent(/Toda peça do pavimento está no alvo/);
+    // Alvo do ambiente para 350: a Sala pende, com o requisito por extenso; clicar seleciona.
+    await user.selectOptions(within(screen.getByTestId('tarefa-lod')).getByLabelText('Alvo de LOD para Ambientes'), '350');
+    const pend = await within(screen.getByTestId('tarefa-lod')).findByTestId('pendencias-de-lod');
+    expect(pend).toHaveTextContent(/Sala · LOD 300/);
+    expect(pend).toHaveTextContent(/declarar piso, forro e rodapé/);
+    await user.click(within(pend).getByRole('button', { name: /Sala/ }));
+    await waitFor(() => expect(screen.queryByTestId('tarefa-lod')).toBeNull());
+  }, 60000);
+});

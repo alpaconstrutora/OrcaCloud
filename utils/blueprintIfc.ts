@@ -526,6 +526,12 @@ export interface OpcoesIfc {
    * `IfcMonetaryUnit`. O sistema é todo em BRL, e é o que se declara.
    */
   custoPorUid?: ReadonlyMap<string, number>;
+  /**
+   * LOD (backlog P2): nível de desenvolvimento derivado por elemento
+   * (`blueprintLod.lodPorUid`) → `LevelOfDevelopment` no `Pset_OpuraPlanta`.
+   * Opcional: quem chama `gerarIfc` sem ele obtém o arquivo de sempre.
+   */
+  lodPorUid?: ReadonlyMap<string, number>;
 }
 
 interface Ctx {
@@ -785,6 +791,8 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
     if (uid) {
       const custo = o.custoPorUid?.get(uid);
       if (custo !== undefined) props.push(['Cost', { tipo: 'IFCMONETARYMEASURE', v: custo }]);
+      const lod = o.lodPorUid?.get(uid);
+      if (lod !== undefined) props.push(['LevelOfDevelopment', { tipo: 'IFCINTEGER', v: lod }]);
     }
     emitirPset(ctx, produto, uid, 'Pset_OpuraPlanta', props);
     psetPersonalizado(produto, uid);

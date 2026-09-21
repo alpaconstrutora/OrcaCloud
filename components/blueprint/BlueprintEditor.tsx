@@ -438,6 +438,8 @@ import { proximaRevisao, revisoesDoModelo, resumirAnotacoes } from '../../utils/
 import PainelGuardaCorpos from './PainelGuardaCorpos';
 import PainelRodapes from './PainelRodapes';
 import PainelDepartamentos from './PainelDepartamentos';
+import PainelLod from './PainelLod';
+import { ALVO_DE_LOD_PADRAO, lodDosElementos, pendenciasDeLod, quadroDeLod, type AlvoDeLod } from '../../utils/blueprintLod';
 import { quadroDeDepartamentos, sugestoesDeDepartamento } from '../../utils/blueprintDepartamentos';
 import PainelRodapeSelecionado from './PainelRodapeSelecionado';
 import { HIPOTESES_DE_RODAPE_PADRAO, resumirRodapes, sugerirRodapes, type HipotesesDeRodape } from '../../utils/blueprintRodape';
@@ -852,6 +854,8 @@ const ROTULO_DA_TAREFA = {
   rodapes: 'Rodapés por ambiente',
   // DEPARTAMENTO (21/09/2026, P2.22): setor por ambiente na etiqueta; quadro por setor e a planta colorida.
   departamentos: 'Departamentos (setores) por ambiente',
+  // LOD (21/09/2026, P2): nível de desenvolvimento derivado por família; alvo por família; pendências.
+  lod: 'LOD — nível de desenvolvimento por família',
   // IA conversacional (19/09/2026, E6.4): pedido → mudanças no programa/hipóteses → re-geração → delta.
   ia: 'Conversar com a planta',
   'gerar-paredes': 'Gerar paredes do PDF',
@@ -1731,6 +1735,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [hipotesesDeGuardaCorpo, setHipotesesDeGuardaCorpo] = usePersistedState<HipotesesDeGuardaCorpo>('blueprint:guardaCorpos', HIPOTESES_DE_GUARDA_CORPO_PADRAO);
   /** RODAPÉ COMO ELEMENTO (P2.21): altura/item padrão do gerador. */
   const [hipotesesDeRodape, setHipotesesDeRodape] = usePersistedState<HipotesesDeRodape>('blueprint:rodapes', HIPOTESES_DE_RODAPE_PADRAO);
+  /** LOD (P2): o alvo por família é da pessoa (persistido); o LOD de cada peça é lido do desenho. */
+  const [alvoDeLod, setAlvoDeLod] = usePersistedState<AlvoDeLod>('blueprint:lod-alvo', ALVO_DE_LOD_PADRAO);
   const [hipotesesDeVagas, setHipotesesDeVagas] = usePersistedState<HipotesesDeVagas>('blueprint:vagas', HIPOTESES_VAGAS_PADRAO);
   const [regiaoDeVagasPedida, setRegiaoDeVagasPedida] = useState<RegiaoDeVagas | null>(null);
   /** ACABAMENTOS (E7.2): o ambiente que a gaveta abre já expandido (vindo do cartão). */
@@ -3250,6 +3256,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   /** DEPARTAMENTOS (P2.22): quadro e sugestões do pavimento ativo. */
   const quadroDeDepartamentosDoNivel = useMemo(() => quadroDeDepartamentos(editor.model, levelId), [editor.model, levelId]);
   const sugestoesDeDepartamentoDoNivel = useMemo(() => sugestoesDeDepartamento(editor.model, levelId), [editor.model, levelId]);
+  /** LOD (P2): elementos do pavimento com o nível derivado; quadro e pendências contra o alvo. */
+  const lodDoNivel = useMemo(() => lodDosElementos(editor.model, levelId), [editor.model, levelId]);
+  const quadroDeLodDoNivel = useMemo(() => quadroDeLod(lodDoNivel, { ...ALVO_DE_LOD_PADRAO, ...alvoDeLod }), [lodDoNivel, alvoDeLod]);
+  const pendenciasDeLodDoNivel = useMemo(() => pendenciasDeLod(lodDoNivel, { ...ALVO_DE_LOD_PADRAO, ...alvoDeLod }), [lodDoNivel, alvoDeLod]);
   const rodapeSel = (editor.model.rodapes ?? []).find((r) => r.id === editor.selectedId) ?? null;
   const componentesDoNivelAtivo = useMemo(() => (editor.model.componentes ?? []).filter((c) => !levelId || c.levelId === levelId), [editor.model.componentes, levelId]);
   const vagasDoNivelAtivo = useMemo(() => (editor.model.vagas ?? []).filter((v) => !levelId || v.levelId === levelId), [editor.model.vagas, levelId]);
@@ -9146,6 +9156,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   ajuda="Departamento (setor) de cada ambiente — Social, Íntimo, Serviço, Circulação, Técnico — gravado na etiqueta; quadro de áreas por setor, sugestão pelo nome/tipo e a planta de departamentos colorida com legenda. O número é quantos ambientes ainda não têm setor."
                 />
               )}
+              {relatorioVisivel('quantitativos') && !emVista && (
+                <BotaoDoRibbon
+                  icone={Gauge}
+                  rotulo="LOD"
+                  contagem={pendenciasDeLodDoNivel.length || undefined}
+                  ativo={tarefaAberta === 'lod'}
+                  onClick={() => alternarTarefa('lod')}
+                  ajuda="Nível de desenvolvimento (LOD 200/300/350) lido de cada peça — camadas, esquadria, rótulo, tipo, circuito, item de catálogo —, alvo por família e a lista do que falta para chegar lá. Vai no IFC como LevelOfDevelopment. O número é quantas peças estão abaixo do alvo."
+                />
+              )}
               {relatorioVisivel('quantitativos') && (
                 <BotaoDoRibbon
                   icone={Scale}
@@ -11420,6 +11440,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'guardaCorpos' && <Fence className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'rodapes' && <Minus className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'departamentos' && <Palette className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'lod' && <Gauge className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'fundacoes' && <SquareStack className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'pontosHidraulicos' && <ShowerHead className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'agua' && <Droplets className="h-5 w-5 text-blue-700" />}
@@ -11435,6 +11456,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           <SheetDescription>
             {tarefaAberta === 'ia' &&
               'Peça em português: "suíte +2 m²", "3 dormitórios", "corredor de 1,20 m". O pedido vira mudança no programa ou nas hipóteses, o gerador re-gera e você lê o delta dos indicadores. Nunca desenha direto.'}
+            {tarefaAberta === 'lod' &&
+              'O LOD de cada peça é derivado do que ela já tem (não se declara): 200 aproximado, 300 preciso, 350 coordenação. Você declara o alvo por família; a lista mostra o que falta, peça a peça. O sistema não avalia LOD 400.'}
             {tarefaAberta === 'departamentos' &&
               'O setor de cada ambiente, gravado na etiqueta. O quadro soma a área útil por setor; a sugestão lê nome e tipo e só grava quando você manda; a planta de departamentos pinta pelo setor com legenda.'}
             {tarefaAberta === 'rodapes' &&
@@ -11520,7 +11543,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' || tarefaAberta === 'mobiliario' || tarefaAberta === 'ia' || tarefaAberta === 'acabamentos' || tarefaAberta === 'guardaCorpos' || tarefaAberta === 'rodapes' || tarefaAberta === 'departamentos' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' || tarefaAberta === 'mobiliario' || tarefaAberta === 'ia' || tarefaAberta === 'acabamentos' || tarefaAberta === 'guardaCorpos' || tarefaAberta === 'rodapes' || tarefaAberta === 'departamentos' || tarefaAberta === 'lod' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
 
@@ -11545,6 +11568,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             />
           )}
 
+          {tarefaAberta === 'lod' && (
+            <PainelLod
+              nomeDoPavimento={editor.model.levels.find((l) => l.id === levelId)?.name ?? 'pavimento'}
+              quadro={quadroDeLodDoNivel}
+              pendencias={pendenciasDeLodDoNivel}
+              alvo={{ ...ALVO_DE_LOD_PADRAO, ...alvoDeLod }}
+              onAlvo={setAlvoDeLod}
+              onSelecionar={(_familia, id) => {
+                setTarefa(null);
+                selecionar([id]);
+              }}
+            />
+          )}
           {tarefaAberta === 'departamentos' && (
             <PainelDepartamentos
               nomeDoPavimento={editor.model.levels.find((l) => l.id === levelId)?.name ?? 'pavimento'}

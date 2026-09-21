@@ -43,6 +43,7 @@ import { modeloDoPavimento, papelDoTemplate, planejarConjunto, type PranchaPlane
 import { COBERTURA_DXF, gerarDxf, type TopografiaParaDxf } from '../utils/blueprintDxf';
 import { COBERTURA_IFC, gerarIfc, ifcGuidDoProjeto } from '../utils/blueprintIfc';
 import { COBERTURA_COLLADA, gerarCollada } from '../utils/blueprintCollada';
+import { lodPorUid } from '../utils/blueprintLod';
 import { chavesPrivadas, parametrosCalculadosDoModelo } from '../utils/blueprintFormulas';
 import { arquivosDoBcf, type TopicoBcf } from '../utils/blueprintBcf';
 import {
@@ -679,6 +680,8 @@ export function montarIfc(model: BlueprintModel, o: OpcoesExportacao): ArtefatoE
     studyId: o.studyId,
     // Só vai custo se quem exportou pediu — ver `custoPorUid`.
     custoPorUid: o.custoPorUid,
+    // LOD derivado por elemento (backlog P2): sempre vai — é leitura do desenho, não opção.
+    lodPorUid: lodPorUid(model),
     aprovacao: o.aprovacao,
     parametrosCalculadosPorUid: o.definicoesDeParametro ? parametrosCalculadosDoModelo(model, o.definicoesDeParametro) : undefined,
     chavesPrivadas: o.definicoesDeParametro ? chavesPrivadas(o.definicoesDeParametro) : undefined,

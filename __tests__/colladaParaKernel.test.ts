@@ -104,8 +104,8 @@ describe('COLLADA → paredes', () => {
     const comMovel = dae.replace('</library_geometries>', caixa + '</library_geometries>').replace('<node id="pav-', '<node id="no-mov" name="Mobiliário armário"><instance_geometry url="#mov"/></node><node id="pav-');
     const semFiltro = prepararCollada(comMovel, { ...OPCOES_PADRAO, ignorarNos: null });
     const comFiltro = prepararCollada(comMovel);
-    // Com o filtro, o armário sai (12 triângulos) e sobram as 4 paredes; sem ele, o armário vira uma parede a mais.
-    expect(comFiltro.resumo.triangulosIgnoradosPorNome).toBe(12);
+    // Com o filtro, os dois armários saem (o nó colado à mão + o que a P2.31 exporta do componente: 12 + 12 triângulos) e sobram as 4 paredes; sem ele, o armário vira uma parede a mais.
+    expect(comFiltro.resumo.triangulosIgnoradosPorNome).toBe(24);
     expect(comFiltro.paredes).toHaveLength(4);
     expect(semFiltro.paredes.length).toBeGreaterThan(4);
     // O vão de 1200 de piso a teto é passage; a janelinha de 200 (< 300) é ignorada.

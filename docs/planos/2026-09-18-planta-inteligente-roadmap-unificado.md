@@ -1379,7 +1379,7 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 **Decisões**
 - **Não é `.skp`**: o formato binário do SketchUp só o SDK em C da Trimble escreve — não cabe no navegador nem numa Edge Function. COLLADA é o que o SketchUp importa nativamente em todas as edições (Arquivo › Importar), e Blender/Rhino também; a cobertura e o rótulo dizem isso.
 - Parcial somente com declaração (mesma disciplina do IFC): sem instalações, mobiliário, terreno, escadas, guarda-corpos, rodapés, anotações, texturas.
-- Importação de COLLADA/SKP (paredes a partir de faces verticais) fica como backlog registrado — a importação de paredes já existe pelo IFC/DXF.
+- Importação de COLLADA/SKP (paredes a partir de faces verticais) fica como backlog registrado — a importação de paredes já existe pelo IFC/DXF. → **feita na P2.26 (paredes) e P2.29 (aberturas)**; instalações e mobiliário na exportação → **P2.31**.
 - Sem bump de kernel (nada no payload).
 
 **Prova**
@@ -1510,6 +1510,21 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 - `npx tsc --noEmit` ok · check-ui ok · `check-xss-sinks.sh` ok · suíte cheia 430 arquivos / 4990 testes · `npm run build` ok.
 - App real (escritas bloqueadas: 16, 0 erros): Analisar › LOD na Planta 14/09 → Estrutura "teto 400 · 67 peças: 60 em 300, 1 em 350, 6 em 400" (o estudo já tinha armaduras manuais declaradas), cabeçalho com a coluna 400; pilar novo → "Lançar manualmente" no painel da peça → "Armadura lançada manualmente"; LOD com alvo 400 → "6/68 · 9 %", pendência "Pilar C-E8DB · LOD 200 — identificar a peça".
 - Testes `blueprintLod.test.ts`: sem manual = 300 com a falta certa; pilar manual = 350/400 conforme avisos; pilar subarmado (2 Ø 5) = 350 com "avisos da armadura"; viga só inferior = 350 com "armadura superior"; viga completa = 400; alvo acima do teto conta contra o teto (parede); IFC emite `LevelOfDevelopment` 350/400 com o contexto; editor P2.24 ampliado (estrutura com teto 400, coluna e alvo 400).
+
+### P2.31 — Exportação COLLADA de instalações e mobiliário (21/09/2026) · fecho do "fora desta fase" da P2.23
+
+**O que entrou**
+- `utils/blueprintCollada.ts`: geradores `cilindroEntre(p0, p1, raio, facetas)` (base ortonormal destra montada já no referencial do SketchUp; tampas + laterais com normal para fora) e `caixaGirada(centro, largura, profundidade, giro, z0, z1)`. `malhasDoModelo(model, incluir)` leva agora **instalações** — trecho = um cilindro por segmento do "L" que o 3D usa (`segmentosDoEletroduto`), raio `max(bitola/2, 15)`; ponto = caixa `medidasDoTerminal` centrada na cota e girada; quadro = caixa `medidasDoQuadro` — e **mobiliário** — caixa largura × profundidade × altura, girada, na cota; conjuntos (pai) não vão, só as peças. 10 materiais novos (as cores de `COR_DA_DISCIPLINA` e das famílias do 3D; 16 no total). `MalhaCollada.grupo` e a cena vira pavimento → **grupo** (Arquitetura / Estrutura / Telhado / Instalações / Mobiliário) → peça: no Outliner do SketchUp um clique esconde as instalações. `OpcoesCollada.incluir { instalacoes, mobiliario }` (padrão tudo; sem toggle na tela — declarado). `ResumoCollada` += trechos/terminais/quadros/componentes; `COBERTURA_COLLADA` atualizada ("caixa é caixa: o vaso e a luminária saem como o volume que ocupam").
+
+**Decisões**
+- Nomes dos nós ("Trecho …", "Ponto …", "Quadro …", "Mobiliário …") são os que o importador (P2.29, `IGNORAR_NOS_PADRAO`) reconhece e ignora — o `.dae` da Planta volta como as mesmas paredes.
+- Raio mínimo de 15 mm no cilindro, como o 3D: um eletroduto de 20 mm sumiria.
+- Sem bump de kernel; exportação pura.
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-xss-sinks.sh` ok · suíte cheia 430 arquivos / 4996 testes · `npm run build` ok.
+- App real (escritas bloqueadas: 14, 0 erros): Colaborar › Versões › SketchUp (.dae) da Planta 19/09 v1 → 603 kB, 16 materiais, nó de grupo "Arquitetura" (a versão publicada não tem instalações nem mobiliário — nenhuma versão publicada do acervo tem; publicar seria escrita real) → reimportado: 171 paredes, como na P2.29. `casa-mep.dae` (gerado por `gerarCollada` de um modelo com eletroduto, tubo de água, tomada, quadro, armário de 2 m e um conjunto de jantar: 14 geometrias, 240 triângulos, grupos Arquitetura/Instalações/Mobiliário, XML bem formado) → Inserir › Do SketchUp: **4 paredes · 192 triângulos fora** com o filtro por nome; sem o filtro, o armário vira "parede de 600 mm" e o desenho perde 4 m — a razão do filtro, vista.
+- Testes `blueprintCollada.test.ts`: eletroduto com um cilindro por segmento do L, tubo com volume ≈ π·0,015²·L, tomada de 0,25 a 0,35 m com 0,001 m³, quadro elétrico, armário girado 0,72 m³ por família, conjunto só pelas peças, nós de grupo e materiais, `incluir` desliga, ida e volta pelo importador devolve as 4 paredes; geradores com volume positivo (reto, inclinado, girado) e degenerado vazio.
 
 ## Verificação (por fase)
 

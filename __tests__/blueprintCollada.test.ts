@@ -6,7 +6,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type Command } from '../utils/blueprintKernel';
-import { COBERTURA_COLLADA, fatiasDaParede, gerarCollada, malhasDoModelo, prisma, triangularAnel } from '../utils/blueprintCollada';
+import { caixaGirada, cilindroEntre, COBERTURA_COLLADA, fatiasDaParede, gerarCollada, malhasDoModelo, prisma, triangularAnel } from '../utils/blueprintCollada';
+import { prepararCollada } from '../utils/colladaParaKernel';
+import { segmentosDoEletroduto } from '../utils/blueprintRede';
 import { artefatosDoFormato } from '../services/blueprintGedService';
 import { PAPEIS } from '../utils/blueprintExport';
 
@@ -91,6 +93,72 @@ describe('SKP · COLLADA', () => {
     expect(Math.max(...zs) - Math.min(...zs)).toBeGreaterThan(1.2);
   });
 
+  it('P2.31 — instalações e mobiliário: cilindros pela bitola (eletroduto em L), caixas na cota, armário por família, conjunto só pelas peças; grupos na cena; opção desliga; o importador ignora pelo nome', () => {
+    const { m, t } = casa();
+    let m2 = m;
+    // Eletroduto de (500,500,cota 300) a (2500,500,cota 300): o 3D anda em "L" (sobe ao teto, corre, desce) → mais de um cilindro.
+    m2 = applyCommand(m2, { type: 'AddTrecho', levelId: t, disciplina: 'ELETRICA', a: point(500, 500), b: point(2500, 500), cotaAMm: 300, cotaBMm: 300, bitolaMm: 25 } as Command).model;
+    // Tubo de água fria reto de 2 m, DN 25 → um cilindro de volume ≈ π·0,0125²·2.
+    m2 = applyCommand(m2, { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: point(500, 1500), b: point(2500, 1500), cotaAMm: 1100, cotaBMm: 1100, bitolaMm: 25 } as Command).model;
+    // Tomada (caixa 100³ centrada na cota 300 → z de 0,25 a 0,35) e quadro.
+    m2 = applyCommand(m2, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'Tomada', at: point(1000, 150), cotaMm: 300 } as Command).model;
+    m2 = applyCommand(m2, { type: 'AddQuadro', levelId: t, nome: 'QDC', at: point(3000, 150), cotaMm: 1500 } as Command).model;
+    // Armário 600 × 600 × 2000 na cota 0 (0,72 m³) e um conjunto (o pai não vai; as peças vão).
+    m2 = applyCommand(m2, { type: 'AddComponente', levelId: t, tipoId: 'ARMARIO', familia: 'ARMARIO', at: point(2000, 2000), larguraMm: 600, profundidadeMm: 600, alturaMm: 2000, rotacaoGraus: 30 } as Command).model;
+    const antesDoConjunto = (m2.componentes ?? []).length;
+    m2 = applyCommand(m2, { type: 'AddConjunto', levelId: t, tipoId: 'CONJUNTO_JANTAR', at: point(1500, 2000), rotacaoGraus: 0 } as Command).model;
+    const pecasDoConjunto = (m2.componentes ?? []).length - antesDoConjunto - 1;
+
+    const { malhas, resumo } = malhasDoModelo(m2);
+    expect(resumo).toMatchObject({ trechos: 2, terminais: 1, quadros: 1, componentes: 1 + pecasDoConjunto });
+    const eletroduto = malhas.find((x) => x.nome.startsWith('Trecho ELETRICA'))!;
+    const agua = malhas.find((x) => x.nome.startsWith('Trecho AGUA_FRIA'))!;
+    // Eletroduto: um cilindro por segmento do "L" que o 3D usa (2 tampas de 12 + 24 laterais = 48 triângulos cada).
+    const segmentos = segmentosDoEletroduto(m2.trechos!.find((x) => x.disciplina === 'ELETRICA')!, 2800).length;
+    expect(eletroduto.triangulos.length / 3).toBe(segmentos * 48);
+    expect(agua.triangulos.length / 3).toBe(48);
+    // Raio = max(bitola/2, 15 mm) = 15 mm; 12 facetas dão ~2 % a menos que o círculo.
+    expect(volume(agua.posicoes, agua.triangulos)).toBeCloseTo(Math.PI * 0.015 * 0.015 * 2 * 0.977, 4);
+    expect(agua.material).toBe('mat-agua-fria');
+    expect(eletroduto.material).toBe('mat-eletrica');
+    const tomada = malhas.find((x) => x.nome.startsWith('Ponto Tomada'))!;
+    const zs = tomada.posicoes.filter((_, i) => i % 3 === 2);
+    expect(Math.min(...zs)).toBeCloseTo(0.25, 6);
+    expect(Math.max(...zs)).toBeCloseTo(0.35, 6);
+    expect(volume(tomada.posicoes, tomada.triangulos)).toBeCloseTo(0.001, 6);
+    expect(malhas.find((x) => x.nome.startsWith('Quadro QDC'))?.material).toBe('mat-eletrica');
+    const armario = malhas.find((x) => x.nome.startsWith('Mobiliário ARMARIO'))!;
+    expect(volume(armario.posicoes, armario.triangulos)).toBeCloseTo(0.72, 2); // girado 30°, cantos ao mm
+    expect(armario.material).toBe('mat-armario');
+    expect(armario.grupo).toBe('Mobiliário');
+    expect(malhas.some((x) => x.nome.includes('CONJUNTO_JANTAR'))).toBe(false);
+    // Cena por grupo; materiais novos; a opção desliga.
+    const xml = gerarCollada(m2, { titulo: 'Casa', revisao: 1, hash: 'h' });
+    expect(xml).toMatch(/<node id="grp-[^"]*" name="Instalações">/);
+    expect(xml).toMatch(/<node id="grp-[^"]*" name="Mobiliário">/);
+    expect(xml).toMatch(/<node id="grp-[^"]*" name="Arquitetura">/);
+    expect(xml).toContain('<material id="mat-agua-fria"');
+    const so = gerarCollada(m2, { titulo: 'Casa', revisao: 1, hash: 'h', incluir: { instalacoes: false, mobiliario: false } });
+    expect(so).not.toMatch(/<node id="grp-[^"]*" name="Instalações">/);
+    expect(so).not.toMatch(/<node id="grp-[^"]*" name="Mobiliário">/);
+    expect(so).toContain('0 trecho(s), 0 ponto(s), 0 quadro(s), 0 componente(s)');
+    // Ida e volta pelo importador (P2.26/P2.29): com o padrão `ignorarNos`, o .dae com instalações e mobiliário devolve as mesmas 4 paredes — o armário de 2 m não vira parede.
+    const r = prepararCollada(xml);
+    expect(r.paredes).toHaveLength(4);
+    expect(r.resumo.triangulosIgnoradosPorNome).toBeGreaterThan(0);
+  });
+
+  it('P2.31 — geradores: cilindro entre pontos e caixa girada com normais para fora', () => {
+    const c = cilindroEntre([0, 0, 0], [0, 0, 1000], 50, 24);
+    expect(volume(c.posicoes, c.triangulos)).toBeGreaterThan(Math.PI * 0.05 * 0.05 * 1 * 0.98);
+    expect(volume(c.posicoes, c.triangulos)).toBeLessThan(Math.PI * 0.05 * 0.05 * 1);
+    const inclinado = cilindroEntre([0, 0, 0], [1000, 1000, 1000], 50, 24);
+    expect(volume(inclinado.posicoes, inclinado.triangulos)).toBeGreaterThan(Math.PI * 0.05 * 0.05 * Math.sqrt(3) * 0.98);
+    const caixa = caixaGirada(point(1000, 1000), 600, 400, 45, 100, 900);
+    expect(volume(caixa.posicoes, caixa.triangulos)).toBeCloseTo(0.6 * 0.4 * 0.8, 2); // cantos arredondados ao mm
+    expect(cilindroEntre([0, 0, 0], [0, 0, 0], 50).triangulos).toEqual([]);
+  });
+
   it('XML: metros, Z para cima, materiais, um nó por pavimento com as peças, cobertura no cabeçalho; determinístico', () => {
     const { m } = casa();
     const o = { titulo: 'Casa & Cia', revisao: 3, hash: 'abc123', kernelVersion: 'blueprint-kernel-ts-x' };
@@ -102,8 +170,8 @@ describe('SKP · COLLADA', () => {
     expect(xml).toContain('<node id="pav-');
     expect(xml).toContain('name="Térreo"');
     expect((xml.match(/<geometry /g) ?? []).length).toBe(6); // 4 paredes + porta + janela
-    expect((xml.match(/<material /g) ?? []).length).toBe(6);
-    expect(xml).toContain('4 parede(s), 2 esquadria(s), 0 peça(s) estrutural(is), 0 água(s)');
+    expect((xml.match(/<material /g) ?? []).length).toBe(16);
+    expect(xml).toContain('4 parede(s), 2 esquadria(s), 0 peça(s) estrutural(is), 0 água(s), 0 trecho(s), 0 ponto(s), 0 quadro(s), 0 componente(s)');
     for (const linha of COBERTURA_COLLADA) expect(xml).toContain(linha.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'));
     expect(gerarCollada(m, o)).toBe(xml);
     expect(xml).not.toContain('NaN');

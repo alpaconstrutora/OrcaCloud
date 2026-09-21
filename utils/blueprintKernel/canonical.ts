@@ -162,6 +162,15 @@ function projetar(model: BlueprintModel): {
     geom: { ...l.geom, tipoDe: l.item.tipoDeId !== undefined ? nivel(l.item.tipoDeId) : undefined },
   }));
 
+  // ETAPAS DE OBRA (0.57.0): por ordem e nome; as peças referenciam por ÍNDICE nesta lista.
+  const etapas = ordenar(
+    model.etapas ?? [],
+    (e) => ({ nome: e.nome, ordem: e.ordem }),
+    (a, b) => a.ordem - b.ordem || a.nome.localeCompare(b.nome),
+  );
+  const indiceDaEtapa = new Map(etapas.map((e, i) => [e.item.id, i]));
+  const etapa = (id: string | null | undefined) => (id != null ? indiceDaEtapa.get(id) : undefined);
+
   // Ordem geométrica, não ordem de criação: duas sessões que desenham as mesmas
   // paredes em ordens diferentes precisam produzir o mesmo payload.
   const walls = ordenar(
@@ -190,6 +199,9 @@ function projetar(model: BlueprintModel): {
       cedeSobreposicao: w.cedeSobreposicao ? true : undefined,
       // FASE DE REFORMA (0.46.0): só quando EXISTENTE ou DEMOLIR — NOVO é o padrão e a ausência.
       fase: w.fase && w.fase !== 'NOVO' ? w.fase : undefined,
+      // ETAPAS (0.57.0): índices em `etapas`, só quando declarados.
+      etapa: etapa(w.etapaId),
+      demolidaEm: etapa(w.demolidaEmEtapaId),
       // PAREDE CURVA (0.48.0): o círculo da faceta, só quando existe — parede
       // reta não ganha chave. É conteúdo (o canvas desenha o arco e o painel o
       // reconhece), então entra no hash.
@@ -267,6 +279,8 @@ function projetar(model: BlueprintModel): {
       // escritura teve em 0.6.0.
       embutida: o.kind === 'sliding' ? o.embutida : undefined,
       fase: o.fase && o.fase !== 'NOVO' ? o.fase : undefined,
+      etapa: etapa(o.etapaId),
+      demolidaEm: etapa(o.demolidaEmEtapaId),
       // O TIPO, só quando declarado — a disciplina de `camadas`: emitir sempre
       // acrescentaria a chave a toda abertura do acervo. Campos reescritos um
       // a um, e `descricao` ENTRA pela razão escrita nas camadas: é o que o
@@ -333,6 +347,8 @@ function projetar(model: BlueprintModel): {
       // decisão do usuário.
       cedeSobreposicao: s.cedeSobreposicao ? true : undefined,
       fase: s.fase && s.fase !== 'NOVO' ? s.fase : undefined,
+      etapa: etapa(s.etapaId),
+      demolidaEm: etapa(s.demolidaEmEtapaId),
       parametros: parametrosCanonicos(s.parametros),
       // Seção T: mesma regra da linha acima, e pela mesma razão. Toda peça do
       // acervo é de seção cheia, então a chave ausente mantém o payload —
@@ -507,6 +523,8 @@ function projetar(model: BlueprintModel): {
       rotulo: c.rotulo ?? null,
       sugerido: c.sugerido ? true : undefined,
       fase: c.fase && c.fase !== 'NOVO' ? c.fase : undefined,
+      etapa: etapa(c.etapaId),
+      demolidaEm: etapa(c.demolidaEmEtapaId),
       parametros: parametrosCanonicos(c.parametros),
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y || cmpStr(x.tipoId, y.tipoId),
@@ -890,6 +908,7 @@ function projetar(model: BlueprintModel): {
         }
       : undefined,
     levels: levels.map((l) => l.geom),
+    etapas: etapas.length ? etapas.map((e) => e.geom) : undefined,
     walls: walls.map((w) => w.geom),
     openings: openings.map((o) => o.geom),
     boundaries: boundaries.map((b) => b.geom),
@@ -924,6 +943,7 @@ function projetar(model: BlueprintModel): {
   const identidade: IdentidadeCanonica = {
     v: 1,
     levels: levels.map((l) => l.item.uid ?? null),
+    etapas: etapas.map((e) => e.item.uid ?? null),
     walls: walls.map((w) => w.item.uid ?? null),
     openings: openings.map((o) => o.item.uid ?? null),
     boundaries: boundaries.map((b) => b.item.uid ?? null),
@@ -1002,6 +1022,8 @@ export function hashDePayload(payload: CanonicalPayload): string {
 export interface IdentidadeCanonica {
   v: 1;
   levels: (ElementUid | null)[];
+  /** Ausente em payload gravado sob kernel anterior a 0.57.0. */
+  etapas?: (ElementUid | null)[];
   walls: (ElementUid | null)[];
   openings: (ElementUid | null)[];
   boundaries: (ElementUid | null)[];
@@ -1054,6 +1076,8 @@ export interface CanonicalPayload {
     projetada?: { lesteM: number; norteM: number; crs: string };
   };
   levels: { name: string; elevationMm: number; defaultHeightMm: number; /** Índice do pavimento TIPO (0.36.0); ausente = pavimento próprio. */ tipoDe?: number }[];
+  /** ETAPAS DE OBRA (0.57.0). Ausente quando não há nenhuma. */
+  etapas?: { nome: string; ordem: number }[];
   walls: {
     level: number;
     a: { x: number; y: number };
@@ -1091,6 +1115,9 @@ export interface CanonicalPayload {
     parametros?: Parametros;
     /** Fase de reforma (0.46.0). Ausente = NOVO. */
     fase?: 'EXISTENTE' | 'DEMOLIR';
+    /** ETAPAS (0.57.0): índices em `etapas`. */
+    etapa?: number;
+    demolidaEm?: number;
   }[];
   openings: {
     wall: number;
@@ -1108,6 +1135,9 @@ export interface CanonicalPayload {
     esquadria?: { nome: string; itemCode: string; descricao: string };
     /** Fase de reforma (0.46.0). Ausente = NOVO. */
     fase?: 'EXISTENTE' | 'DEMOLIR';
+    /** ETAPAS (0.57.0): índices em `etapas`. */
+    etapa?: number;
+    demolidaEm?: number;
     parametros?: Parametros;
   }[];
   boundaries: {
@@ -1140,6 +1170,9 @@ export interface CanonicalPayload {
     cedeSobreposicao?: boolean;
     /** Fase de reforma (0.46.0). Ausente = NOVO. */
     fase?: 'EXISTENTE' | 'DEMOLIR';
+    /** ETAPAS (0.57.0): índices em `etapas`. */
+    etapa?: number;
+    demolidaEm?: number;
     parametros?: Parametros;
   }[];
   /**
@@ -1227,6 +1260,9 @@ export interface CanonicalPayload {
     sugerido?: boolean;
     /** Fase de reforma (0.46.0). Ausente = NOVO. */
     fase?: 'EXISTENTE' | 'DEMOLIR';
+    /** ETAPAS (0.57.0): índices em `etapas`. */
+    etapa?: number;
+    demolidaEm?: number;
     parametros?: Parametros;
     /** FAMÍLIAS ANINHADAS (0.52.0): índice do conjunto-pai nesta lista; ausente = solta. */
     pai?: number;
@@ -1486,6 +1522,15 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
     });
     return id;
   });
+  // ETAPAS DE OBRA (0.57.0): antes das peças, que referenciam por índice.
+  const etapasLidas = payload.etapas ?? [];
+  const etapaIds = etapasLidas.map((e, i) => {
+    const id = nextId(model, 'etp');
+    model.etapas.push({ id, uid: uidDe('etapas', i, etapasLidas.length), nome: e.nome, ordem: e.ordem });
+    return id;
+  });
+  const refDeEtapa = (idx: number | undefined): { etapaId?: string } => (idx !== undefined && etapaIds[idx] ? { etapaId: etapaIds[idx] } : {});
+  const refDeDemolicao = (idx: number | undefined): { demolidaEmEtapaId?: string } => (idx !== undefined && etapaIds[idx] ? { demolidaEmEtapaId: etapaIds[idx] } : {});
   // O vínculo do pavimento tipo, DEPOIS de todos existirem (é índice na lista).
   payload.levels.forEach((l, i) => {
     if (l.tipoDe !== undefined && levelIds[l.tipoDe] && l.tipoDe !== i) model.levels[i].tipoDeId = levelIds[l.tipoDe];
@@ -1509,6 +1554,8 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       // nada — é o que mantém o round-trip fechando byte a byte.
       ...(w.cedeSobreposicao ? { cedeSobreposicao: true } : {}),
       ...(w.fase ? { fase: w.fase } : {}),
+      ...refDeEtapa(w.etapa),
+      ...refDeDemolicao(w.demolidaEm),
       ...(w.arco ? { arco: { centro: { x: w.arco.centro.x, y: w.arco.centro.y }, raioMm: w.arco.raioMm } } : {}),
       ...(w.cortina ? { cortina: { moduloMm: w.cortina.moduloMm, montanteMm: w.cortina.montanteMm, painel: w.cortina.painel } } : {}),
       ...(w.brise ? { brise: { orientacao: w.brise.orientacao, laminaMm: w.brise.laminaMm, passoMm: w.brise.passoMm, afastamentoMm: w.brise.afastamentoMm, lado: w.brise.lado } } : {}),
@@ -1548,6 +1595,8 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       swingReversed: o.swingReversed ?? false,
       embutida: o.embutida ?? false,
       ...(o.fase ? { fase: o.fase } : {}),
+      ...refDeEtapa(o.etapa),
+      ...refDeDemolicao(o.demolidaEm),
       ...(o.esquadria
         ? { esquadria: { nome: o.esquadria.nome, itemCode: o.esquadria.itemCode, descricao: o.esquadria.descricao } }
         : {}),
@@ -1597,6 +1646,8 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       rotulo: s.rotulo ?? null,
       ...(s.cedeSobreposicao ? { cedeSobreposicao: true } : {}),
       ...(s.fase ? { fase: s.fase } : {}),
+      ...refDeEtapa(s.etapa),
+      ...refDeDemolicao(s.demolidaEm),
       ...(s.parametros && Object.keys(s.parametros).length > 0 ? { parametros: { ...s.parametros } } : {}),
       ...(s.secaoT ? { secaoT: s.secaoT } : {}),
     });
@@ -1718,6 +1769,8 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       rotulo: c.rotulo,
       ...(c.sugerido ? { sugerido: true } : {}),
       ...(c.fase ? { fase: c.fase } : {}),
+      ...refDeEtapa(c.etapa),
+      ...refDeDemolicao(c.demolidaEm),
       ...(c.parametros && Object.keys(c.parametros).length > 0 ? { parametros: { ...c.parametros } } : {}),
     });
   });

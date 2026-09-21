@@ -447,6 +447,8 @@ import { proximaRevisao, revisoesDoModelo, resumirAnotacoes } from '../../utils/
 import PainelGuardaCorpos from './PainelGuardaCorpos';
 import PainelRodapes from './PainelRodapes';
 import PainelDepartamentos from './PainelDepartamentos';
+import PainelEtapas from './PainelEtapas';
+import { etapasOrdenadas, pecasNaLinhaDoTempo, pecasSemEtapa, quadroDeEtapas, vistaDaEtapa } from '../../utils/blueprintEtapas';
 import PainelImportarCollada from './PainelImportarCollada';
 import PainelLod from './PainelLod';
 import { ALVO_DE_LOD_PADRAO, lodDosElementos, pendenciasDeLod, quadroDeLod, type AlvoDeLod } from '../../utils/blueprintLod';
@@ -866,6 +868,8 @@ const ROTULO_DA_TAREFA = {
   departamentos: 'Departamentos (setores) por ambiente',
   // LOD (21/09/2026, P2): nível de desenvolvimento derivado por família; alvo por família; pendências.
   lod: 'LOD — nível de desenvolvimento por família',
+  // ETAPAS DE OBRA (21/09/2026, P2): linha do tempo, nasce em / demolida em, etapa em vista.
+  etapas: 'Etapas de obra (fases personalizadas)',
   // IA conversacional (19/09/2026, E6.4): pedido → mudanças no programa/hipóteses → re-geração → delta.
   ia: 'Conversar com a planta',
   'gerar-paredes': 'Gerar paredes do PDF',
@@ -1788,6 +1792,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [hipotesesDeRodape, setHipotesesDeRodape] = usePersistedState<HipotesesDeRodape>('blueprint:rodapes', HIPOTESES_DE_RODAPE_PADRAO);
   /** LOD (P2): o alvo por família é da pessoa (persistido); o LOD de cada peça é lido do desenho. */
   const [alvoDeLod, setAlvoDeLod] = usePersistedState<AlvoDeLod>('blueprint:lod-alvo', ALVO_DE_LOD_PADRAO);
+  /** ETAPAS (P2): a etapa em vista (por estudo não — é de tela; some se a etapa sumir). */
+  const [etapaEmVista, setEtapaEmVista] = usePersistedState<string | null>('blueprint:etapaEmVista', null);
   const [hipotesesDeVagas, setHipotesesDeVagas] = usePersistedState<HipotesesDeVagas>('blueprint:vagas', HIPOTESES_VAGAS_PADRAO);
   const [regiaoDeVagasPedida, setRegiaoDeVagasPedida] = useState<RegiaoDeVagas | null>(null);
   /** ACABAMENTOS (E7.2): o ambiente que a gaveta abre já expandido (vindo do cartão). */
@@ -3546,9 +3552,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    */
   const [ocultosNoDesenho, setOcultosNoDesenho] = useState<Set<string>>(new Set());
   /** O olho do usuário + o recorte da vista de planta (E0.3). */
+  /** ETAPAS (P2): o desenho como está na etapa em vista — status derivado e o que ainda não existe/já saiu. */
+  const vistaDaEtapaAtual = useMemo(() => (etapaEmVista ? vistaDaEtapa(editor.model, etapaEmVista) : null), [editor.model, etapaEmVista]);
   const ocultosNoCanvas = useMemo(() => {
     // FASES DE REFORMA (E10.2): o filtro da vista esconde o que não é daquela fase.
     const daFase = idsOcultosPelaFase(editor.model, filtroDeFase);
+    // ETAPAS (P2): o que não existe na etapa em vista.
+    for (const id of vistaDaEtapaAtual?.ocultos ?? []) daFase.add(id);
     if (!vistaDePlanta) {
       if (daFase.size === 0) return ocultosNoDesenho;
       for (const id of ocultosNoDesenho) daFase.add(id);
@@ -3558,9 +3568,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     for (const id of ocultosNoDesenho) daVista.add(id);
     for (const id of daFase) daVista.add(id);
     return daVista;
-  }, [ocultosNoDesenho, vistaDePlanta, editor.model, nivelDaVistaDePlanta, filtroDeFase]);
-  /** id → fase (só existente/a demolir), para o canvas colorir; e a fase da seleção, para os botões do ribbon. */
-  const fasesDoDesenho = useMemo(() => fasePorId(editor.model), [editor.model]);
+  }, [ocultosNoDesenho, vistaDePlanta, editor.model, nivelDaVistaDePlanta, filtroDeFase, vistaDaEtapaAtual]);
+  /** id → fase (só existente/a demolir), para o canvas colorir; e a fase da seleção, para os botões do ribbon. Com etapa em vista, o status é o DERIVADO dela. */
+  const fasesDoDesenho = useMemo(() => vistaDaEtapaAtual?.fases ?? fasePorId(editor.model), [editor.model, vistaDaEtapaAtual]);
+  const etapasDoEstudo = useMemo(() => etapasOrdenadas(editor.model), [editor.model]);
+  const quadroDeEtapasDoEstudo = useMemo(() => quadroDeEtapas(editor.model, quant), [editor.model, quant]);
+  const selecaoNaLinhaDoTempo = useMemo(() => {
+    const sel = new Set(editor.selectedIds);
+    return pecasNaLinhaDoTempo(editor.model).filter((p) => sel.has(p.id));
+  }, [editor.model, editor.selectedIds]);
   const contagemDeFases = useMemo(() => contagemPorFase(editor.model), [editor.model]);
   const faseSelecionada = useMemo(() => faseDaSelecao(editor.model, editor.selectedIds), [editor.model, editor.selectedIds]);
 
@@ -8772,6 +8788,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   onClick={() => alternarTela('antes-depois')}
                   ajuda="Duas plantas na mesma escala: antes (existente + a demolir) e depois (existente + novo), com o resumo do que se demole e do que se constrói."
                 />
+                <BotaoDoRibbon
+                  icone={History}
+                  rotulo="Etapas"
+                  contagem={etapasDoEstudo.length ? pecasSemEtapa(editor.model) || undefined : undefined}
+                  ativo={tarefaAberta === 'etapas' || !!etapaEmVista}
+                  onClick={() => alternarTarefa('etapas')}
+                  ajuda="Fases personalizadas: a linha do tempo da obra (Existente, Fase 1, Fase 2…), em que etapa cada peça nasce e em qual é demolida, a etapa em vista no desenho e o quadro do que entra e sai por etapa. O número é quantas peças ainda não têm etapa."
+                />
               </GrupoDoRibbon>
             )}
 
@@ -10397,6 +10421,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           <button type="button" onClick={colab.dispensarAvisos} className="text-xs font-medium underline">dispensar</button>
         </div>
       )}
+      {vistaDaEtapaAtual && (
+        <div role="status" data-testid="faixa-etapa" className="flex items-start gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">
+          <History className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
+          <span className="flex-1">
+            <strong>Etapa em vista: {vistaDaEtapaAtual.etapa.nome}</strong> — {vistaDaEtapaAtual.contagem.NOVO} nova(s), {vistaDaEtapaAtual.contagem.EXISTENTE} existente(s), {vistaDaEtapaAtual.contagem.DEMOLIR} a demolir; {vistaDaEtapaAtual.ocultos.size} peça(s) fora desta etapa.
+          </span>
+          <button type="button" onClick={() => setEtapaEmVista(null)} className="shrink-0 text-xs font-medium underline">
+            todas as etapas
+          </button>
+        </div>
+      )}
       {avisoDeTrava && (
         <div role="status" className="flex items-start gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700" data-testid="aviso-de-trava">
           <Lock className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
@@ -11658,6 +11693,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'rodapes' && <Minus className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'departamentos' && <Palette className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'lod' && <Gauge className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'etapas' && <History className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'fundacoes' && <SquareStack className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'pontosHidraulicos' && <ShowerHead className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'agua' && <Droplets className="h-5 w-5 text-blue-700" />}
@@ -11674,6 +11710,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           <SheetDescription>
             {tarefaAberta === 'ia' &&
               'Peça em português: "suíte +2 m²", "3 dormitórios", "corredor de 1,20 m". O pedido vira mudança no programa ou nas hipóteses, o gerador re-gera e você lê o delta dos indicadores. Nunca desenha direto.'}
+            {tarefaAberta === 'etapas' &&
+              'A linha do tempo da obra. Cada peça diz em que etapa nasce e em qual é demolida; com uma etapa em vista o desenho mostra o que existe nela. Cada mudança é um passo de desfazer; a etapa entra na versão publicada.'}
             {tarefaAberta === 'lod' &&
               'O LOD de cada peça é derivado do que ela já tem (não se declara): 200 aproximado, 300 preciso, 350 coordenação. Você declara o alvo por família; a lista mostra o que falta, peça a peça. O sistema não avalia LOD 400.'}
             {tarefaAberta === 'departamentos' &&
@@ -11762,7 +11800,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' || tarefaAberta === 'mobiliario' || tarefaAberta === 'ia' || tarefaAberta === 'acabamentos' || tarefaAberta === 'guardaCorpos' || tarefaAberta === 'rodapes' || tarefaAberta === 'departamentos' || tarefaAberta === 'lod' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' || tarefaAberta === 'mobiliario' || tarefaAberta === 'ia' || tarefaAberta === 'acabamentos' || tarefaAberta === 'guardaCorpos' || tarefaAberta === 'rodapes' || tarefaAberta === 'departamentos' || tarefaAberta === 'lod' || tarefaAberta === 'etapas' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
 
@@ -11787,6 +11825,40 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             />
           )}
 
+          {tarefaAberta === 'etapas' && (
+            <PainelEtapas
+              etapas={etapasDoEstudo}
+              quadro={quadroDeEtapasDoEstudo}
+              selecao={selecaoNaLinhaDoTempo}
+              semEtapa={pecasSemEtapa(editor.model)}
+              etapaEmVista={vistaDaEtapaAtual ? etapaEmVista : null}
+              contagemEmVista={vistaDaEtapaAtual ? { ...vistaDaEtapaAtual.contagem, ocultas: vistaDaEtapaAtual.ocultos.size } : null}
+              onEtapaEmVista={setEtapaEmVista}
+              onCriar={(nomes) => {
+                const criados = editor.runBatch(nomes.map((nome) => ({ type: 'AddEtapa', nome }) as Command));
+                void criados;
+              }}
+              onRenomear={(etapaId, nome) => editor.run({ type: 'SetEtapaProps', etapaId, nome })}
+              onMover={(etapaId, direcao) => {
+                // Troca de posição na lista ordenada e renumera 1..N — um lote, um desfazer.
+                const lista = [...etapasDoEstudo];
+                const i = lista.findIndex((e) => e.id === etapaId);
+                const j = i + direcao;
+                if (i < 0 || j < 0 || j >= lista.length) return;
+                [lista[i], lista[j]] = [lista[j], lista[i]];
+                const cmds = lista.map((e, k) => ({ type: 'SetEtapaProps', etapaId: e.id, ordem: k + 1 }) as Command).filter((c, k) => lista[k].ordem !== k + 1);
+                if (cmds.length) editor.runBatch(cmds);
+              }}
+              onApagar={(etapaId) => {
+                if (etapaEmVista === etapaId) setEtapaEmVista(null);
+                editor.run({ type: 'DeleteEtapa', etapaId });
+              }}
+              onAtribuir={(ids, campos) => {
+                if (ids.length === 0) return;
+                editor.run({ type: 'SetEtapaDasPecas', ids, ...campos });
+              }}
+            />
+          )}
           {tarefaAberta === 'lod' && (
             <PainelLod
               nomeDoPavimento={editor.model.levels.find((l) => l.id === levelId)?.name ?? 'pavimento'}

@@ -149,6 +149,27 @@ export function faseDe(p: { fase?: FaseDeReforma | null }): FaseDeReforma {
   return p.fase ?? 'NOVO';
 }
 
+/**
+ * ETAPAS DE OBRA — fases personalizadas (21/09/2026, backlog P2). A fase de
+ * reforma acima é um STATUS de três valores. A etapa é uma LINHA DO TEMPO da
+ * própria obra ("Existente", "Fase 1 — demolições", "Fase 2 — ampliação"…):
+ * cada peça diz em que etapa NASCE (`etapaId`) e, se sai, em que etapa é
+ * DEMOLIDA (`demolidaEmEtapaId`). Com uma etapa em vista, o status de cada
+ * peça é DERIVADO: nasceu antes = existente, nasce nela = nova, sai nela = a
+ * demolir, nasce depois ou já saiu = não aparece. Sem etapas, tudo segue
+ * como antes (o status `fase`).
+ */
+export interface Etapa {
+  id: ObjectId;
+  /** Identidade persistente — ver `identity.ts`. Fora do hash. */
+  uid: ElementUid;
+  /** "Existente", "Fase 1"… até `MAX_NOME_DE_ETAPA`. */
+  nome: string;
+  /** Posição na linha do tempo (inteiro; menor = antes). */
+  ordem: number;
+}
+export const MAX_NOME_DE_ETAPA = 40;
+
 export interface Wall {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
@@ -204,6 +225,9 @@ export interface Wall {
   cedeSobreposicao?: boolean;
   /** Fase de reforma (E10.2). Ausente = NOVO. */
   fase?: FaseDeReforma;
+  /** ETAPAS (0.57.0): em que etapa a peça nasce / é demolida. Ausente = fora da linha do tempo. */
+  etapaId?: ObjectId | null;
+  demolidaEmEtapaId?: ObjectId | null;
   /**
    * A COMPOSIÇÃO da parede: as faixas de material dentro da espessura.
    *
@@ -523,6 +547,9 @@ export interface Opening {
   embutida: boolean;
   /** Fase de reforma (E10.2). Ausente = NOVO. */
   fase?: FaseDeReforma;
+  /** ETAPAS (0.57.0): em que etapa a peça nasce / é demolida. Ausente = fora da linha do tempo. */
+  etapaId?: ObjectId | null;
+  demolidaEmEtapaId?: ObjectId | null;
   /**
    * O tipo da esquadria, quando declarado. Ausente = abertura sem tipo, que é
    * o que toda abertura do acervo era — e a chave é OMITIDA do payload
@@ -984,6 +1011,9 @@ export interface Structural {
   cedeSobreposicao?: boolean;
   /** Fase de reforma (E10.2). Ausente = NOVO. */
   fase?: FaseDeReforma;
+  /** ETAPAS (0.57.0): em que etapa a peça nasce / é demolida. Ausente = fora da linha do tempo. */
+  etapaId?: ObjectId | null;
+  demolidaEmEtapaId?: ObjectId | null;
 }
 
 /**
@@ -1743,6 +1773,9 @@ export interface Componente {
   sugerido?: boolean | null;
   /** Fase de reforma (E10.2). Ausente = NOVO. */
   fase?: FaseDeReforma;
+  /** ETAPAS (0.57.0): em que etapa a peça nasce / é demolida. Ausente = fora da linha do tempo. */
+  etapaId?: ObjectId | null;
+  demolidaEmEtapaId?: ObjectId | null;
   /** FAMÍLIAS ANINHADAS (0.52.0): o CONJUNTO de que esta peça faz parte (uid do componente-pai). Ausente = solta. */
   paiUid?: ElementUid;
 }
@@ -1991,6 +2024,12 @@ export interface TrechoDeRodape {
   /** A etiqueta do ambiente de origem (idempotência do gerador). */
   spaceUid?: ElementUid | null;
 }
+export function findEtapa(model: BlueprintModel, id: ObjectId): Etapa {
+  const e = (model.etapas ?? []).find((x) => x.id === id);
+  if (!e) throw new KernelError('STAGE_NOT_FOUND', `Etapa inexistente: ${id}`);
+  return e;
+}
+
 export function findRodape(model: BlueprintModel, id: ObjectId): TrechoDeRodape {
   const r = (model.rodapes ?? []).find((x) => x.id === id);
   if (!r) throw new KernelError('BASEBOARD_NOT_FOUND', `Trecho de rodapé inexistente: ${id}`);
@@ -2623,6 +2662,8 @@ export interface BlueprintModel {
   subRegioes: SubRegiao[];
   /** Trechos de rodapé (0.55.0). Ver `TrechoDeRodape`. */
   rodapes: TrechoDeRodape[];
+  /** ETAPAS DE OBRA (0.57.0). */
+  etapas: Etapa[];
   /**
    * Escadas e rampas. Como a estrutura e o telhado, NÃO participam do arranjo
    * planar: uma escada dentro da sala não parte o ambiente. O que ela faz ao
@@ -2743,6 +2784,7 @@ export function emptyModel(): BlueprintModel {
     vistasDependentes: [],
     subRegioes: [],
     rodapes: [],
+    etapas: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -2816,6 +2858,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     vistasDependentes: (model.vistasDependentes ?? []).map((v) => ({ ...v, recorte: { ...v.recorte } })),
     subRegioes: (model.subRegioes ?? []).map((s) => ({ ...s, pontos: s.pontos.map((p) => ({ ...p })), ...(s.parametros ? { parametros: { ...s.parametros } } : {}) })),
     rodapes: (model.rodapes ?? []).map((r) => ({ ...r, pontos: r.pontos.map((p) => ({ ...p })), ...(r.parametros ? { parametros: { ...r.parametros } } : {}) })),
+    etapas: (model.etapas ?? []).map((e) => ({ ...e })),
     grupos: (model.grupos ?? []).map((g) => ({
       ...g,
       pivo: { ...g.pivo },
@@ -3965,6 +4008,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Vista dependente', model.vistasDependentes ?? []],
     ['Sub-região', model.subRegioes ?? []],
     ['Trecho de rodapé', model.rodapes ?? []],
+    ['Etapa', model.etapas ?? []],
     ['Trecho', model.trechos ?? []],
     ['Terminal', model.terminais ?? []],
     ['Quadro', model.quadros ?? []],
@@ -4638,6 +4682,18 @@ export function assertModelInvariants(model: BlueprintModel): void {
   // FASES DE REFORMA (E10.2): valor fora da lista é recusado; `NOVO` explícito é tolerado (o canônico o apaga).
   for (const p of [...model.walls, ...model.openings, ...(model.structures ?? []), ...(model.componentes ?? [])]) {
     if (p.fase !== undefined && !FASES_DE_REFORMA.includes(p.fase)) throw new KernelError('BAD_PHASE', `${p.id}: fase de reforma inválida ${String(p.fase)}`);
+  }
+  // ETAPAS DE OBRA (0.57.0): nome, ordem inteira, referências existentes e demolição depois do nascimento.
+  const ordemDaEtapa = new Map<ObjectId, number>();
+  for (const e of model.etapas ?? []) {
+    if (typeof e.nome !== 'string' || e.nome.trim().length === 0 || e.nome.length > MAX_NOME_DE_ETAPA) throw new KernelError('BAD_STAGE', `Etapa ${e.id}: nome inválido`);
+    if (!Number.isInteger(e.ordem)) throw new KernelError('BAD_STAGE', `Etapa ${e.id}: ordem tem de ser inteira`);
+    ordemDaEtapa.set(e.id, e.ordem);
+  }
+  for (const p of [...model.walls, ...model.openings, ...(model.structures ?? []), ...(model.componentes ?? [])]) {
+    if (p.etapaId != null && !ordemDaEtapa.has(p.etapaId)) throw new KernelError('BAD_STAGE', `${p.id}: etapa inexistente ${p.etapaId}`);
+    if (p.demolidaEmEtapaId != null && !ordemDaEtapa.has(p.demolidaEmEtapaId)) throw new KernelError('BAD_STAGE', `${p.id}: etapa de demolição inexistente ${p.demolidaEmEtapaId}`);
+    if (p.etapaId != null && p.demolidaEmEtapaId != null && (ordemDaEtapa.get(p.demolidaEmEtapaId) ?? 0) <= (ordemDaEtapa.get(p.etapaId) ?? 0)) throw new KernelError('BAD_STAGE', `${p.id}: a demolição tem de vir depois da etapa em que a peça nasce`);
   }
 
   // Eixos: comprimento não nulo, nome curto, coordenadas inteiras.

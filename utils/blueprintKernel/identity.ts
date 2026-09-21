@@ -150,6 +150,8 @@ export const PREFIXO_ROTULO_UID = {
   subRegiao: 'J',
   /** Trecho de rodapé — F (friso; R já é a etiqueta). */
   rodape: 'F',
+  /** Etapa de obra — Y (linha do tempo). */
+  etapa: 'Y',
   stair: 'E',
   label: 'R',
   /**

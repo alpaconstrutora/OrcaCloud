@@ -47,6 +47,8 @@ import {
   MAX_NOME_DE_VISTA_DEPENDENTE,
   acabamentosOuAusente,
   departamentoNormalizado,
+  findEtapa,
+  MAX_NOME_DE_ETAPA,
   type AcabamentosDoAmbiente,
   cloneModel,
   somaDasCamadas,
@@ -527,6 +529,13 @@ export type Command =
    * Id desconhecido é recusado — marcar o que não existe é erro de quem chama.
    */
   | { type: 'SetFase'; ids: ObjectId[]; fase: FaseDeReforma | null }
+  /** ETAPAS DE OBRA (0.57.0, backlog P2 "fases personalizadas"): a linha do tempo e a peça nela. */
+  | { type: 'AddEtapa'; nome: string; ordem?: number }
+  | { type: 'SetEtapaProps'; etapaId: ObjectId; nome?: string; ordem?: number }
+  /** Apaga a etapa e solta as peças que a referenciam (nascimento e demolição). */
+  | { type: 'DeleteEtapa'; etapaId: ObjectId }
+  /** Campo omitido fica como está; `null` apaga. A demolição tem de vir depois do nascimento. */
+  | { type: 'SetEtapaDasPecas'; ids: ObjectId[]; etapaId?: ObjectId | null; demolidaEmEtapaId?: ObjectId | null }
   | { type: 'SetGuardaCorpoProps'; guardaCorpoId: ObjectId; tipo?: TipoDeGuardaCorpo; pontos?: Point[]; alturaMm?: number; material?: MaterialDeGuardaCorpo; itemCode?: string; descricao?: string; rotulo?: string | null; sugerido?: boolean | null }
   | { type: 'MoveGuardaCorpo'; guardaCorpoId: ObjectId; dx: number; dy: number }
   | { type: 'DeleteGuardaCorpo'; guardaCorpoId: ObjectId }
@@ -1574,6 +1583,74 @@ function aplicarSemHash(
         if (!alvo) throw new KernelError('NOT_FOUND', `Peça ${id} não existe`);
         if (command.fase && command.fase !== 'NOVO') alvo.fase = command.fase;
         else delete alvo.fase;
+        diff.updated.push(id);
+      }
+      break;
+    }
+
+    case 'AddEtapa': {
+      const nome = command.nome.trim();
+      if (!nome || nome.length > MAX_NOME_DE_ETAPA) throw new KernelError('BAD_STAGE', `Nome de etapa inválido: ${JSON.stringify(command.nome)}`);
+      const ordem = command.ordem ?? ((next.etapas ?? []).reduce((m, e) => Math.max(m, e.ordem), 0) + 1);
+      if (!Number.isInteger(ordem)) throw new KernelError('BAD_STAGE', 'Ordem da etapa tem de ser inteira');
+      const id = nextId(next, 'etp');
+      next.etapas = [...(next.etapas ?? []), { id, uid: novoUid(), nome, ordem }];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetEtapaProps': {
+      const e = findEtapa(next, command.etapaId);
+      if (command.nome !== undefined) {
+        const nome = command.nome.trim();
+        if (!nome || nome.length > MAX_NOME_DE_ETAPA) throw new KernelError('BAD_STAGE', `Nome de etapa inválido: ${JSON.stringify(command.nome)}`);
+        e.nome = nome;
+      }
+      if (command.ordem !== undefined) {
+        if (!Number.isInteger(command.ordem)) throw new KernelError('BAD_STAGE', 'Ordem da etapa tem de ser inteira');
+        e.ordem = command.ordem;
+      }
+      diff.updated.push(e.id);
+      break;
+    }
+
+    case 'DeleteEtapa': {
+      findEtapa(next, command.etapaId);
+      next.etapas = (next.etapas ?? []).filter((e) => e.id !== command.etapaId);
+      for (const p of [...next.walls, ...next.openings, ...(next.structures ?? []), ...(next.componentes ?? [])]) {
+        let tocou = false;
+        if (p.etapaId === command.etapaId) {
+          delete p.etapaId;
+          tocou = true;
+        }
+        if (p.demolidaEmEtapaId === command.etapaId) {
+          delete p.demolidaEmEtapaId;
+          tocou = true;
+        }
+        if (tocou) diff.updated.push(p.id);
+      }
+      diff.deleted.push(command.etapaId);
+      break;
+    }
+
+    case 'SetEtapaDasPecas': {
+      if (command.etapaId) findEtapa(next, command.etapaId);
+      if (command.demolidaEmEtapaId) findEtapa(next, command.demolidaEmEtapaId);
+      for (const id of command.ids) {
+        const alvo =
+          next.walls.find((w) => w.id === id) ??
+          next.openings.find((o) => o.id === id) ??
+          (next.structures ?? []).find((s) => s.id === id) ??
+          (next.componentes ?? []).find((c) => c.id === id);
+        if (!alvo) throw new KernelError('NOT_FOUND', `Peça ${id} não existe`);
+        if (command.etapaId !== undefined) {
+          if (command.etapaId) alvo.etapaId = command.etapaId;
+          else delete alvo.etapaId;
+        }
+        if (command.demolidaEmEtapaId !== undefined) {
+          if (command.demolidaEmEtapaId) alvo.demolidaEmEtapaId = command.demolidaEmEtapaId;
+          else delete alvo.demolidaEmEtapaId;
+        }
         diff.updated.push(id);
       }
       break;

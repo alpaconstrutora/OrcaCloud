@@ -1459,6 +1459,23 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 - App real, escritas bloqueadas (15): Colaborar › Travas in-flow, "Travar" com POST abortado → "Falha ao travar: … Failed to fetch" (honesto). **Escrita real autorizada** ("criar, provar e soltar"), bloqueio aberto só para `blueprint_element_locks` (14 outras escritas bloqueadas): trava PAVIMENTO "prova P2.27" (2 h) criada → lista "Pavimento Térreo · altair.rosa (você) · prova P2.27 · 21/09/2026, 18:58" → Soltar → "Nenhuma trava vigente neste ramo"; banco com 0 linhas ao fim (INSERT + DELETE, nada mais).
 - Testes `blueprintTravasExplicitas.test.ts` (ELEMENTOS só o que cobre, dono passa, vencida não conta, criar não esbarra; PAVIMENTO bloqueia editar e criar, outro pavimento livre; DISCIPLINA bloqueia pontos/trechos/circuitos, outras livres), editor P2.27 (tela lista com quem/nota, forçar liberação com confirmação → `soltar`, travar pavimento com nota/validade → `criar` em meu nome; portão recusa NameSpace na Sala travada com nome/nota/prazo e deixa a Cozinha passar).
 
+### P2.28 — Etapas de obra: fases personalizadas (21/09/2026) · backlog P2 · kernel 0.56.0 → 0.57.0
+
+**O que entrou**
+- Kernel: família **`etapas`** (`Etapa {id, uid, nome ≤ 40, ordem}`, identidade `Y`), campos `etapaId` (nasce em) e `demolidaEmEtapaId` (sai em) em parede, abertura, estrutura e componente; comandos `AddEtapa` / `SetEtapaProps` / `DeleteEtapa` (solta as peças que a referenciam) / `SetEtapaDasPecas`; invariante `BAD_STAGE` (nome, ordem inteira, referências, demolição depois do nascimento). Canônico: `etapas` por ordem e nome, só quando há; nas peças, `etapa`/`demolidaEm` como ÍNDICES, só quando declarados; ida e volta. Goldens recapturadas (303 testes das famílias passaram com a string antiga).
+- `utils/blueprintEtapas.ts`: `statusNaEtapa` (nasce depois → não aparece; já saiu → não aparece; sai nela → A DEMOLIR; nasce nela → NOVA; nasceu antes → EXISTENTE; sem etapa → o status `fase`), `vistaDaEtapa` (mapa id → status + ocultos + contagem — o que o canvas já sabe pintar), `quadroDeEtapas` (o que nasce e sai em cada etapa, com metros de parede), `pecasSemEtapa`, `ETAPAS_SUGERIDAS`.
+- UI: Arquitetura › Reforma › **Etapas** (gaveta `PainelEtapas`): criar / semear a linha típica (4) / renomear / reordenar (renumera 1..N num lote) / apagar (confirmação); a seleção na linha ("Nasce em", "Demolida em", com "misto"); **etapa em vista** (persistida por tela) que troca o mapa de fases e os ocultos do canvas; quadro por etapa; faixa "Etapa em vista: … — N nova(s), E existente(s), D a demolir; F fora desta etapa" com "todas as etapas". Contagem no botão = peças sem etapa.
+
+**Decisões**
+- A fase de reforma (E10.2) continua como STATUS de três valores; a etapa é a LINHA DO TEMPO. Sem etapas, nada muda. Com etapa em vista, o status é DERIVADO — o canvas e a tela Antes/Depois não ganharam desenho novo.
+- A etapa entra no payload (bump) porque é conteúdo da versão publicada, não parâmetro de tela; a etapa em vista é de tela.
+- Quantitativo por etapa é um quadro (pura), não bump de `quant-`: os totais oficiais continuam contando só o NOVO pelo status.
+
+**Prova**
+- `npx tsc --noEmit` ok · check-ui ok · `check-xss-sinks.sh` ok · suíte cheia 428 arquivos / 4959 testes · `npm run build` ok · `planta-api` reimplantada (bundle 0.57.0; `plantaApi.test.ts` 3/3).
+- App real (escritas bloqueadas: 15, 0 erros de página): Arquitetura › Etapas → Semear → 4 etapas, 162 peças sem etapa; parede nova selecionada → "Nasce em Fase 1, Demolida em Fase 2" → quadro "Fase 1 nascem 1 · 5,80 m / Fase 2 saem 1 · 5,80 m"; etapa em vista Existente → "1 ainda não existe"; Fase 2 → "1 a demolir", faixa correspondente e a parede em vermelho tracejado no canvas (captura).
+- Testes `blueprintEtapas.test.ts` (comandos, invariantes, canônico só quando há etapa com índices e ida e volta, DeleteEtapa solta, status derivado nas três etapas, quadro por etapa, peças sem etapa), editor P2.28 (semear, seleção nasce/demolida gravadas, quadro com os metros da parede, etapa em vista com contagem e faixa).
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

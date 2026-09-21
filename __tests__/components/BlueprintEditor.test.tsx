@@ -5667,3 +5667,66 @@ describe('BlueprintEditor · travas explícitas (P2.27)', () => {
     await waitFor(() => expect(saveDraft).toHaveBeenCalled(), { timeout: 5000 });
   }, 60000);
 });
+
+/**
+ * ETAPAS DE OBRA (21/09/2026, backlog P2): Arquitetura › Reforma › Etapas
+ * semeia a linha do tempo, põe a seleção numa etapa, mostra o quadro, e a
+ * etapa em vista muda o que o canvas recebe (faixa com a contagem).
+ */
+describe('BlueprintEditor · etapas de obra (P2.28)', () => {
+  it('semeia, atribui a seleção, quadro e etapa em vista com faixa', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall' as const, levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 });
+    let m = k.applyBatch(nivel.model, [w(0, 0, 8000, 0), w(8000, 0, 8000, 4000), w(8000, 4000, 0, 4000), w(0, 4000, 0, 0), w(4000, 0, 4000, 4000)]).model;
+    const [a, b] = [...m.spaces].sort((p, q) => p.ring[0].x - q.ring[0].x);
+    m = k.applyBatch(m, [{ type: 'NameSpace', spaceId: a.id, name: 'Sala' }, { type: 'NameSpace', spaceId: b.id, name: 'Cozinha' }]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^arquitetura$/i);
+    await user.click(botao(/^etapas/i));
+    const gaveta = await screen.findByTestId('tarefa-etapas');
+    expect(gaveta).toHaveTextContent(/0 etapa\(s\)/);
+    const { saveDraft } = await import('../../services/blueprintService');
+    vi.mocked(saveDraft).mockClear();
+    await user.click(within(gaveta).getByTestId('semear-etapas'));
+    await waitFor(() => expect(screen.getByTestId('tarefa-etapas')).toHaveTextContent(/4 etapa\(s\) · 5 peça\(s\) ainda sem etapa/));
+    const lista = within(screen.getByTestId('tarefa-etapas')).getByTestId('lista-de-etapas');
+    expect(within(lista).getAllByRole('textbox').map((i) => (i as HTMLInputElement).value)).toEqual(['Existente', 'Fase 1 — demolições e estrutura', 'Fase 2 — vedações e instalações', 'Fase 3 — acabamentos']);
+    // Seleciona a parede 1 pelo navegador e a põe nascendo em Existente.
+    await user.keyboard('{Escape}');
+    await abrirComponentes(user);
+    await user.click(await screen.findByRole('button', { name: /^Parede 1/ }));
+    await user.click(botao(/^etapas/i));
+    const sel = await within(await screen.findByTestId('tarefa-etapas')).findByTestId('selecao-na-linha');
+    expect(sel).toHaveTextContent(/Seleção \(1 peça\(s\)\)/);
+    const etapasIds = () => (vi.mocked(saveDraft).mock.calls.at(-1) as unknown as [string, import('../../utils/blueprintKernel').BlueprintModel])[1].etapas;
+    await waitFor(() => expect(saveDraft).toHaveBeenCalled(), { timeout: 5000 });
+    const existente = etapasIds().find((e) => e.nome === 'Existente')!;
+    const fase1 = etapasIds().find((e) => e.nome.startsWith('Fase 1'))!;
+    await user.selectOptions(within(sel).getByLabelText('Etapa em que a seleção nasce'), existente.id);
+    await user.selectOptions(within(sel).getByLabelText('Etapa em que a seleção é demolida'), fase1.id);
+    let comprimentoM = 0;
+    await waitFor(() => {
+      const salvo = (vi.mocked(saveDraft).mock.calls.at(-1) as unknown as [string, import('../../utils/blueprintKernel').BlueprintModel])[1];
+      const marcada = salvo.walls.find((x) => x.etapaId === existente.id && x.demolidaEmEtapaId === fase1.id);
+      expect(marcada).toBeTruthy();
+      comprimentoM = Math.hypot(marcada!.b.x - marcada!.a.x, marcada!.b.y - marcada!.a.y) / 1000;
+    }, { timeout: 8000 });
+    // Quadro: Existente nasce 1 (o comprimento da parede); Fase 1 sai 1 (o mesmo).
+    const metros = comprimentoM.toFixed(2).replace('.', ',');
+    const quadro = within(screen.getByTestId('tarefa-etapas')).getByTestId('quadro-de-etapas');
+    expect(quadro).toHaveTextContent(new RegExp(`Existente\s*1\s*${metros}\s*0\s*0,00`));
+    expect(quadro).toHaveTextContent(new RegExp(`Fase 1 — demolições e estrutura\s*0\s*0,00\s*1\s*${metros}`));
+    // Etapa em vista: Fase 1 → a parede 1 está a demolir; as outras 4 (sem etapa) seguem o status; nada oculto.
+    await user.selectOptions(within(screen.getByTestId('tarefa-etapas')).getByTestId('etapa-em-vista'), fase1.id);
+    expect(within(screen.getByTestId('tarefa-etapas')).getByTestId('contagem-em-vista')).toHaveTextContent(/4 nova\(s\) · 0 existente\(s\) · 1 a demolir · 0 ainda não existe/);
+    await user.keyboard('{Escape}');
+    const faixa = await screen.findByTestId('faixa-etapa');
+    expect(faixa).toHaveTextContent(/Etapa em vista: Fase 1 — demolições e estrutura — 4 nova\(s\), 0 existente\(s\), 1 a demolir; 0 peça\(s\) fora desta etapa/);
+    await user.click(within(faixa).getByRole('button', { name: /todas as etapas/i }));
+    expect(screen.queryByTestId('faixa-etapa')).toBeNull();
+  }, 60000);
+});

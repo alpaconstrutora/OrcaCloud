@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.56.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.57.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -372,6 +372,8 @@ var PREFIXO_ROTULO_UID = {
   subRegiao: "J",
   /** Trecho de rodapé — F (friso; R já é a etiqueta). */
   rodape: "F",
+  /** Etapa de obra — Y (linha do tempo). */
+  etapa: "Y",
   stair: "E",
   label: "R",
   /**
@@ -639,6 +641,7 @@ function emptyModel() {
     vistasDependentes: [],
     subRegioes: [],
     rodapes: [],
+    etapas: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -1519,6 +1522,13 @@ function projetar(model) {
     ...l,
     geom: { ...l.geom, tipoDe: l.item.tipoDeId !== void 0 ? nivel(l.item.tipoDeId) : void 0 }
   }));
+  const etapas = ordenar(
+    model.etapas ?? [],
+    (e) => ({ nome: e.nome, ordem: e.ordem }),
+    (a, b) => a.ordem - b.ordem || a.nome.localeCompare(b.nome)
+  );
+  const indiceDaEtapa = new Map(etapas.map((e, i) => [e.item.id, i]));
+  const etapa = (id) => id != null ? indiceDaEtapa.get(id) : void 0;
   const walls = ordenar(
     model.walls,
     (w) => ({
@@ -1545,6 +1555,9 @@ function projetar(model) {
       cedeSobreposicao: w.cedeSobreposicao ? true : void 0,
       // FASE DE REFORMA (0.46.0): só quando EXISTENTE ou DEMOLIR — NOVO é o padrão e a ausência.
       fase: w.fase && w.fase !== "NOVO" ? w.fase : void 0,
+      // ETAPAS (0.57.0): índices em `etapas`, só quando declarados.
+      etapa: etapa(w.etapaId),
+      demolidaEm: etapa(w.demolidaEmEtapaId),
       // PAREDE CURVA (0.48.0): o círculo da faceta, só quando existe — parede
       // reta não ganha chave. É conteúdo (o canvas desenha o arco e o painel o
       // reconhece), então entra no hash.
@@ -1605,6 +1618,8 @@ function projetar(model) {
       // escritura teve em 0.6.0.
       embutida: o.kind === "sliding" ? o.embutida : void 0,
       fase: o.fase && o.fase !== "NOVO" ? o.fase : void 0,
+      etapa: etapa(o.etapaId),
+      demolidaEm: etapa(o.demolidaEmEtapaId),
       // O TIPO, só quando declarado — a disciplina de `camadas`: emitir sempre
       // acrescentaria a chave a toda abertura do acervo. Campos reescritos um
       // a um, e `descricao` ENTRA pela razão escrita nas camadas: é o que o
@@ -1655,6 +1670,8 @@ function projetar(model) {
       // decisão do usuário.
       cedeSobreposicao: s2.cedeSobreposicao ? true : void 0,
       fase: s2.fase && s2.fase !== "NOVO" ? s2.fase : void 0,
+      etapa: etapa(s2.etapaId),
+      demolidaEm: etapa(s2.demolidaEmEtapaId),
       parametros: parametrosCanonicos(s2.parametros),
       // Seção T: mesma regra da linha acima, e pela mesma razão. Toda peça do
       // acervo é de seção cheia, então a chave ausente mantém o payload —
@@ -1776,6 +1793,8 @@ function projetar(model) {
       rotulo: c.rotulo ?? null,
       sugerido: c.sugerido ? true : void 0,
       fase: c.fase && c.fase !== "NOVO" ? c.fase : void 0,
+      etapa: etapa(c.etapaId),
+      demolidaEm: etapa(c.demolidaEmEtapaId),
       parametros: parametrosCanonicos(c.parametros)
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y || cmpStr(x.tipoId, y.tipoId)
@@ -2056,6 +2075,7 @@ function projetar(model) {
       } : {}
     } : void 0,
     levels: levels.map((l) => l.geom),
+    etapas: etapas.length ? etapas.map((e) => e.geom) : void 0,
     walls: walls.map((w) => w.geom),
     openings: openings.map((o) => o.geom),
     boundaries: boundaries.map((b) => b.geom),
@@ -2085,6 +2105,7 @@ function projetar(model) {
   const identidade = {
     v: 1,
     levels: levels.map((l) => l.item.uid ?? null),
+    etapas: etapas.map((e) => e.item.uid ?? null),
     walls: walls.map((w) => w.item.uid ?? null),
     openings: openings.map((o) => o.item.uid ?? null),
     boundaries: boundaries.map((b) => b.item.uid ?? null),
@@ -2156,6 +2177,14 @@ function modelFromCanonicalPayload(payload) {
     });
     return id;
   });
+  const etapasLidas = payload.etapas ?? [];
+  const etapaIds = etapasLidas.map((e, i) => {
+    const id = nextId(model, "etp");
+    model.etapas.push({ id, uid: uidDe("etapas", i, etapasLidas.length), nome: e.nome, ordem: e.ordem });
+    return id;
+  });
+  const refDeEtapa = (idx) => idx !== void 0 && etapaIds[idx] ? { etapaId: etapaIds[idx] } : {};
+  const refDeDemolicao = (idx) => idx !== void 0 && etapaIds[idx] ? { demolidaEmEtapaId: etapaIds[idx] } : {};
   payload.levels.forEach((l, i) => {
     if (l.tipoDe !== void 0 && levelIds[l.tipoDe] && l.tipoDe !== i) model.levels[i].tipoDeId = levelIds[l.tipoDe];
   });
@@ -2177,6 +2206,8 @@ function modelFromCanonicalPayload(payload) {
       // nada — é o que mantém o round-trip fechando byte a byte.
       ...w.cedeSobreposicao ? { cedeSobreposicao: true } : {},
       ...w.fase ? { fase: w.fase } : {},
+      ...refDeEtapa(w.etapa),
+      ...refDeDemolicao(w.demolidaEm),
       ...w.arco ? { arco: { centro: { x: w.arco.centro.x, y: w.arco.centro.y }, raioMm: w.arco.raioMm } } : {},
       ...w.cortina ? { cortina: { moduloMm: w.cortina.moduloMm, montanteMm: w.cortina.montanteMm, painel: w.cortina.painel } } : {},
       ...w.brise ? { brise: { orientacao: w.brise.orientacao, laminaMm: w.brise.laminaMm, passoMm: w.brise.passoMm, afastamentoMm: w.brise.afastamentoMm, lado: w.brise.lado } } : {},
@@ -2213,6 +2244,8 @@ function modelFromCanonicalPayload(payload) {
       swingReversed: o.swingReversed ?? false,
       embutida: o.embutida ?? false,
       ...o.fase ? { fase: o.fase } : {},
+      ...refDeEtapa(o.etapa),
+      ...refDeDemolicao(o.demolidaEm),
       ...o.esquadria ? { esquadria: { nome: o.esquadria.nome, itemCode: o.esquadria.itemCode, descricao: o.esquadria.descricao } } : {},
       ...o.parametros && Object.keys(o.parametros).length > 0 ? { parametros: { ...o.parametros } } : {}
     });
@@ -2255,6 +2288,8 @@ function modelFromCanonicalPayload(payload) {
       rotulo: s2.rotulo ?? null,
       ...s2.cedeSobreposicao ? { cedeSobreposicao: true } : {},
       ...s2.fase ? { fase: s2.fase } : {},
+      ...refDeEtapa(s2.etapa),
+      ...refDeDemolicao(s2.demolidaEm),
       ...s2.parametros && Object.keys(s2.parametros).length > 0 ? { parametros: { ...s2.parametros } } : {},
       ...s2.secaoT ? { secaoT: s2.secaoT } : {}
     });
@@ -2358,6 +2393,8 @@ function modelFromCanonicalPayload(payload) {
       rotulo: c.rotulo,
       ...c.sugerido ? { sugerido: true } : {},
       ...c.fase ? { fase: c.fase } : {},
+      ...refDeEtapa(c.etapa),
+      ...refDeDemolicao(c.demolidaEm),
       ...c.parametros && Object.keys(c.parametros).length > 0 ? { parametros: { ...c.parametros } } : {}
     });
   });
@@ -3793,6 +3830,8 @@ function gerarIfc(model, o) {
     if (uid) {
       const custo = o.custoPorUid?.get(uid);
       if (custo !== void 0) props.push(["Cost", { tipo: "IFCMONETARYMEASURE", v: custo }]);
+      const lod = o.lodPorUid?.get(uid);
+      if (lod !== void 0) props.push(["LevelOfDevelopment", { tipo: "IFCINTEGER", v: lod }]);
     }
     emitirPset(ctx, produto, uid, "Pset_OpuraPlanta", props);
     psetPersonalizado(produto, uid);

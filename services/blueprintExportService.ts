@@ -42,6 +42,7 @@ import { type ProjecaoCorte, projetarCorte } from '../utils/blueprintCorte';
 import { modeloDoPavimento, papelDoTemplate, planejarConjunto, type PranchaPlanejada, type TemplateDePrancha } from '../utils/blueprintPranchas';
 import { COBERTURA_DXF, gerarDxf, type TopografiaParaDxf } from '../utils/blueprintDxf';
 import { COBERTURA_IFC, gerarIfc, ifcGuidDoProjeto } from '../utils/blueprintIfc';
+import { COBERTURA_COLLADA, gerarCollada } from '../utils/blueprintCollada';
 import { chavesPrivadas, parametrosCalculadosDoModelo } from '../utils/blueprintFormulas';
 import { arquivosDoBcf, type TopicoBcf } from '../utils/blueprintBcf';
 import {
@@ -695,6 +696,23 @@ export function montarIfc(model: BlueprintModel, o: OpcoesExportacao): ArtefatoE
 
 export function exportarIfc(model: BlueprintModel, o: OpcoesExportacao): void {
   baixarArtefatos(montarIfc(model, o));
+}
+
+/**
+ * SKETCHUP (backlog P2 — "SKP"): COLLADA .dae, o formato que o SketchUp importa
+ * nativamente. Mesma disciplina do IFC: parcial SOMENTE COM declaração — a
+ * cobertura vai no cabeçalho do arquivo e num .txt ao lado.
+ */
+export function montarCollada(model: BlueprintModel, o: OpcoesExportacao): ArtefatoExportado[] {
+  const conteudo = gerarCollada(model, { titulo: o.titulo, revisao: o.revisao, hash: o.hash, kernelVersion: KERNEL_VERSION });
+  return [
+    { blob: new Blob([conteudo], { type: 'model/vnd.collada+xml' }), nome: nomeArquivoSemEscala(o, 'dae'), tipo: 'dae' },
+    coberturaComoArtefato(o, 'dae', COBERTURA_COLLADA),
+  ];
+}
+
+export function exportarCollada(model: BlueprintModel, o: OpcoesExportacao): void {
+  baixarArtefatos(montarCollada(model, o));
 }
 
 /** Nome sem a escala: DXF e IFC não têm escala, e citá-la no nome mentiria. */

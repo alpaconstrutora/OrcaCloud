@@ -44,6 +44,7 @@ import { documentService } from './documentService';
 import {
   montarDxf,
   montarIfc,
+  montarCollada,
   montarPdf,
   montarQuantitativoXlsx,
   type ArtefatoExportado,
@@ -52,7 +53,7 @@ import type { OpcoesExportacao } from '../utils/blueprintExport';
 import type { BlueprintModel } from '../utils/blueprintKernel';
 import type { OpuraDocument } from '../types/documents';
 
-export type FormatoParaGed = 'ifc' | 'pdf' | 'dxf' | 'xlsx';
+export type FormatoParaGed = 'ifc' | 'pdf' | 'dxf' | 'xlsx' | 'dae';
 
 /** O que cada formato monta. Um só lugar decide, e vale para GED e download. */
 export function artefatosDoFormato(
@@ -63,6 +64,8 @@ export function artefatosDoFormato(
   switch (formato) {
     case 'ifc':
       return montarIfc(model, o);
+    case 'dae':
+      return montarCollada(model, o);
     case 'dxf':
       return montarDxf(model, o);
     case 'xlsx':

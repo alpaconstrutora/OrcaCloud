@@ -17,6 +17,7 @@ import type { BlueprintSnapshotTopografiaRow } from '../../types/blueprint';
 import {
   exportarDxf,
   exportarIfc,
+  exportarCollada,
   exportarManifesto,
   exportarQuantitativoXlsx,
   exportarPranchasPdf,
@@ -866,6 +867,15 @@ export default function PainelVersoes({
                 onClick={() => exportar(exportarIfc)}
                 disabled={!modelo}
               />
+              {/* SKETCHUP (backlog P2): COLLADA .dae — o que o SketchUp importa
+                  nativamente. Não é .skp (formato fechado); a cobertura diz. */}
+              <BotaoExportar
+                icone={Boxes}
+                rotulo="SketchUp (.dae)"
+                nomeAcessivel="Exportar COLLADA para SketchUp"
+                onClick={() => exportar(exportarCollada)}
+                disabled={!modelo}
+              />
             </div>
 
             {/* A CAIXA DO CUSTO. Só aparece quando há prévia de orçamento —
@@ -907,7 +917,7 @@ export default function PainelVersoes({
               Publicar no GED
             </h3>
             <div className="mt-1.5 flex gap-1.5">
-              {(['pdf', 'dxf', 'ifc', 'xlsx'] as FormatoParaGed[]).map((f) => (
+              {(['pdf', 'dxf', 'ifc', 'dae', 'xlsx'] as FormatoParaGed[]).map((f) => (
                 <BotaoExportar
                   key={f}
                   icone={UploadCloud}

@@ -1369,6 +1369,24 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 - App real (escritas bloqueadas: 15, 0 erros de página): Analisar › Departamentos → "4 ambiente(s), 4 sem departamento" → Sugerir → quadro "Serviço 1 · 13,17 m² · 14,2 %"; Planta de departamentos → Ambiente 4 pintado de verde com rótulo "Serviço 13,17 m²", faixa com o quadro.
 - Testes: `blueprintDepartamentos.test.ts` (normalização, canônico ida e volta só quando presente, corte no limite, sugestão/idempotência, quadro 8,12 + 10,97 m² com %, paleta fixa e rotativa, "Colorir por" com legenda), editor P2.22 (gaveta, sugerir, edição em linha "Ateliê", saveDraft, vista com faixa), contagem de vistas 10 → 11.
 
+### P2.23 — SKP: exportação para SketchUp via COLLADA (.dae) (21/09/2026) · backlog P2
+
+**O que entrou**
+- `utils/blueprintCollada.ts`: `gerarCollada(model, {titulo, revisao, hash, kernelVersion})` → COLLADA 1.4.1, metros, `Z_UP`, um nó por pavimento e um por peça (nome "Parede W-…" no Outliner do SketchUp), 6 materiais de cor chapada (parede, vidro, porta, concreto, laje, telhado). `malhasDoModelo`: paredes como prismas **com o vão aberto** (`fatiasDaParede`: trechos cheios, peitoril e verga), esquadrias como painel fino (porta 40 mm, janela 6 mm vidro), estrutura pelas regras do 3D (`baseMm`, pilar redondo = cilindro 24 facetas, laje = extrusão), águas com espessura pela normal do plano. Triangulação por orelhas (`triangularAnel`), normais para fora. Cobertura `COBERTURA_COLLADA` (contém / não contém / formato) no cabeçalho do arquivo e no `.txt` ao lado.
+- `blueprintExportService`: `montarCollada` / `exportarCollada`; GED aceita o formato `dae` (`artefatosDoFormato`).
+- Colaborar › Versões › "Para outros programas" ganhou **SketchUp (.dae)** ao lado de DXF e IFC; Publicar no GED ganhou DAE.
+
+**Decisões**
+- **Não é `.skp`**: o formato binário do SketchUp só o SDK em C da Trimble escreve — não cabe no navegador nem numa Edge Function. COLLADA é o que o SketchUp importa nativamente em todas as edições (Arquivo › Importar), e Blender/Rhino também; a cobertura e o rótulo dizem isso.
+- Parcial somente com declaração (mesma disciplina do IFC): sem instalações, mobiliário, terreno, escadas, guarda-corpos, rodapés, anotações, texturas.
+- Importação de COLLADA/SKP (paredes a partir de faces verticais) fica como backlog registrado — a importação de paredes já existe pelo IFC/DXF.
+- Sem bump de kernel (nada no payload).
+
+**Prova**
+- `npx tsc --noEmit` ok · check-ui ok em `PainelVersoes.tsx` · suíte cheia 423 arquivos / 4937 testes · `npm run build` ok.
+- App real (escritas bloqueadas: 14, 0 erros de página): Planta 19/09/2026 (publicada) › Colaborar › Versões › SketchUp (.dae) → baixou `planta-19092026-v1.dae` (599 kB, XML bem formado, `Z_UP`, metros, 411 geometrias — 381 paredes + 30 esquadrias — 5 292 triângulos, 1 nó de pavimento) + `planta-19092026-v1.dae.cobertura.txt` com versão e hash.
+- Testes `blueprintCollada.test.ts`: fatias em torno de porta e janela; prisma e L côncavo com volume pela divergência (normais para fora); parede com porta+janela perde exatamente 0,4995 m³ (1,1805 m³); pilar redondo, laje na cota base, água com volume ≈ área real × espessura e subindo; XML com unidade, eixo, materiais, nós, cobertura, determinístico; serviço/GED montam `.dae` + cobertura.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

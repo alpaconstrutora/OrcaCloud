@@ -1087,7 +1087,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             // caminho do botão "Gerar contrato e parcelas".
             const contrato = linkedContract ?? await handleGenerateContract();
             if (!contrato) {
-                notifyError('Não foi possível gerar o contrato desta negociação — o motivo está na aba "Contrato e Assinatura".');
+                notifyError(erroContratoRef.current || 'Não foi possível gerar o contrato desta negociação — o motivo está na aba "Contrato e Assinatura".');
                 return;
             }
 
@@ -1491,7 +1491,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
      *  quem precisa seguir usando ele na mesma ação (ver
      *  handleGerarContratoEParcelas) — o `setLinkedContract` é assíncrono e o
      *  estado ainda não valeria na linha seguinte. */
+    const erroContratoRef = useRef<string | null>(null);
     const handleGenerateContract = async (): Promise<Contract | null> => {
+        erroContratoRef.current = null;
         if (!formData.id) return null;
         const isRental = formData.type === 'RENTAL';
         if (!formData.client_id) { setContractError(`Adicione ao menos um ${isRental ? 'locatário' : 'comprador'} antes de gerar o contrato.`); return null; }
@@ -1528,6 +1530,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         } catch (err: any) {
             console.error('[DealModal] Erro ao gerar contrato:', err);
             setContractError(err?.message || 'Erro ao gerar contrato.');
+            // Também num ref: quem chama de outra aba (Gerar parcelas, Lançar no
+            // Financeiro) lê o motivo na hora, sem esperar o próximo render —
+            // antes mandava o usuário "ver a aba Contrato e Assinatura".
+            erroContratoRef.current = err?.message || 'Erro ao gerar contrato.';
             return null;
         } finally {
             setGeneratingContract(false);
@@ -2245,7 +2251,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             ? 'Salve a negociação antes de gerar o contrato.'
             : !formData.client_id
                 ? `Adicione ao menos um ${formData.type === 'RENTAL' ? 'locatário' : 'comprador'} na aba Dados antes de gerar.`
-                : null;
+                // createFromDeal numera o contrato pela unidade — sem ela, lança
+                // "Negociação sem unidade". Dizer antes, com o botão desabilitado.
+                : dealUnits.length === 0 && !formData.property_id
+                    ? 'Adicione a unidade na aba Dados da Unidade antes de gerar o contrato.'
+                    : null;
 
     /**
      * Não ter contrato deixou de ser bloqueio (10/08/2026). A parcela continua
@@ -2262,7 +2272,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             // O motivo foi para `contractError`, mas ler essa variável aqui daria
             // o valor do render anterior (closure) — apontar onde ele aparece é
             // mais honesto do que exibir um valor velho.
-            setGenerateResult({ ok: false, msg: 'Não foi possível gerar o contrato desta negociação — o motivo está na aba "Contrato e Assinatura".' });
+            setGenerateResult({ ok: false, msg: erroContratoRef.current || 'Não foi possível gerar o contrato desta negociação — o motivo está na aba "Contrato e Assinatura".' });
             return;
         }
         const alvos = await carregarAlvosDeGeracao(contrato);
@@ -2271,14 +2281,17 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         // período — as parcelas saem do plano de pagamento do próprio contrato,
         // lançadas por createContract. Chamar o gerador recorrente aqui daria
         // "só se aplica a contrato recorrente" logo depois de criar o contrato.
+        //
+        // Até 2026-09-21 este ramo só LIA as parcelas do contrato recém-criado —
+        // e createContractFromDeal não copia o Plano de Pagamento da negociação
+        // para o payment_schedule. Resultado: contrato criado e a mensagem
+        // "plano vazio, preencha na aba Financeiro" com o plano preenchido lá.
+        // Agora aplica o plano, como "Lançar no Financeiro" e como o mesmo botão
+        // já fazia quando o contrato existia (handleGenerateForContract).
         if (!contrato.is_recurring) {
-            const lancadas = await contractService.listFinancialEntries(contrato).catch(() => []);
-            setGenerateResult({
-                ok: lancadas.length > 0,
-                msg: lancadas.length > 0
-                    ? `Contrato ${contrato.number} criado com ${lancadas.length} parcela(s) em Contas a Receber, pelo plano de pagamento do contrato. Elas aparecem nesta mesma tabela.`
-                    : `Contrato ${contrato.number} criado, mas sem parcelas: contrato de venda cobra pelo plano de pagamento do contrato, que está vazio. Preencha-o na aba Financeiro.`,
-            });
+            const alvo = alvos.find(a => a.id === contrato.id)
+                ?? { id: contrato.id, kind: 'CONTRACT' as const, label: contrato.number || '', periodo: '', fromDate: '', toDate: '', amount: 0, contract: contrato };
+            await handleGenerateForContract(alvo);
             return;
         }
 
@@ -4829,7 +4842,36 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 {/* Conferência do que vai ser gerado. Os três valores são os
                                     campos da aba Financeiro — aqui só se lê, para o
                                     usuário não ter que confiar de memória no que digitou lá. */}
-                                {alvoSelecionado && (() => {
+                                {/* Venda cobra pelo Plano de Pagamento (blocos da aba Financeiro), não
+                                    por "mensal × nº": os cartões abaixo mostram o plano. Antes liam o
+                                    espelho `installment_value`/`installments`, que num plano
+                                    heterogêneo (entrada + série + chaves) fica vazio e mostrava "—". */}
+                                {formData.type === 'SALE' && (() => {
+                                    const parcelas = planoComoSchedule();
+                                    const total = parcelas.reduce((soma, i) => soma + i.value, 0);
+                                    return (
+                                        <div className="space-y-2">
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {[
+                                                    { label: 'Parcelas do plano', value: parcelas.length > 0 ? String(parcelas.length) : '—' },
+                                                    { label: 'Valor total', value: parcelas.length > 0 ? fmtMoeda(total) : '—' },
+                                                ].map(c => (
+                                                    <div key={c.label} className="p-3 bg-gray-50 rounded-[6px] border border-gray-100">
+                                                        <p className="text-xs font-semibold text-slate-500">{c.label}</p>
+                                                        <p className="text-sm font-medium text-gray-800 mt-0.5">{c.value}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <p className="text-xs text-gray-400">
+                                                {parcelas.length > 0
+                                                    ? 'Plano de Pagamento da aba Financeiro — altere lá para gerar diferente. Gerar de novo REFAZ as parcelas previstas; as já pagas são mantidas.'
+                                                    : 'O Plano de Pagamento está vazio — monte-o na aba Financeiro (Adicionar pagamento) antes de gerar.'}
+                                            </p>
+                                        </div>
+                                    );
+                                })()}
+
+                                {alvoSelecionado && formData.type !== 'SALE' && (() => {
                                     const { amount, maxCount, usouCampos } = geracaoContrato(alvoSelecionado);
                                     const n = maxCount ?? 0;
                                     const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -4885,22 +4927,29 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                 </div>
                                             )}
 
-                                            <div className="grid grid-cols-3 gap-2">
-                                                {[
-                                                    { label: rotuloParcela, value: mensal > 0 ? fmt(mensal) : '—' },
-                                                    { label: 'Nº de parcelas', value: parcelas > 0 ? String(parcelas) : 'Toda a vigência' },
-                                                    { label: 'Valor total', value: mensal > 0 && parcelas > 0 ? fmt(mensal * parcelas) : '—' },
-                                                ].map(c => (
-                                                    <div key={c.label} className="p-3 bg-gray-50 rounded-[6px] border border-gray-100">
-                                                        <p className="text-xs font-semibold text-slate-500">{c.label}</p>
-                                                        <p className="text-sm font-medium text-gray-800 mt-0.5">{c.value}</p>
+                                            {formData.type !== 'SALE' && (
+                                                <>
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        {[
+                                                            { label: rotuloParcela, value: mensal > 0 ? fmt(mensal) : '—' },
+                                                            { label: 'Nº de parcelas', value: parcelas > 0 ? String(parcelas) : 'Toda a vigência' },
+                                                            { label: 'Valor total', value: mensal > 0 && parcelas > 0 ? fmt(mensal * parcelas) : '—' },
+                                                        ].map(c => (
+                                                            <div key={c.label} className="p-3 bg-gray-50 rounded-[6px] border border-gray-100">
+                                                                <p className="text-xs font-semibold text-slate-500">{c.label}</p>
+                                                                <p className="text-sm font-medium text-gray-800 mt-0.5">{c.value}</p>
+                                                            </div>
+                                                        ))}
                                                     </div>
-                                                ))}
-                                            </div>
-                                            <p className="text-xs text-gray-400 -mt-2">
-                                                Valores da aba Financeiro — altere lá para gerar diferente.
-                                            </p>
+                                                    <p className="text-xs text-gray-400 -mt-2">
+                                                        Valores da aba Financeiro — altere lá para gerar diferente.
+                                                    </p>
+                                                </>
+                                            )}
 
+                                            {/* Venda: as datas vêm do plano, linha a linha — a âncora
+                                                é só da série recorrente (locação). */}
+                                            {formData.type !== 'SALE' && (
                                             <div>
                                                 <label className="text-xs font-semibold text-slate-500 mb-1 block">Data do 1º Pagamento</label>
                                                 <input
@@ -4913,6 +4962,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     Ancora a série: a 1ª parcela cai exatamente neste dia, e o dia do mês das seguintes passa a ser o dela.
                                                 </p>
                                             </div>
+                                            )}
 
                                             {motivoSemContrato && (
                                                 <p className="text-xs text-red-600 flex items-center gap-1">

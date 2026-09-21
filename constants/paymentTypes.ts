@@ -2,12 +2,12 @@ import { PaymentType } from '../types';
 
 /**
  * Código do Tipo de Pagamento gravado em `commercial_deals.custom_installments`
- * (e em `down_payment_installment_type`). Os oito abaixo são os padrão do sistema;
+ * (e em `down_payment_installment_type`). Os nove abaixo são os padrão do sistema;
  * tipos criados pela organização geram códigos `CUSTOM_*` (sem periodicidade).
  * `(string & {})` mantém o autocomplete dos padrão e ainda aceita códigos custom.
  */
 export type InstallmentTypeCode =
-    | 'SINAL' | 'MENSAL' | 'BIMESTRAL' | 'TRIMESTRAL' | 'SEMESTRAL' | 'ANUAL' | 'AVULSA' | 'CHAVES'
+    | 'SINAL' | 'MENSAL' | 'BIMESTRAL' | 'TRIMESTRAL' | 'SEMESTRAL' | 'ANUAL' | 'UNICA' | 'AVULSA' | 'CHAVES'
     | (string & {});
 
 export interface PaymentTypeDefault {
@@ -35,6 +35,8 @@ export const DEFAULT_PAYMENT_TYPES: PaymentTypeDefault[] = [
     { code: 'TRIMESTRAL', name: 'Parcelas trimestrais',  interval_months: 3,    generates_series: true  },
     { code: 'SEMESTRAL',  name: 'Parcelas semestrais',   interval_months: 6,    generates_series: true  },
     { code: 'ANUAL',      name: 'Parcelas anuais',       interval_months: 12,   generates_series: true  },
+    // Pedido de 2026-09-21: pagamento único (à vista, ou uma parcela só).
+    { code: 'UNICA',      name: 'Parcela única',         interval_months: null, generates_series: false },
     { code: 'AVULSA',     name: 'Parcelas avulsas',      interval_months: null, generates_series: false },
     { code: 'CHAVES',     name: 'Parcela nas chaves',    interval_months: null, generates_series: false },
 ];

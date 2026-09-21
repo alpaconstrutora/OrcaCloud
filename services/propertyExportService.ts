@@ -10,7 +10,7 @@ const PAYMENT_TYPE_LABELS: Record<string, string> = {
     PIX: 'PIX', TED: 'TED', DOC: 'DOC', DINHEIRO: 'Dinheiro', CHEQUE: 'Cheque', PERMUTA: 'Permuta',
 };
 const INSTALLMENT_TYPE_LABELS: Record<string, string> = {
-    SINAL: 'Sinal', MENSAL: 'Mensal', BIMESTRAL: 'Bimestral', TRIMESTRAL: 'Trimestral', SEMESTRAL: 'Semestral', ANUAL: 'Anual', AVULSA: 'Avulsa',
+    SINAL: 'Sinal', MENSAL: 'Mensal', BIMESTRAL: 'Bimestral', TRIMESTRAL: 'Trimestral', SEMESTRAL: 'Semestral', ANUAL: 'Anual', UNICA: 'Única', AVULSA: 'Avulsa',
 };
 
 const fmtCurrency = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n || 0);

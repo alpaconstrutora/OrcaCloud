@@ -16,6 +16,9 @@ const tipo = (new URLSearchParams(location.search).get('tipo') || 'SALE') as 'SA
 // `?exemplo=1`: plano já montado como o usuário descreveu em 2026-09-21 —
 // Parcela 1 entrada 100.000 · Parcelas 2–9 mensais 10.000 · Parcela 10 final 50.000.
 const exemplo = new URLSearchParams(location.search).get('exemplo') === '1';
+// `?salva=1`: negociação já gravada (id + comprador) — habilita "Gerar contrato e
+// parcelas" na aba Parcelas; o roteiro Playwright stuba a criação do contrato.
+const salva = new URLSearchParams(location.search).get('salva') === '1';
 const mensais = Array.from({ length: 8 }, (_, i) => ({
   id: `ex-m-${i + 1}`, dueDate: `2026-${String(11 + i).padStart(2, '0')}-10`.replace(/2026-(1[3-9])/, (_m, mm) => `2027-${String(Number(mm) - 12).padStart(2, '0')}`),
   value: 10000, status: 'PENDING', installmentType: 'MENSAL', notes: 'Parcelas mensais em cheque',
@@ -40,6 +43,7 @@ function Harness() {
           contract_total_value: tipo === 'SALE' ? 120000 : undefined,
           payment_method: 'CASH',
           status: 'PROPOSTA',
+          ...(salva ? { id: 'deal-0000-0000-0000-000000000001', client_id: 'cli-0000-0000-0000-000000000001', property_id: 'prop-0000-0000-0000-000000000001', status: 'CONTRATO' } : {}),
           ...(exemplo ? {
             contract_total_value: 230000,
             payment_method: 'INSTALLMENTS',

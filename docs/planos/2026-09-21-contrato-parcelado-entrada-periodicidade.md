@@ -158,3 +158,42 @@ rascunho homogêneo.
 
 **Fase 3 publicada em 2026-09-21** (`a07ef55a` em main) e provada de fora:
 `conferir-producao.sh "Total do plano"` ✅ (domínio servindo origin/main).
+
+---
+
+## Pedido posterior (2026-09-21) — "Parcela única" e "Gerar parcelas" morto
+
+> 1. incluir "parcela Única" em  no tipo de parcela
+> 2. aba Parcelas, < botao gerar parcelas nao esta funcionando
+
+### Diagnóstico (harness `docs/spikes/negociacao-parcelado/?salva=1&exemplo=1`)
+
+O botão abre o modal; o que falhava era o **rodapé "Gerar contrato e parcelas"
+numa VENDA sem contrato**: criava o contrato e só LIA as parcelas dele —
+`createContractFromDeal` não copia o Plano de Pagamento da negociação para o
+`payment_schedule`, então respondia "contrato criado, mas sem parcelas: plano
+vazio, preencha na aba Financeiro" com o plano preenchido lá. E os cartões do
+modal mostravam "—" (liam o espelho mensal × nº, vazio num plano heterogêneo).
+Quando a criação do contrato falhava (ex.: negociação sem unidade), a mensagem
+era genérica ("veja a aba Contrato e Assinatura").
+
+### Plano — Fase 4 (frente `parcelas-gerar-e-tipo-unica`)
+
+9. **`constants/paymentTypes.ts`** — tipo padrão `UNICA` "Parcela única"
+   (sem série); rótulo na proposta em PDF. **Pronto quando:** aparece no Sheet
+   "Adicionar pagamento" (defaults não importados são mesclados por
+   `withDefaultPaymentTypes`).
+10. **`components/DealModal.tsx`** — venda sem contrato: "Gerar contrato e
+    parcelas" cria o contrato e aplica o plano (`handleGenerateForContract`, o
+    mesmo caminho de quando o contrato já existe / "Lançar no Financeiro");
+    modal mostra "Parcelas do plano / Valor total" em venda (mensal × nº e a
+    âncora de data ficam só para locação); motivo real da falha de criação no
+    modal (`erroContratoRef`); pré-requisito de unidade em `motivoSemContrato`.
+    **Pronto quando:** harness — clique gera `PATCH contracts
+    payment_schedule,payment_term_type` com as 10 linhas do exemplo e a
+    mensagem "10 parcela(s) do Plano de Pagamento lançadas".
+
+### Estado — Fase 4
+
+- [x] 9 UNICA no catálogo
+- [x] 10 DealModal — harness: modal "Parcelas do plano 10 · R$ 230.000,00"; sem unidade → "Negociação sem unidade — selecione o imóvel…" no modal; com unidade → contrato criado, `PATCH contracts payment_schedule` (SINAL + 8× MENSAL + CHAVES), "10 parcela(s) … lançadas". typecheck ✓ · `check-ui-standard.sh` ✓

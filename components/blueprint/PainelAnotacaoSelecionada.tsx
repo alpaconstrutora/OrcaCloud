@@ -17,7 +17,7 @@ import IdentificadorDoElemento from './IdentificadorDoElemento';
 
 interface Props {
   anotacao: Anotacao | null;
-  onProps: (campos: { pontos?: { x: number; y: number }[]; texto?: string | null; alturaMm?: number; traco?: TracoDaAnotacao; hachura?: PadraoDeHachura | null; rotacaoGraus?: number; cor?: string | null }) => void;
+  onProps: (campos: { pontos?: { x: number; y: number }[]; texto?: string | null; alturaMm?: number; traco?: TracoDaAnotacao; hachura?: PadraoDeHachura | null; rotacaoGraus?: number; cor?: string | null; revisao?: { numero: number; data: string } }) => void;
   onExcluir: () => void;
 }
 
@@ -28,7 +28,7 @@ const nomeDaVista = (a: Anotacao) => (a.vista.tipo === 'PLANTA' ? 'planta' : a.v
 export default function PainelAnotacaoSelecionada({ anotacao: a, onProps, onExcluir }: Props) {
   if (!a) return null;
   const campo = 'rounded-md border border-slate-300 px-2 py-1 text-xs font-normal text-slate-800';
-  const temTexto = a.tipo === 'TEXTO' || a.tipo === 'LEADER' || a.tipo === 'HACHURA';
+  const temTexto = a.tipo === 'TEXTO' || a.tipo === 'LEADER' || a.tipo === 'HACHURA' || a.tipo === 'NUVEM';
   const angulo = anguloDaCota(a);
   return (
     <div className="border-b border-slate-200 px-4 py-3" data-testid="painel-anotacao">
@@ -46,9 +46,21 @@ export default function PainelAnotacaoSelecionada({ anotacao: a, onProps, onExcl
         </button>
       </div>
       <div className="mt-2 grid grid-cols-2 gap-2 text-xs font-semibold text-slate-500">
+        {a.tipo === 'NUVEM' && a.revisao && (
+          <>
+            <label className="flex flex-col gap-1">
+              Revisão nº
+              <input type="number" key={`${a.id}-rn`} defaultValue={a.revisao.numero} min={1} step={1} aria-label="Número da revisão da nuvem" onBlur={(e) => Number(e.target.value) >= 1 && onProps({ revisao: { numero: Math.round(Number(e.target.value)), data: a.revisao!.data } })} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} className={campo} data-testid="nuvem-revisao-numero" />
+            </label>
+            <label className="flex flex-col gap-1">
+              Data da revisão
+              <input type="date" key={`${a.id}-rd`} defaultValue={a.revisao.data} aria-label="Data da revisão da nuvem" onBlur={(e) => /^\d{4}-\d{2}-\d{2}$/.test(e.target.value) && onProps({ revisao: { numero: a.revisao!.numero, data: e.target.value } })} className={campo} data-testid="nuvem-revisao-data" />
+            </label>
+          </>
+        )}
         {temTexto && (
           <label className="col-span-2 flex flex-col gap-1">
-            Texto{a.tipo === 'HACHURA' ? ' (rótulo, opcional)' : ''}
+            {a.tipo === 'NUVEM' ? 'Descrição da alteração (sai na tabela de revisões)' : `Texto${a.tipo === 'HACHURA' ? ' (rótulo, opcional)' : ''}`}
             <textarea key={`${a.id}-t`} defaultValue={a.texto ?? ''} rows={2} maxLength={500} aria-label="Texto da anotação" onBlur={(e) => onProps({ texto: e.target.value })} className={`${campo} resize-y`} />
           </label>
         )}

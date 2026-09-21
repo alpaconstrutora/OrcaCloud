@@ -65,6 +65,7 @@ import {
   MessageSquareText,
   Slash,
   Highlighter,
+  Cloud,
   TriangleRight,
   Grip,
   Hand,
@@ -418,7 +419,7 @@ import { coresDaVista, type ModoDeCor } from '../../utils/blueprintPaletas';
 import { TEMPLATES_DE_FABRICA, type ConfiguracaoDeVista, type Estilo3d, type EstiloDaPlanta, type TemplateDeVista } from '../../utils/blueprintTemplatesDeVista';
 import { pisosHumanizados, resumirPisos, vegetacaoSimbolica } from '../../utils/blueprintHumanizada';
 import { blueprintViewTemplateService } from '../../services/blueprintViewTemplateService';
-import { resumirAnotacoes } from '../../utils/blueprintAnotacoes';
+import { proximaRevisao, revisoesDoModelo, resumirAnotacoes } from '../../utils/blueprintAnotacoes';
 import PainelGuardaCorpos from './PainelGuardaCorpos';
 import { HIPOTESES_DE_GUARDA_CORPO_PADRAO, resumirGuardaCorpos, sugerirGuardaCorpos, type HipotesesDeGuardaCorpo } from '../../utils/blueprintGuardaCorpo';
 import { resumirAcabamentos } from '../../utils/blueprintAcabamentos';
@@ -1675,6 +1676,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [tipoDeGuardaCorpo, setTipoDeGuardaCorpo] = useState<TipoDeGuardaCorpo>('GUARDA_CORPO');
   /** ANOTAÇÃO (E8.1): o tipo do próximo traçado. */
   const [tipoDeAnotacao, setTipoDeAnotacao] = useState<TipoDeAnotacao>('TEXTO');
+  /** NUVEM DE REVISÃO (P2.15): a revisão em que as PRÓXIMAS nuvens nascem; null = a próxima livre. */
+  const [numeroDaRevisaoEscolhido, setNumeroDaRevisaoEscolhido] = useState<number | null>(null);
+  const numeroDaRevisao = numeroDaRevisaoEscolhido ?? proximaRevisao(editor.model);
   const [hipotesesDeGuardaCorpo, setHipotesesDeGuardaCorpo] = usePersistedState<HipotesesDeGuardaCorpo>('blueprint:guardaCorpos', HIPOTESES_DE_GUARDA_CORPO_PADRAO);
   const [hipotesesDeVagas, setHipotesesDeVagas] = usePersistedState<HipotesesDeVagas>('blueprint:vagas', HIPOTESES_VAGAS_PADRAO);
   const [regiaoDeVagasPedida, setRegiaoDeVagasPedida] = useState<RegiaoDeVagas | null>(null);
@@ -5218,7 +5222,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   /** A anotação nasce na PLANTA do pavimento ativo; o painel edita texto, altura, traço, hachura. */
   function adicionarAnotacao(tipo: TipoDeAnotacao, pontos: Point[]) {
     if (!levelId) return;
-    const criados = editor.run({ type: 'AddAnotacao', vista: { tipo: 'PLANTA', levelId }, tipo, pontos });
+    // NUVEM DE REVISÃO (P2.15): nasce na revisão da barra, com a data de hoje.
+    const revisao = tipo === 'NUVEM' ? { numero: numeroDaRevisao, data: new Date().toISOString().slice(0, 10) } : undefined;
+    const criados = editor.run({ type: 'AddAnotacao', vista: { tipo: 'PLANTA', levelId }, tipo, pontos, ...(revisao ? { revisao } : {}) });
     if (criados.length > 0) selecionar(criados);
   }
   /** O guarda-corpo/corrimão nasce de dois cliques, com a altura padrão do tipo; o painel ajusta. */
@@ -8773,6 +8779,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               ['LINHA', Slash, 'Cliques ao longo da linha; duplo clique encerra'],
               ['HACHURA', Highlighter, 'Cliques no contorno da região; duplo clique fecha (diagonal, cruzada, pontos ou sólida)'],
               ['COTA_ANGULAR', TriangleRight, '3 cliques: o vértice e as duas pontas — o ângulo é derivado'],
+              ['NUVEM', Cloud, 'Cliques no contorno da área alterada; duplo clique fecha. Leva o número e a data da revisão (barra) e a descrição (painel) — sai na tabela de revisões do carimbo'],
             ] as const).map(([tipo, Icone, ajuda]) => (
               <BotaoDoRibbon
                 key={tipo}
@@ -9652,7 +9659,31 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           mesma regra: o que já está lançado se edita no painel lateral. */}
       {!emVista && (
         <BarraDeOpcoes rotulo={rotuloDaFerramentaAtiva}>
-          {editor.tool === 'escada' ? (
+          {editor.tool === 'anotacao' && tipoDeAnotacao === 'NUVEM' ? (
+            /* NUVEM DE REVISÃO (P2.15): em que revisão a próxima nuvem nasce. */
+            <div className="flex items-center gap-2 text-xs text-slate-600">
+              <label className="flex items-center gap-1">
+                Revisão nº
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={numeroDaRevisao}
+                  onChange={(e) => {
+                    const v = Math.round(Number(e.target.value));
+                    if (Number.isFinite(v) && v >= 1) setNumeroDaRevisaoEscolhido(v);
+                  }}
+                  aria-label="Número da revisão das próximas nuvens"
+                  className="w-14 rounded-md border border-slate-300 px-1.5 py-0.5 text-xs text-slate-800"
+                />
+              </label>
+              <span className="text-slate-400">
+                {revisoesDoModelo(editor.model).length > 0
+                  ? `revisões no desenho: ${revisoesDoModelo(editor.model).map((r) => `Δ${r.numero} (${r.nuvens})`).join(' · ')} · a descrição vai no painel da nuvem`
+                  : 'primeira revisão do desenho · a descrição vai no painel da nuvem'}
+              </span>
+            </div>
+          ) : editor.tool === 'escada' ? (
             /* A PROXIMA escada: largura e alvo de espelho. Sem campo de degraus,
                de proposito (ver `escada.ts`). */
             <CamposDaEscada

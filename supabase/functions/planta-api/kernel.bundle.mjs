@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.49.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.50.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -1767,6 +1767,8 @@ function projetar(model) {
       hachura: a.hachura ?? null,
       rotacaoGraus: a.rotacaoGraus,
       cor: a.cor ?? null,
+      // NUVEM DE REVISÃO (0.50.0): só a nuvem tem; as demais não ganham chave.
+      revisao: a.revisao ? { numero: a.revisao.numero, data: a.revisao.data } : void 0,
       parametros: parametrosCanonicos(a.parametros)
     }),
     (x, y) => {
@@ -2300,6 +2302,7 @@ function modelFromCanonicalPayload(payload) {
       hachura: a.hachura,
       rotacaoGraus: a.rotacaoGraus,
       cor: a.cor,
+      ...a.revisao ? { revisao: { numero: a.revisao.numero, data: a.revisao.data } } : {},
       ...a.parametros && Object.keys(a.parametros).length > 0 ? { parametros: { ...a.parametros } } : {}
     });
   });

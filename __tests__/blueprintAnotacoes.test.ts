@@ -72,7 +72,7 @@ describe('anotações (E8.1)', () => {
       { type: 'AddAnotacao', vista: { tipo: 'ELEVACAO', direcao: 'FRENTE' }, tipo: 'LINHA', pontos: [point(0, 0), point(1000, 0)] },
     ]).model;
     expect(anotacoesDaVista(model, { tipo: 'PLANTA', levelId: t }).map((a) => a.texto)).toEqual(['térreo']);
-    expect(resumirAnotacoes(model)).toEqual({ total: 4, porTipo: { TEXTO: 2, LEADER: 0, LINHA: 2, HACHURA: 0, COTA_ANGULAR: 0 }, vistas: 4 });
+    expect(resumirAnotacoes(model)).toEqual({ total: 4, porTipo: { TEXTO: 2, LEADER: 0, LINHA: 2, HACHURA: 0, COTA_ANGULAR: 0, NUVEM: 0 }, vistas: 4 });
     const semSup = applyCommand(model, { type: 'RemoveLevel', levelId: sup }).model;
     expect(semSup.anotacoes.map((a) => a.vista.tipo)).toEqual(['PLANTA', 'CORTE', 'ELEVACAO']);
     const semCorte = applyCommand(semSup, { type: 'DeleteCorte', corteId }).model;

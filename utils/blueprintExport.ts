@@ -25,7 +25,7 @@
  */
 
 import type { Anotacao, BlueprintModel, Point, Wall } from './blueprintKernel';
-import { cotaAngularDesenhada, linhasDaHachura, pontaDaSeta, COR_PADRAO_DA_ANOTACAO } from './blueprintAnotacoes';
+import { contornoDaNuvem, cotaAngularDesenhada, dataDaRevisaoBr, linhasDaHachura, pontaDaSeta, posicaoDaEtiquetaDaNuvem, revisoesDasAnotacoes, revisoesDoModelo, COR_PADRAO_DA_ANOTACAO, type RevisaoDaPrancha } from './blueprintAnotacoes';
 import { contornoEmPlanta, extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
 import { copa, COR_SOMBRA_OPACA, COR_VEGETACAO, pisosHumanizados, simboloNoMundo, sombraDaParede, tramaDoPiso, vegetacaoSimbolica } from './blueprintHumanizada';
 import type { ProjecaoElevacao } from './blueprintElevation';
@@ -558,6 +558,7 @@ export function desenharPlanta(
 
   // ANOTAÇÕES (E8.1) da planta, por cima de tudo — a última camada, como na tela.
   desenharAnotacoes(d, (model.anotacoes ?? []).filter((a) => a.vista.tipo === 'PLANTA'), opcoes.denominador, px, py);
+  const revisoesDaPlanta = revisoesDoModelo(model);
 
   if (opcoes.recorte && bb) {
     d.fimDoRecorte?.();
@@ -565,7 +566,7 @@ export function desenharPlanta(
     d.retangulo(enq.offsetXMm, enq.offsetYMm, (bb.maxX - bb.minX) / opcoes.denominador, (bb.maxY - bb.minY) / opcoes.denominador, { espessuraMm: 0.35, cor: COR_TRACO });
   }
 
-  desenharCarimbo(d, opcoes, enq);
+  desenharCarimbo(d, opcoes, enq, revisoesDaPlanta);
 }
 
 /**
@@ -803,6 +804,19 @@ export function desenharAnotacoes(
           const r = P(c.posicaoDoRotulo);
           d.texto(r.x, r.y, c.rotulo, alturaPapel, cor);
         }
+        break;
+      }
+      // NUVEM DE REVISÃO (P2.15): o mesmo contorno recortado da tela, e o triângulo com o número.
+      case 'NUVEM': {
+        const nuvem = contornoDaNuvem(a.pontos, a.alturaMm);
+        for (let i = 0; i < nuvem.length; i++) linha(nuvem[i], nuvem[(i + 1) % nuvem.length]);
+        const e = P(posicaoDaEtiquetaDaNuvem(a.pontos, a.alturaMm));
+        const lado = Math.max(3, alturaPapel * 1.4);
+        d.linha(e.x, e.y - lado * 0.6, e.x - lado / 2, e.y + lado * 0.45, estilo);
+        d.linha(e.x - lado / 2, e.y + lado * 0.45, e.x + lado / 2, e.y + lado * 0.45, estilo);
+        d.linha(e.x + lado / 2, e.y + lado * 0.45, e.x, e.y - lado * 0.6, estilo);
+        d.texto(e.x - alturaPapel * 0.3, e.y + lado * 0.3, String(a.revisao?.numero ?? ''), alturaPapel * 0.9, cor);
+        if (a.texto) d.texto(e.x + lado * 0.7, e.y + lado * 0.3, a.texto, alturaPapel, cor);
         break;
       }
       default:
@@ -1093,7 +1107,7 @@ export function desenharElevacao(
   );
   desenharAnotacoes(d, daVista, opcoes.denominador, px, py);
 
-  desenharCarimbo(d, opcoes, enq);
+  desenharCarimbo(d, opcoes, enq, revisoesDasAnotacoes(daVista));
 }
 
 /** O que o plano de CORTE atravessa — cheio, como manda a prancha. */
@@ -1198,9 +1212,21 @@ function desenharCotas(
 
 
 /** Legenda, escala, versão e aviso — a faixa inferior da folha. */
-function desenharCarimbo(d: Desenhista, o: OpcoesExportacao, enq: Enquadramento): void {
+function desenharCarimbo(d: Desenhista, o: OpcoesExportacao, enq: Enquadramento, revisoes: RevisaoDaPrancha[] = []): void {
   const topo = MARGEM_MM + enq.utilAlturaMm;
   const largura = enq.utilLarguraMm;
+  // NUVENS DE REVISÃO (P2.15): a tabela de revisões — as 4 mais recentes, à
+  // esquerda do número da prancha (ou da escala gráfica), do mais novo para o
+  // mais velho. É o que liga o "Δ3" da nuvem à data e à descrição.
+  if (revisoes.length > 0) {
+    const xTab = MARGEM_MM + largura - (o.prancha ? 104 : 48) - 78;
+    d.linha(xTab - 3, topo, xTab - 3, topo + CARIMBO_MM, { espessuraMm: 0.25, cor: COR_TRACO });
+    d.texto(xTab, topo + 4, 'Rev.  Data        Descrição', 2.0, '#555555');
+    [...revisoes].reverse().slice(0, 4).forEach((r, i) => {
+      const desc = r.descricoes.join('; ') || `${r.nuvens} nuvem(ns)`;
+      d.texto(xTab, topo + 8 + i * 4.2, `Δ${r.numero}   ${dataDaRevisaoBr(r.data)}   ${desc.length > 34 ? desc.slice(0, 33) + '…' : desc}`, 2.0);
+    });
+  }
 
   d.retangulo(MARGEM_MM, topo, largura, CARIMBO_MM, {
     espessuraMm: 0.25,

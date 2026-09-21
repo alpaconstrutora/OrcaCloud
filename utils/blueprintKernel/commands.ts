@@ -31,6 +31,7 @@ import {
   clonarCamadas,
   clonarArco,
   type ArcoDaParede,
+  type RevisaoDaNuvem,
   acabamentosOuAusente,
   type AcabamentosDoAmbiente,
   cloneModel,
@@ -500,8 +501,8 @@ export type Command =
    * 250 mm do modelo; hachura omitida na HACHURA = DIAGONAL. `MoveAnotacao`
    * desloca todos os pontos; um vértice só vai por `SetAnotacaoProps.pontos`.
    */
-  | { type: 'AddAnotacao'; vista: VistaDaAnotacao; tipo: TipoDeAnotacao; pontos: Point[]; texto?: string | null; alturaMm?: number; traco?: TracoDaAnotacao; hachura?: PadraoDeHachura | null; rotacaoGraus?: number; cor?: string | null }
-  | { type: 'SetAnotacaoProps'; anotacaoId: ObjectId; pontos?: Point[]; texto?: string | null; alturaMm?: number; traco?: TracoDaAnotacao; hachura?: PadraoDeHachura | null; rotacaoGraus?: number; cor?: string | null }
+  | { type: 'AddAnotacao'; vista: VistaDaAnotacao; tipo: TipoDeAnotacao; pontos: Point[]; texto?: string | null; alturaMm?: number; traco?: TracoDaAnotacao; hachura?: PadraoDeHachura | null; rotacaoGraus?: number; cor?: string | null; /** Obrigatória na NUVEM (0.50.0), recusada nas demais. */ revisao?: RevisaoDaNuvem }
+  | { type: 'SetAnotacaoProps'; anotacaoId: ObjectId; pontos?: Point[]; texto?: string | null; alturaMm?: number; traco?: TracoDaAnotacao; hachura?: PadraoDeHachura | null; rotacaoGraus?: number; cor?: string | null; revisao?: RevisaoDaNuvem }
   | { type: 'MoveAnotacao'; anotacaoId: ObjectId; dx: number; dy: number }
   | { type: 'DeleteAnotacao'; anotacaoId: ObjectId }
   /**
@@ -2196,12 +2197,14 @@ function aplicarSemHash(
           vista: { ...command.vista },
           tipo: command.tipo,
           pontos: command.pontos.map((p, i) => ({ x: assertIntegerMm(roundToMm(p.x), `pontos[${i}].x`), y: assertIntegerMm(roundToMm(p.y), `pontos[${i}].y`) })),
-          texto: command.tipo === 'TEXTO' || command.tipo === 'LEADER' || command.tipo === 'HACHURA' ? texto : null,
+          texto: command.tipo === 'TEXTO' || command.tipo === 'LEADER' || command.tipo === 'HACHURA' || command.tipo === 'NUVEM' ? texto : null,
           alturaMm: assertIntegerMm(roundToMm(command.alturaMm ?? ALTURA_PADRAO_DO_TEXTO_MM), 'alturaMm'),
           traco: command.traco ?? 'CONTINUO',
           hachura: command.tipo === 'HACHURA' ? command.hachura ?? 'DIAGONAL' : null,
           rotacaoGraus: ((Math.round(command.rotacaoGraus ?? 0) % 360) + 360) % 360,
           cor: command.cor ?? null,
+          // NUVEM DE REVISÃO (0.50.0): a revisão vem de quem cria (os invariantes recusam nuvem sem ela).
+          ...(command.tipo === 'NUVEM' && command.revisao ? { revisao: { numero: command.revisao.numero, data: command.revisao.data } } : {}),
         },
       ];
       if (command.pontos.length < PONTOS_MINIMOS_DA_ANOTACAO[command.tipo]) {
@@ -2220,6 +2223,7 @@ function aplicarSemHash(
       if (command.hachura !== undefined) a.hachura = command.hachura;
       if (command.rotacaoGraus !== undefined) a.rotacaoGraus = ((Math.round(command.rotacaoGraus) % 360) + 360) % 360;
       if (command.cor !== undefined) a.cor = command.cor;
+      if (command.revisao !== undefined) a.revisao = { numero: command.revisao.numero, data: command.revisao.data };
       diff.updated.push(a.id);
       break;
     }

@@ -546,6 +546,8 @@ function projetar(model: BlueprintModel): {
       hachura: a.hachura ?? null,
       rotacaoGraus: a.rotacaoGraus,
       cor: a.cor ?? null,
+      // NUVEM DE REVISÃO (0.50.0): só a nuvem tem; as demais não ganham chave.
+      revisao: a.revisao ? { numero: a.revisao.numero, data: a.revisao.data } : undefined,
       parametros: parametrosCanonicos(a.parametros),
     }),
     (x, y) => {
@@ -1180,6 +1182,8 @@ export interface CanonicalPayload {
     hachura: PadraoDeHachura | null;
     rotacaoGraus: number;
     cor: string | null;
+    /** Só na NUVEM (kernel ≥ 0.50.0): número e data ISO da revisão. */
+    revisao?: { numero: number; data: string };
     parametros?: Parametros;
   }[];
   /** Núcleos verticais. Ausente sob kernel < 0.39.0 e em desenho sem nenhum. */
@@ -1674,6 +1678,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       hachura: a.hachura,
       rotacaoGraus: a.rotacaoGraus,
       cor: a.cor,
+      ...(a.revisao ? { revisao: { numero: a.revisao.numero, data: a.revisao.data } } : {}),
       ...(a.parametros && Object.keys(a.parametros).length > 0 ? { parametros: { ...a.parametros } } : {}),
     });
   });

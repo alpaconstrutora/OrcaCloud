@@ -204,4 +204,29 @@ describe('anotações · canvas (E8.1)', () => {
     await user.selectOptions(screen.getByLabelText('Giro do texto'), '90');
     expect(onProps).toHaveBeenLastCalledWith({ rotacaoGraus: 90 });
   });
+
+  // NUVEM DE REVISÃO (P2.15): o painel edita número e data da revisão e a descrição.
+  it('painel da nuvem de revisão: número, data e descrição disparam as props; a nuvem se seleciona pelo polígono', async () => {
+    const model = applyCommand(base, { type: 'AddAnotacao', vista: { tipo: 'PLANTA', levelId: t }, tipo: 'NUVEM', pontos: [point(0, 0), point(2000, 0), point(2000, 1500), point(0, 1500)], texto: 'Porta deslocada', revisao: { numero: 2, data: '2026-09-21' } }).model;
+    const nuvem = model.anotacoes[0] as Anotacao;
+    const onProps = vi.fn();
+    const user = userEvent.setup();
+    render(<PainelAnotacaoSelecionada anotacao={nuvem} onProps={onProps} onExcluir={() => {}} />);
+    const painel = screen.getByTestId('painel-anotacao');
+    expect(painel).toHaveTextContent(/Nuvem de revisão/);
+    const num = within(painel).getByTestId('nuvem-revisao-numero');
+    await user.clear(num);
+    await user.type(num, '3{Enter}');
+    expect(onProps).toHaveBeenLastCalledWith({ revisao: { numero: 3, data: '2026-09-21' } });
+    const data = within(painel).getByTestId('nuvem-revisao-data');
+    fireEvent.change(data, { target: { value: '2026-10-02' } });
+    fireEvent.blur(data);
+    expect(onProps).toHaveBeenLastCalledWith({ revisao: { numero: 2, data: '2026-10-02' } });
+    const txt = within(painel).getByLabelText('Texto da anotação');
+    await user.clear(txt);
+    await user.type(txt, 'Janela ampliada');
+    await user.tab();
+    expect(onProps).toHaveBeenLastCalledWith({ texto: 'Janela ampliada' });
+    expect(painel).toHaveTextContent(/Descrição da alteração/);
+  });
 });

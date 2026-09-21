@@ -194,6 +194,13 @@
  *   tem instalação, então nenhuma delas ganha chave — só a versão embutida no
  *   payload mudou.
  *
+ *   0.49.0 → 0.50.0 (21/09/2026): NUVEM DE REVISÃO (backlog P2 — P2.15) —
+ *   tipo de anotação `NUVEM` e `revisao: {numero, data}` só nela (toda nuvem
+ *   tem; nenhuma outra anotação ganha chave). Nenhum dos seis casos tem
+ *   anotação. Mesma prova, refeita antes de tocar num hash: com a string em
+ *   0.49.0 e tudo JÁ no lugar (modelo, comandos, invariantes `BAD_ANNOTATION`,
+ *   canônico ida e volta), 347 testes de kernel/canônico/goldens/IFC/anotações
+ *   /exportação passaram; só depois do bump as seis falhas foram todas de hash.
  *   0.48.0 → 0.49.0 (20/09/2026): COBERTURA POR EXTRUSÃO (backlog P2 — P2.13)
  *   — `extrusao: {a, b}` na água (o eixo em planta), só na água nascida do
  *   comando `AddRoofByExtrusion` (perfil em corte → uma água por trecho reto;
@@ -579,17 +586,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '9157d892dc7551179f42e850916150be49799165def41f4d3a41566e5662502b',
+    hash: 'ca6508f52037b5a638030a289857fdf78434ac4987c49d6afacf80370746cad2',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '785756b0a991cce0dbb18996c1dc50982e6e384477b896622d7efaef4f14c57c',
+    hash: '5a08401b11da59ee4bacbccd1c6a053c9fb922e9c5f455a0fcbd60ed9dc5a824',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '48934e5c441526a43db0a458d47839b92c29aead077a71e657be0f276b67dc14',
+    hash: '4248a5a32945f6364f044da7548249a375ebfa20f733cc9e72909e6333d2f973',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -597,7 +604,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '1d529990e7a8de638dd72ff5167452990c0856f8087ae515db22b8bf081c8477',
+    hash: '639a5f6a1788a652f7fa0b5f93b1c5ce861af54f0a04ffd510cd055fd3168512',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -607,7 +614,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '040fbee412590bfc03adfa9eb29387a5ea5a6c16eab4806fc1e060c4df619c92',
+    hash: '5676033e03c73d1d3feda573f3703814c4857428daae54852416485c11f84388',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -618,7 +625,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '7ec468e74ebc48563f8e6d939f7c86188129a2f056e115f5c89d391bda5f30b8',
+    hash: 'ff84dbd253f1ea3ff9739691fb9613fb129b3931823da468a118e8513c2cf078',
   },
 };
 

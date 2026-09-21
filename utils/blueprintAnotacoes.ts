@@ -9,6 +9,8 @@
  * dentro do canvas.
  */
 import {
+  signedArea,
+  DATA_ISO_DA_REVISAO,
   anguloDaCota,
   mesmaVista,
   pointInPolygon,
@@ -177,7 +179,7 @@ export function distanciaAAnotacao(a: Anotacao, p: Point): number {
   }
   const segs: [Point, Point][] = [];
   const pts = a.pontos;
-  if (a.tipo === 'HACHURA') {
+  if (a.tipo === 'HACHURA' || a.tipo === 'NUVEM') {
     if (pointInPolygon(pts, p)) return 0;
     for (let i = 0; i < pts.length; i++) segs.push([pts[i], pts[(i + 1) % pts.length]]);
   } else if (a.tipo === 'COTA_ANGULAR') {
@@ -205,11 +207,105 @@ export interface ResumoDasAnotacoes {
 }
 
 export function resumirAnotacoes(model: BlueprintModel): ResumoDasAnotacoes {
-  const porTipo: Record<Anotacao['tipo'], number> = { TEXTO: 0, LEADER: 0, LINHA: 0, HACHURA: 0, COTA_ANGULAR: 0 };
+  const porTipo: Record<Anotacao['tipo'], number> = { TEXTO: 0, LEADER: 0, LINHA: 0, HACHURA: 0, COTA_ANGULAR: 0, NUVEM: 0 };
   const vistas = new Set<string>();
   for (const a of model.anotacoes ?? []) {
     porTipo[a.tipo]++;
     vistas.add(a.vista.tipo === 'PLANTA' ? `P:${a.vista.levelId}` : a.vista.tipo === 'CORTE' ? `C:${a.vista.corteId}` : `E:${a.vista.direcao}`);
   }
   return { total: (model.anotacoes ?? []).length, porTipo, vistas: vistas.size };
+}
+
+// ── NUVEM DE REVISÃO (P2.15) ────────────────────────────────────────────────
+
+/** Arcos por metro de contorno: o "recorte" da nuvem. A corda de cada arco é ~2,5 × a altura do texto. */
+export function cordaDaNuvemMm(alturaMm: number): number {
+  return Math.max(150, Math.round(alturaMm * 2.5));
+}
+
+/**
+ * O contorno RECORTADO da nuvem: cada lado do polígono vira uma fila de arcos
+ * de meia-lua para FORA (anel anti-horário → normal à direita do sentido do
+ * lado). Devolve uma polilinha fechada, já discretizada (8 segmentos por
+ * arco) — a mesma geometria para a tela, o PDF e o DXF.
+ */
+export function contornoDaNuvem(pontos: Point[], alturaMm: number): Point[] {
+  if (pontos.length < 3) return pontos.map((p) => ({ ...p }));
+  const corda = cordaDaNuvemMm(alturaMm);
+  const orient = signedArea(pontos) >= 0 ? 1 : -1; // anti-horário → +1
+  const saida: Point[] = [];
+  const n = pontos.length;
+  for (let i = 0; i < n; i++) {
+    const a = pontos[i];
+    const b = pontos[(i + 1) % n];
+    const L = Math.hypot(b.x - a.x, b.y - a.y);
+    if (L < 1) continue;
+    const arcos = Math.max(1, Math.round(L / corda));
+    const passo = L / arcos;
+    const ux = (b.x - a.x) / L;
+    const uy = (b.y - a.y) / L;
+    // Normal para FORA do polígono.
+    const nx = orient * uy;
+    const ny = -orient * ux;
+    const r = passo / 2;
+    for (let k = 0; k < arcos; k++) {
+      const cx = a.x + ux * (k * passo + r);
+      const cy = a.y + uy * (k * passo + r);
+      for (let j = 0; j <= 8; j++) {
+        // do início ao fim da corda (−u → +u) passando pela normal externa (meia-lua)
+        const t = Math.PI * (j / 8);
+        const px = cx + ux * r * -Math.cos(t) + nx * r * Math.sin(t);
+        const py = cy + uy * r * -Math.cos(t) + ny * r * Math.sin(t);
+        if (j === 0 && saida.length > 0) continue; // emenda com o arco anterior
+        saida.push({ x: Math.round(px), y: Math.round(py) });
+      }
+    }
+  }
+  return saida;
+}
+
+/** Onde vai a ETIQUETA "Δn" da nuvem: o vértice mais alto (maior y no modelo), um pouco acima. */
+export function posicaoDaEtiquetaDaNuvem(pontos: Point[], alturaMm: number): Point {
+  const topo = pontos.reduce((m, p) => (p.y > m.y ? p : m), pontos[0]);
+  return { x: topo.x, y: topo.y + cordaDaNuvemMm(alturaMm) / 2 + alturaMm };
+}
+
+export interface RevisaoDaPrancha {
+  numero: number;
+  /** ISO AAAA-MM-DD — a mais recente entre as nuvens do mesmo número. */
+  data: string;
+  /** Descrições das nuvens (sem repetir), na ordem em que aparecem. */
+  descricoes: string[];
+  nuvens: number;
+}
+
+/** A tabela de revisões do carimbo: uma linha por número, das nuvens dadas. */
+export function revisoesDasAnotacoes(anotacoes: readonly Anotacao[]): RevisaoDaPrancha[] {
+  const porNumero = new Map<number, RevisaoDaPrancha>();
+  for (const a of anotacoes) {
+    if (a.tipo !== 'NUVEM' || !a.revisao) continue;
+    const r = porNumero.get(a.revisao.numero) ?? { numero: a.revisao.numero, data: a.revisao.data, descricoes: [], nuvens: 0 };
+    r.nuvens++;
+    if (a.revisao.data > r.data) r.data = a.revisao.data;
+    const d = (a.texto ?? '').trim();
+    if (d && !r.descricoes.includes(d)) r.descricoes.push(d);
+    porNumero.set(a.revisao.numero, r);
+  }
+  return [...porNumero.values()].sort((x, y) => x.numero - y.numero);
+}
+
+export function revisoesDoModelo(model: BlueprintModel): RevisaoDaPrancha[] {
+  return revisoesDasAnotacoes(model.anotacoes ?? []);
+}
+
+/** O próximo número de revisão: o maior existente + 1 (1 quando não há nuvem). */
+export function proximaRevisao(model: BlueprintModel): number {
+  const r = revisoesDoModelo(model);
+  return r.length ? r[r.length - 1].numero + 1 : 1;
+}
+
+/** "dd/mm/aaaa" de uma data ISO, sem fuso. */
+export function dataDaRevisaoBr(iso: string): string {
+  const m = DATA_ISO_DA_REVISAO.exec(iso);
+  return m ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : iso;
 }

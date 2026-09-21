@@ -56,7 +56,7 @@ import {
   discretizarArco,
   anguloEmTorno,
 } from '../../utils/blueprintKernel';
-import { cotaAngularDesenhada, distanciaAAnotacao, linhasDaHachura, pontaDaSeta, tracejadoMm } from '../../utils/blueprintAnotacoes';
+import { contornoDaNuvem, cotaAngularDesenhada, distanciaAAnotacao, linhasDaHachura, pontaDaSeta, posicaoDaEtiquetaDaNuvem, tracejadoMm } from '../../utils/blueprintAnotacoes';
 import {
   encaixarConexao,
   pontosDeConexaoDaParede,
@@ -6330,6 +6330,37 @@ export default function BlueprintCanvas({
               const cx = tela.reduce((s, p) => s + p.x, 0) / tela.length;
               const cy = tela.reduce((s, p) => s + p.y, 0) / tela.length;
               escreverEm({ x: cx, y: cy }, a.texto, 0, 'center');
+            }
+          } else for (let i = 1; i < tela.length; i++) linhaTela(tela[i - 1], tela[i]);
+          break;
+        }
+        // NUVEM DE REVISÃO (P2.15): contorno recortado em meias-luas + etiqueta "Δn" no topo.
+        case 'NUVEM': {
+          if (tela.length >= 3) {
+            const nuvem = contornoDaNuvem(a.pontos, a.alturaMm).map(paraTela);
+            ctx.setLineDash([]);
+            ctx.lineWidth = previa ? 1.2 : 1.6;
+            ctx.beginPath();
+            ctx.moveTo(nuvem[0].x, nuvem[0].y);
+            for (const q of nuvem.slice(1)) ctx.lineTo(q.x, q.y);
+            ctx.closePath();
+            ctx.stroke();
+            if (!previa) {
+              const e = paraTela(posicaoDaEtiquetaDaNuvem(a.pontos, a.alturaMm));
+              const lado = Math.max(10, pxTexto * 1.4);
+              ctx.beginPath();
+              ctx.moveTo(e.x, e.y - lado * 0.6);
+              ctx.lineTo(e.x - lado / 2, e.y + lado * 0.45);
+              ctx.lineTo(e.x + lado / 2, e.y + lado * 0.45);
+              ctx.closePath();
+              ctx.stroke();
+              ctx.font = `600 ${Math.max(9, pxTexto * 0.8)}px ui-sans-serif, system-ui, sans-serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(String((a as Anotacao).revisao?.numero ?? ''), e.x, e.y + lado * 0.12);
+              ctx.textAlign = 'left';
+              ctx.textBaseline = 'alphabetic';
+              if (a.texto) escreverEm({ x: e.x + lado * 0.7, y: e.y + lado * 0.3 }, a.texto, 0, 'left');
             }
           } else for (let i = 1; i < tela.length; i++) linhaTela(tela[i - 1], tela[i]);
           break;

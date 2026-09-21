@@ -1669,11 +1669,23 @@ export interface GuardaCorpo {
  * `alturaMm` é a altura do texto em mm do MODELO (não do papel): a nota escala
  * com o desenho, como no CAD; a exportação divide pela escala.
  */
-export type TipoDeAnotacao = 'TEXTO' | 'LEADER' | 'LINHA' | 'HACHURA' | 'COTA_ANGULAR';
-export const TIPOS_DE_ANOTACAO: readonly TipoDeAnotacao[] = ['TEXTO', 'LEADER', 'LINHA', 'HACHURA', 'COTA_ANGULAR'];
-export const ROTULO_DO_TIPO_DE_ANOTACAO: Record<TipoDeAnotacao, string> = { TEXTO: 'Texto', LEADER: 'Texto com seta', LINHA: 'Linha', HACHURA: 'Região hachurada', COTA_ANGULAR: 'Cota angular' };
+export type TipoDeAnotacao = 'TEXTO' | 'LEADER' | 'LINHA' | 'HACHURA' | 'COTA_ANGULAR' | 'NUVEM';
+export const TIPOS_DE_ANOTACAO: readonly TipoDeAnotacao[] = ['TEXTO', 'LEADER', 'LINHA', 'HACHURA', 'COTA_ANGULAR', 'NUVEM'];
+export const ROTULO_DO_TIPO_DE_ANOTACAO: Record<TipoDeAnotacao, string> = { TEXTO: 'Texto', LEADER: 'Texto com seta', LINHA: 'Linha', HACHURA: 'Região hachurada', COTA_ANGULAR: 'Cota angular', NUVEM: 'Nuvem de revisão' };
 /** Quantos pontos cada tipo exige (mínimo). */
-export const PONTOS_MINIMOS_DA_ANOTACAO: Record<TipoDeAnotacao, number> = { TEXTO: 1, LEADER: 2, LINHA: 2, HACHURA: 3, COTA_ANGULAR: 3 };
+export const PONTOS_MINIMOS_DA_ANOTACAO: Record<TipoDeAnotacao, number> = { TEXTO: 1, LEADER: 2, LINHA: 2, HACHURA: 3, COTA_ANGULAR: 3, NUVEM: 3 };
+/**
+ * NUVEM DE REVISÃO (0.50.0, backlog P2 — P2.15): a que revisão a nuvem
+ * pertence. `numero` inteiro ≥ 1 (o "Δ1" da prancha), `data` ISO `AAAA-MM-DD`
+ * (a data da revisão — o kernel não sabe que dia é, quem cria informa). O
+ * `texto` da anotação é a DESCRIÇÃO da alteração. Só a NUVEM leva revisão, e
+ * toda NUVEM leva uma.
+ */
+export interface RevisaoDaNuvem {
+  numero: number;
+  data: string;
+}
+export const DATA_ISO_DA_REVISAO = /^\d{4}-\d{2}-\d{2}$/;
 export type TracoDaAnotacao = 'CONTINUO' | 'TRACEJADO' | 'PONTILHADO';
 export const TRACOS_DA_ANOTACAO: readonly TracoDaAnotacao[] = ['CONTINUO', 'TRACEJADO', 'PONTILHADO'];
 export type PadraoDeHachura = 'DIAGONAL' | 'CRUZADA' | 'PONTOS' | 'SOLIDA';
@@ -1704,6 +1716,8 @@ export interface Anotacao {
   rotacaoGraus: number;
   /** `#rrggbb` ou null (a cor padrão da anotação). */
   cor: string | null;
+  /** Só na NUVEM (0.50.0): número e data da revisão. */
+  revisao?: RevisaoDaNuvem;
 }
 
 export function findAnotacao(model: BlueprintModel, id: ObjectId): Anotacao {
@@ -2533,7 +2547,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     vagas: (model.vagas ?? []).map((v) => ({ ...v, at: { ...v.at }, ...(v.parametros ? { parametros: { ...v.parametros } } : {}) })),
     componentes: (model.componentes ?? []).map((c) => ({ ...c, at: { ...c.at }, ...(c.parametros ? { parametros: { ...c.parametros } } : {}) })),
     guardaCorpos: (model.guardaCorpos ?? []).map((g) => ({ ...g, pontos: g.pontos.map((p) => ({ ...p })), ...(g.parametros ? { parametros: { ...g.parametros } } : {}) })),
-    anotacoes: (model.anotacoes ?? []).map((a) => ({ ...a, vista: { ...a.vista }, pontos: a.pontos.map((p) => ({ ...p })), ...(a.parametros ? { parametros: { ...a.parametros } } : {}) })),
+    anotacoes: (model.anotacoes ?? []).map((a) => ({ ...a, vista: { ...a.vista }, pontos: a.pontos.map((p) => ({ ...p })), ...(a.parametros ? { parametros: { ...a.parametros } } : {}), ...(a.revisao ? { revisao: { ...a.revisao } } : {}) })),
     grupos: (model.grupos ?? []).map((g) => ({
       ...g,
       pivo: { ...g.pivo },
@@ -4266,6 +4280,13 @@ export function assertModelInvariants(model: BlueprintModel): void {
     if (a.tipo === 'HACHURA' && a.hachura == null) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: região hachurada sem padrão`);
     if (!Number.isInteger(a.rotacaoGraus) || a.rotacaoGraus < 0 || a.rotacaoGraus >= 360) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: giro tem de ser inteiro em [0, 360)`);
     if (a.cor != null && !/^#[0-9a-fA-F]{6}$/.test(a.cor)) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: cor tem de ser #rrggbb`);
+    // NUVEM DE REVISÃO (0.50.0): toda nuvem tem revisão; nenhuma outra tem.
+    if (a.tipo === 'NUVEM') {
+      if (!a.revisao || !Number.isInteger(a.revisao.numero) || a.revisao.numero < 1) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: nuvem de revisão pede número de revisão inteiro ≥ 1`);
+      if (typeof a.revisao.data !== 'string' || !DATA_ISO_DA_REVISAO.test(a.revisao.data)) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: data da revisão tem de ser AAAA-MM-DD`);
+    } else if (a.revisao !== undefined) {
+      throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: só a nuvem de revisão leva revisão`);
+    }
   }
 
   // Guarda-corpos (E7.3): pavimento existente, tipo e material da lista, ≥ 2 vértices inteiros sem trecho nulo, altura inteira positiva, rótulo curto.

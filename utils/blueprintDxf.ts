@@ -44,7 +44,7 @@ import { type Anotacao,
   type Wall,
 } from './blueprintKernel';
 import { AFASTAMENTO_COTA, AVISO_COTA_POR_FACE, cadeiasDoModelo, pontoDaCota } from './blueprintCotas';
-import { cotaAngularDesenhada, linhasDaHachura, pontaDaSeta } from './blueprintAnotacoes';
+import { contornoDaNuvem, posicaoDaEtiquetaDaNuvem, cotaAngularDesenhada, linhasDaHachura, pontaDaSeta } from './blueprintAnotacoes';
 import type { ProjecaoElevacao } from './blueprintElevation';
 import type { ProjecaoCorte } from './blueprintCorte';
 import { contornoDaEscada, degrausDaEscada } from './blueprintKernel';
@@ -568,6 +568,12 @@ function entidadesDeAnotacoes(anotacoes: readonly Anotacao[], P: (p: Ponto) => P
           const cy = a.pontos.reduce((s, p) => s + p.y, 0) / a.pontos.length;
           saida += texto(CAMADAS.ANOTACOES, P({ x: Math.round(cx), y: Math.round(cy) }), a.texto, alt);
         }
+        break;
+      }
+      case 'NUVEM': {
+        saida += polilinha(CAMADAS.ANOTACOES, contornoDaNuvem(a.pontos, alt).map(P));
+        const e = posicaoDaEtiquetaDaNuvem(a.pontos, alt);
+        saida += texto(CAMADAS.ANOTACOES, P(e), `Δ${a.revisao?.numero ?? ''}${a.texto ? ' ' + a.texto : ''}`, alt);
         break;
       }
       case 'COTA_ANGULAR': {

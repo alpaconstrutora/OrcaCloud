@@ -355,6 +355,8 @@ function projetar(model: BlueprintModel): {
       inclinacaoPct: r.inclinacaoPct,
       baseMm: r.baseMm,
       espessuraMm: r.espessuraMm,
+      // COBERTURA POR EXTRUSÃO (0.49.0): o eixo, só quando a água nasceu dele.
+      extrusao: r.extrusao ? { a: { x: r.extrusao.a.x, y: r.extrusao.a.y }, b: { x: r.extrusao.b.x, y: r.extrusao.b.y } } : undefined,
       parametros: parametrosCanonicos(r.parametros),
     }),
     (x, y) =>
@@ -1079,6 +1081,8 @@ export interface CanonicalPayload {
     inclinacaoPct: number;
     baseMm: number;
     espessuraMm: number;
+    /** Ausente sob kernel < 0.49.0 e em água desenhada à mão: o eixo da extrusão que a gerou. */
+    extrusao?: { a: { x: number; y: number }; b: { x: number; y: number } };
   }[];
   /**
    * Linhas de corte. Ausente sob kernel < 0.13.0 e em desenho sem corte —
@@ -1525,6 +1529,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       inclinacaoPct: r.inclinacaoPct,
       baseMm: r.baseMm,
       espessuraMm: r.espessuraMm,
+      ...(r.extrusao ? { extrusao: { a: { x: r.extrusao.a.x, y: r.extrusao.a.y }, b: { x: r.extrusao.b.x, y: r.extrusao.b.y } } } : {}),
       ...(r.parametros && Object.keys(r.parametros).length > 0 ? { parametros: { ...r.parametros } } : {}),
     });
   });

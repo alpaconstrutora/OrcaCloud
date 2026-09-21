@@ -60,6 +60,7 @@ import {
   Route,
   Grid3x3,
   Spline,
+  Tent,
 } from 'lucide-react';
 import { type TipoDeGuardaCorpo,
   TIPOS_DE_INTERRUPTOR,
@@ -138,7 +139,7 @@ export type EscolhaComponente =
   | { tool: 'parede' | 'parede-curva' | 'retangulo' | 'poligono' }
   | { tool: 'abertura'; abertura: Opening['kind'] }
   | { tool: 'estrutural'; estrutural: StructuralKind }
-  | { tool: 'telhado' }
+  | { tool: 'telhado' | 'cobertura-extrusao' }
   | { tool: 'escada'; circulacao: TipoCirculacao }
   | { tool: 'guardacorpo'; guardaCorpo: TipoDeGuardaCorpo }
   | { tool: 'nucleo'; nucleo: TipoDeNucleo; /** Só SHAFT (E11.1): `MECANICA` = shaft de dutos/condensação. */ disciplina?: DisciplinaDeRede | null }
@@ -516,6 +517,15 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
           'gesto; a inclinação e o lado do beiral se ajustam no painel.',
         escolha: { tool: 'telhado' },
       },
+      {
+        chave: 'cobertura-extrusao',
+        rotulo: 'Cobertura por extrusão',
+        icone: Tent,
+        ajuda:
+          'Dois cliques no EIXO em planta; o perfil (duas águas, shed, abóbada, dente de serra) e as ' +
+          'alturas vêm da barra. Vira águas planas — uma por trecho do perfil.',
+        escolha: { tool: 'cobertura-extrusao' },
+      },
     ],
   },
   // CIRCULAÇÃO por último: é o que liga os pavimentos, e só faz sentido depois
@@ -831,6 +841,7 @@ const TOOLS_DE_COMPONENTE: BlueprintTool[] = [
   'abertura',
   'estrutural',
   'telhado',
+  'cobertura-extrusao',
   'escada',
   'nucleo',
   'guardacorpo',

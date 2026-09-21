@@ -50,6 +50,8 @@ export type BlueprintTool =
   | 'parede'
   /** PAREDE CURVA (P2.12): três cliques — início, fim e um ponto por onde o arco passa. */
   | 'parede-curva'
+  /** COBERTURA POR EXTRUSÃO (P2.13): dois cliques no EIXO em planta; o perfil vem da barra de opções. */
+  | 'cobertura-extrusao'
   /** Contorno fechado de N lados iguais, criado num gesto só. */
   | 'poligono'
   /** Retângulo pelos dois cantos opostos — o gesto de fazer um cômodo. */

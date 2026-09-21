@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.48.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.49.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -389,6 +389,7 @@ function rotuloCurto(uid, familia) {
 }
 
 // utils/blueprintKernel/telhado.ts
+var AGUA_INCLINACAO_MAX_PCT = 300;
 function planoDaAgua(agua) {
   const n4 = agua.pontos.length;
   const i = agua.beiralIndex;
@@ -701,6 +702,15 @@ function paredeEhExterna(model, wall, tolerance = DEFAULT_TOLERANCE_MM) {
   if (esquerda || direita) return true;
   return null;
 }
+
+// utils/blueprintKernel/coberturaExtrusao.ts
+var MENSAGEM_DO_ERRO_DE_PERFIL = {
+  PERFIL_CURTO: "O perfil precisa de pelo menos dois pontos",
+  PERFIL_VOLTA: "O perfil volta sobre si mesmo (s decrescente)",
+  PERFIL_INGREME: `Trecho do perfil mais \xEDngreme que ${AGUA_INCLINACAO_MAX_PCT} % \u2014 n\xE3o \xE9 \xE1gua, \xE9 parede`,
+  EIXO_DEGENERADO: "O eixo da extrus\xE3o tem comprimento zero",
+  PERFIL_SEM_AGUA: "O perfil s\xF3 tem trechos verticais \u2014 nenhuma \xE1gua"
+};
 
 // utils/blueprintKernel/sobreposicao.ts
 function faixaVertical(x) {
@@ -1620,6 +1630,8 @@ function projetar(model) {
       inclinacaoPct: r.inclinacaoPct,
       baseMm: r.baseMm,
       espessuraMm: r.espessuraMm,
+      // COBERTURA POR EXTRUSÃO (0.49.0): o eixo, só quando a água nasceu dele.
+      extrusao: r.extrusao ? { a: { x: r.extrusao.a.x, y: r.extrusao.a.y }, b: { x: r.extrusao.b.x, y: r.extrusao.b.y } } : void 0,
       parametros: parametrosCanonicos(r.parametros)
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y
@@ -2161,6 +2173,7 @@ function modelFromCanonicalPayload(payload) {
       inclinacaoPct: r.inclinacaoPct,
       baseMm: r.baseMm,
       espessuraMm: r.espessuraMm,
+      ...r.extrusao ? { extrusao: { a: { x: r.extrusao.a.x, y: r.extrusao.a.y }, b: { x: r.extrusao.b.x, y: r.extrusao.b.y } } } : {},
       ...r.parametros && Object.keys(r.parametros).length > 0 ? { parametros: { ...r.parametros } } : {}
     });
   });

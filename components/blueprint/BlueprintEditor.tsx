@@ -113,6 +113,12 @@ import MenuEncaixe from './MenuEncaixe';
 import { TIPOS_DE_ENCAIXE, ROTULO_DO_ENCAIXE } from '../../utils/blueprintEncaixe';
 import type { TipoDePontoEletrico, AcabamentosDoAmbiente, ObjectId } from '../../utils/blueprintKernel';
 import {
+  aguasDaMesmaExtrusao,
+  perfilDeCobertura,
+  TIPOS_DE_PERFIL_DE_COBERTURA,
+  ROTULO_DO_PERFIL_DE_COBERTURA,
+  type ParametrosDoPerfil,
+  type TipoDePerfilDeCobertura,
   segmentosDoMesmoArco, acabamentosDoAmbiente } from '../../utils/blueprintKernel';
 import type { Quantitativos } from '../../utils/blueprintKernel/quantities';
 import MenuComponentes, { type EscolhaComponente } from './MenuComponentes';
@@ -1630,6 +1636,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * medidas da estrutura — a peça já lançada se edita no painel lateral.
    */
   const [inclinacaoTelhado, setInclinacaoTelhado] = useState(30);
+  /** COBERTURA POR EXTRUSÃO (P2.13): o perfil da PRÓXIMA extrusão — persistido, como a vista. */
+  const [perfilDaExtrusao, setPerfilDaExtrusao] = usePersistedState<ParametrosDoPerfil & { espessuraMm: number }>('blueprint:cobertura-extrusao', {
+    tipo: 'DUAS_AGUAS',
+    vaoMm: 8000,
+    alturaBeiralMm: 3000,
+    alturaCumeeiraMm: 4200,
+    flechaMm: 2000,
+    dentes: 3,
+    espessuraMm: 120,
+  });
   const [beiralTelhado, setBeiralTelhado] = useState(500);
   /**
    * A PROXIMA escada: tipo, largura e alvo de espelho. Estado da barra, como o
@@ -5139,6 +5155,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     if (criados.length > 0) selecionar(criados);
   }
 
+  /** COBERTURA POR EXTRUSÃO (P2.13): o perfil da barra extrudado ao longo do eixo clicado. */
+  function adicionarCoberturaExtrusao(eixoA: Point, eixoB: Point) {
+    if (!levelId) return;
+    const criados = editor.runBatch([
+      { type: 'AddRoofByExtrusion', levelId, eixoA, eixoB, perfil: perfilDeCobertura(perfilDaExtrusao), espessuraMm: perfilDaExtrusao.espessuraMm },
+    ]);
+    if (criados.length > 0) selecionar(criados);
+  }
+
   /**
    * "Gerar do contorno": uma água por construção do pavimento, pela face das
    * paredes mais o beiral (ver `blueprintTelhadoContorno.ts`). É atalho de
@@ -7071,6 +7096,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         onExcluir={removerSelecionada}
         onAplicarTipo={(p) => aguaSel && editor.run({ type: 'SetAguaProps', aguaId: aguaSel.id, ...camposDoTelhado(p) })}
         comAMesmaAssinatura={aguaSel ? (editor.model.roofs ?? []).filter((r) => assinaturaDoTipo(propriedadesDoTelhado(r)) === assinaturaDoTipo(propriedadesDoTelhado(aguaSel))).length : undefined}
+        extrusao={aguaSel?.extrusao ? { aguas: aguasDaMesmaExtrusao(editor.model.roofs ?? [], aguaSel).length } : null}
+        onSelecionarCobertura={() => aguaSel && editor.setSelectedIds(aguasDaMesmaExtrusao(editor.model.roofs ?? [], aguaSel).map((r) => r.id))}
       />
 
       <PainelParedeSelecionada
@@ -9668,6 +9695,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onGerarDoContorno={gerarTelhadoDoContorno}
               temParedes={componentesDoNivel.paredes.length > 0}
             />
+          ) : editor.tool === 'cobertura-extrusao' ? (
+            <CamposDaExtrusao valor={perfilDaExtrusao} onChange={setPerfilDaExtrusao} />
           ) : editor.tool === 'estrutural' ? (
             /* As medidas da PRÓXIMA peça. O que cada campo mostra depende da
                FORMA, não do tipo: profundidade só existe no PONTO, e nem lá
@@ -10303,6 +10332,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               tipoDeGuardaCorpo={tipoDeGuardaCorpo}
               onAddGuardaCorpo={adicionarGuardaCorpo}
               onAddParedeCurva={adicionarParedeCurva}
+              onAddCoberturaExtrusao={adicionarCoberturaExtrusao}
+              vaoDaExtrusaoMm={perfilDaExtrusao.vaoMm}
               anotacoes={anotacoesDoNivelAtivo}
               tipoDeAnotacao={tipoDeAnotacao}
               onAddAnotacao={adicionarAnotacao}
@@ -13506,6 +13537,95 @@ function CamposDoTelhado({
       >
         Do contorno
       </button>
+    </div>
+  );
+}
+
+/** COBERTURA POR EXTRUSÃO (P2.13): o perfil da próxima extrusão, na barra de opções. */
+function CamposDaExtrusao({
+  valor,
+  onChange,
+}: {
+  valor: ParametrosDoPerfil & { espessuraMm: number };
+  onChange: (v: ParametrosDoPerfil & { espessuraMm: number }) => void;
+}) {
+  const campoM = (rotulo: string, chave: 'vaoMm' | 'alturaBeiralMm' | 'alturaCumeeiraMm' | 'flechaMm', ariaLabel: string) => (
+    <label className="flex items-center gap-1">
+      {rotulo}
+      <input
+        type="number"
+        min={0}
+        step={0.1}
+        value={(valor[chave] / 1000).toFixed(2)}
+        onChange={(e) => {
+          const v = Number(e.target.value);
+          if (Number.isFinite(v)) onChange({ ...valor, [chave]: Math.max(0, Math.round(v * 1000)) });
+        }}
+        aria-label={ariaLabel}
+        className="w-16 rounded-md border border-slate-300 px-1.5 py-0.5 text-xs text-slate-800"
+      />
+      m
+    </label>
+  );
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+      <label className="flex items-center gap-1">
+        Perfil
+        <select
+          value={valor.tipo}
+          onChange={(e) => onChange({ ...valor, tipo: e.target.value as TipoDePerfilDeCobertura })}
+          aria-label="Perfil da cobertura por extrusão"
+          className="rounded-md border border-slate-300 px-1.5 py-0.5 text-xs text-slate-800"
+        >
+          {TIPOS_DE_PERFIL_DE_COBERTURA.map((t) => (
+            <option key={t} value={t}>
+              {ROTULO_DO_PERFIL_DE_COBERTURA[t]}
+            </option>
+          ))}
+        </select>
+      </label>
+      {campoM('Vão', 'vaoMm', 'Vão do perfil, através do eixo, em metros')}
+      {campoM('Beiral a', 'alturaBeiralMm', 'Altura do beiral sobre o piso do pavimento, em metros')}
+      {valor.tipo === 'ABOBADA'
+        ? campoM('Flecha', 'flechaMm', 'Flecha da abóbada acima do beiral, em metros')
+        : campoM(valor.tipo === 'UMA_AGUA' ? 'Lado alto a' : 'Cumeeira a', 'alturaCumeeiraMm', 'Altura da cumeeira ou do lado alto sobre o piso, em metros')}
+      {valor.tipo === 'DENTE_DE_SERRA' && (
+        <label className="flex items-center gap-1">
+          Dentes
+          <input
+            type="number"
+            min={1}
+            max={20}
+            step={1}
+            value={valor.dentes}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              if (Number.isFinite(v)) onChange({ ...valor, dentes: Math.max(1, Math.min(20, Math.round(v))) });
+            }}
+            aria-label="Número de dentes do perfil dente de serra"
+            className="w-12 rounded-md border border-slate-300 px-1.5 py-0.5 text-xs text-slate-800"
+          />
+        </label>
+      )}
+      <label className="flex items-center gap-1">
+        Espessura
+        <input
+          type="number"
+          min={10}
+          step={10}
+          value={valor.espessuraMm}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            if (Number.isFinite(v)) onChange({ ...valor, espessuraMm: Math.max(10, Math.round(v)) });
+          }}
+          aria-label="Espessura do pacote de cobertura, em milímetros"
+          className="w-14 rounded-md border border-slate-300 px-1.5 py-0.5 text-xs text-slate-800"
+        />
+        mm
+      </label>
+      <span className="text-slate-400" title="Trechos verticais do perfil (o vidro do dente de serra) não viram água: feche-os com parede ou cortina.">
+        face vertical não vira água
+      </span>
     </div>
   );
 }

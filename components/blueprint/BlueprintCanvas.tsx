@@ -1272,6 +1272,10 @@ interface Props {
   // ── Telhado ───────────────────────────────────────────────────────────────
   /** Confirma uma ÁGUA: o contorno fechou. Inclinação, cota e espessura são estado da barra. */
   onAddAgua?: (pontos: Point[]) => void;
+  /** COBERTURA POR EXTRUSÃO (P2.13): o eixo em planta, de A a B. */
+  onAddCoberturaExtrusao?: (a: Point, b: Point) => void;
+  /** Vão do perfil da extrusão em curso, para a prévia da faixa. */
+  vaoDaExtrusaoMm?: number;
   /** Move UM vértice de uma água. Espelha `onMoveStructuralVertex`. */
   onMoveAguaVertex?: (aguaId: string, index: number, to: Point) => void;
 
@@ -1442,6 +1446,8 @@ export default function BlueprintCanvas({
   onAddEstrutural,
   onMoveStructuralVertex,
   onAddAgua,
+  onAddCoberturaExtrusao,
+  vaoDaExtrusaoMm,
   onMoveAguaVertex,
   onAddCorte,
   onAddEixo,
@@ -1615,6 +1621,8 @@ export default function BlueprintCanvas({
   const [pontoGuardaCorpo, setPontoGuardaCorpo] = useState<Point | null>(null);
   /** PAREDE CURVA em curso: [início] ou [início, fim]; o 3º clique fecha. */
   const [arcoEmCurso, setArcoEmCurso] = useState<Point[]>([]);
+  /** COBERTURA POR EXTRUSÃO em curso: o primeiro clique do eixo. */
+  const [pontoExtrusao, setPontoExtrusao] = useState<Point | null>(null);
   /** ANOTAÇÃO em curso: os vértices já clicados. */
   const [caminhoAnotacao, setCaminhoAnotacao] = useState<Point[]>([]);
   /** O primeiro canto do núcleo em curso (E2.4). */
@@ -6668,6 +6676,41 @@ export default function BlueprintCanvas({
     // parede "pular" meia espessura ao soltar o clique — e prévia que não bate
     // com o resultado é prévia em que ninguém confia. A linha fina contínua marca
     // o traçado em si, para o canto clicado continuar visível sob a faixa.
+    // PRÉVIA DA COBERTURA POR EXTRUSÃO (P2.13): o eixo e a faixa do vão centrada nele.
+    if (tool === 'cobertura-extrusao' && pontoExtrusao && cursor) {
+      const a = paraTela(pontoExtrusao);
+      const b = paraTela(cursor);
+      const L = Math.hypot(b.x - a.x, b.y - a.y);
+      ctx.save();
+      ctx.strokeStyle = COR_PREVIA;
+      ctx.setLineDash([6, 4]);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      if (L > 0.5 && vaoDaExtrusaoMm && vaoDaExtrusaoMm > 0) {
+        const ux = (b.x - a.x) / L;
+        const uy = (b.y - a.y) / L;
+        const meia = (vaoDaExtrusaoMm * vista.escala) / 2;
+        const nx = -uy * meia;
+        const ny = ux * meia;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(a.x + nx, a.y + ny);
+        ctx.lineTo(b.x + nx, b.y + ny);
+        ctx.lineTo(b.x - nx, b.y - ny);
+        ctx.lineTo(a.x - nx, a.y - ny);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = '11px system-ui, sans-serif';
+        ctx.fillStyle = COR_PREVIA;
+        ctx.fillText(`${(L / vista.escala / 1000).toFixed(2)} m × vão ${(vaoDaExtrusaoMm / 1000).toFixed(2)} m`, b.x + 10, b.y - 8);
+      }
+      ctx.restore();
+    }
+
     // PRÉVIA DA PAREDE CURVA (P2.12): corda tracejada após o 1º clique; após o
     // 2º, o arco pelas facetas que o kernel vai gravar — a prévia é o resultado.
     if (tool === 'parede-curva' && arcoEmCurso.length > 0 && cursor) {
@@ -7241,6 +7284,7 @@ export default function BlueprintCanvas({
       cursor &&
       (tool === 'parede' ||
         tool === 'parede-curva' ||
+        tool === 'cobertura-extrusao' ||
         tool === 'poligono' ||
         tool === 'retangulo' ||
         tool === 'terreno' ||
@@ -7920,6 +7964,12 @@ export default function BlueprintCanvas({
       setCursor(alvo);
       return;
     }
+    if (tool === 'cobertura-extrusao') {
+      let alvo = capturarTracado(paraMundo(px, py));
+      if (pontoExtrusao && ortoAtivo(e)) alvo = travarOrtogonal(pontoExtrusao, alvo);
+      setCursor(alvo);
+      return;
+    }
     if (tool === 'parede-curva') {
       // Mesmo ímã da parede reta: as pontas do arco encostam em cantos e eixos.
       let alvo = capturarTracado(paraMundo(px, py));
@@ -8228,6 +8278,20 @@ export default function BlueprintCanvas({
         onAddAnotacao?.(tipoDeAnotacao, pontos);
         setCaminhoAnotacao([]);
       } else setCaminhoAnotacao(pontos);
+      return;
+    }
+
+    // COBERTURA POR EXTRUSÃO (P2.13): dois cliques no eixo.
+    if (tool === 'cobertura-extrusao') {
+      const ponto = capturarTracado(mundo);
+      if (!pontoExtrusao) {
+        setPontoExtrusao(ponto);
+        return;
+      }
+      const fim = ortoAtivo(e) ? travarOrtogonal(pontoExtrusao, ponto) : ponto;
+      if (fim.x === pontoExtrusao.x && fim.y === pontoExtrusao.y) return;
+      onAddCoberturaExtrusao?.(pontoExtrusao, fim);
+      setPontoExtrusao(null);
       return;
     }
 
@@ -9106,6 +9170,7 @@ export default function BlueprintCanvas({
       setPontoEixo(null);
       setPontoGuardaCorpo(null);
       setArcoEmCurso([]);
+      setPontoExtrusao(null);
       setCaminhoAnotacao([]);
       setPontoNucleo(null);
       // ⚠️ E o TRECHO em curso, que o Escape não cancelava: o primeiro clique
@@ -9197,6 +9262,10 @@ export default function BlueprintCanvas({
           ? ancoraDaForma
             ? `Arraste para dar o tamanho e o giro · clique fecha o polígono de ${ladosPoligono} lados · Esc cancela`
             : 'Clique no CENTRO do polígono'
+          : tool === 'cobertura-extrusao'
+            ? pontoExtrusao
+              ? 'Clique no FIM do eixo · a faixa do vão fica centrada nele · Esc cancela'
+              : 'Clique no INÍCIO do eixo da cobertura (perfil e alturas na barra)'
           : tool === 'parede-curva'
             ? arcoEmCurso.length === 0
               ? 'Clique no INÍCIO da parede curva'

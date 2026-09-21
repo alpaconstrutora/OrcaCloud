@@ -39,11 +39,14 @@ interface Props {
   /** TIPO × INSTÂNCIA (E1.5): copia inclinação/base/espessura de um tipo salvo. */
   onAplicarTipo?: (p: PropriedadesDeTelhado) => void;
   comAMesmaAssinatura?: number;
+  /** COBERTURA POR EXTRUSÃO (P2.13): quantas águas nasceram do mesmo eixo; null = água à mão. */
+  extrusao?: { aguas: number } | null;
+  onSelecionarCobertura?: () => void;
 }
 
 const m2 = (v: number) => v.toFixed(2).replace('.', ',');
 
-export default function PainelAguaSelecionada({ agua, onProps, onExcluir, onAplicarTipo, comAMesmaAssinatura }: Props) {
+export default function PainelAguaSelecionada({ agua, onProps, onExcluir, onAplicarTipo, comAMesmaAssinatura, extrusao, onSelecionarCobertura }: Props) {
   if (!agua) return null;
 
   const med = medirAgua(agua);
@@ -75,6 +78,19 @@ export default function PainelAguaSelecionada({ agua, onProps, onExcluir, onApli
           Excluir
         </button>
       </div>
+
+      {extrusao && (
+        <div className="mt-2 flex items-center justify-between gap-2 rounded border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-600" data-testid="cobertura-extrusao-info">
+          <span>
+            Água de <strong>cobertura por extrusão</strong> · {extrusao.aguas} água{extrusao.aguas === 1 ? '' : 's'} do mesmo eixo
+          </span>
+          {onSelecionarCobertura && extrusao.aguas > 1 && (
+            <button type="button" className="text-blue-700 hover:underline" onClick={onSelecionarCobertura}>
+              Selecionar a cobertura
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Inclinação em POR CENTO, como a obra fala. Graus é derivado e aparece
           na linha de medida, nunca como campo — dois campos para a mesma

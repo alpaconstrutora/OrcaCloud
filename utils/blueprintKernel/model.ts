@@ -1071,6 +1071,14 @@ export interface Agua {
   baseMm: number;
   /** Espessura do pacote de cobertura (telha + trama), em mm. */
   espessuraMm: number;
+  /**
+   * COBERTURA POR EXTRUSÃO (0.49.0, backlog P2 — P2.13): esta água nasceu de um
+   * perfil extrudado ao longo do eixo A→B em planta. Ausente = água desenhada
+   * à mão. É AGRUPAMENTO ("selecionar a cobertura"), não geometria: as águas
+   * do mesmo gesto têm o mesmo eixo no mesmo pavimento. Mover um vértice da
+   * água tira o metadado — ela deixou de ser a faixa que a extrusão fez.
+   */
+  extrusao?: { a: Point; b: Point };
 }
 
 /**
@@ -2515,6 +2523,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     roofs: (model.roofs ?? []).map((r) => ({
       ...r,
       pontos: r.pontos.map((p) => ({ ...p })),
+      ...(r.extrusao ? { extrusao: { a: { ...r.extrusao.a }, b: { ...r.extrusao.b } } } : {}),
     })),
     sections: (model.sections ?? []).map((c) => ({ ...c, a: { ...c.a }, b: { ...c.b } })),
     eixos: (model.eixos ?? []).map((e) => ({ ...e, a: { ...e.a }, b: { ...e.b } })),
@@ -4024,6 +4033,16 @@ export function assertModelInvariants(model: BlueprintModel): void {
         'BAD_ROOF_POINTS',
         `Água ${r.id} tem ${r.pontos.length} vértice(s); um plano exige pelo menos 3`,
       );
+    }
+    // COBERTURA POR EXTRUSÃO (0.49.0): eixo inteiro e não degenerado.
+    if (r.extrusao !== undefined) {
+      assertIntegerMm(r.extrusao.a.x, `${r.id}.extrusao.a.x`);
+      assertIntegerMm(r.extrusao.a.y, `${r.id}.extrusao.a.y`);
+      assertIntegerMm(r.extrusao.b.x, `${r.id}.extrusao.b.x`);
+      assertIntegerMm(r.extrusao.b.y, `${r.id}.extrusao.b.y`);
+      if (r.extrusao.a.x === r.extrusao.b.x && r.extrusao.a.y === r.extrusao.b.y) {
+        throw new KernelError('BAD_EXTRUSION', `Eixo de extrusão degenerado em ${r.id}`);
+      }
     }
     r.pontos.forEach((p, i) => {
       assertIntegerMm(p.x, `${r.id}.pontos[${i}].x`);

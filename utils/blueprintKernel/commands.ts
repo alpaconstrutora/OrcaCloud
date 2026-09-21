@@ -10,6 +10,7 @@
 
 import { KernelError, assertIntegerMm, roundToMm } from './units';
 import { arcoConsistente, discretizarArco } from './arco';
+import { aguasDaExtrusao, MENSAGEM_DO_ERRO_DE_PERFIL, type ErroDoPerfil, type PontoDoPerfil } from './coberturaExtrusao';
 import { faixaDaEstruturaNaParede } from './sobreposicao';
 import {
   type BlueprintModel,
@@ -299,6 +300,19 @@ export type Command =
       inclinacaoPct: number;
       beiralIndex?: number;
       baseMm?: number;
+      espessuraMm?: number;
+    }
+  /**
+   * COBERTURA POR EXTRUSÃO (0.49.0, P2.13): perfil em corte (`s` através do
+   * eixo, `z` altura sobre o piso) extrudado ao longo de A→B — uma água por
+   * trecho reto, com o metadado `extrusao`. Ver `coberturaExtrusao.ts`.
+   */
+  | {
+      type: 'AddRoofByExtrusion';
+      levelId: ObjectId;
+      eixoA: Point;
+      eixoB: Point;
+      perfil: PontoDoPerfil[];
       espessuraMm?: number;
     }
   /** Campo omitido fica como está — o painel edita uma medida por vez. */
@@ -1627,6 +1641,39 @@ function aplicarSemHash(
       break;
     }
 
+    case 'AddRoofByExtrusion': {
+      findLevel(next, command.levelId);
+      const eixoA = { x: assertIntegerMm(roundToMm(command.eixoA.x), 'eixoA.x'), y: assertIntegerMm(roundToMm(command.eixoA.y), 'eixoA.y') };
+      const eixoB = { x: assertIntegerMm(roundToMm(command.eixoB.x), 'eixoB.x'), y: assertIntegerMm(roundToMm(command.eixoB.y), 'eixoB.y') };
+      const perfil = command.perfil.map((p, i) => ({ s: assertIntegerMm(roundToMm(p.s), `perfil[${i}].s`), z: assertIntegerMm(roundToMm(p.z), `perfil[${i}].z`) }));
+      let geradas: ReturnType<typeof aguasDaExtrusao>;
+      try {
+        geradas = aguasDaExtrusao(eixoA, eixoB, perfil);
+      } catch (e) {
+        const codigo = (e as Error).message as ErroDoPerfil;
+        throw new KernelError('BAD_EXTRUSION', MENSAGEM_DO_ERRO_DE_PERFIL[codigo] ?? String(codigo));
+      }
+      for (const g of geradas.aguas) {
+        const id = nextId(next, 'agu');
+        next.roofs = [
+          ...(next.roofs ?? []),
+          {
+            id,
+            uid: novoUid(),
+            levelId: command.levelId,
+            pontos: g.pontos,
+            beiralIndex: g.beiralIndex,
+            inclinacaoPct: g.inclinacaoPct,
+            baseMm: g.baseMm,
+            espessuraMm: command.espessuraMm ?? 120,
+            extrusao: { a: { ...eixoA }, b: { ...eixoB } },
+          },
+        ];
+        diff.created.push(id);
+      }
+      break;
+    }
+
     case 'SetAguaProps': {
       const agua = findAgua(next, command.aguaId);
       if (command.inclinacaoPct !== undefined) agua.inclinacaoPct = command.inclinacaoPct;
@@ -1651,6 +1698,9 @@ function aplicarSemHash(
         x: assertIntegerMm(roundToMm(command.to.x), 'to.x'),
         y: assertIntegerMm(roundToMm(command.to.y), 'to.y'),
       };
+      // COBERTURA POR EXTRUSÃO: vértice movido = a água já não é a faixa que o
+      // perfil fez; sai do grupo (o metadado é agrupamento, não geometria).
+      delete agua.extrusao;
       diff.updated.push(agua.id);
       break;
     }
@@ -2978,6 +3028,7 @@ function aplicarSemHash(
           x: inteiro(p.x + dx),
           y: inteiro(p.y + dy),
         }));
+        if (agua.extrusao) agua.extrusao = { a: { x: inteiro(agua.extrusao.a.x + dx), y: inteiro(agua.extrusao.a.y + dy) }, b: { x: inteiro(agua.extrusao.b.x + dx), y: inteiro(agua.extrusao.b.y + dy) } };
         diff.updated.push(agua.id);
       }
 
@@ -3133,6 +3184,7 @@ function aplicarSemHash(
       }
       for (const a of aguas) {
         a.pontos = a.pontos.map(refletir);
+        if (a.extrusao) a.extrusao = { a: refletir(a.extrusao.a), b: refletir(a.extrusao.b) };
         diff.updated.push(a.id);
       }
       for (const t of trechos) {
@@ -3238,6 +3290,7 @@ function aplicarSemHash(
       }
       for (const a of aguas) {
         a.pontos = a.pontos.map(girar);
+        if (a.extrusao) a.extrusao = { a: girar(a.extrusao.a), b: girar(a.extrusao.b) };
         diff.updated.push(a.id);
       }
       for (const t of trechos) {
@@ -4002,7 +4055,7 @@ function aplicarSemHash(
         const id = nextId(next, 'agu');
         next.roofs = [
           ...(next.roofs ?? []),
-          { ...r, id, uid: novoUid(), levelId: command.levelId, pontos: r.pontos.map(deslocar) },
+          { ...r, id, uid: novoUid(), levelId: command.levelId, pontos: r.pontos.map(deslocar), ...(r.extrusao ? { extrusao: { a: deslocar(r.extrusao.a), b: deslocar(r.extrusao.b) } } : {}) },
         ];
         diff.created.push(id);
       }
@@ -4303,6 +4356,7 @@ function alvosDoComando(command: Command): { levelIds: string[]; wallIds: string
     case 'AddCurvedWall':
     case 'AddStructural':
     case 'AddAgua':
+    case 'AddRoofByExtrusion':
     case 'DuplicateEntities':
       a.levelIds = str(c.levelId);
       break;

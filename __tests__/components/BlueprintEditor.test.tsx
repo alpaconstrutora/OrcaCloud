@@ -377,7 +377,7 @@ async function abrirAba(nome: RegExp) {
  * seletor casa com qualquer um dos nomes possíveis.
  */
 const NOMES_DO_BOTAO =
-  /^(Componentes|Parede|Parede curva|Parede em retângulo|Parede em polígono|Porta|Porta de correr|Janela|Vão livre|Pilar|Viga|Laje|Estaca|Bloco de coroamento|Viga de fundação|Shaft|Elevador|Vaga|Vaga PCD|Vaga idoso|Vaga de moto|Guarda-corpo|Corrimão)$/;
+  /^(Componentes|Parede|Parede curva|Parede em retângulo|Parede em polígono|Cobertura por extrusão|Porta|Porta de correr|Janela|Vão livre|Pilar|Viga|Laje|Estaca|Bloco de coroamento|Viga de fundação|Shaft|Elevador|Vaga|Vaga PCD|Vaga idoso|Vaga de moto|Guarda-corpo|Corrimão)$/;
 
 /**
  * O botão do menu.
@@ -5063,5 +5063,42 @@ describe('BlueprintEditor · parede curva (P2.12)', () => {
     expect(info).toHaveTextContent(/20 facetas/);
     await user.click(within(info).getByRole('button', { name: 'Selecionar o arco' }));
     await waitFor(() => expect(screen.getByText(/^20 paredes/)).toBeInTheDocument());
+  }, 60000);
+});
+
+/**
+ * COBERTURA POR EXTRUSÃO (20/09/2026, backlog P2 — P2.13): item no menu com
+ * a barra do perfil; a água nascida da extrusão diz de que grupo é e
+ * "Selecionar a cobertura" pega todas.
+ */
+describe('BlueprintEditor · cobertura por extrusão (P2.13)', () => {
+  it('menu + barra do perfil (abóbada troca cumeeira por flecha); água extrudada mostra o grupo e seleciona a cobertura', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
+    const t = nivel.model.levels[0].id;
+    const perfil = k.perfilDeCobertura({ tipo: 'DUAS_AGUAS', vaoMm: 8000, alturaBeiralMm: 3000, alturaCumeeiraMm: 4200, flechaMm: 0, dentes: 1 });
+    const modelo = k.applyCommand(nivel.model, { type: 'AddRoofByExtrusion', levelId: t, eixoA: k.point(0, 0), eixoB: k.point(10000, 0), perfil }).model;
+    expect(modelo.roofs).toHaveLength(2);
+    loadBranchModel.mockResolvedValue(modelo);
+    await montar();
+    const user = userEvent.setup();
+    await user.click(botaoComponentes());
+    await user.click(screen.getByRole('menuitemradio', { name: /^Cobertura por extrusão$/ }));
+    expect(botaoComponentes()).toHaveTextContent('Cobertura por extrusão');
+    const perfilSel = screen.getByLabelText('Perfil da cobertura por extrusão') as HTMLSelectElement;
+    expect(perfilSel.value).toBe('DUAS_AGUAS');
+    expect(screen.getByLabelText(/Altura da cumeeira ou do lado alto/)).toBeInTheDocument();
+    await user.selectOptions(perfilSel, 'ABOBADA');
+    expect(screen.getByLabelText(/Flecha da abóbada/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Altura da cumeeira ou do lado alto/)).not.toBeInTheDocument();
+    await user.selectOptions(perfilSel, 'DENTE_DE_SERRA');
+    expect(screen.getByLabelText(/Número de dentes/)).toBeInTheDocument();
+    // A água 1 pelo navegador → painel com o grupo → seleciona as duas.
+    await abrirComponentes(user);
+    await user.click(screen.getAllByRole('button').find((b) => /^Água 1\b/.test(b.textContent ?? ''))!);
+    const info = await screen.findByTestId('cobertura-extrusao-info');
+    expect(info).toHaveTextContent(/2 águas do mesmo eixo/);
+    await user.click(within(info).getByRole('button', { name: 'Selecionar a cobertura' }));
+    await waitFor(() => expect(screen.getByText(/2 selecionado/)).toBeInTheDocument());
   }, 60000);
 });

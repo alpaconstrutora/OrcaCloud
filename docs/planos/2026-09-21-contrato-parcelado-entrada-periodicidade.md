@@ -197,3 +197,6 @@ era genérica ("veja a aba Contrato e Assinatura").
 
 - [x] 9 UNICA no catálogo
 - [x] 10 DealModal — harness: modal "Parcelas do plano 10 · R$ 230.000,00"; sem unidade → "Negociação sem unidade — selecione o imóvel…" no modal; com unidade → contrato criado, `PATCH contracts payment_schedule` (SINAL + 8× MENSAL + CHAVES), "10 parcela(s) … lançadas". typecheck ✓ · `check-ui-standard.sh` ✓
+
+**Fase 4 publicada em 2026-09-21** (`474f2717` em main) e provada de fora:
+`conferir-producao.sh "Parcelas do plano"` ✅ (domínio servindo origin/main).

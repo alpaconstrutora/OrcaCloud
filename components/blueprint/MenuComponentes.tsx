@@ -59,6 +59,7 @@ import {
   Wind,
   Route,
   Grid3x3,
+  Spline,
 } from 'lucide-react';
 import { type TipoDeGuardaCorpo,
   TIPOS_DE_INTERRUPTOR,
@@ -134,7 +135,7 @@ import type { BlueprintTool } from '../../hooks/useBlueprintEditor';
 
 /** Ferramenta + subtipo. É o par que define um componente. */
 export type EscolhaComponente =
-  | { tool: 'parede' | 'retangulo' | 'poligono' }
+  | { tool: 'parede' | 'parede-curva' | 'retangulo' | 'poligono' }
   | { tool: 'abertura'; abertura: Opening['kind'] }
   | { tool: 'estrutural'; estrutural: StructuralKind }
   | { tool: 'telhado' }
@@ -389,6 +390,13 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
         icone: Minus,
         ajuda: 'Traço a traço. A polilinha mitra os cantos sozinha.',
         escolha: { tool: 'parede' },
+      },
+      {
+        chave: 'parede-curva',
+        rotulo: 'Parede curva',
+        icone: Spline,
+        ajuda: 'Três cliques: início, fim e um ponto por onde o arco passa. Vira facetas retas com o arco gravado.',
+        escolha: { tool: 'parede-curva' },
       },
       {
         chave: 'retangulo',
@@ -817,6 +825,7 @@ export function fichaDoComponente(chave: ChaveDeComponente): FichaDeComponente |
 /** As ferramentas que o menu governa. Fora desta lista, ele fica apagado. */
 const TOOLS_DE_COMPONENTE: BlueprintTool[] = [
   'parede',
+  'parede-curva',
   'retangulo',
   'poligono',
   'abertura',

@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.47.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.48.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -1496,6 +1496,10 @@ function projetar(model) {
       cedeSobreposicao: w.cedeSobreposicao ? true : void 0,
       // FASE DE REFORMA (0.46.0): só quando EXISTENTE ou DEMOLIR — NOVO é o padrão e a ausência.
       fase: w.fase && w.fase !== "NOVO" ? w.fase : void 0,
+      // PAREDE CURVA (0.48.0): o círculo da faceta, só quando existe — parede
+      // reta não ganha chave. É conteúdo (o canvas desenha o arco e o painel o
+      // reconhece), então entra no hash.
+      arco: w.arco ? { centro: { x: w.arco.centro.x, y: w.arco.centro.y }, raioMm: w.arco.raioMm } : void 0,
       parametros: parametrosCanonicos(w.parametros),
       // A COMPOSIÇÃO. Mesma disciplina das três chaves acima: emitida só quando
       // existe, para não acrescentar `camadas` a toda parede homogênea do
@@ -2066,6 +2070,7 @@ function modelFromCanonicalPayload(payload) {
       // nada — é o que mantém o round-trip fechando byte a byte.
       ...w.cedeSobreposicao ? { cedeSobreposicao: true } : {},
       ...w.fase ? { fase: w.fase } : {},
+      ...w.arco ? { arco: { centro: { x: w.arco.centro.x, y: w.arco.centro.y }, raioMm: w.arco.raioMm } } : {},
       ...w.parametros && Object.keys(w.parametros).length > 0 ? { parametros: { ...w.parametros } } : {},
       // Idem: ausente (e `[]`, que payload nenhum deveria ter) não volta como
       // lista vazia, volta como nada — parede homogênea, que é o que um payload

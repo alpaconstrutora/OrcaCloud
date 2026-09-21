@@ -53,6 +53,8 @@ import {
   pontosDeConexaoEstrutural,
   nomeDoTipoEstrutural,
   pontasPresasAsPecas,
+  discretizarArco,
+  anguloEmTorno,
 } from '../../utils/blueprintKernel';
 import { cotaAngularDesenhada, distanciaAAnotacao, linhasDaHachura, pontaDaSeta, tracejadoMm } from '../../utils/blueprintAnotacoes';
 import {
@@ -1285,6 +1287,8 @@ interface Props {
   /** GUARDA-CORPO (E7.3): dois cliques; o tipo ativo vem da barra. */
   tipoDeGuardaCorpo?: TipoDeGuardaCorpo;
   onAddGuardaCorpo?: (a: Point, b: Point) => void;
+  /** PAREDE CURVA (P2.12): início, fim e o ponto por onde o arco passa. */
+  onAddParedeCurva?: (a: Point, b: Point, passandoPor: Point) => void;
   /** NÚCLEO VERTICAL (E2.4): os que atravessam este pavimento, já filtrados pelo editor. */
   nucleos?: Nucleo[];
   /** Retângulo por dois cantos opostos; o editor põe tipo e pavimentos. */
@@ -1443,6 +1447,7 @@ export default function BlueprintCanvas({
   onAddEixo,
   tipoDeGuardaCorpo = 'GUARDA_CORPO',
   onAddGuardaCorpo,
+  onAddParedeCurva,
   anotacoes = SEM_ANOTACOES,
   tipoDeAnotacao = 'TEXTO',
   onAddAnotacao,
@@ -1608,6 +1613,8 @@ export default function BlueprintCanvas({
   /** Primeiro clique do EIXO em curso (E1.4). */
   const [pontoEixo, setPontoEixo] = useState<Point | null>(null);
   const [pontoGuardaCorpo, setPontoGuardaCorpo] = useState<Point | null>(null);
+  /** PAREDE CURVA em curso: [início] ou [início, fim]; o 3º clique fecha. */
+  const [arcoEmCurso, setArcoEmCurso] = useState<Point[]>([]);
   /** ANOTAÇÃO em curso: os vértices já clicados. */
   const [caminhoAnotacao, setCaminhoAnotacao] = useState<Point[]>([]);
   /** O primeiro canto do núcleo em curso (E2.4). */
@@ -3321,8 +3328,40 @@ export default function BlueprintCanvas({
         // tela. Em 90° isto dá exatamente `meia`, como antes.
         extA: extensaoDeCanto(paredesDoNivel, w, 'a') * vista.escala,
         extB: extensaoDeCanto(paredesDoNivel, w, 'b') * vista.escala,
+        // PAREDE CURVA (P2.12): a faceta é pintada como ARCO do círculo dela, e
+        // não como corda — em tela, com o centro e os ângulos das duas pontas.
+        // Facetas vizinhas do mesmo arco emendam sozinhas: mesmo círculo.
+        arco: w.arco
+          ? (() => {
+              const c = paraTela(w.arco.centro);
+              const raioPx = w.arco.raioMm * vista.escala;
+              const t0 = Math.atan2(a.y - c.y, a.x - c.x);
+              const t1 = Math.atan2(b.y - c.y, b.x - c.x);
+              let delta = t1 - t0;
+              while (delta > Math.PI) delta -= 2 * Math.PI;
+              while (delta < -Math.PI) delta += 2 * Math.PI;
+              return { c, raioPx, t0, t1, antiHorario: delta < 0 };
+            })()
+          : null,
+        // A EMENDA entre facetas do mesmo arco não é canto: o miolo branco
+        // atravessa a junta (senão cada junta sai como um risco radial).
+        emendaA: !!w.arco && paredesDoNivel.some((o) => o !== w && o.arco && o.arco.raioMm === w.arco!.raioMm && o.arco.centro.x === w.arco!.centro.x && o.arco.centro.y === w.arco!.centro.y && ((o.a.x === w.a.x && o.a.y === w.a.y) || (o.b.x === w.a.x && o.b.y === w.a.y))),
+        emendaB: !!w.arco && paredesDoNivel.some((o) => o !== w && o.arco && o.arco.raioMm === w.arco!.raioMm && o.arco.centro.x === w.arco!.centro.x && o.arco.centro.y === w.arco!.centro.y && ((o.a.x === w.b.x && o.a.y === w.b.y) || (o.b.x === w.b.x && o.b.y === w.b.y))),
       };
     });
+    /** Caminho da faceta: arco quando há círculo, corda quando não há. `ext` em px nas pontas. */
+    const caminhoDaFaceta = (t: (typeof traco)[number], extA: number, extB: number) => {
+      ctx.beginPath();
+      if (t.arco && t.arco.raioPx > 0) {
+        const dA = extA / t.arco.raioPx;
+        const dB = extB / t.arco.raioPx;
+        const s = t.arco.antiHorario ? -1 : 1;
+        ctx.arc(t.arco.c.x, t.arco.c.y, t.arco.raioPx, t.arco.t0 - s * dA, t.arco.t1 + s * dB, t.arco.antiHorario);
+      } else {
+        ctx.moveTo(t.a.x - t.ux * extA, t.a.y - t.uy * extA);
+        ctx.lineTo(t.b.x + t.ux * extB, t.b.y + t.uy * extB);
+      }
+    };
 
     // Passada 1 — silhueta. FASES (E10.2): existente em cinza, a demolir em vermelho tracejado.
     for (const t of traco) {
@@ -3333,9 +3372,7 @@ export default function BlueprintCanvas({
       ctx.strokeStyle = selecao.has(t.w.id) ? COR_SELECIONADA : corDaFase?.tracejado ? 'rgba(220, 38, 38, 0.75)' : corDaFase ? corDaFase.traco : humanizada ? COR_PAREDE_HUMANIZADA : COR_PAREDE;
       ctx.lineWidth = t.cheia;
       if (corDaFase?.tracejado) ctx.setLineDash([Math.max(8, t.cheia * 1.5), Math.max(5, t.cheia)]);
-      ctx.beginPath();
-      ctx.moveTo(t.a.x - t.ux * t.extA, t.a.y - t.uy * t.extA);
-      ctx.lineTo(t.b.x + t.ux * t.extB, t.b.y + t.uy * t.extB);
+      caminhoDaFaceta(t, t.extA, t.extB);
       ctx.stroke();
       if (corDaFase?.tracejado) ctx.setLineDash([]);
     }
@@ -3360,14 +3397,12 @@ export default function BlueprintCanvas({
       //
       // A mesma conta serve para a ponta livre, onde `ext` é 0 e o resultado fica
       // negativo — ou seja, recua e deixa borda fechando a extremidade.
-      const recA = t.extA - LINHA_PAREDE_PX;
-      const recB = t.extB - LINHA_PAREDE_PX;
+      const recA = t.emendaA ? LINHA_PAREDE_PX : t.extA - LINHA_PAREDE_PX;
+      const recB = t.emendaB ? LINHA_PAREDE_PX : t.extB - LINHA_PAREDE_PX;
       if (t.comp + recA + recB <= 0) continue;
 
       ctx.lineWidth = miolo;
-      ctx.beginPath();
-      ctx.moveTo(t.a.x - t.ux * recA, t.a.y - t.uy * recA);
-      ctx.lineTo(t.b.x + t.ux * recB, t.b.y + t.uy * recB);
+      caminhoDaFaceta(t, recA, recB);
       ctx.stroke();
     }
 
@@ -3389,7 +3424,7 @@ export default function BlueprintCanvas({
     if (mostrarCamadasParedes) {
       for (const t of traco) {
         const camadas = t.w.camadas;
-        if (!camadas?.length || t.comp < 0.5) continue;
+        if (!camadas?.length || t.comp < 0.5 || t.arco) continue;
         // Fina demais na tela: as faixas viram um borrão que esconde o contorno
         // em vez de informar. Mesma decisão do `miolo < 1` acima.
         if (t.cheia < LIMIAR_CAMADAS_PX) continue;
@@ -6633,6 +6668,51 @@ export default function BlueprintCanvas({
     // parede "pular" meia espessura ao soltar o clique — e prévia que não bate
     // com o resultado é prévia em que ninguém confia. A linha fina contínua marca
     // o traçado em si, para o canto clicado continuar visível sob a faixa.
+    // PRÉVIA DA PAREDE CURVA (P2.12): corda tracejada após o 1º clique; após o
+    // 2º, o arco pelas facetas que o kernel vai gravar — a prévia é o resultado.
+    if (tool === 'parede-curva' && arcoEmCurso.length > 0 && cursor) {
+      const [p0, p1] = arcoEmCurso;
+      const espessuraPx = Math.max(1.5, espessuraMm * vista.escala);
+      ctx.save();
+      ctx.strokeStyle = COR_PREVIA;
+      ctx.setLineDash([6, 4]);
+      if (!p1) {
+        const a = paraTela(p0);
+        const b = paraTela(cursor);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      } else {
+        const arco = discretizarArco(p0, p1, cursor);
+        const a = paraTela(p0);
+        const b = paraTela(p1);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        if (arco) {
+          ctx.lineWidth = espessuraPx;
+          ctx.beginPath();
+          arco.vertices.forEach((v, i) => {
+            const t = paraTela(v);
+            if (i === 0) ctx.moveTo(t.x, t.y);
+            else ctx.lineTo(t.x, t.y);
+          });
+          ctx.stroke();
+          const c = paraTela(cursor);
+          ctx.setLineDash([]);
+          ctx.lineWidth = 1;
+          ctx.font = '11px system-ui, sans-serif';
+          ctx.fillStyle = COR_PREVIA;
+          ctx.fillText(`R ${(arco.raioMm / 1000).toFixed(2)} m · ${arco.vertices.length - 1} facetas`, c.x + 10, c.y - 8);
+        }
+      }
+      ctx.restore();
+    }
+
     if (tool === 'parede' && inicio && cursor) {
       const eixoPrevia = eixoDaParede({ a: inicio, b: cursor }, espessuraMm, alinhamento, {
         antes: mesmoLado ? antesDoInicio : null,
@@ -7160,6 +7240,7 @@ export default function BlueprintCanvas({
     if (
       cursor &&
       (tool === 'parede' ||
+        tool === 'parede-curva' ||
         tool === 'poligono' ||
         tool === 'retangulo' ||
         tool === 'terreno' ||
@@ -7839,6 +7920,13 @@ export default function BlueprintCanvas({
       setCursor(alvo);
       return;
     }
+    if (tool === 'parede-curva') {
+      // Mesmo ímã da parede reta: as pontas do arco encostam em cantos e eixos.
+      let alvo = capturarTracado(paraMundo(px, py));
+      if (arcoEmCurso.length === 1 && ortoAtivo(e)) alvo = travarOrtogonal(arcoEmCurso[0], alvo);
+      setCursor(alvo);
+      return;
+    }
     if (tool === 'anotacao') {
       let alvo = capturarTracado(paraMundo(px, py));
       // O orto da COTA ANGULAR é em relação ao VÉRTICE (as duas pontas saem dele); nas demais, ao vértice anterior.
@@ -8140,6 +8228,26 @@ export default function BlueprintCanvas({
         onAddAnotacao?.(tipoDeAnotacao, pontos);
         setCaminhoAnotacao([]);
       } else setCaminhoAnotacao(pontos);
+      return;
+    }
+
+    // PAREDE CURVA (P2.12): três cliques — início, fim, ponto por onde passa.
+    if (tool === 'parede-curva') {
+      const ponto = capturarTracado(mundo);
+      if (arcoEmCurso.length === 0) {
+        setArcoEmCurso([ponto]);
+        return;
+      }
+      if (arcoEmCurso.length === 1) {
+        const fim = ortoAtivo(e) ? travarOrtogonal(arcoEmCurso[0], ponto) : ponto;
+        if (fim.x === arcoEmCurso[0].x && fim.y === arcoEmCurso[0].y) return;
+        setArcoEmCurso([arcoEmCurso[0], fim]);
+        return;
+      }
+      // Terceiro clique colinear não fecha nada: o gesto continua até haver arco.
+      if (!discretizarArco(arcoEmCurso[0], arcoEmCurso[1], ponto)) return;
+      onAddParedeCurva?.(arcoEmCurso[0], arcoEmCurso[1], ponto);
+      setArcoEmCurso([]);
       return;
     }
 
@@ -8997,6 +9105,7 @@ export default function BlueprintCanvas({
       setPontoCorte(null);
       setPontoEixo(null);
       setPontoGuardaCorpo(null);
+      setArcoEmCurso([]);
       setCaminhoAnotacao([]);
       setPontoNucleo(null);
       // ⚠️ E o TRECHO em curso, que o Escape não cancelava: o primeiro clique
@@ -9088,6 +9197,12 @@ export default function BlueprintCanvas({
           ? ancoraDaForma
             ? `Arraste para dar o tamanho e o giro · clique fecha o polígono de ${ladosPoligono} lados · Esc cancela`
             : 'Clique no CENTRO do polígono'
+          : tool === 'parede-curva'
+            ? arcoEmCurso.length === 0
+              ? 'Clique no INÍCIO da parede curva'
+              : arcoEmCurso.length === 1
+                ? 'Clique no FIM do arco · Esc cancela'
+                : 'Clique num ponto por onde o arco PASSA · Esc cancela'
           : tool === 'parede'
             ? inicio
               ? cadeia.length >= 3

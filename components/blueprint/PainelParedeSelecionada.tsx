@@ -142,6 +142,9 @@ interface Props {
   onDestacarPonta: (end: 'a' | 'b' | null) => void;
   onComprimento: (mm: number) => void;
   onEspessura: (mm: number) => void;
+  /** PAREDE CURVA (P2.12): raio e número de facetas do arco desta parede; null = reta. */
+  arco?: { raioMm: number; facetas: number } | null;
+  onSelecionarArco?: () => void;
   /**
    * O painel de COMPOSIÇÃO, montado por quem tem o quantitativo em mãos.
    *
@@ -221,6 +224,8 @@ export default function PainelParedeSelecionada({
   onDestacarPonta,
   onComprimento,
   onEspessura,
+  arco,
+  onSelecionarArco,
   camadasSlot,
   podeUnir,
   onDividir,
@@ -267,6 +272,19 @@ export default function PainelParedeSelecionada({
           onUnir={onUnir}
           livreMm={livreMm}
         />
+      )}
+
+      {parede && arco && (
+        <div className="mt-2 flex items-center justify-between gap-2 rounded border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-600" data-testid="parede-curva-info">
+          <span>
+            Faceta de <strong>parede curva</strong> · raio {(arco.raioMm / 1000).toFixed(2).replace('.', ',')} m · {arco.facetas} faceta{arco.facetas === 1 ? '' : 's'}
+          </span>
+          {onSelecionarArco && arco.facetas > 1 && (
+            <button type="button" className="text-blue-700 hover:underline" onClick={onSelecionarArco}>
+              Selecionar o arco
+            </button>
+          )}
+        </div>
       )}
 
       {parede && tomadasSlot}

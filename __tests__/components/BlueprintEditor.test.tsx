@@ -377,7 +377,7 @@ async function abrirAba(nome: RegExp) {
  * seletor casa com qualquer um dos nomes possíveis.
  */
 const NOMES_DO_BOTAO =
-  /^(Componentes|Parede|Parede em retângulo|Parede em polígono|Porta|Porta de correr|Janela|Vão livre|Pilar|Viga|Laje|Estaca|Bloco de coroamento|Viga de fundação|Shaft|Elevador|Vaga|Vaga PCD|Vaga idoso|Vaga de moto|Guarda-corpo|Corrimão)$/;
+  /^(Componentes|Parede|Parede curva|Parede em retângulo|Parede em polígono|Porta|Porta de correr|Janela|Vão livre|Pilar|Viga|Laje|Estaca|Bloco de coroamento|Viga de fundação|Shaft|Elevador|Vaga|Vaga PCD|Vaga idoso|Vaga de moto|Guarda-corpo|Corrimão)$/;
 
 /**
  * O botão do menu.
@@ -5029,5 +5029,39 @@ describe('BlueprintEditor · definições de parâmetro (P2.5)', () => {
     } finally {
       listParameterDefinitions.mockResolvedValue([]);
     }
+  }, 60000);
+});
+
+/**
+ * PAREDE CURVA (20/09/2026, backlog P2 — P2.12): "Parede curva" no menu de
+ * componentes; a faceta selecionada diz o raio e quantas facetas tem, e
+ * "Selecionar o arco" pega a curva inteira.
+ */
+describe('BlueprintEditor · parede curva (P2.12)', () => {
+  it('o menu oferece Parede curva; a faceta mostra raio e facetas; "Selecionar o arco" seleciona todas', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const modelo = k.applyBatch(nivel.model, [
+      { type: 'AddWall', levelId: t, a: k.point(0, 0), b: k.point(0, 4000), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddCurvedWall', levelId: t, a: k.point(0, 4000), b: k.point(6000, 4000), passandoPor: k.point(3000, 7000), thicknessMm: 150, heightMm: 2800 },
+    ]).model;
+    expect(modelo.walls.filter((w) => w.arco)).toHaveLength(20);
+    loadBranchModel.mockResolvedValue(modelo);
+    await montar();
+    const user = userEvent.setup();
+    await user.click(botaoComponentes());
+    expect(screen.getByRole('menuitemradio', { name: /^Parede curva$/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('menuitemradio', { name: /^Parede curva$/ }));
+    expect(botaoComponentes()).toHaveTextContent('Parede curva');
+    // Seleciona uma faceta pelo navegador: a "Parede 2" é a primeira faceta.
+    await abrirComponentes(user);
+    await user.click(screen.getAllByRole('button').find((b) => /^Parede 5\b/.test(b.textContent ?? ''))!);
+    const info = await screen.findByTestId('parede-curva-info');
+    expect(info).toHaveTextContent(/parede curva/);
+    expect(info).toHaveTextContent(/raio 3,00 m/);
+    expect(info).toHaveTextContent(/20 facetas/);
+    await user.click(within(info).getByRole('button', { name: 'Selecionar o arco' }));
+    await waitFor(() => expect(screen.getByText(/^20 paredes/)).toBeInTheDocument());
   }, 60000);
 });

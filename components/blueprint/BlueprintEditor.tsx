@@ -112,7 +112,8 @@ import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
 import MenuEncaixe from './MenuEncaixe';
 import { TIPOS_DE_ENCAIXE, ROTULO_DO_ENCAIXE } from '../../utils/blueprintEncaixe';
 import type { TipoDePontoEletrico, AcabamentosDoAmbiente, ObjectId } from '../../utils/blueprintKernel';
-import { acabamentosDoAmbiente } from '../../utils/blueprintKernel';
+import {
+  segmentosDoMesmoArco, acabamentosDoAmbiente } from '../../utils/blueprintKernel';
 import type { Quantitativos } from '../../utils/blueprintKernel/quantities';
 import MenuComponentes, { type EscolhaComponente } from './MenuComponentes';
 import ModalSobreposicao, { type EscolhaSobreposicao } from './ModalSobreposicao';
@@ -2842,6 +2843,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * devolver a planta ao que era — não tirar um lado por vez, deixando um
    * contorno aberto que ninguém desenhou. Os cantos já vêm mitrados do canvas.
    */
+  /** PAREDE CURVA (P2.12): o kernel discretiza e grava as facetas com o arco. */
+  function adicionarParedeCurva(a: Point, b: Point, passandoPor: Point) {
+    if (!levelId) return;
+    editor.runBatch([{ type: 'AddCurvedWall', levelId, a, b, passandoPor, thicknessMm: espessura, heightMm: ALTURA_PADRAO_MM, alinhamento }]);
+  }
+
   function adicionarPoligono(eixos: { a: Point; b: Point }[]) {
     if (!levelId || eixos.length < 3) return;
     editor.runBatch(
@@ -6585,7 +6592,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
 
   /** Espessura e alinhamento só fazem sentido para o que nasce parede. */
   const ehFerramentaDeParede =
-    editor.tool === 'parede' || editor.tool === 'retangulo' || editor.tool === 'poligono';
+    editor.tool === 'parede' || editor.tool === 'parede-curva' || editor.tool === 'retangulo' || editor.tool === 'poligono';
 
   /** O nome da ferramenta ativa, para a barra de opções — com o subtipo quando há. */
   const rotuloDaFerramentaAtiva =
@@ -7074,6 +7081,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         }
         custoDesatualizado={editor.dirtySincePublish}
         parede={paredeSel}
+        arco={paredeSel?.arco ? { raioMm: paredeSel.arco.raioMm, facetas: segmentosDoMesmoArco(editor.model.walls, paredeSel).length } : null}
+        onSelecionarArco={() => paredeSel && editor.setSelectedIds(segmentosDoMesmoArco(editor.model.walls, paredeSel).map((w) => w.id))}
         abertura={aberturaSel}
         pontaQueAnda={esticamento.pontaQueAnda}
         arrastaCanto={esticamento.arrastaCanto}
@@ -10293,6 +10302,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onAddComponente={adicionarComponente}
               tipoDeGuardaCorpo={tipoDeGuardaCorpo}
               onAddGuardaCorpo={adicionarGuardaCorpo}
+              onAddParedeCurva={adicionarParedeCurva}
               anotacoes={anotacoesDoNivelAtivo}
               tipoDeAnotacao={tipoDeAnotacao}
               onAddAnotacao={adicionarAnotacao}

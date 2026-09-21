@@ -242,6 +242,25 @@ export interface Wall {
    * `MergeWalls`.
    */
   camadas?: CamadaParede[];
+  /**
+   * PAREDE CURVA (0.48.0, backlog P2 — P2.12): este segmento é uma FACETA de um
+   * arco, e este é o círculo dela. Ausente = parede reta, que é o que toda
+   * parede do acervo sempre foi. A geometria continua sendo `a`/`b`; o arco é
+   * metadado de desenho e de agrupamento — ver `arco.ts`. Facetas do mesmo
+   * arco têm o mesmo (centro, raio) no mesmo pavimento; não há id de arco.
+   */
+  arco?: ArcoDaParede;
+}
+
+/** O círculo de uma faceta de parede curva. Inteiros em mm. */
+export interface ArcoDaParede {
+  centro: Point;
+  raioMm: number;
+}
+
+/** Cópia do metadado do arco (objeto novo), ou nada. */
+export function clonarArco(arco: ArcoDaParede | undefined): { arco: ArcoDaParede } | Record<string, never> {
+  return arco ? { arco: { centro: { x: arco.centro.x, y: arco.centro.y }, raioMm: arco.raioMm } } : {};
 }
 
 /** O lado oposto. `EIXO` não tem oposto: continua `EIXO`. */
@@ -2474,6 +2493,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
       a: { ...w.a },
       b: { ...w.b },
       ...(w.camadas ? { camadas: clonarCamadas(w.camadas)! } : {}),
+      ...clonarArco(w.arco),
     })),
     // `esquadria` copiada a fundo pela razão de `camadas`: um `...o` cru deixaria
     // o objeto compartilhado entre o modelo novo e o antigo, e aplicar um tipo
@@ -3775,6 +3795,17 @@ export function assertModelInvariants(model: BlueprintModel): void {
       throw new KernelError('BAD_THICKNESS', `Espessura não positiva em ${wall.id}`);
     }
     assertIntegerMm(wall.thicknessMm, `${wall.id}.thicknessMm`);
+    // PAREDE CURVA (0.48.0): metadado inteiro e com raio positivo. A
+    // consistência com as pontas NÃO é invariante — é `retirarArcosDesfeitos`
+    // quem tira o metadado de uma faceta que saiu do círculo, para que um
+    // payload antigo ou um vértice movido nunca derrubem o modelo inteiro.
+    if (wall.arco !== undefined) {
+      if (!Number.isInteger(wall.arco.raioMm) || wall.arco.raioMm <= 0) {
+        throw new KernelError('BAD_ARC', `Raio do arco inválido em ${wall.id}: ${wall.arco.raioMm}`);
+      }
+      assertIntegerMm(wall.arco.centro.x, `${wall.id}.arco.centro.x`);
+      assertIntegerMm(wall.arco.centro.y, `${wall.id}.arco.centro.y`);
+    }
   }
 
   const seen = new Set<ObjectId>();

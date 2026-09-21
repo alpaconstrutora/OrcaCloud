@@ -9,6 +9,7 @@
  */
 
 import { KernelError, assertIntegerMm, roundToMm } from './units';
+import { arcoConsistente, discretizarArco } from './arco';
 import { faixaDaEstruturaNaParede } from './sobreposicao';
 import {
   type BlueprintModel,
@@ -27,6 +28,8 @@ import {
   assertModelInvariants,
   assinaturaDasCamadas,
   clonarCamadas,
+  clonarArco,
+  type ArcoDaParede,
   acabamentosOuAusente,
   type AcabamentosDoAmbiente,
   cloneModel,
@@ -161,6 +164,22 @@ export type Command =
        * próprio arquivo, e a exportação devolve o mesmo `GlobalId`.
        */
       uid?: ElementUid;
+    }
+  /**
+   * PAREDE CURVA (0.48.0, P2.12): arco por três pontos — início, fim e um
+   * ponto por onde passa — gravado como N paredes retas (facetas) com o
+   * metadado `arco`. Ver `arco.ts`. Recusa colineares (`DEGENERATE_ARC`).
+   */
+  | {
+      type: 'AddCurvedWall';
+      levelId: ObjectId;
+      a: Point;
+      b: Point;
+      passandoPor: Point;
+      thicknessMm: number;
+      heightMm: number;
+      alinhamento?: AlinhamentoParede;
+      camadas?: CamadaParede[];
     }
   | {
       type: 'AddOpening';
@@ -1160,6 +1179,31 @@ function aplicarSemHash(
           : {}),
       });
       diff.created.push(id);
+      break;
+    }
+
+    case 'AddCurvedWall': {
+      const arco = discretizarArco(command.a, command.b, command.passandoPor);
+      if (!arco) {
+        throw new KernelError('DEGENERATE_ARC', 'Os três pontos não definem um arco (colineares, coincidentes ou raio minúsculo)');
+      }
+      const metadado: ArcoDaParede = { centro: { x: arco.centro.x, y: arco.centro.y }, raioMm: arco.raioMm };
+      for (let i = 1; i < arco.vertices.length; i++) {
+        const id = nextId(next, 'wal');
+        next.walls.push({
+          id,
+          uid: novoUid(),
+          levelId: command.levelId,
+          a: { ...arco.vertices[i - 1] },
+          b: { ...arco.vertices[i] },
+          thicknessMm: command.camadas ? somaDasCamadas(command.camadas) : command.thicknessMm,
+          heightMm: command.heightMm,
+          ...(command.camadas ? { camadas: clonarCamadas(command.camadas) } : {}),
+          ...(command.alinhamento && command.alinhamento !== 'EIXO' ? { alinhamento: command.alinhamento } : {}),
+          arco: { centro: { ...metadado.centro }, raioMm: metadado.raioMm },
+        });
+        diff.created.push(id);
+      }
       break;
     }
 
@@ -2906,6 +2950,11 @@ function aplicarSemHash(
         }
         alvo.a = { x: inteiro(destino.a.x), y: inteiro(destino.a.y) };
         alvo.b = { x: inteiro(destino.b.x), y: inteiro(destino.b.y) };
+        // PAREDE CURVA: o centro do arco anda rígido com a faceta SELECIONADA;
+        // uma vizinha esticada saiu do círculo e `retirarArcosDesfeitos` cuida.
+        if (selecionadas.has(alvo.id) && 'arco' in alvo && alvo.arco) {
+          alvo.arco = { centro: { x: inteiro(alvo.arco.centro.x + dx), y: inteiro(alvo.arco.centro.y + dy) }, raioMm: alvo.arco.raioMm };
+        }
         diff.updated.push(alvo.id);
       }
 
@@ -3070,6 +3119,7 @@ function aplicarSemHash(
         w.b = refletir(w.b);
         diff.updated.push(w.id);
       }
+      for (const w of paredes) if (w.arco) w.arco = { centro: refletir(w.arco.centro), raioMm: w.arco.raioMm };
       // O lado de abrir é relativo ao sentido a→b; a reflexão troca os lados.
       for (const o of next.openings) {
         if (!espelhadas.has(o.wallId)) continue;
@@ -3169,6 +3219,7 @@ function aplicarSemHash(
         w.b = girar(w.b);
         diff.updated.push(w.id);
       }
+      for (const w of paredes) if (w.arco) w.arco = { centro: girar(w.arco.centro), raioMm: w.arco.raioMm };
       // O arredondamento pode ter tirado 1 mm da parede; a abertura que deixou
       // de caber recua esse milímetro em vez de derrubar o gesto inteiro.
       for (const o of next.openings) {
@@ -3877,6 +3928,7 @@ function aplicarSemHash(
           levelId: command.levelId,
           a: deslocar(w.a),
           b: deslocar(w.b),
+          ...(w.arco ? { arco: { centro: deslocar(w.arco.centro), raioMm: w.arco.raioMm } } : {}),
         });
         diff.created.push(id);
       }
@@ -3972,10 +4024,30 @@ function aplicarSemHash(
   diff.deleted.push(...limparRestricoesOrfas(next));
   // Etiqueta apagada sai da unidade; a unidade fica (E2.2).
   diff.updated.push(...limparEtiquetasOrfasDasUnidades(next));
+  // PAREDE CURVA (P2.12): faceta que saiu do círculo perde o metadado.
+  retirarArcosDesfeitos(next, diff);
   recomputeSpaces(next);
   assertModelInvariants(next);
 
   return { model: next, diff };
+}
+
+/**
+ * Tira `arco` de toda faceta cujas pontas não estão mais sobre o círculo.
+ *
+ * É o que torna o metadado SEGURO: MoveVertex, ponta esticada/aparada por
+ * `manterJuncoes`, SplitWall na corda — qualquer gesto que tire uma ponta do
+ * círculo — deixam a parede reta e honesta, em vez de um arco desenhado que não
+ * passa pelas pontas. Roda em todo comando porque é O(paredes) e porque é a
+ * única forma de nenhum caminho novo esquecer de cuidar disto.
+ */
+function retirarArcosDesfeitos(next: BlueprintModel, diff: Diff): void {
+  for (const w of next.walls) {
+    if (w.arco && !arcoConsistente(w)) {
+      delete w.arco;
+      if (!diff.updated.includes(w.id) && !diff.created.includes(w.id)) diff.updated.push(w.id);
+    }
+  }
 }
 
 /** O que uma instância nova pede — em `AddInstanciaDeGrupo` e nas iniciais de `AddGrupo`. */
@@ -4228,6 +4300,7 @@ function alvosDoComando(command: Command): { levelIds: string[]; wallIds: string
   const lista = (v: unknown) => (Array.isArray(v) ? (v as string[]) : []);
   switch (c.type) {
     case 'AddWall':
+    case 'AddCurvedWall':
     case 'AddStructural':
     case 'AddAgua':
     case 'DuplicateEntities':
@@ -4381,10 +4454,13 @@ export function sincronizarGrupos(next: BlueprintModel, diff: Diff, copiasAntes:
           ...(w.fase ? { fase: w.fase } : {}),
           ...(w.camadas ? { camadas: clonarCamadas(w.camadas)! } : {}),
           ...(w.parametros ? { parametros: { ...w.parametros } } : {}),
+          // PAREDE CURVA: a instância leva o centro transformado; espelho e giro
+          // preservam o raio.
+          ...(w.arco ? { arco: { centro: T(w.arco.centro), raioMm: w.arco.raioMm } } : {}),
         };
         const existente = paredePorUid.get(uid);
         if (existente) {
-          for (const k of ['alinhamento', 'cedeSobreposicao', 'fase', 'camadas', 'parametros'] as const) if (!(k in campos)) delete existente[k];
+          for (const k of ['alinhamento', 'cedeSobreposicao', 'fase', 'camadas', 'parametros', 'arco'] as const) if (!(k in campos)) delete existente[k];
           Object.assign(existente, campos);
           dePara.set(w.id, existente.id);
           tocar(diff.updated, existente.id);
@@ -4530,10 +4606,11 @@ export function sincronizarPavimentosVinculados(next: BlueprintModel, diff: Diff
         ...(w.cedeSobreposicao ? { cedeSobreposicao: true } : {}),
         ...(w.camadas ? { camadas: clonarCamadas(w.camadas)! } : {}),
         ...(w.parametros ? { parametros: { ...w.parametros } } : {}),
+        ...(w.arco ? { arco: { centro: { x: w.arco.centro.x, y: w.arco.centro.y }, raioMm: w.arco.raioMm } } : {}),
       };
       if (existente) {
-        Object.assign(existente, { ...campos, alinhamento: campos.alinhamento, cedeSobreposicao: campos.cedeSobreposicao, camadas: campos.camadas, parametros: campos.parametros });
-        for (const k of ['alinhamento', 'cedeSobreposicao', 'camadas', 'parametros'] as const) if (existente[k] === undefined) delete existente[k];
+        Object.assign(existente, { ...campos, alinhamento: campos.alinhamento, cedeSobreposicao: campos.cedeSobreposicao, camadas: campos.camadas, parametros: campos.parametros, arco: campos.arco });
+        for (const k of ['alinhamento', 'cedeSobreposicao', 'camadas', 'parametros', 'arco'] as const) if (existente[k] === undefined) delete existente[k];
         dePara.set(w.id, existente.id);
         tocar(diff.updated, existente.id);
       } else {

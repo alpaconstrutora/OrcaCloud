@@ -194,6 +194,15 @@
  *   tem instalação, então nenhuma delas ganha chave — só a versão embutida no
  *   payload mudou.
  *
+ *   0.47.0 → 0.48.0 (20/09/2026): PAREDE CURVA (backlog P2 — P2.12) — `arco:
+ *   {centro, raioMm}` na parede, só na FACETA de um arco discretizado (comando
+ *   `AddCurvedWall`, três pontos → N paredes retas com o metadado; parede reta
+ *   não ganha chave). Nenhum dos seis casos tem. Mesma prova, refeita antes de
+ *   tocar num hash: com a string em 0.47.0 e tudo JÁ no lugar (modelo,
+ *   comando, invariante `BAD_ARC`, `retirarArcosDesfeitos`, canônico ida e
+ *   volta, cópias de grupo e de pavimento tipo), 314 testes de
+ *   kernel/canônico/goldens/IFC/grupos passaram; só depois do bump as seis
+ *   falhas foram todas de hash.
  *   0.46.0 → 0.47.0 (20/09/2026): HVAC MÍNIMO (E11.1 do roadmap) — disciplina
  *   `MECANICA` no enum das redes; `disciplina` no shaft (só SHAFT; ausente =
  *   geral); família `CLIMATIZACAO` de componente com os tipos CONDENSADORA,
@@ -562,17 +571,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '84ece8dea3ff4d25412d197fee83d0434478cccd8a214f2f10972910ae5400d5',
+    hash: 'c85ffa52acac35b352c1ab8a62ab82b6a77ab431ba5933e8e15e843c12ec58cd',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'b7fdec12080c6b080b3a8ade88362c30c0c37e975eb96514d45f75ce8271025d',
+    hash: '2a8ad2f0977874bf8003bea4316bb0c0e9bbc30d14112b3d28d6f5cdf9d5b54f',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '608c3dcce5f6a2aed2c3e600f9a5f862bff91cca5dd225301ffda45e474862d9',
+    hash: '3f871a17e3fa3813009ce64f9d51b3b42e8c57a0138226dccd4b7963b7f177e8',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -580,7 +589,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: 'c18fd640b86b833edf2b82cdd25a9271066a8833756b3cf07275298c42b85b5e',
+    hash: 'fd85ff6ab78f629cb5f26d2794182bb9a00b298aae30e918d38d861f3d7a11d7',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -590,7 +599,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '63bb6b3a29578ae6d1b63f998188b927456d5d42d3bbc644dd35fabd37cad40c',
+    hash: '207eb6a45ccf30c97ea771fb3284c17bd07faa1137f7cbb508784344c6d59366',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -601,7 +610,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '5b3f8dc77c89be1da3b83b763f49ee6e83b0184055b9a4fedfab5f17f6b4d13e',
+    hash: '45da644963d412afdfa82285196ab42cabc661808055fc1823f05dc7e5e55454',
   },
 };
 

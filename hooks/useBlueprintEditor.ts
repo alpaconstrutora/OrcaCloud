@@ -48,6 +48,8 @@ export type BlueprintTool =
    */
   | 'mover'
   | 'parede'
+  /** PAREDE CURVA (P2.12): três cliques — início, fim e um ponto por onde o arco passa. */
+  | 'parede-curva'
   /** Contorno fechado de N lados iguais, criado num gesto só. */
   | 'poligono'
   /** Retângulo pelos dois cantos opostos — o gesto de fazer um cômodo. */

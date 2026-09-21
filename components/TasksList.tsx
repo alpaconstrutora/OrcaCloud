@@ -2,15 +2,16 @@ import React, { useMemo, useState } from 'react'
 import {
   CheckCircle2, ExternalLink, Inbox,
   Building2, ChevronDown, ChevronRight, Plus,
-  ArrowUp, ArrowDown, Search, X, SlidersHorizontal,
+  Search, X, SlidersHorizontal, LayoutGrid, MoveHorizontal,
   GripVertical, CornerLeftUp, Flag, Calendar, AlertTriangle,
   ChevronsDownUp, ChevronsUpDown, Bell,
 } from 'lucide-react'
-import type { TaskRecord, EmployeeOption, ProjectOption, TaskDefaults } from './TaskForm'
+import type { TaskRecord, EmployeeOption, ProjectOption, TaskDefaults, SpaceOption } from './TaskForm'
 import type { TaskStatus } from '../services/taskService'
 import type { GroupByField } from './TasksModule'
-import { ColumnConfig, useTableColumns, ColumnConfigButton, usePersistedState } from './ui/TableUtils'
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils'
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils'
+import { FilterPopover } from './ui/FilterPopover'
 import ActionIconButton from './ui/ActionIconButton'
 
 interface TaskGroup { key: string; label: string; color?: string; tasks: TaskRecord[] }
@@ -21,6 +22,8 @@ interface Props {
   employees: EmployeeOption[]
   projects: ProjectOption[]
   statuses?: TaskStatus[]
+  /** Espaços da organização — alimentam o filtro "Espaço" da toolbar (§5.4). */
+  spaces?: SpaceOption[]
   groupBy?: GroupByField
   resetDragSignal?: number
   onToggleDone: (task: TaskRecord) => void
@@ -47,37 +50,45 @@ const MODULE_LABEL: Record<string, { label: string; cls: string }> = {
   compras:     { label: 'Compras',     cls: 'text-indigo-700' },
 }
 
-// ── Configuração de visibilidade de colunas ───────────────────────────────────
+// ── Colunas (visibilidade, ordem arrastável e ordenação via useTableColumns) ──
+// Toda coluna de valor único é ordenável (§6.3). 'actions' é estrutural: fica fora
+// da engrenagem, do arraste e da ordenação.
+// `defaultHidden`: a área de conteúdo de Tarefas mede ~1016px em 1600 (viewport −
+// sidebar 260 − gutter 48 − rail de espaços 256 − gap 20). Nove colunas com `px-6`
+// não cabem aí de jeito nenhum; com a coluna de Ações fora da tela a primeira
+// impressão é de defeito. Nascem visíveis as seis que cabem; as outras ligam na
+// engrenagem (quem já tinha preferência salva mantém as colunas que via).
 const TASKS_LIST_COLUMNS: ColumnConfig[] = [
-  { key: 'title',      label: 'Nome',         sortable: false },
-  { key: 'assignee',  label: 'Responsável',   sortable: false },
-  { key: 'project',   label: 'Obra',          sortable: false },
-  { key: 'start_date',label: 'Data Inicial',  sortable: false },
-  { key: 'due_date',  label: 'Vencimento',    sortable: false },
-  { key: 'priority',  label: 'Prioridade',    sortable: false },
-  { key: 'source',    label: 'Origem',        sortable: false },
-  { key: 'alert',     label: 'Alerta',        sortable: false },
-  { key: 'status',    label: 'Status',        sortable: false },
-  { key: 'actions',   label: 'Ações',         sortable: false },
+  { key: 'title',      label: 'Nome',          sortable: true  },
+  { key: 'assignee',   label: 'Responsável',   sortable: true  },
+  { key: 'project',    label: 'Obra',          sortable: true, defaultHidden: true },
+  { key: 'start_date', label: 'Data inicial',  sortable: true, defaultHidden: true },
+  { key: 'due_date',   label: 'Vencimento',    sortable: true  },
+  { key: 'priority',   label: 'Prioridade',    sortable: true  },
+  { key: 'source',     label: 'Origem',        sortable: true, defaultHidden: true },
+  { key: 'alert',      label: 'Alerta',        sortable: true, defaultHidden: true },
+  { key: 'status',     label: 'Status',        sortable: true  },
+  { key: 'actions',    label: 'Ações',         sortable: false },
 ]
 
-// ── Colunas reordenáveis ──────────────────────────────────────────────────────
-const COLUMN_DEFS = [
-  { key: 'title',      label: 'Nome',          sortCol: 'title'      as const },
-  { key: 'assignee',   label: 'Responsável',   sortCol: 'assignee'   as const },
-  { key: 'project',    label: 'Obra',          sortCol: 'project'    as const },
-  { key: 'start_date', label: 'Data Inicial',  sortCol: 'start_date' as const },
-  { key: 'due_date',   label: 'Vencimento',    sortCol: 'due_date'   as const },
-  { key: 'priority',   label: 'Prioridade',    sortCol: 'priority'   as const },
-  { key: 'source',     label: 'Origem',        sortCol: null },
-  { key: 'alert',      label: 'Alerta',        sortCol: 'alert'      as const },
-  { key: 'status',     label: 'Status',        sortCol: 'status'     as const },
-  { key: 'actions',    label: '',              sortCol: null },
-] as const
+type ColKey = 'title' | 'assignee' | 'project' | 'start_date' | 'due_date' | 'priority' | 'source' | 'alert' | 'status' | 'actions'
 
-type ColKey = typeof COLUMN_DEFS[number]['key']
-type SortCol = Exclude<typeof COLUMN_DEFS[number]['sortCol'], null>
-type SortDir = 'asc' | 'desc'
+// Larguras de partida — redimensionável via useResizableColumns (§6.1); o botão
+// "Ajustar largura ao conteúdo" (§6.1.2) mede o dado real e substitui estes valores.
+// Cada coluna precisa caber o rótulo do cabeçalho + ícone de ordenação com px-6
+// (48px de respiro): "Vencimento" pede ~146px, "Prioridade" ~136px.
+// Soma alvo das visíveis por padrão: 56 (grip+checkbox) + 240+150+146+136+150+134 = 1012 ≤ 1016.
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+  title: 240, assignee: 150, project: 160, start_date: 146, due_date: 146,
+  priority: 136, source: 116, alert: 150, status: 150, actions: 134,
+}
+// Colunas estruturais (grip de arraste + checkbox circular) — largura fixa, fora do
+// redimensionamento. Entram no <colgroup> sem data-col-key, e o autofit as desconta.
+const GRIP_COL_WIDTH  = 24
+const CHECK_COL_WIDTH = 32
+
+// Filtro rápido de escolha única (§5.4) — '' = todos, '__none__' = sem espaço.
+const SPACE_FILTER_NONE = '__none__'
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa os
 // chips de filtro (fPriority/fStatus/fAssignee/fProject) já existentes, não os
@@ -111,9 +122,6 @@ function getAdvancedFilterValue(t: TaskRecord, key: string): unknown {
   }
 }
 
-const DEFAULT_COL_ORDER: ColKey[] = COLUMN_DEFS.map(c => c.key)
-const COL_DEF_MAP = Object.fromEntries(COLUMN_DEFS.map(c => [c.key, c])) as Record<ColKey, typeof COLUMN_DEFS[number]>
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(iso: string | null) {
   if (!iso) return null
@@ -139,31 +147,40 @@ function initials(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map(n => n[0]).join('').toUpperCase()
 }
 
-function SortIcon({ col, active, dir }: { col: string; active: SortCol | null; dir: SortDir }) {
-  if (active !== col) return <span className="inline-block w-3 h-3 opacity-0 group-hover/th:opacity-40"><ArrowUp className="w-3 h-3" /></span>
-  return dir === 'asc'
-    ? <ArrowUp   className="inline-block w-3 h-3 text-blue-500 ml-0.5" />
-    : <ArrowDown className="inline-block w-3 h-3 text-blue-500 ml-0.5" />
-}
+// §6.6/§7.2: px-6 + separador vertical + py-2.5 em toda célula. `overflow-hidden`
+// porque a largura vem do <colgroup> (table-layout: fixed) — sem ele o texto de uma
+// coluna estreita invadiria a vizinha; o `block truncate` + `title` (§6.1.2) nos
+// spans de texto livre é o que devolve o conteúdo cortado.
+const COL = 'px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-slate-700 whitespace-nowrap overflow-hidden'
+const TH  = 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden'
 
-const COL = 'px-3 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-slate-700 whitespace-nowrap'
+const HEADER_LABEL: Record<Exclude<ColKey, 'actions'>, string> = {
+  title: 'Nome', assignee: 'Responsável', project: 'Obra', start_date: 'Data inicial',
+  due_date: 'Vencimento', priority: 'Prioridade', source: 'Origem', alert: 'Alerta', status: 'Status',
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 const TasksList: React.FC<Props> = ({
-  tasks, loading, employees, projects, statuses = [], groupBy = 'none', resetDragSignal,
+  tasks, loading, employees, projects, statuses = [], spaces = [], groupBy = 'none', resetDragSignal,
   onToggleDone, onEdit, onAddSubtask, onMakeSubtask, onAddTask, onNavigate,
 }) => {
-  // F2: filtros + ordenação sobrevivem a navegação/reload.
+  // F2: filtros sobrevivem a navegação/reload (§3). Ordenação e ordem das colunas
+  // vivem no useTableColumns (abaixo), também persistidas.
   const [search, setSearch]           = usePersistedState('tasksListFilters:search', '')
-  const [sortCol, setSortCol]         = usePersistedState<SortCol | null>('tasksListFilters:sortCol', null)
-  const [sortDir, setSortDir]         = usePersistedState<SortDir>('tasksListFilters:sortDir', 'asc')
   const [expanded, setExpanded]       = useState<Set<string>>(new Set())
   const [showFilters, setShowFilters] = useState(false)
   const [fPriority, setFPriority]     = usePersistedState('tasksListFilters:priority', '')
   const [fStatus, setFStatus]         = usePersistedState('tasksListFilters:status', '')
   const [fAssignee, setFAssignee]     = usePersistedState('tasksListFilters:assignee', '')
   const [fProject, setFProject]       = usePersistedState('tasksListFilters:project', '')
+  const [fSpace, setFSpace]           = usePersistedState('tasksListFilters:space', '')
+
+  const spaceFilterOptions = useMemo(() => [
+    { value: '', label: 'Todos' },
+    { value: SPACE_FILTER_NONE, label: 'Sem espaço' },
+    ...spaces.map(s => ({ value: s.id, label: s.name })),
+  ], [spaces])
 
   const [draggingId, setDraggingId]         = useState<string | null>(null)
   const [dragOverId, setDragOverId]         = useState<string | null>(null)
@@ -191,18 +208,24 @@ const TasksList: React.FC<Props> = ({
     if (resetDragSignal) clearDrag()
   }, [resetDragSignal, clearDrag])
 
-  const [colOrder, setColOrder]       = useState<ColKey[]>(DEFAULT_COL_ORDER)
-  const [colDragging, setColDragging] = useState<ColKey | null>(null)
-  const [colDragOver, setColDragOver] = useState<ColKey | null>(null)
-
-  // Visibility via TableUtils (sort handled by existing sortCol/sortDir state)
+  // Visibilidade, ordem arrastável (estilo ClickUp, via SortableHeader onMoveColumn)
+  // e ordenação — tudo persistido em 'tasksListColumns'.
   const taskVisibility = useTableColumns(TASKS_LIST_COLUMNS, 'tasksListColumns')
   const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'tasksListFilters:advanced')
-  // Filter colOrder by visible columns
+  const { sortColumn, sortDirection } = taskVisibility
+  // Colunas de dado visíveis, na ordem escolhida pelo usuário. 'actions' fica fora e
+  // é renderizada por último, fixa, depois do espaçador (§6.1.1).
   const visibleColOrder = useMemo(
-    () => colOrder.filter(k => taskVisibility.visibleColumns.includes(k)),
-    [colOrder, taskVisibility.visibleColumns]
+    () => taskVisibility.orderedVisibleColumns.filter((k): k is Exclude<ColKey, 'actions'> => k !== 'actions'),
+    [taskVisibility.orderedVisibleColumns]
   )
+
+  // §6.1: largura = soma exata das colunas visíveis (nunca w-full com table-layout
+  // fixed — o navegador redistribuiria a folga e arrastar uma borda puxaria a vizinha).
+  const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'tasksListColWidths')
+  const tableTotalWidth = GRIP_COL_WIDTH + CHECK_COL_WIDTH
+    + visibleColOrder.reduce((sum, k) => sum + cols.getWidth(k), 0)
+    + cols.getWidth('actions')
 
   const empMap    = useMemo(() => Object.fromEntries(employees.map(e => [e.id, e])), [employees])
   const projMap   = useMemo(() => Object.fromEntries(projects.map(p => [p.id, p])), [projects])
@@ -230,11 +253,10 @@ const TasksList: React.FC<Props> = ({
     return true
   }
 
-  const toggleSort   = (col: SortCol) => { if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortCol(col); setSortDir('asc') } }
   const toggleExpand = (id: string)   => setExpanded(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
 
   const q = search.toLowerCase()
-  const activeFilters = !!(fPriority || fStatus || fAssignee || fProject)
+  const activeFilters = !!(fPriority || fStatus || fAssignee || fProject || fSpace)
 
   const filtered = useMemo(() => {
     let rows = parents.filter(t => {
@@ -243,27 +265,31 @@ const TasksList: React.FC<Props> = ({
       if (fStatus && (statuses.length > 0 ? t.status_id !== fStatus : t.status !== fStatus)) return false
       if (fAssignee && t.assignee_employee_id !== fAssignee) return false
       if (fProject  && t.project_id !== fProject) return false
+      if (fSpace === SPACE_FILTER_NONE) { if (t.space_id) return false }
+      else if (fSpace && t.space_id !== fSpace) return false
       return true
     })
     rows = applyFilterRules(rows, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue)
-    if (sortCol) {
+    if (sortColumn) {
+      const statusName = (t: TaskRecord) => (statusMap[t.status_id ?? '']?.name ?? t.status).toLowerCase()
       rows = [...rows].sort((a, b) => {
         let av: string | number = '', bv: string | number = ''
-        if (sortCol === 'title')      { av = a.title.toLowerCase(); bv = b.title.toLowerCase() }
-        if (sortCol === 'priority')   { av = a.priority; bv = b.priority }
-        if (sortCol === 'status')     { av = a.status; bv = b.status }
-        if (sortCol === 'start_date') { av = a.start_date ?? ''; bv = b.start_date ?? '' }
-        if (sortCol === 'due_date')   { av = a.due_date ?? ''; bv = b.due_date ?? '' }
-        if (sortCol === 'assignee')   { av = (empMap[a.assignee_employee_id ?? '']?.name ?? '').toLowerCase(); bv = (empMap[b.assignee_employee_id ?? '']?.name ?? '').toLowerCase() }
-        if (sortCol === 'project')    { av = (projMap[a.project_id ?? '']?.name ?? '').toLowerCase(); bv = (projMap[b.project_id ?? '']?.name ?? '').toLowerCase() }
-        if (sortCol === 'alert')      { av = a.alert_at ?? ''; bv = b.alert_at ?? '' }
-        return av < bv ? (sortDir === 'asc' ? -1 : 1) : av > bv ? (sortDir === 'asc' ? 1 : -1) : 0
+        if (sortColumn === 'title')      { av = a.title.toLowerCase(); bv = b.title.toLowerCase() }
+        if (sortColumn === 'priority')   { av = a.priority; bv = b.priority }
+        if (sortColumn === 'status')     { av = statusName(a); bv = statusName(b) }
+        if (sortColumn === 'start_date') { av = a.start_date ?? ''; bv = b.start_date ?? '' }
+        if (sortColumn === 'due_date')   { av = a.due_date ?? ''; bv = b.due_date ?? '' }
+        if (sortColumn === 'assignee')   { av = (empMap[a.assignee_employee_id ?? '']?.name ?? '').toLowerCase(); bv = (empMap[b.assignee_employee_id ?? '']?.name ?? '').toLowerCase() }
+        if (sortColumn === 'project')    { av = (projMap[a.project_id ?? '']?.name ?? '').toLowerCase(); bv = (projMap[b.project_id ?? '']?.name ?? '').toLowerCase() }
+        if (sortColumn === 'source')     { av = MODULE_LABEL[a.source_module]?.label ?? a.source_module; bv = MODULE_LABEL[b.source_module]?.label ?? b.source_module }
+        if (sortColumn === 'alert')      { av = a.alert_at ?? ''; bv = b.alert_at ?? '' }
+        return av < bv ? (sortDirection === 'asc' ? -1 : 1) : av > bv ? (sortDirection === 'asc' ? 1 : -1) : 0
       })
     }
     return rows
-  }, [parents, q, fPriority, fStatus, fAssignee, fProject, sortCol, sortDir, empMap, projMap, statuses, advancedFilters.rules])
+  }, [parents, q, fPriority, fStatus, fAssignee, fProject, fSpace, sortColumn, sortDirection, empMap, projMap, statusMap, statuses, advancedFilters.rules])
 
-  const clearFilters = () => { setFPriority(''); setFStatus(''); setFAssignee(''); setFProject(''); setSearch('') }
+  const clearFilters = () => { setFPriority(''); setFStatus(''); setFAssignee(''); setFProject(''); setFSpace(''); setSearch('') }
 
   // ── Agrupamento ─────────────────────────────────────────────────────────────
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
@@ -338,24 +364,8 @@ const TasksList: React.FC<Props> = ({
     }
   }
 
-  const handleColDrop = (fromKey: ColKey, toKey: ColKey) => {
-    if (fromKey === toKey) return
-    const next = [...colOrder]
-    const from = next.indexOf(fromKey)
-    const to   = next.indexOf(toKey)
-    next.splice(from, 1)
-    next.splice(to, 0, fromKey)
-    setColOrder(next)
-  }
-
-  if (loading) return (
-    <div className="text-center py-12">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-      <p className="mt-2 text-gray-500">Carregando...</p>
-    </div>
-  )
-
-  const sel = 'text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:border-blue-400 text-slate-700'
+  // Filtros rápidos: <select> de escopo na escala compacta do §16 (h-9, 6px, text-sm).
+  const sel = 'h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer'
 
   // ── Linha de tarefa ─────────────────────────────────────────────────────────
   function TaskRow({ t, depth = 0 }: { t: TaskRecord; depth?: number }) {
@@ -376,10 +386,10 @@ const TasksList: React.FC<Props> = ({
     // Cor do checkbox baseada no status customizado
     const checkColor = taskStatus?.color ?? (isDone ? '#10b981' : '#94a3b8')
 
-    const cells: Record<ColKey, React.ReactNode> = {
+    const cells: Record<Exclude<ColKey, 'actions'>, React.ReactNode> = {
       // ── Nome ──────────────────────────────────────────────────────────────
       title: (
-        <td key="title" className="px-3 py-2.5 border-r border-gray-100 text-sm text-slate-700 w-[320px] max-w-[400px]">
+        <td key="title" className={COL}>
           <div className="flex items-center gap-1.5" style={{ paddingLeft: indent }}>
             {children.length > 0 ? (
               <button onClick={() => toggleExpand(t.id)} className="flex-shrink-0 text-slate-400 hover:text-slate-700 transition-colors">
@@ -391,8 +401,8 @@ const TasksList: React.FC<Props> = ({
               </span>
             )}
             <button onClick={() => onEdit(t)} className="text-left min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <span className={`font-normal text-slate-900 truncate leading-snug ${isDone ? 'line-through text-slate-400' : ''}`}>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span title={t.title} className={`block font-normal text-slate-900 truncate leading-snug ${isDone ? 'line-through text-slate-400' : ''}`}>
                   {t.title}
                 </span>
                 {t.alert_at && (
@@ -402,11 +412,11 @@ const TasksList: React.FC<Props> = ({
                 )}
               </div>
               {t.description && (
-                <div className="text-xs text-slate-400 truncate mt-0.5">{t.description}</div>
+                <div title={t.description} className="block text-xs text-slate-400 truncate mt-0.5">{t.description}</div>
               )}
             </button>
             {children.length > 0 && (
-              <span className="text-xs font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full flex-shrink-0">
+              <span className="text-xs font-normal text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-[6px] flex-shrink-0">
                 {children.length}
               </span>
             )}
@@ -418,11 +428,11 @@ const TasksList: React.FC<Props> = ({
       assignee: (
         <td key="assignee" className={COL}>
           {assignee ? (
-            <div className="flex items-center gap-2">
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black text-white flex-shrink-0 ${avatarBg(assignee.name)}`}>
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0 ${avatarBg(assignee.name)}`}>
                 {initials(assignee.name)}
               </div>
-              <span className="truncate max-w-[110px] text-slate-700">{assignee.name}</span>
+              <span title={assignee.name} className="block truncate text-slate-700">{assignee.name}</span>
             </div>
           ) : (
             <span className="text-slate-300">—</span>
@@ -434,9 +444,9 @@ const TasksList: React.FC<Props> = ({
       project: (
         <td key="project" className={COL}>
           {proj ? (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 min-w-0">
               <Building2 className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-              <span className="truncate max-w-[120px]">{proj.name}</span>
+              <span title={proj.name} className="block truncate">{proj.name}</span>
             </div>
           ) : (
             <span className="text-slate-300">—</span>
@@ -448,7 +458,7 @@ const TasksList: React.FC<Props> = ({
       start_date: (
         <td key="start_date" className={COL}>
           {t.start_date ? (
-            <span className={isOverdue(t.start_date) ? 'text-red-500 font-semibold' : 'text-slate-600'}>
+            <span className={isOverdue(t.start_date) ? 'text-red-600' : 'text-slate-600'}>
               {fmt(t.start_date)}
             </span>
           ) : (
@@ -461,7 +471,7 @@ const TasksList: React.FC<Props> = ({
       due_date: (
         <td key="due_date" className={COL}>
           {t.due_date ? (
-            <span className={isOverdue(t.due_date) ? 'text-red-500 font-semibold' : 'text-slate-600'}>
+            <span className={isOverdue(t.due_date) ? 'text-red-600' : 'text-slate-600'}>
               {fmt(t.due_date)}
             </span>
           ) : (
@@ -487,16 +497,14 @@ const TasksList: React.FC<Props> = ({
         </td>
       ),
 
-      // ── Alerta / Lembrete ─────────────────────────────────────────────────
+      // ── Alerta / Lembrete — texto colorido simples, sem pílula (§8) ───────
       alert: (
         <td key="alert" className={COL}>
           {t.alert_at ? (() => {
             const d = new Date(t.alert_at)
             const past = d < new Date()
             return (
-              <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-table-body font-semibold
-                ${past ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'}`}
-              >
+              <span className={`inline-flex items-center gap-1.5 text-sm font-normal ${past ? 'text-red-600' : 'text-amber-700'}`}>
                 <Bell className="w-3 h-3 flex-shrink-0" />
                 {d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
                 {' '}
@@ -509,41 +517,41 @@ const TasksList: React.FC<Props> = ({
         </td>
       ),
 
-      // ── Status — badge ClickUp ─────────────────────────────────────────────
+      // ── Status — texto colorido + bolinha (§8: sem pílula/fundo/uppercase) ─
       status: (
         <td key="status" className={COL}>
           {taskStatus ? (
-            <span className="inline-flex items-center gap-1.5 text-sm font-normal" style={{ color: taskStatus.color }}>
+            <span className="flex items-center gap-1.5 text-sm font-normal min-w-0" style={{ color: taskStatus.color }}>
               <span
                 className="w-2.5 h-2.5 rounded-full border-2 flex-shrink-0"
                 style={{ borderColor: taskStatus.color, backgroundColor: taskStatus.is_done ? taskStatus.color : 'transparent' }}
               />
-              {taskStatus.name}
+              <span title={taskStatus.name} className="block truncate">{taskStatus.name}</span>
             </span>
           ) : (
             <span className="text-slate-300">—</span>
           )}
         </td>
       ),
-
-      // ── Ações ─────────────────────────────────────────────────────────────
-      actions: (
-        <td key="actions" className="px-2 py-2.5">
-          <div className="flex items-center justify-end gap-1.5">
-            <button
-              onClick={() => onAddSubtask(t)}
-              title="Adicionar subtarefa"
-              className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
-            >
-              + subtarefa
-            </button>
-            {route && (
-              <ActionIconButton kind="view" title="Abrir origem" icon={<ExternalLink className="w-4 h-4" />} onClick={() => onNavigate(route)} />
-            )}
-          </div>
-        </td>
-      ),
     }
+
+    // ── Ações — sempre a última, fixa, depois do espaçador (§6.1.1/§9) ─────
+    const actionsCell = (
+      <td key="actions" className="px-6 py-2.5 text-right">
+        <div className="flex items-center justify-end gap-1.5">
+          <button
+            onClick={() => onAddSubtask(t)}
+            title="Adicionar subtarefa"
+            className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all whitespace-nowrap"
+          >
+            + subtarefa
+          </button>
+          {route && (
+            <ActionIconButton kind="view" title="Abrir origem" icon={<ExternalLink className="w-4 h-4" />} onClick={() => onNavigate(route)} />
+          )}
+        </div>
+      </td>
+    )
 
     return (
       <>
@@ -568,7 +576,7 @@ const TasksList: React.FC<Props> = ({
           ].join(' ')}
         >
           {/* Grip */}
-          <td className="pl-2 pr-0 py-0 w-6">
+          <td className="pl-2 pr-0 py-0">
             <div
               draggable
               onDragStart={(e) => {
@@ -588,7 +596,7 @@ const TasksList: React.FC<Props> = ({
           </td>
 
           {/* Checkbox circular dashed — estilo ClickUp */}
-          <td className="px-2 py-0 w-8">
+          <td className="px-2 py-0">
             <button
               onClick={() => onToggleDone(t)}
               className="flex items-center justify-center w-5 h-5 rounded-full transition-all hover:scale-110"
@@ -605,8 +613,11 @@ const TasksList: React.FC<Props> = ({
             </button>
           </td>
 
-          {/* Colunas reordenáveis */}
+          {/* Colunas de dado, na ordem arrastada pelo usuário */}
           {visibleColOrder.map(key => cells[key])}
+          {/* espaçador — casa com o <col /> sem largura, antes de "Ações" (§6.1.1) */}
+          <td aria-hidden="true" className="border-r border-gray-100"></td>
+          {actionsCell}
         </tr>
 
         {isExpanded && children.map(child => (
@@ -743,14 +754,15 @@ const TasksList: React.FC<Props> = ({
   // ── Cabeçalho de grupo (ClickUp style) ────────────────────────────────────
   function GroupHeader({ group }: { group: TaskGroup }) {
     const isCollapsed = collapsedGroups.has(group.key)
-    const totalCols = 2 + visibleColOrder.length
+    // grip + checkbox + colunas de dado + espaçador + ações
+    const totalCols = 2 + visibleColOrder.length + 2
 
     return (
       <tr className="group/gh">
         <td colSpan={totalCols} className="p-0">
           <div
             onClick={() => toggleGroup(group.key)}
-            className="flex items-center gap-2.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 cursor-pointer select-none border-b border-slate-200 transition-colors"
+            className="flex items-center gap-2.5 px-6 py-2 bg-slate-50 hover:bg-slate-100 cursor-pointer select-none border-b border-slate-200 transition-colors"
           >
             <span className="text-slate-400 flex-shrink-0 transition-transform">
               {isCollapsed
@@ -762,9 +774,9 @@ const TasksList: React.FC<Props> = ({
               <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: group.color }} />
             )}
 
-            <span className="font-bold text-sm text-slate-800">{group.label}</span>
+            <span className="font-semibold text-sm text-slate-800">{group.label}</span>
 
-            <span className="text-xs font-bold text-slate-400 bg-slate-200 px-1.5 py-0.5 rounded-full flex-shrink-0">
+            <span className="text-xs font-normal text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded-[6px] flex-shrink-0">
               {group.tasks.length}
             </span>
 
@@ -773,7 +785,7 @@ const TasksList: React.FC<Props> = ({
             {onAddTask && (
               <button
                 onClick={e => { e.stopPropagation(); onAddTask(buildDefaults(group.key)) }}
-                className="opacity-0 group-hover/gh:opacity-100 flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-blue-600 transition-all px-2 py-1 rounded hover:bg-blue-50 flex-shrink-0"
+                className="opacity-0 group-hover/gh:opacity-100 flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-blue-600 transition-all px-2 py-1 rounded-[6px] hover:bg-blue-50 flex-shrink-0"
               >
                 <Plus className="w-3 h-3" /> Tarefa
               </button>
@@ -784,134 +796,13 @@ const TasksList: React.FC<Props> = ({
     )
   }
 
-  // ── Cabeçalho arrastável ────────────────────────────────────────────────────
-  function ColHeader({ colKey }: { colKey: ColKey }) {
-    const col    = COL_DEF_MAP[colKey]
-    const isOver = colDragOver === colKey && colDragging !== colKey
-
-    return (
-      <th
-        onDragOver={(e)  => { e.preventDefault(); e.stopPropagation(); if (colDragging && colDragging !== colKey) setColDragOver(colKey) }}
-        onDragLeave={(e) => { e.stopPropagation(); setColDragOver(null) }}
-        onDrop={(e) => {
-          e.preventDefault(); e.stopPropagation()
-          const from = e.dataTransfer.getData('col') as ColKey
-          if (from && from !== colKey) handleColDrop(from, colKey)
-          setColDragging(null); setColDragOver(null)
-        }}
-        onClick={() => col.sortCol && toggleSort(col.sortCol as SortCol)}
-        className={[
-          'text-[11px] font-semibold text-slate-500 text-left select-none p-0 border-r border-gray-100 last:border-r-0',
-          col.sortCol ? 'group/th' : '',
-          isOver ? 'bg-blue-50 text-blue-600' : '',
-          colDragging === colKey ? 'opacity-40' : '',
-          'transition-colors',
-        ].join(' ')}
-        style={{ width: colKey === 'actions' ? 130 : undefined }}
-      >
-        <div
-          draggable={colKey !== 'actions'}
-          onDragStart={(e) => {
-            e.stopPropagation()
-            e.dataTransfer.setData('col', colKey)
-            e.dataTransfer.effectAllowed = 'move'
-            requestAnimationFrame(() => setColDragging(colKey))
-          }}
-          onDragEnd={(e) => { e.stopPropagation(); setColDragging(null); setColDragOver(null) }}
-          className={[
-            'flex items-center gap-1 px-3 py-2.5 w-full select-none',
-            colKey !== 'actions' ? 'cursor-grab active:cursor-grabbing hover:text-slate-700' : '',
-          ].join(' ')}
-        >
-          {col.label}
-          {col.sortCol && <SortIcon col={col.sortCol} active={sortCol} dir={sortDir} />}
-        </div>
-      </th>
-    )
-  }
+  const hasRows = filtered.length > 0
+  const showEmpty = !loading && !hasRows && !onAddTask
 
   return (
     <div className="space-y-3">
-      {/* Barra busca + filtros */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[180px] max-w-xs">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar tarefa..."
-            className="w-full h-9 pl-8 pr-8 text-sm font-medium border border-slate-200 rounded-[6px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
-          />
-          {search && (
-            <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-        <button
-          onClick={() => setShowFilters(f => !f)}
-          className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium border transition-all
-            ${showFilters || activeFilters ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-200 text-slate-600 hover:border-slate-300 bg-white'}`}
-        >
-          <SlidersHorizontal className="w-3.5 h-3.5" />
-          Filtros
-          {activeFilters && <span className="bg-white/20 text-white text-xs font-black px-1.5 rounded-md">●</span>}
-        </button>
-        {(expandableIds.length > 0 || groupBy !== 'none') && (
-          <button
-            onClick={toggleExpandAll}
-            title={allExpanded ? 'Recolher tudo' : 'Expandir tudo'}
-            className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium border border-slate-200 text-slate-600 hover:border-slate-300 bg-white transition-all"
-          >
-            {allExpanded ? <ChevronsDownUp className="w-3.5 h-3.5" /> : <ChevronsUpDown className="w-3.5 h-3.5" />}
-            {allExpanded ? 'Recolher' : 'Expandir'}
-          </button>
-        )}
-        {(activeFilters || search) && (
-          <button onClick={clearFilters} className="text-button font-bold text-slate-400 hover:text-red-500 flex items-center gap-1">
-            <X className="w-3 h-3" /> Limpar
-          </button>
-        )}
-        <span className="ml-auto text-xs font-bold text-slate-400">{filtered.length} tarefa{filtered.length !== 1 ? 's' : ''}</span>
-        <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
-        <ColumnConfigButton
-          columns={TASKS_LIST_COLUMNS}
-          visibleColumns={taskVisibility.visibleColumns}
-          showColumnConfig={taskVisibility.showColumnConfig}
-          onToggleShow={() => taskVisibility.setShowColumnConfig(!taskVisibility.showColumnConfig)}
-          onToggleColumn={taskVisibility.toggleColumn}
-          onReset={taskVisibility.resetColumns}
-        />
-      </div>
-
-      {showFilters && (
-        <div className="flex items-center gap-2 flex-wrap bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
-          <select value={fPriority} onChange={(e) => setFPriority(e.target.value)} className={sel}>
-            <option value="">Todas as prioridades</option>
-            <option value="1">Urgente</option>
-            <option value="2">Alta</option>
-            <option value="3">Normal</option>
-            <option value="4">Baixa</option>
-          </select>
-          <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} className={sel}>
-            <option value="">Todos os status</option>
-            {statuses.length > 0
-              ? statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)
-              : <><option value="open">Abertas</option><option value="done">Concluídas</option><option value="snoozed">Adiadas</option></>
-            }
-          </select>
-          <select value={fAssignee} onChange={(e) => setFAssignee(e.target.value)} className={sel}>
-            <option value="">Todos os responsáveis</option>
-            {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-          </select>
-          <select value={fProject} onChange={(e) => setFProject(e.target.value)} className={sel}>
-            <option value="">Todas as obras</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-        </div>
-      )}
-
-      {/* Zona de soltar — virar tarefa raiz */}
+      {/* Zona de soltar — virar tarefa raiz (transitória, só durante o arraste; fica
+          fora do card acoplado para não quebrar a costura toolbar/tabela) */}
       {draggingId && tasks.find(t => t.id === draggingId)?.parent_task_id && (
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOverDetach(true) }}
@@ -922,7 +813,7 @@ const TasksList: React.FC<Props> = ({
             setDraggingId(null); setDragOverDetach(false)
           }}
           className={[
-            'flex items-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed text-xs font-bold transition-all duration-150',
+            'flex items-center gap-2 px-4 py-3 rounded-[10px] border-2 border-dashed text-sm font-medium transition-all duration-150',
             dragOverDetach
               ? 'bg-violet-50 border-violet-400 text-violet-700 scale-[1.01]'
               : 'border-slate-300 text-slate-400 bg-slate-50',
@@ -933,24 +824,178 @@ const TasksList: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Tabela */}
-      {filtered.length === 0 && !onAddTask ? (
-        <div className="flex flex-col items-center justify-center py-20 text-slate-300">
-          <Inbox className="w-12 h-12 mb-3" />
-          <p className="text-lg font-bold text-slate-400">Nenhuma tarefa encontrada</p>
-          {(q || activeFilters) && <p className="text-sm mt-1 text-slate-400">Tente ajustar a busca ou os filtros</p>}
+      {/* ── Card acoplado (§5.2): toolbar + tabela num único container ──────── */}
+      <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+        <div className="p-2 border-b border-gray-100 bg-white space-y-3">
+          <div className="flex flex-col md:flex-row gap-2.5 items-center">
+            {/* Busca persistida (§3) */}
+            <div className="flex-1 relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por nome ou descrição da tarefa..."
+                className="w-full h-9 pl-9 pr-8 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+              />
+              {search && (
+                <button onClick={() => setSearch('')} title="Limpar busca" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Filtro rápido de escolha única — Espaço (§5.4) */}
+            <FilterPopover
+              label="Espaço"
+              icon={<LayoutGrid className="w-3.5 h-3.5" />}
+              value={fSpace}
+              onChange={setFSpace}
+              options={spaceFilterOptions}
+            />
+
+            {/* Filtros rápidos (prioridade/status/responsável/obra) — painel abaixo */}
+            <button
+              onClick={() => setShowFilters(f => !f)}
+              title="Filtros rápidos"
+              className={`h-9 flex items-center gap-1.5 px-3 rounded-[6px] text-sm font-medium border transition-all whitespace-nowrap shrink-0 ${
+                showFilters || activeFilters
+                  ? 'border-blue-300 bg-blue-50 text-blue-700'
+                  : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              Filtros
+            </button>
+
+            <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
+
+            {(expandableIds.length > 0 || groupBy !== 'none') && (
+              <button
+                onClick={toggleExpandAll}
+                title={allExpanded ? 'Recolher tudo' : 'Expandir tudo'}
+                className="h-9 w-9 flex items-center justify-center text-gray-500 bg-white border border-gray-200 rounded-[6px] hover:bg-gray-50 transition-all active:scale-95 shrink-0"
+              >
+                {allExpanded ? <ChevronsDownUp className="w-4 h-4" /> : <ChevronsUpDown className="w-4 h-4" />}
+              </button>
+            )}
+
+            {(activeFilters || search) && (
+              <button onClick={clearFilters} className="h-9 flex items-center gap-1 px-2 text-sm font-medium text-gray-500 hover:text-red-600 whitespace-nowrap shrink-0">
+                <X className="w-3.5 h-3.5" /> Limpar
+              </button>
+            )}
+
+            <span className="text-sm text-gray-500 whitespace-nowrap shrink-0">
+              {filtered.length} tarefa{filtered.length !== 1 ? 's' : ''}
+            </span>
+
+            <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+            {/* Engrenagem = quais colunas; setas = largura das colunas (§6.1.2) */}
+            <ColumnConfigButton
+              columns={TASKS_LIST_COLUMNS.filter(c => c.key !== 'actions')}
+              visibleColumns={taskVisibility.visibleColumns}
+              showColumnConfig={taskVisibility.showColumnConfig}
+              onToggleShow={() => taskVisibility.setShowColumnConfig(!taskVisibility.showColumnConfig)}
+              onToggleColumn={taskVisibility.toggleColumn}
+              onReset={taskVisibility.resetColumns}
+            />
+            {/* Autofit sob comando explícito, nunca automático (§6.1.2): recalcular a
+                cada busca faria as colunas dançarem enquanto o usuário digita. Duplo
+                clique no divisor continua sendo "restaurar padrão". */}
+            <button
+              onClick={() => cols.autoFit()}
+              className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+              title="Ajustar largura das colunas ao conteúdo"
+            >
+              <MoveHorizontal className="w-4 h-4" />
+            </button>
+          </div>
+
+          {showFilters && (
+            <div className="flex items-center gap-2 flex-wrap bg-gray-50 border border-gray-200 rounded-[10px] p-4">
+              <select value={fPriority} onChange={(e) => setFPriority(e.target.value)} className={sel}>
+                <option value="">Todas as prioridades</option>
+                <option value="1">Urgente</option>
+                <option value="2">Alta</option>
+                <option value="3">Normal</option>
+                <option value="4">Baixa</option>
+              </select>
+              <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} className={sel}>
+                <option value="">Todos os status</option>
+                {statuses.length > 0
+                  ? statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)
+                  : <><option value="open">Abertas</option><option value="done">Concluídas</option><option value="snoozed">Adiadas</option></>
+                }
+              </select>
+              <select value={fAssignee} onChange={(e) => setFAssignee(e.target.value)} className={sel}>
+                <option value="">Todos os responsáveis</option>
+                {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+              <select value={fProject} onChange={(e) => setFProject(e.target.value)} className={sel}>
+                <option value="">Todas as obras</option>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+
+      {/* Conteúdo — sem bg/border/rounded/shadow próprios (o card pai já supre) */}
+      {loading ? (
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-gray-500">Carregando...</p>
+        </div>
+      ) : showEmpty ? (
+        <div className="text-center py-12">
+          <Inbox className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma tarefa encontrada</h3>
+          <p className="text-sm text-gray-500">{(q || activeFilters) ? 'Tente ajustar a busca ou os filtros.' : 'Nenhuma tarefa neste recorte.'}</p>
         </div>
       ) : (
         <>
         {/* ── Desktop: tabela ─────────────────────────────────────────────── */}
-        <div className="hidden md:block bg-white rounded-[10px] border border-slate-200 overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px]">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="w-6 p-0" />
-                  <th className="w-8 p-0" />
-                  {visibleColOrder.map(key => <ColHeader key={key} colKey={key} />)}
+        <div className="hidden md:block overflow-auto max-h-[70vh]">
+            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+              <colgroup>
+                {/* grip e checkbox: estruturais, largura fixa, sem data-col-key */}
+                <col style={{ width: `${GRIP_COL_WIDTH}px` }} />
+                <col style={{ width: `${CHECK_COL_WIDTH}px` }} />
+                {visibleColOrder.map(key => (
+                  <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                ))}
+                {/* espaçador sem largura — absorve a folga quando a tabela é mais estreita
+                    que o container. ANTES de "Ações" (§6.1.1): depois dela, a sobra ia toda
+                    para a direita e a borda de "Ações" andava a cada arraste. */}
+                <col />
+                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+              </colgroup>
+              <thead>
+                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                  <th className="p-0" />
+                  <th className="p-0" />
+                  {visibleColOrder.map(key => (
+                    <SortableHeader
+                      key={key}
+                      colKey={key}
+                      label={HEADER_LABEL[key]}
+                      uppercase={false}
+                      sortColumn={sortColumn}
+                      sortDirection={sortDirection}
+                      onSort={taskVisibility.handleColumnSort}
+                      onMoveColumn={taskVisibility.moveColumn}
+                      className={TH}
+                    >
+                      <cols.ResizeHandle colKey={key} />
+                    </SortableHeader>
+                  ))}
+                  {/* espaçador — casa com o <col /> sem largura do colgroup, na mesma ordem */}
+                  <th aria-hidden="true" className="border-r border-gray-100" />
+                  <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
+                    Ações
+                    <cols.ResizeHandle colKey="actions" />
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -967,7 +1012,7 @@ const TasksList: React.FC<Props> = ({
                     {/* + Adicionar Tarefa no rodapé de cada grupo */}
                     {!collapsedGroups.has(group.key) && onAddTask && groupBy !== 'none' && (
                       <tr>
-                        <td colSpan={2 + visibleColOrder.length} className="px-4 py-1.5 border-b border-slate-100">
+                        <td colSpan={2 + visibleColOrder.length + 2} className="px-6 py-1.5 border-b border-slate-100">
                           <button
                             onClick={() => onAddTask(buildDefaults(group.key))}
                             className="flex items-center gap-2 text-sm text-slate-400 hover:text-blue-600 transition-colors font-medium group/add"
@@ -983,7 +1028,7 @@ const TasksList: React.FC<Props> = ({
                 {/* + Adicionar Tarefa global (sem agrupamento) */}
                 {groupBy === 'none' && onAddTask && (
                   <tr className="border-t border-slate-100">
-                    <td colSpan={2 + visibleColOrder.length} className="px-4 py-2">
+                    <td colSpan={2 + visibleColOrder.length + 2} className="px-6 py-2">
                       <button
                         onClick={() => onAddTask()}
                         className="flex items-center gap-2 text-sm text-slate-400 hover:text-blue-600 transition-colors font-medium group/add"
@@ -998,11 +1043,10 @@ const TasksList: React.FC<Props> = ({
                 )}
               </tbody>
             </table>
-          </div>
         </div>
 
-        {/* ── Mobile: cartões ─────────────────────────────────────────────── */}
-        <div className="md:hidden space-y-5">
+        {/* ── Mobile: cartões (vocabulário de app nativo, fora do §6/§7) ────── */}
+        <div className="md:hidden space-y-5 p-4">
           {groups.map(group => {
             const collapsed = collapsedGroups.has(group.key)
             return (
@@ -1041,6 +1085,7 @@ const TasksList: React.FC<Props> = ({
         </div>
         </>
       )}
+      </div>
     </div>
   )
 }

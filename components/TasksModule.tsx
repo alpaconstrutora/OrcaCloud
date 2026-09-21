@@ -619,6 +619,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
               employees={employees}
               projects={obras}
               statuses={statuses}
+              spaces={spaceOptions}
               groupBy={groupBy}
               resetDragSignal={dragResetSignal}
               onToggleDone={toggleDone}

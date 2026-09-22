@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Building2, Home, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, DollarSign, Tag, Calendar, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, BrainCircuit, Activity, Percent, Target, Mail, Phone, Briefcase, FileText, AlertCircle, RefreshCw, MoveHorizontal, Sliders } from 'lucide-react';
+import { Building2, Home, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, DollarSign, Tag, Calendar, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, BrainCircuit, Activity, Percent, Target, Mail, Phone, Briefcase, AlertCircle, RefreshCw, MoveHorizontal, Sliders } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { commercialService, dealBuyersOf } from '../services/commercialService';
 import { empreendimentoService } from '../services/empreendimentoService';
@@ -40,10 +40,6 @@ import { pricingRuleApplicationService, buildApplicationRows } from '../services
 import { brokerService } from '../services/brokerService';
 import BrokerModal from './BrokerModal';
 import { BrokerProfile } from '../types';
-import { ContractsDashboard } from './ContractsDashboard';
-import { ContractModal } from './ContractModal';
-import ContractDetailView from './ContractDetailView';
-import { contractService } from '../services/contractService';
 import Button from './ui/Button';
 import { KpiCard } from './ui/KpiCard';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
@@ -397,13 +393,29 @@ const getPositionWeight = (p?: { position_type?: string | null }) =>
 const getSunWeight = (p?: { sun_orientation?: string | null }) =>
     p?.sun_orientation === 'NORTH' ? 1.02 : p?.sun_orientation === 'EAST' ? 1.01 : p?.sun_orientation === 'WEST' ? 0.99 : p?.sun_orientation === 'SOUTH' ? 0.98 : 1.00;
 
+// A aba 'contracts' saiu em 2026-09-22 (pedido do usuário). Ela listava os
+// contratos domain='VENDAS' e, ao abrir um, caía no ContractDetailView — a tela
+// de contrato de OBRA/Suprimentos, cujo trilho é montado só por `is_recurring`:
+// uma venda de unidade ganhava Itens do Contrato, Faturamento (M/F), Retenção de
+// Garantia, Penalidades e Avaliação de Desempenho, e o topo mostrava "Total
+// Medido / Saldo a Faturar". O contrato de venda já tem tela própria em
+// Gerenciar Negociação › aba Contrato, que é por onde ele nasce.
 type SalesTab = 'inventory' | 'deals' | 'dashboard' | 'simulation' | 'price-tables'
-    | 'sales-plans' | 'brokers' | 'contracts' | 'intelligence';
+    | 'sales-plans' | 'brokers' | 'intelligence';
+
+/** Abas que existem hoje — a lista que valida o que veio do localStorage. */
+const SALES_TABS: SalesTab[] = ['inventory', 'deals', 'dashboard', 'simulation',
+    'price-tables', 'sales-plans', 'brokers', 'intelligence'];
 
 const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
-    const [activeTab, setActiveTab] = useState<SalesTab>(
-        (localStorage.getItem('sales_active_tab') as SalesTab) || 'inventory'
-    );
+    // A aba fica salva no navegador. Quem estava em "Contratos" quando ela saiu
+    // (2026-09-22) reabriria a tela com uma aba que não existe mais: nenhum
+    // bloco casaria e a área de conteúdo ficaria em branco, sem aba acesa. Aba
+    // desconhecida cai na primeira — mesma regra do ribbon da Planta (guia §19.5).
+    const [activeTab, setActiveTab] = useState<SalesTab>(() => {
+        const salva = localStorage.getItem('sales_active_tab') as SalesTab | null;
+        return salva && SALES_TABS.includes(salva) ? salva : 'inventory';
+    });
     const [properties, setProperties] = useState<Property[]>([]);
     // Imóvel → empreendimento. O vínculo não é FK na tabela do Comercial: vem de
     // `empreendimento_units.commercial_property_id` (unidade) ou de
@@ -444,10 +456,6 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     const [editingBroker, setEditingBroker] = useState<BrokerProfile | undefined>(undefined);
 
     // Contratos de Venda de Ativos (domain='VENDAS') — isolado dos demais domínios.
-    const [isContractModalOpen, setIsContractModalOpen] = useState(false);
-    const [editingContract, setEditingContract] = useState<any | undefined>(undefined);
-    const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
-    const [contractsVersion, setContractsVersion] = useState(0);
 
 
     // Simulation States
@@ -1373,13 +1381,6 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                     >
                         <User className="w-3.5 h-3.5" />
                         Corretores
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('contracts')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'contracts' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
-                    >
-                        <FileText className="w-3.5 h-3.5" />
-                        Contratos
                     </button>
                     <button
                         onClick={() => setActiveTab('intelligence')}
@@ -2402,67 +2403,6 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 </div>
                 );
             })()}
-
-            {/* Contratos de Venda de Ativos (domain='VENDAS') */}
-            {activeTab === 'contracts' && (
-                selectedContractId ? (
-                    <ContractDetailView
-                        contractId={selectedContractId}
-                        onBack={() => setSelectedContractId(null)}
-                        budget={[]}
-                        organizationId={effectiveOrganizationId}
-                        onEdit={(contract) => { setEditingContract(contract); setIsContractModalOpen(true); }}
-                    />
-                ) : (
-                    <ContractsDashboard
-                        key={contractsVersion}
-                        organizationId={effectiveOrganizationId || ''}
-                        domain="VENDAS"
-                        onViewContract={(id) => setSelectedContractId(id)}
-                        onCreateNew={() => {
-                            setEditingContract({
-                                contract_type: 'Compra e Venda',
-                                nature: 'Venda',
-                                direction: 'OUTGOING',
-                                domain: 'VENDAS',
-                            });
-                            setIsContractModalOpen(true);
-                        }}
-                    />
-                )
-            )}
-
-            {(effectiveOrganizationId || editingContract?.organization_id) && (
-                <ContractModal
-                    isOpen={isContractModalOpen}
-                    onClose={() => { setIsContractModalOpen(false); setEditingContract(undefined); }}
-                    onSubmit={async (data) => {
-                        const effectiveOrgId = effectiveOrganizationId || editingContract?.organization_id;
-                        const payload = { ...data, direction: 'OUTGOING' as const, domain: 'VENDAS' as const, organization_id: effectiveOrgId };
-                        let saved;
-                        if (editingContract?.id) {
-                            saved = await contractService.updateContract(editingContract.id, payload);
-                        } else {
-                            saved = await contractService.createContract(payload);
-                        }
-                        setContractsVersion(v => v + 1);
-                        setIsContractModalOpen(false);
-                        setEditingContract(undefined);
-                        setSelectedContractId(saved.id);
-                    }}
-                    projectId={editingContract?.project_id ?? ''}
-                    organizationId={effectiveOrganizationId || editingContract?.organization_id}
-                    initialData={editingContract ?? undefined}
-                    // Sem `domain` o ContractModal caía no formato legado de 3
-                    // dígitos e escondia o botão "Regerar número" (o onSubmit
-                    // abaixo já gravava domain:'VENDAS' — só a numeração ficava fora).
-                    domain="VENDAS"
-                    titleNew="Novo Contrato de Venda"
-                    moduleLabel="Contratos de Venda de Ativos"
-                />
-            )}
-
-
 
             <PropertyModal
                 isOpen={isPropertyModalOpen}

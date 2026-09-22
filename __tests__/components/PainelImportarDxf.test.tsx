@@ -295,6 +295,100 @@ describe('importar DXF · Padrão ÒPURA (P2.35)', () => {
   });
 });
 
+/** jsdom não tem canvas 2D: um contexto que só grava e um `toBlob` que devolve um PNG vazio. */
+function comCanvasFalso() {
+  const proto = HTMLCanvasElement.prototype as unknown as { getContext: unknown; toBlob: unknown };
+  const getContext = proto.getContext;
+  const toBlob = proto.toBlob;
+  const ctx = { lineWidth: 1, strokeStyle: '', lineCap: 'butt', beginPath() {}, moveTo() {}, lineTo() {}, arc() {}, stroke() {} };
+  proto.getContext = () => ctx;
+  proto.toBlob = function (this: HTMLCanvasElement, cb: (b: Blob | null) => void) { cb(new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' })); };
+  return () => { proto.getContext = getContext; proto.toBlob = toBlob; };
+}
+
+describe('importar DXF · o desenho original como planta de fundo (P2.36)', () => {
+  it('rasteriza o arquivo inteiro já aferido e entrega ao editor ANTES das paredes; o fundo anda com a ancoragem', async () => {
+    const restaurar = comCanvasFalso();
+    try {
+      const onFundo = vi.fn(async () => true);
+      const onImportar = vi.fn();
+      const { model, levelId } = comNivel();
+      const { container } = render(<PainelImportarDxf model={model} levelIdAtivo={levelId} onImportar={onImportar} onFundo={onFundo} />);
+      const texto = dxfComEsquadrias();
+      const arquivo = new File([texto], 'planta.dxf', { type: 'application/dxf' });
+      Object.defineProperty(arquivo, 'text', { value: async () => texto });
+      fireEvent.change(container.querySelector('#importar-dxf-arquivo') as HTMLInputElement, { target: { files: [arquivo] } });
+      await waitFor(() => expect(screen.getByText('planta.dxf')).toBeTruthy());
+      expect(screen.getByTestId('plano-do-fundo').textContent).toMatch(/Todas as camadas, já aferido: \d+ × \d+ px · [\d,.]+ mm\/px · camada PAREDE em destaque/);
+      // Ancoragem "manter as coordenadas do arquivo": dx = dy = 0, então o canto do desenho é (0, 150) com a margem de 8 px.
+      fireEvent.change(screen.getByLabelText('Onde ancorar o desenho importado'), { target: { value: 'ARQUIVO' } });
+      fireEvent.click(screen.getByRole('button', { name: /Importar/ }));
+      await waitFor(() => expect(onImportar).toHaveBeenCalledTimes(1));
+      expect(onFundo).toHaveBeenCalledTimes(1);
+      const [blob, nome, underlay, larguraPx] = onFundo.mock.calls[0] as unknown as [Blob, string, { origemXMm: number; origemYMm: number; mmPorPixel: number; rotacaoMrad: number }, number];
+      expect(blob.type).toBe('image/png');
+      expect(nome).toBe('planta.dxf');
+      // Desenho de 6000 mm de largura (o arco da porta sobe até y = 900): 6000 / 4080 = 1,47 mm/px, margem de 8 px.
+      expect(underlay.mmPorPixel).toBeCloseTo(6000 / 4080, 4);
+      expect(underlay.origemXMm).toBeCloseTo(-8 * underlay.mmPorPixel, 4);
+      expect(underlay.origemYMm).toBeCloseTo(900 + 8 * underlay.mmPorPixel, 4);
+      expect(underlay.rotacaoMrad).toBe(0);
+      expect(larguraPx).toBe(4096);
+      expect(onFundo.mock.invocationCallOrder[0]).toBeLessThan(onImportar.mock.invocationCallOrder[0]);
+    } finally {
+      restaurar();
+    }
+  });
+
+  it('desmarcando, só as paredes entram; se o editor não guardar o fundo, as paredes entram e o aviso aparece', async () => {
+    const restaurar = comCanvasFalso();
+    try {
+      localStorage.clear();
+      const onFundo = vi.fn(async () => false);
+      const onImportar = vi.fn();
+      const { model, levelId } = comNivel();
+      const { container } = render(<PainelImportarDxf model={model} levelIdAtivo={levelId} onImportar={onImportar} onFundo={onFundo} fundoAtivo />);
+      const texto = dxfDeUmaParede();
+      const arquivo = new File([texto], 'planta.dxf', { type: 'application/dxf' });
+      Object.defineProperty(arquivo, 'text', { value: async () => texto });
+      fireEvent.change(container.querySelector('#importar-dxf-arquivo') as HTMLInputElement, { target: { files: [arquivo] } });
+      await waitFor(() => expect(screen.getByText('planta.dxf')).toBeTruthy());
+      expect(screen.getByTestId('plano-do-fundo').textContent).toMatch(/entra como mais uma prancha de fundo/);
+      fireEvent.click(screen.getByLabelText('Guardar o desenho original como planta de fundo'));
+      expect(screen.getByTestId('plano-do-fundo').textContent).toMatch(/Só as paredes entram/);
+      fireEvent.click(screen.getByRole('button', { name: /Importar/ }));
+      await waitFor(() => expect(onImportar).toHaveBeenCalledTimes(1));
+      expect(onFundo).not.toHaveBeenCalled();
+      expect(JSON.parse(localStorage.getItem('blueprint:dxf-fundo')!)).toBe(false);
+    } finally {
+      restaurar();
+    }
+  });
+
+  it('se o editor não guardar o fundo, as paredes entram mesmo assim e o aviso aparece', async () => {
+    // Com o fundo ligado, mas o editor recusando: aviso, e as paredes entraram mesmo assim.
+    const restaurar2 = comCanvasFalso();
+    try {
+      localStorage.clear();
+      const onFundo = vi.fn(async () => false);
+      const onImportar = vi.fn();
+      const { model, levelId } = comNivel();
+      const { container } = render(<PainelImportarDxf model={model} levelIdAtivo={levelId} onImportar={onImportar} onFundo={onFundo} />);
+      const texto = dxfDeUmaParede();
+      const arquivo = new File([texto], 'outra.dxf', { type: 'application/dxf' });
+      Object.defineProperty(arquivo, 'text', { value: async () => texto });
+      fireEvent.change(container.querySelector('#importar-dxf-arquivo') as HTMLInputElement, { target: { files: [arquivo] } });
+      await waitFor(() => expect(screen.getByText('outra.dxf')).toBeTruthy());
+      fireEvent.click(screen.getByRole('button', { name: /Importar/ }));
+      await waitFor(() => expect(onImportar).toHaveBeenCalledTimes(1));
+      expect(onFundo).toHaveBeenCalledTimes(1);
+      expect(screen.getByText(/As paredes entraram, mas a planta de fundo não foi guardada/)).toBeTruthy();
+    } finally {
+      restaurar2();
+    }
+  });
+});
+
 describe('importar DWG (E9.1) · pela Edge Function, no pipeline do DXF', () => {
   it('um .dwg vai ao conversor, volta como DXF e a tela declara a versão; o resultado é a mesma parede que o DXF daria', async () => {
     converterDwgParaDxf.mockResolvedValue({ dxf: dxfDeUmaParede(), versao: 'AC1032', release: 'AutoCAD 2018+', bytes: 25920, codigoLibredwg: 4 });

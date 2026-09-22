@@ -251,6 +251,47 @@ export function useBlueprintUnderlay(
   );
 
   /**
+   * FUNDO JÁ AFERIDO (P2.36): a imagem vem pronta — o DXF/DWG rasterizado pelo
+   * painel de importação — e com a transformação EXATA, porque o arquivo tem
+   * medida. A aferição gravada é verdadeira, não sintética: a largura da imagem
+   * em pixels contra a largura do desenho em milímetros, ambas vindas do
+   * arquivo. É o que impede a tela de pedir aferição para um fundo que já a tem.
+   */
+  const importarRaster = useCallback(
+    async (blob: Blob, nomeArquivo: string, u: Underlay, larguraPx: number): Promise<UnderlayRow | null> => {
+      setOcupado(true);
+      setErro(null);
+      try {
+        const { storagePath, sha256 } = await uploadUnderlay(blob, organizationId, studyId, nomeArquivo);
+        const salvo = await salvarUnderlay({
+          study_id: studyId,
+          organization_id: organizationId,
+          level_id: levelId,
+          storage_path: storagePath,
+          nome_arquivo: nomeArquivo,
+          nome: `fundo · ${nomeArquivo}`,
+          ordem: linhas.length,
+          file_sha256: sha256,
+          pdf_pagina: null,
+          underlay: u,
+          calibracao: { p1: { px: 0, py: 0 }, p2: { px: larguraPx, py: 0 }, distanciaMm: larguraPx * u.mmPorPixel, alinhado: true },
+          opacidade,
+        });
+        setTotalPaginas(1);
+        setLinhas((atual) => [...atual, salvo]);
+        setAtivaId(salvo.id);
+        return salvo;
+      } catch (e) {
+        setErro(e instanceof Error ? e.message : String(e));
+        return null;
+      } finally {
+        setOcupado(false);
+      }
+    },
+    [studyId, organizationId, levelId, linhas.length, opacidade],
+  );
+
+  /**
    * Aplica a aferição na prancha ativa, pivotando no primeiro ponto para não
    * arrastar o traçado.
    *
@@ -456,6 +497,7 @@ export function useBlueprintUnderlay(
     erro,
     totalPaginas,
     importar,
+    importarRaster,
     aplicarCalibracao,
     declararEscala,
     remover,

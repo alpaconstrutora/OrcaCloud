@@ -13586,7 +13586,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           )}
 
           {tarefaAberta === 'importar-dxf' && (
-            <PainelImportarDxf model={editor.model} levelIdAtivo={levelId} onImportar={importarDoIfc} />
+            <PainelImportarDxf
+              model={editor.model}
+              levelIdAtivo={levelId}
+              onImportar={importarDoIfc}
+              // FUNDO DO DXF (P2.36): o desenho original rasterizado e já aferido, por baixo das paredes geradas.
+              onFundo={async (blob, nome, u, larguraPx) => (await fundo.importarRaster(blob, nome, u, larguraPx)) !== null}
+              fundoAtivo={!!fundo.linha}
+            />
           )}
           {tarefaAberta === 'importar-collada' && (
             <PainelImportarCollada model={editor.model} levelIdAtivo={levelId} onImportar={importarDoIfc} />

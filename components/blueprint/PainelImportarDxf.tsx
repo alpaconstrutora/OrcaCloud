@@ -15,6 +15,8 @@ import {
 } from '../../utils/dxfParaKernel';
 import type { ArcoDxf, InsercaoDxf, RecusaDxf, TextoDxf } from '../../utils/dxfLeitor';
 import { gerarTemplateOpura, lerPadraoOpura, REGRAS_DO_PADRAO, temPadraoOpura, VERSAO_DO_PADRAO } from '../../utils/dxfPadraoOpura';
+import { planejarFundo, rasterizarDxf } from '../../utils/dxfParaFundo';
+import type { Underlay } from '../../utils/blueprintUnderlay';
 import { usePersistedState } from '../ui/TableUtils';
 import { converterDwgParaDxf } from '../../services/blueprintDwgService';
 import {
@@ -62,6 +64,14 @@ import {
  * que o padrão já respondeu (camada, unidade, caminho, espessuras). O template
  * sai daqui, pelo botão "Baixar template".
  *
+ * ─── O DESENHO ORIGINAL POR BAIXO (P2.36) ───────────────────────────────────
+ *
+ * Como na importação de PDF, o desenho de origem fica como PLANTA DE FUNDO por
+ * baixo das paredes geradas — para comparar e corrigir onde o reconhecimento
+ * errou. Aqui ele entra JÁ AFERIDO: o DXF tem medida, e o raster é posicionado
+ * com a mesma unidade e a mesma ancoragem das paredes. O upload é do editor
+ * (`onFundo`), que tem o estudo e o pavimento; este painel só rasteriza.
+ *
  * ─── DWG (E9.1) ─────────────────────────────────────────────────────────────
  *
  * Um .dwg entra pelo MESMO caminho: vai à Edge Function `dwg-converter`
@@ -73,6 +83,10 @@ interface Props {
   model: BlueprintModel;
   levelIdAtivo: string | null;
   onImportar: (comandos: Command[]) => void;
+  /** P2.36: guarda o raster do desenho original como planta de fundo já aferida. Devolve `false` se não conseguiu. */
+  onFundo?: (blob: Blob, nomeArquivo: string, underlay: Underlay, larguraPx: number) => Promise<boolean>;
+  /** Já existe uma planta de fundo neste pavimento (a nova entra como mais uma prancha). */
+  fundoAtivo?: boolean;
 }
 
 interface Preparado {
@@ -94,7 +108,7 @@ type Modo = 'FACES' | 'EIXOS';
 
 const m2 = (mm: number) => (mm / 1000).toFixed(2).replace('.', ',');
 
-export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: Props) {
+export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onFundo, fundoAtivo = false }: Props) {
   const [lendo, setLendo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [preparado, setPreparado] = useState<Preparado | null>(null);
@@ -113,6 +127,9 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
   /** PADRÃO ÒPURA (P2.35): ler pelo padrão quando o arquivo o segue; a pessoa pode desligar e ler como DXF comum. */
   const [usarOpura, setUsarOpura] = useState(true);
   const [mostrarRegras, setMostrarRegras] = useState(false);
+  /** FUNDO (P2.36): guardar o desenho original por baixo das paredes geradas. Persistido por tela. */
+  const [guardarFundo, setGuardarFundo] = usePersistedState<boolean>('blueprint:dxf-fundo', true);
+  const [importando, setImportando] = useState(false);
   // ESQUADRIAS (P2.33): as hipóteses de altura e o teto do vão livre, persistidas por tela.
   const [hip, setHip] = usePersistedState<HipotesesDeEsquadrias>('blueprint:dxf-esquadrias', HIPOTESES_ESQUADRIAS_PADRAO);
   const hipoteses: HipotesesDeEsquadrias = { ...HIPOTESES_ESQUADRIAS_PADRAO, ...hip };
@@ -186,9 +203,26 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
 
   const espessuras = [...new Set(paredes.map((p) => p.espessuraMm))].sort((a, b) => a - b);
   const comprimentoTotal = paredes.reduce((s, p) => s + p.comprimentoMm, 0);
+  // FUNDO (P2.36): o plano do raster (tamanho e resolução), sem desenhar — só para o relatório.
+  const opcoesDoFundo = preparado ? { mmPorUnidade: pelaOpura ? 1 : mmPorUnidade, dx, dy, camadaDestaque: pelaOpura ? null : camada } : null;
+  const planoDoFundo = preparado && opcoesDoFundo && onFundo && guardarFundo ? planejarFundo(preparado, opcoesDoFundo) : null;
 
-  function importar() {
-    if (!levelIdAtivo || paredes.length === 0 || !nivel) return;
+  async function importar() {
+    if (!levelIdAtivo || paredes.length === 0 || !nivel || importando) return;
+    // FUNDO (P2.36) primeiro: se o raster falhar, as paredes entram do mesmo jeito, com o aviso.
+    let avisoDoFundo: string | null = null;
+    if (preparado && opcoesDoFundo && onFundo && guardarFundo) {
+      setImportando(true);
+      try {
+        const r = await rasterizarDxf(preparado, opcoesDoFundo);
+        if (!r) avisoDoFundo = 'O desenho original não pôde ser rasterizado neste navegador; as paredes entraram sem a planta de fundo.';
+        else if (!(await onFundo(r.blob, preparado.nomeArquivo, r.plano.underlay, r.plano.larguraPx))) avisoDoFundo = 'As paredes entraram, mas a planta de fundo não foi guardada — veja o painel Planta de fundo.';
+      } catch (e) {
+        avisoDoFundo = `As paredes entraram, mas a planta de fundo não foi guardada: ${e instanceof Error ? e.message : String(e)}`;
+      } finally {
+        setImportando(false);
+      }
+    }
     const comandos: Command[] = [];
     for (const p of paredes) {
       // ESQUADRIAS (P2.33): o vão aponta para a parede pelo `uid` — o `id` só existe depois do lote (o truque da P2.29).
@@ -234,6 +268,7 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
     }
     onImportar(comandos);
     setPreparado(null);
+    setErro(avisoDoFundo);
   }
 
   function baixarTemplate() {
@@ -546,6 +581,23 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
             </div>
           )}
 
+          {/* ── O desenho original por baixo (P2.36) ─────────────────────── */}
+          {onFundo && (
+            <div className="mt-2 rounded-md border border-slate-200 px-2 py-1.5" data-testid="fundo-dxf">
+              <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-600">
+                <input type="checkbox" checked={guardarFundo} onChange={(e) => setGuardarFundo(e.target.checked)} aria-label="Guardar o desenho original como planta de fundo" className="h-3.5 w-3.5" />
+                Guardar o desenho original como planta de fundo, para comparar
+              </label>
+              <p className="mt-0.5 text-[10px] text-slate-400" data-testid="plano-do-fundo">
+                {!guardarFundo
+                  ? 'Só as paredes entram; o desenho de origem não fica na tela.'
+                  : planoDoFundo
+                    ? `Todas as camadas, já aferido: ${planoDoFundo.larguraPx} × ${planoDoFundo.alturaPx} px · ${(planoDoFundo.mmPorPixel >= 10 ? planoDoFundo.mmPorPixel.toFixed(0) : planoDoFundo.mmPorPixel.toFixed(1)).replace('.', ',')} mm/px${!pelaOpura ? ` · camada ${camada} em destaque` : ''}${fundoAtivo ? ' · entra como mais uma prancha de fundo' : ''}. Onde a parede gerada não cobrir o traço, foi o reconhecimento que errou.`
+                    : 'Nada para rasterizar.'}
+              </p>
+            </div>
+          )}
+
           {/* ── Relatório de leitura (P2.34) ─────────────────────────────── */}
           <div className="mt-2 rounded-md bg-slate-50 px-2 py-1.5" data-testid="relatorio-dxf">
             <p className="text-[11px] font-semibold text-slate-600">Relatório de leitura</p>
@@ -604,11 +656,11 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
           <div className="mt-3 flex gap-1.5">
             <button
               type="button"
-              onClick={importar}
-              disabled={paredes.length === 0 || !levelIdAtivo}
+              onClick={() => void importar()}
+              disabled={paredes.length === 0 || !levelIdAtivo || importando}
               className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-[6px] bg-blue-600 px-2.5 text-[13px] font-medium text-white transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-40"
             >
-              <Check className="h-3.5 w-3.5" />
+              {importando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
               Importar {paredes.length}{totalDeAberturas + (opura?.resumo.ambientes ?? 0) > 0 ? ` + ${totalDeAberturas + (opura?.resumo.ambientes ?? 0)}` : ''}
             </button>
             <button

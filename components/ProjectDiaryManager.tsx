@@ -16,8 +16,6 @@ import {
     Save,
     CheckCircle2,
     X,
-    User,
-    Briefcase as BriefcaseIcon,
     ArrowLeft,
     Link2,
     FileDown,
@@ -41,6 +39,17 @@ import Button from './ui/Button';
 
 
 type DiaryEditorTab = 'clima' | 'atividades' | 'comentarios' | 'arquivos';
+
+// Efetivo de Mão de Obra (editor do registro) — células editáveis §7.1.
+const LABOR_COLUMNS: StandardTableColumn[] = [
+    { key: 'category', label: 'Trabalhador / equipe', sortable: true, width: 320 },
+    { key: 'quantity', label: 'Qtd', sortable: true, width: 90, align: 'center' },
+    { key: 'hours', label: 'Horas', sortable: true, width: 90, align: 'center' },
+    { key: 'observations', label: 'Observações', sortable: true, width: 320 },
+];
+/** Linha da tabela do efetivo: a entrada mais o índice em `formData.labor` (sem id próprio). */
+type LaborRow = LaborEntry & { idx: number };
+const LABOR_DATALIST_ID = 'diario-efetivo-sugestoes';
 
 // §6.10 — só colunas de DADO; "Ações" entra por `actions`.
 const DIARY_COLUMNS: StandardTableColumn[] = [
@@ -181,7 +190,6 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
     });
 
     const { organizations, activeOrganizationId, fetchOrganizations } = useStore();
-    const [activeLaborSearchIdx, setActiveLaborSearchIdx] = useState<number | null>(null);
     const [rhSheetOpen, setRhSheetOpen] = useState(false);
 
     // Carregar organizações se estiverem vazias
@@ -581,6 +589,11 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         });
     };
 
+    const laborRows = useMemo<LaborRow[]>(
+        () => (formData.labor || []).map((lab, idx) => ({ ...lab, idx })),
+        [formData.labor],
+    );
+
     /** Efetivo vindo de RH › Colaboradores: uma linha por colaborador, cargo em observações. */
     const addLaborFromRh = (colaboradores: Employee[]) => {
         const novos: LaborEntry[] = colaboradores.map(c => ({ category: c.name, quantity: 1, observations: c.role || '' }));
@@ -757,7 +770,26 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                     <button disabled title="Configurações (em breve)" className="h-9 w-9 flex items-center justify-center bg-gray-50 text-gray-400 rounded-[6px] cursor-not-allowed opacity-60">
                         <Settings className="w-4 h-4" />
                     </button>
-                    {!isAdding && (
+                    {/* Editando: Cancelar + Salvar registro tomam o lugar de "Nova entrada" (§17) */}
+                    {isAdding ? (
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => { setIsAdding(false); setEditingId(null); resetForm(); }}
+                                className="h-9 px-3.5 bg-white text-gray-600 border border-gray-200 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSave}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+                            >
+                                <Save className="w-[15px] h-[15px]" />
+                                Salvar registro
+                            </button>
+                        </>
+                    ) : (
                         <button
                             onClick={handleAddNew}
                             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
@@ -817,21 +849,6 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={() => { setIsAdding(false); setEditingId(null); resetForm(); }}
-                                    className="px-6 py-2.5 bg-white text-gray-500 rounded-xl font-medium text-button uppercase tracking-widest hover:bg-gray-50 transition-all border border-gray-100"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    onClick={handleSave}
-                                    className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-medium text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
-                                >
-                                    <Save className="w-5 h-5" />
-                                    Salvar Registro
-                                </button>
                             </div>
                         </div>
 
@@ -912,210 +929,147 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
 
                             {activeTab === 'atividades' && (
                                 <div className="space-y-10">
-                                    {/* Labour List */}
+                                    {/* Efetivo de Mão de Obra — §6.10 StandardTable com células editáveis §7.1;
+                                        os botões de adicionar moram em toolbarRight (§17). O dropdown legado de
+                                        sugestões (organizations[].resources) virou <datalist>: dentro da tabela um
+                                        popover absoluto seria cortado pelo overflow. */}
                                     <section>
-                                        <div className="flex justify-between items-center mb-4">
-                                            <h3 className="text-[14px] font-medium text-gray-800 uppercase tracking-widest flex items-center gap-2">
-                                                <MoreHorizontal className="w-5 h-5 text-indigo-500" />
-                                                Efetivo de Mão de Obra
-                                            </h3>
-                                            <div className="flex gap-2">
-                                                {(linkedBudget.length > 0 || linkedSchedule) && (
-                                                    <button
-                                                        onClick={() => {
-                                                            const planningLabor = linkedBudget
-                                                                .filter(b => b.sinapiItem?.category === 'Mão de Obra' || b.sinapiItem?.nature === 'Mão de Obra')
-                                                                .map(b => ({
-                                                                    id: crypto.randomUUID(),
-                                                                    category: b.sinapiItem.description,
-                                                                    quantity: 0,
-                                                                    observations: 'Importado do Planejamento'
-                                                                }));
-
-                                                            if (planningLabor.length > 0) {
-                                                                setFormData({ ...formData, labor: [...(formData.labor || []), ...planningLabor] });
-                                                            } else {
-                                                                notify('Nenhuma mão de obra encontrada no planejamento vinculado.');
-                                                            }
-                                                        }}
-                                                        className="flex items-center gap-2 text-xs font-bold text-emerald-600 bg-emerald-50 px-4 py-2 rounded-xl hover:bg-emerald-100 active:scale-95 transition-all outline-none border border-emerald-100 uppercase tracking-widest"
-                                                    >
-                                                        <Download className="w-4 h-4" /> Importar do Planejamento
-                                                    </button>
-                                                )}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setRhSheetOpen(true)}
-                                                    className="flex items-center gap-2 text-xs font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 active:scale-95 transition-all outline-none border border-indigo-100 uppercase tracking-widest"
-                                                    title="Selecionar colaboradores de Recursos Humanos › Colaboradores"
-                                                >
-                                                    <Users className="w-4 h-4" /> Adicionar do RH
-                                                </button>
-                                                <button onClick={addLabor} className="flex items-center gap-2 text-xs font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 active:scale-95 transition-all outline-none border border-indigo-100 uppercase tracking-widest">
-                                                    <Plus className="w-4 h-4" /> Adicionar Mão de Obra
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                            {(formData.labor || []).map((lab, idx) => (
-                                                <div key={idx} className="p-4 bg-gray-50/50 rounded-2xl border border-gray-100 group relative">
-                                                    <button onClick={() => removeLabor(idx)} className="absolute -top-2 -right-2 w-6 h-6 bg-white rounded-full border border-red-100 text-red-500 opacity-0 group-hover:opacity-100 transition-all shadow-sm hover:bg-red-50 flex items-center justify-center"><X className="w-3 h-3" /></button>
-                                                    <div className="space-y-3">
-                                                        <div className={`relative ${activeLaborSearchIdx === idx ? 'z-50' : ''}`}>
-                                                            <input
-                                                                placeholder="Clique para buscar trabalhador ou equipe..."
-                                                                value={lab.category}
-                                                                onFocus={() => setActiveLaborSearchIdx(idx)}
-                                                                onChange={(e) => {
-                                                                    handleLaborChange(idx, 'category', e.target.value);
-                                                                    setActiveLaborSearchIdx(idx);
-                                                                }}
-                                                                className="w-full bg-white border border-gray-100 rounded-lg px-2 py-1.5 text-form-input font-medium focus:ring-2 focus:ring-indigo-100 outline-none mt-1"
-                                                            />
-                                                            
-                                                            {activeLaborSearchIdx === idx && (
-                                                                <>
-                                                                    <div 
-                                                                        className="fixed inset-0 z-[-1]" 
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            setActiveLaborSearchIdx(null);
-                                                                        }} 
-                                                                    ></div>
-                                                                    <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-2 z-[60] max-h-64 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-150">
-                                                                        {(() => {
-                                                                            const filtered = laborSuggestions.filter(s => 
-                                                                                !lab.category || 
-                                                                                s.name.toLowerCase().includes(lab.category.toLowerCase()) ||
-                                                                                s.subLabel?.toLowerCase().includes(lab.category.toLowerCase())
-                                                                            );
-                                                                            
-                                                                            const workers = filtered.filter(s => s.type === 'worker');
-                                                                            const teams = filtered.filter(s => s.type === 'team');
-                                                                            const roles = filtered.filter(s => s.type === 'role');
-
-                                                                            if (organizations.length === 0) {
-                                                                                return (
-                                                                                    <div className="px-3 py-4 text-center">
-                                                                                        <p className="text-xs font-bold text-indigo-500 animate-pulse uppercase tracking-widest">Carregando banco de talentos...</p>
-                                                                                    </div>
-                                                                                );
-                                                                            }
-
-                                                                            if (filtered.length === 0) {
-                                                                                return (
-                                                                                    <div className="px-3 py-4 text-center">
-                                                                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Nenhum recurso encontrado no time</p>
-                                                                                    </div>
-                                                                                );
-                                                                            }
-
-                                                                            return (
-                                                                                <div className="flex flex-col">
-                                                                                    {workers.length > 0 && (
-                                                                                        <>
-                                                                                            <div className="px-3 py-1.5 bg-gray-50 text-[9px] font-bold text-gray-400 uppercase tracking-widest border-y border-gray-100 first:border-t-0">Trabalhadores</div>
-                                                                                            {workers.map(s => (
-                                                                                                <button
-                                                                                                    key={s.id}
-                                                                                                    type="button"
-                                                                                                    onClick={() => {
-                                                                                                        handleLaborChange(idx, 'category', s.name);
-                                                                                                        if (s.subLabel) handleLaborChange(idx, 'observations', s.subLabel);
-                                                                                                        setActiveLaborSearchIdx(null);
-                                                                                                    }}
-                                                                                                    className="w-full text-left px-3 py-2.5 hover:bg-indigo-50 flex flex-col transition-colors border-b border-gray-50 last:border-none"
-                                                                                                >
-                                                                                                    <div className="flex items-center gap-2">
-                                                                                                        <User className="w-3.5 h-3.5 text-indigo-500" />
-                                                                                                        <span className="text-xs font-bold text-gray-700">{s.name}</span>
-                                                                                                    </div>
-                                                                                                    {s.subLabel && <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-widest ml-5.5">{s.subLabel}</span>}
-                                                                                                </button>
-                                                                                            ))}
-                                                                                        </>
-                                                                                    )}
-                                                                                    {teams.length > 0 && (
-                                                                                        <>
-                                                                                            <div className="px-3 py-1.5 bg-gray-50 text-[9px] font-bold text-gray-400 uppercase tracking-widest border-y border-gray-100">Equipes</div>
-                                                                                            {teams.map(s => (
-                                                                                                <button
-                                                                                                    key={s.id}
-                                                                                                    type="button"
-                                                                                                    onClick={() => {
-                                                                                                        handleLaborChange(idx, 'category', s.name);
-                                                                                                        setActiveLaborSearchIdx(null);
-                                                                                                    }}
-                                                                                                    className="w-full text-left px-3 py-2.5 hover:bg-indigo-50 flex flex-col transition-colors border-b border-gray-50 last:border-none"
-                                                                                                >
-                                                                                                    <div className="flex items-center gap-2">
-                                                                                                        <Users className="w-3.5 h-3.5 text-emerald-500" />
-                                                                                                        <span className="text-xs font-bold text-gray-700">{s.name}</span>
-                                                                                                    </div>
-                                                                                                    {s.subLabel && <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-widest ml-5.5">{s.subLabel}</span>}
-                                                                                                </button>
-                                                                                            ))}
-                                                                                        </>
-                                                                                    )}
-                                                                                    {roles.length > 0 && (
-                                                                                        <>
-                                                                                            <div className="px-3 py-1.5 bg-gray-50 text-[9px] font-bold text-gray-400 uppercase tracking-widest border-y border-gray-100">Funções / Categorias</div>
-                                                                                            {roles.map(s => (
-                                                                                                <button
-                                                                                                    key={s.id}
-                                                                                                    type="button"
-                                                                                                    onClick={() => {
-                                                                                                        handleLaborChange(idx, 'category', s.name);
-                                                                                                        setActiveLaborSearchIdx(null);
-                                                                                                    }}
-                                                                                                    className="w-full text-left px-3 py-2.5 hover:bg-indigo-50 flex flex-col transition-colors border-b border-gray-50 last:border-none"
-                                                                                                >
-                                                                                                    <div className="flex items-center gap-2">
-                                                                                                        <BriefcaseIcon className="w-3.5 h-3.5 text-amber-500" />
-                                                                                                        <span className="text-xs font-bold text-gray-700">{s.name}</span>
-                                                                                                    </div>
-                                                                                                </button>
-                                                                                            ))}
-                                                                                        </>
-                                                                                    )}
-                                                                                </div>
-                                                                            );
-                                                                        })()}
-                                                                    </div>
-                                                                </>
-                                                            )}
-                                                        </div>
-                                                        <div className="flex gap-2">
-                                                            <div className="flex-1 flex items-center gap-2">
-                                                                <span className="text-xs font-bold text-gray-400 uppercase">Qtd:</span>
-                                                                <input
-                                                                    type="number"
-                                                                    value={lab.quantity}
-                                                                    onChange={(e) => handleLaborChange(idx, 'quantity', parseInt(e.target.value) || 0)}
-                                                                    className="w-full bg-white border border-gray-100 rounded-lg px-2 py-1.5 text-form-input font-medium focus:ring-2 focus:ring-indigo-100 outline-none"
-                                                                />
-                                                            </div>
-                                                            <div className="flex-1 flex items-center gap-2">
-                                                                <span className="text-xs font-bold text-gray-400 uppercase">Horas:</span>
-                                                                <input
-                                                                    type="number"
-                                                                    placeholder="8"
-                                                                    value={lab.hours || ''}
-                                                                    onChange={(e) => handleLaborChange(idx, 'hours', parseFloat(e.target.value) || 0)}
-                                                                    className="w-full bg-white border border-gray-100 rounded-lg px-2 py-1.5 text-form-input font-medium focus:ring-2 focus:ring-indigo-100 outline-none"
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                        <input
-                                                            placeholder="Observações (ex: Terceirizado)"
-                                                            value={lab.observations || ''}
-                                                            onChange={(e) => handleLaborChange(idx, 'observations', e.target.value)}
-                                                            className="w-full bg-white border border-gray-100 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-indigo-100 outline-none"
-                                                        />
-                                                    </div>
-                                                </div>
+                                        <h3 className="text-[14px] font-medium text-gray-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                            <MoreHorizontal className="w-5 h-5 text-indigo-500" />
+                                            Efetivo de Mão de Obra
+                                        </h3>
+                                        <datalist id={LABOR_DATALIST_ID}>
+                                            {laborSuggestions.map(sug => (
+                                                <option key={`${sug.type}-${sug.id}`} value={sug.name}>{sug.subLabel}</option>
                                             ))}
-                                        </div>
+                                        </datalist>
+                                        <StandardTable<LaborRow>
+                                            storageKey="diario:efetivo"
+                                            columns={LABOR_COLUMNS}
+                                            rows={laborRows}
+                                            rowKey={r => String(r.idx)}
+                                            searchText={r => `${r.category} ${r.observations || ''}`}
+                                            searchPlaceholder="Buscar no efetivo..."
+                                            sortValue={(key, r) => {
+                                                switch (key) {
+                                                    case 'category': return r.category || '';
+                                                    case 'quantity': return Number(r.quantity) || 0;
+                                                    case 'hours': return Number(r.hours) || 0;
+                                                    case 'observations': return r.observations || '';
+                                                    default: return null;
+                                                }
+                                            }}
+                                            renderCell={(key, r) => {
+                                                const campo = 'w-full text-sm font-normal px-2 py-1 rounded border transition-all outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500';
+                                                const estado = (v: unknown) => (v !== '' && v !== undefined && v !== null && v !== 0)
+                                                    ? 'text-gray-900 bg-gray-50 border-gray-100'
+                                                    : 'text-gray-400 bg-white border-dashed border-gray-200';
+                                                switch (key) {
+                                                    case 'category':
+                                                        return (
+                                                            <input
+                                                                list={LABOR_DATALIST_ID}
+                                                                placeholder="Trabalhador, equipe ou função"
+                                                                value={r.category}
+                                                                onChange={(e) => {
+                                                                    const nome = e.target.value;
+                                                                    handleLaborChange(r.idx, 'category', nome);
+                                                                    // Escolheu um trabalhador da lista: a função vai para observações (como o dropdown antigo fazia)
+                                                                    const w = laborSuggestions.find(sug => sug.type === 'worker' && sug.name === nome);
+                                                                    if (w?.subLabel && !r.observations) handleLaborChange(r.idx, 'observations', w.subLabel);
+                                                                }}
+                                                                className={`${campo} ${estado(r.category)}`}
+                                                            />
+                                                        );
+                                                    case 'quantity':
+                                                        return (
+                                                            <input
+                                                                type="number"
+                                                                min={0}
+                                                                value={r.quantity}
+                                                                onChange={(e) => handleLaborChange(r.idx, 'quantity', parseInt(e.target.value) || 0)}
+                                                                className={`${campo} text-center ${estado(r.quantity)}`}
+                                                            />
+                                                        );
+                                                    case 'hours':
+                                                        return (
+                                                            <input
+                                                                type="number"
+                                                                min={0}
+                                                                step={0.5}
+                                                                placeholder="8"
+                                                                value={r.hours || ''}
+                                                                onChange={(e) => handleLaborChange(r.idx, 'hours', parseFloat(e.target.value) || 0)}
+                                                                className={`${campo} text-center ${estado(r.hours)}`}
+                                                            />
+                                                        );
+                                                    case 'observations':
+                                                        return (
+                                                            <input
+                                                                placeholder="Ex.: Terceirizado"
+                                                                value={r.observations || ''}
+                                                                onChange={(e) => handleLaborChange(r.idx, 'observations', e.target.value)}
+                                                                className={`${campo} ${estado(r.observations)}`}
+                                                            />
+                                                        );
+                                                    default:
+                                                        return null;
+                                                }
+                                            }}
+                                            actions={{
+                                                width: 80,
+                                                render: r => <ActionIconButton kind="delete" onClick={() => removeLabor(r.idx)} />,
+                                            }}
+                                            toolbarRight={
+                                                <div className="flex items-center gap-2">
+                                                    {(linkedBudget.length > 0 || linkedSchedule) && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const planningLabor = linkedBudget
+                                                                    .filter(b => b.sinapiItem?.category === 'Mão de Obra' || b.sinapiItem?.nature === 'Mão de Obra')
+                                                                    .map(b => ({
+                                                                        id: crypto.randomUUID(),
+                                                                        category: b.sinapiItem.description,
+                                                                        quantity: 0,
+                                                                        observations: 'Importado do Planejamento'
+                                                                    }));
+
+                                                                if (planningLabor.length > 0) {
+                                                                    setFormData({ ...formData, labor: [...(formData.labor || []), ...planningLabor] });
+                                                                } else {
+                                                                    notify('Nenhuma mão de obra encontrada no planejamento vinculado.');
+                                                                }
+                                                            }}
+                                                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-emerald-600 border border-gray-200 rounded-[6px] hover:bg-emerald-50 font-medium text-[13px] transition-all active:scale-95"
+                                                        >
+                                                            <Download className="w-[15px] h-[15px]" /> Importar do planejamento
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setRhSheetOpen(true)}
+                                                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-blue-600 border border-gray-200 rounded-[6px] hover:bg-blue-50 font-medium text-[13px] transition-all active:scale-95"
+                                                        title="Selecionar colaboradores de Recursos Humanos › Colaboradores"
+                                                    >
+                                                        <Users className="w-[15px] h-[15px]" /> Adicionar do RH
+                                                    </button>
+                                                    {/* §17 — variante compacta */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={addLabor}
+                                                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+                                                    >
+                                                        <Plus className="w-[15px] h-[15px]" /> Adicionar mão de obra
+                                                    </button>
+                                                </div>
+                                            }
+                                            empty={{
+                                                icon: <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
+                                                title: 'Nenhum efetivo lançado',
+                                                subtitle: 'Adicione do RH, importe do planejamento ou lance uma linha manual.',
+                                            }}
+                                        />
                                     </section>
 
                                     {/* Activities */}

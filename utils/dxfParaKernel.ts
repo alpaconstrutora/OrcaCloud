@@ -519,6 +519,14 @@ export function aberturasDoDxf(
       }
       if (blocoDePorta && !blocoDeJanela) {
         resumo.portas++;
+        // O bloco de porta quase sempre traz o arco do giro dentro dele. Se houver um com o centro
+        // numa ponta do vão, ele diz a dobradiça e o lado — sem isso a porta entrava com o padrão
+        // (dobradiça no início, abrindo para +n), que acerta por acaso em metade dos casos.
+        const doBloco = arcos.find((a) => !a.usado && (dist(a.c, v.inicio) <= meia || dist(a.c, v.fim) <= meia));
+        if (doBloco) {
+          doBloco.usado = true;
+          return { kind: 'door', offsetMm: 0, widthMm: 0, heightMm: alturaPorta, sillMm: 0, hingeAtStart: dist(doBloco.c, v.inicio) <= dist(doBloco.c, v.fim), swingReversed: local(doBloco.meio).n < 0 };
+        }
         return { kind: 'door', offsetMm: 0, widthMm: 0, heightMm: alturaPorta, sillMm: 0 };
       }
       if (blocoDeJanela || (paralelos >= 2 && coberto >= 0.6 * v.larguraMm)) {

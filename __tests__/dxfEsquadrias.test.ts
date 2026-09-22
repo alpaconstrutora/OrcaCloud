@@ -45,6 +45,123 @@ const naCota = (paredes: ParedeComAberturas[], y: number) => paredes.filter((p) 
 /** O offset esperado de um trecho [xa, xb] numa parede que pode ter sido lida em qualquer sentido. */
 const offsetDe = (p: ParedeComAberturas, xa: number, xb: number) => (p.b.x > p.a.x ? xa - p.a.x : p.a.x - xb);
 
+/**
+ * O ARCO QUE O APP DESENHA, pela fórmula do canvas (`BlueprintCanvas`) e do PDF
+ * (`blueprintExport`): pivô na ponta da dobradiça, deslocado meia espessura
+ * para o lado que abre; folha na normal `n = (−uy, ux)` vezes o lado; raio =
+ * largura do vão. Devolve o ponto médio do quarto de volta — é ele que diz,
+ * sem ambiguidade, para que lado a porta abre no desenho.
+ */
+function meioDoArcoDesenhado(p: ParedeComAberturas, ab: ParedeComAberturas['aberturas'][number]) {
+  const L = Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y) || 1;
+  const ux = (p.b.x - p.a.x) / L;
+  const uy = (p.b.y - p.a.y) / L;
+  const nx = -uy;
+  const ny = ux;
+  const ini = { x: p.a.x + ux * ab.offsetMm, y: p.a.y + uy * ab.offsetMm };
+  const fim = { x: p.a.x + ux * (ab.offsetMm + ab.widthMm), y: p.a.y + uy * (ab.offsetMm + ab.widthMm) };
+  const lado = ab.swingReversed ? -1 : 1;
+  const meia = p.espessuraMm / 2;
+  const base = ab.hingeAtStart ? ini : fim;
+  const piv = { x: base.x + nx * meia * lado, y: base.y + ny * meia * lado };
+  const eixo = { x: ab.hingeAtStart ? ux : -ux, y: ab.hingeAtStart ? uy : -uy };
+  const folha = { x: nx * lado, y: ny * lado };
+  const c45 = Math.SQRT1_2;
+  return { x: piv.x + (eixo.x + folha.x) * c45 * ab.widthMm, y: piv.y + (eixo.y + folha.y) * c45 * ab.widthMm };
+}
+
+/** O ponto médio do arco do ARQUIVO, em mm — a verdade contra a qual o desenho é conferido. */
+function meioDoArcoDoArquivo(cx: number, cy: number, r: number, a0: number, a1: number) {
+  let v = (a1 - a0) % 360;
+  if (v < 0) v += 360;
+  const m = ((a0 + v / 2) * Math.PI) / 180;
+  return { x: cx + r * Math.cos(m), y: cy + r * Math.sin(m) };
+}
+
+describe('esquadrias no DXF · o LADO da porta (P2.37)', () => {
+  /**
+   * As quatro combinações numa parede horizontal e duas numa vertical: dobradiça
+   * em cada ponta × abrindo para cada lado. O arco do arquivo tem o centro na
+   * dobradiça, na face do lado em que a porta abre — como o CAD desenha.
+   */
+  const VAOS: [number, number, 'E' | 'D', 1 | -1][] = [
+    [2000, 2900, 'E', 1],
+    [6000, 6900, 'D', 1],
+    [10000, 10900, 'E', -1],
+    [14000, 14900, 'D', -1],
+  ];
+  function dxfDasCombinacoes(): string {
+    const pares: Par[] = [...paredeH(0, 150, 0, 20000, VAOS.map(([a, b]) => [a, b] as [number, number]))];
+    for (const [x0, x1, dob, lado] of VAOS) {
+      const cx = dob === 'E' ? x0 : x1;
+      const cy = lado === 1 ? 150 : 0;
+      const fechada = dob === 'E' ? 0 : 180;
+      const aberta = lado === 1 ? 90 : 270;
+      const d = (((aberta - fechada) % 360) + 360) % 360;
+      pares.push(...(d === 90 ? ARC(cx, cy, 900, fechada, aberta) : ARC(cx, cy, 900, aberta, fechada)));
+    }
+    return dxfTexto(pares);
+  }
+
+  it('as quatro combinações de dobradiça × lado saem com o arco EM CIMA do arco do arquivo', () => {
+    const { paredes, resumo } = reconhecer(dxfDasCombinacoes());
+    expect(resumo).toMatchObject({ portas: 4, vaos: 0 });
+    const parede = naCota(paredes, 75)[0];
+    expect(parede.aberturas).toHaveLength(4);
+    for (const [x0, x1, dob, lado] of VAOS) {
+      const ab = parede.aberturas.find((o) => Math.abs(Math.min(offsetDe(parede, x0, x1), 1e9) - o.offsetMm) < 2)!;
+      expect(ab, `vão ${x0}–${x1}`).toBeTruthy();
+      const cx = dob === 'E' ? x0 : x1;
+      const cy = lado === 1 ? 150 : 0;
+      const fechada = dob === 'E' ? 0 : 180;
+      const aberta = lado === 1 ? 90 : 270;
+      const d = (((aberta - fechada) % 360) + 360) % 360;
+      const esperado = d === 90 ? meioDoArcoDoArquivo(cx, cy, 900, fechada, aberta) : meioDoArcoDoArquivo(cx, cy, 900, aberta, fechada);
+      const desenhado = meioDoArcoDesenhado(parede, ab);
+      expect(Math.hypot(desenhado.x - esperado.x, desenhado.y - esperado.y), `vão ${x0}–${x1} (${dob}${lado === 1 ? '+' : '−'})`).toBeLessThan(100);
+    }
+  });
+
+  it('⚠️ VIRAR A PAREDE NA EMENDA VIRA A PORTA: a peça que a emenda precisa inverter mantém o lado no mundo', () => {
+    // Três trechos com dois vãos. O terceiro trecho é desenhado ao CONTRÁRIO (de x maior para menor):
+    // a emenda tem de virá-lo, e a porta que ele já carrega tem de continuar abrindo para o mesmo lado.
+    // Antes da P2.37 só o `offsetMm` era espelhado, e o arco saía do lado errado.
+    const t = dxfTexto([
+      ...paredeH(0, 150, 0, 20000, [[6000, 6900], [14000, 14900]]),
+      ...ARC(6000, 150, 900, 0, 90),
+      ...ARC(14900, 150, 900, 90, 180),
+    ]);
+    const { paredes } = reconhecer(t);
+    const parede = naCota(paredes, 75)[0];
+    expect(parede.aberturas).toHaveLength(2);
+    for (const [cx, a0, a1] of [[6000, 0, 90], [14900, 90, 180]] as const) {
+      const esperado = meioDoArcoDoArquivo(cx, 150, 900, a0, a1);
+      const perto = parede.aberturas.map((ab) => meioDoArcoDesenhado(parede, ab)).map((q) => Math.hypot(q.x - esperado.x, q.y - esperado.y));
+      expect(Math.min(...perto), `arco em ${cx}`).toBeLessThan(100);
+    }
+  });
+
+  it('porta por NOME DE BLOCO usa o arco de dentro do bloco para a dobradiça e o lado', () => {
+    const blocos: Par[] = [
+      ['0', 'BLOCK'], ['8', '0'], ['2', 'PORTA-80'], ['10', '0'], ['20', '0'],
+      ...LINE(0, 0, 0, 800, '0'),
+      ['0', 'ARC'], ['8', '0'], ['10', '0'], ['20', '0'], ['40', '800'], ['50', '90'], ['51', '180'],
+      ['0', 'ENDBLK'],
+    ];
+    // Bloco inserido em (2800, 150): a dobradiça é a ponta DIREITA do vão e a folha abre para +y.
+    const t = dxfTexto([
+      ...paredeH(0, 150, 0, 6000, [[2000, 2800]]),
+      ['0', 'INSERT'], ['8', 'ESQUADRIAS'], ['2', 'PORTA-80'], ['10', '2800'], ['20', '150'],
+    ], blocos);
+    const { paredes, resumo } = reconhecer(t);
+    expect(resumo).toMatchObject({ portas: 1 });
+    const parede = paredes[0];
+    const desenhado = meioDoArcoDesenhado(parede, parede.aberturas[0]);
+    const esperado = meioDoArcoDoArquivo(2800, 150, 800, 90, 180);
+    expect(Math.hypot(desenhado.x - esperado.x, desenhado.y - esperado.y)).toBeLessThan(100);
+  });
+});
+
 describe('esquadrias no DXF · porta, janela e vão', () => {
   // Parede 1 (y 0..150): porta de 900 em [2000, 2900] com arco de dobradiça em x=2000 abrindo para +y;
   // janela de 1200 em [4000, 5200] com duas linhas de vidro na camada JANELAS.

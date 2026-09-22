@@ -94,11 +94,36 @@ const eixoDe = (p: ParedeEmendavel) => {
   return { ux: (p.b.x - p.a.x) / L, uy: (p.b.y - p.a.y) / L, L };
 };
 
-/** A peça apontando no sentido `u`; virada se estava ao contrário — com as aberturas espelhadas. */
+/**
+ * A peça apontando no sentido `u`; virada se estava ao contrário — com as
+ * aberturas espelhadas.
+ *
+ * ⚠️ VIRAR A PEÇA VIRA A PORTA INTEIRA, não só o `offsetMm`. Trocar `a` por `b`
+ * troca as duas referências que orientam uma porta:
+ *
+ *  - `hingeAtStart` é "a dobradiça fica na ponta do vão mais perto de `a`" — e
+ *    `a` passou a ser a outra ponta da parede;
+ *  - `swingReversed` é medido contra a normal `n = (−uy, ux)`, que gira 180°
+ *    junto com `u`.
+ *
+ * Os dois têm de inverter para a porta continuar abrindo para o MESMO lado do
+ * mundo. Sem isso, uma parede que a emenda precisou virar saía com todas as
+ * portas anteriores espelhadas — o arco do lado errado, ignorando o desenho.
+ */
 function noSentido<T extends ParedeEmendavel>(p: T, ux: number, uy: number): T {
   if ((p.b.x - p.a.x) * ux + (p.b.y - p.a.y) * uy >= 0) return p;
   const L = eixoDe(p).L;
-  return { ...p, a: p.b, b: p.a, aberturas: p.aberturas.map((ab) => ({ ...ab, offsetMm: L - ab.offsetMm - ab.widthMm })) };
+  return {
+    ...p,
+    a: p.b,
+    b: p.a,
+    aberturas: p.aberturas.map((ab) => ({
+      ...ab,
+      offsetMm: L - ab.offsetMm - ab.widthMm,
+      ...(ab.hingeAtStart !== undefined ? { hingeAtStart: !ab.hingeAtStart } : {}),
+      ...(ab.swingReversed !== undefined ? { swingReversed: !ab.swingReversed } : {}),
+    })),
+  };
 }
 
 /**

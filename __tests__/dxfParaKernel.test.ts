@@ -164,6 +164,68 @@ describe.skipIf(!TEM)('DXF real · esquadrias (P2.33)', () => {
   }, 180_000);
 });
 
+describe.skipIf(!TEM)('DXF real · o LADO de cada porta (P2.37)', () => {
+  it('o arco que o app DESENHA cai em cima do arco do arquivo, porta por porta', () => {
+    // A conferência de ponta a ponta do que o usuário vê: monta o arco pela fórmula do canvas
+    // (`BlueprintCanvas`) e do PDF (`blueprintExport`) — pivô na ponta da dobradiça deslocado meia
+    // espessura para o lado que abre, folha na normal, raio = largura — e compara o ponto médio do
+    // quarto de volta com o do arco do arquivo. Lado errado dá ~1,4 × a largura de distância.
+    real = real ?? prepararDxf(readFileSync(REAL, 'utf8'));
+    const paredes = tirarDuplicadas(paredesDoDxf(real.segmentos.filter((s) => s.camada === 'PAREDE'), 1000)).paredes;
+    const { paredes: com } = aberturasDoDxf(paredes, real, 1000, 'PAREDE', 2800);
+    const grau = (x: number) => (x * Math.PI) / 180;
+    const arcos = real.arcos
+      .map((a) => {
+        const raio = a.raio * 1000;
+        let v = (a.anguloFinal - a.anguloInicial) % 360;
+        if (v < 0) v += 360;
+        const c = { x: a.centro.x * 1000, y: a.centro.y * 1000 };
+        return { c, raio, v, meio: { x: c.x + raio * Math.cos(grau(a.anguloInicial + v / 2)), y: c.y + raio * Math.sin(grau(a.anguloInicial + v / 2)) } };
+      })
+      .filter((a) => a.raio >= 500 && a.raio <= 1600 && a.v >= 60 && a.v <= 120);
+
+    let conferidas = 0;
+    let forte = 0;
+    for (const p of com) {
+      const L = Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y) || 1;
+      const ux = (p.b.x - p.a.x) / L;
+      const uy = (p.b.y - p.a.y) / L;
+      const nx = -uy;
+      const ny = ux;
+      for (const ab of p.aberturas) {
+        if (ab.kind !== 'door') continue;
+        const ini = { x: p.a.x + ux * ab.offsetMm, y: p.a.y + uy * ab.offsetMm };
+        const fim = { x: p.a.x + ux * (ab.offsetMm + ab.widthMm), y: p.a.y + uy * (ab.offsetMm + ab.widthMm) };
+        let melhor: (typeof arcos)[number] | null = null;
+        let perto = Infinity;
+        for (const a of arcos) {
+          const d = Math.min(Math.hypot(a.c.x - ini.x, a.c.y - ini.y), Math.hypot(a.c.x - fim.x, a.c.y - fim.y));
+          if (d < perto) {
+            perto = d;
+            melhor = a;
+          }
+        }
+        if (!melhor || perto > 400) continue;
+        conferidas++;
+        const lado = ab.swingReversed ? -1 : 1;
+        const meia = p.espessuraMm / 2;
+        const base = ab.hingeAtStart ? ini : fim;
+        const piv = { x: base.x + nx * meia * lado, y: base.y + ny * meia * lado };
+        const eixo = { x: ab.hingeAtStart ? ux : -ux, y: ab.hingeAtStart ? uy : -uy };
+        const folha = { x: nx * lado, y: ny * lado };
+        const c45 = Math.SQRT1_2;
+        const desenhado = { x: piv.x + (eixo.x + folha.x) * c45 * ab.widthMm, y: piv.y + (eixo.y + folha.y) * c45 * ab.widthMm };
+        const d = Math.hypot(desenhado.x - melhor.meio.x, desenhado.y - melhor.meio.y);
+        // Medido em 22/09/2026: 33 das 34 a 15 mm, uma a 136 mm (o desenhista pôs a dobradiça no eixo).
+        expect(d, `porta de ${ab.widthMm} mm em (${Math.round(ini.x)}, ${Math.round(ini.y)})`).toBeLessThan(300);
+        if (d <= 100) forte++;
+      }
+    }
+    expect(conferidas).toBeGreaterThanOrEqual(30);
+    expect(forte).toBeGreaterThanOrEqual(conferidas - 2);
+  }, 180_000);
+});
+
 describe.skipIf(!TEM)('DXF · a camada de EIXO é o caminho exato', () => {
   it('o nosso export tem PLANTA-EIXOS, e cada traço é uma parede', () => {
     // Onde existe camada de eixo não há o que derivar: o traço JÁ é o eixo.

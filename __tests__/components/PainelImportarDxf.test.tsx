@@ -306,6 +306,22 @@ function comCanvasFalso() {
   return () => { proto.getContext = getContext; proto.toBlob = toBlob; };
 }
 
+describe('importar DXF · coordenadas do arquivo longe da origem (P2.37)', () => {
+  it('com o desenho a quilômetros da origem, "manter as coordenadas" não deixa importar — o kernel recusaria e derrubava o editor', async () => {
+    // O mesmo desenho, deslocado 4 km em x: é o caso do projeto real da empresa (3.976.897 mm).
+    const longe = dxfDeUmaParede().replace(/\n(10|11)\n(-?[\d.]+)\n/g, (m, c, v) => `\n${c}\n${Number(v) + 4_000_000}\n`);
+    await abrirComArquivo(longe);
+    const botao = screen.getByRole('button', { name: /Importar/ });
+    expect(botao).toHaveProperty('disabled', false);
+    fireEvent.change(screen.getByLabelText('Onde ancorar o desenho importado'), { target: { value: 'ARQUIVO' } });
+    expect(screen.getByTestId('aviso-longe').textContent).toMatch(/escolha outra posição/);
+    expect(screen.getByRole('button', { name: /Importar/ })).toHaveProperty('disabled', true);
+    // Nas outras posições o desenho entra normalmente.
+    fireEvent.change(screen.getByLabelText('Onde ancorar o desenho importado'), { target: { value: 'ORIGEM' } });
+    expect(screen.getByRole('button', { name: /Importar/ })).toHaveProperty('disabled', false);
+  });
+});
+
 describe('importar DXF · o desenho original como planta de fundo (P2.36)', () => {
   it('rasteriza o arquivo inteiro já aferido e entrega ao editor ANTES das paredes; o fundo anda com a ancoragem', async () => {
     const restaurar = comCanvasFalso();

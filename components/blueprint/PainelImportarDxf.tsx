@@ -200,6 +200,10 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
 
   const pegada = caixaDePontos(paredes.flatMap((p) => [p.a, p.b]));
   const { dx, dy } = deslocamentoDaImportacao(ancoragem, pegada, caixaDoDesenho(model));
+  // ⚠️ O kernel recusa coordenada além de ±1.000.000 mm, e a recusa vem de dentro do lote: o editor
+  // inteiro caía de volta para a lista. Medido no projeto real da empresa, o desenho está a 3.976.897 mm
+  // da origem do arquivo — "manter as coordenadas" é um clique que derrubava a tela.
+  const longe = !!pegada && Math.max(Math.abs(pegada.minX), Math.abs(pegada.maxX), Math.abs(pegada.minY), Math.abs(pegada.maxY)) > 900_000;
 
   const espessuras = [...new Set(paredes.map((p) => p.espessuraMm))].sort((a, b) => a - b);
   const comprimentoTotal = paredes.reduce((s, p) => s + p.comprimentoMm, 0);
@@ -528,9 +532,10 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
             </select>
           </label>
           {ancoragem === 'ARQUIVO' && pegada && (
-            <p className="mt-0.5 text-[10px] text-amber-700">
+            <p className={`mt-0.5 text-[10px] ${longe ? 'font-medium text-red-700' : 'text-amber-700'}`} data-testid="aviso-longe">
               O desenho está a {m2(Math.max(Math.abs(pegada.maxX), Math.abs(pegada.maxY)))} m da
-              origem do arquivo. Acima de 1.000 m o desenho recusa a importação.
+              origem do arquivo. Acima de 1.000 m o desenho recusa a importação
+              {longe ? ' — escolha outra posição.' : '.'}
             </p>
           )}
 
@@ -657,7 +662,7 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
             <button
               type="button"
               onClick={() => void importar()}
-              disabled={paredes.length === 0 || !levelIdAtivo || importando}
+              disabled={paredes.length === 0 || !levelIdAtivo || importando || (ancoragem === 'ARQUIVO' && longe)}
               className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-[6px] bg-blue-600 px-2.5 text-[13px] font-medium text-white transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-40"
             >
               {importando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}

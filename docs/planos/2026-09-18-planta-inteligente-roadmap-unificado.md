@@ -1629,6 +1629,27 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 - App real, **sem nenhuma escrita real** (rest bloqueado: 15; o upload do PNG e a linha da prancha foram SIMULADOS no navegador pelo harness, que devolve ao app o próprio PNG enviado — 3 chamadas simuladas): casa do print → "Guardar o desenho original como planta de fundo … 4096 × 2189 px · 3,7 mm/px · camada PAREDE em destaque" → Importar → 14 → 19 paredes, prancha "fundo · casa-print.dxf" ativa com **"Aferido em 15,03 m · confere em 15,03 m · 3,67 mm por pixel · planta alinhada pela referência"** sem pedir aferição; a 100 % de opacidade o contorno escuro do DXF aparece exatamente sob as faces das paredes geradas e o arco da porta coincide; screenshots a 100 % e 5 % diferem. PNG capturado do upload: 4096 × 2189, RGBA, 188 kB.
 - Testes: `dxfParaFundo.test.ts` (4: caixa com ancoragem e piso de 1 mm/px, pixel (margem, margem) = canto do desenho e a inversa; desenho pequeno não é ampliado, sem traço → null, filtro de camadas; segmento vira move/line em pixels do plano, arco troca o sinal dos ângulos, destaque por último e mais escuro com o traço em mm; filtro no traço), `PainelImportarDxf.test.tsx` (19: rasteriza já aferido e entrega ao editor ANTES das paredes com o underlay da ancoragem; desmarcar guarda a escolha e não rasteriza; editor recusando → paredes entram e o aviso aparece).
 
+### P2.37 — O lado da porta: virar a parede vira a porta (22/09/2026) · a partir do print do usuário
+
+**Pedido**: *"veja pelo print que em muitos casos o arco da porta está sendo feito pelo lado errado, desconsiderando a abertura da porta"*.
+
+**O que a medição disse** — antes de mexer em qualquer coisa, três aferições:
+1. **No projeto real da empresa, as 34 portas estão certas.** Montando o arco pela fórmula do canvas (`BlueprintCanvas`) e do PDF (`blueprintExport`) — pivô na ponta da dobradiça deslocado meia espessura para o lado que abre, folha na normal, raio = largura — e comparando o ponto médio do quarto de volta com o do arco do arquivo: 33 portas a **15 mm**, uma a 136 mm. Lado errado daria ~1,4 × a largura (1,1 m).
+2. **As quatro combinações** (dobradiça em cada ponta × abrindo para cada lado), num DXF sintético, saem cada uma para o seu lado — conferido no app, com o desenho original por baixo.
+3. **O canônico preserva** `hingeAtStart` e `swingReversed` (nada se perde ao salvar e recarregar).
+
+**Os defeitos que a apuração achou** (reais, corrigidos)
+- ⚠️ **Virar a peça na emenda não virava a porta.** `emendaDeParedes.noSentido` espelhava o `offsetMm` da peça desenhada ao contrário, mas não `hingeAtStart` nem `swingReversed` — e os dois dependem do sentido: `hingeAtStart` é "a dobradiça fica na ponta mais perto de `a`" (e `a` virou a outra ponta) e `swingReversed` é medido contra `n = (−uy, ux)` (que girou 180°). Toda porta já reconhecida numa peça que a emenda precisasse inverter saía espelhada — o arco do lado errado, exatamente o sintoma do print. Teste novo `emendaDeParedes.test.ts` reproduz (falha sem a correção) e fixa.
+- **Porta por NOME DE BLOCO entrava sem lado.** `/porta|door/i` no bloco dava `kind: 'door'` e deixava a orientação no padrão (dobradiça no início, abrindo para +n) — acerta por acaso em metade dos casos. Agora, se o bloco traz o arco do giro (quase sempre traz), ele decide a dobradiça e o lado.
+- **"Manter as coordenadas do arquivo" derrubava o editor.** Com o desenho a quilômetros da origem (3.976.897 mm no projeto real), o kernel recusa a coordenada e a recusa vinha de dentro do lote: a tela voltava para a lista de plantas. O painel avisava, mas não impedia o clique. Agora o botão desabilita e o aviso fica em vermelho — como o painel do COLLADA já fazia.
+
+**Prova**
+- `npx tsc --noEmit` ok · check-ui ok · `check-xss-sinks.sh` ok · suíte cheia **435 arquivos / 5049 testes** · `npm run build` ok.
+- Testes novos: `emendaDeParedes.test.ts` (3: a peça virada mantém dobradiça e lado no mundo; a que não vira não muda; abertura sem lado continua sem lado), `dxfEsquadrias.test.ts` (as quatro combinações com o arco desenhado em cima do arco do arquivo; porta por bloco usa o arco de dentro do bloco), `dxfParaKernel.test.ts` (arquivo real: o arco desenhado a menos de 300 mm do arco do arquivo em TODAS as portas, ≥ 30 conferidas, no máximo 2 acima de 100 mm), `PainelImportarDxf.test.tsx` (desenho a 4 km: "manter as coordenadas" desabilita o botão; as outras posições seguem).
+- App real (escritas bloqueadas: 15, 0 erros): DXF com as quatro combinações → "6 porta(s)" → importadas na Planta 14/09 → no canvas, cada arco para o seu lado (dobradiça à esquerda abrindo para cima, à direita abrindo para cima, à esquerda abrindo para baixo, e a parede vertical com as duas).
+
+**O que fica em aberto**: o print mostra o sintoma num desenho que não reproduz aqui — no arquivo real que temos, as 34 portas conferem. Se depois desta correção ainda houver porta do lado errado, é preciso o arquivo (ou o nome do estudo) para apurar; a ferramenta **Inverter o lado** (barra da abertura) conserta peça a peça enquanto isso.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

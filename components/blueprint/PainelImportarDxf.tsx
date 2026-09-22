@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { AlertTriangle, Check, FileUp, Loader2 } from 'lucide-react';
+import { AlertTriangle, Check, Download, FileUp, Loader2 } from 'lucide-react';
 import type { BlueprintModel, Command } from '../../utils/blueprintKernel';
 import { novoUid } from '../../utils/blueprintKernel';
 import {
@@ -13,7 +13,8 @@ import {
   type HipotesesDeEsquadrias,
   type ParedeDoDxf,
 } from '../../utils/dxfParaKernel';
-import type { ArcoDxf, RecusaDxf } from '../../utils/dxfLeitor';
+import type { ArcoDxf, InsercaoDxf, RecusaDxf, TextoDxf } from '../../utils/dxfLeitor';
+import { gerarTemplateOpura, lerPadraoOpura, REGRAS_DO_PADRAO, temPadraoOpura, VERSAO_DO_PADRAO } from '../../utils/dxfPadraoOpura';
 import { usePersistedState } from '../ui/TableUtils';
 import { converterDwgParaDxf } from '../../services/blueprintDwgService';
 import {
@@ -52,6 +53,15 @@ import {
  * procurados em todas. O DXF é planta e não sabe altura: porta, peitoril e
  * altura de janela são HIPÓTESES editáveis aqui, persistidas por tela.
  *
+ * ─── PADRÃO ÒPURA (P2.35) ───────────────────────────────────────────────────
+ *
+ * Quando o arquivo segue o padrão (camadas `OPURA-PAREDE-<mm>`, blocos
+ * `OPURA-PORTA`/`JANELA`/`CORRER`/`VAO` com atributos, textos em
+ * `OPURA-AMBIENTE`), nada é adivinhado: eixo é parede, atributo é medida,
+ * texto é nome de ambiente. O painel detecta, avisa e esconde as perguntas
+ * que o padrão já respondeu (camada, unidade, caminho, espessuras). O template
+ * sai daqui, pelo botão "Baixar template".
+ *
  * ─── DWG (E9.1) ─────────────────────────────────────────────────────────────
  *
  * Um .dwg entra pelo MESMO caminho: vai à Edge Function `dwg-converter`
@@ -69,6 +79,8 @@ interface Preparado {
   nomeArquivo: string;
   segmentos: ReturnType<typeof prepararDxf>['segmentos'];
   arcos: ArcoDxf[];
+  insercoes: InsercaoDxf[];
+  textos: TextoDxf[];
   blocosExpandidos: number;
   porCamada: { camada: string; segmentos: number; arcos: number; comprimento: number }[];
   escalas: EscalaSugerida[];
@@ -98,6 +110,9 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
   const [ancoragem, setAncoragem] = useState<AncoragemIfc>('ORIGEM');
   /** Espessuras DESMARCADAS pela pessoa (P2.34) — por arquivo, zera a cada leitura. */
   const [espessurasFora, setEspessurasFora] = useState<Set<number>>(new Set());
+  /** PADRÃO ÒPURA (P2.35): ler pelo padrão quando o arquivo o segue; a pessoa pode desligar e ler como DXF comum. */
+  const [usarOpura, setUsarOpura] = useState(true);
+  const [mostrarRegras, setMostrarRegras] = useState(false);
   // ESQUADRIAS (P2.33): as hipóteses de altura e o teto do vão livre, persistidas por tela.
   const [hip, setHip] = usePersistedState<HipotesesDeEsquadrias>('blueprint:dxf-esquadrias', HIPOTESES_ESQUADRIAS_PADRAO);
   const hipoteses: HipotesesDeEsquadrias = { ...HIPOTESES_ESQUADRIAS_PADRAO, ...hip };
@@ -120,6 +135,7 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
       setMmPorUnidade(p.escalas[0]?.mmPorUnidade ?? 1000);
       setModo('FACES');
       setEspessurasFora(new Set());
+      setUsarOpura(true);
     } catch (e) {
       setErro(e instanceof Error ? e.message : String(e));
     } finally {
@@ -127,7 +143,9 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
     }
   }, []);
 
-  const daCamada = preparado ? preparado.segmentos.filter((s) => s.camada === camada) : [];
+  const temOpura = preparado ? temPadraoOpura(preparado) : false;
+  const pelaOpura = temOpura && usarOpura;
+  const daCamada = preparado && !pelaOpura ? preparado.segmentos.filter((s) => s.camada === camada) : [];
   // ⚠️ A limpeza vale só para o caminho das FACES: é lá que a mesma parede pode
   // ser pareada duas vezes. Na camada de eixo cada traço é um traço, e remover
   // qualquer coisa seria apagar o que o desenhista desenhou.
@@ -153,11 +171,15 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
   const comprimentoBruto = porEspessura.reduce((s, e) => s + e.comprimentoMm, 0);
   const filtradas = limpo.paredes.filter((p) => !espessurasFora.has(p.espessuraMm));
   // ESQUADRIAS (P2.33): porta pelo arco, janela pelo símbolo, vão livre pelo buraco — em cima das paredes limpas e filtradas.
-  const esquadrias = preparado
-    ? aberturasDoDxf(filtradas, preparado, mmPorUnidade, camada, nivel?.defaultHeightMm ?? 2800, hipoteses)
-    : { paredes: [], resumo: { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 0, cantosFechados: 0 } };
+  // PADRÃO ÒPURA (P2.35): lido, não reconhecido — o mesmo `paredes` de saída, mais os ambientes.
+  const opura = preparado && pelaOpura ? lerPadraoOpura(preparado, nivel?.defaultHeightMm ?? 2800, hipoteses) : null;
+  const esquadrias = opura
+    ? { paredes: opura.paredes, resumo: opura.resumo }
+    : preparado && !pelaOpura
+      ? aberturasDoDxf(filtradas, preparado, mmPorUnidade, camada, nivel?.defaultHeightMm ?? 2800, hipoteses)
+      : { paredes: [], resumo: { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 0, cantosFechados: 0 } };
   const paredes = esquadrias.paredes;
-  const totalDeAberturas = esquadrias.resumo.portas + esquadrias.resumo.janelas + esquadrias.resumo.vaos;
+  const totalDeAberturas = esquadrias.resumo.portas + esquadrias.resumo.janelas + esquadrias.resumo.vaos + (opura?.resumo.correr ?? 0);
 
   const pegada = caixaDePontos(paredes.flatMap((p) => [p.a, p.b]));
   const { dx, dy } = deslocamentoDaImportacao(ancoragem, pegada, caixaDoDesenho(model));
@@ -189,22 +211,39 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
       for (const ab of p.aberturas) {
         if (ab.offsetMm < 0 || ab.offsetMm + ab.widthMm > L) continue;
         const sillMm = Math.max(0, Math.min(ab.sillMm, heightMm - 1));
+        // PADRÃO ÒPURA (P2.35): porta de correr e o TIPO do bloco viram `sliding` e `esquadria.nome`.
+        const opuraAb = ab as typeof ab & { correr?: boolean; tipo?: string };
         comandos.push({
           type: 'AddOpening',
           wallId: '',
           wallUid: uid,
-          kind: ab.kind,
+          kind: opuraAb.correr ? 'sliding' : ab.kind,
           offsetMm: ab.offsetMm,
           widthMm: ab.widthMm,
           heightMm: Math.max(1, Math.min(ab.heightMm, heightMm - sillMm)),
           sillMm,
           ...(ab.hingeAtStart !== undefined ? { hingeAtStart: ab.hingeAtStart } : {}),
           ...(ab.swingReversed !== undefined ? { swingReversed: ab.swingReversed } : {}),
+          ...(opuraAb.tipo && ab.kind !== 'passage' ? { esquadria: { nome: opuraAb.tipo, itemCode: '', descricao: '' } } : {}),
         });
       }
     }
+    // PADRÃO ÒPURA (P2.35): o nome do ambiente nasce no ponto do texto, no mesmo lote das paredes.
+    for (const amb of opura?.ambientes ?? []) {
+      comandos.push({ type: 'PlaceSpaceLabel', levelId: levelIdAtivo, at: { x: amb.at.x + dx, y: amb.at.y + dy }, name: amb.nome });
+    }
     onImportar(comandos);
     setPreparado(null);
+  }
+
+  function baixarTemplate() {
+    const blob = new Blob([gerarTemplateOpura()], { type: 'application/dxf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `padrao-opura-v${VERSAO_DO_PADRAO}.dxf`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   const campo = (rotulo: string, chave: keyof Omit<HipotesesDeEsquadrias, 'reconhecerSimbolos'>, min: number) => (
@@ -258,6 +297,35 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
               e.target.value = '';
             }}
           />
+
+          {/* ── Padrão ÒPURA (P2.35) ─────────────────────────────────────── */}
+          <div className="mt-3 rounded-md border border-blue-100 bg-blue-50/60 px-2 py-1.5" data-testid="padrao-opura">
+            <p className="text-[11px] font-semibold text-blue-900">Padrão ÒPURA de desenho v{VERSAO_DO_PADRAO}</p>
+            <p className="mt-0.5 text-[10px] text-blue-900/80">
+              Desenhe no template e a leitura deixa de reconhecer para LER: eixo é parede (espessura pela camada), bloco com atributos é
+              porta/janela com largura, altura e peitoril declarados, texto é nome de ambiente.
+            </p>
+            <div className="mt-1.5 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={baixarTemplate}
+                className="inline-flex h-7 items-center gap-1.5 rounded-[6px] border border-blue-300 bg-white px-2 text-[12px] font-medium text-blue-800 transition-colors hover:bg-blue-100"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Baixar template (.dxf)
+              </button>
+              <button type="button" onClick={() => setMostrarRegras((v) => !v)} className="text-[11px] font-medium text-blue-700 hover:underline" aria-expanded={mostrarRegras}>
+                {mostrarRegras ? 'Ocultar regras' : 'Ver as regras'}
+              </button>
+            </div>
+            {mostrarRegras && (
+              <ol className="mt-1.5 list-decimal space-y-0.5 pl-4 text-[10px] text-blue-900/80" data-testid="regras-opura">
+                {REGRAS_DO_PADRAO.map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ol>
+            )}
+          </div>
         </>
       )}
 
@@ -275,6 +343,26 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
             </p>
           )}
 
+          {/* ── Padrão ÒPURA detectado (P2.35) ────────────────────────────── */}
+          {temOpura && (
+            <div className="mt-2 rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5" data-testid="aviso-opura">
+              <label className="flex items-center gap-2 text-[11px] font-semibold text-blue-900">
+                <input type="checkbox" checked={usarOpura} onChange={(e) => setUsarOpura(e.target.checked)} aria-label="Ler pelo Padrão ÒPURA" className="h-3.5 w-3.5" />
+                Arquivo no Padrão ÒPURA — lido, não reconhecido
+              </label>
+              {opura && (
+                <p className="mt-0.5 text-[10px] text-blue-900/80" data-testid="resumo-opura">
+                  {opura.resumo.camadas.map((c) => `${c.paredes} parede(s) de ${c.espessuraMm} mm`).join(' · ') || 'nenhuma camada OPURA-PAREDE-*'}
+                  {` · ${opura.resumo.portas} porta(s) · ${opura.resumo.janelas} janela(s) · ${opura.resumo.correr} de correr · ${opura.resumo.vaos} vão(s) · ${opura.resumo.ambientes} ambiente(s)`}
+                  {opura.resumo.esquadriasSemParede > 0 ? ` · ${opura.resumo.esquadriasSemParede} bloco(s) longe de parede` : ''}
+                  {opura.resumo.esquadriasForaDaParede > 0 ? ` · ${opura.resumo.esquadriasForaDaParede} bloco(s) que não coube(ram) na parede` : ''}
+                </p>
+              )}
+            </div>
+          )}
+
+          {!pelaOpura && (
+            <>
           {/* ── A camada ─────────────────────────────────────────────────── */}
           <label className="mt-2 block text-[11px] font-semibold text-slate-600">
             Camada de parede
@@ -363,6 +451,9 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
             </p>
           )}
 
+            </>
+          )}
+
           {/* ── Esquadrias (P2.33) ───────────────────────────────────────── */}
           <div className="mt-2 rounded-md border border-slate-200 px-2 py-1.5" data-testid="esquadrias-dxf">
             <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-600">
@@ -409,7 +500,7 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
           )}
 
           {/* ── Espessuras (P2.34) ───────────────────────────────────────── */}
-          {porEspessura.length > 1 && (
+          {!pelaOpura && porEspessura.length > 1 && (
             <div className="mt-2" data-testid="espessuras-dxf">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-semibold text-slate-600">Espessuras que são parede</span>
@@ -466,8 +557,10 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
             {paredes.length > 0 && (
               <p className="mt-0.5 text-[11px] text-slate-500" data-testid="resumo-esquadrias">
                 {totalDeAberturas === 0
-                  ? 'Nenhuma porta, janela ou vão reconhecido.'
+                  ? (pelaOpura ? 'Nenhum bloco de esquadria no arquivo.' : 'Nenhuma porta, janela ou vão reconhecido.')
                   : `${esquadrias.resumo.portas} porta(s) · ${esquadrias.resumo.janelas} janela(s) · ${esquadrias.resumo.vaos} vão(s) livre(s)`}
+                {opura && opura.resumo.correr > 0 ? ` · ${opura.resumo.correr} de correr` : ''}
+                {opura && opura.resumo.ambientes > 0 ? ` · ${opura.resumo.ambientes} nome(s) de ambiente` : ''}
               </p>
             )}
             {paredes.length > 0 && (
@@ -516,7 +609,7 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
               className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-[6px] bg-blue-600 px-2.5 text-[13px] font-medium text-white transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-40"
             >
               <Check className="h-3.5 w-3.5" />
-              Importar {paredes.length}{totalDeAberturas > 0 ? ` + ${totalDeAberturas}` : ''}
+              Importar {paredes.length}{totalDeAberturas + (opura?.resumo.ambientes ?? 0) > 0 ? ` + ${totalDeAberturas + (opura?.resumo.ambientes ?? 0)}` : ''}
             </button>
             <button
               type="button"

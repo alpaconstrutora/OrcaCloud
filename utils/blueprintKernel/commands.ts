@@ -1053,6 +1053,15 @@ export type Command =
   /** Nome vazio remove a etiqueta. */
   | { type: 'NameSpace'; spaceId: ObjectId; name: string; tipoDeAmbiente?: TipoDeAmbiente | null; acabamentos?: AcabamentosDoAmbiente | null; departamento?: string | null }
   /**
+   * NOME DE AMBIENTE POR PONTO (P2.35, Padrão ÒPURA): a etiqueta nasce em `at`,
+   * no pavimento dado, no MESMO lote que cria as paredes — o ambiente ainda não
+   * existe quando a lista é montada, então não há `spaceId` a apontar. Se já
+   * há ambiente ali com etiqueta, ela é renomeada (não empilha); se não há
+   * ambiente (as paredes não fecharam), a etiqueta fica no ponto e passa a
+   * nomear o ambiente assim que ele fechar — é o que `recomputeSpaces` faz.
+   */
+  | { type: 'PlaceSpaceLabel'; levelId: ObjectId; at: Point; name: string; tipoDeAmbiente?: TipoDeAmbiente | null }
+  /**
    * Classifica a ETIQUETA de um ambiente. `null` volta a "a classificar".
    * `acabamentos` (E7.2) SUBSTITUI o conjunto inteiro (piso, forro e rodapé);
    * `null` limpa. Ausente não mexe.
@@ -4098,6 +4107,26 @@ function aplicarSemHash(
         });
         diff.created.push(id);
       }
+      break;
+    }
+
+    case 'PlaceSpaceLabel': {
+      findLevel(next, command.levelId);
+      const nome = command.name.trim();
+      if (!nome) throw new KernelError('BAD_NAME', 'Nome de ambiente vazio');
+      if (!Number.isFinite(command.at.x) || !Number.isFinite(command.at.y)) throw new KernelError('BAD_POINT', 'Ponto inválido para a etiqueta');
+      const espaco = next.spaces.find((s) => s.levelId === command.levelId && pointInPolygon(s.ring, command.at) && !s.holes.some((h) => pointInPolygon(h, command.at)));
+      const existente = espaco
+        ? next.labels.find((l) => l.levelId === espaco.levelId && pointInPolygon(espaco.ring, l.at) && !espaco.holes.some((h) => pointInPolygon(h, l.at)))
+        : undefined;
+      if (existente) {
+        next.labels = next.labels.map((l) => (l.id === existente.id ? { ...l, name: nome, ...(command.tipoDeAmbiente !== undefined ? { tipoDeAmbiente: command.tipoDeAmbiente } : {}) } : l));
+        diff.updated.push(existente.id);
+        break;
+      }
+      const id = nextId(next, 'lbl');
+      next.labels.push({ id, uid: novoUid(), levelId: command.levelId, at: { x: Math.round(command.at.x), y: Math.round(command.at.y) }, name: nome, tipoDeAmbiente: command.tipoDeAmbiente ?? null });
+      diff.created.push(id);
       break;
     }
 

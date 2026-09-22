@@ -635,6 +635,17 @@ export function aberturasDoDxf(
   }
   resumo.tocosDeBatente = tocos.size;
 
+  const limpas = emendadas.filter((p) => !tocos.has(p));
+  return { paredes: acabarJuncoes(limpas, resumo), resumo };
+}
+
+/**
+ * JUNÇÕES (P2.34): encostar a ponta que parou na FACE da parede que cruza e
+ * fechar o canto em L — o que faz o anel fechar. Compartilhado entre o caminho
+ * das faces (`aberturasDoDxf`) e o do Padrão ÒPURA (P2.35). Preenche
+ * `encostadas`, `pontasSoltas` e `cantosFechados` no resumo.
+ */
+export function acabarJuncoes(limpas: ParedeComAberturas[], resumo: Pick<ResumoDeEsquadrias, 'encostadas' | 'pontasSoltas' | 'cantosFechados'>): ParedeComAberturas[] {
   // ── Encostar a ponta que parou na FACE da parede que cruza (P2.34) ───────
   //
   // Num desenho de faces a parede que chega para na face da que passa: a ponta
@@ -642,7 +653,6 @@ export function aberturasDoDxf(
   // fecha. `encostarNasFaces` (do IFC) leva a ponta ao eixo só nessa condição.
   // Como a ponta `a` pode andar, os offsets das aberturas (medidos de `a`)
   // deslocam junto; abertura que sair da parede é descartada.
-  const limpas = emendadas.filter((p) => !tocos.has(p));
   const encosto = encostarNasFaces(limpas, 5);
   resumo.encostadas = encosto.encostadas;
   resumo.pontasSoltas = encosto.soltas;
@@ -672,8 +682,7 @@ export function aberturasDoDxf(
   const cantos = fecharCantos(encostadas);
   resumo.cantosFechados = cantos.fechados;
   resumo.pontasSoltas = Math.max(0, resumo.pontasSoltas - 2 * cantos.fechados);
-
-  return { paredes: cantos.paredes, resumo };
+  return cantos.paredes;
 }
 
 const MAX_CANTO_MM = 300;

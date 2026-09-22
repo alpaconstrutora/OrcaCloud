@@ -61,6 +61,28 @@ export interface ArcoDxf {
   bloco?: string;
 }
 
+/** P2.35: um `INSERT` do desenho (nível de cima), com os ATRIBUTOS que o acompanham — é assim que o Padrão ÒPURA declara largura, altura e peitoril. */
+export interface InsercaoDxf {
+  camada: string;
+  nome: string;
+  x: number;
+  y: number;
+  sx: number;
+  sy: number;
+  /** Graus, anti-horário. */
+  rotacao: number;
+  /** `ATTRIB` por TAG (maiúsculas) → valor. */
+  atributos: Record<string, string>;
+}
+
+/** P2.35: um `TEXT`/`MTEXT` — o nome de ambiente do Padrão ÒPURA. */
+export interface TextoDxf {
+  camada: string;
+  x: number;
+  y: number;
+  texto: string;
+}
+
 /** O que o arquivo tem e este leitor não converte, com a contagem. */
 export interface RecusaDxf {
   camada: string;
@@ -72,6 +94,10 @@ export interface LeituraDxf {
   segmentos: SegmentoDxf[];
   /** P2.33: os arcos e círculos, para o reconhecimento de portas. */
   arcos: ArcoDxf[];
+  /** P2.35: os blocos inseridos no desenho (nível de cima) com seus atributos. */
+  insercoes: InsercaoDxf[];
+  /** P2.35: os textos do desenho. */
+  textos: TextoDxf[];
   recusas: RecusaDxf[];
   /** Quantos segmentos (e arcos) cada camada tem — é o que a tela oferece para escolher. */
   porCamada: { camada: string; segmentos: number; arcos: number; comprimento: number }[];
@@ -108,7 +134,8 @@ const PROFUNDIDADE_MAX = 4;
 type Entidade =
   | { tipo: 'LINE'; camada: string; a: { x: number; y: number }; b: { x: number; y: number } }
   | { tipo: 'ARC'; camada: string; centro: { x: number; y: number }; raio: number; anguloInicial: number; anguloFinal: number }
-  | { tipo: 'INSERT'; camada: string; nome: string; x: number; y: number; sx: number; sy: number; rotacao: number }
+  | { tipo: 'INSERT'; camada: string; nome: string; x: number; y: number; sx: number; sy: number; rotacao: number; atributos: Record<string, string> }
+  | { tipo: 'TEXT'; camada: string; x: number; y: number; texto: string }
   | { tipo: 'RECUSA'; camada: string; nome: string };
 
 interface Bloco {
@@ -141,6 +168,10 @@ function lerEntidades(linhas: string[], i: number, emitir: (e: Entidade) => void
   let sx = 1;
   let sy = 1;
   let rotacao = 0;
+  /** Conteúdo (código 1) de TEXT/MTEXT e valor de ATTRIB; `tag` é o código 2 do ATTRIB. */
+  let conteudo = '';
+  /** O último INSERT emitido: os `ATTRIB` que vêm logo depois dele (até o `SEQEND`) são os atributos dele. */
+  let ultimoInsert: Extract<Entidade, { tipo: 'INSERT' }> | null = null;
   /** O bloco em definição (só na seção `BLOCKS`). */
   let blocoAtual: Bloco | null = null;
 
@@ -166,7 +197,15 @@ function lerEntidades(linhas: string[], i: number, emitir: (e: Entidade) => void
     } else if ((tipo === 'ARC' || tipo === 'CIRCLE') && xs.length >= 1 && ys.length >= 1 && raio > 0) {
       destino({ tipo: 'ARC', camada, centro: { x: xs[0], y: ys[0] }, raio, anguloInicial: tipo === 'CIRCLE' ? 0 : ang0, anguloFinal: tipo === 'CIRCLE' ? 360 : ang1 });
     } else if (tipo === 'INSERT' && nome && xs.length >= 1 && ys.length >= 1) {
-      destino({ tipo: 'INSERT', camada, nome, x: xs[0], y: ys[0], sx, sy, rotacao });
+      const ins: Extract<Entidade, { tipo: 'INSERT' }> = { tipo: 'INSERT', camada, nome, x: xs[0], y: ys[0], sx, sy, rotacao, atributos: {} };
+      ultimoInsert = ins;
+      destino(ins);
+    } else if (tipo === 'ATTRIB' && ultimoInsert && nome) {
+      // ⚠️ O ATTRIB vem DEPOIS do INSERT no arquivo; a emissão do INSERT já aconteceu, mas o objeto é o
+      // mesmo — quem lê `atributos` depois do `lerEntidades` inteiro vê os valores.
+      ultimoInsert.atributos[nome.toUpperCase()] = conteudo;
+    } else if ((tipo === 'TEXT' || tipo === 'MTEXT') && xs.length >= 1 && ys.length >= 1 && conteudo.trim()) {
+      destino({ tipo: 'TEXT', camada, x: xs[0], y: ys[0], texto: limparMtext(conteudo) });
     } else if (CURVAS_RECUSADAS.has(tipo)) {
       destino({ tipo: 'RECUSA', camada, nome: tipo });
     } else if (tipo === 'BLOCK' && blocos) {
@@ -187,6 +226,7 @@ function lerEntidades(linhas: string[], i: number, emitir: (e: Entidade) => void
     sx = 1;
     sy = 1;
     rotacao = 0;
+    conteudo = '';
   };
 
   for (; i < linhas.length - 1; i += 2) {
@@ -205,6 +245,7 @@ function lerEntidades(linhas: string[], i: number, emitir: (e: Entidade) => void
         continue;
       }
       fecharEntidade();
+      if (valor === 'SEQEND') ultimoInsert = null;
       if (valor === 'ENDSEC') {
         // Zerar ANTES de sair: o `fecharEntidade()` depois do laço existe para
         // o arquivo que acaba sem `ENDSEC`, e sem isto ele contaria a última
@@ -233,7 +274,9 @@ function lerEntidades(linhas: string[], i: number, emitir: (e: Entidade) => void
     } else if (codigo === '40' && (tipo === 'ARC' || tipo === 'CIRCLE')) raio = Number(valor);
     else if (codigo === '50' && tipo === 'ARC') ang0 = Number(valor);
     else if (codigo === '51' && tipo === 'ARC') ang1 = Number(valor);
-    else if (codigo === '2' && (tipo === 'INSERT' || tipo === 'BLOCK')) nome = valor;
+    else if (codigo === '2' && (tipo === 'INSERT' || tipo === 'BLOCK' || tipo === 'ATTRIB')) nome = valor;
+    else if (codigo === '1' && (tipo === 'TEXT' || tipo === 'MTEXT' || tipo === 'ATTRIB')) conteudo = valor;
+    else if (codigo === '3' && tipo === 'MTEXT') conteudo = valor + conteudo; // MTEXT longo: pedaços em 3, o resto em 1
     else if (codigo === '41' && tipo === 'INSERT') sx = Number(valor) || 1;
     else if (codigo === '42' && tipo === 'INSERT') sy = Number(valor) || 1;
     else if (codigo === '50' && tipo === 'INSERT') rotacao = Number(valor) || 0;
@@ -282,11 +325,13 @@ export function lerDxf(texto: string): LeituraDxf {
 
   const segmentos: SegmentoDxf[] = [];
   const arcos: ArcoDxf[] = [];
+  const insercoes: InsercaoDxf[] = [];
+  const textos: TextoDxf[] = [];
   const recusadas = new Map<string, { camada: string; tipo: string; quantas: number }>();
   let blocosExpandidos = 0;
 
   const recusar = (camada: string, tipo: string) => {
-    const chave = `${camada} ${tipo}`;
+    const chave = `${camada}\n${tipo}`; // camada com espaço existe; com quebra de linha, não
     const r = recusadas.get(chave) ?? { camada, tipo, quantas: 0 };
     r.quantas++;
     recusadas.set(chave, r);
@@ -336,7 +381,12 @@ export function lerDxf(texto: string): LeituraDxf {
       });
     } else if (e.tipo === 'RECUSA') {
       recusar(camada, e.nome);
+    } else if (e.tipo === 'TEXT') {
+      textos.push({ camada, ...aplicar(t, { x: e.x, y: e.y }), texto: e.texto });
     } else if (e.tipo === 'INSERT') {
+      // O registro do bloco inserido, só no nível de cima: é o que o Padrão ÒPURA lê (com os atributos,
+      // que chegam ao MESMO objeto depois — ver `ultimoInsert`).
+      if (profundidade === 0) insercoes.push({ camada, nome: e.nome, x: e.x, y: e.y, sx: e.sx, sy: e.sy, rotacao: e.rotacao, atributos: e.atributos });
       const def = blocos.get(e.nome);
       // Anônimo (`*D12` é cota, `*Model_Space` é layout): não é desenho de arquitetura.
       if (e.nome.startsWith('*')) return;
@@ -390,6 +440,8 @@ export function lerDxf(texto: string): LeituraDxf {
   return {
     segmentos: segmentos.filter((s) => Number.isFinite(s.a.x) && Number.isFinite(s.b.y)),
     arcos: arcos.filter((a) => Number.isFinite(a.centro.x) && Number.isFinite(a.centro.y) && Number.isFinite(a.raio)),
+    insercoes: insercoes.filter((i) => Number.isFinite(i.x) && Number.isFinite(i.y)),
+    textos: textos.filter((t) => Number.isFinite(t.x) && Number.isFinite(t.y)),
     recusas: [...recusadas.values()].sort((a, b) => b.quantas - a.quantas),
     porCamada: [...porCamadaMapa.entries()]
       .map(([camada2, v]) => ({ camada: camada2, ...v }))
@@ -397,6 +449,16 @@ export function lerDxf(texto: string): LeituraDxf {
     blocosExpandidos,
     mmPorUnidadeDeclarado,
   };
+}
+
+/** Tira a formatação do MTEXT: `\\P` (parágrafo), `\\f…;` (fonte), `{…}` e `\\A1;` (alinhamento). */
+function limparMtext(t: string): string {
+  return t
+    .replace(/\\[Pp]/g, ' ')
+    .replace(/\\[fFhHwWqQcCaAtT][^;]*;/g, '')
+    .replace(/[{}]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /** Ângulo em [0, 360). */

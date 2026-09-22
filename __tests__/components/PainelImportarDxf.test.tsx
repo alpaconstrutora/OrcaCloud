@@ -18,6 +18,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import PainelImportarDxf from '../../components/blueprint/PainelImportarDxf';
 import { applyCommand, emptyModel } from '../../utils/blueprintKernel';
+import { gerarTemplateOpura, REGRAS_DO_PADRAO } from '../../utils/dxfPadraoOpura';
 
 // E9.1: o DWG passa pela Edge Function; aqui ela é o mock — o que se testa é
 // que o .dwg entra pelo MESMO pipeline do DXF e que a versão fica declarada.
@@ -257,6 +258,40 @@ describe('importar DXF · filtro de espessuras e relatório (P2.34)', () => {
     expect(screen.getByTestId('relatorio-dxf').textContent).toMatch(/Relatório de leitura/);
     // Uma parede isolada: as duas pontas soltas.
     expect(screen.getByTestId('resumo-juncoes').textContent).toBe('2 ponta(s) de parede vão ficar soltas');
+  });
+});
+
+describe('importar DXF · Padrão ÒPURA (P2.35)', () => {
+  it('o template baixado volta detectado: paredes pelo eixo, esquadrias pelos atributos, ambiente pelo texto — e o lote leva PlaceSpaceLabel', async () => {
+    const { onImportar } = await abrirComArquivo(gerarTemplateOpura());
+    expect(screen.getByTestId('aviso-opura').textContent).toMatch(/Arquivo no Padrão ÒPURA/);
+    expect(screen.getByTestId('resumo-opura').textContent).toBe('4 parede(s) de 150 mm · 1 porta(s) · 1 janela(s) · 0 de correr · 0 vão(s) · 1 ambiente(s)');
+    // As perguntas que o padrão já respondeu não aparecem.
+    expect(screen.queryByLabelText('Camada que contém as paredes')).toBeNull();
+    expect(screen.queryByLabelText('Unidade em que o arquivo foi desenhado')).toBeNull();
+    expect(screen.getByTestId('resumo-juncoes').textContent).toBe('Todas as pontas de parede encostam em outra.');
+    expect(screen.getByRole('button', { name: /Importar/ }).textContent).toMatch(/Importar 4 \+ 3/);
+    fireEvent.click(screen.getByRole('button', { name: /Importar/ }));
+    const comandos = onImportar.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(comandos.filter((c) => c.type === 'AddWall')).toHaveLength(4);
+    expect(comandos.find((c) => c.kind === 'door')).toMatchObject({ widthMm: 800, heightMm: 2100, esquadria: { nome: 'P1' } });
+    expect(comandos.find((c) => c.kind === 'window')).toMatchObject({ widthMm: 1200, heightMm: 1200, sillMm: 1000, esquadria: { nome: 'J1' } });
+    expect(comandos.find((c) => c.type === 'PlaceSpaceLabel')).toMatchObject({ name: 'SALA', at: { x: 1700, y: 1500 } });
+  });
+
+  it('desligar "Ler pelo Padrão ÒPURA" volta ao caminho comum (camada e unidade reaparecem)', async () => {
+    await abrirComArquivo(gerarTemplateOpura());
+    fireEvent.click(screen.getByLabelText('Ler pelo Padrão ÒPURA'));
+    expect(screen.getByLabelText('Camada que contém as paredes')).toBeTruthy();
+  });
+
+  it('antes de escolher arquivo, o painel oferece o template e as regras', () => {
+    const { model, levelId } = comNivel();
+    render(<PainelImportarDxf model={model} levelIdAtivo={levelId} onImportar={vi.fn()} />);
+    expect(screen.getByTestId('padrao-opura').textContent).toMatch(/Padrão ÒPURA de desenho v1\.0/);
+    expect(screen.getByRole('button', { name: /Baixar template/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Ver as regras' }));
+    expect(screen.getByTestId('regras-opura').querySelectorAll('li')).toHaveLength(REGRAS_DO_PADRAO.length);
   });
 });
 

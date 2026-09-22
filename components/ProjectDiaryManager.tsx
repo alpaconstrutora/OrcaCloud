@@ -592,6 +592,21 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         });
     };
 
+    /**
+     * Itens do cronograma que podem ser vinculados a uma atividade: só os que
+     * ainda existem no orçamento do planejamento. `itemSchedules` guarda linhas
+     * órfãs de versões anteriores do orçamento (Divino Espírito Santo: 132 no
+     * cronograma, 37 no orçamento) — sem nome, elas apareciam como dezenas de
+     * "Item sem nome" no select. Mesmo critério de OperacionalForm.
+     */
+    const itensCronogramaVinculaveis = useMemo(() => {
+        const its = linkedSchedule?.itemSchedules || [];
+        const porId = new Map(linkedBudget.map(b => [b.id, b]));
+        return its
+            .map(is => ({ schedule: is, budget: porId.get(is.id) }))
+            .filter((x): x is { schedule: typeof x.schedule; budget: BudgetEntry } => !!x.budget && !!x.budget.sinapiItem?.description);
+    }, [linkedSchedule, linkedBudget]);
+
     const laborRows = useMemo<LaborRow[]>(
         () => (formData.labor || []).map((lab, idx) => ({ ...lab, idx })),
         [formData.labor],
@@ -1055,15 +1070,16 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                     <div className="flex-1 min-w-[300px] flex items-center gap-4">
                                                         <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 font-bold shrink-0">{idx + 1}</div>
                                                         <div className="flex-1 space-y-2">
-                                                            {linkedSchedule && linkedSchedule.itemSchedules && linkedSchedule.itemSchedules.length > 0 ? (
+                                                            {itensCronogramaVinculaveis.length > 0 ? (
                                                                 <div className="flex flex-col gap-1">
                                                                     <span className="text-xs font-bold text-gray-400 uppercase tracking-tighter ml-1">Vincular Item do Cronograma</span>
                                                                     <select
                                                                         value={act.itemId || ''}
                                                                         onChange={(e) => {
                                                                             const itemId = e.target.value;
-                                                                            const scheduleItem = linkedSchedule.itemSchedules?.find(is => is.id === itemId);
-                                                                            const budgetItem = linkedBudget.find(b => b.id === itemId);
+                                                                            const vinculo = itensCronogramaVinculaveis.find(x => x.schedule.id === itemId);
+                                                                            const scheduleItem = vinculo?.schedule;
+                                                                            const budgetItem = vinculo?.budget;
 
                                                                             if (itemId) {
                                                                                 const newActs = [...(formData.activities || [])];
@@ -1082,14 +1098,11 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                                         className="w-full bg-indigo-50/50 border border-indigo-100 outline-none focus:bg-white focus:ring-1 focus:ring-indigo-100 p-2.5 rounded-xl text-form-input font-semibold text-indigo-700 transition-all"
                                                                     >
                                                                         <option value="">-- Selecione um item --</option>
-                                                                        {linkedSchedule.itemSchedules.map(is => {
-                                                                            const budgetItem = linkedBudget.find(b => b.id === is.id);
-                                                                            return (
-                                                                                <option key={is.id} value={is.id}>
-                                                                                    {budgetItem?.sinapiItem?.description || 'Item sem nome'}
-                                                                                </option>
-                                                                            );
-                                                                        })}
+                                                                        {itensCronogramaVinculaveis.map(({ schedule: is, budget: budgetItem }) => (
+                                                                            <option key={is.id} value={is.id}>
+                                                                                {budgetItem.sinapiItem.description}
+                                                                            </option>
+                                                                        ))}
                                                                     </select>
                                                                 </div>
                                                             ) : null}

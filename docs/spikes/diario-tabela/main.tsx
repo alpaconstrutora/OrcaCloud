@@ -44,6 +44,9 @@ const settings = {
     classification: 'DIARIO',
     diaryEntries: entradas,
     schedule: { startDate: '2026-08-01', endDate: '2026-12-20' },
+    // `?plan=1`: diário vinculado à obra p1, que tem o planejamento pl1 (o
+    // roteiro Playwright responde GET projects?id=eq.pl1 com cronograma + orçamento).
+    ...(new URLSearchParams(location.search).get('plan') === '1' ? { linkedProjectId: 'p1', linkedProjectName: 'Igreja Divino Espírito Santo' } : {}),
 } as unknown as ProjectSettings;
 
 // ConfirmProvider: o Sheet (Adicionar do RH) usa useConfirm(); no app ele vem do App.tsx.
@@ -51,7 +54,10 @@ createRoot(document.getElementById('raiz')!).render(
     <ConfirmProvider>
     <ProjectDiaryManager
         settings={settings}
-        projects={[{ id: 'p1', name: 'Igreja Divino Espírito Santo', settings: { classification: 'OBRA' } }]}
+        projects={[
+            { id: 'p1', name: 'Igreja Divino Espírito Santo', settings: { classification: 'OBRA' } },
+            { id: 'pl1', name: 'Planejamento Igreja', settings: { classification: 'PLANEJAMENTO', linkedProjectId: 'p1' } },
+        ]}
         onLoadProject={() => undefined}
         onUpdateSettings={() => undefined}
         onBackToList={() => undefined}

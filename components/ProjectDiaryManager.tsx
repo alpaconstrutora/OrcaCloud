@@ -40,6 +40,14 @@ import Button from './ui/Button';
 
 type DiaryEditorTab = 'clima' | 'atividades' | 'comentarios' | 'arquivos';
 
+/** Painel lateral "Status do relatório" — cor de texto por status, sem pílula (§8). */
+const REPORT_STATUS_OPTIONS: { val: NonNullable<DiaryEntry['status']>; hint: string; active: string }[] = [
+    { val: 'Rascunho',   hint: 'Em preenchimento',               active: 'bg-gray-100 text-gray-800 border-gray-200' },
+    { val: 'Em Análise', hint: 'Aguardando conferência',         active: 'bg-amber-50 text-amber-700 border-amber-200' },
+    { val: 'Aprovado',   hint: 'Conferido e validado',           active: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    { val: 'Recusado',   hint: 'Devolvido para correção',        active: 'bg-red-50 text-red-700 border-red-200' },
+];
+
 // Efetivo de Mão de Obra (editor do registro) — células editáveis §7.1.
 const LABOR_COLUMNS: StandardTableColumn[] = [
     { key: 'category', label: 'Trabalhador / equipe', sortable: true, width: 320 },
@@ -811,26 +819,6 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                         <div className="p-6 bg-gray-50/50 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <div className="flex flex-wrap items-center gap-6">
                                 <div className="flex items-center gap-3">
-                                    <div className="flex flex-col">
-                                        <span className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Status do Relatório</span>
-                                        <div className="flex bg-gray-100/50 p-1 rounded-xl">
-                                            {[
-                                                { val: 'Rascunho', color: 'bg-white text-gray-500 shadow-sm border border-gray-100' },
-                                                { val: 'Em Análise', color: 'bg-amber-100 text-amber-700 shadow-sm border border-amber-200' },
-                                                { val: 'Aprovado', color: 'bg-emerald-100 text-emerald-700 shadow-sm border border-emerald-200' },
-                                                { val: 'Recusado', color: 'bg-red-100 text-red-700 shadow-sm border border-red-200' }
-                                            ].map(s => (
-                                                <button
-                                                    key={s.val}
-                                                    onClick={() => setFormData({ ...formData, status: s.val as DiaryEntry['status'] })}
-                                                    className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-tighter transition-all ${formData.status === s.val ? s.color : 'text-gray-700 hover:text-gray-900'}`}
-                                                >
-                                                    {s.val}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div className="w-[1px] h-10 bg-gray-100 mx-2" />
                                     <div className="flex items-center gap-3 bg-indigo-50/50 px-4 py-2 rounded-2xl border border-indigo-100/50">
                                         <Calendar className="w-5 h-5 text-indigo-600" />
                                         <div className="flex flex-col">
@@ -847,6 +835,9 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                             </div>
                         </div>
 
+                        {/* Corpo: abas + conteúdo à esquerda; "Status do relatório" em painel lateral à direita */}
+                        <div className="flex flex-col lg:flex-row">
+                        <div className="flex-1 min-w-0">
                         {/* Abas do editor — §19.1 (trilho `bare`: o card do editor já é a moldura) */}
                         <div className="p-2 border-b border-gray-100 bg-white">
                             <TabsBar
@@ -1232,6 +1223,37 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                     </div>
                                 </div>
                             )}
+                        </div>
+                        </div>
+
+                        {/* Painel lateral direito — Status do relatório (lista vertical; cor por status, §8) */}
+                        <aside className="lg:w-72 shrink-0 border-t lg:border-t-0 lg:border-l border-gray-100 p-6 space-y-3">
+                            <div>
+                                <h3 className="text-sm font-semibold text-gray-900">Status do relatório</h3>
+                                <p className="text-xs text-gray-400 mt-0.5">Situação deste registro do diário.</p>
+                            </div>
+                            <div className="space-y-2" role="radiogroup" aria-label="Status do relatório">
+                                {REPORT_STATUS_OPTIONS.map(opt => {
+                                    const ativo = (formData.status || 'Rascunho') === opt.val;
+                                    return (
+                                        <button
+                                            key={opt.val}
+                                            type="button"
+                                            role="radio"
+                                            aria-checked={ativo}
+                                            onClick={() => setFormData({ ...formData, status: opt.val })}
+                                            className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-[6px] border text-left transition-all ${ativo ? opt.active : 'bg-white text-gray-700 border-gray-100 hover:bg-gray-50'}`}
+                                        >
+                                            <span className="min-w-0">
+                                                <span className="block text-sm font-medium">{opt.val}</span>
+                                                <span className={`block text-xs ${ativo ? 'opacity-80' : 'text-gray-400'}`}>{opt.hint}</span>
+                                            </span>
+                                            {ativo && <CheckCircle2 className="w-4 h-4 shrink-0" />}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </aside>
                         </div>
                     </div >
                 )

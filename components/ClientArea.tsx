@@ -4152,187 +4152,164 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 <ClientPortalLinkModal client={clientProfile} organizationId={organizationId} onClose={() => setShowLinkModal(false)} />
             )}
 
-            {/* Modal Meus Dados */}
-            {showMeusDados && clientProfile && (
-                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={() => setShowMeusDados(false)}>
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-                    <div
-                        className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in zoom-in-95 fade-in duration-200"
-                        onClick={e => e.stopPropagation()}
-                    >
-                        <div className="flex items-center justify-between p-8 border-b border-gray-100">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
-                                    <UserCircle className="w-5 h-5 text-indigo-600" />
-                                </div>
-                                <div>
-                                    <h2 className="text-lg font-black text-gray-900">Meus Dados</h2>
-                                    <p className="text-xs text-gray-400 uppercase tracking-widest mt-0.5">Informações cadastrais</p>
-                                </div>
-                            </div>
-                            <button onClick={() => setShowMeusDados(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
-                                <X className="w-5 h-5" />
-                            </button>
+            {/* Meus dados — painel lateral (Sheet), como no Portal do Fornecedor
+                (`SupplierDashboard` › `showMyAccount`). Era um modal central
+                `rounded-[2rem]`; REGRA #4 / UI_PATTERNS: modal central só para
+                interrupção crítica. Malha do formulário pelo §30; rótulos §21.
+                O Sheet fica sempre montado — é ele quem anima entrada/saída. */}
+            <Sheet open={showMeusDados && !!clientProfile} onClose={() => setShowMeusDados(false)} size="lg">
+                <SheetHeader onClose={() => setShowMeusDados(false)}>
+                    <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 bg-indigo-50 rounded-[10px] flex items-center justify-center shrink-0">
+                            <UserCircle className="w-4 h-4 text-indigo-600" />
                         </div>
+                        <div className="min-w-0">
+                            <SheetTitle>Meus dados</SheetTitle>
+                            <SheetDescription>O cadastro que a incorporadora tem de {clientDisplayName}.</SheetDescription>
+                        </div>
+                    </div>
+                </SheetHeader>
 
-                        <div className="p-8 space-y-5">
-                            {/* Nome */}
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-2">Nome completo</label>
-                                <div className="relative">
-                                    <UserCircle className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                <SheetPanel className="p-4 md:p-6">
+                    <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-8">
+                        {/* Identificação */}
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                                <UserCircle className="w-4 h-4 text-indigo-600" />
+                                <h3 className="text-sm font-semibold text-gray-900">Identificação</h3>
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                <div className="space-y-1.5 col-span-2">
+                                    <label className="text-xs font-semibold text-slate-500">Nome completo</label>
                                     <input
                                         type="text"
                                         value={meusDadosForm.name || ''}
                                         onChange={e => setMeusDadosForm(f => ({ ...f, name: e.target.value }))}
-                                        className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
+                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
                                     />
                                 </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                {/* E-mail */}
-                                <div>
-                                    <label className="block text-xs font-semibold text-slate-500 mb-2">E-mail</label>
-                                    <div className="relative">
-                                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
-                                        <input
-                                            type="email"
-                                            value={meusDadosForm.email || ''}
-                                            onChange={e => setMeusDadosForm(f => ({ ...f, email: e.target.value }))}
-                                            className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
-                                        />
-                                    </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500">E-mail</label>
+                                    <input
+                                        type="email"
+                                        value={meusDadosForm.email || ''}
+                                        onChange={e => setMeusDadosForm(f => ({ ...f, email: e.target.value }))}
+                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
+                                    />
                                 </div>
-                                {/* Telefone */}
-                                <div>
-                                    <label className="block text-xs font-semibold text-slate-500 mb-2">Telefone</label>
-                                    <div className="relative">
-                                        <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
-                                        <input
-                                            type="tel"
-                                            value={meusDadosForm.phone || ''}
-                                            onChange={e => setMeusDadosForm(f => ({ ...f, phone: e.target.value }))}
-                                            className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
-                                        />
-                                    </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500">Telefone</label>
+                                    <input
+                                        type="tel"
+                                        value={meusDadosForm.phone || ''}
+                                        onChange={e => setMeusDadosForm(f => ({ ...f, phone: e.target.value }))}
+                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
+                                    />
                                 </div>
-                            </div>
-
-                            {/* CPF/CNPJ */}
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-2">
-                                    {meusDadosForm.type === 'PJ' ? 'CNPJ' : 'CPF'}
-                                </label>
-                                <div className="relative">
-                                    <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500">{meusDadosForm.type === 'PJ' ? 'CNPJ' : 'CPF'}</label>
                                     <input
                                         type="text"
                                         value={meusDadosForm.document || ''}
                                         onChange={e => setMeusDadosForm(f => ({ ...f, document: e.target.value }))}
-                                        className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
+                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
                                     />
                                 </div>
                             </div>
+                        </div>
 
-                            <div className="border-t border-gray-100 pt-5">
-                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                    <Home className="w-3.5 h-3.5" /> Endereço
-                                </p>
-                                <div className="space-y-4">
-                                    <div className="grid grid-cols-3 gap-4">
-                                        <div className="col-span-2">
-                                            <label className="block text-xs font-semibold text-slate-500 mb-2">Logradouro</label>
-                                            <input
-                                                type="text"
-                                                placeholder="Rua / Av."
-                                                value={meusDadosForm.address || ''}
-                                                onChange={e => setMeusDadosForm(f => ({ ...f, address: e.target.value }))}
-                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-semibold text-slate-500 mb-2">Número</label>
-                                            <input
-                                                type="text"
-                                                value={meusDadosForm.address_number || ''}
-                                                onChange={e => setMeusDadosForm(f => ({ ...f, address_number: e.target.value }))}
-                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-xs font-semibold text-slate-500 mb-2">Bairro</label>
-                                            <input
-                                                type="text"
-                                                value={meusDadosForm.neighborhood || ''}
-                                                onChange={e => setMeusDadosForm(f => ({ ...f, neighborhood: e.target.value }))}
-                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-semibold text-slate-500 mb-2">CEP</label>
-                                            <input
-                                                type="text"
-                                                value={meusDadosForm.zip_code || ''}
-                                                onChange={e => setMeusDadosForm(f => ({ ...f, zip_code: e.target.value }))}
-                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-xs font-semibold text-slate-500 mb-2">Cidade</label>
-                                            <input
-                                                type="text"
-                                                value={meusDadosForm.city || ''}
-                                                onChange={e => setMeusDadosForm(f => ({ ...f, city: e.target.value }))}
-                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-semibold text-slate-500 mb-2">Estado</label>
-                                            <input
-                                                type="text"
-                                                maxLength={2}
-                                                placeholder="UF"
-                                                value={meusDadosForm.state || ''}
-                                                onChange={e => setMeusDadosForm(f => ({ ...f, state: e.target.value.toUpperCase() }))}
-                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
-                                            />
-                                        </div>
-                                    </div>
+                        {/* Endereço */}
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                                <Home className="w-4 h-4 text-indigo-600" />
+                                <h3 className="text-sm font-semibold text-gray-900">Endereço</h3>
+                            </div>
+                            <div className="grid grid-cols-3 gap-x-6 gap-y-4">
+                                <div className="space-y-1.5 col-span-2">
+                                    <label className="text-xs font-semibold text-slate-500">Logradouro</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Rua / Av."
+                                        value={meusDadosForm.address || ''}
+                                        onChange={e => setMeusDadosForm(f => ({ ...f, address: e.target.value }))}
+                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500">Número</label>
+                                    <input
+                                        type="text"
+                                        value={meusDadosForm.address_number || ''}
+                                        onChange={e => setMeusDadosForm(f => ({ ...f, address_number: e.target.value }))}
+                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500">Bairro</label>
+                                    <input
+                                        type="text"
+                                        value={meusDadosForm.neighborhood || ''}
+                                        onChange={e => setMeusDadosForm(f => ({ ...f, neighborhood: e.target.value }))}
+                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500">Cidade</label>
+                                    <input
+                                        type="text"
+                                        value={meusDadosForm.city || ''}
+                                        onChange={e => setMeusDadosForm(f => ({ ...f, city: e.target.value }))}
+                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500">Estado</label>
+                                    <input
+                                        type="text"
+                                        maxLength={2}
+                                        placeholder="UF"
+                                        value={meusDadosForm.state || ''}
+                                        onChange={e => setMeusDadosForm(f => ({ ...f, state: e.target.value.toUpperCase() }))}
+                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
+                                    />
                                 </div>
                             </div>
                         </div>
-
-                        <div className="px-8 pb-8">
-                            <button
-                                disabled={savingDados}
-                                onClick={async () => {
-                                    if (!clientProfile) return;
-                                    setSavingDados(true);
-                                    try {
-                                        await clientService.saveClient({ id: clientProfile.id, ...meusDadosForm });
-                                        onClientSelect?.({ ...clientProfile, ...meusDadosForm } as Client);
-                                        setShowMeusDados(false);
-                                    } catch (err) {
-                                        console.error(err);
-                                        alert('Erro ao salvar dados. Tente novamente.');
-                                    } finally {
-                                        setSavingDados(false);
-                                    }
-                                }}
-                                className="w-full flex items-center justify-center gap-3 py-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-2xl text-button font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-100 active:scale-95"
-                            >
-                                <Save className="w-4 h-4" />
-                                {savingDados ? 'Salvando...' : 'Salvar Alterações'}
-                            </button>
-                        </div>
                     </div>
-                </div>
-            )}
+                </SheetPanel>
+
+                <SheetFooter className="justify-end gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setShowMeusDados(false)}
+                        className="h-9 px-3.5 bg-white border border-gray-200 text-gray-600 rounded-[6px] text-[13px] font-medium hover:bg-gray-50 transition-all"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        disabled={savingDados}
+                        onClick={async () => {
+                            if (!clientProfile) return;
+                            setSavingDados(true);
+                            try {
+                                await clientService.saveClient({ id: clientProfile.id, ...meusDadosForm });
+                                onClientSelect?.({ ...clientProfile, ...meusDadosForm } as Client);
+                                setShowMeusDados(false);
+                                showToast('Dados salvos.');
+                            } catch (err) {
+                                console.error(err);
+                                showToast('Erro ao salvar dados. Tente novamente.', 'error');
+                            } finally {
+                                setSavingDados(false);
+                            }
+                        }}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-[6px] text-[13px] font-medium transition-all active:scale-95"
+                    >
+                        <Save className="w-[15px] h-[15px]" />
+                        {savingDados ? 'Salvando...' : 'Salvar alterações'}
+                    </button>
+                </SheetFooter>
+            </Sheet>
 
             {/* Mobile Bottom Navigation — máx. 5 slots; excedente vai pro sheet "Mais" */}
             {(() => {

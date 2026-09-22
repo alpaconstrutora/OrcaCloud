@@ -96,3 +96,15 @@ as ações (Meus dados, prévia, configurar, **Trocar cliente**) — e nenhum
 
 Cor do avatar/chip continua índigo (identidade do portal do cliente); o coral é
 exclusivo de investidor/fornecedor (§24).
+
+## Pedido 4 (mesma sessão)
+
+> voce esta criando um modal, mais é um drawer. entra e veja.
+
+| # | Arquivo | O que muda | Como sei que terminou |
+|---|---|---|---|
+| 7 | `components/ClientArea.tsx` | "Meus dados" deixa de ser modal central (`rounded-[2rem]`, botão índigo em caixa alta, `alert()`) e vira `Sheet` (drawer, `size="lg"`) como o `showMyAccount` do fornecedor; formulário na malha §30 (Identificação + Endereço, `h-9`, rótulos §21); rodapé Cancelar + Salvar §17; erro via toast | ✅ Playwright no link público: menu → Meus dados abre `[role=dialog]` à direita, 9 campos, botão "Salvar alterações"; 0 erros |
+
+Diferença mantida de propósito: o do fornecedor é **só leitura** (`PortalMyData`,
+cadastro pertence à construtora); o do cliente continua **editável** — era assim
+e ninguém pediu para tirar.

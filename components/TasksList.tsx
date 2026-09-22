@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import {
   CheckCircle2, ExternalLink, Inbox,
   Building2, ChevronDown, ChevronRight, Plus,
-  Search, X, SlidersHorizontal, MoveHorizontal,
+  Search, X, SlidersHorizontal, MoveHorizontal, Pencil, Trash2,
   GripVertical, CornerLeftUp, Flag, Calendar, AlertTriangle,
   ChevronsDownUp, ChevronsUpDown, Bell,
 } from 'lucide-react'
@@ -37,6 +37,14 @@ interface Props {
    *  tarefas e oferece o atalho para desfazê-lo — sem isso "0 tarefas" com um recorte
    *  persistido parece defeito (21/09/2026: Prazo · Hoje com 20 tarefas abertas sem prazo). */
   emptyHint?: { message: string; action?: { label: string; onClick: () => void } }
+  /** Ações em lote (§10). Presente = a tabela ganha a coluna de seleção e a barra fixa no
+   *  rodapé. Cada ação recebe os ids marcados; resolve `true` quando efetivou (a seleção é
+   *  limpa) e `false` quando o usuário cancelou. */
+  bulk?: {
+    onEdit: (ids: string[]) => Promise<boolean>
+    onDone: (ids: string[]) => Promise<boolean>
+    onDelete: (ids: string[]) => Promise<boolean>
+  }
 }
 
 // ── Prioridade ────────────────────────────────────────────────────────────────
@@ -82,15 +90,16 @@ type ColKey = 'title' | 'assignee' | 'project' | 'start_date' | 'due_date' | 'pr
 // "Ajustar largura ao conteúdo" (§6.1.2) mede o dado real e substitui estes valores.
 // Cada coluna precisa caber o rótulo do cabeçalho + ícone de ordenação com px-6
 // (48px de respiro): "Vencimento" pede ~146px, "Prioridade" ~136px.
-// Soma alvo das visíveis por padrão: 56 (grip+checkbox) + 240+150+160+146+136+116+150+134 = 1288 ≤ 1290.
+// Soma alvo das visíveis por padrão: 92 (grip+seleção+checkbox) + 220+140+150+146+136+116+150+134 = 1284 ≤ 1290.
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-  title: 240, assignee: 150, project: 160, start_date: 146, due_date: 146,
+  title: 220, assignee: 140, project: 150, start_date: 146, due_date: 146,
   priority: 136, source: 116, alert: 150, status: 150, actions: 134,
 }
 // Colunas estruturais (grip de arraste + checkbox circular) — largura fixa, fora do
 // redimensionamento. Entram no <colgroup> sem data-col-key, e o autofit as desconta.
-const GRIP_COL_WIDTH  = 24
-const CHECK_COL_WIDTH = 32
+const GRIP_COL_WIDTH   = 24
+const SELECT_COL_WIDTH = 36   // checkbox de seleção em lote (§10) — só quando `bulk` existe
+const CHECK_COL_WIDTH  = 32
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa os
 // chips de filtro (fPriority/fStatus/fAssignee/fProject) já existentes, não os
@@ -165,7 +174,7 @@ const HEADER_LABEL: Record<Exclude<ColKey, 'actions'>, string> = {
 
 const TasksList: React.FC<Props> = ({
   tasks, loading, employees, projects, statuses = [], filters, groupBy = 'none', resetDragSignal,
-  onToggleDone, onEdit, onAddSubtask, onMakeSubtask, onAddTask, onNavigate, emptyHint,
+  onToggleDone, onEdit, onAddSubtask, onMakeSubtask, onAddTask, onNavigate, emptyHint, bulk,
 }) => {
   // F2: filtros sobrevivem a navegação/reload (§3). Ordenação e ordem das colunas
   // vivem no useTableColumns (abaixo), também persistidas.
@@ -218,7 +227,7 @@ const TasksList: React.FC<Props> = ({
   // §6.1: largura = soma exata das colunas visíveis (nunca w-full com table-layout
   // fixed — o navegador redistribuiria a folga e arrastar uma borda puxaria a vizinha).
   const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'tasksListColWidths')
-  const tableTotalWidth = GRIP_COL_WIDTH + CHECK_COL_WIDTH
+  const tableTotalWidth = GRIP_COL_WIDTH + (bulk ? SELECT_COL_WIDTH : 0) + CHECK_COL_WIDTH
     + visibleColOrder.reduce((sum, k) => sum + cols.getWidth(k), 0)
     + cols.getWidth('actions')
 
@@ -338,6 +347,55 @@ const TasksList: React.FC<Props> = ({
     }
     return [...map.values()]
   }, [filtered, groupBy, statusMap, empMap, projMap, statuses])
+
+  // ── Seleção em lote (§10 / §10.1) ───────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null)
+  // Linhas na ordem em que estão DESENHADAS (grupos abertos, subtarefas expandidas) —
+  // é sobre ela que "selecionar todos" e o intervalo do Shift+clique operam.
+  const renderedIds = useMemo(() => {
+    const out: string[] = []
+    const walk = (t: TaskRecord) => {
+      out.push(t.id)
+      if (expanded.has(t.id)) (childMap[t.id] ?? []).forEach(walk)
+    }
+    groups.forEach(g => { if (!collapsedGroups.has(g.key)) g.tasks.forEach(walk) })
+    return out
+  }, [groups, collapsedGroups, expanded, childMap])
+  const renderedIndex = useMemo(() => new Map(renderedIds.map((id, i) => [id, i])), [renderedIds])
+  const allRenderedSelected = renderedIds.length > 0 && renderedIds.every(id => selectedIds.has(id))
+  const clearSelection = () => { setSelectedIds(new Set()); setLastCheckedIndex(null) }
+  const toggleAllRendered = () =>
+    setSelectedIds(prev => {
+      if (allRenderedSelected) { const s = new Set(prev); renderedIds.forEach(id => s.delete(id)); return s }
+      return new Set([...prev, ...renderedIds])
+    })
+  const handleRowCheck = (id: string, shiftKey: boolean) => {
+    const index = renderedIndex.get(id) ?? -1
+    if (shiftKey && lastCheckedIndex !== null && index >= 0) {
+      const [a, b] = lastCheckedIndex < index ? [lastCheckedIndex, index] : [index, lastCheckedIndex]
+      const range = renderedIds.slice(a, b + 1)
+      setSelectedIds(prev => new Set([...prev, ...range]))
+      return
+    }
+    setSelectedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
+    if (index >= 0) setLastCheckedIndex(index)
+  }
+  // Tarefa que sumiu da lista (excluída, ou saiu do recorte) não pode ficar "marcada" invisível.
+  const taskIdSet = useMemo(() => new Set(tasks.map(t => t.id)), [tasks])
+  React.useEffect(() => {
+    setSelectedIds(prev => {
+      const next = new Set([...prev].filter(id => taskIdSet.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [taskIdSet])
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const runBulk = async (fn: (ids: string[]) => Promise<boolean>) => {
+    if (!bulk || selectedIds.size === 0) return
+    setBulkBusy(true)
+    try { if (await fn([...selectedIds])) clearSelection() }
+    finally { setBulkBusy(false) }
+  }
 
   // ── Expandir / recolher tudo ──────────────────────────────────────────────
   // IDs de tarefas que possuem subtarefas (únicos que têm o que expandir)
@@ -589,6 +647,19 @@ const TasksList: React.FC<Props> = ({
             </div>
           </td>
 
+          {/* Seleção em lote (§10) */}
+          {bulk && (
+            <td className="px-2 py-2.5 text-center">
+              <input
+                type="checkbox"
+                title="Dica: segure Shift e clique para selecionar um intervalo"
+                checked={selectedIds.has(t.id)}
+                onChange={(e) => handleRowCheck(t.id, (e.nativeEvent as MouseEvent).shiftKey)}
+                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+              />
+            </td>
+          )}
+
           {/* Checkbox circular dashed — estilo ClickUp */}
           <td className="px-2 py-0">
             <button
@@ -749,7 +820,7 @@ const TasksList: React.FC<Props> = ({
   function GroupHeader({ group }: { group: TaskGroup }) {
     const isCollapsed = collapsedGroups.has(group.key)
     // grip + checkbox + colunas de dado + espaçador + ações
-    const totalCols = 2 + visibleColOrder.length + 2
+    const totalCols = (bulk ? 3 : 2) + visibleColOrder.length + 2
 
     return (
       <tr className="group/gh">
@@ -971,6 +1042,7 @@ const TasksList: React.FC<Props> = ({
               <colgroup>
                 {/* grip e checkbox: estruturais, largura fixa, sem data-col-key */}
                 <col style={{ width: `${GRIP_COL_WIDTH}px` }} />
+                {bulk && <col style={{ width: `${SELECT_COL_WIDTH}px` }} />}
                 <col style={{ width: `${CHECK_COL_WIDTH}px` }} />
                 {visibleColOrder.map(key => (
                   <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
@@ -984,6 +1056,13 @@ const TasksList: React.FC<Props> = ({
               <thead>
                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                   <th className="p-0" />
+                  {bulk && (
+                    <th className="px-2 py-2 text-center">
+                      <input type="checkbox" title="Selecionar todas as linhas visíveis"
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
+                        checked={allRenderedSelected} disabled={renderedIds.length === 0} onChange={toggleAllRendered} />
+                    </th>
+                  )}
                   <th className="p-0" />
                   {visibleColOrder.map(key => (
                     <SortableHeader
@@ -1022,7 +1101,7 @@ const TasksList: React.FC<Props> = ({
                     {/* + Adicionar Tarefa no rodapé de cada grupo */}
                     {!collapsedGroups.has(group.key) && onAddTask && groupBy !== 'none' && (
                       <tr>
-                        <td colSpan={2 + visibleColOrder.length + 2} className="px-6 py-1.5 border-b border-slate-100">
+                        <td colSpan={(bulk ? 3 : 2) + visibleColOrder.length + 2} className="px-6 py-1.5 border-b border-slate-100">
                           <button
                             onClick={() => onAddTask(buildDefaults(group.key))}
                             className="flex items-center gap-2 text-sm text-slate-400 hover:text-blue-600 transition-colors font-medium group/add"
@@ -1038,7 +1117,7 @@ const TasksList: React.FC<Props> = ({
                 {/* + Adicionar Tarefa global (sem agrupamento) */}
                 {groupBy === 'none' && onAddTask && (
                   <tr className="border-t border-slate-100">
-                    <td colSpan={2 + visibleColOrder.length + 2} className="px-6 py-2">
+                    <td colSpan={(bulk ? 3 : 2) + visibleColOrder.length + 2} className="px-6 py-2">
                       <button
                         onClick={() => onAddTask()}
                         className="flex items-center gap-2 text-sm text-slate-400 hover:text-blue-600 transition-colors font-medium group/add"
@@ -1096,6 +1175,31 @@ const TasksList: React.FC<Props> = ({
         </>
       )}
       </div>
+
+      {/* ── Barra de ações em lote (§10): fixa no rodapé, fora do fluxo da lista ── */}
+      {bulk && selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
+          <span className="text-sm font-bold whitespace-nowrap">
+            {selectedIds.size} selecionada{selectedIds.size !== 1 ? 's' : ''}
+          </span>
+          <button onClick={() => runBulk(bulk.onEdit)} disabled={bulkBusy}
+            className="flex items-center gap-1.5 h-9 px-3 bg-white text-blue-700 rounded-[6px] text-sm font-medium hover:bg-blue-50 transition-all disabled:opacity-50">
+            <Pencil className="w-3.5 h-3.5" /> Editar em lote
+          </button>
+          <button onClick={() => runBulk(bulk.onDone)} disabled={bulkBusy}
+            className="flex items-center gap-1.5 h-9 px-3 bg-blue-500 rounded-[6px] text-sm font-medium hover:bg-blue-400 transition-all disabled:opacity-50">
+            <CheckCircle2 className="w-3.5 h-3.5" /> Concluir
+          </button>
+          <button onClick={() => runBulk(bulk.onDelete)} disabled={bulkBusy}
+            className="flex items-center gap-1.5 h-9 px-3 bg-red-500 rounded-[6px] text-sm font-medium hover:bg-red-400 transition-all disabled:opacity-50">
+            <Trash2 className="w-3.5 h-3.5" /> Excluir
+          </button>
+          <button onClick={clearSelection} disabled={bulkBusy}
+            className="flex items-center gap-1.5 h-9 px-3 bg-blue-500 rounded-[6px] text-sm font-medium hover:bg-blue-400 transition-all disabled:opacity-50">
+            <X className="w-3.5 h-3.5" /> Desmarcar
+          </button>
+        </div>
+      )}
     </div>
   )
 }

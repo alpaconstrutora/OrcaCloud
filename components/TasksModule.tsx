@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { isObra } from '../utils/projectClassification'
 import { Plus, CheckSquare, AlertTriangle, Settings2, Layers, List, Kanban, LayoutGrid, FolderOpen, FolderCog, CalendarClock, Smartphone } from 'lucide-react'
 
@@ -18,6 +18,8 @@ import TaskStatusManager from './TaskStatusManager'
 import TasksBoard from './TasksBoard'
 import TaskSpaceManager from './TaskSpaceManager'
 import TaskSpacesSheet from './TaskSpacesSheet'
+import TaskBulkEditSheet, { type TaskBulkPatch } from './TaskBulkEditSheet'
+import { useConfirm } from './ui/confirm'
 import { FilterPopover } from './ui/FilterPopover'
 import { usePersistedState } from './ui/TableUtils'
 import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext'
@@ -332,6 +334,64 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
     if (error) { console.error(error); load() }
   }
 
+  // ── Ações em lote (§10 / §22) ──────────────────────────────────────────────
+  // Gravação num único `.in('id', ids)`; a lista local só recebe os ids que o banco
+  // devolveu — a RLS pode recusar tarefas de outro dono num espaço compartilhado.
+  const confirm = useConfirm()
+  const [bulkIds, setBulkIds] = useState<string[]>([])
+  const bulkResolveRef = useRef<((ok: boolean) => void) | null>(null)
+  const bulkTasks = useMemo(() => bulkIds.map(id => tasks.find(t => t.id === id)).filter((t): t is TaskRecord => !!t), [bulkIds, tasks])
+
+  const bulkUpdate = async (ids: string[], patch: TaskBulkPatch) => {
+    const { data, error } = await supabase.from('tasks').update(patch).in('id', ids).select('id')
+    if (error) throw new Error(error.message)
+    const okIds = new Set((data ?? []).map((r: { id: string }) => r.id))
+    setTasks(prev => prev.map(t => okIds.has(t.id) ? { ...t, ...patch } : t))
+    if (okIds.size < ids.length) {
+      load()
+      throw new Error(`${ids.length - okIds.size} de ${ids.length} tarefa(s) não puderam ser alteradas (sem permissão).`)
+    }
+  }
+
+  const bulkEdit = (ids: string[]) => new Promise<boolean>(resolve => {
+    bulkResolveRef.current = resolve
+    setBulkIds(ids)
+  })
+  const closeBulkEdit = (applied: boolean) => {
+    setBulkIds([])
+    bulkResolveRef.current?.(applied)
+    bulkResolveRef.current = null
+  }
+
+  const bulkDone = async (ids: string[]) => {
+    const doneStatus = statuses.find(s => s.is_done)
+    const patch: TaskBulkPatch = { status: 'done', ...(statuses.length > 0 ? { status_id: doneStatus?.id ?? null } : {}) }
+    try { await bulkUpdate(ids, patch); return true }
+    catch (e) { console.error('[tasks] bulkDone', e); load(); return false }
+  }
+
+  const bulkDelete = async (ids: string[]) => {
+    const ok = await confirm({
+      title: `Excluir ${ids.length} tarefa${ids.length !== 1 ? 's' : ''}?`,
+      message: 'As subtarefas delas também serão excluídas. Essa ação não pode ser desfeita.',
+      variant: 'danger',
+      confirmLabel: 'Excluir',
+    })
+    if (!ok) return false
+    const { data, error } = await supabase.from('tasks').delete().in('id', ids).select('id')
+    if (error) { console.error('[tasks] bulkDelete', error); load(); return false }
+    const gone = new Set((data ?? []).map((r: { id: string }) => r.id))
+    // subtarefas caem em cascata no banco (FK ON DELETE CASCADE) — some da lista também
+    let changed = true
+    while (changed) {
+      changed = false
+      tasks.forEach(t => { if (t.parent_task_id && gone.has(t.parent_task_id) && !gone.has(t.id)) { gone.add(t.id); changed = true } })
+    }
+    setTasks(prev => prev.filter(t => !gone.has(t.id)))
+    loadSpaces(orgKey)
+    return true
+  }
+
   const handleNavigate = (route: string) => {
     if (onChangeView && route.startsWith('/')) {
       onChangeView(route.replace(/^\//, '').split('/')[0])
@@ -528,6 +588,7 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
               onAddTask={(defaults) => openTaskForm({ defaults: { ...(defaults ?? {}), ...scopeDefaults } })}
               onNavigate={handleNavigate}
               emptyHint={emptyHint}
+              bulk={{ onEdit: bulkEdit, onDone: bulkDone, onDelete: bulkDelete }}
             />
           ) : (
             <>
@@ -604,6 +665,17 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
           }}
         />
       )}
+
+      <TaskBulkEditSheet
+        open={bulkIds.length > 0}
+        tasks={bulkTasks}
+        employees={employees}
+        projects={obras}
+        statuses={statuses}
+        spaces={spaceOptions}
+        onClose={() => closeBulkEdit(false)}
+        onApply={async patch => { await bulkUpdate(bulkIds, patch); closeBulkEdit(true) }}
+      />
 
       {orgTargetModal}
     </div>

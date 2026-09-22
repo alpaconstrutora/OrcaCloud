@@ -66,12 +66,25 @@ export interface VaoEntreParedes<T extends ParedeEmendavel> {
 export interface OpcoesDeEmenda<T extends ParedeEmendavel> {
   /** Buraco menor que isto não é vão: é fresta de desenho. */
   vaoMinMm: number;
+  /**
+   * FRESTA (P2.34): buraco menor que `vaoMinMm` e até isto é emendado SEM abertura —
+   * as duas peças viram uma parede contínua. É o cruzamento em T de um desenho de
+   * faces: a face da parede que passa é interrompida pela parede que chega, e o
+   * pareamento devolve dois trechos separados pela espessura dela (10–25 cm).
+   * Medido no projeto real da empresa: metade das pontas de parede eram isso.
+   * Omitido/0 = fresta não emenda (o comportamento do COLLADA).
+   */
+  frestaMaxMm?: number;
   /** Buraco maior que isto nem é oferecido ao classificador — ficam duas paredes. `0` desliga a emenda. */
   vaoMaxMm: number;
   /** As duas peças podem ser a mesma parede? (mesma base e altura no COLLADA, por exemplo). Omitido = sim. */
   compativeis?: (p: T, q: T) => boolean;
-  /** O que o buraco é. `null` = não emendar (ficam duas paredes). */
-  classificar: (vao: VaoEntreParedes<T>) => AberturaLida | null;
+  /**
+   * O que o buraco é. `null` = não emendar (ficam duas paredes). Uma abertura ocupa o
+   * buraco inteiro; uma LISTA traz cada uma com `offsetMm` relativo ao começo do buraco
+   * (porta de duas folhas = duas portas de meia largura).
+   */
+  classificar: (vao: VaoEntreParedes<T>) => AberturaLida | AberturaLida[] | null;
   /** Campos da peça emendada que vêm das duas (o `origem` do COLLADA). Omitido = os de `antes`. */
   fundir?: (antes: T, depois: T) => Partial<T>;
 }
@@ -95,7 +108,8 @@ function noSentido<T extends ParedeEmendavel>(p: T, ux: number, uy: number): T {
  * buracos viram uma parede com duas aberturas.
  */
 export function emendarColineares<T extends ParedeEmendavel>(paredes: readonly T[], o: OpcoesDeEmenda<T>): T[] {
-  if (!(o.vaoMaxMm > 0)) return [...paredes];
+  const frestaMax = o.frestaMaxMm ?? 0;
+  if (!(o.vaoMaxMm > 0) && !(frestaMax > 0)) return [...paredes];
   const restantes = [...paredes];
   const saida: T[] = [];
   while (restantes.length) {
@@ -123,23 +137,28 @@ export function emendarColineares<T extends ParedeEmendavel>(paredes: readonly T
         let depois: T;
         let ux = e.ux;
         let uy = e.uy;
-        if (qMin >= e.L) {
+        // Também a SOBREPOSIÇÃO pequena (P2.34): no T de um desenho de faces as duas peças da
+        // parede que passa podem avançar uma sobre a outra alguns centímetros em vez de deixar
+        // fresta. `largura` negativa = sobreposição; a emenda vira a união, sem abertura.
+        if (qMin >= e.L - frestaMax && qMax > e.L) {
           largura = qMin - e.L;
           antes = p;
           depois = noSentido(q, ux, uy);
-        } else if (qMax <= 0) {
+        } else if (qMax <= frestaMax && qMin < 0) {
           largura = -qMax;
           antes = noSentido(q, ux, uy);
           depois = p;
         } else continue;
-        if (largura < o.vaoMinMm || largura > o.vaoMaxMm) continue;
+        const fresta = largura < o.vaoMinMm && largura <= frestaMax;
+        if (!fresta && (largura < o.vaoMinMm || largura > o.vaoMaxMm)) continue;
+        if (largura < 0 && -largura > Math.min(e.L, eq.L) / 2) continue; // sobreposição que engole meia peça é duplicata, não T
         // ⚠️ NADA no meio do buraco. Duas portas lado a lado deixam TRÊS peças colineares:
         // a de fora de uma, o pilarete, a de fora da outra. Sem esta guarda o par das pontas
         // emendaria por cima do pilarete (um "vão" de 1,9 m engolindo as duas portas) e o
         // pilarete sobraria duplicado — foi o que aconteceu no projeto real da empresa.
         const gIni = qMin >= e.L ? e.L : qMax;
         const gFim = qMin >= e.L ? qMin : 0;
-        const temPecaNoMeio = [...restantes, ...saida].some((r) => {
+        const temPecaNoMeio = largura > 0 && [...restantes, ...saida].some((r) => {
           if (r === q) return false;
           const er = eixoDe(r);
           if (Math.abs(e.ux * er.ux + e.uy * er.uy) < 0.99996) return false;
@@ -152,8 +171,16 @@ export function emendarColineares<T extends ParedeEmendavel>(paredes: readonly T
         // ⚠️ A direção é a de `antes` (a peça que fica na frente da parede emendada).
         ({ ux, uy } = eixoDe(antes));
         const La = eixoDe(antes).L;
-        const abertura = o.classificar({ antes, depois, inicio: antes.b, fim: depois.a, ux, uy, larguraMm: largura, espessuraMm: antes.espessuraMm, offsetMm: La });
-        if (!abertura) continue;
+        // Fresta: sem abertura. Vão: o classificador diz o que é (uma ou mais aberturas, com offset relativo ao começo do buraco).
+        let novas: AberturaLida[];
+        if (fresta) novas = [];
+        else {
+          const abertura = o.classificar({ antes, depois, inicio: antes.b, fim: depois.a, ux, uy, larguraMm: largura, espessuraMm: antes.espessuraMm, offsetMm: La });
+          if (!abertura) continue;
+          novas = Array.isArray(abertura)
+            ? abertura.map((ab) => ({ ...ab, offsetMm: Math.round(La + ab.offsetMm), widthMm: Math.round(ab.widthMm) }))
+            : [{ ...abertura, offsetMm: Math.round(La), widthMm: Math.round(largura) }];
+        }
         const Ld = eixoDe(depois).L;
         const inicioDepois = La + largura;
         p = {
@@ -161,7 +188,7 @@ export function emendarColineares<T extends ParedeEmendavel>(paredes: readonly T
           ...(o.fundir ? o.fundir(antes, depois) : {}),
           b: { x: depois.b.x, y: depois.b.y },
           comprimentoMm: Math.round(inicioDepois + Ld),
-          aberturas: [...antes.aberturas, { ...abertura, offsetMm: Math.round(La), widthMm: Math.round(largura) }, ...depois.aberturas.map((ab) => ({ ...ab, offsetMm: Math.round(ab.offsetMm + inicioDepois) }))].sort((x, y) => x.offsetMm - y.offsetMm),
+          aberturas: [...antes.aberturas, ...novas, ...depois.aberturas.map((ab) => ({ ...ab, offsetMm: Math.round(ab.offsetMm + inicioDepois) }))].sort((x, y) => x.offsetMm - y.offsetMm),
         };
         restantes.splice(i, 1);
         emendou = true;

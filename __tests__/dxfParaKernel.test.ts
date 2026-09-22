@@ -12,6 +12,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { applyBatch, applyCommand, emptyModel, novoUid, pontasSoltasDoNivel, type Command } from '../utils/blueprintKernel';
 import {
   aberturasDoDxf,
   paredesDeEixos,
@@ -132,6 +133,35 @@ describe.skipIf(!TEM)('DXF real · esquadrias (P2.33)', () => {
     const corredor = comAberturas.filter((p) => p.aberturas.filter((ab) => ab.kind === 'door').length >= 5);
     expect(corredor.length).toBeGreaterThanOrEqual(1);
   }, 120_000);
+
+  it('P2.34 — fresta, sobreposição, encosto e canto: as pontas soltas caem de 328 para menos de 250 e os ambientes sobem (medido pelo kernel)', () => {
+    // Régua medida em 22/09/2026 no arquivo real: P2.33 deixava 328 pontas soltas (metade das pontas!) e 106
+    // ambientes; com a P2.34, 239 pontas soltas e 123 ambientes — e os que fecham têm área de cômodo (57, 52, 45 m²).
+    // Pisos, não igualdades.
+    real = real ?? prepararDxf(readFileSync(REAL, 'utf8'));
+    const paredes = tirarDuplicadas(paredesDoDxf(real.segmentos.filter((s) => s.camada === 'PAREDE'), 1000)).paredes;
+    const { paredes: com, resumo } = aberturasDoDxf(paredes, real, 1000, 'PAREDE', 2800);
+    expect(resumo.encostadas).toBeGreaterThanOrEqual(30);
+    expect(resumo.cantosFechados).toBeGreaterThanOrEqual(5);
+    let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const levelId = m.levels[0].id;
+    const minX = Math.min(...com.flatMap((p) => [p.a.x, p.b.x]));
+    const minY = Math.min(...com.flatMap((p) => [p.a.y, p.b.y]));
+    const lote: Command[] = [];
+    for (const p of com) {
+      const uid = novoUid();
+      const L = Math.round(Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y));
+      lote.push({ type: 'AddWall', levelId, a: { x: p.a.x - minX, y: p.a.y - minY }, b: { x: p.b.x - minX, y: p.b.y - minY }, thicknessMm: p.espessuraMm, heightMm: 2800, uid });
+      for (const ab of p.aberturas) if (ab.offsetMm >= 0 && ab.offsetMm + ab.widthMm <= L) lote.push({ type: 'AddOpening', wallId: '', wallUid: uid, kind: ab.kind, offsetMm: ab.offsetMm, widthMm: ab.widthMm, heightMm: ab.heightMm, sillMm: ab.sillMm, hingeAtStart: ab.hingeAtStart, swingReversed: ab.swingReversed });
+    }
+    m = applyBatch(m, lote).model;
+    const soltas = pontasSoltasDoNivel(m, m.levels[0]);
+    expect(soltas.length).toBeLessThan(250);
+    expect(m.spaces.length).toBeGreaterThan(110);
+    const areas = m.spaces.map((s) => s.areaMm2 / 1e6).sort((a, b) => b - a);
+    expect(areas[0]).toBeGreaterThan(40);
+    expect(areas[0]).toBeLessThan(80);
+  }, 180_000);
 });
 
 describe.skipIf(!TEM)('DXF · a camada de EIXO é o caminho exato', () => {

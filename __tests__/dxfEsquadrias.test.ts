@@ -61,7 +61,7 @@ describe('esquadrias no DXF · porta, janela e vão', () => {
 
   it('a porta vem do arco (largura = buraco, dobradiça e lado pelo arco), a janela dos traços paralelos, o vão do buraco vazio; buraco de 3,5 m fica como duas paredes', () => {
     const { paredes, resumo } = reconhecer(texto);
-    expect(resumo).toEqual({ portas: 1, janelas: 1, vaos: 1, arcosSemParede: 1, tocosDeBatente: 0 });
+    expect(resumo).toEqual({ portas: 1, janelas: 1, vaos: 1, arcosSemParede: 1, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 6, cantosFechados: 0 });
     expect(paredes).toHaveLength(3);
 
     const [p1] = naCota(paredes, 75);
@@ -87,7 +87,7 @@ describe('esquadrias no DXF · porta, janela e vão', () => {
 
   it('com o reconhecimento de símbolos desligado, só o vão livre pelo buraco: a porta e a janela viram passagem', () => {
     const { paredes, resumo } = reconhecer(texto, { ...HIPOTESES_ESQUADRIAS_PADRAO, reconhecerSimbolos: false });
-    expect(resumo).toEqual({ portas: 0, janelas: 0, vaos: 3, arcosSemParede: 0, tocosDeBatente: 0 });
+    expect(resumo).toEqual({ portas: 0, janelas: 0, vaos: 3, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 6, cantosFechados: 0 });
     const [p1] = naCota(paredes, 75);
     expect(p1.aberturas.map((ab) => ab.kind)).toEqual(['passage', 'passage']);
   });
@@ -148,12 +148,64 @@ describe('esquadrias no DXF · porta, janela e vão', () => {
     expect(paredes[0].aberturas.map((ab) => [ab.kind, ab.widthMm])).toEqual([['door', 800], ['door', 800]]);
   });
 
-  it('porta de DUAS folhas: um arco em cada ponta do vão, cada raio metade da largura', () => {
+  it('porta de DUAS folhas: um arco em cada ponta do vão, cada raio metade da largura → duas portas de meia largura, dobradiças nas pontas', () => {
     const t = dxfTexto([...paredeH(0, 150, 0, 6000, [[2000, 3600]]), ...ARC(2000, 0, 800, 0, 90), ...ARC(3600, 0, 800, 90, 180)]);
     const { paredes, resumo } = reconhecer(t);
     expect(resumo).toMatchObject({ portas: 1, vaos: 0 });
-    expect(paredes[0].aberturas).toHaveLength(1);
-    expect(paredes[0].aberturas[0]).toMatchObject({ kind: 'door', widthMm: 1600 });
+    const p = paredes[0];
+    expect(p.aberturas).toHaveLength(2);
+    expect(p.aberturas.map((ab) => [ab.kind, ab.widthMm, ab.offsetMm, ab.hingeAtStart])).toEqual([
+      ['door', 800, offsetDe(p, 2000, 2800), true],
+      ['door', 800, offsetDe(p, 2800, 3600), false],
+    ]);
+    // As duas abrem para o mesmo lado (+y).
+    expect(p.aberturas.map((ab) => ab.swingReversed)).toEqual([!(p.b.x > p.a.x), !(p.b.x > p.a.x)]);
+  });
+
+  // ── P2.34: o que fecha ambiente ────────────────────────────────────────────
+  it('FRESTA (P2.34): o cruzamento em T deixa a parede que passa em dois trechos separados pela espessura da que chega — viram UMA parede, sem abertura, e a que chega encosta no eixo', () => {
+    // Parede horizontal y=0..150 de 0 a 6000 com as faces interrompidas em [3000−75, 3000+75] (a parede vertical que chega por baixo);
+    // parede vertical x=2925..3075 de y=−3000 até a face inferior (y=0).
+    const t = dxfTexto([
+      ...paredeH(0, 150, 0, 6000, [[2925, 3075]]),
+      ...LINE(2925, 0, 2925, -3000), ...LINE(3075, 0, 3075, -3000),
+    ]);
+    const { paredes, resumo } = reconhecer(t);
+    expect(paredes).toHaveLength(2);
+    const h = naCota(paredes, 75)[0];
+    expect(h.comprimentoMm).toBe(6000);
+    expect(h.aberturas).toEqual([]);
+    // A vertical foi da face (y=0) ao eixo (y=75).
+    const v = paredes.find((p) => p !== h)!;
+    expect(Math.max(v.a.y, v.b.y)).toBe(75);
+    expect(resumo).toMatchObject({ encostadas: 1, vaos: 0 });
+  });
+
+  it('SOBREPOSIÇÃO pequena (P2.34): dois trechos colineares que avançam um sobre o outro alguns centímetros viram um só; sobreposição de meia peça é duplicata e fica', () => {
+    // Duas paredes horizontais no mesmo eixo, a segunda começando 100 mm ANTES do fim da primeira.
+    const t = dxfTexto([...paredeH(0, 150, 0, 3000, []), ...paredeH(0, 150, 2900, 6000, [])]);
+    const { paredes } = reconhecer(t);
+    // O pareamento das faces sobrepostas pode devolver peças de vários jeitos; o que importa é UMA parede de 6 m no fim.
+    const h = naCota(paredes, 75);
+    expect(h).toHaveLength(1);
+    expect(h[0].comprimentoMm).toBe(6000);
+  });
+
+  it('CANTO em L (P2.34): uma peça avança e a outra para curta — as duas pontas soltas vão ao cruzamento dos eixos', () => {
+    // Horizontal de 0 a 3075 (avança 75 além do eixo x=3000 da vertical); vertical de y=−3000 até y=−100 (para 175 antes do eixo y=75).
+    const t = dxfTexto([
+      ...LINE(0, 0, 3075, 0), ...LINE(0, 150, 3075, 150),
+      ...LINE(2925, -3000, 2925, -100), ...LINE(3075, -3000, 3075, -100),
+    ]);
+    const { paredes, resumo } = reconhecer(t);
+    expect(paredes).toHaveLength(2);
+    const h = naCota(paredes, 75)[0];
+    const v = paredes.find((p) => p !== h)!;
+    const cantoH = h.a.x > h.b.x ? h.a : h.b;
+    const cantoV = v.a.y > v.b.y ? v.a : v.b;
+    expect(cantoH).toEqual({ x: 3000, y: 75 });
+    expect(cantoV).toEqual({ x: 3000, y: 75 });
+    expect(resumo.cantosFechados + resumo.encostadas).toBeGreaterThanOrEqual(1);
   });
 
   it('porta no CANTO: a folha encosta numa parede perpendicular e só há trecho colinear de um lado — a parede é esticada até o canto', () => {
@@ -162,8 +214,9 @@ describe('esquadrias no DXF · porta, janela e vão', () => {
     const { paredes, resumo } = reconhecer(t);
     expect(resumo).toMatchObject({ portas: 1, arcosSemParede: 0 });
     const p = paredes.find((q) => Math.abs(q.a.y - 75) <= 1)!;
-    expect(p.comprimentoMm).toBe(4000);
-    expect(Math.min(p.a.x, p.b.x)).toBe(0);
+    // Esticada até o canto pela porta (x=0) e, depois, até o EIXO da perpendicular (x=−75) pelo fecho de canto da P2.34.
+    expect(p.comprimentoMm).toBe(4075);
+    expect(Math.min(p.a.x, p.b.x)).toBe(-75);
     expect(p.aberturas).toHaveLength(1);
     expect(p.aberturas[0]).toMatchObject({ kind: 'door', widthMm: 800, offsetMm: offsetDe(p, 0, 800) });
   });

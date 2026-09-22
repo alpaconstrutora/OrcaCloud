@@ -96,6 +96,8 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
   // do arquivo — quase 4 km. O kernel limita coordenada a ±1.000.000 mm, então
   // sem ancorar a importação inteira é RECUSADA. Foi o que o harness achou.
   const [ancoragem, setAncoragem] = useState<AncoragemIfc>('ORIGEM');
+  /** Espessuras DESMARCADAS pela pessoa (P2.34) — por arquivo, zera a cada leitura. */
+  const [espessurasFora, setEspessurasFora] = useState<Set<number>>(new Set());
   // ESQUADRIAS (P2.33): as hipóteses de altura e o teto do vão livre, persistidas por tela.
   const [hip, setHip] = usePersistedState<HipotesesDeEsquadrias>('blueprint:dxf-esquadrias', HIPOTESES_ESQUADRIAS_PADRAO);
   const hipoteses: HipotesesDeEsquadrias = { ...HIPOTESES_ESQUADRIAS_PADRAO, ...hip };
@@ -117,6 +119,7 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
       setCamada(p.porCamada[0]?.camada ?? '');
       setMmPorUnidade(p.escalas[0]?.mmPorUnidade ?? 1000);
       setModo('FACES');
+      setEspessurasFora(new Set());
     } catch (e) {
       setErro(e instanceof Error ? e.message : String(e));
     } finally {
@@ -136,10 +139,23 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
         : paredesDoDxf(daCamada, mmPorUnidade);
   const limpo = modo === 'EIXOS' ? { paredes: bruto, removidas: 0 } : tirarDuplicadas(bruto);
   const nivel = model.levels.find((l) => l.id === levelIdAtivo) ?? null;
-  // ESQUADRIAS (P2.33): porta pelo arco, janela pelo símbolo, vão livre pelo buraco — em cima das paredes limpas.
+  // FILTRO DE ESPESSURAS (P2.34): o pareamento de faces acha "parede" em qualquer par de linhas
+  // paralelas a 5–50 cm — grade de vaga, escada, projeção de telhado. Medido no projeto real:
+  // 33 espessuras diferentes, e as de 50–90 mm eram tudo menos parede. Quem escolhe é a pessoa.
+  const porEspessura = [...limpo.paredes.reduce((m, p) => {
+    const e = m.get(p.espessuraMm) ?? { paredes: 0, comprimentoMm: 0 };
+    e.paredes++;
+    e.comprimentoMm += p.comprimentoMm;
+    return m.set(p.espessuraMm, e);
+  }, new Map<number, { paredes: number; comprimentoMm: number }>()).entries()]
+    .map(([espessuraMm, v]) => ({ espessuraMm, ...v }))
+    .sort((a, b) => a.espessuraMm - b.espessuraMm);
+  const comprimentoBruto = porEspessura.reduce((s, e) => s + e.comprimentoMm, 0);
+  const filtradas = limpo.paredes.filter((p) => !espessurasFora.has(p.espessuraMm));
+  // ESQUADRIAS (P2.33): porta pelo arco, janela pelo símbolo, vão livre pelo buraco — em cima das paredes limpas e filtradas.
   const esquadrias = preparado
-    ? aberturasDoDxf(limpo.paredes, preparado, mmPorUnidade, camada, nivel?.defaultHeightMm ?? 2800, hipoteses)
-    : { paredes: [], resumo: { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0 } };
+    ? aberturasDoDxf(filtradas, preparado, mmPorUnidade, camada, nivel?.defaultHeightMm ?? 2800, hipoteses)
+    : { paredes: [], resumo: { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 0, cantosFechados: 0 } };
   const paredes = esquadrias.paredes;
   const totalDeAberturas = esquadrias.resumo.portas + esquadrias.resumo.janelas + esquadrias.resumo.vaos;
 
@@ -392,30 +408,89 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
             </p>
           )}
 
-          {/* ── O que vai entrar ─────────────────────────────────────────── */}
-          <p className="mt-2 text-[11px] text-slate-500" data-testid="resumo-dxf">
-            {paredes.length === 0
-              ? 'Nenhuma parede reconhecida nesta camada com esta unidade.'
-              : `${paredes.length} parede${paredes.length > 1 ? 's' : ''} · ${m2(comprimentoTotal)} m no total · espessuras ${espessuras.join(', ')} mm`}
-          </p>
-          {paredes.length > 0 && (
-            <p className="mt-0.5 text-[11px] text-slate-500" data-testid="resumo-esquadrias">
-              {totalDeAberturas === 0
-                ? 'Nenhuma porta, janela ou vão reconhecido.'
-                : `${esquadrias.resumo.portas} porta(s) · ${esquadrias.resumo.janelas} janela(s) · ${esquadrias.resumo.vaos} vão(s) livre(s)`}
-              {esquadrias.resumo.arcosSemParede > 0 ? ` · ${esquadrias.resumo.arcosSemParede} arco(s) de porta longe de parede, ignorado(s)` : ''}
-              {esquadrias.resumo.tocosDeBatente > 0 ? ` · ${esquadrias.resumo.tocosDeBatente} toco(s) de batente descartado(s)` : ''}
-              {preparado.blocosExpandidos > 0 ? ` · ${preparado.blocosExpandidos} bloco(s) expandido(s)` : ''}
-            </p>
+          {/* ── Espessuras (P2.34) ───────────────────────────────────────── */}
+          {porEspessura.length > 1 && (
+            <div className="mt-2" data-testid="espessuras-dxf">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-slate-600">Espessuras que são parede</span>
+                <span className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // "Principais": as que somam pelo menos 4% do comprimento. Medido no projeto real: 400 mm (muro) tem 4,4%; grade e telhado (70-90 mm) ficam abaixo de 2,5%.
+                      setEspessurasFora(new Set(porEspessura.filter((e) => e.comprimentoMm < 0.04 * comprimentoBruto).map((e) => e.espessuraMm)));
+                    }}
+                    className="rounded px-1.5 py-0.5 text-[10px] font-medium text-blue-700 hover:bg-blue-50"
+                  >
+                    Só as principais
+                  </button>
+                  <button type="button" onClick={() => setEspessurasFora(new Set())} className="rounded px-1.5 py-0.5 text-[10px] font-medium text-slate-500 hover:bg-slate-100">
+                    Todas
+                  </button>
+                </span>
+              </div>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {porEspessura.map((e) => {
+                  const ligada = !espessurasFora.has(e.espessuraMm);
+                  return (
+                    <button
+                      key={e.espessuraMm}
+                      type="button"
+                      aria-pressed={ligada}
+                      aria-label={`Espessura ${e.espessuraMm} mm`}
+                      title={`${e.paredes} parede(s) · ${m2(e.comprimentoMm)} m`}
+                      onClick={() => {
+                        const fora = new Set(espessurasFora);
+                        if (ligada) fora.add(e.espessuraMm);
+                        else fora.delete(e.espessuraMm);
+                        setEspessurasFora(fora);
+                      }}
+                      className={`rounded-[6px] border px-1.5 py-0.5 text-[10px] tabular-nums transition-colors ${ligada ? 'border-blue-300 bg-blue-50 text-blue-800' : 'border-slate-200 text-slate-400 line-through'}`}
+                    >
+                      {e.espessuraMm} · {e.paredes} · {m2(e.comprimentoMm)} m
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           )}
-          {limpo.removidas > 0 && (
-            <p className="mt-0.5 text-[10px] text-slate-400">
-              {limpo.removidas} sobreposta{limpo.removidas > 1 ? 's' : ''} foi
-              {limpo.removidas > 1 ? 'ram' : ''} descartada
-              {limpo.removidas > 1 ? 's' : ''}: o mesmo trecho reconhecido duas vezes. Duas
-              paredes paralelas que não se tocam continuam sendo duas.
+
+          {/* ── Relatório de leitura (P2.34) ─────────────────────────────── */}
+          <div className="mt-2 rounded-md bg-slate-50 px-2 py-1.5" data-testid="relatorio-dxf">
+            <p className="text-[11px] font-semibold text-slate-600">Relatório de leitura</p>
+            <p className="mt-0.5 text-[11px] text-slate-500" data-testid="resumo-dxf">
+              {paredes.length === 0
+                ? 'Nenhuma parede reconhecida nesta camada com esta unidade.'
+                : `${paredes.length} parede${paredes.length > 1 ? 's' : ''} · ${m2(comprimentoTotal)} m no total · espessuras ${espessuras.join(', ')} mm`}
             </p>
-          )}
+            {paredes.length > 0 && (
+              <p className="mt-0.5 text-[11px] text-slate-500" data-testid="resumo-esquadrias">
+                {totalDeAberturas === 0
+                  ? 'Nenhuma porta, janela ou vão reconhecido.'
+                  : `${esquadrias.resumo.portas} porta(s) · ${esquadrias.resumo.janelas} janela(s) · ${esquadrias.resumo.vaos} vão(s) livre(s)`}
+              </p>
+            )}
+            {paredes.length > 0 && (
+              <p className="mt-0.5 text-[11px] text-slate-500" data-testid="resumo-juncoes">
+                {esquadrias.resumo.pontasSoltas === 0
+                  ? 'Todas as pontas de parede encostam em outra.'
+                  : `${esquadrias.resumo.pontasSoltas} ponta(s) de parede vão ficar soltas`}
+                {esquadrias.resumo.encostadas > 0 ? ` · ${esquadrias.resumo.encostadas} encostada(s) no eixo da parede que cruza` : ''}
+                {esquadrias.resumo.cantosFechados > 0 ? ` · ${esquadrias.resumo.cantosFechados} canto(s) fechado(s)` : ''}
+              </p>
+            )}
+            {(esquadrias.resumo.arcosSemParede > 0 || esquadrias.resumo.tocosDeBatente > 0 || preparado.blocosExpandidos > 0 || limpo.removidas > 0 || espessurasFora.size > 0) && (
+              <p className="mt-0.5 text-[10px] text-slate-400" data-testid="resumo-ignorados">
+                {[
+                  espessurasFora.size > 0 ? `${limpo.paredes.length - filtradas.length} parede(s) fora pelo filtro de espessura` : '',
+                  limpo.removidas > 0 ? `${limpo.removidas} sobreposta(s) descartada(s)` : '',
+                  esquadrias.resumo.tocosDeBatente > 0 ? `${esquadrias.resumo.tocosDeBatente} toco(s) de batente descartado(s)` : '',
+                  esquadrias.resumo.arcosSemParede > 0 ? `${esquadrias.resumo.arcosSemParede} arco(s) de porta longe de parede, ignorado(s)` : '',
+                  preparado.blocosExpandidos > 0 ? `${preparado.blocosExpandidos} bloco(s) expandido(s)` : '',
+                ].filter(Boolean).join(' · ')}
+              </p>
+            )}
+          </div>
 
           {preparado.recusas.length > 0 && (
             <div className="mt-2 rounded-md bg-amber-50 px-2 py-1.5">

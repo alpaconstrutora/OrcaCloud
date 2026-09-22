@@ -20,6 +20,7 @@ import {
   type ParedeGerada,
 } from './blueprintVetor';
 import { emendarColineares, type AberturaLida } from './emendaDeParedes';
+import { encostarNasFaces } from './ifcEncostarParedes';
 
 /** Espessura plausível de parede, em milímetros. Fora disto não é parede. */
 export const ESPESSURA_MIN_MM = 50;
@@ -284,6 +285,8 @@ export interface HipotesesDeEsquadrias {
   vaoLivreMaxMm: number;
   /** Buraco menor que isto é fresta de desenho, não vão. */
   vaoMinMm: number;
+  /** FRESTA (P2.34): buraco menor que o vão mínimo e até isto emenda sem abertura (o cruzamento em T). */
+  frestaMaxMm: number;
 }
 
 export const HIPOTESES_ESQUADRIAS_PADRAO: HipotesesDeEsquadrias = {
@@ -293,6 +296,7 @@ export const HIPOTESES_ESQUADRIAS_PADRAO: HipotesesDeEsquadrias = {
   janelaAlturaMm: 1200,
   vaoLivreMaxMm: 3000,
   vaoMinMm: 300,
+  frestaMaxMm: 299,
 };
 
 /** Porta e janela cabem num buraco até isto, mesmo com o vão livre desligado. */
@@ -321,6 +325,12 @@ export interface ResumoDeEsquadrias {
   arcosSemParede: number;
   /** Tocos de batente (mais largos que compridos) descartados de dentro dos vãos. */
   tocosDeBatente: number;
+  /** P2.34: pontas levadas da face ao eixo da parede que cruzam (`encostarNasFaces`). */
+  encostadas: number;
+  /** P2.34: pontas que continuam sem tocar parede nenhuma — o que vai aparecer como ponta solta. */
+  pontasSoltas: number;
+  /** P2.34: cantos em L fechados levando as duas pontas soltas ao cruzamento dos eixos. */
+  cantosFechados: number;
 }
 
 interface Ponto {
@@ -405,7 +415,7 @@ export function aberturasDoDxf(
 ): { paredes: ParedeComAberturas[]; resumo: ResumoDeEsquadrias } {
   const arcos = hip.reconhecerSimbolos ? arcosDePorta(leitura.arcos, mmPorUnidade) : [];
   const tracos = hip.reconhecerSimbolos ? tracosMm(leitura.segmentos, mmPorUnidade, camadaDeParede) : [];
-  const resumo: ResumoDeEsquadrias = { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0 };
+  const resumo: ResumoDeEsquadrias = { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 0, cantosFechados: 0 };
   const alturaPorta = Math.min(hip.portaAlturaMm, alturaDaParedeMm);
   const janela = (): AberturaLida => {
     const sill = Math.min(hip.janelaPeitorilMm, Math.max(0, alturaDaParedeMm - 1));
@@ -416,6 +426,7 @@ export function aberturasDoDxf(
 
   const emendadas = emendarColineares(comAberturas, {
     vaoMinMm: hip.vaoMinMm,
+    frestaMaxMm: hip.frestaMaxMm ?? 0,
     vaoMaxMm: Math.max(hip.vaoLivreMaxMm, hip.reconhecerSimbolos ? BURACO_MAX_MM : 0),
     classificar: (v) => {
       const nx = -v.uy;
@@ -462,7 +473,13 @@ export function aberturasDoDxf(
         folhaIni.usado = true;
         folhaFim.usado = true;
         resumo.portas++;
-        return { kind: 'door', offsetMm: 0, widthMm: 0, heightMm: alturaPorta, sillMm: 0, hingeAtStart: true, swingReversed: local(folhaIni.meio).n < 0 };
+        // Duas folhas de meia largura, dobradiças nas pontas, mesmo lado de abrir — é o que o CAD desenhou.
+        const meiaLargura = Math.round(v.larguraMm / 2);
+        const lado = local(folhaIni.meio).n < 0;
+        return [
+          { kind: 'door', offsetMm: 0, widthMm: meiaLargura, heightMm: alturaPorta, sillMm: 0, hingeAtStart: true, swingReversed: lado },
+          { kind: 'door', offsetMm: meiaLargura, widthMm: Math.round(v.larguraMm) - meiaLargura, heightMm: alturaPorta, sillMm: 0, hingeAtStart: false, swingReversed: lado },
+        ];
       }
 
       // ── Símbolo dentro do buraco: traços paralelos (janela) ou nome de bloco ──
@@ -618,5 +635,119 @@ export function aberturasDoDxf(
   }
   resumo.tocosDeBatente = tocos.size;
 
-  return { paredes: emendadas.filter((p) => !tocos.has(p)), resumo };
+  // ── Encostar a ponta que parou na FACE da parede que cruza (P2.34) ───────
+  //
+  // Num desenho de faces a parede que chega para na face da que passa: a ponta
+  // fica a meia espessura do eixo, dentro do corpo da outra — e o anel não
+  // fecha. `encostarNasFaces` (do IFC) leva a ponta ao eixo só nessa condição.
+  // Como a ponta `a` pode andar, os offsets das aberturas (medidos de `a`)
+  // deslocam junto; abertura que sair da parede é descartada.
+  const limpas = emendadas.filter((p) => !tocos.has(p));
+  const encosto = encostarNasFaces(limpas, 5);
+  resumo.encostadas = encosto.encostadas;
+  resumo.pontasSoltas = encosto.soltas;
+  const encostadas: ParedeComAberturas[] = [];
+  encosto.paredes.forEach((q, i) => {
+    const p = limpas[i];
+    const L = Math.hypot(q.b.x - q.a.x, q.b.y - q.a.y);
+    if (L < 1) return;
+    const ux = (p.b.x - p.a.x) / (Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y) || 1);
+    const uy = (p.b.y - p.a.y) / (Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y) || 1);
+    const desloc = (q.a.x - p.a.x) * ux + (q.a.y - p.a.y) * uy;
+    const aberturas = p.aberturas
+      .map((ab) => ({ ...ab, offsetMm: Math.round(ab.offsetMm - desloc) }))
+      .filter((ab) => ab.offsetMm >= 0 && ab.offsetMm + ab.widthMm <= Math.round(L));
+    encostadas.push({ ...q, comprimentoMm: Math.round(L), aberturas });
+  });
+
+  // ── Fechar o CANTO onde as duas pontas ficaram soltas (P2.34) ────────────
+  //
+  // A mitragem (`mitrarCantos`) só ESTICA, e o encosto só leva a ponta ao eixo
+  // de quem cruza pelo MEIO. Sobra o canto em L onde uma peça avançou e a
+  // outra parou curta — duas pontas soltas a poucos centímetros, uma dentro do
+  // corpo da outra, sem que nenhuma regra as una. Aqui, duas pontas SOLTAS,
+  // não paralelas, a até `MAX_CANTO_MM`, vão as duas para o cruzamento dos
+  // eixos, desde que nenhuma ande mais que isso. Pontas soltas juntas e não
+  // paralelas são um canto; a trava de distância impede unir paredes distantes.
+  const cantos = fecharCantos(encostadas);
+  resumo.cantosFechados = cantos.fechados;
+  resumo.pontasSoltas = Math.max(0, resumo.pontasSoltas - 2 * cantos.fechados);
+
+  return { paredes: cantos.paredes, resumo };
+}
+
+const MAX_CANTO_MM = 300;
+
+function fecharCantos(paredes: ParedeComAberturas[]): { paredes: ParedeComAberturas[]; fechados: number } {
+  const saida = paredes.map((p) => ({ ...p, a: { ...p.a }, b: { ...p.b }, aberturas: p.aberturas.map((ab) => ({ ...ab })) }));
+  const distSeg = (q: Ponto, a: Ponto, b: Ponto) => {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const l2 = dx * dx + dy * dy;
+    if (!l2) return Math.hypot(q.x - a.x, q.y - a.y);
+    const t = Math.max(0, Math.min(1, ((q.x - a.x) * dx + (q.y - a.y) * dy) / l2));
+    return Math.hypot(q.x - (a.x + t * dx), q.y - (a.y + t * dy));
+  };
+  const solta = (i: number, q: Ponto) => saida.every((o, j) => j === i || distSeg(q, o.a, o.b) > 5);
+  type Ponta = { i: number; lado: 'a' | 'b' };
+  const soltas: Ponta[] = [];
+  const pontas: Ponta[] = [];
+  saida.forEach((p, i) => {
+    pontas.push({ i, lado: 'a' }, { i, lado: 'b' });
+    if (solta(i, p.a)) soltas.push({ i, lado: 'a' });
+    if (solta(i, p.b)) soltas.push({ i, lado: 'b' });
+  });
+  const usadas = new Set<string>();
+  let fechados = 0;
+  for (let x = 0; x < soltas.length; x++) {
+    const A = soltas[x];
+    if (usadas.has(`${A.i}${A.lado}`)) continue;
+    const pa = saida[A.i];
+    const qa = pa[A.lado];
+    let melhor: { B: Ponta; ponto: Ponto; custo: number } | null = null;
+    // A outra ponta do canto pode já estar encostada (a peça que avançou 75 mm além do eixo da
+    // outra deixa a própria ponta solta e a da outra no cruzamento): vale qualquer PONTA de parede perto.
+    for (const B of pontas) {
+      if (B.i === A.i || usadas.has(`${B.i}${B.lado}`)) continue;
+      const pb = saida[B.i];
+      const qb = pb[B.lado];
+      if (Math.hypot(qa.x - qb.x, qa.y - qb.y) > MAX_CANTO_MM) continue;
+      // Cruzamento das duas retas (eixos).
+      const ax = pa.b.x - pa.a.x;
+      const ay = pa.b.y - pa.a.y;
+      const bx = pb.b.x - pb.a.x;
+      const by = pb.b.y - pb.a.y;
+      const den = ax * by - ay * bx;
+      const La = Math.hypot(ax, ay) || 1;
+      const Lb = Math.hypot(bx, by) || 1;
+      if (Math.abs(den) < 0.05 * La * Lb) continue; // quase paralelas: não é canto
+      const t = ((pb.a.x - pa.a.x) * by - (pb.a.y - pa.a.y) * bx) / den;
+      const ponto = { x: Math.round(pa.a.x + ax * t), y: Math.round(pa.a.y + ay * t) };
+      const da = Math.hypot(ponto.x - qa.x, ponto.y - qa.y);
+      const db = Math.hypot(ponto.x - qb.x, ponto.y - qb.y);
+      if (da > MAX_CANTO_MM || db > MAX_CANTO_MM) continue;
+      // O cruzamento tem de ficar do lado da ponta (não no meio da peça): a ponta anda para fora ou recua pouco.
+      const custo = da + db;
+      if (!melhor || custo < melhor.custo) melhor = { B, ponto, custo };
+    }
+    if (!melhor) continue;
+    for (const P of [A, melhor.B]) {
+      const p = saida[P.i];
+      const antigoA = { ...p.a };
+      p[P.lado] = { ...melhor.ponto };
+      const L = Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y);
+      if (P.lado === 'a') {
+        // A ponta `a` andou: os offsets (medidos de `a`) deslocam pelo que ela andou ao longo do eixo.
+        const ux = (p.b.x - p.a.x) / (L || 1);
+        const uy = (p.b.y - p.a.y) / (L || 1);
+        const desloc = (p.a.x - antigoA.x) * ux + (p.a.y - antigoA.y) * uy;
+        p.aberturas = p.aberturas.map((ab) => ({ ...ab, offsetMm: Math.round(ab.offsetMm - desloc) }));
+      }
+      p.aberturas = p.aberturas.filter((ab) => ab.offsetMm >= 0 && ab.offsetMm + ab.widthMm <= Math.round(L));
+      p.comprimentoMm = Math.round(L);
+      usadas.add(`${P.i}${P.lado}`);
+    }
+    fechados++;
+  }
+  return { paredes: saida.filter((p) => p.comprimentoMm > 0), fechados };
 }

@@ -217,6 +217,49 @@ describe('importar DXF · esquadrias (P2.33)', () => {
   });
 });
 
+/** P2.34: uma parede de 150 (4 m) e uma "parede" de 60 mm (duas linhas de grade a 60 mm, 1 m). */
+function dxfComDuasEspessuras(): string {
+  const L = (x1: number, y1: number, x2: number, y2: number): [string, string][] => [['0', 'LINE'], ['8', 'PAREDE'], ['10', String(x1)], ['20', String(y1)], ['11', String(x2)], ['21', String(y2)]];
+  const pares: [string, string][] = [
+    ['0', 'SECTION'], ['2', 'HEADER'], ['9', '$INSUNITS'], ['70', '4'], ['0', 'ENDSEC'],
+    ['0', 'SECTION'], ['2', 'ENTITIES'],
+    ...L(0, 0, 4000, 0), ...L(0, 150, 4000, 150),
+    ...L(0, 3000, 1000, 3000), ...L(0, 3060, 1000, 3060),
+    ['0', 'ENDSEC'], ['0', 'EOF'],
+  ];
+  return pares.flatMap(([c, v]) => [c, v]).join('\n');
+}
+
+describe('importar DXF · filtro de espessuras e relatório (P2.34)', () => {
+  it('lista as espessuras com contagem, deixa desmarcar uma, e "Só as principais" tira a grade de 60 mm', async () => {
+    const { onImportar } = await abrirComArquivo(dxfComDuasEspessuras());
+    expect(screen.getByTestId('resumo-dxf').textContent).toMatch(/2 paredes .* espessuras 60, 150 mm/);
+    const chip60 = screen.getByRole('button', { name: 'Espessura 60 mm' });
+    expect(chip60.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(chip60);
+    expect(chip60.getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByTestId('resumo-dxf').textContent).toMatch(/1 parede .* espessuras 150 mm/);
+    expect(screen.getByTestId('resumo-ignorados').textContent).toMatch(/1 parede\(s\) fora pelo filtro de espessura/);
+    fireEvent.click(screen.getByRole('button', { name: 'Todas' }));
+    expect(screen.getByTestId('resumo-dxf').textContent).toMatch(/2 paredes/);
+    // 1 m de 60 mm em 5 m totais = 20% → fica; a regra dos 4% só tira o que é ruído de verdade.
+    fireEvent.click(screen.getByRole('button', { name: 'Só as principais' }));
+    expect(screen.getByTestId('resumo-dxf').textContent).toMatch(/2 paredes/);
+    fireEvent.click(chip60);
+    fireEvent.click(screen.getByRole('button', { name: /Importar/ }));
+    const comandos = onImportar.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(comandos).toHaveLength(1);
+    expect(comandos[0]).toMatchObject({ type: 'AddWall', thicknessMm: 150 });
+  });
+
+  it('o relatório de leitura diz quantas pontas vão ficar soltas', async () => {
+    await abrirComArquivo(dxfComEsquadrias());
+    expect(screen.getByTestId('relatorio-dxf').textContent).toMatch(/Relatório de leitura/);
+    // Uma parede isolada: as duas pontas soltas.
+    expect(screen.getByTestId('resumo-juncoes').textContent).toBe('2 ponta(s) de parede vão ficar soltas');
+  });
+});
+
 describe('importar DWG (E9.1) · pela Edge Function, no pipeline do DXF', () => {
   it('um .dwg vai ao conversor, volta como DXF e a tela declara a versão; o resultado é a mesma parede que o DXF daria', async () => {
     converterDwgParaDxf.mockResolvedValue({ dxf: dxfDeUmaParede(), versao: 'AC1032', release: 'AutoCAD 2018+', bytes: 25920, codigoLibredwg: 4 });

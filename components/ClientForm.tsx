@@ -1,5 +1,5 @@
 import React from 'react';
-import { useOrgContext } from '../hooks/useOrgContext';
+import { useDefaultWriteOrgId, useWritableOrganizations } from '../hooks/useOrgContext';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { ArrowLeft, User, Mail, Phone, FileText, MapPin, Building2, Search, Check } from 'lucide-react';
 import { Client, Empreendimento } from '../types';
@@ -102,20 +102,41 @@ const EMPTY_FORM: Partial<Client> = {
 };
 
 const ClientForm: React.FC<ClientFormProps> = ({ initialData, onSubmit, onClose }) => {
-    // Organização do seletor do topo, já com a herança de empresa/obra.
-    const { orgId: activeOrganizationId } = useOrgContext();
-    const organizations = useStore(state => state.organizations);
+    // Organização do seletor do topo (já com a herança de empresa/obra) e, com
+    // o topo em "Todas", a única organização gravável — quando houver só uma.
+    const defaultOrgId = useDefaultWriteOrgId();
+    // Só as organizações em que ESTE usuário pode gravar. O seletor do topo
+    // (e `useStore().organizations`) lista organizações das quais ele não é
+    // membro — oferecê-las aqui produzia `42501 new row violates row-level
+    // security policy` no INSERT, sem o formulário sequer suspeitar.
+    const organizations = useWritableOrganizations();
+    const allOrganizations = useStore(state => state.organizations);
     const [categories, setCategories] = React.useState<ClientCategory[]>([]);
     const [states, setStates] = React.useState<MasterState[]>([]);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
+    const [orgErro, setOrgErro] = React.useState<string | null>(null);
     const [savedAt, setSavedAt] = React.useState<number | null>(null);
     const [activeTab, setActiveTab] = React.useState<ClientTabId>('geral');
     const { dirty, markDirty, markSaved, confirmDiscard } = useUnsavedChanges();
     const [formData, setFormData] = React.useState<Partial<Client>>({
         ...EMPTY_FORM,
         ...(initialData ?? {}),
-        organization_id: initialData?.organization_id ?? activeOrganizationId ?? undefined,
+        // Cliente é registro de UMA organização (exceção 4 da REGRA #5): nunca
+        // nasce com `organization_id` nulo — a RLS de `clients` exige
+        // `is_org_member(organization_id)` e recusa NULL.
+        organization_id: initialData?.organization_id ?? defaultOrgId ?? undefined,
     });
+
+    // Opções do campo "Organização": as graváveis, mais a do próprio registro
+    // quando ela não estiver entre elas. Editando um cliente de outra
+    // organização (compartilhado via `client_org_shares`), sem essa opção o
+    // campo apareceria VAZIO, como se o cliente não tivesse organização.
+    const orgOptions = React.useMemo(() => {
+        const atualId = formData.organization_id;
+        if (!atualId || organizations.some(o => o.id === atualId)) return organizations;
+        const atual = allOrganizations.find(o => o.id === atualId);
+        return atual ? [...organizations, atual] : organizations;
+    }, [organizations, allOrganizations, formData.organization_id]);
 
     // Vínculo explícito Cliente ↔ Empreendimento (migration 20270918000027).
     const [empreendimentos, setEmpreendimentos] = React.useState<Empreendimento[]>([]);
@@ -133,6 +154,14 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialData, onSubmit, onClose 
     React.useEffect(() => {
         masterDataService.listStates('BR').then(setStates).catch(console.error);
     }, []);
+
+    // A lista de organizações do store pode chegar DEPOIS da montagem do
+    // formulário — sem isto, abrir o cadastro durante o carregamento deixava o
+    // campo vazio mesmo havendo uma única organização possível.
+    React.useEffect(() => {
+        if (!defaultOrgId) return;
+        setFormData(prev => (prev.organization_id ? prev : { ...prev, organization_id: defaultOrgId }));
+    }, [defaultOrgId]);
 
     React.useEffect(() => {
         // As categorias dependem da organização ESCOLHIDA no formulário (campo
@@ -196,10 +225,23 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialData, onSubmit, onClose 
             setActiveTab('geral');
             return;
         }
+        if (!formData.organization_id) {
+            // Sem organização o INSERT volta `42501` da RLS de `clients`
+            // (`is_org_member(organization_id)` não aceita NULL). Melhor dizer
+            // isso aqui do que deixar o banco recusar com o formulário fechado.
+            setActiveTab('geral');
+            setOrgErro('Escolha a organização do cliente para salvar.');
+            return;
+        }
+        setOrgErro(null);
         if (isSubmitting) return;
         setIsSubmitting(true);
         try {
             const saved = await onSubmit(formData, empreendimentoIds);
+            // Gravação recusada (o handler avisa e devolve null): nada de
+            // `markSaved()` nem de fechar — fechar aqui jogava fora o cadastro
+            // inteiro que o usuário tinha acabado de digitar.
+            if (!saved) return;
             markSaved();
             setSavedAt(Date.now());
             // §25: criar fecha (a tarefa acabou); editar permanece na tela.
@@ -207,7 +249,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialData, onSubmit, onClose 
                 onClose();
                 return;
             }
-            if (saved) setFormData(prev => ({ ...prev, ...saved }));
+            setFormData(prev => ({ ...prev, ...saved }));
         } finally {
             setIsSubmitting(false);
         }
@@ -300,14 +342,18 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialData, onSubmit, onClose 
                                             <select
                                                 className={`${INPUT_ICON} bg-white`}
                                                 value={formData.organization_id ?? ''}
-                                                onChange={(e) => update({ organization_id: e.target.value || undefined })}
+                                                onChange={(e) => { setOrgErro(null); update({ organization_id: e.target.value || undefined }); }}
                                             >
-                                                <option value="">Todas as Organizações</option>
-                                                {organizations.map(org => (
+                                                {/* Cliente pertence a UMA organização (exceção 4 da
+                                                    REGRA #5): não existe "Todas" aqui. O placeholder
+                                                    só aparece enquanto nada foi escolhido. */}
+                                                {!formData.organization_id && <option value="">Selecione a organização…</option>}
+                                                {orgOptions.map(org => (
                                                     <option key={org.id} value={org.id}>{org.name}</option>
                                                 ))}
                                             </select>
                                         </div>
+                                        {orgErro && <p className="text-xs text-red-600 mt-1">{orgErro}</p>}
                                     </div>
                                     <div>
                                         <label className={LABEL}>Portais</label>

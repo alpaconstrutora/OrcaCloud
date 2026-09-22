@@ -514,7 +514,17 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
             console.error("Erro ao salvar cliente:", error);
             // Erro do PostgREST é objeto cru (fica genérico); Error do serviço
             // já vem com frase para o usuário (código duplicado, documento duplicado).
-            showToast(error instanceof Error && error.message ? error.message : 'Erro ao salvar o cliente.', 'error');
+            // Exceção: `42501` é a RLS de `clients` recusando a organização do
+            // registro (`is_org_member(organization_id)`) — a frase genérica
+            // escondia a causa, e o seletor do topo lista organizações das
+            // quais o usuário não é membro.
+            const code = (error as { code?: string } | null)?.code;
+            showToast(
+                code === '42501'
+                    ? 'Você não tem permissão para cadastrar clientes nesta organização.'
+                    : error instanceof Error && error.message ? error.message : 'Erro ao salvar o cliente.',
+                'error',
+            );
             return null;
         }
     };

@@ -2,6 +2,7 @@ import React from 'react';
 import { Building2, Check, Layers } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { Modal, ModalHeader, ModalBody } from '../components/ui/modal';
+import { Organization } from '../types';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -200,6 +201,51 @@ export function partialFailureNote(failed: { error: unknown }[]): string {
 }
 
 /**
+ * Organizações em que o usuário PODE GRAVAR — não as que ele enxerga.
+ *
+ * A RLS de `organizations` é mais permissiva que a das tabelas de dados:
+ * o seletor do topo lista organizações das quais o usuário não é membro
+ * (confirmado em 2026-08-04: 4 no seletor, membro de 1; ainda valia em
+ * 2026-09-22). Gravar em uma delas volta `42501 new row violates row-level
+ * security policy` — então qualquer campo "Organização" de formulário de
+ * CADASTRO oferece esta lista, nunca `useStore().organizations` cru.
+ *
+ * Só para ESCRITA. Leitura nunca é recortada por aqui (REGRA #5).
+ */
+export function useWritableOrganizations(): Organization[] {
+    const allOrganizations = useStore(state => state.organizations);
+    const currentEmail = useStore(state => state.currentProfile.email);
+
+    return React.useMemo(() => {
+        const email = currentEmail?.toLowerCase();
+        if (!email) return allOrganizations;
+        const writable = allOrganizations.filter(o =>
+            (o.members ?? []).some(m => m.email?.toLowerCase() === email),
+        );
+        // Sem informação de membro (lista ainda carregando, ou `members` não
+        // veio) não dá para afirmar que não pode gravar — melhor deixar o banco
+        // decidir do que esconder organização legítima.
+        return writable.length > 0 ? writable : allOrganizations;
+    }, [allOrganizations, currentEmail]);
+}
+
+/**
+ * Organização ÓBVIA para um cadastro, quando a tela tem um campo
+ * "Organização" próprio em vez do modal de `useOrgWriteTarget`.
+ *
+ * Mesmo critério do modal (REGRA #5): o topo manda; em "Todas" com uma única
+ * organização gravável o alvo não é ambíguo; com N, `null` — e aí quem chama
+ * obriga a escolha, em vez de mandar `organization_id` nulo para o banco e
+ * receber `42501`.
+ */
+export function useDefaultWriteOrgId(): string | null {
+    const { orgId } = useOrgContext();
+    const organizations = useWritableOrganizations();
+    if (orgId) return orgId;
+    return organizations.length === 1 ? organizations[0].id : null;
+}
+
+/**
  * Resolve a organização de destino de uma CRIAÇÃO, obedecendo ao topo.
  *
  * Auto-contido (não exige Provider no root, igual ao antigo useOrganizationPicker):
@@ -219,30 +265,7 @@ export function partialFailureNote(failed: { error: unknown }[]): string {
  */
 export function useOrgWriteTarget() {
     const { orgId } = useOrgContext();
-    const allOrganizations = useStore(state => state.organizations);
-    const currentEmail = useStore(state => state.currentProfile.email);
-
-    /**
-     * Organizações em que o usuário PODE GRAVAR — não as que ele enxerga.
-     *
-     * A RLS de `organizations` é mais permissiva que a das tabelas de dados:
-     * o seletor do topo lista organizações das quais o usuário não é membro
-     * (confirmado em 2026-08-04: 4 no seletor, membro de 1). Replicar "em
-     * todas" usando a lista inteira faria 3 de 4 gravações falharem com
-     * `42501 new row violates row-level security policy`, e o aviso de
-     * replicação parcial ("as demais já tinham") mentiria sobre a causa.
-     */
-    const organizations = React.useMemo(() => {
-        const email = currentEmail?.toLowerCase();
-        if (!email) return allOrganizations;
-        const writable = allOrganizations.filter(o =>
-            (o.members ?? []).some(m => m.email?.toLowerCase() === email),
-        );
-        // Sem informação de membro (lista ainda carregando, ou `members` não
-        // veio) não dá para afirmar que não pode gravar — melhor deixar o banco
-        // decidir do que esconder organização legítima.
-        return writable.length > 0 ? writable : allOrganizations;
-    }, [allOrganizations, currentEmail]);
+    const organizations = useWritableOrganizations();
     const [pending, setPending] = React.useState<{
         mode: WriteTargetMode;
         resolve: (t: WriteTarget | null) => void;

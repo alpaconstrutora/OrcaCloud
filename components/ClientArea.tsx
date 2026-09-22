@@ -4113,33 +4113,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     {renderPortalActions()}
                 </div>
             )}
-            {!heroSubstituiCabecalho && isStandalone && (
-            <div className="bg-white md:rounded-[10px] p-4 md:p-6 shadow-sm border-b md:border border-gray-100 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
-
-                <div className="relative flex items-center justify-between gap-4">
-                    {/* Avatar + greeting */}
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 md:w-14 md:h-14 bg-indigo-600 rounded-xl md:rounded-2xl flex items-center justify-center text-white font-black text-lg md:text-2xl shadow-lg shadow-indigo-100 shrink-0">
-                            {(clientProfile?.name || settings.name).charAt(0)}
-                        </div>
-                        <div>
-                            <h1 className="text-lg md:text-3xl font-black text-gray-900 tracking-tight leading-tight">
-                                {clientProfile?.name
-                                    ? (ehLocacao(clientCategory) || ehServicos(clientCategory))
-                                        ? clientProfile.name.split(' ')[0]
-                                        : `Olá, ${clientProfile.name.split(' ')[0]}`
-                                    : 'Área do Cliente'}
-                            </h1>
-                            <p className="text-xs md:text-sm font-medium text-gray-400 mt-1.5">
-                                {rotuloDaCategoria(clientCategory) ?? 'Bem-vindo à sua área exclusiva'}
-                            </p>
-                        </div>
-                    </div>
-                    {renderPortalActions()}
-                </div>
-            </div>
-            )}
+            {/* No link público NÃO há card de saudação ("Olá, Nome"): a identidade já
+                vem da casca (badge + menu de conta + sidebar), como no Portal do
+                Fornecedor. Removido a pedido do usuário em 22/09/2026. */}
 
             {/* Link de Acesso — modal compartilhado com a lista de clientes */}
             {showLinkModal && clientProfile && (

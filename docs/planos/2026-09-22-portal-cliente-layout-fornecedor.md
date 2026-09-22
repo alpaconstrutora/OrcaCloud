@@ -122,3 +122,11 @@ de leitura do PortalKit, textos diferentes.
 |---|---|---|---|
 | 8 | `components/ClientArea.tsx` (casca do link) | Banner, badge, chip, avatar e menu **copiados** do `SupplierDashboard` (mesmas classes, coral `#E1553C`, 4 itens com as mesmas ações: Meus dados → Sheet; Preferências/Notificações/Ajuda → mesmos toasts). Sidebar com a aba ativa na mesma cor. Botão azul "Meus dados" do card some no link público (no fornecedor só existe pelo menu) | ✅ DOM: chip e avatar com classes idênticas às do fornecedor; itens `["Meus dados","Preferências","Notificações","Ajuda e comandos"]`; toast de Preferências aparece |
 | 9 | `components/client/portal/ClientPortalMyData.tsx` (novo) | Painel "Meus dados" igual ao `PortalMyData` do fornecedor (Sheet 2xl, só leitura, PortalKit, coral), com os blocos Identificação e Endereço e contato — a entidade é `Client` | ✅ print `menu_igual_meus_dados.png`; `check-ui-standard` limpo |
+
+## Pedido 6 (mesma sessão)
+
+> exclua o banner com a saudacao Ola, nome do cliente
+
+| # | Arquivo | O que muda | Como sei que terminou |
+|---|---|---|---|
+| 10 | `components/ClientArea.tsx` | Some o card branco de boas-vindas (avatar índigo + "Olá, Nome" + ações) do link público — a identidade já vem da casca, como no fornecedor | ✅ Playwright no link: nenhum "Olá, …" visível no desktop (só o hero mobile, `md:hidden`); 0 erros |

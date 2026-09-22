@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Building2, Home, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, Calendar, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, BrainCircuit, Activity, Percent, Target, Mail, Phone, Briefcase, FileText, AlertCircle, RefreshCw, MoveHorizontal, Sliders } from 'lucide-react';
+import { Building2, Home, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, DollarSign, Tag, Calendar, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, BrainCircuit, Activity, Percent, Target, Mail, Phone, Briefcase, FileText, AlertCircle, RefreshCw, MoveHorizontal, Sliders } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { commercialService, dealBuyersOf } from '../services/commercialService';
 import { empreendimentoService } from '../services/empreendimentoService';
@@ -1287,34 +1287,32 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
 
     return (
         <div className="space-y-6">
-            {/* 1. Título — §1 (h1 solto). Os dois botões que moravam na toolbar de
-                botões (§5.3) voltaram para esta linha a pedido do usuário
-                (2026-09-22): a barra existia para dois controles e gastava uma
-                faixa inteira de cromo entre o título e as abas. No tamanho
-                compacto do §17, alinhados ao topo do bloco de título. */}
+            {/* 1. Título — §1 (h1 solto). A toolbar de botões (§5.3) saiu em
+                2026-09-22 e o único controle que sobrou, "Ver todos
+                empreendimentos", vive aqui, à direita do título, no tamanho
+                compacto do §17. Ele só aparece dentro de um edifício — na lista
+                a linha é só título + subtítulo.
+
+                "Relatórios" foi removido no mesmo dia, a pedido do usuário: o
+                botão nunca teve `onClick` — ocupava a linha sem fazer nada. Se
+                a tela voltar a precisar dele, ele nasce com destino, não antes. */}
             <div className="flex items-start justify-between gap-3">
                 <div>
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight">Venda de Ativos</h1>
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Controle de inventário de vendas, negociações e performance imobiliária.</p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                    {selectedBuildingId && (
-                        <button
-                            onClick={() => {
-                                setSelectedBuildingId(null);
-                                if (viewMode === 'tower') setViewMode('grid');
-                            }}
-                            className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all"
-                        >
-                            <ChevronDown className="w-4 h-4 rotate-90" />
-                            Ver todos empreendimentos
-                        </button>
-                    )}
-                    <button className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all">
-                        <Maximize2 className="w-4 h-4" />
-                        Relatórios
+                {selectedBuildingId && (
+                    <button
+                        onClick={() => {
+                            setSelectedBuildingId(null);
+                            if (viewMode === 'tower') setViewMode('grid');
+                        }}
+                        className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all shrink-0"
+                    >
+                        <ChevronDown className="w-4 h-4 rotate-90" />
+                        Ver todos empreendimentos
                     </button>
-                </div>
+                )}
             </div>
 
             {/* 2. Toolbar de abas (§3) — navegação entre as vistas de UM empreendimento

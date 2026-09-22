@@ -34,6 +34,7 @@ import {
     Eye,
     EyeOff,
     UserCircle,
+    User,
     Phone,
     Mail,
     Hash,
@@ -57,6 +58,7 @@ import type { PortalPlanning, PortalCondominio, PortalUnidades } from '../servic
 import { CONDOMINIO_VAZIO, UNIDADES_VAZIO } from '../services/clientPortalService';
 import CondominioTab from './client/CondominioTab';
 import UnidadeTab from './client/UnidadeTab';
+import ClientPortalMyData from './client/portal/ClientPortalMyData';
 import ClientPortalLinkModal from './client/ClientPortalLinkModal';
 import { useStore } from '../store/useStore';
 // Fonte única do que a categoria do cliente significa. Comparação literal
@@ -533,7 +535,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 )}
                 {/* Gestor não tem "Meus dados" aqui (edita o cadastro em Meus Clientes) —
                     igual ao Portal do Fornecedor, onde o topo do gestor tem só prévia + abas. */}
-                {clientProfile && !isAdmin && (
+                {clientProfile && !isAdmin && !isStandalone && (
                     <button
                         onClick={() => { setMeusDadosForm({ ...clientProfile }); setShowMeusDados(true); }}
                         className={escuro
@@ -3943,16 +3945,22 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
             {/* ══ Casca do portal público — banner + header + sidebar (espelha o Portal do Corretor) ══ */}
             {isStandalone && (
-                <div className="hidden md:flex h-9 bg-indigo-50 border-b border-indigo-200 items-center justify-center gap-3 shrink-0 text-xs font-bold text-indigo-700 uppercase tracking-wider">
+                <div className="hidden md:flex h-9 bg-[#FDEDE8] border-b border-[#F3D9D1] items-center justify-center gap-3 shrink-0 text-xs font-bold text-[#C24428] uppercase tracking-wider">
                     <span>Acesso via link público</span>
                 </div>
             )}
             {isStandalone && (
                 <header className="hidden md:flex h-16 border-b border-gray-100 bg-white items-center justify-between px-6 shrink-0">
                     <div className="flex items-center gap-3">
-                        <div className="px-2.5 py-1 bg-indigo-600 text-white rounded-lg text-xs font-black uppercase tracking-wider">Portal do Cliente</div>
+                        <div className="px-2.5 py-1 bg-[#E1553C] text-white rounded-lg text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+                            <Home className="w-3.5 h-3.5" /> Portal do Cliente
+                        </div>
                         <h1 className="text-md font-bold text-gray-900 tracking-tight">Área do Cliente</h1>
                     </div>
+                    {/* Menu de conta — CÓPIA do Portal do Fornecedor (SupplierDashboard, casca
+                        standalone): mesmas classes, mesma cor, mesmos 4 itens e mesmas ações.
+                        Pedido de 22/09/2026: "quero igual, mesmo UI e UX ... para o Menu de conta".
+                        Só a entidade muda (cliente em vez de fornecedor). */}
                     <div className="relative" ref={accountMenuRef}>
                         <button
                             type="button"
@@ -3961,7 +3969,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             aria-haspopup="menu"
                             aria-expanded={isAccountMenuOpen}
                         >
-                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#E1553C] text-[11px] font-bold text-white">
                                 {clientDisplayName.charAt(0).toUpperCase()}
                             </span>
                             <span className="font-semibold text-gray-600">{clientDisplayName} (CLIENTE)</span>
@@ -3972,31 +3980,25 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             <div className="absolute right-0 top-full z-[1000] mt-2 w-[280px] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl" role="menu">
                                 <div className="border-b border-gray-100 px-4 py-3">
                                     <div className="flex items-center gap-3">
-                                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-sm font-bold text-white">
+                                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E1553C] text-sm font-bold text-white">
                                             {clientDisplayName.charAt(0).toUpperCase()}
                                         </span>
                                         <div className="min-w-0 flex-1">
                                             <div className="truncate text-sm font-bold text-gray-900">{clientDisplayName}</div>
-                                            <div className="truncate text-xs text-gray-500">{clientProfile?.email || ''}</div>
+                                            <div className="truncate text-xs text-gray-500">{clientProfile?.email}</div>
                                         </div>
                                     </div>
                                 </div>
-                                {/* Mesmos 4 itens do menu de conta do Portal do Fornecedor
-                                    (SupplierDashboard): Meus dados · Preferências · Notificações
-                                    · Ajuda e comandos. "Notificações" aqui abre o painel real de
-                                    avisos do cliente (o sino), não um "em breve". */}
                                 <div className="p-2">
-                                    {clientProfile && (
-                                        <button
-                                            type="button"
-                                            onClick={() => { setIsAccountMenuOpen(false); setMeusDadosForm({ ...clientProfile }); setShowMeusDados(true); }}
-                                            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-                                            role="menuitem"
-                                        >
-                                            <UserCircle className="h-4 w-4 text-gray-400" />
-                                            <span className="flex-1">Meus dados</span>
-                                        </button>
-                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => { setIsAccountMenuOpen(false); setShowMeusDados(true); }}
+                                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                        role="menuitem"
+                                    >
+                                        <User className="h-4 w-4 text-gray-400" />
+                                        <span className="flex-1">Meus dados</span>
+                                    </button>
                                     <button
                                         type="button"
                                         onClick={() => { setIsAccountMenuOpen(false); showToast('Personalização de tema estará disponível em breve.'); }}
@@ -4008,26 +4010,18 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => {
-                                            setIsAccountMenuOpen(false);
-                                            // Adiado um tick: o painel fecha em QUALQUER clique no documento
-                                            // (efeito acima), e este clique ainda está borbulhando.
-                                            setTimeout(() => setShowNotifications(true), 0);
-                                        }}
+                                        onClick={() => { setIsAccountMenuOpen(false); showToast('Central de notificações do cliente estará disponível em breve.'); }}
                                         className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
                                         role="menuitem"
                                     >
                                         <Bell className="h-4 w-4 text-gray-400" />
                                         <span className="flex-1">Notificações</span>
-                                        {unreadCount > 0 && (
-                                            <span className="text-xs font-medium text-orange-500">{unreadCount > 9 ? '9+' : unreadCount}</span>
-                                        )}
                                     </button>
                                 </div>
                                 <div className="border-t border-gray-100 p-2">
                                     <button
                                         type="button"
-                                        onClick={() => { setIsAccountMenuOpen(false); showToast('Dúvidas? Fale com a incorporadora responsável pelo seu imóvel.'); }}
+                                        onClick={() => { setIsAccountMenuOpen(false); showToast('Dúvidas? Fale com a construtora responsável por esta obra.'); }}
                                         className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
                                         role="menuitem"
                                     >
@@ -4050,7 +4044,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 onClick={() => setActiveTab(tab.id as typeof activeTab)}
                                 className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
                                     activeTab === tab.id
-                                        ? 'bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 font-bold'
+                                        ? 'bg-[#FDEDE8] border border-[#F3D9D1] text-[#C24428] font-semibold'
                                         : 'text-gray-500 hover:text-gray-900 hover:bg-white'
                                 }`}
                             >
@@ -4152,163 +4146,17 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 <ClientPortalLinkModal client={clientProfile} organizationId={organizationId} onClose={() => setShowLinkModal(false)} />
             )}
 
-            {/* Meus dados — painel lateral (Sheet), como no Portal do Fornecedor
-                (`SupplierDashboard` › `showMyAccount`). Era um modal central
-                `rounded-[2rem]`; REGRA #4 / UI_PATTERNS: modal central só para
-                interrupção crítica. Malha do formulário pelo §30; rótulos §21.
-                O Sheet fica sempre montado — é ele quem anima entrada/saída. */}
-            <Sheet open={showMeusDados && !!clientProfile} onClose={() => setShowMeusDados(false)} size="lg">
+            {/* "Meus dados" — IGUAL ao showMyAccount do SupplierDashboard: Sheet 2xl,
+                só leitura, no vocabulário dos portais externos (PortalKit). No link
+                público é a única forma de abrir; no app e na prévia idem. */}
+            <Sheet open={showMeusDados} onClose={() => setShowMeusDados(false)} size="2xl">
                 <SheetHeader onClose={() => setShowMeusDados(false)}>
-                    <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-indigo-50 rounded-[10px] flex items-center justify-center shrink-0">
-                            <UserCircle className="w-4 h-4 text-indigo-600" />
-                        </div>
-                        <div className="min-w-0">
-                            <SheetTitle>Meus dados</SheetTitle>
-                            <SheetDescription>O cadastro que a incorporadora tem de {clientDisplayName}.</SheetDescription>
-                        </div>
-                    </div>
+                    <SheetTitle>Meus dados</SheetTitle>
+                    <SheetDescription>O cadastro que a construtora tem de {clientDisplayName}.</SheetDescription>
                 </SheetHeader>
-
-                <SheetPanel className="p-4 md:p-6">
-                    <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-8">
-                        {/* Identificação */}
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
-                                <UserCircle className="w-4 h-4 text-indigo-600" />
-                                <h3 className="text-sm font-semibold text-gray-900">Identificação</h3>
-                            </div>
-                            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                                <div className="space-y-1.5 col-span-2">
-                                    <label className="text-xs font-semibold text-slate-500">Nome completo</label>
-                                    <input
-                                        type="text"
-                                        value={meusDadosForm.name || ''}
-                                        onChange={e => setMeusDadosForm(f => ({ ...f, name: e.target.value }))}
-                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-semibold text-slate-500">E-mail</label>
-                                    <input
-                                        type="email"
-                                        value={meusDadosForm.email || ''}
-                                        onChange={e => setMeusDadosForm(f => ({ ...f, email: e.target.value }))}
-                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-semibold text-slate-500">Telefone</label>
-                                    <input
-                                        type="tel"
-                                        value={meusDadosForm.phone || ''}
-                                        onChange={e => setMeusDadosForm(f => ({ ...f, phone: e.target.value }))}
-                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-semibold text-slate-500">{meusDadosForm.type === 'PJ' ? 'CNPJ' : 'CPF'}</label>
-                                    <input
-                                        type="text"
-                                        value={meusDadosForm.document || ''}
-                                        onChange={e => setMeusDadosForm(f => ({ ...f, document: e.target.value }))}
-                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Endereço */}
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
-                                <Home className="w-4 h-4 text-indigo-600" />
-                                <h3 className="text-sm font-semibold text-gray-900">Endereço</h3>
-                            </div>
-                            <div className="grid grid-cols-3 gap-x-6 gap-y-4">
-                                <div className="space-y-1.5 col-span-2">
-                                    <label className="text-xs font-semibold text-slate-500">Logradouro</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Rua / Av."
-                                        value={meusDadosForm.address || ''}
-                                        onChange={e => setMeusDadosForm(f => ({ ...f, address: e.target.value }))}
-                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-semibold text-slate-500">Número</label>
-                                    <input
-                                        type="text"
-                                        value={meusDadosForm.address_number || ''}
-                                        onChange={e => setMeusDadosForm(f => ({ ...f, address_number: e.target.value }))}
-                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-semibold text-slate-500">Bairro</label>
-                                    <input
-                                        type="text"
-                                        value={meusDadosForm.neighborhood || ''}
-                                        onChange={e => setMeusDadosForm(f => ({ ...f, neighborhood: e.target.value }))}
-                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-semibold text-slate-500">Cidade</label>
-                                    <input
-                                        type="text"
-                                        value={meusDadosForm.city || ''}
-                                        onChange={e => setMeusDadosForm(f => ({ ...f, city: e.target.value }))}
-                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-semibold text-slate-500">Estado</label>
-                                    <input
-                                        type="text"
-                                        maxLength={2}
-                                        placeholder="UF"
-                                        value={meusDadosForm.state || ''}
-                                        onChange={e => setMeusDadosForm(f => ({ ...f, state: e.target.value.toUpperCase() }))}
-                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:outline-none focus:border-indigo-300 focus:bg-white transition-all"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <SheetPanel className="px-4 py-4 md:px-5">
+                    <ClientPortalMyData client={clientProfile ?? null} />
                 </SheetPanel>
-
-                <SheetFooter className="justify-end gap-2">
-                    <button
-                        type="button"
-                        onClick={() => setShowMeusDados(false)}
-                        className="h-9 px-3.5 bg-white border border-gray-200 text-gray-600 rounded-[6px] text-[13px] font-medium hover:bg-gray-50 transition-all"
-                    >
-                        Cancelar
-                    </button>
-                    <button
-                        disabled={savingDados}
-                        onClick={async () => {
-                            if (!clientProfile) return;
-                            setSavingDados(true);
-                            try {
-                                await clientService.saveClient({ id: clientProfile.id, ...meusDadosForm });
-                                onClientSelect?.({ ...clientProfile, ...meusDadosForm } as Client);
-                                setShowMeusDados(false);
-                                showToast('Dados salvos.');
-                            } catch (err) {
-                                console.error(err);
-                                showToast('Erro ao salvar dados. Tente novamente.', 'error');
-                            } finally {
-                                setSavingDados(false);
-                            }
-                        }}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-[6px] text-[13px] font-medium transition-all active:scale-95"
-                    >
-                        <Save className="w-[15px] h-[15px]" />
-                        {savingDados ? 'Salvando...' : 'Salvar alterações'}
-                    </button>
-                </SheetFooter>
             </Sheet>
 
             {/* Mobile Bottom Navigation — máx. 5 slots; excedente vai pro sheet "Mais" */}

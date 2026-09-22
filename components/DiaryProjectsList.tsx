@@ -307,7 +307,7 @@ const DiaryProjectsList: React.FC<DiaryProjectsListProps> = ({
             {/* §20 — h1 solto + subtítulo mt-1.5; ações na mesma linha, à direita (mesmo arranjo de ProjectList) */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Projetos</h1>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Diários</h1>
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">
                         Diários de obra da sua operação: registros, impedimentos e atualização de cada projeto.
                     </p>

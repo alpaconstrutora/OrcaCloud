@@ -84,6 +84,7 @@ import { orderService } from '../services/orderService';
 import { PurchaseOrder } from '../types';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import { useConfirm } from './ui/confirm';
+import { useToast } from '../hooks/useToast';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import { usePersistedState } from './ui/TableUtils';
 import { KpiCard } from './ui/KpiCard';
@@ -127,6 +128,7 @@ const STATUS_TEXT_COLOR: Record<string, string> = { Aberto: 'text-amber-700', 'E
 
 export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, organizationId, activeTab: initialTab, portalToken, onUpdateSettings, onClientSelect, isPreview = false }) => {
     const confirm = useConfirm();
+    const { showToast } = useToast();
     const [activeTab, setActiveTab] = React.useState<ClientAreaTabId>(initialTab || 'dashboard');
     const [orders, setOrders] = React.useState<PurchaseOrder[]>([]);
     const [aiInsight] = React.useState<ClientAIInsight | null>(null);
@@ -3979,8 +3981,12 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         </div>
                                     </div>
                                 </div>
-                                {clientProfile && (
-                                    <div className="p-2">
+                                {/* Mesmos 4 itens do menu de conta do Portal do Fornecedor
+                                    (SupplierDashboard): Meus dados · Preferências · Notificações
+                                    · Ajuda e comandos. "Notificações" aqui abre o painel real de
+                                    avisos do cliente (o sino), não um "em breve". */}
+                                <div className="p-2">
+                                    {clientProfile && (
                                         <button
                                             type="button"
                                             onClick={() => { setIsAccountMenuOpen(false); setMeusDadosForm({ ...clientProfile }); setShowMeusDados(true); }}
@@ -3990,17 +3996,43 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             <UserCircle className="h-4 w-4 text-gray-400" />
                                             <span className="flex-1">Meus dados</span>
                                         </button>
-                                    </div>
-                                )}
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => { setIsAccountMenuOpen(false); showToast('Personalização de tema estará disponível em breve.'); }}
+                                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                        role="menuitem"
+                                    >
+                                        <Settings2 className="h-4 w-4 text-gray-400" />
+                                        <span className="flex-1">Preferências</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setIsAccountMenuOpen(false);
+                                            // Adiado um tick: o painel fecha em QUALQUER clique no documento
+                                            // (efeito acima), e este clique ainda está borbulhando.
+                                            setTimeout(() => setShowNotifications(true), 0);
+                                        }}
+                                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                        role="menuitem"
+                                    >
+                                        <Bell className="h-4 w-4 text-gray-400" />
+                                        <span className="flex-1">Notificações</span>
+                                        {unreadCount > 0 && (
+                                            <span className="text-xs font-medium text-orange-500">{unreadCount > 9 ? '9+' : unreadCount}</span>
+                                        )}
+                                    </button>
+                                </div>
                                 <div className="border-t border-gray-100 p-2">
                                     <button
                                         type="button"
-                                        onClick={() => setIsAccountMenuOpen(false)}
+                                        onClick={() => { setIsAccountMenuOpen(false); showToast('Dúvidas? Fale com a incorporadora responsável pelo seu imóvel.'); }}
                                         className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
                                         role="menuitem"
                                     >
                                         <HelpCircle className="h-4 w-4 text-gray-400" />
-                                        <span className="flex-1">Dúvidas? Fale com a incorporadora.</span>
+                                        <span className="flex-1">Ajuda e comandos</span>
                                     </button>
                                 </div>
                             </div>

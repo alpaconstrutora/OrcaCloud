@@ -85,3 +85,14 @@ as ações (Meus dados, prévia, configurar, **Trocar cliente**) — e nenhum
 ### Erros meus nesta rodada, pegos pelo print
 - `\b` no fim de regex não casa depois de `]`: `rounded-[2.5rem]` e `tracking-[0.2em]` passaram ilesos na 1ª execução.
 - `<p className="text-(sm|xs) font-bold …` → `%s` com o grupo sem o prefixo gerou `className="xs …"` em 24 linhas.
+
+## Pedido 3 (mesma sessão)
+
+> [print do menu de conta do Portal do Fornecedor: chip "Sebastião Eugênio (FORNECEDOR)" → Meus dados · Preferências · Notificações · Ajuda e comandos] implemente assim no portal do cliente
+
+| # | Arquivo | O que muda | Como sei que terminou |
+|---|---|---|---|
+| 6 | `components/ClientArea.tsx` (casca do link público) | Menu de conta com os 4 itens do fornecedor. "Notificações" abre o painel real de avisos (adiado 1 tick, porque o painel fecha em qualquer clique no documento); "Preferências" e "Ajuda" com o mesmo toast do fornecedor | ✅ Playwright no `/portal-cliente?token=…`: itens `["Meus dados","Preferências","Notificações","Ajuda e comandos"]`, painel de notificações abre, 0 erros |
+
+Cor do avatar/chip continua índigo (identidade do portal do cliente); o coral é
+exclusivo de investidor/fornecedor (§24).

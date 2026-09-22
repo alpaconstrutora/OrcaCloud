@@ -169,6 +169,10 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     const confirm = useConfirm();
     const [orderNumber, setOrderNumber] = React.useState<string | null>(null);
     const [numberLockReason, setNumberLockReason] = React.useState<string | null>(null);
+    // Obra como está GRAVADA. O número do pedido é derivado dela (máscara com o
+    // código do empreendimento), então "mudou a obra desde o último save" é o
+    // gatilho de regerar — e o que a tela avisa quando regerar está travado.
+    const [obraSalva, setObraSalva] = React.useState('');
     const [isRegeneratingNumber, setIsRegeneratingNumber] = React.useState(false);
 
     // Edição não é overlay: é TELA, renderizada in-flow pelo AppRouter dentro da
@@ -306,6 +310,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     setOrderNumber(existingOrder.number ?? null);
                     setSelectedSupplierId(existingOrder.supplierId || '');
                     setSelectedProjectId(existingOrder.projectId || '');
+                    setObraSalva(existingOrder.projectId || '');
                     setDeliveryDate(existingOrder.deliveryDate || '');
                     setPaymentMethod(existingOrder.paymentMethod || 'Boleto');
                     setPaymentTermType(existingOrder.paymentTermType || 'Vista');
@@ -364,6 +369,24 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         return () => { cancelled = true; };
     }, [editingOrderId]);
 
+    /**
+     * Gera e grava um número novo pela máscara vigente. Usado pelo botão
+     * "Regerar" e pelo salvar quando a OBRA mudou — a máscara padrão do pedido
+     * carrega o código do empreendimento (`[PREFIX EMPREENDIMENTO FORNECEDOR]`),
+     * que é resolvido a partir da obra (`documentNumbering/resolvers.ts`), então
+     * mudar de obra sem regerar deixa o número apontando para o lugar errado.
+     */
+    const gerarNumeroNovo = React.useCallback(async (orderId: string, obraId: string) => {
+        const project = obraId ? await projectService.loadProject(obraId) : null;
+        const organizationId = (project as { organization_id?: string } | null)?.organization_id || contextOrgId;
+        if (!organizationId) throw new Error('Não foi possível identificar a organização deste pedido.');
+        return regenerateOrderNumber(orderId, organizationId, {
+            projectId: obraId || undefined,
+            supplierId: selectedSupplierId || undefined,
+            costCenterId: costCenterId || undefined,
+        });
+    }, [contextOrgId, selectedSupplierId, costCenterId]);
+
     const handleRegenerateNumber = async () => {
         if (!editingOrderId) return;
         if (!await confirm({
@@ -375,16 +398,9 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
 
         setIsRegeneratingNumber(true);
         try {
-            const project = selectedProjectId ? await projectService.loadProject(selectedProjectId) : null;
-            const organizationId = (project as { organization_id?: string } | null)?.organization_id || contextOrgId;
-            if (!organizationId) throw new Error('Não foi possível identificar a organização deste pedido.');
-
-            const novo = await regenerateOrderNumber(editingOrderId, organizationId, {
-                projectId: selectedProjectId || undefined,
-                supplierId: selectedSupplierId || undefined,
-                costCenterId: costCenterId || undefined,
-            });
+            const novo = await gerarNumeroNovo(editingOrderId, selectedProjectId);
             setOrderNumber(novo);
+            setObraSalva(selectedProjectId);
         } catch (e: unknown) {
             console.error('[SupplyChainOrderForm] Erro ao regerar número:', e);
             setNumberLockReason(e instanceof Error ? e.message : 'Erro ao regerar o número.');
@@ -840,6 +856,23 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     items: itensParaSalvar,
                 }, editingVersion);
                 if (salvo?.version !== undefined && salvo.version !== null) setEditingVersion(salvo.version);
+
+                // O número carrega o empreendimento, que vem da OBRA: trocar a
+                // obra e deixar o número velho aponta o pedido para o
+                // empreendimento errado em toda tela que lê o número. Fora de
+                // Rascunho o número está travado de propósito (já foi para o
+                // fornecedor) — aí a tela avisa, ao lado do campo, que ele
+                // continua o antigo. Falhar aqui não desfaz o save.
+                const obraMudouNoSave = obraSalva !== selectedProjectId;
+                setObraSalva(selectedProjectId);
+                if (obraMudouNoSave && !numberLockReason) {
+                    try {
+                        setOrderNumber(await gerarNumeroNovo(editingOrderId, selectedProjectId));
+                    } catch (e: unknown) {
+                        console.error('[SupplyChainOrderForm] Erro ao regerar o número após trocar a obra:', e);
+                        setFormError(`O pedido foi salvo, mas o número não pôde ser regerado para a obra nova: ${e instanceof Error ? e.message : 'erro desconhecido'}`);
+                    }
+                }
             } else {
                 await orderService.createOrder({
                     projectId: selectedProjectId,
@@ -941,6 +974,10 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     // Por que o "Salvar alterações" está desligado. `null` = pode salvar. Botão
     // desbotado sem motivo visível foi o que fez a troca de empreendimento
     // parecer "não aceita" em 22/09/2026 — o motivo aparece ao lado do botão.
+    // O número do pedido é derivado da obra: enquanto a obra na tela não for a
+    // gravada, o número que está no campo é o da obra anterior.
+    const obraMudou = isEditing && !!obraSalva && !!selectedProjectId && selectedProjectId !== obraSalva;
+
     const motivoSalvar = motivoSalvarBloqueado({
         fornecedorId: selectedSupplierId,
         obraId: selectedProjectId,
@@ -1273,6 +1310,16 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                             </div>
                                             {numberLockReason && (
                                                 <p className="text-xs text-gray-400 mt-1">{numberLockReason}</p>
+                                            )}
+                                            {/* O número guarda o empreendimento, que vem da obra.
+                                                Trocar a obra sem dizer nada deixaria o número
+                                                apontando para o empreendimento anterior. */}
+                                            {obraMudou && (
+                                                <p className="text-xs text-amber-600 mt-1">
+                                                    {numberLockReason
+                                                        ? 'A obra mudou, mas o número continua o antigo — ele só pode ser regerado em Rascunho.'
+                                                        : 'A obra mudou — o número é regerado pela máscara ao salvar.'}
+                                                </p>
                                             )}
                                         </div>
                                     )}

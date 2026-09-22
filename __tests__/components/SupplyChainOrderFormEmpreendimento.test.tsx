@@ -98,9 +98,12 @@ vi.mock('../../services/financialRegistryService', () => ({
     },
 }));
 vi.mock('../../services/costCenterService', () => ({ costCenterService: { list: vi.fn(async () => []) } }));
+// `null` = pedido em Rascunho, número liberado. String = travado (o pedido já
+// saiu para o fornecedor).
+let travaDoNumero: string | null = null;
 vi.mock('../../services/orderNumberRegenService', () => ({
-    getOrderNumberLockReason: vi.fn(async () => null),
-    regenerateOrderNumber: vi.fn(async () => 'PC-A-002'),
+    getOrderNumberLockReason: vi.fn(async () => travaDoNumero),
+    regenerateOrderNumber: vi.fn(async () => 'PC-B-007'),
 }));
 vi.mock('../../hooks/useOrgContext', () => ({ useOrgContext: () => ({ orgId: 'org-1' }) }));
 
@@ -115,6 +118,7 @@ vi.mock('../../components/MaterialSelectionModal', () => ({ default: () => null 
 vi.mock('../../components/DatabasePickerModal', () => ({ default: () => null }));
 
 import { orderService } from '../../services/orderService';
+import { regenerateOrderNumber } from '../../services/orderNumberRegenService';
 import SupplyChainOrderForm from '../../components/SupplyChainOrderForm';
 import { ConfirmProvider } from '../../components/ui/confirm';
 
@@ -138,6 +142,9 @@ async function esperarPedidoCarregado() {
 
 describe('Pedido › Dados Gerais › trocar o empreendimento', () => {
     beforeEach(() => {
+        // Só as chamadas — `clearAllMocks` não apaga as implementações.
+        vi.clearAllMocks();
+        travaDoNumero = null;
         pedidoAtual = PEDIDO_BASE;
         mapaObraEmpreendimento = {
             'obra-1': { id: 'emp-a', name: 'Empreendimento A' },
@@ -214,6 +221,48 @@ describe('Pedido › Dados Gerais › trocar o empreendimento', () => {
         expect((patch.items ?? []).find(i => i.code === 'ORC-1')).toMatchObject({
             quantity: 5, unitPrice: 500, total: 2500,
         });
+    });
+
+    // O número do pedido carrega o código do empreendimento (máscara padrão
+    // `[PREFIX EMPREENDIMENTO FORNECEDOR]`), resolvido a partir da OBRA. Trocar de
+    // obra e deixar o número velho apontaria o pedido para o empreendimento errado.
+    it('Rascunho: trocar a obra avisa, e salvar regera o número', async () => {
+        mapaObraEmpreendimento = {
+            'obra-1': { id: 'emp-a', name: 'Empreendimento A' },
+            'obra-2': { id: 'emp-b', name: 'Empreendimento B' },
+        };
+        montar();
+        await esperarPedidoCarregado();
+
+        fireEvent.change(seletor(/Empreendimento/), { target: { value: 'emp-b' } });
+        await waitFor(() => expect(seletor(/^Obra$/).value).toBe('obra-2'));
+        expect(screen.getByText(/o número é regerado pela máscara ao salvar/i)).toBeTruthy();
+
+        fireEvent.click(botaoSalvar());
+
+        await waitFor(() => expect(regenerateOrderNumber).toHaveBeenCalled());
+        const [, , ctx] = vi.mocked(regenerateOrderNumber).mock.calls.at(-1)!;
+        expect(ctx.projectId).toBe('obra-2');
+        await waitFor(() => expect(screen.getByDisplayValue('PC-B-007')).toBeTruthy());
+    });
+
+    it('fora de Rascunho o número fica como está, e a tela diz isso', async () => {
+        travaDoNumero = 'Pedido em "Confirmado" — o número só pode ser regerado enquanto ele está em Rascunho.';
+        mapaObraEmpreendimento = {
+            'obra-1': { id: 'emp-a', name: 'Empreendimento A' },
+            'obra-2': { id: 'emp-b', name: 'Empreendimento B' },
+        };
+        montar();
+        await esperarPedidoCarregado();
+
+        fireEvent.change(seletor(/Empreendimento/), { target: { value: 'emp-b' } });
+        await waitFor(() => expect(seletor(/^Obra$/).value).toBe('obra-2'));
+        expect(screen.getByText(/o número continua o antigo/i)).toBeTruthy();
+
+        fireEvent.click(botaoSalvar());
+
+        await waitFor(() => expect(orderService.updateOrder).toHaveBeenCalled());
+        expect(regenerateOrderNumber).not.toHaveBeenCalled();
     });
 
     it('"Todos os empreendimentos" é só filtro — não tira a obra do pedido', async () => {

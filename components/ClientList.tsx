@@ -1,15 +1,15 @@
 import React from 'react';
 import { clientService } from '../services/clientService';
 import { ehLocacao, ehServicos } from '../utils/clientCategory';
-import { clientPortalService, ClientPortalToken } from '../services/clientPortalService';
 import { clientCategoryService } from '../services/clientCategoryService';
 import { empreendimentoService } from '../services/empreendimentoService';
 import { supabase } from '../lib/supabase';
-import { User, Users2, Mail, Phone, Trash2, Search, Loader2, Plus, LayoutDashboard, Table2, Building2, Link2, Copy, Check, RefreshCw, X, Wrench, ClipboardList, Bell, Send, Tag, MoveHorizontal, Upload, FileDown } from 'lucide-react';
+import { User, Users2, Mail, Phone, Trash2, Search, Loader2, Plus, LayoutDashboard, Table2, Building2, Link2, Check, RefreshCw, X, Wrench, ClipboardList, Bell, Send, Tag, MoveHorizontal, Upload, FileDown } from 'lucide-react';
 import { Client, ClientCategory } from '../types';
 import ClientForm from './ClientForm';
 import ClientImportModal from './ClientImportModal';
 import ClientRequestsAdminModal from './ClientRequestsAdminModal';
+import ClientPortalLinkModal from './client/ClientPortalLinkModal';
 import { clientMessagesService } from '../services/clientMessagesService';
 import { clientEmpreendimentoService } from '../services/clientEmpreendimentoService';
 import { exportClientsToExcel } from '../utils/clientExcel';
@@ -538,92 +538,13 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
         setIsImportOpen(true);
     };
 
-    const [tokenModal, setTokenModal] = React.useState<{ client: Client; token: ClientPortalToken | null } | null>(null);
-    const [tokenLoading, setTokenLoading] = React.useState(false);
-    const [tokenCopied, setTokenCopied] = React.useState(false);
+    // Modal de Link de Acesso — vive em `client/ClientPortalLinkModal.tsx`, o mesmo
+    // que o painel do cliente (ClientArea) abre pelo botão do topo.
+    const [tokenModalClient, setTokenModalClient] = React.useState<Client | null>(null);
     const [requestsModal, setRequestsModal] = React.useState<Client | null>(null);
     const [comunicadoModal, setComunicadoModal] = React.useState<Client | null>(null);
     const [comunicadoForm, setComunicadoForm] = React.useState({ title: '', body: '' });
     const [comunicadoSending, setComunicadoSending] = React.useState(false);
-
-    // Quantas unidades de condomínio este cliente ocupa. Serve só para AVISAR
-    // quem gera o link — sem isso, ninguém descobre que o mesmo link abre a aba
-    // Condomínio, e o portal do condômino continua sendo emitido à toa.
-    const [unidadesDoCliente, setUnidadesDoCliente] = React.useState<number | null>(null);
-
-    const openTokenModal = async (client: Client) => {
-        setTokenModal({ client, token: null });
-        setTokenLoading(true);
-        setUnidadesDoCliente(null);
-        try {
-            const tok = await clientPortalService.getTokenForClient(client.id);
-            setTokenModal({ client, token: tok });
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setTokenLoading(false);
-        }
-        // Depois e à parte: é informativo, e falhar aqui não pode impedir de
-        // copiar o link.
-        clientPortalService.getCondominioForClient(client.id)
-            .then(c => setUnidadesDoCliente(c.unidades.length))
-            .catch(() => setUnidadesDoCliente(null));
-    };
-
-    const handleGenerateToken = async () => {
-        // Deriva a org: prop > seletor ativo > org do próprio cliente > única org do usuário.
-        // Cliente global (organization_id null) + seletor em "Todas as organizações" não tem org
-        // para derivar; nesse caso, se o usuário só pertence a uma org, usamos ela.
-        const singleOrgId = organizations.length === 1 ? organizations[0].id : null;
-        const orgId = organizationId || activeOrganizationId || tokenModal?.client.organization_id || singleOrgId;
-        if (!tokenModal) return;
-        if (!orgId) {
-            console.error('[ClientPortal] organizationId ausente', { organizationId, activeOrganizationId, clientOrgId: tokenModal?.client.organization_id, orgCount: organizations.length });
-            showToast('Selecione uma organização específica no seletor do topo para gerar o link de acesso.', 'error');
-            return;
-        }
-        setTokenLoading(true);
-        try {
-            await clientPortalService.generateToken(tokenModal.client.id, orgId);
-            const tok = await clientPortalService.getTokenForClient(tokenModal.client.id);
-            setTokenModal(prev => prev ? { ...prev, token: tok } : null);
-            showToast('Link gerado com sucesso!', 'success');
-        } catch (e) {
-            console.error('[ClientPortal] Erro ao gerar token:', e);
-            showToast('Erro ao gerar link.', 'error');
-        } finally {
-            setTokenLoading(false);
-        }
-    };
-
-    const handleCopyLink = async () => {
-        if (!tokenModal?.token) return;
-        const url = clientPortalService.buildPortalUrl(tokenModal.token.token);
-        await navigator.clipboard.writeText(url);
-        setTokenCopied(true);
-        setTimeout(() => setTokenCopied(false), 2000);
-    };
-
-    const handleRevokeToken = async () => {
-        if (!tokenModal) return;
-        const ok = await confirm({
-            title: 'Revogar acesso ao portal?',
-            message: 'O cliente perderá o acesso ao portal através deste link.',
-            variant: 'warning',
-            confirmLabel: 'Revogar',
-        });
-        if (!ok) return;
-        setTokenLoading(true);
-        try {
-            await clientPortalService.revokeToken(tokenModal.client.id);
-            setTokenModal(prev => prev ? { ...prev, token: null } : null);
-            showToast('Acesso revogado.', 'success');
-        } catch (e) {
-            showToast('Erro ao revogar.', 'error');
-        } finally {
-            setTokenLoading(false);
-        }
-    };
 
     const filteredClients = React.useMemo(() => {
         let result = clients
@@ -1205,7 +1126,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                                         kind="share"
                                                         title="Link de Acesso"
                                                         icon={<Link2 className="w-4 h-4" />}
-                                                        onClick={() => openTokenModal(client)}
+                                                        onClick={() => setTokenModalClient(client)}
                                                     />
                                                     <InlineDisclosureMenu
                                                         menuItems={[
@@ -1325,7 +1246,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                         kind="share"
                                         title="Link de Acesso ao Portal"
                                         icon={<Link2 className="w-4 h-4" />}
-                                        onClick={() => openTokenModal(client)}
+                                        onClick={() => setTokenModalClient(client)}
                                     />
                                     {(client.category === 'Locação' || client.category === 'Serviços') && (
                                         <ActionIconButton
@@ -1353,80 +1274,9 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
             </div>
             )}
 
-            {/* Token Modal */}
-            {tokenModal && (
-                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setTokenModal(null)}>
-                    <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-md p-8 space-y-6" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h3 className="text-lg font-black text-gray-900">Link de Acesso</h3>
-                                <p className="text-sm text-gray-400 font-medium mt-0.5">{tokenModal.client.name}</p>
-                            </div>
-                            <button onClick={() => setTokenModal(null)} className="p-2 text-gray-400 hover:text-gray-600 rounded-[6px] hover:bg-gray-100 transition-colors">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-
-                        {tokenLoading ? (
-                            <div className="flex justify-center py-8">
-                                <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
-                            </div>
-                        ) : tokenModal.token && tokenModal.token.is_active ? (
-                            <div className="space-y-4">
-                                <div className="bg-emerald-50 border border-emerald-100 rounded-[10px] p-4">
-                                    <p className="text-xs font-semibold text-emerald-600 mb-2">Link ativo</p>
-                                    <p className="text-xs text-gray-700 break-all leading-relaxed">
-                                        {clientPortalService.buildPortalUrl(tokenModal.token.token)}
-                                    </p>
-                                    <p className="text-xs text-gray-400 mt-2">
-                                        Expira em: {new Date(tokenModal.token.expires_at).toLocaleDateString('pt-BR')}
-                                        {tokenModal.token.last_used_at && ` · Último acesso: ${new Date(tokenModal.token.last_used_at).toLocaleDateString('pt-BR')}`}
-                                    </p>
-                                    {/* O mesmo link abre o condomínio — a razão de existir da
-                                        aba. Sem dizer aqui, quem gera continua mandando dois. */}
-                                    {!!unidadesDoCliente && (
-                                        <p className="text-xs text-emerald-700 mt-2 pt-2 border-t border-emerald-100">
-                                            Este cliente ocupa {unidadesDoCliente === 1 ? '1 unidade' : `${unidadesDoCliente} unidades`} de condomínio.
-                                            Habilite a aba <strong>Condomínio</strong> no portal e este mesmo link mostra
-                                            unidades, avisos e documentos do prédio.
-                                        </p>
-                                    )}
-                                </div>
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={handleCopyLink}
-                                        className="flex-1 flex items-center justify-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] hover:bg-emerald-700 font-medium text-[13px] transition-all active:scale-95"
-                                    >
-                                        {tokenCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                                        {tokenCopied ? 'Copiado!' : 'Copiar Link'}
-                                    </button>
-                                    <ActionIconButton
-                                        kind="history"
-                                        title="Gerar novo link (invalida o anterior)"
-                                        icon={<RefreshCw className="w-4 h-4" />}
-                                        onClick={handleGenerateToken}
-                                    />
-                                    <ActionIconButton kind="delete" title="Revogar acesso" onClick={handleRevokeToken} />
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                <div className="bg-gray-50 border border-gray-100 rounded-[10px] p-6 text-center">
-                                    <Link2 className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                                    <p className="text-sm font-bold text-gray-700">Nenhum link ativo</p>
-                                    <p className="text-xs text-gray-400 mt-1">Gere um link para que o cliente acesse o portal sem precisar de cadastro.</p>
-                                </div>
-                                <button
-                                    onClick={handleGenerateToken}
-                                    className="w-full flex items-center justify-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] hover:bg-emerald-700 font-medium text-[13px] transition-all active:scale-95"
-                                >
-                                    <Link2 className="w-4 h-4" />
-                                    Gerar Link de Acesso
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                </div>
+            {/* Link de Acesso ao portal (modal compartilhado com ClientArea) */}
+            {tokenModalClient && (
+                <ClientPortalLinkModal client={tokenModalClient} organizationId={organizationId} onClose={() => setTokenModalClient(null)} />
             )}
 
             {/* Modal de Comunicado */}

@@ -29,7 +29,6 @@ import {
     ShieldCheck,
     Sparkles,
     Palette,
-    Users,
     FileDown,
     Settings2,
     Eye,
@@ -48,7 +47,9 @@ import {
     ClipboardList,
     MoreHorizontal,
     ChevronDown,
-    HelpCircle
+    HelpCircle,
+    ArrowLeft,
+    Link2
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid, Line, ComposedChart, Bar, LabelList, Legend } from 'recharts';
 import { buildPlanningView, type PlanningView, type PlanningScale } from '../utils/portalPlanningUtils';
@@ -56,6 +57,7 @@ import type { PortalPlanning, PortalCondominio, PortalUnidades } from '../servic
 import { CONDOMINIO_VAZIO, UNIDADES_VAZIO } from '../services/clientPortalService';
 import CondominioTab from './client/CondominioTab';
 import UnidadeTab from './client/UnidadeTab';
+import ClientPortalLinkModal from './client/ClientPortalLinkModal';
 import { useStore } from '../store/useStore';
 // Fonte única do que a categoria do cliente significa. Comparação literal
 // (`=== 'Locação'`) quebrava caladamente a cada categoria nova — foi o que
@@ -149,6 +151,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
     const [showTabConfig, setShowTabConfig] = React.useState(false);
     const [showMobilePreview, setShowMobilePreview] = React.useState(false);
+    // Link de Acesso (link público do cliente) — mesmo modal da lista de clientes
+    const [showLinkModal, setShowLinkModal] = React.useState(false);
     const [showMeusDados, setShowMeusDados] = React.useState(false);
     const [meusDadosForm, setMeusDadosForm] = React.useState<Partial<Client>>({});
     const [savingDados, setSavingDados] = React.useState(false);
@@ -552,15 +556,6 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         title="Configurar abas"
                         icon={<Settings2 className="w-4 h-4" />}
                     />
-                )}
-                {isAdmin && clientProfile && (
-                    <button
-                        onClick={() => onClientSelect?.(null!)}
-                        className="hidden md:flex items-center gap-1.5 h-9 px-3.5 bg-white hover:bg-gray-50 text-gray-600 rounded-[6px] text-[13px] font-medium transition-all active:scale-95 border border-gray-200"
-                    >
-                        <Users className="w-[15px] h-[15px]" />
-                        Trocar cliente
-                    </button>
                 )}
             </div>
         );
@@ -3845,6 +3840,33 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     // carrega avatar/nome/categoria e as ações do topo — o cabeçalho branco seria
     // um segundo card com a mesma informação, logo abaixo.
     const heroSubstituiCabecalho = activeTab === 'dashboard' && (ehLocacao(clientCategory) || ehServicos(clientCategory));
+    // Título único por aba (guia §19.1/§20) — o mesmo desenho do Portal do
+    // Fornecedor (`SupplierDashboard.TAB_META`): h1 + subtítulo trocam com a aba,
+    // e o conteúdo da aba não repete o título.
+    const primeiroNome = clientProfile?.name?.split(' ')[0];
+    // `Partial` porque o tipo ainda carrega 'clientes' (id legado, sem aba em ALL_TABS).
+    const TAB_META: Partial<Record<ClientAreaTabId, { title: string; subtitle: string }>> = {
+        dashboard: {
+            title: primeiroNome ? `Olá, ${primeiroNome}` : 'Área do Cliente',
+            subtitle: rotuloDaCategoria(clientCategory) ?? 'Bem-vindo à sua área exclusiva',
+        },
+        jornada: { title: 'Minha Jornada', subtitle: 'As etapas da sua compra, do contrato à entrega das chaves.' },
+        unidade: { title: 'Dados da Unidade', subtitle: 'A ficha do imóvel negociado.' },
+        obra: ehServicos(clientCategory)
+            ? { title: 'Andamento do Serviço', subtitle: 'Acompanhe a execução do serviço contratado.' }
+            : { title: 'Obra', subtitle: 'Acompanhe o avanço físico da obra.' },
+        'cronograma-ff': { title: 'Cronograma Físico-Financeiro', subtitle: 'Avanço físico e desembolso previsto por período.' },
+        visual: { title: 'Visual', subtitle: 'Fotos em alta resolução e câmeras ao vivo do canteiro.' },
+        personalizacao: { title: 'Personalização', subtitle: 'Escolha os acabamentos da sua unidade.' },
+        diario: { title: 'Diário de Obra', subtitle: 'Os registros diários do canteiro.' },
+        documentos: { title: 'Documentos', subtitle: 'Arquivos compartilhados pela incorporadora.' },
+        contratos: { title: 'Contratos', subtitle: 'Seus contratos e o status de assinatura.' },
+        financeiro: { title: 'Financeiro', subtitle: 'Parcelas, pagamentos e recibos.' },
+        suporte: { title: 'Suporte', subtitle: 'Fale com a incorporadora.' },
+        manutencao: { title: 'Manutenção', subtitle: 'Chamados de assistência técnica.' },
+        condominio: { title: 'Condomínio', subtitle: 'Unidades, avisos e documentos do prédio.' },
+    };
+    const tabMeta = TAB_META[activeTab] ?? TAB_META.dashboard!;
     // `utils/clientCategory.ts` — o mapa literal que vivia aqui ignorava
     // qualquer categoria nova, e o cliente caía em ALL_TABS: Diário de Obra e
     // Personalização num portal de locatário.
@@ -4040,7 +4062,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         ))}
                     </aside>
                 )}
-                <div className={isStandalone ? 'md:flex-1 md:overflow-y-auto md:p-6 space-y-4 md:space-y-8' : 'space-y-4 md:space-y-8'}>
+                <div className={isStandalone ? 'md:flex-1 md:overflow-y-auto md:p-6 space-y-4 md:space-y-8' : 'space-y-6'}>
             {/* Prévia Mobile — renderiza o portal como o cliente vê, dentro de um iframe estreito */}
             {showMobilePreview && !isPreview && (
                 <MobilePreviewFrame onClose={() => setShowMobilePreview(false)} title="Prévia — Portal do Cliente">
@@ -4056,12 +4078,50 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 </MobilePreviewFrame>
             )}
 
-            {/* Main Header — NÃO renderizado quando o dashboard tem hero próprio
-                (Locação/Serviços): lá o avatar/nome/categoria e estas ações vão DENTRO
-                da faixa colorida, para não repetir o mesmo card duas vezes na tela.
+            {/* ── Cabeçalho da visão do gestor — espelha o Portal do Fornecedor
+                (`SupplierPortalManager` + `SupplierDashboard`): linha "Voltar" +
+                "Link de Acesso", depois o título §20 (h1 + subtítulo por aba) com as
+                ações à direita. Sem card, avatar ou "hero": título é conteúdo de
+                página. Pedido de 22/09/2026. ── */}
+            {isAdmin && clientProfile && !isStandalone && (
+                <div className="flex items-center justify-between gap-4">
+                    <button
+                        onClick={() => onClientSelect?.(null!)}
+                        className="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-gray-900 transition-all w-fit"
+                    >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        Voltar para Clientes
+                    </button>
+                    <button
+                        onClick={() => setShowLinkModal(true)}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-purple-50 text-purple-600 border border-purple-200 rounded-[6px] hover:bg-purple-100 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                    >
+                        <Link2 className="w-[15px] h-[15px]" />
+                        Link de Acesso
+                    </button>
+                </div>
+            )}
+
+            {/* Título §20 — NÃO renderizado quando o dashboard tem hero próprio
+                (Locação/Serviços): lá o nome/categoria e estas ações vão DENTRO
+                da faixa colorida, para não repetir a saudação duas vezes na tela.
                 Precisa sair do DOM (e não só `hidden`) para não montar dois sinos de
-                notificação compartilhando o mesmo estado de dropdown. */}
-            {!heroSubstituiCabecalho && (
+                notificação compartilhando o mesmo estado de dropdown.
+                No acesso por link público (`isStandalone`) a identidade já vem da
+                casca (badge + menu de conta + sidebar), então lá continua o card
+                de boas-vindas de antes. */}
+            {!heroSubstituiCabecalho && !isStandalone && (
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">{tabMeta.title}</h1>
+                        <p className="text-gray-400 text-sm mt-1.5 font-medium">{tabMeta.subtitle}</p>
+                    </div>
+                    {/* Action buttons — mesmas ações reusadas dentro da faixa colorida
+                        do dashboard de Locação/Serviços (variante 'dark') */}
+                    {renderPortalActions()}
+                </div>
+            )}
+            {!heroSubstituiCabecalho && isStandalone && (
             <div className="bg-white md:rounded-[10px] p-4 md:p-6 shadow-sm border-b md:border border-gray-100 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
 
@@ -4084,12 +4144,14 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             </p>
                         </div>
                     </div>
-
-                    {/* Action buttons — mesmas ações reusadas dentro da faixa colorida
-                        do dashboard de Locação/Serviços (variante 'dark') */}
                     {renderPortalActions()}
                 </div>
             </div>
+            )}
+
+            {/* Link de Acesso — modal compartilhado com a lista de clientes */}
+            {showLinkModal && clientProfile && (
+                <ClientPortalLinkModal client={clientProfile} organizationId={organizationId} onClose={() => setShowLinkModal(false)} />
             )}
 
             {/* Modal Meus Dados */}

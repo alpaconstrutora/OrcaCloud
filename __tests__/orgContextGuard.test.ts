@@ -78,7 +78,6 @@ const RULES: Rule[] = [
         baseline: {
             // Cliente global (organization_id null) + topo em "Todas": a tela
             // precisa saber se existe uma organização óbvia para o vínculo.
-            'components/ClientList.tsx': 1,
         },
     },
     {

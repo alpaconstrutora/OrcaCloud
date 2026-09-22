@@ -103,12 +103,17 @@ interface ProjectDiaryManagerProps {
 
 
 const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, projects, onLoadProject, onUpdateSettings, organizationId, onBackToList, onSave, onGenerateReport }) => {
-    const [isAdding, setIsAdding] = useState(
-        localStorage.getItem('diary_is_adding') === 'true'
-    );
-    const [editingId, setEditingId] = useState<string | null>(
-        localStorage.getItem('diary_editing_id')
-    );
+    // O diário SEMPRE abre na tabela de registros. `isAdding`/`editingId` eram
+    // persistidos em localStorage: quem saía com um registro aberto (seta ←)
+    // reabria o diário direto no editor — com o formulário vazio e `editingId`
+    // apontando para o último registro, que um Salvar sobrescreveria em branco
+    // (2026-09-22). As chaves antigas são limpas para não ressuscitar o estado.
+    const [isAdding, setIsAdding] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    React.useEffect(() => {
+        localStorage.removeItem('diary_is_adding');
+        localStorage.removeItem('diary_editing_id');
+    }, []);
     // "Dados gerais" foi desmembrada em 2026-09-21: Condições Climáticas e
     // Atividades do Dia (efetivo + atividades) viraram abas próprias. O valor
     // persistido 'geral' cai na primeira delas.
@@ -121,16 +126,6 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
     const [linkedSchedule, setLinkedSchedule] = useState<ProjectSchedule | null>(null);
     const [linkedBudget, setLinkedBudget] = useState<BudgetEntry[]>([]);
     const [isLoadingLinked, setIsLoadingLinked] = useState(false);
-
-    // Persistência de estado
-    React.useEffect(() => {
-        localStorage.setItem('diary_is_adding', isAdding.toString());
-    }, [isAdding]);
-
-    React.useEffect(() => {
-        if (editingId) localStorage.setItem('diary_editing_id', editingId);
-        else localStorage.removeItem('diary_editing_id');
-    }, [editingId]);
 
     React.useEffect(() => {
         if (activeTab) localStorage.setItem('diary_active_tab', activeTab);

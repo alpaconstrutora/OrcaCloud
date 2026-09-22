@@ -15,7 +15,7 @@
  */
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import PainelImportarDxf from '../../components/blueprint/PainelImportarDxf';
 import { applyCommand, emptyModel } from '../../utils/blueprintKernel';
 
@@ -155,6 +155,65 @@ describe('importar DXF · o que entra', () => {
     });
     expect(screen.getByText(/Nenhuma parede reconhecida/)).toBeTruthy();
     expect(screen.getByRole('button', { name: /Importar/ })).toHaveProperty('disabled', true);
+  });
+});
+
+/**
+ * ESQUADRIAS (P2.33): parede de 6 m (faces y=0/150) com porta de 900 em [2000, 2900] (arco de folha
+ * com dobradiça em x=2000, na camada PORTAS) e janela de 1200 em [4000, 5200] (duas linhas em JANELAS).
+ */
+function dxfComEsquadrias(): string {
+  const L = (x1: number, y1: number, x2: number, y2: number, camada = 'PAREDE'): [string, string][] => [['0', 'LINE'], ['8', camada], ['10', String(x1)], ['20', String(y1)], ['11', String(x2)], ['21', String(y2)]];
+  const pares: [string, string][] = [
+    ['0', 'SECTION'], ['2', 'HEADER'], ['9', '$INSUNITS'], ['70', '4'], ['0', 'ENDSEC'],
+    ['0', 'SECTION'], ['2', 'ENTITIES'],
+    ...L(0, 0, 2000, 0), ...L(0, 150, 2000, 150), ...L(2900, 0, 4000, 0), ...L(2900, 150, 4000, 150), ...L(5200, 0, 6000, 0), ...L(5200, 150, 6000, 150),
+    ...L(2000, 0, 2000, 150), ...L(2900, 0, 2900, 150), ...L(4000, 0, 4000, 150), ...L(5200, 0, 5200, 150),
+    ['0', 'ARC'], ['8', 'PORTAS'], ['10', '2000'], ['20', '0'], ['40', '900'], ['50', '0'], ['51', '90'],
+    ...L(4000, 50, 5200, 50, 'JANELAS'), ...L(4000, 100, 5200, 100, 'JANELAS'),
+    ['0', 'ENDSEC'], ['0', 'EOF'],
+  ];
+  return pares.flatMap(([c, v]) => [c, v]).join('\n');
+}
+
+describe('importar DXF · esquadrias (P2.33)', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('conta porta e janela no resumo, e o lote leva AddWall com uid e AddOpening pelo wallUid com as hipóteses', async () => {
+    const { onImportar } = await abrirComArquivo(dxfComEsquadrias());
+    expect(screen.getByTestId('resumo-esquadrias').textContent).toBe('1 porta(s) · 1 janela(s) · 0 vão(s) livre(s)');
+    expect(screen.getByRole('button', { name: /Importar/ }).textContent).toMatch(/Importar 1 \+ 2/);
+    fireEvent.click(screen.getByRole('button', { name: /Importar/ }));
+    const comandos = onImportar.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(comandos.map((c) => c.type)).toEqual(['AddWall', 'AddOpening', 'AddOpening']);
+    const parede = comandos[0];
+    expect(typeof parede.uid).toBe('string');
+    const porta = comandos.find((c) => c.kind === 'door')!;
+    const janela = comandos.find((c) => c.kind === 'window')!;
+    expect(porta).toMatchObject({ wallId: '', wallUid: parede.uid, widthMm: 900, heightMm: 2100, sillMm: 0 });
+    expect(typeof porta.hingeAtStart).toBe('boolean');
+    expect(typeof porta.swingReversed).toBe('boolean');
+    expect(janela).toMatchObject({ wallUid: parede.uid, widthMm: 1200, heightMm: 1200, sillMm: 1000 });
+  });
+
+  it('as hipóteses editadas entram nas aberturas e ficam persistidas por tela', async () => {
+    const { onImportar } = await abrirComArquivo(dxfComEsquadrias());
+    fireEvent.change(screen.getByLabelText('Altura da porta'), { target: { value: '2400' } });
+    fireEvent.change(screen.getByLabelText('Peitoril da janela'), { target: { value: '900' } });
+    fireEvent.click(screen.getByRole('button', { name: /Importar/ }));
+    const comandos = onImportar.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(comandos.find((c) => c.kind === 'door')).toMatchObject({ heightMm: 2400 });
+    expect(comandos.find((c) => c.kind === 'window')).toMatchObject({ sillMm: 900 });
+    expect(JSON.parse(localStorage.getItem('blueprint:dxf-esquadrias')!)).toMatchObject({ portaAlturaMm: 2400, janelaPeitorilMm: 900 });
+  });
+
+  it('desligando o reconhecimento de símbolos, os buracos viram vãos livres', async () => {
+    const { onImportar } = await abrirComArquivo(dxfComEsquadrias());
+    fireEvent.click(screen.getByLabelText('Reconhecer portas e janelas pelos símbolos'));
+    expect(screen.getByTestId('resumo-esquadrias').textContent).toBe('0 porta(s) · 0 janela(s) · 2 vão(s) livre(s)');
+    fireEvent.click(screen.getByRole('button', { name: /Importar/ }));
+    const comandos = onImportar.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(comandos.filter((c) => c.type === 'AddOpening').map((c) => c.kind)).toEqual(['passage', 'passage']);
   });
 });
 

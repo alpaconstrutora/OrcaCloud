@@ -128,34 +128,141 @@ describe('DXF · as formas', () => {
     expect(r.segmentos.every((s) => s.camada === 'PLANTA-PAREDES')).toBe(true);
   });
 
-  it('ARCO e CÍRCULO são RECUSADOS com o nome, não retificados', () => {
-    // O kernel não tem parede curva. Retificar mudaria a área do ambiente em
-    // silêncio, que é o defeito que este módulo mais combate.
+  it('ARCO e CÍRCULO são LIDOS como arcos (centro, raio, ângulos) — não viram parede, viram símbolo (P2.33)', () => {
+    // O kernel não tem parede curva, e retificar mudaria a área do ambiente em
+    // silêncio. Mas o arco é o giro da folha de porta: 38 deles na camada
+    // PORTAS do projeto real. Por isso sai em `arcos`, não em `recusas`.
     const curvas: [string, string][] = [
       ['0', 'ARC'],
-      ['8', 'PAREDE'],
-      ['10', '0'],
-      ['20', '0'],
+      ['8', 'PORTAS'],
+      ['10', '100'],
+      ['20', '200'],
+      ['40', '800'],
+      ['50', '0'],
+      ['51', '90'],
       ['0', 'CIRCLE'],
       ['8', 'PAREDE'],
       ['10', '0'],
       ['20', '0'],
+      ['40', '50'],
     ];
     const r = lerDxf(dxf([...CABECALHO, ...curvas, ...RODAPE]));
     expect(r.segmentos).toEqual([]);
-    expect(r.recusas).toEqual([
-      { camada: 'PAREDE', tipo: 'ARC', quantas: 1 },
-      { camada: 'PAREDE', tipo: 'CIRCLE', quantas: 1 },
+    expect(r.recusas).toEqual([]);
+    expect(r.arcos).toEqual([
+      { camada: 'PORTAS', centro: { x: 100, y: 200 }, raio: 800, anguloInicial: 0, anguloFinal: 90 },
+      { camada: 'PAREDE', centro: { x: 0, y: 0 }, raio: 50, anguloInicial: 0, anguloFinal: 360 },
     ]);
+    expect(r.porCamada.find((c) => c.camada === 'PORTAS')).toEqual({ camada: 'PORTAS', segmentos: 0, arcos: 1, comprimento: 0 });
   });
 
-  it('a recusa não corta nome de camada COM ESPAÇO', () => {
+  it('elipse e spline continuam recusadas, e a recusa não corta nome de camada COM ESPAÇO', () => {
     // "LINHA DE CORTE" e "VEÍCULOS - VAGAS" são camadas reais do projeto da
     // empresa. Separar a chave por espaço entregaria "LINHA" como camada.
     const r = lerDxf(
-      dxf([...CABECALHO, ['0', 'ARC'], ['8', 'LINHA DE CORTE'], ['10', '0'], ...RODAPE]),
+      dxf([...CABECALHO, ['0', 'SPLINE'], ['8', 'LINHA DE CORTE'], ['10', '0'], ['0', 'ELLIPSE'], ['8', 'X'], ...RODAPE]),
     );
-    expect(r.recusas[0].camada).toBe('LINHA DE CORTE');
+    expect(r.recusas).toEqual([
+      { camada: 'LINHA DE CORTE', tipo: 'SPLINE', quantas: 1 },
+      { camada: 'X', tipo: 'ELLIPSE', quantas: 1 },
+    ]);
+  });
+});
+
+describe('DXF · blocos (P2.33)', () => {
+  /** Um bloco "PORTA" com uma reta de (0,0) a (100,0) e um arco de raio 100 de 0° a 90°, base (0,0). */
+  const BLOCOS: [string, string][] = [
+    ['0', 'SECTION'],
+    ['2', 'BLOCKS'],
+    ['0', 'BLOCK'],
+    ['8', '0'],
+    ['2', 'PORTA'],
+    ['10', '0'],
+    ['20', '0'],
+    ['0', 'LINE'],
+    ['8', '0'],
+    ['10', '0'],
+    ['20', '0'],
+    ['11', '100'],
+    ['21', '0'],
+    ['0', 'ARC'],
+    ['8', 'FOLHA'],
+    ['10', '0'],
+    ['20', '0'],
+    ['40', '100'],
+    ['50', '0'],
+    ['51', '90'],
+    ['0', 'ENDBLK'],
+    ['0', 'ENDSEC'],
+  ];
+  const INSERT = (nome: string, x: number, y: number, extra: [string, string][] = [], camada = 'ESQUADRIAS'): [string, string][] => [
+    ['0', 'INSERT'],
+    ['8', camada],
+    ['2', nome],
+    ['10', String(x)],
+    ['20', String(y)],
+    ...extra,
+  ];
+  const arredonda = (p: { x: number; y: number }) => ({ x: Math.round(p.x), y: Math.round(p.y) });
+
+  it('INSERT expande o bloco na posição, com escala 2 e giro de 90°; a camada 0 herda a do INSERT e o nome do bloco vai junto', () => {
+    const texto = dxf([
+      ['0', 'SECTION'], ['2', 'HEADER'], ['9', '$INSUNITS'], ['70', '4'], ['0', 'ENDSEC'],
+      ...BLOCOS,
+      ['0', 'SECTION'], ['2', 'ENTITIES'],
+      ...INSERT('PORTA', 1000, 500, [['41', '2'], ['42', '2'], ['50', '90']]),
+      ...RODAPE,
+    ]);
+    const r = lerDxf(texto);
+    expect(r.blocosExpandidos).toBe(1);
+    expect(r.recusas).toEqual([]);
+    // A reta (0,0)→(100,0), escalada por 2 e girada 90°, vai de (1000,500) a (1000,700).
+    expect(r.segmentos).toHaveLength(1);
+    expect(r.segmentos[0].camada).toBe('ESQUADRIAS');
+    expect(r.segmentos[0].bloco).toBe('PORTA');
+    expect(arredonda(r.segmentos[0].a)).toEqual({ x: 1000, y: 500 });
+    expect(arredonda(r.segmentos[0].b)).toEqual({ x: 1000, y: 700 });
+    // O arco: raio 200, de 90° a 180°, camada própria preservada.
+    expect(r.arcos).toHaveLength(1);
+    expect(r.arcos[0]).toMatchObject({ camada: 'FOLHA', raio: 200, bloco: 'PORTA' });
+    expect(arredonda(r.arcos[0].centro)).toEqual({ x: 1000, y: 500 });
+    expect(Math.round(r.arcos[0].anguloInicial)).toBe(90);
+    expect(Math.round(r.arcos[0].anguloFinal)).toBe(180);
+  });
+
+  it('espelhado (escala X negativa) inverte o sentido do arco, e as pontas trocam', () => {
+    const r = lerDxf(dxf([...BLOCOS, ['0', 'SECTION'], ['2', 'ENTITIES'], ...INSERT('PORTA', 0, 0, [['41', '-1']]), ...RODAPE]));
+    // O arco 0°→90° espelhado em X vai de 90° a 180° (anti-horário, como o DXF exige).
+    expect(Math.round(r.arcos[0].anguloInicial)).toBe(90);
+    expect(Math.round(r.arcos[0].anguloFinal)).toBe(180);
+    expect(arredonda(r.segmentos[0].b)).toEqual({ x: -100, y: 0 });
+  });
+
+  it('INSERT de bloco que não existe vai para as recusas; bloco anônimo (*D…, cota) é ignorado sem alarde', () => {
+    const r = lerDxf(dxf([...BLOCOS, ['0', 'SECTION'], ['2', 'ENTITIES'], ...INSERT('JANELA-120', 0, 0), ...INSERT('*D12', 0, 0), ...RODAPE]));
+    expect(r.recusas).toEqual([{ camada: 'ESQUADRIAS', tipo: 'INSERT', quantas: 1 }]);
+    expect(r.blocosExpandidos).toBe(0);
+    expect(r.segmentos).toEqual([]);
+  });
+
+  it('bloco dentro de bloco compõe as duas transformações', () => {
+    const aninhado: [string, string][] = [
+      ['0', 'SECTION'], ['2', 'BLOCKS'],
+      ['0', 'BLOCK'], ['8', '0'], ['2', 'RETA'], ['10', '0'], ['20', '0'],
+      ['0', 'LINE'], ['8', '0'], ['10', '0'], ['20', '0'], ['11', '10'], ['21', '0'],
+      ['0', 'ENDBLK'],
+      ['0', 'BLOCK'], ['8', '0'], ['2', 'PAR'], ['10', '0'], ['20', '0'],
+      ['0', 'INSERT'], ['8', '0'], ['2', 'RETA'], ['10', '0'], ['20', '0'],
+      ['0', 'INSERT'], ['8', '0'], ['2', 'RETA'], ['10', '0'], ['20', '5'],
+      ['0', 'ENDBLK'],
+      ['0', 'ENDSEC'],
+    ];
+    const r = lerDxf(dxf([...aninhado, ['0', 'SECTION'], ['2', 'ENTITIES'], ...INSERT('PAR', 100, 100, [['50', '90']], 'MOB'), ...RODAPE]));
+    expect(r.blocosExpandidos).toBe(3);
+    expect(r.segmentos.map((s) => [s.camada, s.bloco, arredonda(s.a), arredonda(s.b)])).toEqual([
+      ['MOB', 'PAR', { x: 100, y: 100 }, { x: 100, y: 110 }],
+      ['MOB', 'PAR', { x: 95, y: 100 }, { x: 95, y: 110 }],
+    ]);
   });
 });
 
@@ -170,7 +277,7 @@ describe('DXF · camadas e unidade', () => {
         ...RODAPE,
       ]),
     );
-    expect(r.porCamada[0]).toEqual({ camada: 'PAREDE', segmentos: 2, comprimento: 700 });
+    expect(r.porCamada[0]).toEqual({ camada: 'PAREDE', segmentos: 2, arcos: 0, comprimento: 700 });
     expect(r.porCamada[1].camada).toBe('COTAS');
   });
 

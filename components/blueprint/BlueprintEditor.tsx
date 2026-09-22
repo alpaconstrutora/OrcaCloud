@@ -11794,7 +11794,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               'Paredes e portas a partir da planta de fundo em PDF. Ao marcar a região, este painel se recolhe para você arrastar sobre o desenho e volta em seguida.'}
             {tarefaAberta === 'importar-ifc' &&
               'Paredes, aberturas e estrutura de um modelo IFC, por medida declarada.'}
-            {tarefaAberta === 'importar-dxf' && 'Paredes de um desenho DXF ou DWG, por camada e polilinha.'}
+            {tarefaAberta === 'importar-dxf' && 'Paredes de um desenho DXF ou DWG, por camada — com portas (arco), janelas (símbolo) e vãos.'}
             {tarefaAberta === 'importar-collada' && 'Paredes de um modelo do SketchUp exportado como COLLADA (.dae): reconhecidas onde há duas faces verticais paralelas a uma distância de parede. O que foi recusado aparece com o motivo.'}
             {tarefaAberta === 'importar-bcf' &&
               'Os tópicos de coordenação (BCF) que o projetista devolveu — pendência, não geometria. Clicar num tópico seleciona a peça no desenho.'}

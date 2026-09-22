@@ -12,13 +12,14 @@
 //
 // O que este módulo acrescenta é o que o DXF tem de diferente: a ESCALA.
 
-import { lerDxf, type SegmentoDxf } from './dxfLeitor';
+import { lerDxf, type ArcoDxf, type SegmentoDxf } from './dxfLeitor';
 import {
   juntarColineares,
   mitrarCantos,
   parearFaces,
   type ParedeGerada,
 } from './blueprintVetor';
+import { emendarColineares, type AberturaLida } from './emendaDeParedes';
 
 /** Espessura plausível de parede, em milímetros. Fora disto não é parede. */
 export const ESPESSURA_MIN_MM = 50;
@@ -248,4 +249,374 @@ export function tirarDuplicadas<T extends ParedeDoDxf>(paredes: T[]): {
     paredes: ordenadas.filter((_, i) => !fora.has(i)),
     removidas: fora.size,
   };
+}
+
+// ─── ESQUADRIAS (P2.33): porta pelo arco, janela pelo símbolo, vão pelo buraco ──
+//
+// Uma parede com porta volta do pareamento como DOIS trechos colineares com um
+// buraco: as faces param no batente, e `juntarColineares` não cruza o vão de
+// propósito. O buraco é a abertura; o que está desenhado EM CIMA dele diz qual:
+//
+//  - **Porta**: o arco do giro da folha. Centro na dobradiça (numa ponta do
+//    buraco), raio = largura da folha = largura do buraco, varredura de ~90°.
+//    O lado em que o arco está diz para onde a porta abre; a ponta em que o
+//    centro está diz de onde sai a dobradiça. Medido no projeto real da
+//    empresa: 38 arcos na camada PORTAS, um por porta.
+//  - **Janela**: traços PARALELOS à parede dentro do buraco (o símbolo de
+//    vidro/peitoril: 2 a 4 linhas). No projeto real: 402 LINE na camada JANELAS.
+//  - **Vão livre**: buraco sem símbolo nenhum, até `vaoLivreMaxMm` (padrão 3 m —
+//    decisão de 21/09/2026). Acima disso ficam duas paredes: é recuo, não vão.
+//
+// O símbolo mora em OUTRA camada que a da parede (PORTAS, JANELAS), então a
+// busca é em todas as camadas — menos a de parede, cujos traços são face e não
+// vidro. Nome de bloco ("PORTA-80", "JAN-120") vale como pista quando o
+// desenho veio em bloco.
+//
+// As ALTURAS não estão no DXF (é planta): vêm das hipóteses editáveis do painel.
+
+export interface HipotesesDeEsquadrias {
+  /** Reconhecer porta (arco) e janela (símbolo) em todas as camadas. Desligado: só o vão livre pelo buraco. */
+  reconhecerSimbolos: boolean;
+  portaAlturaMm: number;
+  janelaPeitorilMm: number;
+  janelaAlturaMm: number;
+  /** Buraco sem símbolo até isto vira vão livre; `0` = não emendar. */
+  vaoLivreMaxMm: number;
+  /** Buraco menor que isto é fresta de desenho, não vão. */
+  vaoMinMm: number;
+}
+
+export const HIPOTESES_ESQUADRIAS_PADRAO: HipotesesDeEsquadrias = {
+  reconhecerSimbolos: true,
+  portaAlturaMm: 2100,
+  janelaPeitorilMm: 1000,
+  janelaAlturaMm: 1200,
+  vaoLivreMaxMm: 3000,
+  vaoMinMm: 300,
+};
+
+/** Porta e janela cabem num buraco até isto, mesmo com o vão livre desligado. */
+const BURACO_MAX_MM = 6000;
+/** Raio plausível do arco de uma folha de porta (mm). */
+const RAIO_PORTA_MIN_MM = 500;
+const RAIO_PORTA_MAX_MM = 1600;
+/**
+ * Folga entre o centro do arco e a ponta do buraco, além de meia espessura: o
+ * CAD põe a dobradiça na face, no eixo ou no batente — medido no projeto real,
+ * 175 mm do eixo numa parede de 150 (100 mm além da face) é comum.
+ */
+const FOLGA_DOBRADICA_MM = 150;
+const BLOCO_DE_PORTA = /porta|door/i;
+const BLOCO_DE_JANELA = /janela|window|\bjan\b/i;
+
+export interface ParedeComAberturas extends ParedeDoDxf {
+  aberturas: AberturaLida[];
+}
+
+export interface ResumoDeEsquadrias {
+  portas: number;
+  janelas: number;
+  vaos: number;
+  /** Arcos com cara de porta (varredura e raio) que não encontraram parede nem buraco. */
+  arcosSemParede: number;
+  /** Tocos de batente (mais largos que compridos) descartados de dentro dos vãos. */
+  tocosDeBatente: number;
+}
+
+interface Ponto {
+  x: number;
+  y: number;
+}
+
+/** Um arco já em mm com o que a porta precisa dele. */
+interface ArcoDePorta {
+  c: Ponto;
+  raio: number;
+  varredura: number;
+  /** Ponto médio do arco: o lado para onde a folha abre. */
+  meio: Ponto;
+  /** As duas pontas: uma delas é a folha fechada, encostada na parede. */
+  pontas: [Ponto, Ponto];
+  bloco?: string;
+  usado: boolean;
+}
+
+/** Um segmento em mm, com o que a janela precisa dele. */
+interface TracoMm {
+  a: Ponto;
+  b: Ponto;
+  ux: number;
+  uy: number;
+  L: number;
+  camada: string;
+  bloco?: string;
+}
+
+const graus = (g: number) => (g * Math.PI) / 180;
+
+function arcosDePorta(arcos: readonly ArcoDxf[], mm: number): ArcoDePorta[] {
+  const saida: ArcoDePorta[] = [];
+  for (const a of arcos) {
+    const raio = a.raio * mm;
+    if (raio < RAIO_PORTA_MIN_MM || raio > RAIO_PORTA_MAX_MM) continue;
+    let varredura = (a.anguloFinal - a.anguloInicial) % 360;
+    if (varredura < 0) varredura += 360;
+    if (varredura === 0) varredura = 360;
+    // Um quarto de volta é a folha; meia volta é a porta dupla/vaivém. Círculo inteiro não é porta.
+    const quarto = varredura >= 60 && varredura <= 120;
+    const meia = varredura >= 170 && varredura <= 190;
+    if (!quarto && !meia) continue;
+    const c = { x: a.centro.x * mm, y: a.centro.y * mm };
+    const ponto = (g: number) => ({ x: c.x + raio * Math.cos(graus(g)), y: c.y + raio * Math.sin(graus(g)) });
+    saida.push({ c, raio, varredura, meio: ponto(a.anguloInicial + varredura / 2), pontas: [ponto(a.anguloInicial), ponto(a.anguloFinal)], ...(a.bloco ? { bloco: a.bloco } : {}), usado: false });
+  }
+  return saida;
+}
+
+function tracosMm(segmentos: readonly SegmentoDxf[], mm: number, camadaDeParede: string): TracoMm[] {
+  const saida: TracoMm[] = [];
+  for (const s of segmentos) {
+    if (s.camada === camadaDeParede && !s.bloco) continue;
+    const a = { x: s.a.x * mm, y: s.a.y * mm };
+    const b = { x: s.b.x * mm, y: s.b.y * mm };
+    const L = Math.hypot(b.x - a.x, b.y - a.y);
+    // Símbolo de janela tem entre uns centímetros e alguns metros; fora disso é cota, hachura ou paisagismo.
+    if (L < 100 || L > BURACO_MAX_MM) continue;
+    saida.push({ a, b, ux: (b.x - a.x) / L, uy: (b.y - a.y) / L, L, camada: s.camada, ...(s.bloco ? { bloco: s.bloco } : {}) });
+  }
+  return saida;
+}
+
+const dist = (p: Ponto, q: Ponto) => Math.hypot(p.x - q.x, p.y - q.y);
+
+/**
+ * Reconhece portas, janelas e vãos livres nas paredes de um DXF e as devolve
+ * emendadas (dois trechos com buraco → uma parede com abertura). Ver o
+ * cabeçalho da seção. `alturaDaParedeMm` é o pé-direito: vão livre vai de piso
+ * a teto, e porta/janela não passam dele.
+ */
+export function aberturasDoDxf(
+  paredes: readonly ParedeDoDxf[],
+  leitura: { segmentos: readonly SegmentoDxf[]; arcos: readonly ArcoDxf[] },
+  mmPorUnidade: number,
+  camadaDeParede: string,
+  alturaDaParedeMm: number,
+  hip: HipotesesDeEsquadrias = HIPOTESES_ESQUADRIAS_PADRAO,
+): { paredes: ParedeComAberturas[]; resumo: ResumoDeEsquadrias } {
+  const arcos = hip.reconhecerSimbolos ? arcosDePorta(leitura.arcos, mmPorUnidade) : [];
+  const tracos = hip.reconhecerSimbolos ? tracosMm(leitura.segmentos, mmPorUnidade, camadaDeParede) : [];
+  const resumo: ResumoDeEsquadrias = { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0 };
+  const alturaPorta = Math.min(hip.portaAlturaMm, alturaDaParedeMm);
+  const janela = (): AberturaLida => {
+    const sill = Math.min(hip.janelaPeitorilMm, Math.max(0, alturaDaParedeMm - 1));
+    return { kind: 'window', offsetMm: 0, widthMm: 0, heightMm: Math.max(1, Math.min(hip.janelaAlturaMm, alturaDaParedeMm - sill)), sillMm: sill };
+  };
+
+  const comAberturas: ParedeComAberturas[] = paredes.map((p) => ({ ...p, aberturas: [] }));
+
+  const emendadas = emendarColineares(comAberturas, {
+    vaoMinMm: hip.vaoMinMm,
+    vaoMaxMm: Math.max(hip.vaoLivreMaxMm, hip.reconhecerSimbolos ? BURACO_MAX_MM : 0),
+    classificar: (v) => {
+      const nx = -v.uy;
+      const ny = v.ux;
+      const meia = v.espessuraMm / 2 + FOLGA_DOBRADICA_MM;
+      /** Posição ao longo do eixo e afastamento perpendicular de um ponto, medidos do começo do buraco. */
+      const local = (p: Ponto) => ({ t: (p.x - v.inicio.x) * v.ux + (p.y - v.inicio.y) * v.uy, n: (p.x - v.inicio.x) * nx + (p.y - v.inicio.y) * ny });
+
+      // ── Porta pelo arco: centro numa ponta do buraco, raio ≈ largura ─────
+      let melhor: { arco: ArcoDePorta; hingeAtStart: boolean; erro: number } | null = null;
+      for (const arco of arcos) {
+        if (arco.usado) continue;
+        const dIni = dist(arco.c, v.inicio);
+        const dFim = dist(arco.c, v.fim);
+        if (arco.varredura <= 120) {
+          if (Math.abs(arco.raio - v.larguraMm) > Math.max(150, 0.15 * v.larguraMm)) continue;
+          const d = Math.min(dIni, dFim);
+          if (d > meia) continue;
+          // A folha FECHADA atravessa o buraco: uma ponta do arco está na outra ponta do vão.
+          const outra = dIni <= dFim ? v.fim : v.inicio;
+          const fechada = Math.min(...arco.pontas.map((q) => dist(q, outra)));
+          if (fechada > meia + 50) continue;
+          const erro = d + fechada;
+          if (!melhor || erro < melhor.erro) melhor = { arco, hingeAtStart: dIni <= dFim, erro };
+        } else {
+          // Meia volta: centro no meio do buraco, diâmetro ≈ largura.
+          const { t, n } = local(arco.c);
+          if (Math.abs(2 * arco.raio - v.larguraMm) > 150 || Math.abs(t - v.larguraMm / 2) > 150 || Math.abs(n) > meia) continue;
+          const erro = Math.abs(2 * arco.raio - v.larguraMm);
+          if (!melhor || erro < melhor.erro) melhor = { arco, hingeAtStart: true, erro };
+        }
+      }
+      if (melhor) {
+        melhor.arco.usado = true;
+        const abreParaOLadoNegativo = local(melhor.arco.meio).n < 0;
+        resumo.portas++;
+        return { kind: 'door', offsetMm: 0, widthMm: 0, heightMm: alturaPorta, sillMm: 0, hingeAtStart: melhor.hingeAtStart, swingReversed: abreParaOLadoNegativo };
+      }
+      // Porta de DUAS FOLHAS: um arco em cada ponta do buraco, cada raio ≈ metade da largura.
+      const meiaFolha = (ponta: Ponto) => arcos.find((a) => !a.usado && a.varredura <= 120 && dist(a.c, ponta) <= meia && Math.abs(2 * a.raio - v.larguraMm) <= Math.max(150, 0.15 * v.larguraMm));
+      const folhaIni = meiaFolha(v.inicio);
+      const folhaFim = meiaFolha(v.fim);
+      if (folhaIni && folhaFim && folhaIni !== folhaFim) {
+        folhaIni.usado = true;
+        folhaFim.usado = true;
+        resumo.portas++;
+        return { kind: 'door', offsetMm: 0, widthMm: 0, heightMm: alturaPorta, sillMm: 0, hingeAtStart: true, swingReversed: local(folhaIni.meio).n < 0 };
+      }
+
+      // ── Símbolo dentro do buraco: traços paralelos (janela) ou nome de bloco ──
+      let paralelos = 0;
+      let coberto = 0;
+      const intervalos: [number, number][] = [];
+      let blocoDePorta = false;
+      let blocoDeJanela = false;
+      const faixa = v.espessuraMm / 2 + 50;
+      for (const s of tracos) {
+        const la = local(s.a);
+        const lb = local(s.b);
+        // Está na caixa do buraco (com folga para símbolo que sai um pouco da parede)?
+        const dentro = (l: { t: number; n: number }) => l.t >= -50 && l.t <= v.larguraMm + 50 && Math.abs(l.n) <= Math.max(faixa, v.larguraMm + 100);
+        if (s.bloco && (dentro(la) || dentro(lb))) {
+          if (BLOCO_DE_PORTA.test(s.bloco)) blocoDePorta = true;
+          if (BLOCO_DE_JANELA.test(s.bloco)) blocoDeJanela = true;
+        }
+        if (Math.abs(s.ux * v.ux + s.uy * v.uy) < 0.99985) continue; // ±1°
+        if (Math.abs(la.n) > faixa || Math.abs(lb.n) > faixa) continue;
+        const t0 = Math.max(0, Math.min(la.t, lb.t));
+        const t1 = Math.min(v.larguraMm, Math.max(la.t, lb.t));
+        if (t1 - t0 < 50) continue;
+        paralelos++;
+        intervalos.push([t0, t1]);
+      }
+      if (intervalos.length) {
+        intervalos.sort((x, y) => x[0] - y[0]);
+        let [ini, fim] = intervalos[0];
+        for (const [a, b] of intervalos.slice(1)) {
+          if (a > fim) {
+            coberto += fim - ini;
+            [ini, fim] = [a, b];
+          } else fim = Math.max(fim, b);
+        }
+        coberto += fim - ini;
+      }
+      if (blocoDePorta && !blocoDeJanela) {
+        resumo.portas++;
+        return { kind: 'door', offsetMm: 0, widthMm: 0, heightMm: alturaPorta, sillMm: 0 };
+      }
+      if (blocoDeJanela || (paralelos >= 2 && coberto >= 0.6 * v.larguraMm)) {
+        resumo.janelas++;
+        return janela();
+      }
+
+      // ── Nada em cima: vão livre até o teto de hipótese ────────────────────
+      if (hip.vaoLivreMaxMm > 0 && v.larguraMm <= hip.vaoLivreMaxMm) {
+        resumo.vaos++;
+        return { kind: 'passage', offsetMm: 0, widthMm: 0, heightMm: alturaDaParedeMm, sillMm: 0 };
+      }
+      return null;
+    },
+  });
+
+  // ── Arco em cima de parede CONTÍNUA, ou na PONTA dela ─────────────────────
+  //
+  // Dois casos que a emenda não alcança: o desenhista não abriu o vão nas faces
+  // (a porta fica em cima de parede contínua), e — o mais comum, medido no
+  // projeto real: 10 das 35 portas — a porta encostada num CANTO: o batente da
+  // dobradiça é a parede perpendicular, então só existe trecho colinear de UM
+  // lado do vão e não há o que emendar. Aí a parede é ESTICADA até o canto, e a
+  // porta fica na ponta: é o que o desenhista teria desenhado numa só parede.
+  for (const arco of arcos) {
+    if (arco.usado || arco.varredura > 120) continue;
+    let hospedeira: { p: ParedeComAberturas; tC: number; tE: number; n: number; L: number } | null = null;
+    for (const p of emendadas) {
+      const L = Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y) || 1;
+      const ux = (p.b.x - p.a.x) / L;
+      const uy = (p.b.y - p.a.y) / L;
+      const nx = -uy;
+      const ny = ux;
+      const meia = p.espessuraMm / 2 + FOLGA_DOBRADICA_MM;
+      const nC = (arco.c.x - p.a.x) * nx + (arco.c.y - p.a.y) * ny;
+      if (Math.abs(nC) > meia) continue;
+      const tC = (arco.c.x - p.a.x) * ux + (arco.c.y - p.a.y) * uy;
+      // A ponta da folha fechada está encostada na mesma reta, a um raio do centro.
+      const fechada = arco.pontas.find((q) => Math.abs((q.x - p.a.x) * nx + (q.y - p.a.y) * ny) <= meia + 50);
+      if (!fechada) continue;
+      const tE = (fechada.x - p.a.x) * ux + (fechada.y - p.a.y) * uy;
+      const t0 = Math.min(tC, tE);
+      const t1 = Math.max(tC, tE);
+      // Dentro da parede, ou saindo por UMA ponta no máximo a folha inteira (a porta no canto) —
+      // e nesse caso a folha fechada tem de terminar exatamente na ponta da parede (o outro batente):
+      // é o que distingue a parede da porta da parede perpendicular do canto, que também passa pelo centro.
+      const folga = arco.raio + FOLGA_DOBRADICA_MM;
+      if (t0 < -folga || t1 > L + folga || (t0 < -50 && t1 > L + 50)) continue;
+      if (t0 < -50 && Math.abs(tE) > 50) continue;
+      if (t1 > L + 50 && Math.abs(tE - L) > 50) continue;
+      const nMeio = (arco.meio.x - p.a.x) * nx + (arco.meio.y - p.a.y) * ny;
+      // Entre candidatas, a que não precisa esticar; depois a mais alinhada.
+      const custo = (t0 < -50 ? -t0 : 0) + (t1 > L + 50 ? t1 - L : 0) + Math.abs(nC);
+      const custoAtual = hospedeira ? (Math.min(hospedeira.tC, hospedeira.tE) < -50 ? -Math.min(hospedeira.tC, hospedeira.tE) : 0) + (Math.max(hospedeira.tC, hospedeira.tE) > hospedeira.L + 50 ? Math.max(hospedeira.tC, hospedeira.tE) - hospedeira.L : 0) + Math.abs(hospedeira.n) : Infinity;
+      if (custo < custoAtual) hospedeira = { p, tC, tE, n: nMeio, L };
+    }
+    if (!hospedeira) {
+      resumo.arcosSemParede++;
+      continue;
+    }
+    const { p, L, tC, tE } = hospedeira;
+    const t0 = Math.min(tC, tE);
+    const t1 = Math.max(tC, tE);
+    // Quanto esticar por cada ponta quando a porta sai pela ponta (a porta no canto).
+    const ext0 = t0 < 0 ? Math.round(-t0) : 0;
+    const ext1 = t1 > L ? Math.round(t1 - L) : 0;
+    const novoL = Math.round(L) + ext0 + ext1;
+    const offsetMm = Math.max(0, Math.round(t0) + ext0);
+    const widthMm = Math.min(Math.round(arco.raio), novoL - offsetMm);
+    if (widthMm < hip.vaoMinMm) continue;
+    if (p.aberturas.some((ab) => ab.offsetMm + ext0 < offsetMm + widthMm && offsetMm < ab.offsetMm + ext0 + ab.widthMm)) continue;
+    if (ext0 || ext1) {
+      const ux = (p.b.x - p.a.x) / L;
+      const uy = (p.b.y - p.a.y) / L;
+      if (ext0) {
+        p.a = { x: Math.round(p.a.x - ux * ext0), y: Math.round(p.a.y - uy * ext0) };
+        for (const ab of p.aberturas) ab.offsetMm += ext0;
+      }
+      if (ext1) p.b = { x: Math.round(p.b.x + ux * ext1), y: Math.round(p.b.y + uy * ext1) };
+      p.comprimentoMm = novoL;
+    }
+    arco.usado = true;
+    resumo.portas++;
+    p.aberturas.push({ kind: 'door', offsetMm, widthMm, heightMm: alturaPorta, sillMm: 0, hingeAtStart: tC <= tE, swingReversed: hospedeira.n < 0 });
+    p.aberturas.sort((x, y) => x.offsetMm - y.offsetMm);
+  }
+
+  // ── Tocos de batente atravessados na parede ──────────────────────────────
+  //
+  // As duas linhas de batente de um pilarete entre duas portas (350 mm uma da
+  // outra, 150 mm de comprimento) PAREIAM como se fossem parede: um toco mais
+  // largo que comprido, atravessado dentro do corpo da parede emendada (ou do
+  // vão). Existia antes desta fase, solto; agora que o pilarete e as portas
+  // viraram uma parede só, o toco é um traço cruzado dentro dela. Sai o que é
+  // mais largo que comprido e tem o centro dentro do corpo de outra parede.
+  const tocos = new Set<ParedeComAberturas>();
+  for (const t of emendadas) {
+    if (t.comprimentoMm > t.espessuraMm) continue;
+    const cx = (t.a.x + t.b.x) / 2;
+    const cy = (t.a.y + t.b.y) / 2;
+    for (const p of emendadas) {
+      if (p === t || p.comprimentoMm <= p.espessuraMm) continue;
+      const L = Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y) || 1;
+      const ux = (p.b.x - p.a.x) / L;
+      const uy = (p.b.y - p.a.y) / L;
+      const n = Math.abs((cx - p.a.x) * -uy + (cy - p.a.y) * ux);
+      if (n > p.espessuraMm / 2) continue;
+      const tt = (cx - p.a.x) * ux + (cy - p.a.y) * uy;
+      if (tt >= -50 && tt <= L + 50) {
+        tocos.add(t);
+        break;
+      }
+    }
+  }
+  resumo.tocosDeBatente = tocos.size;
+
+  return { paredes: emendadas.filter((p) => !tocos.has(p)), resumo };
 }

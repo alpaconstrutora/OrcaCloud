@@ -13,9 +13,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  aberturasDoDxf,
   paredesDeEixos,
   paredesDoDxf,
   prepararDxf,
+  tirarDuplicadas,
   type ParedeDoDxf,
 } from '../utils/dxfParaKernel';
 
@@ -104,6 +106,32 @@ describe.skipIf(!TEM)('DXF real · as paredes', () => {
     // ou nada" viraria "nada" por causa de um traço.
     for (const p of paredes) expect(p.a.x !== p.b.x || p.a.y !== p.b.y).toBe(true);
   });
+});
+
+describe.skipIf(!TEM)('DXF real · esquadrias (P2.33)', () => {
+  it('os arcos da camada PORTAS viram portas e os traços de JANELAS viram janelas — nas paredes da camada PAREDE, em metro', () => {
+    real = real ?? prepararDxf(readFileSync(REAL, 'utf8'));
+    // O leitor agora LÊ os arcos: 38 na camada PORTAS, um por folha de porta.
+    const portasNaCamada = real.porCamada.find((c) => c.camada === 'PORTAS')!;
+    expect(portasNaCamada.arcos).toBeGreaterThanOrEqual(30);
+    expect(real.recusas.some((r) => r.tipo === 'ARC' || r.tipo === 'CIRCLE')).toBe(false);
+
+    const paredes = tirarDuplicadas(paredesDoDxf(real.segmentos.filter((s) => s.camada === 'PAREDE'), 1000)).paredes;
+    const { paredes: comAberturas, resumo } = aberturasDoDxf(paredes, real, 1000, 'PAREDE', 2800);
+    // Medido em 21/09/2026: 34 portas (dos 35 arcos de folha em PORTAS — os outros 3 têm 39°, 0° e raio 243 mm),
+    // 38 janelas, 89 vãos livres; 558 trechos viram 386 paredes. Os arcos "sem parede" são os 32 do SELO
+    // (carimbo da prancha) e uns poucos do layout. Pisos, não igualdades: o arquivo é o mesmo, o algoritmo pode melhorar.
+    expect(resumo.portas).toBeGreaterThanOrEqual(30);
+    expect(resumo.janelas).toBeGreaterThanOrEqual(30);
+    expect(resumo.arcosSemParede).toBeLessThanOrEqual(45);
+    expect(comAberturas.length).toBeLessThan(paredes.length);
+    // Toda porta do arquivo tem 0,80 m (menos uma de 0,757): é a folha padrão do projeto, e é o que sai.
+    const larguras = comAberturas.flatMap((p) => p.aberturas.filter((ab) => ab.kind === 'door').map((ab) => ab.widthMm));
+    expect(larguras.filter((w) => w >= 750 && w <= 850).length).toBeGreaterThanOrEqual(larguras.length - 3);
+    // A parede do corredor: portas de 0,80 em sequência — a cara do print que motivou a fase.
+    const corredor = comAberturas.filter((p) => p.aberturas.filter((ab) => ab.kind === 'door').length >= 5);
+    expect(corredor.length).toBeGreaterThanOrEqual(1);
+  }, 120_000);
 });
 
 describe.skipIf(!TEM)('DXF · a camada de EIXO é o caminho exato', () => {

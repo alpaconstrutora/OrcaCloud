@@ -40,6 +40,7 @@
  * x = X, y = Z, z = Y. Tudo em mm inteiros no fim.
  */
 import type { Point } from './blueprintKernel';
+import { emendarColineares, type AberturaLida } from './emendaDeParedes';
 import { descendentes, filho, filhos, lerXml, nomeLocal, type ElementoXml } from './xmlLeve';
 
 export interface OpcoesDeReconhecimento {
@@ -65,15 +66,8 @@ export interface OpcoesDeReconhecimento {
 export const IGNORAR_NOS_PADRAO = /mobili|m[oó]vel|furniture|instala|el[eé]tric|hidr|tubo|pipe|duto|duct|lumin|\bponto\b|\bquadro\b|\btrecho\b/i;
 export const OPCOES_PADRAO: OpcoesDeReconhecimento = { espessuraMinMm: 50, espessuraMaxMm: 600, comprimentoMinMm: 300, alturaMinMm: 1000, vaoMinMm: 300, vaoLivreMaxMm: 1500, ignorarNos: IGNORAR_NOS_PADRAO };
 
-/** ABERTURAS (P2.29): o vão reconhecido numa parede — o retângulo onde as DUAS faces não têm triângulo. */
-export interface AberturaLida {
-  kind: 'door' | 'window' | 'passage';
-  /** Desde a ponta `a` da parede, ao longo do eixo (mm). */
-  offsetMm: number;
-  widthMm: number;
-  heightMm: number;
-  sillMm: number;
-}
+/** ABERTURAS (P2.29): o vão reconhecido numa parede — o retângulo onde as DUAS faces não têm triângulo. O tipo mora em `emendaDeParedes` (P2.33: o DXF usa o mesmo). */
+export type { AberturaLida } from './emendaDeParedes';
 
 export interface ParedeLida {
   a: Point;
@@ -524,61 +518,14 @@ export function aberturasDaParede(A: Plano, B: Plano, t0: number, t1: number, z0
  * cabe numa passagem (≥ `vaoMinMm`, ≤ `vaoLivreMaxMm`), viram UMA parede com `passage`.
  */
 export function emendarVaosLivres(paredes: ParedeLida[], o: OpcoesDeReconhecimento = OPCOES_PADRAO): ParedeLida[] {
-  if (!(o.vaoLivreMaxMm > 0)) return paredes;
-  const restantes = [...paredes];
-  const saida: ParedeLida[] = [];
-  const eixo = (p: ParedeLida) => {
-    const L = Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y) || 1;
-    return { ux: (p.b.x - p.a.x) / L, uy: (p.b.y - p.a.y) / L, L };
-  };
-  while (restantes.length) {
-    let p = restantes.shift()!;
-    let emendou = true;
-    while (emendou) {
-      emendou = false;
-      const e = eixo(p);
-      for (let i = 0; i < restantes.length; i++) {
-        const q = restantes[i];
-        if (Math.abs(q.espessuraMm - p.espessuraMm) > 1 || Math.abs(q.baseMm - p.baseMm) > 30 || Math.abs(q.alturaMm - p.alturaMm) > 30) continue;
-        const eq = eixo(q);
-        // Mesma direção (ou oposta) e sobre a mesma reta.
-        if (Math.abs(e.ux * eq.ux + e.uy * eq.uy) < 0.99996) continue;
-        const dist = Math.abs((q.a.x - p.a.x) * e.uy - (q.a.y - p.a.y) * e.ux);
-        if (dist > 5) continue;
-        // Posições ao longo do eixo de p.
-        const ta = (q.a.x - p.a.x) * e.ux + (q.a.y - p.a.y) * e.uy;
-        const tb = (q.b.x - p.a.x) * e.ux + (q.b.y - p.a.y) * e.uy;
-        const qMin = Math.min(ta, tb);
-        const qMax = Math.max(ta, tb);
-        let vao: { inicio: number; largura: number; antes: ParedeLida; depois: ParedeLida; depoisInvertida: boolean } | null = null;
-        if (qMin >= e.L) vao = { inicio: e.L, largura: qMin - e.L, antes: p, depois: q, depoisInvertida: ta > tb };
-        else if (qMax <= 0) vao = { inicio: qMax, largura: -qMax, antes: q, depois: p, depoisInvertida: false };
-        if (!vao || vao.largura < o.vaoMinMm || vao.largura > o.vaoLivreMaxMm) continue;
-        // Recompõe no sentido de `antes` (a → b): as aberturas de `depois` deslocam.
-        const antes = vao.antes === p ? p : q;
-        const depois = vao.antes === p ? q : p;
-        const eA = eixo(antes);
-        const depoisNoSentido = ((depois.b.x - depois.a.x) * eA.ux + (depois.b.y - depois.a.y) * eA.uy) >= 0;
-        const Ld = eixo(depois).L;
-        const abDepois = depois.aberturas.map((ab) => (depoisNoSentido ? ab : { ...ab, offsetMm: Ld - ab.offsetMm - ab.widthMm }));
-        const fimAntes = eA.L;
-        const inicioDepois = fimAntes + vao.largura;
-        const b = depoisNoSentido ? depois.b : depois.a;
-        p = {
-          ...antes,
-          b: { x: b.x, y: b.y },
-          comprimentoMm: Math.round(inicioDepois + Ld),
-          aberturas: [...antes.aberturas, { kind: 'passage' as const, offsetMm: Math.round(fimAntes), widthMm: Math.round(vao.largura), heightMm: antes.alturaMm, sillMm: 0 }, ...abDepois.map((ab) => ({ ...ab, offsetMm: Math.round(ab.offsetMm + inicioDepois) }))].sort((x, y) => x.offsetMm - y.offsetMm),
-          origem: antes.origem ?? depois.origem,
-        };
-        restantes.splice(i, 1);
-        emendou = true;
-        break;
-      }
-    }
-    saida.push(p);
-  }
-  return saida;
+  // A geometria da emenda é compartilhada com o DXF (P2.33, `emendaDeParedes`); aqui o buraco é sempre vão livre.
+  return emendarColineares(paredes, {
+    vaoMinMm: o.vaoMinMm,
+    vaoMaxMm: o.vaoLivreMaxMm,
+    compativeis: (p, q) => Math.abs(q.baseMm - p.baseMm) <= 30 && Math.abs(q.alturaMm - p.alturaMm) <= 30,
+    classificar: (v) => ({ kind: 'passage', offsetMm: v.offsetMm, widthMm: v.larguraMm, heightMm: v.antes.alturaMm, sillMm: 0 }),
+    fundir: (antes, depois) => ({ origem: antes.origem ?? depois.origem }),
+  });
 }
 
 /** Agrupa as paredes por cota de base (pavimentos), a 300 mm de tolerância. */

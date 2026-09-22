@@ -1,15 +1,20 @@
 import React, { useCallback, useState } from 'react';
 import { AlertTriangle, Check, FileUp, Loader2 } from 'lucide-react';
 import type { BlueprintModel, Command } from '../../utils/blueprintKernel';
+import { novoUid } from '../../utils/blueprintKernel';
 import {
+  aberturasDoDxf,
+  HIPOTESES_ESQUADRIAS_PADRAO,
   paredesDeEixos,
   paredesDoDxf,
   prepararDxf,
   tirarDuplicadas,
   type EscalaSugerida,
+  type HipotesesDeEsquadrias,
   type ParedeDoDxf,
 } from '../../utils/dxfParaKernel';
-import type { RecusaDxf } from '../../utils/dxfLeitor';
+import type { ArcoDxf, RecusaDxf } from '../../utils/dxfLeitor';
+import { usePersistedState } from '../ui/TableUtils';
 import { converterDwgParaDxf } from '../../services/blueprintDwgService';
 import {
   caixaDePontos,
@@ -38,6 +43,15 @@ import {
  * escreve, e a que quem desenha com disciplina mantém —, o traço já É o eixo, e
  * pareá-lo trocaria dado exato por estimativa.
  *
+ * ─── ESQUADRIAS (P2.33) ─────────────────────────────────────────────────────
+ *
+ * A parede com porta volta do pareamento como dois trechos com um buraco. O que
+ * está desenhado em cima do buraco diz o que ele é: arco de folha = porta (com
+ * dobradiça e lado de abrir), traços paralelos dentro = janela, nada = vão
+ * livre até 3 m. Os símbolos ficam em OUTRAS camadas (PORTAS, JANELAS) e são
+ * procurados em todas. O DXF é planta e não sabe altura: porta, peitoril e
+ * altura de janela são HIPÓTESES editáveis aqui, persistidas por tela.
+ *
  * ─── DWG (E9.1) ─────────────────────────────────────────────────────────────
  *
  * Um .dwg entra pelo MESMO caminho: vai à Edge Function `dwg-converter`
@@ -54,7 +68,9 @@ interface Props {
 interface Preparado {
   nomeArquivo: string;
   segmentos: ReturnType<typeof prepararDxf>['segmentos'];
-  porCamada: { camada: string; segmentos: number; comprimento: number }[];
+  arcos: ArcoDxf[];
+  blocosExpandidos: number;
+  porCamada: { camada: string; segmentos: number; arcos: number; comprimento: number }[];
   escalas: EscalaSugerida[];
   recusas: RecusaDxf[];
   mmPorUnidadeDeclarado: number | null;
@@ -80,6 +96,9 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
   // do arquivo — quase 4 km. O kernel limita coordenada a ±1.000.000 mm, então
   // sem ancorar a importação inteira é RECUSADA. Foi o que o harness achou.
   const [ancoragem, setAncoragem] = useState<AncoragemIfc>('ORIGEM');
+  // ESQUADRIAS (P2.33): as hipóteses de altura e o teto do vão livre, persistidas por tela.
+  const [hip, setHip] = usePersistedState<HipotesesDeEsquadrias>('blueprint:dxf-esquadrias', HIPOTESES_ESQUADRIAS_PADRAO);
+  const hipoteses: HipotesesDeEsquadrias = { ...HIPOTESES_ESQUADRIAS_PADRAO, ...hip };
 
   const preparar = useCallback(async (arquivo: File) => {
     setLendo(true);
@@ -116,7 +135,13 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
         ? paredesDeEixos(daCamada, mmPorUnidade, espessuraMm)
         : paredesDoDxf(daCamada, mmPorUnidade);
   const limpo = modo === 'EIXOS' ? { paredes: bruto, removidas: 0 } : tirarDuplicadas(bruto);
-  const paredes = limpo.paredes;
+  const nivel = model.levels.find((l) => l.id === levelIdAtivo) ?? null;
+  // ESQUADRIAS (P2.33): porta pelo arco, janela pelo símbolo, vão livre pelo buraco — em cima das paredes limpas.
+  const esquadrias = preparado
+    ? aberturasDoDxf(limpo.paredes, preparado, mmPorUnidade, camada, nivel?.defaultHeightMm ?? 2800, hipoteses)
+    : { paredes: [], resumo: { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0 } };
+  const paredes = esquadrias.paredes;
+  const totalDeAberturas = esquadrias.resumo.portas + esquadrias.resumo.janelas + esquadrias.resumo.vaos;
 
   const pegada = caixaDePontos(paredes.flatMap((p) => [p.a, p.b]));
   const { dx, dy } = deslocamentoDaImportacao(ancoragem, pegada, caixaDoDesenho(model));
@@ -125,11 +150,13 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
   const comprimentoTotal = paredes.reduce((s, p) => s + p.comprimentoMm, 0);
 
   function importar() {
-    if (!levelIdAtivo || paredes.length === 0) return;
-    const nivel = model.levels.find((l) => l.id === levelIdAtivo);
-    if (!nivel) return;
-    onImportar(
-      paredes.map((p) => ({
+    if (!levelIdAtivo || paredes.length === 0 || !nivel) return;
+    const comandos: Command[] = [];
+    for (const p of paredes) {
+      // ESQUADRIAS (P2.33): o vão aponta para a parede pelo `uid` — o `id` só existe depois do lote (o truque da P2.29).
+      const uid = novoUid();
+      const heightMm = nivel.defaultHeightMm;
+      comandos.push({
         type: 'AddWall',
         levelId: levelIdAtivo,
         // O deslocamento é aplicado AQUI, no ponto: o que entra é parede igual
@@ -139,20 +166,58 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
         thicknessMm: Math.max(1, p.espessuraMm),
         // O DXF é um desenho de PLANTA: ele não sabe altura nenhuma. O
         // pé-direito do nível é a única outra coisa que o desenho sabe.
-        heightMm: nivel.defaultHeightMm,
-      })),
-    );
+        heightMm,
+        uid,
+      });
+      const L = Math.round(Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y));
+      for (const ab of p.aberturas) {
+        if (ab.offsetMm < 0 || ab.offsetMm + ab.widthMm > L) continue;
+        const sillMm = Math.max(0, Math.min(ab.sillMm, heightMm - 1));
+        comandos.push({
+          type: 'AddOpening',
+          wallId: '',
+          wallUid: uid,
+          kind: ab.kind,
+          offsetMm: ab.offsetMm,
+          widthMm: ab.widthMm,
+          heightMm: Math.max(1, Math.min(ab.heightMm, heightMm - sillMm)),
+          sillMm,
+          ...(ab.hingeAtStart !== undefined ? { hingeAtStart: ab.hingeAtStart } : {}),
+          ...(ab.swingReversed !== undefined ? { swingReversed: ab.swingReversed } : {}),
+        });
+      }
+    }
+    onImportar(comandos);
     setPreparado(null);
   }
+
+  const campo = (rotulo: string, chave: keyof Omit<HipotesesDeEsquadrias, 'reconhecerSimbolos'>, min: number) => (
+    <label key={chave} className="flex items-center justify-between gap-2 text-xs text-slate-600">
+      {rotulo}
+      <span className="flex items-center gap-1">
+        <input
+          type="number"
+          value={hipoteses[chave]}
+          min={min}
+          step={10}
+          aria-label={rotulo}
+          onChange={(e) => setHip({ ...hipoteses, [chave]: Math.max(min, Math.round(Number(e.target.value) || 0)) })}
+          className="w-20 rounded-md border border-slate-300 px-2 py-1 text-right text-xs text-slate-800"
+        />
+        <span className="w-6 text-slate-400">mm</span>
+      </span>
+    </label>
+  );
 
   return (
     <div className="px-4 py-3">
       {!preparado && (
         <>
           <p className="text-xs text-slate-500">
-            Traz as paredes de um DXF ou DWG. O arquivo não sabe altura: ela vem do pé-direito do
-            pavimento. Arco e círculo são recusados e listados — o desenho não tem parede
-            curva.
+            Traz as paredes de um DXF ou DWG — e as portas (pelo arco da folha), janelas (pelo
+            símbolo no vão) e vãos livres. O arquivo não sabe altura: a da parede vem do pé-direito
+            do pavimento; a das esquadrias, das hipóteses abaixo. Parede curva não existe no
+            desenho: arco só vale como símbolo.
           </p>
           <p className="mt-1 text-[11px] text-slate-400" data-testid="aviso-dwg">
             DWG é convertido para DXF no servidor (libredwg); a versão do arquivo aparece ao lado do nome.
@@ -205,7 +270,7 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
             >
               {preparado.porCamada.map((c) => (
                 <option key={c.camada} value={c.camada}>
-                  {c.camada} — {c.segmentos} traços
+                  {c.camada} — {c.segmentos} traços{c.arcos > 0 ? ` · ${c.arcos} arcos` : ''}
                 </option>
               ))}
             </select>
@@ -282,6 +347,30 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
             </p>
           )}
 
+          {/* ── Esquadrias (P2.33) ───────────────────────────────────────── */}
+          <div className="mt-2 rounded-md border border-slate-200 px-2 py-1.5" data-testid="esquadrias-dxf">
+            <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-600">
+              <input
+                type="checkbox"
+                checked={hipoteses.reconhecerSimbolos}
+                onChange={(e) => setHip({ ...hipoteses, reconhecerSimbolos: e.target.checked })}
+                aria-label="Reconhecer portas e janelas pelos símbolos"
+                className="h-3.5 w-3.5"
+              />
+              Reconhecer portas (arco) e janelas (símbolo) em todas as camadas
+            </label>
+            <div className="mt-1.5 space-y-1">
+              {campo('Altura da porta', 'portaAlturaMm', 1)}
+              {campo('Peitoril da janela', 'janelaPeitorilMm', 0)}
+              {campo('Altura da janela', 'janelaAlturaMm', 1)}
+              {campo('Vão livre até', 'vaoLivreMaxMm', 0)}
+            </div>
+            <p className="mt-1 text-[10px] text-slate-400">
+              O DXF é planta: estas alturas são hipóteses, editáveis peça a peça depois. Buraco na parede sem
+              símbolo vira vão livre até este tamanho (0 = não emendar); acima, ficam duas paredes.
+            </p>
+          </div>
+
           {/* ── Onde cai ─────────────────────────────────────────────────── */}
           <label className="mt-2 block text-[11px] font-semibold text-slate-600">
             Posição
@@ -304,11 +393,21 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
           )}
 
           {/* ── O que vai entrar ─────────────────────────────────────────── */}
-          <p className="mt-2 text-[11px] text-slate-500">
+          <p className="mt-2 text-[11px] text-slate-500" data-testid="resumo-dxf">
             {paredes.length === 0
               ? 'Nenhuma parede reconhecida nesta camada com esta unidade.'
               : `${paredes.length} parede${paredes.length > 1 ? 's' : ''} · ${m2(comprimentoTotal)} m no total · espessuras ${espessuras.join(', ')} mm`}
           </p>
+          {paredes.length > 0 && (
+            <p className="mt-0.5 text-[11px] text-slate-500" data-testid="resumo-esquadrias">
+              {totalDeAberturas === 0
+                ? 'Nenhuma porta, janela ou vão reconhecido.'
+                : `${esquadrias.resumo.portas} porta(s) · ${esquadrias.resumo.janelas} janela(s) · ${esquadrias.resumo.vaos} vão(s) livre(s)`}
+              {esquadrias.resumo.arcosSemParede > 0 ? ` · ${esquadrias.resumo.arcosSemParede} arco(s) de porta longe de parede, ignorado(s)` : ''}
+              {esquadrias.resumo.tocosDeBatente > 0 ? ` · ${esquadrias.resumo.tocosDeBatente} toco(s) de batente descartado(s)` : ''}
+              {preparado.blocosExpandidos > 0 ? ` · ${preparado.blocosExpandidos} bloco(s) expandido(s)` : ''}
+            </p>
+          )}
           {limpo.removidas > 0 && (
             <p className="mt-0.5 text-[10px] text-slate-400">
               {limpo.removidas} sobreposta{limpo.removidas > 1 ? 's' : ''} foi
@@ -342,7 +441,7 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar }: P
               className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-[6px] bg-blue-600 px-2.5 text-[13px] font-medium text-white transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-40"
             >
               <Check className="h-3.5 w-3.5" />
-              Importar {paredes.length}
+              Importar {paredes.length}{totalDeAberturas > 0 ? ` + ${totalDeAberturas}` : ''}
             </button>
             <button
               type="button"

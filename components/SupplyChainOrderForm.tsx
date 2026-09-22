@@ -21,6 +21,12 @@ import MaterialSelectionModal from './MaterialSelectionModal';
 import DatabasePickerModal from './DatabasePickerModal';
 import { Supplier, BudgetEntry, SinapiType, SinapiItem, PaymentAccount, CostCenter, CompositionComponent } from '../types';
 import { CostCenterV2 } from '../types/financial';
+import {
+    obrasDoEmpreendimento,
+    empreendimentosComObra,
+    obraAoTrocarEmpreendimento,
+    motivoSalvarBloqueado,
+} from '../utils/pedidoObra';
 // Dinheiro tem duas casas; `qtd × preço` em ponto flutuante não tem.
 // `round2` é o arredondamento canônico do projeto — não reimplementar.
 import { round2 } from '../utils/financialMath';
@@ -564,6 +570,11 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
      */
     React.useEffect(() => {
         if (!itensCarregados || !projectData) return;
+        // Trocar de obra troca o orçamento de referência, e o `projectData` da
+        // obra ANTERIOR ainda está em mãos no render da troca. Classificar com
+        // ele jogaria os itens contra o orçamento errado e zeraria
+        // `itensCarregados` antes de o orçamento novo chegar.
+        if (projectData.id && projectData.id !== selectedProjectId) return;
 
         const codigosDoOrcamento = new Set(
             (projectData.budget ?? [])
@@ -597,7 +608,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         // Classificado: zerar evita reclassificar por cima de edição do usuário
         // quando o orçamento for recarregado.
         setItensCarregados(null);
-    }, [itensCarregados, projectData]);
+    }, [itensCarregados, projectData, selectedProjectId]);
 
     const orderItems = React.useMemo(() => {
         // 1. Get items from budget
@@ -781,7 +792,16 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
 
         setLoading(true);
         try {
-            if (orderItems.length === 0) {
+            // Enquanto a reconciliação com o orçamento da obra não terminou
+            // (`itensCarregados` cheio), quem vale são os itens CRUS: `orderItems`
+            // ainda está montado contra o orçamento anterior — ou contra nenhum,
+            // porque o da obra nova só chega depois — e salvaria o pedido sem as
+            // linhas que vieram do orçamento. Salvar cru não perde nada: o pedido
+            // segue com os itens que tinha, na obra nova.
+            const itensParaSalvar = itensCarregados
+                ? itensCarregados.map(i => ({ ...i, total: i.total ?? round2(i.quantity * i.unitPrice) }))
+                : orderItems;
+            if (itensParaSalvar.length === 0) {
                 setFormError("Nenhum item válido para salvar.");
                 setLoading(false);
                 return;
@@ -817,7 +837,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     chartOfAccounts: planoDeContasName,
                     deliveryMethod: deliveryMethod,
                     deliveryLocation: deliveryLocation,
-                    items: orderItems,
+                    items: itensParaSalvar,
                 }, editingVersion);
                 if (salvo?.version !== undefined && salvo.version !== null) setEditingVersion(salvo.version);
             } else {
@@ -839,7 +859,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     chartOfAccounts: planoDeContasName,
                     deliveryMethod: deliveryMethod,
                     deliveryLocation: deliveryLocation,
-                    items: orderItems,
+                    items: itensParaSalvar,
                     projectName: projectData?.name
                 });
             }
@@ -873,8 +893,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
 
     // Obras oferecidas: as do empreendimento escolhido, ou todas.
     const projectsDoEmpreendimento = React.useMemo(() => {
-        if (!selectedEmpreendimentoId) return projects;
-        const filtradas = projects.filter(p => empreendimentoByProject[p.id]?.id === selectedEmpreendimentoId);
+        const filtradas = obrasDoEmpreendimento(projects, selectedEmpreendimentoId, empreendimentoByProject);
         // A obra atual fica na lista mesmo fora do empreendimento (vínculo
         // desfeito depois do pedido) — senão o <select> mostraria vazio.
         if (selectedProjectId && !filtradas.some(p => p.id === selectedProjectId)) {
@@ -884,13 +903,51 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         return filtradas;
     }, [projects, selectedEmpreendimentoId, empreendimentoByProject, selectedProjectId]);
 
+    // Empreendimento sem obra vinculada é beco sem saída neste seletor: escolher
+    // um deles tiraria a obra do pedido sem oferecer substituta. Ficam listados
+    // (esconder levantaria "cadê o empreendimento X?"), porém desabilitados.
+    const empreendimentosOfertados = React.useMemo(() => {
+        const comObra = empreendimentosComObra(projects, empreendimentoByProject);
+        return empreendimentos.map(e => ({ ...e, temObra: comObra.has(e.id) }));
+    }, [empreendimentos, projects, empreendimentoByProject]);
+
+    /**
+     * Trocar a obra de um pedido que já existe troca o ORÇAMENTO de referência.
+     * `orderItems` só monta item de orçamento que esteja no `projectData` atual,
+     * então o que veio do orçamento da obra anterior sumiria no salvar, calado.
+     * Devolver os itens para `itensCarregados` faz o efeito de classificação
+     * re-separá-los contra o orçamento NOVO: o que existir lá continua item de
+     * orçamento, o resto sobrevive como avulso (mesmo tratamento que o insumo de
+     * composição já recebia).
+     */
+    const trocarObra = (novaObraId: string) => {
+        if (novaObraId === selectedProjectId) return;
+        // `itensCarregados` não-nulo = a classificação da abertura ainda não
+        // rodou; ela já vai acontecer contra o orçamento novo.
+        if (isEditing && selectedProjectId && itensCarregados === null) setItensCarregados(orderItems);
+        setSelectedProjectId(novaObraId);
+    };
+
     const handleEmpreendimentoChange = (empId: string) => {
         setSelectedEmpreendimentoId(empId);
-        // Trocar de empreendimento limpa a obra que não pertence a ele.
-        if (empId && selectedProjectId && empreendimentoByProject[selectedProjectId]?.id !== empId) {
-            setSelectedProjectId('');
-        }
+        // O empreendimento não é campo do pedido — quem grava é a OBRA. Trocar de
+        // empreendimento precisa RESOLVER a obra (a única do empreendimento entra
+        // sozinha); só quando há várias é que a escolha sobra para o usuário, e aí
+        // a tela diz isso ao lado do botão em vez de só desbotá-lo.
+        trocarObra(obraAoTrocarEmpreendimento(
+            selectedProjectId, empId, projects, empreendimentoByProject,
+        ));
     };
+    // Por que o "Salvar alterações" está desligado. `null` = pode salvar. Botão
+    // desbotado sem motivo visível foi o que fez a troca de empreendimento
+    // parecer "não aceita" em 22/09/2026 — o motivo aparece ao lado do botão.
+    const motivoSalvar = motivoSalvarBloqueado({
+        fornecedorId: selectedSupplierId,
+        obraId: selectedProjectId,
+        itensSelecionados: selectedItems.size,
+        itensAvulsos: avulsoItems.length,
+    });
+
     const mostrarItens = !embedded || painel === 'itens';
     const mostrarFinanceiro = !embedded || painel === 'financeiro';
 
@@ -1113,10 +1170,14 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
 
                 {/* Embutido: o cabeçalho é do detalhe; aqui fica só a ação de gravar. */}
                 {embedded ? (
-                    <div className="flex items-center justify-end">
+                    <div className="flex items-center justify-end gap-3">
+                        {motivoSalvar && (
+                            <span className="text-xs text-amber-600">{motivoSalvar}</span>
+                        )}
                         <button
                             onClick={handleSaveOrder}
-                            disabled={!selectedSupplierId || !selectedProjectId || (selectedItems.size === 0 && avulsoItems.length === 0)}
+                            disabled={!!motivoSalvar}
+                            title={motivoSalvar ?? undefined}
                             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
                         >
                             <Save className="w-[15px] h-[15px]" />
@@ -1145,15 +1206,21 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                 </p>
                             </div>
                         </div>
-                        <Button
-                            onClick={handleSaveOrder}
-                            disabled={!selectedSupplierId || !selectedProjectId || (selectedItems.size === 0 && avulsoItems.length === 0)}
-                            size="lg"
-                            className="gap-2 shadow-xl shadow-blue-900/20"
-                        >
-                            <Save className="w-4 h-4" />
-                            <span>Salvar Pedido</span>
-                        </Button>
+                        <div className="flex items-center gap-3">
+                            {motivoSalvar && (
+                                <span className="text-xs text-amber-600 text-right max-w-[16rem]">{motivoSalvar}</span>
+                            )}
+                            <Button
+                                onClick={handleSaveOrder}
+                                disabled={!!motivoSalvar}
+                                title={motivoSalvar ?? undefined}
+                                size="lg"
+                                className="gap-2 shadow-xl shadow-blue-900/20"
+                            >
+                                <Save className="w-4 h-4" />
+                                <span>Salvar Pedido</span>
+                            </Button>
+                        </div>
                     </div>
                 )}
 
@@ -1221,24 +1288,28 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Empreendimento</label>
+                                        <label htmlFor="pedido-empreendimento" className="block text-sm font-medium text-gray-700 mb-1">Empreendimento</label>
                                         <select
+                                            id="pedido-empreendimento"
                                             value={selectedEmpreendimentoId}
                                             onChange={(e) => handleEmpreendimentoChange(e.target.value)}
                                             className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                                         >
                                             <option value="">Todos os empreendimentos</option>
-                                            {empreendimentos.map(e => (
-                                                <option key={e.id} value={e.id}>{e.name}</option>
+                                            {empreendimentosOfertados.map(e => (
+                                                <option key={e.id} value={e.id} disabled={!e.temObra}>
+                                                    {e.temObra ? e.name : `${e.name} (sem obra vinculada)`}
+                                                </option>
                                             ))}
                                         </select>
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Obra</label>
+                                        <label htmlFor="pedido-obra" className="block text-sm font-medium text-gray-700 mb-1">Obra</label>
                                         <select
+                                            id="pedido-obra"
                                             value={selectedProjectId}
-                                            onChange={(e) => setSelectedProjectId(e.target.value)}
+                                            onChange={(e) => trocarObra(e.target.value)}
                                             className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                                         >
                                             <option value="">Selecione a obra...</option>
@@ -1246,6 +1317,14 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                 <option key={p.id} value={p.id}>{p.name}</option>
                                             ))}
                                         </select>
+                                        {/* Empreendimento com mais de uma obra não tem escolha
+                                            automática — sem esta linha o usuário só veria o
+                                            botão de salvar desbotar. */}
+                                        {!selectedProjectId && selectedEmpreendimentoId && (
+                                            <p className="mt-1 text-xs text-amber-600">
+                                                Este empreendimento tem mais de uma obra — escolha qual recebe o pedido.
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div>

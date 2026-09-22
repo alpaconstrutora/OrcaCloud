@@ -804,6 +804,20 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                 </div>
             </div>
 
+            {/* Abas do editor — §19.1, na ordem título → abas → KPIs (§20.1); só existem enquanto se edita */}
+            {isAdding && (
+                <TabsBar
+                    tabs={[
+                        { id: 'clima', label: 'Condições Climáticas' },
+                        { id: 'atividades', label: 'Atividades do Dia', badge: (formData.labor?.length || 0) + (formData.activities?.length || 0) },
+                        { id: 'comentarios', label: 'Comentários' },
+                        { id: 'arquivos', label: 'Arquivos', badge: (formData.images?.length || 0) + (formData.videos?.length || 0) + (formData.documents?.length || 0) },
+                    ]}
+                    value={activeTab}
+                    onChange={setActiveTab}
+                />
+            )}
+
             {/* §4 + §20.1 — prazos da obra como KPIs; mb-3 fecha o bloco de cromo */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                 <KpiCard label="Prazo restante" value={`${metrics.remaining} dias`} icon={<Hourglass className="w-4 h-4" />} color="blue" />
@@ -815,44 +829,10 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
             {
                 isAdding && (
                     <div className="bg-white rounded-3xl shadow-2xl border border-indigo-100 animate-in zoom-in-95 duration-200">
-                        {/* Entry Editor Header */}
-                        <div className="p-6 bg-gray-50/50 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                            <div className="flex flex-wrap items-center gap-6">
-                                <div className="flex items-center gap-3">
-                                    <div className="flex items-center gap-3 bg-indigo-50/50 px-4 py-2 rounded-2xl border border-indigo-100/50">
-                                        <Calendar className="w-5 h-5 text-indigo-600" />
-                                        <div className="flex flex-col">
-                                            <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Data do Diário</span>
-                                            <input
-                                                type="date"
-                                                value={formData.date}
-                                                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                                                className="bg-transparent border-none outline-none text-sm font-black text-indigo-900 p-0"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Corpo: abas + conteúdo à esquerda; "Status do relatório" em painel lateral à direita */}
+                        {/* Corpo: conteúdo da aba ativa à esquerda; Data + Status em painel lateral à direita.
+                            As abas ficam acima dos KPIs (§19.1/§20.1) e a data mora no painel — o card não tem cabeçalho. */}
                         <div className="flex flex-col lg:flex-row">
                         <div className="flex-1 min-w-0">
-                        {/* Abas do editor — §19.1 (trilho `bare`: o card do editor já é a moldura) */}
-                        <div className="p-2 border-b border-gray-100 bg-white">
-                            <TabsBar
-                                bare
-                                tabs={[
-                                    { id: 'clima', label: 'Condições Climáticas' },
-                                    { id: 'atividades', label: 'Atividades do Dia', badge: (formData.labor?.length || 0) + (formData.activities?.length || 0) },
-                                    { id: 'comentarios', label: 'Comentários' },
-                                    { id: 'arquivos', label: 'Arquivos', badge: (formData.images?.length || 0) + (formData.videos?.length || 0) + (formData.documents?.length || 0) },
-                                ]}
-                                value={activeTab}
-                                onChange={setActiveTab}
-                            />
-                        </div>
-
                         <div className="p-8">
                             {activeTab === 'clima' && (
                                 <div className="space-y-10">
@@ -1227,7 +1207,20 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                         </div>
 
                         {/* Painel lateral direito — Status do relatório (lista vertical; cor por status, §8) */}
-                        <aside className="lg:w-72 shrink-0 border-t lg:border-t-0 lg:border-l border-gray-100 p-6 space-y-3">
+                        <aside className="lg:w-72 shrink-0 border-t lg:border-t-0 lg:border-l border-gray-100 p-6 space-y-6">
+                            <div className="space-y-1.5">
+                                <label htmlFor="diario-data" className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                                    <Calendar className="w-4 h-4 text-gray-400" /> Data do diário
+                                </label>
+                                <input
+                                    id="diario-data"
+                                    type="date"
+                                    value={formData.date}
+                                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                />
+                            </div>
+                            <div className="space-y-3">
                             <div>
                                 <h3 className="text-sm font-semibold text-gray-900">Status do relatório</h3>
                                 <p className="text-xs text-gray-400 mt-0.5">Situação deste registro do diário.</p>
@@ -1252,6 +1245,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                         </button>
                                     );
                                 })}
+                            </div>
                             </div>
                         </aside>
                         </div>

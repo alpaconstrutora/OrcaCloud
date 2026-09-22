@@ -135,19 +135,19 @@ const ProjectGallery: React.FC<ProjectGalleryProps> = ({
     };
 
     return (
-        <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
+        <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden shadow-sm">
             <div className="flex border-b border-gray-50 items-center justify-between pr-4">
                 <div className="flex">
                     <button
                         onClick={() => setActiveTab('photos')}
-                        className={`px-6 py-4 text-button font-black uppercase tracking-widest transition-all ${activeTab === 'photos' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-700 hover:text-gray-900'
+                        className={`px-6 py-4 text-button font-bold transition-all ${activeTab === 'photos' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-700 hover:text-gray-900'
                             }`}
                     >
                         Galeria de Fotos
                     </button>
                     <button
                         onClick={() => setActiveTab('live')}
-                        className={`px-6 py-4 text-button font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'live' ? 'text-red-600 border-b-2 border-red-600' : 'text-gray-700 hover:text-gray-900'
+                        className={`px-6 py-4 text-button font-bold transition-all flex items-center gap-2 ${activeTab === 'live' ? 'text-red-600 border-b-2 border-red-600' : 'text-gray-700 hover:text-gray-900'
                             }`}
                     >
                         <div className={`w-2 h-2 rounded-full bg-red-600 ${activeTab === 'live' ? 'animate-pulse' : ''}`} />
@@ -167,7 +167,7 @@ const ProjectGallery: React.FC<ProjectGalleryProps> = ({
                         <button
                             onClick={() => fileInputRef.current?.click()}
                             disabled={isUploading}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all disabled:opacity-50"
+                            className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-[10px] text-xs font-bold hover:bg-indigo-600 hover:text-white transition-all disabled:opacity-50"
                         >
                             {isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
                             Adicionar Foto
@@ -181,7 +181,7 @@ const ProjectGallery: React.FC<ProjectGalleryProps> = ({
                     <div className="relative group">
                         {actualImages.length > 0 ? (
                             <>
-                                <div className="aspect-video bg-gray-100 rounded-2xl overflow-hidden relative group/main">
+                                <div className="aspect-video bg-gray-100 rounded-[10px] overflow-hidden relative group/main">
                                     <img
                                         src={actualImages[selectedImage]}
                                         alt="Work Progress"
@@ -212,7 +212,7 @@ const ProjectGallery: React.FC<ProjectGalleryProps> = ({
                                     {isAdmin && (
                                         <button
                                             onClick={() => handleDelete(selectedImage)}
-                                            className="absolute top-4 right-4 p-2.5 bg-red-600/90 text-white rounded-xl shadow-lg transition-all hover:bg-red-700 hover:scale-105"
+                                            className="absolute top-4 right-4 p-2.5 bg-red-600/90 text-white rounded-[10px] shadow-sm transition-all hover:bg-red-700 hover:scale-105"
                                             title="Excluir foto"
                                         >
                                             <Trash2 className="w-4 h-4" />
@@ -225,7 +225,7 @@ const ProjectGallery: React.FC<ProjectGalleryProps> = ({
                                         <div key={i} className="relative group/thumb">
                                             <button
                                                 onClick={() => setSelectedImage(i)}
-                                                className={`w-20 h-14 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all ${selectedImage === i ? 'border-indigo-600 scale-105 shadow-md' : 'border-transparent opacity-60 hover:opacity-100'
+                                                className={`w-20 h-14 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all ${selectedImage === i ? 'border-indigo-600 scale-105 shadow-sm' : 'border-transparent opacity-60 hover:opacity-100'
                                                     }`}
                                             >
                                                 <img src={img} className="w-full h-full object-cover" />
@@ -236,7 +236,7 @@ const ProjectGallery: React.FC<ProjectGalleryProps> = ({
                                                         e.stopPropagation();
                                                         handleDelete(i);
                                                     }}
-                                                    className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center shadow-md hover:bg-red-700 transition-transform hover:scale-110 z-10"
+                                                    className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center shadow-sm hover:bg-red-700 transition-transform hover:scale-110 z-10"
                                                     title="Excluir"
                                                 >
                                                     <X className="w-3 h-3" />
@@ -247,13 +247,13 @@ const ProjectGallery: React.FC<ProjectGalleryProps> = ({
                                 </div>
                             </>
                         ) : (
-                            <div className="aspect-video bg-gray-50 rounded-2xl flex flex-col items-center justify-center border-2 border-dashed border-gray-100">
+                            <div className="aspect-video bg-gray-50 rounded-[10px] flex flex-col items-center justify-center border-2 border-dashed border-gray-100">
                                 <Camera className="w-12 h-12 text-gray-200 mb-4" />
-                                <p className="text-xs font-black text-gray-300 uppercase tracking-widest">Nenhuma foto na galeria</p>
+                                <p className="text-xs font-bold text-gray-300">Nenhuma foto na galeria</p>
                                 {isAdmin && (
                                     <button
                                         onClick={() => fileInputRef.current?.click()}
-                                        className="mt-4 px-6 py-3 bg-white border border-gray-200 text-indigo-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:border-indigo-600 transition-all"
+                                        className="mt-4 px-6 py-3 bg-white border border-gray-200 text-indigo-600 rounded-[10px] text-xs font-bold hover:border-indigo-600 transition-all"
                                     >
                                         Começar Galeria
                                     </button>
@@ -262,10 +262,10 @@ const ProjectGallery: React.FC<ProjectGalleryProps> = ({
                         )}
                     </div>
                 ) : (
-                    <div className="aspect-video bg-slate-900 rounded-2xl flex flex-col items-center justify-center text-white relative group overflow-hidden">
+                    <div className="aspect-video bg-slate-900 rounded-[10px] flex flex-col items-center justify-center text-white relative group overflow-hidden">
                         {/* Simulated Live Feed */}
                         <div className="absolute inset-0 bg-black opacity-40 group-hover:opacity-60 transition-opacity" />
-                        <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1 bg-red-600 rounded-full text-xs font-black uppercase tracking-widest animate-pulse">
+                        <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1 bg-red-600 rounded-full text-xs font-bold animate-pulse">
                             Live
                         </div>
 
@@ -273,7 +273,7 @@ const ProjectGallery: React.FC<ProjectGalleryProps> = ({
                             <div className="w-16 h-16 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center mb-4 border border-white/20 group-hover:scale-110 transition-transform cursor-pointer">
                                 <Play className="w-8 h-8 fill-white" />
                             </div>
-                            <p className="text-xs font-bold tracking-widest uppercase opacity-80">Conectando ao stream da obra...</p>
+                            <p className="text-xs font-bold opacity-80">Conectando ao stream da obra...</p>
                         </div>
 
                         {/* Simulated UI Overlay */}

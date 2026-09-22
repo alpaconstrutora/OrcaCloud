@@ -142,11 +142,11 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
         return (
             <div className="animate-in fade-in duration-300">
                 {desktopTabsBar}
-                <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-gray-100">
+                <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100">
                     <div className="animate-pulse space-y-4">
                         <div className="h-6 bg-gray-100 rounded w-1/3" />
-                        <div className="h-24 bg-gray-50 rounded-[1.5rem]" />
-                        <div className="h-24 bg-gray-50 rounded-[1.5rem]" />
+                        <div className="h-24 bg-gray-50 rounded-[10px]" />
+                        <div className="h-24 bg-gray-50 rounded-[10px]" />
                     </div>
                 </div>
             </div>
@@ -160,7 +160,7 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
         return (
             <div className="animate-in fade-in duration-300">
                 {desktopTabsBar}
-                <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-gray-100 text-center">
+                <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100 text-center">
                     <div className="w-14 h-14 rounded-[1rem] bg-gray-50 flex items-center justify-center mx-auto mb-4">
                         <Building2 className="w-7 h-7 text-gray-300" />
                     </div>
@@ -181,11 +181,11 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
 
             {/* ── Minhas unidades ── */}
             {porCondominio.map(cond => (
-                <div key={cond.id} className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+                <div key={cond.id} className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
                     <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-6 md:px-10 py-6">
                         <div className="flex items-center gap-2.5">
                             <Building2 className="w-5 h-5 text-blue-200" />
-                            <h2 className="text-xl md:text-2xl font-black text-white leading-tight">{cond.nome}</h2>
+                            <h2 className="text-xl md:text-2xl font-bold text-white leading-tight">{cond.nome}</h2>
                         </div>
                         <p className="text-blue-200 text-sm font-medium mt-1">
                             {cond.unidades.length === 1 ? '1 unidade' : `${cond.unidades.length} unidades`}
@@ -193,9 +193,9 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
                         </p>
                     </div>
 
-                    <div className="p-4 md:p-8 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="p-4 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
                         {cond.unidades.map(u => (
-                            <div key={u.unitId} className="rounded-[1.5rem] border border-gray-100 bg-gray-50/40 p-5">
+                            <div key={u.unitId} className="rounded-[10px] border border-gray-100 bg-gray-50/40 p-5">
                                 <div className="flex items-start justify-between gap-3">
                                     <div>
                                         <h3 className="text-base font-bold text-gray-900">{u.unidade}</h3>
@@ -251,10 +251,10 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
             ))}
 
             {/* ── Avisos ── */}
-            <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 p-6 md:p-10">
+            <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6 md:p-6">
                 <div className="flex items-center gap-2.5 mb-1">
                     <Megaphone className="w-5 h-5 text-indigo-500" />
-                    <h2 className="text-xl font-black text-gray-900">Avisos</h2>
+                    <h2 className="text-xl font-bold text-gray-900">Avisos</h2>
                     {naoLidos > 0 && (
                         <span className="text-sm font-semibold text-indigo-600">
                             {naoLidos} {naoLidos === 1 ? 'não lido' : 'não lidos'}
@@ -271,7 +271,7 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
                             <div
                                 key={a.id}
                                 onClick={() => { if (!a.lido) onMarcarLido?.(a.id); }}
-                                className={`rounded-[1.5rem] border p-5 transition-all ${
+                                className={`rounded-[10px] border p-5 transition-all ${
                                     a.lido ? 'border-gray-100 bg-white'
                                            : 'border-indigo-100 bg-indigo-50/40 cursor-pointer hover:bg-indigo-50/70'
                                 }`}
@@ -301,10 +301,10 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
             </div>
 
             {/* ── Documentos do condomínio ── */}
-            <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 p-6 md:p-10">
+            <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6 md:p-6">
                 <div className="flex items-center gap-2.5 mb-1">
                     <FileText className="w-5 h-5 text-indigo-500" />
-                    <h2 className="text-xl font-black text-gray-900">Documentos do condomínio</h2>
+                    <h2 className="text-xl font-bold text-gray-900">Documentos do condomínio</h2>
                 </div>
                 <p className="text-sm text-gray-500 mb-5">Convenção, regulamento interno e atas</p>
 

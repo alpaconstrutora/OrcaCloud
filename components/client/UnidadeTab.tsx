@@ -16,7 +16,7 @@
 // (onde a pessoa mora/ocupa hoje); aqui vem de `commercial_deals` (o que ela
 // comprou ou alugou). Um cliente pode ter as duas, e elas não coincidem.
 //
-// ⚠️ ESCALA DE RADIUS: `rounded-[2.5rem]` (§16 deprecated), de propósito. O
+// ⚠️ ESCALA DE RADIUS: `rounded-[10px]` (§16 deprecated), de propósito. O
 // Portal do Cliente inteiro está na escala antiga, `CondominioTab` inclusive.
 // Card compacto entre duas abas de 2.5rem lê como bug, e o §16 também proíbe
 // misturar as duas escalas na mesma tela. Migrar o portal inteiro é item
@@ -215,11 +215,11 @@ const UnidadeTab: React.FC<Props> = ({ dados, loading, desktopTabsBar }) => {
         return (
             <div className="animate-in fade-in duration-300">
                 {desktopTabsBar}
-                <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-gray-100">
+                <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100">
                     <div className="animate-pulse space-y-4">
                         <div className="h-6 bg-gray-100 rounded w-1/3" />
-                        <div className="h-24 bg-gray-50 rounded-[1.5rem]" />
-                        <div className="h-24 bg-gray-50 rounded-[1.5rem]" />
+                        <div className="h-24 bg-gray-50 rounded-[10px]" />
+                        <div className="h-24 bg-gray-50 rounded-[10px]" />
                     </div>
                 </div>
             </div>
@@ -233,7 +233,7 @@ const UnidadeTab: React.FC<Props> = ({ dados, loading, desktopTabsBar }) => {
         return (
             <div className="animate-in fade-in duration-300">
                 {desktopTabsBar}
-                <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-gray-100 text-center">
+                <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100 text-center">
                     <div className="w-14 h-14 rounded-[1rem] bg-gray-50 flex items-center justify-center mx-auto mb-4">
                         <Home className="w-7 h-7 text-gray-300" />
                     </div>
@@ -259,14 +259,14 @@ const UnidadeTab: React.FC<Props> = ({ dados, loading, desktopTabsBar }) => {
                 const subtitulo = [u.empreendimento, u.torre].filter(Boolean).join(' · ');
 
                 return (
-                    <div key={u.propertyId} className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+                    <div key={u.propertyId} className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
                         {/* ── Cabeçalho da unidade ── */}
                         <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-6 md:px-10 py-6">
                             <div className="flex flex-wrap items-start justify-between gap-4">
                                 <div>
                                     <div className="flex items-center gap-2.5">
                                         <Home className="w-5 h-5 text-blue-200" />
-                                        <h2 className="text-xl md:text-2xl font-black text-white leading-tight">{u.unidade}</h2>
+                                        <h2 className="text-xl md:text-2xl font-bold text-white leading-tight">{u.unidade}</h2>
                                     </div>
                                     <p className="text-blue-200 text-sm font-medium mt-1 flex items-center gap-1.5">
                                         {subtitulo && <Building2 className="w-3.5 h-3.5" />}
@@ -275,12 +275,12 @@ const UnidadeTab: React.FC<Props> = ({ dados, loading, desktopTabsBar }) => {
                                 </div>
                                 <div className="text-right">
                                     <p className="text-blue-200 text-xs">{rotuloValor}</p>
-                                    <p className="text-lg md:text-xl font-black text-white">{valor}</p>
+                                    <p className="text-lg md:text-xl font-bold text-white">{valor}</p>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="p-5 md:p-8">
+                        <div className="p-5 md:p-6">
                             <Secao
                                 icone={<Home className="w-3.5 h-3.5" />}
                                 titulo="Identificação"

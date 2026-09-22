@@ -467,22 +467,22 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <button
                             onClick={() => setShowNotifications(n => !n)}
                             className={escuro
-                                ? 'relative p-2.5 bg-white/15 border border-white/25 rounded-xl text-white hover:bg-white/25 transition-all'
-                                : 'relative p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-orange-500 hover:border-orange-200 hover:bg-orange-50 transition-all shadow-sm'}
+                                ? 'relative p-2.5 bg-white/15 border border-white/25 rounded-[10px] text-white hover:bg-white/25 transition-all'
+                                : 'relative p-2.5 bg-white border border-gray-100 rounded-[10px] text-gray-400 hover:text-orange-500 hover:border-orange-200 hover:bg-orange-50 transition-all shadow-sm'}
                             title="Notificações"
                         >
                             <Bell className="w-4 h-4" />
                             {unreadCount > 0 && (
-                                <span className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
+                                <span className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
                                     {unreadCount > 9 ? '9+' : unreadCount}
                                 </span>
                             )}
                         </button>
                         {/* Notification dropdown */}
                         {showNotifications && (
-                            <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden" onClick={e => e.stopPropagation()}>
+                            <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-[10px] shadow-sm border border-gray-100 z-50 overflow-hidden" onClick={e => e.stopPropagation()}>
                                 <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                                    <span className="text-sm font-black text-gray-900 uppercase tracking-tight">Notificações</span>
+                                    <span className="text-sm font-bold text-gray-900 tracking-tight">Notificações</span>
                                     {unreadCount > 0 && portalToken && (
                                         <button
                                             onClick={async () => {
@@ -490,7 +490,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 setPortalMessages(prev => prev.map(m => ({ ...m, is_read: true })));
                                                 setUnreadCount(0);
                                             }}
-                                            className="text-[9px] font-black text-orange-500 uppercase tracking-widest hover:underline"
+                                            className="text-xs font-bold text-orange-500 hover:underline"
                                         >
                                             Marcar todas lidas
                                         </button>
@@ -500,7 +500,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     {portalMessages.length === 0 ? (
                                         <div className="py-10 text-center">
                                             <Bell className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-                                            <p className="text-xs font-bold text-gray-400">Nenhuma notificação</p>
+                                            <p className="text-xs text-gray-400">Nenhuma notificação</p>
                                         </div>
                                     ) : portalMessages.map(msg => (
                                         <button
@@ -517,9 +517,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             <div className="flex items-start gap-3">
                                                 <div className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${!msg.is_read ? 'bg-orange-400' : 'bg-gray-200'}`} />
                                                 <div className="min-w-0">
-                                                    <p className="text-xs font-black text-gray-900 leading-tight truncate">{msg.title}</p>
+                                                    <p className="text-xs font-bold text-gray-900 leading-tight truncate">{msg.title}</p>
                                                     {msg.body && <p className="text-xs text-gray-500 mt-0.5 leading-snug line-clamp-2">{msg.body}</p>}
-                                                    <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-1">{new Date(msg.created_at).toLocaleDateString('pt-BR')} · {msg.sender_name}</p>
+                                                    <p className="text-xs font-bold text-gray-300 mt-1">{new Date(msg.created_at).toLocaleDateString('pt-BR')} · {msg.sender_name}</p>
                                                 </div>
                                             </div>
                                         </button>
@@ -529,7 +529,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         )}
                     </div>
                 )}
-                {clientProfile && (
+                {/* Gestor não tem "Meus dados" aqui (edita o cadastro em Meus Clientes) —
+                    igual ao Portal do Fornecedor, onde o topo do gestor tem só prévia + abas. */}
+                {clientProfile && !isAdmin && (
                     <button
                         onClick={() => { setMeusDadosForm({ ...clientProfile }); setShowMeusDados(true); }}
                         className={escuro
@@ -540,22 +542,24 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <span className="hidden sm:inline">Meus dados</span>
                     </button>
                 )}
+                {/* Mesmos botões (classes idênticas) do canto do SupplierDashboard */}
                 {isAdmin && clientProfile && (
-                    <ActionIconButton
-                        kind="view"
+                    <button
                         onClick={() => setShowMobilePreview(true)}
                         title="Visualizar como o cliente vê no celular"
-                        icon={<Smartphone className="w-4 h-4" />}
-                        className="hidden md:block"
-                    />
+                        className="hidden md:block p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all shadow-sm"
+                    >
+                        <Smartphone className="w-4 h-4" />
+                    </button>
                 )}
                 {isAdmin && onUpdateSettings && (
-                    <ActionIconButton
-                        kind="settings"
+                    <button
                         onClick={() => setShowTabConfig(true)}
-                        title="Configurar abas"
-                        icon={<Settings2 className="w-4 h-4" />}
-                    />
+                        title="Configurar abas visíveis do cliente"
+                        className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all shadow-sm"
+                    >
+                        <Settings2 className="w-4 h-4" />
+                    </button>
                 )}
             </div>
         );
@@ -654,7 +658,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     {/* Chamados recentes */}
                     {recentRequests.length > 0 && <div className="px-4 mt-4 pb-6 space-y-2">
                         <div className="flex items-center justify-between mb-2"><p className="text-xs font-black text-gray-400 uppercase tracking-widest">Últimos Chamados</p>{enabledTabIds.includes('manutencao') && <button onClick={() => setActiveTab('manutencao')} className="text-xs font-black text-blue-500 uppercase tracking-widest">Ver todos</button>}</div>
-                        {recentRequests.map(req => (<div key={req.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-3"><div className="min-w-0"><p className="text-sm font-black text-gray-900 truncate">{req.title}</p><p className="text-xs font-bold text-gray-400 mt-0.5">{req.category}</p></div><span className={`shrink-0 text-sm font-normal ${STATUS_TEXT_COLOR[req.status] ?? 'text-gray-500'}`}>{req.status}</span></div>))}
+                        {recentRequests.map(req => (<div key={req.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-3"><div className="min-w-0"><p className="text-sm font-black text-gray-900 truncate">{req.title}</p><p className="text-xs text-gray-400 mt-0.5">{req.category}</p></div><span className={`shrink-0 text-sm font-normal ${STATUS_TEXT_COLOR[req.status] ?? 'text-gray-500'}`}>{req.status}</span></div>))}
                     </div>}
                     {/* Empty state + atalhos */}
                     {recentRequests.length === 0 && (
@@ -670,58 +674,34 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                 {/* ══ DESKTOP ══ */}
                 <div className="hidden md:block space-y-6">
-                    {/* Faixa de boas-vindas — funde o cabeçalho branco (avatar, nome,
-                        categoria e ações) com a saudação; antes eram dois cards iguais */}
-                    <div className="bg-gradient-to-r from-blue-600 to-indigo-500 rounded-3xl px-8 py-6 flex items-start justify-between gap-6">
-                        <div className="flex items-center gap-4 min-w-0">
-                            <div className="w-14 h-14 bg-white/20 border border-white/30 rounded-2xl flex items-center justify-center text-white font-black text-2xl shrink-0">
-                                {(clientProfile?.name || settings.name).charAt(0)}
-                            </div>
-                            <div className="min-w-0">
-                                <p className="text-blue-200 text-xs font-black uppercase tracking-widest mb-1">{rotuloDaCategoria(clientCategory) ?? 'Locação'}</p>
-                                <h2 className="text-2xl font-black text-white truncate">Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}</h2>
-                                <p className="text-blue-200 text-sm mt-1">Acompanhe seu imóvel e pagamentos</p>
-                            </div>
-                        </div>
-                        <div className="flex flex-col items-end gap-4 shrink-0">
-                            {renderPortalActions('dark')}
-                            <div className="flex items-center gap-4">
-                                <div className="text-right">
-                                    <p className="text-xs font-black text-blue-200 uppercase tracking-widest">Próximo Vencimento</p>
-                                    <p className="text-xl font-black text-white mt-0.5">{nextDue ? `R$ ${nextDue.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}` : 'Em dia'}</p>
-                                    {nextDue && <p className="text-xs text-blue-200 font-bold">{new Date(nextDue.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p>}
-                                </div>
-                                {enabledTabIds.includes('financeiro') && <button onClick={() => setActiveTab('financeiro')} className="flex items-center gap-2 px-5 py-3 bg-white text-blue-600 rounded-2xl text-button font-black uppercase tracking-widest hover:bg-blue-50 transition-all shadow"><Wallet className="w-4 h-4" /> Financeiro</button>}
-                            </div>
-                        </div>
-                    </div>
-                    {/* Grid principal */}
-                    <div className="grid grid-cols-3 gap-6">
-                        {/* KPIs */}
-                        {[
-                            { label: 'Contratos Ativos', value: activeContracts.length, icon: <FileText className="w-5 h-5" />, color: 'indigo', tab: 'contratos' as const },
-                            { label: 'Chamados Abertos', value: openRequests.length, icon: <Wrench className="w-5 h-5" />, color: openRequests.length > 0 ? 'amber' : 'emerald', tab: 'manutencao' as const },
-                            { label: 'Cobranças Pagas', value: `${paidPct}%`, icon: <CheckCircle2 className="w-5 h-5" />, color: 'emerald', tab: 'financeiro' as const },
-                        ].map(card => (
-                            <button key={card.label} onClick={() => enabledTabIds.includes(card.tab) && setActiveTab(card.tab)} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex items-center gap-4 hover:border-blue-200 hover:shadow-md transition-all text-left">
-                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center bg-${card.color}-50 text-${card.color}-500 shrink-0`}>{card.icon}</div>
-                                <div><p className="text-2xl font-black text-gray-900">{card.value}</p><p className="text-xs font-black text-gray-400 uppercase tracking-widest mt-0.5">{card.label}</p></div>
-                            </button>
-                        ))}
+                    {/* KPIs §4 (KpiCard canônico) — a faixa colorida de boas-vindas saiu no
+                        desktop: o título §20 (h1 "Olá, Nome" + categoria) já cumpre o papel,
+                        igual ao Portal do Fornecedor. A faixa continua no mobile. */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                        <KpiCard
+                            label="Próximo Vencimento"
+                            value={nextDue ? `R$ ${nextDue.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}` : 'Em dia'}
+                            sub={nextDue ? new Date(nextDue.dueDate + 'T12:00:00').toLocaleDateString('pt-BR') : undefined}
+                            icon={<Wallet className="w-4 h-4" />}
+                            color={nextDue ? 'amber' : 'emerald'}
+                        />
+                        <KpiCard label="Contratos Ativos" value={activeContracts.length} icon={<FileText className="w-4 h-4" />} color="indigo" />
+                        <KpiCard label="Chamados Abertos" value={openRequests.length} icon={<Wrench className="w-4 h-4" />} color={openRequests.length > 0 ? 'amber' : 'emerald'} />
+                        <KpiCard label="Cobranças Pagas" value={`${paidPct}%`} icon={<CheckCircle2 className="w-4 h-4" />} color="emerald" />
                     </div>
                     {/* §19.3 — abas depois dos KPIs desta aba */}
                     {desktopTabsBar}
                     {/* Alerta reajuste */}
-                    {reajusteAlert && <div className="flex items-start gap-3 p-5 bg-amber-50 border border-amber-200 rounded-2xl"><AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" /><div><p className="text-sm font-black text-amber-800 uppercase tracking-tight">Reajuste contratual próximo</p><p className="text-xs text-amber-600 mt-0.5">{reajusteAlert.title} — índice {reajusteAlert.reajuste_index || '—'} em {new Date(reajusteAlert.reajuste_proximo! + 'T12:00:00').toLocaleDateString('pt-BR')}</p></div></div>}
+                    {reajusteAlert && <div className="flex items-start gap-3 p-5 bg-amber-50 border border-amber-200 rounded-[10px]"><AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" /><div><p className="text-sm font-bold text-amber-800 tracking-tight">Reajuste contratual próximo</p><p className="text-xs text-amber-600 mt-0.5">{reajusteAlert.title} — índice {reajusteAlert.reajuste_index || '—'} em {new Date(reajusteAlert.reajuste_proximo! + 'T12:00:00').toLocaleDateString('pt-BR')}</p></div></div>}
                     {/* Duas colunas: chamados + contratos */}
                     <div className="grid grid-cols-2 gap-6">
-                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                            <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Últimos Chamados</h3>{enabledTabIds.includes('manutencao') && <button onClick={() => setActiveTab('manutencao')} className="text-xs font-black text-blue-500 uppercase tracking-widest hover:underline">Ver todos</button>}</div>
-                            {recentRequests.length === 0 ? <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum chamado</p> : <div className="space-y-3">{recentRequests.map(req => (<div key={req.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0"><div className="min-w-0"><p className="text-sm font-bold text-gray-900 truncate">{req.title}</p><p className="text-xs font-bold text-gray-400 uppercase tracking-wide">{req.category}</p></div><span className={`text-sm font-normal shrink-0 ${STATUS_TEXT_COLOR[req.status] ?? 'text-gray-400'}`}>{req.status}</span></div>))}</div>}
+                        <div className="bg-white rounded-[10px] p-6 shadow-sm border border-gray-100">
+                            <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-medium text-gray-900 tracking-tight">Últimos Chamados</h3>{enabledTabIds.includes('manutencao') && <button onClick={() => setActiveTab('manutencao')} className="text-xs font-medium text-blue-500 hover:underline">Ver todos</button>}</div>
+                            {recentRequests.length === 0 ? <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum chamado</p> : <div className="space-y-3">{recentRequests.map(req => (<div key={req.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0"><div className="min-w-0"><p className="text-sm font-bold text-gray-900 truncate">{req.title}</p><p className="text-xs text-gray-400">{req.category}</p></div><span className={`text-sm font-normal shrink-0 ${STATUS_TEXT_COLOR[req.status] ?? 'text-gray-400'}`}>{req.status}</span></div>))}</div>}
                         </div>
-                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                            <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Contratos</h3>{enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-xs font-black text-blue-500 uppercase tracking-widest hover:underline">Ver todos</button>}</div>
-                            {shownContracts.length === 0 ? <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum contrato</p> : <div className="space-y-3">{shownContracts.slice(0, 3).map(c => { const badge = contractDashBadge(c.status); return (<div key={c.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0"><div className="min-w-0"><div className="flex items-center gap-2"><p className="text-sm font-bold text-gray-900 truncate">{c.title}</p><span className={`shrink-0 text-sm font-normal ${badge.textCls}`}>{badge.label}</span></div><p className="text-xs font-bold text-gray-400 uppercase tracking-wide">{c.billing_cycle ?? c.contract_type}{c.end_date ? ` · até ${new Date(c.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}</p></div><span className="text-sm font-black text-gray-900 tabular-nums shrink-0">R$ {(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span></div>); })}</div>}
+                        <div className="bg-white rounded-[10px] p-6 shadow-sm border border-gray-100">
+                            <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-medium text-gray-900 tracking-tight">Contratos</h3>{enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-xs font-medium text-blue-500 hover:underline">Ver todos</button>}</div>
+                            {shownContracts.length === 0 ? <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum contrato</p> : <div className="space-y-3">{shownContracts.slice(0, 3).map(c => { const badge = contractDashBadge(c.status); return (<div key={c.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0"><div className="min-w-0"><div className="flex items-center gap-2"><p className="text-sm font-bold text-gray-900 truncate">{c.title}</p><span className={`shrink-0 text-sm font-normal ${badge.textCls}`}>{badge.label}</span></div><p className="text-xs text-gray-400">{c.billing_cycle ?? c.contract_type}{c.end_date ? ` · até ${new Date(c.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}</p></div><span className="text-sm font-bold text-gray-900 tabular-nums shrink-0">R$ {(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span></div>); })}</div>}
                         </div>
                     </div>
                 </div>
@@ -811,35 +791,24 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                 {/* ══ DESKTOP ══ */}
                 <div className="hidden md:block space-y-6">
-                    {/* Faixa de boas-vindas — funde o cabeçalho branco (avatar, nome,
-                        categoria e ações) com a saudação; antes eram dois cards iguais */}
-                    <div className="bg-gradient-to-r from-indigo-600 to-violet-500 rounded-3xl px-8 py-6 flex items-start justify-between gap-6">
-                        <div className="flex items-center gap-4 min-w-0">
-                            <div className="w-14 h-14 bg-white/20 border border-white/30 rounded-2xl flex items-center justify-center text-white font-black text-2xl shrink-0">
-                                {(clientProfile?.name || settings.name).charAt(0)}
-                            </div>
-                            <div className="min-w-0">
-                                <p className="text-indigo-200 text-xs font-black uppercase tracking-widest mb-1">{rotuloDaCategoria(clientCategory) ?? 'Serviços'}</p>
-                                <h2 className="text-2xl font-black text-white truncate">Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}</h2>
-                                <p className="text-indigo-200 text-sm mt-1">Acompanhe seus contratos e serviços</p>
-                            </div>
-                        </div>
-                        <div className="flex flex-col items-end gap-4 shrink-0">
-                            {renderPortalActions('dark')}
-                            <div className="text-right">
-                                <p className="text-xs font-black text-indigo-200 uppercase tracking-widest">Total Contratado</p>
-                                <p className="text-2xl font-black text-white mt-0.5">R$ {totalContratado.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
-                                <p className="text-xs text-indigo-200 font-bold mt-0.5">{activeContracts.length} contrato{activeContracts.length !== 1 ? 's' : ''} ativo{activeContracts.length !== 1 ? 's' : ''}</p>
-                            </div>
-                        </div>
+                    {/* KPIs §4 — ver nota no dashboard de Locação */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                        <KpiCard
+                            label="Total Contratado"
+                            value={`R$ ${totalContratado.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`}
+                            sub={`${activeContracts.length} contrato${activeContracts.length !== 1 ? 's' : ''} ativo${activeContracts.length !== 1 ? 's' : ''}`}
+                            icon={<DollarSign className="w-4 h-4" />}
+                            color="indigo"
+                        />
+                        <KpiCard label="Contratos Ativos" value={activeContracts.length} icon={<FileText className="w-4 h-4" />} color="blue" />
                     </div>
                     {/* §19.3 — abas depois dos KPIs desta aba */}
                     {desktopTabsBar}
                     {/* Contratos */}
-                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                    <div className="bg-white rounded-[10px] p-6 shadow-sm border border-gray-100">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Contratos</h3>
-                            {enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-xs font-black text-indigo-500 uppercase tracking-widest hover:underline">Ver todos</button>}
+                            <h3 className="text-sm font-bold text-gray-900 tracking-tight">Contratos</h3>
+                            {enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-xs font-medium text-indigo-500 hover:underline">Ver todos</button>}
                         </div>
                         {shownContracts.length === 0 ? (
                             <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum contrato</p>
@@ -854,9 +823,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 <p className="text-sm font-bold text-gray-900 truncate">{c.title}</p>
                                                 <span className={`shrink-0 text-sm font-normal ${badge.textCls}`}>{badge.label}</span>
                                             </div>
-                                            <p className="text-xs font-bold text-gray-400 uppercase">{c.contract_type}{c.sla_days != null ? ` · SLA ${c.sla_days}d` : ''}</p>
+                                            <p className="text-xs text-gray-400">{c.contract_type}{c.sla_days != null ? ` · SLA ${c.sla_days}d` : ''}</p>
                                         </div>
-                                        <span className="text-sm font-black text-gray-900 tabular-nums shrink-0">R$ {(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                                        <span className="text-sm font-bold text-gray-900 tabular-nums shrink-0">R$ {(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
                                     </div>
                                     );
                                 })}
@@ -872,29 +841,25 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         const upcomingEvents = calculateUpcomingPhases(settings, budget);
 
         if (!settings.id || budget.length === 0) {
+            // Estado vazio §12 dentro do card §16
             return (
-                <div className="lg:col-span-3 flex flex-col items-center justify-center p-20 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm text-center animate-in fade-in zoom-in-95 duration-700">
-                    <div className="w-24 h-24 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 mb-8 border-4 border-white shadow-xl shadow-indigo-100/50">
-                        <TrendingUp className="w-10 h-10" />
-                    </div>
-                    <h3 className="text-3xl font-black text-gray-900 uppercase tracking-tight mb-4">Acompanhamento de Obra</h3>
-                    <p className="text-gray-500 max-w-xl mx-auto font-medium leading-relaxed">
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm text-center py-12 px-6 animate-in fade-in duration-500">
+                    <TrendingUp className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Acompanhamento de Obra</h3>
+                    <p className="text-sm text-gray-500 max-w-xl mx-auto">
                         Sua área exclusiva está pronta para acompanhamento. Assim que os dados da sua obra forem processados, você poderá visualizar o progresso real, fotos e o fluxo financeiro aqui.
                     </p>
-                    <div className="mt-10 flex gap-4">
-                        <div className="px-6 py-3 bg-gray-50 rounded-2xl border border-gray-100 text-xs font-black text-gray-400 uppercase tracking-widest">Aguardando Processamento</div>
-                    </div>
                 </div>
             );
         }
 
         return (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {/* Main Metrics (2/3) */}
-                <div className="lg:col-span-2 space-y-8">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="lg:col-span-2 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Status da Obra */}
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between">
+                        <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100 flex flex-col justify-between">
                             <div className="flex justify-between items-start mb-4">
                                 <h3 className="text-gray-900 font-bold flex items-center gap-2">
                                     <TrendingUp className="w-5 h-5 text-indigo-500" />
@@ -914,12 +879,12 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                                 <div className="w-full bg-gray-100 h-3 rounded-full overflow-hidden mb-6 relative">
                                     <div
-                                        className="bg-gradient-to-r from-indigo-500 to-blue-500 h-full rounded-full shadow-lg shadow-indigo-200 transition-all duration-1000"
+                                        className="bg-gradient-to-r from-indigo-500 to-blue-500 h-full rounded-full shadow-sm transition-all duration-1000"
                                         style={{ width: `${calculatedProgress}%` }}
                                     />
                                 </div>
 
-                                <div className="flex justify-between text-xs font-medium uppercase tracking-wider text-gray-500 px-1">
+                                <div className="flex justify-between text-xs font-medium text-gray-500 px-1">
                                     <div className="text-left">
                                         <div className="mb-0.5 flex items-center gap-1">
                                             Etapa Atual
@@ -948,18 +913,18 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                             <div className="border-t border-gray-50 pt-4 mt-4 grid grid-cols-2 gap-4 text-center">
                                 <div>
-                                    <div className="text-xs text-gray-400 font-black uppercase tracking-widest mb-1">Avanço Planejado</div>
-                                    <div className="text-lg font-black text-gray-400">{plannedProgress}%</div>
+                                    <div className="text-xs text-gray-400 font-bold mb-1">Avanço Planejado</div>
+                                    <div className="text-lg font-bold text-gray-400">{plannedProgress}%</div>
                                 </div>
                                 <div className="border-l border-gray-100">
-                                    <div className="text-xs text-indigo-500 font-black uppercase tracking-widest mb-1">Desvio de Prazo</div>
-                                    <div className="text-lg font-black text-gray-900">0 dia(s)</div>
+                                    <div className="text-xs text-indigo-500 font-bold mb-1">Desvio de Prazo</div>
+                                    <div className="text-lg font-bold text-gray-900">0 dia(s)</div>
                                 </div>
                             </div>
                         </div>
 
                         {/* Distribuição de Custos */}
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                        <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100">
                             <h3 className="text-gray-900 font-bold flex items-center gap-2 mb-6">
                                 <DollarSign className="w-5 h-5 text-emerald-500" />
                                 Distribuição de Custos
@@ -990,9 +955,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             </PieChart>
                                         </ResponsiveContainer>
                                     ) : (
-                                        <div className="flex flex-col items-center justify-center w-full h-full text-gray-400 bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
+                                        <div className="flex flex-col items-center justify-center w-full h-full text-gray-400 bg-gray-50/50 rounded-[10px] border border-dashed border-gray-200">
                                             <DollarSign className="w-8 h-8 mb-2 opacity-20" />
-                                            <span className="text-xs font-bold uppercase tracking-widest text-center">Nenhum custo registrado</span>
+                                            <span className="text-xs font-bold text-center">Nenhum custo registrado</span>
                                         </div>
                                     )}
                                 </div>
@@ -1003,7 +968,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             <div key={`legend-${index}`} className="flex justify-between items-center text-xs group">
                                                 <div className="flex items-center gap-2 truncate">
                                                     <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                                                    <span className="font-medium text-gray-600 truncate group-hover:text-gray-900 transition-colors uppercase">{item.name}</span>
+                                                    <span className="font-medium text-gray-600 truncate group-hover:text-gray-900 transition-colors">{item.name}</span>
                                                 </div>
                                                 <span className="font-bold text-gray-900 shrink-0 tabular-nums">R$ {item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                                             </div>
@@ -1016,9 +981,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 </div>
 
                 {/* Secondary Content (1/3) */}
-                <div className="space-y-8">
+                <div className="space-y-6">
                     {/* Próximos Eventos */}
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100">
                         <h3 className="text-gray-900 font-bold flex items-center gap-2 mb-6">
                             <Calendar className="w-5 h-5 text-blue-500" />
                             Próximos Eventos
@@ -1027,18 +992,18 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <div className="space-y-4">
                             {upcomingEvents.length > 0 ? (
                                 upcomingEvents.map((event) => (
-                                    <div key={event.name} className="flex gap-4 p-4 rounded-3xl border border-gray-50 hover:border-blue-100 hover:bg-blue-50/30 transition-all group">
-                                        <div className="flex flex-col items-center justify-center w-16 h-16 bg-blue-100 rounded-2xl shrink-0">
-                                            <span className="text-xl font-black text-blue-700 leading-none">
+                                    <div key={event.name} className="flex gap-4 p-4 rounded-[10px] border border-gray-50 hover:border-blue-100 hover:bg-blue-50/30 transition-all group">
+                                        <div className="flex flex-col items-center justify-center w-16 h-16 bg-blue-100 rounded-[10px] shrink-0">
+                                            <span className="text-xl font-bold text-blue-700 leading-none">
                                                 {event.date.getDate().toString().padStart(2, '0')}
                                             </span>
-                                            <span className="text-xs font-black text-blue-500 uppercase tracking-wider mt-1">
+                                            <span className="text-xs font-bold text-blue-500 mt-1">
                                                 {event.date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase()}
                                             </span>
                                         </div>
 
                                         <div className="flex-1 flex flex-col justify-center min-w-0">
-                                            <h4 className="font-black text-gray-900 tracking-tight text-sm uppercase truncate mb-1">{event.name}</h4>
+                                            <h4 className="font-bold text-gray-900 tracking-tight text-sm truncate mb-1">{event.name}</h4>
                                             <span className="text-sm font-normal text-gray-400">
                                                 Início
                                             </span>
@@ -1046,9 +1011,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     </div>
                                 ))
                             ) : (
-                                <div className="flex flex-col items-center justify-center py-10 px-6 bg-gray-50 rounded-3xl border border-dashed border-gray-200">
+                                <div className="flex flex-col items-center justify-center py-10 px-6 bg-gray-50 rounded-[10px] border border-dashed border-gray-200">
                                     <Calendar className="w-10 h-10 text-gray-300 mb-3" />
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Nenhum evento programado</p>
+                                    <p className="text-xs text-gray-400 text-center">Nenhum evento programado</p>
                                 </div>
                             )}
                         </div>
@@ -1116,13 +1081,14 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
             {/* ══ DESKTOP ══ */}
             {clientContracts.length === 0 ? (
-                <div className="hidden md:flex bg-white p-20 rounded-[2rem] shadow-sm border border-gray-100 flex-col items-center text-center">
-                    <FileText className="w-16 h-16 text-gray-200 mb-6" />
-                    <p className="text-lg font-black text-gray-400 uppercase tracking-widest">Nenhum contrato disponível</p>
+                <div className="hidden md:block bg-white rounded-[10px] shadow-sm border border-gray-100 text-center py-12">
+                    <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum contrato disponível</h3>
+                    <p className="text-sm text-gray-500">Os contratos aparecem aqui assim que forem emitidos.</p>
                 </div>
             ) : (
-                <div className="hidden md:block bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100">
-                    <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight flex items-center gap-3 mb-6">
+                <div className="hidden md:block bg-white p-6 rounded-[10px] shadow-sm border border-gray-100">
+                    <h3 className="text-sm font-bold text-gray-900 tracking-tight flex items-center gap-3 mb-6">
                         <FileText className="w-5 h-5 text-indigo-500" />
                         Meus Contratos
                     </h3>
@@ -1136,11 +1102,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 <div
                                     key={contract.id}
                                     onClick={() => setViewingContract(contract)}
-                                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl border border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all group cursor-pointer"
+                                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-[10px] border border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all group cursor-pointer"
                                 >
                                     <div className="flex flex-col gap-1.5 min-w-0">
-                                        <span className="text-sm font-black text-gray-900 uppercase truncate group-hover:text-indigo-700 transition-colors">{contract.title}</span>
-                                        <div className="flex flex-wrap items-center gap-3 text-xs font-bold text-gray-400 uppercase tracking-widest">
+                                        <span className="text-sm font-bold text-gray-900 truncate group-hover:text-indigo-700 transition-colors">{contract.title}</span>
+                                        <div className="flex flex-wrap items-center gap-3 text-xs font-bold text-gray-400">
                                             {contract.number && <span>Nº {contract.number}</span>}
                                             {contract.contract_type && <span>· {contract.contract_type}</span>}
                                             {contract.start_date && (
@@ -1175,7 +1141,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-3 shrink-0">
-                                        <span className="text-base font-black text-gray-900 tabular-nums">
+                                        <span className="text-base font-bold text-gray-900 tabular-nums">
                                             R$ {(contract.current_value || contract.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </span>
                                         <span className={`text-sm font-normal ${
@@ -1207,29 +1173,29 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setViewingContract(null)}>
                         <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
                         <div
-                            className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 fade-in duration-200"
+                            className="relative bg-white rounded-[10px] shadow-sm w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 fade-in duration-200"
                             onClick={e => e.stopPropagation()}
                         >
-                            <div className="flex items-start justify-between p-8 border-b border-gray-100">
+                            <div className="flex items-start justify-between p-6 border-b border-gray-100">
                                 <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center">
+                                    <div className="w-12 h-12 bg-indigo-50 rounded-[10px] flex items-center justify-center">
                                         <FileText className="w-6 h-6 text-indigo-600" />
                                     </div>
                                     <div>
-                                        <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">{c.title}</h2>
-                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Nº {c.number} · {c.contract_type}</p>
+                                        <h2 className="text-sm font-bold text-gray-900 tracking-tight">{c.title}</h2>
+                                        <p className="text-xs text-gray-400 mt-0.5">Nº {c.number} · {c.contract_type}</p>
                                     </div>
                                 </div>
-                                <button onClick={() => setViewingContract(null)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
+                                <button onClick={() => setViewingContract(null)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-[6px] transition-all">
                                     <X className="w-5 h-5" />
                                 </button>
                             </div>
-                            <div className="p-8 space-y-6">
+                            <div className="p-6 space-y-6">
                                 {isMinuta && (
-                                    <div className="flex items-start gap-4 p-5 bg-purple-50 border border-purple-100 rounded-2xl">
+                                    <div className="flex items-start gap-4 p-5 bg-purple-50 border border-purple-100 rounded-[10px]">
                                         <AlertCircle className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
                                         <div>
-                                            <p className="text-sm font-black text-purple-800 uppercase tracking-tight">Minuta — Aguardando suas considerações</p>
+                                            <p className="text-sm font-bold text-purple-800 tracking-tight">Minuta — Aguardando suas considerações</p>
                                             <p className="text-xs text-purple-600 mt-1">Este é um rascunho do contrato enviado para sua análise. Entre em contato conosco com suas observações antes da assinatura.</p>
                                         </div>
                                     </div>
@@ -1237,10 +1203,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                                 {/* Alerta de reajuste próximo — Locação */}
                                 {isLocacao && diasParaReajuste !== null && diasParaReajuste <= 30 && (
-                                    <div className="flex items-start gap-4 p-5 bg-amber-50 border border-amber-200 rounded-2xl">
+                                    <div className="flex items-start gap-4 p-5 bg-amber-50 border border-amber-200 rounded-[10px]">
                                         <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                                         <div>
-                                            <p className="text-sm font-black text-amber-800 uppercase tracking-tight">Reajuste em {diasParaReajuste} dia{diasParaReajuste !== 1 ? 's' : ''}</p>
+                                            <p className="text-sm font-bold text-amber-800 tracking-tight">Reajuste em {diasParaReajuste} dia{diasParaReajuste !== 1 ? 's' : ''}</p>
                                             <p className="text-xs text-amber-600 mt-1">O contrato será reajustado pelo índice {c.reajuste_index || '—'} em {reajusteProximo!.toLocaleDateString('pt-BR')}.</p>
                                         </div>
                                     </div>
@@ -1254,9 +1220,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         { label: 'Data de Início', value: c.start_date ? new Date(c.start_date + 'T12:00:00').toLocaleDateString('pt-BR') : '—' },
                                         { label: 'Data de Término', value: c.end_date ? new Date(c.end_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'Indeterminado' },
                                     ].map(item => (
-                                        <div key={item.label} className="p-4 bg-gray-50 rounded-2xl">
-                                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">{item.label}</p>
-                                            <p className="text-sm font-black text-gray-900">{item.value}</p>
+                                        <div key={item.label} className="p-4 bg-gray-50 rounded-[10px]">
+                                            <p className="text-xs text-gray-400 mb-1">{item.label}</p>
+                                            <p className="text-sm font-bold text-gray-900">{item.value}</p>
                                         </div>
                                     ))}
                                 </div>
@@ -1264,32 +1230,32 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 {/* Seção extra: Reajuste e Vigência — Locação */}
                                 {isLocacao && (c.reajuste_index || c.billing_cycle || c.due_day != null) && (
                                     <div className="space-y-3">
-                                        <p className="text-xs font-black text-blue-500 uppercase tracking-widest flex items-center gap-2">
+                                        <p className="text-xs font-bold text-blue-500 flex items-center gap-2">
                                             <TrendingUp className="w-3.5 h-3.5" /> Reajuste e Vigência
                                         </p>
                                         <div className="grid grid-cols-2 gap-3">
                                             {c.billing_cycle && (
-                                                <div className="p-4 bg-blue-50 rounded-2xl">
-                                                    <p className="text-xs font-black text-blue-400 uppercase tracking-widest mb-1">Periodicidade</p>
-                                                    <p className="text-sm font-black text-blue-800">{c.billing_cycle}{c.due_day != null ? ` · Dia ${c.due_day}` : ''}</p>
+                                                <div className="p-4 bg-blue-50 rounded-[10px]">
+                                                    <p className="text-xs font-bold text-blue-400 mb-1">Periodicidade</p>
+                                                    <p className="text-sm font-bold text-blue-800">{c.billing_cycle}{c.due_day != null ? ` · Dia ${c.due_day}` : ''}</p>
                                                 </div>
                                             )}
                                             {c.reajuste_index && (
-                                                <div className="p-4 bg-blue-50 rounded-2xl">
-                                                    <p className="text-xs font-black text-blue-400 uppercase tracking-widest mb-1">Índice de Reajuste</p>
-                                                    <p className="text-sm font-black text-blue-800">{c.reajuste_index}</p>
+                                                <div className="p-4 bg-blue-50 rounded-[10px]">
+                                                    <p className="text-xs font-bold text-blue-400 mb-1">Índice de Reajuste</p>
+                                                    <p className="text-sm font-bold text-blue-800">{c.reajuste_index}</p>
                                                 </div>
                                             )}
                                             {c.reajuste_data_base && (
-                                                <div className="p-4 bg-blue-50 rounded-2xl">
-                                                    <p className="text-xs font-black text-blue-400 uppercase tracking-widest mb-1">Data-Base</p>
-                                                    <p className="text-sm font-black text-blue-800">{new Date(c.reajuste_data_base + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                                                <div className="p-4 bg-blue-50 rounded-[10px]">
+                                                    <p className="text-xs font-bold text-blue-400 mb-1">Data-Base</p>
+                                                    <p className="text-sm font-bold text-blue-800">{new Date(c.reajuste_data_base + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
                                                 </div>
                                             )}
                                             {c.reajuste_proximo && (
-                                                <div className={`p-4 rounded-2xl ${diasParaReajuste !== null && diasParaReajuste <= 30 ? 'bg-amber-50' : 'bg-blue-50'}`}>
-                                                    <p className={`text-xs font-black uppercase tracking-widest mb-1 ${diasParaReajuste !== null && diasParaReajuste <= 30 ? 'text-amber-400' : 'text-blue-400'}`}>Próximo Reajuste</p>
-                                                    <p className={`text-sm font-black ${diasParaReajuste !== null && diasParaReajuste <= 30 ? 'text-amber-700' : 'text-blue-800'}`}>
+                                                <div className={`p-4 rounded-[10px] ${diasParaReajuste !== null && diasParaReajuste <= 30 ? 'bg-amber-50' : 'bg-blue-50'}`}>
+                                                    <p className={`text-xs font-bold mb-1 ${diasParaReajuste !== null && diasParaReajuste <= 30 ? 'text-amber-400' : 'text-blue-400'}`}>Próximo Reajuste</p>
+                                                    <p className={`text-sm font-bold ${diasParaReajuste !== null && diasParaReajuste <= 30 ? 'text-amber-700' : 'text-blue-800'}`}>
                                                         {new Date(c.reajuste_proximo + 'T12:00:00').toLocaleDateString('pt-BR')}
                                                         {diasParaReajuste !== null && <span className="text-xs ml-1">({diasParaReajuste}d)</span>}
                                                     </p>
@@ -1302,32 +1268,32 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 {/* Seção extra: Condições de Serviço — Serviços */}
                                 {isServicos && (c.sla_days != null || c.warranty_months != null || c.services_included || c.services_excluded) && (
                                     <div className="space-y-3">
-                                        <p className="text-xs font-black text-indigo-500 uppercase tracking-widest flex items-center gap-2">
+                                        <p className="text-xs font-bold text-indigo-500 flex items-center gap-2">
                                             <ClipboardList className="w-3.5 h-3.5" /> Condições de Serviço
                                         </p>
                                         <div className="grid grid-cols-2 gap-3">
                                             {c.sla_days != null && (
-                                                <div className="p-4 bg-indigo-50 rounded-2xl">
-                                                    <p className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-1">SLA de Atendimento</p>
-                                                    <p className="text-sm font-black text-indigo-800">{c.sla_days} dia{c.sla_days !== 1 ? 's' : ''}</p>
+                                                <div className="p-4 bg-indigo-50 rounded-[10px]">
+                                                    <p className="text-xs font-bold text-indigo-400 mb-1">SLA de Atendimento</p>
+                                                    <p className="text-sm font-bold text-indigo-800">{c.sla_days} dia{c.sla_days !== 1 ? 's' : ''}</p>
                                                 </div>
                                             )}
                                             {c.warranty_months != null && (
-                                                <div className="p-4 bg-emerald-50 rounded-2xl">
-                                                    <p className="text-xs font-black text-emerald-400 uppercase tracking-widest mb-1">Garantia</p>
-                                                    <p className="text-sm font-black text-emerald-800">{c.warranty_months} mês{c.warranty_months !== 1 ? 'es' : ''}</p>
+                                                <div className="p-4 bg-emerald-50 rounded-[10px]">
+                                                    <p className="text-xs font-bold text-emerald-400 mb-1">Garantia</p>
+                                                    <p className="text-sm font-bold text-emerald-800">{c.warranty_months} mês{c.warranty_months !== 1 ? 'es' : ''}</p>
                                                 </div>
                                             )}
                                         </div>
                                         {c.services_included && (
-                                            <div className="p-4 bg-emerald-50 rounded-2xl">
-                                                <p className="text-xs font-black text-emerald-500 uppercase tracking-widest mb-2">Serviços Incluídos</p>
+                                            <div className="p-4 bg-emerald-50 rounded-[10px]">
+                                                <p className="text-xs font-bold text-emerald-500 mb-2">Serviços Incluídos</p>
                                                 <p className="text-sm text-emerald-800 font-medium whitespace-pre-line">{c.services_included}</p>
                                             </div>
                                         )}
                                         {c.services_excluded && (
-                                            <div className="p-4 bg-red-50 rounded-2xl">
-                                                <p className="text-xs font-black text-red-400 uppercase tracking-widest mb-2">Serviços Excluídos</p>
+                                            <div className="p-4 bg-red-50 rounded-[10px]">
+                                                <p className="text-xs font-bold text-red-400 mb-2">Serviços Excluídos</p>
                                                 <p className="text-sm text-red-700 font-medium whitespace-pre-line">{c.services_excluded}</p>
                                             </div>
                                         )}
@@ -1336,7 +1302,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                                 {isMinuta && c.minuta_versions && c.minuta_versions.some(v => v.emitted !== false) && (
                                     <div className="space-y-3">
-                                        <p className="text-xs font-black text-purple-500 uppercase tracking-widest">Versões da Minuta</p>
+                                        <p className="text-xs font-bold text-purple-500">Versões da Minuta</p>
                                         <div className="space-y-2">
                                             {(() => {
                                                 const emitted = c.minuta_versions!.filter(v => v.emitted !== false);
@@ -1347,13 +1313,13 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     href={ver.url}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="flex items-center gap-4 p-4 bg-purple-50 border border-purple-100 rounded-2xl hover:bg-purple-100 transition-all group"
+                                                    className="flex items-center gap-4 p-4 bg-purple-50 border border-purple-100 rounded-[10px] hover:bg-purple-100 transition-all group"
                                                 >
-                                                    <div className="w-9 h-9 bg-purple-600 rounded-xl flex items-center justify-center shrink-0 text-white font-black text-xs">
+                                                    <div className="w-9 h-9 bg-purple-600 rounded-[10px] flex items-center justify-center shrink-0 text-white font-bold text-xs">
                                                         v{ver.v}
                                                     </div>
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="text-sm font-black text-purple-800">
+                                                        <p className="text-sm font-bold text-purple-800">
                                                             {ver.name?.trim() || `Versão ${ver.v}`}
                                                             {ver.v === latestV && (
                                                                 <span className="ml-2 text-xs font-normal text-purple-700">· Atual</span>
@@ -1373,27 +1339,27 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 )}
                                 {!isMinuta && (docUrl ? (
                                     <div className="space-y-3">
-                                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Documento do Contrato</p>
+                                        <p className="text-xs text-gray-400">Documento do Contrato</p>
                                         <a
                                             href={docUrl}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="flex items-center gap-4 p-5 bg-indigo-50 border border-indigo-100 rounded-2xl hover:bg-indigo-100 transition-all group"
+                                            className="flex items-center gap-4 p-5 bg-indigo-50 border border-indigo-100 rounded-[10px] hover:bg-indigo-100 transition-all group"
                                         >
-                                            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+                                            <div className="w-10 h-10 bg-indigo-600 rounded-[10px] flex items-center justify-center shrink-0">
                                                 <Download className="w-5 h-5 text-white" />
                                             </div>
                                             <div>
-                                                <p className="text-sm font-black text-indigo-700">Visualizar / Baixar Contrato</p>
+                                                <p className="text-sm font-bold text-indigo-700">Visualizar / Baixar Contrato</p>
                                                 <p className="text-xs text-indigo-400 mt-0.5">Clique para abrir o documento</p>
                                             </div>
                                             <ChevronRight className="w-4 h-4 text-indigo-400 ml-auto group-hover:translate-x-1 transition-transform" />
                                         </a>
                                     </div>
                                 ) : (
-                                    <div className="flex items-center gap-3 p-5 bg-gray-50 border border-dashed border-gray-200 rounded-2xl">
+                                    <div className="flex items-center gap-3 p-5 bg-gray-50 border border-dashed border-gray-200 rounded-[10px]">
                                         <FileText className="w-5 h-5 text-gray-300" />
-                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Documento ainda não disponível</p>
+                                        <p className="text-xs text-gray-400">Documento ainda não disponível</p>
                                     </div>
                                 ))}
                             </div>
@@ -1797,7 +1763,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             ) : viewMode === 'grid' ? (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
                                 {financialInfo.installments.map((inst, idx) => (
-                                    <div key={inst.id} className="group bg-white p-4 rounded-[10px] border border-gray-100 shadow-sm hover:shadow-lg hover:border-blue-100 transition-all relative">
+                                    <div key={inst.id} className="group bg-white p-4 rounded-[10px] border border-gray-100 shadow-sm hover:shadow-sm hover:border-blue-100 transition-all relative">
                                         <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-3">
                                             <div className="flex flex-col gap-1">
                                                 <h4 className="text-sm font-semibold text-gray-900">{String(inst.description ?? '')}</h4>
@@ -2020,7 +1986,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         };
 
         return (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden -mx-4">
@@ -2056,7 +2022,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         </div>
                                         <div className="min-w-0 flex-1">
                                             <p className="text-sm font-black text-gray-900 truncate">{charge.description}</p>
-                                            <p className="text-xs font-bold text-gray-400 mt-0.5">{new Date(charge.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                                            <p className="text-xs text-gray-400 mt-0.5">{new Date(charge.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
                                         </div>
                                         <div className="flex flex-col items-end shrink-0 gap-1">
                                             <span className="text-sm font-black text-gray-900 tabular-nums">R$ {charge.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
@@ -2072,19 +2038,19 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 </div>
 
                 {/* ══ DESKTOP ══ */}
-                <div className="hidden md:block space-y-8">
+                <div className="hidden md:block space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {[
                         { label: 'Próximo Vencimento', value: nextDue ? `R$ ${nextDue.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—', sub: nextDue ? new Date(nextDue.dueDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'Em dia', color: 'text-amber-600', icon: <Bell className="w-5 h-5 text-amber-500" /> },
                         { label: 'Total Pago', value: `R$ ${totalPaid.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, sub: `${charges.filter(i => i.status === 'PAID').length} cobranças`, color: 'text-emerald-600', icon: <CheckCircle2 className="w-5 h-5 text-emerald-500" /> },
                         { label: 'Pendente', value: `R$ ${totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, sub: `${charges.filter(i => i.status !== 'PAID').length} cobranças`, color: 'text-gray-900', icon: <Clock className="w-5 h-5 text-indigo-500" /> },
                     ].map((card, i) => (
-                        <div key={i} className="bg-white p-7 rounded-[2rem] border border-gray-100 shadow-sm flex items-center gap-4">
-                            <div className="p-3 bg-gray-50 rounded-xl shrink-0">{card.icon}</div>
+                        <div key={i} className="bg-white p-7 rounded-[10px] border border-gray-100 shadow-sm flex items-center gap-4">
+                            <div className="p-3 bg-gray-50 rounded-[10px] shrink-0">{card.icon}</div>
                             <div>
-                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">{card.label}</p>
-                                <p className={`text-2xl font-black ${card.color} tracking-tight`}>{card.value}</p>
-                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">{card.sub}</p>
+                                <p className="text-xs text-gray-400 mb-1">{card.label}</p>
+                                <p className={`text-2xl font-bold ${card.color} tracking-tight`}>{card.value}</p>
+                                <p className="text-xs text-gray-400 mt-0.5">{card.sub}</p>
                             </div>
                         </div>
                     ))}
@@ -2093,11 +2059,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {/* §19.3 — abas depois dos KPIs desta aba */}
                 {desktopTabsBar}
 
-                <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="flex items-center justify-between px-8 py-6 border-b border-gray-50">
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="flex items-center justify-between px-6 py-6 border-b border-gray-50">
                         <div>
-                            <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Cobranças do Imóvel</h3>
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Aluguel, condomínio, IPTU e demais encargos</p>
+                            <h3 className="text-sm font-bold text-gray-900 tracking-tight">Cobranças do Imóvel</h3>
+                            <p className="text-xs text-gray-400 mt-0.5">Aluguel, condomínio, IPTU e demais encargos</p>
                         </div>
                         {isAdmin && (
                             <button
@@ -2110,26 +2076,26 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         handleUpdateCharges([...charges, newCharge]);
                                     }
                                 }}
-                                className="p-3 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 active:scale-95"
+                                className="p-3 bg-blue-600 text-white rounded-[10px] hover:bg-blue-700 transition-all shadow-sm active:scale-95"
                             >
                                 <Plus className="w-5 h-5" />
                             </button>
                         )}
                     </div>
                     {charges.length === 0 ? (
-                        <div className="flex flex-col items-center py-16 text-center">
-                            <DollarSign className="w-12 h-12 text-gray-200 mb-4" />
-                            <p className="text-sm font-black text-gray-400 uppercase tracking-widest">Nenhuma cobrança cadastrada</p>
+                        <div className="flex flex-col items-center py-12 text-center">
+                            <DollarSign className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma cobrança cadastrada</h3>
                         </div>
                     ) : (
                         <table className="w-full text-left">
                             <thead className="bg-gray-50/50 border-b border-gray-100">
-                                <tr className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">
-                                    <th className="px-8 py-4">Descrição</th>
-                                    <th className="px-8 py-4">Vencimento</th>
-                                    <th className="px-8 py-4">Valor</th>
-                                    <th className="px-8 py-4 text-center">Status</th>
-                                    {isAdmin && <th className="px-8 py-4 text-right">Ações</th>}
+                                <tr className="text-xs font-bold text-gray-400">
+                                    <th className="px-6 py-2.5">Descrição</th>
+                                    <th className="px-6 py-2.5">Vencimento</th>
+                                    <th className="px-6 py-2.5">Valor</th>
+                                    <th className="px-6 py-2.5 text-center">Status</th>
+                                    {isAdmin && <th className="px-6 py-2.5 text-right">Ações</th>}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
@@ -2137,20 +2103,20 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     const overdue = charge.status !== 'PAID' && new Date(charge.dueDate + 'T12:00:00') < new Date();
                                     return (
                                         <tr key={charge.id} className="hover:bg-blue-50/30 transition-colors group">
-                                            <td className="px-8 py-4">
+                                            <td className="px-6 py-2.5">
                                                 <span className="text-sm font-normal text-gray-700">{charge.description}</span>
                                             </td>
-                                            <td className="px-8 py-4">
+                                            <td className="px-6 py-2.5">
                                                 <div className={`flex items-center gap-2 text-sm font-normal tabular-nums ${overdue ? 'text-red-500' : 'text-gray-600'}`}>
                                                     <Calendar className="w-3.5 h-3.5" />
                                                     {new Date(charge.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}
                                                     {overdue && <span className="text-sm font-normal text-red-500">· Vencido</span>}
                                                 </div>
                                             </td>
-                                            <td className="px-8 py-4">
+                                            <td className="px-6 py-2.5">
                                                 <span className="text-sm font-medium text-gray-800 tabular-nums">R$ {charge.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                                             </td>
-                                            <td className="px-8 py-4 text-center">
+                                            <td className="px-6 py-2.5 text-center">
                                                 <button
                                                     disabled={!isAdmin}
                                                     onClick={() => {
@@ -2164,15 +2130,15 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 </button>
                                             </td>
                                             {isAdmin && (
-                                                <td className="px-8 py-4 text-right">
+                                                <td className="px-6 py-2.5 text-right">
                                                     <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
                                                         {charge.status === 'PAID' && (
-                                                            <button onClick={() => exportService.generateReceiptPDF(charge, settings, { name: clientProfile?.name || 'OPURA' })} className="p-2 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-xl transition-all" title="Recibo PDF">
+                                                            <button onClick={() => exportService.generateReceiptPDF(charge, settings, { name: clientProfile?.name || 'OPURA' })} className="p-2 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-[6px] transition-all" title="Recibo PDF">
                                                                 <FileDown className="w-4 h-4" />
                                                             </button>
                                                         )}
-                                                        <button onClick={() => { const d = prompt('Descrição:', charge.description); const v = prompt('Valor:', charge.value.toString()); if (d !== null || v !== null) handleUpdateCharges(charges.map(c => c.id === charge.id ? { ...c, description: d ?? c.description, value: v ? parseFloat(v) : c.value } : c)); }} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Pencil className="w-4 h-4" /></button>
-                                                        <button onClick={async () => { if (await confirm({ title: 'Remover cobrança?', variant: 'danger', confirmLabel: 'Remover' })) handleUpdateCharges(charges.filter(c => c.id !== charge.id)); }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><X className="w-4 h-4" /></button>
+                                                        <button onClick={() => { const d = prompt('Descrição:', charge.description); const v = prompt('Valor:', charge.value.toString()); if (d !== null || v !== null) handleUpdateCharges(charges.map(c => c.id === charge.id ? { ...c, description: d ?? c.description, value: v ? parseFloat(v) : c.value } : c)); }} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-[6px] transition-all"><Pencil className="w-4 h-4" /></button>
+                                                        <button onClick={async () => { if (await confirm({ title: 'Remover cobrança?', variant: 'danger', confirmLabel: 'Remover' })) handleUpdateCharges(charges.filter(c => c.id !== charge.id)); }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-[6px] transition-all"><X className="w-4 h-4" /></button>
                                                     </div>
                                                 </td>
                                             )}
@@ -2208,7 +2174,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         };
 
         return (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden -mx-4">
@@ -2254,7 +2220,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     </div>
                                     <div className="min-w-0 flex-1">
                                         <p className="text-sm font-black text-gray-900 truncate">{med.description}</p>
-                                        <p className="text-xs font-bold text-gray-400 mt-0.5">{new Date(med.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                                        <p className="text-xs text-gray-400 mt-0.5">{new Date(med.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
                                     </div>
                                     <div className="flex flex-col items-end shrink-0 gap-1">
                                         <span className="text-sm font-black text-gray-900 tabular-nums">R$ {med.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
@@ -2269,19 +2235,19 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 </div>
 
                 {/* ══ DESKTOP ══ */}
-                <div className="hidden md:block space-y-8">
+                <div className="hidden md:block space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {[
                         { label: 'Total Contratado', value: totalContrato, sub: finInfo.paymentMethod || '—', color: 'text-gray-900', icon: <DollarSign className="w-5 h-5 text-indigo-500" /> },
                         { label: 'Medido / Faturado', value: totalMedido, sub: `${pctMedido.toFixed(1)}% do contrato`, color: 'text-emerald-600', icon: <CheckCircle2 className="w-5 h-5 text-emerald-500" />, progress: pctMedido },
                         { label: 'A Medir', value: totalAMedir, sub: `${medicoes.filter(m => m.status !== 'PAID').length} medições pendentes`, color: 'text-amber-600', icon: <Clock className="w-5 h-5 text-amber-500" /> },
                     ].map((card, i) => (
-                        <div key={i} className="bg-white p-7 rounded-[2rem] border border-gray-100 shadow-sm flex items-center gap-4">
-                            <div className="p-3 bg-gray-50 rounded-xl shrink-0">{card.icon}</div>
+                        <div key={i} className="bg-white p-7 rounded-[10px] border border-gray-100 shadow-sm flex items-center gap-4">
+                            <div className="p-3 bg-gray-50 rounded-[10px] shrink-0">{card.icon}</div>
                             <div className="flex-1">
-                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">{card.label}</p>
-                                <p className={`text-2xl font-black ${card.color} tracking-tight`}>R$ {card.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">{card.sub}</p>
+                                <p className="text-xs text-gray-400 mb-1">{card.label}</p>
+                                <p className={`text-2xl font-bold ${card.color} tracking-tight`}>R$ {card.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                <p className="text-xs text-gray-400 mt-0.5">{card.sub}</p>
                                 {'progress' in card && (
                                     <div className="mt-2 w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
                                         <div className="bg-emerald-500 h-full transition-all duration-1000" style={{ width: `${card.progress}%` }} />
@@ -2295,11 +2261,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {/* §19.3 — abas depois dos KPIs desta aba */}
                 {desktopTabsBar}
 
-                <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="flex items-center justify-between px-8 py-6 border-b border-gray-50">
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="flex items-center justify-between px-6 py-6 border-b border-gray-50">
                         <div>
-                            <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Medições e Faturas</h3>
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Etapas medidas, aprovadas e faturadas</p>
+                            <h3 className="text-sm font-bold text-gray-900 tracking-tight">Medições e Faturas</h3>
+                            <p className="text-xs text-gray-400 mt-0.5">Etapas medidas, aprovadas e faturadas</p>
                         </div>
                         {isAdmin && (
                             <button
@@ -2312,47 +2278,47 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         handleUpdateMedicoes([...medicoes, newMed]);
                                     }
                                 }}
-                                className="p-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+                                className="p-3 bg-indigo-600 text-white rounded-[10px] hover:bg-indigo-700 transition-all shadow-sm active:scale-95"
                             >
                                 <Plus className="w-5 h-5" />
                             </button>
                         )}
                     </div>
                     {medicoes.length === 0 ? (
-                        <div className="flex flex-col items-center py-16 text-center">
-                            <ClipboardList className="w-12 h-12 text-gray-200 mb-4" />
-                            <p className="text-sm font-black text-gray-400 uppercase tracking-widest">Nenhuma medição cadastrada</p>
+                        <div className="flex flex-col items-center py-12 text-center">
+                            <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma medição cadastrada</h3>
                         </div>
                     ) : (
                         <table className="w-full text-left">
                             <thead className="bg-gray-50/50 border-b border-gray-100">
-                                <tr className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">
-                                    <th className="px-8 py-4">Etapa / Medição</th>
-                                    <th className="px-8 py-4">Data</th>
-                                    <th className="px-8 py-4">Valor</th>
-                                    <th className="px-8 py-4 text-center">Status</th>
-                                    {isAdmin && <th className="px-8 py-4 text-right">Ações</th>}
+                                <tr className="text-xs font-bold text-gray-400">
+                                    <th className="px-6 py-2.5">Etapa / Medição</th>
+                                    <th className="px-6 py-2.5">Data</th>
+                                    <th className="px-6 py-2.5">Valor</th>
+                                    <th className="px-6 py-2.5 text-center">Status</th>
+                                    {isAdmin && <th className="px-6 py-2.5 text-right">Ações</th>}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {medicoes.map((med, idx) => (
                                     <tr key={med.id} className="hover:bg-indigo-50/30 transition-colors group">
-                                        <td className="px-8 py-4">
+                                        <td className="px-6 py-2.5">
                                             <div className="flex items-center gap-3">
                                                 <span className="w-6 h-6 flex items-center justify-center bg-indigo-50 text-indigo-600 rounded-lg text-xs font-semibold shrink-0">{idx + 1}</span>
                                                 <span className="text-sm font-normal text-gray-700">{med.description}</span>
                                             </div>
                                         </td>
-                                        <td className="px-8 py-4">
+                                        <td className="px-6 py-2.5">
                                             <div className="flex items-center gap-2 text-sm font-normal text-gray-600 tabular-nums">
                                                 <Calendar className="w-3.5 h-3.5 text-indigo-400" />
                                                 {new Date(med.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}
                                             </div>
                                         </td>
-                                        <td className="px-8 py-4">
+                                        <td className="px-6 py-2.5">
                                             <span className="text-sm font-medium text-gray-800 tabular-nums">R$ {med.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                                         </td>
-                                        <td className="px-8 py-4 text-center">
+                                        <td className="px-6 py-2.5 text-center">
                                             <button
                                                 disabled={!isAdmin}
                                                 onClick={() => {
@@ -2366,13 +2332,13 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             </button>
                                         </td>
                                         {isAdmin && (
-                                            <td className="px-8 py-4 text-right">
+                                            <td className="px-6 py-2.5 text-right">
                                                 <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
                                                     {med.status === 'PAID' && (
-                                                        <button onClick={() => exportService.generateReceiptPDF(med, settings, { name: clientProfile?.name || 'OPURA' })} className="p-2 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-xl transition-all" title="Recibo PDF"><FileDown className="w-4 h-4" /></button>
+                                                        <button onClick={() => exportService.generateReceiptPDF(med, settings, { name: clientProfile?.name || 'OPURA' })} className="p-2 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-[6px] transition-all" title="Recibo PDF"><FileDown className="w-4 h-4" /></button>
                                                     )}
-                                                    <button onClick={() => { const d = prompt('Descrição:', med.description); const v = prompt('Valor:', med.value.toString()); if (d !== null || v !== null) handleUpdateMedicoes(medicoes.map(m => m.id === med.id ? { ...m, description: d ?? m.description, value: v ? parseFloat(v) : m.value } : m)); }} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"><Pencil className="w-4 h-4" /></button>
-                                                    <button onClick={async () => { if (await confirm({ title: 'Remover medição?', variant: 'danger', confirmLabel: 'Remover' })) handleUpdateMedicoes(medicoes.filter(m => m.id !== med.id)); }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><X className="w-4 h-4" /></button>
+                                                    <button onClick={() => { const d = prompt('Descrição:', med.description); const v = prompt('Valor:', med.value.toString()); if (d !== null || v !== null) handleUpdateMedicoes(medicoes.map(m => m.id === med.id ? { ...m, description: d ?? m.description, value: v ? parseFloat(v) : m.value } : m)); }} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-[6px] transition-all"><Pencil className="w-4 h-4" /></button>
+                                                    <button onClick={async () => { if (await confirm({ title: 'Remover medição?', variant: 'danger', confirmLabel: 'Remover' })) handleUpdateMedicoes(medicoes.filter(m => m.id !== med.id)); }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-[6px] transition-all"><X className="w-4 h-4" /></button>
                                                 </div>
                                             </td>
                                         )}
@@ -2395,7 +2361,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 <button
                     key={scale}
                     onClick={() => setPlanningScale(scale)}
-                    className={`px-2.5 py-1.5 rounded-md text-xs font-black uppercase tracking-wide transition-all ${planningScale === scale ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    className={`px-2.5 py-1.5 rounded-md text-xs font-bold transition-all ${planningScale === scale ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                 >
                     {{ day: 'Dia', week: 'Sem', month: 'Mês' }[scale]}
                 </button>
@@ -2416,10 +2382,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             return (
                 <>
                 {desktopTabsBar}
-                <div className="bg-white p-10 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center justify-center py-20 animate-in fade-in duration-500">
-                    <HardHat className="w-16 h-16 text-gray-200 mb-6" />
-                    <p className="text-lg font-black text-gray-400 uppercase tracking-widest text-center">Cronograma ainda não disponível</p>
-                    <p className="text-sm font-bold text-gray-300 uppercase tracking-wider mt-2 text-center">O acompanhamento da obra aparecerá aqui assim que o planejamento for publicado.</p>
+                <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100 flex flex-col items-center justify-center py-12 animate-in fade-in duration-500">
+                    <HardHat className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-gray-900 mb-2 text-center">Cronograma ainda não disponível</h3>
+                    <p className="text-sm text-gray-500 text-center">O acompanhamento da obra aparecerá aqui assim que o planejamento for publicado.</p>
                 </div>
                 </>
             );
@@ -2428,8 +2394,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             return (
                 <>
                 {desktopTabsBar}
-                <div className="bg-white p-10 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-center py-20">
-                    <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100 flex items-center justify-center py-12">
+                    <div className="w-8 h-8 border border-indigo-600 border-t-transparent rounded-full animate-spin" />
                 </div>
                 </>
             );
@@ -2441,10 +2407,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         return (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {/* Cabeçalho + progresso geral */}
-                <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-indigo-600 rounded-3xl p-8 text-white">
+                <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-indigo-600 rounded-[10px] p-6 text-white">
                     <div className="flex items-start justify-between flex-wrap gap-4">
                         <div>
-                            <h3 className="text-2xl font-black tracking-tight uppercase">Acompanhe sua Obra</h3>
+                            <h3 className="text-sm font-bold tracking-tight">Acompanhe sua Obra</h3>
                             <p className="text-blue-200 text-sm font-medium mt-1">Avanço físico e cronograma em tempo real.</p>
                         </div>
                         <div className={`flex items-center gap-2 text-sm font-normal ${onTrack ? 'text-emerald-200' : 'text-amber-100'}`}>
@@ -2453,21 +2419,21 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </div>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
-                        <div className="bg-white/10 rounded-2xl p-4">
-                            <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Avanço Geral</p>
-                            <p className="text-2xl font-black">{pv.progress}%</p>
+                        <div className="bg-white/10 rounded-[10px] p-4">
+                            <p className="text-xs font-bold text-blue-200 mb-1">Avanço Geral</p>
+                            <p className="text-2xl font-bold">{pv.progress}%</p>
                         </div>
-                        <div className="bg-white/10 rounded-2xl p-4">
-                            <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Previsto p/ hoje</p>
-                            <p className="text-2xl font-black">{pv.plannedToday}%</p>
+                        <div className="bg-white/10 rounded-[10px] p-4">
+                            <p className="text-xs font-bold text-blue-200 mb-1">Previsto p/ hoje</p>
+                            <p className="text-2xl font-bold">{pv.plannedToday}%</p>
                         </div>
-                        <div className="bg-white/10 rounded-2xl p-4">
-                            <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Início</p>
-                            <p className="text-sm font-black mt-1.5">{fmt(pv.start)}</p>
+                        <div className="bg-white/10 rounded-[10px] p-4">
+                            <p className="text-xs font-bold text-blue-200 mb-1">Início</p>
+                            <p className="text-sm font-bold mt-1.5">{fmt(pv.start)}</p>
                         </div>
-                        <div className="bg-white/10 rounded-2xl p-4">
-                            <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">{atraso ? 'Atraso' : 'Entrega prevista'}</p>
-                            <p className="text-sm font-black mt-1.5">{atraso ? `${Math.abs(pv.daysRemaining!)} dias` : fmt(pv.end)}</p>
+                        <div className="bg-white/10 rounded-[10px] p-4">
+                            <p className="text-xs font-bold text-blue-200 mb-1">{atraso ? 'Atraso' : 'Entrega prevista'}</p>
+                            <p className="text-sm font-bold mt-1.5">{atraso ? `${Math.abs(pv.daysRemaining!)} dias` : fmt(pv.end)}</p>
                         </div>
                     </div>
                     {/* Barra de progresso geral */}
@@ -2483,11 +2449,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                 {/* Curva S */}
                 {pv.sCurve.length > 0 && (
-                    <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100">
+                    <div className="bg-white rounded-[10px] p-6 md:p-6 shadow-sm border border-gray-100">
                         <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
                             <div className="flex items-center gap-3">
                                 <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
-                                <h3 className="text-lg font-black text-gray-900 tracking-tight uppercase">Curva de Avanço</h3>
+                                <h3 className="text-sm font-bold text-gray-900 tracking-tight">Curva de Avanço</h3>
                             </div>
                             {renderPlanningScaleSelector()}
                         </div>
@@ -2502,17 +2468,17 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             </ComposedChart>
                         </ResponsiveContainer>
                         <div className="flex items-center justify-center gap-6 mt-2">
-                            <span className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest"><span className="w-3 h-3 rounded-sm bg-indigo-200 border border-indigo-400" /> Planejado</span>
-                            <span className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest"><span className="w-3 h-3 rounded-full bg-emerald-500" /> Realizado (hoje)</span>
+                            <span className="flex items-center gap-2 text-xs font-bold text-gray-400"><span className="w-3 h-3 rounded-sm bg-indigo-200 border border-indigo-400" /> Planejado</span>
+                            <span className="flex items-center gap-2 text-xs font-bold text-gray-400"><span className="w-3 h-3 rounded-full bg-emerald-500" /> Realizado (hoje)</span>
                         </div>
                     </div>
                 )}
 
                 {/* Timeline de fases */}
-                <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100">
+                <div className="bg-white rounded-[10px] p-6 md:p-6 shadow-sm border border-gray-100">
                     <div className="flex items-center gap-3 mb-6">
                         <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
-                        <h3 className="text-lg font-black text-gray-900 tracking-tight uppercase">Etapas da Obra</h3>
+                        <h3 className="text-sm font-bold text-gray-900 tracking-tight">Etapas da Obra</h3>
                     </div>
                     {pv.phases.length === 0 ? (
                         <p className="text-sm text-gray-400 font-medium text-center py-8">As etapas aparecerão aqui quando o cronograma for detalhado.</p>
@@ -2521,11 +2487,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             {pv.phases.map(ph => {
                                 const st = statusMap[ph.status];
                                 return (
-                                    <div key={ph.id} className="p-4 rounded-2xl border border-gray-100 hover:border-indigo-200 transition-all">
+                                    <div key={ph.id} className="p-4 rounded-[10px] border border-gray-100 hover:border-indigo-200 transition-all">
                                         <div className="flex items-center justify-between gap-3 mb-2">
                                             <div className="min-w-0">
-                                                <span className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.2em]">{ph.groupName}</span>
-                                                <p className="text-sm font-black text-gray-900 truncate">{ph.name}</p>
+                                                <span className="text-xs font-bold text-indigo-400">{ph.groupName}</span>
+                                                <p className="text-sm font-bold text-gray-900 truncate">{ph.name}</p>
                                             </div>
                                             <span className={`shrink-0 text-sm font-normal ${st.textCls}`}>{st.label}</span>
                                         </div>
@@ -2533,7 +2499,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                                                 <div className={`h-full rounded-full ${st.dot}`} style={{ width: `${ph.progress}%` }} />
                                             </div>
-                                            <span className="text-xs font-black text-gray-400 tabular-nums w-9 text-right">{ph.progress}%</span>
+                                            <span className="text-xs font-bold text-gray-400 tabular-nums w-9 text-right">{ph.progress}%</span>
                                         </div>
                                         <div className="flex items-center gap-2 text-xs font-bold text-gray-400 mt-2">
                                             <Calendar className="w-3 h-3" />
@@ -2556,10 +2522,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             return (
                 <>
                 {desktopTabsBar}
-                <div className="bg-white p-10 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center justify-center py-20 animate-in fade-in duration-500">
-                    <TrendingUp className="w-16 h-16 text-gray-200 mb-6" />
-                    <p className="text-lg font-black text-gray-400 uppercase tracking-widest text-center">Cronograma físico-financeiro ainda não disponível</p>
-                    <p className="text-sm font-bold text-gray-300 uppercase tracking-wider mt-2 text-center">Ele aparecerá aqui assim que o planejamento com valores for publicado.</p>
+                <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100 flex flex-col items-center justify-center py-12 animate-in fade-in duration-500">
+                    <TrendingUp className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-gray-900 mb-2 text-center">Cronograma físico-financeiro ainda não disponível</h3>
+                    <p className="text-sm text-gray-500 text-center">Ele aparecerá aqui assim que o planejamento com valores for publicado.</p>
                 </div>
                 </>
             );
@@ -2568,8 +2534,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             return (
                 <>
                 {desktopTabsBar}
-                <div className="bg-white p-10 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-center py-20">
-                    <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100 flex items-center justify-center py-12">
+                    <div className="w-8 h-8 border border-indigo-600 border-t-transparent rounded-full animate-spin" />
                 </div>
                 </>
             );
@@ -2581,27 +2547,27 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
         return (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-indigo-600 rounded-3xl p-8 text-white">
+                <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-indigo-600 rounded-[10px] p-6 text-white">
                     <div>
-                        <h3 className="text-2xl font-black tracking-tight uppercase">Cronograma Físico-Financeiro</h3>
+                        <h3 className="text-sm font-bold tracking-tight">Cronograma Físico-Financeiro</h3>
                         <p className="text-blue-200 text-sm font-medium mt-1">Desembolso previsto × realizado ao longo do serviço.</p>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
-                        <div className="bg-white/10 rounded-2xl p-4">
-                            <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Total Previsto</p>
-                            <p className="text-xl font-black">{fmtBRL(fv.totalPlanned)}</p>
+                        <div className="bg-white/10 rounded-[10px] p-4">
+                            <p className="text-xs font-bold text-blue-200 mb-1">Total Previsto</p>
+                            <p className="text-xl font-bold">{fmtBRL(fv.totalPlanned)}</p>
                         </div>
-                        <div className="bg-white/10 rounded-2xl p-4">
-                            <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Previsto p/ hoje</p>
-                            <p className="text-xl font-black">{fmtBRL(fv.plannedTodayValue)}</p>
+                        <div className="bg-white/10 rounded-[10px] p-4">
+                            <p className="text-xs font-bold text-blue-200 mb-1">Previsto p/ hoje</p>
+                            <p className="text-xl font-bold">{fmtBRL(fv.plannedTodayValue)}</p>
                         </div>
-                        <div className="bg-white/10 rounded-2xl p-4">
-                            <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Desembolsado</p>
-                            <p className="text-xl font-black">{fmtBRL(fv.totalRealized)}</p>
+                        <div className="bg-white/10 rounded-[10px] p-4">
+                            <p className="text-xs font-bold text-blue-200 mb-1">Desembolsado</p>
+                            <p className="text-xl font-bold">{fmtBRL(fv.totalRealized)}</p>
                         </div>
-                        <div className="bg-white/10 rounded-2xl p-4">
-                            <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">% Financeiro</p>
-                            <p className="text-xl font-black">{pctRealized}%</p>
+                        <div className="bg-white/10 rounded-[10px] p-4">
+                            <p className="text-xs font-bold text-blue-200 mb-1">% Financeiro</p>
+                            <p className="text-xl font-bold">{pctRealized}%</p>
                         </div>
                     </div>
                     <div className="mt-6">
@@ -2615,11 +2581,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {desktopTabsBar}
 
                 {fv.curve.length > 0 && (
-                    <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100">
+                    <div className="bg-white rounded-[10px] p-6 md:p-6 shadow-sm border border-gray-100">
                         <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
                             <div className="flex items-center gap-3">
                                 <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
-                                <h3 className="text-lg font-black text-gray-900 tracking-tight uppercase">Curva de Desembolso</h3>
+                                <h3 className="text-sm font-bold text-gray-900 tracking-tight">Curva de Desembolso</h3>
                             </div>
                             {renderPlanningScaleSelector()}
                         </div>
@@ -2634,18 +2600,18 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             </ComposedChart>
                         </ResponsiveContainer>
                         <div className="flex items-center justify-center gap-6 mt-2">
-                            <span className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest"><span className="w-3 h-3 rounded-sm bg-indigo-200 border border-indigo-400" /> Planejado</span>
-                            <span className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest"><span className="w-3 h-3 rounded-full bg-emerald-500" /> Realizado (hoje)</span>
+                            <span className="flex items-center gap-2 text-xs font-bold text-gray-400"><span className="w-3 h-3 rounded-sm bg-indigo-200 border border-indigo-400" /> Planejado</span>
+                            <span className="flex items-center gap-2 text-xs font-bold text-gray-400"><span className="w-3 h-3 rounded-full bg-emerald-500" /> Realizado (hoje)</span>
                         </div>
                     </div>
                 )}
 
                 {fv.curve.length > 0 && (
-                    <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100">
+                    <div className="bg-white rounded-[10px] p-6 md:p-6 shadow-sm border border-gray-100">
                         <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
                             <div className="flex items-center gap-3">
                                 <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
-                                <h3 className="text-lg font-black text-gray-900 tracking-tight uppercase">Desembolso por Período</h3>
+                                <h3 className="text-sm font-bold text-gray-900 tracking-tight">Desembolso por Período</h3>
                             </div>
                             {renderPlanningScaleSelector()}
                         </div>
@@ -2655,7 +2621,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
                                 <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} tickFormatter={(v) => fmtBRL(v)} width={80} />
                                 <RechartsTooltip formatter={(v) => fmtBRL(Number(v) || 0)} />
-                                <Legend wrapperStyle={{ fontSize: 11, fontWeight: 900, textTransform: 'uppercase' }} />
+                                <Legend wrapperStyle={{ fontSize: 11, fontWeight: 900, textTransform: '' }} />
                                 <Bar dataKey="plannedPeriod" name="Planejado" fill="#818cf8" radius={[4, 4, 0, 0]}>
                                     <LabelList dataKey="plannedPeriod" position="top" formatter={(v: any) => Number(v) > 0 ? fmtBRL(Number(v)) : ''} style={{ fontSize: 9, fontWeight: 700, fill: '#6366f1' }} />
                                 </Bar>
@@ -2667,7 +2633,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     </div>
                 )}
 
-                <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100">
+                <div className="bg-white rounded-[10px] p-6 md:p-6 shadow-sm border border-gray-100">
                     <div className="flex items-center justify-between text-sm font-bold text-gray-500">
                         <span>Previsto acumulado p/ hoje</span>
                         <span className="text-gray-900">{pctToday}%</span>
@@ -2684,11 +2650,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             <>
             {/* §19.3 — esta aba não tem faixa de KPI: as abas abrem o conteúdo */}
             {desktopTabsBar}
-            <div className="bg-white p-10 rounded-3xl shadow-sm border border-gray-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="flex justify-between items-center mb-12">
+            <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex justify-between items-center mb-6">
                     <div className="flex flex-col gap-2">
-                        <h3 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Sua Casa, Sua História</h3>
-                        <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Cada marco é um passo mais próximo da sua nova vida.</p>
+                        <h3 className="text-sm font-bold text-gray-900 tracking-tight">Sua Casa, Sua História</h3>
+                        <p className="text-sm text-gray-400">Cada marco é um passo mais próximo da sua nova vida.</p>
                     </div>
                     <div className="flex items-center gap-2 text-sm font-normal text-emerald-600">
                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -2697,7 +2663,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     </div>
                 </div>
 
-                <div className="relative pl-12 space-y-10 before:absolute before:left-[11px] before:top-4 before:bottom-4 before:w-0.5 before:bg-gray-100 before:rounded-full">
+                <div className="relative pl-12 space-y-6 before:absolute before:left-[11px] before:top-4 before:bottom-4 before:w-0.5 before:bg-gray-100 before:rounded-full">
                     {schedule.length > 0 ? (
                         schedule.map((event, idx) => {
                             const isPast = event.endDate < new Date();
@@ -2707,25 +2673,25 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 <div key={event.id} className="relative group">
                                     {/* Timeline Node */}
                                     <div className={`
-                                        absolute -left-[3.05rem] top-6 w-6 h-6 rounded-full border-4 border-white shadow-md z-10 
+                                        absolute -left-[3.05rem] top-6 w-6 h-6 rounded-full border border-white shadow-sm z-10 
                                         transition-all duration-500 group-hover:scale-125
                                         ${isCurrent ? 'bg-indigo-600 ring-4 ring-indigo-50' : isPast ? 'bg-emerald-500' : 'bg-blue-400'}
                                     `} />
 
                                     <div className={`
-                                        p-8 rounded-[2rem] border transition-all duration-500 w-full
+                                        p-6 rounded-[10px] border transition-all duration-500 w-full
                                         ${isCurrent
-                                            ? 'bg-indigo-50/40 border-indigo-100 shadow-xl shadow-indigo-100/10'
-                                            : 'bg-white border-gray-100 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-50/50'}
+                                            ? 'bg-indigo-50/40 border-indigo-100 shadow-sm'
+                                            : 'bg-white border-gray-100 hover:border-blue-200 hover:shadow-sm hover:'}
                                     `}>
                                         <div className="flex flex-col gap-1 mb-4">
-                                            <span className="text-xs font-black text-indigo-500 uppercase tracking-[0.2em] mb-1">{event.groupName}</span>
-                                            <h4 className="text-2xl font-black text-gray-900 tracking-tight leading-tight uppercase group-hover:text-indigo-600 transition-colors">
+                                            <span className="text-xs font-bold text-indigo-500 mb-1">{event.groupName}</span>
+                                            <h4 className="text-sm font-bold text-gray-900 tracking-tight leading-tight group-hover:text-indigo-600 transition-colors">
                                                 {event.name}
                                             </h4>
                                         </div>
 
-                                        <div className="flex items-center gap-2 text-gray-500 mb-6 bg-gray-50 w-fit px-4 py-2 rounded-2xl border border-gray-100">
+                                        <div className="flex items-center gap-2 text-gray-500 mb-6 bg-gray-50 w-fit px-4 py-2 rounded-[10px] border border-gray-100">
                                             <Calendar className="w-4 h-4 text-gray-400" />
                                             <span className="text-sm font-bold tracking-tight">
                                                 {event.startDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
@@ -2735,7 +2701,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         </div>
 
                                         {/* Lifestyle Insight for the phase */}
-                                        <div className="mb-6 p-4 bg-indigo-50/30 rounded-2xl border border-indigo-100/30">
+                                        <div className="mb-6 p-4 bg-indigo-50/30 rounded-[10px] border border-indigo-100/30">
                                             <div className="flex items-start gap-3">
                                                 <div className="mt-1 p-1 bg-white rounded-lg text-indigo-500 shadow-sm">
                                                     <Sparkles className="w-3.5 h-3.5" />
@@ -2756,11 +2722,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     .map((item) => (
                                                         <div key={item.id} className="flex items-center gap-3 text-xs font-bold text-gray-500 group/item">
                                                             <div className="w-2 h-2 rounded-full bg-blue-400/30 group-hover/item:bg-blue-500 transition-colors" />
-                                                            <span className="tracking-tight uppercase">{item.sinapiItem.description}</span>
+                                                            <span className="tracking-tight">{item.sinapiItem.description}</span>
                                                         </div>
                                                     ))}
                                                 {budget.filter(i => i.group === event.groupName && i.phase.includes(event.name)).length > 5 && (
-                                                    <div className="text-xs font-black text-gray-300 uppercase tracking-widest pl-5">
+                                                    <div className="text-xs font-bold text-gray-300 pl-5">
                                                         + {budget.filter(i => i.group === event.groupName && i.phase.includes(event.name)).length - 5} itens adicionais
                                                     </div>
                                                 )}
@@ -2771,10 +2737,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             );
                         })
                     ) : (
-                        <div className="flex flex-col items-center justify-center py-20 px-6 bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-200">
-                            <Calendar className="w-16 h-16 text-gray-200 mb-6" />
-                            <p className="text-lg font-black text-gray-400 uppercase tracking-widest text-center">Nenhum planejamento carregado</p>
-                            <p className="text-sm font-bold text-gray-300 uppercase tracking-wider mt-2">Defina o cronograma na área de gestão</p>
+                        <div className="flex flex-col items-center justify-center py-12 px-6 bg-gray-50 rounded-[10px] border border-dashed border-gray-200">
+                            <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-bold text-gray-900 mb-2 text-center">Nenhum planejamento carregado</h3>
+                            <p className="text-sm text-gray-500">Defina o cronograma na área de gestão</p>
                         </div>
                     )}
                 </div>
@@ -2839,46 +2805,38 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                 {/* ══ DESKTOP ══ */}
                 <div className="hidden md:block">
-                <div className="flex justify-between items-center mb-6">
-                    <div className="flex items-center gap-6">
-                        <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
-                            Histórico do Diário de Obra
-                        </h3>
-                        <div className="flex bg-gray-100 p-1 rounded-lg">
-                            <button
-                                onClick={() => setViewMode('grid')}
-                                className={`p-1.5 rounded-md transition-all ${viewMode === 'grid'
-                                    ? 'bg-white text-indigo-600 shadow-sm'
-                                    : 'text-gray-400 hover:text-gray-600'
-                                    }`}
-                                title="Visualização em Grade"
-                            >
-                                <LayoutDashboard className="w-4 h-4" />
-                            </button>
-                            <button
-                                onClick={() => setViewMode('list')}
-                                className={`p-1.5 rounded-md transition-all ${viewMode === 'list'
-                                    ? 'bg-white text-indigo-600 shadow-sm'
-                                    : 'text-gray-400 hover:text-gray-600'
-                                    }`}
-                                title="Visualização em Lista"
-                            >
-                                <Table2 className="w-4 h-4" />
-                            </button>
-                        </div>
+                {/* Toolbar de botões §5.3 — toggle grade/lista (§5.1) à esquerda, ação primária §17 à direita.
+                    O título "Histórico do Diário de Obra" saiu: o h1 da aba já diz isso. */}
+                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                    <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                        <button
+                            onClick={() => setViewMode('grid')}
+                            className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                            title="Visualização em Grade"
+                        >
+                            <LayoutDashboard className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={() => setViewMode('list')}
+                            className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                            title="Visualização em Lista"
+                        >
+                            <Table2 className="w-4 h-4" />
+                        </button>
                     </div>
                     {isAdmin && (
-                        <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-md">
+                        <button className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0">
+                            <Plus className="w-[15px] h-[15px]" />
                             Nova Entrada
                         </button>
                     )}
                 </div>
 
                 {entries.length === 0 ? (
-                    <div className="bg-white p-20 rounded-3xl border-2 border-dashed border-gray-100 flex flex-col items-center text-center">
-                        <BookOpen className="w-10 h-10 text-gray-200 mb-4" />
-                        <h4 className="text-gray-400 font-bold">Nenhum registro no diário</h4>
-                        <p className="text-gray-300 text-xs mt-1">O gestor da obra ainda não realizou postagens.</p>
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm text-center py-12">
+                        <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum registro no diário</h3>
+                        <p className="text-sm text-gray-500">O gestor da obra ainda não realizou postagens.</p>
                     </div>
                 ) : viewMode === 'grid' ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -2886,14 +2844,14 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             <div
                                 key={item.id}
                                 onClick={() => setSelectedEntry(item)}
-                                className="group relative bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-indigo-200 transition-all hover:shadow-lg hover:shadow-indigo-100/20 cursor-pointer overflow-hidden"
+                                className="group relative bg-white p-6 rounded-[10px] shadow-sm border border-gray-100 hover:border-indigo-200 transition-all hover:shadow-sm hover: cursor-pointer overflow-hidden"
                             >
                                 {/* Status Indicator Bar */}
                                 <div className={`absolute top-0 left-0 bottom-0 w-1.5 ${item.impediments ? 'bg-red-500' : 'bg-indigo-600'}`} />
 
                                 <div className="flex justify-between items-start mb-4">
                                     <div className="flex flex-col">
-                                        <span className="text-lg font-black text-gray-900 tracking-tight">
+                                        <span className="text-lg font-bold text-gray-900 tracking-tight">
                                             {new Date(item.date + 'T12:00:00').toLocaleDateString('pt-BR')}
                                         </span>
                                         <div className="flex items-center gap-1.5 mt-1">
@@ -2930,7 +2888,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             {item.documents!.slice(0, 2).map((doc, idx) => (
                                                 <div
                                                     key={idx}
-                                                    className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-[9px] font-black uppercase tracking-wider border border-emerald-100"
+                                                    className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-100"
                                                 >
                                                     <Download className="w-3 h-3" />
                                                     {doc.name.split('.').pop()}
@@ -2943,7 +2901,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     )}
                                 </div>
 
-                                <div className="flex items-center justify-between text-xs font-bold text-indigo-600 uppercase pt-4 border-t border-gray-50 mt-4">
+                                <div className="flex items-center justify-between text-xs font-bold text-indigo-600 pt-4 border-t border-gray-50 mt-4">
                                     <span>Ver detalhes completos</span>
                                     <ChevronRight className="w-3 h-3" />
                                 </div>
@@ -2951,33 +2909,33 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         ))}
                     </div>
                 ) : (
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                         <table className="w-full text-left">
                             <thead className="bg-gray-50/50 border-b border-gray-100">
-                                <tr className="text-xs font-black text-gray-400 uppercase tracking-widest">
-                                    <th className="px-8 py-5">Data</th>
-                                    <th className="px-8 py-5">Clima</th>
-                                    <th className="px-8 py-5">Descrição</th>
-                                    <th className="px-8 py-5 text-center">Mídia</th>
-                                    <th className="px-8 py-5 text-right">Ações</th>
+                                <tr className="text-xs font-bold text-gray-400">
+                                    <th className="px-6 py-5">Data</th>
+                                    <th className="px-6 py-5">Clima</th>
+                                    <th className="px-6 py-5">Descrição</th>
+                                    <th className="px-6 py-5 text-center">Mídia</th>
+                                    <th className="px-6 py-5 text-right">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {entries.map((item) => (
                                     <tr key={item.id} className="hover:bg-indigo-50/30 transition-colors group cursor-pointer" onClick={() => setSelectedEntry(item)}>
-                                        <td className="px-8 py-4 whitespace-nowrap">
+                                        <td className="px-6 py-2.5 whitespace-nowrap">
                                             <span className="text-sm font-normal text-gray-700">{new Date(item.date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
                                         </td>
-                                        <td className="px-8 py-4 whitespace-nowrap">
+                                        <td className="px-6 py-2.5 whitespace-nowrap">
                                             <div className="flex items-center gap-2">
                                                 <WeatherIcon type={item.weather} />
                                                 <span className="text-xs font-medium text-gray-500">{item.weather}</span>
                                             </div>
                                         </td>
-                                        <td className="px-8 py-4">
+                                        <td className="px-6 py-2.5">
                                             <p className="text-xs text-gray-600 font-medium line-clamp-1 max-w-md">{item.description}</p>
                                         </td>
-                                        <td className="px-8 py-4 text-center">
+                                        <td className="px-6 py-2.5 text-center">
                                             <div className="flex justify-center -space-x-2">
                                                 {(item.images || []).slice(0, 3).map((img, idx) => (
                                                     <div key={idx} className="w-8 h-8 rounded-full border-2 border-white bg-gray-100 overflow-hidden">
@@ -2991,7 +2949,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="px-8 py-4 text-right">
+                                        <td className="px-6 py-2.5 text-right">
                                             <button className="p-2 transition-transform group-hover:translate-x-1 text-indigo-600">
                                                 <ChevronRight className="w-5 h-5" />
                                             </button>
@@ -3007,11 +2965,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {/* Entry Details Modal */}
                 {selectedEntry && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-                        <div className="bg-white w-full max-w-4xl h-full max-h-[90vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-gray-200">
+                        <div className="bg-white w-full max-w-4xl h-full max-h-[90vh] rounded-[10px] shadow-sm overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-gray-200">
                             {/* Modal Header */}
                             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                                 <div className="flex flex-col">
-                                    <h2 className="text-2xl font-black text-gray-900">Diário de Obra</h2>
+                                    <h2 className="text-2xl font-bold text-gray-900">Diário de Obra</h2>
                                     <div className="flex items-center gap-3 mt-1 text-sm font-bold text-gray-500">
                                         <Calendar className="w-4 h-4 text-indigo-500" />
                                         {new Date(selectedEntry.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
@@ -3022,20 +2980,20 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 </div>
                                 <button
                                     onClick={() => setSelectedEntry(null)}
-                                    className="p-2 bg-white text-gray-400 hover:text-gray-900 rounded-xl border border-gray-100 shadow-sm transition-all hover:rotate-90"
+                                    className="p-2 bg-white text-gray-400 hover:text-gray-900 rounded-[10px] border border-gray-100 shadow-sm transition-all hover:rotate-90"
                                 >
                                     <X className="w-6 h-6" />
                                 </button>
                             </div>
 
                             {/* Modal Content */}
-                            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                            <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                     {/* Left Column: Description & Info */}
-                                    <div className="space-y-8">
+                                    <div className="space-y-6">
                                         <section>
-                                            <h4 className="text-xs font-black text-indigo-600 uppercase tracking-[0.2em] mb-3">Relato do Dia</h4>
-                                            <div className="p-6 bg-indigo-50/30 border border-indigo-100 rounded-2xl">
+                                            <h4 className="text-xs font-bold text-indigo-600 mb-3">Relato do Dia</h4>
+                                            <div className="p-6 bg-indigo-50/30 border border-indigo-100 rounded-[10px]">
                                                 <p className="text-gray-700 leading-relaxed whitespace-pre-wrap font-medium">
                                                     {selectedEntry.description}
                                                 </p>
@@ -3043,38 +3001,38 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         </section>
 
                                         {selectedEntry.impediments && (
-                                            <section className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-4">
+                                            <section className="p-4 bg-red-50 border border-red-100 rounded-[10px] flex items-start gap-4">
                                                 <div className="p-2 bg-red-100 text-red-600 rounded-lg">
                                                     <AlertCircle className="w-5 h-5" />
                                                 </div>
                                                 <div>
-                                                    <h5 className="font-bold text-red-800 text-sm mb-1 uppercase tracking-tight">Impedimento Detectado</h5>
+                                                    <h5 className="font-bold text-red-800 text-sm mb-1 tracking-tight">Impedimento Detectado</h5>
                                                     <p className="text-xs text-red-600/80 font-medium">Existem fatores impedindo o curso normal das atividades programadas para este dia.</p>
                                                 </div>
                                             </section>
                                         )}
 
                                         <div className="grid grid-cols-1 gap-4">
-                                            <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 uppercase">
-                                                <div className="text-[9px] font-black text-gray-400 uppercase mb-2">Mão de Obra</div>
-                                                <div className="text-lg font-black text-gray-900">
+                                            <div className="p-4 bg-gray-50 rounded-[10px] border border-gray-100">
+                                                <div className="text-xs font-bold text-gray-400 mb-2">Mão de Obra</div>
+                                                <div className="text-lg font-bold text-gray-900">
                                                     {selectedEntry.labor?.reduce((acc, l) => acc + l.quantity, 0) || 0}
-                                                    <span className="text-xs font-bold text-gray-400 ml-1 uppercase">Trabalhadores</span>
+                                                    <span className="text-xs font-bold text-gray-400 ml-1">Trabalhadores</span>
                                                 </div>
                                             </div>
                                         </div>
 
                                         {selectedEntry.activities && selectedEntry.activities.length > 0 && (
                                             <section>
-                                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Atividades Realizadas</h4>
+                                                <h4 className="text-xs font-bold text-gray-400 mb-3">Atividades Realizadas</h4>
                                                 <div className="space-y-2">
                                                     {selectedEntry.activities.map((act, idx) => (
-                                                        <div key={idx} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl">
+                                                        <div key={idx} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-[10px]">
                                                             <div className="flex items-center gap-3">
                                                                 <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
                                                                 <span className="text-xs font-bold text-gray-700">{act.description}</span>
                                                             </div>
-                                                            <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">{act.evolution}%</span>
+                                                            <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">{act.evolution}%</span>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -3083,12 +3041,12 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     </div>
 
                                     {/* Right Column: Media & Documents */}
-                                    <div className="space-y-8">
+                                    <div className="space-y-6">
                                         <section>
-                                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Galeria de Mídia</h4>
+                                            <h4 className="text-xs font-bold text-gray-400 mb-4">Galeria de Mídia</h4>
                                             <div className="grid grid-cols-2 gap-3">
                                                 {(selectedEntry.images || []).map((img, idx) => (
-                                                    <div key={idx} className="aspect-square rounded-2xl overflow-hidden border border-gray-100 group/img relative cursor-zoom-in">
+                                                    <div key={idx} className="aspect-square rounded-[10px] overflow-hidden border border-gray-100 group/img relative cursor-zoom-in">
                                                         <img src={img} alt="Obra" className="w-full h-full object-cover transition-transform duration-500 group-hover/img:scale-110" />
                                                         <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
                                                             <Camera className="w-6 h-6 text-white" />
@@ -3096,16 +3054,16 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     </div>
                                                 ))}
                                                 {(selectedEntry.videos || []).map((vid, idx) => (
-                                                    <div key={idx} className="aspect-square rounded-2xl bg-indigo-600 flex flex-col items-center justify-center gap-2 text-white cursor-pointer hover:bg-slate-900 transition-all group/vid">
+                                                    <div key={idx} className="aspect-square rounded-[10px] bg-indigo-600 flex flex-col items-center justify-center gap-2 text-white cursor-pointer hover:bg-slate-900 transition-all group/vid">
                                                         <div className="p-3 bg-white/20 rounded-full group-hover/vid:scale-110 transition-transform">
                                                             <Video className="w-6 h-6" />
                                                         </div>
-                                                        <span className="text-[9px] font-black tracking-widest">VER VÍDEO</span>
+                                                        <span className="text-[9px] font-bold">VER VÍDEO</span>
                                                     </div>
                                                 ))}
                                             </div>
                                             {(selectedEntry.images?.length === 0 && selectedEntry.videos?.length === 0) && (
-                                                <div className="p-10 border-2 border-dashed border-gray-50 rounded-3xl flex flex-col items-center text-center">
+                                                <div className="p-6 border border-dashed border-gray-50 rounded-[10px] flex flex-col items-center text-center">
                                                     <CameraIcon className="w-8 h-8 text-gray-100 mb-2" />
                                                     <span className="text-xs font-bold text-gray-300">NENHUMA MÍDIA ANEXADA</span>
                                                 </div>
@@ -3114,22 +3072,22 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                                         {selectedEntry.documents && selectedEntry.documents.length > 0 && (
                                             <section>
-                                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Documentos Anexos</h4>
+                                                <h4 className="text-xs font-bold text-gray-400 mb-4">Documentos Anexos</h4>
                                                 <div className="space-y-3">
                                                     {selectedEntry.documents.map((doc, idx) => (
                                                         <a
                                                             key={idx}
                                                             href={doc.url}
                                                             download={doc.name}
-                                                            className="flex items-center justify-between p-4 bg-gray-50 border border-gray-100 rounded-2xl hover:bg-white hover:border-indigo-200 transition-all group/doc"
+                                                            className="flex items-center justify-between p-4 bg-gray-50 border border-gray-100 rounded-[10px] hover:bg-white hover:border-indigo-200 transition-all group/doc"
                                                         >
                                                             <div className="flex items-center gap-4">
-                                                                <div className="p-2 bg-white text-indigo-600 rounded-xl shadow-sm group-hover/doc:bg-indigo-600 group-hover/doc:text-white transition-colors">
+                                                                <div className="p-2 bg-white text-indigo-600 rounded-[10px] shadow-sm group-hover/doc:bg-indigo-600 group-hover/doc:text-white transition-colors">
                                                                     <FileText className="w-5 h-5" />
                                                                 </div>
                                                                 <div className="flex flex-col">
                                                                     <span className="text-xs font-bold text-gray-800">{doc.name}</span>
-                                                                    <span className="text-[9px] text-gray-400 font-extrabold uppercase">Documento • {doc.name.split('.').pop()?.toUpperCase()}</span>
+                                                                    <span className="text-xs text-gray-400 font-extrabold">Documento • {doc.name.split('.').pop()?.toUpperCase()}</span>
                                                                 </div>
                                                             </div>
                                                             <Download className="w-4 h-4 text-gray-300 group-hover/doc:text-indigo-600 transition-colors" />
@@ -3144,7 +3102,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                             {/* Modal Footer */}
                             <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-center">
-                                <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.3em]">Visualização do Cliente • Opura Platinum</p>
+                                <p className="text-xs font-bold text-gray-300">Visualização do Cliente • Opura Platinum</p>
                             </div>
                         </div>
                     </div>
@@ -3229,11 +3187,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {desktopTabsBar}
 
                 {/* ══ DESKTOP ══ */}
-                <div className="hidden md:block bg-white p-10 rounded-[2.5rem] shadow-sm border border-gray-100">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+                <div className="hidden md:block bg-white p-6 rounded-[10px] shadow-sm border border-gray-100">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
                         <div className="flex flex-col gap-2">
                             <div className="flex items-center gap-4">
-                                <h3 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Documentos do Projeto</h3>
+                                <h3 className="text-sm font-bold text-gray-900 tracking-tight">Documentos do Projeto</h3>
                                 <div className="flex bg-gray-100 p-1 rounded-lg">
                                     <button
                                         onClick={() => setViewMode('grid')}
@@ -3257,19 +3215,19 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     </button>
                                 </div>
                             </div>
-                            <p className="text-sm font-bold text-gray-400 uppercase tracking-wider">
+                            <p className="text-sm text-gray-400">
                                 Abaixo estão os documentos compartilhados pelo gestor. {isAdmin && 'Para adicionar ou editar, use Gestão de Documentos → Compartilhar.'}
                             </p>
                         </div>
                     </div>
 
                     {viewMode === 'grid' ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                             {displayDocs.length > 0 ? (
                                 displayDocs.map((doc) => (
                                     <div key={doc.id}
                                         onClick={() => handleDownload(doc)}
-                                        className="group flex flex-col items-center p-8 rounded-[2rem] border border-gray-50 bg-gray-50/30 hover:bg-white hover:border-indigo-100 hover:shadow-2xl hover:shadow-indigo-100/30 transition-all cursor-pointer relative"
+                                        className="group flex flex-col items-center p-6 rounded-[10px] border border-gray-50 bg-gray-50/30 hover:bg-white hover:border-indigo-100 hover:shadow-sm hover: transition-all cursor-pointer relative"
                                     >
                                         {isAdmin && doc.shareId && (
                                             <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-all z-20">
@@ -3286,17 +3244,17 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         )}
 
                                         {/* File Icon Block */}
-                                        <div className="w-24 h-24 bg-blue-50/50 rounded-3xl flex items-center justify-center relative mb-6 group-hover:scale-110 transition-transform duration-500">
-                                            <div className="p-5 bg-white rounded-2xl shadow-sm text-blue-500">
+                                        <div className="w-24 h-24 bg-blue-50/50 rounded-[10px] flex items-center justify-center relative mb-6 group-hover:scale-110 transition-transform duration-500">
+                                            <div className="p-5 bg-white rounded-[10px] shadow-sm text-blue-500">
                                                 <FileText className="w-10 h-10" />
                                             </div>
-                                            <div className="absolute -bottom-2 -right-2 bg-indigo-600 p-2.5 rounded-2xl shadow-lg border-4 border-white text-white group-hover:rotate-12 transition-transform">
+                                            <div className="absolute -bottom-2 -right-2 bg-indigo-600 p-2.5 rounded-[10px] shadow-sm border border-white text-white group-hover:rotate-12 transition-transform">
                                                 <Download className="w-3.5 h-3.5" />
                                             </div>
                                         </div>
 
                                         <div className="text-center w-full px-2">
-                                            <div className="text-sm font-black text-gray-900 tracking-tight mb-1 truncate uppercase">{doc.nome}</div>
+                                            <div className="text-sm font-bold text-gray-900 tracking-tight mb-1 truncate">{doc.nome}</div>
                                             <div className="text-xs font-normal mb-2 text-gray-400 group-hover:text-blue-500 transition-colors">
                                                 {doc.categoria || 'Documento'}
                                             </div>
@@ -3304,42 +3262,42 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     </div>
                                 ))
                             ) : (
-                                <div className="col-span-full flex flex-col items-center justify-center py-20 bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-100">
-                                    <FileText className="w-16 h-16 text-gray-200 mb-6" />
-                                    <p className="text-lg font-black text-gray-400 uppercase tracking-widest text-center">
+                                <div className="col-span-full flex flex-col items-center justify-center py-12 bg-gray-50 rounded-[10px] border border-dashed border-gray-100">
+                                    <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                    <h3 className="text-lg font-bold text-gray-900 mb-2 text-center">
                                         {gedDocsLoading ? 'Carregando...' : 'Nenhum documento compartilhado'}
-                                    </p>
+                                    </h3>
                                 </div>
                             )}
                         </div>
                     ) : (
-                        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                             <table className="w-full text-left">
                                 <thead className="bg-gray-50/50 border-b border-gray-100">
-                                    <tr className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">
-                                        <th className="px-8 py-5">Nome do Arquivo</th>
-                                        <th className="px-8 py-5">Categoria</th>
-                                        <th className="px-8 py-5 text-right">Ações</th>
+                                    <tr className="text-xs font-bold text-gray-400">
+                                        <th className="px-6 py-5">Nome do Arquivo</th>
+                                        <th className="px-6 py-5">Categoria</th>
+                                        <th className="px-6 py-5 text-right">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
                                     {displayDocs.length > 0 ? (
                                         displayDocs.map((doc) => (
                                             <tr key={doc.id} className="hover:bg-indigo-50/30 transition-colors group">
-                                                <td className="px-8 py-4">
+                                                <td className="px-6 py-2.5">
                                                     <div className="flex items-center gap-4">
-                                                        <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
+                                                        <div className="w-10 h-10 bg-indigo-50 rounded-[10px] flex items-center justify-center text-indigo-600">
                                                             <FileText className="w-5 h-5" />
                                                         </div>
                                                         <span className="text-sm font-normal text-gray-900">{doc.nome}</span>
                                                     </div>
                                                 </td>
-                                                <td className="px-8 py-4">
+                                                <td className="px-6 py-2.5">
                                                     <span className="text-sm font-normal text-indigo-600">
                                                         {doc.categoria || 'Documento'}
                                                     </span>
                                                 </td>
-                                                <td className="px-8 py-4 text-right">
+                                                <td className="px-6 py-2.5 text-right">
                                                     <div className="flex justify-end gap-1.5">
                                                         <ActionIconButton kind="download" onClick={() => handleDownload(doc)} />
                                                         {isAdmin && doc.shareId && (
@@ -3357,7 +3315,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     ) : (
                                         <tr>
                                             <td colSpan={3} className="py-10 text-center">
-                                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                                                <p className="text-xs text-gray-400">
                                                     {gedDocsLoading ? 'Carregando...' : 'Nenhum documento compartilhado'}
                                                 </p>
                                             </td>
@@ -3839,7 +3797,14 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     // Locação e Serviços têm faixa de boas-vindas própria no dashboard, que já
     // carrega avatar/nome/categoria e as ações do topo — o cabeçalho branco seria
     // um segundo card com a mesma informação, logo abaixo.
-    const heroSubstituiCabecalho = activeTab === 'dashboard' && (ehLocacao(clientCategory) || ehServicos(clientCategory));
+    // Desde 22/09/2026 a faixa colorida só existe no MOBILE desses dashboards; no
+    // desktop o título §20 vale para todas as abas (mesmo desenho do Portal do
+    // Fornecedor). Mantido como constante (false) para o comentário e as
+    // condições abaixo continuarem legíveis.
+    const heroSubstituiCabecalho = false;
+    // No mobile a faixa colorida desses dashboards ainda traz a saudação — o
+    // título §20 fica só no desktop para não repetir "Olá, Nome" duas vezes.
+    const tituloSoDesktop = activeTab === 'dashboard' && (ehLocacao(clientCategory) || ehServicos(clientCategory));
     // Título único por aba (guia §19.1/§20) — o mesmo desenho do Portal do
     // Fornecedor (`SupplierDashboard.TAB_META`): h1 + subtítulo trocam com a aba,
     // e o conteúdo da aba não repete o título.
@@ -3911,19 +3876,20 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                            title={isAdmin && !isVisible ? 'Oculta para o cliente' : undefined}
                             className={`
                                 flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all
                                 ${activeTab === tab.id
                                     ? 'bg-white text-blue-600 shadow-sm'
                                     : isAdmin && !isVisible
-                                        ? 'text-gray-300 hover:text-gray-400'
+                                        ? 'text-gray-300 border border-dashed border-gray-200'
                                         : 'text-gray-700 hover:text-gray-900'
                                 }
                             `}
                         >
                             {tab.icon}
                             {tab.label}
-                            {isAdmin && !isVisible && <EyeOff className="w-3 h-3 ml-1 text-gray-300" />}
+                            {isAdmin && !isVisible && <EyeOff className="w-3 h-3 ml-0.5 opacity-60" />}
                         </button>
                     );
                 })}
@@ -3959,7 +3925,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     if (isAdmin && !clientProfile) {
         // Sempre dentro do <Layout> nesta branch (é a lista do staff escolhendo um
         // cliente — o cliente propriamente dito vê a branch de baixo, que trata
-        // isStandalone). Gutter §20.2 já vem do <main>; era `lg:p-8` (32px, valor
+        // isStandalone). Gutter §20.2 já vem do <main>; era `lg:p-6` (32px, valor
         // antigo, breakpoint errado — o resto do sistema usa `md:`) duplicando.
         return (
             <div className="min-h-screen bg-gray-50/30">
@@ -3971,7 +3937,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     return (
         <div className={isStandalone
             ? 'portal-mobile-font min-h-screen bg-gray-50/30 pb-24 md:pb-0 space-y-4 md:space-y-0 md:h-screen md:flex md:flex-col md:overflow-hidden'
-            : 'portal-mobile-font min-h-screen bg-gray-50/30 pb-24 md:pb-0 space-y-4 md:space-y-8'}>
+            : 'portal-mobile-font min-h-screen bg-gray-50/30 pb-24 md:pb-0 space-y-4 md:space-y-6'}>
 
             {/* ══ Casca do portal público — banner + header + sidebar (espelha o Portal do Corretor) ══ */}
             {isStandalone && (
@@ -4062,7 +4028,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         ))}
                     </aside>
                 )}
-                <div className={isStandalone ? 'md:flex-1 md:overflow-y-auto md:p-6 space-y-4 md:space-y-8' : 'space-y-6'}>
+                <div className={isStandalone ? 'md:flex-1 md:overflow-y-auto md:p-6 space-y-4 md:space-y-6' : 'space-y-6'}>
             {/* Prévia Mobile — renderiza o portal como o cliente vê, dentro de um iframe estreito */}
             {showMobilePreview && !isPreview && (
                 <MobilePreviewFrame onClose={() => setShowMobilePreview(false)} title="Prévia — Portal do Cliente">
@@ -4111,7 +4077,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 casca (badge + menu de conta + sidebar), então lá continua o card
                 de boas-vindas de antes. */}
             {!heroSubstituiCabecalho && !isStandalone && (
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className={`${tituloSoDesktop ? 'hidden md:flex' : 'flex'} flex-col md:flex-row md:items-center justify-between gap-4`}>
                     <div>
                         <h1 className="text-3xl font-black text-gray-900 tracking-tight">{tabMeta.title}</h1>
                         <p className="text-gray-400 text-sm mt-1.5 font-medium">{tabMeta.subtitle}</p>
@@ -4169,7 +4135,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 </div>
                                 <div>
                                     <h2 className="text-lg font-black text-gray-900">Meus Dados</h2>
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Informações cadastrais</p>
+                                    <p className="text-xs text-gray-400 uppercase tracking-widest mt-0.5">Informações cadastrais</p>
                                 </div>
                             </div>
                             <button onClick={() => setShowMeusDados(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
@@ -4517,15 +4483,18 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <div className="hidden md:block">
                             {/* §19.3 — o dashboard não tem faixa de KPI própria: as abas abrem o conteúdo */}
                             {desktopTabsBar}
-                            <div className="space-y-10">
-                                <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                            {/* A coluna do "Concierge Digital" só existe quando há insight; sem ele o
+                                dashboard ocupa a largura inteira (antes sobrava 1/4 vazio à direita). */}
+                            {!aiInsight ? renderDashboard() : (
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                                     <div className="lg:col-span-3">{renderDashboard()}</div>
                                     <div className="lg:col-span-1">
                                         {aiInsight && (
                                             <div className="sticky top-8 space-y-6">
                                                 <div className="flex items-center gap-2 mb-4 px-2">
                                                     <Sparkles className="w-4 h-4 text-indigo-500" />
-                                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Concierge Digital</span>
+                                                    <span className="text-xs font-bold text-gray-400">Concierge Digital</span>
                                                 </div>
                                                 <AIInsightCard
                                                     title={aiInsight.title}
@@ -4538,6 +4507,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     </div>
                                 </div>
                             </div>
+                            )}
                         </div>
                     </>
                 )}
@@ -4555,12 +4525,6 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                         {/* §19.3 — esta aba não tem faixa de KPI: as abas abrem o conteúdo */}
                         {desktopTabsBar}
-                        <div className="flex items-center justify-between mb-8">
-                            <div className="flex flex-col gap-2">
-                                <h3 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Visão Real da Obra</h3>
-                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Acompanhe fotos em alta resolução e câmeras ao vivo do canteiro.</p>
-                            </div>
-                        </div>
                         <ProjectGallery
                             images={clientProfile?.visualGallery || []}
                             isAdmin={isAdmin}
@@ -4570,18 +4534,18 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         />
 
                         {/* Render vs Reality Comparison */}
-                        <div className="mt-16 space-y-8">
+                        <div className="mt-6 space-y-6">
                             <div className="flex items-center gap-3">
                                 <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
-                                <h3 className="text-xl font-black text-gray-900 tracking-tight uppercase">O Sonho vs A Realidade</h3>
+                                <h3 className="text-sm font-bold text-gray-900 tracking-tight">O Sonho vs A Realidade</h3>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div className="relative group overflow-hidden rounded-[2.5rem] border border-gray-100 shadow-sm bg-white">
-                                    <div className="absolute top-6 left-6 z-20 px-4 py-2 bg-black/60 backdrop-blur-md rounded-xl text-xs font-black text-white uppercase tracking-widest">Projeto 3D</div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="relative group overflow-hidden rounded-[10px] border border-gray-100 shadow-sm bg-white">
+                                    <div className="absolute top-6 left-6 z-20 px-4 py-2 bg-black/60 backdrop-blur-md rounded-[10px] text-xs font-bold text-white">Projeto 3D</div>
                                     <img src="https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&q=80&w=800" alt="Render" className="w-full aspect-video object-cover grayscale-[20%] group-hover:grayscale-0 transition-all duration-700" />
                                 </div>
-                                <div className="relative group overflow-hidden rounded-[2.5rem] border border-gray-100 shadow-sm bg-white border-dashed">
-                                    <div className="absolute top-6 left-6 z-20 px-4 py-2 bg-indigo-600 rounded-xl text-xs font-black text-white uppercase tracking-widest">Obra Real</div>
+                                <div className="relative group overflow-hidden rounded-[10px] border border-gray-100 shadow-sm bg-white border-dashed">
+                                    <div className="absolute top-6 left-6 z-20 px-4 py-2 bg-indigo-600 rounded-[10px] text-xs font-bold text-white">Obra Real</div>
                                     <img src="https://images.unsplash.com/photo-1541888946425-d81bb19480c5?auto=format&fit=crop&q=80&w=800" alt="Real" className="w-full aspect-video object-cover" />
                                     <div className="absolute inset-0 bg-white/10" />
                                 </div>
@@ -4659,15 +4623,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             </div>
                         </div>
                         {/* ══ DESKTOP ══ */}
-                        <div className="hidden md:flex bg-white p-12 rounded-[2.5rem] border border-gray-100 flex-col items-center text-center">
-                            <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center text-indigo-600 mb-6">
-                                <ShieldCheck className="w-10 h-10" />
-                            </div>
-                            <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tight mb-2">Assistência e Pós-Obra</h3>
-                            <p className="text-gray-500 max-w-md mx-auto mb-8 font-medium">Este módulo estará disponível após a entrega das chaves para abertura de chamados técnicos e garantia.</p>
-                            <button className="px-8 py-4 bg-gray-100 text-gray-400 rounded-2xl text-xs font-black uppercase tracking-widest cursor-not-allowed">
-                                Abrir Chamado (Em breve)
-                            </button>
+                        <div className="hidden md:block bg-white rounded-[10px] border border-gray-100 shadow-sm text-center py-12 px-6">
+                            <ShieldCheck className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Assistência e Pós-Obra</h3>
+                            <p className="text-sm text-gray-500 max-w-md mx-auto">Este módulo estará disponível após a entrega das chaves para abertura de chamados técnicos e garantia.</p>
                         </div>
                     </div>
                 )}
@@ -4679,53 +4638,41 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     const REQUEST_STATUS_TEXT_COLOR: Record<string, string> = { Aberto: 'text-amber-700', 'Em Andamento': 'text-blue-700', Aguardando: 'text-purple-700', Resolvido: 'text-emerald-700', Cancelado: 'text-gray-400' };
                     return (
                         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-1.5 h-6 bg-amber-500 rounded-full" />
-                                    <h3 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Manutenção do Imóvel</h3>
-                                </div>
-                                <button
-                                    onClick={() => setShowNewRequestForm(true)}
-                                    className="flex items-center gap-2 px-5 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-amber-100 active:scale-95"
-                                >
-                                    <Plus className="w-4 h-4" /> Abrir Chamado
-                                </button>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                {[
-                                    { label: 'Abertos', value: abertos, icon: <Wrench className="w-5 h-5" />, cls: 'bg-amber-50 text-amber-500' },
-                                    { label: 'Em Andamento', value: emAndamento, icon: <Clock className="w-5 h-5" />, cls: 'bg-blue-50 text-blue-500' },
-                                    { label: 'Resolvidos', value: resolvidos, icon: <CheckCircle2 className="w-5 h-5" />, cls: 'bg-emerald-50 text-emerald-500' },
-                                ].map(card => (
-                                    <div key={card.label} className="bg-white border border-gray-100 rounded-3xl p-6 flex items-center gap-4 shadow-sm">
-                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${card.cls}`}>{card.icon}</div>
-                                        <div>
-                                            <p className="text-3xl font-black text-gray-900">{card.value}</p>
-                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{card.label}</p>
-                                        </div>
-                                    </div>
-                                ))}
+                            {/* KPIs §4 (KpiCard canônico) → abas → toolbar de botões §5.3 → lista */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                                <KpiCard label="Abertos" value={abertos} icon={<Wrench className="w-4 h-4" />} color="amber" />
+                                <KpiCard label="Em Andamento" value={emAndamento} icon={<Clock className="w-4 h-4" />} color="blue" />
+                                <KpiCard label="Resolvidos" value={resolvidos} icon={<CheckCircle2 className="w-4 h-4" />} color="emerald" />
                             </div>
 
                             {/* §19.3 — abas depois dos KPIs desta aba */}
                             {desktopTabsBar}
 
+                            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                                <span className="text-xs text-gray-400 px-2">Chamados de assistência técnica deste cliente.</span>
+                                <button
+                                    onClick={() => setShowNewRequestForm(true)}
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                                >
+                                    <Plus className="w-[15px] h-[15px]" /> Abrir Chamado
+                                </button>
+                            </div>
+
                             {requestsLoading ? (
-                                <div className="flex justify-center py-12"><div className="w-6 h-6 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" /></div>
+                                <div className="flex justify-center py-12"><div className="w-6 h-6 border border-amber-500 border-t-transparent rounded-full animate-spin" /></div>
                             ) : clientRequests.length === 0 ? (
-                                <div className="bg-white border border-gray-100 rounded-[2.5rem] p-12 flex flex-col items-center text-center shadow-sm">
-                                    <Wrench className="w-12 h-12 text-gray-200 mb-4" />
-                                    <p className="text-sm font-black text-gray-400 uppercase tracking-widest">Nenhum chamado aberto</p>
-                                    <p className="text-xs text-gray-400 mt-1">Clique em "Abrir Chamado" para solicitar manutenção</p>
+                                <div className="bg-white border border-gray-100 rounded-[10px] shadow-sm text-center py-12">
+                                    <Wrench className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum chamado aberto</h3>
+                                    <p className="text-sm text-gray-500">Clique em "Abrir Chamado" para solicitar manutenção.</p>
                                 </div>
                             ) : (
                                 <div className="space-y-3">
                                     {clientRequests.map(req => (
-                                        <div key={req.id} className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm hover:border-amber-200 transition-all">
+                                        <div key={req.id} className="bg-white border border-gray-100 rounded-[10px] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm hover:border-amber-200 transition-all">
                                             <div className="flex flex-col gap-1.5 min-w-0">
-                                                <span className="text-sm font-black text-gray-900 uppercase tracking-tight">{req.title}</span>
-                                                <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest">
+                                                <span className="text-sm font-bold text-gray-900 tracking-tight">{req.title}</span>
+                                                <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-gray-400">
                                                     <span>{req.category}</span>
                                                     <span>·</span>
                                                     <span>{new Date(req.opened_at + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
@@ -4763,26 +4710,26 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             {showNewRequestForm && (
                                 <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setShowNewRequestForm(false)}>
                                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                                    <div className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-lg animate-in zoom-in-95 fade-in duration-200" onClick={e => e.stopPropagation()}>
+                                    <div className="relative bg-white rounded-[10px] shadow-sm w-full max-w-lg animate-in zoom-in-95 fade-in duration-200" onClick={e => e.stopPropagation()}>
                                         <div className="flex items-center justify-between p-7 border-b border-gray-100">
-                                            <h2 className="text-lg font-black text-gray-900">Novo Chamado de Manutenção</h2>
-                                            <button onClick={() => setShowNewRequestForm(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all"><X className="w-5 h-5" /></button>
+                                            <h2 className="text-lg font-bold text-gray-900">Novo Chamado de Manutenção</h2>
+                                            <button onClick={() => setShowNewRequestForm(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-[6px] transition-all"><X className="w-5 h-5" /></button>
                                         </div>
                                         <div className="p-7 space-y-4">
                                             <div>
                                                 <label className="block text-xs font-semibold text-slate-500 mb-1.5">Título *</label>
-                                                <input type="text" value={newRequestForm.title} onChange={e => setNewRequestForm(f => ({ ...f, title: e.target.value }))} placeholder="Ex: Torneira com vazamento" className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400" />
+                                                <input type="text" value={newRequestForm.title} onChange={e => setNewRequestForm(f => ({ ...f, title: e.target.value }))} placeholder="Ex: Torneira com vazamento" className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400" />
                                             </div>
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div>
                                                     <label className="block text-xs font-semibold text-slate-500 mb-1.5">Categoria</label>
-                                                    <select value={newRequestForm.category} onChange={e => setNewRequestForm(f => ({ ...f, category: e.target.value }))} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400">
+                                                    <select value={newRequestForm.category} onChange={e => setNewRequestForm(f => ({ ...f, category: e.target.value }))} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400">
                                                         {['Elétrica','Hidráulica','Estrutural','Pintura','Serralheria','Geral','Outro'].map(c => <option key={c}>{c}</option>)}
                                                     </select>
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-semibold text-slate-500 mb-1.5">Prioridade</label>
-                                                    <select value={newRequestForm.priority} onChange={e => setNewRequestForm(f => ({ ...f, priority: e.target.value }))} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400">
+                                                    <select value={newRequestForm.priority} onChange={e => setNewRequestForm(f => ({ ...f, priority: e.target.value }))} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400">
                                                         {['Baixa','Média','Alta','Urgente'].map(p => <option key={p}>{p}</option>)}
                                                     </select>
                                                 </div>
@@ -4796,7 +4743,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     <select
                                                         value={newRequestForm.unitId}
                                                         onChange={e => setNewRequestForm(f => ({ ...f, unitId: e.target.value }))}
-                                                        className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400"
+                                                        className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-[10px] text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400"
                                                     >
                                                         <option value="">Não é de uma unidade específica</option>
                                                         {condominio.unidades.map(u => (
@@ -4809,7 +4756,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             )}
                                             <div>
                                                 <label className="block text-xs font-semibold text-slate-500 mb-1.5">Descrição</label>
-                                                <textarea value={newRequestForm.description} onChange={e => setNewRequestForm(f => ({ ...f, description: e.target.value }))} placeholder="Descreva o problema com detalhes..." rows={3} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400 resize-none" />
+                                                <textarea value={newRequestForm.description} onChange={e => setNewRequestForm(f => ({ ...f, description: e.target.value }))} placeholder="Descreva o problema com detalhes..." rows={3} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400 resize-none" />
                                             </div>
                                             <button
                                                 disabled={!newRequestForm.title.trim()}
@@ -4827,7 +4774,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     setShowNewRequestForm(false);
                                                     setNewRequestForm({ title: '', description: '', category: 'Geral', priority: 'Média', unitId: '' });
                                                 }}
-                                                className="w-full py-4 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-2xl font-black uppercase tracking-widest transition-all active:scale-95"
+                                                className="w-full py-4 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-[10px] font-bold transition-all active:scale-95"
                                             >
                                                 Enviar Chamado
                                             </button>
@@ -4840,10 +4787,12 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 })()}
             </div>
 
-            {/* Decorative footer message */}
+            {/* Rodapé decorativo — só no acesso por link, como no Portal do Fornecedor */}
+            {isStandalone && (
             <div className="hidden md:block text-center pt-10 pb-6 opacity-30 select-none pointer-events-none">
-                <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Poderoso e intuitivo • Opura Platinum © 2026</p>
+                <p className="text-xs text-gray-400">Poderoso e intuitivo • Opura Platinum © 2026</p>
             </div>
+            )}
                 </div>{/* /content column */}
             </div>{/* /body wrapper */}
         </div>

@@ -46,12 +46,12 @@ const FinishSelection: React.FC = () => {
 
     return (
         <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <div className="bg-gradient-to-br from-indigo-600 to-blue-700 rounded-[2.5rem] p-10 text-white relative overflow-hidden shadow-2xl">
+            <div className="bg-gradient-to-br from-indigo-600 to-blue-700 rounded-[10px] p-6 text-white relative overflow-hidden shadow-sm">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20" />
                 <div className="relative z-10 max-w-2xl">
                     <div className="flex items-center gap-3 mb-6">
                         <Palette className="w-8 h-8" />
-                        <h2 className="text-3xl font-black uppercase tracking-tight">Studio de Personalização</h2>
+                        <h2 className="text-sm font-bold tracking-tight">Studio de Personalização</h2>
                     </div>
                     <p className="text-indigo-100 text-lg font-medium leading-relaxed">
                         Deixe seu lar com a sua cara. Escolha os acabamentos que mais combinam com seu estilo de vida. Nossos especialistas farão a mágica acontecer.
@@ -65,9 +65,9 @@ const FinishSelection: React.FC = () => {
                         <div className="flex items-center justify-between border-b border-gray-100 pb-6">
                             <div className="flex items-center gap-3">
                                 <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
-                                <h3 className="text-xl font-black text-gray-900 tracking-tight uppercase">{cat}</h3>
+                                <h3 className="text-sm font-bold text-gray-900 tracking-tight">{cat}</h3>
                             </div>
-                            <div className="flex items-center gap-2 text-xs font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-4 py-2 rounded-full">
+                            <div className="flex items-center gap-2 text-xs font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-full">
                                 <Info className="w-4 h-4" />
                                 Escolha uma opção
                             </div>
@@ -78,24 +78,24 @@ const FinishSelection: React.FC = () => {
                                 <div
                                     key={option.id}
                                     onClick={() => handleSelect(cat, option.id)}
-                                    className={`group relative bg-white rounded-[2rem] border-2 transition-all duration-500 cursor-pointer overflow-hidden
+                                    className={`group relative bg-white rounded-[10px] border-2 transition-all duration-500 cursor-pointer overflow-hidden
                     ${selections[cat] === option.id
-                                            ? 'border-indigo-600 shadow-2xl shadow-indigo-100'
-                                            : 'border-transparent shadow-sm hover:shadow-xl hover:border-gray-200'}
+                                            ? 'border-indigo-600 shadow-sm'
+                                            : 'border-transparent shadow-sm hover:shadow-sm hover:border-gray-200'}
                   `}
                                 >
                                     <div className="aspect-square relative overflow-hidden">
                                         <img src={option.image} alt={option.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                                         {selections[cat] === option.id && (
                                             <div className="absolute inset-0 bg-indigo-600/20 backdrop-blur-[2px] flex items-center justify-center animate-in fade-in duration-300">
-                                                <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-indigo-600 shadow-xl">
+                                                <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-indigo-600 shadow-sm">
                                                     <Check className="w-8 h-8 stroke-[3]" />
                                                 </div>
                                             </div>
                                         )}
                                     </div>
-                                    <div className="p-8">
-                                        <h4 className="text-lg font-black text-gray-900 mb-2 uppercase tracking-tight">{option.name}</h4>
+                                    <div className="p-6">
+                                        <h4 className="text-sm font-bold text-gray-900 mb-2 tracking-tight">{option.name}</h4>
                                         <p className="text-sm text-gray-500 font-medium leading-relaxed">{option.description}</p>
                                     </div>
                                 </div>
@@ -105,21 +105,21 @@ const FinishSelection: React.FC = () => {
                 ))}
             </div>
 
-            <div className="bg-gray-50 p-10 rounded-[2.5rem] border border-gray-100 flex flex-col md:flex-row items-center justify-between gap-8">
+            <div className="bg-gray-50 p-6 rounded-[10px] border border-gray-100 flex flex-col md:flex-row items-center justify-between gap-8">
                 <div className="flex items-center gap-6">
-                    <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center text-indigo-600 shadow-sm border border-gray-100">
+                    <div className="w-16 h-16 bg-white rounded-[10px] flex items-center justify-center text-indigo-600 shadow-sm border border-gray-100">
                         <Check className="w-8 h-8" />
                     </div>
                     <div>
-                        <h4 className="text-xl font-black text-gray-900 uppercase tracking-tight">Finalizar Escolhas</h4>
-                        <p className="text-sm font-bold text-gray-400 uppercase tracking-wider">Você selecionou {Object.keys(selections).length} de {categories.length} categorias.</p>
+                        <h4 className="text-sm font-bold text-gray-900 tracking-tight">Finalizar Escolhas</h4>
+                        <p className="text-sm font-bold text-gray-400">Você selecionou {Object.keys(selections).length} de {categories.length} categorias.</p>
                     </div>
                 </div>
                 <button
                     disabled={Object.keys(selections).length === 0}
-                    className={`px-10 py-5 rounded-[1.5rem] text-button font-black uppercase tracking-[0.2em] transition-all
+                    className={`px-10 py-5 rounded-[10px] text-button font-bold transition-all
             ${Object.keys(selections).length > 0
-                            ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100 hover:scale-105 active:scale-95'
+                            ? 'bg-indigo-600 text-white shadow-sm hover:scale-105 active:scale-95'
                             : 'bg-gray-200 text-gray-400 cursor-not-allowed'}
           `}
                 >

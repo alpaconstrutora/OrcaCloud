@@ -58,3 +58,30 @@ as ações (Meus dados, prévia, configurar, **Trocar cliente**) — e nenhum
 - `check-ui-standard.sh` acusa §8 em `ClientArea.tsx:2506/2638` — bolinhas
   de legenda de gráfico (`rounded-full` + rótulo em caixa alta), código
   pré-existente fora do escopo; não é pílula de status.
+
+## Pedido 2 (mesma sessão, depois da 1ª publicação)
+
+> faca novamente. muita coisa ainda nao esta no mesmo UI UX. exemplo, canto superior direito
+
+### O que ainda divergia (levantado aba por aba, print × print, 1600×1000)
+
+| Onde | Fornecedor | Cliente (antes) | Agora |
+|---|---|---|---|
+| Canto superior direito | 2 botões-ícone `p-2.5 bg-white border-gray-100 rounded-xl text-gray-400` (prévia, abas) | botão azul "Meus dados" + 2 `ActionIconButton` | mesmas classes do fornecedor; "Meus dados" só na visão do próprio cliente (gestor edita em Meus Clientes) |
+| Aba oculta | `text-gray-300 border border-dashed` + `EyeOff` | só `text-gray-300` | idem fornecedor, com `title="Oculta para o cliente"` |
+| Rodapé "Poderoso e intuitivo…" | não existe na visão do gestor | aparecia | só `isStandalone` |
+| Dashboard Locação/Serviços (desktop) | título §20 + `KpiCard` | faixa gradiente com avatar/saudação/ações | título §20 + grade de `KpiCard` (Próximo Vencimento, Contratos, Chamados, Cobranças Pagas · Total Contratado, Contratos); a faixa segue no mobile |
+| Conteúdo das 14 abas | escala compacta §16, `h3 text-sm font-bold`, vazio §12 | `rounded-[2.5rem]`/`3xl`/`2xl`, `font-black`, `uppercase tracking-widest`, `shadow-xl`, `p-10`, vazios em caixa alta cinza | passe mecânico (327 + 25 + 21 linhas) fora dos blocos mobile/casca/modais; vazios §12 (ícone 12 · h3 lg · p sm) em Dashboard, Contratos, Obra, Cronograma, Jornada, Documentos, Diário, Suporte, Manutenção |
+| Manutenção | — | título interno + botão âmbar + 3 cards à mão | `KpiCard` ×3 → abas → toolbar §5.3 com "Abrir Chamado" §17 |
+| Diário | — | `h3 text-xl` "Histórico…" + toggle + botão índigo | toolbar §5.3: toggle §5.1 + "Nova Entrada" §17 |
+| Visual | — | título interno "Visão Real da Obra" duplicando o h1 | removido; `ProjectGallery` no vocabulário compacto |
+| Filhos das abas | — | `ProjectGallery`, `client/CondominioTab`, `client/UnidadeTab`, `FinishSelection` no vocabulário antigo | mesmo passe mecânico |
+
+### Fora do escopo desta rodada (registrado, não feito)
+- `FinishSelection` mantém a faixa gradiente "Studio de Personalização" (é protótipo com imagens quebradas; aba oculta por padrão).
+- As sub-abas da galeria (`ProjectGallery`) usam sublinhado, não o trilho §19.1.
+- Blocos mobile, casca do link público e modais não entraram no passe (decisão: o pedido é a visão do gestor no desktop).
+
+### Erros meus nesta rodada, pegos pelo print
+- `\b` no fim de regex não casa depois de `]`: `rounded-[2.5rem]` e `tracking-[0.2em]` passaram ilesos na 1ª execução.
+- `<p className="text-(sm|xs) font-bold …` → `%s` com o grupo sem o prefixo gerou `className="xs …"` em 24 linhas.

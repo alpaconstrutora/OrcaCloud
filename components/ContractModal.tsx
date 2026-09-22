@@ -24,6 +24,7 @@ import { Upload, ExternalLink, KeyRound, RefreshCw } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
+import { useDefaultWriteOrgId, useWritableOrganizations } from '../hooks/useOrgContext';
 import { generateDocumentNumber, MissingCodeError, DocType } from '../services/documentNumbering';
 import { getNumberLockReason, regenerateContractNumber } from '../services/contractNumberRegenService';
 import { useConfirm } from './ui/confirm';
@@ -102,6 +103,16 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     // Quando "Todas as Organizações" está selecionado no seletor global, organizationIdProp vem undefined.
     // Contrato não pode existir sem organização — exigimos a escolha aqui dentro.
     const { organizations: storeOrganizations, projects: storeObras } = useStore();
+    // Opções do seletor interno: só as organizações em que ESTE usuário pode
+    // gravar. `useStore().organizations` lista organizações das quais ele não é
+    // membro (a RLS de `organizations` é mais frouxa que a das tabelas de
+    // dados) — escolher uma delas devolvia `42501 new row violates row-level
+    // security policy` no INSERT do contrato. `storeOrganizations` continua
+    // servindo para NOMEAR a organização já resolvida, que pode ser qualquer uma.
+    const writableOrganizations = useWritableOrganizations();
+    // Topo apontando para uma organização, ou "Todas" com uma única gravável:
+    // o alvo não é ambíguo e não se pergunta nada (REGRA #5).
+    const defaultOrgId = useDefaultWriteOrgId();
     const confirm = useConfirm();
 
     // A prop `projectId` é o projeto do seletor GLOBAL do topo, que pode ser
@@ -117,8 +128,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     );
 
     const [pickedOrgId, setPickedOrgId] = React.useState<string>('');
-    const organizationId = organizationIdProp || pickedOrgId || initialData?.organization_id || undefined;
-    const needsOrgPicker = !organizationIdProp && !initialData?.id;
+    const organizationId = organizationIdProp || pickedOrgId || initialData?.organization_id || defaultOrgId || undefined;
+    const needsOrgPicker = !organizationIdProp && !initialData?.id && !defaultOrgId;
     const activeOrgName = storeOrganizations.find(o => o.id === organizationId)?.name;
     const [formData, setFormData] = React.useState<Partial<Contract>>({
         number: '',
@@ -817,7 +828,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 className="w-full pl-9 pr-3 h-9 bg-amber-50 border border-amber-200 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                             >
                                                 <option value="">Selecione a organização deste contrato</option>
-                                                {storeOrganizations.map(org => (
+                                                {writableOrganizations.map(org => (
                                                     <option key={org.id} value={org.id}>{org.name}</option>
                                                 ))}
                                             </select>

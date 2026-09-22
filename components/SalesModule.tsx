@@ -1287,11 +1287,34 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
 
     return (
         <div className="space-y-6">
-            {/* 1. Título — §1 (h1 solto; os controles que estavam nesta linha viram
-                a toolbar de botões da §4, abaixo do KPI). */}
-            <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Venda de Ativos</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">Controle de inventário de vendas, negociações e performance imobiliária.</p>
+            {/* 1. Título — §1 (h1 solto). Os dois botões que moravam na toolbar de
+                botões (§5.3) voltaram para esta linha a pedido do usuário
+                (2026-09-22): a barra existia para dois controles e gastava uma
+                faixa inteira de cromo entre o título e as abas. No tamanho
+                compacto do §17, alinhados ao topo do bloco de título. */}
+            <div className="flex items-start justify-between gap-3">
+                <div>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Venda de Ativos</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Controle de inventário de vendas, negociações e performance imobiliária.</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                    {selectedBuildingId && (
+                        <button
+                            onClick={() => {
+                                setSelectedBuildingId(null);
+                                if (viewMode === 'tower') setViewMode('grid');
+                            }}
+                            className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all"
+                        >
+                            <ChevronDown className="w-4 h-4 rotate-90" />
+                            Ver todos empreendimentos
+                        </button>
+                    )}
+                    <button className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all">
+                        <Maximize2 className="w-4 h-4" />
+                        Relatórios
+                    </button>
+                </div>
             </div>
 
             {/* 2. Toolbar de abas (§3) — navegação entre as vistas de UM empreendimento
@@ -1383,33 +1406,6 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                     <KpiCard shadow={false} size="sm" label="Ticket Médio" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.ticketMedio)} icon={<TrendingUp className="w-4 h-4" />} color="cyan" />
                 </div>
             )}
-
-            {/* 4. Toolbar de botões (§4) — escopo (Ver todos empreendimentos) e ação
-                (Relatórios). Antes ficavam espremidos na linha do h1. "Inteligência de
-                preços" saiu daqui em 2026-09-12: virou bloco no topo da aba Inteligência,
-                junto das regras que ele aplica. Sem ação primária à direita: "Novo imóvel" saiu daqui a pedido do
-                usuário (o cadastro do primeiro imóvel continua no estado vazio da
-                lista), e o rótulo "Visualizando: <edifício>" também. */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center gap-2">
-                    {selectedBuildingId && (
-                        <button
-                            onClick={() => {
-                                setSelectedBuildingId(null);
-                                if (viewMode === 'tower') setViewMode('grid');
-                            }}
-                            className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all"
-                        >
-                            <ChevronDown className="w-4 h-4 rotate-90" />
-                            Ver todos empreendimentos
-                        </button>
-                    )}
-                    <button className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all">
-                        <Maximize2 className="w-4 h-4" />
-                        Relatórios
-                    </button>
-                </div>
-            </div>
 
             {/* 5. Conteúdo da aba ativa */}
             {activeTab === 'inventory' && (

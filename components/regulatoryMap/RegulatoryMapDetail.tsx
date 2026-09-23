@@ -8,6 +8,7 @@ import { ArrowLeft, Edit, FileSpreadsheet, Map, Ruler, FileWarning, ShieldCheck,
 import { regulatoryMapService } from '../../services/regulatoryMapService';
 import { RegulatoryMapWithCity, RegulatoryMapZone, RegulatoryMapZoneUpdate } from '../../types';
 import { KpiCard } from '../ui/KpiCard';
+import { useToast } from '../../hooks/useToast';
 import RegulatoryZoneTable, { ZoneField } from '../RegulatoryZoneTable';
 import RegulatoryMapExcelImportModal from './RegulatoryMapExcelImportModal';
 
@@ -23,18 +24,13 @@ export const RegulatoryMapDetail: React.FC<Props> = ({ map, onBack, onEdit }) =>
     const [savingId, setSavingId] = React.useState<string | null>(null);
     const [adding, setAdding] = React.useState(false);
     const [importOpen, setImportOpen] = React.useState(false);
-    const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
-
-    const notify = (message: string, type: 'success' | 'error' = 'success') => {
-        setNotification({ message, type });
-        setTimeout(() => setNotification(null), 4500);
-    };
+    const { localToast, showToast } = useToast();
 
     const loadZones = React.useCallback(() => {
         setLoading(true);
         return regulatoryMapService.listZones(map.id).then(setZones).catch((e) => {
             console.error(e);
-            notify('Erro ao carregar zonas do mapa.', 'error');
+            showToast('Erro ao carregar zonas do mapa.', 'error');
         }).finally(() => setLoading(false));
     }, [map.id]);
 
@@ -49,7 +45,7 @@ export const RegulatoryMapDetail: React.FC<Props> = ({ map, onBack, onEdit }) =>
             setZones(prev => [...prev, created]);
         } catch (e) {
             console.error(e);
-            notify('Erro ao criar zona.', 'error');
+            showToast('Erro ao criar zona.', 'error');
         } finally { setAdding(false); }
     };
 
@@ -60,7 +56,7 @@ export const RegulatoryMapDetail: React.FC<Props> = ({ map, onBack, onEdit }) =>
             await regulatoryMapService.updateZone(id, { [field]: value } as RegulatoryMapZoneUpdate);
         } catch (e) {
             console.error(e);
-            notify('Erro ao salvar a alteração.', 'error');
+            showToast('Erro ao salvar a alteração.', 'error');
         } finally { setSavingId(null); }
     };
 
@@ -70,7 +66,7 @@ export const RegulatoryMapDetail: React.FC<Props> = ({ map, onBack, onEdit }) =>
             await regulatoryMapService.deleteZone(id);
         } catch (e) {
             console.error(e);
-            notify('Erro ao excluir a zona.', 'error');
+            showToast('Erro ao excluir a zona.', 'error');
         }
     };
 
@@ -147,17 +143,19 @@ export const RegulatoryMapDetail: React.FC<Props> = ({ map, onBack, onEdit }) =>
                     onImported={async () => {
                         setImportOpen(false);
                         await loadZones();
-                        notify('Planilha importada com sucesso.');
+                        showToast('Planilha importada com sucesso.');
                     }}
                 />
             )}
 
-            {notification && (
+            {/* Só desenha fora do ToastProvider (teste, render isolado): com o provider
+                montado em index.tsx o `localToast` vem null e quem mostra é ele. */}
+            {localToast && (
                 <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
-                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                    localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
                 }`}>
                     <AlertCircle className="w-4 h-4 shrink-0" />
-                    {notification.message}
+                    {localToast.message}
                 </div>
             )}
         </div>

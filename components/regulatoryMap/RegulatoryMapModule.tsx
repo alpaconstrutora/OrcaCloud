@@ -8,6 +8,7 @@ import React from 'react';
 import { Plus, Map, Search, RefreshCw, AlertCircle, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
+import { useToast } from '../../hooks/useToast';
 import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
 import { KpiCard } from '../ui/KpiCard';
 import { regulatoryMapService } from '../../services/regulatoryMapService';
@@ -96,11 +97,7 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) =
     const [isFormOpen, setIsFormOpen] = React.useState(false);
     const [editing, setEditing] = React.useState<RegulatoryMapWithCity | null>(null);
     const confirm = useConfirm();
-    const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
-    const notify = (message: string, type: 'success' | 'error' = 'success') => {
-        setNotification({ message, type });
-        setTimeout(() => setNotification(null), 4500);
-    };
+    const { localToast, showToast } = useToast();
 
     const load = React.useCallback(async () => {
         setLoading(true);
@@ -138,7 +135,7 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) =
             await regulatoryMapService.remove(item.id);
             setItems(prev => prev.filter(i => i.id !== item.id));
         } catch (err: any) {
-            notify(`Erro ao excluir: ${err.message}`, 'error');
+            showToast(`Erro ao excluir: ${err.message}`, 'error');
         }
     };
 
@@ -203,16 +200,25 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) =
                 </button>
             </div>
 
+            {/* mb-3 — §20.1: entre KPIs e a toolbar acoplada o respiro é 12px (mesma
+                tarefa), não os 24px do space-y-6 que separa título de cromo. */}
             {items.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
                     <KpiCard label="Total de mapas" value={items.length} icon={<Map className="w-5 h-5" />} color="blue" />
                     <KpiCard label="Ativos" value={items.filter(i => i.status === 'ATIVO').length} icon={<Map className="w-5 h-5" />} color="emerald" />
                     <KpiCard label="Rascunho" value={items.filter(i => i.status === 'RASCUNHO').length} icon={<Map className="w-5 h-5" />} color="amber" />
                 </div>
             )}
 
+            {/* Toolbar acoplada à tabela (§5.2): busca e conteúdo dividem UM card —
+                border/rounded/shadow só no pai, `overflow-hidden` corta os cantos, e a
+                única costura visível é o `border-b` da faixa da toolbar. */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-2 border-b border-gray-100 bg-white">
             <div className="flex flex-col md:flex-row gap-2.5 items-center">
-                <div className="flex-1 relative w-full">
+                {/* min-w-0: sem isso o flex-1 não encolhe abaixo do placeholder e a linha
+                    estoura quando os grupos da direita entram ao lado. */}
+                <div className="flex-1 min-w-0 relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                         value={search}
@@ -246,6 +252,7 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) =
                     </button>
                 </div>
             </div>
+            </div>
 
             {loading ? (
                 <div className="text-center py-12">
@@ -253,7 +260,7 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) =
                     <p className="mt-2 text-gray-500">Carregando mapas regulatórios...</p>
                 </div>
             ) : filtered.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
+                <div className="text-center py-12">
                     <Map className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum mapa regulatório cadastrado</h3>
                     <p className="text-sm text-gray-500">
@@ -264,7 +271,6 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) =
                 const orderedVisible = tableColumns.orderedVisibleColumns.filter(key => key !== 'actions');
                 const tableWidth = orderedVisible.reduce((s, key) => s + cols.getWidth(key), 0) + cols.getWidth('actions');
                 return (
-                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                     <div className="overflow-x-auto">
                         <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
                             <colgroup>
@@ -320,9 +326,9 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) =
                             </tbody>
                         </table>
                     </div>
-                </div>
                 );
             })()}
+            </div>
 
             {isFormOpen && (
                 <RegulatoryMapForm
@@ -333,12 +339,14 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) =
                 />
             )}
 
-            {notification && (
+            {/* Só desenha fora do ToastProvider (teste, render isolado): com o provider
+                montado em index.tsx o `localToast` vem null e quem mostra é ele. */}
+            {localToast && (
                 <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
-                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                    localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
                 }`}>
                     <AlertCircle className="w-4 h-4 shrink-0" />
-                    {notification.message}
+                    {localToast.message}
                 </div>
             )}
         </div>

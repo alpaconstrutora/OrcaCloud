@@ -1670,6 +1670,23 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 - App real (escritas bloqueadas: 16, 0 erros; o storage e a linha da prancha simulados no navegador, 7 chamadas): importar `casa-print.dxf` → 14 → 19 paredes e o `…desenho.json` guardado → fechar e reabrir Inserir › Do DXF/DWG → **"O desenho desta planta de fundo está guardado · casa-print.dxf · camada PAREDE · milímetro"** → "Gerar de novo com este desenho" → camada e unidade restauradas, "Posição: alinhada à planta de fundo", sem bloco de fundo → **Marcar região** e arrastar no desenho → "Só as paredes com o meio dentro do retângulo entram — 2 fora dele", relatório "3 paredes · 2 porta(s) · 2 janela(s)", botão "Importar 3 + 4" → 19 → 22 paredes, em cima da planta de fundo.
 - Testes: `PainelImportarDxf.test.tsx` (23: a prancha com desenho oferece gerar de novo e restaura os parâmetros; entra pelo `dx`/`dy` guardado e não sobe outro fundo; a região filtra, conta as que ficam de fora e ajusta porta/janela/vão e o botão; prancha sem desenho — o caso do PDF — não oferece nada; o desenho de origem vai junto no `onFundo`).
 
+### P2.39 — Conferir o lado das portas contra o desenho, e corrigir (22/09/2026) · segundo print do usuário
+
+**Pedido**: *"veja print que algumas portas continuam sendo geradas errado"*. A P2.37 corrigiu três defeitos e deixou uma pergunta aberta: no arquivo real que temos, as 34 portas conferem — o sintoma não reproduz aqui. Em vez de seguir adivinhando, esta fase dá a resposta **no desenho do usuário**: uma conferência que compara, porta por porta, o arco que o app DESENHA com o arco do arquivo, e corrige o que estiver espelhado.
+
+**O que entrou**
+- `utils/dxfConferirPortas.ts` (novo): `conferirPortas(model, levelId, desenho)` — para cada porta do pavimento, acha o arco de folha correspondente no desenho guardado (centro a até 300 mm de uma ombreira) e mede as QUATRO combinações de dobradiça × lado; `comandosDaCorrecao` devolve os `FlipOpening` que consertam. Nada de geometria muda, e é um passo de desfazer.
+- `PainelImportarDxf.tsx`: com a prancha de fundo tendo desenho guardado (P2.38), o botão **"Conferir o lado das portas"** e o resultado — "N porta(s) conferida(s) · N com o arco em cima do desenho · N do lado errado · N sem arco no desenho" — com **"Corrigir N porta(s)"** quando há o que corrigir. Vale para o que JÁ está no estudo, inclusive o que entrou por versões anteriores do leitor.
+
+**Duas coisas que a medição ensinou** (e que estão no código)
+- ⚠️ **O ponto médio do arco não basta.** Virar só a DOBRADIÇA move o meio do arco ~370 mm numa porta de 80 cm — menos que meia porta, indistinguível do ruído. No PIVÔ, o mesmo erro vale a largura inteira do vão. O critério soma as duas distâncias (pivô contra o centro do arco, meio contra o meio); medir só o meio, como a primeira versão fazia, deixava passar metade dos casos.
+- ⚠️ **Casar por proximidade pode pegar o arco VIZINHO.** Com o deslocamento errado por meio metro, o arco de uma porta ficou a 400 mm da ombreira da porta seguinte — e a conferência "corrigiria" o que estava certo. Daí a tolerância apertada (300 mm, contra os 15–136 mm medidos no projeto real) e o uso do deslocamento GUARDADO (P2.38), não chutado.
+
+**Prova**
+- `npx tsc --noEmit` ok · check-ui ok · `check-xss-sinks.sh` ok · suíte cheia **440 arquivos / 5086 testes** · `npm run build` ok.
+- Testes: `dxfConferirPortas.test.ts` (4: recém-importadas, as quatro combinações conferem e não há o que corrigir; duas estragadas de propósito — uma no lado, outra na dobradiça — são achadas, com mais de 900 mm de erro cada, e os giros propostos devolvem exatamente o que a importação tinha produzido; porta sem arco não é conferida e desenho sem arco não diz nada; deslocamento errado não casa nada), `PainelImportarDxf.test.tsx` (25: confere e corrige pela tela, com o `FlipOpening` certo; porta já certa não é tocada).
+- App real (escritas bloqueadas: 15, 0 erros; storage simulado): importar `casa-print.dxf` → reabrir Inserir › Do DXF/DWG → **"Conferir o lado das portas"** → "2 porta(s) conferida(s) · 2 com o arco em cima do desenho · 4 sem arco no desenho" (as 4 são as portas que já estavam no estudo, de outra origem) e nenhuma correção oferecida. A correção em si está provada nos testes: no app não há como estragar uma porta sem clicar no desenho, o que o harness não faz.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

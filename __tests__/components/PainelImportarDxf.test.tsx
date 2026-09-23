@@ -496,6 +496,57 @@ describe('importar DXF · gerar de novo com o desenho guardado (P2.38)', () => {
     }
   });
 
+  it('confere o lado das portas do pavimento contra o desenho, e corrige as espelhadas com um giro', async () => {
+    // Um modelo com a parede e a porta do desenho — mas com a porta ESPELHADA, como uma importação
+    // antiga deixaria. A conferência tem de achar e o botão tem de mandar o FlipOpening.
+    const onImportar = vi.fn();
+    const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const levelId = base.model.levels[0].id;
+    const comParede = applyCommand(base.model, { type: 'AddWall', levelId, a: { x: 0, y: 75 }, b: { x: 6000, y: 75 }, thicknessMm: 150, heightMm: 2800 });
+    const wallId = comParede.model.walls[0].id;
+    // O desenho tem a porta em 2000–2900 com a dobradiça em x=2000 abrindo para +y.
+    const model = applyCommand(comParede.model, { type: 'AddOpening', wallId, kind: 'door', offsetMm: 2000, widthMm: 900, heightMm: 2100, sillMm: 0, hingeAtStart: true, swingReversed: true }).model;
+    render(
+      <PainelImportarDxf
+        model={model}
+        levelIdAtivo={levelId}
+        onImportar={onImportar}
+        onDesenhoGuardado={async () => ({ v: 1 as const, nomeArquivo: 'planta.dxf', mmPorUnidade: 1, camada: 'PAREDE', modo: 'FACES' as const, espessuraMm: 150, dx: 0, dy: 0, texto: dxfComEsquadrias() })}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('desenho-guardado')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Conferir o lado das portas/ }));
+    expect(screen.getByTestId('conferencia-portas').textContent).toMatch(/1 porta\(s\) conferida\(s\) · 0 com o arco em cima do desenho · 1 do lado errado/);
+    fireEvent.click(screen.getByRole('button', { name: /Corrigir 1 porta/ }));
+    expect(onImportar).toHaveBeenCalledTimes(1);
+    const comandos = onImportar.mock.calls[0][0] as Array<{ type: string; axis: string; openingId: string }>;
+    expect(comandos).toEqual([{ type: 'FlipOpening', openingId: model.openings[0].id, axis: 'swing' }]);
+    // Depois de corrigir, a tela para de oferecer a correção.
+    expect(screen.getByTestId('conferencia-portas').textContent).toMatch(/1 com o arco em cima do desenho/);
+    expect(screen.queryByRole('button', { name: /Corrigir/ })).toBeNull();
+  });
+
+  it('porta que já está certa não é tocada', async () => {
+    const onImportar = vi.fn();
+    const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const levelId = base.model.levels[0].id;
+    const comParede = applyCommand(base.model, { type: 'AddWall', levelId, a: { x: 0, y: 75 }, b: { x: 6000, y: 75 }, thicknessMm: 150, heightMm: 2800 });
+    const model = applyCommand(comParede.model, { type: 'AddOpening', wallId: comParede.model.walls[0].id, kind: 'door', offsetMm: 2000, widthMm: 900, heightMm: 2100, sillMm: 0, hingeAtStart: true, swingReversed: false }).model;
+    render(
+      <PainelImportarDxf
+        model={model}
+        levelIdAtivo={levelId}
+        onImportar={onImportar}
+        onDesenhoGuardado={async () => ({ v: 1 as const, nomeArquivo: 'planta.dxf', mmPorUnidade: 1, camada: 'PAREDE', modo: 'FACES' as const, espessuraMm: 150, dx: 0, dy: 0, texto: dxfComEsquadrias() })}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('desenho-guardado')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Conferir o lado das portas/ }));
+    expect(screen.getByTestId('conferencia-portas').textContent).toMatch(/1 porta\(s\) conferida\(s\) · 1 com o arco em cima do desenho/);
+    expect(screen.queryByRole('button', { name: /Corrigir/ })).toBeNull();
+    expect(onImportar).not.toHaveBeenCalled();
+  });
+
   it('prancha sem desenho guardado (o caso do PDF) não oferece nada', async () => {
     const { model, levelId } = comNivel();
     render(<PainelImportarDxf model={model} levelIdAtivo={levelId} onImportar={vi.fn()} onDesenhoGuardado={async () => null} />);

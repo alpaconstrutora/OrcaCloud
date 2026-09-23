@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Check, Download, FileUp, Loader2, SquareDashedMousePointer, Wand2, X } from 'lucide-react';
+import { AlertTriangle, Check, DoorOpen, Download, FileUp, Loader2, SquareDashedMousePointer, Wand2, X } from 'lucide-react';
 import type { BlueprintModel, Command } from '../../utils/blueprintKernel';
 import { novoUid } from '../../utils/blueprintKernel';
 import {
@@ -18,6 +18,7 @@ import { gerarTemplateOpura, lerPadraoOpura, REGRAS_DO_PADRAO, temPadraoOpura, V
 import { planejarFundo, rasterizarDxf } from '../../utils/dxfParaFundo';
 import type { Underlay } from '../../utils/blueprintUnderlay';
 import type { DesenhoDaPrancha } from '../../services/blueprintUnderlayService';
+import { comandosDaCorrecao, conferirPortas, type ConferenciaDePortas } from '../../utils/dxfConferirPortas';
 import { usePersistedState } from '../ui/TableUtils';
 import { converterDwgParaDxf } from '../../services/blueprintDwgService';
 import {
@@ -81,6 +82,15 @@ import {
  * no desenho — sem apontar o arquivo de novo. O que nasce assim é alinhado à
  * planta de fundo (o deslocamento da importação veio junto), então cai em cima
  * dela; e o fundo não é subido outra vez.
+ *
+ * ─── CONFERIR O LADO DAS PORTAS (P2.39) ─────────────────────────────────────
+ *
+ * Com o desenho guardado dá para responder a pergunta que a pessoa faz olhando
+ * a tela — "este arco está do lado certo?" — porta por porta, comparando o arco
+ * que o app desenha com o do arquivo. O que estiver espelhado é corrigido com
+ * um giro (`FlipOpening`), sem tocar na geometria e num passo de desfazer. Vale
+ * para o que já está no desenho, inclusive o que entrou por versões antigas do
+ * leitor.
  *
  * ─── DWG (E9.1) ─────────────────────────────────────────────────────────────
  *
@@ -153,6 +163,8 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
   const [daPrancha, setDaPrancha] = useState<{ dx: number; dy: number } | null>(null);
   /** P2.38: a prancha ativa tem desenho guardado? `null` = ainda não perguntamos. */
   const [temGuardado, setTemGuardado] = useState<DesenhoDaPrancha | null>(null);
+  /** P2.39: o resultado da última conferência de portas. */
+  const [conferencia, setConferencia] = useState<ConferenciaDePortas | null>(null);
   // ESQUADRIAS (P2.33): as hipóteses de altura e o teto do vão livre, persistidas por tela.
   const [hip, setHip] = usePersistedState<HipotesesDeEsquadrias>('blueprint:dxf-esquadrias', HIPOTESES_ESQUADRIAS_PADRAO);
   const hipoteses: HipotesesDeEsquadrias = { ...HIPOTESES_ESQUADRIAS_PADRAO, ...hip };
@@ -355,6 +367,24 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
     }
   }
 
+  /** P2.39: confere as portas do pavimento contra os arcos do desenho guardado. Só olha. */
+  function conferirAsPortas() {
+    if (!temGuardado || !levelIdAtivo) return;
+    setErro(null);
+    try {
+      setConferencia(conferirPortas(model, levelIdAtivo, temGuardado));
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  /** P2.39: aplica os giros — um passo de desfazer, nenhuma geometria muda. */
+  function corrigirAsPortas() {
+    if (!conferencia || conferencia.corrigir.length === 0) return;
+    onImportar(comandosDaCorrecao(conferencia.corrigir));
+    setConferencia({ ...conferencia, certas: conferencia.certas + conferencia.corrigir.length, corrigir: [] });
+  }
+
   function baixarTemplate() {
     const blob = new Blob([gerarTemplateOpura()], { type: 'application/dxf' });
     const url = URL.createObjectURL(blob);
@@ -425,14 +455,45 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
                 {temGuardado.nomeArquivo} · camada {temGuardado.camada} · {temGuardado.mmPorUnidade === 1 ? 'milímetro' : temGuardado.mmPorUnidade === 1000 ? 'metro' : `${temGuardado.mmPorUnidade} mm por unidade`}. Gere de novo com outra
                 camada, outras espessuras ou só de uma região — o que nascer cai em cima da planta de fundo.
               </p>
-              <button
-                type="button"
-                onClick={usarODaPrancha}
-                className="mt-1.5 inline-flex h-7 items-center gap-1.5 rounded-[6px] border border-emerald-300 bg-white px-2 text-[12px] font-medium text-emerald-800 transition-colors hover:bg-emerald-100"
-              >
-                <Wand2 className="h-3.5 w-3.5" />
-                Gerar de novo com este desenho
-              </button>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={usarODaPrancha}
+                  className="inline-flex h-7 items-center gap-1.5 rounded-[6px] border border-emerald-300 bg-white px-2 text-[12px] font-medium text-emerald-800 transition-colors hover:bg-emerald-100"
+                >
+                  <Wand2 className="h-3.5 w-3.5" />
+                  Gerar de novo com este desenho
+                </button>
+                <button
+                  type="button"
+                  onClick={conferirAsPortas}
+                  disabled={!levelIdAtivo}
+                  className="inline-flex h-7 items-center gap-1.5 rounded-[6px] border border-emerald-300 bg-white px-2 text-[12px] font-medium text-emerald-800 transition-colors hover:bg-emerald-100 disabled:opacity-40"
+                >
+                  <DoorOpen className="h-3.5 w-3.5" />
+                  Conferir o lado das portas
+                </button>
+              </div>
+              {conferencia && (
+                <div className="mt-1.5 rounded-md bg-white/70 px-2 py-1.5" data-testid="conferencia-portas">
+                  <p className="text-[11px] text-emerald-900">
+                    {conferencia.conferidas === 0
+                      ? 'Nenhuma porta do pavimento casou com um arco deste desenho — nada a conferir.'
+                      : `${conferencia.conferidas} porta(s) conferida(s) · ${conferencia.certas} com o arco em cima do desenho${conferencia.corrigir.length > 0 ? ` · ${conferencia.corrigir.length} do lado errado` : ''}`}
+                    {conferencia.semArco > 0 ? ` · ${conferencia.semArco} sem arco no desenho` : ''}
+                  </p>
+                  {conferencia.corrigir.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={corrigirAsPortas}
+                      className="mt-1 inline-flex h-7 items-center gap-1.5 rounded-[6px] bg-emerald-600 px-2.5 text-[12px] font-medium text-white transition-colors hover:bg-emerald-700"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                      Corrigir {conferencia.corrigir.length} porta(s)
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

@@ -141,3 +141,11 @@ de leitura do PortalKit, textos diferentes.
 
 Alcança desktop **e** os heros mobile — é a mesma família visual; deixar metade
 coral e metade azul seria trocar um desencontro por outro.
+
+## Pedido 8 (23/09/2026)
+
+> diminuir a altura do banner
+
+| # | Arquivo | O que muda | Como sei que terminou |
+|---|---|---|---|
+| 12 | `components/client/UnidadeTab.tsx`, `components/client/CondominioTab.tsx` | Banner coral de 104px → **69px**: `py-6`→`py-3.5`, `px-6 md:px-10`→`px-5 md:px-6`, título `text-xl md:text-2xl`→`text-lg`, ícone 20→16px, subtítulo `text-sm mt-1`→`text-xs mt-0.5`, valor `text-lg md:text-xl`→`text-base`, alinhamento `items-start`→`items-center` | ✅ Playwright: altura medida 69px na aba Dados da Unidade; print `relatorios/cores/banner_menor.png`; nada de conteúdo removido |

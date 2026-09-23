@@ -182,12 +182,12 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
             {/* ── Minhas unidades ── */}
             {porCondominio.map(cond => (
                 <div key={cond.id} className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="bg-[#E1553C] px-6 md:px-10 py-6">
+                    <div className="bg-[#E1553C] px-5 md:px-6 py-3.5">
                         <div className="flex items-center gap-2.5">
-                            <Building2 className="w-5 h-5 text-white/80" />
-                            <h2 className="text-xl md:text-2xl font-bold text-white leading-tight">{cond.nome}</h2>
+                            <Building2 className="w-4 h-4 text-white/80" />
+                            <h2 className="text-lg font-bold text-white leading-tight">{cond.nome}</h2>
                         </div>
-                        <p className="text-white/80 text-sm font-medium mt-1">
+                        <p className="text-white/80 text-xs font-medium mt-0.5">
                             {cond.unidades.length === 1 ? '1 unidade' : `${cond.unidades.length} unidades`}
                             {cond.cnpj ? ` · CNPJ ${cond.cnpj}` : ''}
                         </p>

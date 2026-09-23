@@ -13,6 +13,7 @@
 import { supabase } from '../lib/supabase';
 import { clientService } from './clientService';
 import { clientPortalService } from './clientPortalService';
+import { presetDeAbas } from '../utils/clientCategory';
 import type { AcessoClienteLite } from '../utils/acessoAoCondominio';
 
 /** A aba do portal que mostra o condomínio. Mesma string do `ALL_TABS`
@@ -106,5 +107,38 @@ export const condominioAcessoService = {
         // portal dele no que existe hoje.
 
         return { url: clientPortalService.buildPortalUrl(token), tokenNovo: !vivo };
+    },
+
+    /**
+     * Tira o condomínio da vista do cliente DESLIGANDO A ABA — o oposto exato do
+     * `conceder` acima, e o que o interruptor da coluna Portal faz ao ser
+     * desligado.
+     *
+     * ⚠️ NÃO REVOGA O TOKEN. O link do Portal do Cliente é um por PESSOA e serve
+     * contratos, cobranças e documentos; matá-lo para esconder um prédio tiraria
+     * do ar tudo o que não tem nada a ver com condomínio. Era a razão de o aviso
+     * de "Revogar" em `OcupacoesTab` mandar o síndico desligar a aba à mão.
+     *
+     * `portal_tabs === null` é o caso delicado: sem configuração explícita quem
+     * manda é o preset por categoria (`presetDeAbas`), e ele já inclui a aba. Aí
+     * desligar exige MATERIALIZAR o preset sem `condominio` — gravar só
+     * `[]` ou uma lista fixa apagaria o portal inteiro da pessoa. Categoria sem
+     * preset conhecido não tem lista para materializar: devolve `false`, e quem
+     * chama diz ao usuário para configurar as abas no cadastro do cliente.
+     */
+    async desligarAba(clientId: string): Promise<boolean> {
+        const { data: cli } = await supabase
+            .from('clients').select('portal_tabs, category').eq('id', clientId).maybeSingle();
+        const atuais = Array.isArray((cli as any)?.portal_tabs) ? (cli as any).portal_tabs as string[] : null;
+
+        const base = atuais ?? presetDeAbas((cli as any)?.category);
+        if (!base) return false;
+        if (!base.includes(ABA_CONDOMINIO)) return true;
+
+        await clientService.saveClient({
+            id: clientId,
+            portalTabs: base.filter(t => t !== ABA_CONDOMINIO),
+        } as any);
+        return true;
     },
 };

@@ -5,7 +5,7 @@
 // Um condomínio é o `Empreendimento` no estado EM_OPERACAO — não há entidade
 // nem árvore nova. As torres e unidades são as mesmas que foram vendidas.
 import React from 'react';
-import { ArrowLeft, FileText, Users, Wrench, Save, Scale, Package, Megaphone, Wallet, AlertCircle, FolderOpen } from 'lucide-react';
+import { ArrowLeft, FileText, Users, Wrench, Save, Scale, Package, Megaphone, Wallet, AlertCircle, FolderOpen, Plus } from 'lucide-react';
 import ClientSelect, { type ClientOption } from '../ClientSelect';
 import OcupacoesTab from './OcupacoesTab';
 import ManutencaoTab from './ManutencaoTab';
@@ -31,6 +31,23 @@ const TITULOS: Record<Aba, { titulo: string; subtitulo: string }> = {
     financeiro: { titulo: 'Financeiro', subtitulo: 'rateio das despesas entre as unidades' },
     comunicacao: { titulo: 'Comunicação', subtitulo: 'avisos e documentos do portal' },
 };
+
+/**
+ * Ação primária que a aba ativa publica na LINHA DO TÍTULO (§17: ação frequente
+ * fica alinhada ao título, no tamanho compacto — não solta no meio da régua de
+ * controles da tabela).
+ *
+ * O título é do PAI e o handler é do FILHO, então o sentido do slot é o inverso
+ * do `tabsSlot`/`chromeSlot` do guia (§19.3/§19.4): em vez de o pai passar cromo
+ * pronto para baixo, a aba registra o que sabe fazer e o pai desenha o botão —
+ * um estilo de botão só, aqui, para as próximas abas não copiarem o terceiro.
+ * O descritor é `{ label, onClick }`, não um `ReactNode`: nó novo a cada render
+ * do filho re-disparava o efeito de registro.
+ */
+export interface AcaoDoTitulo {
+    label: string;
+    onClick: () => void;
+}
 
 interface Props {
     empreendimento: Empreendimento;
@@ -129,6 +146,12 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
         } finally { setSalvando(false); }
     };
 
+    /** A aba ativa publica aqui a própria ação primária (ver `AcaoDoTitulo`). */
+    const [acaoDoTitulo, setAcaoDoTitulo] = React.useState<AcaoDoTitulo | null>(null);
+    // Trocar de aba limpa o botão ANTES do filho novo montar: sem isto, a ação
+    // da aba anterior fica na linha do título por um render da aba seguinte.
+    React.useEffect(() => { setAcaoDoTitulo(null); }, [aba]);
+
     const abas: { id: Aba; label: string; icon: any }[] = [
         { id: 'ficha', label: 'Ficha', icon: FileText },
         { id: 'ocupacoes', label: 'Ocupações', icon: Users },
@@ -170,11 +193,25 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
                     a tela mostra. A IDENTIDADE (qual condomínio) desce para o
                     subtítulo em vez de sumir — sem ela, saber "Manutenção" sem
                     saber "de qual prédio" é pior que o problema original. */}
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">{TITULOS[aba].titulo}</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                    {identidade}
-                    {' · '}{TITULOS[aba].subtitulo}
-                </p>
+                <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">{TITULOS[aba].titulo}</h1>
+                        <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                            {identidade}
+                            {' · '}{TITULOS[aba].subtitulo}
+                        </p>
+                    </div>
+                    {/* §17 — botão primário compacto, o único azul sólido da tela. */}
+                    {acaoDoTitulo && (
+                        <button
+                            onClick={acaoDoTitulo.onClick}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 whitespace-nowrap"
+                        >
+                            <Plus className="w-[15px] h-[15px]" />
+                            {acaoDoTitulo.label}
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Abas §19.1 */}
@@ -322,7 +359,7 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
                 </div>
             )}
 
-            {aba === 'ocupacoes' && <OcupacoesTab empreendimento={e} />}
+            {aba === 'ocupacoes' && <OcupacoesTab empreendimento={e} registrarAcaoDoTitulo={setAcaoDoTitulo} />}
             {aba === 'fracoes' && <FracoesTab empreendimento={e} />}
             {aba === 'documentos' && <DocumentosTab empreendimento={e} />}
             {aba === 'ativos' && <AtivosTab empreendimento={e} />}

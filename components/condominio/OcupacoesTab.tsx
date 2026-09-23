@@ -9,20 +9,23 @@
 // UI: ui_ux_guia_unificado.md — §5.2 toolbar acoplada, §6.6 px-6 + border-r,
 // §7 tipografia, §8 status como texto, §9 ações, §14 useConfirm, §22 estado local.
 import React from 'react';
-import { Users, UserCheck, Home, Wallet, Search, RefreshCw, Plus, DoorOpen, Download, AlertCircle, LinkIcon, Link2Off, ExternalLink } from 'lucide-react';
+import { Users, UserCheck, Home, Wallet, Search, RefreshCw, Plus, DoorOpen, Download, AlertCircle, LinkIcon, Link2Off, ExternalLink, MoveHorizontal } from 'lucide-react';
 import {
     ColumnConfig,
     useTableColumns,
+    useResizableColumns,
     ColumnConfigButton,
     SortableHeader,
     usePersistedState,
 } from '../ui/TableUtils';
+import TableSwitch from '../ui/TableSwitch';
 import { KpiCard } from '../ui/KpiCard';
 import ClientSelect from '../ClientSelect';
 import ActionIconButton from '../ui/ActionIconButton';
 import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { useConfirm } from '../ui/confirm';
+import type { AcaoDoTitulo } from './CondominioDetail';
 // O módulo passou a conhecer DOIS caminhos de acesso ao condomínio: o link de
 // condômino (legado) e a aba Condomínio do Portal do Cliente. A regra de qual
 // vale mora num lugar só.
@@ -46,6 +49,8 @@ import type {
     UnitOccupancyRow,
 } from '../../types/empreendimento';
 
+// Só colunas de DADO. "Ações" é estrutural (§2/§6.1): não entra no menu de
+// colunas, não se arrasta e tem a própria <col> no fim do colgroup.
 const COLUMNS: ColumnConfig[] = [
     { key: 'unidade', label: 'Unidade', sortable: true },
     { key: 'torre', label: 'Torre', sortable: true },
@@ -60,8 +65,37 @@ const COLUMNS: ColumnConfig[] = [
     // botão de compartilhar é idêntico com ou sem acesso, e renovar (que
     // invalida o link anterior) vira ato às cegas.
     { key: 'portal', label: 'Portal', sortable: true },
-    { key: 'actions', label: 'Ações', sortable: false },
 ];
+
+// §6.1 — larguras iniciais, redimensionáveis e persistidas por tela. Soma: 1210
+// de dado + 140 de Ações = 1350px, ESCOLHIDO para caber no container (medido:
+// 1390px úteis em viewport 1700 com a sidebar). A primeira versão somava 1460 e
+// a tabela nascia com rolagem horizontal, com o espaçador do §6.1.1 em 0 e
+// "Ações" fora da borda do card. A folga que sobra vai inteira para o <col />
+// espaçador, nunca redistribuída entre as colunas de dado.
+// Larguras medidas contra o dado real (condomínio 007 - Bella Vista): "Torre
+// Única" cabe inteira, e "Fração ideal" tem espaço para o rótulo MAIS o ícone de
+// ordenação — com 110px o `overflow-hidden` do ResizeHandle comia o chevron e a
+// coluna parecia não ordenável (§6.8).
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    unidade: 105, torre: 130, pessoa: 165, documento: 125, papel: 135,
+    entrada: 110, saida: 105, fracao: 135, portal: 200, actions: 140,
+};
+
+// Metadados de cabeçalho por coluna — o <thead> é montado a partir de
+// `orderedVisibleColumns` (a ordem que o usuário arrasta), não de uma sequência
+// fixa de JSX. `overflow-hidden` é exigência do ResizeHandle (§6.1).
+const COLUMN_HEADERS: Record<string, { label: string; className: string }> = {
+    unidade: { label: 'Unidade', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    torre: { label: 'Torre', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    pessoa: { label: 'Pessoa', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    documento: { label: 'CPF/CNPJ', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    papel: { label: 'Papel', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    entrada: { label: 'Entrada', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    saida: { label: 'Saída', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    fracao: { label: 'Fração ideal', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    portal: { label: 'Portal', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+};
 
 const ROLE_LABELS: Record<OccupancyRole, string> = {
     PROPRIETARIO: 'Proprietário',
@@ -104,6 +138,9 @@ function hojeISO(): string {
 
 interface Props {
     empreendimento: Empreendimento;
+    /** Publica "Nova ocupação" na linha do título da tela (§17). Ausente = a tela
+     *  não tem onde pendurar a ação, e ela volta para a régua de controles. */
+    registrarAcaoDoTitulo?: (acao: AcaoDoTitulo | null) => void;
 }
 
 /**
@@ -122,12 +159,103 @@ interface LinhaExibida {
 
 interface ClienteOpcao { id: string; name: string; document?: string | null; email?: string | null; city?: string | null; state?: string | null }
 
-const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
+/**
+ * Conteúdo de cada `<td>` por coluna. Extraída (e CHAMADA — função de célula que
+ * ninguém chama é código morto que envelhece sem ninguém notar) para o corpo da
+ * tabela poder mapear `orderedVisibleColumns` em vez de repetir um bloco
+ * condicional fixo por coluna, que é o que impedia arrastar coluna aqui.
+ */
+function renderOcupacaoCell(
+    key: string,
+    l: LinhaExibida,
+    /** Estado do acesso ao condomínio desta linha. `null` = unidade sem ocupante. */
+    estado: EstadoDeAcesso | null,
+    onTogglePortal: (o: UnitOccupancyRow, estado: EstadoDeAcesso) => void,
+    alternandoPortal: boolean,
+): React.ReactNode {
+    const o = l.ocupacao;
+    switch (key) {
+        case 'unidade':
+            return <span className="block truncate text-sm font-normal text-gray-700" title={l.unitName}>{l.unitName}</span>;
+        case 'torre':
+            return <span className="block truncate text-sm font-normal text-gray-600" title={l.towerName}>{l.towerName}</span>;
+        case 'pessoa':
+            /* Unidade sem ocupante aparece rotulada, não em branco: vazio sem
+               rótulo lê como dado faltando por descuido. */
+            return o
+                ? <span className="block truncate text-sm font-normal text-gray-700" title={o._client_name}>{o._client_name}</span>
+                : <span className="text-sm font-normal text-gray-400">Sem ocupante</span>;
+        case 'documento':
+            return <span className="text-sm font-normal text-gray-600">{o?._client_document || '—'}</span>;
+        case 'papel':
+            return o
+                ? <span className={`text-sm font-normal ${ROLE_TEXT_COLOR[o.role]}`}>{ROLE_LABELS[o.role]}</span>
+                : <span className="text-sm font-normal text-gray-400">—</span>;
+        case 'entrada':
+            return <span className="text-sm font-normal text-gray-600">{o ? formatarData(o.started_at) : '—'}</span>;
+        case 'saida':
+            return <span className="text-sm font-normal text-gray-600">{!o ? '—' : o.ended_at ? formatarData(o.ended_at) : 'Vigente'}</span>;
+        case 'fracao':
+            /* No piloto (retrofit) esta coluna é vazia em 100% das unidades: a fração de
+               prédio entregue vem da CONVENÇÃO, não do motor de áreas. Por isso o vazio é
+               rotulado, não deixado em branco como se fosse dado faltando por descuido. */
+            return l.fracao != null
+                ? <span className="text-sm font-normal text-gray-600">{`${(l.fracao * 100).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}%`}</span>
+                : <span className="text-sm font-normal text-gray-400">Não informada</span>;
+        case 'portal':
+            /* Interruptor + o texto do estado ao lado. O switch responde "vê o
+               condomínio?" (o único booleano real da coluna); o rótulo continua
+               dizendo POR QUAL caminho e por quanto tempo — `via` tem seis
+               valores, e reduzi-los a ligado/desligado perderia justamente o
+               `AGUARDA_ABA` (link vivo, prédio invisível), que é a razão de
+               `utils/acessoAoCondominio.ts` existir.
+               Ocupação encerrada não liga nada: o interruptor fica inerte. */
+            if (!o || !estado) return <span className="text-sm font-normal text-gray-400">—</span>;
+            return (
+                <div className="flex items-center gap-2">
+                    <TableSwitch
+                        checked={estado.ve}
+                        onChange={() => onTogglePortal(o, estado)}
+                        onColor="peer-checked:bg-emerald-600"
+                        disabled={!!o.ended_at || alternandoPortal}
+                        title={o.ended_at
+                            ? 'Ocupação encerrada — o acesso não se altera por aqui'
+                            : estado.ve
+                                ? 'Desligar a aba Condomínio do portal desta pessoa'
+                                : 'Dar acesso ao condomínio pelo Portal do Cliente'}
+                    />
+                    {/* O rótulo fica FORA do TableSwitch (que pinta o texto de
+                        cinza por estado) para manter a cor semântica do §8 — o
+                        âmbar de "aba desligada" é o aviso da coluna. */}
+                    <span className={`text-sm font-normal whitespace-nowrap ${estado.cor}`}>{estado.texto}</span>
+                </div>
+            );
+        default:
+            return null;
+    }
+}
+
+const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }) => {
     const confirm = useConfirm();
 
     const [searchTerm, setSearchTerm] = usePersistedState<string>('ocupacoes:search', '');
     const [incluirEncerradas, setIncluirEncerradas] = usePersistedState<boolean>('ocupacoes:encerradas', false);
     const tableColumns = useTableColumns(COLUMNS, 'ocupacoesColumns');
+    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'ocupacoesColWidths');
+    /** Colunas de dado na ordem escolhida pelo usuário. O filtro de `actions` é
+     *  defesa contra preferência antiga: até hoje "Ações" era uma ColumnConfig, e
+     *  quem já usou a tela tem a chave salva em `visibleColumns`/`columnOrder` —
+     *  sem o corte ela viraria um `<td>` vazio sem `<col>`, desalinhando a tabela
+     *  toda a partir dali. */
+    const colunasVisiveis = React.useMemo(
+        () => tableColumns.orderedVisibleColumns.filter(k => k !== 'actions'),
+        [tableColumns.orderedVisibleColumns],
+    );
+    // §6.1 — largura da tabela é a SOMA exata das colunas visíveis; nunca w-full.
+    const tableTotalWidth = COLUMNS.reduce(
+        (soma, c) => soma + (tableColumns.visibleColumns.includes(c.key) ? cols.getWidth(c.key) : 0),
+        0,
+    ) + cols.getWidth('actions');
 
     const [linhas, setLinhas] = React.useState<UnitOccupancyRow[]>([]);
     /** Acesso ao portal por ocupação. `listByUnits` existia no service e não era
@@ -157,6 +285,10 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
     const [loading, setLoading] = React.useState(true);
     const [erro, setErro] = React.useState<string | null>(null);
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+    /** Ocupações com o interruptor de Portal em voo — evita duplo clique
+     *  disparando duas escritas no mesmo cliente. */
+    const [alternandoPortal, setAlternandoPortal] = React.useState<Set<string>>(new Set());
 
     const [sheetAberto, setSheetAberto] = React.useState(false);
     const [salvando, setSalvando] = React.useState(false);
@@ -318,7 +450,10 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
             // Sem coluna escolhida: agrupa por unidade, que é como se lê um espelho.
             return a.unitName.localeCompare(b.unitName, 'pt-BR', { numeric: true });
         });
-    }, [linhas, unidades, acessos, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection]);
+        // `acessoDa` no lugar de `acessos`: a ordenação por Portal lê os DOIS
+        // caminhos, e com só `acessos` na lista a ordem não se refazia quando o
+        // interruptor mudava o lado do Portal do Cliente.
+    }, [linhas, unidades, acessoDa, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const kpis = React.useMemo(() => {
         const vigentes = linhas.filter(l => !l.ended_at);
@@ -395,10 +530,20 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
         }
     };
 
-    const abrirNova = () => {
+    // useCallback porque o efeito de registro abaixo depende da identidade dela:
+    // handler novo a cada render reescreveria o estado do pai em loop.
+    const abrirNova = React.useCallback(() => {
         setForm({ unit_id: '', client_id: '', role: 'PROPRIETARIO', started_at: hojeISO(), notes: '' });
         setSheetAberto(true);
-    };
+    }, []);
+
+    // A ação primária mora na linha do título (§17), que é do pai — ver
+    // `AcaoDoTitulo` em CondominioDetail.
+    React.useEffect(() => {
+        if (!registrarAcaoDoTitulo) return;
+        registrarAcaoDoTitulo({ label: 'Nova ocupação', onClick: abrirNova });
+        return () => registrarAcaoDoTitulo(null);
+    }, [registrarAcaoDoTitulo, abrirNova]);
 
     const salvar = async () => {
         if (!form.unit_id || !form.client_id) {
@@ -547,6 +692,64 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
         }
     };
 
+    /**
+     * O interruptor da coluna Portal. Ligado = a pessoa VÊ o condomínio agora.
+     *
+     * Desligar depende de POR QUAL caminho ela vê, e os dois não se misturam:
+     *  - `PORTAL_CLIENTE` → desliga a aba Condomínio. O token NÃO é revogado: o
+     *    link é um por pessoa e carrega contratos, cobranças e documentos.
+     *  - `LINK_CONDOMINO` (legado) → revoga aquele link, que é o que dá a vista.
+     * Ligar é sempre `concederAcesso` (que já sabe distinguir "falta a aba" de
+     * "falta o link") — inclusive no estado `AGUARDA_ABA`.
+     */
+    const alternarPortal = async (linha: UnitOccupancyRow, estado: EstadoDeAcesso) => {
+        if (alternandoPortal.has(linha.id)) return;
+        const marcar = (ligado: boolean) => setAlternandoPortal(prev => {
+            const proximo = new Set(prev);
+            if (ligado) proximo.add(linha.id); else proximo.delete(linha.id);
+            return proximo;
+        });
+
+        marcar(true);
+        try {
+            if (!estado.ve) {
+                await concederAcesso(linha);
+                return;
+            }
+            if (estado.via === 'LINK_CONDOMINO') {
+                await revogarAcesso(linha);
+                return;
+            }
+            const ok = await confirm({
+                title: 'Esconder o condomínio deste cliente?',
+                message: `A aba Condomínio sai do Portal do Cliente de ${linha._client_name}. O link dele continua valendo para contratos, cobranças e documentos — só o prédio deixa de aparecer.`,
+                variant: 'warning',
+                confirmLabel: 'Desligar a aba',
+            });
+            if (!ok) return;
+            const desligou = await condominioAcessoService.desligarAba(linha.client_id);
+            if (!desligou) {
+                notify('Este cliente não tem abas configuradas e a categoria dele não define um conjunto padrão. Ajuste as abas no cadastro do cliente.', 'error');
+                return;
+            }
+            // §22 — costura no estado local; recarregar a aba jogaria fora
+            // ordenação, busca e rolagem por causa de um interruptor.
+            setAcessoCliente(prev => ({
+                ...prev,
+                [linha.client_id]: {
+                    ativo: prev[linha.client_id]?.ativo ?? true,
+                    expiraEm: prev[linha.client_id]?.expiraEm ?? null,
+                    abaLigada: false,
+                },
+            }));
+            notify('Aba Condomínio desligada. O link do cliente continua valendo.');
+        } catch (e: any) {
+            notify(e?.message || 'Erro ao alterar o acesso ao condomínio.', 'error');
+        } finally {
+            marcar(false);
+        }
+    };
+
     const excluir = async (linha: UnitOccupancyRow) => {
         const ok = await confirm({
             title: 'Excluir o registro?',
@@ -563,8 +766,6 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
             notify(e?.message || 'Erro ao excluir o registro.', 'error');
         }
     };
-
-    const visiveis = tableColumns.visibleColumns;
 
     return (
         <div className="space-y-6">
@@ -632,13 +833,24 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
 
                         <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                             <ColumnConfigButton
-                                columns={COLUMNS.filter(c => c.key !== 'actions')}
+                                columns={COLUMNS}
                                 visibleColumns={tableColumns.visibleColumns}
                                 showColumnConfig={tableColumns.showColumnConfig}
                                 onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
                                 onToggleColumn={tableColumns.toggleColumn}
                                 onReset={tableColumns.resetColumns}
                             />
+                            {/* §6.1.2 — ajusta a largura ao conteúdo sob comando, nunca
+                                automático: recalcular a cada tecla da busca faria as
+                                colunas dançarem. Fica junto do menu de colunas porque os
+                                dois são "configurar as colunas". */}
+                            <button
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
                         </div>
 
                         <button
@@ -650,14 +862,17 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                             Importar do Comercial
                         </button>
 
-                        {/* Ação primária — §17, variante compacta */}
-                        <button
-                            onClick={abrirNova}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                        >
-                            <Plus className="w-[15px] h-[15px]" />
-                            Nova ocupação
-                        </button>
+                        {/* A ação primária mora na linha do título (§17). O botão só
+                            reaparece aqui se a tela não tiver onde pendurá-la. */}
+                        {!registrarAcaoDoTitulo && (
+                            <button
+                                onClick={abrirNova}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                            >
+                                <Plus className="w-[15px] h-[15px]" />
+                                Nova ocupação
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -683,174 +898,109 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                     </div>
                 ) : (
                     <div className="overflow-auto max-h-[70vh]">
-                        <table className="w-full text-left border-collapse">
+                        {/* §6.1 — table-layout fixed + largura = soma das colunas (nunca
+                            w-full, que fazia o navegador redistribuir a folga e arrastar
+                            uma borda mexer na coluna vizinha). O `minWidth: 100%` estica
+                            até o container e a folga vai toda para o <col /> espaçador. */}
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                            <colgroup>
+                                {colunasVisiveis.map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                ))}
+                                {/* §6.1.1 — espaçador ANTES de "Ações": absorve a folga no
+                                    meio, senão ela fica à direita de "Ações", que passa a
+                                    andar a cada arraste e desalinha da toolbar acima. */}
+                                <col />
+                                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                            </colgroup>
+                            {/* Ordem vem de `colunasVisiveis`: arrastar um cabeçalho
+                                (onMoveColumn) reordena e persiste, estilo ClickUp. */}
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    {visiveis.includes('unidade') && (
-                                        <SortableHeader colKey="unidade" label="Unidade" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
-                                    {visiveis.includes('torre') && (
-                                        <SortableHeader colKey="torre" label="Torre" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
-                                    {visiveis.includes('pessoa') && (
-                                        <SortableHeader colKey="pessoa" label="Pessoa" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
-                                    {visiveis.includes('documento') && (
-                                        <SortableHeader colKey="documento" label="CPF/CNPJ" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
-                                    {visiveis.includes('papel') && (
-                                        <SortableHeader colKey="papel" label="Papel" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
-                                    {visiveis.includes('entrada') && (
-                                        <SortableHeader colKey="entrada" label="Entrada" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
-                                    {visiveis.includes('saida') && (
-                                        <SortableHeader colKey="saida" label="Saída" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
-                                    {visiveis.includes('fracao') && (
-                                        <SortableHeader colKey="fracao" label="Fração ideal" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
-                                    {visiveis.includes('portal') && (
-                                        <SortableHeader colKey="portal" label="Portal" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
-                                    {visiveis.includes('actions') && (
-                                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
-                                    )}
+                                    {colunasVisiveis.map(key => {
+                                        const def = COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={def.label} uppercase={false}
+                                                sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}>
+                                                <cols.ResizeHandle colKey={key} />
+                                            </SortableHeader>
+                                        );
+                                    })}
+                                    {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                    <th aria-hidden="true" className="border-r border-gray-100" />
+                                    <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
+                                        Ações
+                                        <cols.ResizeHandle colKey="actions" />
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {filtradas.map(l => {
                                     const o = l.ocupacao;
+                                    const e = o ? acessoDa(o) : null;
                                     return (
                                     <tr key={l.key} className={`hover:bg-blue-50/50 transition-colors group ${o?.ended_at ? 'opacity-60' : ''}`}>
-                                        {visiveis.includes('unidade') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{l.unitName}</td>
-                                        )}
-                                        {visiveis.includes('torre') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{l.towerName}</td>
-                                        )}
-                                        {visiveis.includes('pessoa') && (
-                                            /* Unidade sem ocupante aparece rotulada, não em branco:
-                                               vazio sem rótulo lê como dado faltando por descuido. */
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                                {o ? o._client_name : <span className="text-gray-400">Sem ocupante</span>}
+                                        {colunasVisiveis.map(key => (
+                                            <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                {renderOcupacaoCell(key, l, e, alternarPortal, o ? alternandoPortal.has(o.id) : false)}
                                             </td>
-                                        )}
-                                        {visiveis.includes('documento') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{o?._client_document || '—'}</td>
-                                        )}
-                                        {visiveis.includes('papel') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                {o
-                                                    ? <span className={`text-sm font-normal ${ROLE_TEXT_COLOR[o.role]}`}>{ROLE_LABELS[o.role]}</span>
-                                                    : <span className="text-sm font-normal text-gray-400">—</span>}
-                                            </td>
-                                        )}
-                                        {visiveis.includes('entrada') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{o ? formatarData(o.started_at) : '—'}</td>
-                                        )}
-                                        {visiveis.includes('saida') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                {!o ? '—' : o.ended_at ? formatarData(o.ended_at) : 'Vigente'}
-                                            </td>
-                                        )}
-                                        {visiveis.includes('fracao') && (
-                                            /* No piloto (retrofit) esta coluna é vazia em 100% das unidades: a fração de
-                                               prédio entregue vem da CONVENÇÃO, não do motor de áreas. Por isso o vazio é
-                                               rotulado, não deixado em branco como se fosse dado faltando por descuido. */
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                {l.fracao != null
-                                                    ? `${(l.fracao * 100).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}%`
-                                                    : <span className="text-gray-400">Não informada</span>}
-                                            </td>
-                                        )}
-                                        {visiveis.includes('portal') && (
-                                            /* §8: texto colorido, sem pílula. O prazo entra no rótulo
-                                               porque "ativo" sozinho não diz que vence em 3 dias. */
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal whitespace-nowrap">
-                                                {o
-                                                    ? (() => {
-                                                        const e = acessoDa(o);
-                                                        return <span className={e.cor}>{e.texto}</span>;
-                                                    })()
-                                                    : <span className="text-gray-400">—</span>}
-                                            </td>
-                                        )}
-                                        {visiveis.includes('actions') && (
-                                            <td className="px-6 py-2.5 text-right">
-                                                <div className="flex items-center justify-end gap-1.5">
-                                                    {o && !o.ended_at && (() => {
-                                                        // Quem já VÊ o condomínio não precisa de "conceder" —
-                                                        // precisa do link para mandar. Oferecer conceder aqui
-                                                        // convidaria a regenerar um token que está em uso.
-                                                        const e = acessoDa(o);
-                                                        return e.ve ? (
-                                                            <ActionIconButton
-                                                                kind="share"
-                                                                title="Copiar o link do portal"
-                                                                icon={<LinkIcon className="w-4 h-4" />}
-                                                                onClick={() => copiarLinkDoCliente(o)}
-                                                            />
-                                                        ) : (
-                                                            <button
-                                                                onClick={() => concederAcesso(o)}
-                                                                className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all whitespace-nowrap"
-                                                            >
-                                                                {e.via === 'AGUARDA_ABA' ? 'Ligar a aba' : 'Conceder acesso'}
-                                                            </button>
-                                                        );
-                                                    })()}
-                                                    {o && !o.ended_at && (
-                                                        <ActionIconButton
-                                                            kind="edit"
-                                                            title="Encerrar ocupação"
-                                                            icon={<DoorOpen className="w-4 h-4" />}
-                                                            onClick={() => encerrar(o)}
-                                                        />
-                                                    )}
-                                                    {o && (
-                                                        /* Revogar é terciária e vai no kebab (§9.2): destrutiva do
-                                                           acesso, mas não do registro — por isso não é o showDelete. */
-                                                        <InlineDisclosureMenu
-                                                            menuItems={[
-                                                                // Ida para o outro lado da ponte: o portal onde
-                                                                // esta pessoa de fato vê o condomínio.
-                                                                ...(acessoCliente[o.client_id]?.ativo ? [{
-                                                                    icon: <ExternalLink className="w-[18px] h-[18px]" />,
-                                                                    label: 'Ver no Portal do Cliente',
-                                                                    onClick: () => navigateToFocus('client-properties', o.client_id, 'CLIENTE_CONDOMINIO'),
-                                                                }] : []),
-                                                                ...(acessos[o.id]?.is_active ? [{
-                                                                    icon: <Link2Off className="w-[18px] h-[18px]" />,
-                                                                    label: 'Revogar link de condômino',
-                                                                    onClick: () => revogarAcesso(o),
-                                                                }] : []),
-                                                            ]}
-                                                            showDelete
-                                                            onDelete={() => excluir(o)}
-                                                        />
-                                                    )}
-                                                </div>
-                                            </td>
-                                        )}
+                                        ))}
+                                        {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                        <td aria-hidden="true" className="border-r border-gray-100"></td>
+                                        <td className="px-6 py-2.5 text-right">
+                                            <div className="flex items-center justify-end gap-1.5" onClick={ev => ev.stopPropagation()}>
+                                                {/* "Conceder acesso"/"Ligar a aba" saiu daqui: virou o
+                                                    interruptor da coluna Portal, e o mesmo ato em dois
+                                                    lugares da linha é o §18. Sobra o que o interruptor
+                                                    não faz: entregar o link a quem já tem acesso. */}
+                                                {o && !o.ended_at && e?.ve && (
+                                                    <ActionIconButton
+                                                        kind="share"
+                                                        title="Copiar o link do portal"
+                                                        icon={<LinkIcon className="w-4 h-4" />}
+                                                        onClick={() => copiarLinkDoCliente(o)}
+                                                    />
+                                                )}
+                                                {o && !o.ended_at && (
+                                                    <ActionIconButton
+                                                        kind="edit"
+                                                        title="Encerrar ocupação"
+                                                        icon={<DoorOpen className="w-4 h-4" />}
+                                                        onClick={() => encerrar(o)}
+                                                    />
+                                                )}
+                                                {o && (
+                                                    /* Revogar é terciária e vai no kebab (§9.2): destrutiva do
+                                                       acesso, mas não do registro — por isso não é o showDelete.
+                                                       Continua aqui mesmo com o interruptor: quem tem os DOIS
+                                                       caminhos vivos mostra na coluna o estado do Portal do
+                                                       Cliente (precedência de `estadoDeAcesso`), e o link de
+                                                       condômino velho não some por desligar a aba. */
+                                                    <InlineDisclosureMenu
+                                                        menuItems={[
+                                                            // Ida para o outro lado da ponte: o portal onde
+                                                            // esta pessoa de fato vê o condomínio.
+                                                            ...(acessoCliente[o.client_id]?.ativo ? [{
+                                                                icon: <ExternalLink className="w-[18px] h-[18px]" />,
+                                                                label: 'Ver no Portal do Cliente',
+                                                                onClick: () => navigateToFocus('client-properties', o.client_id, 'CLIENTE_CONDOMINIO'),
+                                                            }] : []),
+                                                            ...(acessos[o.id]?.is_active ? [{
+                                                                icon: <Link2Off className="w-[18px] h-[18px]" />,
+                                                                label: 'Revogar link de condômino',
+                                                                onClick: () => revogarAcesso(o),
+                                                            }] : []),
+                                                        ]}
+                                                        showDelete
+                                                        onDelete={() => excluir(o)}
+                                                    />
+                                                )}
+                                            </div>
+                                        </td>
                                     </tr>
                                     );
                                 })}

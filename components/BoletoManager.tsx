@@ -790,55 +790,17 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
 
     return (
         <div className="space-y-6">
-            {/* 1. Título — h1 solto (§1). Escopo e ações moram na barra da §4, abaixo
-                dos KPIs; antes estavam espremidos aqui na mesma linha do título. */}
-            <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Boletos a Pagar</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                    Capture boletos via PDF e gere lançamentos automaticamente em contas a pagar.
-                </p>
-            </div>
-
-            {/* 3. Cards de resumo — padrão guia seção 4 (componente KpiCard) */}
-            {!loading && boletos.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-                    <KpiCard
-                        label="A Pagar"
-                        value={formatBRL(summary.totalPendente)}
-                        sub={`${summary.countPendente} boleto${summary.countPendente !== 1 ? 's' : ''} pendente${summary.countPendente !== 1 ? 's' : ''}`}
-                        icon={<Wallet className="w-5 h-5" />}
-                        color="blue"
-                    />
-                    <KpiCard
-                        label="Vencem em 7 dias"
-                        value={formatBRL(summary.totalAVencer7)}
-                        sub={`${summary.countAVencer7} boleto${summary.countAVencer7 !== 1 ? 's' : ''}`}
-                        icon={<Clock className="w-5 h-5" />}
-                        color="amber"
-                    />
-                    <KpiCard
-                        label="Em Atraso"
-                        value={formatBRL(summary.totalAtrasado)}
-                        sub={`${summary.countAtrasado} boleto${summary.countAtrasado !== 1 ? 's' : ''}`}
-                        icon={<AlertTriangle className="w-5 h-5" />}
-                        color="red"
-                    />
-                    <KpiCard
-                        label="Pagos no Mês"
-                        value={formatBRL(summary.totalPagoMes)}
-                        sub={`${summary.countPagoMes} boleto${summary.countPagoMes !== 1 ? 's' : ''}`}
-                        icon={<CheckCircle2 className="w-5 h-5" />}
-                        color="emerald"
-                    />
+            {/* 1. Título + ações (§1) — os botões vivem na mesma linha do título,
+                alinhados à direita; não há mais toolbar de botões separada. */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <div>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Boletos a Pagar</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                        Capture boletos via PDF e gere lançamentos automaticamente em contas a pagar.
+                    </p>
                 </div>
-            )}
 
-            {/* 4. Toolbar de botões (§4) — escopo à esquerda (organização), ação
-                primária à direita. Estavam todos na linha do título antes. */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center gap-2">
-                    {/* Sem seletor de organização aqui: vem do seletor global do topo. */}
-
+                <div className="flex flex-wrap items-center gap-2 lg:justify-end shrink-0">
                     {/* Exports — só fazem sentido com lista carregada */}
                     {filtered.length > 0 && (
                         <>
@@ -877,17 +839,51 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         <Upload className="w-4 h-4" />
                         Importar em Lote
                     </button>
-                </div>
 
-                {/* Ação primária — único azul sólido da tela (§8) */}
-                <button
-                    onClick={abrirNovo}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                >
-                    <Plus className="w-[15px] h-[15px]" />
-                    Novo boleto
-                </button>
+                    {/* Ação primária — único azul sólido da tela (§8) */}
+                    <button
+                        onClick={abrirNovo}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                    >
+                        <Plus className="w-[15px] h-[15px]" />
+                        Novo boleto
+                    </button>
+                </div>
             </div>
+
+            {/* 3. Cards de resumo — padrão guia seção 4 (componente KpiCard) */}
+            {!loading && boletos.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+                    <KpiCard
+                        label="A Pagar"
+                        value={formatBRL(summary.totalPendente)}
+                        sub={`${summary.countPendente} boleto${summary.countPendente !== 1 ? 's' : ''} pendente${summary.countPendente !== 1 ? 's' : ''}`}
+                        icon={<Wallet className="w-5 h-5" />}
+                        color="blue"
+                    />
+                    <KpiCard
+                        label="Vencem em 7 dias"
+                        value={formatBRL(summary.totalAVencer7)}
+                        sub={`${summary.countAVencer7} boleto${summary.countAVencer7 !== 1 ? 's' : ''}`}
+                        icon={<Clock className="w-5 h-5" />}
+                        color="amber"
+                    />
+                    <KpiCard
+                        label="Em Atraso"
+                        value={formatBRL(summary.totalAtrasado)}
+                        sub={`${summary.countAtrasado} boleto${summary.countAtrasado !== 1 ? 's' : ''}`}
+                        icon={<AlertTriangle className="w-5 h-5" />}
+                        color="red"
+                    />
+                    <KpiCard
+                        label="Pagos no Mês"
+                        value={formatBRL(summary.totalPagoMes)}
+                        sub={`${summary.countPagoMes} boleto${summary.countPagoMes !== 1 ? 's' : ''}`}
+                        icon={<CheckCircle2 className="w-5 h-5" />}
+                        color="emerald"
+                    />
+                </div>
+            )}
 
             {/* Erro — antes do card, para não quebrar a costura toolbar↔tabela abaixo */}
             {error && (

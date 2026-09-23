@@ -178,7 +178,7 @@ describe('esquadrias no DXF · porta, janela e vão', () => {
 
   it('a porta vem do arco (largura = buraco, dobradiça e lado pelo arco), a janela dos traços paralelos, o vão do buraco vazio; buraco de 3,5 m fica como duas paredes', () => {
     const { paredes, resumo } = reconhecer(texto);
-    expect(resumo).toEqual({ portas: 1, janelas: 1, vaos: 1, arcosSemParede: 1, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 6, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0 });
+    expect(resumo).toEqual({ portas: 1, janelas: 1, vaos: 1, arcosSemParede: 1, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 6, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0, janelasPeloSimbolo: 0, simbolosDeJanelaIgnorados: 0 });
     expect(paredes).toHaveLength(3);
 
     const [p1] = naCota(paredes, 75);
@@ -204,7 +204,7 @@ describe('esquadrias no DXF · porta, janela e vão', () => {
 
   it('com o reconhecimento de símbolos desligado, só o vão livre pelo buraco: a porta e a janela viram passagem', () => {
     const { paredes, resumo } = reconhecer(texto, { ...HIPOTESES_ESQUADRIAS_PADRAO, reconhecerSimbolos: false });
-    expect(resumo).toEqual({ portas: 0, janelas: 0, vaos: 3, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 6, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0 });
+    expect(resumo).toEqual({ portas: 0, janelas: 0, vaos: 3, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 6, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0, janelasPeloSimbolo: 0, simbolosDeJanelaIgnorados: 0 });
     const [p1] = naCota(paredes, 75);
     expect(p1.aberturas.map((ab) => ab.kind)).toEqual(['passage', 'passage']);
   });
@@ -345,6 +345,59 @@ describe('esquadrias no DXF · porta, janela e vão', () => {
     expect(resumo).toMatchObject({ portas: 0, portasNoCanto: 0 });
     expect(resumo.arcosSemVao + resumo.arcosSemParede).toBe(1);
     expect(paredes.flatMap((p) => p.aberturas)).toEqual([]);
+  });
+
+  it('JANELA PELO SÍMBOLO (P2.41): a esquadria desenhada por cima de parede contínua vira janela, com a largura dos traços', () => {
+    // O desenhista não interrompeu as faces: a parede vai de 0 a 6000 inteira, e a janela é o símbolo
+    // (duas linhas de vidro de 1,2 m) na camada JANELAS, dentro do corpo da parede.
+    const t = dxfTexto([
+      ...paredeH(0, 150, 0, 6000, []),
+      ...LINE(2000, 50, 3200, 50, 'JANELAS'),
+      ...LINE(2000, 100, 3200, 100, 'JANELAS'),
+    ]);
+    const { paredes, resumo } = reconhecer(t);
+    expect(resumo).toMatchObject({ janelas: 1, janelasPeloSimbolo: 1, vaos: 0, portas: 0 });
+    const p = paredes[0];
+    expect(p.aberturas).toHaveLength(1);
+    expect(p.aberturas[0]).toMatchObject({ kind: 'window', widthMm: 1200, offsetMm: offsetDe(p, 2000, 3200), sillMm: 1000, heightMm: 1200 });
+  });
+
+  it('⚠️ traço paralelo SEM nome de esquadria (bancada, armário) não abre janela nenhuma', () => {
+    // A mesma geometria, na camada MÓVEIS: dentro da parede, paralelo, dois traços — e nada acontece.
+    // O que separa a janela da bancada é o nome; sem ele, abrir seria furar a parede de quem confiou.
+    const t = dxfTexto([
+      ...paredeH(0, 150, 0, 6000, []),
+      ...LINE(2000, 50, 3200, 50, 'MÓVEIS'),
+      ...LINE(2000, 100, 3200, 100, 'MÓVEIS'),
+    ]);
+    const { paredes, resumo } = reconhecer(t);
+    expect(resumo).toMatchObject({ janelas: 0, janelasPeloSimbolo: 0 });
+    expect(paredes[0].aberturas).toEqual([]);
+  });
+
+  it('o símbolo no VÃO continua mandando: onde há buraco, a janela sai do buraco e não do símbolo', () => {
+    // Buraco de 1200 com o símbolo um pouco menor dentro: a largura é a do VÃO (1200), não a dos traços.
+    const t = dxfTexto([
+      ...paredeH(0, 150, 0, 6000, [[2000, 3200]]),
+      ...LINE(2100, 50, 3100, 50, 'JANELAS'),
+      ...LINE(2100, 100, 3100, 100, 'JANELAS'),
+    ]);
+    const { paredes, resumo } = reconhecer(t);
+    expect(resumo).toMatchObject({ janelas: 1, janelasPeloSimbolo: 0 });
+    expect(paredes[0].aberturas[0]).toMatchObject({ kind: 'window', widthMm: 1200 });
+  });
+
+  it('símbolo largo demais (uma fachada inteira desenhada na planta) é ignorado e relatado', () => {
+    // 5 m de traço: passa pelo filtro de comprimento (6 m) mas excede a largura plausível de uma
+    // janela (4 m), então é contado e não abre nada. Acima de 6 m o traço nem chega aqui.
+    const t = dxfTexto([
+      ...paredeH(0, 150, 0, 12000, []),
+      ...LINE(1000, 50, 6000, 50, 'JANELAS'),
+      ...LINE(1000, 100, 6000, 100, 'JANELAS'),
+    ]);
+    const { paredes, resumo } = reconhecer(t);
+    expect(resumo).toMatchObject({ janelas: 0, simbolosDeJanelaIgnorados: 1 });
+    expect(paredes[0].aberturas).toEqual([]);
   });
 
   it('bloco com nome de porta no buraco vale como porta mesmo sem arco; bloco de janela, como janela', () => {

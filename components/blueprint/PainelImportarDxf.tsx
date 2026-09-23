@@ -83,6 +83,14 @@ import {
  * planta de fundo (o deslocamento da importação veio junto), então cai em cima
  * dela; e o fundo não é subido outra vez.
  *
+ * ─── A JANELA PELO SÍMBOLO (P2.41) ──────────────────────────────────────────
+ *
+ * A porta precisa do vão desenhado; a janela, não necessariamente — o símbolo
+ * dela atravessa a abertura de ponta a ponta, e a extensão das linhas de vidro
+ * É a largura. Onde a parede está contínua e há símbolo de esquadria (a camada
+ * ou o bloco se chamando janela/window/esquadria), a janela nasce com essa
+ * medida. Traço paralelo sem esse nome — bancada, armário — não abre nada.
+ *
  * ─── PRIMEIRO O VÃO, DEPOIS O ARCO (P2.40) ──────────────────────────────────
  *
  * Porta só nasce onde o desenho TEM abertura: o buraco entre dois trechos da
@@ -253,7 +261,7 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
     ? { paredes: opura.paredes, resumo: opura.resumo }
     : preparado && !pelaOpura
       ? aberturasDoDxf(filtradas, preparado, mmPorUnidade, camada, nivel?.defaultHeightMm ?? 2800, hipoteses)
-      : { paredes: [], resumo: { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 0, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0 } };
+      : { paredes: [], resumo: { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 0, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0, janelasPeloSimbolo: 0, simbolosDeJanelaIgnorados: 0 } };
   // REGIÃO (P2.38): gera só o que está dentro do retângulo marcado no desenho. O critério é o ponto
   // MÉDIO da parede: uma parede que atravessa a borda pertence a quem tem a maior parte dela.
   const dentroDaRegiao = (p: { a: { x: number; y: number }; b: { x: number; y: number } }) => {
@@ -820,6 +828,7 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
                   ? (pelaOpura ? 'Nenhum bloco de esquadria no arquivo.' : 'Nenhuma porta, janela ou vão reconhecido.')
                   : `${contagem.portas} porta(s) · ${contagem.janelas} janela(s) · ${contagem.vaos} vão(s) livre(s)`}
                 {contagem.correr > 0 ? ` · ${contagem.correr} de correr` : ''}
+                {esquadrias.resumo.janelasPeloSimbolo > 0 ? ` (${esquadrias.resumo.janelasPeloSimbolo} pelo símbolo, sem vão desenhado)` : ''}
                 {opura && opura.resumo.ambientes > 0 ? ` · ${opura.resumo.ambientes} nome(s) de ambiente` : ''}
               </p>
             )}
@@ -832,13 +841,14 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
                 {esquadrias.resumo.cantosFechados > 0 ? ` · ${esquadrias.resumo.cantosFechados} canto(s) fechado(s)` : ''}
               </p>
             )}
-            {(esquadrias.resumo.arcosSemParede > 0 || esquadrias.resumo.arcosSemVao > 0 || esquadrias.resumo.tocosDeBatente > 0 || preparado.blocosExpandidos > 0 || limpo.removidas > 0 || espessurasFora.size > 0) && (
+            {(esquadrias.resumo.arcosSemParede > 0 || esquadrias.resumo.arcosSemVao > 0 || esquadrias.resumo.simbolosDeJanelaIgnorados > 0 || esquadrias.resumo.tocosDeBatente > 0 || preparado.blocosExpandidos > 0 || limpo.removidas > 0 || espessurasFora.size > 0) && (
               <p className="mt-0.5 text-[10px] text-slate-400" data-testid="resumo-ignorados">
                 {[
                   espessurasFora.size > 0 ? `${limpo.paredes.length - filtradas.length} parede(s) fora pelo filtro de espessura` : '',
                   limpo.removidas > 0 ? `${limpo.removidas} sobreposta(s) descartada(s)` : '',
                   esquadrias.resumo.tocosDeBatente > 0 ? `${esquadrias.resumo.tocosDeBatente} toco(s) de batente descartado(s)` : '',
                   esquadrias.resumo.arcosSemVao > 0 ? `${esquadrias.resumo.arcosSemVao} arco(s) de porta em parede SEM vão — porta não criada` : '',
+                  esquadrias.resumo.simbolosDeJanelaIgnorados > 0 ? `${esquadrias.resumo.simbolosDeJanelaIgnorados} símbolo(s) de janela fora da largura plausível` : '',
                   esquadrias.resumo.arcosSemParede > 0 ? `${esquadrias.resumo.arcosSemParede} arco(s) de porta longe de parede, ignorado(s)` : '',
                   preparado.blocosExpandidos > 0 ? `${preparado.blocosExpandidos} bloco(s) expandido(s)` : '',
                 ].filter(Boolean).join(' · ')}

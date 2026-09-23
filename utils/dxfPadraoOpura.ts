@@ -96,7 +96,7 @@ export function lerPadraoOpura(
   alturaDaParedeMm: number,
   hip: HipotesesDeEsquadrias,
 ): LeituraOpura {
-  const resumo: LeituraOpura['resumo'] = { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 0, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0, camadas: [], correr: 0, ambientes: 0, esquadriasSemParede: 0, esquadriasForaDaParede: 0 };
+  const resumo: LeituraOpura['resumo'] = { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 0, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0, janelasPeloSimbolo: 0, simbolosDeJanelaIgnorados: 0, camadas: [], correr: 0, ambientes: 0, esquadriasSemParede: 0, esquadriasForaDaParede: 0 };
 
   // ── Paredes: um traço, uma parede; a espessura está no nome da camada ────
   const porCamada = new Map<string, SegmentoDxf[]>();

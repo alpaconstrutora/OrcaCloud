@@ -1707,6 +1707,28 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 - Testes: `dxfEsquadrias.test.ts` (arco em parede contínua não abre porta e é relatado — o teste que antes fixava o contrário, agora invertido; porta no canto SEM a perpendicular também não vira porta; a porta no canto com batente continua, com `portasNoCanto: 1`; as quatro combinações de lado seguem em cima do arco do arquivo).
 - App real (escritas bloqueadas: 15, 0 erros): projeto da empresa, camada PAREDE, "só as principais" → "219 paredes · **34 porta(s)** · 38 janela(s) · 54 vão(s)" e, no que ficou de fora, **"1 arco(s) de porta em parede SEM vão — porta não criada · 38 arco(s) de porta longe de parede"**.
 
+### P2.41 — A janela pelo símbolo, e por que muitas não entravam (23/09/2026)
+
+**Pedido**: *"verifique por que muitas janelas não estão sendo reconhecidas"*.
+
+**O que a medição achou** (projeto real da empresa, camada PAREDE)
+- A camada `JANELAS` tem **458 traços**, que se agrupam em **62 símbolos**. Parecem 62 janelas; não são.
+- **21** estão sobre parede reconhecida — e **19 viraram janela**; 2 falharam por cobertura (56 %, contra os 60 % exigidos).
+- **~28** estão a 1–5 m de qualquer parede, **sem nenhum traço de parede em volta**: são as esquadrias desenhadas em **elevação** na mesma prancha (uma delas tem 10 linhas paralelas a cada 5 cm — vidro em vista, não em planta).
+- **12** estão perto de parede, e a inspeção mostrou o que são: símbolos cujo agrupamento junta duas janelas vizinhas (o centro cai entre elas) ou que estão sobre paredes que o pareamento não reconheceu.
+- Uma varredura independente confirmou o essencial: **nenhuma janela sobre parede reconhecida ficou de fora** — o classificador não é o gargalo.
+
+**O caso que faltava cobrir, e entrou**
+- `utils/dxfParaKernel.ts` — **janela pelo símbolo, em parede contínua**: onde o desenhista não interrompeu as faces e desenhou a esquadria por cima, a janela nasce com a **extensão medida das linhas de vidro**. Isso não contradiz a P2.40: o arco da porta não diz onde o vão começa nem termina, mas o símbolo da janela atravessa a abertura de ponta a ponta — a largura é medida, não suposta.
+- ⚠️ **Só com o nome declarando**: a camada (ou o bloco) tem de casar `/janela|window|esquadr|jan/i`. Bancada, armário e degrau também são traços paralelos dentro da parede; sem esse nome não se abre nada — o preço de errar aqui é um buraco na parede de quem confiou no importador.
+- Largura plausível 0,4–4 m; fora disso o símbolo é contado (`simbolosDeJanelaIgnorados`) e não abre nada. Onde já há vão, o **vão manda** (a largura sai dele, não do símbolo).
+- Tela: "N janela(s) … (N pelo símbolo, sem vão desenhado)" e, no rodapé, os símbolos fora da largura plausível.
+
+**Prova**
+- `npx tsc --noEmit` ok · check-ui ok · `check-xss-sinks.sh` ok · suíte cheia **441 arquivos / 5097 testes** · `npm run build` ok.
+- Testes: `dxfEsquadrias.test.ts` (janela por cima de parede contínua vira janela com a largura dos traços; os mesmos traços na camada `MÓVEIS` não abrem nada; com vão desenhado a largura é a do vão; símbolo de 5 m é ignorado e relatado).
+- No projeto real: **nada muda** (0 janelas pelo símbolo — lá todas já vinham do vão), o que era o esperado e mostra que o caminho novo não inventa janela onde o desenho já estava certo. Num DXF com a esquadria desenhada por cima da parede: "4 paredes · 0 porta(s) · **2 janela(s) · (1 pelo símbolo, sem vão desenhado)**", as duas visíveis no canvas (escritas bloqueadas: 15, 0 erros).
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

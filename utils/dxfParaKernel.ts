@@ -312,6 +312,11 @@ const RAIO_PORTA_MAX_MM = 1600;
 const FOLGA_DOBRADICA_MM = 150;
 const BLOCO_DE_PORTA = /porta|door/i;
 const BLOCO_DE_JANELA = /janela|window|\bjan\b/i;
+/** Camada (ou bloco) cujo nome declara esquadria: a evidência que permite abrir janela em parede contínua (P2.41). */
+const NOME_DE_JANELA = /janela|window|esquadr|\bjan\b/i;
+/** Largura plausível de uma janela em planta, em mm. */
+const JANELA_MIN_MM = 400;
+const JANELA_MAX_MM = 4000;
 
 export interface ParedeComAberturas extends ParedeDoDxf {
   aberturas: AberturaLida[];
@@ -335,6 +340,10 @@ export interface ResumoDeEsquadrias {
   arcosSemVao: number;
   /** P2.40: portas abertas no vão entre a ponta da parede e o batente do canto. */
   portasNoCanto: number;
+  /** P2.41: janelas abertas pelo SÍMBOLO dentro de parede contínua (o desenho não interrompeu as faces). */
+  janelasPeloSimbolo: number;
+  /** P2.41: grupos de símbolo de janela sobre parede que não viraram janela (largura fora da faixa, traços de menos). */
+  simbolosDeJanelaIgnorados: number;
 }
 
 interface Ponto {
@@ -419,7 +428,7 @@ export function aberturasDoDxf(
 ): { paredes: ParedeComAberturas[]; resumo: ResumoDeEsquadrias } {
   const arcos = hip.reconhecerSimbolos ? arcosDePorta(leitura.arcos, mmPorUnidade) : [];
   const tracos = hip.reconhecerSimbolos ? tracosMm(leitura.segmentos, mmPorUnidade, camadaDeParede) : [];
-  const resumo: ResumoDeEsquadrias = { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 0, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0 };
+  const resumo: ResumoDeEsquadrias = { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 0, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0, janelasPeloSimbolo: 0, simbolosDeJanelaIgnorados: 0 };
   const alturaPorta = Math.min(hip.portaAlturaMm, alturaDaParedeMm);
   const janela = (): AberturaLida => {
     const sill = Math.min(hip.janelaPeitorilMm, Math.max(0, alturaDaParedeMm - 1));
@@ -677,6 +686,75 @@ export function aberturasDoDxf(
     }
   }
   resumo.tocosDeBatente = tocos.size;
+
+  // ── Janela pelo SÍMBOLO, em parede contínua (P2.41) ──────────────────────
+  //
+  // A porta precisa do vão desenhado (P2.40) porque o arco não diz onde ele
+  // começa nem termina. A JANELA é outra coisa: o símbolo — as duas ou mais
+  // linhas de vidro — atravessa o vão de ponta a ponta, e a extensão delas É a
+  // largura da abertura, medida, não suposta. Por isso aqui a janela pode
+  // nascer sem buraco entre trechos: quando o desenhista não interrompeu as
+  // faces da parede e desenhou a esquadria por cima.
+  //
+  // ⚠️ SÓ COM O NOME DECLARANDO. Bancada, armário e degrau também são traços
+  // paralelos dentro da parede; o que separa a janela deles é a camada (ou o
+  // bloco) se chamar janela/window/esquadria. Sem esse nome, não se abre nada —
+  // o preço de errar aqui é um buraco na parede de quem confiou no importador.
+  if (hip.reconhecerSimbolos) {
+    for (const p of emendadas) {
+      const L = Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y) || 1;
+      const ux = (p.b.x - p.a.x) / L;
+      const uy = (p.b.y - p.a.y) / L;
+      const nx = -uy;
+      const ny = ux;
+      const faixa = p.espessuraMm / 2 + 50;
+      const intervalos: [number, number][] = [];
+      for (const t of tracos) {
+        if (!NOME_DE_JANELA.test(t.camada) && !(t.bloco && NOME_DE_JANELA.test(t.bloco))) continue;
+        if (Math.abs(t.ux * ux + t.uy * uy) < 0.99985) continue;
+        const na = (t.a.x - p.a.x) * nx + (t.a.y - p.a.y) * ny;
+        const nb = (t.b.x - p.a.x) * nx + (t.b.y - p.a.y) * ny;
+        if (Math.abs(na) > faixa || Math.abs(nb) > faixa) continue;
+        const ta = (t.a.x - p.a.x) * ux + (t.a.y - p.a.y) * uy;
+        const tb = (t.b.x - p.a.x) * ux + (t.b.y - p.a.y) * uy;
+        const t0 = Math.max(0, Math.min(ta, tb));
+        const t1 = Math.min(L, Math.max(ta, tb));
+        if (t1 - t0 < hip.vaoMinMm) continue;
+        intervalos.push([t0, t1]);
+      }
+      if (intervalos.length < 2) continue;
+      // Traços que se tocam são a MESMA esquadria; um espaço entre eles separa duas janelas.
+      intervalos.sort((a, b) => a[0] - b[0]);
+      const grupos: { ini: number; fim: number; quantos: number }[] = [];
+      let atual = { ini: intervalos[0][0], fim: intervalos[0][1], quantos: 1 };
+      for (const [a, b] of intervalos.slice(1)) {
+        if (a > atual.fim + 100) {
+          grupos.push(atual);
+          atual = { ini: a, fim: b, quantos: 1 };
+        } else {
+          atual.fim = Math.max(atual.fim, b);
+          atual.quantos++;
+        }
+      }
+      grupos.push(atual);
+      for (const g of grupos) {
+        if (g.quantos < 2) continue;
+        const largura = Math.round(g.fim - g.ini);
+        const offsetMm = Math.round(g.ini);
+        if (largura < JANELA_MIN_MM || largura > JANELA_MAX_MM) {
+          resumo.simbolosDeJanelaIgnorados++;
+          continue;
+        }
+        // Onde já há abertura (o caminho do vão, que é o preferido), não se mexe.
+        if (p.aberturas.some((ab) => ab.offsetMm < offsetMm + largura && offsetMm < ab.offsetMm + ab.widthMm)) continue;
+        const sill = Math.min(hip.janelaPeitorilMm, Math.max(0, alturaDaParedeMm - 1));
+        p.aberturas.push({ kind: 'window', offsetMm, widthMm: largura, heightMm: Math.max(1, Math.min(hip.janelaAlturaMm, alturaDaParedeMm - sill)), sillMm: sill });
+        p.aberturas.sort((x, y) => x.offsetMm - y.offsetMm);
+        resumo.janelas++;
+        resumo.janelasPeloSimbolo++;
+      }
+    }
+  }
 
   const limpas = emendadas.filter((p) => !tocos.has(p));
   return { paredes: acabarJuncoes(limpas, resumo), resumo };

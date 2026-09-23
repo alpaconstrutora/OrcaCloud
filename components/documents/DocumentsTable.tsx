@@ -260,7 +260,7 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
         <table
           ref={cols?.tableRef}
           className={cols ? 'text-left border-collapse' : 'w-full text-left border-collapse'}
-          style={cols ? { tableLayout: 'fixed', width: tableWidth } : undefined}
+          style={cols ? { tableLayout: 'fixed', width: tableWidth, minWidth: '100%' } : undefined}
         >
           {cols && (
             <colgroup>

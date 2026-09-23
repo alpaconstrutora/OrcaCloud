@@ -308,7 +308,7 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ organizationId, onNew
                 const tableWidth = visibleCols.reduce((s, c) => s + cols.getWidth(c.key), 0) + cols.getWidth('actions');
                 return (
                 <div className="overflow-auto max-h-[70vh]">
-                    <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                    <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth, minWidth: '100%' }}>
                             <colgroup>
                                 {visibleCols.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />)}
                                 <col />

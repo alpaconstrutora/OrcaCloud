@@ -1323,7 +1323,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   return (
                     <div className="border border-gray-200 rounded-[10px] overflow-hidden shadow-sm bg-white">
                       <div className="overflow-x-auto">
-                        <table ref={wsUserCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                        <table ref={wsUserCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth, minWidth: '100%' }}>
                           <colgroup>
                             {orderedVisible.map(key => <col key={key} data-col-key={key} style={{ width: `${wsUserCols.getWidth(key)}px` }} />)}
                             <col />
@@ -2024,6 +2024,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   <table ref={partnerCols.tableRef} className="text-left border-collapse" style={{
                     tableLayout: 'fixed',
                     width: tableColumns.orderedVisibleColumns.reduce((s, k) => s + partnerCols.getWidth(k), 0) + partnerCols.getWidth('actions'),
+                    minWidth: '100%',
                   }}>
                     <colgroup>
                       {tableColumns.orderedVisibleColumns.map(key => (

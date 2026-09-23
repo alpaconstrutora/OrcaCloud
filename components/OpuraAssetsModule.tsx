@@ -1667,7 +1667,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                       const orderedVisibleKeys = assetTableColumns.orderedVisibleColumns.filter(k => k !== 'actions');
                       return (
                         <div className="overflow-x-auto">
-                          <table ref={assetCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                          <table ref={assetCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth, minWidth: '100%' }}>
                             <colgroup>
                               {orderedVisibleKeys.map(key => (
                                 <col key={key} data-col-key={key} style={{ width: `${assetCols.getWidth(key)}px` }} />
@@ -1851,7 +1851,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   // Sem moldura própria: o card acoplado acima já é a moldura (§5.2)
                   <>
                     <div className="overflow-x-auto">
-                      <table ref={reservationCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                      <table ref={reservationCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth, minWidth: '100%' }}>
                         <colgroup>
                           {orderedVisibleKeys.map(key => (
                             <col key={key} data-col-key={key} style={{ width: `${reservationCols.getWidth(key)}px` }} />
@@ -2045,7 +2045,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   return (
                     <>
                       <div className="overflow-x-auto">
-                        <table ref={maintenanceCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                        <table ref={maintenanceCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth, minWidth: '100%' }}>
                           <colgroup>
                             {orderedVisibleKeys.map(key => (
                               <col key={key} data-col-key={key} style={{ width: `${maintenanceCols.getWidth(key)}px` }} />

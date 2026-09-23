@@ -536,7 +536,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                 columns={BANK_COLUMNS} tableColumns={bankTableColumns} cols={bankCols}
                 loading={loading} emptyLabel="Nenhuma divergência deste tipo"
             >
-                <table ref={bankCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: bankTableWidth }}>
+                <table ref={bankCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: bankTableWidth, minWidth: '100%' }}>
                     <colgroup>
                         {bankVisible.map(key => <col key={key} data-col-key={key} style={{ width: `${bankCols.getWidth(key)}px` }} />)}
                         <col />
@@ -597,7 +597,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                 columns={INTERNAL_COLUMNS} tableColumns={internalTableColumns} cols={internalCols}
                 loading={loading} emptyLabel="Nenhuma divergência deste tipo"
             >
-                <table ref={internalCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: internalTableWidth }}>
+                <table ref={internalCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: internalTableWidth, minWidth: '100%' }}>
                     <colgroup>
                         {internalVisible.map(key => <col key={key} data-col-key={key} style={{ width: `${internalCols.getWidth(key)}px` }} />)}
                         <col />
@@ -658,7 +658,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                 columns={MISMATCH_COLUMNS} tableColumns={mismatchTableColumns} cols={mismatchCols}
                 loading={loading} emptyLabel="Nenhuma divergência deste tipo"
             >
-                <table ref={mismatchCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: mismatchTableWidth }}>
+                <table ref={mismatchCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: mismatchTableWidth, minWidth: '100%' }}>
                     <colgroup>
                         {mismatchVisible.map(key => <col key={key} data-col-key={key} style={{ width: `${mismatchCols.getWidth(key)}px` }} />)}
                         <col />

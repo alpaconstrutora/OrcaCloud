@@ -1037,7 +1037,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
             ) : (
                 viewMode === 'list' ? (
                         <div className="overflow-auto max-h-[70vh]">
-                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth }}>
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
                                 {displayColumns.map(key => (
                                     <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />

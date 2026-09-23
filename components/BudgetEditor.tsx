@@ -2698,7 +2698,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       }
         {/* Conteúdo — SEM bg/border/rounded/shadow próprios: o card pai já supre (§5.2) */}
         <div className="flex-1 overflow-auto min-h-0">
-          <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth }}>
+          <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
             {/* Uma única definição de coluna para TODAS as linhas (cabeçalho, grupo,
                 etapa, subetapa e item) — antes eram 3 templates de grid distintos
                 (11, 9 e 12 colunas), e por isso as colunas nunca alinhavam.

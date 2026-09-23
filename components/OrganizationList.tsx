@@ -685,7 +685,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                     </div>
                                 </div>
                                 <div className="overflow-x-auto">
-                                <table ref={allUsersCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: allUsersTableTotalWidth }}>
+                                <table ref={allUsersCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: allUsersTableTotalWidth, minWidth: '100%' }}>
                                     <colgroup>
                                         {allUsersColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                             <col key={key} data-col-key={key} style={{ width: `${allUsersCols.getWidth(key)}px` }} />

@@ -2092,7 +2092,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                         </div>
                     ) : (
                         <div className="overflow-auto max-h-[70vh]">
-                            <table ref={analysisCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: analysisTableTotalWidth }}>
+                            <table ref={analysisCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: analysisTableTotalWidth, minWidth: '100%' }}>
                                 <colgroup>
                                     {ANALYSIS_COLUMNS.filter(c => analysisTableColumns.visibleColumns.includes(c.key)).map(c => (
                                         <col key={c.key} data-col-key={c.key} style={{ width: `${analysisCols.getWidth(c.key)}px` }} />
@@ -2229,7 +2229,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                         </div>
                     ) : (
                         <div className="overflow-auto max-h-[70vh]">
-                            <table ref={clientTypeCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: clientTypeTableTotalWidth }}>
+                            <table ref={clientTypeCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: clientTypeTableTotalWidth, minWidth: '100%' }}>
                                 <colgroup>
                                     {CLIENT_TYPE_COLUMNS.filter(c => clientTypeTableColumns.visibleColumns.includes(c.key)).map(c => (
                                         <col key={c.key} data-col-key={c.key} style={{ width: `${clientTypeCols.getWidth(c.key)}px` }} />
@@ -2453,7 +2453,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
 
                             {viewMode === 'list' && (
                                 <div className="overflow-auto max-h-[70vh]">
-                                    <table ref={unitsCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: unitsTableTotalWidth }}>
+                                    <table ref={unitsCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: unitsTableTotalWidth, minWidth: '100%' }}>
                                         <colgroup>
                                             {unitsTableColumns.orderedVisibleColumns.filter(key => (unitsModeColumnKeys as readonly string[]).includes(key)).map(key => (
                                                 <col key={key} data-col-key={key} style={{ width: `${unitsCols.getWidth(key)}px` }} />
@@ -2836,7 +2836,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             ) : (
                             <>
                                 <div className="overflow-auto max-h-[70vh]">
-                                <table ref={dealCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: dealsTableTotalWidth }}>
+                                <table ref={dealCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: dealsTableTotalWidth, minWidth: '100%' }}>
                                     <colgroup>
                                         {dealTableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                             <col key={key} data-col-key={key} style={{ width: `${dealCols.getWidth(key)}px` }} />

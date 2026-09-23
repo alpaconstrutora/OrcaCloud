@@ -606,7 +606,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                    table-layout:fixed (o navegador redistribuiria a sobra e arrastar
                    uma borda moveria a coluna vizinha errada). */
                 <div className="overflow-auto max-h-[70vh]">
-                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth }}>
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
                                 {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                     <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />

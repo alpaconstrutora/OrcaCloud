@@ -279,7 +279,7 @@ export function FiscalRules({ organizationId, writeOrganizationId, onToast, chro
               const visibleR = tableColumns.orderedVisibleColumns.filter(key => key !== 'actions');
               const rulesTableWidth = visibleR.reduce((s, key) => s + cols.getWidth(key), 0) + cols.getWidth('actions');
               return (
-            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: rulesTableWidth }}>
+            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: rulesTableWidth, minWidth: '100%' }}>
               <colgroup>
                 {visibleR.map(key => <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />)}
                 <col />

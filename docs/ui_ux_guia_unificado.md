@@ -840,6 +840,19 @@ bug original — usa exatamente esta combinação desde então.
 > dimensionar cada coluna pelo conteúdo e deixar o espaçador ficar com o resto —
 > e registrar a soma alvo num comentário ao lado de `*_COL_WIDTHS`.
 
+**Estado das ocorrências (2026-09-23).** Varredura nas 96 tabelas
+`tableLayout: 'fixed'` do app: **79 têm espaçador e `minWidth: '100%'`; 17 não
+têm nem um nem outro.** Zero tabelas com espaçador e sem `minWidth` — que era o
+caso morto. A regra é esse par: **espaçador e `minWidth` andam juntos, ou nenhum
+dos dois.** Tabela sem espaçador NÃO pode receber `minWidth` — aí não há coluna
+elástica e a folga se espalha pelas colunas de dado, que é o bug do §6.1.
+
+As 28 tabelas corrigidas na varredura (20 arquivos) mostravam faixa branca
+sempre que a soma das colunas visíveis ficava abaixo do container — folga medida
+de 2px (`OrganizationUsers`, soma 1288) a 540px (`RegulatoryMapModule`, soma
+750). Ficaram de fora, por não terem espaçador, `OpuraAssetsModule.tsx:2232`
+(rateio) e `RentalsModule.tsx:2992` (corretores).
+
 > ⚠️ O espaçador entra nas **três** listas na mesma posição: `<col />` no
 > colgroup, `<th aria-hidden="true" className="border-r border-gray-100" />` no
 > thead e `<td aria-hidden="true"></td>` no tbody. Faltar em uma desalinha tudo

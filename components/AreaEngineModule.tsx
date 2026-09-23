@@ -1397,7 +1397,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                             const orderedProjectColumns = projectTableColumns.orderedVisibleColumns.filter(key => key !== 'actions');
                             return (
                                 <div className="overflow-x-auto">
-                                    <table ref={projectCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                                    <table ref={projectCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth, minWidth: '100%' }}>
                                         <colgroup>
                                             {orderedProjectColumns.map(key => (
                                                 <col key={key} data-col-key={key} style={{ width: `${projectCols.getWidth(key)}px` }} />

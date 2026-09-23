@@ -1125,7 +1125,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                         </div>
                     </div>
                     <div className="overflow-x-auto">
-                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: memberTableTotalWidth }}>
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: memberTableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
                                 {memberColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                     <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />

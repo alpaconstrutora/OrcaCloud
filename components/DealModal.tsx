@@ -3797,7 +3797,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </div>
                                     ) : (
                                         <div className="overflow-auto max-h-[60vh]">
-                                            <table ref={parcelasResize.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: parcelasTableWidth }}>
+                                            <table ref={parcelasResize.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: parcelasTableWidth, minWidth: '100%' }}>
 {parcelasColGroup}
                                                 <thead>
                                                     {/* Sticky §6.5, sentence case §6.2, px-6 + border-r §6.6.

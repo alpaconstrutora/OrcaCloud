@@ -338,7 +338,7 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
                     </div>
                 ) : (
                     <div className="overflow-auto max-h-[70vh]">
-                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth }}>
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
                                 {columns.filter(c => c.key !== 'actions').map(c => (
                                     tableColumns.visibleColumns.includes(c.key) && (

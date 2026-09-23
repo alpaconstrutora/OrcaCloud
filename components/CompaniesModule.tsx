@@ -709,7 +709,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
 
                         return (
                             <div className="overflow-x-auto">
-                                <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                                <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth, minWidth: '100%' }}>
                                     <colgroup>
                                         {orderedVisible.map(key => <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />)}
                                         <col />

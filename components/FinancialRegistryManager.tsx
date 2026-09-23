@@ -548,7 +548,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                         const orderedVisible = orderedVisibleForScreen;
                         const tableWidth = orderedVisible.reduce((s, k) => s + cols.getWidth(k), 0) + cols.getWidth('actions');
                         return (
-                    <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                    <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth, minWidth: '100%' }}>
                         <colgroup>
                             {orderedVisible.map(key => (
                                 <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />

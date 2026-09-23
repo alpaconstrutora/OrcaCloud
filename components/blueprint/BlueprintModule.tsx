@@ -266,7 +266,7 @@ export default function BlueprintModule() {
                 <table
                   ref={cols.tableRef}
                   className="text-left border-collapse"
-                  style={{ tableLayout: 'fixed', width: tableTotalWidth }}
+                  style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}
                 >
                   <colgroup>
                     {COLUMNS.filter((c) => c.key !== 'actions').map(

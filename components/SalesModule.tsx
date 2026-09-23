@@ -164,8 +164,7 @@ function renderInventoryDetailCell(
     key: string,
     property: Property,
     ctx: {
-        getStatusColor: (s: PropertyStatus) => string;
-        getStatusLabel: (s: PropertyStatus) => string;
+        unitStatus: (p: Property) => { label: string; color: string };
         empreendimentoByProperty: Record<string, { id: string; name: string; towerName?: string }>;
     },
 ): React.ReactNode {
@@ -211,7 +210,7 @@ function renderInventoryDetailCell(
         case 'floor':
             return <span className="text-sm font-normal text-gray-600">{property.floor ? `${property.floor}º` : 'Térreo'}</span>;
         case 'status':
-            return <span className={`text-sm font-normal ${ctx.getStatusColor(property.status)}`}>{ctx.getStatusLabel(property.status)}</span>;
+            return <span className={`text-sm font-normal ${ctx.unitStatus(property).color}`}>{ctx.unitStatus(property).label}</span>;
         default:
             return null;
     }
@@ -236,8 +235,7 @@ function renderInventoryMasterCell(
     key: string,
     property: Property,
     ctx: {
-        getStatusColor: (s: PropertyStatus) => string;
-        getStatusLabel: (s: PropertyStatus) => string;
+        unitStatus: (p: Property) => { label: string; color: string };
         empreendimentoByProperty: Record<string, { id: string; name: string; towerName?: string }>;
     },
 ): React.ReactNode {
@@ -253,7 +251,7 @@ function renderInventoryMasterCell(
         case 'price_per_m2':
             return '---';
         case 'status':
-            return <span className={`text-sm font-normal ${ctx.getStatusColor(property.status)}`}>{ctx.getStatusLabel(property.status)}</span>;
+            return <span className={`text-sm font-normal ${ctx.unitStatus(property).color}`}>{ctx.unitStatus(property).label}</span>;
         default:
             return null;
     }
@@ -919,6 +917,31 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         }
     };
 
+    /**
+     * Status da UNIDADE no mesmo vocabulário da negociação (2026-09-22, pedido
+     * do usuário — mesma correção que Locações ganhou em 08/2026).
+     *
+     * `PropertyStatus` tem 5 estados (Disponível/Reservado/Vendido/Alugado/
+     * Permutado) e o workflow da negociação tem 6 etapas: a unidade de uma
+     * negociação em Assinatura aparecia como "Reservado" aqui e "Assinatura"
+     * dentro da negociação. O dado está certo nos dois lugares (RESERVED é o
+     * reflexo correto de ASSINATURA) — as palavras é que não batiam. Agora a
+     * unidade mostra o ESTÁGIO da negociação que a ocupa; o rótulo do cadastro
+     * só aparece quando não há negociação ativa nenhuma (aí "Disponível", ou
+     * "Vendido"/"Permutado" de venda antiga sem negociação registrada).
+     *
+     * Uma unidade tem no máximo uma negociação ativa (regra de unicidade do
+     * commercialService), então o primeiro achado já é o certo.
+     */
+    const getUnitStatusDisplay = (property: Property): { label: string; color: string } => {
+        const deal = deals.find(d => d.status !== 'CANCELLED' &&
+            (d.units && d.units.length > 0
+                ? d.units.some(u => u.property_id === property.id)
+                : d.property_id === property.id));
+        if (deal) return getDealStatusDisplay(deal.status, deal.type);
+        return { label: getStatusLabel(property.status), color: getStatusColor(property.status) };
+    };
+
     // ui_ux_guia_unificado.md §6.3 — valor de ordenação de cada coluna de propriedade.
     const getInventorySortValue = (p: Property, key: string): string | number => {
         switch (key) {
@@ -933,7 +956,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             case 'position_weight': return getPositionWeight(p);
             case 'sun_weight': return getSunWeight(p);
             case 'floor': return p.floor ?? -1;
-            case 'status': return getStatusLabel(p.status);
+            case 'status': return getUnitStatusDisplay(p).label;
             default: return '';
         }
     };
@@ -1180,12 +1203,13 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         onEdit: () => void,
         onDelete: () => void,
         onRegisterDeal: () => void,
-        getStatusColor: (s: PropertyStatus) => string,
-        getStatusLabel: (s: PropertyStatus) => string,
+        /** Rótulo+cor do status: etapa da negociação que ocupa a unidade, ou o
+         *  estado do cadastro quando não há nenhuma (ver getUnitStatusDisplay). */
+        unitStatus: (p: Property) => { label: string; color: string },
         selected?: boolean,
         onSelect?: () => void,
         compact?: boolean
-    }> = ({ property, onEdit, onDelete, onRegisterDeal, getStatusColor, getStatusLabel, selected, onSelect, compact }) => (
+    }> = ({ property, onEdit, onDelete, onRegisterDeal, unitStatus, selected, onSelect, compact }) => (
         <div 
             onClick={() => {
                 if (property.type === 'BUILDING' && !selectedBuildingId) {
@@ -1206,8 +1230,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                     />
                 </div>
                 <div className="absolute top-6 right-6 z-10 flex flex-col gap-2 scale-90 origin-top-right">
-                    <span className={`text-sm font-normal drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)] ${getStatusColor(property.status)}`}>
-                        {getStatusLabel(property.status)}
+                    <span className={`text-sm font-normal drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)] ${unitStatus(property).color}`}>
+                        {unitStatus(property).label}
                     </span>
                     <div className="flex gap-2">
                         <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-2 bg-white/90 backdrop-blur-md rounded-[6px] text-gray-600 hover:text-blue-600 shadow-lg transition-all"><Edit className="w-4 h-4" /></button>
@@ -1494,8 +1518,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                             setEditingDeal({ id: '', property_id: property.id, client_id: '', type: 'SALE', value: property.price, date: new Date().toISOString().split('T')[0], status: 'PENDING', units: [{ property_id: property.id, value: property.price, is_primary: true }] });
                                                             setIsDealModalOpen(true);
                                                         }}
-                                                        getStatusColor={getStatusColor}
-                                                        getStatusLabel={getStatusLabel}
+                                                        unitStatus={getUnitStatusDisplay}
                                                     />
                                                 </div>
                                              ))
@@ -1519,8 +1542,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                             setEditingDeal({ id: '', property_id: property.id, client_id: '', type: 'SALE', value: property.price, date: new Date().toISOString().split('T')[0], status: 'PENDING', units: [{ property_id: property.id, value: property.price, is_primary: true }] });
                                                             setIsDealModalOpen(true);
                                                         }}
-                                                        getStatusColor={getStatusColor}
-                                                        getStatusLabel={getStatusLabel}
+                                                        unitStatus={getUnitStatusDisplay}
                                                     />
                                                 </div>
                                             );
@@ -1603,7 +1625,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                             </td>
                                                             {orderedVisible.map(key => (
                                                                 <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                                    {renderInventoryDetailCell(key, property, { getStatusColor, getStatusLabel, empreendimentoByProperty })}
+                                                                    {renderInventoryDetailCell(key, property, { unitStatus: getUnitStatusDisplay, empreendimentoByProperty })}
                                                                 </td>
                                                             ))}
                                                             {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
@@ -1646,7 +1668,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                             <td key={key}
                                                                 className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 cursor-pointer ${INVENTORY_MASTER_CELL_TEXT_CLASS[key] || ''}`}
                                                                 onClick={() => setSelectedBuildingId(property.id)}>
-                                                                {renderInventoryMasterCell(key, property, { getStatusColor, getStatusLabel, empreendimentoByProperty })}
+                                                                {renderInventoryMasterCell(key, property, { unitStatus: getUnitStatusDisplay, empreendimentoByProperty })}
                                                             </td>
                                                         ))}
                                                         {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}

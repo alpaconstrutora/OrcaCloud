@@ -184,15 +184,13 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) =
     // ── Lista ──────────────────────────────────────────────────────────────────
     return (
         <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
+            {/* Cabeçalho §20 — h1 + p direto, sem card/banda/ícone. A migalha "Comercial /
+                Incorporação" saiu por ser caminho de módulo estático (§18/§23): a sidebar já
+                mostra o grupo Comercial com "Mapa Regulatório" ativo. */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <div className="flex items-center gap-2 text-xs font-semibold text-gray-400">
-                        <span>Comercial</span><span>/</span><span className="text-gray-600 font-bold">Incorporação</span>
-                    </div>
-                    <h1 className="text-2xl font-black text-gray-900 tracking-tight mt-1.5 flex items-center gap-2">
-                        <Map className="w-6 h-6 text-blue-600" /> Mapa Regulatório
-                    </h1>
-                    <p className="text-sm text-gray-500 font-medium mt-1">
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Mapa Regulatório</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">
                         Cadastre o mapa regulatório de cada cidade uma vez; os empreendimentos importam as zonas aplicáveis.
                     </p>
                 </div>

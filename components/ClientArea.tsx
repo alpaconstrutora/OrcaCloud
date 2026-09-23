@@ -276,11 +276,28 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     React.useEffect(() => {
         const orgId = settings.organizationId || (settings as any).organization_id || organizationId;
         if (clientProfile && (activeTab === 'financeiro' || activeTab === 'contratos')) {
-            if (orgId) {
-                commercialFinanceService.listAllClientInstallments(clientProfile.id, orgId).then(installments => {
-                    setGlobalClientInstallments(installments);
-                }).catch(console.error);
+            // Duas fontes, unidas por id. A consulta direta (`listAllClient-
+            // Installments`) só funciona para quem é membro da organização — é o
+            // admin olhando o portal por dentro, e é ela que ainda responde
+            // pelas parcelas do cofre legado (`projects.settings`). A RPC
+            // responde por quem entra pelo portal de verdade: `internal_-
+            // transactions` tem policy só de membro, então por link (anon) ou
+            // como cliente logado a tabela devolvia `[]` sem erro — 135
+            // recebíveis e R$ 894.400 invisíveis nas 4 pessoas com link vivo,
+            // medido em 23/09/2026. A cota condominial cairia no mesmo buraco.
+            const fontes: Promise<PaymentInstallment[]>[] = [
+                portalToken
+                    ? clientPortalService.getReceivablesByToken(portalToken, clientProfile.id)
+                    : clientPortalService.getReceivablesForClient(clientProfile.id),
+            ];
+            if (orgId && !portalToken) {
+                fontes.push(commercialFinanceService.listAllClientInstallments(clientProfile.id, orgId));
             }
+            Promise.all(fontes).then(listas => {
+                const porId = new Map<string, PaymentInstallment>();
+                for (const parcela of listas.flat()) porId.set(parcela.id, parcela);
+                setGlobalClientInstallments([...porId.values()]);
+            }).catch(console.error);
             const loadContracts = portalToken
                 ? clientPortalService.getContractsByToken(portalToken)
                 : contractService.listContractsByClientId(clientProfile.id, orgId || undefined, clientProfile.category);
@@ -290,9 +307,16 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         }
         if (activeTab === 'manutencao' || (activeTab === 'dashboard' && ehLocacao(clientCategory))) {
             setRequestsLoading(true);
+            // ⚠️ AS DUAS PONTAS SÃO RPC, pela mesma razão das abas Condomínio e
+            // Unidade abaixo: `client_requests` só tem policy de membro da
+            // organização, e o cliente logado não é membro — `listRequests`
+            // devolvia zero linhas SEM ERRO, e a aba dizia "nenhum chamado" a
+            // quem tinha. As duas RPCs também trazem os chamados das UNIDADES
+            // que a pessoa ocupa, não só os que ela abriu: o chamado é do
+            // imóvel, e o portal legado do condômino já fazia assim.
             const load = portalToken
                 ? clientRequestsService.getRequestsByToken(portalToken)
-                : (clientProfile && orgId ? clientRequestsService.listRequests(orgId, clientProfile.id) : Promise.resolve([]));
+                : (clientProfile ? clientRequestsService.getRequestsForClient(clientProfile.id) : Promise.resolve([]));
             load.then(setClientRequests).catch(console.error).finally(() => setRequestsLoading(false));
         }
         // Aba Condomínio: unidades, avisos e documentos do prédio.

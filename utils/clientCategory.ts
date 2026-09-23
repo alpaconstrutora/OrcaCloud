@@ -77,14 +77,31 @@ const CONDOMINIO = ['dashboard', 'condominio', 'financeiro', 'documentos', 'manu
  */
 export function presetDeAbas(category?: string | null): string[] | undefined {
     if (!normalizar(category)) return undefined;
-    // Síndico primeiro: ele é condômino, mas o rótulo é mais específico.
+    // Síndico primeiro: ele é condômino, mas o rótulo é mais específico, e não
+    // tem base de venda nem de locação por trás.
     if (ehSindico(category)) return CONDOMINIO;
-    if (ehLocacao(category) && ehCondominio(category)) return [...LOCACAO, 'condominio'];
-    if (ehLocacao(category)) return LOCACAO;
-    if (ehCondominio(category)) return CONDOMINIO;
-    if (ehServicos(category)) return SERVICOS;
-    if (ehVendas(category)) return VENDAS;
-    return undefined;
+
+    // BASE + ACRÉSCIMO, não uma cadeia de `if`s. A base é a natureza do
+    // relacionamento (o que a pessoa comprou, alugou ou contratou); `condominio`
+    // é acréscimo, porque ser condômino não substitui nada — soma.
+    //
+    // ⚠️ A cadeia antiga errava em "Venda e Condomínio": `ehCondominio` casava
+    // antes de `ehVendas` e a pessoa caía no preset só de prédio, perdendo
+    // `unidade`, `jornada`, `obra`, `contratos`, `visual`, `personalizacao`,
+    // `diario` e `suporte` — a compra inteira. Eram 8 dos 15 condôminos da base
+    // em 23/09/2026, todos com `portal_tabs` nulo (ou seja, no preset). O caso
+    // irmão "Locação e Condominio" estava tratado à mão desde 01/09; a lição é
+    // que tratar UM par à mão só adia o próximo.
+    const base = ehLocacao(category) ? LOCACAO
+        : ehServicos(category) ? SERVICOS
+        : ehVendas(category) ? VENDAS
+        : null;
+
+    if (!base) return ehCondominio(category) ? CONDOMINIO : undefined;
+    if (!ehCondominio(category)) return base;
+    // `includes` porque uma base pode vir a ter a aba no futuro — acrescentar
+    // duas vezes deixaria a aba repetida na barra do portal.
+    return base.includes('condominio') ? base : [...base, 'condominio'];
 }
 
 /** Rótulo curto para o hero do portal. `null` = usar a saudação genérica. */

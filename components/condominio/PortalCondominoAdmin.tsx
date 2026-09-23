@@ -37,13 +37,15 @@ import {
 import { KpiCard } from '../ui/KpiCard';
 import ActionIconButton from '../ui/ActionIconButton';
 import CondominoPortal from './CondominoPortal';
+import CondominioTab from '../client/CondominioTab';
+import { clientPortalService, CONDOMINIO_VAZIO, type PortalCondominio } from '../../services/clientPortalService';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { unitOccupancyService } from '../../services/unitOccupancyService';
 import {
     condominoAccessService, linkDoPortal, type AcessoCondomino,
 } from '../../services/condominoPortalService';
 import { useOrgContext } from '../../hooks/useOrgContext';
-import { estadoDeAcesso, resumirAcessos, type AcessoClienteLite } from '../../utils/acessoAoCondominio';
+import { estadoDeAcesso, resumirAcessos, type AcessoClienteLite, type ViaDeAcesso } from '../../utils/acessoAoCondominio';
 import { condominioAcessoService } from '../../services/condominioAcessoService';
 import { useStore } from '../../store/useStore';
 import { useScrollAoTopo } from '../../hooks/useScrollAoTopo';
@@ -82,6 +84,9 @@ interface Linha {
      *  que a linha alcança o outro caminho de acesso. */
     clientId: string;
     acesso?: AcessoCondomino;
+    /** Preenchido só ao abrir a prévia: por qual caminho ESTA pessoa vê o
+     *  condomínio, que é o que decide qual superfície pré-visualizar. */
+    via?: ViaDeAcesso;
 }
 
 const PortalCondominoAdmin: React.FC = () => {
@@ -513,12 +518,16 @@ const AcessosDoCondominio: React.FC<{
                                     return (
                                         <tr
                                             key={l.key}
-                                            /* A prévia renderiza <CondominoPortal token={...}>, que só
-                                               existe com link de CONDÔMINO. Quem vê pelo Portal do
-                                               Cliente não tem esse token — clicar abriria "link
-                                               inválido", que pareceria defeito do acesso da pessoa. */
-                                            className={`transition-colors group ${e.via === 'LINK_CONDOMINO' ? 'hover:bg-blue-50/50 cursor-pointer' : ''}`}
-                                            onClick={e.via === 'LINK_CONDOMINO' ? () => setPrevia(l) : undefined}
+                                            /* Clicável para quem VÊ o condomínio, pelos DOIS caminhos —
+                                               a prévia escolhe a superfície conforme o `via`. Antes só
+                                               `LINK_CONDOMINO` abria, e como não existe mais nenhum link
+                                               de condômino ativo (0 na base, 23/09/2026), a tela inteira
+                                               tinha virado uma lista que não abre nada: a prévia era de
+                                               um portal que ninguém usa. Quem está em `AGUARDA_ABA`
+                                               segue sem prévia, de propósito — não há o que pré-ver
+                                               enquanto o condomínio não aparece para a pessoa. */
+                                            className={`transition-colors group ${e.ve ? 'hover:bg-blue-50/50 cursor-pointer' : ''}`}
+                                            onClick={e.ve ? () => setPrevia({ ...l, via: e.via }) : undefined}
                                         >
                                             {v.includes('unidade') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{l.unidade}</td>}
                                             {v.includes('pessoa') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{l.pessoa}</td>}
@@ -617,12 +626,21 @@ const PreviaDoPortal: React.FC<{
                 </p>
             </div>
 
-            {previa.acesso ? (
-                /* A prévia reusa o COMPONENTE do portal, não uma cópia: o objetivo
-                   é mostrar o que o morador vê, e uma segunda implementação
-                   divergiria no primeiro ajuste. `somenteLeitura` é o único desvio.
-                   O portal traz a própria casca (§20.2.1: `min-h-screen` e gutter
-                   próprio); o container só o recorta para não sangrar na página. */
+            {previa.via === 'PORTAL_CLIENTE' ? (
+                /* O caminho de hoje. Mesma doutrina do outro ramo: reusa o
+                   COMPONENTE da aba real (`client/CondominioTab`), não uma cópia.
+                   SEM `onMarcarLido` — é o mesmo motivo de o modo somente-leitura
+                   existir: só de abrir a prévia, os avisos daquele morador seriam
+                   marcados como lidos, e o número que diz ao síndico se a
+                   comunicação chegou viraria ficção. */
+                <PreviaDoPortalDoCliente clientId={previa.clientId} />
+            ) : previa.acesso ? (
+                /* O caminho legado. A prévia reusa o COMPONENTE do portal, não uma
+                   cópia: o objetivo é mostrar o que o morador vê, e uma segunda
+                   implementação divergiria no primeiro ajuste. `somenteLeitura` é o
+                   único desvio. O portal traz a própria casca (§20.2.1:
+                   `min-h-screen` e gutter próprio); o container só o recorta para
+                   não sangrar na página. */
                 <div className="rounded-[10px] border border-gray-100 overflow-hidden shadow-sm">
                     <CondominoPortal token={previa.acesso.token} somenteLeitura />
                 </div>
@@ -636,6 +654,36 @@ const PreviaDoPortal: React.FC<{
                     </p>
                 </div>
             )}
+        </div>
+    );
+};
+
+/**
+ * A aba Condomínio do Portal do Cliente, como ELE a vê.
+ *
+ * Carrega por `getCondominioForClient`, a mesma RPC que o portal usa quando o
+ * cliente está logado — e que autoriza membro da organização, que é quem está
+ * olhando aqui. Nada de token: o link é da pessoa e não precisa ser tocado para
+ * mostrar a tela.
+ */
+const PreviaDoPortalDoCliente: React.FC<{ clientId: string }> = ({ clientId }) => {
+    const [dados, setDados] = React.useState<PortalCondominio>(CONDOMINIO_VAZIO);
+    const [carregando, setCarregando] = React.useState(true);
+
+    React.useEffect(() => {
+        let vivo = true;
+        setCarregando(true);
+        clientPortalService.getCondominioForClient(clientId)
+            .then(d => { if (vivo) setDados(d); })
+            .finally(() => { if (vivo) setCarregando(false); });
+        return () => { vivo = false; };
+    }, [clientId]);
+
+    return (
+        <div className="rounded-[10px] border border-gray-100 overflow-hidden shadow-sm bg-white p-4 md:p-6">
+            {/* Sem `onMarcarLido` e sem `onResolverDocumento`: a prévia não grava
+                leitura nem emite URL assinada em nome de ninguém. */}
+            <CondominioTab dados={dados} loading={carregando} />
         </div>
     );
 };

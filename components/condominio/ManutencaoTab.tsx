@@ -8,11 +8,13 @@
 // forma mais eficiente de um plano de manutenção morrer sem ninguém notar.
 import React from 'react';
 import {
-    AlertTriangle, CalendarClock, ClipboardList, Wrench, Search, RefreshCw, Plus, CheckCircle2, AlertCircle } from 'lucide-react';
+    AlertTriangle, CalendarClock, ClipboardList, Wrench, Search, RefreshCw, Plus, CheckCircle2, AlertCircle, MessageSquare } from 'lucide-react';
 import {
     ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
 } from '../ui/TableUtils';
 import { KpiCard } from '../ui/KpiCard';
+import { clientRequestsService, type ClientRequest } from '../../services/clientRequestsService';
+import { empreendimentoService } from '../../services/empreendimentoService';
 import ActionIconButton from '../ui/ActionIconButton';
 import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
@@ -102,7 +104,34 @@ function textoVencimento(dias: number | null, proxima?: string | null): { texto:
     return { texto: formatarData(proxima), cor: 'text-gray-600' };
 }
 
-type Aba = 'plano' | 'ordens';
+type Aba = 'plano' | 'ordens' | 'chamados';
+
+// Colunas da aba "Chamados dos condôminos". O chamado é do IMÓVEL, então a
+// unidade vem primeiro — é por ela que o síndico procura.
+const CHAMADO_COLUMNS: ColumnConfig[] = [
+    { key: 'unidade', label: 'Unidade', sortable: true },
+    { key: 'pessoa', label: 'Quem abriu', sortable: true },
+    { key: 'titulo', label: 'Chamado', sortable: true },
+    { key: 'categoria', label: 'Categoria', sortable: true },
+    { key: 'prioridade', label: 'Prioridade', sortable: true },
+    { key: 'aberto', label: 'Aberto em', sortable: true },
+    { key: 'situacao', label: 'Situação', sortable: true },
+];
+
+// §8 — texto colorido, sem pílula.
+const CHAMADO_STATUS_COLOR: Record<string, string> = {
+    'Aberto': 'text-red-600',
+    'Em Andamento': 'text-blue-600',
+    'Aguardando': 'text-amber-600',
+    'Resolvido': 'text-emerald-600',
+    'Cancelado': 'text-gray-500',
+};
+const CHAMADO_PRIORIDADE_COLOR: Record<string, string> = {
+    'Urgente': 'text-red-600',
+    'Alta': 'text-amber-600',
+    'Média': 'text-gray-600',
+    'Baixa': 'text-gray-500',
+};
 
 interface Props { empreendimento: Empreendimento }
 
@@ -114,11 +143,17 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
     const [searchTerm, setSearchTerm] = usePersistedState<string>('condominio:manutencao:search', '');
     const itemColumns = useTableColumns(ITEM_COLUMNS, 'manutencaoItemColumns');
     const orderColumns = useTableColumns(ORDER_COLUMNS, 'manutencaoOrderColumns');
+    const chamadoColumns = useTableColumns(CHAMADO_COLUMNS, 'manutencaoChamadoColumns');
 
     const [sistemas, setSistemas] = React.useState<BuildingSystem[]>([]);
     const [plano, setPlano] = React.useState<MaintenancePlan | null>(null);
     const [itens, setItens] = React.useState<MaintenancePlanItemRow[]>([]);
     const [ordens, setOrdens] = React.useState<MaintenanceOrderRow[]>([]);
+    /** Chamados abertos pelos condôminos no portal. Vêm de `client_requests`,
+     *  não do mundo `maintenance_*` — são coisas diferentes e continuam
+     *  diferentes: plano e ordem são do SÍNDICO; chamado é do MORADOR. O que
+     *  faltava era o síndico conseguir ver os do prédio dele sem sair daqui. */
+    const [chamados, setChamados] = React.useState<ClientRequest[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [erro, setErro] = React.useState<string | null>(null);
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -169,6 +204,17 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
 
             setItens(vigente ? await maintenanceService.listPlanItems(vigente.id, sys) : []);
             setOrdens(await maintenanceService.listOrders(empreendimento.id, sys));
+
+            // Chamados do prédio, recortados pelas UNIDADES dele. Falhar aqui
+            // não derruba a aba: o plano de manutenção é a razão dela existir, e
+            // o chamado é o acréscimo.
+            try {
+                const units = await empreendimentoService.listAllUnitsForEmpreendimento(empreendimento.id);
+                setChamados(await clientRequestsService.listByUnits(units.map(u => u.id)));
+            } catch (e) {
+                console.error('[ManutencaoTab] chamados dos condôminos:', e);
+                setChamados([]);
+            }
         } catch (e: any) {
             setErro(e?.message || 'Erro ao carregar a manutenção.');
         } finally {
@@ -185,8 +231,9 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
             proximos: ativos.filter(i => i._dias_para_vencer != null && i._dias_para_vencer >= 0 && i._dias_para_vencer <= 30).length,
             itens: ativos.length,
             abertas: ordens.filter(o => o.status !== 'CONCLUIDA' && o.status !== 'CANCELADA').length,
+            chamadosAbertos: chamados.filter(c => c.status !== 'Resolvido' && c.status !== 'Cancelado').length,
         };
-    }, [itens, ordens]);
+    }, [itens, ordens, chamados]);
 
     const itensFiltrados = React.useMemo(() => {
         const t = searchTerm.trim().toLowerCase();
@@ -201,6 +248,33 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
         return ordens.filter(o =>
             o.description.toLowerCase().includes(t) || o._system_name.toLowerCase().includes(t));
     }, [ordens, searchTerm]);
+
+    const chamadosFiltrados = React.useMemo(() => {
+        const t = searchTerm.trim().toLowerCase();
+        const base = !t ? chamados : chamados.filter(c =>
+            c.title.toLowerCase().includes(t)
+            || (c.description || '').toLowerCase().includes(t)
+            || (c._client_name || '').toLowerCase().includes(t)
+            || (c.unit_name || '').toLowerCase().includes(t));
+        const valor = (c: ClientRequest, col: string): string => {
+            switch (col) {
+                case 'unidade': return c.unit_name || '';
+                case 'pessoa': return c._client_name || '';
+                case 'titulo': return c.title;
+                case 'categoria': return c.category || '';
+                case 'prioridade': return c.priority || '';
+                case 'aberto': return c.opened_at || c.created_at || '';
+                case 'situacao': return c.status || '';
+                default: return '';
+            }
+        };
+        if (!chamadoColumns.sortColumn) return base;
+        return [...base].sort((a, b) => {
+            const cmp = valor(a, chamadoColumns.sortColumn!)
+                .localeCompare(valor(b, chamadoColumns.sortColumn!), 'pt-BR');
+            return chamadoColumns.sortDirection === 'desc' ? -cmp : cmp;
+        });
+    }, [chamados, searchTerm, chamadoColumns.sortColumn, chamadoColumns.sortDirection]);
 
     /** Monta a proposta a partir dos sistemas prediais cadastrados na organização. */
     const abrirCriacaoPlano = () => {
@@ -408,6 +482,7 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
 
     const iv = itemColumns.visibleColumns;
     const ov = orderColumns.visibleColumns;
+    const cv = chamadoColumns.visibleColumns;
 
     return (
         <div className="space-y-6">
@@ -420,7 +495,7 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                 define inverte a leitura (§20.1, ordem corrigida em 02/08/2026). */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                    {([['plano', 'Plano de manutenção'], ['ordens', 'Ordens de serviço']] as [Aba, string][]).map(([id, label]) => (
+                    {([['plano', 'Plano de manutenção'], ['ordens', 'Ordens de serviço'], ['chamados', 'Chamados dos condôminos']] as [Aba, string][]).map(([id, label]) => (
                         <button
                             key={id}
                             onClick={() => setAba(id)}
@@ -447,7 +522,18 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                     color={kpis.proximos > 0 ? 'amber' : 'gray'}
                 />
                 <KpiCard label="ITENS NO PLANO" value={kpis.itens} icon={<ClipboardList className="w-5 h-5" />} color="blue" />
-                <KpiCard label="ORDENS ABERTAS" value={kpis.abertas} icon={<Wrench className="w-5 h-5" />} color="indigo" />
+                {/* O 4º card acompanha a aba ativa: em Chamados, "ordens abertas"
+                    não é o número que a pessoa está olhando. */}
+                {aba === 'chamados' ? (
+                    <KpiCard
+                        label="CHAMADOS ABERTOS" value={kpis.chamadosAbertos}
+                        sub={kpis.chamadosAbertos > 0 ? 'Abertos pelos condôminos no portal' : undefined}
+                        icon={<MessageSquare className="w-5 h-5" />}
+                        color={kpis.chamadosAbertos > 0 ? 'amber' : 'gray'}
+                    />
+                ) : (
+                    <KpiCard label="ORDENS ABERTAS" value={kpis.abertas} icon={<Wrench className="w-5 h-5" />} color="indigo" />
+                )}
             </div>
 
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
@@ -457,7 +543,11 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input
                                 type="text"
-                                placeholder={aba === 'plano' ? 'Buscar por serviço ou sistema...' : 'Buscar por descrição ou sistema...'}
+                                placeholder={aba === 'plano'
+                                    ? 'Buscar por serviço ou sistema...'
+                                    : aba === 'chamados'
+                                        ? 'Buscar por unidade, pessoa ou descrição...'
+                                        : 'Buscar por descrição ou sistema...'}
                                 value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)}
                                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
@@ -481,6 +571,15 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                                     onToggleColumn={itemColumns.toggleColumn}
                                     onReset={itemColumns.resetColumns}
                                 />
+                            ) : aba === 'chamados' ? (
+                                <ColumnConfigButton
+                                    columns={CHAMADO_COLUMNS}
+                                    visibleColumns={chamadoColumns.visibleColumns}
+                                    showColumnConfig={chamadoColumns.showColumnConfig}
+                                    onToggleShow={() => chamadoColumns.setShowColumnConfig(!chamadoColumns.showColumnConfig)}
+                                    onToggleColumn={chamadoColumns.toggleColumn}
+                                    onReset={chamadoColumns.resetColumns}
+                                />
                             ) : (
                                 <ColumnConfigButton
                                     columns={ORDER_COLUMNS.filter(c => c.key !== 'actions')}
@@ -492,7 +591,10 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                                 />
                             )}
                         </div>
-                        {aba === 'plano' ? (
+                        {/* Chamados não tem ação primária: quem abre chamado é o
+                            morador, pelo portal. Botão "novo chamado" aqui seria o
+                            síndico abrindo em nome de alguém — outro assunto. */}
+                        {aba === 'chamados' ? null : aba === 'plano' ? (
                             plano && (
                                 <button
                                     onClick={() => setSheetItem(true)}
@@ -517,6 +619,79 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                         <p className="mt-2 text-gray-500">Carregando...</p>
                     </div>
+                ) : aba === 'chamados' ? (
+                    chamadosFiltrados.length === 0 ? (
+                        <div className="text-center py-12">
+                            <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">
+                                {chamados.length === 0 ? 'Nenhum chamado das unidades' : 'Nenhum resultado'}
+                            </h3>
+                            <p className="text-sm text-gray-500 max-w-md mx-auto">
+                                {chamados.length === 0
+                                    /* Honestidade sobre o recorte: a lista é por UNIDADE, então
+                                       chamado gravado sem unidade não aparece aqui — e é melhor
+                                       dizer isso do que deixar o síndico achar que viu tudo. */
+                                    ? 'Os chamados abertos pelos condôminos no portal aparecem aqui, recortados pelas unidades deste condomínio. Chamado registrado sem unidade não entra nesta lista — ele fica na ficha do cliente, em Comercial › Clientes.'
+                                    : 'Tente ajustar a busca.'}
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="overflow-auto max-h-[70vh]">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        {CHAMADO_COLUMNS.filter(c => cv.includes(c.key)).map(c => (
+                                            <SortableHeader
+                                                key={c.key} colKey={c.key} label={c.label} uppercase={false}
+                                                sortColumn={chamadoColumns.sortColumn} sortDirection={chamadoColumns.sortDirection}
+                                                onSort={chamadoColumns.handleColumnSort}
+                                                className="px-6 py-2 border-r border-gray-100"
+                                            />
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                    {chamadosFiltrados.map(c => (
+                                        <tr key={c.id} className="hover:bg-blue-50/50 transition-colors group">
+                                            {cv.includes('unidade') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                                    {c.unit_name || '—'}
+                                                </td>
+                                            )}
+                                            {cv.includes('pessoa') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                                    <span className="block truncate" title={c._client_name || undefined}>{c._client_name || '—'}</span>
+                                                </td>
+                                            )}
+                                            {cv.includes('titulo') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                                    <span className="block truncate" title={c.description || c.title}>{c.title}</span>
+                                                </td>
+                                            )}
+                                            {cv.includes('categoria') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{c.category || '—'}</td>
+                                            )}
+                                            {cv.includes('prioridade') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                    <span className={`text-sm font-normal ${CHAMADO_PRIORIDADE_COLOR[c.priority] || 'text-gray-600'}`}>{c.priority}</span>
+                                                </td>
+                                            )}
+                                            {cv.includes('aberto') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                                    {formatarData((c.opened_at || c.created_at || '').slice(0, 10))}
+                                                </td>
+                                            )}
+                                            {cv.includes('situacao') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                    <span className={`text-sm font-normal ${CHAMADO_STATUS_COLOR[c.status] || 'text-gray-600'}`}>{c.status}</span>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )
                 ) : aba === 'plano' && !plano ? (
                     <div className="text-center py-12">
                         <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-4" />

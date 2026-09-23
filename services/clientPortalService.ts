@@ -1,4 +1,6 @@
 import { supabase } from '../lib/supabase';
+import { mapReceivableRow, type ReceivableRow } from './commercialFinanceService';
+import type { PaymentInstallment } from '../types';
 
 export interface ClientPortalToken {
     id: string;
@@ -308,6 +310,35 @@ export const clientPortalService = {
         if (error) { console.error('[clientPortalService] getCondominioForClient:', error); return CONDOMINIO_VAZIO; }
         const res = data as PortalCondominio;
         return res?.ok ? res : CONDOMINIO_VAZIO;
+    },
+
+    // ── Recebíveis (aba Financeiro) ─────────────────────────────────────────
+    // MESMO motivo das duas funções de condomínio acima, e o mesmo defeito, num
+    // lugar onde ninguém tinha olhado: `internal_transactions` só tem política
+    // para `authenticated` + `is_org_member`. A aba Financeiro lia a tabela
+    // DIRETO, então para quem entra por link (anon) ou para o cliente logado
+    // (que não é membro) ela devolvia `[]` — vazio, sem erro.
+    //
+    // Medido em 23/09/2026, antes da correção: as 4 pessoas com link vivo
+    // somavam 135 recebíveis e R$ 894.400 que o portal delas não mostrava. A
+    // cota condominial, quando for materializada, cairia no mesmo buraco.
+
+    /** Link público (`/portal-cliente?token=`). */
+    async getReceivablesByToken(token: string, clientId: string): Promise<PaymentInstallment[]> {
+        const { data, error } = await supabase.rpc('fn_portal_get_receivables', { p_token: token });
+        if (error) { console.error('[clientPortalService] getReceivablesByToken:', error); return []; }
+        const res = data as { ok?: boolean; recebiveis?: ReceivableRow[] };
+        if (!res?.ok) return [];
+        return (res.recebiveis ?? []).map(r => mapReceivableRow(r, clientId));
+    },
+
+    /** Cliente logado, e admin abrindo o portal por dentro. */
+    async getReceivablesForClient(clientId: string): Promise<PaymentInstallment[]> {
+        const { data, error } = await supabase.rpc('fn_portal_get_receivables_for_client', { p_client_id: clientId });
+        if (error) { console.error('[clientPortalService] getReceivablesForClient:', error); return []; }
+        const res = data as { ok?: boolean; recebiveis?: ReceivableRow[] };
+        if (!res?.ok) return [];
+        return (res.recebiveis ?? []).map(r => mapReceivableRow(r, clientId));
     },
 
     /**

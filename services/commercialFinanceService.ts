@@ -13,6 +13,36 @@ interface CommercialProjectRow {
     created_at?: string;
 }
 
+/**
+ * Uma linha de `internal_transactions` (CREDIT) virando parcela do Portal do
+ * Cliente. Exportado porque a MESMA regra roda em dois lugares — aqui, na
+ * consulta direta que o admin faz, e em `clientPortalService`, sobre o que a
+ * RPC do portal devolve. Duas cópias divergiriam no primeiro status novo.
+ */
+export interface ReceivableRow {
+    id: string;
+    reference_id?: string | null;
+    transaction_date?: string | null;
+    due_date?: string | null;
+    amount?: number | string | null;
+    description?: string | null;
+    status?: string | null;
+    business_status?: string | null;
+}
+
+export function mapReceivableRow(r: ReceivableRow, clientId: string): PaymentInstallment {
+    const pago = r.status === 'CONCILIATED'
+        || ['RECEBIDO', 'PAGO'].includes((r.business_status as string) || '');
+    return {
+        id: r.id,
+        dueDate: (r.due_date as string) || (r.transaction_date as string),
+        value: Number(r.amount) || 0,
+        status: pago ? 'PAID' : 'PENDING',
+        description: (r.description as string) || '',
+        clientId,
+    } as PaymentInstallment;
+}
+
 export const commercialFinanceService = {
     /**
      * ⚠️ APOSENTADA (2026-08-02) — mantida só para não quebrar os chamadores.
@@ -684,16 +714,7 @@ export const commercialFinanceService = {
             const jaVistos = new Set(consolidated.map(i => i.id));
             for (const r of [...(rows || []), ...rowsDeMaisContratos]) {
                 if (jaVistos.has(r.id as string)) continue;
-                const pago = r.status === 'CONCILIATED'
-                    || ['RECEBIDO', 'PAGO'].includes((r.business_status as string) || '');
-                consolidated.push({
-                    id: r.id as string,
-                    dueDate: (r.due_date as string) || (r.transaction_date as string),
-                    value: Number(r.amount) || 0,
-                    status: pago ? 'PAID' : 'PENDING',
-                    description: (r.description as string) || '',
-                    clientId,
-                });
+                consolidated.push(mapReceivableRow(r as ReceivableRow, clientId));
             }
         } catch (e) {
             console.error('[COMMERCIAL-FINANCE] listAllClientInstallments (cobranças reais):', e);

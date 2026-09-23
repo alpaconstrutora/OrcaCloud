@@ -73,6 +73,39 @@ describe('presetDeAbas', () => {
         }
     });
 
+    it('"Venda e Condomínio" ganha a aba Condomínio SEM perder as de venda', () => {
+        // O caso que a cadeia de `if`s errava: `ehCondominio` casava antes de
+        // `ehVendas` e a pessoa caía no preset só de prédio. Em 23/09/2026 eram
+        // 8 dos 15 condôminos da base — a compra inteira sumia do portal deles
+        // (Dados da Unidade, Jornada, Obra, Contratos, Visual, Personalização,
+        // Diário e Suporte) no instante em que alguém concedesse o acesso.
+        const p = presetDeAbas('Venda e Condomínio')!;
+        expect(p).toContain('condominio');
+        for (const aba of ['dashboard', 'unidade', 'jornada', 'obra', 'visual',
+                           'personalizacao', 'diario', 'documentos', 'contratos',
+                           'financeiro', 'suporte']) {
+            expect(p).toContain(aba);
+        }
+    });
+
+    it('a base entra inteira para qualquer par com condomínio', () => {
+        // A regra é base + acréscimo: quem tem natureza de relacionamento leva
+        // o preset dela inteiro, some-se ou não a aba de prédio. Sem isto, cada
+        // categoria combinada nova precisa de um `if` à mão — e é o `if` que
+        // falta que produz o defeito.
+        for (const [combinada, pura] of [
+            ['Venda e Condomínio', 'Vendas'],
+            ['Locação e Condominio', 'Locação'],
+            ['Serviços e Condomínio', 'Serviços'],
+        ] as const) {
+            const p = presetDeAbas(combinada)!;
+            for (const aba of presetDeAbas(pura)!) expect(p).toContain(aba);
+            expect(p).toContain('condominio');
+            // e a aba não entra duas vezes
+            expect(p.filter(a => a === 'condominio')).toHaveLength(1);
+        }
+    });
+
     it('locação pura NÃO ganha a aba de condomínio', () => {
         expect(presetDeAbas('Locação')).not.toContain('condominio');
     });

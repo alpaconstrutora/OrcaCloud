@@ -23,6 +23,9 @@ export interface ClientRequest {
     unit_name?: string | null;
     tower_name?: string | null;
     condominio_name?: string | null;
+    /** Nome do cliente, resolvido por `listByUnits` (a tela do condomínio lista
+     *  chamados de várias pessoas, então precisa dizer de quem é cada um). */
+    _client_name?: string | null;
 }
 
 export interface ClientServiceOrder {
@@ -113,6 +116,49 @@ export const clientRequestsService = {
     },
 
     // ── Portal anon: lê via token ─────────────────────────────────────────────
+    /**
+     * Chamados do cliente logado — pela MESMA RPC do link, não por consulta
+     * direta. `client_requests` só tem política para membro da organização, e o
+     * cliente logado não é membro: `listRequests` devolvia `[]` sem erro, e a
+     * aba Manutenção do portal dizia "nenhum chamado" a quem tinha chamado.
+     *
+     * A RPC autoriza de duas formas (membro da organização — o admin abrindo o
+     * portal — ou o próprio cliente pelo e-mail), as mesmas de
+     * `client_portal_get_condominio_for_client`.
+     */
+    async getRequestsForClient(clientId: string): Promise<ClientRequest[]> {
+        const { data, error } = await supabase.rpc('fn_portal_get_requests_for_client', { p_client_id: clientId });
+        if (error) { console.error('[clientRequestsService] getRequestsForClient:', error); return []; }
+        const res = data as { valid: boolean; data: ClientRequest[] | null };
+        return res?.valid ? (res.data ?? []) : [];
+    },
+
+    /**
+     * Chamados das unidades informadas — o recorte do CONDOMÍNIO.
+     *
+     * Por UNIDADE e não por pessoa: o chamado é do imóvel (o vazamento continua
+     * lá quando o morador troca), e a pessoa pode ter outro imóvel em outro
+     * lugar, que nada tem a ver com este prédio. Quem chama roda como membro da
+     * organização, então a policy normal de `client_requests` basta — sem RPC.
+     *
+     * ⚠️ Chamado SEM `unit_id` não entra: não há como dizer a que prédio ele
+     * pertence. A tela diz isso em vez de fingir uma lista completa.
+     */
+    async listByUnits(unitIds: string[]): Promise<ClientRequest[]> {
+        if (unitIds.length === 0) return [];
+        const { data, error } = await supabase
+            .from('client_requests')
+            .select('id,organization_id,client_id,unit_id,title,description,category,priority,status,assigned_to,admin_notes,photos,opened_at,resolved_at,created_at,updated_at,clients(name)')
+            .in('unit_id', unitIds)
+            .order('opened_at', { ascending: false, nullsFirst: false })
+            .order('created_at', { ascending: false });
+        if (error) throw new Error(`Falha ao carregar os chamados: ${error.message}`);
+        return (data ?? []).map((r: any) => ({
+            ...r,
+            _client_name: r.clients?.name ?? null,
+        })) as ClientRequest[];
+    },
+
     async getRequestsByToken(token: string): Promise<ClientRequest[]> {
         const { data, error } = await supabase.rpc('fn_portal_get_requests', { p_token: token });
         if (error) throw error;

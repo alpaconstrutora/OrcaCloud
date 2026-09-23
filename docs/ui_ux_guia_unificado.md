@@ -785,6 +785,11 @@ const tableTotalWidth = 40 // checkbox
 > recalculado a cada resize/toggle). Exige também um `<col data-col-key>` para
 > **cada** `<th>`/`<td>`, na mesma ordem — um `<col>` faltando desalinha todas
 > as colunas seguintes.
+> ⚠️ **`minWidth: '100%'` não é a mesma coisa que `width: 100%` e é
+> obrigatório** — ver §6.1.1. O que a linha acima proíbe é a tabela *ser* 100%;
+> o `minWidth` só impede que ela fique **menor** que o container, e a folga vai
+> inteira para o `<col />` espaçador (o único sem largura explícita), não
+> redistribuída entre as colunas de dado.
 
 #### 6.1.1 Coluna espaçadora vem ANTES de "Ações"
 
@@ -793,17 +798,47 @@ algum lugar. Esse lugar é um `<col />` sem largura — mas a **posição** dele
 `<colgroup>` decide se a tabela fica alinhada ou não:
 
 ```tsx
-<colgroup>
-  {/* ...colunas de dado... */}
-  <col />                                {/* espaçador: absorve a folga AQUI */}
-  <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
-</colgroup>
+// minWidth: '100%' é o que DÁ folga ao espaçador — sem ele a tabela para na soma
+// exata e a folga vira faixa branca fora da tabela, à direita de "Ações".
+<table ref={cols.tableRef} style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+  <colgroup>
+    {/* ...colunas de dado... */}
+    <col />                                {/* espaçador: absorve a folga AQUI */}
+    <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+  </colgroup>
 ```
 
 Com o espaçador **depois** de "Ações", toda a sobra vai para a direita dela — e
 como essa sobra encolhe e cresce a cada arraste, a borda de "Ações" **anda** e
 desalinha da toolbar acoplada acima. Com o espaçador antes, a folga é absorvida
 no meio e "Ações" fica ancorada na borda direita.
+
+**Sem `minWidth: '100%'` o espaçador é código morto.** `width: tableTotalWidth`
+é a soma exata das colunas: se ela é menor que o container, a tabela inteira para
+ali e não existe folga *dentro* da tabela para o `<col />` absorver — ela aparece
+como faixa branca à direita de "Ações", dentro do card. O `minWidth` estica a
+tabela até o container e a folga passa a ser interna, que é o único lugar onde o
+espaçador alcança.
+
+Medido em `regulatoryMap/RegulatoryMapModule.tsx` com Playwright (viewport 1600,
+sidebar 260px → 1290px úteis), colunas somando 750px:
+
+| | tabela | espaçador | folga à direita de "Ações" |
+|---|---|---|---|
+| `width` só | 750px | **0px** | **540px** de branco |
+| `width` + `minWidth: '100%'` | 1290px | **540px** | **0px** |
+
+E o resize continua correto: arrastar "Cidade" +120px move só "Cidade"
+(220 → 340) e é o **espaçador** que cede (540 → 420) — as vizinhas não se mexem.
+É por isso que este `minWidth` não recria o bug do §6.1: lá a tabela era 100% e
+*nenhuma* coluna tinha folga própria para ceder; aqui todas as colunas de dado
+têm px explícito e só o espaçador é elástico. `SupplierList.tsx:552` — a tela do
+bug original — usa exatamente esta combinação desde então.
+
+> ℹ️ **Somar até o container não é obrigatório.** Numa tela de 4 colunas, esticar
+> para 1290px daria 300px à coluna "Status" para escrever "Rascunho". O certo é
+> dimensionar cada coluna pelo conteúdo e deixar o espaçador ficar com o resto —
+> e registrar a soma alvo num comentário ao lado de `*_COL_WIDTHS`.
 
 > ⚠️ O espaçador entra nas **três** listas na mesma posição: `<col />` no
 > colgroup, `<th aria-hidden="true" className="border-r border-gray-100" />` no

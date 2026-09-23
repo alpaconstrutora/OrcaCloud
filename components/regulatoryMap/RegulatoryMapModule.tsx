@@ -39,6 +39,11 @@ const MAP_COLUMNS: ColumnConfig[] = [
     { key: 'status', label: 'Status', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
+// Soma 750px — MENOR que os ~1290px úteis (viewport 1600 menos sidebar e gutter).
+// É de propósito: 4 colunas esticadas até 1290 deixariam "Status" com 300px para a
+// palavra "Rascunho". Quem absorve a folga é o <col /> espaçador antes de "Ações"
+// (§6.1.1), e quem permite que ele a absorva é o `minWidth: '100%'` no <table> —
+// sem ele a tabela para nos 750px e a folga vira faixa branca à direita.
 const MAP_COL_WIDTHS: Record<string, number> = { name: 320, city: 220, status: 130, actions: 80 };
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -272,7 +277,7 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) =
                 const tableWidth = orderedVisible.reduce((s, key) => s + cols.getWidth(key), 0) + cols.getWidth('actions');
                 return (
                     <div className="overflow-x-auto">
-                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth, minWidth: '100%' }}>
                             <colgroup>
                                 {orderedVisible.map(key => (
                                     <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />

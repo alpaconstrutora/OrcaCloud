@@ -314,9 +314,22 @@ const BLOCO_DE_PORTA = /porta|door/i;
 const BLOCO_DE_JANELA = /janela|window|\bjan\b/i;
 /** Camada (ou bloco) cujo nome declara esquadria: a evidência que permite abrir janela em parede contínua (P2.41). */
 const NOME_DE_JANELA = /janela|window|esquadr|\bjan\b/i;
+/** Camada (ou bloco) que declara porta: a evidência para ler a folha rente à parede como de CORRER (P2.42). */
+const NOME_DE_PORTA = /porta|door|correr|sliding/i;
 /** Largura plausível de uma janela em planta, em mm. */
 const JANELA_MIN_MM = 400;
 const JANELA_MAX_MM = 4000;
+/**
+ * Largura máxima de uma porta de ABRIR de uma folha, em mm (P2.42).
+ *
+ * ⚠️ Folha de 1,6 m não existe: ninguém aguenta o peso nem o espaço de giro. Vão maior que isso é
+ * porta de duas folhas (dois arcos, cada um com metade), porta de CORRER (folha que desliza, sem
+ * arco) ou vão livre. Sem este teto, um vão de 3 m com um símbolo qualquer perto virava uma porta de
+ * abrir de 3 m — e o app desenhava um arco gigante, que foi o que o usuário viu em 23/09/2026.
+ */
+const PORTA_ABRIR_MAX_MM = 1600;
+/** A folha de correr é desenhada FORA do corpo da parede, paralela a ela: a que distância procurar. */
+const CORRER_FORA_MAX_MM = 500;
 
 export interface ParedeComAberturas extends ParedeDoDxf {
   aberturas: AberturaLida[];
@@ -344,6 +357,10 @@ export interface ResumoDeEsquadrias {
   janelasPeloSimbolo: number;
   /** P2.41: grupos de símbolo de janela sobre parede que não viraram janela (largura fora da faixa, traços de menos). */
   simbolosDeJanelaIgnorados: number;
+  /** P2.42: portas de CORRER reconhecidas pela folha desenhada rente à parede. */
+  correr: number;
+  /** P2.42: vãos largos demais para uma porta de abrir — viraram vão livre em vez de porta gigante. */
+  vaosLargosDemais: number;
 }
 
 interface Ponto {
@@ -428,7 +445,7 @@ export function aberturasDoDxf(
 ): { paredes: ParedeComAberturas[]; resumo: ResumoDeEsquadrias } {
   const arcos = hip.reconhecerSimbolos ? arcosDePorta(leitura.arcos, mmPorUnidade) : [];
   const tracos = hip.reconhecerSimbolos ? tracosMm(leitura.segmentos, mmPorUnidade, camadaDeParede) : [];
-  const resumo: ResumoDeEsquadrias = { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 0, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0, janelasPeloSimbolo: 0, simbolosDeJanelaIgnorados: 0 };
+  const resumo: ResumoDeEsquadrias = { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 0, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0, janelasPeloSimbolo: 0, simbolosDeJanelaIgnorados: 0, correr: 0, vaosLargosDemais: 0 };
   const alturaPorta = Math.min(hip.portaAlturaMm, alturaDaParedeMm);
   const janela = (): AberturaLida => {
     const sill = Math.min(hip.janelaPeitorilMm, Math.max(0, alturaDaParedeMm - 1));
@@ -447,6 +464,36 @@ export function aberturasDoDxf(
       const meia = v.espessuraMm / 2 + FOLGA_DOBRADICA_MM;
       /** Posição ao longo do eixo e afastamento perpendicular de um ponto, medidos do começo do buraco. */
       const local = (p: Ponto) => ({ t: (p.x - v.inicio.x) * v.ux + (p.y - v.inicio.y) * v.uy, n: (p.x - v.inicio.x) * nx + (p.y - v.inicio.y) * ny });
+
+      // ── Porta de CORRER: a folha desenhada FORA do corpo, paralela à parede ──
+      //
+      // O símbolo de correr não tem arco: é a folha (uma ou duas) deslizando rente à parede, por
+      // fora dela. Procura-se traço paralelo ao eixo, afastado entre meia espessura e meia espessura
+      // + 50 cm, cobrindo boa parte do vão. Só vale quando NENHUM arco casou: com arco, é de abrir.
+      const deCorrer = (): boolean => {
+        const meiaEsp = v.espessuraMm / 2;
+        // ⚠️ SÓ COM O NOME DECLARANDO, e só sem arco por perto. Numa planta real há dezenas de traços
+        // rentes à parede — soleira, piso, projeção, bancada, mobiliário — e a primeira versão deste
+        // critério (qualquer traço paralelo, 40% do vão) transformou 23 janelas e 28 vãos do projeto
+        // real em portas de correr. A folha de correr é desenhada na camada da esquadria; é isso que a
+        // separa de uma linha de piso que passa ali por acaso.
+        let cobertura = 0;
+        for (const s of tracos) {
+          if (!NOME_DE_PORTA.test(s.camada) && !(s.bloco && NOME_DE_PORTA.test(s.bloco))) continue;
+          if (Math.abs(s.ux * v.ux + s.uy * v.uy) < 0.99985) continue;
+          const la = local(s.a);
+          const lb = local(s.b);
+          const nMed = (la.n + lb.n) / 2;
+          if (Math.abs(nMed) < meiaEsp - 20 || Math.abs(nMed) > meiaEsp + CORRER_FORA_MAX_MM) continue;
+          const t0 = Math.max(0, Math.min(la.t, lb.t));
+          const t1 = Math.min(v.larguraMm, Math.max(la.t, lb.t));
+          if (t1 - t0 > cobertura) cobertura = t1 - t0;
+        }
+        if (cobertura < 0.6 * v.larguraMm) return false;
+        // Arco de folha por perto (mesmo sem casar com este vão) = porta de abrir mal lida, não correr.
+        const meioDoVao = { x: (v.inicio.x + v.fim.x) / 2, y: (v.inicio.y + v.fim.y) / 2 };
+        return !arcos.some((a) => dist(a.c, meioDoVao) < v.larguraMm);
+      };
 
       // ── Porta pelo arco: centro numa ponta do buraco, raio ≈ largura ─────
       let melhor: { arco: ArcoDePorta; hingeAtStart: boolean; erro: number } | null = null;
@@ -471,6 +518,11 @@ export function aberturasDoDxf(
           const erro = Math.abs(2 * arco.raio - v.larguraMm);
           if (!melhor || erro < melhor.erro) melhor = { arco, hingeAtStart: true, erro };
         }
+      }
+      if (melhor && v.larguraMm > PORTA_ABRIR_MAX_MM * 1.2) {
+        // Arco casado, mas vão largo demais para UMA folha: não se inventa a porta gigante.
+        melhor = null;
+        resumo.vaosLargosDemais++;
       }
       if (melhor) {
         melhor.arco.usado = true;
@@ -530,7 +582,10 @@ export function aberturasDoDxf(
         }
         coberto += fim - ini;
       }
-      if (blocoDePorta && !blocoDeJanela) {
+      if (blocoDePorta && !blocoDeJanela && v.larguraMm > PORTA_ABRIR_MAX_MM * 1.2) {
+        // Bloco com nome de porta num vão largo: sem saber o tipo, o vão livre é a leitura honesta.
+        resumo.vaosLargosDemais++;
+      } else if (blocoDePorta && !blocoDeJanela) {
         resumo.portas++;
         // O bloco de porta quase sempre traz o arco do giro dentro dele. Se houver um com o centro
         // numa ponta do vão, ele diz a dobradiça e o lado — sem isso a porta entrava com o padrão
@@ -545,6 +600,14 @@ export function aberturasDoDxf(
       if (blocoDeJanela || (paralelos >= 2 && coberto >= 0.6 * v.larguraMm)) {
         resumo.janelas++;
         return janela();
+      }
+
+      // Porta de CORRER (P2.42): sem arco e sem vidro, mas com a folha desenhada rente à parede.
+      // Vem DEPOIS da janela de propósito: um vão com vidro dentro é janela, mesmo que passe por ali
+      // alguma linha da camada de portas — foi o que tirou 4 janelas do projeto real na primeira versão.
+      if (deCorrer()) {
+        resumo.correr++;
+        return { kind: 'door', offsetMm: 0, widthMm: 0, heightMm: alturaPorta, sillMm: 0, correr: true } as AberturaLida & { correr: true };
       }
 
       // ── Nada em cima: vão livre até o teto de hipótese ────────────────────

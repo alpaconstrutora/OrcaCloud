@@ -178,7 +178,7 @@ describe('esquadrias no DXF · porta, janela e vão', () => {
 
   it('a porta vem do arco (largura = buraco, dobradiça e lado pelo arco), a janela dos traços paralelos, o vão do buraco vazio; buraco de 3,5 m fica como duas paredes', () => {
     const { paredes, resumo } = reconhecer(texto);
-    expect(resumo).toEqual({ portas: 1, janelas: 1, vaos: 1, arcosSemParede: 1, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 6, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0, janelasPeloSimbolo: 0, simbolosDeJanelaIgnorados: 0 });
+    expect(resumo).toEqual({ portas: 1, janelas: 1, vaos: 1, arcosSemParede: 1, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 6, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0, janelasPeloSimbolo: 0, simbolosDeJanelaIgnorados: 0, correr: 0, vaosLargosDemais: 0 });
     expect(paredes).toHaveLength(3);
 
     const [p1] = naCota(paredes, 75);
@@ -204,7 +204,7 @@ describe('esquadrias no DXF · porta, janela e vão', () => {
 
   it('com o reconhecimento de símbolos desligado, só o vão livre pelo buraco: a porta e a janela viram passagem', () => {
     const { paredes, resumo } = reconhecer(texto, { ...HIPOTESES_ESQUADRIAS_PADRAO, reconhecerSimbolos: false });
-    expect(resumo).toEqual({ portas: 0, janelas: 0, vaos: 3, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 6, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0, janelasPeloSimbolo: 0, simbolosDeJanelaIgnorados: 0 });
+    expect(resumo).toEqual({ portas: 0, janelas: 0, vaos: 3, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 6, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0, janelasPeloSimbolo: 0, simbolosDeJanelaIgnorados: 0, correr: 0, vaosLargosDemais: 0 });
     const [p1] = naCota(paredes, 75);
     expect(p1.aberturas.map((ab) => ab.kind)).toEqual(['passage', 'passage']);
   });
@@ -398,6 +398,31 @@ describe('esquadrias no DXF · porta, janela e vão', () => {
     const { paredes, resumo } = reconhecer(t);
     expect(resumo).toMatchObject({ janelas: 0, simbolosDeJanelaIgnorados: 1 });
     expect(paredes[0].aberturas).toEqual([]);
+  });
+
+  it('PORTA DE CORRER (P2.42): a folha desenhada rente à parede, sem arco, vira porta de correr', () => {
+    // Vão de 1,5 m; a folha corre por FORA da parede (a 120 mm do eixo, sendo a parede de 150),
+    // cobrindo o vão inteiro. Sem arco: não é de abrir.
+    const t = dxfTexto([
+      ...paredeH(0, 150, 0, 6000, [[2000, 3500]]),
+      ...LINE(2000, 195, 3500, 195, 'PORTAS'),
+    ]);
+    const { paredes, resumo } = reconhecer(t);
+    expect(resumo).toMatchObject({ correr: 1, portas: 0, vaos: 0 });
+    const ab = paredes[0].aberturas[0] as typeof paredes[0]['aberturas'][number] & { correr?: boolean };
+    expect(ab).toMatchObject({ kind: 'door', widthMm: 1500, correr: true });
+  });
+
+  it('⚠️ VÃO LARGO DEMAIS não vira porta de abrir gigante (P2.42): sem símbolo de correr, é vão livre', () => {
+    // Vão de 2,4 m com um arco de 1,2 m numa ponta: uma folha de 2,4 m não existe. Antes o app abria
+    // a porta com a largura do vão e desenhava um arco gigante.
+    const t = dxfTexto([...paredeH(0, 150, 0, 8000, [[2000, 4400]]), ...ARC(2000, 150, 2400, 0, 90)]);
+    const { paredes, resumo } = reconhecer(t);
+    expect(resumo.portas).toBe(0);
+    expect(resumo.vaos + resumo.vaosLargosDemais).toBeGreaterThanOrEqual(1);
+    const ab = paredes[0].aberturas[0];
+    expect(ab.kind).toBe('passage');
+    expect(ab.widthMm).toBe(2400);
   });
 
   it('bloco com nome de porta no buraco vale como porta mesmo sem arco; bloco de janela, como janela', () => {

@@ -472,6 +472,7 @@ import {
   cantoEntreEixos,
   cantosEncostados,
   pontasSoltasDoNivel,
+  extensoesAteEncontrar,
   juntasParalelasSemCanto,
   computeQuantities,
   deslocamentoParaManterFace,
@@ -4903,6 +4904,28 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * mais precisa de resposta: um botão que aceita o clique e fica em silêncio
    * ensina a desconfiar do botão.
    */
+  /**
+   * PAREDE QUE TERMINA NO VAZIO (P2.42): as pontas soltas que encontrariam outra
+   * parede se continuassem retas. Fica fora do passe automático de propósito —
+   * esticar meio metro não é "parece ligado", é uma decisão sobre o projeto.
+   */
+  const extensoes = useMemo(() => {
+    const level = editor.model.levels.find((l) => l.id === levelId);
+    return level ? extensoesAteEncontrar(editor.model, level) : [];
+  }, [editor.model, levelId]);
+
+  function estenderAgora() {
+    if (extensoes.length === 0) return;
+    const comandos: Command[] = extensoes.map((e) => ({ type: 'MoveVertex', wallId: e.wallId, end: e.end, to: e.to }));
+    try {
+      editor.runBatch(comandos);
+      const maior = Math.max(...extensoes.map((e) => e.distanciaMm));
+      setAvisoConexaoT(`${comandos.length} parede(s) esticada(s) até encontrar (a maior andou ${(maior / 1000).toFixed(2).replace('.', ',')} m). Desfazer reverte tudo de uma vez.`);
+    } catch (e) {
+      setAvisoConexaoT(e instanceof Error ? `O desenho recusou: ${e.message}` : 'O desenho recusou a extensão.');
+    }
+  }
+
   function conectarAgora() {
     const comandos = comandosDeConexao(editor.model);
     if (comandos.length === 0) {
@@ -11300,6 +11323,26 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 <CornerDownRight className="h-3.5 w-3.5" />
                 Conectar automaticamente
               </button>
+
+              {/* A PAREDE QUE TERMINA NO VAZIO (P2.42).
+                  "Conectar automaticamente" só encosta o que já se sobrepõe — a ponta
+                  tem de estar dentro da faixa desenhada da outra parede. A parede que
+                  morre a meio metro do encontro não é alcançada por ele, e no desenho
+                  ela nem parece ligada: é a situação do print de 23/09/2026. Aqui a
+                  ponta é esticada NA PRÓPRIA DIREÇÃO até cruzar a parede que estava à
+                  frente, com teto de 1,2 m — acima disso é vão, não canto mal fechado. */}
+              {extensoes.length > 0 && (
+                <button
+                  type="button"
+                  onClick={estenderAgora}
+                  title="Estica a ponta na direção da própria parede até encontrar a parede que está à frente (até 1,2 m)"
+                  className="mt-2 ml-2 inline-flex items-center gap-1.5 rounded-md border border-amber-400 bg-white px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
+                  data-testid="estender-pontas"
+                >
+                  <MoveHorizontal className="h-3.5 w-3.5" />
+                  Terminar {extensoes.length} parede(s) até encontrar
+                </button>
+              )}
 
               {/* O BECO SEM SAÍDA, nomeado.
                   Sem isto o usuário vê a bolinha âmbar, clica no botão acima,

@@ -51,7 +51,7 @@ export type { DegrauDaEscada, FatiaDaEscada, FuroDaEscada, MedidaEscada } from '
 export { mitraDaPonta, poligonoDaJuncao, pontasNaJuncao } from './juncoes';
 export type { MitraDaPonta, PontaNaJuncao } from './juncoes';
 
-export { buildArrangement, contornoExternoDoNivel, recomputeSpaces, vertexDegrees, encostosSemJuncao, cantosEncostados, pontasSoltasDoNivel, juntasParalelasSemCanto } from './arrangement';
+export { buildArrangement, contornoExternoDoNivel, recomputeSpaces, vertexDegrees, encostosSemJuncao, cantosEncostados, pontasSoltasDoNivel, juntasParalelasSemCanto, extensoesAteEncontrar, MAX_EXTENSAO_MM } from './arrangement';
 export type { EncostoSemJuncao, CantoEncostado, PontaSoltaDoNivel, JuntaParalela } from './arrangement';
 export type { ArrangementResult } from './arrangement';
 

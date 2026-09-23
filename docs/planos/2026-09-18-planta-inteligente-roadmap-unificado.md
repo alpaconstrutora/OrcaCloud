@@ -1729,6 +1729,26 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 - Testes: `dxfEsquadrias.test.ts` (janela por cima de parede contínua vira janela com a largura dos traços; os mesmos traços na camada `MÓVEIS` não abrem nada; com vão desenhado a largura é a do vão; símbolo de 5 m é ignorado e relatado).
 - No projeto real: **nada muda** (0 janelas pelo símbolo — lá todas já vinham do vão), o que era o esperado e mostra que o caminho novo não inventa janela onde o desenho já estava certo. Num DXF com a esquadria desenhada por cima da parede: "4 paredes · 0 porta(s) · **2 janela(s) · (1 pelo símbolo, sem vão desenhado)**", as duas visíveis no canvas (escritas bloqueadas: 15, 0 erros).
 
+### P2.42 — Terminar a parede que morre no vazio, e a porta que não é de abrir (23/09/2026)
+
+**Pedido** (print com duas situações): *"1. parede que termina sem ter uma porta. Temos que criar um botão para terminá-la? 2. Porta gigante de abrir onde era para ser de correr"*.
+
+**1. A parede que termina no vazio**
+- O app já tinha dois passes: **"Conectar automaticamente"** (a ponta que está DENTRO da faixa desenhada da outra parede, faltando meia espessura) e a ferramenta **Juntar** (duas pontas soltas que fazem canto). Nenhum alcança a parede que morre a meio metro do encontro — no desenho ela nem parece ligada.
+- `utils/blueprintKernel/arrangement.ts`: **`extensoesAteEncontrar(model, level, maxMm = 1200)`** — a ponta solta que encontraria outra parede se continuasse reta. Travas: anda só para FRENTE (esticar é continuar o traço, nunca girá-lo), o encontro cai no corpo do alvo, teto de **1,2 m** (acima disso não é canto mal fechado: é vão, e fechá-lo inventaria um ambiente) e eixos quase paralelos ficam de fora.
+- `BlueprintEditor.tsx`: no painel âmbar, ao lado de "Conectar automaticamente", o botão **"Terminar N parede(s) até encontrar"** — `MoveVertex` em lote, um passo de desfazer, com o aviso dizendo quanto a maior andou.
+
+**2. A porta gigante**
+- **Teto para porta de abrir** (`PORTA_ABRIR_MAX_MM = 1600`, com 20 % de folga): folha de 1,6 m não existe. Vão maior sem símbolo de correr vira vão livre e é contado (`vaosLargosDemais`) — antes, um vão de 3 m com um símbolo perto virava porta de abrir de 3 m, e o app desenhava o arco gigante do print. O mesmo teto vale para a porta reconhecida por nome de bloco.
+- **Porta de CORRER pelo símbolo**: a folha de correr é desenhada FORA do corpo da parede, paralela a ela. Onde há esse traço cobrindo ≥ 60 % do vão, a abertura entra como `sliding`.
+- ⚠️ Duas lições medidas, ambas no código: **(a)** o critério frouxo (qualquer traço paralelo, 40 %) transformou **23 janelas e 28 vãos** do projeto real em portas de correr — traço rente à parede é o que mais existe numa planta (soleira, piso, projeção, mobiliário); agora exige camada/bloco com nome de porta, 60 % de cobertura e nenhum arco por perto. **(b)** testar o correr ANTES da janela tirou 4 janelas; a ordem certa é arco → duas folhas → bloco → janela → correr → vão livre.
+
+**Prova**
+- `npx tsc --noEmit` ok · check-ui ok · `check-xss-sinks.sh` ok · suíte cheia **442 arquivos / 5104 testes** · `npm run build` ok.
+- Projeto real, antes → depois: **34 portas → 34**, **38 janelas → 38**, 89 vãos → 88, e **1 porta de correr** (o vão que o desenho mostra com folha correndo). Nada se perdeu.
+- Testes: `blueprintEstenderParede.test.ts` (5: a parede a 400 mm da perpendicular é esticada e o canto fecha, some da lista de soltas; 1,5 m não entra, e o teto é parâmetro; só para frente; paralelas e encontro fora do corpo não valem; entre duas paredes à frente ganha a mais próxima), `dxfEsquadrias.test.ts` (folha rente à parede vira porta de correr; vão de 2,4 m com arco de uma folha vira vão livre, não porta gigante).
+- App real (escritas bloqueadas: 16, 0 erros): DXF com uma parede interna morrendo 70 cm antes da parede de cima → importa com "1 ponta(s) solta(s)" → **"Terminar 1 parede(s) até encontrar"** → "1 parede(s) esticada(s) até encontrar (a maior andou 0,78 m)" e os ambientes passam de **5 para 6** — o cômodo fechou.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

@@ -261,7 +261,7 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
     ? { paredes: opura.paredes, resumo: opura.resumo }
     : preparado && !pelaOpura
       ? aberturasDoDxf(filtradas, preparado, mmPorUnidade, camada, nivel?.defaultHeightMm ?? 2800, hipoteses)
-      : { paredes: [], resumo: { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 0, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0, janelasPeloSimbolo: 0, simbolosDeJanelaIgnorados: 0 } };
+      : { paredes: [], resumo: { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 0, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0, janelasPeloSimbolo: 0, simbolosDeJanelaIgnorados: 0, correr: 0, vaosLargosDemais: 0 } };
   // REGIÃO (P2.38): gera só o que está dentro do retângulo marcado no desenho. O critério é o ponto
   // MÉDIO da parede: uma parede que atravessa a borda pertence a quem tem a maior parte dela.
   const dentroDaRegiao = (p: { a: { x: number; y: number }; b: { x: number; y: number } }) => {

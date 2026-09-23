@@ -1035,6 +1035,97 @@ export interface PontaSoltaDoNivel {
  * dentro da faixa de espessura de outra parede, ligada ou não — que é exatamente
  * o defeito "parece ligado e não está" que o aviso existe para denunciar.
  */
+/** P2.42: uma ponta solta que ALCANÇA outra parede se for esticada na própria direção. */
+export interface ExtensaoAteEncontrar {
+  wallId: string;
+  end: 'a' | 'b';
+  /** O cruzamento com o eixo da parede alvo — para onde a ponta vai. */
+  to: Point;
+  alvoId: string;
+  /** Quanto a ponta anda, em mm. */
+  distanciaMm: number;
+}
+
+/** Até onde uma ponta pode ser esticada para achar parede. Meio metro fecha canto; 1,2 m já é vão. */
+export const MAX_EXTENSAO_MM = 1200;
+
+/**
+ * PAREDE QUE TERMINA NO VAZIO (P2.42): a ponta solta que encontraria outra
+ * parede se continuasse reta.
+ *
+ * ─── O QUE ISTO NÃO É ───────────────────────────────────────────────────────
+ *
+ * Não é `encostosSemJuncao` — lá a ponta já está DENTRO da faixa desenhada da
+ * outra parede, e só falta alcançar o eixo (meia espessura). Não é
+ * `cantosEncostados`, que junta duas pontas soltas que se sobrepõem. Aqui a
+ * ponta morre a meio metro do nada: no desenho ela nem parece ligada, e por
+ * isso nenhum dos dois passes automáticos a toca — nem deve, porque esticar
+ * meio metro é decisão de quem conhece o projeto.
+ *
+ * ─── AS TRAVAS ──────────────────────────────────────────────────────────────
+ *
+ * 1. A ponta anda SÓ para frente, na direção da própria parede: esticar é
+ *    continuar o traço, nunca girá-lo.
+ * 2. O encontro tem de cair no corpo do alvo (com meia espessura de folga nas
+ *    pontas dele), senão a parede iria "encontrar" o prolongamento imaginário
+ *    de outra.
+ * 3. Até `MAX_EXTENSAO_MM`. Acima disso não é canto mal fechado: é vão, ou
+ *    parede que falta desenhar — e inventá-la fecharia um ambiente que não
+ *    existe, mentindo na área e no quantitativo.
+ * 4. Eixos quase paralelos não se cruzam de verdade: ficam de fora.
+ */
+export function extensoesAteEncontrar(
+  model: BlueprintModel,
+  level: Level,
+  maxMm = MAX_EXTENSAO_MM,
+  tolerance = DEFAULT_TOLERANCE_MM,
+): ExtensaoAteEncontrar[] {
+  const paredes = model.walls.filter((w) => w.levelId === level.id);
+  if (paredes.length === 0) return [];
+  const grauDe = indiceDeGraus(model, level, tolerance);
+
+  const achados: ExtensaoAteEncontrar[] = [];
+  for (const w of paredes) {
+    for (const end of ['a', 'b'] as const) {
+      const p = w[end];
+      if (grauDe(p) !== 1) continue;
+      const oposta = end === 'a' ? w.b : w.a;
+      const dx = p.x - oposta.x;
+      const dy = p.y - oposta.y;
+      const L = Math.hypot(dx, dy);
+      if (L === 0) continue;
+      const ux = dx / L;
+      const uy = dy / L;
+
+      let melhor: ExtensaoAteEncontrar | null = null;
+      for (const o of paredes) {
+        if (o.id === w.id) continue;
+        const ox = o.b.x - o.a.x;
+        const oy = o.b.y - o.a.y;
+        const Lo = Math.hypot(ox, oy);
+        if (Lo === 0) continue;
+        const den = ux * oy - uy * ox;
+        // TRAVA 4: quase paralelas não têm cruzamento útil.
+        if (Math.abs(den) < 0.05 * Lo) continue;
+        const t = ((o.a.x - p.x) * oy - (o.a.y - p.y) * ox) / den;
+        // TRAVA 1 e 3: só para frente, e não mais que o teto.
+        if (t <= 0 || t > maxMm) continue;
+        const ponto = { x: p.x + ux * t, y: p.y + uy * t };
+        // TRAVA 2: o encontro cai no corpo do alvo.
+        const u = ((ponto.x - o.a.x) * ox + (ponto.y - o.a.y) * oy) / (Lo * Lo);
+        const folga = o.thicknessMm / 2 / Lo;
+        if (u < -folga || u > 1 + folga) continue;
+        const distanciaMm = Math.round(t);
+        if (!melhor || distanciaMm < melhor.distanciaMm) {
+          melhor = { wallId: w.id, end, to: { x: Math.round(ponto.x), y: Math.round(ponto.y) }, alvoId: o.id, distanciaMm };
+        }
+      }
+      if (melhor) achados.push(melhor);
+    }
+  }
+  return achados;
+}
+
 export function pontasSoltasDoNivel(
   model: BlueprintModel,
   level: Level,

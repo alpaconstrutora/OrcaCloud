@@ -87,3 +87,11 @@ registros daquele diário, sem passar pela escolha.
 - A confirmação de exclusão é própria do app: `useConfirm()` renderiza no
   documento pai e não apareceria dentro do iframe da prévia.
 - Busca do seletor de diário não persiste (§3.1 — busca de seletor é transitória).
+
+## Publicação (23/09/2026)
+
+- Commit `00e80291` em `main` (push direto, REGRA #8). Suíte completa na frente:
+  441 arquivos / 5093 testes verdes; `verificar:build` limpo.
+- Provado de fora com `conferir-producao.sh "Escolha o diário para registrar o
+  dia"`: domínio carimbado com `4872cc3` (commit de outra frente que já contém
+  o `00e80291`) e o texto da tela nova presente no bundle servido.

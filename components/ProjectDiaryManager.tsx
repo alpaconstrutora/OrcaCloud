@@ -24,7 +24,8 @@ import {
     CloudRain,
     CloudSun,
     Ban,
-    Video
+    Video,
+    Smartphone
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { KpiCard } from './ui/KpiCard';
@@ -36,6 +37,8 @@ import { ProjectSettings, DiaryEntry, BudgetEntry, WeatherShift, DiaryActivity, 
 import { projectService } from '../services/projectService';
 import { useStore } from '../store/useStore';
 import Button from './ui/Button';
+import MobilePreviewFrame from './MobilePreviewFrame';
+import DiaryMobileApp from './DiaryMobileApp';
 
 
 type DiaryEditorTab = 'clima' | 'atividades' | 'comentarios' | 'arquivos';
@@ -131,6 +134,10 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
     });
     const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
     const [isLinkingPlanningOpen, setIsLinkingPlanningOpen] = useState(false);
+    // Mesmo arranjo de TasksModule: celular de verdade entra direto no app mobile
+    // (já com este diário aberto); no desktop o botão "Mobile" abre a prévia.
+    const [showMobilePreview, setShowMobilePreview] = useState(false);
+    const [isMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
     const [linkedSchedule, setLinkedSchedule] = useState<ProjectSchedule | null>(null);
     const [linkedBudget, setLinkedBudget] = useState<BudgetEntry[]>([]);
     const [isLoadingLinked, setIsLoadingLinked] = useState(false);
@@ -643,8 +650,15 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         else setFormData(prev => ({ ...prev, documents: (prev.documents || []).filter((_, i) => i !== index) }));
     };
 
+    if (isMobile) return <DiaryMobileApp projects={projects} initialProjectId={settings.id} />;
+
     return (
         <div className="space-y-6 pb-20">
+            {showMobilePreview && (
+                <MobilePreviewFrame onClose={() => setShowMobilePreview(false)} title="Prévia — Diário de Obras">
+                    <DiaryMobileApp projects={projects} initialProjectId={settings.id} />
+                </MobilePreviewFrame>
+            )}
             {/* §20 — h1 solto + subtítulo mt-1.5 (o subtítulo carrega o seletor de obra);
                 ações na mesma linha, à direita, como na lista de diários */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -707,6 +721,14 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
 
                 {/* §17 — variante compacta; o vínculo de planejamento é ação secundária (borda), cor pelo estado */}
                 <div className="flex items-center gap-2 shrink-0">
+                    <button
+                        onClick={() => setShowMobilePreview(true)}
+                        title="Prévia Mobile"
+                        className="hidden md:flex items-center gap-1.5 h-9 px-3.5 bg-white text-gray-500 border border-gray-200 rounded-[6px] hover:bg-gray-50 hover:text-gray-700 font-medium text-[13px] transition-all active:scale-95"
+                    >
+                        <Smartphone className="w-[15px] h-[15px]" />
+                        Mobile
+                    </button>
                     <div className="relative">
                             <button
                                 onClick={() => setIsLinkingPlanningOpen(!isLinkingPlanningOpen)}
@@ -892,7 +914,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                                         <button
                                                                             key={c}
                                                                             onClick={() => handleWeatherShiftChange(idx, 'condition', c)}
-                                                                            className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${shift.condition === c ? (c === 'Praticável' ? 'bg-emerald-500 text-white shadow-md shadow-emerald-100' : 'bg-red-500 text-white shadow-md shadow-red-100') : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                                                                            className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${shift.condition === c ? (c === 'Praticável' ? 'bg-emerald-500 text-white shadow-md shadow-emerald-100' : 'bg-red-500 text-white shadow-md shadow-red-100') : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
                                                                         >
                                                                             {c}
                                                                         </button>
@@ -1131,7 +1153,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                         />
                                                     </div>
                                                     <div className="flex items-center gap-2 shrink-0">
-                                                        <span className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest border ${act.evolution === 100 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                                                        <span className={`text-xs font-medium ${act.evolution === 100 ? 'text-emerald-600' : 'text-amber-600'}`}>
                                                             {act.evolution === 100 ? 'Finalizada' : 'Em Andamento'}
                                                         </span>
                                                         <ActionIconButton kind="delete" onClick={() => removeActivity(idx)} />

@@ -10,6 +10,7 @@ import {
     AlertTriangle,
     CalendarClock,
     TrendingUp,
+    Smartphone,
 } from 'lucide-react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Copy01Icon, FileDownloadIcon } from '@hugeicons/core-free-icons';
@@ -21,6 +22,8 @@ import ActionIconButton from './ui/ActionIconButton';
 import { onlyDiarios, isObra } from '../utils/projectClassification';
 import { projectService } from '../services/projectService';
 import { useStore } from '../store/useStore';
+import MobilePreviewFrame from './MobilePreviewFrame';
+import DiaryMobileApp from './DiaryMobileApp';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DiaryEntryLike = any;
@@ -181,6 +184,11 @@ const DiaryProjectsList: React.FC<DiaryProjectsListProps> = ({
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'diaryProjectsColWidths');
     const confirm = useConfirm();
 
+    // Mesmo arranjo de TasksModule: celular de verdade entra direto no app mobile;
+    // no desktop o botão "Mobile" abre o mesmo app dentro da moldura de prévia.
+    const [showMobilePreview, setShowMobilePreview] = React.useState(false);
+    const [isMobile] = React.useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+
     const fetchProjects = useStore(s => s.fetchProjects);
     const storeOrganizations = useStore(s => s.organizations);
     const projectsLoading = useStore(s => s.projectsLoading);
@@ -302,8 +310,15 @@ const DiaryProjectsList: React.FC<DiaryProjectsListProps> = ({
         uppercase: false,
     };
 
+    if (isMobile) return <DiaryMobileApp projects={projects} />;
+
     return (
         <div className="space-y-6">
+            {showMobilePreview && (
+                <MobilePreviewFrame onClose={() => setShowMobilePreview(false)} title="Prévia — Diário de Obras">
+                    <DiaryMobileApp projects={projects} />
+                </MobilePreviewFrame>
+            )}
             {/* §20 — h1 solto + subtítulo mt-1.5; ações na mesma linha, à direita (mesmo arranjo de ProjectList) */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
@@ -313,6 +328,14 @@ const DiaryProjectsList: React.FC<DiaryProjectsListProps> = ({
                     </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                    <button
+                        onClick={() => setShowMobilePreview(true)}
+                        title="Prévia Mobile"
+                        className="hidden md:flex items-center gap-1.5 h-9 px-3.5 bg-white text-gray-500 border border-gray-200 rounded-[6px] hover:bg-gray-50 hover:text-gray-700 font-medium text-[13px] transition-all active:scale-95"
+                    >
+                        <Smartphone className="w-[15px] h-[15px]" />
+                        Mobile
+                    </button>
                     {onOpenLaborAnalytics && (
                         <button
                             onClick={onOpenLaborAnalytics}

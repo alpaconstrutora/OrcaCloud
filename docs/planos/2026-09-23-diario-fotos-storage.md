@@ -112,3 +112,13 @@ do mobile e do desktop com o storage interceptado.
   limpo; `orgContextGuard` 14/14; `segurancaMigrations` e `migrationsPrefixo`
   verdes (a migration nasceu `000030`, colidiu, passou por `000040` — também
   tomado — e ficou `000055`, primeiro livre).
+
+## Publicação (23/09/2026)
+
+- Commit `eba67207` em `main` (push direto, REGRA #8). Suíte completa na frente:
+  442 arquivos / 5104 testes verdes; `verificar:build` limpo.
+- Ordem respeitada: migration aplicada e function publicada ANTES do push do
+  frontend — o app novo já encontrou bucket e function no ar.
+- Provado de fora com `conferir-producao.sh "Falha ao enviar a foto"`: texto
+  novo presente no bundle servido (outra frente já tinha empurrado `85ac9a8`
+  em seguida; o "faltam 1 commit" é ela, não este).

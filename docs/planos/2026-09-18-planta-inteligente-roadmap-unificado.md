@@ -1650,6 +1650,26 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 
 **O que fica em aberto**: o print mostra o sintoma num desenho que não reproduz aqui — no arquivo real que temos, as 34 portas conferem. Se depois desta correção ainda houver porta do lado errado, é preciso o arquivo (ou o nome do estudo) para apurar; a ferramenta **Inverter o lado** (barra da abertura) conserta peça a peça enquanto isso.
 
+### P2.38 — Gerar de novo a partir do DXF guardado, e só de uma região (22/09/2026) · pergunta do usuário
+
+**Pergunta**: *"o processo de geração automática de paredes, portas e janelas só acontece quando importo uma planta? não existe botão para ser feito separadamente — importar planta e depois pedir para gerar?"*. Existia **só para PDF** (Inserir › Do PDF gera do vetor guardado, com região e escolha de espessura). Para DXF/DWG era um passo só: mudar a camada ou uma hipótese exigia apontar o arquivo de novo.
+
+**O que entrou**
+- `services/blueprintUnderlayService.ts`: `DesenhoDaPrancha` (o DXF cru + os parâmetros da importação que o gerou: nome, unidade, camada, modo, espessura e o deslocamento `dx`/`dy`), `salvarDesenho`/`carregarDesenho` ao lado da imagem (`<path>.desenho.json`, teto de 24 MB — o projeto real tem 8,3 MB; 404 = a prancha não tem desenho, o caso de todo PDF). Guarda-se o ARQUIVO, e não o vetor extraído como no PDF, porque o que se muda ao regerar é justamente a leitura.
+- `hooks/useBlueprintUnderlay.ts`: `importarRaster` leva o desenho junto (erro engolido, como o vetor do PDF: o fundo já subiu); `desenhoDaPranchaAtiva()` devolve o desenho da prancha ativa.
+- `PainelImportarDxf.tsx`: quando a prancha de fundo ativa tem desenho guardado, a tela abre com **"O desenho desta planta de fundo está guardado … Gerar de novo com este desenho"** — restaura camada, unidade, modo e espessura, e entra **alinhado à planta de fundo** (usa o `dx`/`dy` guardado; o seletor de posição some, porque escolher outra faria o gerado sair de cima do fundo) e **sem subir outro fundo**. Bloco **"Onde gerar"**: marcar região no desenho (a mesma ferramenta do "Do PDF") — entra só a parede com o MEIO dentro do retângulo, e a tela diz quantas ficaram de fora. Os contadores do relatório e do botão passam a ser do que VAI ENTRAR (com região, as esquadrias das paredes de fora não são mais anunciadas).
+- `BlueprintEditor.tsx`: liga `onDesenhoGuardado` e a região (`regiao`/`regiaoArmada`/armar/limpar) também à tarefa `importar-dxf` — o canvas já sabia marcar o retângulo.
+
+**Decisões**
+- O desenho vai junto da PRANCHA, não do estudo: cada importação guarda o seu, e trocar de prancha troca o desenho oferecido.
+- Sem "substituir o que já entrou": gerar de novo ACRESCENTA, como toda importação, e é um passo de desfazer. Apagar o que veio antes seria decidir pelo usuário o que estava errado.
+- Região por ponto médio da parede (o mesmo critério do "Do PDF"), não por recorte da geometria: uma parede que atravessa a borda pertence a quem tem a maior parte dela, e continua inteira.
+
+**Prova**
+- `npx tsc --noEmit` ok · check-ui ok · `check-xss-sinks.sh` ok · suíte cheia **438 arquivos / 5078 testes** · `npm run build` ok.
+- App real (escritas bloqueadas: 16, 0 erros; o storage e a linha da prancha simulados no navegador, 7 chamadas): importar `casa-print.dxf` → 14 → 19 paredes e o `…desenho.json` guardado → fechar e reabrir Inserir › Do DXF/DWG → **"O desenho desta planta de fundo está guardado · casa-print.dxf · camada PAREDE · milímetro"** → "Gerar de novo com este desenho" → camada e unidade restauradas, "Posição: alinhada à planta de fundo", sem bloco de fundo → **Marcar região** e arrastar no desenho → "Só as paredes com o meio dentro do retângulo entram — 2 fora dele", relatório "3 paredes · 2 porta(s) · 2 janela(s)", botão "Importar 3 + 4" → 19 → 22 paredes, em cima da planta de fundo.
+- Testes: `PainelImportarDxf.test.tsx` (23: a prancha com desenho oferece gerar de novo e restaura os parâmetros; entra pelo `dx`/`dy` guardado e não sobe outro fundo; a região filtra, conta as que ficam de fora e ajusta porta/janela/vão e o botão; prancha sem desenho — o caso do PDF — não oferece nada; o desenho de origem vai junto no `onFundo`).
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

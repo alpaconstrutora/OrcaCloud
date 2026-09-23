@@ -9,12 +9,15 @@ import {
   listarUnderlays,
   rasterizarPdf,
   removerUnderlay,
+  carregarDesenho,
+  salvarDesenho,
   salvarUnderlay,
   salvarVetor,
   temArcos,
   underlayDaLinha,
   uploadUnderlay,
   urlAssinada,
+  type DesenhoDaPrancha,
   type UnderlayRow,
 } from '../services/blueprintUnderlayService';
 import type { ArcoBezier, ParaPixel, SegmentoVetor } from '../utils/blueprintVetor';
@@ -258,7 +261,7 @@ export function useBlueprintUnderlay(
    * arquivo. É o que impede a tela de pedir aferição para um fundo que já a tem.
    */
   const importarRaster = useCallback(
-    async (blob: Blob, nomeArquivo: string, u: Underlay, larguraPx: number): Promise<UnderlayRow | null> => {
+    async (blob: Blob, nomeArquivo: string, u: Underlay, larguraPx: number, desenho?: DesenhoDaPrancha): Promise<UnderlayRow | null> => {
       setOcupado(true);
       setErro(null);
       try {
@@ -277,6 +280,10 @@ export function useBlueprintUnderlay(
           calibracao: { p1: { px: 0, py: 0 }, p2: { px: larguraPx, py: 0 }, distanciaMm: larguraPx * u.mmPorPixel, alinhado: true },
           opacidade,
         });
+        // O DESENHO DE ORIGEM (P2.38), ao lado da imagem: é ele que permite gerar de novo — outra
+        // camada, outras espessuras, uma região — sem apontar o arquivo outra vez. Erro engolido de
+        // propósito, como o vetor do PDF: a planta de fundo já subiu, e o desenho é conveniência.
+        if (desenho) await salvarDesenho(storagePath, desenho).catch(() => false);
         setTotalPaginas(1);
         setLinhas((atual) => [...atual, salvo]);
         setAtivaId(salvo.id);
@@ -300,6 +307,12 @@ export function useBlueprintUnderlay(
    * `underlay` do estado logo depois entregaria o valor VELHO: o React só
    * atualiza o closure na próxima renderização.
    */
+  /** O desenho de origem da prancha ativa (P2.38), quando ela tem um. */
+  const desenhoDaPranchaAtiva = useCallback(async (): Promise<DesenhoDaPrancha | null> => {
+    if (!linha) return null;
+    return carregarDesenho(linha.storage_path);
+  }, [linha]);
+
   const aplicarCalibracao = useCallback(
     async (
       p1: PontoPx,
@@ -498,6 +511,7 @@ export function useBlueprintUnderlay(
     totalPaginas,
     importar,
     importarRaster,
+    desenhoDaPranchaAtiva,
     aplicarCalibracao,
     declararEscala,
     remover,

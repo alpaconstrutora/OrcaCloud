@@ -10985,13 +10985,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               // o próximo arraste em QUALQUER ferramenta virar uma marcação de
               // região invisível — o botão que a armou não está mais na tela
               // para explicar o que aconteceu.
-              regiaoArmada={(tarefaAberta === 'gerar-paredes' && regiaoArmada) || recorteArmado !== null}
+              regiaoArmada={((tarefaAberta === 'gerar-paredes' || tarefaAberta === 'importar-dxf') && regiaoArmada) || recorteArmado !== null}
               recorteDaVista={vistaDependenteAtual ? { ...vistaDependenteAtual.recorte, nome: vistaDependenteAtual.nome, denominador: vistaDependenteAtual.denominador } : null}
               vistasDependentesDoNivel={vistaDependenteAtual ? [] : (editor.model.vistasDependentes ?? []).filter((v) => v.levelId === levelId)}
               // A região só aparece com a tarefa que a usa aberta. Desenhá-la
               // sempre deixaria um retângulo violeta sobre a planta enquanto se
               // traça parede, sem nada na tela explicando de onde ele veio.
-              regiao={tarefaAberta === 'gerar-paredes' ? regiao : null}
+              regiao={tarefaAberta === 'gerar-paredes' || tarefaAberta === 'importar-dxf' ? regiao : null}
               pecasPrevistas={pecasPrevistas}
               ocultos={ocultosNoCanvas}
               onRegiaoDefinida={(r) => {
@@ -13591,8 +13591,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               levelIdAtivo={levelId}
               onImportar={importarDoIfc}
               // FUNDO DO DXF (P2.36): o desenho original rasterizado e já aferido, por baixo das paredes geradas.
-              onFundo={async (blob, nome, u, larguraPx) => (await fundo.importarRaster(blob, nome, u, larguraPx)) !== null}
+              onFundo={async (blob, nome, u, larguraPx, desenho) => (await fundo.importarRaster(blob, nome, u, larguraPx, desenho)) !== null}
               fundoAtivo={!!fundo.linha}
+              // GERAR DE NOVO (P2.38): o desenho guardado na prancha, e a mesma região do "Do PDF".
+              onDesenhoGuardado={fundo.desenhoDaPranchaAtiva}
+              regiao={regiao}
+              regiaoArmada={regiaoArmada}
+              onArmarRegiao={() => {
+                setRegiaoArmada((a) => {
+                  setDrawerRecolhido(!a);
+                  return !a;
+                });
+              }}
+              onLimparRegiao={() => setRegiao(null)}
             />
           )}
           {tarefaAberta === 'importar-collada' && (

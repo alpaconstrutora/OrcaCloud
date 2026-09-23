@@ -375,6 +375,75 @@ export function caminhoDoVetor(storagePath: string): string {
 const LIMITE_VETOR_BYTES = 12 * 1024 * 1024;
 
 /**
+ * O DESENHO DE ORIGEM guardado ao lado da prancha (P2.38).
+ *
+ * ─── POR QUE GUARDAR O ARQUIVO INTEIRO ──────────────────────────────────────
+ *
+ * O PDF guarda o VETOR extraído, porque o que interessa dele são os traços. O
+ * DXF é diferente: o que se muda ao regerar é justamente a leitura — outra
+ * camada, outra unidade, outras espessuras, outras hipóteses de esquadria. Só
+ * o arquivo inteiro permite isso; um vetor já filtrado congelaria a decisão que
+ * a pessoa quer rever.
+ *
+ * Junto vão os PARÂMETROS da importação que o gerou, e o deslocamento aplicado
+ * (`dx`, `dy`): é ele que faz o que se gera depois cair EM CIMA da planta de
+ * fundo, em vez de voltar para a origem.
+ */
+export interface DesenhoDaPrancha {
+  v: 1;
+  nomeArquivo: string;
+  mmPorUnidade: number;
+  camada: string;
+  modo: 'FACES' | 'EIXOS';
+  espessuraMm: number;
+  dx: number;
+  dy: number;
+  /** O DXF cru (um DWG já convertido). */
+  texto: string;
+}
+
+/** O desenho fica ao lado da imagem, como o vetor do PDF; 404 = não tem. */
+export function caminhoDoDesenho(storagePath: string): string {
+  return `${storagePath.replace(/\.png$/i, '')}.desenho.json`;
+}
+
+/** Acima disto o desenho não é guardado — o projeto real da empresa tem 8,3 MB. */
+const LIMITE_DESENHO_BYTES = 24 * 1024 * 1024;
+
+/** Guarda o desenho de origem ao lado da imagem. `false` = decidiu não guardar (grande demais, ou falhou). */
+export async function salvarDesenho(storagePath: string, d: DesenhoDaPrancha): Promise<boolean> {
+  try {
+    const texto = JSON.stringify(d);
+    if (texto.length > LIMITE_DESENHO_BYTES) return false;
+    const { error } = await supabase.storage
+      .from(BUCKET)
+      .upload(caminhoDoDesenho(storagePath), new Blob([texto], { type: 'application/json' }), {
+        upsert: true,
+        contentType: 'application/json',
+      });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+/** O desenho de origem da prancha, ou `null` quando ela não tem um (o caso de toda prancha de PDF). */
+export async function carregarDesenho(storagePath: string): Promise<DesenhoDaPrancha | null> {
+  try {
+    const { data, error } = await supabase.storage
+      .from(BUCKET)
+      .createSignedUrl(caminhoDoDesenho(storagePath), 60 * 60);
+    if (error || !data?.signedUrl) return null;
+    const r = await fetch(data.signedUrl);
+    if (!r.ok) return null;
+    const json = (await r.json()) as DesenhoDaPrancha;
+    return json?.v === 1 && typeof json.texto === 'string' && json.texto.length > 0 ? json : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Guarda o vetor ao lado da imagem. Devolve `false` se decidiu não guardar.
  *
  * ⚠️ NUNCA lança. O artefato principal da importação é a planta de fundo; o

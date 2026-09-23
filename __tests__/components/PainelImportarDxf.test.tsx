@@ -341,7 +341,10 @@ describe('importar DXF · o desenho original como planta de fundo (P2.36)', () =
       fireEvent.click(screen.getByRole('button', { name: /Importar/ }));
       await waitFor(() => expect(onImportar).toHaveBeenCalledTimes(1));
       expect(onFundo).toHaveBeenCalledTimes(1);
-      const [blob, nome, underlay, larguraPx] = onFundo.mock.calls[0] as unknown as [Blob, string, { origemXMm: number; origemYMm: number; mmPorPixel: number; rotacaoMrad: number }, number];
+      const [blob, nome, underlay, larguraPx, desenho] = onFundo.mock.calls[0] as unknown as [Blob, string, { origemXMm: number; origemYMm: number; mmPorPixel: number; rotacaoMrad: number }, number, { v: number; camada: string; mmPorUnidade: number; texto: string; dx: number; dy: number }];
+      // P2.38: o desenho de origem vai junto, com os parâmetros da importação — é o que permite gerar de novo.
+      expect(desenho).toMatchObject({ v: 1, nomeArquivo: 'planta.dxf', camada: 'PAREDE', mmPorUnidade: 1, modo: 'FACES' });
+      expect(desenho.texto).toContain('PAREDE');
       expect(blob.type).toBe('image/png');
       expect(nome).toBe('planta.dxf');
       // Desenho de 6000 mm de largura (o arco da porta sobe até y = 900): 6000 / 4080 = 1,47 mm/px, margem de 8 px.
@@ -402,6 +405,102 @@ describe('importar DXF · o desenho original como planta de fundo (P2.36)', () =
     } finally {
       restaurar2();
     }
+  });
+});
+
+describe('importar DXF · gerar de novo com o desenho guardado (P2.38)', () => {
+  const guardado = () => ({
+    v: 1 as const,
+    nomeArquivo: 'planta.dxf',
+    mmPorUnidade: 1,
+    camada: 'PAREDE',
+    modo: 'FACES' as const,
+    espessuraMm: 150,
+    dx: 1000,
+    dy: 2000,
+    texto: dxfComEsquadrias(),
+  });
+
+  it('a prancha com desenho guardado oferece gerar de novo: restaura camada e unidade, entra alinhado ao fundo e NÃO sobe outro fundo', async () => {
+    const restaurar = comCanvasFalso();
+    try {
+      const onFundo = vi.fn(async () => true);
+      const onImportar = vi.fn();
+      const { model, levelId } = comNivel();
+      render(
+        <PainelImportarDxf
+          model={model}
+          levelIdAtivo={levelId}
+          onImportar={onImportar}
+          onFundo={onFundo}
+          fundoAtivo
+          onDesenhoGuardado={async () => guardado()}
+        />,
+      );
+      await waitFor(() => expect(screen.getByTestId('desenho-guardado')).toBeTruthy());
+      expect(screen.getByTestId('desenho-guardado').textContent).toMatch(/planta\.dxf · camada PAREDE · milímetro/);
+      fireEvent.click(screen.getByRole('button', { name: /Gerar de novo com este desenho/ }));
+      await waitFor(() => expect(screen.getByText('planta.dxf')).toBeTruthy());
+      // A posição não se escolhe: é a da planta de fundo, senão o gerado não cairia em cima dela.
+      expect(screen.getByTestId('alinhado-ao-fundo').textContent).toMatch(/alinhada à planta de fundo/);
+      expect(screen.queryByLabelText('Onde ancorar o desenho importado')).toBeNull();
+      expect(screen.queryByTestId('fundo-dxf')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: /Importar/ }));
+      await waitFor(() => expect(onImportar).toHaveBeenCalledTimes(1));
+      expect(onFundo).not.toHaveBeenCalled();
+      // O deslocamento guardado (1000, 2000) é o que posiciona as paredes.
+      const parede = (onImportar.mock.calls[0][0] as Array<Record<string, { x: number; y: number }>>).find((c) => (c as unknown as { type: string }).type === 'AddWall')!;
+      expect(parede.a).toEqual({ x: 1000, y: 2075 });
+    } finally {
+      restaurar();
+    }
+  });
+
+  it('a região limita o que é gerado, e diz quantas ficaram de fora', async () => {
+    const restaurar = comCanvasFalso();
+    try {
+      const onImportar = vi.fn();
+      const { model, levelId } = comNivel();
+      // Duas paredes no desenho: a de 6 m em y≈75 e outra, distante, em y≈5000.
+      const doisTrechos = {
+        ...guardado(),
+        dx: 0,
+        dy: 0,
+        texto: dxfComEsquadrias().replace('0\nENDSEC\n0\nEOF', ['0', 'LINE', '8', 'PAREDE', '10', '0', '20', '5000', '11', '4000', '21', '5000', '0', 'LINE', '8', 'PAREDE', '10', '0', '20', '5150', '11', '4000', '21', '5150', '0', 'ENDSEC', '0', 'EOF'].join('\n')),
+      };
+      const { rerender } = render(
+        <PainelImportarDxf model={model} levelIdAtivo={levelId} onImportar={onImportar} onDesenhoGuardado={async () => doisTrechos} onArmarRegiao={() => {}} onLimparRegiao={() => {}} />,
+      );
+      await waitFor(() => expect(screen.getByTestId('desenho-guardado')).toBeTruthy());
+      fireEvent.click(screen.getByRole('button', { name: /Gerar de novo com este desenho/ }));
+      await waitFor(() => expect(screen.getByText('planta.dxf')).toBeTruthy());
+      expect(screen.getByTestId('resumo-dxf').textContent).toMatch(/2 paredes/);
+      expect(screen.getByTestId('regiao-dxf').textContent).toMatch(/Sem região, o desenho inteiro entra/);
+
+      // Região em torno da parede de baixo (y≈75): a de cima fica de fora.
+      rerender(
+        <PainelImportarDxf model={model} levelIdAtivo={levelId} onImportar={onImportar} onDesenhoGuardado={async () => doisTrechos} onArmarRegiao={() => {}} onLimparRegiao={() => {}} regiao={{ x0: -500, y0: -500, x1: 7000, y1: 500 }} />,
+      );
+      expect(screen.getByTestId('resumo-dxf').textContent).toMatch(/1 parede /);
+      expect(screen.getByTestId('regiao-dxf').textContent).toMatch(/1 fora dele/);
+      // Os contadores são do que VAI ENTRAR: a parede que ficou leva a porta e as janelas dela.
+      expect(screen.getByTestId('resumo-esquadrias').textContent).toBe('1 porta(s) · 1 janela(s) · 0 vão(s) livre(s)');
+      expect(screen.getByRole('button', { name: /Importar/ }).textContent).toMatch(/Importar 1 \+ 2/);
+      fireEvent.click(screen.getByRole('button', { name: /Importar/ }));
+      await waitFor(() => expect(onImportar).toHaveBeenCalledTimes(1));
+      const comandos = onImportar.mock.calls[0][0] as Array<{ type: string; a?: { y: number } }>;
+      expect(comandos.filter((c) => c.type === 'AddWall')).toHaveLength(1);
+      expect(comandos.find((c) => c.type === 'AddWall')!.a!.y).toBe(75);
+    } finally {
+      restaurar();
+    }
+  });
+
+  it('prancha sem desenho guardado (o caso do PDF) não oferece nada', async () => {
+    const { model, levelId } = comNivel();
+    render(<PainelImportarDxf model={model} levelIdAtivo={levelId} onImportar={vi.fn()} onDesenhoGuardado={async () => null} />);
+    await waitFor(() => expect(screen.getByTestId('padrao-opura')).toBeTruthy());
+    expect(screen.queryByTestId('desenho-guardado')).toBeNull();
   });
 });
 

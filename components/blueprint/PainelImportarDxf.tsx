@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from 'react';
-import { AlertTriangle, Check, Download, FileUp, Loader2 } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { AlertTriangle, Check, Download, FileUp, Loader2, SquareDashedMousePointer, Wand2, X } from 'lucide-react';
 import type { BlueprintModel, Command } from '../../utils/blueprintKernel';
 import { novoUid } from '../../utils/blueprintKernel';
 import {
@@ -17,6 +17,7 @@ import type { ArcoDxf, InsercaoDxf, RecusaDxf, TextoDxf } from '../../utils/dxfL
 import { gerarTemplateOpura, lerPadraoOpura, REGRAS_DO_PADRAO, temPadraoOpura, VERSAO_DO_PADRAO } from '../../utils/dxfPadraoOpura';
 import { planejarFundo, rasterizarDxf } from '../../utils/dxfParaFundo';
 import type { Underlay } from '../../utils/blueprintUnderlay';
+import type { DesenhoDaPrancha } from '../../services/blueprintUnderlayService';
 import { usePersistedState } from '../ui/TableUtils';
 import { converterDwgParaDxf } from '../../services/blueprintDwgService';
 import {
@@ -72,6 +73,15 @@ import {
  * com a mesma unidade e a mesma ancoragem das paredes. O upload é do editor
  * (`onFundo`), que tem o estudo e o pavimento; este painel só rasteriza.
  *
+ * ─── GERAR DE NOVO, SEM O ARQUIVO (P2.38) ───────────────────────────────────
+ *
+ * O desenho de origem fica guardado ao lado da planta de fundo. Com ele, a
+ * tela oferece "Usar o desenho desta prancha": muda-se a camada, a unidade, as
+ * espessuras ou as hipóteses e gera-se outra vez — ou só de uma REGIÃO marcada
+ * no desenho — sem apontar o arquivo de novo. O que nasce assim é alinhado à
+ * planta de fundo (o deslocamento da importação veio junto), então cai em cima
+ * dela; e o fundo não é subido outra vez.
+ *
  * ─── DWG (E9.1) ─────────────────────────────────────────────────────────────
  *
  * Um .dwg entra pelo MESMO caminho: vai à Edge Function `dwg-converter`
@@ -84,13 +94,22 @@ interface Props {
   levelIdAtivo: string | null;
   onImportar: (comandos: Command[]) => void;
   /** P2.36: guarda o raster do desenho original como planta de fundo já aferida. Devolve `false` se não conseguiu. */
-  onFundo?: (blob: Blob, nomeArquivo: string, underlay: Underlay, larguraPx: number) => Promise<boolean>;
+  onFundo?: (blob: Blob, nomeArquivo: string, underlay: Underlay, larguraPx: number, desenho?: DesenhoDaPrancha) => Promise<boolean>;
   /** Já existe uma planta de fundo neste pavimento (a nova entra como mais uma prancha). */
   fundoAtivo?: boolean;
+  /** P2.38: o desenho guardado na prancha de fundo ativa, para gerar de novo sem o arquivo. */
+  onDesenhoGuardado?: () => Promise<DesenhoDaPrancha | null>;
+  /** P2.38: região marcada no desenho (mm do modelo) — gera só o que está dentro dela. */
+  regiao?: { x0: number; y0: number; x1: number; y1: number } | null;
+  regiaoArmada?: boolean;
+  onArmarRegiao?: () => void;
+  onLimparRegiao?: () => void;
 }
 
 interface Preparado {
   nomeArquivo: string;
+  /** O DXF cru, para guardar ao lado da prancha (P2.38). */
+  texto: string;
   segmentos: ReturnType<typeof prepararDxf>['segmentos'];
   arcos: ArcoDxf[];
   insercoes: InsercaoDxf[];
@@ -108,7 +127,7 @@ type Modo = 'FACES' | 'EIXOS';
 
 const m2 = (mm: number) => (mm / 1000).toFixed(2).replace('.', ',');
 
-export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onFundo, fundoAtivo = false }: Props) {
+export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onFundo, fundoAtivo = false, onDesenhoGuardado, regiao = null, regiaoArmada = false, onArmarRegiao, onLimparRegiao }: Props) {
   const [lendo, setLendo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [preparado, setPreparado] = useState<Preparado | null>(null);
@@ -130,9 +149,25 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
   /** FUNDO (P2.36): guardar o desenho original por baixo das paredes geradas. Persistido por tela. */
   const [guardarFundo, setGuardarFundo] = usePersistedState<boolean>('blueprint:dxf-fundo', true);
   const [importando, setImportando] = useState(false);
+  /** P2.38: quando o desenho veio da prancha de fundo, o deslocamento é o da importação que a criou. */
+  const [daPrancha, setDaPrancha] = useState<{ dx: number; dy: number } | null>(null);
+  /** P2.38: a prancha ativa tem desenho guardado? `null` = ainda não perguntamos. */
+  const [temGuardado, setTemGuardado] = useState<DesenhoDaPrancha | null>(null);
   // ESQUADRIAS (P2.33): as hipóteses de altura e o teto do vão livre, persistidas por tela.
   const [hip, setHip] = usePersistedState<HipotesesDeEsquadrias>('blueprint:dxf-esquadrias', HIPOTESES_ESQUADRIAS_PADRAO);
   const hipoteses: HipotesesDeEsquadrias = { ...HIPOTESES_ESQUADRIAS_PADRAO, ...hip };
+
+  // P2.38: ao abrir a tela, ver se a prancha de fundo ativa traz um desenho guardado.
+  useEffect(() => {
+    let cancelado = false;
+    if (!onDesenhoGuardado) return;
+    void onDesenhoGuardado().then((d) => {
+      if (!cancelado) setTemGuardado(d);
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, [onDesenhoGuardado]);
 
   const preparar = useCallback(async (arquivo: File) => {
     setLendo(true);
@@ -141,9 +176,11 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
     try {
       const ehDwg = /\.dwg$/i.test(arquivo.name);
       const convertido = ehDwg ? await converterDwgParaDxf(arquivo) : null;
-      const p = prepararDxf(convertido ? convertido.dxf : await arquivo.text());
+      const texto = convertido ? convertido.dxf : await arquivo.text();
+      const p = prepararDxf(texto);
       setPreparado({
         nomeArquivo: arquivo.name,
+        texto,
         ...p,
         ...(convertido ? { dwg: { versao: convertido.versao, release: convertido.release, bytes: convertido.bytes, codigoLibredwg: convertido.codigoLibredwg } } : {}),
       });
@@ -153,6 +190,7 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
       setModo('FACES');
       setEspessurasFora(new Set());
       setUsarOpura(true);
+      setDaPrancha(null);
     } catch (e) {
       setErro(e instanceof Error ? e.message : String(e));
     } finally {
@@ -187,6 +225,8 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
     .sort((a, b) => a.espessuraMm - b.espessuraMm);
   const comprimentoBruto = porEspessura.reduce((s, e) => s + e.comprimentoMm, 0);
   const filtradas = limpo.paredes.filter((p) => !espessurasFora.has(p.espessuraMm));
+  const dxDaRegiao = daPrancha?.dx ?? 0;
+  const dyDaRegiao = daPrancha?.dy ?? 0;
   // ESQUADRIAS (P2.33): porta pelo arco, janela pelo símbolo, vão livre pelo buraco — em cima das paredes limpas e filtradas.
   // PADRÃO ÒPURA (P2.35): lido, não reconhecido — o mesmo `paredes` de saída, mais os ambientes.
   const opura = preparado && pelaOpura ? lerPadraoOpura(preparado, nivel?.defaultHeightMm ?? 2800, hipoteses) : null;
@@ -195,11 +235,31 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
     : preparado && !pelaOpura
       ? aberturasDoDxf(filtradas, preparado, mmPorUnidade, camada, nivel?.defaultHeightMm ?? 2800, hipoteses)
       : { paredes: [], resumo: { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 0, cantosFechados: 0 } };
-  const paredes = esquadrias.paredes;
-  const totalDeAberturas = esquadrias.resumo.portas + esquadrias.resumo.janelas + esquadrias.resumo.vaos + (opura?.resumo.correr ?? 0);
+  // REGIÃO (P2.38): gera só o que está dentro do retângulo marcado no desenho. O critério é o ponto
+  // MÉDIO da parede: uma parede que atravessa a borda pertence a quem tem a maior parte dela.
+  const dentroDaRegiao = (p: { a: { x: number; y: number }; b: { x: number; y: number } }) => {
+    if (!regiao) return true;
+    const mx = (p.a.x + p.b.x) / 2 + dxDaRegiao;
+    const my = (p.a.y + p.b.y) / 2 + dyDaRegiao;
+    return mx >= Math.min(regiao.x0, regiao.x1) && mx <= Math.max(regiao.x0, regiao.x1) && my >= Math.min(regiao.y0, regiao.y1) && my <= Math.max(regiao.y0, regiao.y1);
+  };
+  const paredes = esquadrias.paredes.filter(dentroDaRegiao);
+  const foraDaRegiao = esquadrias.paredes.length - paredes.length;
+  // ⚠️ Os contadores vêm do que VAI ENTRAR, não do que foi reconhecido: com uma região marcada, as
+  // esquadrias das paredes de fora não entram, e anunciá-las prometeria o que não vai acontecer.
+  const aberturasQueEntram = paredes.flatMap((p) => p.aberturas as (typeof p.aberturas[number] & { correr?: boolean })[]);
+  const contagem = {
+    correr: aberturasQueEntram.filter((ab) => ab.correr).length,
+    portas: aberturasQueEntram.filter((ab) => ab.kind === 'door' && !ab.correr).length,
+    janelas: aberturasQueEntram.filter((ab) => ab.kind === 'window').length,
+    vaos: aberturasQueEntram.filter((ab) => ab.kind === 'passage').length,
+  };
+  const totalDeAberturas = aberturasQueEntram.length;
 
   const pegada = caixaDePontos(paredes.flatMap((p) => [p.a, p.b]));
-  const { dx, dy } = deslocamentoDaImportacao(ancoragem, pegada, caixaDoDesenho(model));
+  const desloc = deslocamentoDaImportacao(ancoragem, pegada, caixaDoDesenho(model));
+  // P2.38: o desenho da prancha entra onde a planta de fundo está — é o que faz o gerado cair em cima dela.
+  const { dx, dy } = daPrancha ?? desloc;
   // ⚠️ O kernel recusa coordenada além de ±1.000.000 mm, e a recusa vem de dentro do lote: o editor
   // inteiro caía de volta para a lista. Medido no projeto real da empresa, o desenho está a 3.976.897 mm
   // da origem do arquivo — "manter as coordenadas" é um clique que derrubava a tela.
@@ -209,18 +269,19 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
   const comprimentoTotal = paredes.reduce((s, p) => s + p.comprimentoMm, 0);
   // FUNDO (P2.36): o plano do raster (tamanho e resolução), sem desenhar — só para o relatório.
   const opcoesDoFundo = preparado ? { mmPorUnidade: pelaOpura ? 1 : mmPorUnidade, dx, dy, camadaDestaque: pelaOpura ? null : camada } : null;
-  const planoDoFundo = preparado && opcoesDoFundo && onFundo && guardarFundo ? planejarFundo(preparado, opcoesDoFundo) : null;
+  const planoDoFundo = preparado && opcoesDoFundo && onFundo && guardarFundo && !daPrancha ? planejarFundo(preparado, opcoesDoFundo) : null;
 
   async function importar() {
     if (!levelIdAtivo || paredes.length === 0 || !nivel || importando) return;
     // FUNDO (P2.36) primeiro: se o raster falhar, as paredes entram do mesmo jeito, com o aviso.
     let avisoDoFundo: string | null = null;
-    if (preparado && opcoesDoFundo && onFundo && guardarFundo) {
+    if (preparado && opcoesDoFundo && onFundo && guardarFundo && !daPrancha) {
       setImportando(true);
       try {
         const r = await rasterizarDxf(preparado, opcoesDoFundo);
         if (!r) avisoDoFundo = 'O desenho original não pôde ser rasterizado neste navegador; as paredes entraram sem a planta de fundo.';
-        else if (!(await onFundo(r.blob, preparado.nomeArquivo, r.plano.underlay, r.plano.larguraPx))) avisoDoFundo = 'As paredes entraram, mas a planta de fundo não foi guardada — veja o painel Planta de fundo.';
+        // O DESENHO vai junto (P2.38): é ele que permite gerar de novo sem apontar o arquivo.
+        else if (!(await onFundo(r.blob, preparado.nomeArquivo, r.plano.underlay, r.plano.larguraPx, { v: 1, nomeArquivo: preparado.nomeArquivo, mmPorUnidade, camada, modo, espessuraMm, dx, dy, texto: preparado.texto }))) avisoDoFundo = 'As paredes entraram, mas a planta de fundo não foi guardada — veja o painel Planta de fundo.';
       } catch (e) {
         avisoDoFundo = `As paredes entraram, mas a planta de fundo não foi guardada: ${e instanceof Error ? e.message : String(e)}`;
       } finally {
@@ -273,6 +334,25 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
     onImportar(comandos);
     setPreparado(null);
     setErro(avisoDoFundo);
+  }
+
+  /** P2.38: abre o desenho guardado na prancha de fundo, com os parâmetros da importação que a criou. */
+  function usarODaPrancha() {
+    if (!temGuardado) return;
+    setErro(null);
+    try {
+      const p = prepararDxf(temGuardado.texto);
+      setPreparado({ nomeArquivo: temGuardado.nomeArquivo, texto: temGuardado.texto, ...p });
+      setCamada(temGuardado.camada);
+      setMmPorUnidade(temGuardado.mmPorUnidade);
+      setModo(temGuardado.modo);
+      setEspessuraMm(temGuardado.espessuraMm);
+      setEspessurasFora(new Set());
+      setUsarOpura(true);
+      setDaPrancha({ dx: temGuardado.dx, dy: temGuardado.dy });
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+    }
   }
 
   function baixarTemplate() {
@@ -336,6 +416,25 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
               e.target.value = '';
             }}
           />
+
+          {/* ── Gerar de novo, sem o arquivo (P2.38) ─────────────────────── */}
+          {temGuardado && (
+            <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50/70 px-2 py-1.5" data-testid="desenho-guardado">
+              <p className="text-[11px] font-semibold text-emerald-900">O desenho desta planta de fundo está guardado</p>
+              <p className="mt-0.5 text-[10px] text-emerald-900/80">
+                {temGuardado.nomeArquivo} · camada {temGuardado.camada} · {temGuardado.mmPorUnidade === 1 ? 'milímetro' : temGuardado.mmPorUnidade === 1000 ? 'metro' : `${temGuardado.mmPorUnidade} mm por unidade`}. Gere de novo com outra
+                camada, outras espessuras ou só de uma região — o que nascer cai em cima da planta de fundo.
+              </p>
+              <button
+                type="button"
+                onClick={usarODaPrancha}
+                className="mt-1.5 inline-flex h-7 items-center gap-1.5 rounded-[6px] border border-emerald-300 bg-white px-2 text-[12px] font-medium text-emerald-800 transition-colors hover:bg-emerald-100"
+              >
+                <Wand2 className="h-3.5 w-3.5" />
+                Gerar de novo com este desenho
+              </button>
+            </div>
+          )}
 
           {/* ── Padrão ÒPURA (P2.35) ─────────────────────────────────────── */}
           <div className="mt-3 rounded-md border border-blue-100 bg-blue-50/60 px-2 py-1.5" data-testid="padrao-opura">
@@ -517,7 +616,42 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
             </p>
           </div>
 
+          {/* ── Região (P2.38): gerar só um pedaço ───────────────────────── */}
+          {daPrancha && onArmarRegiao && (
+            <div className="mt-2 rounded-md border border-violet-200 bg-violet-50/60 px-2 py-1.5" data-testid="regiao-dxf">
+              <p className="text-[11px] font-semibold text-violet-900">Onde gerar</p>
+              <div className="mt-1 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onArmarRegiao}
+                  aria-pressed={regiaoArmada}
+                  className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[12px] font-medium ${regiaoArmada ? 'border-violet-500 bg-violet-100 text-violet-900' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
+                >
+                  <SquareDashedMousePointer className="h-3.5 w-3.5" />
+                  {regiaoArmada ? 'Arraste no desenho…' : regiao ? 'Marcar outra região' : 'Marcar região'}
+                </button>
+                {regiao && onLimparRegiao && (
+                  <button type="button" onClick={onLimparRegiao} className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-slate-500 hover:bg-slate-100 hover:text-slate-700">
+                    <X className="h-3 w-3" />
+                    Limpar
+                  </button>
+                )}
+              </div>
+              <p className="mt-1 text-[10px] text-violet-900/80">
+                {regiao
+                  ? `Só as paredes com o meio dentro do retângulo entram${foraDaRegiao > 0 ? ` — ${foraDaRegiao} fora dele` : ''}.`
+                  : 'Sem região, o desenho inteiro entra de novo. Marcar um retângulo é o jeito de corrigir um cômodo sem mexer no resto.'}
+              </p>
+            </div>
+          )}
+
           {/* ── Onde cai ─────────────────────────────────────────────────── */}
+          {daPrancha && (
+            <p className="mt-2 text-[11px] text-slate-500" data-testid="alinhado-ao-fundo">
+              Posição: alinhada à planta de fundo (o deslocamento da importação que a criou).
+            </p>
+          )}
+          {!daPrancha && (
           <label className="mt-2 block text-[11px] font-semibold text-slate-600">
             Posição
             <select
@@ -531,7 +665,8 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
               <option value="ARQUIVO">Manter as coordenadas do arquivo</option>
             </select>
           </label>
-          {ancoragem === 'ARQUIVO' && pegada && (
+          )}
+          {!daPrancha && ancoragem === 'ARQUIVO' && pegada && (
             <p className={`mt-0.5 text-[10px] ${longe ? 'font-medium text-red-700' : 'text-amber-700'}`} data-testid="aviso-longe">
               O desenho está a {m2(Math.max(Math.abs(pegada.maxX), Math.abs(pegada.maxY)))} m da
               origem do arquivo. Acima de 1.000 m o desenho recusa a importação
@@ -587,7 +722,7 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
           )}
 
           {/* ── O desenho original por baixo (P2.36) ─────────────────────── */}
-          {onFundo && (
+          {onFundo && !daPrancha && (
             <div className="mt-2 rounded-md border border-slate-200 px-2 py-1.5" data-testid="fundo-dxf">
               <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-600">
                 <input type="checkbox" checked={guardarFundo} onChange={(e) => setGuardarFundo(e.target.checked)} aria-label="Guardar o desenho original como planta de fundo" className="h-3.5 w-3.5" />
@@ -615,8 +750,8 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
               <p className="mt-0.5 text-[11px] text-slate-500" data-testid="resumo-esquadrias">
                 {totalDeAberturas === 0
                   ? (pelaOpura ? 'Nenhum bloco de esquadria no arquivo.' : 'Nenhuma porta, janela ou vão reconhecido.')
-                  : `${esquadrias.resumo.portas} porta(s) · ${esquadrias.resumo.janelas} janela(s) · ${esquadrias.resumo.vaos} vão(s) livre(s)`}
-                {opura && opura.resumo.correr > 0 ? ` · ${opura.resumo.correr} de correr` : ''}
+                  : `${contagem.portas} porta(s) · ${contagem.janelas} janela(s) · ${contagem.vaos} vão(s) livre(s)`}
+                {contagem.correr > 0 ? ` · ${contagem.correr} de correr` : ''}
                 {opura && opura.resumo.ambientes > 0 ? ` · ${opura.resumo.ambientes} nome(s) de ambiente` : ''}
               </p>
             )}
@@ -662,7 +797,7 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
             <button
               type="button"
               onClick={() => void importar()}
-              disabled={paredes.length === 0 || !levelIdAtivo || importando || (ancoragem === 'ARQUIVO' && longe)}
+              disabled={paredes.length === 0 || !levelIdAtivo || importando || (!daPrancha && ancoragem === 'ARQUIVO' && longe)}
               className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-[6px] bg-blue-600 px-2.5 text-[13px] font-medium text-white transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-40"
             >
               {importando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}

@@ -286,7 +286,8 @@ function renderDealCell(
     deal: PropertyDeal,
     ctx: {
         property?: Property;
-        client?: Client;
+        /** TODOS os compradores, com o mesmo peso (ver dealBuyerLabelOf). */
+        buyerLabel: { name: string; extra: number; all: string };
         unitLabel: { name: string; extra: number; all: string };
         m2: number;
         basePrice: number;
@@ -297,13 +298,15 @@ function renderDealCell(
         empreendimentoByProperty: Record<string, { id: string; name: string; towerName?: string }>;
     },
 ): React.ReactNode {
-    const { property, client, unitLabel, m2, basePrice, m2Base, m2Venda, variancia, varianciaPct } = ctx;
+    const { property, buyerLabel, unitLabel, m2, basePrice, m2Base, m2Venda, variancia, varianciaPct } = ctx;
+    const moeda = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
     switch (key) {
         case 'code':
             return deal.code || '—';
         case 'property':
+            // §6.1.2 — `truncate` só recorta em elemento de bloco.
             return (
-                <span className="text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors">
+                <span className="block truncate text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors">
                     {unitLabel.name || property?.name || '---'}
                     {unitLabel.extra > 0 && (
                         <span className="ml-1.5 text-xs text-gray-400">+{unitLabel.extra}</span>
@@ -311,7 +314,11 @@ function renderDealCell(
                 </span>
             );
         case 'client':
-            return client?.name || 'Não vinculado';
+            return (
+                <span className={`block truncate text-sm font-normal ${buyerLabel.all ? 'text-gray-600' : 'text-gray-400'}`}>
+                    {buyerLabel.all || 'Não vinculado'}
+                </span>
+            );
         case 'empreendimento':
             // Sem a torre — mesma razão da tabela de Unidades do edifício.
             return <EmpreendimentoCell value={deal.property_id ? ctx.empreendimentoByProperty[deal.property_id] : undefined} showTower={false} />;
@@ -320,17 +327,17 @@ function renderDealCell(
         case 'private_area':
             return `${m2}m²`;
         case 'price_base':
-            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(basePrice);
+            return moeda(basePrice);
         case 'price_per_m2_base':
-            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(m2Base);
+            return moeda(m2Base);
         case 'floor':
             return property?.floor ? `${property.floor}º` : 'T';
         case 'sale_value':
-            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(deal.value);
+            return moeda(deal.value);
         case 'sale_value_per_m2':
-            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(m2Venda);
+            return moeda(m2Venda);
         case 'variance':
-            return `${variancia >= 0 ? '+' : ''}${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(variancia)}`;
+            return `${variancia >= 0 ? '+' : ''}${moeda(variancia)}`;
         case 'variance_pct':
             return `${Math.abs(varianciaPct).toFixed(1)}%`;
         case 'status': {
@@ -340,6 +347,16 @@ function renderDealCell(
         default:
             return null;
     }
+}
+
+/** Texto inteiro no `title` das colunas que truncam (§6.1.2). */
+function getDealCellTitle(
+    key: string,
+    ctx: { unitLabel: { all: string }; buyerLabel: { all: string } },
+): string | undefined {
+    if (key === 'property') return ctx.unitLabel.all || undefined;
+    if (key === 'client') return ctx.buyerLabel.all || undefined;
+    return undefined;
 }
 
 // Conteúdo de cada <td> da tabela de Corretores — mesmo padrão.
@@ -1373,20 +1390,6 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                         Negociações
                     </button>
                     <button
-                        onClick={() => setActiveTab('dashboard')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
-                    >
-                        <TrendingUp className="w-3.5 h-3.5" />
-                        Resultados
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('simulation')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'simulation' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
-                    >
-                        <Activity className="w-3.5 h-3.5" />
-                        Simulação
-                    </button>
-                    <button
                         onClick={() => setActiveTab('price-tables')}
                         className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'price-tables' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
@@ -1413,6 +1416,20 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                     >
                         <Sliders className="w-3.5 h-3.5" />
                         Inteligência
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('dashboard')}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                    >
+                        <TrendingUp className="w-3.5 h-3.5" />
+                        Resultados
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('simulation')}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'simulation' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                    >
+                        <Activity className="w-3.5 h-3.5" />
+                        Simulação
                     </button>
                 </div>
                 </div>
@@ -2092,15 +2109,17 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                 </button>
                             </div>
                         ) : (() => {
-                            const dv = dealsColumns.visibleColumns;
                             const dSortProps = {
                                 sortColumn: dealsColumns.sortColumn,
                                 sortDirection: dealsColumns.sortDirection,
                                 onSort: dealsColumns.handleColumnSort,
                                 uppercase: false as const,
                             };
-                            const dealsTableTotalWidth = DEALS_COLUMNS.filter(c => c.key !== 'actions')
-                                .reduce((sum, c) => sum + (dv.includes(c.key) ? dealsResize.getWidth(c.key) : 0), 0)
+                            // Ordem que o usuário arrastou (persistida por useTableColumns), sem
+                            // "actions", que é estrutural e mora sempre no fim.
+                            const dealsOrdered = dealsColumns.orderedVisibleColumns.filter(k => k !== 'actions');
+                            const dealsTableTotalWidth = dealsOrdered
+                                .reduce((sum, k) => sum + dealsResize.getWidth(k), 0)
                                 + dealsResize.getWidth('actions');
                             return (
                             /* Sem moldura própria — o card acoplado acima já a supre (§5.2). */
@@ -2108,20 +2127,9 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                 <div className="overflow-x-auto">
                                 <table ref={dealsResize.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: dealsTableTotalWidth, minWidth: '100%' }}>
                                     <colgroup>
-                                        {dv.includes('code') && <col data-col-key="code" style={{ width: `${dealsResize.getWidth('code')}px` }} />}
-                                        {dv.includes('property') && <col data-col-key="property" style={{ width: `${dealsResize.getWidth('property')}px` }} />}
-                                        {dv.includes('client') && <col data-col-key="client" style={{ width: `${dealsResize.getWidth('client')}px` }} />}
-                                        {dv.includes('empreendimento') && <col data-col-key="empreendimento" style={{ width: `${dealsResize.getWidth('empreendimento')}px` }} />}
-                                        {dv.includes('block') && <col data-col-key="block" style={{ width: `${dealsResize.getWidth('block')}px` }} />}
-                                        {dv.includes('private_area') && <col data-col-key="private_area" style={{ width: `${dealsResize.getWidth('private_area')}px` }} />}
-                                        {dv.includes('price_base') && <col data-col-key="price_base" style={{ width: `${dealsResize.getWidth('price_base')}px` }} />}
-                                        {dv.includes('price_per_m2_base') && <col data-col-key="price_per_m2_base" style={{ width: `${dealsResize.getWidth('price_per_m2_base')}px` }} />}
-                                        {dv.includes('floor') && <col data-col-key="floor" style={{ width: `${dealsResize.getWidth('floor')}px` }} />}
-                                        {dv.includes('sale_value') && <col data-col-key="sale_value" style={{ width: `${dealsResize.getWidth('sale_value')}px` }} />}
-                                        {dv.includes('sale_value_per_m2') && <col data-col-key="sale_value_per_m2" style={{ width: `${dealsResize.getWidth('sale_value_per_m2')}px` }} />}
-                                        {dv.includes('variance') && <col data-col-key="variance" style={{ width: `${dealsResize.getWidth('variance')}px` }} />}
-                                        {dv.includes('variance_pct') && <col data-col-key="variance_pct" style={{ width: `${dealsResize.getWidth('variance_pct')}px` }} />}
-                                        {dv.includes('status') && <col data-col-key="status" style={{ width: `${dealsResize.getWidth('status')}px` }} />}
+                                        {dealsOrdered.map(key => (
+                                            <col key={key} data-col-key={key} style={{ width: `${dealsResize.getWidth(key)}px` }} />
+                                        ))}
                                         {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
                                             borda de "Ações" não andar a cada redimensionamento. */}
                                         <col />
@@ -2130,20 +2138,17 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                     {/* thead em sentence case (§6.2) — escala compacta, colunas via SortableHeader (§6/§6.3) */}
                                     <thead>
                                         <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                            {dv.includes('code') && <SortableHeader colKey="code" label="Código" {...dSortProps} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="code" /></SortableHeader>}
-                                            {dv.includes('property') && <SortableHeader colKey="property" label="Unidade" {...dSortProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><dealsResize.ResizeHandle colKey="property" /></SortableHeader>}
-                                            {dv.includes('client') && <SortableHeader colKey="client" label="Cliente" {...dSortProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><dealsResize.ResizeHandle colKey="client" /></SortableHeader>}
-                                            {dv.includes('empreendimento') && <SortableHeader colKey="empreendimento" label="Empreendimento" {...dSortProps} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="empreendimento" /></SortableHeader>}
-                                            {dv.includes('block') && <SortableHeader colKey="block" label="Bloco" {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"><dealsResize.ResizeHandle colKey="block" /></SortableHeader>}
-                                            {dv.includes('private_area') && <SortableHeader colKey="private_area" label="Á. priv." {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="private_area" /></SortableHeader>}
-                                            {dv.includes('price_base') && <SortableHeader colKey="price_base" label="Preço base" {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="price_base" /></SortableHeader>}
-                                            {dv.includes('price_per_m2_base') && <SortableHeader colKey="price_per_m2_base" label="Vlr/m² base" {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="price_per_m2_base" /></SortableHeader>}
-                                            {dv.includes('floor') && <SortableHeader colKey="floor" label="Andar" {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"><dealsResize.ResizeHandle colKey="floor" /></SortableHeader>}
-                                            {dv.includes('sale_value') && <SortableHeader colKey="sale_value" label="Vlr venda" {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="sale_value" /></SortableHeader>}
-                                            {dv.includes('sale_value_per_m2') && <SortableHeader colKey="sale_value_per_m2" label="Vlr venda/m²" {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="sale_value_per_m2" /></SortableHeader>}
-                                            {dv.includes('variance') && <SortableHeader colKey="variance" label="Var. (R$)" {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="variance" /></SortableHeader>}
-                                            {dv.includes('variance_pct') && <SortableHeader colKey="variance_pct" label="Var. (%)" {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="variance_pct" /></SortableHeader>}
-                                            {dv.includes('status') && <SortableHeader colKey="status" label="Status" {...dSortProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><dealsResize.ResizeHandle colKey="status" /></SortableHeader>}
+                                            {dealsOrdered.map(key => {
+                                                const def = DEALS_COLUMN_HEADERS[key];
+                                                if (!def) return null;
+                                                return (
+                                                    <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} {...dSortProps}
+                                                        onMoveColumn={dealsColumns.moveColumn}
+                                                        className={def.className}>
+                                                        <dealsResize.ResizeHandle colKey={key} />
+                                                    </SortableHeader>
+                                                );
+                                            })}
                                             {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                             <th aria-hidden="true" className="border-r border-gray-100" />
                                             <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
@@ -2167,86 +2172,16 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                             const varianciaPct = m2Base > 0 ? (variancia / m2Base) * 100 : 0;
                                             return (
                                                 <tr key={deal.id} className="hover:bg-blue-50/50 transition-colors cursor-pointer group" onClick={() => { setEditingDeal(deal); setIsDealModalOpen(true); }}>
-                                                    {dv.includes('code') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
-                                                            {deal.code || '—'}
-                                                        </td>
-                                                    )}
-                                                    {dv.includes('property') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0" title={unitLabel.all || undefined}>
-                                                            {/* §6.1.2 — `truncate` só recorta em elemento de bloco. */}
-                                                            <span className="block truncate text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors">
-                                                                {unitLabel.name || property?.name || '---'}
-                                                                {unitLabel.extra > 0 && (
-                                                                    <span className="ml-1.5 text-xs text-gray-400">+{unitLabel.extra}</span>
-                                                                )}
-                                                            </span>
-                                                        </td>
-                                                    )}
-                                                    {dv.includes('client') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0" title={buyerLabel.all || undefined}>
-                                                            <span className={`block truncate text-sm font-normal ${buyerLabel.all ? 'text-gray-600' : 'text-gray-400'}`}>
-                                                                {buyerLabel.all || 'Não vinculado'}
-                                                            </span>
-                                                        </td>
-                                                    )}
-                                                    {dv.includes('empreendimento') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                            <EmpreendimentoCell value={deal.property_id ? empreendimentoByProperty[deal.property_id] : undefined} showTower={false} />
-                                                        </td>
-                                                    )}
-                                                    {dv.includes('block') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 text-center">
-                                                            {property?.block || '-'}
-                                                        </td>
-                                                    )}
-                                                    {dv.includes('private_area') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 text-center">
-                                                            {dealAreaOf(deal)}m²
-                                                        </td>
-                                                    )}
-                                                    {dv.includes('price_base') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-600 text-right">
-                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(basePrice)}
-                                                        </td>
-                                                    )}
-                                                    {dv.includes('price_per_m2_base') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-600 text-right">
-                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(m2Base)}
-                                                        </td>
-                                                    )}
-                                                    {dv.includes('floor') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 text-center">
-                                                            {property?.floor ? `${property.floor}º` : 'T'}
-                                                        </td>
-                                                    )}
-                                                    {dv.includes('sale_value') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 text-right">
-                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(deal.value)}
-                                                        </td>
-                                                    )}
-                                                    {dv.includes('sale_value_per_m2') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-blue-600 text-right">
-                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(m2Venda)}
-                                                        </td>
-                                                    )}
-                                                    {dv.includes('variance') && (
-                                                        <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-right ${variancia >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                                                            {variancia >= 0 ? '+' : ''}{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(variancia)}
-                                                        </td>
-                                                    )}
-                                                    {dv.includes('variance_pct') && (
-                                                        <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-center ${variancia >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                                                            {Math.abs(varianciaPct).toFixed(1)}%
-                                                        </td>
-                                                    )}
-                                                    {dv.includes('status') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                            <span className={`text-sm font-normal ${getDealStatusDisplay(deal.status, deal.type).color}`}>
-                                                                {getDealStatusDisplay(deal.status, deal.type).label}
-                                                            </span>
-                                                        </td>
-                                                    )}
+                                                    {dealsOrdered.map(key => {
+                                                        const cellCtx = { property, buyerLabel, unitLabel, m2, basePrice, m2Base, m2Venda, variancia, varianciaPct, empreendimentoByProperty };
+                                                        return (
+                                                            <td key={key}
+                                                                className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 ${getDealCellClass(key, variancia)}`}
+                                                                title={getDealCellTitle(key, cellCtx)}>
+                                                                {renderDealCell(key, deal, cellCtx)}
+                                                            </td>
+                                                        );
+                                                    })}
                                                     {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                                     <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                     <td className="px-6 py-2.5 text-right">
@@ -2260,7 +2195,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                         })}
                                         {sortedBuildingDeals.length === 0 && (
                                             <tr>
-                                                <td colSpan={dv.length + 2} className="px-6 py-12 text-center text-sm font-normal text-gray-400">
+                                                <td colSpan={dealsOrdered.length + 2} className="px-6 py-12 text-center text-sm font-normal text-gray-400">
                                                     {dealsSearch
                                                         ? `Nenhuma negociação encontrada para "${dealsSearch}".`
                                                         : 'Nenhuma negociação registrada.'}

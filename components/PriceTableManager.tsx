@@ -18,6 +18,7 @@ import type { PricingRuleApplication, Property, RentalPricingRule } from '../typ
 import { useConfirm } from './ui/confirm';
 import { formatMoney } from './ui/Format';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
+import TableSwitch from './ui/TableSwitch';
 import { KpiCard } from './ui/KpiCard';
 import Button from './ui/Button';
 
@@ -343,29 +344,24 @@ function renderPriceTableCell(
                 </div>
             );
         }
+        // Escala do switch de tabela: ui/TableSwitch (36×20). Estes dois estavam
+        // em 44×24 — desenho anterior ao ajuste de escala, que ficava maior que
+        // o texto da linha ao lado (apontado pelo usuário em 2026-09-23, tendo
+        // a coluna "Portal do Cliente" de Clientes como referência).
         case 'visibleToBroker':
             return (
-                <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                        type="checkbox"
-                        className="sr-only peer"
-                        checked={item.visible_to_broker ?? true}
-                        onChange={() => ctx.onToggleVisibility(item)}
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                </label>
+                <TableSwitch
+                    checked={item.visible_to_broker ?? true}
+                    onChange={() => ctx.onToggleVisibility(item)}
+                />
             );
         case 'showPrice':
             return (
-                <label className="relative inline-flex items-center cursor-pointer" title="Ligado: o corretor vê o preço desta unidade. Desligado: a unidade continua listada, sem o valor.">
-                    <input
-                        type="checkbox"
-                        className="sr-only peer"
-                        checked={item.show_price_to_broker ?? true}
-                        onChange={() => ctx.onToggleShowPrice(item)}
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                </label>
+                <TableSwitch
+                    checked={item.show_price_to_broker ?? true}
+                    onChange={() => ctx.onToggleShowPrice(item)}
+                    title="Ligado: o corretor vê o preço desta unidade. Desligado: a unidade continua listada, sem o valor."
+                />
             );
         default:
             return null;

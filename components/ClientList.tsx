@@ -18,6 +18,7 @@ import ServicesToast from './services/ServicesToast';
 import { useStore } from '../store/useStore';
 import { useOrgWriteTarget } from '../hooks/useOrgContext';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
+import TableSwitch from './ui/TableSwitch';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { useConfirm } from './ui/confirm';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
@@ -189,17 +190,6 @@ const CategoryLabel: React.FC<{ category?: string }> = ({ category }) => (
     <span className={`text-sm font-normal ${category ? (CATEGORY_COLORS[category] || 'text-gray-600') : 'text-gray-400'}`}>
         {category || 'Não definido'}
     </span>
-);
-
-// Switch de tabela (padrão existente em PriceTableManager.tsx) — reaproveitado
-// aqui para as duas colunas booleanas de Clientes (Status, Portal do Cliente),
-// em vez de inventar um estilo novo.
-const TableSwitch: React.FC<{ checked: boolean; onChange: () => void; onLabel: string; offLabel: string; onColor?: string }> = ({ checked, onChange, onLabel, offLabel, onColor = 'peer-checked:bg-blue-600' }) => (
-    <label className="inline-flex items-center gap-2 cursor-pointer" onClick={(e) => e.stopPropagation()}>
-        <input type="checkbox" className="sr-only peer" checked={checked} onChange={onChange} />
-        <div className={`w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all relative ${onColor}`}></div>
-        <span className={`text-sm font-normal ${checked ? 'text-gray-700' : 'text-gray-400'}`}>{checked ? onLabel : offLabel}</span>
-    </label>
 );
 
 // Conteúdo de cada célula (TD) por coluna — extraído para função pura para que o corpo da tabela

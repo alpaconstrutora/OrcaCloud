@@ -130,3 +130,14 @@ de leitura do PortalKit, textos diferentes.
 | # | Arquivo | O que muda | Como sei que terminou |
 |---|---|---|---|
 | 10 | `components/ClientArea.tsx` | Some o card branco de boas-vindas (avatar índigo + "Olá, Nome" + ações) do link público — a identidade já vem da casca, como no fornecedor | ✅ Playwright no link: nenhum "Olá, …" visível no desktop (só o hero mobile, `md:hidden`); 0 erros |
+
+## Pedido 7 (23/09/2026)
+
+> [print da aba Dados da Unidade no link público, com o cabeçalho azul-marinho sobre a casca coral] banner azul fora do padrao de cores
+
+| # | Arquivo | O que muda | Como sei que terminou |
+|---|---|---|---|
+| 11 | `components/client/UnidadeTab.tsx`, `components/client/CondominioTab.tsx`, `components/ClientArea.tsx` | Os 12 banners `bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600/indigo-600` viram `bg-[#E1553C]` (coral do §24/PortalKit); textos de apoio `text-blue-200`/`text-indigo-200` (34 + 2) viram `text-white/80`; os dois botões brancos dentro dos heros mobile passam de `text-blue-600`/`text-indigo-600` para `text-[#C24428]` | ✅ Playwright nas abas Dados da Unidade, Obra, Cronograma e Condomínio (visão do gestor) + link público: 0 blocos azul-marinho ≥300×60px; prints em `relatorios/cores/` |
+
+Alcança desktop **e** os heros mobile — é a mesma família visual; deixar metade
+coral e metade azul seria trocar um desencontro por outro.

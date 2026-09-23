@@ -599,7 +599,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden space-y-0">
                     {/* Hero */}
-                    <div className="-mx-4 bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-5 pt-4 pb-10">
+                    <div className="-mx-4 bg-[#E1553C] px-5 pt-4 pb-10">
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1.5">
                                 <span className="text-xs font-black text-white uppercase tracking-widest">Locação</span>
@@ -616,7 +616,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             </div>
                         </div>
                         <h2 className="text-2xl font-black text-white leading-tight">Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}</h2>
-                        <p className="text-blue-200 text-sm font-medium mt-1">Acompanhe seu imóvel e pagamentos</p>
+                        <p className="text-white/80 text-sm font-medium mt-1">Acompanhe seu imóvel e pagamentos</p>
                         {/* Ações rápidas (topo) */}
                         {quickTabs.length > 0 && (
                             <div className="mt-5 grid grid-cols-4 gap-2">
@@ -631,16 +631,16 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <div className="mt-4 bg-white/15 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
                             <div className="grid grid-cols-2 gap-3 mb-3">
                                 <div>
-                                    <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Próximo Vencimento</p>
-                                    {nextDue ? (<><p className="text-lg font-black text-white">R$ {nextDue.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p><p className="text-[9px] text-blue-200 font-bold mt-0.5">{new Date(nextDue.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p></>) : <p className="text-sm font-black text-white">Em dia</p>}
+                                    <p className="text-[9px] font-black text-white/80 uppercase tracking-widest mb-1">Próximo Vencimento</p>
+                                    {nextDue ? (<><p className="text-lg font-black text-white">R$ {nextDue.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p><p className="text-[9px] text-white/80 font-bold mt-0.5">{new Date(nextDue.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p></>) : <p className="text-sm font-black text-white">Em dia</p>}
                                 </div>
                                 <div className="border-l border-white/20 pl-3">
-                                    <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Total Pago</p>
+                                    <p className="text-[9px] font-black text-white/80 uppercase tracking-widest mb-1">Total Pago</p>
                                     <p className="text-lg font-black text-white">{paidPct}%</p>
-                                    <p className="text-[9px] text-blue-200 font-bold mt-0.5">R$ {totalPaid.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+                                    <p className="text-[9px] text-white/80 font-bold mt-0.5">R$ {totalPaid.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
                                 </div>
                             </div>
-                            {enabledTabIds.includes('financeiro') && <button onClick={() => setActiveTab('financeiro')} className="w-full py-2.5 bg-white text-blue-600 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2"><Wallet className="w-3.5 h-3.5" /> Ver Financeiro <ArrowRight className="w-3 h-3" /></button>}
+                            {enabledTabIds.includes('financeiro') && <button onClick={() => setActiveTab('financeiro')} className="w-full py-2.5 bg-white text-[#C24428] rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2"><Wallet className="w-3.5 h-3.5" /> Ver Financeiro <ArrowRight className="w-3 h-3" /></button>}
                         </div>
                     </div>
                     {/* KPIs flutuantes */}
@@ -726,7 +726,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden space-y-0">
                     {/* Hero */}
-                    <div className="-mx-4 bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-5 pt-4 pb-10">
+                    <div className="-mx-4 bg-[#E1553C] px-5 pt-4 pb-10">
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-2"><span className="text-sm font-medium text-white">Serviços</span></div>
                             <div className="flex items-center gap-2">
@@ -735,7 +735,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             </div>
                         </div>
                         <h2 className="text-2xl font-black text-white leading-tight">Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}</h2>
-                        <p className="text-blue-200 text-sm font-medium mt-1">Acompanhe seus contratos e serviços</p>
+                        <p className="text-white/80 text-sm font-medium mt-1">Acompanhe seus contratos e serviços</p>
                         {quickTabs.length > 0 && (
                             <div className="mt-5 grid grid-cols-4 gap-2">
                                 {quickTabs.map(tab => (
@@ -749,11 +749,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <div className="mt-4 bg-white/15 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Contratos Ativos</p>
+                                    <p className="text-[9px] font-black text-white/80 uppercase tracking-widest mb-1">Contratos Ativos</p>
                                     <p className="text-lg font-black text-white">{activeContracts.length}</p>
                                 </div>
                                 <div className="border-l border-white/20 pl-3">
-                                    <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Total Contratado</p>
+                                    <p className="text-[9px] font-black text-white/80 uppercase tracking-widest mb-1">Total Contratado</p>
                                     <p className="text-lg font-black text-white">R$ {totalContratado.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
                                 </div>
                             </div>
@@ -1040,9 +1040,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             {/* ══ MOBILE ══ */}
             <div className="md:hidden -mx-4">
                 {/* Mini hero */}
-                <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-5 pt-4 pb-8">
+                <div className="bg-[#E1553C] px-5 pt-4 pb-8">
                     <h2 className="text-2xl font-black text-white leading-tight">Contratos</h2>
-                    <p className="text-blue-200 text-sm font-medium mt-1">{clientContracts.length} contrato{clientContracts.length !== 1 ? 's' : ''} disponíve{clientContracts.length !== 1 ? 'is' : 'l'}</p>
+                    <p className="text-white/80 text-sm font-medium mt-1">{clientContracts.length} contrato{clientContracts.length !== 1 ? 's' : ''} disponíve{clientContracts.length !== 1 ? 'is' : 'l'}</p>
                 </div>
                 <div className="px-4 -mt-3 pb-6 space-y-2">
                     {clientContracts.length === 0 ? (
@@ -1994,9 +1994,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden -mx-4">
-                    <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-5 pt-4 pb-8">
+                    <div className="bg-[#E1553C] px-5 pt-4 pb-8">
                         <h2 className="text-2xl font-black text-white leading-tight">Financeiro</h2>
-                        <p className="text-blue-200 text-sm font-medium mt-1">Cobranças e pagamentos do imóvel</p>
+                        <p className="text-white/80 text-sm font-medium mt-1">Cobranças e pagamentos do imóvel</p>
                     </div>
                     <div className="px-4 -mt-3 pb-2 grid grid-cols-3 gap-2 mb-2">
                         {[
@@ -2182,9 +2182,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden -mx-4">
-                    <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-5 pt-4 pb-8">
+                    <div className="bg-[#E1553C] px-5 pt-4 pb-8">
                         <h2 className="text-2xl font-black text-white leading-tight">Financeiro</h2>
-                        <p className="text-blue-200 text-sm font-medium mt-1">Medições e faturamento</p>
+                        <p className="text-white/80 text-sm font-medium mt-1">Medições e faturamento</p>
                     </div>
                     <div className="px-4 -mt-3 pb-2 grid grid-cols-3 gap-2 mb-2">
                         {[
@@ -2411,11 +2411,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         return (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {/* Cabeçalho + progresso geral */}
-                <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-indigo-600 rounded-[10px] p-6 text-white">
+                <div className="bg-[#E1553C] rounded-[10px] p-6 text-white">
                     <div className="flex items-start justify-between flex-wrap gap-4">
                         <div>
                             <h3 className="text-sm font-bold tracking-tight">Acompanhe sua Obra</h3>
-                            <p className="text-blue-200 text-sm font-medium mt-1">Avanço físico e cronograma em tempo real.</p>
+                            <p className="text-white/80 text-sm font-medium mt-1">Avanço físico e cronograma em tempo real.</p>
                         </div>
                         <div className={`flex items-center gap-2 text-sm font-normal ${onTrack ? 'text-emerald-200' : 'text-amber-100'}`}>
                             <div className={`w-2 h-2 rounded-full ${onTrack ? 'bg-emerald-400' : 'bg-amber-400'} animate-pulse`} />
@@ -2424,19 +2424,19 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
                         <div className="bg-white/10 rounded-[10px] p-4">
-                            <p className="text-xs font-bold text-blue-200 mb-1">Avanço Geral</p>
+                            <p className="text-xs font-bold text-white/80 mb-1">Avanço Geral</p>
                             <p className="text-2xl font-bold">{pv.progress}%</p>
                         </div>
                         <div className="bg-white/10 rounded-[10px] p-4">
-                            <p className="text-xs font-bold text-blue-200 mb-1">Previsto p/ hoje</p>
+                            <p className="text-xs font-bold text-white/80 mb-1">Previsto p/ hoje</p>
                             <p className="text-2xl font-bold">{pv.plannedToday}%</p>
                         </div>
                         <div className="bg-white/10 rounded-[10px] p-4">
-                            <p className="text-xs font-bold text-blue-200 mb-1">Início</p>
+                            <p className="text-xs font-bold text-white/80 mb-1">Início</p>
                             <p className="text-sm font-bold mt-1.5">{fmt(pv.start)}</p>
                         </div>
                         <div className="bg-white/10 rounded-[10px] p-4">
-                            <p className="text-xs font-bold text-blue-200 mb-1">{atraso ? 'Atraso' : 'Entrega prevista'}</p>
+                            <p className="text-xs font-bold text-white/80 mb-1">{atraso ? 'Atraso' : 'Entrega prevista'}</p>
                             <p className="text-sm font-bold mt-1.5">{atraso ? `${Math.abs(pv.daysRemaining!)} dias` : fmt(pv.end)}</p>
                         </div>
                     </div>
@@ -2551,26 +2551,26 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
         return (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-indigo-600 rounded-[10px] p-6 text-white">
+                <div className="bg-[#E1553C] rounded-[10px] p-6 text-white">
                     <div>
                         <h3 className="text-sm font-bold tracking-tight">Cronograma Físico-Financeiro</h3>
-                        <p className="text-blue-200 text-sm font-medium mt-1">Desembolso previsto × realizado ao longo do serviço.</p>
+                        <p className="text-white/80 text-sm font-medium mt-1">Desembolso previsto × realizado ao longo do serviço.</p>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
                         <div className="bg-white/10 rounded-[10px] p-4">
-                            <p className="text-xs font-bold text-blue-200 mb-1">Total Previsto</p>
+                            <p className="text-xs font-bold text-white/80 mb-1">Total Previsto</p>
                             <p className="text-xl font-bold">{fmtBRL(fv.totalPlanned)}</p>
                         </div>
                         <div className="bg-white/10 rounded-[10px] p-4">
-                            <p className="text-xs font-bold text-blue-200 mb-1">Previsto p/ hoje</p>
+                            <p className="text-xs font-bold text-white/80 mb-1">Previsto p/ hoje</p>
                             <p className="text-xl font-bold">{fmtBRL(fv.plannedTodayValue)}</p>
                         </div>
                         <div className="bg-white/10 rounded-[10px] p-4">
-                            <p className="text-xs font-bold text-blue-200 mb-1">Desembolsado</p>
+                            <p className="text-xs font-bold text-white/80 mb-1">Desembolsado</p>
                             <p className="text-xl font-bold">{fmtBRL(fv.totalRealized)}</p>
                         </div>
                         <div className="bg-white/10 rounded-[10px] p-4">
-                            <p className="text-xs font-bold text-blue-200 mb-1">% Financeiro</p>
+                            <p className="text-xs font-bold text-white/80 mb-1">% Financeiro</p>
                             <p className="text-xl font-bold">{pctRealized}%</p>
                         </div>
                     </div>
@@ -2769,9 +2769,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden -mx-4">
-                    <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-5 pt-4 pb-8">
+                    <div className="bg-[#E1553C] px-5 pt-4 pb-8">
                         <h2 className="text-2xl font-black text-white leading-tight">Diário de Obra</h2>
-                        <p className="text-blue-200 text-sm font-medium mt-1">{entries.length} registro{entries.length !== 1 ? 's' : ''} do gestor</p>
+                        <p className="text-white/80 text-sm font-medium mt-1">{entries.length} registro{entries.length !== 1 ? 's' : ''} do gestor</p>
                     </div>
                     <div className="px-4 -mt-3 pb-6 space-y-2">
                         {entries.length === 0 ? (
@@ -3154,9 +3154,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden -mx-4">
                     {/* Mini hero */}
-                    <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-5 pt-4 pb-8">
+                    <div className="bg-[#E1553C] px-5 pt-4 pb-8">
                         <h2 className="text-2xl font-black text-white leading-tight">Documentos</h2>
-                        <p className="text-blue-200 text-sm font-medium mt-1">Arquivos compartilhados pelo gestor</p>
+                        <p className="text-white/80 text-sm font-medium mt-1">Arquivos compartilhados pelo gestor</p>
                     </div>
                     {/* Lista */}
                     <div className="px-4 -mt-3 pb-6 space-y-2">
@@ -3385,19 +3385,19 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     <h2 className="text-2xl font-black text-white leading-tight">
                         Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}
                     </h2>
-                    <p className="text-indigo-200 text-sm font-medium mt-1">Acompanhe sua obra em tempo real</p>
+                    <p className="text-white/80 text-sm font-medium mt-1">Acompanhe sua obra em tempo real</p>
 
                     {/* Balance card flutuante */}
                     <div className="mt-5 bg-white/15 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
                         <div className="grid grid-cols-2 gap-3 mb-3">
                             <div>
-                                <p className="text-[9px] font-black text-indigo-200 uppercase tracking-widest mb-1">Total Pago</p>
+                                <p className="text-[9px] font-black text-white/80 uppercase tracking-widest mb-1">Total Pago</p>
                                 <p className="text-lg font-black text-white">
                                     R$ {totalPaid.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
                                 </p>
                             </div>
                             <div className="border-l border-white/20 pl-3">
-                                <p className="text-[9px] font-black text-indigo-200 uppercase tracking-widest mb-1">Saldo Restante</p>
+                                <p className="text-[9px] font-black text-white/80 uppercase tracking-widest mb-1">Saldo Restante</p>
                                 <p className="text-lg font-black text-white">
                                     R$ {balanceRemaining.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
                                 </p>
@@ -3406,7 +3406,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         {enabledTabIds.includes('financeiro') && (
                         <button
                             onClick={() => setActiveTab('financeiro')}
-                            className="w-full py-2.5 bg-white text-indigo-600 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
+                            className="w-full py-2.5 bg-white text-[#C24428] rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
                         >
                             <Wallet className="w-3.5 h-3.5" />
                             Ver Financeiro
@@ -3604,12 +3604,12 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-[9px] font-black text-indigo-200 uppercase tracking-widest">Valor Total</p>
+                            <p className="text-[9px] font-black text-white/80 uppercase tracking-widest">Valor Total</p>
                             <p className="text-3xl font-black text-white mt-1">
                                 R$ {totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
                             </p>
                             {finInfo?.paymentMethod && (
-                                <p className="text-xs text-indigo-200 font-bold mt-1 uppercase">{finInfo.paymentMethod}</p>
+                                <p className="text-xs text-white/80 font-bold mt-1 uppercase">{finInfo.paymentMethod}</p>
                             )}
                         </div>
                         {/* Donut grande */}
@@ -3634,7 +3634,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             </ResponsiveContainer>
                             <div className="absolute inset-0 flex flex-col items-center justify-center">
                                 <span className="text-2xl font-black text-white leading-none">{paidPct}%</span>
-                                <span className="text-[8px] font-black text-indigo-200 uppercase tracking-wide mt-0.5">pago</span>
+                                <span className="text-[8px] font-black text-white/80 uppercase tracking-wide mt-0.5">pago</span>
                             </div>
                         </div>
                     </div>
@@ -3644,24 +3644,24 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <div className="bg-white/15 rounded-2xl p-3 border border-white/20">
                             <div className="flex items-center gap-2 mb-2">
                                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
-                                <p className="text-[9px] font-black text-indigo-200 uppercase tracking-widest">Parcelas Pagas</p>
+                                <p className="text-[9px] font-black text-white/80 uppercase tracking-widest">Parcelas Pagas</p>
                             </div>
                             <p className="text-lg font-black text-white">{paidInsts.length}</p>
                             <div className="mt-2 w-full bg-white/20 rounded-full h-1.5">
                                 <div className="bg-emerald-300 h-1.5 rounded-full" style={{ width: `${allInsts.length > 0 ? (paidInsts.length / allInsts.length) * 100 : 0}%` }} />
                             </div>
-                            <p className="text-[8px] text-indigo-200 font-bold mt-1">{paidInsts.length}/{allInsts.length} total</p>
+                            <p className="text-[8px] text-white/80 font-bold mt-1">{paidInsts.length}/{allInsts.length} total</p>
                         </div>
                         <div className="bg-white/15 rounded-2xl p-3 border border-white/20">
                             <div className="flex items-center gap-2 mb-2">
                                 <Clock className="w-3.5 h-3.5 text-amber-300" />
-                                <p className="text-[9px] font-black text-indigo-200 uppercase tracking-widest">Pendentes</p>
+                                <p className="text-[9px] font-black text-white/80 uppercase tracking-widest">Pendentes</p>
                             </div>
                             <p className="text-lg font-black text-white">{pendingInsts.length}</p>
                             <div className="mt-2 w-full bg-white/20 rounded-full h-1.5">
                                 <div className="bg-amber-300 h-1.5 rounded-full" style={{ width: `${allInsts.length > 0 ? (pendingInsts.length / allInsts.length) * 100 : 0}%` }} />
                             </div>
-                            <p className="text-[8px] text-indigo-200 font-bold mt-1">
+                            <p className="text-[8px] text-white/80 font-bold mt-1">
                                 R$ {(totalValue - totalPaid).toLocaleString('pt-BR', { minimumFractionDigits: 0 })} restante
                             </p>
                         </div>
@@ -4440,9 +4440,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         {desktopTabsBar}
                         {/* ══ MOBILE ══ */}
                         <div className="md:hidden -mx-4">
-                            <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-5 pt-4 pb-8">
+                            <div className="bg-[#E1553C] px-5 pt-4 pb-8">
                                 <h2 className="text-2xl font-black text-white leading-tight">Suporte</h2>
-                                <p className="text-blue-200 text-sm font-medium mt-1">Assistência e pós-obra</p>
+                                <p className="text-white/80 text-sm font-medium mt-1">Assistência e pós-obra</p>
                             </div>
                             <div className="px-4 -mt-3 pb-6">
                                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col items-center text-center">

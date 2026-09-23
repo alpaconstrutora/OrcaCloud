@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { DiaryEntry, DiaryActivity, LaborEntry, WeatherShift, ProjectSettings, BudgetEntry } from '../types';
 import { projectService } from '../services/projectService';
+import { uploadDiaryMedia, removeDiaryMedia, diaryEntryMediaRefs } from '../services/diaryMediaService';
+import { useDiaryMediaUrls } from '../hooks/useDiaryMediaUrls';
 import { onlyDiarios, isObra } from '../utils/projectClassification';
 
 /**
@@ -132,14 +134,10 @@ function hasImpediment(e: DiaryEntry): boolean {
     return !!e.impediments && e.impediments.trim() !== '';
 }
 
-/** Lê arquivos como data URL — mesmo formato que a tela desktop grava. */
-function readAsDataURL(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = ev => resolve(ev.target?.result as string);
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(file);
-    });
+/** Onde a foto vai parar no bucket: `{org}/{projeto}/…` — a org é o que a policy lê. */
+interface UploadTarget {
+    orgId: string | null;
+    projectId: string;
 }
 
 // ── Peças de UI ──────────────────────────────────────────────────────────────
@@ -359,6 +357,7 @@ const ResumoScreen: React.FC<{ entries: DiaryEntry[] }> = ({ entries }) => {
         () => entries.flatMap(e => (e.images || []).map(src => ({ src, date: e.date }))).slice(0, 9),
         [entries],
     );
+    const fotoUrls = useDiaryMediaUrls(useMemo(() => ultimasFotos.map(f => f.src), [ultimasFotos]));
 
     return (
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
@@ -382,7 +381,9 @@ const ResumoScreen: React.FC<{ entries: DiaryEntry[] }> = ({ entries }) => {
                     <SectionTitle icon={ImageIcon} label="Fotos recentes" />
                     <div className="grid grid-cols-3 gap-1.5 mt-3">
                         {ultimasFotos.map((f, i) => (
-                            <img key={i} src={f.src} alt={`Foto de ${fmtShort(f.date)}`} className="w-full h-20 object-cover rounded-xl" />
+                            fotoUrls[f.src]
+                                ? <img key={i} src={fotoUrls[f.src]} alt={`Foto de ${fmtShort(f.date)}`} className="w-full h-20 object-cover rounded-xl" />
+                                : <div key={i} className="w-full h-20 rounded-xl bg-slate-100 animate-pulse" />
                         ))}
                     </div>
                 </div>
@@ -398,14 +399,24 @@ const EntrySheet: React.FC<{
     entry: DiaryEntry;
     isNew: boolean;
     saving: boolean;
+    upload: UploadTarget;
     onClose: () => void;
     onSave: (e: DiaryEntry) => void;
     onDelete: (id: string) => void;
-}> = ({ entry, isNew, saving, onClose, onSave, onDelete }) => {
+}> = ({ entry, isNew, saving, upload, onClose, onSave, onDelete }) => {
     const [form, setForm] = useState<DiaryEntry>(entry);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [erro, setErro] = useState<string | null>(null);
+    const [enviando, setEnviando] = useState(false);
     const fotoRef = useRef<HTMLInputElement>(null);
+    const fotoUrls = useDiaryMediaUrls(form.images);
+
+    // Cancelar depois de tirar foto: o objeto já subiu — sai do bucket junto.
+    const cancelar = () => {
+        const originais = new Set(diaryEntryMediaRefs(entry));
+        void removeDiaryMedia((form.images || []).filter(r => !originais.has(r)));
+        onClose();
+    };
 
     const set = <K extends keyof DiaryEntry>(k: K, v: DiaryEntry[K]) => setForm(p => ({ ...p, [k]: v }));
 
@@ -446,8 +457,21 @@ const EntrySheet: React.FC<{
 
     const addFotos = async (files: FileList | null) => {
         if (!files?.length) return;
-        const urls = await Promise.all(Array.from(files).map(readAsDataURL));
-        setForm(p => ({ ...p, images: [...(p.images || []), ...urls] }));
+        if (!upload.orgId) { setErro('Diário sem organização: não há onde guardar a foto.'); return; }
+        setEnviando(true);
+        try {
+            const paths: string[] = [];
+            for (const file of Array.from(files)) {
+                paths.push(await uploadDiaryMedia({ orgId: upload.orgId, projectId: upload.projectId, file }));
+            }
+            setForm(p => ({ ...p, images: [...(p.images || []), ...paths] }));
+            setErro(null);
+        } catch (err) {
+            console.error('Erro ao enviar foto do diário:', err);
+            setErro('Falha ao enviar a foto. Tente novamente.');
+        } finally {
+            setEnviando(false);
+        }
     };
 
     const submit = () => {
@@ -467,7 +491,7 @@ const EntrySheet: React.FC<{
             <StatusBar />
             {/* Cabeçalho */}
             <div className="bg-white px-4 py-3 flex items-center gap-3 border-b border-slate-100 flex-shrink-0">
-                <button onClick={onClose} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
+                <button onClick={cancelar} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
                     <ArrowLeft className="w-4 h-4" />
                 </button>
                 <div className="flex-1 min-w-0">
@@ -685,16 +709,19 @@ const EntrySheet: React.FC<{
                     />
                     <button
                         onClick={() => fotoRef.current?.click()}
-                        className="w-full h-12 rounded-xl border-2 border-dashed border-slate-200 text-slate-500 text-sm font-bold flex items-center justify-center gap-2 active:bg-slate-50"
+                        disabled={enviando}
+                        className="w-full h-12 rounded-xl border-2 border-dashed border-slate-200 text-slate-500 text-sm font-bold flex items-center justify-center gap-2 active:bg-slate-50 disabled:opacity-60"
                     >
-                        <Camera className="w-4 h-4" />
-                        Tirar foto ou escolher
+                        {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+                        {enviando ? 'Enviando…' : 'Tirar foto ou escolher'}
                     </button>
                     {(form.images || []).length > 0 && (
                         <div className="grid grid-cols-3 gap-1.5">
                             {(form.images || []).map((src, i) => (
                                 <div key={i} className="relative">
-                                    <img src={src} alt={`Foto ${i + 1}`} className="w-full h-20 object-cover rounded-xl" />
+                                    {fotoUrls[src]
+                                        ? <img src={fotoUrls[src]} alt={`Foto ${i + 1}`} className="w-full h-20 object-cover rounded-xl" />
+                                        : <div className="w-full h-20 rounded-xl bg-slate-100 animate-pulse" />}
                                     <button
                                         onClick={() => setForm(p => ({ ...p, images: (p.images || []).filter((_, k) => k !== i) }))}
                                         className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center"
@@ -736,7 +763,7 @@ const EntrySheet: React.FC<{
             {/* Rodapé de ação */}
             <div className="bg-white border-t border-slate-100 px-4 py-3 flex items-center gap-2 flex-shrink-0">
                 <button
-                    onClick={onClose}
+                    onClick={cancelar}
                     className="h-12 px-5 rounded-xl bg-slate-100 text-slate-600 text-sm font-bold active:scale-95 transition-all"
                 >
                     Cancelar
@@ -852,7 +879,7 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
     }), [entries, filter]);
 
     /** Grava a lista inteira — os registros são JSONB do projeto, não linha de tabela. */
-    const persist = useCallback(async (next: DiaryEntry[], msg: string) => {
+    const persist = useCallback(async (next: DiaryEntry[], msg: string, orfaos: string[] = []) => {
         if (!project) return;
         setSaving(true);
         try {
@@ -869,6 +896,8 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
             setProject(p => (p ? { ...p, settings } : p));
             setEditing(null);
             notify(msg);
+            // Objetos que o registro deixou de referenciar saem do bucket DEPOIS do save.
+            if (orfaos.length > 0) void removeDiaryMedia(orfaos);
         } catch (err) {
             console.error('Erro ao salvar registro do diário:', err);
             notify('Falha ao salvar. Tente novamente.');
@@ -879,15 +908,17 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
 
     const handleSaveEntry = useCallback((entry: DiaryEntry) => {
         const list = (project?.settings?.diaryEntries || []) as DiaryEntry[];
-        const exists = list.some(e => e.id === entry.id);
-        const next = exists ? list.map(e => (e.id === entry.id ? entry : e)) : [entry, ...list];
+        const anterior = list.find(e => e.id === entry.id);
+        const next = anterior ? list.map(e => (e.id === entry.id ? entry : e)) : [entry, ...list];
         next.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-        persist(next, exists ? 'Registro atualizado.' : 'Registro salvo.');
+        const refsAgora = new Set(diaryEntryMediaRefs(entry));
+        const orfaos = diaryEntryMediaRefs(anterior).filter(r => !refsAgora.has(r));
+        persist(next, anterior ? 'Registro atualizado.' : 'Registro salvo.', orfaos);
     }, [project, persist]);
 
     const handleDeleteEntry = useCallback((id: string) => {
         const list = (project?.settings?.diaryEntries || []) as DiaryEntry[];
-        persist(list.filter(e => e.id !== id), 'Registro excluído.');
+        persist(list.filter(e => e.id !== id), 'Registro excluído.', diaryEntryMediaRefs(list.find(e => e.id === id)));
     }, [project, persist]);
 
     const diarioAtual = diarios.find(d => d.id === selectedId);
@@ -1015,6 +1046,7 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
                     entry={editing}
                     isNew={isNew}
                     saving={saving}
+                    upload={{ orgId: project?.organization_id ?? project?.settings?.organizationId ?? null, projectId: project?.id ?? '' }}
                     onClose={() => setEditing(null)}
                     onSave={handleSaveEntry}
                     onDelete={handleDeleteEntry}

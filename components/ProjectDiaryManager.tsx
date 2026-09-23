@@ -35,6 +35,8 @@ import DiaryLaborFromRhSheet from './DiaryLaborFromRhSheet';
 import type { Employee } from '../services/laborService';
 import { ProjectSettings, DiaryEntry, BudgetEntry, WeatherShift, DiaryActivity, LaborEntry, ProjectSchedule } from '../types';
 import { projectService } from '../services/projectService';
+import { uploadDiaryMedia, removeDiaryMedia, diaryEntryMediaRefs } from '../services/diaryMediaService';
+import { useDiaryMediaUrls } from '../hooks/useDiaryMediaUrls';
 import { useStore } from '../store/useStore';
 import Button from './ui/Button';
 import MobilePreviewFrame from './MobilePreviewFrame';
@@ -200,6 +202,11 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
     });
 
     const { organizations, activeOrganizationId, fetchOrganizations } = useStore();
+
+    // Mídia mora em bucket privado (`diario-midia`): o registro guarda o PATH e
+    // a URL é assinada na leitura. Data URL de registro antigo passa direto.
+    const [uploadingKind, setUploadingKind] = useState<'image' | 'video' | 'document' | null>(null);
+    const mediaUrls = useDiaryMediaUrls(useMemo(() => diaryEntryMediaRefs(formData), [formData.images, formData.videos, formData.documents]));
     const [rhSheetOpen, setRhSheetOpen] = useState(false);
 
     // Carregar organizações se estiverem vazias
@@ -403,6 +410,11 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                 impediments: formData.impediments
             };
 
+        // Objetos que o registro deixou de referenciar saem do bucket DEPOIS do save.
+        const anterior = editingId ? (settings.diaryEntries || []).find(e => e.id === editingId) : undefined;
+        const refsAgora = new Set(diaryEntryMediaRefs(currentEntry));
+        const orfaos = diaryEntryMediaRefs(anterior).filter(r => !refsAgora.has(r));
+
         if (editingId) {
             newEntries = newEntries.map(e => e.id === editingId ? currentEntry : e);
         } else {
@@ -478,6 +490,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         if (onSave) {
             await onSave();
         }
+        if (orfaos.length > 0) void removeDiaryMedia(orfaos);
 
         setIsAdding(false);
 
@@ -528,10 +541,12 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
 
     const confirmDelete = async () => {
         if (!confirmDeleteId) return;
+        const apagado = (settings.diaryEntries || []).find(e => e.id === confirmDeleteId);
         const newEntries = (settings.diaryEntries || []).filter(e => e.id !== confirmDeleteId);
         onUpdateSettings({ ...settings, diaryEntries: newEntries });
         setConfirmDeleteId(null);
         if (onSave) await onSave();
+        if (apagado) void removeDiaryMedia(diaryEntryMediaRefs(apagado));
     };
 
     const handleWeatherShiftChange = (index: number, field: keyof WeatherShift, value: string) => {
@@ -630,18 +645,42 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         setFormData({ ...formData, labor: (formData.labor || []).filter((_, i) => i !== index) });
     };
 
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video' | 'document') => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+    /** Organização dona do diário: é o primeiro segmento do path no bucket (a policy lê daí). */
+    const resolveDiaryOrgId = async (): Promise<string | null> => {
+        if (settings.organizationId) return settings.organizationId;
+        if (organizationId) return organizationId;
+        if (!settings.id) return null;
+        try {
+            const p = await projectService.loadProject(settings.id);
+            return p?.organization_id ?? p?.settings?.organizationId ?? null;
+        } catch {
+            return null;
+        }
+    };
 
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const result = event.target?.result as string;
-            if (type === 'image') setFormData(prev => ({ ...prev, images: [...(prev.images || []), result] }));
-            else if (type === 'video') setFormData(prev => ({ ...prev, videos: [...(prev.videos || []), result] }));
-            else setFormData(prev => ({ ...prev, documents: [...(prev.documents || []), { name: file.name, url: result, type: file.type }] }));
-        };
-        reader.readAsDataURL(file);
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video' | 'document') => {
+        const files = Array.from(e.target.files || []);
+        e.target.value = '';
+        if (files.length === 0) return;
+        const orgId = await resolveDiaryOrgId();
+        if (!orgId || !settings.id) {
+            notify('Salve o diário numa organização antes de anexar arquivos.');
+            return;
+        }
+        setUploadingKind(type);
+        try {
+            for (const file of files) {
+                const path = await uploadDiaryMedia({ orgId, projectId: settings.id, file });
+                if (type === 'image') setFormData(prev => ({ ...prev, images: [...(prev.images || []), path] }));
+                else if (type === 'video') setFormData(prev => ({ ...prev, videos: [...(prev.videos || []), path] }));
+                else setFormData(prev => ({ ...prev, documents: [...(prev.documents || []), { name: file.name, url: path, type: file.type }] }));
+            }
+        } catch (err) {
+            console.error('Erro ao enviar arquivo do diário:', err);
+            notify('Falha ao enviar o arquivo. Tente novamente.');
+        } finally {
+            setUploadingKind(null);
+        }
     };
 
     const removeFile = (index: number, type: 'image' | 'video' | 'document') => {
@@ -1202,22 +1241,22 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                     {/* Uploaders */}
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                         <div className="relative group overflow-hidden bg-indigo-50 border-2 border-dashed border-indigo-200 rounded-3xl p-8 flex flex-col items-center justify-center text-center hover:bg-indigo-100/50 hover:border-indigo-400 transition-all cursor-pointer shadow-sm active:scale-95">
-                                            <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, 'image')} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                            <input type="file" accept="image/*" multiple disabled={uploadingKind !== null} onChange={(e) => handleFileUpload(e, 'image')} className="absolute inset-0 opacity-0 cursor-pointer" />
                                             <Camera className="w-8 h-8 text-indigo-500 mb-3" />
                                             <span className="text-xs font-bold text-indigo-800 uppercase tracking-widest">Fotos</span>
-                                            <span className="text-xs text-indigo-400 font-medium">JPG, PNG</span>
+                                            <span className="text-xs text-indigo-400 font-medium">{uploadingKind === 'image' ? 'Enviando…' : 'JPG, PNG'}</span>
                                         </div>
                                         <div className="relative group overflow-hidden bg-blue-50 border-2 border-dashed border-blue-200 rounded-3xl p-8 flex flex-col items-center justify-center text-center hover:bg-blue-100/50 hover:border-blue-400 transition-all cursor-pointer shadow-sm active:scale-95">
-                                            <input type="file" accept="video/*" onChange={(e) => handleFileUpload(e, 'video')} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                            <input type="file" accept="video/*" multiple disabled={uploadingKind !== null} onChange={(e) => handleFileUpload(e, 'video')} className="absolute inset-0 opacity-0 cursor-pointer" />
                                             <Video className="w-8 h-8 text-blue-500 mb-3" />
                                             <span className="text-xs font-bold text-blue-800 uppercase tracking-widest">Vídeos</span>
-                                            <span className="text-xs text-blue-400 font-medium">MP4</span>
+                                            <span className="text-xs text-blue-400 font-medium">{uploadingKind === 'video' ? 'Enviando…' : 'MP4'}</span>
                                         </div>
                                         <div className="relative group overflow-hidden bg-emerald-50 border-2 border-dashed border-emerald-200 rounded-3xl p-8 flex flex-col items-center justify-center text-center hover:bg-emerald-100/50 hover:border-emerald-400 transition-all cursor-pointer shadow-sm active:scale-95">
-                                            <input type="file" onChange={(e) => handleFileUpload(e, 'document')} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                            <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,application/pdf" multiple disabled={uploadingKind !== null} onChange={(e) => handleFileUpload(e, 'document')} className="absolute inset-0 opacity-0 cursor-pointer" />
                                             <FileText className="w-8 h-8 text-emerald-500 mb-3" />
                                             <span className="text-xs font-bold text-emerald-800 uppercase tracking-widest">Documentos</span>
-                                            <span className="text-xs text-emerald-400 font-medium">PDF, DOC, XLS</span>
+                                            <span className="text-xs text-emerald-400 font-medium">{uploadingKind === 'document' ? 'Enviando…' : 'PDF, DOC, XLS'}</span>
                                         </div>
                                     </div>
 
@@ -1225,17 +1264,36 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
                                         {(formData.images || []).map((img, i) => (
                                             <div key={i} className="aspect-square relative group bg-gray-100 rounded-3xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-xl transition-all">
-                                                <img src={img} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                                                {mediaUrls[img]
+                                                    ? <img src={mediaUrls[img]} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                                                    : <div className="w-full h-full animate-pulse bg-gray-100" />}
                                                 <Button onClick={() => removeFile(i, 'image')} variant="danger" size="icon" className="absolute top-3 right-3 rounded-full opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100"><X className="w-4 h-4" /></Button>
                                             </div>
                                         ))}
                                         {(formData.videos || []).map((vid, i) => (
                                             <div key={i} className="aspect-square relative group bg-slate-900 rounded-3xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-xl transition-all flex items-center justify-center">
-                                                <Video className="w-10 h-10 text-white/50" />
+                                                {mediaUrls[vid]
+                                                    ? <a href={mediaUrls[vid]} target="_blank" rel="noreferrer" title="Abrir vídeo" className="flex items-center justify-center w-full h-full"><Video className="w-10 h-10 text-white/50" /></a>
+                                                    : <Video className="w-10 h-10 text-white/50" />}
                                                 <Button onClick={() => removeFile(i, 'video')} variant="danger" size="icon" className="absolute top-3 right-3 rounded-full opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100"><X className="w-4 h-4" /></Button>
                                             </div>
                                         ))}
                                     </div>
+
+                                    {/* Documentos — antes só eram contados; agora abrem pelo link assinado */}
+                                    {(formData.documents || []).length > 0 && (
+                                        <div className="space-y-2">
+                                            {(formData.documents || []).map((doc, i) => (
+                                                <div key={i} className="flex items-center gap-3 px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-[10px]">
+                                                    <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
+                                                    {mediaUrls[doc.url]
+                                                        ? <a href={mediaUrls[doc.url]} target="_blank" rel="noreferrer" className="text-sm font-medium text-blue-600 hover:underline truncate">{doc.name}</a>
+                                                        : <span className="text-sm font-medium text-gray-500 truncate">{doc.name}</span>}
+                                                    <button type="button" onClick={() => removeFile(i, 'document')} className="ml-auto p-1 text-gray-400 hover:text-red-600" title="Remover"><X className="w-4 h-4" /></button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

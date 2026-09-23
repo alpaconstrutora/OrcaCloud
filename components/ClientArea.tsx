@@ -91,6 +91,7 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFoot
 import { usePersistedState } from './ui/TableUtils';
 import { KpiCard } from './ui/KpiCard';
 import { isObra } from '../utils/projectClassification';
+import { useDiaryMediaUrls } from '../hooks/useDiaryMediaUrls';
 
 /** As abas do portal. Era uma união literal repetida em dois lugares (prop e
  *  `useState`) — aba nova exigia editar as duas, e esquecer uma só aparece como
@@ -413,6 +414,13 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
     const currentFinancialInfo = clientProfile?.financialInfo || settings.financialInfo;
     const currentDiaryEntries = clientProfile?.diaryEntries || settings.diaryEntries || [];
+    // Mídia do diário mora em bucket privado (`diario-midia`): assina-se na leitura.
+    // No link público (token) a assinatura passa pela edge function
+    // `client-portal-diary-download`; data URL de registro antigo passa direto.
+    const diaryMediaUrls = useDiaryMediaUrls(
+        React.useMemo(() => currentDiaryEntries.flatMap(e => [...(e.images || []), ...(e.videos || []), ...(e.documents || []).map(d => d.url)]), [currentDiaryEntries]),
+        portalToken,
+    );
 
     const updateClientData = async (updates: Partial<Client>) => {
         if (!clientProfile || !onClientSelect) return false;
@@ -2877,7 +2885,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     <div className="flex flex-wrap gap-2">
                                         {(item.images || []).map((img, idx) => (
                                             <div key={idx} className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center text-gray-300 overflow-hidden border border-gray-50">
-                                                <img src={img} alt="Obra" className="w-full h-full object-cover" />
+                                                {diaryMediaUrls[img] && <img src={diaryMediaUrls[img]} alt="Obra" className="w-full h-full object-cover" />}
                                             </div>
                                         ))}
                                         {(item.videos || []).map((vid, idx) => (
@@ -2943,7 +2951,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             <div className="flex justify-center -space-x-2">
                                                 {(item.images || []).slice(0, 3).map((img, idx) => (
                                                     <div key={idx} className="w-8 h-8 rounded-full border-2 border-white bg-gray-100 overflow-hidden">
-                                                        <img src={img} alt="" className="w-full h-full object-cover" />
+                                                        {diaryMediaUrls[img] && <img src={diaryMediaUrls[img]} alt="" className="w-full h-full object-cover" />}
                                                     </div>
                                                 ))}
                                                 {(item.images || []).length > 3 && (
@@ -3051,14 +3059,14 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             <div className="grid grid-cols-2 gap-3">
                                                 {(selectedEntry.images || []).map((img, idx) => (
                                                     <div key={idx} className="aspect-square rounded-[10px] overflow-hidden border border-gray-100 group/img relative cursor-zoom-in">
-                                                        <img src={img} alt="Obra" className="w-full h-full object-cover transition-transform duration-500 group-hover/img:scale-110" />
+                                                        {diaryMediaUrls[img] && <img src={diaryMediaUrls[img]} alt="Obra" className="w-full h-full object-cover transition-transform duration-500 group-hover/img:scale-110" />}
                                                         <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
                                                             <Camera className="w-6 h-6 text-white" />
                                                         </div>
                                                     </div>
                                                 ))}
                                                 {(selectedEntry.videos || []).map((vid, idx) => (
-                                                    <div key={idx} className="aspect-square rounded-[10px] bg-indigo-600 flex flex-col items-center justify-center gap-2 text-white cursor-pointer hover:bg-slate-900 transition-all group/vid">
+                                                    <div key={idx} onClick={() => { const u = diaryMediaUrls[vid]; if (u) window.open(u, '_blank', 'noopener'); }} className="aspect-square rounded-[10px] bg-indigo-600 flex flex-col items-center justify-center gap-2 text-white cursor-pointer hover:bg-slate-900 transition-all group/vid">
                                                         <div className="p-3 bg-white/20 rounded-full group-hover/vid:scale-110 transition-transform">
                                                             <Video className="w-6 h-6" />
                                                         </div>
@@ -3081,7 +3089,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     {selectedEntry.documents.map((doc, idx) => (
                                                         <a
                                                             key={idx}
-                                                            href={doc.url}
+                                                            href={diaryMediaUrls[doc.url] || '#'}
+                                                            target="_blank"
+                                                            rel="noreferrer"
                                                             download={doc.name}
                                                             className="flex items-center justify-between p-4 bg-gray-50 border border-gray-100 rounded-[10px] hover:bg-white hover:border-indigo-200 transition-all group/doc"
                                                         >

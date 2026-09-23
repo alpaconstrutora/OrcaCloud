@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { ProjectSettings, Organization } from '../types';
 import { useOrgContext } from '../hooks/useOrgContext';
+import { useDiaryMediaUrls } from '../hooks/useDiaryMediaUrls';
 import {
     Printer,
     FileText,
@@ -48,6 +49,11 @@ const DiaryReportViewer: React.FC<DiaryReportViewerProps> = ({ settings, organiz
         'Chuva Forte': <CloudRain className="w-4 h-4 text-indigo-600" />,
         'Instável': <CloudSun className="w-4 h-4 text-purple-400" />
     };
+
+    // Fotos moram em bucket privado: o registro guarda o path, a URL é assinada aqui.
+
+    const mediaUrls = useDiaryMediaUrls(useMemo(() => entries.flatMap(e => e.images || []), [entries]));
+
 
     const handlePrint = () => {
         window.print();
@@ -271,7 +277,7 @@ const DiaryReportViewer: React.FC<DiaryReportViewerProps> = ({ settings, organiz
                                             <div className="grid grid-cols-4 gap-2">
                                                 {entry.images.map((img, i) => (
                                                     <div key={i} className="aspect-square rounded-xl border border-gray-100 overflow-hidden bg-gray-50">
-                                                        <img src={img} className="w-full h-full object-cover" alt={`Diário ${entry.date} - ${i}`} />
+                                                        {mediaUrls[img] && <img src={mediaUrls[img]} className="w-full h-full object-cover" alt={`Diário ${entry.date} - ${i}`} />}
                                                     </div>
                                                 ))}
                                             </div>

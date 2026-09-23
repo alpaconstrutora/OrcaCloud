@@ -372,10 +372,18 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 ? clientPortalService.getContractsByToken(portalToken)
                 : contractService.listContractsByClientId(clientProfile.id, orgId || undefined, clientProfile.category))
                 .then(c => setClientContracts(c as any)).catch(console.error);
-            if (orgId) {
-                commercialFinanceService.listAllClientInstallments(clientProfile.id, orgId)
-                    .then(setGlobalClientInstallments).catch(console.error);
-            }
+            // ⚠️ SEGUNDO ponto de chamada das parcelas, e o que escapou da
+            // correção de 23/09 (85ac9a8): com token, `listAllClientInstallments`
+            // lê tabela direto — 401 em `commercial_deal_buyers`, vazio em
+            // `internal_transactions` — e ainda SOBRESCREVIA, por `.then(set...)`,
+            // a lista que a RPC tinha acabado de trazer. Quem é de locação via o
+            // dashboard zerar a cada visita. Mesma bifurcação do outro ponto.
+            (portalToken
+                ? clientPortalService.getReceivablesByToken(portalToken, clientProfile.id)
+                : (orgId
+                    ? commercialFinanceService.listAllClientInstallments(clientProfile.id, orgId)
+                    : Promise.resolve([])))
+                .then(setGlobalClientInstallments).catch(console.error);
         }
         // Mensagens do portal (carrega na montagem quando há token)
         if (portalToken) {

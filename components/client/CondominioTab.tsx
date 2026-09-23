@@ -22,10 +22,13 @@
 import React from 'react';
 import {
     Building2, Megaphone, FileText, ExternalLink, Check, Users, Scale,
+    Wrench, Package, Wallet, CalendarClock,
 } from 'lucide-react';
 import type {
     PortalCondominio, PortalUnidadeCondominio, PortalAvisoCondominio,
+    PortalRateioCondominio,
 } from '../../services/clientPortalService';
+import { CRITERIO_LABEL, type CriterioRateio } from '../../services/condominioRateioService';
 
 /** Papéis do banco em português de gente. */
 const PAPEL_LABEL: Record<string, string> = {
@@ -49,6 +52,38 @@ const CATEGORIA_LABEL: Record<string, string> = {
     OBRA: 'Obra', AVISO: 'Aviso',
 };
 
+/** Periodicidade do plano em português de gente: "a cada 6 meses", não "6 MES". */
+const UNIDADE_PERIODO: Record<string, [string, string]> = {
+    DIA: ['dia', 'dias'], SEMANA: ['semana', 'semanas'],
+    MES: ['mês', 'meses'], ANO: ['ano', 'anos'],
+};
+export function periodicidade(valor: number | null, unidade: string | null): string {
+    if (!valor || !unidade) return '—';
+    const par = UNIDADE_PERIODO[unidade.toUpperCase()];
+    if (!par) return `a cada ${valor} ${unidade.toLowerCase()}`;
+    return `a cada ${valor} ${valor === 1 ? par[0] : par[1]}`;
+}
+
+/** §8 — texto colorido, sem pílula. */
+const COR_SITUACAO_ORDEM: Record<string, string> = {
+    CONCLUIDA: 'text-emerald-600', EM_EXECUCAO: 'text-blue-600',
+    AGENDADA: 'text-amber-600', CANCELADA: 'text-gray-400',
+};
+const LABEL_SITUACAO_ORDEM: Record<string, string> = {
+    CONCLUIDA: 'Concluída', EM_EXECUCAO: 'Em execução',
+    AGENDADA: 'Agendada', CANCELADA: 'Cancelada',
+};
+const LABEL_TIPO_ORDEM: Record<string, string> = {
+    PREVENTIVA: 'Preventiva', CORRETIVA: 'Corretiva',
+};
+// Rótulo de tipo. O de CRITÉRIO vem do service (`CRITERIO_LABEL`), não de uma
+// cópia aqui: a minha cópia trazia "IGUALITARIO", que NÃO existe — o
+// vocabulário real é FRACAO_IDEAL | IGUAL | AREA_PRIVATIVA | GRUPO | FIXO, e os
+// dois últimos ficariam sem rótulo. Uma fonte só.
+const LABEL_TIPO_RATEIO: Record<string, string> = {
+    ORDINARIO: 'Ordinária', EXTRAORDINARIO: 'Extraordinária',
+};
+
 const CATEGORIA_DOC: Record<string, string> = {
     CONVENCAO: 'Convenção', REGULAMENTO: 'Regulamento', ATA: 'Ata',
     MANUAL: 'Manual', LAUDO: 'Laudo', SEGURO: 'Seguro', OUTRO: 'Outro',
@@ -56,6 +91,16 @@ const CATEGORIA_DOC: Record<string, string> = {
 
 const data = (iso: string | null) =>
     iso ? new Date(iso + (iso.length === 10 ? 'T12:00:00' : '')).toLocaleDateString('pt-BR') : '—';
+
+const dinheiro = (v: number | null | undefined) =>
+    v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+/** `competencia` é DATE ('2026-08-01'). Nunca `new Date(iso)` — o fuso come um
+ *  dia e a competência vira o mês anterior. */
+export const competencia = (iso: string) => {
+    const [ano, mes] = iso.slice(0, 10).split('-');
+    return `${mes}/${ano}`;
+};
 
 const numero = (v: number | null, sufixo = '') =>
     v == null ? '—' : `${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}${sufixo}`;
@@ -339,6 +384,221 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
 
                 {erroDocumento && (
                     <p className="text-sm text-red-600 mt-3">{erroDocumento}</p>
+                )}
+            </div>
+
+            {/* ── Financeiro do condomínio (rateio) ──────────────────────────
+                O rateio INTEIRO, com a cota de todas as unidades — decisão do
+                usuário em 23/09/2026 entre "só a minha", "minha + despesas" e
+                "tudo": transparência de assembleia. A cota de quem está olhando
+                vem marcada (`minha`) e é destacada no meio das outras. */}
+            <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
+                <div className="flex items-center gap-2.5 mb-1">
+                    <Wallet className="w-5 h-5 text-indigo-500" />
+                    <h2 className="text-xl font-bold text-gray-900">Financeiro do condomínio</h2>
+                </div>
+                <p className="text-sm text-gray-500 mb-5">Despesas do prédio e o rateio entre as unidades</p>
+
+                {dados.rateios.length === 0 ? (
+                    <p className="text-sm text-gray-400 py-6 text-center">
+                        Nenhum rateio publicado no momento.
+                    </p>
+                ) : (
+                    <div className="space-y-4">
+                        {dados.rateios.map((r: PortalRateioCondominio) => (
+                            <div key={r.id} className="rounded-[10px] border border-gray-100 overflow-hidden">
+                                <div className="bg-gray-50/60 px-5 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-gray-100">
+                                    <div>
+                                        <p className="text-base font-bold text-gray-900">
+                                            Competência {competencia(r.competencia)}
+                                            {r.numero ? <span className="text-sm font-normal text-gray-400"> · {r.numero}</span> : null}
+                                        </p>
+                                        <p className="text-xs text-gray-500 mt-0.5">
+                                            {/* O TIPO importa para quem lê: despesa extraordinária
+                                                costuma ser do proprietário, a ordinária do
+                                                inquilino — e a mesma tela serve aos dois. */}
+                                            Taxa {(LABEL_TIPO_RATEIO[r.tipo] ?? r.tipo).toLowerCase()}
+                                            {' · rateada por '}
+                                            {(CRITERIO_LABEL[r.criterio as CriterioRateio] ?? r.criterio).toLowerCase()}
+                                            {porCondominio.length > 1 ? ` · ${r.condominioNome}` : ''}
+                                        </p>
+                                    </div>
+                                    {/* §8 — texto colorido, sem pílula. Rascunho é PRÉVIA: o número
+                                        ainda pode mudar, e omitir isso seria pior que não mostrar. */}
+                                    {r.status === 'RASCUNHO' ? (
+                                        <span className="text-sm font-normal text-amber-600">Prévia — pode mudar</span>
+                                    ) : (
+                                        <span className="text-sm font-normal text-emerald-600">
+                                            Fechado{r.fechadoEm ? ` em ${data(r.fechadoEm.slice(0, 10))}` : ''}
+                                        </span>
+                                    )}
+                                </div>
+
+                                <div className="p-5 space-y-5">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <p className="text-xs text-gray-400">Despesas do mês</p>
+                                            <p className="text-lg font-bold text-gray-900">{dinheiro(r.totalDespesas)}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-gray-400">Sua cota</p>
+                                            <p className="text-lg font-bold text-indigo-600">
+                                                {dinheiro(r.cotas.filter(c => c.minha).reduce((s2, c) => s2 + Number(c.valor || 0), 0))}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {r.despesas.length > 0 && (
+                                        <div>
+                                            <p className="text-xs font-semibold text-slate-500 mb-2">O que entrou no rateio</p>
+                                            <div className="space-y-1.5">
+                                                {r.despesas.map(d => (
+                                                    <div key={d.id} className="flex items-center justify-between gap-3 text-sm">
+                                                        <span className="text-gray-600 truncate" title={d.descricao}>{d.descricao}</span>
+                                                        <span className="text-gray-800 font-medium shrink-0">{dinheiro(d.valor)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {r.cotas.length > 0 && (
+                                        <div>
+                                            <p className="text-xs font-semibold text-slate-500 mb-2">Rateio por unidade</p>
+                                            <div className="space-y-1">
+                                                {r.cotas.map(c => (
+                                                    <div
+                                                        key={c.id}
+                                                        className={`flex items-center justify-between gap-3 text-sm rounded-[6px] px-2.5 py-1.5 ${
+                                                            c.minha ? 'bg-indigo-50/60' : ''
+                                                        }`}
+                                                    >
+                                                        <span className="min-w-0 truncate text-gray-600">
+                                                            <span className={c.minha ? 'font-semibold text-gray-900' : ''}>
+                                                                {[c.torre, c.unidade].filter(Boolean).join(' · ') || '—'}
+                                                            </span>
+                                                            {c.pessoa ? <span className="text-gray-400"> · {c.pessoa}</span> : null}
+                                                            {c.minha ? <span className="text-indigo-600 font-semibold"> · sua unidade</span> : null}
+                                                        </span>
+                                                        <span className={`shrink-0 ${c.minha ? 'font-bold text-indigo-600' : 'font-medium text-gray-800'}`}>
+                                                            {dinheiro(c.valor)}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* ── Manutenção do prédio ─────────────────────────────────────── */}
+            <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
+                <div className="flex items-center gap-2.5 mb-1">
+                    <Wrench className="w-5 h-5 text-indigo-500" />
+                    <h2 className="text-xl font-bold text-gray-900">Manutenção do prédio</h2>
+                </div>
+                <p className="text-sm text-gray-500 mb-5">
+                    O plano da NBR 5674 e as ordens de serviço da administração
+                </p>
+
+                {dados.manutencao.length === 0 && dados.ordens.length === 0 ? (
+                    <p className="text-sm text-gray-400 py-6 text-center">
+                        Nenhum plano de manutenção publicado no momento.
+                    </p>
+                ) : (
+                    <div className="space-y-6">
+                        {dados.manutencao.length > 0 && (
+                            <div>
+                                <p className="text-xs font-semibold text-slate-500 mb-2">O que é mantido</p>
+                                <div className="space-y-2">
+                                    {dados.manutencao.map(m => (
+                                        <div key={m.id} className="rounded-[10px] border border-gray-100 p-4 flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-semibold text-gray-900">{m.descricao}</p>
+                                                <p className="text-xs text-gray-400 mt-0.5">
+                                                    {m.sistema ? `${m.sistema} · ` : ''}
+                                                    {periodicidade(m.periodicidadeValor, m.periodicidadeUnidade)}
+                                                    {porCondominio.length > 1 ? ` · ${m.condominioNome}` : ''}
+                                                </p>
+                                            </div>
+                                            {m.proximoVencimento && (
+                                                <span className="text-xs text-gray-500 flex items-center gap-1 shrink-0">
+                                                    <CalendarClock className="w-3.5 h-3.5" />
+                                                    {data(m.proximoVencimento)}
+                                                </span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {dados.ordens.length > 0 && (
+                            <div>
+                                <p className="text-xs font-semibold text-slate-500 mb-2">Ordens de serviço</p>
+                                <div className="space-y-2">
+                                    {dados.ordens.map(o => (
+                                        <div key={o.id} className="rounded-[10px] border border-gray-100 p-4 flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-semibold text-gray-900">{o.descricao}</p>
+                                                <p className="text-xs text-gray-400 mt-0.5">
+                                                    {o.codigo ? `${o.codigo} · ` : ''}
+                                                    {LABEL_TIPO_ORDEM[o.tipo] ?? o.tipo}
+                                                    {o.sistema ? ` · ${o.sistema}` : ''}
+                                                    {o.executadaEm
+                                                        ? ` · executada em ${data(o.executadaEm)}`
+                                                        : o.agendadaPara ? ` · agendada para ${data(o.agendadaPara)}` : ''}
+                                                </p>
+                                            </div>
+                                            <span className={`text-sm font-normal shrink-0 ${COR_SITUACAO_ORDEM[o.situacao] ?? 'text-gray-600'}`}>
+                                                {LABEL_SITUACAO_ORDEM[o.situacao] ?? o.situacao}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* ── Equipamentos do prédio ────────────────────────────────────
+                Sem valor de compra, fornecedor nem número de série — a garantia
+                entra porque é o que o condômino tem interesse em cobrar. */}
+            <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
+                <div className="flex items-center gap-2.5 mb-1">
+                    <Package className="w-5 h-5 text-indigo-500" />
+                    <h2 className="text-xl font-bold text-gray-900">Equipamentos do prédio</h2>
+                </div>
+                <p className="text-sm text-gray-500 mb-5">Elevadores, bombas e demais ativos, com a garantia do fornecedor</p>
+
+                {dados.ativos.length === 0 ? (
+                    <p className="text-sm text-gray-400 py-6 text-center">
+                        Nenhum equipamento cadastrado no momento.
+                    </p>
+                ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                        {dados.ativos.map(a => (
+                            <div key={a.id} className="rounded-[10px] border border-gray-100 p-4 flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-gray-900 truncate">{a.nome}</p>
+                                    <p className="text-xs text-gray-400 mt-0.5 truncate">
+                                        {[a.sistema, a.marca, a.modelo].filter(Boolean).join(' · ') || a.categoria || '—'}
+                                        {porCondominio.length > 1 ? ` · ${a.condominioNome}` : ''}
+                                    </p>
+                                </div>
+                                {a.garantiaAte && (
+                                    <span className="text-xs text-gray-500 shrink-0">
+                                        garantia até {data(a.garantiaAte)}
+                                    </span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
                 )}
             </div>
         </div>

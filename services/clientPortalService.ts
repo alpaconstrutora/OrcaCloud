@@ -68,18 +68,98 @@ export interface PortalDocumentoCondominio {
     condominioNome: string;
 }
 
+/** Item do plano de manutenção NBR 5674 do prédio. Só item ativo de plano
+ *  vigente — item desativado é decisão revogada. */
+export interface PortalManutencaoCondominio {
+    id: string;
+    descricao: string;
+    sistema: string | null;
+    periodicidadeValor: number | null;
+    periodicidadeUnidade: string | null;
+    ultimaExecucao: string | null;
+    proximoVencimento: string | null;
+    responsavel: string | null;
+    condominioNome: string;
+}
+
+/** Ordem de serviço do prédio. SEM custo: quanto se pagou ao fornecedor é
+ *  negociação da administração; o total gasto o condômino vê no rateio. */
+export interface PortalOrdemCondominio {
+    id: string;
+    codigo: string | null;
+    descricao: string;
+    sistema: string | null;
+    tipo: string;
+    prioridade: string;
+    situacao: string;
+    agendadaPara: string | null;
+    executadaEm: string | null;
+    condominioNome: string;
+}
+
+/** Equipamento do prédio. Sem valor de compra, fornecedor ou número de série —
+ *  garantia entra porque é o que o condômino tem interesse em cobrar. */
+export interface PortalAtivoCondominio {
+    id: string;
+    nome: string;
+    codigo: string | null;
+    categoria: string | null;
+    marca: string | null;
+    modelo: string | null;
+    situacao: string | null;
+    sistema: string | null;
+    garantiaAte: string | null;
+    condominioNome: string;
+}
+
+export interface PortalCotaCondominio {
+    id: string;
+    unitId: string | null;
+    unidade: string | null;
+    torre: string | null;
+    pessoa: string | null;
+    peso: number | null;
+    valor: number;
+    ajusteManual: boolean;
+    /** A cota de quem está olhando — a tela destaca no meio das outras. */
+    minha: boolean;
+}
+
+/** Um rateio do condomínio, com as despesas e a cota de TODAS as unidades
+ *  (decisão do usuário em 23/09/2026: transparência de assembleia).
+ *  `status` é RASCUNHO ou FECHADO; cancelado não chega aqui. */
+export interface PortalRateioCondominio {
+    id: string;
+    numero: string | null;
+    competencia: string;
+    tipo: string;
+    criterio: string;
+    status: 'RASCUNHO' | 'FECHADO';
+    totalDespesas: number;
+    totalRateado: number;
+    fechadoEm: string | null;
+    condominioNome: string;
+    despesas: { id: string; descricao: string; valor: number }[];
+    cotas: PortalCotaCondominio[];
+}
+
 export interface PortalCondominio {
     ok: boolean;
     motivo?: string;
     unidades: PortalUnidadeCondominio[];
     avisos: PortalAvisoCondominio[];
     documentos: PortalDocumentoCondominio[];
+    manutencao: PortalManutencaoCondominio[];
+    ordens: PortalOrdemCondominio[];
+    ativos: PortalAtivoCondominio[];
+    rateios: PortalRateioCondominio[];
 }
 
 /** Payload vazio — usado quando não há vínculo, e também no erro. A aba precisa
  *  renderizar o estado vazio de propósito, não uma tela quebrada. */
 export const CONDOMINIO_VAZIO: PortalCondominio = {
     ok: true, unidades: [], avisos: [], documentos: [],
+    manutencao: [], ordens: [], ativos: [], rateios: [],
 };
 
 // ── Aba "Dados da Unidade" ──────────────────────────────────────────────────
@@ -297,11 +377,15 @@ export const clientPortalService = {
     // por RPC SECURITY DEFINER, cada uma com sua autorização.
 
     /** Link público (`/portal-cliente?token=`). */
+    // O spread sobre CONDOMINIO_VAZIO garante que toda coleção exista mesmo se
+    // a RPC do banco for mais antiga que este bundle (deploy de frontend e de
+    // migration não são atômicos) — assim a aba renderiza a seção vazia em vez
+    // de estourar num `.map` de `undefined`.
     async getCondominioByToken(token: string): Promise<PortalCondominio> {
         const { data, error } = await supabase.rpc('client_portal_get_condominio', { p_token: token });
         if (error) { console.error('[clientPortalService] getCondominioByToken:', error); return CONDOMINIO_VAZIO; }
         const res = data as PortalCondominio;
-        return res?.ok ? res : CONDOMINIO_VAZIO;
+        return res?.ok ? { ...CONDOMINIO_VAZIO, ...res } : CONDOMINIO_VAZIO;
     },
 
     /** Cliente logado, e admin abrindo o portal por dentro. */
@@ -309,7 +393,7 @@ export const clientPortalService = {
         const { data, error } = await supabase.rpc('client_portal_get_condominio_for_client', { p_client_id: clientId });
         if (error) { console.error('[clientPortalService] getCondominioForClient:', error); return CONDOMINIO_VAZIO; }
         const res = data as PortalCondominio;
-        return res?.ok ? res : CONDOMINIO_VAZIO;
+        return res?.ok ? { ...CONDOMINIO_VAZIO, ...res } : CONDOMINIO_VAZIO;
     },
 
     // ── Recebíveis (aba Financeiro) ─────────────────────────────────────────

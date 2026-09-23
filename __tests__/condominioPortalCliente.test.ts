@@ -7,7 +7,7 @@
 // teve um erro de 100× de verdade, com frações decimais salvas em campo de %.
 import { describe, it, expect } from 'vitest';
 import {
-    agruparPorCondominio, fracaoParaPercentual,
+    agruparPorCondominio, fracaoParaPercentual, periodicidade, competencia,
 } from '../components/client/CondominioTab';
 import type { PortalUnidadeCondominio } from '../services/clientPortalService';
 
@@ -90,5 +90,46 @@ describe('fracaoParaPercentual', () => {
 
     it('zero é zero, não é ausência', () => {
         expect(fracaoParaPercentual(0)).toBe('0,0000%');
+    });
+});
+
+// ── Manutenção e rateio, acrescentados em 23/09/2026 ────────────────────────
+// As duas regras puras que entraram com Manutenção, Ativos e Financeiro no
+// portal. Mesmo critério das de cima: o que erra em SILÊNCIO.
+
+describe('periodicidade', () => {
+    it('escreve em português, com plural correto', () => {
+        expect(periodicidade(6, 'MES')).toBe('a cada 6 meses');
+        expect(periodicidade(1, 'MES')).toBe('a cada 1 mês');
+        expect(periodicidade(1, 'ANO')).toBe('a cada 1 ano');
+        expect(periodicidade(15, 'DIA')).toBe('a cada 15 dias');
+    });
+
+    it('unidade desconhecida não vira tela quebrada', () => {
+        // O vocabulário do banco pode ganhar um valor novo antes desta tela
+        // saber dele. Degradar para minúscula é feio; sumir com o item é pior.
+        expect(periodicidade(3, 'TRIMESTRE')).toBe('a cada 3 trimestre');
+    });
+
+    it('sem periodicidade é travessão, não "a cada null"', () => {
+        expect(periodicidade(null, 'MES')).toBe('—');
+        expect(periodicidade(6, null)).toBe('—');
+        expect(periodicidade(0, 'MES')).toBe('—');
+    });
+});
+
+describe('competencia', () => {
+    it('NÃO perde um dia para o fuso', () => {
+        // `new Date('2026-08-01')` é meia-noite UTC, que em BRT (-3) é
+        // 31/07 às 21h — e a competência de agosto vira 07/2026. Este domínio
+        // já teve exatamente esse defeito em datas de cronograma; por isso a
+        // função corta a string em vez de construir Date.
+        expect(competencia('2026-08-01')).toBe('08/2026');
+        expect(competencia('2026-01-01')).toBe('01/2026');
+        expect(competencia('2026-12-01')).toBe('12/2026');
+    });
+
+    it('aceita timestamp completo, não só DATE', () => {
+        expect(competencia('2026-08-01T00:00:00Z')).toBe('08/2026');
     });
 });

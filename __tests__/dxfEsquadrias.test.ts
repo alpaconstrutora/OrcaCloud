@@ -178,7 +178,7 @@ describe('esquadrias no DXF · porta, janela e vão', () => {
 
   it('a porta vem do arco (largura = buraco, dobradiça e lado pelo arco), a janela dos traços paralelos, o vão do buraco vazio; buraco de 3,5 m fica como duas paredes', () => {
     const { paredes, resumo } = reconhecer(texto);
-    expect(resumo).toEqual({ portas: 1, janelas: 1, vaos: 1, arcosSemParede: 1, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 6, cantosFechados: 0 });
+    expect(resumo).toEqual({ portas: 1, janelas: 1, vaos: 1, arcosSemParede: 1, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 6, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0 });
     expect(paredes).toHaveLength(3);
 
     const [p1] = naCota(paredes, 75);
@@ -204,7 +204,7 @@ describe('esquadrias no DXF · porta, janela e vão', () => {
 
   it('com o reconhecimento de símbolos desligado, só o vão livre pelo buraco: a porta e a janela viram passagem', () => {
     const { paredes, resumo } = reconhecer(texto, { ...HIPOTESES_ESQUADRIAS_PADRAO, reconhecerSimbolos: false });
-    expect(resumo).toEqual({ portas: 0, janelas: 0, vaos: 3, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 6, cantosFechados: 0 });
+    expect(resumo).toEqual({ portas: 0, janelas: 0, vaos: 3, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 6, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0 });
     const [p1] = naCota(paredes, 75);
     expect(p1.aberturas.map((ab) => ab.kind)).toEqual(['passage', 'passage']);
   });
@@ -240,14 +240,14 @@ describe('esquadrias no DXF · porta, janela e vão', () => {
     expect(porta.swingReversed).toBe(paraX);
   });
 
-  it('arco em cima de parede CONTÍNUA (o desenhista não abriu o vão) ainda vira porta, com a largura do raio', () => {
+  it('⚠️ PRIMEIRO O VÃO, DEPOIS O ARCO (P2.40): arco em cima de parede CONTÍNUA não abre porta nenhuma — é relatado', () => {
+    // Até a P2.39 isto abria uma porta com a largura do raio: nascia abertura onde o desenho não tinha
+    // nenhuma, e na posição que o arco sugeria. O arco diz que um vão é porta; ele não cria o vão.
     const t = dxfTexto([...paredeH(0, 150, 0, 4000, []), ...ARC(1000, 0, 800, 0, 90)]);
     const { paredes, resumo } = reconhecer(t);
-    expect(resumo).toMatchObject({ portas: 1, arcosSemParede: 0 });
+    expect(resumo).toMatchObject({ portas: 0, arcosSemVao: 1, arcosSemParede: 0 });
     expect(paredes).toHaveLength(1);
-    const p = paredes[0];
-    expect(p.aberturas).toHaveLength(1);
-    expect(p.aberturas[0]).toMatchObject({ kind: 'door', widthMm: 800, offsetMm: offsetDe(p, 1000, 1800), hingeAtStart: p.b.x > p.a.x });
+    expect(paredes[0].aberturas).toEqual([]);
   });
 
   it('duas portas lado a lado com um pilarete entre elas: a emenda NÃO pula por cima do pilarete', () => {
@@ -329,13 +329,22 @@ describe('esquadrias no DXF · porta, janela e vão', () => {
     // Parede horizontal só de x=800 a x=4000 (o vão [0, 800] está entre o canto e ela); arco com dobradiça no canto (0,0).
     const t = dxfTexto([...paredeH(0, 150, 800, 4000, []), ...LINE(0, 0, 0, -3000), ...LINE(-150, 0, -150, -3000), ...ARC(0, 0, 800, 0, 90)]);
     const { paredes, resumo } = reconhecer(t);
-    expect(resumo).toMatchObject({ portas: 1, arcosSemParede: 0 });
+    expect(resumo).toMatchObject({ portas: 1, portasNoCanto: 1, arcosSemParede: 0, arcosSemVao: 0 });
     const p = paredes.find((q) => Math.abs(q.a.y - 75) <= 1)!;
     // Esticada até o canto pela porta (x=0) e, depois, até o EIXO da perpendicular (x=−75) pelo fecho de canto da P2.34.
     expect(p.comprimentoMm).toBe(4075);
     expect(Math.min(p.a.x, p.b.x)).toBe(-75);
     expect(p.aberturas).toHaveLength(1);
     expect(p.aberturas[0]).toMatchObject({ kind: 'door', widthMm: 800, offsetMm: offsetDe(p, 0, 800) });
+  });
+
+  it('porta no CANTO sem batente (a perpendicular não existe) também não vira porta — o vão precisaria de dois lados', () => {
+    // A mesma geometria da porta no canto, sem a parede perpendicular: não há batente, logo não há vão.
+    const t = dxfTexto([...paredeH(0, 150, 800, 4000, []), ...ARC(0, 0, 800, 0, 90)]);
+    const { paredes, resumo } = reconhecer(t);
+    expect(resumo).toMatchObject({ portas: 0, portasNoCanto: 0 });
+    expect(resumo.arcosSemVao + resumo.arcosSemParede).toBe(1);
+    expect(paredes.flatMap((p) => p.aberturas)).toEqual([]);
   });
 
   it('bloco com nome de porta no buraco vale como porta mesmo sem arco; bloco de janela, como janela', () => {

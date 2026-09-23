@@ -1687,6 +1687,26 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 - Testes: `dxfConferirPortas.test.ts` (4: recém-importadas, as quatro combinações conferem e não há o que corrigir; duas estragadas de propósito — uma no lado, outra na dobradiça — são achadas, com mais de 900 mm de erro cada, e os giros propostos devolvem exatamente o que a importação tinha produzido; porta sem arco não é conferida e desenho sem arco não diz nada; deslocamento errado não casa nada), `PainelImportarDxf.test.tsx` (25: confere e corrige pela tela, com o `FlipOpening` certo; porta já certa não é tocada).
 - App real (escritas bloqueadas: 15, 0 erros; storage simulado): importar `casa-print.dxf` → reabrir Inserir › Do DXF/DWG → **"Conferir o lado das portas"** → "2 porta(s) conferida(s) · 2 com o arco em cima do desenho · 4 sem arco no desenho" (as 4 são as portas que já estavam no estudo, de outra origem) e nenhuma correção oferecida. A correção em si está provada nos testes: no app não há como estragar uma porta sem clicar no desenho, o que o harness não faz.
 
+### P2.40 — Primeiro o vão, depois o arco (23/09/2026) · a causa que o usuário apontou
+
+**Pedido**: *"está criando abertura de porta onde não existe. Primeiro o app deve identificar a abertura da porta e depois o arco. Atualmente o sistema identifica o arco e faz abertura da porta, porém muitas vezes a abertura está sendo feita na posição invertida"*. Diagnóstico exato: desde a P2.33 havia um caminho em que o arco, sozinho, abria porta — **sem vão no desenho** —, com a largura do raio e na posição que o arco sugeria. Daí a porta onde não há abertura, e a posição espelhada.
+
+**A regra, agora**
+- **Porta só onde o desenho TEM abertura**: o buraco entre dois trechos colineares da parede (o caminho da emenda, P2.34) ou o vão entre a ponta da parede e o **batente de um canto** — e este só quando a parede perpendicular está lá; sem batente não há vão, e sem vão não há porta.
+- **O arco diz o que o vão é** (porta, e para que lado abre), nunca onde ele fica. A posição e a largura vêm do vão.
+- Arco sobre parede contínua vira relato: **"N arco(s) de porta em parede SEM vão — porta não criada"**, separado dos arcos longe de qualquer parede (carimbo, paisagismo), que continuam em "longe de parede".
+
+**O que entrou**
+- `utils/dxfParaKernel.ts`: o bloco do arco reescrito — só o vão que sai por UMA ponta da parede (o canto) sobrevive, com a folha fechada terminando na ponta E uma parede não paralela cruzando ali (`temBatente`); tudo o mais conta em `arcosSemVao`. `ResumoDeEsquadrias` += `arcosSemVao`, `portasNoCanto`.
+- `PainelImportarDxf.tsx`: a linha do que ficou de fora ganha os arcos sem vão.
+
+**No projeto real da empresa** (antes → depois): **34 portas → 34 portas** (33 pelo vão + 1 no canto, contra 33 + 1 inventada em parede contínua); 39 arcos que não viram porta, agora separados em 38 longe de parede e 1 em parede sem vão. Ou seja: nada de bom se perdeu, e o caminho que inventava abertura sumiu.
+
+**Prova**
+- `npx tsc --noEmit` ok · check-ui ok · `check-xss-sinks.sh` ok · suíte cheia **441 arquivos / 5093 testes** · `npm run build` ok.
+- Testes: `dxfEsquadrias.test.ts` (arco em parede contínua não abre porta e é relatado — o teste que antes fixava o contrário, agora invertido; porta no canto SEM a perpendicular também não vira porta; a porta no canto com batente continua, com `portasNoCanto: 1`; as quatro combinações de lado seguem em cima do arco do arquivo).
+- App real (escritas bloqueadas: 15, 0 erros): projeto da empresa, camada PAREDE, "só as principais" → "219 paredes · **34 porta(s)** · 38 janela(s) · 54 vão(s)" e, no que ficou de fora, **"1 arco(s) de porta em parede SEM vão — porta não criada · 38 arco(s) de porta longe de parede"**.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

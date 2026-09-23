@@ -83,6 +83,13 @@ import {
  * planta de fundo (o deslocamento da importação veio junto), então cai em cima
  * dela; e o fundo não é subido outra vez.
  *
+ * ─── PRIMEIRO O VÃO, DEPOIS O ARCO (P2.40) ──────────────────────────────────
+ *
+ * Porta só nasce onde o desenho TEM abertura: o buraco entre dois trechos da
+ * parede, ou o vão entre a ponta dela e o batente de um canto. O arco diz que
+ * aquele vão é porta e para que lado ela abre — ele não cria vão. Arco sobre
+ * parede contínua é relatado ("em parede SEM vão"), não vira porta.
+ *
  * ─── CONFERIR O LADO DAS PORTAS (P2.39) ─────────────────────────────────────
  *
  * Com o desenho guardado dá para responder a pergunta que a pessoa faz olhando
@@ -246,7 +253,7 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
     ? { paredes: opura.paredes, resumo: opura.resumo }
     : preparado && !pelaOpura
       ? aberturasDoDxf(filtradas, preparado, mmPorUnidade, camada, nivel?.defaultHeightMm ?? 2800, hipoteses)
-      : { paredes: [], resumo: { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 0, cantosFechados: 0 } };
+      : { paredes: [], resumo: { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 0, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0 } };
   // REGIÃO (P2.38): gera só o que está dentro do retângulo marcado no desenho. O critério é o ponto
   // MÉDIO da parede: uma parede que atravessa a borda pertence a quem tem a maior parte dela.
   const dentroDaRegiao = (p: { a: { x: number; y: number }; b: { x: number; y: number } }) => {
@@ -825,12 +832,13 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
                 {esquadrias.resumo.cantosFechados > 0 ? ` · ${esquadrias.resumo.cantosFechados} canto(s) fechado(s)` : ''}
               </p>
             )}
-            {(esquadrias.resumo.arcosSemParede > 0 || esquadrias.resumo.tocosDeBatente > 0 || preparado.blocosExpandidos > 0 || limpo.removidas > 0 || espessurasFora.size > 0) && (
+            {(esquadrias.resumo.arcosSemParede > 0 || esquadrias.resumo.arcosSemVao > 0 || esquadrias.resumo.tocosDeBatente > 0 || preparado.blocosExpandidos > 0 || limpo.removidas > 0 || espessurasFora.size > 0) && (
               <p className="mt-0.5 text-[10px] text-slate-400" data-testid="resumo-ignorados">
                 {[
                   espessurasFora.size > 0 ? `${limpo.paredes.length - filtradas.length} parede(s) fora pelo filtro de espessura` : '',
                   limpo.removidas > 0 ? `${limpo.removidas} sobreposta(s) descartada(s)` : '',
                   esquadrias.resumo.tocosDeBatente > 0 ? `${esquadrias.resumo.tocosDeBatente} toco(s) de batente descartado(s)` : '',
+                  esquadrias.resumo.arcosSemVao > 0 ? `${esquadrias.resumo.arcosSemVao} arco(s) de porta em parede SEM vão — porta não criada` : '',
                   esquadrias.resumo.arcosSemParede > 0 ? `${esquadrias.resumo.arcosSemParede} arco(s) de porta longe de parede, ignorado(s)` : '',
                   preparado.blocosExpandidos > 0 ? `${preparado.blocosExpandidos} bloco(s) expandido(s)` : '',
                 ].filter(Boolean).join(' · ')}

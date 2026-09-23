@@ -331,6 +331,10 @@ export interface ResumoDeEsquadrias {
   pontasSoltas: number;
   /** P2.34: cantos em L fechados levando as duas pontas soltas ao cruzamento dos eixos. */
   cantosFechados: number;
+  /** P2.40: arcos de porta que não têm vão na parede — nenhuma porta é criada para eles. */
+  arcosSemVao: number;
+  /** P2.40: portas abertas no vão entre a ponta da parede e o batente do canto. */
+  portasNoCanto: number;
 }
 
 interface Ponto {
@@ -415,7 +419,7 @@ export function aberturasDoDxf(
 ): { paredes: ParedeComAberturas[]; resumo: ResumoDeEsquadrias } {
   const arcos = hip.reconhecerSimbolos ? arcosDePorta(leitura.arcos, mmPorUnidade) : [];
   const tracos = hip.reconhecerSimbolos ? tracosMm(leitura.segmentos, mmPorUnidade, camadaDeParede) : [];
-  const resumo: ResumoDeEsquadrias = { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 0, cantosFechados: 0 };
+  const resumo: ResumoDeEsquadrias = { portas: 0, janelas: 0, vaos: 0, arcosSemParede: 0, tocosDeBatente: 0, encostadas: 0, pontasSoltas: 0, cantosFechados: 0, arcosSemVao: 0, portasNoCanto: 0 };
   const alturaPorta = Math.min(hip.portaAlturaMm, alturaDaParedeMm);
   const janela = (): AberturaLida => {
     const sill = Math.min(hip.janelaPeitorilMm, Math.max(0, alturaDaParedeMm - 1));
@@ -543,17 +547,25 @@ export function aberturasDoDxf(
     },
   });
 
-  // ── Arco em cima de parede CONTÍNUA, ou na PONTA dela ─────────────────────
+  // ── Arco NA PONTA da parede, contra o batente do canto (P2.40) ───────────
   //
-  // Dois casos que a emenda não alcança: o desenhista não abriu o vão nas faces
-  // (a porta fica em cima de parede contínua), e — o mais comum, medido no
-  // projeto real: 10 das 35 portas — a porta encostada num CANTO: o batente da
-  // dobradiça é a parede perpendicular, então só existe trecho colinear de UM
-  // lado do vão e não há o que emendar. Aí a parede é ESTICADA até o canto, e a
-  // porta fica na ponta: é o que o desenhista teria desenhado numa só parede.
+  // ⚠️ A REGRA É: PRIMEIRO O VÃO, DEPOIS O ARCO. O arco diz que um vão é porta,
+  // e para que lado ela abre — ele NÃO cria o vão. Até a P2.39 um arco em cima
+  // de parede contínua abria uma porta com a largura do raio: nascia abertura
+  // onde o desenho não tinha nenhuma, e na posição que o arco sugeria, não na
+  // do vão (que não existia) — o defeito que o usuário viu em 23/09/2026.
+  //
+  // Sobra UM caso legítimo sem buraco entre trechos: a porta encostada num
+  // CANTO. Ali o batente da dobradiça é a parede perpendicular, então só há
+  // trecho colinear de um lado e não existe o que emendar — mas o vão existe no
+  // desenho, entre a ponta da parede e a perpendicular. É esse vão que se abre,
+  // e só quando a perpendicular está lá: sem ela, não há batente, e sem batente
+  // não há vão.
   for (const arco of arcos) {
     if (arco.usado || arco.varredura > 120) continue;
     let hospedeira: { p: ParedeComAberturas; tC: number; tE: number; n: number; L: number } | null = null;
+    /** Alguma parede passa pelo centro do arco? Distingue "longe de tudo" de "em parede sem vão". */
+    let emAlgumaParede = false;
     for (const p of emendadas) {
       const L = Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y) || 1;
       const ux = (p.b.x - p.a.x) / L;
@@ -563,6 +575,10 @@ export function aberturasDoDxf(
       const meia = p.espessuraMm / 2 + FOLGA_DOBRADICA_MM;
       const nC = (arco.c.x - p.a.x) * nx + (arco.c.y - p.a.y) * ny;
       if (Math.abs(nC) > meia) continue;
+      {
+        const t = (arco.c.x - p.a.x) * ux + (arco.c.y - p.a.y) * uy;
+        if (t >= -FOLGA_DOBRADICA_MM && t <= L + FOLGA_DOBRADICA_MM) emAlgumaParede = true;
+      }
       const tC = (arco.c.x - p.a.x) * ux + (arco.c.y - p.a.y) * uy;
       // A ponta da folha fechada está encostada na mesma reta, a um raio do centro.
       const fechada = arco.pontas.find((q) => Math.abs((q.x - p.a.x) * nx + (q.y - p.a.y) * ny) <= meia + 50);
@@ -570,46 +586,65 @@ export function aberturasDoDxf(
       const tE = (fechada.x - p.a.x) * ux + (fechada.y - p.a.y) * uy;
       const t0 = Math.min(tC, tE);
       const t1 = Math.max(tC, tE);
-      // Dentro da parede, ou saindo por UMA ponta no máximo a folha inteira (a porta no canto) —
-      // e nesse caso a folha fechada tem de terminar exatamente na ponta da parede (o outro batente):
-      // é o que distingue a parede da porta da parede perpendicular do canto, que também passa pelo centro.
+      // SÓ o vão que sai por uma ponta da parede: dentro dela não há vão nenhum (a parede é contínua ali).
       const folga = arco.raio + FOLGA_DOBRADICA_MM;
-      if (t0 < -folga || t1 > L + folga || (t0 < -50 && t1 > L + 50)) continue;
-      if (t0 < -50 && Math.abs(tE) > 50) continue;
-      if (t1 > L + 50 && Math.abs(tE - L) > 50) continue;
+      const saiPorA = t0 < -50 && t1 <= L + 50 && t0 >= -folga;
+      const saiPorB = t1 > L + 50 && t0 >= -50 && t1 <= L + folga;
+      if (!saiPorA && !saiPorB) continue;
+      // E a folha fechada tem de terminar na ponta da parede — é o outro batente do vão.
+      if (saiPorA && Math.abs(tE) > 50) continue;
+      if (saiPorB && Math.abs(tE - L) > 50) continue;
       const nMeio = (arco.meio.x - p.a.x) * nx + (arco.meio.y - p.a.y) * ny;
-      // Entre candidatas, a que não precisa esticar; depois a mais alinhada.
-      const custo = (t0 < -50 ? -t0 : 0) + (t1 > L + 50 ? t1 - L : 0) + Math.abs(nC);
-      const custoAtual = hospedeira ? (Math.min(hospedeira.tC, hospedeira.tE) < -50 ? -Math.min(hospedeira.tC, hospedeira.tE) : 0) + (Math.max(hospedeira.tC, hospedeira.tE) > hospedeira.L + 50 ? Math.max(hospedeira.tC, hospedeira.tE) - hospedeira.L : 0) + Math.abs(hospedeira.n) : Infinity;
+      const custo = (saiPorA ? -t0 : t1 - L) + Math.abs(nC);
+      const custoAtual = hospedeira ? Math.abs(hospedeira.n) + Math.max(-Math.min(hospedeira.tC, hospedeira.tE), Math.max(hospedeira.tC, hospedeira.tE) - hospedeira.L) : Infinity;
       if (custo < custoAtual) hospedeira = { p, tC, tE, n: nMeio, L };
     }
     if (!hospedeira) {
-      resumo.arcosSemParede++;
+      // Em cima de uma parede, mas sem vão ali; ou longe de qualquer parede (paisagismo, carimbo).
+      if (emAlgumaParede) resumo.arcosSemVao++;
+      else resumo.arcosSemParede++;
       continue;
     }
     const { p, L, tC, tE } = hospedeira;
     const t0 = Math.min(tC, tE);
     const t1 = Math.max(tC, tE);
-    // Quanto esticar por cada ponta quando a porta sai pela ponta (a porta no canto).
     const ext0 = t0 < 0 ? Math.round(-t0) : 0;
     const ext1 = t1 > L ? Math.round(t1 - L) : 0;
+    const ux = (p.b.x - p.a.x) / L;
+    const uy = (p.b.y - p.a.y) / L;
+    // O BATENTE: uma parede que cruza a reta no fim do vão. Sem ela, o vão não existe — e a porta não nasce.
+    const pontaDoVao = ext0
+      ? { x: p.a.x - ux * ext0, y: p.a.y - uy * ext0 }
+      : { x: p.b.x + ux * ext1, y: p.b.y + uy * ext1 };
+    const temBatente = emendadas.some((o) => {
+      if (o === p) return false;
+      const Lo = Math.hypot(o.b.x - o.a.x, o.b.y - o.a.y) || 1;
+      const ox = (o.b.x - o.a.x) / Lo;
+      const oy = (o.b.y - o.a.y) / Lo;
+      // Perpendicular (ou pelo menos não paralela) e passando pela ponta do vão.
+      if (Math.abs(ox * ux + oy * uy) > 0.5) return false;
+      const t = (pontaDoVao.x - o.a.x) * ox + (pontaDoVao.y - o.a.y) * oy;
+      const n = Math.abs((pontaDoVao.x - o.a.x) * -oy + (pontaDoVao.y - o.a.y) * ox);
+      return t >= -FOLGA_DOBRADICA_MM && t <= Lo + FOLGA_DOBRADICA_MM && n <= o.espessuraMm / 2 + FOLGA_DOBRADICA_MM;
+    });
+    if (!temBatente) {
+      resumo.arcosSemVao++;
+      continue;
+    }
     const novoL = Math.round(L) + ext0 + ext1;
     const offsetMm = Math.max(0, Math.round(t0) + ext0);
     const widthMm = Math.min(Math.round(arco.raio), novoL - offsetMm);
     if (widthMm < hip.vaoMinMm) continue;
     if (p.aberturas.some((ab) => ab.offsetMm + ext0 < offsetMm + widthMm && offsetMm < ab.offsetMm + ext0 + ab.widthMm)) continue;
-    if (ext0 || ext1) {
-      const ux = (p.b.x - p.a.x) / L;
-      const uy = (p.b.y - p.a.y) / L;
-      if (ext0) {
-        p.a = { x: Math.round(p.a.x - ux * ext0), y: Math.round(p.a.y - uy * ext0) };
-        for (const ab of p.aberturas) ab.offsetMm += ext0;
-      }
-      if (ext1) p.b = { x: Math.round(p.b.x + ux * ext1), y: Math.round(p.b.y + uy * ext1) };
-      p.comprimentoMm = novoL;
+    if (ext0) {
+      p.a = { x: Math.round(p.a.x - ux * ext0), y: Math.round(p.a.y - uy * ext0) };
+      for (const ab of p.aberturas) ab.offsetMm += ext0;
     }
+    if (ext1) p.b = { x: Math.round(p.b.x + ux * ext1), y: Math.round(p.b.y + uy * ext1) };
+    p.comprimentoMm = novoL;
     arco.usado = true;
     resumo.portas++;
+    resumo.portasNoCanto++;
     p.aberturas.push({ kind: 'door', offsetMm, widthMm, heightMm: alturaPorta, sillMm: 0, hingeAtStart: tC <= tE, swingReversed: hospedeira.n < 0 });
     p.aberturas.sort((x, y) => x.offsetMm - y.offsetMm);
   }

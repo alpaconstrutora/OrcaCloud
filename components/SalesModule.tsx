@@ -2,6 +2,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Building2, Home, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, DollarSign, Tag, Calendar, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, BrainCircuit, Activity, Percent, Target, Mail, Phone, Briefcase, AlertCircle, RefreshCw, MoveHorizontal, Sliders } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+// Vocabulário ÚNICO do status da negociação (Proposta → … → Concluído), o mesmo
+// do stepper "Etapa da Negociação" em Gerenciar Negociação › Contrato.
+import { getDealStatusDisplay } from '../lib/dealWorkflow';
 import { commercialService, dealBuyersOf } from '../services/commercialService';
 import { empreendimentoService } from '../services/empreendimentoService';
 import EmpreendimentoCell from './empreendimento/EmpreendimentoCell';
@@ -332,12 +335,10 @@ function renderDealCell(
             return `${variancia >= 0 ? '+' : ''}${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(variancia)}`;
         case 'variance_pct':
             return `${Math.abs(varianciaPct).toFixed(1)}%`;
-        case 'status':
-            return (
-                <span className={`text-sm font-normal ${deal.status === 'COMPLETED' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                    {deal.status === 'COMPLETED' ? 'Concluído' : 'Pendente'}
-                </span>
-            );
+        case 'status': {
+            const view = getDealStatusDisplay(deal.status, deal.type);
+            return <span className={`text-sm font-normal ${view.color}`}>{view.label}</span>;
+        }
         default:
             return null;
     }
@@ -2009,10 +2010,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                 <ActionIconButton kind="delete" onClick={() => handleDeleteDeal(deal.id)} />
                                             </div>
                                             <div className="flex items-center gap-2 mb-4">
-                                                <span className={`text-sm font-normal ${deal.status === 'COMPLETED' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                                    {deal.status === 'COMPLETED' ? 'Concluído' :
-                                                        deal.status === 'PENDING' ? 'Pendente' :
-                                                            deal.status === 'CANCELLED' ? 'Cancelado' : 'Em Negociação'}
+                                                <span className={`text-sm font-normal ${getDealStatusDisplay(deal.status, deal.type).color}`}>
+                                                    {getDealStatusDisplay(deal.status, deal.type).label}
                                                 </span>
                                                 <span className="text-xs text-gray-400 ml-auto">
                                                     {new Date(deal.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
@@ -2221,8 +2220,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                     )}
                                                     {dv.includes('status') && (
                                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                            <span className={`text-sm font-normal ${deal.status === 'COMPLETED' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                                                {deal.status === 'COMPLETED' ? 'Concluído' : 'Pendente'}
+                                                            <span className={`text-sm font-normal ${getDealStatusDisplay(deal.status, deal.type).color}`}>
+                                                                {getDealStatusDisplay(deal.status, deal.type).label}
                                                             </span>
                                                         </td>
                                                     )}

@@ -159,3 +159,28 @@ export const STATUS_LABELS: Record<DealWorkflowStatus, string> = {
     COMPLETED:       'Concluído',
     CANCELLED:       'Cancelado',
 };
+
+/**
+ * Rótulo e cor do status de uma negociação para exibição em lista/card —
+ * o MESMO vocabulário do stepper "Etapa da Negociação" (`DealWorkflowBar`, em
+ * Gerenciar Negociação › Contrato): Proposta · Aprovação · Reserva · Contrato ·
+ * Assinatura · Concluído (Alugado, em locação) · Cancelado.
+ *
+ * Existe porque cada tela inventava o seu: Venda de Ativos › Negociações
+ * colapsava os seis estágios num ternário `COMPLETED ? 'Concluído' :
+ * 'Pendente'`, então uma negociação em Assinatura aparecia como "Pendente" na
+ * lista e como "Assinatura" dentro da negociação — o usuário leu (com razão)
+ * como dessincronia (2026-09-22; o mesmo já tinha acontecido em Locações em
+ * 2026-08-04). Status desconhecido devolve o próprio código, em cinza: melhor
+ * mostrar `FOO` do que chamar de "Pendente" algo que ninguém sabe o que é.
+ */
+export function getDealStatusDisplay(
+    status?: string | null,
+    dealType?: PropertyDeal['type'],
+): { label: string; color: string } {
+    if (status === 'CANCELLED') return { label: STATUS_LABELS.CANCELLED, color: 'text-red-600' };
+    const step = getStepByStatus((status || 'IN_NEGOTIATION') as DealWorkflowStatus);
+    if (!step) return { label: status || '—', color: 'text-gray-600' };
+    const view = getWorkflowStep(step, dealType);
+    return { label: view.label, color: view.color };
+}

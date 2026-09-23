@@ -42,7 +42,7 @@ import { RentalPricingConfig } from '../types';
 import RentalRenewals from './rentals/RentalRenewals';
 import RentalAnalysisOverview from './rentals/RentalAnalysisOverview';
 import { contractRenewalService } from '../services/contractRenewalService';
-import { getStepByStatus, getStepIndex, WORKFLOW_STEPS, DealWorkflowStatus, getWorkflowStep } from '../lib/dealWorkflow';
+import { getStepByStatus, getStepIndex, WORKFLOW_STEPS, DealWorkflowStatus, getWorkflowStep, getDealStatusDisplay as statusDaNegociacao } from '../lib/dealWorkflow';
 // Conta de carteira compartilhada com services/rentalsDashboardService.ts — as
 // duas telas mostram os mesmos KPIs e já divergiram por terem cópias da fórmula.
 // getDealInstallmentValue trabalha na escala do CONTRATO (campos do próprio
@@ -1461,15 +1461,11 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     // antes a aba Contratos colapsava Proposta/Aprovação/Reserva/Contrato/Assinatura
     // num genérico "Pendente", dessincronizado do status (mais granular) que a
     // Unidade já exibe a partir do mesmo negócio.
-    const getDealStatusDisplay = (status?: string) => {
-        if (status === 'CANCELLED') return { label: 'Cancelado', color: 'text-red-600' };
-        const step = getStepByStatus((status || 'IN_NEGOTIATION') as DealWorkflowStatus);
-        // Locação: a etapa final (COMPLETED) é "Alugado", não "Concluído" — mesmo
-        // texto do stepper de Gerenciar Negociação (DealWorkflowBar).
-        if (!step) return { label: status || '', color: 'text-gray-600' };
-        const view = getWorkflowStep(step, 'RENTAL');
-        return { label: view.label, color: view.color };
-    };
+    // Locação: a etapa final (COMPLETED) é "Alugado", não "Concluído" — mesmo
+    // texto do stepper de Gerenciar Negociação (DealWorkflowBar). A cópia local
+    // desta função virou `getDealStatusDisplay` de lib/dealWorkflow em
+    // 2026-09-22, quando Venda de Ativos precisou do mesmo vocabulário.
+    const getDealStatusDisplay = (status?: string) => statusDaNegociacao(status, 'RENTAL');
 
     // Status da UNIDADE no mesmo vocabulário da aba Contratos.
     //

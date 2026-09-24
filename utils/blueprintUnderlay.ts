@@ -312,6 +312,79 @@ export const AVISO_RASTER =
   'resto da folha. Confira uma segunda cota distante da primeira antes de confiar ' +
   'no traçado.';
 
+/**
+ * A escala deste fundo veio do ARQUIVO, e não de clique nenhum (P2.57)?
+ *
+ * ─── O RELATO ───────────────────────────────────────────────────────────────
+ *
+ * Importando um DXF, o usuário leu na tela: *"a escala aferida num ponto pode
+ * não valer no resto da folha"*, *"Aferido em 76,35 m"*, *"equivale a 1:110,1
+ * num escaneamento de 150 dpi"* — e perguntou se devia mudar a escala para
+ * 1:110,1, com as paredes já corretas. ⚠️ **Nenhuma das três frases se aplica
+ * a um fundo de DXF**, e a terceira quase o levou a estragar um desenho certo:
+ * declarar 1:100 ali recalcularia o mm/px para 16,93 e encolheria a imagem 9%.
+ *
+ * O fundo de DXF (P2.36) é rasterizado por nós A PARTIR DO VETOR: o mm por
+ * pixel é exato por construção, não houve clique, e não há papel para ondular.
+ * A "escala equivalente em 150 dpi" é artefato da resolução que o rasterizador
+ * escolheu (lado máximo de 4096 px) — não diz nada sobre o projeto.
+ *
+ * ─── COMO SE RECONHECE, SEM COLUNA NOVA ─────────────────────────────────────
+ *
+ * `importarRaster` grava a calibração com a ASSINATURA da máquina: `p1` na
+ * origem exata e `p2` na borda direita, ambos com `py = 0` — conferido no banco
+ * do usuário: `(0,0)` → `(4097,0)`. Nenhuma mão humana acerta esses pixels
+ * clicando. Somado a `pdf_pagina === null` (não é prancha de PDF) e ao
+ * alinhamento, identifica o caso sem inventar coluna no schema.
+ */
+export function escalaVeioDoArquivo(linha: {
+  pdf_pagina: number | null;
+  calib_p1_px: number | null;
+  calib_p1_py: number | null;
+  calib_p2_px: number | null;
+  calib_p2_py: number | null;
+  calib_alinhado?: boolean | null;
+}): boolean {
+  return (
+    linha.pdf_pagina === null &&
+    linha.calib_p1_px === 0 &&
+    linha.calib_p1_py === 0 &&
+    linha.calib_p2_py === 0 &&
+    (linha.calib_p2_px ?? 0) > 0 &&
+    linha.calib_alinhado === true
+  );
+}
+
+/**
+ * Aplica um `mmPorPixel` novo mantendo `pivo` no lugar.
+ *
+ * O controle certo para o fundo que veio do arquivo: ali não existe "1:100"
+ * — não há papel nem dpi de impressão —, existe quanto vale um pixel. É o que
+ * corrige a unidade lida errado (arquivo em centímetro tratado como milímetro
+ * deixa tudo 10× fora), sem passar por um denominador inventado.
+ */
+export function aplicarMmPorPixel(
+  mmPorPixel: number,
+  anterior: Underlay | null,
+  pivo: PontoPx = { px: 0, py: 0 },
+): Underlay {
+  if (!(mmPorPixel > 0)) {
+    throw new CalibracaoInvalida('O milímetro por pixel precisa ser maior que zero.');
+  }
+  const parcial: Underlay = {
+    ...UNDERLAY_NEUTRO,
+    mmPorPixel,
+    rotacaoMrad: anterior?.rotacaoMrad ?? 0,
+  };
+  const alvo = anterior ? pixelParaModelo(anterior, pivo) : { x: 0, y: 0 };
+  const semOrigem = pixelParaModelo(parcial, pivo);
+  return {
+    ...parcial,
+    origemXMm: alvo.x - semOrigem.x,
+    origemYMm: alvo.y - semOrigem.y,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Que arquivo serve de planta de fundo
 // ─────────────────────────────────────────────────────────────────────────────

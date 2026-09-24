@@ -10897,7 +10897,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
 
       {/* Corpo */}
       {fundo.linha && fundo.underlay && (
-        <ResumoDaAfericao linha={fundo.linha} underlay={fundo.underlay} />
+        <ResumoDaAfericao
+          linha={fundo.linha}
+          underlay={fundo.underlay}
+          onDeclararMmPorPixel={(mm) => void fundo.declararMmPorPixel(mm)}
+        />
       )}
       {fundo.erro && (
         <p className="border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">

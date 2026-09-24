@@ -210,3 +210,60 @@ describe('ResumoDaAfericao · o desenho que parece certo', () => {
     expect(screen.getByText(/planta alinhada pela referência/i)).toBeInTheDocument();
   });
 });
+
+/**
+ * O FUNDO QUE VEIO DO ARQUIVO (P2.57).
+ *
+ * ⚠️ O relato: importando um DXF, a tela dizia "a escala aferida num ponto
+ * pode não valer no resto da folha" e "equivale a 1:110,1 num escaneamento de
+ * 150 dpi", e o usuário perguntou se devia declarar 1:110,1 — com as paredes
+ * certas. Declarar 1:100 teria encolhido a imagem 9%.
+ *
+ * Os números são os do banco dele: 4097 px, 18,636 mm/px, p1 (0,0) → p2 (4097,0).
+ */
+describe('ResumoDaAfericao · fundo vindo do arquivo', () => {
+  const DO_DXF = {
+    pdf_pagina: null,
+    calib_p1_px: 0,
+    calib_p1_py: 0,
+    calib_p2_px: 4097,
+    calib_p2_py: 0,
+    calib_alinhado: true,
+    calib_distancia_mm: 76350.1,
+  };
+  const U = { origemXMm: 0, origemYMm: 0, mmPorPixel: 18.636, rotacaoMrad: 0 };
+
+  it('⚠️ não repete o alarme de escaneamento nem a escala "equivalente"', () => {
+    render(<ResumoDaAfericao linha={linha(DO_DXF)} underlay={U} />);
+    expect(screen.queryByText(/pode não valer no resto da folha/i)).toBeNull();
+    expect(screen.queryByText(/num escaneamento de 150 dpi/i)).toBeNull();
+    expect(screen.queryByText(/1:110/)).toBeNull();
+  });
+
+  it('diz que a escala é exata e de onde ela veio', () => {
+    render(<ResumoDaAfericao linha={linha(DO_DXF)} underlay={U} />);
+    const bloco = screen.getByTestId('fundo-do-arquivo');
+    expect(bloco).toHaveTextContent('exata, vinda do arquivo');
+    expect(bloco).toHaveTextContent('18,636 mm por pixel');
+    expect(bloco).toHaveTextContent('sem clique e sem papel para distorcer');
+    // E explica por que não há "1:100" a declarar.
+    expect(bloco).toHaveTextContent('escala de impressão é coisa de papel');
+  });
+
+  it('o ajuste oferecido é o mm por pixel, aplicado no Enter', async () => {
+    const user = userEvent.setup();
+    const onDeclararMmPorPixel = vi.fn();
+    render(<ResumoDaAfericao linha={linha(DO_DXF)} underlay={U} onDeclararMmPorPixel={onDeclararMmPorPixel} />);
+    const campo = screen.getByLabelText(/Milímetros por pixel/i);
+    await user.type(campo, '1,8636');
+    await user.keyboard('{Enter}');
+    // Vírgula aceita: é como se digita número em português.
+    expect(onDeclararMmPorPixel).toHaveBeenCalledWith(1.8636);
+  });
+
+  it('o fundo de PDF continua no caminho antigo, com o aviso e a escala 1:N', () => {
+    render(<ResumoDaAfericao linha={linha({ ...DO_DXF, pdf_pagina: 1 })} underlay={U} />);
+    expect(screen.queryByTestId('fundo-do-arquivo')).toBeNull();
+    expect(screen.getByText(/pode não valer no resto da folha/i)).toBeInTheDocument();
+  });
+});

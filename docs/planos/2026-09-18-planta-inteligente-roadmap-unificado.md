@@ -2108,6 +2108,36 @@ Medido no app, numa planta publicada real: **1 de 12 medidas tinha preço**. As 
 - `__tests__/components/PainelOrcamento.test.tsx` (+1, total 18): o catálogo abre com o termo da medida e o de-para é salvo com a medida certa e `active: true`.
 - **App real** (escritas bloqueadas: 3, 0 erros), planta publicada: **11 botões "Vincular item"** na lista; clicar no de "Área de parede (duas faces)" abre o modal intitulado *Item para "Área de parede (duas faces)"*, com o campo de descrição preenchido com **REBOCO** e a busca já rodada — **5 resultados**, o primeiro em **M2**, que é a dimensão exigida pela medida.
 
+### P2.57 — O fundo que veio do arquivo não é um escaneamento (24/09/2026) · relato do usuário
+
+**O relato.** Ao importar um DXF, a tela disse:
+
+> *A planta de fundo é uma imagem: a escala aferida num ponto pode não valer no resto da folha…*
+> *Aferido em 76,35 m · confere em 76,35 m · 18,64 mm por pixel · **equivale a 1:110,1 num escaneamento de 150 dpi** · planta alinhada pela referência*
+
+E a pergunta: *"a mensagem indica que a escala correta deveria ser 1:110,1. As medidas estão corretas nas paredes. Devo alterar a escala?"* — seguida de *"não consigo alterar a escala"*.
+
+**⚠️ As três frases são sobre papel escaneado, e nenhuma se aplica.** O fundo de DXF (P2.36) é rasterizado pelo app **a partir do vetor**: o mm/px é exato por construção, não houve clique nenhum, e não há folha para ondular. O "1:110,1" é a leitura inversa da resolução que o rasterizador escolheu (lado máximo de 4096 px) — não diz nada sobre o projeto. **A resposta certa era "não faça nada"**, e a tela sugeria o contrário: declarar 1:100 ali recalcularia o mm/px para 16,93 e **encolheria a imagem em 9%**, estragando um fundo que estava certo.
+
+**E o campo de escala estava escondido justo nesse caso**: `pdf_pagina !== null` guardava o campo "Escala 1:" para fundo de PDF — regra correta quando só o PDF era rasterizado por nós, e nunca reavaliada quando a P2.36 passou a gerar fundo de DXF.
+
+**Como o caso é reconhecido, sem coluna nova.** `importarRaster` grava a calibração com assinatura de máquina: `p1` na origem exata e `p2` na borda direita, ambos com `py = 0` — conferido no banco do usuário, `(0,0) → (4097,0)`. Nenhuma mão humana acerta esses pixels clicando.
+
+**O que a tela passou a dizer** (bloco verde, no lugar do alarme âmbar):
+
+> Escala **exata, vinda do arquivo** · **18,636 mm por pixel** · o desenho foi rasterizado pelo próprio app, sem clique e sem papel para distorcer · planta alinhada pela referência.
+> Não há "1:100" a declarar aqui: escala de impressão é coisa de papel. Se a medida do desenho saiu errada (arquivo em centímetro lido como milímetro, por exemplo), corrija o milímetro por pixel.
+
+E o ajuste oferecido é o único que faz sentido ali: **o mm por pixel**, aplicado no Enter, pivotando na origem para o traçado não sair do lugar.
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-ui-standard.sh` ok · `check-xss-sinks.sh` ok · suíte cheia **459 arquivos / 5250 testes** verdes · `npm run build` ok.
+- `__tests__/blueprintFundoDoArquivo.test.ts` (6), com os números do banco do usuário: a assinatura identifica o fundo de DXF; PDF e aferição humana continuam no outro caminho; ⚠️ **a conta do estrago** — `mmPorPixelDaEscala(100) = 16,933`, 9% menor que 18,636, e `18,636 × 150 ÷ 25,4 = 110,06`, que é de onde saía o "1:110,1"; corrigir o mm/px mantém o pivô; o caso de centímetro lido como milímetro; valor não positivo recusado.
+- `__tests__/components/ControlesDeFundo.test.tsx` (+4, total 19): o alarme de escaneamento e a escala "equivalente" **somem** para esse fundo; o bloco diz que a escala é exata e de onde veio; o ajuste de mm/px aplica no Enter; **o fundo de PDF continua no caminho antigo**.
+- **App real** (escritas bloqueadas: 2, 0 erros), *Planta 24/09/2026* — a do relato: o bloco novo aparece com "18,636 mm por pixel", o campo de mm/px existe, e tanto o alarme quanto o "1:110" **deixaram de aparecer**.
+
+**⚠️ Um defeito que o teste pegou antes do usuário**: o campo nasceu como `input[type=number]`, que **descarta a vírgula**. Quem digitasse "1,8636" veria o campo vazio e o Enter não faria nada. Virou `type="text"` com `inputMode="decimal"`, como o `CampoMedida` da casa já fazia.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

@@ -29,6 +29,7 @@ import {
   recusaDeFundo,
   type PontoPx,
   type Underlay,
+  aplicarMmPorPixel,
 } from '../utils/blueprintUnderlay';
 
 /**
@@ -375,6 +376,59 @@ export function useBlueprintUnderlay(
    * clicada", e mantê-los ao lado de uma escala declarada faria a tela mostrar
    * uma medição que não vale mais e que ninguém refez.
    */
+  /**
+   * Corrige o MM POR PIXEL do fundo que veio do arquivo (P2.57).
+   *
+   * ⚠️ O irmão `declararEscala` não serve aqui: ele traduz um denominador
+   * ("1:100") assumindo 150 dpi, e num raster gerado do vetor não há papel nem
+   * dpi — a conta produziria um número exato e errado. O que existe é quanto
+   * vale um pixel, e é isso que se corrige quando a unidade do arquivo foi lida
+   * errado (centímetro tratado como milímetro deixa tudo 10× fora).
+   *
+   * A calibração é regravada com a mesma assinatura de máquina (p1 na origem,
+   * p2 na borda) e a distância recalculada: sem isso a tela passaria a dizer
+   * "aferido em 76,35 m" com um mm/px que já não produz esse número.
+   */
+  const declararMmPorPixel = useCallback(
+    async (mmPorPixel: number): Promise<Underlay | null> => {
+      if (!linha || !(mmPorPixel > 0)) return null;
+      setOcupado(true);
+      setErro(null);
+      try {
+        const anterior = underlayDaLinha(linha);
+        const larguraPx = linha.calib_p2_px ?? 0;
+        const pivo: PontoPx = { px: 0, py: 0 };
+        const novo = aplicarMmPorPixel(mmPorPixel, anterior, pivo);
+        const salvo = await salvarUnderlay({
+          id: linha.id,
+          study_id: linha.study_id,
+          organization_id: linha.organization_id,
+          level_id: linha.level_id,
+          storage_path: linha.storage_path,
+          nome_arquivo: linha.nome_arquivo,
+          nome: linha.nome,
+          ordem: linha.ordem,
+          file_sha256: linha.file_sha256 ?? '',
+          pdf_pagina: linha.pdf_pagina,
+          underlay: novo,
+          calibracao:
+            larguraPx > 0
+              ? { p1: { px: 0, py: 0 }, p2: { px: larguraPx, py: 0 }, distanciaMm: larguraPx * mmPorPixel, alinhado: true }
+              : undefined,
+          opacidade,
+        });
+        setLinhas((atual) => atual.map((l) => (l.id === salvo.id ? salvo : l)));
+        return novo;
+      } catch (e) {
+        setErro(e instanceof Error ? e.message : String(e));
+        return null;
+      } finally {
+        setOcupado(false);
+      }
+    },
+    [linha, opacidade],
+  );
+
   const declararEscala = useCallback(
     async (denominador: number): Promise<Underlay | null> => {
       if (!linha) return null;
@@ -514,6 +568,7 @@ export function useBlueprintUnderlay(
     desenhoDaPranchaAtiva,
     aplicarCalibracao,
     declararEscala,
+    declararMmPorPixel,
     remover,
     /**
      * `true` quando há fundo mas a escala não foi estabelecida por nenhuma das

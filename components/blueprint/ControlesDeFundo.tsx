@@ -8,6 +8,7 @@ import {
   escalaPadraoProxima,
   precisaoDaAfericao,
   type Underlay,
+  escalaVeioDoArquivo,
 } from '../../utils/blueprintUnderlay';
 import type { UnderlayRow } from '../../services/blueprintUnderlayService';
 import { usePersistedState } from '../ui/TableUtils';
@@ -225,10 +226,20 @@ export default function ControlesDeFundo({
 export function ResumoDaAfericao({
   linha,
   underlay,
+  onDeclararMmPorPixel,
 }: {
   linha: UnderlayRow;
   underlay: Underlay;
+  /**
+   * Corrige o milímetro por pixel do fundo que veio do arquivo (P2.57).
+   *
+   * Opcional: quem monta este componente sem a ação continua vendo o resumo,
+   * só não oferece o ajuste.
+   */
+  onDeclararMmPorPixel?: (mmPorPixel: number) => void;
 }) {
+  /** Rascunho do campo de mm/px — aplicado no Enter, como a escala declarada. */
+  const [mmPx, setMmPx] = useState('');
   /**
    * Dispensada nesta PRANCHA.
    *
@@ -286,6 +297,64 @@ export function ResumoDaAfericao({
     declarada === null && precisao !== null && precisao.vaoPx < VAO_CURTO_PX;
 
   if (dispensada) return null;
+
+  /**
+   * ⚠️ O FUNDO QUE VEIO DO ARQUIVO NÃO É UM ESCANEAMENTO (P2.57).
+   *
+   * Relato do usuário ao importar um DXF: a tela dizia "a escala aferida num
+   * ponto pode não valer no resto da folha", "Aferido em 76,35 m" e "equivale a
+   * 1:110,1 num escaneamento de 150 dpi" — e ele perguntou se devia declarar
+   * 1:110,1, com as paredes já certas. Declarar 1:100 ali teria recalculado o
+   * mm/px para 16,93 e encolhido a imagem 9%: um fundo certo virando errado por
+   * causa de um texto que não era sobre ele.
+   *
+   * Fundo de DXF é rasterizado do VETOR: mm/px exato, sem clique, sem papel que
+   * ondule. Aqui ele diz isso, e o ajuste oferecido é o único que faz sentido —
+   * quanto vale um pixel.
+   */
+  const doArquivo = escalaVeioDoArquivo(linha);
+
+  if (doArquivo) {
+    return (
+      <div className="border-b border-emerald-200 bg-emerald-50 px-4 py-2" data-testid="fundo-do-arquivo">
+        <p className="text-[11px] text-emerald-800">
+          Escala <strong>exata, vinda do arquivo</strong> ·{' '}
+          <strong>{underlay.mmPorPixel.toFixed(3).replace('.', ',')} mm por pixel</strong> · o desenho foi
+          rasterizado pelo próprio app, sem clique e sem papel para distorcer · planta alinhada pela
+          referência.
+        </p>
+        <p className="mt-1 text-[11px] text-emerald-700">
+          Não há "1:100" a declarar aqui: escala de impressão é coisa de papel. Se a medida do desenho
+          saiu errada (arquivo em centímetro lido como milímetro, por exemplo), corrija o milímetro por
+          pixel.
+        </p>
+        <label className="mt-1.5 flex items-center gap-1 text-[11px] text-emerald-800">
+          mm por pixel
+          {/* ⚠️ TEXTO, não `number`. Em português se digita "1,8636", e
+              `input[type=number]` descarta a vírgula — o campo ficaria vazio e o
+              Enter não faria nada. É a mesma escolha do `CampoMedida`. */}
+          <input
+            type="text"
+            inputMode="decimal"
+            placeholder={underlay.mmPorPixel.toFixed(3).replace('.', ',')}
+            value={mmPx}
+            onChange={(e) => setMmPx(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return;
+              const n = Number(mmPx.replace(',', '.'));
+              if (n > 0) {
+                onDeclararMmPorPixel?.(n);
+                setMmPx('');
+              }
+            }}
+            aria-label="Milímetros por pixel do fundo"
+            className="w-24 rounded-md border border-emerald-300 bg-white px-1 py-1 text-xs text-slate-800"
+          />
+          <span className="text-emerald-600">Enter</span>
+        </label>
+      </div>
+    );
+  }
 
   return (
     <div className="border-b border-amber-200 bg-amber-50 px-4 py-2">

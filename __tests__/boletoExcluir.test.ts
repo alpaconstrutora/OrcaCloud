@@ -30,10 +30,14 @@ function filtrar(linhas: Linha[], filtros: Array<[string, string, unknown]>): Li
         op === 'neq' ? l[col] !== val : l[col] === val));
 }
 
-function query(tabela: string, modo: 'select' | 'delete', head: boolean) {
+function query(tabela: string, modo: 'select' | 'delete' | 'update', head: boolean, patch: Linha = {}) {
     const filtros: Array<[string, string, unknown]> = [];
     const executar = () => {
         const linhas = filtrar(db[tabela] ?? [], filtros);
+        if (modo === 'update') {
+            linhas.forEach(l => Object.assign(l, patch));
+            return { data: linhas, error: null, count: linhas.length };
+        }
         if (modo === 'delete') {
             db[tabela] = (db[tabela] ?? []).filter(l => !linhas.includes(l));
             return { data: null, error: null, count: linhas.length };
@@ -43,6 +47,11 @@ function query(tabela: string, modo: 'select' | 'delete', head: boolean) {
     const api: any = {
         eq: (col: string, val: unknown) => (filtros.push(['eq', col, val]), api),
         neq: (col: string, val: unknown) => (filtros.push(['neq', col, val]), api),
+        select: () => api,
+        single: async () => {
+            const r = executar();
+            return { data: (r.data as Linha[] | null)?.[0] ?? null, error: null };
+        },
         maybeSingle: async () => {
             const r = executar();
             return { data: (r.data as Linha[] | null)?.[0] ?? null, error: null };
@@ -59,6 +68,7 @@ vi.mock('../lib/supabase', () => ({
         from: (tabela: string) => ({
             select: (_cols: string, opts?: { head?: boolean }) => query(tabela, 'select', !!opts?.head),
             delete: () => query(tabela, 'delete', false),
+            update: (patch: Linha) => query(tabela, 'update', false, patch),
             insert: async () => ({ data: null, error: null }),
         }),
         storage: {
@@ -89,16 +99,25 @@ beforeEach(() => {
 });
 
 describe('quais status podem ser excluídos', () => {
-    it('rascunho, aprovado e pago sim; cancelado não', () => {
+    it('rascunho e aprovado sim; pago e cancelado não', () => {
         expect(boletoService.podeExcluir('rascunho')).toBe(true);
         expect(boletoService.podeExcluir('aprovado')).toBe(true);
-        expect(boletoService.podeExcluir('pago')).toBe(true);
+        expect(boletoService.podeExcluir('pago')).toBe(false);
         expect(boletoService.podeExcluir('cancelado')).toBe(false);
+    });
+
+    /* A queixa que abriu tudo isto foi um ícone cinza que não dizia por quê.
+       Botão desligado sem motivo é o defeito; com motivo, é instrução. */
+    it('o botão desligado sempre tem motivo, e o do pago aponta o caminho', () => {
+        expect(boletoService.motivoParaNaoExcluir('rascunho')).toBeNull();
+        expect(boletoService.motivoParaNaoExcluir('aprovado')).toBeNull();
+        expect(boletoService.motivoParaNaoExcluir('pago')).toMatch(/reverta para rascunho/i);
+        expect(boletoService.motivoParaNaoExcluir('cancelado')).toMatch(/histórico/i);
     });
 
     it('recusa cancelado com mensagem, sem apagar nada', async () => {
         cenario('cancelado');
-        await expect(boletoService.excluir('b1', ORG)).rejects.toThrow(/cancelados/i);
+        await expect(boletoService.excluir('b1', ORG)).rejects.toThrow(/cancelado fica no histórico/i);
         expect(db.boletos).toHaveLength(1);
     });
 });
@@ -113,33 +132,53 @@ describe('excluir rascunho', () => {
     });
 });
 
-describe('excluir pago', () => {
-    /* O "pago" do boleto é marcação própria: `marcarPago` grava CONCILIATED no
-       título sem que exista linha de extrato do outro lado. Em 24/09/2026 eram
-       517 títulos CONCILIATED para 7 conciliações bancárias reais — por isso o
-       status do título não barra, e o vínculo com o extrato barra. */
-    it('exclui mesmo com o título baixado, levando título e nota', async () => {
+describe('pago: o fluxo é reverter e só então excluir', () => {
+    it('excluir direto é recusado, e a mensagem ensina o caminho', async () => {
         cenario('pago', 'CONCILIATED');
-        await boletoService.excluir('b1', ORG);
-        expect(db.boletos).toHaveLength(0);
-        expect(db.internal_transactions).toHaveLength(0);
-        expect(db.invoices).toHaveLength(0);
-    });
-
-    it('recusa o pago que tem conciliação bancária de verdade, e manda desfazê-la', async () => {
-        cenario('pago', 'CONCILIATED');
-        db.reconciliation_matches = [{ id: 'm1', internal_transaction_id: 'tx-1' }];
-        await expect(boletoService.excluir('b1', ORG)).rejects.toThrow(/desfaça a conciliação/i);
+        await expect(boletoService.excluir('b1', ORG)).rejects.toThrow(/reverta para rascunho/i);
         expect(db.boletos).toHaveLength(1);
         expect(db.internal_transactions).toHaveLength(1);
         expect(storageRemovidos).toHaveLength(0);
     });
 
-    it('exclui o pago que nunca teve título (os 85 de 24/09) sem reclamar', async () => {
-        cenario('pago', null);
+    it('reverter estorna título e nota e devolve o boleto a rascunho', async () => {
+        cenario('pago', 'CONCILIATED');
+        const atualizado = await boletoService.reverterParaRascunho('b1', ORG);
+        expect(atualizado.status).toBe('rascunho');
+        expect(db.internal_transactions).toHaveLength(0);
+        expect(db.invoices).toHaveLength(0);
+        expect(db.boletos[0].invoice_id).toBeNull();
+        // Reverter NÃO apaga: o arquivo e o boleto continuam lá.
+        expect(db.boletos).toHaveLength(1);
+        expect(storageRemovidos).toHaveLength(0);
+    });
+
+    it('depois de reverter, o excluir passa', async () => {
+        cenario('pago', 'CONCILIATED');
+        await boletoService.reverterParaRascunho('b1', ORG);
         await boletoService.excluir('b1', ORG);
         expect(db.boletos).toHaveLength(0);
+        expect(storageRemovidos).toEqual([['org/b1.pdf']]);
+    });
+
+    it('reverter recusa o pago com conciliação bancária de verdade', async () => {
+        cenario('pago', 'CONCILIATED');
+        db.reconciliation_matches = [{ id: 'm1', internal_transaction_id: 'tx-1' }];
+        await expect(boletoService.reverterParaRascunho('b1', ORG)).rejects.toThrow(/desfaça a conciliação/i);
+        expect(db.boletos[0].status).toBe('pago');
+        expect(db.internal_transactions).toHaveLength(1);
+    });
+
+    it('reverte também o pago que nunca teve título (os 85 de 24/09)', async () => {
+        cenario('pago', null);
+        const atualizado = await boletoService.reverterParaRascunho('b1', ORG);
+        expect(atualizado.status).toBe('rascunho');
         expect(db.invoices).toHaveLength(0);
+    });
+
+    it('reverter não vale para rascunho nem cancelado', async () => {
+        cenario('cancelado');
+        await expect(boletoService.reverterParaRascunho('b1', ORG)).rejects.toThrow(/só boleto pago/i);
     });
 });
 

@@ -60,14 +60,11 @@ const BOLETO_COLUMNS: ColumnConfig[] = [
 // uma sequência fixa de JSX (padrão ClientList.tsx). 'actions' não tem
 // ordenação própria (sortable: false) mas participa do arraste igual às demais.
 /**
- * O texto da confirmação muda com o que a exclusão VAI LEVAR JUNTO. Rascunho
- * não leva nada; aprovado leva título e nota; pago leva os dois E tira o valor
- * do realizado — quem clica precisa saber disso antes, não depois.
+ * O texto da confirmação muda com o que a exclusão VAI LEVAR JUNTO: rascunho
+ * não leva nada, aprovado leva título e nota. Quem clica precisa saber disso
+ * antes, não depois. (Pago não chega aqui — passa antes por reverter.)
  */
 function mensagemDeExclusao(status: Boleto['status']): string {
-    if (status === 'pago') {
-        return 'Este boleto está marcado como PAGO: o título já baixado no financeiro e a nota serão removidos junto, e o valor sai do realizado. Essa ação não pode ser desfeita.';
-    }
     if (status === 'aprovado') {
         return 'Este boleto já foi aprovado: o título dele no financeiro e a nota serão removidos junto. Essa ação não pode ser desfeita.';
     }
@@ -218,7 +215,7 @@ function renderBoletoCell(
                     <ActionIconButton
                         kind="delete"
                         disabled={!boletoService.podeExcluir(b.status)}
-                        title={boletoService.podeExcluir(b.status) ? 'Excluir' : 'Boleto cancelado fica no histórico'}
+                        title={boletoService.motivoParaNaoExcluir(b.status) ?? 'Excluir'}
                         onClick={() => onDelete(b)}
                     />
                 </div>
@@ -269,7 +266,7 @@ const BoletoCardItem = React.memo(function BoletoCardItem({
                     kind="delete"
                     size="sm"
                     disabled={!boletoService.podeExcluir(b.status)}
-                    title={boletoService.podeExcluir(b.status) ? 'Excluir' : 'Boleto cancelado fica no histórico'}
+                    title={boletoService.motivoParaNaoExcluir(b.status) ?? 'Excluir'}
                     onClick={() => onDelete(b)}
                 />
             </div>
@@ -502,24 +499,31 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         const selecionados = filtered.filter(b => selectedIds.has(b.id));
         const elegiveis = selecionados.filter(b => boletoService.podeExcluir(b.status));
         const bloqueados = selecionados.length - elegiveis.length;
-        const lancados = elegiveis.filter(b => b.status === 'aprovado' || b.status === 'pago').length;
-        const pagos = elegiveis.filter(b => b.status === 'pago').length;
+        const aprovados = elegiveis.filter(b => b.status === 'aprovado').length;
+        const pagosNaSelecao = selecionados.filter(b => b.status === 'pago').length;
         if (elegiveis.length === 0) {
-            notify('Nenhum dos boletos selecionados pode ser excluído — cancelados ficam no histórico.', 'error');
+            notify(
+                pagosNaSelecao > 0
+                    ? 'Boleto pago não é excluído direto: abra o boleto e reverta para rascunho primeiro.'
+                    : 'Nenhum dos boletos selecionados pode ser excluído — cancelados ficam no histórico.',
+                'error',
+            );
             return;
         }
-        const avisoLancados = lancados > 0
-            ? ` ${lancados} ${lancados !== 1 ? 'já foram lançados' : 'já foi lançado'}: o título no financeiro e a nota serão removidos junto.`
+        const avisoAprovados = aprovados > 0
+            ? ` ${aprovados} ${aprovados !== 1 ? 'já foram aprovados' : 'já foi aprovado'}: o título no financeiro e a nota serão removidos junto.`
             : '';
-        const avisoPagos = pagos > 0
-            ? ` ${pagos} ${pagos !== 1 ? 'estão marcados como PAGOS — o valor sai do realizado' : 'está marcado como PAGO — o valor sai do realizado'}.`
-            : '';
-        const avisoBloqueados = bloqueados > 0
-            ? ` ${bloqueados} boleto${bloqueados !== 1 ? 's' : ''} cancelado${bloqueados !== 1 ? 's serão ignorados' : ' será ignorado'}.`
-            : '';
+        /* Pago e cancelado são ignorados pelo MESMO `if`, mas por razões
+           diferentes — e o usuário precisa da diferença: um tem caminho
+           (reverter), o outro não. */
+        const canceladosNaSelecao = bloqueados - pagosNaSelecao;
+        const avisoBloqueados = [
+            pagosNaSelecao > 0 ? ` ${pagosNaSelecao} pago${pagosNaSelecao !== 1 ? 's serão ignorados' : ' será ignorado'} (reverta para rascunho antes).` : '',
+            canceladosNaSelecao > 0 ? ` ${canceladosNaSelecao} cancelado${canceladosNaSelecao !== 1 ? 's serão ignorados' : ' será ignorado'}.` : '',
+        ].join('');
         const ok = await confirm({
             title: `Excluir ${elegiveis.length} boleto${elegiveis.length !== 1 ? 's' : ''}?`,
-            message: `Essa ação não pode ser desfeita.${avisoLancados}${avisoPagos}${avisoBloqueados}`,
+            message: `Essa ação não pode ser desfeita.${avisoAprovados}${avisoBloqueados}`,
             variant: 'danger',
             confirmLabel: 'Excluir',
         });
@@ -558,7 +562,12 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
 
     async function handleExcluirBoleto(b: Boleto) {
         if (!boletoService.podeExcluir(b.status)) {
-            notify('Boleto cancelado fica no histórico e não pode ser excluído.', 'error');
+            notify(
+                b.status === 'pago'
+                    ? 'Boleto pago não é excluído direto: abra o boleto e reverta para rascunho primeiro.'
+                    : 'Boleto cancelado fica no histórico e não pode ser excluído.',
+                'error',
+            );
             return;
         }
         const ok = await confirm({

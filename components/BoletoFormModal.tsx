@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
     Upload, Loader2, ArrowLeft, FileText, AlertCircle, CheckCircle2,
     Building2, Calendar, DollarSign, Hash, Eye, Save,
-    ThumbsUp, Ban, Trash2, UserPlus,
+    ThumbsUp, Ban, Trash2, UserPlus, Undo2,
 } from 'lucide-react';
 import PlanoContasSelect from './PlanoContasSelect';
 import HierarchicalSelect from './HierarchicalSelect';
@@ -390,6 +390,32 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
             setError(error.message || 'Falha ao cancelar');
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    /* Primeiro passo do fluxo de exclusão do pago (decisão do usuário,
+       24/09/2026): reverter estorna título e nota e devolve o boleto a rascunho;
+       só aí o Excluir aparece. A confirmação diz o que o estorno mexe no
+       financeiro, porque é isso que ninguém deveria descobrir depois. */
+    async function handleReverterParaRascunho() {
+        if (!boleto) return;
+        const ok = await confirm({
+            title: 'Reverter para rascunho?',
+            message: 'O título deste boleto no financeiro e a nota serão estornados, e o valor sai do realizado. O boleto volta a rascunho e poderá ser editado, aprovado de novo ou excluído.',
+            variant: 'danger',
+            confirmLabel: 'Reverter',
+        });
+        if (!ok) return;
+        setBusy(true);
+        try {
+            const atualizado = await boletoService.reverterParaRascunho(boleto.id, organizationId, userEmail);
+            setBoleto(atualizado);
+            onSaved(atualizado);
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            setError(error.message || 'Falha ao reverter');
         } finally {
             setBusy(false);
         }
@@ -1052,6 +1078,16 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                 {/* Footer com ações */}
                 {boleto && (
                     <div className="sticky bottom-0 bg-white border-t border-gray-100 px-6 py-4 flex flex-wrap items-center justify-end gap-2">
+                        {boleto.status === 'pago' && (
+                            <button
+                                onClick={handleReverterParaRascunho}
+                                disabled={busy}
+                                className="px-4 py-2 text-amber-700 hover:bg-amber-50 rounded-lg text-button font-bold uppercase tracking-widest flex items-center gap-2"
+                            >
+                                <Undo2 className="w-3.5 h-3.5" /> Reverter para rascunho
+                            </button>
+                        )}
+
                         {boletoService.podeExcluir(boleto.status) && (
                             <button
                                 onClick={handleExcluir}

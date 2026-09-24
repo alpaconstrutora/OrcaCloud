@@ -69,6 +69,47 @@ concreto: `reconciliation_matches`, `condominio_rateio_itens`,
 - 1ª rodada (rascunho + aprovado): commit `658042c`, provado no domínio por
   `scripts/conferir-producao.sh`.
 
+
+### Terceiro pedido — 24/09/2026, mesma sessão
+
+> ainda nao consigo excluir boleto pago.
+> op fluxo é alterar o status de pago para rascunho e so  entao pode ser excluir.
+
+Duas coisas nessa frase, e elas se separam:
+
+**"ainda não consigo"** — o código ESTAVA no ar. O bundle servido por
+`orcacloud.vercel.app` continha
+`podeExcluir(a){return a==="rascunho"||a==="aprovado"||a==="pago"}`, verificado
+baixando o chunk. O que o usuário via era o service worker do PWA servindo a
+versão anterior no navegador dele.
+
+**"o fluxo é…"** — perguntado se era o fluxo desejado ou o contorno que tinha
+tentado, respondeu: **é o fluxo que eu quero**. Pago não se exclui de uma vez;
+reverte para rascunho (estornando a baixa) e só então exclui.
+
+Registro do que estava errado no meu lado: não existe, nem existia, nenhuma UI
+que leve um boleto de `pago` para `rascunho` — `transitar` só é chamado por
+Aprovar e Marcar pago. O fluxo descrito era um desejo, não um caminho existente.
+
+## Itens — 3ª rodada (reverter para rascunho)
+
+8. **`services/boletoService.ts`** — `podeExcluir` volta a recusar `pago`; nasce
+   `reverterParaRascunho` (estorna título e nota via `desfazerLancamento`, zera
+   `invoice_id`, grava auditoria `status_rascunho`) e `motivoParaNaoExcluir`,
+   que dá à tela a frase do botão desligado. **Pronto quando**: os casos de
+   `pago: o fluxo é reverter e só então excluir` passam, incluindo o encadeado
+   (reverter → excluir). ✅ feito.
+
+9. **UI** — botão "Reverter para rascunho" no rodapé do boleto pago
+   (`BoletoFormModal`); tooltip do ícone desligado passa a dizer **"Reverta para
+   rascunho antes de excluir"** em vez de só recusar; no lote, pago e cancelado
+   deixam de ser contados juntos, porque um tem caminho e o outro não.
+   **Pronto quando**: check-ui-standard sai 0 nos dois arquivos. ✅ feito.
+
+10. **O ícone cinza mudo era o defeito de origem.** `motivoParaNaoExcluir` é a
+    trava contra ele voltar: todo status que não exclui tem, por contrato, uma
+    frase — e há teste que cobra isso. ✅ feito.
+
 ## Diagnóstico
 
 O botão nunca esteve quebrado. A trava existia em três camadas — UI, handler e

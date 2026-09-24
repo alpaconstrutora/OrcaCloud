@@ -1093,19 +1093,76 @@ export const boletoService = {
      * (`internal_transactions`), então a exclusão precisa DESFAZER esses dois;
      * `desfazerLancamento` abaixo é quem decide se isso ainda é seguro.
      *
-     * `pago` entrou em 24/09/2026 a pedido do usuário. Ele merece cuidado —
-     * apagar tira o valor do realizado —, mas o "pago" do boleto é uma
-     * MARCAÇÃO (`marcarPago` grava `CONCILIATED`/`PAGO` no título), não um
-     * casamento com extrato: dos 519 pagos em 24/09, só 7 tinham conciliação
-     * bancária de verdade. É por isso que a trava aqui olha para os VÍNCULOS do
-     * título, não para o status dele.
+     * `pago` NÃO entra aqui, por decisão do usuário em 24/09/2026: ele não se
+     * exclui de uma vez. O caminho é `reverterParaRascunho` primeiro — dois
+     * atos deliberados em vez de um clique que apaga dinheiro lançado. O
+     * `motivoParaNaoExcluir` é quem diz isso na tela.
+     *
+     * (O que NÃO decide nada em nenhum dos dois caminhos é o status do título:
+     * o "pago" do boleto é MARCAÇÃO — `marcarPago` grava `CONCILIATED` no
+     * título sozinho, e em 24/09 eram 517 `CONCILIATED` para 7 conciliações
+     * bancárias reais. Quem trava são os vínculos, em `desfazerLancamento`.)
      *
      * `cancelado` continua fora, e de propósito: cancelar é justamente a
      * alternativa que PRESERVA o histórico. Se o cancelado pudesse ser excluído,
      * cancelar deixaria de significar alguma coisa.
      */
     podeExcluir(status: BoletoStatus): boolean {
-        return status === 'rascunho' || status === 'aprovado' || status === 'pago';
+        return status === 'rascunho' || status === 'aprovado';
+    },
+
+    /**
+     * Por que o botão Excluir está apagado neste status — em uma frase, para a
+     * tela mostrar no lugar de um ícone cinza mudo.
+     *
+     * Botão desligado que não diz o porquê foi exatamente a queixa que abriu
+     * esta linha de trabalho (24/09/2026). Quando existe um caminho, o texto
+     * aponta o caminho.
+     */
+    motivoParaNaoExcluir(status: BoletoStatus): string | null {
+        if (this.podeExcluir(status)) return null;
+        if (status === 'pago') return 'Reverta para rascunho antes de excluir';
+        return 'Boleto cancelado fica no histórico';
+    },
+
+    /**
+     * Desfaz a baixa e devolve o boleto para rascunho.
+     *
+     * É o primeiro passo do fluxo de exclusão de um boleto pago, definido pelo
+     * usuário em 24/09/2026: pago não se exclui de uma vez. Reverter estorna o
+     * que existe no financeiro — título e nota saem — e o boleto volta ao
+     * começo; só então o Excluir fica disponível. São dois atos deliberados em
+     * vez de um clique que apaga dinheiro lançado.
+     *
+     * As travas são as mesmas da exclusão, e por isso ficam em
+     * `desfazerLancamento`: o que impede apagar o título impede estorná-lo.
+     */
+    async reverterParaRascunho(boletoId: string, organizationId: string, userEmail?: string): Promise<Boleto> {
+        const boleto = await this.getById(boletoId);
+        if (!boleto) throw new Error('Boleto não encontrado.');
+        if (boleto.status !== 'pago') {
+            throw new Error('Só boleto pago é revertido para rascunho. Aprovado pode ser excluído direto.');
+        }
+
+        await this.desfazerLancamento(boletoId, organizationId, boleto.invoice_id ?? null);
+
+        const { data, error } = await supabase
+            .from(TABLE)
+            .update({ status: 'rascunho', invoice_id: null })
+            .eq('id', boletoId)
+            .select()
+            .single();
+        if (error) throw error;
+
+        await registrarAuditoria(boletoId, organizationId, 'status_rascunho', {
+            metodo: 'usuario',
+            usuario_email: userEmail,
+            campo: 'status',
+            valor_antes: boleto.status,
+            valor_depois: 'rascunho',
+        });
+
+        return mapRowToBoleto(data);
     },
 
     /**
@@ -1199,7 +1256,11 @@ export const boletoService = {
         const boleto = await this.getById(boletoId);
         if (!boleto) return;
         if (!this.podeExcluir(boleto.status)) {
-            throw new Error('Só é possível excluir boletos em rascunho ou aprovados. Boletos pagos ou cancelados ficam no histórico.');
+            throw new Error(
+                boleto.status === 'pago'
+                    ? 'Boleto pago não é excluído direto: reverta para rascunho (o título e a nota são estornados) e então exclua.'
+                    : 'Boleto cancelado fica no histórico e não pode ser excluído.',
+            );
         }
 
         // Rascunho nunca teve lançamento; todo o resto que chega aqui teve.

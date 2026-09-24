@@ -20,7 +20,7 @@ import Breadcrumb from '../ui/Breadcrumb';
 import CostCenterSelect from '../CostCenterSelect';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
-import { condominioRateioService } from '../../services/condominioRateioService';
+import { condominioRateioService, type CentroDeCustoDisponivel } from '../../services/condominioRateioService';
 import type { Empreendimento } from '../../types/empreendimento';
 
 export type Aba = 'ficha' | 'ocupacoes' | 'fracoes' | 'documentos' | 'ativos' | 'manutencao' | 'financeiro' | 'comunicacao';
@@ -112,7 +112,7 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
     // condomínio, não tinha o campo. As duas telas falam com o MESMO service,
     // então não há duas verdades — só duas portas para o mesmo dado.
     const [centros, setCentros] = React.useState<{ id: string; code: string; name: string }[]>([]);
-    const [ccDisponiveis, setCcDisponiveis] = React.useState<{ id: string; code: string; name: string; grupo: string | null }[]>([]);
+    const [ccDisponiveis, setCcDisponiveis] = React.useState<CentroDeCustoDisponivel[]>([]);
     const [ccEscolhido, setCcEscolhido] = React.useState('');
     const [ccOcupado, setCcOcupado] = React.useState(false);
 
@@ -154,7 +154,14 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
             // §22 — costura local, sem recarregar a tela. Reordena por código
             // para casar com a ordem que o service devolve na próxima carga.
             setCentros(prev => [...prev, c].sort((a, b) => a.code.localeCompare(b.code, 'pt-BR')));
-            setCcDisponiveis(prev => prev.filter(d => d.id !== c.id));
+            // Tira o escolhido da lista de livres e, junto, qualquer GRUPO que
+            // tenha ficado sem filho — grupo vazio viraria uma linha morta no
+            // drawer: não é escolhível e não abre nada.
+            setCcDisponiveis(prev => {
+                const restantes = prev.filter(d => d.id !== c.id);
+                const paisComFilho = new Set(restantes.filter(d => d.selecionavel).map(d => d.parent_id));
+                return restantes.filter(d => d.selecionavel || paisComFilho.has(d.id));
+            });
             setCcEscolhido('');
             notify(`Centro de custo ${c.code} vinculado a este condomínio.`);
         } catch (err: any) {
@@ -175,9 +182,14 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
         try {
             await condominioRateioService.desvincular(alvo.id);
             setCentros(prev => prev.filter(c => c.id !== alvo.id));
-            // Volta para a lista de livres sem ida ao banco.
-            setCcDisponiveis(prev => [...prev, { ...alvo, grupo: null }]
-                .sort((a, b) => a.code.localeCompare(b.code, 'pt-BR')));
+            // Recarrega os livres em vez de recolocar o item à mão: a linha
+            // vinculada só guarda id/código/nome, e o drawer precisa do
+            // `parent_id` do GRUPO para montar o accordion. Costura otimista
+            // aqui devolveria um item órfão, que o componente desenharia como
+            // raiz solta — o defeito que esta frente veio corrigir.
+            try {
+                setCcDisponiveis(await condominioRateioService.listarDisponiveis(e.organization_id));
+            } catch { /* a lista se refaz no próximo carregamento */ }
             notify('Centro de custo desvinculado.');
         } catch (err: any) {
             notify(err?.message || 'Erro ao desvincular.', 'error');
@@ -441,7 +453,12 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
                                 <div className="flex gap-2 mt-1">
                                     <div className="flex-1 min-w-0">
                                         <CostCenterSelect
-                                            costCenters={ccDisponiveis.map(d => ({ id: d.id, name: d.name, code: d.code, parent_name: d.grupo ?? null }))}
+                                            // A lista vai CRUA: é `parent_id` apontando para um
+                                            // item presente que faz o drawer virar accordion, como
+                                            // em Suprimentos › Pedidos. Achatar aqui (que era o que
+                                            // eu fazia) joga o componente no modo antigo — lista
+                                            // plana com badge escuro de código.
+                                            costCenters={ccDisponiveis}
                                             value={ccEscolhido}
                                             onChange={setCcEscolhido}
                                             placeholder={ccDisponiveis.length ? 'Selecione para vincular' : 'Nenhum centro de custo livre'}

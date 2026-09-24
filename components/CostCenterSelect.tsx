@@ -26,6 +26,12 @@ export interface CostCenterOption {
     /** Quando a lista junta mais de uma org (conta que "atende também" outras), a
      *  árvore ganha um cabeçalho por organização — mesmo desenho do PlanoContasSelect. */
     organization_id?: string | null;
+    /** `false` = só agrupa, não é escolhível (clicar abre/fecha os filhos).
+     *  Default: escolhível, que é como todo chamador anterior se comporta.
+     *  Existe para quem monta uma lista PARCIAL da árvore e precisa incluir o
+     *  grupo só para o accordion existir — caso do vínculo de condomínio, em
+     *  que o grupo não pode virar o centro de custo do caixa. */
+    selecionavel?: boolean;
 }
 
 interface Props {
@@ -61,9 +67,9 @@ export function costCenterSelectItems(costCenters: CostCenterOption[], orgNames:
         const prefixo = parentName ? `${parentName} > ` : null;
         const name = prefixo && cc.name.startsWith(prefixo) ? cc.name.slice(prefixo.length) : cc.name;
         if (!parentId && agruparPorOrg) {
-            return { id: cc.id, code: cc.code ?? null, name, parentId: orgNodeId(cc.organization_id), parentName: orgNames.get(cc.organization_id ?? '') ?? 'Organização', fullName: cc.name };
+            return { id: cc.id, code: cc.code ?? null, name, parentId: orgNodeId(cc.organization_id), parentName: orgNames.get(cc.organization_id ?? '') ?? 'Organização', fullName: cc.name, selecionavel: cc.selecionavel };
         }
-        return { id: cc.id, code: cc.code ?? null, name, parentId, parentName, fullName: cc.name };
+        return { id: cc.id, code: cc.code ?? null, name, parentId, parentName, fullName: cc.name, selecionavel: cc.selecionavel };
     });
     if (!agruparPorOrg) return itens;
     const cabecalhos: HierarchicalSelectItem[] = orgs.map(org => ({

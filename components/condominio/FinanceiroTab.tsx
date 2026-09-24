@@ -26,7 +26,7 @@ import { useConfirm } from '../ui/confirm';
 import {
     condominioRateioService, CRITERIO_LABEL, CRITERIO_EXIGE,
     type CriterioRateio, type TipoRateio, type PreviaRateio, type Rateio, type DespesaRateio,
-    type CotaDoRateio,
+    type CotaDoRateio, type CentroDeCustoDisponivel,
 } from '../../services/condominioRateioService';
 import {
     condominioCobrancaService,
@@ -483,7 +483,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
         return () => { ativo = false; };
     }, [sheetNovo, form.criterio, unidades.length, empreendimento.id]);
 
-    const [disponiveis, setDisponiveis] = React.useState<{ id: string; code: string; name: string; grupo: string | null }[]>([]);
+    const [disponiveis, setDisponiveis] = React.useState<CentroDeCustoDisponivel[]>([]);
     const [escolhido, setEscolhido] = React.useState('');
 
     // Só carrega quando falta centro de custo — é o único momento em que a
@@ -721,7 +721,8 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                 {/* Drawer padrão de Centro de Custo (§7.1.1) — só os livres. */}
                                 <div className="flex-1 min-w-0">
                                     <CostCenterSelect
-                                        costCenters={disponiveis.map(d => ({ id: d.id, name: d.name, code: d.code, parent_name: d.grupo ?? null }))}
+                                        // Crua, não achatada — ver o comentário gêmeo na Ficha.
+                                        costCenters={disponiveis}
                                         value={escolhido}
                                         onChange={setEscolhido}
                                         placeholder="Selecione para vincular"

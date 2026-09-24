@@ -60,6 +60,22 @@ export interface ItemPrevia {
     aviso?: string;
 }
 
+/**
+ * Centro de custo candidato ao vínculo com um condomínio, no formato que o
+ * drawer padrão (`CostCenterSelect`) precisa para montar o accordion: os
+ * FILHOS livres mais os GRUPOS deles, com `parent_id` apontando para um item
+ * presente na mesma lista.
+ */
+export interface CentroDeCustoDisponivel {
+    id: string;
+    code: string;
+    name: string;
+    parent_id: string | null;
+    organization_id: string | null;
+    /** `false` nos grupos — só agrupam, não são escolhíveis. */
+    selecionavel: boolean;
+}
+
 /** Uma cota já gravada, com os rótulos que a tela precisa. */
 export interface CotaDoRateio {
     id: string;
@@ -296,10 +312,10 @@ export const condominioRateioService = {
      * é unidade de caixa. (Cada centro de custo pertence a no máximo um
      * empreendimento; o empreendimento pode ter vários.)
      */
-    async listarDisponiveis(organizationId: string): Promise<{ id: string; code: string; name: string; grupo: string | null }[]> {
+    async listarDisponiveis(organizationId: string): Promise<CentroDeCustoDisponivel[]> {
         const { data, error } = await supabase
             .from('cost_centers_v2')
-            .select('id, code, name, parent_id')
+            .select('id, code, name, parent_id, organization_id')
             .eq('organization_id', organizationId)
             .is('empreendimento_id', null)
             .not('parent_id', 'is', null)
@@ -307,16 +323,45 @@ export const condominioRateioService = {
         if (error) throw new Error(`Falha ao carregar os centros de custo: ${error.message}`);
 
         const linhas = data || [];
-        const paisIds = [...new Set(linhas.map((l: any) => l.parent_id).filter(Boolean))];
-        const nomePai = new Map<string, string>();
+        if (linhas.length === 0) return [];
+
+        // Os GRUPOS pais entram na lista junto com os filhos — não como enfeite:
+        // é a presença de `parent_id` apontando para um item PRESENTE que faz o
+        // `HierarchicalSelect` desenhar o accordion (grupo com chevron, código
+        // em texto simples). Sem os pais na lista, todo filho vira raiz e o
+        // componente cai no modo antigo: lista plana com badge escuro de código
+        // — exatamente o que destoava do drawer de Suprimentos › Pedidos, que
+        // recebe a árvore inteira de `costCenterService.list`.
+        const paisIds = [...new Set(linhas.map((l: any) => l.parent_id).filter(Boolean))] as string[];
+        const pais: CentroDeCustoDisponivel[] = [];
         if (paisIds.length > 0) {
-            const { data: pais } = await supabase
-                .from('cost_centers_v2').select('id, name').in('id', paisIds);
-            for (const p of pais || []) nomePai.set(p.id, p.name);
+            const { data: grupos } = await supabase
+                .from('cost_centers_v2')
+                .select('id, code, name, parent_id, organization_id')
+                .in('id', paisIds)
+                .order('code', { ascending: true });
+            for (const g of grupos || []) {
+                pais.push({
+                    id: g.id, code: g.code, name: g.name,
+                    parent_id: g.parent_id ?? null,
+                    organization_id: g.organization_id ?? null,
+                    // Grupo NÃO é escolhível: ele não recebe lançamento, e
+                    // apontar o condomínio para um grupo faria a despesa cair
+                    // num nível que não é unidade de caixa. Clicar nele só
+                    // abre/fecha os filhos.
+                    selecionavel: false,
+                });
+            }
         }
-        return linhas.map((l: any) => ({
-            id: l.id, code: l.code, name: l.name, grupo: nomePai.get(l.parent_id) || null,
+
+        const filhos: CentroDeCustoDisponivel[] = linhas.map((l: any) => ({
+            id: l.id, code: l.code, name: l.name,
+            parent_id: l.parent_id ?? null,
+            organization_id: l.organization_id ?? null,
+            selecionavel: true,
         }));
+
+        return [...pais, ...filhos];
     },
 
     /**

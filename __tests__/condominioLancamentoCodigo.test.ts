@@ -18,19 +18,30 @@ const tabelas: Record<string, Linha[]> = {
         { id: 'cc-a', code: '011', name: 'Bella Vista', empreendimento_id: 'emp-bv' },
     ],
     internal_transactions: [
-        { id: 't1', description: 'Elevador', amount: 362.33, transaction_date: '2026-09-10', direction: 'DEBIT', cost_center_id: 'cc-a', source_system: 'BOLETO', reference_id: 'b-705', party_name: 'MN Conservação' },
+        { id: 't1', description: 'Elevador', amount: 362.33, transaction_date: '2026-09-10', direction: 'DEBIT', cost_center_id: 'cc-a', source_system: 'BOLETO', reference_id: 'b-705', party_name: 'MN CONSERVAÇÃO ELEVADORES COM PEÇAS LTDA   CNPJ: 07.604.526/0001-20  Rua Francisco', supplier_id: 'f-mn' },
         // numero de 1 dígito: tem de sair com 4, como na Conciliação.
         { id: 't2', description: 'Água', amount: 99.61, transaction_date: '2026-09-11', direction: 'DEBIT', cost_center_id: 'cc-a', source_system: 'BOLETO', reference_id: 'b-6', party_name: 'Copasa' },
         // origem sem código próprio → null, nunca o uuid.
         { id: 't3', description: 'Reembolso', amount: 40, transaction_date: '2026-09-12', direction: 'DEBIT', cost_center_id: 'cc-a', source_system: 'MANUAL', reference_id: null, party_name: 'Síndico' },
         // BOLETO cujo registro sumiu de `boletos` (RLS ou exclusão): null, e a
         // linha continua na lista — a despesa existe mesmo sem o documento.
-        { id: 't4', description: 'Luz', amount: 72.14, transaction_date: '2026-09-13', direction: 'DEBIT', cost_center_id: 'cc-a', source_system: 'BOLETO', reference_id: 'b-sumido', party_name: 'Energisa' },
+        // O caso do boleto 1383 em produção: sem nome nenhum no lançamento,
+        // mas COM `supplier_id` — a coluna mostrava "—" com o vínculo feito.
+        { id: 't4', description: 'download (98).pdf', amount: 72.14, transaction_date: '2026-09-13', direction: 'DEBIT', cost_center_id: 'cc-a', source_system: 'BOLETO', reference_id: 'b-sumido', party_name: null, entity_name: null, supplier_id: 'f-en' },
+        // Sem fornecedor cadastrado: sobra o texto cru, podado.
+        { id: 't5', description: 'Zeladoria', amount: 200, transaction_date: '2026-09-14', direction: 'DEBIT', cost_center_id: 'cc-a', source_system: 'BOLETO', reference_id: null, party_name: 'NEW GRAN ROCHAS LTDA CNPJ: 12.345.678/0001-90 Av. Brasil 900', supplier_id: null },
+        // Cadastro com nome em branco não pode ganhar do texto cru.
+        { id: 't6', description: 'Jardim', amount: 80, transaction_date: '2026-09-15', direction: 'DEBIT', cost_center_id: 'cc-a', source_system: 'BOLETO', reference_id: null, party_name: 'JARDINAGEM SILVA LTDA', supplier_id: 'f-branco' },
     ],
     boletos: [
         { id: 'b-705', numero: 705 },
         { id: 'b-6', numero: 6 },
         { id: 'b-nulo', numero: null },
+    ],
+    suppliers: [
+        { id: 'f-mn', name: 'MN CONSERVACAO DE ELEVADORES E COMERCIO DE PECAS LTDA' },
+        { id: 'f-en', name: 'Energisa' },
+        { id: 'f-branco', name: '   ' },
     ],
     condominio_rateio_despesas: [],
 };
@@ -98,7 +109,7 @@ describe('listarLancamentos — coluna Código', () => {
         const t4 = l.find(x => x.id === 't4');
         expect(t4).toBeDefined();
         expect(t4!.codigo).toBeNull();
-        expect(l).toHaveLength(4);
+        expect(l).toHaveLength(6);
     });
 });
 
@@ -115,5 +126,47 @@ describe('codigosDeBoleto', () => {
     it('id repetido é consultado uma vez só', async () => {
         const m = await condominioRateioService.codigosDeBoleto(['b-705', 'b-705', 'b-6']);
         expect([...m.entries()].sort()).toEqual([['b-6', '0006'], ['b-705', '0705']]);
+    });
+});
+
+describe('listarLancamentos — coluna Fornecedor', () => {
+    it('lançamento SEM party_name/entity_name mostra o fornecedor cadastrado (o caso do boleto 1383)', async () => {
+        const l = await carregar();
+        expect(l.find(x => x.id === 't4')!.fornecedor).toBe('Energisa');
+    });
+
+    it('o cadastrado GANHA do bloco de OCR — senão a Conciliação e o condomínio nomeiam o mesmo título diferente', async () => {
+        const l = await carregar();
+        expect(l.find(x => x.id === 't1')!.fornecedor)
+            .toBe('MN CONSERVACAO DE ELEVADORES E COMERCIO DE PECAS LTDA');
+    });
+
+    it('sem fornecedor cadastrado, o texto cru vai PODADO — não com CNPJ e endereço colados', async () => {
+        const l = await carregar();
+        expect(l.find(x => x.id === 't5')!.fornecedor).toBe('NEW GRAN ROCHAS LTDA');
+    });
+
+    it('cadastro com nome em branco não apaga o texto cru', async () => {
+        const l = await carregar();
+        expect(l.find(x => x.id === 't6')!.fornecedor).toBe('JARDINAGEM SILVA LTDA');
+    });
+
+    it('sem nome em lugar nenhum a coluna fica vazia — nunca "null" nem o uuid', async () => {
+        const l = await carregar();
+        const t3 = l.find(x => x.id === 't3')!;
+        expect(t3.fornecedor).toBe('Síndico');
+        const semNada = l.filter(x => x.fornecedor.includes('null') || x.fornecedor.includes('-4'));
+        expect(semNada).toEqual([]);
+    });
+});
+
+describe('nomesDeFornecedor', () => {
+    it('lista vazia devolve mapa vazio, sem consultar', async () => {
+        expect((await condominioRateioService.nomesDeFornecedor([])).size).toBe(0);
+    });
+
+    it('nome só com espaços não entra no mapa', async () => {
+        const m = await condominioRateioService.nomesDeFornecedor(['f-branco']);
+        expect(m.has('f-branco')).toBe(false);
     });
 });

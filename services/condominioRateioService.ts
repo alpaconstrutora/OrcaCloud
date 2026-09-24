@@ -15,7 +15,7 @@
 
 import { supabase } from '../lib/supabase';
 import { generateDocumentNumber } from './documentNumbering';
-import { rotuloDeDespesa } from '../utils/despesaCondominio';
+import { rotuloDeDespesa, podarRuidoDeBoleto } from '../utils/despesaCondominio';
 
 export type CriterioRateio = 'FRACAO_IDEAL' | 'IGUAL' | 'AREA_PRIVATIVA' | 'GRUPO' | 'FIXO';
 export type TipoRateio = 'ORDINARIO' | 'EXTRAORDINARIO';
@@ -103,7 +103,21 @@ export interface LancamentoDoCondominio {
     data: string;
     descricao: string;
     valor: number;
-    /** Quem recebeu — `party_name`, com `entity_name` de reserva. */
+    /**
+     * Quem recebeu. Na ordem: o fornecedor **cadastrado** (`supplier_id` →
+     * `suppliers.name`), depois `party_name`/`entity_name` podados.
+     *
+     * O cadastrado vem primeiro porque `party_name` na origem BOLETO é o bloco
+     * de OCR da linha do beneficiário, com CNPJ, endereço e chamada
+     * publicitária colados ("ENERGISA SUL-SUDESTE - DISTRIBUIDORA DE ENERGIA
+     * S.A. CADASTRE SUA FATURA EM DÉBI…"). É a mesma ordem que a Conciliação
+     * Bancária usa em `displayPartyName` — sem isso o MESMO título aparece
+     * como "Energisa" lá e como bloco de OCR (ou vazio) aqui.
+     *
+     * Medido em 24/09/2026 nas 136 despesas de condomínio da base: 35 estavam
+     * **em branco** com o `supplier_id` preenchido — o vínculo existia e a
+     * tela não o consultava. Nenhuma linha é realmente anônima.
+     */
     fornecedor: string;
     /**
      * De ONDE o lançamento veio: `source_system` cru (BOLETO, NFE, MANUAL,
@@ -683,7 +697,7 @@ export const condominioRateioService = {
 
         const { data, error } = await supabase
             .from('internal_transactions')
-            .select('id, description, amount, transaction_date, cost_center_id, party_name, entity_name, source_system, reference_id')
+            .select('id, description, amount, transaction_date, cost_center_id, party_name, entity_name, source_system, reference_id, supplier_id')
             .in('cost_center_id', params.costCenterIds)
             .eq('direction', 'DEBIT')
             .gte('transaction_date', inicio)
@@ -710,6 +724,16 @@ export const condominioRateioService = {
             // Idem: falhar aqui só apaga a coluna Código.
         }
 
+        // Nome do fornecedor cadastrado, em lote. Best-effort como os códigos:
+        // sem leitura em `suppliers` a coluna cai no texto cru, não some.
+        let fornecedores = new Map<string, string>();
+        try {
+            fornecedores = await this.nomesDeFornecedor(
+                linhas.map((l: any) => l.supplier_id).filter(Boolean) as string[]);
+        } catch {
+            // Idem: falhar aqui só devolve a coluna ao texto cru.
+        }
+
         let emRateio = new Map<string, string>();
         try {
             emRateio = await this.competenciaDosRateios(linhas.map((l: any) => l.id as string));
@@ -730,7 +754,11 @@ export const condominioRateioService = {
                 descricao: rotuloDeDespesa(l.description, l.party_name || l.entity_name)
                     ?? 'Despesa sem descrição',
                 valor: Number(l.amount || 0),
-                fornecedor: (l.party_name || l.entity_name || '') as string,
+                // `podarRuidoDeBoleto` no texto cru: sem fornecedor cadastrado,
+                // mostrar o bloco de OCR inteiro é pior que mostrar o começo
+                // legível dele. É o mesmo podador da descrição.
+                fornecedor: (l.supplier_id ? fornecedores.get(l.supplier_id as string) : undefined)
+                    ?? podarRuidoDeBoleto(String(l.party_name || l.entity_name || '')),
                 origem: (l.source_system || '') as string,
                 costCenterId: (l.cost_center_id ?? null) as string | null,
                 costCenterLabel: ccs.get(l.cost_center_id) ?? '—',
@@ -738,6 +766,31 @@ export const condominioRateioService = {
                 rateioCompetencia: comp,
             };
         });
+    },
+
+    /**
+     * `supplier.id → nome cadastrado`, em lote.
+     *
+     * Existe para a coluna Fornecedor não depender do texto que o leitor de
+     * boleto extraiu. O cadastro é a versão curada do mesmo nome, e é a que o
+     * resto do app mostra.
+     */
+    async nomesDeFornecedor(supplierIds: string[]): Promise<Map<string, string>> {
+        const mapa = new Map<string, string>();
+        const ids = [...new Set(supplierIds)];
+        if (ids.length === 0) return mapa;
+
+        const { data, error } = await supabase
+            .from('suppliers')
+            .select('id, name')
+            .in('id', ids);
+        if (error) throw new Error(`Falha ao carregar os fornecedores: ${error.message}`);
+
+        for (const f of data || []) {
+            const nome = String(f.name ?? '').trim();
+            if (nome) mapa.set(f.id as string, nome);
+        }
+        return mapa;
     },
 
     /**

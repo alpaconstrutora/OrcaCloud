@@ -2351,6 +2351,24 @@ Semântica: `<nav aria-label="Trilha de navegação">`.
 > ℹ️ `text-xs` aqui (e não o `text-sm` do corpo) é deliberado: a trilha é
 > secundária ao título que vem logo abaixo.
 
+### Exceção autorizada — 1 salto, por decisão do usuário
+
+**`condominio/CondominioDetail.tsx` (Ficha do condomínio), 2026-09-23.** O
+critério 2 acima pede 2 saltos (3 crumbs) e manda resolver 1 salto com
+"Voltar". Aqui há **1 salto** (Condomínios → um condomínio) e mesmo assim a
+tela usa a migalha, porque o usuário pediu — *"botao voltar nao pode ficar
+acima do título da tela"* — e escolheu a migalha depois de ver as três opções
+(seta à esquerda do h1, "Voltar" à direita na linha do título, migalha).
+
+O que motivou: o botão "Voltar" gastava **32px de altura inteiros** acima do
+`<h1>`, numa tela que já tem título + subtítulo + barra de 8 abas antes do
+primeiro dado. A migalha ocupa uma linha de 16px e ainda diz de onde se veio.
+
+> ⚠️ Isto **não** reabre a §23 para 1 salto em geral. É uma ocorrência
+> nomeada, como as exceções da §8.1 e da §7.3. Tela nova com 1 salto continua
+> usando "Voltar" — a menos que o usuário decida o contrário, e aí a decisão
+> entra aqui.
+
 ### Estado das ocorrências (2026-08-03)
 
 | Arquivo | Veredito |

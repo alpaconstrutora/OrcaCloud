@@ -192,6 +192,40 @@ export const condominioRateioService = {
     },
 
     /**
+     * Os centros de custo de VÁRIOS condomínios de uma vez, agrupados por
+     * `empreendimento_id`.
+     *
+     * Existe para a coluna "Centro de custo" da lista de Condomínios: chamar
+     * `getCentrosDeCusto` por linha seria N+1 numa tela que já nasce com
+     * dezenas de condomínios, e a coluna não vale uma consulta por linha.
+     *
+     * Devolve um Map — condomínio sem centro de custo simplesmente não tem
+     * chave, e quem lê usa `?? []`. Não inventa entrada vazia para não fazer
+     * "tem chave" parecer "tem centro de custo".
+     */
+    async getCentrosDeCustoPorEmpreendimento(
+        empreendimentoIds: string[],
+    ): Promise<Map<string, { id: string; code: string; name: string }[]>> {
+        const mapa = new Map<string, { id: string; code: string; name: string }[]>();
+        if (empreendimentoIds.length === 0) return mapa;
+
+        const { data, error } = await supabase
+            .from('cost_centers_v2')
+            .select('id, code, name, empreendimento_id')
+            .in('empreendimento_id', empreendimentoIds)
+            .order('code', { ascending: true });
+        if (error) throw new Error(`Falha ao carregar os centros de custo: ${error.message}`);
+
+        for (const cc of data || []) {
+            const chave = (cc as { empreendimento_id: string }).empreendimento_id;
+            const lista = mapa.get(chave) ?? [];
+            lista.push({ id: cc.id, code: cc.code, name: cc.name });
+            mapa.set(chave, lista);
+        }
+        return mapa;
+    },
+
+    /**
      * O GRUPO "Condomínios", criado sob demanda. `cost_centers_v2` tem 2 níveis
      * via `parent_id`: grupo (parent nulo) e centro de custo (filho). O
      * condomínio é FILHO — criá-lo solto no primeiro nível o põe lado a lado com

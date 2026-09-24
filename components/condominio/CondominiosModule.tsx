@@ -20,6 +20,7 @@ import {
 import { KpiCard } from '../ui/KpiCard';
 import { useConfirm } from '../ui/confirm';
 import CondominioDetail, { type Aba as AbaCondominio } from './CondominioDetail';
+import { condominioRateioService } from '../../services/condominioRateioService';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { useOrgContext } from '../../hooks/useOrgContext';
 import { useStore } from '../../store/useStore';
@@ -40,6 +41,10 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Condomínio', sortable: true },
     { key: 'cnpj', label: 'CNPJ do condomínio', sortable: true },
     { key: 'cidade', label: 'Cidade', sortable: true },
+    // Vem do lado INVERSO: `cost_centers_v2.empreendimento_id` aponta para o
+    // condomínio, e desde 19/09/2026 podem ser VÁRIOS (a despesa do rateio é a
+    // soma deles). Por isso a célula pode ter mais de um valor.
+    { key: 'centroCusto', label: 'Centro de custo', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
@@ -60,6 +65,10 @@ const CondominiosModule: React.FC = () => {
     const tableColumns = useTableColumns(COLUMNS, 'condominiosColumns');
 
     const [todos, setTodos] = React.useState<Empreendimento[]>([]);
+    /** Centros de custo por condomínio, carregados em LOTE (não 1 consulta por linha). */
+    const [ccPorEmpreendimento, setCcPorEmpreendimento] = React.useState<
+        Map<string, { id: string; code: string; name: string }[]>
+    >(new Map());
     const [loading, setLoading] = React.useState(true);
     const [erro, setErro] = React.useState<string | null>(null);
     const [aberto, setAberto] = React.useState<Empreendimento | null>(null);
@@ -82,7 +91,16 @@ const CondominiosModule: React.FC = () => {
         try {
             // Carrega tudo: a tabela mostra só os condomínios, e o painel de
             // importação precisa dos demais para você escolher quais trazer.
-            setTodos(await empreendimentoService.list(orgId || undefined));
+            const lista = await empreendimentoService.list(orgId || undefined);
+            setTodos(lista);
+            // A coluna Centro de custo NÃO segura a lista: a tabela aparece com
+            // o que já veio e a coluna preenche depois (§22, corolário). Falhar
+            // aqui também não derruba a tela — é uma coluna, não o assunto.
+            try {
+                setCcPorEmpreendimento(
+                    await condominioRateioService.getCentrosDeCustoPorEmpreendimento(
+                        lista.filter(e => e.status === 'EM_OPERACAO').map(e => e.id)));
+            } catch { setCcPorEmpreendimento(new Map()); }
         } catch (e: any) {
             setErro(e?.message || 'Erro ao carregar os condomínios.');
         } finally {
@@ -132,6 +150,12 @@ const CondominiosModule: React.FC = () => {
         [todos],
     );
 
+    /** "011 — Bella Vista"; com vários, separados por " · ". */
+    const rotuloCC = React.useCallback((id: string): string => {
+        const ccs = ccPorEmpreendimento.get(id) ?? [];
+        return ccs.map(c => `${c.code} — ${c.name}`).join(' · ');
+    }, [ccPorEmpreendimento]);
+
     const filtrados = React.useMemo(() => {
         const t = searchTerm.trim().toLowerCase();
         const base = t
@@ -139,7 +163,11 @@ const CondominiosModule: React.FC = () => {
                 e.name.toLowerCase().includes(t)
                 || (e.code || '').toLowerCase().includes(t)
                 || (e.condominio_cnpj || '').toLowerCase().includes(t)
-                || (e.endereco_city || '').toLowerCase().includes(t))
+                || (e.endereco_city || '').toLowerCase().includes(t)
+                // A busca alcança o centro de custo porque ele virou coluna:
+                // coluna visível que a busca não enxerga faz o usuário digitar
+                // "011" e a linha sumir.
+                || rotuloCC(e.id).toLowerCase().includes(t))
             : emOperacao;
 
         const valor = (e: Empreendimento, col: string): string => {
@@ -148,6 +176,9 @@ const CondominiosModule: React.FC = () => {
                 case 'name': return e.name;
                 case 'cnpj': return e.condominio_cnpj || '';
                 case 'cidade': return e.endereco_city || '';
+                // Sem centro de custo devolve '' — todos juntos no mesmo
+                // extremo, em vez de espalhados pela lista.
+                case 'centroCusto': return rotuloCC(e.id);
                 default: return '';
             }
         };
@@ -159,7 +190,7 @@ const CondominiosModule: React.FC = () => {
             }
             return a.name.localeCompare(b.name, 'pt-BR');
         });
-    }, [emOperacao, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [emOperacao, searchTerm, rotuloCC, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const abrirImportacao = () => {
         setSelecionados(new Set());
@@ -242,11 +273,25 @@ const CondominiosModule: React.FC = () => {
 
     return (
         <div className="space-y-6 pb-20">
-            <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Condomínios</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                    O edifício depois da entrega: ocupações, manutenção predial e o histórico técnico.
-                </p>
+            {/* §20 — título solto. A ação primária vem na MESMA linha, à
+                direita (§5.3/§17, escala compacta): ela estava lá embaixo, na
+                toolbar acoplada, disputando espaço com busca e colunas.
+                `items-start` para o botão alinhar pelo topo do h1, não pelo
+                meio do bloco de duas linhas. */}
+            <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Condomínios</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                        O edifício depois da entrega: ocupações, manutenção predial e o histórico técnico.
+                    </p>
+                </div>
+                <button
+                    onClick={abrirImportacao}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 whitespace-nowrap"
+                >
+                    <Download className="w-[15px] h-[15px]" />
+                    Importar empreendimento
+                </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-3">
@@ -302,14 +347,6 @@ const CondominiosModule: React.FC = () => {
                             />
                         </div>
 
-                        {/* Ação primária — §17, variante compacta */}
-                        <button
-                            onClick={abrirImportacao}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 whitespace-nowrap"
-                        >
-                            <Download className="w-[15px] h-[15px]" />
-                            Importar empreendimento
-                        </button>
                     </div>
                 </div>
 
@@ -337,6 +374,7 @@ const CondominiosModule: React.FC = () => {
                                     {v.includes('name') && <SortableHeader colKey="name" label="Condomínio" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
                                     {v.includes('cnpj') && <SortableHeader colKey="cnpj" label="CNPJ do condomínio" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
                                     {v.includes('cidade') && <SortableHeader colKey="cidade" label="Cidade" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
+                                    {v.includes('centroCusto') && <SortableHeader colKey="centroCusto" label="Centro de custo" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
                                     {v.includes('actions') && <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>}
                                 </tr>
                             </thead>
@@ -355,6 +393,15 @@ const CondominiosModule: React.FC = () => {
                                                 </td>
                                             )}
                                             {v.includes('cidade') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{e.endereco_city || '—'}</td>}
+                                            {v.includes('centroCusto') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                                    {rotuloCC(e.id)
+                                                        // §6.1.2 — `truncate` só recorta em elemento de
+                                                        // bloco, e o texto inteiro volta pelo `title`.
+                                                        ? <span className="block truncate" title={rotuloCC(e.id)}>{rotuloCC(e.id)}</span>
+                                                        : <span className="text-gray-400" title="Vincule o centro de custo na Ficha do condomínio — sem ele não há de onde tirar as despesas do rateio.">—</span>}
+                                                </td>
+                                            )}
                                             {v.includes('actions') && (
                                                 /* §9.1 — o clique na linha JÁ abre o condomínio, que é a
                                                    ação dominante e inequívoca. Repeti-la como botão

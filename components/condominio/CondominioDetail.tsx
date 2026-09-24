@@ -5,7 +5,7 @@
 // Um condomínio é o `Empreendimento` no estado EM_OPERACAO — não há entidade
 // nem árvore nova. As torres e unidades são as mesmas que foram vendidas.
 import React from 'react';
-import { ArrowLeft, FileText, Users, Wrench, Save, Scale, Package, Megaphone, Wallet, AlertCircle, FolderOpen, Plus } from 'lucide-react';
+import { FileText, Users, Wrench, Save, Scale, Package, Megaphone, Wallet, AlertCircle, FolderOpen, Plus, Link2, Unlink } from 'lucide-react';
 import ClientSelect, { type ClientOption } from '../ClientSelect';
 import OcupacoesTab from './OcupacoesTab';
 import ManutencaoTab from './ManutencaoTab';
@@ -16,6 +16,11 @@ import DocumentosTab from './DocumentosTab';
 import FinanceiroTab from './FinanceiroTab';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { clientService } from '../../services/clientService';
+import Breadcrumb from '../ui/Breadcrumb';
+import CostCenterSelect from '../CostCenterSelect';
+import ActionIconButton from '../ui/ActionIconButton';
+import { useConfirm } from '../ui/confirm';
+import { condominioRateioService } from '../../services/condominioRateioService';
 import type { Empreendimento } from '../../types/empreendimento';
 
 export type Aba = 'ficha' | 'ocupacoes' | 'fracoes' | 'documentos' | 'ativos' | 'manutencao' | 'financeiro' | 'comunicacao';
@@ -84,6 +89,7 @@ export const identidadeDoCondominio = (name?: string | null, code?: string | nul
 };
 
 const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack, onChanged }) => {
+    const confirm = useConfirm();
     const [aba, setAba] = React.useState<Aba>(abaInicial ?? 'ficha');
     const [e, setE] = React.useState<Empreendimento>(empreendimento);
     const identidade = React.useMemo(
@@ -98,6 +104,18 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
         setTimeout(() => setNotification(null), 4500);
     };
 
+    // ── Centros de custo do condomínio ────────────────────────────────────
+    // O vínculo mora no lado INVERSO (`cost_centers_v2.empreendimento_id`), e
+    // desde 19/09/2026 são N por condomínio — a despesa do rateio é a soma
+    // deles. Até 23/09 só a aba Financeiro editava isso, e só depois de entrar
+    // no condomínio e trocar de aba; a Ficha, que é onde se cadastra o
+    // condomínio, não tinha o campo. As duas telas falam com o MESMO service,
+    // então não há duas verdades — só duas portas para o mesmo dado.
+    const [centros, setCentros] = React.useState<{ id: string; code: string; name: string }[]>([]);
+    const [ccDisponiveis, setCcDisponiveis] = React.useState<{ id: string; code: string; name: string; grupo: string | null }[]>([]);
+    const [ccEscolhido, setCcEscolhido] = React.useState('');
+    const [ccOcupado, setCcOcupado] = React.useState(false);
+
     const [ficha, setFicha] = React.useState({
         condominio_razao_social: e.condominio_razao_social || '',
         condominio_cnpj: e.condominio_cnpj || '',
@@ -110,6 +128,61 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
         cobranca_multa_percent: String((e as any).cobranca_multa_percent ?? 2),
         cobranca_juros_mes_percent: String((e as any).cobranca_juros_mes_percent ?? 1),
     });
+
+    const carregarCentros = React.useCallback(async () => {
+        try {
+            const [vinculados, livres] = await Promise.all([
+                condominioRateioService.getCentrosDeCusto(e.id),
+                condominioRateioService.listarDisponiveis(e.organization_id),
+            ]);
+            setCentros(vinculados);
+            setCcDisponiveis(livres);
+        } catch {
+            // Falhar aqui não derruba a Ficha — é um campo, não o assunto.
+            setCentros([]);
+            setCcDisponiveis([]);
+        }
+    }, [e.id, e.organization_id]);
+
+    React.useEffect(() => { carregarCentros(); }, [carregarCentros]);
+
+    const vincularCentro = async () => {
+        if (!ccEscolhido) return;
+        setCcOcupado(true);
+        try {
+            const c = await condominioRateioService.vincular(ccEscolhido, e.id);
+            // §22 — costura local, sem recarregar a tela. Reordena por código
+            // para casar com a ordem que o service devolve na próxima carga.
+            setCentros(prev => [...prev, c].sort((a, b) => a.code.localeCompare(b.code, 'pt-BR')));
+            setCcDisponiveis(prev => prev.filter(d => d.id !== c.id));
+            setCcEscolhido('');
+            notify(`Centro de custo ${c.code} vinculado a este condomínio.`);
+        } catch (err: any) {
+            notify(err?.message || 'Erro ao vincular o centro de custo.', 'error');
+        } finally { setCcOcupado(false); }
+    };
+
+    const desvincularCentro = async (alvo: { id: string; code: string; name: string }) => {
+        const ultimo = centros.length === 1;
+        const ok = await confirm({
+            title: 'Desvincular o centro de custo?',
+            message: `${alvo.code} — ${alvo.name} deixa de fazer parte do caixa deste condomínio. Nada é apagado: os lançamentos e os rateios já feitos continuam onde estão${ultimo ? ', mas novos rateios ficam sem de onde tirar despesa' : '; as despesas dele deixam de entrar nos próximos rateios'}.`,
+            variant: 'warning',
+            confirmLabel: 'Desvincular',
+        });
+        if (!ok) return;
+        setCcOcupado(true);
+        try {
+            await condominioRateioService.desvincular(alvo.id);
+            setCentros(prev => prev.filter(c => c.id !== alvo.id));
+            // Volta para a lista de livres sem ida ao banco.
+            setCcDisponiveis(prev => [...prev, { ...alvo, grupo: null }]
+                .sort((a, b) => a.code.localeCompare(b.code, 'pt-BR')));
+            notify('Centro de custo desvinculado.');
+        } catch (err: any) {
+            notify(err?.message || 'Erro ao desvincular.', 'error');
+        } finally { setCcOcupado(false); }
+    };
 
     React.useEffect(() => {
         clientService.listClients(e.organization_id)
@@ -178,16 +251,25 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
         <div className="space-y-6">
             {/* §20 — título solto, NUNCA em card. Copiei o cabeçalho em card do
                 EmpreendimentoDetail, mas ele é exceção NOMEADA para telas que já
-                existiam; tela nova segue o padrão. §23: com 1 salto de
-                profundidade o padrão é "Voltar", não migalha de pão. */}
+                existiam; tela nova segue o padrão.
+
+                §23 — MIGALHA DE PÃO, a pedido do usuário (23/09/2026):
+                "botao voltar nao pode ficar acima do título da tela". O botão
+                "Voltar" gastava 32px de altura inteiros acima do h1; a trilha
+                ocupa uma linha de 16px e ainda diz de onde se veio.
+                ⚠️ Divergência CONSCIENTE do critério 2 da §23, que pede 3
+                crumbs (2 saltos) e manda resolver 1 salto com "Voltar" — aqui
+                há 1 salto só. O usuário escolheu a migalha depois de ver as
+                três opções lado a lado. Registrada no guia, para não virar
+                precedente silencioso. */}
             <div>
-                <button
-                    type="button"
-                    onClick={onBack}
-                    className="flex items-center gap-1.5 h-8 px-2.5 -ml-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all mb-3"
-                >
-                    <ArrowLeft className="w-4 h-4" /> Voltar
-                </button>
+                <Breadcrumb
+                    className="mb-1.5"
+                    items={[
+                        { label: 'Condomínios', onClick: onBack },
+                        { label: identidade },
+                    ]}
+                />
                 {/* §19.1/§20 — o título acompanha a aba ativa: cada uma troca o
                     conteúdo inteiro, e um <h1> fixo ficaria mentindo sobre o que
                     a tela mostra. A IDENTIDADE (qual condomínio) desce para o
@@ -312,6 +394,77 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
                                     Mandato vencido — o síndico não representa mais o condomínio.
                                 </p>
                             )}
+                        </div>
+                    </div>
+
+                    {/* Centro de custo — a ÂNCORA da segregação do caixa.
+                        Seção própria porque não é um campo de texto do cadastro:
+                        são N vínculos, cada um com ação de tirar. */}
+                    <div className="mt-8 pt-6 border-t border-gray-100">
+                        <p className="text-sm font-medium text-gray-800">Centro de custo</p>
+                        <p className="text-xs text-gray-400 mt-0.5 mb-4">
+                            A despesa do condomínio é a que cai nestes centros de custo — é o que separa o
+                            caixa dele, com ou sem organização própria, e é de onde o rateio tira as
+                            despesas. Podem ser mais de um: o rateio soma todos.
+                        </p>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                          <div className="md:col-span-2 xl:col-span-2">
+                        {centros.length > 0 ? (
+                            <div className="space-y-1.5 mb-4">
+                                {centros.map(c => (
+                                    <div key={c.id} className="flex items-center justify-between gap-3 p-2.5 rounded-[6px] border border-gray-200">
+                                        <span className="text-sm font-normal text-gray-700 min-w-0">
+                                            <span className="block truncate" title={`${c.code} — ${c.name}`}>
+                                                {c.code} — {c.name}
+                                            </span>
+                                        </span>
+                                        <ActionIconButton
+                                            kind="delete"
+                                            title="Desvincular deste condomínio"
+                                            icon={<Unlink className="w-4 h-4" />}
+                                            disabled={ccOcupado}
+                                            onClick={() => desvincularCentro(c)}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-xs text-amber-600 mb-4">
+                                Nenhum centro de custo vinculado — sem ele não há de onde tirar as despesas do rateio.
+                            </p>
+                        )}
+
+                        {/* §7.1.1 — centro de custo SEMPRE no drawer padrão, nunca `<select>`. */}
+                            <div>
+                                <label className="text-xs font-semibold text-slate-500">Vincular um centro de custo</label>
+                                <div className="flex gap-2 mt-1">
+                                    <div className="flex-1 min-w-0">
+                                        <CostCenterSelect
+                                            costCenters={ccDisponiveis.map(d => ({ id: d.id, name: d.name, code: d.code, parent_name: d.grupo ?? null }))}
+                                            value={ccEscolhido}
+                                            onChange={setCcEscolhido}
+                                            placeholder={ccDisponiveis.length ? 'Selecione para vincular' : 'Nenhum centro de custo livre'}
+                                            size="sm"
+                                            disabled={ccOcupado || ccDisponiveis.length === 0}
+                                            hoverCls="hover:bg-blue-50"
+                                        />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={vincularCentro}
+                                        disabled={!ccEscolhido || ccOcupado}
+                                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 shrink-0"
+                                    >
+                                        <Link2 className="w-[15px] h-[15px]" /> Vincular
+                                    </button>
+                                </div>
+                                <p className="text-xs text-gray-400 mt-1">
+                                    A lista traz só os centros de custo que ainda não são de nenhum condomínio.
+                                    Criar um novo continua em Financeiro, quando o condomínio não tem nenhum.
+                                </p>
+                            </div>
+                          </div>
                         </div>
                     </div>
 

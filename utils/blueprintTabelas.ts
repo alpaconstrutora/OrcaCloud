@@ -270,7 +270,7 @@ export function montarTabela(model: BlueprintModel, def: DefinicaoDeTabela, calc
     const porChave = new Map<string, GrupoDaTabela>();
     for (const l of linhas) {
       const v = chaveDe(l.vars, k);
-      const id = v === null ? ' ' : String(v);
+      const id = v === null ? '\n' : String(v);
       const g = porChave.get(id) ?? { chave: v, rotulo: v === null || v === '' ? '(sem valor)' : typeof v === 'boolean' ? (v ? 'sim' : 'não') : String(v), linhas: [], totais: [] };
       g.linhas.push(l.linha);
       porChave.set(id, g);

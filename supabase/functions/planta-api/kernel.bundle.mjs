@@ -3082,7 +3082,8 @@ function computeQuantities(model, policy = POLITICA_PADRAO, kernelVersion = "") 
   const materiais = /* @__PURE__ */ new Map();
   for (const p of paredes) {
     for (const c of p.camadas) {
-      const chave = `${c.itemCode}\0${c.funcao}`;
+      const chave = `${c.itemCode}
+${c.funcao}`;
       const atual = materiais.get(chave);
       if (atual) {
         atual.volumeM3 += c.volumeM3;
@@ -3362,7 +3363,9 @@ function computeQuantities(model, policy = POLITICA_PADRAO, kernelVersion = "") 
   });
   const porBitolaMapa = /* @__PURE__ */ new Map();
   for (const t of trechos) {
-    const chave = `${t.disciplina}\0${t.bitolaMm}\0${t.itemCode ?? ""}`;
+    const chave = `${t.disciplina}
+${t.bitolaMm}
+${t.itemCode ?? ""}`;
     const atual = porBitolaMapa.get(chave);
     if (atual) {
       atual.comprimentoM += t.comprimentoM;
@@ -3383,7 +3386,9 @@ function computeQuantities(model, policy = POLITICA_PADRAO, kernelVersion = "") 
   const porTerminalMapa = /* @__PURE__ */ new Map();
   for (const t of model.terminais ?? []) {
     const classificacao = t.tipoHidraulico ?? t.tipoEletrico ?? null;
-    const chave = `${t.disciplina}\0${classificacao ?? t.tipo}\0${t.itemCode ?? ""}`;
+    const chave = `${t.disciplina}
+${classificacao ?? t.tipo}
+${t.itemCode ?? ""}`;
     const atual = porTerminalMapa.get(chave);
     if (atual) atual.quantidade += 1;
     else {

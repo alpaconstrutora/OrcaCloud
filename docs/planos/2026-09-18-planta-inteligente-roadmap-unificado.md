@@ -1841,6 +1841,40 @@ A segunda ponta parou 163 mm antes de uma parede que está **no mesmo eixo x = 3
 - ⚠️ `scripts/build-planta-api-kernel.mjs` teve de rodar: o bundle que a Edge Function `planta-api` executa carrega `nomeDaEsquadria` e ficou defasado — `plantaApi.test.ts` pegou isso sozinho.
 - **App real** (escritas bloqueadas: 14, 0 erros), *Planta 23/09/2026*: o seletor da barra lista `60 cm | 70 cm | 80 cm | 90 cm | 100 cm | 120 cm | 150 cm | 200 cm`; selecionando a "Porta 1 · Parede 25", o navegador diz **100 × 210 cm**, o painel mostra **Largura 100 cm / Altura 210 cm** e o tipo de esquadria, **Porta 100×210**.
 
+### P2.47 — Byte NUL no código-fonte, e a trava para a terceira vez (24/09/2026)
+
+**Como apareceu.** Durante a P2.46, uma busca por `porEsquadria` em `utils/blueprintKernel/quantities.ts` devolveu só **`Binary file matches`** — num arquivo de 82 KB de TypeScript comum. A causa: cinco `\0` LITERAIS dentro de template strings, escritos como separador de chave de Map (`` `${c.itemCode}\0${c.funcao}` ``), pela razão de sempre — "NUL nunca aparece no dado". Mais um em `utils/blueprintTabelas.ts`, como sentinela de valor nulo. **Foi a segunda vez**: em 21/09 o mesmo padrão atingiu `utils/dxfLeitor.ts` (P2.33).
+
+**O estrago não é estético.** Com um NUL, o git passa a tratar o arquivo como binário:
+
+- `git diff` e `git show` param de mostrar as mudanças ("Binary files differ") — a revisão fica cega naquele arquivo;
+- conflito de merge ali não tem como ser resolvido linha a linha;
+- `grep`/ripgrep **pulam** o arquivo por padrão, que foi como o caso se revelou.
+
+⚠️ **E havia um segundo estrago, silencioso**: sendo binários, os dois arquivos escaparam da normalização de fim de linha do repositório. Medido nos blobs:
+
+| arquivo | CR | LF | NUL |
+|---|---|---|---|
+| `blueprintComponentes.ts` (normal) | **0** | 481 | 0 |
+| `blueprintKernel/model.ts` (normal) | **0** | 5060 | 0 |
+| `blueprintTabelas.ts` | **363** | 363 | 1 |
+| `blueprintKernel/quantities.ts` | **1766** | 1766 | 5 |
+
+Todo `.ts` do projeto está em LF no repositório (`core.autocrlf`); esses dois guardavam **CRLF**, porque a normalização não roda em arquivo binário. Tirar o NUL os traz de volta ao padrão — daí o diff grande destes dois arquivos, que é uma vez só.
+
+**A correção.** Os seis NUL viram `\n`, que tem exatamente a garantia que se queria (nunca aparece dentro de um código de item, de uma função de camada ou de uma disciplina) e continua sendo texto. Nenhuma chave é reaberta por `split` — conferido antes de mexer —, então a troca é invisível para o resultado: os **goldens do kernel** (hash canônico) e o quantitativo inteiro passam sem recapturar nada.
+
+**A trava: `__tests__/bytesNulNoFonte.test.ts`.** É TESTE, e não um `scripts/check-*.sh`, pelo motivo que o próprio `ci.yml` registra ao lado do passo de XSS: *"As demais travas (segurancaMigrations, orgContextGuard) já são arquivos de teste e entram no `vitest run`"* — script que depende de alguém lembrar de rodar foi a razão de um bug voltar. Varre `components`, `utils`, `hooks`, `lib`, `services`, `store`, `types`, `scripts`, `__tests__`, `supabase/migrations` e `supabase/functions`, só extensões de texto, e a mensagem de falha diz **o que fazer** ("se era separador de chave de Map, troque por `\n`").
+
+**Prova**
+- ⚠️ O teste foi escrito ANTES da correção e **falhou apontando os dois arquivos com a contagem certa** (`quantities.ts (5), blueprintTabelas.ts (1)`).
+- `npx tsc --noEmit` ok · `check-xss-sinks.sh` ok · suíte cheia **450 arquivos / 5166 testes** verdes · `npm run build` ok.
+- `blueprintKernelGoldens` e `plantaApi` passam sem recaptura: o separador é interno, o hash não muda.
+- O bundle da Edge Function foi regerado — ele escapava o NUL como `\0`, e agora traz a quebra que o esbuild emite no lugar do escape. Mesmo resultado, e `plantaApi.test.ts` confirma.
+- Depois da correção, `git diff` volta a mostrar os dois arquivos linha a linha — que é o ponto.
+
+**Fica anotado, não corrigido**: `quantities.ts` monta chaves de Map com três separadores diferentes — `\n`, `|` e **espaço** (`` `${escopo} ${itemCode} ${funcao ?? ''}` ``). O espaço é frágil (um código de item com espaço colide com o vizinho), mas é bug latente, não observado, e trocá-lo é mexer no agrupamento do quantitativo — assunto de uma fase própria, com o usuário.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

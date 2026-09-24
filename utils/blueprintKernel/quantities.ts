@@ -1233,7 +1233,7 @@ export function computeQuantities(
   const materiais = new Map<string, QuantidadePorMaterial>();
   for (const p of paredes) {
     for (const c of p.camadas) {
-      const chave = `${c.itemCode} ${c.funcao}`;
+      const chave = `${c.itemCode}\n${c.funcao}`;
       const atual = materiais.get(chave);
       if (atual) {
         atual.volumeM3 += c.volumeM3;
@@ -1621,7 +1621,7 @@ export function computeQuantities(
   // Uma linha de COMPRA por disciplina × bitola × item de catálogo.
   const porBitolaMapa = new Map<string, QuantidadePorBitola>();
   for (const t of trechos) {
-    const chave = `${t.disciplina} ${t.bitolaMm} ${t.itemCode ?? ''}`;
+    const chave = `${t.disciplina}\n${t.bitolaMm}\n${t.itemCode ?? ''}`;
     const atual = porBitolaMapa.get(chave);
     if (atual) {
       atual.comprimentoM += t.comprimentoM;
@@ -1643,7 +1643,7 @@ export function computeQuantities(
   const porTerminalMapa = new Map<string, QuantidadePorTerminal>();
   for (const t of model.terminais ?? []) {
     const classificacao = t.tipoHidraulico ?? t.tipoEletrico ?? null;
-    const chave = `${t.disciplina} ${classificacao ?? t.tipo} ${t.itemCode ?? ''}`;
+    const chave = `${t.disciplina}\n${classificacao ?? t.tipo}\n${t.itemCode ?? ''}`;
     const atual = porTerminalMapa.get(chave);
     if (atual) atual.quantidade += 1;
     else {

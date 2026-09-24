@@ -38,9 +38,7 @@ interface ClientListProps {
 const CLIENT_COLUMNS: ColumnConfig[] = [
     { key: 'code', label: 'Código', sortable: true },
     { key: 'name', label: 'Cliente', sortable: true },
-    // Apelido: é a saudação do Portal do Cliente. Oculta por padrão — a tabela já
-    // tem 9 colunas e o nome basta para achar a linha (§6.1 / defaultHidden).
-    { key: 'nickname', label: 'Apelido', sortable: true, defaultHidden: true },
+    { key: 'nickname', label: 'Apelido', sortable: true },
     { key: 'category', label: 'Tipo', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
     { key: 'organization', label: 'Organização', sortable: true },
@@ -62,6 +60,7 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
 const CLIENT_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
     code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     name: { label: 'Cliente', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    nickname: { label: 'Apelido', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     category: { label: 'Tipo', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     organization: { label: 'Organização', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
@@ -330,7 +329,12 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     const [viewMode, setViewMode] = usePersistedState<'list' | 'grid'>('clientListFilters:viewMode', 'list');
     const [categoryFilter, setCategoryFilter] = usePersistedState<string>('clientListFilters:category', 'all');
     const { toasts, show: showToast, dismiss: dismissToast } = useServicesToast();
-    const tableColumns = useTableColumns(CLIENT_COLUMNS, 'clientListColumns');
+    // `:v2` (23/09/2026) — a coluna "Apelido" nasceu `defaultHidden` e, uma vez
+    // salva como conhecida-e-oculta no navegador, tirar o `defaultHidden` não a
+    // traria de volta para quem já tinha aberto a tela: `loadPersistedTableState`
+    // só revela coluna que ainda NÃO está em `knownColumns`. Trocar a chave dá a
+    // todos o conjunto padrão novo (custo: ordem/ordenação salvas voltam ao padrão).
+    const tableColumns = useTableColumns(CLIENT_COLUMNS, 'clientListColumns:v2');
     // Opções de "Tipo" vêm de Configurações do Sistema > Tipos de Clientes (mesma
     // fonte usada pelo ClientForm), não de uma lista fixa — categoria custom
     // criada lá (ex: "Condomínio") precisa aparecer aqui igual.

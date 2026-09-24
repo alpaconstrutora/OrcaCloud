@@ -164,3 +164,25 @@ coral e metade azul seria trocar um desencontro por outro.
 | 14 | `types/users.ts`, `services/clientService.ts` | `Client.nickname`; coluna no 1º degrau do `listClients` + degrau novo sem ela (regra do próprio arquivo) | ✅ `tsc` limpo; a lista continua carregando se a migration não estiver aplicada |
 | 15 | `components/ClientForm.tsx`, `components/ClientList.tsx` | Campo "Apelido" ao lado do nome (Dados gerais); coluna "Apelido" na tabela, `defaultHidden` | ✅ print `relatorios/apelido/form_apelido.png` |
 | 16 | `App.tsx`, `components/ClientArea.tsx` | `nickname` entra no mapa campo-a-campo do guard de token; topo do portal troca "Área do Cliente" por "Olá, <apelido>" (vazio = primeiro nome); a saudação do dashboard usa a mesma fonte | ✅ Playwright no link público: `h1` do header = "Olá, Zé Roberto" (apelido injetado só na resposta de leitura, nada gravado) |
+
+## Pedido 10 (23/09/2026)
+
+> por algum motivo a coluna apelido nao esta aparecendo em minha organizacao < meus clientes
+
+**Dois defeitos meus, empilhados** (o segundo escondia o primeiro):
+
+1. `CLIENT_COLUMN_HEADERS` não tinha entrada `nickname`, e o `<thead>` faz
+   `const def = CLIENT_COLUMN_HEADERS[key]; if (!def) return null;` — a coluna
+   era descartada **em silêncio**, mesmo visível em `orderedVisibleColumns`.
+   É a armadilha de [[project_tabela_arrastar_coluna_render_cell_morta]] pelo
+   avesso: lá o `renderCell` estava morto, aqui o header é que faltava.
+2. Eu a tinha marcado `defaultHidden: true` por conta própria — o pedido era
+   ter a coluna, não escondê-la.
+
+| # | Arquivo | O que muda | Como sei que terminou |
+|---|---|---|---|
+| 17 | `components/ClientList.tsx` | `nickname` entra em `CLIENT_COLUMN_HEADERS`; sai o `defaultHidden`; chave de persistência vira `clientListColumns:v2` (coluna já salva como "conhecida e oculta" no navegador não reaparece só por tirar o `defaultHidden` — `loadPersistedTableState` só revela o que ainda não está em `knownColumns`) | ✅ Playwright: cabeçalhos = `[Código, Cliente, **Apelido**, Tipo, …]`, coluna no índice 2, células com "—" quando vazio |
+
+**Lição para a próxima coluna nesta tela:** são **quatro** listas, não duas —
+`CLIENT_COLUMNS`, `CLIENT_COLUMN_HEADERS`, `DEFAULT_COL_WIDTHS` e o
+`renderClientCell`. Faltar qualquer uma some com a coluna sem erro nenhum.

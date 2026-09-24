@@ -76,6 +76,25 @@ export interface CentroDeCustoDisponivel {
     selecionavel: boolean;
 }
 
+/**
+ * Um lançamento do caixa do condomínio, como a aba Despesas mostra.
+ *
+ * Diferente de `DespesaRateio`, que é o SNAPSHOT congelado dentro de um rateio:
+ * este é o lançamento vivo em `internal_transactions`, e traz de onde veio
+ * (centro de custo) e se já foi rateado — as duas perguntas que o síndico faz
+ * ao olhar uma despesa solta.
+ */
+export interface LancamentoDoCondominio {
+    id: string;
+    data: string;
+    descricao: string;
+    valor: number;
+    costCenterId: string | null;
+    costCenterLabel: string;
+    /** Já entrou em algum rateio VIVO (não cancelado). */
+    rateada: boolean;
+}
+
 /** Uma cota já gravada, com os rótulos que a tela precisa. */
 export interface CotaDoRateio {
     id: string;
@@ -602,6 +621,77 @@ export const condominioRateioService = {
             semResponsavel: itens.filter(i => !i.clientId).length,
             jaRateadas,
         };
+    },
+
+    /**
+     * Os lançamentos do caixa do condomínio numa competência — a aba Despesas.
+     *
+     * Mesmo recorte da prévia do rateio (`previa`), de propósito: `DEBIT` nos
+     * centros de custo do condomínio, por `transaction_date`. Se esta lista
+     * mostrasse um recorte diferente, o síndico veria uma despesa aqui que não
+     * aparece no rateio do mesmo mês e não teria como explicar a diferença.
+     *
+     * A marca `rateada` vem de `listarJaRateadas`, a mesma que a prévia usa
+     * para excluir — aqui ela não exclui nada, só rotula: a aba existe
+     * justamente para mostrar o que ficou de fora.
+     */
+    async listarLancamentos(params: {
+        costCenterIds: string[];
+        competencia: string;   // 'YYYY-MM-01'
+    }): Promise<LancamentoDoCondominio[]> {
+        if (params.costCenterIds.length === 0) return [];
+
+        const inicio = params.competencia;
+        const [ano, mes] = inicio.split('-').map(Number);
+        const fimISO = mes === 12
+            ? `${ano + 1}-01-01`
+            : `${ano}-${String(mes + 1).padStart(2, '0')}-01`;
+
+        const { data, error } = await supabase
+            .from('internal_transactions')
+            .select('id, description, amount, transaction_date, cost_center_id, party_name, entity_name')
+            .in('cost_center_id', params.costCenterIds)
+            .eq('direction', 'DEBIT')
+            .gte('transaction_date', inicio)
+            .lt('transaction_date', fimISO)
+            .order('transaction_date', { ascending: false });
+        if (error) throw new Error(`Falha ao carregar os lançamentos: ${error.message}`);
+
+        const linhas = data || [];
+        if (linhas.length === 0) return [];
+
+        // Rótulo do centro de custo, em lote.
+        const ccs = await this.getCentrosDeCustoPorEmpreendimentoNomes(params.costCenterIds);
+
+        let rateadas = new Set<string>();
+        try {
+            rateadas = await this.listarJaRateadas(linhas.map((l: any) => l.id as string));
+        } catch {
+            // Falhar aqui só tira a marca "já rateada" — não some com a lista.
+        }
+
+        return linhas.map((l: any) => ({
+            id: l.id as string,
+            data: l.transaction_date as string,
+            // Mesma poda de rótulo do rateio: na origem BOLETO a descrição é
+            // nome de arquivo ou bloco de OCR. Ver `utils/despesaCondominio.ts`.
+            descricao: rotuloDeDespesa(l.description, l.party_name || l.entity_name)
+                ?? 'Despesa sem descrição',
+            valor: Number(l.amount || 0),
+            costCenterId: (l.cost_center_id ?? null) as string | null,
+            costCenterLabel: ccs.get(l.cost_center_id) ?? '—',
+            rateada: rateadas.has(l.id as string),
+        }));
+    },
+
+    /** `id → "código — nome"` dos centros de custo dados. */
+    async getCentrosDeCustoPorEmpreendimentoNomes(ids: string[]): Promise<Map<string, string>> {
+        const mapa = new Map<string, string>();
+        if (ids.length === 0) return mapa;
+        const { data } = await supabase
+            .from('cost_centers_v2').select('id, code, name').in('id', ids);
+        for (const c of data || []) mapa.set(c.id, `${c.code} — ${c.name}`);
+        return mapa;
     },
 
     async listar(empreendimentoId: string): Promise<Rateio[]> {

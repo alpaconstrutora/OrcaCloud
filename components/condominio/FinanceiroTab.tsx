@@ -26,7 +26,7 @@ import { useConfirm } from '../ui/confirm';
 import {
     condominioRateioService, CRITERIO_LABEL, CRITERIO_EXIGE,
     type CriterioRateio, type TipoRateio, type PreviaRateio, type Rateio, type DespesaRateio,
-    type CotaDoRateio, type CentroDeCustoDisponivel,
+    type CotaDoRateio, type CentroDeCustoDisponivel, type LancamentoDoCondominio,
 } from '../../services/condominioRateioService';
 import {
     condominioCobrancaService,
@@ -222,6 +222,95 @@ const TabelaCotas: React.FC<{ cotas: CotaDoRateio[] }> = ({ cotas }) => (
     </div>
 );
 
+/** Lançamentos do caixa do condomínio — a aba Despesas.
+ *  Tabela de PÁGINA (não vive em `Sheet`), então `px-6` e `py-2.5` do §6.6/§7.2. */
+const TabelaLancamentos: React.FC<{
+    lancamentos: LancamentoDoCondominio[];
+    carregando: boolean;
+    erro: string | null;
+    mes: string;
+    temBusca: boolean;
+}> = ({ lancamentos, carregando, erro, mes, temBusca }) => {
+    if (carregando) {
+        return (
+            <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-2 text-gray-500">Carregando...</p>
+            </div>
+        );
+    }
+    if (erro) {
+        return <div className="m-4 bg-red-50 border border-red-200 text-red-700 rounded-[10px] px-4 py-3 text-sm">{erro}</div>;
+    }
+    if (lancamentos.length === 0) {
+        return (
+            <div className="text-center py-12">
+                <Wallet className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-bold text-gray-900 mb-2">
+                    {temBusca ? 'Nenhum resultado' : `Nenhuma despesa em ${mes}`}
+                </h3>
+                <p className="text-sm text-gray-500 max-w-md mx-auto">
+                    {temBusca
+                        ? 'Tente ajustar a busca.'
+                        : 'Lance a despesa no Financeiro apontando para um centro de custo deste condomínio — é daqui que o rateio a tira.'}
+                </p>
+            </div>
+        );
+    }
+
+    const total = lancamentos.reduce((s, l) => s + l.valor, 0);
+    return (
+        <div className="overflow-auto max-h-[70vh]">
+            <table className="w-full text-left border-collapse">
+                <thead>
+                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                        <th className="px-6 py-2 border-r border-gray-100 whitespace-nowrap">Data</th>
+                        <th className="px-6 py-2 border-r border-gray-100">Descrição</th>
+                        <th className="px-6 py-2 border-r border-gray-100">Centro de custo</th>
+                        <th className="px-6 py-2 border-r border-gray-100 whitespace-nowrap">Situação</th>
+                        <th className="px-6 py-2 text-right whitespace-nowrap">Valor</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                    {lancamentos.map(l => (
+                        <tr key={l.id} className="hover:bg-blue-50/50 transition-colors">
+                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
+                                {dataBR(l.data)}
+                            </td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
+                                {/* §6.1.2 — `truncate` precisa de `block`, e o texto
+                                    inteiro volta pelo `title`. */}
+                                <span className="block truncate" title={l.descricao}>{l.descricao}</span>
+                            </td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                                <span className="block truncate" title={l.costCenterLabel}>{l.costCenterLabel}</span>
+                            </td>
+                            {/* §8 — texto colorido, sem pílula. "Já rateada" responde
+                                a pergunta que traz o síndico aqui: o que ficou de fora. */}
+                            <td className={`px-6 py-2.5 border-r border-gray-100 text-sm font-normal ${l.rateada ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                {l.rateada ? 'Já rateada' : 'Fora de rateio'}
+                            </td>
+                            <td className="px-6 py-2.5 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
+                                {dinheiro(l.valor)}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+                <tfoot>
+                    <tr className="bg-gray-50 border-t border-gray-200">
+                        <td className="px-6 py-2.5 text-sm font-normal text-gray-500" colSpan={4}>
+                            {lancamentos.length} lançamento(s) em {mes}
+                        </td>
+                        <td className="px-6 py-2.5 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
+                            {dinheiro(total)}
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    );
+};
+
 interface Props { empreendimento: Empreendimento }
 
 const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
@@ -233,6 +322,22 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
     // termo que não é dele — e "sumiu rateio" vira chamado de suporte. Trocar
     // de condomínio desmonta a aba, então o `useState` inicial do
     // `usePersistedState` roda de novo e lê a chave certa.
+    // ── Sub-abas (§19.1) ──────────────────────────────────────────────────
+    // "Rateios" é o documento; "Despesas" é a matéria-prima dele. A segunda
+    // nasceu porque o único lugar que mostrava lançamento era o painel de um
+    // rateio JÁ criado — despesa que ainda não entrou em rateio nenhum não
+    // aparecia em lugar algum, e é justamente a que o síndico precisa achar.
+    const [subAba, setSubAba] = usePersistedState<'rateios' | 'despesas'>(
+        `condominio:${empreendimento.id}:financeiro:subaba`, 'rateios');
+
+    // ── Filtro de competência ─────────────────────────────────────────────
+    // `''` = todas. Vale para as DUAS sub-abas: nos rateios recorta a coluna
+    // Competência; nas despesas é o mês dos lançamentos. Um filtro só, porque
+    // é a mesma pergunta ("de qual mês estamos falando?") — dois controles
+    // separados dariam ao usuário duas respostas diferentes na mesma tela.
+    const [competenciaFiltro, setCompetenciaFiltro] = usePersistedState<string>(
+        `condominio:${empreendimento.id}:financeiro:competencia`, '');
+
     const [searchTerm, setSearchTerm] = usePersistedState<string>(
         `condominio:${empreendimento.id}:financeiro:search`, '');
     const tableColumns = useTableColumns(COLUMNS, 'condominioFinanceiroColumns');
@@ -652,6 +757,49 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
         }
     };
 
+    // ── Aba Despesas ──────────────────────────────────────────────────────
+    const [lancamentos, setLancamentos] = React.useState<LancamentoDoCondominio[]>([]);
+    const [carregandoLanc, setCarregandoLanc] = React.useState(false);
+    const [erroLanc, setErroLanc] = React.useState<string | null>(null);
+
+    // Sem competência escolhida a aba usa o mês corrente: `internal_transactions`
+    // é a maior tabela do financeiro, e "todas as despesas de todos os tempos"
+    // seria uma varredura que ninguém pediu. O filtro do topo manda.
+    const mesDasDespesas = competenciaFiltro || competenciaAtual().slice(0, 7);
+
+    React.useEffect(() => {
+        if (subAba !== 'despesas' || centros.length === 0) return;
+        let ativo = true;
+        setCarregandoLanc(true);
+        setErroLanc(null);
+        condominioRateioService.listarLancamentos({
+            costCenterIds: centros.map(c => c.id),
+            competencia: `${mesDasDespesas}-01`,
+        })
+            .then(l => { if (ativo) setLancamentos(l); })
+            .catch(e => { if (ativo) { setErroLanc(e?.message || 'Erro ao carregar os lançamentos.'); setLancamentos([]); } })
+            .finally(() => { if (ativo) setCarregandoLanc(false); });
+        return () => { ativo = false; };
+    }, [subAba, centros, mesDasDespesas]);
+
+    const lancamentosFiltrados = React.useMemo(() => {
+        const t = searchTerm.trim().toLowerCase();
+        if (!t) return lancamentos;
+        return lancamentos.filter(l =>
+            l.descricao.toLowerCase().includes(t)
+            || l.costCenterLabel.toLowerCase().includes(t));
+    }, [lancamentos, searchTerm]);
+
+    /** Competências que existem, para o seletor não oferecer mês vazio. */
+    const competenciasDisponiveis = React.useMemo(() => {
+        const meses = new Set(rateios.map(r => r.competencia.slice(0, 7)));
+        // O mês corrente entra mesmo sem rateio: é de onde se parte para criar
+        // o primeiro, e a aba Despesas precisa dele para mostrar o que já caiu.
+        meses.add(competenciaAtual().slice(0, 7));
+        if (competenciaFiltro) meses.add(competenciaFiltro);
+        return [...meses].sort().reverse();
+    }, [rateios, competenciaFiltro]);
+
     const vivos = React.useMemo(() => rateios.filter(r => r.status !== 'CANCELADO'), [rateios]);
     const kpis = React.useMemo(() => ({
         fechados: vivos.filter(r => r.status === 'FECHADO').length,
@@ -661,12 +809,17 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
 
     const filtrados = React.useMemo(() => {
         const t = searchTerm.trim().toLowerCase();
-        if (!t) return rateios;
-        return rateios.filter(r =>
+        // O recorte por competência vem ANTES da busca: é filtro de escopo
+        // ("qual mês"), não de texto.
+        const porMes = competenciaFiltro
+            ? rateios.filter(r => r.competencia.slice(0, 7) === competenciaFiltro)
+            : rateios;
+        if (!t) return porMes;
+        return porMes.filter(r =>
             rotuloCompetencia(r.competencia).includes(t)
             || (r.number || '').toLowerCase().includes(t)
             || CRITERIO_LABEL[r.criterio].toLowerCase().includes(t));
-    }, [rateios, searchTerm]);
+    }, [rateios, searchTerm, competenciaFiltro]);
 
     // Sem coluna escolhida mantém a ordem do service (competência desc) — é a
     // leitura natural de um livro de competências, e §6.4 pede que o default
@@ -804,6 +957,47 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                 </div>
             )}
 
+            {/* Sub-abas §19.1 — trilho cinza, aba ativa em branco com o texto
+                azul. Não é o azul sólido do botão primário: aba ativa é estado
+                de navegação, não ação. */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    {([
+                        { id: 'rateios' as const, label: 'Rateios', icon: Calculator },
+                        { id: 'despesas' as const, label: 'Despesas', icon: Wallet },
+                    ]).map(t => (
+                        <button
+                            key={t.id}
+                            onClick={() => setSubAba(t.id)}
+                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                                subAba === t.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
+                            }`}
+                        >
+                            <t.icon className="w-3.5 h-3.5" /> {t.label}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Filtro de competência — escopo, não busca (§5.3): decide de
+                    QUAL MÊS a tela fala, nas duas sub-abas. */}
+                <div className="flex items-center gap-2 shrink-0">
+                    <label className="text-xs font-semibold text-slate-500 whitespace-nowrap">Competência</label>
+                    <select
+                        value={competenciaFiltro}
+                        onChange={e => setCompetenciaFiltro(e.target.value)}
+                        className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                    >
+                        {/* Em Despesas não existe "todas": a aba cai no mês
+                            corrente, porque varrer `internal_transactions` sem
+                            recorte é consulta que ninguém pediu. */}
+                        {subAba === 'rateios' && <option value="">Todas</option>}
+                        {competenciasDisponiveis.map(m => (
+                            <option key={m} value={m}>{rotuloCompetencia(`${m}-01`)}</option>
+                        ))}
+                    </select>
+                </div>
+            </div>
+
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-2 border-b border-gray-100 bg-white">
                     <div className="flex flex-col md:flex-row gap-2.5 items-center">
@@ -811,7 +1005,9 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input
                                 type="text"
-                                placeholder="Buscar por competência ou critério..."
+                                placeholder={subAba === 'rateios'
+                                    ? 'Buscar por competência ou critério...'
+                                    : 'Buscar por descrição ou centro de custo...'}
                                 value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)}
                                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
@@ -824,25 +1020,43 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                         >
                             <RefreshCw className="w-4 h-4" />
                         </button>
-                        <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
-                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-                            <ColumnConfigButton
-                                columns={COLUMNS.filter(c => c.key !== 'actions')}
-                                visibleColumns={tableColumns.visibleColumns}
-                                showColumnConfig={tableColumns.showColumnConfig}
-                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-                                onToggleColumn={tableColumns.toggleColumn}
-                                onReset={tableColumns.resetColumns}
-                            />
-                        </div>
-                        <button
-                            onClick={() => { setPrevia(null); setSheetNovo(true); }}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 whitespace-nowrap"
-                        >
-                            <Plus className="w-[15px] h-[15px]" /> Novo rateio
-                        </button>
+                        {/* Configurar coluna e "Novo rateio" pertencem à tabela de
+                            rateios — em Despesas não há o que configurar nem o que
+                            criar: o lançamento nasce no Financeiro, não aqui. */}
+                        {subAba === 'rateios' && (
+                            <>
+                                <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+                                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                    <ColumnConfigButton
+                                        columns={COLUMNS.filter(c => c.key !== 'actions')}
+                                        visibleColumns={tableColumns.visibleColumns}
+                                        showColumnConfig={tableColumns.showColumnConfig}
+                                        onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                        onToggleColumn={tableColumns.toggleColumn}
+                                        onReset={tableColumns.resetColumns}
+                                    />
+                                </div>
+                                <button
+                                    onClick={() => { setPrevia(null); setSheetNovo(true); }}
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 whitespace-nowrap"
+                                >
+                                    <Plus className="w-[15px] h-[15px]" /> Novo rateio
+                                </button>
+                            </>
+                        )}
                     </div>
                 </div>
+
+                {subAba === 'despesas' ? (
+                    <TabelaLancamentos
+                        lancamentos={lancamentosFiltrados}
+                        carregando={carregandoLanc}
+                        erro={erroLanc}
+                        mes={rotuloCompetencia(`${mesDasDespesas}-01`)}
+                        temBusca={!!searchTerm.trim()}
+                    />
+                ) : (
+                <>
 
                 {loading ? (
                     <div className="text-center py-12">
@@ -903,8 +1117,25 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                                 </td>
                                             )}
                                             {v.includes('competencia') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 whitespace-nowrap">
-                                                    {rotuloCompetencia(r.competencia)}
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal whitespace-nowrap">
+                                                    {/* A competência é um LINK para a aba Despesas
+                                                        daquele mês (§7: item relacionado = azul).
+                                                        `stopPropagation` porque a linha inteira já
+                                                        abre o detalhe do rateio — sem isso os dois
+                                                        gestos disparam juntos e o painel cobre a aba
+                                                        que acabou de ser aberta. */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={ev => {
+                                                            ev.stopPropagation();
+                                                            setCompetenciaFiltro(r.competencia.slice(0, 7));
+                                                            setSubAba('despesas');
+                                                        }}
+                                                        className="text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                                                        title={`Ver os lançamentos de ${rotuloCompetencia(r.competencia)}`}
+                                                    >
+                                                        {rotuloCompetencia(r.competencia)}
+                                                    </button>
                                                 </td>
                                             )}
                                             {v.includes('tipo') && (
@@ -1036,6 +1267,8 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                             </tbody>
                         </table>
                     </div>
+                )}
+                </>
                 )}
             </div>
 

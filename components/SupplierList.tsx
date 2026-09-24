@@ -64,15 +64,15 @@ const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
 // `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
 // uma sequência fixa de JSX. 'contact' não tem valor único pra ordenar (§6.3).
 const SUPPLIER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
-    code: { label: 'Código', className: 'px-6 py-5 border-r border-gray-100 overflow-hidden' },
-    name: { label: 'Fornecedor', className: 'px-6 py-5 border-r border-gray-100 overflow-hidden' },
-    nickname: { label: 'Apelido', className: 'px-6 py-5 border-r border-gray-100 overflow-hidden' },
-    type: { label: 'Tipo', className: 'px-6 py-5 border-r border-gray-100 overflow-hidden' },
-    category: { label: 'Categoria', className: 'px-6 py-5 border-r border-gray-100 overflow-hidden' },
-    organization: { label: 'Organização', className: 'px-6 py-5 border-r border-gray-100 overflow-hidden' },
-    portal: { label: 'Portais', className: 'px-6 py-5 border-r border-gray-100 overflow-hidden' },
-    contact: { label: 'Contato', sortable: false, className: 'px-6 py-5 border-r border-gray-100 overflow-hidden' },
-    document: { label: 'Documento', className: 'px-6 py-5 border-r border-gray-100 overflow-hidden' },
+    code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    name: { label: 'Fornecedor', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    nickname: { label: 'Apelido', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    type: { label: 'Tipo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    category: { label: 'Categoria', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    organization: { label: 'Organização', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    portal: { label: 'Portais', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    contact: { label: 'Contato', sortable: false, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    document: { label: 'Documento', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
 };
 
 // Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
@@ -417,9 +417,45 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
 
     return (
         <div>
-            <div className="mb-6">
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Meus Fornecedores</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie sua rede de parceiros e fornecedores.</p>
+            <div className="mb-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                <div>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Meus Fornecedores</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie sua rede de parceiros e fornecedores.</p>
+                </div>
+
+                {/* Ações da tela na linha do título, alinhadas à direita: escopo de exibição
+                    (Razão Social/Apelido) + ação primária. Não existe mais toolbar de botões
+                    separada acima da busca. */}
+                <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0" title="Escolha se as listas mostram a Razão Social ou o Apelido do fornecedor">
+                        <button
+                            onClick={() => handleNameModeChange('razao')}
+                            className={`px-2.5 h-7 rounded-[6px] text-xs font-semibold transition-all ${nameMode === 'razao'
+                                ? 'bg-blue-600 text-white'
+                                : 'text-gray-700 hover:text-gray-900'
+                                }`}
+                        >
+                            Razão Social
+                        </button>
+                        <button
+                            onClick={() => handleNameModeChange('apelido')}
+                            className={`px-2.5 h-7 rounded-[6px] text-xs font-semibold transition-all ${nameMode === 'apelido'
+                                ? 'bg-blue-600 text-white'
+                                : 'text-gray-700 hover:text-gray-900'
+                                }`}
+                        >
+                            Apelido
+                        </button>
+                    </div>
+
+                    <button
+                        onClick={() => handleOpenForm()}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                    >
+                        <Plus className="w-[15px] h-[15px]" />
+                        Novo fornecedor
+                    </button>
+                </div>
             </div>
 
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-3">
@@ -428,40 +464,6 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                 <KpiCard shadow={false} size="sm" label="Pessoa Jurídica" value={kpis.pj} icon={<Building2 className="w-4 h-4" />} color="indigo" />
                 <KpiCard shadow={false} size="sm" label="Pessoa Física" value={kpis.pf} icon={<Users className="w-4 h-4" />} color="purple" />
                 <KpiCard shadow={false} size="sm" label="Categorias" value={kpis.categorias} icon={<Tag className="w-4 h-4" />} color="amber" />
-            </div>
-
-            {/* Toolbar de botões (ui_ux_guia_unificado.md §5.3) — escopo (exibição Razão Social/Apelido)
-                à esquerda, ação primária (Novo fornecedor) à direita. Barra própria, acima da
-                toolbar de busca, porque muda o escopo de exibição, não o filtro dos dados. */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0" title="Escolha se as listas mostram a Razão Social ou o Apelido do fornecedor">
-                    <button
-                        onClick={() => handleNameModeChange('razao')}
-                        className={`px-2.5 h-7 rounded-[6px] text-xs font-semibold transition-all ${nameMode === 'razao'
-                            ? 'bg-blue-600 text-white'
-                            : 'text-gray-700 hover:text-gray-900'
-                            }`}
-                    >
-                        Razão Social
-                    </button>
-                    <button
-                        onClick={() => handleNameModeChange('apelido')}
-                        className={`px-2.5 h-7 rounded-[6px] text-xs font-semibold transition-all ${nameMode === 'apelido'
-                            ? 'bg-blue-600 text-white'
-                            : 'text-gray-700 hover:text-gray-900'
-                            }`}
-                    >
-                        Apelido
-                    </button>
-                </div>
-
-                <button
-                    onClick={() => handleOpenForm()}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                >
-                    <Plus className="w-[15px] h-[15px]" />
-                    Novo fornecedor
-                </button>
             </div>
 
             {/* Toolbar §5 (variante acoplada à tabela) — toolbar e conteúdo dividem um único
@@ -567,7 +569,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                             <thead>
                                 {/* sticky: cabeçalho fixo em tabelas longas (ui_ux_guia_unificado.md §6.5) */}
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    <th className="w-10 px-4 py-5 border-r border-gray-100 text-center">
+                                    <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
                                         <input
                                             type="checkbox"
                                             className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
@@ -591,7 +593,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                     })}
                                     {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                     <th aria-hidden="true" className="border-r border-gray-100" />
-                                    <th className="px-6 py-5 text-center relative overflow-hidden text-table-header font-semibold text-gray-500">
+                                    <th className="px-6 py-2 text-center relative overflow-hidden text-table-header font-semibold text-gray-500">
                                         Ações
                                         <cols.ResizeHandle colKey="actions" />
                                     </th>

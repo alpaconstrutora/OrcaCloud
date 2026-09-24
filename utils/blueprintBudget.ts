@@ -1403,8 +1403,10 @@ export function gerarLancamentosDeEsquadrias(
 
   for (const e of quant.totais.porEsquadria ?? []) {
     // Sem nome = ninguém declarou tipo. Não é caso de divergência.
-    const declarada = e.assinatura.split('|')[3] !== '';
-    if (!declarada) continue;
+    // ⚠️ Do CAMPO, e não de `assinatura.split('|')[3]`, como era até 24/09/2026:
+    // a assinatura é chave de agrupamento, não formato de dados, e um `|`
+    // digitado no nome deslocava os campos do split.
+    if (!e.declarada) continue;
 
     if (!e.itemCode) {
       divergencias.push({

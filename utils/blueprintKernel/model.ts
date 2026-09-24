@@ -570,8 +570,30 @@ export interface Opening {
  * é assim que o Revit pensa uma família, e é melhor do que um quadro em que só
  * as nomeadas aparecem agrupadas.
  */
+/**
+ * Escapa um campo de TEXTO LIVRE para entrar numa chave separada por `|`.
+ *
+ * ⚠️ Sem isto a assinatura era AMBIGUA: nome e itemCode são dois campos
+ * livres ADJACENTES, e um `|` digitado em qualquer um deles desloca a
+ * fronteira. Uma busca exaustiva acha o par em segundos — nome `A` com item
+ * `|A` dá a MESMA chave que nome `A|` com item `A`, e as duas esquadrias
+ * viram uma linha só no quadro, com a quantidade somada.
+ *
+ * ESCAPAR, e não trocar o separador: a assinatura vira o `id` da linha de
+ * orçamento (`bp:<studyId>:esquadria:<assinatura>`), que é de-para
+ * persistido. Escapando, todo dado SEM `|` produz a mesma chave de antes,
+ * byte a byte, e nada se desliga; trocar o separador mudaria todos os ids de
+ * uma vez. A barra invertida entra junto porque, sozinho, `|` → `\|` só
+ * empurraria a ambiguidade para quem digitasse uma barra.
+ */
+function escaparNaChave(valor: string): string {
+  return valor.replace(/[\\\|]/g, (c) => '\\' + c);
+}
+
 export function assinaturaDaEsquadria(o: Pick<Opening, 'kind' | 'widthMm' | 'heightMm' | 'esquadria'>): string {
-  return `${o.kind}|${o.widthMm}|${o.heightMm}|${o.esquadria?.nome ?? ''}|${o.esquadria?.itemCode ?? ''}`;
+  const nome = escaparNaChave(o.esquadria?.nome ?? '');
+  const item = escaparNaChave(o.esquadria?.itemCode ?? '');
+  return `${o.kind}|${o.widthMm}|${o.heightMm}|${nome}|${item}`;
 }
 
 /**

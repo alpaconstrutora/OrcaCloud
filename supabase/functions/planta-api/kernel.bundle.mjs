@@ -476,8 +476,13 @@ function assinaturaDasCamadas(camadas) {
   if (!camadas || camadas.length === 0) return "";
   return camadas.map((c) => `${c.espessuraMm}|${c.itemCode}|${c.funcao}`).join(";");
 }
+function escaparNaChave(valor) {
+  return valor.replace(/[\\\|]/g, (c) => "\\" + c);
+}
 function assinaturaDaEsquadria(o) {
-  return `${o.kind}|${o.widthMm}|${o.heightMm}|${o.esquadria?.nome ?? ""}|${o.esquadria?.itemCode ?? ""}`;
+  const nome = escaparNaChave(o.esquadria?.nome ?? "");
+  const item = escaparNaChave(o.esquadria?.itemCode ?? "");
+  return `${o.kind}|${o.widthMm}|${o.heightMm}|${nome}|${item}`;
 }
 function nomeDaEsquadria(o) {
   const cm = (mm) => (mm / 10).toFixed(Math.round(mm) % 10 === 0 ? 0 : 1).replace(".", ",");
@@ -3112,6 +3117,7 @@ ${c.funcao}`;
     areaM2: o.widthMm * o.heightMm / MM2_PARA_M2,
     nome: nomeDaEsquadria(o),
     assinatura: assinaturaDaEsquadria(o),
+    declarada: !!o.esquadria?.nome,
     itemCode: o.esquadria?.itemCode ?? "",
     descricao: o.esquadria?.descricao ?? ""
   }));
@@ -3127,6 +3133,7 @@ ${c.funcao}`;
     } else {
       grupos.set(q.assinatura, {
         assinatura: q.assinatura,
+        declarada: q.declarada,
         nome: q.nome,
         tipo: q.tipo,
         larguraM: q.larguraM,

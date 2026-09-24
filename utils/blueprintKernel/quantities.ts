@@ -391,6 +391,15 @@ export interface QuantidadeAbertura {
   nome: string;
   /** A ASSINATURA do tipo — o que agrupa o quadro. Ver `assinaturaDaEsquadria`. */
   assinatura: string;
+  /**
+   * Alguém declarou um TIPO (deu nome), ou o nome é derivado das medidas?
+   *
+   * ⚠️ Campo próprio porque o orçamento lia isto de
+   * `assinatura.split('|')[3] !== ''` — reabrindo a chave de agrupamento como
+   * se fosse formato de dados. Um `|` no nome deslocava os campos e a
+   * resposta saia errada. Quem precisa do campo lê o campo.
+   */
+  declarada: boolean;
   /** Item de catálogo do tipo. `''` = sem tipo ou tipo sem item. */
   itemCode: string;
   descricao: string;
@@ -406,6 +415,14 @@ export interface QuantidadeAbertura {
  */
 export interface QuantidadePorEsquadria {
   assinatura: string;
+  /**
+   * Alguém declarou um TIPO (deu nome), ou o nome é derivado das medidas?
+   *
+   * ⚠️ Campo próprio porque o orçamento lia isto de
+   * `assinatura.split('|')[3] !== ''` — reabrindo a chave de agrupamento como
+   * se fosse formato de dados. Um `|` no nome deslocava os campos.
+   */
+  declarada: boolean;
   nome: string;
   tipo: 'door' | 'window' | 'sliding';
   larguraM: number;
@@ -1268,6 +1285,7 @@ export function computeQuantities(
     areaM2: ((o.widthMm * o.heightMm) / MM2_PARA_M2),
     nome: nomeDaEsquadria(o),
     assinatura: assinaturaDaEsquadria(o),
+    declarada: !!o.esquadria?.nome,
     itemCode: o.esquadria?.itemCode ?? '',
     descricao: o.esquadria?.descricao ?? '',
   }));
@@ -1286,6 +1304,7 @@ export function computeQuantities(
     } else {
       grupos.set(q.assinatura, {
         assinatura: q.assinatura,
+        declarada: q.declarada,
         nome: q.nome,
         tipo: q.tipo,
         larguraM: q.larguraM,

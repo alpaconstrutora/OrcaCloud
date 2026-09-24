@@ -1875,6 +1875,38 @@ Todo `.ts` do projeto está em LF no repositório (`core.autocrlf`); esses dois 
 
 **Fica anotado, não corrigido**: `quantities.ts` monta chaves de Map com três separadores diferentes — `\n`, `|` e **espaço** (`` `${escopo} ${itemCode} ${funcao ?? ''}` ``). O espaço é frágil (um código de item com espaço colide com o vizinho), mas é bug latente, não observado, e trocá-lo é mexer no agrupamento do quantitativo — assunto de uma fase própria, com o usuário.
 
+### P2.48 — A chave ambígua do quadro de esquadrias (24/09/2026)
+
+**⚠️ Primeiro, uma correção de rumo.** Ao fechar a P2.47 eu anotei que `quantities.ts` montava chaves de agrupamento com **espaço** (`` `${escopo} ${itemCode} ${funcao}` ``) e que isso era um bug latente de colisão. **Estava errado.** Antes de mexer, uma busca exaustiva de colisão sobre um alfabeto adversarial (códigos com espaço, `|`, `;`, vazios, e pedaços que imitam os próprios enums) mostrou o contrário: naquelas chaves o `itemCode` fica **entre dois campos enumerados** que não contêm espaço, então a string é decodificável e não há par ambíguo — 336, 160, 80 e 3 600 combinações sem uma única colisão. O espaço é feio ali, não é defeito.
+
+A mesma busca, porém, achou um bug **real** em outro lugar:
+
+```
+nome "A"  + item "|A"   →  door|800|2100|A||A
+nome "A|" + item "A"    →  door|800|2100|A||A
+```
+
+**`assinaturaDaEsquadria` (kernel) junta cinco campos com `|`, e os dois últimos — nome do tipo e código do item — são texto LIVRE e ADJACENTES.** Dois campos livres lado a lado com um separador que pode aparecer dentro deles é a definição de chave ambígua. E essa chave não é decorativa: é ela que **agrupa o quadro de esquadrias**, que por sua vez vira linha de orçamento e `IfcDoorType`. Duas esquadrias diferentes viravam **uma linha só, com a quantidade somada** — silenciosamente.
+
+**⚠️ E havia um segundo uso, pior.** `utils/blueprintBudget.ts` REABRIA a chave:
+
+```ts
+const declarada = e.assinatura.split('|')[3] !== '';
+```
+
+Chave de agrupamento tratada como formato de dados. Um `|` no nome desloca os campos e a resposta sai errada — e essa resposta decide se a esquadria entra na conferência de divergências do orçamento.
+
+**A correção**
+
+- `escaparNaChave` em `model.ts`: `\` e `|` são escapados nos dois campos livres. ⚠️ **Escapar, e não trocar o separador**, por um motivo concreto: a assinatura vira o `id` da linha de orçamento (`bp:<studyId>:esquadria:<assinatura>`), que é de-para **persistido**. Escapando, todo dado sem `|` produz a chave de antes **byte a byte** — e no banco nenhum dos 24 códigos de item tem `|` —, então nada se desliga; trocar o separador mudaria todos os ids de uma vez. A barra invertida entra junto porque, sozinho, `|` → `\|` só empurraria a ambiguidade para quem digitasse uma barra.
+- `QuantidadePorEsquadria.declarada: boolean` (campo novo, aditivo), preenchido de `!!o.esquadria?.nome`. O orçamento passa a ler o campo. Quem precisa do dado lê o dado.
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-xss-sinks.sh` ok · suíte cheia **451 arquivos / 5171 testes** verdes · `npm run build` ok · bundle da `planta-api` regerado.
+- `__tests__/blueprintAssinaturaEsquadria.test.ts` (5). ⚠️ **Medido com a correção revertida** (`git stash` dos três arquivos): 3 falham, e pelos motivos certos — `expected 'door|800|2100|A||A' not to be 'door|800|2100|A||A'`, `expected [ … ] to have a length of 2 but got 1` (o quadro somando duas esquadrias distintas numa linha) e `expected [] to have a length of 1` (o `declarada` que não existia).
+- Um dos cinco casos é de **compatibilidade**: `nome "P1" + item "87879"` continua dando exatamente `door|800|2100|P1|87879`. É o que preserva os ids de orçamento já gravados.
+- Os goldens do kernel passam sem recaptura: a assinatura não entra no hash canônico (`assinaturaDasCamadas`, que entra na ordenação, não foi tocada — e a busca exaustiva não achou colisão nela, nem com `;` e `|` no código, em 3 600 combinações).
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

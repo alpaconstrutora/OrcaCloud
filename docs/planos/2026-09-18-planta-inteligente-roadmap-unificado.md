@@ -1985,6 +1985,34 @@ As 26 primeiras não são decisão de projeto: são o mesmo canto desenhado duas
 
 **Fica anotado**: sobram 58 pontas soltas e 41 juntas paralelas — as de 0,3 m para cima, que são paredes distintas, e as que o filtro de saldo recusou. Fechar essas exige decisão de desenho, não regra automática.
 
+### P2.52 — Revisão guiada das pontas soltas (24/09/2026)
+
+**O que sobra não é automatizável.** Depois dos passes automáticos restam, na planta real, **58 pontas soltas**. Elas sobraram por um motivo bom: nenhuma regra pode decidi-las sem adivinhar — a ponta a 40 cm de outra é vão de propósito ou parede faltando? A lista âmbar diz QUANTAS são; não diz ONDE nem O QUE FAZER. E 58 bolinhas espalhadas em 195 paredes não se percorrem no olho.
+
+**Uma por vez, com a vista indo até ela.** `utils/blueprintRevisaoDePontas.ts` responde, por ponta: quais saídas existem NAQUELE ponto?
+
+| saída | quando aparece |
+|---|---|
+| **Juntar** com a ponta a N mm | há outra ponta solta a ≤ 600 mm, em qualquer ângulo. Move ESTA ponta — a que está em foco; mover a outra faria o desenho mexer fora do campo de visão |
+| **Esticar** N mm até encontrar | há parede à frente (a conta da P2.42, agora oferecida ponta a ponta) |
+| **Excluir este toco** | parede de até 300 mm com as DUAS pontas livres — sujeira de importação, um traço que sobrou |
+| **Não é problema** | sempre. Varanda, terraço e limite externo DEVEM ficar abertos |
+
+⚠️ **Nada aqui decide.** Cada opção vira comando só quando clicada — é a diferença para a P2.51, que aplica em lote o que mede como seguro.
+
+**Duas decisões de interface que a prova confirmou**
+
+1. **A vista vai até a ponta.** Ação `CENTRALIZAR` nova no canvas (`navegacao`), com escala mínima: aproxima quem está longe demais para ver o detalhe e deixa quem já está perto onde estava — mudar o zoom sob o cursor de quem revisa é desorientador.
+2. ⚠️ **O índice FICA quando a lista encolhe.** Consertei a 8ª de 69, a lista vira 68 e eu continuo na 8ª — que agora é a próxima. Se o índice acompanhasse a ponta, eu saltaria uma a cada conserto.
+
+⚠️ **As "não é problema" vivem no navegador**, por estudo (`usePersistedState`), não no modelo. É juízo de quem revisa, não geometria: gravá-lo no payload mudaria o hash do desenho, e duas pessoas revisando a mesma planta produziriam versões diferentes sem uma linha ter mudado de lugar. O custo é conhecido e está dito: quem abrir a planta noutro computador revê as marcadas.
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-ui-standard.sh` nos três .tsx ok · `check-xss-sinks.sh` ok · suíte cheia **456 arquivos / 5208 testes** verdes · `npm run build` ok.
+- `__tests__/blueprintRevisaoDePontas.test.ts` (7): JUNTAR move a ponta em foco e reduz o número de soltas; além do alcance não oferece; ESTICAR traz a distância no rótulo; o toco só sai com as duas pontas livres, e parede curta com uma ponta presa NÃO é toco; as ignoradas somem da fila sem sair do desenho; **ponta sem saída continua na fila com a lista vazia** — sumir seria esconder trabalho que falta.
+- `__tests__/components/PainelRevisaoDePontas.test.tsx` (5): foca só quando a ponta muda; o índice fica quando a lista encolhe; a opção aplica com o índice dela e "Não é problema" não aplica comando nenhum; ponta sem saída diz o que fazer à mão; lista vazia oferece trazer as marcadas de volta.
+- **App real** (escritas bloqueadas: 15, 0 erros), *Planta 23/09/2026*: o painel abre em *"Revisando 1 de 71"* com o contexto *"Ponta final de uma parede de 975 mm, em 3480, 975"*; navegando até a 8ª aparece *"Juntar com a ponta a 25 mm"*, e o clique leva **71 → 69** pontas soltas (uma junção resolve as duas); "Não é problema" leva a fila de 69 para 68 e surge o link *"Rever as 1 marcada(s) como intencional(is)"*.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

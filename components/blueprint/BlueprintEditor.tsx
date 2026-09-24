@@ -176,6 +176,8 @@ import PainelEsquadria from './PainelEsquadria';
 import PainelEsquadrias from './PainelEsquadrias';
 import { comandosDaUnificacao, unificacoesPropostas, TOLERANCIA_PADRAO_MM } from '../../utils/blueprintUnificarEsquadrias';
 import { comandosDeJuntarParalelas, juncoesParalelasProximas, LATERAL_MAXIMA_MM } from '../../utils/blueprintJuntarParalelas';
+import PainelRevisaoDePontas from './PainelRevisaoDePontas';
+import { chaveDaPonta, pontasParaRevisar, type PontaEmRevisao } from '../../utils/blueprintRevisaoDePontas';
 import PainelImportarIfc from './PainelImportarIfc';
 import PainelImportarDxf from './PainelImportarDxf';
 import PainelImportarBcf from './PainelImportarBcf';
@@ -5013,6 +5015,43 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * Num memo sobre `editor.model` isso rodaria a cada comando — a cada clique de
    * desenho — e travaria o traçado. É o mesmo caminho de `conectarAgora`.
    */
+  /**
+   * Pontas que o usuário marcou como INTENCIONAIS (varanda, limite externo).
+   *
+   * ⚠️ No navegador, por estudo — não no modelo. É juízo de quem revisa, não
+   * geometria: gravá-lo no payload mudaria o hash do desenho, e duas pessoas
+   * revisando a mesma planta produziriam versões diferentes sem uma linha ter
+   * mudado de lugar.
+   */
+  const [pontasIgnoradas, setPontasIgnoradas] = usePersistedState<string[]>(
+    `blueprint:pontas-intencionais:${study.id}`,
+    [],
+  );
+  const ignoradasSet = useMemo(() => new Set(pontasIgnoradas), [pontasIgnoradas]);
+  /**
+   * A fila da revisão guiada (P2.52).
+   *
+   * Depende de `editor.model`, como os outros diagnósticos do bloco — e pode,
+   * porque a conta é barata: lista as pontas soltas e, para cada uma, olha a
+   * vizinhança. O caro (medir o efeito de cada conserto no arranjo) é da P2.51,
+   * e por isso lá o cálculo mora no clique.
+   */
+  const pontasEmRevisao = useMemo(() => {
+    const level = editor.model.levels.find((l) => l.id === levelId);
+    return level ? pontasParaRevisar(editor.model, level, ignoradasSet) : [];
+  }, [editor.model, levelId, ignoradasSet]);
+
+  function aplicarOpcaoDaPonta(ponta: PontaEmRevisao, indice: number) {
+    const opcao = ponta.opcoes[indice];
+    if (!opcao) return;
+    try {
+      editor.runBatch(opcao.comandos);
+      setAvisoConexaoT(`${opcao.rotulo}. Desfazer reverte.`);
+    } catch (e) {
+      setAvisoConexaoT(e instanceof Error ? `O desenho recusou: ${e.message}` : 'O desenho recusou a ação.');
+    }
+  }
+
   function juntarParalelasAgora() {
     const level = editor.model.levels.find((l) => l.id === levelId);
     if (!level) return;
@@ -11542,6 +11581,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   Juntar as desalinhadas por menos de {LATERAL_MAXIMA_MM / 10} cm
                 </button>
               )}
+
+              {/* REVISÃO GUIADA (P2.52). O que sobra depois dos passes
+                  automáticos não é automátizavel — é decisão de desenho. Em vez
+                  de 58 bolinhas espalhadas, uma ponta por vez, com a vista indo
+                  até ela e só as saídas que existem naquele ponto. */}
+              <PainelRevisaoDePontas
+                pontas={pontasEmRevisao}
+                ignoradas={pontasIgnoradas.length}
+                onFocar={(em) => setNavegacao((n) => ({ seq: (n?.seq ?? 0) + 1, acao: 'CENTRALIZAR', em, escalaMinima: 0.03 }))}
+                onAplicar={aplicarOpcaoDaPonta}
+                onIgnorar={(ponta) => setPontasIgnoradas([...pontasIgnoradas, chaveDaPonta(ponta.wallId, ponta.end)])}
+                onLimparIgnoradas={() => setPontasIgnoradas([])}
+              />
 
               {vaosCandidatos.vaos.length === 0 ? (
                 <p className="mt-2 text-xs text-amber-700">

@@ -213,7 +213,7 @@ const COR_PREVIA = '#2563eb';
 export type PecaPrevistaNoCanvas = PecaPrevista;
 
 /** O que a barra pode pedir à vista da planta (ver a prop `navegacao`). */
-export type AcaoDeNavegacao = 'ENQUADRAR' | 'ZOOM_MAIS' | 'ZOOM_MENOS' | 'ESCALA_1_100';
+export type AcaoDeNavegacao = 'ENQUADRAR' | 'ZOOM_MAIS' | 'ZOOM_MENOS' | 'ESCALA_1_100' | 'CENTRALIZAR';
 /** Identidade estável para o padrão: `[]` literal a cada render redesenharia o canvas sem parar. */
 const SEM_PECAS_PREVISTAS: readonly PecaPrevistaNoCanvas[] = [];
 const SEM_OCULTOS: ReadonlySet<string> = new Set();
@@ -991,7 +991,20 @@ interface Props {
    * booleano, para que dois cliques seguidos no mesmo botão sejam dois
    * pedidos — o mesmo desenho do `enquadrarToken` do `ElevationCanvas`.
    */
-  navegacao?: { seq: number; acao: AcaoDeNavegacao } | null;
+  navegacao?: {
+    seq: number;
+    acao: AcaoDeNavegacao;
+    /**
+     * Para `CENTRALIZAR`: o ponto que vai para o meio da tela, em mm do modelo.
+     *
+     * Existe para a REVISÃO GUIADA (P2.52) poder levar a vista até a ponta que
+     * está sendo revista. Sem isto, "próxima ponta" mudaria a lista e deixaria o
+     * usuário procurando no desenho qual delas piscou.
+     */
+    em?: { x: number; y: number };
+    /** Escala mínima ao centralizar: aproxima quando a vista está longe demais. */
+    escalaMinima?: number;
+  } | null;
   /**
    * O retângulo VISÍVEL, em milímetro do modelo, a cada mudança de vista.
    *
@@ -3167,6 +3180,20 @@ export default function BlueprintCanvas({
     if (navegacao.acao === 'ZOOM_MAIS') return noCentro(limitar(vista.escala * 1.25));
     if (navegacao.acao === 'ZOOM_MENOS') return noCentro(limitar(vista.escala / 1.25));
     if (navegacao.acao === 'ESCALA_1_100') return noCentro(limitar(96 / 25.4 / 100));
+    if (navegacao.acao === 'CENTRALIZAR') {
+      const alvo = navegacao.em;
+      if (!alvo) return;
+      // Aproxima só se estiver longe demais para ver o detalhe; quem já está
+      // perto continua na escala em que estava, porque mudar o zoom sob o
+      // cursor de quem revisa é desorientador.
+      const escala = limitar(Math.max(vista.escala, navegacao.escalaMinima ?? 0));
+      setVista({
+        escala,
+        dx: tamanho.w / 2 - alvo.x * escala,
+        dy: tamanho.h / 2 + alvo.y * escala,
+      });
+      return;
+    }
 
     const pontos: Point[] = [];
     // VISTA DEPENDENTE: o enquadramento é o do recorte.

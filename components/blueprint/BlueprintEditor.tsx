@@ -173,6 +173,7 @@ import { comandosDeAceite as aceitarVagas, comandosDeLimpeza as limparVagas, HIP
 import { nucleosDoNivel } from '../../utils/blueprintNucleoVertical';
 import PainelEsquadria from './PainelEsquadria';
 import PainelEsquadrias from './PainelEsquadrias';
+import { comandosDaUnificacao, unificacoesPropostas, TOLERANCIA_PADRAO_MM } from '../../utils/blueprintUnificarEsquadrias';
 import PainelImportarIfc from './PainelImportarIfc';
 import PainelImportarDxf from './PainelImportarDxf';
 import PainelImportarBcf from './PainelImportarBcf';
@@ -2722,6 +2723,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * esquadria sem nome antes de gerar linha OU divergência, então 104 peças
    * sem tipo não produziam orçamento nem aviso.
    */
+  /** Tolerância da unificação de tipos (P2.50), em milímetro. */
+  const [toleranciaDeUnificacao, setToleranciaDeUnificacao] = useState(TOLERANCIA_PADRAO_MM);
+  /**
+   * O que daria para unificar no pavimento ativo (P2.50).
+   *
+   * Mora aqui, e não no painel, porque a conta precisa do MODELO: decidir se a
+   * medida nova cabe na parede exige o comprimento dela e o offset da abertura,
+   * que o quadro de esquadrias não carrega.
+   */
+  const unificacoesDeEsquadria = useMemo(
+    () => (levelId ? unificacoesPropostas(editor.model, levelId, toleranciaDeUnificacao) : []),
+    [editor.model, levelId, toleranciaDeUnificacao],
+  );
   const esquadriasSemTipo = useMemo(
     () => (quant.totais.porEsquadria ?? []).filter((e) => !e.declarada).reduce((soma, e) => soma + e.quantidade, 0),
     [quant],
@@ -12108,6 +12122,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               }}
               onSelecionar={(ids) => {
                 if (ids.length > 0) selecionar([...ids]);
+              }}
+              unificacoes={unificacoesDeEsquadria}
+              toleranciaMm={toleranciaDeUnificacao}
+              onTolerancia={setToleranciaDeUnificacao}
+              onUnificar={(quais) => {
+                const cmds = comandosDaUnificacao(quais);
+                if (cmds.length > 0) editor.runBatch(cmds);
               }}
             />
           )}

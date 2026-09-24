@@ -1932,6 +1932,28 @@ Não era desleixo: o único caminho existente era selecionar cada abertura no de
 
 **Fica para o usuário decidir**: 41 tipos para 90 peças é bastante fragmentação, vinda de medidas ligeiramente diferentes no DXF (uma porta 82×210 e outra 80×210 são dois tipos). Agrupar por medida arredondada mudaria a geometria do desenho, então não foi feito por conta própria.
 
+### P2.50 — Unificar tipos de esquadria próximos (24/09/2026) · *"faça uma fase que oferece unificar tipos próximos"*
+
+**De onde vem a fragmentação.** A P2.49 fechou com **90 esquadrias em 41 tipos** na planta real. Não são 41 caixilhos: é o DXF. A mesma porta desenhada em momentos diferentes sai 800, 802 e 815 mm, e a medida entra na assinatura — cada milímetro vira um tipo no quadro. O orçamento pede 41 cotações de um caixilho só.
+
+**⚠️ Esta é a única ação do módulo que muda GEOMETRIA em lote.** Unificar 802 → 800 mm reescreve a abertura no desenho. Por isso: prévia item a item **antes** do botão, tolerância escolhida pelo usuário (padrão 2 cm, o pedido), e um passo de desfazer para tudo.
+
+**As três decisões que o código trava**
+
+1. **O alvo é o tipo mais numeroso.** Entre 800 mm (12 peças) e 802 mm (2), o padrão de fato é 800 — é o que o projeto quis. Empate resolve pela medida **redonda** (múltiplo de 5 cm), que é a que existe no catálogo do fabricante; persistindo, a maior.
+2. **A tolerância NÃO é transitiva.** Com 2 cm, 800 e 802 juntam, 802 e 804 juntam, mas 800 e 804 não. Uma cadeia transitiva arrastaria 800 até 840 em vinte passos de 2 mm — o oposto do que a tolerância promete. Cada peça absorvida está a no máximo a tolerância **do alvo**.
+3. **O que não cabe fica fora da proposta.** `SetOpeningSize` recusa quando `offset + largura` passa do comprimento da parede, ou `peitoril + altura` do pé-direito — e o kernel recusaria o **lote inteiro** por causa de uma peça. A conta de "cabe?" é feita antes, peça a peça: o que não cabe sai do lote e é **contado na tela**, com o motivo.
+
+Junto da medida vai a **esquadria do alvo** (nome e item), quando ele tem uma: trocar só a medida deixaria duas peças 80×210 com nomes diferentes — a fragmentação de volta, agora invisível.
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-ui-standard.sh` ok · `check-xss-sinks.sh` ok · suíte cheia **453 arquivos / 5190 testes** verdes · `npm run build` ok.
+- `__tests__/blueprintUnificarEsquadrias.test.ts` (8): alvo pelo mais numeroso; empate pela redonda (800 ganha de 795); a não-transitividade (800+820 juntam, 840 fica); **a peça que não cabe sai do lote e o lote resultante é aceito pelo kernel**; a altura entra na conta; o nome do alvo vai junto e o quadro cai para um tipo; porta e janela nunca se unificam; tolerância zero desliga; vão livre não entra.
+- `__tests__/components/PainelEsquadrias.test.tsx` (+4, total 11): a prévia mostra cada agrupamento e o que não cabe; o botão entrega a proposta inteira e só existe com proposta; a tolerância é digitada em **centímetro** e sobe em milímetro (com estado, porque o campo é controlado); sem `onUnificar` o bloco nem aparece.
+- **App real** (escritas bloqueadas: 16, 0 erros), *Planta 23/09/2026*: a prévia lista 6 agrupamentos — por exemplo `202×120, 201,7×120, 200,2×120 → 200×120 cm · 3 peça(s) · 1 não cabe(m) e fica(m) como está` — e aplicar leva o quadro de **41 para 29 tipos**, com o fluxo da P2.49 em seguida nomeando os 29.
+
+**Fica anotado**: o alvo é a medida que mais se repete no DESENHO, não a comercial. Na planta real isso produz alvos como `219,4×120` — unificado, mas não redondo. Arredondar para a medida de catálogo mexeria também nas peças do alvo (e poderia não caber), então é decisão de outra fase, com o usuário.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

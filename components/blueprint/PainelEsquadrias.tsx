@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookMarked, Search, Wand2 } from 'lucide-react';
+import { BookMarked, Combine, Search, Wand2 } from 'lucide-react';
 import { nomeDoTipoDeAbertura, type Esquadria } from '../../utils/blueprintKernel';
 import type { QuantidadePorEsquadria } from '../../utils/blueprintKernel/quantities';
-import { textoEmCm } from '../../utils/blueprintMedidaCm';
+import { cmParaMm, mmParaCm, textoEmCm } from '../../utils/blueprintMedidaCm';
+import { TOLERANCIA_PADRAO_MM, type Unificacao } from '../../utils/blueprintUnificarEsquadrias';
 import DatabasePickerModal from '../DatabasePickerModal';
 import { useOrgContext, useOrgWriteTarget, forEachTargetOrg } from '../../hooks/useOrgContext';
 import { listOpeningTypes, saveOpeningType, type TipoDeEsquadria } from '../../services/blueprintOpeningTypeService';
@@ -55,9 +56,26 @@ interface Props {
   onAplicar: (mudancas: { openingIds: readonly string[]; esquadria: Esquadria }[]) => void;
   /** Mostra o grupo no desenho. */
   onSelecionar: (openingIds: readonly string[]) => void;
+  /**
+   * UNIFICAR TIPOS PRÓXIMOS (P2.50). A proposta chega pronta porque depende do
+   * MODELO (saber se a medida nova cabe na parede), e este painel só conhece o
+   * quadro. `toleranciaMm` sobe para quem calcula.
+   */
+  unificacoes?: readonly Unificacao[];
+  toleranciaMm?: number;
+  onTolerancia?: (mm: number) => void;
+  onUnificar?: (quais: readonly Unificacao[]) => void;
 }
 
-export default function PainelEsquadrias({ grupos, onAplicar, onSelecionar }: Props) {
+export default function PainelEsquadrias({
+  grupos,
+  onAplicar,
+  onSelecionar,
+  unificacoes = [],
+  toleranciaMm = TOLERANCIA_PADRAO_MM,
+  onTolerancia,
+  onUnificar,
+}: Props) {
   const [rascunho, setRascunho] = useState<Record<string, RascunhoDeEsquadria>>({});
   const [escolhendoItemDe, setEscolhendoItemDe] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -268,6 +286,66 @@ export default function PainelEsquadrias({ grupos, onAplicar, onSelecionar }: Pr
         <p className="mt-2 text-[11px] text-slate-600" role="status" data-testid="aviso-esquadrias-lote">
           {aviso}
         </p>
+      )}
+
+      {/* UNIFICAR TIPOS PRÓXIMOS (P2.50).
+          ⚠️ É a única ação do módulo que muda GEOMETRIA em lote — unificar
+          802 → 800 mm reescreve a abertura no desenho. Por isso a prévia vem
+          antes do botão, item a item, e a tolerância é do usuário. */}
+      {onUnificar && (
+        <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-2" data-testid="unificar-tipos">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-1.5 text-xs text-slate-600">
+              Unificar tipos que diferem até
+              <input
+                type="number"
+                min={0}
+                max={20}
+                step={0.5}
+                value={mmParaCm(toleranciaMm)}
+                onChange={(e) => onTolerancia?.(cmParaMm(Number(e.target.value) || 0))}
+                aria-label="Tolerância para unificar tipos (cm)"
+                className="w-16 rounded-md border border-slate-300 px-2 py-1 text-right text-xs text-slate-800"
+              />
+              cm
+            </label>
+            <button
+              type="button"
+              onClick={() => onUnificar(unificacoes)}
+              disabled={unificacoes.length === 0}
+              title="Reescreve a medida das peças absorvidas no desenho. Um passo de desfazer."
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              data-testid="unificar-agora"
+            >
+              <Combine className="h-3.5 w-3.5" />
+              Unificar {unificacoes.length || ''} agrupamento(s)
+            </button>
+          </div>
+
+          {unificacoes.length === 0 ? (
+            <p className="mt-1.5 text-[11px] text-slate-500" data-testid="unificar-nada">
+              Nenhum tipo a menos de {textoEmCm(toleranciaMm)} cm de outro. Aumente a tolerância para ver mais — ou
+              está tudo padronizado.
+            </p>
+          ) : (
+            <ul className="mt-1.5 space-y-0.5" data-testid="previa-unificacao">
+              {unificacoes.map((u) => (
+                <li key={u.alvo.assinatura} className="text-[11px] text-slate-600">
+                  <strong>
+                    {u.absorvidos
+                      .map((g) => `${textoEmCm(g.larguraMm)}×${textoEmCm(g.alturaMm)}`)
+                      .join(', ')}
+                  </strong>{' '}
+                  → {textoEmCm(u.alvo.larguraMm)}×{textoEmCm(u.alvo.alturaMm)} cm
+                  {u.alvo.esquadria?.nome ? ` (${u.alvo.esquadria.nome})` : ''} · {u.pecas} peça(s)
+                  {u.naoCabem.length > 0 && (
+                    <span className="text-amber-700"> · {u.naoCabem.length} não cabe(m) e fica(m) como está</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       <table className="mt-3 w-full text-left text-xs">

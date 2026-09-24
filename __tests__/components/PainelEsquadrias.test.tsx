@@ -163,3 +163,93 @@ describe('PainelEsquadrias · o quadro em lote', () => {
     expect(screen.getByTestId('esquadrias-vazio')).toHaveTextContent('não há caixilho a orçar');
   });
 });
+
+/**
+ * UNIFICAR TIPOS PRÓXIMOS (P2.50) — a parte do painel.
+ *
+ * ⚠️ A conta mora em `blueprintUnificarEsquadrias` (precisa do modelo, para
+ * saber se a medida nova cabe na parede) e tem teste próprio. Aqui se trava o
+ * que o painel promete: a PRÉVIA antes do botão, o que não cabe dito na tela,
+ * e a tolerância em centímetro subindo em milímetro.
+ */
+describe('PainelEsquadrias · unificar tipos próximos', () => {
+  const unificacao = {
+    alvo: { assinatura: 'a', kind: 'door' as const, larguraMm: 800, alturaMm: 2100, esquadria: { nome: 'P1', itemCode: '', descricao: '' }, aberturas: [] },
+    absorvidos: [
+      { assinatura: 'b', kind: 'door' as const, larguraMm: 802, alturaMm: 2100, esquadria: null, aberturas: [{ openingId: 'o2', maxLarguraMm: 5000, maxAlturaMm: 2800 }] },
+    ],
+    pecas: 1,
+    naoCabem: [{ openingId: 'o9', motivo: 'largura 800 mm não cabe: sobram 770 mm de parede' }],
+  };
+
+  it('mostra a PRÉVIA item a item, com o que não cabe, antes de qualquer botão', () => {
+    const onUnificar = vi.fn();
+    render(
+      <PainelEsquadrias
+        grupos={[grupo({ assinatura: 'a', quantidade: 12 }), grupo({ assinatura: 'b', larguraM: 0.802 })]}
+        onAplicar={vi.fn()}
+        onSelecionar={vi.fn()}
+        unificacoes={[unificacao]}
+        toleranciaMm={20}
+        onUnificar={onUnificar}
+      />,
+    );
+    const previa = screen.getByTestId('previa-unificacao');
+    expect(previa).toHaveTextContent('80,2×210');
+    expect(previa).toHaveTextContent('80×210 cm (P1)');
+    expect(previa).toHaveTextContent('1 peça(s)');
+    // O que não cabe é dito, não escondido.
+    expect(previa).toHaveTextContent('1 não cabe(m) e fica(m) como está');
+  });
+
+  it('o botão entrega a proposta inteira e só existe com proposta', async () => {
+    const user = userEvent.setup();
+    const onUnificar = vi.fn();
+    const { rerender } = render(
+      <PainelEsquadrias grupos={[grupo()]} onAplicar={vi.fn()} onSelecionar={vi.fn()} unificacoes={[unificacao]} onUnificar={onUnificar} />,
+    );
+    await user.click(screen.getByTestId('unificar-agora'));
+    expect(onUnificar).toHaveBeenCalledWith([unificacao]);
+
+    // Sem proposta: botão desabilitado e a tela explica.
+    rerender(<PainelEsquadrias grupos={[grupo()]} onAplicar={vi.fn()} onSelecionar={vi.fn()} unificacoes={[]} onUnificar={onUnificar} />);
+    expect(screen.getByTestId('unificar-agora')).toBeDisabled();
+    expect(screen.getByTestId('unificar-nada')).toHaveTextContent('Nenhum tipo a menos de 2 cm');
+  });
+
+  it('a tolerância é digitada em CENTÍMETRO e sobe em milímetro', async () => {
+    const user = userEvent.setup();
+    const onTolerancia = vi.fn();
+    // Com ESTADO, como no editor: o campo é controlado, e um `toleranciaMm` fixo
+    // faria o valor voltar a cada tecla — o teste mediria o próprio dúblê.
+    function Controlado() {
+      const [mm, setMm] = React.useState(20);
+      return (
+        <PainelEsquadrias
+          grupos={[grupo()]}
+          onAplicar={vi.fn()}
+          onSelecionar={vi.fn()}
+          unificacoes={[]}
+          toleranciaMm={mm}
+          onTolerancia={(v) => {
+            onTolerancia(v);
+            setMm(v);
+          }}
+          onUnificar={vi.fn()}
+        />
+      );
+    }
+    render(<Controlado />);
+    const campo = screen.getByLabelText(/Tolerância para unificar/) as HTMLInputElement;
+    expect(campo.value).toBe('2');
+    await user.clear(campo);
+    await user.type(campo, '5');
+    expect(onTolerancia).toHaveBeenLastCalledWith(50);
+    expect(campo.value).toBe('5');
+  });
+
+  it('sem `onUnificar`, o bloco nem aparece — quem não tem o modelo não oferece a ação', () => {
+    render(<PainelEsquadrias grupos={[grupo()]} onAplicar={vi.fn()} onSelecionar={vi.fn()} />);
+    expect(screen.queryByTestId('unificar-tipos')).toBeNull();
+  });
+});

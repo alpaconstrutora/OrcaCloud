@@ -14,6 +14,13 @@ import { contractIndexService } from '../services/contractIndexService';
 import { KpiCard } from './ui/KpiCard';
 import MyTasksWidget from './MyTasksWidget';
 import { ApproveRejectModal, ENTITY_TAG } from './FinancialApprovalModule';
+import {
+    centralControleService, comoSettled,
+    type CentralControleBootstrap,
+} from '../services/centralControleService';
+import type { ReconciliationDivergences } from '../types/financial';
+import type { ProcessStepBottleneck } from '../types/process';
+import { useStore } from '../store/useStore';
 
 interface Props {
     organizationId: string | null;
@@ -85,18 +92,44 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     const load = React.useCallback(async () => {
         setLoading(true);
 
-        // Cada fonte é independente — uma RPC fora do ar não pode apagar as outras
-        // (ao contrário do padrão de try/catch único usado no BIDashboard).
-        const [financialR, divergenceR, approvalSummaryR, bottlenecksR, reajusteR, actionQueueR, scorecardR, approvalConfigR] = await Promise.allSettled([
-            financialIntelligenceService.getAlerts(organizationId),
-            divergenceService.getDivergences(organizationId),
-            approvalService.getPendingSummary(organizationId),
-            processService.getBottlenecks(organizationId),
+        // ── Uma chamada para as seis consultas pesadas ────────────────────
+        // Até 24/09/2026 as OITO saíam juntas num `Promise.allSettled`, por
+        // cima das ~17 requisições da casca do app — pico medido de 17 em voo.
+        // Nenhuma das seis é lenta sozinha (3 ms a 1,5 s com a RLS ativa); em
+        // produção, correndo juntas, a média ia a 687–3.744 ms e o pior caso a
+        // 7,8 s (`pg_stat_statements`, ~350 chamadas). Não era o SQL: era a
+        // disputa por uma instância pequena.
+        //
+        // `fn_central_controle_bootstrap` roda as seis numa sessão só. As duas
+        // leituras de tabela (reajuste e config de alçada) continuam soltas —
+        // são baratas e não entram na função.
+        //
+        // O isolamento por fonte NÃO se perdeu: a função SQL embrulha cada
+        // consulta no próprio `BEGIN … EXCEPTION`, e `comoSettled` devolve o
+        // mesmo `PromiseSettledResult` que o código abaixo já lia.
+        const [bootstrapR, reajusteR, approvalConfigR] = await Promise.allSettled([
+            centralControleService.bootstrap(organizationId),
             contractIndexService.listDueForReajuste(organizationId),
-            approvalService.listActionQueue(organizationId),
-            financialIntelligenceService.getProjectScorecards(organizationId),
             financialApprovalService.listConfig(organizationId),
         ]);
+
+        // Uma falha da chamada consolidada (rede, timeout) derruba as seis
+        // juntas — é o preço de trocar seis round-trips por um. `comoSettled`
+        // transforma isso no mesmo `rejected` que cada fonte teria sozinha,
+        // então os seis blocos de tratamento abaixo seguem valendo.
+        const painel = bootstrapR.status === 'fulfilled' ? bootstrapR.value : undefined;
+        const falhaGeral = bootstrapR.status === 'rejected' ? bootstrapR.reason : undefined;
+        const fonte = <T,>(chave: keyof CentralControleBootstrap): PromiseSettledResult<T> =>
+            painel
+                ? comoSettled(painel[chave] as never, String(chave)) as PromiseSettledResult<T>
+                : { status: 'rejected', reason: falhaGeral ?? new Error('Painel indisponível.') };
+
+        const financialR       = fonte<FinancialAlert[]>('financial_alerts');
+        const divergenceR      = fonte<ReconciliationDivergences>('divergences');
+        const approvalSummaryR = fonte<ApprovalPendingSummary[]>('approval_summary');
+        const bottlenecksR     = fonte<ProcessStepBottleneck[]>('bottlenecks');
+        const actionQueueR     = fonte<ActionQueueItem[]>('action_queue');
+        const scorecardR       = fonte<ProjectScorecard[]>('scorecards');
 
         const errs: string[] = [];
         const built: AlertItem[] = [];
@@ -218,11 +251,41 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
         setLoading(false);
     }, [organizationId]);
 
-    React.useEffect(() => { load(); }, [load]);
+    // ── C3: não competir com a casca do app ───────────────────────────────
+    // As consultas deste painel são as mais pesadas da sessão e, até
+    // 24/09/2026, saíam no MESMO instante em que a casca carregava projetos,
+    // organizações, clientes, colaboradores e tarefas — pico medido de 17
+    // requisições em voo, num banco de 224 MB de shared_buffers. Sobrepor as
+    // duas rajadas fazia as duas demorarem mais.
+    //
+    // `projectsLoading` nasce `true` e só cai quando o carregamento mais
+    // pesado da casca termina — é o sinal mais honesto de "assentou" que o
+    // store oferece. Não é bloqueio de leitura por organização (REGRA #5): o
+    // painel carrega em "Todas" igual, só espera a vez.
+    const cascaCarregando = useStore(s => s.projectsLoading);
+    const [podeCarregar, setPodeCarregar] = React.useState(false);
+
+    React.useEffect(() => {
+        if (podeCarregar) return;
+        if (!cascaCarregando) { setPodeCarregar(true); return; }
+        // Teto de 4 s: se a casca travar ou falhar, o painel não fica refém
+        // dela — atrasar é aceitável, nunca carregar não é.
+        const teto = setTimeout(() => setPodeCarregar(true), 4000);
+        return () => clearTimeout(teto);
+    }, [cascaCarregando, podeCarregar]);
+
+    React.useEffect(() => { if (podeCarregar) load(); }, [load, podeCarregar]);
 
     // Faixa 3 — recarrega só o caixa projetado ao trocar o período (30/60/90 dias),
     // sem re-buscar as demais 5 fontes.
+    //
+    // Espera o mesmo portão do `load()`: esta RPC não entrou na consolidada
+    // porque é a única que aceita parâmetro de período e recarrega sozinha ao
+    // trocar 30/60/90 — mas no primeiro carregamento ela disputava com a casca
+    // igual às outras. Trocar o período depois não espera nada: aí a casca já
+    // assentou e `podeCarregar` é verdadeiro.
     React.useEffect(() => {
+        if (!podeCarregar) return;
         let cancelled = false;
         setCashflowLoading(true);
         financialIntelligenceService.getCashflowProjection(organizationId, cashflowDays)
@@ -230,7 +293,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
             .catch(err => { console.error('[CentralControle] cashflow:', err); if (!cancelled) setCashflow([]); })
             .finally(() => { if (!cancelled) setCashflowLoading(false); });
         return () => { cancelled = true; };
-    }, [organizationId, cashflowDays]);
+    }, [organizationId, cashflowDays, podeCarregar]);
 
     // Opções do filtro de Obra — só entram obras que de fato têm algo pendente
     // visível agora (alerta financeiro ou item na fila de aprovação).

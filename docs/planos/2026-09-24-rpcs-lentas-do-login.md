@@ -144,6 +144,75 @@ sobreposição sem mexer em ~30 chamadas), depois **C4**. **C2** só com decisã
 explícita sobre frescura. **C5** é a alavanca mais simples se o orçamento
 permitir — nenhuma das outras compensa uma instância subdimensionada para sempre.
 
+## Execução de C1 + C3 (a recomendação, aprovada pelo usuário)
+
+> Siga sua recomendação
+
+### C1 — uma chamada no lugar de seis
+
+`supabase/migrations/aplicar_20270924000001_central_controle_bootstrap.sql`:
+`fn_central_controle_bootstrap` roda as seis consultas numa **sessão só**, em
+sequência. Uma conexão, um round-trip, cache do Postgres aproveitado entre os
+blocos em vez de seis sessões disputando o mesmo buffer pool.
+
+Duas decisões que não são detalhe:
+
+- **`SECURITY INVOKER`**, como as seis originais. Marcar DEFINER faria a
+  consolidação virar furo de autorização — devolveria, com os privilégios do
+  dono, dados que o chamador não pode ver. A autorização segue na RLS.
+- **Um `BEGIN … EXCEPTION` por fonte.** O código que isto substitui usava
+  `Promise.allSettled` de propósito, para que uma RPC fora do ar não apagasse
+  as outras cinco. Um `SELECT` único perderia isso. Cada fonte devolve
+  `{ok, data}` ou `{ok: false, erro}`, e `comoSettled()` reconstrói o mesmo
+  `PromiseSettledResult` que a tela já lia — os seis blocos de tratamento não
+  mudaram.
+
+Aplicada e conferida com a RLS ativa: **2.501 ms**, 6/6 fontes `ok`,
+`action_queue` com 483 itens, `scorecards` 11, `bottlenecks` 5.
+
+### C3 — o painel não compete mais com a casca
+
+As consultas do painel saíam no MESMO instante em que a casca carregava
+projetos, organizações, clientes, colaboradores e tarefas. `projectsLoading`
+nasce `true` e cai quando o carregamento mais pesado da casca termina — é o
+sinal de "assentou" mais honesto que o store oferece. Teto de 4 s para o painel
+nunca ficar refém da casca.
+
+O `fn_cashflow_projection` entrou no mesmo portão: ficou fora da consolidada
+por ser a única que aceita período (30/60/90) e recarregar sozinha, mas no
+primeiro carregamento disputava igual às outras.
+
+| | Antes | Depois |
+|---|---|---|
+| Chamadas do painel | 8 | **3** (consolidada + 2 leituras de tabela baratas) |
+| RPCs pesadas | 6 requisições | **1** (`fn_central_controle_bootstrap`, 148 KB, 893 ms) |
+| Quando o painel começa | **+679 ms** — dentro da rajada da casca | **+3.039 ms** — depois de ela assentar |
+
+### A prova que mais importa: os números não mudaram
+
+Produção (código antigo, 6 chamadas) × frente (consolidada) — mesmo usuário,
+mesmo dado, texto da tela extraído e comparado linha a linha:
+
+```
+✅ IDÊNTICO: 46 linhas de conteúdo batem
+```
+
+Inclui os 460 títulos aguardando aprovação (R$ 2.623.352,01), os 27 contratos
+(R$ 4.375.623,05), os 5 pedidos, os 6 reajustes vencidos e os saldos projetados
+por obra. Zero erro de console nos dois lados.
+
+### O que NÃO prometo
+
+Não afirmo ganho de tempo de parede. A variância do banco compartilhado é
+grande demais para isso — foi o que derrubou a tentativa do limitador de
+concorrência (ver acima). O que está provado aqui é **estrutural**: seis
+round-trips viraram um, e o painel deixou de sobrepor a rajada da casca.
+
 ## Estado
 
-Investigação concluída — 24/09/2026. **Nenhum código de produto alterado.**
+C1 e C3 concluídos e verificados — 24/09/2026.
+C2, C4 e C5 seguem em aberto (ver a tabela de caminhos acima).
+
+Mecânica: `tsc` limpo · `build` limpo · **5.178 testes** · `segurancaMigrations`
+e `migrationsPrefixo` OK · `check-ui-standard` limpo em `CentralControle.tsx` ·
+os 4 scripts de regra OK.

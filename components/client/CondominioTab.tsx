@@ -29,6 +29,11 @@ import type {
     PortalRateioCondominio,
 } from '../../services/clientPortalService';
 import { CRITERIO_LABEL, type CriterioRateio } from '../../services/condominioRateioService';
+// O MESMO rótulo do admin. O payload traz a descrição como está no banco, e os
+// rateios criados antes de 23/09/2026 guardaram o texto cru do boleto — podar
+// aqui é o que faz o condômino ler "ENERGISA SUL-SUDESTE" em vez do nome do
+// arquivo. Ver `utils/despesaCondominio.ts`.
+import { rotuloDeDespesa } from '../../utils/despesaCondominio';
 
 /** Papéis do banco em português de gente. */
 const PAPEL_LABEL: Record<string, string> = {
@@ -454,7 +459,9 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
                                             <div className="space-y-1.5">
                                                 {r.despesas.map(d => (
                                                     <div key={d.id} className="flex items-center justify-between gap-3 text-sm">
-                                                        <span className="text-gray-600 truncate" title={d.descricao}>{d.descricao}</span>
+                                                        <span className="text-gray-600 truncate" title={d.descricao}>
+                                                            {rotuloDeDespesa(d.descricao) ?? 'Despesa sem descrição'}
+                                                        </span>
                                                         <span className="text-gray-800 font-medium shrink-0">{dinheiro(d.valor)}</span>
                                                     </div>
                                                 ))}

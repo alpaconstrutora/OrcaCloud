@@ -15,6 +15,7 @@
 
 import { supabase } from '../lib/supabase';
 import { generateDocumentNumber } from './documentNumbering';
+import { rotuloDeDespesa } from '../utils/despesaCondominio';
 
 export type CriterioRateio = 'FRACAO_IDEAL' | 'IGUAL' | 'AREA_PRIVATIVA' | 'GRUPO' | 'FIXO';
 export type TipoRateio = 'ORDINARIO' | 'EXTRAORDINARIO';
@@ -38,6 +39,9 @@ export const CRITERIO_EXIGE: Record<CriterioRateio, string> = {
 };
 
 export interface DespesaRateio {
+    /** `condominio_rateio_despesas.id`. Só no snapshot salvo — a prévia ainda
+     *  não gravou nada, e é por este id que a descrição é corrigida. */
+    id?: string;
     transaction_id: string;
     descricao: string;
     valor: number;
@@ -337,7 +341,7 @@ export const condominioRateioService = {
         }
         let queryTx = supabase
             .from('internal_transactions')
-            .select('id, description, amount, transaction_date, direction')
+            .select('id, description, amount, transaction_date, direction, party_name, entity_name')
             .in('cost_center_id', params.costCenterIds)
             .eq('direction', 'DEBIT');
         queryTx = params.transactionIds && params.transactionIds.length > 0
@@ -348,7 +352,12 @@ export const condominioRateioService = {
 
         const despesas: DespesaRateio[] = (txs || []).map((t: any) => ({
             transaction_id: t.id,
-            descricao: t.description || 'Sem descrição',
+            // O rateio nasce com o rótulo já podado: a descrição da transação é,
+            // na origem BOLETO, nome de arquivo ou o bloco de OCR da linha do
+            // beneficiário. Ver `utils/despesaCondominio.ts` — e o síndico pode
+            // reescrever depois, no detalhe do rateio em rascunho.
+            descricao: rotuloDeDespesa(t.description, t.party_name || t.entity_name)
+                ?? 'Despesa sem descrição',
             valor: Number(t.amount || 0),
             data: t.transaction_date,
         }));
@@ -585,15 +594,37 @@ export const condominioRateioService = {
     async listarDespesas(rateioId: string): Promise<DespesaRateio[]> {
         const { data, error } = await supabase
             .from('condominio_rateio_despesas')
-            .select('transaction_id, descricao, valor')
+            .select('id, transaction_id, descricao, valor')
             .eq('rateio_id', rateioId)
             .order('descricao', { ascending: true });
         if (error) throw new Error(`Falha ao carregar as despesas: ${error.message}`);
         return (data || []).map((d: any) => ({
+            id: d.id,
             transaction_id: d.transaction_id,
-            descricao: d.descricao || 'Sem descrição',
+            // Poda na LEITURA também, e não só na criação: os rateios que já
+            // existem foram gravados com a descrição crua, e o condômino já os
+            // enxerga no portal. Descrição escrita à mão passa intacta.
+            descricao: rotuloDeDespesa(d.descricao) ?? 'Despesa sem descrição',
             valor: Number(d.valor || 0),
         }));
+    },
+
+    /**
+     * Corrige a descrição de uma despesa do rateio.
+     *
+     * Só faz sentido em rateio RASCUNHO: fechado é prestação de contas, e
+     * reescrever a linha depois de fechado muda o documento que o condômino já
+     * recebeu. Quem chama garante o estado — a tela só oferece a edição no
+     * rascunho.
+     */
+    async atualizarDescricaoDespesa(despesaId: string, descricao: string): Promise<void> {
+        const limpa = descricao.trim();
+        if (!limpa) throw new Error('A descrição não pode ficar vazia.');
+        const { error } = await supabase
+            .from('condominio_rateio_despesas')
+            .update({ descricao: limpa })
+            .eq('id', despesaId);
+        if (error) throw new Error(`Falha ao salvar a descrição: ${error.message}`);
     },
 
     async listarItens(rateioId: string): Promise<{ unit_id: string; peso: number; valor: number; client_id: string | null }[]> {

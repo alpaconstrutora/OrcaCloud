@@ -9,7 +9,7 @@
 // UI: ui_ux_guia_unificado.md — §5.2 toolbar acoplada, §6.6 px-6 + border-r,
 // §7 tipografia, §8 status como texto, §9 ações, §14 useConfirm, §22 estado local.
 import React from 'react';
-import { Users, UserCheck, Home, Wallet, Search, RefreshCw, Plus, DoorOpen, Download, AlertCircle, LinkIcon, Link2Off, ExternalLink, MoveHorizontal } from 'lucide-react';
+import { Users, UserCheck, Home, Wallet, Search, RefreshCw, Plus, DoorOpen, Download, AlertCircle, LinkIcon, ExternalLink, MoveHorizontal } from 'lucide-react';
 import {
     ColumnConfig,
     useTableColumns,
@@ -34,9 +34,6 @@ import { condominioAcessoService } from '../../services/condominioAcessoService'
 import { clientPortalService } from '../../services/clientPortalService';
 import { useStore } from '../../store/useStore';
 import { unitOccupancyService } from '../../services/unitOccupancyService';
-import {
-    condominoAccessService, type AcessoCondomino,
-} from '../../services/condominoPortalService';
 import {
     occupancyImportService,
     type ImportPreview,
@@ -258,19 +255,16 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
     ) + cols.getWidth('actions');
 
     const [linhas, setLinhas] = React.useState<UnitOccupancyRow[]>([]);
-    /** Acesso ao portal por ocupação. `listByUnits` existia no service e não era
-     *  chamado por ninguém — a tela gerava link sem nunca saber quais já tinham. */
-    const [acessos, setAcessos] = React.useState<Record<string, AcessoCondomino>>({});
     /** Lado do Portal do Cliente, por `client_id` (não por ocupação: o link é
      *  da PESSOA, e quem tem 3 salas tem um link só). */
     const [acessoCliente, setAcessoCliente] = React.useState<Record<string, AcessoClienteLite>>({});
     const navigateToFocus = useStore(s => s.navigateToFocus);
 
-    /** O estado que a coluna mostra, juntando os dois caminhos. */
+    /** O estado que a coluna mostra. Desde a aposentadoria do portal legado
+     *  (23/09/2026) há um caminho só: o Portal do Cliente. */
     const acessoDa = React.useCallback(
-        (o: { id: string; client_id: string }): EstadoDeAcesso =>
-            estadoDeAcesso(acessoCliente[o.client_id], acessos[o.id]),
-        [acessoCliente, acessos],
+        (o: { client_id: string }): EstadoDeAcesso => estadoDeAcesso(acessoCliente[o.client_id]),
+        [acessoCliente],
     );
     /**
      * TODAS as unidades do empreendimento, sempre — ocupadas ou não. A tabela é
@@ -339,14 +333,6 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
 
             // Falha aqui não pode derrubar a aba: o acesso ao portal é uma
             // coluna a mais, não a razão da tela existir.
-            try {
-                const lista = await condominoAccessService.listByUnits(units.map(u => u.id));
-                setAcessos(Object.fromEntries(lista.map(a => [a.occupancy_id, a])));
-            } catch {
-                setAcessos({});
-            }
-            // Idem para o Portal do Cliente. Em paralelo com nada: já veio
-            // depois das ocupações porque precisa dos client_ids delas.
             try {
                 const mapa = await condominioAcessoService.mapearPorCliente(
                     dados.map(d => d.client_id));
@@ -666,39 +652,10 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
     };
 
     /**
-     * Revoga o acesso ao portal. DESATIVA, não apaga: a linha de
-     * `condomino_portal_access` é a identidade do condômino, e dela dependem as
-     * confirmações de leitura de aviso — apagar levaria o histórico junto.
-     * Por isso o estado vira "Revogado" na coluna, em vez de sumir.
-     */
-    const revogarAcesso = async (linha: UnitOccupancyRow) => {
-        const acesso = acessos[linha.id];
-        if (!acesso) return;
-        const ok = await confirm({
-            title: 'Revogar o acesso ao portal?',
-            message: acessoCliente[linha.client_id]?.ativo && acessoCliente[linha.client_id]?.abaLigada
-                ? `O link ANTIGO (Portal do Condômino) de ${linha._client_name} para de funcionar. Atenção: ${linha._client_name} continua vendo o condomínio pelo Portal do Cliente — para tirar o acesso de verdade, desligue a aba Condomínio no portal dele.`
-                : `O link de ${linha._client_name} para a unidade ${linha._unit_name} para de funcionar imediatamente. O registro do acesso é mantido — as confirmações de leitura já feitas dependem dele.`,
-            variant: 'danger',
-            confirmLabel: 'Revogar acesso',
-        });
-        if (!ok) return;
-        try {
-            await condominoAccessService.revogar(acesso.id);
-            setAcessos(prev => ({ ...prev, [linha.id]: { ...acesso, is_active: false } }));
-            notify('Acesso revogado. O link anterior não abre mais.');
-        } catch (e: any) {
-            notify(e?.message || 'Erro ao revogar o acesso.', 'error');
-        }
-    };
-
-    /**
      * O interruptor da coluna Portal. Ligado = a pessoa VÊ o condomínio agora.
      *
-     * Desligar depende de POR QUAL caminho ela vê, e os dois não se misturam:
-     *  - `PORTAL_CLIENTE` → desliga a aba Condomínio. O token NÃO é revogado: o
-     *    link é um por pessoa e carrega contratos, cobranças e documentos.
-     *  - `LINK_CONDOMINO` (legado) → revoga aquele link, que é o que dá a vista.
+     * Desligar tira a aba Condomínio do portal. O token NÃO é revogado: o link
+     * é um por pessoa e carrega contratos, cobranças e documentos.
      * Ligar é sempre `concederAcesso` (que já sabe distinguir "falta a aba" de
      * "falta o link") — inclusive no estado `AGUARDA_ABA`.
      */
@@ -714,10 +671,6 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
         try {
             if (!estado.ve) {
                 await concederAcesso(linha);
-                return;
-            }
-            if (estado.via === 'LINK_CONDOMINO') {
-                await revogarAcesso(linha);
                 return;
             }
             const ok = await confirm({
@@ -974,12 +927,9 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
                                                     />
                                                 )}
                                                 {o && (
-                                                    /* Revogar é terciária e vai no kebab (§9.2): destrutiva do
-                                                       acesso, mas não do registro — por isso não é o showDelete.
-                                                       Continua aqui mesmo com o interruptor: quem tem os DOIS
-                                                       caminhos vivos mostra na coluna o estado do Portal do
-                                                       Cliente (precedência de `estadoDeAcesso`), e o link de
-                                                       condômino velho não some por desligar a aba. */
+                                                    /* Só a ponte para o portal e a exclusão do registro. O
+                                                       "Revogar link de condômino" saiu em 23/09/2026 com o
+                                                       portal legado: não há mais link de condômino a revogar. */
                                                     <InlineDisclosureMenu
                                                         menuItems={[
                                                             // Ida para o outro lado da ponte: o portal onde
@@ -988,11 +938,6 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
                                                                 icon: <ExternalLink className="w-[18px] h-[18px]" />,
                                                                 label: 'Ver no Portal do Cliente',
                                                                 onClick: () => navigateToFocus('client-properties', o.client_id, 'CLIENTE_CONDOMINIO'),
-                                                            }] : []),
-                                                            ...(acessos[o.id]?.is_active ? [{
-                                                                icon: <Link2Off className="w-[18px] h-[18px]" />,
-                                                                label: 'Revogar link de condômino',
-                                                                onClick: () => revogarAcesso(o),
                                                             }] : []),
                                                         ]}
                                                         showDelete

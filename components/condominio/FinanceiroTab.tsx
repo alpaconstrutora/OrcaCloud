@@ -86,7 +86,37 @@ function dataBR(iso?: string): string {
  *  Vive DENTRO de um `Sheet`, então usa a régua do §6.9 (`px-3`, e `px-4` na
  *  coluna de texto livre) em vez do `px-6` de tabela de página inteira: num
  *  painel de ~672px, seis lados de 24px comem mais largura do que sobra. */
-const TabelaDespesas: React.FC<{ despesas: DespesaRateio[]; comData: boolean }> = ({ despesas, comData }) => (
+const TabelaDespesas: React.FC<{
+    despesas: DespesaRateio[];
+    comData: boolean;
+    /** Presente só em rateio RASCUNHO: fechado é prestação de contas, e
+     *  reescrever a linha depois mudaria o documento que o condômino recebeu. */
+    onEditarDescricao?: (despesa: DespesaRateio, nova: string) => Promise<void>;
+}> = ({ despesas, comData, onEditarDescricao }) => {
+    const [editando, setEditando] = React.useState<string | null>(null);
+    const [texto, setTexto] = React.useState('');
+    const [salvando, setSalvando] = React.useState(false);
+
+    const abrir = (d: DespesaRateio) => {
+        if (!onEditarDescricao || !d.id) return;
+        setEditando(d.id);
+        // Abre com o rótulo ATUAL, não vazio: corrigir costuma ser ajustar uma
+        // palavra, e obrigar a redigitar tudo faria ninguém corrigir.
+        setTexto(d.descricao);
+    };
+
+    const salvar = async (d: DespesaRateio) => {
+        if (!onEditarDescricao) return;
+        setSalvando(true);
+        try {
+            await onEditarDescricao(d, texto);
+            setEditando(null);
+        } finally {
+            setSalvando(false);
+        }
+    };
+
+    return (
     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden overflow-x-auto">
         <table className="w-full text-left border-collapse">
             <thead>
@@ -98,13 +128,46 @@ const TabelaDespesas: React.FC<{ despesas: DespesaRateio[]; comData: boolean }> 
             </thead>
             <tbody className="divide-y divide-gray-200">
                 {despesas.map(d => (
-                    <tr key={d.transaction_id}>
+                    <tr key={d.id || d.transaction_id}>
                         {comData && (
                             <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
                                 {dataBR(d.data)}
                             </td>
                         )}
-                        <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{d.descricao}</td>
+                        <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
+                            {editando === d.id ? (
+                                <div className="flex items-center gap-1.5">
+                                    <input
+                                        autoFocus
+                                        value={texto}
+                                        onChange={e => setTexto(e.target.value)}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') salvar(d);
+                                            if (e.key === 'Escape') setEditando(null);
+                                        }}
+                                        className="flex-1 h-8 px-2 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                                    />
+                                    <button
+                                        onClick={() => salvar(d)}
+                                        disabled={salvando || !texto.trim()}
+                                        className="h-8 px-2.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 text-[13px] font-medium disabled:opacity-50"
+                                    >
+                                        Salvar
+                                    </button>
+                                </div>
+                            ) : onEditarDescricao && d.id ? (
+                                /* Clique na célula edita — a ação é óbvia e única
+                                   nesta linha (§9.1), então não ganha botão próprio. */
+                                <button
+                                    type="button"
+                                    onClick={() => abrir(d)}
+                                    className="w-full text-left hover:text-blue-600 transition-colors"
+                                    title="Clique para corrigir a descrição desta despesa"
+                                >
+                                    {d.descricao}
+                                </button>
+                            ) : d.descricao}
+                        </td>
                         <td className="px-3 py-2.5 last:border-r-0 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
                             {dinheiro(d.valor)}
                         </td>
@@ -113,7 +176,8 @@ const TabelaDespesas: React.FC<{ despesas: DespesaRateio[]; comData: boolean }> 
             </tbody>
         </table>
     </div>
-);
+    );
+};
 
 interface Props { empreendimento: Empreendimento }
 
@@ -141,6 +205,22 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
     const [sheetDetalhe, setSheetDetalhe] = React.useState<Rateio | null>(null);
     const [carregandoDetalhe, setCarregandoDetalhe] = React.useState(false);
     const [despesasDetalhe, setDespesasDetalhe] = React.useState<DespesaRateio[]>([]);
+
+    /**
+     * Corrige a descrição de uma despesa do rateio em rascunho. §22: costura no
+     * array local — recarregar o Sheet inteiro por causa de um texto perderia a
+     * rolagem e piscaria a lista.
+     */
+    const editarDescricaoDespesa = async (d: DespesaRateio, nova: string) => {
+        if (!d.id) return;
+        try {
+            await condominioRateioService.atualizarDescricaoDespesa(d.id, nova);
+            setDespesasDetalhe(prev => prev.map(x => (x.id === d.id ? { ...x, descricao: nova.trim() } : x)));
+            notify('Descrição corrigida. O condômino passa a ver este texto no portal.');
+        } catch (e: any) {
+            notify(e?.message || 'Erro ao salvar a descrição.', 'error');
+        }
+    };
 
     const abrirDetalhe = async (r: Rateio) => {
         setSheetDetalhe(r);
@@ -1006,7 +1086,14 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                     {dinheiro(despesasDetalhe.reduce((s, d) => s + d.valor, 0))}
                                 </span>
                             </div>
-                            <TabelaDespesas despesas={despesasDetalhe} comData={false} />
+                            {/* A edição só aparece em RASCUNHO. Fechado é
+                                prestação de contas: o condômino já recebeu
+                                aquele documento. */}
+                            <TabelaDespesas
+                                despesas={despesasDetalhe}
+                                comData={false}
+                                onEditarDescricao={sheetDetalhe?.status === 'RASCUNHO' ? editarDescricaoDespesa : undefined}
+                            />
                         </div>
                     )}
                 </SheetPanel>

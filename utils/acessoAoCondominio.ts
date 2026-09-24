@@ -1,27 +1,25 @@
 // utils/acessoAoCondominio.ts
 // Por qual caminho esta pessoa vê o condomínio — em um lugar só.
 // Plano: docs/planos/2026-09-01b-conectar-condominio-portal-cliente.md
+// Aposentadoria do portal legado: docs/planos/2026-09-23-despesas-legiveis-e-portal-legado.md
 //
-// POR QUE ISTO EXISTE: até 01/09 havia um portal só, e "acesso" era sinônimo de
-// "tem linha viva em `condomino_portal_access`". Essa definição estava escrita
-// DUAS vezes (`OcupacoesTab.tsx` e `PortalCondominoAdmin.tsx`, cópias literais)
-// e virou mentira quando a aba Condomínio entrou no Portal do Cliente.
+// POR QUE ISTO EXISTE: até 01/09/2026 havia um portal só (o "Portal do
+// Condômino", link por OCUPAÇÃO em `condomino_portal_access`), e "acesso" era
+// sinônimo de "tem linha viva lá". Essa definição estava escrita DUAS vezes
+// (`OcupacoesTab.tsx` e `PortalCondominoAdmin.tsx`, cópias literais) e virou
+// mentira quando a aba Condomínio entrou no Portal do Cliente.
 //
-// O tamanho da mentira, medido na base em 01/09: ZERO links de condômino
-// ativos, 3 pessoas com link do Portal do Cliente. A tela dizia "Sem acesso"
-// em cinza para as três — o mesmo rótulo de quem não tem nada.
+// 23/09/2026 — O PORTAL LEGADO FOI APOSENTADO. Desde 01/09 não se emitia mais
+// link de condômino, e em 23/09 a base tinha 2 linhas em
+// `condomino_portal_access`, ZERO ativas, e ZERO leituras de aviso apontando
+// para elas. Sumiram daqui, com o portal: `LINK_CONDOMINO`, `EXPIRADO` e
+// `REVOGADO` — os três só descreviam aquele link.
 //
-// ⚠️ `AGUARDA_ABA` É UM ESTADO PRÓPRIO, e é o mais importante daqui. Quem tem
-// link de cliente ativo mas com a aba `condominio` desligada ENTRA no portal e
-// **não vê o condomínio**. Não é "sem acesso" (o link funciona) nem "com
-// acesso" (o prédio não aparece). Fundir esse caso com qualquer um dos dois
-// recria exatamente o problema que este arquivo resolve.
-
-/** O que a tela precisa saber de `condomino_portal_access`. */
-export interface AcessoCondominoLite {
-    is_active: boolean;
-    expires_at: string;
-}
+// ⚠️ `AGUARDA_ABA` CONTINUA SENDO UM ESTADO PRÓPRIO, e é o mais importante
+// daqui. Quem tem link de cliente ativo mas com a aba `condominio` desligada
+// ENTRA no portal e **não vê o condomínio**. Não é "sem acesso" (o link
+// funciona) nem "com acesso" (o prédio não aparece). Fundir esse caso com
+// qualquer um dos dois recria exatamente o problema que este arquivo resolve.
 
 /** O que a tela precisa saber do lado do Portal do Cliente. */
 export interface AcessoClienteLite {
@@ -35,9 +33,6 @@ export interface AcessoClienteLite {
 export type ViaDeAcesso =
     | 'PORTAL_CLIENTE'   // entra e vê o condomínio
     | 'AGUARDA_ABA'      // entra, mas o condomínio não aparece
-    | 'LINK_CONDOMINO'   // portal antigo, ainda válido
-    | 'EXPIRADO'         // link de condômino venceu sozinho
-    | 'REVOGADO'         // alguém tirou
     | 'SEM_ACESSO';
 
 export interface EstadoDeAcesso {
@@ -45,7 +40,7 @@ export interface EstadoDeAcesso {
     texto: string;
     /** Classe de cor §8 — texto colorido, sem pílula. */
     cor: string;
-    /** Vê o condomínio AGORA. Só `PORTAL_CLIENTE` e `LINK_CONDOMINO`. */
+    /** Vê o condomínio AGORA. */
     ve: boolean;
     /** Tem alguma porta aberta, ainda que não mostre o condomínio.
      *  Serve para não oferecer "conceder" a quem só precisa da aba. */
@@ -58,14 +53,10 @@ const diasAte = (iso?: string | null): number =>
 const plural = (d: number) => `${d} dia${d === 1 ? '' : 's'}`;
 
 /**
- * A precedência é o coração da função: **quem tem Portal do Cliente usa esse**.
- * O link de condômino só decide quando não existe o outro — ele é o legado, e
- * desde 01/09 não é mais o que se emite.
+ * O único caminho vivo é o Portal do Cliente. A assinatura perdeu o segundo
+ * parâmetro (o acesso de condômino) junto com o portal legado.
  */
-export function estadoDeAcesso(
-    cliente?: AcessoClienteLite | null,
-    condomino?: AcessoCondominoLite | null,
-): EstadoDeAcesso {
+export function estadoDeAcesso(cliente?: AcessoClienteLite | null): EstadoDeAcesso {
     if (cliente?.ativo) {
         if (cliente.abaLigada) {
             const d = diasAte(cliente.expiraEm);
@@ -82,23 +73,7 @@ export function estadoDeAcesso(
         };
     }
 
-    if (!condomino) {
-        return { via: 'SEM_ACESSO', texto: 'Sem acesso', cor: 'text-gray-400', ve: false, temPorta: false };
-    }
-    // Revogado é decisão de alguém; expirado é o prazo vencendo sozinho. A
-    // diferença muda o que o síndico faz, então os dois não se fundem.
-    if (!condomino.is_active) {
-        return { via: 'REVOGADO', texto: 'Revogado', cor: 'text-gray-500', ve: false, temPorta: false };
-    }
-    const d = diasAte(condomino.expires_at);
-    if (d <= 0) {
-        return { via: 'EXPIRADO', texto: 'Expirado', cor: 'text-amber-600', ve: false, temPorta: false };
-    }
-    return {
-        via: 'LINK_CONDOMINO',
-        texto: `Link de condômino · ${plural(d)}`,
-        cor: 'text-emerald-600', ve: true, temPorta: true,
-    };
+    return { via: 'SEM_ACESSO', texto: 'Sem acesso', cor: 'text-gray-400', ve: false, temPorta: false };
 }
 
 /** Contagem para os KPIs.
@@ -112,7 +87,7 @@ export interface ResumoDeAcesso {
     ve: number;
     /** Entra no portal, mas a aba está desligada — um clique de resolver. */
     aguardaAba: number;
-    /** Nenhuma porta: sem link nenhum, revogado ou expirado. */
+    /** Nenhuma porta: sem link nenhum. */
     sem: number;
 }
 

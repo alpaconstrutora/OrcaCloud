@@ -17,7 +17,6 @@ import { KpiCard } from '../ui/KpiCard';
 // em 01/09 havia ZERO links de condômino ativos, ou seja, dizia "ninguém".
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { unitOccupancyService } from '../../services/unitOccupancyService';
-import { condominoAccessService } from '../../services/condominoPortalService';
 import { condominioAcessoService } from '../../services/condominioAcessoService';
 import { estadoDeAcesso, resumirAcessos, type ResumoDeAcesso } from '../../utils/acessoAoCondominio';
 import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
@@ -94,14 +93,12 @@ const ComunicacaoTab: React.FC<Props> = ({ empreendimento }) => {
                 }]));
                 const ocup = await unitOccupancyService.listByEmpreendimento(
                     units.map(u => u.id), labels, { incluirEncerradas: false });
-                const [acessos, porCliente] = await Promise.all([
-                    condominoAccessService.listByUnits(units.map(u => u.id)),
-                    condominioAcessoService.mapearPorCliente(ocup.map(o => o.client_id)),
-                ]);
-                const porOcupacao = new Map(acessos.map(a => [a.occupancy_id, a]));
+                // Um caminho só desde a aposentadoria do portal legado
+                // (23/09/2026): o Portal do Cliente.
+                const porCliente = await condominioAcessoService.mapearPorCliente(
+                    ocup.map(o => o.client_id));
                 if (!vivo) return;
-                setAlcance(resumirAcessos(ocup.map(o =>
-                    estadoDeAcesso(porCliente.get(o.client_id), porOcupacao.get(o.id)))));
+                setAlcance(resumirAcessos(ocup.map(o => estadoDeAcesso(porCliente.get(o.client_id)))));
             } catch {
                 // Falhar aqui não pode impedir de publicar: a tela some com o
                 // número em vez de mostrar um número inventado.

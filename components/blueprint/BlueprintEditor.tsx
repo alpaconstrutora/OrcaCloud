@@ -231,7 +231,7 @@ import ReguaDoTempo from './ReguaDoTempo';
 import type { PreviaOrcamento } from '../../services/blueprintBudgetService';
 import PainelVersoes from './PainelVersoes';
 import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
-import Ribbon, { BarraDeOpcoes, BotaoDoRibbon, GrupoDoRibbon, abaEfetiva } from './Ribbon';
+import Ribbon, { BarraDeOpcoes, BotaoDoRibbon, GrupoDoRibbon, MenuDoRibbon, abaEfetiva } from './Ribbon';
 import DockDeRelatorios, { useAlturaDoDock } from './DockDeRelatorios';
 import PainelDeTarefa from './PainelDeTarefa';
 import { Sheet, SheetDescription, SheetFooter, SheetHeader, SheetPanel, SheetTitle } from '../ui/sheet';
@@ -1184,6 +1184,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [abaSalva, setAbaSalva] = usePersistedState<AbaDoRibbonDoEditor>(
     'blueprint:abaDoRibbon',
     'arquitetura',
+  );
+  /**
+   * RIBBON RECOLHIDO (24/09/2026). Persistido junto da aba: quem trabalha num
+   * notebook recolhe uma vez e não quer recolher de novo a cada carga.
+   */
+  const [ribbonRecolhido, setRibbonRecolhido] = usePersistedState<boolean>(
+    'blueprint:ribbonRecolhido',
+    false,
   );
   /** Nível que as ferramentas de desenho editam. `null` = o primeiro. */
   const [nivelAtivoId, setNivelAtivoId] = usePersistedState<string | null>(
@@ -8928,6 +8936,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         abas={abasDoRibbon}
         ativa={aba}
         onEscolher={escolherAba}
+        recolhido={ribbonRecolhido}
+        onRecolher={setRibbonRecolhido}
         ariaLabel="Ferramentas de desenho"
         esquerda={
           <SeletorDeVista
@@ -9006,203 +9016,227 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               />
             </GrupoDoRibbon>
 
-            {/* ESTRUTURAL (15/09/2026): o lançamento automático de pilares. O
-                pilar avulso continua no menu Componentes; aqui é a proposta em
-                lote — prévia tracejada no desenho, um passo de desfazer. */}
-            {!emVista && (
-              <GrupoDoRibbon rotulo="Estrutural">
-                {/* EIXO da malha (E1.4): a linha nomeada que o calculista risca
-                    antes do pilar. Dois cliques; o ímã e os pilares automáticos
-                    passam a olhar para ela. */}
-                <Ferramenta atual={editor.tool} valor="eixo" icone={Hash} rotulo="Eixo" onClick={editor.setTool} />
-                <BotaoDoRibbon
+            {/* PROJETO (24/09/2026). Os quatro grupos desta aba — Estrutural,
+                Reforma, Acabamentos e Vistas — eram 20 botões em DUAS fileiras.
+                O usuário mandou o print: *"o menubar está com 4 linhas. Ocupando
+                muito da tela"*. Viraram quatro menus numa fileira só; o que se usa
+                a cada minuto (Construir) ficou de fora, à vista. */}
+            <GrupoDoRibbon rotulo="Projeto">
+              {/* ESTRUTURAL (15/09/2026): o lançamento automático de pilares. O
+                  pilar avulso continua no menu Componentes; aqui é a proposta em
+                  lote — prévia tracejada no desenho, um passo de desfazer. */}
+              {!emVista && (
+                <MenuDoRibbon
+                  rotulo="Estrutural"
                   icone={RectangleVertical}
-                  rotulo="Pilares automáticos"
-                  contagem={planoDePilares?.pilares.length || undefined}
-                  ativo={tarefaAberta === 'pilares'}
-                  onClick={() => alternarTarefa('pilares')}
-                  ajuda="Um pilar em cada encontro de paredes (canto, T, cruzamento) e intermediários quando o vão passa do máximo — prévia antes de gravar, Ctrl+Z desfaz"
-                />
-                <BotaoDoRibbon
-                  icone={RectangleHorizontal}
-                  rotulo="Vigas automáticas"
-                  contagem={planoDeVigas?.vigas.length || undefined}
-                  ativo={tarefaAberta === 'vigas'}
-                  onClick={() => alternarTarefa('vigas')}
-                  ajuda="Uma viga por parede, de pilar a pilar, com a largura da parede e altura pelo maior vão (L/10) — prévia antes de gravar, Ctrl+Z desfaz"
-                />
-                <BotaoDoRibbon
-                  icone={Layers}
-                  rotulo="Lajes automáticas"
-                  contagem={planoDeLajes?.lajes.length || undefined}
-                  ativo={tarefaAberta === 'lajes'}
-                  onClick={() => alternarTarefa('lajes')}
-                  ajuda="Uma laje por ambiente fechado, apoiada no topo das paredes — prévia antes de gravar, Ctrl+Z desfaz"
-                />
-                <BotaoDoRibbon
-                  icone={SquareStack}
-                  rotulo="Fundações automáticas"
-                  contagem={planoDeFundacoes ? planoDeFundacoes.blocos.length + planoDeFundacoes.baldrames.length || undefined : undefined}
-                  ativo={tarefaAberta === 'fundacoes'}
-                  onClick={() => alternarTarefa('fundacoes')}
-                  ajuda="Um bloco de coroamento sob cada pilar do pavimento, com uma ou duas estacas — prévia antes de gravar, Ctrl+Z desfaz"
-                />
-              </GrupoDoRibbon>
-            )}
-
-            {/* FASES DE REFORMA (20/09/2026, E10.2): marca a seleção como existente,
-                a demolir ou novo (kernel 0.46.0); o filtro da vista está no menu
-                Vista; Antes/Depois é tela com as duas miniaturas. */}
-            {!emVista && (
-              <GrupoDoRibbon rotulo="Reforma">
-                {(['EXISTENTE', 'DEMOLIR', 'NOVO'] as const).map((fase) => (
-                  <BotaoDoRibbon
-                    key={fase}
-                    icone={Hammer}
-                    rotulo={fase === 'EXISTENTE' ? 'Existente' : fase === 'DEMOLIR' ? 'A demolir' : 'Novo'}
-                    contagem={fase === 'NOVO' ? undefined : contagemDeFases[fase] || undefined}
-                    ativo={faseSelecionada.ids.length > 0 && faseSelecionada.fase === fase}
-                    disabled={faseSelecionada.ids.length === 0}
-                    onClick={() => editor.run({ type: 'SetFase', ids: faseSelecionada.ids, fase: fase === 'NOVO' ? null : fase })}
-                    ajuda={
-                      fase === 'EXISTENTE'
-                        ? 'Marca a seleção (paredes, aberturas, estrutura, mobiliário) como EXISTENTE: fica na obra; fora do quantitativo de construção e do de demolição; cinza no desenho. O número é quantas peças estão assim.'
-                        : fase === 'DEMOLIR'
-                          ? 'Marca a seleção como A DEMOLIR: sai da obra; entra nas medidas "Demolição — …" do orçamento; vermelho tracejado no desenho. O número é quantas peças estão assim.'
-                          : 'Volta a seleção a NOVO (o padrão): é o que se constrói e se orça.'
-                    }
-                  />
-                ))}
-                <BotaoDoRibbon
-                  icone={Hammer}
-                  rotulo="Antes / depois"
-                  ativo={telaAberta === 'antes-depois'}
-                  onClick={() => alternarTela('antes-depois')}
-                  ajuda="Duas plantas na mesma escala: antes (existente + a demolir) e depois (existente + novo), com o resumo do que se demole e do que se constrói."
-                />
-                <BotaoDoRibbon
-                  icone={History}
-                  rotulo="Etapas"
-                  contagem={etapasDoEstudo.length ? pecasSemEtapa(editor.model) || undefined : undefined}
-                  ativo={tarefaAberta === 'etapas' || !!etapaEmVista}
-                  onClick={() => alternarTarefa('etapas')}
-                  ajuda="Fases personalizadas: a linha do tempo da obra (Existente, Fase 1, Fase 2…), em que etapa cada peça nasce e em qual é demolida, a etapa em vista no desenho e o quadro do que entra e sai por etapa. O número é quantas peças ainda não têm etapa."
-                />
-              </GrupoDoRibbon>
-            )}
-
-            {/* ACABAMENTOS (19/09/2026, E7.2): piso, forro e rodapé por ambiente —
-                camadas na etiqueta (kernel 0.43.0), tipos da organização, material
-                por camada; o quantitativo e o orçamento saem por material. */}
-            {!emVista && (
-              <GrupoDoRibbon rotulo="Acabamentos">
-                <BotaoDoRibbon
-                  icone={Layers}
-                  rotulo="Piso e forro"
-                  contagem={ambientesParaAcabamento.filter((a) => !a.acabamentos).length || undefined}
-                  ativo={tarefaAberta === 'acabamentos'}
-                  onClick={() => {
-                    setAmbienteDeAcabamentos(null);
-                    alternarTarefa('acabamentos');
-                  }}
-                  ajuda="Piso (camadas de baixo para cima), forro (camadas + rebaixo) e rodapé (pela política, declarado ou sem) por ambiente; presets, tipos salvos na organização e material por camada — quantitativo e orçamento por material"
-                />
-                <BotaoDoRibbon
-                  icone={BookMarked}
-                  rotulo="Esquadrias"
-                  contagem={esquadriasSemTipo || undefined}
-                  ativo={tarefaAberta === 'esquadrias'}
-                  onClick={() => alternarTarefa('esquadrias')}
-                  ajuda="Quadro de esquadrias do desenho como LOTE: nomeia os tipos (P1, J1…), vincula item de catálogo e aplica a todas as aberturas do grupo de uma vez. Esquadria sem nome de tipo não entra no orçamento — nem como divergência."
-                />
-                <BotaoDoRibbon
-                  icone={Fence}
-                  rotulo="Guarda-corpos"
-                  contagem={sugestaoDeGuardaCorpos.sugestoes.length + resumoDeGuardaCorpos.erros || undefined}
-                  ativo={tarefaAberta === 'guardaCorpos'}
-                  onClick={() => alternarTarefa('guardaCorpos')}
-                  ajuda="Guarda-corpo (1,10 m, NBR 14718) sobre borda livre de laje em pavimento elevado e corrimão (0,92 m, NBR 9050) dos dois lados da escada — sugestão com prévia, material e item por peça, metros no quantitativo e no orçamento"
-                />
-                <BotaoDoRibbon
-                  icone={Minus}
-                  rotulo="Rodapés"
-                  contagem={sugestaoDeRodapes.sugestoes.length || resumoDeRodapes.sugeridos || undefined}
-                  ativo={tarefaAberta === 'rodapes'}
-                  onClick={() => alternarTarefa('rodapes')}
-                  ajuda="Rodapé como elemento (P2.21): trechos ao pé das paredes por ambiente, descontadas as portas; altura e item por trecho; com trechos, o quantitativo soma os trechos e não o perímetro"
-                />
-                <BotaoDoRibbon
-                  icone={BookOpen}
-                  rotulo="Materiais"
-                  contagem={[...usosPorCodigo.keys()].filter((c) => !biblioteca.porCodigo.has(c)).length || undefined}
-                  ativo={telaAberta === 'materiais'}
-                  onClick={() => alternarTela('materiais')}
-                  ajuda="Biblioteca de materiais da organização: código (SINAPI/interno), custo, fabricante, densidade e condutividade; resolve o código das camadas, pisos, rodapés e guarda-corpos na tela e no orçamento. O número é quantos códigos do desenho ainda não estão nela."
-                />
-                <BotaoDoRibbon
-                  icone={BookMarked}
-                  rotulo="Tipos"
-                  contagem={tiposDoCatalogo.filter((t) => t.active).length || undefined}
-                  ativo={telaAberta === 'tipos'}
-                  onClick={() => {
-                    if (telaAberta !== 'tipos') recarregarCatalogoDeTipos();
-                    alternarTela('tipos');
-                  }}
-                  ajuda="Catálogo de tipos da organização (estrutura, ponto, escada, telhado, componente, piso, forro): renomear, desativar, excluir, usos no desenho, semear padrões e copiar para outra organização"
-                />
-                <BotaoDoRibbon
-                  icone={Sigma}
-                  rotulo="Parâmetros"
-                  contagem={definicoesDeParametro.length || undefined}
-                  ativo={telaAberta === 'parametros'}
-                  onClick={() => {
-                    if (telaAberta !== 'parametros') recarregarDefinicoes();
-                    alternarTela('parametros');
-                  }}
-                  ajuda="Definições de parâmetro personalizado e fórmulas da organização: editar, marcar o que sai nas saídas, excluir; usos no desenho"
-                />
-              </GrupoDoRibbon>
-            )}
-
-            {/* CORTE. Não é construção nem medida: o que sai daqui é uma VISTA.
-                Grupo próprio, e não o menu Componentes — a lista de componentes é
-                o que se constrói, e uma linha de corte não se constrói. */}
-            <GrupoDoRibbon rotulo="Vistas">
-              <Ferramenta
-                atual={editor.tool}
-                valor="corte"
-                icone={Scissors}
-                rotulo="Corte"
-                onClick={editor.setTool}
-              />
-              {/* INVERTER, TAMBÉM NA PLANTA (pedido de 06/09/2026): é onde se vê a
-                  MARCA com as setas e onde se percebe que apontam para o lado
-                  errado. Ligado ao corte SELECIONADO, não a "o último". */}
-              {corteSel && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    editor.run({
-                      type: 'SetCorteProps',
-                      corteId: corteSel.id,
-                      olharPara: corteSel.olharPara === 'ESQUERDA' ? 'DIREITA' : 'ESQUERDA',
-                    })
-                  }
-                  title="Vira o corte para o outro lado. As setas na planta acompanham."
-                  className="inline-flex h-7 items-center gap-1.5 rounded-md border border-slate-300 px-2.5 text-sm text-slate-600 transition-colors hover:bg-slate-50"
+                  ajuda="Eixos da malha e lançamento automático de pilares, vigas, lajes e fundações — sempre com prévia tracejada antes de gravar"
                 >
-                  <ArrowLeftRight className="h-3.5 w-3.5" />
-                  Inverter o lado
-                </button>
+                  {/* EIXO da malha (E1.4): a linha nomeada que o calculista risca
+                      antes do pilar. Dois cliques; o ímã e os pilares automáticos
+                      passam a olhar para ela. */}
+                  <Ferramenta atual={editor.tool} valor="eixo" icone={Hash} rotulo="Eixo" onClick={editor.setTool} />
+                  <BotaoDoRibbon
+                    icone={RectangleVertical}
+                    rotulo="Pilares automáticos"
+                    contagem={planoDePilares?.pilares.length || undefined}
+                    ativo={tarefaAberta === 'pilares'}
+                    onClick={() => alternarTarefa('pilares')}
+                    ajuda="Um pilar em cada encontro de paredes (canto, T, cruzamento) e intermediários quando o vão passa do máximo — prévia antes de gravar, Ctrl+Z desfaz"
+                  />
+                  <BotaoDoRibbon
+                    icone={RectangleHorizontal}
+                    rotulo="Vigas automáticas"
+                    contagem={planoDeVigas?.vigas.length || undefined}
+                    ativo={tarefaAberta === 'vigas'}
+                    onClick={() => alternarTarefa('vigas')}
+                    ajuda="Uma viga por parede, de pilar a pilar, com a largura da parede e altura pelo maior vão (L/10) — prévia antes de gravar, Ctrl+Z desfaz"
+                  />
+                  <BotaoDoRibbon
+                    icone={Layers}
+                    rotulo="Lajes automáticas"
+                    contagem={planoDeLajes?.lajes.length || undefined}
+                    ativo={tarefaAberta === 'lajes'}
+                    onClick={() => alternarTarefa('lajes')}
+                    ajuda="Uma laje por ambiente fechado, apoiada no topo das paredes — prévia antes de gravar, Ctrl+Z desfaz"
+                  />
+                  <BotaoDoRibbon
+                    icone={SquareStack}
+                    rotulo="Fundações automáticas"
+                    contagem={planoDeFundacoes ? planoDeFundacoes.blocos.length + planoDeFundacoes.baldrames.length || undefined : undefined}
+                    ativo={tarefaAberta === 'fundacoes'}
+                    onClick={() => alternarTarefa('fundacoes')}
+                    ajuda="Um bloco de coroamento sob cada pilar do pavimento, com uma ou duas estacas — prévia antes de gravar, Ctrl+Z desfaz"
+                  />
+                </MenuDoRibbon>
               )}
-              <BotaoDoRibbon
-                icone={Crop}
-                rotulo="Vista dependente"
-                contagem={(editor.model.vistasDependentes ?? []).filter((v) => v.levelId === levelId).length || undefined}
-                ativo={recorteArmado === 'nova'}
-                onClick={() => setRecorteArmado((r) => (r === 'nova' ? null : 'nova'))}
-                ajuda="Arraste um retângulo na planta: vira uma vista com nome e escala próprios (recorte da planta-mãe), que sai como prancha"
-              />
+
+              {/* FASES DE REFORMA (20/09/2026, E10.2): marca a seleção como existente,
+                  a demolir ou novo (kernel 0.46.0); o filtro da vista está no menu
+                  Vista; Antes/Depois é tela com as duas miniaturas. */}
+              {!emVista && (
+                <MenuDoRibbon
+                  rotulo="Reforma"
+                  icone={Hammer}
+                  ajuda="Marca a seleção como existente, a demolir ou novo; compara antes e depois; etapas da obra"
+                >
+                  {(['EXISTENTE', 'DEMOLIR', 'NOVO'] as const).map((fase) => (
+                    <BotaoDoRibbon
+                      key={fase}
+                      icone={Hammer}
+                      rotulo={fase === 'EXISTENTE' ? 'Existente' : fase === 'DEMOLIR' ? 'A demolir' : 'Novo'}
+                      contagem={fase === 'NOVO' ? undefined : contagemDeFases[fase] || undefined}
+                      ativo={faseSelecionada.ids.length > 0 && faseSelecionada.fase === fase}
+                      disabled={faseSelecionada.ids.length === 0}
+                      onClick={() => editor.run({ type: 'SetFase', ids: faseSelecionada.ids, fase: fase === 'NOVO' ? null : fase })}
+                      ajuda={
+                        fase === 'EXISTENTE'
+                          ? 'Marca a seleção (paredes, aberturas, estrutura, mobiliário) como EXISTENTE: fica na obra; fora do quantitativo de construção e do de demolição; cinza no desenho. O número é quantas peças estão assim.'
+                          : fase === 'DEMOLIR'
+                            ? 'Marca a seleção como A DEMOLIR: sai da obra; entra nas medidas "Demolição — …" do orçamento; vermelho tracejado no desenho. O número é quantas peças estão assim.'
+                            : 'Volta a seleção a NOVO (o padrão): é o que se constrói e se orça.'
+                      }
+                    />
+                  ))}
+                  <BotaoDoRibbon
+                    icone={Hammer}
+                    rotulo="Antes / depois"
+                    ativo={telaAberta === 'antes-depois'}
+                    onClick={() => alternarTela('antes-depois')}
+                    ajuda="Duas plantas na mesma escala: antes (existente + a demolir) e depois (existente + novo), com o resumo do que se demole e do que se constrói."
+                  />
+                  <BotaoDoRibbon
+                    icone={History}
+                    rotulo="Etapas"
+                    contagem={etapasDoEstudo.length ? pecasSemEtapa(editor.model) || undefined : undefined}
+                    ativo={tarefaAberta === 'etapas' || !!etapaEmVista}
+                    onClick={() => alternarTarefa('etapas')}
+                    ajuda="Fases personalizadas: a linha do tempo da obra (Existente, Fase 1, Fase 2…), em que etapa cada peça nasce e em qual é demolida, a etapa em vista no desenho e o quadro do que entra e sai por etapa. O número é quantas peças ainda não têm etapa."
+                  />
+                </MenuDoRibbon>
+              )}
+
+              {/* ACABAMENTOS (19/09/2026, E7.2): piso, forro e rodapé por ambiente —
+                  camadas na etiqueta (kernel 0.43.0), tipos da organização, material
+                  por camada; o quantitativo e o orçamento saem por material. */}
+              {!emVista && (
+                <MenuDoRibbon
+                  rotulo="Acabamentos"
+                  icone={Layers}
+                  contagem={esquadriasSemTipo || undefined}
+                  ajuda="Piso e forro, esquadrias, guarda-corpos, rodapés, materiais, tipos e parâmetros"
+                >
+                  <BotaoDoRibbon
+                    icone={Layers}
+                    rotulo="Piso e forro"
+                    contagem={ambientesParaAcabamento.filter((a) => !a.acabamentos).length || undefined}
+                    ativo={tarefaAberta === 'acabamentos'}
+                    onClick={() => {
+                      setAmbienteDeAcabamentos(null);
+                      alternarTarefa('acabamentos');
+                    }}
+                    ajuda="Piso (camadas de baixo para cima), forro (camadas + rebaixo) e rodapé (pela política, declarado ou sem) por ambiente; presets, tipos salvos na organização e material por camada — quantitativo e orçamento por material"
+                  />
+                  <BotaoDoRibbon
+                    icone={BookMarked}
+                    rotulo="Esquadrias"
+                    contagem={esquadriasSemTipo || undefined}
+                    ativo={tarefaAberta === 'esquadrias'}
+                    onClick={() => alternarTarefa('esquadrias')}
+                    ajuda="Quadro de esquadrias do desenho como LOTE: nomeia os tipos (P1, J1…), vincula item de catálogo e aplica a todas as aberturas do grupo de uma vez. Esquadria sem nome de tipo não entra no orçamento — nem como divergência."
+                  />
+                  <BotaoDoRibbon
+                    icone={Fence}
+                    rotulo="Guarda-corpos"
+                    contagem={sugestaoDeGuardaCorpos.sugestoes.length + resumoDeGuardaCorpos.erros || undefined}
+                    ativo={tarefaAberta === 'guardaCorpos'}
+                    onClick={() => alternarTarefa('guardaCorpos')}
+                    ajuda="Guarda-corpo (1,10 m, NBR 14718) sobre borda livre de laje em pavimento elevado e corrimão (0,92 m, NBR 9050) dos dois lados da escada — sugestão com prévia, material e item por peça, metros no quantitativo e no orçamento"
+                  />
+                  <BotaoDoRibbon
+                    icone={Minus}
+                    rotulo="Rodapés"
+                    contagem={sugestaoDeRodapes.sugestoes.length || resumoDeRodapes.sugeridos || undefined}
+                    ativo={tarefaAberta === 'rodapes'}
+                    onClick={() => alternarTarefa('rodapes')}
+                    ajuda="Rodapé como elemento (P2.21): trechos ao pé das paredes por ambiente, descontadas as portas; altura e item por trecho; com trechos, o quantitativo soma os trechos e não o perímetro"
+                  />
+                  <BotaoDoRibbon
+                    icone={BookOpen}
+                    rotulo="Materiais"
+                    contagem={[...usosPorCodigo.keys()].filter((c) => !biblioteca.porCodigo.has(c)).length || undefined}
+                    ativo={telaAberta === 'materiais'}
+                    onClick={() => alternarTela('materiais')}
+                    ajuda="Biblioteca de materiais da organização: código (SINAPI/interno), custo, fabricante, densidade e condutividade; resolve o código das camadas, pisos, rodapés e guarda-corpos na tela e no orçamento. O número é quantos códigos do desenho ainda não estão nela."
+                  />
+                  <BotaoDoRibbon
+                    icone={BookMarked}
+                    rotulo="Tipos"
+                    contagem={tiposDoCatalogo.filter((t) => t.active).length || undefined}
+                    ativo={telaAberta === 'tipos'}
+                    onClick={() => {
+                      if (telaAberta !== 'tipos') recarregarCatalogoDeTipos();
+                      alternarTela('tipos');
+                    }}
+                    ajuda="Catálogo de tipos da organização (estrutura, ponto, escada, telhado, componente, piso, forro): renomear, desativar, excluir, usos no desenho, semear padrões e copiar para outra organização"
+                  />
+                  <BotaoDoRibbon
+                    icone={Sigma}
+                    rotulo="Parâmetros"
+                    contagem={definicoesDeParametro.length || undefined}
+                    ativo={telaAberta === 'parametros'}
+                    onClick={() => {
+                      if (telaAberta !== 'parametros') recarregarDefinicoes();
+                      alternarTela('parametros');
+                    }}
+                    ajuda="Definições de parâmetro personalizado e fórmulas da organização: editar, marcar o que sai nas saídas, excluir; usos no desenho"
+                  />
+                </MenuDoRibbon>
+              )}
+
+              {/* CORTE. Não é construção nem medida: o que sai daqui é uma VISTA.
+                  Grupo próprio, e não o menu Componentes — a lista de componentes é
+                  o que se constrói, e uma linha de corte não se constrói. */}
+              <MenuDoRibbon
+                rotulo="Vistas"
+                icone={Scissors}
+                ajuda="Linha de corte e vista dependente — o recorte da planta com nome e escala próprios"
+              >
+                <Ferramenta
+                  atual={editor.tool}
+                  valor="corte"
+                  icone={Scissors}
+                  rotulo="Corte"
+                  onClick={editor.setTool}
+                />
+                {/* INVERTER, TAMBÉM NA PLANTA (pedido de 06/09/2026): é onde se vê a
+                    MARCA com as setas e onde se percebe que apontam para o lado
+                    errado. Ligado ao corte SELECIONADO, não a "o último". */}
+                {corteSel && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      editor.run({
+                        type: 'SetCorteProps',
+                        corteId: corteSel.id,
+                        olharPara: corteSel.olharPara === 'ESQUERDA' ? 'DIREITA' : 'ESQUERDA',
+                      })
+                    }
+                    title="Vira o corte para o outro lado. As setas na planta acompanham."
+                    className="inline-flex h-7 items-center gap-1.5 rounded-md border border-slate-300 px-2.5 text-sm text-slate-600 transition-colors hover:bg-slate-50"
+                  >
+                    <ArrowLeftRight className="h-3.5 w-3.5" />
+                    Inverter o lado
+                  </button>
+                )}
+                <BotaoDoRibbon
+                  icone={Crop}
+                  rotulo="Vista dependente"
+                  contagem={(editor.model.vistasDependentes ?? []).filter((v) => v.levelId === levelId).length || undefined}
+                  ativo={recorteArmado === 'nova'}
+                  onClick={() => setRecorteArmado((r) => (r === 'nova' ? null : 'nova'))}
+                  ajuda="Arraste um retângulo na planta: vira uma vista com nome e escala próprios (recorte da planta-mãe), que sai como prancha"
+                />
+              </MenuDoRibbon>
             </GrupoDoRibbon>
           </>
         )}

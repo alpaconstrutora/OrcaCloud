@@ -381,8 +381,32 @@ async function abrirComponentes(user: ReturnType<typeof userEvent.setup>) {
   }
 }
 
-/** Desenha paredes chamando o canvas por dentro não dá; usa-se o próprio DOM. */
+/**
+ * Abre os MENUS do ribbon que estiverem fechados (24/09/2026, P2.60).
+ *
+ * Os grupos Estrutural, Reforma, Acabamentos e Vistas da aba Arquitetura viraram
+ * menus ▾ — o painel do ribbon estava com quatro fileiras e sobravam 243 px de
+ * 780 para o desenho. Os comandos são os MESMOS, com o mesmo nome acessível e a
+ * mesma contagem; só não estão no DOM enquanto o menu está fechado.
+ *
+ * `fireEvent.click` (e não `userEvent`) de propósito: é síncrono, cabe dentro do
+ * `botao()` que os testes usam em `expect(...)`, e não dispara o `mousedown` que
+ * fecharia o menu vizinho — abrem-se todos de uma vez.
+ */
+function abrirMenusDoRibbon() {
+  for (const b of document.querySelectorAll<HTMLButtonElement>('[data-menu-do-ribbon][aria-expanded="false"]')) {
+    fireEvent.click(b);
+  }
+}
+
+/**
+ * Desenha paredes chamando o canvas por dentro não dá; usa-se o próprio DOM.
+ *
+ * Se o botão não estiver à vista, abre os menus do ribbon e procura de novo —
+ * um comando que mudou de lugar não deveria custar 37 edições de teste.
+ */
 function botao(nome: RegExp) {
+  if (screen.queryAllByRole('button', { name: nome }).length === 0) abrirMenusDoRibbon();
   return screen.getByRole('button', { name: nome });
 }
 
@@ -2055,7 +2079,10 @@ describe('BlueprintEditor · quantitativos', () => {
     const user = userEvent.setup();
     // Térreo: a gaveta sugere 2 corrimãos; a laje no chão não.
     await abrirAba(/^arquitetura$/i);
-    const botao = () => screen.getAllByRole('button', { name: /^guarda-corpos/i }).find((b) => b.getAttribute('title')?.startsWith('Guarda-corpo (1,10 m'))!;
+    const botao = () => {
+      abrirMenusDoRibbon();
+      return screen.getAllByRole('button', { name: /^guarda-corpos/i }).find((x) => x.getAttribute('title')?.startsWith('Guarda-corpo (1,10 m'))!;
+    };
     expect(botao()).toHaveTextContent('3'); // 2 sugestões + 1 erro de altura
     await user.click(botao());
     const gaveta = await screen.findByTestId('tarefa-guarda-corpos');
@@ -2119,7 +2146,10 @@ describe('BlueprintEditor · quantitativos', () => {
     const user = userEvent.setup();
     await abrirAba(/^arquitetura$/i);
     // O botão do ribbon conta 1 código fora da biblioteca (X-FORA).
-    const botao = () => screen.getAllByRole('button', { name: /^materiais/i }).find((b) => b.getAttribute('title')?.startsWith('Biblioteca de materiais'))!;
+    const botao = () => {
+      abrirMenusDoRibbon();
+      return screen.getAllByRole('button', { name: /^materiais/i }).find((x) => x.getAttribute('title')?.startsWith('Biblioteca de materiais'))!;
+    };
     await waitFor(() => expect(botao()).toHaveTextContent('1'));
     await user.click(botao());
     const tela = await screen.findByTestId('tela-materiais');
@@ -2441,7 +2471,10 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     // Sem seleção, os botões de fase ficam desligados.
-    const botaoFase = (nome: RegExp) => screen.getAllByRole('button', { name: nome }).find((b) => b.getAttribute('title')?.startsWith('Marca a seleção') || b.getAttribute('title')?.startsWith('Volta a seleção'))!;
+    const botaoFase = (nome: RegExp) => {
+      abrirMenusDoRibbon();
+      return screen.getAllByRole('button', { name: nome }).find((x) => x.getAttribute('title')?.startsWith('Marca a seleção') || x.getAttribute('title')?.startsWith('Volta a seleção'))!;
+    };
     expect(botaoFase(/^A demolir/)).toBeDisabled();
     // Seleciona o pilar P1 pelo navegador e marca A DEMOLIR: o botão acende e conta 1.
     await abrirComponentes(user);
@@ -2464,7 +2497,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await user.keyboard('{Escape}');
     // Antes/Depois: tela em fluxo com as duas miniaturas, contagem e resumo; "Selecionar as 1 peça(s)" volta ao editor com a seleção.
     await abrirAba(/^arquitetura$/i);
-    await user.click(screen.getByRole('button', { name: /^Antes \/ depois/ }));
+    await user.click(botao(/^Antes \/ depois/));
     const tela = await screen.findByTestId('tela-antes-depois');
     expect(document.querySelector('[data-tela="antes-depois"]')).toBeTruthy();
     expect(within(tela).getAllByTestId('mini-planta')).toHaveLength(2);
@@ -4927,7 +4960,7 @@ describe('BlueprintEditor · catálogo de tipos (P2.3)', () => {
       await montar();
       const user = userEvent.setup();
       await abrirAba(/^arquitetura$/i);
-      await user.click(screen.getByRole('button', { name: /^Tipos/ }));
+      await user.click(botao(/^Tipos/));
       const tela = await screen.findByTestId('tela-catalogo-de-tipos');
       expect(document.querySelector('[data-tela="tipos"]')?.className).not.toMatch(/fixed|inset-0/);
       expect(tela).toHaveTextContent(/Nenhum tipo ainda/);
@@ -5035,7 +5068,7 @@ describe('BlueprintEditor · definições de parâmetro (P2.5)', () => {
       await montar();
       const user = userEvent.setup();
       await abrirAba(/^arquitetura$/i);
-      await user.click(screen.getByRole('button', { name: /^Parâmetros/ }));
+      await user.click(botao(/^Parâmetros/));
       const tela = await screen.findByTestId('tela-parametros');
       expect(document.querySelector('[data-tela="parametros"]')?.className).not.toMatch(/fixed|inset-0/);
       await waitFor(() => expect(within(tela).getByText('Custo interno')).toBeInTheDocument());
@@ -5236,7 +5269,7 @@ describe('BlueprintEditor · vista dependente (P2.17)', () => {
     const user = userEvent.setup();
     // Arquitetura › Vistas: o botão conta a vista do pavimento.
     await abrirAba(/^arquitetura$/i);
-    expect(screen.getByRole('button', { name: /^Vista dependente/ })).toHaveTextContent('1');
+    expect(botao(/^Vista dependente/)).toHaveTextContent('1');
     // Seletor de vista: o recorte está na lista; abrir mostra a faixa e mantém a planta editável.
     const seletor = () => within(screen.getByRole('toolbar')).getByRole('button', { expanded: false, name: /^(planta|Ala oeste|Ala esquerda)$/i });
     await user.click(seletor());
@@ -5258,7 +5291,7 @@ describe('BlueprintEditor · vista dependente (P2.17)', () => {
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /^excluir$/i }));
     await waitFor(() => expect(screen.queryByTestId('faixa-vista-dependente')).toBeNull());
-    expect(screen.getByRole('button', { name: /^Vista dependente/ })).not.toHaveTextContent(/\d/);
+    expect(botao(/^Vista dependente/)).not.toHaveTextContent(/\d/);
   }, 60000);
 });
 
@@ -5907,5 +5940,44 @@ describe('BlueprintEditor · estender parede até a face', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /Estender até a face — selecione uma parede/ })).toBeDisabled(),
     );
+  }, 60000);
+
+  /**
+   * P2.60 (24/09/2026) — *"o menubar está com 4 linhas. Ocupando muito da tela.
+   * Sugeria agrupamentos"*.
+   *
+   * A aba Arquitetura passou a ter DOIS grupos: Construir (à vista, é o que se
+   * usa a cada minuto) e Projeto, com quatro menus. E o ribbon inteiro recolhe.
+   */
+  it('a aba Arquitetura tem Construir à vista e quatro menus em Projeto; recolher tira o painel e o acesso rápido', async () => {
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^arquitetura$/i);
+
+    // Construir NÃO virou menu: Selecionar continua a um clique.
+    expect(within(screen.getByRole('group', { name: 'Construir' })).getByRole('button', { name: /^selecionar$/i })).toBeInTheDocument();
+    const projeto = screen.getByRole('group', { name: 'Projeto' });
+    expect([...projeto.querySelectorAll('[data-menu-do-ribbon]')].map((b) => b.getAttribute('data-menu-do-ribbon'))).toEqual([
+      'Estrutural',
+      'Reforma',
+      'Acabamentos',
+      'Vistas',
+    ]);
+
+    // Fechado, o comando não está no DOM; abrir o menu o traz.
+    expect(screen.queryByRole('button', { name: /^pilares automáticos/i })).not.toBeInTheDocument();
+    await user.click(within(projeto).getByRole('button', { name: /^Estrutural/ }));
+    expect(screen.getByRole('button', { name: /^pilares automáticos/i })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+
+    // RECOLHER: some o painel (e o acesso rápido junto); as abas ficam.
+    expect(screen.getByRole('button', { name: /^desfazer/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /recolher a faixa de comandos/i }));
+    expect(screen.queryByRole('group', { name: 'Construir' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^desfazer/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^arquitetura$/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /mostrar a faixa de comandos/i }));
+    expect(screen.getByRole('group', { name: 'Construir' })).toBeInTheDocument();
   }, 60000);
 });

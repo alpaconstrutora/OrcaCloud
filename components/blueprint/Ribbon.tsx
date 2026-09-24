@@ -67,6 +67,8 @@ export default function Ribbon<Id extends string>({
   esquerda,
   direita,
   acessoRapido,
+  recolhido,
+  onRecolher,
   ariaLabel,
   children,
 }: {
@@ -83,13 +85,22 @@ export default function Ribbon<Id extends string>({
    * segunda linha (*"o toolbar de botões está deslocado… alinhe à esquerda"*).
    */
   acessoRapido?: React.ReactNode;
+  /**
+   * RIBBON RECOLHIDO (24/09/2026): só a fileira das abas fica; o acesso rápido
+   * e o painel da aba somem. Pedido do usuário com print — *"o menubar está com
+   * 4 linhas. Ocupando muito da tela"*. Sem isto, nem os menus (que tiram uma
+   * fileira) devolvem a tela de quem está conferindo o traçado num notebook.
+   */
+  recolhido?: boolean;
+  /** Sem esta prop o controle de recolher não aparece — quem não guarda o estado não oferece o gesto. */
+  onRecolher?: (v: boolean) => void;
   ariaLabel: string;
   /** O painel da aba ativa: `GrupoDoRibbon`s. */
   children: React.ReactNode;
 }) {
   return (
     <div role="toolbar" aria-label={ariaLabel} className="border-b border-slate-200 bg-white">
-      <div className="flex flex-wrap items-center gap-2 px-4 pt-1.5">
+      <div className={`flex flex-wrap items-center gap-2 px-4 pt-1.5 ${recolhido ? 'pb-1.5' : ''}`}>
         {esquerda}
         <div
           role="tablist"
@@ -104,7 +115,17 @@ export default function Ribbon<Id extends string>({
                 type="button"
                 role="tab"
                 aria-selected={selecionada}
-                onClick={() => onEscolher(a.id)}
+                /* Recolhido, o clique na aba TRAZ o painel de volta: sem isto o
+                   clique não faz nada visível e o usuário acha que travou. */
+                onClick={() => {
+                  onEscolher(a.id);
+                  if (recolhido) onRecolher?.(false);
+                }}
+                /* Duplo clique recolhe — o gesto do Revit e do Office. Só recolhe
+                   (nunca abre): estando recolhido, o primeiro clique já abriu. */
+                onDoubleClick={() => {
+                  if (!recolhido) onRecolher?.(true);
+                }}
                 className={`h-7 whitespace-nowrap rounded-[6px] px-3 text-sm font-medium transition-all ${
                   selecionada
                     ? a.contextual
@@ -120,14 +141,36 @@ export default function Ribbon<Id extends string>({
             );
           })}
         </div>
+        {/* O gesto EXPLÍCITO de recolher. O duplo clique na aba faz o mesmo, mas
+            duplo clique não se descobre olhando — este botão é o que se vê. */}
+        {onRecolher && (
+          <button
+            type="button"
+            onClick={() => onRecolher(!recolhido)}
+            aria-expanded={!recolhido}
+            aria-label={recolhido ? 'Mostrar a faixa de comandos' : 'Recolher a faixa de comandos'}
+            title={
+              recolhido
+                ? 'Mostrar a faixa de comandos'
+                : 'Recolher a faixa de comandos e devolver a altura ao desenho (duplo clique na aba faz o mesmo)'
+            }
+            className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+              <path d={recolhido ? 'M6 9l6 6 6-6' : 'M18 15l-6-6-6 6'} strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        )}
         {direita && <div className="ml-auto flex items-center gap-1">{direita}</div>}
       </div>
-      {acessoRapido && <div className="px-4 pt-1.5">{acessoRapido}</div>}
+      {!recolhido && acessoRapido && <div className="px-4 pt-1.5">{acessoRapido}</div>}
 
       {/* O painel da aba. `flex-wrap`: em tela estreita os grupos descem de
           linha em vez de sumir — foi assim que duas abas já sumiram da barra
           antiga. `items-stretch` para as divisórias dos grupos irem até embaixo. */}
-      <div className="flex flex-wrap items-stretch gap-x-3 gap-y-2 px-4 py-1.5">{children}</div>
+      {!recolhido && (
+        <div className="flex flex-wrap items-stretch gap-x-3 gap-y-2 px-4 py-1.5">{children}</div>
+      )}
     </div>
   );
 }
@@ -226,5 +269,106 @@ export function BarraDeOpcoes({ rotulo, children }: { rotulo: string; children: 
       <span className="text-xs font-semibold text-slate-600">{rotulo}</span>
       {children}
     </div>
+  );
+}
+
+/**
+ * Um GRUPO DE COMANDOS que vira um botão com menu ▾.
+ *
+ * ─── POR QUE ─────────────────────────────────────────────────────────────────
+ *
+ * Pedido do usuário em 24/09/2026, com print: *"o menubar está com 4 linhas.
+ * Ocupando muito da tela. Sugeria agrupamentos"*. Medido na janela do print
+ * (1660×780), o canvas ficava com 243 px de 780 — 31% da tela para desenhar.
+ *
+ * A aba Arquitetura sozinha tinha 20 comandos em quatro grupos (Estrutural,
+ * Reforma, Acabamentos, Vistas) que ocupavam DUAS fileiras. Aqui cada grupo
+ * desses vira um botão só; os comandos continuam os mesmos, com o mesmo rótulo,
+ * a mesma contagem e a mesma ajuda — um clique a mais para chegar neles.
+ *
+ * ⚠️ O que NÃO entra aqui: o grupo "Construir" (Selecionar, Mover, Componentes,
+ * Mobiliário, Juntar). É o que se usa a cada minuto de desenho; esconder atrás
+ * de um clique o gesto mais repetido do editor seria trocar altura por atrito.
+ *
+ * `contagem` é a PENDÊNCIA do grupo, não a soma das contagens de dentro: os
+ * números dos itens são de naturezas diferentes (400 rodapés sugeridos × 90
+ * esquadrias sem tipo), e somá-los daria um número que não significa nada.
+ */
+export function MenuDoRibbon({
+  rotulo,
+  icone: Icone,
+  contagem,
+  ajuda,
+  children,
+}: {
+  rotulo: string;
+  icone: React.ComponentType<{ className?: string }>;
+  /** Pendência do grupo — some quando é zero. */
+  contagem?: number;
+  ajuda?: string;
+  children: React.ReactNode;
+}) {
+  const [aberto, setAberto] = React.useState(false);
+  const caixaRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!aberto) return;
+    const fora = (e: MouseEvent) => {
+      if (caixaRef.current && !caixaRef.current.contains(e.target as Node)) setAberto(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setAberto(false);
+    };
+    document.addEventListener('mousedown', fora);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', fora);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [aberto]);
+
+  return (
+    <div ref={caixaRef} className="relative">
+      <button
+        type="button"
+        data-menu-do-ribbon={rotulo}
+        aria-haspopup="true"
+        aria-expanded={aberto}
+        onClick={() => setAberto((v) => !v)}
+        title={ajuda}
+        className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+          aberto ? 'bg-slate-100 text-slate-900' : 'text-slate-600 hover:bg-slate-100'
+        }`}
+      >
+        <Icone className="h-4 w-4" />
+        {rotulo}
+        {contagem !== undefined && contagem > 0 && (
+          <span className="rounded-[6px] bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700">{contagem}</span>
+        )}
+        <ChevronDownDoRibbon />
+      </button>
+      {aberto && (
+        /* z-[70]: acima da grade e do canvas — o mesmo teto dos outros menus do
+           ribbon. Fecha ao clicar num comando: quem escolheu já terminou aqui. */
+        <div
+          aria-label={rotulo}
+          onClick={(e) => {
+            if ((e.target as HTMLElement).closest('button')) setAberto(false);
+          }}
+          className="absolute left-0 z-[70] mt-1 flex min-w-[16rem] flex-col items-stretch gap-0.5 rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A setinha do menu. Inline para o Ribbon não depender de biblioteca de ícone. */
+function ChevronDownDoRibbon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3 opacity-60">
+      <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }

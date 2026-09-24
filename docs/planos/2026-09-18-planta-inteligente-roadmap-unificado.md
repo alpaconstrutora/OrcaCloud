@@ -2176,6 +2176,56 @@ Depois das duas: de 199 para **111 paredes com alvo**, e as propostas passaram a
 - `__tests__/components/BlueprintEditor.test.tsx` (+1, total no arquivo): sem seleção o botão existe e está **desabilitado**, com o título ensinando; selecionada a parede, o título passa a `Estender até a face: fim 900 mm` e ele habilita; depois do clique **volta a desabilitar**, porque a ponta chegou na face.
 - **App real** (escritas bloqueadas: 3, 0 erros), *Planta 24/09/2026*: com a Parede 26 selecionada, o botão aparece habilitado com `title="Estender até a face: fim 1300 mm"` — a mesma distância que o painel anuncia.
 
+### P2.60 — O ribbon em uma fileira, e recolhível (24/09/2026) · *"o menubar está com 4 linhas. Ocupando muito da tela. Sugeria agrupamentos"*
+
+**A medida antes do remédio.** O usuário mandou o print. Medi na MESMA janela (1660×780 CSS px), na planta dele:
+
+```
+toolbar 285 px · topo do canvas 537 px → o desenho fica com 243 px de 780 (31% da tela)
+```
+
+Quatro faixas empilhadas: abas · acesso rápido (27 botões) · painel da aba em DUAS fileiras · barra de opções. O editor de plantas estava usando dois terços da altura para falar de si mesmo.
+
+**O que entrou (as duas coisas que o usuário escolheu, A + B).**
+
+**A — os comandos em menus ▾.** A aba Arquitetura tinha 20 comandos em quatro grupos (Estrutural, Reforma, Acabamentos, Vistas) que não cabiam numa fileira. Viraram quatro menus dentro de um grupo só, "Projeto". O comando é o mesmo, com o mesmo rótulo, a mesma contagem e a mesma ajuda — custa um clique a mais chegar nele.
+
+⚠️ **"Construir" ficou de fora, à vista** (Selecionar, Mover, Componentes, Mobiliário, Juntar). É o que se usa a cada minuto de desenho; esconder atrás de um clique o gesto mais repetido do editor seria trocar altura por atrito — o oposto do pedido.
+
+⚠️ **A contagem do menu é a PENDÊNCIA do grupo, não a soma das de dentro.** Acabamentos reúne "90 esquadrias sem tipo" com "400 rodapés sugeridos" e "45 tipos no catálogo": somar daria um número que não significa nada. Só Acabamentos leva número, e é o das esquadrias sem tipo — a única que é dívida.
+
+**B — o ribbon recolhe.** Duplo clique na aba (o gesto do Revit e do Office) ou o chevron ao lado das abas: some o painel e o acesso rápido, ficam as abas. Recolhido, **o clique numa aba traz o painel de volta** — sem isso o clique não faz nada visível e o usuário acha que travou. O estado é persistido (`blueprint:ribbonRecolhido`): quem trabalha num notebook recolhe uma vez, não a cada carga.
+
+**De graça, porque já estava certo:** o `ResizeObserver` do `ribbonRef` (P2.17) remede a borda inferior do ribbon, então o painel de propriedades sobe junto quando o ribbon recolhe. Não precisou de uma linha.
+
+**⚠️ O que custou caro foi o teste, não o código.** 37 chamadas de teste clicam num comando que agora nasce dentro de um menu fechado — e comando fechado não está no DOM. Em vez de 37 edições, o helper `botao()` do arquivo passou a abrir os menus quando não acha o botão (`fireEvent.click`, síncrono, cabe dentro de um `expect`). Três `const botao = () =>` locais sombreavam o helper e precisaram do mesmo tratamento — os dois primeiros só apareceram rodando a suíte.
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-ui-standard.sh` (Ribbon.tsx e BlueprintEditor.tsx) ok · `check-xss-sinks.sh` ok · suíte cheia **461 arquivos / 5277 testes** verdes · `npm run build` ok.
+- `__tests__/components/Ribbon.test.tsx` (+6): recolhido some o painel e o acesso rápido e as abas ficam; duplo clique recolhe e o clique na aba devolve; **sem `onRecolher` não há botão de recolher** (quem não guarda o estado não oferece o gesto); o menu fechado não tem o comando no DOM, o clique abre-executa-fecha; Esc e clique fora fecham; a contagem some quando é zero.
+- `__tests__/components/BlueprintEditor.test.tsx` (+1): a aba Arquitetura tem Construir à vista e exatamente os quatro menus em Projeto, na ordem; "Pilares automáticos" não está no DOM até abrir Estrutural; recolher tira o painel e o Desfazer e mantém as abas.
+- **Harness de LAYOUT** `docs/spikes/ribbon-altura/` (novo): jsdom não tem retângulo — `getBoundingClientRect` devolve zero, e nenhum teste de componente pode enxergar quantos pixels a barra come. O harness monta o `Ribbon` de verdade, com os 20 comandos da aba Arquitetura (mesmos rótulos, mesmas contagens: é o comprimento do texto que decide onde a fileira quebra), na MESMA janela do print (1660×780), e roda nos dois arranjos:
+
+```
+ANTES     192 px · painel em 2 fileiras · Construir, Estrutural, Reforma, Acabamentos, Vistas
+DEPOIS    137 px · painel em 1 fileira  · Construir, Projeto
+RECOLHIDO  51 px
+ganho: 55 px agrupando · 141 px recolhido
+```
+
+  ⚠️ O harness **reprova o arranjo antigo** (sai com erro se ele couber numa fileira) — medição que aprova tudo não mede nada. E ⚠️ estes 192 px não são os 285 px do print: o acesso rápido do harness é uma fileira de 12 marcas, e no app são 27 botões que quebram. O que o harness mede com honestidade é o ARRANJO; o ganho no app é maior, não menor.
+- **App real** (escritas bloqueadas: 2, 0 erros de página), *Planta 24/09/2026*, a MESMA janela 1660×780 do print:
+
+```
+antes da fase   barra 285 px · topo do canvas 537 → o desenho fica com 243 px de 780 (31%)
+agora, aberto   barra 177 px · topo do canvas 429 →                        351 px de 780 (45%)
+agora, recolhido barra 51 px · topo do canvas 303 →                        477 px de 780 (61%)
+```
+
+  **−108 px só agrupando, −234 px recolhido** — o desenho passou de um terço da tela para quase dois terços. Os quatro menus estão lá (`Estrutural`, `Reforma`, `Acabamentos 90`, `Vistas`), "Esquadrias" aparece ao abrir Acabamentos, e o clique numa aba com o ribbon recolhido devolve o painel (a aba Analisar voltou com 264 px).
+
+  ⚠️ **A publicação ficou parada ~1 h** porque o projeto Supabase esteve fora do ar entre ~18:55 e ~20:00 de 24/09/2026 (PostgREST, GoTrue e `db query --linked` pendurando os três). Sem login não havia planta para medir, e a seção ficou marcada PENDENTE até a medição acima existir de fato.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

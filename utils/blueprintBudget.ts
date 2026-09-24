@@ -943,6 +943,34 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
   }
 }
 
+/**
+ * Quanto a planta MEDE de cada medida do catálogo — independente de de-para.
+ *
+ * ⚠️ Usa o MESMO `medir` que gera as linhas, de propósito: a cobertura
+ * (`blueprintCoberturaOrcamento`) diz "a planta tem 1.240 m² de alvenaria sem
+ * item", e se ela contasse por outro caminho poderia discordar do orçamento na
+ * própria tela que os mostra lado a lado.
+ *
+ * Medida sem elemento no desenho volta com `quantidade: 0` em vez de sumir: a
+ * tela precisa saber a diferença entre "não tem no desenho" e "tem e está fora
+ * do orçamento".
+ */
+export function resumoDasMedidas(
+  quant: Quantitativos,
+  extras: ExtrasDaGeracao = {},
+): { medidaId: string; rotulo: string; dimensao: Dimensao; quantidade: number; elementos: number }[] {
+  return MEDIDAS.map((def) => {
+    const valores = medir(quant, def.id, [], extras);
+    return {
+      medidaId: def.id,
+      rotulo: def.rotulo,
+      dimensao: def.dimensao,
+      quantidade: valores.reduce((soma, v) => soma + v.valor, 0),
+      elementos: valores.length,
+    };
+  });
+}
+
 export interface ContextoGeracao {
   studyId: string;
   studyName: string;

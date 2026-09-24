@@ -2069,6 +2069,28 @@ PROTECAO … PARA PORTA DE POCO DE ELEVADOR, VAO DE *120 X 240* CM
 - `__tests__/components/PainelEsquadrias.test.tsx` (+1, total 15): com a mira no catálogo a prévia marca a linha e o aviso diz que todas as peças mudam.
 - **App real** (escritas bloqueadas: 4, 0 erros): o seletor aparece, e a prévia passa a mostrar `85,8×210 → 87×210 cm · medida de catálogo · 6 peça(s)`.
 
+### P2.55 — Quanto da planta já tem preço (24/09/2026)
+
+**O silêncio.** O painel de orçamento mostra as linhas que saem e as divergências que impedem cada uma. O que ele **não** mostra é o contrário: o que a planta mede e não vira linha nenhuma, porque ninguém mapeou aquela medida. Isso nunca apareceu como divergência — divergência é mapeamento que falhou; aqui **nem há mapeamento** — e o total saía parecendo completo.
+
+Medido no app, numa planta publicada real: **1 de 12 medidas tinha preço**. As outras 11 — 556 m² de parede (duas faces), 278 m² (uma face), 150 m² de piso com perda, 149 m² de área construída, 116 m de perímetro, 109 m de rodapé — estavam fora do orçamento, sem um aviso.
+
+**O que entrou**
+- `utils/blueprintCoberturaOrcamento.ts` (novo): cruza o que a planta MEDE com o de-para e o catálogo, e classifica cada medida — `COM_PRECO`, `SEM_MAPEAMENTO`, `ITEM_AUSENTE`, `UNIDADE_INCOMPATIVEL`, `DESLIGADO`.
+- `resumoDasMedidas` exportado de `blueprintBudget`: usa o **mesmo `medir`** que gera as linhas, de propósito — cobertura e orçamento aparecem lado a lado na tela, e contar por dois caminhos seria convidá-los a discordar.
+- A cobertura sai de dentro de `preverLancamentos`, que já tem quantitativo, de-para e catálogo resolvidos: calcular fora custaria duas idas ao banco.
+- Bloco no painel: *"N de M medida(s) da planta têm preço. O total acima é só dessas"*, e a lista do que ficou fora **da maior quantidade para a menor** — é o que prioriza: 556 m² sem item importa mais que 3 un sem item.
+
+⚠️ **Cobertura se conta em MEDIDA, nunca em dinheiro.** "80% do orçamento coberto" seria mentira: não se sabe o preço justamente do que falta.
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-ui-standard.sh` ok · `check-xss-sinks.sh` ok · suíte cheia **458 arquivos / 5237 testes** verdes · `npm run build` ok.
+- `__tests__/blueprintCoberturaOrcamento.test.ts` (7): a medida sem mapeamento entra em FALTANDO com a quantidade; unidade incompatível não vira valor; item fora do catálogo e de-para desligado são estados distintos; entre dois mapeamentos o ATIVO manda; medida que a planta não tem sai da conta mas **continua na lista** (a tela precisa distinguir "não tem no desenho" de "tem e está fora"); item sem preço não inventa valor; a lista do que falta vem da maior quantidade para a menor.
+- `__tests__/components/PainelOrcamento.test.tsx` (+1, total 17) — e os 5 dublês de prévia ganharam o campo novo.
+- **App real** (escritas bloqueadas: 2, 0 erros), planta publicada: *"1 de 12 medida(s) da planta têm preço"*, com a lista priorizada.
+
+**⚠️ Um defeito que o teste pegou antes do usuário.** O bloco nasceu **dentro** do ramo "tem linhas geradas" — então, com zero linhas, o painel dizia só *"Nenhuma linha gerada"*. É exatamente o caso em que a cobertura mais importa: zero linhas significa que a planta inteira está fora do orçamento. O bloco foi movido para fora do ramo.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

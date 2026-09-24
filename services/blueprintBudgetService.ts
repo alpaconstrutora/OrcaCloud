@@ -7,6 +7,7 @@
 // banco. Foi assim que o erro que interessa (unidade incompatível) ficou coberto
 // por teste sem precisar de rede.
 
+import { coberturaDoOrcamento, type Cobertura } from '../utils/blueprintCoberturaOrcamento';
 import { medirSubRegioes } from '../utils/blueprintSubRegioes';
 import { supabase } from '../lib/supabase';
 import { sinapiService } from './sinapiService';
@@ -25,6 +26,7 @@ import {
   type MapeamentoOrcamento,
   type MapeamentoResolvido,
   type ResultadoGeracao,
+  resumoDasMedidas,
 } from '../utils/blueprintBudget';
 import {
   POLITICA_PADRAO,
@@ -163,6 +165,15 @@ export interface PreviaOrcamento extends ResultadoGeracao {
   contexto: ContextoGeracao;
   /** Quanto o conjunto gerado soma, com o preço vigente do catálogo. */
   totalEstimado: number;
+  /**
+   * O que a planta MEDE e não vira linha (P2.55).
+   *
+   * ⚠️ Sai daqui, e não de uma segunda chamada, porque aqui já estão o
+   * quantitativo, o de-para e o catálogo resolvidos — calcular fora seria pagar
+   * duas idas ao banco e arriscar que a cobertura e o orçamento discordem sobre
+   * a mesma quantidade, um ao lado do outro na tela.
+   */
+  cobertura: Cobertura;
 }
 
 /**
@@ -259,7 +270,14 @@ export async function preverLancamentos(
     0,
   );
 
-  return { ...resultado, contexto, totalEstimado };
+  // COBERTURA (P2.55): o que a planta mede, cruzado com o de-para e o catálogo.
+  const cobertura = coberturaDoOrcamento(
+    resumoDasMedidas(quant, { armadura, subRegioes: medirSubRegioes(model) }),
+    mapeamentos,
+    itens,
+  );
+
+  return { ...resultado, contexto, totalEstimado, cobertura };
 }
 
 /**

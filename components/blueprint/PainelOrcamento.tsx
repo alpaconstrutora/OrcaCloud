@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import type { BlueprintStudy } from '../../types/blueprint';
 import { MEDIDAS, MEDIDA_POR_ID, type MapeamentoOrcamento } from '../../utils/blueprintBudget';
+import { ROTULO_DO_ESTADO } from '../../utils/blueprintCoberturaOrcamento';
 import {
   listObrasDaOrganizacao,
   listSnapshots,
@@ -388,6 +389,52 @@ export default function PainelOrcamento({
               </div>
             )}
 
+            {/* COBERTURA (P2.55).
+                ⚠️ FORA do ramo "tem linhas", e não dentro dele. O teste pegou
+                isto: com zero linhas geradas o painel dizia só "Nenhuma linha
+                gerada" — e é exatamente aí que a cobertura importa, porque é
+                quando a planta inteira está fora do orçamento.
+                ⚠️ O total acima soma o que TEM item. O que a planta mede e
+                ninguém mapeou não aparece nem como divergência — divergência é
+                mapeamento que falhou; aqui nem há mapeamento —, e sem este
+                bloco o total pareceria completo. */}
+            <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-2" data-testid="cobertura-orcamento">
+              <p className="text-xs text-slate-700">
+                <strong>
+                  {previa.cobertura.comPreco} de {previa.cobertura.medidasComQuantidade} medida(s) da planta têm preço.
+                </strong>{' '}
+                O total acima é só dessas.
+              </p>
+              {previa.cobertura.faltando.length === 0 ? (
+                <p className="mt-1 text-[11px] text-slate-500" data-testid="cobertura-completa">
+                  Tudo o que a planta mede está no orçamento.
+                </p>
+              ) : (
+                <>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Fora do orçamento, da maior quantidade para a menor:
+                  </p>
+                  <ul className="mt-1 space-y-0.5" data-testid="cobertura-faltando">
+                    {previa.cobertura.faltando.slice(0, 12).map((l) => (
+                      <li key={l.medidaId} className="text-[11px] text-slate-600">
+                        <span className="font-medium text-slate-700">{l.rotulo}</span>{' '}
+                        <span className="tabular-nums">
+                          {l.quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} {l.dimensao.toLowerCase()}
+                        </span>{' '}
+                        · {ROTULO_DO_ESTADO[l.estado]}
+                        {l.itemCode ? ` (${l.itemCode})` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                  {previa.cobertura.faltando.length > 12 && (
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      e mais {previa.cobertura.faltando.length - 12} medida(s).
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+
             {previa.entries.length === 0 ? (
               <p className="mt-3 text-xs text-slate-500">Nenhuma linha gerada.</p>
             ) : (
@@ -430,6 +477,7 @@ export default function PainelOrcamento({
                     })}
                   </span>
                 </p>
+
 
                 {destinoFechado && (
                   <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">

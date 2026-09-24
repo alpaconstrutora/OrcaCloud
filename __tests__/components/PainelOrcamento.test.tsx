@@ -16,6 +16,15 @@ import type { BlueprintStudy } from '../../types/blueprint';
 
 const listMappings = vi.fn();
 const preverLancamentos = vi.fn();
+
+/**
+ * A COBERTURA que a prévia passou a trazer (P2.55).
+ *
+ * ⚠️ Dublê único, e não um por caso: o painel lê `previa.cobertura` para dizer
+ * quantas medidas da planta têm preço, e um caso que esqueça o campo quebra a
+ * tela — foi o que aconteceu ao acrescentar o bloco.
+ */
+const COBERTURA = { linhas: [], medidasComQuantidade: 0, comPreco: 0, totalEstimado: 0, faltando: [] };
 const aplicarNoProjeto = vi.fn();
 const saveMapping = vi.fn(async () => ({}) as never);
 const deleteMapping = vi.fn(async () => {});
@@ -125,6 +134,7 @@ describe('PainelOrcamento · o que o painel oferece', () => {
       ],
       contexto: CONTEXTO,
       totalEstimado: 0,
+      cobertura: COBERTURA,
     });
 
     await montar();
@@ -154,6 +164,7 @@ describe('PainelOrcamento · o que o painel oferece', () => {
       divergencias: [],
       contexto: CONTEXTO,
       totalEstimado: 548.5,
+      cobertura: COBERTURA,
     });
 
     await montar();
@@ -178,6 +189,7 @@ describe('PainelOrcamento · o que o painel oferece', () => {
       divergencias: [],
       contexto: CONTEXTO,
       totalEstimado: 548.5,
+      cobertura: COBERTURA,
     });
     aplicarNoProjeto.mockResolvedValue({ removidas: 3, adicionadas: 1, total: 4 });
 
@@ -217,6 +229,7 @@ describe('PainelOrcamento · o que o painel oferece', () => {
       divergencias: [],
       contexto: CONTEXTO,
       totalEstimado: 548.5,
+      cobertura: COBERTURA,
     });
 
     await montar({ project_id: 'prj_1' });
@@ -265,6 +278,7 @@ describe('PainelOrcamento · vincular a obra', () => {
       divergencias: [],
       contexto: CONTEXTO,
       totalEstimado: 548.5,
+      cobertura: COBERTURA,
     });
 
     await montar();
@@ -330,6 +344,7 @@ describe('PainelOrcamento · orçamento fechado', () => {
     divergencias: [],
     contexto: CONTEXTO,
     totalEstimado: 548.5,
+    cobertura: COBERTURA,
   };
 
   async function comPrevia() {
@@ -377,5 +392,46 @@ describe('PainelOrcamento · orçamento fechado', () => {
 
     await waitFor(() => expect(aplicar).toBeEnabled());
     expect(screen.queryByText(/reabra-o na tela de Orçamento/i)).not.toBeInTheDocument();
+  });
+
+});
+
+describe('PainelOrcamento · cobertura', () => {
+  /**
+   * COBERTURA (P2.55) — o silêncio que o bloco quebra.
+   *
+   * ⚠️ O total da prévia soma o que TEM item. O que a planta mede e ninguém
+   * mapeou não aparece nem como divergência, e sem este bloco o total pareceria
+   * completo.
+   */
+  it('diz quantas medidas têm preço e lista o que ficou fora, da maior para a menor', async () => {
+    preverLancamentos.mockResolvedValue({
+      entries: [],
+      divergencias: [],
+      contexto: CONTEXTO,
+      totalEstimado: 1000,
+      cobertura: {
+        linhas: [],
+        medidasComQuantidade: 3,
+        comPreco: 1,
+        totalEstimado: 1000,
+        faltando: [
+          { medidaId: 'AREA_PAREDE_DUAS_FACES', rotulo: 'Área de parede (duas faces)', dimensao: 'M2', quantidade: 1240, estado: 'SEM_MAPEAMENTO', itemCode: '', precoUnitario: null, valor: null },
+          { medidaId: 'CONTAGEM_PORTAS', rotulo: 'Portas', dimensao: 'UN', quantidade: 35, estado: 'ITEM_AUSENTE', itemCode: '99999', precoUnitario: null, valor: null },
+        ],
+      },
+    });
+
+    await montar();
+    await userEvent.setup().click(await screen.findByRole('button', { name: /prévia/i }));
+    const bloco = await screen.findByTestId('cobertura-orcamento');
+    expect(bloco).toHaveTextContent('1 de 3 medida(s) da planta têm preço');
+    const lista = within(bloco).getByTestId('cobertura-faltando');
+    // A maior quantidade primeiro — é o que prioriza.
+    expect(lista.textContent).toMatch(/Área de parede[\s\S]*Portas/);
+    expect(lista).toHaveTextContent('1.240 m2');
+    expect(lista).toHaveTextContent('sem item vinculado');
+    // O item que existe no de-para mas sumiu do catálogo aparece com o código.
+    expect(lista).toHaveTextContent('item fora do catálogo (99999)');
   });
 });

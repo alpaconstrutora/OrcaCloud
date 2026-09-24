@@ -60,6 +60,20 @@ export interface ItemPrevia {
     aviso?: string;
 }
 
+/** Uma cota já gravada, com os rótulos que a tela precisa. */
+export interface CotaDoRateio {
+    id: string;
+    unitId: string;
+    unitLabel: string;
+    peso: number;
+    valor: number;
+    clientId: string | null;
+    /** `null` = a cota foi calculada sem ninguém no papel de pagador. */
+    clientNome: string | null;
+    /** Já virou recebível em Contas a Receber. */
+    temRecebivel: boolean;
+}
+
 export interface PreviaRateio {
     despesas: DespesaRateio[];
     totalDespesas: number;
@@ -69,6 +83,13 @@ export interface PreviaRateio {
     semDado: number;
     /** Unidades sem ninguém para cobrar. */
     semResponsavel: number;
+    /**
+     * Despesas da competência que ficaram de fora por já estarem em outro
+     * rateio vivo. Zero é o caso normal; qualquer número acima disso precisa
+     * aparecer na tela, senão o total "não bate" com o extrato do centro de
+     * custo e ninguém sabe por quê.
+     */
+    jaRateadas: number;
 }
 
 export interface Rateio {
@@ -317,6 +338,12 @@ export const condominioRateioService = {
          * existia, então quem não passar nada não muda de resultado.
          */
         pagador?: PagadorDaCota;
+        /**
+         * Escape para incluir despesa que JÁ está em outro rateio vivo. O
+         * default é excluir — ver o bloco 1.5 abaixo. Existe para um caso
+         * futuro de recálculo/refazimento; hoje ninguém passa.
+         */
+        incluirJaRateadas?: boolean;
     }): Promise<PreviaRateio> {
         const inicio = params.competencia;
         // Fim = 1º dia do mês seguinte, por aritmética de STRING. Com
@@ -361,7 +388,31 @@ export const condominioRateioService = {
             valor: Number(t.amount || 0),
             data: t.transaction_date,
         }));
-        const totalCentavos = despesas.reduce((s, d) => s + paraCentavos(d.valor), 0);
+        // 1.5. Fora as que JÁ entraram em outro rateio vivo.
+        //
+        // Nada no banco impede a mesma despesa cair em dois rateios:
+        // `uidx_rateio_despesa` é (rateio_id, transaction_id) — por rateio —, e
+        // `uidx_rateio_competencia` é (empreendimento, competência, TIPO), o que
+        // deixa ORDINÁRIO e EXTRAORDINÁRIO do mesmo mês conviverem. Como a
+        // janela de despesas não olha o tipo, o extraordinário de 09/2026 puxava
+        // exatamente a MESMA lista do ordinário de 09/2026 e o condômino pagava
+        // a conta duas vezes.
+        //
+        // A trava já existia (`listarJaRateadas`) e só o caminho de Contas a
+        // Pagar a usava. Movida para cá, onde TODO caminho passa — é o mesmo
+        // raciocínio das REGRAS #2/#3: corte na origem, seguro por padrão, em
+        // vez de cada tela nova ter de lembrar.
+        let jaRateadas = 0;
+        let despesasElegiveis = despesas;
+        if (!params.incluirJaRateadas && despesas.length > 0) {
+            const usadas = await this.listarJaRateadas(despesas.map(d => d.transaction_id));
+            if (usadas.size > 0) {
+                despesasElegiveis = despesas.filter(d => !usadas.has(d.transaction_id));
+                jaRateadas = despesas.length - despesasElegiveis.length;
+            }
+        }
+
+        const totalCentavos = despesasElegiveis.reduce((s, d) => s + paraCentavos(d.valor), 0);
 
         // 2. Unidades e seus pesos.
         const { empreendimentoService } = await import('./empreendimentoService');
@@ -460,12 +511,17 @@ export const condominioRateioService = {
         const itens: ItemPrevia[] = base.map((b, i) => ({ ...b, valor: paraReais(valores[i]) }));
 
         return {
-            despesas,
+            // As ELEGÍVEIS, não todas: é esta lista que vira
+            // `condominio_rateio_despesas` no salvar, e gravar aqui uma despesa
+            // que não entrou no total faria a prestação de contas somar
+            // diferente da cota cobrada.
+            despesas: despesasElegiveis,
             totalDespesas: paraReais(totalCentavos),
             itens,
             totalRateado: paraReais(valores.reduce((s, v) => s + v, 0)),
             semDado: itens.filter(i => i.peso === 0 && params.criterio !== 'GRUPO').length,
             semResponsavel: itens.filter(i => !i.clientId).length,
+            jaRateadas,
         };
     },
 
@@ -625,6 +681,63 @@ export const condominioRateioService = {
             .update({ descricao: limpa })
             .eq('id', despesaId);
         if (error) throw new Error(`Falha ao salvar a descrição: ${error.message}`);
+    },
+
+    /**
+     * As cotas de um rateio salvo, prontas para a tela — com o rótulo da
+     * unidade e o nome de quem paga.
+     *
+     * Existe porque `listarItens` devolve UUIDs, e por isso nunca teve
+     * chamador: a única lista cota-a-cota que a aba mostrava era a da sheet de
+     * cobrança, que some assim que `cobranca_gerada_em` é preenchido. Depois de
+     * cobrar, "quem deve quanto" deixava de ser respondível na tela — que é
+     * justamente a pergunta da prestação de contas.
+     *
+     * O `client_id` lido é o GRAVADO na cota (quem era o responsável quando o
+     * rateio foi calculado), não o ocupante de hoje: é o que o documento diz,
+     * e documento não se reescreve sozinho quando a ocupação muda.
+     */
+    async listarCotas(rateioId: string): Promise<CotaDoRateio[]> {
+        const { data, error } = await supabase
+            .from('condominio_rateio_itens')
+            .select('id, unit_id, peso, valor, client_id, transaction_id')
+            .eq('rateio_id', rateioId);
+        if (error) throw new Error(`Falha ao carregar as cotas: ${error.message}`);
+        const linhas = data || [];
+        if (linhas.length === 0) return [];
+
+        const unitIds = [...new Set(linhas.map((l: any) => l.unit_id as string))];
+        const rotulo = new Map<string, string>();
+        if (unitIds.length > 0) {
+            const { data: us } = await supabase
+                .from('empreendimento_units')
+                .select('id, name, tower:empreendimento_towers(name)')
+                .in('id', unitIds);
+            for (const u of us || []) {
+                const torre = (u as { tower?: { name?: string } }).tower?.name;
+                rotulo.set(u.id, torre ? `${torre} · ${u.name}` : u.name);
+            }
+        }
+
+        const clientIds = [...new Set(linhas.map((l: any) => l.client_id).filter(Boolean))] as string[];
+        const nomes = new Map<string, string>();
+        if (clientIds.length > 0) {
+            const { data: cs } = await supabase.from('clients').select('id, name').in('id', clientIds);
+            for (const c of cs || []) nomes.set(c.id, c.name);
+        }
+
+        return linhas
+            .map((l: any) => ({
+                id: l.id as string,
+                unitId: l.unit_id as string,
+                unitLabel: rotulo.get(l.unit_id) || '—',
+                peso: Number(l.peso || 0),
+                valor: Number(l.valor || 0),
+                clientId: (l.client_id ?? null) as string | null,
+                clientNome: l.client_id ? (nomes.get(l.client_id) || '—') : null,
+                temRecebivel: !!l.transaction_id,
+            }))
+            .sort((a, b) => a.unitLabel.localeCompare(b.unitLabel, 'pt-BR'));
     },
 
     async listarItens(rateioId: string): Promise<{ unit_id: string; peso: number; valor: number; client_id: string | null }[]> {

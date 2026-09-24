@@ -26,11 +26,13 @@ import { useConfirm } from '../ui/confirm';
 import {
     condominioRateioService, CRITERIO_LABEL, CRITERIO_EXIGE,
     type CriterioRateio, type TipoRateio, type PreviaRateio, type Rateio, type DespesaRateio,
+    type CotaDoRateio,
 } from '../../services/condominioRateioService';
 import {
     condominioCobrancaService,
     type PreviaCobranca, type PagadorDaCota, type ResultadoEmissao,
 } from '../../services/condominioCobrancaService';
+import { empreendimentoService } from '../../services/empreendimentoService';
 import type { Empreendimento } from '../../types/empreendimento';
 
 const STATUS_COR: Record<string, string> = {
@@ -179,13 +181,60 @@ const TabelaDespesas: React.FC<{
     );
 };
 
+/** Cotas de um rateio salvo — quem paga quanto. Prestação de contas.
+ *  Mesma régua da §6.9 que `TabelaDespesas` usa: dentro de `Sheet` a largura é
+ *  o recurso escasso, então `px-3` de régua e `px-4` na coluna de texto livre. */
+const TabelaCotas: React.FC<{ cotas: CotaDoRateio[] }> = ({ cotas }) => (
+    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+            <thead>
+                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                    <th className="px-3 py-2 border-r border-gray-100 whitespace-nowrap">Unidade</th>
+                    <th className="px-4 py-2 border-r border-gray-100">Quem paga</th>
+                    <th className="px-3 py-2 text-right whitespace-nowrap">Cota</th>
+                </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+                {cotas.map(c => (
+                    <tr key={c.id}>
+                        <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 whitespace-nowrap">
+                            {c.unitLabel}
+                        </td>
+                        <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
+                            {c.clientNome ? (
+                                <span className="block truncate" title={c.clientNome}>{c.clientNome}</span>
+                            ) : (
+                                /* §8: texto colorido, sem pílula. A cota existe e foi
+                                   calculada — o que falta é de QUEM cobrar. */
+                                <span className="text-amber-600">Sem pagador definido</span>
+                            )}
+                        </td>
+                        <td className="px-3 py-2.5 last:border-r-0 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
+                            {dinheiro(c.valor)}
+                            {c.temRecebivel && (
+                                <span className="block text-xs font-normal text-emerald-600">cobrada</span>
+                            )}
+                        </td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    </div>
+);
+
 interface Props { empreendimento: Empreendimento }
 
 const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
     const confirm = useConfirm();
     const orgId = empreendimento.organization_id;
 
-    const [searchTerm, setSearchTerm] = usePersistedState<string>('condominio:financeiro:search', '');
+    // A chave leva o id do condomínio: com uma chave única para todos, abrir o
+    // condomínio B logo depois de buscar no A trazia a lista já filtrada por um
+    // termo que não é dele — e "sumiu rateio" vira chamado de suporte. Trocar
+    // de condomínio desmonta a aba, então o `useState` inicial do
+    // `usePersistedState` roda de novo e lê a chave certa.
+    const [searchTerm, setSearchTerm] = usePersistedState<string>(
+        `condominio:${empreendimento.id}:financeiro:search`, '');
     const tableColumns = useTableColumns(COLUMNS, 'condominioFinanceiroColumns');
     const v = tableColumns.visibleColumns;
     // Todos os centros de custo do condomínio (N desde 2026-09-19): a despesa
@@ -205,6 +254,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
     const [sheetDetalhe, setSheetDetalhe] = React.useState<Rateio | null>(null);
     const [carregandoDetalhe, setCarregandoDetalhe] = React.useState(false);
     const [despesasDetalhe, setDespesasDetalhe] = React.useState<DespesaRateio[]>([]);
+    const [cotasDetalhe, setCotasDetalhe] = React.useState<CotaDoRateio[]>([]);
 
     /**
      * Corrige a descrição de uma despesa do rateio em rascunho. §22: costura no
@@ -226,9 +276,17 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
         setSheetDetalhe(r);
         setCarregandoDetalhe(true);
         try {
-            setDespesasDetalhe(await condominioRateioService.listarDespesas(r.id));
+            // As duas metades do documento, em paralelo: o que se gastou
+            // (despesas) e quem paga o quê (cotas). Uma sem a outra não é
+            // prestação de contas.
+            const [ds, cs] = await Promise.all([
+                condominioRateioService.listarDespesas(r.id),
+                condominioRateioService.listarCotas(r.id),
+            ]);
+            setDespesasDetalhe(ds);
+            setCotasDetalhe(cs);
         } catch (e: any) {
-            notify(e?.message || 'Erro ao carregar as despesas do rateio.', 'error');
+            notify(e?.message || 'Erro ao carregar o detalhe do rateio.', 'error');
         } finally {
             setCarregandoDetalhe(false);
         }
@@ -244,10 +302,19 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
 
     const emitirBoletos = async (r: Rateio) => {
         const e = emissoes[r.id];
-        const faltam = e ? e.total - e.emitidas : 0;
+        // Quantas vão SAIR. A contagem de `emissoes` só é carregada por
+        // `carregar()`, para rateios que já tinham cobrança gerada — então logo
+        // depois de gerar na MESMA sessão ela é `undefined`, e a conta antiga
+        // (`e?.total ?? 0`) anunciava "0 cobrança(s) vão para o Asaas" na
+        // véspera de mandar N boletos a condômino. Sem contagem, a frase passa
+        // a dizer o que se sabe — "as cobranças" — em vez de um número falso.
+        const faltam = e ? e.total - e.emitidas : null;
+        const quantas = faltam === null
+            ? 'As cobranças ainda não emitidas'
+            : `${faltam} cobrança(s)`;
         const ok = await confirm({
             title: 'Emitir os boletos?',
-            message: `${faltam > 0 ? faltam : (e?.total ?? 0)} cobrança(s) da competência ${rotuloCompetencia(r.competencia)} vão para o Asaas, com multa e juros da Ficha. Boleto emitido chega ao condômino e NÃO se desfaz — para cancelar depois é preciso fazer isso no próprio Asaas.`,
+            message: `${quantas} da competência ${rotuloCompetencia(r.competencia)} vão para o Asaas, com multa e juros da Ficha. Boleto emitido chega ao condômino e NÃO se desfaz — para cancelar depois é preciso fazer isso no próprio Asaas.`,
             variant: 'danger',
             confirmLabel: 'Emitir boletos',
         });
@@ -334,15 +401,39 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
             const r = await condominioCobrancaService.gerarRecebiveis(sheetCobranca.id, { vencimento, pagador });
             // §22 — costura local, sem recarregar a aba.
             const carimbo = new Date().toISOString();
-            setRateios(prev => prev.map(x => (x.id === sheetCobranca.id ? { ...x, cobranca_gerada_em: carimbo } : x)));
-            setSheetCobranca(null);
-            notify(`${r.criados} recebível(is) gerado(s).${r.pulados > 0 ? ` ${r.pulados} cota(s) ficaram de fora.` : ''}`);
+            // Só carimba se alguma cota virou recebível — o service usa o mesmo
+            // critério do lado do banco. Com zero criados, o rateio segue
+            // "fechado, não cobrado" e a ação continua na tela.
+            if (r.criados > 0) {
+                setRateios(prev => prev.map(x => (x.id === sheetCobranca.id ? { ...x, cobranca_gerada_em: carimbo } : x)));
+                setSheetCobranca(null);
+            }
+            const partes = [`${r.criados} recebível(is) gerado(s).`];
+            if (r.pulados > 0) partes.push(`${r.pulados} cota(s) ficaram de fora.`);
+            // Falha de cota NÃO pode virar silêncio: até 23/09 o lote abortava
+            // no primeiro erro e o usuário via só a exceção da primeira cota,
+            // sem saber quantas tinham passado.
+            if (r.falhas.length > 0) {
+                partes.push(`${r.falhas.length} falharam: ${r.falhas.map(f => f.unitLabel).join(', ')}.`);
+            }
+            notify(partes.join(' '), r.falhas.length > 0 ? 'error' : 'success');
         } catch (e: any) {
             notify(e?.message || 'Erro ao gerar as cobranças.', 'error');
         } finally {
             setGerandoCob(false);
         }
     };
+
+    // ── Critério GRUPO — as unidades que participam ───────────────────────
+    // Até 23/09/2026 o critério existia no `<select>`, no CHECK do banco e no
+    // service (`unidadesDoGrupo`), e NENHUMA tela passava a lista. Resultado:
+    // escolher "Grupo de unidades" dava peso 0 em todas, total rateado
+    // R$ 0,00 — e esse rateio vazio ainda podia ser salvo e FECHADO, queimando
+    // um número da sequência CONDO_RATEIO. Opção que não dá para exercer é
+    // armadilha; aqui ela ganha o seletor que faltava.
+    const [unidades, setUnidades] = React.useState<{ id: string; label: string }[]>([]);
+    const [carregandoUnidades, setCarregandoUnidades] = React.useState(false);
+    const [doGrupo, setDoGrupo] = React.useState<Set<string>>(new Set());
 
     const [sheetNovo, setSheetNovo] = React.useState(false);
     const [calculando, setCalculando] = React.useState(false);
@@ -374,6 +465,23 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
     }, [empreendimento.id]);
 
     React.useEffect(() => { carregar(); }, [carregar]);
+
+    // As unidades só importam para o critério GRUPO — e só com a sheet aberta.
+    // Carregar sempre custaria uma varredura de torres+unidades por abertura da
+    // aba, para um critério que é o menos usado dos cinco.
+    React.useEffect(() => {
+        if (!sheetNovo || form.criterio !== 'GRUPO' || unidades.length > 0) return;
+        let ativo = true;
+        setCarregandoUnidades(true);
+        empreendimentoService.listAllUnitsForEmpreendimento(empreendimento.id)
+            .then(us => {
+                if (!ativo) return;
+                setUnidades(us.map(u => ({ id: u.id, label: `${u._tower_name} · ${u.name}` })));
+            })
+            .catch(() => { if (ativo) setUnidades([]); })
+            .finally(() => { if (ativo) setCarregandoUnidades(false); });
+        return () => { ativo = false; };
+    }, [sheetNovo, form.criterio, unidades.length, empreendimento.id]);
 
     const [disponiveis, setDisponiveis] = React.useState<{ id: string; code: string; name: string; grupo: string | null }[]>([]);
     const [escolhido, setEscolhido] = React.useState('');
@@ -439,6 +547,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                 competencia: form.competencia,
                 criterio: form.criterio,
                 valorFixo: Number(form.valorFixo.replace(',', '.')) || 0,
+                unidadesDoGrupo: form.criterio === 'GRUPO' ? [...doGrupo] : undefined,
             }));
         } catch (e: any) {
             notify(e?.message || 'Erro ao calcular.', 'error');
@@ -855,7 +964,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                                                 onClick={() => abrirDetalhe(r)}
                                                                 className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all whitespace-nowrap"
                                                             >
-                                                                Ver despesas
+                                                                Ver detalhe
                                                             </button>
                                                         )}
                                                         {r.status === 'RASCUNHO' && (
@@ -883,10 +992,24 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                                                 onClick={() => { if (emitindo !== r.id) emitirBoletos(r); }}
                                                             />
                                                         )}
-                                                        {r.status === 'FECHADO' && !r.cobranca_gerada_em && (
+                                                        {/* Continua alcançável DEPOIS de gerada, de
+                                                            propósito. Desde que o lote deixou de abortar
+                                                            no primeiro erro (23/09/2026), uma geração
+                                                            pode sair pela metade: o rateio ganha
+                                                            `cobranca_gerada_em` e sobram cotas sem
+                                                            recebível. Escondendo a ação aí, essas cotas
+                                                            ficavam inalcançáveis para sempre — e o
+                                                            caminho de resolver um CPF que faltava e
+                                                            gerar o que sobrou não existia. A prévia é a
+                                                            autoridade: cota já gerada aparece bloqueada
+                                                            com "o recebível existe", e o botão do rodapé
+                                                            trava em zero cobrável. */}
+                                                        {r.status === 'FECHADO' && (
                                                             <ActionIconButton
                                                                 kind="edit"
-                                                                title="Gerar cobrança das cotas"
+                                                                title={r.cobranca_gerada_em
+                                                                    ? 'Gerar cobrança das cotas que ficaram sem recebível'
+                                                                    : 'Gerar cobrança das cotas'}
                                                                 icon={<FileText className="w-4 h-4" />}
                                                                 onClick={() => abrirCobranca(r)}
                                                             />
@@ -929,7 +1052,15 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                 <input
                                     type="month"
                                     value={form.competencia.slice(0, 7)}
-                                    onChange={e => setForm(f => ({ ...f, competencia: `${e.target.value}-01` }))}
+                                    // Trocar a competência INVALIDA a prévia: ela
+                                    // é o que `salvar()` grava como cotas e
+                                    // despesas, mas a competência gravada sai do
+                                    // FORM. Sem isto dava para calcular agosto,
+                                    // mudar o campo para setembro e salvar um
+                                    // rateio de setembro com as despesas de
+                                    // agosto — sem nada na tela indicando a
+                                    // troca. Mesmo motivo do critério, abaixo.
+                                    onChange={e => { setForm(f => ({ ...f, competencia: `${e.target.value}-01` })); setPrevia(null); }}
                                     className="mt-1 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                                 />
                             </div>
@@ -937,7 +1068,11 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                 <label className="text-xs font-semibold text-slate-500">Tipo</label>
                                 <select
                                     value={form.tipo}
-                                    onChange={e => setForm(f => ({ ...f, tipo: e.target.value as TipoRateio }))}
+                                    // O tipo também é gravado a partir do form, e
+                                    // decide o pagador padrão da cobrança —
+                                    // prévia calculada como ordinária não pode
+                                    // ser salva como extraordinária.
+                                    onChange={e => { setForm(f => ({ ...f, tipo: e.target.value as TipoRateio })); setPrevia(null); }}
                                     className="mt-1 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                                 >
                                     <option value="ORDINARIO">Ordinário</option>
@@ -965,6 +1100,68 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                             <p className="text-xs text-gray-400 mt-1">Exige: {CRITERIO_EXIGE[form.criterio]}.</p>
                         </div>
 
+                        {form.criterio === 'GRUPO' && (
+                            <div>
+                                <div className="flex items-center justify-between gap-3">
+                                    <label className="text-xs font-semibold text-slate-500">Unidades do grupo</label>
+                                    <div className="flex items-center gap-1.5">
+                                        <button
+                                            type="button"
+                                            onClick={() => { setDoGrupo(new Set(unidades.map(u => u.id))); setPrevia(null); }}
+                                            className="h-7 px-2 rounded-[6px] text-xs font-medium text-gray-500 hover:bg-gray-100 transition-all"
+                                        >
+                                            Todas
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setDoGrupo(new Set()); setPrevia(null); }}
+                                            className="h-7 px-2 rounded-[6px] text-xs font-medium text-gray-500 hover:bg-gray-100 transition-all"
+                                        >
+                                            Nenhuma
+                                        </button>
+                                    </div>
+                                </div>
+                                {carregandoUnidades ? (
+                                    <p className="text-xs text-gray-400 mt-2">Carregando as unidades...</p>
+                                ) : unidades.length === 0 ? (
+                                    <p className="text-xs text-amber-600 flex items-start gap-1.5 mt-2">
+                                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                                        Este condomínio não tem unidades cadastradas — não há grupo a formar.
+                                    </p>
+                                ) : (
+                                    <div className="mt-1 max-h-56 overflow-y-auto rounded-[10px] border border-gray-200 divide-y divide-gray-100">
+                                        {unidades.map(u => (
+                                            <label
+                                                key={u.id}
+                                                className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={doGrupo.has(u.id)}
+                                                    onChange={() => {
+                                                        setDoGrupo(prev => {
+                                                            const proximo = new Set(prev);
+                                                            if (proximo.has(u.id)) proximo.delete(u.id);
+                                                            else proximo.add(u.id);
+                                                            return proximo;
+                                                        });
+                                                        // Trocar quem está no grupo muda TODAS as cotas —
+                                                        // a prévia na tela deixaria de corresponder.
+                                                        setPrevia(null);
+                                                    }}
+                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                />
+                                                <span className="text-sm font-normal text-gray-700">{u.label}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                )}
+                                <p className="text-xs text-gray-400 mt-1">
+                                    {doGrupo.size} de {unidades.length} no grupo — a despesa é dividida só entre elas.
+                                </p>
+                            </div>
+                        )}
+
                         {form.criterio === 'FIXO' && (
                             <div>
                                 <label className="text-xs font-semibold text-slate-500">Valor por unidade</label>
@@ -983,7 +1180,13 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
 
                         <button
                             onClick={calcular}
-                            disabled={calculando}
+                            // Grupo vazio calcularia peso 0 em todas as unidades e
+                            // devolveria um rateio de R$ 0,00 — que antes dava para
+                            // salvar e fechar, queimando um número de documento.
+                            disabled={calculando || (form.criterio === 'GRUPO' && doGrupo.size === 0)}
+                            title={form.criterio === 'GRUPO' && doGrupo.size === 0
+                                ? 'Escolha ao menos uma unidade para formar o grupo.'
+                                : undefined}
                             className="flex items-center gap-1.5 h-9 px-3.5 bg-gray-100 text-gray-700 rounded-[6px] hover:bg-gray-200 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
                         >
                             <Calculator className="w-[15px] h-[15px]" />
@@ -1010,11 +1213,27 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                     <TabelaDespesas despesas={previa.despesas} comData />
                                 )}
 
-                                {previa.despesas.length === 0 && (
+                                {/* Só quando NÃO houve exclusão: com despesas
+                                    excluídas por já estarem em outro rateio, a
+                                    frase "nenhuma despesa lançada… lance no
+                                    Financeiro" é falsa e manda o síndico lançar
+                                    de novo o que já existe. As duas apareciam
+                                    juntas, contradizendo-se (visto na prova de
+                                    tela de 23/09). O aviso de `jaRateadas`
+                                    abaixo é que explica o zero nesse caso. */}
+                                {previa.despesas.length === 0 && previa.jaRateadas === 0 && (
                                     <p className="text-xs text-amber-600 flex items-start gap-1.5">
                                         <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                                         Nenhuma despesa lançada nesta competência {centros.length > 1 ? 'nos centros de custo' : 'no centro de custo'} do
                                         condomínio. Lance as despesas no Financeiro apontando para {centros.length > 1 ? 'um deles' : 'ele'}.
+                                    </p>
+                                )}
+                                {previa.jaRateadas > 0 && (
+                                    <p className="text-xs text-amber-600 flex items-start gap-1.5">
+                                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                                        {previa.jaRateadas} despesa(s) desta competência ficaram de fora porque já
+                                        entraram em outro rateio (o ordinário e o extraordinário do mesmo mês leem
+                                        o mesmo centro de custo). Cobrar de novo seria cobrar duas vezes.
                                     </p>
                                 )}
                                 {previa.semDado > 0 && (
@@ -1053,7 +1272,14 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                     <button onClick={() => setSheetNovo(false)} className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all">Cancelar</button>
                     <button
                         onClick={salvar}
-                        disabled={salvando || !previa}
+                        // Rateio de R$ 0,00 não é rascunho: é um documento vazio
+                        // que consome número ao fechar. FIXO é a exceção — lá o
+                        // total é consequência do valor digitado, e zero pode ser
+                        // intencional só se o usuário digitou zero.
+                        disabled={salvando || !previa || (previa.totalRateado <= 0 && form.criterio !== 'FIXO')}
+                        title={previa && previa.totalRateado <= 0 && form.criterio !== 'FIXO'
+                            ? 'Nada a ratear: sem despesa na competência, ou nenhuma unidade com peso.'
+                            : undefined}
                         className="h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
                     >
                         {salvando ? 'Salvando...' : 'Salvar rascunho'}
@@ -1061,12 +1287,12 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                 </SheetFooter>
             </Sheet>
 
-            {/* Ver despesas — mesma tabela usada na conferência, reaberta a partir
+            {/* Ver detalhe — cotas + despesas, reabertas a partir
                 do rastro salvo em `condominio_rateio_despesas`. Serve tanto para
                 revisar um rascunho quanto como prestação de contas de um fechado. */}
             <Sheet open={!!sheetDetalhe} onClose={() => setSheetDetalhe(null)} size="2xl">
                 <SheetHeader onClose={() => setSheetDetalhe(null)}>
-                    <SheetTitle>Despesas do rateio</SheetTitle>
+                    <SheetTitle>Detalhe do rateio</SheetTitle>
                     <SheetDescription>
                         {sheetDetalhe && `${rotuloCompetencia(sheetDetalhe.competencia)} · ${CRITERIO_LABEL[sheetDetalhe.criterio]} · ${STATUS_LABEL[sheetDetalhe.status]}`}
                     </SheetDescription>
@@ -1076,24 +1302,54 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                         <div className="text-center py-12">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                         </div>
-                    ) : despesasDetalhe.length === 0 ? (
-                        <p className="text-sm text-gray-500 text-center py-8">Nenhuma despesa gravada neste rateio.</p>
+                    ) : despesasDetalhe.length === 0 && cotasDetalhe.length === 0 ? (
+                        <p className="text-sm text-gray-500 text-center py-8">Nada gravado neste rateio.</p>
                     ) : (
-                        <div className="space-y-3">
-                            <div className="flex justify-between text-sm bg-gray-50 rounded-[10px] p-3">
-                                <span className="text-gray-500">Total das despesas</span>
-                                <span className="font-medium text-gray-800">
-                                    {dinheiro(despesasDetalhe.reduce((s, d) => s + d.valor, 0))}
-                                </span>
+                        <div className="space-y-6">
+                            {/* COTAS primeiro: a pergunta que se faz a um rateio é
+                                "quanto minha unidade deve", e a resposta estava
+                                inalcançável na tela depois que a cobrança era
+                                gerada (a sheet de cobrança some com o botão). */}
+                            <div className="space-y-3">
+                                <div className="flex justify-between text-sm bg-gray-50 rounded-[10px] p-3">
+                                    <span className="text-gray-500">
+                                        Cotas — {cotasDetalhe.length} unidade(s)
+                                    </span>
+                                    <span className="font-medium text-gray-800">
+                                        {dinheiro(cotasDetalhe.reduce((s, c) => s + c.valor, 0))}
+                                    </span>
+                                </div>
+                                {cotasDetalhe.length === 0 ? (
+                                    <p className="text-sm text-gray-500 text-center py-6">
+                                        Nenhuma cota gravada — nenhuma unidade recebeu valor neste rateio.
+                                    </p>
+                                ) : (
+                                    <TabelaCotas cotas={cotasDetalhe} />
+                                )}
                             </div>
-                            {/* A edição só aparece em RASCUNHO. Fechado é
-                                prestação de contas: o condômino já recebeu
-                                aquele documento. */}
-                            <TabelaDespesas
-                                despesas={despesasDetalhe}
-                                comData={false}
-                                onEditarDescricao={sheetDetalhe?.status === 'RASCUNHO' ? editarDescricaoDespesa : undefined}
-                            />
+
+                            <div className="space-y-3">
+                                <div className="flex justify-between text-sm bg-gray-50 rounded-[10px] p-3">
+                                    <span className="text-gray-500">Total das despesas</span>
+                                    <span className="font-medium text-gray-800">
+                                        {dinheiro(despesasDetalhe.reduce((s, d) => s + d.valor, 0))}
+                                    </span>
+                                </div>
+                                {despesasDetalhe.length === 0 ? (
+                                    <p className="text-sm text-gray-500 text-center py-6">
+                                        Nenhuma despesa gravada neste rateio.
+                                    </p>
+                                ) : (
+                                    /* A edição só aparece em RASCUNHO. Fechado é
+                                       prestação de contas: o condômino já recebeu
+                                       aquele documento. */
+                                    <TabelaDespesas
+                                        despesas={despesasDetalhe}
+                                        comData={false}
+                                        onEditarDescricao={sheetDetalhe?.status === 'RASCUNHO' ? editarDescricaoDespesa : undefined}
+                                    />
+                                )}
+                            </div>
                         </div>
                     )}
                 </SheetPanel>

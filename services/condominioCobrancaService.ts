@@ -56,6 +56,14 @@ export interface ResultadoEmissao {
     falhas: { unitLabel: string; motivo: string }[];
 }
 
+export interface ResultadoGeracao {
+    criados: number;
+    /** Cotas que a prévia já dizia que não dá para cobrar (sem papel, sem CPF). */
+    pulados: number;
+    /** Cotas que TENTARAM virar recebível e não conseguiram, nomeadas. */
+    falhas: { unitLabel: string; motivo: string }[];
+}
+
 /** 'YYYY-MM-01' → '05/2024', para descrição do recebível. */
 function rotuloCompetencia(iso: string): string {
     const [a, m] = iso.slice(0, 10).split('-');
@@ -192,11 +200,30 @@ export const condominioCobrancaService = {
      * Idempotência: a cota que já tem `transaction_id` é pulada, e
      * `uidx_rateio_item_transaction` é a trava de verdade. Rodar duas vezes
      * cria ZERO na segunda.
+     *
+     * ── Por que o lote NÃO aborta no primeiro erro (23/09/2026) ─────────────
+     * Cada cota é um condômino. Abortar na terceira deixava as duas primeiras
+     * gravadas, as sete seguintes sem recebível e `cobranca_gerada_em` NULO —
+     * isto é, a tela continuava oferecendo "Gerar cobrança", e a segunda
+     * tentativa batia 23505 nas duas que já existiam. As falhas passam a ser
+     * colhidas e devolvidas NOMEADAS, como `emitir()` já fazia.
+     *
+     * ── Por que o recebível órfão é apagado ────────────────────────────────
+     * O recebível nasce ANTES do vínculo. Se o vínculo falhar, o recebível
+     * fica em Contas a Receber sem ninguém apontando para ele: dinheiro falso
+     * que o módulo que o criou não enxerga mais, e que o retry não reaproveita
+     * (o `reference_id` é determinístico, então a segunda tentativa colide).
+     * Desfazer o insert é a única saída que não deixa rastro errado.
+     *
+     * Até 23/09/2026 nada disso era alcançável: a trigger `trg_rateio_itens_
+     * protege` recusava o UPDATE do vínculo em rateio FECHADO — e rateio
+     * fechado é justamente a pré-condição desta função. Ver a migration
+     * `aplicar_20270923000010`.
      */
     async gerarRecebiveis(
         rateioId: string,
         opcoes: { vencimento: string; pagador?: PagadorDaCota },
-    ): Promise<{ criados: number; pulados: number }> {
+    ): Promise<ResultadoGeracao> {
         const previa = await this.previa(rateioId, { pagador: opcoes.pagador });
         if (previa.rateio.status !== 'FECHADO') {
             throw new Error('Só rateio FECHADO vira cobrança — feche antes de gerar.');
@@ -204,6 +231,16 @@ export const condominioCobrancaService = {
 
         const cobraveis = previa.cotas.filter(c => !c.bloqueio);
         if (cobraveis.length === 0) {
+            // Todas já materializadas é IDEMPOTÊNCIA, não erro: é o que a
+            // docstring promete ("rodar duas vezes cria ZERO na segunda"), e é
+            // o caminho de quem volta depois de uma geração parcial para
+            // conferir se sobrou alguma. Erro fica para o caso em que há cota
+            // sem recebível e nenhuma delas pode ser cobrada.
+            const todasJaGeradas = previa.cotas.length > 0
+                && previa.cotas.every(c => c.transactionId);
+            if (todasJaGeradas) {
+                return { criados: 0, pulados: 0, falhas: [] };
+            }
             throw new Error('Nenhuma cota pode ser cobrada. Veja os motivos na prévia.');
         }
 
@@ -211,6 +248,7 @@ export const condominioCobrancaService = {
         const tipoLabel = previa.rateio.tipo === 'EXTRAORDINARIO' ? 'extraordinária' : 'ordinária';
 
         let criados = 0;
+        const falhas: ResultadoGeracao['falhas'] = [];
         for (const cota of cobraveis) {
             // `reference_id` COMPOSTO, no padrão da casa ({origem}-p{vencimento}):
             // é o que dá idempotência e o que os helpers de lib/receivableRef
@@ -241,22 +279,39 @@ export const condominioCobrancaService = {
                 })
                 .select('id')
                 .single();
-            if (error) throw new Error(`Falha ao gerar o recebível de ${cota.unitLabel}: ${error.message}`);
+            if (error) {
+                falhas.push({ unitLabel: cota.unitLabel, motivo: error.message });
+                continue;
+            }
 
             const { error: eU } = await supabase
                 .from('condominio_rateio_itens')
                 .update({ transaction_id: tx.id })
                 .eq('id', cota.itemId);
-            if (eU) throw new Error(`Recebível criado, mas não vinculou à cota de ${cota.unitLabel}: ${eU.message}`);
+            if (eU) {
+                // Compensação: sem o vínculo, este recebível é órfão.
+                await supabase.from('internal_transactions').delete().eq('id', tx.id);
+                falhas.push({
+                    unitLabel: cota.unitLabel,
+                    motivo: `Não foi possível vincular o recebível à cota: ${eU.message}`,
+                });
+                continue;
+            }
             criados++;
         }
 
-        await supabase
-            .from('condominio_rateios')
-            .update({ cobranca_gerada_em: new Date().toISOString() })
-            .eq('id', rateioId);
+        // Só carimba se ALGUMA cota virou recebível. Com zero criados o rateio
+        // segue "fechado, não cobrado" — que é a verdade, e é o que mantém a
+        // ação "Gerar cobrança" na tela para o usuário tentar de novo depois
+        // de resolver o motivo.
+        if (criados > 0) {
+            await supabase
+                .from('condominio_rateios')
+                .update({ cobranca_gerada_em: new Date().toISOString() })
+                .eq('id', rateioId);
+        }
 
-        return { criados, pulados: previa.qtdBloqueada };
+        return { criados, pulados: previa.qtdBloqueada, falhas };
     },
 
     /**

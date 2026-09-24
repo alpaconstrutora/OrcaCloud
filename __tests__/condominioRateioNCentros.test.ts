@@ -29,6 +29,10 @@ const tabelas: Record<string, Linha[]> = {
     ],
     unit_occupancies: [],
     clients: [],
+    // Despesas já lançadas em rateio — a fonte de `listarJaRateadas`. O embed
+    // `condominio_rateios!inner(status)` é modelado como objeto aninhado, que é
+    // a forma que o PostgREST devolve.
+    condominio_rateio_despesas: [],
 };
 
 function builder(table: string) {
@@ -39,6 +43,17 @@ function builder(table: string) {
         eq(k: string, v: unknown) { preds.push(r => r[k] === v); return q; },
         in(k: string, vs: unknown[]) { preds.push(r => vs.includes(r[k])); return q; },
         is(k: string, v: unknown) { preds.push(r => r[k] == v); return q; },
+        // `neq` aceita caminho pontilhado ('condominio_rateios.status') porque é
+        // assim que o PostgREST filtra sobre um embed — e é o que
+        // `listarJaRateadas` usa para ignorar rateio CANCELADO.
+        neq(k: string, v: unknown) {
+            preds.push(r => {
+                const valor = k.split('.').reduce<unknown>(
+                    (acc, parte) => (acc == null ? acc : (acc as Linha)[parte]), r);
+                return valor !== v;
+            });
+            return q;
+        },
         gte(k: string, v: string) { preds.push(r => String(r[k]) >= v); return q; },
         lt(k: string, v: string) { preds.push(r => String(r[k]) < v); return q; },
         order(campo: string, o?: { ascending?: boolean }) { ordem = { campo, asc: o?.ascending !== false }; return q; },
@@ -109,5 +124,62 @@ describe('previa — a despesa é a SOMA dos centros de custo do condomínio', (
     it('lista vazia de centros de custo → erro claro, nunca "todas as despesas"', async () => {
         await expect(condominioRateioService.previa({ ...base, costCenterIds: [] }))
             .rejects.toThrow(/não tem centro de custo/);
+    });
+});
+
+/**
+ * A mesma despesa em DOIS rateios (23/09/2026).
+ *
+ * `uidx_rateio_despesa` é (rateio_id, transaction_id) — por rateio —, e
+ * `uidx_rateio_competencia` é (empreendimento, competência, TIPO). Como a
+ * janela de despesas não olha o tipo, o EXTRAORDINÁRIO de 09/2026 puxava
+ * exatamente a mesma lista do ORDINÁRIO de 09/2026, e o condômino pagava a
+ * mesma água duas vezes. A trava existia (`listarJaRateadas`) e só o caminho de
+ * Contas a Pagar a usava; agora vive dentro da prévia, onde TODO caminho passa.
+ */
+describe('previa — despesa que já está em outro rateio vivo fica de fora', () => {
+    const base = { empreendimentoId: 'emp-garden', competencia: '2026-09-01', criterio: 'IGUAL' as const };
+
+    it('despesa de rateio VIVO é excluída, e a exclusão é contada e reportada', async () => {
+        tabelas.condominio_rateio_despesas = [
+            { transaction_id: 't1', condominio_rateios: { status: 'RASCUNHO' } },
+        ];
+        const p = await condominioRateioService.previa({ ...base, costCenterIds: ['cc-a', 'cc-b'] });
+
+        expect(p.despesas.map(d => d.transaction_id)).toEqual(['t2']);
+        expect(p.jaRateadas).toBe(1);
+        // O total acompanha: é o que separa "excluí" de "escondi".
+        expect(p.totalDespesas).toBeCloseTo(250.5, 2);
+        expect(p.totalRateado).toBeCloseTo(250.5, 2);
+    });
+
+    it('rateio CANCELADO não segura a despesa — refazer é justamente o caminho', async () => {
+        tabelas.condominio_rateio_despesas = [
+            { transaction_id: 't1', condominio_rateios: { status: 'CANCELADO' } },
+        ];
+        const p = await condominioRateioService.previa({ ...base, costCenterIds: ['cc-a', 'cc-b'] });
+
+        expect(p.despesas.map(d => d.transaction_id).sort()).toEqual(['t1', 't2']);
+        expect(p.jaRateadas).toBe(0);
+    });
+
+    it('sem nada rateado, nada muda e `jaRateadas` é 0', async () => {
+        tabelas.condominio_rateio_despesas = [];
+        const p = await condominioRateioService.previa({ ...base, costCenterIds: ['cc-a', 'cc-b'] });
+
+        expect(p.despesas.map(d => d.transaction_id).sort()).toEqual(['t1', 't2']);
+        expect(p.jaRateadas).toBe(0);
+    });
+
+    it('o escape `incluirJaRateadas` traz a despesa de volta', async () => {
+        tabelas.condominio_rateio_despesas = [
+            { transaction_id: 't1', condominio_rateios: { status: 'FECHADO' } },
+        ];
+        const p = await condominioRateioService.previa({
+            ...base, costCenterIds: ['cc-a', 'cc-b'], incluirJaRateadas: true,
+        });
+
+        expect(p.despesas.map(d => d.transaction_id).sort()).toEqual(['t1', 't2']);
+        expect(p.jaRateadas).toBe(0);
     });
 });

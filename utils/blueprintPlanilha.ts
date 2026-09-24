@@ -56,6 +56,9 @@ export const COBERTURA_PLANILHA = [
 ];
 
 /** Duas casas na apresentação; o valor guardado é o bruto do kernel. */
+/** Metro do quantitativo -> centimetro, como a tela mostra esquadria (P2.46). */
+const cmDeM = (m: number) => Number((m * 100).toFixed(1));
+
 function n2(v: number): number {
   return Math.round(v * 100) / 100;
 }
@@ -263,12 +266,14 @@ export function abasDoQuantitativo(
     abas.push({
       nome: 'Quadro de esquadrias',
       linhas: [
-        ['Esquadria', 'Tipo', 'Largura (m)', 'Altura (m)', 'Quantidade', 'Área total (m²)', 'Item', 'Descrição'],
+        // Largura e altura em CENTIMETRO (P2.46): a esquadria se especifica em cm
+        // ("porta 80x210"), e o quadro tem de dizer o mesmo que a tela.
+        ['Esquadria', 'Tipo', 'Largura (cm)', 'Altura (cm)', 'Quantidade', 'Área total (m²)', 'Item', 'Descrição'],
         ...quant.totais.porEsquadria.map((e) => [
           e.nome,
           nomeDoTipoDeAbertura(e.tipo),
-          n2(e.larguraM),
-          n2(e.alturaM),
+          cmDeM(e.larguraM),
+          cmDeM(e.alturaM),
           e.quantidade,
           n2(e.areaM2),
           e.itemCode,

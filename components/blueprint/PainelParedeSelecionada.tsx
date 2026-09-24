@@ -12,6 +12,7 @@ import {
   type CortinaDeVidro,
   type Brise,
 } from '../../utils/blueprintKernel';
+import { casasEmCm, cmParaMm, mmParaCm } from '../../utils/blueprintMedidaCm';
 import ControleDeSobreposicao from './ControleDeSobreposicao';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
 import CustoDoElemento from './CustoDoElemento';
@@ -352,26 +353,28 @@ export default function PainelParedeSelecionada({
             </label>
           )}
 
-          {/* Em MILÍMETROS, e não em metros como o comprimento de parede: é a
-              unidade em que vão de esquadria se especifica e se compra ("porta
-              80×210"), e é a mesma do seletor de largura da barra ao inserir. */}
+          {/* Em CENTÍMETROS (P2.46), e não em metros como o comprimento de
+              parede nem em milímetros como era até 23/09/2026: é a unidade em
+              que vão de esquadria se especifica e se desenha ("porta 80×210"),
+              e é a mesma do seletor de largura da barra ao inserir. A casa
+              decimal só aparece quando existe — ver `blueprintMedidaCm`. */}
           <CampoMedida
             rotulo="Largura"
-            valor={abertura.widthMm}
-            casas={0}
-            sufixo="mm"
+            valor={mmParaCm(abertura.widthMm)}
+            casas={casasEmCm(abertura.widthMm)}
+            sufixo="cm"
             chave={`${abertura.id}:l:${abertura.widthMm}`}
-            aoAplicar={(mm) => onTamanhoAbertura({ widthMm: Math.round(mm) })}
-            ariaLabel="Largura da abertura, em milímetros"
+            aoAplicar={(cm) => onTamanhoAbertura({ widthMm: cmParaMm(cm) })}
+            ariaLabel="Largura da abertura, em centímetros"
           />
           <CampoMedida
             rotulo="Altura"
-            valor={abertura.heightMm}
-            casas={0}
-            sufixo="mm"
+            valor={mmParaCm(abertura.heightMm)}
+            casas={casasEmCm(abertura.heightMm)}
+            sufixo="cm"
             chave={`${abertura.id}:a:${abertura.heightMm}`}
-            aoAplicar={(mm) => onTamanhoAbertura({ heightMm: Math.round(mm) })}
-            ariaLabel="Altura da abertura, em milímetros"
+            aoAplicar={(cm) => onTamanhoAbertura({ heightMm: cmParaMm(cm) })}
+            ariaLabel="Altura da abertura, em centímetros"
           />
           {/* Peitoril fica de fora só na PORTA, onde é sempre zero (o vão nasce
               no piso) e um campo de um valor só é ruído. Vão livre tem: subir o
@@ -379,12 +382,12 @@ export default function PainelParedeSelecionada({
           {abertura.kind !== 'door' && (
             <CampoMedida
               rotulo="Peitoril"
-              valor={abertura.sillMm}
-              casas={0}
-              sufixo="mm"
+              valor={mmParaCm(abertura.sillMm)}
+              casas={casasEmCm(abertura.sillMm)}
+              sufixo="cm"
               chave={`${abertura.id}:p:${abertura.sillMm}`}
-              aoAplicar={(mm) => onTamanhoAbertura({ sillMm: Math.round(mm) })}
-              ariaLabel="Altura do peitoril, em milímetros"
+              aoAplicar={(cm) => onTamanhoAbertura({ sillMm: cmParaMm(cm) })}
+              ariaLabel="Altura do peitoril, em centímetros"
             />
           )}
 

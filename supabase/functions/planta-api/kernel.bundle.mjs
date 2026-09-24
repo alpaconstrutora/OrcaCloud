@@ -480,7 +480,8 @@ function assinaturaDaEsquadria(o) {
   return `${o.kind}|${o.widthMm}|${o.heightMm}|${o.esquadria?.nome ?? ""}|${o.esquadria?.itemCode ?? ""}`;
 }
 function nomeDaEsquadria(o) {
-  return o.esquadria?.nome || `${nomeDoTipoDeAbertura(o.kind, o.embutida)} ${o.widthMm}\xD7${o.heightMm}`;
+  const cm = (mm) => (mm / 10).toFixed(Math.round(mm) % 10 === 0 ? 0 : 1).replace(".", ",");
+  return o.esquadria?.nome || `${nomeDoTipoDeAbertura(o.kind, o.embutida)} ${cm(o.widthMm)}\xD7${cm(o.heightMm)}`;
 }
 function nomeDoTipoDeAbertura(kind, embutida = false) {
   if (kind === "door") return "Porta";
@@ -5163,6 +5164,7 @@ var COBERTURA_PLANILHA = [
   "F\xF4rma de pe\xE7a estrutural segue a pol\xEDtica do m\xF3dulo: pilar pelo per\xEDmetro da se\xE7\xE3o, viga em duas laterais mais o fundo, laje s\xF3 o fundo. A borda da laje n\xE3o entra.",
   "Estudo preliminar assistido; requer valida\xE7\xE3o de profissional habilitado."
 ];
+var cmDeM = (m) => Number((m * 100).toFixed(1));
 function n2(v) {
   return Math.round(v * 100) / 100;
 }
@@ -5317,12 +5319,14 @@ function abasDoQuantitativo(quant, ctx, armadura, parametros) {
     abas.push({
       nome: "Quadro de esquadrias",
       linhas: [
-        ["Esquadria", "Tipo", "Largura (m)", "Altura (m)", "Quantidade", "\xC1rea total (m\xB2)", "Item", "Descri\xE7\xE3o"],
+        // Largura e altura em CENTIMETRO (P2.46): a esquadria se especifica em cm
+        // ("porta 80x210"), e o quadro tem de dizer o mesmo que a tela.
+        ["Esquadria", "Tipo", "Largura (cm)", "Altura (cm)", "Quantidade", "\xC1rea total (m\xB2)", "Item", "Descri\xE7\xE3o"],
         ...quant.totais.porEsquadria.map((e) => [
           e.nome,
           nomeDoTipoDeAbertura(e.tipo),
-          n2(e.larguraM),
-          n2(e.alturaM),
+          cmDeM(e.larguraM),
+          cmDeM(e.alturaM),
           e.quantidade,
           n2(e.areaM2),
           e.itemCode,

@@ -38,6 +38,9 @@ import {
   type Wall,
 } from './blueprintKernel';
 
+
+import { textoEmCm as emCm } from './blueprintMedidaCm';
+
 export interface HipotesesDeGuardaCorpo {
   /** Folga além de meia espessura para considerar "há parede" sobre a borda. */
   folgaDaParedeMm: number;
@@ -71,10 +74,10 @@ export interface AvisoDeGuardaCorpo {
 export function conferirGuardaCorpo(g: GuardaCorpo): AvisoDeGuardaCorpo[] {
   const out: AvisoDeGuardaCorpo[] = [];
   if (g.tipo === 'GUARDA_CORPO' && g.alturaMm < ALTURA_MINIMA_DO_GUARDA_CORPO_MM) {
-    out.push({ guardaCorpoId: g.id, gravidade: 'ERRO', norma: 'NBR 14718', texto: `altura ${(g.alturaMm / 1000).toFixed(2).replace('.', ',')} m abaixo do mínimo de 1,10 m` });
+    out.push({ guardaCorpoId: g.id, gravidade: 'ERRO', norma: 'NBR 14718', texto: `altura ${emCm(g.alturaMm)} cm abaixo do mínimo de 110 cm` });
   }
   if (g.tipo === 'CORRIMAO' && (g.alturaMm < FAIXA_DO_CORRIMAO_MM[0] || g.alturaMm > FAIXA_DO_CORRIMAO_MM[1])) {
-    out.push({ guardaCorpoId: g.id, gravidade: 'AVISO', norma: 'NBR 9050 6.9.4', texto: `altura ${(g.alturaMm / 1000).toFixed(2).replace('.', ',')} m fora da faixa 0,80–0,92 m` });
+    out.push({ guardaCorpoId: g.id, gravidade: 'AVISO', norma: 'NBR 9050 6.9.4', texto: `altura ${emCm(g.alturaMm)} cm fora da faixa 80–92 cm` });
   }
   if (g.material === 'VIDRO' && g.tipo === 'GUARDA_CORPO' && !g.itemCode) {
     out.push({ guardaCorpoId: g.id, gravidade: 'AVISO', norma: 'NBR 7199', texto: 'vidro de guarda-corpo tem de ser laminado ou temperado-laminado — escolha o item para o orçamento saber qual' });

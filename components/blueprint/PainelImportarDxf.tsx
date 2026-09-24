@@ -27,6 +27,7 @@ import {
   deslocamentoDaImportacao,
   type AncoragemIfc,
 } from '../../utils/ancoragemImportacao';
+import { cmParaMm, mmParaCm } from '../../utils/blueprintMedidaCm';
 
 /**
  * Importar PAREDES de um DXF.
@@ -414,16 +415,18 @@ export default function PainelImportarDxf({ model, levelIdAtivo, onImportar, onF
     <label key={chave} className="flex items-center justify-between gap-2 text-xs text-slate-600">
       {rotulo}
       <span className="flex items-center gap-1">
+        {/* Em CENTIMETROS (P2.46): altura de porta, peitoril e vao se
+            especificam em cm. `min` chega em milimetro, como o valor guardado. */}
         <input
           type="number"
-          value={hipoteses[chave]}
-          min={min}
-          step={10}
+          value={mmParaCm(hipoteses[chave])}
+          min={mmParaCm(min)}
+          step={1}
           aria-label={rotulo}
-          onChange={(e) => setHip({ ...hipoteses, [chave]: Math.max(min, Math.round(Number(e.target.value) || 0)) })}
+          onChange={(e) => setHip({ ...hipoteses, [chave]: Math.max(min, cmParaMm(Number(e.target.value) || 0)) })}
           className="w-20 rounded-md border border-slate-300 px-2 py-1 text-right text-xs text-slate-800"
         />
-        <span className="w-6 text-slate-400">mm</span>
+        <span className="w-6 text-slate-400">cm</span>
       </span>
     </label>
   );

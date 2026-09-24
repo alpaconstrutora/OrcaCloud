@@ -43,7 +43,7 @@ const J1: Esquadria = { nome: 'J1', itemCode: '94559', descricao: 'Janela de alu
  * Uma parede de 12 m com: duas P1 (80×210), uma P2 (90×210), uma janela J1
  * (120×120) e uma porta SEM tipo de 80×210.
  *
- * Assinaturas distintas: P1 (2 un), P2 (1), J1 (1), "Porta 800×2100" sem nome
+ * Assinaturas distintas: P1 (2 un), P2 (1), J1 (1), "Porta 80×210" sem nome
  * (1) — QUATRO grupos, cinco aberturas.
  */
 function casa(): BlueprintModel {
@@ -99,13 +99,13 @@ const CTX = { studyId: 'e1', studyName: 'Casa', snapshotId: 's1', snapshotHash: 
 
 describe('esquadria · 1. IFC', () => {
   it('um IfcDoorType por assinatura, e a porta SEM nome também ganha o dela', () => {
-    // 3 tipos de porta (P1, P2, "Porta 800×2100") + 1 de janela (J1).
+    // 3 tipos de porta (P1, P2, "Porta 80×210") + 1 de janela (J1).
     const ifc = gerarIfc(casa(), OPCOES_IFC);
     expect(ifc.match(/IFCDOORTYPE\(/g)).toHaveLength(3);
     expect(ifc.match(/IFCWINDOWTYPE\(/g)).toHaveLength(1);
     expect(ifc.match(/IFCRELDEFINESBYTYPE\(/g)).toHaveLength(4);
     expect(ifc).toContain("'P1'");
-    expect(ifc).toContain(`'${noIfc('Porta 800×2100')}'`);
+    expect(ifc).toContain(`'${noIfc('Porta 80×210')}'`);
   });
 
   it('as DUAS P1 apontam para o MESMO tipo', () => {
@@ -145,7 +145,7 @@ describe('esquadria · 2. quantitativo', () => {
     // 2 × 0,8 × 2,1 = 3,36 m²
     expect(p1.areaM2).toBeCloseTo(3.36, 6);
     expect(p1.itemCode).toBe('90843');
-    const semNome = quadro.find((e) => e.nome === 'Porta 800×2100')!;
+    const semNome = quadro.find((e) => e.nome === 'Porta 80×210')!;
     expect(semNome.quantidade).toBe(1);
     expect(semNome.itemCode).toBe('');
   });

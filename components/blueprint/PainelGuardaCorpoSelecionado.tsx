@@ -16,6 +16,7 @@ import {
   type TipoDeGuardaCorpo,
 } from '../../utils/blueprintKernel';
 import { conferirGuardaCorpo } from '../../utils/blueprintGuardaCorpo';
+import { casasEmCm, cmParaMm, mmParaCm } from '../../utils/blueprintMedidaCm';
 import DatabasePickerModal from '../DatabasePickerModal';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
 import SeletorDeMaterial from './SeletorDeMaterial';
@@ -46,7 +47,7 @@ export default function PainelGuardaCorpoSelecionado({ guardaCorpo: g, onProps, 
             {g.sugerido ? ' · sugerido' : ''}
           </h3>
           <p className="mt-0.5 text-[11px] text-slate-500">
-            {ROTULO_DO_MATERIAL_DE_GUARDA_CORPO[g.material]} · {m(compMm)} m · h {m(g.alturaMm)} m · {((compMm * g.alturaMm) / 1e6).toFixed(2).replace('.', ',')} m² · {g.pontos.length - 1} trecho(s)
+            {ROTULO_DO_MATERIAL_DE_GUARDA_CORPO[g.material]} · {m(compMm)} m · h {mmParaCm(g.alturaMm).toFixed(casasEmCm(g.alturaMm)).replace('.', ',')} cm · {((compMm * g.alturaMm) / 1e6).toFixed(2).replace('.', ',')} m² · {g.pontos.length - 1} trecho(s)
           </p>
           <IdentificadorDoElemento uid={g.uid} familia="guardaCorpo" />
         </div>
@@ -80,8 +81,11 @@ export default function PainelGuardaCorpoSelecionado({ guardaCorpo: g, onProps, 
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          Altura (mm)
-          <input type="number" key={`${g.id}-h`} defaultValue={g.alturaMm} min={100} step={10} aria-label="Altura do guarda-corpo (mm)" onBlur={(e) => Number(e.target.value) > 0 && onProps({ alturaMm: Number(e.target.value) })} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} className={campo} />
+          {/* Em CENTIMETROS (P2.46): guarda-corpo se especifica em cm (a NBR
+              14718 pede 1,10 m, que em projeto se escreve 110). O modelo
+              continua em milimetro inteiro. */}
+          Altura (cm)
+          <input type="number" key={`${g.id}-h`} defaultValue={mmParaCm(g.alturaMm)} min={10} step={1} aria-label="Altura do guarda-corpo (cm)" onBlur={(e) => Number(e.target.value) > 0 && onProps({ alturaMm: cmParaMm(Number(e.target.value)) })} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} className={campo} />
         </label>
         <label className="flex flex-col gap-1">
           Material

@@ -19,6 +19,7 @@ import {
   type NoEspacial,
 } from '../../utils/blueprintGrafoEspacial';
 import { FICHA_DO_USO } from '../../utils/blueprintPrograma';
+import { textoEmCm } from '../../utils/blueprintMedidaCm';
 
 interface Props {
   grafo: GrafoEspacial | null;
@@ -86,7 +87,7 @@ export default function PainelGrafoEspacial({ grafo, nomeDoPavimento, onSelecion
             )}
             {resumo.portasEstreitas.length > 0 && (
               <li className="flex items-center gap-1 text-amber-800">
-                <AlertTriangle className="h-3.5 w-3.5" /> Porta(s) com vão &lt; 0,80 m: {resumo.portasEstreitas.map((a) => `${nomeDe(a.de)} ↔ ${nomeDe(a.para)} (${a.comprimentoMm} mm)`).join('; ')}.
+                <AlertTriangle className="h-3.5 w-3.5" /> Porta(s) com vão &lt; 80 cm: {resumo.portasEstreitas.map((a) => `${nomeDe(a.de)} ↔ ${nomeDe(a.para)} (${textoEmCm(a.comprimentoMm)} cm)`).join('; ')}.
               </li>
             )}
           </ul>
@@ -160,7 +161,7 @@ export default function PainelGrafoEspacial({ grafo, nomeDoPavimento, onSelecion
           )}
         </div>
         <p className="mt-1 text-[11px] text-slate-500">
-          Medido pelos centros das portas: centro do ambiente → porta → porta → centro do destino. O menor vão pelo caminho é o que uma cadeira de rodas encontra (NBR 9050: 0,80 m).
+          Medido pelos centros das portas: centro do ambiente → porta → porta → centro do destino. O menor vão pelo caminho é o que uma cadeira de rodas encontra (NBR 9050: 80 cm).
         </p>
       </div>
     </div>

@@ -679,9 +679,15 @@ export function desenharIndice(
 
 /**
  * TABELAS (E8.3): quadro de áreas (ambiente, pavimento, área de piso, perímetro
- * interno) com total e quadro de esquadrias (nome, tipo, L × A, quantidade).
+ * interno) com total e quadro de esquadrias (nome, tipo, L × A em CENTIMETRO, quantidade).
  * Os números são os do quantitativo publicado — os mesmos da aba Quantitativos.
  */
+/** Metro do quantitativo -> texto em centimetro, como a tela (P2.46). */
+function cmDeM(m: number): string {
+  const mm = Math.round(m * 1000);
+  return (mm / 10).toFixed(mm % 10 === 0 ? 0 : 1).replace('.', ',');
+}
+
 export function desenharTabelas(
   d: Desenhista,
   quant: { ambientes: { nome?: string; spaceId: string; areaPisoM2: number; perimetroEixoM: number }[]; totais: { areaPisoM2: number; porEsquadria: { nome: string; tipo: string; larguraM: number; alturaM: number; quantidade: number }[] } },
@@ -723,7 +729,7 @@ export function desenharTabelas(
   let y1 = aDireita ? MARGEM_MM + 10 : y + 12;
   d.texto(x1, y1, 'Quadro de esquadrias', 4.2);
   y1 += 6;
-  const cols2: [string, number][] = [['Nome', 30], ['Tipo', 36], ['L × A (m)', 34], ['Qtd.', 16]];
+  const cols2: [string, number][] = [['Nome', 30], ['Tipo', 36], ['L × A (cm)', 34], ['Qtd.', 16]];
   let x = x1;
   for (const [rotulo, w] of cols2) {
     d.texto(x, y1, rotulo, 2.4, '#555555');
@@ -735,7 +741,7 @@ export function desenharTabelas(
   for (const e of quant.totais.porEsquadria) {
     d.texto(x1, y1, e.nome, 2.8);
     d.texto(x1 + 30, y1, ROTULO_TIPO[e.tipo] ?? e.tipo, 2.8);
-    d.texto(x1 + 66, y1, `${fmt(e.larguraM)} × ${fmt(e.alturaM)}`, 2.8);
+    d.texto(x1 + 66, y1, `${cmDeM(e.larguraM)} × ${cmDeM(e.alturaM)}`, 2.8);
     d.texto(x1 + 100, y1, String(e.quantidade), 2.8);
     y1 += linhaMm;
   }

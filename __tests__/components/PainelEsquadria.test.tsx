@@ -117,7 +117,8 @@ describe('PainelEsquadria · 1. o nome', () => {
 
   it('mostra o nome do tipo, ou o nome derivado quando não há', () => {
     montar();
-    expect(screen.getByText('Porta 900×2100')).toBeTruthy();
+    // Em CENTÍMETRO desde 23/09/2026 (P2.46): "Porta 90×210", como se fala em projeto.
+    expect(screen.getByText('Porta 90×210')).toBeTruthy();
   });
 });
 

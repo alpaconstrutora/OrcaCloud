@@ -1807,6 +1807,40 @@ A segunda ponta parou 163 mm antes de uma parede que está **no mesmo eixo x = 3
 
 **Fica registrado**: o botão não foi clicado na prova do app de propósito — as escritas estavam bloqueadas, e corrigir a planta do usuário é decisão dele. A folga de 163 mm continua no banco até que ele clique.
 
+### P2.46 — Porta, janela e guarda-corpo em centímetro (23/09/2026) · *"medidas de portas, janelas e guarda corpo em centímetros, que é medida padrão em arquitetura"*
+
+**O estado antes.** Um inventário de toda a interface achou **três unidades diferentes para a mesma coisa**: esquadria era 100 % milímetro na edição (painel da abertura, seletor da barra, hipóteses do DXF, nome do tipo) e 100 % metro nas saídas (quadro da prancha, planilha); guarda-corpo era misto **dentro da mesma tela** — `PainelGuardaCorpoSelecionado` exibia `h 1,10 m` no resumo e editava `1100` em milímetro no campo logo abaixo; a gaveta de sugestões editava em **metro**. Havia até texto fora de sincronia: o aviso de porta estreita dizia "vão < 0,80 m" e imprimia "(700 mm)" na mesma frase. ⚠️ E `nomeDaEsquadria`, no kernel, tinha o comentário `"P1", ou "Porta 80×210"` sobre um código que devolvia **"Porta 800×2100"** — a intenção já era centímetro desde que a função nasceu.
+
+**A regra.** `utils/blueprintMedidaCm.ts` (novo): `mmParaCm`, `cmParaMm`, `casasEmCm`, `textoEmCm`. O **modelo não muda** — o kernel guarda milímetro inteiro e recusa qualquer outra coisa (`assertIntegerMm`); centímetro é unidade de tela.
+
+⚠️ **A casa decimal é variável, e isso não é estética.** Centímetro com zero casa perderia o milímetro: 2105 mm viraria "211 cm", e o campo confirma no `blur` — bastaria clicar dentro e sair para gravar 2110 mm, mudando uma medida do usuário sem que ninguém digitasse nada. Sempre com uma casa encheria a tela de "90,0". Então a casa aparece só quando existe: múltiplo de 10 mm sai inteiro ("90 cm"), o resto sai com uma casa ("210,5 cm") — e 0,1 cm **é** o milímetro, o menor passo que o modelo guarda.
+
+**Onde mudou** (tudo o que o inventário achou, em ordem de quem vê primeiro)
+
+| Lugar | Antes | Agora |
+|---|---|---|
+| Painel da abertura: largura, altura, peitoril | 900 / 2100 mm | **90 / 210 cm** |
+| Barra, seletor de largura ao inserir | 600 mm … 2000 mm | **60 cm … 200 cm** |
+| Barra e painel, select "Tipo salvo" | P1 · 800×2100 | **P1 · 80×210 cm** |
+| Navegador de componentes, esquadria | 0,90 × 2,10 m | **90 × 210 cm** (o pilar da linha de baixo já estava em cm) |
+| Nome automático da esquadria (`nomeDaEsquadria`) | Porta 800×2100 | **Porta 80×210** — sai no quadro, no orçamento e no **IFC** |
+| Hipóteses da importação DXF (4 campos) | mm | **cm** |
+| Painel do guarda-corpo: resumo e campo | `h 1,10 m` / campo em mm | **`h 110 cm`** nos dois |
+| Gaveta de guarda-corpos: 2 hipóteses, 2 tabelas | metro | **cm** |
+| Avisos NBR 14718 / 9050 | "altura 0,90 m abaixo do mínimo de 1,10 m" | **"altura 90 cm abaixo do mínimo de 110 cm"** |
+| Aviso de porta estreita (grafo espacial) | "< 0,80 m … (700 mm)" | **"< 80 cm … (70 cm)"** |
+| Lista de vãos candidatos | Vão 1 · 1,00 m | **Vão 1 · 100 cm** |
+| Quadro de esquadrias: planilha e prancha | Largura (m) / L × A (m) | **Largura (cm) / L × A (cm)** |
+
+**Fora do escopo, de propósito**: comprimento e espessura de parede, cotas gerais, escada, rede e estrutura continuam como estavam — o pedido é esquadria e guarda-corpo. O painel de importação COLLADA também ficou em milímetro: ali os quatro campos misturam parâmetro de parede e de vão no mesmo bloco, e converter metade deixaria duas unidades lado a lado.
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-ui-standard.sh` nos 8 .tsx ok · `check-xss-sinks.sh` ok · suíte cheia **449 arquivos / 5165 testes** verdes · `npm run build` ok.
+- `__tests__/blueprintMedidaCm.test.ts` (5): ida e volta exata para 15 medidas, inclusive as que não são múltiplo de 10 mm; a casa só aparece quando existe; 5 mm é "0,5" e volta a 5; o digitado sempre vira milímetro inteiro. ⚠️ O quinto caso trava `nomeDaEsquadria` contra `textoEmCm`: a formatação está **duplicada** no kernel de propósito (nenhum arquivo de `utils/blueprintKernel/` importa de fora de si), e se uma mudar sozinha o teste cai.
+- 13 testes existentes mudaram de unidade junto — nenhum foi afrouxado: `PainelParedeSelecionada` ganhou dois casos novos (a casa decimal em 2105 mm; "210,5" digitado virando 2105 mm).
+- ⚠️ `scripts/build-planta-api-kernel.mjs` teve de rodar: o bundle que a Edge Function `planta-api` executa carrega `nomeDaEsquadria` e ficou defasado — `plantaApi.test.ts` pegou isso sozinho.
+- **App real** (escritas bloqueadas: 14, 0 erros), *Planta 23/09/2026*: o seletor da barra lista `60 cm | 70 cm | 80 cm | 90 cm | 100 cm | 120 cm | 150 cm | 200 cm`; selecionando a "Porta 1 · Parede 25", o navegador diz **100 × 210 cm**, o painel mostra **Largura 100 cm / Altura 210 cm** e o tipo de esquadria, **Porta 100×210**.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

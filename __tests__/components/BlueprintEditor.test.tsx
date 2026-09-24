@@ -1435,7 +1435,8 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(resumo).toHaveTextContent(/3 ambiente\(s\) · 3 porta\(s\), 0 passagem\(ns\), 3 parede\(s\) dividida\(s\) · 1 saída\(s\)/);
     expect(resumo).toHaveTextContent(/circulação 0,0 %/);
     expect(resumo).toHaveTextContent(/Percurso mais longo até a saída: Dormitório 1, 7,05 m/);
-    expect(resumo).toHaveTextContent(/Porta\(s\) com vão < 0,80 m: .*\(700 mm\)/);
+    // Em CENTÍMETRO desde 23/09/2026 (P2.46): limiar e valor na mesma unidade.
+    expect(resumo).toHaveTextContent(/Porta\(s\) com vão < 80 cm: .*\(70 cm\)/);
     const linha = within(gaveta).getByRole('row', { name: 'Ambiente Cozinha' });
     expect(linha).toHaveTextContent(/Cozinha.*Cozinha.*12,00 m².*Sala \(porta 0,80\).*Dormitório 1 \(4,00 m\).*L 3,00 m · S 4,00 m.*4,91 m · 2 porta\(s\)/);
     // Percurso cozinha → dormitório: pela sala, 2 portas, menor vão 0,70.
@@ -2069,29 +2070,29 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(g()).toHaveTextContent(/Sugestões \(0 · 2 já cobertas\)/); // idempotente: o que foi lançado não volta
     await user.click(within(g()).getByTestId('aceitar-guarda-corpos'));
     expect(within(g()).getByTestId('resumo-dos-guarda-corpos')).not.toHaveTextContent(/sugerida/);
-    // Painel da mureta: aviso NBR 14718; subir para 1,10 m limpa o aviso.
+    // Painel da mureta: aviso NBR 14718; subir para 110 cm limpa o aviso.
     await user.click(within(g()).getByRole('button', { name: 'Mureta' }));
     const painel = await screen.findByTestId('painel-guarda-corpo');
-    expect(within(painel).getByTestId('avisos-do-guarda-corpo')).toHaveTextContent(/NBR 14718: altura 0,90 m abaixo do mínimo/);
-    const altura = within(painel).getByLabelText('Altura do guarda-corpo (mm)');
+    expect(within(painel).getByTestId('avisos-do-guarda-corpo')).toHaveTextContent(/NBR 14718: altura 90 cm abaixo do mínimo/);
+    const altura = within(painel).getByLabelText('Altura do guarda-corpo (cm)');
     await user.clear(altura);
-    await user.type(altura, '1100{Enter}');
+    await user.type(altura, '110{Enter}');
     expect(within(screen.getByTestId('painel-guarda-corpo')).queryByTestId('avisos-do-guarda-corpo')).toBeNull();
     await user.selectOptions(within(screen.getByTestId('painel-guarda-corpo')).getByLabelText('Material do guarda-corpo'), 'VIDRO');
-    expect(screen.getByTestId('painel-guarda-corpo')).toHaveTextContent(/Vidro · 3,00 m · h 1,10 m · 3,30 m²/);
+    expect(screen.getByTestId('painel-guarda-corpo')).toHaveTextContent(/Vidro · 3,00 m · h 110 cm · 3,30 m²/);
     // Menu Componentes › Circulação oferece Guarda-corpo e Corrimão; escolher arma a ferramenta.
     await escolherComponente(/^Corrimão$/);
     expect(botaoComponentes()).toHaveTextContent('Corrimão');
     // Navegador lista as peças com a chave do menu.
     await abrirComponentes(user);
     expect(screen.getAllByRole('button').filter((b) => /^Escada · corrimão (esquerdo|direito)/.test(b.textContent ?? ''))).toHaveLength(2);
-    expect(screen.getAllByRole('button').find((b) => /^Mureta/.test(b.textContent ?? ''))).toHaveTextContent(/3,00 m · h 1,10 m/);
+    expect(screen.getAllByRole('button').find((b) => /^Mureta/.test(b.textContent ?? ''))).toHaveTextContent(/3,00 m · h 110 cm/);
     // Superior: a borda sul da laje vira sugestão de guarda-corpo de 8 m.
     await user.click(screen.getByRole('radio', { name: /Editar Superior/ }));
     await abrirAba(/^arquitetura$/i);
     await user.click(botao());
     const g2 = await screen.findByTestId('tarefa-guarda-corpos');
-    expect(within(g2).getByRole('row', { name: 'Sugestão L2 · borda 1' })).toHaveTextContent(/Guarda-corpo.*8,00.*1,10/);
+    expect(within(g2).getByRole('row', { name: 'Sugestão L2 · borda 1' })).toHaveTextContent(/Guarda-corpo.*8,00.*110/);
     expect(within(g2).getAllByRole('row', { name: /^Sugestão/ })).toHaveLength(1);
   }, 60000);
 
@@ -2587,7 +2588,7 @@ describe('BlueprintEditor · painel do selecionado', () => {
   });
 
   it('a linha do vão SELECIONA no desenho as paredes das duas pontas', async () => {
-    // O casamento lista ↔ planta. Antes, "Vão 1 · 1,00 m" era texto: media,
+    // O casamento lista ↔ planta. Antes, "Vão 1 · 100 cm" era texto: media,
     // oferecia fechar, e não dizia ONDE fica. Numa planta real as medidas se
     // repetem (havia quatro vãos de 0,98 m), então achar o vão pela medida não
     // é achar.
@@ -2599,13 +2600,13 @@ describe('BlueprintEditor · painel do selecionado', () => {
     loadBranchModel.mockResolvedValue(comDuasParedesSoltas());
     await montar();
 
-    const linha = await screen.findByRole('button', { name: /Vão 1 · 1,00 m/ });
+    const linha = await screen.findByRole('button', { name: /Vão 1 · 100 cm/ });
     expect(linha).toHaveAttribute('aria-pressed', 'false');
 
     await userEvent.setup().click(linha);
 
     expect(screen.getByText(/2 paredes/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Vão 1 · 1,00 m/ })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /Vão 1 · 100 cm/ })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
@@ -3316,7 +3317,7 @@ describe('BlueprintEditor · ribbon', () => {
     expect(screen.queryByRole('tab', { name: 'Modificar' })).not.toBeInTheDocument();
 
     // Selecionar pela lista de vãos (o canvas é opaco em jsdom) marca as duas paredes.
-    await userEvent.setup().click(await screen.findByRole('button', { name: /Vão 1 · 1,00 m/ }));
+    await userEvent.setup().click(await screen.findByRole('button', { name: /Vão 1 · 100 cm/ }));
     const modificar = screen.getByRole('tab', { name: 'Modificar' });
     expect(modificar).toBeInTheDocument();
     // Não pula sozinha na primeira seleção: quem está desenhando continua onde estava.

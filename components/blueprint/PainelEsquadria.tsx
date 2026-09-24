@@ -6,6 +6,7 @@ import {
   type Esquadria,
   type Opening,
 } from '../../utils/blueprintKernel';
+import { textoEmCm } from '../../utils/blueprintMedidaCm';
 import DatabasePickerModal from '../DatabasePickerModal';
 import { useOrgContext, useOrgWriteTarget, forEachTargetOrg } from '../../hooks/useOrgContext';
 import {
@@ -152,7 +153,7 @@ export default function PainelEsquadria({ abertura, onEsquadria, onAplicarTipo }
           </option>
           {compativeis.map((t) => (
             <option key={t.id} value={t.id}>
-              {t.nome} · {t.widthMm}×{t.heightMm}
+              {t.nome} · {textoEmCm(t.widthMm)}×{textoEmCm(t.heightMm)} cm
             </option>
           ))}
         </select>

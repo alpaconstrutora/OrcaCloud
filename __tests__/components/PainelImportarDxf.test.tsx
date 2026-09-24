@@ -199,8 +199,10 @@ describe('importar DXF · esquadrias (P2.33)', () => {
 
   it('as hipóteses editadas entram nas aberturas e ficam persistidas por tela', async () => {
     const { onImportar } = await abrirComArquivo(dxfComEsquadrias());
-    fireEvent.change(screen.getByLabelText('Altura da porta'), { target: { value: '2400' } });
-    fireEvent.change(screen.getByLabelText('Peitoril da janela'), { target: { value: '900' } });
+    // ⚠️ Os campos falam CENTÍMETRO desde 23/09/2026 (P2.46): 240 cm de porta
+    // e 90 cm de peitoril viram 2400 mm e 900 mm no comando e no que fica salvo.
+    fireEvent.change(screen.getByLabelText('Altura da porta'), { target: { value: '240' } });
+    fireEvent.change(screen.getByLabelText('Peitoril da janela'), { target: { value: '90' } });
     fireEvent.click(screen.getByRole('button', { name: /Importar/ }));
     const comandos = onImportar.mock.calls[0][0] as Array<Record<string, unknown>>;
     expect(comandos.find((c) => c.kind === 'door')).toMatchObject({ heightMm: 2400 });

@@ -95,9 +95,9 @@ describe('esquadria · 1. a ASSINATURA', () => {
 
   it('o nome é o do tipo, ou "Porta 80×210" quando não há', () => {
     expect(nomeDaEsquadria({ kind: 'door', widthMm: 800, heightMm: 2100, embutida: false, esquadria: P1 })).toBe('P1');
-    expect(nomeDaEsquadria({ kind: 'door', widthMm: 800, heightMm: 2100, embutida: false })).toBe('Porta 800×2100');
+    expect(nomeDaEsquadria({ kind: 'door', widthMm: 800, heightMm: 2100, embutida: false })).toBe('Porta 80×210');
     expect(nomeDaEsquadria({ kind: 'sliding', widthMm: 1200, heightMm: 2100, embutida: true })).toBe(
-      'Porta de correr embutida 1200×2100',
+      'Porta de correr embutida 120×210',
     );
   });
 });

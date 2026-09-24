@@ -100,7 +100,7 @@ describe('PainelComponentes', () => {
     montar();
     expect(linha('Parede 1')).toHaveTextContent('4,00 m');
     expect(linha('Parede 2')).toHaveTextContent('3,00 m');
-    expect(linha('Porta 1')).toHaveTextContent('0,90 × 2,10 m');
+    expect(linha('Porta 1')).toHaveTextContent('90 × 210 cm'); // centímetro desde P2.46
     expect(linha('P1 · Pilar')).toHaveTextContent('20 × 40 cm');
   });
 

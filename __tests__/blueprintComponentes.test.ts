@@ -131,14 +131,16 @@ describe('componentes · 2. a esquadria diz onde mora', () => {
 });
 
 describe('componentes · 3. a medida que identifica cada família', () => {
-  it('parede em metro, esquadria em vão, pilar em seção', () => {
+  it('parede em metro, esquadria em CENTÍMETRO, pilar em seção', () => {
     const linhas = inventario(planta());
 
     expect(linhas.find((l) => l.rotulo === 'Parede 1')?.medida).toBe('4,00 m');
     expect(linhas.find((l) => l.rotulo === 'Parede 1')?.detalhe).toBe(
       'esp. 15 cm · 2 esquadrias',
     );
-    expect(linhas.find((l) => l.rotulo === 'Porta 1')?.medida).toBe('0,90 × 2,10 m');
+    // Em CENTÍMETRO desde 23/09/2026 (P2.46) — e o pilar da linha de baixo já
+    // estava em cm: as duas famílias passam a falar a mesma unidade.
+    expect(linhas.find((l) => l.rotulo === 'Porta 1')?.medida).toBe('90 × 210 cm');
     expect(linhas.find((l) => l.chave === 'PILAR')?.medida).toBe('20 × 40 cm');
   });
 

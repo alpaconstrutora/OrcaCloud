@@ -296,15 +296,24 @@ describe('PainelParedeSelecionada · tamanho da abertura', () => {
   // alimenta o quantitativo (área descontada da parede) e até aqui era um 2100
   // fixo que ninguém escolheu, nem ao inserir.
 
+  // ⚠️ EM CENTÍMETRO desde 23/09/2026 (P2.46): o campo mostra 90, não 900,
+  // e o painel converte para o milimetro inteiro que o kernel exige.
   const largura = () =>
     screen.getByRole('textbox', { name: /largura da abertura/i }) as HTMLInputElement;
   const altura = () =>
     screen.getByRole('textbox', { name: /altura da abertura/i }) as HTMLInputElement;
 
-  it('mostra largura e altura da porta, em milímetros', () => {
+  it('mostra largura e altura da porta, em CENTÍMETROS', () => {
     montar({ parede: null, abertura: porta() });
-    expect(largura().value).toBe('900');
-    expect(altura().value).toBe('2100');
+    expect(largura().value).toBe('90');
+    expect(altura().value).toBe('210');
+  });
+
+  it('a casa decimal aparece só quando existe — 2105 mm é "210,5", nunca "211"', () => {
+    // Sem a casa, o campo mostraria 211 e gravaria 2110 no primeiro blur: a
+    // medida do usuário mudaria sozinha, sem ninguém digitar nada.
+    montar({ parede: null, abertura: porta({ heightMm: 2105 }) });
+    expect(altura().value).toBe('210,5');
   });
 
   it('ENTER na largura aplica só a largura', async () => {
@@ -312,9 +321,10 @@ describe('PainelParedeSelecionada · tamanho da abertura', () => {
     const props = montar({ parede: null, abertura: porta() });
 
     await user.clear(largura());
-    await user.type(largura(), '800');
+    await user.type(largura(), '80');
     await user.keyboard('{Enter}');
 
+    // 80 cm digitados viram 800 mm no comando: o modelo não mudou de unidade.
     expect(props.onTamanhoAbertura).toHaveBeenCalledExactlyOnceWith({ widthMm: 800 });
   });
 
@@ -323,10 +333,21 @@ describe('PainelParedeSelecionada · tamanho da abertura', () => {
     const props = montar({ parede: null, abertura: porta() });
 
     await user.clear(altura());
-    await user.type(altura(), '2300');
+    await user.type(altura(), '230');
     await user.keyboard('{Enter}');
 
     expect(props.onTamanhoAbertura).toHaveBeenCalledExactlyOnceWith({ heightMm: 2300 });
+  });
+
+  it('meio centímetro digitado vira milímetro inteiro, sem quebrar o kernel', async () => {
+    const user = userEvent.setup();
+    const props = montar({ parede: null, abertura: porta() });
+
+    await user.clear(altura());
+    await user.type(altura(), '210,5');
+    await user.keyboard('{Enter}');
+
+    expect(props.onTamanhoAbertura).toHaveBeenCalledExactlyOnceWith({ heightMm: 2105 });
   });
 
   it('ESCAPE descarta e devolve o valor exibido', async () => {
@@ -338,7 +359,7 @@ describe('PainelParedeSelecionada · tamanho da abertura', () => {
     await user.keyboard('{Escape}');
 
     expect(props.onTamanhoAbertura).not.toHaveBeenCalled();
-    expect(largura().value).toBe('900');
+    expect(largura().value).toBe('90');
   });
 
   it('valor inválido não emite comando', async () => {
@@ -372,10 +393,10 @@ describe('PainelParedeSelecionada · tamanho da abertura', () => {
     });
 
     const peitoril = screen.getByRole('textbox', { name: /peitoril/i }) as HTMLInputElement;
-    expect(peitoril.value).toBe('900');
+    expect(peitoril.value).toBe('90');
 
     await user.clear(peitoril);
-    await user.type(peitoril, '1000');
+    await user.type(peitoril, '100');
     await user.keyboard('{Enter}');
 
     expect(props.onTamanhoAbertura).toHaveBeenCalledExactlyOnceWith({ sillMm: 1000 });
@@ -387,11 +408,11 @@ describe('PainelParedeSelecionada · tamanho da abertura', () => {
     // a tela afirma um número que o desenho não tem.
     const props = { ...montarProps(), parede: null, abertura: porta() };
     const { rerender } = render(<PainelParedeSelecionada {...props} />);
-    expect(largura().value).toBe('900');
+    expect(largura().value).toBe('90');
 
     // Mesma abertura, mesmo tamanho: é o que chega depois de uma recusa.
     rerender(<PainelParedeSelecionada {...props} abertura={porta()} />);
-    expect(largura().value).toBe('900');
+    expect(largura().value).toBe('90');
   });
 });
 

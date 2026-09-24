@@ -574,9 +574,22 @@ export function assinaturaDaEsquadria(o: Pick<Opening, 'kind' | 'widthMm' | 'hei
   return `${o.kind}|${o.widthMm}|${o.heightMm}|${o.esquadria?.nome ?? ''}|${o.esquadria?.itemCode ?? ''}`;
 }
 
-/** "P1", ou "Porta 80×210" quando não há tipo declarado. */
+/**
+ * "P1", ou "Porta 80×210" quando não há tipo declarado.
+ *
+ * ⚠️ EM CENTÍMETRO (P2.46, 23/09/2026). Até aqui esta linha dizia "Porta
+ * 80×210" no comentário e devolvia "Porta 800×2100" no código. Esquadria se
+ * nomeia em centímetro — é assim no quadro da prancha, na planilha, no
+ * orçamento e no IFC, que é por onde este nome sai.
+ *
+ * A conta está duplicada de `utils/blueprintMedidaCm` DE PROPÓSITO: o kernel
+ * não importa nada de fora de si (nenhum arquivo daqui tem `from '../'`), e
+ * abrir essa porta por um formatador seria caro. `blueprintMedidaCm.test.ts`
+ * trava as duas contas uma contra a outra.
+ */
 export function nomeDaEsquadria(o: Pick<Opening, 'kind' | 'widthMm' | 'heightMm' | 'esquadria' | 'embutida'>): string {
-  return o.esquadria?.nome || `${nomeDoTipoDeAbertura(o.kind, o.embutida)} ${o.widthMm}×${o.heightMm}`;
+  const cm = (mm: number) => (mm / 10).toFixed(Math.round(mm) % 10 === 0 ? 0 : 1).replace('.', ',');
+  return o.esquadria?.nome || `${nomeDoTipoDeAbertura(o.kind, o.embutida)} ${cm(o.widthMm)}×${cm(o.heightMm)}`;
 }
 
 /**

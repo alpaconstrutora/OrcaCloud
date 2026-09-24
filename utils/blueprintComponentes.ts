@@ -53,6 +53,9 @@ import { SIGLA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
  */
 
 /** Uma linha do inventário. Sem JSX: quem renderiza resolve ícone e grupo. */
+
+import { textoEmCm } from './blueprintMedidaCm';
+
 export interface LinhaDeComponente {
   id: string;
   /** `'parede'` | `Opening['kind']` | `StructuralKind` — a chave do catálogo. */
@@ -171,7 +174,8 @@ export function linhasDeComponentes(
     id: o.id,
     chave: o.kind,
     rotulo: `${nomeDoTipoDeAbertura(o.kind)} ${etiquetas.get(o.id)?.numero ?? numero(o.kind)}`,
-    medida: `${m(o.widthMm)} × ${m(o.heightMm)} m`,
+    // Esquadria em CENTIMETRO (P2.46), como o painel, a barra e o quadro.
+    medida: `${textoEmCm(o.widthMm)} × ${textoEmCm(o.heightMm)} cm`,
     // A parede hospedeira é o que localiza a esquadria: sem ela, "Janela 4" não
     // diz onde está, e o clique na lista vira tentativa e erro.
     detalhe:
@@ -299,7 +303,8 @@ export function linhasDeComponentes(
       id: g.id,
       chave,
       rotulo: g.rotulo || `${ROTULO_DO_TIPO_DE_GUARDA_CORPO[g.tipo]} ${numero(chave)}`,
-      medida: `${m(comprimentoDoGuardaCorpo(g))} m · h ${m(g.alturaMm)} m`,
+      // Altura em CENTIMETRO (P2.46), como o painel e a gaveta: comprimento fica em metro.
+      medida: `${m(comprimentoDoGuardaCorpo(g))} m · h ${textoEmCm(g.alturaMm)} cm`,
       detalhe: `${ROTULO_DO_MATERIAL_DE_GUARDA_CORPO[g.material]}${g.itemCode ? ` · ${g.itemCode}` : ''}${g.sugerido ? ' · sugerido' : ''}`,
     };
   });

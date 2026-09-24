@@ -792,7 +792,7 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
         .filter((g) => (medidaId === 'COMPRIMENTO_CORRIMAO' ? g.tipo === 'CORRIMAO' : g.tipo === 'GUARDA_CORPO'))
         .map((g, i) => ({
           ref: g.uid,
-          rotulo: `${g.rotulo || `${g.tipo === 'CORRIMAO' ? 'Corrimão' : 'Guarda-corpo'} ${i + 1}`} · ${g.material.toLowerCase()} · h ${g.alturaM.toFixed(2)} m`,
+          rotulo: `${g.rotulo || `${g.tipo === 'CORRIMAO' ? 'Corrimão' : 'Guarda-corpo'} ${i + 1}`} · ${g.material.toLowerCase()} · h ${Math.round(g.alturaM * 100)} cm`,
           valor: medidaId === 'AREA_GUARDA_CORPO' ? g.areaM2 : g.comprimentoM,
           formula: medidaId === 'AREA_GUARDA_CORPO' ? 'Σ comprimento dos trechos × altura' : 'Σ comprimento dos trechos da polilinha',
           variaveis: { comprimentoM: g.comprimentoM, alturaM: g.alturaM, areaM2: g.areaM2, trechos: g.trechos, material: g.material },

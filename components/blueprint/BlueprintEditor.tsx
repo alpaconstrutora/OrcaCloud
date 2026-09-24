@@ -116,6 +116,7 @@ import ActionIconButton from '../ui/ActionIconButton';
 import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
 import MenuEncaixe from './MenuEncaixe';
 import { TIPOS_DE_ENCAIXE, ROTULO_DO_ENCAIXE } from '../../utils/blueprintEncaixe';
+import { casasEmCm, cmParaMm, mmParaCm, textoEmCm } from '../../utils/blueprintMedidaCm';
 import {
   alvosDeEncosto,
   encostoDaPonta,
@@ -10351,7 +10352,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                       .filter((t) => t.kind === tipoAbertura)
                       .map((t) => (
                         <option key={t.id} value={t.id}>
-                          {t.nome} · {t.widthMm}×{t.heightMm}
+                          {t.nome} · {textoEmCm(t.widthMm)}×{textoEmCm(t.heightMm)} cm
                         </option>
                       ))}
                   </select>
@@ -10383,9 +10384,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   onChange={(e) => setLarguraAbertura(Number(e.target.value))}
                   className="rounded-md border border-slate-300 px-2 py-1 text-xs"
                 >
+                  {/* Em CENTÍMETROS (P2.46): a largura de vão se fala em cm
+                      ("porta de 80"), e este seletor tem de dizer o mesmo que o
+                      painel da abertura selecionada. O valor guardado continua
+                      em milímetro — é o que o kernel aceita. */}
                   {[600, 700, 800, 900, 1000, 1200, 1500, 2000].map((mm) => (
                     <option key={mm} value={mm}>
-                      {mm} mm
+                      {textoEmCm(mm)} cm
                     </option>
                   ))}
                 </select>
@@ -11447,7 +11452,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {vaosCandidatos.vaos.length === 0 ? (
                 <p className="mt-2 text-xs text-amber-700">
                   Nenhum par de pontas <strong>na mesma linha</strong>, na faixa de
-                  abertura (40 cm a 3 m). Ponta que não continua o eixo de outra parede é
+                  abertura (40 cm a 300 cm). Ponta que não continua o eixo de outra parede é
                   canto aberto, não vão: arraste a ponta até encostar, ou desenhe o
                   trecho que falta. Fechar na diagonal criaria uma parede enviesada.
                 </p>
@@ -11498,7 +11503,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                           title="Selecionar na planta as paredes deste vão"
                           className="w-full rounded text-left text-xs font-medium text-slate-700 hover:text-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                         >
-                          Vão {i + 1} · {(v.mm / 1000).toFixed(2).replace('.', ',')} m
+                          Vão {i + 1} · {textoEmCm(v.mm)} cm
                         </button>
                         {/* CINCO saídas, porque são cinco as coisas que o vão
                             pode ser. Com duas — porta ou parede — a janela não

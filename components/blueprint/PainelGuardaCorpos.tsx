@@ -9,6 +9,7 @@ import React from 'react';
 import { AlertTriangle, Fence } from 'lucide-react';
 import { ROTULO_DO_MATERIAL_DE_GUARDA_CORPO, ROTULO_DO_TIPO_DE_GUARDA_CORPO, comprimentoDoGuardaCorpo, type GuardaCorpo, type ObjectId } from '../../utils/blueprintKernel';
 import { conferirGuardaCorpo, type AvisoDeGuardaCorpo, type HipotesesDeGuardaCorpo, type ResultadoDaSugestao, type ResumoDosGuardaCorpos, type SugestaoDeGuardaCorpo } from '../../utils/blueprintGuardaCorpo';
+import { casasEmCm, cmParaMm, mmParaCm, textoEmCm } from '../../utils/blueprintMedidaCm';
 
 interface Props {
   nomeDoPavimento: string;
@@ -40,11 +41,11 @@ export default function PainelGuardaCorpos({ nomeDoPavimento, pecas, resumo, sug
         </label>
         <label className="inline-flex items-center gap-1">
           Guarda-corpo (m)
-          <input type="number" min={0.9} max={2} step={0.05} value={hipoteses.alturaGuardaCorpoMm / 1000} onChange={(e) => Number(e.target.value) > 0 && onHipoteses({ ...hipoteses, alturaGuardaCorpoMm: Math.round(Number(e.target.value) * 1000) })} aria-label="Altura sugerida do guarda-corpo (m)" className="h-7 w-16 rounded-[6px] border border-slate-300 bg-white px-1.5 text-right text-xs" />
+          <input type="number" min={90} max={200} step={5} value={mmParaCm(hipoteses.alturaGuardaCorpoMm)} onChange={(e) => Number(e.target.value) > 0 && onHipoteses({ ...hipoteses, alturaGuardaCorpoMm: cmParaMm(Number(e.target.value)) })} aria-label="Altura sugerida do guarda-corpo (cm)" className="h-7 w-16 rounded-[6px] border border-slate-300 bg-white px-1.5 text-right text-xs" />
         </label>
         <label className="inline-flex items-center gap-1">
           Corrimão (m)
-          <input type="number" min={0.7} max={1.2} step={0.01} value={hipoteses.alturaCorrimaoMm / 1000} onChange={(e) => Number(e.target.value) > 0 && onHipoteses({ ...hipoteses, alturaCorrimaoMm: Math.round(Number(e.target.value) * 1000) })} aria-label="Altura sugerida do corrimão (m)" className="h-7 w-16 rounded-[6px] border border-slate-300 bg-white px-1.5 text-right text-xs" />
+          <input type="number" min={70} max={120} step={1} value={mmParaCm(hipoteses.alturaCorrimaoMm)} onChange={(e) => Number(e.target.value) > 0 && onHipoteses({ ...hipoteses, alturaCorrimaoMm: cmParaMm(Number(e.target.value)) })} aria-label="Altura sugerida do corrimão (cm)" className="h-7 w-16 rounded-[6px] border border-slate-300 bg-white px-1.5 text-right text-xs" />
         </label>
         <button type="button" disabled={sugestao.sugestoes.length === 0} onClick={() => onLancar(sugestao.sugestoes)} data-testid="lancar-guarda-corpos" className="ml-auto inline-flex h-7 items-center gap-1 rounded-[6px] bg-blue-600 px-2 text-xs font-medium text-white hover:bg-blue-700 disabled:bg-slate-300" title="Grava as sugestões como peças sugeridas (tracejadas) — mover ou Aceitar confirma">
           Lançar {sugestao.sugestoes.length} sugestão(ões)
@@ -58,7 +59,7 @@ export default function PainelGuardaCorpos({ nomeDoPavimento, pecas, resumo, sug
         {resumo.erros > 0 && <span className="text-red-700"> · {resumo.erros} abaixo de 1,10 m (NBR 14718)</span>}
         {resumo.avisos > 0 && <span className="text-amber-800"> · {resumo.avisos} aviso(s)</span>}
         <p className="mt-1 text-[11px] text-slate-500">
-          Sugestão: borda de laje SEM parede em cima, em pavimento elevado (varanda, mezanino, laje acessível), a {m(hipoteses.alturaGuardaCorpoMm)} m; corrimão a meia largura da escada/rampa, a {m(hipoteses.alturaCorrimaoMm)} m. O que já existe no mesmo trecho não se repete. Altura mínima 1,10 m (NBR 14718); corrimão 0,80–0,92 m (NBR 9050 6.9.4).
+          Sugestão: borda de laje SEM parede em cima, em pavimento elevado (varanda, mezanino, laje acessível), a {textoEmCm(hipoteses.alturaGuardaCorpoMm)} cm; corrimão a meia largura da escada/rampa, a {textoEmCm(hipoteses.alturaCorrimaoMm)} cm. O que já existe no mesmo trecho não se repete. Altura mínima 110 cm (NBR 14718); corrimão 80–92 cm (NBR 9050 6.9.4).
         </p>
       </div>
 
@@ -73,7 +74,7 @@ export default function PainelGuardaCorpos({ nomeDoPavimento, pecas, resumo, sug
                 <th className="py-1 pr-2 font-medium">Onde</th>
                 <th className="py-1 pr-2 font-medium">Tipo</th>
                 <th className="py-1 pr-2 text-right font-medium">m</th>
-                <th className="py-1 pr-2 text-right font-medium">h (m)</th>
+                <th className="py-1 pr-2 text-right font-medium">h (cm)</th>
                 <th className="py-1 font-medium" />
               </tr>
             </thead>
@@ -83,7 +84,7 @@ export default function PainelGuardaCorpos({ nomeDoPavimento, pecas, resumo, sug
                   <td className="py-1 pr-2">{s.rotulo}</td>
                   <td className="py-1 pr-2 text-slate-600">{ROTULO_DO_TIPO_DE_GUARDA_CORPO[s.comando.tipo]}</td>
                   <td className="py-1 pr-2 text-right tabular-nums">{m(s.comprimentoMm)}</td>
-                  <td className="py-1 pr-2 text-right tabular-nums">{m(s.comando.alturaMm ?? 0)}</td>
+                  <td className="py-1 pr-2 text-right tabular-nums">{textoEmCm(s.comando.alturaMm ?? 0)}</td>
                   <td className="py-1 text-right">
                     <button type="button" onClick={() => onLancar([s])} className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[11px] text-slate-700 hover:bg-slate-50" aria-label={`Lançar ${s.rotulo}`}>Lançar</button>
                   </td>
@@ -113,7 +114,7 @@ export default function PainelGuardaCorpos({ nomeDoPavimento, pecas, resumo, sug
                 <th className="py-1 pr-2 font-medium">Peça</th>
                 <th className="py-1 pr-2 font-medium">Material</th>
                 <th className="py-1 pr-2 text-right font-medium">m</th>
-                <th className="py-1 pr-2 text-right font-medium">h (m)</th>
+                <th className="py-1 pr-2 text-right font-medium">h (cm)</th>
                 <th className="py-1 pr-2 font-medium">Item</th>
                 <th className="py-1 font-medium">Conferência</th>
               </tr>
@@ -129,7 +130,7 @@ export default function PainelGuardaCorpos({ nomeDoPavimento, pecas, resumo, sug
                     </td>
                     <td className="py-1 pr-2 text-slate-600">{ROTULO_DO_MATERIAL_DE_GUARDA_CORPO[g.material]}</td>
                     <td className="py-1 pr-2 text-right tabular-nums">{m(comprimentoDoGuardaCorpo(g))}</td>
-                    <td className="py-1 pr-2 text-right tabular-nums">{m(g.alturaMm)}</td>
+                    <td className="py-1 pr-2 text-right tabular-nums">{textoEmCm(g.alturaMm)}</td>
                     <td className="py-1 pr-2">{g.itemCode ? <span className="text-slate-700">{g.itemCode}</span> : <span className="text-amber-800">sem item</span>}</td>
                     <td className="py-1">
                       {avisos.length === 0 ? <span className="text-emerald-700">ok</span> : avisos.map((a, i) => (

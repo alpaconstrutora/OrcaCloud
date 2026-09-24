@@ -12,10 +12,11 @@
 // rascunho → fechar, e o banco recusa alterar item de rateio já fechado.
 import React from 'react';
 import {
-    Calculator, Wallet, Search, RefreshCw, Plus, Lock, AlertTriangle, Building2, AlertCircle, FileText, Loader2, Send, CheckCircle2 } from 'lucide-react';
+    Calculator, Wallet, Search, RefreshCw, Plus, Lock, AlertTriangle, Building2, AlertCircle, FileText, Loader2, Send, CheckCircle2, MoveHorizontal } from 'lucide-react';
 import { regenerateCondoRateioNumber } from '../../services/condoRateioNumberRegenService';
 import {
     ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
+    useResizableColumns,
 } from '../ui/TableUtils';
 import { KpiCard } from '../ui/KpiCard';
 import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
@@ -222,6 +223,12 @@ const TabelaCotas: React.FC<{ cotas: CotaDoRateio[] }> = ({ cotas }) => (
     </div>
 );
 
+// Larguras da aba Despesas. Soma = 1.100px; a folga vai para o `<col />`
+// espaçador (§6.1.1), não se espalha pelas colunas de dado.
+const LARGURAS_DESPESAS: Record<string, number> = {
+    data: 110, descricao: 320, fornecedor: 240, centro: 200, situacao: 150, valor: 130,
+};
+
 /** Lançamentos do caixa do condomínio — a aba Despesas.
  *  Tabela de PÁGINA (não vive em `Sheet`), então `px-6` e `py-2.5` do §6.6/§7.2. */
 const TabelaLancamentos: React.FC<{
@@ -230,7 +237,10 @@ const TabelaLancamentos: React.FC<{
     erro: string | null;
     mes: string;
     temBusca: boolean;
-}> = ({ lancamentos, carregando, erro, mes, temBusca }) => {
+    /** Vem do pai porque o botão de auto-ajuste (§6.1.2) mora na toolbar, e a
+     *  toolbar não é filha desta tabela. */
+    cols: ReturnType<typeof useResizableColumns>;
+}> = ({ lancamentos, carregando, erro, mes, temBusca, cols }) => {
     if (carregando) {
         return (
             <div className="text-center py-12">
@@ -259,16 +269,40 @@ const TabelaLancamentos: React.FC<{
     }
 
     const total = lancamentos.reduce((s, l) => s + l.valor, 0);
+    // §6.1 — largura = SOMA das colunas, nunca `w-full`: com `table-layout:
+    // fixed` em 100%, o navegador redistribui a sobra e arrastar uma borda
+    // redimensiona a vizinha errada. `minWidth: '100%'` é o que dá folga ao
+    // espaçador (§6.1.1); sem ele o espaçador é código morto.
+    const larguraTotal = Object.keys(LARGURAS_DESPESAS).reduce((acc, k) => acc + cols.getWidth(k), 0);
+
     return (
         <div className="overflow-auto max-h-[70vh]">
-            <table className="w-full text-left border-collapse">
+            <table
+                ref={cols.tableRef}
+                className="text-left border-collapse"
+                style={{ tableLayout: 'fixed', width: larguraTotal, minWidth: '100%' }}
+            >
+                <colgroup>
+                    <col data-col-key="data" style={{ width: `${cols.getWidth('data')}px` }} />
+                    <col data-col-key="descricao" style={{ width: `${cols.getWidth('descricao')}px` }} />
+                    <col data-col-key="fornecedor" style={{ width: `${cols.getWidth('fornecedor')}px` }} />
+                    <col data-col-key="centro" style={{ width: `${cols.getWidth('centro')}px` }} />
+                    <col data-col-key="situacao" style={{ width: `${cols.getWidth('situacao')}px` }} />
+                    {/* §6.1.1 — o espaçador vem ANTES da última coluna. Depois
+                        dela, a sobra empurra "Valor" a cada arraste e a borda
+                        dança em relação à toolbar acima. */}
+                    <col />
+                    <col data-col-key="valor" style={{ width: `${cols.getWidth('valor')}px` }} />
+                </colgroup>
                 <thead>
                     <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                        <th className="px-6 py-2 border-r border-gray-100 whitespace-nowrap">Data</th>
-                        <th className="px-6 py-2 border-r border-gray-100">Descrição</th>
-                        <th className="px-6 py-2 border-r border-gray-100">Centro de custo</th>
-                        <th className="px-6 py-2 border-r border-gray-100 whitespace-nowrap">Situação</th>
-                        <th className="px-6 py-2 text-right whitespace-nowrap">Valor</th>
+                        <th className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden relative">Data<cols.ResizeHandle colKey="data" /></th>
+                        <th className="px-6 py-2 border-r border-gray-100 overflow-hidden relative">Descrição<cols.ResizeHandle colKey="descricao" /></th>
+                        <th className="px-6 py-2 border-r border-gray-100 overflow-hidden relative">Fornecedor<cols.ResizeHandle colKey="fornecedor" /></th>
+                        <th className="px-6 py-2 border-r border-gray-100 overflow-hidden relative">Centro de custo<cols.ResizeHandle colKey="centro" /></th>
+                        <th className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden relative">Situação<cols.ResizeHandle colKey="situacao" /></th>
+                        <th aria-hidden="true" className="border-r border-gray-100"></th>
+                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500 whitespace-nowrap">Valor</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -277,19 +311,37 @@ const TabelaLancamentos: React.FC<{
                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
                                 {dataBR(l.data)}
                             </td>
+                            {/* §6.1.2 — `truncate` só recorta em elemento de bloco,
+                                e o texto inteiro volta pelo `title`. */}
                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
-                                {/* §6.1.2 — `truncate` precisa de `block`, e o texto
-                                    inteiro volta pelo `title`. */}
                                 <span className="block truncate" title={l.descricao}>{l.descricao}</span>
+                            </td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
+                                {l.fornecedor
+                                    ? <span className="block truncate" title={l.fornecedor}>{l.fornecedor}</span>
+                                    : <span className="text-gray-400">—</span>}
                             </td>
                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
                                 <span className="block truncate" title={l.costCenterLabel}>{l.costCenterLabel}</span>
                             </td>
-                            {/* §8 — texto colorido, sem pílula. "Já rateada" responde
-                                a pergunta que traz o síndico aqui: o que ficou de fora. */}
+                            {/* §8 — texto colorido, sem pílula. Quando o rateio é de
+                                OUTRO mês, dizer QUAL é o que explica a diferença
+                                entre esta aba e a de Rateios. */}
                             <td className={`px-6 py-2.5 border-r border-gray-100 text-sm font-normal ${l.rateada ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                {l.rateada ? 'Já rateada' : 'Fora de rateio'}
+                                {!l.rateada ? 'Fora de rateio' : (
+                                    <span
+                                        className="block truncate"
+                                        title={l.rateioCompetencia
+                                            ? `Entrou no rateio de ${rotuloCompetencia(`${l.rateioCompetencia}-01`)}`
+                                            : undefined}
+                                    >
+                                        {l.rateioCompetencia && l.rateioCompetencia !== l.data.slice(0, 7)
+                                            ? `Rateada em ${rotuloCompetencia(`${l.rateioCompetencia}-01`)}`
+                                            : 'Já rateada'}
+                                    </span>
+                                )}
                             </td>
+                            <td aria-hidden="true" className="border-r border-gray-100"></td>
                             <td className="px-6 py-2.5 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
                                 {dinheiro(l.valor)}
                             </td>
@@ -298,7 +350,7 @@ const TabelaLancamentos: React.FC<{
                 </tbody>
                 <tfoot>
                     <tr className="bg-gray-50 border-t border-gray-200">
-                        <td className="px-6 py-2.5 text-sm font-normal text-gray-500" colSpan={4}>
+                        <td className="px-6 py-2.5 text-sm font-normal text-gray-500" colSpan={6}>
                             {lancamentos.length} lançamento(s) em {mes}
                         </td>
                         <td className="px-6 py-2.5 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
@@ -758,6 +810,12 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
     };
 
     // ── Aba Despesas ──────────────────────────────────────────────────────
+    // §6.1 — a aba Despesas tem TRÊS colunas de texto livre (descrição,
+    // fornecedor, centro de custo): é exatamente o caso em que redimensionar
+    // paga o próprio custo. A tabela de Rateios segue sem, pela decisão já
+    // registrada lá (oito colunas curtas, nenhuma de texto livre).
+    const colsDespesas = useResizableColumns(LARGURAS_DESPESAS, `condominio:${empreendimento.id}:despesas:larguras`);
+
     const [lancamentos, setLancamentos] = React.useState<LancamentoDoCondominio[]>([]);
     const [carregandoLanc, setCarregandoLanc] = React.useState(false);
     const [erroLanc, setErroLanc] = React.useState<string | null>(null);
@@ -766,6 +824,17 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
     // é a maior tabela do financeiro, e "todas as despesas de todos os tempos"
     // seria uma varredura que ninguém pediu. O filtro do topo manda.
     const mesDasDespesas = competenciaFiltro || competenciaAtual().slice(0, 7);
+
+    // Em Despesas o `<select>` não tem a opção "Todas". Com o filtro em `''`
+    // (herdado da aba Rateios), o navegador exibia a PRIMEIRA opção da lista
+    // enquanto o estado seguia vazio e os dados vinham do mês corrente — o
+    // rótulo dizia um mês e a tabela mostrava outro. Entrar na aba fixa a
+    // competência, e aí rótulo e dado passam a falar do mesmo mês.
+    React.useEffect(() => {
+        if (subAba === 'despesas' && !competenciaFiltro) {
+            setCompetenciaFiltro(competenciaAtual().slice(0, 7));
+        }
+    }, [subAba, competenciaFiltro, setCompetenciaFiltro]);
 
     React.useEffect(() => {
         if (subAba !== 'despesas' || centros.length === 0) return;
@@ -789,16 +858,6 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
             l.descricao.toLowerCase().includes(t)
             || l.costCenterLabel.toLowerCase().includes(t));
     }, [lancamentos, searchTerm]);
-
-    /** Competências que existem, para o seletor não oferecer mês vazio. */
-    const competenciasDisponiveis = React.useMemo(() => {
-        const meses = new Set(rateios.map(r => r.competencia.slice(0, 7)));
-        // O mês corrente entra mesmo sem rateio: é de onde se parte para criar
-        // o primeiro, e a aba Despesas precisa dele para mostrar o que já caiu.
-        meses.add(competenciaAtual().slice(0, 7));
-        if (competenciaFiltro) meses.add(competenciaFiltro);
-        return [...meses].sort().reverse();
-    }, [rateios, competenciaFiltro]);
 
     const vivos = React.useMemo(() => rateios.filter(r => r.status !== 'CANCELADO'), [rateios]);
     const kpis = React.useMemo(() => ({
@@ -982,19 +1041,31 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                     QUAL MÊS a tela fala, nas duas sub-abas. */}
                 <div className="flex items-center gap-2 shrink-0">
                     <label className="text-xs font-semibold text-slate-500 whitespace-nowrap">Competência</label>
-                    <select
+                    {/* Campo de MÊS, não `<select>` de meses conhecidos.
+                        A lista de opções saía dos rateios existentes — e com
+                        isso um mês que tem DESPESA e ainda não tem rateio ficava
+                        inalcançável, que é justamente o mês que se quer olhar
+                        antes de criar o rateio. (Pego na prova de tela de
+                        24/09: o Bella Vista oferecia 09/2026, 07/2026 e 05/2024,
+                        e escondia 08/2026, onde há lançamento.)
+                        Campo vazio = "Todas" na aba Rateios; em Despesas o
+                        efeito acima preenche com o mês corrente. */}
+                    <input
+                        type="month"
                         value={competenciaFiltro}
                         onChange={e => setCompetenciaFiltro(e.target.value)}
-                        className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
-                    >
-                        {/* Em Despesas não existe "todas": a aba cai no mês
-                            corrente, porque varrer `internal_transactions` sem
-                            recorte é consulta que ninguém pediu. */}
-                        {subAba === 'rateios' && <option value="">Todas</option>}
-                        {competenciasDisponiveis.map(m => (
-                            <option key={m} value={m}>{rotuloCompetencia(`${m}-01`)}</option>
-                        ))}
-                    </select>
+                        className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    />
+                    {subAba === 'rateios' && competenciaFiltro && (
+                        <button
+                            type="button"
+                            onClick={() => setCompetenciaFiltro('')}
+                            className="h-9 px-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all whitespace-nowrap"
+                            title="Mostrar todas as competências"
+                        >
+                            Todas
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -1020,6 +1091,26 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                         >
                             <RefreshCw className="w-4 h-4" />
                         </button>
+                        {/* §6.1.2 — ajustar a largura ao conteúdo, sob comando
+                            explícito. Só na aba Despesas, que é a que
+                            redimensiona; recalcular sozinho faria as colunas
+                            dançarem enquanto o usuário digita na busca. */}
+                        {subAba === 'despesas' && (
+                            <>
+                                <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+                                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                    <button
+                                        type="button"
+                                        onClick={() => colsDespesas.autoFit()}
+                                        className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                        title="Ajustar largura das colunas ao conteúdo"
+                                    >
+                                        <MoveHorizontal className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </>
+                        )}
+
                         {/* Configurar coluna e "Novo rateio" pertencem à tabela de
                             rateios — em Despesas não há o que configurar nem o que
                             criar: o lançamento nasce no Financeiro, não aqui. */}
@@ -1054,6 +1145,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                         erro={erroLanc}
                         mes={rotuloCompetencia(`${mesDasDespesas}-01`)}
                         temBusca={!!searchTerm.trim()}
+                        cols={colsDespesas}
                     />
                 ) : (
                 <>

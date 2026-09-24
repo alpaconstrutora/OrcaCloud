@@ -89,10 +89,23 @@ export interface LancamentoDoCondominio {
     data: string;
     descricao: string;
     valor: number;
+    /** Quem recebeu — `party_name`, com `entity_name` de reserva. */
+    fornecedor: string;
     costCenterId: string | null;
     costCenterLabel: string;
     /** Já entrou em algum rateio VIVO (não cancelado). */
     rateada: boolean;
+    /**
+     * Competência do rateio em que entrou (`YYYY-MM`), quando entrou.
+     *
+     * Existe porque ela nem sempre é o mês do próprio lançamento: o rateio
+     * criado pelo Fechamento por Centro de Custo (Contas a Pagar) recebe os
+     * títulos ESCOLHIDOS, e `previa` troca a janela de data por `.in('id', …)`.
+     * Medido em 24/09/2026: o rateio de 07/2026 do Bella Vista contém um
+     * título de **17/08/2026**. Sem este campo, a aba Despesas diria só "já
+     * rateada" e o usuário não teria como saber em qual mês.
+     */
+    rateioCompetencia: string | null;
 }
 
 /** Uma cota já gravada, com os rótulos que a tela precisa. */
@@ -663,25 +676,61 @@ export const condominioRateioService = {
         // Rótulo do centro de custo, em lote.
         const ccs = await this.getCentrosDeCustoPorEmpreendimentoNomes(params.costCenterIds);
 
-        let rateadas = new Set<string>();
+        let emRateio = new Map<string, string>();
         try {
-            rateadas = await this.listarJaRateadas(linhas.map((l: any) => l.id as string));
+            emRateio = await this.competenciaDosRateios(linhas.map((l: any) => l.id as string));
         } catch {
-            // Falhar aqui só tira a marca "já rateada" — não some com a lista.
+            // Falhar aqui só tira a marca de rateio — não some com a lista.
         }
 
-        return linhas.map((l: any) => ({
-            id: l.id as string,
-            data: l.transaction_date as string,
-            // Mesma poda de rótulo do rateio: na origem BOLETO a descrição é
-            // nome de arquivo ou bloco de OCR. Ver `utils/despesaCondominio.ts`.
-            descricao: rotuloDeDespesa(l.description, l.party_name || l.entity_name)
-                ?? 'Despesa sem descrição',
-            valor: Number(l.amount || 0),
-            costCenterId: (l.cost_center_id ?? null) as string | null,
-            costCenterLabel: ccs.get(l.cost_center_id) ?? '—',
-            rateada: rateadas.has(l.id as string),
-        }));
+        return linhas.map((l: any) => {
+            const comp = emRateio.get(l.id as string) ?? null;
+            return {
+                id: l.id as string,
+                data: l.transaction_date as string,
+                // Mesma poda de rótulo do rateio: na origem BOLETO a descrição é
+                // nome de arquivo ou bloco de OCR. Ver `utils/despesaCondominio.ts`.
+                descricao: rotuloDeDespesa(l.description, l.party_name || l.entity_name)
+                    ?? 'Despesa sem descrição',
+                valor: Number(l.amount || 0),
+                fornecedor: (l.party_name || l.entity_name || '') as string,
+                costCenterId: (l.cost_center_id ?? null) as string | null,
+                costCenterLabel: ccs.get(l.cost_center_id) ?? '—',
+                rateada: comp !== null,
+                rateioCompetencia: comp,
+            };
+        });
+    },
+
+    /**
+     * `transaction_id → competência ('YYYY-MM')` do rateio VIVO em que o título
+     * entrou. Irmã de `listarJaRateadas`, que só responde sim/não.
+     *
+     * A competência importa porque nem sempre é o mês do título: rateio criado
+     * a partir dos títulos MARCADOS no Fechamento por Centro de Custo ignora a
+     * janela de data. Um título de agosto pode estar, legitimamente, no rateio
+     * de julho — e a tela precisa poder dizer isso.
+     *
+     * Com o título em mais de um rateio vivo (o índice único é por rateio, não
+     * global), fica a PRIMEIRA que vier: a tela mostra "entrou em rateio de
+     * MM/AAAA", não pretende ser a lista completa.
+     */
+    async competenciaDosRateios(transactionIds: string[]): Promise<Map<string, string>> {
+        const mapa = new Map<string, string>();
+        if (transactionIds.length === 0) return mapa;
+        const { data, error } = await supabase
+            .from('condominio_rateio_despesas')
+            .select('transaction_id, condominio_rateios!inner(status, competencia)')
+            .in('transaction_id', transactionIds)
+            .neq('condominio_rateios.status', 'CANCELADO');
+        if (error) throw new Error(`Falha ao verificar despesas já lançadas: ${error.message}`);
+        for (const d of data || []) {
+            const tid = (d as any).transaction_id as string;
+            if (mapa.has(tid)) continue;
+            const comp = (d as any).condominio_rateios?.competencia as string | undefined;
+            if (comp) mapa.set(tid, comp.slice(0, 7));
+        }
+        return mapa;
     },
 
     /** `id → "código — nome"` dos centros de custo dados. */

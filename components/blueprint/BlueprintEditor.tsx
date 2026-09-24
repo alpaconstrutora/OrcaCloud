@@ -180,6 +180,7 @@ import { sinapiService } from '../../services/sinapiService';
 import { comandosDeJuntarParalelas, juncoesParalelasProximas, LATERAL_MAXIMA_MM } from '../../utils/blueprintJuntarParalelas';
 import PainelRevisaoDePontas from './PainelRevisaoDePontas';
 import { chaveDaPonta, pontasParaRevisar, type PontaEmRevisao } from '../../utils/blueprintRevisaoDePontas';
+import { comandoDeEstender, extensoesDaParede } from '../../utils/blueprintEstenderAteFace';
 import PainelImportarIfc from './PainelImportarIfc';
 import PainelImportarDxf from './PainelImportarDxf';
 import PainelImportarBcf from './PainelImportarBcf';
@@ -3126,6 +3127,23 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   // Cardinalidade 1: `selectedId` é `null` quando há mais de um selecionado, e
   // é isso que faz o painel de parede sumir sozinho em favor do de conjunto.
   const paredeSel = editor.model.walls.find((w) => w.id === editor.selectedId) ?? null;
+
+  // ⚠️ DEPOIS de `paredeSel`, e não junto dos outros diagnósticos: `const` não
+  // é içado, e declarar este memo antes derruba a aba com "used before its
+  // declaration" — o mesmo TDZ que já derrubou a vista 3D e o canônico do
+  // circuito nesta base.
+  /**
+   * Até onde cada ponta da parede selecionada pode ir (P2.58).
+   *
+   * Depende da seleção, então só custa quando há uma parede escolhida — e a
+   * conta é um raio contra as faces do pavimento, barata o bastante para o memo.
+   */
+  const extensoesDaParedeSelecionada = useMemo(() => {
+    const level = editor.model.levels.find((l) => l.id === levelId);
+    if (!level || !paredeSel) return [];
+    return extensoesDaParede(editor.model, level, paredeSel.id);
+  }, [editor.model, levelId, paredeSel]);
+
   const aberturaSel = editor.model.openings.find((o) => o.id === editor.selectedId) ?? null;
 
   const selecionados = useMemo(() => new Set(editor.selectedIds), [editor.selectedIds]);
@@ -7608,6 +7626,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           ) : null
         }
         podeUnir={!!vizinhaParaUnir}
+        // ESTENDER ATÉ A FACE (P2.58): achar a face exige percorrer o contorno de
+        // todas as paredes e estruturas do pavimento — conta que só quem tem o
+        // modelo pode fazer. Só roda com uma parede selecionada.
+        extensoes={extensoesDaParedeSelecionada}
+        onEstender={(end, ateOEixo) => {
+          const e = extensoesDaParedeSelecionada.find((x) => x.end === end);
+          if (!e) return;
+          try {
+            editor.run(comandoDeEstender(e, ateOEixo));
+          } catch (err) {
+            setAvisoConexaoT(err instanceof Error ? `O desenho recusou: ${err.message}` : 'O desenho recusou a extensão.');
+          }
+        }}
         // O comprimento LIVRE depende da espessura das VIZINHAS, então sai
         // daqui, que conhece o nível inteiro — o painel só vê a selecionada.
         livreMm={

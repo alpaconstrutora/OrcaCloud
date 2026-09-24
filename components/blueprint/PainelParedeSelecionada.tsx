@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Scissors, Combine, FlipHorizontal, FlipVertical } from 'lucide-react';
+import { Scissors, Combine, FlipHorizontal, FlipVertical, MoveRight } from 'lucide-react';
 import {
   mmToMeters,
   nomeDoTipoDeAbertura,
@@ -165,6 +165,21 @@ interface Props {
   podeUnir: boolean;
   onDividir: () => void;
   onUnir: () => void;
+  /**
+   * ESTENDER ATÉ A FACE (P2.58). Cada ponta que tem algo à frente vira um botão.
+   *
+   * Vem pronto de quem tem o MODELO: achar a face exige percorrer o contorno de
+   * todas as paredes e estruturas do pavimento, e este painel só conhece a
+   * parede selecionada.
+   */
+  extensoes?: readonly {
+    end: 'a' | 'b';
+    to: { x: number; y: number };
+    noEixo: { x: number; y: number } | null;
+    tipo: 'PAREDE' | 'ESTRUTURA';
+    distanciaMm: number;
+  }[];
+  onEstender?: (end: 'a' | 'b', ateOEixo: boolean) => void;
   /** Volume que esta parede divide com o concreto, em m³. `0` = nenhum. */
   sobreposicaoM3?: number;
   onCedeSobreposicao?: (cede: boolean) => void;
@@ -241,6 +256,8 @@ export default function PainelParedeSelecionada({
   podeUnir,
   onDividir,
   onUnir,
+  extensoes,
+  onEstender,
   sobreposicaoM3 = 0,
   onCedeSobreposicao,
   onFlipAbertura,
@@ -281,6 +298,8 @@ export default function PainelParedeSelecionada({
           podeUnir={podeUnir}
           onDividir={onDividir}
           onUnir={onUnir}
+          extensoes={extensoes}
+          onEstender={onEstender}
           livreMm={livreMm}
         />
       )}
@@ -453,6 +472,8 @@ function ComprimentoEEspessura({
   podeUnir,
   onDividir,
   onUnir,
+  extensoes,
+  onEstender,
   livreMm,
 }: {
   parede: Wall;
@@ -468,6 +489,21 @@ function ComprimentoEEspessura({
   podeUnir: boolean;
   onDividir: () => void;
   onUnir: () => void;
+  /**
+   * ESTENDER ATÉ A FACE (P2.58). Cada ponta que tem algo à frente vira um botão.
+   *
+   * Vem pronto de quem tem o MODELO: achar a face exige percorrer o contorno de
+   * todas as paredes e estruturas do pavimento, e este painel só conhece a
+   * parede selecionada.
+   */
+  extensoes?: readonly {
+    end: 'a' | 'b';
+    to: { x: number; y: number };
+    noEixo: { x: number; y: number } | null;
+    tipo: 'PAREDE' | 'ESTRUTURA';
+    distanciaMm: number;
+  }[];
+  onEstender?: (end: 'a' | 'b', ateOEixo: boolean) => void;
   /**
    * Comprimento livre entre as faces das paredes vizinhas, em mm.
    *
@@ -599,6 +635,37 @@ function ComprimentoEEspessura({
           }
         />
       </div>
+
+      {/* ESTENDER ATÉ A FACE (P2.58) — pedido do usuário.
+          ⚠️ Duas paradas, e a diferença importa: a FACE é onde a alvenaria nova
+          encosta na existente (o que se vê e o que se constrói), e o EIXO é o
+          que o arranjo precisa para fechar o ambiente. O botão principal faz o
+          que foi pedido; o atalho ao lado oferece o eixo quando ele existe. */}
+      {onEstender && (extensoes?.length ?? 0) > 0 && (
+        <div className="mt-2 space-y-1" data-testid="estender-ate-face">
+          {extensoes!.map((e) => (
+            <div key={e.end} className="flex items-center gap-1.5">
+              <BotaoTexto
+                icone={MoveRight}
+                rotulo={`Estender ${e.end === 'a' ? 'início' : 'fim'} ${e.distanciaMm} mm`}
+                onClick={() => onEstender(e.end, false)}
+                titulo={`Leva a ponta até a face ${e.tipo === 'ESTRUTURA' ? 'da peça estrutural' : 'da parede'} que está à frente`}
+              />
+              {e.noEixo && (
+                <button
+                  type="button"
+                  onClick={() => onEstender(e.end, true)}
+                  title="Vai até o EIXO da outra parede, e não até a face: é o que fecha o ambiente no arranjo"
+                  className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50"
+                  data-testid={`estender-eixo-${e.end}`}
+                >
+                  até o eixo
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </>
   );
 }

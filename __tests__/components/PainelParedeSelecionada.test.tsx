@@ -614,3 +614,43 @@ describe('PainelParedeSelecionada · fachada (P2.20)', () => {
     expect(onCortina2).toHaveBeenLastCalledWith(null);
   });
 });
+
+/**
+ * ESTENDER ATÉ A FACE (P2.58) — a parte do painel.
+ *
+ * A conta tem teste próprio (`blueprintEstenderAteFace.test.ts`). Aqui fica o
+ * contrato da tela: um botão por ponta que TEM alvo, com a distância no rótulo,
+ * e o atalho "até o eixo" só quando o eixo existe — estrutura não tem.
+ */
+describe('PainelParedeSelecionada · estender até a face', () => {
+  const ATE_PAREDE = { end: 'b' as const, to: { x: 4900, y: 0 }, noEixo: { x: 5000, y: 0 }, tipo: 'PAREDE' as const, distanciaMm: 900 };
+  const ATE_PILAR = { end: 'a' as const, to: { x: 4800, y: 0 }, noEixo: null, tipo: 'ESTRUTURA' as const, distanciaMm: 700 };
+
+  it('um botão por ponta com alvo, com a distância no rótulo', async () => {
+    const user = userEvent.setup();
+    const onEstender = vi.fn();
+    montar({ extensoes: [ATE_PAREDE, ATE_PILAR], onEstender });
+    const bloco = screen.getByTestId('estender-ate-face');
+    expect(bloco).toHaveTextContent('Estender fim 900 mm');
+    expect(bloco).toHaveTextContent('Estender início 700 mm');
+
+    await user.click(screen.getByRole('button', { name: /Estender fim 900 mm/ }));
+    expect(onEstender).toHaveBeenCalledWith('b', false);
+  });
+
+  it('⚠️ "até o eixo" só existe quando há eixo — pilar não tem', async () => {
+    const user = userEvent.setup();
+    const onEstender = vi.fn();
+    montar({ extensoes: [ATE_PAREDE, ATE_PILAR], onEstender });
+    expect(screen.getByTestId('estender-eixo-b')).toBeInTheDocument();
+    expect(screen.queryByTestId('estender-eixo-a')).toBeNull();
+
+    await user.click(screen.getByTestId('estender-eixo-b'));
+    expect(onEstender).toHaveBeenCalledWith('b', true);
+  });
+
+  it('sem nada à frente, o bloco nem aparece', () => {
+    montar({ extensoes: [], onEstender: vi.fn() });
+    expect(screen.queryByTestId('estender-ate-face')).toBeNull();
+  });
+});

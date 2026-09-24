@@ -2138,6 +2138,29 @@ E o ajuste oferecido é o único que faz sentido ali: **o mm por pixel**, aplica
 
 **⚠️ Um defeito que o teste pegou antes do usuário**: o campo nasceu como `input[type=number]`, que **descarta a vírgula**. Quem digitasse "1,8636" veria o campo vazio e o Enter não faria nada. Virou `type="text"` com `inputMode="decimal"`, como o `CampoMedida` da casa já fazia.
 
+### P2.58 — Estender a parede até a face (24/09/2026) · *"crie uma funcionalidade de estender parede até encontrar a face de outra parede ou um componente"*
+
+**O que já existia não servia.** `extensoesAteEncontrar` (P2.42) estica a ponta solta até o **EIXO** da parede da frente, em lote — e está certo assim: o objetivo lá é fechar o contorno, e é no eixo que o arranjo enxerga o encontro. O pedido é outro:
+
+- **Face, não eixo.** A face é o que se vê e o que se constrói: a alvenaria nova morre encostada na existente. Parar no eixo faz a parede invadir meia espessura da outra.
+- **Não só parede.** O caso clássico de obra é a parede que morre num **pilar** — que aquela função nem olha.
+
+**O que entrou.** `utils/blueprintEstenderAteFace.ts` (novo): lança um raio da ponta na direção da própria parede e para na **primeira face** do caminho — faces das paredes (contorno de `cantosDaParede`) e contorno em planta das peças estruturais. O resultado carrega **os dois pontos**, `to` (face) e `noEixo`, porque as duas paradas são legítimas e a diferença importa: encostar na face é o certo para o desenho; o ambiente só fecha quando a ponta alcança o eixo. Na tela, um botão por ponta com alvo (`Estender fim 1245 mm`) e, ao lado, `até o eixo` quando o alvo é parede — estrutura não tem eixo.
+
+**⚠️ Duas correções que só a medição na planta real trouxe** (202 paredes, a do usuário):
+
+1. **Propunha atravessar.** Na primeira versão, **273 das 367 extensões eram de ~75 mm** — exatamente meia espessura. Era a ponta que **já encosta** no eixo da parede vizinha: o raio partia de dentro dela e achava a face de saída como se fosse alvo. O botão convidaria a empurrar a parede para dentro da outra.
+2. **E continuou propondo depois do primeiro remédio.** O filtro inicial usava par-ímpar sobre o contorno, que é **instável na borda** — e no canto em L a ponta cai exatamente sobre a borda do corpo vizinho. Sobravam propostas de 75 mm em paredes que já formavam canto. A conta virou distância ao eixo contra meia espessura, que não tem esse ponto cego.
+
+Depois das duas: de 199 para **111 paredes com alvo**, e as propostas passaram a ser reais — 1245 mm, 1300 mm, 2750 mm.
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-ui-standard.sh` ok · `check-xss-sinks.sh` ok · suíte cheia **460 arquivos / 5260 testes** verdes · `npm run build` ok.
+- `__tests__/blueprintEstenderAteFace.test.ts` (6): para na face, a meia espessura antes do eixo, e traz o eixo junto; **o caso de obra — a parede morre no pilar**, com `noEixo: null`; para na primeira face do caminho; sem nada à frente devolve `null` e não estica para o vazio; a ponta que aponta para o outro lado não acha nada; ⚠️ **ir até o eixo fecha o ambiente, parar na face não** — medido com `pontasSoltasDoNivel` antes e depois.
+- `__tests__/components/PainelParedeSelecionada.test.tsx` (+3, total 51): um botão por ponta com alvo, com a distância no rótulo; "até o eixo" só quando há eixo; sem alvo, o bloco não aparece.
+- `__tests__/components/BlueprintEditor.test.tsx` (+1): a integração inteira — o memo depende da parede **selecionada**, mora depois de `paredeSel` (⚠️ TDZ, o mesmo que já derrubou a vista 3D nesta base) e alimenta um painel montado em dois lugares.
+- **App real** (escritas bloqueadas: 3, 0 erros), *Planta 24/09/2026*: selecionando a Parede 26, o painel oferece **"Estender fim 1245 mm"** e o atalho "até o eixo"; o clique aplica e o bloco some, porque a ponta chegou na face.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

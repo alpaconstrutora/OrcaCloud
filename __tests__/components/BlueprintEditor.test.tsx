@@ -5834,3 +5834,39 @@ describe('BlueprintEditor · guarda-corpo que não encosta', () => {
     await waitFor(() => expect(screen.queryByTestId('guarda-corpos-soltos')).toBeNull());
   }, 60000);
 });
+
+/**
+ * ESTENDER ATÉ A FACE (24/09/2026, P2.58) — a integração.
+ *
+ * A conta e o painel têm testes próprios. Este caso existe porque o fio entre
+ * eles passa por três pontos que os outros não cobrem: o memo depende da parede
+ * SELECIONADA, mora depois de `paredeSel` (TDZ) e alimenta um painel montado em
+ * dois lugares.
+ */
+describe('BlueprintEditor · estender parede até a face', () => {
+  it('a parede selecionada oferece o botão, e o clique encosta na face', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    // Horizontal parando a 1 m de uma vertical de 200 mm: face em x = 4900.
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [
+        { type: 'AddWall', levelId: t, a: k.point(0, 0), b: k.point(4000, 0), thicknessMm: 150, heightMm: 2800 },
+        { type: 'AddWall', levelId: t, a: k.point(5000, -3000), b: k.point(5000, 3000), thicknessMm: 200, heightMm: 2800 },
+      ]).model,
+    );
+    await montar();
+    const user = userEvent.setup();
+    await abrirComponentes(user);
+    await user.click(await screen.findByRole('button', { name: /^Parede 1/ }));
+
+    const bloco = await screen.findByTestId('estender-ate-face');
+    expect(bloco).toHaveTextContent('Estender fim 900 mm');
+    // O atalho do eixo aparece porque o alvo é parede (tem eixo).
+    expect(screen.getByTestId('estender-eixo-b')).toBeInTheDocument();
+
+    await user.click(within(bloco).getByRole('button', { name: /Estender fim 900 mm/ }));
+    // A ponta parou na FACE: o botão some, porque não há mais o que estender.
+    await waitFor(() => expect(screen.queryByTestId('estender-ate-face')).toBeNull());
+  }, 60000);
+});

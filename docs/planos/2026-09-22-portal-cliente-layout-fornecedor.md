@@ -149,3 +149,18 @@ coral e metade azul seria trocar um desencontro por outro.
 | # | Arquivo | O que muda | Como sei que terminou |
 |---|---|---|---|
 | 12 | `components/client/UnidadeTab.tsx`, `components/client/CondominioTab.tsx` | Banner coral de 104px → **69px**: `py-6`→`py-3.5`, `px-6 md:px-10`→`px-5 md:px-6`, título `text-xl md:text-2xl`→`text-lg`, ícone 20→16px, subtítulo `text-sm mt-1`→`text-xs mt-0.5`, valor `text-lg md:text-xl`→`text-base`, alinhamento `items-start`→`items-center` | ✅ Playwright: altura medida 69px na aba Dados da Unidade; print `relatorios/cores/banner_menor.png`; nada de conteúdo removido |
+
+## Pedido 9 (23/09/2026)
+
+> veja print que no topo da tela a esquerda temos Portal do Cliente e Área do Cliente. Esta redundante: substituir Área do Cliente, por uma Olá, e o apelido do cliente cadastrado em Minha organização < meus clientes
+
+⚠️ O cadastro de clientes **não tinha** campo de apelido (o de fornecedores tem
+"Nome fantasia" = `suppliers.nickname`). Perguntado, o usuário escolheu
+**criar o campo** em vez de usar o primeiro nome.
+
+| # | Arquivo | O que muda | Como sei que terminou |
+|---|---|---|---|
+| 13 | `supabase/migrations/aplicar_20270923000001_clients_nickname.sql` (novo) | `clients.nickname text` (mesmo nome da coluna do fornecedor) | ✅ aplicada por `db query` no banco remoto; `information_schema` confirma |
+| 14 | `types/users.ts`, `services/clientService.ts` | `Client.nickname`; coluna no 1º degrau do `listClients` + degrau novo sem ela (regra do próprio arquivo) | ✅ `tsc` limpo; a lista continua carregando se a migration não estiver aplicada |
+| 15 | `components/ClientForm.tsx`, `components/ClientList.tsx` | Campo "Apelido" ao lado do nome (Dados gerais); coluna "Apelido" na tabela, `defaultHidden` | ✅ print `relatorios/apelido/form_apelido.png` |
+| 16 | `App.tsx`, `components/ClientArea.tsx` | `nickname` entra no mapa campo-a-campo do guard de token; topo do portal troca "Área do Cliente" por "Olá, <apelido>" (vazio = primeiro nome); a saudação do dashboard usa a mesma fonte | ✅ Playwright no link público: `h1` do header = "Olá, Zé Roberto" (apelido injetado só na resposta de leitura, nada gravado) |

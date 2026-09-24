@@ -14,6 +14,10 @@ export interface Client {
     id: string;
     code?: string;
     name: string;
+    /** Apelido / nome fantasia — mesmo vocabulário de `Supplier.nickname`.
+     *  É a saudação do Portal do Cliente ("Olá, <apelido>"); vazio = primeiro
+     *  nome de `name`. Migration aplicar_20270923000001. */
+    nickname?: string;
     email?: string;
     phone?: string;
     document?: string;

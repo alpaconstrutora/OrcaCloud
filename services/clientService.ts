@@ -76,14 +76,20 @@ export const clientService = {
         // Regra ao acrescentar coluna nova: ela entra APENAS no primeiro
         // degrau, e ganha um degrau novo logo abaixo, sem ela.
         const BASE = 'id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency';
+        const BASE_SEM_APELIDO = BASE;
+        const BASE_COM_APELIDO = `${BASE}, nickname`;
         const COMUM = 'type, category, portal, portal_tabs, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)';
         const QUALIFICACAO = 'nationality, profession, marital_status, marital_regime, spouse_name, spouse_document';
         const REPRESENTANTE = 'legal_rep_name, legal_rep_document, legal_rep_rg, legal_rep_rg_uf, legal_rep_rg_issuing_agency, legal_rep_nationality, legal_rep_role';
 
         const DEGRAUS: { cols: string; aviso?: string }[] = [
-            { cols: `${BASE}, ${QUALIFICACAO}, ${REPRESENTANTE}, status, is_shared, ${COMUM}` },
+            { cols: `${BASE_COM_APELIDO}, ${QUALIFICACAO}, ${REPRESENTANTE}, status, is_shared, ${COMUM}` },
             {
-                // Degrau novo (regra acima): igual ao de cima, sem `is_shared`.
+                // Degrau novo (regra acima): igual ao de cima, sem `nickname`.
+                cols: `${BASE_SEM_APELIDO}, ${QUALIFICACAO}, ${REPRESENTANTE}, status, is_shared, ${COMUM}`,
+                aviso: 'Coluna nickname ausente — aplique a migration aplicar_20270923000001. O portal saúda pelo primeiro nome até lá.',
+            },
+            {
                 cols: `${BASE}, ${QUALIFICACAO}, ${REPRESENTANTE}, status, ${COMUM}`,
                 aviso: 'Coluna is_shared ausente — aplique a migration aplicar_20270914000018. Cliente compartilhado aparece como da organização dona até lá.',
             },

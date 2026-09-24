@@ -75,6 +75,10 @@ const ClientPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
         setClientData({
           id: cli.id,
           name: cli.name,
+          // Apelido — a saudação do topo do portal ("Olá, ___"). Este mapa é
+          // campo a campo: coluna nova de `clients` que o portal precise ver
+          // tem de entrar aqui também, senão chega da RPC e morre no caminho.
+          nickname: cli.nickname,
           email: cli.email,
           phone: cli.phone,
           document: cli.document,

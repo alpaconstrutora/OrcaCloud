@@ -319,7 +319,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialData, onSubmit, onClose 
                                             />
                                         </div>
                                     )}
-                                    <div className={initialData ? 'md:col-span-3' : 'md:col-span-4'}>
+                                    <div className={initialData ? 'md:col-span-2' : 'md:col-span-3'}>
                                         <label className={LABEL}>Nome completo / Razão social</label>
                                         <div className="relative">
                                             <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -331,6 +331,18 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialData, onSubmit, onClose 
                                                 autoFocus
                                             />
                                         </div>
+                                    </div>
+                                    {/* Apelido — é a saudação do Portal do Cliente ("Olá, ___").
+                                        Vazio, o portal usa o primeiro nome. */}
+                                    <div>
+                                        <label className={LABEL}>Apelido</label>
+                                        <input
+                                            type="text"
+                                            className={INPUT}
+                                            placeholder="Como o cliente é chamado"
+                                            value={formData.nickname ?? ''}
+                                            onChange={(e) => update({ nickname: e.target.value })}
+                                        />
                                     </div>
                                 </div>
 

@@ -3854,7 +3854,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     // Título único por aba (guia §19.1/§20) — o mesmo desenho do Portal do
     // Fornecedor (`SupplierDashboard.TAB_META`): h1 + subtítulo trocam com a aba,
     // e o conteúdo da aba não repete o título.
-    const primeiroNome = clientProfile?.name?.split(' ')[0];
+    const primeiroNome = clientProfile?.nickname?.trim() || clientProfile?.name?.split(' ')[0];
     // `Partial` porque o tipo ainda carrega 'clientes' (id legado, sem aba em ALL_TABS).
     const TAB_META: Partial<Record<ClientAreaTabId, { title: string; subtitle: string }>> = {
         dashboard: {
@@ -3906,6 +3906,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     // No app autenticado a navegação já vem do Layout global — não duplicar.
     const isStandalone = !!portalToken;
     const clientDisplayName = clientProfile?.name || settings.name || 'Cliente';
+    /** Apelido cadastrado em Meus Clientes; vazio, o primeiro nome. É a saudação
+     *  do portal — pedido do usuário em 23/09/2026, porque "Área do Cliente" ao
+     *  lado do badge "PORTAL DO CLIENTE" dizia a mesma coisa duas vezes. */
+    const apelidoCliente = clientProfile?.nickname?.trim() || clientProfile?.name?.split(' ')[0] || '';
 
     // §19.3/§19.4 — `chromeSlot`: a barra de abas é montada UMA vez aqui e
     // renderizada DENTRO de cada aba, na posição que a anatomia pede
@@ -3997,7 +4001,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <div className="px-2.5 py-1 bg-[#E1553C] text-white rounded-lg text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
                             <Home className="w-3.5 h-3.5" /> Portal do Cliente
                         </div>
-                        <h1 className="text-md font-bold text-gray-900 tracking-tight">Área do Cliente</h1>
+                        <h1 className="text-md font-bold text-gray-900 tracking-tight">{apelidoCliente ? `Olá, ${apelidoCliente}` : 'Bem-vindo'}</h1>
                     </div>
                     {/* Menu de conta — CÓPIA do Portal do Fornecedor (SupplierDashboard, casca
                         standalone): mesmas classes, mesma cor, mesmos 4 itens e mesmas ações.

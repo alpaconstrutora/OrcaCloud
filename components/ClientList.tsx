@@ -38,6 +38,9 @@ interface ClientListProps {
 const CLIENT_COLUMNS: ColumnConfig[] = [
     { key: 'code', label: 'Código', sortable: true },
     { key: 'name', label: 'Cliente', sortable: true },
+    // Apelido: é a saudação do Portal do Cliente. Oculta por padrão — a tabela já
+    // tem 9 colunas e o nome basta para achar a linha (§6.1 / defaultHidden).
+    { key: 'nickname', label: 'Apelido', sortable: true, defaultHidden: true },
     { key: 'category', label: 'Tipo', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
     { key: 'organization', label: 'Organização', sortable: true },
@@ -49,7 +52,7 @@ const CLIENT_COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    code: 118, name: 220, category: 130, status: 110, organization: 180, contact: 200, document: 150, projects: 236, portal: 150, actions: 190,
+    code: 118, name: 220, nickname: 160, category: 130, status: 110, organization: 180, contact: 200, document: 150, projects: 236, portal: 150, actions: 190,
 };
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -214,6 +217,8 @@ function renderClientCell(
                     <span className="text-sm font-normal text-gray-700">{client.name}</span>
                 </div>
             );
+        case 'nickname':
+            return <span className="text-sm font-normal text-gray-700">{client.nickname || '—'}</span>;
         case 'category':
             return <CategoryLabel category={client.category} />;
         case 'status':
@@ -277,6 +282,7 @@ function renderClientCell(
 function getAdvancedFilterValue(c: Client, key: string): unknown {
     switch (key) {
         case 'name': return c.name ?? '';
+        case 'nickname': return c.nickname ?? '';
         case 'email': return c.email ?? '';
         case 'document': return c.document ?? '';
         case 'organization': return c.organization_name ?? '';

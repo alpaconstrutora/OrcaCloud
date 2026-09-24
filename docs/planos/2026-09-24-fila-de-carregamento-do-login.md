@@ -111,8 +111,70 @@ bytes) alivia, mas não resolve.
 | C | Investigar por que 7 RPCs levam 5,5 s | some o pior da latência | Médio: é trabalho de banco (plano, índice, RLS), não de front |
 | D | Escalonar a rajada (fila com concorrência limitada no client) | tira o pico de 17 | Médio: muda o comportamento de carregamento do app inteiro |
 
+## Execução do item A — e a correção de rota no meio dele
+
+O usuário escolheu **A + badge agora, C como frente própria**.
+
+### ⚠️ A minha hipótese sobre A estava errada, e a medição corrigiu
+
+Eu havia escrito que os dois `GET projects` eram "store + árvore de contexto".
+Ao instrumentar `window.fetch` e capturar a **pilha de chamada** de cada uma
+(`c:/tmp/pwtest/quem-chama-projects.js`), as duas vieram do MESMO lugar:
+
+```
+at async Object.listProjects (services/projectService.ts)
+at async fetchProjects      (store/useStore.ts)
+```
+
+A árvore de contexto **não busca nada no login**: `ContextSelector` só passa
+`everOpened=true` depois do primeiro clique no seletor. Ela nunca foi a segunda
+chamada.
+
+### A causa real da duplicata: um parâmetro morto na lista de dependências
+
+`fetchProjects(organizations)` **nunca usou** o parâmetro — a organização sai de
+`activeOrganizationId` do próprio store (REGRA #5). Mas `organizations` estava
+na lista de dependências do efeito em `App.tsx:487`, e a identidade do array
+muda quando `fetchOrganizations` resolve. O efeito refazia a busca inteira.
+
+Correção: o parâmetro saiu da assinatura (o compilador apontou as 4 chamadas) e
+das dependências, em `App.tsx` e em `DiaryProjectsList.tsx`.
+
+### E o `lean` continua valendo — para quando a árvore ABRE
+
+A projeção enxuta ficou, porque abrir o seletor de contexto baixava 1,2 MB para
+desenhar uma árvore que usa 7 campos.
+
+⚠️ O risco dessa projeção era **falhar em silêncio**: se
+`settings->>isSystemProject` (chave camelCase) voltasse nulo, `onlyObras` e
+`excludeSystemProjects` passariam a mentir sem erro nenhum. Exercitado na tela,
+com o corpo da resposta inspecionado:
+
+- `s_classification` preenchido em **30/30** linhas
+- distribuição `{OBRA: 18, ORCAMENTO: 6, DIARIO: 3, PLANEJAMENTO: 3}` — bate com o banco
+- `s_is_system` não-nulo em **3/30**, todos `'true'` — os três projetos de sistema
+- a árvore monta (Bella Vista, Garden na tela)
+
+## Resultado medido
+
+| Momento | Antes | Depois |
+|---|---|---|
+| `GET projects` no login | 2 × 1.193 KB = **2.386 KB** | 1 × 1.193 KB |
+| `GET projects` ao abrir o seletor de contexto | 1.193 KB | **13 KB** |
+| Badge de notificações, por ciclo | 95 KB | **0 bytes** |
+
+**~2,4 MB a menos no carregamento**, e o badge deixou de trafegar 95 KB a cada
+60 s.
+
+### O que NÃO foi feito
+
+- **B** (tirar `settings` do `listProjects` por padrão) — segue de pé: o login
+  ainda baixa 1.193 KB de cronograma, WBS, diário e financeiro para listar obra.
+- **C** (as 7 RPCs de 5,2–5,5 s) — frente própria, como combinado.
+- **D** (limitar concorrência) — não avaliado.
+
 ## Estado
 
-Investigação concluída — 24/09/2026. Nada alterado por conta dela.
-A correção do badge está commitada em `feat/equipamento-abort-unread`, não
-publicada.
+Item A e badge concluídos e verificados — 24/09/2026.
+Mecânica: `tsc` limpo · `build` limpo · **5.166 testes** · `check-ui-standard`
+limpo nos arquivos tocados · os 4 scripts de regra OK · zero erro de console.

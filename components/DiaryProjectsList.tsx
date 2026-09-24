@@ -198,8 +198,11 @@ const DiaryProjectsList: React.FC<DiaryProjectsListProps> = ({
     const reload = React.useCallback(() => {
         // Sem organização ativa ("Todas as organizações") a leitura NÃO é bloqueada —
         // o service não filtra e a RLS recorta (CLAUDE.md regra #5).
-        void fetchProjects(storeOrganizations as never);
-    }, [fetchProjects, storeOrganizations]);
+        void fetchProjects();
+        // `storeOrganizations` saiu daqui junto com o parâmetro: `fetchProjects`
+        // nunca leu a lista, e mantê-la na dependência refazia a busca a cada
+        // mudança de identidade do array.
+    }, [fetchProjects]);
 
     /**
      * Mesmo recorte que a tela usava antes: projetos classificados como DIARIO

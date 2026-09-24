@@ -86,7 +86,7 @@ export const CriarObraDoEmpreendimento: React.FC<Props> = ({
       }
 
       // A obra nova precisa entrar no store para aparecer nos seletores de obra.
-      fetchProjects(organizations);
+      fetchProjects();
       onCreated(saved.id, settings.name);
     } catch (err: any) {
       onError(`Erro ao criar a obra: ${err.message}`);

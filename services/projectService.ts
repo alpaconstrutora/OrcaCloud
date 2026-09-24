@@ -20,6 +20,23 @@ import { AnyClassification, onlyClassifications } from '../utils/projectClassifi
  * literal `=== 'OBRA'`, não "chamou e usou direto".
  */
 export interface ListProjectsOptions {
+    /**
+     * Traz só as CHAVES ESCALARES de `settings` que a filtragem e um seletor
+     * precisam — `classification`, `isSystemProject`, `name`, `organizationId`,
+     * `code` — em vez da coluna JSONB inteira.
+     *
+     * Medido em produção (24/09/2026): `GET projects` baixava **1.193 KB** e
+     * rodava DUAS vezes no login (store + árvore de contexto) = 2,4 MB, 80% de
+     * todo o tráfego do carregamento. O peso está dentro de `settings`:
+     * `planningVersions` 472 kB, `schedule` 325 kB, `financialInfo` 215 kB,
+     * `wbs` 67 kB, `diaryEntries` 75 kB — tudo baixado e descartado por quem só
+     * queria montar uma lista de obras.
+     *
+     * ⚠️ O `settings` devolvido no modo enxuto é PARCIAL e existe só para os
+     * filtros e para rótulo. Quem lê qualquer outra chave (cronograma, WBS,
+     * financeiro) NÃO pode usar `lean`.
+     */
+    lean?: boolean;
     /** Filtra por `settings.clientId`. */
     clientId?: string;
     /** `null`/`undefined` = "Todas as organizações": não filtra, a RLS recorta (regra #5). */
@@ -221,11 +238,27 @@ export const projectService = {
             empresaId,
             includeSystemProjects = false,
             classifications = ['OBRA'],
+            lean = false,
         } = opcoes;
+
+        // As cinco chaves que os filtros desta função e o seletor de contexto
+        // leem de `settings`. `->>` devolve texto, então `isSystemProject` volta
+        // como 'true'/'false' e precisa ser convertido — `isSystemProject()`
+        // compara com `=== true`, e a string 'false' passaria como verdadeira
+        // num teste de veracidade ingênuo.
+        const COLS_LEAN =
+            'id, name, updated_at, created_at, code, empresa_id, investor_id, organization_id,'
+            + ' s_classification:settings->>classification,'
+            + ' s_is_system:settings->>isSystemProject,'
+            + ' s_name:settings->>name,'
+            + ' s_org:settings->>organizationId,'
+            + ' s_code:settings->>code';
 
         let query = supabase
             .from('projects')
-            .select('id, name, updated_at, created_at, settings, code, empresa_id, investor_id, organization_id')
+            .select(lean
+                ? COLS_LEAN
+                : 'id, name, updated_at, created_at, settings, code, empresa_id, investor_id, organization_id')
             .order('updated_at', { ascending: false });
 
         if (clientId) {
@@ -245,7 +278,25 @@ export const projectService = {
 
         const { data, error } = await query;
         if (error) throw error;
-        const rows = data ?? [];
+
+        // Remonta um `settings` PARCIAL para os filtros abaixo e para quem
+        // consome — eles leem `p.settings?.x`, e não têm de saber que a
+        // consulta foi enxuta.
+        const rows = lean
+            ? (data ?? []).map((r: any) => {
+                const { s_classification, s_is_system, s_name, s_org, s_code, ...resto } = r;
+                return {
+                    ...resto,
+                    settings: {
+                        classification: s_classification ?? undefined,
+                        isSystemProject: s_is_system === 'true',
+                        name: s_name ?? undefined,
+                        organizationId: s_org ?? undefined,
+                        code: s_code ?? undefined,
+                    },
+                };
+            })
+            : (data ?? []);
         const semSistema = includeSystemProjects ? rows : excludeSystemProjects(rows);
         return classifications === 'ALL'
             ? semSistema

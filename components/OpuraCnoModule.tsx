@@ -716,7 +716,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
               </div>
 
               <button
-                onClick={() => fetchProjects(organizations)}
+                onClick={() => fetchProjects()}
                 disabled={projectsLoading}
                 title="Atualizar"
                 className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95 disabled:opacity-50"

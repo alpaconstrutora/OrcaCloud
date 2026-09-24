@@ -482,9 +482,12 @@ const App: React.FC = () => {
 
   React.useEffect(() => {
     if (session?.user?.id) {
-      fetchProjects(organizations);
+      fetchProjects();
     }
-  }, [projectId, fetchProjects, organizations, session?.user?.id, activeOrganizationId]);
+    // `organizations` saiu das dependências junto com o parâmetro: a busca não
+    // usava a lista, mas a identidade do array mudava quando
+    // `fetchOrganizations` resolvia — e o efeito refazia 1,2 MB de `projects`.
+  }, [projectId, fetchProjects, session?.user?.id, activeOrganizationId]);
 
   React.useEffect(() => {
     // Sem activeOrganizationId ("Todas as organizações"), NÃO bloquear a

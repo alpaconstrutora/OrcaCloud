@@ -123,7 +123,18 @@ interface ProjectState {
     setBudget: (budget: BudgetEntry[]) => void;
     setProjectSettings: (settings: ProjectSettings) => void;
     setFavorites: (favorites: string[] | ((prev: string[]) => string[])) => void;
-    fetchProjects: (organizations: Organization[]) => Promise<void>;
+    /**
+     * Recarrega a lista de projetos. **Não recebe parâmetro**: a organização
+     * vem de `activeOrganizationId` do próprio store (REGRA #5).
+     *
+     * Até 24/09/2026 recebia `organizations: Organization[]` e NUNCA o usava —
+     * e esse parâmetro morto tinha custo real: em `App.tsx` ele entrava na
+     * lista de dependências do efeito, então a identidade do array mudava
+     * quando `fetchOrganizations` resolvia e a busca inteira rodava DE NOVO.
+     * Medido em produção: `GET projects` = 1.193 KB, duas vezes, 80% de todo
+     * o tráfego do login.
+     */
+    fetchProjects: () => Promise<void>;
     fetchClients: () => Promise<void>;
     fetchOrganizations: () => Promise<void>;
     activeOrganizationId: string | null;
@@ -284,7 +295,7 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
     setFavorites: (favs) => set((state) => ({
         favorites: typeof favs === 'function' ? (favs as (prev: string[]) => string[])(state.favorites) : favs
     })),
-    fetchProjects: async (organizations) => {
+    fetchProjects: async () => {
         set({ projectsLoading: true });
         try {
             const { activeOrganizationId } = get();

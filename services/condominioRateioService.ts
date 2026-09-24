@@ -86,6 +86,20 @@ export interface CentroDeCustoDisponivel {
  */
 export interface LancamentoDoCondominio {
     id: string;
+    /**
+     * Código do DOCUMENTO de origem — hoje o nº do boleto, com os mesmos 4
+     * dígitos que a Conciliação Bancária usa (`loadOriginCodes` em
+     * `components/BankReconciliation.tsx`), para o mesmo título não ter dois
+     * códigos diferentes em duas telas.
+     *
+     * `null` quando a origem não tem código próprio. Medido em 24/09/2026:
+     * as 136 despesas de condomínio da base são TODAS `BOLETO` e todas com
+     * `reference_id`, então só essa origem é resolvida aqui. Outra origem
+     * (NFE, MANUAL, PURCHASE_ORDER) cai em `null` e a célula mostra "—" —
+     * de propósito: inventar um código a partir do uuid seria pior que
+     * admitir que não há um.
+     */
+    codigo: string | null;
     data: string;
     descricao: string;
     valor: number;
@@ -669,7 +683,7 @@ export const condominioRateioService = {
 
         const { data, error } = await supabase
             .from('internal_transactions')
-            .select('id, description, amount, transaction_date, cost_center_id, party_name, entity_name, source_system')
+            .select('id, description, amount, transaction_date, cost_center_id, party_name, entity_name, source_system, reference_id')
             .in('cost_center_id', params.costCenterIds)
             .eq('direction', 'DEBIT')
             .gte('transaction_date', inicio)
@@ -683,6 +697,19 @@ export const condominioRateioService = {
         // Rótulo do centro de custo, em lote.
         const ccs = await this.getCentrosDeCustoPorEmpreendimentoNomes(params.costCenterIds);
 
+        // Código do documento, em lote. Best-effort como na Conciliação: sem
+        // permissão de leitura em `boletos` a coluna fica vazia, mas a lista
+        // de despesas continua de pé.
+        let codigos = new Map<string, string>();
+        try {
+            codigos = await this.codigosDeBoleto(
+                linhas.filter((l: any) => l.source_system === 'BOLETO' && l.reference_id)
+                    .map((l: any) => l.reference_id as string),
+            );
+        } catch {
+            // Idem: falhar aqui só apaga a coluna Código.
+        }
+
         let emRateio = new Map<string, string>();
         try {
             emRateio = await this.competenciaDosRateios(linhas.map((l: any) => l.id as string));
@@ -694,6 +721,9 @@ export const condominioRateioService = {
             const comp = emRateio.get(l.id as string) ?? null;
             return {
                 id: l.id as string,
+                codigo: (l.source_system === 'BOLETO' && l.reference_id)
+                    ? (codigos.get(l.reference_id as string) ?? null)
+                    : null,
                 data: l.transaction_date as string,
                 // Mesma poda de rótulo do rateio: na origem BOLETO a descrição é
                 // nome de arquivo ou bloco de OCR. Ver `utils/despesaCondominio.ts`.
@@ -708,6 +738,34 @@ export const condominioRateioService = {
                 rateioCompetencia: comp,
             };
         });
+    },
+
+    /**
+     * `boleto.id → nº com 4 dígitos`. Mesma regra da Conciliação Bancária
+     * (`loadOriginCodes`): `String(numero).padStart(4, '0')`.
+     *
+     * Aqui a chave é o `reference_id` do lançamento porque, na origem BOLETO,
+     * ele é o id do boleto puro — sem os sufixos compostos que as origens de
+     * contrato usam (ver `lib/receivableRef.ts` e o aviso de 22P02 em
+     * `BankReconciliation.tsx`). Por isso este método não tenta desmontar a
+     * referência: se a origem não for BOLETO, ela nem chega aqui.
+     */
+    async codigosDeBoleto(boletoIds: string[]): Promise<Map<string, string>> {
+        const mapa = new Map<string, string>();
+        const ids = [...new Set(boletoIds)];
+        if (ids.length === 0) return mapa;
+
+        const { data, error } = await supabase
+            .from('boletos')
+            .select('id, numero')
+            .in('id', ids);
+        if (error) throw new Error(`Falha ao carregar os códigos: ${error.message}`);
+
+        for (const b of data || []) {
+            if (b.numero == null) continue;
+            mapa.set(b.id as string, String(b.numero).padStart(4, '0'));
+        }
+        return mapa;
     },
 
     /**

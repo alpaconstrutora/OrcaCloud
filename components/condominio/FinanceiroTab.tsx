@@ -228,10 +228,10 @@ const TabelaCotas: React.FC<{ cotas: CotaDoRateio[] }> = ({ cotas }) => (
     </div>
 );
 
-// Larguras da aba Despesas. Soma = 1.100px; a folga vai para o `<col />`
+// Larguras da aba Despesas. Soma = 1.200px; a folga vai para o `<col />`
 // espaçador (§6.1.1), não se espalha pelas colunas de dado.
 const LARGURAS_DESPESAS: Record<string, number> = {
-    data: 110, descricao: 300, fornecedor: 220, origem: 120, centro: 190, situacao: 150, valor: 130,
+    codigo: 100, data: 110, descricao: 300, fornecedor: 220, origem: 120, centro: 190, situacao: 150, valor: 130,
 };
 
 /** Lançamentos do caixa do condomínio — a aba Despesas.
@@ -288,6 +288,7 @@ const TabelaLancamentos: React.FC<{
                 style={{ tableLayout: 'fixed', width: larguraTotal, minWidth: '100%' }}
             >
                 <colgroup>
+                    <col data-col-key="codigo" style={{ width: `${cols.getWidth('codigo')}px` }} />
                     <col data-col-key="data" style={{ width: `${cols.getWidth('data')}px` }} />
                     <col data-col-key="descricao" style={{ width: `${cols.getWidth('descricao')}px` }} />
                     <col data-col-key="fornecedor" style={{ width: `${cols.getWidth('fornecedor')}px` }} />
@@ -302,6 +303,7 @@ const TabelaLancamentos: React.FC<{
                 </colgroup>
                 <thead>
                     <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                        <th className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden relative">Código<cols.ResizeHandle colKey="codigo" /></th>
                         <th className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden relative">Data<cols.ResizeHandle colKey="data" /></th>
                         <th className="px-6 py-2 border-r border-gray-100 overflow-hidden relative">Descrição<cols.ResizeHandle colKey="descricao" /></th>
                         <th className="px-6 py-2 border-r border-gray-100 overflow-hidden relative">Fornecedor<cols.ResizeHandle colKey="fornecedor" /></th>
@@ -315,6 +317,12 @@ const TabelaLancamentos: React.FC<{
                 <tbody className="divide-y divide-gray-200">
                     {lancamentos.map(l => (
                         <tr key={l.id} className="hover:bg-blue-50/50 transition-colors">
+                            {/* Código do documento (hoje, nº do boleto). Origem sem
+                                código próprio mostra "—" — ver o comentário do
+                                campo em `condominioRateioService`. */}
+                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 whitespace-nowrap">
+                                {l.codigo ?? <span className="text-gray-400">—</span>}
+                            </td>
                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
                                 {dataBR(l.data)}
                             </td>
@@ -365,7 +373,7 @@ const TabelaLancamentos: React.FC<{
                 </tbody>
                 <tfoot>
                     <tr className="bg-gray-50 border-t border-gray-200">
-                        <td className="px-6 py-2.5 text-sm font-normal text-gray-500" colSpan={7}>
+                        <td className="px-6 py-2.5 text-sm font-normal text-gray-500" colSpan={8}>
                             {lancamentos.length} lançamento(s) em {mes}
                         </td>
                         <td className="px-6 py-2.5 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
@@ -872,7 +880,8 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
         // A busca alcança as colunas VISÍVEIS: coluna que a busca não enxerga
         // faz o usuário digitar "boleto" e a linha sumir.
         return lancamentos.filter(l =>
-            l.descricao.toLowerCase().includes(t)
+            (l.codigo ?? '').toLowerCase().includes(t)
+            || l.descricao.toLowerCase().includes(t)
             || l.fornecedor.toLowerCase().includes(t)
             || origemLabel(l.origem).toLowerCase().includes(t)
             || l.costCenterLabel.toLowerCase().includes(t));
@@ -1097,7 +1106,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                 type="text"
                                 placeholder={subAba === 'rateios'
                                     ? 'Buscar por competência ou critério...'
-                                    : 'Buscar por descrição, fornecedor, origem ou centro de custo...'}
+                                    : 'Buscar por código, descrição, fornecedor, origem ou centro de custo...'}
                                 value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)}
                                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
@@ -1389,7 +1398,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                     <SheetTitle>Novo rateio</SheetTitle>
                     <SheetDescription>{empreendimento.name}</SheetDescription>
                 </SheetHeader>
-                <SheetPanel>
+                <SheetPanel className="p-6">
                     {/* §30 — malha do formulário. Antes: `mt-1` (4px) entre
                         rótulo e campo, `gap-3` (12px) entre campos, tudo num
                         `space-y-4` sem seção, e o Critério — um `<select>` —
@@ -1676,7 +1685,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                         {sheetDetalhe && `${rotuloCompetencia(sheetDetalhe.competencia)} · ${CRITERIO_LABEL[sheetDetalhe.criterio]} · ${STATUS_LABEL[sheetDetalhe.status]}`}
                     </SheetDescription>
                 </SheetHeader>
-                <SheetPanel>
+                <SheetPanel className="p-6">
                     {carregandoDetalhe ? (
                         <div className="text-center py-12">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
@@ -1748,7 +1757,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                         {sheetCobranca && `${rotuloCompetencia(sheetCobranca.competencia)} · ${sheetCobranca.tipo === 'EXTRAORDINARIO' ? 'Extraordinário' : 'Ordinário'} · ${dinheiro(sheetCobranca.total_rateado)}`}
                     </SheetDescription>
                 </SheetHeader>
-                <SheetPanel>
+                <SheetPanel className="p-6">
                     {/* §30, mesma malha do "Novo rateio": par rótulo/campo em
                         6px, grade 24/16px, seção com título e linha, 32px entre
                         seções. As duas sheets vivem na mesma aba — deixar só uma
@@ -1863,7 +1872,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                         {resultado && `${rotuloCompetencia(resultado.rateio.competencia)} · ${resultado.rateio.number || 'sem número'}`}
                     </SheetDescription>
                 </SheetHeader>
-                <SheetPanel>
+                <SheetPanel className="p-6">
                     {resultado && (
                         <div className="space-y-4">
                             <div className="flex items-start gap-3 p-3 rounded-[10px] border border-gray-200">

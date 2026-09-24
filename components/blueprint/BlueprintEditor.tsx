@@ -14,6 +14,7 @@ import {
   FlipHorizontal2,
   FlipVertical2,
   RotateCcw,
+  MoveRight,
   RotateCw,
   Link2,
   AlignStartVertical,
@@ -2770,6 +2771,23 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         : [],
     [editor.model, levelId, toleranciaDeUnificacao, mirarCatalogo, medidasComerciais],
   );
+  /**
+   * Estende a parede selecionada até a face, pelo botão de ícone da barra (P2.59).
+   *
+   * ⚠️ TODAS as pontas com alvo, num lote só. O painel da parede oferece ponta
+   * a ponta (e o atalho "até o eixo"); o botão da barra é o gesto rápido de quem
+   * já sabe o que quer — um clique, um passo de desfazer. Sem alvo ele nem
+   * habilita, então não há clique que não faça nada.
+   */
+  function estenderSelecionadaAteAFace() {
+    if (extensoesDaParedeSelecionada.length === 0) return;
+    try {
+      editor.runBatch(extensoesDaParedeSelecionada.map((e) => comandoDeEstender(e, false)));
+    } catch (err) {
+      setAvisoConexaoT(err instanceof Error ? `O desenho recusou: ${err.message}` : 'O desenho recusou a extensão.');
+    }
+  }
+
   const esquadriasSemTipo = useMemo(
     () => (quant.totais.porEsquadria ?? []).filter((e) => !e.declarada).reduce((soma, e) => soma + e.quantidade, 0),
     [quant],
@@ -7949,6 +7967,22 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   rotulo="Alinhar à referência — a última parede selecionada"
                   onClick={alinhar}
                   disabled={editor.selectedIds.length < 2}
+                />
+                {/* ESTENDER ATÉ A FACE (P2.59). O usuário perguntou onde estava a
+                    ferramenta: ela nascera no rodapé do painel da parede, abaixo da
+                    dobra. Aqui ela fica à vista, no grupo de quem edita o que já
+                    está desenhado — e o título diz quanto vai andar antes do clique. */}
+                <BotaoBarra
+                  icone={MoveRight}
+                  rotulo={
+                    extensoesDaParedeSelecionada.length === 0
+                      ? 'Estender até a face — selecione uma parede que tenha parede ou pilar à frente (até 3 m)'
+                      : `Estender até a face: ${extensoesDaParedeSelecionada
+                          .map((e) => `${e.end === 'a' ? 'início' : 'fim'} ${e.distanciaMm} mm`)
+                          .join(' e ')}`
+                  }
+                  onClick={estenderSelecionadaAteAFace}
+                  disabled={extensoesDaParedeSelecionada.length === 0}
                 />
                 <BotaoBarra
                   icone={LayoutGrid}

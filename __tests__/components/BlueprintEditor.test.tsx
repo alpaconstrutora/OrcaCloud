@@ -5869,4 +5869,43 @@ describe('BlueprintEditor · estender parede até a face', () => {
     // A ponta parou na FACE: o botão some, porque não há mais o que estender.
     await waitFor(() => expect(screen.queryByTestId('estender-ate-face')).toBeNull());
   }, 60000);
+
+  /**
+   * O BOTÃO DE ÍCONE NA BARRA (P2.59).
+   *
+   * ⚠️ Pedido do usuário depois de perguntar "onde encontro a ferramenta?": ela
+   * nascera no rodapé do painel da parede, abaixo da dobra. Na barra ela fica à
+   * vista — e o título diz quanto vai andar ANTES do clique, porque um botão só
+   * de ícone não tem outro jeito de avisar.
+   */
+  it('o botão de ícone da barra estende a parede selecionada, e só habilita com alvo', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [
+        { type: 'AddWall', levelId: t, a: k.point(0, 0), b: k.point(4000, 0), thicknessMm: 150, heightMm: 2800 },
+        { type: 'AddWall', levelId: t, a: k.point(5000, -3000), b: k.point(5000, 3000), thicknessMm: 200, heightMm: 2800 },
+      ]).model,
+    );
+    await montar();
+    const user = userEvent.setup();
+
+    // Sem seleção: existe, desabilitado, e o título ensina o que fazer.
+    const semSelecao = screen.getByRole('button', { name: /Estender até a face — selecione uma parede/ });
+    expect(semSelecao).toBeDisabled();
+
+    await abrirComponentes(user);
+    await user.click(await screen.findByRole('button', { name: /^Parede 1/ }));
+
+    // Com a parede selecionada, o título passa a dizer QUANTO vai andar.
+    const comAlvo = await screen.findByRole('button', { name: /Estender até a face: fim 900 mm/ });
+    expect(comAlvo).toBeEnabled();
+    await user.click(comAlvo);
+
+    // Estendeu: o botão volta a desabilitar, porque a ponta chegou na face.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Estender até a face — selecione uma parede/ })).toBeDisabled(),
+    );
+  }, 60000);
 });

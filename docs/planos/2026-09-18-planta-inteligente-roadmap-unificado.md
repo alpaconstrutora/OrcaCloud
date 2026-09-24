@@ -2161,6 +2161,21 @@ Depois das duas: de 199 para **111 paredes com alvo**, e as propostas passaram a
 - `__tests__/components/BlueprintEditor.test.tsx` (+1): a integração inteira — o memo depende da parede **selecionada**, mora depois de `paredeSel` (⚠️ TDZ, o mesmo que já derrubou a vista 3D nesta base) e alimenta um painel montado em dois lugares.
 - **App real** (escritas bloqueadas: 3, 0 erros), *Planta 24/09/2026*: selecionando a Parede 26, o painel oferece **"Estender fim 1245 mm"** e o atalho "até o eixo"; o clique aplica e o bloco some, porque a ponta chegou na face.
 
+### P2.59 — Estender vira botão de ícone na barra (24/09/2026) · *"crie um botão (ícone somente) com a função estender"*
+
+**Como isto apareceu.** Publicada a P2.58, a pergunta seguinte foi *"onde encontro a ferramenta?"* — e a resposta expôs o problema: ela nascera no **rodapé do painel da parede**, abaixo de Comprimento, Espessura, Composição e da linha Dividir/Unir. Ou seja, **abaixo da dobra**: quem não rolasse o painel não sabia que existia.
+
+**O que entrou.** Um `BotaoBarra` (só ícone, `title` e `aria-label`) no grupo **Seleção** da barra, ao lado de Duplicar, Espelhar, Girar e Alinhar — o grupo de quem edita o que já está desenhado.
+
+- **Estende TODAS as pontas com alvo de uma vez**, num lote só (um passo de desfazer). O painel continua oferecendo ponta a ponta e o atalho "até o eixo"; o botão da barra é o gesto rápido de quem já sabe o que quer.
+- ⚠️ **O título diz quanto vai andar ANTES do clique** — `Estender até a face: fim 1300 mm`. Num botão só de ícone não há outro jeito de avisar, e estender é ação que muda a geometria.
+- **Sem alvo, não habilita**, e o título vira instrução: *"selecione uma parede que tenha parede ou pilar à frente (até 3 m)"*. Botão que aceita clique e não faz nada é pior que botão desabilitado.
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-ui-standard.sh` ok · `check-xss-sinks.sh` ok · suíte cheia **461 arquivos / 5270 testes** verdes · `npm run build` ok.
+- `__tests__/components/BlueprintEditor.test.tsx` (+1, total no arquivo): sem seleção o botão existe e está **desabilitado**, com o título ensinando; selecionada a parede, o título passa a `Estender até a face: fim 900 mm` e ele habilita; depois do clique **volta a desabilitar**, porque a ponta chegou na face.
+- **App real** (escritas bloqueadas: 3, 0 erros), *Planta 24/09/2026*: com a Parede 26 selecionada, o botão aparece habilitado com `title="Estender até a face: fim 1300 mm"` — a mesma distância que o painel anuncia.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

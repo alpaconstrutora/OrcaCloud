@@ -644,20 +644,35 @@ const Layout: React.FC<LayoutProps> = ({
   }, [activeView, activeOrganizationId]);
 
   const fetchUnreadCount = React.useCallback(async () => {
-    if (!profile.email && !isDev) return;
-    const emailToFilter = isDev ? undefined : profile.email;
+    if (!profile.email) return;
 
     try {
-      const notifications = await notificationService.listNotifications(emailToFilter);
-      const count = notifications.filter(n => !n.isRead).length;
-      setUnreadCount(count);
+      // Só a CONTAGEM (`head: true`): antes isto trazia as linhas inteiras de
+      // todas as notificações e contava `!isRead` em JavaScript, a cada 60 s.
+      //
+      // O filtro por e-mail vale também para o DESENVOLVEDOR. Antes ele era
+      // removido (`isDev ? undefined : profile.email`) e o badge passava a
+      // contar notificação DOS OUTROS — a RLS deixa ver as da organização, e
+      // são 1.236 não lidas de 8 destinatários. Badge é "as minhas não lidas";
+      // a caixa de notificações continua livre para mostrar mais.
+      setUnreadCount(await notificationService.countUnread(profile.email));
     } catch (err) {
+      // Poll abortado (timeout de 20 s do client, aba em segundo plano, rede
+      // caindo) NÃO é erro de aplicação: o próximo poll resolve em 60 s.
+      // Gritar `console.error` aqui foi o que fez parecer, em 24/09/2026, que
+      // um cadastro de equipamento tinha falhado — o erro era deste badge.
+      const transitorio = err instanceof Error
+        && (err.name === 'AbortError' || /abort|failed to fetch|networkerror/i.test(err.message));
+      if (transitorio) {
+        console.warn('Badge de notificações: consulta interrompida, tentando de novo no próximo ciclo.');
+        return;
+      }
       console.error("Failed to fetch unread count:", err);
     }
-  }, [profile.email, isDev]);
+  }, [profile.email]);
 
   React.useEffect(() => {
-    if (!profile.email && !isDev) return;
+    if (!profile.email) return;
 
     fetchUnreadCount();
 
@@ -672,6 +687,11 @@ const Layout: React.FC<LayoutProps> = ({
       fetchUnreadCount();
     }, 60000);
 
+    // ⚠️ Aqui o `isDev` CONTINUA tirando o filtro, de propósito: mexer nisto
+    // muda quais notificações disparam o toast, que não é o que se pediu em
+    // 24/09/2026. Consequência conhecida: para o perfil DESENVOLVEDOR o toast
+    // pode anunciar notificação de outra pessoa. O BADGE, esse sim, passou a
+    // contar só as do próprio usuário (ver `fetchUnreadCount`).
     const emailToFilter = isDev ? undefined : profile.email;
 
     // Subscribe to changes (Supabase Realtime)

@@ -60,6 +60,43 @@ export const notificationService = {
         return (data || []).map(mapNotification);
     },
 
+    /**
+     * Só o NÚMERO de não lidas — para o badge da barra lateral.
+     *
+     * Existe porque o badge usava `listNotifications` e contava `!isRead` em
+     * JavaScript: trazia as linhas inteiras (título, mensagem, link, tipo…) de
+     * TODAS as notificações do usuário, a cada 60 s, a cada evento do Realtime
+     * e a cada `notifications_updated`, para produzir um inteiro. Com 174
+     * notificações isso é payload e parse a troco de nada — e era a requisição
+     * que, na fila de ~30 do carregamento, estourava o timeout de 20 s do
+     * client e cuspia "Failed to fetch unread count: AbortError" no console
+     * (relatado em 24/09/2026, enquanto o usuário cadastrava um equipamento).
+     *
+     * `head: true` não traz linha nenhuma: a contagem volta no `Content-Range`.
+     * O recorte é o MESMO de `listNotifications`, de propósito — badge e caixa
+     * têm de falar do mesmo conjunto, senão o número não bate com a lista.
+     */
+    async countUnread(email?: string, organizationId?: string | null): Promise<number> {
+        let query = supabase
+            .from('notifications')
+            .select('id', { count: 'exact', head: true })
+            .eq('is_read', false);
+
+        if (email) {
+            query = query.eq('recipient_email', email);
+        }
+
+        if (organizationId) {
+            // Mesma regra da listagem: notificação sem organização é pessoal e
+            // acompanha o usuário em qualquer contexto do seletor.
+            query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
+        }
+
+        const { count, error } = await query;
+        if (error) throw error;
+        return count ?? 0;
+    },
+
     async markAsRead(id: string) {
         const { error } = await supabase
             .from('notifications')

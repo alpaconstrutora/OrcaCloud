@@ -1244,6 +1244,10 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
     };
 
     const supplierDisplayName = effectiveSupplier ? getSupplierDisplayName(effectiveSupplier, appSettingsService.get().supplierNameDisplay) : 'Fornecedor';
+    // Saudação do header: usa o APELIDO cadastrado em Minha Organização > Meus
+    // Fornecedores (independente do modo de exibição global), com a razão social
+    // como fallback — o badge ao lado já diz "Portal do Fornecedor".
+    const supplierGreetingName = effectiveSupplier?.nickname?.trim() || effectiveSupplier?.name?.trim() || 'Fornecedor';
 
     // Contas bancárias do bloco "Dados bancários" de Meus dados. Dois caminhos,
     // porque o painel existe nos dois contextos: no portal por link não há
@@ -1305,7 +1309,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                             <div className="px-2.5 py-1 bg-[#E1553C] text-white rounded-lg text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
                                 <Truck className="w-3.5 h-3.5" /> Portal do Fornecedor
                             </div>
-                            <h1 className="text-md font-bold text-gray-900 tracking-tight">Área do Fornecedor</h1>
+                            <h1 className="text-md font-bold text-gray-900 tracking-tight">Olá, {supplierGreetingName}</h1>
                         </div>
                         <div className="relative" ref={accountMenuRef}>
                             <button

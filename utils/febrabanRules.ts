@@ -113,6 +113,61 @@ function toISO(ms: number): string {
 }
 
 /**
+ * O vencimento é uma data possível para um boleto?
+ *
+ * A janela é a MESMA que `resolverFatorVencimento` já usa para desempatar
+ * ciclos (25 anos para trás, 5 para frente) — uma definição só de "data
+ * plausível de boleto", para o desempate e a validação não discordarem.
+ * O piso duro é 07/10/1997, quando o fator de vencimento começou: boleto
+ * anterior a isso não existe.
+ *
+ * ── Por que existe ──────────────────────────────────────────────────────────
+ * Em 24/09/2026 a base tinha um boleto com vencimento **`20023-09-21`** — ano
+ * de cinco dígitos. Veio de um PDF cuja linha digitável não foi encontrada
+ * (`metodo_extracao: pdf_text`, `confidence_score: 0`), então a data saiu do
+ * texto/da digitação, sem passar por nenhum guarda. Um `<input type="date">`
+ * aceita ano de até 275760, e o Postgres aceita o ano 20023 numa coluna `date`
+ * — ninguém no caminho tinha opinião sobre isso.
+ *
+ * Devolve `null` em vez de lançar: data implausível não pode derrubar a
+ * importação de um boleto cujo valor e beneficiário vieram certos. Quem chama
+ * registra o motivo nos avisos e deixa o usuário preencher.
+ */
+export function vencimentoPlausivel(
+    iso: string | null | undefined,
+    referenceDate = new Date(),
+): { ok: true; valor: string | null } | { ok: false; motivo: string } {
+    if (!iso) return { ok: true, valor: null };
+
+    // `YYYY-MM-DD` exato: `new Date()` aceitaria '20023-09-21' e devolveria uma
+    // data válida do ano 20023, que é como o dado entrou.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+        return { ok: false, motivo: `Vencimento "${iso}" não está no formato AAAA-MM-DD.` };
+    }
+
+    const ms = Date.parse(`${iso}T00:00:00Z`);
+    if (Number.isNaN(ms)) return { ok: false, motivo: `Vencimento "${iso}" não é uma data válida.` };
+
+    // Dia que não existe (31/02) vira outro mês no parse — comparar de volta pega.
+    if (toISO(ms) !== iso) return { ok: false, motivo: `Vencimento "${iso}" não é uma data do calendário.` };
+
+    if (ms < BASE_FATOR_ANTIGA) {
+        return { ok: false, motivo: `Vencimento "${iso}" é anterior a 07/10/1997, quando o fator de vencimento começou.` };
+    }
+
+    const teto = Date.UTC(
+        referenceDate.getUTCFullYear() + ANOS_FUTURO_PLAUSIVEL,
+        referenceDate.getUTCMonth(),
+        referenceDate.getUTCDate(),
+    );
+    if (ms > teto) {
+        return { ok: false, motivo: `Vencimento "${iso}" está mais de ${ANOS_FUTURO_PLAUSIVEL} anos no futuro.` };
+    }
+
+    return { ok: true, valor: iso };
+}
+
+/**
  * Converte o fator de vencimento (4 dígitos) em data, dizendo QUAL ciclo usou e
  * se a escolha foi um palpite.
  *

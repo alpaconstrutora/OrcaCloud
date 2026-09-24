@@ -34,6 +34,14 @@ interface BoletoFormModalProps {
 // Mantido o nome exportado para não tocar os call sites existentes (BoletoManager etc.).
 const formatBRL = (v?: number) => formatMoney(v);
 
+/* Barreira de navegador para a data do vencimento — a mesma janela que
+   `vencimentoPlausivel` aplica no service. Sem `min`/`max` o `<input
+   type="date">` aceita ano de até 275760, que foi como um `20023-09-21` entrou
+   na base. O service continua sendo o guarda de verdade: isto só evita ao
+   usuário digitar e só então tomar o erro. */
+const VENCIMENTO_MIN = '1997-10-07';
+const VENCIMENTO_MAX = `${new Date().getFullYear() + 5}-12-31`;
+
 const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     organizationId: initialOrgId, organizations = [], onOrgChange,
     userEmail, projectId, boleto: initial, onClose, onSaved,
@@ -556,6 +564,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                     </FormField>
                                     <FormField label="Vencimento" icon={Calendar}>
                                         <input type="date" value={vencimento}
+                                            min={VENCIMENTO_MIN} max={VENCIMENTO_MAX}
                                             onChange={e => setVencimento(e.target.value)}
                                             className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
                                     </FormField>
@@ -731,6 +740,8 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                         <input
                                             type="date"
                                             value={vencimento}
+                                            min={VENCIMENTO_MIN}
+                                            max={VENCIMENTO_MAX}
                                             onChange={(e) => setVencimento(e.target.value)}
                                             className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
                                         />

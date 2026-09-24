@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import { resolverCategoriaPorId } from './financialCategoryResolver';
 import { sanitizeFileName } from '../utils/storageUtils';
 import { sha256File, extractFromPdfFile, buildExtractionFromLinhaDigitavel } from '../utils/boletoParser';
-import { parseLinhaDigitavel, onlyDigits, nomeBanco } from '../utils/febrabanRules';
+import { parseLinhaDigitavel, onlyDigits, nomeBanco, vencimentoPlausivel } from '../utils/febrabanRules';
 import { financialApprovalService } from './financialApprovalService';
 import type {
     Boleto,
@@ -141,13 +141,21 @@ function mapRowToBoleto(row: any): Boleto {
 }
 
 function extractionToColumns(ext: BoletoExtractionResult) {
+    // Guarda da data (24/09/2026): a base tinha um boleto com vencimento
+    // `20023-09-21` — ano de cinco dígitos, vindo de um PDF sem linha
+    // digitável. Data implausível NÃO derruba a importação: vira `null` mais
+    // um aviso, e o usuário preenche. O valor e o beneficiário podem ter vindo
+    // certos, e perder o boleto inteiro por causa da data seria pior.
+    const venc = vencimentoPlausivel(ext.campos.vencimento.valor);
+    const avisoData = venc.ok ? [] : [venc.motivo];
+
     return {
         linha_digitavel: ext.campos.linha_digitavel.valor,
         codigo_barras: ext.campos.codigo_barras.valor,
         qr_pix: ext.campos.qr_pix.valor,
         valor: ext.campos.valor.valor,
         valor_original: ext.campos.valor_original.valor,
-        vencimento: ext.campos.vencimento.valor,
+        vencimento: venc.ok ? venc.valor : null,
         beneficiario_nome: ext.campos.beneficiario_nome.valor,
         beneficiario_cnpj: ext.campos.beneficiario_cnpj.valor,
         banco_codigo: ext.campos.banco_codigo.valor,
@@ -166,8 +174,8 @@ function extractionToColumns(ext: BoletoExtractionResult) {
            foi justamente esse campo que descartou o falso alarme dos boletos de
            2017 em 15/08/2026. */
         checksum_valido: ext.erros.length === 0,
-        erros_validacao: [...ext.erros, ...(ext.avisos ?? [])].length
-            ? [...ext.erros, ...(ext.avisos ?? [])]
+        erros_validacao: [...ext.erros, ...(ext.avisos ?? []), ...avisoData].length
+            ? [...ext.erros, ...(ext.avisos ?? []), ...avisoData]
             : null,
     };
 }
@@ -388,6 +396,16 @@ export const boletoService = {
         'descricao' | 'observacoes' | 'valor' | 'vencimento' | 'beneficiario_nome' | 'beneficiario_cnpj' |
         'multa' | 'multa_percentual' | 'juros_dia' | 'juros_dia_tipo'
     >>, userEmail?: string): Promise<Boleto> {
+        // Segunda via de escrita do vencimento — o formulário. `<input
+        // type="date">` aceita ano de até 275760, então o guarda vale aqui
+        // também; do contrário a correção da extração seria contornável
+        // digitando. Aqui a data implausível é RECUSADA (e não zerada como na
+        // importação): quem digitou está olhando para o campo e pode corrigir.
+        if (fields.vencimento !== undefined) {
+            const venc = vencimentoPlausivel(fields.vencimento);
+            if (!venc.ok) throw new Error(venc.motivo);
+        }
+
         const { data, error } = await supabase
             .from(TABLE)
             .update(fields)
@@ -565,6 +583,28 @@ export const boletoService = {
 
         if (!txExistente) {
             const hoje = new Date().toISOString().slice(0, 10);
+            /* ── A data de COMPETÊNCIA do título (24/09/2026) ───────────────
+               Até aqui `transaction_date` recebia `hoje` — o dia em que o
+               boleto foi APROVADO. Medido na base: 532 dos 634 títulos de
+               boleto (84%) ficaram com a data da captura, e 508 (80%) foram
+               lançados mais de 30 dias depois do vencimento. O caso que
+               denunciou: 43 boletos da MN Conservação, capturados entre 17/06
+               e 02/07, aprovados todos em 17/09 às 16:28 — e carimbados com
+               17/09/2026, embora vençam entre 2020 e 2023.
+
+               Isso dói no condomínio porque o rateio recorta por
+               `transaction_date`: um boleto de 2021 caía na competência de
+               setembro/2026, e o condômino seria cobrado hoje por despesa de
+               cinco anos atrás.
+
+               `hoje` continua como reserva porque o vencimento é opcional
+               (810 de 1.147 boletos o têm). Sem vencimento não há data melhor
+               — e uma data errada é pior que uma aproximada declarada.
+
+               ⚠️ Isto NÃO reescreve o passado: os 532 títulos já gravados
+               seguem com a data da captura. O backfill é decisão própria, com
+               efeito em DRE, balancete e nos rateios já feitos. */
+            const dataCompetencia = boletoRow.vencimento ?? hoje;
             const categoriaBoleto = await resolverCategoriaPorId(boletoRow.category_id);
             /* O título NÃO nasce aprovado. Até 15/08/2026 este insert gravava
                `approval_status: 'APROVADO'`, então todo boleto se autodeclarava
@@ -580,7 +620,7 @@ export const boletoService = {
                 direction:        'DEBIT',
                 status:           'PENDING',
                 amount:           boletoRow.valor,
-                transaction_date: hoje,
+                transaction_date: dataCompetencia,
                 due_date:         boletoRow.vencimento ?? null,
                 description:      boletoRow.descricao || boletoRow.beneficiario_nome || boletoRow.documento_nome || 'Boleto',
                 entity_name:      boletoRow.beneficiario_nome ?? null,

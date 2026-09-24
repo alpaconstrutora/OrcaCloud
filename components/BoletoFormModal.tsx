@@ -398,10 +398,12 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     async function handleExcluir() {
         if (!boleto) return;
         const ok = await confirm({
-            title: boleto.status === 'aprovado' ? 'Excluir boleto aprovado?' : 'Excluir rascunho?',
-            message: boleto.status === 'aprovado'
-                ? 'Este boleto já foi aprovado: o título dele no financeiro e a nota serão removidos junto. Essa ação não pode ser desfeita.'
-                : 'Excluir este rascunho permanentemente? Essa ação não pode ser desfeita.',
+            title: boleto.status === 'rascunho' ? 'Excluir rascunho?' : 'Excluir boleto?',
+            message: boleto.status === 'pago'
+                ? 'Este boleto está marcado como PAGO: o título já baixado no financeiro e a nota serão removidos junto, e o valor sai do realizado. Essa ação não pode ser desfeita.'
+                : boleto.status === 'aprovado'
+                    ? 'Este boleto já foi aprovado: o título dele no financeiro e a nota serão removidos junto. Essa ação não pode ser desfeita.'
+                    : 'Excluir este rascunho permanentemente? Essa ação não pode ser desfeita.',
             variant: 'danger',
             confirmLabel: 'Excluir',
         });

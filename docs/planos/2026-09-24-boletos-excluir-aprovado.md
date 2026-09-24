@@ -13,6 +13,62 @@ Na resposta, o diagnóstico mostrou que o botão estava desligado de propósito
 > aprovado, estornando/apagando junto o título financeiro gerado na aprovação.
 > Pago e cancelado continuam protegidos.
 
+
+### Pedido posterior — 24/09/2026, mesma sessão
+
+Depois de publicado o primeiro commit, o usuário voltou:
+
+> boleto #0010 continua com botão excluir desativado. por que?
+
+Duas causas: o commit ainda não estava no ar, e o #0010 está `pago` — que a
+primeira rodada mantinha protegido. Perguntado se queria liberar o pago, o
+usuário escolheu:
+
+> **Sim, liberar pago também** — definir o que acontece com a baixa e a
+> conciliação do título antes de apagar.
+
+## O que a medição mostrou sobre o "pago" (24/09/2026)
+
+| | |
+|---|---|
+| boletos `pago` | 519 |
+| …com título no razão | 434 |
+| …**sem título nenhum** | **85** (o #0010 é um deles) |
+| …com conciliação bancária real | **7** |
+| …em rateio de condomínio / com pagamento a fornecedor | 0 / 0 |
+
+Isso derrubou a trava por status do título que a primeira rodada usava. `pago`
+no boleto é MARCAÇÃO: `marcarPago` grava `CONCILIATED`/`PAGO` no título por
+conta própria, sem linha de extrato do outro lado — 517 títulos `CONCILIATED`
+para 7 conciliações de verdade. Barrar por status recusaria ~510 exclusões
+legítimas **e ainda assim não protegeria nada**. Quem protege é o vínculo
+concreto: `reconciliation_matches`, `condominio_rateio_itens`,
+`supplier_payments`.
+
+## Itens — 2ª rodada (pago)
+
+5. **`services/boletoService.ts`** — `podeExcluir` passa a aceitar `pago`;
+   `desfazerLancamento` perde o gate por status do título e passa a decidir só
+   pelos três vínculos; `excluir` chama o desfazimento para todo status que
+   não seja rascunho. **Pronto quando**: os casos de `excluir pago` passam,
+   incluindo o pago sem título (os 85) e a recusa do pago conciliado.
+   ✅ feito — e o teste pegou um defeito real: `excluir` chamava o desfazimento
+   só para `aprovado`, então um pago sairia deixando o título de pé.
+
+6. **UI (`BoletoManager.tsx`, `BoletoFormModal.tsx`)** — confirmação própria do
+   pago, dizendo que o valor **sai do realizado**; `mensagemDeExclusao` concentra
+   os três textos; o lote conta pagos à parte. **Pronto quando**:
+   check-ui-standard sai 0 nos dois arquivos. ✅ feito.
+
+7. **`cancelado` continua fora**, e de propósito: cancelar é a alternativa que
+   preserva o histórico; se o cancelado pudesse ser excluído, cancelar deixaria
+   de significar alguma coisa. Registrado no código.
+
+## Publicação
+
+- 1ª rodada (rascunho + aprovado): commit `658042c`, provado no domínio por
+  `scripts/conferir-producao.sh`.
+
 ## Diagnóstico
 
 O botão nunca esteve quebrado. A trava existia em três camadas — UI, handler e

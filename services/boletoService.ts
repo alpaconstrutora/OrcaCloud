@@ -1088,14 +1088,24 @@ export const boletoService = {
     /**
      * Status em que o boleto pode ser excluído.
      *
-     * `rascunho` nunca teve reflexo financeiro — sai limpo. `aprovado` já criou
-     * nota (`invoices`) e título no razão (`internal_transactions`), então a
-     * exclusão precisa DESFAZER esses dois; `desfazerLancamento` abaixo é quem
-     * decide se isso ainda é seguro. `pago` e `cancelado` continuam fora:
-     * o primeiro tem baixa financeira, o segundo é o próprio histórico.
+     * `rascunho` nunca teve reflexo financeiro — sai limpo. `aprovado` e `pago`
+     * já criaram nota (`invoices`) e título no razão
+     * (`internal_transactions`), então a exclusão precisa DESFAZER esses dois;
+     * `desfazerLancamento` abaixo é quem decide se isso ainda é seguro.
+     *
+     * `pago` entrou em 24/09/2026 a pedido do usuário. Ele merece cuidado —
+     * apagar tira o valor do realizado —, mas o "pago" do boleto é uma
+     * MARCAÇÃO (`marcarPago` grava `CONCILIATED`/`PAGO` no título), não um
+     * casamento com extrato: dos 519 pagos em 24/09, só 7 tinham conciliação
+     * bancária de verdade. É por isso que a trava aqui olha para os VÍNCULOS do
+     * título, não para o status dele.
+     *
+     * `cancelado` continua fora, e de propósito: cancelar é justamente a
+     * alternativa que PRESERVA o histórico. Se o cancelado pudesse ser excluído,
+     * cancelar deixaria de significar alguma coisa.
      */
     podeExcluir(status: BoletoStatus): boolean {
-        return status === 'rascunho' || status === 'aprovado';
+        return status === 'rascunho' || status === 'aprovado' || status === 'pago';
     },
 
     /**
@@ -1115,7 +1125,7 @@ export const boletoService = {
     async desfazerLancamento(boletoId: string, organizationId: string, invoiceId: string | null): Promise<void> {
         const { data: tx, error: txErr } = await supabase
             .from('internal_transactions')
-            .select('id, status')
+            .select('id')
             .eq('organization_id', organizationId)
             .eq('source_system', 'BOLETO')
             .eq('reference_id', boletoId)
@@ -1123,21 +1133,20 @@ export const boletoService = {
         if (txErr) throw txErr;
 
         if (tx) {
-            // Só título ainda em aberto pode sumir. CONCILIATED/PAID já bateu com
-            // extrato ou teve baixa — apagar reabriria um buraco no caixa.
-            if (tx.status !== 'PENDING') {
-                throw new Error(
-                    'O título deste boleto no financeiro já saiu de "em aberto" (conciliado ou baixado) e não pode ser excluído. Use Cancelar para preservar o histórico.',
-                );
-            }
-
+            /* O status do título NÃO decide nada aqui — e isso é deliberado.
+               `marcarPago` grava `CONCILIATED` no título por conta própria, sem
+               que exista qualquer linha de extrato do outro lado: em 24/09/2026
+               eram 517 títulos `CONCILIATED` para 7 conciliações bancárias reais.
+               Barrar por status recusaria 510 exclusões legítimas e ainda assim
+               não protegeria nada — quem protege são os três vínculos abaixo,
+               que são dado de OUTRO módulo e sumiriam em silêncio. */
             const { count: conciliacoes, error: mErr } = await supabase
                 .from('reconciliation_matches')
                 .select('id', { count: 'exact', head: true })
                 .eq('internal_transaction_id', tx.id);
             if (mErr) throw mErr;
             if (conciliacoes) {
-                throw new Error('O título deste boleto já está conciliado com o extrato bancário. Use Cancelar.');
+                throw new Error('O título deste boleto já está conciliado com uma linha do extrato bancário. Desfaça a conciliação em Financeiro › Conciliação antes de excluir, ou use Cancelar.');
             }
 
             const { count: rateios, error: rErr } = await supabase
@@ -1193,7 +1202,8 @@ export const boletoService = {
             throw new Error('Só é possível excluir boletos em rascunho ou aprovados. Boletos pagos ou cancelados ficam no histórico.');
         }
 
-        if (boleto.status === 'aprovado') {
+        // Rascunho nunca teve lançamento; todo o resto que chega aqui teve.
+        if (boleto.status !== 'rascunho') {
             await this.desfazerLancamento(boletoId, organizationId, boleto.invoice_id ?? null);
         }
 

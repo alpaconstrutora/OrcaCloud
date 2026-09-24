@@ -89,16 +89,16 @@ beforeEach(() => {
 });
 
 describe('quais status podem ser excluídos', () => {
-    it('rascunho e aprovado sim; pago e cancelado não', () => {
+    it('rascunho, aprovado e pago sim; cancelado não', () => {
         expect(boletoService.podeExcluir('rascunho')).toBe(true);
         expect(boletoService.podeExcluir('aprovado')).toBe(true);
-        expect(boletoService.podeExcluir('pago')).toBe(false);
+        expect(boletoService.podeExcluir('pago')).toBe(true);
         expect(boletoService.podeExcluir('cancelado')).toBe(false);
     });
 
-    it('recusa pago com mensagem, sem apagar nada', async () => {
-        cenario('pago');
-        await expect(boletoService.excluir('b1', ORG)).rejects.toThrow(/rascunho ou aprovados/i);
+    it('recusa cancelado com mensagem, sem apagar nada', async () => {
+        cenario('cancelado');
+        await expect(boletoService.excluir('b1', ORG)).rejects.toThrow(/cancelados/i);
         expect(db.boletos).toHaveLength(1);
     });
 });
@@ -113,6 +113,36 @@ describe('excluir rascunho', () => {
     });
 });
 
+describe('excluir pago', () => {
+    /* O "pago" do boleto é marcação própria: `marcarPago` grava CONCILIATED no
+       título sem que exista linha de extrato do outro lado. Em 24/09/2026 eram
+       517 títulos CONCILIATED para 7 conciliações bancárias reais — por isso o
+       status do título não barra, e o vínculo com o extrato barra. */
+    it('exclui mesmo com o título baixado, levando título e nota', async () => {
+        cenario('pago', 'CONCILIATED');
+        await boletoService.excluir('b1', ORG);
+        expect(db.boletos).toHaveLength(0);
+        expect(db.internal_transactions).toHaveLength(0);
+        expect(db.invoices).toHaveLength(0);
+    });
+
+    it('recusa o pago que tem conciliação bancária de verdade, e manda desfazê-la', async () => {
+        cenario('pago', 'CONCILIATED');
+        db.reconciliation_matches = [{ id: 'm1', internal_transaction_id: 'tx-1' }];
+        await expect(boletoService.excluir('b1', ORG)).rejects.toThrow(/desfaça a conciliação/i);
+        expect(db.boletos).toHaveLength(1);
+        expect(db.internal_transactions).toHaveLength(1);
+        expect(storageRemovidos).toHaveLength(0);
+    });
+
+    it('exclui o pago que nunca teve título (os 85 de 24/09) sem reclamar', async () => {
+        cenario('pago', null);
+        await boletoService.excluir('b1', ORG);
+        expect(db.boletos).toHaveLength(0);
+        expect(db.invoices).toHaveLength(0);
+    });
+});
+
 describe('excluir aprovado', () => {
     it('remove junto o título no razão e a nota', async () => {
         cenario('aprovado', 'PENDING');
@@ -120,14 +150,6 @@ describe('excluir aprovado', () => {
         expect(db.boletos).toHaveLength(0);
         expect(db.internal_transactions).toHaveLength(0);
         expect(db.invoices).toHaveLength(0);
-    });
-
-    it('recusa quando o título já saiu de "em aberto" — e o boleto continua lá', async () => {
-        cenario('aprovado', 'CONCILIATED');
-        await expect(boletoService.excluir('b1', ORG)).rejects.toThrow(/em aberto/i);
-        expect(db.boletos).toHaveLength(1);
-        expect(db.internal_transactions).toHaveLength(1);
-        expect(storageRemovidos).toHaveLength(0);
     });
 
     it('recusa quando o título está conciliado com o extrato', async () => {

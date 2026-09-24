@@ -2035,7 +2035,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                       <option value="todos">Todos Tipos</option>
                       <option value="preventiva">Preventiva</option>
                       <option value="corretiva">Corretiva</option>
-                      <option value="calibracao">Calibração</option>
+                      <option value="preditiva">Preditiva</option>
                     </select>
 
                     <select
@@ -2102,7 +2102,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   const statusColor: Record<string, string> = {
                     concluida: 'text-emerald-700', em_execucao: 'text-amber-700', agendada: 'text-blue-700', cancelada: 'text-rose-600',
                   };
-                  const typeLabels: Record<string, string> = { preventiva: 'Preventiva', corretiva: 'Corretiva', calibracao: 'Calibração' };
+                  const typeLabels: Record<string, string> = { preventiva: 'Preventiva', corretiva: 'Corretiva', preditiva: 'Preditiva' };
 
                   if (sortedMaint.length === 0) {
                     return (
@@ -3031,7 +3031,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     >
                       <option value="preventiva">Preventiva</option>
                       <option value="corretiva">Corretiva</option>
-                      <option value="calibracao">Calibração</option>
+                      <option value="preditiva">Preditiva</option>
                     </select>
                   </div>
 

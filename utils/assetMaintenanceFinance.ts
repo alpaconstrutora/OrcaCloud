@@ -22,7 +22,7 @@ export function maintenanceTitleReference(maintenanceId: string): string {
 const TIPO_LABEL: Record<MaintenanceType, string> = {
   preventiva: 'preventiva',
   corretiva: 'corretiva',
-  calibracao: 'calibração',
+  preditiva: 'preditiva',
 };
 
 export interface MaintenanceTitleAsset {

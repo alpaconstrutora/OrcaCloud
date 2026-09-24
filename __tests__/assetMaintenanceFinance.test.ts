@@ -43,8 +43,8 @@ describe('buildMaintenanceTitle', () => {
   it('descrição junta tipo, ativo e texto da ordem', () => {
     expect(buildMaintenanceTitle(base, asset)!.description)
       .toBe('Manutenção corretiva — AT-001 Betoneira 400L: Troca de rolamentos');
-    expect(buildMaintenanceTitle({ ...base, type: 'calibracao', description: '' }, null)!.description)
-      .toBe('Manutenção calibração');
+    expect(buildMaintenanceTitle({ ...base, type: 'preditiva', description: '' }, null)!.description)
+      .toBe('Manutenção preditiva');
   });
 
   it('custo zero ou negativo → sem título', () => {

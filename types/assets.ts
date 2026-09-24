@@ -15,7 +15,11 @@ export type AssetStatus =
   | 'ocioso'
   | 'baixado';
 
-export type MaintenanceType = 'preventiva' | 'corretiva' | 'calibracao';
+// 'preditiva' substituiu 'calibracao' em 24/09/2026 (pedido do usuário): o que a
+// Gestão de Ativos acompanha é a manutenção baseada em condição do bem, não o
+// ato de aferir instrumento. Migration aplicar_20270924000020 renomeia os
+// registros existentes — não há valor 'calibracao' no banco.
+export type MaintenanceType = 'preventiva' | 'corretiva' | 'preditiva';
 export type MaintenanceStatus = 'agendada' | 'em_execucao' | 'concluida' | 'cancelada';
 export type ReservationStatus = 'pendente' | 'aprovada' | 'ativa' | 'finalizada' | 'cancelada';
 

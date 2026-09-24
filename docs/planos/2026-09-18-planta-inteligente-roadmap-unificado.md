@@ -2013,6 +2013,33 @@ As 26 primeiras não são decisão de projeto: são o mesmo canto desenhado duas
 - `__tests__/components/PainelRevisaoDePontas.test.tsx` (5): foca só quando a ponta muda; o índice fica quando a lista encolhe; a opção aplica com o índice dela e "Não é problema" não aplica comando nenhum; ponta sem saída diz o que fazer à mão; lista vazia oferece trazer as marcadas de volta.
 - **App real** (escritas bloqueadas: 15, 0 erros), *Planta 23/09/2026*: o painel abre em *"Revisando 1 de 71"* com o contexto *"Ponta final de uma parede de 975 mm, em 3480, 975"*; navegando até a 8ª aparece *"Juntar com a ponta a 25 mm"*, e o clique leva **71 → 69** pontas soltas (uma junção resolve as duas); "Não é problema" leva a fila de 69 para 68 e surge o link *"Rever as 1 marcada(s) como intencional(is)"*.
 
+### P2.53 — Item de catálogo pela medida da esquadria (24/09/2026)
+
+**O último passo até o preço.** Depois de nomear (P2.49) e unificar (P2.50), a planta tem os tipos identificados e **nenhum com item de catálogo** — e sem item o orçamento levanta a divergência, mas não tem preço para pôr na linha. À mão são 29 idas ao catálogo, cada uma com uma busca cujo termo a pessoa precisa inventar.
+
+**Só que o SINAPI já diz a medida no nome do item.** Medido no banco: **240 itens de esquadria com medida na descrição**, em quatro formatos que convivem:
+
+```
+KIT PORTA PRONTA DE MADEIRA, FOLHA MEDIA (NBR 15930) DE 800 X 2100 MM…
+KIT DE PORTA DE MADEIRA PARA PINTURA, SEMI-OCA…, 80X210CM, ESPESSURA…
+PORTA SALA LIMPA 90X210 CM COM VISOR…
+PROTECAO … PARA PORTA DE POCO DE ELEVADOR, VAO DE *120 X 240* CM
+```
+
+`utils/blueprintItemPorMedida.ts` (novo) lê essa medida e casa com a do desenho. O sufixo manda quando existe (`MM`/`CM`/`M`); sem sufixo decide a ordem de grandeza — esquadria de 400 mm não existe, então `80X210` é centímetro e `800 X 2100` é milímetro, e um par com decimal (`0,80 X 2,10`) só pode ser metro. O que cai fora da faixa possível (200 mm a 10 m) não é medida de esquadria: é espessura ou número de norma.
+
+**⚠️ Sugestão, nunca aplicação.** "Porta 80×210" casa com dezenas de itens — madeira, alumínio, corta-fogo, sala limpa — e a diferença entre eles é **preço**, não medida. O botão só preenche o rascunho, e o aviso põe a dúvida onde ela é: *"Confira a descrição — a mesma medida serve a madeira, alumínio e corta-fogo"*. Item já escolhido à mão nunca é sobrescrito.
+
+**A tolerância é a MESMA da unificação**, de propósito: é a mesma pergunta ("quanta diferença eu aceito?"), e dois campos para ela seriam dois lugares para o usuário desconfiar de qual vale.
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-ui-standard.sh` ok · `check-xss-sinks.sh` ok · suíte cheia **457 arquivos / 5219 testes** verdes · `npm run build` ok.
+- `__tests__/blueprintItemPorMedida.test.ts` (8), com descrições **reais** do banco: os quatro formatos de medida; a inferência sem sufixo; ⚠️ o que **não** vira medida (`PARAFUSO 3 X 40 MM`, `CHAPA 1200 X 30000 MM`, `NBR 15930`); porta não casa com item de janela nem o contrário; porta de correr aceita item de porta comum; fora da tolerância **não sugere nada** — melhor nenhum item do que o errado.
+- `__tests__/components/PainelEsquadrias.test.tsx` (+3, total 14): preenche e avisa para conferir; ⚠️ não sobrescreve item escolhido à mão; catálogo fora do ar não quebra a tela e diz o que fazer.
+- **App real** (escritas bloqueadas: 16, 0 erros), *Planta 23/09/2026*, o ciclo inteiro numa sessão: 41 tipos → unificar → **29 tipos** → sugerir → **8 com item** → nomear → **29 nomeados**, e o lote final *"90 esquadria(s) de 29 tipo(s) atualizadas"*.
+
+**⚠️ Um efeito que a prova revelou, e que é decisão sua.** Sugerir **sobre a planta como está** casa **14 dos 41 tipos** (41 das 90 peças). Sugerir **depois de unificar** casa só **8 dos 29** — porque a unificação leva cada grupo para a medida que mais se repete **no desenho** (`219,4 × 120`, `85,8 × 210`), e o catálogo só conhece medidas comerciais. As duas fases são boas isoladas e brigam quando encadeadas. A saída seria a unificação mirar a medida de catálogo mais próxima em vez da mais frequente — o que muda a geometria de TODAS as peças do grupo, inclusive as do alvo, e por isso não foi feito por conta própria.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

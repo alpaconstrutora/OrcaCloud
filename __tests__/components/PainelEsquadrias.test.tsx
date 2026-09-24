@@ -39,6 +39,11 @@ vi.mock('../../hooks/useOrgContext', () => ({
   forEachTargetOrg: vi.fn().mockResolvedValue({ ok: 1, failed: [] }),
 }));
 
+const buscarNoSinapi = vi.fn();
+vi.mock('../../services/sinapiService', () => ({
+  sinapiService: { search: (...a: unknown[]) => buscarNoSinapi(...a) },
+}));
+
 vi.mock('../../components/DatabasePickerModal', () => ({
   default: ({ isOpen, onSelect }: { isOpen: boolean; onSelect: (i: { code: string; description: string }) => void }) =>
     isOpen ? (
@@ -251,5 +256,53 @@ describe('PainelEsquadrias · unificar tipos próximos', () => {
   it('sem `onUnificar`, o bloco nem aparece — quem não tem o modelo não oferece a ação', () => {
     render(<PainelEsquadrias grupos={[grupo()]} onAplicar={vi.fn()} onSelecionar={vi.fn()} />);
     expect(screen.queryByTestId('unificar-tipos')).toBeNull();
+  });
+});
+
+/**
+ * SUGERIR ITEM PELA MEDIDA (P2.53) — a parte do painel.
+ *
+ * A regra tem teste próprio (`blueprintItemPorMedida.test.ts`, com descrições
+ * reais do SINAPI). Aqui fica o contrato da tela: a sugestão só preenche o
+ * rascunho, não sobrescreve escolha feita, e o aviso põe a dúvida no lugar
+ * certo — a mesma medida serve a madeira, alumínio e corta-fogo.
+ */
+describe('PainelEsquadrias · sugerir item pela medida', () => {
+  const CATALOGO = [
+    { code: '39496', description: 'KIT PORTA PRONTA DE MADEIRA, FOLHA MEDIA DE 800 X 2100 MM', unit: 'UN' },
+    { code: '94570', description: 'JANELA DE ALUMINIO DE CORRER, 120X120 CM, COM VIDRO', unit: 'M2' },
+  ];
+
+  it('preenche o item dos tipos cuja medida bate, e avisa para conferir', async () => {
+    const user = userEvent.setup();
+    buscarNoSinapi.mockResolvedValue(CATALOGO);
+    montar([
+      grupo({ assinatura: 'a', larguraM: 0.8, alturaM: 2.1, quantidade: 5 }),
+      grupo({ assinatura: 'b', tipo: 'window', larguraM: 1.2, alturaM: 1.2, quantidade: 3 }),
+    ]);
+    await user.click(screen.getByTestId('sugerir-itens'));
+    await screen.findByText(/2 tipo\(s\) com item sugerido/);
+    const itens = screen.getAllByRole('button', { name: /Item do tipo/ }).map((b) => b.textContent);
+    expect(itens.join(' ')).toContain('39496');
+    expect(itens.join(' ')).toContain('94570');
+    // ⚠️ O aviso tem de pôr a dúvida no lugar certo.
+    expect(screen.getByTestId('aviso-esquadrias-lote')).toHaveTextContent('madeira, alumínio e corta-fogo');
+  });
+
+  it('⚠️ não sobrescreve item já escolhido — sugestão não desfaz decisão', async () => {
+    const user = userEvent.setup();
+    buscarNoSinapi.mockResolvedValue(CATALOGO);
+    montar([grupo({ assinatura: 'a', larguraM: 0.8, alturaM: 2.1, itemCode: '11111', descricao: 'Escolhido à mão' })]);
+    await user.click(screen.getByTestId('sugerir-itens'));
+    await screen.findByText(/Nenhum item do catálogo bate|tipo\(s\) com item/);
+    expect(screen.getByRole('button', { name: /Item do tipo/ })).toHaveTextContent('11111');
+  });
+
+  it('catálogo fora do ar não quebra a tela — diz o que fazer', async () => {
+    const user = userEvent.setup();
+    buscarNoSinapi.mockRejectedValue(new Error('rede'));
+    montar([grupo({ assinatura: 'a' })]);
+    await user.click(screen.getByTestId('sugerir-itens'));
+    await screen.findByText(/Não consegui ler o catálogo/);
   });
 });

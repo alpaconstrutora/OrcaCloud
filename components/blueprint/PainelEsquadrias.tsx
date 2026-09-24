@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookMarked, Combine, Search, Wand2 } from 'lucide-react';
+import { BookMarked, Combine, Search, Sparkles, Wand2 } from 'lucide-react';
 import { nomeDoTipoDeAbertura, type Esquadria } from '../../utils/blueprintKernel';
 import type { QuantidadePorEsquadria } from '../../utils/blueprintKernel/quantities';
 import { cmParaMm, mmParaCm, textoEmCm } from '../../utils/blueprintMedidaCm';
@@ -7,6 +7,8 @@ import { TOLERANCIA_PADRAO_MM, type Unificacao } from '../../utils/blueprintUnif
 import DatabasePickerModal from '../DatabasePickerModal';
 import { useOrgContext, useOrgWriteTarget, forEachTargetOrg } from '../../hooks/useOrgContext';
 import { listOpeningTypes, saveOpeningType, type TipoDeEsquadria } from '../../services/blueprintOpeningTypeService';
+import { sinapiService } from '../../services/sinapiService';
+import { sugerirItens } from '../../utils/blueprintItemPorMedida';
 
 /**
  * ESQUADRIAS DO DESENHO, EM LOTE (24/09/2026, P2.49).
@@ -162,6 +164,62 @@ export default function PainelEsquadrias({
     setAviso(`${semNome.length} tipo(s) nomeados. Confira e clique em Aplicar.`);
   }
 
+  /**
+   * Preenche o ITEM de cada tipo com a melhor sugestão do catálogo (P2.53).
+   *
+   * O SINAPI escreve a medida no nome do item ("KIT PORTA… DE 800 X 2100 MM",
+   * "… 80X210CM"), e são 240 itens de esquadria com medida no texto. Medido na
+   * planta real: 14 dos 41 tipos recebem sugestão dentro de 2 cm — 46% das
+   * peças —, e 19 com 5 cm.
+   *
+   * ⚠️ SÓ PREENCHE O RASCUNHO. "Porta 80×210" casa com dezenas de itens —
+   * madeira, alumínio, corta-fogo — e a diferença entre eles é preço, não
+   * medida. Quem aplica é a pessoa, depois de olhar a descrição.
+   *
+   * A TOLERÂNCIA É A MESMA da unificação, de propósito: é a mesma pergunta
+   * ("quanta diferença eu aceito?"), e dois campos para ela seriam dois lugares
+   * para o usuário desconfiar de qual vale.
+   */
+  const [sugerindo, setSugerindo] = useState(false);
+  async function sugerirDoCatalogo() {
+    setSugerindo(true);
+    try {
+      const achados = await Promise.all([
+        sinapiService.search('PORTA').catch(() => []),
+        sinapiService.search('JANELA').catch(() => []),
+      ]);
+      const catalogo = achados.flat().map((i) => ({ code: i.code, description: i.description, unit: i.unit }));
+      if (catalogo.length === 0) {
+        setAviso('Não consegui ler o catálogo agora. Escolha o item pelo botão da linha.');
+        return;
+      }
+      const novo: Record<string, RascunhoDeEsquadria> = { ...rascunho };
+      let n = 0;
+      for (const g of ordenados) {
+        const v = valorDe(g);
+        // Não sobrescreve item já escolhido: sugestão não desfaz decisão.
+        if (v.itemCode) continue;
+        const [melhor] = sugerirItens(
+          { larguraMm: Math.round(g.larguraM * 1000), alturaMm: Math.round(g.alturaM * 1000) },
+          g.tipo,
+          catalogo,
+          toleranciaMm,
+        );
+        if (!melhor) continue;
+        novo[g.assinatura] = { ...v, itemCode: melhor.item.code, descricao: melhor.item.description };
+        n += 1;
+      }
+      setRascunho(novo);
+      setAviso(
+        n === 0
+          ? `Nenhum item do catálogo bate com estas medidas dentro de ${textoEmCm(toleranciaMm)} cm. Aumente a tolerância ou escolha pelo botão da linha.`
+          : `${n} tipo(s) com item sugerido pela medida. ⚠️ Confira a descrição — a mesma medida serve a madeira, alumínio e corta-fogo — e clique em Aplicar.`,
+      );
+    } finally {
+      setSugerindo(false);
+    }
+  }
+
   /** Só o que mudou em relação ao desenho — nomear tudo de novo não é um lote. */
   const pendentes = useMemo(
     () =>
@@ -260,6 +318,17 @@ export default function PainelEsquadrias({
         >
           <Wand2 className="h-3.5 w-3.5" />
           Nomear automaticamente
+        </button>
+        <button
+          type="button"
+          onClick={sugerirDoCatalogo}
+          disabled={sugerindo}
+          title="Procura no catálogo (SINAPI e base própria) o item cuja medida bate com a do tipo. Só preenche o rascunho — confira a descrição antes de aplicar."
+          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          data-testid="sugerir-itens"
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          {sugerindo ? 'Procurando…' : 'Sugerir itens pela medida'}
         </button>
         <button
           type="button"

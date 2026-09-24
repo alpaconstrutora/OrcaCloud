@@ -32,6 +32,21 @@ const SO_ARQUIVO = /^(download|documento|doc|img|image|scan|arquivo|whatsapp)[\s
 
 const ARQUIVO_QUALQUER = /\.(pdf|jpe?g|png|xml|txt)$/i;
 
+/**
+ * O NÚMERO do documento, sem o rótulo antes.
+ *
+ * ⚠️ Foi o que escapou da primeira versão e só apareceu na prova: a lista de
+ * `CORTES` procura a palavra "CNPJ", mas o texto real é
+ * "…ENERGIA S.A. 07.282.377/0001-20 47 61" — número puro, sem rótulo nenhum.
+ * Cortar no primeiro CNPJ/CPF formatado resolve os dois casos, e leva junto o
+ * lixo numérico que vem depois (agência, conta, dígitos do boleto).
+ *
+ * Específico de propósito: exige a pontuação de CNPJ (`00.000.000/0000`) ou de
+ * CPF (`000.000.000-00`). Um `\d{6,}` genérico comeria "Energia 08/2026" e
+ * qualquer descrição que o síndico escrever com número.
+ */
+const DOCUMENTO = /\d{2}\.\d{3}\.\d{3}\/\d{4}|\d{3}\.\d{3}\.\d{3}-\d{2}/;
+
 /** Espaço duplo, quebra de linha e espaço nas pontas — o OCR produz todos. */
 const normalizar = (s: string): string => s.replace(/\s+/g, ' ').trim();
 
@@ -61,7 +76,14 @@ export function podarRuidoDeBoleto(texto: string): string {
         // antes dele — cortar ali devolveria string vazia.
         if (i > 0 && i < fim) fim = i;
     }
-    return normalizar(s.slice(0, fim).replace(/[\s\-–—:,.]+$/, ''));
+    const doc = s.match(DOCUMENTO);
+    if (doc && doc.index !== undefined && doc.index > 0 && doc.index < fim) fim = doc.index;
+
+    // Apara a pontuação solta que sobra no corte — mas preserva o ponto de uma
+    // abreviação ("…ENERGIA S.A."), que não é lixo, é o nome.
+    return normalizar(s.slice(0, fim))
+        .replace(/[\s\-–—:,]+$/, '')
+        .replace(/(?<![A-ZÀ-Ý])\.$/, '');
 }
 
 /**

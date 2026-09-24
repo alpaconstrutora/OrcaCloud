@@ -95,28 +95,50 @@ melhor, e foi ela que ficou.)*
 
 ---
 
-## Estado
+## Estado — feito, publicado e provado
 
 | | |
 |---|---|
-| Item 1 — código | ✔ feito |
-| Item 2 — código | ✔ feito |
-| Migration do item 2 | ⏳ **não aplicada** |
-| Prova visual dos dois | ⏳ **não feita** |
-| Publicação | ⏳ **não feita** |
+| Item 1 — descrições legíveis | ✔ no ar |
+| Item 2 — portal legado aposentado | ✔ no ar, migration aplicada |
 
-**Por quê:** a partir das ~21h o projeto Supabase ficou inacessível — `HTTP 522`
-(Cloudflare não alcança a origem) tanto no REST quanto nas RPCs, e
-`db query --linked` falha ao criar a login role. Não é a minha rede nem a minha
-credencial: GitHub e o domínio de produção respondem 200. **Isso afeta a
-produção também**, não só este trabalho.
+**A prova pegou um defeito que o papel não pegou.** A 1ª versão da poda cortava
+no *rótulo* "CNPJ", e o texto real do boleto traz só o **número**: o portal
+seguiu mostrando "…ENERGIA S.A. 07.282.377/0001-20 47 61". Pior: o detector de
+sujeira da própria prova procurava a palavra "CNPJ" e me devolveu "0 linhas com
+ruído" — verde falso, do mesmo gênero que a memória
+`portao_copiado_inverte_sinal` registra.
 
-Sem banco não dá para aplicar a migration nem para abrir o portal e conferir a
-tela. Os portões que não dependem de rede estão verdes: `tsc --noEmit` sem erro,
-`check-ui-standard.sh` limpo nos quatro `.tsx` tocados, `check-xss-sinks.sh`
-limpo, suíte cheia **444 arquivos / 5126 testes**.
+Corrigidos os dois: a poda passou a cortar também no CNPJ/CPF **formatado**
+(específico de propósito — um `\d{6,}` genérico decapitaria "Energia — áreas
+comuns 08/2026"), e o detector da prova passou a procurar o número. O portão foi
+então testado nas DUAS direções: acusa 3/3 dos textos antigos e 0/3 dos novos.
 
-**Ordem quando o banco voltar:** publicar o código primeiro (ele já não chama as
-RPCs legadas, então convive com elas de pé), depois aplicar a migration, depois
-a prova visual. Derrubar objeto de banco antes de o frontend parar de chamá-lo é
-o caminho curto para erro em produção.
+Prova final no portal por link (Dynamis, escritas bloqueadas, 0 erro de página):
+as 14 despesas leem "ENERGISA SUL-SUDESTE - DISTRIBUIDORA DE ENERGIA S.A." e
+"Despesa sem descrição" (o boleto cuja descrição era só `download (98).pdf`).
+A rota `/portal-condomino` não existe mais: cai na seleção de portal do app.
+
+Banco: as 3 RPCs do legado somem (`condomino_portal_get_data` responde
+`PGRST202` para `anon`), a do Portal do Cliente segue em 200, e as 2 linhas
+históricas continuam lá com o `COMMENT` de aposentadoria.
+
+Portões: `tsc` sem erro, `check-ui-standard` limpo, `check-xss-sinks` limpo,
+suíte cheia **5129 testes**.
+
+## Nota de incidente — Supabase fora entre ~21h e 21:35
+
+Durante o trabalho o projeto passou a responder **HTTP 522**. O log do Postgres
+que o usuário trouxe mostrou `pg_cron` e checkpoints completando normalmente, e
+minhas sondas mostraram `rest/v1/` respondendo **401** e `functions/v1/` **404**
+enquanto qualquer consulta real e o `auth/v1/health` davam 522 — ou seja:
+**Postgres vivo; o caminho de conexão externo travado.** Os cron jobs seguiam
+porque rodam DENTRO do banco, sem passar pela borda. Resolvido com restart
+completo do projeto pelo usuário.
+
+⚠️ **Hipótese não descartada:** rodei `supabase db query --linked` ~40 vezes na
+sessão, e cada chamada cria uma login role temporária. Pode ter contribuído para
+esgotar conexões. O `pg_stat_activity` depois do restart estava limpo — mas o
+restart apagou a evidência, então isso **não inocenta**. Usar o CLI com
+parcimônia em sessão longa, e conferir `pg_stat_activity` ANTES de reiniciar na
+próxima vez.

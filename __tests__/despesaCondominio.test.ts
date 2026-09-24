@@ -19,18 +19,44 @@ describe('podarRuidoDeBoleto', () => {
         // string inteira — daí o tratamento separado para marcador inicial.
         expect(podarRuidoDeBoleto(
             'BENEFICIÁRIO:ENERGISA SUL-SUDESTE - DISTRIBUIDORA DE ENERGIA S.A. 07.282.377/0001',
-        )).toBe('ENERGISA SUL-SUDESTE - DISTRIBUIDORA DE ENERGIA S.A. 07.282.377/0001');
+        )).toBe('ENERGISA SUL-SUDESTE - DISTRIBUIDORA DE ENERGIA S.A.');
     });
 
     it('corta a chamada publicitária que o boleto traz junto', () => {
         expect(podarRuidoDeBoleto(
             'ENERGISA SUL-SUDESTE - DISTRIBUIDORA DE ENERGIA S.A.  CADASTRE SUA FATURA EM DÉBITO',
-        )).toBe('ENERGISA SUL-SUDESTE - DISTRIBUIDORA DE ENERGIA S.A');
+        )).toBe('ENERGISA SUL-SUDESTE - DISTRIBUIDORA DE ENERGIA S.A.');
     });
 
     it('normaliza o espaçamento do OCR', () => {
         expect(podarRuidoDeBoleto('MN CONSERVAÇÃO   ELEVADORES\n  COM PEÇAS LTDA   CNPJ:   07.604'))
             .toBe('MN CONSERVAÇÃO ELEVADORES COM PEÇAS LTDA');
+    });
+
+    it('corta no CNPJ SEM RÓTULO — o caso que escapou da 1ª versão', () => {
+        // Achado na prova visual, não no papel: a lista de marcadores procurava
+        // a palavra "CNPJ", e o texto real traz só o NÚMERO. O condômino leu
+        // "…ENERGIA S.A. 07.282.377/0001-20 47 61" no portal.
+        expect(podarRuidoDeBoleto(
+            'ENERGISA SUL-SUDESTE - DISTRIBUIDORA DE ENERGIA S.A. 07.282.377/0001-20 47 61',
+        )).toBe('ENERGISA SUL-SUDESTE - DISTRIBUIDORA DE ENERGIA S.A.');
+        expect(podarRuidoDeBoleto('FULANO DE TAL 123.456.789-00 Ag 0001'))
+            .toBe('FULANO DE TAL');
+    });
+
+    it('NÃO come número que faz parte da descrição', () => {
+        // O corte é pela pontuação de CNPJ/CPF, não por "tem dígito". Um
+        // `\d{6,}` genérico decapitaria o que o síndico escreveu.
+        expect(podarRuidoDeBoleto('Energia — áreas comuns 08/2026'))
+            .toBe('Energia — áreas comuns 08/2026');
+        expect(podarRuidoDeBoleto('Reforma do hall — etapa 2 de 3'))
+            .toBe('Reforma do hall — etapa 2 de 3');
+    });
+
+    it('preserva o ponto da abreviação, apara a pontuação solta', () => {
+        // "S.A." é o nome; "LTDA -" tem lixo no fim.
+        expect(podarRuidoDeBoleto('ACME S.A. CNPJ: 1')).toBe('ACME S.A.');
+        expect(podarRuidoDeBoleto('ACME LTDA - CNPJ: 1')).toBe('ACME LTDA');
     });
 
     it('texto já limpo passa intacto', () => {
@@ -49,7 +75,7 @@ describe('rotuloDeDespesa', () => {
         expect(rotuloDeDespesa(
             'download (98).pdf',
             'ENERGISA SUL-SUDESTE - DISTRIBUIDORA DE ENERGIA S.A.  CADASTRE SUA FATURA',
-        )).toBe('ENERGISA SUL-SUDESTE - DISTRIBUIDORA DE ENERGIA S.A');
+        )).toBe('ENERGISA SUL-SUDESTE - DISTRIBUIDORA DE ENERGIA S.A.');
     });
 
     it('sem descrição e sem credor devolve null — quem chama decide o vazio', () => {

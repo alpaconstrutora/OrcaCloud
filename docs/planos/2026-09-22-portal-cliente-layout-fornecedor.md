@@ -212,3 +212,14 @@ não foi possível — o projeto Supabase ficou indisponível durante a implemen
 (`/auth/v1/token` sem resposta, `supabase db query` com timeout de conexão). O
 comportamento está coberto pelos testes de render; falta só conferir a tela com
 dado real quando o serviço voltar.
+
+## Pedido 12 (24/09/2026)
+
+> [print da aba Condomínio › Dados Gerais, com o banner coral "007 - Bella Vista / 1 unidade"] remover banner
+
+| # | Arquivo | O que muda | Como sei que terminou |
+|---|---|---|---|
+| 23 | `components/client/CondominioTab.tsx` | Sai o banner coral do card de condomínio em "Dados Gerais". A identificação do prédio passa a viver na linha acima das abas, que agora aparece em **todas** as seis (antes era escondida em Dados Gerais para não duplicar o banner) e ganha `· N unidades · CNPJ`. Com mais de um condomínio, cada bloco de unidades leva um cabeçalho em texto (`text-sm font-semibold` + borda), não uma faixa colorida | ✅ `tsc` · `check-ui-standard` · 20 testes · print `relatorios/cond/spike_Dados.png` |
+
+Com isso o coral fica só onde é acento (ícone da descrição de cada aba), não
+mais como bloco de fundo dentro do conteúdo.

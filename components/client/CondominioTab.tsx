@@ -199,21 +199,25 @@ type Grupo = ReturnType<typeof agruparPorCondominio>[number];
 
 // ── Dados Gerais ─────────────────────────────────────────────────────────────
 const PainelDadosGerais: React.FC<{ grupos: Grupo[] }> = ({ grupos }) => (
-    <div className="space-y-4">
+    <div className="space-y-6">
         {grupos.map((cond: Grupo) => (
-            <div key={cond.id} className="rounded-[10px] border border-gray-100 overflow-hidden">
-                <div className="bg-[#E1553C] px-5 md:px-6 py-3.5">
-                    <div className="flex items-center gap-2.5">
-                        <Building2 className="w-4 h-4 text-white/80" />
-                        <h2 className="text-lg font-bold text-white leading-tight">{cond.nome}</h2>
+            <div key={cond.id}>
+                {/* Sem banner colorido (pedido do usuário em 24/09/2026): a faixa
+                    coral repetia, em tamanho de outdoor, o que a linha acima das
+                    abas já diz. Fica a identificação em texto — e, com um único
+                    condomínio, nem ela: aí a linha de cima basta (§18). */}
+                {grupos.length > 1 && (
+                    <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-100">
+                        <Building2 className="w-4 h-4 text-gray-400" />
+                        <h2 className="text-sm font-semibold text-gray-900">{cond.nome}</h2>
+                        <span className="text-xs text-gray-400">
+                            {cond.unidades.length === 1 ? '1 unidade' : `${cond.unidades.length} unidades`}
+                            {cond.cnpj ? ` · CNPJ ${cond.cnpj}` : ''}
+                        </span>
                     </div>
-                    <p className="text-white/80 text-xs font-medium mt-0.5">
-                        {cond.unidades.length === 1 ? '1 unidade' : `${cond.unidades.length} unidades`}
-                        {cond.cnpj ? ` · CNPJ ${cond.cnpj}` : ''}
-                    </p>
-                </div>
+                )}
 
-                <div className="p-4 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {cond.unidades.map((u: PortalUnidadeCondominio) => (
                         <div key={u.unitId} className="rounded-[10px] border border-gray-100 bg-gray-50/40 p-5">
                             <div className="flex items-start justify-between gap-3">
@@ -715,16 +719,19 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
                 (`condominio/PortalCondominoAdmin`) não existe `desktopTabsBar`, e a
                 tela ficaria presa numa aba só. */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                {/* Qual prédio estou vendo. Sem isto, as outras cinco abas perdem o
-                    contexto que vinha do banner coral. Em "Dados Gerais" NÃO aparece:
-                    lá o banner já traz o nome, e repetir a dois centímetros de
-                    distância é o §18 na prática. */}
-                {abaAtiva !== 'dados' && (
-                    <div className="flex items-center gap-1.5 px-4 pt-3 text-sm text-gray-500">
-                        <Building2 className="w-3.5 h-3.5 text-gray-400" />
-                        {multi ? `${porCondominio.length} condomínios` : porCondominio[0].nome}
-                    </div>
-                )}
+                {/* Qual prédio estou vendo — agora em TODAS as abas, inclusive
+                    "Dados Gerais": o banner coral que dizia isso lá dentro saiu a
+                    pedido do usuário (24/09/2026), então esta linha é a única
+                    identificação do condomínio na tela. */}
+                <div className="flex items-center gap-1.5 px-4 pt-3 text-sm text-gray-500">
+                    <Building2 className="w-3.5 h-3.5 text-gray-400" />
+                    {multi
+                        ? `${porCondominio.length} condomínios`
+                        : [porCondominio[0].nome,
+                           porCondominio[0].unidades.length === 1 ? '1 unidade' : `${porCondominio[0].unidades.length} unidades`,
+                           porCondominio[0].cnpj ? `CNPJ ${porCondominio[0].cnpj}` : null,
+                          ].filter(Boolean).join(' · ')}
+                </div>
 
                 <PortalTabs tabs={abas} active={abaAtiva} onChange={(id) => setAba(id as AbaCondominio)} />
 

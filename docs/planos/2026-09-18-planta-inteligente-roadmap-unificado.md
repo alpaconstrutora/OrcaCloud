@@ -1749,6 +1749,22 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 - Testes: `blueprintEstenderParede.test.ts` (5: a parede a 400 mm da perpendicular é esticada e o canto fecha, some da lista de soltas; 1,5 m não entra, e o teto é parâmetro; só para frente; paralelas e encontro fora do corpo não valem; entre duas paredes à frente ganha a mais próxima), `dxfEsquadrias.test.ts` (folha rente à parede vira porta de correr; vão de 2,4 m com arco de uma folha vira vão livre, não porta gigante).
 - App real (escritas bloqueadas: 16, 0 erros): DXF com uma parede interna morrendo 70 cm antes da parede de cima → importa com "1 ponta(s) solta(s)" → **"Terminar 1 parede(s) até encontrar"** → "1 parede(s) esticada(s) até encontrar (a maior andou 0,78 m)" e os ambientes passam de **5 para 6** — o cômodo fechou.
 
+### P2.43 — O broadcast só sai com o canal inscrito (23/09/2026) · erro no console ao inserir peça
+
+**Relato**: ao inserir um guarda-corpo, o console mostrava, a cada peça, o par
+`Realtime send() is automatically falling back to REST API` + `POST /realtime/v1/api/broadcast 401`.
+
+**A causa**: `hooks/useBlueprintColaboracao.ts` difunde o lote aplicado (`difundir`) e avisa mudança de travas (`avisarTravas`) chamando `channel.send()`. ⚠️ Num canal que ainda não está `SUBSCRIBED` isso NÃO falha: o supabase-js cai sozinho para a API REST do Realtime, que pede autorização própria e responde **401**. A janela entre abrir a planta e o canal conectar é curta, mas é justamente quando se começa a desenhar — e quem trabalha sozinho (sem colaboração ativa) fica nela o tempo todo.
+
+**A correção**: `conectadoRef` (o estado de conexão em ref, porque os dois são chamados de fora do ciclo de render) e saída silenciosa enquanto o canal não está inscrito. Sem canal não há a quem avisar, e o aviso é só colaboração em tempo real: o desenho já foi para o banco por outro caminho. Quando o canal conecta, volta a difundir sozinho.
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-xss-sinks.sh` ok · suíte cheia **444 arquivos / 5116 testes** · `npm run build` ok.
+- Teste novo `__tests__/components/useBlueprintColaboracao.test.tsx` (3), com o `subscribe` segurado para poder chamar `difundir` ANTES da conexão — a janela exata do defeito: antes de `SUBSCRIBED` nada é enviado; depois, os dois enviam (`comando` e `travas`); se a conexão cai (`CHANNEL_ERROR`), voltam a calar; lote vazio nunca vira broadcast. **Sem a correção, dois dos três falham.**
+- ⚠️ A prova no app não pôde ser feita nesta rodada: o login do harness falhou com "Failed to fetch" (rede com o Supabase instável no momento), em três execuções. Fica registrado para a próxima rodada — o que se conferiria é a ausência de chamadas a `/realtime/v1/api/broadcast` ao inserir peças.
+
+**Fora desta fase**: o terceiro aviso do mesmo console, `Failed to fetch unread count: AbortError`, vem de `components/Layout.tsx` (badge de notificações do layout global, de outra frente) — é um `fetch` abortado, provavelmente por navegação, e não pertence à Planta.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

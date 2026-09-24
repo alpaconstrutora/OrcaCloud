@@ -60,6 +60,12 @@ interface Opcoes {
 export function useBlueprintColaboracao({ branchId, userId, email, nome, aoReceber, habilitado = true, aoMudarTravas }: Opcoes): UsoDaColaboracao {
   const [estados, setEstados] = useState<EstadoDePresenca[]>([]);
   const [conectado, setConectado] = useState(false);
+  /**
+   * ⚠️ O MESMO estado, em ref, porque `difundir` e `avisarTravas` são chamados de
+   * fora do ciclo de render (pelo editor, ao aplicar um comando) e precisam do
+   * valor de AGORA, não do que existia quando o callback foi criado.
+   */
+  const conectadoRef = useRef(false);
   const [avisos, setAvisos] = useState<AvisoDeColaboracao[]>([]);
   const canalRef = useRef<RealtimeChannel | null>(null);
   const presencaRef = useRef<{ levelId: string | null; selecionados: string[] }>({ levelId: null, selecionados: [] });
@@ -112,11 +118,13 @@ export function useBlueprintColaboracao({ branchId, userId, email, nome, aoReceb
       })
       .subscribe((status: string) => {
         const ok = status === 'SUBSCRIBED';
+        conectadoRef.current = ok;
         setConectado(ok);
         if (ok) void canal.track(meuEstado());
       });
     return () => {
       canalRef.current = null;
+      conectadoRef.current = false;
       setConectado(false);
       void supabase.removeChannel(canal);
     };
@@ -134,10 +142,23 @@ export function useBlueprintColaboracao({ branchId, userId, email, nome, aoReceb
     [conectado, meuEstado],
   );
 
+  /**
+   * ⚠️ SÓ COM O CANAL INSCRITO.
+   *
+   * `channel.send()` num canal que ainda não está `SUBSCRIBED` não falha: o
+   * supabase-js cai sozinho para a API REST do Realtime — que pede autorização
+   * própria e responde **401**. O resultado era um par de erros no console a
+   * cada peça inserida (relatado em 23/09/2026, ao inserir um guarda-corpo),
+   * mais o aviso de depreciação do fallback.
+   *
+   * Sem canal não há a quem avisar, e o aviso é só colaboração em tempo real: o
+   * desenho já foi para o banco por outro caminho. Então a saída silenciosa é a
+   * resposta certa — e ela some sozinha quando o canal conecta.
+   */
   const difundir = useCallback((comandos: Command[], hashDepois: string) => {
     const canal = canalRef.current;
     const { userId: u, nome: n, email: e } = identidadeRef.current;
-    if (!canal || !u || comandos.length === 0) return;
+    if (!canal || !conectadoRef.current || !u || comandos.length === 0) return;
     const msg = novaMensagem(u, n || e || 'alguém', comandos, hashDepois);
     void canal.send({ type: 'broadcast', event: 'comando', payload: msg });
   }, []);
@@ -145,7 +166,7 @@ export function useBlueprintColaboracao({ branchId, userId, email, nome, aoReceb
   const avisarTravas = useCallback((texto?: string) => {
     const canal = canalRef.current;
     const { userId: u, nome: n, email: e } = identidadeRef.current;
-    if (!canal || !u) return;
+    if (!canal || !conectadoRef.current || !u) return;
     void canal.send({ type: 'broadcast', event: 'travas', payload: { autorId: u, autorNome: n || e || 'alguém', texto: texto ?? null } });
   }, []);
 

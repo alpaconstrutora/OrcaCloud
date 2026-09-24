@@ -66,6 +66,16 @@ interface OpuraAssetsModuleProps {
   onChangeView: (view: string) => void;
 }
 
+// Abas do módulo. Lista de dados (e não um ternário dentro do JSX) porque cada
+// aba agora carrega ícone além do rótulo — ver o bloco `{/* Tabs */}`.
+const ASSET_TABS = [
+  { key: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
+  { key: 'bens', label: 'Ativos Patrimoniais', icon: Package },
+  { key: 'reservas', label: 'Reservas & Locação', icon: Calendar },
+  { key: 'manutencoes', label: 'Manutenções', icon: Wrench },
+  { key: 'custos_rateio', label: 'Custos & Rateio', icon: TrendingDown },
+] as const;
+
 // Tabela "Ativos Patrimoniais" (aba Ativos) — guia §1/§2.
 // De `brand_model` a `documents`: eram o painel de detalhe da direita, que deixou
 // de existir em 2026-09-09 (ver docs/planos/2026-09-09-ativos-tabela-sem-painel.md).
@@ -1469,18 +1479,27 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-gray-200 gap-6 overflow-x-auto">
-        {(['dashboard', 'bens', 'reservas', 'manutencoes', 'custos_rateio'] as const).map(tab => (
+      {/* Tabs — mesmo desenho das abas do Suprimentos › Gestão de Almoxarifado
+          (`InventoryModule.tsx`), a pedido do usuário em 24/09/2026: ícone +
+          rótulo em caixa normal, sublinhado azul na ativa. O que havia aqui era
+          `font-black uppercase tracking-widest` sem ícone — mesma mecânica,
+          outro vocabulário visual.
+
+          `flex-wrap` e não `overflow-x-auto`: rolagem horizontal corta o rótulo
+          sem indício de que há mais aba (guia §19.1). São cinco abas, cabem. */}
+      <div className="flex flex-wrap items-center gap-1 border-b border-gray-200">
+        {ASSET_TABS.map(t => (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`pb-3 font-black text-button uppercase tracking-widest transition-colors border-b-2
-              ${activeTab === tab 
-                ? 'border-blue-600 text-blue-600' 
-                : 'border-transparent text-gray-700 hover:text-gray-900'}`}
+            key={t.key}
+            onClick={() => setActiveTab(t.key)}
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === t.key
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
           >
-            {tab === 'bens' ? 'Ativos Patrimoniais' : tab === 'reservas' ? 'Reservas & Locação' : tab === 'manutencoes' ? 'Manutenções' : tab === 'custos_rateio' ? 'Custos & Rateio' : tab}
+            <t.icon className="w-4 h-4" />
+            {t.label}
           </button>
         ))}
       </div>

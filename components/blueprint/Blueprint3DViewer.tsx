@@ -67,6 +67,7 @@ import type { MalhaDoTerreno } from '../../utils/blueprintTopografia';
 import type { ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
 import type { ArmaduraDaPeca, HipotesesDeArmadura } from '../../utils/blueprintArmadura';
 import { ehTransversal, segmentosDaArmaduraDoModelo } from '../../utils/blueprintArmaduraGeometria';
+import { paineisDaPolilinha, pecaNoMundo } from '../../utils/blueprint3dPecas';
 
 interface Props {
   model: BlueprintModel;
@@ -1238,7 +1239,9 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, en
       const geom = new THREE.BoxGeometry(c.larguraMm * S, c.alturaMm * S, c.profundidadeMm * S);
       const cor = c.familia === 'LOUCA' ? '#f8fafc' : c.familia === 'EQUIPAMENTO' ? '#cbd5e1' : c.familia === 'ARMARIO' ? '#b08968' : c.familia === 'CLIMATIZACAO' ? '#5eead4' : '#a3b18a';
       // E11.1: a base pode estar acima do piso (evaporadora, exaustor).
-      out.push({ id: c.id, geom, pos: [c.at.x * S, (nivel.elevationMm + (c.cotaMm ?? 0) + c.alturaMm / 2) * S, -c.at.y * S], rot: (c.rotacaoGraus * Math.PI) / 180, cor, sugerido: !!c.sugerido });
+      // A convenção mora em `blueprint3dPecas` (Z = y do modelo, giro invertido) — a mesma das paredes.
+      const { pos, rot } = pecaNoMundo(c.at, c.rotacaoGraus, c.alturaMm, c.cotaMm ?? 0, nivel.elevationMm);
+      out.push({ id: c.id, geom, pos, rot, cor, sugerido: !!c.sugerido });
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1252,13 +1255,9 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, en
       if (ocultos?.has(g.id)) continue;
       const nivel = model.levels.find((l) => l.id === g.levelId);
       if (!nivel) continue;
-      for (let i = 1; i < g.pontos.length; i++) {
-        const a = g.pontos[i - 1];
-        const b = g.pontos[i];
-        const L = Math.hypot(b.x - a.x, b.y - a.y);
-        if (L < 1) continue;
-        const geom = new THREE.BoxGeometry(L * S, g.alturaMm * S, 50 * S);
-        out.push({ id: g.id, chave: `${g.id}-${i}`, geom, pos: [((a.x + b.x) / 2) * S, (nivel.elevationMm + g.alturaMm / 2) * S, -((a.y + b.y) / 2) * S], rot: Math.atan2(b.y - a.y, b.x - a.x), material: g.material, sugerido: !!g.sugerido });
+      for (const painel of paineisDaPolilinha(g.pontos, g.alturaMm, nivel.elevationMm)) {
+        const geom = new THREE.BoxGeometry(painel.comprimentoM, g.alturaMm * S, 50 * S);
+        out.push({ id: g.id, chave: `${g.id}-${painel.trecho}`, geom, pos: painel.pos, rot: painel.rot, material: g.material, sugerido: !!g.sugerido });
       }
     }
     return out;

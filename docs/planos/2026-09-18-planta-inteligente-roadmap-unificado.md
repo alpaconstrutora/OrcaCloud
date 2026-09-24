@@ -1765,6 +1765,19 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 
 **Fora desta fase**: o terceiro aviso do mesmo console, `Failed to fetch unread count: AbortError`, vem de `components/Layout.tsx` (badge de notificações do layout global, de outra frente) — é um `fetch` abortado, provavelmente por navegação, e não pertence à Planta.
 
+### P2.44 — Guarda-corpo e componentes espelhados no 3D (23/09/2026) · print do usuário
+
+**Relato**: o guarda-corpo desenhado na varanda aparecia **fora do prédio** no 3D.
+
+**A causa**: a convenção do viewer é **`Z do mundo = y do modelo, sem trocar o sinal`** — é o que a parede faz (`new Vector3(b.x - a.x, 0, b.y - a.y)` para a direção, `((a.y + b.y) / 2) * S` para a posição), e o que laje, água, estrutura, terminais e quadros (`caixaDaPeca`) já faziam. ⚠️ **Guarda-corpo e componentes usavam `-y` como Z** (e o giro com o sinal do modelo): ficavam ESPELHADOS em torno do eixo X do mundo, em relação a todo o resto. Perto da origem a diferença quase não aparece; a dezenas de metros dela — qualquer planta real — a peça vai parar longe do prédio. (O `shapeDoAnel` nega o `y` por outro motivo: ele passa por um `rotateX(-π/2)`, e as duas negações se cancelam.)
+
+**A correção**: `utils/blueprint3dPecas.ts` (novo) com a convenção num lugar só e testável — `pecaNoMundo` (peça pontual: móvel, louça, equipamento) e `paineisDaPolilinha` (um painel por trecho de guarda-corpo/corrimão). O viewer passa a usá-las. O giro inverte de sinal junto, como a seção estrutural já fazia.
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-xss-sinks.sh` ok · suíte cheia **446 arquivos / 5133 testes** · `npm run build` ok.
+- Teste novo `blueprint3dPecas.test.ts` (4), que compara com a **conta da parede** copiada do viewer: um guarda-corpo em cima de uma parede a 40 m da origem cai exatamente sobre ela (com o sinal errado, o Z sairia em −25 m — 50 metros fora do lugar); o giro segue a direção do trecho no mundo, e a ponta do painel girado cai onde o trecho termina; polilinha de três pontos vira dois painéis numerados e trecho de clique duplo não vira nada; a peça pontual usa o mesmo Z, o giro invertido e a cota acima do piso.
+- App real (escritas bloqueadas: 14, 0 erros), Planta 14/09 em 3D, **mesma câmera antes e depois**: antes havia uma caixa verde-oliva (componente) flutuando FORA da fachada, no Pavimento 1; depois ela não está mais lá fora — voltou para dentro do volume. O quadro elétrico preto aparece igual nas duas imagens, como esperado: `caixaDaPeca` já usava a convenção certa.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

@@ -1390,156 +1390,190 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                     <SheetDescription>{empreendimento.name}</SheetDescription>
                 </SheetHeader>
                 <SheetPanel>
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label className="text-xs font-semibold text-slate-500">Competência</label>
-                                <input
-                                    type="month"
-                                    value={form.competencia.slice(0, 7)}
-                                    // Trocar a competência INVALIDA a prévia: ela
-                                    // é o que `salvar()` grava como cotas e
-                                    // despesas, mas a competência gravada sai do
-                                    // FORM. Sem isto dava para calcular agosto,
-                                    // mudar o campo para setembro e salvar um
-                                    // rateio de setembro com as despesas de
-                                    // agosto — sem nada na tela indicando a
-                                    // troca. Mesmo motivo do critério, abaixo.
-                                    onChange={e => { setForm(f => ({ ...f, competencia: `${e.target.value}-01` })); setPrevia(null); }}
-                                    className="mt-1 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                                />
+                    {/* §30 — malha do formulário. Antes: `mt-1` (4px) entre
+                        rótulo e campo, `gap-3` (12px) entre campos, tudo num
+                        `space-y-4` sem seção, e o Critério — um `<select>` —
+                        ocupando a linha inteira, que a §30 proíbe justamente
+                        para campo curto. Agora: par 6px, grade 24/16px, seção
+                        com título e linha, 32px entre seções. */}
+                    <div className="space-y-8">
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                                <Calculator className="w-4 h-4 text-blue-600" />
+                                <h3 className="text-sm font-semibold text-gray-900">O que ratear</h3>
                             </div>
-                            <div>
-                                <label className="text-xs font-semibold text-slate-500">Tipo</label>
-                                <select
-                                    value={form.tipo}
-                                    // O tipo também é gravado a partir do form, e
-                                    // decide o pagador padrão da cobrança —
-                                    // prévia calculada como ordinária não pode
-                                    // ser salva como extraordinária.
-                                    onChange={e => { setForm(f => ({ ...f, tipo: e.target.value as TipoRateio })); setPrevia(null); }}
-                                    className="mt-1 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                                >
-                                    <option value="ORDINARIO">Ordinário</option>
-                                    <option value="EXTRAORDINARIO">Extraordinário</option>
-                                </select>
-                                <p className="text-xs text-gray-400 mt-1">
-                                    {form.tipo === 'EXTRAORDINARIO'
-                                        ? 'Obra e benfeitoria são do PROPRIETÁRIO, não do inquilino — por isso rateio separado.'
-                                        : 'Despesa corrente do mês.'}
-                                </p>
-                            </div>
-                        </div>
 
-                        <div>
-                            <label className="text-xs font-semibold text-slate-500">Critério</label>
-                            <select
-                                value={form.criterio}
-                                onChange={e => { setForm(f => ({ ...f, criterio: e.target.value as CriterioRateio })); setPrevia(null); }}
-                                className="mt-1 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                            >
-                                {(Object.keys(CRITERIO_LABEL) as CriterioRateio[]).map(c => (
-                                    <option key={c} value={c}>{CRITERIO_LABEL[c]}</option>
-                                ))}
-                            </select>
-                            <p className="text-xs text-gray-400 mt-1">Exige: {CRITERIO_EXIGE[form.criterio]}.</p>
-                        </div>
-
-                        {form.criterio === 'GRUPO' && (
-                            <div>
-                                <div className="flex items-center justify-between gap-3">
-                                    <label className="text-xs font-semibold text-slate-500">Unidades do grupo</label>
-                                    <div className="flex items-center gap-1.5">
-                                        <button
-                                            type="button"
-                                            onClick={() => { setDoGrupo(new Set(unidades.map(u => u.id))); setPrevia(null); }}
-                                            className="h-7 px-2 rounded-[6px] text-xs font-medium text-gray-500 hover:bg-gray-100 transition-all"
-                                        >
-                                            Todas
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => { setDoGrupo(new Set()); setPrevia(null); }}
-                                            className="h-7 px-2 rounded-[6px] text-xs font-medium text-gray-500 hover:bg-gray-100 transition-all"
-                                        >
-                                            Nenhuma
-                                        </button>
-                                    </div>
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500">Competência</label>
+                                    <input
+                                        type="month"
+                                        value={form.competencia.slice(0, 7)}
+                                        // Trocar a competência INVALIDA a prévia: ela
+                                        // é o que `salvar()` grava como cotas e
+                                        // despesas, mas a competência gravada sai do
+                                        // FORM. Sem isto dava para calcular agosto,
+                                        // mudar o campo para setembro e salvar um
+                                        // rateio de setembro com as despesas de
+                                        // agosto — sem nada na tela indicando a
+                                        // troca. Mesmo motivo do critério, abaixo.
+                                        onChange={e => { setForm(f => ({ ...f, competencia: `${e.target.value}-01` })); setPrevia(null); }}
+                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                                    />
                                 </div>
-                                {carregandoUnidades ? (
-                                    <p className="text-xs text-gray-400 mt-2">Carregando as unidades...</p>
-                                ) : unidades.length === 0 ? (
-                                    <p className="text-xs text-amber-600 flex items-start gap-1.5 mt-2">
-                                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                                        Este condomínio não tem unidades cadastradas — não há grupo a formar.
+
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500">Tipo</label>
+                                    <select
+                                        value={form.tipo}
+                                        // O tipo também é gravado a partir do form, e
+                                        // decide o pagador padrão da cobrança —
+                                        // prévia calculada como ordinária não pode
+                                        // ser salva como extraordinária.
+                                        onChange={e => { setForm(f => ({ ...f, tipo: e.target.value as TipoRateio })); setPrevia(null); }}
+                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                                    >
+                                        <option value="ORDINARIO">Ordinário</option>
+                                        <option value="EXTRAORDINARIO">Extraordinário</option>
+                                    </select>
+                                    <p className="text-xs text-gray-400">
+                                        {form.tipo === 'EXTRAORDINARIO'
+                                            ? 'Obra e benfeitoria são do PROPRIETÁRIO, não do inquilino — por isso rateio separado.'
+                                            : 'Despesa corrente do mês.'}
                                     </p>
-                                ) : (
-                                    <div className="mt-1 max-h-56 overflow-y-auto rounded-[10px] border border-gray-200 divide-y divide-gray-100">
-                                        {unidades.map(u => (
-                                            <label
-                                                key={u.id}
-                                                className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={doGrupo.has(u.id)}
-                                                    onChange={() => {
-                                                        setDoGrupo(prev => {
-                                                            const proximo = new Set(prev);
-                                                            if (proximo.has(u.id)) proximo.delete(u.id);
-                                                            else proximo.add(u.id);
-                                                            return proximo;
-                                                        });
-                                                        // Trocar quem está no grupo muda TODAS as cotas —
-                                                        // a prévia na tela deixaria de corresponder.
-                                                        setPrevia(null);
-                                                    }}
-                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                />
-                                                <span className="text-sm font-normal text-gray-700">{u.label}</span>
-                                            </label>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500">Critério</label>
+                                    <select
+                                        value={form.criterio}
+                                        onChange={e => { setForm(f => ({ ...f, criterio: e.target.value as CriterioRateio })); setPrevia(null); }}
+                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                                    >
+                                        {(Object.keys(CRITERIO_LABEL) as CriterioRateio[]).map(c => (
+                                            <option key={c} value={c}>{CRITERIO_LABEL[c]}</option>
                                         ))}
+                                    </select>
+                                    <p className="text-xs text-gray-400">Exige: {CRITERIO_EXIGE[form.criterio]}.</p>
+                                </div>
+
+                                {form.criterio === 'FIXO' && (
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-slate-500">Valor por unidade</label>
+                                        <input
+                                            type="text" inputMode="decimal"
+                                            value={form.valorFixo}
+                                            onChange={e => setForm(f => ({ ...f, valorFixo: e.target.value }))}
+                                            placeholder="0,00"
+                                            className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                                        />
+                                        <p className="text-xs text-gray-400">
+                                            No valor fixo o total arrecadado é consequência, e pode não bater com a despesa.
+                                        </p>
                                     </div>
                                 )}
-                                <p className="text-xs text-gray-400 mt-1">
-                                    {doGrupo.size} de {unidades.length} no grupo — a despesa é dividida só entre elas.
+
+                                {/* A lista de unidades é conteúdo LARGO, não campo
+                                    curto: ela atravessa as duas colunas (§30). */}
+                                {form.criterio === 'GRUPO' && (
+                                    <div className="col-span-2 space-y-1.5">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <label className="text-xs font-semibold text-slate-500">Unidades do grupo</label>
+                                            <div className="flex items-center gap-1.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setDoGrupo(new Set(unidades.map(u => u.id))); setPrevia(null); }}
+                                                    className="h-7 px-2 rounded-[6px] text-xs font-medium text-gray-500 hover:bg-gray-100 transition-all"
+                                                >
+                                                    Todas
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setDoGrupo(new Set()); setPrevia(null); }}
+                                                    className="h-7 px-2 rounded-[6px] text-xs font-medium text-gray-500 hover:bg-gray-100 transition-all"
+                                                >
+                                                    Nenhuma
+                                                </button>
+                                            </div>
+                                        </div>
+                                        {carregandoUnidades ? (
+                                            <p className="text-xs text-gray-400">Carregando as unidades...</p>
+                                        ) : unidades.length === 0 ? (
+                                            <p className="text-xs text-amber-600 flex items-start gap-1.5">
+                                                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                                                Este condomínio não tem unidades cadastradas — não há grupo a formar.
+                                            </p>
+                                        ) : (
+                                            <div className="max-h-56 overflow-y-auto rounded-[10px] border border-gray-200 divide-y divide-gray-100">
+                                                {unidades.map(u => (
+                                                    <label
+                                                        key={u.id}
+                                                        className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors"
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={doGrupo.has(u.id)}
+                                                            onChange={() => {
+                                                                setDoGrupo(prev => {
+                                                                    const proximo = new Set(prev);
+                                                                    if (proximo.has(u.id)) proximo.delete(u.id);
+                                                                    else proximo.add(u.id);
+                                                                    return proximo;
+                                                                });
+                                                                // Trocar quem está no grupo muda TODAS as cotas —
+                                                                // a prévia na tela deixaria de corresponder.
+                                                                setPrevia(null);
+                                                            }}
+                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                        />
+                                                        <span className="text-sm font-normal text-gray-700">{u.label}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        )}
+                                        <p className="text-xs text-gray-400">
+                                            {doGrupo.size} de {unidades.length} no grupo — a despesa é dividida só entre elas.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Ação da seção, à direita — §30: rodapé de
+                                formulário é linha solta, sem card próprio. */}
+                            <div className="flex justify-end">
+                                <button
+                                    onClick={calcular}
+                                    // Grupo vazio calcularia peso 0 em todas as unidades e
+                                    // devolveria um rateio de R$ 0,00 — que antes dava para
+                                    // salvar e fechar, queimando um número de documento.
+                                    disabled={calculando || (form.criterio === 'GRUPO' && doGrupo.size === 0)}
+                                    title={form.criterio === 'GRUPO' && doGrupo.size === 0
+                                        ? 'Escolha ao menos uma unidade para formar o grupo.'
+                                        : undefined}
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-gray-100 text-gray-700 rounded-[6px] hover:bg-gray-200 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                                >
+                                    <Calculator className="w-[15px] h-[15px]" />
+                                    {calculando ? 'Calculando...' : 'Calcular'}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Sem prévia o painel ficava com um vão enorme entre o
+                            botão e o rodapé — e nada dizendo o que falta fazer.
+                            §12: o vazio é um estado, e tem texto próprio. */}
+                        {!previa && !calculando && (
+                            <div className="text-center py-10 border-t border-gray-100">
+                                <Calculator className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                                <p className="text-sm text-gray-500 max-w-sm mx-auto">
+                                    Calcule para ver quais despesas entram e quanto cada unidade paga.
+                                    Nada é gravado até você salvar o rascunho.
                                 </p>
                             </div>
                         )}
-
-                        {form.criterio === 'FIXO' && (
-                            <div>
-                                <label className="text-xs font-semibold text-slate-500">Valor por unidade</label>
-                                <input
-                                    type="text" inputMode="decimal"
-                                    value={form.valorFixo}
-                                    onChange={e => setForm(f => ({ ...f, valorFixo: e.target.value }))}
-                                    placeholder="0,00"
-                                    className="mt-1 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                                />
-                                <p className="text-xs text-gray-400 mt-1">
-                                    No valor fixo o total arrecadado é consequência, e pode não bater com a despesa.
-                                </p>
-                            </div>
-                        )}
-
-                        <button
-                            onClick={calcular}
-                            // Grupo vazio calcularia peso 0 em todas as unidades e
-                            // devolveria um rateio de R$ 0,00 — que antes dava para
-                            // salvar e fechar, queimando um número de documento.
-                            disabled={calculando || (form.criterio === 'GRUPO' && doGrupo.size === 0)}
-                            title={form.criterio === 'GRUPO' && doGrupo.size === 0
-                                ? 'Escolha ao menos uma unidade para formar o grupo.'
-                                : undefined}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-gray-100 text-gray-700 rounded-[6px] hover:bg-gray-200 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
-                        >
-                            <Calculator className="w-[15px] h-[15px]" />
-                            {calculando ? 'Calculando...' : 'Calcular'}
-                        </button>
 
                         {previa && (
-                            <div className="space-y-3 pt-2">
+                            <div className="space-y-3">
+
                                 <div className="bg-gray-50 rounded-[10px] p-3 text-sm">
                                     <div className="flex justify-between">
                                         <span className="text-gray-500">Despesas da competência</span>
@@ -1715,33 +1749,44 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                     </SheetDescription>
                 </SheetHeader>
                 <SheetPanel>
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label className="text-xs font-semibold text-slate-500">Vencimento</label>
-                                <input
-                                    type="date"
-                                    value={vencimento}
-                                    onChange={e => setVencimento(e.target.value)}
-                                    className="mt-1 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                                />
-                                <p className="text-xs text-gray-400 mt-1">Mesma data para todas as cotas desta competência.</p>
+                    {/* §30, mesma malha do "Novo rateio": par rótulo/campo em
+                        6px, grade 24/16px, seção com título e linha, 32px entre
+                        seções. As duas sheets vivem na mesma aba — deixar só uma
+                        no padrão seria trocar um desalinho por outro. */}
+                    <div className="space-y-8">
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                                <FileText className="w-4 h-4 text-blue-600" />
+                                <h3 className="text-sm font-semibold text-gray-900">Como cobrar</h3>
                             </div>
-                            <div>
-                                <label className="text-xs font-semibold text-slate-500">Cobrar de</label>
-                                <select
-                                    value={pagador}
-                                    onChange={e => trocarPagador(e.target.value as PagadorDaCota)}
-                                    className="mt-1 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                                >
-                                    <option value="RESPONSAVEL">Responsável financeiro</option>
-                                    <option value="PROPRIETARIO">Proprietário</option>
-                                </select>
-                                <p className="text-xs text-gray-400 mt-1">
-                                    {sheetCobranca?.tipo === 'EXTRAORDINARIO'
-                                        ? 'Obra e benfeitoria são obrigação do proprietário — por isso o padrão aqui.'
-                                        : 'Despesa corrente costuma ser do responsável financeiro.'}
-                                </p>
+
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500">Vencimento</label>
+                                    <input
+                                        type="date"
+                                        value={vencimento}
+                                        onChange={e => setVencimento(e.target.value)}
+                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                                    />
+                                    <p className="text-xs text-gray-400">Mesma data para todas as cotas desta competência.</p>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500">Cobrar de</label>
+                                    <select
+                                        value={pagador}
+                                        onChange={e => trocarPagador(e.target.value as PagadorDaCota)}
+                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                                    >
+                                        <option value="RESPONSAVEL">Responsável financeiro</option>
+                                        <option value="PROPRIETARIO">Proprietário</option>
+                                    </select>
+                                    <p className="text-xs text-gray-400">
+                                        {sheetCobranca?.tipo === 'EXTRAORDINARIO'
+                                            ? 'Obra e benfeitoria são obrigação do proprietário — por isso o padrão aqui.'
+                                            : 'Despesa corrente costuma ser do responsável financeiro.'}
+                                    </p>
+                                </div>
                             </div>
                         </div>
 

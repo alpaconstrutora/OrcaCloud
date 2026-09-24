@@ -116,6 +116,13 @@ import ActionIconButton from '../ui/ActionIconButton';
 import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
 import MenuEncaixe from './MenuEncaixe';
 import { TIPOS_DE_ENCAIXE, ROTULO_DO_ENCAIXE } from '../../utils/blueprintEncaixe';
+import {
+  alvosDeEncosto,
+  encostoDaPonta,
+  guardaCorposSoltos,
+  pontosCorrigidos,
+  MAX_ENCOSTO_MM,
+} from '../../utils/blueprintGuardaCorpoEncosto';
 import type { TipoDePontoEletrico, AcabamentosDoAmbiente, ObjectId } from '../../utils/blueprintKernel';
 import {
   MATERIAIS_DE_SUB_REGIAO,
@@ -4926,6 +4933,46 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     }
   }
 
+  /**
+   * As pontas de guarda-corpo que deveriam encostar e não encostam (P2.45).
+   *
+   * Guarda-corpo não entra no arranjo planar — não fecha ambiente, não aparece
+   * em `pontasSoltasDoNivel` —, então nada no app olhava para ele. Este é o
+   * único aviso que existe sobre a peça, e a conta é a MESMA que o traçado usa
+   * para encostar: o que o aviso lista é exatamente o que o botão conserta.
+   */
+  const guardaCorposSoltosDoNivel = useMemo(
+    () => (levelId ? guardaCorposSoltos(editor.model, levelId) : []),
+    [editor.model, levelId],
+  );
+
+  function encostarGuardaCorposAgora() {
+    if (guardaCorposSoltosDoNivel.length === 0) return;
+    const porPeca = new Map<ObjectId, typeof guardaCorposSoltosDoNivel>();
+    for (const s of guardaCorposSoltosDoNivel) {
+      porPeca.set(s.guardaCorpoId, [...(porPeca.get(s.guardaCorpoId) ?? []), s]);
+    }
+    const comandos: Command[] = [];
+    for (const [guardaCorpoId, correcoes] of porPeca) {
+      const g = (editor.model.guardaCorpos ?? []).find((x) => x.id === guardaCorpoId);
+      if (!g) continue;
+      const pontos = pontosCorrigidos(g.pontos, correcoes);
+      // Trecho que virou nulo não vai: o kernel recusaria o lote inteiro.
+      if (pontos.some((p, i) => i > 0 && p.x === pontos[i - 1].x && p.y === pontos[i - 1].y)) continue;
+      comandos.push({ type: 'SetGuardaCorpoProps', guardaCorpoId, pontos });
+    }
+    if (comandos.length === 0) return;
+    try {
+      const maior = Math.max(...guardaCorposSoltosDoNivel.map((s) => s.folgaMm));
+      editor.runBatch(comandos);
+      setAvisoConexaoT(
+        `${guardaCorposSoltosDoNivel.length} ponta(s) de guarda-corpo encostada(s) (a maior andou ${maior} mm). Desfazer reverte tudo de uma vez.`,
+      );
+    } catch (e) {
+      setAvisoConexaoT(e instanceof Error ? `O desenho recusou: ${e.message}` : 'O desenho recusou o encosto.');
+    }
+  }
+
   function conectarAgora() {
     const comandos = comandosDeConexao(editor.model);
     if (comandos.length === 0) {
@@ -5432,10 +5479,30 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     const criados = editor.run({ type: 'AddAnotacao', vista: { tipo: 'PLANTA', levelId }, tipo, pontos, ...(revisao ? { revisao } : {}) });
     if (criados.length > 0) selecionar(criados);
   }
-  /** O guarda-corpo/corrimão nasce de dois cliques, com a altura padrão do tipo; o painel ajusta. */
+  /**
+   * O guarda-corpo/corrimão nasce de dois cliques, com a altura padrão do tipo;
+   * o painel ajusta.
+   *
+   * ⚠️ AS PONTAS ENCOSTAM ANTES DE NASCER (P2.45). O ímã do traçado já puxa para
+   * parede e canto, mas o alcance dele é `SNAP_PX / escala`: no zoom de trabalho
+   * não chega a 16 cm. Foi assim que o guarda-corpo real do usuário nasceu com
+   * uma ponta a 0 mm da parede e a outra a 163 mm da ponta da parede que
+   * continua o mesmo eixo — um buraco de 16 cm no peitoril, invisível em planta.
+   * Aqui a régua é o milímetro do modelo (300 mm), não o pixel da tela.
+   */
   function adicionarGuardaCorpo(a: Point, b: Point) {
     if (!levelId) return;
-    const criados = editor.run({ type: 'AddGuardaCorpo', levelId, tipo: tipoDeGuardaCorpo, pontos: [a, b] });
+    const alvos = alvosDeEncosto(editor.model, levelId);
+    const encostar = (p: Point, vizinho: Point): Point => {
+      const e = encostoDaPonta(p, { x: p.x - vizinho.x, y: p.y - vizinho.y }, alvos);
+      return e ? point(e.to.x, e.to.y) : p;
+    };
+    const pa = encostar(a, b);
+    const pb = encostar(b, a);
+    // Encostar as duas pontas no mesmo lugar anularia o trecho — o kernel recusa,
+    // e recusar um clique é pior do que deixar a segunda ponta onde ela estava.
+    const pontos = pa.x === pb.x && pa.y === pb.y ? [a, b] : [pa, pb];
+    const criados = editor.run({ type: 'AddGuardaCorpo', levelId, tipo: tipoDeGuardaCorpo, pontos });
     if (criados.length > 0) selecionar(criados);
   }
   /** O componente nasce com as medidas do catálogo, de pé; o painel gira e ajusta. */
@@ -11487,6 +11554,38 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   </p>
                 </>
               )}
+            </div>
+          )}
+
+          {/* O GUARDA-CORPO QUE NÃO ENCOSTA (P2.45).
+              Bloco IRMÃO, e não dentro do de pontas soltas: guarda-corpo não
+              entra no arranjo planar — não fecha ambiente e nunca apareceu em
+              `pontasSoltasDoNivel` —, então uma planta com todos os contornos
+              fechados esconderia o aviso justamente quando ele é o único que
+              existe sobre a peça. No guarda-corpo real do usuário a ponta ficou
+              a 163 mm da parede que continua o mesmo eixo: em planta, com a
+              peça desenhada como linha fina, não se vê; no 3D é um buraco de
+              16 cm no peitoril, que é o oposto do que um guarda-corpo faz. */}
+          {guardaCorposSoltosDoNivel.length > 0 && (
+            <div className="border-b border-amber-200 bg-amber-50 px-4 py-3" data-testid="guarda-corpos-soltos">
+              <p className="text-xs text-amber-800">
+                <strong>
+                  {guardaCorposSoltosDoNivel.length} ponta(s) de guarda-corpo sem encostar.
+                </strong>{' '}
+                A maior folga é de {Math.max(...guardaCorposSoltosDoNivel.map((s) => s.folgaMm))} mm —
+                em planta a peça é uma linha fina e a folga não se vê, mas no 3D ela é um vão
+                aberto no peitoril.
+              </p>
+              <button
+                type="button"
+                onClick={encostarGuardaCorposAgora}
+                title={`Leva cada ponta até a parede (ou o guarda-corpo) mais próximo, no máximo ${MAX_ENCOSTO_MM} mm`}
+                className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-amber-400 bg-white px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
+                data-testid="encostar-guarda-corpos"
+              >
+                <CornerDownRight className="h-3.5 w-3.5" />
+                Encostar {guardaCorposSoltosDoNivel.length} ponta(s)
+              </button>
             </div>
           )}
 

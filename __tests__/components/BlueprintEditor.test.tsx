@@ -5790,3 +5790,46 @@ describe('BlueprintEditor · pavimento criado na importação (P2.32)', () => {
     expect(salvo.walls.filter((x) => x.levelId === destino.levels[0].id)).toHaveLength(4);
   }, 60000);
 });
+
+/**
+ * O GUARDA-CORPO SOLTO (23/09/2026, P2.45).
+ *
+ * ⚠️ O caso é REAL, medido no banco: o guarda-corpo que o usuário inseriu na
+ * Planta 14/09 vai de (3480, 975) a (3480, 6470). A ponta de baixo caiu a 0 mm
+ * do eixo de uma parede; a de cima parou a 163 mm da ponta de uma parede que
+ * está no MESMO eixo x = 3480. Em planta a peça é uma linha fina e a folga não
+ * se vê; no 3D é um buraco de 16 cm no peitoril. Antes desta fase NADA no app
+ * avisava: guarda-corpo não entra no arranjo planar, então não aparece em
+ * `pontasSoltasDoNivel` nem em nenhum outro diagnóstico.
+ */
+describe('BlueprintEditor · guarda-corpo que não encosta', () => {
+  it('a ponta a 163 mm da parede colinear é anunciada, e o botão a encosta', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [
+        { type: 'AddWall', levelId: t, a: k.point(2000, 975), b: k.point(5000, 975), thicknessMm: 150, heightMm: 2800 },
+        { type: 'AddWall', levelId: t, a: k.point(3480, 6633), b: k.point(3480, 8977), thicknessMm: 150, heightMm: 2800 },
+        { type: 'AddGuardaCorpo', levelId: t, tipo: 'GUARDA_CORPO', pontos: [k.point(3480, 975), k.point(3480, 6470)] },
+      ]).model,
+    );
+    await montar();
+    const user = userEvent.setup();
+
+    const secao = document.querySelector<HTMLButtonElement>('button[aria-controls="secao-ambientes-corpo"]')!;
+    expect(secao).toBeTruthy();
+    if (secao.getAttribute('aria-expanded') === 'false') await user.click(secao);
+
+    const aviso = await screen.findByTestId('guarda-corpos-soltos');
+    expect(aviso).toHaveTextContent('1 ponta(s) de guarda-corpo sem encostar');
+    // A folga medida, em milímetro — o número que o usuário não via.
+    expect(aviso).toHaveTextContent('163 mm');
+    // A ponta de baixo, que já está dentro do corpo da parede, NÃO entra na conta.
+    expect(aviso).not.toHaveTextContent('2 ponta(s)');
+
+    await user.click(within(aviso).getByTestId('encostar-guarda-corpos'));
+    // O aviso some porque a folga acabou — e some pela MESMA conta que o listou.
+    await waitFor(() => expect(screen.queryByTestId('guarda-corpos-soltos')).toBeNull());
+  }, 60000);
+});

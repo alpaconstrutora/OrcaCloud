@@ -1778,6 +1778,35 @@ Próxima: P2.11 — recorte do envelope para servidão no meio do lote (E3.1), o
 - Teste novo `blueprint3dPecas.test.ts` (4), que compara com a **conta da parede** copiada do viewer: um guarda-corpo em cima de uma parede a 40 m da origem cai exatamente sobre ela (com o sinal errado, o Z sairia em −25 m — 50 metros fora do lugar); o giro segue a direção do trecho no mundo, e a ponta do painel girado cai onde o trecho termina; polilinha de três pontos vira dois painéis numerados e trecho de clique duplo não vira nada; a peça pontual usa o mesmo Z, o giro invertido e a cota acima do piso.
 - App real (escritas bloqueadas: 14, 0 erros), Planta 14/09 em 3D, **mesma câmera antes e depois**: antes havia uma caixa verde-oliva (componente) flutuando FORA da fachada, no Pavimento 1; depois ela não está mais lá fora — voltou para dentro do volume. O quadro elétrico preto aparece igual nas duas imagens, como esperado: `caixaDaPeca` já usava a convenção certa.
 
+### P2.45 — O guarda-corpo que não encosta na parede (23/09/2026) · *"verifique a conexão de uma guarda-corpo com uma parede"*
+
+**A verificação, no dado real.** O guarda-corpo que o usuário inseriu (branch principal da *Planta 23/09/2026*, salvo em 24/09 01:36) vai de (3480, 975) a (3480, 6470), vertical. Medindo cada ponta contra as paredes do mesmo pavimento:
+
+| Ponta | Parede mais próxima | Ao eixo | À face |
+|---|---|---|---|
+| (3480, 975) | horizontal, 150 mm | **0 mm** — grudou | −75 (entra na parede) |
+| (3480, 6470) | vertical (3480, 6633)→(3480, 8977), 150 mm | **163 mm** | **88 mm de folga** |
+
+A segunda ponta parou 163 mm antes de uma parede que está **no mesmo eixo x = 3480** — é a continuação exata dela. Em planta, com o guarda-corpo desenhado como linha fina, esses 163 mm não se veem no zoom de trabalho; no 3D são um buraco de 16 cm no peitoril, na peça cuja função é ser barreira.
+
+**O que o código explica.** Desenhar guarda-corpo TEM ímã: a ferramenta usa o mesmo `capturarTracado` da parede (extremidade, canto, e os notáveis meio/sobre/perpendicular/extensão/interseção, todos ligados por padrão) — foi assim que a primeira ponta caiu em 0 mm. ⚠️ Só que o alcance dele é `SNAP_PX / escala`: 12 px convertidos em milímetro pelo zoom, e em zoom de trabalho 163 mm ficam fora. Depois do clique não havia mais nada: guarda-corpo não entra no arranjo planar, então não fecha ambiente e **nunca apareceu em `pontasSoltasDoNivel`** nem em nenhum outro diagnóstico. E `segmentosParaEncaixe` só carregava paredes, trechos de rede e eixos — a varanda em L são duas peças de dois cliques, e a segunda só emendava na primeira se o clique acertasse o mesmo milímetro.
+
+**O que entrou**
+
+- **`utils/blueprintGuardaCorpoEncosto.ts`** (novo) — a regra pura, uma pergunta só: *para onde esta ponta deveria ir?* `encostoDaPonta` tem dois candidatos, o **EIXO** do alvo (projeção, quando ele atravessa a direção do traço: leva a ponta ao eixo da parede e o painel entra sem fresta) e a **PONTA** dele (o canto). ⚠️ Contra um alvo **paralelo** só vale a ponta, e só topo a topo: grudar no canto de uma parede paralela a 200 mm torceria o traço de quem correu o guarda-corpo rente a ela de propósito. Régua de 300 mm, a mesma de `fecharCantos` no DXF — acima disso é vão, não junção mal fechada (uma régua de 150 mm deixaria o caso real de fora por 13 mm). `guardaCorposSoltos` aplica a mesma conta a todas as pontas do pavimento.
+- **Encostar ao desenhar** — `adicionarGuardaCorpo` passa as duas pontas pela regra antes de criar a peça. A diferença para o ímã é a régua: milímetro do modelo, não pixel da tela.
+- **Aviso e botão** — bloco próprio na seção Ambientes, **irmão** e não dentro do de pontas soltas: uma planta com todos os contornos fechados esconderia o único aviso que existe sobre a peça. O botão usa `SetGuardaCorpoProps.pontos`, que já movia vértice a vértice — **nenhum comando novo no kernel, e nenhum bump**. O que o aviso lista é o que o botão conserta, porque é a mesma função.
+- **O guarda-corpo virou alvo de ímã** — entra em `segmentosParaEncaixe` (espessura nominal de 50 mm, a do painel no 3D) e as pontas da polilinha entram na urna da EXTREMIDADE. Honestamente: isto **não** é o que resolve o caso do usuário (a parede já estava no ímã); resolve a emenda trecho a trecho, que antes não tinha ímã nenhum.
+
+**Prova**
+
+- `npx tsc --noEmit` ok · `check-ui-standard.sh` nos dois .tsx ok · `check-xss-sinks.sh` ok · suíte cheia **447 arquivos / 5143 testes** verdes · `npm run build` ok.
+- `__tests__/blueprintGuardaCorpoEncosto.test.ts` (6), com o **caso real como primeiro teste**: as coordenadas do banco entram, a ponta de baixo não é listada (já está dentro do corpo da parede), a de cima sai com `folgaMm: 163` e destino (3480, 6633), e aplicar zera a lista. Mais: contra parede atravessada vai para o eixo; o guarda-corpo rente a uma paralela **não** é torcido, mas a paralela colinear encosta; 301 mm não é folga; o segundo trecho da varanda em L encosta no primeiro e nunca em si mesmo; vértice do meio não é ponta.
+- `__tests__/components/BlueprintEditor.test.tsx` (+1, 60 s): o editor inteiro montado com as paredes e o guarda-corpo reais → o aviso diz "1 ponta(s)" e "163 mm", e o clique no botão o faz sumir. O `data-testid` não existia antes desta fase, então o caso falha sem ela.
+- **App real** (escritas bloqueadas: 14, 0 erros), abrindo a *Planta 23/09/2026* — a planta onde o defeito está: a seção Ambientes mostra **"1 ponta(s) de guarda-corpo sem encostar. A maior folga é de 163 mm"**. O número que o app anuncia é o mesmo que a medição em SQL tinha dado, por dois caminhos independentes.
+
+**Fica registrado**: o botão não foi clicado na prova do app de propósito — as escritas estavam bloqueadas, e corrigir a planta do usuário é decisão dele. A folga de 163 mm continua no banco até que ele clique.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

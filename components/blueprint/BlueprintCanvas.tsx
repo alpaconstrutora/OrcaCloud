@@ -141,6 +141,7 @@ import {
   type TipoDeEncaixe,
   type SegmentoParaEncaixe,
 } from '../../utils/blueprintEncaixe';
+import { ESPESSURA_DO_GUARDA_CORPO_MM } from '../../utils/blueprintGuardaCorpoEncosto';
 
 /**
  * Canvas do editor de plantas (épico E3).
@@ -2236,11 +2237,20 @@ export default function BlueprintCanvas({
       espessuraMm: w.thicknessMm,
     }));
     for (const t of trechosReais) saida.push({ id: t.id, a: t.a, b: t.b, espessuraMm: t.bitolaMm });
+    // GUARDA-CORPO E CORRIMÃO (P2.45): a varanda em L são DUAS peças de dois
+    // cliques, e sem o trecho anterior aqui a segunda só emendava na primeira
+    // se o clique acertasse o mesmo milímetro — não havia ímã nenhum entre elas.
+    // Espessura nominal para o ímã ter corpo; a peça não tem espessura no modelo.
+    for (const g of guardaCorpos) {
+      for (let i = 1; i < g.pontos.length; i++) {
+        saida.push({ id: g.id, a: g.pontos[i - 1], b: g.pontos[i], espessuraMm: ESPESSURA_DO_GUARDA_CORPO_MM });
+      }
+    }
     // EIXOS: linha sem corpo — o ímã puxa para a linha (SOBRE/PERPENDICULAR) e
     // para os cruzamentos (INTERSECAO), que é para isso que a malha existe.
     for (const e of eixos) saida.push({ id: e.id, a: e.a, b: e.b });
     return saida;
-  }, [paredesDoNivel, trechosReais, eixos]);
+  }, [paredesDoNivel, trechosReais, eixos, guardaCorpos]);
 
   /** As peças circulares, para o encaixe no CENTRO. */
   const circulosParaEncaixe = useMemo(
@@ -2353,6 +2363,20 @@ export default function BlueprintCanvas({
         }
       }
 
+      // PONTAS DE GUARDA-CORPO (P2.45): entram na urna do EIXO, junto das pontas
+      // de parede. A varanda em L sao DUAS pecas de dois cliques, e sem isto a
+      // segunda so emendava na primeira se o clique acertasse o mesmo milimetro.
+      for (const g of guardaCorpos) {
+        if (g.pontos.length === 0) continue;
+        for (const q of [g.pontos[0], g.pontos[g.pontos.length - 1]]) {
+          const d = Math.hypot(q.x - mundo.x, q.y - mundo.y);
+          if (d < limite && d < distEixo) {
+            melhorEixo = q;
+            distEixo = d;
+          }
+        }
+      }
+
       const primeiro = preferirCanto ? melhorCanto : melhorEixo;
       const segundo = preferirCanto ? melhorEixo : melhorCanto;
       const achado = primeiro ?? segundo;
@@ -2395,6 +2419,7 @@ export default function BlueprintCanvas({
     [
       paredesDoNivel,
       encaixesDeEstrutura,
+      guardaCorpos,
       vista.escala,
       passoEfetivo,
       encaixesAtivos,

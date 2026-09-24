@@ -12,7 +12,7 @@
  * coberto" seria mentira, porque não se sabe o preço justamente do que falta.
  */
 import { describe, expect, it } from 'vitest';
-import { coberturaDoOrcamento, ROTULO_DO_ESTADO, type ItemDoCatalogo } from '../utils/blueprintCoberturaOrcamento';
+import { coberturaDoOrcamento, ROTULO_DO_ESTADO, termoDeBuscaDaMedida, type ItemDoCatalogo } from '../utils/blueprintCoberturaOrcamento';
 import type { MapeamentoOrcamento } from '../utils/blueprintBudget';
 
 function mapa(medida: string, item_code: string, active = true): MapeamentoOrcamento {
@@ -117,5 +117,29 @@ describe('cobertura do orçamento', () => {
       CATALOGO,
     );
     expect(c.faltando.map((l) => l.quantidade)).toEqual([1240, 90, 3]);
+  });
+});
+
+/**
+ * TERMO DE BUSCA POR MEDIDA (P2.56).
+ *
+ * ⚠️ É termo de BUSCA, não sugestão de item. A esquadria casa por medida (o
+ * SINAPI escreve "80X210" no nome); "área de parede" não casa com nada — o item
+ * certo depende de bloco, espessura, argamassa e de como a obra orça. O que dá
+ * para fazer sem adivinhar é abrir o catálogo já buscando a palavra certa.
+ */
+describe('termo de busca da medida', () => {
+  it('as medidas conhecidas têm termo próprio, não o rótulo', () => {
+    expect(termoDeBuscaDaMedida('COMPRIMENTO_RODAPE', 'Comprimento de rodapé')).toBe('RODAPE');
+    expect(termoDeBuscaDaMedida('AREA_PAREDE_DUAS_FACES', 'Área de parede (duas faces)')).toBe('REBOCO');
+    expect(termoDeBuscaDaMedida('VOLUME_CONCRETO_PILAR', 'Volume de concreto (pilar)')).toBe('CONCRETO PILAR');
+  });
+
+  it('medida sem entrada cai na primeira palavra de CONTEÚDO do rótulo', () => {
+    // "Área", "de" e "volume" não ajudam quem procura no catálogo.
+    expect(termoDeBuscaDaMedida('MEDIDA_NOVA', 'Área de impermeabilização')).toBe('IMPERMEABILIZACAO');
+    expect(termoDeBuscaDaMedida('OUTRA', 'Volume de escavação')).toBe('ESCAVACAO');
+    // Acento sai do termo: o catálogo é escrito sem acento.
+    expect(termoDeBuscaDaMedida('X', 'Comprimento de grádil')).toBe('GRADIL');
   });
 });

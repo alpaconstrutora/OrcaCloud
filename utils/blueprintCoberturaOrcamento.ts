@@ -135,3 +135,56 @@ export const ROTULO_DO_ESTADO: Record<EstadoDaMedida, string> = {
   UNIDADE_INCOMPATIVEL: 'unidade incompatível',
   DESLIGADO: 'de-para desligado',
 };
+
+/**
+ * O que procurar no catálogo para uma medida sem item (P2.56).
+ *
+ * ⚠️ É TERMO DE BUSCA, não sugestão de item. A esquadria pode casar por medida
+ * (o SINAPI escreve "80X210" no nome); "área de parede" não casa com nada — o
+ * item certo depende de bloco, espessura, argamassa e de como a obra orça. O
+ * que dá para fazer sem adivinhar é abrir o catálogo já buscando a palavra
+ * certa, e deixar a escolha com quem monta o orçamento.
+ *
+ * O fallback é a primeira palavra do rótulo, que é melhor que caixa vazia.
+ */
+const TERMO_POR_MEDIDA: Record<string, string> = {
+  AREA_PISO: 'CONTRAPISO',
+  AREA_PISO_COM_PERDA: 'PISO CERAMICO',
+  AREA_CONSTRUIDA: 'LAJE',
+  COMPRIMENTO_RODAPE: 'RODAPE',
+  AREA_RODAPE: 'RODAPE',
+  PERIMETRO: 'ALVENARIA',
+  AREA_PAREDE_UMA_FACE: 'CHAPISCO',
+  AREA_PAREDE_DUAS_FACES: 'REBOCO',
+  AREA_CORTINA: 'PELE DE VIDRO',
+  COMPRIMENTO_MONTANTE: 'PERFIL ALUMINIO',
+  AREA_BRISE: 'BRISE',
+  COMPRIMENTO_PAREDE: 'ALVENARIA',
+  VOLUME_ALVENARIA: 'ALVENARIA BLOCO',
+  CONTAGEM_PORTAS: 'PORTA',
+  CONTAGEM_JANELAS: 'JANELA',
+  AREA_ESQUADRIAS: 'ESQUADRIA',
+  VOLUME_CONCRETO_PILAR: 'CONCRETO PILAR',
+  VOLUME_CONCRETO_VIGA: 'CONCRETO VIGA',
+  VOLUME_CONCRETO_LAJE: 'CONCRETO LAJE',
+  VOLUME_CONCRETO_FUNDACAO: 'CONCRETO FUNDACAO',
+  AREA_FORMA_PILAR: 'FORMA PILAR',
+  AREA_FORMA_VIGA: 'FORMA VIGA',
+  AREA_FORMA_LAJE: 'FORMA LAJE',
+  AREA_FORMA_FUNDACAO: 'FORMA FUNDACAO',
+};
+
+export function termoDeBuscaDaMedida(medidaId: string, rotulo: string): string {
+  const direto = TERMO_POR_MEDIDA[medidaId];
+  if (direto) return direto;
+  // Sem entrada no mapa: a primeira palavra "de conteúdo" do rótulo. "Área de
+  // forma da viga" → "forma"; artigos e preposições não ajudam ninguém.
+  const vazias = new Set(['area', 'de', 'do', 'da', 'com', 'em', 'por', 'volume', 'comprimento', 'contagem', 'perimetro']);
+  const palavras = rotulo
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length > 2 && !vazias.has(w));
+  return (palavras[0] ?? rotulo).toUpperCase();
+}

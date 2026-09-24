@@ -2091,6 +2091,23 @@ Medido no app, numa planta publicada real: **1 de 12 medidas tinha preço**. As 
 
 **⚠️ Um defeito que o teste pegou antes do usuário.** O bloco nasceu **dentro** do ramo "tem linhas geradas" — então, com zero linhas, o painel dizia só *"Nenhuma linha gerada"*. É exatamente o caso em que a cobertura mais importa: zero linhas significa que a planta inteira está fora do orçamento. O bloco foi movido para fora do ramo.
 
+### P2.56 — Vincular item direto da linha que falta (24/09/2026)
+
+**O atalho que faltava.** A P2.55 passou a dizer *"Área de parede (duas faces) 556 m² · sem item vinculado"*. Só que resolver isso exigia rolar até o formulário, reencontrar a mesma medida num `select` de 40 entradas e **inventar o termo de busca** no catálogo — "área de parede" não acha nada; o que acha é "REBOCO", "CHAPISCO", "ALVENARIA", conforme o que a obra orça naquela superfície.
+
+**O que entrou**
+- Botão **"Vincular item"** em cada linha da cobertura. A medida já vai escolhida; o catálogo abre já buscando.
+- `termoDeBuscaDaMedida` em `blueprintCoberturaOrcamento`: mapa de 24 medidas para o termo que acha o item (`COMPRIMENTO_RODAPE` → `RODAPE`, `AREA_PAREDE_DUAS_FACES` → `REBOCO`, `VOLUME_CONCRETO_PILAR` → `CONCRETO PILAR`). Sem entrada no mapa, cai na primeira palavra **de conteúdo** do rótulo, sem acento — "Área de impermeabilização" → `IMPERMEABILIZACAO` —, que é melhor que caixa vazia.
+- `DatabasePickerModal` ganhou `termoInicial`, aplicado por abertura (chave no estado, não `useEffect`, que brigaria com quem já está digitando).
+
+⚠️ **É termo de BUSCA, não sugestão de item.** A esquadria pôde casar por medida (P2.53) porque o SINAPI escreve "80X210" no nome. "Área de parede" não casa com nada: o item certo depende de bloco, espessura, argamassa e de como a obra orça. O que dá para fazer sem adivinhar é abrir o catálogo na palavra certa — a escolha continua de quem monta o orçamento, e a prévia segue recusando unidade incompatível.
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-ui-standard.sh` ok · `check-xss-sinks.sh` ok · suíte cheia **458 arquivos / 5240 testes** verdes · `npm run build` ok.
+- `__tests__/blueprintCoberturaOrcamento.test.ts` (+2, total 9): as medidas conhecidas têm termo próprio; sem entrada, a primeira palavra de conteúdo do rótulo, sem acento e sem "área/de/volume".
+- `__tests__/components/PainelOrcamento.test.tsx` (+1, total 18): o catálogo abre com o termo da medida e o de-para é salvo com a medida certa e `active: true`.
+- **App real** (escritas bloqueadas: 3, 0 erros), planta publicada: **11 botões "Vincular item"** na lista; clicar no de "Área de parede (duas faces)" abre o modal intitulado *Item para "Área de parede (duas faces)"*, com o campo de descrição preenchido com **REBOCO** e a busca já rodada — **5 resultados**, o primeiro em **M2**, que é a dimensão exigida pela medida.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

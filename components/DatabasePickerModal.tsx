@@ -22,10 +22,19 @@ interface DatabasePickerModalProps {
     zIndex?: number;
     /** true = seleção múltipla (checkbox por linha); onSelectMany fecha o modal ao confirmar. Default false — comportamento antigo intacto. */
     multiple?: boolean;
+    /**
+     * Busca já preenchida ao abrir (P2.56).
+     *
+     * Quem abre o catálogo a partir de uma MEDIDA ("Área de parede sem item")
+     * sabe o que procurar melhor do que a caixa vazia: o termo entra pronto e a
+     * pessoa refina. Muda a cada abertura — por isso a chave no estado inicial
+     * e não um `useEffect`, que brigaria com quem já está digitando.
+     */
+    termoInicial?: string;
     onSelectMany?: (items: SinapiItem[]) => void;
 }
 
-const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClose, onSelect, title, subtitle, zIndex = 110, multiple = false, onSelectMany }) => {
+const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClose, onSelect, title, subtitle, zIndex = 110, multiple = false, onSelectMany, termoInicial }) => {
     const [selected, setSelected] = React.useState<Map<string, SinapiItem>>(new Map());
 
     React.useEffect(() => {
@@ -46,7 +55,13 @@ const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClo
     };
 
     // Search States (Replicated from DatabaseExplorer)
-    const [searchTerm, setSearchTerm] = React.useState('');
+    const [searchTerm, setSearchTerm] = React.useState(termoInicial ?? '');
+    // Abriu de novo com outro termo (outra medida): recomeça dele.
+    const ultimoTermo = React.useRef(termoInicial);
+    if (isOpen && termoInicial !== undefined && termoInicial !== ultimoTermo.current) {
+        ultimoTermo.current = termoInicial;
+        setSearchTerm(termoInicial);
+    }
     const [searchCode, setSearchCode] = React.useState('');
     const [searchType, setSearchType] = React.useState('');
     const [searchGroup, setSearchGroup] = React.useState('');

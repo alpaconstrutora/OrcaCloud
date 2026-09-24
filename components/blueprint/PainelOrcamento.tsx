@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import type { BlueprintStudy } from '../../types/blueprint';
 import { MEDIDAS, MEDIDA_POR_ID, type MapeamentoOrcamento } from '../../utils/blueprintBudget';
-import { ROTULO_DO_ESTADO } from '../../utils/blueprintCoberturaOrcamento';
+import { ROTULO_DO_ESTADO, termoDeBuscaDaMedida } from '../../utils/blueprintCoberturaOrcamento';
+import DatabasePickerModal from '../DatabasePickerModal';
 import {
   listObrasDaOrganizacao,
   listSnapshots,
@@ -123,6 +124,43 @@ export default function PainelOrcamento({
       });
       setNovoCodigo('');
       // A prévia antiga passa a mentir assim que o de-para muda.
+      setPrevia(null);
+      onPrevia?.(null);
+      await recarregar();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'falha ao salvar');
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  /**
+   * Vincular item a uma medida que a cobertura apontou (P2.56).
+   *
+   * ⚠️ O caminho antigo existe e continua: escolher a medida no `select` e
+   * digitar o código. Só que quem acabou de ler "Área de parede (duas faces)
+   * 556 m² · sem item vinculado" tem de reencontrar a mesma medida numa lista de
+   * 40 e descobrir sozinho o que procurar no catálogo. Aqui a medida já vem
+   * escolhida e a busca já vem preenchida — a escolha do item continua sendo de
+   * quem monta o orçamento.
+   */
+  const [vinculando, setVinculando] = useState<{ medidaId: string; rotulo: string } | null>(null);
+
+  async function vincularItem(medidaId: string, itemCode: string) {
+    setOcupado(true);
+    try {
+      await saveMapping({
+        organization_id: study.organization_id,
+        medida: medidaId,
+        item_code: itemCode,
+        phase: '',
+        budget_group: 'Planta Inteligente',
+        agrupamento: 'TOTAL',
+        filtro_ambiente: [],
+        active: true,
+      });
+      // A prévia antiga passa a mentir assim que o de-para muda — o mesmo
+      // cuidado de `adicionar`.
       setPrevia(null);
       onPrevia?.(null);
       await recarregar();
@@ -422,7 +460,16 @@ export default function PainelOrcamento({
                           {l.quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} {l.dimensao.toLowerCase()}
                         </span>{' '}
                         · {ROTULO_DO_ESTADO[l.estado]}
-                        {l.itemCode ? ` (${l.itemCode})` : ''}
+                        {l.itemCode ? ` (${l.itemCode})` : ''}{' '}
+                        <button
+                          type="button"
+                          onClick={() => setVinculando({ medidaId: l.medidaId, rotulo: l.rotulo })}
+                          disabled={ocupado}
+                          className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                          aria-label={`Vincular item a ${l.rotulo}`}
+                        >
+                          Vincular item
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -511,6 +558,21 @@ export default function PainelOrcamento({
           </>
         )}
       </div>
+      {/* CATÁLOGO já buscando o termo da medida (P2.56). É termo de busca, e
+          não sugestão de item: "área de parede" não casa com nenhum item pelo
+          nome — o certo depende de bloco, espessura e de como a obra orça. */}
+      <DatabasePickerModal
+        isOpen={vinculando !== null}
+        onClose={() => setVinculando(null)}
+        title={vinculando ? `Item para "${vinculando.rotulo}"` : 'Item'}
+        subtitle="A unidade do item tem de casar com a dimensão da medida — a prévia recusa o que não casar."
+        termoInicial={vinculando ? termoDeBuscaDaMedida(vinculando.medidaId, vinculando.rotulo) : undefined}
+        onSelect={(item) => {
+          const alvo = vinculando;
+          setVinculando(null);
+          if (alvo) void vincularItem(alvo.medidaId, item.code);
+        }}
+      />
     </div>
   );
 }

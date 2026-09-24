@@ -17,6 +17,18 @@ import type { BlueprintStudy } from '../../types/blueprint';
 const listMappings = vi.fn();
 const preverLancamentos = vi.fn();
 
+// Dúblê do catálogo: expõe o TERMO com que foi aberto — é o que a P2.56
+// promete (abrir já buscando a palavra certa da medida).
+vi.mock('../../components/DatabasePickerModal', () => ({
+  default: ({ isOpen, termoInicial, onSelect }: { isOpen: boolean; termoInicial?: string; onSelect: (i: { code: string }) => void }) =>
+    isOpen ? (
+      <div>
+        <span data-testid="termo-do-catalogo">{termoInicial}</span>
+        <button type="button" onClick={() => onSelect({ code: '87251' })}>escolher-item-dublê</button>
+      </div>
+    ) : null,
+}));
+
 /**
  * A COBERTURA que a prévia passou a trazer (P2.55).
  *
@@ -433,5 +445,46 @@ describe('PainelOrcamento · cobertura', () => {
     expect(lista).toHaveTextContent('sem item vinculado');
     // O item que existe no de-para mas sumiu do catálogo aparece com o código.
     expect(lista).toHaveTextContent('item fora do catálogo (99999)');
+  });
+});
+
+/**
+ * VINCULAR ITEM DIRETO DA LINHA (P2.56).
+ *
+ * O caminho antigo (escolher a medida no select e digitar o código) continua.
+ * O que se trava aqui é o atalho: quem leu "Área de parede 556 m² · sem item"
+ * não deveria reencontrar a medida numa lista de 40 nem inventar o termo de
+ * busca.
+ */
+describe('PainelOrcamento · vincular item pela cobertura', () => {
+  const COM_FALTA = {
+    entries: [],
+    divergencias: [],
+    contexto: CONTEXTO,
+    totalEstimado: 0,
+    cobertura: {
+      linhas: [],
+      medidasComQuantidade: 1,
+      comPreco: 0,
+      totalEstimado: 0,
+      faltando: [
+        { medidaId: 'COMPRIMENTO_RODAPE', rotulo: 'Comprimento de rodapé', dimensao: 'M', quantidade: 109, estado: 'SEM_MAPEAMENTO', itemCode: '', precoUnitario: null, valor: null },
+      ],
+    },
+  };
+
+  it('abre o catálogo com o TERMO da medida e salva o de-para com a medida certa', async () => {
+    const user = userEvent.setup();
+    preverLancamentos.mockResolvedValue(COM_FALTA);
+    await montar();
+    await user.click(await screen.findByRole('button', { name: /prévia/i }));
+
+    await user.click(await screen.findByRole('button', { name: /Vincular item a Comprimento de rodap/ }));
+    // ⚠️ O catálogo abre buscando "RODAPE", não vazio.
+    expect(screen.getByTestId('termo-do-catalogo')).toHaveTextContent('RODAPE');
+
+    await user.click(screen.getByRole('button', { name: /escolher-item-dubl/ }));
+    await waitFor(() => expect(saveMapping).toHaveBeenCalled());
+    expect(saveMapping.mock.calls[0][0]).toMatchObject({ medida: 'COMPRIMENTO_RODAPE', item_code: '87251', active: true });
   });
 });

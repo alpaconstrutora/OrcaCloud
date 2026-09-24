@@ -1954,6 +1954,37 @@ Junto da medida vai a **esquadria do alvo** (nome e item), quando ele tem uma: t
 
 **Fica anotado**: o alvo é a medida que mais se repete no DESENHO, não a comercial. Na planta real isso produz alvos como `219,4×120` — unificado, mas não redondo. Arredondar para a medida de catálogo mexeria também nas peças do alvo (e poderia não caber), então é decisão de outra fase, com o usuário.
 
+### P2.51 — A junta paralela que só precisa de um empurrão (24/09/2026)
+
+**O beco.** `juntasParalelasSemCanto` nomeia a ponta solta que morreu de frente para uma parede PARALELA. Dois eixos paralelos não se cruzam: não há canto a calcular, a ferramenta Juntar recusa, "Conectar automaticamente" não alcança e a lista de vãos não pega. O painel dizia que a saída era selecionar os dois segmentos e mover o conjunto — orientação correta para o caso que a originou, o de uma **divisa** colinear que não acompanha a parede de propósito.
+
+**⚠️ A medição contou outra história.** Na planta real, antes de escrever uma linha de código: **71 pontas soltas, 56 paralelas sem canto, ZERO com divisa**. São parede contra parede, vindas do DXF, e o afastamento **lateral** delas se parte em dois mundos:
+
+| afastamento lateral | quantas |
+|---|---|
+| 0–50 mm | **26** |
+| 0,3–1 m | 13 |
+| acima de 1 m | 17 |
+
+As 26 primeiras não são decisão de projeto: são o mesmo canto desenhado duas vezes com 2 cm de diferença. As outras 30 são paredes distintas que por acaso se olham — encostá-las inventaria geometria, e ficam fora por construção.
+
+**O que entrou.** `utils/blueprintJuntarParalelas.ts` (novo) e um botão no bloco âmbar, ao lado de "Conectar automaticamente" e "Terminar N parede(s)". Quem está solto é quem anda; com as duas pontas soltas, anda a mais curta (a longa estrutura o desenho), desempatando por espessura e depois por id.
+
+**Três coisas que a medição, e não o raciocínio, obrigou a mudar**
+
+1. ⚠️ **Uma ponta por parede, por lote.** O kernel aplica em sequência: mover as duas pontas de um toco levava a segunda para cima de onde a primeira parou, e `Mover o vértice colapsaria a parede` derrubava o **lote inteiro**. Foi o kernel que apontou, aplicando o lote sobre a planta real.
+2. ⚠️ **Só entra o que faz o total CAIR, e isso se mede.** A primeira versão resolvia as 14 pontas visadas e **soltava outras 11** — a parede sai de onde estava e uma vizinhança se desfaz. Saldo positivo no agregado, e ainda assim o usuário apertaria "consertar" e veria bolinhas novas aparecerem. Agora cada junta é aplicada sobre o acumulado e só fica se o número de pontas soltas do pavimento diminuir. Passou de 14 propostas (11 danos) para **9 propostas (1 dano)**.
+3. ⚠️ **Calculado no CLIQUE, não em `useMemo`.** A conta mede o efeito de cada junta no arranjo: **100 ms** na planta real. Num memo sobre `editor.model` isso rodaria a cada comando — a cada clique de desenho. É o mesmo caminho de `conectarAgora`.
+
+**E um texto que se contradizia.** A prova no app mostrou o botão prometendo "menos de 5 cm" e o aviso confessando "a maior andou 223 mm". Os dois estavam certos: a tolerância limita o **desalinho lateral**, e a ponta também desliza no próprio eixo até a ponta da outra parede (o quanto couber na espessura — 386 mm, naquela parede). A tela passou a dizer as duas medidas.
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-ui-standard.sh` ok · `check-xss-sinks.sh` ok · suíte cheia **454 arquivos / 5196 testes** verdes · `npm run build` ok.
+- `__tests__/blueprintJuntarParalelas.test.ts` (6): o desencontro de 20 mm num retângulo fecha o contorno; acima da tolerância não se mexe; **aplicar a proposta nunca piora** (a garantia do filtro); nunca move as duas pontas da mesma parede e o lote é aceito pelo kernel; paredes que se cruzam não entram (ali há canto); tolerância zero desliga.
+- **App real** (escritas bloqueadas: 15, 0 erros), *Planta 23/09/2026*, antes → depois de um clique: **71 → 58 pontas soltas** e **58 → 62 ambientes**, com a mensagem *"9 ponta(s) paralela(s) juntadas — desalinho de até 47 mm; a que mais andou percorreu 223 mm"*.
+
+**Fica anotado**: sobram 58 pontas soltas e 41 juntas paralelas — as de 0,3 m para cima, que são paredes distintas, e as que o filtro de saldo recusou. Fechar essas exige decisão de desenho, não regra automática.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

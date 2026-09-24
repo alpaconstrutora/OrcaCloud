@@ -37,6 +37,7 @@ import {
   Contrast,
   Copy,
   CopyPlus,
+  Combine,
   CornerDownRight,
   DoorOpen,
   Building2,
@@ -174,6 +175,7 @@ import { nucleosDoNivel } from '../../utils/blueprintNucleoVertical';
 import PainelEsquadria from './PainelEsquadria';
 import PainelEsquadrias from './PainelEsquadrias';
 import { comandosDaUnificacao, unificacoesPropostas, TOLERANCIA_PADRAO_MM } from '../../utils/blueprintUnificarEsquadrias';
+import { comandosDeJuntarParalelas, juncoesParalelasProximas, LATERAL_MAXIMA_MM } from '../../utils/blueprintJuntarParalelas';
 import PainelImportarIfc from './PainelImportarIfc';
 import PainelImportarDxf from './PainelImportarDxf';
 import PainelImportarBcf from './PainelImportarBcf';
@@ -5000,6 +5002,41 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       );
     } catch (e) {
       setAvisoConexaoT(e instanceof Error ? `O desenho recusou: ${e.message}` : 'O desenho recusou o encosto.');
+    }
+  }
+
+  /**
+   * Junta as pontas paralelas que estão a um empurrão de fechar (P2.51).
+   *
+   * ⚠️ Calculado NO CLIQUE, e não em `useMemo`, porque a conta mede o efeito
+   * de cada junta no arranjo do pavimento: 100 ms na planta real (195 paredes).
+   * Num memo sobre `editor.model` isso rodaria a cada comando — a cada clique de
+   * desenho — e travaria o traçado. É o mesmo caminho de `conectarAgora`.
+   */
+  function juntarParalelasAgora() {
+    const level = editor.model.levels.find((l) => l.id === levelId);
+    if (!level) return;
+    const juntas = juncoesParalelasProximas(editor.model, level);
+    if (juntas.length === 0) {
+      setAvisoConexaoT(
+        `Nenhuma junta paralela a menos de ${LATERAL_MAXIMA_MM / 10} cm que feche o contorno. ` +
+          'As que sobram estão longe demais para serem junta desfeita — são paredes distintas, e encostá-las inventaria geometria.',
+      );
+      return;
+    }
+    try {
+      const maiorLateral = Math.max(...juntas.map((j) => j.lateralMm));
+      const maiorAndou = Math.max(...juntas.map((j) => j.distanciaMm));
+      editor.runBatch(comandosDeJuntarParalelas(juntas));
+      // As DUAS medidas: o desalinho (que a tolerância limita) e o quanto a ponta
+      // andou (que inclui o deslize no próprio eixo, e por isso pode ser maior).
+      setAvisoConexaoT(
+        `${juntas.length} ponta(s) paralela(s) juntadas — desalinho de até ${maiorLateral} mm; ` +
+          `a que mais andou percorreu ${maiorAndou} mm, deslizando no próprio eixo até a ponta da outra parede. ` +
+          'Desfazer reverte tudo de uma vez.',
+      );
+    } catch (e) {
+      setAvisoConexaoT(e instanceof Error ? `O desenho recusou: ${e.message}` : 'O desenho recusou a junção.');
     }
   }
 
@@ -11484,6 +11521,26 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                     </>
                   )}
                 </p>
+              )}
+
+              {/* AS QUE ESTÃO A UM EMPURRÃO (P2.51).
+                  O parágrafo acima nasceu do caso da DIVISA, em que a recusa é
+                  deliberada. Medido na planta real em 24/09: 56 juntas paralelas,
+                  ZERO com divisa — são parede contra parede, do DXF, e 26 delas
+                  estão a menos de 5 cm. Essas têm conserto, e a conta mede o efeito
+                  de cada uma antes de propor: só entra o que faz o número de pontas
+                  soltas CAIR. Na planta real: 71 → 58 soltas e 58 → 62 ambientes. */}
+              {juntasParalelas.length > 0 && (
+                <button
+                  type="button"
+                  onClick={juntarParalelasAgora}
+                  title={`Junta a ponta cujo DESALINHO lateral é menor que ${LATERAL_MAXIMA_MM / 10} cm — e só as que fazem o número de pontas soltas cair. A ponta também desliza no próprio eixo até a outra parede, então pode andar mais que isso. Quem está solto anda; com as duas soltas, anda a mais curta.`}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-amber-400 bg-white px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
+                  data-testid="juntar-paralelas"
+                >
+                  <Combine className="h-3.5 w-3.5" />
+                  Juntar as desalinhadas por menos de {LATERAL_MAXIMA_MM / 10} cm
+                </button>
               )}
 
               {vaosCandidatos.vaos.length === 0 ? (

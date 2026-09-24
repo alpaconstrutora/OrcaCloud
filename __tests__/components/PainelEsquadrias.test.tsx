@@ -179,8 +179,12 @@ describe('PainelEsquadrias · o quadro em lote', () => {
  */
 describe('PainelEsquadrias · unificar tipos próximos', () => {
   const unificacao = {
-    alvo: { assinatura: 'a', kind: 'door' as const, larguraMm: 800, alturaMm: 2100, esquadria: { nome: 'P1', itemCode: '', descricao: '' }, aberturas: [] },
-    absorvidos: [
+    chave: 'a',
+    larguraMm: 800,
+    alturaMm: 2100,
+    origem: 'DESENHO' as const,
+    esquadria: { nome: 'P1', itemCode: '', descricao: '' },
+    grupos: [
       { assinatura: 'b', kind: 'door' as const, larguraMm: 802, alturaMm: 2100, esquadria: null, aberturas: [{ openingId: 'o2', maxLarguraMm: 5000, maxAlturaMm: 2800 }] },
     ],
     pecas: 1,
@@ -205,6 +209,22 @@ describe('PainelEsquadrias · unificar tipos próximos', () => {
     expect(previa).toHaveTextContent('1 peça(s)');
     // O que não cabe é dito, não escondido.
     expect(previa).toHaveTextContent('1 não cabe(m) e fica(m) como está');
+  });
+
+  it('⚠️ com a mira no CATÁLOGO, a prévia marca a linha e o aviso diz que todas as peças mudam', () => {
+    render(
+      <PainelEsquadrias
+        grupos={[grupo()]}
+        onAplicar={vi.fn()}
+        onSelecionar={vi.fn()}
+        unificacoes={[{ ...unificacao, origem: 'CATALOGO' as const, larguraMm: 870, pecas: 6 }]}
+        onUnificar={vi.fn()}
+        mirarCatalogo
+        onMirarCatalogo={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('previa-unificacao')).toHaveTextContent('medida de catálogo');
+    expect(screen.getByTestId('aviso-mira-catalogo')).toHaveTextContent('inclusive as do tipo mais numeroso');
   });
 
   it('o botão entrega a proposta inteira e só existe com proposta', async () => {

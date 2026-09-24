@@ -24,7 +24,27 @@
 // é feita aqui, peça a peça, ANTES: o que não cabe sai do lote e é contado à
 // parte, para a tela poder dizer quantas ficaram de fora e por quê.
 //
-// ─── O ALVO É O MAIS NUMEROSO ───────────────────────────────────────────────
+// ─── MIRAR O DESENHO OU O CATÁLOGO (P2.54) ──────────────────────────────────
+//
+// ⚠️ As duas primeiras fases brigavam quando encadeadas, e a prova no app
+// mostrou o número: sugerir item sobre a planta como está casa **14 dos 41
+// tipos**; depois de unificar, só **8 dos 29**. A razão é que unificar mirando
+// a medida mais frequente leva o grupo para `219,4 × 120` ou `85,8 × 210` —
+// medidas que existem no desenho e não no catálogo de ninguém.
+//
+// Por isso o alvo agora tem duas origens:
+//
+//   DESENHO   — a medida do tipo mais numeroso. Conservador: as peças do alvo
+//               não se mexem, e o desenho fica exatamente como foi levantado.
+//   CATÁLOGO  — a medida comercial mais próxima do grupo. **Todas** as peças
+//               mudam, inclusive as do antigo alvo, e em troca o tipo passa a
+//               ter item, preço e fornecedor.
+//
+// Quem escolhe é o usuário, porque a troca é real: a segunda mexe no desenho
+// levantado para caber no que se compra. Numa obra a construir isso é o certo;
+// num as-built de reforma, não.
+//
+// ─── O ALVO É O MAIS NUMEROSO ───────────────────────────────────
 //
 // Entre 800 mm (12 peças) e 802 mm (2 peças), o padrão de fato é 800: é o que o
 // projeto quis. Empate resolve pela medida REDONDA (múltiplo de 50 mm), que é a
@@ -53,14 +73,29 @@ export interface GrupoDeEsquadria {
   aberturas: AberturaDoGrupo[];
 }
 
+export type OrigemDaMedida = 'DESENHO' | 'CATALOGO';
+
 export interface Unificacao {
-  /** O tipo que fica — o mais numeroso do agrupamento. */
-  alvo: GrupoDeEsquadria;
-  /** Os tipos que passam a ser o alvo. */
-  absorvidos: GrupoDeEsquadria[];
+  /** Chave estável para lista e teste — a assinatura do tipo mais numeroso. */
+  chave: string;
+  /** A medida que fica. */
+  larguraMm: number;
+  alturaMm: number;
+  /** De onde veio a medida: o desenho ou o catálogo. */
+  origem: OrigemDaMedida;
+  /** O tipo (nome/item) que prevalece — o do grupo mais numeroso. */
+  esquadria: Esquadria | null;
+  /**
+   * Os grupos que MUDAM de medida.
+   *
+   * ⚠️ Com origem CATÁLOGO isto inclui o próprio grupo mais numeroso: a
+   * medida comercial não é a dele. Com origem DESENHO ele fica de fora, porque
+   * já está na medida alvo.
+   */
+  grupos: GrupoDeEsquadria[];
   /** Quantas peças mudam de medida. */
   pecas: number;
-  /** As que NÃO cabem com a medida do alvo e ficam como estão. */
+  /** As que NÃO cabem com a medida alvo e ficam como estão. */
   naoCabem: { openingId: ObjectId; motivo: string }[];
 }
 
@@ -112,6 +147,12 @@ export function unificacoesPropostas(
   model: BlueprintModel,
   levelId: ObjectId,
   toleranciaMm = TOLERANCIA_PADRAO_MM,
+  /**
+   * Medidas COMERCIAIS disponíveis (as do catálogo). Passadas, o alvo passa a
+   * ser a mais próxima do grupo, dentro da tolerância; sem elas, o alvo é a
+   * medida do tipo mais numeroso, como antes.
+   */
+  medidasComerciais: readonly { larguraMm: number; alturaMm: number }[] = [],
 ): Unificacao[] {
   if (toleranciaMm <= 0) return [];
   const pendentes = gruposDoNivel(model, levelId);
@@ -126,35 +167,66 @@ export function unificacoesPropostas(
   );
   const usados = new Set<string>();
 
-  for (const alvo of porTamanho) {
-    if (usados.has(alvo.assinatura)) continue;
-    const absorvidos = porTamanho.filter(
+  for (const semente of porTamanho) {
+    if (usados.has(semente.assinatura)) continue;
+    const proximos = porTamanho.filter(
       (g) =>
         !usados.has(g.assinatura) &&
-        g.assinatura !== alvo.assinatura &&
-        g.kind === alvo.kind &&
-        Math.abs(g.larguraMm - alvo.larguraMm) <= toleranciaMm &&
-        Math.abs(g.alturaMm - alvo.alturaMm) <= toleranciaMm,
+        g.assinatura !== semente.assinatura &&
+        g.kind === semente.kind &&
+        Math.abs(g.larguraMm - semente.larguraMm) <= toleranciaMm &&
+        Math.abs(g.alturaMm - semente.alturaMm) <= toleranciaMm,
     );
-    if (absorvidos.length === 0) continue;
 
-    usados.add(alvo.assinatura);
+    // A MEDIDA ALVO: a comercial mais próxima, quando há catálogo e ela está
+    // dentro da tolerância de TODO o agrupamento; senão, a da semente.
+    const doGrupo = [semente, ...proximos];
+    let larguraMm = semente.larguraMm;
+    let alturaMm = semente.alturaMm;
+    let origem: OrigemDaMedida = 'DESENHO';
+    if (medidasComerciais.length > 0) {
+      let melhor: { larguraMm: number; alturaMm: number; desvio: number } | null = null;
+      for (const c of medidasComerciais) {
+        // ⚠️ Tem de servir a TODOS do agrupamento, e não só à semente: a
+        // medida comercial vai valer para todas as peças, inclusive as dela.
+        const cabeEmTodos = doGrupo.every(
+          (g) => Math.abs(g.larguraMm - c.larguraMm) <= toleranciaMm && Math.abs(g.alturaMm - c.alturaMm) <= toleranciaMm,
+        );
+        if (!cabeEmTodos) continue;
+        const desvio = Math.abs(c.larguraMm - semente.larguraMm) + Math.abs(c.alturaMm - semente.alturaMm);
+        if (!melhor || desvio < melhor.desvio) melhor = { ...c, desvio };
+      }
+      if (melhor) {
+        larguraMm = melhor.larguraMm;
+        alturaMm = melhor.alturaMm;
+        origem = 'CATALOGO';
+      }
+    }
+
+    // Quem MUDA de medida: com alvo do desenho, os próximos; com alvo do
+    // catálogo, todo mundo que ainda não está na medida comercial — inclusive a
+    // semente.
+    const candidatos = doGrupo.filter((g) => g.larguraMm !== larguraMm || g.alturaMm !== alturaMm);
+    if (candidatos.length === 0) continue;
+
+    usados.add(semente.assinatura);
+    for (const g of proximos) usados.add(g.assinatura);
+
     const naoCabem: Unificacao['naoCabem'] = [];
     const cabem: GrupoDeEsquadria[] = [];
-    for (const g of absorvidos) {
-      usados.add(g.assinatura);
+    for (const g of candidatos) {
       const dentro = g.aberturas.filter((a) => {
-        if (alvo.larguraMm > a.maxLarguraMm) {
+        if (larguraMm > a.maxLarguraMm) {
           naoCabem.push({
             openingId: a.openingId,
-            motivo: `largura ${alvo.larguraMm} mm não cabe: sobram ${a.maxLarguraMm} mm de parede`,
+            motivo: `largura ${larguraMm} mm não cabe: sobram ${a.maxLarguraMm} mm de parede`,
           });
           return false;
         }
-        if (alvo.alturaMm > a.maxAlturaMm) {
+        if (alturaMm > a.maxAlturaMm) {
           naoCabem.push({
             openingId: a.openingId,
-            motivo: `altura ${alvo.alturaMm} mm não cabe: sobram ${a.maxAlturaMm} mm até o teto`,
+            motivo: `altura ${alturaMm} mm não cabe: sobram ${a.maxAlturaMm} mm até o teto`,
           });
           return false;
         }
@@ -164,9 +236,13 @@ export function unificacoesPropostas(
     }
     if (cabem.length === 0) continue;
     saida.push({
-      alvo,
-      absorvidos: cabem,
-      pecas: cabem.reduce((s, g) => s + g.aberturas.length, 0),
+      chave: semente.assinatura,
+      larguraMm,
+      alturaMm,
+      origem,
+      esquadria: semente.esquadria,
+      grupos: cabem,
+      pecas: cabem.reduce((soma, g) => soma + g.aberturas.length, 0),
       naoCabem,
     });
   }
@@ -183,16 +259,11 @@ export function unificacoesPropostas(
 export function comandosDaUnificacao(unificacoes: readonly Unificacao[]): Command[] {
   const cmds: Command[] = [];
   for (const u of unificacoes) {
-    for (const g of u.absorvidos) {
+    for (const g of u.grupos) {
       for (const a of g.aberturas) {
-        cmds.push({
-          type: 'SetOpeningSize',
-          openingId: a.openingId,
-          widthMm: u.alvo.larguraMm,
-          heightMm: u.alvo.alturaMm,
-        });
-        if (u.alvo.esquadria) {
-          cmds.push({ type: 'SetOpeningEsquadria', openingId: a.openingId, esquadria: { ...u.alvo.esquadria } });
+        cmds.push({ type: 'SetOpeningSize', openingId: a.openingId, widthMm: u.larguraMm, heightMm: u.alturaMm });
+        if (u.esquadria) {
+          cmds.push({ type: 'SetOpeningEsquadria', openingId: a.openingId, esquadria: { ...u.esquadria } });
         }
       }
     }

@@ -67,6 +67,16 @@ interface Props {
   toleranciaMm?: number;
   onTolerancia?: (mm: number) => void;
   onUnificar?: (quais: readonly Unificacao[]) => void;
+  /**
+   * Mirar a medida do DESENHO (a mais frequente) ou a do CATÁLOGO (comercial).
+   *
+   * ⚠️ A segunda muda TODAS as peças do agrupamento, inclusive as do tipo mais
+   * numeroso — e em troca o tipo passa a ter item e preço. É escolha do usuário
+   * porque a troca é real: mexer no desenho levantado para caber no que se
+   * compra faz sentido em obra a construir, e não num as-built de reforma.
+   */
+  mirarCatalogo?: boolean;
+  onMirarCatalogo?: (v: boolean) => void;
 }
 
 export default function PainelEsquadrias({
@@ -77,6 +87,8 @@ export default function PainelEsquadrias({
   toleranciaMm = TOLERANCIA_PADRAO_MM,
   onTolerancia,
   onUnificar,
+  mirarCatalogo = false,
+  onMirarCatalogo,
 }: Props) {
   const [rascunho, setRascunho] = useState<Record<string, RascunhoDeEsquadria>>({});
   const [escolhendoItemDe, setEscolhendoItemDe] = useState<string | null>(null);
@@ -378,6 +390,20 @@ export default function PainelEsquadrias({
               />
               cm
             </label>
+            {onMirarCatalogo && (
+              <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                Mirar
+                <select
+                  value={mirarCatalogo ? 'CATALOGO' : 'DESENHO'}
+                  onChange={(e) => onMirarCatalogo(e.target.value === 'CATALOGO')}
+                  aria-label="Medida alvo da unificação"
+                  className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                >
+                  <option value="DESENHO">a medida do desenho</option>
+                  <option value="CATALOGO">a medida de catálogo</option>
+                </select>
+              </label>
+            )}
             <button
               type="button"
               onClick={() => onUnificar(unificacoes)}
@@ -391,6 +417,13 @@ export default function PainelEsquadrias({
             </button>
           </div>
 
+          {mirarCatalogo && (
+            <p className="mt-1.5 text-[11px] text-blue-700" data-testid="aviso-mira-catalogo">
+              ⚠️ Mirando o catálogo, <strong>todas</strong> as peças do agrupamento mudam de medida — inclusive as do
+              tipo mais numeroso. O desenho passa a ter a medida que se compra.
+            </p>
+          )}
+
           {unificacoes.length === 0 ? (
             <p className="mt-1.5 text-[11px] text-slate-500" data-testid="unificar-nada">
               Nenhum tipo a menos de {textoEmCm(toleranciaMm)} cm de outro. Aumente a tolerância para ver mais — ou
@@ -399,14 +432,16 @@ export default function PainelEsquadrias({
           ) : (
             <ul className="mt-1.5 space-y-0.5" data-testid="previa-unificacao">
               {unificacoes.map((u) => (
-                <li key={u.alvo.assinatura} className="text-[11px] text-slate-600">
+                <li key={u.chave} className="text-[11px] text-slate-600">
                   <strong>
-                    {u.absorvidos
-                      .map((g) => `${textoEmCm(g.larguraMm)}×${textoEmCm(g.alturaMm)}`)
-                      .join(', ')}
+                    {u.grupos.map((g) => `${textoEmCm(g.larguraMm)}×${textoEmCm(g.alturaMm)}`).join(', ')}
                   </strong>{' '}
-                  → {textoEmCm(u.alvo.larguraMm)}×{textoEmCm(u.alvo.alturaMm)} cm
-                  {u.alvo.esquadria?.nome ? ` (${u.alvo.esquadria.nome})` : ''} · {u.pecas} peça(s)
+                  → {textoEmCm(u.larguraMm)}×{textoEmCm(u.alturaMm)} cm
+                  {u.esquadria?.nome ? ` (${u.esquadria.nome})` : ''}
+                  {/* De onde veio a medida: o desenho ou o catálogo. Com o
+                      catálogo TODAS as peças mudam — inclusive as do tipo mais
+                      numeroso — e a tela tem de dizer isso antes do clique. */}
+                  {u.origem === 'CATALOGO' && <span className="text-blue-700"> · medida de catálogo</span>} · {u.pecas} peça(s)
                   {u.naoCabem.length > 0 && (
                     <span className="text-amber-700"> · {u.naoCabem.length} não cabe(m) e fica(m) como está</span>
                   )}

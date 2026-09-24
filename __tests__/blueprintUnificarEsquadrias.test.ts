@@ -74,9 +74,10 @@ describe('unificar esquadrias próximas', () => {
       { offsetMm: 6000, widthMm: 802 },
     ]);
     const [u] = unificacoesPropostas(model, levelId);
-    expect(u.alvo.larguraMm).toBe(800);
+    expect(u.larguraMm).toBe(800);
+    expect(u.origem).toBe('DESENHO');
     expect(u.pecas).toBe(1);
-    expect(u.absorvidos[0].larguraMm).toBe(802);
+    expect(u.grupos[0].larguraMm).toBe(802);
 
     const depois = applyBatch(model, comandosDaUnificacao([u])).model;
     expect(depois.openings.every((o) => o.widthMm === 800)).toBe(true);
@@ -90,7 +91,7 @@ describe('unificar esquadrias próximas', () => {
       { offsetMm: 2000, widthMm: 800 },
     ]);
     const [u] = unificacoesPropostas(model, levelId);
-    expect(u.alvo.larguraMm).toBe(800);
+    expect(u.larguraMm).toBe(800);
   });
 
   it('⚠️ a tolerância NÃO é transitiva: 800 e 840 não se juntam por causa dos vizinhos', () => {
@@ -102,8 +103,8 @@ describe('unificar esquadrias próximas', () => {
     ]);
     const u = unificacoesPropostas(model, levelId, 20);
     // 820 está a 20 do 800 e entra; 840 está a 40 e fica fora deste agrupamento.
-    const alvo800 = u.find((x) => x.alvo.larguraMm === 800)!;
-    expect(alvo800.absorvidos.map((g) => g.larguraMm)).toEqual([820]);
+    const alvo800 = u.find((x) => x.larguraMm === 800)!;
+    expect(alvo800.grupos.map((g) => g.larguraMm)).toEqual([820]);
     const depois = applyBatch(model, comandosDaUnificacao(u)).model;
     expect(depois.openings.map((o) => o.widthMm).sort((a, b) => a - b)).toEqual([800, 800, 800, 840]);
   });
@@ -125,7 +126,7 @@ describe('unificar esquadrias próximas', () => {
     );
     const u = unificacoesPropostas(model, levelId, 20);
     const alvo = u[0];
-    expect(alvo.alvo.larguraMm).toBe(790);
+    expect(alvo.larguraMm).toBe(790);
     // A que cabe entra; a que não cabe é contada à parte, com o motivo.
     expect(alvo.pecas).toBe(1);
     expect(alvo.naoCabem).toHaveLength(1);
@@ -149,7 +150,7 @@ describe('unificar esquadrias próximas', () => {
       2300,
     );
     const [u] = unificacoesPropostas(model, levelId, 20);
-    expect(u.alvo.alturaMm).toBe(2290);
+    expect(u.alturaMm).toBe(2290);
     const depois = applyBatch(model, comandosDaUnificacao([u])).model;
     expect(depois.openings.every((o) => o.heightMm === 2290)).toBe(true);
   });
@@ -189,5 +190,74 @@ describe('unificar esquadrias próximas', () => {
     ] as Command[]).model;
     expect(gruposDoNivel(m, levelId)).toEqual([]);
     expect(unificacoesPropostas(m, levelId, 20)).toEqual([]);
+  });
+
+  /**
+   * ⚠️ MIRAR O CATÁLOGO (P2.54). A prova no app mostrou que unificar pela medida
+   * do DESENHO e depois sugerir item brigavam: 14 dos 41 tipos casavam com o
+   * catálogo antes de unificar, e só 8 dos 29 depois — porque o alvo virava
+   * `219,4 × 120`, medida que não existe no catálogo de ninguém.
+   */
+  it('com medidas comerciais, o alvo é a COMERCIAL mais próxima — e o grupo todo anda', () => {
+    // 3 portas de 798 e 1 de 802: pela medida do desenho, o alvo seria 798.
+    const { model, levelId } = cena([
+      { offsetMm: 0, widthMm: 798 },
+      { offsetMm: 2000, widthMm: 798 },
+      { offsetMm: 4000, widthMm: 798 },
+      { offsetMm: 6000, widthMm: 802 },
+    ]);
+    const semCatalogo = unificacoesPropostas(model, levelId, 20)[0];
+    expect(semCatalogo.larguraMm).toBe(798);
+    expect(semCatalogo.pecas).toBe(1); // só a de 802 anda
+
+    const [comCatalogo] = unificacoesPropostas(model, levelId, 20, [{ larguraMm: 800, alturaMm: 2100 }]);
+    expect(comCatalogo.larguraMm).toBe(800);
+    expect(comCatalogo.origem).toBe('CATALOGO');
+    // ⚠️ TODAS as quatro peças andam — inclusive as três do tipo mais numeroso.
+    expect(comCatalogo.pecas).toBe(4);
+
+    const depois = applyBatch(model, comandosDaUnificacao([comCatalogo])).model;
+    expect(depois.openings.every((o) => o.widthMm === 800)).toBe(true);
+  });
+
+  it('a medida comercial só vale se servir a TODO o agrupamento', () => {
+    // 700 e 718 (18 mm de diferença, dentro da tolerância de 20). Uma comercial
+    // de 700 serve aos dois; uma de 730 serviria ao 718 e não ao 700.
+    const { model, levelId } = cena([
+      { offsetMm: 0, widthMm: 700 },
+      { offsetMm: 2000, widthMm: 718 },
+    ]);
+    const [so730] = unificacoesPropostas(model, levelId, 20, [{ larguraMm: 730, alturaMm: 2100 }]);
+    // 730 está a 30 mm do 700: não serve ao grupo todo, então cai para o desenho.
+    expect(so730.origem).toBe('DESENHO');
+    const [com700] = unificacoesPropostas(model, levelId, 20, [{ larguraMm: 700, alturaMm: 2100 }]);
+    expect(com700.origem).toBe('CATALOGO');
+    expect(com700.larguraMm).toBe(700);
+  });
+
+  it('⚠️ medida comercial que não cabe na parede não é aplicada àquela peça', () => {
+    // A segunda porta termina no fim da parede: 800 não cabe ali.
+    const { model, levelId } = cena(
+      [
+        { offsetMm: 0, widthMm: 790 },
+        { offsetMm: 2210, widthMm: 790 },
+      ],
+      3000,
+    );
+    const [u] = unificacoesPropostas(model, levelId, 20, [{ larguraMm: 800, alturaMm: 2100 }]);
+    expect(u.origem).toBe('CATALOGO');
+    expect(u.naoCabem.length).toBeGreaterThan(0);
+    // E o lote que sobra é aceito pelo kernel.
+    expect(() => applyBatch(model, comandosDaUnificacao([u]))).not.toThrow();
+  });
+
+  it('sem medida comercial perto, continua mirando o desenho', () => {
+    const { model, levelId } = cena([
+      { offsetMm: 0, widthMm: 800 },
+      { offsetMm: 2000, widthMm: 810 },
+    ]);
+    const [u] = unificacoesPropostas(model, levelId, 20, [{ larguraMm: 1500, alturaMm: 2100 }]);
+    expect(u.origem).toBe('DESENHO');
+    expect(u.larguraMm).toBe(800);
   });
 });

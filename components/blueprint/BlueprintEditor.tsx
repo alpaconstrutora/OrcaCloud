@@ -175,6 +175,8 @@ import { nucleosDoNivel } from '../../utils/blueprintNucleoVertical';
 import PainelEsquadria from './PainelEsquadria';
 import PainelEsquadrias from './PainelEsquadrias';
 import { comandosDaUnificacao, unificacoesPropostas, TOLERANCIA_PADRAO_MM } from '../../utils/blueprintUnificarEsquadrias';
+import { medidasNaDescricao } from '../../utils/blueprintItemPorMedida';
+import { sinapiService } from '../../services/sinapiService';
 import { comandosDeJuntarParalelas, juncoesParalelasProximas, LATERAL_MAXIMA_MM } from '../../utils/blueprintJuntarParalelas';
 import PainelRevisaoDePontas from './PainelRevisaoDePontas';
 import { chaveDaPonta, pontasParaRevisar, type PontaEmRevisao } from '../../utils/blueprintRevisaoDePontas';
@@ -2730,6 +2732,30 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   /** Tolerância da unificação de tipos (P2.50), em milímetro. */
   const [toleranciaDeUnificacao, setToleranciaDeUnificacao] = useState(TOLERANCIA_PADRAO_MM);
   /**
+   * Mirar a medida de CATÁLOGO na unificação (P2.54), e as medidas comerciais.
+   *
+   * O catálogo só é lido quando o modo liga: são duas buscas no Supabase, e
+   * fazer isso ao abrir a planta custaria rede em quem nunca vai unificar.
+   */
+  const [mirarCatalogo, setMirarCatalogo] = useState(false);
+  const [medidasComerciais, setMedidasComerciais] = useState<{ larguraMm: number; alturaMm: number }[]>([]);
+  useEffect(() => {
+    if (!mirarCatalogo || medidasComerciais.length > 0) return;
+    let vivo = true;
+    void Promise.all([sinapiService.search('PORTA').catch(() => []), sinapiService.search('JANELA').catch(() => [])])
+      .then((r) => {
+        if (!vivo) return;
+        const vistas = new Map<string, { larguraMm: number; alturaMm: number }>();
+        for (const item of r.flat()) {
+          for (const m of medidasNaDescricao(item.description)) vistas.set(`${m.larguraMm}x${m.alturaMm}`, m);
+        }
+        setMedidasComerciais([...vistas.values()]);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [mirarCatalogo, medidasComerciais.length]);
+  /**
    * O que daria para unificar no pavimento ativo (P2.50).
    *
    * Mora aqui, e não no painel, porque a conta precisa do MODELO: decidir se a
@@ -2737,8 +2763,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * que o quadro de esquadrias não carrega.
    */
   const unificacoesDeEsquadria = useMemo(
-    () => (levelId ? unificacoesPropostas(editor.model, levelId, toleranciaDeUnificacao) : []),
-    [editor.model, levelId, toleranciaDeUnificacao],
+    () =>
+      levelId
+        ? unificacoesPropostas(editor.model, levelId, toleranciaDeUnificacao, mirarCatalogo ? medidasComerciais : [])
+        : [],
+    [editor.model, levelId, toleranciaDeUnificacao, mirarCatalogo, medidasComerciais],
   );
   const esquadriasSemTipo = useMemo(
     () => (quant.totais.porEsquadria ?? []).filter((e) => !e.declarada).reduce((soma, e) => soma + e.quantidade, 0),
@@ -12235,6 +12264,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               unificacoes={unificacoesDeEsquadria}
               toleranciaMm={toleranciaDeUnificacao}
               onTolerancia={setToleranciaDeUnificacao}
+              mirarCatalogo={mirarCatalogo}
+              onMirarCatalogo={setMirarCatalogo}
               onUnificar={(quais) => {
                 const cmds = comandosDaUnificacao(quais);
                 if (cmds.length > 0) editor.runBatch(cmds);

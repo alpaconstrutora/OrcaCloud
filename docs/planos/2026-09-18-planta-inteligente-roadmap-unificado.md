@@ -2040,6 +2040,35 @@ PROTECAO … PARA PORTA DE POCO DE ELEVADOR, VAO DE *120 X 240* CM
 
 **⚠️ Um efeito que a prova revelou, e que é decisão sua.** Sugerir **sobre a planta como está** casa **14 dos 41 tipos** (41 das 90 peças). Sugerir **depois de unificar** casa só **8 dos 29** — porque a unificação leva cada grupo para a medida que mais se repete **no desenho** (`219,4 × 120`, `85,8 × 210`), e o catálogo só conhece medidas comerciais. As duas fases são boas isoladas e brigam quando encadeadas. A saída seria a unificação mirar a medida de catálogo mais próxima em vez da mais frequente — o que muda a geometria de TODAS as peças do grupo, inclusive as do alvo, e por isso não foi feito por conta própria.
 
+### P2.54 — Unificar mirando a medida de catálogo (24/09/2026)
+
+**A hipótese.** A P2.53 terminou com um conflito medido: sugerir item sobre a planta como está casa **14 dos 41 tipos**; depois de unificar, só **8 dos 29** — porque a unificação leva o grupo para a medida mais frequente no DESENHO (`219,4 × 120`, `85,8 × 210`), e o catálogo só conhece medidas comerciais. Eu propus ao usuário que a unificação mirasse a medida de catálogo, e afirmei que isso "cobriria bem mais que 8 tipos".
+
+**⚠️ A medição desmentiu a minha própria proposta.** Implementado e medido na planta real, com o catálogo inteiro (28 medidas de esquadria distintas no SINAPI):
+
+| tolerância | mirando o desenho | mirando o catálogo |
+|---|---|---|
+| 2 cm | 29 tipos, 8 com item | 29 tipos, **8** com item |
+| 3 cm | 28 tipos, 8 com item | 28 tipos, **9** com item |
+| 5 cm | 24 tipos, 7 com item | 24 tipos, **8** com item |
+| 8 cm | 22 tipos, 7 com item | 22 tipos, **8** com item |
+
+**Um tipo a mais, não "bem mais".** O gargalo não era a mira: é que este desenho não usa medidas comerciais em lugar nenhum — `85,6`, `87,4`, `219,4` não se aproximam de nenhuma das 28 por tolerância razoável. Só **2 dos 6 agrupamentos** encontram medida comercial a 2 cm.
+
+**Por que a fase ficou de pé mesmo assim.** É opt-in (padrão desligado), custa um `select`, e o ganho depende do DESENHO, não do código: numa planta levantada com medidas de projeto — que é o caso de obra nova — a medida comercial está a milímetros, e a mira passa a casar quase tudo. Ficar com a hipótese implementada e o número honesto no documento é melhor do que remover e reabrir a pergunta na próxima planta.
+
+**O que entrou**
+- `unificacoesPropostas(model, level, tolerancia, medidasComerciais?)`: com o quarto argumento, o alvo passa a ser a medida comercial mais próxima — ⚠️ **desde que sirva a TODO o agrupamento**, e não só à semente, porque ela vai valer para todas as peças.
+- A `Unificacao` mudou de forma: o alvo deixou de ser um grupo existente (`alvo`/`absorvidos`) e virou medida + origem (`larguraMm`, `alturaMm`, `origem`, `grupos`). Com origem CATÁLOGO, `grupos` inclui o próprio tipo mais numeroso — ele também muda.
+- Seletor "Mirar: a medida do desenho / a medida de catálogo" na gaveta, com aviso de que **todas** as peças mudam, e a linha da prévia marcada com "medida de catálogo".
+- O catálogo só é lido quando o modo liga: são duas buscas no Supabase, e fazê-las ao abrir a planta custaria rede a quem nunca vai unificar.
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-ui-standard.sh` ok · `check-xss-sinks.sh` ok · suíte cheia **457 arquivos / 5224 testes** verdes · `npm run build` ok.
+- `__tests__/blueprintUnificarEsquadrias.test.ts` (12 — os 8 da P2.50 na estrutura nova, mais 4): com medida comercial o alvo vira ela e **as quatro peças andam, inclusive as três do tipo mais numeroso**; a comercial só vale se servir ao agrupamento inteiro (730 não serve a um grupo que tem 700); o que não cabe na parede continua fora e o lote segue aceito pelo kernel; sem comercial perto, continua mirando o desenho.
+- `__tests__/components/PainelEsquadrias.test.tsx` (+1, total 15): com a mira no catálogo a prévia marca a linha e o aviso diz que todas as peças mudam.
+- **App real** (escritas bloqueadas: 4, 0 erros): o seletor aparece, e a prévia passa a mostrar `85,8×210 → 87×210 cm · medida de catálogo · 6 peça(s)`.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

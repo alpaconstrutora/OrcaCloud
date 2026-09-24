@@ -24,6 +24,11 @@ import ActionIconButton from '../ui/ActionIconButton';
 import CostCenterSelect from '../CostCenterSelect';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { useConfirm } from '../ui/confirm';
+// Mesmo rótulo de origem que Contas a Pagar usa. Importar do componente é a
+// convenção já estabelecida aqui — `ContasPagarManager` e
+// `financeiro/FechamentoCentroCusto` fazem igual. Extrair para um util
+// tocaria esses dois sem ninguém ter pedido.
+import { origemLabel } from '../ContasPagarParcelas';
 import {
     condominioRateioService, CRITERIO_LABEL, CRITERIO_EXIGE,
     type CriterioRateio, type TipoRateio, type PreviaRateio, type Rateio, type DespesaRateio,
@@ -226,7 +231,7 @@ const TabelaCotas: React.FC<{ cotas: CotaDoRateio[] }> = ({ cotas }) => (
 // Larguras da aba Despesas. Soma = 1.100px; a folga vai para o `<col />`
 // espaçador (§6.1.1), não se espalha pelas colunas de dado.
 const LARGURAS_DESPESAS: Record<string, number> = {
-    data: 110, descricao: 320, fornecedor: 240, centro: 200, situacao: 150, valor: 130,
+    data: 110, descricao: 300, fornecedor: 220, origem: 120, centro: 190, situacao: 150, valor: 130,
 };
 
 /** Lançamentos do caixa do condomínio — a aba Despesas.
@@ -286,6 +291,7 @@ const TabelaLancamentos: React.FC<{
                     <col data-col-key="data" style={{ width: `${cols.getWidth('data')}px` }} />
                     <col data-col-key="descricao" style={{ width: `${cols.getWidth('descricao')}px` }} />
                     <col data-col-key="fornecedor" style={{ width: `${cols.getWidth('fornecedor')}px` }} />
+                    <col data-col-key="origem" style={{ width: `${cols.getWidth('origem')}px` }} />
                     <col data-col-key="centro" style={{ width: `${cols.getWidth('centro')}px` }} />
                     <col data-col-key="situacao" style={{ width: `${cols.getWidth('situacao')}px` }} />
                     {/* §6.1.1 — o espaçador vem ANTES da última coluna. Depois
@@ -299,6 +305,7 @@ const TabelaLancamentos: React.FC<{
                         <th className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden relative">Data<cols.ResizeHandle colKey="data" /></th>
                         <th className="px-6 py-2 border-r border-gray-100 overflow-hidden relative">Descrição<cols.ResizeHandle colKey="descricao" /></th>
                         <th className="px-6 py-2 border-r border-gray-100 overflow-hidden relative">Fornecedor<cols.ResizeHandle colKey="fornecedor" /></th>
+                        <th className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden relative">Origem<cols.ResizeHandle colKey="origem" /></th>
                         <th className="px-6 py-2 border-r border-gray-100 overflow-hidden relative">Centro de custo<cols.ResizeHandle colKey="centro" /></th>
                         <th className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden relative">Situação<cols.ResizeHandle colKey="situacao" /></th>
                         <th aria-hidden="true" className="border-r border-gray-100"></th>
@@ -320,6 +327,14 @@ const TabelaLancamentos: React.FC<{
                                 {l.fornecedor
                                     ? <span className="block truncate" title={l.fornecedor}>{l.fornecedor}</span>
                                     : <span className="text-gray-400">—</span>}
+                            </td>
+                            {/* Origem: o MESMO rótulo de Contas a Pagar
+                                (`origemLabel`), para as duas telas não darem
+                                nomes diferentes à mesma origem. Ele degrada
+                                sozinho — origem fora do mapa vira "Asset
+                                Maintenance" em vez de ASSET_MAINTENANCE. */}
+                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                                <span className="block truncate" title={origemLabel(l.origem)}>{origemLabel(l.origem)}</span>
                             </td>
                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
                                 <span className="block truncate" title={l.costCenterLabel}>{l.costCenterLabel}</span>
@@ -350,7 +365,7 @@ const TabelaLancamentos: React.FC<{
                 </tbody>
                 <tfoot>
                     <tr className="bg-gray-50 border-t border-gray-200">
-                        <td className="px-6 py-2.5 text-sm font-normal text-gray-500" colSpan={6}>
+                        <td className="px-6 py-2.5 text-sm font-normal text-gray-500" colSpan={7}>
                             {lancamentos.length} lançamento(s) em {mes}
                         </td>
                         <td className="px-6 py-2.5 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
@@ -854,8 +869,12 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
     const lancamentosFiltrados = React.useMemo(() => {
         const t = searchTerm.trim().toLowerCase();
         if (!t) return lancamentos;
+        // A busca alcança as colunas VISÍVEIS: coluna que a busca não enxerga
+        // faz o usuário digitar "boleto" e a linha sumir.
         return lancamentos.filter(l =>
             l.descricao.toLowerCase().includes(t)
+            || l.fornecedor.toLowerCase().includes(t)
+            || origemLabel(l.origem).toLowerCase().includes(t)
             || l.costCenterLabel.toLowerCase().includes(t));
     }, [lancamentos, searchTerm]);
 
@@ -1078,7 +1097,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                 type="text"
                                 placeholder={subAba === 'rateios'
                                     ? 'Buscar por competência ou critério...'
-                                    : 'Buscar por descrição ou centro de custo...'}
+                                    : 'Buscar por descrição, fornecedor, origem ou centro de custo...'}
                                 value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)}
                                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"

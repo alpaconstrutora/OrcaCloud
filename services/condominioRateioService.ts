@@ -91,6 +91,13 @@ export interface LancamentoDoCondominio {
     valor: number;
     /** Quem recebeu — `party_name`, com `entity_name` de reserva. */
     fornecedor: string;
+    /**
+     * De ONDE o lançamento veio: `source_system` cru (BOLETO, NFE, MANUAL,
+     * PURCHASE_ORDER…). O rótulo em português é de `origemLabel`, em
+     * `components/ContasPagarParcelas.tsx` — o mesmo que Contas a Pagar usa,
+     * para as duas telas não inventarem nomes diferentes para a mesma origem.
+     */
+    origem: string;
     costCenterId: string | null;
     costCenterLabel: string;
     /** Já entrou em algum rateio VIVO (não cancelado). */
@@ -662,7 +669,7 @@ export const condominioRateioService = {
 
         const { data, error } = await supabase
             .from('internal_transactions')
-            .select('id, description, amount, transaction_date, cost_center_id, party_name, entity_name')
+            .select('id, description, amount, transaction_date, cost_center_id, party_name, entity_name, source_system')
             .in('cost_center_id', params.costCenterIds)
             .eq('direction', 'DEBIT')
             .gte('transaction_date', inicio)
@@ -694,6 +701,7 @@ export const condominioRateioService = {
                     ?? 'Despesa sem descrição',
                 valor: Number(l.amount || 0),
                 fornecedor: (l.party_name || l.entity_name || '') as string,
+                origem: (l.source_system || '') as string,
                 costCenterId: (l.cost_center_id ?? null) as string | null,
                 costCenterLabel: ccs.get(l.cost_center_id) ?? '—',
                 rateada: comp !== null,

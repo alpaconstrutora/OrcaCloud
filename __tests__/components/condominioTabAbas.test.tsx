@@ -21,6 +21,7 @@ import React from 'react';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import CondominioTab from '../../components/client/CondominioTab';
+import { ConfirmProvider } from '../../components/ui/confirm';
 import { CONDOMINIO_VAZIO, type PortalCondominio } from '../../services/clientPortalService';
 
 const dados: PortalCondominio = {
@@ -61,8 +62,11 @@ const dados: PortalCondominio = {
     ordens: [],
     ativos: [{
         id: 'at1', nome: 'Elevador social', codigo: 'ELV-01', categoria: 'Elevador',
-        marca: 'Atlas', modelo: 'Schindler 3300', situacao: 'ATIVO', sistema: 'Transporte',
-        garantiaAte: '2027-01-31', condominioNome: '010 - Galeria Altavista',
+        subcategoria: 'Tração', marca: 'Atlas', modelo: 'Schindler 3300',
+        numeroSerie: 'AS-99182-B', situacao: 'ATIVO', sistema: 'Transporte',
+        dataAquisicao: '2021-03-12', valorAquisicao: 184000, vidaUtilMeses: 240,
+        valorResidual: 18400, observacoes: 'Casa de máquinas no 9º pavimento.',
+        imagemUrl: null, garantiaAte: '2027-01-31', condominioNome: '010 - Galeria Altavista',
     }],
 };
 
@@ -83,9 +87,14 @@ const MARCA: Record<string, RegExp> = {
 
 const abrir = (rotulo: string) => fireEvent.click(screen.getByRole('button', { name: new RegExp(rotulo) }));
 
+/** O `Sheet` da ficha do equipamento usa `useConfirm`, que exige o provider —
+ *  é o mesmo que `index.tsx` monta na raiz do app. Sem ele o teste quebra com
+ *  "useConfirm deve ser usado dentro de <ConfirmProvider>". */
+const montar = (ui: React.ReactElement) => render(<ConfirmProvider>{ui}</ConfirmProvider>);
+
 describe('CondominioTab — seis abas', () => {
     it('mostra as seis abas e cada uma abre o seu painel', () => {
-        render(<CondominioTab dados={dados} loading={false} onMarcarLido={vi.fn()} />);
+        montar(<CondominioTab dados={dados} loading={false} onMarcarLido={vi.fn()} />);
 
         for (const rotulo of ABAS) {
             expect(screen.getByRole('button', { name: new RegExp(rotulo) })).toBeInTheDocument();
@@ -102,7 +111,7 @@ describe('CondominioTab — seis abas', () => {
     });
 
     it('o contador de não lidos aparece só na aba Avisos', () => {
-        render(<CondominioTab dados={dados} loading={false} onMarcarLido={vi.fn()} />);
+        montar(<CondominioTab dados={dados} loading={false} onMarcarLido={vi.fn()} />);
         const avisos = screen.getByRole('button', { name: /Avisos/ });
         expect(within(avisos).getByText('1')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Equipamentos do prédio/ }).textContent)
@@ -110,15 +119,53 @@ describe('CondominioTab — seis abas', () => {
     });
 
     it('sem unidade de condomínio não há barra de abas, e sim o estado vazio', () => {
-        render(<CondominioTab dados={CONDOMINIO_VAZIO} loading={false} />);
+        montar(<CondominioTab dados={CONDOMINIO_VAZIO} loading={false} />);
         expect(screen.getByText(/Nenhuma unidade de condomínio/)).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /Documentos do condomínio/ })).toBeNull();
     });
 
     it('sem onMarcarLido (prévia do síndico) o aviso não é clicável', () => {
-        render(<CondominioTab dados={dados} loading={false} />);
+        montar(<CondominioTab dados={dados} loading={false} />);
         abrir('Avisos');
         const card = screen.getByText('Assembleia de outubro').closest('div.rounded-\\[10px\\]');
         expect(card?.className).not.toContain('cursor-pointer');
+    });
+});
+
+// A ficha do bem (24/09/2026): clicar no equipamento abre o painel lateral com
+// os campos de Gestão de Ativos › Ativos Patrimoniais. O que erra em silêncio
+// aqui é o painel abrir VAZIO — o card da lista mostra nome e marca, e sem
+// asserir um campo que SÓ existe na ficha (nº de série, valor) um painel em
+// branco passaria despercebido.
+describe('CondominioTab — ficha do equipamento', () => {
+    it('clicar no equipamento abre a ficha com os dados do cadastro', async () => {
+        montar(<CondominioTab dados={dados} loading={false} />);
+        abrir('Equipamentos do prédio');
+
+        // a lista não mostra a ficha antes do clique
+        expect(screen.queryByText('AS-99182-B')).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: /Elevador social/ }));
+
+        expect(await screen.findByText('AS-99182-B')).toBeInTheDocument();
+        expect(screen.getByText('ELV-01')).toBeInTheDocument();
+        expect(screen.getByText('Tração')).toBeInTheDocument();
+        expect(screen.getByText('R$ 184.000,00')).toBeInTheDocument();
+        expect(screen.getByText('20 anos')).toBeInTheDocument();          // 240 meses viram anos
+        expect(screen.getByText('12/03/2021')).toBeInTheDocument();
+        expect(screen.getByText(/Casa de máquinas/)).toBeInTheDocument();
+    });
+
+    it('campo sem valor não vira linha vazia na ficha', () => {
+        const semFicha = {
+            ...dados,
+            ativos: [{ ...dados.ativos[0], numeroSerie: null, valorAquisicao: null, observacoes: null }],
+        };
+        montar(<CondominioTab dados={semFicha} loading={false} />);
+        abrir('Equipamentos do prédio');
+        fireEvent.click(screen.getByRole('button', { name: /Elevador social/ }));
+        expect(screen.queryByText('Nº de série')).toBeNull();
+        expect(screen.queryByText('Valor de aquisição')).toBeNull();
+        expect(screen.queryByText('Observações')).toBeNull();
     });
 });

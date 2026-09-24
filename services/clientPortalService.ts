@@ -104,10 +104,23 @@ export interface PortalAtivoCondominio {
     nome: string;
     codigo: string | null;
     categoria: string | null;
+    /** Os campos abaixo são a FICHA do bem — os mesmos de Gestão de Ativos ›
+     *  Ativos Patrimoniais. Entraram em 24/09/2026 (migration
+     *  `aplicar_20270924000050`), quando o usuário pediu que clicar no
+     *  equipamento trouxesse "os dados cadastrados" lá. A lista continua
+     *  mostrando só o resumo; o resto abre no painel lateral. */
+    subcategoria: string | null;
     marca: string | null;
     modelo: string | null;
+    numeroSerie: string | null;
     situacao: string | null;
     sistema: string | null;
+    dataAquisicao: string | null;
+    valorAquisicao: number | null;
+    vidaUtilMeses: number | null;
+    valorResidual: number | null;
+    observacoes: string | null;
+    imagemUrl: string | null;
     garantiaAte: string | null;
     condominioNome: string;
 }

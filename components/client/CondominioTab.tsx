@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 import type {
     PortalCondominio, PortalUnidadeCondominio, PortalAvisoCondominio,
-    PortalRateioCondominio,
+    PortalRateioCondominio, PortalAtivoCondominio,
 } from '../../services/clientPortalService';
 import { CRITERIO_LABEL, type CriterioRateio } from '../../services/condominioRateioService';
 // O MESMO rótulo do admin. O payload traz a descrição como está no banco, e os
@@ -38,6 +38,7 @@ import { CRITERIO_LABEL, type CriterioRateio } from '../../services/condominioRa
 // arquivo. Ver `utils/despesaCondominio.ts`.
 import { rotuloDeDespesa } from '../../utils/despesaCondominio';
 import { PortalTabs } from '../portal/PortalKit';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
 import { usePersistedState } from '../ui/TableUtils';
 
 /** Papéis do banco em português de gente. */
@@ -602,39 +603,158 @@ const PainelManutencao: React.FC<{
 // ── Equipamentos do prédio ───────────────────────────────────────────────────
 /* Sem valor de compra, fornecedor nem número de série — a garantia entra porque
    é o que o condômino tem interesse em cobrar. */
-const PainelEquipamentos: React.FC<{ ativos: PortalCondominio['ativos']; multi: boolean }> = ({ ativos, multi }) => (
-    <div>
-        <Descricao icone={<Package className="w-4 h-4" />}>
-            Elevadores, bombas e demais ativos, com a garantia do fornecedor
-        </Descricao>
-        {ativos.length === 0 ? (
-            <Vazio
-                icone={<Package className="w-12 h-12" />}
-                titulo="Nenhum equipamento cadastrado"
-                texto="Elevadores, bombas e demais ativos do prédio aparecem aqui."
-            />
-        ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-                {ativos.map(a => (
-                    <div key={a.id} className="rounded-[10px] border border-gray-100 p-4 flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                            <p className="text-sm font-semibold text-gray-900 truncate">{a.nome}</p>
-                            <p className="text-xs text-gray-400 mt-0.5 truncate">
-                                {[a.sistema, a.marca, a.modelo].filter(Boolean).join(' · ') || a.categoria || '—'}
-                                {multi ? ` · ${a.condominioNome}` : ''}
-                            </p>
-                        </div>
-                        {a.garantiaAte && (
-                            <span className="text-xs text-gray-500 shrink-0">
-                                garantia até {data(a.garantiaAte)}
-                            </span>
-                        )}
-                    </div>
-                ))}
+/** Rótulo de um campo da ficha. Campo vazio some — ficha de cadastro cheia de
+ *  "—" faz o olho procurar informação onde não há. */
+const CampoFicha: React.FC<{ rotulo: string; valor?: React.ReactNode; bruto?: unknown }> = ({ rotulo, valor, bruto }) => {
+    const conteudo = valor ?? (bruto as React.ReactNode);
+    const referencia = bruto !== undefined ? bruto : valor;
+    if (referencia === null || referencia === undefined || referencia === '') return null;
+    return (
+        <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-slate-500">{rotulo}</p>
+            <p className="text-sm text-gray-900">{conteudo}</p>
+        </div>
+    );
+};
+
+/** Meses viram anos quando fecham: "240 meses" não se lê, "20 anos" sim. */
+const vidaUtil = (meses: number | null) => {
+    if (meses == null) return null;
+    if (meses % 12 === 0) {
+        const anos = meses / 12;
+        return `${anos} ${anos === 1 ? 'ano' : 'anos'}`;
+    }
+    return `${meses} ${meses === 1 ? 'mês' : 'meses'}`;
+};
+
+/**
+ * A ficha do bem — os mesmos campos de Gestão de Ativos › Ativos Patrimoniais,
+ * a pedido do usuário (24/09/2026). Painel lateral, não modal: REGRA #4 /
+ * UI_PATTERNS — modal central é para interrupção crítica, e aqui a pessoa está
+ * consultando. Malha do §30.
+ */
+const FichaDoEquipamento: React.FC<{ ativo: PortalAtivoCondominio | null; multi: boolean; onClose: () => void }> = ({ ativo, multi, onClose }) => (
+    <Sheet open={!!ativo} onClose={onClose} size="lg">
+        <SheetHeader onClose={onClose}>
+            <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-[#FDEDE8] rounded-[10px] flex items-center justify-center shrink-0">
+                    <Package className="w-4 h-4 text-[#C24428]" />
+                </div>
+                <div className="min-w-0">
+                    <SheetTitle>{ativo?.nome ?? 'Equipamento'}</SheetTitle>
+                    <SheetDescription>
+                        {[ativo?.sistema, multi ? ativo?.condominioNome : null].filter(Boolean).join(' · ')
+                            || 'Ficha do equipamento'}
+                    </SheetDescription>
+                </div>
             </div>
-        )}
-    </div>
+        </SheetHeader>
+
+        <SheetPanel className="p-4 md:p-6">
+            {ativo && (
+                <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-8">
+                    {ativo.imagemUrl && (
+                        <img
+                            src={ativo.imagemUrl}
+                            alt={ativo.nome}
+                            className="w-full max-h-56 object-cover rounded-[10px] border border-gray-100"
+                        />
+                    )}
+
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                            <Package className="w-4 h-4 text-[#C24428]" />
+                            <h3 className="text-sm font-semibold text-gray-900">Identificação</h3>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                            <CampoFicha rotulo="Nome do bem" bruto={ativo.nome} />
+                            <CampoFicha rotulo="Código patrimonial" bruto={ativo.codigo} />
+                            <CampoFicha rotulo="Categoria" bruto={ativo.categoria} />
+                            <CampoFicha rotulo="Subcategoria" bruto={ativo.subcategoria} />
+                            <CampoFicha rotulo="Sistema do prédio" bruto={ativo.sistema} />
+                            <CampoFicha rotulo="Situação" bruto={ativo.situacao} />
+                            <CampoFicha rotulo="Marca" bruto={ativo.marca} />
+                            <CampoFicha rotulo="Modelo" bruto={ativo.modelo} />
+                            <CampoFicha rotulo="Nº de série" bruto={ativo.numeroSerie} />
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                            <CalendarClock className="w-4 h-4 text-[#C24428]" />
+                            <h3 className="text-sm font-semibold text-gray-900">Aquisição e garantia</h3>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                            <CampoFicha rotulo="Data de aquisição" valor={data(ativo.dataAquisicao)} bruto={ativo.dataAquisicao} />
+                            <CampoFicha rotulo="Valor de aquisição" valor={dinheiro(ativo.valorAquisicao)} bruto={ativo.valorAquisicao} />
+                            <CampoFicha rotulo="Vida útil" valor={vidaUtil(ativo.vidaUtilMeses)} bruto={ativo.vidaUtilMeses} />
+                            <CampoFicha rotulo="Valor residual" valor={dinheiro(ativo.valorResidual)} bruto={ativo.valorResidual} />
+                            <CampoFicha rotulo="Garantia do fornecedor até" valor={data(ativo.garantiaAte)} bruto={ativo.garantiaAte} />
+                        </div>
+                    </div>
+
+                    {ativo.observacoes && (
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                                <FileText className="w-4 h-4 text-[#C24428]" />
+                                <h3 className="text-sm font-semibold text-gray-900">Observações</h3>
+                            </div>
+                            <p className="text-sm text-gray-700 whitespace-pre-line">{ativo.observacoes}</p>
+                        </div>
+                    )}
+                </div>
+            )}
+        </SheetPanel>
+    </Sheet>
 );
+
+const PainelEquipamentos: React.FC<{ ativos: PortalCondominio['ativos']; multi: boolean }> = ({ ativos, multi }) => {
+    const [aberto, setAberto] = React.useState<PortalAtivoCondominio | null>(null);
+
+    return (
+        <div>
+            <Descricao icone={<Package className="w-4 h-4" />}>
+                Elevadores, bombas e demais ativos, com a garantia do fornecedor
+            </Descricao>
+            {ativos.length === 0 ? (
+                <Vazio
+                    icone={<Package className="w-12 h-12" />}
+                    titulo="Nenhum equipamento cadastrado"
+                    texto="Elevadores, bombas e demais ativos do prédio aparecem aqui."
+                />
+            ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                    {ativos.map(a => (
+                        /* Botão, e não <div onClick>: a ficha tem de abrir pelo teclado
+                           também, e leitor de tela precisa saber que a linha age. */
+                        <button
+                            key={a.id}
+                            type="button"
+                            onClick={() => setAberto(a)}
+                            className="w-full text-left rounded-[10px] border border-gray-100 p-4 flex items-start justify-between gap-3 hover:border-[#F3D9D1] hover:bg-[#FDEDE8]/40 transition-all"
+                        >
+                            <div className="min-w-0">
+                                <p className="text-sm font-semibold text-gray-900 truncate">{a.nome}</p>
+                                <p className="text-xs text-gray-400 mt-0.5 truncate">
+                                    {[a.sistema, a.marca, a.modelo].filter(Boolean).join(' · ') || a.categoria || '—'}
+                                    {multi ? ` · ${a.condominioNome}` : ''}
+                                </p>
+                            </div>
+                            {a.garantiaAte && (
+                                <span className="text-xs text-gray-500 shrink-0">
+                                    garantia até {data(a.garantiaAte)}
+                                </span>
+                            )}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {/* Sempre montado: é o `open` do Sheet que anima a entrada e a saída. */}
+            <FichaDoEquipamento ativo={aberto} multi={multi} onClose={() => setAberto(null)} />
+        </div>
+    );
+};
 
 interface Props {
     dados: PortalCondominio;

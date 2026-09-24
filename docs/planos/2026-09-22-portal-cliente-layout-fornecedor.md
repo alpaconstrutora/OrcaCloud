@@ -223,3 +223,25 @@ dado real quando o serviço voltar.
 
 Com isso o coral fica só onde é acento (ícone da descrição de cada aba), não
 mais como bloco de fundo dentro do conteúdo.
+
+## Pedido 13 (24/09/2026)
+
+> equipamentos do predio: ao clicar em um equipamento trazer os detalhes de cadastro do equipamento
+
+Perguntado QUAIS detalhes (o portal expunha um recorte deliberado desde 23/09),
+o usuário respondeu: **"os dados cadastrados em gestão de ativos < ativos
+patrimoniais"**. Então é o espelho daquele formulário — e isso **reverte** o
+recorte anterior, que deixava série, aquisição e valores fora do portal.
+
+| # | Arquivo | O que muda | Como sei que terminou |
+|---|---|---|---|
+| 24 | `supabase/migrations/aplicar_20270924000050_condominio_portal_ficha_ativo.sql` (novo) | `fn_condominio_payload_for_client` passa a devolver, por ativo: subcategoria, nº de série, data e valor de aquisição, vida útil, valor residual, observações e imagem. `supplier_id` segue fora — não é campo daquele cadastro | ✅ aplicada por `db query -f`; `pg_get_functiondef` confirma os campos no banco; `segurancaMigrations` 2/2 (REVOKE/GRANT juntos) |
+| 25 | `services/clientPortalService.ts` | `PortalAtivoCondominio` ganha os 8 campos | ✅ `tsc` |
+| 26 | `components/client/CondominioTab.tsx` | Card do equipamento vira `<button>` (teclado/leitor de tela) e abre `FichaDoEquipamento` — `Sheet` lateral (REGRA #4), malha §30, três seções: Identificação · Aquisição e garantia · Observações. Campo vazio **some** em vez de virar "—" | ✅ print `relatorios/cond/ficha_aberta.png` e `ficha_vazia.png` |
+| 27 | `__tests__/components/condominioTabAbas.test.tsx` | 2 casos novos: clique abre a ficha com os dados do cadastro (asserindo campo que SÓ existe na ficha) e campo vazio não vira linha | ✅ 6/6 |
+
+⚠️ Armadilha achada no caminho: o `Sheet` usa `useConfirm`, que exige o
+`ConfirmProvider`. Em produção ele vem da raiz (`index.tsx`), mas o teste de
+render e o harness montam o componente sozinho — os dois passaram a envolver
+em `<ConfirmProvider>`. Sem isso, o erro é `useConfirm deve ser usado dentro de
+<ConfirmProvider>`, e só aparece quando a ficha abre.

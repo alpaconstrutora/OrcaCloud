@@ -15,6 +15,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import '../../../index.css';
 import CondominioTab from '../../../components/client/CondominioTab';
+import { ConfirmProvider } from '../../../components/ui/confirm';
 import { CONDOMINIO_VAZIO, type PortalCondominio } from '../../../services/clientPortalService';
 
 const dados: PortalCondominio = {
@@ -77,13 +78,30 @@ const dados: PortalCondominio = {
         { id: 'o2', codigo: 'OS-0048', descricao: 'Inspeção anual do SPDA', sistema: 'Elétrico', tipo: 'INSPECAO', prioridade: 'MEDIA', situacao: 'AGENDADA', agendadaPara: '2026-10-20', executadaEm: null, condominioNome: '010 - Galeria Altavista' },
     ],
     ativos: [
-        { id: 'at1', nome: 'Elevador social', codigo: 'ELV-01', categoria: 'Elevador', marca: 'Atlas Schindler', modelo: '3300', situacao: 'ATIVO', sistema: 'Transporte vertical', garantiaAte: '2027-01-31', condominioNome: '010 - Galeria Altavista' },
-        { id: 'at2', nome: 'Bomba de recalque', codigo: 'BMB-02', categoria: 'Bomba', marca: 'Schneider', modelo: 'BC-92', situacao: 'ATIVO', sistema: 'Hidráulico', garantiaAte: null, condominioNome: '010 - Galeria Altavista' },
+        {
+            id: 'at1', nome: 'Elevador social', codigo: 'ELV-01', categoria: 'Elevador',
+            subcategoria: 'Tração', marca: 'Atlas Schindler', modelo: '3300',
+            numeroSerie: 'AS-99182-B', situacao: 'ATIVO', sistema: 'Transporte vertical',
+            dataAquisicao: '2021-03-12', valorAquisicao: 184000, vidaUtilMeses: 240,
+            valorResidual: 18400, observacoes: 'Casa de máquinas no 9º pavimento. Chave reserva com a zeladoria.',
+            imagemUrl: null, garantiaAte: '2027-01-31', condominioNome: '010 - Galeria Altavista',
+        },
+        {
+            id: 'at2', nome: 'Bomba de recalque', codigo: 'BMB-02', categoria: 'Bomba',
+            subcategoria: null, marca: 'Schneider', modelo: 'BC-92', numeroSerie: null,
+            situacao: 'ATIVO', sistema: 'Hidráulico', dataAquisicao: null, valorAquisicao: null,
+            vidaUtilMeses: null, valorResidual: null, observacoes: null, imagemUrl: null,
+            garantiaAte: null, condominioNome: '010 - Galeria Altavista',
+        },
     ],
 };
 
 createRoot(document.getElementById('raiz')!).render(
     <React.StrictMode>
-        <CondominioTab dados={dados} loading={false} onMarcarLido={(id) => console.log('marcar lido', id)} />
+        {/* O `Sheet` da ficha do equipamento usa `useConfirm` — o provider é o
+            mesmo que `index.tsx` monta na raiz do app. */}
+        <ConfirmProvider>
+            <CondominioTab dados={dados} loading={false} onMarcarLido={(id) => console.log('marcar lido', id)} />
+        </ConfirmProvider>
     </React.StrictMode>,
 );

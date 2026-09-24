@@ -7,7 +7,7 @@
 // teve um erro de 100× de verdade, com frações decimais salvas em campo de %.
 import { describe, it, expect } from 'vitest';
 import {
-    agruparPorCondominio, fracaoParaPercentual, periodicidade, competencia,
+    agruparPorCondominio, fracaoParaPercentual, periodicidade, competencia, resolverAba,
 } from '../components/client/CondominioTab';
 import type { PortalUnidadeCondominio } from '../services/clientPortalService';
 
@@ -131,5 +131,23 @@ describe('competencia', () => {
 
     it('aceita timestamp completo, não só DATE', () => {
         expect(competencia('2026-08-01T00:00:00Z')).toBe('08/2026');
+    });
+});
+
+// A aba escolhida vive no localStorage (§3). Um id aposentado — ou lixo de outra
+// versão — renderizaria a tela SEM painel nenhum e sem aba ativa: tela branca por
+// um valor que ninguém lembra de ter gravado. Mesmo critério dos helpers acima:
+// erra em silêncio, sem exceção e sem log.
+describe('resolverAba', () => {
+    it('aba conhecida passa direto', () => {
+        expect(resolverAba('financeiro')).toBe('financeiro');
+        expect(resolverAba('equipamentos')).toBe('equipamentos');
+    });
+
+    it('id aposentado, vazio ou nulo cai em Dados Gerais', () => {
+        expect(resolverAba('aba-que-nao-existe-mais')).toBe('dados');
+        expect(resolverAba('')).toBe('dados');
+        expect(resolverAba(null)).toBe('dados');
+        expect(resolverAba(undefined)).toBe('dados');
     });
 });

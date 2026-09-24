@@ -3875,7 +3875,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         financeiro: { title: 'Financeiro', subtitle: 'Parcelas, pagamentos e recibos.' },
         suporte: { title: 'Suporte', subtitle: 'Fale com a incorporadora.' },
         manutencao: { title: 'Manutenção', subtitle: 'Chamados de assistência técnica.' },
-        condominio: { title: 'Condomínio', subtitle: 'Unidades, avisos e documentos do prédio.' },
+        condominio: { title: 'Condomínio', subtitle: 'Unidades, avisos, documentos, rateio, manutenção e equipamentos do prédio.' },
     };
     const tabMeta = TAB_META[activeTab] ?? TAB_META.dashboard!;
     // `utils/clientCategory.ts` — o mapa literal que vivia aqui ignorava

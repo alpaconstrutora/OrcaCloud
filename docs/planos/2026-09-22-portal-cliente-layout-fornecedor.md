@@ -186,3 +186,29 @@ coral e metade azul seria trocar um desencontro por outro.
 **Lição para a próxima coluna nesta tela:** são **quatro** listas, não duas —
 `CLIENT_COLUMNS`, `CLIENT_COLUMN_HEADERS`, `DEFAULT_COL_WIDTHS` e o
 `renderClientCell`. Faltar qualquer uma some com a coluna sem erro nenhum.
+
+## Pedido 11 (24/09/2026)
+
+> portal do cliente < Condominio: transforme cada painel em uma aba: Dados Gerais; Avisos; Documentos do condomínio; Financeiro do condomínio; Manutenção do prédio; Equipamentos do prédio
+
+Plano aprovado: `~/.claude/plans/porta-do-cliente-cozy-pudding.md` (copiado nos itens abaixo).
+Escolhas do usuário: barra = `PortalTabs` (abas de pasta coral do Fornecedor);
+aba vazia sempre visível; rótulos literais.
+
+| # | Arquivo | O que muda | Como sei que terminou |
+|---|---|---|---|
+| 18 | `components/client/CondominioTab.tsx` | Os 6 painéis empilhados viram 6 componentes em escopo de módulo (`PainelDadosGerais`…`PainelEquipamentos`) dentro de um card com `PortalTabs`. Cada painel perde a moldura e o `<h2>` (que repetiria o rótulo da aba) e mantém a linha de descrição; estados vazios sobem para o ritmo §12 (`<Vazio>`); aba persistida em `clientArea:condominioSubtab` com `resolverAba` | ✅ `tsc` limpo · `check-ui-standard` limpo · 4 testes de render novos · prints das 6 abas |
+| 19 | `__tests__/components/condominioTabAbas.test.tsx` (novo) | Render em jsdom: as 6 abas existem, cada uma abre o SEU painel (e não o das outras), contador só em Avisos, sem unidade não há barra, e sem `onMarcarLido` o aviso não é clicável | ✅ 4/4 |
+| 20 | `__tests__/condominioPortalCliente.test.ts` | `describe('resolverAba')` — id aposentado/nulo cai em Dados Gerais | ✅ 16/16 (os 4 helpers antigos intactos) |
+| 21 | `docs/spikes/condominio-abas/` (novo) | Harness que monta o componente com payload fabricado — nasceu porque o Supabase caiu (522 no Cloudflare, `db query` em timeout) bem na hora de conferir a tela | ✅ prints em `c:/tmp/pwtest/relatorios/cond/spike_*.png` |
+| 22 | `components/ClientArea.tsx` | `TAB_META.condominio.subtitle` passa a citar rateio/manutenção/equipamentos | ✅ |
+
+Dois defeitos de rótulo corrigidos no caminho (mesmo dicionário, mesma família):
+`INSPECAO` (tipo de ordem) e `ABERTA` (situação) não estavam mapeados e apareciam
+crus, em caixa alta, no meio de rótulos em português.
+
+⚠️ **Verificação pendente**: o print no app real (visão do gestor e link público)
+não foi possível — o projeto Supabase ficou indisponível durante a implementação
+(`/auth/v1/token` sem resposta, `supabase db query` com timeout de conexão). O
+comportamento está coberto pelos testes de render; falta só conferir a tela com
+dado real quando o serviço voltar.

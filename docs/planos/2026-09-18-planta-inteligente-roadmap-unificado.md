@@ -1907,6 +1907,31 @@ Chave de agrupamento tratada como formato de dados. Um `|` no nome desloca os ca
 - Um dos cinco casos é de **compatibilidade**: `nome "P1" + item "87879"` continua dando exatamente `door|800|2100|P1|87879`. É o que preserva os ids de orçamento já gravados.
 - Os goldens do kernel passam sem recaptura: a assinatura não entra no hash canônico (`assinaturaDasCamadas`, que entra na ordenação, não foi tocada — e a busca exaustiva não achou colisão nela, nem com `;` e `|` no código, em 3 600 combinações).
 
+### P2.49 — Esquadrias em lote: do desenho ao orçamento (24/09/2026)
+
+**O número que motivou.** Medido na planta real depois de toda a importação DXF: **104 esquadrias, 0 com tipo declarado, 0 com item de catálogo**. E `blueprintBudget` pula a esquadria sem tipo **antes** de gerar linha ou divergência (`if (!e.declarada) continue`, o mesmo ponto que a P2.48 arrumou). Resultado: a planta inteira não produzia **uma única linha de esquadria no orçamento e não acusava nada**.
+
+Não era desleixo: o único caminho existente era selecionar cada abertura no desenho e digitar o nome no painel do selecionado — 104 vezes, acertando o clique em cada porta. Ninguém faz isso, e por isso o número era 0.
+
+**O que entrou**
+
+- **`components/blueprint/PainelEsquadrias.tsx`** (novo) — gaveta "Esquadrias" no ribbon Arquitetura, ao lado de Guarda-corpos. O quadro (`totais.porEsquadria`) já agrupava por assinatura e cada grupo já trazia `openingIds`: faltava a tela onde essa lista fosse EDITÁVEL.
+- **"Nomear automaticamente"** — numera os tipos SEM nome: `P1, P2…` (porta), `PC1` (correr), `J1` (janela), do mais numeroso ao menos. ⚠️ Não renomeia quem já tem nome e não repete um nome já usado no desenho: quem chamou uma porta de "PE-01" não quer que um botão a vire "P3".
+- **Item por grupo** (o mesmo `DatabasePickerModal` do painel singular) e **"Salvar no catálogo"**, que guarda os tipos nomeados na organização — para a planta seguinte não recomeçar do zero.
+- **Aplicar é UM lote**: `SetOpeningEsquadria` para todas as aberturas de todos os grupos tocados, um passo de desfazer.
+- **A contagem no botão do ribbon** é quantas PEÇAS estão fora do orçamento por falta de tipo — o número que era invisível.
+
+⚠️ **Nomear muda a assinatura** (o nome entra nela) e re-agrupa o quadro na renderização seguinte. Por isso o rascunho é indexado pela assinatura atual e aplicado de uma vez: editar linha a linha contra um quadro que se reordena embaixo do cursor seria ingovernável.
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-ui-standard.sh` nos dois .tsx ok · `check-xss-sinks.sh` ok · suíte cheia **452 arquivos / 5178 testes** verdes · `npm run build` ok.
+- `__tests__/components/PainelEsquadrias.test.tsx` (7): o aviso conta PEÇAS e não tipos; a numeração segue a quantidade; não renomeia nem repete nome existente; aplicar manda um lote só, com todas as aberturas do grupo e só o que mudou; nome vazio não vira esquadria (item sozinho não é tipo); clicar no tipo seleciona as aberturas no desenho; sem esquadria, diz que vão livre não conta.
+- **App real** (escritas bloqueadas: 15, 0 erros), *Planta 23/09/2026*: o botão do ribbon nasce com **90**; a gaveta abre com *"90 esquadria(s) em 41 tipo(s) · 0 tipo(s) com nome"* e o aviso *"São 90 peça(s) fora hoje"*; "Nomear automaticamente" propõe `P1, P2, P3…`; aplicar devolve *"90 esquadria(s) de 41 tipo(s) atualizadas"* e **o aviso de fora do orçamento desaparece**. (90 e não 104 porque vão livre não entra no quadro: 104 − 14 = 90.)
+
+**⚠️ Um defeito que só a prova no app mostrou.** Na primeira execução os nomes saíram `J5, J2, J4, J21, J20…`: os números certos, embaralhados. A numeração ia por quantidade e a TABELA vinha na ordem do quadro (alfabética pelo nome derivado — "Janela 100×120" antes de "Janela 120×100"). Numerar por uma ordem e listar por outra faz o usuário desconfiar do botão. A tabela passou a usar a mesma ordenação da numeração (tipo, depois quantidade), e a segunda execução saiu `P1, P2, P3…`. Nenhum teste de unidade pegaria isso — a lista estava "correta", só ilegível.
+
+**Fica para o usuário decidir**: 41 tipos para 90 peças é bastante fragmentação, vinda de medidas ligeiramente diferentes no DXF (uma porta 82×210 e outra 80×210 são dois tipos). Agrupar por medida arredondada mudaria a geometria do desenho, então não foi feito por conta própria.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

@@ -172,6 +172,7 @@ import PainelVagas from './PainelVagas';
 import { comandosDeAceite as aceitarVagas, comandosDeLimpeza as limparVagas, HIPOTESES_VAGAS_PADRAO, planejarVagas, type HipotesesDeVagas, type RegiaoDeVagas } from '../../utils/blueprintVagasAutomaticas';
 import { nucleosDoNivel } from '../../utils/blueprintNucleoVertical';
 import PainelEsquadria from './PainelEsquadria';
+import PainelEsquadrias from './PainelEsquadrias';
 import PainelImportarIfc from './PainelImportarIfc';
 import PainelImportarDxf from './PainelImportarDxf';
 import PainelImportarBcf from './PainelImportarBcf';
@@ -873,6 +874,9 @@ const ROTULO_DA_TAREFA = {
   // GUARDA-CORPOS (19/09/2026, E7.3): borda livre de laje e escada → sugestão; conferência NBR 14718/9050.
   guardaCorpos: 'Guarda-corpos e corrimãos',
   rodapes: 'Rodapés por ambiente',
+  // ESQUADRIAS EM LOTE (24/09/2026, P2.49): o quadro do desenho vira tipos
+  // nomeados com item — sem isto, esquadria sem nome nao entra no orcamento.
+  esquadrias: 'Esquadrias — tipos e itens em lote',
   // DEPARTAMENTO (21/09/2026, P2.22): setor por ambiente na etiqueta; quadro por setor e a planta colorida.
   departamentos: 'Departamentos (setores) por ambiente',
   // LOD (21/09/2026, P2): nível de desenvolvimento derivado por família; alvo por família; pendências.
@@ -2710,6 +2714,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const quant = useMemo(
     () => computeQuantities(editor.model, POLITICA_PADRAO),
     [editor.model],
+  );
+  /**
+   * Quantas esquadrias estao FORA do orcamento por nao terem tipo (P2.49).
+   *
+   * Vai no numerinho do botão porque era invisível: `blueprintBudget` pula a
+   * esquadria sem nome antes de gerar linha OU divergência, então 104 peças
+   * sem tipo não produziam orçamento nem aviso.
+   */
+  const esquadriasSemTipo = useMemo(
+    () => (quant.totais.porEsquadria ?? []).filter((e) => !e.declarada).reduce((soma, e) => soma + e.quantidade, 0),
+    [quant],
   );
   quantRef.current = quant;
   /** COLORIR POR (E8.2): cor por ambiente e legenda do recorte atual. */
@@ -8909,6 +8924,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   ajuda="Piso (camadas de baixo para cima), forro (camadas + rebaixo) e rodapé (pela política, declarado ou sem) por ambiente; presets, tipos salvos na organização e material por camada — quantitativo e orçamento por material"
                 />
                 <BotaoDoRibbon
+                  icone={BookMarked}
+                  rotulo="Esquadrias"
+                  contagem={esquadriasSemTipo || undefined}
+                  ativo={tarefaAberta === 'esquadrias'}
+                  onClick={() => alternarTarefa('esquadrias')}
+                  ajuda="Quadro de esquadrias do desenho como LOTE: nomeia os tipos (P1, J1…), vincula item de catálogo e aplica a todas as aberturas do grupo de uma vez. Esquadria sem nome de tipo não entra no orçamento — nem como divergência."
+                />
+                <BotaoDoRibbon
                   icone={Fence}
                   rotulo="Guarda-corpos"
                   contagem={sugestaoDeGuardaCorpos.sugestoes.length + resumoDeGuardaCorpos.erros || undefined}
@@ -11949,7 +11972,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' || tarefaAberta === 'mobiliario' || tarefaAberta === 'ia' || tarefaAberta === 'acabamentos' || tarefaAberta === 'guardaCorpos' || tarefaAberta === 'rodapes' || tarefaAberta === 'departamentos' || tarefaAberta === 'lod' || tarefaAberta === 'etapas' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' || tarefaAberta === 'mobiliario' || tarefaAberta === 'ia' || tarefaAberta === 'acabamentos' || tarefaAberta === 'esquadrias' || tarefaAberta === 'guardaCorpos' || tarefaAberta === 'rodapes' || tarefaAberta === 'departamentos' || tarefaAberta === 'lod' || tarefaAberta === 'etapas' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno}
 
@@ -12069,6 +12092,22 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onSelecionar={(id) => {
                 setTarefa(null);
                 selecionar([id]);
+              }}
+            />
+          )}
+
+          {tarefaAberta === 'esquadrias' && (
+            <PainelEsquadrias
+              grupos={quant.totais.porEsquadria ?? []}
+              onAplicar={(mudancas) => {
+                // UM lote para tudo: um passo de desfazer para o quadro inteiro.
+                const cmds: Command[] = mudancas.flatMap((m) =>
+                  m.openingIds.map((openingId): Command => ({ type: 'SetOpeningEsquadria', openingId, esquadria: m.esquadria })),
+                );
+                if (cmds.length > 0) editor.runBatch(cmds);
+              }}
+              onSelecionar={(ids) => {
+                if (ids.length > 0) selecionar([...ids]);
               }}
             />
           )}

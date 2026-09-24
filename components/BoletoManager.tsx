@@ -50,7 +50,8 @@ const BOLETO_COLUMNS: ColumnConfig[] = [
     { key: 'capturado_por', label: 'Capturado por', sortable: true },
     // Clicar na linha já abre o boleto (ação dominante, única relevante — guia
     // §9.1). A coluna 'actions' fica só com o que não é a ação dominante:
-    // excluir (restrito a rascunho, igual à exclusão em lote).
+    // excluir (restrito a rascunho/aprovado, igual à exclusão em lote —
+    // `boletoService.podeExcluir`).
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
@@ -201,8 +202,8 @@ function renderBoletoCell(
                 <div className="flex items-center justify-end">
                     <ActionIconButton
                         kind="delete"
-                        disabled={b.status !== 'rascunho'}
-                        title={b.status === 'rascunho' ? 'Excluir' : 'Apenas rascunhos podem ser excluídos'}
+                        disabled={!boletoService.podeExcluir(b.status)}
+                        title={boletoService.podeExcluir(b.status) ? 'Excluir' : 'Boleto pago ou cancelado fica no histórico'}
                         onClick={() => onDelete(b)}
                     />
                 </div>
@@ -252,8 +253,8 @@ const BoletoCardItem = React.memo(function BoletoCardItem({
                 <ActionIconButton
                     kind="delete"
                     size="sm"
-                    disabled={b.status !== 'rascunho'}
-                    title={b.status === 'rascunho' ? 'Excluir' : 'Apenas rascunhos podem ser excluídos'}
+                    disabled={!boletoService.podeExcluir(b.status)}
+                    title={boletoService.podeExcluir(b.status) ? 'Excluir' : 'Boleto pago ou cancelado fica no histórico'}
                     onClick={() => onDelete(b)}
                 />
             </div>
@@ -484,17 +485,22 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
 
     async function handleExcluirLote() {
         const selecionados = filtered.filter(b => selectedIds.has(b.id));
-        const rascunhos = selecionados.filter(b => b.status === 'rascunho');
-        const naoRascunhos = selecionados.length - rascunhos.length;
-        if (rascunhos.length === 0) {
-            notify('Apenas boletos em rascunho podem ser excluídos. Use cancelar para os demais.', 'error');
+        const elegiveis = selecionados.filter(b => boletoService.podeExcluir(b.status));
+        const bloqueados = selecionados.length - elegiveis.length;
+        const aprovados = elegiveis.filter(b => b.status === 'aprovado').length;
+        if (elegiveis.length === 0) {
+            notify('Nenhum dos boletos selecionados pode ser excluído — pagos e cancelados ficam no histórico.', 'error');
             return;
         }
+        const avisoAprovados = aprovados > 0
+            ? ` ${aprovados} ${aprovados !== 1 ? 'estão aprovados: o título no financeiro e a nota serão removidos junto' : 'está aprovado: o título no financeiro e a nota serão removidos junto'}.`
+            : '';
+        const avisoBloqueados = bloqueados > 0
+            ? ` ${bloqueados} boleto${bloqueados !== 1 ? 's' : ''} pago${bloqueados !== 1 ? 's' : ''} ou cancelado${bloqueados !== 1 ? 's serão ignorados' : ' será ignorado'}.`
+            : '';
         const ok = await confirm({
-            title: `Excluir ${rascunhos.length} boleto${rascunhos.length !== 1 ? 's' : ''}?`,
-            message: naoRascunhos > 0
-                ? `Essa ação não pode ser desfeita. ${naoRascunhos} boleto${naoRascunhos !== 1 ? 's' : ''} selecionado${naoRascunhos !== 1 ? 's' : ''} não ${naoRascunhos !== 1 ? 'são rascunhos e serão ignorados' : 'é rascunho e será ignorado'} (use cancelar).`
-                : 'Excluir permanentemente os boletos selecionados? Essa ação não pode ser desfeita.',
+            title: `Excluir ${elegiveis.length} boleto${elegiveis.length !== 1 ? 's' : ''}?`,
+            message: `Essa ação não pode ser desfeita.${avisoAprovados}${avisoBloqueados}`,
             variant: 'danger',
             confirmLabel: 'Excluir',
         });
@@ -502,16 +508,24 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         setExcluindoLote(true);
         try {
             const resultados = await Promise.allSettled(
-                rascunhos.map(b => boletoService.excluirRascunho(b.id, effectiveOrgId ?? organizationId, userEmail))
+                elegiveis.map(b => boletoService.excluir(b.id, effectiveOrgId ?? organizationId, userEmail))
             );
             const excluidosIds = new Set(
-                rascunhos.filter((_, i) => resultados[i].status === 'fulfilled').map(b => b.id)
+                elegiveis.filter((_, i) => resultados[i].status === 'fulfilled').map(b => b.id)
             );
             const falhas = resultados.length - excluidosIds.size;
             if (falhas > 0) {
-                notify(`${excluidosIds.size} boleto(s) excluído(s), ${falhas} falharam.`, excluidosIds.size === 0 ? 'error' : 'success');
+                /* A recusa de um aprovado tem MOTIVO (título conciliado, em
+                   rateio, já baixado) e o motivo é o que diz ao usuário o que
+                   fazer. Contar "N falharam" escondia isso. */
+                const primeiroErro = resultados.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined;
+                const motivo = primeiroErro?.reason instanceof Error ? primeiroErro.reason.message : '';
+                notify(
+                    `${excluidosIds.size} boleto(s) excluído(s), ${falhas} não puderam ser excluídos.${motivo ? ` ${motivo}` : ''}`,
+                    excluidosIds.size === 0 ? 'error' : 'success',
+                );
             } else {
-                notify(`${rascunhos.length} boleto${rascunhos.length !== 1 ? 's excluídos' : ' excluído'} com sucesso.`);
+                notify(`${elegiveis.length} boleto${elegiveis.length !== 1 ? 's excluídos' : ' excluído'} com sucesso.`);
             }
             if (excluidosIds.size > 0) {
                 setBoletos(prev => prev.filter(item => !excluidosIds.has(item.id)));
@@ -524,19 +538,21 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     }
 
     async function handleExcluirBoleto(b: Boleto) {
-        if (b.status !== 'rascunho') {
-            notify('Apenas boletos em rascunho podem ser excluídos. Use cancelar para os demais.', 'error');
+        if (!boletoService.podeExcluir(b.status)) {
+            notify('Boletos pagos ou cancelados ficam no histórico e não podem ser excluídos.', 'error');
             return;
         }
         const ok = await confirm({
             title: 'Excluir boleto?',
-            message: 'Excluir permanentemente este boleto? Essa ação não pode ser desfeita.',
+            message: b.status === 'aprovado'
+                ? 'Este boleto já foi aprovado: o título dele no financeiro e a nota serão removidos junto. Essa ação não pode ser desfeita.'
+                : 'Excluir permanentemente este boleto? Essa ação não pode ser desfeita.',
             variant: 'danger',
             confirmLabel: 'Excluir',
         });
         if (!ok) return;
         try {
-            await boletoService.excluirRascunho(b.id, effectiveOrgId ?? organizationId, userEmail);
+            await boletoService.excluir(b.id, effectiveOrgId ?? organizationId, userEmail);
             notify('Boleto excluído com sucesso.');
             setBoletos(prev => prev.filter(item => item.id !== b.id));
             void recarregarStats();

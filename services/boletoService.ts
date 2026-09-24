@@ -1086,23 +1086,126 @@ export const boletoService = {
     },
 
     /**
-     * Exclui permanentemente um boleto rascunho (e seu arquivo no storage).
-     * Apenas rascunhos podem ser excluídos — demais status devem ser cancelados.
+     * Status em que o boleto pode ser excluído.
+     *
+     * `rascunho` nunca teve reflexo financeiro — sai limpo. `aprovado` já criou
+     * nota (`invoices`) e título no razão (`internal_transactions`), então a
+     * exclusão precisa DESFAZER esses dois; `desfazerLancamento` abaixo é quem
+     * decide se isso ainda é seguro. `pago` e `cancelado` continuam fora:
+     * o primeiro tem baixa financeira, o segundo é o próprio histórico.
      */
-    async excluirRascunho(boletoId: string, organizationId: string, userEmail?: string): Promise<void> {
+    podeExcluir(status: BoletoStatus): boolean {
+        return status === 'rascunho' || status === 'aprovado';
+    },
+
+    /**
+     * Desfaz o que a aprovação criou (título no razão + nota), ou explica por
+     * que não dá.
+     *
+     * A aprovação (`aprovarECriarInvoice`) cria duas linhas. O título é a
+     * perigosa: ele entra na conciliação bancária, na alçada e pode virar
+     * despesa de rateio. Cada `throw` aqui corresponde a um vínculo que tornaria
+     * a exclusão uma perda silenciosa de dado em OUTRO módulo — nesses casos o
+     * caminho certo continua sendo Cancelar, que preserva o histórico.
+     *
+     * A alçada não tem tabela própria: `approvalService` grava colunas na
+     * própria `internal_transactions` (ver `approvalService.submit`), então
+     * apagar o título já leva a solicitação junto.
+     */
+    async desfazerLancamento(boletoId: string, organizationId: string, invoiceId: string | null): Promise<void> {
+        const { data: tx, error: txErr } = await supabase
+            .from('internal_transactions')
+            .select('id, status')
+            .eq('organization_id', organizationId)
+            .eq('source_system', 'BOLETO')
+            .eq('reference_id', boletoId)
+            .maybeSingle();
+        if (txErr) throw txErr;
+
+        if (tx) {
+            // Só título ainda em aberto pode sumir. CONCILIATED/PAID já bateu com
+            // extrato ou teve baixa — apagar reabriria um buraco no caixa.
+            if (tx.status !== 'PENDING') {
+                throw new Error(
+                    'O título deste boleto no financeiro já saiu de "em aberto" (conciliado ou baixado) e não pode ser excluído. Use Cancelar para preservar o histórico.',
+                );
+            }
+
+            const { count: conciliacoes, error: mErr } = await supabase
+                .from('reconciliation_matches')
+                .select('id', { count: 'exact', head: true })
+                .eq('internal_transaction_id', tx.id);
+            if (mErr) throw mErr;
+            if (conciliacoes) {
+                throw new Error('O título deste boleto já está conciliado com o extrato bancário. Use Cancelar.');
+            }
+
+            const { count: rateios, error: rErr } = await supabase
+                .from('condominio_rateio_itens')
+                .select('id', { count: 'exact', head: true })
+                .eq('transaction_id', tx.id);
+            if (rErr) throw rErr;
+            if (rateios) {
+                throw new Error('O título deste boleto entra no rateio de um condomínio. Use Cancelar para não alterar o rateio.');
+            }
+
+            const { count: pagamentos, error: pErr } = await supabase
+                .from('supplier_payments')
+                .select('id', { count: 'exact', head: true })
+                .eq('transaction_id', tx.id);
+            if (pErr) throw pErr;
+            if (pagamentos) {
+                throw new Error('Existe pagamento a fornecedor lançado sobre este boleto. Use Cancelar.');
+            }
+
+            const { error: delTxErr } = await supabase.from('internal_transactions').delete().eq('id', tx.id);
+            if (delTxErr) throw delTxErr;
+        }
+
+        if (invoiceId) {
+            // A nota é 1:1 com o boleto (índice único em `file_path`), mas a
+            // coluna `boletos.invoice_id` não impede que outra linha aponte para
+            // ela — conferir antes é barato e evita apagar nota de terceiro.
+            const { count: outros, error: oErr } = await supabase
+                .from('boletos')
+                .select('id', { count: 'exact', head: true })
+                .eq('invoice_id', invoiceId)
+                .neq('id', boletoId);
+            if (oErr) throw oErr;
+            if (!outros) {
+                const { error: delInvErr } = await supabase.from('invoices').delete().eq('id', invoiceId);
+                if (delInvErr) throw delInvErr;
+            }
+        }
+    },
+
+    /**
+     * Exclui permanentemente um boleto (e seu arquivo no storage).
+     *
+     * Rascunho sai direto. Aprovado só sai depois de `desfazerLancamento`
+     * remover o título e a nota criados na aprovação — e ela recusa se o título
+     * já tiver vida própria no financeiro. Pago e cancelado nunca saem.
+     */
+    async excluir(boletoId: string, organizationId: string, userEmail?: string): Promise<void> {
         const boleto = await this.getById(boletoId);
         if (!boleto) return;
-        if (boleto.status !== 'rascunho') {
-            throw new Error('Apenas boletos em rascunho podem ser excluídos. Use cancelar nos demais casos.');
+        if (!this.podeExcluir(boleto.status)) {
+            throw new Error('Só é possível excluir boletos em rascunho ou aprovados. Boletos pagos ou cancelados ficam no histórico.');
+        }
+
+        if (boleto.status === 'aprovado') {
+            await this.desfazerLancamento(boletoId, organizationId, boleto.invoice_id ?? null);
         }
 
         await supabase.storage.from(BUCKET).remove([boleto.documento_path]).catch(() => {});
         const { error } = await supabase.from(TABLE).delete().eq('id', boletoId);
         if (error) throw error;
 
-        await registrarAuditoria(boletoId, organizationId, 'exclusao', {
-            metodo: 'usuario',
-            usuario_email: userEmail,
-        });
+        /* Não há auditoria de exclusão: `boletos_auditoria.boleto_id` tem FK
+           `ON DELETE CASCADE`, então o histórico do boleto some junto com ele e
+           um insert depois do delete só violaria a FK. A chamada que existia
+           aqui falhava sempre — em silêncio, porque `registrarAuditoria` engole
+           o erro. Registro de exclusão, se for preciso, precisa de tabela sem
+           FK para `boletos`. */
     },
 };

@@ -395,18 +395,20 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         }
     }
 
-    async function handleExcluirRascunho() {
+    async function handleExcluir() {
         if (!boleto) return;
         const ok = await confirm({
-            title: 'Excluir rascunho?',
-            message: 'Excluir este rascunho permanentemente? Essa ação não pode ser desfeita.',
+            title: boleto.status === 'aprovado' ? 'Excluir boleto aprovado?' : 'Excluir rascunho?',
+            message: boleto.status === 'aprovado'
+                ? 'Este boleto já foi aprovado: o título dele no financeiro e a nota serão removidos junto. Essa ação não pode ser desfeita.'
+                : 'Excluir este rascunho permanentemente? Essa ação não pode ser desfeita.',
             variant: 'danger',
             confirmLabel: 'Excluir',
         });
         if (!ok) return;
         setBusy(true);
         try {
-            await boletoService.excluirRascunho(boleto.id, organizationId, userEmail);
+            await boletoService.excluir(boleto.id, organizationId, userEmail);
             onSaved({ ...boleto, status: 'cancelado' }); // sinal de atualização
             onClose();
         } catch (err: unknown) {
@@ -1048,9 +1050,9 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                 {/* Footer com ações */}
                 {boleto && (
                     <div className="sticky bottom-0 bg-white border-t border-gray-100 px-6 py-4 flex flex-wrap items-center justify-end gap-2">
-                        {boleto.status === 'rascunho' && (
+                        {boletoService.podeExcluir(boleto.status) && (
                             <button
-                                onClick={handleExcluirRascunho}
+                                onClick={handleExcluir}
                                 disabled={busy}
                                 className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg text-button font-bold uppercase tracking-widest flex items-center gap-2"
                             >

@@ -44,6 +44,7 @@ import { AssetImportModal } from './AssetImportModal';
 import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import ImageDropzone from './ui/ImageDropzone';
 import {
   OpuraAsset,
   AssetCategory,
@@ -69,6 +70,8 @@ interface OpuraAssetsModuleProps {
 // De `brand_model` a `documents`: eram o painel de detalhe da direita, que deixou
 // de existir em 2026-09-09 (ver docs/planos/2026-09-09-ativos-tabela-sem-painel.md).
 const ASSET_COLUMNS: ColumnConfig[] = [
+  // Ordena por "tem foto ou não" — miniatura não tem ordem alfabética.
+  { key: 'image', label: 'Imagem', sortable: true },
   { key: 'code', label: 'Código', sortable: true },
   { key: 'name', label: 'Ativo', sortable: true },
   { key: 'category', label: 'Categoria', sortable: true },
@@ -93,6 +96,9 @@ const ASSET_COLUMNS: ColumnConfig[] = [
 // do §6.6. As colunas de dado encolheram junto para a soma continuar cabendo
 // em 1920 sem rolagem lateral — medido no navegador, não estimado.
 const ASSET_COL_WIDTHS: Record<string, number> = {
+  // 80 = miniatura de 40px + o `px-6` do §6.6 (24+24) e nada mais: a coluna não
+  // tem texto para acomodar.
+  image: 80,
   code: 160, name: 165, category: 100, status: 85, brand_model: 125, allocation: 135,
   purchase_value: 115, useful_life: 100, last_movement: 140, documents: 120, value: 110, actions: 250,
 };
@@ -138,6 +144,7 @@ const RATEIO_COL_WIDTHS: Record<string, number> = { project_name: 220, assets_co
 // Header (label/sortable/className) da tabela "Ativos Patrimoniais" — mesmo
 // className que cada <SortableHeader> original recebia.
 const ASSET_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+  image: { label: 'Imagem', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   name: { label: 'Ativo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   category: { label: 'Categoria', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
@@ -315,6 +322,19 @@ function renderAssetCell(
   },
 ): React.ReactNode {
   switch (key) {
+    case 'image': {
+      const url = assetService.imagePublicUrl(asset.image_url);
+      const Icon = ctx.categoryIcons[asset.category] || Package;
+      // Sem foto a célula mostra o ícone da categoria em cinza — não um vazio,
+      // que faria a coluna parecer quebrada em quem ainda não subiu imagem.
+      return url
+        ? <img src={url} alt={asset.name} loading="lazy" className="w-10 h-10 rounded-[6px] object-cover border border-gray-100 bg-gray-50" />
+        : (
+          <div className="w-10 h-10 rounded-[6px] flex items-center justify-center bg-gray-50 border border-gray-100 text-gray-300" title="Sem imagem">
+            <Icon className="w-4 h-4" />
+          </div>
+        );
+    }
     case 'code':
       return <span className="text-sm font-normal text-gray-600">{asset.code}</span>;
     case 'name': {
@@ -387,6 +407,7 @@ function formularioAtivoVazio() {
     purchase_value: 0,
     useful_life_months: 60,
     residual_value: 0,
+    image_url: '',
     notes: '',
     responsible_worker_id: undefined as string | undefined,
   };
@@ -449,6 +470,12 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   const [selectedMaintenance, setSelectedMaintenance] = React.useState<OpuraAssetMaintenance | null>(null);
   
   const [isNewDocModalOpen, setIsNewDocModalOpen] = React.useState(false);
+
+  // Upload da foto do bem. `imagensOrfas` guarda o que foi subido NESTE drawer e
+  // ainda não pertence a ativo nenhum: se o usuário trocar a imagem três vezes e
+  // sair sem salvar, os três arquivos ficariam no bucket para sempre.
+  const [assetImageUploading, setAssetImageUploading] = React.useState(false);
+  const imagensOrfas = React.useRef<string[]>([]);
 
   // Estados adicionais de marcas e colaboradores (Fase 7)
   const [brands, setBrands] = React.useState<OpuraAssetBrand[]>([]);
@@ -716,6 +743,9 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
           purchase_value: Number(assetForm.purchase_value) || 0,
           useful_life_months: Number(assetForm.useful_life_months) || undefined,
           residual_value: Number(assetForm.residual_value) || 0,
+          // `null` e não `undefined`: remover a foto tem de APAGAR a coluna, e
+          // `undefined` é campo ausente no PATCH — o valor antigo ficaria.
+          image_url: assetForm.image_url || null,
           notes: assetForm.notes || undefined
         });
         alert('Ativo patrimonial updated com sucesso!');
@@ -739,11 +769,14 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
           residual_value: Number(assetForm.residual_value) || 0,
           status: 'disponivel',
           tracking_code: generatedCode,
+          image_url: assetForm.image_url || undefined,
           notes: assetForm.notes || undefined
         });
         alert(isDuplicate ? 'Ativo duplicado com sucesso!' : 'Ativo patrimonial cadastrado com sucesso!');
       }
       
+      // O que foi salvo pertence ao ativo — não é mais órfão para descartar.
+      imagensOrfas.current = [];
       // Fecha sem pedir confirmação: acabou de salvar, não há pendência a descartar.
       fecharFormularioAtivo();
       loadData();
@@ -1191,6 +1224,39 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   // Eram os seis botões do painel de detalhe da direita. Cada uma marca o ativo
   // alvo (`selectedAsset`, de onde os modais leem) e abre o modal correspondente.
 
+  const descartarImagensOrfas = () => {
+    const pendentes = imagensOrfas.current;
+    imagensOrfas.current = [];
+    // Sem `await`: limpeza de bucket não pode segurar o fechamento do drawer.
+    pendentes.forEach(path => { void assetService.removeImage(path); });
+  };
+
+  const handleAssetImageSelect = async (file: File) => {
+    const targetOrgId = activeOrganizationId || assetForm.organization_id;
+    setAssetImageUploading(true);
+    try {
+      const path = await assetService.uploadImage(targetOrgId || '', file);
+      imagensOrfas.current.push(path);
+      setAssetForm(prev => ({ ...prev, image_url: path }));
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setAssetImageUploading(false);
+    }
+  };
+
+  // Só apaga do bucket o arquivo que ainda não foi salvo em ativo nenhum. A foto
+  // já persistida some da coluna ao salvar — o arquivo fica, porque a duplicata
+  // do ativo aponta para o MESMO caminho e perderia a imagem junto.
+  const handleAssetImageRemove = () => {
+    const atual = assetForm.image_url;
+    if (atual && imagensOrfas.current.includes(atual)) {
+      imagensOrfas.current = imagensOrfas.current.filter(p => p !== atual);
+      void assetService.removeImage(atual);
+    }
+    setAssetForm(prev => ({ ...prev, image_url: '' }));
+  };
+
   // Único caminho para abrir o drawer do formulário: além de preencher o form,
   // grava o snapshot que o `dirty` compara e reseta o modo (editar/duplicar/criar).
   // Passar por aqui é o que impede "cancelei a edição, cliquei em Cadastrar Ativo
@@ -1199,6 +1265,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     form: ReturnType<typeof formularioAtivoVazio>,
     modo: { editandoId?: string | null; duplicando?: boolean; somenteLeitura?: boolean } = {},
   ) => {
+    imagensOrfas.current = [];
     setAssetForm(form);
     setAssetFormSnapshot(JSON.stringify(form));
     setEditingAssetId(modo.editandoId ?? null);
@@ -1208,6 +1275,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   };
 
   const fecharFormularioAtivo = () => {
+    descartarImagensOrfas();
     setIsNewAssetModalOpen(false);
     setEditingAssetId(null);
     setIsDuplicate(false);
@@ -1247,6 +1315,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     purchase_value: asset.purchase_value || 0,
     useful_life_months: asset.useful_life_months || 60,
     residual_value: asset.residual_value || 0,
+    image_url: asset.image_url || '',
     notes: asset.notes || '',
     responsible_worker_id: asset.responsible_worker_id,
   });
@@ -1338,6 +1407,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   });
 
   const sortedAssets = sortRows(filteredAssets, assetTableColumns.sortColumn, assetTableColumns.sortDirection, (a, key) => {
+    // Miniatura não tem ordem alfabética: ordena por "tem foto" (1) x "não tem" (0).
+    if (key === 'image') return a.image_url ? 1 : 0;
     if (key === 'value') return calculateDepreciation(a).current;
     if (key === 'brand_model') return [a.brand, a.model].filter(Boolean).join(' ');
     if (key === 'allocation') return projects.find(p => p.id === a.current_project_id)?.name || 'Sede / Central';
@@ -2471,6 +2542,19 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-500">Imagem do Bem</label>
+                {/* Fora do que `<fieldset disabled>` alcança: arraste não é evento de
+                    controle de formulário, então o modo leitura entra pela prop. */}
+                <ImageDropzone
+                  value={assetService.imagePublicUrl(assetForm.image_url)}
+                  onSelect={handleAssetImageSelect}
+                  onRemove={handleAssetImageRemove}
+                  uploading={assetImageUploading}
+                  disabled={assetFormReadOnly}
+                />
               </div>
 
               <div className="space-y-1">

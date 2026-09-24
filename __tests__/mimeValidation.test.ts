@@ -11,6 +11,8 @@
 import { describe, it, expect } from 'vitest';
 import {
     validateDocumentFile,
+    validateImageFile,
+    IMAGE_ACCEPT_ATTR,
     ACCEPTED_EXTENSIONS,
     ACCEPTED_MIMES,
     DOCUMENT_ACCEPT_ATTR,
@@ -244,5 +246,35 @@ describe('validateDocumentFile — cobertura das regras do service', () => {
             const result = validateDocumentFile(f);
             expect(result.valid).toBe(false);
         }
+    });
+});
+
+
+// ─── Imagem (foto de cadastro — ex.: Gestão de Ativos) ───────────────────────
+
+describe('validateImageFile', () => {
+    it('aceita JPG, PNG e WEBP', () => {
+        expect(validateImageFile(makeFile('bem.jpg', 'image/jpeg'))).toEqual({ valid: true });
+        expect(validateImageFile(makeFile('bem.jpeg', 'image/jpeg'))).toEqual({ valid: true });
+        expect(validateImageFile(makeFile('bem.png', 'image/png'))).toEqual({ valid: true });
+        expect(validateImageFile(makeFile('bem.webp', 'image/webp'))).toEqual({ valid: true });
+    });
+
+    it('recusa PDF — é documento, não imagem que o <img> renderiza', () => {
+        expect(validateImageFile(makeFile('manual.pdf', 'application/pdf')).valid).toBe(false);
+    });
+
+    it('recusa executável renomeado para .png', () => {
+        expect(validateImageFile(makeFile('spoof.png', 'application/x-msdownload')).valid).toBe(false);
+    });
+
+    it('recusa arquivo vazio, sem extensão e acima de 5 MB', () => {
+        expect(validateImageFile(makeFile('vazio.png', 'image/png', 0)).valid).toBe(false);
+        expect(validateImageFile(makeFile('semponto', 'image/png')).valid).toBe(false);
+        expect(validateImageFile(makeFile('grande.png', 'image/png', 5 * MB + 1)).valid).toBe(false);
+    });
+
+    it('o accept do input cobre exatamente as extensões aceitas', () => {
+        expect(IMAGE_ACCEPT_ATTR).toBe('.jpg,.jpeg,.png,.webp');
     });
 });

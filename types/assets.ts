@@ -38,6 +38,8 @@ export interface OpuraAsset {
   responsible_worker_id?: string;
   current_project_id?: string;
   tracking_code?: string;
+  /** Caminho da foto no bucket `organization-assets` — não é URL (ver assetService.imagePublicUrl). */
+  image_url?: string | null;
   notes?: string;
   created_at: string;
   updated_at: string;

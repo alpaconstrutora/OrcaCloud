@@ -1,6 +1,7 @@
 // services/assetService.ts
 
 import { supabase } from '../lib/supabase';
+import { validateImageFile } from '../lib/mimeValidation';
 import {
   OpuraAsset,
   OpuraAssetInsert,
@@ -69,6 +70,9 @@ function erroPonteFinanceira(err: unknown): Error {
   const msg = err instanceof Error ? err.message : String((err as { message?: string })?.message ?? err);
   return new Error(`Ordem salva, mas o lançamento financeiro falhou: ${msg} — edite a ordem e salve de novo para gerar o título.`);
 }
+
+/** Bucket público já usado por foto/documento de colaborador. */
+const ASSET_IMAGE_BUCKET = 'organization-assets';
 
 export const assetService = {
   // ATIVOS
@@ -154,6 +158,50 @@ export const assetService = {
       console.error(`[AssetService] Error deleting asset ${id}:`, error);
       throw new Error(`Falha ao excluir ativo: ${error.message}`);
     }
+  },
+
+  // FOTO DO ATIVO
+  //
+  // Bucket `organization-assets` (público) — o mesmo de foto/documento de
+  // colaborador. A coluna `image_url` guarda o CAMINHO, nunca a URL: bucket
+  // público resolve a URL na hora de renderizar, e caminho sobrevive a troca de
+  // domínio do projeto Supabase.
+  imagePublicUrl(path?: string | null): string | null {
+    if (!path) return null;
+    // Já veio URL absoluta (dado antigo ou colado à mão) — devolve como está.
+    if (/^https?:\/\//i.test(path)) return path;
+    return supabase.storage.from(ASSET_IMAGE_BUCKET).getPublicUrl(path).data.publicUrl;
+  },
+
+  /** Sobe a imagem e devolve o CAMINHO no bucket (é isso que vai para `image_url`). */
+  async uploadImage(organizationId: string, file: File): Promise<string> {
+    const validation = validateImageFile(file);
+    if (!validation.valid) throw new Error(validation.error);
+
+    const ext = file.name.toLowerCase().split('.').pop();
+    // `organizationId` no caminho mantém a foto no recorte da organização dona
+    // mesmo antes de o ativo existir (o drawer sobe a imagem antes de salvar).
+    const path = `asset-photos/${organizationId || 'sem-organizacao'}/${crypto.randomUUID()}.${ext}`;
+
+    const { error } = await supabase.storage
+      .from(ASSET_IMAGE_BUCKET)
+      .upload(path, file, { upsert: false, contentType: file.type });
+
+    if (error) {
+      console.error('[AssetService] Error uploading asset image:', error);
+      if (error.message.includes('bucket_not_found')) {
+        throw new Error(`O bucket "${ASSET_IMAGE_BUCKET}" não foi encontrado no Supabase Storage.`);
+      }
+      throw new Error(`Falha ao enviar a imagem: ${error.message}`);
+    }
+    return path;
+  },
+
+  /** Remove o arquivo do bucket. Falha aqui não é erro de negócio — só loga. */
+  async removeImage(path?: string | null): Promise<void> {
+    if (!path || /^https?:\/\//i.test(path)) return;
+    const { error } = await supabase.storage.from(ASSET_IMAGE_BUCKET).remove([path]);
+    if (error) console.warn('[AssetService] Error removing asset image:', error);
   },
 
   // MOVIMENTAÇÕES

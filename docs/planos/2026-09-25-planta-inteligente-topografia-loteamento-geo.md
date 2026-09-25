@@ -214,3 +214,26 @@ Ordem recomendada de execução (valor primeiro, dependências respeitadas): **B
 4. Edge Function nova: `curl -s -o /dev/null -w '%{http_code}' -X POST "$URL/functions/v1/<fn>" -d '{}'` tem de dar 401.
 5. Prova no app real (skill `rodar-app`, escritas bloqueadas, Desfazer ao fim) do gesto principal da fase; provas geográficas com um lote de referência conhecido (KML no Google Earth / DXF e SHP no QGIS sobre OSM).
 6. Doc da fase em `docs/planos/2026-09-25-planta-inteligente-topografia-loteamento-geo.md` (este plano, movido para lá no primeiro commit, com o pedido original literal); commit; push; `bash scripts/conferir-producao.sh` + CI.
+
+---
+
+## Estado — B1 (25/09/2026)
+
+Publicada em dois commits: `70ce531b` (kernel + motor) e `e69f9c75` (tela).
+
+- [x] Kernel **0.57.0 → 0.58.0**: `Quadra`, `Lote`, `Via`, `AreaPublica` em `utils/blueprintKernel/model.ts`; 16 comandos Add/Set/Move/Delete em `commands.ts`; invariantes `BAD_BLOCK`/`BAD_PLOT`/`BAD_STREET`/`BAD_PUBLIC_AREA`; canônico com a quadra do lote por **índice**; `index.ts` reexporta. Goldens provados intactos com a string antiga ANTES do bump, recapturados depois, motivo no cabeçalho de `__tests__/blueprintKernelGoldens.test.ts`. Bundle da `planta-api` regerado.
+- [x] `utils/blueprintLoteamento.ts` (puro): `faixaDaVia` (offset com canto no cruzamento), `calcadasDaVia`, `medirLote` (área, perímetro, testada, papel e confrontante por lado, encravado), `areasDoLoteamento`, `numerarQuadra`, `centroide`, `rotuloDoLote`.
+- [x] Editor: grupo **Loteamento** na aba Terreno (Quadra, Lote, Via, Área pública, Numerar), barra de opções por ferramenta, sequência automática de nome/número, quadra do lote derivada do desenho.
+- [x] Canvas: gesto de polígono (fecha no 1º vértice) e de eixo (termina no último), prévia com a caixa da via, desenho das quatro famílias com número e área, Esc limpa.
+- [x] Testes: `blueprintLoteamento.test.ts` (16), `blueprintLoteamentoCanonico.test.ts` (6), `BlueprintEditor.test.tsx` (+3). Suíte cheia **469 arquivos / 5.411 testes** verde; tsc, `check-ui-standard`, `check-xss-sinks` e `build` verdes.
+- [x] Harness com portão: `docs/spikes/loteamento/` (`medir.mjs`, exit ≠ 0 reprova) — números do motor + pixels no canvas real + controle `?vazio=1`.
+
+### Achados desta fase (só o navegador pegou)
+
+1. **O desenho caiu dentro de `if (limitesDoNivel.length > 0)`** — o loteamento inteiro só apareceria em estudo que já tivesse divisa da gleba. Os 184 testes de componente passavam com a tela vazia, porque em jsdom o canvas é opaco.
+2. **O rótulo da via usava `eixo[Math.floor(length / 2)]`** — num eixo de dois pontos isso é a ponta, e o nome da rua ficava fora da tela. Virou o ponto na metade do comprimento.
+3. **A medição nasceu cega duas vezes**: a cor da caixa da via é quase o branco do fundo (contou 155 mil px de "via" na tela vazia), e a área pública é pintada com `globalAlpha` 0,7, então procurar a cor nominal dava zero e parecia "não pintou". Só o controle `?vazio=1` revelou a primeira.
+
+### Fora desta fase (declarado)
+
+Subdivisão automática e conferência da Lei 6.766 (B2), sync com o Empreendimento (B3), memorial e planta por lote (B4). Quadra/lote/via ainda não entram no DXF nem na prancha — entram na B4.

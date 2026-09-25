@@ -419,8 +419,13 @@ function botao(nome: RegExp) {
  * antes. O editor nasce em Arquitetura, onde moram Selecionar, Componentes,
  * Juntar e Corte — os testes que só usam esses não precisam trocar de aba.
  */
-async function abrirAba(nome: RegExp) {
+async function abrirAba(nome: RegExp, abrirMenus = true) {
   await userEvent.setup().click(screen.getByRole('tab', { name: nome }));
+  // P2.60/P2.61: os comandos das abas moram em menus ▾, e menu fechado não está
+  // no DOM. Abrir todos depois de trocar de aba mantém válido o que estes testes
+  // sempre afirmaram — qual comando existe e o que ele faz — sem 50 edições.
+  // Quem PRECISA do menu fechado (os testes do próprio agrupamento) passa `false`.
+  if (abrirMenus) abrirMenusDoRibbon();
 }
 
 /**
@@ -701,14 +706,15 @@ function cabecalhoDaSecao(nome: RegExp) {
  */
 async function abrirRelatorio(nome: RegExp, aba: RegExp = /^analisar$/i) {
   await abrirAba(aba);
-  await userEvent.setup().click(screen.getByRole('button', { name: nome }));
+  // P2.61: os 19 relatórios moram em Conferência ▾ / Quantidades ▾ / Gerar ▾.
+  await userEvent.setup().click(botao(nome));
   return screen.findByRole('dialog');
 }
 
 /** 17/09/2026: Quantitativos é TELA em fluxo (*"criar nova tela também em vez de drawer"*). */
 async function abrirTelaDeQuantitativos() {
   await abrirAba(/^analisar$/i);
-  await userEvent.setup().click(screen.getByRole('button', { name: /^quantitativos$/i }));
+  await userEvent.setup().click(botao(/^quantitativos$/i));
   const titulo = await screen.findByRole('heading', { level: 1, name: /quantitativos/i });
   return titulo.closest('[data-tela="quantitativos"]') as HTMLElement;
 }
@@ -759,10 +765,10 @@ describe('BlueprintEditor · quantitativos', () => {
 
     await userEvent.setup().click(within(tela).getByRole('button', { name: /voltar ao editor/i }));
     expect(document.querySelector('[data-tela="quantitativos"]')).toBeNull();
-    expect(screen.getByRole('button', { name: /^quantitativos$/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(botao(/^quantitativos$/i)).toHaveAttribute('aria-pressed', 'false');
     expect(cabecalhoDaSecao(/ambientes/i)).toHaveAttribute('aria-expanded', 'true');
 
-    await userEvent.setup().click(screen.getByRole('button', { name: /^conflitos/i }));
+    await userEvent.setup().click(botao(/^conflitos/i));
     expect(screen.getByRole('dialog')).toHaveTextContent(/conflitos/i);
   });
 
@@ -1009,7 +1015,7 @@ describe('BlueprintEditor · quantitativos', () => {
     );
     await montar();
     await abrirAba(/^analisar$/i);
-    const conflitos = screen.getByRole('button', { name: /^conflitos/i });
+    const conflitos = botao(/^conflitos/i);
     expect(conflitos).toHaveTextContent('1');
     await userEvent.setup().click(conflitos);
     const dialog = screen.getByRole('dialog');
@@ -1067,7 +1073,7 @@ describe('BlueprintEditor · quantitativos', () => {
     const user = userEvent.setup();
     // Tela: Analisar › Unidades; cria "101" e "102".
     await abrirAba(/^analisar$/i);
-    await user.click(screen.getByRole('button', { name: /^unidades$/i }));
+    await user.click(botao(/^unidades$/i));
     const tela = (await screen.findByRole('heading', { level: 1, name: /^unidades$/i })).closest('[data-tela="unidades"]') as HTMLElement;
     const numero = within(tela).getByLabelText('Número da nova unidade');
     await user.type(numero, '101{Enter}');
@@ -1087,8 +1093,8 @@ describe('BlueprintEditor · quantitativos', () => {
     // Tabela: privativa = 12 m² de eixo + externas (4 + 3 + 4 m) × 0,1 = 13,10; fração 500 ‰ cada; geminadas entre si.
     await abrirAba(/^analisar$/i);
     // O botão do ribbon conta as unidades.
-    expect(screen.getByRole('button', { name: /^unidades/i })).toHaveTextContent('2');
-    await user.click(screen.getByRole('button', { name: /^unidades/i }));
+    expect(botao(/^unidades/i)).toHaveTextContent('2');
+    await user.click(botao(/^unidades/i));
     const tela2 = (await screen.findByRole('heading', { level: 1, name: /^unidades$/i })).closest('[data-tela="unidades"]') as HTMLElement;
     const linhas = within(tela2).getAllByRole('row').map((r) => (r.textContent ?? '').replace(/\s+/g, ' '));
     expect(linhas.some((l) => /Sala A.*13,10.*500,000 ‰.*102/.test(l))).toBe(true);
@@ -1112,7 +1118,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^analisar$/i);
-    await user.click(screen.getByRole('button', { name: /^unidades/i }));
+    await user.click(botao(/^unidades/i));
     const tela = (await screen.findByRole('heading', { level: 1, name: /^unidades$/i })).closest('[data-tela="unidades"]') as HTMLElement;
     await user.click(within(tela).getByRole('button', { name: 'Repetir a unidade 101' }));
     const painel = within(tela).getByTestId('repetir-unidade');
@@ -1209,7 +1215,10 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(plano).toHaveTextContent(/Faltam 5 para a exigência de 12/);
     await user.click(within(gaveta).getByRole('button', { name: /^lançar$/i }));
     expect(await within(gaveta).findByText(/7 vaga\(s\) lançada\(s\) como sugeridas/)).toBeInTheDocument();
-    const botaoVagas = () => screen.getAllByRole('button', { name: /^vagas/i }).find((b) => b.getAttribute('title')?.startsWith('Lança'))!;
+    const botaoVagas = () => {
+      abrirMenusDoRibbon();
+      return screen.getAllByRole('button', { name: /^vagas/i }).find((b) => b.getAttribute('title')?.startsWith('Lança'))!;
+    };
     expect(botaoVagas()).toHaveTextContent('7');
     // Relançar substitui; aceitar confirma e zera a contagem de sugeridas.
     expect(within(gaveta).getByRole('button', { name: /^relançar$/i })).toBeInTheDocument();
@@ -1291,7 +1300,10 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^analisar$/i);
-    const botaoLegislacao = () => screen.getAllByRole('button', { name: /^legislação/i }).find((b) => b.getAttribute('title')?.startsWith('Verificar'))!;
+    const botaoLegislacao = () => {
+      abrirMenusDoRibbon();
+      return screen.getAllByRole('button', { name: /^legislação/i }).find((b) => b.getAttribute('title')?.startsWith('Verificar'))!;
+    };
     expect(botaoLegislacao()).toHaveTextContent(/\d/); // há erros
     await user.click(botaoLegislacao());
     const tela = (await screen.findByRole('heading', { level: 1, name: /verificar legislação/i })).closest('[data-tela="legislacao"]') as HTMLElement;
@@ -1352,6 +1364,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await user.click(within(drawer).getByRole('button', { name: /^fechar$/i }));
     // Legislação: "Pavimento dentro do envelope edificável" violada no térreo.
     await abrirAba(/^analisar$/i);
+    abrirMenusDoRibbon();
     await user.click(screen.getAllByRole('button', { name: /^legislação/i }).find((b) => b.getAttribute('title')?.startsWith('Verificar'))!);
     const tela = (await screen.findByRole('heading', { level: 1, name: /verificar legislação/i })).closest('[data-tela="legislacao"]') as HTMLElement;
     await user.selectOptions(within(tela).getByLabelText('Filtrar por estado'), 'VIOLADA');
@@ -1370,7 +1383,10 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^analisar$/i);
-    const botaoPrograma = () => screen.getAllByRole('button', { name: /^programa/i }).find((b) => b.getAttribute('title')?.startsWith('Programa de necessidades'))!;
+    const botaoPrograma = () => {
+      abrirMenusDoRibbon();
+      return screen.getAllByRole('button', { name: /^programa/i }).find((b) => b.getAttribute('title')?.startsWith('Programa de necessidades'))!;
+    };
     expect(botaoPrograma()).not.toHaveTextContent(/\d/);
     await user.click(botaoPrograma());
     const tela = (await screen.findByRole('heading', { level: 1, name: /programa de necessidades/i })).closest('[data-tela="programa"]') as HTMLElement;
@@ -1451,6 +1467,7 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(cartao).toHaveTextContent(/Saída: 7,05 m/);
     // Gaveta Analisar › Grafo.
     await abrirAba(/^analisar$/i);
+    abrirMenusDoRibbon();
     const botaoGrafo = screen.getAllByRole('button', { name: /^grafo/i }).find((b) => b.getAttribute('title')?.startsWith('Grafo espacial'))!;
     expect(botaoGrafo).toHaveTextContent('3');
     await user.click(botaoGrafo);
@@ -1509,7 +1526,10 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^analisar$/i);
-    const botaoLegislacao = () => screen.getAllByRole('button', { name: /^legislação/i }).find((b) => b.getAttribute('title')?.startsWith('Verificar'))!;
+    const botaoLegislacao = () => {
+      abrirMenusDoRibbon();
+      return screen.getAllByRole('button', { name: /^legislação/i }).find((b) => b.getAttribute('title')?.startsWith('Verificar'))!;
+    };
     await user.click(botaoLegislacao());
     const tela = (await screen.findByRole('heading', { level: 1, name: /verificar legislação/i })).closest('[data-tela="legislacao"]') as HTMLElement;
     // Resultados: a fonte "Programa de necessidades" está lá, com a cozinha faltando.
@@ -1563,6 +1583,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^analisar$/i);
+    abrirMenusDoRibbon();
     const botao = screen.getAllByRole('button', { name: /^insolação/i }).find((b) => b.getAttribute('title')?.startsWith('Insolação'))!;
     await user.click(botao);
     const gaveta = await screen.findByTestId('tarefa-insolacao');
@@ -1599,6 +1620,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await user.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByTestId('tarefa-insolacao')).toBeNull());
     await abrirAba(/^analisar$/i);
+    abrirMenusDoRibbon();
     await user.click(screen.getAllByRole('button', { name: /^legislação/i }).find((b) => b.getAttribute('title')?.startsWith('Verificar'))!);
     const tela = (await screen.findByRole('heading', { level: 1, name: /verificar legislação/i })).closest('[data-tela="legislacao"]') as HTMLElement;
     await user.selectOptions(within(tela).getByLabelText('Filtrar por fonte'), 'NBR 15575-1:2021');
@@ -1633,7 +1655,10 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^analisar$/i);
-    const botao = () => screen.getAllByRole('button', { name: /^avaliação/i }).find((b) => b.getAttribute('title')?.startsWith('Avaliação'))!;
+    const botao = () => {
+      abrirMenusDoRibbon();
+      return screen.getAllByRole('button', { name: /^avaliação/i }).find((x) => x.getAttribute('title')?.startsWith('Avaliação'))!;
+    };
     expect(botao()).toHaveTextContent(/\d{2}/); // a nota geral no botão
     await user.click(botao());
     const tela = (await screen.findByRole('heading', { level: 1, name: /^avaliação$/i })).closest('[data-tela="avaliacao"]') as HTMLElement;
@@ -1661,6 +1686,7 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(await screen.findByText(/^Abertura selecionada$/i)).toBeInTheDocument();
     // Cartão no Resumo dos Quantitativos.
     await abrirAba(/^analisar$/i);
+    abrirMenusDoRibbon();
     await user.click(screen.getByRole('button', { name: /^quantitativos$/i }));
     const cartao = await screen.findByTestId('cartao-da-avaliacao');
     expect(cartao).toHaveTextContent(/Avaliação · \d+ indicador\(es\) avaliado\(s\)/);
@@ -1690,6 +1716,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^analisar$/i);
+    abrirMenusDoRibbon();
     await user.click(screen.getAllByRole('button', { name: /^avaliação/i }).find((b) => b.getAttribute('title')?.startsWith('Avaliação'))!);
     const tela = (await screen.findByRole('heading', { level: 1, name: /^avaliação$/i })).closest('[data-tela="avaliacao"]') as HTMLElement;
     await user.click(within(tela).getByRole('tab', { name: /^Sugestões/ }));
@@ -1714,6 +1741,7 @@ describe('BlueprintEditor · quantitativos', () => {
     // De volta: "Ir para Porta 0,70 m" fecha a tela e seleciona a abertura.
     await user.click(screen.getByRole('button', { name: /^voltar ao editor$/i }));
     await abrirAba(/^analisar$/i);
+    abrirMenusDoRibbon();
     await user.click(screen.getAllByRole('button', { name: /^avaliação/i }).find((b) => b.getAttribute('title')?.startsWith('Avaliação'))!);
     const tela2 = (await screen.findByRole('heading', { level: 1, name: /^avaliação$/i })).closest('[data-tela="avaliacao"]') as HTMLElement;
     await user.click(within(within(tela2).getByTestId('sugestao-corredores-0')).getByRole('button', { name: 'Ir para Porta 0,70 m' }));
@@ -1737,6 +1765,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^colaborar$/i);
+    abrirMenusDoRibbon();
     const botao = screen.getByRole('button', { name: /^alternativas/i });
     expect(botao).toHaveTextContent('2');
     await user.click(botao);
@@ -1776,7 +1805,10 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^analisar$/i);
-    const botao = () => screen.getAllByRole('button', { name: /^gerar/i }).find((b) => b.getAttribute('title')?.startsWith('Gerar plantas'))!;
+    const botao = () => {
+      abrirMenusDoRibbon();
+      return screen.getAllByRole('button', { name: /^gerar/i }).find((x) => x.getAttribute('title')?.startsWith('Gerar plantas'))!;
+    };
     await user.click(botao());
     const tela = (await screen.findByRole('heading', { level: 1, name: /^gerar plantas$/i })).closest('[data-tela="gerar"]') as HTMLElement;
     expect(within(tela).getByTestId('contexto-do-gerador')).toHaveTextContent(/Programa: 7 item\(ns\), 9 relação\(ões\)\. Sem lote\/envelope: usa o retângulo declarado acima\. Frente suposta ao sul/);
@@ -1842,6 +1874,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^analisar$/i);
+    abrirMenusDoRibbon();
     const botao = screen.getAllByRole('button', { name: /^mobiliário/i }).find((b) => b.getAttribute('title')?.startsWith('Mobiliário mínimo'))!;
     await user.click(botao);
     const gaveta = await screen.findByTestId('tarefa-mobiliario');
@@ -1866,6 +1899,7 @@ describe('BlueprintEditor · quantitativos', () => {
     // Toggle "Mostrar no desenho" persiste e a gaveta do mobiliário o reflete.
     await user.keyboard('{Escape}');
     await abrirAba(/^analisar$/i);
+    abrirMenusDoRibbon();
     await user.click(screen.getAllByRole('button', { name: /^mobiliário/i }).find((b) => b.getAttribute('title')?.startsWith('Mobiliário mínimo'))!);
     const gaveta2 = await screen.findByTestId('tarefa-mobiliario');
     const toggle = within(gaveta2).getByLabelText('Mostrar mobiliário no desenho') as HTMLInputElement;
@@ -1883,6 +1917,7 @@ describe('BlueprintEditor · quantitativos', () => {
     const user = userEvent.setup();
     await abrirAba(/^analisar$/i);
     // Menos sementes/iterações para o teste: pela tela Gerar.
+    abrirMenusDoRibbon();
     await user.click(screen.getAllByRole('button', { name: /^gerar/i }).find((b) => b.getAttribute('title')?.startsWith('Gerar plantas'))!);
     const telaGerar = (await screen.findByRole('heading', { level: 1, name: /^gerar plantas$/i })).closest('[data-tela="gerar"]') as HTMLElement;
     fireEvent.change(within(telaGerar).getByLabelText('Número de sementes'), { target: { value: '1' } });
@@ -1890,6 +1925,7 @@ describe('BlueprintEditor · quantitativos', () => {
     fireEvent.click(within(telaGerar).getByLabelText('Lançar automáticos'));
     await user.click(screen.getByRole('button', { name: /^voltar ao editor$/i }));
     await abrirAba(/^analisar$/i);
+    abrirMenusDoRibbon();
     await user.click(screen.getAllByRole('button', { name: /^conversar/i }).find((b) => b.getAttribute('title')?.startsWith('Conversar'))!);
     const gaveta = await screen.findByTestId('tarefa-ia');
     // Explicar sem alternativa: explica o desenho aberto (vazio → nota —).
@@ -1948,7 +1984,10 @@ describe('BlueprintEditor · quantitativos', () => {
     const user = userEvent.setup();
     // Menu Mobiliário (Arquitetura): escolher a cama arma a ferramenta e o botão passa a dizer qual.
     await abrirAba(/^arquitetura$/i);
-    const menuMobiliario = () => screen.getAllByRole('button', { name: /mobiliário|cama de casal/i }).find((b) => b.getAttribute('title')?.startsWith('Mobiliário, louças'))!;
+    const menuMobiliario = () => {
+      abrirMenusDoRibbon();
+      return screen.getAllByRole('button', { name: /mobiliário|cama de casal/i }).find((b) => b.getAttribute('title')?.startsWith('Mobiliário, louças'))!;
+    };
     await user.click(menuMobiliario());
     await user.click(screen.getByRole('menuitemradio', { name: /^Cama de casal$/ }));
     expect(menuMobiliario()).toHaveTextContent('Cama de casal');
@@ -1970,6 +2009,7 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(screen.getByTestId('painel-componente')).toHaveTextContent(/giro 90°/);
     // Analisar › Mobiliário: aceitar grava o kit do dormitório como componentes sugeridos.
     await abrirAba(/^analisar$/i);
+    abrirMenusDoRibbon();
     await user.click(screen.getAllByRole('button', { name: /^mobiliário/i }).find((b) => b.getAttribute('title')?.startsWith('Mobiliário mínimo'))!);
     const gaveta = await screen.findByTestId('tarefa-mobiliario');
     expect(gaveta).toHaveTextContent(/1 já no pavimento/);
@@ -2207,7 +2247,10 @@ describe('BlueprintEditor · quantitativos', () => {
     const user = userEvent.setup();
     // Inserir › Anotações: cada botão conta as suas (só as da planta contam no total do modelo — o corte também conta: é TEXTO).
     await abrirAba(/^inserir$/i);
-    const botao = (nome: RegExp) => screen.getAllByRole('button', { name: nome }).find((b) => b.getAttribute('title')?.includes('Sai no PDF e no DXF'))!;
+    const botao = (nome: RegExp) => {
+      abrirMenusDoRibbon();
+      return screen.getAllByRole('button', { name: nome }).find((x) => x.getAttribute('title')?.includes('Sai no PDF e no DXF'))!;
+    };
     await waitFor(() => expect(botao(/^texto/i)).toHaveTextContent('2'));
     expect(botao(/^cota angular/i)).toHaveTextContent('1');
     expect(botao(/^região hachurada/i)).toHaveTextContent('1');
@@ -2335,6 +2378,7 @@ describe('BlueprintEditor · quantitativos', () => {
       await montar();
       const user = userEvent.setup();
       await abrirAba(/^colaborar$/i);
+      abrirMenusDoRibbon();
       const botao = screen.getByRole('button', { name: /^API/ });
       expect(botao).toHaveAttribute('title', expect.stringMatching(/tokens da organização/));
       await user.click(botao);
@@ -2768,7 +2812,7 @@ describe('BlueprintEditor · caminho para o orçamento (RF-122)', () => {
 
     const drawer = await abrirRelatorio(/^orçamento$/i);
     expect(drawer).toHaveTextContent(/orçamento/i);
-    expect(screen.getByRole('button', { name: /^orçamento$/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(botao(/^orçamento$/i)).toHaveAttribute('aria-pressed', 'true');
     expect(cabecalhoDaSecao(/ambientes/i)).toHaveAttribute('aria-expanded', 'true');
   });
 
@@ -3016,7 +3060,10 @@ describe('BlueprintEditor · ribbon', () => {
 
   it('a barra de opções diz a ferramenta ativa mesmo com o ribbon noutra aba', async () => {
     await montar();
-    const opcoes = () => screen.getByRole('region', { name: /opções da ferramenta/i });
+    const opcoes = () => {
+      abrirMenusDoRibbon();
+      return screen.getByRole('region', { name: /opções da ferramenta/i });
+    };
     expect(opcoes()).toHaveTextContent(/^Parede/);
     expect(within(opcoes()).getByLabelText(/espessura/i)).toBeInTheDocument();
 
@@ -3164,7 +3211,10 @@ describe('BlueprintEditor · ribbon', () => {
     expect(menu().queryByRole('menuitemradio', { name: /^Vaso sanitário · água quente$/ })).toBeNull();
 
     await user.click(menu().getByRole('menuitemradio', { name: /^Caixa d'água$/ }));
-    const opcoes = () => screen.getByRole('region', { name: /opções da ferramenta/i });
+    const opcoes = () => {
+      abrirMenusDoRibbon();
+      return screen.getByRole('region', { name: /opções da ferramenta/i });
+    };
     expect(opcoes()).toHaveTextContent(/^Caixa d'água/);
 
     await user.click(botao(/^caixa d'água$/i));
@@ -4762,7 +4812,7 @@ describe('BlueprintEditor · planta → compras (E10.3)', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^analisar$/i);
-    const botaoCompras = screen.getByRole('button', { name: /^Compras/ });
+    const botaoCompras = botao(/^Compras/);
     expect(botaoCompras).toHaveAttribute('title', expect.stringMatching(/Plano de Aquisições/));
     await user.click(botaoCompras);
     const tela = await screen.findByTestId('tela-compras');
@@ -4787,7 +4837,7 @@ describe('BlueprintEditor · planta → compras (E10.3)', () => {
     await waitFor(() => expect(screen.getByRole('toolbar')).toBeInTheDocument());
     const user = userEvent.setup();
     await abrirAba(/^analisar$/i);
-    await user.click(screen.getByRole('button', { name: /^Compras/ }));
+    await user.click(botao(/^Compras/));
     const tela = await screen.findByTestId('tela-compras');
     await waitFor(() => expect(within(tela).getByTestId('obra-de-compras')).toHaveTextContent('Residencial Alfa'));
     expect(within(tela).queryByTestId('aviso-sem-versao')).toBeNull();
@@ -4847,7 +4897,10 @@ describe('BlueprintEditor · HVAC mínimo (E11.1)', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^mecânica$/i);
-    const menu = () => screen.getAllByRole('button').find((b) => b.getAttribute('title')?.startsWith('Reservas de espaço de climatização'))!;
+    const menu = () => {
+      abrirMenusDoRibbon();
+      return screen.getAllByRole('button').find((b) => b.getAttribute('title')?.startsWith('Reservas de espaço de climatização'))!;
+    };
     expect(menu()).toBeTruthy();
     await user.click(menu());
     for (const nome of ['Condensadora', 'Evaporadora hi-wall', 'Exaustor / ventilação', 'Casa de máquinas', 'Shaft mecânico', 'Duto', 'Difusor / grelha']) {
@@ -4866,7 +4919,7 @@ describe('BlueprintEditor · HVAC mínimo (E11.1)', () => {
     await user.click(screen.getByRole('menuitemradio', { name: /^Difusor \/ grelha$/ }));
     expect(menu()).toHaveTextContent('Difusor / grelha');
     // O clash da reserva: pilar dentro da condensadora — conta no ribbon e abre a lista.
-    const conflitos = screen.getByRole('button', { name: /^Conflitos das reservas/ });
+    const conflitos = botao(/^Conflitos das reservas/);
     expect(conflitos).toHaveTextContent('1');
     await user.click(conflitos);
     const lista = await screen.findByText(/estrutura dentro da reserva do equipamento/);
@@ -4906,7 +4959,10 @@ describe('BlueprintEditor · status do conflito (P2.1)', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^analisar$/i);
-    const botao = () => screen.getByRole('button', { name: /^conflitos/i });
+    const botao = () => {
+      abrirMenusDoRibbon();
+      return screen.getByRole('button', { name: /^conflitos/i });
+    };
     expect(botao()).toHaveTextContent('1');
     await user.click(botao());
     const dialog = screen.getByRole('dialog');
@@ -5223,7 +5279,7 @@ describe('BlueprintEditor · tabelas personalizadas (P2.16)', () => {
       await montar();
       const user = userEvent.setup();
       await abrirAba(/^analisar$/i);
-      await user.click(screen.getByRole('button', { name: /^Tabelas/ }));
+      await user.click(botao(/^Tabelas/));
       const tela = await screen.findByTestId('tela-tabelas');
       expect(document.querySelector('[data-tela="tabelas"]')?.className).not.toMatch(/fixed|inset-0/);
       await waitFor(() => expect(within(tela).getAllByText('Paredes por pavimento').length).toBeGreaterThan(0));
@@ -5310,7 +5366,10 @@ describe('BlueprintEditor · famílias aninhadas (P2.18)', () => {
     loadBranchModel.mockResolvedValue(m);
     await montar();
     const user = userEvent.setup();
-    const menuMobiliario = () => screen.getAllByRole('button', { name: /mobiliário/i }).find((b) => b.getAttribute('title')?.startsWith('Mobiliário, louças'))!;
+    const menuMobiliario = () => {
+      abrirMenusDoRibbon();
+      return screen.getAllByRole('button', { name: /mobiliário/i }).find((b) => b.getAttribute('title')?.startsWith('Mobiliário, louças'))!;
+    };
     await user.click(menuMobiliario());
     expect(screen.getByRole('menuitemradio', { name: /^Conjunto de banheiro$/ })).toBeInTheDocument();
     expect(screen.getByRole('menuitemradio', { name: /^Conjunto de jantar$/ })).toBeInTheDocument();
@@ -5952,7 +6011,7 @@ describe('BlueprintEditor · estender parede até a face', () => {
   it('a aba Arquitetura tem Construir à vista e quatro menus em Projeto; recolher tira o painel e o acesso rápido', async () => {
     await montar();
     const user = userEvent.setup();
-    await abrirAba(/^arquitetura$/i);
+    await abrirAba(/^arquitetura$/i, false);
 
     // Construir NÃO virou menu: Selecionar continua a um clique.
     expect(within(screen.getByRole('group', { name: 'Construir' })).getByRole('button', { name: /^selecionar$/i })).toBeInTheDocument();
@@ -5979,5 +6038,41 @@ describe('BlueprintEditor · estender parede até a face', () => {
 
     await user.click(screen.getByRole('button', { name: /mostrar a faixa de comandos/i }));
     expect(screen.getByRole('group', { name: 'Construir' })).toBeInTheDocument();
+  }, 60000);
+
+  /**
+   * P2.61 (24/09/2026) — *"menus inserir e analisar não foi possível
+   * agrupamento?"*. As duas abas tinham o mesmo problema da Arquitetura: Inserir
+   * com 11 comandos em duas fileiras, Analisar com 19 relatórios num grupo só.
+   */
+  it('Inserir agrupa em Anotações ▾ + Importar ▾ e mantém Referência aberta; Analisar reparte os 19 relatórios em três menus', async () => {
+    await montar();
+    const user = userEvent.setup();
+
+    await abrirAba(/^inserir$/i, false);
+    const inserir = screen.getByRole('group', { name: 'Inserir' });
+    expect([...inserir.querySelectorAll('[data-menu-do-ribbon]')].map((b) => b.getAttribute('data-menu-do-ribbon'))).toEqual([
+      'Anotações',
+      'Importar',
+    ]);
+    // ⚠️ Referência NÃO virou menu: a opacidade e a aferição da escala são estado
+    // do fundo, e estado que se lê de relance não vai para dentro de um menu.
+    expect(screen.getByRole('group', { name: 'Referência' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Do DXF\/DWG/ })).not.toBeInTheDocument();
+    await user.click(within(inserir).getByRole('button', { name: /^Importar/ }));
+    expect(screen.getByRole('button', { name: /^Do DXF\/DWG/ })).toBeInTheDocument();
+
+    await abrirAba(/^analisar$/i, false);
+    const relatorios = screen.getByRole('group', { name: 'Relatórios' });
+    expect([...relatorios.querySelectorAll('[data-menu-do-ribbon]')].map((b) => b.getAttribute('data-menu-do-ribbon'))).toEqual([
+      'Conferência',
+      'Quantidades',
+      'Gerar',
+    ]);
+    // Medir continua à vista: são ferramentas de clicar na planta, não relatórios.
+    expect(within(screen.getByRole('group', { name: 'Medir' })).getByRole('button', { name: /^contar$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Conflitos/ })).not.toBeInTheDocument();
+    await user.click(within(relatorios).getByRole('button', { name: /^Conferência/ }));
+    expect(screen.getByRole('button', { name: /^Conflitos/ })).toBeInTheDocument();
   }, 60000);
 });

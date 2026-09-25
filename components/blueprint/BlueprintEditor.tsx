@@ -9516,35 +9516,92 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
 
         {aba === 'inserir' && (
           <>
-          {/* ANOTAÇÕES (19/09/2026, E8.1): o que se escreve sobre a vista — texto,
-              texto com seta, linha, região hachurada, cota angular. Vão para o
-              PDF e o DXF; não são construção. Cada botão arma a ferramenta com
-              o tipo; clicar de novo desarma. */}
-          <GrupoDoRibbon rotulo="Anotações">
-            {([
-              ['TEXTO', Type, '1 clique: o texto entra no ponto; edite no painel'],
-              ['LEADER', MessageSquareText, '2 cliques: a ponta da seta e onde o texto fica'],
-              ['LINHA', Slash, 'Cliques ao longo da linha; duplo clique encerra'],
-              ['HACHURA', Highlighter, 'Cliques no contorno da região; duplo clique fecha (diagonal, cruzada, pontos ou sólida)'],
-              ['COTA_ANGULAR', TriangleRight, '3 cliques: o vértice e as duas pontas — o ângulo é derivado'],
-              ['NUVEM', Cloud, 'Cliques no contorno da área alterada; duplo clique fecha. Leva o número e a data da revisão (barra) e a descrição (painel) — sai na tabela de revisões do carimbo'],
-            ] as const).map(([tipo, Icone, ajuda]) => (
-              <BotaoDoRibbon
-                key={tipo}
-                icone={Icone}
-                rotulo={ROTULO_DO_TIPO_DE_ANOTACAO[tipo]}
-                contagem={resumoDeAnotacoes.porTipo[tipo] || undefined}
-                ativo={editor.tool === 'anotacao' && tipoDeAnotacao === tipo}
-                onClick={() => {
-                  if (editor.tool === 'anotacao' && tipoDeAnotacao === tipo) editor.setTool('selecionar');
-                  else {
-                    setTipoDeAnotacao(tipo);
-                    editor.setTool('anotacao');
-                  }
-                }}
-                ajuda={`${ROTULO_DO_TIPO_DE_ANOTACAO[tipo]} na planta do pavimento ativo — ${ajuda}. Sai no PDF e no DXF.`}
-              />
-            ))}
+          {/* INSERIR (24/09/2026, P2.61). Anotações (6 comandos) e Importar (5) eram
+              duas fileiras. Viraram menus, como os da Arquitetura na P2.60 —
+              *"menus inserir e analisar não foi possível agrupamento?"*.
+              ⚠️ REFERÊNCIA fica ABERTA: o controle de opacidade mostra o estado
+              do fundo (e a aferição da escala), e estado que se lê de relance
+              não vai para dentro de um menu. */}
+          <GrupoDoRibbon rotulo="Inserir">
+            {/* ANOTAÇÕES (19/09/2026, E8.1): o que se escreve sobre a vista — texto,
+                texto com seta, linha, região hachurada, cota angular. Vão para o
+                PDF e o DXF; não são construção. Cada botão arma a ferramenta com
+                o tipo; clicar de novo desarma. */}
+            <MenuDoRibbon
+              rotulo="Anotações"
+              icone={Type}
+              ajuda="Texto, texto com seta, linha, região hachurada, cota angular e nuvem de revisão — sobre a vista, não são construção; saem no PDF e no DXF"
+            >
+                {([
+                  ['TEXTO', Type, '1 clique: o texto entra no ponto; edite no painel'],
+                  ['LEADER', MessageSquareText, '2 cliques: a ponta da seta e onde o texto fica'],
+                  ['LINHA', Slash, 'Cliques ao longo da linha; duplo clique encerra'],
+                  ['HACHURA', Highlighter, 'Cliques no contorno da região; duplo clique fecha (diagonal, cruzada, pontos ou sólida)'],
+                  ['COTA_ANGULAR', TriangleRight, '3 cliques: o vértice e as duas pontas — o ângulo é derivado'],
+                  ['NUVEM', Cloud, 'Cliques no contorno da área alterada; duplo clique fecha. Leva o número e a data da revisão (barra) e a descrição (painel) — sai na tabela de revisões do carimbo'],
+                ] as const).map(([tipo, Icone, ajuda]) => (
+                  <BotaoDoRibbon
+                    key={tipo}
+                    icone={Icone}
+                    rotulo={ROTULO_DO_TIPO_DE_ANOTACAO[tipo]}
+                    contagem={resumoDeAnotacoes.porTipo[tipo] || undefined}
+                    ativo={editor.tool === 'anotacao' && tipoDeAnotacao === tipo}
+                    onClick={() => {
+                      if (editor.tool === 'anotacao' && tipoDeAnotacao === tipo) editor.setTool('selecionar');
+                      else {
+                        setTipoDeAnotacao(tipo);
+                        editor.setTool('anotacao');
+                      }
+                    }}
+                    ajuda={`${ROTULO_DO_TIPO_DE_ANOTACAO[tipo]} na planta do pavimento ativo — ${ajuda}. Sai no PDF e no DXF.`}
+                  />
+                ))}
+            </MenuDoRibbon>
+            {/* IMPORTAR — trazer para dentro o que outra pessoa desenhou. O PDF
+                vira parede por reconhecimento; o IFC e o DXF, por medida
+                declarada; o BCF é a única que traz PENDÊNCIA em vez de geometria.
+                Cada uma abre como tarefa no painel lateral. */}
+            <MenuDoRibbon
+              rotulo="Importar"
+              icone={Boxes}
+              ajuda="Trazer para dentro o que outra pessoa desenhou: PDF, IFC, DXF/DWG, SketchUp e BCF"
+            >
+                <BotaoDoRibbon
+                  icone={FileText}
+                  rotulo="Do PDF"
+                  ativo={tarefaAberta === 'gerar-paredes'}
+                  onClick={() => alternarTarefa('gerar-paredes')}
+                  ajuda="Gerar paredes e portas a partir da planta de fundo em PDF"
+                />
+                <BotaoDoRibbon
+                  icone={Boxes}
+                  rotulo="Do IFC"
+                  ativo={tarefaAberta === 'importar-ifc'}
+                  onClick={() => alternarTarefa('importar-ifc')}
+                  ajuda="Importar paredes, aberturas e estrutura de um modelo IFC"
+                />
+                <BotaoDoRibbon
+                  icone={PenTool}
+                  rotulo="Do DXF/DWG"
+                  ativo={tarefaAberta === 'importar-dxf'}
+                  onClick={() => alternarTarefa('importar-dxf')}
+                  ajuda="Importar paredes de um desenho DXF ou DWG (o DWG é convertido no servidor)"
+                />
+                <BotaoDoRibbon
+                  icone={Boxes}
+                  rotulo="Do SketchUp"
+                  ativo={tarefaAberta === 'importar-collada'}
+                  onClick={() => alternarTarefa('importar-collada')}
+                  ajuda="Importar paredes de um modelo do SketchUp exportado como COLLADA (.dae): o leitor reconhece parede onde há duas faces verticais paralelas; o .skp (binário fechado) não pode ser lido diretamente"
+                />
+                <BotaoDoRibbon
+                  icone={MessagesSquare}
+                  rotulo="Do BCF"
+                  ativo={tarefaAberta === 'importar-bcf'}
+                  onClick={() => alternarTarefa('importar-bcf')}
+                  ajuda="Importar os tópicos de coordenação (BCF) que o projetista devolveu"
+                />
+            </MenuDoRibbon>
           </GrupoDoRibbon>
           <GrupoDoRibbon rotulo="Referência">
             <ControlesDeFundo
@@ -9568,47 +9625,6 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               }}
               onOpacidade={fundo.setOpacidade}
               onRemover={() => void fundo.remover()}
-            />
-          </GrupoDoRibbon>
-          {/* IMPORTAR — trazer para dentro o que outra pessoa desenhou. O PDF
-              vira parede por reconhecimento; o IFC e o DXF, por medida
-              declarada; o BCF é a única que traz PENDÊNCIA em vez de geometria.
-              Cada uma abre como tarefa no painel lateral. */}
-          <GrupoDoRibbon rotulo="Importar">
-            <BotaoDoRibbon
-              icone={FileText}
-              rotulo="Do PDF"
-              ativo={tarefaAberta === 'gerar-paredes'}
-              onClick={() => alternarTarefa('gerar-paredes')}
-              ajuda="Gerar paredes e portas a partir da planta de fundo em PDF"
-            />
-            <BotaoDoRibbon
-              icone={Boxes}
-              rotulo="Do IFC"
-              ativo={tarefaAberta === 'importar-ifc'}
-              onClick={() => alternarTarefa('importar-ifc')}
-              ajuda="Importar paredes, aberturas e estrutura de um modelo IFC"
-            />
-            <BotaoDoRibbon
-              icone={PenTool}
-              rotulo="Do DXF/DWG"
-              ativo={tarefaAberta === 'importar-dxf'}
-              onClick={() => alternarTarefa('importar-dxf')}
-              ajuda="Importar paredes de um desenho DXF ou DWG (o DWG é convertido no servidor)"
-            />
-            <BotaoDoRibbon
-              icone={Boxes}
-              rotulo="Do SketchUp"
-              ativo={tarefaAberta === 'importar-collada'}
-              onClick={() => alternarTarefa('importar-collada')}
-              ajuda="Importar paredes de um modelo do SketchUp exportado como COLLADA (.dae): o leitor reconhece parede onde há duas faces verticais paralelas; o .skp (binário fechado) não pode ser lido diretamente"
-            />
-            <BotaoDoRibbon
-              icone={MessagesSquare}
-              rotulo="Do BCF"
-              ativo={tarefaAberta === 'importar-bcf'}
-              onClick={() => alternarTarefa('importar-bcf')}
-              ajuda="Importar os tópicos de coordenação (BCF) que o projetista devolveu"
             />
           </GrupoDoRibbon>
           </>
@@ -9647,188 +9663,208 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             {/* RELATÓRIOS — o que o desenho DIZ: pendências da geometria,
                 formas medidas, quantidades, custo. Abrem no dock. */}
             <GrupoDoRibbon rotulo="Relatórios">
-              <BotaoDoRibbon
+              <MenuDoRibbon
+                rotulo="Conferência"
                 icone={AlertTriangle}
-                rotulo="Conflitos"
-                contagem={totalDeConflitos}
-                ativo={relatorioAberto === 'conflitos'}
-                onClick={() => alternarRelatorio('conflitos')}
-                ajuda="Interferências entre disciplinas, com a estrutura e da estrutura com vãos e escadas; exportar BCF"
-              />
-              <BotaoDoRibbon
-                icone={Link2}
-                rotulo="Restrições"
-                contagem={restricoesVioladas || undefined}
-                ativo={relatorioAberto === 'restricoes'}
-                onClick={() => alternarRelatorio('restricoes')}
-                ajuda="As restrições declaradas (sobre o eixo, distância, comprimento, paralela) conferidas contra o desenho; a violada oferece Ajustar"
-              />
-              {relatorioVisivel('medicoes') && (
+                contagem={totalDeConflitos + restricoesVioladas + errosDeLegislacao || undefined}
+                ajuda="O que está errado ou falta: conflitos, restrições, legislação, LOD, programa, departamentos, grafo, avaliação e insolação. O número soma as três violações — conflitos, restrições violadas e erros de legislação; cada uma tem a sua dentro."
+              >
                 <BotaoDoRibbon
-                  icone={Ruler}
-                  rotulo="Medições"
-                  contagem={medicoes.formas.length}
-                  ativo={relatorioAberto === 'medicoes'}
-                  onClick={() => alternarRelatorio('medicoes')}
-                  ajuda="As formas medidas sobre a planta de fundo e o envio ao orçamento"
+                  icone={AlertTriangle}
+                  rotulo="Conflitos"
+                  contagem={totalDeConflitos}
+                  ativo={relatorioAberto === 'conflitos'}
+                  onClick={() => alternarRelatorio('conflitos')}
+                  ajuda="Interferências entre disciplinas, com a estrutura e da estrutura com vãos e escadas; exportar BCF"
                 />
-              )}
-              {relatorioVisivel('quantitativos') && (
+                <BotaoDoRibbon
+                  icone={Link2}
+                  rotulo="Restrições"
+                  contagem={restricoesVioladas || undefined}
+                  ativo={relatorioAberto === 'restricoes'}
+                  onClick={() => alternarRelatorio('restricoes')}
+                  ajuda="As restrições declaradas (sobre o eixo, distância, comprimento, paralela) conferidas contra o desenho; a violada oferece Ajustar"
+                />
+                {relatorioVisivel('quantitativos') && (
+                  <BotaoDoRibbon
+                    icone={Scale}
+                    rotulo="Legislação"
+                    contagem={errosDeLegislacao || undefined}
+                    ativo={telaAberta === 'legislacao'}
+                    onClick={() => alternarTela('legislacao')}
+                    ajuda="Verificar legislação: código de obras (semente), NBR 9050/5410, zona e regras da organização — violada, conforme ou não avaliada"
+                  />
+                )}
+                {relatorioVisivel('quantitativos') && !emVista && (
+                  <BotaoDoRibbon
+                    icone={Gauge}
+                    rotulo="LOD"
+                    contagem={pendenciasDeLodDoNivel.length || undefined}
+                    ativo={tarefaAberta === 'lod'}
+                    onClick={() => alternarTarefa('lod')}
+                    ajuda="Nível de desenvolvimento (LOD 200/300/350) lido de cada peça — camadas, esquadria, rótulo, tipo, circuito, item de catálogo —, alvo por família e a lista do que falta para chegar lá. Vai no IFC como LevelOfDevelopment. O número é quantas peças estão abaixo do alvo."
+                  />
+                )}
+                {relatorioVisivel('quantitativos') && (
+                  <BotaoDoRibbon
+                    icone={ClipboardList}
+                    rotulo="Programa"
+                    contagem={programaDoEstudo.programa.itens.length || undefined}
+                    ativo={telaAberta === 'programa'}
+                    onClick={() => alternarTela('programa')}
+                    ajuda="Programa de necessidades do estudo: ambientes pedidos, áreas, exigências e matriz de proximidade; sementes por tipologia"
+                  />
+                )}
+                {relatorioVisivel('quantitativos') && !emVista && (
+                  <BotaoDoRibbon
+                    icone={Palette}
+                    rotulo="Departamentos"
+                    contagem={ambientes.filter((a) => !a.departamento).length || undefined}
+                    ativo={tarefaAberta === 'departamentos'}
+                    onClick={() => alternarTarefa('departamentos')}
+                    ajuda="Departamento (setor) de cada ambiente — Social, Íntimo, Serviço, Circulação, Técnico — gravado na etiqueta; quadro de áreas por setor, sugestão pelo nome/tipo e a planta de departamentos colorida com legenda. O número é quantos ambientes ainda não têm setor."
+                  />
+                )}
+                {relatorioVisivel('quantitativos') && (
+                  <BotaoDoRibbon
+                    icone={Footprints}
+                    rotulo="Grafo"
+                    contagem={grafoDoNivel?.nos.length || undefined}
+                    ativo={tarefaAberta === 'grafo'}
+                    onClick={() => alternarTarefa('grafo')}
+                    ajuda="Grafo espacial do pavimento: quem se liga a quem por porta e por parede, percursos pelas portas, circulação %, fachada e orientação de cada ambiente"
+                  />
+                )}
+                {relatorioVisivel('quantitativos') && (
+                  <BotaoDoRibbon
+                    icone={Gauge}
+                    rotulo="Avaliação"
+                    contagem={avaliacao.notaGeral ?? undefined}
+                    ativo={telaAberta === 'avaliacao'}
+                    onClick={() => alternarTela('avaliacao')}
+                    ajuda="Avaliação: nota geral 0–100 e dezoito indicadores com explicação (programa, legislação, eficiência, circulação, insolação, acessibilidade, custo…); pesos editáveis"
+                  />
+                )}
+                {relatorioVisivel('quantitativos') && (
+                  <BotaoDoRibbon
+                    icone={Sun}
+                    rotulo="Insolação"
+                    contagem={insolacaoDoNivel.filter((a) => a.temJanela && a.horas.INVERNO === 0).length || undefined}
+                    ativo={tarefaAberta === 'insolacao'}
+                    onClick={() => alternarTarefa('insolacao')}
+                    ajuda="Insolação e ventilação: posição do sol por data e hora solar, horas de sol por fachada e ambiente (21/06, 21/03, 21/12), sombra do entorno, ventilação cruzada; sol e sombras no 3D"
+                  />
+                )}
+              </MenuDoRibbon>
+              <MenuDoRibbon
+                rotulo="Quantidades"
+                icone={Calculator}
+                ajuda="O que vira número e dinheiro: medições, quantitativos, unidades, armadura, tabelas, orçamento e compras"
+              >
+                {relatorioVisivel('medicoes') && (
+                  <BotaoDoRibbon
+                    icone={Ruler}
+                    rotulo="Medições"
+                    contagem={medicoes.formas.length}
+                    ativo={relatorioAberto === 'medicoes'}
+                    onClick={() => alternarRelatorio('medicoes')}
+                    ajuda="As formas medidas sobre a planta de fundo e o envio ao orçamento"
+                  />
+                )}
+                {relatorioVisivel('quantitativos') && (
+                  <BotaoDoRibbon
+                    icone={Table2}
+                    rotulo="Quantitativos"
+                    ativo={telaAberta === 'quantitativos'}
+                    onClick={() => alternarTela('quantitativos')}
+                    ajuda="Áreas, volumes e comprimentos derivados do desenho; o quantitativo oficial da versão"
+                  />
+                )}
+                {relatorioVisivel('quantitativos') && (
+                  <BotaoDoRibbon
+                    icone={Building2}
+                    rotulo="Unidades"
+                    contagem={editor.model.unidades.length || undefined}
+                    ativo={telaAberta === 'unidades'}
+                    onClick={() => alternarTela('unidades')}
+                    ajuda="Unidades autônomas: composição por ambiente, área privativa NBR 12721, área comum e fração ideal"
+                  />
+                )}
+                {(!emVista || em3d) && (
+                  <BotaoDoRibbon
+                    icone={Grip}
+                    rotulo="Armadura"
+                    contagem={armadura.pecas.length || undefined}
+                    ativo={telaAberta === 'armadura'}
+                    onClick={() => alternarTela('armadura')}
+                    ajuda="Aço por peça e por família — mínimos da NBR 6118 + taxa de referência; hipóteses do estudo"
+                  />
+                )}
                 <BotaoDoRibbon
                   icone={Table2}
-                  rotulo="Quantitativos"
-                  ativo={telaAberta === 'quantitativos'}
-                  onClick={() => alternarTela('quantitativos')}
-                  ajuda="Áreas, volumes e comprimentos derivados do desenho; o quantitativo oficial da versão"
+                  rotulo="Tabelas"
+                  contagem={tabelasSalvas.length || undefined}
+                  ativo={telaAberta === 'tabelas'}
+                  onClick={() => {
+                    if (telaAberta !== 'tabelas') recarregarTabelas();
+                    alternarTela('tabelas');
+                  }}
+                  ajuda="Tabelas personalizadas (schedules): família, colunas, filtro, agrupamento e totais — sobre este desenho, em .xlsx"
                 />
-              )}
-              {relatorioVisivel('quantitativos') && (
+                {relatorioVisivel('orcamento') && (
+                  <BotaoDoRibbon
+                    icone={Calculator}
+                    rotulo="Orçamento"
+                    ativo={relatorioAberto === 'orcamento'}
+                    onClick={() => alternarRelatorio('orcamento')}
+                    ajuda="A ponte com o orçamento da obra: prévia e aplicação por elemento"
+                  />
+                )}
                 <BotaoDoRibbon
-                  icone={Building2}
-                  rotulo="Unidades"
-                  contagem={editor.model.unidades.length || undefined}
-                  ativo={telaAberta === 'unidades'}
-                  onClick={() => alternarTela('unidades')}
-                  ajuda="Unidades autônomas: composição por ambiente, área privativa NBR 12721, área comum e fração ideal"
+                  icone={ShoppingCart}
+                  rotulo="Compras"
+                  ativo={telaAberta === 'compras'}
+                  onClick={() => alternarTela('compras')}
+                  ajuda="Da planta ao Plano de Aquisições da obra: insumos das linhas do orçamento, datados pelo cronograma; cotação num clique"
                 />
-              )}
-              {relatorioVisivel('quantitativos') && !emVista && (
-                <BotaoDoRibbon
-                  icone={Palette}
-                  rotulo="Departamentos"
-                  contagem={ambientes.filter((a) => !a.departamento).length || undefined}
-                  ativo={tarefaAberta === 'departamentos'}
-                  onClick={() => alternarTarefa('departamentos')}
-                  ajuda="Departamento (setor) de cada ambiente — Social, Íntimo, Serviço, Circulação, Técnico — gravado na etiqueta; quadro de áreas por setor, sugestão pelo nome/tipo e a planta de departamentos colorida com legenda. O número é quantos ambientes ainda não têm setor."
-                />
-              )}
-              {relatorioVisivel('quantitativos') && !emVista && (
-                <BotaoDoRibbon
-                  icone={Gauge}
-                  rotulo="LOD"
-                  contagem={pendenciasDeLodDoNivel.length || undefined}
-                  ativo={tarefaAberta === 'lod'}
-                  onClick={() => alternarTarefa('lod')}
-                  ajuda="Nível de desenvolvimento (LOD 200/300/350) lido de cada peça — camadas, esquadria, rótulo, tipo, circuito, item de catálogo —, alvo por família e a lista do que falta para chegar lá. Vai no IFC como LevelOfDevelopment. O número é quantas peças estão abaixo do alvo."
-                />
-              )}
-              {relatorioVisivel('quantitativos') && (
-                <BotaoDoRibbon
-                  icone={Scale}
-                  rotulo="Legislação"
-                  contagem={errosDeLegislacao || undefined}
-                  ativo={telaAberta === 'legislacao'}
-                  onClick={() => alternarTela('legislacao')}
-                  ajuda="Verificar legislação: código de obras (semente), NBR 9050/5410, zona e regras da organização — violada, conforme ou não avaliada"
-                />
-              )}
-              {relatorioVisivel('quantitativos') && (
-                <BotaoDoRibbon
-                  icone={ClipboardList}
-                  rotulo="Programa"
-                  contagem={programaDoEstudo.programa.itens.length || undefined}
-                  ativo={telaAberta === 'programa'}
-                  onClick={() => alternarTela('programa')}
-                  ajuda="Programa de necessidades do estudo: ambientes pedidos, áreas, exigências e matriz de proximidade; sementes por tipologia"
-                />
-              )}
-              {relatorioVisivel('quantitativos') && (
-                <BotaoDoRibbon
-                  icone={Wand2}
-                  rotulo="Gerar"
-                  contagem={gerador.resultados.length || undefined}
-                  ativo={telaAberta === 'gerar'}
-                  onClick={() => alternarTela('gerar')}
-                  ajuda="Gerar plantas: do programa e do envelope, N alternativas determinísticas (zona por fluxo, treemap, recozimento com semente, paredes, portas, janelas, automáticos, avaliação)"
-                />
-              )}
-              {relatorioVisivel('quantitativos') && (
-                <BotaoDoRibbon
-                  icone={Bot}
-                  rotulo="Conversar"
-                  contagem={turnos.length || undefined}
-                  ativo={tarefaAberta === 'ia'}
-                  onClick={() => alternarTarefa('ia')}
-                  ajuda="Conversar com a planta: pedido em linguagem natural → mudanças no programa/hipóteses (nunca geometria) → re-geração → delta dos indicadores; explicar a solução"
-                />
-              )}
-              {relatorioVisivel('quantitativos') && (
-                <BotaoDoRibbon
-                  icone={Footprints}
-                  rotulo="Grafo"
-                  contagem={grafoDoNivel?.nos.length || undefined}
-                  ativo={tarefaAberta === 'grafo'}
-                  onClick={() => alternarTarefa('grafo')}
-                  ajuda="Grafo espacial do pavimento: quem se liga a quem por porta e por parede, percursos pelas portas, circulação %, fachada e orientação de cada ambiente"
-                />
-              )}
-              {relatorioVisivel('quantitativos') && (
-                <BotaoDoRibbon
-                  icone={Sun}
-                  rotulo="Insolação"
-                  contagem={insolacaoDoNivel.filter((a) => a.temJanela && a.horas.INVERNO === 0).length || undefined}
-                  ativo={tarefaAberta === 'insolacao'}
-                  onClick={() => alternarTarefa('insolacao')}
-                  ajuda="Insolação e ventilação: posição do sol por data e hora solar, horas de sol por fachada e ambiente (21/06, 21/03, 21/12), sombra do entorno, ventilação cruzada; sol e sombras no 3D"
-                />
-              )}
-              {relatorioVisivel('quantitativos') && (
-                <BotaoDoRibbon
-                  icone={Grid2x2}
-                  rotulo="Mobiliário"
-                  contagem={mobiliarioDoNivel.filter((a) => a.pecas.length > 0 && !(hipotesesDeMobiliario.acessivel ? a.circulacao.ok120 : a.circulacao.ok90)).length || undefined}
-                  ativo={tarefaAberta === 'mobiliario'}
-                  onClick={() => alternarTarefa('mobiliario')}
-                  ajuda="Mobiliário mínimo por ambiente (cama/armário, sofá/mesa, bancada/geladeira/fogão, tanque/máquina, box/vaso/lavatório) e circulação livre de 0,90/1,20 m verificada; vagas e shaft quando o programa pede"
-                />
-              )}
-              {relatorioVisivel('quantitativos') && (
-                <BotaoDoRibbon
-                  icone={Gauge}
-                  rotulo="Avaliação"
-                  contagem={avaliacao.notaGeral ?? undefined}
-                  ativo={telaAberta === 'avaliacao'}
-                  onClick={() => alternarTela('avaliacao')}
-                  ajuda="Avaliação: nota geral 0–100 e dezoito indicadores com explicação (programa, legislação, eficiência, circulação, insolação, acessibilidade, custo…); pesos editáveis"
-                />
-              )}
-              {(!emVista || em3d) && (
-                <BotaoDoRibbon
-                  icone={Grip}
-                  rotulo="Armadura"
-                  contagem={armadura.pecas.length || undefined}
-                  ativo={telaAberta === 'armadura'}
-                  onClick={() => alternarTela('armadura')}
-                  ajuda="Aço por peça e por família — mínimos da NBR 6118 + taxa de referência; hipóteses do estudo"
-                />
-              )}
-              {relatorioVisivel('orcamento') && (
-                <BotaoDoRibbon
-                  icone={Calculator}
-                  rotulo="Orçamento"
-                  ativo={relatorioAberto === 'orcamento'}
-                  onClick={() => alternarRelatorio('orcamento')}
-                  ajuda="A ponte com o orçamento da obra: prévia e aplicação por elemento"
-                />
-              )}
-              <BotaoDoRibbon
-                icone={Table2}
-                rotulo="Tabelas"
-                contagem={tabelasSalvas.length || undefined}
-                ativo={telaAberta === 'tabelas'}
-                onClick={() => {
-                  if (telaAberta !== 'tabelas') recarregarTabelas();
-                  alternarTela('tabelas');
-                }}
-                ajuda="Tabelas personalizadas (schedules): família, colunas, filtro, agrupamento e totais — sobre este desenho, em .xlsx"
-              />
-              <BotaoDoRibbon
-                icone={ShoppingCart}
-                rotulo="Compras"
-                ativo={telaAberta === 'compras'}
-                onClick={() => alternarTela('compras')}
-                ajuda="Da planta ao Plano de Aquisições da obra: insumos das linhas do orçamento, datados pelo cronograma; cotação num clique"
-              />
+
+              </MenuDoRibbon>
+              <MenuDoRibbon
+                rotulo="Gerar"
+                icone={Wand2}
+                ajuda="Do programa ao desenho: alternativas geradas, conversar com a planta e o mobiliário mínimo conferido"
+              >
+                {relatorioVisivel('quantitativos') && (
+                  <BotaoDoRibbon
+                    icone={Wand2}
+                    rotulo="Gerar"
+                    contagem={gerador.resultados.length || undefined}
+                    ativo={telaAberta === 'gerar'}
+                    onClick={() => alternarTela('gerar')}
+                    ajuda="Gerar plantas: do programa e do envelope, N alternativas determinísticas (zona por fluxo, treemap, recozimento com semente, paredes, portas, janelas, automáticos, avaliação)"
+                  />
+                )}
+                {relatorioVisivel('quantitativos') && (
+                  <BotaoDoRibbon
+                    icone={Bot}
+                    rotulo="Conversar"
+                    contagem={turnos.length || undefined}
+                    ativo={tarefaAberta === 'ia'}
+                    onClick={() => alternarTarefa('ia')}
+                    ajuda="Conversar com a planta: pedido em linguagem natural → mudanças no programa/hipóteses (nunca geometria) → re-geração → delta dos indicadores; explicar a solução"
+                  />
+                )}
+                {relatorioVisivel('quantitativos') && (
+                  <BotaoDoRibbon
+                    icone={Grid2x2}
+                    rotulo="Mobiliário"
+                    contagem={mobiliarioDoNivel.filter((a) => a.pecas.length > 0 && !(hipotesesDeMobiliario.acessivel ? a.circulacao.ok120 : a.circulacao.ok90)).length || undefined}
+                    ativo={tarefaAberta === 'mobiliario'}
+                    onClick={() => alternarTarefa('mobiliario')}
+                    ajuda="Mobiliário mínimo por ambiente (cama/armário, sofá/mesa, bancada/geladeira/fogão, tanque/máquina, box/vaso/lavatório) e circulação livre de 0,90/1,20 m verificada; vagas e shaft quando o programa pede"
+                  />
+                )}
+              </MenuDoRibbon>
             </GrupoDoRibbon>
           </>
         )}

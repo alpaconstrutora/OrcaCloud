@@ -2226,6 +2226,45 @@ agora, recolhido barra 51 px · topo do canvas 303 →                        47
 
   ⚠️ **A publicação ficou parada ~1 h** porque o projeto Supabase esteve fora do ar entre ~18:55 e ~20:00 de 24/09/2026 (PostgREST, GoTrue e `db query --linked` pendurando os três). Sem login não havia planta para medir, e a seção ficou marcada PENDENTE até a medição acima existir de fato.
 
+### P2.61 — Inserir e Analisar agrupam também (24/09/2026) · *"menus inserir e analisar não foi possível agrupamento?"*
+
+**A resposta honesta era "dava, sim".** A P2.60 parou na Arquitetura porque era o que o print mostrava. As outras duas abas tinham o mesmo defeito, e a Analisar tinha o pior: **19 relatórios num grupo só**.
+
+**Inserir.** Anotações (6 comandos) e Importar (5) viraram menus, num grupo "Inserir".
+
+⚠️ **Referência NÃO virou menu.** Ali moram a opacidade do fundo e a aferição da escala: é ESTADO que se lê de relance enquanto se desenha por cima da planta importada, não comando que se dispara. Estado atrás de um clique deixa de ser lido.
+
+**Analisar.** Um menu só com 19 itens daria uma lista de ~570 px — mais alta que meia tela, com barra de rolagem dentro do menu. Viraram **três menus por natureza** (escolha do usuário entre três arranjos propostos):
+
+| menu | o que reúne |
+|---|---|
+| **Conferência** | Conflitos · Restrições · Legislação · LOD · Programa · Departamentos · Grafo · Avaliação · Insolação |
+| **Quantidades** | Medições · Quantitativos · Unidades · Armadura · Tabelas · Orçamento · Compras |
+| **Gerar** | Gerar · Conversar · Mobiliário |
+
+Medir (Área, Linha, Contar) ficou à vista: são ferramentas de clicar na planta, não relatórios.
+
+⚠️ **Aqui a contagem do menu É uma soma** — e por isso o `title` diz que é: as três violações (conflitos, restrições violadas, erros de legislação) são a MESMA natureza, "o que está errado". Diferente do caso de Acabamentos na P2.60, onde somar 90 esquadrias sem tipo com 400 rodapés sugeridos não significaria nada.
+
+**⚠️ O defeito que só a suíte pegou: `title` de menu roubando o clique do comando.** A ajuda do menu "Gerar" começava com *"Gerar plantas…"* — exatamente o prefixo pelo qual três testes acham o comando "Gerar" (`title.startsWith('Gerar plantas')`). O menu vem antes no DOM, então o `.find()` pegava o MENU: o clique abria e fechava o menu, e a tela Gerar nunca nascia. Reescrita a ajuda. Vale para quem for criar menu novo: **a ajuda do menu não pode começar como a ajuda de um comando de dentro dele.**
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-ui-standard.sh` ok · `check-xss-sinks.sh` ok · suíte cheia **464 arquivos / 5313 testes** verdes · `npm run build` ok.
+- `__tests__/components/BlueprintEditor.test.tsx` (+1): Inserir tem exatamente `Anotações` e `Importar` como menus e **mantém Referência aberta**; "Do DXF/DWG" não está no DOM até abrir Importar; Analisar tem exatamente `Conferência`, `Quantidades` e `Gerar`, com Medir à vista, e "Conflitos" só aparece ao abrir Conferência.
+- Nos helpers: `abrirAba()` passou a abrir os menus do ribbon depois de trocar de aba (e os testes do próprio agrupamento pedem `false`). Foi isto que evitou reescrever ~50 chamadas; o que os testes afirmam continua o mesmo — qual comando existe e o que ele faz.
+- **App real** (escritas bloqueadas: 2, 0 erros de página), janela 1660×780, o MESMO estudo nas duas passadas (build anterior × build novo):
+
+```
+              ANTES                      DEPOIS
+Arquitetura   barra 177 px · 1 fileira   barra 177 px · 1 fileira   (já era da P2.60)
+Inserir       barra 229 px · 2 fileiras  barra 176 px · 1 fileira   −53 px
+Analisar      barra 264 px · 2 fileiras  barra 177 px · 1 fileira   −87 px
+```
+
+  **E o ganho que não estava no pedido: as três abas passaram a ter a MESMA altura** (176–177 px). Antes, ir de Arquitetura para Analisar empurrava o desenho 87 px para baixo — o canvas pulava a cada troca de aba, e o que se estava olhando saía do lugar.
+
+  ⚠️ A medição saiu na *Planta 14/09/2026* e não na *Planta 24/09/2026* das fases anteriores: esta foi **arquivada às 00:02 de 25/09** e saiu da lista (não por mim — o roteiro bloqueia escritas, 2 bloqueadas nesta corrida). As duas passadas usaram o mesmo estudo, que é o que a comparação exige.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

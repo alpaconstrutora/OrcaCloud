@@ -1126,6 +1126,95 @@ export const boletoService = {
     },
 
     /**
+     * Mover o boleto de organização só vale ANTES de existir título.
+     *
+     * A aprovação cria a `internal_transaction` (e a nota) com o
+     * `organization_id` do boleto. Trocar a org depois disso deixaria o título
+     * no financeiro da org antiga e o boleto na nova — conciliação, rateio de
+     * condomínio e exercício fechado passariam a olhar para caixas diferentes.
+     * Decidido com o usuário em 24/09/2026: só rascunho/revisão.
+     */
+    podeMudarOrganizacao(status: BoletoStatus): boolean {
+        return status === 'rascunho' || status === 'revisao';
+    },
+
+    /** Por que o campo Organização está apagado — frase para a tela mostrar. */
+    motivoParaNaoMudarOrganizacao(status: BoletoStatus): string | null {
+        if (this.podeMudarOrganizacao(status)) return null;
+        if (status === 'aprovado') return 'Boleto aprovado já tem título no financeiro desta organização. Exclua ou cancele para recapturar em outra.';
+        if (status === 'pago') return 'Boleto pago: reverta para rascunho antes de mudar de organização.';
+        if (status === 'cancelado') return 'Boleto cancelado fica no histórico da organização em que foi capturado.';
+        return 'Só é possível mudar a organização enquanto o boleto está em rascunho.';
+    },
+
+    /**
+     * Move o boleto para outra organização, limpando as dimensões.
+     *
+     * Fornecedor, obra, centro de custo, plano de contas, conta financeira e
+     * plano de contas contábil são FK para catálogo da org ANTIGA — levá-los
+     * junto cruzaria tenant (é o mesmo defeito que o centro de custo
+     * apontando empreendimento de outra org). Por isso vão a `null` junto com
+     * as sugestões automáticas, que também foram calculadas na org antiga.
+     */
+    async moverParaOrganizacao(
+        boletoId: string,
+        organizacaoAtual: string,
+        novaOrganizacaoId: string,
+        userEmail?: string,
+    ): Promise<Boleto> {
+        if (!novaOrganizacaoId) throw new Error('Selecione a organização de destino.');
+
+        const { data: atual, error: errAtual } = await supabase
+            .from(TABLE)
+            .select('status, organization_id')
+            .eq('id', boletoId)
+            .single();
+        if (errAtual) throw errAtual;
+
+        // Copiado ANTES do update: `atual` é a linha lida, e ler o
+        // `organization_id` dela depois da escrita é ler o valor novo.
+        const orgAntiga: string = atual.organization_id ?? organizacaoAtual;
+        const status = atual.status as BoletoStatus;
+        if (!this.podeMudarOrganizacao(status)) {
+            throw new Error(this.motivoParaNaoMudarOrganizacao(status) ?? 'Não é possível mudar a organização deste boleto.');
+        }
+        if (orgAntiga === novaOrganizacaoId) {
+            const mesmo = await this.getById(boletoId);
+            if (!mesmo) throw new Error('Boleto não encontrado.');
+            return mesmo;
+        }
+
+        const { data, error } = await supabase
+            .from(TABLE)
+            .update({
+                organization_id:     novaOrganizacaoId,
+                supplier_id:         null,
+                cost_center_id:      null,
+                plano_de_contas_id:  null,
+                category_id:         null,
+                project_id:          null,
+                chart_of_accounts_id: null,
+                sugestao_supplier_id: null,
+                sugestao_cc_id:      null,
+                sugestao_confianca:  null,
+            })
+            .eq('id', boletoId)
+            .select(BOLETO_COLUMNS)
+            .single();
+        if (error) throw error;
+
+        await registrarAuditoria(boletoId, novaOrganizacaoId, 'mudanca_organizacao', {
+            campo: 'organization_id',
+            valor_antes: orgAntiga,
+            valor_depois: novaOrganizacaoId,
+            metodo: 'usuario',
+            usuario_email: userEmail,
+        });
+
+        return mapRowToBoleto(data);
+    },
+
+    /**
      * Desfaz a baixa e devolve o boleto para rascunho.
      *
      * É o primeiro passo do fluxo de exclusão de um boleto pago, definido pelo

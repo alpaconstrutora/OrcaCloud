@@ -98,12 +98,19 @@ function dataBR(iso?: string): string {
  *  Vive DENTRO de um `Sheet`, então usa a régua do §6.9 (`px-3`, e `px-4` na
  *  coluna de texto livre) em vez do `px-6` de tabela de página inteira: num
  *  painel de ~672px, seis lados de 24px comem mais largura do que sobra. */
+// Soma das visíveis = 620px com data, dentro dos 624 úteis de um `Sheet` 2xl
+// com `p-6` (§6.9). Sem data, a descrição absorve a folga.
 const COLUNAS_DESPESA_COM_DATA: StandardTableColumn[] = [
-    { key: 'data', label: 'Data', sortable: true, width: 110 },
-    { key: 'descricao', label: 'Descrição', sortable: true, width: 330 },
-    { key: 'valor', label: 'Valor', sortable: true, width: 130, align: 'right' },
+    { key: 'data', label: 'Data', sortable: true, width: 100 },
+    { key: 'descricao', label: 'Descrição', sortable: true, width: 230 },
+    { key: 'fornecedor', label: 'Fornecedor', sortable: true, width: 170 },
+    { key: 'valor', label: 'Valor', sortable: true, width: 120, align: 'right' },
 ];
-const COLUNAS_DESPESA_SEM_DATA: StandardTableColumn[] = COLUNAS_DESPESA_COM_DATA.filter(c => c.key !== 'data');
+const COLUNAS_DESPESA_SEM_DATA: StandardTableColumn[] = [
+    { key: 'descricao', label: 'Descrição', sortable: true, width: 280 },
+    { key: 'fornecedor', label: 'Fornecedor', sortable: true, width: 220, },
+    { key: 'valor', label: 'Valor', sortable: true, width: 120, align: 'right' },
+];
 
 /** Despesas de um rateio — na prévia e no snapshot salvo.
  *  `StandardTable` com `dense` (§6.9/§6.10): mesmo desenho do drawer
@@ -153,11 +160,17 @@ const TabelaDespesas: React.FC<{
             rowKey={d => d.id || d.transaction_id}
             dense
             maxHeight="42vh"
-            searchText={d => `${d.descricao} ${d.data ?? ''}`}
+            searchText={d => `${d.descricao} ${d.fornecedor ?? ''} ${d.data ?? ''}`}
             searchPlaceholder="Buscar despesa..."
             renderCell={(key, d) => {
                 if (key === 'data') {
                     return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{dataBR(d.data)}</span>;
+                }
+                if (key === 'fornecedor') {
+                    // Quem recebeu. Nome é texto livre: QUEBRA, não trunca.
+                    return d.fornecedor
+                        ? <span className="text-sm font-normal text-gray-700 break-words">{d.fornecedor}</span>
+                        : <span className="text-sm font-normal text-gray-400">—</span>;
                 }
                 if (key === 'valor') {
                     // §7 — valor financeiro é o único caso com `font-medium`.
@@ -634,7 +647,9 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
             observacoes: sheetRelatorio.observacoes,
             totalDespesas: sheetRelatorio.total_despesas,
             totalRateado: sheetRelatorio.total_rateado,
-            despesas: dadosRelatorio.despesas.map(d => ({ descricao: d.descricao, valor: d.valor })),
+            despesas: dadosRelatorio.despesas.map(d => ({
+                descricao: d.descricao, valor: d.valor, fornecedor: d.fornecedor ?? null,
+            })),
             cotas: dadosRelatorio.cotas.map(c => ({
                 unidade: c.unitLabel,
                 pagador: c.clientNome,

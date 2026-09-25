@@ -15,7 +15,7 @@
 
 import { supabase } from '../lib/supabase';
 import { generateDocumentNumber } from './documentNumbering';
-import { rotuloDeDespesa, podarRuidoDeBoleto } from '../utils/despesaCondominio';
+import { rotuloDeDespesa, podarRuidoDeBoleto, rotuloDeFornecedor } from '../utils/despesaCondominio';
 
 export type CriterioRateio = 'FRACAO_IDEAL' | 'IGUAL' | 'AREA_PRIVATIVA' | 'GRUPO' | 'FIXO';
 export type TipoRateio = 'ORDINARIO' | 'EXTRAORDINARIO';
@@ -101,6 +101,17 @@ export interface DespesaRateio {
     valor: number;
     /** Só na prévia (vem de `internal_transactions`) — o snapshot salvo não guarda data. */
     data?: string;
+    /**
+     * Quem recebeu. Resolvido a partir do `transaction_id`, com a mesma ordem
+     * da aba Despesas: fornecedor CADASTRADO primeiro, `party_name` podado
+     * depois (`rotuloDeFornecedor`). `null` = não há nome em lugar nenhum.
+     *
+     * Não é coluna de `condominio_rateio_despesas`: o snapshot guarda
+     * descrição e valor, e o fornecedor vem do lançamento de origem. Medido em
+     * 25/09/2026: as 38 despesas de rateio da base acham o lançamento, e todas
+     * as 38 têm fornecedor cadastrado.
+     */
+    fornecedor?: string | null;
 }
 
 export interface ItemPrevia {
@@ -1300,7 +1311,19 @@ export const condominioRateioService = {
             .eq('rateio_id', rateioId)
             .order('descricao', { ascending: true });
         if (error) throw new Error(`Falha ao carregar as despesas: ${error.message}`);
-        return (data || []).map((d: any) => ({
+        const linhas = data || [];
+
+        // Fornecedor do lançamento de origem, em lote. Best-effort: sem ele a
+        // coluna fica vazia e o relatório continua de pé.
+        let credores = new Map<string, string | null>();
+        try {
+            credores = await this.fornecedoresDasDespesas(
+                linhas.map((d: any) => d.transaction_id).filter(Boolean));
+        } catch {
+            // Só apaga a coluna Fornecedor.
+        }
+
+        return linhas.map((d: any) => ({
             id: d.id,
             transaction_id: d.transaction_id,
             // Poda na LEITURA também, e não só na criação: os rateios que já
@@ -1308,7 +1331,38 @@ export const condominioRateioService = {
             // enxerga no portal. Descrição escrita à mão passa intacta.
             descricao: rotuloDeDespesa(d.descricao) ?? 'Despesa sem descrição',
             valor: Number(d.valor || 0),
+            fornecedor: credores.get(d.transaction_id) ?? null,
         }));
+    },
+
+    /**
+     * `transaction_id → nome de quem recebeu`, em lote.
+     *
+     * Duas consultas e não um embed: `internal_transactions → suppliers` já
+     * deu `PGRST201` por ambiguidade noutras telas, e aqui o custo de evitar
+     * isso é uma consulta a mais sobre um punhado de ids.
+     */
+    async fornecedoresDasDespesas(transactionIds: string[]): Promise<Map<string, string | null>> {
+        const mapa = new Map<string, string | null>();
+        const ids = [...new Set(transactionIds)];
+        if (ids.length === 0) return mapa;
+
+        const { data: txs, error } = await supabase
+            .from('internal_transactions')
+            .select('id, supplier_id, party_name, entity_name')
+            .in('id', ids);
+        if (error) throw new Error(`Falha ao carregar os fornecedores: ${error.message}`);
+
+        const nomes = await this.nomesDeFornecedor(
+            (txs || []).map((t: any) => t.supplier_id).filter(Boolean) as string[]);
+
+        for (const t of txs || []) {
+            mapa.set(t.id as string, rotuloDeFornecedor(
+                t.supplier_id ? nomes.get(t.supplier_id as string) : null,
+                (t.party_name || t.entity_name) as string | null,
+            ));
+        }
+        return mapa;
     },
 
     /**

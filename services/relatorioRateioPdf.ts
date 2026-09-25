@@ -125,13 +125,22 @@ export async function baixarRelatorioRateioPdf(rel: RelatorioRateio): Promise<st
         doc.text('Nenhuma despesa entrou neste rateio.', 16, y);
         y += 10;
     } else {
+        // A coluna Fornecedor só existe quando há fornecedor: rateio montado à
+        // mão, sem lançamento de origem, não gasta 45mm numa coluna de traços.
+        const temFornecedor = rel.despesas.some(d => !!d.fornecedor);
         autoTable(doc, {
             startY: y,
             margin: { left: 14, right: 14 },
-            head: [['#', 'Descrição', 'Valor']],
+            head: [temFornecedor
+                ? ['#', 'Descrição', 'Fornecedor', 'Valor']
+                : ['#', 'Descrição', 'Valor']],
             body: [
-                ...rel.despesas.map((d, i) => [String(i + 1), d.descricao, dinheiro(d.valor)]),
-                ['', `TOTAL — ${rel.despesas.length} lançamento(s)`, dinheiro(rel.somaDespesas)],
+                ...rel.despesas.map((d, i) => (temFornecedor
+                    ? [String(i + 1), d.descricao, d.fornecedor ?? '—', dinheiro(d.valor)]
+                    : [String(i + 1), d.descricao, dinheiro(d.valor)])),
+                temFornecedor
+                    ? ['', `TOTAL — ${rel.despesas.length} lançamento(s)`, '', dinheiro(rel.somaDespesas)]
+                    : ['', `TOTAL — ${rel.despesas.length} lançamento(s)`, dinheiro(rel.somaDespesas)],
             ],
             headStyles: { fillColor: PRIMARY, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
             bodyStyles: { fontSize: 9, textColor: DARK },
@@ -142,11 +151,18 @@ export async function baixarRelatorioRateioPdf(rel: RelatorioRateio): Promise<st
                     data.cell.styles.fillColor = LIGHT;
                 }
             },
-            columnStyles: {
-                0: { cellWidth: 12, halign: 'right' },
-                1: { cellWidth: 135 },
-                2: { cellWidth: 35, halign: 'right' },
-            },
+            columnStyles: temFornecedor
+                ? {
+                    0: { cellWidth: 10, halign: 'right' },
+                    1: { cellWidth: 74 },
+                    2: { cellWidth: 60 },
+                    3: { cellWidth: 38, halign: 'right' },
+                }
+                : {
+                    0: { cellWidth: 12, halign: 'right' },
+                    1: { cellWidth: 135 },
+                    2: { cellWidth: 35, halign: 'right' },
+                },
         });
         y = (doc as any).lastAutoTable.finalY + 10;
     }

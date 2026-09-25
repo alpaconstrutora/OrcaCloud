@@ -114,3 +114,27 @@ export function rotuloDeDespesa(
 
     return null;
 }
+
+/**
+ * Quem recebeu a despesa, com a MESMA ordem que a aba Despesas e a Conciliação
+ * Bancária usam: **fornecedor cadastrado primeiro, texto cru depois** — e o
+ * cru sempre podado.
+ *
+ * Existe aqui, e não dentro de um service, porque o relatório de rateio monta
+ * a linha em dois lugares: no admin (que resolve `supplier_id` por consulta) e
+ * no portal (que recebe os dois campos prontos da RPC). Uma regra só, senão o
+ * mesmo documento nomeia o mesmo fornecedor de dois jeitos.
+ *
+ * O cadastrado ganha porque `party_name` na origem BOLETO é o bloco de OCR da
+ * linha do beneficiário, com CNPJ, endereço e publicidade colados. `null` = não
+ * há nome em lugar nenhum; quem chama decide o texto do vazio.
+ */
+export function rotuloDeFornecedor(
+    cadastrado?: string | null,
+    cru?: string | null,
+): string | null {
+    const doCadastro = normalizar(cadastrado || '');
+    if (doCadastro) return doCadastro;
+    const doCru = podarRuidoDeBoleto(normalizar(cru || ''));
+    return doCru || null;
+}

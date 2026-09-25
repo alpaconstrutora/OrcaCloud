@@ -152,7 +152,15 @@ export interface PortalRateioCondominio {
     totalRateado: number;
     fechadoEm: string | null;
     condominioNome: string;
-    despesas: { id: string; descricao: string; valor: number }[];
+    despesas: {
+        id: string;
+        descricao: string;
+        valor: number;
+        /** Fornecedor CADASTRADO do lançamento de origem (`suppliers.name`). */
+        fornecedorCadastrado: string | null;
+        /** `party_name`/`entity_name` crus — na origem BOLETO é bloco de OCR. */
+        fornecedorCru: string | null;
+    }[];
     cotas: PortalCotaCondominio[];
 }
 

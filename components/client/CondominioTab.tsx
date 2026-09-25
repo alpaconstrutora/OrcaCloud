@@ -36,7 +36,7 @@ import { CRITERIO_LABEL, type CriterioRateio } from '../../services/condominioRa
 // rateios criados antes de 23/09/2026 guardaram o texto cru do boleto — podar
 // aqui é o que faz o condômino ler "ENERGISA SUL-SUDESTE" em vez do nome do
 // arquivo. Ver `utils/despesaCondominio.ts`.
-import { rotuloDeDespesa } from '../../utils/despesaCondominio';
+import { rotuloDeDespesa, rotuloDeFornecedor } from '../../utils/despesaCondominio';
 import { montarRelatorioRateio } from '../../utils/relatorioRateio';
 import { baixarRelatorioRateioPdf } from '../../services/relatorioRateioPdf';
 import { PortalTabs } from '../portal/PortalKit';
@@ -451,6 +451,10 @@ const BotaoPdfDoRateio: React.FC<{ rateio: PortalRateioCondominio }> = ({ rateio
                 despesas: rateio.despesas.map(d => ({
                     descricao: rotuloDeDespesa(d.descricao) ?? 'Despesa sem descrição',
                     valor: d.valor,
+                    // A MESMA regra do admin: cadastrado antes do texto cru, e
+                    // o cru podado. A RPC manda os dois campos justamente para
+                    // a decisão ficar num lugar só.
+                    fornecedor: rotuloDeFornecedor(d.fornecedorCadastrado, d.fornecedorCru),
                 })),
                 cotas: rateio.cotas.map(c => ({
                     unidade: [c.torre, c.unidade].filter(Boolean).join(' · ') || '—',

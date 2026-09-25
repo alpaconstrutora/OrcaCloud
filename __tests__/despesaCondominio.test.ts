@@ -5,7 +5,7 @@
 // 08/2026 de Galeria Altavista em 23/09/2026, quando o condômino passou a ver a
 // lista de despesas no portal.
 import { describe, it, expect } from 'vitest';
-import { rotuloDeDespesa, podarRuidoDeBoleto } from '../utils/despesaCondominio';
+import { rotuloDeDespesa, podarRuidoDeBoleto, rotuloDeFornecedor } from '../utils/despesaCondominio';
 
 describe('podarRuidoDeBoleto', () => {
     it('corta no CNPJ e devolve só o nome', () => {
@@ -94,5 +94,35 @@ describe('rotuloDeDespesa', () => {
     it('não devolve fragmento de 1 ou 2 letras', () => {
         // 'A CNPJ 123' podaria para 'A' — rótulo pior que nenhum.
         expect(rotuloDeDespesa('A CNPJ: 123', null)).toBeNull();
+    });
+});
+
+describe('rotuloDeFornecedor — quem recebeu a despesa', () => {
+    it('o fornecedor CADASTRADO ganha do bloco de OCR', () => {
+        expect(rotuloDeFornecedor(
+            'MN CONSERVACAO DE ELEVADORES E COMERCIO DE PECAS LTDA',
+            'MN CONSERVAÇÃO ELEVADORES COM PEÇAS LTDA   CNPJ: 07.604.526/0001-20  Av...',
+        )).toBe('MN CONSERVACAO DE ELEVADORES E COMERCIO DE PECAS LTDA');
+    });
+
+    it('sem cadastro, o texto cru vai PODADO — não com CNPJ e endereço colados', () => {
+        expect(rotuloDeFornecedor(null, 'NEW GRAN ROCHAS LTDA CNPJ: 12.345.678/0001-90 Av. Brasil'))
+            .toBe('NEW GRAN ROCHAS LTDA');
+    });
+
+    it('cadastro em branco não apaga o texto cru', () => {
+        expect(rotuloDeFornecedor('   ', 'JARDINAGEM SILVA LTDA')).toBe('JARDINAGEM SILVA LTDA');
+    });
+
+    it('sem nome em lugar nenhum devolve null — a célula decide o texto do vazio', () => {
+        expect(rotuloDeFornecedor(null, null)).toBeNull();
+        expect(rotuloDeFornecedor(undefined, '')).toBeNull();
+    });
+
+    it('é a MESMA resposta para os dois lados do relatório: função pura, sem estado', () => {
+        const a = rotuloDeFornecedor('Energisa', null);
+        const b = rotuloDeFornecedor('Energisa', 'ENERGISA SUL-SUDESTE - DISTRIBUIDORA DE ENERGIA S.A. CADASTRE');
+        expect(a).toBe('Energisa');
+        expect(b).toBe('Energisa');
     });
 });

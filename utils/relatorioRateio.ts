@@ -21,6 +21,16 @@
 export interface LinhaDespesaRelatorio {
     descricao: string;
     valor: number;
+    /**
+     * Quem recebeu. `null` = não há nome em lugar nenhum — a célula diz "—",
+     * não some.
+     *
+     * A regra de qual nome usar (cadastrado antes do texto cru, e o cru
+     * podado) é uma só, em `utils/despesaCondominio.rotuloDeFornecedor`: os
+     * dois lados que montam este documento chamam ELA, senão o mesmo
+     * fornecedor sai com dois nomes no mesmo relatório.
+     */
+    fornecedor?: string | null;
 }
 
 /** Uma linha de cota do documento. */

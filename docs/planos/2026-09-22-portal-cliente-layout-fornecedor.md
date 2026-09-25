@@ -245,3 +245,16 @@ recorte anterior, que deixava série, aquisição e valores fora do portal.
 render e o harness montam o componente sozinho — os dois passaram a envolver
 em `<ConfirmProvider>`. Sem isso, o erro é `useConfirm deve ser usado dentro de
 <ConfirmProvider>`, e só aparece quando a ficha abre.
+
+### Ajustes depois do primeiro print em produção (mesmo dia)
+
+O print com dado real (Bella Vista, "Bomba de Combate a Incêndio") mostrou três
+coisas que o harness com dado fabricado não mostrava:
+
+- **Imagem quebrada**: `opura_assets.image_url` também guarda caminho de bucket
+  privado. Agora só renderiza URL absoluta `http(s)` e, se ainda assim falhar,
+  o elemento se apaga (`onError`) em vez de deixar o ícone de foto rasgada.
+- **`sistema_predial` e `em_uso` crus**: situação passa pelo vocabulário de
+  `types/assets.ts` (`LABEL_SITUACAO_ATIVO`) e categoria/subcategoria por um
+  `humanizar()` — chave nova que ninguém mapeou vira "Sistema predial", não
+  identificador com underline.

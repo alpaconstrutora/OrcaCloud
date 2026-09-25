@@ -617,6 +617,22 @@ const CampoFicha: React.FC<{ rotulo: string; valor?: React.ReactNode; bruto?: un
     );
 };
 
+/** Situação do bem, no vocabulário de Gestão de Ativos (`types/assets.ts`). O
+ *  banco guarda `em_uso`, `baixado`… — sem isto o condômino lê a chave crua. */
+const LABEL_SITUACAO_ATIVO: Record<string, string> = {
+    disponivel: 'Disponível', em_uso: 'Em uso', manutencao: 'Em manutenção',
+    ocioso: 'Ocioso', baixado: 'Baixado',
+};
+
+/** Chave do banco (`sistema_predial`) vira texto ("Sistema predial"). Serve de
+ *  rede para valor novo que ninguém mapeou — melhor um rótulo derivado do que
+ *  um identificador com underline no meio da ficha. */
+const humanizar = (v: string | null) => {
+    if (!v) return null;
+    const t = v.replace(/_/g, ' ').trim();
+    return t.charAt(0).toUpperCase() + t.slice(1);
+};
+
 /** Meses viram anos quando fecham: "240 meses" não se lê, "20 anos" sim. */
 const vidaUtil = (meses: number | null) => {
     if (meses == null) return null;
@@ -653,10 +669,15 @@ const FichaDoEquipamento: React.FC<{ ativo: PortalAtivoCondominio | null; multi:
         <SheetPanel className="p-4 md:p-6">
             {ativo && (
                 <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-8">
-                    {ativo.imagemUrl && (
+                    {/* Só URL absoluta: `opura_assets.image_url` também guarda caminho
+                        de bucket privado, que aqui viraria imagem quebrada com o alt
+                        exposto. E, se mesmo assim falhar, o elemento se apaga em vez
+                        de deixar o ícone de foto rasgada na ficha. */}
+                    {ativo.imagemUrl && /^https?:\/\//.test(ativo.imagemUrl) && (
                         <img
                             src={ativo.imagemUrl}
                             alt={ativo.nome}
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                             className="w-full max-h-56 object-cover rounded-[10px] border border-gray-100"
                         />
                     )}
@@ -669,10 +690,14 @@ const FichaDoEquipamento: React.FC<{ ativo: PortalAtivoCondominio | null; multi:
                         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                             <CampoFicha rotulo="Nome do bem" bruto={ativo.nome} />
                             <CampoFicha rotulo="Código patrimonial" bruto={ativo.codigo} />
-                            <CampoFicha rotulo="Categoria" bruto={ativo.categoria} />
-                            <CampoFicha rotulo="Subcategoria" bruto={ativo.subcategoria} />
+                            <CampoFicha rotulo="Categoria" valor={humanizar(ativo.categoria)} bruto={ativo.categoria} />
+                            <CampoFicha rotulo="Subcategoria" valor={humanizar(ativo.subcategoria)} bruto={ativo.subcategoria} />
                             <CampoFicha rotulo="Sistema do prédio" bruto={ativo.sistema} />
-                            <CampoFicha rotulo="Situação" bruto={ativo.situacao} />
+                            <CampoFicha
+                                rotulo="Situação"
+                                valor={LABEL_SITUACAO_ATIVO[ativo.situacao ?? ''] ?? humanizar(ativo.situacao)}
+                                bruto={ativo.situacao}
+                            />
                             <CampoFicha rotulo="Marca" bruto={ativo.marca} />
                             <CampoFicha rotulo="Modelo" bruto={ativo.modelo} />
                             <CampoFicha rotulo="Nº de série" bruto={ativo.numeroSerie} />

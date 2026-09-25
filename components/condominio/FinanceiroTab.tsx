@@ -23,6 +23,7 @@ import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
 import ActionIconButton from '../ui/ActionIconButton';
 import CostCenterSelect from '../CostCenterSelect';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
+import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
 import { useConfirm } from '../ui/confirm';
 // Mesmo rótulo de origem que Contas a Pagar usa. Importar do componente é a
 // convenção já estabelecida aqui — `ContasPagarManager` e
@@ -94,13 +95,28 @@ function dataBR(iso?: string): string {
  *  Vive DENTRO de um `Sheet`, então usa a régua do §6.9 (`px-3`, e `px-4` na
  *  coluna de texto livre) em vez do `px-6` de tabela de página inteira: num
  *  painel de ~672px, seis lados de 24px comem mais largura do que sobra. */
+const COLUNAS_DESPESA_COM_DATA: StandardTableColumn[] = [
+    { key: 'data', label: 'Data', sortable: true, width: 110 },
+    { key: 'descricao', label: 'Descrição', sortable: true, width: 330 },
+    { key: 'valor', label: 'Valor', sortable: true, width: 130, align: 'right' },
+];
+const COLUNAS_DESPESA_SEM_DATA: StandardTableColumn[] = COLUNAS_DESPESA_COM_DATA.filter(c => c.key !== 'data');
+
+/** Despesas de um rateio — na prévia e no snapshot salvo.
+ *  `StandardTable` com `dense` (§6.9/§6.10): mesmo desenho do drawer
+ *  "Importar do Comercial", para os painéis desta aba não terem dois cromos
+ *  de tabela diferentes um do lado do outro. */
 const TabelaDespesas: React.FC<{
     despesas: DespesaRateio[];
     comData: boolean;
+    /** Chave do estado da tabela. Distinta por painel: a prévia mostra a coluna
+     *  Data e o detalhe não, e uma chave só faria a lista de colunas visíveis
+     *  de um vazar para o outro. */
+    storageKey: string;
     /** Presente só em rateio RASCUNHO: fechado é prestação de contas, e
      *  reescrever a linha depois mudaria o documento que o condômino recebeu. */
     onEditarDescricao?: (despesa: DespesaRateio, nova: string) => Promise<void>;
-}> = ({ despesas, comData, onEditarDescricao }) => {
+}> = ({ despesas, comData, storageKey, onEditarDescricao }) => {
     const [editando, setEditando] = React.useState<string | null>(null);
     const [texto, setTexto] = React.useState('');
     const [salvando, setSalvando] = React.useState(false);
@@ -124,109 +140,155 @@ const TabelaDespesas: React.FC<{
         }
     };
 
+    const total = despesas.reduce((acc, d) => acc + d.valor, 0);
+
     return (
-    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-            <thead>
-                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                    {comData && <th className="px-3 py-2 border-r border-gray-100 whitespace-nowrap">Data</th>}
-                    <th className="px-4 py-2 border-r border-gray-100">Descrição</th>
-                    <th className="px-3 py-2 text-right whitespace-nowrap">Valor</th>
-                </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-                {despesas.map(d => (
-                    <tr key={d.id || d.transaction_id}>
-                        {comData && (
-                            <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
-                                {dataBR(d.data)}
-                            </td>
-                        )}
-                        <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
-                            {editando === d.id ? (
-                                <div className="flex items-center gap-1.5">
-                                    <input
-                                        autoFocus
-                                        value={texto}
-                                        onChange={e => setTexto(e.target.value)}
-                                        onKeyDown={e => {
-                                            if (e.key === 'Enter') salvar(d);
-                                            if (e.key === 'Escape') setEditando(null);
-                                        }}
-                                        className="flex-1 h-8 px-2 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                                    />
-                                    <button
-                                        onClick={() => salvar(d)}
-                                        disabled={salvando || !texto.trim()}
-                                        className="h-8 px-2.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 text-[13px] font-medium disabled:opacity-50"
-                                    >
-                                        Salvar
-                                    </button>
-                                </div>
-                            ) : onEditarDescricao && d.id ? (
-                                /* Clique na célula edita — a ação é óbvia e única
-                                   nesta linha (§9.1), então não ganha botão próprio. */
-                                <button
-                                    type="button"
-                                    onClick={() => abrir(d)}
-                                    className="w-full text-left hover:text-blue-600 transition-colors"
-                                    title="Clique para corrigir a descrição desta despesa"
-                                >
-                                    {d.descricao}
-                                </button>
-                            ) : d.descricao}
-                        </td>
-                        <td className="px-3 py-2.5 last:border-r-0 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
-                            {dinheiro(d.valor)}
-                        </td>
-                    </tr>
-                ))}
-            </tbody>
-        </table>
-    </div>
+        <StandardTable<DespesaRateio>
+            storageKey={storageKey}
+            columns={comData ? COLUNAS_DESPESA_COM_DATA : COLUNAS_DESPESA_SEM_DATA}
+            rows={despesas}
+            rowKey={d => d.id || d.transaction_id}
+            dense
+            maxHeight="42vh"
+            searchText={d => `${d.descricao} ${d.data ?? ''}`}
+            searchPlaceholder="Buscar despesa..."
+            renderCell={(key, d) => {
+                if (key === 'data') {
+                    return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{dataBR(d.data)}</span>;
+                }
+                if (key === 'valor') {
+                    // §7 — valor financeiro é o único caso com `font-medium`.
+                    return <span className="text-sm font-medium text-gray-800 whitespace-nowrap">{dinheiro(d.valor)}</span>;
+                }
+                if (editando === d.id) {
+                    return (
+                        <div className="flex items-center gap-1.5">
+                            <input
+                                autoFocus
+                                value={texto}
+                                onChange={e => setTexto(e.target.value)}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter') salvar(d);
+                                    if (e.key === 'Escape') setEditando(null);
+                                }}
+                                className="flex-1 h-8 px-2 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                            />
+                            <button
+                                onClick={() => salvar(d)}
+                                disabled={salvando || !texto.trim()}
+                                className="h-8 px-2.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 text-[13px] font-medium disabled:opacity-50"
+                            >
+                                Salvar
+                            </button>
+                        </div>
+                    );
+                }
+                if (onEditarDescricao && d.id) {
+                    /* Clique na célula edita — a ação é óbvia e única nesta
+                       linha (§9.1), então não ganha botão próprio. */
+                    return (
+                        <button
+                            type="button"
+                            onClick={() => abrir(d)}
+                            className="w-full text-left text-sm font-normal text-gray-700 hover:text-blue-600 transition-colors break-words"
+                            title="Clique para corrigir a descrição desta despesa"
+                        >
+                            {d.descricao}
+                        </button>
+                    );
+                }
+                return <span className="text-sm font-normal text-gray-700 break-words">{d.descricao}</span>;
+            }}
+            /* Rodapé FORA da grade de colunas. Com `renderTotals` o total caía
+               na coluna espaçadora (§6.1.1), de 52px, e saía cortado — e
+               qualquer coluna que o usuário ocultasse pela engrenagem
+               deslocaria a célula de novo. */
+            footer={
+                <div className="px-3 py-2.5 border-t border-gray-200 bg-gray-50 flex items-center justify-between gap-3">
+                    <span className="text-sm font-normal text-gray-600">{despesas.length} lançamento(s)</span>
+                    <span className="text-sm font-medium text-gray-800 whitespace-nowrap">{dinheiro(total)}</span>
+                </div>
+            }
+        />
     );
 };
 
-/** Cotas de um rateio salvo — quem paga quanto. Prestação de contas.
- *  Mesma régua da §6.9 que `TabelaDespesas` usa: dentro de `Sheet` a largura é
- *  o recurso escasso, então `px-3` de régua e `px-4` na coluna de texto livre. */
-const TabelaCotas: React.FC<{ cotas: CotaDoRateio[] }> = ({ cotas }) => (
-    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-            <thead>
-                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                    <th className="px-3 py-2 border-r border-gray-100 whitespace-nowrap">Unidade</th>
-                    <th className="px-4 py-2 border-r border-gray-100">Quem paga</th>
-                    <th className="px-3 py-2 text-right whitespace-nowrap">Cota</th>
-                </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-                {cotas.map(c => (
-                    <tr key={c.id}>
-                        <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 whitespace-nowrap">
-                            {c.unitLabel}
-                        </td>
-                        <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
-                            {c.clientNome ? (
-                                <span className="block truncate" title={c.clientNome}>{c.clientNome}</span>
-                            ) : (
-                                /* §8: texto colorido, sem pílula. A cota existe e foi
-                                   calculada — o que falta é de QUEM cobrar. */
-                                <span className="text-amber-600">Sem pagador definido</span>
-                            )}
-                        </td>
-                        <td className="px-3 py-2.5 last:border-r-0 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
-                            {dinheiro(c.valor)}
-                            {c.temRecebivel && (
-                                <span className="block text-xs font-normal text-emerald-600">cobrada</span>
-                            )}
-                        </td>
-                    </tr>
-                ))}
-            </tbody>
-        </table>
-    </div>
-);
+/** Uma linha de cota, venha da prévia (`ItemPrevia`) ou do snapshot salvo
+ *  (`CotaDoRateio`). Existia uma renderização para cada: o detalhe tinha
+ *  tabela e a prévia, cartões empilhados com o nome do pagador em cinza sob a
+ *  unidade — dois desenhos para o mesmo dado. */
+interface LinhaCota {
+    chave: string;
+    unidade: string;
+    /** `null` = a cota foi calculada sem ninguém no papel de pagador. */
+    pagador: string | null;
+    /** Por que a unidade não entrou, ou entrou com peso zero. Só na prévia. */
+    aviso?: string;
+    valor: number;
+}
+
+// Sem observação sobra largura para o nome; com ela, 620px é o teto — medido:
+// 690px numa caixa de 622 dava rolagem lateral permanente e cortava
+// "Torre Única · Estacionamento".
+const COLUNAS_COTA: StandardTableColumn[] = [
+    { key: 'unidade', label: 'Unidade', sortable: true, width: 200 },
+    { key: 'pagador', label: 'Quem paga', sortable: true, width: 290 },
+    { key: 'valor', label: 'Cota', sortable: true, width: 120, align: 'right' },
+];
+const COLUNAS_COTA_COM_AVISO: StandardTableColumn[] = [
+    { key: 'unidade', label: 'Unidade', sortable: true, width: 170 },
+    { key: 'pagador', label: 'Quem paga', sortable: true, width: 175 },
+    { key: 'aviso', label: 'Observação', sortable: true, width: 165 },
+    { key: 'valor', label: 'Cota', sortable: true, width: 110, align: 'right' },
+];
+
+/** Cotas — quem paga quanto. Prestação de contas na sheet de detalhe, e o que
+ *  SERÁ gravado na prévia. */
+const TabelaCotas: React.FC<{ cotas: LinhaCota[]; storageKey: string }> = ({ cotas, storageKey }) => {
+    const total = cotas.reduce((s, c) => s + c.valor, 0);
+    // A coluna de observação só existe quando há observação: coluna vazia em
+    // painel estreito é largura gasta sem dado.
+    const temAviso = cotas.some(c => !!c.aviso);
+    return (
+        <StandardTable<LinhaCota>
+            storageKey={storageKey}
+            columns={temAviso ? COLUNAS_COTA_COM_AVISO : COLUNAS_COTA}
+            rows={cotas}
+            rowKey={c => c.chave}
+            dense
+            maxHeight="42vh"
+            searchText={c => `${c.unidade} ${c.pagador ?? ''} ${c.aviso ?? ''}`}
+            searchPlaceholder="Buscar unidade ou pagador..."
+            renderCell={(key, c) => {
+                if (key === 'unidade') {
+                    // QUEBRA linha, não `nowrap`: "Torre Única · Estacionamento"
+                    // não cabe em coluna de drawer, e célula cortada é lida como
+                    // coluna cortada (mesma lição do SupplierSelect, 11/09).
+                    return <span className="text-sm font-normal text-gray-700 break-words">{c.unidade}</span>;
+                }
+                if (key === 'pagador') {
+                    // §8: texto colorido, sem pílula. A cota existe e foi
+                    // calculada — o que falta é de QUEM cobrar.
+                    return c.pagador
+                        ? <span className="text-sm font-normal text-gray-700 break-words">{c.pagador}</span>
+                        : <span className="text-sm font-normal text-amber-600">Sem pagador definido</span>;
+                }
+                if (key === 'aviso') {
+                    return c.aviso
+                        ? <span className="text-sm font-normal text-amber-600 break-words">{c.aviso}</span>
+                        : <span className="text-sm font-normal text-gray-400">—</span>;
+                }
+                return <span className="text-sm font-medium text-gray-800 whitespace-nowrap">{dinheiro(c.valor)}</span>;
+            }}
+            footer={
+                <div className="px-3 py-2.5 border-t border-gray-200 bg-gray-50 flex items-center justify-between gap-3">
+                    <span className="text-sm font-normal text-gray-600">{cotas.length} unidade(s)</span>
+                    <span className="text-sm font-medium text-gray-800 whitespace-nowrap">{dinheiro(total)}</span>
+                </div>
+            }
+        />
+    );
+};
 
 // Larguras da aba Despesas. Soma = 1.200px; a folga vai para o `<col />`
 // espaçador (§6.1.1), não se espalha pelas colunas de dado.
@@ -1581,76 +1643,85 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                         )}
 
                         {previa && (
-                            <div className="space-y-3">
-
-                                <div className="bg-gray-50 rounded-[10px] p-3 text-sm">
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-500">Despesas da competência</span>
-                                        <span className="text-gray-800 font-medium">{dinheiro(previa.totalDespesas)}</span>
+                            <div className="space-y-6">
+                                {/* As duas caixas cinzas de resumo viraram a linha
+                                    de totais DENTRO de cada tabela: o total ao pé
+                                    da lista que ele soma se lê sem procurar, e o
+                                    par rótulo/valor empilhado some junto. */}
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-3">
+                                        <h3 className="text-sm font-semibold text-gray-900">Despesas que entram</h3>
+                                        <span className="text-xs text-gray-500">
+                                            {centros.length > 1
+                                                ? `Centros de custo ${centros.map(c => c.code).join(', ')}`
+                                                : `Centro de custo ${centro?.code}`}
+                                        </span>
                                     </div>
-                                    <div className="flex justify-between mt-1">
-                                        <span className="text-gray-500">Total rateado</span>
-                                        <span className="text-gray-800 font-medium">{dinheiro(previa.totalRateado)}</span>
-                                    </div>
-                                    <div className="text-xs text-gray-400 mt-1">
-                                        {previa.despesas.length} lançamento(s) {centros.length > 1 ? `nos centros de custo ${centros.map(c => c.code).join(', ')}` : `no centro de custo ${centro?.code}`}
-                                    </div>
+                                    {previa.despesas.length > 0 ? (
+                                        <TabelaDespesas
+                                            despesas={previa.despesas}
+                                            comData
+                                            storageKey="condominio:rateio:previa:despesas"
+                                        />
+                                    ) : (
+                                        /* Só quando NÃO houve exclusão: com despesas
+                                           excluídas por já estarem em outro rateio, a
+                                           frase "nenhuma despesa lançada… lance no
+                                           Financeiro" é falsa e manda o síndico lançar
+                                           de novo o que já existe. As duas apareciam
+                                           juntas, contradizendo-se (visto na prova de
+                                           tela de 23/09). O aviso de `jaRateadas`
+                                           abaixo é que explica o zero nesse caso. */
+                                        previa.jaRateadas === 0 && (
+                                            <p className="text-sm text-amber-600 flex items-start gap-1.5">
+                                                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                                                Nenhuma despesa lançada nesta competência {centros.length > 1 ? 'nos centros de custo' : 'no centro de custo'} do
+                                                condomínio. Lance as despesas no Financeiro apontando para {centros.length > 1 ? 'um deles' : 'ele'}.
+                                            </p>
+                                        )
+                                    )}
+                                    {previa.jaRateadas > 0 && (
+                                        <p className="text-sm text-amber-600 flex items-start gap-1.5">
+                                            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                                            {previa.jaRateadas} despesa(s) desta competência ficaram de fora porque já
+                                            entraram em outro rateio (o ordinário e o extraordinário do mesmo mês leem
+                                            o mesmo centro de custo). Cobrar de novo seria cobrar duas vezes.
+                                        </p>
+                                    )}
                                 </div>
 
-                                {previa.despesas.length > 0 && (
-                                    <TabelaDespesas despesas={previa.despesas} comData />
-                                )}
-
-                                {/* Só quando NÃO houve exclusão: com despesas
-                                    excluídas por já estarem em outro rateio, a
-                                    frase "nenhuma despesa lançada… lance no
-                                    Financeiro" é falsa e manda o síndico lançar
-                                    de novo o que já existe. As duas apareciam
-                                    juntas, contradizendo-se (visto na prova de
-                                    tela de 23/09). O aviso de `jaRateadas`
-                                    abaixo é que explica o zero nesse caso. */}
-                                {previa.despesas.length === 0 && previa.jaRateadas === 0 && (
-                                    <p className="text-xs text-amber-600 flex items-start gap-1.5">
-                                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                                        Nenhuma despesa lançada nesta competência {centros.length > 1 ? 'nos centros de custo' : 'no centro de custo'} do
-                                        condomínio. Lance as despesas no Financeiro apontando para {centros.length > 1 ? 'um deles' : 'ele'}.
-                                    </p>
-                                )}
-                                {previa.jaRateadas > 0 && (
-                                    <p className="text-xs text-amber-600 flex items-start gap-1.5">
-                                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                                        {previa.jaRateadas} despesa(s) desta competência ficaram de fora porque já
-                                        entraram em outro rateio (o ordinário e o extraordinário do mesmo mês leem
-                                        o mesmo centro de custo). Cobrar de novo seria cobrar duas vezes.
-                                    </p>
-                                )}
-                                {previa.semDado > 0 && (
-                                    <p className="text-xs text-amber-600 flex items-start gap-1.5">
-                                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                                        {previa.semDado} unidade(s) sem {CRITERIO_EXIGE[form.criterio]} — ficam de fora do rateio.
-                                    </p>
-                                )}
-                                {previa.semResponsavel > 0 && (
-                                    <p className="text-xs text-amber-600 flex items-start gap-1.5">
-                                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                                        {previa.semResponsavel} unidade(s) sem responsável financeiro — a cota é
-                                        calculada, mas não há de quem cobrar.
-                                    </p>
-                                )}
-
-                                <div className="space-y-1.5">
-                                    {previa.itens.map(i => (
-                                        <div key={i.unitId} className={`flex items-start justify-between gap-3 p-2.5 rounded-[6px] border ${i.valor > 0 ? 'border-gray-200' : 'border-gray-100 opacity-60'}`}>
-                                            <div className="min-w-0">
-                                                <div className="text-sm text-gray-800">{i.unitLabel}</div>
-                                                <div className="text-xs text-gray-500">
-                                                    {i.clientNome}
-                                                    {i.aviso ? <span className="text-amber-600"> · {i.aviso}</span> : ''}
-                                                </div>
-                                            </div>
-                                            <span className="text-sm font-medium text-gray-800 shrink-0">{dinheiro(i.valor)}</span>
-                                        </div>
-                                    ))}
+                                <div className="space-y-3">
+                                    <div className="border-b border-gray-100 pb-3">
+                                        <h3 className="text-sm font-semibold text-gray-900">Quem paga quanto</h3>
+                                    </div>
+                                    {/* A prévia tinha cartões empilhados com o nome do
+                                        pagador em cinza sob a unidade — o mesmo dado que
+                                        o detalhe já mostrava em tabela. Agora é a MESMA
+                                        tabela, com o motivo da unidade fora do rateio em
+                                        coluna própria em vez de sufixo âmbar na linha. */}
+                                    <TabelaCotas
+                                        storageKey="condominio:rateio:previa:cotas"
+                                        cotas={previa.itens.map(i => ({
+                                            chave: i.unitId,
+                                            unidade: i.unitLabel,
+                                            pagador: i.clientNome || null,
+                                            aviso: i.aviso,
+                                            valor: i.valor,
+                                        }))}
+                                    />
+                                    {previa.semDado > 0 && (
+                                        <p className="text-sm text-amber-600 flex items-start gap-1.5">
+                                            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                                            {previa.semDado} unidade(s) sem {CRITERIO_EXIGE[form.criterio]} — ficam de fora do rateio.
+                                        </p>
+                                    )}
+                                    {previa.semResponsavel > 0 && (
+                                        <p className="text-sm text-amber-600 flex items-start gap-1.5">
+                                            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                                            {previa.semResponsavel} unidade(s) sem responsável financeiro — a cota é
+                                            calculada, mas não há de quem cobrar.
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -1699,29 +1770,29 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                 inalcançável na tela depois que a cobrança era
                                 gerada (a sheet de cobrança some com o botão). */}
                             <div className="space-y-3">
-                                <div className="flex justify-between text-sm bg-gray-50 rounded-[10px] p-3">
-                                    <span className="text-gray-500">
-                                        Cotas — {cotasDetalhe.length} unidade(s)
-                                    </span>
-                                    <span className="font-medium text-gray-800">
-                                        {dinheiro(cotasDetalhe.reduce((s, c) => s + c.valor, 0))}
-                                    </span>
+                                <div className="border-b border-gray-100 pb-3">
+                                    <h3 className="text-sm font-semibold text-gray-900">Quem paga quanto</h3>
                                 </div>
                                 {cotasDetalhe.length === 0 ? (
                                     <p className="text-sm text-gray-500 text-center py-6">
                                         Nenhuma cota gravada — nenhuma unidade recebeu valor neste rateio.
                                     </p>
                                 ) : (
-                                    <TabelaCotas cotas={cotasDetalhe} />
+                                    <TabelaCotas
+                                        storageKey="condominio:rateio:detalhe:cotas"
+                                        cotas={cotasDetalhe.map(c => ({
+                                            chave: c.id,
+                                            unidade: c.unitLabel,
+                                            pagador: c.clientNome,
+                                            valor: c.valor,
+                                        }))}
+                                    />
                                 )}
                             </div>
 
                             <div className="space-y-3">
-                                <div className="flex justify-between text-sm bg-gray-50 rounded-[10px] p-3">
-                                    <span className="text-gray-500">Total das despesas</span>
-                                    <span className="font-medium text-gray-800">
-                                        {dinheiro(despesasDetalhe.reduce((s, d) => s + d.valor, 0))}
-                                    </span>
+                                <div className="border-b border-gray-100 pb-3">
+                                    <h3 className="text-sm font-semibold text-gray-900">Despesas do rateio</h3>
                                 </div>
                                 {despesasDetalhe.length === 0 ? (
                                     <p className="text-sm text-gray-500 text-center py-6">
@@ -1734,6 +1805,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                     <TabelaDespesas
                                         despesas={despesasDetalhe}
                                         comData={false}
+                                        storageKey="condominio:rateio:detalhe:despesas"
                                         onEditarDescricao={sheetDetalhe?.status === 'RASCUNHO' ? editarDescricaoDespesa : undefined}
                                     />
                                 )}

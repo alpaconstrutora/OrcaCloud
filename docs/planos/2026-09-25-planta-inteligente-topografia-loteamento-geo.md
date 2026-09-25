@@ -1,0 +1,216 @@
+# Incorporação › Planta Inteligente — Topografia, Loteamento, GeoINCRA/SIGEF, REURB, CAR, Raster
+
+> Destino definitivo no repositório (REGRA #6): `docs/planos/2026-09-25-planta-inteligente-topografia-loteamento-geo.md`.
+> Este arquivo é o rascunho do plan mode; ao sair do plan mode o primeiro item é copiá-lo para lá.
+
+## Pedido original (sessão de 2026-09-25)
+
+> analise Algumas ferramentas para implementarmos em incorporacao < planta inteligente. Anelise o que ja temos implementado e o que falta implementar e faça um plano para implementacao
+>
+> essencialmente temos uma combinação de CAD + topografia + geoprocessamento + loteamentos/REURB + GeoINCRA/SIGEF + terraplenagem/volumetria + raster/ortofotos + CAR. Metrica Support
+> [segue a lista completa de 35 seções do Métrica TOPO — 1. Núcleo/Projetos · 2. Banco cadastral · 3. CAD próprio · 4. Visualização · 5. Pontos topográficos · 6. Importação · 7. Exportação/locação · 8. Linhas/polilinhas · 9. Cotas e medições · 10. Topografia convencional · 11. Cartografia · 12. GeoINCRA/SIGEF · 13. ODS SIGEF · 14. Integração SIGEF · 15. Loteamentos · 16. Documentação de loteamentos · 17. Locação · 18. Cadastro urbano · 19. REURB · 20. Google/imagens · 21. CAR · 22. MDT · 23. Curvas de nível · 24. Volumetria · 25. Terraplenagem · 26. Perfis · 27. Mapas temáticos · 28. Raster · 29. Vetorização · 30. DEM · 31. CAD↔Raster · 32. KML/KMZ · 33. Formatos · 34. Automação de documentos · 35. Suporte — e o resumo em 12 macrocomponentes: CAD, Projetos, Pontos, Topografia, Cartografia, GeoINCRA, Urbano, REURB, CAR/GIS, MDT/Volumetria, Terraplenagem, Raster.]
+>
+> O que considero mais importante: o valor não está em possuir um CAD; está no encadeamento levantamento → pontos → geometria CAD → georreferenciamento → cálculo → documentação → locação/exportação. E em nichos: GeoINCRA → SIGEF; loteamento/REURB → memoriais + plantas individuais automáticas; MDT → terraplenagem + volumetria; ortofoto/DEM → vetorização + curvas + pontos 3D.
+
+## Contexto
+
+O pedido compara a Planta Inteligente (Incorporação › Planta Inteligente, `components/blueprint/*`, kernel `blueprint-kernel-ts-0.57.0`) com o catálogo funcional do Métrica TOPO (CAD topográfico brasileiro). O inventário abaixo foi lido no código em 25/09/2026 (três varreduras: kernel/topografia, CAD/editor/formatos, Incorporação/cadastros/documentos). Conclusão geral: **o motor de MDT/curvas/terraplenagem já existe e é extenso** (17 fases da topografia + P2.64/P2.65 de hoje: 10 módulos `blueprintTopografia*`, ~7.000 linhas, 28 arquivos de teste, versões imutáveis em `blueprint_study_topografia`); **o que falta é o encadeamento para fora do lote único**: cartografia real (CRS/datum), feições de levantamento, documentação do imóvel (memorial, roteiro, malha de coordenadas), loteamento (quadra/lote/via), terraplenagem de vias (eixo/greide/seções), raster georreferenciado (GeoTIFF/tiles/SHP) e as peças normativas (GeoINCRA/SIGEF, CAR, REURB).
+
+Premissa mantida do produto (topografia fase 17): o software **não substitui o responsável técnico** — gera as peças e o fluxo de emissão; a certificação (SIGEF), o registro e a ART continuam com o profissional.
+
+## Inventário — o que já existe × o que falta (12 macrocomponentes)
+
+Legenda: ✅ existe · 🟡 parcial · ❌ não existe · ⛔ fora por decisão
+
+### 1. CAD (desenho, edição, camadas, cotas, impressão)
+- ✅ Famílias BIM (parede reta/curva, abertura, estrutural 6 tipos, telhado, escada, guarda-corpo, rodapé, núcleo, vaga, componente/mobiliário, redes MEP), anotações `TEXTO|LEADER|LINHA|HACHURA|COTA_ANGULAR|NUVEM` (`utils/blueprintKernel/model.ts:1890`), grupos com origem (= blocos), tabelas na prancha (`utils/blueprintTabelas.ts`).
+- ✅ Edição: undo/redo por estado (`ModelHistory`, `commands.ts:4666`), `applyBatch`, copiar/colar/duplicar, mover (arraste, setas, por valor), girar, espelhar, matriz, alinhar, dividir/unir parede, estender até face (`utils/blueprintEstenderAteFace.ts`), cortar parede no pilar, laço retangular janela/cruzamento, isolar, travas por elemento.
+- ✅ OSNAP 8 tipos (`utils/blueprintEncaixe.ts`), grade em mm, orto F8/Shift; pan/zoom (roda `passive:false`, ±, enquadrar, 1:100); vistas planta/situação/implantação/cobertura/forro/cortes/elevações/3D órbita+walk; pavimentos.
+- ✅ Prancha: A4–A0, escalas 1:1…1:500, carimbo com CAU/CREA, conjunto de pranchas com template (`utils/blueprintPranchas.ts`, `blueprint_sheet_templates`), PDF/PNG (jsPDF), DXF R12 com camadas fixas `PLANTA-*`/`TOPO-*`.
+- ❌ Camada nomeada de usuário (cor/linetype/espessura por camada), estilo de cota/texto nomeado, cota linear manual, offset/paralela, fillet/chamfer, trim genérico, escalar geometria, polar tracking, igualar propriedades, localizar objeto, laço poligonal/fence, círculo/elipse livres, imagem como entidade, malha de coordenadas na prancha, viewports múltiplos, layouts múltiplos.
+- **Decisão proposta:** não replicar CAD genérico (o próprio pedido diz que o valor está no encadeamento). Entram só os comandos que as cadeias abaixo exigem: **offset/paralela** (vias e recuos do loteamento), **cota linear manual**, **malha de coordenadas na prancha**, **camada de exibição por feição de levantamento**. Fillet/chamfer/polar/viewports/layers de usuário ficam fora.
+
+### 2. Projetos / banco cadastral
+- ✅ Estudos N por org, ramos (alternativas), autosave, snapshot imutável com hash, permissões, GED/compartilhar com cliente, API/webhooks/plugins, DWG→DXF (Edge `dwg-converter`), IFC/DXF/PDF/PNG/COLLADA/BCF/XLSX.
+- 🟡 Georreferência: `Georreferencia { latitude, longitude, elevacaoM, rotacaoNorteDeg, projetada?: { lesteM, norteM, crs } }` (`model.ts:2770`) — **`crs` é texto opaco; o kernel não converte nada**. Única projeção no repo: `utmParaLatLon` própria (GRS80) em `blueprintTopografiaImportacao.ts:390`; `geoParaLocal`/`localParaGeo` são plano tangente por metros/grau.
+- 🟡 Cadastros: `commercial_properties` tem `registration_number` (matrícula), `registry_office` (cartório), `iptu_registration`, `type='LAND'` — **sem lat/long nem geometria**; `empreendimentos` tem `matricula` (sem cartório), `responsavel_tecnico`/`crea_cau` (texto livre), `terreno_*` (medidas, sem coordenadas); `blueprint_studies` **não tem `empreendimento_id`** (só `project_id`); `blueprint_study_urban_context.empreendimento_id` sem FK; UNIQUE por estudo = **um lote por estudo** ("gleba multi-lote está fora", literal na migration).
+- ❌ Cadastro de proprietários (só `unit_occupancies.role='PROPRIETARIO'` → `clients`), de responsáveis técnicos reutilizável (só `contract_technical_responsibilities`, escopo contrato), de matrícula como entidade, de gleba autônoma. Zero ocorrências de CAR/CCIR/NIRF/INCRA/SIGEF.
+- ⛔ Backups .TBKP/.ZIP — o histórico de snapshots cobre. Elipsoide configurável — SIRGAS2000/GRS80 é o único legal no Brasil desde 2015; SAD69/Córrego Alegre entram só como **origem de conversão**.
+
+### 3. Pontos topográficos
+- ✅ `PontoCotado { x, y, cotaM }` (`blueprintTopografia.ts:91`), importação de 9 formatos (`FormatoDeImportacao`: TEXTO PNEZD, GEOJSON, KML, DXF, SVG, LANDXML, perfis/curvas do ÒPURA) com separador/cabeçalho/ordem N-E/UTM detectados, ancoragem (direto/centro do lote/georreferência), linhas de quebra por código `LQ<n>`, contorno do lote pelo arquivo (P2.65: código de divisa `M1…`, polilinha DXF por camada, `Polygon` KML/GeoJSON, `<Parcel>` LandXML), proveniência sha256, DEM remoto (Open-Meteo GLO-90; SRTM 30 m via Edge `topografia-elevacao`).
+- ❌ Ponto com **nome/descrição/código/símbolo** (o `P` e o `D` do PNEZD são descartados), edição de ponto, duplicados, interpolar/pontuar polilinha, ponto de locação, exportação de pontos (TXT XYZ, XLS, KML de pontos, "para estação"), GPX, Shapefile.
+- ⛔ Download serial de estação total/GPS, processamento PPP (serviço externo IBGE), Topcon/Trimble proprietários.
+
+### 4. Topografia convencional
+- ✅ Quadro de divisas (`utils/blueprintTerreno.ts`: papel frente/fundos/laterais derivado, `medidaEscrituraMm`, `confrontante`, divergência com tolerância 10 mm, `erroFechamentoMm`, área/perímetro), envelope por recuos, aproveitamento, `conferirLote` (testada/área mínima da zona).
+- ❌ Azimute/rumo e distância por lado (azimute existe só para insolação), nomeação de vértices (P1…Pn / M-P-V), tabela de roteiro perimétrico, **memorial descritivo do imóvel** (os únicos memoriais são o executivo de terraplenagem e o de incorporação, ambos jsPDF hardcoded), planta de situação com malha de coordenadas, restituição por memorial/matrícula (texto → polígono), divisão de áreas, locação de divisas.
+- Reúso: motor docx (`services/docxRenderService.ts` + `docxFieldCatalog.ts` — sem origem `terreno`/`lote`; extensão é aditiva), `document_templates`, `EmitDocumentModal.tsx`.
+
+### 5. Cartografia
+- 🟡 Só `utmParaLatLon` (inversa) própria + `zonaUtmDe`; `IfcMapConversion` sai quando há E/N + CRS informados.
+- ❌ Direta lat/long→UTM, SAD69/Córrego Alegre→SIRGAS2000, **Sistema Geodésico Local (PTL/SGL, NBR 14166 / INCRA)**, convergência meridiana e fator de escala, DMS, monografia de vértice, DXF geográfico em lat/long.
+
+### 6. GeoINCRA / SIGEF
+- ❌ Tudo: vértices M/P/V com código do credenciado, sigma E/N/h e método, tipos de limite NTGIR, confrontantes por segmento (o `confrontante` por divisa existe, mas por lado do lote, não por trecho com tipo de limite), planilha ODS SIGEF, memorial GeoINCRA, planta padrão INCRA, área em SGL, carta de anuência, relatório de vértices.
+- ⛔ Integração com o portal SIGEF (sem API pública; consulta e envio são do credenciado).
+
+### 7. Urbano / Loteamento
+- 🟡 Ancestrais: `SubRegiao` do terreno (0.53.0, `model.ts:2028` — é material/permeabilidade, não lote), `Unidade` (E2.2), vagas, `empreendimento_types` com `motor_category horizontal`, `empreendimento_units` + espelho de vendas ↔ `commercial_properties` (triggers `20270815000007/8`), tabelas de preço, portal do corretor.
+- ❌ Tipo de empreendimento **Loteamento** (a palavra só existe em `investor_opportunities.opportunity_type`), entidades Quadra/Lote/Via/Área pública no kernel, subdivisão automática, numeração e cotagem automáticas, conferência Lei 6.766/79 + lei municipal, memorial e planta individual por lote, tabelas de lotes/quadras/áreas, locação de lotes, campos de lote na unidade (quadra, número, testada, área, confrontantes).
+
+### 8. REURB
+- ❌ Depende de 7 (quadras/lotes), 12 (ortofoto) e 2 (proprietários/edificações). Documentos para cartório/prefeitura = templates docx.
+
+### 9. CAR / GIS
+- 🟡 KML leitura/escrita (curvas, lote), GeoJSON leitura, mapa de declividade (existe).
+- ❌ Shapefile (.shp/.shx/.dbf/.prj) leitura/escrita, KMZ, atributos livres por feição, APP/Reserva Legal como feições, tabela de perímetros/áreas/coordenadas.
+
+### 10. MDT / Volumetria
+- ✅ Grade + marching squares, TIN Bowyer-Watson (não CDT; breaklines por densificação), TIN importada (LandXML/3DFACE), curvas por equidistância/intervalo/número/lista, mestras, estatísticas, hipsometria (8 classes/equidistância/arco-íris), declividade por faixas, **platô plano** (cota única, equilíbrio, corte/aterro, talude por aresta, banqueta, via de serviço, muro por aresta, empolamento/contração), drenagem + pré-dimensionamento, perfil ao longo de linha, malha 3D, walk sobre o relevo, `blueprint_study_terraplenagem`.
+- ❌ Volume entre **duas superfícies quaisquer** (só platô × terreno), platô **inclinado** (greide), volume de região selecionada, método das seções, editar triangulação (trocar aresta/apagar triângulo), exportar MDT (LandXML só entra), mapa de inundação (cota de cheia), DEM raster local (só API remota por pontos).
+
+### 11. Terraplenagem e arruamento
+- ❌ Eixo de projeto com estaqueamento, greide (rampas + curvas verticais), seção tipo, seções transversais por estaca, volumes por áreas médias, nota de serviço simples/composta, exportação de cotas do greide, pontos de locação. Existe só o perfil do terreno natural e da superfície do platô (`perfilAoLongo`, `superficieDeProjeto`).
+
+### 12. Raster / ortofoto / DEM / vetorização
+- 🟡 Planta de fundo PDF/IMAGEM calibrada por 2 pontos ou escala declarada (`utils/blueprintUnderlay.ts`, `blueprint_underlays`), DXF como fundo, desenho sobre o fundo = vetorização (as ferramentas já desenham sobre o underlay).
+- ❌ Ortofoto **georreferenciada** (GeoTIFF/world file) posicionada pela georreferência sem calibração manual, tiles de satélite/OSM como fundo (Leaflet só no Market Intelligence, `OpuraMarketModule.tsx:853`), DEM GeoTIFF float → grade, clip de imagem, KMZ.
+- ⛔ ECW e JP2 (codecs proprietários/complexos).
+
+### Dependências: o que há e o que não há
+`package.json`: three, @react-three/fiber/drei, konva, leaflet 1.9.4, web-ifc, pdfjs-dist, jspdf, xlsx, exceljs, docxtemplater. **Não há**: proj4, shpjs, geotiff, @turf, delaunator/cdt2d, jszip. Toda a geometria é própria.
+
+## Decisões tomadas com o usuário (25/09/2026)
+
+1. **Escopo**: os quatro blocos entram — Loteamento + comercial; Cartografia + documentação do imóvel; Terraplenagem de vias + volumetria; Raster/GIS + GeoINCRA/SIGEF + REURB/CAR. O que fica fora está nomeado no fim.
+2. **Lote = unidade do empreendimento**: tipo `Loteamento` em `empreendimento_types` (`motor_category='horizontal'`, `is_system=true`); **quadra = `empreendimento_towers`**, **lote = `empreendimento_units`** (a unidade exige `tower_id`, a cardinalidade é natural). Reaproveita espelho de vendas, tabela de preços, portal do corretor e `unit_occupancies.role='PROPRIETARIO'` sem código novo nessas telas.
+3. **Cartografia com `proj4`** (dependência nova, ~150 KB) para UTM/SIRGAS2000/WGS84/SAD69/Córrego Alegre; **SGL/PTL (NBR 14166) é código próprio** (proj4 não tem). O `utmParaLatLon` próprio de `blueprintTopografiaImportacao.ts:398` vira caso de teste de equivalência, não é apagado na mesma fase.
+
+## Decisões de arquitetura (minhas, registradas)
+
+- **Payload canônico × tabela lateral** — critério da topografia fase 7 e da memória da escritura: vai no payload o que o usuário **desenha/edita com ferramenta do kernel** (undo, autosave em `blueprint_branches.draft_payload`, ids reatribuídos por `modelFromCanonicalPayload`); fica fora o **dado do mundo** (importado, amostrado, grande).
+  - Dentro (bump + goldens): Quadra/Lote/Via/Área pública (B1); atributos de vértice da divisa — nome, tipo M/P/V, sigma, método (A1/A4).
+  - Fora (tabela lateral): feições de levantamento (A2, tabela **mutável** nova — `blueprint_study_topografia` é imutável por schema), greide/seções/nota de serviço (C2), rasters (A3), emissões documentais.
+  - Derivado nunca é gravado: azimute, rumo, roteiro, área SGL, faixa da via por offset, subdivisão proposta, conferência 6.766.
+- **F0 (geo) não muda o kernel**: `Georreferencia.projetada.crs` continua texto (validar em `validateModel` rejeitaria payloads publicados). Interpretação e validação de EPSG moram em `utils/geo/`, com aviso no painel.
+- **Lote não é `Boundary`**: `medirTerreno`/`anelDoTerreno` (`utils/blueprintTerreno.ts`) assumem UM anel; a gleba continua sendo as `Boundary`. Lote é entidade própria com `pontos`, `quadraId`, `numero`, `testadaIndex`, molde `SubRegiao` (`model.ts:2028`, comandos `AddSubRegiao/SetSubRegiaoProps/MoveSubRegiaoVertex/DeleteSubRegiao`).
+- **Vínculo Planta ↔ Empreendimento pelo `uid`, nunca pelo `id`** (ids são reatribuídos ao carregar): `empreendimento_towers.blueprint_quadra_uid`, `empreendimento_units.blueprint_lote_uid`. Direção do vínculo: `empreendimentos.blueprint_study_id` (espelho de `planta_ai_study_id`, migration `20270209000000`), **não** `blueprint_studies.empreendimento_id`.
+- **Sync sem motor novo**: `services/sync/` (planner/applier/conflitos) é compartilhado por adapter; entra `SyncOrigin='blueprint'` + `blueprintLoteamentoAdapter.ts` (molde `plantaAdapter.ts`) + `blueprintEmpreendimentoSync.ts` (cola, molde `plantaEmpreendimentoSync.ts`). Preço e status **nunca** saem da Planta.
+- **`blueprint_study_urban_context` continua UM por estudo**: a zona e a Lei 6.766 se aplicam à **gleba**; a conferência por lote é derivada. Não criar contexto por lote.
+- **CAD genérico fora**: entram só offset/paralela (via e recuo), cota linear manual, malha de coordenadas na prancha e camada de exibição por feição. Fillet/chamfer/polar/layers de usuário/viewports não entram.
+- **Regras do repo**: todo service novo recebe `organization_id` do estudo (`study.organization_id`, como `useBlueprintTerraplenagem`), arquivo novo fora do `BASELINE` de `orgContextGuard` (REGRA 5); toda tabela nova com policy `is_org_member(organization_id)` sem perna `OR` e toda função com `REVOKE … FROM PUBLIC, anon` na mesma migration (REGRA 7); Edge Function nova com gate em `_shared/auth.ts`; migrations `aplicar_20270925*+` aplicadas por `db query -f`, nunca `db push`; ritual de fase do roadmap unificado (tsc, check-ui, suíte cheia, build, doc, commit, push, `conferir-producao.sh`).
+
+## Plano — três frentes, uma fase por commit
+
+Ordem recomendada de execução (valor primeiro, dependências respeitadas): **B1 → A0 → C1 → B2 → B3 → B4 → A1 → C2 → A2 → A3 → A4 → C3 → A5**. A0 não bloqueia B nem C (mm locais). Cada fase abaixo diz o que muda e como sei que terminou.
+
+### Frente B — Loteamento (Terreno › grupo novo "Loteamento")
+
+**B1 — Quadra, Lote, Via e Área pública no kernel · bump 0.57.0 → 0.58.0**
+- `utils/blueprintKernel/model.ts`: `Quadra { id, uid, nome, pontos }`, `Lote { id, uid, quadraId, numero, pontos, testadaIndex, tipo: 'LOTE'|'ENCRAVADO' }`, `Via { id, uid, nome, eixo: Point[], larguraMm, calcadaMm }`, `AreaPublica { id, uid, tipo: 'VERDE'|'INSTITUCIONAL'|'VIARIO'|'RESERVA', pontos }`; listas em `BlueprintModel`; `find*`. `commands.ts`: `Add/Set*Props/Move*Vertex/Delete*` (molde SubRegiao); `canonical.ts` serializa omitindo listas vazias; `units.ts:279` bump; goldens recapturados com o rito do cabeçalho de `__tests__/blueprintKernelGoldens.test.ts`.
+- `utils/blueprintLoteamento.ts` (puro, novo): `faixaDaVia(eixo, largura)` (offset dos dois lados, cantos por interseção), `medirLote` (área, testada, laterais, fundo pelo mesmo critério de `papeisSugeridos`), `confrontantesDoLote` (vizinhos por aresta compartilhada: lote, via, área pública ou divisa da gleba com o `confrontante` já gravado), `numerarQuadra` (sentido horário a partir da esquina escolhida), `areasDoLoteamento` (tabela: lotes, vias, verde, institucional, % sobre a gleba).
+- `components/blueprint/BlueprintEditor.tsx` (`ABAS_DO_RIBBON`): grupo **Loteamento** na aba Terreno — Quadra, Lote, Via, Área pública, Numerar, Cotar lotes (liga as cotas derivadas por lote em `MenuExibir`). Painel de propriedades por entidade em `PainelDeTarefa` (nome/número/largura/tipo). Canvas desenha faixa da via, hachura por tipo de área pública, número no centróide do lote.
+- `blueprint_objects.object_type` CHECK: `ALTER` no molde da migration da escada (`aplicar_20270919000009`) se o publish gravar essas famílias como objetos (confirmar como `SubRegiao` é publicado antes).
+- Testes: `__tests__/blueprintLoteamento.test.ts` (faixa da via em polilinha com canto, lote de esquina, encravado sem via = aviso, numeração determinística), goldens, `BlueprintEditor.test.tsx` (+ grupo).
+- **Terminou quando**: desenhar quadra + 3 lotes + via, numerar, cotar; Ctrl+Z desfaz o lote inteiro; publicar e reabrir mantém `uid`; DXF sai com camadas `LOTE-QUADRA/LOTE-LOTE/LOTE-VIA/LOTE-AREA`.
+
+**B2 — Subdivisão automática e conferência Lei 6.766/79 · sem bump (derivado)**
+- `utils/blueprintLoteamento.ts`: `subdividirQuadra(quadra, { testadaMinMm, areaMinMm2, profundidadeMm, viasAdjacentes })` → lista de anéis **proposta** (lotes de meio por fatias perpendiculares à testada; esquinas com testada dupla); `conferirLoteamento(model, regras)` → avisos: lote < 125 m² / testada < 5 m (art. 4º II), % áreas públicas abaixo do exigido pela lei municipal (valor da zona, com fallback declarado), lote encravado, lote sem testada em via, faixa não edificável de 15 m em rodovias/dutos (art. 4º III) se houver `Boundary kind='RESTRICAO'`.
+- Regras entram pelo vocabulário da zona já existente (`utils/blueprintZonaUrbanistica.ts`, `blueprint_rule_sets`): campos `lote_area_min`, `lote_testada_min`, `areas_publicas_min_pct`.
+- UI: tarefa "Lotear quadra" (drawer, parâmetros + prévia tracejada + **Aceitar** que vira `applyBatch`); relatório **Conferência do loteamento** no menu Conferência da aba Analisar.
+- **Terminou quando**: quadra retangular 60×30 m com testada 12 m gera 10 lotes de meio em um lote/um Ctrl+Z; a conferência acusa lote de 100 m² e some ao corrigir; teste de determinismo (mesma entrada → mesmo hash).
+
+**B3 — Tipo Loteamento e sync com o Empreendimento · migration, sem bump**
+- Migration `aplicar_20270925000001_loteamento_empreendimento.sql`: seed `Loteamento` em `empreendimento_types` (`is_system`, `organization_id NULL`, `motor_category='horizontal'`); `empreendimentos.blueprint_study_id UUID` (sem FK, molde `planta_ai_study_id`); `empreendimento_towers.blueprint_quadra_uid UUID`, `empreendimento_units.blueprint_lote_uid UUID` + índice parcial único (molde `empr_units_instance_uidx`), `quadra TEXT`, `lote TEXT`, `testada_m NUMERIC`, `confrontantes JSONB`.
+- `services/sync/types.ts`: `SyncOrigin` + `'blueprint'`, `PROVENANCE.blueprint = { towerKey: 'blueprint_quadra_uid', unitKey: 'blueprint_lote_uid' }`, `ORIGIN_LABEL`; campos novos no registry do planner (grupo `estrutura`). `services/sync/blueprintLoteamentoAdapter.ts`: payload publicado → `CanonicalTower` (quadra) / `CanonicalUnit` (lote: name "Lote 12", `typology='LOTE'`, `private_area`, `quadra`, `lote`, `testada_m`, `confrontantes`, `position_type` pela testada; `createOnly` status `DISPONIVEL`, price `null`). `services/blueprintEmpreendimentoSync.ts`: `previewSync`/`syncToEmpreendimento`/`writeBack` (área da gleba) com `buildPlan`/`applyPlan`/`materializeConflicts` + auditoria.
+- `types/empreendimento.ts` + `components/empreendimento/` (aba Sincronização já existe: acrescenta a origem Planta Inteligente; Torres & Unidades mostra "Quadra"/"Lote" quando `tipo='loteamento'`, rótulo por slot da nomenclatura).
+- Planta: aba Colaborar › "Enviar ao empreendimento" (drawer com prévia do plano de sync — molde da tela de sync do Planta AI).
+- **Terminou quando**: estudo com 2 quadras/12 lotes publicado → sync cria 2 torres + 12 unidades com `blueprint_lote_uid`; segundo sync sem mudança = plano vazio; renomear um lote na Planta = 1 update; `commercial_properties` espelhadas pela trigger `20270815000007`; lote aparece no portal do corretor com preço da tabela; `orgContextGuard` e `segurancaMigrations` verdes.
+
+**B4 — Documentação do loteamento: memorial e planta por lote, tabelas, KML, locação · sem bump**
+- `services/docxFieldCatalog.ts`: origens `gleba` e `lote` (aditivo): nome do loteamento, quadra, número, área, testada, lados com medidas e confrontantes, coordenadas dos vértices (UTM e lat/long quando houver georreferência — A0), matrícula/cartório da gleba (`commercial_properties.registration_number/registry_office` ou `empreendimentos.matricula`). `document_templates` de fábrica: "Memorial descritivo de lote", "Memorial de área pública", "Memorial do loteamento" (tabular). Emissão em lote: um docx por lote → GED (`blueprintGedService.publicarNoGed`).
+- `utils/blueprintPranchas.ts`: `TipoDePrancha` + `'LOTE'` e `'LOTEAMENTO'`; `PranchaPlanejada.loteUid`; `blueprintExport.ts`: `desenharLote` (lote em destaque, quadra em cinza, cotas dos lados, norte, malha de coordenadas quando georreferenciado — A1, tabela de vértices) e `desenharLoteamento` (planta geral com números e tabela de áreas). Conjunto de pranchas: "uma prancha por lote" no `InclusaoNoConjunto`.
+- `utils/blueprintTabelas.ts`: famílias `LOTE`/`QUADRA`/`AREA_PUBLICA` com colunas (sementes: "Lotes por quadra", "Áreas do loteamento", "Cadastro urbano" = lote × proprietário via `unit_occupancies` × edificação); xlsx pelo caminho existente (`blueprintPlanilha.ts`).
+- Exportação: KML do loteamento (um `Placemark` por lote, pasta por quadra; exige georreferência), pontos de locação (vértices de lote/quadra em CSV/TXT `P,N,E,Z` e KML de pontos — reaproveita `csvDaGrade`/`kmlDasCurvas` como molde).
+- **Terminou quando**: emitir memorial de 12 lotes gera 12 docx no GED com confrontantes certos (teste de `confrontantesDoLote` contra fixture de quadra com esquina); conjunto A3 com 12 pranchas LOTE + 1 LOTEAMENTO; KML abre no Google Earth no lugar certo (prova com o lote de teste georreferenciado); tabela "Áreas do loteamento" fecha 100 %.
+
+### Frente A — Cartografia, documentação do imóvel, levantamento, raster, GeoINCRA
+
+**A0 — Módulo geodésico `utils/geo/` com proj4 · sem bump**
+- `npm i proj4` (+ `@types/proj4`). `utils/geo/crs.ts`: catálogo fechado de EPSG aceitos (SIRGAS 2000 UTM 17S–25S `31977…31985`, SAD69 UTM `2917x…2918x`, Córrego Alegre, `4674`, `4326`), `lerCrs(texto)` (aceita "EPSG:31983", "SIRGAS 2000 / UTM 23S", "UTM 23S"), `zonaDaLongitude`; `utils/geo/projecao.ts`: `geoParaProjetado`, `projetadoParaGeo`, `transformarDatum`, `convergenciaMeridiana`, `fatorDeEscala`; `utils/geo/sgl.ts`: Sistema Geodésico Local NBR 14166 (origem, elevação, E/N locais ↔ geodésicas; é o que o INCRA usa para área); `utils/geo/formato.ts`: DMS, azimute↔rumo, distância e azimute entre vértices projetados.
+- `blueprintTopografiaImportacao.ts`: `utmParaLatLon` passa a delegar; teste de equivalência (≤ 1 mm) contra a implementação antiga em 20 pontos do Brasil antes de remover.
+- `components/blueprint/PainelTerreno.tsx` (georreferência): campo CRS vira select do catálogo com aviso quando o texto gravado não é reconhecido; mostra E/N derivados de lat/long (rotulados "derivado") e a convergência meridiana; ancoragem: "origem local = vértice X da divisa" (grava só `projetada.lesteM/norteM`, nada de UTM em mm no kernel).
+- Exportação: `gerarDxf` ganha opção **DXF georreferenciado** (coordenadas em E/N metros no CRS) e **DXF em lat/long**; KML e IFC (`IfcMapConversion`) passam a usar o mesmo módulo.
+- Testes: `__tests__/geo*.test.ts` contra pontos oficiais IBGE (RBMC) com SIRGAS e SAD69; ida e volta; fuso errado detectado (E fora de 160–840 km).
+- **Terminou quando**: lote em Belo Horizonte informado em UTM 23S SAD69 abre em KML no lugar certo (< 1 m do SIRGAS de referência); DXF georreferenciado abre no QGIS sobre o OSM no lugar.
+
+**A1 — Documentação do imóvel: vértices, azimutes, roteiro, memorial, malha · bump 0.58.0 → 0.59.0**
+- Kernel: `model.verticesDoTerreno: VerticeDoTerreno[]` `{ uid, ponto, nome, tipo?: 'M'|'P'|'V', sigmaMm?, metodo? }` ancorado por coincidência com as pontas das `Boundary` (molde `Label/labelUid`, `model.ts:739`); comandos `SetVerticeDoTerreno`, `NomearVertices` (P1…Pn ou padrão GeoINCRA em A4) — `SetBoundaryEscritura` (`commands.ts:760`) é o molde. Bump + goldens.
+- `utils/blueprintTerreno.ts`: `roteiroPerimetrico(model, geo)` derivado — vértice, E, N, lat, long, azimute (plano + verdadeiro por convergência), rumo, distância, confrontante; área pela escritura × desenho × SGL (A0). `restituirMemorial(texto)`: parser de memorial convencional ("segue com azimute 45°30'10" e distância 32,50 m até o vértice P2, confrontando com…") → polígono + confrontantes, com relatório de erro de fechamento; entrada pela tarefa "Restituir memorial" (aba Terreno › Lote) e pelo "Importar levantamento" (formato TEXTO_MEMORIAL detectado pelo conteúdo, molde `detectarFormato`).
+- `QuadroDeDivisas.tsx`: colunas azimute/rumo/distância; edição do nome do vértice.
+- Prancha: `TipoDePrancha` `'TOPOGRAFICA'` e `'SITUACAO'`; `desenharMalhaDeCoordenadas` (linhas E/N a cada passo redondo pela escala, rótulos nas margens, norte verdadeiro + convergência), tabela de vértices e roteiro na folha; **cota linear manual** como anotação `COTA_LINEAR` (dois pontos + afastamento) — é a única entidade CAD nova desta fase.
+- Docx: origem `terreno` em `docxFieldCatalog.ts` (roteiro tabular, área, perímetro, matrícula/cartório, responsável técnico e CAU/CREA do carimbo do template de prancha); template de fábrica "Memorial descritivo convencional".
+- **Terminou quando**: lote de 4 lados fechado → roteiro com 4 linhas e azimutes que fecham 360° ± tolerância; memorial docx emitido com o texto no formato convencional; restituir o próprio memorial devolve o polígono com erro de fechamento < 10 mm (ida e volta); prancha TOPOGRAFICA A1 1:500 com malha a cada 50 m.
+
+**A2 — Feições de levantamento (planialtimétrico cadastral) · tabela lateral, sem bump**
+- Hoje `pontosCotados` vive em `useState` (`hooks/useBlueprintTopografia.ts:176`) e só persiste ao gerar versão: recarregar perde a importação. Migration `aplicar_20270925000002_blueprint_levantamento.sql`: `blueprint_study_levantamento` (mutável; `(study_id, organization_id)` FK composta; `pontos JSONB` `{ x, y, cotaM, nome, codigo, descricao }`, `linhas JSONB` `{ codigo, tipo, pontos }`, `hash_pontos`, proveniência); `blueprint_study_topografia.levantamento_id` ON DELETE SET NULL (molde `blueprint_snapshot_topografia.topografia_id`). `hash_entrada` continua sobre `{x,y,cotaM}` — nome/código fora do hash (versões antigas intactas).
+- `utils/blueprintTopografiaImportacao.ts`: preservar `P` e `D` do PNEZD e o `codigo` (hoje descartados); catálogo de códigos de feição (`utils/blueprintFeicoes.ts`: CERCA, MURO, MEIO_FIO, EDIFICACAO, POSTE, ARVORE, CURSO_DAGUA, ESTRADA, LQ, DIVISA…, com símbolo e traço) e leitura de linhas por código sequencial (molde `LQ<n>`) e por camada do DXF.
+- `services/blueprintLevantamentoService.ts` (org do estudo), hook, `PainelTopografia.tsx`: lista editável de pontos (nome, cota, descrição, apagar, duplicados por distância < tolerância e por nome), toggle por código no `MenuExibir` (camada de exibição), símbolo e rótulo no canvas; "Interpolar pontos sobre linha" e "Pontuar polilinha" (gera pontos cotados pela TIN).
+- Exportação de pontos: TXT/CSV `P,N,E,Z,D` (local, UTM com A0, lat/long), KML de pontos, DXF (`TOPO-PONTO` com atributo nome/cota já existe — acrescenta feições por camada), XLSX (caminho de `blueprintPlanilha`).
+- **Terminou quando**: importar CSV de 500 pontos com códigos, recarregar a página e os 500 continuarem; a versão de topografia gerada aponta o `levantamento_id`; cerca aparece como linha própria e não como breakline; exportar e reimportar dá os mesmos nomes.
+
+**A3 — Raster/GIS: GeoTIFF, world file, tiles, Shapefile, KMZ, inundação**
+- `utils/geo/geotiff.ts` (próprio: tags TIFF, `ModelTiepoint/ModelPixelScale/GeoKey` → CRS via A0; compressão nenhuma/LZW/Deflate via `DecompressionStream`; recusa tiled/JPEG com mensagem) e world file (`.tfw/.jgw/.pgw`). Ortofoto → `Underlay` **posicionado pela georreferência** (`calibrar` recebe os dois pontos calculados, sem gesto), gravado em `blueprint_underlays` com `crs` e `bbox`. DEM GeoTIFF float32 → `GradeDeElevacao` como fonte `DEM_IMPORTADO` em `blueprintElevacaoProvedores.ts` (classe `LEVANTAMENTO_IMPORTADO` se resolução ≤ 1 m, senão `PRELIMINAR_REMOTO`; DR-08 continua valendo).
+- Tiles como fundo: Edge Function `tiles-proxy` (gate `_shared/auth.ts`, cache, `User-Agent`, fonte configurável por organização: ESRI World Imagery com atribuição, OSM só em desenvolvimento pela política de uso — licença registrada como pendência de negócio E-12); no editor, "Fundo › Imagem de satélite" monta o mosaico da caixa do lote (zoom pela escala) e o posiciona pela georreferência (reprojeção Web Mercator → CRS por A0, com aviso de distorção). Vetorização = desenhar sobre ele com as ferramentas que já existem.
+- Shapefile `utils/geo/shapefile.ts` (leitura `.shp/.shx/.dbf/.prj` de Point/Polyline/Polygon(Z); escrita idem; `.zip` pelo `pizzip` já presente via docxtemplater — confirmar exposição, senão `fflate`), KMZ (zip do KML). Importar SHP entra no "Importar levantamento" (contorno e feições); exportar SHP do lote, dos lotes (B), das curvas, dos pontos, com atributos.
+- Mapa de inundação: `hipsometriaDaGrade` com cota de cheia informada → mancha + área atingida (toggle em Exibir).
+- **Terminou quando**: ortofoto GeoTIFF do IBGE/prefeitura abre sob o lote sem calibrar, com desvio < 1 pixel nos vértices conhecidos; DEM local gera curvas iguais ao Open-Meteo na mesma gleba ± resolução; SHP exportado abre no QGIS com atributos; `curl` sem token na `tiles-proxy` dá 401.
+
+**A4 — GeoINCRA / SIGEF · bump (atributos de vértice) + emissões**
+- Kernel (sobre A1): `tipo M|P|V`, `codigoCredenciado`, `sigmaE/N/h`, `metodo` (NTGIR 3ª ed: GNSS-PPP, RTK, estação…), `tipoDeLimite` por `Boundary` (cerca, muro, estrada, curso d'água, linha seca…) e `confrontante` com CPF/CNPJ e CCIR/matrícula do vizinho. Nomeação automática no padrão `<credenciado>-M-0001`. Controle de duplicados, vértice sem sigma, cota zero.
+- `utils/geo/sigef.ts`: **planilha ODS SIGEF** (zip XML `content.xml` no layout oficial: identificação, vértices com lat/long em GMS, sigma, método, tipo de limite, confrontante; modalidades por parcela/desmembramento/área encravada) — sem lib de ODS, escrita direta; área em SGL (A0) que é a que o SIGEF confere. Memorial GeoINCRA (docx, origem `terreno` + campos INCRA), carta de anuência por confrontante (docx), relatório analítico de vértices (tabela), **planta padrão INCRA** (`TipoDePrancha 'INCRA'`: malha, tabela de vértices, tipos de limite, carimbo com credenciado/ART).
+- Leitura do retorno SIGEF (CSV de vértices certificados) para conferir contra o desenho (relatório de diferenças E/N).
+- ⛔ Sem integração com o portal SIGEF (não há API; envio é do credenciado).
+- **Terminou quando**: ODS gerada abre no LibreOffice com o layout da planilha oficial e é aceita pelo validador do SIGEF em uma parcela de teste (prova manual pelo usuário/credenciado, registrada); memorial GeoINCRA lista os vértices em GMS com 3 casas; carta de anuência por confrontante.
+
+**A5 — CAR e REURB: documentos e atributos · sem bump**
+- CAR: feições `AREA_IMOVEL`, `APP`, `RESERVA_LEGAL`, `VEGETACAO_NATIVA`, `AREA_CONSOLIDADA`, `SERVIDAO`, `HIDROGRAFIA` como tipos de `AreaPublica`/feição (B1/A2) com atributos exigidos pelo SICAR; exportação SHP (A3) e KML por tema; tabela de perímetros/áreas/coordenadas; mapa de declividade (existe) e apoio à Reserva Legal (% da área do imóvel por bioma informado).
+- REURB (Lei 13.465/2017): sobre B (quadras/lotes vetorizados sobre a ortofoto de A3) + `unit_occupancies` (proprietário/ocupante) + edificações por lote (`empreendimento_unit_characteristics` já existe: área construída, uso, padrão); templates docx de fábrica: memorial por lote REURB, planta individual (B4), listagem de ocupantes para cartório e prefeitura; importação/exportação da base de ocupantes em xlsx pelo `occupancyImportService.ts` que já existe.
+- **Terminou quando**: gleba com APP e RL exporta 3 SHP com atributos; um núcleo REURB de 20 lotes gera 20 memoriais + 20 pranchas + listagem de ocupantes.
+
+### Frente C — Terraplenagem de vias e volumetria
+
+**C1 — Platô inclinado e volume entre duas superfícies · sem bump (aquecimento, sem dependência)**
+- `utils/blueprintTopografiaAnalises.ts`: `terraplenagemComTalude` aceita `plato: { cotaM } | { plano: { cotaM, declividadeLongPct, declividadeTransvPct, azimuteDeg } }`; `volumeEntreSuperficies(gradeA, gradeB, anel?)` (corte/aterro/líquido por célula, com região opcional); `areaDeSuperficie(grade, anel)`. Persistência: campos novos em `blueprint_study_terraplenagem` (migration aditiva). Painel: modo "Platô inclinado" e relatório "Volume entre versões" (escolhe duas versões de topografia — antes/depois do serviço = **medição de terraplenagem executada**).
+- **Terminou quando**: platô inclinado 2 % sobre terreno plano dá corte = aterro no eixo de equilíbrio (teste analítico); volume entre versão A e a mesma versão = 0; entre A e A+1 m = área × 1 m ± 0,1 %.
+
+**C2 — Eixo, estaqueamento, greide, seções e nota de serviço · tabela lateral**
+- Eixo como polilinha própria (não depende da Via de B1): ferramenta "Eixo de projeto" no grupo Topografia; `utils/blueprintVias.ts` (puro): `estaquear(eixo, passoM=20)` (estacas 0+000, com estacas fracionárias nos vértices), `perfilDoEixo` (reusa `perfilAoLongo`), `Greide { pontos: {estaca, cotaM}[], curvasVerticais: {estaca, comprimentoM}[] }` com parábola simples, rampa máx por classe de via (aviso), `SecaoTipo { pistaMm, calcadaMm, sarjeta, taludeCorte, taludeAterro }`, `secoesTransversais(eixo, estacas, secaoTipo, greide, grade)` (terreno × projeto por estaca, offsets), `volumesPorAreasMedias` (corte/aterro por trecho, acumulado, com empolamento/contração já existentes), `notaDeServico` (simples: estaca, cota terreno, cota projeto, corte/aterro no eixo; composta: + offsets e cotas de bordo/pé/crista).
+- Migration `aplicar_20270925000003_blueprint_vias.sql`: `blueprint_study_vias` (eixo por `uid` quando for Via do kernel, senão polilinha própria; greide, seção tipo, passo; FK à versão de topografia; org do estudo).
+- UI: drawer "Vias e greide" (tabela de estacas com cota editável do greide, gráfico do perfil terreno × greide no `svgDoPerfil` estendido, seção por estaca), relatório Nota de serviço (xlsx/pdf), exportação de cotas do greide e pontos de locação (estaca, offset, E/N/Z) em CSV/KML.
+- **Terminou quando**: eixo reto de 200 m em rampa de 1 % sobre terreno plano dá nota de serviço com 11 estacas e volumes que fecham com a fórmula das áreas médias (teste analítico); alterar uma cota do greide recalcula tudo; exportação de locação reimporta como pontos (A2).
+
+**C3 — Via do loteamento como eixo e LandXML de saída · depende de B1 e C2**
+- `blueprint_study_vias.via_uid` liga ao `Via` do kernel: eixo e largura vêm do desenho; seção tipo padrão da via; conferência "todas as vias com greide" no relatório do loteamento (B2).
+- `utils/blueprintTopografiaExport.ts`: `landXmlDaTopografia` (superfície TIN + `Alignments` do eixo + `Profile` do greide + `Parcels` dos lotes) — o leitor LandXML já existe, o teste é ida e volta.
+- **Terminou quando**: loteamento com 3 vias exporta LandXML que reimporta a mesma TIN e os mesmos lotes; nota de serviço por via.
+
+## Fora do plano (registrado, não replicar sem pedido)
+
+- CAD genérico: layers de usuário, estilos nomeados de cota/texto, fillet/chamfer, trim genérico, escalar geometria, polar tracking, igualar propriedades, laço poligonal/fence, viewports/layouts múltiplos, círculo/elipse livres, imagem como entidade.
+- Aquisição de dados: download serial de estação total/GPS, PPP (IBGE-PPP é serviço externo), formatos proprietários Topcon/Trimble, GPX (entra só se pedido — o CSV cobre).
+- Raster: ECW, JP2, GeoTIFF tiled/JPEG (recusa com mensagem).
+- Integração com o portal SIGEF, consulta CREA/CAU, SICAR (envio é do responsável).
+- DWG de saída (limitação declarada do `dwg-converter`).
+- Suporte/treinamento (§35 do pedido) — não é software.
+- Licenças de tiles/geocoder (E-12) — decisão de negócio, registrada como pendência.
+
+## Verificação (por fase, o ritual do roadmap unificado)
+
+1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx tocados>` · `bash scripts/check-xss-sinks.sh` · `npx vitest run` (suíte cheia) · `npm run build`.
+2. Fase com bump: goldens provados com a string antiga antes do bump, recaptura, motivo no cabeçalho de `__tests__/blueprintKernelGoldens.test.ts`.
+3. Migration: `npx vitest run __tests__/segurancaMigrations.test.ts` e `migrationsPrefixo.test.ts`; aplicar com `npx supabase db query --linked -f <arquivo>`; `bash scripts/check-rls-postura.sh`; grants por grantee em `information_schema.role_table_grants` (a tabela nova nasce com ALL para anon/authenticated — `REVOKE … FROM PUBLIC, anon, authenticated` explícito).
+4. Edge Function nova: `curl -s -o /dev/null -w '%{http_code}' -X POST "$URL/functions/v1/<fn>" -d '{}'` tem de dar 401.
+5. Prova no app real (skill `rodar-app`, escritas bloqueadas, Desfazer ao fim) do gesto principal da fase; provas geográficas com um lote de referência conhecido (KML no Google Earth / DXF e SHP no QGIS sobre OSM).
+6. Doc da fase em `docs/planos/2026-09-25-planta-inteligente-topografia-loteamento-geo.md` (este plano, movido para lá no primeiro commit, com o pedido original literal); commit; push; `bash scripts/conferir-producao.sh` + CI.

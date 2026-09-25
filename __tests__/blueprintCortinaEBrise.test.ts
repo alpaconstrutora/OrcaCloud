@@ -59,7 +59,7 @@ describe('cortina de vidro e brise (P2.20)', () => {
     const { m } = casa();
     let r = applyCommand(m, { type: 'SetWallCortina', wallId: m.walls[0].id, cortina: { moduloMm: 1500, montanteMm: 80, painel: 'POLICARBONATO' } }).model;
     r = applyCommand(r, { type: 'SetWallBrise', wallId: m.walls[2].id, brise: { orientacao: 'VERTICAL', laminaMm: 100, passoMm: 250, afastamentoMm: 200, lado: 'ESQUERDA' } }).model;
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.57.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.58.0');
     const payload = parseCanonicalPayload(canonicalPayload(r));
     expect(payload.walls.filter((w) => w.cortina)).toHaveLength(1);
     expect(payload.walls.filter((w) => w.brise)).toHaveLength(1);

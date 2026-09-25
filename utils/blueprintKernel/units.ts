@@ -276,7 +276,21 @@
  * hash e a versão sobe. As duas chaves só são emitidas quando declaradas; os
  * goldens (só paredes) mudam apenas pela string da versão.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.57.0';
+/**
+ * ─── 0.57.0 → 0.58.0 (25/09/2026) — O LOTEAMENTO ──────────────────────
+ *
+ * Quatro famílias novas para o parcelamento do solo (Lei 6.766/79): `quadras`,
+ * `lotes`, `vias` (pelo EIXO, com a caixa e o passeio) e `areasPublicas`. São
+ * desenho — têm ferramenta, vértice arrastável e desfazer —, então entram no
+ * payload canônico e no hash. A gleba continua sendo o anel de `Boundary`: lote
+ * não é divisa, porque `medirTerreno` assume UM anel.
+ *
+ * O lote aponta a quadra por ÍNDICE na ordem canônica, nunca por id — id é
+ * reatribuído ao recarregar o payload. As quatro listas são OMITIDAS quando
+ * vazias, então desenho sem loteamento não ganha chave nova e só muda de hash
+ * pela string da versão. Isso foi provado antes do bump.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.58.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

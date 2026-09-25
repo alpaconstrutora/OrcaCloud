@@ -2059,6 +2059,132 @@ export interface TrechoDeRodape {
   /** A etiqueta do ambiente de origem (idempotência do gerador). */
   spaceUid?: ElementUid | null;
 }
+
+/**
+ * LOTEAMENTO (0.58.0) - QUADRA, LOTE, VIA e AREA PUBLICA.
+ *
+ * O parcelamento do solo (Lei 6.766/79) desenha sobre a GLEBA - que continua
+ * sendo o anel de `Boundary`, com o quadro de divisas, a escritura e os
+ * confrontantes. Lote NAO e `Boundary`: `medirTerreno`/`anelDoTerreno` assumem
+ * UM anel de divisas, e N lotes ali dentro quebrariam quadro, envelope e erro
+ * de fechamento. Por isso sao familias proprias, no molde da `SubRegiao`: nao
+ * participam do arranjo planar (sao chao, nao divisoria) e nao sao construcao.
+ *
+ * O que e DERIVADO e nunca gravado: a faixa da via (offset do eixo), a area e
+ * a testada do lote, os confrontantes por aresta, a conferencia da Lei 6.766.
+ * Ver `utils/blueprintLoteamento.ts`.
+ */
+export const MAX_NOME_DE_QUADRA = 30;
+export const MAX_NUMERO_DE_LOTE = 30;
+export const MAX_NOME_DE_VIA = 60;
+export const MAX_NOME_DE_AREA_PUBLICA = 60;
+/** Caixa da via: de alinhamento a alinhamento, passeio incluido. */
+export const MAX_LARGURA_DE_VIA_MM = 100_000;
+
+export interface Quadra {
+  id: ObjectId;
+  uid: ElementUid;
+  parametros?: Parametros;
+  levelId: ObjectId;
+  /** "A", "01", "Quadra 3" - o rotulo que vai ao memorial. */
+  nome: string;
+  /** Contorno em planta, mm inteiros, >= 3 vertices. */
+  pontos: Point[];
+}
+
+/**
+ * ENCRAVADO e o lote sem frente para via - existe no desenho (o projeto pode
+ * estar em curso), mas a conferencia o acusa. REMANESCENTE e a sobra da gleba
+ * que nao vira lote vendavel.
+ */
+export const TIPOS_DE_LOTE = ['LOTE', 'ENCRAVADO', 'REMANESCENTE'] as const;
+export type TipoDeLote = (typeof TIPOS_DE_LOTE)[number];
+
+export interface Lote {
+  id: ObjectId;
+  uid: ElementUid;
+  parametros?: Parametros;
+  levelId: ObjectId;
+  /** A quadra a que pertence; null = lote solto (gleba sem quadras). */
+  quadraId: ObjectId | null;
+  /** "12", "12-A" - unico dentro da quadra, conferido fora do kernel. */
+  numero: string;
+  /** Contorno em planta, mm inteiros, >= 3 vertices. */
+  pontos: Point[];
+  /**
+   * Indice da aresta que e a TESTADA (frente), na ordem de `pontos`: a aresta
+   * i vai de `pontos[i]` a `pontos[(i + 1) % n]`. null = derivar pela via mais
+   * proxima, como `papeisSugeridos` faz para a divisa.
+   */
+  testadaIndex: number | null;
+  tipo: TipoDeLote;
+}
+
+export interface Via {
+  id: ObjectId;
+  uid: ElementUid;
+  parametros?: Parametros;
+  levelId: ObjectId;
+  /** "Rua 3", "Avenida Central". */
+  nome: string;
+  /** EIXO da via, polilinha aberta, >= 2 vertices, mm inteiros. */
+  eixo: Point[];
+  /** Caixa da via (alinhamento a alinhamento), mm. */
+  larguraMm: number;
+  /** Passeio de CADA lado, dentro da caixa; 0 = sem calcada desenhada. */
+  calcadaMm: number;
+}
+
+export const TIPOS_DE_AREA_PUBLICA = ['VERDE', 'INSTITUCIONAL', 'VIARIO', 'RESERVA'] as const;
+export type TipoDeAreaPublica = (typeof TIPOS_DE_AREA_PUBLICA)[number];
+export interface FichaDaAreaPublica {
+  rotulo: string;
+  /** Cor de preenchimento na planta (`#rrggbb`). */
+  cor: string;
+}
+export const FICHA_DA_AREA_PUBLICA: Record<TipoDeAreaPublica, FichaDaAreaPublica> = {
+  VERDE: { rotulo: 'Area verde / lazer', cor: '#bbf7d0' },
+  INSTITUCIONAL: { rotulo: 'Area institucional', cor: '#bfdbfe' },
+  VIARIO: { rotulo: 'Sistema viario', cor: '#e5e7eb' },
+  RESERVA: { rotulo: 'Reserva / nao edificavel', cor: '#fde68a' },
+};
+
+export interface AreaPublica {
+  id: ObjectId;
+  uid: ElementUid;
+  parametros?: Parametros;
+  levelId: ObjectId;
+  tipo: TipoDeAreaPublica;
+  /** "Praca da entrada"; null = o rotulo do tipo. */
+  nome: string | null;
+  /** Contorno em planta, mm inteiros, >= 3 vertices. */
+  pontos: Point[];
+}
+
+export function findQuadra(model: BlueprintModel, id: ObjectId): Quadra {
+  const q = (model.quadras ?? []).find((x) => x.id === id);
+  if (!q) throw new KernelError('BLOCK_NOT_FOUND', `Quadra inexistente: ${id}`);
+  return q;
+}
+
+export function findLote(model: BlueprintModel, id: ObjectId): Lote {
+  const l = (model.lotes ?? []).find((x) => x.id === id);
+  if (!l) throw new KernelError('PLOT_NOT_FOUND', `Lote inexistente: ${id}`);
+  return l;
+}
+
+export function findVia(model: BlueprintModel, id: ObjectId): Via {
+  const v = (model.vias ?? []).find((x) => x.id === id);
+  if (!v) throw new KernelError('STREET_NOT_FOUND', `Via inexistente: ${id}`);
+  return v;
+}
+
+export function findAreaPublica(model: BlueprintModel, id: ObjectId): AreaPublica {
+  const a = (model.areasPublicas ?? []).find((x) => x.id === id);
+  if (!a) throw new KernelError('PUBLIC_AREA_NOT_FOUND', `Area publica inexistente: ${id}`);
+  return a;
+}
+
 export function findEtapa(model: BlueprintModel, id: ObjectId): Etapa {
   const e = (model.etapas ?? []).find((x) => x.id === id);
   if (!e) throw new KernelError('STAGE_NOT_FOUND', `Etapa inexistente: ${id}`);
@@ -2699,6 +2825,14 @@ export interface BlueprintModel {
   rodapes: TrechoDeRodape[];
   /** ETAPAS DE OBRA (0.57.0). */
   etapas: Etapa[];
+  /** LOTEAMENTO (0.58.0) - quadras do parcelamento. Ver `Quadra`. */
+  quadras: Quadra[];
+  /** LOTEAMENTO (0.58.0) - lotes. Ver `Lote`. */
+  lotes: Lote[];
+  /** LOTEAMENTO (0.58.0) - vias pelo EIXO; a faixa e derivada. Ver `Via`. */
+  vias: Via[];
+  /** LOTEAMENTO (0.58.0) - areas publicas e nao edificaveis. Ver `AreaPublica`. */
+  areasPublicas: AreaPublica[];
   /**
    * Escadas e rampas. Como a estrutura e o telhado, NÃO participam do arranjo
    * planar: uma escada dentro da sala não parte o ambiente. O que ela faz ao
@@ -2820,6 +2954,10 @@ export function emptyModel(): BlueprintModel {
     subRegioes: [],
     rodapes: [],
     etapas: [],
+    quadras: [],
+    lotes: [],
+    vias: [],
+    areasPublicas: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -2894,6 +3032,10 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     subRegioes: (model.subRegioes ?? []).map((s) => ({ ...s, pontos: s.pontos.map((p) => ({ ...p })), ...(s.parametros ? { parametros: { ...s.parametros } } : {}) })),
     rodapes: (model.rodapes ?? []).map((r) => ({ ...r, pontos: r.pontos.map((p) => ({ ...p })), ...(r.parametros ? { parametros: { ...r.parametros } } : {}) })),
     etapas: (model.etapas ?? []).map((e) => ({ ...e })),
+    quadras: (model.quadras ?? []).map((q) => ({ ...q, pontos: q.pontos.map((p) => ({ ...p })), ...(q.parametros ? { parametros: { ...q.parametros } } : {}) })),
+    lotes: (model.lotes ?? []).map((l) => ({ ...l, pontos: l.pontos.map((p) => ({ ...p })), ...(l.parametros ? { parametros: { ...l.parametros } } : {}) })),
+    vias: (model.vias ?? []).map((v) => ({ ...v, eixo: v.eixo.map((p) => ({ ...p })), ...(v.parametros ? { parametros: { ...v.parametros } } : {}) })),
+    areasPublicas: (model.areasPublicas ?? []).map((a) => ({ ...a, pontos: a.pontos.map((p) => ({ ...p })), ...(a.parametros ? { parametros: { ...a.parametros } } : {}) })),
     grupos: (model.grupos ?? []).map((g) => ({
       ...g,
       pivo: { ...g.pivo },
@@ -4044,6 +4186,10 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Sub-região', model.subRegioes ?? []],
     ['Trecho de rodapé', model.rodapes ?? []],
     ['Etapa', model.etapas ?? []],
+    ['Quadra', model.quadras ?? []],
+    ['Lote', model.lotes ?? []],
+    ['Via', model.vias ?? []],
+    ['Area publica', model.areasPublicas ?? []],
     ['Trecho', model.trechos ?? []],
     ['Terminal', model.terminais ?? []],
     ['Quadro', model.quadros ?? []],
@@ -4690,6 +4836,52 @@ export function assertModelInvariants(model: BlueprintModel): void {
       assertIntegerMm(p.y, `${s.id}.pontos[${i}].y`);
     });
     if (s.nome != null && (typeof s.nome !== 'string' || s.nome.length > MAX_NOME_DE_SUB_REGIAO)) throw new KernelError('BAD_SUBREGION', `Sub-região ${s.id}: nome maior que ${MAX_NOME_DE_SUB_REGIAO} caracteres`);
+  }
+  // LOTEAMENTO (0.58.0): pavimento vivo, contorno inteiro, nome/numero curtos,
+  // quadra existente, testada dentro da lista de arestas, via com eixo aberto.
+  for (const q of model.quadras ?? []) {
+    if (!model.levels.some((l) => l.id === q.levelId)) throw new KernelError('BAD_BLOCK', `Quadra ${q.id}: pavimento inexistente`);
+    if (!Array.isArray(q.pontos) || q.pontos.length < 3) throw new KernelError('BAD_BLOCK', `Quadra ${q.id}: o contorno precisa de pelo menos 3 vertices`);
+    q.pontos.forEach((p, i) => {
+      assertIntegerMm(p.x, `${q.id}.pontos[${i}].x`);
+      assertIntegerMm(p.y, `${q.id}.pontos[${i}].y`);
+    });
+    if (typeof q.nome !== 'string' || q.nome.trim().length === 0 || q.nome.length > MAX_NOME_DE_QUADRA) throw new KernelError('BAD_BLOCK', `Quadra ${q.id}: nome vazio ou maior que ${MAX_NOME_DE_QUADRA} caracteres`);
+  }
+  for (const l of model.lotes ?? []) {
+    if (!model.levels.some((x) => x.id === l.levelId)) throw new KernelError('BAD_PLOT', `Lote ${l.id}: pavimento inexistente`);
+    if (l.quadraId != null && !(model.quadras ?? []).some((q) => q.id === l.quadraId)) throw new KernelError('BAD_PLOT', `Lote ${l.id}: quadra inexistente ${l.quadraId}`);
+    if (!TIPOS_DE_LOTE.includes(l.tipo)) throw new KernelError('BAD_PLOT', `Lote ${l.id}: tipo desconhecido ${String(l.tipo)}`);
+    if (!Array.isArray(l.pontos) || l.pontos.length < 3) throw new KernelError('BAD_PLOT', `Lote ${l.id}: o contorno precisa de pelo menos 3 vertices`);
+    l.pontos.forEach((p, i) => {
+      assertIntegerMm(p.x, `${l.id}.pontos[${i}].x`);
+      assertIntegerMm(p.y, `${l.id}.pontos[${i}].y`);
+    });
+    if (typeof l.numero !== 'string' || l.numero.trim().length === 0 || l.numero.length > MAX_NUMERO_DE_LOTE) throw new KernelError('BAD_PLOT', `Lote ${l.id}: numero vazio ou maior que ${MAX_NUMERO_DE_LOTE} caracteres`);
+    if (l.testadaIndex != null && (!Number.isInteger(l.testadaIndex) || l.testadaIndex < 0 || l.testadaIndex >= l.pontos.length)) {
+      throw new KernelError('BAD_PLOT', `Lote ${l.id}: testada ${String(l.testadaIndex)} fora das ${l.pontos.length} arestas`);
+    }
+  }
+  for (const v of model.vias ?? []) {
+    if (!model.levels.some((l) => l.id === v.levelId)) throw new KernelError('BAD_STREET', `Via ${v.id}: pavimento inexistente`);
+    if (!Array.isArray(v.eixo) || v.eixo.length < 2) throw new KernelError('BAD_STREET', `Via ${v.id}: o eixo precisa de pelo menos 2 vertices`);
+    v.eixo.forEach((p, i) => {
+      assertIntegerMm(p.x, `${v.id}.eixo[${i}].x`);
+      assertIntegerMm(p.y, `${v.id}.eixo[${i}].y`);
+    });
+    if (!Number.isInteger(v.larguraMm) || v.larguraMm < 1 || v.larguraMm > MAX_LARGURA_DE_VIA_MM) throw new KernelError('BAD_STREET', `Via ${v.id}: largura tem de ser inteira entre 1 e ${MAX_LARGURA_DE_VIA_MM} mm`);
+    if (!Number.isInteger(v.calcadaMm) || v.calcadaMm < 0 || v.calcadaMm * 2 >= v.larguraMm) throw new KernelError('BAD_STREET', `Via ${v.id}: as duas calcadas tem de caber na caixa de ${v.larguraMm} mm`);
+    if (typeof v.nome !== 'string' || v.nome.trim().length === 0 || v.nome.length > MAX_NOME_DE_VIA) throw new KernelError('BAD_STREET', `Via ${v.id}: nome vazio ou maior que ${MAX_NOME_DE_VIA} caracteres`);
+  }
+  for (const a of model.areasPublicas ?? []) {
+    if (!model.levels.some((l) => l.id === a.levelId)) throw new KernelError('BAD_PUBLIC_AREA', `Area publica ${a.id}: pavimento inexistente`);
+    if (!TIPOS_DE_AREA_PUBLICA.includes(a.tipo)) throw new KernelError('BAD_PUBLIC_AREA', `Area publica ${a.id}: tipo desconhecido ${String(a.tipo)}`);
+    if (!Array.isArray(a.pontos) || a.pontos.length < 3) throw new KernelError('BAD_PUBLIC_AREA', `Area publica ${a.id}: o contorno precisa de pelo menos 3 vertices`);
+    a.pontos.forEach((p, i) => {
+      assertIntegerMm(p.x, `${a.id}.pontos[${i}].x`);
+      assertIntegerMm(p.y, `${a.id}.pontos[${i}].y`);
+    });
+    if (a.nome != null && (typeof a.nome !== 'string' || a.nome.length > MAX_NOME_DE_AREA_PUBLICA)) throw new KernelError('BAD_PUBLIC_AREA', `Area publica ${a.id}: nome maior que ${MAX_NOME_DE_AREA_PUBLICA} caracteres`);
   }
   // VISTA DEPENDENTE (0.51.0): pavimento vivo, nome, recorte inteiro e não degenerado, escala inteira.
   for (const v of model.vistasDependentes ?? []) {

@@ -40,6 +40,19 @@ import {
   MATERIAIS_DE_SUB_REGIAO,
   MAX_NOME_DE_SUB_REGIAO,
   type MaterialDeSubRegiao,
+  findQuadra,
+  findLote,
+  findVia,
+  findAreaPublica,
+  TIPOS_DE_LOTE,
+  TIPOS_DE_AREA_PUBLICA,
+  MAX_NOME_DE_QUADRA,
+  MAX_NUMERO_DE_LOTE,
+  MAX_NOME_DE_VIA,
+  MAX_NOME_DE_AREA_PUBLICA,
+  MAX_LARGURA_DE_VIA_MM,
+  type TipoDeLote,
+  type TipoDeAreaPublica,
   CONJUNTOS_DE_COMPONENTES,
   ehConjunto,
   filhosDoConjunto,
@@ -524,6 +537,23 @@ export type Command =
   | { type: 'SetSubRegiaoProps'; subRegiaoId: ObjectId; material?: MaterialDeSubRegiao; nome?: string | null; pontos?: Point[] }
   | { type: 'MoveSubRegiaoVertex'; subRegiaoId: ObjectId; index: number; to: Point }
   | { type: 'DeleteSubRegiao'; subRegiaoId: ObjectId }
+  // LOTEAMENTO (0.58.0)
+  | { type: 'AddQuadra'; levelId: ObjectId; nome: string; pontos: Point[] }
+  | { type: 'SetQuadraProps'; quadraId: ObjectId; nome?: string; pontos?: Point[] }
+  | { type: 'MoveQuadraVertex'; quadraId: ObjectId; index: number; to: Point }
+  | { type: 'DeleteQuadra'; quadraId: ObjectId }
+  | { type: 'AddLote'; levelId: ObjectId; quadraId?: ObjectId | null; numero: string; pontos: Point[]; testadaIndex?: number | null; tipo?: TipoDeLote }
+  | { type: 'SetLoteProps'; loteId: ObjectId; quadraId?: ObjectId | null; numero?: string; pontos?: Point[]; testadaIndex?: number | null; tipo?: TipoDeLote }
+  | { type: 'MoveLoteVertex'; loteId: ObjectId; index: number; to: Point }
+  | { type: 'DeleteLote'; loteId: ObjectId }
+  | { type: 'AddVia'; levelId: ObjectId; nome: string; eixo: Point[]; larguraMm: number; calcadaMm?: number }
+  | { type: 'SetViaProps'; viaId: ObjectId; nome?: string; eixo?: Point[]; larguraMm?: number; calcadaMm?: number }
+  | { type: 'MoveViaVertex'; viaId: ObjectId; index: number; to: Point }
+  | { type: 'DeleteVia'; viaId: ObjectId }
+  | { type: 'AddAreaPublica'; levelId: ObjectId; tipo: TipoDeAreaPublica; pontos: Point[]; nome?: string | null }
+  | { type: 'SetAreaPublicaProps'; areaId: ObjectId; tipo?: TipoDeAreaPublica; nome?: string | null; pontos?: Point[] }
+  | { type: 'MoveAreaPublicaVertex'; areaId: ObjectId; index: number; to: Point }
+  | { type: 'DeleteAreaPublica'; areaId: ObjectId }
   | { type: 'AddVistaDependente'; levelId: ObjectId; nome: string; recorte: { minX: number; minY: number; maxX: number; maxY: number }; denominador?: number }
   | { type: 'SetVistaDependenteProps'; vistaId: ObjectId; nome?: string; recorte?: { minX: number; minY: number; maxX: number; maxY: number }; denominador?: number }
   | { type: 'DeleteVistaDependente'; vistaId: ObjectId }
@@ -2504,6 +2534,236 @@ function aplicarSemHash(
       const s = findSubRegiao(next, command.subRegiaoId);
       next.subRegioes = (next.subRegioes ?? []).filter((x) => x.id !== s.id);
       diff.deleted.push(s.id);
+      break;
+    }
+
+    // ── Loteamento (0.58.0): quadra, lote, via e area publica ─────────
+
+    case 'AddQuadra': {
+      findLevel(next, command.levelId);
+      const nome = command.nome?.trim().slice(0, MAX_NOME_DE_QUADRA) ?? '';
+      if (!nome) throw new KernelError('BAD_BLOCK', 'A quadra precisa de nome');
+      if (command.pontos.length < 3) throw new KernelError('BAD_BLOCK', `A quadra precisa de pelo menos 3 vertices; recebeu ${command.pontos.length}`);
+      const id = nextId(next, 'qdr');
+      next.quadras = [
+        ...(next.quadras ?? []),
+        { id, uid: novoUid(), levelId: command.levelId, nome, pontos: command.pontos.map(paraPontoMm) },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetQuadraProps': {
+      const q = findQuadra(next, command.quadraId);
+      if (command.nome !== undefined) {
+        const nome = command.nome?.trim().slice(0, MAX_NOME_DE_QUADRA) ?? '';
+        if (!nome) throw new KernelError('BAD_BLOCK', 'A quadra precisa de nome');
+        q.nome = nome;
+      }
+      if (command.pontos !== undefined) {
+        if (command.pontos.length < 3) throw new KernelError('BAD_BLOCK', 'A quadra precisa de pelo menos 3 vertices');
+        q.pontos = command.pontos.map(paraPontoMm);
+      }
+      diff.updated.push(q.id);
+      break;
+    }
+
+    case 'MoveQuadraVertex': {
+      const q = findQuadra(next, command.quadraId);
+      if (command.index < 0 || command.index >= q.pontos.length) throw new KernelError('BAD_BLOCK', `Vertice ${command.index} nao existe em ${q.id}`);
+      q.pontos[command.index] = { x: assertIntegerMm(roundToMm(command.to.x), 'to.x'), y: assertIntegerMm(roundToMm(command.to.y), 'to.y') };
+      diff.updated.push(q.id);
+      break;
+    }
+
+    /**
+     * Apagar a quadra NAO apaga os lotes: o desenho do lote e trabalho, e
+     * perde-lo por um clique na quadra seria destruicao silenciosa. Os lotes
+     * ficam soltos (`quadraId = null`) e a conferencia os acusa.
+     */
+    case 'DeleteQuadra': {
+      const q = findQuadra(next, command.quadraId);
+      next.quadras = (next.quadras ?? []).filter((x) => x.id !== q.id);
+      for (const l of next.lotes ?? []) {
+        if (l.quadraId === q.id) {
+          l.quadraId = null;
+          diff.updated.push(l.id);
+        }
+      }
+      diff.deleted.push(q.id);
+      break;
+    }
+
+    case 'AddLote': {
+      findLevel(next, command.levelId);
+      if (command.quadraId != null) findQuadra(next, command.quadraId);
+      const numero = command.numero?.trim().slice(0, MAX_NUMERO_DE_LOTE) ?? '';
+      if (!numero) throw new KernelError('BAD_PLOT', 'O lote precisa de numero');
+      if (command.pontos.length < 3) throw new KernelError('BAD_PLOT', `O lote precisa de pelo menos 3 vertices; recebeu ${command.pontos.length}`);
+      const tipo = command.tipo ?? 'LOTE';
+      if (!TIPOS_DE_LOTE.includes(tipo)) throw new KernelError('BAD_PLOT', `Tipo de lote desconhecido: ${String(tipo)}`);
+      const pontos = command.pontos.map(paraPontoMm);
+      const testadaIndex = command.testadaIndex ?? null;
+      if (testadaIndex != null && (!Number.isInteger(testadaIndex) || testadaIndex < 0 || testadaIndex >= pontos.length)) {
+        throw new KernelError('BAD_PLOT', `Testada ${String(testadaIndex)} fora das ${pontos.length} arestas`);
+      }
+      const id = nextId(next, 'lot');
+      next.lotes = [
+        ...(next.lotes ?? []),
+        { id, uid: novoUid(), levelId: command.levelId, quadraId: command.quadraId ?? null, numero, pontos, testadaIndex, tipo },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetLoteProps': {
+      const l = findLote(next, command.loteId);
+      if (command.quadraId !== undefined) {
+        if (command.quadraId != null) findQuadra(next, command.quadraId);
+        l.quadraId = command.quadraId ?? null;
+      }
+      if (command.numero !== undefined) {
+        const numero = command.numero?.trim().slice(0, MAX_NUMERO_DE_LOTE) ?? '';
+        if (!numero) throw new KernelError('BAD_PLOT', 'O lote precisa de numero');
+        l.numero = numero;
+      }
+      if (command.tipo !== undefined) {
+        if (!TIPOS_DE_LOTE.includes(command.tipo)) throw new KernelError('BAD_PLOT', `Tipo de lote desconhecido: ${String(command.tipo)}`);
+        l.tipo = command.tipo;
+      }
+      if (command.pontos !== undefined) {
+        if (command.pontos.length < 3) throw new KernelError('BAD_PLOT', 'O lote precisa de pelo menos 3 vertices');
+        l.pontos = command.pontos.map(paraPontoMm);
+        // Menos vertices do que antes pode deixar a testada apontando para fora.
+        if (l.testadaIndex != null && l.testadaIndex >= l.pontos.length) l.testadaIndex = null;
+      }
+      if (command.testadaIndex !== undefined) {
+        const t = command.testadaIndex;
+        if (t != null && (!Number.isInteger(t) || t < 0 || t >= l.pontos.length)) throw new KernelError('BAD_PLOT', `Testada ${String(t)} fora das ${l.pontos.length} arestas`);
+        l.testadaIndex = t ?? null;
+      }
+      diff.updated.push(l.id);
+      break;
+    }
+
+    case 'MoveLoteVertex': {
+      const l = findLote(next, command.loteId);
+      if (command.index < 0 || command.index >= l.pontos.length) throw new KernelError('BAD_PLOT', `Vertice ${command.index} nao existe em ${l.id}`);
+      l.pontos[command.index] = { x: assertIntegerMm(roundToMm(command.to.x), 'to.x'), y: assertIntegerMm(roundToMm(command.to.y), 'to.y') };
+      diff.updated.push(l.id);
+      break;
+    }
+
+    case 'DeleteLote': {
+      const l = findLote(next, command.loteId);
+      next.lotes = (next.lotes ?? []).filter((x) => x.id !== l.id);
+      diff.deleted.push(l.id);
+      break;
+    }
+
+    case 'AddVia': {
+      findLevel(next, command.levelId);
+      const nome = command.nome?.trim().slice(0, MAX_NOME_DE_VIA) ?? '';
+      if (!nome) throw new KernelError('BAD_STREET', 'A via precisa de nome');
+      if (command.eixo.length < 2) throw new KernelError('BAD_STREET', `O eixo da via precisa de pelo menos 2 vertices; recebeu ${command.eixo.length}`);
+      const larguraMm = assertIntegerMm(roundToMm(command.larguraMm), 'larguraMm');
+      if (larguraMm < 1 || larguraMm > MAX_LARGURA_DE_VIA_MM) throw new KernelError('BAD_STREET', `Largura da via fora de 1..${MAX_LARGURA_DE_VIA_MM} mm: ${larguraMm}`);
+      const calcadaMm = assertIntegerMm(roundToMm(command.calcadaMm ?? 0), 'calcadaMm');
+      if (calcadaMm < 0 || calcadaMm * 2 >= larguraMm) throw new KernelError('BAD_STREET', `As duas calcadas de ${calcadaMm} mm nao cabem na caixa de ${larguraMm} mm`);
+      const id = nextId(next, 'via');
+      next.vias = [
+        ...(next.vias ?? []),
+        { id, uid: novoUid(), levelId: command.levelId, nome, eixo: command.eixo.map(paraPontoMm), larguraMm, calcadaMm },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetViaProps': {
+      const v = findVia(next, command.viaId);
+      if (command.nome !== undefined) {
+        const nome = command.nome?.trim().slice(0, MAX_NOME_DE_VIA) ?? '';
+        if (!nome) throw new KernelError('BAD_STREET', 'A via precisa de nome');
+        v.nome = nome;
+      }
+      if (command.eixo !== undefined) {
+        if (command.eixo.length < 2) throw new KernelError('BAD_STREET', 'O eixo da via precisa de pelo menos 2 vertices');
+        v.eixo = command.eixo.map(paraPontoMm);
+      }
+      // Largura e calcada se conferem JUNTAS: mudar so uma das duas pode
+      // deixar as calcadas maiores que a caixa.
+      const larguraMm = command.larguraMm === undefined ? v.larguraMm : assertIntegerMm(roundToMm(command.larguraMm), 'larguraMm');
+      const calcadaMm = command.calcadaMm === undefined ? v.calcadaMm : assertIntegerMm(roundToMm(command.calcadaMm), 'calcadaMm');
+      if (larguraMm < 1 || larguraMm > MAX_LARGURA_DE_VIA_MM) throw new KernelError('BAD_STREET', `Largura da via fora de 1..${MAX_LARGURA_DE_VIA_MM} mm: ${larguraMm}`);
+      if (calcadaMm < 0 || calcadaMm * 2 >= larguraMm) throw new KernelError('BAD_STREET', `As duas calcadas de ${calcadaMm} mm nao cabem na caixa de ${larguraMm} mm`);
+      v.larguraMm = larguraMm;
+      v.calcadaMm = calcadaMm;
+      diff.updated.push(v.id);
+      break;
+    }
+
+    case 'MoveViaVertex': {
+      const v = findVia(next, command.viaId);
+      if (command.index < 0 || command.index >= v.eixo.length) throw new KernelError('BAD_STREET', `Vertice ${command.index} nao existe em ${v.id}`);
+      v.eixo[command.index] = { x: assertIntegerMm(roundToMm(command.to.x), 'to.x'), y: assertIntegerMm(roundToMm(command.to.y), 'to.y') };
+      diff.updated.push(v.id);
+      break;
+    }
+
+    case 'DeleteVia': {
+      const v = findVia(next, command.viaId);
+      next.vias = (next.vias ?? []).filter((x) => x.id !== v.id);
+      diff.deleted.push(v.id);
+      break;
+    }
+
+    case 'AddAreaPublica': {
+      findLevel(next, command.levelId);
+      if (!TIPOS_DE_AREA_PUBLICA.includes(command.tipo)) throw new KernelError('BAD_PUBLIC_AREA', `Tipo desconhecido: ${String(command.tipo)}`);
+      if (command.pontos.length < 3) throw new KernelError('BAD_PUBLIC_AREA', `A area publica precisa de pelo menos 3 vertices; recebeu ${command.pontos.length}`);
+      const id = nextId(next, 'apb');
+      next.areasPublicas = [
+        ...(next.areasPublicas ?? []),
+        {
+          id,
+          uid: novoUid(),
+          levelId: command.levelId,
+          tipo: command.tipo,
+          nome: command.nome?.trim().slice(0, MAX_NOME_DE_AREA_PUBLICA) || null,
+          pontos: command.pontos.map(paraPontoMm),
+        },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetAreaPublicaProps': {
+      const a = findAreaPublica(next, command.areaId);
+      if (command.tipo !== undefined) {
+        if (!TIPOS_DE_AREA_PUBLICA.includes(command.tipo)) throw new KernelError('BAD_PUBLIC_AREA', `Tipo desconhecido: ${String(command.tipo)}`);
+        a.tipo = command.tipo;
+      }
+      if (command.nome !== undefined) a.nome = command.nome?.trim().slice(0, MAX_NOME_DE_AREA_PUBLICA) || null;
+      if (command.pontos !== undefined) {
+        if (command.pontos.length < 3) throw new KernelError('BAD_PUBLIC_AREA', 'A area publica precisa de pelo menos 3 vertices');
+        a.pontos = command.pontos.map(paraPontoMm);
+      }
+      diff.updated.push(a.id);
+      break;
+    }
+
+    case 'MoveAreaPublicaVertex': {
+      const a = findAreaPublica(next, command.areaId);
+      if (command.index < 0 || command.index >= a.pontos.length) throw new KernelError('BAD_PUBLIC_AREA', `Vertice ${command.index} nao existe em ${a.id}`);
+      a.pontos[command.index] = { x: assertIntegerMm(roundToMm(command.to.x), 'to.x'), y: assertIntegerMm(roundToMm(command.to.y), 'to.y') };
+      diff.updated.push(a.id);
+      break;
+    }
+
+    case 'DeleteAreaPublica': {
+      const a = findAreaPublica(next, command.areaId);
+      next.areasPublicas = (next.areasPublicas ?? []).filter((x) => x.id !== a.id);
+      diff.deleted.push(a.id);
       break;
     }
 
@@ -4663,6 +4923,15 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
  * comando inverso exige uma prova de que cada operação é reversível, e é
  * exatamente essa prova que o caso 23 quer testar sem circularidade.
  */
+/**
+ * Ponto do desenho em MILIMETRO INTEIRO. O kernel nao guarda fracao: o mm e a
+ * unidade, e arredondar na borda (e nao no calculo) e o que faz duas sessoes
+ * que desenham o mesmo gesto produzirem o mesmo hash. Ver `roundToMm`.
+ */
+function paraPontoMm(p: Point, i: number): Point {
+  return { x: assertIntegerMm(roundToMm(p.x), `pontos[${i}].x`), y: assertIntegerMm(roundToMm(p.y), `pontos[${i}].y`) };
+}
+
 export class ModelHistory {
   private readonly states: BlueprintModel[] = [];
   private cursor = -1;

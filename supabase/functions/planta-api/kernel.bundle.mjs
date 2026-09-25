@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.57.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.58.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -648,6 +648,10 @@ function emptyModel() {
     subRegioes: [],
     rodapes: [],
     etapas: [],
+    quadras: [],
+    lotes: [],
+    vias: [],
+    areasPublicas: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -1839,6 +1843,54 @@ function projetar(model) {
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.material, y.material)
   );
+  const quadras = ordenar(
+    model.quadras ?? [],
+    (q) => ({
+      level: nivel(q.levelId),
+      nome: q.nome,
+      pontos: q.pontos.map((p) => ({ x: p.x, y: p.y })),
+      parametros: parametrosCanonicos(q.parametros)
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.nome, y.nome)
+  );
+  const indiceDaQuadra = /* @__PURE__ */ new Map();
+  quadras.forEach((q, i) => indiceDaQuadra.set(q.item.id, i));
+  const lotes = ordenar(
+    model.lotes ?? [],
+    (l) => ({
+      level: nivel(l.levelId),
+      quadra: l.quadraId != null && indiceDaQuadra.has(l.quadraId) ? indiceDaQuadra.get(l.quadraId) : null,
+      numero: l.numero,
+      pontos: l.pontos.map((p) => ({ x: p.x, y: p.y })),
+      testadaIndex: l.testadaIndex,
+      tipo: l.tipo,
+      parametros: parametrosCanonicos(l.parametros)
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.numero, y.numero)
+  );
+  const vias = ordenar(
+    model.vias ?? [],
+    (v) => ({
+      level: nivel(v.levelId),
+      nome: v.nome,
+      eixo: v.eixo.map((p) => ({ x: p.x, y: p.y })),
+      larguraMm: v.larguraMm,
+      calcadaMm: v.calcadaMm,
+      parametros: parametrosCanonicos(v.parametros)
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.eixo[0].x - y.eixo[0].x || x.eixo[0].y - y.eixo[0].y || cmpStr(x.nome, y.nome)
+  );
+  const areasPublicas = ordenar(
+    model.areasPublicas ?? [],
+    (a) => ({
+      level: nivel(a.levelId),
+      tipo: a.tipo,
+      nome: a.nome ?? null,
+      pontos: a.pontos.map((p) => ({ x: p.x, y: p.y })),
+      parametros: parametrosCanonicos(a.parametros)
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.tipo, y.tipo)
+  );
   const vistasDependentes = ordenar(
     model.vistasDependentes ?? [],
     (v) => ({
@@ -2098,6 +2150,10 @@ function projetar(model) {
     anotacoes: anotacoes.length ? anotacoes.map((a) => a.geom) : void 0,
     vistasDependentes: vistasDependentes.length ? vistasDependentes.map((v) => v.geom) : void 0,
     subRegioes: subRegioes.length ? subRegioes.map((s2) => s2.geom) : void 0,
+    quadras: quadras.length ? quadras.map((q) => q.geom) : void 0,
+    lotes: lotes.length ? lotes.map((l) => l.geom) : void 0,
+    vias: vias.length ? vias.map((v) => v.geom) : void 0,
+    areasPublicas: areasPublicas.length ? areasPublicas.map((a) => a.geom) : void 0,
     rodapes: rodapes.length ? rodapes.map((r) => r.geom) : void 0,
     trechos: trechos.length ? trechos.map((t) => t.geom) : void 0,
     terminais: terminais.length ? terminais.map((t) => t.geom) : void 0,
@@ -2128,6 +2184,10 @@ function projetar(model) {
     anotacoes: anotacoes.map((a) => a.item.uid ?? null),
     vistasDependentes: vistasDependentes.map((v) => v.item.uid ?? null),
     subRegioes: subRegioes.map((s2) => s2.item.uid ?? null),
+    quadras: quadras.map((q) => q.item.uid ?? null),
+    lotes: lotes.map((l) => l.item.uid ?? null),
+    vias: vias.map((v) => v.item.uid ?? null),
+    areasPublicas: areasPublicas.map((a) => a.item.uid ?? null),
     rodapes: rodapes.map((r) => r.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
@@ -2437,6 +2497,64 @@ function modelFromCanonicalPayload(payload) {
       pontos: s2.pontos.map((p) => ({ x: p.x, y: p.y })),
       nome: s2.nome,
       ...s2.parametros && Object.keys(s2.parametros).length > 0 ? { parametros: { ...s2.parametros } } : {}
+    });
+  });
+  const quadrasPayload = payload.quadras ?? [];
+  const idsDeQuadra = [];
+  quadrasPayload.forEach((q, i) => {
+    if (!levelIds[q.level]) return;
+    const id = nextId(model, "qdr");
+    idsDeQuadra[i] = id;
+    model.quadras.push({
+      id,
+      uid: uidDe("quadras", i, quadrasPayload.length),
+      levelId: levelIds[q.level],
+      nome: q.nome,
+      pontos: q.pontos.map((p) => ({ x: p.x, y: p.y })),
+      ...q.parametros && Object.keys(q.parametros).length > 0 ? { parametros: { ...q.parametros } } : {}
+    });
+  });
+  const lotesPayload = payload.lotes ?? [];
+  lotesPayload.forEach((l, i) => {
+    if (!levelIds[l.level]) return;
+    const quadraId = l.quadra != null && idsDeQuadra[l.quadra] ? idsDeQuadra[l.quadra] : null;
+    model.lotes.push({
+      id: nextId(model, "lot"),
+      uid: uidDe("lotes", i, lotesPayload.length),
+      levelId: levelIds[l.level],
+      quadraId,
+      numero: l.numero,
+      pontos: l.pontos.map((p) => ({ x: p.x, y: p.y })),
+      testadaIndex: l.testadaIndex,
+      tipo: l.tipo,
+      ...l.parametros && Object.keys(l.parametros).length > 0 ? { parametros: { ...l.parametros } } : {}
+    });
+  });
+  const viasPayload = payload.vias ?? [];
+  viasPayload.forEach((v, i) => {
+    if (!levelIds[v.level]) return;
+    model.vias.push({
+      id: nextId(model, "via"),
+      uid: uidDe("vias", i, viasPayload.length),
+      levelId: levelIds[v.level],
+      nome: v.nome,
+      eixo: v.eixo.map((p) => ({ x: p.x, y: p.y })),
+      larguraMm: v.larguraMm,
+      calcadaMm: v.calcadaMm,
+      ...v.parametros && Object.keys(v.parametros).length > 0 ? { parametros: { ...v.parametros } } : {}
+    });
+  });
+  const areasPayload = payload.areasPublicas ?? [];
+  areasPayload.forEach((a, i) => {
+    if (!levelIds[a.level]) return;
+    model.areasPublicas.push({
+      id: nextId(model, "apb"),
+      uid: uidDe("areasPublicas", i, areasPayload.length),
+      levelId: levelIds[a.level],
+      tipo: a.tipo,
+      nome: a.nome,
+      pontos: a.pontos.map((p) => ({ x: p.x, y: p.y })),
+      ...a.parametros && Object.keys(a.parametros).length > 0 ? { parametros: { ...a.parametros } } : {}
     });
   });
   const vistasDependentes = payload.vistasDependentes ?? [];

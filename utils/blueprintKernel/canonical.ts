@@ -49,6 +49,9 @@ import {
   type PainelDeCortina,
   type OrientacaoDeBrise,
   type MaterialDeSubRegiao,
+  type TipoDeLote,
+  type TipoDeAreaPublica,
+  type ObjectId,
   type BlueprintModel,
   type BoundaryKind,
   type BoundaryPapel,
@@ -570,6 +573,61 @@ function projetar(model: BlueprintModel): {
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.material, y.material),
   );
 
+  // LOTEAMENTO (0.58.0): quadra, lote, via e area publica. Omitidos quando nao ha.
+  // A QUADRA do lote sai por INDICE na ordem canonica das quadras, nunca por
+  // id: o id e reatribuido ao recarregar o payload, o indice nao.
+  const quadras = ordenar(
+    model.quadras ?? [],
+    (q) => ({
+      level: nivel(q.levelId),
+      nome: q.nome,
+      pontos: q.pontos.map((p) => ({ x: p.x, y: p.y })),
+      parametros: parametrosCanonicos(q.parametros),
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.nome, y.nome),
+  );
+  const indiceDaQuadra = new Map<ObjectId, number>();
+  quadras.forEach((q, i) => indiceDaQuadra.set(q.item.id, i));
+
+  const lotes = ordenar(
+    model.lotes ?? [],
+    (l) => ({
+      level: nivel(l.levelId),
+      quadra: l.quadraId != null && indiceDaQuadra.has(l.quadraId) ? (indiceDaQuadra.get(l.quadraId) as number) : null,
+      numero: l.numero,
+      pontos: l.pontos.map((p) => ({ x: p.x, y: p.y })),
+      testadaIndex: l.testadaIndex,
+      tipo: l.tipo,
+      parametros: parametrosCanonicos(l.parametros),
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.numero, y.numero),
+  );
+
+  const vias = ordenar(
+    model.vias ?? [],
+    (v) => ({
+      level: nivel(v.levelId),
+      nome: v.nome,
+      eixo: v.eixo.map((p) => ({ x: p.x, y: p.y })),
+      larguraMm: v.larguraMm,
+      calcadaMm: v.calcadaMm,
+      parametros: parametrosCanonicos(v.parametros),
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.eixo[0].x - y.eixo[0].x || x.eixo[0].y - y.eixo[0].y || cmpStr(x.nome, y.nome),
+  );
+
+  const areasPublicas = ordenar(
+    model.areasPublicas ?? [],
+    (a) => ({
+      level: nivel(a.levelId),
+      tipo: a.tipo,
+      nome: a.nome ?? null,
+      pontos: a.pontos.map((p) => ({ x: p.x, y: p.y })),
+      parametros: parametrosCanonicos(a.parametros),
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.tipo, y.tipo),
+  );
+
   // VISTAS DEPENDENTES (0.51.0): pavimento por índice, nome, recorte, escala. Omitidas quando não há.
   const vistasDependentes = ordenar(
     model.vistasDependentes ?? [],
@@ -925,6 +983,10 @@ function projetar(model: BlueprintModel): {
     anotacoes: anotacoes.length ? anotacoes.map((a) => a.geom) : undefined,
     vistasDependentes: vistasDependentes.length ? vistasDependentes.map((v) => v.geom) : undefined,
     subRegioes: subRegioes.length ? subRegioes.map((s) => s.geom) : undefined,
+    quadras: quadras.length ? quadras.map((q) => q.geom) : undefined,
+    lotes: lotes.length ? lotes.map((l) => l.geom) : undefined,
+    vias: vias.length ? vias.map((v) => v.geom) : undefined,
+    areasPublicas: areasPublicas.length ? areasPublicas.map((a) => a.geom) : undefined,
     rodapes: rodapes.length ? rodapes.map((r) => r.geom) : undefined,
     trechos: trechos.length ? trechos.map((t) => t.geom) : undefined,
     terminais: terminais.length ? terminais.map((t) => t.geom) : undefined,
@@ -960,6 +1022,10 @@ function projetar(model: BlueprintModel): {
     anotacoes: anotacoes.map((a) => a.item.uid ?? null),
     vistasDependentes: vistasDependentes.map((v) => v.item.uid ?? null),
     subRegioes: subRegioes.map((s) => s.item.uid ?? null),
+    quadras: quadras.map((q) => q.item.uid ?? null),
+    lotes: lotes.map((l) => l.item.uid ?? null),
+    vias: vias.map((v) => v.item.uid ?? null),
+    areasPublicas: areasPublicas.map((a) => a.item.uid ?? null),
     rodapes: rodapes.map((r) => r.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
@@ -1047,6 +1113,11 @@ export interface IdentidadeCanonica {
   anotacoes?: (ElementUid | null)[];
   vistasDependentes?: (ElementUid | null)[];
   subRegioes?: (ElementUid | null)[];
+  /** Ausentes em payload gravado sob kernel anterior a 0.58.0. */
+  quadras?: (ElementUid | null)[];
+  lotes?: (ElementUid | null)[];
+  vias?: (ElementUid | null)[];
+  areasPublicas?: (ElementUid | null)[];
   rodapes?: (ElementUid | null)[];
   trechos?: (ElementUid | null)[];
   terminais?: (ElementUid | null)[];
@@ -1284,6 +1355,11 @@ export interface CanonicalPayload {
   rodapes?: { level: number; pontos: { x: number; y: number }[]; alturaMm: number; itemCode: string; descricao: string; sugerido?: boolean; etiqueta?: number; parametros?: Parametros }[];
   /** Sub-regiões do terreno. Ausente sob kernel < 0.53.0 e em desenho sem nenhuma. */
   subRegioes?: { level: number; material: MaterialDeSubRegiao; pontos: { x: number; y: number }[]; nome: string | null; parametros?: Parametros }[];
+  /** LOTEAMENTO. Ausentes sob kernel < 0.58.0 e em desenho sem nenhum. A quadra do lote vai por ÍNDICE. */
+  quadras?: { level: number; nome: string; pontos: { x: number; y: number }[]; parametros?: Parametros }[];
+  lotes?: { level: number; quadra: number | null; numero: string; pontos: { x: number; y: number }[]; testadaIndex: number | null; tipo: TipoDeLote; parametros?: Parametros }[];
+  vias?: { level: number; nome: string; eixo: { x: number; y: number }[]; larguraMm: number; calcadaMm: number; parametros?: Parametros }[];
+  areasPublicas?: { level: number; tipo: TipoDeAreaPublica; nome: string | null; pontos: { x: number; y: number }[]; parametros?: Parametros }[];
   /** Vistas dependentes (recortes nomeados de planta). Ausente sob kernel < 0.51.0 e em desenho sem nenhuma. */
   vistasDependentes?: { level: number; nome: string; recorte: { minX: number; minY: number; maxX: number; maxY: number }; denominador: number }[];
   /** Anotações por vista. Ausente sob kernel < 0.45.0 e em desenho sem nenhuma. */
@@ -1811,6 +1887,70 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       pontos: s.pontos.map((p) => ({ x: p.x, y: p.y })),
       nome: s.nome,
       ...(s.parametros && Object.keys(s.parametros).length > 0 ? { parametros: { ...s.parametros } } : {}),
+    });
+  });
+
+  // LOTEAMENTO: quadras primeiro - o lote aponta a quadra por indice.
+  const quadrasPayload = payload.quadras ?? [];
+  const idsDeQuadra: ObjectId[] = [];
+  quadrasPayload.forEach((q, i) => {
+    if (!levelIds[q.level]) return;
+    const id = nextId(model, 'qdr');
+    idsDeQuadra[i] = id;
+    model.quadras.push({
+      id,
+      uid: uidDe('quadras', i, quadrasPayload.length),
+      levelId: levelIds[q.level],
+      nome: q.nome,
+      pontos: q.pontos.map((p) => ({ x: p.x, y: p.y })),
+      ...(q.parametros && Object.keys(q.parametros).length > 0 ? { parametros: { ...q.parametros } } : {}),
+    });
+  });
+
+  const lotesPayload = payload.lotes ?? [];
+  lotesPayload.forEach((l, i) => {
+    if (!levelIds[l.level]) return;
+    // Quadra que nao entrou (pavimento morto) deixa o lote solto, nao o perde.
+    const quadraId = l.quadra != null && idsDeQuadra[l.quadra] ? idsDeQuadra[l.quadra] : null;
+    model.lotes.push({
+      id: nextId(model, 'lot'),
+      uid: uidDe('lotes', i, lotesPayload.length),
+      levelId: levelIds[l.level],
+      quadraId,
+      numero: l.numero,
+      pontos: l.pontos.map((p) => ({ x: p.x, y: p.y })),
+      testadaIndex: l.testadaIndex,
+      tipo: l.tipo,
+      ...(l.parametros && Object.keys(l.parametros).length > 0 ? { parametros: { ...l.parametros } } : {}),
+    });
+  });
+
+  const viasPayload = payload.vias ?? [];
+  viasPayload.forEach((v, i) => {
+    if (!levelIds[v.level]) return;
+    model.vias.push({
+      id: nextId(model, 'via'),
+      uid: uidDe('vias', i, viasPayload.length),
+      levelId: levelIds[v.level],
+      nome: v.nome,
+      eixo: v.eixo.map((p) => ({ x: p.x, y: p.y })),
+      larguraMm: v.larguraMm,
+      calcadaMm: v.calcadaMm,
+      ...(v.parametros && Object.keys(v.parametros).length > 0 ? { parametros: { ...v.parametros } } : {}),
+    });
+  });
+
+  const areasPayload = payload.areasPublicas ?? [];
+  areasPayload.forEach((a, i) => {
+    if (!levelIds[a.level]) return;
+    model.areasPublicas.push({
+      id: nextId(model, 'apb'),
+      uid: uidDe('areasPublicas', i, areasPayload.length),
+      levelId: levelIds[a.level],
+      tipo: a.tipo,
+      nome: a.nome,
+      pontos: a.pontos.map((p) => ({ x: p.x, y: p.y })),
+      ...(a.parametros && Object.keys(a.parametros).length > 0 ? { parametros: { ...a.parametros } } : {}),
     });
   });
 

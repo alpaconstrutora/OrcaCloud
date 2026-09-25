@@ -6089,8 +6089,21 @@ describe('BlueprintEditor · estender parede até a face', () => {
     // Não existe mais faixa própria acima da barra.
     expect(document.querySelector('header')).toBeNull();
     expect(within(barra).getByRole('button', { name: /voltar para a lista/i })).toBeInTheDocument();
-    expect(within(barra).getByRole('heading', { level: 1 })).toHaveTextContent('Planta de teste');
     expect(within(barra).getByRole('button', { name: /publicar versão/i })).toBeInTheDocument();
+
+    // P2.63: o nome saiu da TELA, não do app. Some do olho, fica para o leitor
+    // de tela (h1 sr-only), no title da seta e na aba do navegador.
+    const nome = within(barra).getByRole('heading', { level: 1 });
+    expect(nome).toHaveTextContent('Planta de teste');
+    expect(nome).toHaveClass('sr-only');
+    expect(within(barra).getByRole('button', { name: /voltar para a lista/i })).toHaveAttribute(
+      'title',
+      'Voltar para a lista — Planta de teste',
+    );
+    expect(document.title).toBe('Planta de teste · Planta Inteligente');
+    // O estado de salvamento continua VISÍVEL, mas ao lado do Publicar: colado
+    // na seta, qualquer texto vira rótulo dela.
+    expect(within(barra).getByText('Sem alterações')).toBeInTheDocument();
 
     // Recolhido, o que some é o painel — o cabeçalho dissolvido fica.
     await user.click(screen.getByRole('button', { name: /recolher a faixa de comandos/i }));

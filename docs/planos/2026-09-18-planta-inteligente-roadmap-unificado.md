@@ -2293,6 +2293,25 @@ Analisar     desenho 437 px     desenho 482 px
 1. `click({ force: true })` numa aba **clica mesmo quando algo cobre o ribbon** — uma corrida mediu a aba Analisar mostrando os grupos de Inserir, porque o clique não pegou. Agora o roteiro confere `aria-selected="true"` antes de medir, e tenta de novo.
 2. O que cobria era um **diálogo** ("Divisas do lote") que o estudo abre sozinho. O roteiro fecha diálogos com Esc antes de cada aba.
 
+### P2.63 — Só a seta (25/09/2026) · *"o botão de voltar não precisa de texto, somente o ícone"*
+
+**O botão já era só ícone** — `BotaoBarra` põe o rótulo em `title`/`aria-label`, nunca como texto. O que estava ali era o **nome da planta**, que a P2.62 tinha acabado de trazer para a fileira das abas. Colado na seta, virava rótulo dela: `← Planta 14/09/2026`.
+
+Perguntei o que fazer com o nome (separar visualmente × tirar da barra) e a resposta foi **tirar**.
+
+**Onde o nome foi parar** — some da tela, não do app:
+
+- `title` da seta: `Voltar para a lista — Planta 14/09/2026`;
+- **aba do navegador** (`document.title`), que é o que distingue duas plantas abertas em abas diferentes. ⚠️ O app **não mexia** em `document.title` em lugar nenhum; o editor passa a mexer e **devolve o título anterior ao sair**, para não vazar para o resto;
+- `h1` com `sr-only`: quem usa leitor de tela continua tendo um título de nível 1 para saber onde está. Tirar o `h1` de vez seria deixar a tela sem cabeçalho.
+
+**⚠️ E o defeito que a primeira versão criou:** com o nome fora, sobrou `← Sem alterações`. O estado de salvamento passou a ser lido como rótulo da seta — **o mesmo problema, outro texto**. Ele foi para o outro extremo da fileira, ao lado do Publicar, que é onde faz sentido: rascunho salvo × versão publicada é a mesma conversa. Continua visível, sempre: é retorno de ação, não comando.
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-ui-standard.sh` ok · `check-xss-sinks.sh` ok · suíte cheia **466 arquivos / 5333 testes** verdes · `npm run build` ok.
+- `__tests__/components/BlueprintEditor.test.tsx`: o `h1` tem o nome e a classe `sr-only`; o `title` da seta é `Voltar para a lista — Planta de teste`; `document.title` é `Planta de teste · Planta Inteligente`; "Sem alterações" continua na barra.
+- **App real** (escritas bloqueadas: 2, 0 erros de página), 1660×780: a fileira ficou `← · Planta ▾ · abas · ⌃ ············ Sem alterações · Publicar versão`. O desenho segue com **482 px** — esta fase não era de altura, era de leitura.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

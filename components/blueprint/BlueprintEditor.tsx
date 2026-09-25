@@ -1216,6 +1216,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * não cobrir o acesso rápido — duplicar/espelhar/isolar agem sobre a seleção,
    * e é com seleção que o painel está aberto.
    */
+  /**
+   * O nome da planta na ABA DO NAVEGADOR (25/09/2026, P2.63). Ele saiu da barra;
+   * com duas plantas abertas em abas diferentes, é aqui que se distingue uma da
+   * outra. Devolve o título anterior ao sair — o resto do app não mexe nisto.
+   */
+  useEffect(() => {
+    const anterior = document.title;
+    document.title = `${study.name} · Planta Inteligente`;
+    return () => {
+      document.title = anterior;
+    };
+  }, [study.name]);
+
   const ribbonRef = useRef<HTMLDivElement>(null);
   const [topoDoDesenhoPx, setTopoDoDesenhoPx] = useState<number | undefined>(undefined);
   useEffect(() => {
@@ -8901,26 +8914,22 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 inconsistência com esconder comandos em menu: é retorno de ação.
                 "Falha ao salvar" dentro de um tooltip seria esconder justamente
                 o que precisa interromper quem está desenhando. */}
-            <BotaoBarra icone={ArrowLeft} rotulo="Voltar para a lista" onClick={onBack} />
-            <div className="flex min-w-0 max-w-[22rem] items-baseline gap-2">
-              <h1
-                className="truncate text-sm font-semibold text-slate-800"
-                title={`${study.name} · Revisão publicada ${editor.baseRevision} · unidades em milímetros`}
-              >
-                {study.name}
-              </h1>
-              <span
-                className={`shrink-0 text-xs ${
-                  editor.saveState === 'erro'
-                    ? 'text-red-600'
-                    : editor.saveState === 'salvo'
-                      ? 'text-emerald-600'
-                      : 'text-slate-500'
-                }`}
-              >
-                {rotuloSalvamento[editor.saveState]}
-              </span>
-            </div>
+            <BotaoBarra
+              icone={ArrowLeft}
+              rotulo={`Voltar para a lista — ${study.name}`}
+              onClick={onBack}
+            />
+            {/* ⚠️ O NOME DA PLANTA SAIU DA BARRA (25/09/2026, P2.63): *"o botão de
+                voltar não precisa de texto, somente o ícone"* — colado na seta, o
+                nome era lido como rótulo dela. Some da tela, não do app: continua
+                no `title` da seta, na ABA DO NAVEGADOR e como `h1` para leitor de
+                tela, que precisa de um título de nível 1 para saber onde está. */}
+            <h1
+              className="sr-only"
+              title={`${study.name} · Revisão publicada ${editor.baseRevision} · unidades em milímetros`}
+            >
+              {study.name}
+            </h1>
             <SeletorDeVista
               vista={vista}
               onEscolher={setVista}
@@ -8930,26 +8939,47 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           </>
         }
         direita={
-          /* PUBLICAR encostado à direita da mesma fileira: é o fim do fluxo,
-             clicado uma vez por sessão — e continua o único botão azul da tela. */
-          <button
-            type="button"
-            onClick={() => void publicarComTopografia()}
-            disabled={editor.publishing || !editor.dirtySincePublish}
-            className="inline-flex shrink-0 items-center gap-2 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-            title={
-              editor.dirtySincePublish
-                ? 'Publica uma versão imutável desta planta'
-                : 'Nada mudou desde a última publicação'
-            }
-          >
-            {editor.publishing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Upload className="h-4 w-4" />
-            )}
-            Publicar versão
-          </button>
+          <>
+            {/* O ESTADO DE SALVAMENTO mora AQUI, e não colado na seta de voltar
+                (25/09/2026, P2.63): ao lado da seta, qualquer texto vira rótulo
+                dela — foi o que gerou o pedido *"o botão de voltar não precisa de
+                texto"*. Junto do Publicar ele está onde faz sentido: rascunho
+                salvo × versão publicada é a mesma conversa.
+
+                ⚠️ VISÍVEL, sempre: é retorno de ação, não comando. "Falha ao
+                salvar" num tooltip seria esconder o que precisa interromper. */}
+            <span
+              className={`shrink-0 text-xs ${
+                editor.saveState === 'erro'
+                  ? 'text-red-600'
+                  : editor.saveState === 'salvo'
+                    ? 'text-emerald-600'
+                    : 'text-slate-500'
+              }`}
+            >
+              {rotuloSalvamento[editor.saveState]}
+            </span>
+            {/* PUBLICAR encostado à direita: é o fim do fluxo, clicado uma vez
+                por sessão — e continua o único botão azul da tela. */}
+            <button
+              type="button"
+              onClick={() => void publicarComTopografia()}
+              disabled={editor.publishing || !editor.dirtySincePublish}
+              className="inline-flex shrink-0 items-center gap-2 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              title={
+                editor.dirtySincePublish
+                  ? 'Publica uma versão imutável desta planta'
+                  : 'Nada mudou desde a última publicação'
+              }
+            >
+              {editor.publishing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
+              Publicar versão
+            </button>
+          </>
         }
         acessoRapido={
           <AcessoRapido

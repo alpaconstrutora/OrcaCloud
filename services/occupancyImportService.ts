@@ -65,12 +65,37 @@ export interface ImportUnitRow {
      * dependia da ORDEM em que os eixos eram importados, o que é frágil.
      */
     responsavelFinanceiro: string | null;
-    selected: boolean;
     motivo?: string;
 }
 
+/**
+ * UMA ocupação a criar — a unidade de escolha do usuário.
+ *
+ * Antes a escolha era por UNIDADE, e cada unidade podia gerar até três
+ * ocupações (proprietário, inquilino e responsável financeiro) sem que desse
+ * para recusar uma delas. O responsável financeiro em especial era derivado e
+ * criado em silêncio, anunciado por uma linha verde de rodapé.
+ */
+export interface ImportOccupancy {
+    unitId: string;
+    unitLabel: string;
+    role: OccupancyRole;
+    clientId: string;
+    clientName: string;
+    startedAt: string;
+    sourceContractId: string | null;
+    origem: string;
+}
+
+/** Chave estável de uma candidata. Unidade + papel: o mesmo papel não se
+ *  repete na mesma unidade (é o que o índice único do banco garante). */
+export const chaveDaCandidata = (c: { unitId: string; role: OccupancyRole }) =>
+    `${c.unitId}|${c.role}`;
+
 export interface ImportPreview {
     rows: ImportUnitRow[];
+    /** O que SERÁ criado, uma linha por ocupação — é isto que a tela lista. */
+    candidatas: ImportOccupancy[];
     unidadesTotal: number;
     unidadesComPessoa: number;
     /** Unidades cuja negociação existe mas ainda não é posse. */
@@ -98,7 +123,7 @@ export const occupancyImportService = {
         // 1. A ÂNCORA: as unidades do empreendimento. Todas, publicadas ou não.
         const units = await empreendimentoService.listAllUnitsForEmpreendimento(empreendimentoId);
         if (units.length === 0) {
-            return { rows: [], unidadesTotal: 0, unidadesComPessoa: 0, unidadesEmNegociacao: 0 };
+            return { rows: [], candidatas: [], unidadesTotal: 0, unidadesComPessoa: 0, unidadesEmNegociacao: 0 };
         }
 
         // 2. Os imóveis comerciais de cada unidade — os DOIS eixos juntos. A
@@ -270,72 +295,82 @@ export const occupancyImportService = {
                 unitLabel: label,
                 pessoas: novas,
                 responsavelFinanceiro: temAlgoACriar ? responsavelFinanceiro : null,
-                selected: temAlgoACriar,
                 motivo: motivos.length ? motivos.join(' ') : undefined,
             });
         }
 
         rows.sort((a, b) => a.unitLabel.localeCompare(b.unitLabel, 'pt-BR', { numeric: true }));
-        return { rows, unidadesTotal: units.length, unidadesComPessoa, unidadesEmNegociacao };
+
+        // Achatar em candidatas. O responsável financeiro entra como linha
+        // PRÓPRIA, com a data e o contrato da pessoa de quem ele foi derivado —
+        // é o que permite recusá-lo sem perder a origem das outras.
+        const candidatas: ImportOccupancy[] = [];
+        for (const r of rows) {
+            for (const p of r.pessoas) {
+                candidatas.push({
+                    unitId: r.unitId, unitLabel: r.unitLabel, role: p.role,
+                    clientId: p.clientId, clientName: p.clientName,
+                    startedAt: p.startedAt, sourceContractId: p.sourceContractId, origem: p.origem,
+                });
+            }
+            if (r.responsavelFinanceiro) {
+                const base = r.pessoas.find(p => p.clientId === r.responsavelFinanceiro);
+                candidatas.push({
+                    unitId: r.unitId, unitLabel: r.unitLabel, role: 'RESPONSAVEL_FINANCEIRO',
+                    clientId: r.responsavelFinanceiro,
+                    clientName: base?.clientName || '(pessoa não encontrada)',
+                    startedAt: base?.startedAt || new Date().toISOString().slice(0, 10),
+                    sourceContractId: base?.sourceContractId || null,
+                    origem: base?.origem || 'Comercial',
+                });
+            }
+        }
+
+        return { rows, candidatas, unidadesTotal: units.length, unidadesComPessoa, unidadesEmNegociacao };
     },
 
     /**
-     * Grava só as linhas marcadas, uma ocupação por vez: um lote único faria o
+     * Grava as candidatas escolhidas, uma por vez: um lote único faria o
      * primeiro conflito derrubar as boas junto.
+     *
+     * Recebe `ImportOccupancy[]` e não mais a linha da unidade porque a escolha
+     * passou a ser por OCUPAÇÃO — cada item já traz a data, o contrato e a
+     * origem, sem depender de reencontrá-los na linha.
      */
-    async applyImport(rows: ImportUnitRow[]): Promise<ImportResult> {
+    async applyImport(itens: ImportOccupancy[]): Promise<ImportResult> {
         const criadas: UnitOccupancy[] = [];
         const erros: string[] = [];
         let puladas = 0;
 
-        for (const row of rows.filter(r => r.selected)) {
-            const aCriar: { role: OccupancyRole; clientId: string; startedAt: string; contractId: string | null; origem: string }[] =
-                row.pessoas.map(p => ({
-                    role: p.role, clientId: p.clientId, startedAt: p.startedAt,
-                    contractId: p.sourceContractId, origem: p.origem,
-                }));
+        for (const item of itens) {
+            const { data, error } = await supabase
+                .from('unit_occupancies')
+                .insert({
+                    unit_id: item.unitId,
+                    client_id: item.clientId,
+                    // A org é derivada pelo trigger a partir da unidade
+                    // (CLAUDE.md regra #5).
+                    organization_id: null,
+                    role: item.role,
+                    started_at: item.startedAt,
+                    ended_at: null,
+                    source_contract_id: item.sourceContractId,
+                    notes: `Importada do Comercial — ${item.origem}`,
+                })
+                .select(OCCUPANCY_COLS)
+                .single();
 
-            if (row.responsavelFinanceiro) {
-                const base = row.pessoas.find(p => p.clientId === row.responsavelFinanceiro);
-                aCriar.push({
-                    role: 'RESPONSAVEL_FINANCEIRO',
-                    clientId: row.responsavelFinanceiro,
-                    startedAt: base?.startedAt || new Date().toISOString().slice(0, 10),
-                    contractId: base?.sourceContractId || null,
-                    origem: base?.origem || 'Comercial',
-                });
-            }
-
-            for (const item of aCriar) {
-                const { data, error } = await supabase
-                    .from('unit_occupancies')
-                    .insert({
-                        unit_id: row.unitId,
-                        client_id: item.clientId,
-                        // A org é derivada pelo trigger a partir da unidade
-                        // (CLAUDE.md regra #5).
-                        organization_id: null,
-                        role: item.role,
-                        started_at: item.startedAt,
-                        ended_at: null,
-                        source_contract_id: item.contractId,
-                        notes: `Importada do Comercial — ${item.origem}`,
-                    })
-                    .select(OCCUPANCY_COLS)
-                    .single();
-
-                if (error) {
-                    // Corrida com outra aba, ou dado que mudou entre a prévia e o
-                    // clique. Conta como pulada, não como falha.
-                    if (error.message.includes('uidx_unit_occupancies')) {
-                        puladas += 1;
-                    } else {
-                        erros.push(`${row.unitLabel}: ${traduzirErroOcupacao(error.message)}`);
-                    }
-                    continue;
+            if (error) {
+                // Corrida com outra aba, ou dado que mudou entre a prévia e o
+                // clique. Conta como pulada, não como falha.
+                if (error.message.includes('uidx_unit_occupancies')) {
+                    puladas += 1;
+                } else {
+                    erros.push(`${item.unitLabel}: ${traduzirErroOcupacao(error.message)}`);
                 }
-                criadas.push(data as UnitOccupancy);
+                continue;
             }
+            criadas.push(data as UnitOccupancy);
         }
 
         return { criadas: criadas.length, puladas, erros, novas: criadas };

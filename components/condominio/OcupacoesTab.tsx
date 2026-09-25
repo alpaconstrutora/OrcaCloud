@@ -36,8 +36,11 @@ import { useStore } from '../../store/useStore';
 import { unitOccupancyService } from '../../services/unitOccupancyService';
 import {
     occupancyImportService,
+    chaveDaCandidata,
     type ImportPreview,
+    type ImportOccupancy,
 } from '../../services/occupancyImportService';
+import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { clientService } from '../../services/clientService';
 import type {
@@ -100,6 +103,48 @@ const ROLE_LABELS: Record<OccupancyRole, string> = {
     MORADOR: 'Morador',
     RESPONSAVEL_FINANCEIRO: 'Responsável financeiro',
 };
+
+/** Uma linha do drawer "Importar do Comercial".
+ *  `candidata` nula = unidade sem nada a importar: aparece para dizer onde
+ *  falta cadastro, e não pode ser marcada. */
+interface LinhaImport {
+    chave: string;
+    unidade: string;
+    pessoa: string;
+    papel: string;
+    origem: string;
+    desde: string;
+    situacao: string;
+    /** Cor do §8 da situação — do verde "será criada" ao âmbar "não entra". */
+    tom: string;
+    motivo: string;
+    candidata: ImportOccupancy | null;
+}
+
+// Soma das visíveis = 610px, dentro dos 624 úteis de um Sheet `2xl` com `p-6`
+// (§6.9: em painel lateral a largura é o recurso escasso).
+const COLUNAS_IMPORT: StandardTableColumn[] = [
+    { key: 'unidade', label: 'Unidade', sortable: true, width: 160 },
+    { key: 'pessoa', label: 'Pessoa', sortable: true, width: 165 },
+    { key: 'papel', label: 'Papel', sortable: true, width: 105 },
+    { key: 'situacao', label: 'Situação', sortable: true, width: 185 },
+    // Nascem ocultas: justificam a linha, mas não competem por largura. A frase
+    // inteira do motivo numa coluna de 165px quebrava em CINCO linhas — texto
+    // empilhado de novo, só que por quebra em vez de por `<div>`.
+    { key: 'motivo', label: 'Motivo', sortable: false, width: 300, defaultHidden: true },
+    { key: 'origem', label: 'Origem', sortable: true, width: 170, defaultHidden: true },
+    { key: 'desde', label: 'Desde', sortable: true, width: 110, defaultHidden: true },
+];
+
+/** Rótulo CURTO de situação + o tom do §8. A frase completa fica na coluna
+ *  Motivo — coluna de status é rótulo, não parágrafo. */
+function situacaoDaLinha(motivo: string | undefined): { rotulo: string; tom: string } {
+    const m = motivo || '';
+    if (m.includes('Já importada')) return { rotulo: 'Já importada', tom: 'text-gray-600' };
+    if (m.includes('Negociação em andamento')) return { rotulo: 'Negociação em andamento', tom: 'text-amber-600' };
+    if (m.includes('Nenhum proprietário ou locatário')) return { rotulo: 'Não está no Comercial', tom: 'text-amber-600' };
+    return { rotulo: 'Nada a importar', tom: 'text-amber-600' };
+}
 
 // Texto colorido, sem pílula/fundo/uppercase (§8).
 const ROLE_TEXT_COLOR: Record<OccupancyRole, string> = {
@@ -293,6 +338,51 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
     const [preview, setPreview] = React.useState<ImportPreview | null>(null);
     const [carregandoPreview, setCarregandoPreview] = React.useState(false);
     const [importando, setImportando] = React.useState(false);
+    // Quais ocupações serão criadas. A escolha é por OCUPAÇÃO, não por unidade:
+    // uma unidade gera até três (proprietário, inquilino e responsável
+    // financeiro) e antes não dava para recusar só uma — o responsável
+    // financeiro em especial era criado em silêncio.
+    const [selecionadas, setSelecionadas] = React.useState<Set<string>>(new Set());
+
+    // Uma linha por OCUPAÇÃO a criar, mais uma por unidade que não tem nenhuma.
+    const linhasImport = React.useMemo<LinhaImport[]>(() => {
+        if (!preview) return [];
+        const porUnidade = new Map<string, ImportOccupancy[]>();
+        for (const c of preview.candidatas) {
+            if (!porUnidade.has(c.unitId)) porUnidade.set(c.unitId, []);
+            porUnidade.get(c.unitId)!.push(c);
+        }
+        const linhas: LinhaImport[] = [];
+        for (const r of preview.rows) {
+            const cands = porUnidade.get(r.unitId) || [];
+            if (cands.length === 0) {
+                const { rotulo, tom } = situacaoDaLinha(r.motivo);
+                linhas.push({
+                    chave: `${r.unitId}|nada`,
+                    unidade: r.unitLabel,
+                    pessoa: '', papel: '', origem: '', desde: '',
+                    situacao: rotulo, tom, motivo: r.motivo || '',
+                    candidata: null,
+                });
+                continue;
+            }
+            for (const c of cands) {
+                linhas.push({
+                    chave: chaveDaCandidata(c),
+                    unidade: r.unitLabel,
+                    pessoa: c.clientName,
+                    papel: ROLE_LABELS[c.role],
+                    origem: c.origem,
+                    desde: formatarData(c.startedAt),
+                    situacao: 'Será criada',
+                    tom: 'text-emerald-600',
+                    motivo: r.motivo || '',
+                    candidata: c,
+                });
+            }
+        }
+        return linhas;
+    }, [preview]);
     const [form, setForm] = React.useState<{
         unit_id: string; client_id: string; role: OccupancyRole; started_at: string; notes: string;
     }>({ unit_id: '', client_id: '', role: 'PROPRIETARIO', started_at: hojeISO(), notes: '' });
@@ -461,7 +551,11 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
         setCarregandoPreview(true);
         setPreview(null);
         try {
-            setPreview(await occupancyImportService.previewImport(empreendimento.id, orgId));
+            const pv = await occupancyImportService.previewImport(empreendimento.id, orgId);
+            setPreview(pv);
+            // Nasce tudo marcado: o caminho comum é importar o que foi
+            // encontrado, e desmarcar é a exceção.
+            setSelecionadas(new Set(pv.candidatas.map(chaveDaCandidata)));
         } catch (e: any) {
             notify(e?.message || 'Erro ao montar a prévia da importação.', 'error');
             setImportOpen(false);
@@ -470,29 +564,23 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
         }
     };
 
-    const alternarLinha = (unitId: string) => {
-        setPreview(p => p && ({
-            ...p,
-            rows: p.rows.map(r => (r.unitId === unitId ? { ...r, selected: !r.selected } : r)),
-        }));
-    };
-
     const aplicarImportacao = async () => {
         if (!preview) return;
         setImportando(true);
         try {
-            const r = await occupancyImportService.applyImport(preview.rows);
+            const escolhidas = preview.candidatas.filter(c => selecionadas.has(chaveDaCandidata(c)));
+            const r = await occupancyImportService.applyImport(escolhidas);
             // §22 — costura no array local em vez de recarregar a aba inteira.
             if (r.novas.length > 0) {
                 const porUnidade = Object.fromEntries(unidades.map(u => [u.id, u.label]));
                 setLinhas(prev => [
                     ...r.novas.map(o => {
                         const [torre, nome] = (porUnidade[o.unit_id] || ' · ').split(' · ');
-                        const linha = preview.rows.find(x => x.unitId === o.unit_id);
-                        const pessoa = linha?.pessoas.find(pp => pp.clientId === o.client_id);
+                        const cand = preview.candidatas.find(
+                            c => c.unitId === o.unit_id && c.clientId === o.client_id && c.role === o.role);
                         return {
                             ...o,
-                            _client_name: pessoa?.clientName || '—',
+                            _client_name: cand?.clientName || '—',
                             _client_document: null,
                             _client_email: null,
                             _unit_name: nome || '—',
@@ -1053,11 +1141,13 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
                         Quem já está nos contratos vira ocupação. Nada é gravado até você confirmar.
                     </SheetDescription>
                 </SheetHeader>
-                <SheetPanel>
+                <SheetPanel className="p-6">
                     {/* A ÂNCORA É A UNIDADE DO EMPREENDIMENTO. Uma linha por
                         unidade — inclusive as sem ninguém encontrado. Unidade que
                         some da lista vira defeito invisível: foi assim que a
-                        importação de vendas pareceu quebrada em 14/08/2026. */}
+                        importação de vendas pareceu quebrada em 14/08/2026.
+                        A linha sem candidata NÃO tem checkbox: ela está aqui para
+                        dizer onde falta cadastro, não para ser importada. */}
                     {carregandoPreview ? (
                         <div className="text-center py-12">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
@@ -1073,52 +1163,62 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
                             </p>
                         </div>
                     ) : (
-                        <div className="space-y-3">
-                            <div className="text-xs text-gray-500">
-                                {preview.unidadesComPessoa} de {preview.unidadesTotal} unidades com pessoa encontrada
-                                {preview.unidadesEmNegociacao > 0 && ` · ${preview.unidadesEmNegociacao} em negociação`}
-                            </div>
-
-                            {preview.rows.map(r => {
-                                const semNada = r.pessoas.length === 0 && !r.responsavelFinanceiro;
-                                return (
-                                    <label
-                                        key={r.unitId}
-                                        className={`flex items-start gap-3 p-3 rounded-[10px] border transition-all cursor-pointer ${
-                                            r.selected ? 'border-blue-200 bg-blue-50/40' : 'border-gray-200 bg-white'
-                                        } ${semNada ? 'opacity-60 cursor-not-allowed' : ''}`}
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={r.selected}
-                                            disabled={semNada}
-                                            onChange={() => alternarLinha(r.unitId)}
-                                            className="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
-                                        />
-                                        <div className="min-w-0 flex-1">
-                                            <span className="text-sm font-medium text-gray-800">{r.unitLabel}</span>
-                                            {r.pessoas.map(p => (
-                                                <div key={p.role} className="text-xs text-gray-500 mt-0.5">
-                                                    <span className="text-gray-700">{ROLE_LABELS[p.role]}</span>
-                                                    {': '}{p.clientName}
-                                                    <span className="text-gray-400">
-                                                        {' · '}{p.origem}{' · desde '}{formatarData(p.startedAt)}
-                                                    </span>
-                                                </div>
-                                            ))}
-                                            {r.responsavelFinanceiro && (
-                                                <div className="text-xs text-emerald-600 mt-0.5">
-                                                    Também vira responsável financeiro
-                                                </div>
-                                            )}
-                                            {r.motivo && (
-                                                <p className="text-xs text-amber-600 mt-1">{r.motivo}</p>
-                                            )}
-                                        </div>
-                                    </label>
-                                );
-                            })}
-                        </div>
+                        <StandardTable<LinhaImport>
+                            storageKey="condominio:ocupacoes:importar"
+                            columns={COLUNAS_IMPORT}
+                            rows={linhasImport}
+                            rowKey={l => l.chave}
+                            dense
+                            maxHeight="58vh"
+                            searchText={l => `${l.unidade} ${l.pessoa} ${l.papel} ${l.origem} ${l.situacao} ${l.motivo}`}
+                            searchPlaceholder="Buscar por unidade, pessoa ou papel..."
+                            selection={{
+                                selected: selecionadas,
+                                onChange: setSelecionadas,
+                                canSelect: l => l.candidata !== null,
+                            }}
+                            renderCell={(key, l) => {
+                                if (key === 'unidade') {
+                                    // Identificador curto: uma linha. Quem quebra é
+                                    // nome de pessoa (texto livre), não "Torre A · 11".
+                                    return <span className="text-sm font-normal text-gray-700 whitespace-nowrap">{l.unidade}</span>;
+                                }
+                                if (key === 'pessoa') {
+                                    // Nome é texto livre: QUEBRA linha, não trunca —
+                                    // nome cortado é lido como coluna cortada.
+                                    return l.pessoa
+                                        ? <span className="text-sm font-normal text-gray-700 break-words">{l.pessoa}</span>
+                                        : <span className="text-sm font-normal text-gray-400">—</span>;
+                                }
+                                if (key === 'papel') {
+                                    // §8 — texto colorido, sem pílula.
+                                    return l.candidata
+                                        ? <span className={`text-sm font-normal ${ROLE_TEXT_COLOR[l.candidata.role]}`}>{l.papel}</span>
+                                        : <span className="text-sm font-normal text-gray-400">—</span>;
+                                }
+                                if (key === 'origem') {
+                                    return <span className="text-sm font-normal text-gray-600 break-words">{l.origem || '—'}</span>;
+                                }
+                                if (key === 'desde') {
+                                    return <span className="text-sm font-normal text-gray-600">{l.desde || '—'}</span>;
+                                }
+                                if (key === 'motivo') {
+                                    return l.motivo
+                                        ? <span className="text-sm font-normal text-gray-600 break-words">{l.motivo}</span>
+                                        : <span className="text-sm font-normal text-gray-400">—</span>;
+                                }
+                                // Situação: §8, texto colorido sem pílula. O âmbar
+                                // não é erro — é "não vai entrar nesta importação".
+                                return <span className={`text-sm font-normal ${l.tom}`}>{l.situacao}</span>;
+                            }}
+                            footer={
+                                <div className="px-3 py-2.5 border-t border-gray-200 bg-gray-50 text-sm font-normal text-gray-600">
+                                    {preview.unidadesComPessoa} de {preview.unidadesTotal} unidades com pessoa encontrada
+                                    {preview.unidadesEmNegociacao > 0 && ` · ${preview.unidadesEmNegociacao} em negociação`}
+                                    {` · ${preview.candidatas.length} ocupaç${preview.candidatas.length === 1 ? 'ão' : 'ões'} a criar`}
+                                </div>
+                            }
+                        />
                     )}
                 </SheetPanel>
                 <SheetFooter>
@@ -1130,14 +1230,15 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
                     </button>
                     <button
                         onClick={aplicarImportacao}
-                        disabled={importando || !preview || preview.rows.filter(r => r.selected).length === 0}
+                        disabled={importando || selecionadas.size === 0}
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
                     >
                         {importando
                             ? 'Importando...'
-                            /* Conta UNIDADES, não ocupações: cada unidade pode gerar até
-                               três (proprietário, inquilino e responsável financeiro). */
-                            : `Importar ${preview?.rows.filter(r => r.selected).length ?? 0} unidades`}
+                            /* Conta OCUPAÇÕES, que é o que foi marcado linha a linha —
+                               dizer "N unidades" com 3 marcadas na mesma unidade
+                               contaria outra coisa. */
+                            : `Importar ${selecionadas.size} ocupaç${selecionadas.size === 1 ? 'ão' : 'ões'}`}
                     </button>
                 </SheetFooter>
             </Sheet>

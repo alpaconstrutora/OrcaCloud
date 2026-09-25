@@ -61,6 +61,27 @@ for (const status of ['rascunho', 'aprovado', 'pago', 'cancelado']) {
       })(),
       // Nenhum rótulo do formulário pode ter voltado ao estilo gritado.
       rotulosGritados: rotulos.filter(l => getComputedStyle(l).textTransform === 'uppercase').length,
+      // ── Painéis (§30) ───────────────────────────────────────────────────
+      // A queixa foi "não tem separação entre o boleto e os campos". Separação
+      // aqui é medível: painel branco sobre fundo cinza, com borda.
+      paineis: (() => {
+        const cards = [...document.querySelectorAll('div')].filter(d => {
+          const c = getComputedStyle(d);
+          return c.backgroundColor === 'rgb(255, 255, 255)'
+            && c.borderTopWidth === '1px'
+            && parseFloat(c.borderTopLeftRadius) === 10
+            && d.getBoundingClientRect().width > 300;
+        });
+        const corpo = document.querySelector('[data-corpo]');
+        return {
+          quantidade: cards.length,
+          fundoDoCorpo: corpo ? getComputedStyle(corpo).backgroundColor : null,
+          contrasteComOFundo: corpo
+            ? getComputedStyle(corpo).backgroundColor !== 'rgb(255, 255, 255)'
+            : null,
+        };
+      })(),
+      secoes: [...document.querySelectorAll('h3')].map(h => h.textContent.trim()),
     };
   });
 
@@ -83,6 +104,13 @@ if (r.rascunho.radiusCampo !== '6px') falhas.push(`radius ${r.rascunho.radiusCam
 if (r.rascunho.rotulo?.transform !== 'none') falhas.push('rótulo voltou a uppercase (§21)');
 if (r.rascunho.rotulo?.peso !== '600') falhas.push(`peso do rótulo ${r.rascunho.rotulo?.peso}, esperado 600 (§21)`);
 if (r.rascunho.rotulosGritados !== 0) falhas.push(`${r.rascunho.rotulosGritados} rótulos ainda em uppercase (§21)`);
+// Painéis: 2 cards (documento + formulário) sobre um fundo que NÃO é branco.
+if (r.rascunho.paineis.quantidade !== 2) falhas.push(`${r.rascunho.paineis.quantidade} painéis brancos com borda, esperado 2 (documento + formulário)`);
+if (r.rascunho.paineis.contrasteComOFundo !== true) falhas.push(`fundo do corpo é ${r.rascunho.paineis.fundoDoCorpo} — painel branco sobre branco não separa nada`);
+const esperadas = ['Documento original', 'Cobrança', 'Quem recebe', 'Classificação', 'Observações'];
+for (const t of esperadas) {
+  if (!r.rascunho.secoes.includes(t)) falhas.push(`falta o título de seção "${t}"`);
+}
 
 if (falhas.length) {
   console.error('FALHA:\n - ' + falhas.join('\n - '));

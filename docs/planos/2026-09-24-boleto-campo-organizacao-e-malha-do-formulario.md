@@ -123,3 +123,55 @@ aquele drawer para a §16 é trabalho separado, não feito aqui.
 `npx tsc --noEmit` limpo; suíte cheia `465 passed | 5 skipped (470)`,
 `5321 passed | 33 skipped`; `check-ui-standard.sh` e `check-org-selector-guard.sh`
 com exit 0.
+
+---
+
+## Pedido seguinte, mesma sessão (24/09/2026)
+
+> financeiro < boletos a pagar: analise o design UI/Ux.
+> nao tem separacao entre boleto e os campos. crie paineis separando da grupo. Melhorar
+
+### O diagnóstico
+
+A tela inteira estava na mesma cor. O corpo não pintava fundo, então herdava o
+`bg-gray-50` do shell; o cartão do documento também era `bg-gray-50`; e os
+campos, depois da migração da malha, ficaram `bg-gray-50` igualmente. Três
+camadas no mesmo tom, nenhuma borda de verdade — o olho não tinha onde apoiar
+para separar "o que o sistema leu do boleto" de "o que eu preciso decidir".
+Além disso os 11 campos da direita eram uma pilha contínua, sem nenhum título
+intermediário: nada dizia que Valor/Vencimento são uma coisa e Centro de
+Custo/Plano de Contas são outra.
+
+### O que mudou
+
+| Antes | Depois |
+|---|---|
+| corpo sem fundo (herdava gray-50) | `bg-gray-50` explícito, para o branco do painel significar algo |
+| documento em card `bg-gray-50` | `Painel` branco, borda + sombra, `rounded-[10px]` (§30), sticky no desktop |
+| 11 campos numa pilha só | **um** painel com 4 seções: Cobrança · Quem recebe · Classificação · Observações |
+| sem título de grupo | título + ícone + `border-b pb-3`, `space-y-8` entre seções (§30) |
+| dropzone tracejada solta | dropzone sobre branco |
+| Observações sem rótulo próprio, `rows={2}`, com `h-9` de input | "Anotações internas", `rows={3}`, `CAMPO_AREA`, placeholder dizendo que não sai da equipe |
+
+Duas primitivas novas no arquivo — `Painel` e `Secao` — para as duas regras
+do §30 ficarem em um lugar só. **Seção não virou card**: campos preenchidos em
+sequência são um formulário, e três cards empilhados gastariam 3× moldura.
+
+Aplicado também no ramo de **captura** (arquivo escolhido, boleto ainda não
+salvo), senão capturar e editar seriam duas telas diferentes.
+
+### Verificação
+
+O passeio passou a **medir** os painéis, não só a malha: conta os cards brancos
+com borda de 1px e radius 10 (tem de dar 2), confere que o fundo do corpo
+**não** é branco, e exige os 5 títulos de seção na tela. Falha com `exit 1`.
+
+Resultado: `{ quantidade: 2, fundoDoCorpo: gray-50, contrasteComOFundo: true }`,
+5 títulos presentes, malha §21/§30/§16 sem regressão.
+
+⚠️ **Não verificado na tela:** o formulário do ramo de captura (exige upload de
+arquivo de verdade, que o harness sem sessão não faz). A estrutura é a mesma
+do ramo de edição e o typecheck passa, mas isso é inferência, não medição.
+
+Suíte: `466 passed | 5 skipped (471)`, `5331 passed | 33 skipped`.
+`check-ui-standard.sh` exit 0.

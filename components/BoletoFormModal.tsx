@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
     Upload, Loader2, ArrowLeft, FileText, AlertCircle, CheckCircle2,
     Building2, Calendar, DollarSign, Hash, Eye, Save,
-    ThumbsUp, Ban, Trash2, UserPlus, Undo2,
+    ThumbsUp, Ban, Trash2, UserPlus, Undo2, Receipt, Tag, StickyNote,
 } from 'lucide-react';
 import PlanoContasSelect from './PlanoContasSelect';
 import HierarchicalSelect from './HierarchicalSelect';
@@ -43,6 +43,40 @@ const formatBRL = (v?: number) => formatMoney(v);
 const ROTULO = 'text-xs font-semibold text-slate-500';
 const CAMPO = 'w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 outline-none focus:bg-white focus:border-blue-600 transition-colors disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed';
 const CAMPO_AREA = 'w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 outline-none focus:bg-white focus:border-blue-600 transition-colors';
+
+/**
+ * Painel — o card do §30: `bg-white p-6 rounded-[10px] border shadow-sm`.
+ *
+ * Existe porque a tela inteira vivia solta sobre o mesmo cinza do shell
+ * (`bg-gray-50`), e o cartão do documento também era `bg-gray-50`: tudo com a
+ * mesma cor, nada com borda de verdade. O olho não achava onde o boleto
+ * acabava e o formulário começava — foi exatamente a queixa de 24/09/2026.
+ * Branco sobre o cinza do shell é o que separa.
+ */
+const Painel: React.FC<React.PropsWithChildren<{ className?: string }>> = ({ className = '', children }) => (
+    <div className={`bg-white rounded-[10px] border border-gray-100 shadow-sm ${className}`}>
+        {children}
+    </div>
+);
+
+/**
+ * Seção dentro de um painel — §30: título + ícone + `border-b pb-3`, campos em
+ * `space-y-4`, e 32px (`space-y-8`) entre seções irmãs.
+ *
+ * Seção NÃO vira card próprio: campos que o usuário preenche em sequência são
+ * um formulário só. Três cards empilhados fariam o olho entrar e sair três
+ * vezes e gastariam 3× moldura.
+ */
+const Secao: React.FC<React.PropsWithChildren<{ titulo: string; icone: React.ComponentType<{ className?: string }>; acao?: React.ReactNode }>> = ({ titulo, icone: Icone, acao, children }) => (
+    <div className="space-y-4">
+        <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+            <Icone className="w-4 h-4 text-blue-600" />
+            <h3 className="text-sm font-semibold text-gray-900">{titulo}</h3>
+            {acao && <div className="ml-auto">{acao}</div>}
+        </div>
+        {children}
+    </div>
+);
 
 /* Barreira de navegador para a data do vencimento — a mesma janela que
    `vencimentoPlausivel` aplica no service. Sem `min`/`max` o `<input
@@ -541,7 +575,10 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                     </div>
                 </div>
 
-                <div className="p-6 space-y-6">
+                {/* `bg-gray-50` de propósito: o shell (`Layout`) já e cinza, mas esta
+                    tela substitui a lista e precisa carregar o proprio fundo para
+                    que o branco dos paineis signifique alguma coisa. */}
+                <div data-corpo className="p-6 space-y-6 bg-gray-50 min-h-[70vh]">
                     {error && (
                         <div className="flex items-start gap-3 p-3 rounded-[6px] bg-red-50 border border-red-200 text-red-700 text-sm">
                             <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
@@ -559,7 +596,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                     {isCreating && !pendingFile && (
                         <div
                             onClick={() => fileInputRef.current?.click()}
-                            className="border-2 border-dashed border-gray-200 rounded-[10px] p-12 text-center cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-colors"
+                            className="bg-white border-2 border-dashed border-gray-200 rounded-[10px] p-12 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/40 transition-colors"
                         >
                             {uploading ? (
                                 <div className="flex flex-col items-center gap-3 text-blue-600">
@@ -592,145 +629,156 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                     {isCreating && pendingFile && !boleto && (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             {/* Preview do PDF */}
-                            <div className="space-y-4">
-                                <div className="bg-gray-50 rounded-[10px] border border-gray-100 overflow-hidden">
-                                    <div className="px-4 py-2 border-b border-gray-100 flex items-center gap-2 text-xs font-semibold text-slate-500">
-                                        <FileText className="w-3.5 h-3.5" /> Documento original
+                            <div className="space-y-6 lg:sticky lg:top-24 lg:self-start">
+                                <Painel className="overflow-hidden">
+                                    <div className="px-6 py-3.5 border-b border-gray-100 flex items-center gap-2">
+                                        <FileText className="w-4 h-4 text-blue-600" />
+                                        <h3 className="text-sm font-semibold text-gray-900">Documento original</h3>
                                     </div>
-                                    <div className="aspect-[3/4] bg-white">
+                                    <div className="aspect-[3/4] bg-gray-50">
                                         {documentoBlobUrl
                                             ? <iframe src={documentoBlobUrl} className="w-full h-full" title="Boleto" />
                                             : <div className="flex items-center justify-center h-full text-gray-400 text-sm"><Loader2 className="w-5 h-5 animate-spin mr-2" />Carregando...</div>
                                         }
                                     </div>
-                                    <div className="px-4 py-2 text-xs text-gray-500 border-t border-gray-100 truncate">{pendingFile.name}</div>
-                                </div>
+                                    <div className="px-6 py-3 text-xs text-gray-500 border-t border-gray-100 truncate" title={pendingFile.name}>{pendingFile.name}</div>
+                                </Painel>
                             </div>
 
-                            {/* Dados extraídos + formulário */}
-                            <div className="space-y-4">
-                                {pendingExtraction && (
-                                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                                        <ReadOnlyField icon={Building2} label="Banco" value={pendingExtraction.campos.banco_nome?.valor ?? '—'} />
-                                        <ReadOnlyField icon={Hash} label="Confiança" value={`${pendingExtraction.confidence_score ?? 0}%`} />
-                                        {pendingExtraction.campos.beneficiario_nome?.valor && (
-                                            <ReadOnlyField label="Beneficiário" value={
-                                                pendingExtraction.campos.beneficiario_nome.valor
-                                                    .replace(/[\s\-–]+(?:CNPJ|CPF)[:\s]*[\d.\/\-]+.*/i, '')
-                                                    .replace(/\s+\d{11,14}\b.*/g, '')
-                                                    .trim()
-                                            } />
-                                        )}
-                                        {pendingExtraction.campos.beneficiario_cnpj?.valor && (
-                                            <ReadOnlyField label="CNPJ / CPF" value={pendingExtraction.campos.beneficiario_cnpj.valor} mono />
-                                        )}
-                                    </div>
-                                )}
+                            {/* Dados extraídos + formulário — mesmas seções da edição */}
+                            <Painel className="p-6 space-y-8">
+                                <Secao titulo="Cobrança" icone={Receipt}>
+                                    {pendingExtraction && (
+                                        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                            <ReadOnlyField icon={Building2} label="Banco" value={pendingExtraction.campos.banco_nome?.valor ?? '—'} />
+                                            <ReadOnlyField icon={Hash} label="Confiança" value={`${pendingExtraction.confidence_score ?? 0}%`} />
+                                            {pendingExtraction.campos.beneficiario_nome?.valor && (
+                                                <ReadOnlyField label="Beneficiário" value={
+                                                    pendingExtraction.campos.beneficiario_nome.valor
+                                                        .replace(/[\s\-–]+(?:CNPJ|CPF)[:\s]*[\d.\/\-]+.*/i, '')
+                                                        .replace(/\s+\d{11,14}\b.*/g, '')
+                                                        .trim()
+                                                } />
+                                            )}
+                                            {pendingExtraction.campos.beneficiario_cnpj?.valor && (
+                                                <ReadOnlyField label="CNPJ / CPF" value={pendingExtraction.campos.beneficiario_cnpj.valor} mono />
+                                            )}
+                                        </div>
+                                    )}
 
-                                {/* Organização — obrigatória para salvar. Nunca oferece
-                                    "Todas": `organization_id` nulo é recusado pela RLS
-                                    (REGRA #5). */}
-                                {orgsGravaveis.length > 0 && (
-                                    <FormField
-                                        label="Organização *"
-                                        icon={Building2}
-                                        hint={!organizationId ? 'Escolha antes de salvar — ela define quais fornecedores, obras e centros de custo aparecem abaixo.' : null}
-                                    >
-                                        <select
-                                            value={organizationId}
-                                            onChange={e => { setOrganizationId(e.target.value); onOrgChange?.(e.target.value); }}
-                                            className={CAMPO}
-                                            autoFocus={!organizationId}
+                                    {/* Organização — obrigatória para salvar. Nunca oferece
+                                        "Todas": `organization_id` nulo é recusado pela RLS
+                                        (REGRA #5). */}
+                                    {orgsGravaveis.length > 0 && (
+                                        <FormField
+                                            label="Organização *"
+                                            icon={Building2}
+                                            hint={!organizationId ? 'Escolha antes de salvar — ela define quais fornecedores, obras e centros de custo aparecem abaixo.' : null}
                                         >
-                                            <option value="">— Selecione a organização —</option>
-                                            {orgsGravaveis.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                                            <select
+                                                value={organizationId}
+                                                onChange={e => { setOrganizationId(e.target.value); onOrgChange?.(e.target.value); }}
+                                                className={CAMPO}
+                                                autoFocus={!organizationId}
+                                            >
+                                                <option value="">— Selecione a organização —</option>
+                                                {orgsGravaveis.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                                            </select>
+                                        </FormField>
+                                    )}
+
+                                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                        <FormField label="Valor (R$)" icon={DollarSign}>
+                                            <input type="number" step="0.01" min="0" value={valor}
+                                                onChange={e => setValor(e.target.value)}
+                                                className={CAMPO} />
+                                        </FormField>
+                                        <FormField label="Vencimento" icon={Calendar}>
+                                            <input type="date" value={vencimento}
+                                                min={VENCIMENTO_MIN} max={VENCIMENTO_MAX}
+                                                onChange={e => setVencimento(e.target.value)}
+                                                className={CAMPO} />
+                                        </FormField>
+                                    </div>
+
+                                    <MultaJurosFields
+                                        multa={multa} setMulta={setMulta}
+                                        multaPercentual={multaPercentual} setMultaPercentual={setMultaPercentual}
+                                        jurosDia={jurosDia} setJurosDia={setJurosDia}
+                                        jurosDiaTipo={jurosDiaTipo} setJurosDiaTipo={setJurosDiaTipo}
+                                    />
+
+                                </Secao>
+
+                                <Secao titulo="Classificação" icone={Tag}>
+                                    <FormField label="Descrição">
+                                        <input
+                                            type="text"
+                                            value={descricao}
+                                            onChange={e => setDescricao(e.target.value)}
+                                            placeholder="O que está sendo pago (vai para a descrição do título)"
+                                            className={CAMPO}
+                                        />
+                                    </FormField>
+
+                                    <FormField label="Obra / Projeto">
+                                        <select value={selectedProjectId} onChange={e => setSelectedProjectId(e.target.value)}
+                                            className={CAMPO}>
+                                            <option value="">— Sem vínculo —</option>
+                                            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                         </select>
                                     </FormField>
-                                )}
 
-                                <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                                    <FormField label="Valor (R$)" icon={DollarSign}>
-                                        <input type="number" step="0.01" min="0" value={valor}
-                                            onChange={e => setValor(e.target.value)}
-                                            className={CAMPO} />
+                                    <FormField label="Centro de Custo">
+                                        <CostCenterSelect
+                                            costCenters={costCenters}
+                                            value={costCenterId}
+                                            onChange={setCostCenterId}
+                                            hoverCls="hover:bg-blue-50"
+                                            size="sm"
+                                        />
                                     </FormField>
-                                    <FormField label="Vencimento" icon={Calendar}>
-                                        <input type="date" value={vencimento}
-                                            min={VENCIMENTO_MIN} max={VENCIMENTO_MAX}
-                                            onChange={e => setVencimento(e.target.value)}
-                                            className={CAMPO} />
+
+                                    <FormField label="Plano de Contas">
+                                        <PlanoContasSelect
+                                            planoContas={planoContas}
+                                            value={planoDeContasId}
+                                            onChange={setPlanoDeContasId}
+                                            placeholder="—"
+                                            hoverCls="hover:bg-blue-50"
+                                            size="sm"
+                                        />
                                     </FormField>
-                                </div>
 
-                                <MultaJurosFields
-                                    multa={multa} setMulta={setMulta}
-                                    multaPercentual={multaPercentual} setMultaPercentual={setMultaPercentual}
-                                    jurosDia={jurosDia} setJurosDia={setJurosDia}
-                                    jurosDiaTipo={jurosDiaTipo} setJurosDiaTipo={setJurosDiaTipo}
-                                />
+                                    {/* Conta Financeira (financial_categories) — a dimensão que a DRE
+                                        lê. Distinta de Centro de Custo e de Plano de Contas; mesmo
+                                        drawer do ContractModal. */}
+                                    <FormField label="Conta Financeira">
+                                        <HierarchicalSelect
+                                            items={contasFinanceiras.map(c => ({ id: c.id, name: c.name, parentId: c.parent_id ?? null }))}
+                                            value={categoryId}
+                                            onChange={setCategoryId}
+                                            valueField="id"
+                                            placeholder="—"
+                                            hoverCls="hover:bg-blue-50"
+                                            size="sm"
+                                            panelVariant="drawer"
+                                            drawerTitle="Selecionar Conta Financeira"
+                                        />
+                                    </FormField>
 
-                                <FormField label="Descrição">
-                                    <input
-                                        type="text"
-                                        value={descricao}
-                                        onChange={e => setDescricao(e.target.value)}
-                                        placeholder="O que está sendo pago (vai para a descrição do título)"
-                                        className={CAMPO}
-                                    />
-                                </FormField>
+                                </Secao>
 
-                                <FormField label="Obra / Projeto">
-                                    <select value={selectedProjectId} onChange={e => setSelectedProjectId(e.target.value)}
-                                        className={CAMPO}>
-                                        <option value="">— Sem vínculo —</option>
-                                        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                                    </select>
-                                </FormField>
+                                <Secao titulo="Observações" icone={StickyNote}>
+                                    <FormField label="Anotações internas">
+                                        <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)}
+                                            rows={3}
+                                            placeholder="Só para a equipe — não vai para o título nem para o fornecedor."
+                                            className={CAMPO_AREA} />
+                                    </FormField>
+                                </Secao>
 
-                                <FormField label="Centro de Custo">
-                                    <CostCenterSelect
-                                        costCenters={costCenters}
-                                        value={costCenterId}
-                                        onChange={setCostCenterId}
-                                        hoverCls="hover:bg-blue-50"
-                                        size="sm"
-                                    />
-                                </FormField>
-
-                                <FormField label="Plano de Contas">
-                                    <PlanoContasSelect
-                                        planoContas={planoContas}
-                                        value={planoDeContasId}
-                                        onChange={setPlanoDeContasId}
-                                        placeholder="—"
-                                        hoverCls="hover:bg-blue-50"
-                                        size="sm"
-                                    />
-                                </FormField>
-
-                                {/* Conta Financeira (financial_categories) — a dimensão que a DRE
-                                    lê. Distinta de Centro de Custo e de Plano de Contas; mesmo
-                                    drawer do ContractModal. */}
-                                <FormField label="Conta Financeira">
-                                    <HierarchicalSelect
-                                        items={contasFinanceiras.map(c => ({ id: c.id, name: c.name, parentId: c.parent_id ?? null }))}
-                                        value={categoryId}
-                                        onChange={setCategoryId}
-                                        valueField="id"
-                                        placeholder="—"
-                                        hoverCls="hover:bg-blue-50"
-                                        size="sm"
-                                        panelVariant="drawer"
-                                        drawerTitle="Selecionar Conta Financeira"
-                                    />
-                                </FormField>
-
-                                <FormField label="Observações">
-                                    <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)}
-                                        rows={2} className={CAMPO} />
-                                </FormField>
-
-                                <div className="flex justify-end gap-2 pt-2">
+                                <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
                                     <button onClick={() => { setPendingFile(null); setPendingExtraction(null); setDocumentoBlobUrl(null); }}
                                         className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-[6px] text-sm font-medium">
                                         Trocar arquivo
@@ -754,7 +802,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                         Salvar e fechar
                                     </button>
                                 </div>
-                            </div>
+                            </Painel>
                         </div>
                     )}
 
@@ -762,13 +810,13 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                     {boleto && (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             {/* Coluna esquerda: visualização do documento */}
-                            <div className="space-y-4">
-                                <div className="bg-gray-50 rounded-[10px] border border-gray-100 overflow-hidden">
-                                    <div className="px-4 py-2 border-b border-gray-100 flex items-center gap-2 text-xs font-semibold text-slate-500">
-                                        <FileText className="w-3.5 h-3.5" />
-                                        Documento original
+                            <div className="space-y-6 lg:sticky lg:top-24 lg:self-start">
+                                <Painel className="overflow-hidden">
+                                    <div className="px-6 py-3.5 border-b border-gray-100 flex items-center gap-2">
+                                        <FileText className="w-4 h-4 text-blue-600" />
+                                        <h3 className="text-sm font-semibold text-gray-900">Documento original</h3>
                                     </div>
-                                    <div className="aspect-[3/4] bg-white">
+                                    <div className="aspect-[3/4] bg-gray-50">
                                         {boleto.documento_mime === 'application/pdf' ? (
                                             documentoBlobUrl
                                                 ? <iframe src={documentoBlobUrl} className="w-full h-full" title="Boleto" />
@@ -777,15 +825,15 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                             <img src={documentoBlobUrl} className="w-full h-full object-contain" alt="Boleto" />
                                         ) : null}
                                     </div>
-                                    <div className="px-4 py-2 flex items-center justify-between text-xs text-gray-500 border-t border-gray-100">
-                                        <span className="truncate">{boleto.documento_nome}</span>
+                                    <div className="px-6 py-3 flex items-center justify-between gap-3 text-xs text-gray-500 border-t border-gray-100">
+                                        <span className="truncate" title={boleto.documento_nome}>{boleto.documento_nome}</span>
                                         {documentoUrl && (
-                                            <a href={documentoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1">
+                                            <a href={documentoUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 text-blue-600 hover:underline flex items-center gap-1">
                                                 <Eye className="w-3 h-3" /> Abrir
                                             </a>
                                         )}
                                     </div>
-                                </div>
+                                </Painel>
 
                                 {/* Linha digitável manual (quando confidence baixo) */}
                                 {boleto.confidence_score !== undefined && boleto.confidence_score < 80 && (
@@ -814,362 +862,375 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                 )}
                             </div>
 
-                            {/* Coluna direita: dados extraídos e form */}
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                                    <ReadOnlyField icon={Building2} label="Banco" value={boleto.banco_nome ?? boleto.banco_codigo ?? '—'} />
-                                    <ReadOnlyField icon={Hash} label="Linha digitável" value={boleto.linha_digitavel ?? '—'} mono />
-                                </div>
+                            {/* Coluna direita: UM painel, quatro seções (§30). O que o
+                                sistema LEU do boleto (banco, linha, beneficiário) fica em
+                                "Cobrança"; o que o usuário DECIDE fica em "Classificação"
+                                — é essa a fronteira que a tela não mostrava. */}
+                            <Painel className="p-6 space-y-8">
+                                <Secao titulo="Cobrança" icone={Receipt}>
+                                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                        <ReadOnlyField icon={Building2} label="Banco" value={boleto.banco_nome ?? boleto.banco_codigo ?? '—'} />
+                                        <ReadOnlyField icon={Hash} label="Linha digitável" value={boleto.linha_digitavel ?? '—'} mono />
+                                    </div>
 
-                                <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                                    <FormField label="Valor (R$)" icon={DollarSign}>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            value={valor}
-                                            onChange={(e) => setValor(e.target.value)}
-                                            className={CAMPO}
-                                        />
-                                    </FormField>
-                                    <FormField label="Vencimento" icon={Calendar}>
-                                        <input
-                                            type="date"
-                                            value={vencimento}
-                                            min={VENCIMENTO_MIN}
-                                            max={VENCIMENTO_MAX}
-                                            onChange={(e) => setVencimento(e.target.value)}
-                                            className={CAMPO}
-                                        />
-                                    </FormField>
-                                </div>
+                                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                        <FormField label="Valor (R$)" icon={DollarSign}>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                value={valor}
+                                                onChange={(e) => setValor(e.target.value)}
+                                                className={CAMPO}
+                                            />
+                                        </FormField>
+                                        <FormField label="Vencimento" icon={Calendar}>
+                                            <input
+                                                type="date"
+                                                value={vencimento}
+                                                min={VENCIMENTO_MIN}
+                                                max={VENCIMENTO_MAX}
+                                                onChange={(e) => setVencimento(e.target.value)}
+                                                className={CAMPO}
+                                            />
+                                        </FormField>
+                                    </div>
 
-                                <MultaJurosFields
-                                    multa={multa} setMulta={setMulta}
-                                    multaPercentual={multaPercentual} setMultaPercentual={setMultaPercentual}
-                                    jurosDia={jurosDia} setJurosDia={setJurosDia}
-                                    jurosDiaTipo={jurosDiaTipo} setJurosDiaTipo={setJurosDiaTipo}
-                                />
+                                    <MultaJurosFields
+                                        multa={multa} setMulta={setMulta}
+                                        multaPercentual={multaPercentual} setMultaPercentual={setMultaPercentual}
+                                        jurosDia={jurosDia} setJurosDia={setJurosDia}
+                                        jurosDiaTipo={jurosDiaTipo} setJurosDiaTipo={setJurosDiaTipo}
+                                    />
+                                </Secao>
 
-                                {/* Beneficiário só aparece quando não há fornecedor vinculado — evita duplicidade */}
-                                {boleto.beneficiario_nome && !supplierId && (() => {
-                                    const nomeExib = boleto.beneficiario_nome!
-                                        .replace(/[\s\-–]+(?:CNPJ|CPF)[:\s]*[\d.\/\-]+.*/i, '')
-                                        .replace(/\s+\d{11,14}\b.*/g, '')
-                                        .trim();
-                                    let cnpjExib = boleto.beneficiario_cnpj ?? '';
-                                    if (!cnpjExib) {
-                                        const m = boleto.beneficiario_nome!.match(/\b(\d{14}|\d{11})\b/);
-                                        if (m) cnpjExib = m[1];
-                                    }
-                                    return (
-                                        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                                            <ReadOnlyField label="Beneficiário" value={nomeExib || boleto.beneficiario_nome!} />
-                                            <ReadOnlyField label="CNPJ / CPF" value={cnpjExib || '—'} mono />
-                                        </div>
-                                    );
-                                })()}
-
-                                <FormField label="Fornecedor">
-                                    <>
-                                        {boleto.sugestao_supplier_id && supplierId === boleto.sugestao_supplier_id && (
-                                            <div className="flex items-center gap-2 mb-1.5">
-                                                <span className="inline-flex items-center gap-1 text-sm font-normal text-emerald-700">
-                                                    <CheckCircle2 className="w-3.5 h-3.5" /> Sugerido via CNPJ
-                                                </span>
-                                                <button type="button" onClick={() => setSupplierId('')} className="text-xs text-gray-700 hover:text-gray-900 underline">limpar</button>
+                                <Secao titulo="Quem recebe" icone={UserPlus}>
+                                    {/* Beneficiário só aparece quando não há fornecedor vinculado — evita duplicidade */}
+                                    {boleto.beneficiario_nome && !supplierId && (() => {
+                                        const nomeExib = boleto.beneficiario_nome!
+                                            .replace(/[\s\-–]+(?:CNPJ|CPF)[:\s]*[\d.\/\-]+.*/i, '')
+                                            .replace(/\s+\d{11,14}\b.*/g, '')
+                                            .trim();
+                                        let cnpjExib = boleto.beneficiario_cnpj ?? '';
+                                        if (!cnpjExib) {
+                                            const m = boleto.beneficiario_nome!.match(/\b(\d{14}|\d{11})\b/);
+                                            if (m) cnpjExib = m[1];
+                                        }
+                                        return (
+                                            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                                <ReadOnlyField label="Beneficiário" value={nomeExib || boleto.beneficiario_nome!} />
+                                                <ReadOnlyField label="CNPJ / CPF" value={cnpjExib || '—'} mono />
                                             </div>
-                                        )}
-                                        <div className="flex gap-2 items-stretch">
-                                            {/* Drawer lateral em tabela (Nome · CNPJ/CPF · Categoria,
-                                                ordenável, com busca e filtro de categoria) — o <select>
-                                                nativo não permitia pesquisar num catálogo longo. */}
-                                            <div className="flex-1 min-w-0 overflow-hidden">
-                                                <SupplierSelect
-                                                    suppliers={suppliers}
-                                                    value={supplierId}
-                                                    onChange={(v) => { setSupplierId(v); setShowNovoFornecedor(false); }}
-                                                    placeholder="Selecione um fornecedor"
-                                                />
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => { setShowNovoFornecedor(v => !v); setSupplierId(''); }}
-                                                title="Cadastrar novo fornecedor com dados do boleto"
-                                                className={`shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 h-9 rounded-[6px] border text-sm font-medium transition-colors ${
-                                                    showNovoFornecedor
-                                                        ? 'bg-blue-600 text-white border-blue-600'
-                                                        : 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50'
-                                                }`}
-                                            >
-                                                <UserPlus className="w-3.5 h-3.5" />
-                                                Novo
-                                            </button>
-                                        </div>
+                                        );
+                                    })()}
 
-                                        {/* Mini-formulário de cadastro rápido */}
-                                        {showNovoFornecedor && (
-                                            <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-[10px] space-y-4">
-                                                <p className="text-xs font-semibold text-blue-700 flex items-center gap-1.5">
-                                                    <UserPlus className="w-3 h-3" /> Cadastrar novo fornecedor
-                                                </p>
-
-                                                <div>
-                                                    <label className={`${ROTULO} block mb-1.5`}>Razão Social *</label>
-                                                    <input
-                                                        type="text"
-                                                        required
-                                                        value={novoForn.name}
-                                                        onChange={e => setNovoForn(p => ({ ...p, name: e.target.value }))}
-                                                        className={CAMPO}
-                                                        placeholder="Nome do fornecedor"
+                                    <FormField label="Fornecedor">
+                                        <>
+                                            {boleto.sugestao_supplier_id && supplierId === boleto.sugestao_supplier_id && (
+                                                <div className="flex items-center gap-2 mb-1.5">
+                                                    <span className="inline-flex items-center gap-1 text-sm font-normal text-emerald-700">
+                                                        <CheckCircle2 className="w-3.5 h-3.5" /> Sugerido via CNPJ
+                                                    </span>
+                                                    <button type="button" onClick={() => setSupplierId('')} className="text-xs text-gray-700 hover:text-gray-900 underline">limpar</button>
+                                                </div>
+                                            )}
+                                            <div className="flex gap-2 items-stretch">
+                                                {/* Drawer lateral em tabela (Nome · CNPJ/CPF · Categoria,
+                                                    ordenável, com busca e filtro de categoria) — o <select>
+                                                    nativo não permitia pesquisar num catálogo longo. */}
+                                                <div className="flex-1 min-w-0 overflow-hidden">
+                                                    <SupplierSelect
+                                                        suppliers={suppliers}
+                                                        value={supplierId}
+                                                        onChange={(v) => { setSupplierId(v); setShowNovoFornecedor(false); }}
+                                                        placeholder="Selecione um fornecedor"
                                                     />
                                                 </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setShowNovoFornecedor(v => !v); setSupplierId(''); }}
+                                                    title="Cadastrar novo fornecedor com dados do boleto"
+                                                    className={`shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 h-9 rounded-[6px] border text-sm font-medium transition-colors ${
+                                                        showNovoFornecedor
+                                                            ? 'bg-blue-600 text-white border-blue-600'
+                                                            : 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50'
+                                                    }`}
+                                                >
+                                                    <UserPlus className="w-3.5 h-3.5" />
+                                                    Novo
+                                                </button>
+                                            </div>
 
-                                                <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                            {/* Mini-formulário de cadastro rápido */}
+                                            {showNovoFornecedor && (
+                                                <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-[10px] space-y-4">
+                                                    <p className="text-xs font-semibold text-blue-700 flex items-center gap-1.5">
+                                                        <UserPlus className="w-3 h-3" /> Cadastrar novo fornecedor
+                                                    </p>
+
                                                     <div>
-                                                        <label className={`${ROTULO} block mb-1.5`}>CNPJ / CPF</label>
+                                                        <label className={`${ROTULO} block mb-1.5`}>Razão Social *</label>
                                                         <input
                                                             type="text"
-                                                            value={novoForn.document}
-                                                            onChange={e => setNovoForn(p => ({ ...p, document: e.target.value }))}
-                                                            className={`${CAMPO} font-mono`}
-                                                            placeholder="00.000.000/0000-00"
+                                                            required
+                                                            value={novoForn.name}
+                                                            onChange={e => setNovoForn(p => ({ ...p, name: e.target.value }))}
+                                                            className={CAMPO}
+                                                            placeholder="Nome do fornecedor"
                                                         />
                                                     </div>
-                                                    <div>
-                                                        <label className={`${ROTULO} block mb-1.5`}>Tipo</label>
-                                                        <select
-                                                            value={novoForn.type}
-                                                            onChange={e => setNovoForn(p => ({ ...p, type: e.target.value as 'PJ' | 'PF' }))}
-                                                            className={CAMPO}
-                                                        >
-                                                            <option value="PJ">Pessoa Jurídica</option>
-                                                            <option value="PF">Pessoa Física</option>
-                                                        </select>
-                                                    </div>
-                                                </div>
 
-                                                <div>
-                                                    <label className={`${ROTULO} block mb-1.5`}>Categoria</label>
-                                                    <select
-                                                        value={novoForn.category}
-                                                        onChange={e => setNovoForn(p => ({ ...p, category: e.target.value }))}
-                                                        className={CAMPO}
-                                                    >
-                                                        {['Materiais de Construção','Mão de Obra / Serviços','Equipamentos / Ferramentas','Consultoria / Projetos','Transporte / Logística','Outros'].map(c => (
-                                                            <option key={c} value={c}>{c}</option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-
-                                                {/* Endereço */}
-                                                <div className="pt-1 border-t border-blue-100">
-                                                    <p className="text-xs font-semibold text-slate-500 mb-2">Endereço</p>
-                                                    <div className="grid grid-cols-3 gap-x-6 gap-y-4 mb-2">
-                                                        <div className="col-span-2">
-                                                            <label className={`${ROTULO} block mb-1.5`}>Rua / Logradouro</label>
-                                                            <input
-                                                                type="text"
-                                                                value={novoForn.street}
-                                                                onChange={e => setNovoForn(p => ({ ...p, street: e.target.value }))}
-                                                                className={CAMPO}
-                                                                placeholder="Av. Paulista"
-                                                            />
-                                                        </div>
+                                                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                                                         <div>
-                                                            <label className={`${ROTULO} block mb-1.5`}>Número</label>
+                                                            <label className={`${ROTULO} block mb-1.5`}>CNPJ / CPF</label>
                                                             <input
                                                                 type="text"
-                                                                value={novoForn.number}
-                                                                onChange={e => setNovoForn(p => ({ ...p, number: e.target.value }))}
-                                                                className={CAMPO}
-                                                                placeholder="123"
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-x-6 gap-y-4 mb-2">
-                                                        <div>
-                                                            <label className={`${ROTULO} block mb-1.5`}>Bairro</label>
-                                                            <input
-                                                                type="text"
-                                                                value={novoForn.neighborhood}
-                                                                onChange={e => setNovoForn(p => ({ ...p, neighborhood: e.target.value }))}
-                                                                className={CAMPO}
-                                                                placeholder="Centro"
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <label className={`${ROTULO} block mb-1.5`}>CEP</label>
-                                                            <input
-                                                                type="text"
-                                                                value={novoForn.zip_code}
-                                                                onChange={e => setNovoForn(p => ({ ...p, zip_code: e.target.value }))}
+                                                                value={novoForn.document}
+                                                                onChange={e => setNovoForn(p => ({ ...p, document: e.target.value }))}
                                                                 className={`${CAMPO} font-mono`}
-                                                                placeholder="00000-000"
-                                                                maxLength={9}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                    <div className="grid grid-cols-3 gap-x-6 gap-y-4">
-                                                        <div className="col-span-2">
-                                                            <label className={`${ROTULO} block mb-1.5`}>Cidade</label>
-                                                            <input
-                                                                type="text"
-                                                                value={novoForn.city}
-                                                                onChange={e => setNovoForn(p => ({ ...p, city: e.target.value }))}
-                                                                className={CAMPO}
-                                                                placeholder="São Paulo"
+                                                                placeholder="00.000.000/0000-00"
                                                             />
                                                         </div>
                                                         <div>
-                                                            <label className={`${ROTULO} block mb-1.5`}>UF</label>
+                                                            <label className={`${ROTULO} block mb-1.5`}>Tipo</label>
                                                             <select
-                                                                value={novoForn.state}
-                                                                onChange={e => setNovoForn(p => ({ ...p, state: e.target.value }))}
+                                                                value={novoForn.type}
+                                                                onChange={e => setNovoForn(p => ({ ...p, type: e.target.value as 'PJ' | 'PF' }))}
                                                                 className={CAMPO}
                                                             >
-                                                                <option value="">—</option>
-                                                                {['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map(uf => (
-                                                                    <option key={uf} value={uf}>{uf}</option>
-                                                                ))}
+                                                                <option value="PJ">Pessoa Jurídica</option>
+                                                                <option value="PF">Pessoa Física</option>
                                                             </select>
                                                         </div>
                                                     </div>
+
+                                                    <div>
+                                                        <label className={`${ROTULO} block mb-1.5`}>Categoria</label>
+                                                        <select
+                                                            value={novoForn.category}
+                                                            onChange={e => setNovoForn(p => ({ ...p, category: e.target.value }))}
+                                                            className={CAMPO}
+                                                        >
+                                                            {['Materiais de Construção','Mão de Obra / Serviços','Equipamentos / Ferramentas','Consultoria / Projetos','Transporte / Logística','Outros'].map(c => (
+                                                                <option key={c} value={c}>{c}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+
+                                                    {/* Endereço */}
+                                                    <div className="pt-1 border-t border-blue-100">
+                                                        <p className="text-xs font-semibold text-slate-500 mb-2">Endereço</p>
+                                                        <div className="grid grid-cols-3 gap-x-6 gap-y-4 mb-2">
+                                                            <div className="col-span-2">
+                                                                <label className={`${ROTULO} block mb-1.5`}>Rua / Logradouro</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={novoForn.street}
+                                                                    onChange={e => setNovoForn(p => ({ ...p, street: e.target.value }))}
+                                                                    className={CAMPO}
+                                                                    placeholder="Av. Paulista"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className={`${ROTULO} block mb-1.5`}>Número</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={novoForn.number}
+                                                                    onChange={e => setNovoForn(p => ({ ...p, number: e.target.value }))}
+                                                                    className={CAMPO}
+                                                                    placeholder="123"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="grid grid-cols-2 gap-x-6 gap-y-4 mb-2">
+                                                            <div>
+                                                                <label className={`${ROTULO} block mb-1.5`}>Bairro</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={novoForn.neighborhood}
+                                                                    onChange={e => setNovoForn(p => ({ ...p, neighborhood: e.target.value }))}
+                                                                    className={CAMPO}
+                                                                    placeholder="Centro"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className={`${ROTULO} block mb-1.5`}>CEP</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={novoForn.zip_code}
+                                                                    onChange={e => setNovoForn(p => ({ ...p, zip_code: e.target.value }))}
+                                                                    className={`${CAMPO} font-mono`}
+                                                                    placeholder="00000-000"
+                                                                    maxLength={9}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
+                                                            <div className="col-span-2">
+                                                                <label className={`${ROTULO} block mb-1.5`}>Cidade</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={novoForn.city}
+                                                                    onChange={e => setNovoForn(p => ({ ...p, city: e.target.value }))}
+                                                                    className={CAMPO}
+                                                                    placeholder="São Paulo"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className={`${ROTULO} block mb-1.5`}>UF</label>
+                                                                <select
+                                                                    value={novoForn.state}
+                                                                    onChange={e => setNovoForn(p => ({ ...p, state: e.target.value }))}
+                                                                    className={CAMPO}
+                                                                >
+                                                                    <option value="">—</option>
+                                                                    {['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map(uf => (
+                                                                        <option key={uf} value={uf}>{uf}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex gap-2 pt-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleSalvarNovoFornecedor}
+                                                            disabled={salvandoForn || !novoForn.name.trim()}
+                                                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-[6px] text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                                                        >
+                                                            {salvandoForn ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                                                            Salvar e selecionar
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowNovoFornecedor(false)}
+                                                            className="px-3 py-2 text-gray-500 hover:text-gray-700 text-sm font-medium"
+                                                        >
+                                                            Cancelar
+                                                        </button>
+                                                    </div>
                                                 </div>
+                                            )}
+                                        </>
+                                    </FormField>
 
-                                                <div className="flex gap-2 pt-1">
-                                                    <button
-                                                        type="button"
-                                                        onClick={handleSalvarNovoFornecedor}
-                                                        disabled={salvandoForn || !novoForn.name.trim()}
-                                                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-[6px] text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-                                                    >
-                                                        {salvandoForn ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                                                        Salvar e selecionar
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setShowNovoFornecedor(false)}
-                                                        className="px-3 py-2 text-gray-500 hover:text-gray-700 text-sm font-medium"
-                                                    >
-                                                        Cancelar
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </>
-                                </FormField>
+                                    <FormField label="Descrição">
+                                        <input
+                                            type="text"
+                                            value={descricao}
+                                            onChange={e => setDescricao(e.target.value)}
+                                            placeholder="O que está sendo pago (vai para a descrição do título)"
+                                            className={CAMPO}
+                                        />
+                                    </FormField>
+                                </Secao>
 
-                                <FormField label="Descrição">
-                                    <input
-                                        type="text"
-                                        value={descricao}
-                                        onChange={e => setDescricao(e.target.value)}
-                                        placeholder="O que está sendo pago (vai para a descrição do título)"
-                                        className={CAMPO}
-                                    />
-                                </FormField>
-
-                                {/* Organização do boleto. NAO e o seletor do topo: o topo e
-                                    filtro de listagem, este campo é a org DONA do registro —
-                                    é ela que decide quais fornecedores, obras, centros de
-                                    custo e planos de contas aparecem nos campos abaixo.
-                                    Editável só em rascunho/revisão: depois da aprovação existe
-                                    título em `internal_transactions` na org antiga. */}
-                                <FormField
-                                    label="Organização"
-                                    icon={Building2}
-                                    hint={boletoService.motivoParaNaoMudarOrganizacao(boleto.status)
-                                        ?? 'Trocar limpa fornecedor, obra, centro de custo, plano de contas e conta financeira — são cadastros da organização atual.'}
-                                >
-                                    <select
-                                        value={organizationId}
-                                        disabled={!boletoService.podeMudarOrganizacao(boleto.status) || trocandoOrg || busy}
-                                        onChange={(e) => handleTrocarOrganizacao(e.target.value)}
-                                        className={CAMPO}
-                                        title={boletoService.motivoParaNaoMudarOrganizacao(boleto.status) ?? undefined}
+                                <Secao titulo="Classificação" icone={Tag}>
+                                    {/* Organização do boleto. NAO e o seletor do topo: o topo e
+                                        filtro de listagem, este campo é a org DONA do registro —
+                                        é ela que decide quais fornecedores, obras, centros de
+                                        custo e planos de contas aparecem nos campos abaixo.
+                                        Editável só em rascunho/revisão: depois da aprovação existe
+                                        título em `internal_transactions` na org antiga. */}
+                                    <FormField
+                                        label="Organização"
+                                        icon={Building2}
+                                        hint={boletoService.motivoParaNaoMudarOrganizacao(boleto.status)
+                                            ?? 'Trocar limpa fornecedor, obra, centro de custo, plano de contas e conta financeira — são cadastros da organização atual.'}
                                     >
-                                        {/* A org do boleto pode não estar entre as graváveis (perdeu
-                                            acesso, ou é leitura por outra via) — sem esta linha o
-                                            <select> mostraria a org errada, a primeira da lista. */}
-                                        {!orgsGravaveis.some(o => o.id === organizationId) && (
-                                            <option value={organizationId}>
-                                                {organizations.find(o => o.id === organizationId)?.name ?? 'Organização atual'}
-                                            </option>
-                                        )}
-                                        {orgsGravaveis.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-                                    </select>
-                                </FormField>
+                                        <select
+                                            value={organizationId}
+                                            disabled={!boletoService.podeMudarOrganizacao(boleto.status) || trocandoOrg || busy}
+                                            onChange={(e) => handleTrocarOrganizacao(e.target.value)}
+                                            className={CAMPO}
+                                            title={boletoService.motivoParaNaoMudarOrganizacao(boleto.status) ?? undefined}
+                                        >
+                                            {/* A org do boleto pode não estar entre as graváveis (perdeu
+                                                acesso, ou é leitura por outra via) — sem esta linha o
+                                                <select> mostraria a org errada, a primeira da lista. */}
+                                            {!orgsGravaveis.some(o => o.id === organizationId) && (
+                                                <option value={organizationId}>
+                                                    {organizations.find(o => o.id === organizationId)?.name ?? 'Organização atual'}
+                                                </option>
+                                            )}
+                                            {orgsGravaveis.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                                        </select>
+                                    </FormField>
 
-                                <FormField label="Obra / Projeto">
-                                    <select
-                                        value={selectedProjectId}
-                                        onChange={(e) => setSelectedProjectId(e.target.value)}
-                                        className={CAMPO}
-                                    >
-                                        <option value="">— Sem vínculo —</option>
-                                        {projects.map(p => (
-                                            <option key={p.id} value={p.id}>{p.name}</option>
-                                        ))}
-                                    </select>
-                                </FormField>
+                                    <FormField label="Obra / Projeto">
+                                        <select
+                                            value={selectedProjectId}
+                                            onChange={(e) => setSelectedProjectId(e.target.value)}
+                                            className={CAMPO}
+                                        >
+                                            <option value="">— Sem vínculo —</option>
+                                            {projects.map(p => (
+                                                <option key={p.id} value={p.id}>{p.name}</option>
+                                            ))}
+                                        </select>
+                                    </FormField>
 
-                                <FormField label="Centro de Custo">
-                                    <CostCenterSelect
-                                        costCenters={costCenters}
-                                        value={costCenterId}
-                                        onChange={setCostCenterId}
-                                        hoverCls="hover:bg-blue-50"
-                                        size="sm"
-                                    />
-                                </FormField>
+                                    <FormField label="Centro de Custo">
+                                        <CostCenterSelect
+                                            costCenters={costCenters}
+                                            value={costCenterId}
+                                            onChange={setCostCenterId}
+                                            hoverCls="hover:bg-blue-50"
+                                            size="sm"
+                                        />
+                                    </FormField>
 
-                                <FormField label="Plano de Contas">
-                                    <PlanoContasSelect
-                                        planoContas={planoContas}
-                                        value={planoDeContasId}
-                                        onChange={setPlanoDeContasId}
-                                        placeholder="—"
-                                        hoverCls="hover:bg-blue-50"
-                                        size="sm"
-                                    />
-                                </FormField>
+                                    <FormField label="Plano de Contas">
+                                        <PlanoContasSelect
+                                            planoContas={planoContas}
+                                            value={planoDeContasId}
+                                            onChange={setPlanoDeContasId}
+                                            placeholder="—"
+                                            hoverCls="hover:bg-blue-50"
+                                            size="sm"
+                                        />
+                                    </FormField>
 
-                                {/* Conta Financeira (financial_categories) — a dimensão que a DRE
-                                    lê. Distinta de Centro de Custo e de Plano de Contas; mesmo
-                                    drawer do ContractModal. */}
-                                <FormField label="Conta Financeira">
-                                    <HierarchicalSelect
-                                        items={contasFinanceiras.map(c => ({ id: c.id, name: c.name, parentId: c.parent_id ?? null }))}
-                                        value={categoryId}
-                                        onChange={setCategoryId}
-                                        valueField="id"
-                                        placeholder="—"
-                                        hoverCls="hover:bg-blue-50"
-                                        size="sm"
-                                        panelVariant="drawer"
-                                        drawerTitle="Selecionar Conta Financeira"
-                                    />
-                                </FormField>
+                                    {/* Conta Financeira (financial_categories) — a dimensão que a DRE
+                                        lê. Distinta de Centro de Custo e de Plano de Contas; mesmo
+                                        drawer do ContractModal. */}
+                                    <FormField label="Conta Financeira">
+                                        <HierarchicalSelect
+                                            items={contasFinanceiras.map(c => ({ id: c.id, name: c.name, parentId: c.parent_id ?? null }))}
+                                            value={categoryId}
+                                            onChange={setCategoryId}
+                                            valueField="id"
+                                            placeholder="—"
+                                            hoverCls="hover:bg-blue-50"
+                                            size="sm"
+                                            panelVariant="drawer"
+                                            drawerTitle="Selecionar Conta Financeira"
+                                        />
+                                    </FormField>
 
-                                <FormField label="Observações">
-                                    <textarea
-                                        value={observacoes}
-                                        onChange={(e) => setObservacoes(e.target.value)}
-                                        rows={2}
-                                        className={CAMPO}
-                                    />
-                                </FormField>
+                                </Secao>
 
-                                {boleto.erros_validacao && boleto.erros_validacao.length > 0 && (
-                                    <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-[6px] p-3">
-                                        <p className="font-semibold mb-1">Avisos de validação:</p>
-                                        <ul className="list-disc list-inside space-y-0.5">
-                                            {boleto.erros_validacao.map((e, i) => <li key={i}>{e}</li>)}
-                                        </ul>
-                                    </div>
-                                )}
-                            </div>
+                                <Secao titulo="Observações" icone={StickyNote}>
+                                    <FormField label="Anotações internas">
+                                        <textarea
+                                            value={observacoes}
+                                            onChange={(e) => setObservacoes(e.target.value)}
+                                            rows={3}
+                                            placeholder="Só para a equipe — não vai para o título nem para o fornecedor."
+                                            className={CAMPO_AREA}
+                                        />
+                                    </FormField>
+
+                                    {boleto.erros_validacao && boleto.erros_validacao.length > 0 && (
+                                        <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-[6px] p-3">
+                                            <p className="font-semibold mb-1">Avisos de validação:</p>
+                                            <ul className="list-disc list-inside space-y-0.5">
+                                                {boleto.erros_validacao.map((e, i) => <li key={i}>{e}</li>)}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </Secao>
+                            </Painel>
                         </div>
                     )}
                 </div>

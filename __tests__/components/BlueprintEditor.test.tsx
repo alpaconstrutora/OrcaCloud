@@ -6075,4 +6075,28 @@ describe('BlueprintEditor · estender parede até a face', () => {
     await user.click(within(relatorios).getByRole('button', { name: /^Conferência/ }));
     expect(screen.getByRole('button', { name: /^Conflitos/ })).toBeInTheDocument();
   }, 60000);
+
+  /**
+   * P2.62 (24/09/2026) — *"botão voltar topo a esquerda e botão publicar no topo
+   * direito está ocupando espaço vertical sem necessidade"*. A faixa própria do
+   * cabeçalho sumiu: as três coisas foram para a fileira das abas.
+   */
+  it('o cabeçalho sumiu: voltar, nome, estado e Publicar vivem DENTRO da barra — e sobrevivem ao ribbon recolhido', async () => {
+    await montar();
+    const user = userEvent.setup();
+    const barra = screen.getByRole('toolbar', { name: /ferramentas de desenho/i });
+
+    // Não existe mais faixa própria acima da barra.
+    expect(document.querySelector('header')).toBeNull();
+    expect(within(barra).getByRole('button', { name: /voltar para a lista/i })).toBeInTheDocument();
+    expect(within(barra).getByRole('heading', { level: 1 })).toHaveTextContent('Planta de teste');
+    expect(within(barra).getByRole('button', { name: /publicar versão/i })).toBeInTheDocument();
+
+    // Recolhido, o que some é o painel — o cabeçalho dissolvido fica.
+    await user.click(screen.getByRole('button', { name: /recolher a faixa de comandos/i }));
+    expect(screen.getByRole('button', { name: /voltar para a lista/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /publicar versão/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Planta de teste');
+    await user.click(screen.getByRole('button', { name: /mostrar a faixa de comandos/i }));
+  }, 60000);
 });

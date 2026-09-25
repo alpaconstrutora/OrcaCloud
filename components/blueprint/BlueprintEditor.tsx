@@ -8867,57 +8867,6 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       data-tela-cheia={telaCheia ? '' : undefined}
       hidden={telaAberta != null}
     >
-      {/* Cabeçalho */}
-      {/* UMA LINHA, ~32px em vez de ~57 (pedido de 27/08/2026: o topo comia
-          espaço de desenho). "Revisão N · unidades em milímetros" saiu da tela
-          para o `title` do nome — é referência, consultada uma vez, não algo que
-          se lê a cada segundo.
-
-          O ESTADO DE SALVAMENTO fica visível, e isso não é inconsistência: é
-          retorno de ação. Esconder "Falha ao salvar" num tooltip seria esconder
-          justamente o que precisa interromper quem está desenhando. */}
-      <header className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-1.5">
-        <BotaoBarra icone={ArrowLeft} rotulo="Voltar para a lista" onClick={onBack} />
-
-        <div className="flex min-w-0 flex-1 items-baseline gap-2">
-          <h1
-            className="truncate text-sm font-semibold text-slate-800"
-            title={`${study.name} · Revisão publicada ${editor.baseRevision} · unidades em milímetros`}
-          >
-            {study.name}
-          </h1>
-          <span
-            className={`shrink-0 text-xs ${
-              editor.saveState === 'erro'
-                ? 'text-red-600'
-                : editor.saveState === 'salvo'
-                  ? 'text-emerald-600'
-                  : 'text-slate-500'
-            }`}
-          >
-            {rotuloSalvamento[editor.saveState]}
-          </span>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => void publicarComTopografia()}
-          disabled={editor.publishing || !editor.dirtySincePublish}
-          className="inline-flex shrink-0 items-center gap-2 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-          title={
-            editor.dirtySincePublish
-              ? 'Publica uma versão imutável desta planta'
-              : 'Nada mudou desde a última publicação'
-          }
-        >
-          {editor.publishing ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Upload className="h-4 w-4" />
-          )}
-          Publicar versão
-        </button>
-      </header>
 
       {/* ─── O RIBBON (13/09/2026) ─────────────────────────────────────────────
           Era UMA barra com ~25 controles que quebrava em duas ou três linhas.
@@ -8940,12 +8889,67 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         onRecolher={setRibbonRecolhido}
         ariaLabel="Ferramentas de desenho"
         esquerda={
-          <SeletorDeVista
-            vista={vista}
-            onEscolher={setVista}
-            cortes={(editor.model.sections ?? []).map((c) => ({ id: c.id, rotulo: c.rotulo }))}
-            vistasDependentes={(editor.model.vistasDependentes ?? []).map((v) => ({ id: v.id, nome: v.nome }))}
-          />
+          <>
+            {/* O CABEÇALHO DISSOLVIDO (24/09/2026, P2.62). Voltar, o nome da
+                planta e o estado de salvamento eram uma faixa própria de 40 px
+                acima do ribbon — *"botão voltar topo a esquerda e botão publicar
+                no topo direito está ocupando espaço vertical sem necessidade"*.
+                São três coisas pequenas: cabem na fileira das abas, que já tem
+                altura para elas.
+
+                ⚠️ O ESTADO DE SALVAMENTO continua VISÍVEL, e isso não é
+                inconsistência com esconder comandos em menu: é retorno de ação.
+                "Falha ao salvar" dentro de um tooltip seria esconder justamente
+                o que precisa interromper quem está desenhando. */}
+            <BotaoBarra icone={ArrowLeft} rotulo="Voltar para a lista" onClick={onBack} />
+            <div className="flex min-w-0 max-w-[22rem] items-baseline gap-2">
+              <h1
+                className="truncate text-sm font-semibold text-slate-800"
+                title={`${study.name} · Revisão publicada ${editor.baseRevision} · unidades em milímetros`}
+              >
+                {study.name}
+              </h1>
+              <span
+                className={`shrink-0 text-xs ${
+                  editor.saveState === 'erro'
+                    ? 'text-red-600'
+                    : editor.saveState === 'salvo'
+                      ? 'text-emerald-600'
+                      : 'text-slate-500'
+                }`}
+              >
+                {rotuloSalvamento[editor.saveState]}
+              </span>
+            </div>
+            <SeletorDeVista
+              vista={vista}
+              onEscolher={setVista}
+              cortes={(editor.model.sections ?? []).map((c) => ({ id: c.id, rotulo: c.rotulo }))}
+              vistasDependentes={(editor.model.vistasDependentes ?? []).map((v) => ({ id: v.id, nome: v.nome }))}
+            />
+          </>
+        }
+        direita={
+          /* PUBLICAR encostado à direita da mesma fileira: é o fim do fluxo,
+             clicado uma vez por sessão — e continua o único botão azul da tela. */
+          <button
+            type="button"
+            onClick={() => void publicarComTopografia()}
+            disabled={editor.publishing || !editor.dirtySincePublish}
+            className="inline-flex shrink-0 items-center gap-2 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            title={
+              editor.dirtySincePublish
+                ? 'Publica uma versão imutável desta planta'
+                : 'Nada mudou desde a última publicação'
+            }
+          >
+            {editor.publishing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="h-4 w-4" />
+            )}
+            Publicar versão
+          </button>
         }
         acessoRapido={
           <AcessoRapido

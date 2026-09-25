@@ -2265,6 +2265,34 @@ Analisar      barra 264 px · 2 fileiras  barra 177 px · 1 fileira   −87 px
 
   ⚠️ A medição saiu na *Planta 14/09/2026* e não na *Planta 24/09/2026* das fases anteriores: esta foi **arquivada às 00:02 de 25/09** e saiu da lista (não por mim — o roteiro bloqueia escritas, 2 bloqueadas nesta corrida). As duas passadas usaram o mesmo estudo, que é o que a comparação exige.
 
+### P2.62 — O cabeçalho do editor se dissolve na fileira das abas (24/09/2026) · *"botão voltar topo a esquerda e botão publicar no topo direito está ocupando espaço vertical sem necessidade"*
+
+**O que era.** Uma faixa própria, do lado esquerdo ao direito da tela, para três coisas pequenas: a seta de voltar, o nome da planta com o estado de salvamento, e o botão Publicar. Ela já tinha sido espremida de 57 para ~40 px em 27/08/2026; o problema não era a altura dela, era **existir**.
+
+**O que entrou.** Os três foram para a fileira das abas, que já tem altura de sobra: `← Planta 14/09/2026 · Sem alterações` à esquerda, antes do seletor de vista; `Publicar versão` encostado à direita. A faixa sumiu — não há mais `<header>` no editor.
+
+⚠️ **O estado de salvamento continua VISÍVEL**, e isto não contradiz a P2.60/P2.61 (que esconderam 30 comandos em menus): comando é o que você dispara; "Falha ao salvar" é **retorno de ação**. Escondê-lo num tooltip seria esconder justamente o que precisa interromper quem está desenhando.
+
+**De brinde, com o ribbon recolhido:** como voltar, nome, estado e Publicar moram na fileira das abas, **eles sobrevivem ao recolher**. Recolhido, o editor fica com uma faixa de 51 px que ainda traz o caminho de volta, a identidade da planta e o fim do fluxo.
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-ui-standard.sh` ok · `check-xss-sinks.sh` ok · suíte cheia **466 arquivos / 5333 testes** verdes · `npm run build` ok.
+- `__tests__/components/BlueprintEditor.test.tsx` (+1): **não existe mais `<header>`**; voltar, o `h1` com o nome e Publicar estão DENTRO do `role="toolbar"`; e os três continuam lá depois de recolher o ribbon.
+- **App real** (escritas bloqueadas: 2, 0 erros de página), janela 1660×780, mesmo estudo nas duas passadas:
+
+```
+             ANTES              DEPOIS
+Arquitetura  desenho 437 px     desenho 482 px
+Inserir      desenho 438 px     desenho 483 px
+Analisar     desenho 437 px     desenho 482 px
+```
+
+  **+45 px de desenho em todas as abas**, e o painel continua em UMA fileira: o trilho de abas absorveu o nome da planta e o Publicar sem quebrar.
+
+⚠️ **Duas armadilhas do roteiro de medição, corrigidas aqui** (valem para o próximo):
+1. `click({ force: true })` numa aba **clica mesmo quando algo cobre o ribbon** — uma corrida mediu a aba Analisar mostrando os grupos de Inserir, porque o clique não pegou. Agora o roteiro confere `aria-selected="true"` antes de medir, e tenta de novo.
+2. O que cobria era um **diálogo** ("Divisas do lote") que o estudo abre sozinho. O roteiro fecha diálogos com Esc antes de cada aba.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

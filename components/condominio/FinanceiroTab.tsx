@@ -25,7 +25,7 @@ import CostCenterSelect from '../CostCenterSelect';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
 import { useConfirm } from '../ui/confirm';
-import { boletoService } from '../../services/boletoService';
+import { storageService } from '../../services/storageService';
 // Mesmo rótulo de origem que Contas a Pagar usa. Importar do componente é a
 // convenção já estabelecida aqui — `ContasPagarManager` e
 // `financeiro/FechamentoCentroCusto` fazem igual. Extrair para um util
@@ -291,10 +291,12 @@ const TabelaCotas: React.FC<{ cotas: LinhaCota[]; storageKey: string }> = ({ cot
     );
 };
 
-// Larguras da aba Despesas. Soma = 1.400px; a folga vai para o `<col />`
+// Larguras da aba Despesas. Soma = 1.435px; a folga vai para o `<col />`
 // espaçador (§6.1.1), não se espalha pelas colunas de dado.
+// `codigo` em 135 e não 100: nasceu para o nº de boleto ("0705") e passou a
+// receber também o número do contrato ("CTL-010-0003"), que não cabia.
 const LARGURAS_DESPESAS: Record<string, number> = {
-    codigo: 100, documento: 200, data: 110, descricao: 300, fornecedor: 220, origem: 120, centro: 190, situacao: 150, valor: 130,
+    codigo: 135, documento: 200, data: 110, descricao: 300, fornecedor: 220, origem: 120, centro: 190, situacao: 150, valor: 130,
 };
 
 /** Lançamentos do caixa do condomínio — a aba Despesas.
@@ -399,18 +401,18 @@ const TabelaLancamentos: React.FC<{
                                 carregamento, senão 136 assinaturas expirariam antes
                                 de alguém abrir uma. §7 — link em `text-blue-600`. */}
                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal">
-                                {!l.documentoPath ? (
+                                {!l.documento ? (
                                     <span className="text-gray-400">—</span>
-                                ) : abrindoDocumento === l.documentoPath ? (
+                                ) : abrindoDocumento === l.documento.path ? (
                                     <span className="text-gray-500">Abrindo...</span>
                                 ) : (
                                     <button
                                         type="button"
                                         onClick={() => onAbrirDocumento(l)}
                                         className="block w-full text-left truncate text-blue-600 hover:text-blue-800 transition-colors"
-                                        title={`Abrir ${l.documentoNome}`}
+                                        title={`Abrir ${l.documento.nome}`}
                                     >
-                                        {l.documentoNome}
+                                        {l.documento.nome}
                                     </button>
                                 )}
                             </td>
@@ -528,10 +530,13 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
     const [abrindoDocumento, setAbrindoDocumento] = React.useState<string | null>(null);
 
     const abrirDocumento = async (l: LancamentoDoCondominio) => {
-        if (!l.documentoPath) return;
-        setAbrindoDocumento(l.documentoPath);
+        if (!l.documento) return;
+        setAbrindoDocumento(l.documento.path);
         try {
-            const url = await boletoService.getDocumentoUrl(l.documentoPath);
+            // O BUCKET vem da origem: boleto e XML de NF-e moram em buckets
+            // diferentes, e quem exibe não deveria decidir isso.
+            const url = await storageService.createSignedUrl(
+                l.documento.bucket, l.documento.path, 60 * 15);
             // `noopener` é obrigatório: sem ele a aba nova recebe `window.opener`
             // e pode navegar a nossa.
             window.open(url, '_blank', 'noopener,noreferrer');
@@ -992,7 +997,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
         // faz o usuário digitar "boleto" e a linha sumir.
         return lancamentos.filter(l =>
             (l.codigo ?? '').toLowerCase().includes(t)
-            || (l.documentoNome ?? '').toLowerCase().includes(t)
+            || (l.documento?.nome ?? '').toLowerCase().includes(t)
             || l.descricao.toLowerCase().includes(t)
             || l.fornecedor.toLowerCase().includes(t)
             || origemLabel(l.origem).toLowerCase().includes(t)

@@ -457,3 +457,137 @@ function distanciaAPolilinhaTeste(p: { x: number; y: number }, pts: { x: number;
   }
   return menor;
 }
+
+/**
+ * P2.65 — *"o levantamento topográfico já vem com o contorno do lote"*. O
+ * contorno sai do arquivo e atravessa a MESMA conversão dos pontos (unidade,
+ * UTM/georreferência, ancoragem); senão cairia noutro lugar do desenho.
+ */
+describe('contorno do lote no arquivo (P2.65)', () => {
+  const par = (c: number | string, v: number | string) => `${c}\n${v}\n`;
+  const SEM_LOTE = { anel: null, georreferencia: GEO };
+
+  it('CSV: os pontos com código de divisa formam o anel, na ordem do arquivo — e continuam sendo pontos cotados', () => {
+    const csv = [
+      '1;2,000;3,000;100,50;M1',
+      '2;2,000;9,000;100,80;M2',
+      '3;5,000;6,000;101,20;LEV',   // levantamento no meio, não é divisa
+      '4;8,000;9,000;101,00;M3',
+      '5;8,000;3,000;100,60;M4',
+    ].join('\n');
+    const r = importarPontos(csv, 'TEXTO', SEM_LOTE);
+    // Nenhum ponto se perde: o marco de divisa também é cota medida.
+    expect(r.pontos).toHaveLength(5);
+    expect(r.contorno).not.toBeNull();
+    expect(r.contorno!.origem).toBe('CODIGO_DOS_PONTOS');
+    expect(r.contorno!.pontos).toHaveLength(4);
+    // 6 m × 6 m = 36 m² (N,E → x = E, y = N).
+    expect(r.contorno!.areaM2).toBeCloseTo(36, 2);
+    expect(r.contorno!.perimetroM).toBeCloseTo(24, 2);
+    expect(r.contorno!.pontos[0]).toEqual({ x: 3000, y: 2000 });
+  });
+
+  it('CSV sem código de divisa: a envoltória convexa entra como PROPOSTA, não como leitura', () => {
+    const csv = ['1;2,000;3,000;100,50', '2;2,000;9,000;100,80', '3;8,000;9,000;101,00', '4;5,000;6,000;101,20'].join('\n');
+    const r = importarPontos(csv, 'TEXTO', SEM_LOTE);
+    expect(r.contorno!.origem).toBe('ENVOLTORIA');
+    // O ponto do meio fica de fora do casco.
+    expect(r.contorno!.pontos).toHaveLength(3);
+    // ⚠️ Envoltória NÃO ganha aviso de "dá para lançar": é proposta.
+    expect(r.avisos.some((a) => /lançar as divisas/.test(a))).toBe(false);
+  });
+
+  it('DXF: a polilinha FECHADA da camada de divisa vira o contorno, e os vértices dela NÃO viram cota zero', () => {
+    const dxf =
+      par(0, 'SECTION') + par(2, 'HEADER') + par(9, '$INSUNITS') + par(70, 6) + par(0, 'ENDSEC') +
+      par(0, 'SECTION') + par(2, 'ENTITIES') +
+      par(0, 'POINT') + par(8, 'TOPO') + par(10, 5) + par(20, 5) + par(30, 100.5) +
+      par(0, 'POINT') + par(8, 'TOPO') + par(10, 6) + par(20, 6) + par(30, 101.5) +
+      par(0, 'POINT') + par(8, 'TOPO') + par(10, 7) + par(20, 4) + par(30, 100.9) +
+      // Uma fechada grande em camada qualquer e a divisa, menor, na camada certa.
+      par(0, 'LWPOLYLINE') + par(8, 'QUADRA') + par(90, 4) + par(70, 1) +
+      par(10, -50) + par(20, -50) + par(10, 50) + par(20, -50) + par(10, 50) + par(20, 50) + par(10, -50) + par(20, 50) +
+      par(0, 'LWPOLYLINE') + par(8, 'DIVISA') + par(90, 4) + par(70, 1) +
+      par(10, 0) + par(20, 0) + par(10, 10) + par(20, 0) + par(10, 10) + par(20, 20) + par(10, 0) + par(20, 20) +
+      par(0, 'ENDSEC') + par(0, 'EOF');
+    const r = importarPontos(dxf, 'DXF', SEM_LOTE);
+    expect(r.pontos).toHaveLength(3); // só os POINT; a polilinha não virou ponto
+    expect(r.pontos.every((pt) => pt.cotaM > 100)).toBe(true);
+    expect(r.contorno!.origem).toBe('POLIGONO_DO_ARQUIVO');
+    // ⚠️ A camada decide: a QUADRA tem área muito maior, mas DIVISA vence.
+    expect(r.contorno!.camada).toBe('DIVISA');
+    expect(r.contorno!.areaM2).toBeCloseTo(200, 2);
+    expect(r.contorno!.pontos).toHaveLength(4);
+  });
+
+  it('GeoJSON: o Polygon é o lote e não entra como ponto; KML idem pelo outerBoundaryIs', () => {
+    const anel = [
+      [GEO.longitude, GEO.latitude],
+      [GEO.longitude + 0.0002, GEO.latitude],
+      [GEO.longitude + 0.0002, GEO.latitude + 0.0002],
+      [GEO.longitude, GEO.latitude + 0.0002],
+      [GEO.longitude, GEO.latitude],
+    ];
+    const geojson = JSON.stringify({
+      type: 'FeatureCollection',
+      features: [
+        { type: 'Feature', geometry: { type: 'Point', coordinates: [GEO.longitude + 0.0001, GEO.latitude + 0.0001, 101.5] }, properties: {} },
+        { type: 'Feature', geometry: { type: 'Polygon', coordinates: [anel] }, properties: {} },
+      ],
+    });
+    const r = importarPontos(geojson, 'GEOJSON', { anel: null, georreferencia: GEO });
+    expect(r.pontos).toHaveLength(1);
+    expect(r.contorno!.origem).toBe('POLIGONO_DO_ARQUIVO');
+    expect(r.contorno!.pontos).toHaveLength(4);
+
+    const kml = `<kml><Document>
+      <Placemark><Point><coordinates>${GEO.longitude + 0.0001},${GEO.latitude + 0.0001},101.5</coordinates></Point></Placemark>
+      <Placemark><Polygon><outerBoundaryIs><LinearRing><coordinates>
+        ${anel.map((c) => `${c[0]},${c[1]},0`).join(' ')}
+      </coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>
+    </Document></kml>`;
+    const k = importarPontos(kml, 'KML', { anel: null, georreferencia: GEO });
+    expect(k.pontos).toHaveLength(1);
+    expect(k.contorno!.pontos).toHaveLength(4);
+  });
+
+  it('LandXML: o <Parcel> é o lote', () => {
+    const xml = `<LandXML linearUnit="meter">
+      <Surfaces><Surface><Definition><Pnts>
+        <P id="1">5 5 100.5</P><P id="2">6 6 101.5</P><P id="3">7 4 100.9</P>
+      </Pnts></Definition></Surface></Surfaces>
+      <Parcels><Parcel name="Lote 12"><CoordGeom>
+        <Line><Start>0 0</Start><End>0 10</End></Line>
+        <Line><Start>0 10</Start><End>20 10</End></Line>
+        <Line><Start>20 10</Start><End>20 0</End></Line>
+        <Line><Start>20 0</Start><End>0 0</End></Line>
+      </CoordGeom></Parcel></Parcels>
+    </LandXML>`;
+    const r = importarPontos(xml, 'LANDXML', { anel: null, georreferencia: GEO });
+    expect(r.pontos).toHaveLength(3);
+    expect(r.contorno!.origem).toBe('POLIGONO_DO_ARQUIVO');
+    expect(r.contorno!.pontos).toHaveLength(4);
+    expect(r.contorno!.areaM2).toBeCloseTo(200, 2);
+  });
+
+  it('⚠️ o contorno ANDA JUNTO com os pontos na ancoragem: um anel convertido por fora cairia noutro lugar', () => {
+    // Coordenadas locais do topógrafo (origem 1000,1000), com um lote do
+    // desenho longe delas: a ancoragem automática leva tudo ao centro do lote.
+    const csv = [
+      '1;1000,000;1000,000;100,50;M1',
+      '2;1000,000;1006,000;100,80;M2',
+      '3;1006,000;1006,000;101,00;M3',
+      '4;1006,000;1000,000;100,60;M4',
+    ].join('\n');
+    const r = importarPontos(csv, 'TEXTO', CTX);
+    expect(r.detectado.ancoragem).toBe('CENTRO_DO_LOTE');
+    // O centro do anel importado tem de coincidir com o centro do lote (6, 15 m).
+    const cx = r.contorno!.pontos.reduce((a, q) => a + q.x, 0) / 4;
+    const cy = r.contorno!.pontos.reduce((a, q) => a + q.y, 0) / 4;
+    expect(cx).toBeCloseTo(6000, -1);
+    expect(cy).toBeCloseTo(15000, -1);
+    // E os pontos seguem em cima do anel: mesma translação.
+    const px = r.pontos.reduce((a, q) => a + q.x, 0) / 4;
+    expect(px).toBeCloseTo(cx, -1);
+  });
+});

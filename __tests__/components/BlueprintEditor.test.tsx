@@ -6119,44 +6119,49 @@ describe('BlueprintEditor · estender parede até a face', () => {
    * formatos; estava a quatro passos, dentro de "Dados do lote". Aqui vira um
    * comando da aba Terreno.
    */
-  it('Terreno › Topografia tem "Importar levantamento": sem lote fechado ele ensina o caminho; com lote, abre Dados do lote com a fonte em pontos cotados', async () => {
+  it('Terreno › Topografia: "Importar levantamento" NÃO espera o lote — o arquivo traz o contorno e as divisas nascem dele', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
-    const t = nivel.model.levels[0].id;
-
-    // 1. Sem lote: existe, está apagado, e o título diz o que fazer antes.
-    await montar();
-    await abrirAba(/^terreno$/i);
-    const semLote = botao(/^Importar levantamento/);
-    expect(semLote).toBeDisabled();
-    expect(semLote).toHaveAttribute('title', expect.stringMatching(/feche o contorno do lote com a ferramenta Terreno/i));
-    cleanup();
-
-    // 2. Com o lote fechado: habilita e abre a gaveta na fonte certa.
-    const d = (ax: number, ay: number, bx: number, by: number) =>
-      ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO' }) as const;
-    loadBranchModel.mockResolvedValue(
-      k.applyBatch(nivel.model, [
-        d(0, 0, 20000, 0),
-        d(20000, 0, 20000, 30000),
-        d(20000, 30000, 0, 30000),
-        d(0, 30000, 0, 0),
-      ]).model,
-    );
+    loadBranchModel.mockResolvedValue(nivel.model);
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^terreno$/i);
-    const comLote = botao(/^Importar levantamento/);
-    await waitFor(() => expect(comLote).toBeEnabled());
-    await user.click(comLote);
 
-    // A gaveta "Dados do lote" abriu, com a seção de topografia e a linha de
-    // pontos cotados — é ali que o arquivo entra.
-    // ⚠️ Pelo painel, e não por `findByRole('dialog')`: fechar o contorno do
-    // lote abre sozinho o Quadro de divisas, e aí há DOIS diálogos na tela.
+    // ⚠️ Sem lote e HABILITADO: exigir o contorno antes era pedir para desenhar
+    // à mão o que o levantamento já traz medido.
+    const importar = botao(/^Importar levantamento/);
+    expect(importar).toBeEnabled();
+    expect(importar).toHaveAttribute('title', expect.stringMatching(/lança as divisas do lote junto/i));
+    await user.click(importar);
+
     const topografia = await screen.findByTestId('painel-topografia');
     const gaveta = topografia.closest('[role="dialog"]') as HTMLElement;
-    expect(gaveta).toHaveTextContent(/Dados do lote/);
-    expect(within(gaveta).getByLabelText('Arquivo de pontos cotados')).toBeInTheDocument();
+    expect(within(gaveta).getByTestId('topografia-sem-lote')).toBeInTheDocument();
+    // Sem lote, "Usar vértices do lote" não tem de onde tirar vértice.
+    expect(within(gaveta).getByRole('button', { name: 'Usar vértices do lote' })).toBeDisabled();
+
+    // Um levantamento com marcos de divisa: 20 × 30 m.
+    const csv = [
+      '1;0,000;0,000;100,50;M1',
+      '2;30,000;0,000;100,80;M2',
+      '3;30,000;20,000;101,20;M3',
+      '4;0,000;20,000;100,90;M4',
+      '5;15,000;10,000;101,50;LEV',
+    ].join(String.fromCharCode(10));
+    const entrada = within(gaveta).getByLabelText('Arquivo de pontos cotados') as HTMLInputElement;
+    const arquivo = new File([csv], 'levantamento.csv', { type: 'text/plain' });
+    fireEvent.change(entrada, { target: { files: [arquivo] } });
+
+    const lancar = await screen.findByTestId('lancar-lote-do-arquivo');
+    expect(lancar).toHaveTextContent(/4 lados/);
+    expect(lancar).toHaveTextContent(/600,00 m²/);
+    // Veio do arquivo (códigos de divisa), então já nasce marcado.
+    expect(within(lancar).getByRole('checkbox')).toBeChecked();
+
+    await user.click(screen.getByRole('button', { name: 'Substituir os pontos' }));
+
+    // O lote nasceu: o bloco "ainda não há contorno" some e as curvas ficam liberadas.
+    await waitFor(() => expect(screen.queryByTestId('topografia-sem-lote')).not.toBeInTheDocument());
+    expect(screen.getByTestId('painel-topografia')).toHaveTextContent(/Pontos cotados \(5\)/);
   }, 60000);
 });

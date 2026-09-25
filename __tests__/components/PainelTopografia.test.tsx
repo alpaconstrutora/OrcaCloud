@@ -92,10 +92,16 @@ function hook(extra: Partial<Topografia> = {}): Topografia {
 }
 
 describe('PainelTopografia', () => {
-  it('sem lote fechado, só orienta — não oferece gerar', () => {
+  it('sem lote fechado não gera curvas — mas OFERECE a importação, que é de onde o lote pode nascer (P2.65)', () => {
     render(<PainelTopografia topografia={hook()} temLoteFechado={false} temGeorreferencia={false} />);
-    expect(screen.getByText(/Feche o contorno do lote/)).toBeTruthy();
+    expect(screen.getByTestId('topografia-sem-lote')).toBeTruthy();
+    expect(screen.getByText(/Ainda não há contorno de lote/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Gerar/ })).toBeNull();
+    // ⚠️ Até 25/09/2026 o painel parava na frase "Feche o contorno do lote" e
+    // escondia a importação junto — o usuário tinha de desenhar à mão o
+    // contorno que o levantamento já traz medido.
+    expect(screen.getByRole('button', { name: 'Importar' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Usar vértices do lote' })).toBeDisabled();
   });
 
   it('com lote, "Usar vértices do lote" e "Gerar" chamam o hook', () => {

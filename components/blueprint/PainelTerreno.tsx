@@ -267,7 +267,26 @@ export default function PainelTerreno({
   onGeorreferencia,
 }: Props) {
   const empSelecionado = empreendimentos.find((e) => e.id === empreendimentoId) ?? null;
-  if (!terreno && !divisaSelecionada) return null;
+  /**
+   * ⚠️ Sem lote e sem divisa selecionada o painel não tinha o que dizer — e
+   * levava junto o SLOT DE TOPOGRAFIA, que é onde mora a importação do
+   * levantamento (P2.65). Justamente quem não tem lote precisa dela: *"o
+   * levantamento topográfico já vem com o contorno do lote"*. Então o slot
+   * vale por si, com o cabeçalho para não aparecer solto no meio da gaveta.
+   */
+  if (!terreno && !divisaSelecionada) {
+    if (!topografiaSlot) return null;
+    return (
+      <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+        <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <LandPlot className="h-3.5 w-3.5" />
+          Terreno
+        </h3>
+        <Georreferenciar valor={georreferencia} onMudar={onGeorreferencia} />
+        {topografiaSlot}
+      </div>
+    );
+  }
 
   const comprimentoMm = divisaSelecionada
     ? Math.round(

@@ -73,6 +73,34 @@ export interface PontoImportado extends PontoCotado {
   codigo?: string;
   /** Fase 15: índice da linha de quebra a que o ponto pertence (vértices na ordem do arquivo). */
   quebra?: number;
+  /** P2.65: índice no anel do contorno (ver `Bruto.contorno`). */
+  contorno?: number;
+  soContorno?: boolean;
+}
+
+/**
+ * De onde saiu o contorno do lote (P2.65).
+ *
+ * - `POLIGONO_DO_ARQUIVO` — polilinha fechada do DXF, `Polygon` do GeoJSON/KML,
+ *   `Parcel` do LandXML. É o desenho do topógrafo; entra com confiança.
+ * - `CODIGO_DOS_PONTOS` — pontos com código de divisa (M1, M2…, DIV, LIM, PL)
+ *   num CSV/TXT de estação total, na ordem do arquivo. É o que o topógrafo
+ *   codifica em campo.
+ * - `ENVOLTORIA` — ⚠️ PROPOSTA, não leitura: o menor polígono que envolve os
+ *   pontos. O levantamento quase sempre passa da divisa (a rua, o vizinho, o
+ *   talude), então isto costuma dar área MAIOR que a da escritura. Nunca entra
+ *   sozinho; a tela oferece desmarcado.
+ */
+export type OrigemDoContorno = 'POLIGONO_DO_ARQUIVO' | 'CODIGO_DOS_PONTOS' | 'ENVOLTORIA';
+
+export interface ContornoImportado {
+  origem: OrigemDoContorno;
+  /** Anel ABERTO (sem repetir o primeiro), em mm do desenho, já ancorado. */
+  pontos: Point[];
+  areaM2: number;
+  perimetroM: number;
+  /** DXF: a camada de onde veio — é o que deixa conferir se é a divisa mesmo. */
+  camada?: string;
 }
 
 export interface ResultadoDaImportacao {
@@ -100,6 +128,12 @@ export interface ResultadoDaImportacao {
   };
   /** Quantos pontos caem dentro do lote (com anel) — o que a TIN vai usar de verdade. */
   dentroDoLote: number;
+  /**
+   * P2.65: o contorno do lote que veio no arquivo. *"o levantamento topográfico
+   * já vem com o contorno do lote"* — exigir que alguém o desenhasse antes era
+   * trabalho em dobro.
+   */
+  contorno: ContornoImportado | null;
   avisos: string[];
 }
 
@@ -411,6 +445,18 @@ interface Bruto {
   codigo?: string;
   /** Fase 15: a linha de quebra deste vértice (índice; ordem do arquivo dentro da linha). */
   quebra?: number;
+  /**
+   * P2.65: vértice do CONTORNO DO LOTE, na ordem do anel. Viaja como ponto
+   * para pegar carona na mesma conversão de unidade, UTM/geo e ancoragem — e
+   * é separado de volta no fim.
+   */
+  contorno?: number;
+  /**
+   * ⚠️ Vértice que é SÓ contorno (polilinha do DXF, Polygon do GeoJSON, Parcel
+   * do LandXML): não é ponto cotado. A polilinha do lote quase nunca tem Z, e
+   * deixá-la virar cota zero destruiria a superfície.
+   */
+  soContorno?: boolean;
 }
 
 /**
@@ -419,6 +465,46 @@ interface Bruto {
  * arquivo, formam a linha.
  */
 const CODIGO_DE_QUEBRA = /^(?:LQ|BL|BRK)\s*[-_]?\s*(\d+)$/i;
+
+/**
+ * Código de ponto que marca VÉRTICE DE DIVISA (P2.65): `M1`, `M-2`, `V3`,
+ * `PL4`, `EST5`, ou qualquer código que diga DIV/LIM/MARCO/PERIM/CERCA.
+ *
+ * ⚠️ Não há norma: cada topógrafo tem o seu caderno de códigos. Estes são os
+ * usuais no Brasil, e a tela mostra quantos casaram — quem vê 0 sabe que o
+ * código dele é outro e desenha o lote à mão, sem ficar adivinhando.
+ */
+const CODIGO_DE_DIVISA = /^(?:M|V|PL|EST|P)\s*[-_]?\s*\d+$|DIV|LIM|MARCO|PERIM|CERCA/i;
+
+/** Área (m²) e perímetro (m) de um anel em mm, aberto. */
+function medirAnel(anel: Point[]): { areaM2: number; perimetroM: number } {
+  let dobro = 0;
+  let perim = 0;
+  for (let i = 0; i < anel.length; i++) {
+    const a = anel[i];
+    const b = anel[(i + 1) % anel.length];
+    dobro += a.x * b.y - b.x * a.y;
+    perim += Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  return { areaM2: Math.abs(dobro) / 2 / 1e6, perimetroM: perim / 1000 };
+}
+
+/** Envoltória convexa (varredura de Andrew), anel aberto em sentido anti-horário. */
+function envoltoriaConvexa(ps: Point[]): Point[] {
+  const pts = [...ps].sort((u, v) => (u.x === v.x ? u.y - v.y : u.x - v.x));
+  if (pts.length < 3) return [];
+  const cruz = (o: Point, a: Point, b: Point) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const meia = (lista: Point[]) => {
+    const fora: Point[] = [];
+    for (const p of lista) {
+      while (fora.length >= 2 && cruz(fora[fora.length - 2], fora[fora.length - 1], p) <= 0) fora.pop();
+      fora.push(p);
+    }
+    fora.pop();
+    return fora;
+  };
+  return [...meia(pts), ...meia([...pts].reverse())];
+}
 
 /** Agrupa por `quebra` mantendo a ordem; linha com menos de dois vértices não é linha. */
 function linhasDeQuebraDe(pontos: PontoImportado[]): LinhaDeQuebra[] {
@@ -535,7 +621,7 @@ function lerTexto(texto: string): { brutos: Bruto[]; separador: string; cabecalh
   return { brutos, separador, cabecalho, ordemPeloCabecalho, ignoradas, geo };
 }
 
-function lerGeoJson(texto: string): { brutos: Bruto[]; ignoradas: number; avisos: string[] } {
+function lerGeoJson(texto: string): { brutos: Bruto[]; contorno: Bruto[]; ignoradas: number; avisos: string[] } {
   let raiz: unknown;
   try {
     raiz = JSON.parse(texto);
@@ -543,6 +629,7 @@ function lerGeoJson(texto: string): { brutos: Bruto[]; ignoradas: number; avisos
     throw new Error('O arquivo não é um JSON válido.');
   }
   const brutos: Bruto[] = [];
+  const contorno: Bruto[] = [];
   let ignoradas = 0;
   const avisos: string[] = [];
   const cotaDe = (props: Record<string, unknown> | null | undefined, coords: number[]): number | null => {
@@ -579,6 +666,19 @@ function lerGeoJson(texto: string): { brutos: Bruto[]; ignoradas: number; avisos
       }
     } else if (geom.type === 'GeometryCollection' && Array.isArray((geom as { geometries?: unknown }).geometries)) {
       for (const g of (geom as { geometries: { type?: string; coordinates?: unknown }[] }).geometries) visitar(g, props);
+    } else if ((geom.type === 'Polygon' || geom.type === 'MultiPolygon') && Array.isArray(geom.coordinates)) {
+      // P2.65: o LOTE. Só o anel EXTERNO do primeiro polígono — ilhas e buracos
+      // não são divisa. Vem sem cota de propósito (`soContorno`).
+      const primeiro = geom.type === 'Polygon' ? (geom.coordinates as number[][][]) : (geom.coordinates as number[][][][])[0];
+      const anel = primeiro?.[0];
+      if (Array.isArray(anel) && anel.length >= 4 && contorno.length === 0) {
+        // GeoJSON fecha o anel repetindo o primeiro ponto: entra aberto.
+        const fecha = anel.length > 1 && anel[0][0] === anel[anel.length - 1][0] && anel[0][1] === anel[anel.length - 1][1];
+        const usar = fecha ? anel.slice(0, -1) : anel;
+        for (const c of usar) contorno.push({ a: c[1], b: c[0], z: 0, soContorno: true });
+      } else {
+        ignoradas++;
+      }
     } else {
       ignoradas++;
     }
@@ -594,17 +694,31 @@ function lerGeoJson(texto: string): { brutos: Bruto[]; ignoradas: number; avisos
     throw new Error('O JSON não é GeoJSON (sem type).');
   }
   if (ignoradas > 0) avisos.push(`${ignoradas} feição(ões) sem ponto ou sem cota foram ignoradas.`);
-  return { brutos, ignoradas, avisos };
+  return { brutos, contorno, ignoradas, avisos };
 }
 
-function lerKml(texto: string): { brutos: Bruto[]; ignoradas: number } {
+function lerKml(texto: string): { brutos: Bruto[]; contorno: Bruto[]; ignoradas: number } {
   const brutos: Bruto[] = [];
+  const contorno: Bruto[] = [];
   let ignoradas = 0;
   const placemarks = texto.match(/<Placemark[\s\S]*?<\/Placemark>/gi) ?? [];
   for (const pm of placemarks) {
     const nome = pm.match(/<name>([\s\S]*?)<\/name>/i)?.[1]?.trim();
     const ponto = pm.match(/<Point>[\s\S]*?<coordinates>([\s\S]*?)<\/coordinates>[\s\S]*?<\/Point>/i);
     if (!ponto) {
+      // P2.65: um Polygon no KML é o LOTE, não lixo. Só o anel externo.
+      const anel = pm.match(/<outerBoundaryIs>[\s\S]*?<coordinates>([\s\S]*?)<\/coordinates>[\s\S]*?<\/outerBoundaryIs>/i);
+      if (anel && contorno.length === 0) {
+        const vs = anel[1]
+          .trim()
+          .split(/\s+/)
+          .map((t) => t.split(',').map(Number))
+          .filter((c) => c.length >= 2 && Number.isFinite(c[0]) && Number.isFinite(c[1]));
+        const fecha = vs.length > 1 && vs[0][0] === vs[vs.length - 1][0] && vs[0][1] === vs[vs.length - 1][1];
+        for (const c of fecha ? vs.slice(0, -1) : vs) contorno.push({ a: c[1], b: c[0], z: 0, soContorno: true });
+        if (contorno.length >= 3) continue;
+        contorno.length = 0;
+      }
       ignoradas++;
       continue;
     }
@@ -624,7 +738,7 @@ function lerKml(texto: string): { brutos: Bruto[]; ignoradas: number } {
     }
     brutos.push({ a: partes[1], b: partes[0], z, nome });
   }
-  return { brutos, ignoradas };
+  return { brutos, contorno, ignoradas };
 }
 
 /** Número dentro de um texto de cota ("101,25", "Cota 101.25", "101.25 m"). */
@@ -677,6 +791,8 @@ function emparelharMarcasComTextos(
  */
 function lerDxfPontos(texto: string): {
   brutos: Bruto[];
+  contorno: Bruto[];
+  camadaDoContorno?: string;
   faces: number[];
   ignoradas: number;
   avisos: string[];
@@ -711,6 +827,43 @@ function lerDxfPontos(texto: string): {
     const q = quebras++;
     for (const v of vs) brutos.push({ a: v.y, b: v.x, z: v.z, codigo: `quebra ${q + 1}`, quebra: q });
   }
+  /**
+   * P2.65 — O CONTORNO DO LOTE. A polilinha FECHADA de maior área, com a
+   * camada decidindo empates: `DIVISA`, `LIMITE`, `LOTE`, `PERIMETRO`… é como
+   * o topógrafo nomeia. Sem camada reconhecível, ainda vale a maior fechada —
+   * e a tela mostra de qual camada veio, para conferir antes de aceitar.
+   *
+   * ⚠️ Estes vértices NÃO viram pontos cotados (`soContorno`): a polilinha do
+   * lote quase nunca tem Z, e cota zero no meio do levantamento afundaria a
+   * superfície inteira.
+   */
+  // ⚠️ `quadra` NÃO entra: a quadra contém vários lotes, e ela costuma ser a
+  // polilinha fechada de MAIOR área do arquivo — seria a primeira a ser escolhida
+  // e lançaria o quarteirão inteiro como divisa do imóvel.
+  const CAMADA_DE_DIVISA = /divis|limit|lote|perimetr|terreno|matric|imovel|imóvel/i;
+  const fechadas = entidades
+    .filter((e) => e.tipo === 'POLILINHA' && e.fechada && (e.vertices?.length ?? 0) >= 3)
+    .map((e) => {
+      const vs = e.vertices!;
+      let dobro = 0;
+      for (let i = 0; i < vs.length; i++) {
+        const a = vs[i];
+        const b = vs[(i + 1) % vs.length];
+        dobro += a.x * b.y - b.x * a.y;
+      }
+      return { camada: e.camada, vs, area: Math.abs(dobro) / 2, naCamada: CAMADA_DE_DIVISA.test(e.camada) };
+    })
+    .sort((u, v) => Number(v.naCamada) - Number(u.naCamada) || v.area - u.area);
+  const escolhida = fechadas[0];
+  const contorno: Bruto[] = [];
+  if (escolhida) {
+    // O leitor repete o primeiro vértice para fechar; o anel entra aberto.
+    const vs = escolhida.vs;
+    const ultimo = vs[vs.length - 1];
+    const fecha = vs.length > 1 && ultimo.x === vs[0].x && ultimo.y === vs[0].y;
+    for (const v of fecha ? vs.slice(0, -1) : vs) contorno.push({ a: v.y, b: v.x, z: 0, soContorno: true });
+  }
+
   // TIN importada: 3DFACE. Vértices iguais (x, y, z) viram um só ponto.
   const faces: number[] = [];
   const indiceDoVertice = new Map<string, number>();
@@ -732,7 +885,7 @@ function lerDxfPontos(texto: string): {
   if (semTexto > 0) avisos.push(`${semTexto} marca(s) sem cota em Z e sem texto numérico por perto foram ignoradas.`);
   if (polilinhasSemCota > 0) avisos.push(`${polilinhasSemCota} linha(s)/polilinha(s) sem Z (desenho 2D) ficaram de fora.`);
   if (marcas.length === 0 && quebras === 0 && faces.length === 0) avisos.push('O DXF não tem POINT, CIRCLE, polilinha com Z nem 3DFACE — nada para importar.');
-  return { brutos, faces, ignoradas: semTexto, avisos, unidade, quebras, polilinhasSemCota };
+  return { brutos, contorno, camadaDoContorno: escolhida?.camada, faces, ignoradas: semTexto, avisos, unidade, quebras, polilinhasSemCota };
 }
 
 /**
@@ -740,7 +893,7 @@ function lerDxfPontos(texto: string): {
  * `<Faces><F>` (três ids), `<Breaklines><Breakline><PntList3D>`, e
  * `<CgPoints><CgPoint>`. Unidade por `<Metric linearUnit="…">`.
  */
-function lerLandXml(texto: string): { brutos: Bruto[]; faces: number[]; unidade: 'M' | 'MM'; avisos: string[]; quebras: number } {
+function lerLandXml(texto: string): { brutos: Bruto[]; contorno: Bruto[]; faces: number[]; unidade: 'M' | 'MM'; avisos: string[]; quebras: number } {
   const avisos: string[] = [];
   const unidade: 'M' | 'MM' = /linearUnit\s*=\s*"millimeter"/i.test(texto) ? 'MM' : 'M';
   if (/<Imperial\b/i.test(texto)) avisos.push('LandXML em unidades imperiais: as coordenadas foram lidas como estão (sem converter pés).');
@@ -786,7 +939,23 @@ function lerLandXml(texto: string): { brutos: Bruto[]; faces: number[]; unidade:
     brutos.push({ a: v[0], b: v[1], z: v[2], nome, codigo });
   }
   if (brutos.length === 0) avisos.push('O LandXML não tem <Pnts>, <Breakline> nem <CgPoint> — nada para importar.');
-  return { brutos, faces, unidade, avisos, quebras };
+
+  /**
+   * P2.65: `<Parcels><Parcel><CoordGeom>` é o LOTE com valor jurídico do
+   * LandXML — é para isso que a seção existe. Os vértices saem dos `<Start>`
+   * das feições na ordem em que aparecem (o `<End>` de uma é o `<Start>` da
+   * seguinte num contorno fechado); o último `<End>` fecha e fica de fora.
+   */
+  const contorno: Bruto[] = [];
+  const parcel = texto.match(/<Parcel\b[\s\S]*?<CoordGeom\b[\s\S]*?<\/CoordGeom>/i)?.[0];
+  if (parcel) {
+    for (const m of parcel.matchAll(/<Start\b[^>]*>([^<]*)<\/Start>/g)) {
+      const n = m[1].trim().split(/[\s,]+/).map(Number).filter(Number.isFinite);
+      if (n.length >= 2) contorno.push({ a: n[0], b: n[1], z: 0, soContorno: true });
+    }
+    if (contorno.length < 3) contorno.length = 0;
+  }
+  return { brutos, contorno, faces, unidade, avisos, quebras };
 }
 
 function atributo(tag: string, nome: string): number | null {
@@ -1121,6 +1290,8 @@ export function importarPontos(
       tinImportada: null,
       detectado: { ordem: 'ENZ', unidade: 'MM', ancoragem: ancC, linhasLidas: pontosC.length, linhasIgnoradas: 0, curvasLidas: l.curvasLidas, curvasSemCota: 0, linhasDeQuebra: quebrasC.length },
       dentroDoLote: dentro,
+      // Curvas e perfis do próprio ÒPURA não trazem lote (P2.65).
+      contorno: null,
       avisos,
     };
   }
@@ -1176,9 +1347,18 @@ export function importarPontos(
       tinImportada: null,
       detectado: { ordem: 'ENZ', unidade: 'MM', ancoragem: 'DIRETO', linhasLidas: lidas, linhasIgnoradas: ignoradasP },
       dentroDoLote: dentro,
+      // Curvas e perfis do próprio ÒPURA não trazem lote (P2.65).
+      contorno: null,
       avisos,
     };
   }
+
+  // P2.65: vértices do contorno do lote, na ordem do anel. Entram no FIM de
+  // `brutos` — a TIN importada indexa `pontos` por posição, e acrescentar no
+  // fim não mexe nos índices das faces.
+  let contornoBruto: Bruto[] = [];
+  let origemDoContorno: OrigemDoContorno | null = null;
+  let camadaDoContorno: string | undefined;
 
   if (formato === 'TEXTO') {
     const l = lerTexto(texto);
@@ -1199,11 +1379,13 @@ export function importarPontos(
     brutos = l.brutos;
     ignoradas = l.ignoradas;
     avisos.push(...l.avisos);
+    contornoBruto = l.contorno;
     ordem = 'GEO';
   } else if (formato === 'KML') {
     const l = lerKml(texto);
     brutos = l.brutos;
     ignoradas = l.ignoradas;
+    contornoBruto = l.contorno;
     ordem = 'GEO';
     if (ignoradas > 0) avisos.push(`${ignoradas} Placemark(s) sem Point ou sem altitude foram ignorados.`);
   } else if (formato === 'DXF') {
@@ -1213,6 +1395,8 @@ export function importarPontos(
     avisos.push(...l.avisos);
     unidadeDoDxf = l.unidade;
     faces = l.faces;
+    contornoBruto = l.contorno;
+    camadaDoContorno = l.camadaDoContorno;
     curvasSemCota = l.polilinhasSemCota > 0 ? l.polilinhasSemCota : undefined;
     ordem = 'NEZ'; // as marcas saem como a = y (N), b = x (E)
   } else if (formato === 'LANDXML') {
@@ -1221,6 +1405,7 @@ export function importarPontos(
     avisos.push(...l.avisos);
     unidadeDoDxf = l.unidade;
     faces = l.faces;
+    contornoBruto = l.contorno;
     ordem = 'NEZ'; // LandXML escreve norte, este, cota
   } else {
     const l = lerSvgPontos(texto);
@@ -1233,11 +1418,35 @@ export function importarPontos(
     ordem = 'NEZ';
   }
 
+  if (contornoBruto.length >= 3) {
+    origemDoContorno = 'POLIGONO_DO_ARQUIVO';
+    contornoBruto.forEach((b, i) => brutos.push({ ...b, contorno: i, soContorno: true }));
+  } else {
+    // Sem polígono no arquivo: os PONTOS com código de divisa (M1, M2, DIV…),
+    // na ordem do arquivo. Estes continuam sendo pontos cotados — são medidas
+    // de verdade, não só desenho.
+    let k = 0;
+    for (const b of brutos) {
+      if (b.codigo && CODIGO_DE_DIVISA.test(b.codigo.trim())) b.contorno = k++;
+    }
+    if (k >= 3) origemDoContorno = 'CODIGO_DOS_PONTOS';
+    else for (const b of brutos) delete b.contorno;
+  }
+
   // Em (E, N) metros (ou graus quando GEO), já na ordem certa.
-  let pontosEN: { e: number; n: number; z: number; nome?: string; codigo?: string; quebra?: number }[] = brutos.map((b) =>
+  let pontosEN: {
+    e: number;
+    n: number;
+    z: number;
+    nome?: string;
+    codigo?: string;
+    quebra?: number;
+    contorno?: number;
+    soContorno?: boolean;
+  }[] = brutos.map((b) =>
     ordem === 'ENZ'
-      ? { e: b.a, n: b.b, z: b.z, nome: b.nome, codigo: b.codigo, quebra: b.quebra }
-      : { e: b.b, n: b.a, z: b.z, nome: b.nome, codigo: b.codigo, quebra: b.quebra },
+      ? { e: b.a, n: b.b, z: b.z, nome: b.nome, codigo: b.codigo, quebra: b.quebra, contorno: b.contorno, soContorno: b.soContorno }
+      : { e: b.b, n: b.a, z: b.z, nome: b.nome, codigo: b.codigo, quebra: b.quebra, contorno: b.contorno, soContorno: b.soContorno },
   );
 
   let ancoragem: ResultadoDaImportacao['detectado']['ancoragem'] = 'DIRETO';
@@ -1248,7 +1457,7 @@ export function importarPontos(
     unidade = 'SVG';
     const escala = opcoes.escalaSvgMmPorUnidade && opcoes.escalaSvgMmPorUnidade > 0 ? opcoes.escalaSvgMmPorUnidade : 1000;
     // Y do SVG cresce para baixo: inverte pela altura da caixa.
-    pontos = pontosEN.map((p) => ({ x: p.e * escala, y: (alturaSvg - p.n) * escala, cotaM: p.z, nome: p.nome, codigo: p.codigo, quebra: p.quebra }));
+    pontos = pontosEN.map((p) => ({ x: p.e * escala, y: (alturaSvg - p.n) * escala, cotaM: p.z, nome: p.nome, codigo: p.codigo, quebra: p.quebra, contorno: p.contorno, soContorno: p.soContorno }));
     if (alturaSvg === 0) avisos.push('SVG sem viewBox/height: o Y foi invertido em torno de zero.');
   } else if (ordem === 'GEO') {
     unidade = 'GEO';
@@ -1257,7 +1466,7 @@ export function importarPontos(
     }
     const geo = ctx.georreferencia;
     ancoragem = 'GEORREFERENCIA';
-    pontos = pontosEN.map((p) => ({ ...geoParaLocal({ lat: p.n, lon: p.e }, geo), cotaM: p.z, nome: p.nome, codigo: p.codigo, quebra: p.quebra }));
+    pontos = pontosEN.map((p) => ({ ...geoParaLocal({ lat: p.n, lon: p.e }, geo), cotaM: p.z, nome: p.nome, codigo: p.codigo, quebra: p.quebra, contorno: p.contorno, soContorno: p.soContorno }));
   } else {
     const utm = unidadePedida === 'UTM' || (unidadePedida === 'AUTO' && pareceUtm(brutos).sim);
     if (utm) {
@@ -1273,7 +1482,7 @@ export function importarPontos(
       }
       const geo = ctx.georreferencia;
       ancoragem = 'GEORREFERENCIA';
-      pontos = pontosEN.map((p) => ({ ...geoParaLocal(utmParaLatLon(p.e, p.n, zona, hemi), geo), cotaM: p.z, nome: p.nome, codigo: p.codigo, quebra: p.quebra }));
+      pontos = pontosEN.map((p) => ({ ...geoParaLocal(utmParaLatLon(p.e, p.n, zona, hemi), geo), cotaM: p.z, nome: p.nome, codigo: p.codigo, quebra: p.quebra, contorno: p.contorno, soContorno: p.soContorno }));
     } else {
       const maior = Math.max(0, ...pontosEN.map((p) => Math.max(Math.abs(p.e), Math.abs(p.n))));
       // Coordenada local em metros raramente passa de alguns milhares (a
@@ -1282,7 +1491,7 @@ export function importarPontos(
       const emMm = unidadePedida === 'MM' || (unidadePedida === 'AUTO' && (unidadeDoDxf === 'MM' || (unidadeDoDxf === null && maior > 5000)));
       unidade = emMm ? 'MM' : 'M';
       const fator = emMm ? 1 : 1000;
-      pontos = pontosEN.map((p) => ({ x: p.e * fator, y: p.n * fator, cotaM: p.z, nome: p.nome, codigo: p.codigo, quebra: p.quebra }));
+      pontos = pontosEN.map((p) => ({ x: p.e * fator, y: p.n * fator, cotaM: p.z, nome: p.nome, codigo: p.codigo, quebra: p.quebra, contorno: p.contorno, soContorno: p.soContorno }));
     }
   }
 
@@ -1310,6 +1519,40 @@ export function importarPontos(
   }
 
   pontos = pontos.map((p) => ({ ...p, x: Math.round(p.x), y: Math.round(p.y) }));
+
+  /**
+   * P2.65 — O CONTORNO SAI DAQUI, depois de passar pela mesma conversão de
+   * unidade, UTM/georreferência e ancoragem que os pontos. Foi por isso que
+   * ele viajou junto: um anel convertido por outro caminho cairia noutro
+   * lugar do desenho.
+   *
+   * Os vértices que são SÓ contorno saem de `pontos` — a polilinha do lote não
+   * tem cota, e cota zero no meio do levantamento afundaria a superfície.
+   */
+  const doContorno = pontos
+    .filter((p) => p.contorno !== undefined)
+    .sort((u, v) => u.contorno! - v.contorno!)
+    .map((p) => ({ x: p.x, y: p.y }));
+  pontos = pontos.filter((p) => !p.soContorno);
+
+  let contorno: ContornoImportado | null = null;
+  if (origemDoContorno && doContorno.length >= 3) {
+    contorno = { origem: origemDoContorno, pontos: doContorno, ...medirAnel(doContorno), camada: camadaDoContorno };
+  } else if (pontos.length >= 3) {
+    // ⚠️ PROPOSTA, e a tela oferece desmarcada: o levantamento quase sempre
+    // passa da divisa, então a envoltória costuma dar área MAIOR que a real.
+    const casco = envoltoriaConvexa(pontos.map((p) => ({ x: p.x, y: p.y })));
+    if (casco.length >= 3) contorno = { origem: 'ENVOLTORIA', pontos: casco, ...medirAnel(casco) };
+  }
+  if (contorno) {
+    const quanto = `${contorno.pontos.length} lados · ${contorno.areaM2.toFixed(2).replace('.', ',')} m²`;
+    if (contorno.origem === 'POLIGONO_DO_ARQUIVO') {
+      avisos.push(`Contorno do lote no arquivo (${quanto}${contorno.camada ? `, camada ${contorno.camada}` : ''}): dá para lançar as divisas junto.`);
+    } else if (contorno.origem === 'CODIGO_DOS_PONTOS') {
+      avisos.push(`Contorno pelos pontos com código de divisa (${quanto}): dá para lançar as divisas junto.`);
+    }
+  }
+
   const dentroDoLote = ctx.anel && ctx.anel.length >= 3 ? pontos.filter((p) => pointInPolygon(ctx.anel!, p)).length : pontos.length;
   if (pontos.length > 0 && dentroDoLote === 0) avisos.push('Nenhum ponto cai dentro do lote: confira ordem N/E, unidade e ancoragem.');
   if (pontos.length > 0 && pontos.length < 3) avisos.push('Menos de três pontos: a triangulação precisa de pelo menos três, não alinhados.');
@@ -1341,6 +1584,7 @@ export function importarPontos(
       faces: tinImportada ? faces.length / 3 : undefined,
     },
     dentroDoLote,
+    contorno,
     avisos,
   };
 }

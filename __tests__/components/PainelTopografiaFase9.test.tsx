@@ -4,7 +4,7 @@
  * aplicação, e a proveniência do arquivo na lista.
  */
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import PainelTopografia from '../../components/blueprint/PainelTopografia';
 import type { Topografia } from '../../hooks/useBlueprintTopografia';
@@ -195,6 +195,46 @@ describe('PainelTopografia · fase 11 (curvas no SVG)', () => {
       } finally {
         abrir.mockRestore();
       }
+    });
+  });
+
+  /**
+   * P2.65 — *"o levantamento topográfico já vem com o contorno do lote"*.
+   */
+  describe('lançar o lote do arquivo (P2.65)', () => {
+    it('com o contorno no arquivo, a caixa nasce MARCADA e "Substituir" lança as divisas antes dos pontos', async () => {
+      const t = hook();
+      const onLancarLote = vi.fn();
+      render(<PainelTopografia topografia={t} temLoteFechado={false} temGeorreferencia={false} onLancarLote={onLancarLote} />);
+      escolher('levantamento.csv', ['1;0,000;0,000;100,50;M1', '2;30,000;0,000;100,80;M2', '3;30,000;20,000;101,20;M3', '4;0,000;20,000;100,90;M4'].join(String.fromCharCode(10)));
+      const caixa = await screen.findByTestId('lancar-lote-do-arquivo');
+      expect(caixa).toHaveTextContent(/4 lados · 600,00 m²/);
+      expect(within(caixa).getByRole('checkbox')).toBeChecked();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Substituir os pontos' }));
+      expect(onLancarLote).toHaveBeenCalledTimes(1);
+      expect(onLancarLote.mock.calls[0][0]).toHaveLength(4);
+      expect(t.definirPontosCotados).toHaveBeenCalledTimes(1);
+    });
+
+    it('⚠️ a envoltória convexa nasce DESMARCADA — palpite não vira divisa sozinho', async () => {
+      const t = hook();
+      const onLancarLote = vi.fn();
+      render(<PainelTopografia topografia={t} temLoteFechado={false} temGeorreferencia={false} onLancarLote={onLancarLote} />);
+      escolher('sem-codigo.csv', ['1;0,000;0,000;100,50', '2;30,000;0,000;100,80', '3;30,000;20,000;101,20'].join(String.fromCharCode(10)));
+      const caixa = await screen.findByTestId('lancar-lote-do-arquivo');
+      expect(within(caixa).getByRole('checkbox')).not.toBeChecked();
+      expect(caixa).toHaveTextContent(/Palpite/);
+      fireEvent.click(screen.getByRole('button', { name: 'Substituir os pontos' }));
+      expect(onLancarLote).not.toHaveBeenCalled();
+    });
+
+    it('sem `onLancarLote` (o lote já existe) a caixa nem aparece', async () => {
+      const t = hook();
+      render(<PainelTopografia topografia={t} temLoteFechado temGeorreferencia={false} />);
+      escolher('levantamento.csv', ['1;0,000;0,000;100,50;M1', '2;30,000;0,000;100,80;M2', '3;30,000;20,000;101,20;M3'].join(String.fromCharCode(10)));
+      await waitFor(() => expect(screen.getByTestId('previa-da-importacao')).toBeTruthy());
+      expect(screen.queryByTestId('lancar-lote-do-arquivo')).not.toBeInTheDocument();
     });
   });
 });

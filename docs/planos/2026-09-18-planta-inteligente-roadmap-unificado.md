@@ -2373,6 +2373,51 @@ barra da aba Terreno: 176 px, painel em 1 fileira (o comando novo não quebrou a
   ⚠️ O realce é medido **aos 0,7 s**, não depois: ele dura 2 s, e medir no fim mediria a ausência
   dele — um verde que não significaria nada.
 
+### P2.65 — O lote nasce do levantamento (25/09/2026) · *"o botão está bloqueado esperando fazer primeiro o contorno do lote. Esse pedido leva a um serviço extra ao usuário pois o levantamento topográfico já vem com o contorno do lote"*
+
+**O usuário está certo, e o erro era meu.** A P2.64 desabilitou "Importar levantamento" sem lote fechado, com um motivo que parecia técnico — o painel de topografia só existia com o lote, e a ancoragem precisa do anel. Só que **o arquivo do topógrafo traz o perímetro**: pedir o contorno antes é mandar desenhar à mão o que já está medido.
+
+**O contorno agora SAI DO ARQUIVO.** Cada formato tem o seu lugar canônico, e é de lá que ele é lido:
+
+| formato | de onde vem o lote |
+|---|---|
+| **DXF** | a polilinha **fechada** de maior área, com a **camada** desempatando (`DIVISA`, `LIMITE`, `LOTE`, `PERIMETRO`, `MATRICULA`…) |
+| **GeoJSON / KML** | o `Polygon` / `outerBoundaryIs` — só o anel externo; ilha e buraco não são divisa |
+| **LandXML** | `<Parcels><Parcel><CoordGeom>`, que é a seção que existe exatamente para isso |
+| **CSV/TXT** | os pontos com **código de divisa** (`M1`, `M2`, `V3`, `PL4`, `DIV`, `LIM`, `MARCO`, `CERCA`), na ordem do arquivo — decisão do usuário entre três arranjos propostos |
+
+Sem nenhum dos quatro, sobra a **envoltória convexa** dos pontos. ⚠️ Ela entra **DESMARCADA** e rotulada como palpite: o levantamento quase sempre passa da divisa (a rua, o vizinho, o talude), então a envoltória tende a dar área **maior** que a da escritura. Palpite não vira divisa sem alguém olhar.
+
+**⚠️ O contorno viaja JUNTO com os pontos.** Ele entra na lista de brutos marcado (`contorno`, `soContorno`) e atravessa a mesma conversão de unidade, UTM/georreferência e ancoragem; só no fim é separado. Convertê-lo por fora daria um anel deslocado dos pontos que ele deveria cercar — e o teste que prova isso mede o centro dos dois depois de uma ancoragem no centro do lote.
+
+⚠️ **Os vértices que são SÓ contorno não viram ponto cotado.** A polilinha do lote quase nunca tem Z; deixá-la entrar como cota zero afundaria a superfície inteira. Já os marcos do CSV **continuam** sendo pontos cotados — ali a cota foi medida de verdade.
+
+**O que mais precisou ceder para o caminho existir:**
+- `PainelTopografia` deixava a tela em *"Feche o contorno do lote"* e escondia a importação junto. Agora o bloco de pontos e o botão Importar aparecem, com o texto dizendo que o arquivo pode trazer o perímetro.
+- ⚠️ `PainelTerreno` fazia `if (!terreno && !divisaSelecionada) return null` — sem nenhuma divisa, a gaveta "Dados do lote" vinha **vazia**, levando o slot de topografia junto. Quem mais precisa da importação é justamente quem não tem lote. O slot passou a valer por si.
+- "Usar vértices do lote" fica **desabilitado** sem lote, dizendo por quê.
+- ⚠️ Lançar o lote só é oferecido quando **não** existe contorno. Trocar divisa desenhada por outra é destruição, e isso passa pela ferramenta Terreno, não por um checkbox.
+
+**Dois defeitos que os testes pegaram antes do app:**
+1. Eu tinha posto `quadra` na lista de camadas de divisa do DXF. A quadra contém **vários lotes** e costuma ser a polilinha fechada de maior área do arquivo — seria a primeira escolhida, e lançaria o quarteirão inteiro como divisa do imóvel.
+2. Um `setLancarLote(false)` sobrou **depois** da leitura do arquivo e desmarcava a caixa que o resultado tinha acabado de marcar.
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-ui-standard.sh` (BlueprintEditor, PainelTopografia, PainelTerreno) ok · `check-xss-sinks.sh` ok · suíte cheia **466 arquivos / 5369 testes** verdes · `npm run build` ok.
+- `__tests__/blueprintTopografiaImportacao.test.ts` (+6): CSV com marcos (os 5 pontos continuam pontos, o anel tem 4 lados e 36 m²); CSV sem código cai na envoltória **sem** o aviso de "dá para lançar"; DXF em que a `QUADRA` é maior e a `DIVISA` vence, e a polilinha não vira cota zero; GeoJSON e KML com `Polygon`; LandXML com `Parcel`; e **o anel andando junto dos pontos** na ancoragem.
+- `__tests__/components/PainelTopografiaFase9.test.tsx` (+3) e `PainelTopografia.test.tsx` (1 reescrito): a caixa nasce marcada com contorno do arquivo e desmarcada na envoltória; sem `onLancarLote` ela nem aparece; sem lote o painel oferece Importar e desabilita "Usar vértices do lote".
+- `__tests__/components/BlueprintEditor.test.tsx` (1 reescrito): sem lote o comando está **habilitado**; o clique abre a gaveta com o bloco de importação; o CSV com marcos oferece "4 lados · 600,00 m²" marcado; e **depois de Substituir o lote existe** — o bloco "ainda não há contorno" some.
+- **App real** (escritas bloqueadas: 5, 0 erros de página), *Planta 25/09/2026* (a única da lista sem lote):
+
+```
+Terreno → Importar levantamento (habilitado, sem lote nenhum)
+CSV com M1..M4 + 3 pontos de levantamento
+  → "7 pontos lidos · separador ;"
+  → "Lançar o lote do arquivo — 4 lados · 600,00 m² · 100,00 m de perímetro
+     Pelos pontos com código de divisa (M1, M2…), na ordem do arquivo"   [marcado sozinho]
+Substituir → o bloco "ainda não há contorno" some e o painel mostra  TERRENO 600,00 m²
+```
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

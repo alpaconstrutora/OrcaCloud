@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Check, Copy, Download, Mountain, Plus, Sparkles, Upload } from 'lucide-react';
-import { sha256 } from '../../utils/blueprintKernel';
+import { sha256, type Point } from '../../utils/blueprintKernel';
 import {
   detectarFormato,
   formatoPeloNome,
@@ -182,6 +182,7 @@ export default function PainelTopografia({
   drenagem = null,
   executivo = null,
   pedidoDeImportacao,
+  onLancarLote,
 }: {
   topografia: Topografia;
   temLoteFechado: boolean;
@@ -211,6 +212,13 @@ export default function PainelTopografia({
    * chegando aos dois abriria duas caixas de arquivo.
    */
   pedidoDeImportacao?: number;
+  /**
+   * P2.65 — lançar as DIVISAS do lote a partir do contorno que veio no arquivo.
+   * *"o levantamento topográfico já vem com o contorno do lote"*: exigir que
+   * alguém desenhasse o contorno antes de importar era trabalho em dobro.
+   * Ausente = o editor não oferece (por exemplo, quando o lote já existe).
+   */
+  onLancarLote?: (pontos: Point[]) => void;
 }) {
   const t = topografia;
   const confirmar = useConfirm();
@@ -251,9 +259,24 @@ export default function PainelTopografia({
       )}
 
       {!temLoteFechado ? (
-        <p className="mt-1.5 text-xs text-slate-500">
-          Feche o contorno do lote para gerar curvas de nível.
-        </p>
+        /* P2.65: sem lote não se geram curvas — mas o arquivo do topógrafo
+           traz o contorno, então é daqui que o lote pode nascer. Fechar esta
+           porta era mandar o usuário desenhar à mão o que ele já tem medido. */
+        <div className="mt-1.5" data-testid="topografia-sem-lote">
+          <p className="text-xs text-slate-500">
+            Ainda não há contorno de lote. Importe o levantamento: se o arquivo trouxer o
+            perímetro (polilinha fechada do DXF, <code>Polygon</code> do GeoJSON/KML,{' '}
+            <code>Parcel</code> do LandXML ou pontos com código de divisa), dá para lançar as
+            divisas a partir dele — e aí as curvas de nível ficam liberadas.
+          </p>
+          <PontosCotados
+            topografia={t}
+            linhaDoPerfil={perfil?.pontos ?? null}
+            pedidoDeImportacao={pedidoDeImportacao}
+            onLancarLote={onLancarLote}
+            semLote
+          />
+        </div>
       ) : (
         <>
           {/* Fonte — um botão por fonte, como a origem da zona: a escolha decide se
@@ -542,10 +565,15 @@ function PontosCotados({
   topografia: t,
   linhaDoPerfil,
   pedidoDeImportacao,
+  onLancarLote,
+  semLote = false,
 }: {
   topografia: Topografia;
   linhaDoPerfil: PontoDoPerfil[] | null;
   pedidoDeImportacao?: number;
+  onLancarLote?: (pontos: Point[]) => void;
+  /** Sem contorno de lote no desenho (P2.65): muda o que dá para fazer aqui. */
+  semLote?: boolean;
 }) {
   return (
     <div className="mt-2">
@@ -558,7 +586,9 @@ function PontosCotados({
         <button
           type="button"
           onClick={t.usarVerticesDoLote}
-          className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700 transition-colors hover:bg-slate-50"
+          disabled={semLote}
+          title={semLote ? 'Não há lote desenhado ainda — importe o levantamento ou desenhe o contorno com a ferramenta Terreno' : undefined}
+          className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Usar vértices do lote
         </button>
@@ -575,6 +605,7 @@ function PontosCotados({
           topografia={t}
           linhaDoPerfil={linhaDoPerfil}
           pedidoDeImportacao={pedidoDeImportacao}
+          onLancarLote={onLancarLote}
         />
       </div>
 
@@ -915,10 +946,12 @@ function ImportarPontos({
   topografia: t,
   linhaDoPerfil,
   pedidoDeImportacao,
+  onLancarLote,
 }: {
   topografia: Topografia;
   linhaDoPerfil: PontoDoPerfil[] | null;
   pedidoDeImportacao?: number;
+  onLancarLote?: (pontos: Point[]) => void;
 }) {
   const entrada = useRef<HTMLInputElement>(null);
   const caixa = useRef<HTMLButtonElement>(null);
@@ -927,6 +960,13 @@ function ImportarPontos({
   const [opcoes, setOpcoes] = useState<OpcoesDeImportacao>({});
   const [resultado, setResultado] = useState<ResultadoDaImportacao | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  /**
+   * P2.65: lançar as divisas junto. Marcado sozinho quando o arquivo TRAZ o
+   * polígono (ou os marcos de divisa); ⚠️ a envoltória convexa entra
+   * DESMARCADA — ela é palpite, e um palpite que costuma dar área maior que a
+   * da escritura não pode virar divisa sem alguém olhar.
+   */
+  const [lancarLote, setLancarLote] = useState(false);
 
   /**
    * O botão "Importar levantamento" do ribbon (P2.64) chega aqui: traz o bloco
@@ -948,14 +988,16 @@ function ImportarPontos({
 
   const rodar = (arq: NonNullable<typeof arquivo>, op: OpcoesDeImportacao) => {
     try {
-      setResultado(
-        importarPontos(
-          arq.texto,
-          arq.formato,
-          { anel: t.anelDoLote, georreferencia: t.georreferencia, linhaDoPerfil: linhaDoPerfil?.filter((q) => q.cotaM !== null || true) ?? null },
-          op,
-        ),
+      const r = importarPontos(
+        arq.texto,
+        arq.formato,
+        { anel: t.anelDoLote, georreferencia: t.georreferencia, linhaDoPerfil: linhaDoPerfil?.filter((q) => q.cotaM !== null || true) ?? null },
+        op,
       );
+      setResultado(r);
+      // ⚠️ Marcado só quando o arquivo TRAZ o contorno. A envoltória convexa é
+      // palpite — e palpite não vira divisa sem alguém olhar.
+      setLancarLote(!!onLancarLote && !!r.contorno && r.contorno.origem !== 'ENVOLTORIA');
       setErro(null);
     } catch (e) {
       setResultado(null);
@@ -997,6 +1039,8 @@ function ImportarPontos({
 
   const aplicar = (modo: 'SUBSTITUIR' | 'ACRESCENTAR') => {
     if (!arquivo || !resultado || resultado.pontos.length === 0) return;
+    // As divisas primeiro: os pontos cotados só fazem sentido dentro de um lote.
+    if (lancarLote && resultado.contorno && onLancarLote) onLancarLote(resultado.contorno.pontos);
     t.definirPontosCotados(
       resultado.pontos.map((p) => ({ x: p.x, y: p.y, cotaM: p.cotaM })),
       { arquivo: arquivo.nome, formato: ROTULO_DO_FORMATO[arquivo.formato], sha256: arquivo.sha256, quantos: resultado.pontos.length },
@@ -1006,6 +1050,7 @@ function ImportarPontos({
     );
     setArquivo(null);
     setResultado(null);
+    setLancarLote(false);
     if (entrada.current) entrada.current.value = '';
   };
 
@@ -1146,6 +1191,32 @@ function ImportarPontos({
               {a}
             </p>
           ))}
+          {resultado?.contorno && onLancarLote && (
+            <label
+              className="mt-2 flex w-full basis-full items-start gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1.5"
+              data-testid="lancar-lote-do-arquivo"
+            >
+              <input
+                type="checkbox"
+                checked={lancarLote}
+                onChange={(e) => setLancarLote(e.target.checked)}
+                className="mt-0.5 h-3.5 w-3.5"
+              />
+              <span>
+                <strong className="font-semibold">Lançar o lote do arquivo</strong> —{' '}
+                {resultado.contorno.pontos.length} lados ·{' '}
+                {formatar(resultado.contorno.areaM2)} m² · {formatar(resultado.contorno.perimetroM)} m de perímetro
+                {resultado.contorno.camada && ` · camada ${resultado.contorno.camada}`}
+                <span className="mt-0.5 block text-slate-500">
+                  {resultado.contorno.origem === 'POLIGONO_DO_ARQUIVO'
+                    ? 'O perímetro desenhado pelo topógrafo. As divisas entram como estão; papel de cada lado e medidas da escritura ficam para o Quadro de divisas.'
+                    : resultado.contorno.origem === 'CODIGO_DOS_PONTOS'
+                      ? 'Pelos pontos com código de divisa (M1, M2…), na ordem do arquivo.'
+                      : '⚠️ Palpite: a envoltória dos pontos. O levantamento costuma passar da divisa (a rua, o vizinho), então a área tende a sair MAIOR que a da escritura — confira antes.'}
+                </span>
+              </span>
+            </label>
+          )}
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <button
               type="button"

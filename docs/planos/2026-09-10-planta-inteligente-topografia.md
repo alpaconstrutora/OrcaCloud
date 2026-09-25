@@ -998,3 +998,43 @@ importação mora quatro passos abaixo, dentro de "Dados do lote", atrás da esc
   painel de topografia → CSV PNEZD de 5 pontos → "5 pontos lidos · separador ; · 2 dentro do lote"
   → Substituir → "5 pontos de levantamento-teste.csv · 1349dd1f5c5f"
 
+---
+
+# Pedido posterior — 2026-09-25: fase 19 (o lote nasce do levantamento)
+
+## Pedido original
+
+> botao de importar levantamento est bloqueado, esperando fazer primeiro o contorno do lote. Esse
+> pedido leva a um servico extra ao usuário pois o levantamento topografico ja vem com o contorno
+> do lote
+
+## Decisões
+
+- O contorno passa a ser **lido do arquivo**: polilinha fechada (DXF, camada desempatando),
+  `Polygon`/`outerBoundaryIs` (GeoJSON/KML), `<Parcel>` (LandXML) e **pontos com código de
+  divisa** no CSV/TXT (escolha do usuário entre três arranjos).
+- Envoltória convexa só como **proposta desmarcada** — o levantamento passa da divisa e a área
+  sairia maior que a da escritura.
+- O contorno atravessa a MESMA conversão dos pontos (unidade, UTM/geo, ancoragem); separado só
+  no fim. Vértices que são só contorno **não** viram ponto cotado (cota zero afundaria a TIN).
+- Lançar o lote só quando **não** há contorno: substituir divisa desenhada é destruição.
+
+## Estado — fase 19
+
+- [x] F47 — `blueprintTopografiaImportacao`: `ContornoImportado`, `OrigemDoContorno`,
+  `CODIGO_DE_DIVISA`, `medirAnel`, `envoltoriaConvexa`; contorno nos cinco leitores;
+  `PainelTopografia`/`PainelTerreno` sem lote; `BlueprintEditor.lancarLoteDoArquivo`
+- [x] Testes: importação (+6), painel (+3 e 1 reescrito), editor (1 reescrito)
+- [x] Suíte cheia (466 arquivos, 5.369 testes), typecheck, `check-ui-standard.sh`,
+  `check-xss-sinks.sh` e `build` verdes
+- [x] **Prova no app real** (escritas bloqueadas: 5, 0 erros): estudo sem lote → Importar
+  levantamento → CSV com M1..M4 → "4 lados · 600,00 m²" marcado → Substituir → TERRENO 600,00 m²
+
+### Achados desta fase (os testes pegaram antes do app)
+
+- **`quadra` na lista de camadas de divisa do DXF**: a quadra tem vários lotes e é a polilinha
+  fechada de maior área — teria lançado o quarteirão inteiro como divisa do imóvel.
+- **`setLancarLote(false)` depois da leitura** desmarcava a caixa que o resultado tinha marcado.
+- **`PainelTerreno` retornava `null` sem divisa nenhuma** e levava junto o slot de topografia:
+  a gaveta "Dados do lote" abria vazia exatamente para quem mais precisa da importação.
+

@@ -1531,6 +1531,33 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * gaveta se ela já estivesse aberta.
    */
   const [pedidoDeImportacaoDeLevantamento, setPedidoDeImportacaoDeLevantamento] = useState(0);
+  /**
+   * LANÇAR O LOTE DO ARQUIVO (25/09/2026, P2.65) — *"o levantamento topográfico
+   * já vem com o contorno do lote"*.
+   *
+   * O anel vem do importador já convertido e ancorado como os pontos; aqui ele
+   * só vira divisa: um `AddBoundary` por lado, fechando no primeiro, num lote
+   * só — um passo de desfazer. Papel de cada lado e medida da escritura ficam
+   * para o Quadro de divisas, que abre sozinho quando o contorno fecha.
+   */
+  function lancarLoteDoArquivo(pontos: { x: number; y: number }[]) {
+    if (pontos.length < 3 || !levelId) return;
+    try {
+      editor.runBatch(
+        pontos.map((a, i) => ({
+          type: 'AddBoundary' as const,
+          levelId,
+          a: { x: Math.round(a.x), y: Math.round(a.y) },
+          b: { x: Math.round(pontos[(i + 1) % pontos.length].x), y: Math.round(pontos[(i + 1) % pontos.length].y) },
+          kind: 'TERRENO' as const,
+        })),
+      );
+    } catch (e) {
+      setAvisoConexaoT(
+        e instanceof Error ? `O desenho recusou o contorno do arquivo: ${e.message}` : 'O desenho recusou o contorno do arquivo.',
+      );
+    }
+  }
   function importarLevantamento() {
     topografia.setFonteCodigo('PONTOS_COTADOS');
     setDrawerRecolhido(false);
@@ -7219,6 +7246,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           topografia={topografia}
           temLoteFechado={anelDoLoteFechado !== null}
           pedidoDeImportacao={pedidoDeImportacao}
+          // Só se oferece lançar o lote quando ainda não há um: trocar um
+          // contorno existente por outro é destruir divisa desenhada, e isso
+          // tem de passar pela ferramenta Terreno, não por um checkbox.
+          onLancarLote={anelDoLoteFechado === null ? lancarLoteDoArquivo : undefined}
           temGeorreferencia={!!editor.model.georreferencia}
           cotaDeOrigemInformada={cotaDeOrigemInformada}
           declividade={declividade}
@@ -9368,12 +9399,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 icone={FileUp}
                 rotulo="Importar levantamento"
                 onClick={importarLevantamento}
-                disabled={anelDoLoteFechado === null}
-                ajuda={
-                  anelDoLoteFechado === null
-                    ? 'Importar levantamento topográfico — feche o contorno do lote com a ferramenta Terreno antes: é o lote que diz onde os pontos do arquivo caem'
-                    : 'Arquivo do topógrafo — CSV/TXT de estação total (PNEZD), GeoJSON, KML, DXF, SVG ou LandXML — vira os pontos cotados do lote, com prévia antes de entrar e o sha256 do arquivo na proveniência da versão'
-                }
+                ajuda="Arquivo do topógrafo — CSV/TXT de estação total (PNEZD), GeoJSON, KML, DXF, SVG ou LandXML. Traz os pontos cotados e, quando o arquivo tem o perímetro, lança as divisas do lote junto. Prévia antes de entrar; o sha256 do arquivo vai na proveniência da versão."
               />
               <Ferramenta
                 atual={editor.tool}
@@ -9686,13 +9712,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 <BotaoDoRibbon
                   icone={Mountain}
                   rotulo="Do levantamento topográfico"
-                  disabled={anelDoLoteFechado === null}
                   onClick={importarLevantamento}
-                  ajuda={
-                    anelDoLoteFechado === null
-                      ? 'Pontos cotados do topógrafo — feche o contorno do lote com a ferramenta Terreno antes: é o lote que diz onde os pontos do arquivo caem'
-                      : 'Pontos cotados do topógrafo (CSV/TXT PNEZD, GeoJSON, KML, DXF, SVG, LandXML): abre em Terreno › Dados do lote, com prévia antes de entrar'
-                  }
+                  ajuda="Pontos cotados do topógrafo (CSV/TXT PNEZD, GeoJSON, KML, DXF, SVG, LandXML) e, quando o arquivo traz o perímetro, as divisas do lote: abre em Terreno › Dados do lote, com prévia antes de entrar"
                 />
             </MenuDoRibbon>
           </GrupoDoRibbon>

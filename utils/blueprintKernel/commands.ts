@@ -2543,7 +2543,7 @@ function aplicarSemHash(
       findLevel(next, command.levelId);
       const nome = command.nome?.trim().slice(0, MAX_NOME_DE_QUADRA) ?? '';
       if (!nome) throw new KernelError('BAD_BLOCK', 'A quadra precisa de nome');
-      if (command.pontos.length < 3) throw new KernelError('BAD_BLOCK', `A quadra precisa de pelo menos 3 vertices; recebeu ${command.pontos.length}`);
+      if (command.pontos.length < 3) throw new KernelError('BAD_BLOCK', `A quadra precisa de pelo menos 3 vértices; recebeu ${command.pontos.length}`);
       const id = nextId(next, 'qdr');
       next.quadras = [
         ...(next.quadras ?? []),
@@ -2561,7 +2561,7 @@ function aplicarSemHash(
         q.nome = nome;
       }
       if (command.pontos !== undefined) {
-        if (command.pontos.length < 3) throw new KernelError('BAD_BLOCK', 'A quadra precisa de pelo menos 3 vertices');
+        if (command.pontos.length < 3) throw new KernelError('BAD_BLOCK', 'A quadra precisa de pelo menos 3 vértices');
         q.pontos = command.pontos.map(paraPontoMm);
       }
       diff.updated.push(q.id);
@@ -2570,7 +2570,7 @@ function aplicarSemHash(
 
     case 'MoveQuadraVertex': {
       const q = findQuadra(next, command.quadraId);
-      if (command.index < 0 || command.index >= q.pontos.length) throw new KernelError('BAD_BLOCK', `Vertice ${command.index} nao existe em ${q.id}`);
+      if (command.index < 0 || command.index >= q.pontos.length) throw new KernelError('BAD_BLOCK', `Vértice ${command.index} não existe em ${q.id}`);
       q.pontos[command.index] = { x: assertIntegerMm(roundToMm(command.to.x), 'to.x'), y: assertIntegerMm(roundToMm(command.to.y), 'to.y') };
       diff.updated.push(q.id);
       break;
@@ -2598,8 +2598,8 @@ function aplicarSemHash(
       findLevel(next, command.levelId);
       if (command.quadraId != null) findQuadra(next, command.quadraId);
       const numero = command.numero?.trim().slice(0, MAX_NUMERO_DE_LOTE) ?? '';
-      if (!numero) throw new KernelError('BAD_PLOT', 'O lote precisa de numero');
-      if (command.pontos.length < 3) throw new KernelError('BAD_PLOT', `O lote precisa de pelo menos 3 vertices; recebeu ${command.pontos.length}`);
+      if (!numero) throw new KernelError('BAD_PLOT', 'O lote precisa de número');
+      if (command.pontos.length < 3) throw new KernelError('BAD_PLOT', `O lote precisa de pelo menos 3 vértices; recebeu ${command.pontos.length}`);
       const tipo = command.tipo ?? 'LOTE';
       if (!TIPOS_DE_LOTE.includes(tipo)) throw new KernelError('BAD_PLOT', `Tipo de lote desconhecido: ${String(tipo)}`);
       const pontos = command.pontos.map(paraPontoMm);
@@ -2624,7 +2624,7 @@ function aplicarSemHash(
       }
       if (command.numero !== undefined) {
         const numero = command.numero?.trim().slice(0, MAX_NUMERO_DE_LOTE) ?? '';
-        if (!numero) throw new KernelError('BAD_PLOT', 'O lote precisa de numero');
+        if (!numero) throw new KernelError('BAD_PLOT', 'O lote precisa de número');
         l.numero = numero;
       }
       if (command.tipo !== undefined) {
@@ -2632,7 +2632,7 @@ function aplicarSemHash(
         l.tipo = command.tipo;
       }
       if (command.pontos !== undefined) {
-        if (command.pontos.length < 3) throw new KernelError('BAD_PLOT', 'O lote precisa de pelo menos 3 vertices');
+        if (command.pontos.length < 3) throw new KernelError('BAD_PLOT', 'O lote precisa de pelo menos 3 vértices');
         l.pontos = command.pontos.map(paraPontoMm);
         // Menos vertices do que antes pode deixar a testada apontando para fora.
         if (l.testadaIndex != null && l.testadaIndex >= l.pontos.length) l.testadaIndex = null;
@@ -2648,7 +2648,7 @@ function aplicarSemHash(
 
     case 'MoveLoteVertex': {
       const l = findLote(next, command.loteId);
-      if (command.index < 0 || command.index >= l.pontos.length) throw new KernelError('BAD_PLOT', `Vertice ${command.index} nao existe em ${l.id}`);
+      if (command.index < 0 || command.index >= l.pontos.length) throw new KernelError('BAD_PLOT', `Vértice ${command.index} não existe em ${l.id}`);
       l.pontos[command.index] = { x: assertIntegerMm(roundToMm(command.to.x), 'to.x'), y: assertIntegerMm(roundToMm(command.to.y), 'to.y') };
       diff.updated.push(l.id);
       break;
@@ -2665,11 +2665,11 @@ function aplicarSemHash(
       findLevel(next, command.levelId);
       const nome = command.nome?.trim().slice(0, MAX_NOME_DE_VIA) ?? '';
       if (!nome) throw new KernelError('BAD_STREET', 'A via precisa de nome');
-      if (command.eixo.length < 2) throw new KernelError('BAD_STREET', `O eixo da via precisa de pelo menos 2 vertices; recebeu ${command.eixo.length}`);
+      if (command.eixo.length < 2) throw new KernelError('BAD_STREET', `O eixo da via precisa de pelo menos 2 vértices; recebeu ${command.eixo.length}`);
       const larguraMm = assertIntegerMm(roundToMm(command.larguraMm), 'larguraMm');
       if (larguraMm < 1 || larguraMm > MAX_LARGURA_DE_VIA_MM) throw new KernelError('BAD_STREET', `Largura da via fora de 1..${MAX_LARGURA_DE_VIA_MM} mm: ${larguraMm}`);
       const calcadaMm = assertIntegerMm(roundToMm(command.calcadaMm ?? 0), 'calcadaMm');
-      if (calcadaMm < 0 || calcadaMm * 2 >= larguraMm) throw new KernelError('BAD_STREET', `As duas calcadas de ${calcadaMm} mm nao cabem na caixa de ${larguraMm} mm`);
+      if (calcadaMm < 0 || calcadaMm * 2 >= larguraMm) throw new KernelError('BAD_STREET', `As duas calçadas de ${calcadaMm} mm não cabem na caixa de ${larguraMm} mm`);
       const id = nextId(next, 'via');
       next.vias = [
         ...(next.vias ?? []),
@@ -2687,7 +2687,7 @@ function aplicarSemHash(
         v.nome = nome;
       }
       if (command.eixo !== undefined) {
-        if (command.eixo.length < 2) throw new KernelError('BAD_STREET', 'O eixo da via precisa de pelo menos 2 vertices');
+        if (command.eixo.length < 2) throw new KernelError('BAD_STREET', 'O eixo da via precisa de pelo menos 2 vértices');
         v.eixo = command.eixo.map(paraPontoMm);
       }
       // Largura e calcada se conferem JUNTAS: mudar so uma das duas pode
@@ -2695,7 +2695,7 @@ function aplicarSemHash(
       const larguraMm = command.larguraMm === undefined ? v.larguraMm : assertIntegerMm(roundToMm(command.larguraMm), 'larguraMm');
       const calcadaMm = command.calcadaMm === undefined ? v.calcadaMm : assertIntegerMm(roundToMm(command.calcadaMm), 'calcadaMm');
       if (larguraMm < 1 || larguraMm > MAX_LARGURA_DE_VIA_MM) throw new KernelError('BAD_STREET', `Largura da via fora de 1..${MAX_LARGURA_DE_VIA_MM} mm: ${larguraMm}`);
-      if (calcadaMm < 0 || calcadaMm * 2 >= larguraMm) throw new KernelError('BAD_STREET', `As duas calcadas de ${calcadaMm} mm nao cabem na caixa de ${larguraMm} mm`);
+      if (calcadaMm < 0 || calcadaMm * 2 >= larguraMm) throw new KernelError('BAD_STREET', `As duas calçadas de ${calcadaMm} mm não cabem na caixa de ${larguraMm} mm`);
       v.larguraMm = larguraMm;
       v.calcadaMm = calcadaMm;
       diff.updated.push(v.id);
@@ -2704,7 +2704,7 @@ function aplicarSemHash(
 
     case 'MoveViaVertex': {
       const v = findVia(next, command.viaId);
-      if (command.index < 0 || command.index >= v.eixo.length) throw new KernelError('BAD_STREET', `Vertice ${command.index} nao existe em ${v.id}`);
+      if (command.index < 0 || command.index >= v.eixo.length) throw new KernelError('BAD_STREET', `Vértice ${command.index} não existe em ${v.id}`);
       v.eixo[command.index] = { x: assertIntegerMm(roundToMm(command.to.x), 'to.x'), y: assertIntegerMm(roundToMm(command.to.y), 'to.y') };
       diff.updated.push(v.id);
       break;
@@ -2720,7 +2720,7 @@ function aplicarSemHash(
     case 'AddAreaPublica': {
       findLevel(next, command.levelId);
       if (!TIPOS_DE_AREA_PUBLICA.includes(command.tipo)) throw new KernelError('BAD_PUBLIC_AREA', `Tipo desconhecido: ${String(command.tipo)}`);
-      if (command.pontos.length < 3) throw new KernelError('BAD_PUBLIC_AREA', `A area publica precisa de pelo menos 3 vertices; recebeu ${command.pontos.length}`);
+      if (command.pontos.length < 3) throw new KernelError('BAD_PUBLIC_AREA', `A área pública precisa de pelo menos 3 vértices; recebeu ${command.pontos.length}`);
       const id = nextId(next, 'apb');
       next.areasPublicas = [
         ...(next.areasPublicas ?? []),
@@ -2745,7 +2745,7 @@ function aplicarSemHash(
       }
       if (command.nome !== undefined) a.nome = command.nome?.trim().slice(0, MAX_NOME_DE_AREA_PUBLICA) || null;
       if (command.pontos !== undefined) {
-        if (command.pontos.length < 3) throw new KernelError('BAD_PUBLIC_AREA', 'A area publica precisa de pelo menos 3 vertices');
+        if (command.pontos.length < 3) throw new KernelError('BAD_PUBLIC_AREA', 'A área pública precisa de pelo menos 3 vértices');
         a.pontos = command.pontos.map(paraPontoMm);
       }
       diff.updated.push(a.id);
@@ -2754,7 +2754,7 @@ function aplicarSemHash(
 
     case 'MoveAreaPublicaVertex': {
       const a = findAreaPublica(next, command.areaId);
-      if (command.index < 0 || command.index >= a.pontos.length) throw new KernelError('BAD_PUBLIC_AREA', `Vertice ${command.index} nao existe em ${a.id}`);
+      if (command.index < 0 || command.index >= a.pontos.length) throw new KernelError('BAD_PUBLIC_AREA', `Vértice ${command.index} não existe em ${a.id}`);
       a.pontos[command.index] = { x: assertIntegerMm(roundToMm(command.to.x), 'to.x'), y: assertIntegerMm(roundToMm(command.to.y), 'to.y') };
       diff.updated.push(a.id);
       break;

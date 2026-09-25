@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import {
   type TrechoDeRodape,
   FICHA_DO_MATERIAL_DE_SUB_REGIAO,
+  FICHA_DA_AREA_PUBLICA,
   polygonArea,
   type SubRegiao,
   type MaterialDeSubRegiao,
@@ -81,6 +82,7 @@ import {
   type Underlay,
 } from '../../utils/blueprintUnderlay';
 import { anelDoTerreno, ROTULO_CURTO_DO_PAPEL } from '../../utils/blueprintTerreno';
+import { faixaDaVia, calcadasDaVia, centroide, areaEmM2 } from '../../utils/blueprintLoteamento';
 import { COR_DA_FASE } from '../../utils/blueprintFases';
 import { COR_DA_FAMILIA, COR_PAREDE_HUMANIZADA, COR_SOMBRA, COR_VEGETACAO, sombraDaParede, tramaDoPiso, type EstiloDoPiso, type Planta } from '../../utils/blueprintHumanizada';
 import type { CurvaDeNivel, GradeDeElevacao, PontoCotado } from '../../utils/blueprintTopografia';
@@ -470,6 +472,28 @@ interface PontoTela {
  * posicionar a partir de uma conta geométrica (meio do traço, deslocado pela
  * normal) sem precisar adivinhar a largura do texto.
  */
+/** O ponto na METADE do comprimento de uma polilinha — não o vértice do meio. */
+function pontoMedioDaPolilinha(pontos: { x: number; y: number }[]): { x: number; y: number } {
+  if (pontos.length === 0) return { x: 0, y: 0 };
+  if (pontos.length === 1) return pontos[0];
+  const trechos: number[] = [];
+  let total = 0;
+  for (let i = 0; i < pontos.length - 1; i += 1) {
+    const d = Math.hypot(pontos[i + 1].x - pontos[i].x, pontos[i + 1].y - pontos[i].y);
+    trechos.push(d);
+    total += d;
+  }
+  let restante = total / 2;
+  for (let i = 0; i < trechos.length; i += 1) {
+    if (restante <= trechos[i] || i === trechos.length - 1) {
+      const t = trechos[i] === 0 ? 0 : restante / trechos[i];
+      return { x: pontos[i].x + (pontos[i + 1].x - pontos[i].x) * t, y: pontos[i].y + (pontos[i + 1].y - pontos[i].y) * t };
+    }
+    restante -= trechos[i];
+  }
+  return pontos[0];
+}
+
 function escreverRotulo(
   ctx: CanvasRenderingContext2D,
   texto: string,
@@ -1275,6 +1299,13 @@ interface Props {
   /** O material da PRÓXIMA sub-região (prévia). */
   materialDaSubRegiao?: MaterialDeSubRegiao;
   onAddSubRegiao?: (pontos: Point[]) => void;
+  /** LOTEAMENTO (B1): quadra, lote e area publica sao poligonos; a via e o EIXO. */
+  /** Largura da caixa da via em curso, para a previa mostrar a faixa e nao so o eixo. */
+  larguraDaVia?: number;
+  onAddQuadra?: (pontos: Point[]) => void;
+  onAddLote?: (pontos: Point[]) => void;
+  onAddAreaPublica?: (pontos: Point[]) => void;
+  onAddVia?: (eixo: Point[]) => void;
   /** Move a ponta de um limite. Espelha `onMoveVertex`. */
   onMoveBoundaryVertex?: (boundaryId: string, end: 'a' | 'b', to: Point) => void;
   /**
@@ -1436,6 +1467,11 @@ export default function BlueprintCanvas({
   subRegioes = SEM_SUB_REGIOES,
   materialDaSubRegiao = 'GRAMA',
   onAddSubRegiao,
+  larguraDaVia = 12000,
+  onAddQuadra,
+  onAddLote,
+  onAddAreaPublica,
+  onAddVia,
   onMoveBoundaryVertex,
   limiteEmDestaque = null,
   onMoveOpening,
@@ -1679,6 +1715,15 @@ export default function BlueprintCanvas({
   const [pontoNucleo, setPontoNucleo] = useState<Point | null>(null);
   /** SUB-REGIÃO em curso: vértices já clicados; fecha no 1º. */
   const [anelSubRegiao, setAnelSubRegiao] = useState<Point[]>([]);
+  /**
+   * LOTEAMENTO (B1): quadra, lote e area publica compartilham o MESMO estado de
+   * anel em curso. Sao o mesmo gesto (poligono que fecha no primeiro vertice) e
+   * so uma ferramenta esta ativa por vez; tres estados separados so dariam tres
+   * lugares para esquecer de limpar no Esc.
+   */
+  const [anelDoLoteamento, setAnelDoLoteamento] = useState<Point[]>([]);
+  /** A via e polilinha ABERTA: termina no duplo clique, como o perfil. */
+  const [eixoEmCurso, setEixoEmCurso] = useState<Point[]>([]);
   /**
    * A primeira ponta do TRECHO de rede em curso.
    *
@@ -4364,6 +4409,165 @@ export default function BlueprintCanvas({
     //
     // O anel do TERRENO ganha preenchimento fraco — é a única figura da tela
     // cuja ÁREA é o produto, e vê-la preenchida é o que diz "este é o lote".
+      // LOTEAMENTO (B1). O rotulo do lote nao segue o toggle de ambiente: numero
+      // e area sao o conteudo do desenho de loteamento, nao anotacao opcional.
+      // Some so quando nao caberia -- abaixo de ~4 px por metro fica ilegivel.
+      const mostrarRotulos = vista.escala * 1000 >= 4;
+      // LOTEAMENTO (B1). A ordem importa: a VIA e o chao de todos (vem primeiro),
+      // depois a area publica, depois a quadra (so contorno, para nao tapar os
+      // lotes) e por fim o LOTE, que e o que se vende e precisa ficar legivel.
+      for (const v of model.vias ?? []) {
+        if (v.eixo.length < 2 || ocultos.has(v.id)) continue;
+        const faixa = faixaDaVia(v.eixo, v.larguraMm);
+        if (faixa.length < 3) continue;
+        const pts = faixa.map(paraTela);
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
+        ctx.closePath();
+        ctx.fillStyle = selecao.has(v.id) ? '#dbeafe' : '#e5e7eb';
+        ctx.fill();
+        ctx.strokeStyle = selecao.has(v.id) ? COR_SELECIONADA : '#94a3b8';
+        ctx.lineWidth = selecao.has(v.id) ? 2 : 1;
+        ctx.stroke();
+        // As calcadas, com o traco mais leve do que o alinhamento.
+        for (const calcada of calcadasDaVia(v)) {
+          if (calcada.length < 3) continue;
+          const cp = calcada.map(paraTela);
+          ctx.beginPath();
+          ctx.moveTo(cp[0].x, cp[0].y);
+          for (const q of cp.slice(1)) ctx.lineTo(q.x, q.y);
+          ctx.closePath();
+          ctx.strokeStyle = 'rgba(100, 116, 139, 0.5)';
+          ctx.lineWidth = 0.8;
+          ctx.stroke();
+        }
+        ctx.restore();
+        if (mostrarRotulos) {
+          // ⚠️ O meio da via é o meio do COMPRIMENTO, não o vértice do meio da
+          // lista: num eixo de dois pontos `eixo[length/2]` é a PONTA, e o nome
+          // da rua ia parar fora da tela. O print da B1 pegou isso.
+          const t = paraTela(pontoMedioDaPolilinha(v.eixo));
+          escreverRotulo(ctx, v.nome, t.x, t.y, '#475569', Math.round(11 * fz));
+        }
+      }
+
+      for (const a of model.areasPublicas ?? []) {
+        if (a.pontos.length < 3 || ocultos.has(a.id)) continue;
+        const ficha = FICHA_DA_AREA_PUBLICA[a.tipo];
+        const pts = a.pontos.map(paraTela);
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
+        ctx.closePath();
+        ctx.fillStyle = ficha.cor;
+        ctx.globalAlpha = 0.7;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = selecao.has(a.id) ? COR_SELECIONADA : '#64748b';
+        ctx.lineWidth = selecao.has(a.id) ? 2 : 1;
+        ctx.stroke();
+        ctx.restore();
+        if (mostrarRotulos) {
+          const c = centroide(a.pontos);
+          const t = paraTela(c);
+          escreverRotulo(ctx, a.nome || ficha.rotulo, t.x, t.y - 7, '#334155', Math.round(11 * fz));
+          escreverRotulo(ctx, `${areaEmM2(a.pontos).toFixed(2).replace('.', ',')} m\u00b2`, t.x, t.y + 7, '#475569', Math.round(10 * fz));
+        }
+      }
+
+      for (const q of model.quadras ?? []) {
+        if (q.pontos.length < 3 || ocultos.has(q.id)) continue;
+        const pts = q.pontos.map(paraTela);
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const p of pts.slice(1)) ctx.lineTo(p.x, p.y);
+        ctx.closePath();
+        ctx.strokeStyle = selecao.has(q.id) ? COR_SELECIONADA : '#334155';
+        ctx.lineWidth = selecao.has(q.id) ? 2.5 : 1.5;
+        ctx.setLineDash([10, 5]);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      for (const l of model.lotes ?? []) {
+        if (l.pontos.length < 3 || ocultos.has(l.id)) continue;
+        const pts = l.pontos.map(paraTela);
+        const selecionado = selecao.has(l.id);
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const p of pts.slice(1)) ctx.lineTo(p.x, p.y);
+        ctx.closePath();
+        // Encravado sai em ambar: e o lote que a conferencia vai acusar, e ver
+        // isso no desenho vale mais do que le-lo num relatorio depois.
+        ctx.fillStyle = l.tipo === 'ENCRAVADO' ? '#fef3c7' : l.tipo === 'REMANESCENTE' ? '#f1f5f9' : '#ffffff';
+        ctx.globalAlpha = 0.85;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = selecionado ? COR_SELECIONADA : '#475569';
+        ctx.lineWidth = selecionado ? 2.5 : 1.2;
+        ctx.stroke();
+        ctx.restore();
+        if (mostrarRotulos) {
+          const c = centroide(l.pontos);
+          const t = paraTela(c);
+          escreverRotulo(ctx, l.numero, t.x, t.y - 7, '#0f172a', Math.round(12 * fz));
+          escreverRotulo(ctx, `${areaEmM2(l.pontos).toFixed(2).replace('.', ',')} m\u00b2`, t.x, t.y + 7, '#475569', Math.round(10 * fz));
+        }
+      }
+
+      // Previa do loteamento em curso: poligono para quadra/lote/area publica,
+      // e a CAIXA da via (nao so o eixo) enquanto se traca a rua -- e a largura
+      // que diz se a rua cabe entre as quadras.
+      if ((tool === 'quadra' || tool === 'lote' || tool === 'area-publica') && anelDoLoteamento.length > 0 && cursor) {
+        const pts = [...anelDoLoteamento, cursor].map(paraTela);
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
+        ctx.closePath();
+        if (pts.length >= 3) {
+          ctx.fillStyle = tool === 'area-publica' ? FICHA_DA_AREA_PUBLICA.VERDE.cor : '#e2e8f0';
+          ctx.globalAlpha = 0.4;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        ctx.strokeStyle = COR_PREVIA;
+        ctx.setLineDash([6, 4]);
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.restore();
+      }
+      if (tool === 'via' && eixoEmCurso.length > 0 && cursor) {
+        const eixo = [...eixoEmCurso, cursor];
+        const faixa = faixaDaVia(eixo, larguraDaVia);
+        ctx.save();
+        if (faixa.length >= 3) {
+          const fp = faixa.map(paraTela);
+          ctx.beginPath();
+          ctx.moveTo(fp[0].x, fp[0].y);
+          for (const q of fp.slice(1)) ctx.lineTo(q.x, q.y);
+          ctx.closePath();
+          ctx.fillStyle = '#e5e7eb';
+          ctx.globalAlpha = 0.5;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        const ep = eixo.map(paraTela);
+        ctx.beginPath();
+        ctx.moveTo(ep[0].x, ep[0].y);
+        for (const q of ep.slice(1)) ctx.lineTo(q.x, q.y);
+        ctx.strokeStyle = COR_PREVIA;
+        ctx.setLineDash([6, 4]);
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.restore();
+      }
+
     if (limitesDoNivel.length > 0) {
       // Durante o traçado quem preenche é a PRÉVIA, que já mostra o lote com o
       // lado em curso. Preencher os dois empilha alpha sobre alpha e produz uma
@@ -8448,6 +8652,22 @@ export default function BlueprintCanvas({
       return;
     }
 
+    // LOTEAMENTO (B1): quadra, lote e area publica seguem o gesto da sub-regiao.
+    if (tool === 'quadra' || tool === 'lote' || tool === 'area-publica') {
+      let alvo = capturarTracado(paraMundo(px, py));
+      const anterior = anelDoLoteamento[anelDoLoteamento.length - 1] ?? null;
+      if (anterior && ortoAtivo(e)) alvo = travarOrtogonal(anterior, alvo);
+      setCursor(alvo);
+      return;
+    }
+    if (tool === 'via') {
+      let alvo = capturarTracado(paraMundo(px, py));
+      const anterior = eixoEmCurso[eixoEmCurso.length - 1] ?? null;
+      if (anterior && ortoAtivo(e)) alvo = travarOrtogonal(anterior, alvo);
+      setCursor(alvo);
+      return;
+    }
+
     if (tool === 'rede') {
       let alvo = capturarRede(paraMundo(px, py));
       if (pontoRede && ortoAtivo(e)) alvo = travarOrtogonal(pontoRede, alvo);
@@ -8825,6 +9045,41 @@ export default function BlueprintCanvas({
       if (anterior && ortoAtivo(e)) ponto = travarOrtogonal(anterior, ponto);
       if (anterior && ponto.x === anterior.x && ponto.y === anterior.y) return;
       setAnelSubRegiao((c) => [...c, ponto]);
+      return;
+    }
+
+    // LOTEAMENTO (B1). Quadra, lote e area publica fecham no primeiro vertice,
+    // como a sub-regiao. A VIA nao: ela e polilinha aberta, e termina no duplo
+    // clique ou ao clicar de novo no ultimo vertice -- fechar um eixo de rua no
+    // primeiro ponto faria uma rua que volta em si mesma.
+    if (tool === 'quadra' || tool === 'lote' || tool === 'area-publica') {
+      let ponto = capturarTracado(mundo);
+      const fecha = anelDoLoteamento.length >= 3 && Math.hypot(anelDoLoteamento[0].x - ponto.x, anelDoLoteamento[0].y - ponto.y) < SNAP_PX / vista.escala;
+      if (fecha) {
+        if (tool === 'quadra') onAddQuadra?.(anelDoLoteamento);
+        else if (tool === 'lote') onAddLote?.(anelDoLoteamento);
+        else onAddAreaPublica?.(anelDoLoteamento);
+        setAnelDoLoteamento([]);
+        return;
+      }
+      const anterior = anelDoLoteamento[anelDoLoteamento.length - 1] ?? null;
+      if (anterior && ortoAtivo(e)) ponto = travarOrtogonal(anterior, ponto);
+      if (anterior && ponto.x === anterior.x && ponto.y === anterior.y) return;
+      setAnelDoLoteamento((c) => [...c, ponto]);
+      return;
+    }
+
+    if (tool === 'via') {
+      let ponto = capturarTracado(mundo);
+      const anterior = eixoEmCurso[eixoEmCurso.length - 1] ?? null;
+      if (anterior && ortoAtivo(e)) ponto = travarOrtogonal(anterior, ponto);
+      // Clicar de novo no ultimo vertice termina a via, como o Perfil.
+      if (anterior && ponto.x === anterior.x && ponto.y === anterior.y) {
+        if (eixoEmCurso.length >= 2) onAddVia?.(eixoEmCurso);
+        setEixoEmCurso([]);
+        return;
+      }
+      setEixoEmCurso((c) => [...c, ponto]);
       return;
     }
 
@@ -9662,6 +9917,8 @@ export default function BlueprintCanvas({
       setArcoEmCurso([]);
       setPontoExtrusao(null);
       setAnelSubRegiao([]);
+      setAnelDoLoteamento([]);
+      setEixoEmCurso([]);
       setCaminhoAnotacao([]);
       setPontoNucleo(null);
       // ⚠️ E o TRECHO em curso, que o Escape não cancelava: o primeiro clique
@@ -9757,6 +10014,20 @@ export default function BlueprintCanvas({
             ? pontoRodape
               ? 'Clique no FIM do trecho de rodapé · Esc cancela'
               : 'Clique no INÍCIO do trecho de rodapé, ao pé da parede'
+          : tool === 'quadra' || tool === 'lote' || tool === 'area-publica'
+            ? anelDoLoteamento.length >= 3
+              ? `Clique no pr\u00f3ximo v\u00e9rtice \u00b7 volte ao 1\u00ba para fechar ${tool === 'quadra' ? 'a quadra' : tool === 'lote' ? 'o lote' : 'a \u00e1rea p\u00fablica'} \u00b7 Esc cancela`
+              : anelDoLoteamento.length > 0
+                ? 'Clique nos v\u00e9rtices \u00b7 Esc cancela'
+                : tool === 'quadra'
+                  ? 'Clique no 1\u00ba v\u00e9rtice da QUADRA (nome na barra)'
+                  : tool === 'lote'
+                    ? 'Clique no 1\u00ba v\u00e9rtice do LOTE (quadra e n\u00famero na barra)'
+                    : 'Clique no 1\u00ba v\u00e9rtice da \u00c1REA P\u00daBLICA (tipo na barra)'
+          : tool === 'via'
+            ? eixoEmCurso.length >= 1
+              ? 'Clique no pr\u00f3ximo v\u00e9rtice do EIXO \u00b7 clique de novo no \u00faltimo para terminar \u00b7 Esc cancela'
+              : 'Clique no 1\u00ba v\u00e9rtice do EIXO da via (largura na barra)'
           : tool === 'subregiao'
             ? anelSubRegiao.length >= 3
               ? 'Clique no próximo vértice · volte ao 1º para fechar a sub-região · Esc cancela'

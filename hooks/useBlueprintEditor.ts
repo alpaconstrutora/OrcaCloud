@@ -134,6 +134,11 @@ export type BlueprintTool =
   | 'nucleo'
   /** SUB-REGIÃO DO TERRENO (P2.19): polígono com material de superfície; fecha voltando ao 1º vértice. */
   | 'subregiao'
+  // LOTEAMENTO (B1)
+  | 'quadra'
+  | 'lote'
+  | 'via'
+  | 'area-publica'
   /** VAGA DE GARAGEM (E2.5): um clique no centro; o tipo vem da barra. */
   | 'vaga'
   /** COMPONENTE (E7.1): mobiliário/louça/bancada, um clique no centro; o tipo vem do catálogo. */

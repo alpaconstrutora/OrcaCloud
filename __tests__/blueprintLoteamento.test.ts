@@ -232,7 +232,7 @@ describe('invariantes do kernel', () => {
     const m = base();
     expect(() =>
       applyBatch(m, [{ type: 'AddVia', levelId: m.levels[0].id, nome: 'Rua', eixo: [{ x: 0, y: 0 }, { x: 10000, y: 0 }], larguraMm: 6000, calcadaMm: 3000 }]),
-    ).toThrow(/calcadas/i);
+    ).toThrow(/calçadas/i);
   });
 
   it('testada fora das arestas é recusada', () => {

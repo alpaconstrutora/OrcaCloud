@@ -6165,3 +6165,61 @@ describe('BlueprintEditor · estender parede até a face', () => {
     expect(screen.getByTestId('painel-topografia')).toHaveTextContent(/Pontos cotados \(5\)/);
   }, 60000);
 });
+
+/**
+ * LOTEAMENTO (B1) — a classe de defeito que esta suíte existe para pegar é
+ * "família nova DESENHA mas não ALCANÇA": o comando existe no kernel e não há
+ * caminho até ele na tela. Aqui se afirma o caminho, não a geometria.
+ */
+describe('BlueprintEditor · loteamento (B1)', () => {
+  it('a aba Terreno oferece as quatro ferramentas do parcelamento', async () => {
+    await montar();
+    await abrirAba(/^terreno$/i);
+
+    for (const nome of [/^quadra$/i, /^lote$/i, /^via$/i, /^área pública$/i]) {
+      expect(botao(nome)).toBeInTheDocument();
+    }
+  });
+
+  it('cada ferramenta pergunta na barra só o que ela precisa', async () => {
+    const user = userEvent.setup();
+    await montar();
+    await abrirAba(/^terreno$/i);
+
+    // QUADRA: o nome da próxima, e nada de largura de via.
+    await user.click(botao(/^quadra$/i));
+    expect(screen.getByLabelText(/nome da próxima quadra/i)).toHaveValue('A');
+    expect(screen.queryByLabelText(/largura da caixa da via/i)).not.toBeInTheDocument();
+
+    // LOTE: o número. A quadra NÃO é campo — sai do desenho.
+    await user.click(botao(/^lote$/i));
+    expect(screen.getByLabelText(/número do próximo lote/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/nome da próxima quadra/i)).not.toBeInTheDocument();
+
+    // VIA: caixa e passeio, com o mínimo acessível entre as opções.
+    await user.click(botao(/^via$/i));
+    const caixa = within(screen.getByLabelText(/largura da caixa da via/i));
+    expect(caixa.getByRole('option', { name: '12,00 m' })).toBeInTheDocument();
+    const passeio = within(screen.getByLabelText(/largura do passeio/i));
+    expect(passeio.getByRole('option', { name: '1,50 m' })).toBeInTheDocument();
+    expect(passeio.getByRole('option', { name: 'sem passeio' })).toBeInTheDocument();
+
+    // ÁREA PÚBLICA: os quatro tipos.
+    await user.click(botao(/^área pública$/i));
+    const tipo = within(screen.getByLabelText(/tipo da próxima área pública/i));
+    for (const rotulo of [/área verde/i, /institucional/i, /sistema viário/i, /reserva/i]) {
+      expect(tipo.getByRole('option', { name: rotulo })).toBeInTheDocument();
+    }
+  });
+
+  it('Numerar fica apagado sem quadra, e o title ensina o caminho', async () => {
+    await montar();
+    await abrirAba(/^terreno$/i);
+
+    // A planta do dublê não tem quadra: numerar não teria o que fazer, e um
+    // botão cinza MUDO viraria chamado — o motivo vai no title.
+    const numerar = botao(/^numerar$/i);
+    expect(numerar).toBeDisabled();
+    expect(numerar).toHaveAttribute('title', expect.stringMatching(/desenhe uma quadra/i));
+  });
+});

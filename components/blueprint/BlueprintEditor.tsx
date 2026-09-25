@@ -71,7 +71,7 @@ import {
   Highlighter,
   Cloud,
   Crop,
-  Trees,
+  Trees, Route, TreePine, ListOrdered,
   TriangleRight,
   Grip,
   Hand,
@@ -127,7 +127,9 @@ import {
   pontosCorrigidos,
   MAX_ENCOSTO_MM,
 } from '../../utils/blueprintGuardaCorpoEncosto';
-import type { TipoDePontoEletrico, AcabamentosDoAmbiente, ObjectId } from '../../utils/blueprintKernel';
+import type { TipoDePontoEletrico, AcabamentosDoAmbiente, ObjectId, TipoDeAreaPublica, TipoDeLote } from '../../utils/blueprintKernel';
+import { TIPOS_DE_AREA_PUBLICA, FICHA_DA_AREA_PUBLICA, TIPOS_DE_LOTE } from '../../utils/blueprintKernel';
+import { numerarQuadra, centroide, medirLote, areasDoLoteamento, ROTULO_DO_PAPEL_DO_LADO } from '../../utils/blueprintLoteamento';
 import {
   MATERIAIS_DE_SUB_REGIAO,
   FICHA_DO_MATERIAL_DE_SUB_REGIAO,
@@ -142,7 +144,7 @@ import {
   ROTULO_DO_PERFIL_DE_COBERTURA,
   type ParametrosDoPerfil,
   type TipoDePerfilDeCobertura,
-  segmentosDoMesmoArco, acabamentosDoAmbiente } from '../../utils/blueprintKernel';
+  segmentosDoMesmoArco, acabamentosDoAmbiente, pointInPolygon } from '../../utils/blueprintKernel';
 import type { Quantitativos } from '../../utils/blueprintKernel/quantities';
 import MenuComponentes, { type EscolhaComponente } from './MenuComponentes';
 import ModalSobreposicao, { type EscolhaSobreposicao } from './ModalSobreposicao';
@@ -804,6 +806,41 @@ type SecaoDoPainel = (typeof SECOES_DO_PAINEL)[number]['id'];
  * quando os relatórios e a emissão saírem do painel (F3 do plano
  * `docs/planos/2026-09-13-planta-ribbon-painel-enxuto-dock.md`).
  */
+/**
+ * PROXIMO nome de quadra: A -> B -> ... -> Z -> AA. Quadra costuma ser letra no
+ * Brasil; se o usuario escreveu numero ("01"), a sequencia segue em numero.
+ */
+function proximaQuadra(atual: string): string {
+  const t = atual.trim();
+  if (/^\d+$/.test(t)) return proximoNumero(t);
+  if (!/^[A-Za-z]+$/.test(t)) return t;
+  const letras = t.toUpperCase().split('');
+  let i = letras.length - 1;
+  for (;;) {
+    if (letras[i] !== 'Z') {
+      letras[i] = String.fromCharCode(letras[i].charCodeAt(0) + 1);
+      return letras.join('');
+    }
+    letras[i] = 'A';
+    if (i === 0) return 'A' + letras.join('');
+    i -= 1;
+  }
+}
+
+/**
+ * PROXIMO numero, preservando o zero a esquerda e o texto em volta: "1" -> "2",
+ * "09" -> "10", "Rua 3" -> "Rua 4", "12-A" -> "13-A". Sem digito nenhum, devolve
+ * o que recebeu -- inventar sequencia onde nao ha seria pior que repetir.
+ */
+function proximoNumero(atual: string): string {
+  const m = atual.match(/^(.*?)(\d+)(\D*)$/);
+  if (!m) return atual;
+  const [, antes, digitos, depois] = m;
+  const seguinte = String(Number(digitos) + 1);
+  const comZeros = digitos.length > seguinte.length ? seguinte.padStart(digitos.length, '0') : seguinte;
+  return `${antes}${comZeros}${depois}`;
+}
+
 const ABAS_DO_RIBBON = [
   { id: 'arquitetura', rotulo: 'Arquitetura', naVista: false },
   { id: 'terreno', rotulo: 'Terreno', naVista: false },
@@ -967,6 +1004,11 @@ const ROTULO_DA_FERRAMENTA: Partial<Record<BlueprintTool, string>> = {
   rede: 'Trecho de rede',
   terminal: 'Ponto',
   quadro: 'Quadro de distribuição',
+  // LOTEAMENTO (B1)
+  quadra: 'Quadra',
+  lote: 'Lote',
+  via: 'Via',
+  'area-publica': 'Área pública',
 };
 
 /**
@@ -1867,6 +1909,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [tipoDeNucleo, setTipoDeNucleo] = useState<TipoDeNucleo>('SHAFT');
   /** SUB-REGIÃO DO TERRENO (P2.19): o material da próxima; persistido. */
   const [materialDaSubRegiao, setMaterialDaSubRegiao] = usePersistedState<MaterialDeSubRegiao>('blueprint:subregiao-material', 'GRAMA');
+  // LOTEAMENTO (B1). O nome da quadra e o numero do lote andam SOZINHOS depois
+  // de cada peca: desenhar 20 lotes digitando o numero de cada um seria o
+  // trabalho que a ferramenta existe para tirar. Numerar de novo pelo comando
+  // "Numerar" reescreve tudo em ordem.
+  const [nomeDaQuadra, setNomeDaQuadra] = usePersistedState<string>('blueprint:loteamento-quadra', 'A');
+  const [numeroDoLote, setNumeroDoLote] = usePersistedState<string>('blueprint:loteamento-lote', '1');
+  const [larguraDaVia, setLarguraDaVia] = usePersistedState<number>('blueprint:loteamento-via-largura', 12000);
+  const [calcadaDaVia, setCalcadaDaVia] = usePersistedState<number>('blueprint:loteamento-via-calcada', 2000);
+  const [nomeDaVia, setNomeDaVia] = usePersistedState<string>('blueprint:loteamento-via-nome', 'Rua 1');
+  const [tipoDeAreaPublica, setTipoDeAreaPublica] = usePersistedState<TipoDeAreaPublica>('blueprint:loteamento-area-tipo', 'VERDE');
   /** MECÂNICA (E11.1): o shaft nasce com a disciplina escolhida no menu (`MECANICA`) ou geral (`null`). */
   const [disciplinaDoNucleo, setDisciplinaDoNucleo] = useState<DisciplinaDeRede | null>(null);
   /** VAGA (E2.5): o tipo do próximo clique; hipóteses do lançamento lembradas entre sessões. */
@@ -5770,6 +5822,68 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     if (criados.length > 0) selecionar(criados);
   }
 
+  /**
+   * LOTEAMENTO (B1). Quadra, lote, via e area publica nascem com o que esta na
+   * barra de opcoes, e o proximo nome/numero e sugerido sozinho. A quadra do
+   * lote e a ULTIMA desenhada que contem o centro do lote -- pedir a quadra num
+   * campo faria o usuario repetir o que o desenho ja diz.
+   */
+  function adicionarQuadra(pontos: Point[]) {
+    if (!levelId) return;
+    const criados = editor.run({ type: 'AddQuadra', levelId, nome: nomeDaQuadra, pontos });
+    if (criados.length > 0) {
+      selecionar(criados);
+      setNomeDaQuadra(proximaQuadra(nomeDaQuadra));
+      // Lote volta a 1: e a numeracao da quadra nova.
+      setNumeroDoLote('1');
+    }
+  }
+
+  function adicionarLote(pontos: Point[]) {
+    if (!levelId) return;
+    const centro = centroide(pontos);
+    const daVez = (editor.model.quadras ?? [])
+      .filter((q) => q.levelId === levelId && q.pontos.length >= 3 && pointInPolygon(q.pontos, centro))
+      .slice(-1)[0];
+    const criados = editor.run({ type: 'AddLote', levelId, quadraId: daVez?.id ?? null, numero: numeroDoLote, pontos });
+    if (criados.length > 0) {
+      selecionar(criados);
+      setNumeroDoLote(proximoNumero(numeroDoLote));
+    }
+  }
+
+  function adicionarVia(eixo: Point[]) {
+    if (!levelId) return;
+    const criados = editor.run({ type: 'AddVia', levelId, nome: nomeDaVia, eixo, larguraMm: larguraDaVia, calcadaMm: calcadaDaVia });
+    if (criados.length > 0) {
+      selecionar(criados);
+      setNomeDaVia(proximoNumero(nomeDaVia));
+    }
+  }
+
+  function adicionarAreaPublica(pontos: Point[]) {
+    if (!levelId) return;
+    const criados = editor.run({ type: 'AddAreaPublica', levelId, tipo: tipoDeAreaPublica, pontos });
+    if (criados.length > 0) selecionar(criados);
+  }
+
+  /** NUMERAR a quadra selecionada (ou a unica) em um lote de comandos: um Ctrl+Z desfaz. */
+  function numerarQuadraSelecionada() {
+    const doNivel = (editor.model.quadras ?? []).filter((q) => q.levelId === levelId);
+    const alvo = doNivel.find((q) => editor.selectedIds.includes(q.id)) ?? (doNivel.length === 1 ? doNivel[0] : null);
+    if (!alvo) {
+      setAvisoConexaoT('Selecione no desenho a quadra a numerar. Com uma só quadra no pavimento, ela é usada sozinha.');
+      return;
+    }
+    const plano = numerarQuadra(editor.model, alvo);
+    if (plano.length === 0) {
+      setAvisoConexaoT('Nenhum lote dentro dessa quadra ainda. Desenhe os lotes antes de numerar.');
+      return;
+    }
+    editor.runBatch(plano.map((p) => ({ type: 'SetLoteProps' as const, loteId: p.loteId, numero: p.numero })));
+    setAvisoConexaoT(`${plano.length} lote${plano.length > 1 ? 's' : ''} numerado${plano.length > 1 ? 's' : ''} na quadra ${alvo.nome}, no sentido horário. Ctrl+Z desfaz tudo.`);
+  }
+
   function adicionarNucleo(ring: Point[]) {
     if (!levelId) return;
     const criados = editor.run({ type: 'AddNucleo', levelId, tipo: tipoDeNucleo, ring, ...(tipoDeNucleo === 'SHAFT' && disciplinaDoNucleo ? { disciplina: disciplinaDoNucleo } : {}) });
@@ -9375,6 +9489,51 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 ajuda="Área da escritura, papel de cada divisa, recuos e zona urbanística, topografia, corte e aterro, projeto executivo de terraplenagem"
               />
             </GrupoDoRibbon>
+            {/* LOTEAMENTO (B1, 25/09/2026): o parcelamento do solo. Separado do grupo
+                Lote porque ali o assunto é UM imóvel (a gleba, a escritura, os
+                recuos); aqui são as N unidades que nascem dele e vão virar
+                matícula, espelho de vendas e memória descritiva cada uma. */}
+            <GrupoDoRibbon rotulo="Loteamento">
+              <Ferramenta
+                atual={editor.tool}
+                valor="quadra"
+                icone={Grid3x3}
+                rotulo="Quadra"
+                onClick={editor.setTool}
+              />
+              <Ferramenta
+                atual={editor.tool}
+                valor="lote"
+                icone={Scan}
+                rotulo="Lote"
+                onClick={editor.setTool}
+              />
+              <Ferramenta
+                atual={editor.tool}
+                valor="via"
+                icone={Route}
+                rotulo="Via"
+                onClick={editor.setTool}
+              />
+              <Ferramenta
+                atual={editor.tool}
+                valor="area-publica"
+                icone={TreePine}
+                rotulo="Área pública"
+                onClick={editor.setTool}
+              />
+              <BotaoDoRibbon
+                icone={ListOrdered}
+                rotulo="Numerar"
+                onClick={numerarQuadraSelecionada}
+                disabled={(editor.model.quadras ?? []).filter((q) => q.levelId === levelId).length === 0}
+                ajuda={
+                  (editor.model.quadras ?? []).filter((q) => q.levelId === levelId).length === 0
+                    ? 'Desenhe uma quadra primeiro: a numeração corre no sentido horário dentro dela'
+                    : 'Renumera os lotes da quadra selecionada no sentido horário, a partir do 1º vértice dela · um Ctrl+Z desfaz tudo'
+                }
+              />
+            </GrupoDoRibbon>
             {/* GARAGEM (19/09/2026, E2.5): vagas em fileiras com circulação, por ambiente
                 ou pelo contorno do pavimento; os mínimos PCD/idoso e a exigência conferidos. */}
             <GrupoDoRibbon rotulo="Garagem">
@@ -10617,7 +10776,106 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           mesma regra: o que já está lançado se edita no painel lateral. */}
       {!emVista && (
         <BarraDeOpcoes rotulo={rotuloDaFerramentaAtiva}>
-          {editor.tool === 'subregiao' ? (
+          {editor.tool === 'quadra' ? (
+            /* LOTEAMENTO (B1): o nome da PRÓXIMA quadra. Anda sozinho depois de
+               cada uma (A, B, C…) — desenhar dez quadras digitando o nome de
+               cada uma seria o trabalho que a ferramenta existe para tirar. */
+            <label className="flex items-center gap-2 text-xs text-slate-600">
+              Quadra
+              <input
+                type="text"
+                value={nomeDaQuadra}
+                onChange={(e) => setNomeDaQuadra(e.target.value.slice(0, 30))}
+                aria-label="Nome da próxima quadra"
+                className="w-16 rounded-md border border-slate-300 px-1.5 py-0.5 text-xs text-slate-800"
+              />
+              <span className="text-slate-400">cliques nos vértices; volte ao 1º para fechar · a próxima segue a sequência</span>
+            </label>
+          ) : editor.tool === 'lote' ? (
+            /* LOTEAMENTO (B1): o número do PRÓXIMO lote, e o tipo. A quadra não
+               é campo: sai do desenho (a quadra que contém o lote). */
+            <div className="flex items-center gap-3 text-xs text-slate-600">
+              <label className="flex items-center gap-2">
+                Lote nº
+                <input
+                  type="text"
+                  value={numeroDoLote}
+                  onChange={(e) => setNumeroDoLote(e.target.value.slice(0, 30))}
+                  aria-label="Número do próximo lote"
+                  className="w-16 rounded-md border border-slate-300 px-1.5 py-0.5 text-xs text-slate-800"
+                />
+              </label>
+              <span className="text-slate-400">
+                a quadra vem do desenho (a que contém o lote) · a testada é o lado que encosta na via · o próximo número segue a sequência
+              </span>
+            </div>
+          ) : editor.tool === 'via' ? (
+            /* LOTEAMENTO (B1): a CAIXA da via e o passeio. A prévia desenha a
+               faixa, não só o eixo — é a largura que diz se a rua cabe. */
+            <div className="flex items-center gap-3 text-xs text-slate-600">
+              <label className="flex items-center gap-2">
+                Via
+                <input
+                  type="text"
+                  value={nomeDaVia}
+                  onChange={(e) => setNomeDaVia(e.target.value.slice(0, 60))}
+                  aria-label="Nome da próxima via"
+                  className="w-24 rounded-md border border-slate-300 px-1.5 py-0.5 text-xs text-slate-800"
+                />
+              </label>
+              <label className="flex items-center gap-2">
+                Caixa
+                <select
+                  value={larguraDaVia}
+                  onChange={(e) => setLarguraDaVia(Number(e.target.value))}
+                  aria-label="Largura da caixa da via"
+                  className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                  title="De alinhamento a alinhamento, passeio incluído. 12 m é o mínimo usual de via local em loteamento."
+                >
+                  {[8000, 10000, 12000, 14000, 16000, 20000, 25000, 30000].map((mm) => (
+                    <option key={mm} value={mm}>
+                      {(mm / 1000).toFixed(2).replace('.', ',')} m
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center gap-2">
+                Passeio
+                <select
+                  value={calcadaDaVia}
+                  onChange={(e) => setCalcadaDaVia(Number(e.target.value))}
+                  aria-label="Largura do passeio de cada lado"
+                  className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                  title="De cada lado, DENTRO da caixa. 1,50 m é o mínimo acessível da NBR 9050; 2,00 m é o usual."
+                >
+                  {[0, 1500, 2000, 2500, 3000].map((mm) => (
+                    <option key={mm} value={mm}>
+                      {mm === 0 ? 'sem passeio' : `${(mm / 1000).toFixed(2).replace('.', ',')} m`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <span className="text-slate-400">cliques no EIXO; clique de novo no último vértice para terminar</span>
+            </div>
+          ) : editor.tool === 'area-publica' ? (
+            /* LOTEAMENTO (B1): o tipo da próxima área pública. */
+            <label className="flex items-center gap-2 text-xs text-slate-600">
+              Tipo
+              <select
+                value={tipoDeAreaPublica}
+                onChange={(e) => setTipoDeAreaPublica(e.target.value as TipoDeAreaPublica)}
+                aria-label="Tipo da próxima área pública"
+                className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+              >
+                {TIPOS_DE_AREA_PUBLICA.map((t) => (
+                  <option key={t} value={t}>
+                    {FICHA_DA_AREA_PUBLICA[t].rotulo}
+                  </option>
+                ))}
+              </select>
+              <span className="text-slate-400">cliques nos vértices; volte ao 1º para fechar</span>
+            </label>
+          ) : editor.tool === 'subregiao' ? (
             /* SUB-REGIÃO DO TERRENO (P2.19): o material da próxima. */
             <label className="flex items-center gap-2 text-xs text-slate-600">
               Material
@@ -11435,6 +11693,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               subRegioes={(editor.model.subRegioes ?? []).filter((s) => s.levelId === levelId)}
               materialDaSubRegiao={materialDaSubRegiao}
               onAddSubRegiao={adicionarSubRegiao}
+              larguraDaVia={larguraDaVia}
+              onAddQuadra={adicionarQuadra}
+              onAddLote={adicionarLote}
+              onAddVia={adicionarVia}
+              onAddAreaPublica={adicionarAreaPublica}
               vagas={vagasDoNivelAtivo}
               tipoDeVaga={tipoDeVaga}
               onAddVaga={adicionarVaga}

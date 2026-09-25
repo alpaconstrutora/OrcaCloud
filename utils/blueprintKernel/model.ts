@@ -2143,10 +2143,10 @@ export interface FichaDaAreaPublica {
   cor: string;
 }
 export const FICHA_DA_AREA_PUBLICA: Record<TipoDeAreaPublica, FichaDaAreaPublica> = {
-  VERDE: { rotulo: 'Area verde / lazer', cor: '#bbf7d0' },
-  INSTITUCIONAL: { rotulo: 'Area institucional', cor: '#bfdbfe' },
-  VIARIO: { rotulo: 'Sistema viario', cor: '#e5e7eb' },
-  RESERVA: { rotulo: 'Reserva / nao edificavel', cor: '#fde68a' },
+  VERDE: { rotulo: 'Área verde / lazer', cor: '#bbf7d0' },
+  INSTITUCIONAL: { rotulo: 'Área institucional', cor: '#bfdbfe' },
+  VIARIO: { rotulo: 'Sistema viário', cor: '#e5e7eb' },
+  RESERVA: { rotulo: 'Reserva / não edificável', cor: '#fde68a' },
 };
 
 export interface AreaPublica {
@@ -2181,7 +2181,7 @@ export function findVia(model: BlueprintModel, id: ObjectId): Via {
 
 export function findAreaPublica(model: BlueprintModel, id: ObjectId): AreaPublica {
   const a = (model.areasPublicas ?? []).find((x) => x.id === id);
-  if (!a) throw new KernelError('PUBLIC_AREA_NOT_FOUND', `Area publica inexistente: ${id}`);
+  if (!a) throw new KernelError('PUBLIC_AREA_NOT_FOUND', `Área pública inexistente: ${id}`);
   return a;
 }
 
@@ -4189,7 +4189,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Quadra', model.quadras ?? []],
     ['Lote', model.lotes ?? []],
     ['Via', model.vias ?? []],
-    ['Area publica', model.areasPublicas ?? []],
+    ['Área pública', model.areasPublicas ?? []],
     ['Trecho', model.trechos ?? []],
     ['Terminal', model.terminais ?? []],
     ['Quadro', model.quadros ?? []],
@@ -4841,7 +4841,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
   // quadra existente, testada dentro da lista de arestas, via com eixo aberto.
   for (const q of model.quadras ?? []) {
     if (!model.levels.some((l) => l.id === q.levelId)) throw new KernelError('BAD_BLOCK', `Quadra ${q.id}: pavimento inexistente`);
-    if (!Array.isArray(q.pontos) || q.pontos.length < 3) throw new KernelError('BAD_BLOCK', `Quadra ${q.id}: o contorno precisa de pelo menos 3 vertices`);
+    if (!Array.isArray(q.pontos) || q.pontos.length < 3) throw new KernelError('BAD_BLOCK', `Quadra ${q.id}: o contorno precisa de pelo menos 3 vértices`);
     q.pontos.forEach((p, i) => {
       assertIntegerMm(p.x, `${q.id}.pontos[${i}].x`);
       assertIntegerMm(p.y, `${q.id}.pontos[${i}].y`);
@@ -4852,36 +4852,36 @@ export function assertModelInvariants(model: BlueprintModel): void {
     if (!model.levels.some((x) => x.id === l.levelId)) throw new KernelError('BAD_PLOT', `Lote ${l.id}: pavimento inexistente`);
     if (l.quadraId != null && !(model.quadras ?? []).some((q) => q.id === l.quadraId)) throw new KernelError('BAD_PLOT', `Lote ${l.id}: quadra inexistente ${l.quadraId}`);
     if (!TIPOS_DE_LOTE.includes(l.tipo)) throw new KernelError('BAD_PLOT', `Lote ${l.id}: tipo desconhecido ${String(l.tipo)}`);
-    if (!Array.isArray(l.pontos) || l.pontos.length < 3) throw new KernelError('BAD_PLOT', `Lote ${l.id}: o contorno precisa de pelo menos 3 vertices`);
+    if (!Array.isArray(l.pontos) || l.pontos.length < 3) throw new KernelError('BAD_PLOT', `Lote ${l.id}: o contorno precisa de pelo menos 3 vértices`);
     l.pontos.forEach((p, i) => {
       assertIntegerMm(p.x, `${l.id}.pontos[${i}].x`);
       assertIntegerMm(p.y, `${l.id}.pontos[${i}].y`);
     });
-    if (typeof l.numero !== 'string' || l.numero.trim().length === 0 || l.numero.length > MAX_NUMERO_DE_LOTE) throw new KernelError('BAD_PLOT', `Lote ${l.id}: numero vazio ou maior que ${MAX_NUMERO_DE_LOTE} caracteres`);
+    if (typeof l.numero !== 'string' || l.numero.trim().length === 0 || l.numero.length > MAX_NUMERO_DE_LOTE) throw new KernelError('BAD_PLOT', `Lote ${l.id}: número vazio ou maior que ${MAX_NUMERO_DE_LOTE} caracteres`);
     if (l.testadaIndex != null && (!Number.isInteger(l.testadaIndex) || l.testadaIndex < 0 || l.testadaIndex >= l.pontos.length)) {
       throw new KernelError('BAD_PLOT', `Lote ${l.id}: testada ${String(l.testadaIndex)} fora das ${l.pontos.length} arestas`);
     }
   }
   for (const v of model.vias ?? []) {
     if (!model.levels.some((l) => l.id === v.levelId)) throw new KernelError('BAD_STREET', `Via ${v.id}: pavimento inexistente`);
-    if (!Array.isArray(v.eixo) || v.eixo.length < 2) throw new KernelError('BAD_STREET', `Via ${v.id}: o eixo precisa de pelo menos 2 vertices`);
+    if (!Array.isArray(v.eixo) || v.eixo.length < 2) throw new KernelError('BAD_STREET', `Via ${v.id}: o eixo precisa de pelo menos 2 vértices`);
     v.eixo.forEach((p, i) => {
       assertIntegerMm(p.x, `${v.id}.eixo[${i}].x`);
       assertIntegerMm(p.y, `${v.id}.eixo[${i}].y`);
     });
     if (!Number.isInteger(v.larguraMm) || v.larguraMm < 1 || v.larguraMm > MAX_LARGURA_DE_VIA_MM) throw new KernelError('BAD_STREET', `Via ${v.id}: largura tem de ser inteira entre 1 e ${MAX_LARGURA_DE_VIA_MM} mm`);
-    if (!Number.isInteger(v.calcadaMm) || v.calcadaMm < 0 || v.calcadaMm * 2 >= v.larguraMm) throw new KernelError('BAD_STREET', `Via ${v.id}: as duas calcadas tem de caber na caixa de ${v.larguraMm} mm`);
+    if (!Number.isInteger(v.calcadaMm) || v.calcadaMm < 0 || v.calcadaMm * 2 >= v.larguraMm) throw new KernelError('BAD_STREET', `Via ${v.id}: as duas calçadas têm de caber na caixa de ${v.larguraMm} mm`);
     if (typeof v.nome !== 'string' || v.nome.trim().length === 0 || v.nome.length > MAX_NOME_DE_VIA) throw new KernelError('BAD_STREET', `Via ${v.id}: nome vazio ou maior que ${MAX_NOME_DE_VIA} caracteres`);
   }
   for (const a of model.areasPublicas ?? []) {
-    if (!model.levels.some((l) => l.id === a.levelId)) throw new KernelError('BAD_PUBLIC_AREA', `Area publica ${a.id}: pavimento inexistente`);
-    if (!TIPOS_DE_AREA_PUBLICA.includes(a.tipo)) throw new KernelError('BAD_PUBLIC_AREA', `Area publica ${a.id}: tipo desconhecido ${String(a.tipo)}`);
-    if (!Array.isArray(a.pontos) || a.pontos.length < 3) throw new KernelError('BAD_PUBLIC_AREA', `Area publica ${a.id}: o contorno precisa de pelo menos 3 vertices`);
+    if (!model.levels.some((l) => l.id === a.levelId)) throw new KernelError('BAD_PUBLIC_AREA', `Área pública ${a.id}: pavimento inexistente`);
+    if (!TIPOS_DE_AREA_PUBLICA.includes(a.tipo)) throw new KernelError('BAD_PUBLIC_AREA', `Área pública ${a.id}: tipo desconhecido ${String(a.tipo)}`);
+    if (!Array.isArray(a.pontos) || a.pontos.length < 3) throw new KernelError('BAD_PUBLIC_AREA', `Área pública ${a.id}: o contorno precisa de pelo menos 3 vértices`);
     a.pontos.forEach((p, i) => {
       assertIntegerMm(p.x, `${a.id}.pontos[${i}].x`);
       assertIntegerMm(p.y, `${a.id}.pontos[${i}].y`);
     });
-    if (a.nome != null && (typeof a.nome !== 'string' || a.nome.length > MAX_NOME_DE_AREA_PUBLICA)) throw new KernelError('BAD_PUBLIC_AREA', `Area publica ${a.id}: nome maior que ${MAX_NOME_DE_AREA_PUBLICA} caracteres`);
+    if (a.nome != null && (typeof a.nome !== 'string' || a.nome.length > MAX_NOME_DE_AREA_PUBLICA)) throw new KernelError('BAD_PUBLIC_AREA', `Área pública ${a.id}: nome maior que ${MAX_NOME_DE_AREA_PUBLICA} caracteres`);
   }
   // VISTA DEPENDENTE (0.51.0): pavimento vivo, nome, recorte inteiro e não degenerado, escala inteira.
   for (const v of model.vistasDependentes ?? []) {

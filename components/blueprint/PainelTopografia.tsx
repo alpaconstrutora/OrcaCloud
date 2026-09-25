@@ -181,6 +181,7 @@ export default function PainelTopografia({
   perfil = null,
   drenagem = null,
   executivo = null,
+  pedidoDeImportacao,
 }: {
   topografia: Topografia;
   temLoteFechado: boolean;
@@ -200,6 +201,16 @@ export default function PainelTopografia({
   hipsometriaOpcoes?: HipsometriaOpcoesNoPainel | null;
   perfil?: PerfilNoPainel | null;
   drenagem?: DrenagemNoPainel | null;
+  /**
+   * PEDIDO DE IMPORTAÇÃO (25/09/2026, P2.64): número de SÉRIE vindo do botão
+   * "Importar levantamento" da aba Terreno. Cada número novo abre a caixa de
+   * arquivo aqui dentro; o mesmo número não reabre.
+   *
+   * ⚠️ Só a cópia do painel que está na GAVETA recebe isto. O mesmo painel é
+   * montado duas vezes (dock com a divisa selecionada + gaveta), e um token
+   * chegando aos dois abriria duas caixas de arquivo.
+   */
+  pedidoDeImportacao?: number;
 }) {
   const t = topografia;
   const confirmar = useConfirm();
@@ -268,7 +279,11 @@ export default function PainelTopografia({
           <p className="mt-1.5 text-xs text-slate-500">{t.fonte.descricao}</p>
 
           {t.fonte.tipo === 'LOCAL' ? (
-            <PontosCotados topografia={t} linhaDoPerfil={perfil?.pontos ?? null} />
+            <PontosCotados
+              topografia={t}
+              linhaDoPerfil={perfil?.pontos ?? null}
+              pedidoDeImportacao={pedidoDeImportacao}
+            />
           ) : (
             <div className="mt-1.5 space-y-1 text-xs text-slate-600">
               <p>
@@ -523,7 +538,15 @@ export default function PainelTopografia({
 const formatar = (v: number, casas = 2) => v.toFixed(casas).replace('.', ',');
 
 /** Os pontos do levantamento, um por linha: X, Y (m do desenho) e cota (m). */
-function PontosCotados({ topografia: t, linhaDoPerfil }: { topografia: Topografia; linhaDoPerfil: PontoDoPerfil[] | null }) {
+function PontosCotados({
+  topografia: t,
+  linhaDoPerfil,
+  pedidoDeImportacao,
+}: {
+  topografia: Topografia;
+  linhaDoPerfil: PontoDoPerfil[] | null;
+  pedidoDeImportacao?: number;
+}) {
   return (
     <div className="mt-2">
       {/* `flex-wrap`: a prévia da importação (basis-full) quebra para uma linha
@@ -548,7 +571,11 @@ function PontosCotados({ topografia: t, linhaDoPerfil }: { topografia: Topografi
         >
           <Plus className="h-3.5 w-3.5" />
         </button>
-        <ImportarPontos topografia={t} linhaDoPerfil={linhaDoPerfil} />
+        <ImportarPontos
+          topografia={t}
+          linhaDoPerfil={linhaDoPerfil}
+          pedidoDeImportacao={pedidoDeImportacao}
+        />
       </div>
 
       {t.origemDosPontos && t.pontosCotados.length > 0 && (
@@ -884,12 +911,40 @@ const ROTULO_DO_FORMATO: Record<FormatoDeImportacao, string> = {
  * pontos entram na lista e a proveniência (nome + sha256) acompanha a próxima
  * versão gerada.
  */
-function ImportarPontos({ topografia: t, linhaDoPerfil }: { topografia: Topografia; linhaDoPerfil: PontoDoPerfil[] | null }) {
+function ImportarPontos({
+  topografia: t,
+  linhaDoPerfil,
+  pedidoDeImportacao,
+}: {
+  topografia: Topografia;
+  linhaDoPerfil: PontoDoPerfil[] | null;
+  pedidoDeImportacao?: number;
+}) {
   const entrada = useRef<HTMLInputElement>(null);
+  const caixa = useRef<HTMLButtonElement>(null);
+  const [apontado, setApontado] = useState(false);
   const [arquivo, setArquivo] = useState<{ nome: string; texto: string; formato: FormatoDeImportacao; sha256: string } | null>(null);
   const [opcoes, setOpcoes] = useState<OpcoesDeImportacao>({});
   const [resultado, setResultado] = useState<ResultadoDaImportacao | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+
+  /**
+   * O botão "Importar levantamento" do ribbon (P2.64) chega aqui: traz o bloco
+   * à vista e abre a caixa de arquivo.
+   *
+   * ⚠️ O `.click()` programático só abre a caixa dentro da ATIVAÇÃO TRANSITÓRIA
+   * do navegador (alguns segundos depois de um clique de verdade). Em geral
+   * abre; quando não abre, o fluxo não pode morrer — daí o `scrollIntoView` e o
+   * realce de 2 s: o botão fica à vista, apontado, a um clique.
+   */
+  useEffect(() => {
+    if (!pedidoDeImportacao) return;
+    caixa.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    setApontado(true);
+    const fim = setTimeout(() => setApontado(false), 2000);
+    entrada.current?.click();
+    return () => clearTimeout(fim);
+  }, [pedidoDeImportacao]);
 
   const rodar = (arq: NonNullable<typeof arquivo>, op: OpcoesDeImportacao) => {
     try {
@@ -972,10 +1027,14 @@ function ImportarPontos({ topografia: t, linhaDoPerfil }: { topografia: Topograf
         onChange={(e) => aoEscolher(e.target.files)}
       />
       <button
+        ref={caixa}
         type="button"
+        data-apontado={apontado ? '' : undefined}
         onClick={() => entrada.current?.click()}
         title="Importar pontos de arquivo: CSV/TXT de estação total (código LQ1, LQ2… marca linha de quebra), GeoJSON, KML, DXF (blocos, polilinhas com Z, 3DFACE), SVG ou LandXML"
-        className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700 transition-colors hover:bg-slate-50"
+        className={`inline-flex items-center gap-1 rounded-md border bg-white px-2 py-1 text-[11px] text-slate-700 transition-colors hover:bg-slate-50 ${
+          apontado ? 'border-blue-400 ring-2 ring-blue-400' : 'border-slate-300'
+        }`}
       >
         <Upload className="h-3.5 w-3.5" />
         Importar

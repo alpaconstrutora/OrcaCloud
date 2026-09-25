@@ -12,6 +12,11 @@ import { FONTES, fonteDeElevacao } from '../../utils/blueprintElevacaoProvedores
 
 vi.mock('../../components/ui/confirm', () => ({ useConfirm: () => vi.fn(async () => true) }));
 
+// jsdom não faz layout e não implementa `scrollIntoView` — o painel o chama
+// para trazer o bloco de importação à vista (P2.64). Mesmo apoio dos outros
+// testes de componente desta pasta.
+(Element.prototype as unknown as { scrollIntoView: unknown }).scrollIntoView = vi.fn();
+
 const LOTE = [
   { x: 0, y: 0 },
   { x: 12000, y: 0 },
@@ -152,5 +157,44 @@ describe('PainelTopografia · fase 11 (curvas no SVG)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Substituir os pontos' }));
     const [pontos] = (t.definirPontosCotados as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(new Set(pontos.map((p: { cotaM: number }) => p.cotaM))).toEqual(new Set([101.5, 102]));
+  });
+
+  /**
+   * P2.64 (25/09/2026) — o botão "Importar levantamento" da aba Terreno pede a
+   * caixa de arquivo por um número de SÉRIE que atravessa até aqui.
+   */
+  describe('pedido de importação vindo do ribbon (P2.64)', () => {
+    it('sem pedido não abre nada; um número novo abre a caixa de arquivo UMA vez e aponta o botão', () => {
+      const abrir = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
+      try {
+        const t = hook();
+        const { rerender } = render(<PainelTopografia topografia={t} temLoteFechado temGeorreferencia={false} />);
+        expect(abrir).not.toHaveBeenCalled();
+        expect(screen.getByRole('button', { name: 'Importar' })).not.toHaveAttribute('data-apontado');
+
+        rerender(<PainelTopografia topografia={t} temLoteFechado temGeorreferencia={false} pedidoDeImportacao={1} />);
+        expect(abrir).toHaveBeenCalledTimes(1);
+        // ⚠️ O realce existe porque a caixa de arquivo pode NÃO abrir (a
+        // ativação transitória do navegador expira): o botão fica apontado.
+        expect(screen.getByRole('button', { name: 'Importar' })).toHaveAttribute('data-apontado');
+      } finally {
+        abrir.mockRestore();
+      }
+    });
+
+    it('o MESMO número não reabre — é série, não interruptor', () => {
+      const abrir = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
+      try {
+        const t = hook();
+        const { rerender } = render(<PainelTopografia topografia={t} temLoteFechado temGeorreferencia={false} pedidoDeImportacao={3} />);
+        expect(abrir).toHaveBeenCalledTimes(1);
+        rerender(<PainelTopografia topografia={t} temLoteFechado temGeorreferencia={false} pedidoDeImportacao={3} />);
+        expect(abrir).toHaveBeenCalledTimes(1);
+        rerender(<PainelTopografia topografia={t} temLoteFechado temGeorreferencia={false} pedidoDeImportacao={4} />);
+        expect(abrir).toHaveBeenCalledTimes(2);
+      } finally {
+        abrir.mockRestore();
+      }
+    });
   });
 });

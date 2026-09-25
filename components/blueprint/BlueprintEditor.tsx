@@ -9,6 +9,7 @@ import {
   CircuitBoard,
   Calculator,
   FileText,
+  FileUp,
   RectangleVertical,
   SquareStack,
   FlipHorizontal2,
@@ -1515,6 +1516,28 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     setDrawerRecolhido(false);
     setTarefa((t) => (t === id ? null : id));
   };
+  /**
+   * IMPORTAR LEVANTAMENTO (25/09/2026, P2.64) — *"planta inteligente < terreno:
+   * implemente importar levantamento topográfico"*.
+   *
+   * A importação existe desde 11/09 e lê nove formatos; o que faltava era o
+   * CAMINHO. Estava a quatro passos: Dados do lote › fonte "Pontos cotados" ›
+   * botãozinho "Importar" na linha dos pontos. Aqui vira um clique.
+   *
+   * Três coisas, nesta ordem: a fonte precisa ser "Pontos cotados" (nas fontes
+   * remotas a importação nem aparece), a gaveta precisa estar aberta, e o
+   * pedido — um número de SÉRIE — atravessa até o `<input type="file">` que já
+   * mora no painel. `setTarefa` e não `alternarTarefa`: alternar FECHARIA a
+   * gaveta se ela já estivesse aberta.
+   */
+  const [pedidoDeImportacaoDeLevantamento, setPedidoDeImportacaoDeLevantamento] = useState(0);
+  function importarLevantamento() {
+    topografia.setFonteCodigo('PONTOS_COTADOS');
+    setDrawerRecolhido(false);
+    setTarefa('terreno');
+    setPedidoDeImportacaoDeLevantamento((n) => n + 1);
+  }
+
   const alternarRelatorio = (id: RelatorioDoDock) => setRelatorio((r) => (r === id ? null : id));
   const dock = useAlturaDoDock();
   const [ortogonal, setOrtogonal] = useState(true);
@@ -7141,7 +7164,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * lugares: como TAREFA "Dados do lote" (aba Terreno do ribbon) e como
    * PROPRIEDADES da divisa selecionada. Era o miolo da seção "Ambientes".
    */
-  const painelDoTerreno = (
+  /**
+   * ⚠️ FUNÇÃO, e não constante (P2.64): este painel é montado em DOIS lugares —
+   * no dock quando há divisa selecionada e na gaveta "Dados do lote". Só a
+   * gaveta recebe o pedido de importação; com o token nos dois, o clique no
+   * ribbon abriria DUAS caixas de arquivo.
+   */
+  const painelDoTerreno = (pedidoDeImportacao?: number) => (
     <PainelTerreno
       terreno={terreno}
       subRegioes={quadroDeSubRegioes(editor.model, terreno?.areaMm2 ?? null, levelId)}
@@ -7189,6 +7218,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         <PainelTopografia
           topografia={topografia}
           temLoteFechado={anelDoLoteFechado !== null}
+          pedidoDeImportacao={pedidoDeImportacao}
           temGeorreferencia={!!editor.model.georreferencia}
           cotaDeOrigemInformada={cotaDeOrigemInformada}
           declividade={declividade}
@@ -7779,7 +7809,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
 
       {/* A DIVISA selecionada se edita no painel do terreno (comprimento,
           papel na escritura) — o mesmo que a tarefa "Dados do lote" abre. */}
-      {limiteSel && painelDoTerreno}
+      {limiteSel && painelDoTerreno()}
       </>
     ) : null;
 
@@ -9330,6 +9360,21 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 uma VISTA do terreno e uma premissa de terraplenagem — nenhuma das
                 duas passa pelo kernel. */}
             <GrupoDoRibbon rotulo="Topografia">
+              {/* IMPORTAR LEVANTAMENTO (P2.64): o arquivo do topógrafo em um
+                  clique. Primeiro do grupo porque é o primeiro passo real de
+                  quem tem topografia — antes de traçar perfil ou drenagem,
+                  alguém precisa pôr as cotas no desenho. */}
+              <BotaoDoRibbon
+                icone={FileUp}
+                rotulo="Importar levantamento"
+                onClick={importarLevantamento}
+                disabled={anelDoLoteFechado === null}
+                ajuda={
+                  anelDoLoteFechado === null
+                    ? 'Importar levantamento topográfico — feche o contorno do lote com a ferramenta Terreno antes: é o lote que diz onde os pontos do arquivo caem'
+                    : 'Arquivo do topógrafo — CSV/TXT de estação total (PNEZD), GeoJSON, KML, DXF, SVG ou LandXML — vira os pontos cotados do lote, com prévia antes de entrar e o sha256 do arquivo na proveniência da versão'
+                }
+              />
               <Ferramenta
                 atual={editor.tool}
                 valor="perfil"
@@ -9634,6 +9679,20 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   ativo={tarefaAberta === 'importar-bcf'}
                   onClick={() => alternarTarefa('importar-bcf')}
                   ajuda="Importar os tópicos de coordenação (BCF) que o projetista devolveu"
+                />
+                {/* O LEVANTAMENTO também mora aqui (P2.64), embora o painel dele
+                    seja o do terreno: "Importar" é onde se procura importar. O que
+                    ele traz não é geometria — são as cotas do lote. */}
+                <BotaoDoRibbon
+                  icone={Mountain}
+                  rotulo="Do levantamento topográfico"
+                  disabled={anelDoLoteFechado === null}
+                  onClick={importarLevantamento}
+                  ajuda={
+                    anelDoLoteFechado === null
+                      ? 'Pontos cotados do topógrafo — feche o contorno do lote com a ferramenta Terreno antes: é o lote que diz onde os pontos do arquivo caem'
+                      : 'Pontos cotados do topógrafo (CSV/TXT PNEZD, GeoJSON, KML, DXF, SVG, LandXML): abre em Terreno › Dados do lote, com prévia antes de entrar'
+                  }
                 />
             </MenuDoRibbon>
           </GrupoDoRibbon>
@@ -12299,7 +12358,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         <SheetPanel
           className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' || tarefaAberta === 'mobiliario' || tarefaAberta === 'ia' || tarefaAberta === 'acabamentos' || tarefaAberta === 'esquadrias' || tarefaAberta === 'guardaCorpos' || tarefaAberta === 'rodapes' || tarefaAberta === 'departamentos' || tarefaAberta === 'lod' || tarefaAberta === 'etapas' ? 'px-6 py-4' : 'p-0'}`}
         >
-          {tarefaAberta === 'terreno' && painelDoTerreno}
+          {tarefaAberta === 'terreno' && painelDoTerreno(pedidoDeImportacaoDeLevantamento)}
 
           {tarefaAberta === 'ia' && (
             <PainelIa

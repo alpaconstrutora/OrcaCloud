@@ -956,3 +956,45 @@ Estava em "fora do software por decisão" desde a fase 8 ("projeto executivo com
 5. Recarregar a página → versão volta; escolher outra versão troca as curvas.
 6. Exportar SVG e CSV → abrir fora e achar o aviso e a fonte.
 7. Menu Exibir › "Curvas de nível" desliga a camada.
+
+---
+
+# Pedido posterior — 2026-09-25: fase 18 (o caminho até a importação)
+
+## Pedido original
+
+> planta inteligente < terreno: implemente importar levantamento topográfico
+
+## O que se achou antes de escrever código
+
+A importação existe desde a **fase 9** e lê nove formatos. O que o pedido revela é que ela está
+inalcançável: a aba Terreno tem um grupo chamado "Topografia" com `Perfil` e `Drenagem`, e a
+importação mora quatro passos abaixo, dentro de "Dados do lote", atrás da escolha da fonte.
+
+## Decisões
+
+- **Não criar motor nenhum.** Confirmado com o usuário (três opções oferecidas: trazer para a
+  aba, implementar um formato que falte, ou tratar a planta topográfica como planta de fundo).
+  Escolha: trazer para a aba.
+- **Comando no grupo Topografia**, à frente de Perfil e Drenagem, e também no menu `Importar ▾`
+  da aba Inserir.
+- **Desabilitado sem lote fechado**, com o motivo e o caminho no `title` — o painel de topografia
+  só existe com o lote fechado.
+- **Pedido por número de série** até o `<input type="file">` do painel, com `scrollIntoView` e
+  realce de 2 s como rede: o `.click()` programático depende da ativação transitória do navegador.
+- `painelDoTerreno` vira **função**: montado em dois lugares, só a gaveta recebe o pedido, senão
+  seriam duas caixas de arquivo.
+
+## Estado — fase 18
+
+- [x] F46 — `PainelTopografia`/`PontosCotados`/`ImportarPontos` com `pedidoDeImportacao`;
+  `BlueprintEditor` com `importarLevantamento`, o botão na aba Terreno, o item no menu Importar e
+  `painelDoTerreno` como função
+- [x] Testes: `PainelTopografiaFase9` (+2, o pedido e a série) e `BlueprintEditor` (+1, o comando
+  apagado sem lote e a gaveta certa com lote)
+- [x] Suíte cheia (466 arquivos, 5.360 testes), typecheck, `check-ui-standard.sh`,
+  `check-xss-sinks.sh` e `build` verdes
+- [x] **Prova no app real** (escritas bloqueadas: 4, 0 erros): aba Terreno → clique → gaveta com o
+  painel de topografia → CSV PNEZD de 5 pontos → "5 pontos lidos · separador ; · 2 dentro do lote"
+  → Substituir → "5 pontos de levantamento-teste.csv · 1349dd1f5c5f"
+

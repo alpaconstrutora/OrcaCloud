@@ -2312,6 +2312,67 @@ Perguntei o que fazer com o nome (separar visualmente × tirar da barra) e a res
 - `__tests__/components/BlueprintEditor.test.tsx`: o `h1` tem o nome e a classe `sr-only`; o `title` da seta é `Voltar para a lista — Planta de teste`; `document.title` é `Planta de teste · Planta Inteligente`; "Sem alterações" continua na barra.
 - **App real** (escritas bloqueadas: 2, 0 erros de página), 1660×780: a fileira ficou `← · Planta ▾ · abas · ⌃ ············ Sem alterações · Publicar versão`. O desenho segue com **482 px** — esta fase não era de altura, era de leitura.
 
+### P2.64 — "Importar levantamento" na aba Terreno (25/09/2026) · *"planta inteligente < terreno: implemente importar levantamento topográfico"*
+
+**O que eu respondi antes de escrever código: já existe.** O motor
+`utils/blueprintTopografiaImportacao.ts` está em produção desde 11/09/2026 (fase 9 da topografia,
+commit `8e08f613`) e lê **nove formatos** — CSV/TXT de estação total no padrão PNEZD, GeoJSON,
+KML, DXF (blocos, polilinha 3D, 3DFACE), SVG, LandXML com TIN e linhas de quebra, e as
+exportações de perfil e curvas do próprio ÒPURA — com detecção de separador, de cabeçalho, de
+ordem N/E e de decimal com vírgula, ancoragem no lote, conversão UTM, prévia e proveniência com
+sha256.
+
+**O que faltava era o CAMINHO.** Na aba Terreno, o grupo chamado "Topografia" tinha só `Perfil` e
+`Drenagem`. Para importar eram quatro passos: *Dados do lote → seção Curvas de nível → fonte
+"Pontos cotados" → botãozinho `Importar` na linha dos pontos*. Perguntei ao usuário se era isso
+ou se faltava um formato; a resposta foi trazer para a aba.
+
+**O que entrou.** Um comando `Importar levantamento` no grupo Topografia, à frente de Perfil e
+Drenagem — antes de traçar qualquer coisa, alguém precisa pôr as cotas no desenho. O clique faz
+três coisas: põe a fonte em **Pontos cotados** (nas fontes remotas a importação nem aparece),
+abre a gaveta "Dados do lote" e manda um **pedido** — um número de série — até o
+`<input type="file">` que já mora no painel. O mesmo comando entrou no menu `Importar ▾` da aba
+Inserir, que é onde se procura importar.
+
+⚠️ **Desabilitado sem lote fechado, dizendo o motivo:** *"feche o contorno do lote com a
+ferramenta Terreno antes: é o lote que diz onde os pontos do arquivo caem"*. O painel de
+topografia inteiro só existe com o lote fechado, e a ancoragem no centro do lote precisa do anel.
+
+⚠️ **Dois detalhes que só aparecem quando se escreve:**
+
+1. **`painelDoTerreno` era uma constante montada em DOIS lugares** — no dock com a divisa
+   selecionada e na gaveta. Um pedido chegando aos dois abriria **duas** caixas de arquivo.
+   Virou função; só a gaveta recebe o pedido.
+2. **O `.click()` programático depende da ativação transitória do navegador.** Em geral abre a
+   caixa; quando não abre, o fluxo não pode morrer — por isso o bloco é trazido à vista
+   (`scrollIntoView`) e **apontado por 2 s** (`ring-2`), com o botão `Importar` a um clique.
+
+**Nada de motor novo.** Os nove formatos, o hook e a tabela `blueprint_study_topografia` ficaram
+como estavam. Esta fase é de caminho, não de capacidade.
+
+**Prova**
+- `npx tsc --noEmit` ok · `check-ui-standard.sh` (BlueprintEditor e PainelTopografia) ok ·
+  `check-xss-sinks.sh` ok · suíte cheia **466 arquivos / 5360 testes** verdes · `npm run build` ok.
+- `__tests__/components/PainelTopografiaFase9.test.tsx` (+2): sem pedido nada abre; um número novo
+  chama `HTMLInputElement.click` **uma** vez e aponta o botão; **o mesmo número não reabre** — é
+  série, não interruptor.
+- `__tests__/components/BlueprintEditor.test.tsx` (+1): sem lote o comando existe, está apagado e
+  o `title` ensina o caminho; com o lote fechado habilita, e o clique abre "Dados do lote" com o
+  painel de topografia e o campo de arquivo. ⚠️ O teste acha a gaveta **pelo painel**, e não por
+  `findByRole('dialog')`: fechar o contorno abre sozinho o Quadro de divisas, e aí há dois.
+- **App real** (escritas bloqueadas: 4, 0 erros de página), janela 1660×780, *Planta 14/09/2026*:
+
+```
+aba Terreno → botão HABILITADO, com o title dos nove formatos
+clique      → gaveta "Dados do lote" com o painel de topografia; bloco apontado aos 0,7 s
+arquivo     → "levantamento-teste.csv · texto (CSV/TXT) · 5 pontos lidos · separador ; · 2 dentro do lote"
+Substituir  → "5 pontos de levantamento-teste.csv · 1349dd1f5c5f — vai na proveniência da versão"
+barra da aba Terreno: 176 px, painel em 1 fileira (o comando novo não quebrou a fileira)
+```
+
+  ⚠️ O realce é medido **aos 0,7 s**, não depois: ele dura 2 s, e medir no fim mediria a ausência
+  dele — um verde que não significaria nada.
+
 ## Verificação (por fase)
 
 1. `npx tsc --noEmit` · `bash scripts/check-ui-standard.sh <tsx>` · `npx vitest run` cheia ·

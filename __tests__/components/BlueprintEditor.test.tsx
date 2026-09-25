@@ -6112,4 +6112,51 @@ describe('BlueprintEditor · estender parede até a face', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Planta de teste');
     await user.click(screen.getByRole('button', { name: /mostrar a faixa de comandos/i }));
   }, 60000);
+
+  /**
+   * P2.64 (25/09/2026) — *"planta inteligente < terreno: implemente importar
+   * levantamento topográfico"*. A importação existia desde 11/09 e lia nove
+   * formatos; estava a quatro passos, dentro de "Dados do lote". Aqui vira um
+   * comando da aba Terreno.
+   */
+  it('Terreno › Topografia tem "Importar levantamento": sem lote fechado ele ensina o caminho; com lote, abre Dados do lote com a fonte em pontos cotados', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+
+    // 1. Sem lote: existe, está apagado, e o título diz o que fazer antes.
+    await montar();
+    await abrirAba(/^terreno$/i);
+    const semLote = botao(/^Importar levantamento/);
+    expect(semLote).toBeDisabled();
+    expect(semLote).toHaveAttribute('title', expect.stringMatching(/feche o contorno do lote com a ferramenta Terreno/i));
+    cleanup();
+
+    // 2. Com o lote fechado: habilita e abre a gaveta na fonte certa.
+    const d = (ax: number, ay: number, bx: number, by: number) =>
+      ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO' }) as const;
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [
+        d(0, 0, 20000, 0),
+        d(20000, 0, 20000, 30000),
+        d(20000, 30000, 0, 30000),
+        d(0, 30000, 0, 0),
+      ]).model,
+    );
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    const comLote = botao(/^Importar levantamento/);
+    await waitFor(() => expect(comLote).toBeEnabled());
+    await user.click(comLote);
+
+    // A gaveta "Dados do lote" abriu, com a seção de topografia e a linha de
+    // pontos cotados — é ali que o arquivo entra.
+    // ⚠️ Pelo painel, e não por `findByRole('dialog')`: fechar o contorno do
+    // lote abre sozinho o Quadro de divisas, e aí há DOIS diálogos na tela.
+    const topografia = await screen.findByTestId('painel-topografia');
+    const gaveta = topografia.closest('[role="dialog"]') as HTMLElement;
+    expect(gaveta).toHaveTextContent(/Dados do lote/);
+    expect(within(gaveta).getByLabelText('Arquivo de pontos cotados')).toBeInTheDocument();
+  }, 60000);
 });

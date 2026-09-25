@@ -34,9 +34,13 @@ const tabelas: Record<string, Linha[]> = {
         { id: 't6', description: 'Jardim', amount: 80, transaction_date: '2026-09-15', direction: 'DEBIT', cost_center_id: 'cc-a', source_system: 'BOLETO', reference_id: null, party_name: 'JARDINAGEM SILVA LTDA', supplier_id: 'f-branco' },
     ],
     boletos: [
-        { id: 'b-705', numero: 705 },
-        { id: 'b-6', numero: 6 },
-        { id: 'b-nulo', numero: null },
+        { id: 'b-705', numero: 705, documento_path: 'org/705.pdf', documento_nome: 'elevador-julho.pdf' },
+        { id: 'b-6', numero: 6, documento_path: 'org/6.pdf', documento_nome: 'download (98).pdf' },
+        { id: 'b-nulo', numero: null, documento_path: null, documento_nome: null },
+        // Arquivo sem nome: ainda é arquivo.
+        { id: 'b-sem-nome', numero: 12, documento_path: 'org/12.pdf', documento_nome: '   ' },
+        // Nome sem arquivo: não há o que abrir.
+        { id: 'b-so-nome', numero: 13, documento_path: '  ', documento_nome: 'fantasma.pdf' },
     ],
     suppliers: [
         { id: 'f-mn', name: 'MN CONSERVACAO DE ELEVADORES E COMERCIO DE PECAS LTDA' },
@@ -113,19 +117,60 @@ describe('listarLancamentos — coluna Código', () => {
     });
 });
 
-describe('codigosDeBoleto', () => {
+describe('dadosDoBoleto', () => {
     it('`numero` nulo não vira a string "null"', async () => {
-        const m = await condominioRateioService.codigosDeBoleto(['b-nulo']);
-        expect(m.has('b-nulo')).toBe(false);
+        const m = await condominioRateioService.dadosDoBoleto(['b-nulo']);
+        expect(m.get('b-nulo')!.codigo).toBeNull();
     });
 
     it('lista vazia não consulta nada e devolve mapa vazio', async () => {
-        expect((await condominioRateioService.codigosDeBoleto([])).size).toBe(0);
+        expect((await condominioRateioService.dadosDoBoleto([])).size).toBe(0);
     });
 
     it('id repetido é consultado uma vez só', async () => {
-        const m = await condominioRateioService.codigosDeBoleto(['b-705', 'b-705', 'b-6']);
-        expect([...m.entries()].sort()).toEqual([['b-6', '0006'], ['b-705', '0705']]);
+        const m = await condominioRateioService.dadosDoBoleto(['b-705', 'b-705', 'b-6']);
+        expect([...m.keys()].sort()).toEqual(['b-6', 'b-705']);
+        expect(m.get('b-705')!.codigo).toBe('0705');
+    });
+
+    it('traz o PATH do arquivo, nunca uma URL — o bucket é privado e a assinatura expira', async () => {
+        const m = await condominioRateioService.dadosDoBoleto(['b-705']);
+        const d = m.get('b-705')!;
+        expect(d.documentoPath).toBe('org/705.pdf');
+        expect(d.documentoPath).not.toMatch(/^https?:/);
+    });
+
+    it('arquivo sem nome ainda é arquivo: rótulo cai para "Documento", link não se perde', async () => {
+        const m = await condominioRateioService.dadosDoBoleto(['b-sem-nome']);
+        expect(m.get('b-sem-nome')).toMatchObject({ documentoPath: 'org/12.pdf', documentoNome: 'Documento' });
+    });
+
+    it('nome sem arquivo não vira link: não há o que abrir', async () => {
+        const m = await condominioRateioService.dadosDoBoleto(['b-so-nome']);
+        expect(m.get('b-so-nome')).toMatchObject({ documentoPath: null, documentoNome: null });
+    });
+});
+
+describe('listarLancamentos — coluna Documento', () => {
+    it('boleto com arquivo traz path e nome na linha', async () => {
+        const l = await carregar();
+        const t1 = l.find(x => x.id === 't1')!;
+        expect(t1.documentoPath).toBe('org/705.pdf');
+        expect(t1.documentoNome).toBe('elevador-julho.pdf');
+    });
+
+    it('origem que não é BOLETO não tenta buscar documento', async () => {
+        const l = await carregar();
+        const t3 = l.find(x => x.id === 't3')!;
+        expect(t3.documentoPath).toBeNull();
+        expect(t3.documentoNome).toBeNull();
+    });
+
+    it('boleto que não volta de `boletos` fica sem documento, e a despesa CONTINUA na lista', async () => {
+        const l = await carregar();
+        const t4 = l.find(x => x.id === 't4')!;
+        expect(t4.documentoPath).toBeNull();
+        expect(l).toHaveLength(6);
     });
 });
 

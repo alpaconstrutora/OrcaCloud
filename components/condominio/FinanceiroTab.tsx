@@ -25,6 +25,7 @@ import CostCenterSelect from '../CostCenterSelect';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
 import { useConfirm } from '../ui/confirm';
+import { boletoService } from '../../services/boletoService';
 // Mesmo rótulo de origem que Contas a Pagar usa. Importar do componente é a
 // convenção já estabelecida aqui — `ContasPagarManager` e
 // `financeiro/FechamentoCentroCusto` fazem igual. Extrair para um util
@@ -290,10 +291,10 @@ const TabelaCotas: React.FC<{ cotas: LinhaCota[]; storageKey: string }> = ({ cot
     );
 };
 
-// Larguras da aba Despesas. Soma = 1.200px; a folga vai para o `<col />`
+// Larguras da aba Despesas. Soma = 1.400px; a folga vai para o `<col />`
 // espaçador (§6.1.1), não se espalha pelas colunas de dado.
 const LARGURAS_DESPESAS: Record<string, number> = {
-    codigo: 100, data: 110, descricao: 300, fornecedor: 220, origem: 120, centro: 190, situacao: 150, valor: 130,
+    codigo: 100, documento: 200, data: 110, descricao: 300, fornecedor: 220, origem: 120, centro: 190, situacao: 150, valor: 130,
 };
 
 /** Lançamentos do caixa do condomínio — a aba Despesas.
@@ -307,7 +308,12 @@ const TabelaLancamentos: React.FC<{
     /** Vem do pai porque o botão de auto-ajuste (§6.1.2) mora na toolbar, e a
      *  toolbar não é filha desta tabela. */
     cols: ReturnType<typeof useResizableColumns>;
-}> = ({ lancamentos, carregando, erro, mes, temBusca, cols }) => {
+    /** Abre o arquivo do documento de origem. Fica no pai porque é ele que tem
+     *  o `notify` para contar uma falha de assinatura. */
+    onAbrirDocumento: (l: LancamentoDoCondominio) => void;
+    /** Path do documento que está sendo assinado — a linha diz "Abrindo...". */
+    abrindoDocumento: string | null;
+}> = ({ lancamentos, carregando, erro, mes, temBusca, cols, onAbrirDocumento, abrindoDocumento }) => {
     if (carregando) {
         return (
             <div className="text-center py-12">
@@ -351,6 +357,7 @@ const TabelaLancamentos: React.FC<{
             >
                 <colgroup>
                     <col data-col-key="codigo" style={{ width: `${cols.getWidth('codigo')}px` }} />
+                    <col data-col-key="documento" style={{ width: `${cols.getWidth('documento')}px` }} />
                     <col data-col-key="data" style={{ width: `${cols.getWidth('data')}px` }} />
                     <col data-col-key="descricao" style={{ width: `${cols.getWidth('descricao')}px` }} />
                     <col data-col-key="fornecedor" style={{ width: `${cols.getWidth('fornecedor')}px` }} />
@@ -366,6 +373,7 @@ const TabelaLancamentos: React.FC<{
                 <thead>
                     <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                         <th className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden relative">Código<cols.ResizeHandle colKey="codigo" /></th>
+                        <th className="px-6 py-2 border-r border-gray-100 overflow-hidden relative">Documento<cols.ResizeHandle colKey="documento" /></th>
                         <th className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden relative">Data<cols.ResizeHandle colKey="data" /></th>
                         <th className="px-6 py-2 border-r border-gray-100 overflow-hidden relative">Descrição<cols.ResizeHandle colKey="descricao" /></th>
                         <th className="px-6 py-2 border-r border-gray-100 overflow-hidden relative">Fornecedor<cols.ResizeHandle colKey="fornecedor" /></th>
@@ -384,6 +392,27 @@ const TabelaLancamentos: React.FC<{
                                 campo em `condominioRateioService`. */}
                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 whitespace-nowrap">
                                 {l.codigo ?? <span className="text-gray-400">—</span>}
+                            </td>
+                            {/* O arquivo que originou a despesa — o boleto, quando
+                                ela veio de Financeiro › Boletos a Pagar. O bucket é
+                                privado: a URL é assinada no CLIQUE (15 min), não no
+                                carregamento, senão 136 assinaturas expirariam antes
+                                de alguém abrir uma. §7 — link em `text-blue-600`. */}
+                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal">
+                                {!l.documentoPath ? (
+                                    <span className="text-gray-400">—</span>
+                                ) : abrindoDocumento === l.documentoPath ? (
+                                    <span className="text-gray-500">Abrindo...</span>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => onAbrirDocumento(l)}
+                                        className="block w-full text-left truncate text-blue-600 hover:text-blue-800 transition-colors"
+                                        title={`Abrir ${l.documentoNome}`}
+                                    >
+                                        {l.documentoNome}
+                                    </button>
+                                )}
                             </td>
                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
                                 {dataBR(l.data)}
@@ -435,7 +464,7 @@ const TabelaLancamentos: React.FC<{
                 </tbody>
                 <tfoot>
                     <tr className="bg-gray-50 border-t border-gray-200">
-                        <td className="px-6 py-2.5 text-sm font-normal text-gray-500" colSpan={8}>
+                        <td className="px-6 py-2.5 text-sm font-normal text-gray-500" colSpan={9}>
                             {lancamentos.length} lançamento(s) em {mes}
                         </td>
                         <td className="px-6 py-2.5 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
@@ -491,6 +520,26 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
         setNotification({ message, type });
         setTimeout(() => setNotification(null), 4500);
+    };
+
+    // Path do documento em assinatura — a célula mostra "Abrindo..." enquanto
+    // isso. Guardar o PATH (e não um booleano) faz a marca ficar na linha certa
+    // quando o usuário clica em duas em sequência.
+    const [abrindoDocumento, setAbrindoDocumento] = React.useState<string | null>(null);
+
+    const abrirDocumento = async (l: LancamentoDoCondominio) => {
+        if (!l.documentoPath) return;
+        setAbrindoDocumento(l.documentoPath);
+        try {
+            const url = await boletoService.getDocumentoUrl(l.documentoPath);
+            // `noopener` é obrigatório: sem ele a aba nova recebe `window.opener`
+            // e pode navegar a nossa.
+            window.open(url, '_blank', 'noopener,noreferrer');
+        } catch (e: any) {
+            notify(e?.message || 'Não foi possível abrir o documento.', 'error');
+        } finally {
+            setAbrindoDocumento(null);
+        }
     };
 
     const [sheetDetalhe, setSheetDetalhe] = React.useState<Rateio | null>(null);
@@ -943,6 +992,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
         // faz o usuário digitar "boleto" e a linha sumir.
         return lancamentos.filter(l =>
             (l.codigo ?? '').toLowerCase().includes(t)
+            || (l.documentoNome ?? '').toLowerCase().includes(t)
             || l.descricao.toLowerCase().includes(t)
             || l.fornecedor.toLowerCase().includes(t)
             || origemLabel(l.origem).toLowerCase().includes(t)
@@ -1168,7 +1218,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                 type="text"
                                 placeholder={subAba === 'rateios'
                                     ? 'Buscar por competência ou critério...'
-                                    : 'Buscar por código, descrição, fornecedor, origem ou centro de custo...'}
+                                    : 'Buscar por código, documento, descrição, fornecedor, origem ou centro de custo...'}
                                 value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)}
                                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
@@ -1236,6 +1286,8 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                         mes={rotuloCompetencia(`${mesDasDespesas}-01`)}
                         temBusca={!!searchTerm.trim()}
                         cols={colsDespesas}
+                        onAbrirDocumento={abrirDocumento}
+                        abrindoDocumento={abrindoDocumento}
                     />
                 ) : (
                 <>

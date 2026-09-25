@@ -84,6 +84,13 @@ export interface CentroDeCustoDisponivel {
  * (centro de custo) e se já foi rateado — as duas perguntas que o síndico faz
  * ao olhar uma despesa solta.
  */
+/** O que o documento de origem de um lançamento tem a oferecer à lista. */
+export interface DadosDoBoleto {
+    codigo: string | null;
+    documentoPath: string | null;
+    documentoNome: string | null;
+}
+
 export interface LancamentoDoCondominio {
     id: string;
     /**
@@ -100,6 +107,15 @@ export interface LancamentoDoCondominio {
      * admitir que não há um.
      */
     codigo: string | null;
+    /**
+     * Arquivo do documento de origem, no bucket PRIVADO `boletos`. Guarda o
+     * PATH — a URL é assinada na hora de abrir (`boletoService.getDocumentoUrl`,
+     * 15 min). Assinar as 136 linhas no carregamento seria gastar 136 chamadas
+     * para o usuário abrir, no máximo, uma — e a assinatura expiraria antes.
+     */
+    documentoPath: string | null;
+    /** Nome do arquivo, como o Boletos a Pagar mostra. `null` = sem arquivo. */
+    documentoNome: string | null;
     data: string;
     descricao: string;
     valor: number;
@@ -711,17 +727,17 @@ export const condominioRateioService = {
         // Rótulo do centro de custo, em lote.
         const ccs = await this.getCentrosDeCustoPorEmpreendimentoNomes(params.costCenterIds);
 
-        // Código do documento, em lote. Best-effort como na Conciliação: sem
-        // permissão de leitura em `boletos` a coluna fica vazia, mas a lista
-        // de despesas continua de pé.
-        let codigos = new Map<string, string>();
+        // Código e arquivo do documento, em lote. Best-effort como na
+        // Conciliação: sem permissão de leitura em `boletos` as colunas ficam
+        // vazias, mas a lista de despesas continua de pé.
+        let docs = new Map<string, DadosDoBoleto>();
         try {
-            codigos = await this.codigosDeBoleto(
+            docs = await this.dadosDoBoleto(
                 linhas.filter((l: any) => l.source_system === 'BOLETO' && l.reference_id)
                     .map((l: any) => l.reference_id as string),
             );
         } catch {
-            // Idem: falhar aqui só apaga a coluna Código.
+            // Idem: falhar aqui só apaga as colunas Código e Documento.
         }
 
         // Nome do fornecedor cadastrado, em lote. Best-effort como os códigos:
@@ -743,11 +759,14 @@ export const condominioRateioService = {
 
         return linhas.map((l: any) => {
             const comp = emRateio.get(l.id as string) ?? null;
+            const doc = (l.source_system === 'BOLETO' && l.reference_id)
+                ? docs.get(l.reference_id as string)
+                : undefined;
             return {
                 id: l.id as string,
-                codigo: (l.source_system === 'BOLETO' && l.reference_id)
-                    ? (codigos.get(l.reference_id as string) ?? null)
-                    : null,
+                codigo: doc?.codigo ?? null,
+                documentoPath: doc?.documentoPath ?? null,
+                documentoNome: doc?.documentoNome ?? null,
                 data: l.transaction_date as string,
                 // Mesma poda de rótulo do rateio: na origem BOLETO a descrição é
                 // nome de arquivo ou bloco de OCR. Ver `utils/despesaCondominio.ts`.
@@ -794,29 +813,41 @@ export const condominioRateioService = {
     },
 
     /**
-     * `boleto.id → nº com 4 dígitos`. Mesma regra da Conciliação Bancária
-     * (`loadOriginCodes`): `String(numero).padStart(4, '0')`.
+     * `boleto.id → { código, arquivo }` do documento de origem.
+     *
+     * O código segue a regra da Conciliação Bancária (`loadOriginCodes`):
+     * `String(numero).padStart(4, '0')`.
      *
      * Aqui a chave é o `reference_id` do lançamento porque, na origem BOLETO,
      * ele é o id do boleto puro — sem os sufixos compostos que as origens de
      * contrato usam (ver `lib/receivableRef.ts` e o aviso de 22P02 em
      * `BankReconciliation.tsx`). Por isso este método não tenta desmontar a
      * referência: se a origem não for BOLETO, ela nem chega aqui.
+     *
+     * Traz só o PATH do arquivo, nunca uma URL: o bucket é privado e a
+     * assinatura vale 15 minutos — assiná-la no carregamento da lista a faria
+     * expirar antes do clique.
      */
-    async codigosDeBoleto(boletoIds: string[]): Promise<Map<string, string>> {
-        const mapa = new Map<string, string>();
+    async dadosDoBoleto(boletoIds: string[]): Promise<Map<string, DadosDoBoleto>> {
+        const mapa = new Map<string, DadosDoBoleto>();
         const ids = [...new Set(boletoIds)];
         if (ids.length === 0) return mapa;
 
         const { data, error } = await supabase
             .from('boletos')
-            .select('id, numero')
+            .select('id, numero, documento_path, documento_nome')
             .in('id', ids);
-        if (error) throw new Error(`Falha ao carregar os códigos: ${error.message}`);
+        if (error) throw new Error(`Falha ao carregar os documentos: ${error.message}`);
 
         for (const b of data || []) {
-            if (b.numero == null) continue;
-            mapa.set(b.id as string, String(b.numero).padStart(4, '0'));
+            const caminho = String(b.documento_path ?? '').trim();
+            mapa.set(b.id as string, {
+                codigo: b.numero == null ? null : String(b.numero).padStart(4, '0'),
+                documentoPath: caminho || null,
+                // Arquivo sem nome ainda é arquivo: o rótulo cai para "Documento"
+                // na tela em vez de a linha perder o link.
+                documentoNome: caminho ? (String(b.documento_nome ?? '').trim() || 'Documento') : null,
+            });
         }
         return mapa;
     },

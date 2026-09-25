@@ -25,7 +25,7 @@
 import React from 'react';
 import {
     Building2, Megaphone, FileText, ExternalLink, Check, Users, Scale,
-    Wrench, Package, Wallet, CalendarClock,
+    Wrench, Package, Wallet, CalendarClock, Download,
 } from 'lucide-react';
 import type {
     PortalCondominio, PortalUnidadeCondominio, PortalAvisoCondominio,
@@ -37,6 +37,8 @@ import { CRITERIO_LABEL, type CriterioRateio } from '../../services/condominioRa
 // aqui é o que faz o condômino ler "ENERGISA SUL-SUDESTE" em vez do nome do
 // arquivo. Ver `utils/despesaCondominio.ts`.
 import { rotuloDeDespesa } from '../../utils/despesaCondominio';
+import { montarRelatorioRateio } from '../../utils/relatorioRateio';
+import { baixarRelatorioRateioPdf } from '../../services/relatorioRateioPdf';
 import { PortalTabs } from '../portal/PortalKit';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
 import { usePersistedState } from '../ui/TableUtils';
@@ -420,6 +422,70 @@ const PainelDocumentos: React.FC<{
 /* O rateio INTEIRO, com a cota de todas as unidades — decisão do usuário em
    23/09/2026 entre "só a minha", "minha + despesas" e "tudo": transparência de
    assembleia. A cota de quem está olhando vem marcada (`minha`). */
+/** Baixar a competência em PDF. O documento é montado no navegador, a partir
+ *  do payload que a aba já recebeu — não há chamada nova, nem arquivo guardado
+ *  em bucket que envelheceria enquanto o rateio é corrigido. */
+const BotaoPdfDoRateio: React.FC<{ rateio: PortalRateioCondominio }> = ({ rateio }) => {
+    const [gerando, setGerando] = React.useState(false);
+    const [erro, setErro] = React.useState<string | null>(null);
+
+    const baixar = async () => {
+        setGerando(true);
+        setErro(null);
+        try {
+            await baixarRelatorioRateioPdf(montarRelatorioRateio({
+                condominio: rateio.condominioNome,
+                numero: rateio.numero,
+                competencia: rateio.competencia,
+                // "Ordinário", e não o "Taxa ordinária" do card acima: o
+                // documento é o MESMO que o síndico baixa, e o mesmo campo não
+                // pode sair com duas palavras em duas mãos.
+                tipo: rateio.tipo === 'EXTRAORDINARIO' ? 'Extraordinário' : 'Ordinário',
+                criterio: CRITERIO_LABEL[rateio.criterio as CriterioRateio] ?? rateio.criterio,
+                // O mesmo vocabulário da tela: "Prévia" e não "Rascunho", porque
+                // é o que o condômino lê no cabeçalho do card acima.
+                status: rateio.status === 'RASCUNHO' ? 'Rascunho' : 'Fechado',
+                fechadoEm: rateio.fechadoEm,
+                totalDespesas: rateio.totalDespesas,
+                totalRateado: rateio.totalRateado,
+                despesas: rateio.despesas.map(d => ({
+                    descricao: rotuloDeDespesa(d.descricao) ?? 'Despesa sem descrição',
+                    valor: d.valor,
+                })),
+                cotas: rateio.cotas.map(c => ({
+                    unidade: [c.torre, c.unidade].filter(Boolean).join(' · ') || '—',
+                    pagador: c.pessoa,
+                    valor: c.valor,
+                    observacao: null,
+                    // A cota de quem está lendo vai destacada também no PDF.
+                    minha: c.minha,
+                })),
+            }));
+        } catch (e: any) {
+            // O portal não tem toast: o erro fica na linha do botão, senão o
+            // clique não faz nada e o condômino conclui que o site quebrou.
+            setErro(e?.message || 'Não foi possível gerar o PDF.');
+        } finally {
+            setGerando(false);
+        }
+    };
+
+    return (
+        <div className="flex flex-col items-end gap-1">
+            <button
+                type="button"
+                onClick={baixar}
+                disabled={gerando}
+                className="flex items-center gap-1.5 h-8 px-3 rounded-[6px] border border-gray-200 bg-white text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-50"
+            >
+                <Download className="w-[15px] h-[15px]" />
+                {gerando ? 'Gerando...' : 'Baixar PDF'}
+            </button>
+            {erro && <span className="text-xs text-red-600">{erro}</span>}
+        </div>
+    );
+};
+
 const PainelFinanceiro: React.FC<{ rateios: PortalRateioCondominio[]; multi: boolean }> = ({ rateios, multi }) => (
     <div>
         <Descricao icone={<Wallet className="w-4 h-4" />}>
@@ -451,15 +517,18 @@ const PainelFinanceiro: React.FC<{ rateios: PortalRateioCondominio[]; multi: boo
                                     {multi ? ` · ${r.condominioNome}` : ''}
                                 </p>
                             </div>
-                            {/* §8 — texto colorido, sem pílula. Rascunho é PRÉVIA: o número
-                                ainda pode mudar, e omitir isso seria pior que não mostrar. */}
-                            {r.status === 'RASCUNHO' ? (
-                                <span className="text-sm font-normal text-amber-600">Prévia — pode mudar</span>
-                            ) : (
-                                <span className="text-sm font-normal text-emerald-600">
-                                    Fechado{r.fechadoEm ? ` em ${data(r.fechadoEm.slice(0, 10))}` : ''}
-                                </span>
-                            )}
+                            <div className="flex items-center gap-3">
+                                {/* §8 — texto colorido, sem pílula. Rascunho é PRÉVIA: o número
+                                    ainda pode mudar, e omitir isso seria pior que não mostrar. */}
+                                {r.status === 'RASCUNHO' ? (
+                                    <span className="text-sm font-normal text-amber-600">Prévia — pode mudar</span>
+                                ) : (
+                                    <span className="text-sm font-normal text-emerald-600">
+                                        Fechado{r.fechadoEm ? ` em ${data(r.fechadoEm.slice(0, 10))}` : ''}
+                                    </span>
+                                )}
+                                <BotaoPdfDoRateio rateio={r} />
+                            </div>
                         </div>
 
                         <div className="p-5 space-y-5">

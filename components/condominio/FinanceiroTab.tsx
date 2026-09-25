@@ -19,6 +19,8 @@ import {
     useResizableColumns,
 } from '../ui/TableUtils';
 import { KpiCard } from '../ui/KpiCard';
+import { montarRelatorioRateio, type RelatorioRateio } from '../../utils/relatorioRateio';
+import { baixarRelatorioRateioPdf } from '../../services/relatorioRateioPdf';
 import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
 import ActionIconButton from '../ui/ActionIconButton';
 import CostCenterSelect from '../CostCenterSelect';
@@ -568,23 +570,90 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
         }
     };
 
+    // As duas metades do documento, em paralelo: o que se gastou (despesas) e
+    // quem paga o quê (cotas). Uma sem a outra não é prestação de contas.
+    // Extraído porque o detalhe e o relatório carregam exatamente isto.
+    const carregarMetades = (rateioId: string) => Promise.all([
+        condominioRateioService.listarDespesas(rateioId),
+        condominioRateioService.listarCotas(rateioId),
+    ]);
+
     const abrirDetalhe = async (r: Rateio) => {
         setSheetDetalhe(r);
         setCarregandoDetalhe(true);
         try {
-            // As duas metades do documento, em paralelo: o que se gastou
-            // (despesas) e quem paga o quê (cotas). Uma sem a outra não é
-            // prestação de contas.
-            const [ds, cs] = await Promise.all([
-                condominioRateioService.listarDespesas(r.id),
-                condominioRateioService.listarCotas(r.id),
-            ]);
+            const [ds, cs] = await carregarMetades(r.id);
             setDespesasDetalhe(ds);
             setCotasDetalhe(cs);
         } catch (e: any) {
             notify(e?.message || 'Erro ao carregar o detalhe do rateio.', 'error');
         } finally {
             setCarregandoDetalhe(false);
+        }
+    };
+
+    // ── Relatório de rateio ───────────────────────────────────────────────
+    // Sheet PRÓPRIA, e não um botão no detalhe: o detalhe é tela de trabalho
+    // (corrige descrição em rascunho), o relatório é o documento que sai daqui
+    // para o condômino. Misturar os dois faz a tela de trabalho parecer o
+    // documento oficial.
+    const [sheetRelatorio, setSheetRelatorio] = React.useState<Rateio | null>(null);
+    const [carregandoRelatorio, setCarregandoRelatorio] = React.useState(false);
+    const [baixandoPdf, setBaixandoPdf] = React.useState(false);
+    const [dadosRelatorio, setDadosRelatorio] = React.useState<{
+        despesas: DespesaRateio[]; cotas: CotaDoRateio[];
+    } | null>(null);
+
+    const abrirRelatorio = async (r: Rateio) => {
+        setSheetRelatorio(r);
+        setDadosRelatorio(null);
+        setCarregandoRelatorio(true);
+        try {
+            const [ds, cs] = await carregarMetades(r.id);
+            setDadosRelatorio({ despesas: ds, cotas: cs });
+        } catch (e: any) {
+            notify(e?.message || 'Erro ao montar o relatório.', 'error');
+            setSheetRelatorio(null);
+        } finally {
+            setCarregandoRelatorio(false);
+        }
+    };
+
+    // O MESMO modelo que o portal do condômino usa — se cada lado montasse o
+    // seu, o síndico e o condômino teriam dois documentos que discordam.
+    const relatorio = React.useMemo<RelatorioRateio | null>(() => {
+        if (!sheetRelatorio || !dadosRelatorio) return null;
+        return montarRelatorioRateio({
+            condominio: empreendimento.name,
+            numero: sheetRelatorio.number,
+            competencia: sheetRelatorio.competencia,
+            tipo: sheetRelatorio.tipo === 'EXTRAORDINARIO' ? 'Extraordinário' : 'Ordinário',
+            criterio: CRITERIO_LABEL[sheetRelatorio.criterio],
+            status: STATUS_LABEL[sheetRelatorio.status] ?? sheetRelatorio.status,
+            fechadoEm: sheetRelatorio.fechado_em,
+            observacoes: sheetRelatorio.observacoes,
+            totalDespesas: sheetRelatorio.total_despesas,
+            totalRateado: sheetRelatorio.total_rateado,
+            despesas: dadosRelatorio.despesas.map(d => ({ descricao: d.descricao, valor: d.valor })),
+            cotas: dadosRelatorio.cotas.map(c => ({
+                unidade: c.unitLabel,
+                pagador: c.clientNome,
+                valor: c.valor,
+                observacao: null,
+            })),
+        });
+    }, [sheetRelatorio, dadosRelatorio, empreendimento.name]);
+
+    const baixarPdf = async () => {
+        if (!relatorio) return;
+        setBaixandoPdf(true);
+        try {
+            const arquivo = await baixarRelatorioRateioPdf(relatorio);
+            notify(`${arquivo} baixado.`);
+        } catch (e: any) {
+            notify(e?.message || 'Erro ao gerar o PDF.', 'error');
+        } finally {
+            setBaixandoPdf(false);
         }
     };
 
@@ -1438,6 +1507,16 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                                                 Ver detalhe
                                                             </button>
                                                         )}
+                                                        {/* O documento existe para RASCUNHO também: é a
+                                                            prévia que o síndico confere antes de fechar. */}
+                                                        {!cancelado && (
+                                                            <ActionIconButton
+                                                                kind="view"
+                                                                title="Relatório do rateio"
+                                                                icon={<FileText className="w-4 h-4" />}
+                                                                onClick={() => abrirRelatorio(r)}
+                                                            />
+                                                        )}
                                                         {r.status === 'RASCUNHO' && (
                                                             <ActionIconButton
                                                                 kind="edit"
@@ -2040,6 +2119,138 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                 </SheetPanel>
                 <SheetFooter>
                     <button onClick={() => setResultado(null)} className="h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95">Fechar</button>
+                </SheetFooter>
+            </Sheet>
+
+            {/* Relatório do rateio — o documento na tela, e o mesmo em PDF.
+                `2xl` como as outras sheets desta aba: as duas tabelas foram
+                dimensionadas para os 624px úteis (§6.9), e `4xl` é exceção
+                reservada a seletor dentro de campo, não conveniência. */}
+            <Sheet open={!!sheetRelatorio} onClose={() => setSheetRelatorio(null)} size="2xl">
+                <SheetHeader onClose={() => setSheetRelatorio(null)}>
+                    <SheetTitle>Relatório de rateio</SheetTitle>
+                    <SheetDescription>
+                        {relatorio
+                            ? `${relatorio.condominio} · ${relatorio.titulo}`
+                            : 'Prestação de contas da competência.'}
+                    </SheetDescription>
+                </SheetHeader>
+                <SheetPanel className="p-6">
+                    {carregandoRelatorio || !relatorio ? (
+                        <div className="text-center py-12">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                            <p className="mt-2 text-gray-500">Montando o relatório...</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-8">
+                            {/* Identificação — §30: par rótulo/valor em grade,
+                                não empilhado em linhas de texto. */}
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                                    <FileText className="w-4 h-4 text-blue-600" />
+                                    <h3 className="text-sm font-semibold text-gray-900">Identificação</h3>
+                                </div>
+                                <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                    <div className="space-y-1.5">
+                                        <p className="text-xs font-semibold text-slate-500">Competência</p>
+                                        <p className="text-sm font-normal text-gray-700">{relatorio.competencia}</p>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <p className="text-xs font-semibold text-slate-500">Tipo</p>
+                                        <p className="text-sm font-normal text-gray-700">{relatorio.tipo}</p>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <p className="text-xs font-semibold text-slate-500">Critério</p>
+                                        <p className="text-sm font-normal text-gray-700">{relatorio.criterio}</p>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <p className="text-xs font-semibold text-slate-500">Situação</p>
+                                        <p className="text-sm font-normal text-gray-700">
+                                            {relatorio.status}{relatorio.fechadoEm ? ` em ${relatorio.fechadoEm}` : ''}
+                                        </p>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <p className="text-xs font-semibold text-slate-500">Total das despesas</p>
+                                        <p className="text-sm font-medium text-gray-800">{dinheiro(relatorio.totalDespesas)}</p>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <p className="text-xs font-semibold text-slate-500">Total rateado</p>
+                                        <p className="text-sm font-medium text-gray-800">{dinheiro(relatorio.totalRateado)}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Os avisos vêm ANTES das tabelas: são o que muda a
+                                leitura dos números abaixo, e aviso no rodapé é
+                                aviso que ninguém lê. */}
+                            {relatorio.avisos.length > 0 && (
+                                <div className="space-y-2">
+                                    {relatorio.avisos.map((aviso, i) => (
+                                        <p key={i} className="text-sm text-amber-600 flex items-start gap-1.5">
+                                            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                                            {aviso}
+                                        </p>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className="space-y-3">
+                                <div className="border-b border-gray-100 pb-3">
+                                    <h3 className="text-sm font-semibold text-gray-900">Despesas da competência</h3>
+                                </div>
+                                {relatorio.despesas.length === 0 ? (
+                                    <p className="text-sm text-gray-500 py-4">Nenhuma despesa entrou neste rateio.</p>
+                                ) : (
+                                    <TabelaDespesas
+                                        despesas={dadosRelatorio?.despesas ?? []}
+                                        comData={false}
+                                        storageKey="condominio:rateio:relatorio:despesas"
+                                    />
+                                )}
+                            </div>
+
+                            <div className="space-y-3">
+                                <div className="border-b border-gray-100 pb-3">
+                                    <h3 className="text-sm font-semibold text-gray-900">Rateio por unidade</h3>
+                                </div>
+                                {relatorio.cotas.length === 0 ? (
+                                    <p className="text-sm text-gray-500 py-4">Nenhuma unidade recebeu cota neste rateio.</p>
+                                ) : (
+                                    <TabelaCotas
+                                        storageKey="condominio:rateio:relatorio:cotas"
+                                        cotas={(dadosRelatorio?.cotas ?? []).map(c => ({
+                                            chave: c.id,
+                                            unidade: c.unitLabel,
+                                            pagador: c.clientNome,
+                                            valor: c.valor,
+                                        }))}
+                                    />
+                                )}
+                            </div>
+
+                            {relatorio.observacoes && (
+                                <div className="space-y-3">
+                                    <div className="border-b border-gray-100 pb-3">
+                                        <h3 className="text-sm font-semibold text-gray-900">Observações</h3>
+                                    </div>
+                                    <p className="text-sm font-normal text-gray-700 whitespace-pre-line">{relatorio.observacoes}</p>
+                                </div>
+                            )}
+
+                            <p className="text-xs text-gray-500">Gerado em {relatorio.geradoEm}.</p>
+                        </div>
+                    )}
+                </SheetPanel>
+                <SheetFooter>
+                    <button onClick={() => setSheetRelatorio(null)} className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all">Fechar</button>
+                    <button
+                        onClick={baixarPdf}
+                        disabled={!relatorio || baixandoPdf}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                    >
+                        <FileText className="w-[15px] h-[15px]" />
+                        {baixandoPdf ? 'Gerando...' : 'Baixar PDF'}
+                    </button>
                 </SheetFooter>
             </Sheet>
 

@@ -3,8 +3,8 @@ import {
     Upload, Search, CheckCircle2, AlertCircle,
     ArrowRightLeft, FileText, Download, Trash2, Check,
     Plus, Calendar, DollarSign, Briefcase, RefreshCw,
-    Zap, ShieldCheck, Settings2, Info, ArrowUpDown, X, Tag,
-    LayoutGrid, List, Users, UserPlus, ExternalLink, Rows3, Pencil, MoveHorizontal, EyeOff, Brain
+    Zap, ShieldCheck, Settings2, Info, ArrowUpDown, X,
+    LayoutGrid, List, UserPlus, ExternalLink, Rows3, Pencil, MoveHorizontal, EyeOff, Brain
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import type { ClientOption } from './ClientSelect';
@@ -43,7 +43,6 @@ import AnomaliesPanel from './AnomaliesPanel';
 import SmartReconciliationCenter from './SmartReconciliationCenter';
 import ProlaboreReconciliationPanel from './ProlaboreReconciliationPanel';
 import BankTxEdicaoEmLoteModal from './BankTxEdicaoEmLoteModal';
-import CostCenterSelect from './CostCenterSelect';
 import BankStatementImportDrawer, { type CompletudeDaConta } from './BankStatementImportDrawer';
 import { SYSTEM_PROJECT_NAMES_SQL } from '../utils/systemProjects';
 import { originIdFromRef } from '../lib/receivableRef';
@@ -137,6 +136,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     };
     const [selectedInternalTxIds, setSelectedInternalTxIds] = useState<Set<string>>(new Set());
     const [isLoteEditOpen, setIsLoteEditOpen] = useState(false);
+    // Pendentes usa o MESMO padrão do Extrato (barra curta + modal). O alvo diz qual
+    // dos dois lados está sendo editado, porque a aba tem duas seleções independentes.
+    const [loteAlvoPendentes, setLoteAlvoPendentes] = useState<null | 'bank' | 'internal'>(null);
     const [showImportDrawer, setShowImportDrawer] = useState(false);
     const [completudeDaConta, setCompletudeDaConta] = useState<CompletudeDaConta | null>(null);
     const [selectedRuleIds, setSelectedRuleIds] = useState<Set<string>>(new Set());
@@ -1805,245 +1807,51 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         }
     };
 
-    const handleBulkUpdateCategory = async (type: 'bank' | 'internal', newCategory: string) => {
-        const ids = Array.from(type === 'bank' ? selectedBankTxIds : selectedInternalTxIds);
-        if (ids.length === 0) return;
-
-        setIsLoading(true);
-        try {
-            const table = type === 'bank' ? 'bank_transactions' : 'internal_transactions';
-            const updatePayload = type === 'bank' 
-                ? { category: newCategory, status: (newCategory ? 'RULE_APPLIED' : 'NORMALIZED') as BankTransactionStatus }
-                : { category: newCategory };
-
-            const { error } = await supabase
-                .from(table)
-                .update(updatePayload)
-                .in('id', ids);
-
-            if (error) throw error;
-
-            // Atualizar estado local
-            if (type === 'bank') {
-                setBankTransactions(prev => prev.map(tx => 
-                    ids.includes(tx.id) ? { ...tx, ...updatePayload } : tx
-                ));
-                setSelectedBankTxIds(new Set());
-            } else {
-                setInternalTransactions(prev => prev.map(tx => 
-                    ids.includes(tx.id) ? { ...tx, category: newCategory } : tx
-                ));
-                setSelectedInternalTxIds(new Set());
-            }
-
-            setActionFeedback({ message: `${ids.length} itens atualizados com sucesso!`, type: 'success' });
-            setTimeout(() => setActionFeedback(null), 3000);
-
-            // Sincronizar com matches
-            setMatches(prev => prev.map(m => {
-                const bId = m.bank_transaction?.id;
-                const iId = m.internal_transaction?.id;
-                
-                let updatedM = { ...m };
-                let changed = false;
-
-                if (type === 'bank' && bId && ids.includes(bId)) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    updatedM.bank_transaction = { ...m.bank_transaction, ...updatePayload } as any;
-                    changed = true;
-                }
-                if (type === 'internal' && iId && ids.includes(iId)) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    updatedM.internal_transaction = { ...m.internal_transaction, category: newCategory } as any;
-                    changed = true;
-                }
-
-                return changed ? updatedM : m;
-            }));
-
-        } catch (err: unknown) {
-            const error = err instanceof Error ? err : new Error(String(err));
-            console.error(`Error bulk updating ${type} category:`, error);
-            alert(`Erro ao atualizar categorias em lote: ${error.message}`);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleBulkUpdateEntityName = async (type: 'bank' | 'internal', newEntityName: string) => {
-        const ids = Array.from(type === 'bank' ? selectedBankTxIds : selectedInternalTxIds);
-        if (ids.length === 0) return;
-
-        setIsLoading(true);
-        try {
-            const table = type === 'bank' ? 'bank_transactions' : 'internal_transactions';
-            // bank_transactions usa counterparty_name; internal_transactions usa entity_name
-            const updatePayload = type === 'bank'
-                ? { counterparty_name: newEntityName }
-                : { entity_name: newEntityName };
-
-            const { error } = await supabase
-                .from(table)
-                .update(updatePayload)
-                .in('id', ids);
-
-            if (error) throw error;
-
-            if (type === 'bank') {
-                setBankTransactions(prev => prev.map(tx =>
-                    ids.includes(tx.id) ? { ...tx, counterparty_name: newEntityName } : tx
-                ));
-                setSelectedBankTxIds(new Set());
-            } else {
-                setInternalTransactions(prev => prev.map(tx =>
-                    ids.includes(tx.id) ? { ...tx, entity_name: newEntityName } : tx
-                ));
-                setSelectedInternalTxIds(new Set());
-            }
-
-            setActionFeedback({ message: `${ids.length} itens atualizados com sucesso!`, type: 'success' });
-            setTimeout(() => setActionFeedback(null), 3000);
-
-            setMatches(prev => prev.map(m => {
-                const bId = m.bank_transaction?.id;
-                const iId = m.internal_transaction?.id;
-                let updatedM = { ...m };
-                let changed = false;
-                if (type === 'bank' && bId && ids.includes(bId)) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    updatedM.bank_transaction = { ...m.bank_transaction, counterparty_name: newEntityName } as any;
-                    changed = true;
-                }
-                if (type === 'internal' && iId && ids.includes(iId)) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    updatedM.internal_transaction = { ...m.internal_transaction, entity_name: newEntityName } as any;
-                    changed = true;
-                }
-                return changed ? updatedM : m;
-            }));
-
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? JSON.stringify(err);
-            console.error(`Error bulk updating ${type} entity_name:`, err);
-            alert(`Erro ao atualizar fornecedor/cliente em lote: ${msg}`);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleBulkUpdateProject = async (type: 'bank' | 'internal', newProjectId: string) => {
-        const ids = Array.from(type === 'bank' ? selectedBankTxIds : selectedInternalTxIds);
-        if (ids.length === 0) return;
-
-        setIsLoading(true);
-        try {
-            const table = type === 'bank' ? 'bank_transactions' : 'internal_transactions';
-            const { error } = await supabase
-                .from(table)
-                .update({ project_id: newProjectId || null })
-                .in('id', ids);
-
-            if (error) throw error;
-
-            if (type === 'bank') {
-                setBankTransactions(prev => prev.map(tx =>
-                    ids.includes(tx.id) ? { ...tx, project_id: newProjectId || undefined } : tx
-                ));
-                setSelectedBankTxIds(new Set());
-            } else {
-                setInternalTransactions(prev => prev.map(tx =>
-                    ids.includes(tx.id) ? { ...tx, project_id: newProjectId || undefined } : tx
-                ));
-                setSelectedInternalTxIds(new Set());
-            }
-
-            setActionFeedback({ message: `${ids.length} itens atualizados com sucesso!`, type: 'success' });
-            setTimeout(() => setActionFeedback(null), 3000);
-
-            setMatches(prev => prev.map(m => {
-                const bId = m.bank_transaction?.id;
-                const iId = m.internal_transaction?.id;
-                let updatedM = { ...m };
-                let changed = false;
-                if (type === 'bank' && bId && ids.includes(bId)) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    updatedM.bank_transaction = { ...m.bank_transaction, project_id: newProjectId || undefined } as any;
-                    changed = true;
-                }
-                if (type === 'internal' && iId && ids.includes(iId)) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    updatedM.internal_transaction = { ...m.internal_transaction, project_id: newProjectId || undefined } as any;
-                    changed = true;
-                }
-                return changed ? updatedM : m;
-            }));
-
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? JSON.stringify(err);
-            console.error(`Error bulk updating ${type} project_id:`, err);
-            alert(`Erro ao atualizar obra em lote: ${msg}`);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleBulkUpdateCostCenter = async (type: 'bank' | 'internal', newCostCenterId: string) => {
-        const ids = Array.from(type === 'bank' ? selectedBankTxIds : selectedInternalTxIds);
-        if (ids.length === 0) return;
-
-        setIsLoading(true);
-        try {
-            const table = type === 'bank' ? 'bank_transactions' : 'internal_transactions';
-            const { error } = await supabase
-                .from(table)
-                .update({ cost_center_id: newCostCenterId || null })
-                .in('id', ids);
-
-            if (error) throw error;
-
-            if (type === 'bank') {
-                setBankTransactions(prev => prev.map(tx =>
-                    ids.includes(tx.id) ? { ...tx, cost_center_id: newCostCenterId || undefined } : tx
-                ));
-                setSelectedBankTxIds(new Set());
-            } else {
-                setInternalTransactions(prev => prev.map(tx =>
-                    ids.includes(tx.id) ? { ...tx, cost_center_id: newCostCenterId || undefined } : tx
-                ));
-                setSelectedInternalTxIds(new Set());
-            }
-
-            setActionFeedback({ message: `${ids.length} itens atualizados com sucesso!`, type: 'success' });
-            setTimeout(() => setActionFeedback(null), 3000);
-
-            setMatches(prev => prev.map(m => {
-                const bId = m.bank_transaction?.id;
-                const iId = m.internal_transaction?.id;
-                let updatedM = { ...m };
-                let changed = false;
-                if (type === 'bank' && bId && ids.includes(bId)) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    updatedM.bank_transaction = { ...m.bank_transaction, cost_center_id: newCostCenterId || undefined } as any;
-                    changed = true;
-                }
-                if (type === 'internal' && iId && ids.includes(iId)) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    updatedM.internal_transaction = { ...m.internal_transaction, cost_center_id: newCostCenterId || undefined } as any;
-                    changed = true;
-                }
-                return changed ? updatedM : m;
-            }));
-
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? JSON.stringify(err);
-            console.error(`Error bulk updating ${type} cost_center_id:`, err);
-            alert(`Erro ao atualizar centro de custo em lote: ${msg}`);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
     // Salva vários campos do extrato bancário de uma vez (usado pelo modal "Editar em Lote")
+    /**
+     * Mesma edição em lote do extrato, do lado dos lançamentos internos. As colunas
+     * diferem: `internal_transactions` guarda `entity_name` onde o extrato guarda
+     * `counterparty_name` (ver handleBulkUpdateEntityName). As demais
+     * (category, project_id, cost_center_id, plano_de_contas_id) têm o mesmo nome —
+     * conferido no banco antes de escrever.
+     */
+    const handleBulkUpdateInternalFields = async (
+        fields: Partial<Pick<BankTransaction, 'category' | 'counterparty_name' | 'project_id' | 'cost_center_id' | 'plano_de_contas_id'>>
+    ) => {
+        const ids = Array.from(selectedInternalTxIds);
+        if (ids.length === 0) return;
+
+        const updatePayload: Record<string, unknown> = {};
+        if (fields.category !== undefined) updatePayload.category = fields.category;
+        if (fields.counterparty_name !== undefined) updatePayload.entity_name = fields.counterparty_name;
+        if (fields.project_id !== undefined) updatePayload.project_id = fields.project_id || null;
+        if (fields.cost_center_id !== undefined) updatePayload.cost_center_id = fields.cost_center_id || null;
+        if (fields.plano_de_contas_id !== undefined) updatePayload.plano_de_contas_id = fields.plano_de_contas_id || null;
+        if (Object.keys(updatePayload).length === 0) return;
+
+        const { error } = await supabase
+            .from('internal_transactions')
+            .update(updatePayload)
+            .in('id', ids);
+
+        if (error) throw error;
+
+        setInternalTransactions(prev => prev.map(tx =>
+            ids.includes(tx.id) ? ({ ...tx, ...updatePayload } as typeof tx) : tx
+        ));
+        setMatches(prev => prev.map(m => {
+            const iId = m.internal_transaction?.id;
+            if (iId && ids.includes(iId)) {
+                return { ...m, internal_transaction: { ...m.internal_transaction, ...updatePayload } as never };
+            }
+            return m;
+        }));
+
+        setSelectedInternalTxIds(new Set());
+        setActionFeedback({ message: `${ids.length} lançamento${ids.length !== 1 ? 's' : ''} atualizado${ids.length !== 1 ? 's' : ''} com sucesso!`, type: 'success' });
+        setTimeout(() => setActionFeedback(null), 3000);
+    };
+
     const handleBulkUpdateBankFields = async (
         fields: Partial<Pick<BankTransaction, 'category' | 'counterparty_name' | 'project_id' | 'cost_center_id' | 'plano_de_contas_id'>>
     ) => {
@@ -3312,8 +3120,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 const totalHidden = hiddenBankCount + hiddenInternalCount;
 
                 return (
-                    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-gray-900 text-white px-6 py-4 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                        <div className="flex -space-x-2">
+                    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw_-_2rem)] flex items-center gap-3 bg-gray-900 text-white px-5 py-3 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                        <div className="flex -space-x-2 shrink-0">
                             {bankCount > 0 && (
                                 <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center ring-2 ring-gray-900 border border-white/20" title={`${bankCount} extratos`}>
                                     <FileText className="w-4 h-4 text-white" />
@@ -3325,13 +3133,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 </div>
                             )}
                         </div>
-                        
-                        <div className="flex flex-col">
-                            <span className="text-xs font-black tracking-tight leading-none">
+
+                        <div className="flex flex-col min-w-0">
+                            <span className="text-sm font-bold whitespace-nowrap">
                                 {totalCount} item{totalCount > 1 ? 'ns' : ''} selecionado{totalCount > 1 ? 's' : ''}
                             </span>
                             {totalHidden > 0 && (
-                                <span className="text-xs font-bold text-gray-400 mt-0.5 flex items-center gap-1">
+                                <span className="text-xs font-bold text-gray-400 mt-0.5 flex items-center gap-1 whitespace-nowrap">
                                     <Info className="w-3 h-3 text-amber-500" />
                                     {totalHidden} oculto{totalHidden > 1 ? 's' : ''} por filtros
                                 </span>
@@ -3340,203 +3148,33 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
                         <div className="w-px h-8 bg-white/20 mx-1" />
 
-                        <div className="flex items-center gap-2">
-                            <div className="relative group">
-                                <Tag className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none group-focus-within:text-blue-400 transition-colors" />
-                                <select
-                                    id="bulk-cat-select"
-                                    defaultValue=""
-                                    className="bg-white/10 border border-white/20 text-white text-xs font-black pl-9 pr-8 py-2.5 rounded-2xl uppercase tracking-wider cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all appearance-none min-w-[180px] hover:bg-white/20"
-                                >
-                                    <option value="" disabled className="text-gray-900 bg-white">Categorizar em lote...</option>
-                                    {uniqueCategories.map(cat => (
-                                        <option key={cat} value={cat} className="text-gray-900 bg-white font-bold">{cat}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div className="flex items-center bg-white/5 p-1 rounded-2xl border border-white/10">
-                                {bankCount > 0 && (
-                                    <button
-                                        onClick={() => {
-                                            const sel = document.getElementById('bulk-cat-select') as HTMLSelectElement;
-                                            if (!sel?.value) { alert('Selecione uma categoria.'); return; }
-                                            handleBulkUpdateCategory('bank', sel.value);
-                                        }}
-                                        className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-blue-600 hover:bg-blue-500 transition-all shadow-lg active:scale-95 flex items-center gap-2"
-                                    >
-                                        Extratos ({bankCount})
-                                    </button>
-                                )}
-                                {bankCount > 0 && internalCount > 0 && <div className="w-px h-4 bg-white/10 mx-1" />}
-                                {internalCount > 0 && (
-                                    <button
-                                        onClick={() => {
-                                            const sel = document.getElementById('bulk-cat-select') as HTMLSelectElement;
-                                            if (!sel?.value) { alert('Selecione uma categoria.'); return; }
-                                            handleBulkUpdateCategory('internal', sel.value);
-                                        }}
-                                        className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-500 transition-all shadow-lg active:scale-95 flex items-center gap-2"
-                                    >
-                                        Internos ({internalCount})
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="w-px h-8 bg-white/20 mx-1" />
-
-                        <div className="flex items-center gap-2">
-                            <div className="relative group">
-                                <Users className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none group-focus-within:text-purple-400 transition-colors" />
-                                <select
-                                    id="bulk-entity-select"
-                                    defaultValue=""
-                                    className="bg-white/10 border border-white/20 text-white text-xs font-black pl-9 pr-8 py-2.5 rounded-2xl uppercase tracking-wider cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all appearance-none min-w-[200px] hover:bg-white/20"
-                                >
-                                    <option value="" disabled className="text-gray-900 bg-white">Credor/cliente em lote...</option>
-                                    {uniqueClients.length > 0 && (
-                                        <optgroup label="Clientes" className="text-gray-900 bg-white">
-                                            {uniqueClients.map(c => (
-                                                <option key={`c-${c}`} value={c} className="text-gray-900 bg-white font-bold">{c}</option>
-                                            ))}
-                                        </optgroup>
-                                    )}
-                                    {uniqueCredores.length > 0 && (
-                                        <optgroup label="Credores" className="text-gray-900 bg-white">
-                                            {uniqueCredores.map(s => (
-                                                <option key={`cr-${s}`} value={s} className="text-gray-900 bg-white font-bold">{s}</option>
-                                            ))}
-                                        </optgroup>
-                                    )}
-                                </select>
-                            </div>
-
-                            <div className="flex items-center bg-white/5 p-1 rounded-2xl border border-white/10">
-                                {bankCount > 0 && (
-                                    <button
-                                        onClick={() => {
-                                            const sel = document.getElementById('bulk-entity-select') as HTMLSelectElement;
-                                            if (!sel?.value) { alert('Selecione um fornecedor ou cliente.'); return; }
-                                            handleBulkUpdateEntityName('bank', sel.value);
-                                        }}
-                                        className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-blue-600 hover:bg-blue-500 transition-all shadow-lg active:scale-95 flex items-center gap-2"
-                                    >
-                                        Extratos ({bankCount})
-                                    </button>
-                                )}
-                                {bankCount > 0 && internalCount > 0 && <div className="w-px h-4 bg-white/10 mx-1" />}
-                                {internalCount > 0 && (
-                                    <button
-                                        onClick={() => {
-                                            const sel = document.getElementById('bulk-entity-select') as HTMLSelectElement;
-                                            if (!sel?.value) { alert('Selecione um fornecedor ou cliente.'); return; }
-                                            handleBulkUpdateEntityName('internal', sel.value);
-                                        }}
-                                        className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-500 transition-all shadow-lg active:scale-95 flex items-center gap-2"
-                                    >
-                                        Internos ({internalCount})
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="w-px h-8 bg-white/20 mx-1" />
-
-                        <div className="flex items-center gap-2">
-                            <div className="relative group">
-                                <Briefcase className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none group-focus-within:text-sky-400 transition-colors" />
-                                <select
-                                    id="bulk-project-select"
-                                    defaultValue=""
-                                    className="bg-white/10 border border-white/20 text-white text-xs font-black pl-9 pr-8 py-2.5 rounded-2xl uppercase tracking-wider cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all appearance-none min-w-[180px] hover:bg-white/20"
-                                >
-                                    <option value="" disabled className="text-gray-900 bg-white">Obra em lote...</option>
-                                    {masterProjects.map(p => (
-                                        <option key={p.id} value={p.id} className="text-gray-900 bg-white font-bold">{p.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div className="flex items-center bg-white/5 p-1 rounded-2xl border border-white/10">
-                                {bankCount > 0 && (
-                                    <button
-                                        onClick={() => {
-                                            const sel = document.getElementById('bulk-project-select') as HTMLSelectElement;
-                                            if (!sel?.value) { alert('Selecione uma obra.'); return; }
-                                            handleBulkUpdateProject('bank', sel.value);
-                                        }}
-                                        className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-blue-600 hover:bg-blue-500 transition-all shadow-lg active:scale-95 flex items-center gap-2"
-                                    >
-                                        Extratos ({bankCount})
-                                    </button>
-                                )}
-                                {bankCount > 0 && internalCount > 0 && <div className="w-px h-4 bg-white/10 mx-1" />}
-                                {internalCount > 0 && (
-                                    <button
-                                        onClick={() => {
-                                            const sel = document.getElementById('bulk-project-select') as HTMLSelectElement;
-                                            if (!sel?.value) { alert('Selecione uma obra.'); return; }
-                                            handleBulkUpdateProject('internal', sel.value);
-                                        }}
-                                        className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-500 transition-all shadow-lg active:scale-95 flex items-center gap-2"
-                                    >
-                                        Internos ({internalCount})
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="w-px h-8 bg-white/20 mx-1" />
-
-                        <div className="flex items-center gap-2">
-                            {/* Centro de Custo em lote: drawer padrão do app (§7.1.1), com o
-                                gatilho na paleta escura da barra. */}
-                            <div className="min-w-[220px]">
-                                <CostCenterSelect
-                                    costCenters={masterCostCenters}
-                                    value={bulkCostCenterId}
-                                    onChange={setBulkCostCenterId}
-                                    placeholder="Centro de Custo em lote..."
-                                    hoverCls="hover:bg-blue-50"
-                                    compact
-                                    triggerClassName="h-9 bg-white/10 border border-white/20 text-white text-sm font-medium pl-3 pr-2 rounded-[6px] hover:bg-white/15 focus:bg-white/20"
-                                />
-                            </div>
-
-                            <div className="flex items-center bg-white/5 p-1 rounded-2xl border border-white/10">
-                                {bankCount > 0 && (
-                                    <button
-                                        onClick={() => {
-                                            if (!bulkCostCenterId) { alert('Selecione um centro de custo.'); return; }
-                                            handleBulkUpdateCostCenter('bank', bulkCostCenterId);
-                                        }}
-                                        className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-blue-600 hover:bg-blue-500 transition-all shadow-lg active:scale-95 flex items-center gap-2"
-                                    >
-                                        Extratos ({bankCount})
-                                    </button>
-                                )}
-                                {bankCount > 0 && internalCount > 0 && <div className="w-px h-4 bg-white/10 mx-1" />}
-                                {internalCount > 0 && (
-                                    <button
-                                        onClick={() => {
-                                            if (!bulkCostCenterId) { alert('Selecione um centro de custo.'); return; }
-                                            handleBulkUpdateCostCenter('internal', bulkCostCenterId);
-                                        }}
-                                        className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-500 transition-all shadow-lg active:scale-95 flex items-center gap-2"
-                                    >
-                                        Internos ({internalCount})
-                                    </button>
-                                )}
-                            </div>
-                        </div>
+                        {bankCount > 0 && (
+                            <button
+                                onClick={() => setLoteAlvoPendentes('bank')}
+                                className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 transition-colors whitespace-nowrap"
+                                title="Categoria, credor/cliente, obra, centro de custo e plano de contas dos extratos selecionados"
+                            >
+                                <Pencil className="w-3.5 h-3.5" />
+                                Editar extratos ({bankCount})
+                            </button>
+                        )}
+                        {internalCount > 0 && (
+                            <button
+                                onClick={() => setLoteAlvoPendentes('internal')}
+                                className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 transition-colors whitespace-nowrap"
+                                title="Categoria, credor/cliente, obra, centro de custo e plano de contas dos lançamentos selecionados"
+                            >
+                                <Pencil className="w-3.5 h-3.5" />
+                                Editar internos ({internalCount})
+                            </button>
+                        )}
 
                         {bankCount > 0 && (
                             <>
                                 <div className="w-px h-8 bg-white/20 mx-1" />
                                 <button
                                     onClick={() => handleGerarLancamentos(Array.from(selectedBankTxIds))}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-500 transition-all shadow-lg active:scale-95 text-white"
+                                    className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 transition-colors whitespace-nowrap"
                                     title="Gerar lançamento interno já conciliado para cada movimento classificado"
                                 >
                                     <Plus className="w-3.5 h-3.5" />
@@ -3544,7 +3182,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 </button>
                                 <button
                                     onClick={() => handleDeleteBankTransactions(Array.from(selectedBankTxIds))}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-black uppercase tracking-widest bg-blue-500 hover:bg-blue-400 transition-all shadow-lg active:scale-95 text-white"
+                                    className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 transition-colors whitespace-nowrap"
                                     title="Marcar os lançamentos selecionados como ignorados (não são movimento real)"
                                 >
                                     <EyeOff className="w-3.5 h-3.5" />
@@ -3555,7 +3193,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
                         <button
                             onClick={() => { setSelectedBankTxIds(new Set()); setSelectedInternalTxIds(new Set()); }}
-                            className="w-10 h-10 rounded-2xl text-white/40 hover:text-white hover:bg-white/10 transition-all flex items-center justify-center group"
+                            className="w-9 h-9 rounded-xl text-white/40 hover:text-white hover:bg-white/10 transition-all flex items-center justify-center group shrink-0"
                             title="Limpar seleção (Esc)"
                         >
                             <X className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
@@ -3563,6 +3201,37 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     </div>
                 );
             })()}
+
+            {/* Edição em lote da aba Pendentes — o MESMO modal do Extrato, um por lado */}
+            {loteAlvoPendentes === 'bank' && (
+                <BankTxEdicaoEmLoteModal
+                    transactions={sortedBankTransactions.filter(tx => selectedBankTxIds.has(tx.id))}
+                    categories={uniqueCategories}
+                    clienteRegistros={clienteRegistros}
+                    credorRegistros={credorRegistros}
+                    projects={masterProjects}
+                    costCenters={masterCostCenters}
+                    planoContas={masterPlanoContas}
+                    onIgnore={() => handleDeleteBankTransactions(Array.from(selectedBankTxIds))}
+                    onClose={() => setLoteAlvoPendentes(null)}
+                    onSave={handleBulkUpdateBankFields}
+                />
+            )}
+            {loteAlvoPendentes === 'internal' && (
+                <BankTxEdicaoEmLoteModal
+                    transactions={sortedInternalTransactions
+                        .filter(tx => selectedInternalTxIds.has(tx.id))
+                        .map(tx => ({ ...tx, counterparty_name: tx.entity_name ?? tx.party_name ?? tx.description ?? '' })) as unknown as BankTransaction[]}
+                    categories={uniqueCategories}
+                    clienteRegistros={clienteRegistros}
+                    credorRegistros={credorRegistros}
+                    projects={masterProjects}
+                    costCenters={masterCostCenters}
+                    planoContas={masterPlanoContas}
+                    onClose={() => setLoteAlvoPendentes(null)}
+                    onSave={handleBulkUpdateInternalFields}
+                />
+            )}
 
             {/* Main Content Area */}
             {activeView === 'dashboard' ? (

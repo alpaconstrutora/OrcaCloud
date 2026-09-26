@@ -6,6 +6,7 @@ import {
 } from '../services/blueprintTerraplenagemService';
 import {
   PARAMETROS_PADRAO,
+  type InclinacaoDoPlato,
   type LinhaDeDrenagem,
   type ParametrosDeTerraplenagem,
   type TipoDeDrenagem,
@@ -35,6 +36,9 @@ export interface Terraplenagem {
   /** `null` = usar a cota de equilíbrio. */
   cotaPlatoM: number | null;
   setCotaPlatoM: (v: number | null) => void;
+  /** C1: caimento do platô; `null` = horizontal. A cota informada é a do centro do platô. */
+  inclinacao: InclinacaoDoPlato | null;
+  setInclinacao: (v: InclinacaoDoPlato | null) => void;
   parametros: ParametrosDeTerraplenagem;
   setParametros: (patch: Partial<ParametrosDeTerraplenagem>) => void;
   /** As linhas desenhadas do perfil (fase 5: várias por estudo), cada uma com ≥ 2 pontos. */
@@ -170,9 +174,22 @@ export function novoIdDeDrenagem(): string {
   return c && typeof c.randomUUID === 'function' ? c.randomUUID() : `d-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** C1: a inclinação gravada; linha sem as colunas (ou tudo zero) = platô horizontal. */
+function inclinacaoDaLinha(row: {
+  inclinacao_long_pct?: number | null;
+  inclinacao_transv_pct?: number | null;
+  inclinacao_azimute_deg?: number | null;
+}): InclinacaoDoPlato | null {
+  const L = Number(row.inclinacao_long_pct ?? 0);
+  const T = Number(row.inclinacao_transv_pct ?? 0);
+  if (!Number.isFinite(L) || !Number.isFinite(T) || (L === 0 && T === 0)) return null;
+  return { declividadeLongPct: L, declividadeTransvPct: T, azimuteDeg: Number(row.inclinacao_azimute_deg ?? 0) || 0 };
+}
+
 export function useBlueprintTerraplenagem(studyId: string, organizationId: string): Terraplenagem {
   const [base, setBaseLocal] = useState<BaseDoPlato>('ENVELOPE');
   const [cotaPlatoM, setCotaLocal] = useState<number | null>(null);
+  const [inclinacao, setInclinacaoLocal] = useState<InclinacaoDoPlato | null>(null);
   const [parametros, setParametrosLocal] = useState<ParametrosDeTerraplenagem>(PARAMETROS_PADRAO);
   const [linhasDoPerfil, setLinhasLocal] = useState<Point[][]>([]);
   const [drenagem, setDrenagemLocal] = useState<LinhaDeDrenagem[]>([]);
@@ -191,6 +208,7 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
         if (row) {
           setBaseLocal(row.base);
           setCotaLocal(row.cota_plato_m);
+          setInclinacaoLocal(inclinacaoDaLinha(row));
           setParametrosLocal(parametrosDaLinha(row));
           setLinhasLocal(linhasDoPerfilDaColuna(row.perfil_polilinha));
           setDrenagemLocal(drenagemDaColuna(row.drenagem));
@@ -231,6 +249,10 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
   hidraulicaRef.current = hidraulica;
   const estruturaRef = useRef(estrutura);
   estruturaRef.current = estrutura;
+  // A inclinação também vai por ref (C1): é parte do platô, mas entrar como
+  // parâmetro de `premissa` faria todos os setters mudarem de assinatura.
+  const inclinacaoRef = useRef(inclinacao);
+  inclinacaoRef.current = inclinacao;
 
   const premissa = useCallback(
     (
@@ -244,6 +266,9 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
       estrutura: estruturaRef.current,
       base: b,
       cota_plato_m: cota,
+      inclinacao_long_pct: inclinacaoRef.current?.declividadeLongPct ?? null,
+      inclinacao_transv_pct: inclinacaoRef.current?.declividadeTransvPct ?? null,
+      inclinacao_azimute_deg: inclinacaoRef.current?.azimuteDeg ?? null,
       talude_corte_h: p.taludeCorteH,
       talude_aterro_h: p.taludeAterroH,
       empolamento_pct: p.empolamentoPct,
@@ -273,6 +298,15 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
       persistir(premissa(base, v, parametros, linhasDoPerfil, drenagem));
     },
     [persistir, premissa, base, parametros, linhasDoPerfil, drenagem],
+  );
+
+  const setInclinacao = useCallback(
+    (v: InclinacaoDoPlato | null) => {
+      inclinacaoRef.current = v;
+      setInclinacaoLocal(v);
+      persistir(premissa(base, cotaPlatoM, parametros, linhasDoPerfil, drenagem));
+    },
+    [persistir, premissa, base, cotaPlatoM, parametros, linhasDoPerfil, drenagem],
   );
 
   const setParametros = useCallback(
@@ -375,6 +409,8 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
     setBase,
     cotaPlatoM,
     setCotaPlatoM,
+    inclinacao,
+    setInclinacao,
     parametros,
     setParametros,
     linhasDoPerfil,

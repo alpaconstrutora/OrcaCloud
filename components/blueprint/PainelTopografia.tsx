@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Check, Copy, Download, Mountain, Plus, Sparkles, Upload } from 'lucide-react';
 import { sha256, type Point } from '../../utils/blueprintKernel';
 import {
@@ -18,6 +18,9 @@ import { ALGORITMO_TOPOGRAFIA, type ModoDeNiveis, type QualidadeDaGrade } from '
 import {
   FAIXAS_DE_DECLIVIDADE,
   TIPOS_DE_DRENAGEM,
+  areaDeSuperficie,
+  volumeEntreSuperficies,
+  type InclinacaoDoPlato,
   type AnaliseDaDrenagem,
   type Declividade,
   type LinhaDeDrenagem,
@@ -77,6 +80,9 @@ export interface TerraplenagemNoPainel {
   /** `null` = usando a cota de equilíbrio. */
   cotaPlatoM: number | null;
   onCotaPlatoM: (v: number | null) => void;
+  /** C1: caimento do platô (`null` = horizontal). */
+  inclinacao?: InclinacaoDoPlato | null;
+  onInclinacao?: (v: InclinacaoDoPlato | null) => void;
   cotaDeEquilibrioM: number | null;
   resultado: ResultadoDaTerraplenagem | null;
   /** Talude, empolamento e contração (fase 3); banqueta, via e talude por aresta (fase 4). */
@@ -552,6 +558,7 @@ export default function PainelTopografia({
       {t.selecionada && perfil && <SecaoPerfil p={perfil} />}
 
       {t.selecionada && terraplenagem && <SecaoTerraplenagem t={terraplenagem} />}
+      {t.selecionada && terraplenagem && <SecaoVolumeEntreVersoes t={t} />}
       {t.selecionada && drenagem && <SecaoDrenagem d={drenagem} />}
       {t.selecionada && executivo && <SecaoProjetoExecutivo e={executivo} />}
     </div>
@@ -1568,6 +1575,55 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
         )}
       </p>
 
+      {/* Platô inclinado (C1): caimento em duas direções; a cota acima é a do centro. */}
+      {t.onInclinacao && (
+        <div className="mt-2" data-testid="topografia-plato-inclinado">
+          <label className="flex items-center gap-2 text-xs text-slate-600">
+            <input
+              type="checkbox"
+              checked={t.inclinacao !== null && t.inclinacao !== undefined}
+              aria-label="Platô inclinado"
+              onChange={(e) => t.onInclinacao?.(e.target.checked ? { declividadeLongPct: 1, declividadeTransvPct: 0, azimuteDeg: 0 } : null)}
+            />
+            <span>Platô inclinado</span>
+          </label>
+          {t.inclinacao && (
+            <>
+              <div className="mt-1 grid grid-cols-3 gap-x-2 gap-y-1">
+                <CampoParametro
+                  rotulo="Longitudinal"
+                  valor={t.inclinacao.declividadeLongPct}
+                  passo="0.1"
+                  min="-20"
+                  sufixo="%"
+                  onMudar={(v) => t.onInclinacao?.({ ...t.inclinacao!, declividadeLongPct: Math.max(-20, Math.min(20, v)) })}
+                />
+                <CampoParametro
+                  rotulo="Transversal"
+                  valor={t.inclinacao.declividadeTransvPct}
+                  passo="0.1"
+                  min="-20"
+                  sufixo="%"
+                  onMudar={(v) => t.onInclinacao?.({ ...t.inclinacao!, declividadeTransvPct: Math.max(-20, Math.min(20, v)) })}
+                />
+                <CampoParametro
+                  rotulo="Azimute"
+                  valor={t.inclinacao.azimuteDeg}
+                  passo="1"
+                  min="0"
+                  sufixo="°"
+                  onMudar={(v) => t.onInclinacao?.({ ...t.inclinacao!, azimuteDeg: ((v % 360) + 360) % 360 })}
+                />
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500">
+                A cota informada é a do centro do platô; o plano sobe no sentido do azimute (0° = norte do desenho) e, na
+                transversal, para a direita dele. Até ±20 %.
+              </p>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Talude e material — os parâmetros de PROJETO (fase 3). */}
       <p className="mt-3 text-xs font-medium text-slate-700">Talude e material</p>
       <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">
@@ -2422,6 +2478,87 @@ function SecaoPerfil({ p }: { p: PerfilNoPainel }) {
             </button>
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Volume entre duas versões da topografia (C1): a medição da terraplenagem
+ * EXECUTADA — levantamento de antes × levantamento de depois, célula a célula.
+ * A conta é pura (`volumeEntreSuperficies`) e só vale entre versões na mesma
+ * malha; malha diferente é dito, não interpolado.
+ */
+function SecaoVolumeEntreVersoes({ t }: { t: Topografia }) {
+  const versoes = t.versoes;
+  const atual = t.selecionada;
+  const [antesId, setAntesId] = useState<string>('');
+  const [depoisId, setDepoisId] = useState<string>('');
+  // Padrão: "antes" = a versão anterior à selecionada; "depois" = a selecionada.
+  const antes = versoes.find((v) => v.id === antesId) ?? versoes.find((v) => atual && v.versao < atual.versao) ?? null;
+  const depois = versoes.find((v) => v.id === depoisId) ?? atual;
+  const conta = useMemo(() => {
+    if (!antes || !depois) return null;
+    try {
+      const anel = depois.anel.length >= 3 ? depois.anel : null;
+      return { ok: true as const, v: volumeEntreSuperficies(antes.grade, depois.grade, anel), a: areaDeSuperficie(depois.grade, anel) };
+    } catch (e) {
+      return { ok: false as const, erro: e instanceof Error ? e.message : String(e) };
+    }
+  }, [antes, depois]);
+  if (versoes.length < 2) return null;
+  const rotulo = (v: (typeof versoes)[number]) => `v${v.versao} · ${new Date(v.created_at).toLocaleDateString('pt-BR')}`;
+  return (
+    <div className="mt-3 border-t border-slate-200 pt-3" data-testid="topografia-volume-entre-versoes">
+      <p className="text-xs font-medium text-slate-700">Volume entre versões (executado)</p>
+      <p className="mt-0.5 text-[11px] text-slate-500">
+        Levantamento de antes × de depois do serviço: o que saiu (corte) e o que entrou (aterro).
+      </p>
+      <div className="mt-1.5 grid grid-cols-2 gap-2">
+        <label className="text-[11px] text-slate-500">
+          <span className="block">Antes</span>
+          <select
+            value={antes?.id ?? ''}
+            aria-label="Versão de antes"
+            onChange={(e) => setAntesId(e.target.value)}
+            className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800"
+          >
+            {versoes.map((v) => (
+              <option key={v.id} value={v.id}>
+                {rotulo(v)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-[11px] text-slate-500">
+          <span className="block">Depois</span>
+          <select
+            value={depois?.id ?? ''}
+            aria-label="Versão de depois"
+            onChange={(e) => setDepoisId(e.target.value)}
+            className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800"
+          >
+            {versoes.map((v) => (
+              <option key={v.id} value={v.id}>
+                {rotulo(v)}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {conta && !conta.ok && <p className="mt-1.5 text-[11px] text-amber-700">{conta.erro}</p>}
+      {conta && conta.ok && (
+        <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
+          <Medida rotulo="Corte executado" valor={`${formatar(conta.v.corteM3, 1)} m³`} />
+          <Medida rotulo="Aterro executado" valor={`${formatar(conta.v.aterroM3, 1)} m³`} />
+          <Medida rotulo={conta.v.saldoM3 >= 0 ? 'Saldo (entrou)' : 'Saldo (saiu)'} valor={`${formatar(Math.abs(conta.v.saldoM3), 1)} m³`} />
+          <Medida rotulo="Área comparada" valor={`${formatar(conta.v.areaM2)} m²`} />
+          <Medida rotulo="Área real (depois)" valor={`${formatar(conta.a.areaM2)} m²`} />
+          <Medida rotulo="Área projetada" valor={`${formatar(conta.a.areaProjetadaM2)} m²`} />
+          {conta.v.celulasSemCota > 0 && (
+            <Medida rotulo="Células sem cota" valor={`${conta.v.celulasSemCota} fora da conta`} />
+          )}
+        </dl>
       )}
     </div>
   );

@@ -60,6 +60,13 @@ export interface BlueprintTerraplenagemRow {
   base: 'ENVELOPE' | 'LOTE';
   /** Cota do platô em metro; `null` = usar a cota de equilíbrio. */
   cota_plato_m: number | null;
+  /**
+   * C1 (migration `aplicar_20270926000010`): caimento do platô — longitudinal
+   * ao longo do azimute de desenho, transversal a 90°. `null`/0 = horizontal.
+   */
+  inclinacao_long_pct: number | null;
+  inclinacao_transv_pct: number | null;
+  inclinacao_azimute_deg: number | null;
   /** Parâmetros de projeto (fase 3, migration `aplicar_20270921000007`). */
   talude_corte_h: number;
   talude_aterro_h: number;

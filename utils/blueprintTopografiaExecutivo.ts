@@ -36,7 +36,7 @@
 import { sha256, stableStringify } from './blueprintKernel';
 import type { DimensionamentoDoMuro, DimensionamentoHidraulico, ParametrosEstruturais, ParametrosHidraulicos } from './blueprintTopografiaDimensionamento';
 import { estabilidadeGlobal } from './blueprintTopografiaDimensionamento';
-import type { ParametrosDeTerraplenagem } from './blueprintTopografiaAnalises';
+import type { InclinacaoDoPlato, ParametrosDeTerraplenagem } from './blueprintTopografiaAnalises';
 
 // ── Tipos ─────────────────────────────────────────────────────────────────
 
@@ -343,8 +343,11 @@ export function hashDaBaseExecutiva(base: {
   cotaPlatoM: number | null;
   basePlato: string;
   sondagem: Sondagem;
+  /** C1: só entra no hash quando existe — as emissões anteriores (platô horizontal) continuam valendo. */
+  inclinacao?: InclinacaoDoPlato | null;
 }): string {
-  return sha256(stableStringify(base));
+  const { inclinacao, ...resto } = base;
+  return sha256(stableStringify(inclinacao ? { ...resto, inclinacao } : resto));
 }
 
 export interface EmissaoExecutiva {

@@ -74,6 +74,8 @@ export function murosDeArrimo3d(
   terrenoEm: (p: Point) => number | null,
   cotaZeroM: number,
   passoMm = 500,
+  /** C1: a cota do platô em cada ponto da aresta (platô inclinado). Sem ela, `cotaPlatoM` vale em toda parte. */
+  cotaDoPlatoEm?: (p: Point) => number,
 ): MuroDeArrimo3d[] {
   const saida: MuroDeArrimo3d[] = [];
   for (const m of muros) {
@@ -86,13 +88,14 @@ export function murosDeArrimo3d(
     for (let k = 0; k <= n; k++) {
       const t = k / n;
       const p = { x: m.a.x + (m.b.x - m.a.x) * t, y: m.a.y + (m.b.y - m.a.y) * t };
+      const cotaDoPlato = cotaDoPlatoEm ? cotaDoPlatoEm(p) : cotaPlatoM;
       const terreno =
         terrenoEm(p) ??
         terrenoEm({ x: p.x - m.normal.x * recuo, y: p.y - m.normal.y * recuo }) ??
         terrenoEm({ x: p.x + m.normal.x * recuo, y: p.y + m.normal.y * recuo }) ??
-        cotaPlatoM;
-      const topo = Math.max(cotaPlatoM, terreno);
-      const pe = Math.min(cotaPlatoM, terreno) - 0.5;
+        cotaDoPlato;
+      const topo = Math.max(cotaDoPlato, terreno);
+      const pe = Math.min(cotaDoPlato, terreno) - 0.5;
       pos.push(p.x / 1000, topo - cotaZeroM, p.y / 1000, p.x / 1000, pe - cotaZeroM, p.y / 1000);
       if (k > 0) {
         const b = (k - 1) * 2;

@@ -428,7 +428,9 @@ import {
   hipsometriaDaGrade,
   analisarDrenagem,
   canaletasDoPlato,
+  centroDoPlato,
   cotaDeProjeto,
+  cotaDoPlatoEm,
   type AnaliseDaDrenagem,
   perfilAoLongo,
   terraplenagemComTalude,
@@ -4115,13 +4117,21 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chaveDaTopografia, anelDoPlato]);
   const cotaDoPlatoM = terraplenagem.cotaPlatoM ?? cotaDeEquilibrioM;
+  /** C1: o caimento do platô (`null` = horizontal). A cota acima é a do centro do anel. */
+  const inclinacaoDoPlato = terraplenagem.inclinacao;
   const terraplenagemCalc = useMemo(() => {
     const v = topografia.selecionada;
     return v && anelDoPlato && cotaDoPlatoM !== null
-      ? terraplenagemComTalude(v.grade, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros)
+      ? terraplenagemComTalude(v.grade, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros, inclinacaoDoPlato)
       : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chaveDaTopografia, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros]);
+  }, [chaveDaTopografia, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros, inclinacaoDoPlato]);
+  /** A cota do plano em cada ponto — só existe com inclinação; o corte 2D e os muros 3D a recebem. */
+  const cotaDoPlatoEmFn = useMemo(() => {
+    if (!anelDoPlato || cotaDoPlatoM === null || !inclinacaoDoPlato) return undefined;
+    const centro = centroDoPlato(anelDoPlato);
+    return (p: Point) => cotaDoPlatoEm(cotaDoPlatoM, inclinacaoDoPlato, centro, p);
+  }, [anelDoPlato, cotaDoPlatoM, inclinacaoDoPlato]);
   /** O corte recebe o platô (com os taludes) junto do terreno — o projeto contra o chão. */
   const terrenoParaCorteComPlato = useMemo<TerrenoParaCorte | null>(() => {
     if (!terrenoParaCorte) return null;
@@ -4130,21 +4140,22 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       ...terrenoParaCorte,
       plato: {
         cotaM: cotaDoPlatoM,
+        cotaEmM: cotaDoPlatoEmFn,
         anel: anelDoPlato,
         taludeCorteH: terraplenagem.parametros.taludeCorteH,
         taludeAterroH: terraplenagem.parametros.taludeAterroH,
         parametros: terraplenagem.parametros,
       },
     };
-  }, [terrenoParaCorte, mostrarTerraplenagem, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros]);
+  }, [terrenoParaCorte, mostrarTerraplenagem, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros, cotaDoPlatoEmFn]);
   // ── Fase 6: drenagem traçada sobre a superfície de projeto ────────────────
   /** A linha de drenagem em foco no painel e na planta (id), se alguma. */
   const [drenagemAtiva, setDrenagemAtiva] = useState<string | null>(null);
   const cotaDeProjetoFn = useMemo(() => {
     const v = topografia.selecionada;
-    return v ? cotaDeProjeto(v.grade, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros) : null;
+    return v ? cotaDeProjeto(v.grade, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros, inclinacaoDoPlato) : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chaveDaTopografia, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros]);
+  }, [chaveDaTopografia, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros, inclinacaoDoPlato]);
   const analisesDeDrenagem = useMemo(() => {
     const saida: Record<string, AnaliseDaDrenagem> = {};
     if (!cotaDeProjetoFn) return saida;
@@ -4208,8 +4219,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         cotaPlatoM: terraplenagem.cotaPlatoM,
         basePlato: terraplenagem.base,
         sondagem: executivo.sondagem,
+        inclinacao: terraplenagem.inclinacao,
       }),
-    [topografia.selecionada, terraplenagem.parametros, terraplenagem.estrutura, terraplenagem.hidraulica, terraplenagem.cotaPlatoM, terraplenagem.base, executivo.sondagem],
+    [topografia.selecionada, terraplenagem.parametros, terraplenagem.estrutura, terraplenagem.hidraulica, terraplenagem.cotaPlatoM, terraplenagem.base, executivo.sondagem, terraplenagem.inclinacao],
   );
   const resultadoExecutivo = useMemo(
     () =>
@@ -4286,11 +4298,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       : [];
     const muros =
       terraplenagemCalc && cotaDoPlatoM !== null
-        ? murosDeArrimo3d(terraplenagemCalc.muros, cotaDoPlatoM, amostradorDaGrade(v.grade), cotaZeroDoTerrenoM)
+        ? murosDeArrimo3d(terraplenagemCalc.muros, cotaDoPlatoM, amostradorDaGrade(v.grade), cotaZeroDoTerrenoM, 500, cotaDoPlatoEmFn)
         : [];
     return drenagem.length === 0 && muros.length === 0 ? null : { drenagem, muros };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chaveDaTopografia, cotaDeProjetoFn, terraplenagem.drenagem, atendeDrenagem, terraplenagemCalc, cotaDoPlatoM, cotaZeroDoTerrenoM]);
+  }, [chaveDaTopografia, cotaDeProjetoFn, terraplenagem.drenagem, atendeDrenagem, terraplenagemCalc, cotaDoPlatoM, cotaZeroDoTerrenoM, cotaDoPlatoEmFn]);
   const extrasDoRelevo3dChave = extrasDoRelevo3d
     ? `${chaveDaTopografia}:${cotaZeroDoTerrenoM}:${extrasDoRelevo3d.drenagem.map((d) => `${d.id}${d.atende ? 1 : 0}${d.posicoes.length}`).join(',')}:${extrasDoRelevo3d.muros.map((m) => `${m.aresta}${m.posicoes.length}`).join(',')}:${cotaDoPlatoM}`
     : '';
@@ -7596,6 +7608,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             temEnvelope: !!envelope?.valido,
             cotaPlatoM: terraplenagem.cotaPlatoM,
             onCotaPlatoM: terraplenagem.setCotaPlatoM,
+            inclinacao: terraplenagem.inclinacao,
+            onInclinacao: terraplenagem.setInclinacao,
             cotaDeEquilibrioM,
             resultado: terraplenagemCalc,
             parametros: terraplenagem.parametros,
@@ -11838,7 +11852,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               // O mesmo toggle "Curvas de nível" da planta governa o perfil no
               // corte: é uma camada só, vista de dois jeitos.
               terreno={mostrarCurvasDeNivel ? terrenoParaCorteComPlato : null}
-              terrenoChave={`${chaveDaTopografia}:${cotaZeroDoTerrenoM}:${mostrarTerraplenagem ? cotaDoPlatoM : ''}:${terraplenagem.base}:${JSON.stringify(terraplenagem.parametros)}`}
+              terrenoChave={`${chaveDaTopografia}:${cotaZeroDoTerrenoM}:${mostrarTerraplenagem ? cotaDoPlatoM : ''}:${terraplenagem.base}:${JSON.stringify(terraplenagem.parametros)}:${JSON.stringify(inclinacaoDoPlato)}`}
             />
           ) : (
             <BlueprintCanvas

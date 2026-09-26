@@ -253,6 +253,12 @@ export interface TerrenoParaCorte {
     cotaM: number;
     anel: Point[];
     /**
+     * C1 — platô inclinado: a cota do plano em cada ponto. Quando existe, ela
+     * manda sobre `cotaM` dentro do anel E na crista do talude; `cotaM` fica
+     * como a cota do centro, para quem só precisa de um número.
+     */
+    cotaEmM?: (p: Point) => number;
+    /**
      * Taludes 1:h (fase 3). Com eles, a linha do projeto não termina na borda
      * do platô: sobe (corte) ou desce (aterro) a partir dela até encontrar o
      * terreno. Sem eles, a linha é só o platô, como na fase 2.
@@ -559,6 +565,7 @@ function platoNoCorte(
     y: u * base.u.y + fa * base.d.y,
   });
   const vDe = (cotaM: number) => Math.round((cotaM - terreno.cotaZeroM) * 1000);
+  const cotaDoPlatoEm = (p: Point) => (plato.cotaEmM ? plato.cotaEmM(p) : plato.cotaM);
   const v = vDe(plato.cotaM);
   const hc = plato.taludeCorteH;
   const ha = plato.taludeAterroH;
@@ -590,7 +597,7 @@ function platoNoCorte(
         const vt = vDoTerreno(p);
         if (vt !== null && vt !== v) atual.push({ u: Math.round(u), v: vt });
       }
-      atual.push({ u: Math.round(u), v });
+      atual.push({ u: Math.round(u), v: vDe(cotaDoPlatoEm(p)) });
       dentroAntes = true;
       muroAntes = false;
       uAnterior = u;
@@ -630,8 +637,9 @@ function platoNoCorte(
           empolamentoPct: 0,
           contracaoPct: 0,
         };
-        const s = superficieDeProjeto(plato.cotaM, proximidade.dMm, proximidade, parametros);
-        if (s.naVia) vTalude = v;
+        const cotaDaBorda = cotaDoPlatoEm(p);
+        const s = superficieDeProjeto(cotaDaBorda, proximidade.dMm, proximidade, parametros);
+        if (s.naVia) vTalude = vDe(cotaDaBorda);
         else if ((hc || plato.parametros) && t > s.corteM) vTalude = vDe(s.corteM);
         else if ((ha || plato.parametros) && t < s.aterroM) vTalude = vDe(s.aterroM);
       }

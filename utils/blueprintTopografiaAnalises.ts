@@ -199,11 +199,78 @@ export function cotaDeEquilibrio(grade: GradeDeElevacao, anelPlato: Point[]): nu
 }
 
 /** Corte e aterro de um platô plano na cota dada, célula a célula. */
+/**
+ * PLATÔ INCLINADO (fase C1): o greide do platô.
+ *
+ * Até aqui o platô era um plano HORIZONTAL numa cota só. Um pátio, uma rua ou
+ * um lote grande têm caimento — para escoar a água e para não cortar demais
+ * numa ponta e aterrar demais na outra. A inclinação é declarada em duas
+ * direções: a LONGITUDINAL, ao longo do azimute dado, e a TRANSVERSAL, a 90°
+ * dela. A cota informada é a do CENTRO do platô (o centróide do anel); o plano
+ * gira em torno dele, e por isso trocar a inclinação não muda a cota média.
+ *
+ * O azimute é o de DESENHO (0° = +Y, horário), como o resto da planta.
+ */
+export interface InclinacaoDoPlato {
+  /** Caimento ao longo do azimute, em %. Positivo = sobe no sentido do azimute. */
+  declividadeLongPct: number;
+  /** Caimento a 90° do azimute (para a direita de quem olha no azimute), em %. */
+  declividadeTransvPct: number;
+  /** Direção longitudinal, em graus de desenho (0 = +Y, horário). */
+  azimuteDeg: number;
+}
+
+export const SEM_INCLINACAO: InclinacaoDoPlato = { declividadeLongPct: 0, declividadeTransvPct: 0, azimuteDeg: 0 };
+
+/** Centróide do anel: o ponto em que a cota do platô vale exatamente a informada. */
+export function centroDoPlato(anel: Point[]): Point {
+  if (anel.length === 0) return { x: 0, y: 0 };
+  let a2 = 0;
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0; i < anel.length; i++) {
+    const p = anel[i];
+    const q = anel[(i + 1) % anel.length];
+    const f = p.x * q.y - q.x * p.y;
+    a2 += f;
+    cx += (p.x + q.x) * f;
+    cy += (p.y + q.y) * f;
+  }
+  if (a2 === 0) return { x: anel.reduce((s, p) => s + p.x, 0) / anel.length, y: anel.reduce((s, p) => s + p.y, 0) / anel.length };
+  return { x: cx / (3 * a2), y: cy / (3 * a2) };
+}
+
+/**
+ * A cota do platô num ponto qualquer — constante sem inclinação, plano com ela.
+ *
+ * ⚠️ O plano é avaliado também FORA do anel (no talude e na via): é o que faz
+ * a crista do talude acompanhar o caimento da borda em vez de nascer numa
+ * cota única. É uma extrapolação de poucos metros; a diferença para a cota
+ * exata da aresta é declividade × distância à borda, centímetros.
+ */
+export function cotaDoPlatoEm(cotaPlatoM: number, inclinacao: InclinacaoDoPlato | null | undefined, centro: Point, p: Point): number {
+  if (!inclinacao) return cotaPlatoM;
+  const { declividadeLongPct: L, declividadeTransvPct: T, azimuteDeg } = inclinacao;
+  if (L === 0 && T === 0) return cotaPlatoM;
+  const az = (azimuteDeg * Math.PI) / 180;
+  // Azimute de desenho: 0° = +Y, horário → unitário (sen, cos); transversal a +90° → (cos, −sen).
+  const ux = Math.sin(az);
+  const uy = Math.cos(az);
+  const dx = (p.x - centro.x) / 1000;
+  const dy = (p.y - centro.y) / 1000;
+  const dLong = dx * ux + dy * uy;
+  const dTransv = dx * uy - dy * ux;
+  return cotaPlatoM + (dLong * L) / 100 + (dTransv * T) / 100;
+}
+
 export function terraplenagemPreliminar(
   grade: GradeDeElevacao,
   anelPlato: Point[],
   cotaPlatoM: number,
+  inclinacao: InclinacaoDoPlato | null = null,
 ): Terraplenagem {
+  const centroDoAnel = centroDoPlato(anelPlato);
+  const cotaEm = (p: Point) => cotaDoPlatoEm(cotaPlatoM, inclinacao, centroDoAnel, p);
   const { espacamentoMm: esp, colunas, linhas } = grade;
   const areaCelM2 = (esp / 1000) ** 2;
   const total = (linhas - 1) * (colunas - 1);
@@ -223,7 +290,7 @@ export function terraplenagemPreliminar(
       semCota++;
       continue;
     }
-    const delta = cotaPlatoM - v;
+    const delta = cotaEm({ x: grade.origem.x + (c + 0.5) * esp, y: grade.origem.y + (l + 0.5) * esp }) - v;
     deltaDaCelulaM[i] = delta;
     area += areaCelM2;
     if (delta > 0) {
@@ -592,10 +659,15 @@ export function murosDeArrimo(
   anelPlato: Point[],
   cotaPlatoM: number,
   parametros: ParametrosDeTerraplenagem,
+  inclinacao: InclinacaoDoPlato | null = null,
 ): MuroDeArrimo[] {
   const n = anelPlato.length;
   if (n < 3) return [];
   const cotaEm = amostradorDaGrade(grade);
+  // Com platô inclinado o topo do muro acompanha o plano (C1): a altura é medida
+  // contra a cota do platô NAQUELE ponto da aresta, não contra uma cota única.
+  const centroDoAnel = centroDoPlato(anelPlato);
+  const cotaDoPlatoNoPonto = (p: Point) => cotaDoPlatoEm(cotaPlatoM, inclinacao, centroDoAnel, p);
   const orientacao = orientacaoDoAnel(anelPlato);
   const passo = Math.max(100, grade.espacamentoMm / 2);
   // Quando o platô é o próprio lote, a aresta do muro coincide com a BORDA da
@@ -623,7 +695,7 @@ export function murosDeArrimo(
         cotaEm({ x: p.x - normal.x * recuo, y: p.y - normal.y * recuo }) ??
         cotaEm({ x: p.x + normal.x * recuo, y: p.y + normal.y * recuo });
       if (cota === null) continue;
-      const h = cota - cotaPlatoM;
+      const h = cota - cotaDoPlatoNoPonto(p);
       if (h > maxCorte) maxCorte = h;
       if (-h > maxAterro) maxAterro = -h;
       area += (Math.abs(h) * passo) / 1000;
@@ -699,8 +771,11 @@ export function terraplenagemComTalude(
   anelPlato: Point[],
   cotaPlatoM: number,
   parametros: ParametrosDeTerraplenagem = PARAMETROS_PADRAO,
+  inclinacao: InclinacaoDoPlato | null = null,
 ): TerraplenagemComTalude {
-  const base = terraplenagemPreliminar(grade, anelPlato, cotaPlatoM);
+  const base = terraplenagemPreliminar(grade, anelPlato, cotaPlatoM, inclinacao);
+  const centroDoAnel = centroDoPlato(anelPlato);
+  const cotaEm = (p: Point) => cotaDoPlatoEm(cotaPlatoM, inclinacao, centroDoAnel, p);
   const { origem, espacamentoMm: esp, colunas, linhas } = grade;
   const areaCelM2 = (esp / 1000) ** 2;
 
@@ -724,12 +799,15 @@ export function terraplenagemComTalude(
         const terreno = cotaMediaDaCelula(grade, l, c);
         if (terreno === null) continue;
         const proximidade = distanciaAoAnelComAresta(centro, anelPlato);
-        const s = superficieDeProjeto(cotaPlatoM, proximidade.dMm, proximidade, parametros);
+        // Com inclinação, a crista do talude nasce na cota do plano NAQUELE ponto
+        // (o plano extrapolado até a célula), não numa cota única.
+        const cotaDaBorda = cotaEm(centro);
+        const s = superficieDeProjeto(cotaDaBorda, proximidade.dMm, proximidade, parametros);
         if (s.muro) continue; // atrás do muro de arrimo o terreno fica como está
 
         // Via de serviço: faixa na cota do platô — corta ou aterra como o platô.
         if (s.naVia) {
-          const delta = cotaPlatoM - terreno;
+          const delta = cotaDaBorda - terreno;
           areaVia += areaCelM2;
           deltaDaCelulaM[i] = delta;
           if (delta < 0) {
@@ -867,7 +945,7 @@ export function terraplenagemComTalude(
     }
   }
 
-  const muros = murosDeArrimo(grade, anelPlato, cotaPlatoM, parametros);
+  const muros = murosDeArrimo(grade, anelPlato, cotaPlatoM, parametros, inclinacao);
 
   const corteTotal = base.corteM3 + viaCorte + taludeCorte;
   const aterroTotal = base.aterroM3 + viaAterro + taludeAterro;
@@ -964,17 +1042,21 @@ export function cotaDeProjeto(
   anelPlato: Point[] | null,
   cotaPlatoM: number | null,
   parametros: ParametrosDeTerraplenagem,
+  inclinacao: InclinacaoDoPlato | null = null,
 ): (p: Point) => number | null {
   const terreno = amostradorDaGrade(grade);
   if (!anelPlato || anelPlato.length < 3 || cotaPlatoM === null) return terreno;
+  const centroDoAnel = centroDoPlato(anelPlato);
+  const cotaEm = (q: Point) => cotaDoPlatoEm(cotaPlatoM, inclinacao, centroDoAnel, q);
   return (p: Point) => {
-    if (pointInPolygon(anelPlato, p)) return cotaPlatoM;
+    if (pointInPolygon(anelPlato, p)) return cotaEm(p);
     const t = terreno(p);
     if (t === null) return null;
     const proximidade = distanciaAoAnelComAresta(p, anelPlato);
-    const s = superficieDeProjeto(cotaPlatoM, proximidade.dMm, proximidade, parametros);
+    const cotaDaBorda = cotaEm(p);
+    const s = superficieDeProjeto(cotaDaBorda, proximidade.dMm, proximidade, parametros);
     if (s.muro) return t;
-    if (s.naVia) return cotaPlatoM;
+    if (s.naVia) return cotaDaBorda;
     if (t > s.corteM) return s.corteM;
     if (t < s.aterroM) return s.aterroM;
     return t;
@@ -1374,4 +1456,119 @@ export function hipsometriaDaGrade(
     return k;
   });
   return { classeDaCelula, classes, minM: min, maxM: max };
+}
+
+
+// ─── C1: VOLUME ENTRE DUAS SUPERFÍCIES e ÁREA DE SUPERFÍCIE ────────────────────────
+
+export interface VolumeEntreSuperficies {
+  /** Onde B está ABAIXO de A: material que saiu (corte), em m³. */
+  corteM3: number;
+  /** Onde B está ACIMA de A: material que entrou (aterro), em m³. */
+  aterroM3: number;
+  /** aterro − corte. */
+  saldoM3: number;
+  /** Área comparada (células com cota nas duas), em m². */
+  areaM2: number;
+  /** Células em que uma das grades não tinha cota — ficaram fora da conta, e estão DITAS. */
+  celulasSemCota: number;
+}
+
+/**
+ * O VOLUME ENTRE DUAS SUPERFÍCIES — a medição de terraplenagem executada.
+ *
+ * `antes` é a topografia do levantamento original; `depois`, a do levantamento
+ * feito após o serviço. Corte é onde o depois ficou abaixo do antes; aterro,
+ * onde ficou acima. É o número que fecha a medição do empreiteiro.
+ *
+ * ⚠️ As duas grades têm de ser a MESMA malha (origem, espaçamento e
+ * dimensões). Duas versões de topografia do mesmo estudo com o mesmo lote
+ * geram a mesma malha; grades diferentes não são comparáveis célula a célula,
+ * e reamostrar uma na outra inventaria cota onde não há medição. Por isso o
+ * erro, e não uma interpolação silenciosa.
+ */
+export function volumeEntreSuperficies(antes: GradeDeElevacao, depois: GradeDeElevacao, anel: Point[] | null = null): VolumeEntreSuperficies {
+  const mesmaMalha =
+    antes.origem.x === depois.origem.x &&
+    antes.origem.y === depois.origem.y &&
+    antes.espacamentoMm === depois.espacamentoMm &&
+    antes.colunas === depois.colunas &&
+    antes.linhas === depois.linhas;
+  if (!mesmaMalha) {
+    throw new Error(
+      `As duas superfícies não estão na mesma malha (${antes.colunas}×${antes.linhas} a ${antes.espacamentoMm} mm × ${depois.colunas}×${depois.linhas} a ${depois.espacamentoMm} mm). Compare versões geradas sobre o mesmo lote.`,
+    );
+  }
+  const { origem, espacamentoMm: esp, colunas, linhas } = antes;
+  const areaCelM2 = (esp / 1000) ** 2;
+  let corte = 0;
+  let aterro = 0;
+  let area = 0;
+  let semCota = 0;
+  for (let l = 0; l + 1 < linhas; l++) {
+    for (let c = 0; c + 1 < colunas; c++) {
+      if (anel && anel.length >= 3) {
+        const centro = { x: origem.x + (c + 0.5) * esp, y: origem.y + (l + 0.5) * esp };
+        if (!pointInPolygon(anel, centro)) continue;
+      }
+      const a = cotaMediaDaCelula(antes, l, c);
+      const b = cotaMediaDaCelula(depois, l, c);
+      if (a === null || b === null) {
+        semCota++;
+        continue;
+      }
+      const delta = b - a;
+      area += areaCelM2;
+      if (delta > 0) aterro += delta * areaCelM2;
+      else if (delta < 0) corte += -delta * areaCelM2;
+    }
+  }
+  return { corteM3: corte, aterroM3: aterro, saldoM3: aterro - corte, areaM2: area, celulasSemCota: semCota };
+}
+
+/**
+ * A ÁREA DE SUPERFÍCIE do terreno — a área REAL, seguindo o relevo, e não a
+ * projeção em planta. Num talude 1:1,5 ela é 20% maior que a projetada; é a
+ * área que se paga em hidrossemeadura, em geomanta, em grama.
+ *
+ * Cada célula vira dois triângulos em 3D. Célula com canto sem cota fica fora
+ * e é contada, não escondida.
+ */
+export function areaDeSuperficie(grade: GradeDeElevacao, anel: Point[] | null = null): { areaM2: number; areaProjetadaM2: number; celulasSemCota: number } {
+  const { origem, espacamentoMm: esp, colunas, linhas, cotasM } = grade;
+  const e = esp / 1000;
+  let area = 0;
+  let proj = 0;
+  let semCota = 0;
+  const tri = (ax: number, ay: number, az: number, bx: number, by: number, bz: number, cx: number, cy: number, cz: number) => {
+    const ux = bx - ax;
+    const uy = by - ay;
+    const uz = bz - az;
+    const vx = cx - ax;
+    const vy = cy - ay;
+    const vz = cz - az;
+    const nx = uy * vz - uz * vy;
+    const ny = uz * vx - ux * vz;
+    const nz = ux * vy - uy * vx;
+    return Math.sqrt(nx * nx + ny * ny + nz * nz) / 2;
+  };
+  for (let l = 0; l + 1 < linhas; l++) {
+    for (let c = 0; c + 1 < colunas; c++) {
+      if (anel && anel.length >= 3) {
+        const centro = { x: origem.x + (c + 0.5) * esp, y: origem.y + (l + 0.5) * esp };
+        if (!pointInPolygon(anel, centro)) continue;
+      }
+      const z00 = cotasM[l * colunas + c];
+      const z10 = cotasM[l * colunas + c + 1];
+      const z01 = cotasM[(l + 1) * colunas + c];
+      const z11 = cotasM[(l + 1) * colunas + c + 1];
+      if (z00 === null || z10 === null || z01 === null || z11 === null) {
+        semCota++;
+        continue;
+      }
+      area += tri(0, 0, z00, e, 0, z10, 0, e, z01) + tri(e, 0, z10, e, e, z11, 0, e, z01);
+      proj += e * e;
+    }
+  }
+  return { areaM2: area, areaProjetadaM2: proj, celulasSemCota: semCota };
 }

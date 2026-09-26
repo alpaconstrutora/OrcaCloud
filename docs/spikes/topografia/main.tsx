@@ -29,6 +29,7 @@ import {
   applyCommand,
   emptyModel,
   point,
+  type Point,
   type BlueprintModel,
   type Command,
 } from '../../../utils/blueprintKernel';
@@ -67,6 +68,10 @@ import {
   PARAMETROS_PADRAO,
   perfilAoLongo,
   terraplenagemComTalude,
+  centroDoPlato,
+  cotaDoPlatoEm,
+  volumeEntreSuperficies,
+  type InclinacaoDoPlato,
 } from '../../../utils/blueprintTopografiaAnalises';
 import { svgDoPerfil } from '../../../utils/blueprintTopografiaExport';
 import { linhasDeDrenagem3d, murosDeArrimo3d } from '../../../utils/blueprintTopografia3dExtras';
@@ -191,8 +196,23 @@ const fase6 = busca.get('fase6') === '1';
 const cmc = busca.get('cmc') === '1';
 /** `?intervalo=1` (fase 13): níveis a cada 0,5 m a partir do MÍNIMO do terreno (cotas não redondas). */
 const intervalo = busca.get('intervalo') === '1';
+/** `?inclinado=1` (C1): platô a 2 % subindo para o norte e uma versão "antes" 0,3 m abaixo, para o volume entre versões. */
+const inclinado = busca.get('inclinado') === '1' || busca.get('inclinado') === '2';
+/** `?inclinado=2`: 5 % TRANSVERSAL (ao longo de X) — é o que o corte FRENTE consegue mostrar inclinado. */
+const INCLINACAO: InclinacaoDoPlato | null = !inclinado
+  ? null
+  : busca.get('inclinado') === '2'
+    ? { declividadeLongPct: 0, declividadeTransvPct: 5, azimuteDeg: 0 }
+    : { declividadeLongPct: 2, declividadeTransvPct: 0, azimuteDeg: 0 };
 const { model, levelId } = modelo();
 const versao = versaoGerada();
+const versaoAntes: BlueprintTopografiaRow = {
+  ...versao,
+  id: 'v0',
+  versao: 0,
+  hash_resultado: 'antes-' + versao.hash_resultado,
+  grade: { ...versao.grade, cotasM: versao.grade.cotasM.map((c) => (c === null ? null : c - 0.3)) },
+};
 const terreno = medirTerreno(model.boundaries);
 const COTA_ZERO = 101.5; // sem "Cota do terreno" informada: a cota média
 
@@ -217,10 +237,12 @@ const PARAMETROS = fase6
         taludePorAresta: [null, { corteH: 3, aterroH: 3 }, null, null],
       }
     : PARAMETROS_PADRAO;
-const terraplenagem = terraplenagemComTalude(versao.grade, ANEL_DO_PLATO, cotaPlato, PARAMETROS);
+const terraplenagem = terraplenagemComTalude(versao.grade, ANEL_DO_PLATO, cotaPlato, PARAMETROS, INCLINACAO);
+const centroDoAnel = centroDoPlato(ANEL_DO_PLATO);
+const cotaDoPlatoNoPonto = INCLINACAO ? (p: Point) => cotaDoPlatoEm(cotaPlato, INCLINACAO, centroDoAnel, p) : undefined;
 // Fase 6: drenagem sobre a superfície de projeto — as canaletas do platô e
 // uma descida d'água traçada para o sul (que desce mesmo: o lote sobe ao norte).
-const cotaProjeto = cotaDeProjeto(versao.grade, ANEL_DO_PLATO, cotaPlato, PARAMETROS);
+const cotaProjeto = cotaDeProjeto(versao.grade, ANEL_DO_PLATO, cotaPlato, PARAMETROS, INCLINACAO);
 let contadorDeIds = 0;
 const DRENAGEM: LinhaDeDrenagem[] = fase6
   ? [
@@ -298,7 +320,7 @@ const topografia: Topografia = {
   gerar: async () => {},
   gerando: false,
   erro: dem ? 'O lado menor do lote tem 12 m e esta fonte resolve 90 m: cabem 0,1 células, e o mínimo é 3 (270 m). Para um lote deste tamanho, use os pontos cotados do levantamento.' : null,
-  versoes: [versao],
+  versoes: inclinado ? [versao, versaoAntes] : [versao],
   selecionada: versao,
   selecionar: () => {},
   apagarVersao: async () => {},
@@ -322,6 +344,16 @@ declare global {
 const chao3d = (x: number, z: number) => {
   const c = amostradorDoChao(versao.grade)({ x: x * 1000, y: z * 1000 });
   return c === null ? null : c - COTA_ZERO;
+};
+// C1: os números que o script de medida compara com o DOM do painel.
+(window as unknown as { __c1?: unknown }).__c1 = {
+  inclinado,
+  corteM3: terraplenagem.corteM3,
+  aterroM3: terraplenagem.aterroM3,
+  cotaNorte: cotaProjeto(point(6000, 14_900)),
+  cotaSul: cotaProjeto(point(6000, 5100)),
+  cotaCentro: cotaProjeto(centroDoAnel),
+  volume: inclinado ? volumeEntreSuperficies(versaoAntes.grade, versao.grade, versao.anel.length >= 3 ? versao.anel : null) : null,
 };
 window.__topografia = {
   curvas: versao.curvas.length,
@@ -350,7 +382,7 @@ function App() {
             cotaZeroM: COTA_ZERO,
             vertices: CANTOS,
             plato: comPlato
-              ? { cotaM: cotaPlato, anel: ANEL_DO_PLATO, taludeCorteH: 1.5, taludeAterroH: 1.5, parametros: PARAMETROS }
+              ? { cotaM: cotaPlato, cotaEmM: cotaDoPlatoNoPonto, anel: ANEL_DO_PLATO, taludeCorteH: 1.5, taludeAterroH: 1.5, parametros: PARAMETROS }
               : null,
           }}
           terrenoChave={versao.hash_resultado}
@@ -372,7 +404,7 @@ function App() {
             fase6
               ? {
                   drenagem: linhasDeDrenagem3d(DRENAGEM, ATENDE, cotaProjeto, COTA_ZERO),
-                  muros: murosDeArrimo3d(terraplenagem.muros, cotaPlato, amostradorDaGrade(versao.grade), COTA_ZERO),
+                  muros: murosDeArrimo3d(terraplenagem.muros, cotaPlato, amostradorDaGrade(versao.grade), COTA_ZERO, 500, cotaDoPlatoNoPonto),
                 }
               : null
           }
@@ -474,6 +506,8 @@ function App() {
                 temEnvelope: false,
                 cotaPlatoM: cotaPlato,
                 onCotaPlatoM: () => {},
+                inclinacao: INCLINACAO,
+                onInclinacao: () => {},
                 cotaDeEquilibrioM: cotaEquilibrio,
                 resultado: terraplenagem,
                 parametros: PARAMETROS,

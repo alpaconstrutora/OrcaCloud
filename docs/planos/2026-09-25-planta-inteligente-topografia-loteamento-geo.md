@@ -360,3 +360,24 @@ Cota linear manual como anotação (`COTA_LINEAR`) e a origem `terreno` no `docx
 1. **Azimute escrito como `360°00'00"` e rumo `0°00'00" NW`.** 359,99999° é o norte, mas eu reduzia a [0, 360) ANTES de arredondar, e o GMS arredondava 359,99999 para 360. Correção: arredondar à precisão do texto em INTEIROS de "último dígito de segundo" (1/3600 não é exato em binário — 1296000 × (1/3600) dá 359,99999999999994 e voltava a 360), e só então reduzir. Teste novo em `geo.test.ts`.
 2. **Meu teste do roteiro afirmava a física ao contrário e passava por ruído numérico.** Com o Y do desenho no norte verdadeiro (rotação 0), o azimute VERDADEIRO coincide com o de DESENHO até o segundo de arco; quem difere pela convergência é o de QUADRÍCULA (medido entre os E/N). O teste dizia "verdadeiro ≠ desenho" e passava porque o plano tangente introduz 10⁻⁷ grau. Agora afirma |verdadeiro − desenho| < 3,6" e (verdadeiro − quadrícula) = convergência.
 3. O harness do quadro precisava de `ConfirmProvider` (o `QuadroDeDivisas` usa `useConfirm`) — como o da topografia já registrava.
+
+## Estado — C1 (26/09/2026)
+
+- [x] Motor (`utils/blueprintTopografiaAnalises.ts`, sem bump — nada do platô vive no kernel): `InclinacaoDoPlato { declividadeLongPct, declividadeTransvPct, azimuteDeg }`, `centroDoPlato` (centróide do anel), `cotaDoPlatoEm(cota, inclinacao, centro, p)`. `terraplenagemPreliminar`, `terraplenagemComTalude`, `cotaDeProjeto` e `murosDeArrimo` ganharam o parâmetro opcional `inclinacao` (`null` = a conta horizontal de sempre, byte a byte — teste `toEqual`). **A cota informada é a do CENTRO do platô**: o plano gira em torno dele, e trocar o caimento não muda a cota média. A crista do talude nasce na cota do plano NAQUELE ponto (plano extrapolado até a célula/aresta), não numa cota única.
+- [x] `volumeEntreSuperficies(antes, depois, anel?)` — corte onde o depois ficou abaixo, aterro onde ficou acima, área comparada e **células sem cota contadas**; exige a MESMA malha (origem, passo, dimensões) e lança erro dito em vez de reamostrar em silêncio. `areaDeSuperficie(grade, anel?)` — área real seguindo o relevo (dois triângulos 3D por célula) × projetada.
+- [x] Corte 2D (`blueprintCorte.ts`): `plato.cotaEmM?` — a linha do projeto e a crista do talude seguem o plano. 3D (`murosDeArrimo3d`): topo do muro pelo plano. Hash da base executiva só ganha a chave `inclinacao` quando ela existe — as emissões anteriores continuam valendo.
+- [x] Persistência: migration `aplicar_20270926000010` (aplicada em produção por `db query -f`; conferida de fora: 3 colunas `numeric` + CHECK |caimento| ≤ 20 % e azimute em [0, 360)). Hook `useBlueprintTerraplenagem` lê/grava `inclinacao` (por ref, como `hidraulica`/`estrutura`, para não mudar a assinatura de `premissa`); `inclinacaoDaLinha` trata linha sem as colunas ou tudo zero como horizontal.
+- [x] Painel: toggle **Platô inclinado** com Longitudinal / Transversal (%) / Azimute (°) — ao ligar, parte de 1 % longitudinal; azimute normalizado a [0, 360); caimento travado em ±20 %. Seção **Volume entre versões (executado)**: só com ≥ 2 versões; "antes" = versão anterior à selecionada, "depois" = a selecionada; corte/aterro/saldo/área comparada + área real e projetada; malha diferente mostra o erro.
+- [x] Testes: `blueprintTopografiaFaseC1` (15 — platô a 2 % sobre terreno plano: corte = aterro = 20 m³ no eixo de equilíbrio; A×A = 0; A×A+1 m = área × 1 m ± 0,1 %; área 45° = √2 × projetada; malha diferente lança), `PainelTopografiaFaseC1` (5). Suíte cheia **479 arquivos / 5.560 testes** verde; tsc, `check-ui-standard`, `check-xss-sinks` verdes.
+
+### Prova no navegador (harness `docs/spikes/topografia/index.html?inclinado=1|2` + `medir-c1.mjs`, portão)
+
+20 verificações contra o painel REAL: controle sem inclinação (toggle desligado, sem campos, sem a seção de volume com uma versão só); com `?inclinado=1` toggle ligado com 2/0/0, a cota de projeto sobe 0,196 m do sul ao norte do platô de 10 m com o centro na cota informada; a seção de volume mostra no DOM o MESMO aterro que o motor (108,0 m³ = 360 m² × 0,3 m da versão "antes"), corte 0,0, antes = v0 e depois = v1. Foto do corte: o corte FRENTE percorre X, então só a inclinação TRANSVERSAL aparece nele (`?inclinado=2`, 5 % ao longo de X) — a crista esquerda nasce 0,4 m abaixo da direita, como declarado.
+
+### Um achado do teste
+
+`cotaDeProjeto` 0,5 m fora da borda com o plano 0,2 m acima do terreno devolvia a cota NATURAL — e está certo: a 1:1,5 o talude de aterro cai 0,33 m em 0,5 m e já alcançou o chão. O teste que esperava "> terreno" ali estava errado; agora afirma o talude a 10 cm da borda e o terreno a 50 cm.
+
+### Fora desta fase (declarado)
+
+Volume "de região selecionada" à mão (o `anel` de `volumeEntreSuperficies` já recorta pelo anel da versão); método das seções (vai com o eixo/estaqueamento do C2); reamostragem entre malhas diferentes — decisão: comparar só versões do mesmo lote, o erro é dito.

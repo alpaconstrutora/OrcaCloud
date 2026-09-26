@@ -13,17 +13,20 @@ import {
   type BiomaDaReservaLegal,
   type CarDoImovel,
 } from '../../utils/blueprintCar';
+import type { EstadoDaGravacao } from '../../hooks/useBlueprintRegularizacao';
 
 export interface Props {
   car: CarDoImovel;
   bioma: BiomaDaReservaLegal;
   onBioma: (b: BiomaDaReservaLegal) => void;
   onExportar: (formato: 'shp' | 'kml' | 'csv') => void;
+  /** A localização do imóvel fica gravada no estudo; isto diz se gravou. */
+  estadoDaGravacao?: EstadoDaGravacao;
 }
 
 const ha = (v: number) => v.toFixed(4).replace('.', ',');
 
-export default function PainelCar({ car, bioma, onBioma, onExportar }: Props) {
+export default function PainelCar({ car, bioma, onBioma, onExportar, estadoDaGravacao = 'SALVO' }: Props) {
   const quadro = quadroDoCar(car);
   const rl = car.areaDoImovelM2 > 0 ? apoioAReservaLegal(car, bioma) : null;
   const temas = quadro.filter((l) => l.tema !== 'AREA_IMOVEL').length;
@@ -90,6 +93,15 @@ export default function PainelCar({ car, bioma, onBioma, onExportar }: Props) {
             ))}
           </select>
         </label>
+      <p className={`text-[11px] ${estadoDaGravacao === 'INDISPONIVEL' ? 'text-amber-700' : 'text-slate-500'}`} data-testid="car-gravacao">
+        {estadoDaGravacao === 'CARREGANDO'
+          ? 'Lendo os dados gravados do estudo…'
+          : estadoDaGravacao === 'SALVANDO'
+            ? 'Gravando no estudo…'
+            : estadoDaGravacao === 'INDISPONIVEL'
+              ? 'Não consegui gravar no estudo: o que mudar agora fica só nesta aba.'
+              : 'A localização fica gravada no estudo, para todos da organização.'}
+      </p>
         {rl && (
           <>
             <dl className="mt-2 grid grid-cols-3 gap-x-3 gap-y-1">

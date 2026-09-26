@@ -98,3 +98,21 @@ describe('PainelReurb', () => {
     expect(b.title).toMatch(/Desenhe os lotes/);
   });
 });
+
+describe('estado da gravação no estudo', () => {
+  it('CAR: gravado diz que é do estudo; sem gravar avisa que fica na aba', () => {
+    const car = carDoImovel(gleba(true));
+    const { rerender } = render(<PainelCar car={car} bioma="DEMAIS_REGIOES" onBioma={vi.fn()} onExportar={vi.fn()} estadoDaGravacao="SALVO" />);
+    expect(screen.getByTestId('car-gravacao').textContent).toMatch(/gravada no estudo/);
+    rerender(<PainelCar car={car} bioma="DEMAIS_REGIOES" onBioma={vi.fn()} onExportar={vi.fn()} estadoDaGravacao="INDISPONIVEL" />);
+    expect(screen.getByTestId('car-gravacao').textContent).toMatch(/fica só nesta aba/);
+  });
+
+  it('REURB: gravando e indisponível', () => {
+    const props = { model: nucleo(), dados: DADOS, onDados: vi.fn(), ocupantes: { estado: 'PRONTO' as const, empreendimento: null, lotesComUnidade: 0, porLoteUid: {} }, onRecarregar: vi.fn(), onMemoriais: vi.fn(), onListagem: vi.fn(), onPranchas: vi.fn() };
+    const { rerender } = render(<PainelReurb {...props} estadoDaGravacao="SALVANDO" />);
+    expect(screen.getByTestId('reurb-gravacao').textContent).toMatch(/Gravando/);
+    rerender(<PainelReurb {...props} estadoDaGravacao="INDISPONIVEL" />);
+    expect(screen.getByTestId('reurb-gravacao').textContent).toMatch(/fica só nesta aba/);
+  });
+});

@@ -1,17 +1,14 @@
 // hooks/useBlueprintReurb.ts
 //
-// REURB (A5): os dados do núcleo (neste navegador, por estudo — são os campos
-// do cabeçalho das peças, não cadastro) e os ocupantes de cada lote, lidos do
-// Empreendimento ligado só quando o relatório abre.
+// REURB (A5): os ocupantes de cada lote, lidos do Empreendimento ligado só
+// quando o relatório abre. Os dados do núcleo moram em
+// `useBlueprintRegularizacao` (tabela `blueprint_study_regularizacao`).
 
 import { useCallback, useEffect, useState } from 'react';
-import { usePersistedState } from '../components/ui/TableUtils';
 import { blueprintReurbService } from '../services/blueprintReurbService';
-import type { DadosDaReurb } from '../utils/blueprintReurb';
 import type { OcupantesNoPainel } from '../components/blueprint/PainelReurb';
 
-export function useBlueprintReurb(studyId: string, nomePadrao: string, ativo: boolean) {
-  const [dados, setDados] = usePersistedState<DadosDaReurb>(`blueprint:reurb:${studyId}`, { nome: nomePadrao, modalidade: 'REURB-S' });
+export function useBlueprintReurb(studyId: string, ativo: boolean) {
   const [ocupantes, setOcupantes] = useState<OcupantesNoPainel>({ estado: 'CARREGANDO', empreendimento: null, lotesComUnidade: 0, porLoteUid: {} });
   const [versao, setVersao] = useState(0);
 
@@ -32,7 +29,6 @@ export function useBlueprintReurb(studyId: string, nomePadrao: string, ativo: bo
     };
   }, [studyId, ativo, versao]);
 
-  const atualizarDados = useCallback((patch: Partial<DadosDaReurb>) => setDados((d) => ({ ...d, ...patch })), [setDados]);
   const recarregar = useCallback(() => setVersao((v) => v + 1), []);
-  return { dados, atualizarDados, ocupantes, recarregar };
+  return { ocupantes, recarregar };
 }

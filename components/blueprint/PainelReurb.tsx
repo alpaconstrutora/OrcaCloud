@@ -8,6 +8,7 @@ import React from 'react';
 import { AlertTriangle, Download, RefreshCw } from 'lucide-react';
 import type { BlueprintModel } from '../../utils/blueprintKernel';
 import { rotuloDoLote } from '../../utils/blueprintLoteamento';
+import type { EstadoDaGravacao } from '../../hooks/useBlueprintRegularizacao';
 import { pendenciasDaReurb, ROTULO_DA_MODALIDADE, type DadosDaReurb, type ModalidadeDaReurb, type OcupanteDoLote } from '../../utils/blueprintReurb';
 
 export interface OcupantesNoPainel {
@@ -27,11 +28,13 @@ export interface Props {
   onMemoriais: () => void;
   onListagem: () => void;
   onPranchas: () => void;
+  /** Os dados do núcleo ficam gravados no estudo; isto diz se gravou. */
+  estadoDaGravacao?: EstadoDaGravacao;
 }
 
 const campo = 'mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800';
 
-export default function PainelReurb({ model, dados, onDados, ocupantes, onRecarregar, onMemoriais, onListagem, onPranchas }: Props) {
+export default function PainelReurb({ model, dados, onDados, ocupantes, onRecarregar, onMemoriais, onListagem, onPranchas, estadoDaGravacao = 'SALVO' }: Props) {
   const lotes = (model.lotes ?? []).filter((l) => l.tipo === 'LOTE');
   const pendencias = pendenciasDaReurb(model, ocupantes.porLoteUid, dados);
   const semLote = lotes.length === 0 ? 'Desenhe os lotes do núcleo (grupo Loteamento) — sobre a ortofoto, se houver' : null;
@@ -69,6 +72,15 @@ export default function PainelReurb({ model, dados, onDados, ocupantes, onRecarr
           {texto('Responsável técnico', 'responsavelTecnico')}
           {texto('Registro no conselho', 'registroDoConselho', 'CREA-MG 123456')}
         </div>
+        <p className={`text-[11px] ${estadoDaGravacao === 'INDISPONIVEL' ? 'text-amber-700' : 'text-slate-500'}`} data-testid="reurb-gravacao">
+        {estadoDaGravacao === 'CARREGANDO'
+          ? 'Lendo os dados gravados do estudo…'
+          : estadoDaGravacao === 'SALVANDO'
+            ? 'Gravando no estudo…'
+            : estadoDaGravacao === 'INDISPONIVEL'
+              ? 'Não consegui gravar no estudo: o que mudar agora fica só nesta aba.'
+              : 'Gravado no estudo, para todos da organização.'}
+        </p>
       </section>
 
       <section data-testid="reurb-ocupantes">

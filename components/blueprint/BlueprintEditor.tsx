@@ -154,8 +154,9 @@ import PainelSigef from './PainelSigef';
 import PainelCar from './PainelCar';
 import PainelReurb from './PainelReurb';
 import { useBlueprintReurb } from '../../hooks/useBlueprintReurb';
+import { useBlueprintRegularizacao } from '../../hooks/useBlueprintRegularizacao';
 import { zipDeTextos } from '../../services/blueprintReurbService';
-import { carDoImovel, camadasDoCar, kmlDoCar, csvDeCoordenadasDoCar, type BiomaDaReservaLegal } from '../../utils/blueprintCar';
+import { carDoImovel, camadasDoCar, kmlDoCar, csvDeCoordenadasDoCar } from '../../utils/blueprintCar';
 import { memoriaisReurb, listagemDeOcupantes } from '../../utils/blueprintReurb';
 import { zipDeShapefiles } from '../../utils/geo/shapefile';
 import { useBlueprintSigef } from '../../hooks/useBlueprintSigef';
@@ -4082,8 +4083,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const sigef = useBlueprintSigef(study.id, study.organization_id);
   // A5: CAR derivado do desenho; REURB com os ocupantes do Empreendimento.
   const car = useMemo(() => carDoImovel(editor.model), [editor.model]);
-  const [biomaDoCar, setBiomaDoCar] = usePersistedState<BiomaDaReservaLegal>(`blueprint:carBioma:${study.id}`, 'DEMAIS_REGIOES');
-  const reurb = useBlueprintReurb(study.id, study.name || 'Núcleo urbano informal', relatorioAberto === 'reurb');
+  // Núcleo da REURB e bioma do CAR gravados no estudo (antes: no navegador).
+  const regularizacao = useBlueprintRegularizacao(study.id, study.organization_id, study.name || 'Núcleo urbano informal');
+  const reurb = useBlueprintReurb(study.id, relatorioAberto === 'reurb');
   // C3: as Vias desenhadas no loteamento e as vias de projeto resolvidas contra
   // elas — a ligada acompanha o eixo, o nome e a caixa do DESENHO.
   const viasDoLoteamento = useMemo<ViaDoLoteamento[]>(
@@ -15483,8 +15485,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             <div className="px-4 py-3">
               <PainelCar
                 car={car}
-                bioma={biomaDoCar}
-                onBioma={setBiomaDoCar}
+                bioma={regularizacao.bioma}
+                onBioma={regularizacao.alterarBioma}
+                estadoDaGravacao={regularizacao.estado}
                 onExportar={(formato) =>
                   void (async () => {
                     try {
@@ -15510,16 +15513,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             <div className="px-4 py-3">
               <PainelReurb
                 model={editor.model}
-                dados={reurb.dados}
-                onDados={reurb.atualizarDados}
+                dados={regularizacao.reurb}
+                onDados={regularizacao.alterarReurb}
+                estadoDaGravacao={regularizacao.estado}
                 ocupantes={reurb.ocupantes}
                 onRecarregar={reurb.recarregar}
                 onMemoriais={() =>
                   void (async () => {
                     try {
-                      const ms = memoriaisReurb(editor.model, reurb.ocupantes.porLoteUid, reurb.dados);
+                      const ms = memoriaisReurb(editor.model, reurb.ocupantes.porLoteUid, regularizacao.reurb);
                       const zip = await zipDeTextos(ms.map((m) => ({ nome: `${m.titulo.replace(/[\\/:*?"<>|]+/g, '-')}.txt`, texto: m.texto })));
-                      const base = (reurb.dados.nome || 'REURB').replace(/[\\/:*?"<>|]+/g, '-');
+                      const base = (regularizacao.reurb.nome || 'REURB').replace(/[\\/:*?"<>|]+/g, '-');
                       baixarArtefatos([{ blob: new Blob([zip as BlobPart], { type: 'application/zip' }), nome: `${base} - memoriais REURB.zip`, tipo: 'zip' }]);
                     } catch (e) {
                       setAvisoConexaoT(e instanceof Error ? e.message : String(e));
@@ -15529,7 +15533,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 onListagem={() =>
                   void (async () => {
                     try {
-                      const base = (reurb.dados.nome || 'REURB').replace(/[\\/:*?"<>|]+/g, '-');
+                      const base = (regularizacao.reurb.nome || 'REURB').replace(/[\\/:*?"<>|]+/g, '-');
                       baixarArtefatos([artefatoDeTabelaXlsx(`${base} - ocupantes`, listagemDeOcupantes(editor.model, reurb.ocupantes.porLoteUid))]);
                     } catch (e) {
                       setAvisoConexaoT(e instanceof Error ? e.message : String(e));
@@ -15538,7 +15542,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 }
                 onPranchas={() => {
                   try {
-                    baixarArtefatos(montarPdfDoLoteamento(editor.model, { dados: reurb.dados, areaDaGlebaMm2: terreno?.areaMm2 ?? null, umaFolhaPorLote: true }));
+                    baixarArtefatos(montarPdfDoLoteamento(editor.model, { dados: regularizacao.reurb, areaDaGlebaMm2: terreno?.areaMm2 ?? null, umaFolhaPorLote: true }));
                   } catch (e) {
                     setAvisoConexaoT(e instanceof Error ? e.message : String(e));
                   }

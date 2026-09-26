@@ -507,6 +507,15 @@ As regras vieram dos documentos do PRÓPRIO INCRA, baixados e lidos nesta fase (
 - **Limite do kernel para imóvel rural grande**: coordenadas do kernel são mm inteiros em ±1.000.000 (±1 km da origem). Imóvel com mais de ~2 km de lado não cabe — o CAR de fazenda grande precisa de outra origem/escala no kernel (decisão futura, com bump).
 - Características da edificação por lote (área construída, uso, padrão — `empreendimento_unit_characteristics`) na listagem e no memorial REURB.
 - Importação/exportação da base de ocupantes por planilha: continua no Empreendimento (`occupancyImportService`); a gaveta lê e aponta o caminho.
-- Memoriais REURB em .txt (como os da B4), não em docx de template; dados do núcleo e bioma no navegador, não em tabela.
+- Memoriais REURB em .txt (como os da B4), não em docx de template. ~~Dados do núcleo e bioma no navegador, não em tabela~~ → resolvido depois da A5 (seção seguinte).
 - Envio ao SICAR e instauração da REURB: do responsável e do município.
-- Edge Function `planta-api`: bundle regenerado no repositório, não republicada.
+- ~~Edge Function `planta-api`: bundle regenerado no repositório, não republicada~~ → **republicada em 26/09/2026 (versão 19)** com o kernel 0.61.0; provado baixando o código publicado (`supabase functions download`) e comparando com a main. A versão 18 subiu por engano do checkout principal atrasado (kernel 0.57.0) e foi substituída.
+
+## Estado — pendências da A5 (26/09/2026)
+
+Pedido: *"4"* — levar os dados da REURB e do CAR do navegador para o banco.
+
+- [x] Migration `aplicar_20270926000050_blueprint_regularizacao.sql` (**aplicada** por `db query -f`): `blueprint_study_regularizacao`, uma linha por estudo, colunas `reurb` (núcleo, modalidade, município/UF, matrícula, cartório, RT, registro) e `car` (`bioma`). FK composta ao estudo, policy `is_org_member(organization_id)` sem perna OR, `REVOKE … FROM PUBLIC, anon, authenticated` + `GRANT` a authenticated. Conferido no banco: RLS ligado, só authenticated com grants; `check-rls-postura` limpo.
+- [x] `services/blueprintRegularizacaoService.ts` (upsert de UMA coluna por vez — as duas gavetas gravam sem pisar uma na outra) e `hooks/useBlueprintRegularizacao.ts` (molde do `useBlueprintSigef`: resposta imediata, gravação com respiro de 600 ms para o núcleo, bioma na hora, `INDISPONIVEL` sem a tabela). **Adoção**: o que a A5 deixou no localStorage vale quando o banco não tem a coluna — é gravado no banco e só então apagado do navegador; se a gravação falha, o navegador fica intacto.
+- [x] `useBlueprintReurb` ficou só com os ocupantes. As gavetas CAR e REURB mostram o estado: gravado no estudo / gravando / não gravou (fica só nesta aba).
+- [x] Testes: `useBlueprintRegularizacao` (6 — gravado vence o navegador; adoção grava e apaga; adoção que falha não apaga; padrão sem nada; respiro grava uma vez; sem tabela não tenta gravar), `PainelCarReurb` (+2). Suíte cheia 498 arquivos / 5.722 verde; tsc, `check-ui-standard`, `check-xss-sinks`, testes de migration, build verdes.

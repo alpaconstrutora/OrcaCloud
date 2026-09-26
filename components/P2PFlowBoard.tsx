@@ -67,7 +67,7 @@ function StageDetail({ stageId, organizationId, projectId }: {
           </div>
           <div className="flex flex-col items-end gap-1 shrink-0">
             {r.status && (
-              <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-600 uppercase tracking-wide whitespace-nowrap">
+              <span className="text-sm font-normal text-gray-600 whitespace-nowrap">
                 {r.status}
               </span>
             )}
@@ -195,9 +195,9 @@ export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeVi
   const autos   = stages.filter(s => s.inboundSeam === 'auto').length;
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+    <div className="space-y-6 pb-20">
       {/* Cabeçalho */}
-      <div className="flex flex-wrap items-start gap-4 mb-6">
+      <div className="flex flex-wrap items-start gap-4">
         <div className="flex-1 min-w-0">
           <h1 className="text-xl font-black text-slate-900 flex items-center gap-2">
             <Workflow className="w-5 h-5 text-indigo-600 shrink-0" />
@@ -236,7 +236,7 @@ export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeVi
       </div>
 
       {/* Cards de saúde */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-3 gap-3">
         <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3">
           <p className="text-xs font-black uppercase tracking-wider text-emerald-700">Automáticas</p>
           <p className="text-2xl font-black text-emerald-700">{autos}</p>
@@ -281,7 +281,7 @@ export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeVi
 
       {/* Legenda dos pontos de atenção */}
       {(gaps > 0 || manuais > 0) && (
-        <div className="mt-6">
+        <div>
           <h2 className="text-sm font-black uppercase tracking-wider text-slate-500 mb-2">
             Pontos de atenção nas integrações
           </h2>
@@ -306,7 +306,7 @@ export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeVi
       )}
 
       {generatedAt && (
-        <p className="mt-4 text-xs text-slate-400">
+        <p className="text-xs text-slate-400">
           Atualizado em {new Date(generatedAt).toLocaleString('pt-BR')}
           {selectedProjectId && projects.find(p => p.id === selectedProjectId) && (
             <> · Obra: <strong>{projects.find(p => p.id === selectedProjectId)!.name}</strong></>

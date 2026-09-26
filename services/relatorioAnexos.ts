@@ -12,19 +12,30 @@
 // aceitável: boleto vem de PDF escaneado ou de OCR, e o que se quer dele é a
 // prova visual. O corpo do relatório — que é o que se lê — continua vetorial.
 //
-// ⚠️ Só o lado de DENTRO do sistema consegue anexar. O bucket `boletos` só abre
-// para membro da organização (policy `boletos_select_org`), e o condômino entra
-// por token de portal, sem ser membro. O relatório do portal sai sem anexo, de
-// propósito — não é limitação a corrigir, é a permissão funcionando.
+// ⚠️ O bucket `boletos` só abre para membro da organização (policy
+// `boletos_select_org`), e o condômino entra por token de portal, sem ser
+// membro. Por isso o comprovante chega em duas formas (`ComprovanteDaLinha`):
+// o síndico traz `{ bucket, path }` e assina aqui com a própria sessão; o
+// portal traz `{ url }` já assinada pela Edge Function
+// `client-portal-rateio-comprovantes`, que autoriza pela RPC do portal.
 
 import { storageService } from './storageService';
-import type { DocumentoDeOrigem } from './condominioRateioService';
+import type { ComprovanteDaLinha } from '../utils/relatorioRateio';
 
 /** Uma despesa que tem comprovante a anexar. */
 export interface ComprovanteDeDespesa {
     descricao: string;
     valor: number;
-    documento: DocumentoDeOrigem;
+    documento: ComprovanteDaLinha;
+}
+
+/** A URL para baixar o comprovante — a que veio pronta, ou assinada agora. */
+export async function urlDoComprovante(documento: ComprovanteDaLinha): Promise<string> {
+    if ('url' in documento) {
+        if (!documento.url) throw new Error('o arquivo existe, mas não pôde ser liberado para download');
+        return documento.url;
+    }
+    return storageService.createSignedUrl(documento.bucket, documento.path, 60 * 15);
 }
 
 /** Qualidade do anexo. Escala 2 num A4 dá ~1.240×1.754 px, legível para
@@ -119,7 +130,7 @@ export async function anexarComprovantes(
         const c = comprovantes[i];
         aoProgredir?.(i, comprovantes.length);
         try {
-            const url = await storageService.createSignedUrl(c.documento.bucket, c.documento.path, 60 * 15);
+            const url = await urlDoComprovante(c.documento);
             const resposta = await fetch(url);
             if (!resposta.ok) throw new Error(`o arquivo respondeu ${resposta.status}`);
             const bytes = await resposta.arrayBuffer();

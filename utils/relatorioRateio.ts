@@ -31,13 +31,23 @@ export interface LinhaDespesaRelatorio {
      * fornecedor sai com dois nomes no mesmo relatório.
      */
     fornecedor?: string | null;
-    /**
-     * O COMPROVANTE, quando existe: `{ bucket, path, nome }` do arquivo que
-     * originou a despesa. Só o lado de dentro do sistema preenche — o portal
-     * não alcança o bucket dos boletos (ver `services/relatorioAnexos.ts`).
-     */
-    documento?: { bucket: string; path: string; nome: string } | null;
+    /** O COMPROVANTE, quando existe — o arquivo que originou a despesa. */
+    documento?: ComprovanteDaLinha | null;
 }
+
+/**
+ * Onde buscar o comprovante, nas duas formas que ele chega:
+ *
+ *  • `{ bucket, path }` — lado de DENTRO: o síndico é membro da organização e
+ *    assina com a própria sessão na hora de anexar;
+ *  • `{ url }` — PORTAL: o condômino não alcança o bucket `boletos`, então a
+ *    Edge Function `client-portal-rateio-comprovantes` autoriza pela RPC do
+ *    portal e devolve a URL já assinada. `url` vazia = a function achou o
+ *    arquivo mas não conseguiu assinar; o PDF diz isso no fim.
+ */
+export type ComprovanteDaLinha =
+    | { bucket: string; path: string; nome: string }
+    | { url: string; nome: string };
 
 /** Uma linha de cota do documento. */
 export interface LinhaCotaRelatorio {

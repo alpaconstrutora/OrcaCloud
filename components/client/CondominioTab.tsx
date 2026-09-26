@@ -422,18 +422,49 @@ const PainelDocumentos: React.FC<{
 /* O rateio INTEIRO, com a cota de todas as unidades — decisão do usuário em
    23/09/2026 entre "só a minha", "minha + despesas" e "tudo": transparência de
    assembleia. A cota de quem está olhando vem marcada (`minha`). */
+/** Os comprovantes de um rateio, já assinados — quem sabe a identidade do
+ *  portal (token × cliente logado) é a tela dona. */
+type ResolverComprovantes = (rateioId: string) => Promise<{ despesaId: string; url: string; nome: string }[]>;
+
 /** Baixar a competência em PDF. O documento é montado no navegador, a partir
- *  do payload que a aba já recebeu — não há chamada nova, nem arquivo guardado
- *  em bucket que envelheceria enquanto o rateio é corrigido. */
-const BotaoPdfDoRateio: React.FC<{ rateio: PortalRateioCondominio }> = ({ rateio }) => {
+ *  do payload que a aba já recebeu — não há arquivo guardado em bucket que
+ *  envelheceria enquanto o rateio é corrigido. A única chamada nova é a dos
+ *  comprovantes, e só quando a caixa está marcada. */
+const BotaoPdfDoRateio: React.FC<{ rateio: PortalRateioCondominio; onResolverComprovantes?: ResolverComprovantes }> = ({ rateio, onResolverComprovantes }) => {
     const [gerando, setGerando] = React.useState(false);
     const [erro, setErro] = React.useState<string | null>(null);
+    // O que aconteceu com os anexos, dito na linha do botão — o portal não tem
+    // toast, e o condômino não pode descobrir só na última página do PDF que o
+    // boleto que ele queria conferir não veio.
+    const [aviso, setAviso] = React.useState<string | null>(null);
+    // Marcado por padrão, como no relatório do síndico (pedido de 26/09/2026):
+    // o comprovante é a prova do número, e é ela que o condômino quer conferir.
+    const [comComprovantes, setComComprovantes] = React.useState(true);
+    const [progresso, setProgresso] = React.useState<string | null>(null);
+    // Sem resolvedor (a prévia do síndico) ou sem despesa, a caixa não muda
+    // nada — e caixa que não muda nada só ensina a ignorar a caixa.
+    const podeAnexar = !!onResolverComprovantes && rateio.despesas.length > 0;
 
     const baixar = async () => {
         setGerando(true);
         setErro(null);
+        setAviso(null);
         try {
-            await baixarRelatorioRateioPdf(montarRelatorioRateio({
+            // Os comprovantes vêm ANTES do PDF. Se a busca falhar, o PDF sai
+            // sem anexo, dizendo — melhor que não sair.
+            let assinados = new Map<string, { url: string; nome: string }>();
+            let falhaAoBuscar: string | null = null;
+            if (podeAnexar && comComprovantes) {
+                setProgresso('Buscando comprovantes...');
+                try {
+                    const lista = await onResolverComprovantes!(rateio.id);
+                    assinados = new Map(lista.map(c => [c.despesaId, { url: c.url, nome: c.nome }]));
+                } catch (e: any) {
+                    falhaAoBuscar = e?.message || 'não foi possível buscar os comprovantes';
+                }
+            }
+
+            const r = await baixarRelatorioRateioPdf(montarRelatorioRateio({
                 condominio: rateio.condominioNome,
                 numero: rateio.numero,
                 competencia: rateio.competencia,
@@ -455,6 +486,7 @@ const BotaoPdfDoRateio: React.FC<{ rateio: PortalRateioCondominio }> = ({ rateio
                     // o cru podado. A RPC manda os dois campos justamente para
                     // a decisão ficar num lugar só.
                     fornecedor: rotuloDeFornecedor(d.fornecedorCadastrado, d.fornecedorCru),
+                    documento: assinados.get(d.id) ?? null,
                 })),
                 cotas: rateio.cotas.map(c => ({
                     unidade: [c.torre, c.unidade].filter(Boolean).join(' · ') || '—',
@@ -464,33 +496,70 @@ const BotaoPdfDoRateio: React.FC<{ rateio: PortalRateioCondominio }> = ({ rateio
                     // A cota de quem está lendo vai destacada também no PDF.
                     minha: c.minha,
                 })),
-            }));
+            }), {
+                comComprovantes: assinados.size > 0,
+                aoProgredir: (feito, total) => setProgresso(`Anexando ${feito} de ${total}...`),
+            });
+
+            if (podeAnexar && comComprovantes) {
+                if (falhaAoBuscar) {
+                    setAviso(`PDF baixado sem os comprovantes: ${falhaAoBuscar}.`);
+                } else if (assinados.size === 0) {
+                    setAviso('Nenhuma despesa deste rateio tem comprovante anexado.');
+                } else if (r.falhas.length > 0) {
+                    setAviso(`${r.anexados} comprovante(s) anexado(s); ${r.falhas.length} não entrou/entraram — o motivo está na última página.`);
+                }
+            }
         } catch (e: any) {
             // O portal não tem toast: o erro fica na linha do botão, senão o
             // clique não faz nada e o condômino conclui que o site quebrou.
             setErro(e?.message || 'Não foi possível gerar o PDF.');
         } finally {
             setGerando(false);
+            setProgresso(null);
         }
     };
 
     return (
         <div className="flex flex-col items-end gap-1">
-            <button
-                type="button"
-                onClick={baixar}
-                disabled={gerando}
-                className="flex items-center gap-1.5 h-8 px-3 rounded-[6px] border border-gray-200 bg-white text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-50"
-            >
-                <Download className="w-[15px] h-[15px]" />
-                {gerando ? 'Gerando...' : 'Baixar PDF'}
-            </button>
+            <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
+                {/* Na MESMA linha do botão que ela governa — opção de download
+                    longe do download não é lida. */}
+                {podeAnexar && (
+                    <label className="flex items-center gap-2 cursor-pointer select-none whitespace-nowrap">
+                        <input
+                            type="checkbox"
+                            checked={comComprovantes}
+                            disabled={gerando}
+                            onChange={e => setComComprovantes(e.target.checked)}
+                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
+                        />
+                        <span className="text-sm font-normal text-gray-700">Incluir os comprovantes</span>
+                    </label>
+                )}
+                <button
+                    type="button"
+                    onClick={baixar}
+                    disabled={gerando}
+                    className="flex items-center gap-1.5 h-8 px-3 shrink-0 whitespace-nowrap rounded-[6px] border border-gray-200 bg-white text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-50"
+                >
+                    <Download className="w-[15px] h-[15px]" />
+                    {/* Contar em voz alta: anexar leva segundos, e um botão
+                        parado lê como travado. */}
+                    {gerando ? (progresso ?? 'Gerando...') : 'Baixar PDF'}
+                </button>
+            </div>
             {erro && <span className="text-xs text-red-600">{erro}</span>}
+            {aviso && <span className="text-xs text-amber-700">{aviso}</span>}
         </div>
     );
 };
 
-const PainelFinanceiro: React.FC<{ rateios: PortalRateioCondominio[]; multi: boolean }> = ({ rateios, multi }) => (
+const PainelFinanceiro: React.FC<{
+    rateios: PortalRateioCondominio[];
+    multi: boolean;
+    onResolverComprovantes?: ResolverComprovantes;
+}> = ({ rateios, multi, onResolverComprovantes }) => (
     <div>
         <Descricao icone={<Wallet className="w-4 h-4" />}>
             Despesas do prédio e o rateio entre as unidades
@@ -521,17 +590,20 @@ const PainelFinanceiro: React.FC<{ rateios: PortalRateioCondominio[]; multi: boo
                                     {multi ? ` · ${r.condominioNome}` : ''}
                                 </p>
                             </div>
-                            <div className="flex items-center gap-3">
+                            {/* No celular o grupo QUEBRA como bloco (situação numa
+                                linha, caixa + botão na outra) em vez de espremer
+                                cada rótulo em três linhas. */}
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                                 {/* §8 — texto colorido, sem pílula. Rascunho é PRÉVIA: o número
                                     ainda pode mudar, e omitir isso seria pior que não mostrar. */}
                                 {r.status === 'RASCUNHO' ? (
-                                    <span className="text-sm font-normal text-amber-600">Prévia — pode mudar</span>
+                                    <span className="text-sm font-normal text-amber-600 whitespace-nowrap">Prévia — pode mudar</span>
                                 ) : (
-                                    <span className="text-sm font-normal text-emerald-600">
+                                    <span className="text-sm font-normal text-emerald-600 whitespace-nowrap">
                                         Fechado{r.fechadoEm ? ` em ${data(r.fechadoEm.slice(0, 10))}` : ''}
                                     </span>
                                 )}
-                                <BotaoPdfDoRateio rateio={r} />
+                                <BotaoPdfDoRateio rateio={r} onResolverComprovantes={onResolverComprovantes} />
                             </div>
                         </div>
 
@@ -866,9 +938,13 @@ interface Props {
      *  Quem sabe a identidade (token do link × cliente logado) é a tela dona,
      *  como já acontece com `onMarcarLido`. */
     onResolverDocumento?: (documentoId: string) => Promise<string>;
+    /** Os comprovantes de um rateio, já assinados, para o PDF anexar. Mesma
+     *  identidade de `onResolverDocumento`. Sem ele, o PDF sai sem a caixa de
+     *  anexar (é o caso da prévia do síndico). */
+    onResolverComprovantes?: ResolverComprovantes;
 }
 
-const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopTabsBar, onResolverDocumento }) => {
+const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopTabsBar, onResolverDocumento, onResolverComprovantes }) => {
     const porCondominio = React.useMemo(
         () => agruparPorCondominio(dados.unidades), [dados.unidades]);
 
@@ -961,7 +1037,7 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
                     {abaAtiva === 'documentos' && (
                         <PainelDocumentos documentos={dados.documentos} multi={multi} onResolverDocumento={onResolverDocumento} />
                     )}
-                    {abaAtiva === 'financeiro' && <PainelFinanceiro rateios={dados.rateios} multi={multi} />}
+                    {abaAtiva === 'financeiro' && <PainelFinanceiro rateios={dados.rateios} multi={multi} onResolverComprovantes={onResolverComprovantes} />}
                     {abaAtiva === 'manutencao' && (
                         <PainelManutencao manutencao={dados.manutencao} ordens={dados.ordens} multi={multi} />
                     )}

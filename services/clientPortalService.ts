@@ -474,6 +474,38 @@ export const clientPortalService = {
         return data.url as string;
     },
 
+    /**
+     * Os comprovantes (boleto, XML, minuta) das despesas de um rateio, com a URL
+     * já assinada — para o PDF do rateio anexá-los, como o do síndico.
+     *
+     * Edge Function pelo mesmo motivo de `abrirDocumentoCondominio`: o bucket
+     * `boletos` só abre para membro da organização. A function autoriza pela
+     * MESMA RPC desta aba e resolve a origem pelo MESMO código da aba Despesas
+     * do síndico (`supabase/functions/_shared/origemDoLancamento.ts`).
+     *
+     * `url` vazia = o arquivo existe mas não assinou; quem monta o PDF lista a
+     * despesa em "Comprovantes que não entraram". Nunca guarde o retorno: a URL
+     * expira em 15 min.
+     */
+    async comprovantesDoRateio(
+        params: { token?: string; clientId?: string; rateioId: string },
+    ): Promise<{ despesaId: string; url: string; nome: string }[]> {
+        const { data, error } = await supabase.functions.invoke('client-portal-rateio-comprovantes', {
+            body: params,
+        });
+        if (error) {
+            // A mensagem do supabase-js ("Edge Function returned a non-2xx
+            // status code") vai direto para a tela do condômino — trocar pelo
+            // motivo que a function mandou, ou por uma frase que ele entenda.
+            const corpo = await (error as any).context?.json?.().catch(() => null);
+            throw new Error(corpo?.error || 'o serviço de comprovantes não respondeu');
+        }
+        if (!Array.isArray(data?.comprovantes)) {
+            throw new Error(data?.error || 'Não foi possível buscar os comprovantes.');
+        }
+        return data.comprovantes;
+    },
+
     /** Só existe pelo token: marcar lido é ato do morador, não do admin olhando.
      *  Silencioso de propósito — falhar aqui não pode atrapalhar a leitura. */
     async marcarAvisoLido(token: string, avisoId: string): Promise<boolean> {

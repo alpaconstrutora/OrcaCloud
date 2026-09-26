@@ -612,10 +612,10 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
     const [sheetRelatorio, setSheetRelatorio] = React.useState<Rateio | null>(null);
     const [carregandoRelatorio, setCarregandoRelatorio] = React.useState(false);
     const [baixandoPdf, setBaixandoPdf] = React.useState(false);
-    // Anexar é OPT-IN: rasterizar os comprovantes leva segundos e engorda o
-    // arquivo. Quem quer a prova marca; quem só quer o demonstrativo baixa
-    // rápido. O padrão que gasta menos é o desmarcado.
-    const [comComprovantes, setComComprovantes] = React.useState(false);
+    // Marcado por padrão (pedido de 26/09/2026): a prestação de contas vai com
+    // a prova. Custa segundos e alguns centos de KB; quem só quer o
+    // demonstrativo desmarca. O portal do condômino nasce igual.
+    const [comComprovantes, setComComprovantes] = React.useState(true);
     const [progressoAnexo, setProgressoAnexo] = React.useState<{ feito: number; total: number } | null>(null);
     const [dadosRelatorio, setDadosRelatorio] = React.useState<{
         despesas: DespesaRateio[]; cotas: CotaDoRateio[];

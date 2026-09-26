@@ -4457,6 +4457,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 portalToken
                                     ? { token: portalToken, documentoId }
                                     : { clientId: clientProfile?.id, documentoId })}
+                        onResolverComprovantes={(rateioId) =>
+                            clientPortalService.comprovantesDoRateio(
+                                portalToken
+                                    ? { token: portalToken, rateioId }
+                                    : { clientId: clientProfile?.id, rateioId })}
                     />
                 )}
                 {activeTab === 'unidade' && (

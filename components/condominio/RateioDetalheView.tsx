@@ -97,9 +97,14 @@ const RateioDetalheView: React.FC<Props> = ({
     const editarDescricao = async (d: DespesaRateio, nova: string) => {
         if (!d.id) return;
         try {
-            await condominioRateioService.atualizarDescricaoDespesa(d.id, nova);
+            // A correção vai para o LANÇAMENTO, não para este rateio: uma
+            // descrição, um lugar. Sem `transaction_id` (rateio montado à mão)
+            // o serviço grava no snapshot, que é o único lugar que existe.
+            await condominioRateioService.atualizarDescricaoDespesa(d.id, nova, d.transaction_id);
             setDespesas(prev => prev.map(x => (x.id === d.id ? { ...x, descricao: nova.trim() } : x)));
-            setAviso({ texto: 'Descrição corrigida. O condômino passa a ver este texto no portal.' });
+            setAviso({ texto: d.transaction_id
+                ? 'Descrição corrigida no lançamento — vale também em Contas a Pagar, na aba Despesas e no portal.'
+                : 'Descrição corrigida neste rateio.' });
         } catch (e: any) {
             setAviso({ texto: e?.message || 'Erro ao salvar a descrição.', erro: true });
         }

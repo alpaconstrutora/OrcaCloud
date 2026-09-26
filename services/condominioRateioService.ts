@@ -1276,6 +1276,20 @@ export const condominioRateioService = {
             });
         }
 
+        // ⚠️ CONGELA a descrição antes de fechar. Em rascunho a tela mostra o
+        // texto do lançamento; se o snapshot não fosse atualizado aqui, o
+        // documento sairia com o texto ANTIGO — o síndico veria uma coisa na
+        // tela e outra no PDF que o condômino recebe.
+        //
+        // Best-effort: falhar aqui não pode impedir o fechamento, que é o que
+        // gera o número. Na pior hipótese o documento fica com o snapshot
+        // antigo, que é o comportamento de antes desta mudança.
+        try {
+            await this.congelarDescricoes(id);
+        } catch {
+            // segue o fechamento
+        }
+
         const { data, error } = await supabase
             .from('condominio_rateios')
             .update({ status: 'FECHADO', fechado_em: new Date().toISOString(), number })
@@ -1284,6 +1298,33 @@ export const condominioRateioService = {
             .single();
         if (error) throw new Error(`Falha ao fechar o rateio: ${error.message}`);
         return data as Rateio;
+    },
+
+    /**
+     * Grava no snapshot o texto que o rascunho estava mostrando. Chamado no
+     * fechamento: dali em diante a linha é documento e não muda mais.
+     */
+    async congelarDescricoes(rateioId: string): Promise<void> {
+        const { data } = await supabase
+            .from('condominio_rateio_despesas')
+            .select('id, transaction_id, descricao')
+            .eq('rateio_id', rateioId);
+        const linhas = (data || []).filter((d: any) => d.transaction_id);
+        if (linhas.length === 0) return;
+
+        const vivos = await this.lancamentosDasDespesas(linhas.map((d: any) => d.transaction_id));
+        for (const d of linhas) {
+            const v = vivos.get((d as any).transaction_id);
+            if (!v) continue;
+            const rotulo = rotuloDeDespesa(v.description, v.credor);
+            // Só escreve o que MUDOU: um UPDATE por linha idêntica só gasta
+            // round-trip e suja o histórico.
+            if (!rotulo || rotulo === (d as any).descricao) continue;
+            await supabase
+                .from('condominio_rateio_despesas')
+                .update({ descricao: rotulo })
+                .eq('id', (d as any).id);
+        }
     },
 
     async cancelar(id: string): Promise<Rateio> {
@@ -1304,7 +1345,33 @@ export const condominioRateioService = {
      * de um rateio fechado: uma vez salvo, é ESSA lista (não a competência
      * corrente do centro de custo) que vale como comprovação.
      */
+    /**
+     * Despesas de um rateio.
+     *
+     * ⚠️ RASCUNHO segue o LANÇAMENTO; FECHADO e CANCELADO seguem o snapshot.
+     *
+     * `condominio_rateio_despesas.descricao` é uma cópia tirada quando o rateio
+     * foi criado. Isso é certo para um rateio fechado — é o documento que o
+     * condômino recebeu, e documento não se reescreve sozinho. Mas num rascunho
+     * a cópia envelhece: medido em 26/09/2026, as 38 despesas de rateio da base
+     * divergiam do lançamento, porque as descrições boas ("Consumo de Energia",
+     * "Manutençao do Elevador") foram escritas DEPOIS, e 5 snapshots ainda eram
+     * nome de arquivo enquanto nenhum lançamento vivo era.
+     *
+     * A decisão de qual usar fica AQUI, e não em quem chama: a tela de detalhe e
+     * o relatório leem a mesma lista, e um deles escolhendo diferente daria dois
+     * textos para a mesma despesa.
+     */
     async listarDespesas(rateioId: string): Promise<DespesaRateio[]> {
+        const { data: rateio } = await supabase
+            .from('condominio_rateios')
+            .select('status')
+            .eq('id', rateioId)
+            .single();
+        // Sem conseguir ler o status, trata como documento: mostrar o snapshot
+        // nunca reescreve nada, e é o comportamento antigo.
+        const seguirLancamento = (rateio as { status?: string } | null)?.status === 'RASCUNHO';
+
         const { data, error } = await supabase
             .from('condominio_rateio_despesas')
             .select('id, transaction_id, descricao, valor')
@@ -1313,69 +1380,106 @@ export const condominioRateioService = {
         if (error) throw new Error(`Falha ao carregar as despesas: ${error.message}`);
         const linhas = data || [];
 
-        // Fornecedor do lançamento de origem, em lote. Best-effort: sem ele a
-        // coluna fica vazia e o relatório continua de pé.
+        // Fornecedor E descrição do lançamento de origem, em lote. Best-effort:
+        // sem eles a linha cai no snapshot e o relatório continua de pé.
         let credores = new Map<string, string | null>();
+        let lancamentos = new Map<string, { description: string | null; credor: string | null }>();
         try {
-            credores = await this.fornecedoresDasDespesas(
+            const dados = await this.lancamentosDasDespesas(
                 linhas.map((d: any) => d.transaction_id).filter(Boolean));
+            lancamentos = dados;
+            for (const [id, v] of dados) credores.set(id, rotuloDeFornecedor(v.fornecedor, v.credor));
         } catch {
-            // Só apaga a coluna Fornecedor.
+            // Só apaga a coluna Fornecedor e mantém o snapshot na Descrição.
         }
 
-        return linhas.map((d: any) => ({
-            id: d.id,
-            transaction_id: d.transaction_id,
+        return linhas.map((d: any) => {
+            const vivo = lancamentos.get(d.transaction_id);
             // Poda na LEITURA também, e não só na criação: os rateios que já
             // existem foram gravados com a descrição crua, e o condômino já os
             // enxerga no portal. Descrição escrita à mão passa intacta.
-            descricao: rotuloDeDespesa(d.descricao) ?? 'Despesa sem descrição',
-            valor: Number(d.valor || 0),
-            fornecedor: credores.get(d.transaction_id) ?? null,
-        }));
+            //
+            // O credor entra como segunda chance, igual à aba Despesas — sem
+            // ele, descrição que é nome de arquivo virava "Despesa sem
+            // descrição" aqui e o nome do fornecedor lá.
+            const rotulo = seguirLancamento && vivo
+                ? rotuloDeDespesa(vivo.description, vivo.credor)
+                : rotuloDeDespesa(d.descricao, vivo?.credor);
+            return {
+                id: d.id,
+                transaction_id: d.transaction_id,
+                descricao: rotulo ?? 'Despesa sem descrição',
+                valor: Number(d.valor || 0),
+                fornecedor: credores.get(d.transaction_id) ?? null,
+            };
+        });
     },
 
     /**
-     * `transaction_id → nome de quem recebeu`, em lote.
+     * `transaction_id → { descrição viva, credor cru, fornecedor cadastrado }`.
      *
-     * Duas consultas e não um embed: `internal_transactions → suppliers` já
-     * deu `PGRST201` por ambiguidade noutras telas, e aqui o custo de evitar
-     * isso é uma consulta a mais sobre um punhado de ids.
+     * Traz os três de uma vez porque quem chama precisa dos três pela MESMA
+     * despesa: a descrição para o rascunho, o credor como segunda chance do
+     * rótulo, e o fornecedor para a coluna própria.
+     *
+     * Duas consultas e não um embed: `internal_transactions → suppliers` já deu
+     * `PGRST201` por ambiguidade noutras telas, e o custo de evitar isso é uma
+     * consulta a mais sobre um punhado de ids.
      */
-    async fornecedoresDasDespesas(transactionIds: string[]): Promise<Map<string, string | null>> {
-        const mapa = new Map<string, string | null>();
+    async lancamentosDasDespesas(transactionIds: string[]): Promise<Map<string, {
+        description: string | null; credor: string | null; fornecedor: string | null;
+    }>> {
+        const mapa = new Map<string, { description: string | null; credor: string | null; fornecedor: string | null }>();
         const ids = [...new Set(transactionIds)];
         if (ids.length === 0) return mapa;
 
         const { data: txs, error } = await supabase
             .from('internal_transactions')
-            .select('id, supplier_id, party_name, entity_name')
+            .select('id, description, supplier_id, party_name, entity_name')
             .in('id', ids);
-        if (error) throw new Error(`Falha ao carregar os fornecedores: ${error.message}`);
+        if (error) throw new Error(`Falha ao carregar os lançamentos: ${error.message}`);
 
         const nomes = await this.nomesDeFornecedor(
             (txs || []).map((t: any) => t.supplier_id).filter(Boolean) as string[]);
 
         for (const t of txs || []) {
-            mapa.set(t.id as string, rotuloDeFornecedor(
-                t.supplier_id ? nomes.get(t.supplier_id as string) : null,
-                (t.party_name || t.entity_name) as string | null,
-            ));
+            mapa.set(t.id as string, {
+                description: (t.description ?? null) as string | null,
+                credor: (t.party_name || t.entity_name || null) as string | null,
+                fornecedor: t.supplier_id ? (nomes.get(t.supplier_id as string) ?? null) : null,
+            });
         }
         return mapa;
     },
 
     /**
-     * Corrige a descrição de uma despesa do rateio.
+     * Corrige a descrição de uma despesa — no LANÇAMENTO, não no rateio.
      *
-     * Só faz sentido em rateio RASCUNHO: fechado é prestação de contas, e
-     * reescrever a linha depois de fechado muda o documento que o condômino já
-     * recebeu. Quem chama garante o estado — a tela só oferece a edição no
-     * rascunho.
+     * Decisão do usuário em 26/09/2026: uma descrição, um lugar. Corrigir aqui
+     * conserta a despesa em Contas a Pagar, na aba Despesas, nos outros rateios
+     * e no portal — não só dentro deste rateio. Era o contrário antes, e por
+     * isso o mesmo boleto aparecia com dois textos em duas telas.
+     *
+     * Só faz sentido em rateio RASCUNHO: fechado é prestação de contas, e o
+     * fechamento CONGELA o texto no snapshot (`fechar`). Quem chama garante o
+     * estado — a tela só oferece a edição no rascunho.
+     *
+     * Sem `transactionId` (despesa de rateio montado à mão, sem lançamento de
+     * origem), grava no snapshot mesmo: é o único lugar que existe.
      */
-    async atualizarDescricaoDespesa(despesaId: string, descricao: string): Promise<void> {
+    async atualizarDescricaoDespesa(
+        despesaId: string, descricao: string, transactionId?: string | null,
+    ): Promise<void> {
         const limpa = descricao.trim();
         if (!limpa) throw new Error('A descrição não pode ficar vazia.');
+        if (transactionId) {
+            const { error } = await supabase
+                .from('internal_transactions')
+                .update({ description: limpa })
+                .eq('id', transactionId);
+            if (error) throw new Error(`Falha ao salvar a descrição: ${error.message}`);
+            return;
+        }
         const { error } = await supabase
             .from('condominio_rateio_despesas')
             .update({ descricao: limpa })

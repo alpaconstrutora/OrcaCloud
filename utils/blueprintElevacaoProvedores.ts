@@ -29,7 +29,7 @@
 
 import type { ClasseDeQualidade, LatLon } from './blueprintTopografia';
 
-export type CodigoDaFonte = 'PONTOS_COTADOS' | 'OPEN_METEO_GLO90' | 'OPENTOPODATA_SRTM30';
+export type CodigoDaFonte = 'PONTOS_COTADOS' | 'OPEN_METEO_GLO90' | 'OPENTOPODATA_SRTM30' | 'DEM_ARQUIVO';
 
 export interface FonteDeElevacao {
   codigo: CodigoDaFonte;
@@ -114,6 +114,28 @@ export const FONTES: readonly FonteDeElevacao[] = [
     descricao:
       'Modelo digital de elevação público com célula de 30 m, três vezes mais fino que o GLO-90. ' +
       'Serve gleba grande; num lote urbano ainda é recusado (lado menor < 90 m).',
+  },
+  {
+    // A3: DEM GeoTIFF importado com célula MAIOR que 1 m. Os pixels viram pontos
+    // cotados (a mesma TIN do levantamento), mas a classe é a do DEM remoto — um
+    // SRTM baixado não vira "levantamento" só por ter vindo em arquivo. DEM de
+    // até 1 m (drone, LiDAR) entra como Pontos cotados. Não aparece como botão:
+    // só existe quando um arquivo a escolhe.
+    codigo: 'DEM_ARQUIVO',
+    nome: 'DEM GeoTIFF importado',
+    rotuloCurto: 'DEM do arquivo',
+    tipo: 'LOCAL',
+    resolucaoNominalM: null,
+    referenciaVertical: null,
+    datasetVersao: 'arquivo GeoTIFF do usuário',
+    licenca: 'a do arquivo de origem',
+    atribuicao: 'modelo digital de elevação importado',
+    classe: 'PRELIMINAR_REMOTO',
+    maxPontosPorRequisicao: Number.POSITIVE_INFINITY,
+    exigeGeorreferencia: true,
+    descricao:
+      'Modelo de elevação em GeoTIFF com célula acima de 1 m (SRTM, ALOS, Copernicus baixados). Os pixels viram pontos cotados; ' +
+      'a versão sai PRELIMINAR, como um DEM remoto.',
   },
 ];
 

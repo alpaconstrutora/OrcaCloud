@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { AlertTriangle, Image as ImageIcon, Layers, Ruler, Trash2 } from 'lucide-react';
+import { AlertTriangle, Image as ImageIcon, Layers, Ruler, Trash2, Globe } from 'lucide-react';
 import {
   AVISO_RASTER,
   VAO_CURTO_PX,
@@ -35,6 +35,7 @@ export default function ControlesDeFundo({
   onDeclararEscala,
   onOpacidade,
   onRemover,
+  onImportarOrtofoto,
 }: {
   linhas: UnderlayRow[];
   linha: UnderlayRow | null;
@@ -50,8 +51,14 @@ export default function ControlesDeFundo({
   onDeclararEscala: (denominador: number) => void;
   onOpacidade: (v: number) => void;
   onRemover: () => void;
+  /**
+   * A3: ortofoto GEORREFERENCIADA — GeoTIFF, ou imagem + world file (+ .prj).
+   * Cai no lugar pela georreferência do lote, sem aferir. Ausente = sem o botão.
+   */
+  onImportarOrtofoto?: (arquivos: File[]) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const ortoRef = useRef<HTMLInputElement>(null);
   const [pagina, setPagina] = useState(1);
   const [escala, setEscala] = useState('');
 
@@ -104,6 +111,34 @@ export default function ControlesDeFundo({
         <ImageIcon className="h-3.5 w-3.5" />
         {linha ? 'Acrescentar prancha' : 'Planta de fundo'}
       </button>
+
+      {onImportarOrtofoto && (
+        <>
+          <input
+            ref={ortoRef}
+            type="file"
+            multiple
+            accept=".tif,.tiff,.png,.jpg,.jpeg,.tfw,.pgw,.jgw,.wld,.prj"
+            className="hidden"
+            aria-label="Arquivos da ortofoto georreferenciada"
+            onChange={(e) => {
+              const fs = e.target.files ? [...e.target.files] : [];
+              if (fs.length > 0) onImportarOrtofoto(fs);
+              e.target.value = '';
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => ortoRef.current?.click()}
+            disabled={ocupado}
+            title="GeoTIFF, ou a imagem com o world file (.tfw/.pgw/.jgw) e o .prj — escolha todos juntos. Cai no lugar pela georreferência do lote, sem aferir."
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+          >
+            <Globe className="h-3.5 w-3.5" />
+            Ortofoto
+          </button>
+        </>
+      )}
 
       {totalPaginas > 1 && (
         <label className="flex items-center gap-1 text-[11px] text-slate-600">

@@ -332,6 +332,8 @@ export function csvDaGrade(grade: GradeDeElevacao, prov: ProvenienciaDaVersao): 
 export interface ExtrasDaTopografia {
   drenagem?: { nome: string; tipo?: string; pontos: Point[] }[];
   muros?: { a: Point; b: Point; normal: Point }[];
+  /** A3: os lotes do loteamento, para a camada `lotes` do Shapefile. */
+  lotes?: { quadra: string; numero: string; areaM2: number; pontos: Point[] }[];
 }
 
 /** Cor CSS `#rrggbb` → cor KML `aabbggrr` (opaca). */

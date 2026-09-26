@@ -267,3 +267,24 @@ describe('ResumoDaAfericao · fundo vindo do arquivo', () => {
     expect(screen.getByText(/pode não valer no resto da folha/i)).toBeInTheDocument();
   });
 });
+
+describe('ControlesDeFundo · ortofoto georreferenciada (A3)', () => {
+  it('sem o callback, não há o botão; com ele, os arquivos escolhidos (vários) vão juntos', () => {
+    montar();
+    expect(screen.queryByRole('button', { name: /^ortofoto$/i })).toBeNull();
+  });
+
+  it('o botão explica o que escolher e manda TODOS os arquivos da seleção', () => {
+    const onImportarOrtofoto = vi.fn();
+    montar({ onImportarOrtofoto });
+    const botao = screen.getByRole('button', { name: /^ortofoto$/i });
+    expect(botao.title).toMatch(/GeoTIFF.*world file.*\.prj.*sem aferir/);
+    const input = screen.getByLabelText('Arquivos da ortofoto georreferenciada') as HTMLInputElement;
+    expect(input.multiple).toBe(true);
+    expect(input.accept).toContain('.tfw');
+    const img = new File(['x'], 'orto.png', { type: 'image/png' });
+    const pgw = new File(['0.5'], 'orto.pgw');
+    fireEvent.change(input, { target: { files: [img, pgw] } });
+    expect(onImportarOrtofoto).toHaveBeenCalledWith([img, pgw]);
+  });
+});

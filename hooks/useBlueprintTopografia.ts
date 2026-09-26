@@ -6,6 +6,8 @@ import {
   type TopografiaInput,
 } from '../services/blueprintTopografiaService';
 import { baixarArtefatos } from '../services/blueprintExportService';
+import { camadasDaTopografia } from '../utils/geo/exportacaoGis';
+import { kmzDoKml, zipDeShapefiles } from '../utils/geo/shapefile';
 import { blueprintLevantamentoService } from '../services/blueprintLevantamentoService';
 import {
   contarFeicoes,
@@ -101,6 +103,8 @@ export interface OrigemDosPontos {
   formato: string;
   sha256: string;
   quantos: number;
+  /** A3: a fonte que o arquivo escolhe (DEM grosso = DEM_ARQUIVO, preliminar). Ausente = Pontos cotados. */
+  fonte?: CodigoDaFonte;
 }
 
 export interface LevantamentoEmEdicao {
@@ -194,7 +198,8 @@ export interface Topografia {
   selecionar: (id: string | null) => void;
   apagarVersao: (id: string) => Promise<void>;
   /** `extras` (fase 8): drenagem traçada e muros, que vão no KML e no DXF por cima das curvas; `cores` (fase 12): a rampa arco-íris no SVG e no KML. */
-  exportar: (formato: 'svg' | 'csv' | 'kml' | 'dxf', extras?: ExtrasDaTopografia & { cores?: CoresDaExportacao; executivo?: EmissaoExecutiva | null }) => void;
+  /** A3: `kmz` (o KML zipado) e `shp` (zip de shapefiles: curvas, pontos, lote, drenagem, lotes). */
+  exportar: (formato: 'svg' | 'csv' | 'kml' | 'dxf' | 'kmz' | 'shp', extras?: ExtrasDaTopografia & { cores?: CoresDaExportacao; executivo?: EmissaoExecutiva | null }) => void;
 
   carregando: boolean;
   persistenciaIndisponivel: boolean;
@@ -271,7 +276,7 @@ export function useBlueprintTopografia(
               setLinhasDeQuebra(lev.linhas_de_quebra ?? []);
               setTinImportada(null);
               setOrigemDosPontos(lev.origem ?? null);
-              setFonteCodigo('PONTOS_COTADOS');
+              setFonteCodigo((lev.origem as OrigemDosPontos | null)?.fonte ?? 'PONTOS_COTADOS');
             }
             setEstadoLev('SALVO');
           }
@@ -345,7 +350,7 @@ export function useBlueprintTopografia(
         setTinImportada(extras.tinImportada ?? null);
       }
       setOrigemDosPontos(origem);
-      setFonteCodigo('PONTOS_COTADOS');
+      setFonteCodigo(origem?.fonte ?? 'PONTOS_COTADOS');
       marcar();
     },
     [marcar],
@@ -634,11 +639,11 @@ export function useBlueprintTopografia(
   );
 
   const exportar = useCallback(
-    (formato: 'svg' | 'csv' | 'kml' | 'dxf', extras: ExtrasDaTopografia & { cores?: CoresDaExportacao; executivo?: EmissaoExecutiva | null } = {}) => {
+    (formato: 'svg' | 'csv' | 'kml' | 'dxf' | 'kmz' | 'shp', extras: ExtrasDaTopografia & { cores?: CoresDaExportacao; executivo?: EmissaoExecutiva | null } = {}) => {
       if (!selecionada) return;
       // KML sem georreferência não tem onde pôr o lote no mundo. O botão já
       // vem desabilitado; isto é a rede de segurança.
-      if (formato === 'kml' && !selecionada.georreferencia) return;
+      if ((formato === 'kml' || formato === 'kmz') && !selecionada.georreferencia) return;
       const prov: ProvenienciaDaVersao = {
         nomeDoEstudo,
         versao: selecionada.versao,
@@ -652,6 +657,39 @@ export function useBlueprintTopografia(
         // Fase 17: com a emissão executiva válida, o aviso das exportações é a ART.
         executivo: extras.executivo ?? null,
       };
+      // A3: os dois formatos zipados (pizzip entra por import dinâmico → assíncronos).
+      if (formato === 'kmz' || formato === 'shp') {
+        const versao = selecionada;
+        void (async () => {
+          try {
+            if (formato === 'kmz') {
+              const kml = kmlDasCurvas(versao.curvas, versao.anel, { ...prov, georreferencia: versao.georreferencia! }, versao.pontos_cotados, extras);
+              const bytes = await kmzDoKml(kml);
+              baixarArtefatos([{ blob: new Blob([bytes as BlobPart], { type: 'application/vnd.google-earth.kmz' }), nome: nomeDoArquivoDeTopografia(nomeDoEstudo, versao.versao, 'kmz'), tipo: 'kmz' }]);
+              return;
+            }
+            // Pontos com NOME (o levantamento em edição) quando é a fonte local; senão, os da versão.
+            const pontos = fonteDeElevacao(versao.fonte_codigo as CodigoDaFonte).tipo === 'LOCAL' && pontosCotados.length > 0 ? pontosCotados : versao.pontos_cotados;
+            const { camadas, georreferenciado } = camadasDaTopografia(
+              {
+                curvas: versao.curvas.map((c) => ({ cotaM: c.cotaM, mestra: !!c.mestra, pontos: c.pontos })),
+                pontos,
+                anel: versao.anel,
+                drenagem: extras.drenagem?.map((d) => ({ nome: d.nome, tipo: d.tipo ?? '', pontos: d.pontos })),
+                lotes: extras.lotes,
+              },
+              versao.georreferencia,
+            );
+            const bytes = await zipDeShapefiles(camadas);
+            // Sem georreferência, o NOME avisa: coordenadas locais, sem .prj.
+            const nome = nomeDoArquivoDeTopografia(georreferenciado ? nomeDoEstudo : `${nomeDoEstudo} - coordenadas LOCAIS`, versao.versao, 'shp.zip');
+            baixarArtefatos([{ blob: new Blob([bytes as BlobPart], { type: 'application/zip' }), nome, tipo: 'shp' }]);
+          } catch (e) {
+            setErro(e instanceof Error ? e.message : String(e));
+          }
+        })();
+        return;
+      }
       const conteudo =
         formato === 'svg'
           ? svgDasCurvas(selecionada.curvas, selecionada.anel, prov, {
@@ -695,7 +733,7 @@ export function useBlueprintTopografia(
         },
       ]);
     },
-    [selecionada, nomeDoEstudo],
+    [selecionada, nomeDoEstudo, pontosCotados],
   );
 
   // ── A2: o que o painel e o canvas usam do levantamento ────────────────────
@@ -742,7 +780,8 @@ export function useBlueprintTopografia(
         if (novos.length === 0) return;
         setPontosCotados((ps) => [...ps, ...novos]);
         setTinImportada(null);
-        setFonteCodigo('PONTOS_COTADOS');
+        // Acrescentar a um DEM importado não muda a classe dele.
+        setFonteCodigo((f) => (fonteDeElevacao(f).tipo === 'LOCAL' ? f : 'PONTOS_COTADOS'));
         marcar();
       },
       exportar: exportarLevantamento,

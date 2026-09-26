@@ -424,3 +424,29 @@ KML dos pontos de locação (sai o CSV, que é o que a estação total lê; KML 
 ### Fora desta fase (declarado)
 
 Feições vindas de POLILINHA de DXF por camada (hoje: só pelo código dos pontos); XLSX de pontos (sai CSV, que abre no Excel); UTM/lat-long como colunas do CSV (o KML leva a georreferência); caderno de códigos por organização (o catálogo é fixo).
+
+## Estado — A3 (26/09/2026)
+
+- [x] `utils/geo/tiff.ts` — leitor PRÓPRIO de TIFF/GeoTIFF: little/big endian, strips e tiles, sem compressão/LZW/Deflate (`DecompressionStream`)/PackBits, preditor 2 e 3, 8/16/32 bits inteiros e 32/64 float, paleta; tags GeoTIFF (ModelPixelScale/Tiepoint/Transformation, GeoKeyDirectory com EPSG projetado/geográfico e PixelIsPoint levado ao canto do pixel, NODATA do GDAL). Recusas NOMEADAS com a saída (`gdal_translate`): BigTIFF, JPEG/WebP/LERC, planar, > 120 MP.
+- [x] `utils/geo/raster.ts` — cadeia pixel → CRS do arquivo → SIRGAS 2000 → mm do desenho; CRS de LEITURA a mais (WGS 84 / UTM sul, Web Mercator) sem poluir o catálogo da tela; `crsDoWkt` (.prj ESRI/OGC); world file (centro → canto); janela de recorte (lote + margem); `encaixarOrtofoto` (semelhança + resíduo em pixels nos cantos e no centro, aviso de pixel não quadrado); RGBA da janela; `pontosDoDem` (um ponto por pixel no centro, NODATA contado, teto de 20.000 pontos com passo). `demEhPreliminar` = célula > 1,05 m (a folga é o fator de escala do UTM).
+- [x] **Ortofoto → planta de fundo SEM aferir** (`utils/geo/ortofoto.ts`, botão **Ortofoto** em Planta de fundo): GeoTIFF, ou imagem + world file (+ `.prj`; sem ele vale o CRS do lote), seleção múltipla; recorta lote + 30 m, vira PNG e entra pelo `importarRaster` que já existia; o aviso diz CRS, pixel e o desvio máximo.
+- [x] **DEM GeoTIFF → pontos cotados** pelo "Importar levantamento": ≤ 1 m entra como Pontos cotados (LEVANTAMENTO_IMPORTADO); acima, fonte nova `DEM_ARQUIVO` (LOCAL, classe PRELIMINAR_REMOTO) — um SRTM baixado não vira "levantamento" por ter vindo em arquivo. A fonte viaja em `origem.fonte` do levantamento (A2) e volta ao recarregar; o botão "DEM do arquivo" só aparece quando é a fonte ativa. Sem lote, o arquivo inteiro (com o teto) — a gleba pode nascer do DEM.
+- [x] **Shapefile** (`utils/geo/shapefile.ts`): leitura e escrita de Point/PolyLine/Polygon (e Z), `.shx`, `.dbf` (UTF-8 + `.cpg`), `.prj`, anel externo horário; zip e **KMZ** via `pizzip` em import dinâmico. Importar: `.zip` de shapefile → GeoJSON em lat/long (com `.prj`: pontos e vértices com Z viram pontos; o 1º polígono vira contorno do lote) ou CSV local (sem `.prj`: dito, e o polígono não vira contorno); `.kmz` → KML. Exportar a versão: **SHP** (curvas, pontos com nome/código, lote, drenagem, lotes do loteamento — SIRGAS 2000 / UTM do fuso com `.prj`; sem georreferência, metros locais sem `.prj` e o NOME do arquivo diz "coordenadas LOCAIS") e **KMZ**.
+- [x] **Mancha de inundação** (`manchaDeInundacao`): cota de cheia no painel → célula com cota média abaixo, pintada em azul pela mesma pintura do hipsométrico; área e lâmina máxima; o texto diz que NÃO é modelo hidráulico.
+- [x] Testes: `geoRaster` (14 — contra GeoTIFFs escritos pelo **PIL**: RGB LZW, DEM float32 Deflate com NODATA, cinza 16 bits PackBits com PixelIsPoint, sem geo; LZW pelo exemplo da especificação), `geoShapefile` (6 — leitura contra zip escrito pelo **pyshp**, escrita com conferência de bytes e ida e volta), `geoImportacaoExportacao` (10 — shapefile no importador com fator de escala e convergência medidos, DEM plano ± 1 mm, SHP de saída na origem ± 1 cm, inundação), `PainelTopografiaFaseA3` (5), `ControlesDeFundo` (+2). Suíte cheia 490 arquivos / 5.653 verde; tsc, `check-ui-standard`, `check-xss-sinks`, build verdes.
+
+### Provas fora do vitest
+
+- **Navegador** (`docs/spikes/geo/index.html` + `medir-a3.mjs`, 11 checks): o GeoTIFF passa pelo `prepararOrtofoto` real (DecompressionStream, canvas, PNG); o PNG é decodificado de volta e **a origem do desenho cai no pixel (100, 50) do arquivo, com a cor dele (100, 50, 150)**; desvio 0,0002 px; pixel 0,5001 m; recorte 161×100 de 200×100; giro de 6,3 mrad = a convergência meridiana; DEM Deflate/float32 com 1.999 pontos e 1 NODATA.
+- **Shapefile lido pelo pyshp** (`docs/spikes/geo/gerar-shp.ts` → `conferir-shp.py`, 13 checks): PolygonZ fechado e horário com área 600 m², PolyLineZ com Z, PointZ, atributos acentuados em UTF-8, `.prj` SIRGAS 2000 / UTM 23S.
+
+### Um achado
+
+Eu esperava que o ponto 10 m a leste e 5 m ao norte NA QUADRÍCULA caísse em (10 000, 5 000) mm no desenho. Não cai: o desenho é o plano do terreno com Y no norte VERDADEIRO — a distância muda pelo fator de escala (< 0,1 %) e a direção gira pela convergência (0,36° aqui, 6,3 mrad na ortofoto). É a mesma física da A1; o teste agora mede isso em vez de igualdade de milímetros.
+
+### Fora desta fase (declarado)
+
+- **Tiles de satélite como fundo (Edge Function `tiles-proxy`)** — depende da decisão de LICENÇA (pendência de negócio E-12 do plano): o ESRI World Imagery exige conta/termos para uso comercial e o OSM proíbe uso pesado de tiles. Publicar um proxy de imagens de terceiros é decisão do negócio, não de código. O caminho de GeoTIFF/world file já cobre a ortofoto que a prefeitura, o IBGE ou o drone entregam.
+- Comparação "DEM local × Open-Meteo na mesma gleba" com dado real (não há DEM público no repositório; provado com plano analítico).
+- ECW/JP2, GeoTIFF com JPEG interno, BigTIFF (recusa com mensagem).
+- `blueprint_underlays` não ganhou colunas de CRS/bbox: a ortofoto grava o CRS no nome e a aferição verdadeira (largura em px × mm) nos `calib_*`, como o fundo de DXF.

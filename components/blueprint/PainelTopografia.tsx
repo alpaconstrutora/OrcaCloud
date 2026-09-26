@@ -16,6 +16,9 @@ import type { Topografia } from '../../hooks/useBlueprintTopografia';
 import type { CodigoDaFonte } from '../../utils/blueprintElevacaoProvedores';
 import { ALGORITMO_TOPOGRAFIA, amostradorDaGrade, type ModoDeNiveis, type QualidadeDaGrade } from '../../utils/blueprintTopografia';
 import { FEICOES, fichaDaFeicao, interpolarSobreLinha, lerCodigo, pontuarPolilinha } from '../../utils/blueprintFeicoes';
+import { lerTiff } from '../../utils/geo/tiff';
+import { kmlDoKmz, lerZipDeShapefiles } from '../../utils/geo/shapefile';
+import { resultadoDoDem, textoDoShapefile } from '../../utils/geo/importacaoGis';
 import {
   FAIXAS_DE_DECLIVIDADE,
   TIPOS_DE_DRENAGEM,
@@ -73,6 +76,17 @@ export interface PerfilNoPainel {
 }
 
 /** O que o painel precisa para a seção "Corte e aterro" (fase 2). */
+/** A3: a mancha de inundação — a cota de cheia vive no editor (o canvas a pinta). */
+export interface InundacaoNoPainel {
+  cotaM: number | null;
+  onCotaM: (v: number | null) => void;
+  areaM2: number;
+  laminaMaxM: number;
+  /** Faixa de cotas da versão, para sugerir e limitar. */
+  cotaMinM: number;
+  cotaMaxM: number;
+}
+
 export interface TerraplenagemNoPainel {
   base: 'ENVELOPE' | 'LOTE';
   onBase: (b: 'ENVELOPE' | 'LOTE') => void;
@@ -190,8 +204,14 @@ export default function PainelTopografia({
   executivo = null,
   pedidoDeImportacao,
   onLancarLote,
+  inundacao = null,
+  lotesDoLoteamento,
 }: {
   topografia: Topografia;
+  /** A3: a mancha de inundação (cota de cheia informada). */
+  inundacao?: InundacaoNoPainel | null;
+  /** A3: os lotes do loteamento, que o Shapefile leva na camada `lotes`. */
+  lotesDoLoteamento?: { quadra: string; numero: string; areaM2: number; pontos: Point[] }[];
   temLoteFechado: boolean;
   temGeorreferencia: boolean;
   /** Fase 17: o projeto executivo com ART. */
@@ -289,7 +309,8 @@ export default function PainelTopografia({
           {/* Fonte — um botão por fonte, como a origem da zona: a escolha decide se
               o resultado é levantamento ou DEM (90 m ou 30 m, fase 8). */}
           <div className="mt-1.5 flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 p-0.5">
-            {t.fontes.map((f) => (
+            {/* A3: "DEM do arquivo" não é escolha: só aparece quando um GeoTIFF a trouxe. */}
+            {t.fontes.filter((f) => f.codigo !== 'DEM_ARQUIVO' || t.fonteCodigo === 'DEM_ARQUIVO').map((f) => (
               <button
                 key={f.codigo}
                 type="button"
@@ -517,6 +538,7 @@ export default function PainelTopografia({
           // Fase 8: drenagem e muros vão junto no KML e no DXF.
           extras={{
             drenagem: drenagem?.linhas.map((l) => ({ nome: l.nome, tipo: l.tipo, pontos: l.pontos })),
+            lotes: lotesDoLoteamento,
             muros: terraplenagem?.resultado?.muros.map((m) => ({ a: m.a, b: m.b, normal: m.normal })),
             // Fase 12: com o hipsométrico em arco-íris ligado, o SVG e o KML
             // saem coloridos e com a legenda por nível, como no Contour Map Creator.
@@ -555,6 +577,7 @@ export default function PainelTopografia({
       {t.selecionada && hipsometria && (
         <SecaoHipsometria hipsometria={hipsometria} opcoes={hipsometriaOpcoes} />
       )}
+      {t.selecionada && inundacao && <SecaoInundacao i={inundacao} />}
 
       {t.selecionada && perfil && <SecaoPerfil p={perfil} />}
 
@@ -1166,7 +1189,18 @@ function ImportarPontos({
   const entrada = useRef<HTMLInputElement>(null);
   const caixa = useRef<HTMLButtonElement>(null);
   const [apontado, setApontado] = useState(false);
-  const [arquivo, setArquivo] = useState<{ nome: string; texto: string; formato: FormatoDeImportacao; sha256: string } | null>(null);
+  const [arquivo, setArquivo] = useState<{
+    nome: string;
+    texto: string;
+    formato: FormatoDeImportacao;
+    sha256: string;
+    /** A3: o que o arquivo ERA (KMZ, Shapefile, GeoTIFF) quando virou outro formato para o importador. */
+    rotulo?: string;
+    /** A3: resultado já pronto (DEM) — as opções de leitura não se aplicam. */
+    pronto?: ResultadoDaImportacao;
+    avisosExtras?: string[];
+    fonte?: CodigoDaFonte;
+  } | null>(null);
   const [opcoes, setOpcoes] = useState<OpcoesDeImportacao>({});
   const [resultado, setResultado] = useState<ResultadoDaImportacao | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -1197,13 +1231,20 @@ function ImportarPontos({
   }, [pedidoDeImportacao]);
 
   const rodar = (arq: NonNullable<typeof arquivo>, op: OpcoesDeImportacao) => {
+    if (arq.pronto) {
+      setResultado(arq.pronto);
+      setLancarLote(false);
+      setErro(null);
+      return;
+    }
     try {
-      const r = importarPontos(
+      const lido = importarPontos(
         arq.texto,
         arq.formato,
         { anel: t.anelDoLote, georreferencia: t.georreferencia, linhaDoPerfil: linhaDoPerfil?.filter((q) => q.cotaM !== null || true) ?? null },
         op,
       );
+      const r = arq.avisosExtras?.length ? { ...lido, avisos: [...arq.avisosExtras, ...lido.avisos] } : lido;
       setResultado(r);
       // ⚠️ Marcado só quando o arquivo TRAZ o contorno. A envoltória convexa é
       // palpite — e palpite não vira divisa sem alguém olhar.
@@ -1218,9 +1259,53 @@ function ImportarPontos({
   const aoEscolher = (lista: FileList | null) => {
     const f = lista?.[0];
     if (!f) return;
+    // A3: os binários — KMZ (zip do KML), Shapefile em .zip, DEM GeoTIFF.
+    const extensao = f.name.toLowerCase().slice(f.name.lastIndexOf('.'));
+    if (['.zip', '.kmz', '.tif', '.tiff'].includes(extensao)) {
+      void (async () => {
+        try {
+          const bytes = new Uint8Array(await f.arrayBuffer());
+          const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((b) => b.toString(16).padStart(2, '0')).join('');
+          let arq: NonNullable<typeof arquivo>;
+          if (extensao === '.kmz') {
+            arq = { nome: f.name, texto: await kmlDoKmz(bytes), formato: 'KML', sha256: hash, rotulo: 'KMZ (KML zipado)' };
+          } else if (extensao === '.zip') {
+            const camadas = await lerZipDeShapefiles(bytes);
+            const conv = textoDoShapefile(camadas);
+            arq = {
+              nome: f.name,
+              texto: conv.texto,
+              formato: conv.formato,
+              sha256: hash,
+              rotulo: `Shapefile (${camadas.map((c) => c.nome).join(', ')} · ${conv.crs ?? 'sem .prj'})`,
+              avisosExtras: conv.avisos,
+            };
+          } else {
+            const dem = resultadoDoDem(await lerTiff(bytes), t.georreferencia, t.anelDoLote);
+            arq = {
+              nome: f.name,
+              texto: '',
+              formato: 'TEXTO',
+              sha256: hash,
+              rotulo: `DEM GeoTIFF (${dem.resolucaoM.toFixed(1).replace('.', ',')} m · ${dem.crs}${dem.preliminar ? ' · PRELIMINAR' : ''})`,
+              pronto: dem.resultado,
+              ...(dem.preliminar ? { fonte: 'DEM_ARQUIVO' as const } : {}),
+            };
+          }
+          setArquivo(arq);
+          setOpcoes({});
+          rodar(arq, {});
+        } catch (e) {
+          setErro(e instanceof Error ? e.message : String(e));
+          setArquivo(null);
+          setResultado(null);
+        }
+      })();
+      return;
+    }
     const formatoBase = formatoPeloNome(f.name);
     if (!formatoBase) {
-      setErro(`Não sei ler "${f.name}": use CSV/TXT, GeoJSON, KML, DXF, SVG ou LandXML.`);
+      setErro(`Não sei ler "${f.name}": use CSV/TXT, GeoJSON, KML/KMZ, DXF, SVG, LandXML, Shapefile (.zip) ou DEM GeoTIFF.`);
       setArquivo(null);
       setResultado(null);
       return;
@@ -1261,7 +1346,14 @@ function ImportarPontos({
         ...(p.codigo ? { codigo: p.codigo } : {}),
         ...(p.descricao ? { descricao: p.descricao } : {}),
       })),
-      { arquivo: arquivo.nome, formato: ROTULO_DO_FORMATO[arquivo.formato], sha256: arquivo.sha256, quantos: resultado.pontos.length },
+      {
+        arquivo: arquivo.nome,
+        formato: arquivo.rotulo ?? ROTULO_DO_FORMATO[arquivo.formato],
+        sha256: arquivo.sha256,
+        quantos: resultado.pontos.length,
+        // A3: DEM grosso escolhe a fonte preliminar — a classe da versão diz de onde veio.
+        ...(arquivo.fonte ? { fonte: arquivo.fonte } : {}),
+      },
       modo,
       // Fase 15: as linhas de quebra e a TIN do mesmo arquivo vão junto.
       { linhasDeQuebra: resultado.linhasDeQuebra, tinImportada: resultado.tinImportada },
@@ -1284,7 +1376,7 @@ function ImportarPontos({
       <input
         ref={entrada}
         type="file"
-        accept=".csv,.txt,.pnezd,.dat,.pts,.xyz,.geojson,.json,.kml,.dxf,.svg,.xml"
+        accept=".csv,.txt,.pnezd,.dat,.pts,.xyz,.geojson,.json,.kml,.kmz,.dxf,.svg,.xml,.zip,.tif,.tiff"
         aria-label="Arquivo de pontos cotados"
         className="hidden"
         onChange={(e) => aoEscolher(e.target.files)}
@@ -1306,7 +1398,7 @@ function ImportarPontos({
         <div className="mt-2 w-full basis-full rounded-md border border-blue-200 bg-blue-50 p-2 text-[11px] text-slate-700" data-testid="previa-da-importacao">
           {arquivo && (
             <p>
-              <strong className="font-semibold">{arquivo.nome}</strong> · {ROTULO_DO_FORMATO[arquivo.formato]}
+              <strong className="font-semibold">{arquivo.nome}</strong> · {arquivo.rotulo ?? ROTULO_DO_FORMATO[arquivo.formato]}
               {resultado && (
                 <>
                   {' '}
@@ -1342,7 +1434,7 @@ function ImportarPontos({
           {erro && <p className="mt-1 text-red-700">{erro}</p>}
           {arquivo && (
             <div className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-1">
-              {arquivo.formato === 'TEXTO' && resultado?.detectado.ordem !== 'GEO' && !resultado?.detectado.cabecalho && (
+              {!arquivo.pronto && arquivo.formato === 'TEXTO' && resultado?.detectado.ordem !== 'GEO' && !resultado?.detectado.cabecalho && (
                 <label>
                   <span className="block text-slate-500">Ordem das colunas</span>
                   <select
@@ -1357,7 +1449,7 @@ function ImportarPontos({
                   </select>
                 </label>
               )}
-              {(arquivo.formato === 'TEXTO' || arquivo.formato === 'DXF') && resultado?.detectado.ordem !== 'GEO' && (
+              {!arquivo.pronto && (arquivo.formato === 'TEXTO' || arquivo.formato === 'DXF') && resultado?.detectado.ordem !== 'GEO' && (
                 <label>
                   <span className="block text-slate-500">Unidade</span>
                   <select
@@ -1677,7 +1769,81 @@ function Resultado({
           <Download className="h-3.5 w-3.5" />
           KML
         </button>
+        <button
+          type="button"
+          disabled={!v.georreferencia}
+          onClick={() => t.exportar('kmz', extras)}
+          title={
+            v.georreferencia
+              ? 'O mesmo KML, zipado — o que o Google Earth e o CAR preferem'
+              : 'Sem georreferência não há onde pôr o lote no mundo — informe em "Onde fica" e gere de novo.'
+          }
+          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Download className="h-3.5 w-3.5" />
+          KMZ
+        </button>
+        <button
+          type="button"
+          onClick={() => t.exportar('shp', extras)}
+          title={
+            v.georreferencia
+              ? 'Shapefile (.zip): curvas, pontos cotados, lote, drenagem e lotes — SIRGAS 2000 / UTM do fuso do lote, com .prj'
+              : 'Shapefile (.zip) em coordenadas LOCAIS do desenho, sem .prj — informe "Onde fica" para sair em SIRGAS 2000 / UTM'
+          }
+          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-50"
+        >
+          <Download className="h-3.5 w-3.5" />
+          SHP
+        </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * MANCHA DE INUNDAÇÃO (A3): até onde a água chega numa cheia informada. A cota
+ * mora no editor (a planta pinta a mancha); aqui só se digita e se lê.
+ */
+function SecaoInundacao({ i }: { i: InundacaoNoPainel }) {
+  return (
+    <div className="mt-3 border-t border-slate-200 pt-3" data-testid="topografia-inundacao">
+      <p className="text-xs font-medium text-slate-700">Mancha de inundação</p>
+      <label className="mt-1.5 flex items-center justify-between gap-2 text-xs text-slate-600">
+        <span>Cota de cheia</span>
+        <span className="flex items-center gap-1">
+          <input
+            type="number"
+            step="0.1"
+            value={i.cotaM ?? ''}
+            placeholder={formatar((i.cotaMinM + i.cotaMaxM) / 2)}
+            aria-label="Cota de cheia (m)"
+            onChange={(e) => {
+              const v = e.target.value.trim();
+              i.onCotaM(v === '' ? null : Number(v));
+            }}
+            className="w-24 rounded-md border border-slate-300 px-2 py-1 text-right text-xs text-slate-800"
+          />
+          <span className="w-6 text-slate-400">m</span>
+        </span>
+      </label>
+      {i.cotaM === null ? (
+        <p className="mt-1 text-[11px] text-slate-500">
+          Informe a cota que a água atinge (a máxima de cheia conhecida, a do projeto de drenagem da prefeitura). O terreno vai de{' '}
+          {formatar(i.cotaMinM)} a {formatar(i.cotaMaxM)} m.
+        </p>
+      ) : (
+        <>
+          <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
+            <Medida rotulo="Área alagada" valor={`${formatar(i.areaM2)} m²`} />
+            <Medida rotulo="Lâmina máxima" valor={`${formatar(i.laminaMaxM)} m`} />
+          </dl>
+          <p className="mt-1 text-[11px] text-slate-500">
+            Toda célula abaixo da cota, pintada de azul na planta. Não é modelo hidráulico: não sabe se a água chega ali (um dique, uma
+            depressão isolada), nem de vazão — é a leitura de "até que cota".
+          </p>
+        </>
+      )}
     </div>
   );
 }

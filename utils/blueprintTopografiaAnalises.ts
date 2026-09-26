@@ -1572,3 +1572,46 @@ export function areaDeSuperficie(grade: GradeDeElevacao, anel: Point[] | null = 
   }
   return { areaM2: area, areaProjetadaM2: proj, celulasSemCota: semCota };
 }
+
+
+// ─── A3: MANCHA DE INUNDAÇÃO ─────────────────────────────────────────────────
+
+export interface ManchaDeInundacao {
+  /** 0 = célula alagada (cota média abaixo da cheia), `null` = seca ou sem cota. Pronta para o overlay hipsométrico. */
+  classeDaCelula: (number | null)[];
+  areaM2: number;
+  /** A maior lâmina d'água (cheia − cota média da célula), em m. */
+  laminaMaxM: number;
+  celulasSemCota: number;
+}
+
+/**
+ * A MANCHA de uma cheia informada: toda célula da grade cuja cota média fica
+ * abaixo da cota de cheia. É a leitura "até onde a água chega se o rio subir a
+ * X m" — NÃO é modelo hidráulico (não sabe de conectividade, vazão nem
+ * remanso), e a tela diz isso. Com anel, conta só dentro dele.
+ */
+export function manchaDeInundacao(grade: GradeDeElevacao, cotaDeCheiaM: number, anel: Point[] | null = null): ManchaDeInundacao {
+  const { origem, espacamentoMm: esp, colunas, linhas } = grade;
+  const classe: (number | null)[] = new Array(Math.max(0, (colunas - 1) * (linhas - 1))).fill(null);
+  const areaCel = (esp / 1000) ** 2;
+  let area = 0;
+  let lamina = 0;
+  let semCota = 0;
+  for (let l = 0; l + 1 < linhas; l++) {
+    for (let c = 0; c + 1 < colunas; c++) {
+      if (anel && anel.length >= 3 && !pointInPolygon(anel, { x: origem.x + (c + 0.5) * esp, y: origem.y + (l + 0.5) * esp })) continue;
+      const v = cotaMediaDaCelula(grade, l, c);
+      if (v === null) {
+        semCota++;
+        continue;
+      }
+      if (v < cotaDeCheiaM) {
+        classe[l * (colunas - 1) + c] = 0;
+        area += areaCel;
+        lamina = Math.max(lamina, cotaDeCheiaM - v);
+      }
+    }
+  }
+  return { classeDaCelula: classe, areaM2: area, laminaMaxM: lamina, celulasSemCota: semCota };
+}

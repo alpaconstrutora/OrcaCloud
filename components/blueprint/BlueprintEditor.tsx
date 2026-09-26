@@ -152,6 +152,8 @@ import PainelRoteiroPerimetrico from './PainelRoteiroPerimetrico';
 import PainelViasEGreide from './PainelViasEGreide';
 import { useBlueprintVias } from '../../hooks/useBlueprintVias';
 import { estaquear } from '../../utils/blueprintVias';
+import { prepararOrtofoto } from '../../utils/geo/ortofoto';
+import { manchaDeInundacao } from '../../utils/blueprintTopografiaAnalises';
 import { fichaDaFeicao, lerCodigo } from '../../utils/blueprintFeicoes';
 import {
   MATERIAIS_DE_SUB_REGIAO,
@@ -3958,6 +3960,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     () => (terreno?.fechado ? terreno.anel : null),
     [terreno],
   );
+  // A3: a cota de cheia da mancha de inundação (sessão; não é premissa de projeto).
+  const [cotaDeCheiaM, setCotaDeCheiaM] = useState<number | null>(null);
   const topografia = useBlueprintTopografia(
     study.id,
     study.organization_id,
@@ -4032,6 +4036,21 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     });
     return linhas.length + marcas.length > 0 ? { linhas, marcas } : null;
   }, [topografia.levantamento, topografia.pontosCotados]);
+  const manchaDeCheia = useMemo(() => {
+    const v = topografia.selecionada;
+    return v && cotaDeCheiaM !== null && Number.isFinite(cotaDeCheiaM) ? manchaDeInundacao(v.grade, cotaDeCheiaM, v.anel) : null;
+  }, [topografia.selecionada, cotaDeCheiaM]);
+  /** A3: os lotes do loteamento para a camada `lotes` do Shapefile. */
+  const lotesParaShapefile = useMemo(
+    () =>
+      (editor.model.lotes ?? []).map((l) => ({
+        quadra: (editor.model.quadras ?? []).find((q) => q.id === l.quadraId)?.nome ?? '',
+        numero: String(l.numero),
+        areaM2: Math.abs(polygonArea(l.pontos)) / 1e6,
+        pontos: l.pontos,
+      })),
+    [editor.model.lotes, editor.model.quadras],
+  );
   const terraplenagem = useBlueprintTerraplenagem(study.id, study.organization_id);
   // C2: as vias de projeto (eixo, greide, seção tipo) — tabela lateral própria.
   const vias = useBlueprintVias(study.id, study.organization_id);
@@ -5169,6 +5188,24 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * só, ela sobrava na tela — e foi exatamente o "não funcionou" que ele reportou.
    */
   const [avisoConexaoT, setAvisoConexaoT] = useState<string | null>(null);
+  /**
+   * A3: ORTOFOTO georreferenciada → planta de fundo JÁ posicionada (sem aferir).
+   * O desvio da semelhança nos cantos vai no aviso: é a prova de que caiu no lugar.
+   */
+  const importarOrtofoto = async (arquivos: File[]) => {
+    try {
+      const geo = editor.model.georreferencia ?? null;
+      const o = await prepararOrtofoto(arquivos, geo, anelDoLoteFechado, geo?.projetada?.crs);
+      const salvo = await fundo.importarRaster(o.blob, `${o.nome} · ${o.crs}`, o.underlay, o.largura);
+      if (!salvo) return;
+      setAvisoConexaoT(
+        `Ortofoto posicionada pela georreferência: ${o.crs}, pixel de ${o.encaixe.pixelM.toFixed(2).replace('.', ',')} m, desvio máximo de ${o.encaixe.residuoPx.toFixed(2).replace('.', ',')} pixel nos cantos.` +
+          (o.encaixe.avisos.length > 0 ? ' ' + o.encaixe.avisos.join(' ') : ''),
+      );
+    } catch (e) {
+      setAvisoConexaoT(e instanceof Error ? e.message : String(e));
+    }
+  };
   const conexaoTFeitaEm = useRef<string | null>(null);
 
   /**
@@ -7643,6 +7680,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           // contorno existente por outro é destruir divisa desenhada, e isso
           // tem de passar pela ferramenta Terreno, não por um checkbox.
           onLancarLote={anelDoLoteFechado === null ? lancarLoteDoArquivo : undefined}
+          inundacao={
+            topografia.selecionada
+              ? {
+                  cotaM: cotaDeCheiaM,
+                  onCotaM: setCotaDeCheiaM,
+                  areaM2: manchaDeCheia?.areaM2 ?? 0,
+                  laminaMaxM: manchaDeCheia?.laminaMaxM ?? 0,
+                  cotaMinM: topografia.selecionada.estatisticas.cotaMinM,
+                  cotaMaxM: topografia.selecionada.estatisticas.cotaMaxM,
+                }
+              : null
+          }
+          lotesDoLoteamento={lotesParaShapefile}
           temGeorreferencia={!!editor.model.georreferencia}
           cotaDeOrigemInformada={cotaDeOrigemInformada}
           declividade={declividade}
@@ -10240,6 +10290,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               }}
               onOpacidade={fundo.setOpacidade}
               onRemover={() => void fundo.remover()}
+              onImportarOrtofoto={(fs) => void importarOrtofoto(fs)}
             />
           </GrupoDoRibbon>
           </>
@@ -12034,7 +12085,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 editor.setTool('selecionar');
               }}
               hipsometria={
-                mostrarHipsometria && hipsometria && topografia.selecionada
+                // A3: a mancha de inundação usa a mesma pintura por célula, em azul, e passa na frente.
+                manchaDeCheia && topografia.selecionada
+                  ? { grade: topografia.selecionada.grade, classeDaCelula: manchaDeCheia.classeDaCelula, cores: ['#2563eb'] }
+                  : mostrarHipsometria && hipsometria && topografia.selecionada
                   ? {
                       grade: topografia.selecionada.grade,
                       classeDaCelula: hipsometria.classeDaCelula,

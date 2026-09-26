@@ -4,7 +4,7 @@
 // 01/09/2026: o cabeçalho mostrava "010 - Galeria Altavista · 010 · quem é
 // dono…". Código repetido faz o leitor procurar uma diferença que não existe.
 import { describe, it, expect } from 'vitest';
-import { identidadeDoCondominio } from '../components/condominio/CondominioDetail';
+import { identidadeDoCondominio } from '../utils/condominioIdentidade';
 
 describe('identidadeDoCondominio', () => {
     it('não repete o código que o nome já traz (o bug real)', () => {

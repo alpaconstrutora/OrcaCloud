@@ -14,9 +14,12 @@ import AtivosTab from './AtivosTab';
 import ComunicacaoTab from './ComunicacaoTab';
 import DocumentosTab from './DocumentosTab';
 import FinanceiroTab from './FinanceiroTab';
+import RateioDetalheView from './RateioDetalheView';
+import type { Rateio } from '../../services/condominioRateioService';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { clientService } from '../../services/clientService';
 import Breadcrumb from '../ui/Breadcrumb';
+import { identidadeDoCondominio } from '../../utils/condominioIdentidade';
 import CostCenterSelect from '../CostCenterSelect';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
@@ -62,35 +65,14 @@ interface Props {
     onChanged?: (e: Empreendimento) => void;
 }
 
-/**
- * Nome do condomínio com o código, SEM repetir o que o nome já diz.
- *
- * Na base os condomínios se chamam "010 - Galeria Altavista": concatenar o
- * `code` produzia "010 - Galeria Altavista · 010 · …", e código repetido faz o
- * leitor procurar uma diferença que não existe.
- *
- * ⚠️ A comparação é por BORDA, não `includes`: com `includes`, o código "10"
- * seria dado como presente dentro de "Bloco 100" e sumiria justamente de quem
- * precisa dele. A borda é "não alfanumérico" em vez de uma lista de
- * separadores — a lista deixava passar "Galeria Altavista (010)", e toda lista
- * desse tipo esquece um caractere.
- *
- * O `code` é escapado porque vem digitado: um código "C+1" viraria
- * quantificador e derrubaria o cabeçalho inteiro com SyntaxError.
- */
-export const identidadeDoCondominio = (name?: string | null, code?: string | null): string => {
-    const nome = (name || '').trim();
-    const cod = (code || '').trim();
-    if (!cod) return nome;
-    const escapado = cod.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const borda = '[^0-9A-Za-zÀ-ÿ]';
-    const jaNoNome = new RegExp(`(^|${borda})${escapado}($|${borda})`).test(nome);
-    return jaNoNome ? nome : `${nome} · ${cod}`;
-};
+
 
 const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack, onChanged }) => {
     const confirm = useConfirm();
     const [aba, setAba] = React.useState<Aba>(abaInicial ?? 'ficha');
+    // Rateio aberto como TELA (troca in-flow). Mora aqui, e não no
+    // `FinanceiroTab`, porque é este componente que faz o early return.
+    const [rateioAberto, setRateioAberto] = React.useState<Rateio | null>(null);
     const [e, setE] = React.useState<Empreendimento>(empreendimento);
     const identidade = React.useMemo(
         () => identidadeDoCondominio(e.name, e.code),
@@ -258,6 +240,22 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
         // são o que se sabe sobre ele.
         { id: 'comunicacao', label: 'Comunicação', icon: Megaphone },
     ];
+
+    // ── Detalhe de um rateio: TELA, não painel ────────────────────────────
+    // O early return é aqui, e não dentro do `FinanceiroTab`, porque a tela
+    // substitui o condomínio INTEIRO — inclusive o cabeçalho e a barra de
+    // abas. Devolvê-la de dentro da aba deixaria dois títulos empilhados, um
+    // dizendo "Financeiro" e o outro "Rateio 0003".
+    if (rateioAberto) {
+        return (
+            <RateioDetalheView
+                empreendimento={e}
+                rateio={rateioAberto}
+                onBack={() => setRateioAberto(null)}
+                onBackParaLista={onBack}
+            />
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -534,7 +532,7 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
             {aba === 'documentos' && <DocumentosTab empreendimento={e} />}
             {aba === 'ativos' && <AtivosTab empreendimento={e} />}
             {aba === 'manutencao' && <ManutencaoTab empreendimento={e} />}
-            {aba === 'financeiro' && <FinanceiroTab empreendimento={e} />}
+            {aba === 'financeiro' && <FinanceiroTab empreendimento={e} onAbrirRateio={setRateioAberto} />}
             {aba === 'comunicacao' && <ComunicacaoTab empreendimento={e} />}
 
             {notification && (

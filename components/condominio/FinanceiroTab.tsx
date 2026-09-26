@@ -111,12 +111,19 @@ const COLUNAS_DESPESA_SEM_DATA: StandardTableColumn[] = [
     { key: 'fornecedor', label: 'Fornecedor', sortable: true, width: 220, },
     { key: 'valor', label: 'Valor', sortable: true, width: 120, align: 'right' },
 ];
+// Em TELA a largura não é escassa: §6.6 (px-6) e colunas de página, senão
+// sobra tudo para o `<col>` espaçador e a tabela fica com um vão à direita.
+const COLUNAS_DESPESA_TELA: StandardTableColumn[] = [
+    { key: 'descricao', label: 'Descrição', sortable: true, width: 460 },
+    { key: 'fornecedor', label: 'Fornecedor', sortable: true, width: 340 },
+    { key: 'valor', label: 'Valor', sortable: true, width: 160, align: 'right' },
+];
 
 /** Despesas de um rateio — na prévia e no snapshot salvo.
  *  `StandardTable` com `dense` (§6.9/§6.10): mesmo desenho do drawer
  *  "Importar do Comercial", para os painéis desta aba não terem dois cromos
  *  de tabela diferentes um do lado do outro. */
-const TabelaDespesas: React.FC<{
+export const TabelaDespesas: React.FC<{
     despesas: DespesaRateio[];
     comData: boolean;
     /** Chave do estado da tabela. Distinta por painel: a prévia mostra a coluna
@@ -126,7 +133,10 @@ const TabelaDespesas: React.FC<{
     /** Presente só em rateio RASCUNHO: fechado é prestação de contas, e
      *  reescrever a linha depois mudaria o documento que o condômino recebeu. */
     onEditarDescricao?: (despesa: DespesaRateio, nova: string) => Promise<void>;
-}> = ({ despesas, comData, storageKey, onEditarDescricao }) => {
+    /** `false` = a tabela vive numa TELA, não numa gaveta: colunas de página
+     *  (§6.6) e sem altura travada — quem rola é a página. */
+    dense?: boolean;
+}> = ({ despesas, comData, storageKey, onEditarDescricao, dense = true }) => {
     const [editando, setEditando] = React.useState<string | null>(null);
     const [texto, setTexto] = React.useState('');
     const [salvando, setSalvando] = React.useState(false);
@@ -155,11 +165,11 @@ const TabelaDespesas: React.FC<{
     return (
         <StandardTable<DespesaRateio>
             storageKey={storageKey}
-            columns={comData ? COLUNAS_DESPESA_COM_DATA : COLUNAS_DESPESA_SEM_DATA}
+            columns={comData ? COLUNAS_DESPESA_COM_DATA : (dense ? COLUNAS_DESPESA_SEM_DATA : COLUNAS_DESPESA_TELA)}
             rows={despesas}
             rowKey={d => d.id || d.transaction_id}
-            dense
-            maxHeight="42vh"
+            dense={dense}
+            maxHeight={dense ? '42vh' : 'none'}
             searchText={d => `${d.descricao} ${d.fornecedor ?? ''} ${d.data ?? ''}`}
             searchPlaceholder="Buscar despesa..."
             renderCell={(key, d) => {
@@ -233,7 +243,7 @@ const TabelaDespesas: React.FC<{
  *  (`CotaDoRateio`). Existia uma renderização para cada: o detalhe tinha
  *  tabela e a prévia, cartões empilhados com o nome do pagador em cinza sob a
  *  unidade — dois desenhos para o mesmo dado. */
-interface LinhaCota {
+export interface LinhaCota {
     chave: string;
     unidade: string;
     /** `null` = a cota foi calculada sem ninguém no papel de pagador. */
@@ -251,6 +261,11 @@ const COLUNAS_COTA: StandardTableColumn[] = [
     { key: 'pagador', label: 'Quem paga', sortable: true, width: 290 },
     { key: 'valor', label: 'Cota', sortable: true, width: 120, align: 'right' },
 ];
+const COLUNAS_COTA_TELA: StandardTableColumn[] = [
+    { key: 'unidade', label: 'Unidade', sortable: true, width: 300 },
+    { key: 'pagador', label: 'Quem paga', sortable: true, width: 480 },
+    { key: 'valor', label: 'Cota', sortable: true, width: 160, align: 'right' },
+];
 const COLUNAS_COTA_COM_AVISO: StandardTableColumn[] = [
     { key: 'unidade', label: 'Unidade', sortable: true, width: 170 },
     { key: 'pagador', label: 'Quem paga', sortable: true, width: 175 },
@@ -260,7 +275,12 @@ const COLUNAS_COTA_COM_AVISO: StandardTableColumn[] = [
 
 /** Cotas — quem paga quanto. Prestação de contas na sheet de detalhe, e o que
  *  SERÁ gravado na prévia. */
-const TabelaCotas: React.FC<{ cotas: LinhaCota[]; storageKey: string }> = ({ cotas, storageKey }) => {
+export const TabelaCotas: React.FC<{
+    cotas: LinhaCota[];
+    storageKey: string;
+    /** `false` = TELA: colunas de página e sem altura travada. */
+    dense?: boolean;
+}> = ({ cotas, storageKey, dense = true }) => {
     const total = cotas.reduce((s, c) => s + c.valor, 0);
     // A coluna de observação só existe quando há observação: coluna vazia em
     // painel estreito é largura gasta sem dado.
@@ -268,11 +288,11 @@ const TabelaCotas: React.FC<{ cotas: LinhaCota[]; storageKey: string }> = ({ cot
     return (
         <StandardTable<LinhaCota>
             storageKey={storageKey}
-            columns={temAviso ? COLUNAS_COTA_COM_AVISO : COLUNAS_COTA}
+            columns={temAviso ? COLUNAS_COTA_COM_AVISO : (dense ? COLUNAS_COTA : COLUNAS_COTA_TELA)}
             rows={cotas}
             rowKey={c => c.chave}
-            dense
-            maxHeight="42vh"
+            dense={dense}
+            maxHeight={dense ? '42vh' : 'none'}
             searchText={c => `${c.unidade} ${c.pagador ?? ''} ${c.aviso ?? ''}`}
             searchPlaceholder="Buscar unidade ou pagador..."
             renderCell={(key, c) => {
@@ -494,9 +514,17 @@ const TabelaLancamentos: React.FC<{
     );
 };
 
-interface Props { empreendimento: Empreendimento }
+interface Props {
+    empreendimento: Empreendimento;
+    /**
+     * Abrir o detalhe de um rateio. É o PAI quem troca o conteúdo: o detalhe
+     * virou TELA (troca in-flow), não painel, e uma tela não pode nascer
+     * dentro da aba que ela substitui.
+     */
+    onAbrirRateio?: (rateio: Rateio) => void;
+}
 
-const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
+const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
     const confirm = useConfirm();
     const orgId = empreendimento.organization_id;
 
@@ -562,26 +590,6 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
         }
     };
 
-    const [sheetDetalhe, setSheetDetalhe] = React.useState<Rateio | null>(null);
-    const [carregandoDetalhe, setCarregandoDetalhe] = React.useState(false);
-    const [despesasDetalhe, setDespesasDetalhe] = React.useState<DespesaRateio[]>([]);
-    const [cotasDetalhe, setCotasDetalhe] = React.useState<CotaDoRateio[]>([]);
-
-    /**
-     * Corrige a descrição de uma despesa do rateio em rascunho. §22: costura no
-     * array local — recarregar o Sheet inteiro por causa de um texto perderia a
-     * rolagem e piscaria a lista.
-     */
-    const editarDescricaoDespesa = async (d: DespesaRateio, nova: string) => {
-        if (!d.id) return;
-        try {
-            await condominioRateioService.atualizarDescricaoDespesa(d.id, nova);
-            setDespesasDetalhe(prev => prev.map(x => (x.id === d.id ? { ...x, descricao: nova.trim() } : x)));
-            notify('Descrição corrigida. O condômino passa a ver este texto no portal.');
-        } catch (e: any) {
-            notify(e?.message || 'Erro ao salvar a descrição.', 'error');
-        }
-    };
 
     // As duas metades do documento, em paralelo: o que se gastou (despesas) e
     // quem paga o quê (cotas). Uma sem a outra não é prestação de contas.
@@ -591,19 +599,10 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
         condominioRateioService.listarCotas(rateioId),
     ]);
 
-    const abrirDetalhe = async (r: Rateio) => {
-        setSheetDetalhe(r);
-        setCarregandoDetalhe(true);
-        try {
-            const [ds, cs] = await carregarMetades(r.id);
-            setDespesasDetalhe(ds);
-            setCotasDetalhe(cs);
-        } catch (e: any) {
-            notify(e?.message || 'Erro ao carregar o detalhe do rateio.', 'error');
-        } finally {
-            setCarregandoDetalhe(false);
-        }
-    };
+    // O detalhe é TELA: quem troca o conteúdo é `CondominioDetail`. Aqui só
+    // se avisa. Sem o pai (aba usada solta), o botão nem aparece — ver a
+    // coluna de ações.
+    const abrirDetalhe = (r: Rateio) => onAbrirRateio?.(r);
 
     // ── Relatório de rateio ───────────────────────────────────────────────
     // Sheet PRÓPRIA, e não um botão no detalhe: o detalhe é tela de trabalho
@@ -1894,78 +1893,6 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                     >
                         {salvando ? 'Salvando...' : 'Salvar rascunho'}
                     </button>
-                </SheetFooter>
-            </Sheet>
-
-            {/* Ver detalhe — cotas + despesas, reabertas a partir
-                do rastro salvo em `condominio_rateio_despesas`. Serve tanto para
-                revisar um rascunho quanto como prestação de contas de um fechado. */}
-            <Sheet open={!!sheetDetalhe} onClose={() => setSheetDetalhe(null)} size="2xl">
-                <SheetHeader onClose={() => setSheetDetalhe(null)}>
-                    <SheetTitle>Detalhe do rateio</SheetTitle>
-                    <SheetDescription>
-                        {sheetDetalhe && `${rotuloCompetencia(sheetDetalhe.competencia)} · ${CRITERIO_LABEL[sheetDetalhe.criterio]} · ${STATUS_LABEL[sheetDetalhe.status]}`}
-                    </SheetDescription>
-                </SheetHeader>
-                <SheetPanel className="p-6">
-                    {carregandoDetalhe ? (
-                        <div className="text-center py-12">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                        </div>
-                    ) : despesasDetalhe.length === 0 && cotasDetalhe.length === 0 ? (
-                        <p className="text-sm text-gray-500 text-center py-8">Nada gravado neste rateio.</p>
-                    ) : (
-                        <div className="space-y-6">
-                            {/* COTAS primeiro: a pergunta que se faz a um rateio é
-                                "quanto minha unidade deve", e a resposta estava
-                                inalcançável na tela depois que a cobrança era
-                                gerada (a sheet de cobrança some com o botão). */}
-                            <div className="space-y-3">
-                                <div className="border-b border-gray-100 pb-3">
-                                    <h3 className="text-sm font-semibold text-gray-900">Quem paga quanto</h3>
-                                </div>
-                                {cotasDetalhe.length === 0 ? (
-                                    <p className="text-sm text-gray-500 text-center py-6">
-                                        Nenhuma cota gravada — nenhuma unidade recebeu valor neste rateio.
-                                    </p>
-                                ) : (
-                                    <TabelaCotas
-                                        storageKey="condominio:rateio:detalhe:cotas"
-                                        cotas={cotasDetalhe.map(c => ({
-                                            chave: c.id,
-                                            unidade: c.unitLabel,
-                                            pagador: c.clientNome,
-                                            valor: c.valor,
-                                        }))}
-                                    />
-                                )}
-                            </div>
-
-                            <div className="space-y-3">
-                                <div className="border-b border-gray-100 pb-3">
-                                    <h3 className="text-sm font-semibold text-gray-900">Despesas do rateio</h3>
-                                </div>
-                                {despesasDetalhe.length === 0 ? (
-                                    <p className="text-sm text-gray-500 text-center py-6">
-                                        Nenhuma despesa gravada neste rateio.
-                                    </p>
-                                ) : (
-                                    /* A edição só aparece em RASCUNHO. Fechado é
-                                       prestação de contas: o condômino já recebeu
-                                       aquele documento. */
-                                    <TabelaDespesas
-                                        despesas={despesasDetalhe}
-                                        comData={false}
-                                        storageKey="condominio:rateio:detalhe:despesas"
-                                        onEditarDescricao={sheetDetalhe?.status === 'RASCUNHO' ? editarDescricaoDespesa : undefined}
-                                    />
-                                )}
-                            </div>
-                        </div>
-                    )}
-                </SheetPanel>
-                <SheetFooter>
-                    <button onClick={() => setSheetDetalhe(null)} className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all">Fechar</button>
                 </SheetFooter>
             </Sheet>
 

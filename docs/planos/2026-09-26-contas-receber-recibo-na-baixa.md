@@ -186,7 +186,7 @@ O `generateReceiptPDF` existente **não é alterado**: ClientArea e ProjectFinan
 - [x] 6. `components/financeiro/BaixaRecebivelSheet.tsx` — `check-ui-standard.sh` exit 0
 - [x] 7. `ContasReceberManager.tsx` — `check-ui-standard.sh` exit 0, `orgContextGuard` verde, `check-system-projects`/`check-project-classification` sem achado, `check-xss-sinks` limpo
 - [x] 8. Verificação ponta a ponta — ver registro abaixo
-- [ ] 9. Publicação
+- [x] 9. Publicação — commit `9831ea1` em main; `conferir-producao.sh "Confirmar recebimento"` provou o SHA carimbado no bundle servido (26/09/2026)
 
 ### Registro do teste real (item 8, 26/09/2026)
 

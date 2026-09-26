@@ -19,6 +19,7 @@ import { FEICOES, fichaDaFeicao, interpolarSobreLinha, lerCodigo, pontuarPolilin
 import { lerTiff } from '../../utils/geo/tiff';
 import { kmlDoKmz, lerZipDeShapefiles } from '../../utils/geo/shapefile';
 import { resultadoDoDem, textoDoShapefile } from '../../utils/geo/importacaoGis';
+import { converterDwgParaDxf } from '../../services/blueprintDwgService';
 import {
   FAIXAS_DE_DECLIVIDADE,
   TIPOS_DE_DRENAGEM,
@@ -1208,6 +1209,8 @@ function ImportarPontos({
   const [opcoes, setOpcoes] = useState<OpcoesDeImportacao>({});
   const [resultado, setResultado] = useState<ResultadoDaImportacao | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  // DWG: a conversão no servidor leva segundos — a tela diz que está andando.
+  const [convertendo, setConvertendo] = useState<string | null>(null);
   /**
    * P2.65: lançar as divisas junto. Marcado sozinho quando o arquivo TRAZ o
    * polígono (ou os marcos de divisa); ⚠️ a envoltória convexa entra
@@ -1265,6 +1268,43 @@ function ImportarPontos({
     if (!f) return;
     // A3: os binários — KMZ (zip do KML), Shapefile em .zip, DEM GeoTIFF.
     const extensao = f.name.toLowerCase().slice(f.name.lastIndexOf('.'));
+    // DWG (26/09/2026): vira DXF na Edge Function `dwg-converter` (a mesma do
+    // "Importar do DXF/DWG" de paredes) e segue pelo leitor de DXF do
+    // levantamento. A proveniência é o hash do DWG — o arquivo que o
+    // topógrafo entregou —, não o do DXF gerado.
+    if (extensao === '.dwg') {
+      setErro(null);
+      setArquivo(null);
+      setResultado(null);
+      setConvertendo(f.name);
+      void (async () => {
+        try {
+          const bytes = new Uint8Array(await f.arrayBuffer());
+          const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((b) => b.toString(16).padStart(2, '0')).join('');
+          const c = await converterDwgParaDxf(f);
+          const arq: NonNullable<typeof arquivo> = {
+            nome: f.name,
+            texto: c.dxf,
+            formato: 'DXF',
+            sha256: hash,
+            rotulo: `DWG ${c.versao} · ${c.release}, convertido para DXF no servidor`,
+            ...(c.codigoLibredwg > 0
+              ? { avisosExtras: [`O conversor de DWG avisou (código ${c.codigoLibredwg}): entidades que ele não conhece foram ignoradas. Confira os pontos antes de aplicar.`] }
+              : {}),
+          };
+          setArquivo(arq);
+          setOpcoes({});
+          rodar(arq, {});
+        } catch (e) {
+          setErro(e instanceof Error ? e.message : String(e));
+          setArquivo(null);
+          setResultado(null);
+        } finally {
+          setConvertendo(null);
+        }
+      })();
+      return;
+    }
     if (['.zip', '.kmz', '.tif', '.tiff'].includes(extensao)) {
       void (async () => {
         try {
@@ -1309,7 +1349,7 @@ function ImportarPontos({
     }
     const formatoBase = formatoPeloNome(f.name);
     if (!formatoBase) {
-      setErro(`Não sei ler "${f.name}": use CSV/TXT, GeoJSON, KML/KMZ, DXF, SVG, LandXML, Shapefile (.zip) ou DEM GeoTIFF.`);
+      setErro(`Não sei ler "${f.name}": use CSV/TXT, GeoJSON, KML/KMZ, DXF/DWG, SVG, LandXML, Shapefile (.zip) ou DEM GeoTIFF.`);
       setArquivo(null);
       setResultado(null);
       return;
@@ -1380,7 +1420,7 @@ function ImportarPontos({
       <input
         ref={entrada}
         type="file"
-        accept=".csv,.txt,.pnezd,.dat,.pts,.xyz,.geojson,.json,.kml,.kmz,.dxf,.svg,.xml,.zip,.tif,.tiff"
+        accept=".csv,.txt,.pnezd,.dat,.pts,.xyz,.geojson,.json,.kml,.kmz,.dxf,.dwg,.svg,.xml,.zip,.tif,.tiff"
         aria-label="Arquivo de pontos cotados"
         className="hidden"
         onChange={(e) => aoEscolher(e.target.files)}
@@ -1390,14 +1430,24 @@ function ImportarPontos({
         type="button"
         data-apontado={apontado ? '' : undefined}
         onClick={() => entrada.current?.click()}
-        title="Importar pontos de arquivo: CSV/TXT de estação total (código LQ1, LQ2… marca linha de quebra), GeoJSON, KML, DXF (blocos, polilinhas com Z, 3DFACE), SVG ou LandXML"
-        className={`inline-flex items-center gap-1 rounded-md border bg-white px-2 py-1 text-[11px] text-slate-700 transition-colors hover:bg-slate-50 ${
+        disabled={!!convertendo}
+        title={
+          convertendo
+            ? `Aguarde: convertendo ${convertendo} de DWG para DXF no servidor`
+            : 'Importar pontos de arquivo: CSV/TXT de estação total (código LQ1, LQ2… marca linha de quebra), GeoJSON, KML, DXF ou DWG (blocos, polilinhas com Z, 3DFACE — o DWG é convertido no servidor), SVG ou LandXML'
+        }
+        className={`inline-flex items-center gap-1 rounded-md border bg-white px-2 py-1 text-[11px] text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-wait disabled:opacity-50 ${
           apontado ? 'border-blue-400 ring-2 ring-blue-400' : 'border-slate-300'
         }`}
       >
         <Upload className="h-3.5 w-3.5" />
         Importar
       </button>
+      {convertendo && (
+        <p className="mt-2 w-full basis-full text-[11px] text-slate-500" data-testid="convertendo-dwg">
+          Convertendo {convertendo} de DWG para DXF no servidor…
+        </p>
+      )}
       {(arquivo || erro) && (
         <div className="mt-2 w-full basis-full rounded-md border border-blue-200 bg-blue-50 p-2 text-[11px] text-slate-700" data-testid="previa-da-importacao">
           {arquivo && (

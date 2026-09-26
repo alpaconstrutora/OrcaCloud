@@ -519,3 +519,11 @@ Pedido: *"4"* — levar os dados da REURB e do CAR do navegador para o banco.
 - [x] `services/blueprintRegularizacaoService.ts` (upsert de UMA coluna por vez — as duas gavetas gravam sem pisar uma na outra) e `hooks/useBlueprintRegularizacao.ts` (molde do `useBlueprintSigef`: resposta imediata, gravação com respiro de 600 ms para o núcleo, bioma na hora, `INDISPONIVEL` sem a tabela). **Adoção**: o que a A5 deixou no localStorage vale quando o banco não tem a coluna — é gravado no banco e só então apagado do navegador; se a gravação falha, o navegador fica intacto.
 - [x] `useBlueprintReurb` ficou só com os ocupantes. As gavetas CAR e REURB mostram o estado: gravado no estudo / gravando / não gravou (fica só nesta aba).
 - [x] Testes: `useBlueprintRegularizacao` (6 — gravado vence o navegador; adoção grava e apaga; adoção que falha não apaga; padrão sem nada; respiro grava uma vez; sem tabela não tenta gravar), `PainelCarReurb` (+2). Suíte cheia 498 arquivos / 5.722 verde; tsc, `check-ui-standard`, `check-xss-sinks`, testes de migration, build verdes.
+
+### DWG no "Importar levantamento" (26/09/2026)
+
+Pedido: *"é possível abrir um levantamento topográfico em formato dwg?"* → *"quero que faça"*.
+
+- [x] O painel da topografia aceita `.dwg`: o arquivo vai à Edge Function `dwg-converter` (a mesma do "Importar do DXF/DWG" de paredes, `converterDwgParaDxf`) e o DXF devolvido segue pelo leitor de levantamento — pontos com cota (marca + texto/ATTRIB), linhas de quebra com Z, 3DFACE e o contorno. A prévia diz "DWG AC10xx · versão, convertido para DXF no servidor"; aviso do libredwg (código > 0) vira aviso da importação; falha aparece como erro. Durante a conversão o botão fica desligado e o title diz por quê. A proveniência (`sha256`) é a do DWG entregue, não a do DXF gerado.
+- [x] Testes: `PainelTopografiaDwg` (3, conversor simulado). Suíte cheia 499 arquivos / 5.725 verde; tsc, `check-ui-standard`, `check-xss-sinks`, build verdes.
+- ⚠️ Não provado com um DWG real de levantamento nesta sessão (não havia arquivo nas pastas do projeto). A conversão em si é a mesma já provada na E9.1 com o TERRENO.dwg da empresa.

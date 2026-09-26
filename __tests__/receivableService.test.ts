@@ -1,10 +1,17 @@
 import { describe, it, expect, vi } from 'vitest';
 
-// O service importa o client do Supabase no topo; as funções puras não o usam.
-vi.mock('../lib/supabase', () => ({ supabase: {} }));
+// O service importa o client do Supabase no topo. As funções puras não o usam;
+// `darBaixa` usa só from().update().eq(), capturado aqui para conferir o payload.
+const db = vi.hoisted(() => {
+    const eq = vi.fn(async () => ({ error: null }));
+    const update = vi.fn(() => ({ eq }));
+    const from = vi.fn(() => ({ update }));
+    return { from, update, eq };
+});
+vi.mock('../lib/supabase', () => ({ supabase: { from: db.from } }));
 vi.mock('../services/empreendimentoService', () => ({ empreendimentoService: {} }));
 
-import { filtrarRecebiveis, aplicarStatusLocal } from '../services/receivableService';
+import { filtrarRecebiveis, aplicarStatusLocal, receivableService } from '../services/receivableService';
 import type { Receivable } from '../types/financial';
 
 const C1 = 'dbb274e7-59e2-494a-bb5f-aba877c4330f';
@@ -92,5 +99,25 @@ describe('aplicarStatusLocal — espelho do updateStatus + CASE da view (§22)',
         const orig = rec({});
         aplicarStatusLocal(orig, 'RECEBIDO', HOJE);
         expect(orig.effective_status).toBe('PREVISTO');
+    });
+});
+
+describe('darBaixa — baixa com os dados do pagamento (painel de baixa)', () => {
+    it('grava RECEBIDO/CONCILIATED com data e forma EXPLÍCITAS (a trigger só preenche vazio)', async () => {
+        await receivableService.darBaixa('tx-1', { paymentDate: '2026-09-25', paymentType: 'PIX' });
+        expect(db.from).toHaveBeenCalledWith('internal_transactions');
+        expect(db.update).toHaveBeenCalledWith(expect.objectContaining({
+            business_status: 'RECEBIDO',
+            status: 'CONCILIATED',
+            payment_date: '2026-09-25',
+            payment_type: 'PIX',
+        }));
+        expect(db.eq).toHaveBeenCalledWith('id', 'tx-1');
+    });
+
+    it('forma não informada vai como null (não como string vazia)', async () => {
+        db.update.mockClear();
+        await receivableService.darBaixa('tx-2', { paymentDate: '2026-09-25', paymentType: null });
+        expect(db.update).toHaveBeenCalledWith(expect.objectContaining({ payment_type: null }));
     });
 });

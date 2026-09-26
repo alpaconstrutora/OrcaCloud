@@ -2,13 +2,17 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Check, ChevronDown, ChevronUp,
     Loader2, Plus, RefreshCw, Search, TrendingUp, X, Filter,
-    FileText, QrCode, Copy, ExternalLink, DollarSign, AlertTriangle, MoveHorizontal, Undo2,
+    FileText, QrCode, Copy, ExternalLink, DollarSign, AlertTriangle, MoveHorizontal, Undo2, Receipt,
 } from 'lucide-react';
 import { receivableService, filtrarRecebiveis, aplicarStatusLocal } from '../services/receivableService';
 import { clientChargeService } from '../services/clientChargeService';
 import { asaasConfigService } from '../services/asaasConfigService';
 import { clientService } from '../services/clientService';
 import { financialRegistryService } from '../services/financialRegistryService';
+import { financialReceiptService, type ReciboAtivo } from '../services/financialReceiptService';
+import BaixaRecebivelSheet, { type DadosDaBaixa } from './financeiro/BaixaRecebivelSheet';
+import { mensagemResultadoBaixa } from '../utils/baixaRecebivel';
+import { numeroRecibo } from '../utils/reciboRecebimento';
 import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
 import type { ClientCharge, BillingType } from '../services/clientChargeService';
 import type { Receivable, ReceivableEffectiveStatus, InadimplenciaFaixa } from '../types/financial';
@@ -726,7 +730,12 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     const [charges, setCharges]           = useState<Record<string, ClientCharge>>({});
     const [emitindo, setEmitindo]         = useState<Receivable | null>(null);
     const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
-    const [bulkLoading, setBulkLoading]   = useState(false);
+    // Painel de baixa (1 título ou lote) e recibos numerados — ver
+    // docs/planos/2026-09-26-contas-receber-recibo-na-baixa.md
+    const [baixando, setBaixando]         = useState<Receivable[] | null>(null);
+    const [baixaProgresso, setBaixaProgresso] = useState<string | null>(null);
+    const [recibos, setRecibos]           = useState<Map<string, ReciboAtivo>>(new Map());
+    const [gerandoRecibo, setGerandoRecibo] = useState<string | null>(null);
     // Duas dimensões DIFERENTES (ver migration 20270822000013) — carregadas uma
     // vez por organização para resolver os UUIDs de vw_receivables em nome.
     const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
@@ -800,6 +809,13 @@ export default function ContasReceberManager({ organizationId, organizations }: 
             setSelectedIds(new Set());
             setLoading(false);
 
+            // Nº do recibo ativo de cada título recebido — só alimenta o
+            // tooltip do botão Recibo; não segura a lista nem derruba a tela.
+            const recebidos = data.filter(r => r.effective_status === 'RECEBIDO').map(r => r.id);
+            financialReceiptService.listarAtivos(recebidos)
+                .then(m => { if (seq === loadSeq.current) setRecibos(m); })
+                .catch(err => console.error('[ContasReceberManager] Erro ao carregar recibos:', err));
+
             const comEmpreendimento = await receivableService.resolveEmpreendimentos(data, effectiveOrgId);
             if (seq !== loadSeq.current) return;
             // Mudança local (baixa/estorno) entre a lista e o Empreendimento chegar
@@ -871,28 +887,79 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     function handleDueToChange(value: string) { setDueTo(value); setCompetencia(''); }
     function clearDueRange() { setDueFrom(''); setDueTo(''); setCompetencia(''); }
 
-    async function handleBaixa(receivable: Receivable) {
-        const ok = await confirm({
-            title: 'Confirmar Recebimento',
-            message: (
-                <>
-                    Marcar <b>{receivable.description ?? '(sem descrição)'}</b> como <b className="text-green-700">RECEBIDO</b>?
-                    <div className="bg-gray-50 rounded-xl p-3 mt-3 flex justify-between items-center">
-                        <span className="text-xs text-gray-500">Valor</span>
-                        <span className="font-bold text-gray-900">{fmt(receivable.amount)}</span>
-                    </div>
-                </>
-            ),
-            variant: 'default',
-            confirmLabel: 'Confirmar',
+    /** Baixa abre o painel (data + forma + "emitir recibo"); a confirmação
+     *  vem em `confirmarBaixa`. */
+    function handleBaixa(receivable: Receivable) {
+        setBaixando([receivable]);
+    }
+
+    const logoDaOrg = (orgId: string) => organizations?.find(o => o.id === orgId)?.logoUrl ?? null;
+
+    function guardarReciboNaLista(txId: string, recibo: ReciboAtivo) {
+        setRecibos(prev => new Map(prev).set(txId, recibo));
+    }
+
+    /**
+     * Baixa (1 título ou lote) com os dados do painel e, se pedido, um recibo
+     * por título. Sequencial: cada recibo é um download, e a numeração sai na
+     * ordem da lista. Falha de recibo não desfaz a baixa — o título fica
+     * recebido e o botão Recibo da linha emite depois.
+     */
+    async function confirmarBaixa(dados: DadosDaBaixa) {
+        const alvos = baixando ?? [];
+        const nomeDe = (r: Receivable) => r.party_name ?? r.description ?? r.id;
+        const okIds: string[] = [];
+        const falhasBaixa: string[] = [];
+        const falhasRecibo: string[] = [];
+        let emitidos = 0;
+        let naoGuardados = 0;
+
+        for (const [i, r] of alvos.entries()) {
+            setBaixaProgresso(alvos.length > 1 ? `Baixando ${i + 1} de ${alvos.length}…` : null);
+            try {
+                await receivableService.darBaixa(r.id, { paymentDate: dados.paymentDate, paymentType: dados.paymentType });
+                okIds.push(r.id);
+            } catch {
+                falhasBaixa.push(nomeDe(r));
+                continue;
+            }
+            if (!dados.emitirRecibo) continue;
+            try {
+                const { recibo, guardado } = await financialReceiptService.baixarPdf(r.id, { logoUrl: logoDaOrg(r.organization_id) });
+                guardarReciboNaLista(r.id, recibo);
+                emitidos++;
+                if (!guardado) naoGuardados++;
+            } catch (e) {
+                console.error('[ContasReceberManager] Recibo não gerado:', e);
+                falhasRecibo.push(nomeDe(r));
+            }
+        }
+
+        setBaixaProgresso(null);
+        if (okIds.length) aplicarStatusNaLista(okIds, 'RECEBIDO');
+        setBaixando(null);
+        const { texto, erro } = mensagemResultadoBaixa({
+            baixados: okIds.length, falhasBaixa, emitirRecibo: dados.emitirRecibo,
+            recibos: emitidos, falhasRecibo, naoGuardados,
         });
-        if (!ok) return;
+        notify(texto, erro ? 'error' : 'success');
+    }
+
+    /** Reimprime o recibo ativo — ou emite agora, para título baixado antes do
+     *  recibo existir (a RPC usa a data de pagamento já gravada no título). */
+    async function handleRecibo(r: Receivable) {
+        setGerandoRecibo(r.id);
         try {
-            await receivableService.updateStatus(receivable.id, 'RECEBIDO');
-            aplicarStatusNaLista([receivable.id], 'RECEBIDO');
-            notify('Recebível baixado com sucesso.');
+            const { recibo, guardado } = await financialReceiptService.baixarPdf(r.id, { logoUrl: logoDaOrg(r.organization_id) });
+            guardarReciboNaLista(r.id, recibo);
+            const n = numeroRecibo(recibo.receipt_number);
+            notify(guardado
+                ? `Recibo Nº ${n} baixado.`
+                : `Recibo Nº ${n} baixado, mas a cópia não ficou guardada — reimprima para guardar.`);
         } catch (e) {
-            notify('Erro: ' + (e instanceof Error ? e.message : 'Falha ao baixar'), 'error');
+            notify('Erro ao gerar o recibo: ' + (e instanceof Error ? e.message : 'falha desconhecida'), 'error');
+        } finally {
+            setGerandoRecibo(null);
         }
     }
 
@@ -955,6 +1022,16 @@ export default function ContasReceberManager({ organizationId, organizations }: 
             const novo = newStatus as Parameters<typeof receivableService.updateStatus>[1];
             await receivableService.updateStatus(id, novo);
             aplicarStatusNaLista([id], novo);
+            // Fora de RECEBIDO, a trigger cancela o recibo no banco; a próxima
+            // baixa emite outro número.
+            if (novo !== 'RECEBIDO') {
+                setRecibos(prev => {
+                    if (!prev.has(id)) return prev;
+                    const next = new Map(prev);
+                    next.delete(id);
+                    return next;
+                });
+            }
         } catch (e) {
             notify('Erro: ' + (e instanceof Error ? e.message : 'Falha'), 'error');
         } finally {
@@ -1056,28 +1133,10 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     }
     const clearSelection = () => setSelectedIds(new Set());
 
-    async function handleBulkBaixa() {
-        const alvos = selectedVisible;
-        if (alvos.length === 0) return;
-        setBulkLoading(true);
-        const okIds: string[] = [];
-        const falhas: string[] = [];
-        for (const r of alvos) {
-            try {
-                await receivableService.updateStatus(r.id, 'RECEBIDO');
-                okIds.push(r.id);
-            } catch {
-                falhas.push(r.party_name ?? r.description ?? r.id);
-            }
-        }
-        setSelectedIds(new Set());
-        setBulkLoading(false);
-        if (okIds.length) aplicarStatusNaLista(okIds, 'RECEBIDO');
-        if (falhas.length) {
-            notify(`${okIds.length} baixado(s). Falha em ${falhas.length}: ${falhas.join(', ')}`, 'error');
-        } else if (okIds.length) {
-            notify(`${okIds.length} ${okIds.length !== 1 ? 'recebíveis baixados' : 'recebível baixado'}.`);
-        }
+    /** Lote abre o mesmo painel com todos os selecionados visíveis. */
+    function handleBulkBaixa() {
+        if (selectedVisible.length === 0) return;
+        setBaixando(selectedVisible);
     }
 
     const summary = useMemo(() => {
@@ -1421,6 +1480,19 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                                                     )}
                                                     {isRecebido && (
                                                         <ActionIconButton
+                                                            kind="download"
+                                                            title={recibos.has(r.id)
+                                                                ? `Reimprimir recibo Nº ${numeroRecibo(recibos.get(r.id)!.receipt_number)}`
+                                                                : 'Emitir recibo'}
+                                                            icon={gerandoRecibo === r.id
+                                                                ? <Loader2 className="w-4 h-4 animate-spin" />
+                                                                : <Receipt className="w-4 h-4" />}
+                                                            disabled={gerandoRecibo === r.id}
+                                                            onClick={() => handleRecibo(r)}
+                                                        />
+                                                    )}
+                                                    {isRecebido && (
+                                                        <ActionIconButton
                                                             kind="settings"
                                                             title="Estornar baixa"
                                                             icon={<Undo2 className="w-4 h-4" />}
@@ -1483,10 +1555,10 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                     </span>
                     <button
                         onClick={handleBulkBaixa}
-                        disabled={bulkLoading}
+                        disabled={!!baixando}
                         className="flex items-center gap-1.5 px-3 py-2 bg-white text-green-700 rounded-xl text-sm font-semibold hover:bg-green-50 disabled:opacity-60 transition-colors"
                     >
-                        {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        {baixando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                         Baixar (Recebido)
                     </button>
                     <button
@@ -1526,6 +1598,13 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                     onClose={() => setEmitindo(null)}
                 />
             )}
+
+            <BaixaRecebivelSheet
+                titulos={baixando}
+                onClose={() => setBaixando(null)}
+                onConfirm={confirmarBaixa}
+                progresso={baixaProgresso}
+            />
 
             {/* Toast de Notificação — padrão guia seção 13 */}
             {notification && (

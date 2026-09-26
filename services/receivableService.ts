@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { originIdFromRef } from '../lib/receivableRef';
 import { empreendimentoService } from './empreendimentoService';
-import type { Receivable, ReceivableBusinessStatus, ReceivableEffectiveStatus, InadimplenciaFaixa } from '../types/financial';
+import type { Receivable, ReceivableBusinessStatus, ReceivableEffectiveStatus, ReceivablePaymentType, InadimplenciaFaixa } from '../types/financial';
 
 /**
  * Só o que recorta a CONSULTA (período/obra). Busca por texto e status são
@@ -217,6 +217,29 @@ export const receivableService = {
         const { error } = await supabase
             .from('internal_transactions')
             .update(updates)
+            .eq('id', id);
+        if (error) throw error;
+    },
+
+    /**
+     * Baixa com os dados do pagamento (painel de baixa). Mesmo efeito de
+     * `updateStatus(id, 'RECEBIDO')` mais a data e a forma informadas — a data
+     * vai explícita, então `trg_payment_date_na_baixa` (que só preenche vazio)
+     * não a troca por hoje. É daqui que o recibo tira data e forma.
+     */
+    async darBaixa(
+        id: string,
+        pagamento: { paymentDate: string; paymentType: ReceivablePaymentType | null },
+    ): Promise<void> {
+        const { error } = await supabase
+            .from('internal_transactions')
+            .update({
+                business_status: 'RECEBIDO',
+                status: 'CONCILIATED',
+                payment_date: pagamento.paymentDate,
+                payment_type: pagamento.paymentType,
+                updated_at: new Date().toISOString(),
+            })
             .eq('id', id);
         if (error) throw error;
     },

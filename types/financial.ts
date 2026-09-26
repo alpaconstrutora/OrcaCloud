@@ -756,6 +756,40 @@ export interface Receivable {
     updated_at?: string;
 }
 
+/** Forma de pagamento gravada em `internal_transactions.payment_type` — mesmo
+ *  vocabulário da parcela do plano de pagamento. */
+export type ReceivablePaymentType = NonNullable<PaymentInstallment['paymentType']>;
+
+/**
+ * Recibo de recebimento emitido na baixa (tabela `financial_receipts`,
+ * migration aplicar_20270926000110). O conteúdo é CONGELADO na emissão — o PDF
+ * é montado a partir destes campos, não do título nem do cliente atuais.
+ * Escrita só pelas RPCs `emitir_recibo_recebimento` / `registrar_arquivo_recibo`.
+ */
+export interface FinancialReceipt {
+    id: string;
+    organization_id: string;
+    /** null quando o título foi excluído depois da emissão. */
+    transaction_id: string | null;
+    /** Sequencial por organização. */
+    receipt_number: number;
+    amount: number;
+    payment_date: string;
+    payment_type: string | null;
+    description: string | null;
+    payer_name: string | null;
+    payer_document: string | null;
+    issuer_name: string | null;
+    issuer_document: string | null;
+    issuer_address: string | null;
+    /** Caminho no bucket `financial-receipts` (`<org>/<id>.pdf`). */
+    file_path: string | null;
+    issued_by: string | null;
+    issued_at: string;
+    cancelled_at: string | null;
+    cancel_reason: string | null;
+}
+
 // ────────────────────────────────────────────────────────────
 // Contas a Pagar (parcelas de Suprimentos — Pedidos e Contratos)
 // ────────────────────────────────────────────────────────────

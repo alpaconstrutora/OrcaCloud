@@ -150,6 +150,10 @@ import { pendenciasDosMemoriais } from '../../utils/blueprintMemorialLote';
 import { roteiroPerimetrico, memorialConvencional } from '../../utils/blueprintRoteiroPerimetrico';
 import PainelRoteiroPerimetrico from './PainelRoteiroPerimetrico';
 import PainelViasEGreide from './PainelViasEGreide';
+import PainelSigef from './PainelSigef';
+import { useBlueprintSigef } from '../../hooks/useBlueprintSigef';
+import { perimetroSigef, planilhaOdsSigef } from '../../utils/geo/sigef';
+import { crsPorCodigo } from '../../utils/geo/projecao';
 import { useBlueprintVias } from '../../hooks/useBlueprintVias';
 import { estaquear } from '../../utils/blueprintVias';
 import { prepararOrtofoto } from '../../utils/geo/ortofoto';
@@ -989,6 +993,9 @@ const RELATORIOS_DO_DOCK = {
   // VIAS E GREIDE (26/09/2026, C2): eixo estaqueado, greide com PIVs, seções
   // transversais, volumes por áreas médias e nota de serviço.
   vias: { rotulo: 'Vias e greide', naVista: false, no3d: false },
+  // GeoINCRA / SIGEF (26/09/2026, A4): identificação, vértices, trechos,
+  // pendências pelas regras do INCRA, planilha ODS, memorial, cartas e retorno.
+  sigef: { rotulo: 'GeoINCRA / SIGEF', naVista: false, no3d: false },
   conflitos: { rotulo: 'Conflitos', naVista: true, no3d: true },
   // Restrições (E1.4b): a conferência das intenções declaradas, com o ajuste.
   restricoes: { rotulo: 'Restrições', naVista: true, no3d: true },
@@ -1592,6 +1599,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     'restricoes',
     // C2: tabelas de estacas, volumes e nota de serviço — consulta.
     'vias',
+    // A4: formulário + tabelas + peças — gaveta.
+    'sigef',
     // B2: é tabela de consulta, e o critério vigente manda tabela para o drawer.
     'loteamento',
     // A1: idem.
@@ -4054,6 +4063,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const terraplenagem = useBlueprintTerraplenagem(study.id, study.organization_id);
   // C2: as vias de projeto (eixo, greide, seção tipo) — tabela lateral própria.
   const vias = useBlueprintVias(study.id, study.organization_id);
+  // A4: a identificação SIGEF do imóvel (o resto — vértices e trechos — é kernel).
+  const sigef = useBlueprintSigef(study.id, study.organization_id);
   const eixosNoCanvas = useMemo(
     () => ({
       linhas: vias.vias.map((v) => ({
@@ -9847,6 +9858,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                       : 'Vértice a vértice com azimutes de DESENHO — informe latitude/longitude e o CRS em Dados do lote para os azimutes verdadeiros e as coordenadas'
                 }
               />
+              {/* A4: as peças do georreferenciamento do imóvel rural para o credenciado. */}
+              <BotaoDoRibbon
+                icone={Landmark}
+                rotulo="SIGEF"
+                ativo={relatorioAberto === 'sigef'}
+                onClick={() => alternarRelatorio('sigef')}
+                disabled={roteiro.lados.length === 0}
+                ajuda={
+                  roteiro.lados.length === 0
+                    ? 'Feche o contorno do lote com a ferramenta Terreno: o SIGEF é sobre os vértices dele'
+                    : 'GeoINCRA: códigos dos vértices no padrão do credenciado, tipo, sigmas e método; tipo de limite e confrontante por trecho; pendências pelas regras do INCRA; planilha ODS no modelo oficial, memorial, cartas de anuência e conferência do retorno'
+                }
+              />
             </GrupoDoRibbon>
             {/* LOTEAMENTO (B1, 25/09/2026): o parcelamento do solo. Separado do grupo
                 Lote porque ali o assunto é UM imóvel (a gleba, a escritura, os
@@ -15303,6 +15327,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {relatorioNoDrawer === 'restricoes' && <Link2 className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'loteamento' && <LandPlot className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'roteiro' && <ListOrdered className="h-5 w-5 text-blue-700" />}
+              {relatorioNoDrawer === 'sigef' && <Landmark className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'vias' && <Milestone className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'medicoes' && <Ruler className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'orcamento' && <Calculator className="h-5 w-5 text-blue-700" />}
@@ -15340,6 +15365,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               'A ponte com o orçamento da obra: o de-para dos itens e a prévia do que a versão publicada gera.'}
             {relatorioNoDrawer === 'loteamento' &&
               'Área e testada mínimas, lote encravado, número repetido na quadra e o percentual de áreas públicas. Os mínimos vêm da zona do estudo quando informados; senão, do piso da Lei 6.766/79. Só acusa — nada trava o desenho.'}
+            {relatorioNoDrawer === 'sigef' &&
+              'As peças do georreferenciamento do imóvel rural, no padrão do INCRA, para o credenciado revisar, validar e enviar. Vértices e trechos são do desenho (Ctrl+Z desfaz); a identificação do imóvel fica gravada no estudo.'}
             {relatorioNoDrawer === 'roteiro' &&
               'A tabela que a matrícula e o SIGEF pedem: vértice a vértice, no sentido horário, com coordenadas, azimute, distância e confrontante. Tudo derivado do desenho — nada aqui se grava.'}
             {relatorioNoDrawer === 'vias' &&
@@ -15369,6 +15396,38 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   setAvisoConexaoT(`${anel.length} divisas lançadas a partir do memorial. Ctrl+Z desfaz todas.`);
                 }}
                 temLote={(editor.model.boundaries ?? []).some((b) => b.kind === 'TERRENO')}
+              />
+            </div>
+          )}
+
+          {relatorioNoDrawer === 'sigef' && (
+            <div className="px-4 py-3">
+              <PainelSigef
+                model={editor.model}
+                sigef={sigef}
+                onComandos={(cmds) => editor.runBatch(cmds)}
+                meridianoCentral={(() => {
+                  const c = crsPorCodigo(editor.model.georreferencia?.projetada?.crs ?? '');
+                  return c?.zona ? -183 + 6 * c.zona : null;
+                })()}
+                onBaixarTexto={(nome, texto, tipo) => baixarArtefatos([{ blob: new Blob([texto], { type: `${tipo};charset=utf-8` }), nome, tipo: tipo === 'text/csv' ? 'csv' : 'txt' }])}
+                onPlanilha={() =>
+                  void (async () => {
+                    try {
+                      const perimetro = perimetroSigef(editor.model);
+                      const c = crsPorCodigo(editor.model.georreferencia?.projetada?.crs ?? '');
+                      if (!perimetro || !c?.zona) return;
+                      // O MODELO OFICIAL do INCRA (1.4 rc5), servido junto do app: é preenchido, não recriado.
+                      const resposta = await fetch('/sigef/sigef_planilha_modelo_1.4_rc5.ods');
+                      if (!resposta.ok) throw new Error(`O modelo da planilha do SIGEF não carregou (${resposta.status}).`);
+                      const ods = await planilhaOdsSigef(new Uint8Array(await resposta.arrayBuffer()), sigef.identificacao, perimetro, -183 + 6 * c.zona);
+                      const nome = `${(sigef.identificacao.denominacao || study.name || 'imovel').replace(/[\\/:*?"<>|]+/g, '-')} - SIGEF.ods`;
+                      baixarArtefatos([{ blob: new Blob([ods as BlobPart], { type: 'application/vnd.oasis.opendocument.spreadsheet' }), nome, tipo: 'ods' }]);
+                    } catch (e) {
+                      setAvisoConexaoT(e instanceof Error ? e.message : String(e));
+                    }
+                  })()
+                }
               />
             </div>
           )}

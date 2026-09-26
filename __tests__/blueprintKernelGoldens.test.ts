@@ -194,6 +194,17 @@
  *   tem instalação, então nenhuma delas ganha chave — só a versão embutida no
  *   payload mudou.
  *
+ *   0.59.0 → 0.60.0 (26/09/2026): O QUE O SIGEF PEDE (fase A4) — o vértice
+ *   ganhou `sigmaEMm`/`sigmaNMm`/`sigmaHMm`/`altitudeM`, a divisa ganhou
+ *   `tipoDeLimite` (LA1…LN6 do INCRA) e os documentos do confrontante (CNS,
+ *   matrícula, CPF/CNPJ). Tudo omitido do canônico quando ausente — nenhum dos
+ *   seis casos tem limite nem vértice, então só a string da versão mudou. Mesma
+ *   prova, refeita ANTES de tocar num hash: com a string em 0.59.0 e tudo JÁ no
+ *   lugar (modelo, invariantes, canônico, `SetBoundarySigef`, `SetVerticeDoTerreno`
+ *   com sigmas, `NomearVerticesDoTerreno` com o padrão SIGEF), 313 testes de
+ *   kernel/goldens/loteamento/vértices/roteiro passaram sem tocar em hash; só
+ *   depois do bump as seis falhas foram todas de hash.
+ *
  *   0.58.0 → 0.59.0 (26/09/2026): VÉRTICES NOMEADOS DO TERRENO (fase A1) —
  *   `verticesDoTerreno` ({ponto, nome, tipo?, sigmaMm?, metodo?}), ancorados
  *   no ponto. Nenhum dos seis casos tem vértice nomeado e a lista é omitida
@@ -675,17 +686,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: 'a4201a0d53e17a5ab002113bcf670fb60e5fdb5fdb05e2519ae64e4bb2b0c3ec',
+    hash: '04f73ec9b2fa3491f743e1c71326fe632ccd8b8781444a2ba194796a381b5443',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'cca2a69b8533871e324f3fa55da09bc6361cc5d091915d5053c47a3cd67374e8',
+    hash: '3f50b5de8e10aaa2d4411d4dc9bd96292e6ef537a1e11e9bb3577468dd4ad7de',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '5202159709ea9f0dd2bd497d03a9a74ae987646e41c602b128d3e930fa31fbe2',
+    hash: 'a50901a64d64ebe6597f17983ceb8dd9983ed4eff1754d9fb7b443ebfdbc8cfc',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -693,7 +704,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: 'b284e68e8e17573d51feb01bc0ffe55afdfa52832c92fffce8003c914413a625',
+    hash: '55b99aa9e12634a198f67ec088c70ec08208b570eb77714aa27d1153c262d82c',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -703,7 +714,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: 'c5e2dbc185b916f3afe46deddc1369aa69576ff0ce9737980cc2816d37b027b4',
+    hash: '6f7b73a5dcedb3575e5c20f9810db46b7d699dc1464c112a09bacf275d73bceb',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -714,7 +725,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '55434793724b5f95c95dda6f856ec2c1695f6f6889f0e8004229a154baf9ab38',
+    hash: 'c1ebcc4d058a5257b8cee7dbb9a4f96b55b0d7d523cdc497265d7fbf738d7969',
   },
 };
 

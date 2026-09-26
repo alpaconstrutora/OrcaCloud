@@ -709,6 +709,17 @@ export interface Boundary {
    */
   medidaEscrituraMm?: number | null;
   /**
+   * A4 (0.60.0) — SIGEF: o TIPO DE LIMITE do trecho pelo Manual Técnico de
+   * Limites e Confrontações do INCRA (LA1 cerca … LN6 limite natural não
+   * tipificado) e os documentos do CONFRONTANTE que a planilha ODS e a carta
+   * de anuência pedem. Ausentes = ninguém informou (o lote urbano não precisa).
+   */
+  tipoDeLimite?: TipoDeLimite | null;
+  confrontanteCns?: string | null;
+  confrontanteMatricula?: string | null;
+  /** CPF ou CNPJ do confrontante, como digitado. */
+  confrontanteDocumento?: string | null;
+  /**
    * Com quem este lado confronta, como a escritura descreve: "Rua das Acácias",
    * "lote 12", "Córrego do Meio". Texto livre porque a matrícula é texto livre —
    * um catálogo de confrontantes obrigaria a cadastrar a rua antes de desenhar.
@@ -2178,6 +2189,14 @@ export interface AreaPublica {
  * O vértice que perde o seu ponto (a divisa foi apagada) fica ÓRFÃO e visível,
  * não some: someço é o que faz o nome reaparecer no lugar errado depois.
  */
+/**
+ * A4 (0.60.0): os tipos de limite do SIGEF — Manual Técnico de Limites e
+ * Confrontações, 1ª ed. LA = artificial, LN = natural.
+ */
+export const TIPOS_DE_LIMITE = ['LA1', 'LA2', 'LA3', 'LA4', 'LA5', 'LA6', 'LA7', 'LN1', 'LN2', 'LN3', 'LN4', 'LN5', 'LN6'] as const;
+export type TipoDeLimite = (typeof TIPOS_DE_LIMITE)[number];
+export const MAX_DOCUMENTO_DO_CONFRONTANTE = 40;
+
 export interface VerticeDoTerreno {
   uid: ElementUid;
   /** A âncora: o ponto do anel a que este nome pertence, em mm inteiros. */
@@ -2191,8 +2210,18 @@ export interface VerticeDoTerreno {
   tipo?: 'M' | 'P' | 'V';
   /** Precisão declarada do vértice, em mm. O SIGEF exige; o cadastro urbano, não. */
   sigmaMm?: number;
-  /** Como foi determinado: "GNSS RTK", "estação total", "digitalização". */
+  /** Como foi determinado: "GNSS RTK", "estação total", "digitalização" — ou o código SIGEF (PG6, PT5…). */
   metodo?: string;
+  /**
+   * A4 (0.60.0) — SIGEF: os desvios-padrão por eixo (a planilha pede sigma de
+   * longitude, latitude e altura separados), em mm, e a altitude elipsoidal
+   * do vértice, em m. `sigmaMm` (A1) continua valendo como sigma horizontal
+   * quando os por eixo não foram informados.
+   */
+  sigmaEMm?: number;
+  sigmaNMm?: number;
+  sigmaHMm?: number;
+  altitudeM?: number;
 }
 export const MAX_NOME_DE_VERTICE = 40;
 /** Tolerancia para dizer que o vértice nomeado é AQUELE ponto do anel. */
@@ -4505,6 +4534,16 @@ export function assertModelInvariants(model: BlueprintModel): void {
     // divergência, e um 12000,4 ali produziria um Δ fracionário que nenhuma das
     // duas medidas tem. `null` é ausência e passa direto: não se compara desenho
     // com escritura que ninguém informou.
+    // SIGEF (0.60.0): tipo de limite do catálogo; documentos curtos.
+    if (b.tipoDeLimite != null && !(TIPOS_DE_LIMITE as readonly string[]).includes(b.tipoDeLimite)) {
+      throw new KernelError('BAD_LIMIT_TYPE', `Limite ${b.id}: tipo de limite desconhecido ${String(b.tipoDeLimite)}`);
+    }
+    for (const k of ['confrontanteCns', 'confrontanteMatricula', 'confrontanteDocumento'] as const) {
+      const t = b[k];
+      if (t != null && (typeof t !== 'string' || t.length > MAX_DOCUMENTO_DO_CONFRONTANTE)) {
+        throw new KernelError('BAD_LIMIT_TYPE', `Limite ${b.id}: ${k} maior que ${MAX_DOCUMENTO_DO_CONFRONTANTE} caracteres`);
+      }
+    }
     if (b.medidaEscrituraMm !== null && b.medidaEscrituraMm !== undefined) {
       assertIntegerMm(b.medidaEscrituraMm, `${b.id}.medidaEscrituraMm`);
       if (b.medidaEscrituraMm <= 0) {
@@ -4887,6 +4926,11 @@ export function assertModelInvariants(model: BlueprintModel): void {
     }
     if (v.tipo != null && !['M', 'P', 'V'].includes(v.tipo)) throw new KernelError('BAD_VERTEX', `Vértice ${v.nome}: tipo desconhecido ${String(v.tipo)}`);
     if (v.sigmaMm != null && (!Number.isFinite(v.sigmaMm) || v.sigmaMm < 0)) throw new KernelError('BAD_VERTEX', `Vértice ${v.nome}: sigma tem de ser positivo`);
+    for (const k of ['sigmaEMm', 'sigmaNMm', 'sigmaHMm'] as const) {
+      const s = v[k];
+      if (s != null && (!Number.isFinite(s) || s < 0)) throw new KernelError('BAD_VERTEX', `Vértice ${v.nome}: ${k} tem de ser positivo`);
+    }
+    if (v.altitudeM != null && !Number.isFinite(v.altitudeM)) throw new KernelError('BAD_VERTEX', `Vértice ${v.nome}: altitude não é número`);
   }
   // LOTEAMENTO (0.58.0): pavimento vivo, contorno inteiro, nome/numero curtos,
   // quadra existente, testada dentro da lista de arestas, via com eixo aberto.

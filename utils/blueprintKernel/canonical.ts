@@ -50,6 +50,7 @@ import {
   type OrientacaoDeBrise,
   type MaterialDeSubRegiao,
   type TipoDeLote,
+  type TipoDeLimite,
   type TipoDeAreaPublica,
   type ObjectId,
   type BlueprintModel,
@@ -308,6 +309,11 @@ function projetar(model: BlueprintModel): {
       // digitou o nome da rua com outra grafia.
       medidaEscrituraMm: b.medidaEscrituraMm ?? null,
       confrontante: b.confrontante ?? null,
+      // SIGEF (0.60.0): só quando informados — limite sem eles não ganha chave nova.
+      tipoDeLimite: b.tipoDeLimite ?? undefined,
+      confrontanteCns: b.confrontanteCns ?? undefined,
+      confrontanteMatricula: b.confrontanteMatricula ?? undefined,
+      confrontanteDocumento: b.confrontanteDocumento ?? undefined,
       // Restrição (0.41.0): só na RESTRICAO; ausente nas demais — a chave some.
       restricao: b.restricao ? { tipo: b.restricao.tipo, faixaMm: b.restricao.faixaMm } : undefined,
       a: { x: b.a.x, y: b.a.y },
@@ -584,6 +590,11 @@ function projetar(model: BlueprintModel): {
       tipo: v.tipo ?? undefined,
       sigmaMm: v.sigmaMm ?? undefined,
       metodo: v.metodo ?? undefined,
+      // SIGEF (0.60.0): omitidos quando ausentes.
+      sigmaEMm: v.sigmaEMm ?? undefined,
+      sigmaNMm: v.sigmaNMm ?? undefined,
+      sigmaHMm: v.sigmaHMm ?? undefined,
+      altitudeM: v.altitudeM ?? undefined,
     }),
     (x, y) => x.ponto.x - y.ponto.x || x.ponto.y - y.ponto.y || cmpStr(x.nome, y.nome),
   );
@@ -1238,6 +1249,11 @@ export interface CanonicalPayload {
     /** Ausentes em payload gravado sob kernel < 0.6.0. */
     medidaEscrituraMm?: number | null;
     confrontante?: string | null;
+    /** SIGEF: ausentes sob kernel < 0.60.0 e quando ninguém informou. */
+    tipoDeLimite?: TipoDeLimite;
+    confrontanteCns?: string;
+    confrontanteMatricula?: string;
+    confrontanteDocumento?: string;
     /** Só na RESTRICAO (kernel ≥ 0.41.0). */
     restricao?: { tipo: TipoDeRestricaoDoLote; faixaMm: number };
     a: { x: number; y: number };
@@ -1375,7 +1391,7 @@ export interface CanonicalPayload {
   /** Sub-regiões do terreno. Ausente sob kernel < 0.53.0 e em desenho sem nenhuma. */
   subRegioes?: { level: number; material: MaterialDeSubRegiao; pontos: { x: number; y: number }[]; nome: string | null; parametros?: Parametros }[];
   /** VÉRTICES NOMEADOS do terreno. Ausente sob kernel < 0.59.0 e em desenho sem nenhum. */
-  verticesDoTerreno?: { ponto: { x: number; y: number }; nome: string; tipo?: 'M' | 'P' | 'V'; sigmaMm?: number; metodo?: string }[];
+  verticesDoTerreno?: { ponto: { x: number; y: number }; nome: string; tipo?: 'M' | 'P' | 'V'; sigmaMm?: number; metodo?: string; sigmaEMm?: number; sigmaNMm?: number; sigmaHMm?: number; altitudeM?: number }[];
   /** LOTEAMENTO. Ausentes sob kernel < 0.58.0 e em desenho sem nenhum. A quadra do lote vai por ÍNDICE. */
   quadras?: { level: number; nome: string; pontos: { x: number; y: number }[]; parametros?: Parametros }[];
   lotes?: { level: number; quadra: number | null; numero: string; pontos: { x: number; y: number }[]; testadaIndex: number | null; tipo: TipoDeLote; parametros?: Parametros }[];
@@ -1719,6 +1735,10 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       // contra uma medida que nunca foi digitada.
       medidaEscrituraMm: b.medidaEscrituraMm ?? null,
       confrontante: b.confrontante ?? null,
+      ...(b.tipoDeLimite != null ? { tipoDeLimite: b.tipoDeLimite } : {}),
+      ...(b.confrontanteCns != null ? { confrontanteCns: b.confrontanteCns } : {}),
+      ...(b.confrontanteMatricula != null ? { confrontanteMatricula: b.confrontanteMatricula } : {}),
+      ...(b.confrontanteDocumento != null ? { confrontanteDocumento: b.confrontanteDocumento } : {}),
       ...(b.restricao ? { restricao: { tipo: b.restricao.tipo, faixaMm: b.restricao.faixaMm } } : {}),
     });
   });
@@ -1921,6 +1941,10 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       ...(v.tipo != null ? { tipo: v.tipo } : {}),
       ...(v.sigmaMm != null ? { sigmaMm: v.sigmaMm } : {}),
       ...(v.metodo != null ? { metodo: v.metodo } : {}),
+      ...(v.sigmaEMm != null ? { sigmaEMm: v.sigmaEMm } : {}),
+      ...(v.sigmaNMm != null ? { sigmaNMm: v.sigmaNMm } : {}),
+      ...(v.sigmaHMm != null ? { sigmaHMm: v.sigmaHMm } : {}),
+      ...(v.altitudeM != null ? { altitudeM: v.altitudeM } : {}),
     });
   });
 

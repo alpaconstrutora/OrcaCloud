@@ -450,3 +450,25 @@ Eu esperava que o ponto 10 m a leste e 5 m ao norte NA QUADRÍCULA caísse em (1
 - Comparação "DEM local × Open-Meteo na mesma gleba" com dado real (não há DEM público no repositório; provado com plano analítico).
 - ECW/JP2, GeoTIFF com JPEG interno, BigTIFF (recusa com mensagem).
 - `blueprint_underlays` não ganhou colunas de CRS/bbox: a ortofoto grava o CRS no nome e a aferição verdadeira (largura em px × mm) nos `calib_*`, como o fundo de DXF.
+
+## Estado — A4 (26/09/2026)
+
+As regras vieram dos documentos do PRÓPRIO INCRA, baixados e lidos nesta fase (não de memória): o modelo oficial `sigef_planilha_modelo_1.4_rc5.ods`, o Manual do SIGEF (formato das células), o Manual Técnico de Limites e Confrontações 1ª ed. (LA1…LN6) e o Manual Técnico para Georreferenciamento de Imóveis Rurais 2ª ed. (métodos PG/PT/PA/PS/PB, tipos de vértice que cada um admite, código `<credenciado 4>-<tipo>-<sequencial>`).
+
+- [x] Kernel **0.59.0 → 0.60.0**: vértice com `sigmaEMm`/`sigmaNMm`/`sigmaHMm`/`altitudeM`; divisa com `tipoDeLimite` (LA1…LN6) e `confrontanteCns`/`confrontanteMatricula`/`confrontanteDocumento`; comando `SetBoundarySigef`; `NomearVerticesDoTerreno` com `sigef: { credenciado, inicio por tipo }` (credenciado de 4 caracteres, sequência POR TIPO, continuando de onde o credenciado parou). Tudo omitido do canônico quando ausente. Rito dos goldens: com a string em 0.59.0 e tudo no lugar, 313 testes passaram sem tocar hash; só depois do bump as seis falhas foram de hash. Bundle da planta-api regerado.
+- [x] `utils/geo/sigef.ts`: `perimetroSigef` (sentido horário a partir do vértice mais ao NORTE; o trecho que SAI do vértice leva limite e confrontante; azimute/distância/área/perímetro no SGL); `gmsSigef` ("45 30 25,892 W"), `metrosSigef` ("0,18"); `validarSigef` (identificação, código no padrão, tipo × código, método do catálogo × tipo de vértice, sigmas e altitude presentes, precisão máxima M 0,50 / P 0,50 em LA / P 3,00 em LN, limite e confrontante por trecho, códigos repetidos); **planilha ODS = o modelo oficial PREENCHIDO** (DOMParser/XMLSerializer, `mimetype` primeiro e sem compressão, pastas vazias preservadas; abas e parâmetros intactos) — `identificacao` B2…B16, `perimetro_1` B3/B4/B5/B9/D9/F9 e os vértices da linha 12, A…L; `memorialGeoIncra` (GMS com 3 casas, h, azimute e distância SGL, confrontante e tipo de limite, fecha no inicial); `cartasDeAnuencia` (uma por confrontante com os trechos dele); `relatorioDeVerticesCsv`; `conferirRetornoSigef` (código; longitude; latitude em GMS ou decimal → ΔE/ΔN em m, e os códigos que só existem de um lado).
+- [x] `blueprint_study_sigef` (migration `aplicar_20270926000040`, aplicada e conferida de fora: grants só `authenticated`, policy `is_org_member`): a identificação do imóvel (natureza, detentor, denominação, situação, natureza da área, SNCR, CNS, matrícula, município, credenciado, RT). Vértices e trechos ficam no kernel (desfazer, snapshot). Service + hook `useBlueprintSigef`.
+- [x] Tela: **SIGEF** no grupo Lote da aba Terreno → gaveta `PainelSigef` (identificação; vértices com tipo/sigmas/h/método — método incompatível com o tipo aparece desabilitado; "Nomear no padrão SIGEF" com o próximo sequencial por tipo; trechos com tipo de limite, confrontante, CNS, matrícula, CPF/CNPJ; pendências; peças; conferência do retorno). A planilha fica desligada com erro e o title diz quantos. O modelo do INCRA é servido em `public/sigef/`.
+- [x] Prancha **INCRA** (`TipoDePrancha`, `incluir.incra`): a planta topográfica com o quadro de vértices do SIGEF (código, longitude, latitude, limite), área no SGL e a legenda dos limites usados.
+- [x] Testes: `blueprintKernelSigef` (6), `geoSigef` (15), `PainelSigef` (5), `BlueprintEditor` (+1); goldens recapturados.
+
+### Provas fora do vitest
+
+- **Navegador** (`docs/spikes/geo/sigef.html` + `medir-sigef.mjs`, 9 checks): controle incompleto com 38 erros ditos e a planilha desligada explicando; completo sem pendência; o botão baixa a planilha preenchida no navegador; trocar o tipo de limite pela tabela chega ao kernel.
+- **O .ods baixado lido por outro leitor** (`conferir-ods.py`, stdlib do Python, 24 checks): ODS válido (mimetype), as 8 abas na ordem, os demais arquivos do modelo intactos, as seis abas de parâmetros byte a byte iguais ao modelo, identificação e vértices nas células certas e no formato do manual.
+
+### O que continua com o credenciado (declarado)
+
+- **Validar e enviar**: a extensão do SIGEF no LibreOffice e o validador do portal conferem contra os imóveis já certificados — só eles sabem. A prova final ("aceita pelo validador") é manual, pelo credenciado, numa parcela de teste. Sem integração com o portal (não há API pública).
+- Planilha com **uma parcela** (`perimetro_1`, lado Externo); desmembramento, várias parcelas e lado interno ficam para quando houver caso.
+- Memorial e cartas saem em TEXTO (para colar no modelo de documento do escritório), não em .docx por template.

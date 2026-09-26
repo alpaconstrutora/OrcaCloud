@@ -75,7 +75,7 @@ describe('famílias aninhadas (P2.18)', () => {
     const { m, lvl } = base();
     let r = applyCommand(m, { type: 'AddConjunto', levelId: lvl, tipoId: 'CONJUNTO_BANHEIRO', at: point(2000, 1500), rotacaoGraus: 90 }).model;
     r = applyCommand(r, { type: 'AddComponente', levelId: lvl, tipoId: 'SOFA', at: point(9000, 9000) }).model;
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.59.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.60.0');
     const payload = parseCanonicalPayload(canonicalPayload(r));
     const comPai = payload.componentes!.filter((c) => c.pai !== undefined);
     expect(comPai).toHaveLength(3);

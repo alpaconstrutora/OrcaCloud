@@ -14,6 +14,7 @@
 import type { BlueprintModel, Point } from './blueprintKernel';
 import type { Desenhista, Enquadramento, EstiloTraco } from './blueprintExport';
 import { enquadrarPontos, paraPapel, type ContextoDoDesenho } from './blueprintPranchaLoteamento';
+import { perimetroSigef, ROTULO_DO_TIPO_DE_LIMITE, type PerimetroSigef } from './geo/sigef';
 import { roteiroPerimetrico, type RoteiroPerimetrico } from './blueprintRoteiroPerimetrico';
 import { numeroBr } from './blueprintMemorialLote';
 
@@ -119,6 +120,8 @@ export function desenharPlantaTopografica(
   model: BlueprintModel,
   enq: Enquadramento,
   alturaDoTextoMm = 2.2,
+  /** A4: `INCRA` troca a tabela pelo quadro de vértices do SIGEF (código, longitude, latitude, limite) e a legenda dos limites. */
+  variante: 'TOPOGRAFICA' | 'INCRA' = 'TOPOGRAFICA',
 ): { roteiro: RoteiroPerimetrico; malha: { passoM: number; linhas: number } | null } {
   const roteiro = roteiroPerimetrico(model);
   if (roteiro.vertices.length < 3) {
@@ -154,7 +157,12 @@ export function desenharPlantaTopografica(
   // 4. Os vértices, por cima.
   roteiro.vertices.forEach((v, i) => marcarVertice(d, pts[i], v.nome, alturaDoTextoMm));
 
-  // 5. A tabela do roteiro, à direita.
+  // 5. A tabela, à direita — no padrão INCRA, o quadro de vértices do SIGEF.
+  const sigef = variante === 'INCRA' ? perimetroSigef(model) : null;
+  if (sigef) {
+    desenharQuadroIncra(d, sigef, enq, alturaDoTextoMm);
+    return { roteiro, malha };
+  }
   const x0 = enq.offsetXMm + enq.utilLarguraMm * 0.65;
   const linhaAlt = alturaDoTextoMm * 1.7;
   let y = enq.offsetYMm + linhaAlt;
@@ -187,4 +195,44 @@ export function desenharPlantaTopografica(
     d.texto(x0, y, 'Sem malha de coordenadas: imóvel não georreferenciado neste estudo. Azimutes de desenho.', alturaDoTextoMm * 0.75, '#b45309');
   }
   return { roteiro, malha };
+}
+
+
+/**
+ * O QUADRO DE VÉRTICES do padrão INCRA (A4): código, longitude e latitude em
+ * GMS (SIRGAS 2000), tipo de limite do trecho que sai do vértice e distância no
+ * SGL; embaixo, a área no SGL e a legenda dos limites usados.
+ */
+function desenharQuadroIncra(d: Desenhista, sigef: PerimetroSigef, enq: Enquadramento, alturaDoTextoMm: number): void {
+  const x0 = enq.offsetXMm + enq.utilLarguraMm * 0.64;
+  const largura = enq.utilLarguraMm * 0.36;
+  const linhaAlt = alturaDoTextoMm * 1.7;
+  const col = [0, 0.3, 0.58, 0.84].map((f) => x0 + f * largura);
+  let y = enq.offsetYMm + linhaAlt;
+  d.texto(x0, y, 'VÉRTICES — SIRGAS 2000', alturaDoTextoMm * 1.2, '#0f172a');
+  y += linhaAlt * 1.3;
+  ['Código', 'Longitude', 'Latitude', 'Limite'].forEach((t, i) => d.texto(col[i], y, t, alturaDoTextoMm * 0.85, '#0f172a'));
+  y += linhaAlt;
+  const limite = enq.offsetYMm + enq.utilAlturaMm - linhaAlt * 6;
+  for (const l of sigef.linhas) {
+    if (y > limite) {
+      d.texto(x0, y, '… (continua no relatório de vértices)', alturaDoTextoMm * 0.8, '#94a3b8');
+      break;
+    }
+    [l.codigo, l.longitudeTexto, l.latitudeTexto, l.tipoDeLimite ?? '—'].forEach((t, i) => d.texto(col[i], y, t, alturaDoTextoMm * 0.72, '#334155'));
+    y += linhaAlt;
+  }
+  y += linhaAlt * 0.5;
+  d.texto(x0, y, `Área (SGL) ${numeroBr(sigef.areaSglM2 / 10_000, 4)} ha · Perímetro ${numeroBr(sigef.perimetroSglM)} m`, alturaDoTextoMm * 0.85, '#0f172a');
+  y += linhaAlt;
+  const usados = [...new Set(sigef.linhas.map((l) => l.tipoDeLimite).filter((t): t is NonNullable<typeof t> => !!t))].sort();
+  if (usados.length > 0) {
+    d.texto(x0, y, 'Tipos de limite:', alturaDoTextoMm * 0.8, '#0f172a');
+    y += linhaAlt * 0.9;
+    for (const t of usados) {
+      d.texto(x0, y, `${t} — ${ROTULO_DO_TIPO_DE_LIMITE[t]}`, alturaDoTextoMm * 0.75, '#475569');
+      y += linhaAlt * 0.85;
+    }
+  }
+  d.texto(x0, y + linhaAlt * 0.3, 'Azimutes, distâncias e área no plano topográfico local.', alturaDoTextoMm * 0.7, '#475569');
 }

@@ -41,6 +41,9 @@ import {
   MAX_NOME_DE_SUB_REGIAO,
   type MaterialDeSubRegiao,
   MAX_NOME_DE_VERTICE,
+  TIPOS_DE_LIMITE,
+  MAX_DOCUMENTO_DO_CONFRONTANTE,
+  type TipoDeLimite,
   TOLERANCIA_DO_VERTICE_MM,
   type VerticeDoTerreno,
   findQuadra,
@@ -541,9 +544,33 @@ export type Command =
   | { type: 'MoveSubRegiaoVertex'; subRegiaoId: ObjectId; index: number; to: Point }
   | { type: 'DeleteSubRegiao'; subRegiaoId: ObjectId }
   // VÉRTICES DO TERRENO (0.59.0)
-  | { type: 'SetVerticeDoTerreno'; ponto: Point; nome: string; tipo?: 'M' | 'P' | 'V' | null; sigmaMm?: number | null; metodo?: string | null }
+  | {
+      type: 'SetVerticeDoTerreno';
+      ponto: Point;
+      nome: string;
+      tipo?: 'M' | 'P' | 'V' | null;
+      sigmaMm?: number | null;
+      metodo?: string | null;
+      /** A4: sigmas por eixo (mm) e altitude elipsoidal (m). `null` apaga; ausente não mexe. */
+      sigmaEMm?: number | null;
+      sigmaNMm?: number | null;
+      sigmaHMm?: number | null;
+      altitudeM?: number | null;
+    }
   | { type: 'RemoverVerticeDoTerreno'; ponto: Point }
-  | { type: 'NomearVerticesDoTerreno'; pontos: Point[]; prefixo?: string; inicio?: number }
+  | {
+      type: 'NomearVerticesDoTerreno';
+      pontos: Point[];
+      prefixo?: string;
+      inicio?: number;
+      /**
+       * A4: o padrão do SIGEF — `<credenciado>-<tipo>-<sequencial>` ("ABCD-M-0001"),
+       * uma sequência POR TIPO. O tipo é o do vértice (P quando não informado).
+       * `inicio` por tipo continua de onde o credenciado parou (a numeração é dele,
+       * não do imóvel: não pode repetir).
+       */
+      sigef?: { credenciado: string; inicio?: Partial<Record<'M' | 'P' | 'V', number>> };
+    }
   // LOTEAMENTO (0.58.0)
   | { type: 'AddQuadra'; levelId: ObjectId; nome: string; pontos: Point[] }
   | { type: 'SetQuadraProps'; quadraId: ObjectId; nome?: string; pontos?: Point[] }
@@ -798,6 +825,18 @@ export type Command =
       boundaryId: ObjectId;
       medidaMm: number | null;
       confrontante: string | null;
+    }
+  /**
+   * A4 (0.60.0): o que o SIGEF pede de um trecho da divisa — tipo de limite e
+   * documentos do confrontante. Ausente não mexe; `null` (ou texto vazio) apaga.
+   */
+  | {
+      type: 'SetBoundarySigef';
+      boundaryId: ObjectId;
+      tipoDeLimite?: TipoDeLimite | null;
+      confrontanteCns?: string | null;
+      confrontanteMatricula?: string | null;
+      confrontanteDocumento?: string | null;
     }
   /** Área do lote na escritura, em mm². `null` tira. */
   | { type: 'SetAreaEscritura'; areaMm2: number | null }
@@ -2559,6 +2598,10 @@ function aplicarSemHash(
         ...(command.tipo !== undefined ? { tipo: command.tipo ?? undefined } : {}),
         ...(command.sigmaMm !== undefined ? { sigmaMm: command.sigmaMm ?? undefined } : {}),
         ...(command.metodo !== undefined ? { metodo: command.metodo?.trim() || undefined } : {}),
+        ...(command.sigmaEMm !== undefined ? { sigmaEMm: command.sigmaEMm ?? undefined } : {}),
+        ...(command.sigmaNMm !== undefined ? { sigmaNMm: command.sigmaNMm ?? undefined } : {}),
+        ...(command.sigmaHMm !== undefined ? { sigmaHMm: command.sigmaHMm ?? undefined } : {}),
+        ...(command.altitudeM !== undefined ? { altitudeM: command.altitudeM ?? undefined } : {}),
       };
       if (existente) {
         Object.assign(existente, dados);
@@ -2589,10 +2632,22 @@ function aplicarSemHash(
       const prefixo = command.prefixo?.trim() || 'P';
       const inicio = command.inicio ?? 1;
       let lista = next.verticesDoTerreno ?? [];
+      // SIGEF: 4 caracteres do credenciado, o tipo, e 4 dígitos por tipo.
+      const credenciado = command.sigef?.credenciado.trim().toUpperCase() ?? '';
+      if (command.sigef && !/^[A-Z0-9]{4}$/.test(credenciado)) {
+        throw new KernelError('BAD_VERTEX', `Código do credenciado tem 4 caracteres (letras e números): "${command.sigef.credenciado}"`);
+      }
+      const proximo: Record<'M' | 'P' | 'V', number> = { M: command.sigef?.inicio?.M ?? 1, P: command.sigef?.inicio?.P ?? 1, V: command.sigef?.inicio?.V ?? 1 };
       command.pontos.forEach((p, i) => {
         const ponto = paraPontoMm(p, i);
-        const nome = `${prefixo}${inicio + i}`.slice(0, MAX_NOME_DE_VERTICE);
         const existente = lista.find((v) => Math.hypot(v.ponto.x - ponto.x, v.ponto.y - ponto.y) <= TOLERANCIA_DO_VERTICE_MM);
+        let nome: string;
+        if (command.sigef) {
+          const tipo = existente?.tipo ?? 'P';
+          nome = `${credenciado}-${tipo}-${String(proximo[tipo]++).padStart(4, '0')}`;
+        } else {
+          nome = `${prefixo}${inicio + i}`.slice(0, MAX_NOME_DE_VERTICE);
+        }
         if (existente) {
           existente.nome = nome;
           diff.updated.push(existente.uid);
@@ -3470,6 +3525,23 @@ function aplicarSemHash(
       const agua = findAgua(next, command.aguaId);
       next.roofs = (next.roofs ?? []).filter((r) => r.id !== agua.id);
       diff.deleted.push(agua.id);
+      break;
+    }
+
+    case 'SetBoundarySigef': {
+      const boundary = findBoundary(next, command.boundaryId);
+      if (command.tipoDeLimite !== undefined) {
+        if (command.tipoDeLimite !== null && !(TIPOS_DE_LIMITE as readonly string[]).includes(command.tipoDeLimite)) {
+          throw new KernelError('BAD_LIMIT_TYPE', `Tipo de limite desconhecido: ${String(command.tipoDeLimite)}`);
+        }
+        boundary.tipoDeLimite = command.tipoDeLimite;
+      }
+      for (const k of ['confrontanteCns', 'confrontanteMatricula', 'confrontanteDocumento'] as const) {
+        if (command[k] === undefined) continue;
+        const t = command[k]?.trim() ?? '';
+        boundary[k] = t === '' ? null : t.slice(0, MAX_DOCUMENTO_DO_CONFRONTANTE);
+      }
+      diff.updated.push(boundary.id);
       break;
     }
 

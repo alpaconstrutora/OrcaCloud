@@ -61,7 +61,7 @@ describe('etapas de obra', () => {
     expect(m2.etapas).toHaveLength(2);
     expect(m2.walls[4].demolidaEmEtapaId).toBeUndefined();
     expect(m2.openings[0].etapaId).toBeUndefined();
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.59.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.60.0');
   });
 
   it('status derivado por etapa em vista; quadro por etapa; peças sem etapa', () => {

@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.59.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.60.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -1652,6 +1652,11 @@ function projetar(model) {
       // digitou o nome da rua com outra grafia.
       medidaEscrituraMm: b.medidaEscrituraMm ?? null,
       confrontante: b.confrontante ?? null,
+      // SIGEF (0.60.0): só quando informados — limite sem eles não ganha chave nova.
+      tipoDeLimite: b.tipoDeLimite ?? void 0,
+      confrontanteCns: b.confrontanteCns ?? void 0,
+      confrontanteMatricula: b.confrontanteMatricula ?? void 0,
+      confrontanteDocumento: b.confrontanteDocumento ?? void 0,
       // Restrição (0.41.0): só na RESTRICAO; ausente nas demais — a chave some.
       restricao: b.restricao ? { tipo: b.restricao.tipo, faixaMm: b.restricao.faixaMm } : void 0,
       a: { x: b.a.x, y: b.a.y },
@@ -1851,7 +1856,12 @@ function projetar(model) {
       nome: v.nome,
       tipo: v.tipo ?? void 0,
       sigmaMm: v.sigmaMm ?? void 0,
-      metodo: v.metodo ?? void 0
+      metodo: v.metodo ?? void 0,
+      // SIGEF (0.60.0): omitidos quando ausentes.
+      sigmaEMm: v.sigmaEMm ?? void 0,
+      sigmaNMm: v.sigmaNMm ?? void 0,
+      sigmaHMm: v.sigmaHMm ?? void 0,
+      altitudeM: v.altitudeM ?? void 0
     }),
     (x, y) => x.ponto.x - y.ponto.x || x.ponto.y - y.ponto.y || cmpStr(x.nome, y.nome)
   );
@@ -2348,6 +2358,10 @@ function modelFromCanonicalPayload(payload) {
       // contra uma medida que nunca foi digitada.
       medidaEscrituraMm: b.medidaEscrituraMm ?? null,
       confrontante: b.confrontante ?? null,
+      ...b.tipoDeLimite != null ? { tipoDeLimite: b.tipoDeLimite } : {},
+      ...b.confrontanteCns != null ? { confrontanteCns: b.confrontanteCns } : {},
+      ...b.confrontanteMatricula != null ? { confrontanteMatricula: b.confrontanteMatricula } : {},
+      ...b.confrontanteDocumento != null ? { confrontanteDocumento: b.confrontanteDocumento } : {},
       ...b.restricao ? { restricao: { tipo: b.restricao.tipo, faixaMm: b.restricao.faixaMm } } : {}
     });
   });
@@ -2521,7 +2535,11 @@ function modelFromCanonicalPayload(payload) {
       nome: v.nome,
       ...v.tipo != null ? { tipo: v.tipo } : {},
       ...v.sigmaMm != null ? { sigmaMm: v.sigmaMm } : {},
-      ...v.metodo != null ? { metodo: v.metodo } : {}
+      ...v.metodo != null ? { metodo: v.metodo } : {},
+      ...v.sigmaEMm != null ? { sigmaEMm: v.sigmaEMm } : {},
+      ...v.sigmaNMm != null ? { sigmaNMm: v.sigmaNMm } : {},
+      ...v.sigmaHMm != null ? { sigmaHMm: v.sigmaHMm } : {},
+      ...v.altitudeM != null ? { altitudeM: v.altitudeM } : {}
     });
   });
   const quadrasPayload = payload.quadras ?? [];

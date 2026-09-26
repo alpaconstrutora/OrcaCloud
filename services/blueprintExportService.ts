@@ -490,6 +490,14 @@ export function desenharConjunto(
         folhas.push({ prancha: p, denominador: den });
         break;
       }
+      case 'INCRA': {
+        // A4: a mesma planta, com a tabela dos vértices no padrão do SIGEF.
+        const enq = enquadrar(model, template.denominadorPlanta, papel, false);
+        desenharPlantaTopografica(d, model, enq, 2.2, 'INCRA');
+        desenharCarimboDaFolha(d, comPrancha(0), enq);
+        folhas.push({ prancha: p, denominador: 0 });
+        break;
+      }
       case 'TOPOGRAFICA': {
         // A1: a escala é a que faz o lote caber com a tabela ao lado; sai como 0
         // ("variável") no carimbo em vez de um denominador que não mede.

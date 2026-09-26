@@ -6325,3 +6325,17 @@ describe('BlueprintEditor · vias e greide (C2)', () => {
     expect(within(grupo).getByRole('button', { name: /^eixo de projeto$/i })).toHaveAttribute('aria-pressed', 'true');
   }, 60000);
 });
+
+/**
+ * GeoINCRA / SIGEF (A4): o botão mora no grupo Lote da aba Terreno, junto do
+ * Roteiro, e sem lote fica apagado dizendo o caminho.
+ */
+describe('BlueprintEditor · SIGEF (A4)', () => {
+  it('SIGEF fica apagado sem lote, dizendo por quê', async () => {
+    await montar();
+    await abrirAba(/^terreno$/i);
+    const sigef = botao(/^sigef$/i);
+    expect(sigef).toBeDisabled();
+    expect(sigef).toHaveAttribute('title', expect.stringMatching(/feche o contorno do lote/i));
+  });
+});

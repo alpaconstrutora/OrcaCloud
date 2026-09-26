@@ -300,7 +300,15 @@
  * lista é omitida quando vazia, então desenho sem vértice nomeado só muda de
  * hash pela string da versão — provado antes do bump.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.59.0';
+/**
+ * ─── 0.59.0 → 0.60.0 (26/09/2026) — O QUE O SIGEF PEDE ────────────────────────
+ *
+ * Vértice do terreno com sigma por eixo (E, N, h) e altitude elipsoidal; divisa
+ * com tipo de limite (LA1…LN6, Manual Técnico de Limites e Confrontações do
+ * INCRA) e documentos do confrontante; nomeação `<credenciado>-<tipo>-<seq>`.
+ * Campos omitidos do canônico quando ausentes — provado antes do bump.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.60.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

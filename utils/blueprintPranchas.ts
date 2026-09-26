@@ -46,6 +46,8 @@ export interface InclusaoNoConjunto {
   humanizada: boolean;
   /** A1: a planta TOPOGRÁFICA do imóvel (malha de coordenadas, vértices, roteiro). Ausente em templates anteriores → falso. */
   topografica?: boolean;
+  /** A4: a planta no PADRÃO INCRA (códigos dos vértices, coordenadas geodésicas, tipos de limite). Ausente → falso. */
+  incra?: boolean;
 }
 export interface TemplateDePrancha {
   papel: PapelId;
@@ -135,7 +137,7 @@ export interface Recorte {
   maxY: number;
 }
 
-export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'HUMANIZADA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS' | 'TOPOGRAFICA';
+export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'HUMANIZADA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS' | 'TOPOGRAFICA' | 'INCRA';
 
 export interface PranchaPlanejada {
   /** "A-01". */
@@ -179,6 +181,9 @@ export function planejarConjunto(model: BlueprintModel, t: TemplateDePrancha): P
   // A1: a topográfica vem logo após o índice — é a folha do IMÓVEL, antes das do edifício.
   if (t.incluir.topografica && model.boundaries.some((b) => b.kind === 'TERRENO')) {
     numerar({ tipo: 'TOPOGRAFICA', titulo: 'Planta topográfica do imóvel', denominador: 0 });
+  }
+  if (t.incluir.incra && model.boundaries.some((b) => b.kind === 'TERRENO')) {
+    numerar({ tipo: 'INCRA', titulo: 'Planta do imóvel — padrão INCRA', denominador: 0 });
   }
   if (t.incluir.plantas) {
     for (const n of niveis) {

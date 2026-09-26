@@ -108,3 +108,38 @@ describe('PainelViasEGreide', () => {
     expect(p.onBaixar).toHaveBeenLastCalledWith(expect.stringMatching(/locacao\.csv$/), expect.stringContaining('ponto;norte;este;cota;descricao'), 'text/csv');
   });
 });
+
+describe('PainelViasEGreide · vias do loteamento (C3)', () => {
+  const k = { uid: 'u1', nome: 'Rua do Desenho', eixo: [{ x: 0, y: 0 }, { x: 0, y: 100_000 }], larguraMm: 12_000, calcadaMm: 2500 };
+
+  it('as vias do loteamento sem projeto aparecem, e "Projetar" pede ao pai', () => {
+    const onUsarViaDoLoteamento = vi.fn();
+    montar([], { viasDoLoteamento: [k], onUsarViaDoLoteamento });
+    fireEvent.click(screen.getByRole('button', { name: 'Projetar Rua do Desenho' }));
+    expect(onUsarViaDoLoteamento).toHaveBeenCalledWith(k);
+  });
+
+  it('ligada: some da lista, diz que acompanha o desenho, e o nome fica travado dizendo onde renomear', () => {
+    montar([via({ viaUid: 'u1', nome: 'Rua do Desenho' })], { viasDoLoteamento: [k], ligacao: { v1: { doLoteamento: true, orfa: false } }, onUsarViaDoLoteamento: vi.fn() });
+    expect(screen.queryByTestId('vias-do-loteamento')).toBeNull();
+    expect(screen.getByTestId('via-ligada').textContent).toMatch(/vêm do DESENHO/);
+    const nome = screen.getByLabelText('Nome da via') as HTMLInputElement;
+    expect(nome).toBeDisabled();
+    expect(nome.title).toMatch(/renomeie lá/);
+  });
+
+  it('órfã: a via do desenho foi apagada — dito', () => {
+    montar([via({ viaUid: 'sumiu' })], { ligacao: { v1: { doLoteamento: false, orfa: true } } });
+    expect(screen.getByTestId('via-orfa').textContent).toMatch(/foi apagada do desenho/);
+  });
+
+  it('com mais de uma via, a nota de serviço de TODAS sai num CSV com a coluna via', () => {
+    const p = montar([via(), via({ id: 'v2', nome: 'Rua B' })]);
+    fireEvent.click(screen.getByRole('button', { name: /Notas de todas as vias \(2\)/ }));
+    const csv = (p.onBaixar as ReturnType<typeof vi.fn>).mock.calls.at(-1)![1] as string;
+    const linhas = csv.split('\n');
+    expect(linhas[0]).toBe('via;estaca;distancia_m;cota_terreno_m;cota_projeto_m;aterro_m;corte_m');
+    expect(linhas.filter((l) => l.startsWith('Rua A;'))).toHaveLength(11);
+    expect(linhas.filter((l) => l.startsWith('Rua B;'))).toHaveLength(11);
+  });
+});

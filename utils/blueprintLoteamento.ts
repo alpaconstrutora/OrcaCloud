@@ -578,7 +578,7 @@ export interface AvisoDoLoteamento {
   gravidade: GravidadeDoAviso;
   texto: string;
   /** A regra que o gerou, para a tela agrupar. */
-  regra: 'area_minima' | 'testada_minima' | 'encravado' | 'sem_quadra' | 'areas_publicas' | 'numero_repetido';
+  regra: 'area_minima' | 'testada_minima' | 'encravado' | 'sem_quadra' | 'areas_publicas' | 'numero_repetido' | 'via_sem_greide';
 }
 
 export interface RegrasDoLoteamento {

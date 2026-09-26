@@ -19,6 +19,26 @@ export interface TopografiaParaShp {
   lotes?: { quadra: string; numero: string; areaM2: number; pontos: Point[] }[];
 }
 
+/**
+ * O PLANO DE SAÍDA dos formatos GIS (SHP, LandXML): com georreferência, SIRGAS 2000 /
+ * UTM do fuso do lote; sem ela, metros LOCAIS do desenho.
+ */
+export function planoDeSaida(geo: Georreferencia | null): {
+  paraSaida: (p: Point) => { este: number; norte: number };
+  sistema: { epsg: number; nome: string } | null;
+} {
+  if (!geo) return { paraSaida: (p) => ({ este: p.x / 1000, norte: p.y / 1000 }), sistema: null };
+  const zona = geoParaProjetado({ lat: geo.latitude, lon: geo.longitude }).valor.crs;
+  return {
+    paraSaida: (p) => {
+      const ll = localParaGeo(p, geo);
+      const e = geoParaProjetado({ lat: ll.lat, lon: ll.lon }, zona).valor;
+      return { este: e.este, norte: e.norte };
+    },
+    sistema: { epsg: Number(zona.codigo.replace('EPSG:', '')), nome: zona.nome },
+  };
+}
+
 export function camadasDaTopografia(t: TopografiaParaShp, geo: Georreferencia | null): { camadas: CamadaShp[]; georreferenciado: boolean; crs: string | null } {
   let paraSaida: (p: Point) => { x: number; y: number };
   let prj: string | null = null;

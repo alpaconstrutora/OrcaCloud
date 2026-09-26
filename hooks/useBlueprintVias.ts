@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Point } from '../utils/blueprintKernel';
 import { blueprintViasService } from '../services/blueprintViasService';
 import type { BlueprintViaRow } from '../types/blueprint';
-import { PASSO_PADRAO_M, SECAO_TIPO_PADRAO, type Greide, type SecaoTipo } from '../utils/blueprintVias';
+import { PASSO_PADRAO_M, SECAO_TIPO_PADRAO, secaoDaViaDoLoteamento, type Greide, type SecaoTipo, type ViaDoLoteamento } from '../utils/blueprintVias';
 
 /**
  * Uma via de projeto na tela (C2): o que se grava, já normalizado. `greide`
@@ -26,6 +26,8 @@ export interface Vias {
   setAtiva: (id: string | null) => void;
   /** Acrescenta uma via com o eixo traçado e devolve o id (`null` com menos de 2 pontos). */
   adicionar: (eixo: Point[], nome?: string) => string | null;
+  /** C3: projeta uma Via do loteamento — ligada pelo `uid`; eixo, nome e seção acompanham o desenho. */
+  adicionarDoLoteamento: (v: ViaDoLoteamento) => string | null;
   alterar: (id: string, patch: Partial<Omit<ViaDeProjeto, 'id'>>) => void;
   remover: (id: string) => void;
   carregando: boolean;
@@ -152,6 +154,27 @@ export function useBlueprintVias(studyId: string, organizationId: string): Vias 
     [vias.length, persistir],
   );
 
+  const adicionarDoLoteamento = useCallback(
+    (k: ViaDoLoteamento) => {
+      if (k.eixo.length < 2) return null;
+      const via: ViaDeProjeto = {
+        id: novoId(),
+        nome: k.nome,
+        viaUid: k.uid,
+        eixo: k.eixo.map((p) => ({ x: p.x, y: p.y })),
+        passoM: PASSO_PADRAO_M,
+        greide: null,
+        secaoTipo: secaoDaViaDoLoteamento(k),
+        topografiaId: null,
+      };
+      setVias((v) => [...v, via]);
+      setAtiva(via.id);
+      persistir(via);
+      return via.id;
+    },
+    [persistir],
+  );
+
   const alterar = useCallback(
     (id: string, patch: Partial<Omit<ViaDeProjeto, 'id'>>) => {
       setVias((lista) => {
@@ -176,5 +199,5 @@ export function useBlueprintVias(studyId: string, organizationId: string): Vias 
     [persistenciaIndisponivel],
   );
 
-  return { vias, ativaId, setAtiva, adicionar, alterar, remover, carregando, persistenciaIndisponivel };
+  return { vias, ativaId, setAtiva, adicionar, adicionarDoLoteamento, alterar, remover, carregando, persistenciaIndisponivel };
 }

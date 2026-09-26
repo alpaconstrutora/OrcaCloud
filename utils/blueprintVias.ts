@@ -25,6 +25,7 @@
  */
 import type { Point } from './blueprintKernel';
 import { numeroBr } from './blueprintMemorialLote';
+import type { AvisoDoLoteamento } from './blueprintLoteamento';
 
 // ─── Estaqueamento ───────────────────────────────────────────────────────────
 
@@ -741,4 +742,76 @@ export function svgDaSecao(secao: SecaoTransversal, opcoes: { largura?: number; 
 
 function escapar(t: string): string {
   return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ─── C3: a VIA DO LOTEAMENTO como eixo de projeto ───────────────────────────
+
+/** O que a Via do kernel (B1) empresta ao projeto geométrico. */
+export interface ViaDoLoteamento {
+  uid: string;
+  nome: string;
+  eixo: Point[];
+  /** Caixa da via, alinhamento a alinhamento (pista + 2 calçadas), mm. */
+  larguraMm: number;
+  /** Calçada de CADA lado, mm. */
+  calcadaMm: number;
+}
+
+/** A seção tipo que sai da caixa desenhada: pista = caixa − 2 calçadas; taludes padrão. */
+export function secaoDaViaDoLoteamento(v: ViaDoLoteamento, base: SecaoTipo = SECAO_TIPO_PADRAO): SecaoTipo {
+  const calcadaM = Math.max(0, v.calcadaMm) / 1000;
+  return { ...base, pistaM: Math.max(1, v.larguraMm / 1000 - 2 * calcadaM), calcadaM };
+}
+
+export interface ViaResolvida<T> {
+  via: T;
+  /** Ligada a uma Via do loteamento que ainda existe: eixo, nome e seção vêm do DESENHO. */
+  doLoteamento: boolean;
+  /** Ligada a uma Via que foi apagada do desenho: fica com o último eixo gravado, e isso é dito. */
+  orfa: boolean;
+}
+
+/**
+ * Resolve cada via de projeto contra as Vias do desenho. Ligada (`viaUid`):
+ * o eixo, o nome e pista/calçada são os do DESENHO, sempre — mudar a rua no
+ * loteamento muda as estacas e a nota de serviço junto; os taludes, o passo e
+ * o greide continuam os do projeto. Sem a Via no desenho, fica órfã.
+ */
+export function resolverViasDoLoteamento<T extends { viaUid: string | null; nome: string; eixo: Point[]; secaoTipo: SecaoTipo }>(
+  vias: readonly T[],
+  doDesenho: readonly ViaDoLoteamento[],
+): ViaResolvida<T>[] {
+  const porUid = new Map(doDesenho.map((v) => [v.uid, v]));
+  return vias.map((via) => {
+    if (!via.viaUid) return { via, doLoteamento: false, orfa: false };
+    const k = porUid.get(via.viaUid);
+    if (!k) return { via, doLoteamento: false, orfa: true };
+    return {
+      via: { ...via, nome: k.nome, eixo: k.eixo.map((p) => ({ x: p.x, y: p.y })), secaoTipo: secaoDaViaDoLoteamento(k, via.secaoTipo) },
+      doLoteamento: true,
+      orfa: false,
+    };
+  });
+}
+
+/**
+ * CONFERÊNCIA DO LOTEAMENTO (C3): toda Via desenhada deveria ter projeto
+ * geométrico com greide — é ele que diz se a rua sobe mais que a rampa
+ * máxima e quanto de terra move. Só ATENÇÃO: loteamento em estudo pode não
+ * ter greide ainda.
+ */
+export function conferirGreidesDasVias(
+  doDesenho: readonly ViaDoLoteamento[],
+  projeto: readonly { viaUid: string | null; greide: Greide | null }[],
+): AvisoDoLoteamento[] {
+  const avisos: AvisoDoLoteamento[] = [];
+  for (const v of doDesenho) {
+    const p = projeto.find((x) => x.viaUid === v.uid);
+    if (!p) {
+      avisos.push({ loteId: null, rotulo: v.nome, gravidade: 'ATENCAO', regra: 'via_sem_greide', texto: `A via "${v.nome}" não tem projeto geométrico — abra Vias e greide e use-a como eixo.` });
+    } else if (!p.greide || p.greide.pontos.length === 0) {
+      avisos.push({ loteId: null, rotulo: v.nome, gravidade: 'ATENCAO', regra: 'via_sem_greide', texto: `A via "${v.nome}" está com o greide de partida (reta terreno a terreno): defina os PIVs.` });
+    }
+  }
+  return avisos;
 }

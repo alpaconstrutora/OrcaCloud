@@ -206,12 +206,15 @@ export default function PainelTopografia({
   onLancarLote,
   inundacao = null,
   lotesDoLoteamento,
+  viasDeProjeto,
 }: {
   topografia: Topografia;
   /** A3: a mancha de inundação (cota de cheia informada). */
   inundacao?: InundacaoNoPainel | null;
   /** A3: os lotes do loteamento, que o Shapefile leva na camada `lotes`. */
   lotesDoLoteamento?: { quadra: string; numero: string; areaM2: number; pontos: Point[] }[];
+  /** C3: as vias de projeto, para o LandXML. */
+  viasDeProjeto?: NonNullable<ExtrasDaTopografia['vias']>;
   temLoteFechado: boolean;
   temGeorreferencia: boolean;
   /** Fase 17: o projeto executivo com ART. */
@@ -539,6 +542,7 @@ export default function PainelTopografia({
           extras={{
             drenagem: drenagem?.linhas.map((l) => ({ nome: l.nome, tipo: l.tipo, pontos: l.pontos })),
             lotes: lotesDoLoteamento,
+            vias: viasDeProjeto,
             muros: terraplenagem?.resultado?.muros.map((m) => ({ a: m.a, b: m.b, normal: m.normal })),
             // Fase 12: com o hipsométrico em arco-íris ligado, o SVG e o KML
             // saem coloridos e com a legenda por nível, como no Contour Map Creator.
@@ -1795,6 +1799,18 @@ function Resultado({
         >
           <Download className="h-3.5 w-3.5" />
           SHP
+        </button>
+        <button
+          type="button"
+          onClick={() => t.exportar('landxml', extras)}
+          title={
+            'LandXML: a superfície (TIN), os eixos das vias com o greide e os lotes — para Civil 3D, TopoGRAPH e afins. ' +
+            (v.georreferencia ? 'Em SIRGAS 2000 / UTM do fuso do lote.' : 'Sem georreferência, em metros LOCAIS do desenho.')
+          }
+          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-50"
+        >
+          <Download className="h-3.5 w-3.5" />
+          LandXML
         </button>
       </div>
     </div>

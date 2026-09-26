@@ -103,3 +103,16 @@ describe('PainelTopografia · A3', () => {
     for (const e of ['.kmz', '.zip', '.tif', '.tiff']) expect(input.accept).toContain(e);
   });
 });
+
+describe('PainelTopografia · LandXML (C3)', () => {
+  it('o botão LandXML exporta com as vias de projeto e os lotes nos extras; sem georreferência, o title diz que sai LOCAL', () => {
+    const t = hook();
+    const vias = [{ nome: 'Rua A', eixo: [], passoM: 20, greide: null }];
+    const lotes = [{ quadra: 'A', numero: '1', areaM2: 300, pontos: [] }];
+    render(<PainelTopografia topografia={t} temLoteFechado temGeorreferencia={false} viasDeProjeto={vias} lotesDoLoteamento={lotes} />);
+    const b = screen.getByRole('button', { name: 'LandXML' });
+    expect(b.title).toMatch(/metros LOCAIS/);
+    fireEvent.click(b);
+    expect(t.exportar).toHaveBeenCalledWith('landxml', expect.objectContaining({ vias, lotes }));
+  });
+});

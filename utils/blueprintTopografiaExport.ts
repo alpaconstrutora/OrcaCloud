@@ -334,6 +334,8 @@ export interface ExtrasDaTopografia {
   muros?: { a: Point; b: Point; normal: Point }[];
   /** A3: os lotes do loteamento, para a camada `lotes` do Shapefile. */
   lotes?: { quadra: string; numero: string; areaM2: number; pontos: Point[] }[];
+  /** C3: as vias de projeto (eixo e greide), para os `<Alignments>` do LandXML. `greide` null = de partida. */
+  vias?: { nome: string; eixo: Point[]; passoM: number; greide: { pontos: { distM: number; cotaM: number; curvaM?: number }[] } | null }[];
 }
 
 /** Cor CSS `#rrggbb` → cor KML `aabbggrr` (opaca). */

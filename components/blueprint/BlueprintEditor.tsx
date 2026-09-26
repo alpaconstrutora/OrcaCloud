@@ -155,7 +155,7 @@ import { useBlueprintSigef } from '../../hooks/useBlueprintSigef';
 import { perimetroSigef, planilhaOdsSigef } from '../../utils/geo/sigef';
 import { crsPorCodigo } from '../../utils/geo/projecao';
 import { useBlueprintVias } from '../../hooks/useBlueprintVias';
-import { estaquear } from '../../utils/blueprintVias';
+import { conferirGreidesDasVias, estaquear, resolverViasDoLoteamento, type ViaDoLoteamento } from '../../utils/blueprintVias';
 import { prepararOrtofoto } from '../../utils/geo/ortofoto';
 import { manchaDeInundacao } from '../../utils/blueprintTopografiaAnalises';
 import { fichaDaFeicao, lerCodigo } from '../../utils/blueprintFeicoes';
@@ -4065,9 +4065,21 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const vias = useBlueprintVias(study.id, study.organization_id);
   // A4: a identificação SIGEF do imóvel (o resto — vértices e trechos — é kernel).
   const sigef = useBlueprintSigef(study.id, study.organization_id);
+  // C3: as Vias desenhadas no loteamento e as vias de projeto resolvidas contra
+  // elas — a ligada acompanha o eixo, o nome e a caixa do DESENHO.
+  const viasDoLoteamento = useMemo<ViaDoLoteamento[]>(
+    () => (editor.model.vias ?? []).map((v) => ({ uid: v.uid, nome: v.nome, eixo: v.eixo, larguraMm: v.larguraMm, calcadaMm: v.calcadaMm })),
+    [editor.model.vias],
+  );
+  const viasResolvidas = useMemo(() => resolverViasDoLoteamento(vias.vias, viasDoLoteamento), [vias.vias, viasDoLoteamento]);
+  const viasDeProjeto = useMemo(() => viasResolvidas.map((r) => r.via), [viasResolvidas]);
+  const ligacaoDasVias = useMemo(
+    () => Object.fromEntries(viasResolvidas.map((r) => [r.via.id, { doLoteamento: r.doLoteamento, orfa: r.orfa }])),
+    [viasResolvidas],
+  );
   const eixosNoCanvas = useMemo(
     () => ({
-      linhas: vias.vias.map((v) => ({
+      linhas: viasDeProjeto.map((v) => ({
         id: v.id,
         nome: v.nome,
         pontos: v.eixo,
@@ -4075,7 +4087,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       })),
       ativa: vias.ativaId,
     }),
-    [vias.vias, vias.ativaId],
+    [viasDeProjeto, vias.ativaId],
   );
   // Fase 17: o projeto executivo com ART (responsável, sondagem, emissões).
   const executivo = useBlueprintProjetoExecutivo(study.id, study.organization_id);
@@ -6043,8 +6055,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     [zona.areaMinimaDoLoteM2, zona.testadaMinimaMm],
   );
   const avisosDoLoteamento = useMemo(
-    () => conferirLoteamento(editor.model, regrasDoLoteamento, terreno?.areaMm2 ?? null),
-    [editor.model, regrasDoLoteamento, terreno?.areaMm2],
+    () => [
+      ...conferirLoteamento(editor.model, regrasDoLoteamento, terreno?.areaMm2 ?? null),
+      // C3: toda Via desenhada deveria ter projeto geométrico com greide.
+      ...conferirGreidesDasVias(viasDoLoteamento, vias.vias),
+    ],
+    [editor.model, regrasDoLoteamento, terreno?.areaMm2, viasDoLoteamento, vias.vias],
   );
   const errosDoLoteamento = useMemo(() => resumoDaConferencia(avisosDoLoteamento).erros, [avisosDoLoteamento]);
 
@@ -7704,6 +7720,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               : null
           }
           lotesDoLoteamento={lotesParaShapefile}
+          viasDeProjeto={viasDeProjeto.map((v) => ({ nome: v.nome, eixo: v.eixo, passoM: v.passoM, greide: v.greide }))}
           temGeorreferencia={!!editor.model.georreferencia}
           cotaDeOrigemInformada={cotaDeOrigemInformada}
           declividade={declividade}
@@ -12102,7 +12119,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 if (id) setDrenagemAtiva(id);
                 editor.setTool('selecionar');
               }}
-              eixosDeVia={vias.vias.length > 0 ? eixosNoCanvas : null}
+              eixosDeVia={viasDeProjeto.length > 0 ? eixosNoCanvas : null}
               onEixoDeViaTracado={(pontos) => {
                 const id = vias.adicionar(pontos);
                 if (id) setRelatorio('vias');
@@ -15435,7 +15452,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           {relatorioNoDrawer === 'vias' && (
             <div className="px-4 py-3">
               <PainelViasEGreide
-                vias={vias.vias}
+                vias={viasDeProjeto}
+                viasDoLoteamento={viasDoLoteamento}
+                ligacao={ligacaoDasVias}
+                onUsarViaDoLoteamento={(k) => void vias.adicionarDoLoteamento(k)}
                 ativaId={vias.ativaId}
                 onAtiva={vias.setAtiva}
                 onTracar={() => {

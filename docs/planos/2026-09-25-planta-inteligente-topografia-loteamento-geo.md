@@ -472,3 +472,20 @@ As regras vieram dos documentos do PRÓPRIO INCRA, baixados e lidos nesta fase (
 - **Validar e enviar**: a extensão do SIGEF no LibreOffice e o validador do portal conferem contra os imóveis já certificados — só eles sabem. A prova final ("aceita pelo validador") é manual, pelo credenciado, numa parcela de teste. Sem integração com o portal (não há API pública).
 - Planilha com **uma parcela** (`perimetro_1`, lado Externo); desmembramento, várias parcelas e lado interno ficam para quando houver caso.
 - Memorial e cartas saem em TEXTO (para colar no modelo de documento do escritório), não em .docx por template.
+
+## Estado — C3 (26/09/2026)
+
+- [x] **A Via do loteamento como eixo** (sem migration: `blueprint_study_vias.via_uid` já existia desde a C2). `resolverViasDoLoteamento`: a via de projeto LIGADA pega o eixo, o nome e a seção (pista = caixa − 2 calçadas; calçada) da Via do DESENHO, ao vivo — mexer na rua no loteamento move as estacas, as seções e a nota; greide, passo e taludes continuam do projeto. Via apagada do desenho → ÓRFÃ, com o último eixo gravado e o aviso. Gaveta Vias e greide: "Projetar <rua>" para cada Via do loteamento ainda sem projeto; nome travado na ligada (o title diz para renomear no loteamento); **Notas de todas as vias** num CSV com a coluna `via`.
+- [x] **Conferência do loteamento**: regra nova `via_sem_greide` (ATENÇÃO) — Via desenhada sem projeto geométrico, ou com o greide de partida (sem PIVs).
+- [x] **LandXML de saída** (`utils/geo/landxml.ts`, botão **LandXML** na versão de topografia): `<Surfaces>` com a TIN da grade da versão (nós com cota; 2 triângulos por célula, 1 quando falta um canto), `<Alignments>` com o eixo em `<Line>`s e o greide em `<Profile><ProfAlign>` (`<PVI>` e `<ParaCurve length>`; via sem PIVs sai com o greide de partida), `<Parcels>` com a GLEBA primeiro (o importador existente lê a 1ª parcela como o contorno do lote) e cada lote com a área. Ordem NORTE ESTE COTA; SIRGAS 2000 / UTM do fuso com `<CoordinateSystem epsgCode>` quando georreferenciado, metros LOCAIS (e o nome do arquivo diz) quando não. `planoDeSaida` passou a ser o plano comum do SHP e do LandXML. `lerLandXmlCompleto` lê superfície, alinhamentos com os PVIs e parcelas — a volta.
+- [x] Testes: `blueprintLandXml` (9 — o aceite: loteamento com 3 vias exporta e volta com a MESMA TIN (272 pontos, 479 faces), os MESMOS lotes (vértice a vértice, área) e os perfis; o importador de pontos que já existia lê a superfície como TIN importada e o contorno da gleba; nota de serviço por via), `PainelViasEGreide` (+4), `PainelTopografiaFaseA3` (+1). Suíte cheia 494 arquivos / 5.696 verde; tsc, `check-ui-standard`, `check-xss-sinks`, build verdes.
+
+### Prova fora do vitest
+
+`docs/spikes/geo/gerar-landxml.ts` → `conferir-landxml.py` (15 checks): o XML lido por um parser de verdade (ElementTree, namespace do LandXML 1.2): unidades, EPSG, nome com `&` escapado, 272 pontos e 479 faces, TODA face apontando pontos existentes, ordem N E Z, três alinhamentos, perfil PVI/ParaCurve/PVI, via sem greide sem perfil, a gleba primeiro, área e anel fechado dos lotes.
+
+### Fora desta fase (declarado)
+
+- A superfície exportada é a TIN da GRADE da versão (de onde as curvas saem), não a triangulação original dos pontos cotados — é a mesma superfície que a tela mostra.
+- Curva HORIZONTAL (arco) no eixo: o eixo é polilinha, sai como `<Line>`s.
+- Seções transversais (`<CrossSects>`) no LandXML: a nota de serviço em CSV cobre o campo.

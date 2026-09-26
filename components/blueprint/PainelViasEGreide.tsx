@@ -31,6 +31,7 @@ import {
   type Greide,
   type ModoDaNota,
   type SecaoTipo,
+  type ViaDoLoteamento,
 } from '../../utils/blueprintVias';
 import { numeroBr } from '../../utils/blueprintMemorialLote';
 
@@ -49,6 +50,10 @@ export interface Props {
   onBaixar: (nome: string, conteudo: string, tipo: 'text/csv' | 'image/svg+xml') => void;
   nomeDoEstudo: string;
   persistenciaIndisponivel: boolean;
+  /** C3: as Vias desenhadas no loteamento e o que cada via de projeto é em relação a elas. */
+  viasDoLoteamento?: ViaDoLoteamento[];
+  ligacao?: Record<string, { doLoteamento: boolean; orfa: boolean }>;
+  onUsarViaDoLoteamento?: (v: ViaDoLoteamento) => void;
 }
 
 const fmt = (v: number | null | undefined, casas = 2) => (v === null || v === undefined ? '—' : numeroBr(v, casas));
@@ -76,7 +81,7 @@ function CampoNumero({ rotulo, valor, passo, min, sufixo, onMudar, largura = 'w-
   );
 }
 
-export default function PainelViasEGreide({ vias, ativaId, onAtiva, onTracar, onAlterar, onRemover, cotaEmM, material, onBaixar, nomeDoEstudo, persistenciaIndisponivel }: Props) {
+export default function PainelViasEGreide({ vias, ativaId, onAtiva, onTracar, onAlterar, onRemover, cotaEmM, material, onBaixar, nomeDoEstudo, persistenciaIndisponivel, viasDoLoteamento = [], ligacao = {}, onUsarViaDoLoteamento }: Props) {
   const via = vias.find((v) => v.id === ativaId) ?? vias[0] ?? null;
   const [modoDaNota, setModoDaNota] = useState<ModoDaNota>('SIMPLES');
   const [estacaDaSecao, setEstacaDaSecao] = useState<number>(0);
@@ -112,6 +117,23 @@ export default function PainelViasEGreide({ vias, ativaId, onAtiva, onTracar, on
   };
   const alterarSecao = (patch: Partial<SecaoTipo>) => via && onAlterar(via.id, { secaoTipo: { ...via.secaoTipo, ...patch } });
   const nomeBase = `${nomeDoEstudo || 'estudo'} - ${via?.nome ?? 'via'}`.replace(/[\\/:*?"<>|]+/g, '-');
+  const ligada = via ? ligacao[via.id] : undefined;
+  // C3: as Vias do desenho ainda sem projeto geométrico.
+  const semProjeto = viasDoLoteamento.filter((k) => !vias.some((v) => v.viaUid === k.uid));
+  // C3: a nota de serviço de TODAS as vias num CSV só (coluna `via`).
+  const notasDeTodas = (): string => {
+    if (!cotaEmM) return '';
+    const linhas: string[] = [];
+    vias.forEach((v, i) => {
+      const e = estaquear(v.eixo, v.passoM);
+      const g = v.greide && v.greide.pontos.length > 0 ? v.greide : greideDoTerreno(e, cotaEmM);
+      if (!g) return;
+      const csv = csvDaNotaDeServico(notaDeServico(secoesTransversais(e, cotaEmM, v.secaoTipo, g), 'SIMPLES'), 'SIMPLES').split('\n');
+      if (i === 0 || linhas.length === 0) linhas.push(`via;${csv[0]}`);
+      for (const l of csv.slice(1)) linhas.push(`${v.nome.replace(/;/g, ',')};${l}`);
+    });
+    return linhas.join('\n');
+  };
 
   return (
     <div className="space-y-5 text-xs text-slate-700" data-testid="painel-vias">
@@ -146,6 +168,8 @@ export default function PainelViasEGreide({ vias, ativaId, onAtiva, onTracar, on
               <input
                 value={via.nome}
                 aria-label="Nome da via"
+                disabled={!!ligada?.doLoteamento}
+                title={ligada?.doLoteamento ? 'O nome vem da via desenhada no loteamento — renomeie lá' : undefined}
                 onChange={(e) => onAlterar(via.id, { nome: e.target.value })}
                 className="mt-0.5 w-36 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800"
               />
@@ -173,7 +197,39 @@ export default function PainelViasEGreide({ vias, ativaId, onAtiva, onTracar, on
         )}
       </div>
 
+      {/* C3: as ruas do loteamento, prontas para virar eixo — sem traçar de novo. */}
+      {semProjeto.length > 0 && onUsarViaDoLoteamento && (
+        <div className="rounded-md bg-slate-50 px-3 py-2" data-testid="vias-do-loteamento">
+          <p className="text-slate-700">Vias do loteamento sem projeto geométrico:</p>
+          <ul className="mt-1 flex flex-wrap gap-1.5">
+            {semProjeto.map((k) => (
+              <li key={k.uid}>
+                <button
+                  type="button"
+                  onClick={() => onUsarViaDoLoteamento(k)}
+                  title="Usa o eixo desenhado no loteamento: nome, eixo, pista e calçada acompanham o desenho; greide, passo e taludes são do projeto"
+                  className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Projetar {k.nome}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {!via && <p className="text-slate-500">Nenhum eixo traçado. Trace um na planta — a via nasce dele, com estacas a cada 20 m.</p>}
+
+      {ligada?.doLoteamento && (
+        <p className="rounded-md bg-blue-50 px-3 py-2 text-blue-800" data-testid="via-ligada">
+          Via do loteamento: o eixo, o nome, a pista e as calçadas vêm do DESENHO — mude a rua no loteamento e as estacas, as seções e a nota acompanham.
+        </p>
+      )}
+      {ligada?.orfa && (
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-amber-800" data-testid="via-orfa">
+          A via do loteamento a que este projeto estava ligado foi apagada do desenho: ficou o último eixo gravado.
+        </p>
+      )}
 
       {via && (
         <>
@@ -466,6 +522,16 @@ export default function PainelViasEGreide({ vias, ativaId, onAtiva, onTracar, on
                 >
                   <Download className="h-3.5 w-3.5" /> Pontos de locação (CSV)
                 </button>
+                {vias.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => onBaixar(`${nomeDoEstudo || 'estudo'} - notas de servico de todas as vias.csv`, notasDeTodas(), 'text/csv')}
+                    title="A nota de serviço simples de cada via, uma embaixo da outra, com a coluna via"
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                  >
+                    <Download className="h-3.5 w-3.5" /> Notas de todas as vias ({vias.length})
+                  </button>
+                )}
               </div>
             </div>
           )}

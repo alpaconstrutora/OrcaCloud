@@ -6,7 +6,9 @@ import {
   type TopografiaInput,
 } from '../services/blueprintTopografiaService';
 import { baixarArtefatos } from '../services/blueprintExportService';
-import { camadasDaTopografia } from '../utils/geo/exportacaoGis';
+import { camadasDaTopografia, planoDeSaida } from '../utils/geo/exportacaoGis';
+import { landXmlDaTopografia } from '../utils/geo/landxml';
+import { estaquear, greideDoTerreno } from '../utils/blueprintVias';
 import { kmzDoKml, zipDeShapefiles } from '../utils/geo/shapefile';
 import { blueprintLevantamentoService } from '../services/blueprintLevantamentoService';
 import {
@@ -43,6 +45,7 @@ import {
   niveisPorNumero,
   hashDoResultado,
   localParaGeo,
+  amostradorDaGrade,
   nosDaGrade,
   planejarGrade,
   sugerirEquidistancia,
@@ -199,7 +202,8 @@ export interface Topografia {
   apagarVersao: (id: string) => Promise<void>;
   /** `extras` (fase 8): drenagem traçada e muros, que vão no KML e no DXF por cima das curvas; `cores` (fase 12): a rampa arco-íris no SVG e no KML. */
   /** A3: `kmz` (o KML zipado) e `shp` (zip de shapefiles: curvas, pontos, lote, drenagem, lotes). */
-  exportar: (formato: 'svg' | 'csv' | 'kml' | 'dxf' | 'kmz' | 'shp', extras?: ExtrasDaTopografia & { cores?: CoresDaExportacao; executivo?: EmissaoExecutiva | null }) => void;
+  /** C3: `landxml` — superfície TIN, eixos com greide e lotes (a gleba primeiro). */
+  exportar: (formato: 'svg' | 'csv' | 'kml' | 'dxf' | 'kmz' | 'shp' | 'landxml', extras?: ExtrasDaTopografia & { cores?: CoresDaExportacao; executivo?: EmissaoExecutiva | null }) => void;
 
   carregando: boolean;
   persistenciaIndisponivel: boolean;
@@ -639,7 +643,7 @@ export function useBlueprintTopografia(
   );
 
   const exportar = useCallback(
-    (formato: 'svg' | 'csv' | 'kml' | 'dxf' | 'kmz' | 'shp', extras: ExtrasDaTopografia & { cores?: CoresDaExportacao; executivo?: EmissaoExecutiva | null } = {}) => {
+    (formato: 'svg' | 'csv' | 'kml' | 'dxf' | 'kmz' | 'shp' | 'landxml', extras: ExtrasDaTopografia & { cores?: CoresDaExportacao; executivo?: EmissaoExecutiva | null } = {}) => {
       if (!selecionada) return;
       // KML sem georreferência não tem onde pôr o lote no mundo. O botão já
       // vem desabilitado; isto é a rede de segurança.
@@ -657,6 +661,24 @@ export function useBlueprintTopografia(
         // Fase 17: com a emissão executiva válida, o aviso das exportações é a ART.
         executivo: extras.executivo ?? null,
       };
+      // C3: LandXML — a mesma superfície das curvas, os eixos com o greide e os lotes.
+      if (formato === 'landxml') {
+        const v = selecionada;
+        const plano = planoDeSaida(v.georreferencia);
+        const cota = amostradorDaGrade(v.grade);
+        const texto = landXmlDaTopografia({
+          nomeDoProjeto: nomeDoEstudo,
+          superficie: { nome: `Terreno v${v.versao}`, grade: v.grade },
+          // Via sem PIVs sai com o greide de PARTIDA (terreno a terreno) — o mesmo que a tela mostra.
+          vias: (extras.vias ?? []).map((x) => ({ nome: x.nome, eixo: x.eixo, greide: x.greide ?? greideDoTerreno(estaquear(x.eixo, x.passoM), cota) })),
+          gleba: v.anel.length >= 3 ? { nome: 'Gleba', anel: v.anel } : null,
+          lotes: (extras.lotes ?? []).map((l) => ({ nome: l.quadra ? `Quadra ${l.quadra} · Lote ${l.numero}` : `Lote ${l.numero}`, anel: l.pontos })),
+          paraSaida: plano.paraSaida,
+          sistema: plano.sistema,
+        });
+        baixarArtefatos([{ blob: new Blob([texto], { type: 'application/xml;charset=utf-8' }), nome: nomeDoArquivoDeTopografia(plano.sistema ? nomeDoEstudo : `${nomeDoEstudo} - coordenadas LOCAIS`, v.versao, 'xml'), tipo: 'landxml' }]);
+        return;
+      }
       // A3: os dois formatos zipados (pizzip entra por import dinâmico → assíncronos).
       if (formato === 'kmz' || formato === 'shp') {
         const versao = selecionada;

@@ -120,9 +120,30 @@ describe('Onde fica · a coordenada do topógrafo', () => {
     expect(screen.getByText(/fuso/i)).toBeTruthy();
   });
 
-  it('o CRS entra junto do número', async () => {
+  /**
+   * A0 (26/09/2026): o CRS deixou de ser campo livre e virou LISTA do catálogo.
+   * O teste antigo digitava "E" e afirmava que "E" era gravado — o que provava
+   * que o campo repassava texto, não que o sistema escolhido fazia sentido.
+   * Agora se afirma o que importa: só sistema do catálogo entra, e o que já
+   * estava gravado fora dele continua sendo oferecido (tirar a opção apagaria
+   * o dado no primeiro salvamento).
+   */
+  it('o CRS é escolhido na lista, e grava o código EPSG', async () => {
     const { onGeorreferencia } = montar(CAMBUI);
-    await userEvent.type(screen.getByLabelText('Sistema de projeção (CRS)'), 'E');
-    expect(onGeorreferencia.mock.calls.at(-1)![0].projetada.crs).toBe('E');
+    const select = screen.getByLabelText('Sistema de projeção (CRS)') as HTMLSelectElement;
+    await userEvent.selectOptions(select, 'EPSG:31983');
+    expect(onGeorreferencia.mock.calls.at(-1)![0].projetada.crs).toBe('EPSG:31983');
+  });
+
+  it('a lista separa o sistema LEGAL dos herdados, e cobre os 8 fusos do Brasil', () => {
+    montar(CAMBUI);
+    const select = screen.getByLabelText('Sistema de projeção (CRS)') as HTMLSelectElement;
+    const grupos = Array.from(select.querySelectorAll('optgroup')).map((g) => g.label);
+    expect(grupos[0]).toMatch(/SIRGAS 2000/);
+    expect(grupos.some((g) => /herdados/i.test(g))).toBe(true);
+    // SIRGAS 2000 / UTM 18S a 25S.
+    const sirgas = Array.from(select.querySelectorAll('optgroup')[0].querySelectorAll('option'));
+    expect(sirgas).toHaveLength(8);
+    expect(sirgas[0].textContent).toMatch(/UTM 18S/);
   });
 });

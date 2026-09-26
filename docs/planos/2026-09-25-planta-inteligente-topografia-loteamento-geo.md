@@ -306,3 +306,27 @@ A medição do harness voltou a nascer cega, pelo mesmo motivo da B1 em outra co
 - **A escala das folhas é a que faz caber**, e por isso não sai um denominador redondo no carimbo: dizer 1:500 numa folha que mede outra coisa é pior que não dizer escala.
 - **No CSV de locação, NORTE é o Y e ESTE é o X** — a convenção da topografia. Trocar espelha o loteamento inteiro no campo sem nenhum sinal na tela.
 - O `Desenhista` continua com quatro primitivas: não inventei tracejado só para a quadra, que se distingue por espessura e cor.
+
+---
+
+## Estado — A0 (26/09/2026)
+
+- [x] `proj4` instalado (decisão do usuário). `utils/geo/` com quatro peças: `crs.ts` (catálogo FECHADO — SIRGAS 2000 nos 8 fusos do Brasil, SAD 69 e Córrego Alegre como herdados, WGS 84; `lerCrs` aceita código, nome e a forma curta do topógrafo; `conferirFuso` avisa quando o fuso não contém a longitude), `projecao.ts` (conversão, transformação de datum, convergência meridiana, fator de escala, distância no elipsoide), `formato.ts` (GMS, azimute, rumo, azimute verdadeiro) e `sgl.ts` (Sistema Geodésico Local da NBR 14166, área real e o desvio da área medida em UTM).
+- [x] Painel do Terreno: o CRS virou **lista do catálogo**, com aviso de fuso/sistema herdado e três derivados na tela — convergência meridiana, fator de escala e quanto a área em UTM difere da real.
+- [x] **O memorial ganhou coordenadas** (lacuna declarada na B4): com georreferência e CRS projetado, cada lado sai com azimute **verdadeiro** e rumo, e os vértices com E/N e grau-minuto-segundo. Sem ela, o aviso de ausência continua.
+- [x] Testes: `geo.test.ts` (27) e `blueprintMemorialLote.test.ts` (+6). Suíte cheia **474 arquivos / 5.505 testes** verde; tsc, `check-ui-standard` e `build` verdes.
+
+### Como os testes provam o que provam
+
+Não há coordenadas "oficiais" copiadas de uma estação da rede geodésica: eu não teria como conferir esse número, e um valor inventado com cara de oficial seria pior que nenhum. O que se afirma é o verificável:
+
+1. **Equivalência com `utmParaLatLon`**, a implementação própria em produção desde 11/09, em sete pontos do Brasil, abaixo do milímetro. Ela **não foi apagada nem passou a delegar** de propósito: virasse um repasse para o proj4, o teste compararia o proj4 com ele mesmo e um erro de parâmetro no catálogo deixaria de ser detectável.
+2. Ida e volta no milímetro.
+3. Propriedades que são definição: fator 0,9996 e convergência zero no meridiano central.
+4. Ordem de grandeza do deslocamento SAD 69 → SIRGAS 2000 (dezenas de metros).
+
+### Três defeitos que os testes pegaram
+
+1. **Códigos EPSG do SAD 69 errados** — eu usei `29100 + zona`; o correto é `29170 + zona` (18S é 29188, não 29118).
+2. **`gmsTexto` com zero casas de segundo escrevia `45°30'000"`**: o preenchimento pedia largura 3 quando deviam ser 2 dígitos.
+3. **O sinal da convergência** — no hemisfério **sul** ela é NEGATIVA a leste do meridiano central, o contrário da intuição do hemisfério norte. O código estava certo pela fórmula; o teste é que assumira errado.

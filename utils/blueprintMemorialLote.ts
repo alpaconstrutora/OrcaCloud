@@ -21,7 +21,19 @@
  * ⚠️ E não substitui o responsável técnico. É a mesma premissa da topografia:
  * o software redige a peça; quem assina, e responde, é o profissional.
  */
-import type { BlueprintModel, Lote, Quadra, AreaPublica } from './blueprintKernel';
+import type { BlueprintModel, Lote, Quadra, AreaPublica, Georreferencia } from './blueprintKernel';
+import { localParaGeo } from './blueprintTopografia';
+import {
+  azimute as azimuteEntre,
+  azimuteVerdadeiro,
+  azimuteTexto,
+  rumoTexto,
+  convergenciaMeridiana,
+  crsPorCodigo,
+  geoParaProjetado,
+  latitudeTexto,
+  longitudeTexto,
+} from './geo';
 import {
   medirLote,
   areaEmM2,
@@ -96,6 +108,91 @@ function porExtenso(papel: PapelDoLado): string {
 export const AVISO_SEM_GEORREFERENCIA =
   'Memorial descrito por medidas e confrontantes. As coordenadas dos vértices e os azimutes das divisas dependem de georreferenciamento do levantamento, que não consta deste estudo.';
 
+/**
+ * A0 — o memorial COM georreferência.
+ *
+ * Quando o estudo tem latitude/longitude e um CRS projetado do catálogo, cada
+ * lado ganha azimute e rumo, e cada vértice ganha coordenada. É o que o SIGEF e
+ * o registro de imóveis pedem, e é o que faltava na B4.
+ *
+ * ⚠️ O azimute do desenho é o de QUADRÍCULA (medido contra o Y da projeção). O
+ * que vai no memorial é o VERDADEIRO, que difere pela convergência meridiana —
+ * até 2° na borda do fuso. Escrever um pelo outro gira todas as divisas, e o
+ * desenho continua perfeito.
+ */
+export interface LadoGeorreferenciado {
+  indice: number;
+  azimuteDeQuadricula: number;
+  azimuteVerdadeiro: number;
+  azimuteTexto: string;
+  rumoTexto: string;
+}
+
+export interface VerticeGeorreferenciado {
+  indice: number;
+  este: number;
+  norte: number;
+  lat: number;
+  lon: number;
+  latitudeTexto: string;
+  longitudeTexto: string;
+}
+
+export interface Georreferenciamento {
+  crs: string;
+  convergenciaGraus: number;
+  vertices: VerticeGeorreferenciado[];
+  lados: LadoGeorreferenciado[];
+}
+
+/**
+ * Traduz os vértices do lote para coordenadas do mundo.
+ *
+ * Devolve `null` quando falta georreferência ou o CRS não é projetado — e é o
+ * `null` que faz o memorial voltar a dizer que não tem coordenadas, em vez de
+ * inventá-las.
+ */
+export function georreferenciarLote(model: BlueprintModel, lote: Lote): Georreferenciamento | null {
+  const geo: Georreferencia | null | undefined = model.georreferencia;
+  if (!geo || !Number.isFinite(geo.latitude) || !Number.isFinite(geo.longitude)) return null;
+  if (geo.latitude === 0 && geo.longitude === 0) return null;
+  const crs = geo.projetada?.crs ? crsPorCodigo(geo.projetada.crs) : null;
+  if (!crs || crs.tipo !== 'PROJETADO' || crs.zona == null) return null;
+
+  const convergencia = convergenciaMeridiana({ lat: geo.latitude, lon: geo.longitude }, crs.zona);
+
+  const vertices: VerticeGeorreferenciado[] = lote.pontos.map((p, i) => {
+    // O kernel trabalha em mm LOCAIS; `localParaGeo` leva ao mundo pela
+    // âncora do estudo, e daí o proj4 leva ao sistema projetado.
+    const g = localParaGeo(p, geo);
+    const proj = geoParaProjetado({ lat: g.lat, lon: g.lon }, crs).valor;
+    return {
+      indice: i,
+      este: Math.round(proj.este * 1000) / 1000,
+      norte: Math.round(proj.norte * 1000) / 1000,
+      lat: g.lat,
+      lon: g.lon,
+      latitudeTexto: latitudeTexto(g.lat),
+      longitudeTexto: longitudeTexto(g.lon),
+    };
+  });
+
+  const lados: LadoGeorreferenciado[] = vertices.map((v, i) => {
+    const seguinte = vertices[(i + 1) % vertices.length];
+    const azQuad = azimuteEntre({ x: v.este, y: v.norte }, { x: seguinte.este, y: seguinte.norte });
+    const azVerd = azimuteVerdadeiro(azQuad, convergencia);
+    return {
+      indice: i,
+      azimuteDeQuadricula: azQuad,
+      azimuteVerdadeiro: azVerd,
+      azimuteTexto: azimuteTexto(azVerd),
+      rumoTexto: rumoTexto(azVerd),
+    };
+  });
+
+  return { crs: crs.codigo, convergenciaGraus: convergencia, vertices, lados };
+}
+
 export interface MemorialDeLote {
   loteId: string;
   loteUid: string;
@@ -121,7 +218,10 @@ export function memorialDeLote(model: BlueprintModel, lote: Lote, dados: DadosDo
   const medida = medirLote(model, lote);
   const quadra = lote.quadraId != null ? (model.quadras ?? []).find((q) => q.id === lote.quadraId) : undefined;
   const lados = ordenarLados(medida.lados);
-  const avisos: string[] = [AVISO_SEM_GEORREFERENCIA];
+  const geo = georreferenciarLote(model, lote);
+  // O aviso só entra quando NÃO há georreferência: dizer que faltam
+  // coordenadas num memorial que as tem seria mentira em papel assinado.
+  const avisos: string[] = geo ? [] : [AVISO_SEM_GEORREFERENCIA];
 
   if (!quadra) avisos.push('Lote fora de qualquer quadra — o memorial sai sem a identificação da quadra.');
   if (medida.encravado) avisos.push('Lote sem frente para via (encravado): confira o desenho antes de emitir.');
@@ -141,8 +241,21 @@ export function memorialDeLote(model: BlueprintModel, lote: Lote, dados: DadosDo
   );
 
   // O giro: um trecho por lado, na ordem frente → direita → fundo → esquerda.
-  const trechos = lados.map((l) => `mede ${metros(l.comprimentoMm)} ${porExtenso(l.papel)}${confrontacao(l)}`);
+  // Com georreferência, cada trecho leva o azimute VERDADEIRO — é ele que o
+  // SIGEF e o registro conferem.
+  const trechos = lados.map((l) => {
+    const azimute = geo?.lados.find((g) => g.indice === l.indice);
+    const rumo = azimute ? `, no azimute ${azimute.azimuteTexto} (rumo ${azimute.rumoTexto})` : '';
+    return `mede ${metros(l.comprimentoMm)} ${porExtenso(l.papel)}${rumo}${confrontacao(l)}`;
+  });
   frases.push(`${trechos.join('; ')}.`);
+
+  if (geo) {
+    const v = geo.vertices[0];
+    frases.push(
+      `Coordenadas no sistema ${geo.crs}; o vértice inicial fica em E ${numeroBr(v.este, 3)} m, N ${numeroBr(v.norte, 3)} m (${v.latitudeTexto}, ${v.longitudeTexto}). Azimutes verdadeiros, corrigidos da convergência meridiana de ${numeroBr(geo.convergenciaGraus, 4)}°.`,
+    );
+  }
 
   if (dados.matricula) {
     frases.push(
@@ -279,7 +392,9 @@ export function memorialDoLoteamento(model: BlueprintModel, areaDaGlebaMm2: numb
     linhas.push(`  Quadra ${q.quadra}: ${q.lotes} lote(s), ${numeroBr(q.areaM2)} m² (menor ${numeroBr(q.menorLoteM2)} m², maior ${numeroBr(q.maiorLoteM2)} m²)`);
   }
   linhas.push('');
-  linhas.push(AVISO_SEM_GEORREFERENCIA);
+  // Idem: o aviso só quando o estudo não tem georreferência.
+  const temGeo = (model.lotes ?? []).some((l) => georreferenciarLote(model, l) != null);
+  if (!temGeo) linhas.push(AVISO_SEM_GEORREFERENCIA);
   if (dados.responsavelTecnico) {
     linhas.push('');
     linhas.push(`Responsável técnico: ${dados.responsavelTecnico}${dados.registroDoConselho ? ` — ${dados.registroDoConselho}` : ''}`);

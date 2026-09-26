@@ -25,6 +25,7 @@ import {
   pontosDeLocacao,
   csvDeLocacao,
   pendenciasDosMemoriais,
+  georreferenciarLote,
   numeroBr,
   AVISO_SEM_GEORREFERENCIA,
   type DadosDoLoteamento,
@@ -259,5 +260,89 @@ describe('pontos de locação', () => {
   it('o número sai no formato brasileiro', () => {
     expect(numeroBr(1234.5)).toBe('1234,50');
     expect(numeroBr(12.3456, 3)).toBe('12,346');
+  });
+});
+
+/**
+ * A0 — O MEMORIAL COM GEORREFERÊNCIA.
+ *
+ * O que muda quando o estudo tem latitude/longitude e um CRS projetado: cada
+ * lado ganha azimute VERDADEIRO e rumo, cada vértice ganha coordenada, e o
+ * aviso de ausência SOME — dizer que faltam coordenadas num memorial que as tem
+ * seria mentira em papel assinado.
+ */
+describe('memorial georreferenciado (A0)', () => {
+  /** O mesmo loteamento, agora ancorado em Belo Horizonte, UTM 23S SIRGAS. */
+  function comGeorreferencia(): BlueprintModel {
+    const m = loteamento();
+    return {
+      ...m,
+      georreferencia: {
+        latitude: -19.9167,
+        longitude: -43.9345,
+        projetada: { lesteM: 611_000, norteM: 7_796_000, crs: 'EPSG:31983' },
+      },
+    } as BlueprintModel;
+  }
+
+  it('sem georreferência, o aviso está lá; com ela, some', () => {
+    const semGeo = memorialDeLote(loteamento(), loteamento().lotes[0], DADOS);
+    expect(semGeo.avisos).toContain(AVISO_SEM_GEORREFERENCIA);
+
+    const m = comGeorreferencia();
+    const comGeo = memorialDeLote(m, m.lotes[0], DADOS);
+    expect(comGeo.avisos).not.toContain(AVISO_SEM_GEORREFERENCIA);
+  });
+
+  it('cada lado ganha azimute e rumo no texto', () => {
+    const m = comGeorreferencia();
+    const memorial = memorialDeLote(m, m.lotes[1], DADOS);
+    expect(memorial.texto).toMatch(/no azimute \d+°\d{2}'\d{2}"/);
+    expect(memorial.texto).toMatch(/rumo \d+°\d{2}'\d{2}" (NE|SE|SW|NW)/);
+    expect(memorial.texto).toContain('EPSG:31983');
+    expect(memorial.texto).toMatch(/convergência meridiana/i);
+  });
+
+  it('os vértices saem em E/N e em grau-minuto-segundo', () => {
+    const m = comGeorreferencia();
+    const geo = georreferenciarLote(m, m.lotes[0]);
+    expect(geo).not.toBeNull();
+    expect(geo!.vertices).toHaveLength(4);
+    // Belo Horizonte no fuso 23: E perto de 610 km, N perto de 7.796 km.
+    expect(geo!.vertices[0].este).toBeGreaterThan(100_000);
+    expect(geo!.vertices[0].este).toBeLessThan(900_000);
+    expect(geo!.vertices[0].norte).toBeGreaterThan(7_000_000);
+    expect(geo!.vertices[0].latitudeTexto).toMatch(/S$/);
+    expect(geo!.vertices[0].longitudeTexto).toMatch(/W$/);
+  });
+
+  it('⚠️ o azimute do memorial é o VERDADEIRO, não o de quadrícula', () => {
+    const m = comGeorreferencia();
+    const geo = georreferenciarLote(m, m.lotes[0])!;
+    // Belo Horizonte fica a leste do meridiano central (-45): no hemisfério
+    // sul, a convergência é negativa, e os dois azimutes NÃO coincidem.
+    expect(geo.convergenciaGraus).not.toBe(0);
+    for (const lado of geo.lados) {
+      expect(lado.azimuteVerdadeiro).not.toBeCloseTo(lado.azimuteDeQuadricula, 6);
+      const diferenca = ((lado.azimuteVerdadeiro - lado.azimuteDeQuadricula + 540) % 360) - 180;
+      expect(diferenca).toBeCloseTo(geo.convergenciaGraus, 6);
+    }
+  });
+
+  it('CRS geográfico ou fora do catálogo não georreferencia — e o aviso volta', () => {
+    const m = comGeorreferencia();
+    // 4674 é geográfico: não dá E/N, então não há azimute de quadrícula.
+    const geografico = { ...m, georreferencia: { ...m.georreferencia!, projetada: { lesteM: 0, norteM: 0, crs: 'EPSG:4674' } } } as BlueprintModel;
+    expect(georreferenciarLote(geografico, geografico.lotes[0])).toBeNull();
+    expect(memorialDeLote(geografico, geografico.lotes[0], DADOS).avisos).toContain(AVISO_SEM_GEORREFERENCIA);
+
+    const semCrs = { ...m, georreferencia: { latitude: -19.9, longitude: -43.9 } } as BlueprintModel;
+    expect(georreferenciarLote(semCrs, semCrs.lotes[0])).toBeNull();
+  });
+
+  it('latitude e longitude zeradas não contam como georreferência', () => {
+    const m = loteamento();
+    const zerado = { ...m, georreferencia: { latitude: 0, longitude: 0, projetada: { lesteM: 0, norteM: 0, crs: 'EPSG:31983' } } } as BlueprintModel;
+    expect(georreferenciarLote(zerado, zerado.lotes[0])).toBeNull();
   });
 });

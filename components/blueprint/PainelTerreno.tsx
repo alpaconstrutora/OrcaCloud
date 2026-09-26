@@ -2,7 +2,16 @@ import { ROTULO_DA_RESTRICAO_DO_LOTE, TIPOS_DE_RESTRICAO_DO_LOTE, type TipoDeRes
 import type { AvisoDoLote } from '../../utils/blueprintZonaUrbanistica';
 import type { EnvelopeVertical } from '../../utils/blueprintEnvelope3d';
 import type { QuadroDeSubRegioes } from '../../utils/blueprintSubRegioes';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import {
+  CATALOGO_DE_CRS,
+  crsPorCodigo,
+  conferirFuso,
+  convergenciaMeridiana,
+  fatorDeEscala,
+  desvioDaAreaEmUtm,
+  gmsTexto,
+} from '../../utils/geo';
 import { AlertTriangle, LandPlot, Save, Table2 } from 'lucide-react';
 import type { Boundary, BoundaryPapel, Georreferencia } from '../../utils/blueprintKernel';
 import {
@@ -804,6 +813,44 @@ function Georreferenciar({
     onMudar({ ...base, ...campo });
   };
 
+  /**
+   * A0 — o aviso que evita o erro caro: o fuso escolhido não contém a longitude
+   * informada. Converter assim não dá erro nenhum; o desenho sai deslocado por
+   * centenas de quilômetros com a forma perfeita.
+   */
+  const avisoDoCrs = useMemo(() => {
+    const codigo = valor?.projetada?.crs;
+    if (!codigo || !valor) return null;
+    const crs = crsPorCodigo(codigo);
+    if (!crs) return 'Sistema fora do catálogo: as grandezas derivadas (convergência, fator de escala) não são calculadas para ele.';
+    if (crs.herdado) {
+      return `${crs.nome} é um sistema HERDADO. Serve para ler o que está na escritura antiga, mas o cadastro atual usa SIRGAS 2000 — converta antes de emitir peça técnica.`;
+    }
+    return conferirFuso(crs, valor.longitude);
+  }, [valor?.projetada?.crs, valor?.longitude, valor]);
+
+  /**
+   * A0 — o que o memorial precisa e ninguém calcula à mão: a convergência (o
+   * ângulo entre o norte da quadrícula e o verdadeiro) e o fator de escala, que
+   * é quanto a área medida em UTM difere da área real do terreno.
+   */
+  const derivadosDoCrs = useMemo(() => {
+    if (!valor) return null;
+    const crs = valor.projetada?.crs ? crsPorCodigo(valor.projetada.crs) : null;
+    if (!crs || crs.zona == null) return null;
+    if (!Number.isFinite(valor.latitude) || !Number.isFinite(valor.longitude)) return null;
+    if (valor.latitude === 0 && valor.longitude === 0) return null;
+    const ponto = { lat: valor.latitude, lon: valor.longitude };
+    const conv = convergenciaMeridiana(ponto, crs.zona);
+    const k = fatorDeEscala(ponto, crs.zona);
+    const desvio = desvioDaAreaEmUtm(k);
+    return {
+      convergencia: gmsTexto(conv, 0),
+      fator: k.toFixed(6).replace('.', ','),
+      desvioDaArea: `${desvio > 0 ? '+' : ''}${desvio.toFixed(3).replace('.', ',')}% (${desvio < 0 ? 'menor' : 'maior'} que a real)`,
+    };
+  }, [valor]);
+
   return (
     <div className="mt-3 border-t border-slate-200 pt-3">
       <div className="flex items-center justify-between gap-2">
@@ -894,10 +941,8 @@ function Georreferenciar({
             />
             <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
               <span className="shrink-0">Sistema (CRS)</span>
-              <input
-                type="text"
+              <select
                 value={valor.projetada?.crs ?? ''}
-                placeholder="EPSG:31983"
                 aria-label="Sistema de projeção (CRS)"
                 onChange={(e) =>
                   mudar({
@@ -908,10 +953,46 @@ function Georreferenciar({
                     },
                   })
                 }
-                className="w-28 rounded-md border border-slate-300 px-2 py-1 text-right text-xs text-slate-800"
-              />
+                className="w-44 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800"
+              >
+                <option value="">Escolha o sistema…</option>
+                <optgroup label="SIRGAS 2000 (legal no Brasil)">
+                  {CATALOGO_DE_CRS.filter((c) => c.datum === 'SIRGAS2000' && c.zona != null).map((c) => (
+                    <option key={c.codigo} value={c.codigo}>
+                      {c.nome} — {c.codigo}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Herdados (só como origem)">
+                  {CATALOGO_DE_CRS.filter((c) => c.herdado && c.zona != null).map((c) => (
+                    <option key={c.codigo} value={c.codigo}>
+                      {c.nome} — {c.codigo}
+                    </option>
+                  ))}
+                </optgroup>
+                {/* O que já estava gravado e não está no catálogo continua sendo
+                    oferecido: tirar a opção apagaria o dado ao salvar. */}
+                {valor.projetada?.crs && !crsPorCodigo(valor.projetada.crs) && (
+                  <option value={valor.projetada.crs}>{valor.projetada.crs} (fora do catálogo)</option>
+                )}
+              </select>
             </label>
           </div>
+          {avisoDoCrs && (
+            <p className="mt-1.5 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-800" role="status">
+              {avisoDoCrs}
+            </p>
+          )}
+          {derivadosDoCrs && (
+            <dl className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs text-slate-600">
+              <dt>Convergência meridiana</dt>
+              <dd className="text-right font-medium text-slate-800">{derivadosDoCrs.convergencia}</dd>
+              <dt>Fator de escala</dt>
+              <dd className="text-right font-medium text-slate-800">{derivadosDoCrs.fator}</dd>
+              <dt>Área medida em UTM</dt>
+              <dd className="text-right font-medium text-slate-800">{derivadosDoCrs.desvioDaArea}</dd>
+            </dl>
+          )}
           <p className="mt-1.5 text-xs text-slate-500">
             Só preencha se um topógrafo mediu. O sistema é obrigatório junto do número —
             coordenada sem CRS é um valor que ninguém sabe de onde é. Ela NÃO é calculada a

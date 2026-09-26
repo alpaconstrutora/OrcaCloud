@@ -395,6 +395,20 @@ export function zonaUtmDe(lon: number): number {
  * UTM (WGS 84 / SIRGAS 2000 — o mesmo elipsoide GRS80 para o que interessa)
  * → latitude/longitude. Fórmulas de Snyder; erro abaixo de 1 mm na zona.
  */
+/**
+ * ⚠️ A CONTA PRÓPRIA DE UTM, MANTIDA DE PROPÓSITO (A0, 26/09/2026).
+ *
+ * Desde a fase A0 existe `utils/geo`, sobre proj4, que faz a mesma conversão
+ * com mais sistemas e mais guardas. Esta função NÃO foi apagada nem passou a
+ * delegar, e a razão é o teste: `__tests__/geo.test.ts` compara as duas em sete
+ * pontos do Brasil e exige concordância abaixo do milímetro. Uma referência
+ * independente é o que torna esse teste uma prova — se ela virasse um repasse
+ * para o proj4, o teste passaria a comparar o proj4 com ele mesmo, e um erro de
+ * parâmetro no catálogo deixaria de ser detectável.
+ *
+ * Ela permanece como a implementação usada na importação (nada mudou no
+ * caminho do usuário) E como a testemunha do módulo novo.
+ */
 export function utmParaLatLon(este: number, norte: number, zona: number, hemisferio: 'N' | 'S'): LatLon {
   const a = 6378137;
   const f = 1 / 298.257222101;

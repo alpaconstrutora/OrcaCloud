@@ -22,6 +22,7 @@ import { _roots } from '@react-three/fiber';
 import PainelTerreno from '../../../components/blueprint/PainelTerreno';
 import PainelTopografia from '../../../components/blueprint/PainelTopografia';
 import PainelViasEGreide from '../../../components/blueprint/PainelViasEGreide';
+import { contarFeicoes, duplicados, fichaDaFeicao, lerCodigo, linhasDasFeicoes, type PontoDeLevantamento } from '../../../utils/blueprintFeicoes';
 import type { ViaDeProjeto } from '../../../hooks/useBlueprintVias';
 import { estaquear, greideDoTerreno, secoesTransversais, volumesPorAreasMedias, SECAO_TIPO_PADRAO } from '../../../utils/blueprintVias';
 import { ConfirmProvider } from '../../../components/ui/confirm';
@@ -203,6 +204,33 @@ const intervalo = busca.get('intervalo') === '1';
 const inclinado = busca.get('inclinado') === '1' || busca.get('inclinado') === '2';
 /** `?vias=1` (C2): uma via de projeto ao longo do lote (x = 6 m, de y = 1 m a y = 29 m — na borda da grade a amostra é null —, passo 5 m) com o greide de partida; a gaveta em cima do painel. */
 const comVias = busca.get('vias') === '1';
+/** `?levantamento=1` (A2): pontos com nome e código — cerca (CE1) a oeste, muro (MU) ao sul, postes, árvore, um repetido e um código fora do catálogo. */
+const comLevantamento = busca.get('levantamento') === '1';
+const PONTOS_DO_LEVANTAMENTO: PontoDeLevantamento[] = [
+  ...PONTOS.map((p, i) => ({ ...p, nome: `P${i + 1}` })),
+  { x: 500, y: 2000, cotaM: 100.2, nome: 'C1', codigo: 'CE1', descricao: 'arame farpado' },
+  { x: 500, y: 10_000, cotaM: 101.0, nome: 'C2', codigo: 'CE1' },
+  { x: 500, y: 20_000, cotaM: 101.9, nome: 'C3', codigo: 'CE1' },
+  { x: 500, y: 28_000, cotaM: 102.4, nome: 'C4', codigo: 'CE1' },
+  { x: 2000, y: 500, cotaM: 100.1, nome: 'M1', codigo: 'MU' },
+  { x: 10_000, y: 500, cotaM: 100.5, nome: 'M2', codigo: 'MU' },
+  { x: 11_000, y: 5000, cotaM: 101.0, nome: 'PO1', codigo: 'PO', descricao: 'luz' },
+  { x: 11_000, y: 25_000, cotaM: 103.0, nome: 'PO2', codigo: 'PO' },
+  { x: 3000, y: 20_000, cotaM: 102.0, nome: 'AR1', codigo: 'AR', descricao: 'ipê' },
+  { x: 6003, y: 15_002, cotaM: 101.2, nome: 'P5b' },
+  { x: 8000, y: 8000, cotaM: 101.0, nome: 'X1', codigo: 'XY' },
+];
+const PONTOS_DA_TELA: PontoDeLevantamento[] = comLevantamento ? PONTOS_DO_LEVANTAMENTO : PONTOS;
+const FEICOES_NA_PLANTA = comLevantamento
+  ? {
+      linhas: linhasDasFeicoes(PONTOS_DO_LEVANTAMENTO).map((l) => ({ cor: fichaDaFeicao(l.feicao).cor, traco: fichaDaFeicao(l.feicao).traco, pontos: l.pontos })),
+      marcas: PONTOS_DO_LEVANTAMENTO.flatMap((p) => {
+        const { feicao } = lerCodigo(p.codigo);
+        const f = feicao ? fichaDaFeicao(feicao) : null;
+        return f && f.tipo === 'PONTO' ? [{ x: p.x, y: p.y, cor: f.cor, simbolo: f.simbolo }] : [];
+      }),
+    }
+  : null;
 /** `?inclinado=2`: 5 % TRANSVERSAL (ao longo de X) — é o que o corte FRENTE consegue mostrar inclinado. */
 const INCLINACAO: InclinacaoDoPlato | null = !inclinado
   ? null
@@ -303,11 +331,25 @@ const curvaDestacada = versao.curvas[indiceDaCurva];
 const pontoDaCurva = curvaDestacada?.pontos[Math.floor(curvaDestacada.pontos.length / 2)] ?? { x: 0, y: 0 };
 
 const topografia: Topografia = {
+  levantamento: comLevantamento
+    ? {
+        linhas: linhasDasFeicoes(PONTOS_DO_LEVANTAMENTO),
+        contagem: contarFeicoes(PONTOS_DO_LEVANTAMENTO),
+        duplicados: duplicados(PONTOS_DO_LEVANTAMENTO),
+        removerDuplicados: () => {},
+        acrescentarPontos: () => {},
+        exportar: () => {},
+        feicoesOcultas: new Set(),
+        alternarFeicao: () => {},
+        estado: 'SALVO',
+        id: 'lev-harness',
+      }
+    : undefined,
   fontes: FONTES,
   fonteCodigo: dem ? 'OPEN_METEO_GLO90' : 'PONTOS_COTADOS',
   setFonteCodigo: () => {},
   fonte: fonteDeElevacao(dem ? 'OPEN_METEO_GLO90' : 'PONTOS_COTADOS'),
-  pontosCotados: PONTOS,
+  pontosCotados: PONTOS_DA_TELA,
   adicionarPonto: () => {},
   alterarPonto: () => {},
   removerPonto: () => {},
@@ -361,6 +403,14 @@ const chao3d = (x: number, z: number) => {
   return c === null ? null : c - COTA_ZERO;
 };
 // C1: os números que o script de medida compara com o DOM do painel.
+(window as unknown as { __a2?: unknown }).__a2 = comLevantamento
+  ? {
+      pontos: PONTOS_DO_LEVANTAMENTO.length,
+      linhas: linhasDasFeicoes(PONTOS_DO_LEVANTAMENTO).map((l) => l.chave),
+      duplicados: duplicados(PONTOS_DO_LEVANTAMENTO).map((d) => d.motivo),
+      contagem: contarFeicoes(PONTOS_DO_LEVANTAMENTO),
+    }
+  : null;
 // C2: os números da via que o script de medida compara com a gaveta.
 {
   const estacasDaVia = estaquear(VIA.eixo, VIA.passoM);
@@ -457,7 +507,8 @@ function App() {
           ortogonal
           mostrarMedidasParedes
           curvasDeNivel={versao.curvas}
-          pontosCotados={PONTOS}
+          pontosCotados={PONTOS_DA_TELA}
+          feicoesDoLevantamento={FEICOES_NA_PLANTA}
           eixosDeVia={
             comVias
               ? {

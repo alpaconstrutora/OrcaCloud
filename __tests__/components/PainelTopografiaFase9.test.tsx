@@ -62,7 +62,8 @@ describe('PainelTopografia · fase 9 (importar pontos)', () => {
     const [pontos, origem, modo] = (t.definirPontosCotados as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(modo).toBe('SUBSTITUIR');
     expect(pontos).toHaveLength(3);
-    expect(pontos[0]).toEqual({ x: 10000, y: 2000, cotaM: 100.5 }); // ordem E,N escolhida
+    // A2: o nome do ponto (o P do PNEZD) viaja junto — antes era descartado aqui.
+    expect(pontos[0]).toEqual({ x: 10000, y: 2000, cotaM: 100.5, nome: '1' }); // ordem E,N escolhida
     expect(origem).toMatchObject({ arquivo: 'levantamento.csv', formato: 'texto (CSV/TXT)', quantos: 3 });
     expect(origem.sha256).toHaveLength(64);
     expect(screen.queryByTestId('previa-da-importacao')).toBeNull();

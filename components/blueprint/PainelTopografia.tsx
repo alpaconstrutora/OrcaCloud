@@ -14,7 +14,8 @@ import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import type { Topografia } from '../../hooks/useBlueprintTopografia';
 import type { CodigoDaFonte } from '../../utils/blueprintElevacaoProvedores';
-import { ALGORITMO_TOPOGRAFIA, type ModoDeNiveis, type QualidadeDaGrade } from '../../utils/blueprintTopografia';
+import { ALGORITMO_TOPOGRAFIA, amostradorDaGrade, type ModoDeNiveis, type QualidadeDaGrade } from '../../utils/blueprintTopografia';
+import { FEICOES, fichaDaFeicao, interpolarSobreLinha, lerCodigo, pontuarPolilinha } from '../../utils/blueprintFeicoes';
 import {
   FAIXAS_DE_DECLIVIDADE,
   TIPOS_DE_DRENAGEM,
@@ -643,42 +644,9 @@ function PontosCotados({
           levantamento (CSV/TXT, GeoJSON, KML, DXF, SVG ou LandXML), ou adicione os pontos à mão.
         </p>
       ) : (
-        <div className="mt-1.5 space-y-1">
-          <div className="flex items-center gap-1 text-[11px] text-slate-400">
-            <span className="w-4" />
-            <span className="w-16 text-right">X (m)</span>
-            <span className="w-16 text-right">Y (m)</span>
-            <span className="w-16 text-right">Cota (m)</span>
-          </div>
-          {t.pontosCotados.map((p, i) => (
-            <div key={i} className="flex items-center gap-1">
-              <span className="w-4 text-[11px] text-slate-400">{i + 1}</span>
-              <CampoDoPonto
-                rotulo={`X do ponto ${i + 1} (m)`}
-                valor={p.x / 1000}
-                onMudar={(v) => t.alterarPonto(i, { x: Math.round(v * 1000) })}
-              />
-              <CampoDoPonto
-                rotulo={`Y do ponto ${i + 1} (m)`}
-                valor={p.y / 1000}
-                onMudar={(v) => t.alterarPonto(i, { y: Math.round(v * 1000) })}
-              />
-              <CampoDoPonto
-                rotulo={`Cota do ponto ${i + 1} (m)`}
-                valor={p.cotaM}
-                onMudar={(v) => t.alterarPonto(i, { cotaM: v })}
-              />
-              <ActionIconButton
-                kind="delete"
-                size="sm"
-                title="Remover ponto"
-                aria-label={`Remover ponto ${i + 1}`}
-                onClick={() => t.removerPonto(i)}
-              />
-            </div>
-          ))}
-        </div>
+        <ListaDePontos t={t} />
       )}
+      {t.levantamento && t.pontosCotados.length > 0 && <SecaoDoLevantamento t={t} linhaDoPerfil={linhaDoPerfil} />}
     </div>
   );
 }
@@ -904,6 +872,241 @@ function SecaoProjetoExecutivo({ e }: { e: ExecutivoNoPainel }) {
   );
 }
 
+/** Mais que isto não se desenha: 500 pontos em inputs travam o painel. O filtro acha o resto. */
+const LIMITE_DA_LISTA = 100;
+
+/**
+ * A lista editável (A2): o NOME no lugar do número da linha (vazio mostra o
+ * número), X/Y/cota, apagar; a cor da feição na borda do nome e o código com a
+ * descrição no title. Com muitos pontos, filtra por nome, código ou descrição.
+ */
+function ListaDePontos({ t }: { t: Topografia }) {
+  const [filtro, setFiltro] = useState('');
+  const termo = filtro.trim().toUpperCase();
+  const visiveis = useMemo(() => {
+    const todos = t.pontosCotados.map((p, i) => ({ p, i }));
+    if (!termo) return todos;
+    return todos.filter(({ p }) => [p.nome, p.codigo, p.descricao].some((v) => (v ?? '').toUpperCase().includes(termo)));
+  }, [t.pontosCotados, termo]);
+  const mostrados = visiveis.slice(0, LIMITE_DA_LISTA);
+  return (
+    <div className="mt-1.5 space-y-1" data-testid="lista-de-pontos">
+      {t.pontosCotados.length > 20 && (
+        <input
+          type="search"
+          value={filtro}
+          onChange={(e) => setFiltro(e.target.value)}
+          placeholder="Filtrar por nome, código ou descrição"
+          aria-label="Filtrar pontos"
+          className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800"
+        />
+      )}
+      <div className="flex items-center gap-1 text-[11px] text-slate-400">
+        <span className="w-11">Nome</span>
+        <span className="w-16 text-right">X (m)</span>
+        <span className="w-16 text-right">Y (m)</span>
+        <span className="w-16 text-right">Cota (m)</span>
+      </div>
+      {mostrados.map(({ p, i }) => {
+        const { feicao } = lerCodigo(p.codigo);
+        const ficha = feicao ? fichaDaFeicao(feicao) : null;
+        const dica = [p.codigo && `código ${p.codigo}`, ficha?.rotulo, p.descricao].filter(Boolean).join(' · ');
+        return (
+          <div key={i} className="flex items-center gap-1">
+            <input
+              type="text"
+              value={p.nome ?? ''}
+              placeholder={String(i + 1)}
+              aria-label={`Nome do ponto ${i + 1}`}
+              title={dica || undefined}
+              onChange={(e) => t.alterarPonto(i, { nome: e.target.value || undefined })}
+              className={`w-11 min-w-0 rounded-md border border-slate-300 px-1 py-1 text-[11px] text-slate-800 ${ficha ? 'border-l-4' : ''}`}
+              style={ficha ? { borderLeftColor: ficha.cor } : undefined}
+            />
+            <CampoDoPonto rotulo={`X do ponto ${i + 1} (m)`} valor={p.x / 1000} onMudar={(v) => t.alterarPonto(i, { x: Math.round(v * 1000) })} />
+            <CampoDoPonto rotulo={`Y do ponto ${i + 1} (m)`} valor={p.y / 1000} onMudar={(v) => t.alterarPonto(i, { y: Math.round(v * 1000) })} />
+            <CampoDoPonto rotulo={`Cota do ponto ${i + 1} (m)`} valor={p.cotaM} onMudar={(v) => t.alterarPonto(i, { cotaM: v })} />
+            <ActionIconButton kind="delete" size="sm" title="Remover ponto" aria-label={`Remover ponto ${i + 1}`} onClick={() => t.removerPonto(i)} />
+          </div>
+        );
+      })}
+      {visiveis.length > mostrados.length && (
+        <p className="text-[11px] text-slate-500">
+          Mostrando {mostrados.length} de {visiveis.length} — filtre por nome ou código para achar os outros.
+        </p>
+      )}
+      {termo && visiveis.length === 0 && <p className="text-[11px] text-slate-500">Nenhum ponto com "{filtro.trim()}".</p>}
+    </div>
+  );
+}
+
+/** Tira os pontos colineares de uma linha amostrada: sobram os vértices de verdade. */
+function verticesDaAmostra(pts: { x: number; y: number }[]): { x: number; y: number }[] {
+  if (pts.length <= 2) return pts;
+  const saida = [pts[0]];
+  for (let i = 1; i + 1 < pts.length; i++) {
+    const a = saida[saida.length - 1];
+    const b = pts[i];
+    const c = pts[i + 1];
+    const cruz = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    const base = Math.hypot(c.x - a.x, c.y - a.y) || 1;
+    if (Math.abs(cruz) / base > 5) saida.push(b);
+  }
+  saida.push(pts[pts.length - 1]);
+  return saida;
+}
+
+/**
+ * FEIÇÕES DO LEVANTAMENTO (A2): o que os códigos dizem — por feição, quantos
+ * pontos e linhas, mostrar/esconder na planta, adensar as linhas; duplicados;
+ * pontuar a linha do perfil sobre a versão; exportar os pontos. E o estado da
+ * gravação: o levantamento agora sobrevive a recarregar a página.
+ */
+function SecaoDoLevantamento({ t, linhaDoPerfil }: { t: Topografia; linhaDoPerfil: PontoDoPerfil[] | null }) {
+  const lev = t.levantamento!;
+  const [passoM, setPassoM] = useState(5);
+  const c = lev.contagem;
+  const presentes = FEICOES.filter((f) => (c.porFeicao[f.id] ?? 0) > 0);
+  const repetidosNaPosicao = lev.duplicados.filter((d) => d.motivo === 'POSICAO');
+  const nomesRepetidos = lev.duplicados.filter((d) => d.motivo === 'NOME');
+  const grade = t.selecionada?.grade ?? null;
+  const motivoSemPontuar = !grade
+    ? 'Gere uma versão da topografia primeiro: os pontos saem com a cota da superfície dela'
+    : !linhaDoPerfil || linhaDoPerfil.length < 2
+      ? 'Trace uma linha de perfil (Terreno › Perfil) ou escolha um corte no Perfil altimétrico: é ela que se pontua'
+      : null;
+  const rotuloDoEstado =
+    lev.estado === 'SALVO'
+      ? 'gravado — volta ao recarregar'
+      : lev.estado === 'SALVANDO'
+        ? 'gravando…'
+        : lev.estado === 'INDISPONIVEL'
+          ? 'sem a tabela do levantamento: só nesta aba'
+          : '';
+  return (
+    <div className="mt-3 border-y border-slate-200 py-3" data-testid="levantamento-feicoes">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium text-slate-700">Feições do levantamento</p>
+        {rotuloDoEstado && (
+          <span className={`text-[11px] ${lev.estado === 'INDISPONIVEL' ? 'text-amber-700' : 'text-slate-500'}`} data-testid="estado-do-levantamento">
+            {rotuloDoEstado}
+          </span>
+        )}
+      </div>
+
+      {presentes.length === 0 ? (
+        <p className="mt-1 text-[11px] text-slate-500">
+          Nenhum ponto com código de feição. Os códigos lidos são os usuais — CE (cerca), MU (muro), MF (meio-fio), ED
+          (edificação), ES (estrada), RIO, TA (talude), DIV (divisa), PO (poste), AR (árvore), PV, MC (marco); o número depois
+          do código separa duas linhas (CE1, CE2). LQ continua sendo linha de quebra.
+        </p>
+      ) : (
+        <ul className="mt-1 space-y-1">
+          {presentes.map((f) => {
+            const linhas = lev.linhas.filter((l) => l.feicao === f.id);
+            const visivel = !lev.feicoesOcultas.has(f.id);
+            return (
+              <li key={f.id} className="flex items-center gap-2 text-[11px] text-slate-600">
+                <input type="checkbox" checked={visivel} onChange={() => lev.alternarFeicao(f.id)} aria-label={`Mostrar ${f.rotulo} na planta`} />
+                <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: f.cor }} />
+                <span className="min-w-0 flex-1">
+                  {f.rotulo} · {c.porFeicao[f.id]} {c.porFeicao[f.id] === 1 ? 'ponto' : 'pontos'}
+                  {f.tipo === 'LINHA' && ` · ${linhas.length} ${linhas.length === 1 ? 'linha' : 'linhas'}`}
+                </span>
+                {f.tipo === 'LINHA' && linhas.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      lev.acrescentarPontos(
+                        linhas.flatMap((l, k) => interpolarSobreLinha(l.pontos, passoM * 1000, `${f.aliases[0]}${k + 1}-`)),
+                      )
+                    }
+                    title={`Acrescenta pontos a cada ${formatar(passoM, 1)} m sobre as linhas medidas, com a cota em rampa entre os vértices`}
+                    className="shrink-0 text-blue-700 transition-colors hover:text-blue-900"
+                  >
+                    Adensar
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {c.semFeicao > 0 && (
+        <p className="mt-1 text-[11px] text-slate-500">
+          {c.semFeicao} {c.semFeicao === 1 ? 'ponto' : 'pontos'} com código fora do catálogo ({c.codigosDesconhecidos.slice(0, 8).join(', ')}
+          {c.codigosDesconhecidos.length > 8 ? '…' : ''}) — ficam como ponto cotado comum.
+        </p>
+      )}
+
+      {(repetidosNaPosicao.length > 0 || nomesRepetidos.length > 0) && (
+        <div className="mt-2 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800" data-testid="duplicados">
+          {repetidosNaPosicao.length > 0 && (
+            <p className="flex items-center gap-2">
+              <span className="min-w-0 flex-1">
+                {repetidosNaPosicao.length} {repetidosNaPosicao.length === 1 ? 'ponto repetido' : 'pontos repetidos'} na mesma posição (até 1 cm de outro).
+              </span>
+              <button type="button" onClick={lev.removerDuplicados} className="shrink-0 font-medium text-blue-700 transition-colors hover:text-blue-900">
+                Remover repetidos
+              </button>
+            </p>
+          )}
+          {nomesRepetidos.length > 0 && (
+            <p>
+              {nomesRepetidos.length} {nomesRepetidos.length === 1 ? 'nome repetido' : 'nomes repetidos'} em posições diferentes (
+              {[...new Set(nomesRepetidos.map((d) => t.pontosCotados[d.repetido]?.nome))].slice(0, 6).join(', ')}) — renomeie na lista; não se apaga um ponto medido.
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="mt-2 flex flex-wrap items-end gap-2">
+        <CampoParametro rotulo="Passo" valor={passoM} passo="1" min="0.5" sufixo="m" onMudar={setPassoM} />
+        <button
+          type="button"
+          disabled={!!motivoSemPontuar}
+          title={motivoSemPontuar ?? `Um ponto a cada ${formatar(passoM, 1)} m sobre a linha do perfil, com a cota da versão v${t.selecionada?.versao}`}
+          onClick={() => {
+            if (!grade || !linhaDoPerfil) return;
+            const linha = verticesDaAmostra(linhaDoPerfil.map((q) => ({ x: q.x, y: q.y })));
+            lev.acrescentarPontos(pontuarPolilinha(linha, passoM * 1000, amostradorDaGrade(grade), `PP${t.pontosCotados.length + 1}-`));
+          }}
+          className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Pontuar a linha do perfil
+        </button>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-1 text-[11px] text-slate-600">
+        <span className="mr-1">Exportar pontos:</span>
+        {(['csv', 'kml', 'dxf'] as const).map((f) => {
+          const semGeo = f === 'kml' && !t.georreferencia;
+          return (
+            <button
+              key={f}
+              type="button"
+              disabled={semGeo}
+              onClick={() => lev.exportar(f)}
+              title={
+                semGeo
+                  ? 'Informe latitude/longitude em "Onde fica": o KML precisa saber onde o lote está no mundo'
+                  : f === 'csv'
+                    ? 'ponto;norte;este;cota;codigo;descricao em metros — o Importar levantamento lê de volta com os mesmos nomes'
+                    : f === 'kml'
+                      ? 'Um marcador por ponto, uma pasta por feição, e as linhas das feições'
+                      : 'Pontos com cota e nome, e cada feição na sua camada LEV-*'
+              }
+              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Download className="h-3 w-3" /> {f.toUpperCase()}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function CampoDoPonto({
   rotulo,
   valor,
@@ -1049,7 +1252,15 @@ function ImportarPontos({
     // As divisas primeiro: os pontos cotados só fazem sentido dentro de um lote.
     if (lancarLote && resultado.contorno && onLancarLote) onLancarLote(resultado.contorno.pontos);
     t.definirPontosCotados(
-      resultado.pontos.map((p) => ({ x: p.x, y: p.y, cotaM: p.cotaM })),
+      // A2: nome, código e descrição do caderno de campo vão junto.
+      resultado.pontos.map((p) => ({
+        x: p.x,
+        y: p.y,
+        cotaM: p.cotaM,
+        ...(p.nome ? { nome: p.nome } : {}),
+        ...(p.codigo ? { codigo: p.codigo } : {}),
+        ...(p.descricao ? { descricao: p.descricao } : {}),
+      })),
       { arquivo: arquivo.nome, formato: ROTULO_DO_FORMATO[arquivo.formato], sha256: arquivo.sha256, quantos: resultado.pontos.length },
       modo,
       // Fase 15: as linhas de quebra e a TIN do mesmo arquivo vão junto.

@@ -152,6 +152,7 @@ import PainelRoteiroPerimetrico from './PainelRoteiroPerimetrico';
 import PainelViasEGreide from './PainelViasEGreide';
 import { useBlueprintVias } from '../../hooks/useBlueprintVias';
 import { estaquear } from '../../utils/blueprintVias';
+import { fichaDaFeicao, lerCodigo } from '../../utils/blueprintFeicoes';
 import {
   MATERIAIS_DE_SUB_REGIAO,
   FICHA_DO_MATERIAL_DE_SUB_REGIAO,
@@ -1789,6 +1790,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     'blueprint:mostrarCurvasDeNivel',
     true,
   );
+  /** A2: as feições do levantamento (cerca, muro, poste…) pelos códigos dos pontos. */
+  const [mostrarFeicoes, setMostrarFeicoes] = usePersistedState('blueprint:mostrarFeicoesDoLevantamento', true);
   /** Faixas de declividade pintadas sob as curvas. Nasce desligado: é leitura, não desenho. */
   const [mostrarDeclividade, setMostrarDeclividade] = usePersistedState(
     'blueprint:mostrarDeclividade',
@@ -4011,6 +4014,24 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chaveDaTopografia]);
 
+  // A2: as feições do levantamento resolvidas pelo catálogo, sem as que o painel escondeu.
+  const feicoesNoCanvas = useMemo(() => {
+    const lev = topografia.levantamento;
+    if (!lev) return null;
+    const linhas = lev.linhas
+      .filter((l) => !lev.feicoesOcultas.has(l.feicao))
+      .map((l) => {
+        const f = fichaDaFeicao(l.feicao);
+        return { cor: f.cor, traco: f.traco, pontos: l.pontos };
+      });
+    const marcas = topografia.pontosCotados.flatMap((p) => {
+      const { feicao } = lerCodigo(p.codigo);
+      if (!feicao || lev.feicoesOcultas.has(feicao)) return [];
+      const f = fichaDaFeicao(feicao);
+      return f.tipo === 'PONTO' ? [{ x: p.x, y: p.y, cor: f.cor, simbolo: f.simbolo }] : [];
+    });
+    return linhas.length + marcas.length > 0 ? { linhas, marcas } : null;
+  }, [topografia.levantamento, topografia.pontosCotados]);
   const terraplenagem = useBlueprintTerraplenagem(study.id, study.organization_id);
   // C2: as vias de projeto (eixo, greide, seção tipo) — tabela lateral própria.
   const vias = useBlueprintVias(study.id, study.organization_id);
@@ -11025,6 +11046,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                         : 'Não há topografia gerada.',
                     },
                     {
+                      chave: 'feicoes-do-levantamento',
+                      rotulo: 'Feições do levantamento',
+                      icone: Fence,
+                      ligado: mostrarFeicoes,
+                      alternar: () => setMostrarFeicoes((v) => !v),
+                      desabilitado: !feicoesNoCanvas,
+                      ajuda: feicoesNoCanvas
+                        ? 'Cerca, muro, meio-fio, edificação, poste, árvore… pelos códigos dos pontos do levantamento. Cada feição liga e desliga no painel do terreno.'
+                        : 'Nenhum ponto do levantamento tem código de feição (CE, MU, MF, ED, PO, AR…).',
+                    },
+                    {
                       chave: 'nos-da-grade',
                       rotulo: 'Nós da grade',
                       icone: Grid3x3,
@@ -11970,6 +12002,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   ? topografia.pontosCotados
                   : undefined
               }
+              feicoesDoLevantamento={mostrarFeicoes && topografia.fonte.tipo === 'LOCAL' ? feicoesNoCanvas : null}
               declividade={
                 mostrarDeclividade && declividade && topografia.selecionada
                   ? { grade: topografia.selecionada.grade, faixaDaCelula: declividade.faixaDaCelula }

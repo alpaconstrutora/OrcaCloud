@@ -1139,7 +1139,17 @@ interface Props {
    */
   curvasDeNivel?: CurvaDeNivel[];
   /** Os pontos cotados em edição — para o usuário ver ONDE está digitando. */
-  pontosCotados?: PontoCotado[];
+  /** A2: com o nome do caderno de campo, quando há — sai embaixo da cota, com zoom. */
+  pontosCotados?: (PontoCotado & { nome?: string })[];
+  /**
+   * A2: as FEIÇÕES do levantamento, já resolvidas pelo catálogo (cor, traço,
+   * símbolo): linhas (cerca, muro, meio-fio…) e marcas pontuais (poste, árvore…).
+   * Não são entidades de kernel; somem pelo painel ou por Exibir.
+   */
+  feicoesDoLevantamento?: {
+    linhas: { cor: string; traco: readonly number[]; pontos: Point[] }[];
+    marcas: { x: number; y: number; cor: string; simbolo: 'CIRCULO' | 'QUADRADO' | 'TRIANGULO' | 'ARVORE' | 'CRUZ' }[];
+  } | null;
   /**
    * Declividade por célula da grade (fase 2): pinta cada célula com a cor da
    * faixa, SOB as curvas. `null` = camada desligada.
@@ -1516,6 +1526,7 @@ export default function BlueprintCanvas({
   mostrarPreenchimentoTerreno = true,
   curvasDeNivel = SEM_CURVAS,
   pontosCotados = SEM_PONTOS_COTADOS,
+  feicoesDoLevantamento = null,
   declividade = null,
   terraplenagem = null,
   hipsometria = null,
@@ -4877,6 +4888,53 @@ export default function BlueprintCanvas({
           ctx.lineTo(q.x, q.y + 5);
           ctx.stroke();
           ctx.fillText(p.cotaM.toFixed(2).replace('.', ','), q.x + 6, q.y - 3);
+          // A2: o nome do ponto, embaixo — só com zoom, senão 500 nomes viram mancha.
+          if (p.nome && vista.escala > 0.03) {
+            ctx.save();
+            ctx.globalAlpha = 0.7;
+            ctx.textBaseline = 'top';
+            ctx.fillText(p.nome, q.x + 6, q.y + 2);
+            ctx.restore();
+          }
+        }
+        ctx.restore();
+      }
+
+      // FEIÇÕES DO LEVANTAMENTO (A2): as linhas na cor e traço da feição, e
+      // as marcas pontuais com o símbolo — sobre os pontos, sob os eixos.
+      if (feicoesDoLevantamento) {
+        ctx.save();
+        for (const l of feicoesDoLevantamento.linhas) {
+          if (l.pontos.length < 2) continue;
+          const pts = l.pontos.map(paraTela);
+          ctx.strokeStyle = l.cor;
+          ctx.lineWidth = 1.75;
+          ctx.setLineDash([...l.traco]);
+          ctx.beginPath();
+          ctx.moveTo(pts[0].x, pts[0].y);
+          for (const t of pts.slice(1)) ctx.lineTo(t.x, t.y);
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        for (const m of feicoesDoLevantamento.marcas) {
+          const q = paraTela(m);
+          ctx.strokeStyle = m.cor;
+          ctx.fillStyle = m.cor;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          if (m.simbolo === 'CIRCULO') ctx.arc(q.x, q.y, 4.5, 0, Math.PI * 2);
+          else if (m.simbolo === 'QUADRADO') ctx.rect(q.x - 4, q.y - 4, 8, 8);
+          else if (m.simbolo === 'TRIANGULO') {
+            ctx.moveTo(q.x, q.y - 5);
+            ctx.lineTo(q.x + 5, q.y + 4);
+            ctx.lineTo(q.x - 5, q.y + 4);
+            ctx.closePath();
+          } else if (m.simbolo === 'ARVORE') {
+            ctx.arc(q.x, q.y, 7, 0, Math.PI * 2);
+            ctx.moveTo(q.x + 2, q.y);
+            ctx.arc(q.x, q.y, 2, 0, Math.PI * 2);
+          }
+          ctx.stroke();
         }
         ctx.restore();
       }
@@ -8269,6 +8327,7 @@ export default function BlueprintCanvas({
     mostrarPreenchimentoTerreno,
     curvasDeNivel,
     pontosCotados,
+    feicoesDoLevantamento,
     declividade,
     terraplenagem,
     hipsometria,

@@ -1,11 +1,26 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Georreferencia, Point } from '../utils/blueprintKernel';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { sha256, stableStringify, type Georreferencia, type Point } from '../utils/blueprintKernel';
 import type { BlueprintTopografiaRow } from '../types/blueprint';
 import {
   blueprintTopografiaService,
   type TopografiaInput,
 } from '../services/blueprintTopografiaService';
 import { baixarArtefatos } from '../services/blueprintExportService';
+import { blueprintLevantamentoService } from '../services/blueprintLevantamentoService';
+import {
+  contarFeicoes,
+  csvDoLevantamento,
+  duplicados as acharDuplicados,
+  fichaDaFeicao,
+  kmlDoLevantamento,
+  linhasDasFeicoes,
+  semDuplicadosDePosicao,
+  type ContagemDeFeicoes,
+  type Duplicado,
+  type IdDaFeicao,
+  type LinhaDeFeicao,
+  type PontoDeLevantamento,
+} from '../utils/blueprintFeicoes';
 import {
   ALGORITMO_TOPOGRAFIA,
   amostrarLevantamento,
@@ -88,15 +103,32 @@ export interface OrigemDosPontos {
   quantos: number;
 }
 
+export interface LevantamentoEmEdicao {
+  linhas: LinhaDeFeicao[];
+  contagem: ContagemDeFeicoes;
+  duplicados: Duplicado[];
+  /** Tira os repetidos por POSIÇÃO (o nome repetido é outro ponto; fica para a pessoa). */
+  removerDuplicados: () => void;
+  /** Acrescenta pontos gerados (pontuar/interpolar) ao fim da lista. */
+  acrescentarPontos: (pontos: PontoDeLevantamento[]) => void;
+  exportar: (formato: 'csv' | 'kml' | 'dxf') => void;
+  feicoesOcultas: ReadonlySet<IdDaFeicao>;
+  alternarFeicao: (id: IdDaFeicao) => void;
+  /** VAZIO = nada a gravar; INDISPONIVEL = sem a tabela (sem a migration), só em memória. */
+  estado: 'VAZIO' | 'SALVANDO' | 'SALVO' | 'INDISPONIVEL';
+  id: string | null;
+}
+
 export interface Topografia {
   fontes: readonly FonteDeElevacao[];
   fonteCodigo: CodigoDaFonte;
   setFonteCodigo: (c: CodigoDaFonte) => void;
   fonte: FonteDeElevacao;
 
-  pontosCotados: PontoCotado[];
+  /** A2: com nome, código e descrição quando o levantamento traz. */
+  pontosCotados: PontoDeLevantamento[];
   adicionarPonto: () => void;
-  alterarPonto: (indice: number, patch: Partial<PontoCotado>) => void;
+  alterarPonto: (indice: number, patch: Partial<PontoDeLevantamento>) => void;
   removerPonto: (indice: number) => void;
   /** Um ponto por vértice do lote, com cota zero para o usuário preencher. */
   usarVerticesDoLote: () => void;
@@ -106,7 +138,7 @@ export interface Topografia {
    * RF-014, checksum do insumo). `modo` acrescenta aos digitados ou substitui.
    */
   definirPontosCotados: (
-    pontos: PontoCotado[],
+    pontos: PontoDeLevantamento[],
     origem: OrigemDosPontos | null,
     modo: 'SUBSTITUIR' | 'ACRESCENTAR',
     /** Fase 15: as linhas de quebra e a TIN que vieram no mesmo arquivo. */
@@ -124,6 +156,12 @@ export interface Topografia {
   /** O que a importação precisa saber do desenho. */
   anelDoLote: Point[] | null;
   georreferencia: Georreferencia | null;
+  /**
+   * A2: o levantamento em edição — persistido em `blueprint_study_levantamento`
+   * (sobrevive a recarregar), as feições pelos códigos, duplicados e
+   * exportações. Opcional na interface só para os fixtures antigos.
+   */
+  levantamento?: LevantamentoEmEdicao;
 
   qualidade: QualidadeDaGrade;
   setQualidade: (q: QualidadeDaGrade) => void;
@@ -173,7 +211,13 @@ export function useBlueprintTopografia(
   georreferencia: Georreferencia | null,
 ): Topografia {
   const [fonteCodigo, setFonteCodigo] = useState<CodigoDaFonte>('PONTOS_COTADOS');
-  const [pontosCotados, setPontosCotados] = useState<PontoCotado[]>([]);
+  const [pontosCotados, setPontosCotados] = useState<PontoDeLevantamento[]>([]);
+  // A2: o levantamento em edição persistido; `revisao` sobe a cada mexida do usuário.
+  const [levantamentoId, setLevantamentoId] = useState<string | null>(null);
+  const [estadoLev, setEstadoLev] = useState<LevantamentoEmEdicao['estado']>('VAZIO');
+  const [revisao, setRevisao] = useState(0);
+  const [feicoesOcultas, setFeicoesOcultas] = useState<ReadonlySet<IdDaFeicao>>(new Set());
+  const marcar = useCallback(() => setRevisao((r) => r + 1), []);
   const [origemDosPontos, setOrigemDosPontos] = useState<OrigemDosPontos | null>(null);
   const [linhasDeQuebra, setLinhasDeQuebra] = useState<LinhaDeQuebra[]>([]);
   const [tinImportada, setTinImportada] = useState<TinImportada | null>(null);
@@ -215,6 +259,27 @@ export function useBlueprintTopografia(
           setLinhasDeQuebra(ultima.linhas_de_quebra ?? []);
           setTinImportada(ultima.tin_importada ?? null);
         }
+        // A2: o levantamento em edição, se houver, é o que a pessoa deixou na
+        // tela — vale mais que os insumos da última versão (pode ter mexido depois).
+        try {
+          const lev = await blueprintLevantamentoService.get(studyId);
+          if (!vivo) return;
+          if (lev) {
+            setLevantamentoId(lev.id);
+            if (lev.pontos.length > 0) {
+              setPontosCotados(lev.pontos);
+              setLinhasDeQuebra(lev.linhas_de_quebra ?? []);
+              setTinImportada(null);
+              setOrigemDosPontos(lev.origem ?? null);
+              setFonteCodigo('PONTOS_COTADOS');
+            }
+            setEstadoLev('SALVO');
+          }
+        } catch (e) {
+          if (!vivo) return;
+          setEstadoLev('INDISPONIVEL');
+          console.warn('[topografia] levantamento sem persistência:', e);
+        }
       } catch (e) {
         if (!vivo) return;
         setPersistencia(true);
@@ -246,16 +311,25 @@ export function useBlueprintTopografia(
   const adicionarPonto = useCallback(() => {
     setPontosCotados((ps) => [...ps, { x: 0, y: 0, cotaM: 0 }]);
     setTinImportada(null);
-  }, []);
+    marcar();
+  }, [marcar]);
 
   const definirPontosCotados = useCallback(
     (
-      pontos: PontoCotado[],
+      pontos: PontoDeLevantamento[],
       origem: OrigemDosPontos | null,
       modo: 'SUBSTITUIR' | 'ACRESCENTAR',
       extras: { linhasDeQuebra?: LinhaDeQuebra[]; tinImportada?: TinImportada | null } = {},
     ) => {
-      const limpos = pontos.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y), cotaM: p.cotaM }));
+      // A2: nome, código e descrição viajam junto (antes eram descartados aqui).
+      const limpos: PontoDeLevantamento[] = pontos.map((p) => ({
+        x: Math.round(p.x),
+        y: Math.round(p.y),
+        cotaM: p.cotaM,
+        ...(p.nome ? { nome: p.nome } : {}),
+        ...(p.codigo ? { codigo: p.codigo } : {}),
+        ...(p.descricao ? { descricao: p.descricao } : {}),
+      }));
       const linhas = (extras.linhasDeQuebra ?? []).map((l) => ({
         pontos: l.pontos.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y), cotaM: p.cotaM })),
       }));
@@ -272,19 +346,22 @@ export function useBlueprintTopografia(
       }
       setOrigemDosPontos(origem);
       setFonteCodigo('PONTOS_COTADOS');
+      marcar();
     },
-    [],
+    [marcar],
   );
 
-  const alterarPonto = useCallback((indice: number, patch: Partial<PontoCotado>) => {
+  const alterarPonto = useCallback((indice: number, patch: Partial<PontoDeLevantamento>) => {
     setPontosCotados((ps) => ps.map((p, i) => (i === indice ? { ...p, ...patch } : p)));
     setTinImportada(null);
-  }, []);
+    marcar();
+  }, [marcar]);
 
   const removerPonto = useCallback((indice: number) => {
     setPontosCotados((ps) => ps.filter((_, i) => i !== indice));
     setTinImportada(null);
-  }, []);
+    marcar();
+  }, [marcar]);
 
   const usarVerticesDoLote = useCallback(() => {
     if (!anel) return;
@@ -293,12 +370,47 @@ export function useBlueprintTopografia(
     setPontosCotados(anel.map((p) => ({ x: p.x, y: p.y, cotaM: 0 })));
     setLinhasDeQuebra([]);
     setTinImportada(null);
-  }, [anel]);
+    marcar();
+  }, [anel, marcar]);
 
   const limparQuebrasETin = useCallback(() => {
     setLinhasDeQuebra([]);
     setTinImportada(null);
-  }, []);
+    marcar();
+  }, [marcar]);
+
+  // ── A2: gravação do levantamento em edição ──────────────────────────────
+  // Refs para a gravação atrasada ler o estado MAIS NOVO, não o da mexida que a agendou.
+  const estadoParaGravar = useRef({ pontosCotados, linhasDeQuebra, origemDosPontos });
+  estadoParaGravar.current = { pontosCotados, linhasDeQuebra, origemDosPontos };
+  const levantamentoIndisponivel = persistenciaIndisponivel || estadoLev === 'INDISPONIVEL';
+  const salvarLevantamento = useCallback(async (): Promise<string | null> => {
+    if (levantamentoIndisponivel) return null;
+    const { pontosCotados: ps, linhasDeQuebra: ls, origemDosPontos: og } = estadoParaGravar.current;
+    try {
+      const row = await blueprintLevantamentoService.save(studyId, organizationId, {
+        pontos: ps,
+        linhas_de_quebra: ls,
+        hash_pontos: sha256(stableStringify(ps.map((p) => ({ x: p.x, y: p.y, cotaM: p.cotaM })))),
+        origem: og,
+      });
+      setLevantamentoId(row.id);
+      setEstadoLev('SALVO');
+      return row.id;
+    } catch (e) {
+      console.warn('[topografia] levantamento não gravou:', e);
+      setEstadoLev('INDISPONIVEL');
+      return null;
+    }
+  }, [levantamentoIndisponivel, studyId, organizationId]);
+  // Com respiro: a cota se digita dígito a dígito, e a importação chega de uma vez.
+  useEffect(() => {
+    if (revisao === 0 || levantamentoIndisponivel) return;
+    setEstadoLev('SALVANDO');
+    const t = setTimeout(() => void salvarLevantamento(), 800);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revisao]);
 
   const gerar = useCallback(async () => {
     setErro(null);
@@ -329,6 +441,11 @@ export function useBlueprintTopografia(
             })()
           : anel;
       let grade = planejarGrade(anel, espacamentoMm);
+      // A2: a versão guarda e "hasheia" só {x, y, cota} — nome, código e
+      // descrição ficam no levantamento, e as versões antigas continuam conferíveis.
+      const soCotas: PontoCotado[] = pontosCotados.map((p) => ({ x: p.x, y: p.y, cotaM: p.cotaM }));
+      // E a versão aponta o levantamento de onde saiu: grava o que estiver pendente antes.
+      const levantamentoDaVersao = fonte.tipo === 'LOCAL' && pontosCotados.length > 0 ? ((await salvarLevantamento()) ?? levantamentoId) : null;
 
       if (fonte.tipo === 'LOCAL') {
         if (pontosCotados.length < 3) {
@@ -423,9 +540,11 @@ export function useBlueprintTopografia(
         niveis_m: niveisM,
         curvas,
         estatisticas,
-        pontos_cotados: fonte.tipo === 'LOCAL' ? pontosCotados : [],
+        pontos_cotados: fonte.tipo === 'LOCAL' ? soCotas : [],
         linhas_de_quebra: fonte.tipo === 'LOCAL' ? linhasDeQuebra : [],
         tin_importada: fonte.tipo === 'LOCAL' ? tinImportada : null,
+        // Só quando existe: sem a migration a coluna não está lá, e o insert com ela falharia.
+        ...(levantamentoDaVersao ? { levantamento_id: levantamentoDaVersao } : {}),
         anel: anelDasCurvas,
         georreferencia,
         algoritmo_nome: ALGORITMO_TOPOGRAFIA.nome,
@@ -437,7 +556,7 @@ export function useBlueprintTopografia(
           georreferencia,
           espacamentoMm,
           equidistanciaM: equid,
-          pontosCotados: fonte.tipo === 'LOCAL' ? pontosCotados : [],
+          pontosCotados: fonte.tipo === 'LOCAL' ? soCotas : [],
           modoNiveis,
           niveisM,
           // `undefined` quando não há: a chave some do hash e as versões
@@ -491,6 +610,8 @@ export function useBlueprintTopografia(
     organizationId,
     versoes,
     persistenciaIndisponivel,
+    salvarLevantamento,
+    levantamentoId,
   ]);
 
   const apagarVersao = useCallback(
@@ -577,6 +698,68 @@ export function useBlueprintTopografia(
     [selecionada, nomeDoEstudo],
   );
 
+  // ── A2: o que o painel e o canvas usam do levantamento ────────────────────
+  const linhasDeFeicao = useMemo(() => linhasDasFeicoes(pontosCotados), [pontosCotados]);
+  const contagemDeFeicoes = useMemo(() => contarFeicoes(pontosCotados), [pontosCotados]);
+  const duplicadosDoLevantamento = useMemo(() => acharDuplicados(pontosCotados), [pontosCotados]);
+  const exportarLevantamento = useCallback(
+    (formato: 'csv' | 'kml' | 'dxf') => {
+      if (pontosCotados.length === 0) return;
+      if (formato === 'kml' && !georreferencia) return;
+      const titulo = `${nomeDoEstudo} - levantamento`;
+      const conteudo =
+        formato === 'csv'
+          ? csvDoLevantamento(pontosCotados)
+          : formato === 'kml'
+            ? kmlDoLevantamento(pontosCotados, georreferencia!, titulo)
+            : gerarDxfDaTopografia(
+                {
+                  curvas: [],
+                  pontosCotados: pontosCotados.map((p) => ({ x: p.x, y: p.y, cotaM: p.cotaM, nome: p.nome })),
+                  feicoes: linhasDeFeicao.map((l) => ({ camada: fichaDaFeicao(l.feicao).camadaDxf, pontos: l.pontos })),
+                },
+                anel ?? [],
+                { titulo, versao: 0, aviso: 'Levantamento em edicao - pontos como importados/digitados, sem superficie gerada.' },
+              );
+      const tipo = formato === 'csv' ? 'text/csv' : formato === 'kml' ? 'application/vnd.google-earth.kml+xml' : 'application/dxf';
+      baixarArtefatos([
+        { blob: new Blob([conteudo], { type: `${tipo};charset=utf-8` }), nome: `${titulo.replace(/[\\/:*?"<>|]+/g, '-')}.${formato}`, tipo: formato },
+      ]);
+    },
+    [pontosCotados, georreferencia, nomeDoEstudo, linhasDeFeicao, anel],
+  );
+  const levantamento = useMemo<LevantamentoEmEdicao>(
+    () => ({
+      linhas: linhasDeFeicao,
+      contagem: contagemDeFeicoes,
+      duplicados: duplicadosDoLevantamento,
+      removerDuplicados: () => {
+        setPontosCotados((ps) => semDuplicadosDePosicao(ps));
+        setTinImportada(null);
+        marcar();
+      },
+      acrescentarPontos: (novos) => {
+        if (novos.length === 0) return;
+        setPontosCotados((ps) => [...ps, ...novos]);
+        setTinImportada(null);
+        setFonteCodigo('PONTOS_COTADOS');
+        marcar();
+      },
+      exportar: exportarLevantamento,
+      feicoesOcultas,
+      alternarFeicao: (id) =>
+        setFeicoesOcultas((s) => {
+          const n = new Set(s);
+          if (n.has(id)) n.delete(id);
+          else n.add(id);
+          return n;
+        }),
+      estado: levantamentoIndisponivel ? 'INDISPONIVEL' : estadoLev,
+      id: levantamentoId,
+    }),
+    [linhasDeFeicao, contagemDeFeicoes, duplicadosDoLevantamento, exportarLevantamento, feicoesOcultas, levantamentoIndisponivel, estadoLev, levantamentoId, marcar],
+  );
+
   return {
     fontes: FONTES,
     fonteCodigo,
@@ -594,6 +777,7 @@ export function useBlueprintTopografia(
     limparQuebrasETin,
     anelDoLote: anel,
     georreferencia,
+    levantamento,
     qualidade,
     setQualidade,
     equidistanciaM,

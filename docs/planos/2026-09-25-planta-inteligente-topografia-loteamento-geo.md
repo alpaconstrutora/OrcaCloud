@@ -402,3 +402,25 @@ Volume "de região selecionada" à mão (o `anel` de `volumeEntreSuperficies` j�
 ### Fora desta fase (declarado)
 
 KML dos pontos de locação (sai o CSV, que é o que a estação total lê; KML pede georreferência e entra com o SHP/KMZ de A3); seção tipo com abaulamento/sarjeta (plataforma plana); a via do loteamento como eixo e o LandXML de saída (C3).
+
+## Estado — A2 (26/09/2026)
+
+- [x] `utils/blueprintFeicoes.ts` (puro): `PontoDeLevantamento` ({x, y, cota} + nome, código, descrição); catálogo FECHADO de 12 feições (cerca, muro, meio-fio, edificação, estrada, curso d'água, talude, divisa como LINHA; poste, árvore, boca de lobo/PV, marco como PONTO) com aliases usuais, cor, traço, símbolo e camada DXF `LEV-*`; `lerCodigo` ("CE1", "cerca 2", "PO luz"); `linhasDasFeicoes` (com número junta mesmo intercalado; sem número, corrida consecutiva); `contarFeicoes` (e os códigos fora do catálogo, DITOS); `duplicados` por posição (≤ 1 cm, grade de espalhamento) e por nome; `pontuarPolilinha` (cota da superfície, onde não há cota o ponto não nasce); `interpolarSobreLinha` (adensar em rampa); `csvDoLevantamento` e `kmlDoLevantamento`.
+- [x] ⚠️ A LINHA DE QUEBRA continua sendo SÓ LQ/BL/BRK: uma cerca é feição, nunca breakline (teste).
+- [x] Importação: `descricao` nova no ponto; o campo D do PNEZD separa CÓDIGO (1º token, com o número colado se vier "BRK 3") e DESCRIÇÃO ("CE1 cerca de arame"); com cabeçalho, coluna de descrição própria é lida. O painel deixou de jogar fora nome/código/descrição ao aceitar a importação.
+- [x] Persistência: `blueprint_study_levantamento` (migration `aplicar_20270926000030`, aplicada e conferida de fora: grants só `authenticated`, policy `is_org_member`; UMA linha por estudo, mutável) com pontos, linhas de quebra, `hash_pontos` e origem; `blueprint_study_topografia.levantamento_id` (SET NULL). O hook grava com respiro de 800 ms a cada mexida, lê ao montar (o levantamento vence os insumos da última versão), e ao GERAR grava o pendente e aponta a versão para ele. A versão continua guardando e "hasheando" só {x, y, cota}: o mesmo conjunto com e sem nomes dá o MESMO `hash_entrada` (teste).
+- [x] Tela: lista com o NOME no lugar do número (vazio mostra o número), borda na cor da feição, código/feição/descrição no title; acima de 20 pontos um filtro, e a lista corta em 100 dizendo quantos faltam. Seção **Feições do levantamento**: por feição, pontos e linhas, mostrar/esconder na planta, **Adensar**; códigos fora do catálogo; duplicados (Remover repetidos por posição; nome repetido pede renomear, não apaga); **Pontuar a linha do perfil** (sobre a versão selecionada); exportar pontos CSV/KML/DXF (feições em camadas `LEV-*`, nome como texto); estado da gravação. Todo botão desligado diz por quê. Planta: linhas das feições na cor/traço do catálogo, marcas pontuais com símbolo, nome do ponto com zoom; toggle **Feições do levantamento** em Exibir.
+- [x] Testes: `blueprintFeicoes` (12 — inclui 500 pontos exportados e reimportados com os mesmos nomes/códigos/descrições/coordenadas, e cerca ≠ breakline), `useBlueprintTopografiaLevantamento` (3 — **500 pontos voltam depois de "recarregar"**, a versão leva `levantamento_id` e só {x,y,cota}, hash igual com e sem nomes), `PainelTopografiaFaseA2` (7); `PainelTopografiaFase9` atualizado (o nome agora viaja). Suíte cheia, tsc, `check-ui-standard`, `check-xss-sinks` e build verdes.
+
+### Prova no navegador (harness `docs/spikes/topografia/index.html?levantamento=1` + `medir-a2.mjs`, portão)
+
+21 verificações: controle sem a seção e com o número como placeholder; com o levantamento, 16 linhas com os nomes, title com código/feição/descrição, Cerca 4 pontos/1 linha, Muro 2/1, Poste 2, Árvore 1 (DOM = motor), XY fora do catálogo, o repetido a 3 mm acusado com o botão, KML desligado dizendo "Onde fica"; na planta, 492 px na cor da cerca (controle 0) e o muro desenhado.
+
+### Decisões
+
+- **Linhas das feições são DERIVADAS dos códigos**, não gravadas: o plano previa `linhas JSONB`; gravar o que se recalcula dos pontos criaria duas verdades. A tabela guarda as linhas de QUEBRA (que antes também se perdiam ao recarregar).
+- **A TIN importada (por índice) não é persistida no levantamento** — qualquer edição já a descartava; volta pela versão, como antes.
+
+### Fora desta fase (declarado)
+
+Feições vindas de POLILINHA de DXF por camada (hoje: só pelo código dos pontos); XLSX de pontos (sai CSV, que abre no Excel); UTM/lat-long como colunas do CSV (o KML leva a georreferência); caderno de códigos por organização (o catálogo é fixo).

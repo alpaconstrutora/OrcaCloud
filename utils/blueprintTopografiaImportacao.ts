@@ -71,6 +71,8 @@ export interface OpcoesDeImportacao {
 export interface PontoImportado extends PontoCotado {
   nome?: string;
   codigo?: string;
+  /** A2: o texto livre depois do código ("PO luz" → descrição "luz"), ou a coluna de descrição do cabeçalho. */
+  descricao?: string;
   /** Fase 15: índice da linha de quebra a que o ponto pertence (vértices na ordem do arquivo). */
   quebra?: number;
   /** P2.65: índice no anel do contorno (ver `Bruto.contorno`). */
@@ -457,6 +459,7 @@ interface Bruto {
   z: number;
   nome?: string;
   codigo?: string;
+  descricao?: string;
   /** Fase 15: a linha de quebra deste vértice (índice; ordem do arquivo dentro da linha). */
   quebra?: number;
   /**
@@ -537,6 +540,20 @@ const NOMES_E = /^(e|este|east|easting|x|lon|long|longitude)$/i;
 const NOMES_Z = /^(z|cota|cota_m|h|alt|altitude|elev|elevation|elevacao|elevação)$/i;
 const NOMES_ID = /^(p|pt|ponto|point|id|nome|name|n[ºo]|num|numero|número|est|estaca)$/i;
 const NOMES_COD = /^(d|desc|descricao|descrição|cod|codigo|código|code|obs)$/i;
+/** A2: coluna de DESCRIÇÃO separada do código (quando o arquivo tem as duas). */
+const NOMES_DESC = /^(desc|descricao|descrição|obs|observacao|observação|observacoes|observações)$/i;
+
+/**
+ * A2: o campo D do PNEZD costuma trazer código E descrição juntos ("CE1 cerca
+ * de arame", "PO luz"). O código é o primeiro token — com o número colado se
+ * vier separado ("BRK 3", "cerca 2"); o resto é descrição.
+ */
+function separarCodigo(campo: string | undefined): { codigo: string | undefined; descricao: string } {
+  const t = campo?.trim();
+  if (!t) return { codigo: campo, descricao: '' };
+  const m = t.match(/^(\S+(?:\s+\d+(?=\s|$))?)(?:\s+(.*))?$/);
+  return m ? { codigo: m[1], descricao: (m[2] ?? '').trim() } : { codigo: t, descricao: '' };
+}
 
 function detectarSeparador(linhas: string[]): string {
   const amostra = linhas.slice(0, 20);
@@ -564,7 +581,7 @@ function lerTexto(texto: string): { brutos: Bruto[]; separador: string; cabecalh
 
   let cabecalho = false;
   let ordemPeloCabecalho: 'NEZ' | 'ENZ' | null = null;
-  let colunas: { a: number; b: number; z: number; nome: number | null; codigo: number | null } | null = null;
+  let colunas: { a: number; b: number; z: number; nome: number | null; codigo: number | null; descricao: number | null } | null = null;
   let geo = false;
   if (linhas.length > 0) {
     const primeira = dividir(linhas[0]);
@@ -580,7 +597,8 @@ function lerTexto(texto: string): { brutos: Bruto[]; separador: string; cabecalh
       if (iN >= 0 && iE >= 0 && iZ >= 0) {
         geo = /lat/i.test(primeira[iN]) && /lon/i.test(primeira[iE]);
         // `a` recebe sempre a coluna N (ou lat), `b` a E (ou lon): ordem já resolvida.
-        colunas = { a: iN, b: iE, z: iZ, nome: iId >= 0 ? iId : null, codigo: iCod >= 0 ? iCod : null };
+        const iDesc = primeira.findIndex((c, k) => k !== iCod && NOMES_DESC.test(c.replace(/\s|\(.*\)/g, '')));
+        colunas = { a: iN, b: iE, z: iZ, nome: iId >= 0 ? iId : null, codigo: iCod >= 0 ? iCod : null, descricao: iDesc >= 0 ? iDesc : null };
         ordemPeloCabecalho = 'NEZ';
       }
     }
@@ -607,8 +625,12 @@ function lerTexto(texto: string): { brutos: Bruto[]; separador: string; cabecalh
         ignoradas++;
         continue;
       }
-      const codigo = colunas.codigo !== null ? c[colunas.codigo] : undefined;
-      brutos.push({ a, b, z, nome: colunas.nome !== null ? c[colunas.nome] : undefined, codigo, quebra: quebraDe(codigo) });
+      const bruto = colunas.codigo !== null ? c[colunas.codigo] : undefined;
+      // Com coluna de descrição própria, o código fica como veio; sem ela, separa.
+      const sep = colunas.descricao !== null ? { codigo: bruto, descricao: c[colunas.descricao] ?? '' } : separarCodigo(bruto);
+      const codigo = sep.codigo;
+      const descricao = sep.descricao.trim() || undefined;
+      brutos.push({ a, b, z, nome: colunas.nome !== null ? c[colunas.nome] : undefined, codigo, descricao, quebra: quebraDe(codigo) });
       continue;
     }
     // Sem cabeçalho: P? a b z D? — a primeira sequência de três números.
@@ -630,7 +652,10 @@ function lerTexto(texto: string): { brutos: Bruto[]; separador: string; cabecalh
     }
     const nome = inicio > 0 ? c[inicio - 1] : undefined;
     const resto = c.slice(inicio + 3).filter((x) => numeroFlexivel(x) === null);
-    brutos.push({ a: nums[inicio]!, b: nums[inicio + 1]!, z: nums[inicio + 2]!, nome, codigo: resto[0], quebra: quebraDe(resto[0]) });
+    // A2: no PNEZD o D é o código; o que vier depois dele é descrição livre.
+    const sep = separarCodigo(resto[0]);
+    const descricao = [sep.descricao, ...resto.slice(1)].join(' ').trim() || undefined;
+    brutos.push({ a: nums[inicio]!, b: nums[inicio + 1]!, z: nums[inicio + 2]!, nome, codigo: sep.codigo, descricao, quebra: quebraDe(sep.codigo) });
   }
   return { brutos, separador, cabecalho, ordemPeloCabecalho, ignoradas, geo };
 }
@@ -1454,13 +1479,14 @@ export function importarPontos(
     z: number;
     nome?: string;
     codigo?: string;
+    descricao?: string;
     quebra?: number;
     contorno?: number;
     soContorno?: boolean;
   }[] = brutos.map((b) =>
     ordem === 'ENZ'
-      ? { e: b.a, n: b.b, z: b.z, nome: b.nome, codigo: b.codigo, quebra: b.quebra, contorno: b.contorno, soContorno: b.soContorno }
-      : { e: b.b, n: b.a, z: b.z, nome: b.nome, codigo: b.codigo, quebra: b.quebra, contorno: b.contorno, soContorno: b.soContorno },
+      ? { e: b.a, n: b.b, z: b.z, nome: b.nome, codigo: b.codigo, descricao: b.descricao, quebra: b.quebra, contorno: b.contorno, soContorno: b.soContorno }
+      : { e: b.b, n: b.a, z: b.z, nome: b.nome, codigo: b.codigo, descricao: b.descricao, quebra: b.quebra, contorno: b.contorno, soContorno: b.soContorno },
   );
 
   let ancoragem: ResultadoDaImportacao['detectado']['ancoragem'] = 'DIRETO';
@@ -1471,7 +1497,7 @@ export function importarPontos(
     unidade = 'SVG';
     const escala = opcoes.escalaSvgMmPorUnidade && opcoes.escalaSvgMmPorUnidade > 0 ? opcoes.escalaSvgMmPorUnidade : 1000;
     // Y do SVG cresce para baixo: inverte pela altura da caixa.
-    pontos = pontosEN.map((p) => ({ x: p.e * escala, y: (alturaSvg - p.n) * escala, cotaM: p.z, nome: p.nome, codigo: p.codigo, quebra: p.quebra, contorno: p.contorno, soContorno: p.soContorno }));
+    pontos = pontosEN.map((p) => ({ x: p.e * escala, y: (alturaSvg - p.n) * escala, cotaM: p.z, nome: p.nome, codigo: p.codigo, descricao: p.descricao, quebra: p.quebra, contorno: p.contorno, soContorno: p.soContorno }));
     if (alturaSvg === 0) avisos.push('SVG sem viewBox/height: o Y foi invertido em torno de zero.');
   } else if (ordem === 'GEO') {
     unidade = 'GEO';
@@ -1480,7 +1506,7 @@ export function importarPontos(
     }
     const geo = ctx.georreferencia;
     ancoragem = 'GEORREFERENCIA';
-    pontos = pontosEN.map((p) => ({ ...geoParaLocal({ lat: p.n, lon: p.e }, geo), cotaM: p.z, nome: p.nome, codigo: p.codigo, quebra: p.quebra, contorno: p.contorno, soContorno: p.soContorno }));
+    pontos = pontosEN.map((p) => ({ ...geoParaLocal({ lat: p.n, lon: p.e }, geo), cotaM: p.z, nome: p.nome, codigo: p.codigo, descricao: p.descricao, quebra: p.quebra, contorno: p.contorno, soContorno: p.soContorno }));
   } else {
     const utm = unidadePedida === 'UTM' || (unidadePedida === 'AUTO' && pareceUtm(brutos).sim);
     if (utm) {
@@ -1496,7 +1522,7 @@ export function importarPontos(
       }
       const geo = ctx.georreferencia;
       ancoragem = 'GEORREFERENCIA';
-      pontos = pontosEN.map((p) => ({ ...geoParaLocal(utmParaLatLon(p.e, p.n, zona, hemi), geo), cotaM: p.z, nome: p.nome, codigo: p.codigo, quebra: p.quebra, contorno: p.contorno, soContorno: p.soContorno }));
+      pontos = pontosEN.map((p) => ({ ...geoParaLocal(utmParaLatLon(p.e, p.n, zona, hemi), geo), cotaM: p.z, nome: p.nome, codigo: p.codigo, descricao: p.descricao, quebra: p.quebra, contorno: p.contorno, soContorno: p.soContorno }));
     } else {
       const maior = Math.max(0, ...pontosEN.map((p) => Math.max(Math.abs(p.e), Math.abs(p.n))));
       // Coordenada local em metros raramente passa de alguns milhares (a
@@ -1505,7 +1531,7 @@ export function importarPontos(
       const emMm = unidadePedida === 'MM' || (unidadePedida === 'AUTO' && (unidadeDoDxf === 'MM' || (unidadeDoDxf === null && maior > 5000)));
       unidade = emMm ? 'MM' : 'M';
       const fator = emMm ? 1 : 1000;
-      pontos = pontosEN.map((p) => ({ x: p.e * fator, y: p.n * fator, cotaM: p.z, nome: p.nome, codigo: p.codigo, quebra: p.quebra, contorno: p.contorno, soContorno: p.soContorno }));
+      pontos = pontosEN.map((p) => ({ x: p.e * fator, y: p.n * fator, cotaM: p.z, nome: p.nome, codigo: p.codigo, descricao: p.descricao, quebra: p.quebra, contorno: p.contorno, soContorno: p.soContorno }));
     }
   }
 

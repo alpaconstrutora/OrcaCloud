@@ -229,7 +229,9 @@ function polilinhaAberta(camada: string, pontos: Ponto[]): string {
 /** As entidades da topografia: curvas, cotas nas mestras e pontos cotados. */
 export interface TopografiaParaDxf {
   curvas: { cotaM: number; mestra: boolean; fechada: boolean; pontos: Ponto[] }[];
-  pontosCotados: { x: number; y: number; cotaM: number }[];
+  pontosCotados: { x: number; y: number; cotaM: number; nome?: string }[];
+  /** A2: as linhas das feições do levantamento (cerca, muro, meio-fio…), cada uma na sua camada `LEV-*`. */
+  feicoes?: { camada: string; pontos: Ponto[] }[];
   /** Fase 8: linhas de drenagem (no sentido do escoamento) e muros de arrimo (a aresta e a normal para fora). */
   drenagem?: { nome: string; pontos: Ponto[] }[];
   muros?: { a: Ponto; b: Ponto; normal: Ponto }[];
@@ -277,7 +279,10 @@ function entidadesDaTopografia(t: TopografiaParaDxf): string {
     saida += linha(CAMADAS.TOPO_PONTO, { x: p.x - r, y: p.y }, { x: p.x + r, y: p.y });
     saida += linha(CAMADAS.TOPO_PONTO, { x: p.x, y: p.y - r }, { x: p.x, y: p.y + r });
     saida += texto(CAMADAS.TOPO_TEXTO, { x: p.x + r * 1.3, y: p.y + r * 1.3 }, p.cotaM.toFixed(2), 160);
+    // A2: o nome do ponto (o do caderno de campo) embaixo da cota.
+    if (p.nome) saida += texto(CAMADAS.TOPO_TEXTO, { x: p.x + r * 1.3, y: p.y - r * 1.3 - 160 }, p.nome, 120);
   }
+  for (const f of t.feicoes ?? []) saida += polilinhaAberta(f.camada, f.pontos);
   return saida;
 }
 
@@ -498,6 +503,8 @@ export function gerarDxfDaTopografia(
     CAMADAS.TOPO_DRENAGEM,
     CAMADAS.TOPO_MURO,
     CAMADAS.AMBIENTES,
+    // A2: uma camada por feição presente — quem abre no CAD liga e desliga cerca, muro, meio-fio.
+    ...new Set((t.feicoes ?? []).map((f) => f.camada)),
   ];
   let dxf =
     par(999, `${o.titulo} - curvas de nivel v${o.versao} - unidades: mm; cota em m`) +

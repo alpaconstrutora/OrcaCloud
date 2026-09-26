@@ -204,6 +204,22 @@ export interface BlueprintMaterialRow {
   updated_at: string;
 }
 
+/**
+ * O levantamento em edição (A2, migration `aplicar_20270926000030`): uma
+ * linha por estudo, mutável — os pontos com nome, código e descrição.
+ */
+export interface BlueprintLevantamentoRow {
+  id: string;
+  study_id: string;
+  organization_id: string;
+  pontos: { x: number; y: number; cotaM: number; nome?: string; codigo?: string; descricao?: string }[];
+  linhas_de_quebra: LinhaDeQuebra[];
+  hash_pontos: string | null;
+  origem: { arquivo: string; formato: string; sha256: string; quantos: number } | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface BlueprintTopografiaRow {
   id: string;
   study_id: string;
@@ -226,6 +242,8 @@ export interface BlueprintTopografiaRow {
   /** Fase 15 (migration `aplicar_20270921000015`): linhas de quebra honradas pela TIN e, se importada, as faces dela. */
   linhas_de_quebra: LinhaDeQuebra[];
   tin_importada: TinImportada | null;
+  /** A2: o levantamento em edição de onde a versão saiu. Opcional: versões antigas e fixtures não têm. */
+  levantamento_id?: string | null;
   anel: Point[];
   georreferencia: Georreferencia | null;
   algoritmo_nome: string;

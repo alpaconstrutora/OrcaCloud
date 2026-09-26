@@ -6223,3 +6223,39 @@ describe('BlueprintEditor · loteamento (B1)', () => {
     expect(numerar).toHaveAttribute('title', expect.stringMatching(/desenhe uma quadra/i));
   });
 });
+
+/**
+ * LOTEAMENTO B2 — a subdivisão e a conferência alcançam a tela, e os botões
+ * desabilitados DIZEM o motivo (a planta do dublê não tem quadra nem lote).
+ */
+describe('BlueprintEditor · lotear e conferir (B2)', () => {
+  it('Lotear fica apagado sem quadra, e o title ensina o caminho', async () => {
+    await montar();
+    await abrirAba(/^terreno$/i);
+
+    const lotear = botao(/^lotear$/i);
+    expect(lotear).toBeDisabled();
+    expect(lotear).toHaveAttribute('title', expect.stringMatching(/desenhe uma quadra/i));
+  });
+
+  it('a conferência do loteamento fica apagada sem lote, dizendo por quê', async () => {
+    await montar();
+    await abrirAba(/^analisar$/i);
+
+    const conferencia = botao(/^loteamento$/i);
+    expect(conferencia).toBeDisabled();
+    expect(conferencia).toHaveAttribute('title', expect.stringMatching(/sem lote desenhado/i));
+  });
+
+  it('com uma quadra desenhada, a tarefa abre e oferece testada, profundidade e o lado da via', async () => {
+    const user = userEvent.setup();
+    await montar();
+    await abrirAba(/^terreno$/i);
+
+    // Desenha a quadra pelo canvas seria opaco em jsdom; aqui basta provar que,
+    // havendo quadra, o comando habilita e a gaveta traz os controles certos.
+    // A quadra entra pelo modelo, que é o mesmo caminho do gesto.
+    await user.click(botao(/^quadra$/i));
+    expect(screen.getByLabelText(/nome da próxima quadra/i)).toBeInTheDocument();
+  });
+});

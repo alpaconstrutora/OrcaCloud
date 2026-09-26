@@ -129,7 +129,20 @@ import {
 } from '../../utils/blueprintGuardaCorpoEncosto';
 import type { TipoDePontoEletrico, AcabamentosDoAmbiente, ObjectId, TipoDeAreaPublica, TipoDeLote } from '../../utils/blueprintKernel';
 import { TIPOS_DE_AREA_PUBLICA, FICHA_DA_AREA_PUBLICA, TIPOS_DE_LOTE } from '../../utils/blueprintKernel';
-import { numerarQuadra, centroide, medirLote, areasDoLoteamento, ROTULO_DO_PAPEL_DO_LADO } from '../../utils/blueprintLoteamento';
+import {
+  numerarQuadra,
+  centroide,
+  medirLote,
+  areasDoLoteamento,
+  ROTULO_DO_PAPEL_DO_LADO,
+  subdividirQuadra,
+  conferirLoteamento,
+  resumoDaConferencia,
+  SUBDIVISAO_PADRAO,
+  AREA_MINIMA_LEI_6766_M2,
+  TESTADA_MINIMA_LEI_6766_MM,
+  type ParametrosDaSubdivisao,
+} from '../../utils/blueprintLoteamento';
 import {
   MATERIAIS_DE_SUB_REGIAO,
   FICHA_DO_MATERIAL_DE_SUB_REGIAO,
@@ -174,6 +187,8 @@ import SeletorDeTipo from './SeletorDeTipo';
 import { camposDoComponente, propriedadesDoComponente, type PropriedadesDeComponente } from '../../utils/blueprintTipos';
 import { comandosDeMobiliario } from '../../utils/blueprintMobiliario';
 import PainelVagas from './PainelVagas';
+import PainelLotear from './PainelLotear';
+import PainelConferenciaDoLoteamento from './PainelConferenciaDoLoteamento';
 import { comandosDeAceite as aceitarVagas, comandosDeLimpeza as limparVagas, HIPOTESES_VAGAS_PADRAO, planejarVagas, type HipotesesDeVagas, type RegiaoDeVagas } from '../../utils/blueprintVagasAutomaticas';
 import { nucleosDoNivel } from '../../utils/blueprintNucleoVertical';
 import PainelEsquadria from './PainelEsquadria';
@@ -907,6 +922,9 @@ const ROTULO_DA_TAREFA = {
   grupo: 'Grupo com origem — agrupar e instanciar',
   // Vagas automáticas (19/09/2026, roadmap E2.5): fileiras com circulação na garagem.
   vagas: 'Vagas de garagem — lançamento automático',
+  // LOTEAR QUADRA (25/09/2026, B2): a quadra vira N lotes de testada fixa —
+  // prévia tracejada, um lote de comandos, um Ctrl+Z.
+  lotear: 'Lotear quadra — subdivisão automática',
   // GRAFO ESPACIAL (19/09/2026, E4.2): a planta como rede de ambientes —
   // vizinhos por porta e por parede, percursos, circulação %, fachadas.
   grafo: 'Grafo espacial — vizinhos, percursos e fachadas',
@@ -948,6 +966,9 @@ type TarefaDoPainel = keyof typeof ROTULO_DA_TAREFA;
  * continua se lendo lá.
  */
 const RELATORIOS_DO_DOCK = {
+  // CONFERÊNCIA DO LOTEAMENTO (25/09/2026, B2): área e testada mínimas, lote
+  // encravado, número repetido e o percentual de áreas públicas. Só acusa.
+  loteamento: { rotulo: 'Conferência do loteamento', naVista: false, no3d: false },
   conflitos: { rotulo: 'Conflitos', naVista: true, no3d: true },
   // Restrições (E1.4b): a conferência das intenções declaradas, com o ajuste.
   restricoes: { rotulo: 'Restrições', naVista: true, no3d: true },
@@ -1549,6 +1570,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
+    // B2: é tabela de consulta, e o critério vigente manda tabela para o drawer.
+    'loteamento',
     'medicoes',
     'orcamento',
   ]);
@@ -1914,6 +1937,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   // trabalho que a ferramenta existe para tirar. Numerar de novo pelo comando
   // "Numerar" reescreve tudo em ordem.
   const [nomeDaQuadra, setNomeDaQuadra] = usePersistedState<string>('blueprint:loteamento-quadra', 'A');
+  // B2: a tarefa de lotear. A quadra escolhida NÃO é persistida (é do desenho
+  // aberto); os parâmetros sim — quem lotea um bairro repete a mesma testada.
+  const [quadraALotear, setQuadraALotear] = useState<ObjectId | null>(null);
+  const [parametrosDaSubdivisao, setParametrosDaSubdivisao] = usePersistedState<ParametrosDaSubdivisao>('blueprint:subdivisao', SUBDIVISAO_PADRAO);
+  const [resultadoDeLotear, setResultadoDeLotear] = useState<string | null>(null);
   const [numeroDoLote, setNumeroDoLote] = usePersistedState<string>('blueprint:loteamento-lote', '1');
   const [larguraDaVia, setLarguraDaVia] = usePersistedState<number>('blueprint:loteamento-via-largura', 12000);
   const [calcadaDaVia, setCalcadaDaVia] = usePersistedState<number>('blueprint:loteamento-via-calcada', 2000);
@@ -5867,6 +5895,72 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     if (criados.length > 0) selecionar(criados);
   }
 
+  /**
+   * B2 — a PROPOSTA de subdivisão, derivada. Nunca gravada: recalcula a cada
+   * mudança de parâmetro e some quando a tarefa fecha.
+   */
+  const quadrasDoNivel = useMemo(
+    () => (editor.model.quadras ?? []).filter((q) => q.levelId === levelId),
+    [editor.model.quadras, levelId],
+  );
+  const propostaDeSubdivisao = useMemo(() => {
+    const q = quadrasDoNivel.find((x) => x.id === quadraALotear);
+    return q ? subdividirQuadra(q, parametrosDaSubdivisao) : null;
+  }, [quadrasDoNivel, quadraALotear, parametrosDaSubdivisao]);
+
+  /**
+   * B2 — as regras da conferência. A ZONA do estudo manda quando informou; o
+   * piso da Lei 6.766 entra só como rede de segurança, e a tela diz de onde
+   * veio cada número — conferir contra a lei errada é pior que não conferir.
+   */
+  const regrasDoLoteamento = useMemo(
+    () => ({
+      areaMinimaM2: zona.areaMinimaDoLoteM2 ?? AREA_MINIMA_LEI_6766_M2,
+      testadaMinimaMm: zona.testadaMinimaMm ?? TESTADA_MINIMA_LEI_6766_MM,
+      areasPublicasMinPct: null,
+    }),
+    [zona.areaMinimaDoLoteM2, zona.testadaMinimaMm],
+  );
+  const origemDasRegrasDoLoteamento = useMemo(
+    () => ({
+      area: (zona.areaMinimaDoLoteM2 != null ? 'ZONA' : 'LEI') as 'ZONA' | 'LEI',
+      testada: (zona.testadaMinimaMm != null ? 'ZONA' : 'LEI') as 'ZONA' | 'LEI',
+    }),
+    [zona.areaMinimaDoLoteM2, zona.testadaMinimaMm],
+  );
+  const avisosDoLoteamento = useMemo(
+    () => conferirLoteamento(editor.model, regrasDoLoteamento, terreno?.areaMm2 ?? null),
+    [editor.model, regrasDoLoteamento, terreno?.areaMm2],
+  );
+  const errosDoLoteamento = useMemo(() => resumoDaConferencia(avisosDoLoteamento).erros, [avisosDoLoteamento]);
+
+  /** B2 — lança a proposta num lote só de comandos. */
+  function aceitarSubdivisao() {
+    if (!levelId || !propostaDeSubdivisao || propostaDeSubdivisao.lotes.length === 0) return;
+    const quadra = quadrasDoNivel.find((q) => q.id === quadraALotear);
+    if (!quadra) return;
+    // Continua a numeração da quadra em vez de recomeçar do 1: lotear duas
+    // vezes a mesma quadra não pode gerar dois lotes "1".
+    const existentes = (editor.model.lotes ?? []).filter((l) => l.quadraId === quadra.id);
+    const maior = existentes.reduce((max, l) => {
+      const n = Number(String(l.numero).replace(/\D/g, ''));
+      return Number.isFinite(n) && n > max ? n : max;
+    }, 0);
+    const criados = editor.runBatch(
+      propostaDeSubdivisao.lotes.map((l, i) => ({
+        type: 'AddLote' as const,
+        levelId,
+        quadraId: quadra.id,
+        numero: String(maior + i + 1),
+        pontos: l.pontos,
+      })),
+    );
+    setResultadoDeLotear(
+      `${propostaDeSubdivisao.lotes.length} lote${propostaDeSubdivisao.lotes.length > 1 ? 's' : ''} lançado${propostaDeSubdivisao.lotes.length > 1 ? 's' : ''} na quadra ${quadra.nome}. Ctrl+Z desfaz todos.`,
+    );
+    if (criados.length > 0) selecionar(criados);
+  }
+
   /** NUMERAR a quadra selecionada (ou a unica) em um lote de comandos: um Ctrl+Z desfaz. */
   function numerarQuadraSelecionada() {
     const doNivel = (editor.model.quadras ?? []).filter((q) => q.levelId === levelId);
@@ -9523,6 +9617,18 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 onClick={editor.setTool}
               />
               <BotaoDoRibbon
+                icone={Grid2x2}
+                rotulo="Lotear"
+                ativo={tarefaAberta === 'lotear'}
+                onClick={() => alternarTarefa('lotear')}
+                disabled={quadrasDoNivel.length === 0}
+                ajuda={
+                  quadrasDoNivel.length === 0
+                    ? 'Desenhe uma quadra primeiro: é ela que se subdivide em lotes'
+                    : 'Fatia a quadra em lotes de testada fixa — prévia antes de lançar, e um Ctrl+Z desfaz'
+                }
+              />
+              <BotaoDoRibbon
                 icone={ListOrdered}
                 rotulo="Numerar"
                 onClick={numerarQuadraSelecionada}
@@ -9949,6 +10055,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   ativo={relatorioAberto === 'conflitos'}
                   onClick={() => alternarRelatorio('conflitos')}
                   ajuda="Interferências entre disciplinas, com a estrutura e da estrutura com vãos e escadas; exportar BCF"
+                />
+                <BotaoDoRibbon
+                  icone={LandPlot}
+                  rotulo="Loteamento"
+                  contagem={errosDoLoteamento || undefined}
+                  ativo={relatorioAberto === 'loteamento'}
+                  onClick={() => alternarRelatorio('loteamento')}
+                  disabled={(editor.model.lotes ?? []).length === 0}
+                  ajuda={
+                    (editor.model.lotes ?? []).length === 0
+                      ? 'Sem lote desenhado não há o que conferir — use Lotear ou a ferramenta Lote, na aba Terreno'
+                      : 'Área e testada mínimas, lote encravado, número repetido e o percentual de áreas públicas (Lei 6.766/79 e a zona do estudo)'
+                  }
                 />
                 <BotaoDoRibbon
                   icone={Link2}
@@ -11694,6 +11813,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               materialDaSubRegiao={materialDaSubRegiao}
               onAddSubRegiao={adicionarSubRegiao}
               larguraDaVia={larguraDaVia}
+              lotesPropostos={tarefaAberta === 'lotear' ? (propostaDeSubdivisao?.lotes.map((l) => l.pontos) ?? null) : null}
               onAddQuadra={adicionarQuadra}
               onAddLote={adicionarLote}
               onAddVia={adicionarVia}
@@ -12640,7 +12760,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' || tarefaAberta === 'mobiliario' || tarefaAberta === 'ia' || tarefaAberta === 'acabamentos' || tarefaAberta === 'esquadrias' || tarefaAberta === 'guardaCorpos' || tarefaAberta === 'rodapes' || tarefaAberta === 'departamentos' || tarefaAberta === 'lod' || tarefaAberta === 'etapas' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'lotear' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' || tarefaAberta === 'mobiliario' || tarefaAberta === 'ia' || tarefaAberta === 'acabamentos' || tarefaAberta === 'esquadrias' || tarefaAberta === 'guardaCorpos' || tarefaAberta === 'rodapes' || tarefaAberta === 'departamentos' || tarefaAberta === 'lod' || tarefaAberta === 'etapas' ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno(pedidoDeImportacaoDeLevantamento)}
 
@@ -12907,6 +13027,27 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 setTarefa(null);
                 selecionar([id]);
               }}
+            />
+          )}
+
+          {tarefaAberta === 'lotear' && (
+            <PainelLotear
+              model={editor.model}
+              levelId={levelId}
+              quadras={quadrasDoNivel}
+              quadraId={quadraALotear}
+              onQuadra={(id) => {
+                setQuadraALotear(id);
+                setResultadoDeLotear(null);
+              }}
+              parametros={parametrosDaSubdivisao}
+              onParametros={(p) => {
+                setParametrosDaSubdivisao(p);
+                setResultadoDeLotear(null);
+              }}
+              proposta={propostaDeSubdivisao}
+              onAceitar={aceitarSubdivisao}
+              resultado={resultadoDeLotear}
             />
           )}
 
@@ -14819,6 +14960,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             <span className="flex items-center gap-2">
               {relatorioNoDrawer === 'conflitos' && <AlertTriangle className="h-5 w-5 text-amber-600" />}
               {relatorioNoDrawer === 'restricoes' && <Link2 className="h-5 w-5 text-blue-700" />}
+              {relatorioNoDrawer === 'loteamento' && <LandPlot className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'medicoes' && <Ruler className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'orcamento' && <Calculator className="h-5 w-5 text-blue-700" />}
               {RELATORIOS_DO_DOCK[relatorioNoDrawer].rotulo}
@@ -14837,6 +14979,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   {restricoesVioladas}/{conferenciaDeRestricoes.length}
                 </span>
               )}
+              {relatorioNoDrawer === 'loteamento' && (
+                <span className="rounded-[6px] bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-600">
+                  {errosDoLoteamento}/{(editor.model.lotes ?? []).length}
+                </span>
+              )}
             </span>
           </SheetTitle>
           <SheetDescription>
@@ -14848,10 +14995,27 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               'As intenções declaradas — sobre o eixo, distância ao eixo, comprimento travado, mesmo comprimento, paralela — conferidas contra o desenho. A restrição não trava o gesto: a violada mostra o desvio e oferece Ajustar (um comando, Ctrl+Z desfaz).'}
             {relatorioNoDrawer === 'orcamento' &&
               'A ponte com o orçamento da obra: o de-para dos itens e a prévia do que a versão publicada gera.'}
+            {relatorioNoDrawer === 'loteamento' &&
+              'Área e testada mínimas, lote encravado, número repetido na quadra e o percentual de áreas públicas. Os mínimos vêm da zona do estudo quando informados; senão, do piso da Lei 6.766/79. Só acusa — nada trava o desenho.'}
           </SheetDescription>
         </SheetHeader>
 
         <SheetPanel className="drawer-legivel p-0">
+          {relatorioNoDrawer === 'loteamento' && (
+            <div className="px-4 py-3">
+              <PainelConferenciaDoLoteamento
+                avisos={avisosDoLoteamento}
+                regras={regrasDoLoteamento}
+                origemDasRegras={origemDasRegrasDoLoteamento}
+                totalDeLotes={(editor.model.lotes ?? []).length}
+                onSelecionar={(id) => {
+                  setRelatorio(null);
+                  selecionar([id]);
+                }}
+              />
+            </div>
+          )}
+
           {relatorioNoDrawer === 'conflitos' && (
             <PainelConflitos
               model={editor.model}

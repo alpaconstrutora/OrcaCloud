@@ -237,3 +237,25 @@ Publicada em dois commits: `70ce531b` (kernel + motor) e `e69f9c75` (tela).
 ### Fora desta fase (declarado)
 
 Subdivisão automática e conferência da Lei 6.766 (B2), sync com o Empreendimento (B3), memorial e planta por lote (B4). Quadra/lote/via ainda não entram no DXF nem na prancha — entram na B4.
+
+---
+
+## Estado — B2 (25/09/2026)
+
+- [x] `utils/blueprintLoteamento.ts`: `subdividirQuadra` (fatias perpendiculares ao lado de frente escolhido, profundidade declarada ou até o fundo, segunda fileira só quando cabe inteira, sobra sempre DECLARADA), `conferirLoteamento` (área e testada mínimas, encravado, sem quadra, número repetido na quadra, percentual de áreas públicas), `resumoDaConferencia`, e os pisos `AREA_MINIMA_LEI_6766_M2` / `TESTADA_MINIMA_LEI_6766_MM`.
+- [x] Tarefa **Lotear quadra** (`components/blueprint/PainelLotear.tsx`), no grupo Loteamento da aba Terreno: escolhe quadra, lado da via, testada, profundidade e duas fileiras; prévia tracejada no canvas com a área de cada lote; lançar é um `runBatch` (um Ctrl+Z desfaz).
+- [x] Relatório **Conferência do loteamento** (`PainelConferenciaDoLoteamento.tsx`), em drawer pelo menu Conferência da aba Analisar, com a contagem de erros no botão e o clique levando ao lote no desenho.
+- [x] Testes: `blueprintLoteamentoB2.test.ts` (16) e `BlueprintEditor.test.tsx` (+3). Suíte cheia **470 arquivos / 5.435 testes** verde; tsc, `check-ui-standard`, `check-xss-sinks` e `build` verdes.
+- [x] Harness `?lotear=1` com a proposta medida no canvas real (portão verde).
+
+### Decisões desta fase
+
+- **A zona manda; a Lei 6.766 é rede de segurança.** Os mínimos vêm de `areaMinimaDoLoteM2`/`testadaMinimaMm` da zona quando informados; senão, dos 125 m² e 5 m do art. 4º, II. A tela diz de onde veio cada número — conferir contra a lei errada é pior que não conferir.
+- **O percentual de áreas públicas só REPROVA com mínimo informado.** A Lei 6.766 não fixa mais os 35% que se cita de cabeça desde a Lei 9.785/99; sem o número da lei municipal, a conferência informa o percentual e não reprova.
+- **A subdivisão não grava nada** até alguém aceitar, e **a sobra é declarada** — sobra silenciosa pareceria defeito.
+- **Lotear a mesma quadra duas vezes continua a numeração** em vez de recomeçar do 1, senão sairiam dois lotes "1".
+- A conferência **só acusa**: projeto em andamento passa por estados inválidos o tempo todo, e travar o desenho atrapalharia em vez de ajudar.
+
+### Achado desta fase
+
+A medição do harness voltou a nascer cega, pelo mesmo motivo da B1 em outra cor: o **preenchimento** da prévia (`#dbeafe` a 45% sobre branco) fica quase branco, e a grade do canvas também é azulada — o critério "azul claro" contou 206 mil pixels na tela SEM proposta nenhuma. O que discrimina é o **traço** da prévia (`#2563eb`), saturado e exclusivo dela.

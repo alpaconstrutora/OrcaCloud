@@ -427,3 +427,296 @@ export function rotuloDoLote(model: BlueprintModel, lote: Lote): string {
 export function areasPublicasDoTipo(model: BlueprintModel, tipo: TipoDeAreaPublica): AreaPublica[] {
   return (model.areasPublicas ?? []).filter((a) => a.tipo === tipo);
 }
+
+
+// ─── B2: SUBDIVISÃO AUTOMÁTICA E CONFERÊNCIA DA LEI 6.766/79 ────────────
+
+/**
+ * Os mínimos do art. 4º, II da Lei 6.766/79, que valem quando a lei municipal
+ * não disser outra coisa — e ela quase sempre diz. São PISO nacional: o
+ * município pode exigir mais, nunca menos.
+ */
+export const AREA_MINIMA_LEI_6766_M2 = 125;
+export const TESTADA_MINIMA_LEI_6766_MM = 5000;
+/**
+ * A faixa não edificável de 15 m de cada lado ao longo de águas correntes e
+ * dormentes, rodovias, ferrovias e dutos (art. 4º, III). Não é derivada do
+ * desenho: depende de existir uma `Boundary` de RESTRIÇÃO dizendo o que é.
+ */
+export const FAIXA_NAO_EDIFICAVEL_LEI_6766_MM = 15000;
+
+export interface ParametrosDaSubdivisao {
+  /** Testada de cada lote, em mm. É a medida que o loteador escolhe primeiro. */
+  testadaMm: number;
+  /** Profundidade, em mm. `null` = até o outro lado da quadra. */
+  profundidadeMm: number | null;
+  /**
+   * De que lado da quadra as frentes olham: o ÍNDICE da aresta da quadra que
+   * dá para a via. As fatias saem perpendiculares a ela.
+   */
+  frenteIndex: number;
+  /**
+   * Fatiar também o lado OPOSTO, de costas (a quadra dupla, com duas fileiras
+   * de lotes fundo com fundo). Só faz sentido com profundidade declarada.
+   */
+  duasFileiras: boolean;
+}
+
+export const SUBDIVISAO_PADRAO: ParametrosDaSubdivisao = {
+  testadaMm: 12000,
+  profundidadeMm: 30000,
+  frenteIndex: 0,
+  duasFileiras: false,
+};
+
+export interface LotePropostoDaSubdivisao {
+  pontos: Point[];
+  areaM2: number;
+  testadaM: number;
+  /** A fileira: 0 = de frente para a via escolhida; 1 = a de costas. */
+  fileira: number;
+}
+
+export interface PropostaDeSubdivisao {
+  lotes: LotePropostoDaSubdivisao[];
+  /** O que sobrou da quadra depois das fatias inteiras, em m². */
+  sobraM2: number;
+  /**
+   * Por que a proposta não cobre tudo, quando não cobre. Texto para a tela —
+   * uma sobra sem explicação parece defeito.
+   */
+  aviso: string | null;
+}
+
+/**
+ * SUBDIVIDIR a quadra em lotes de testada fixa.
+ *
+ * O caso que este motor resolve é o da quadra de lados retos — que é o que
+ * loteamento urbano tem. Ele fatia PERPENDICULARMENTE à aresta de frente
+ * escolhida, começando pelo vértice inicial dela, e recorta cada fatia contra
+ * a quadra. Não tenta ser um resolvedor geral: quadra com lado curvo ou muito
+ * irregular devolve o que couber e diz na `aviso` o que ficou de fora — sobra
+ * declarada é informação; sobra silenciosa é defeito.
+ *
+ * ⚠️ A proposta NÃO grava nada. Quem grava é o comando que a aceita, num
+ * lote só de comandos (um Ctrl+Z desfaz a quadra inteira).
+ */
+export function subdividirQuadra(quadra: Quadra, p: ParametrosDaSubdivisao): PropostaDeSubdivisao {
+  const anel = quadra.pontos;
+  const n = anel.length;
+  const vazia: PropostaDeSubdivisao = { lotes: [], sobraM2: areaEmM2(anel), aviso: null };
+  if (n < 3 || p.testadaMm <= 0) return { ...vazia, aviso: 'Quadra ou testada inválida.' };
+  const i = ((p.frenteIndex % n) + n) % n;
+
+  const a = anel[i];
+  const b = anel[(i + 1) % n];
+  const compFrente = Math.hypot(b.x - a.x, b.y - a.y);
+  if (compFrente < p.testadaMm) {
+    return { ...vazia, aviso: `A frente escolhida tem ${(compFrente / 1000).toFixed(2).replace('.', ',')} m — menos que a testada de ${(p.testadaMm / 1000).toFixed(2).replace('.', ',')} m.` };
+  }
+
+  // Direção ao longo da frente, e a normal apontando para DENTRO da quadra.
+  const ux = (b.x - a.x) / compFrente;
+  const uy = (b.y - a.y) / compFrente;
+  const fora = normalExterna(anel, i);
+  const nx = -fora.x;
+  const ny = -fora.y;
+
+  // Profundidade: a declarada, ou a maior que a quadra comporta a partir da frente.
+  const profundidadeDaQuadra = Math.max(
+    0,
+    ...anel.map((q) => (q.x - a.x) * nx + (q.y - a.y) * ny),
+  );
+  const prof = p.profundidadeMm != null && p.profundidadeMm > 0 ? Math.min(p.profundidadeMm, profundidadeDaQuadra) : profundidadeDaQuadra;
+  if (prof <= 0) return { ...vazia, aviso: 'A quadra não tem profundidade a partir dessa frente.' };
+
+  const quantos = Math.floor(compFrente / p.testadaMm);
+  const lotes: LotePropostoDaSubdivisao[] = [];
+  const fatiar = (deslocamento: number, fileira: number) => {
+    for (let k = 0; k < quantos; k += 1) {
+      const t0 = k * p.testadaMm;
+      const t1 = t0 + p.testadaMm;
+      const canto = (t: number, d: number): Point => ({
+        x: Math.round(a.x + ux * t + nx * d),
+        y: Math.round(a.y + uy * t + ny * d),
+      });
+      const pontos = [canto(t0, deslocamento), canto(t1, deslocamento), canto(t1, deslocamento + prof), canto(t0, deslocamento + prof)];
+      lotes.push({ pontos, areaM2: areaEmM2(pontos), testadaM: Math.round((p.testadaMm / 1000) * 100) / 100, fileira });
+    }
+  };
+  fatiar(0, 0);
+
+  // A segunda fileira nasce de COSTAS para a primeira, ocupando o resto da
+  // profundidade — e só quando ela cabe inteira. Meia fileira não é lote.
+  let usado = prof;
+  if (p.duasFileiras && profundidadeDaQuadra - prof >= prof) {
+    fatiar(prof, 1);
+    usado = prof * 2;
+  }
+
+  const sobraDaFrente = compFrente - quantos * p.testadaMm;
+  const areaDosLotes = lotes.reduce((s, l) => s + l.areaM2, 0);
+  const sobraM2 = Math.round((areaEmM2(anel) - areaDosLotes) * 100) / 100;
+
+  const partes: string[] = [];
+  if (sobraDaFrente >= 1) partes.push(`sobram ${(sobraDaFrente / 1000).toFixed(2).replace('.', ',')} m de testada no fim da fileira`);
+  if (profundidadeDaQuadra - usado >= 1000) partes.push(`${((profundidadeDaQuadra - usado) / 1000).toFixed(2).replace('.', ',')} m de profundidade não loteados`);
+
+  return {
+    lotes,
+    sobraM2,
+    aviso: partes.length > 0 ? `${partes.join(' e ')} — vire área pública, remanescente ou ajuste a testada.` : null,
+  };
+}
+
+export type GravidadeDoAviso = 'ERRO' | 'ATENCAO' | 'OK';
+
+export interface AvisoDoLoteamento {
+  /** A que se refere: `null` = o loteamento inteiro. */
+  loteId: string | null;
+  rotulo: string;
+  gravidade: GravidadeDoAviso;
+  texto: string;
+  /** A regra que o gerou, para a tela agrupar. */
+  regra: 'area_minima' | 'testada_minima' | 'encravado' | 'sem_quadra' | 'areas_publicas' | 'numero_repetido';
+}
+
+export interface RegrasDoLoteamento {
+  /** Da zona (`areaMinimaDoLoteM2`) ou o piso da Lei 6.766. */
+  areaMinimaM2: number;
+  /** Da zona (`testadaMinimaMm`) ou o piso da Lei 6.766. */
+  testadaMinimaMm: number;
+  /**
+   * Percentual mínimo de áreas públicas sobre a gleba. A Lei 6.766 NÃO fixa
+   * número desde a Lei 9.785/99 — quem fixa é a lei municipal. `null` =
+   * ninguém disse, e aí a conferência INFORMA o percentual sem reprovar.
+   */
+  areasPublicasMinPct: number | null;
+}
+
+export const REGRAS_PADRAO_DO_LOTEAMENTO: RegrasDoLoteamento = {
+  areaMinimaM2: AREA_MINIMA_LEI_6766_M2,
+  testadaMinimaMm: TESTADA_MINIMA_LEI_6766_MM,
+  areasPublicasMinPct: null,
+};
+
+/**
+ * CONFERIR o loteamento. Só acusa — nada trava, nada muda o desenho.
+ *
+ * ⚠️ O percentual de áreas públicas só REPROVA quando alguém informou o
+ * mínimo. Desde a Lei 9.785/99 a Lei 6.766 não traz mais os 35% que muita
+ * gente ainda cita de cabeça; exigir um número federal que não existe faria o
+ * sistema reprovar projeto correto.
+ */
+export function conferirLoteamento(
+  model: BlueprintModel,
+  regras: RegrasDoLoteamento,
+  areaDaGlebaMm2: number | null,
+): AvisoDoLoteamento[] {
+  const avisos: AvisoDoLoteamento[] = [];
+  const lotes = (model.lotes ?? []).filter((l) => l.tipo === 'LOTE');
+  const m2 = (v: number) => v.toFixed(2).replace('.', ',');
+
+  for (const lote of lotes) {
+    const rotulo = rotuloDoLote(model, lote);
+    const medida = medirLote(model, lote);
+    const areaM2 = medida.areaMm2 / 1e6;
+
+    if (areaM2 < regras.areaMinimaM2) {
+      avisos.push({
+        loteId: lote.id,
+        rotulo,
+        gravidade: 'ERRO',
+        regra: 'area_minima',
+        texto: `Área ${m2(areaM2)} m² < mínimo ${m2(regras.areaMinimaM2)} m².`,
+      });
+    }
+    if (medida.testadaMm < regras.testadaMinimaMm) {
+      avisos.push({
+        loteId: lote.id,
+        rotulo,
+        gravidade: 'ERRO',
+        regra: 'testada_minima',
+        texto: `Testada ${m2(medida.testadaMm / 1000)} m < mínima ${m2(regras.testadaMinimaMm / 1000)} m.`,
+      });
+    }
+    if (medida.encravado) {
+      avisos.push({
+        loteId: lote.id,
+        rotulo,
+        gravidade: 'ERRO',
+        regra: 'encravado',
+        texto: 'Nenhum lado dá para via — lote encravado.',
+      });
+    }
+    if (lote.quadraId == null && (model.quadras ?? []).length > 0) {
+      avisos.push({
+        loteId: lote.id,
+        rotulo,
+        gravidade: 'ATENCAO',
+        regra: 'sem_quadra',
+        texto: 'Fora de qualquer quadra — o memorial sai sem a quadra.',
+      });
+    }
+  }
+
+  // Número repetido DENTRO da mesma quadra. Entre quadras, repetir é o normal.
+  const porQuadra = new Map<string, Map<string, number>>();
+  for (const lote of lotes) {
+    const chave = lote.quadraId ?? 'sem-quadra';
+    const conta = porQuadra.get(chave) ?? new Map<string, number>();
+    conta.set(lote.numero, (conta.get(lote.numero) ?? 0) + 1);
+    porQuadra.set(chave, conta);
+  }
+  for (const [chave, conta] of porQuadra) {
+    const quadra = (model.quadras ?? []).find((q) => q.id === chave);
+    for (const [numero, vezes] of conta) {
+      if (vezes > 1) {
+        avisos.push({
+          loteId: null,
+          rotulo: quadra ? `Quadra ${quadra.nome}` : 'Lotes sem quadra',
+          gravidade: 'ERRO',
+          regra: 'numero_repetido',
+          texto: `${vezes} lotes com o número ${numero} — use "Numerar" ou renomeie.`,
+        });
+      }
+    }
+  }
+
+  // ÁREAS PÚBLICAS sobre a gleba.
+  if (areaDaGlebaMm2 != null && areaDaGlebaMm2 > 0) {
+    const glebaM2 = areaDaGlebaMm2 / 1e6;
+    const publicasM2 =
+      (model.areasPublicas ?? []).reduce((s, a) => s + areaEmM2(a.pontos), 0) +
+      (model.vias ?? []).reduce((s, v) => s + areaEmM2(faixaDaVia(v.eixo, v.larguraMm)), 0);
+    const pct = Math.round((publicasM2 / glebaM2) * 10000) / 100;
+    if (regras.areasPublicasMinPct == null) {
+      avisos.push({
+        loteId: null,
+        rotulo: 'Loteamento',
+        gravidade: 'OK',
+        regra: 'areas_publicas',
+        texto: `Áreas públicas (vias + verde + institucional): ${m2(pct)}% da gleba. A lei municipal é que fixa o mínimo — informe na zona para conferir.`,
+      });
+    } else {
+      const ok = pct >= regras.areasPublicasMinPct;
+      avisos.push({
+        loteId: null,
+        rotulo: 'Loteamento',
+        gravidade: ok ? 'OK' : 'ERRO',
+        regra: 'areas_publicas',
+        texto: `Áreas públicas ${m2(pct)}% ${ok ? '≥' : '<'} mínimo ${m2(regras.areasPublicasMinPct)}% da gleba.`,
+      });
+    }
+  }
+
+  return avisos;
+}
+
+/** Quantos erros e atencoes, para o botão do ribbon mostrar a contagem. */
+export function resumoDaConferencia(avisos: AvisoDoLoteamento[]): { erros: number; atencoes: number } {
+  return {
+    erros: avisos.filter((a) => a.gravidade === 'ERRO').length,
+    atencoes: avisos.filter((a) => a.gravidade === 'ATENCAO').length,
+  };
+}

@@ -66,7 +66,7 @@ async function contarCores(p) {
       verde: [187, 247, 208],
       branco: [255, 255, 255],
     };
-    const conta = { branco: 0, verde: 0, tracoEscuro: 0, total: width * height };
+    const conta = { branco: 0, verde: 0, azul: 0, tracoEscuro: 0, total: width * height };
     for (let i = 0; i < data.length; i += 4) {
       const [r, g, b, a] = [data[i], data[i + 1], data[i + 2], data[i + 3]];
       if (a < 32) continue;
@@ -75,6 +75,11 @@ async function contarCores(p) {
       // cor exata dava zero e parecia "não pintou". O que identifica o verde é a
       // RELAÇÃO entre os canais, não o valor nominal.
       if (g > r + 15 && g > b + 8 && g > 180) conta.verde += 1;
+      // ⚠️ O PREENCHIMENTO da prévia (#dbeafe a 45% sobre branco) vira ~(239,246,255)
+      // — quase branco, e a GRADE do canvas também é azulada: contar "azul claro"
+      // achou 206 mil px na tela sem proposta nenhuma. O que discrimina é o
+      // TRAÇO da prévia, #2563eb, que é saturado e não aparece em mais nada.
+      else if (Math.abs(r - 37) <= 40 && Math.abs(g - 99) <= 45 && b > 170 && b - r > 80) conta.azul += 1;
       // ⚠️ O miolo do lote é branco, e o FUNDO do canvas também (#ffffff): contar
       // branco mediria a tela vazia. Fica no relatório como referência, fora do
       // veredito — quem decide são o verde e o traço.
@@ -154,6 +159,10 @@ if (!dados) {
   exigir(Math.abs((verde?.areaM2 ?? 0) - 540) < 0.5, `área verde: ${verde?.areaM2} m² (18 × 30 = 540)`);
   // A via entra pela FAIXA (102 m × 12 m), não pelo comprimento do eixo.
   exigir(Math.abs(dados.areaDaViaM2 - 1224) < 1, `faixa da Rua 1: ${dados.areaDaViaM2} m² (102 × 12 = 1.224)`);
+
+  // B2 — a conferência da Lei 6.766 sobre um loteamento regular: nenhum erro.
+  exigir(dados.conferencia.erros === 0, `conferência: ${dados.conferencia.erros} erro(s), ${dados.conferencia.atencoes} atenção(ões)`);
+  exigir(dados.conferencia.regras.includes('areas_publicas'), 'a conferência informa o percentual de áreas públicas');
 }
 
 if (!comDesenho) {
@@ -164,7 +173,26 @@ if (!comDesenho) {
   exigir(comDesenho.tracoEscuro > 500, `os contornos de lote e quadra pintaram (${comDesenho.tracoEscuro} px)`);
 }
 
-// ── 2. O CONTROLE: sem loteamento, a mesma medição tem de dar ~zero ──────────
+// ── 2. B2: a PROPOSTA de subdivisão, tracejada sobre a quadra vazia ─────────
+await abrir(`${ALVO}?lotear=1`);
+const comProposta = await page.evaluate(() => window.__loteamento ?? null);
+const pixelsDaProposta = await contarCores(page);
+await page.screenshot({ path: path.join(saida, 'loteamento-proposta.png') });
+if (!comProposta?.proposta) {
+  exigir(false, 'a proposta de subdivisão não chegou ao harness');
+} else {
+  const p = comProposta.proposta;
+  exigir(p.lotes === 5, `proposta: ${p.lotes} lotes (60 m de frente ÷ 12 m)`);
+  exigir(p.areaM2 === 360, `cada lote proposto: ${p.areaM2} m²`);
+  exigir(p.sobraM2 === 0, `sem sobra (${p.sobraM2} m²)`);
+  exigir(p.aviso === null, `sem aviso a dar${p.aviso ? `: ${p.aviso}` : ''}`);
+  // A quadra está VAZIA neste modo: os lotes existem só como proposta.
+  exigir(comProposta.lotes === 0, `a proposta não grava (${comProposta.lotes} lotes no modelo)`);
+  linhas.push(`      proposta: azul ${pixelsDaProposta?.azul ?? 0} px`);
+  exigir((pixelsDaProposta?.azul ?? 0) > 500, `o tracejado da prévia pintou (${pixelsDaProposta?.azul ?? 0} px)`);
+}
+
+// ── 3. O CONTROLE: sem loteamento, a mesma medição tem de dar ~zero ──────────
 await abrir(`${ALVO}?vazio=1`);
 const semDesenho = await contarCores(page);
 await page.screenshot({ path: path.join(saida, 'loteamento-vazio.png') });
@@ -173,6 +201,7 @@ if (!semDesenho) {
 } else {
   linhas.push(`      controle: branco ${semDesenho.branco} · verde ${semDesenho.verde} · traço ${semDesenho.tracoEscuro}`);
   exigir(semDesenho.verde < 200, `sem loteamento não há verde (${semDesenho.verde} px)`);
+  exigir(semDesenho.azul < 100, `sem proposta não há tracejado de prévia (${semDesenho.azul} px)`);
   exigir(semDesenho.tracoEscuro < (comDesenho?.tracoEscuro ?? 0) / 4, `sem loteamento quase não há traço (${semDesenho.tracoEscuro} px)`);
 }
 

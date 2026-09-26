@@ -1302,6 +1302,12 @@ interface Props {
   /** LOTEAMENTO (B1): quadra, lote e area publica sao poligonos; a via e o EIXO. */
   /** Largura da caixa da via em curso, para a previa mostrar a faixa e nao so o eixo. */
   larguraDaVia?: number;
+  /**
+   * B2: os lotes PROPOSTOS pela subdivisão, tracejados. Aceitar às cegas seria
+   * pior que não propor — a prévia é o que torna a escolha de testada uma
+   * decisão e não um palpite.
+   */
+  lotesPropostos?: Point[][] | null;
   onAddQuadra?: (pontos: Point[]) => void;
   onAddLote?: (pontos: Point[]) => void;
   onAddAreaPublica?: (pontos: Point[]) => void;
@@ -1468,6 +1474,7 @@ export default function BlueprintCanvas({
   materialDaSubRegiao = 'GRAMA',
   onAddSubRegiao,
   larguraDaVia = 12000,
+  lotesPropostos = null,
   onAddQuadra,
   onAddLote,
   onAddAreaPublica,
@@ -4517,6 +4524,33 @@ export default function BlueprintCanvas({
           const t = paraTela(c);
           escreverRotulo(ctx, l.numero, t.x, t.y - 7, '#0f172a', Math.round(12 * fz));
           escreverRotulo(ctx, `${areaEmM2(l.pontos).toFixed(2).replace('.', ',')} m\u00b2`, t.x, t.y + 7, '#475569', Math.round(10 * fz));
+        }
+      }
+
+      // B2: a PROPOSTA de subdivisão, tracejada e com a área de cada lote.
+      if (lotesPropostos && lotesPropostos.length > 0) {
+        for (const anel of lotesPropostos) {
+          if (anel.length < 3) continue;
+          const pts = anel.map(paraTela);
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(pts[0].x, pts[0].y);
+          for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
+          ctx.closePath();
+          ctx.fillStyle = '#dbeafe';
+          ctx.globalAlpha = 0.45;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = COR_PREVIA;
+          ctx.setLineDash([8, 5]);
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          ctx.restore();
+          if (mostrarRotulos) {
+            const c = centroide(anel);
+            const t = paraTela(c);
+            escreverRotulo(ctx, `${areaEmM2(anel).toFixed(2).replace('.', ',')} m²`, t.x, t.y, '#1d4ed8', Math.round(10 * fz));
+          }
         }
       }
 

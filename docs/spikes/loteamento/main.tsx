@@ -23,10 +23,21 @@ import {
   type BlueprintModel,
   type Command,
 } from '../../../utils/blueprintKernel';
-import { areasDoLoteamento, medirLote, faixaDaVia } from '../../../utils/blueprintLoteamento';
+import {
+  areasDoLoteamento,
+  medirLote,
+  faixaDaVia,
+  subdividirQuadra,
+  conferirLoteamento,
+  resumoDaConferencia,
+  SUBDIVISAO_PADRAO,
+  REGRAS_PADRAO_DO_LOTEAMENTO,
+} from '../../../utils/blueprintLoteamento';
 
 const params = new URLSearchParams(location.search);
 const vazio = params.has('vazio');
+/** `?lotear=1` mostra a PROPOSTA de subdivisão (B2), tracejada, sem gravar nada. */
+const lotear = params.has('lotear');
 
 /**
  * Um loteamento pequeno e REAL: uma quadra de 60 × 30 m com cinco lotes de
@@ -93,6 +104,9 @@ function montar(): BlueprintModel {
   ]);
 
   const quadraId = comEstrutura.model.quadras[0].id;
+  // No modo `?lotear=1` a quadra fica vazia: o que se quer ver é a PROPOSTA
+  // tracejada por cima dela, que é o gesto que a B2 acrescenta.
+  if (lotear) return comEstrutura.model;
   const lotes: Command[] = [0, 1, 2, 3, 4].map((i) => ({
     type: 'AddLote' as const,
     levelId,
@@ -124,9 +138,18 @@ declare global {
       /** Medida do lote do meio: área, testada e confrontantes por papel. */
       loteDoMeio: { areaM2: number; testadaM: number; lados: { papel: string; confrontante: string | null }[] } | null;
       areas: { chave: string; quantidade: number; areaM2: number; percentual: number | null }[];
+      /** B2: a proposta de subdivisão (só no modo `?lotear=1`). */
+      proposta: { lotes: number; areaM2: number | null; sobraM2: number; aviso: string | null } | null;
+      /** B2: a conferência da Lei 6.766 sobre o que está desenhado. */
+      conferencia: { erros: number; atencoes: number; regras: string[] };
     };
   }
 }
+
+/** B2: a proposta (derivada, nunca gravada) e a conferência. */
+const propostaDaSubdivisao =
+  lotear && model.quadras[0] ? subdividirQuadra(model.quadras[0], { ...SUBDIVISAO_PADRAO, testadaMm: 12000, profundidadeMm: 30000 }) : null;
+const conferencia = conferirLoteamento(model, REGRAS_PADRAO_DO_LOTEAMENTO, 1800 * 1e6);
 
 const loteDoMeio = model.lotes[2] ?? null;
 const medida = loteDoMeio ? medirLote(model, loteDoMeio) : null;
@@ -151,6 +174,18 @@ window.__loteamento = {
     areaM2: l.areaM2,
     percentual: l.percentual,
   })),
+  proposta: propostaDaSubdivisao
+    ? {
+        lotes: propostaDaSubdivisao.lotes.length,
+        areaM2: propostaDaSubdivisao.lotes[0]?.areaM2 ?? null,
+        sobraM2: propostaDaSubdivisao.sobraM2,
+        aviso: propostaDaSubdivisao.aviso,
+      }
+    : null,
+  conferencia: {
+    ...resumoDaConferencia(conferencia),
+    regras: conferencia.map((a) => a.regra),
+  },
 };
 
 function areaDoAnel(anel: { x: number; y: number }[]): number {
@@ -173,6 +208,7 @@ function App() {
           levelId={levelId}
           selectedIds={[]}
           onSelecionar={() => {}}
+          lotesPropostos={propostaDaSubdivisao ? propostaDaSubdivisao.lotes.map((l) => l.pontos) : null}
         />
       </div>
     </ConfirmProvider>

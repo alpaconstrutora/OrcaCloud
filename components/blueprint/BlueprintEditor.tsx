@@ -129,7 +129,7 @@ import {
   MAX_ENCOSTO_MM,
 } from '../../utils/blueprintGuardaCorpoEncosto';
 import type { TipoDePontoEletrico, AcabamentosDoAmbiente, ObjectId, TipoDeAreaPublica, TipoDeLote } from '../../utils/blueprintKernel';
-import { TIPOS_DE_AREA_PUBLICA, FICHA_DA_AREA_PUBLICA, TIPOS_DE_LOTE } from '../../utils/blueprintKernel';
+import { TIPOS_DE_AREA_PUBLICA, TIPOS_DE_AREA_DO_LOTEAMENTO, TIPOS_AMBIENTAIS, FICHA_DA_AREA_PUBLICA, TIPOS_DE_LOTE } from '../../utils/blueprintKernel';
 import {
   numerarQuadra,
   centroide,
@@ -145,12 +145,19 @@ import {
   type ParametrosDaSubdivisao,
 } from '../../utils/blueprintLoteamento';
 import { blueprintEmpreendimentoSync } from '../../services/blueprintEmpreendimentoSync';
-import { montarDocumentosDoLoteamento, previaDosDocumentos } from '../../services/blueprintLoteamentoDocsService';
+import { montarDocumentosDoLoteamento, montarPdfDoLoteamento, previaDosDocumentos } from '../../services/blueprintLoteamentoDocsService';
 import { pendenciasDosMemoriais } from '../../utils/blueprintMemorialLote';
 import { roteiroPerimetrico, memorialConvencional } from '../../utils/blueprintRoteiroPerimetrico';
 import PainelRoteiroPerimetrico from './PainelRoteiroPerimetrico';
 import PainelViasEGreide from './PainelViasEGreide';
 import PainelSigef from './PainelSigef';
+import PainelCar from './PainelCar';
+import PainelReurb from './PainelReurb';
+import { useBlueprintReurb } from '../../hooks/useBlueprintReurb';
+import { zipDeTextos } from '../../services/blueprintReurbService';
+import { carDoImovel, camadasDoCar, kmlDoCar, csvDeCoordenadasDoCar, type BiomaDaReservaLegal } from '../../utils/blueprintCar';
+import { memoriaisReurb, listagemDeOcupantes } from '../../utils/blueprintReurb';
+import { zipDeShapefiles } from '../../utils/geo/shapefile';
 import { useBlueprintSigef } from '../../hooks/useBlueprintSigef';
 import { perimetroSigef, planilhaOdsSigef } from '../../utils/geo/sigef';
 import { crsPorCodigo } from '../../utils/geo/projecao';
@@ -996,6 +1003,11 @@ const RELATORIOS_DO_DOCK = {
   // GeoINCRA / SIGEF (26/09/2026, A4): identificação, vértices, trechos,
   // pendências pelas regras do INCRA, planilha ODS, memorial, cartas e retorno.
   sigef: { rotulo: 'GeoINCRA / SIGEF', naVista: false, no3d: false },
+  // CAR (26/09/2026, A5): quadro dos temas do SICAR, apoio à Reserva Legal e
+  // os arquivos por tema (SHP, KML, coordenadas).
+  car: { rotulo: 'CAR — Cadastro Ambiental Rural', naVista: false, no3d: false },
+  // REURB (26/09/2026, A5): núcleo, ocupantes por lote e as peças.
+  reurb: { rotulo: 'REURB — Regularização fundiária', naVista: false, no3d: false },
   conflitos: { rotulo: 'Conflitos', naVista: true, no3d: true },
   // Restrições (E1.4b): a conferência das intenções declaradas, com o ajuste.
   restricoes: { rotulo: 'Restrições', naVista: true, no3d: true },
@@ -1601,6 +1613,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     'vias',
     // A4: formulário + tabelas + peças — gaveta.
     'sigef',
+    // A5: idem — quadro, formulário e peças.
+    'car',
+    'reurb',
     // B2: é tabela de consulta, e o critério vigente manda tabela para o drawer.
     'loteamento',
     // A1: idem.
@@ -4065,6 +4080,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const vias = useBlueprintVias(study.id, study.organization_id);
   // A4: a identificação SIGEF do imóvel (o resto — vértices e trechos — é kernel).
   const sigef = useBlueprintSigef(study.id, study.organization_id);
+  // A5: CAR derivado do desenho; REURB com os ocupantes do Empreendimento.
+  const car = useMemo(() => carDoImovel(editor.model), [editor.model]);
+  const [biomaDoCar, setBiomaDoCar] = usePersistedState<BiomaDaReservaLegal>(`blueprint:carBioma:${study.id}`, 'DEMAIS_REGIOES');
+  const reurb = useBlueprintReurb(study.id, study.name || 'Núcleo urbano informal', relatorioAberto === 'reurb');
   // C3: as Vias desenhadas no loteamento e as vias de projeto resolvidas contra
   // elas — a ligada acompanha o eixo, o nome e a caixa do DESENHO.
   const viasDoLoteamento = useMemo<ViaDoLoteamento[]>(
@@ -9888,6 +9907,20 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                     : 'GeoINCRA: códigos dos vértices no padrão do credenciado, tipo, sigmas e método; tipo de limite e confrontante por trecho; pendências pelas regras do INCRA; planilha ODS no modelo oficial, memorial, cartas de anuência e conferência do retorno'
                 }
               />
+              {/* A5: os temas ambientais do imóvel rural, para o SICAR. */}
+              <BotaoDoRibbon
+                icone={Trees}
+                rotulo="CAR"
+                contagem={car.poligonos.filter((p) => p.tema !== 'AREA_IMOVEL').length || undefined}
+                ativo={relatorioAberto === 'car'}
+                onClick={() => alternarRelatorio('car')}
+                disabled={roteiro.lados.length === 0}
+                ajuda={
+                  roteiro.lados.length === 0
+                    ? 'Feche o contorno do imóvel com a ferramenta Terreno: o CAR mede os temas contra ele'
+                    : 'Quadro de APP, Reserva Legal, vegetação nativa, área consolidada, servidão e hidrografia; apoio à Reserva Legal pelo bioma; Shapefile por tema, KML e coordenadas para o SICAR. Os temas se desenham com Área (tipo Ambiental)'
+                }
+              />
             </GrupoDoRibbon>
             {/* LOTEAMENTO (B1, 25/09/2026): o parcelamento do solo. Separado do grupo
                 Lote porque ali o assunto é UM imóvel (a gleba, a escritura, os
@@ -9943,6 +9976,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   (editor.model.quadras ?? []).filter((q) => q.levelId === levelId).length === 0
                     ? 'Desenhe uma quadra primeiro: a numeração corre no sentido horário dentro dela'
                     : 'Renumera os lotes da quadra selecionada no sentido horário, a partir do 1º vértice dela · um Ctrl+Z desfaz tudo'
+                }
+              />
+              {/* A5: regularização fundiária — os lotes com seus ocupantes. */}
+              <BotaoDoRibbon
+                icone={Users}
+                rotulo="REURB"
+                ativo={relatorioAberto === 'reurb'}
+                onClick={() => alternarRelatorio('reurb')}
+                disabled={(editor.model.lotes ?? []).length === 0}
+                ajuda={
+                  (editor.model.lotes ?? []).length === 0
+                    ? 'Desenhe os lotes do núcleo primeiro (Quadra, Lote — sobre a ortofoto, se houver)'
+                    : 'Regularização fundiária (Lei 13.465/2017): ocupantes por lote lidos do Empreendimento, memoriais REURB, listagem de ocupantes para cartório e prefeitura e as pranchas por lote'
                 }
               />
             </GrupoDoRibbon>
@@ -11358,11 +11404,21 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 aria-label="Tipo da próxima área pública"
                 className="rounded-md border border-slate-300 px-2 py-1 text-xs"
               >
-                {TIPOS_DE_AREA_PUBLICA.map((t) => (
-                  <option key={t} value={t}>
-                    {FICHA_DA_AREA_PUBLICA[t].rotulo}
-                  </option>
-                ))}
+                {/* A5: os temas do CAR na mesma ferramenta, em grupo próprio — não contam como área pública do loteamento. */}
+                <optgroup label="Loteamento">
+                  {TIPOS_DE_AREA_DO_LOTEAMENTO.map((t) => (
+                    <option key={t} value={t}>
+                      {FICHA_DA_AREA_PUBLICA[t].rotulo}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Ambiental (CAR)">
+                  {TIPOS_AMBIENTAIS.map((t) => (
+                    <option key={t} value={t}>
+                      {FICHA_DA_AREA_PUBLICA[t].rotulo}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
               <span className="text-slate-400">cliques nos vértices; volte ao 1º para fechar</span>
             </label>
@@ -15345,6 +15401,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {relatorioNoDrawer === 'loteamento' && <LandPlot className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'roteiro' && <ListOrdered className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'sigef' && <Landmark className="h-5 w-5 text-blue-700" />}
+              {relatorioNoDrawer === 'car' && <Trees className="h-5 w-5 text-blue-700" />}
+              {relatorioNoDrawer === 'reurb' && <Users className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'vias' && <Milestone className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'medicoes' && <Ruler className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'orcamento' && <Calculator className="h-5 w-5 text-blue-700" />}
@@ -15384,6 +15442,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               'Área e testada mínimas, lote encravado, número repetido na quadra e o percentual de áreas públicas. Os mínimos vêm da zona do estudo quando informados; senão, do piso da Lei 6.766/79. Só acusa — nada trava o desenho.'}
             {relatorioNoDrawer === 'sigef' &&
               'As peças do georreferenciamento do imóvel rural, no padrão do INCRA, para o credenciado revisar, validar e enviar. Vértices e trechos são do desenho (Ctrl+Z desfaz); a identificação do imóvel fica gravada no estudo.'}
+            {relatorioNoDrawer === 'car' &&
+              'Os temas ambientais do imóvel medidos contra o contorno dele, o apoio à Reserva Legal e os arquivos por tema para o módulo de cadastro do SICAR. Tudo derivado do desenho.'}
+            {relatorioNoDrawer === 'reurb' &&
+              'As peças da regularização fundiária do núcleo: um memorial por lote com os ocupantes, a listagem para cartório e prefeitura e as pranchas. Os ocupantes vêm do Empreendimento ligado; os dados do núcleo ficam neste navegador.'}
             {relatorioNoDrawer === 'roteiro' &&
               'A tabela que a matrícula e o SIGEF pedem: vértice a vértice, no sentido horário, com coordenadas, azimute, distância e confrontante. Tudo derivado do desenho — nada aqui se grava.'}
             {relatorioNoDrawer === 'vias' &&
@@ -15413,6 +15475,74 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   setAvisoConexaoT(`${anel.length} divisas lançadas a partir do memorial. Ctrl+Z desfaz todas.`);
                 }}
                 temLote={(editor.model.boundaries ?? []).some((b) => b.kind === 'TERRENO')}
+              />
+            </div>
+          )}
+
+          {relatorioNoDrawer === 'car' && (
+            <div className="px-4 py-3">
+              <PainelCar
+                car={car}
+                bioma={biomaDoCar}
+                onBioma={setBiomaDoCar}
+                onExportar={(formato) =>
+                  void (async () => {
+                    try {
+                      const base = (study.name || 'imovel').replace(/[\\/:*?"<>|]+/g, '-');
+                      if (formato === 'shp') {
+                        const zip = await zipDeShapefiles(camadasDoCar(car));
+                        baixarArtefatos([{ blob: new Blob([zip as BlobPart], { type: 'application/zip' }), nome: `${base} - CAR (shapefile).zip`, tipo: 'zip' }]);
+                      } else if (formato === 'kml') {
+                        baixarArtefatos([{ blob: new Blob([kmlDoCar(car, study.name || 'Imóvel')], { type: 'application/vnd.google-earth.kml+xml' }), nome: `${base} - CAR.kml`, tipo: 'kml' }]);
+                      } else {
+                        baixarArtefatos([{ blob: new Blob([csvDeCoordenadasDoCar(car)], { type: 'text/csv;charset=utf-8' }), nome: `${base} - CAR coordenadas.csv`, tipo: 'csv' }]);
+                      }
+                    } catch (e) {
+                      setAvisoConexaoT(e instanceof Error ? e.message : String(e));
+                    }
+                  })()
+                }
+              />
+            </div>
+          )}
+
+          {relatorioNoDrawer === 'reurb' && (
+            <div className="px-4 py-3">
+              <PainelReurb
+                model={editor.model}
+                dados={reurb.dados}
+                onDados={reurb.atualizarDados}
+                ocupantes={reurb.ocupantes}
+                onRecarregar={reurb.recarregar}
+                onMemoriais={() =>
+                  void (async () => {
+                    try {
+                      const ms = memoriaisReurb(editor.model, reurb.ocupantes.porLoteUid, reurb.dados);
+                      const zip = await zipDeTextos(ms.map((m) => ({ nome: `${m.titulo.replace(/[\\/:*?"<>|]+/g, '-')}.txt`, texto: m.texto })));
+                      const base = (reurb.dados.nome || 'REURB').replace(/[\\/:*?"<>|]+/g, '-');
+                      baixarArtefatos([{ blob: new Blob([zip as BlobPart], { type: 'application/zip' }), nome: `${base} - memoriais REURB.zip`, tipo: 'zip' }]);
+                    } catch (e) {
+                      setAvisoConexaoT(e instanceof Error ? e.message : String(e));
+                    }
+                  })()
+                }
+                onListagem={() =>
+                  void (async () => {
+                    try {
+                      const base = (reurb.dados.nome || 'REURB').replace(/[\\/:*?"<>|]+/g, '-');
+                      baixarArtefatos([artefatoDeTabelaXlsx(`${base} - ocupantes`, listagemDeOcupantes(editor.model, reurb.ocupantes.porLoteUid))]);
+                    } catch (e) {
+                      setAvisoConexaoT(e instanceof Error ? e.message : String(e));
+                    }
+                  })()
+                }
+                onPranchas={() => {
+                  try {
+                    baixarArtefatos(montarPdfDoLoteamento(editor.model, { dados: reurb.dados, areaDaGlebaMm2: terreno?.areaMm2 ?? null, umaFolhaPorLote: true }));
+                  } catch (e) {
+                    setAvisoConexaoT(e instanceof Error ? e.message : String(e));
+                  }
+                }}
               />
             </div>
           )}

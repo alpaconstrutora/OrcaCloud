@@ -22,6 +22,7 @@
  * o software redige a peça; quem assina, e responde, é o profissional.
  */
 import type { BlueprintModel, Lote, Quadra, AreaPublica, Georreferencia } from './blueprintKernel';
+import { ehAreaDoLoteamento, FICHA_DA_AREA_PUBLICA } from './blueprintKernel';
 import { localParaGeo } from './blueprintTopografia';
 import {
   azimute as azimuteEntre,
@@ -309,6 +310,10 @@ function rotuloDaDestinacao(area: AreaPublica): string {
       return 'sistema viário';
     case 'RESERVA':
       return 'reserva / faixa não edificável';
+    default:
+      // A5: os temas ambientais (CAR) não são áreas do loteamento — não chegam aqui
+      // pelo memorial do loteamento; se chegarem, dizem o que são.
+      return FICHA_DA_AREA_PUBLICA[area.tipo].rotulo.toLowerCase();
   }
 }
 
@@ -451,7 +456,8 @@ export function documentoDoLoteamento(model: BlueprintModel, areaDaGlebaMm2: num
     for (const m of memoriais) partes.push(m.texto, '');
   }
 
-  const publicas = model.areasPublicas ?? [];
+  // A5: só as do LOTEAMENTO — APP, Reserva Legal e afins são do CAR, não se transferem ao município.
+  const publicas = (model.areasPublicas ?? []).filter((a) => ehAreaDoLoteamento(a.tipo));
   if (publicas.length > 0) {
     partes.push('ÁREAS PÚBLICAS', '');
     for (const a of publicas) partes.push(memorialDeAreaPublica(a, dados), '');

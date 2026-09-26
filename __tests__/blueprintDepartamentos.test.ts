@@ -47,7 +47,7 @@ describe('P2.22 · departamento na etiqueta', () => {
     // Comprido demais é cortado no limite (40), não recusado.
     const m3 = applyCommand(m, { type: 'SetSpaceLabelProps', labelId: etiqueta(m, sala).id, departamento: 'x'.repeat(60) }).model;
     expect(etiqueta(m3, sala).departamento).toHaveLength(40);
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.60.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.61.0');
   });
 
   it('sugere pelo nome e pelo tipo, é idempotente, e o quadro soma área útil por setor com %', () => {

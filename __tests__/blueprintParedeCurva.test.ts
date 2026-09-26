@@ -99,7 +99,7 @@ describe('parede curva (P2.12)', () => {
     expect(areaM2).toBeLessThan(38.2);
 
     // Canônico: só as facetas levam `arco`; ida e volta idêntica.
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.60.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.61.0');
     const payload = parseCanonicalPayload(canonicalPayload(r.model));
     expect(payload.walls.filter((x) => x.arco)).toHaveLength(20);
     expect(payload.walls.filter((x) => !x.arco)).toHaveLength(3);

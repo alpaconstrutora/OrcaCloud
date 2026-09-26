@@ -88,7 +88,7 @@ describe('rodapé como elemento (P2.21)', () => {
     expect(lanc.entries.length).toBeGreaterThan(0);
     expect(lanc.entries.reduce((acc, l) => acc + l.quantity, 0)).toBeCloseTo(15.1, 2);
     // Canônico.
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.60.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.61.0');
     expect(parseCanonicalPayload(canonicalPayload(m)).rodapes).toBeUndefined();
     const payload = parseCanonicalPayload(canonicalPayload(r));
     expect(payload.rodapes).toHaveLength(6);

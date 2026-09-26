@@ -41,7 +41,7 @@ describe('vista dependente (P2.17)', () => {
 
   it('canônico: só quando há vista; ida e volta com o pavimento por índice; o conjunto de pranchas ganha uma AMPLIAÇÃO por vista na escala dela', () => {
     const { m, t0 } = casa();
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.60.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.61.0');
     expect(parseCanonicalPayload(canonicalPayload(m)).vistasDependentes).toBeUndefined();
     const r = applyBatch(m, [
       { type: 'AddVistaDependente', levelId: t0, nome: 'Ala esquerda', recorte: { minX: -500, minY: -500, maxX: 10500, maxY: 8500 }, denominador: 50 },

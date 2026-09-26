@@ -2146,8 +2146,22 @@ export interface Via {
   calcadaMm: number;
 }
 
-export const TIPOS_DE_AREA_PUBLICA = ['VERDE', 'INSTITUCIONAL', 'VIARIO', 'RESERVA'] as const;
+/**
+ * Os tipos da família "área": os quatro do LOTEAMENTO (B1) e, desde 0.61.0 (A5),
+ * os temas AMBIENTAIS do CAR/SICAR — APP, Reserva Legal, vegetação nativa, área
+ * consolidada, servidão administrativa e hidrografia. É a mesma geometria
+ * (polígono no terreno, com nome) e a mesma ferramenta; o que muda é a conta:
+ * os ambientais NÃO entram no percentual de áreas públicas do loteamento nem no
+ * memorial do loteamento (ver `ehAreaDoLoteamento`).
+ */
+export const TIPOS_DE_AREA_DO_LOTEAMENTO = ['VERDE', 'INSTITUCIONAL', 'VIARIO', 'RESERVA'] as const;
+export const TIPOS_AMBIENTAIS = ['APP', 'RESERVA_LEGAL', 'VEGETACAO_NATIVA', 'AREA_CONSOLIDADA', 'SERVIDAO', 'HIDROGRAFIA'] as const;
+export const TIPOS_DE_AREA_PUBLICA = [...TIPOS_DE_AREA_DO_LOTEAMENTO, ...TIPOS_AMBIENTAIS] as const;
 export type TipoDeAreaPublica = (typeof TIPOS_DE_AREA_PUBLICA)[number];
+export type TipoAmbiental = (typeof TIPOS_AMBIENTAIS)[number];
+export function ehAreaDoLoteamento(tipo: TipoDeAreaPublica): boolean {
+  return (TIPOS_DE_AREA_DO_LOTEAMENTO as readonly string[]).includes(tipo);
+}
 export interface FichaDaAreaPublica {
   rotulo: string;
   /** Cor de preenchimento na planta (`#rrggbb`). */
@@ -2158,6 +2172,12 @@ export const FICHA_DA_AREA_PUBLICA: Record<TipoDeAreaPublica, FichaDaAreaPublica
   INSTITUCIONAL: { rotulo: 'Área institucional', cor: '#bfdbfe' },
   VIARIO: { rotulo: 'Sistema viário', cor: '#e5e7eb' },
   RESERVA: { rotulo: 'Reserva / não edificável', cor: '#fde68a' },
+  APP: { rotulo: 'APP — preservação permanente', cor: '#86efac' },
+  RESERVA_LEGAL: { rotulo: 'Reserva Legal', cor: '#4ade80' },
+  VEGETACAO_NATIVA: { rotulo: 'Remanescente de vegetação nativa', cor: '#a3e635' },
+  AREA_CONSOLIDADA: { rotulo: 'Área rural consolidada', cor: '#fcd34d' },
+  SERVIDAO: { rotulo: 'Servidão administrativa', cor: '#cbd5e1' },
+  HIDROGRAFIA: { rotulo: "Hidrografia (curso ou corpo d'água)", cor: '#7dd3fc' },
 };
 
 export interface AreaPublica {

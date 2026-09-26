@@ -489,3 +489,24 @@ As regras vieram dos documentos do PRÓPRIO INCRA, baixados e lidos nesta fase (
 - A superfície exportada é a TIN da GRADE da versão (de onde as curvas saem), não a triangulação original dos pontos cotados — é a mesma superfície que a tela mostra.
 - Curva HORIZONTAL (arco) no eixo: o eixo é polilinha, sai como `<Line>`s.
 - Seções transversais (`<CrossSects>`) no LandXML: a nota de serviço em CSV cobre o campo.
+
+## Estado — A5 (26/09/2026)
+
+- [x] **Temas do CAR como tipos de área · bump 0.60.0 → 0.61.0**. `TIPOS_AMBIENTAIS` (APP, RESERVA_LEGAL, VEGETACAO_NATIVA, AREA_CONSOLIDADA, SERVIDAO, HIDROGRAFIA) somados aos quatro do loteamento em `TIPOS_DE_AREA_PUBLICA`, com ficha (rótulo e cor); `ehAreaDoLoteamento` separa os dois grupos. O plano dizia "sem bump", mas o tipo é validado pelo kernel — aceitar os novos exigiu o rito: goldens provados com a string antiga, recapturados com nota no cabeçalho, bundle da `planta-api` regenerado. Os temas ambientais **não** entram no % de áreas públicas do loteamento nem no memorial dele. Editor: o select de tipo ganhou `optgroup` Loteamento / Ambiental (CAR).
+- [x] **CAR** (`utils/blueprintCar.ts`, gaveta **CAR** em Terreno › Lote, depois do SIGEF): o contorno do imóvel (as divisas TERRENO) + os polígonos de cada tema, medidos no plano topográfico local (SGL) quando georreferenciado; avisos (sem contorno, sem georreferência, vértice de tema fora do imóvel); quadro por tema com área em ha, % do imóvel e perímetro; **apoio à Reserva Legal** pela localização (Amazônia floresta 80 %, cerrado 35 %, campos 20 %, demais 20 % — art. 12) com exigida × desenhada × saldo e as notas dos arts. 15 e 67; arquivos: **Shapefile por tema** em .zip (SIRGAS 2000 geográfico EPSG:4674, camadas com o nome do tema no SICAR, atributos TEMA/NOME/AREA_HA/PERIM_M, .cpg UTF-8), **KML** (pasta por tema, na cor) e **CSV de coordenadas** vértice a vértice. Arquivos desligados sem georreferência, com o motivo no title. O bioma fica no navegador, por estudo.
+- [x] **REURB** (`utils/blueprintReurb.ts`, `services/blueprintReurbService.ts`, gaveta **REURB** no grupo Loteamento): dados do núcleo (nome, modalidade REURB-S/REURB-E, município/UF, matrícula de origem, cartório, RT e registro) — ficam no navegador, por estudo; ocupantes por lote lidos do Empreendimento ligado (`empreendimentos.blueprint_study_id` → unidades com `blueprint_lote_uid` → `unit_occupancies` vigentes), com o aviso e o caminho quando o estudo não tem Empreendimento; pendências (núcleo sem nome/RT, lote sem ocupante, ocupante sem CPF/CNPJ, pendência do memorial do lote); peças: **memoriais REURB** (um .txt por lote num .zip: cabeçalho da Lei 13.465/2017, modalidade, matrícula, medidas, memorial do lote da B4 e os ocupantes com documento e vínculo), **listagem de ocupantes** em xlsx (quadra, lote, área, testada, ocupante, CPF/CNPJ, vínculo — uma linha por ocupante) e **pranchas** (planta geral + uma por lote + quadro, pelo PDF da B4).
+- [x] **Bug latente da B4 corrigido**: o PDF de Documentos do loteamento quebrava ao gerar — o carimbo lia `o.hash.slice` e `montarPdfDoLoteamento` nunca passava hash. Agora sai o hash do desenho atual e a revisão 0 quando não informados. Os testes da B4 não chamavam o PDF; o aceite da A5 (20 pranchas) é que achou.
+- [x] Testes: `blueprintCarReurb` (10 — aceites: gleba com APP e RL exporta 3 SHP com atributos em EPSG:4674; núcleo de 20 lotes gera 20 memoriais, a listagem e o PDF com ≥ 21 folhas; CAR fora do % e do memorial do loteamento), `blueprintReurbService` (3), `PainelCarReurb` (5), `BlueprintEditor` (tipos novos no select). Suíte cheia 497 arquivos / 5.714 verde; tsc, `check-ui-standard`, `check-xss-sinks`, build verdes.
+
+### Prova fora do vitest
+
+`docs/spikes/geo/conferir-car.py`: o .zip do CAR (a gleba de 80 ha do teste) lido pelo **pyshp**: 15 arquivos (.shp/.shx/.dbf/.prj/.cpg × 3 temas), `POLYGONZ`, campos TEMA/NOME/AREA_HA/PERIM_M, áreas 80 / 3 / 16 ha, longitudes −43,950…−43,940 e latitudes −19,900…−19,893 (Minas, no lugar), .prj geográfico SIRGAS 2000, texto com acento em UTF-8 correto.
+
+### Fora desta fase (declarado)
+
+- **Limite do kernel para imóvel rural grande**: coordenadas do kernel são mm inteiros em ±1.000.000 (±1 km da origem). Imóvel com mais de ~2 km de lado não cabe — o CAR de fazenda grande precisa de outra origem/escala no kernel (decisão futura, com bump).
+- Características da edificação por lote (área construída, uso, padrão — `empreendimento_unit_characteristics`) na listagem e no memorial REURB.
+- Importação/exportação da base de ocupantes por planilha: continua no Empreendimento (`occupancyImportService`); a gaveta lê e aponta o caminho.
+- Memoriais REURB em .txt (como os da B4), não em docx de template; dados do núcleo e bioma no navegador, não em tabela.
+- Envio ao SICAR e instauração da REURB: do responsável e do município.
+- Edge Function `planta-api`: bundle regenerado no repositório, não republicada.

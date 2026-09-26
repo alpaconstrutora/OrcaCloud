@@ -308,7 +308,14 @@
  * INCRA) e documentos do confrontante; nomeação `<credenciado>-<tipo>-<seq>`.
  * Campos omitidos do canônico quando ausentes — provado antes do bump.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.60.0';
+/**
+ * ─── 0.60.0 → 0.61.0 (26/09/2026) — OS TEMAS DO CAR ───────────────────────────
+ *
+ * A família "área" aceita os temas ambientais do SICAR (APP, Reserva Legal,
+ * vegetação nativa, área consolidada, servidão, hidrografia), que ficam fora das
+ * contas do loteamento (`ehAreaDoLoteamento`). Vocabulário novo, forma igual.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.61.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

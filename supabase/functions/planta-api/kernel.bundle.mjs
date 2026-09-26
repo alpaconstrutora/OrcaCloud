@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.60.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.61.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -598,6 +598,9 @@ function comprimentoDoGuardaCorpo(g) {
   for (let i = 1; i < g.pontos.length; i++) s2 += Math.hypot(g.pontos[i].x - g.pontos[i - 1].x, g.pontos[i].y - g.pontos[i - 1].y);
   return s2;
 }
+var TIPOS_DE_AREA_DO_LOTEAMENTO = ["VERDE", "INSTITUCIONAL", "VIARIO", "RESERVA"];
+var TIPOS_AMBIENTAIS = ["APP", "RESERVA_LEGAL", "VEGETACAO_NATIVA", "AREA_CONSOLIDADA", "SERVIDAO", "HIDROGRAFIA"];
+var TIPOS_DE_AREA_PUBLICA = [...TIPOS_DE_AREA_DO_LOTEAMENTO, ...TIPOS_AMBIENTAIS];
 var TIPOS_DE_PONTO_HIDRAULICO = [
   "TORNEIRA",
   "TORNEIRA_JARDIM",

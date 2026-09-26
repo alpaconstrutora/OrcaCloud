@@ -6204,10 +6204,10 @@ describe('BlueprintEditor · loteamento (B1)', () => {
     expect(passeio.getByRole('option', { name: '1,50 m' })).toBeInTheDocument();
     expect(passeio.getByRole('option', { name: 'sem passeio' })).toBeInTheDocument();
 
-    // ÁREA PÚBLICA: os quatro tipos.
+    // ÁREA PÚBLICA: os quatro tipos do loteamento e (A5) os seis temas ambientais do CAR.
     await user.click(botao(/^área pública$/i));
     const tipo = within(screen.getByLabelText(/tipo da próxima área pública/i));
-    for (const rotulo of [/área verde/i, /institucional/i, /sistema viário/i, /reserva/i]) {
+    for (const rotulo of [/área verde/i, /institucional/i, /sistema viário/i, /^reserva \/ não edificável$/i, /^APP/, /^reserva legal$/i, /vegetação nativa/i, /consolidada/i, /servidão/i, /hidrografia/i]) {
       expect(tipo.getByRole('option', { name: rotulo })).toBeInTheDocument();
     }
   });

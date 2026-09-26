@@ -13,6 +13,7 @@
 // mandar ao GED) é quem chama, como nas outras exportações.
 import jsPDF from 'jspdf';
 import type { BlueprintModel } from '../utils/blueprintKernel';
+import { snapshotHash } from '../utils/blueprintKernel';
 import { PAPEIS, orientar, MARGEM_MM, CARIMBO_MM, desenharCarimboDaFolha, type Desenhista, type EstiloTraco, type Enquadramento, type OpcoesExportacao, type Papel } from '../utils/blueprintExport';
 import { desenharLote, desenharLoteamento, desenharTabelasDoLoteamento } from '../utils/blueprintPranchaLoteamento';
 import { documentoDoLoteamento, csvDeLocacao, memoriaisDoLoteamento, type DadosDoLoteamento } from '../utils/blueprintMemorialLote';
@@ -61,6 +62,13 @@ export interface OpcoesDosDocumentos {
   /** Uma folha por lote. Em loteamento grande, isso são dezenas de páginas. */
   umaFolhaPorLote?: boolean;
   carimboDaOrg?: OpcoesExportacao['carimboDaOrg'];
+  /**
+   * O que o carimbo liga à versão: o hash do desenho e a revisão. Ausentes, sai
+   * o hash do desenho ATUAL (o que se imprime) e revisão 0 — antes da A5 o
+   * carimbo lia `o.hash.slice` sem ele e o PDF do loteamento quebrava ao gerar.
+   */
+  hash?: string;
+  revisao?: number;
 }
 
 function papelDe(o: OpcoesDosDocumentos): Papel {
@@ -100,6 +108,7 @@ export function montarPdfDoLoteamento(model: BlueprintModel, o: OpcoesDosDocumen
   const lotes = (model.lotes ?? []).filter((l) => l.tipo === 'LOTE');
   const papel = papelDe(o);
   const enq = areaUtil(papel);
+  const hashDoDesenho = snapshotHash(model);
 
   const folhas: { titulo: string; desenhar: (d: Desenhista) => void }[] = [];
   folhas.push({
@@ -136,6 +145,8 @@ export function montarPdfDoLoteamento(model: BlueprintModel, o: OpcoesDosDocumen
       cotas: false,
       titulo: folha.titulo,
       carimboDaOrg: o.carimboDaOrg,
+      hash: o.hash ?? hashDoDesenho,
+      revisao: o.revisao ?? 0,
       prancha: { numero: `L-${String(i + 1).padStart(2, '0')}`, total: folhas.length, titulo: folha.titulo },
     } as OpcoesExportacao, enq);
   });

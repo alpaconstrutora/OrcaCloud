@@ -24,6 +24,7 @@ import {
   intersecaoDeRetas,
   pointInPolygon,
   FICHA_DA_AREA_PUBLICA,
+  ehAreaDoLoteamento,
 } from './blueprintKernel';
 
 /** Um lado do lote, na ordem do anel. */
@@ -687,7 +688,8 @@ export function conferirLoteamento(
   if (areaDaGlebaMm2 != null && areaDaGlebaMm2 > 0) {
     const glebaM2 = areaDaGlebaMm2 / 1e6;
     const publicasM2 =
-      (model.areasPublicas ?? []).reduce((s, a) => s + areaEmM2(a.pontos), 0) +
+      // A5: só as do LOTEAMENTO — APP e Reserva Legal não são áreas públicas da Lei 6.766.
+      (model.areasPublicas ?? []).filter((a) => ehAreaDoLoteamento(a.tipo)).reduce((s, a) => s + areaEmM2(a.pontos), 0) +
       (model.vias ?? []).reduce((s, v) => s + areaEmM2(faixaDaVia(v.eixo, v.larguraMm)), 0);
     const pct = Math.round((publicasM2 / glebaM2) * 10000) / 100;
     if (regras.areasPublicasMinPct == null) {

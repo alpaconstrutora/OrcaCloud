@@ -194,6 +194,14 @@
  *   tem instalação, então nenhuma delas ganha chave — só a versão embutida no
  *   payload mudou.
  *
+ *   0.60.0 → 0.61.0 (26/09/2026): CAR (fase A5) — a família "área" ganhou os
+ *   temas ambientais do SICAR (APP, RESERVA_LEGAL, VEGETACAO_NATIVA,
+ *   AREA_CONSOLIDADA, SERVIDAO, HIDROGRAFIA). É só vocabulário novo: nenhum dos
+ *   seis casos tem área, e o canônico de uma área não mudou de forma. Mesma
+ *   prova, refeita ANTES de tocar num hash: com a string em 0.60.0 e os tipos no
+ *   lugar, 322 testes de kernel/goldens/loteamento passaram; só depois do bump
+ *   as seis falhas foram todas de hash.
+ *
  *   0.59.0 → 0.60.0 (26/09/2026): O QUE O SIGEF PEDE (fase A4) — o vértice
  *   ganhou `sigmaEMm`/`sigmaNMm`/`sigmaHMm`/`altitudeM`, a divisa ganhou
  *   `tipoDeLimite` (LA1…LN6 do INCRA) e os documentos do confrontante (CNS,
@@ -686,17 +694,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '04f73ec9b2fa3491f743e1c71326fe632ccd8b8781444a2ba194796a381b5443',
+    hash: 'bb672e370282e48fc17cbb9a374974d569c19a9671ad9d7c1c3d33775708a182',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '3f50b5de8e10aaa2d4411d4dc9bd96292e6ef537a1e11e9bb3577468dd4ad7de',
+    hash: 'e35f04951c66eafc25563a15061cbe5be491c4b4b0d2c4dd26f024fead1f24cb',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: 'a50901a64d64ebe6597f17983ceb8dd9983ed4eff1754d9fb7b443ebfdbc8cfc',
+    hash: '4a6cc9e920bbcb478869f51199b8141ad03b9ede2d8c6135fd3db68065404202',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -704,7 +712,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '55b99aa9e12634a198f67ec088c70ec08208b570eb77714aa27d1153c262d82c',
+    hash: '7d399e7f7e508ac7a659a240c40c44263e5bfec7813894f56a51c72eaf78dc58',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -714,7 +722,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '6f7b73a5dcedb3575e5c20f9810db46b7d699dc1464c112a09bacf275d73bceb',
+    hash: '01fdb9157c4ae4a6f378d2381a0bd053a9df2eb7b9053e95ef1a3efb929decca',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -725,7 +733,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: 'c1ebcc4d058a5257b8cee7dbb9a4f96b55b0d7d523cdc497265d7fbf738d7969',
+    hash: '663e751b4d305515cc78dd2d169aac9d88346e00a4103d97ce379285e7bc5caa',
   },
 };
 

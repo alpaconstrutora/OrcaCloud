@@ -70,7 +70,7 @@ describe('sub-regiões do terreno (P2.19)', () => {
     // Orçamento: a medida existe no escopo TERRENO.
     expect(MEDIDAS.find((x) => x.id === 'AREA_SUBREGIAO')).toMatchObject({ escopo: 'TERRENO', dimensao: 'M2' });
     // Canônico.
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.60.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.61.0');
     expect(parseCanonicalPayload(canonicalPayload(m)).subRegioes).toBeUndefined();
     const payload = parseCanonicalPayload(canonicalPayload(r));
     expect(payload.subRegioes).toHaveLength(3);

@@ -381,3 +381,24 @@ Cota linear manual como anotação (`COTA_LINEAR`) e a origem `terreno` no `docx
 ### Fora desta fase (declarado)
 
 Volume "de região selecionada" à mão (o `anel` de `volumeEntreSuperficies` já recorta pelo anel da versão); método das seções (vai com o eixo/estaqueamento do C2); reamostragem entre malhas diferentes — decisão: comparar só versões do mesmo lote, o erro é dito.
+
+## Estado — C2 (26/09/2026)
+
+- [x] `utils/blueprintVias.ts` (puro, sem bump): `estaquear` (estacas `k+f,ff` a cada passo, fracionária em cada vértice e no fim, sem duplicar a inteira que cai no vértice), `cotaDoGreide` (reta entre PIVs + parábola simétrica onde o PIV tem `curvaM`; fora do trecho é `null`, não extrapola), `rampasDoGreide`/`conferirGreide` (rampa > 12 % e curva que não cabe são DITAS), `greideDoTerreno` (partida: reta terreno→terreno), `secaoTransversal` (plataforma pista + calçadas na cota do greide, talude de cada lado até o terreno com o pé inserido EXATAMENTE na amostragem — senão o trapézio corta o triângulo), `volumesPorAreasMedias` (com empolamento/contração da premissa), `notaDeServico` simples/composta + CSV, `csvDoGreide`, `pontosDeLocacaoDaVia`/`csvDeLocacaoDaVia` (eixo, bordos, pés; PNEZD que `importarPontos` lê de volta — teste de ida e volta), `svgDoPerfilDaVia`, `svgDaSecao`.
+- [x] Convenções: offset positivo à DIREITA de quem caminha no eixo; projeto − terreno positivo = aterro; estaca 0 onde o traçado começa.
+- [x] Persistência: `blueprint_study_vias` (migration `aplicar_20270926000020`, aplicada em produção e conferida de fora: colunas, grants só `authenticated`, policy `is_org_member`). Grava-se eixo, passo, PIVs e seção tipo; `service`/`hook` (`useBlueprintVias`, gravação com respiro por via, degradação sem a migration).
+- [x] Tela: ferramenta **Eixo de projeto** (tool `eixo-via` — `eixo` já era a malha estrutural, e colidiu no primeiro tsc) no grupo Topografia da aba Terreno, mesmo gesto do perfil; ao terminar, a via nasce e a gaveta abre. Canvas desenha o eixo em âmbar com um traço por estaca e o número das inteiras. Gaveta **Vias e greide** (`PainelViasEGreide`): via/nome/passo, seção tipo, avisos do greide, perfil terreno × greide (SVG como `<img>` data-URL, sem sink), tabela de estacas com a cota do greide editável (vira PIV; PIV removível; curva vertical por PIV interno), seção transversal da estaca clicada, volumes por trecho e totais, nota simples/composta com CSV, CSV de greide e de locação.
+- [x] Testes: `blueprintVias` (17 — o caso de aceite: eixo reto de 200 m a 1 % sobre terreno plano dá 11 estacas e volumes iguais à fórmula fechada `A = h·w + h²·H`; curva vertical afasta `(g₂ − g₁)·L/8`; mudar uma cota recalcula; locação reimporta com as mesmas coordenadas), `PainelViasEGreide` (6), `BlueprintEditor` (+1). Suíte cheia verde; tsc, `check-ui-standard`, `check-xss-sinks`, build verdes.
+
+### Prova no navegador (harness `docs/spikes/topografia/index.html?vias=1` + `medir-c2.mjs`, portão)
+
+15 verificações contra a gaveta REAL sobre o terreno do harness: controle sem a gaveta; com a via, 7 estacas (0+0,00 … 5+3,00, 28 m a passo 5), greide de partida com as cotas do terreno nas pontas (100,36 → 102,83), PIV só nas pontas, nota com 7 linhas, volumes do DOM iguais aos do motor (corte 5,2 / aterro 42,8 m³), perfil e seção como imagem; foto da planta com o eixo e as estacas.
+
+### Dois achados
+
+1. **Na borda da grade a amostra é `null`** (o eixo de y = 0 a y = 30 m devolvia greide nulo e tabela vazia): o mesmo que `murosDeArrimo` já contornava. O harness passou a traçar de 1 m a 29 m; na tela real, um eixo que sai do lote mostra "sem dados" na estaca, não um número.
+2. **`dangerouslySetInnerHTML` para SVG gerado aqui** é recusado pelo `check-xss-sinks.sh` e sanitizar mutilaria o gráfico: o caminho já resolvido no painel do terreno é `<img src="data:image/svg+xml…">`.
+
+### Fora desta fase (declarado)
+
+KML dos pontos de locação (sai o CSV, que é o que a estação total lê; KML pede georreferência e entra com o SHP/KMZ de A3); seção tipo com abaulamento/sarjeta (plataforma plana); a via do loteamento como eixo e o LandXML de saída (C3).

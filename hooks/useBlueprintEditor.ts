@@ -90,6 +90,13 @@ export type BlueprintTool =
    */
   | 'drenagem'
   /**
+   * EIXO DE PROJETO de uma via (C2): polilinha com o mesmo gesto do perfil;
+   * vira uma via de projeto (estacas, greide, seções, nota de serviço) em
+   * `blueprint_study_vias` — dado de projeto geométrico, fora do kernel.
+   * (`'eixo'` já é o eixo da malha estrutural.)
+   */
+  | 'eixo-via'
+  /**
    * ESTRUTURA — pilar, viga, laje, estaca, bloco de coroamento, viga de
    * fundação.
    *

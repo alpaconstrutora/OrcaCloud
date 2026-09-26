@@ -57,6 +57,7 @@ import {
   FileDown,
   Activity,
   Waves,
+  Milestone,
   Grid2x2,
   Grid3x3,
   Hash,
@@ -148,6 +149,9 @@ import { montarDocumentosDoLoteamento, previaDosDocumentos } from '../../service
 import { pendenciasDosMemoriais } from '../../utils/blueprintMemorialLote';
 import { roteiroPerimetrico, memorialConvencional } from '../../utils/blueprintRoteiroPerimetrico';
 import PainelRoteiroPerimetrico from './PainelRoteiroPerimetrico';
+import PainelViasEGreide from './PainelViasEGreide';
+import { useBlueprintVias } from '../../hooks/useBlueprintVias';
+import { estaquear } from '../../utils/blueprintVias';
 import {
   MATERIAIS_DE_SUB_REGIAO,
   FICHA_DO_MATERIAL_DE_SUB_REGIAO,
@@ -979,6 +983,9 @@ const RELATORIOS_DO_DOCK = {
   // ROTEIRO PERIMÉTRICO (26/09/2026, A1): vértice a vértice, com coordenadas,
   // azimute verdadeiro, distância e confrontante; o memorial convencional.
   roteiro: { rotulo: 'Roteiro perimétrico', naVista: false, no3d: false },
+  // VIAS E GREIDE (26/09/2026, C2): eixo estaqueado, greide com PIVs, seções
+  // transversais, volumes por áreas médias e nota de serviço.
+  vias: { rotulo: 'Vias e greide', naVista: false, no3d: false },
   conflitos: { rotulo: 'Conflitos', naVista: true, no3d: true },
   // Restrições (E1.4b): a conferência das intenções declaradas, com o ajuste.
   restricoes: { rotulo: 'Restrições', naVista: true, no3d: true },
@@ -1580,6 +1587,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
+    // C2: tabelas de estacas, volumes e nota de serviço — consulta.
+    'vias',
     // B2: é tabela de consulta, e o critério vigente manda tabela para o drawer.
     'loteamento',
     // A1: idem.
@@ -4003,6 +4012,20 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   }, [chaveDaTopografia]);
 
   const terraplenagem = useBlueprintTerraplenagem(study.id, study.organization_id);
+  // C2: as vias de projeto (eixo, greide, seção tipo) — tabela lateral própria.
+  const vias = useBlueprintVias(study.id, study.organization_id);
+  const eixosNoCanvas = useMemo(
+    () => ({
+      linhas: vias.vias.map((v) => ({
+        id: v.id,
+        nome: v.nome,
+        pontos: v.eixo,
+        estacas: estaquear(v.eixo, v.passoM).map((s) => ({ x: s.x, y: s.y, nome: s.nome, azimuteDeg: s.azimuteDeg, inteira: s.nome.endsWith('+0,00') })),
+      })),
+      ativa: vias.ativaId,
+    }),
+    [vias.vias, vias.ativaId],
+  );
   // Fase 17: o projeto executivo com ART (responsável, sondagem, emissões).
   const executivo = useBlueprintProjetoExecutivo(study.id, study.organization_id);
 
@@ -9851,6 +9874,27 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 rotulo="Drenagem"
                 onClick={editor.setTool}
               />
+              {/* C2: o eixo de uma via de projeto e a gaveta com estacas, greide,
+                  seções, volumes e nota de serviço. */}
+              <Ferramenta
+                atual={editor.tool}
+                valor="eixo-via"
+                icone={Route}
+                rotulo="Eixo de projeto"
+                onClick={editor.setTool}
+              />
+              <BotaoDoRibbon
+                icone={Milestone}
+                rotulo="Vias e greide"
+                contagem={vias.vias.length || undefined}
+                ativo={relatorioAberto === 'vias'}
+                onClick={() => alternarRelatorio('vias')}
+                ajuda={
+                  vias.vias.length === 0
+                    ? 'Trace um eixo de projeto na planta primeiro — a via nasce dele, estaqueada a cada 20 m'
+                    : 'Estacas, greide com PIVs e curvas verticais, seção tipo, seções transversais, volumes por áreas médias e nota de serviço (CSV)'
+                }
+              />
             </GrupoDoRibbon>
           </>
         )}
@@ -11948,6 +11992,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onDrenagemTracada={(pontos) => {
                 const id = terraplenagem.adicionarDrenagem(pontos);
                 if (id) setDrenagemAtiva(id);
+                editor.setTool('selecionar');
+              }}
+              eixosDeVia={vias.vias.length > 0 ? eixosNoCanvas : null}
+              onEixoDeViaTracado={(pontos) => {
+                const id = vias.adicionar(pontos);
+                if (id) setRelatorio('vias');
                 editor.setTool('selecionar');
               }}
               hipsometria={
@@ -15166,6 +15216,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {relatorioNoDrawer === 'restricoes' && <Link2 className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'loteamento' && <LandPlot className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'roteiro' && <ListOrdered className="h-5 w-5 text-blue-700" />}
+              {relatorioNoDrawer === 'vias' && <Milestone className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'medicoes' && <Ruler className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'orcamento' && <Calculator className="h-5 w-5 text-blue-700" />}
               {RELATORIOS_DO_DOCK[relatorioNoDrawer].rotulo}
@@ -15204,6 +15255,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               'Área e testada mínimas, lote encravado, número repetido na quadra e o percentual de áreas públicas. Os mínimos vêm da zona do estudo quando informados; senão, do piso da Lei 6.766/79. Só acusa — nada trava o desenho.'}
             {relatorioNoDrawer === 'roteiro' &&
               'A tabela que a matrícula e o SIGEF pedem: vértice a vértice, no sentido horário, com coordenadas, azimute, distância e confrontante. Tudo derivado do desenho — nada aqui se grava.'}
+            {relatorioNoDrawer === 'vias' &&
+              'O projeto geométrico da via: eixo estaqueado, greide com PIVs e curvas verticais, seção tipo, seções transversais por estaca, volumes por áreas médias e a nota de serviço. Grava-se o eixo, o passo, os PIVs e a seção tipo; o resto é derivado contra a topografia exibida.'}
           </SheetDescription>
         </SheetHeader>
 
@@ -15229,6 +15282,29 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   setAvisoConexaoT(`${anel.length} divisas lançadas a partir do memorial. Ctrl+Z desfaz todas.`);
                 }}
                 temLote={(editor.model.boundaries ?? []).some((b) => b.kind === 'TERRENO')}
+              />
+            </div>
+          )}
+
+          {relatorioNoDrawer === 'vias' && (
+            <div className="px-4 py-3">
+              <PainelViasEGreide
+                vias={vias.vias}
+                ativaId={vias.ativaId}
+                onAtiva={vias.setAtiva}
+                onTracar={() => {
+                  setRelatorio(null);
+                  editor.setTool('eixo-via');
+                }}
+                onAlterar={vias.alterar}
+                onRemover={vias.remover}
+                cotaEmM={topografia.selecionada ? amostradorDaGrade(topografia.selecionada.grade) : null}
+                material={{ empolamentoPct: terraplenagem.parametros.empolamentoPct, contracaoPct: terraplenagem.parametros.contracaoPct }}
+                onBaixar={(nome, conteudo, tipo) =>
+                  baixarArtefatos([{ blob: new Blob([conteudo], { type: `${tipo};charset=utf-8` }), nome, tipo: nome.endsWith('.svg') ? 'svg' : 'csv' }])
+                }
+                nomeDoEstudo={study.name}
+                persistenciaIndisponivel={vias.persistenciaIndisponivel}
               />
             </div>
           )}

@@ -285,6 +285,8 @@ const COR_PERFIL = '#7c3aed';
 /** Drenagem: azul-água, com a que não atende ao caimento em vermelho; muro: grafite. */
 const COR_DRENAGEM = '#0284c7';
 const COR_DRENAGEM_FALHA = '#dc2626';
+/** Eixo de projeto de via (C2): âmbar escuro, com as estacas marcadas. */
+const COR_EIXO_DE_VIA = '#b45309';
 const COR_MURO = '#1f2937';
 /** Defaults ESTÁVEIS: um `[]` novo a cada render entraria nas deps do desenho. */
 const SEM_CURVAS: CurvaDeNivel[] = [];
@@ -1157,6 +1159,9 @@ interface Props {
   drenagem?: { linhas: LinhaDeDrenagem[]; ativa: string | null; atende: Record<string, boolean> } | null;
   /** A ferramenta Drenagem terminou uma polilinha (≥ 2 pontos), no sentido do escoamento. */
   onDrenagemTracada?: (pontos: Point[]) => void;
+  /** C2: os eixos de projeto das vias, com as estacas já calculadas (mm), e o ativo. */
+  eixosDeVia?: { linhas: { id: string; nome: string; pontos: Point[]; estacas: { x: number; y: number; nome: string; azimuteDeg: number; inteira: boolean }[] }[]; ativa: string | null } | null;
+  onEixoDeViaTracado?: (pontos: Point[]) => void;
   /** Mapa hipsométrico (fase 3): classe de cota por célula e a cor de cada classe. */
   hipsometria?: { grade: GradeDeElevacao; classeDaCelula: (number | null)[]; cores: string[] } | null;
   /**
@@ -1523,6 +1528,8 @@ export default function BlueprintCanvas({
   onPerfilTracado,
   drenagem = null,
   onDrenagemTracada,
+  eixosDeVia = null,
+  onEixoDeViaTracado,
   coresPorAmbiente = false,
   coresDosAmbientes,
   humanizada = false,
@@ -4874,6 +4881,48 @@ export default function BlueprintCanvas({
         ctx.restore();
       }
 
+      // EIXOS DE PROJETO das vias (C2): linha cheia em âmbar, um traço curto
+      // transversal por estaca (as inteiras mais longas, com o nome), e o nome
+      // da via no início. Não são entidades de kernel — apagam-se pela gaveta.
+      if (eixosDeVia && eixosDeVia.linhas.length > 0) {
+        ctx.save();
+        for (const via of eixosDeVia.linhas) {
+          if (via.pontos.length < 2) continue;
+          const ativa = via.id === eixosDeVia.ativa;
+          const pts = via.pontos.map(paraTela);
+          ctx.strokeStyle = COR_EIXO_DE_VIA;
+          ctx.fillStyle = COR_EIXO_DE_VIA;
+          ctx.globalAlpha = ativa || eixosDeVia.ativa === null ? 1 : 0.55;
+          ctx.lineWidth = ativa ? 2.5 : 1.75;
+          ctx.setLineDash([]);
+          ctx.beginPath();
+          ctx.moveTo(pts[0].x, pts[0].y);
+          for (const t of pts.slice(1)) ctx.lineTo(t.x, t.y);
+          ctx.stroke();
+          ctx.font = `${Math.round(9 * fz)}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          for (const e of via.estacas) {
+            const t = paraTela({ x: e.x, y: e.y });
+            const az = (e.azimuteDeg * Math.PI) / 180;
+            // transversal em tela: o Y da tela cresce para baixo, então a direita do azimute é (cos, +sen)
+            const nx = Math.cos(az);
+            const ny = Math.sin(az);
+            const meio = e.inteira ? 6 : 3.5;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(t.x - nx * meio, t.y - ny * meio);
+            ctx.lineTo(t.x + nx * meio, t.y + ny * meio);
+            ctx.stroke();
+            if (e.inteira && vista.escala > 0.004) ctx.fillText(e.nome.replace('+0,00', ''), t.x + nx * (meio + 8), t.y + ny * (meio + 8) + 4);
+          }
+          ctx.font = `${ativa ? 'bold ' : ''}${Math.round(10 * fz)}px sans-serif`;
+          ctx.textAlign = 'left';
+          ctx.fillText(via.nome, pts[0].x + 6, pts[0].y - 4);
+        }
+        ctx.restore();
+      }
+
       // As linhas desenhadas do PERFIL (fases 4/5): tracejadas em roxo, um
       // ponto por vértice e o rótulo numerado no início; a ativa sai mais
       // grossa. Não são entidades de kernel — não se selecionam nem se movem;
@@ -7220,8 +7269,8 @@ export default function BlueprintCanvas({
     // PERFIL em curso: a polilinha inteira tracejada em roxo até o cursor, com a
     // cota do trecho. É desenhada inteira (e não só o lado em curso, como o
     // terreno) porque nada dela existe ainda no modelo — só nasce ao terminar.
-    if ((tool === 'perfil' || tool === 'drenagem') && inicio && cursor) {
-      const corDoGesto = tool === 'perfil' ? COR_PERFIL : COR_DRENAGEM;
+    if ((tool === 'perfil' || tool === 'drenagem' || tool === 'eixo-via') && inicio && cursor) {
+      const corDoGesto = tool === 'perfil' ? COR_PERFIL : tool === 'eixo-via' ? COR_EIXO_DE_VIA : COR_DRENAGEM;
       const emTela = [...cadeia, cursor].map(paraTela);
       ctx.strokeStyle = corDoGesto;
       ctx.lineWidth = 1.5;
@@ -8229,6 +8278,7 @@ export default function BlueprintCanvas({
     linhasDoPerfil,
     linhaDoPerfilAtiva,
     drenagem,
+    eixosDeVia,
     coresPorAmbiente,
     coresDosAmbientes,
     humanizada,
@@ -8739,7 +8789,7 @@ export default function BlueprintCanvas({
       return;
     }
 
-    if (tool === 'perfil' || tool === 'drenagem') {
+    if (tool === 'perfil' || tool === 'drenagem' || tool === 'eixo-via') {
       // Encaixa na grade e nas pontas como o resto; a trava ortogonal vale
       // porque perfil reto é o caso comum (uma seção da rua ao fundo).
       let alvo = capturar(paraMundo(px, py));
@@ -9451,7 +9501,7 @@ export default function BlueprintCanvas({
     // clicando no último vértice (ou com duplo clique, que cai aqui duas vezes:
     // o segundo clique cai em cima do primeiro e termina). A polilinha inteira
     // vai para o editor de uma vez — meio perfil não serve para nada.
-    if (tool === 'perfil' || tool === 'drenagem') {
+    if (tool === 'perfil' || tool === 'drenagem' || tool === 'eixo-via') {
       let ponto = capturar(mundo);
       if (!inicio) {
         setCadeia([ponto]);
@@ -9461,7 +9511,7 @@ export default function BlueprintCanvas({
       if (ortoAtivo(e)) ponto = travarOrtogonal(inicio, ponto);
       const noUltimo = Math.hypot(ponto.x - inicio.x, ponto.y - inicio.y) < HIT_PX / vista.escala;
       if (noUltimo) {
-        if (cadeia.length >= 2) (tool === 'perfil' ? onPerfilTracado : onDrenagemTracada)?.(cadeia);
+        if (cadeia.length >= 2) (tool === 'perfil' ? onPerfilTracado : tool === 'eixo-via' ? onEixoDeViaTracado : onDrenagemTracada)?.(cadeia);
         setCadeia([]);
         setTrechos([]);
         return;
@@ -9603,8 +9653,8 @@ export default function BlueprintCanvas({
     }
     // PERFIL termina no duplo clique com o que tem (o segundo clique do par já
     // terminou pelo `click` quando caiu no último vértice; se não caiu, é aqui).
-    if (tool === 'perfil' || tool === 'drenagem') {
-      if (cadeia.length >= 2) (tool === 'perfil' ? onPerfilTracado : onDrenagemTracada)?.(cadeia);
+    if (tool === 'perfil' || tool === 'drenagem' || tool === 'eixo-via') {
+      if (cadeia.length >= 2) (tool === 'perfil' ? onPerfilTracado : tool === 'eixo-via' ? onEixoDeViaTracado : onDrenagemTracada)?.(cadeia);
       setCadeia([]);
       setTrechos([]);
       return;
@@ -10030,6 +10080,10 @@ export default function BlueprintCanvas({
           ? inicio
             ? 'Clique para o próximo vértice, seguindo a água · clique no último vértice (ou duplo clique) termina no deságue · Esc cancela'
             : 'Clique onde a água ENTRA na canaleta — trace no sentido do escoamento, até o deságue'
+          : tool === 'eixo-via'
+          ? inicio
+            ? 'Clique para o próximo vértice do eixo · clique no último vértice (ou duplo clique) termina · Esc cancela'
+            : 'Clique onde a via COMEÇA (estaca 0) — o estaqueamento segue o sentido do traçado'
           : tool === 'juntar'
           ? pontasSoltas.length === 0
             ? 'Nenhuma ponta solta nesta planta — não há canto aberto para juntar'

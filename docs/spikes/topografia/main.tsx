@@ -21,6 +21,9 @@ import Blueprint3DViewer from '../../../components/blueprint/Blueprint3DViewer';
 import { _roots } from '@react-three/fiber';
 import PainelTerreno from '../../../components/blueprint/PainelTerreno';
 import PainelTopografia from '../../../components/blueprint/PainelTopografia';
+import PainelViasEGreide from '../../../components/blueprint/PainelViasEGreide';
+import type { ViaDeProjeto } from '../../../hooks/useBlueprintVias';
+import { estaquear, greideDoTerreno, secoesTransversais, volumesPorAreasMedias, SECAO_TIPO_PADRAO } from '../../../utils/blueprintVias';
 import { ConfirmProvider } from '../../../components/ui/confirm';
 import type { Topografia } from '../../../hooks/useBlueprintTopografia';
 import type { BlueprintTopografiaRow } from '../../../types/blueprint';
@@ -198,6 +201,8 @@ const cmc = busca.get('cmc') === '1';
 const intervalo = busca.get('intervalo') === '1';
 /** `?inclinado=1` (C1): platô a 2 % subindo para o norte e uma versão "antes" 0,3 m abaixo, para o volume entre versões. */
 const inclinado = busca.get('inclinado') === '1' || busca.get('inclinado') === '2';
+/** `?vias=1` (C2): uma via de projeto ao longo do lote (x = 6 m, de y = 1 m a y = 29 m — na borda da grade a amostra é null —, passo 5 m) com o greide de partida; a gaveta em cima do painel. */
+const comVias = busca.get('vias') === '1';
 /** `?inclinado=2`: 5 % TRANSVERSAL (ao longo de X) — é o que o corte FRENTE consegue mostrar inclinado. */
 const INCLINACAO: InclinacaoDoPlato | null = !inclinado
   ? null
@@ -206,6 +211,16 @@ const INCLINACAO: InclinacaoDoPlato | null = !inclinado
     : { declividadeLongPct: 2, declividadeTransvPct: 0, azimuteDeg: 0 };
 const { model, levelId } = modelo();
 const versao = versaoGerada();
+const VIA: ViaDeProjeto = {
+  id: 'via-1',
+  nome: 'Rua A',
+  viaUid: null,
+  eixo: [point(6000, 1000), point(6000, 29_000)],
+  passoM: 5,
+  greide: null,
+  secaoTipo: { ...SECAO_TIPO_PADRAO, pistaM: 5, calcadaM: 1.5 },
+  topografiaId: null,
+};
 const versaoAntes: BlueprintTopografiaRow = {
   ...versao,
   id: 'v0',
@@ -346,6 +361,21 @@ const chao3d = (x: number, z: number) => {
   return c === null ? null : c - COTA_ZERO;
 };
 // C1: os números que o script de medida compara com o DOM do painel.
+// C2: os números da via que o script de medida compara com a gaveta.
+{
+  const estacasDaVia = estaquear(VIA.eixo, VIA.passoM);
+  const greideDaVia = greideDoTerreno(estacasDaVia, amostradorDaGrade(versao.grade));
+  const secoesDaVia = greideDaVia ? secoesTransversais(estacasDaVia, amostradorDaGrade(versao.grade), VIA.secaoTipo, greideDaVia) : [];
+  const volumesDaVia = secoesDaVia.length > 1 ? volumesPorAreasMedias(secoesDaVia, { empolamentoPct: PARAMETROS.empolamentoPct, contracaoPct: PARAMETROS.contracaoPct }) : null;
+  (window as unknown as { __c2?: unknown }).__c2 = {
+    comVias,
+    estacas: estacasDaVia.map((e) => e.nome),
+    greide: greideDaVia,
+    corteM3: volumesDaVia?.corteM3 ?? null,
+    aterroM3: volumesDaVia?.aterroM3 ?? null,
+    diferencas: secoesDaVia.map((x) => x.diferencaM),
+  };
+}
 (window as unknown as { __c1?: unknown }).__c1 = {
   inclinado,
   corteM3: terraplenagem.corteM3,
@@ -428,6 +458,21 @@ function App() {
           mostrarMedidasParedes
           curvasDeNivel={versao.curvas}
           pontosCotados={PONTOS}
+          eixosDeVia={
+            comVias
+              ? {
+                  linhas: [
+                    {
+                      id: VIA.id,
+                      nome: VIA.nome,
+                      pontos: VIA.eixo,
+                      estacas: estaquear(VIA.eixo, VIA.passoM).map((e) => ({ x: e.x, y: e.y, nome: e.nome, azimuteDeg: e.azimuteDeg, inteira: e.nome.endsWith('+0,00') })),
+                    },
+                  ],
+                  ativa: VIA.id,
+                }
+              : null
+          }
           declividade={comDeclividade ? { grade: versao.grade, faixaDaCelula: declividade.faixaDaCelula } : null}
           terraplenagem={
             comPlato
@@ -494,6 +539,24 @@ function App() {
           georreferencia={null}
           onGeorreferencia={() => {}}
           topografiaSlot={
+            <>
+            {comVias && (
+              <div className="mb-4 rounded-md border border-slate-200 bg-white p-3">
+                <PainelViasEGreide
+                  vias={[VIA]}
+                  ativaId={VIA.id}
+                  onAtiva={() => {}}
+                  onTracar={() => {}}
+                  onAlterar={() => {}}
+                  onRemover={() => {}}
+                  cotaEmM={amostradorDaGrade(versao.grade)}
+                  material={{ empolamentoPct: PARAMETROS.empolamentoPct, contracaoPct: PARAMETROS.contracaoPct }}
+                  onBaixar={() => {}}
+                  nomeDoEstudo="Harness"
+                  persistenciaIndisponivel={false}
+                />
+              </div>
+            )}
             <PainelTopografia
               topografia={topografia}
               temLoteFechado
@@ -576,6 +639,7 @@ function App() {
               }
               onLimparCurva={() => {}}
             />
+            </>
           }
         />
       </div>

@@ -53,6 +53,26 @@ export type BlueprintStudyStatus = 'RASCUNHO' | 'EM_EDICAO' | 'PUBLICADO' | 'ARQ
  * `blueprint_study_terraplenagem` (migration `aplicar_20270921000006`). Uma
  * por estudo; volumes são derivados, nunca gravados.
  */
+/**
+ * Uma via de projeto (C2, migration `aplicar_20270926000020`): eixo em mm do
+ * desenho, passo do estaqueamento, PIVs do greide e seção tipo. Estacas,
+ * seções, volumes e nota de serviço são derivados na tela.
+ */
+export interface BlueprintViaRow {
+  id: string;
+  study_id: string;
+  organization_id: string;
+  nome: string;
+  via_uid: string | null;
+  eixo: Point[];
+  passo_m: number;
+  greide: { pontos: { distM: number; cotaM: number; curvaM?: number }[] } | null;
+  secao_tipo: { pistaM?: number; calcadaM?: number; taludeCorteH?: number; taludeAterroH?: number } | null;
+  topografia_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface BlueprintTerraplenagemRow {
   id: string;
   study_id: string;

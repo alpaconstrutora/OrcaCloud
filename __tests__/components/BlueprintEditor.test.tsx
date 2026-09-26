@@ -6302,3 +6302,26 @@ describe('BlueprintEditor · roteiro perimétrico (A1)', () => {
   });
 
 });
+
+/**
+ * VIAS E GREIDE (C2): a ferramenta "Eixo de projeto" e a gaveta "Vias e greide"
+ * existem no grupo Topografia da aba Terreno; sem eixo, a gaveta abre vazia e
+ * ensina a traçar. O nome do tool é `eixo-via` — `eixo` já é a malha estrutural.
+ */
+describe('BlueprintEditor · vias e greide (C2)', () => {
+  it('Eixo de projeto e Vias e greide ficam no grupo Topografia; a gaveta sem via ensina a traçar', async () => {
+    await montar();
+    await abrirAba(/^terreno$/i);
+    const grupo = screen.getByRole('group', { name: /^topografia$/i });
+    expect(within(grupo).getByRole('button', { name: /^eixo de projeto$/i })).toBeInTheDocument();
+    const vias = within(grupo).getByRole('button', { name: /^vias e greide$/i });
+    expect(vias).toHaveAttribute('title', expect.stringMatching(/trace um eixo de projeto/i));
+    await userEvent.setup().click(vias);
+    const painel = await screen.findByTestId('painel-vias');
+    expect(painel).toHaveTextContent(/nenhum eixo traçado/i);
+    // "Traçar eixo" fecha a gaveta e liga a ferramenta — o botão do ribbon fica pressionado
+    await userEvent.setup().click(within(painel).getByRole('button', { name: /traçar eixo/i }));
+    await waitFor(() => expect(screen.queryByTestId('painel-vias')).toBeNull());
+    expect(within(grupo).getByRole('button', { name: /^eixo de projeto$/i })).toHaveAttribute('aria-pressed', 'true');
+  }, 60000);
+});

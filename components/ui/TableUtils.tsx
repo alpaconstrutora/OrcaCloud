@@ -47,6 +47,32 @@ interface PersistedTableState {
  * continuam escondidas — só chaves nunca vistas antes (fora de `knownColumns`)
  * são adicionadas.
  */
+/**
+ * Encaixa na ordem salva pelo usuário as colunas que a tela passou a definir
+ * depois do último salvamento. Cada coluna nova entra logo DEPOIS da coluna que
+ * a antecede na ordem default (a mais próxima que já esteja na ordem salva);
+ * sem nenhuma antecessora, entra no começo.
+ *
+ * Até 26/09/2026 entravam no fim. Numa tabela mais larga que a tela, "o fim" é
+ * fora da área visível: a coluna Recibo de Contas a Receber, desenhada para ficar
+ * ao lado de Status, nasceria escondida para todo usuário que já tinha colunas
+ * salvas. A ordem que o usuário arrastou é preservada — só as novas se encaixam.
+ */
+export function mesclarOrdemDeColunas(ordemSalva: string[], ordemDefault: string[]): string[] {
+  const out = [...ordemSalva];
+  for (let i = 0; i < ordemDefault.length; i++) {
+    const k = ordemDefault[i];
+    if (out.includes(k)) continue;
+    let pos = 0;
+    for (let j = i - 1; j >= 0; j--) {
+      const idx = out.indexOf(ordemDefault[j]);
+      if (idx !== -1) { pos = idx + 1; break; }
+    }
+    out.splice(pos, 0, k);
+  }
+  return out;
+}
+
 function loadPersistedTableState(
   storageKey: string,
   defaultVisibleColumns: string[],
@@ -92,14 +118,15 @@ function loadPersistedTableState(
     // Coluna nova entra visível — a menos que a tela a tenha marcado defaultHidden.
     const newVisibleColumns = newColumns.filter(k => defaultVisibleColumns.includes(k));
     // Colunas que a tela define hoje mas que não estão na ordem salva (coluna nova
-    // introduzida depois do último salvamento) entram no fim, na ordem default.
+    // introduzida depois do último salvamento) entram ao lado da vizinha da ordem
+    // default — ver mesclarOrdemDeColunas.
     const missingFromOrder = allColumns.filter(k => !columnOrder.includes(k));
     return {
       visibleColumns: newVisibleColumns.length ? [...storedVisible, ...newVisibleColumns] : storedVisible,
       sortColumn,
       sortDirection,
       knownColumns: newColumns.length ? [...knownColumns, ...newColumns] : knownColumns,
-      columnOrder: missingFromOrder.length ? [...columnOrder, ...missingFromOrder] : columnOrder,
+      columnOrder: missingFromOrder.length ? mesclarOrdemDeColunas(columnOrder, allColumns) : columnOrder,
     };
   } catch (e) {
     console.warn(`Failed to load table preferences from localStorage (${storageKey}):`, e);

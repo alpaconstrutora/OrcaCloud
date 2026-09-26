@@ -52,6 +52,11 @@ function logoComoDataUrl(url?: string | null): Promise<string | null> {
     return p;
 }
 
+async function logoDaOrganizacao(orgId: string): Promise<string | null> {
+    const { data } = await supabase.from('organizations').select('logo_url').eq('id', orgId).maybeSingle();
+    return (data as { logo_url?: string | null } | null)?.logo_url ?? null;
+}
+
 async function guardarPdf(recibo: FinancialReceipt, pdf: Blob): Promise<void> {
     const path = `${recibo.organization_id}/${recibo.id}.pdf`;
     const { error } = await supabase.storage
@@ -119,7 +124,10 @@ export const financialReceiptService = {
             // Arquivo sumiu do bucket: monta de novo pelo registro congelado.
         }
 
-        const pdf = montarReciboPdf(recibo, await logoComoDataUrl(opts.logoUrl)).output('blob');
+        // Sem logo informada (ex.: Portal do Cliente, visão da equipe), usa a da
+        // organização DONA do recibo — não a do topo.
+        const logoUrl = opts.logoUrl !== undefined ? opts.logoUrl : await logoDaOrganizacao(recibo.organization_id);
+        const pdf = montarReciboPdf(recibo, await logoComoDataUrl(logoUrl)).output('blob');
         let guardado = !!recibo.file_path;
         if (!recibo.file_path) {
             try {

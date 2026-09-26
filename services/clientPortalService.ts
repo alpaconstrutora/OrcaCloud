@@ -463,6 +463,23 @@ export const clientPortalService = {
      *
      * Nunca guarde o retorno: URL assinada expira em 15 min.
      */
+    async baixarReciboDoPortal(
+        params: { token?: string; clientId?: string; transactionId: string },
+    ): Promise<{ url: string; numero: number }> {
+        // Edge Function `client-portal-recibo-download`: autoriza pela MESMA RPC
+        // de recebíveis do portal e devolve URL assinada (15 min) do PDF guardado.
+        const { data, error } = await supabase.functions.invoke('client-portal-recibo-download', {
+            body: params,
+        });
+        if (error) {
+            // Resposta 4xx chega como FunctionsHttpError — a mensagem útil está no corpo.
+            const corpo = await (error as { context?: Response }).context?.json?.().catch(() => null);
+            throw new Error(corpo?.error || 'Não foi possível baixar o recibo.');
+        }
+        if (!data?.url) throw new Error(data?.error || 'Não foi possível baixar o recibo.');
+        return { url: data.url as string, numero: data.numero as number };
+    },
+
     async abrirDocumentoCondominio(
         params: { token?: string; clientId?: string; documentoId: string },
     ): Promise<string> {

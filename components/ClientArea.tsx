@@ -77,6 +77,8 @@ import { clientService } from '../services/clientService';
 import { clientRequestsService, ClientRequest } from '../services/clientRequestsService';
 import { clientMessagesService, ClientPortalMessage } from '../services/clientMessagesService';
 import { exportService } from '../services/exportService';
+import { financialReceiptService } from '../services/financialReceiptService';
+import { numeroRecibo } from '../utils/reciboRecebimento';
 import { commercialFinanceService } from '../services/commercialFinanceService';
 import { contractService } from '../services/contractService';
 import { clientPortalService, PortalGedDocument } from '../services/clientPortalService';
@@ -1415,6 +1417,46 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         );
     };
 
+    /**
+     * Recibo de uma parcela paga. Três caminhos, do mais forte ao legado:
+     *  - equipe (isAdmin) e parcela de `internal_transactions`: emite ou
+     *    reimprime o recibo NUMERADO (mesmo fluxo de Contas a Receber);
+     *  - cliente e recibo já emitido: baixa o PDF guardado pela Edge Function
+     *    `client-portal-recibo-download` (link público ou cliente logado);
+     *  - parcela do JSON legado, ou ainda sem recibo emitido: o PDF montado na
+     *    hora, como sempre foi.
+     */
+    const baixarRecibo = async (inst: PaymentInstallment) => {
+        try {
+            if (isAdmin && inst.transactionId) {
+                const { recibo } = await financialReceiptService.baixarPdf(inst.transactionId);
+                showToast(`Recibo Nº ${numeroRecibo(recibo.receipt_number)} baixado.`);
+                return;
+            }
+            if (inst.transactionId && inst.receiptNumber) {
+                const { url } = await clientPortalService.baixarReciboDoPortal({
+                    token: portalToken || undefined,
+                    clientId: portalToken ? undefined : clientProfile?.id,
+                    transactionId: inst.transactionId,
+                });
+                const a = document.createElement('a');
+                a.href = url;
+                a.rel = 'noopener';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                return;
+            }
+            exportService.generateReceiptPDF(inst, settings, { name: clientProfile?.name || 'OPURA' });
+        } catch (e) {
+            showToast('Erro ao baixar o recibo: ' + (e instanceof Error ? e.message : 'tente novamente.'), 'error');
+        }
+    };
+
+    /** Rótulo do botão de recibo: diz o número quando o recibo já existe. */
+    const tituloRecibo = (inst: PaymentInstallment) =>
+        inst.receiptNumber ? `Baixar recibo Nº ${numeroRecibo(inst.receiptNumber)}` : (isAdmin ? 'Gerar recibo PDF' : 'Baixar recibo PDF');
+
     const renderFinanceiro = () => {
         let baseFinInfo = currentFinancialInfo || {
             totalValue: 0,
@@ -1870,11 +1912,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 {inst.status === 'PAID' && (
                                                     <ActionIconButton
                                                         kind="download"
-                                                        title="Gerar recibo PDF"
+                                                        title={tituloRecibo(inst)}
                                                         icon={<FileDown className="w-4 h-4" />}
                                                         onClick={(e) => {
                                                             e?.stopPropagation();
-                                                            exportService.generateReceiptPDF(inst, settings, { name: clientProfile?.name || 'OPURA' });
+                                                            void baixarRecibo(inst);
                                                         }}
                                                     />
                                                 )}
@@ -1964,11 +2006,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                             {inst.status === 'PAID' && (
                                                                 <ActionIconButton
                                                                     kind="download"
-                                                                    title={isAdmin ? 'Gerar recibo PDF' : 'Baixar recibo PDF'}
+                                                                    title={tituloRecibo(inst)}
                                                                     icon={<FileDown className="w-4 h-4" />}
                                                                     onClick={(e) => {
                                                                         e?.stopPropagation();
-                                                                        exportService.generateReceiptPDF(inst, settings, { name: clientProfile?.name || 'OPURA' });
+                                                                        void baixarRecibo(inst);
                                                                     }}
                                                                 />
                                                             )}
@@ -2177,7 +2219,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 <td className="px-6 py-2.5 text-right">
                                                     <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
                                                         {charge.status === 'PAID' && (
-                                                            <button onClick={() => exportService.generateReceiptPDF(charge, settings, { name: clientProfile?.name || 'OPURA' })} className="p-2 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-[6px] transition-all" title="Recibo PDF">
+                                                            <button onClick={() => void baixarRecibo(charge)} className="p-2 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-[6px] transition-all" title={tituloRecibo(charge)}>
                                                                 <FileDown className="w-4 h-4" />
                                                             </button>
                                                         )}
@@ -2379,7 +2421,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
                                                     {med.status === 'PAID' && (
-                                                        <button onClick={() => exportService.generateReceiptPDF(med, settings, { name: clientProfile?.name || 'OPURA' })} className="p-2 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-[6px] transition-all" title="Recibo PDF"><FileDown className="w-4 h-4" /></button>
+                                                        <button onClick={() => void baixarRecibo(med)} className="p-2 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-[6px] transition-all" title={tituloRecibo(med)}><FileDown className="w-4 h-4" /></button>
                                                     )}
                                                     <button onClick={() => { const d = prompt('Descrição:', med.description); const v = prompt('Valor:', med.value.toString()); if (d !== null || v !== null) handleUpdateMedicoes(medicoes.map(m => m.id === med.id ? { ...m, description: d ?? m.description, value: v ? parseFloat(v) : m.value } : m)); }} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-[6px] transition-all"><Pencil className="w-4 h-4" /></button>
                                                     <button onClick={async () => { if (await confirm({ title: 'Remover medição?', variant: 'danger', confirmLabel: 'Remover' })) handleUpdateMedicoes(medicoes.filter(m => m.id !== med.id)); }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-[6px] transition-all"><X className="w-4 h-4" /></button>

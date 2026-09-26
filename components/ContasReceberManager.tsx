@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     AlertCircle, Check, ChevronDown, ChevronUp,
     Loader2, Plus, RefreshCw, Search, TrendingUp, X, Filter,
-    FileText, QrCode, Copy, ExternalLink, DollarSign, AlertTriangle, MoveHorizontal, Undo2, Receipt,
+    FileText, QrCode, Copy, ExternalLink, DollarSign, AlertTriangle, MoveHorizontal, Undo2, Receipt, Download,
 } from 'lucide-react';
 import { receivableService, filtrarRecebiveis, aplicarStatusLocal } from '../services/receivableService';
 import { clientChargeService } from '../services/clientChargeService';
@@ -14,6 +14,7 @@ import BaixaRecebivelSheet, { type DadosDaBaixa } from './financeiro/BaixaRecebi
 import { mensagemResultadoBaixa } from '../utils/baixaRecebivel';
 import { numeroRecibo } from '../utils/reciboRecebimento';
 import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
+import { useStore } from '../store/useStore';
 import type { ClientCharge, BillingType } from '../services/clientChargeService';
 import type { Receivable, ReceivableEffectiveStatus, InadimplenciaFaixa } from '../types/financial';
 import type { Organization, CostCenter } from '../types';
@@ -58,6 +59,12 @@ const RECEBER_COLUMNS: ColumnConfig[] = [
     { key: 'project_name', label: 'Obra', sortable: true },
     { key: 'due_date', label: 'Vencimento', sortable: true },
     { key: 'amount', label: 'Valor', sortable: true },
+    // Recibo ANTES de Status, de propósito: a tabela é mais larga que a tela e
+    // a coluna Ações fica fora da área visível — o ícone de recibo ali passava
+    // despercebido (26/09/2026). Depois de Status ainda terminava em 1655px
+    // numa tela de 1600 (medido com Playwright); aqui cabe inteira.
+    // Ordena pelo número do recibo.
+    { key: 'recibo', label: 'Recibo', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
     // Duas dimensões DIFERENTES (ver migration 20270822000013): Centro de
     // Custo é cost_centers_v2, Plano de Contas é plano_de_contas. Resolvidas
@@ -80,12 +87,13 @@ const RECEBER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean
     due_date: { label: 'Vencimento', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
     amount: { label: 'Valor', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
     status: { label: 'Status', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
+    recibo: { label: 'Recibo', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
     cost_center_name: { label: 'Centro de Custo', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
     plano_de_contas_name: { label: 'Plano de Contas', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
 };
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    party_name: 200, description: 220, empreendimento_name: 180, project_name: 160, due_date: 150, amount: 140, status: 150,
+    party_name: 200, description: 220, empreendimento_name: 180, project_name: 160, due_date: 150, amount: 140, status: 150, recibo: 130,
     cost_center_name: 180, plano_de_contas_name: 180, actions: 260,
 };
 
@@ -736,6 +744,18 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     const [baixaProgresso, setBaixaProgresso] = useState<string | null>(null);
     const [recibos, setRecibos]           = useState<Map<string, ReciboAtivo>>(new Map());
     const [gerandoRecibo, setGerandoRecibo] = useState<string | null>(null);
+
+    // Deep-link (aviso "recibo disponível", pagamento próximo/em atraso): o
+    // clique na notificação chega aqui como viewFocus CONTA_RECEBER com o id do
+    // título. Mesmo contrato de ContasPagarManager (CONTA_PAGAR).
+    const viewFocus = useStore(s => s.viewFocus);
+    const setViewFocus = useStore(s => s.setViewFocus);
+    const focusId = viewFocus?.source === 'CONTA_RECEBER' ? viewFocus.ref : undefined;
+    const [destacado, setDestacado] = useState<string | null>(null);
+    /** Quando o foco limpou o período, espera a recarga que isso dispara
+     *  (valor = loadSeq no momento da limpeza) antes de concluir "não achei". */
+    const focoAguardaCarga = useRef<number | null>(null);
+    const focoLimpouFiltros = useRef(false);
     // Duas dimensões DIFERENTES (ver migration 20270822000013) — carregadas uma
     // vez por organização para resolver os UUIDs de vw_receivables em nome.
     const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
@@ -945,6 +965,25 @@ export default function ContasReceberManager({ organizationId, organizations }: 
         notify(texto, erro ? 'error' : 'success');
     }
 
+    /** Célula da coluna Recibo: "Nº 000004" baixa o PDF guardado; "Emitir" no
+     *  recebido sem recibo (baixado antes do recibo existir); "—" em aberto. */
+    function renderReciboCell(r: Receivable): React.ReactNode {
+        if (r.effective_status !== 'RECEBIDO') return <span className="text-sm text-gray-400">—</span>;
+        if (gerandoRecibo === r.id) return <Loader2 className="w-4 h-4 animate-spin text-blue-600" />;
+        const rec = recibos.get(r.id);
+        return (
+            <button
+                type="button"
+                onClick={() => handleRecibo(r)}
+                title={rec ? `Baixar o recibo Nº ${numeroRecibo(rec.receipt_number)}` : 'Emitir o recibo deste recebimento'}
+                className="inline-flex items-center gap-1.5 text-sm font-normal text-blue-600 hover:text-blue-800 hover:underline whitespace-nowrap"
+            >
+                {rec ? <Download className="w-3.5 h-3.5" /> : <Receipt className="w-3.5 h-3.5" />}
+                {rec ? `Nº ${numeroRecibo(rec.receipt_number)}` : 'Emitir'}
+            </button>
+        );
+    }
+
     /** Reimprime o recibo ativo — ou emite agora, para título baixado antes do
      *  recibo existir (a RPC usa a data de pagamento já gravada no título). */
     async function handleRecibo(r: Receivable) {
@@ -1071,6 +1110,8 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                     case 'cost_center_name':    va = (a.cost_center_name ?? '').toLowerCase();    vb = (b.cost_center_name ?? '').toLowerCase();    break;
                     case 'plano_de_contas_name': va = (a.plano_de_contas_name ?? '').toLowerCase(); vb = (b.plano_de_contas_name ?? '').toLowerCase(); break;
                     case 'status':        va = a.effective_status;                    vb = b.effective_status;                    break;
+                    // Sem recibo = -1: recebidos sem recibo e títulos em aberto ficam juntos numa ponta.
+                    case 'recibo':        va = recibos.get(a.id)?.receipt_number ?? -1; vb = recibos.get(b.id)?.receipt_number ?? -1; break;
                     default:              return 0;
                 }
                 if (va < vb) return tableColumns.sortDirection === 'asc' ? -1 : 1;
@@ -1082,7 +1123,51 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     // `rowsWithNames`, não `rows`: com `rows` o memo não reagia ao catálogo de
     // CC/Plano chegar depois da lista — ficava mascarado enquanto a lista era a
     // mais lenta das duas.
-    }, [rowsWithNames, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [rowsWithNames, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection, recibos]);
+
+    useEffect(() => {
+        if (!focusId || loading) return;
+        if (focoAguardaCarga.current !== null && loadSeq.current <= focoAguardaCarga.current) return;
+        focoAguardaCarga.current = null;
+
+        if (!rows.some(r => r.id === focusId)) {
+            // Fora do período carregado? Limpa o período uma vez e espera a recarga.
+            if ((dueFrom || dueTo || competencia) && !focoLimpouFiltros.current) {
+                focoLimpouFiltros.current = true;
+                focoAguardaCarga.current = loadSeq.current;
+                clearDueRange();
+                return;
+            }
+            setViewFocus(null);
+            focoLimpouFiltros.current = false;
+            notify('Título não encontrado — confira a organização selecionada no topo.', 'error');
+            return;
+        }
+        if (!sorted.some(r => r.id === focusId)) {
+            // Carregado, mas escondido pela busca/status/filtro avançado.
+            focoLimpouFiltros.current = true;
+            setSearch('');
+            setStatusFilter('all');
+            advancedFilters.clearRules();
+            return;
+        }
+        setViewFocus(null);
+        setDestacado(focusId);
+        const limpou = focoLimpouFiltros.current;
+        focoLimpouFiltros.current = false;
+        requestAnimationFrame(() => document.getElementById(`receber-row-${focusId}`)?.scrollIntoView({ block: 'center' }));
+        notify(limpou
+            ? 'Filtros limpos para exibir o título destacado. O recibo está na coluna Recibo.'
+            : 'Título destacado. O recibo está na coluna Recibo.');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [focusId, loading, rows, sorted]);
+
+    // O destaque some sozinho — é orientação, não estado.
+    useEffect(() => {
+        if (!destacado) return;
+        const t = setTimeout(() => setDestacado(null), 8000);
+        return () => clearTimeout(t);
+    }, [destacado]);
 
     /** Mesmo critério do botão "Baixar" por linha: só não-RECEBIDO pode ser baixado. */
     const isSelectable = (r: Receivable) => r.effective_status !== 'RECEBIDO';
@@ -1426,7 +1511,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                                     // são espelho de outro módulo e voltariam no próximo sync.
                                     const isManual = r.source_system === 'MANUAL';
                                     return (
-                                        <tr key={r.id} className={`hover:bg-blue-50/50 transition-colors ${selectedIds.has(r.id) ? 'bg-blue-50/60' : isVencido ? 'bg-red-50/30' : ''}`}>
+                                        <tr key={r.id} id={`receber-row-${r.id}`} className={`hover:bg-blue-50/50 transition-colors ${destacado === r.id ? 'bg-amber-50' : selectedIds.has(r.id) ? 'bg-blue-50/60' : isVencido ? 'bg-red-50/30' : ''}`}>
                                             <td className="px-6 py-2.5 text-center border-r border-gray-100">
                                                 {isSelectable(r) ? (
                                                     <input
@@ -1442,7 +1527,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                                                 if (!RECEBER_COLUMN_HEADERS[key]) return null;
                                                 return (
                                                     <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                        {renderReceberCell(key, r)}
+                                                        {key === 'recibo' ? renderReciboCell(r) : renderReceberCell(key, r)}
                                                     </td>
                                                 );
                                             })}

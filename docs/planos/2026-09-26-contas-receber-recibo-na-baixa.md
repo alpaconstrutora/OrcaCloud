@@ -6,6 +6,10 @@
 
 > Sessão: e7e86c63-bc35-44ed-8b51-a87c73ea1b7a · 2026-09-26
 
+### Pedido posterior (2026-09-26, mesma sessão, depois da publicação de `9831ea1`)
+
+> o recibo deve ficar disponivel para download
+
 ## Decisões tomadas com o usuário
 
 | Data | Pergunta | Resposta |
@@ -14,6 +18,7 @@
 | 2026-09-26 | A baixa precisa de mais dados? | Painel de baixa com data e forma de pagamento |
 | 2026-09-26 | Guardar numerado? | Sim, numerado e salvo |
 | 2026-09-26 | Lote? | Um arquivo por título |
+| 2026-09-26 | Onde o recibo fica disponível para download? | Os quatro: coluna na tabela · Portal do Cliente · link da notificação · "não achei o ícone" (conferir produção) |
 
 Resumo das decisões:
 - **Gatilho:** caixa "Emitir recibo" (marcada por padrão) no momento da baixa + ícone "Recibo" nos títulos já recebidos para reimprimir.
@@ -210,6 +215,51 @@ console/HTTP:
 Limpeza: os dois títulos foram excluídos; a trigger de exclusão marcou os nº 2 e 3
 como `titulo_excluido`. Os 3 recibos ficam no histórico (cancelados) e **o
 contador da Alpa está em 3 — o primeiro recibo real dela será o nº 000004.**
+
+## Fase 2 — recibo disponível para download
+
+Achado ao conferir produção (Playwright, 1600×1000): o ícone existe (129 linhas
+recebidas; recibo real nº 000004 já emitido), mas a tabela é mais larga que a
+tela e **a coluna Ações fica fora da área visível**, só com rolagem lateral.
+
+- [x] 10. `components/ui/TableUtils.tsx` — coluna nova entra ao lado da vizinha
+  da ordem padrão, não no fim (senão a coluna Recibo nasce fora da tela para
+  quem já tem colunas salvas). **Pronto quando:** teste de
+  `mesclarOrdemDeColunas` verde.
+- [x] 11. `ContasReceberManager.tsx` — coluna **Recibo** logo após Valor (antes de Status — depois de Status terminava em 1655px numa tela de 1600, medido):
+  "Nº 000004" (link, baixa o PDF guardado), "Emitir" no recebido sem recibo, "—"
+  no aberto; ordenável pelo número. **Pronto quando:** visível sem rolagem em
+  1600px no app real; `check-ui-standard.sh` exit 0.
+- [x] 12. Link da notificação — `App.tsx handleNavigate` passa o `?tx=` por
+  `navigateToFocus` (`CONTA_RECEBER`/`CONTA_PAGAR`); `ContasReceberManager`
+  consome: limpa filtros se preciso, rola até o título e destaca. **Pronto
+  quando:** clicar no aviso abre a tela com a linha destacada (app real).
+- [x] 13. Portal do Cliente — `fn_portal_receivables_payload` ganha `recibo_numero`
+  (migration `aplicar_20270926000120`, aplicada; definição conferida no banco antes
+  de reescrever) + Edge Function `client-portal-recibo-download` (autoriza pela MESMA
+  RPC do portal com a credencial do chamador; service_role só assina). Botões de
+  recibo do `ClientArea`: equipe emite/reimprime o numerado; cliente baixa o
+  guardado; JSON legado segue o PDF montado na hora.
+- [ ] 14. Publicação.
+
+### Registro da verificação da Fase 2 (26/09/2026)
+
+Playwright no dev server da frente, agente de leitura, rede escutada (único erro:
+500 em `sinapi_items`, alheio — aparece em qualquer tela):
+
+- **Coluna** (preferência de colunas ANTIGA semeada no localStorage, sem `recibo`):
+  ordem `… Valor | Recibo | Status …`; cabeçalho de 1375 a 1505px em 1600 —
+  inteiro na tela. "Nº 000004" baixou o PDF guardado.
+- **Aviso**: clique em "Abrir" num aviso REAL de atraso
+  (`/contas-a-receber?tx=2615398c…`, Fernanda Prado Zanotti) na Central de
+  Notificações → hash `#/contas-a-receber`, linha com `bg-amber-50`, centralizada.
+- **Portal do Cliente** pelo link público de José Roberto Gomes (token ativo
+  existente, só leitura): botão "Baixar recibo Nº 000004" → `Recibo_000004.pdf`,
+  **mesmo hash** do arquivo baixado pela equipe.
+- **Edge Function** (REGRA #7 P3): sem header → 401; chave pública + token falso →
+  403; chave pública + clientId sem sessão → 403; token válido pedindo título de
+  OUTRO cliente → 403; token válido + título dele → 200 com URL assinada.
+- `npm run ci` verde (5754 passed).
 
 ## Fora do escopo (anotado, não feito)
 

@@ -6,6 +6,11 @@ export interface PaymentInstallment {
     description: string;
     paymentDate?: string;
     receiptUrl?: string;
+    /** Id em `internal_transactions` — presente só quando a parcela VEIO de lá
+     *  (portal/RPC). Parcela do JSON legado (`financialInfo.installments`) não tem. */
+    transactionId?: string;
+    /** Nº do recibo de recebimento ATIVO (`financial_receipts`), quando já emitido. */
+    receiptNumber?: number | null;
     dealId?: string;
     dealType?: 'SALE' | 'RENTAL' | 'SERVICE';
     clientId?: string;

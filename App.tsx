@@ -366,6 +366,7 @@ import { INITIAL_PROJECT_SETTINGS } from './constants';
 import { BudgetEntry, ProjectSettings, Organization, Contract, Client, ProfileGroup } from './types';
 import { Loader2, Shield, WifiOff } from 'lucide-react';
 import { useStore } from './store/useStore';
+import { destinoDoLinkDeNotificacao } from './utils/linkNotificacao';
 import { useToast } from './hooks/useToast';
 import { usePersistenceSync } from './hooks/usePersistenceSync';
 import { useAuthSync } from './hooks/useAuthSync';
@@ -474,9 +475,12 @@ const App: React.FC = () => {
         setPendingSupplierOrderId(orderId);
         setPendingSupplierOrderViewMode('details');
       }
-    } else if (link.startsWith('/')) {
-      const view = link.substring(1).split('?')[0];
-      if (view) setActiveView(view);
+    } else {
+      // `/contas-a-receber?tx=` e `/contas-a-pagar?tx=` abrem a tela já no
+      // título (deep-link do store); o resto só troca de tela, como antes.
+      const destino = destinoDoLinkDeNotificacao(link);
+      if (destino?.foco) useStore.getState().navigateToFocus(destino.view, destino.foco.ref, destino.foco.source);
+      else if (destino) setActiveView(destino.view);
     }
   }, [setActiveView, setIsNotificationOpen]);
 

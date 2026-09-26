@@ -28,6 +28,8 @@ export interface ReceivableRow {
     description?: string | null;
     status?: string | null;
     business_status?: string | null;
+    /** Só no payload do portal (`fn_portal_receivables_payload`, aplicar_20270926000120). */
+    recibo_numero?: number | null;
 }
 
 export function mapReceivableRow(r: ReceivableRow, clientId: string): PaymentInstallment {
@@ -40,6 +42,8 @@ export function mapReceivableRow(r: ReceivableRow, clientId: string): PaymentIns
         status: pago ? 'PAID' : 'PENDING',
         description: (r.description as string) || '',
         clientId,
+        transactionId: r.id,
+        receiptNumber: r.recibo_numero ?? null,
     } as PaymentInstallment;
 }
 

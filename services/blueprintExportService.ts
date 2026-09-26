@@ -26,6 +26,8 @@ import {
   type EstiloTraco,
   type OpcoesExportacao,
 } from '../utils/blueprintExport';
+import { desenharCarimboDaFolha } from '../utils/blueprintExport';
+import { desenharPlantaTopografica } from '../utils/blueprintPranchaTopografica';
 import {
   KERNEL_VERSION,
   POLITICA_PADRAO,
@@ -486,6 +488,15 @@ export function desenharConjunto(
         }
         desenharPlanta(d, m, comPrancha(den, { recorte: p.recorte }), enq);
         folhas.push({ prancha: p, denominador: den });
+        break;
+      }
+      case 'TOPOGRAFICA': {
+        // A1: a escala é a que faz o lote caber com a tabela ao lado; sai como 0
+        // ("variável") no carimbo em vez de um denominador que não mede.
+        const enq = enquadrar(model, template.denominadorPlanta, papel, false);
+        desenharPlantaTopografica(d, model, enq);
+        desenharCarimboDaFolha(d, comPrancha(0), enq);
+        folhas.push({ prancha: p, denominador: 0 });
         break;
       }
       case 'TABELAS': {

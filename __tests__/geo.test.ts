@@ -48,6 +48,7 @@ import {
   azimuteParaRumo,
   rumoParaAzimute,
   rumoTexto,
+  azimuteTexto,
   azimuteVerdadeiro,
   geoParaSgl,
   sglParaGeo,
@@ -323,5 +324,16 @@ describe('Sistema Geodésico Local (NBR 14166)', () => {
     // 850 m de altitude sobre ~6.371 km de raio: ~13 cm por km.
     const razao = comAltitude.norte / semAltitude.norte;
     expect(razao).toBeCloseTo(1 + 850 / 6_371_000, 5);
+  });
+});
+
+describe('azimute que arredonda para 360 (achado do harness da A1)', () => {
+  it('359,99999° escreve 0°00\'00", e o rumo é NE — não 360° nem NW', () => {
+    expect(azimuteTexto(359.99999)).toBe('0°00\'00"');
+    expect(rumoTexto(359.99999)).toBe('0°00\'00" NE');
+    // e um norte de verdade continua norte
+    expect(azimuteTexto(0)).toBe('0°00\'00"');
+    // sem estragar quem NÃO arredonda para 360
+    expect(azimuteTexto(359.5, 0)).toBe('359°30\'00"');
   });
 });

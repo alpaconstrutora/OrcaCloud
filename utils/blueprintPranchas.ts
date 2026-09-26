@@ -44,6 +44,8 @@ export interface InclusaoNoConjunto {
   eletrica: boolean;
   /** E8.4: a planta HUMANIZADA por pavimento (venda). Ausente em templates anteriores → falso. */
   humanizada: boolean;
+  /** A1: a planta TOPOGRÁFICA do imóvel (malha de coordenadas, vértices, roteiro). Ausente em templates anteriores → falso. */
+  topografica?: boolean;
 }
 export interface TemplateDePrancha {
   papel: PapelId;
@@ -65,7 +67,7 @@ export const TEMPLATE_DE_PRANCHA_PADRAO: TemplateDePrancha = {
   denominadorAmpliacao: 25,
   cotas: true,
   carimbo: { empresa: '', responsavel: '', registro: '', cliente: '', endereco: '', prefixo: 'A', camposExtras: [] },
-  incluir: { indice: true, plantas: true, cortes: true, elevacoes: true, ampliacoes: true, tabelas: true, eletrica: false, humanizada: false },
+  incluir: { indice: true, plantas: true, cortes: true, elevacoes: true, ampliacoes: true, tabelas: true, eletrica: false, humanizada: false, topografica: false },
 };
 
 export interface TemplateDePranchaSalvo {
@@ -116,7 +118,7 @@ export function templateDePranchaDaColuna(raw: unknown): TemplateDePrancha {
       prefixo: texto(c.prefixo, 'A', 4).trim() || 'A',
       camposExtras: extras,
     },
-    incluir: Object.fromEntries((Object.keys(P.incluir) as (keyof InclusaoNoConjunto)[]).map((k) => [k, bool(i[k], P.incluir[k])])) as unknown as InclusaoNoConjunto,
+    incluir: Object.fromEntries((Object.keys(P.incluir) as (keyof InclusaoNoConjunto)[]).map((k) => [k, bool(i[k], P.incluir[k] ?? false)])) as unknown as InclusaoNoConjunto,
   };
 }
 
@@ -133,7 +135,7 @@ export interface Recorte {
   maxY: number;
 }
 
-export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'HUMANIZADA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS';
+export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'HUMANIZADA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS' | 'TOPOGRAFICA';
 
 export interface PranchaPlanejada {
   /** "A-01". */
@@ -174,6 +176,10 @@ export function planejarConjunto(model: BlueprintModel, t: TemplateDePrancha): P
     out.push({ ...p, numero: `${t.carimbo.prefixo}-${String(out.length + 1).padStart(2, '0')}` });
   };
   if (t.incluir.indice) numerar({ tipo: 'INDICE', titulo: 'Índice de pranchas', denominador: 0 });
+  // A1: a topográfica vem logo após o índice — é a folha do IMÓVEL, antes das do edifício.
+  if (t.incluir.topografica && model.boundaries.some((b) => b.kind === 'TERRENO')) {
+    numerar({ tipo: 'TOPOGRAFICA', titulo: 'Planta topográfica do imóvel', denominador: 0 });
+  }
   if (t.incluir.plantas) {
     for (const n of niveis) {
       if (!model.walls.some((w) => w.levelId === n.id)) continue;

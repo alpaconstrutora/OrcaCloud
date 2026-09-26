@@ -37,7 +37,7 @@ function sala() {
 
 describe('dutos como trechos MECANICA (P2.2)', () => {
   it('o duto é um trecho MECANICA: padrões (forro 2600, Ø 200, "Duto"), canônico ida e volta, e o kernel não sobe de versão', () => {
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.58.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.59.0');
     expect(COTA_PADRAO_MM.MECANICA).toBe(2600);
     expect(BITOLA_PADRAO_MM.MECANICA).toBe(200);
     expect(COTA_TERMINAL_PADRAO_MM.MECANICA).toBe(2600);

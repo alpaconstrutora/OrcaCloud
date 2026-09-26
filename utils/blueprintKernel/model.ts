@@ -2161,6 +2161,43 @@ export interface AreaPublica {
   pontos: Point[];
 }
 
+/**
+ * VÉRTICE NOMEADO DO TERRENO (0.59.0).
+ *
+ * O memorial descritivo não fala em "lado 3": fala em "do vértice P2 ao P3". O
+ * nome do vértice é o que amarra o texto ao desenho, à planta e à tabela de
+ * coordenadas — e hoje ele é digitado três vezes, uma em cada peça.
+ *
+ * ⚠️ ANCORADO NO PONTO, não no índice do anel nem no id da divisa. É a mesma
+ * decisão da etiqueta de ambiente (`Label`), e pelo mesmo motivo: o anel é
+ * DERIVADO das divisas (`anelDoTerreno`), e apagar uma divisa ou inverter o
+ * sentido do desenho renumera todos os índices. Um nome guardado por índice
+ * apareceria colado no vértice errado, sem erro nenhum — e um memorial com os
+ * vértices trocados é um documento errado que parece certo.
+ *
+ * O vértice que perde o seu ponto (a divisa foi apagada) fica ÓRFÃO e visível,
+ * não some: someço é o que faz o nome reaparecer no lugar errado depois.
+ */
+export interface VerticeDoTerreno {
+  uid: ElementUid;
+  /** A âncora: o ponto do anel a que este nome pertence, em mm inteiros. */
+  ponto: Point;
+  /** "P1", "M-0001", "Vértice da esquina". */
+  nome: string;
+  /**
+   * GeoINCRA (NTGIR): M = marco materializado, P = ponto não materializado,
+   * V = virtual. Fica opcional aqui e ganha sentido pleno na fase do SIGEF.
+   */
+  tipo?: 'M' | 'P' | 'V';
+  /** Precisão declarada do vértice, em mm. O SIGEF exige; o cadastro urbano, não. */
+  sigmaMm?: number;
+  /** Como foi determinado: "GNSS RTK", "estação total", "digitalização". */
+  metodo?: string;
+}
+export const MAX_NOME_DE_VERTICE = 40;
+/** Tolerancia para dizer que o vértice nomeado é AQUELE ponto do anel. */
+export const TOLERANCIA_DO_VERTICE_MM = 5;
+
 export function findQuadra(model: BlueprintModel, id: ObjectId): Quadra {
   const q = (model.quadras ?? []).find((x) => x.id === id);
   if (!q) throw new KernelError('BLOCK_NOT_FOUND', `Quadra inexistente: ${id}`);
@@ -2825,6 +2862,8 @@ export interface BlueprintModel {
   rodapes: TrechoDeRodape[];
   /** ETAPAS DE OBRA (0.57.0). */
   etapas: Etapa[];
+  /** VÉRTICES NOMEADOS do terreno (0.59.0). Ver `VerticeDoTerreno`. */
+  verticesDoTerreno: VerticeDoTerreno[];
   /** LOTEAMENTO (0.58.0) - quadras do parcelamento. Ver `Quadra`. */
   quadras: Quadra[];
   /** LOTEAMENTO (0.58.0) - lotes. Ver `Lote`. */
@@ -2954,6 +2993,7 @@ export function emptyModel(): BlueprintModel {
     subRegioes: [],
     rodapes: [],
     etapas: [],
+    verticesDoTerreno: [],
     quadras: [],
     lotes: [],
     vias: [],
@@ -3032,6 +3072,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     subRegioes: (model.subRegioes ?? []).map((s) => ({ ...s, pontos: s.pontos.map((p) => ({ ...p })), ...(s.parametros ? { parametros: { ...s.parametros } } : {}) })),
     rodapes: (model.rodapes ?? []).map((r) => ({ ...r, pontos: r.pontos.map((p) => ({ ...p })), ...(r.parametros ? { parametros: { ...r.parametros } } : {}) })),
     etapas: (model.etapas ?? []).map((e) => ({ ...e })),
+    verticesDoTerreno: (model.verticesDoTerreno ?? []).map((v) => ({ ...v, ponto: { ...v.ponto } })),
     quadras: (model.quadras ?? []).map((q) => ({ ...q, pontos: q.pontos.map((p) => ({ ...p })), ...(q.parametros ? { parametros: { ...q.parametros } } : {}) })),
     lotes: (model.lotes ?? []).map((l) => ({ ...l, pontos: l.pontos.map((p) => ({ ...p })), ...(l.parametros ? { parametros: { ...l.parametros } } : {}) })),
     vias: (model.vias ?? []).map((v) => ({ ...v, eixo: v.eixo.map((p) => ({ ...p })), ...(v.parametros ? { parametros: { ...v.parametros } } : {}) })),
@@ -4836,6 +4877,16 @@ export function assertModelInvariants(model: BlueprintModel): void {
       assertIntegerMm(p.y, `${s.id}.pontos[${i}].y`);
     });
     if (s.nome != null && (typeof s.nome !== 'string' || s.nome.length > MAX_NOME_DE_SUB_REGIAO)) throw new KernelError('BAD_SUBREGION', `Sub-região ${s.id}: nome maior que ${MAX_NOME_DE_SUB_REGIAO} caracteres`);
+  }
+  // VÉRTICE DO TERRENO (0.59.0): ponto inteiro, nome curto, sigma positivo.
+  for (const v of model.verticesDoTerreno ?? []) {
+    assertIntegerMm(v.ponto.x, `vértice ${v.nome}.ponto.x`);
+    assertIntegerMm(v.ponto.y, `vértice ${v.nome}.ponto.y`);
+    if (typeof v.nome !== 'string' || v.nome.trim().length === 0 || v.nome.length > MAX_NOME_DE_VERTICE) {
+      throw new KernelError('BAD_VERTEX', `Vértice: nome vazio ou maior que ${MAX_NOME_DE_VERTICE} caracteres`);
+    }
+    if (v.tipo != null && !['M', 'P', 'V'].includes(v.tipo)) throw new KernelError('BAD_VERTEX', `Vértice ${v.nome}: tipo desconhecido ${String(v.tipo)}`);
+    if (v.sigmaMm != null && (!Number.isFinite(v.sigmaMm) || v.sigmaMm < 0)) throw new KernelError('BAD_VERTEX', `Vértice ${v.nome}: sigma tem de ser positivo`);
   }
   // LOTEAMENTO (0.58.0): pavimento vivo, contorno inteiro, nome/numero curtos,
   // quadra existente, testada dentro da lista de arestas, via com eixo aberto.

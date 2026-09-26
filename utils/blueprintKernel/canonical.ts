@@ -573,6 +573,21 @@ function projetar(model: BlueprintModel): {
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.material, y.material),
   );
 
+  // VÉRTICES NOMEADOS DO TERRENO (0.59.0): por ponto, depois nome. Omitidos quando não há.
+  // Só os campos declarados entram (tipo/sigma/método como `undefined` somem do
+  // JSON) — vértice só com nome não ganha chave nova.
+  const verticesDoTerreno = ordenar(
+    model.verticesDoTerreno ?? [],
+    (v) => ({
+      ponto: { x: v.ponto.x, y: v.ponto.y },
+      nome: v.nome,
+      tipo: v.tipo ?? undefined,
+      sigmaMm: v.sigmaMm ?? undefined,
+      metodo: v.metodo ?? undefined,
+    }),
+    (x, y) => x.ponto.x - y.ponto.x || x.ponto.y - y.ponto.y || cmpStr(x.nome, y.nome),
+  );
+
   // LOTEAMENTO (0.58.0): quadra, lote, via e area publica. Omitidos quando nao ha.
   // A QUADRA do lote sai por INDICE na ordem canonica das quadras, nunca por
   // id: o id e reatribuido ao recarregar o payload, o indice nao.
@@ -983,6 +998,7 @@ function projetar(model: BlueprintModel): {
     anotacoes: anotacoes.length ? anotacoes.map((a) => a.geom) : undefined,
     vistasDependentes: vistasDependentes.length ? vistasDependentes.map((v) => v.geom) : undefined,
     subRegioes: subRegioes.length ? subRegioes.map((s) => s.geom) : undefined,
+    verticesDoTerreno: verticesDoTerreno.length ? verticesDoTerreno.map((v) => v.geom) : undefined,
     quadras: quadras.length ? quadras.map((q) => q.geom) : undefined,
     lotes: lotes.length ? lotes.map((l) => l.geom) : undefined,
     vias: vias.length ? vias.map((v) => v.geom) : undefined,
@@ -1022,6 +1038,7 @@ function projetar(model: BlueprintModel): {
     anotacoes: anotacoes.map((a) => a.item.uid ?? null),
     vistasDependentes: vistasDependentes.map((v) => v.item.uid ?? null),
     subRegioes: subRegioes.map((s) => s.item.uid ?? null),
+    verticesDoTerreno: verticesDoTerreno.map((v) => v.item.uid ?? null),
     quadras: quadras.map((q) => q.item.uid ?? null),
     lotes: lotes.map((l) => l.item.uid ?? null),
     vias: vias.map((v) => v.item.uid ?? null),
@@ -1113,6 +1130,8 @@ export interface IdentidadeCanonica {
   anotacoes?: (ElementUid | null)[];
   vistasDependentes?: (ElementUid | null)[];
   subRegioes?: (ElementUid | null)[];
+  /** Ausente em payload gravado sob kernel anterior a 0.59.0. */
+  verticesDoTerreno?: (ElementUid | null)[];
   /** Ausentes em payload gravado sob kernel anterior a 0.58.0. */
   quadras?: (ElementUid | null)[];
   lotes?: (ElementUid | null)[];
@@ -1355,6 +1374,8 @@ export interface CanonicalPayload {
   rodapes?: { level: number; pontos: { x: number; y: number }[]; alturaMm: number; itemCode: string; descricao: string; sugerido?: boolean; etiqueta?: number; parametros?: Parametros }[];
   /** Sub-regiões do terreno. Ausente sob kernel < 0.53.0 e em desenho sem nenhuma. */
   subRegioes?: { level: number; material: MaterialDeSubRegiao; pontos: { x: number; y: number }[]; nome: string | null; parametros?: Parametros }[];
+  /** VÉRTICES NOMEADOS do terreno. Ausente sob kernel < 0.59.0 e em desenho sem nenhum. */
+  verticesDoTerreno?: { ponto: { x: number; y: number }; nome: string; tipo?: 'M' | 'P' | 'V'; sigmaMm?: number; metodo?: string }[];
   /** LOTEAMENTO. Ausentes sob kernel < 0.58.0 e em desenho sem nenhum. A quadra do lote vai por ÍNDICE. */
   quadras?: { level: number; nome: string; pontos: { x: number; y: number }[]; parametros?: Parametros }[];
   lotes?: { level: number; quadra: number | null; numero: string; pontos: { x: number; y: number }[]; testadaIndex: number | null; tipo: TipoDeLote; parametros?: Parametros }[];
@@ -1887,6 +1908,19 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       pontos: s.pontos.map((p) => ({ x: p.x, y: p.y })),
       nome: s.nome,
       ...(s.parametros && Object.keys(s.parametros).length > 0 ? { parametros: { ...s.parametros } } : {}),
+    });
+  });
+
+  // VÉRTICES NOMEADOS DO TERRENO: não dependem de pavimento nem de divisa (âncora é o ponto).
+  const verticesPayload = payload.verticesDoTerreno ?? [];
+  verticesPayload.forEach((v, i) => {
+    model.verticesDoTerreno.push({
+      uid: uidDe('verticesDoTerreno', i, verticesPayload.length),
+      ponto: { x: v.ponto.x, y: v.ponto.y },
+      nome: v.nome,
+      ...(v.tipo != null ? { tipo: v.tipo } : {}),
+      ...(v.sigmaMm != null ? { sigmaMm: v.sigmaMm } : {}),
+      ...(v.metodo != null ? { metodo: v.metodo } : {}),
     });
   });
 

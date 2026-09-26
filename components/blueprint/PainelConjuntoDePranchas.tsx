@@ -28,8 +28,8 @@ interface Props {
   onRemover: (id: string) => Promise<void>;
 }
 
-const ROTULO_INCLUIR: Record<keyof InclusaoNoConjunto, string> = { indice: 'Índice', plantas: 'Plantas por pavimento', humanizada: 'Plantas humanizadas (venda)', eletrica: 'Elétrica (+ quadro de cargas e unifilar)', cortes: 'Cortes', elevacoes: 'Fachadas', ampliacoes: 'Ampliações (banheiros e cozinhas)', tabelas: 'Quadro de áreas e esquadrias' };
-const ROTULO_TIPO = { INDICE: 'Índice', PLANTA: 'Planta', HUMANIZADA: 'Humanizada', ELETRICA: 'Elétrica', QUADRO_DE_CARGAS: 'Quadro', UNIFILAR: 'Unifilar', CORTE: 'Corte', ELEVACAO: 'Fachada', AMPLIACAO: 'Ampliação', TABELAS: 'Tabelas' } as const;
+const ROTULO_INCLUIR: Record<keyof InclusaoNoConjunto, string> = { indice: 'Índice', plantas: 'Plantas por pavimento', humanizada: 'Plantas humanizadas (venda)', eletrica: 'Elétrica (+ quadro de cargas e unifilar)', cortes: 'Cortes', elevacoes: 'Fachadas', ampliacoes: 'Ampliações (banheiros e cozinhas)', tabelas: 'Quadro de áreas e esquadrias', topografica: 'Planta topográfica do imóvel (malha de coordenadas e roteiro)' };
+const ROTULO_TIPO = { INDICE: 'Índice', PLANTA: 'Planta', HUMANIZADA: 'Humanizada', ELETRICA: 'Elétrica', QUADRO_DE_CARGAS: 'Quadro', UNIFILAR: 'Unifilar', CORTE: 'Corte', ELEVACAO: 'Fachada', AMPLIACAO: 'Ampliação', TABELAS: 'Tabelas', TOPOGRAFICA: 'Topográfica' } as const;
 
 export default function PainelConjuntoDePranchas({ modelo, templates, indisponivel = null, template, onTemplate, templateEscolhidoId, onEscolher, onGerar, gerando = false, desabilitado = false, onSalvar, onRemover }: Props) {
   const [editando, setEditando] = useState(false);

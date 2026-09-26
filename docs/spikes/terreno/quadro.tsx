@@ -13,6 +13,7 @@ import '../../../index.css';
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import QuadroDeDivisas from '../../../components/blueprint/QuadroDeDivisas';
+import { ConfirmProvider } from '../../../components/ui/confirm';
 import PainelTerreno from '../../../components/blueprint/PainelTerreno';
 import PainelZonaUrbanistica from '../../../components/blueprint/PainelZonaUrbanistica';
 import type { EmpreendimentoRegulatoryZone } from '../../../types/empreendimento';
@@ -31,6 +32,30 @@ import {
   papeisSugeridos,
 } from '../../../utils/blueprintTerreno';
 import { lerZona, recuosDaZona } from '../../../utils/blueprintZonaUrbanistica';
+// A1: roteiro perimétrico e a gaveta dele.
+import { roteiroPerimetrico, memorialConvencional } from '../../../utils/blueprintRoteiroPerimetrico';
+import PainelRoteiroPerimetrico from '../../../components/blueprint/PainelRoteiroPerimetrico';
+
+/**
+ * A1: `?geo=1` georreferencia o lote (BH, UTM 23S SIRGAS) e `?vertices=1`
+ * nomeia P1…Pn — os dois estados que o roteiro distingue. Aplicados no fim,
+ * valem também para o `?vazio=1`.
+ */
+function comExtras(model: BlueprintModel): BlueprintModel {
+  const q = new URLSearchParams(location.search);
+  let m = model;
+  if (q.get('geo') === '1') {
+    m = applyCommand(m, {
+      type: 'SetGeorreferencia',
+      georreferencia: { latitude: -19.9167, longitude: -43.9345, projetada: { lesteM: 611_000, norteM: 7_796_000, crs: 'EPSG:31983' } },
+    }).model;
+  }
+  if (q.get('vertices') === '1') {
+    const t = medirTerreno(m.boundaries);
+    if (t) m = applyCommand(m, { type: 'NomearVerticesDoTerreno', pontos: t.anel }).model;
+  }
+  return m;
+}
 
 /** Lote de 5 lados: frente ao sul, fundo partido em dois trechos da mesma reta. */
 const CANTOS = [
@@ -58,7 +83,7 @@ function inicial(): BlueprintModel {
   }));
   let model = applyBatch(base.model, lados).model;
 
-  if (new URLSearchParams(location.search).get('vazio') === '1') return model;
+  if (new URLSearchParams(location.search).get('vazio') === '1') return comExtras(model);
 
   // Estado cheio: papéis derivados, escritura preenchida e uma divergência de
   // 20 cm — que é o caso que o painel existe para mostrar.
@@ -93,7 +118,7 @@ function inicial(): BlueprintModel {
       confrontante: 'Lote 05',
     },
   ]).model;
-  return model;
+  return comExtras(model);
 }
 
 function App() {
@@ -193,12 +218,29 @@ function App() {
     );
   }
 
+  if (new URLSearchParams(location.search).get('roteiro') === '1') {
+    const roteiro = roteiroPerimetrico(model);
+    return (
+      <div className="mx-auto max-w-3xl p-6">
+        <PainelRoteiroPerimetrico
+          roteiro={roteiro}
+          memorial={memorialConvencional(roteiro, { nome: 'Lote do harness' })}
+          onNomear={() => rodar([{ type: 'NomearVerticesDoTerreno', pontos: roteiro.vertices.map((v) => v.ponto) }])}
+          onRestituir={() => {}}
+          temLote={model.boundaries.some((b) => b.kind === 'TERRENO')}
+        />
+      </div>
+    );
+  }
+
   return (
     <QuadroDeDivisas
       aberto
       onFechar={() => {}}
       terreno={terreno}
       limites={model.boundaries}
+      roteiro={roteiroPerimetrico(model)}
+      onNomearVertice={(ponto, nome) => rodar([{ type: 'SetVerticeDoTerreno', ponto, nome }])}
       areaEscrituraMm2={model.areaEscrituraMm2 ?? null}
       onAreaEscritura={(areaMm2) => rodar([{ type: 'SetAreaEscritura', areaMm2 }])}
       onPapel={(boundaryId, papel) => rodar([{ type: 'SetBoundaryPapel', boundaryId, papel }])}
@@ -222,4 +264,8 @@ function App() {
   );
 }
 
-createRoot(document.getElementById('raiz')!).render(<App />);
+createRoot(document.getElementById('raiz')!).render(
+  <ConfirmProvider>
+    <App />
+  </ConfirmProvider>,
+);

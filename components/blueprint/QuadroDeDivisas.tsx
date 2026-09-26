@@ -2,6 +2,7 @@ import React from 'react';
 import { AlertTriangle, LandPlot, MapPin } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import type { Boundary, BoundaryPapel, ObjectId } from '../../utils/blueprintKernel';
+import type { RoteiroPerimetrico } from '../../utils/blueprintRoteiroPerimetrico';
 import {
   areaEmM2,
   divergente,
@@ -77,6 +78,14 @@ interface Props {
   onEscritura: (boundaryId: ObjectId, medidaMm: number | null, confrontante: string | null) => void;
   /** Acende o lado no desenho enquanto a linha está em foco. */
   onDestacar: (boundaryId: ObjectId | null) => void;
+  /**
+   * A1: o roteiro perimétrico derivado do mesmo desenho — traz o vértice de
+   * partida de cada lado, o azimute e o rumo. Opcional: o quadro continua
+   * valendo sem ele (é o caso dos testes antigos e de quem não precisa).
+   */
+  roteiro?: RoteiroPerimetrico | null;
+  /** A1: renomeia o vértice de partida do lado (âncora é o ponto). */
+  onNomearVertice?: (ponto: { x: number; y: number }, nome: string) => void;
 }
 
 export default function QuadroDeDivisas({
@@ -90,6 +99,8 @@ export default function QuadroDeDivisas({
   onApontarFrente,
   onEscritura,
   onDestacar,
+  roteiro = null,
+  onNomearVertice,
 }: Props) {
   if (!terreno) return null;
 
@@ -195,6 +206,14 @@ export default function QuadroDeDivisas({
                   Desenhado
                 </th>
                 <th className="px-3 py-2 border-r border-gray-100 w-24">Escritura</th>
+                {roteiro && roteiro.lados.length > 0 && (
+                  <>
+                    <th className="px-3 py-2 border-r border-gray-100 w-20">Vértice</th>
+                    <th className="px-3 py-2 border-r border-gray-100 w-28 text-right" title={roteiro.georreferenciado ? 'Azimute verdadeiro, corrigido da convergência meridiana' : 'Azimute de DESENHO (contra o eixo Y do modelo): sem georreferência não é o azimute do memorial'}>
+                      Azimute{roteiro.georreferenciado ? '' : ' (des.)'}
+                    </th>
+                  </>
+                )}
                 <th className="px-4 py-2 min-w-[9rem]">Confrontante</th>
               </tr>
             </thead>
@@ -254,6 +273,44 @@ export default function QuadroDeDivisas({
                     <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-700">
                       {metrosDe(linha.desenhadoMm)} m
                     </td>
+
+                    {roteiro && roteiro.lados.length > 0 && (() => {
+                      const lado = roteiro.lados.find((l) => l.divisaId === linha.id) ?? null;
+                      const vertice = lado ? roteiro.vertices[lado.ordem - 1] : null;
+                      return (
+                        <>
+                          <td className="px-3 py-2.5 border-r border-gray-100">
+                            {vertice ? (
+                              <input
+                                type="text"
+                                defaultValue={vertice.provisorio ? '' : vertice.nome}
+                                placeholder={vertice.nome}
+                                key={`${linha.id}-${vertice.nome}`}
+                                aria-label={`Nome do vértice de partida do lado ${linha.ordem}`}
+                                title="O vértice onde este lado começa. Enter ou sair do campo grava; vazio mantém o provisório."
+                                onBlur={(e) => {
+                                  const nome = e.target.value.trim();
+                                  if (nome && nome !== vertice.nome) onNomearVertice?.(vertice.ponto, nome);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                }}
+                                className={`w-full rounded-md border px-2 py-1 text-sm font-normal ${vertice.provisorio ? 'border-dashed border-gray-200 text-gray-400' : 'border-gray-100 bg-gray-50 text-gray-900'}`}
+                              />
+                            ) : (
+                              <span className="text-sm text-gray-400">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-700 whitespace-nowrap">
+                            {lado ? (
+                              <span title={`Rumo ${lado.rumoTexto}`}>{lado.azimuteTexto}</span>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                        </>
+                      );
+                    })()}
 
                     <td className="px-3 py-2.5 border-r border-gray-100">
                       <CampoEmMetros

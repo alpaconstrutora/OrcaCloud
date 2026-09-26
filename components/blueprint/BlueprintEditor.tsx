@@ -146,6 +146,8 @@ import {
 import { blueprintEmpreendimentoSync } from '../../services/blueprintEmpreendimentoSync';
 import { montarDocumentosDoLoteamento, previaDosDocumentos } from '../../services/blueprintLoteamentoDocsService';
 import { pendenciasDosMemoriais } from '../../utils/blueprintMemorialLote';
+import { roteiroPerimetrico, memorialConvencional } from '../../utils/blueprintRoteiroPerimetrico';
+import PainelRoteiroPerimetrico from './PainelRoteiroPerimetrico';
 import {
   MATERIAIS_DE_SUB_REGIAO,
   FICHA_DO_MATERIAL_DE_SUB_REGIAO,
@@ -972,6 +974,9 @@ const RELATORIOS_DO_DOCK = {
   // CONFERÊNCIA DO LOTEAMENTO (25/09/2026, B2): área e testada mínimas, lote
   // encravado, número repetido e o percentual de áreas públicas. Só acusa.
   loteamento: { rotulo: 'Conferência do loteamento', naVista: false, no3d: false },
+  // ROTEIRO PERIMÉTRICO (26/09/2026, A1): vértice a vértice, com coordenadas,
+  // azimute verdadeiro, distância e confrontante; o memorial convencional.
+  roteiro: { rotulo: 'Roteiro perimétrico', naVista: false, no3d: false },
   conflitos: { rotulo: 'Conflitos', naVista: true, no3d: true },
   // Restrições (E1.4b): a conferência das intenções declaradas, com o ajuste.
   restricoes: { rotulo: 'Restrições', naVista: true, no3d: true },
@@ -1575,6 +1580,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     'restricoes',
     // B2: é tabela de consulta, e o critério vigente manda tabela para o drawer.
     'loteamento',
+    // A1: idem.
+    'roteiro',
     'medicoes',
     'orcamento',
   ]);
@@ -6032,6 +6039,30 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     }
   }
 
+  /**
+   * A1 — o ROTEIRO PERIMÉTRICO, derivado do desenho a cada mudança. Nunca
+   * gravado: nome do vértice vive no kernel, geometria nas divisas,
+   * georreferência no estudo; a tabela é só a junção dos três.
+   */
+  const roteiro = useMemo(() => roteiroPerimetrico(editor.model), [editor.model]);
+
+  /** A1 — nomeia P1…Pn no sentido do roteiro, num comando só (Ctrl+Z desfaz). */
+  async function nomearVerticesDoTerreno() {
+    if (roteiro.vertices.length < 3) return;
+    // §14 do guia: nunca o confirm nativo — o `useConfirm` do app.
+    const ok = roteiro.vertices.every((v) => v.provisorio)
+      ? true
+      : await confirmar({
+          title: 'Renomear os vértices?',
+          message: 'Alguns vértices já têm nome. Todos passam a P1, P2… na ordem do roteiro. Ctrl+Z desfaz.',
+          confirmLabel: 'Renomear',
+          variant: 'warning',
+        });
+    if (!ok) return;
+    editor.run({ type: 'NomearVerticesDoTerreno', pontos: roteiro.vertices.map((v) => v.ponto) });
+    setAvisoConexaoT(`${roteiro.vertices.length} vértices nomeados P1…P${roteiro.vertices.length}, no sentido horário a partir do primeiro. Ctrl+Z desfaz.`);
+  }
+
   /** B2 — lança a proposta num lote só de comandos. */
   function aceitarSubdivisao() {
     if (!levelId || !propostaDeSubdivisao || propostaDeSubdivisao.lotes.length === 0) return;
@@ -9679,6 +9710,34 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 ativo={tarefaAberta === 'terreno'}
                 onClick={() => alternarTarefa('terreno')}
                 ajuda="Área da escritura, papel de cada divisa, recuos e zona urbanística, topografia, corte e aterro, projeto executivo de terraplenagem"
+              />
+              {/* A1: o nome do vértice é o que amarra memorial, planta e tabela
+                  de coordenadas ao MESMO ponto — e hoje é digitado três vezes. */}
+              <BotaoDoRibbon
+                icone={Hash}
+                rotulo="Nomear vértices"
+                onClick={() => void nomearVerticesDoTerreno()}
+                disabled={roteiro.vertices.length < 3}
+                ajuda={
+                  roteiro.vertices.length < 3
+                    ? 'Feche o contorno do lote com a ferramenta Terreno antes: os vértices são os do anel'
+                    : 'Nomeia P1, P2… no sentido horário a partir do primeiro vértice — um comando só, Ctrl+Z desfaz; edite um a um no quadro de divisas'
+                }
+              />
+              <BotaoDoRibbon
+                icone={ListOrdered}
+                rotulo="Roteiro"
+                contagem={roteiro.lados.length || undefined}
+                ativo={relatorioAberto === 'roteiro'}
+                onClick={() => alternarRelatorio('roteiro')}
+                disabled={roteiro.lados.length === 0}
+                ajuda={
+                  roteiro.lados.length === 0
+                    ? 'Feche o contorno do lote com a ferramenta Terreno: o roteiro é a tabela vértice a vértice dele'
+                    : roteiro.georreferenciado
+                      ? 'Vértice a vértice: E/N, latitude/longitude, azimute verdadeiro, distância e confrontante; memorial convencional; restituição por memorial'
+                      : 'Vértice a vértice com azimutes de DESENHO — informe latitude/longitude e o CRS em Dados do lote para os azimutes verdadeiros e as coordenadas'
+                }
               />
             </GrupoDoRibbon>
             {/* LOTEAMENTO (B1, 25/09/2026): o parcelamento do solo. Separado do grupo
@@ -15092,6 +15151,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {relatorioNoDrawer === 'conflitos' && <AlertTriangle className="h-5 w-5 text-amber-600" />}
               {relatorioNoDrawer === 'restricoes' && <Link2 className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'loteamento' && <LandPlot className="h-5 w-5 text-blue-700" />}
+              {relatorioNoDrawer === 'roteiro' && <ListOrdered className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'medicoes' && <Ruler className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'orcamento' && <Calculator className="h-5 w-5 text-blue-700" />}
               {RELATORIOS_DO_DOCK[relatorioNoDrawer].rotulo}
@@ -15128,10 +15188,37 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               'A ponte com o orçamento da obra: o de-para dos itens e a prévia do que a versão publicada gera.'}
             {relatorioNoDrawer === 'loteamento' &&
               'Área e testada mínimas, lote encravado, número repetido na quadra e o percentual de áreas públicas. Os mínimos vêm da zona do estudo quando informados; senão, do piso da Lei 6.766/79. Só acusa — nada trava o desenho.'}
+            {relatorioNoDrawer === 'roteiro' &&
+              'A tabela que a matrícula e o SIGEF pedem: vértice a vértice, no sentido horário, com coordenadas, azimute, distância e confrontante. Tudo derivado do desenho — nada aqui se grava.'}
           </SheetDescription>
         </SheetHeader>
 
         <SheetPanel className="drawer-legivel p-0">
+          {relatorioNoDrawer === 'roteiro' && (
+            <div className="px-4 py-3">
+              <PainelRoteiroPerimetrico
+                roteiro={roteiro}
+                memorial={memorialConvencional(roteiro, { nome: study.name || 'Imóvel' })}
+                onNomear={() => void nomearVerticesDoTerreno()}
+                onRestituir={(anel) => {
+                  if (!levelId || anel.length < 3) return;
+                  editor.runBatch(
+                    anel.map((p, i) => ({
+                      type: 'AddBoundary' as const,
+                      levelId,
+                      a: p,
+                      b: anel[(i + 1) % anel.length],
+                      kind: 'TERRENO' as const,
+                    })),
+                  );
+                  setRelatorio(null);
+                  setAvisoConexaoT(`${anel.length} divisas lançadas a partir do memorial. Ctrl+Z desfaz todas.`);
+                }}
+                temLote={(editor.model.boundaries ?? []).some((b) => b.kind === 'TERRENO')}
+              />
+            </div>
+          )}
+
           {relatorioNoDrawer === 'loteamento' && (
             <div className="px-4 py-3">
               <PainelConferenciaDoLoteamento
@@ -15237,6 +15324,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         }}
         terreno={terreno}
         limites={limitesDoNivel}
+        roteiro={roteiro}
+        onNomearVertice={(ponto, nome) => editor.run({ type: 'SetVerticeDoTerreno', ponto, nome })}
         areaEscrituraMm2={editor.model.areaEscrituraMm2 ?? null}
         onAreaEscritura={(areaMm2) => editor.run({ type: 'SetAreaEscritura', areaMm2 })}
         onPapel={(boundaryId, papel) => editor.run({ type: 'SetBoundaryPapel', boundaryId, papel })}

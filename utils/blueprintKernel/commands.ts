@@ -40,6 +40,9 @@ import {
   MATERIAIS_DE_SUB_REGIAO,
   MAX_NOME_DE_SUB_REGIAO,
   type MaterialDeSubRegiao,
+  MAX_NOME_DE_VERTICE,
+  TOLERANCIA_DO_VERTICE_MM,
+  type VerticeDoTerreno,
   findQuadra,
   findLote,
   findVia,
@@ -537,6 +540,10 @@ export type Command =
   | { type: 'SetSubRegiaoProps'; subRegiaoId: ObjectId; material?: MaterialDeSubRegiao; nome?: string | null; pontos?: Point[] }
   | { type: 'MoveSubRegiaoVertex'; subRegiaoId: ObjectId; index: number; to: Point }
   | { type: 'DeleteSubRegiao'; subRegiaoId: ObjectId }
+  // VÉRTICES DO TERRENO (0.59.0)
+  | { type: 'SetVerticeDoTerreno'; ponto: Point; nome: string; tipo?: 'M' | 'P' | 'V' | null; sigmaMm?: number | null; metodo?: string | null }
+  | { type: 'RemoverVerticeDoTerreno'; ponto: Point }
+  | { type: 'NomearVerticesDoTerreno'; pontos: Point[]; prefixo?: string; inicio?: number }
   // LOTEAMENTO (0.58.0)
   | { type: 'AddQuadra'; levelId: ObjectId; nome: string; pontos: Point[] }
   | { type: 'SetQuadraProps'; quadraId: ObjectId; nome?: string; pontos?: Point[] }
@@ -2534,6 +2541,68 @@ function aplicarSemHash(
       const s = findSubRegiao(next, command.subRegiaoId);
       next.subRegioes = (next.subRegioes ?? []).filter((x) => x.id !== s.id);
       diff.deleted.push(s.id);
+      break;
+    }
+
+    // ── Vértices nomeados do terreno (0.59.0) ──────────────────────
+
+    case 'SetVerticeDoTerreno': {
+      const nome = command.nome?.trim().slice(0, MAX_NOME_DE_VERTICE) ?? '';
+      if (!nome) throw new KernelError('BAD_VERTEX', 'O vértice precisa de nome');
+      const ponto = paraPontoMm(command.ponto, 0);
+      const lista = next.verticesDoTerreno ?? [];
+      // A âncora é o PONTO, com tolerância: quem clica no vértice raramente
+      // acerta o milímetro, e um nome por coordenada exata nunca seria reeditado.
+      const existente = lista.find((v) => Math.hypot(v.ponto.x - ponto.x, v.ponto.y - ponto.y) <= TOLERANCIA_DO_VERTICE_MM);
+      const dados: Partial<VerticeDoTerreno> = {
+        nome,
+        ...(command.tipo !== undefined ? { tipo: command.tipo ?? undefined } : {}),
+        ...(command.sigmaMm !== undefined ? { sigmaMm: command.sigmaMm ?? undefined } : {}),
+        ...(command.metodo !== undefined ? { metodo: command.metodo?.trim() || undefined } : {}),
+      };
+      if (existente) {
+        Object.assign(existente, dados);
+        diff.updated.push(existente.uid);
+      } else {
+        next.verticesDoTerreno = [...lista, { uid: novoUid(), ponto, ...dados, nome }];
+        diff.created.push(next.verticesDoTerreno[next.verticesDoTerreno.length - 1].uid);
+      }
+      break;
+    }
+
+    case 'RemoverVerticeDoTerreno': {
+      const ponto = paraPontoMm(command.ponto, 0);
+      const lista = next.verticesDoTerreno ?? [];
+      const alvo = lista.find((v) => Math.hypot(v.ponto.x - ponto.x, v.ponto.y - ponto.y) <= TOLERANCIA_DO_VERTICE_MM);
+      if (!alvo) break;
+      next.verticesDoTerreno = lista.filter((v) => v !== alvo);
+      diff.deleted.push(alvo.uid);
+      break;
+    }
+
+    /**
+     * NOMEAR EM LOTE: P1, P2, P3… na ordem em que os pontos chegam (que é a do
+     * anel). Um comando só, um Ctrl+Z — nomear 40 vértices um a um seria o
+     * trabalho que a ferramenta existe para tirar.
+     */
+    case 'NomearVerticesDoTerreno': {
+      const prefixo = command.prefixo?.trim() || 'P';
+      const inicio = command.inicio ?? 1;
+      let lista = next.verticesDoTerreno ?? [];
+      command.pontos.forEach((p, i) => {
+        const ponto = paraPontoMm(p, i);
+        const nome = `${prefixo}${inicio + i}`.slice(0, MAX_NOME_DE_VERTICE);
+        const existente = lista.find((v) => Math.hypot(v.ponto.x - ponto.x, v.ponto.y - ponto.y) <= TOLERANCIA_DO_VERTICE_MM);
+        if (existente) {
+          existente.nome = nome;
+          diff.updated.push(existente.uid);
+        } else {
+          const novo: VerticeDoTerreno = { uid: novoUid(), ponto, nome };
+          lista = [...lista, novo];
+          diff.created.push(novo.uid);
+        }
+      });
+      next.verticesDoTerreno = lista;
       break;
     }
 

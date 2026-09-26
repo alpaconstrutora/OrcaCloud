@@ -330,3 +330,33 @@ Não há coordenadas "oficiais" copiadas de uma estação da rede geodésica: eu
 1. **Códigos EPSG do SAD 69 errados** — eu usei `29100 + zona`; o correto é `29170 + zona` (18S é 29188, não 29118).
 2. **`gmsTexto` com zero casas de segundo escrevia `45°30'000"`**: o preenchimento pedia largura 3 quando deviam ser 2 dígitos.
 3. **O sinal da convergência** — no hemisfério **sul** ela é NEGATIVA a leste do meridiano central, o contrário da intuição do hemisfério norte. O código estava certo pela fórmula; o teste é que assumira errado.
+
+---
+
+## Estado — A1 (26/09/2026)
+
+- [x] Kernel **0.58.0 → 0.59.0**: `verticesDoTerreno` ({ponto, nome, tipo M/P/V?, sigmaMm?, metodo?}) **ancorado no PONTO** (o anel é derivado e renumera ao apagar uma divisa — um nome por índice apareceria no vértice errado sem erro nenhum). Comandos `SetVerticeDoTerreno` (cria ou edita pelo ponto, tolerância de 5 mm), `RemoverVerticeDoTerreno`, `NomearVerticesDoTerreno` (P1…Pn num comando só). Goldens provados intactos com a string antiga antes do bump, recapturados depois; bundle da planta-api regerado.
+- [x] `utils/blueprintRoteiroPerimetrico.ts`: `roteiroPerimetrico` (derivado: sentido horário forçado com as divisas acompanhando a inversão, vértice de partida = menor sufixo numérico, E/N + lat/long + azimute VERDADEIRO + distância no terreno quando georreferenciado, fechamento angular), `memorialConvencional` (o texto da gleba inteira) e `restituirMemorial` (texto → polígono, com erro de fechamento e o que não leu DITO).
+- [x] `utils/blueprintPranchaTopografica.ts`: `desenharPlantaTopografica` (divisa, vértices marcados e nomeados, cota e azimute por lado, tabela do roteiro) e `desenharMalhaDeCoordenadas` (só com georreferência; passo redondo 1/2/5×10ⁿ; rótulos E/N nas margens). `TipoDePrancha` ganhou `'TOPOGRAFICA'` (opção `incluir.topografica`, opcional para templates gravados).
+- [x] Tela: **Nomear vértices** e **Roteiro** no grupo Lote da aba Terreno; o quadro de divisas ganhou as colunas Vértice (editável) e Azimute; gaveta `PainelRoteiroPerimetrico` com tabela, memorial para copiar e restituição por memorial (lança as divisas num lote só; bloqueada quando já há lote — restituir por cima seria destruição).
+- [x] Testes: `blueprintVerticesDoTerreno` (8), `blueprintRoteiroPerimetrico` (10), `blueprintPranchaTopografica` (4), `BlueprintEditor` (+1). Suíte cheia **478 arquivos / 5.540 testes** verde; tsc, `check-ui-standard`, `check-xss-sinks` e `build` verdes.
+
+### Três coisas que os testes corrigiram em mim
+
+1. **A divisa do lote é `kind: 'TERRENO'`**, não `DIVISA` (`DIVISA` é partição interna de ambientes; `divisasDoLote` filtra por TERRENO). E o confrontante não entra no `AddBoundary` — é de `SetBoundaryEscritura`.
+2. **O desenho JÁ É o terreno.** Eu esperava a distância "no terreno" maior que a do desenho perto do meridiano central; mas o modelo é em mm locais (plano do terreno), e o que encolhe por `k` é a distância na QUADRÍCULA (entre os E/N). O teste agora afirma isso: quadrícula < desenho, razão ≈ 0,99975 em BH.
+3. **Rotular confrontante por índice da lista de divisas** punha "Lote 11" noutro lado físico no lote anti-horário; o teste comparava lados diferentes. O confrontante é do lado físico.
+
+### Fora desta fase (declarado)
+
+Cota linear manual como anotação (`COTA_LINEAR`) e a origem `terreno` no `docxFieldCatalog` — o memorial sai em texto para copiar, não em .docx por template. Planta de SITUAÇÃO como tipo próprio (a vista `situacao` já existe).
+
+### Prova no navegador (harness `docs/spikes/terreno/quadro.html` + `medir-roteiro.mjs`, portão com exit ≠ 0)
+
+19 verificações: coluna Vértice com os provisórios V1…V5 e "Azimute (des.)" sem georreferência; "Azimute" sem o sufixo, P1…P5 nos campos e 5 azimutes em GMS com georreferência; renomear pelo quadro grava no kernel; a gaveta traz E/N, latitude "S", longitude "W", convergência; o memorial começa em P1 e fecha o perímetro; **restituir o próprio memorial lê 5 trechos com erro de fechamento 0,000 m**; com lote desenhado, "Lançar" fica apagado e o title explica; nenhum erro de console.
+
+### Dois achados que só o PRINT pegou (o unitário passava)
+
+1. **Azimute escrito como `360°00'00"` e rumo `0°00'00" NW`.** 359,99999° é o norte, mas eu reduzia a [0, 360) ANTES de arredondar, e o GMS arredondava 359,99999 para 360. Correção: arredondar à precisão do texto em INTEIROS de "último dígito de segundo" (1/3600 não é exato em binário — 1296000 × (1/3600) dá 359,99999999999994 e voltava a 360), e só então reduzir. Teste novo em `geo.test.ts`.
+2. **Meu teste do roteiro afirmava a física ao contrário e passava por ruído numérico.** Com o Y do desenho no norte verdadeiro (rotação 0), o azimute VERDADEIRO coincide com o de DESENHO até o segundo de arco; quem difere pela convergência é o de QUADRÍCULA (medido entre os E/N). O teste dizia "verdadeiro ≠ desenho" e passava porque o plano tangente introduz 10⁻⁷ grau. Agora afirma |verdadeiro − desenho| < 3,6" e (verdadeiro − quadrícula) = convergência.
+3. O harness do quadro precisava de `ConfirmProvider` (o `QuadroDeDivisas` usa `useConfirm`) — como o da topografia já registrava.

@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.58.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.59.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -648,6 +648,7 @@ function emptyModel() {
     subRegioes: [],
     rodapes: [],
     etapas: [],
+    verticesDoTerreno: [],
     quadras: [],
     lotes: [],
     vias: [],
@@ -1843,6 +1844,17 @@ function projetar(model) {
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.material, y.material)
   );
+  const verticesDoTerreno = ordenar(
+    model.verticesDoTerreno ?? [],
+    (v) => ({
+      ponto: { x: v.ponto.x, y: v.ponto.y },
+      nome: v.nome,
+      tipo: v.tipo ?? void 0,
+      sigmaMm: v.sigmaMm ?? void 0,
+      metodo: v.metodo ?? void 0
+    }),
+    (x, y) => x.ponto.x - y.ponto.x || x.ponto.y - y.ponto.y || cmpStr(x.nome, y.nome)
+  );
   const quadras = ordenar(
     model.quadras ?? [],
     (q) => ({
@@ -2150,6 +2162,7 @@ function projetar(model) {
     anotacoes: anotacoes.length ? anotacoes.map((a) => a.geom) : void 0,
     vistasDependentes: vistasDependentes.length ? vistasDependentes.map((v) => v.geom) : void 0,
     subRegioes: subRegioes.length ? subRegioes.map((s2) => s2.geom) : void 0,
+    verticesDoTerreno: verticesDoTerreno.length ? verticesDoTerreno.map((v) => v.geom) : void 0,
     quadras: quadras.length ? quadras.map((q) => q.geom) : void 0,
     lotes: lotes.length ? lotes.map((l) => l.geom) : void 0,
     vias: vias.length ? vias.map((v) => v.geom) : void 0,
@@ -2184,6 +2197,7 @@ function projetar(model) {
     anotacoes: anotacoes.map((a) => a.item.uid ?? null),
     vistasDependentes: vistasDependentes.map((v) => v.item.uid ?? null),
     subRegioes: subRegioes.map((s2) => s2.item.uid ?? null),
+    verticesDoTerreno: verticesDoTerreno.map((v) => v.item.uid ?? null),
     quadras: quadras.map((q) => q.item.uid ?? null),
     lotes: lotes.map((l) => l.item.uid ?? null),
     vias: vias.map((v) => v.item.uid ?? null),
@@ -2497,6 +2511,17 @@ function modelFromCanonicalPayload(payload) {
       pontos: s2.pontos.map((p) => ({ x: p.x, y: p.y })),
       nome: s2.nome,
       ...s2.parametros && Object.keys(s2.parametros).length > 0 ? { parametros: { ...s2.parametros } } : {}
+    });
+  });
+  const verticesPayload = payload.verticesDoTerreno ?? [];
+  verticesPayload.forEach((v, i) => {
+    model.verticesDoTerreno.push({
+      uid: uidDe("verticesDoTerreno", i, verticesPayload.length),
+      ponto: { x: v.ponto.x, y: v.ponto.y },
+      nome: v.nome,
+      ...v.tipo != null ? { tipo: v.tipo } : {},
+      ...v.sigmaMm != null ? { sigmaMm: v.sigmaMm } : {},
+      ...v.metodo != null ? { metodo: v.metodo } : {}
     });
   });
   const quadrasPayload = payload.quadras ?? [];

@@ -290,7 +290,17 @@
  * vazias, então desenho sem loteamento não ganha chave nova e só muda de hash
  * pela string da versão. Isso foi provado antes do bump.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.58.0';
+/**
+ * ─── 0.58.0 → 0.59.0 (26/09/2026) — VÉRTICES NOMEADOS DO TERRENO ──────────────
+ *
+ * `verticesDoTerreno`: nome (e, opcionalmente, tipo M/P/V, sigma e método) por
+ * vértice do lote, ancorado no PONTO — não no índice do anel, que é derivado e
+ * renumera ao apagar uma divisa. É o que amarra o memorial, a tabela de
+ * coordenadas e a planta ao mesmo vértice. Nome é conteúdo (muda o hash); a
+ * lista é omitida quando vazia, então desenho sem vértice nomeado só muda de
+ * hash pela string da versão — provado antes do bump.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.59.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

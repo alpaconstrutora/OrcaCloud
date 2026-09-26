@@ -6282,3 +6282,23 @@ describe('BlueprintEditor · documentos do loteamento (B4)', () => {
     expect(botao(/^documentos$/i)).toBeInTheDocument();
   });
 });
+
+/**
+ * ROTEIRO PERIMÉTRICO E VÉRTICES NOMEADOS (A1): os comandos existem na aba
+ * Terreno, ficam apagados sem lote e o title diz o caminho.
+ */
+describe('BlueprintEditor · roteiro perimétrico (A1)', () => {
+  it('Nomear vértices e Roteiro ficam apagados sem lote, dizendo por quê', async () => {
+    await montar();
+    await abrirAba(/^terreno$/i);
+
+    const nomear = botao(/^nomear vértices$/i);
+    expect(nomear).toBeDisabled();
+    expect(nomear).toHaveAttribute('title', expect.stringMatching(/feche o contorno do lote/i));
+
+    const roteiro = botao(/^roteiro$/i);
+    expect(roteiro).toBeDisabled();
+    expect(roteiro).toHaveAttribute('title', expect.stringMatching(/feche o contorno do lote/i));
+  });
+
+});

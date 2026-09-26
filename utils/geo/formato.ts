@@ -126,15 +126,31 @@ export function rumoParaAzimute(r: Rumo): number {
   }
 }
 
+/**
+ * ⚠️ O azimute ARREDONDADO à precisão do texto, e só então reduzido a [0, 360).
+ *
+ * 359,99999° é o norte. Reduzir antes de arredondar deixava passar 359,99999,
+ * que o GMS arredondava para `360°00'00"` — e o rumo virava `0°00'00" NW` em
+ * vez de `0°00'00" NE`. O print do harness pegou; o teste unitário, não.
+ */
+function azimuteArredondado(az: number, casasDoSegundo: number): number {
+  // Em INTEIROS de "último dígito de segundo": 1/3600 não é exato em binário, e
+  // 1296000 × (1/3600) dá 359,99999999999994 — que o GMS arredondava de volta a 360.
+  const porGrau = 3600 * 10 ** casasDoSegundo;
+  const volta = 360 * porGrau;
+  const n = ((Math.round(az * porGrau) % volta) + volta) % volta;
+  return n / porGrau;
+}
+
 /** `45°30'00" SE` — o rumo como o memorial o escreve. */
 export function rumoTexto(az: number, casasDoSegundo = 0): string {
-  const r = azimuteParaRumo(az);
+  const r = azimuteParaRumo(azimuteArredondado(az, casasDoSegundo));
   return `${gmsTexto(r.angulo, casasDoSegundo)} ${r.quadrante}`;
 }
 
 /** `135°30'00"` — o azimute escrito. */
 export function azimuteTexto(az: number, casasDoSegundo = 0): string {
-  return gmsTexto(((az % 360) + 360) % 360, casasDoSegundo);
+  return gmsTexto(azimuteArredondado(az, casasDoSegundo), casasDoSegundo);
 }
 
 /**

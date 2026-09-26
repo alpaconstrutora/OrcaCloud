@@ -16,11 +16,12 @@ import React from 'react';
 import {
   Loader2, RefreshCw, BarChart3, Building2, ArrowLeftRight,
   CheckCircle2, AlertTriangle, Link2Off, Clock, Upload, Ruler,
-  Download, Send,
+  Download, Send, LandPlot
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { plantaEmpreendimentoSync } from '../../services/plantaEmpreendimentoSync';
+import { blueprintEmpreendimentoSync } from '../../services/blueprintEmpreendimentoSync';
 import { PlantaAiIntegration } from '../../services/plantaAiIntegration';
 import { previewWriteBackImovib, applyWriteBackImovib, WriteBackItem } from '../../services/sync/writeBackImovib';
 import { Empreendimento, EmpreendimentoSyncReport, PlantaAiSyncReport, PlantaAiWriteBackReport } from '../../types';
@@ -55,6 +56,12 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
   const [plantaSyncing, setPlantaSyncing] = React.useState(false);
   const [plantaWritingBack, setPlantaWritingBack] = React.useState(false);
 
+  // Loteamento — Planta Inteligente (B3). Não tem write-back: o desenho é a
+  // origem, e reconstruir geometria a partir de uma área não tem solução única.
+  const [loteamentoReport, setLoteamentoReport] = React.useState<PlantaAiSyncReport | null>(null);
+  const [loteamentoError, setLoteamentoError] = React.useState<string | null>(null);
+  const [loteamentoSyncing, setLoteamentoSyncing] = React.useState(false);
+
   // Aresta direta Arquitetura ↔ Viabilidade. Só existe para ESTE empreendimento se os dois
   // estudos que ele referencia apontarem um para o outro (imovib_studies.planta_ai_study_id).
   // Os dois vínculos do empreendimento são independentes: dá para ter um Imovib e um Planta IA
@@ -67,6 +74,7 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
     setStudyError(null);
     setWriteBackError(null);
     setPlantaError(null);
+    setLoteamentoError(null);
     const tasks: Promise<void>[] = [];
 
     // Viabilidade — só roda o dry-run se houver estudo vinculado
@@ -87,6 +95,17 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
     }
 
     // Planta IA — só roda o dry-run se houver estudo de arquitetura vinculado
+    // LOTEAMENTO (B3): a terceira aresta. So roda o dry-run com estudo vinculado.
+    if (e.blueprint_study_id) {
+      tasks.push(
+        blueprintEmpreendimentoSync.previewSync(e.id)
+          .then(r => setLoteamentoReport(r))
+          .catch(err => { setLoteamentoError(err.message); setLoteamentoReport(null); })
+      );
+    } else {
+      setLoteamentoReport(null);
+    }
+
     if (e.planta_ai_study_id) {
       tasks.push(
         plantaEmpreendimentoSync.previewSync(e.id)
@@ -123,7 +142,7 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
 
     await Promise.all(tasks);
     setLoading(false);
-  }, [e.id, e.imovib_study_id, e.planta_ai_study_id]);
+  }, [e.id, e.imovib_study_id, e.planta_ai_study_id, e.blueprint_study_id]);
 
   React.useEffect(() => { load(); }, [load]);
 
@@ -146,6 +165,11 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
     }
   };
 
+  const loteamentoOrphans = (loteamentoReport?.orphanTowers.length ?? 0) + (loteamentoReport?.orphanUnits.length ?? 0);
+  const loteamentoTotal = loteamentoReport
+    ? loteamentoReport.towersCreated + loteamentoReport.towersUpdated + loteamentoReport.unitsCreated + loteamentoReport.unitsUpdated
+    : 0;
+
   const handlePlantaSync = async () => {
     if (!plantaReport) return;
     const total = plantaReport.towersCreated + plantaReport.towersUpdated
@@ -166,6 +190,32 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
       setPlantaError(err.message);
     } finally {
       setPlantaSyncing(false);
+    }
+  };
+
+  /** LOTEAMENTO (B3): traz as quadras e os lotes da versão PUBLICADA do desenho. */
+  const handleLoteamentoSync = async () => {
+    if (!loteamentoReport) return;
+    const total = loteamentoReport.towersCreated + loteamentoReport.towersUpdated
+      + loteamentoReport.unitsCreated + loteamentoReport.unitsUpdated;
+    if (total === 0) return;
+    const ok = await confirm({
+      title: 'Trazer o loteamento para o empreendimento?',
+      message: `Serão criadas/atualizadas ${loteamentoReport.towersCreated + loteamentoReport.towersUpdated} quadra(s) e ${loteamentoReport.unitsCreated + loteamentoReport.unitsUpdated} lote(s) a partir da versão PUBLICADA do desenho.
+
+Só a geometria vem do desenho (quadra, número, área, testada e confrontantes). Preço e status de venda dos lotes já existentes não são tocados.`,
+      confirmLabel: 'Trazer',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    setLoteamentoSyncing(true);
+    try {
+      await blueprintEmpreendimentoSync.syncToEmpreendimento(e.id);
+      await load();
+    } catch (err: any) {
+      setLoteamentoError(err.message);
+    } finally {
+      setLoteamentoSyncing(false);
     }
   };
 
@@ -498,6 +548,55 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
               <DiffRow label="Sem origem no Planta IA" value={plantaUnitsWithoutOrigin} muted />
               <p className="text-[9px] text-gray-400 font-medium leading-relaxed pt-1">
                 Envia pavimentos, unidades por andar, total de unidades e áreas. VGV, custo e status de venda nunca voltam ao cenário.
+              </p>
+            </>
+          ) : null}
+        </RelationCard>
+
+        {/* LOTEAMENTO ↔ EMPREENDIMENTO (B3). Aresta de MÃO ÚNICA, e de propósito:
+            o desenho é a origem. Mudar a área de um lote é mover vértice na
+            planta, não editar um número no cadastro — e reconstruir geometria a
+            partir de uma área não tem solução única. */}
+        <RelationCard
+          title="Loteamento → Empreendimento"
+          icon={LandPlot}
+          tint="emerald"
+        >
+          {!e.blueprint_study_id ? (
+            <EmptyHint icon={Link2Off} text="Este empreendimento não está vinculado a um estudo da Planta Inteligente. Vincule pelo botão Editar, ou envie desde a própria planta." />
+          ) : loteamentoError ? (
+            <div className="text-xs text-rose-600 font-medium flex items-start gap-1.5">
+              <AlertTriangle className="w-4 h-4 shrink-0" /> {loteamentoError}
+            </div>
+          ) : loteamentoReport ? (
+            <>
+              <p className="text-[10px] font-semibold text-gray-400 pt-1">Da versão publicada para o empreendimento</p>
+              <DiffRow label="Quadras a criar" value={loteamentoReport.towersCreated} />
+              <DiffRow label="Quadras a atualizar" value={loteamentoReport.towersUpdated} />
+              <DiffRow label="Lotes a criar" value={loteamentoReport.unitsCreated} />
+              <DiffRow label="Lotes a atualizar" value={loteamentoReport.unitsUpdated} />
+              <DiffRow label="Lotes no desenho" value={loteamentoReport.scenarioUnits} muted />
+              {loteamentoOrphans > 0 && <DiffRow label="Itens órfãos (mantidos)" value={loteamentoOrphans} warn />}
+              {loteamentoReport.warnings.map((w, i) => (
+                <p key={i} className="text-[10px] text-amber-600 font-medium flex items-start gap-1.5 leading-relaxed pt-1">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" /> {w}
+                </p>
+              ))}
+              <button
+                type="button"
+                onClick={handleLoteamentoSync}
+                disabled={loteamentoSyncing || loteamentoTotal === 0}
+                title={
+                  loteamentoTotal === 0
+                    ? 'Nada a trazer: o empreendimento já reflete a versão publicada do desenho'
+                    : 'Traz quadras e lotes da versão publicada — preço e status dos lotes existentes não são tocados'
+                }
+                className="mt-3 w-full rounded-[8px] bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+              >
+                {loteamentoSyncing ? 'Trazendo…' : `Trazer ${loteamentoTotal || ''} ${loteamentoTotal === 1 ? 'item' : 'itens'}`.trim()}
+              </button>
+              <p className="text-[9px] text-gray-400 font-medium leading-relaxed pt-1">
+                Só a geometria vem do desenho: quadra, número, área, testada e confrontantes. Preço e status de venda são do empreendimento, e só nascem com o lote.
               </p>
             </>
           ) : null}

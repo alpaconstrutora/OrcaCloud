@@ -259,3 +259,28 @@ Subdivisão automática e conferência da Lei 6.766 (B2), sync com o Empreendime
 ### Achado desta fase
 
 A medição do harness voltou a nascer cega, pelo mesmo motivo da B1 em outra cor: o **preenchimento** da prévia (`#dbeafe` a 45% sobre branco) fica quase branco, e a grade do canvas também é azulada — o critério "azul claro" contou 206 mil pixels na tela SEM proposta nenhuma. O que discrimina é o **traço** da prévia (`#2563eb`), saturado e exclusivo dela.
+
+---
+
+## Estado — B3 (25/09/2026)
+
+- [x] Migration `aplicar_20270925000020_loteamento_empreendimento.sql`, **aplicada e conferida no banco**: tipo de sistema `LOTEAMENTO` (`motor_category='horizontal'`), `empreendimentos.blueprint_study_id`, `empreendimento_towers.blueprint_quadra_uid`, `empreendimento_units.blueprint_lote_uid` + `quadra`/`lote`/`testada_m`/`confrontantes`, dois índices parciais únicos e um de busca.
+- [x] Motor: `SyncOrigin` ganhou `'blueprint'`; `PROVENANCE`, `ORIGIN_LABEL` e `SYNC_FIELDS` estendidos (o `Record<SyncOrigin, …>` fez o compilador apontar os três lugares).
+- [x] `services/sync/blueprintAdapter.ts`: lê o **snapshot publicado**, quadra → `CanonicalTower` (com `matchName` para adoção por nome), lote → `CanonicalUnit` com área, testada, posição e confrontantes.
+- [x] `services/blueprintEmpreendimentoSync.ts`: `linkStudy`, `previewSync`, `syncToEmpreendimento` — cola fina sobre `buildPlan`/`applyPlan`, com conflitos indo para a Curadoria e um evento resumo de auditoria.
+- [x] Tela: cartão **Loteamento → Empreendimento** na aba Sincronização, e comando **Enviar loteamento** na aba Colaborar da Planta.
+- [x] Testes: `blueprintEmpreendimentoSync.test.ts` (10). Suíte cheia **471 arquivos / 5.445 testes** verde; tsc, `check-ui-standard`, `check-org-selector-guard` e `build` verdes.
+
+### Três achados que teriam quebrado em produção, não nos testes
+
+1. **`empreendimento_field_proposals.origin` era CHECK fechado** (`imovib|planta_ai`). Sem ampliar, `materializeConflicts` estouraria no **primeiro conflito real** — e só há conflito quando o desenho muda depois do primeiro envio, que é justamente quando o usuário mais precisa que funcione.
+2. **`empreendimento_audit_logs.source` idem**, sem `sync_blueprint`.
+3. **`TOWER_COLS`/`UNIT_COLS` são listas explícitas de colunas.** Sem as colunas novas ali, o `TargetState` não enxergaria a proveniência e **cada sincronização recriaria o loteamento inteiro**, duplicando tudo em silêncio.
+
+### Decisões desta fase
+
+- **A fonte é o snapshot PUBLICADO, nunca o rascunho.** O rascunho muda a cada gesto (autosave de 1,5 s); sincronizar dele faria o espelho de vendas mudar debaixo do corretor enquanto alguém arrasta um vértice.
+- **Sem write-back.** O desenho é a origem: mudar a área de um lote é mover vértice na planta, e reconstruir geometria a partir de uma área não tem solução única.
+- **A quadra tem `matchName`** (ao contrário do cenário do Planta IA): "Quadra A" é um nome que o usuário reconhece, então uma torre criada à mão com esse nome é adotada em vez de virar torre-fantasma.
+- **Tipologia fica fora do diff** (`typology: 'LOTE'` é `createOnly`): campo imutável comparado a cada sync vira conflito eterno.
+- Preço e status continuam do Empreendimento, escritos só na criação — como nas outras duas arestas.

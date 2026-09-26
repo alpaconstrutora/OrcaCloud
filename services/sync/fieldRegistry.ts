@@ -87,6 +87,30 @@ export const SYNC_FIELDS: Record<SyncOrigin, FieldSpec[]> = {
         { entity: 'unit', field: 'bathrooms', label: 'Banheiros', group: 'estrutura', compare: 'exact' },
         { entity: 'unit', field: 'parking_spaces', label: 'Vagas', group: 'estrutura', compare: 'exact' },
     ],
+
+    // ── Loteamento (Planta Inteligente) ──────────────────────────────────────
+    // A quadra vira torre e o lote vira unidade. O que o desenho SABE é a
+    // geometria: número, área e testada. O que ele NÃO sabe é comercial —
+    // preço e status continuam sendo do Empreendimento, como nas outras origens.
+    //
+    // `area` do lote entra em `private_area`: é a área privativa de um lote, e é
+    // por ela que a tabela de preços e o espelho de vendas calculam. `total_area`
+    // acompanha porque num lote não há área comum a somar.
+    blueprint: [
+        // A torre-quadra não propõe `name`: quem renomeia "Quadra A" para
+        // "Quadra Norte" no Empreendimento não pode ser sobrescrito a cada sync.
+        // O nome entra só na criação, pelo createOnly.
+
+        ...UNIT_SHARED.filter(f => f.field !== 'typology'),
+        // Tipologia de lote é sempre LOTE — entra no createOnly, não no diff:
+        // conflito eterno é o que acontece quando o imutável vira comparável.
+        { entity: 'unit', field: 'quadra', label: 'Quadra', group: 'identidade', compare: 'exact' },
+        { entity: 'unit', field: 'lote', label: 'Lote', group: 'identidade', compare: 'exact' },
+        // Testada em METRO com 2 casas, como a coluna. A tolerância de centímetro
+        // evita que arredondar 12,005 vire divergência eterna.
+        { entity: 'unit', field: 'testada_m', label: 'Testada (m)', group: 'estrutura', compare: 'numeric', tolerance: CENT },
+        { entity: 'unit', field: 'position_type', label: 'Posição', group: 'estrutura', compare: 'exact' },
+    ],
 };
 
 /** Índice (origin → entity → field) → spec. */

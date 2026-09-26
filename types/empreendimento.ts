@@ -43,6 +43,8 @@ export interface Empreendimento {
 
     // Vínculo vivo com o estudo de arquitetura (Planta IA) — direto, sem passar pelo Imovib
     planta_ai_study_id?: string | null;
+    /** LOTEAMENTO (B3): o estudo da Planta Inteligente que originou este empreendimento. */
+    blueprint_study_id?: string | null;
 
     // Obra principal (projects.id). Não substitui o vínculo por torre
     // (EmpreendimentoTower.project_id), que é o correto no multi-torre.
@@ -125,6 +127,8 @@ export interface EmpreendimentoTower {
     project_id?: string | null;
     imovib_block_id?: string | null;
     planta_ai_scenario_id?: string | null;
+    /** LOTEAMENTO (B3): o `uid` da Quadra no payload canônico — uid, nunca id. */
+    blueprint_quadra_uid?: string | null;
     name: string;
     floors_count?: number;
     units_per_floor?: number;
@@ -164,6 +168,16 @@ export interface EmpreendimentoUnit {
     imovib_unit_id?: string | null;
     imovib_instance_id?: string | null;
     planta_ai_unit_id?: string | null;
+    /** LOTEAMENTO (B3): o `uid` do Lote no payload canônico — uid, nunca id. */
+    blueprint_lote_uid?: string | null;
+    /** Quadra do lote, como no memorial ("A", "01"). Texto: "12-A" não é número. */
+    quadra?: string | null;
+    /** Número do lote, como no memorial ("12", "12-A"). */
+    lote?: string | null;
+    /** Testada (frente) em metros, derivada do desenho. */
+    testada_m?: number | null;
+    /** Lados do lote com papel e confrontante, derivados do desenho. */
+    confrontantes?: { papel: string; confrontante: string | null; comprimentoM: number }[] | null;
     name: string;
     floor?: number;
     typology?: string;
@@ -425,7 +439,7 @@ export type EmpreendimentoAuditAction =
     | 'sync' | 'publish' | 'pull' | 'approve' | 'reject' | 'export';
 
 export type EmpreendimentoAuditSource =
-    | 'app' | 'sync_imovib' | 'sync_planta' | 'curadoria'
+    | 'app' | 'sync_imovib' | 'sync_planta' | 'sync_blueprint' | 'curadoria'
     | 'comercial' | 'locacao' | 'area_engine';
 
 export interface EmpreendimentoAuditLog {

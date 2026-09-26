@@ -17,7 +17,7 @@ import {
     EmpreendimentoTowerInsert, EmpreendimentoUnitInsert, EmpreendimentoCommonAreaInsert,
 } from '../../types/empreendimento';
 
-export type SyncOrigin = 'imovib' | 'planta_ai';
+export type SyncOrigin = 'imovib' | 'planta_ai' | 'blueprint';
 export type SyncEntity = 'empreendimento' | 'tower' | 'unit' | 'common_area';
 export type FieldGroup = 'identidade' | 'estrutura' | 'area' | 'comercial';
 
@@ -175,14 +175,20 @@ export interface TargetState {
  * (evita cascade delete e permite órfão).
  */
 export const PROVENANCE: Record<SyncOrigin, {
-    towerKey: 'imovib_block_id' | 'planta_ai_scenario_id';
-    unitKey: 'imovib_instance_id' | 'planta_ai_unit_id';
+    towerKey: 'imovib_block_id' | 'planta_ai_scenario_id' | 'blueprint_quadra_uid';
+    unitKey: 'imovib_instance_id' | 'planta_ai_unit_id' | 'blueprint_lote_uid';
 }> = {
     imovib: { towerKey: 'imovib_block_id', unitKey: 'imovib_instance_id' },
     planta_ai: { towerKey: 'planta_ai_scenario_id', unitKey: 'planta_ai_unit_id' },
+    // LOTEAMENTO (B3, 25/09/2026): quadra → torre, lote → unidade. A chave é o
+    // `uid` do payload canônico, NUNCA o id do kernel: `modelFromCanonicalPayload`
+    // reatribui os ids a cada carregamento, e um vínculo por id trocaria de dono
+    // em silêncio — o lote 12 viraria o lote 3 sem erro nenhum.
+    blueprint: { towerKey: 'blueprint_quadra_uid', unitKey: 'blueprint_lote_uid' },
 };
 
 export const ORIGIN_LABEL: Record<SyncOrigin, string> = {
     imovib: 'Viabilidade',
     planta_ai: 'Arquitetura',
+    blueprint: 'Loteamento',
 };

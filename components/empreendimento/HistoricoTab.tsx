@@ -82,6 +82,7 @@ const SOURCE_LABELS: Record<EmpreendimentoAuditSource, string> = {
   app: 'Cadastro',
   sync_imovib: 'Viabilidade (Imovib)',
   sync_planta: 'Planta IA',
+  sync_blueprint: 'Planta Inteligente (loteamento)',
   curadoria: 'Curadoria',
   comercial: 'Vendas',
   locacao: 'Locações',

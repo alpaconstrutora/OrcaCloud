@@ -143,6 +143,7 @@ import {
   TESTADA_MINIMA_LEI_6766_MM,
   type ParametrosDaSubdivisao,
 } from '../../utils/blueprintLoteamento';
+import { blueprintEmpreendimentoSync } from '../../services/blueprintEmpreendimentoSync';
 import {
   MATERIAIS_DE_SUB_REGIAO,
   FICHA_DO_MATERIAL_DE_SUB_REGIAO,
@@ -5934,6 +5935,49 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   );
   const errosDoLoteamento = useMemo(() => resumoDaConferencia(avisosDoLoteamento).erros, [avisosDoLoteamento]);
 
+  /**
+   * B3 — enviar o loteamento ao Empreendimento.
+   *
+   * O envio parte da versão PUBLICADA, nunca do rascunho: o rascunho muda a cada
+   * gesto, e sincronizar dele faria o espelho de vendas mudar debaixo do corretor
+   * enquanto alguém arrasta um vértice. Publicar é o ato que diz "este vale".
+   */
+  const [enviandoAoEmpreendimento, setEnviandoAoEmpreendimento] = useState(false);
+  const empreendimentoDoLoteamento = zona.empreendimentoId || empreendimentoSugerido;
+
+  async function enviarLoteamentoAoEmpreendimento() {
+    if (!empreendimentoDoLoteamento) return;
+    setEnviandoAoEmpreendimento(true);
+    try {
+      // Vincula o estudo na primeira vez; nas seguintes é idempotente.
+      await blueprintEmpreendimentoSync.linkStudy(empreendimentoDoLoteamento, study.id);
+      const previa = await blueprintEmpreendimentoSync.previewSync(empreendimentoDoLoteamento);
+      const total = previa.towersCreated + previa.towersUpdated + previa.unitsCreated + previa.unitsUpdated;
+      if (total === 0) {
+        setAvisoConexaoT(
+          previa.warnings[0] ??
+            'O empreendimento já reflete a versão publicada deste desenho — nada a enviar.',
+        );
+        return;
+      }
+      const ok = await confirmar({
+        title: 'Enviar o loteamento ao empreendimento?',
+        message: `${previa.towersCreated + previa.towersUpdated} quadra(s) e ${previa.unitsCreated + previa.unitsUpdated} lote(s) da versão PUBLICADA vão para o cadastro, onde viram unidades do espelho de vendas.\n\nPreço e status de venda dos lotes que já existem lá não são tocados.`,
+        confirmLabel: 'Enviar',
+        variant: 'warning',
+      });
+      if (!ok) return;
+      const feito = await blueprintEmpreendimentoSync.syncToEmpreendimento(empreendimentoDoLoteamento);
+      setAvisoConexaoT(
+        `Loteamento enviado: ${feito.towersCreated} quadra(s) e ${feito.unitsCreated} lote(s) criados, ${feito.unitsUpdated} lote(s) atualizado(s). Veja em Empreendimentos › Torres & Unidades.`,
+      );
+    } catch (e) {
+      setAvisoConexaoT(`Não consegui enviar: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setEnviandoAoEmpreendimento(false);
+    }
+  }
+
   /** B2 — lança a proposta num lote só de comandos. */
   function aceitarSubdivisao() {
     if (!levelId || !propostaDeSubdivisao || propostaDeSubdivisao.lotes.length === 0) return;
@@ -10453,6 +10497,24 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           </GrupoDoRibbon>
         )}
         {aba === 'colaborar' && (
+          <>
+          {/* LOTEAMENTO → EMPREENDIMENTO (B3). Fica em Colaborar porque é
+              entrega: o desenho sai da planta e vira cadastro comercial. */}
+          <GrupoDoRibbon rotulo="Empreendimento">
+            <BotaoDoRibbon
+              icone={Building2}
+              rotulo="Enviar loteamento"
+              onClick={() => void enviarLoteamentoAoEmpreendimento()}
+              disabled={enviandoAoEmpreendimento || !empreendimentoDoLoteamento || (editor.model.lotes ?? []).length === 0}
+              ajuda={
+                !empreendimentoDoLoteamento
+                  ? 'Este estudo não tem empreendimento: vincule a obra ao empreendimento para enviar os lotes'
+                  : (editor.model.lotes ?? []).length === 0
+                    ? 'Desenhe os lotes primeiro (aba Terreno › Lotear)'
+                    : 'Manda as quadras e os lotes da versão PUBLICADA para o cadastro do empreendimento, onde viram unidades do espelho de vendas'
+              }
+            />
+          </GrupoDoRibbon>
           <GrupoDoRibbon rotulo="Integração">
             <BotaoDoRibbon
               icone={KeyRound}
@@ -10488,6 +10550,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               ajuda="Plugins da organização: páginas https suas abertas num quadro isolado (sandbox) que recebem o desenho por postMessage e propõem comandos do kernel — você aprova antes de entrar no desenho. Inclui um plugin de exemplo e o protocolo. O número é quantos estão ativos."
             />
           </GrupoDoRibbon>
+          </>
         )}
 
         {aba === 'vista' && emVista && (

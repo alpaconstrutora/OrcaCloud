@@ -240,7 +240,7 @@ tela e **a coluna Ações fica fora da área visível**, só com rolagem lateral
   RPC do portal com a credencial do chamador; service_role só assina). Botões de
   recibo do `ClientArea`: equipe emite/reimprime o numerado; cliente baixa o
   guardado; JSON legado segue o PDF montado na hora.
-- [ ] 14. Publicação.
+- [x] 14. Publicação — commit `4cde2e3` em main; `conferir-producao.sh` achou os textos da coluna no bundle servido e o SHA carimbado (26/09/2026). Edge Function `client-portal-recibo-download` publicada e sondada.
 
 ### Registro da verificação da Fase 2 (26/09/2026)
 

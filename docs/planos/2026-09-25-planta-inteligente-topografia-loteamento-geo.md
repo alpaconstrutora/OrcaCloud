@@ -284,3 +284,25 @@ A medição do harness voltou a nascer cega, pelo mesmo motivo da B1 em outra co
 - **A quadra tem `matchName`** (ao contrário do cenário do Planta IA): "Quadra A" é um nome que o usuário reconhece, então uma torre criada à mão com esse nome é adotada em vez de virar torre-fantasma.
 - **Tipologia fica fora do diff** (`typology: 'LOTE'` é `createOnly`): campo imutável comparado a cada sync vira conflito eterno.
 - Preço e status continuam do Empreendimento, escritos só na criação — como nas outras duas arestas.
+
+---
+
+## Estado — B4 (26/09/2026)
+
+- [x] `utils/blueprintMemorialLote.ts`: memorial por lote (giro frente → direita → fundo → esquerda, medida e confrontante lado a lado), memorial de área pública (art. 22 da Lei 6.766), memorial do loteamento com quadro de áreas, tabelas de lotes/quadras/vias, pontos de locação e o CSV em PNEZD.
+- [x] `utils/blueprintPranchaLoteamento.ts`: `desenharLote` (lote em destaque, quadra e vizinhos em traço leve, cotas e confrontantes), `desenharLoteamento` (planta geral) e `desenharTabelasDoLoteamento`, sobre o `Desenhista` abstrato.
+- [x] `services/blueprintLoteamentoDocsService.ts`: o conjunto em PDF (planta geral + uma folha por lote + quadro de áreas), o memorial em texto e o CSV de locação.
+- [x] Comando **Documentos** na aba Colaborar, ao lado de "Enviar loteamento".
+- [x] Testes: `blueprintMemorialLote.test.ts` (15), `blueprintPranchaLoteamento.test.ts` (9), `BlueprintEditor.test.tsx` (+2). Suíte cheia **473 arquivos / 5.471 testes** verde; tsc, `check-ui-standard`, `check-xss-sinks` e `build` verdes.
+
+### Achado desta fase
+
+**`boundingBox` só enxergava paredes e divisas.** Um loteamento não tem parede nenhuma: a caixa saía nula e a prancha seria declarada VAZIA com o desenho inteiro dentro do modelo. As quatro famílias entraram no enquadramento.
+
+### Decisões
+
+- **O memorial descreve por medidas e confrontantes**, que é a forma usual do loteamento urbano aprovado. Azimutes e coordenadas dependem de georreferência (fase A1) — e a ausência é **dita** em todo memorial (`AVISO_SEM_GEORREFERENCIA`), não omitida.
+- **Download, não GED.** O memorial é peça que o responsável técnico revisa e assina; publicar direto daria ao rascunho a aparência de documento emitido.
+- **A escala das folhas é a que faz caber**, e por isso não sai um denominador redondo no carimbo: dizer 1:500 numa folha que mede outra coisa é pior que não dizer escala.
+- **No CSV de locação, NORTE é o Y e ESTE é o X** — a convenção da topografia. Trocar espelha o loteamento inteiro no campo sem nenhum sinal na tela.
+- O `Desenhista` continua com quatro primitivas: não inventei tracejado só para a quadra, que se distingue por espessura e cor.

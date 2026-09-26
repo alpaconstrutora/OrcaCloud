@@ -6259,3 +6259,26 @@ describe('BlueprintEditor · lotear e conferir (B2)', () => {
     expect(screen.getByLabelText(/nome da próxima quadra/i)).toBeInTheDocument();
   });
 });
+
+/**
+ * DOCUMENTOS DO LOTEAMENTO (B4): o comando existe, fica apagado sem lote e
+ * o title diz o que falta.
+ */
+describe('BlueprintEditor · documentos do loteamento (B4)', () => {
+  it('Documentos fica apagado sem lote, e o title ensina o caminho', async () => {
+    await montar();
+    await abrirAba(/^colaborar$/i);
+
+    const documentos = botao(/^documentos$/i);
+    expect(documentos).toBeDisabled();
+    expect(documentos).toHaveAttribute('title', expect.stringMatching(/desenhe os lotes primeiro/i));
+  });
+
+  it('o comando fica junto do envio ao empreendimento, na entrega', async () => {
+    await montar();
+    await abrirAba(/^colaborar$/i);
+    // Os dois são "o desenho saindo da planta": um vira cadastro, o outro vira papel.
+    expect(botao(/^enviar loteamento$/i)).toBeInTheDocument();
+    expect(botao(/^documentos$/i)).toBeInTheDocument();
+  });
+});

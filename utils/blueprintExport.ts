@@ -119,6 +119,14 @@ export function boundingBox(model: BlueprintModel): {
   const pontos: Point[] = [
     ...model.walls.flatMap((w) => [w.a, w.b]),
     ...model.boundaries.flatMap((b) => [b.a, b.b]),
+    // LOTEAMENTO (B4). ⚠️ Sem estas quatro famílias, um loteamento — que não tem
+    // parede nenhuma — dá caixa nula, e a prancha sai declarada VAZIA com o
+    // desenho inteiro dentro do modelo. O enquadramento tem de ver tudo que
+    // aparece no papel.
+    ...(model.quadras ?? []).flatMap((q) => q.pontos),
+    ...(model.lotes ?? []).flatMap((l) => l.pontos),
+    ...(model.vias ?? []).flatMap((v) => v.eixo),
+    ...(model.areasPublicas ?? []).flatMap((a) => a.pontos),
   ];
   if (pontos.length === 0) return null;
 
@@ -1218,6 +1226,17 @@ function desenharCotas(
 
 
 /** Legenda, escala, versão e aviso — a faixa inferior da folha. */
+/**
+ * O carimbo, exposto para as folhas do LOTEAMENTO (B4).
+ *
+ * Elas desenham o próprio conteúdo (planta do lote, planta geral, tabelas), mas
+ * a moldura tem de ser a mesma das outras folhas do conjunto — carimbo diferente
+ * por tipo de folha é como um conjunto de pranchas deixa de parecer um conjunto.
+ */
+export function desenharCarimboDaFolha(d: Desenhista, o: OpcoesExportacao, enq: Enquadramento): void {
+  desenharCarimbo(d, o, enq);
+}
+
 function desenharCarimbo(d: Desenhista, o: OpcoesExportacao, enq: Enquadramento, revisoes: RevisaoDaPrancha[] = []): void {
   const topo = MARGEM_MM + enq.utilAlturaMm;
   const largura = enq.utilLarguraMm;

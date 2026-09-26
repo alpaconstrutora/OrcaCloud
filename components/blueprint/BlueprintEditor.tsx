@@ -144,6 +144,8 @@ import {
   type ParametrosDaSubdivisao,
 } from '../../utils/blueprintLoteamento';
 import { blueprintEmpreendimentoSync } from '../../services/blueprintEmpreendimentoSync';
+import { montarDocumentosDoLoteamento, previaDosDocumentos } from '../../services/blueprintLoteamentoDocsService';
+import { pendenciasDosMemoriais } from '../../utils/blueprintMemorialLote';
 import {
   MATERIAIS_DE_SUB_REGIAO,
   FICHA_DO_MATERIAL_DE_SUB_REGIAO,
@@ -5978,6 +5980,58 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     }
   }
 
+  /**
+   * B4 — emite os documentos do loteamento: pranchas (planta geral, uma folha
+   * por lote e o quadro de áreas), o memorial descritivo e os pontos de locação.
+   *
+   * Sai como download, não como gravação: o memorial é peça que o responsável
+   * técnico revisa e assina antes de ir ao cartório — publicar direto no GED
+   * daria ao rascunho a aparência de documento emitido.
+   */
+  const [emitindoDocumentos, setEmitindoDocumentos] = useState(false);
+
+  async function emitirDocumentosDoLoteamento() {
+    if (!levelId) return;
+    const previa = previaDosDocumentos(editor.model);
+    const pendencias = pendenciasDosMemoriais(editor.model);
+    const ok = await confirmar({
+      title: 'Emitir os documentos do loteamento?',
+      message:
+        `${previa.folhas} folha(s) de prancha, ${previa.memoriais} memorial(is) e ${previa.pontosDeLocacao} ponto(s) de locação.` +
+        (pendencias.comAviso > 0
+          ? `\n\n⚠️ ${pendencias.comAviso} lote(s) com pendência no desenho (lado sem confrontante, encravado ou fora de quadra). Os documentos saem assim mesmo, com a pendência escrita no memorial.`
+          : '') +
+        '\n\nO memorial descreve por medidas e confrontantes. Coordenadas e azimutes dependem de georreferenciamento, que este estudo ainda não tem.',
+      confirmLabel: 'Emitir',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    setEmitindoDocumentos(true);
+    try {
+      const artefatos = montarDocumentosDoLoteamento(editor.model, {
+        dados: {
+          nome: study.name || 'Loteamento',
+          matricula: null,
+          cartorio: null,
+        },
+        areaDaGlebaMm2: terreno?.areaMm2 ?? null,
+      });
+      for (const a of artefatos) {
+        const url = URL.createObjectURL(a.blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = a.nome;
+        link.click();
+        URL.revokeObjectURL(url);
+      }
+      setAvisoConexaoT(`${artefatos.length} arquivo(s) gerado(s): pranchas em PDF, memorial em texto e os pontos de locação em CSV.`);
+    } catch (e) {
+      setAvisoConexaoT(`Não consegui emitir: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setEmitindoDocumentos(false);
+    }
+  }
+
   /** B2 — lança a proposta num lote só de comandos. */
   function aceitarSubdivisao() {
     if (!levelId || !propostaDeSubdivisao || propostaDeSubdivisao.lotes.length === 0) return;
@@ -10512,6 +10566,20 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   : (editor.model.lotes ?? []).length === 0
                     ? 'Desenhe os lotes primeiro (aba Terreno › Lotear)'
                     : 'Manda as quadras e os lotes da versão PUBLICADA para o cadastro do empreendimento, onde viram unidades do espelho de vendas'
+              }
+            />
+            {/* B4: as peças que acompanham o loteamento na prefeitura e no
+                cartório. Download, não GED: o memorial é revisado e assinado
+                pelo responsável técnico antes de virar documento. */}
+            <BotaoDoRibbon
+              icone={FileText}
+              rotulo="Documentos"
+              onClick={() => void emitirDocumentosDoLoteamento()}
+              disabled={emitindoDocumentos || (editor.model.lotes ?? []).length === 0}
+              ajuda={
+                (editor.model.lotes ?? []).length === 0
+                  ? 'Desenhe os lotes primeiro (aba Terreno › Lotear)'
+                  : 'Planta geral, uma planta por lote, quadro de áreas, memorial descritivo e os pontos de locação em CSV'
               }
             />
           </GrupoDoRibbon>

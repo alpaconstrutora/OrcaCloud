@@ -4,10 +4,12 @@ import {
   CheckCircle2, AlertTriangle, XCircle,
   ClipboardList, FileSearch, ShoppingCart, Truck,
   Warehouse, FileText, DollarSign, Landmark,
-  ChevronDown, ChevronUp, ChevronRight, Loader2,
+  ChevronRight, Loader2, Inbox,
   Building2,
 } from 'lucide-react';
 import { p2pFlowService, P2PStage, P2PRecord, SeamStatus } from '../services/p2pFlowService';
+import { KpiCard, KpiColor } from './ui/KpiCard';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 
 interface Props {
   activeOrganizationId: string | null;
@@ -31,8 +33,18 @@ const SEAM_CFG: Record<SeamStatus, { label: string; color: string; lineColor: st
   gap:    { label: 'Lacuna',      color: 'text-red-600',     lineColor: 'bg-red-300',      icon: XCircle },
 };
 
-// ── Detalhe de um nó expandido ──────────────────────────────────────────────
-function StageDetail({ stageId, organizationId, projectId }: {
+// KPIs de saúde das integrações — um por situação da costura de entrada.
+const SEAM_KPI: { seam: SeamStatus; label: string; sub: string; color: KpiColor; icon: React.ElementType; vazio: string }[] = [
+  { seam: 'auto',   label: 'Automáticas',  sub: 'Integração sem intervenção', color: 'emerald', icon: CheckCircle2,  vazio: 'Nenhuma etapa recebe dados automaticamente.' },
+  { seam: 'manual', label: 'Semi-manuais', sub: 'Exigem ação do usuário',     color: 'amber',   icon: AlertTriangle, vazio: 'Nenhuma etapa depende de ação manual.' },
+  { seam: 'gap',    label: 'Lacunas',      sub: 'Sem integração',             color: 'red',     icon: XCircle,       vazio: 'Nenhuma lacuna de integração.' },
+];
+
+const BTN_PRIMARIO   = 'flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95';
+const BTN_SECUNDARIO = 'flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95';
+
+// ── Registros de uma etapa (corpo do drawer) ────────────────────────────────
+function StageRecords({ stageId, organizationId, projectId }: {
   stageId: string;
   organizationId: string | null;
   projectId?: string;
@@ -48,30 +60,35 @@ function StageDetail({ stageId, organizationId, projectId }: {
   }, [stageId, organizationId, projectId]);
 
   if (loading) return (
-    <div className="py-4 flex justify-center">
-      <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+    <div className="text-center py-12">
+      <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto" />
+      <p className="mt-2 text-gray-500">Carregando...</p>
     </div>
   );
 
   if (records.length === 0) return (
-    <p className="py-3 text-xs text-slate-400 text-center">Nenhum registro nesta etapa.</p>
+    <div className="text-center py-12">
+      <Inbox className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+      <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum registro nesta etapa</h3>
+      <p className="text-sm text-gray-500">Tente outra obra no filtro do topo da tela.</p>
+    </div>
   );
 
   return (
-    <div className="mt-3 space-y-1.5 max-h-48 overflow-y-auto pr-1">
+    <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
       {records.map(r => (
-        <div key={r.id} className="flex items-start justify-between gap-2 bg-slate-50 rounded-lg px-3 py-2">
+        <div key={r.id} className="flex items-start justify-between gap-3 px-4 py-2.5">
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-slate-800 truncate">{r.label}</p>
-            {r.sublabel && <p className="text-xs text-slate-500 truncate">{r.sublabel}</p>}
+            <p className="text-sm font-medium text-gray-800 break-words">{r.label}</p>
+            {r.sublabel && <p className="text-xs text-gray-500 break-words">{r.sublabel}</p>}
           </div>
-          <div className="flex flex-col items-end gap-1 shrink-0">
+          <div className="flex flex-col items-end gap-0.5 shrink-0">
             {r.status && (
               <span className="text-sm font-normal text-gray-600 whitespace-nowrap">
                 {r.status}
               </span>
             )}
-            {r.date && <span className="text-xs text-slate-400">{r.date}</span>}
+            {r.date && <span className="text-xs text-gray-400">{r.date}</span>}
           </div>
         </div>
       ))}
@@ -79,70 +96,149 @@ function StageDetail({ stageId, organizationId, projectId }: {
   );
 }
 
-// ── Nó do fluxo ──────────────────────────────────────────────────────────────
-function StageCard({
-  stage, organizationId, projectId, expanded, onToggle, onNavigate,
-}: {
-  stage: P2PStage;
+// ── Drawer de uma etapa ─────────────────────────────────────────────────────
+function StageSheet({ stage, organizationId, projectId, onClose, onNavigate }: {
+  stage: P2PStage | null;
   organizationId: string | null;
   projectId?: string;
-  expanded: boolean;
-  onToggle: () => void;
+  onClose: () => void;
   onNavigate: (v: string) => void;
+}) {
+  const seam = stage ? SEAM_CFG[stage.inboundSeam] : null;
+  return (
+    <Sheet open={!!stage} onClose={onClose} size="lg">
+      {stage && seam && (
+        <>
+          <SheetHeader onClose={onClose}>
+            <SheetTitle>{stage.label}</SheetTitle>
+            <SheetDescription>
+              {stage.owner} · {stage.count} {stage.count === 1 ? 'registro' : 'registros'}
+              {stage.pending != null && stage.pending > 0 && ` · ${stage.pending} pendentes`}
+            </SheetDescription>
+          </SheetHeader>
+
+          <SheetPanel className="p-6 space-y-4">
+            <div className="flex items-start gap-2">
+              <seam.icon className={`w-4 h-4 mt-0.5 shrink-0 ${seam.color}`} />
+              <div>
+                <p className={`text-sm font-medium ${seam.color}`}>Entrada: {seam.label}</p>
+                {stage.inboundNote && <p className="text-xs text-gray-500">{stage.inboundNote}</p>}
+              </div>
+            </div>
+            <StageRecords stageId={stage.id} organizationId={organizationId} projectId={projectId} />
+          </SheetPanel>
+
+          <SheetFooter>
+            <button onClick={onClose} className={BTN_SECUNDARIO}>Fechar</button>
+            {stage.view && (
+              <button onClick={() => onNavigate(stage.view!)} className={BTN_PRIMARIO}>
+                Abrir módulo <ChevronRight className="w-[15px] h-[15px]" />
+              </button>
+            )}
+          </SheetFooter>
+        </>
+      )}
+    </Sheet>
+  );
+}
+
+// ── Drawer de um KPI: etapas naquela situação de integração ─────────────────
+function SeamSheet({ seam, stages, onClose, onOpenStage }: {
+  seam: SeamStatus | null;
+  stages: P2PStage[];
+  onClose: () => void;
+  onOpenStage: (id: string) => void;
+}) {
+  const kpi = SEAM_KPI.find(k => k.seam === seam);
+  const lista = stages.filter(s => s.inboundSeam === seam);
+  return (
+    <Sheet open={!!seam} onClose={onClose} size="lg">
+      {kpi && (
+        <>
+          <SheetHeader onClose={onClose}>
+            <SheetTitle>Integrações {kpi.label.toLowerCase()}</SheetTitle>
+            <SheetDescription>{kpi.sub} · {lista.length} {lista.length === 1 ? 'etapa' : 'etapas'}</SheetDescription>
+          </SheetHeader>
+
+          <SheetPanel className="p-6">
+            {lista.length === 0 ? (
+              <div className="text-center py-12">
+                <kpi.icon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma etapa</h3>
+                <p className="text-sm text-gray-500">{kpi.vazio}</p>
+              </div>
+            ) : (
+              <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
+                {lista.map(s => {
+                  const Icon = STAGE_ICON[s.id] ?? Workflow;
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => onOpenStage(s.id)}
+                      className="w-full flex items-start gap-3 px-4 py-2.5 text-left hover:bg-gray-50 transition"
+                    >
+                      <Icon className="w-4 h-4 mt-0.5 text-indigo-600 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-800">{s.label}</p>
+                        {s.inboundNote && <p className="text-xs text-gray-500 break-words">{s.inboundNote}</p>}
+                      </div>
+                      <span className="text-sm text-gray-600 shrink-0">{s.count}</span>
+                      <ChevronRight className="w-4 h-4 mt-0.5 text-gray-400 shrink-0" />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </SheetPanel>
+
+          <SheetFooter>
+            <button onClick={onClose} className={BTN_SECUNDARIO}>Fechar</button>
+          </SheetFooter>
+        </>
+      )}
+    </Sheet>
+  );
+}
+
+// ── Nó do fluxo ──────────────────────────────────────────────────────────────
+function StageCard({ stage, selected, onOpen }: {
+  stage: P2PStage;
+  selected: boolean;
+  onOpen: () => void;
 }) {
   const Icon = STAGE_ICON[stage.id] ?? Workflow;
   const seam = SEAM_CFG[stage.inboundSeam];
 
   return (
-    <div className={`w-full sm:w-48 bg-white border rounded-2xl shadow-sm transition-all
-      ${stage.inboundSeam === 'gap' ? 'border-red-200' : stage.inboundSeam === 'manual' ? 'border-amber-200' : 'border-slate-200'}`}
+    <button
+      onClick={onOpen}
+      className={`w-full sm:w-48 text-left p-4 bg-white border rounded-2xl shadow-sm hover:bg-slate-50 transition-all
+        ${selected ? 'ring-2 ring-indigo-400' : ''}
+        ${stage.inboundSeam === 'gap' ? 'border-red-200' : stage.inboundSeam === 'manual' ? 'border-amber-200' : 'border-slate-200'}`}
     >
-      {/* Cabeçalho clicável (expande/colapsa) */}
-      <button
-        onClick={onToggle}
-        className="w-full text-left p-4 rounded-2xl hover:bg-slate-50 transition"
-      >
-        <div className="flex items-center gap-2 mb-3">
-          <div className="bg-indigo-50 text-indigo-600 p-2 rounded-xl shrink-0">
-            <Icon className="w-4 h-4" />
-          </div>
-          <div className="ml-auto">
-            {expanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
-          </div>
+      <div className="flex items-center gap-2 mb-3">
+        <div className="bg-indigo-50 text-indigo-600 p-2 rounded-xl shrink-0">
+          <Icon className="w-4 h-4" />
         </div>
+        <ChevronRight className="w-4 h-4 text-slate-400 ml-auto" />
+      </div>
 
-        <p className="text-xs font-black uppercase tracking-wider text-slate-400 leading-none">{stage.owner}</p>
-        <p className="text-sm font-bold text-slate-800 leading-snug mt-0.5">{stage.label}</p>
+      <p className="text-xs font-black uppercase tracking-wider text-slate-400 leading-none">{stage.owner}</p>
+      <p className="text-sm font-bold text-slate-800 leading-snug mt-0.5">{stage.label}</p>
 
-        <div className="mt-3 flex items-baseline gap-2">
-          <span className="text-2xl font-black text-slate-900">{stage.count}</span>
-          {stage.pending != null && stage.pending > 0 && (
-            <span className="text-xs font-bold text-amber-600">{stage.pending} pend.</span>
-          )}
-        </div>
+      <div className="mt-3 flex items-baseline gap-2">
+        <span className="text-2xl font-black text-slate-900">{stage.count}</span>
+        {stage.pending != null && stage.pending > 0 && (
+          <span className="text-xs font-bold text-amber-600">{stage.pending} pend.</span>
+        )}
+      </div>
 
-        {/* Badge da costura de entrada */}
-        <div className={`mt-2 flex items-center gap-1 ${seam.color}`}>
-          <seam.icon className="w-3 h-3" />
-          <span className="text-xs font-bold uppercase tracking-wide">{seam.label}</span>
-        </div>
-      </button>
-
-      {/* Expansão com registros + botão de navegar */}
-      {expanded && (
-        <div className="px-4 pb-4 border-t border-slate-100 pt-2">
-          <StageDetail stageId={stage.id} organizationId={organizationId} projectId={projectId} />
-          {stage.view && (
-            <button
-              onClick={() => onNavigate(stage.view!)}
-              className="mt-3 w-full flex items-center justify-center gap-1 text-button font-bold text-indigo-600 hover:text-indigo-800"
-            >
-              Abrir módulo <ChevronRight className="w-3 h-3" />
-            </button>
-          )}
-        </div>
-      )}
-    </div>
+      {/* Badge da costura de entrada */}
+      <div className={`mt-2 flex items-center gap-1 ${seam.color}`}>
+        <seam.icon className="w-3 h-3" />
+        <span className="text-xs font-bold uppercase tracking-wide">{seam.label}</span>
+      </div>
+    </button>
   );
 }
 
@@ -167,7 +263,8 @@ export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeVi
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [generatedAt, setGeneratedAt] = useState('');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [openStageId, setOpenStageId] = useState<string | null>(null);
+  const [openSeam, setOpenSeam] = useState<SeamStatus | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -192,7 +289,12 @@ export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeVi
 
   const gaps    = stages.filter(s => s.inboundSeam === 'gap').length;
   const manuais = stages.filter(s => s.inboundSeam === 'manual').length;
-  const autos   = stages.filter(s => s.inboundSeam === 'auto').length;
+  const contagemPorSeam: Record<SeamStatus, number> = {
+    auto: stages.filter(s => s.inboundSeam === 'auto').length,
+    manual: manuais,
+    gap: gaps,
+  };
+  const openStage = stages.find(s => s.id === openStageId) ?? null;
 
   return (
     <div className="space-y-6 pb-20">
@@ -214,7 +316,7 @@ export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeVi
               <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
               <select
                 value={selectedProjectId}
-                onChange={e => { setSelectedProjectId(e.target.value); setExpandedId(null); }}
+                onChange={e => { setSelectedProjectId(e.target.value); setOpenStageId(null); }}
                 className="bg-transparent text-slate-700 font-medium focus:outline-none max-w-[180px]"
               >
                 <option value="">Todas as obras</option>
@@ -225,7 +327,7 @@ export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeVi
             </div>
           )}
           <button
-            onClick={() => { load(); setExpandedId(null); }}
+            onClick={() => { load(); setOpenStageId(null); }}
             disabled={loading}
             className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50"
           >
@@ -235,20 +337,20 @@ export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeVi
         </div>
       </div>
 
-      {/* Cards de saúde */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3">
-          <p className="text-xs font-black uppercase tracking-wider text-emerald-700">Automáticas</p>
-          <p className="text-2xl font-black text-emerald-700">{autos}</p>
-        </div>
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3">
-          <p className="text-xs font-black uppercase tracking-wider text-amber-700">Semi-manuais</p>
-          <p className="text-2xl font-black text-amber-700">{manuais}</p>
-        </div>
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-3">
-          <p className="text-xs font-black uppercase tracking-wider text-red-700">Lacunas</p>
-          <p className="text-2xl font-black text-red-700">{gaps}</p>
-        </div>
+      {/* KPIs de saúde das integrações (§4) — clicar abre as etapas daquela situação */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {SEAM_KPI.map(k => (
+          <KpiCard
+            key={k.seam}
+            label={k.label}
+            value={contagemPorSeam[k.seam]}
+            sub={k.sub}
+            icon={<k.icon className="w-4 h-4" />}
+            color={k.color}
+            onClick={() => setOpenSeam(k.seam)}
+            title={`Ver etapas: ${k.label.toLowerCase()}`}
+          />
+        ))}
       </div>
 
       {/* Fluxo */}
@@ -258,11 +360,8 @@ export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeVi
             <React.Fragment key={stage.id}>
               <StageCard
                 stage={stage}
-                organizationId={activeOrganizationId}
-                projectId={selectedProjectId || undefined}
-                expanded={expandedId === stage.id}
-                onToggle={() => setExpandedId(prev => prev === stage.id ? null : stage.id)}
-                onNavigate={onChangeView}
+                selected={openStageId === stage.id}
+                onOpen={() => setOpenStageId(stage.id)}
               />
               {i < stages.length - 1 && (
                 <>
@@ -313,6 +412,20 @@ export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeVi
           )}
         </p>
       )}
+
+      <SeamSheet
+        seam={openSeam}
+        stages={stages}
+        onClose={() => setOpenSeam(null)}
+        onOpenStage={id => { setOpenSeam(null); setOpenStageId(id); }}
+      />
+      <StageSheet
+        stage={openStage}
+        organizationId={activeOrganizationId}
+        projectId={selectedProjectId || undefined}
+        onClose={() => setOpenStageId(null)}
+        onNavigate={onChangeView}
+      />
     </div>
   );
 };

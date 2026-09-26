@@ -32,11 +32,12 @@ const base = () => ({
         { id: 'd5', rateio_id: 'r-cancelado', transaction_id: 't1', descricao: 'MN CONSERVACAO DE ELEVADORES E COMERCIO DE PECAS LTDA', valor: 350 },
     ],
     internal_transactions: [
-        { id: 't1', description: 'Manutençao do Elevador', supplier_id: 'f-mn', party_name: 'MN CONSERVAÇÃO ELEVADORES LTDA CNPJ: 07.604.526/0001-20' },
+        { id: 't1', description: 'Manutençao do Elevador', supplier_id: 'f-mn', party_name: 'MN CONSERVAÇÃO ELEVADORES LTDA CNPJ: 07.604.526/0001-20', source_system: 'BOLETO', reference_id: 'b-705' },
         // Descrição viva que é nome de arquivo: o CREDOR é a segunda chance.
         { id: 't2', description: 'download (98).pdf', supplier_id: null, party_name: 'ENERGISA SUL-SUDESTE - DISTRIBUIDORA DE ENERGIA S.A. CADASTRE' },
     ],
     suppliers: [{ id: 'f-mn', name: 'MN CONSERVACAO DE ELEVADORES E COMERCIO DE PECAS LTDA' }],
+    boletos: [{ id: 'b-705', numero: 705, documento_path: 'org/705.pdf', documento_nome: 'elevador-julho.pdf' }],
 });
 
 let tabelas = base();
@@ -155,5 +156,30 @@ describe('a edição corrige o LANÇAMENTO, não o rateio', () => {
         await expect(condominioRateioService.atualizarDescricaoDespesa('d1', '   ', 't1')).rejects.toThrow();
         expect(tabelas.internal_transactions.find(t => t.id === 't1')!.description)
             .toBe('Manutençao do Elevador');
+    });
+});
+
+describe('o COMPROVANTE chega até o relatório', () => {
+    it('despesa de origem BOLETO traz o arquivo, com o bucket', async () => {
+        const ds = await condominioRateioService.listarDespesas('r-rascunho');
+        expect(ds.find(d => d.id === 'd1')!.documento).toEqual({
+            bucket: 'boletos', path: 'org/705.pdf', nome: 'elevador-julho.pdf',
+        });
+    });
+
+    it('rateio FECHADO também traz o comprovante — a prova não muda com o status', async () => {
+        const ds = await condominioRateioService.listarDespesas('r-fechado');
+        expect(ds[0].documento?.path).toBe('org/705.pdf');
+    });
+
+    it('despesa sem lançamento não inventa comprovante', async () => {
+        const ds = await condominioRateioService.listarDespesas('r-rascunho');
+        expect(ds.find(d => d.id === 'd3')!.documento).toBeNull();
+    });
+
+    it('despesa cuja origem não tem arquivo fica sem comprovante', async () => {
+        const ds = await condominioRateioService.listarDespesas('r-rascunho');
+        // t2 não tem source_system/reference_id no dublê
+        expect(ds.find(d => d.id === 'd2')!.documento).toBeNull();
     });
 });

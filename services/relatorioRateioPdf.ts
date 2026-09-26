@@ -23,6 +23,7 @@
 // a tela conhece os rótulos.
 
 import type { RelatorioRateio } from '../utils/relatorioRateio';
+import { anexarComprovantes, type ComprovanteDeDespesa } from './relatorioAnexos';
 
 const PRIMARY = [30, 64, 175] as [number, number, number];   // blue-800
 const LIGHT = [241, 245, 249] as [number, number, number];   // slate-100
@@ -47,8 +48,24 @@ function tituloDeSecao(doc: any, titulo: string, y: number, W: number): number {
     return y + 12;
 }
 
-/** Gera e BAIXA o PDF. Devolve o nome do arquivo, para a tela poder dizê-lo. */
-export async function baixarRelatorioRateioPdf(rel: RelatorioRateio): Promise<string> {
+export interface OpcoesDoRelatorio {
+    /** Anexar os comprovantes (boleto, XML, minuta) depois do corpo. */
+    comComprovantes?: boolean;
+    /** Progresso do anexo, para a tela poder contar — rasterizar 12 boletos
+     *  leva segundos, e um botão parado nesse tempo lê como travado. */
+    aoProgredir?: (feito: number, total: number) => void;
+}
+
+export interface ResultadoDoRelatorio {
+    arquivo: string;
+    anexados: number;
+    falhas: { descricao: string; motivo: string }[];
+}
+
+/** Gera e BAIXA o PDF. Devolve o nome do arquivo e o que houve com os anexos. */
+export async function baixarRelatorioRateioPdf(
+    rel: RelatorioRateio, opcoes: OpcoesDoRelatorio = {},
+): Promise<ResultadoDoRelatorio> {
     const { jsPDF } = await import('jspdf');
     const { default: autoTable } = await import('jspdf-autotable');
 
@@ -241,7 +258,36 @@ export async function baixarRelatorioRateioPdf(rel: RelatorioRateio): Promise<st
         doc.text(`${i} / ${paginas}`, W - 14, H - 4, { align: 'right' });
     }
 
+    // ── Comprovantes ─────────────────────────────────────────────────────
+    // Entram DEPOIS do rodapé do corpo, de propósito: o corpo é a prestação de
+    // contas e tem de ficar legível sozinho; o anexo é a prova, e vem atrás.
+    let anexados = 0;
+    let falhas: { descricao: string; motivo: string }[] = [];
+    if (opcoes.comComprovantes) {
+        const comprovantes: ComprovanteDeDespesa[] = rel.despesas
+            .filter(d => !!d.documento)
+            .map(d => ({ descricao: d.descricao, valor: d.valor, documento: d.documento! }));
+        const r = await anexarComprovantes(doc, autoTable, comprovantes, opcoes.aoProgredir);
+        anexados = r.anexados;
+        falhas = r.falhas;
+
+        // O rodapé foi escrito antes das páginas de anexo — refazer, senão as
+        // páginas novas saem sem numeração e o "1 / 3" vira mentira.
+        const total = doc.getNumberOfPages();
+        for (let i = 1; i <= total; i++) {
+            doc.setPage(i);
+            const H = doc.internal.pageSize.getHeight();
+            doc.setFillColor(...LIGHT);
+            doc.rect(0, H - 12, W, 12, 'F');
+            doc.setTextColor(...GRAY);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.text(`${rel.condominio} — ${rel.titulo} · Documento gerado pelo Òpura.`, 14, H - 4);
+            doc.text(`${i} / ${total}`, W - 14, H - 4, { align: 'right' });
+        }
+    }
+
     const arquivo = `${rel.nomeDoArquivo}.pdf`;
     doc.save(arquivo);
-    return arquivo;
+    return { arquivo, anexados, falhas };
 }

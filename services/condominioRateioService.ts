@@ -112,6 +112,15 @@ export interface DespesaRateio {
      * as 38 têm fornecedor cadastrado.
      */
     fornecedor?: string | null;
+    /**
+     * O COMPROVANTE — o arquivo que originou a despesa (boleto, XML de NF-e,
+     * minuta de contrato). É o que o relatório anexa quando o síndico marca
+     * "incluir os comprovantes".
+     *
+     * Mesmo resolvedor por origem da aba Despesas (`resolverOrigens`), para o
+     * mesmo lançamento não apontar para dois arquivos diferentes em duas telas.
+     */
+    documento?: DocumentoDeOrigem | null;
 }
 
 export interface ItemPrevia {
@@ -1393,6 +1402,22 @@ export const condominioRateioService = {
             // Só apaga a coluna Fornecedor e mantém o snapshot na Descrição.
         }
 
+        // O COMPROVANTE de cada despesa, pelo mesmo resolvedor por origem que a
+        // aba Despesas usa. Best-effort: sem ele o relatório sai sem anexo.
+        let comprovantes = new Map<string, OrigemResolvida>();
+        try {
+            const ids = linhas.map((d: any) => d.transaction_id).filter(Boolean);
+            if (ids.length > 0) {
+                const { data: txs } = await supabase
+                    .from('internal_transactions')
+                    .select('id, source_system, reference_id')
+                    .in('id', ids);
+                comprovantes = await this.resolverOrigens((txs || []) as any);
+            }
+        } catch {
+            // Só tira o anexo; a lista continua de pé.
+        }
+
         return linhas.map((d: any) => {
             const vivo = lancamentos.get(d.transaction_id);
             // Poda na LEITURA também, e não só na criação: os rateios que já
@@ -1411,6 +1436,7 @@ export const condominioRateioService = {
                 descricao: rotulo ?? 'Despesa sem descrição',
                 valor: Number(d.valor || 0),
                 fornecedor: credores.get(d.transaction_id) ?? null,
+                documento: comprovantes.get(d.transaction_id)?.documento ?? null,
             };
         });
     },

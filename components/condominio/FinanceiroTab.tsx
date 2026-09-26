@@ -612,6 +612,11 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
     const [sheetRelatorio, setSheetRelatorio] = React.useState<Rateio | null>(null);
     const [carregandoRelatorio, setCarregandoRelatorio] = React.useState(false);
     const [baixandoPdf, setBaixandoPdf] = React.useState(false);
+    // Anexar é OPT-IN: rasterizar os comprovantes leva segundos e engorda o
+    // arquivo. Quem quer a prova marca; quem só quer o demonstrativo baixa
+    // rápido. O padrão que gasta menos é o desmarcado.
+    const [comComprovantes, setComComprovantes] = React.useState(false);
+    const [progressoAnexo, setProgressoAnexo] = React.useState<{ feito: number; total: number } | null>(null);
     const [dadosRelatorio, setDadosRelatorio] = React.useState<{
         despesas: DespesaRateio[]; cotas: CotaDoRateio[];
     } | null>(null);
@@ -648,6 +653,10 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
             totalRateado: sheetRelatorio.total_rateado,
             despesas: dadosRelatorio.despesas.map(d => ({
                 descricao: d.descricao, valor: d.valor, fornecedor: d.fornecedor ?? null,
+                // ⚠️ Sem esta linha o checkbox aparecia, contava os documentos
+                // e o PDF saía com ZERO anexos: o campo é opcional, então o
+                // TypeScript não acusa quando o `map` o descarta.
+                documento: d.documento ?? null,
             })),
             cotas: dadosRelatorio.cotas.map(c => ({
                 unidade: c.unitLabel,
@@ -662,12 +671,28 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
         if (!relatorio) return;
         setBaixandoPdf(true);
         try {
-            const arquivo = await baixarRelatorioRateioPdf(relatorio);
-            notify(`${arquivo} baixado.`);
+            const r = await baixarRelatorioRateioPdf(relatorio, {
+                comComprovantes,
+                aoProgredir: (feito, total) => setProgressoAnexo({ feito, total }),
+            });
+            // O que NÃO entrou é dito aqui também, e não só no fim do PDF:
+            // quem clicou está olhando a tela, não a última página do arquivo.
+            if (r.falhas.length > 0) {
+                notify(
+                    `${r.arquivo} baixado com ${r.anexados} comprovante(s). `
+                    + `${r.falhas.length} não entrou/entraram — o motivo está na última página.`,
+                    'error',
+                );
+            } else {
+                notify(comComprovantes
+                    ? `${r.arquivo} baixado com ${r.anexados} comprovante(s).`
+                    : `${r.arquivo} baixado.`);
+            }
         } catch (e: any) {
             notify(e?.message || 'Erro ao gerar o PDF.', 'error');
         } finally {
             setBaixandoPdf(false);
+            setProgressoAnexo(null);
         }
     };
 
@@ -2184,15 +2209,53 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
                     )}
                 </SheetPanel>
                 <SheetFooter>
-                    <button onClick={() => setSheetRelatorio(null)} className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all">Fechar</button>
-                    <button
-                        onClick={baixarPdf}
-                        disabled={!relatorio || baixandoPdf}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
-                    >
-                        <FileText className="w-[15px] h-[15px]" />
-                        {baixandoPdf ? 'Gerando...' : 'Baixar PDF'}
-                    </button>
+                    {/* O checkbox fica NA MESMA linha do botão que ele governa —
+                        opção de download longe do download não é lida. Some
+                        quando não há comprovante nenhum: caixa que não muda
+                        nada só ensina a ignorar a caixa. */}
+                    {/* `flex-1` empurra os botões para a direita sem mexer no
+                        `justify-end` que o SheetFooter já traz: somar
+                        `justify-between` aqui seria conflito de Tailwind, e quem
+                        vence é a ordem no CSS gerado, não a ordem na classe. */}
+                    <div className="flex-1 min-w-0">
+                    {(() => {
+                        const quantos = (dadosRelatorio?.despesas ?? []).filter(d => d.documento).length;
+                        if (quantos === 0) {
+                            return <span className="text-xs text-gray-400">Nenhuma despesa tem comprovante anexável.</span>;
+                        }
+                        return (
+                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={comComprovantes}
+                                    disabled={baixandoPdf}
+                                    onChange={e => setComComprovantes(e.target.checked)}
+                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
+                                />
+                                <span className="text-sm font-normal text-gray-700">
+                                    Incluir os comprovantes
+                                    <span className="text-gray-400">{` (${quantos} documento${quantos === 1 ? '' : 's'})`}</span>
+                                </span>
+                            </label>
+                        );
+                    })()}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => setSheetRelatorio(null)} className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all">Fechar</button>
+                        <button
+                            onClick={baixarPdf}
+                            disabled={!relatorio || baixandoPdf}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                        >
+                            <FileText className="w-[15px] h-[15px]" />
+                            {/* Contar em voz alta: rasterizar 12 boletos leva
+                                segundos, e um botão parado lê como travado. */}
+                            {!baixandoPdf ? 'Baixar PDF'
+                                : progressoAnexo && progressoAnexo.total > 0
+                                    ? `Anexando ${progressoAnexo.feito} de ${progressoAnexo.total}...`
+                                    : 'Gerando...'}
+                        </button>
+                    </div>
                 </SheetFooter>
             </Sheet>
 

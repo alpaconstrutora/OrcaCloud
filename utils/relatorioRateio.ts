@@ -31,6 +31,12 @@ export interface LinhaDespesaRelatorio {
      * fornecedor sai com dois nomes no mesmo relatório.
      */
     fornecedor?: string | null;
+    /**
+     * O COMPROVANTE, quando existe: `{ bucket, path, nome }` do arquivo que
+     * originou a despesa. Só o lado de dentro do sistema preenche — o portal
+     * não alcança o bucket dos boletos (ver `services/relatorioAnexos.ts`).
+     */
+    documento?: { bucket: string; path: string; nome: string } | null;
 }
 
 /** Uma linha de cota do documento. */

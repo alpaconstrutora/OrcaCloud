@@ -11,6 +11,7 @@ import { financialApprovalService } from '../services/financialApprovalService';
 import { blueprintApprovalService } from '../services/blueprintApprovalService';
 import { contractService } from '../services/contractService';
 import { orderService } from '../services/orderService';
+import { purchaseRequestService } from '../services/purchaseRequestService';
 import { approvalService, type ApprovalPendingSummary, type ActionQueueItem } from '../services/approvalService';
 import type {
     FinancialApprovalConfig, ApprovalStep,
@@ -28,6 +29,7 @@ export const ENTITY_TAG: Record<ActionQueueItem['entity'], string> = {
     purchase_order: 'Compra',
     process_step:   'Processo',
     blueprint_snapshot: 'Planta',
+    purchase_request: 'Solicitação',
 };
 
 // ⚠️ Toda entidade nova PRECISA aparecer nos três dispatches abaixo. O `return`
@@ -39,6 +41,7 @@ function dispatchSubmit(item: ActionQueueItem, organizationId: string): Promise<
         return blueprintApprovalService.enviarParaAprovacao(item.id, organizationId);
     if (item.entity === 'contract')       return contractService.submitForApproval(item.id);
     if (item.entity === 'purchase_order') return orderService.submitForApproval(item.id, organizationId);
+    if (item.entity === 'purchase_request') return purchaseRequestService.submitForApproval(item.id);
     return financialApprovalService.submitForApproval(item.id, organizationId);
 }
 
@@ -50,6 +53,8 @@ function dispatchApprove(
         return blueprintApprovalService.aprovar(item.id, level, userEmail, labels, notes);
     if (item.entity === 'contract')       return contractService.approveContract(item.id, level, userEmail, notes);
     if (item.entity === 'purchase_order') return orderService.approveOrder(item.id, level, userEmail, notes);
+    if (item.entity === 'purchase_request')
+        return purchaseRequestService.approve(item.id, level, userEmail, labels, notes);
     return financialApprovalService.approve(item.id, level, userEmail, labels, notes);
 }
 
@@ -58,6 +63,7 @@ function dispatchReject(item: ActionQueueItem, userEmail: string, reason: string
         return blueprintApprovalService.rejeitar(item.id, userEmail, reason);
     if (item.entity === 'contract')       return contractService.rejectContract(item.id, userEmail, reason);
     if (item.entity === 'purchase_order') return orderService.rejectOrder(item.id, userEmail, reason);
+    if (item.entity === 'purchase_request') return purchaseRequestService.reject(item.id, userEmail, reason);
     return financialApprovalService.reject(item.id, userEmail, reason);
 }
 
@@ -587,6 +593,7 @@ const ENTITY_LABEL: Record<string, string> = {
     transaction: 'saídas financeiras',
     contract:    'contratos',
     purchase_order: 'compras',
+    purchase_request: 'solicitações de compra',
 };
 
 function SoftPendingBanner({ organizationId }: { organizationId: string }) {

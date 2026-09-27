@@ -39,6 +39,7 @@ const ProjectSettingsView   = React.lazy(() => import('./ProjectSettingsView'));
 const SupplyChainOrderList  = React.lazy(() => import('./SupplyChainOrderList'));
 const SupplyChainOrderDetails = React.lazy(() => import('./SupplyChainOrderDetails'));
 const SupplyChainQuotationList = React.lazy(() => import('./SupplyChainQuotationList'));
+const SolicitacoesCompraList = React.lazy(() => import('./suprimentos/SolicitacoesCompraList'));
 const SupplyChainQuotationForm = React.lazy(() => import('./SupplyChainQuotationForm'));
 const SupplyChainQuotationComparison = React.lazy(() => import('./SupplyChainQuotationComparison'));
 const SupplyChainContractList = React.lazy(() => import('./SupplyChainContractList'));
@@ -888,6 +889,17 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           // O lápis leva para o detalhe: é lá que se edita, na aba Dados Gerais.
           onEdit={(id) => { setSelectedOrderId(id); setPendingSupplierOrderViewMode('details'); }}
           version={ordersVersion}
+        />
+      );
+
+    // Solicitações de Compra (26/09/2026). O prefixo `supplies-` herda o guard de
+    // `canViewOrders`/`compras` acima — de propósito, sem chave de permissão
+    // nova (chave declarada e não aplicada é o que o comentário do guard proíbe).
+    case 'supplies-solicitacoes':
+      return (
+        <SolicitacoesCompraList
+          onOpenQuotation={(id) => { setEditingQuotationId(id); setIsCreatingQuotation(true); setActiveView('supplies-quotations'); }}
+          onOpenOrder={(id) => { setSelectedOrderId(id); setPendingSupplierOrderViewMode('details'); setActiveView('supplies-orders'); }}
         />
       );
 

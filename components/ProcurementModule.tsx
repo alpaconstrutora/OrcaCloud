@@ -5,12 +5,15 @@ import {
     PackageSearch, ChevronDown, ChevronUp, CheckCircle2,
     BarChart2, ListFilter, Zap, FileText, Truck,
     Square, CheckSquare, Users, X, ChevronRight,
-    Shield, TrendingUp, Sliders,
+    Shield, TrendingUp, Sliders, ClipboardPen,
 } from 'lucide-react';
 import { procurementService, computeRiskItems, computeMonthlyBreakdown, simulateScenario } from '../services/procurementService';
 import { projectService, ProjectData } from '../services/projectService';
 import { supplierService, getSupplierDisplayName } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
+import { purchaseRequestService } from '../services/purchaseRequestService';
+import { pedirEdicaoDaSolicitacao } from './suprimentos/SolicitacoesCompraList';
+import { useToast } from '../hooks/useToast';
 import {
     ProcurementPlanItem,
     ProcurementKPIs,
@@ -209,7 +212,7 @@ function OrderModal({
 }
 
 // ── Módulo principal ───────────────────────────────────────────────────────────
-export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => {
+export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId, onChangeView }) => {
     const [tab, setTab] = useState<Tab>('plano');
     const [projects, setProjects] = useState<{ id: string; name: string; classification: 'OBRA' | 'PLANEJAMENTO' }[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState<string>('');
@@ -349,6 +352,58 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
     };
 
     const clearSelection = () => setSelected(new Set());
+
+    /**
+     * "Gerar solicitação" (26/09/2026 — docs/planos/2026-09-26-suprimentos-solicitacoes-compra.md):
+     * a necessidade vira uma Solicitação de Compra em RASCUNHO e abre para
+     * revisão. Diferente de Gerar Cotação/Pedido, funciona em "Todas as
+     * organizações": a SC é da organização DONA DA OBRA (REGRA #5, item 5).
+     * Linha do plano já presa a outra SC aberta não entra de novo.
+     */
+    const [gerandoSc, setGerandoSc] = useState(false);
+    // Toast GLOBAL (provider): o aviso tem de sobreviver à troca de tela logo
+    // abaixo — o `showToast` local desta tela desmonta junto com ela (teste de 26/09).
+    const { showToast: avisar } = useToast();
+    const gerarSolicitacao = async () => {
+        if (!selectedProjectId) return;
+        setGerandoSc(true);
+        try {
+            const emUso = await purchaseRequestService.planItemIdsEmUso(selectedProjectId);
+            const escolhidos = items.filter(i => selected.has(i.id));
+            const livres = escolhidos.filter(i => !emUso.has(i.id));
+            if (livres.length === 0) {
+                setError('Os itens marcados já estão em outra solicitação aberta.');
+                return;
+            }
+            const obra = projects.find(p => p.id === selectedProjectId)?.name ?? 'obra';
+            const sc = await purchaseRequestService.create({
+                projectId: selectedProjectId,
+                title: `Plano de Aquisições — ${obra} — ${new Date().toLocaleDateString('pt-BR')}`,
+                priority: 'normal',
+                items: livres.map((p, idx) => ({
+                    position: idx,
+                    source: 'plano',
+                    procurementPlanItemId: p.id,
+                    inputCode: p.inputCode ?? null,
+                    description: p.inputDescription,
+                    unit: p.inputUnit,
+                    quantity: Number(p.netRequiredQty) > 0 ? Number(p.netRequiredQty) : Number(p.requiredQty) || 1,
+                    estimatedUnitPrice: Number(p.estimatedUnitCost) || 0,
+                    needDate: p.needDate ?? null,
+                })),
+            });
+            if (livres.length < escolhidos.length) {
+                avisar(`${escolhidos.length - livres.length} item(ns) já estavam em outra solicitação aberta e ficaram de fora.`);
+            }
+            clearSelection();
+            pedirEdicaoDaSolicitacao(sc.id);
+            onChangeView('supplies-solicitacoes');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Falha ao gerar a solicitação.');
+        } finally {
+            setGerandoSc(false);
+        }
+    };
 
     // ── derived data ───────────────────────────────────────────────────────────
     const today = new Date().toISOString().slice(0, 10);
@@ -558,6 +613,14 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
                     <CheckSquare className="w-4 h-4" />
                     <span className="text-sm font-medium">{selected.size} item(s) selecionado(s)</span>
                     <div className="flex gap-2 ml-auto">
+                        <button
+                            onClick={gerarSolicitacao}
+                            disabled={gerandoSc || !selectedProjectId}
+                            title={!selectedProjectId ? 'Selecione a obra do plano.' : undefined}
+                            className="flex items-center gap-1.5 bg-white text-indigo-700 text-button font-semibold px-3 py-1.5 rounded hover:bg-indigo-50 disabled:opacity-60"
+                        >
+                            <ClipboardPen className="w-3.5 h-3.5" /> {gerandoSc ? 'Gerando…' : 'Gerar Solicitação'}
+                        </button>
                         <button
                             onClick={() => setModal('quotation')}
                             className="flex items-center gap-1.5 bg-white text-blue-700 text-button font-semibold px-3 py-1.5 rounded hover:bg-blue-50"

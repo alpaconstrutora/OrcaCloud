@@ -1,5 +1,11 @@
 import { supabase } from '../lib/supabase';
 import { projectService } from './projectService';
+import { purchaseRequestService } from './purchaseRequestService';
+import { statusDaSolicitacao, STATUS_LABEL } from '../utils/solicitacaoCompra';
+import type { PurchaseRequestDisplayStatus } from '../types/purchaseRequest';
+
+/** SC que ainda pede ação de alguém (a etapa "Solicitação" do quadro). */
+const SC_ABERTA: PurchaseRequestDisplayStatus[] = ['rascunho', 'em_aprovacao', 'aprovada', 'em_atendimento'];
 
 export type SeamStatus = 'auto' | 'manual' | 'gap';
 
@@ -147,8 +153,28 @@ export const p2pFlowService = {
       ...proj,
     });
 
+    // Etapa "Solicitação" = Solicitações de Compra ABERTAS (rascunho, em
+    // aprovação, aprovada, em atendimento — as quatro abas somadas da lista).
+    // Status é derivado dos itens (utils/solicitacaoCompra.ts), não há coluna
+    // para contar no banco: por isso lê pela mesma função da tela. Até
+    // 26/09/2026 esta etapa contava `procurement_plan_items`, porque a SC não existia.
+    const contarSolicitacoes = async () => {
+      try {
+        const lista = (await purchaseRequestService.list(organizationId))
+          .filter(sc => !projectId || sc.projectId === projectId)
+          .map(sc => statusDaSolicitacao(sc));
+        return {
+          abertas: lista.filter(st => SC_ABERTA.includes(st)).length,
+          emAprovacao: lista.filter(st => st === 'em_aprovacao').length,
+        };
+      } catch (e) {
+        console.warn('[p2pFlow] solicitações:', e);
+        return { abertas: 0, emAprovacao: 0 };
+      }
+    };
+
     const [
-      necessidades,
+      solicitacoes,
       cotacoes,
       pedidosAbertos,
       pedidosRecebidos,
@@ -158,7 +184,7 @@ export const p2pFlowService = {
       contasPagar,
       pagos,
     ] = await Promise.all([
-      countRows('procurement_plan_items', { ...org, ...proj }),
+      contarSolicitacoes(),
       contarCotacoes(),
       countRows('purchase_orders', { ...org, ...proj, status: ['Rascunho', 'Enviado'] }),
       countRows('purchase_orders', { ...org, ...proj, status: ['Recebido', 'Parcial'] }),
@@ -172,13 +198,13 @@ export const p2pFlowService = {
     const stages: P2PStage[] = [
       {
         id: 'solicitacao', label: 'Solicitação', owner: 'Obras / Almoxarifado',
-        view: 'plano-aquisicoes', count: necessidades,
-        inboundSeam: 'auto', inboundNote: 'Origem da necessidade (orçamento + cronograma)',
+        view: 'supplies-solicitacoes', count: solicitacoes.abertas, pending: solicitacoes.emAprovacao,
+        inboundSeam: 'auto', inboundNote: 'Obra pede (orçamento, almoxarifado ou Plano de Aquisições); alçada aprova',
       },
       {
         id: 'cotacao', label: 'Cotação', owner: 'Suprimentos',
         view: 'supplies-quotations', count: cotacoes,
-        inboundSeam: 'auto', inboundNote: 'Plano gera quotation_request',
+        inboundSeam: 'auto', inboundNote: 'Solicitação aprovada (ou o Plano) gera quotation_request',
       },
       {
         id: 'pedido', label: 'Pedido de Compra', owner: 'Suprimentos',
@@ -226,20 +252,15 @@ export const p2pFlowService = {
 
     switch (stageId) {
       case 'solicitacao': {
-        const rows = await fetchRows<{
-          id: string; input_description: string; input_unit: string;
-          required_qty: number; status: string; need_date: string;
-        }>(
-          'procurement_plan_items',
-          'id, input_description, input_unit, required_qty, status, need_date',
-          { ...org, ...proj },
-        );
-        return rows.map(r => ({
-          id: r.id,
-          label: r.input_description,
-          sublabel: `${r.required_qty} ${r.input_unit}`,
-          status: r.status,
-          date: fmtDate(r.need_date),
+        const lista = (await purchaseRequestService.list(organizationId).catch(() => []))
+          .filter(sc => (!projectId || sc.projectId === projectId) && SC_ABERTA.includes(statusDaSolicitacao(sc)))
+          .slice(0, 50);
+        return lista.map(sc => ({
+          id: sc.id,
+          label: `${sc.number ?? ''} ${sc.title}`.trim(),
+          sublabel: sc.projectName ?? '',
+          status: STATUS_LABEL[statusDaSolicitacao(sc)],
+          date: fmtDate(sc.needDate ?? undefined),
         }));
       }
 

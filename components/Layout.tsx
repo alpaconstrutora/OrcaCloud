@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins, GraduationCap, PencilRuler, Landmark, Home, Boxes } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, ClipboardPen, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins, GraduationCap, PencilRuler, Landmark, Home, Boxes } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -480,7 +480,7 @@ const Layout: React.FC<LayoutProps> = ({
   const operacionalViews = ['operacional','project-diary'];
   const [isOperacionalOpen, setIsOperacionalOpen] = React.useState(() => operacionalViews.includes(activeView));
   React.useEffect(() => { if (operacionalViews.includes(activeView)) setIsOperacionalOpen(true); }, [activeView]);
-  const suprimentosViews = ['fluxo-p2p','supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado'];
+  const suprimentosViews = ['fluxo-p2p','supplies-solicitacoes','supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado'];
   const [isSuprimentosOpen, setIsSuprimentosOpen] = React.useState(() => suprimentosViews.includes(activeView));
   React.useEffect(() => { if (suprimentosViews.includes(activeView)) setIsSuprimentosOpen(true); }, [activeView]);
   const financeiroViews = ['financial-dashboard','contas-a-receber','financial-boletos','contas-a-pagar','tributos-a-pagar','boletos-pagar','extrato-bancario','bank-reconciliation','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial', 'fpa-module', 'dividas-financiamentos'];
@@ -514,6 +514,7 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'eng-orcamentos', label: 'Orcamentos', group: 'Engenharia', icon: FolderOpen },
       { id: 'eng-planejamento', label: 'Planejamento', group: 'Engenharia', icon: Calendar },
       { id: 'measure-ai', label: 'Medição inteligente', group: 'Engenharia', icon: Calculator },
+      { id: 'supplies-solicitacoes', label: 'Solicitações de compra', group: 'Suprimentos', icon: ClipboardPen },
       { id: 'supplies-contracts', label: 'Contratos', group: 'Suprimentos', icon: FileText },
       { id: 'supplies-quotations', label: 'Cotações', group: 'Suprimentos', icon: FileText },
       { id: 'supplies-orders', label: 'Pedidos', group: 'Suprimentos', icon: Package },
@@ -1032,6 +1033,7 @@ const Layout: React.FC<LayoutProps> = ({
                   >
                     <DropdownItem id="fluxo-p2p" label="Fluxo Integrado (P2P)" icon={Workflow} />
                     <DropdownItem id="plano-aquisicoes" label="Plano de Aquisições" icon={ClipboardList} />
+                    <DropdownItem id="supplies-solicitacoes" label="Solicitações" icon={ClipboardPen} />
                     <DropdownItem id="supplies-contracts" label="Contratos" icon={FileText} />
                     <DropdownItem id="supplies-quotations" label="Cotações" icon={FileText} />
                     <DropdownItem id="supplies-orders" label="Pedidos" icon={Package} />
@@ -1339,6 +1341,7 @@ const Layout: React.FC<LayoutProps> = ({
               <NavGroup label="Suprimentos" />
               <NavItem id="fluxo-p2p" icon={Workflow} label="Fluxo Integrado (P2P)" forceFull />
               <NavItem id="plano-aquisicoes" icon={ClipboardList} label="Plano de Aquisições" forceFull />
+              <NavItem id="supplies-solicitacoes" icon={ClipboardPen} label="Solicitações" forceFull />
               <NavItem id="supplies-orders" icon={Package} label="Pedidos" forceFull />
               <NavItem id="supplies-receipts" icon={Truck} label="Recebimento" forceFull />
               <NavItem id="almoxarifado" icon={Warehouse} label="Almoxarifado" forceFull />

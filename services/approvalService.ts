@@ -34,7 +34,8 @@ export type ApprovalEntity =
     | 'contract'
     | 'purchase_order'
     | 'process_step'
-    | 'blueprint_snapshot';
+    | 'blueprint_snapshot'
+    | 'purchase_request';
 
 interface EntityMeta {
     /** Tabela no banco. */
@@ -64,6 +65,10 @@ const ENTITY_META: Record<ApprovalEntity, EntityMeta> = {
     // estado no estudo congelaria o desenho inteiro enquanto uma revisao esta
     // sob analise.
     blueprint_snapshot: { table: 'blueprint_snapshots', valueField: 'amount' },
+    // SOLICITAÇÃO DE COMPRA (2026-09-26). `estimated_total` existe, mas
+    // `purchaseRequestService` passa organizationId e amount explícitos — e
+    // `semFaixa: 'exigir1'`: SC sem preço (valor 0) ainda precisa de aprovação.
+    purchase_request:   { table: 'purchase_requests',   valueField: 'estimated_total' },
 };
 
 export interface ResolvedLevels {

@@ -73,6 +73,9 @@ export const NOTIF_TYPE_META: Record<string, NotifTypeMeta> = {
     // ── Suprimentos ─────────────────────────────────────────────────────────
     status_change: { category: 'suprimentos', label: 'Mudança de status' },  // services/orderService.ts
     chat_message:  { category: 'suprimentos', label: 'Mensagem no pedido' }, // services/chatService.ts
+    // Solicitante avisado da decisão (services/purchaseRequestService.ts). Não é
+    // `solicitacao_aprovacao`, que já é a aprovação de DOCUMENTO do GED.
+    solicitacao_compra_decidida: { category: 'suprimentos', label: 'Solicitação de compra aprovada/reprovada' },
 
     // ── Documentos (GED / ÒPURA Docs) ───────────────────────────────────────
     documento_compartilhado: { category: 'documentos', label: 'Documento compartilhado' },

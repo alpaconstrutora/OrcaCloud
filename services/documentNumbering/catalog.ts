@@ -24,6 +24,13 @@ export interface DocTypeCatalogEntry {
  */
 export const DOC_TYPE_CATALOG: Record<DocType, DocTypeCatalogEntry> = {
     // ═══ Tabela principal (print de 2026-08-30) — re-prefixados ═══
+    PURCHASE_REQUEST: {
+        label: 'Solicitações de Compra',
+        // Nasceu em 2026-09-26 no mesmo formato dos outros documentos de
+        // Suprimentos (SC-RES01-TR1-0001). O CHECK de doc_type no banco foi
+        // ampliado em aplicar_20270926000130_solicitacoes_compra.sql.
+        default: { slots: ['PREFIX', 'EMPREENDIMENTO', 'OBRA'], prefix: 'SC', separator: '-', seqPadding: 4 },
+    },
     PURCHASE_ORDER: {
         label: 'Pedidos de Compra',
         default: { slots: ['PREFIX', 'EMPREENDIMENTO', 'OBRA'], prefix: 'PCO', separator: '-', seqPadding: 4 },
@@ -89,7 +96,7 @@ export const DOC_TYPE_CATALOG: Record<DocType, DocTypeCatalogEntry> = {
 
 /** Ordem de exibição das duas tabelas — DOC_TYPE_CATALOG é um Record, sem ordem própria garantida. */
 export const MAIN_DOC_TYPES: DocType[] = [
-    'PURCHASE_ORDER', 'QUOTATION', 'SUPPLY_CONTRACT',
+    'PURCHASE_REQUEST', 'PURCHASE_ORDER', 'QUOTATION', 'SUPPLY_CONTRACT',
     'UNIT_SALE_CONTRACT', 'RENTAL_CONTRACT', 'CONDO_RATEIO', 'SERVICE_CONTRACT',
 ];
 

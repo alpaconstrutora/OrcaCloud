@@ -42,7 +42,7 @@ const PRESETS = {
     'contas-a-pagar', 'contas-a-receber', 'extrato-bancario', 'tributos-a-pagar',
     'financial-dashboard', 'boletos-pagar',
     // Suprimentos
-    'supplies-orders', 'supplies-quotations', 'supplies-contracts', 'fluxo-p2p',
+    'supplies-solicitacoes', 'supplies-orders', 'supplies-quotations', 'supplies-contracts', 'fluxo-p2p',
     // Engenharia e Incorporação
     'eng-obras', 'eng-orcamentos', 'eng-planejamento', 'empreendimentos',
     // Corporativo

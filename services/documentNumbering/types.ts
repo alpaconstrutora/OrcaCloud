@@ -47,7 +47,7 @@ export const ALL_VARIABLE_TOKENS: VariableToken[] = [
 export const MAX_SLOTS = 8;
 
 /**
- * Os 11 documentos que a Nomenclatura passa a controlar (REGRA de produto —
+ * Os documentos que a Nomenclatura controla (12 desde 2026-09-26, com a SC — REGRA de produto —
  * "os números dos módulos abaixo devem ser vinculados a Configurações do
  * Sistema › Nomenclatura", pedido de 2026-08-17).
  */
@@ -62,7 +62,8 @@ export type DocType =
     | 'RENTAL_CONTRACT'      // Comercial › Locações (contrato CL-)
     | 'SALE_DEAL'            // Comercial › Vendas de Unidades (código da negociação)
     | 'RENTAL_DEAL'          // Comercial › Locações (código da negociação)
-    | 'CONDO_RATEIO';        // Comercial › Condomínios (rateio fechado)
+    | 'CONDO_RATEIO'         // Comercial › Condomínios (rateio fechado)
+    | 'PURCHASE_REQUEST';    // Suprimentos › Solicitações de Compra (2026-09-26)
 
 export interface NumberingConfig {
     slots: SlotToken[];

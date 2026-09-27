@@ -277,7 +277,7 @@ const PRODUCTS: { id: ProductContext; label: string; icon: string; color: string
 const MODULES_BY_PRODUCT: Record<ProductContext, { key: string; label: string; description: string }[]> = {
     platform: [
         { key: 'obras',      label: 'Engenharia / Obras',               description: 'Obras, Orçamentos, Cronogramas e Composições' },
-        { key: 'compras',    label: 'Suprimentos / Compras',            description: 'Pedidos, Cotações, Recebimento e Contratos' },
+        { key: 'compras',    label: 'Suprimentos / Compras',            description: 'Solicitações, Pedidos, Cotações, Recebimento e Contratos' },
         { key: 'rh',         label: 'Mão de Obra / RH',                 description: 'Colaboradores, Equipes, Ponto, Folha e SST' },
         { key: 'crm',        label: 'Comercial & Vendas',               description: 'Espelho de vendas e CRM de serviços' },
         { key: 'rentals',    label: 'Comercial — Locações',             description: 'Gestão de locações, contratos de aluguel e inadimplência' },

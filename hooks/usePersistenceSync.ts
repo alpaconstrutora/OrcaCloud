@@ -114,7 +114,7 @@ export const usePersistenceSync = ({
     // `setSelectedQuotationId(null)` abaixo apagava o id no mesmo instante em
     // que a tela ia usá-lo — a cotação nunca era encontrada e o mapa abria
     // vazio ("Cotação não encontrada."), levando junto tudo que vive nele.
-    const isSuppliesView = ['supplies-orders', 'supplies-quotations', 'supplies-quotations-comparison', 'supplies-contracts', 'supplies-receipts'].includes(activeView);
+    const isSuppliesView = ['supplies-solicitacoes', 'supplies-orders', 'supplies-quotations', 'supplies-quotations-comparison', 'supplies-contracts', 'supplies-receipts'].includes(activeView);
     const isImovibView = activeView === 'imovib';
     const isDiaryView = activeView === 'project-diary';
 

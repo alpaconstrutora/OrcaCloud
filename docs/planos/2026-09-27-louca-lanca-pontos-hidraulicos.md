@@ -59,9 +59,10 @@ O vaso estava em `componentes` (família LOUCA, `tipoId: VASO`), não em
    **Pronto quando:** teste de componente clica e os terminais aparecem.
 5. [x] Motivo do esgoto automático conta as louças sem ponto de esgoto.
    **Pronto quando:** teste com vaso-louça + CI espera "selecione a peça".
-6. [ ] Suíte (505 arquivos / 5.777 testes verdes), typecheck e `check-ui-standard.sh`
-   no painel: feitos em 27/09/2026. Falta: publicar (push em main) e
-   `conferir-producao.sh` com um texto da tela.
+6. [x] Suíte (505 arquivos / 5.777 testes verdes), typecheck e `check-ui-standard.sh`
+   no painel: feitos em 27/09/2026. Publicado (`cee179c`, push em main) e
+   conferido de fora: `conferir-producao.sh "ainda sem ponto de esgoto"
+   "lancar-pontos-da-louca"` → o domínio serve exatamente origin/main.
 
 ## Fora do escopo (anotado)
 

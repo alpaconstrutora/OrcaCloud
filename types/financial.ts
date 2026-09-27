@@ -793,6 +793,9 @@ export interface FinancialReceipt {
     issued_at: string;
     cancelled_at: string | null;
     cancel_reason: string | null;
+    /** Nº do contrato de origem (`contracts.number`), congelado na emissão
+     *  (aplicar_20270927000120). NULL = título sem contrato. */
+    contract_number: string | null;
 }
 
 // ────────────────────────────────────────────────────────────

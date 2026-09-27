@@ -17,6 +17,15 @@
 (Resposta à oferta de corrigir o recibo antigo do portal, que assinava com o nome
 do próprio cliente.)
 
+### Pedido posterior (2026-09-27, mesma sessão, com print do recibo nº 000004)
+
+> 1. veja print: logomarca ficou esticada.
+> 2. trazer norecibo o numero do contrato
+> 3. trazer a data da baixa do título
+
+Perguntado o que o item 3 queria (o recibo já mostrava a data gravada na baixa):
+*"desconsidere meu pedido."* Perguntado sobre o nº 4 já emitido: **"Regerar o nº 4"**.
+
 ## Decisões tomadas com o usuário
 
 | Data | Pergunta | Resposta |
@@ -295,6 +304,20 @@ nenhum** (coluna Ações só para a equipe, e escondida até passar o mouse).
   Incoporadora / 09.264.396/0001-59". José Roberto segue com "Baixar recibo
   Nº 000004". tsc ok, 5770 testes, build ok.
 - [x] 18. Publicação — commit `78c2e56` em main; `conferir-producao.sh` provou o SHA e o texto novo no bundle servido (27/09/2026).
+
+## Fase 4 — logo proporcional e nº do contrato (27/09/2026)
+
+- [x] 19. Migration `aplicar_20270927000120_recibo_numero_do_contrato.sql` —
+  coluna `financial_receipts.contract_number` (snapshot) + `emitir_recibo_recebimento`
+  reescrita a partir da vigente (conferida: idêntica ao arquivo) resolvendo
+  `contracts.number` pelo `reference_id` (`:p` e `-p`) + backfill. Aplicada: nº 4 →
+  `CTV-007-007-0001`. Teste desfeito por exceção num título `-p`: `CTL-010-014-0001`.
+- [x] 20. `utils/reciboRecebimento.ts` — linha "Contrato: …" e logo em
+  `caberNaCaixa` (proporção mantida, centralizada na caixa 30×15). Testes: 14.
+- [ ] 21. Publicação.
+- [ ] 22. Regerar o nº 4 — depois do deploy: backup do PDF antigo, apagar o objeto,
+  `file_path = NULL`, baixar em produção (refaz pelo snapshot). **Pronto quando:** o
+  PDF baixado de produção traz "Contrato: CTV-007-007-0001" e a logo proporcional.
 
 ## Fora do escopo (anotado, não feito)
 

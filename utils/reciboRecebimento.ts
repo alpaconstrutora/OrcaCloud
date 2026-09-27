@@ -62,8 +62,10 @@ export function textoRecibo(r: Pick<FinancialReceipt, 'amount' | 'payer_name' | 
 }
 
 /** Linhas de detalhe abaixo do corpo (data e forma). */
-export function detalhesRecibo(r: Pick<FinancialReceipt, 'payment_date' | 'payment_type'>): string[] {
-    const linhas = [`Data do pagamento: ${dataBR(r.payment_date)}`];
+export function detalhesRecibo(r: Pick<FinancialReceipt, 'payment_date' | 'payment_type' | 'contract_number'>): string[] {
+    const linhas: string[] = [];
+    if (r.contract_number) linhas.push(`Contrato: ${r.contract_number}`);
+    linhas.push(`Data do pagamento: ${dataBR(r.payment_date)}`);
     const forma = rotuloFormaPagamento(r.payment_type);
     if (forma) linhas.push(`Forma de pagamento: ${forma}`);
     return linhas;
@@ -75,6 +77,17 @@ export function nomeArquivoRecibo(r: Pick<FinancialReceipt, 'receipt_number' | '
         .replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
         .slice(0, 40);
     return `Recibo_${numeroRecibo(r.receipt_number)}${pagador ? `_${pagador}` : ''}.pdf`;
+}
+
+/**
+ * Tamanho da logo dentro da caixa `maxW × maxH` mantendo a proporção. Até
+ * 27/09/2026 a logo era desenhada direto em 30×15 mm e saía esticada (a da Alpa
+ * é quase quadrada).
+ */
+export function caberNaCaixa(w: number, h: number, maxW: number, maxH: number): { w: number; h: number } {
+    if (!(w > 0) || !(h > 0)) return { w: maxW, h: maxH };
+    const escala = Math.min(maxW / w, maxH / h);
+    return { w: w * escala, h: h * escala };
 }
 
 /** Formato do data URL da logo para o `addImage` do jsPDF. */
@@ -111,8 +124,11 @@ export function montarReciboPdf(r: FinancialReceipt, logoDataUrl?: string | null
     let xEmitente = M;
     if (logoDataUrl) {
         try {
-            doc.addImage(logoDataUrl, formatoImagem(logoDataUrl), M, y - 6, 30, 15, undefined, 'FAST');
-            xEmitente = M + 36;
+            const props = doc.getImageProperties(logoDataUrl);
+            const { w, h } = caberNaCaixa(props.width, props.height, 30, 15);
+            // Centralizada na altura da caixa de 15 mm, alinhada à esquerda.
+            doc.addImage(logoDataUrl, formatoImagem(logoDataUrl), M, y - 6 + (15 - h) / 2, w, h, undefined, 'FAST');
+            xEmitente = M + w + 6;
         } catch {
             /* logo inválida não impede o recibo */
         }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-    textoRecibo, detalhesRecibo, nomeArquivoRecibo, numeroRecibo, montarReciboPdf,
+    textoRecibo, detalhesRecibo, nomeArquivoRecibo, numeroRecibo, montarReciboPdf, caberNaCaixa,
 } from '../utils/reciboRecebimento';
 import type { FinancialReceipt } from '../types/financial';
 
@@ -24,6 +24,7 @@ function recibo(over: Partial<FinancialReceipt> = {}): FinancialReceipt {
         issued_at: '2026-09-26T15:00:00Z',
         cancelled_at: null,
         cancel_reason: null,
+        contract_number: null,
         ...over,
     };
 }
@@ -62,6 +63,14 @@ describe('detalhesRecibo — data e forma', () => {
         ]);
     });
 
+    it('contrato entra em primeiro, quando o título tem contrato', () => {
+        expect(detalhesRecibo(recibo({ contract_number: 'CTV-007-007-0001' }))).toEqual([
+            'Contrato: CTV-007-007-0001',
+            'Data do pagamento: 25/09/2026',
+            'Forma de pagamento: PIX',
+        ]);
+    });
+
     it('forma não informada some da lista', () => {
         expect(detalhesRecibo(recibo({ payment_type: null }))).toEqual(['Data do pagamento: 25/09/2026']);
     });
@@ -93,5 +102,19 @@ describe('montarReciboPdf', () => {
 
     it('logo inválida não impede o recibo', () => {
         expect(() => montarReciboPdf(recibo(), 'data:image/png;base64,naoebase64')).not.toThrow();
+    });
+});
+
+describe('caberNaCaixa — logo sem esticar', () => {
+    it('logo quadrada numa caixa 30×15 fica 15×15', () => {
+        expect(caberNaCaixa(400, 400, 30, 15)).toEqual({ w: 15, h: 15 });
+    });
+    it('logo larga é limitada pela largura, mantendo a proporção', () => {
+        const r = caberNaCaixa(900, 100, 30, 15);
+        expect(r.w).toBe(30);
+        expect(r.h).toBeCloseTo(30 / 9);
+    });
+    it('dimensão inválida cai na caixa inteira (não divide por zero)', () => {
+        expect(caberNaCaixa(0, 0, 30, 15)).toEqual({ w: 30, h: 15 });
     });
 });

@@ -463,6 +463,24 @@ export const clientPortalService = {
      *
      * Nunca guarde o retorno: URL assinada expira em 15 min.
      */
+    /**
+     * A empresa que assina o recibo montado na hora (parcela do JSON legado, ou
+     * paga sem recibo numerado): a organização dona do cadastro do cliente.
+     * RPC porque pelo link público e pelo cliente logado a RLS de
+     * `organizations` não devolve nada (aplicar_20270927000110).
+     */
+    async getEmitente(
+        params: { token?: string; clientId?: string },
+    ): Promise<{ name: string; cnpj?: string; endereco?: string }> {
+        const { data, error } = params.token
+            ? await supabase.rpc('client_portal_get_emitente', { p_token: params.token })
+            : await supabase.rpc('client_portal_get_emitente_for_client', { p_client_id: params.clientId });
+        if (error) throw error;
+        const res = data as { ok?: boolean; motivo?: string; nome?: string; cnpj?: string | null; endereco?: string | null };
+        if (!res?.ok || !res.nome) throw new Error(res?.motivo || 'Empresa emitente não encontrada.');
+        return { name: res.nome, cnpj: res.cnpj ?? undefined, endereco: res.endereco ?? undefined };
+    },
+
     async baixarReciboDoPortal(
         params: { token?: string; clientId?: string; transactionId: string },
     ): Promise<{ url: string; numero: number }> {

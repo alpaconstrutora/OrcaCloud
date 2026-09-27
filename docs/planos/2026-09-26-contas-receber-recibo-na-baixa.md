@@ -10,6 +10,13 @@
 
 > o recibo deve ficar disponivel para download
 
+### Pedido posterior (2026-09-27, mesma sessão)
+
+> corrigir
+
+(Resposta à oferta de corrigir o recibo antigo do portal, que assinava com o nome
+do próprio cliente.)
+
 ## Decisões tomadas com o usuário
 
 | Data | Pergunta | Resposta |
@@ -260,6 +267,34 @@ Playwright no dev server da frente, agente de leitura, rede escutada (único err
   403; chave pública + clientId sem sessão → 403; token válido pedindo título de
   OUTRO cliente → 403; token válido + título dele → 200 com URL assinada.
 - `npm run ci` verde (5754 passed).
+
+## Fase 3 — recibo antigo do portal (27/09/2026)
+
+O recibo montado na hora (`exportService.generateReceiptPDF`) — parcelas do JSON
+legado e parcelas pagas ainda sem recibo numerado — tinha quatro erros medidos no
+PDF real (Filtrelec, link público): emitente = **nome do cliente** e sem CNPJ;
+"Recebemos de **Cliente**"; "do imóvel **undefined**"; data do pagamento = **hoje**.
+E na visão de Locação/Serviços do portal o cliente **não tinha botão de recibo
+nenhum** (coluna Ações só para a equipe, e escondida até passar o mouse).
+
+- [x] 15. Migration `aplicar_20270927000110_portal_emitente_do_recibo.sql` —
+  `client_portal_get_emitente(p_token)` (anon) e `_for_client(p_client_id)`
+  (membro OU o próprio cliente por e-mail), mesma autorização das RPCs de
+  recebíveis; payload interno fechado. Sem `logo_url` (há logo gravada como data
+  URL de ~79 KB). + `fn_portal_receivables_payload` ganha `payment_date`.
+  Aplicada; sondas com a chave pública: token falso → `ok:false`; anon nas
+  funções fechadas → 42501.
+- [x] 16. `ClientArea.tsx` — emitente vem da RPC (sem emitente, não emite);
+  pagador = cliente do portal; coluna Ações de Locação/Serviços para todos, com o
+  recibo para o cliente e editar/remover só para a equipe, sempre visível (§9) e
+  com `ActionIconButton` (§9.2). `exportService.generateReceiptPDF`: sem "imóvel
+  undefined" e data por string (sem o recuo de fuso de `new Date('AAAA-MM-DD')`).
+- [x] 17. Verificação — PDF real da Filtrelec pelo link público: "Recebemos de
+  Filtrelec Comercio e Importação … parcela 1/36 (10/08/2021).", "Data do
+  Pagamento: 09/09/2026" (a gravada no título), assinado "Alpa Construtora e
+  Incoporadora / 09.264.396/0001-59". José Roberto segue com "Baixar recibo
+  Nº 000004". tsc ok, 5770 testes, build ok.
+- [ ] 18. Publicação.
 
 ## Fora do escopo (anotado, não feito)
 

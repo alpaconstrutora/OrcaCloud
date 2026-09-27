@@ -30,6 +30,8 @@ export interface ReceivableRow {
     business_status?: string | null;
     /** Só no payload do portal (`fn_portal_receivables_payload`, aplicar_20270926000120). */
     recibo_numero?: number | null;
+    /** Idem (aplicar_20270927000110) — a data real do pagamento, para o recibo. */
+    payment_date?: string | null;
 }
 
 export function mapReceivableRow(r: ReceivableRow, clientId: string): PaymentInstallment {
@@ -44,6 +46,7 @@ export function mapReceivableRow(r: ReceivableRow, clientId: string): PaymentIns
         clientId,
         transactionId: r.id,
         receiptNumber: r.recibo_numero ?? null,
+        paymentDate: (r.payment_date as string) || undefined,
     } as PaymentInstallment;
 }
 

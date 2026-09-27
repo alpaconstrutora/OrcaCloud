@@ -600,12 +600,21 @@ export const exportService = {
         y += 20;
         doc.setFontSize(12);
         doc.setFont('helvetica', 'normal');
-        const text = `Recebemos de ${installment.clientName || 'Cliente'}, a importância de ${fmtPrice(installment.value)}, referente a ${installment.description} do imóvel ${installment.propertyName || settings.name}.`;
+        // Imóvel só quando existe: no portal por link `settings.name` é undefined
+        // e o recibo saía "do imóvel undefined" (27/09/2026).
+        const imovel = installment.propertyName || settings?.name;
+        const text = `Recebemos de ${installment.clientName || 'Cliente'}, a importância de ${fmtPrice(installment.value)}, referente a ${installment.description}${imovel ? ` do imóvel ${imovel}` : ''}.`;
         const splitText = doc.splitTextToSize(text, pageWidth - (margin * 2));
         doc.text(splitText, margin, y);
 
         y += 30;
-        doc.text(`Data do Pagamento: ${new Date(installment.paymentDate || new Date()).toLocaleDateString('pt-BR')}`, margin, y);
+        // 'YYYY-MM-DD' formatado por string: `new Date('2026-09-09')` é UTC e cai
+        // no dia 08 em Brasília. Sem data de pagamento, a de hoje (como antes).
+        const pago = installment.paymentDate?.slice(0, 10);
+        const dataPagamento = pago && /^\d{4}-\d{2}-\d{2}$/.test(pago)
+            ? pago.split('-').reverse().join('/')
+            : new Date().toLocaleDateString('pt-BR');
+        doc.text(`Data do Pagamento: ${dataPagamento}`, margin, y);
 
         y += 40;
         // Signature line

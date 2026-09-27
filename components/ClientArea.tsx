@@ -1426,6 +1426,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
      *  - parcela do JSON legado, ou ainda sem recibo emitido: o PDF montado na
      *    hora, como sempre foi.
      */
+    const emitenteRef = React.useRef<{ name: string; cnpj?: string } | null>(null);
     const baixarRecibo = async (inst: PaymentInstallment) => {
         try {
             if (isAdmin && inst.transactionId) {
@@ -1447,7 +1448,19 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 a.remove();
                 return;
             }
-            exportService.generateReceiptPDF(inst, settings, { name: clientProfile?.name || 'OPURA' });
+            // Emitente = a organização dona do cadastro do cliente. Até 27/09/2026
+            // ia `{ name: clientProfile.name }`: o recibo saía assinado pelo
+            // próprio pagador, sem CNPJ. Sem emitente, não emite — recibo com a
+            // assinatura errada é pior do que nenhum.
+            if (!emitenteRef.current) {
+                emitenteRef.current = await clientPortalService.getEmitente({
+                    token: portalToken || undefined,
+                    clientId: portalToken ? undefined : clientProfile?.id,
+                });
+            }
+            // Pagador = o cliente do portal (a parcela vinda da RPC não traz nome;
+            // o recibo dizia "Recebemos de Cliente").
+            exportService.generateReceiptPDF({ ...inst, clientName: inst.clientName || clientProfile?.name }, settings, emitenteRef.current);
         } catch (e) {
             showToast('Erro ao baixar o recibo: ' + (e instanceof Error ? e.message : 'tente novamente.'), 'error');
         }
@@ -2181,7 +2194,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     <th className="px-6 py-2.5">Vencimento</th>
                                     <th className="px-6 py-2.5">Valor</th>
                                     <th className="px-6 py-2.5 text-center">Status</th>
-                                    {isAdmin && <th className="px-6 py-2.5 text-right">Ações</th>}
+                                    <th className="px-6 py-2.5 text-right">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
@@ -2215,19 +2228,21 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     {charge.status === 'PAID' ? 'Pago' : overdue ? 'Vencido' : 'Pendente'}
                                                 </button>
                                             </td>
-                                            {isAdmin && (
-                                                <td className="px-6 py-2.5 text-right">
-                                                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                                                        {charge.status === 'PAID' && (
-                                                            <button onClick={() => void baixarRecibo(charge)} className="p-2 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-[6px] transition-all" title={tituloRecibo(charge)}>
-                                                                <FileDown className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                        <button onClick={() => { const d = prompt('Descrição:', charge.description); const v = prompt('Valor:', charge.value.toString()); if (d !== null || v !== null) handleUpdateCharges(charges.map(c => c.id === charge.id ? { ...c, description: d ?? c.description, value: v ? parseFloat(v) : c.value } : c)); }} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-[6px] transition-all"><Pencil className="w-4 h-4" /></button>
-                                                        <button onClick={async () => { if (await confirm({ title: 'Remover cobrança?', variant: 'danger', confirmLabel: 'Remover' })) handleUpdateCharges(charges.filter(c => c.id !== charge.id)); }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-[6px] transition-all"><X className="w-4 h-4" /></button>
-                                                    </div>
-                                                </td>
-                                            )}
+                                            {/* Recibo para TODOS (o inquilino também baixa o dele);
+                                                editar/remover só a equipe. Sempre visível (§9). */}
+                                            <td className="px-6 py-2.5 text-right">
+                                                <div className="flex justify-end gap-1.5">
+                                                    {charge.status === 'PAID' && (
+                                                        <ActionIconButton kind="download" title={tituloRecibo(charge)} icon={<FileDown className="w-4 h-4" />} onClick={() => void baixarRecibo(charge)} />
+                                                    )}
+                                                    {isAdmin && (
+                                                        <>
+                                                            <ActionIconButton kind="edit" onClick={() => { const d = prompt('Descrição:', charge.description); const v = prompt('Valor:', charge.value.toString()); if (d !== null || v !== null) handleUpdateCharges(charges.map(c => c.id === charge.id ? { ...c, description: d ?? c.description, value: v ? parseFloat(v) : c.value } : c)); }} />
+                                                            <ActionIconButton kind="delete" title="Remover cobrança" onClick={async () => { if (await confirm({ title: 'Remover cobrança?', variant: 'danger', confirmLabel: 'Remover' })) handleUpdateCharges(charges.filter(c => c.id !== charge.id)); }} />
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </td>
                                         </tr>
                                     );
                                 })}
@@ -2383,7 +2398,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     <th className="px-6 py-2.5">Data</th>
                                     <th className="px-6 py-2.5">Valor</th>
                                     <th className="px-6 py-2.5 text-center">Status</th>
-                                    {isAdmin && <th className="px-6 py-2.5 text-right">Ações</th>}
+                                    <th className="px-6 py-2.5 text-right">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
@@ -2417,17 +2432,20 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 {med.status === 'PAID' ? 'Aprovada' : 'Pendente'}
                                             </button>
                                         </td>
-                                        {isAdmin && (
-                                            <td className="px-6 py-2.5 text-right">
-                                                <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                                                    {med.status === 'PAID' && (
-                                                        <button onClick={() => void baixarRecibo(med)} className="p-2 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-[6px] transition-all" title={tituloRecibo(med)}><FileDown className="w-4 h-4" /></button>
-                                                    )}
-                                                    <button onClick={() => { const d = prompt('Descrição:', med.description); const v = prompt('Valor:', med.value.toString()); if (d !== null || v !== null) handleUpdateMedicoes(medicoes.map(m => m.id === med.id ? { ...m, description: d ?? m.description, value: v ? parseFloat(v) : m.value } : m)); }} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-[6px] transition-all"><Pencil className="w-4 h-4" /></button>
-                                                    <button onClick={async () => { if (await confirm({ title: 'Remover medição?', variant: 'danger', confirmLabel: 'Remover' })) handleUpdateMedicoes(medicoes.filter(m => m.id !== med.id)); }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-[6px] transition-all"><X className="w-4 h-4" /></button>
-                                                </div>
-                                            </td>
-                                        )}
+                                        {/* Recibo para TODOS; editar/remover só a equipe. Sempre visível (§9). */}
+                                        <td className="px-6 py-2.5 text-right">
+                                            <div className="flex justify-end gap-1.5">
+                                                {med.status === 'PAID' && (
+                                                    <ActionIconButton kind="download" title={tituloRecibo(med)} icon={<FileDown className="w-4 h-4" />} onClick={() => void baixarRecibo(med)} />
+                                                )}
+                                                {isAdmin && (
+                                                    <>
+                                                        <ActionIconButton kind="edit" onClick={() => { const d = prompt('Descrição:', med.description); const v = prompt('Valor:', med.value.toString()); if (d !== null || v !== null) handleUpdateMedicoes(medicoes.map(m => m.id === med.id ? { ...m, description: d ?? m.description, value: v ? parseFloat(v) : m.value } : m)); }} />
+                                                        <ActionIconButton kind="delete" title="Remover medição" onClick={async () => { if (await confirm({ title: 'Remover medição?', variant: 'danger', confirmLabel: 'Remover' })) handleUpdateMedicoes(medicoes.filter(m => m.id !== med.id)); }} />
+                                                    </>
+                                                )}
+                                            </div>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>

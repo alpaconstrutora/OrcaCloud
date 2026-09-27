@@ -1965,6 +1965,27 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(turno3()).toHaveTextContent(/Nada a aplicar/);
   }, 60000);
 
+  it('louça sem ponto (27/09/2026): o painel oferece "Lançar os pontos"; clicar liga o vaso e o botão some', async () => {
+    // "na planta tem uma vaso sanitaria. o sistema nao reconheceu?" — o vaso
+    // desenhado antes de a peça lançar os pontos sozinha.
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const m = k.applyBatch(nivel.model, [{ type: 'AddComponente', levelId: t, tipoId: 'VASO', at: k.point(6200, 5400) }]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirComponentes(user);
+    await user.click(screen.getAllByRole('button').find((b) => /^Vaso sanitário 1/.test(b.textContent ?? ''))!);
+    const ponto = () => within(screen.getByTestId('painel-componente')).getByTestId('ponto-ligado');
+    expect(ponto()).toHaveTextContent(/nenhum a até 0,60 m/);
+    const lancar = within(ponto()).getByTestId('lancar-pontos-da-louca');
+    expect(lancar).toHaveTextContent('Lançar os pontos (água fria, esgoto)');
+    await user.click(lancar);
+    expect(ponto()).toHaveTextContent(/ligado — a 0 mm/);
+    expect(within(ponto()).queryByTestId('lancar-pontos-da-louca')).toBeNull();
+  });
+
   it('componentes (E7.1): o menu Mobiliário arma a ferramenta; o navegador lista o vaso e o painel mostra a ficha e o ponto ligado; trocar o tipo troca a ficha; aceitar o mobiliário grava componentes sugeridos', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });

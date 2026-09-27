@@ -31,8 +31,8 @@
  * duplica; uma disciplina que faltava (a água quente ligada depois) nasce na
  * posição do ponto irmão que já existe.
  */
-import type { BlueprintModel, Command, DisciplinaDeRede, Opening, Space, SpaceLabel, Terminal, TipoDePontoHidraulico, Wall } from './blueprintKernel';
-import { DISCIPLINAS_DO_PONTO_HIDRAULICO, pointInPolygon, signedArea } from './blueprintKernel';
+import type { BlueprintModel, Command, Componente, DisciplinaDeRede, FichaDoComponente, Opening, Space, SpaceLabel, Terminal, TipoDePontoHidraulico, Wall } from './blueprintKernel';
+import { CATALOGO_DE_COMPONENTES, DISCIPLINAS_DO_PONTO_HIDRAULICO, pointInPolygon, signedArea } from './blueprintKernel';
 import type { Point } from './blueprintKernel';
 import { etiquetaDoAmbiente, ladosDePiso, pontoJuntoAPorta, type LadoDoAmbiente } from './blueprintDistribuicao';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
@@ -220,14 +220,16 @@ function posicionarKit(
 }
 
 /** As disciplinas que o aparelho pede neste kit (esgoto do chuveiro vai pelo coletor). */
-function disciplinasDaPeca(peca: PecaPosicionada, hip: HipotesesDePontos): DisciplinaDeRede[] {
-  const admitidas = DISCIPLINAS_DO_PONTO_HIDRAULICO[peca.tipo];
+/** As redes que o aparelho recebe — a mesma regra no kit do ambiente e na louça. */
+function disciplinasDoAparelho(tipo: TipoDePontoHidraulico, hip: HipotesesDePontos): DisciplinaDeRede[] {
+  const admitidas = DISCIPLINAS_DO_PONTO_HIDRAULICO[tipo];
   return admitidas.filter((d) => {
-    if (d === 'AGUA_QUENTE') return hip.aguaQuenteEm.includes(peca.tipo);
-    if (d === 'ESGOTO' && peca.tipo === 'CHUVEIRO') return false;
+    if (d === 'AGUA_QUENTE') return hip.aguaQuenteEm.includes(tipo);
+    if (d === 'ESGOTO' && tipo === 'CHUVEIRO') return false;
     return true;
   });
 }
+const disciplinasDaPeca = (peca: PecaPosicionada, hip: HipotesesDePontos) => disciplinasDoAparelho(peca.tipo, hip);
 
 // ─── O plano ─────────────────────────────────────────────────────────────────
 
@@ -293,4 +295,61 @@ export function planejarPontosDoNivel(
     .filter((s) => !levelId || s.levelId === levelId)
     .map((s) => planejarPontosDoAmbiente(model, s, hip, s.id in kitsForcados ? kitsForcados[s.id] : undefined))
     .filter((p) => p.kit !== null || p.spaceId in kitsForcados);
+}
+
+// ─── A louça lança os pontos dela (27/09/2026) ──────────────────────────────
+
+/** Raio em que um ponto é "da" louça — o mesmo de `pontoHidraulicoDoComponente`. */
+const RAIO_DA_LOUCA_MM = 600;
+
+/**
+ * Os `AddTerminal` que faltam à louça (vaso, lavatório, box, tanque, máquina,
+ * bancada com pia): um por rede do aparelho, no centro da peça, na cota da
+ * ficha. Nasceu de *"na planta tem uma vaso sanitaria. o sistema nao
+ * reconheceu?"* — a peça desenhada não criava ponto, e o esgoto automático só
+ * lê pontos. IDEMPOTENTE por (tipo, disciplina) a até 600 mm; a rede que falta
+ * nasce na posição do irmão que já existe. Não é `sugerida`: a peça foi
+ * colocada pelo usuário.
+ */
+export function pontosDaLouca(
+  model: BlueprintModel,
+  componente: Componente,
+  hip: HipotesesDePontos = HIPOTESES_PONTOS_PADRAO,
+): Extract<Command, { type: 'AddTerminal' }>[] {
+  const tipo = (CATALOGO_DE_COMPONENTES[componente.tipoId] as FichaDoComponente | undefined)?.ligaAoPonto;
+  if (!tipo) return [];
+  const irmaos = (model.terminais ?? [])
+    .filter((t) => t.levelId === componente.levelId && t.tipoHidraulico === tipo)
+    .map((t) => ({ t, d: Math.hypot(t.at.x - componente.at.x, t.at.y - componente.at.y) }))
+    .filter((x) => x.d <= RAIO_DA_LOUCA_MM)
+    .sort((a, b) => a.d - b.d)
+    .map((x) => x.t);
+  const ponto = irmaos[0]?.at ?? componente.at;
+  const ficha = FICHA_DO_PONTO_HIDRAULICO[tipo];
+  return disciplinasDoAparelho(tipo, hip)
+    .filter((d) => !irmaos.some((t) => t.disciplina === d))
+    .map((d) => ({
+      type: 'AddTerminal' as const,
+      levelId: componente.levelId,
+      disciplina: d,
+      tipo: ficha.rotulo,
+      at: { x: ponto.x, y: ponto.y },
+      cotaMm: ficha.cotaMm[d] ?? 0,
+      tipoHidraulico: tipo,
+    }));
+}
+
+/** Os pontos das louças que ENTRARAM num comando (a peça, ou o conjunto e os filhos). */
+export function pontosDasLoucasCriadas(
+  depois: BlueprintModel,
+  criados: readonly string[],
+  hip: HipotesesDePontos = HIPOTESES_PONTOS_PADRAO,
+): Extract<Command, { type: 'AddTerminal' }>[] {
+  const ids = new Set(criados);
+  const comandos: Extract<Command, { type: 'AddTerminal' }>[] = [];
+  for (const c of depois.componentes ?? []) {
+    if (!ids.has(c.id)) continue;
+    comandos.push(...pontosDaLouca(depois, c, hip));
+  }
+  return comandos;
 }

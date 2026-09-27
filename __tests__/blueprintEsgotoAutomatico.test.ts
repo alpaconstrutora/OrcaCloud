@@ -131,6 +131,30 @@ describe('planejarEsgoto — casa térrea', () => {
     expect(novos(p).find((c) => horizontal(c) && em(c, 600, 2500))!.b).toEqual({ x: 4000, y: -1000 });
   });
 
+  it('com CI, mas o vaso só na água fria: o motivo diz o que fazer (item "· esgoto" do menu) e não há comando', () => {
+    const { m, t } = nivel();
+    const soAguaFria = applyBatch(m, [
+      { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'VASO_SANITARIO', at: point(600, 800), cotaMm: 300, tipoHidraulico: 'VASO_SANITARIO' },
+      esg(t, 'CAIXA_INSPECAO', 4000, -1000, -700),
+    ]).model;
+    const p = planejarEsgoto(soAguaFria);
+    expect(p.comandos).toHaveLength(0);
+    expect(p.motivo).toMatch(/Vaso sanitário · esgoto/);
+    expect(p.motivo).toMatch(/água fria/);
+  });
+
+  it('a planta do usuário (27/09/2026): vaso só como LOUÇA + CI → o motivo aponta a peça e o botão do painel', () => {
+    const { m, t } = nivel();
+    const soLouca = applyBatch(m, [
+      { type: 'AddComponente', levelId: t, tipoId: 'VASO', at: point(6200, 5400) },
+      esg(t, 'CAIXA_INSPECAO', 12800, 5200, -600),
+    ]).model;
+    const p = planejarEsgoto(soLouca);
+    expect(p.comandos).toHaveLength(0);
+    expect(p.motivo).toMatch(/a louça desenhada \(Vaso sanitário\) ainda sem ponto de esgoto/);
+    expect(p.motivo).toMatch(/Lançar os pontos/);
+  });
+
   it('IDEMPOTENTE e RELANÇÁVEL: aplicado, nada a fazer; relançar apaga os sugeridos e refaz', () => {
     const { m } = casa();
     const aplicado = applyBatch(m, planejarEsgoto(m).comandos).model;

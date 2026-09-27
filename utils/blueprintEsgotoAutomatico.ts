@@ -35,7 +35,7 @@
  * pré-dimensionamento; o executivo é do projetista.
  */
 import type { BlueprintModel, Command, ObjectId, Space, Terminal, TipoDePontoHidraulico } from './blueprintKernel';
-import { pointInPolygon } from './blueprintKernel';
+import { CATALOGO_DE_COMPONENTES, pointInPolygon } from './blueprintKernel';
 import {
   arvoreComRotaLimitada,
   comprimentoMm,
@@ -47,6 +47,7 @@ import {
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { shaftPreferido } from './blueprintNucleoVertical';
 import { redeDaOrigem } from './blueprintAguaAutomatica';
+import { pontosDaLouca } from './blueprintPontosHidraulicos';
 
 export interface HipotesesDeEsgoto {
   /** Caimento mínimo, em %, para DN até 75 e para DN 100 ou mais (NBR 8160). */
@@ -157,7 +158,16 @@ export function planejarEsgoto(model: BlueprintModel, hip: HipotesesDeEsgoto = H
   const sugeridos = rede.filter((t) => t.sugerido).length;
 
   const todas = fontesDeEsgoto(model).filter((t) => (indice.get(t.levelId) ?? 0) >= idxDestino);
-  if (todas.length === 0) return vazio('nenhum ponto de esgoto tipado', { sugeridos, trechosDaRede: rede.length, destinoId: cisDoTerreo[0].id });
+  // O motivo diz O QUE FAZER, não só o que falta. Os casos comuns: a LOUÇA
+  // desenhada sem ponto (desenhada antes de 27/09/2026, quando a peça passou a
+  // lançar os seus), o aparelho só na água fria (cada rede tem o seu ponto) e o
+  // ponto sem tipo.
+  const loucasSemEsgoto = (model.componentes ?? [])
+    .filter((c) => (indice.get(c.levelId) ?? 0) >= idxDestino && pontosDaLouca(model, c).some((p) => p.disciplina === 'ESGOTO'));
+  const nomesDasLoucas = [...new Set(loucasSemEsgoto.map((c) => c.rotulo || CATALOGO_DE_COMPONENTES[c.tipoId].rotulo))].join(', ');
+  if (todas.length === 0) return vazio(loucasSemEsgoto.length > 0
+    ? `${loucasSemEsgoto.length === 1 ? 'a louça desenhada' : `${loucasSemEsgoto.length} louças desenhadas`} (${nomesDasLoucas}) ainda sem ponto de esgoto — selecione a peça e clique em "Lançar os pontos"`
+    : 'coloque os aparelhos na rede de esgoto — no menu Hidráulica, os itens "· esgoto" (Vaso sanitário · esgoto, Chuveiro · esgoto…); o mesmo aparelho na água fria, ou o ponto de esgoto sem tipo, não conta', { sugeridos, trechosDaRede: rede.length, destinoId: cisDoTerreo[0].id });
 
   // Ligados: já há trecho de esgoto encostando na posição.
   const pontas = new Map<ObjectId, Set<string>>();

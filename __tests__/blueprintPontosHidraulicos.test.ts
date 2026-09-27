@@ -19,7 +19,10 @@ import {
   kitDoAmbiente,
   planejarPontosDoAmbiente,
   planejarPontosDoNivel,
+  pontosDaLouca,
+  pontosDasLoucasCriadas,
 } from '../utils/blueprintPontosHidraulicos';
+import { planejarEsgoto } from '../utils/blueprintEsgotoAutomatico';
 import { ladosDePiso } from '../utils/blueprintDistribuicao';
 
 function casa(): { m: BlueprintModel; t: string } {
@@ -148,5 +151,65 @@ describe('planejarPontosDoAmbiente', () => {
     const r = applyBatch(m, lote);
     expect(r.diff.created).toHaveLength(8 + 3 + 5);
     expect(r.model.terminais!.every((x) => x.sugerida)).toBe(true);
+  });
+});
+
+describe('pontosDaLouca (27/09/2026): a peça desenhada lança os pontos dela', () => {
+  // "na planta tem uma vaso sanitaria. o sistema nao reconheceu?"
+  const terreo = () => {
+    const m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    return { m, t: m.levels[0].id };
+  };
+  const colocar = (m: BlueprintModel, cmd: Command) => {
+    const r = applyCommand(m, cmd);
+    const pontos = pontosDasLoucasCriadas(r.model, r.diff.created);
+    return { m: applyBatch(r.model, pontos).model, pontos };
+  };
+
+  it('vaso → água fria + esgoto, no centro da peça, na cota da ficha; o esgoto automático passa a enxergá-lo', () => {
+    const { m, t } = terreo();
+    const { m: comVaso, pontos } = colocar(m, { type: 'AddComponente', levelId: t, tipoId: 'VASO', at: point(6200, 5400) });
+    expect(pontos.map((p) => p.disciplina).sort()).toEqual(['AGUA_FRIA', 'ESGOTO']);
+    expect(pontos.every((p) => p.tipoHidraulico === 'VASO_SANITARIO' && p.at.x === 6200 && p.at.y === 5400)).toBe(true);
+    expect(pontos.find((p) => p.disciplina === 'AGUA_FRIA')!.cotaMm).toBe(300);
+    expect(pontos.some((p) => 'sugerida' in p)).toBe(false);
+    const comCi = applyCommand(comVaso, {
+      type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'Caixa de inspeção', at: point(12800, 5200), cotaMm: -600, tipoHidraulico: 'CAIXA_INSPECAO',
+    }).model;
+    const plano = planejarEsgoto(comCi);
+    expect(plano.motivo).toBeNull();
+    expect(plano.aLigar).toBe(1);
+  });
+
+  it('lavatório ganha água quente (hipótese do kit); box não ganha esgoto (vai pelo coletor); peça sem ponto → nada', () => {
+    const { m, t } = terreo();
+    expect(colocar(m, { type: 'AddComponente', levelId: t, tipoId: 'LAVATORIO', at: point(0, 0) }).pontos.map((p) => p.disciplina).sort())
+      .toEqual(['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO']);
+    expect(colocar(m, { type: 'AddComponente', levelId: t, tipoId: 'BOX', at: point(0, 0) }).pontos.map((p) => p.disciplina))
+      .not.toContain('ESGOTO');
+    expect(colocar(m, { type: 'AddComponente', levelId: t, tipoId: 'CAMA_CASAL', at: point(0, 0) }).pontos).toEqual([]);
+  });
+
+  it('IDEMPOTENTE: segunda chamada não duplica; a rede que falta nasce na posição do irmão que já existe', () => {
+    const { m, t } = terreo();
+    const { m: comVaso } = colocar(m, { type: 'AddComponente', levelId: t, tipoId: 'VASO', at: point(1000, 1000) });
+    const vaso = comVaso.componentes!.find((c) => c.tipoId === 'VASO')!;
+    expect(pontosDaLouca(comVaso, vaso)).toEqual([]);
+    // Só a água fria, a 300 mm do centro (o caso da planta do usuário: o ponto já lançado à mão).
+    const r = applyCommand(m, { type: 'AddComponente', levelId: t, tipoId: 'VASO', at: point(1000, 1000) });
+    const soAf = applyCommand(r.model, {
+      type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Vaso sanitário', at: point(1300, 1000), cotaMm: 300, tipoHidraulico: 'VASO_SANITARIO',
+    }).model;
+    const faltam = pontosDaLouca(soAf, soAf.componentes![0]);
+    expect(faltam).toHaveLength(1);
+    expect(faltam[0].disciplina).toBe('ESGOTO');
+    expect(faltam[0].at).toEqual({ x: 1300, y: 1000 });
+  });
+
+  it('conjunto de banheiro: os filhos (vaso, lavatório, box) lançam os pontos de cada um', () => {
+    const { m, t } = terreo();
+    const { pontos } = colocar(m, { type: 'AddConjunto', levelId: t, tipoId: 'CONJUNTO_BANHEIRO', at: point(3000, 3000) });
+    const tipos = new Set(pontos.map((p) => p.tipoHidraulico));
+    expect(tipos).toEqual(new Set(['VASO_SANITARIO', 'LAVATORIO', 'CHUVEIRO']));
   });
 });

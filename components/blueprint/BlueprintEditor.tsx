@@ -574,6 +574,7 @@ import {
   type TipoDeAnotacao,
   ROTULO_DO_TIPO_DE_ANOTACAO,
   pontoHidraulicoDoComponente,
+  applyCommand,
   type TipoDeRestricaoDoLote,
   TIPOS_DE_RESTRICAO_DO_LOTE,
   ROTULO_DA_RESTRICAO_DO_LOTE,
@@ -611,6 +612,8 @@ import {
   HIPOTESES_PONTOS_PADRAO,
   ROTULO_DO_KIT,
   planejarPontosDoNivel,
+  pontosDaLouca,
+  pontosDasLoucasCriadas,
   type HipotesesDePontos,
   type KitHidraulico,
 } from '../../utils/blueprintPontosHidraulicos';
@@ -5978,7 +5981,18 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   function adicionarComponente(at: Point) {
     if (!levelId) return;
     // FAMÍLIAS ANINHADAS (P2.18): um conjunto entra pai + filhos; a seleção fica no pai.
-    const criados = editor.run(ehConjunto(tipoDeComponente) ? { type: 'AddConjunto', levelId, at, tipoId: tipoDeComponente } : { type: 'AddComponente', levelId, at, tipoId: tipoDeComponente });
+    const comando: Command = ehConjunto(tipoDeComponente) ? { type: 'AddConjunto', levelId, at, tipoId: tipoDeComponente } : { type: 'AddComponente', levelId, at, tipoId: tipoDeComponente };
+    // A LOUÇA LANÇA OS PONTOS DELA (27/09/2026): o vaso desenhado não era visto
+    // pelo esgoto automático, que só lê pontos. Peça e pontos num lote só — um
+    // Ctrl+Z desfaz os dois. Recusa do kernel: o `run` abaixo mostra o motivo.
+    let pontos: Command[] = [];
+    try {
+      const r = applyCommand(editor.model, comando);
+      pontos = pontosDasLoucasCriadas(r.model, r.diff.created);
+    } catch {
+      pontos = [];
+    }
+    const criados = pontos.length > 0 ? editor.runBatch([comando, ...pontos]) : editor.run(comando);
     if (criados.length > 0) selecionar([criados[0]]);
   }
 
@@ -8110,6 +8124,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         onProps={(campos) => componenteSel && editor.run({ type: 'SetComponenteProps', componenteId: componenteSel.id, ...campos })}
         onExcluir={removerSelecionada}
         onSelecionarPonto={(id) => selecionarEAbrir([id])}
+        redesSemPonto={componenteSel ? pontosDaLouca(editor.model, componenteSel).map((c) => c.disciplina) : []}
+        onLancarPontos={() => componenteSel && editor.runBatch(pontosDaLouca(editor.model, componenteSel))}
         conjunto={
           componenteSel
             ? ehConjunto(componenteSel.tipoId)

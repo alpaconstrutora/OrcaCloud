@@ -134,7 +134,15 @@ import {
   terminalSob as acertoTerminal,
   trechoSob as acertoTrecho,
 } from '../../utils/blueprintRede';
-import { simbolosDasConexoes2D } from '../../utils/blueprintIsometrico';
+import {
+  COR_DO_CONTORNO_DA_PECA,
+  LARGURA_MINIMA_DO_DETALHE_PX,
+  anguloDeLeitura,
+  faixaDoTubo2D,
+  pegadaDaCaixa2D,
+  rotuloDoTrecho2D,
+  simbolosDasConexoes2D,
+} from '../../utils/blueprintIsometrico';
 import { useRodaNaoPassiva } from '../../hooks/useRodaNaoPassiva';
 import { SIGLA_DO_PONTO_HIDRAULICO } from '../../utils/blueprintHidraulica';
 import {
@@ -5471,40 +5479,84 @@ export default function BlueprintCanvas({
       const p = paraTela(entrada?.a ?? t.a);
       const q = paraTela(entrada?.b ?? t.b);
       const curva = curvaDoTrecho(p, q, desvios.get(t.id) ?? 0);
-      ctx.strokeStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA[t.disciplina];
-      // A BITOLA de verdade, com piso de traço: um eletroduto de 25 mm num zoom
-      // de conjunto é meio pixel, e meio pixel some. Acima do piso o que se vê
-      // é a largura real do tubo — que é o que faz um coletor de 100 mm parecer
-      // um coletor e não outro eletroduto.
-      ctx.lineWidth = Math.max(t.bitolaMm * vista.escala, selecionado ? 2.5 : 1.5);
-      // ── CONTÍNUA × PONTILHADA: a convenção da NBR 5410 ──────────────────
+      // ── O TUBO DETALHADO (27/09/2026, "detalhado também no 2d") ──────────
       //
-      // Contínua = embutido na parede ou no teto. Pontilhada = embutido no
-      // piso. Quem lê a prancha sabe por onde passar o cabo sem abrir o corte.
-      //
-      // ⚠️ A regra é a MESMA para as quatro disciplinas, e isso substitui o
-      // "esgoto é sempre tracejado" que estava aqui. O motivo antigo era o
-      // mesmo — "o que corre enterrado" —, só que afirmado pela disciplina em
-      // vez da cota: um esgoto no forro do andar de baixo saía pontilhado
-      // dizendo que estava no chão.
-      //
-      // ⚠️ O preço, declarado: em preto e branco, um eletroduto no piso e um
-      // esgoto no piso passam a ter o mesmo traço. Eles se separam pela cor e
-      // pela bitola, e numa prancha ELÉTRICA — que é onde esta convenção vale —
-      // todas as linhas são elétricas.
-      // SUGERIDO (lançamento automático, ainda não confirmado): pontilhado
-      // fino, o mesmo tracejado do anel da tomada sugerida — mover ou aceitar
-      // devolve o traço à convenção (contínuo / pontilhado no piso).
-      ctx.setLineDash(t.sugerido ? [3, 3] : embutidoNoPiso(t) ? [6, 3] : []);
-      ctx.beginPath();
-      if (p.x === q.x && p.y === q.y) {
-        // A prumada vista de cima é a SEÇÃO do tubo: raio = meia bitola.
-        ctx.arc(p.x, p.y, emTela(t.bitolaMm / 2), 0, Math.PI * 2);
+      // Água e esgoto com zoom para isso viram a FAIXA do tubo — duas bordas
+      // na largura real e o miolo claro na cor da rede —, como o isométrico de
+      // referência; a prumada vira o círculo da seção, cheio. Abaixo de
+      // `LARGURA_MINIMA_DO_DETALHE_PX`, e no trecho sobreposto (desviado em
+      // arco), continua o traço de sempre.
+      const hidraulico = t.disciplina === 'AGUA_FRIA' || t.disciplina === 'AGUA_QUENTE' || t.disciplina === 'ESGOTO';
+      const larguraPx = t.bitolaMm * vista.escala;
+      const ehPrumada = p.x === q.x && p.y === q.y;
+      const detalhado = hidraulico && larguraPx >= LARGURA_MINIMA_DO_DETALHE_PX && (desvios.get(t.id) ?? 0) === 0;
+      const faixa = detalhado && !ehPrumada ? faixaDoTubo2D(p, q, larguraPx) : null;
+      if (detalhado) {
+        const cor = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA[t.disciplina];
+        ctx.save();
+        ctx.strokeStyle = cor;
+        ctx.fillStyle = cor;
+        ctx.lineWidth = selecionado ? 2 : 1.25;
+        ctx.setLineDash(t.sugerido ? [3, 3] : embutidoNoPiso(t) ? [6, 3] : []);
+        ctx.beginPath();
+        if (faixa) {
+          ctx.moveTo(faixa.bordaA[0].x, faixa.bordaA[0].y);
+          ctx.lineTo(faixa.bordaA[1].x, faixa.bordaA[1].y);
+          ctx.lineTo(faixa.bordaB[1].x, faixa.bordaB[1].y);
+          ctx.lineTo(faixa.bordaB[0].x, faixa.bordaB[0].y);
+          ctx.closePath();
+        } else {
+          ctx.arc(p.x, p.y, larguraPx / 2, 0, Math.PI * 2);
+        }
+        ctx.globalAlpha = 0.18;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        if (faixa) {
+          // Só as BORDAS: fechar o retângulo riscaria o tubo em cada emenda.
+          ctx.beginPath();
+          ctx.moveTo(faixa.bordaA[0].x, faixa.bordaA[0].y);
+          ctx.lineTo(faixa.bordaA[1].x, faixa.bordaA[1].y);
+          ctx.moveTo(faixa.bordaB[0].x, faixa.bordaB[0].y);
+          ctx.lineTo(faixa.bordaB[1].x, faixa.bordaB[1].y);
+        }
+        ctx.stroke();
+        ctx.restore();
       } else {
-        ctx.moveTo(p.x, p.y);
-        ctx.quadraticCurveTo(curva.controle.x, curva.controle.y, q.x, q.y);
+        ctx.strokeStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA[t.disciplina];
+        // A BITOLA de verdade, com piso de traço: um eletroduto de 25 mm num zoom
+        // de conjunto é meio pixel, e meio pixel some. Acima do piso o que se vê
+        // é a largura real do tubo — que é o que faz um coletor de 100 mm parecer
+        // um coletor e não outro eletroduto.
+        ctx.lineWidth = Math.max(t.bitolaMm * vista.escala, selecionado ? 2.5 : 1.5);
+        // ── CONTÍNUA × PONTILHADA: a convenção da NBR 5410 ──────────────────
+        //
+        // Contínua = embutido na parede ou no teto. Pontilhada = embutido no
+        // piso. Quem lê a prancha sabe por onde passar o cabo sem abrir o corte.
+        //
+        // ⚠️ A regra é a MESMA para as quatro disciplinas, e isso substitui o
+        // "esgoto é sempre tracejado" que estava aqui. O motivo antigo era o
+        // mesmo — "o que corre enterrado" —, só que afirmado pela disciplina em
+        // vez da cota: um esgoto no forro do andar de baixo saía pontilhado
+        // dizendo que estava no chão.
+        //
+        // ⚠️ O preço, declarado: em preto e branco, um eletroduto no piso e um
+        // esgoto no piso passam a ter o mesmo traço. Eles se separam pela cor e
+        // pela bitola, e numa prancha ELÉTRICA — que é onde esta convenção vale —
+        // todas as linhas são elétricas.
+        // SUGERIDO (lançamento automático, ainda não confirmado): pontilhado
+        // fino, o mesmo tracejado do anel da tomada sugerida — mover ou aceitar
+        // devolve o traço à convenção (contínuo / pontilhado no piso).
+        ctx.setLineDash(t.sugerido ? [3, 3] : embutidoNoPiso(t) ? [6, 3] : []);
+        ctx.beginPath();
+        if (p.x === q.x && p.y === q.y) {
+          // A prumada vista de cima é a SEÇÃO do tubo: raio = meia bitola.
+          ctx.arc(p.x, p.y, emTela(t.bitolaMm / 2), 0, Math.PI * 2);
+        } else {
+          ctx.moveTo(p.x, p.y);
+          ctx.quadraticCurveTo(curva.controle.x, curva.controle.y, q.x, q.y);
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
 
       // ── SOBE / DESCE, na convenção da NBR 5410 ────────────────────────────
       //
@@ -5687,7 +5739,33 @@ export default function BlueprintCanvas({
       if (t.disciplina !== 'ELETRICA' && mostrarCircuitos) {
         const prumada = p.x === q.x && p.y === q.y;
         const comp = Math.hypot(q.x - p.x, q.y - p.y);
-        if (prumada || comp >= 28 * fz) {
+        if (hidraulico) {
+          // "ø100 mm · i 1 %" PARALELO ao tubo, acima da faixa — o mesmo ø do
+          // 3D. Sem espaço ao longo do tubo, fica de fora (não sobrepõe o vizinho).
+          const texto = rotuloDoTrecho2D(t);
+          ctx.fillStyle = COR_DA_DISCIPLINA[t.disciplina];
+          ctx.font = `${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+          if (prumada) {
+            // Só a prumada com NOME (TQ, Ventilação): a descida curta sob o
+            // aparelho caía em cima da sigla dele ("VS" sobre "ø100 mm", visto
+            // no harness) e repetia o ø que o ramal horizontal já escreve.
+            if (t.rotulo) {
+              ctx.textAlign = 'start';
+              ctx.fillText(texto, p.x + Math.max(larguraPx / 2, 3) + 4 * fz, p.y - 5 * fz);
+            }
+          } else if (ctx.measureText(texto).width <= comp - 8) {
+            const m = curva.meio;
+            ctx.save();
+            ctx.translate(m.x, m.y);
+            ctx.rotate(anguloDeLeitura(p, q));
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(texto, 0, -(Math.max(larguraPx, 2) / 2 + 2 * fz));
+            ctx.restore();
+          }
+          ctx.textAlign = 'start';
+          ctx.textBaseline = 'alphabetic';
+        } else if (prumada || comp >= 28 * fz) {
           const c = prumada ? p : curva.meio;
           ctx.fillStyle = COR_DA_DISCIPLINA[t.disciplina];
           ctx.font = `${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
@@ -5713,9 +5791,33 @@ export default function BlueprintCanvas({
       ctx.strokeStyle = sc.cor;
       ctx.fillStyle = sc.cor;
       ctx.lineCap = 'butt';
+      // DETALHADA (zoom com a bolsa >= 4 px): cada bolsa é o retângulo da peça
+      // com contorno, e o corpo um disco contornado — o desenho da conexão, e
+      // não uma mancha. Longe, o traço grosso de antes.
+      const detalhada =
+        Math.max(0, ...sc.bolsas.map((b) => b.larguraMm), ...sc.aneis.map((r) => r * 2)) * vista.escala >= LARGURA_MINIMA_DO_DETALHE_PX;
+      const contornar = () => {
+        ctx.strokeStyle = COR_DO_CONTORNO_DA_PECA;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.strokeStyle = sc.cor;
+      };
+      ctx.setLineDash([]);
       for (const b of sc.bolsas) {
         const p = paraTela(b.de);
         const q = paraTela(b.para);
+        const f = detalhada ? faixaDoTubo2D(p, q, b.larguraMm * vista.escala) : null;
+        if (f) {
+          ctx.beginPath();
+          ctx.moveTo(f.bordaA[0].x, f.bordaA[0].y);
+          ctx.lineTo(f.bordaA[1].x, f.bordaA[1].y);
+          ctx.lineTo(f.bordaB[1].x, f.bordaB[1].y);
+          ctx.lineTo(f.bordaB[0].x, f.bordaB[0].y);
+          ctx.closePath();
+          ctx.fill();
+          contornar();
+          continue;
+        }
         ctx.lineWidth = Math.max(b.larguraMm * vista.escala, 3);
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
@@ -5724,15 +5826,21 @@ export default function BlueprintCanvas({
       }
       const c = paraTela(sc.no);
       for (const r of sc.aneis) {
-        ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.arc(c.x, c.y, Math.max(emTela(r), 3), 0, Math.PI * 2);
-        ctx.stroke();
+        if (detalhada) {
+          ctx.fill();
+          contornar();
+        } else {
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
       }
       if (sc.raioDoCorpoMm != null) {
         ctx.beginPath();
         ctx.arc(c.x, c.y, Math.max(emTela(sc.raioDoCorpoMm), 2.5), 0, Math.PI * 2);
         ctx.fill();
+        if (detalhada) contornar();
       }
     }
 
@@ -6032,31 +6140,110 @@ export default function BlueprintCanvas({
         ctx.restore();
       }
 
-      ctx.fillStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA[t.disciplina];
-      ctx.beginPath();
-      if (ehLigacaoDireta || ehInterruptor) {
-        // Já desenhado acima; o caminho vazio abaixo não pinta nada.
-      } else if (terminalEhRedondo(t)) {
-        // Redondo é o símbolo de ponto, e é o caso comum. A LUZ sai com o
-        // dobro do raio (`FATOR_DO_SIMBOLO_DE_LUZ`).
-        const raio = emTela(md.larguraMm / 2) * (ehLuz(t) ? FATOR_DO_SIMBOLO_DE_LUZ : 1);
-        ctx.arc(c.x, c.y, selecionado ? raio + 1.5 : raio, 0, Math.PI * 2);
+      // ── A CAIXA DE ESGOTO DETALHADA (27/09/2026, "detalhado também no 2d") ─
+      //
+      // CI e CG: a parede da caixa e a TAMPA dentro, com a sigla; CS e ralo
+      // sifonado: o corpo redondo e a GRELHA. Só com zoom para isso (meia
+      // largura >= 6 px); longe, o símbolo cheio de sempre.
+      const pegada = pegadaDaCaixa2D(t);
+      const caixaDetalhada = !!pegada && emTela(Math.min(pegada.larguraMm, pegada.profundidadeMm) / 2) >= 6;
+      if (pegada && caixaDetalhada) {
+        const contorno = selecionado ? COR_SELECIONADA : COR_DO_CONTORNO_DA_PECA;
+        const centro = paraTela(t.at);
+        const sigla = t.tipoHidraulico ? SIGLA_DO_PONTO_HIDRAULICO[t.tipoHidraulico] : '';
+        ctx.save();
+        ctx.setLineDash([]);
+        if (pegada.forma === 'PRISMA') {
+          const poligono = (l: number, pr: number) => {
+            const k = cantosDaPeca(t.at, { larguraMm: l, profundidadeMm: pr, alturaMm: 0 }, giroDaPeca(t)).map(paraTela);
+            ctx.beginPath();
+            ctx.moveTo(k[0].x, k[0].y);
+            for (const v of k.slice(1)) ctx.lineTo(v.x, v.y);
+            ctx.closePath();
+          };
+          poligono(pegada.larguraMm, pegada.profundidadeMm);
+          ctx.fillStyle = '#f4f4f5';
+          ctx.fill();
+          ctx.strokeStyle = contorno;
+          ctx.lineWidth = selecionado ? 2.5 : 1.5;
+          ctx.stroke();
+          // A tampa: 60 mm de parede de cada lado.
+          poligono(Math.max(pegada.larguraMm - 120, pegada.larguraMm * 0.6), Math.max(pegada.profundidadeMm - 120, pegada.profundidadeMm * 0.6));
+          ctx.fillStyle = '#d4d4d8';
+          ctx.fill();
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.fillStyle = '#27272a';
+          ctx.font = `bold ${Math.round(11 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(sigla, centro.x, centro.y);
+        } else {
+          const r = emTela(pegada.larguraMm / 2);
+          ctx.beginPath();
+          ctx.arc(centro.x, centro.y, r, 0, Math.PI * 2);
+          ctx.fillStyle = '#f4f4f5';
+          ctx.fill();
+          ctx.strokeStyle = contorno;
+          ctx.lineWidth = selecionado ? 2.5 : 1.5;
+          ctx.stroke();
+          // A grelha: disco interno com a malha, recortada nele.
+          const ri = r * 0.72;
+          ctx.beginPath();
+          ctx.arc(centro.x, centro.y, ri, 0, Math.PI * 2);
+          ctx.fillStyle = '#d4d4d8';
+          ctx.fill();
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.clip();
+          ctx.strokeStyle = '#71717a';
+          ctx.beginPath();
+          for (let k = -2; k <= 2; k++) {
+            const d = (k * ri) / 2.5;
+            ctx.moveTo(centro.x - ri, centro.y + d);
+            ctx.lineTo(centro.x + ri, centro.y + d);
+            ctx.moveTo(centro.x + d, centro.y - ri);
+            ctx.lineTo(centro.x + d, centro.y + ri);
+          }
+          ctx.stroke();
+        }
+        ctx.restore();
+        if (pegada.forma === 'CILINDRO') {
+          // A sigla da CS/ralo vai por fora: dentro, a grelha não deixa ler.
+          const r = emTela(pegada.larguraMm / 2);
+          ctx.fillStyle = COR_DA_DISCIPLINA[t.disciplina];
+          ctx.font = `bold ${Math.round(11 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+          ctx.fillText(sigla, centro.x + r + 3, centro.y - r - 2);
+        }
+        ctx.textAlign = 'start';
+        ctx.textBaseline = 'alphabetic';
       } else {
-        // ⚠️ Quem declarou largura e profundidade DIFERENTES declarou uma peça
-        // retangular: desenhá-la redonda esconderia a medida que a pessoa
-        // acabou de informar — e esconderia o giro junto, porque um círculo
-        // girado é o mesmo círculo.
-        const cantos = cantosDaPeca(t.at, md, giroDaPeca(t)).map(paraTela);
-        ctx.moveTo(cantos[0].x, cantos[0].y);
-        for (const k of cantos.slice(1)) ctx.lineTo(k.x, k.y);
-        ctx.closePath();
+        ctx.fillStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA[t.disciplina];
+        ctx.beginPath();
+        if (ehLigacaoDireta || ehInterruptor) {
+          // Já desenhado acima; o caminho vazio abaixo não pinta nada.
+        } else if (terminalEhRedondo(t)) {
+          // Redondo é o símbolo de ponto, e é o caso comum. A LUZ sai com o
+          // dobro do raio (`FATOR_DO_SIMBOLO_DE_LUZ`).
+          const raio = emTela(md.larguraMm / 2) * (ehLuz(t) ? FATOR_DO_SIMBOLO_DE_LUZ : 1);
+          ctx.arc(c.x, c.y, selecionado ? raio + 1.5 : raio, 0, Math.PI * 2);
+        } else {
+          // ⚠️ Quem declarou largura e profundidade DIFERENTES declarou uma peça
+          // retangular: desenhá-la redonda esconderia a medida que a pessoa
+          // acabou de informar — e esconderia o giro junto, porque um círculo
+          // girado é o mesmo círculo.
+          const cantos = cantosDaPeca(t.at, md, giroDaPeca(t)).map(paraTela);
+          ctx.moveTo(cantos[0].x, cantos[0].y);
+          for (const k of cantos.slice(1)) ctx.lineTo(k.x, k.y);
+          ctx.closePath();
+        }
+        ctx.fill();
+        // Anel branco por fora: sem ele o ponto some quando cai em cima de uma
+        // parede preenchida, que é justamente onde tomada e ponto de água ficam.
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.25;
+        ctx.stroke();
       }
-      ctx.fill();
-      // Anel branco por fora: sem ele o ponto some quando cai em cima de uma
-      // parede preenchida, que é justamente onde tomada e ponto de água ficam.
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1.25;
-      ctx.stroke();
 
       // ── O TERMINAL MECÂNICO (P2.2): o X do difusor dentro da peça ─────────
       if (t.disciplina === 'MECANICA' && !selecionado) {
@@ -6082,7 +6269,7 @@ export default function BlueprintCanvas({
       // E uma marca DENTRO da peça para as que têm desenho consagrado: ralo
       // seco com a diagonal, ralo/caixa sifonada com a cruz, caixa d'água e
       // caixas de inspeção/gordura com o nome escrito quando cabem.
-      if (t.tipoHidraulico && !selecionado) {
+      if (t.tipoHidraulico && !selecionado && !caixaDetalhada) {
         const sigla = SIGLA_DO_PONTO_HIDRAULICO[t.tipoHidraulico];
         const meio = emTela(Math.min(md.larguraMm, md.profundidadeMm) / 2);
         ctx.save();

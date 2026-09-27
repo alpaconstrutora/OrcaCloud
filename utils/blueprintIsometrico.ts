@@ -120,9 +120,10 @@ export function corpoDaCaixa3D(t: Terminal, elevacaoDoNivelMm: number): CorpoDaC
   const ext = extensaoVerticalDaCaixa(t);
   const ficha = t.tipoHidraulico ? CAIXAS_DE_ESGOTO[t.tipoHidraulico] : undefined;
   if (!ext || !ficha || t.disciplina !== 'ESGOTO') return null;
-  const cilindro = t.tipoHidraulico === 'CAIXA_SIFONADA' || t.tipoHidraulico === 'RALO_SIFONADO';
-  const largura = t.larguraMm ?? ficha.larguraPadraoMm;
-  const profundidade = cilindro ? largura : (t.profundidadeMm ?? largura);
+  const pegada = pegadaDaCaixa2D(t)!;
+  const cilindro = pegada.forma === 'CILINDRO';
+  const largura = pegada.larguraMm;
+  const profundidade = pegada.profundidadeMm;
   const altura = ext.topoMm - ext.fundoMm;
   const espessura = cilindro ? 15 : 40;
   const aba = cilindro ? 0 : 40;
@@ -215,4 +216,61 @@ export function simbolosDasConexoes2D(model: BlueprintModel, levelId: ObjectId |
         raioDoCorpoMm: temCorpo ? (Math.max(...c.ramais!.map((r) => r.bitolaMm)) * FATOR_DA_BOLSA) / 2 : null,
       };
     });
+}
+
+// ─── A planta 2D DETALHADA (27/09/2026, "detalhado também no 2d") ────────────
+
+/**
+ * Abaixo desta largura em TELA o tubo continua traço simples: uma faixa de duas
+ * bordas com 2 px vira um borrão, e no zoom de conjunto o traço lê melhor.
+ */
+export const LARGURA_MINIMA_DO_DETALHE_PX = 4;
+/** O contorno das peças (conexões e caixas) na planta detalhada. */
+export const COR_DO_CONTORNO_DA_PECA = '#3f3f46';
+
+type P2 = { x: number; y: number };
+
+/**
+ * As duas BORDAS do tubo desenhado com a largura real: paralelas ao eixo p→q,
+ * a meia largura de cada lado. `null` na prumada (p = q), que é círculo.
+ */
+export function faixaDoTubo2D(p: P2, q: P2, larguraPx: number): { bordaA: [P2, P2]; bordaB: [P2, P2] } | null {
+  const dx = q.x - p.x;
+  const dy = q.y - p.y;
+  const n = Math.hypot(dx, dy);
+  if (n === 0) return null;
+  const ox = (-dy / n) * (larguraPx / 2);
+  const oy = (dx / n) * (larguraPx / 2);
+  return {
+    bordaA: [{ x: p.x + ox, y: p.y + oy }, { x: q.x + ox, y: q.y + oy }],
+    bordaB: [{ x: p.x - ox, y: p.y - oy }, { x: q.x - ox, y: q.y - oy }],
+  };
+}
+
+/** O ângulo de p→q virado para o texto ler da esquerda para a direita: (−π/2, π/2]. */
+export function anguloDeLeitura(p: P2, q: P2): number {
+  let a = Math.atan2(q.y - p.y, q.x - p.x);
+  if (a > Math.PI / 2) a -= Math.PI;
+  if (a <= -Math.PI / 2) a += Math.PI;
+  return a;
+}
+
+/** "ø100 mm · i 1 %" (esgoto com caimento), "ø25 mm", "TQ ø100 mm" — o mesmo ø do 3D. */
+export function rotuloDoTrecho2D(t: Pick<Trecho, 'bitolaMm' | 'rotulo' | 'disciplina' | 'a' | 'b' | 'cotaAMm' | 'cotaBMm'>): string {
+  const compMm = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
+  const desnivel = Math.abs(t.cotaBMm - t.cotaAMm);
+  const caimento =
+    t.disciplina === 'ESGOTO' && compMm > 0 && desnivel > 0
+      ? ` · i ${((desnivel / compMm) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} %`
+      : '';
+  return `${textoDoRotulo(t)}${caimento}`;
+}
+
+/** A pegada em planta da caixa de esgoto (medida declarada, senão a da ficha); `null` se não é caixa. */
+export function pegadaDaCaixa2D(t: Terminal): { forma: 'PRISMA' | 'CILINDRO'; larguraMm: number; profundidadeMm: number } | null {
+  const ficha = t.tipoHidraulico ? CAIXAS_DE_ESGOTO[t.tipoHidraulico] : undefined;
+  if (!ficha || t.disciplina !== 'ESGOTO') return null;
+  const cilindro = t.tipoHidraulico === 'CAIXA_SIFONADA' || t.tipoHidraulico === 'RALO_SIFONADO';
+  const largura = t.larguraMm ?? ficha.larguraPadraoMm;
+  return { forma: cilindro ? 'CILINDRO' : 'PRISMA', larguraMm: largura, profundidadeMm: cilindro ? largura : (t.profundidadeMm ?? largura) };
 }

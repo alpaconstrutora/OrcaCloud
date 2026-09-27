@@ -13,6 +13,10 @@ Perguntas e respostas da mesma sessão:
 - "Por onde começo o detalhamento de tubos e conexões?" → **"3D + junção 45° juntos (1+2+3+4)"**
 - "As conexões também devem aparecer na planta 2D (símbolo de joelho/tê/junção nos encontros)?" → **"3D e 2D"**
 
+Pedido seguinte, mesma sessão, depois da publicação de `e4070fa`:
+
+> detalhado também no 2d
+
 ## Estado de partida (levantado no código em 27/09/2026)
 
 - 3D: cada trecho é um cilindro com raio = DN/2 e cor da disciplina
@@ -80,6 +84,20 @@ Perguntas e respostas da mesma sessão:
    componentes tocados e `check-xss-sinks.sh`: verdes em 27/09. Publicado (`e4070fa`,
    push em main) e conferido de fora: `conferir-producao.sh "Diâmetros das redes"
    "Junção 45°"` → o domínio serve exatamente origin/main.
+
+8. [x] **Planta 2D detalhada** (`BlueprintCanvas.tsx` + `blueprintIsometrico.ts`):
+   água e esgoto com zoom para isso (faixa >= `LARGURA_MINIMA_DO_DETALHE_PX` = 4 px)
+   viram o TUBO em duas bordas com o miolo claro; a prumada, o círculo cheio; as
+   conexões, retângulo da bolsa + disco com contorno (`COR_DO_CONTORNO_DA_PECA`); a
+   CI/CG, parede + tampa com a sigla; a CS/ralo, corpo + grelha; o rótulo vira
+   "ø100 mm · i 1 %" PARALELO ao tubo (`anguloDeLeitura`: nunca de cabeça para
+   baixo). Longe (ou trecho sobreposto em arco), o traço simples de antes.
+   **Pronto quando:** testes da faixa, do ângulo, do rótulo e da pegada; visto no
+   harness `?vista=2d` em três zooms, console limpo.
+   ✔ 27/09: 13 testes em `blueprintIsometrico.test.ts`; harness em servidor novo.
+   Ajuste que saiu do print: o rótulo da prumada curta sob o aparelho caía sobre a
+   sigla ("VS" em cima de "ø100 mm") — na planta só a prumada com nome (TQ,
+   Ventilação) leva rótulo. Suíte: 506 arquivos / 5.801 testes verdes.
 
 ## Fora do escopo (anotado)
 

@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
-import { corDaConexao, corpoDaCaixa3D, escurecer, pecasDasConexoes3D, rotulosDaRede3D, simbolosDasConexoes2D, textoDoRotulo } from '../utils/blueprintIsometrico';
+import { anguloDeLeitura, corDaConexao, corpoDaCaixa3D, escurecer, faixaDoTubo2D, pecasDasConexoes3D, pegadaDaCaixa2D, rotuloDoTrecho2D, rotulosDaRede3D, simbolosDasConexoes2D, textoDoRotulo } from '../utils/blueprintIsometrico';
 
 function terreo(): { m: BlueprintModel; t: string } {
   const m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
@@ -116,6 +116,42 @@ describe('simbolosDasConexoes2D', () => {
     const mm = applyBatch(dois, [esgoto(s, 0, 0, 2000, 0, 50, -150, -170), esgoto(s, 2000, 0, 2000, 2000, 50, -170, -190)]).model;
     expect(simbolosDasConexoes2D(mm, s)).toHaveLength(1);
     expect(simbolosDasConexoes2D(mm, t)).toHaveLength(0);
+  });
+});
+
+describe('planta 2D detalhada ("detalhado também no 2d")', () => {
+  it('faixa do tubo: duas bordas paralelas a meia largura do eixo; prumada → null', () => {
+    expect(faixaDoTubo2D({ x: 0, y: 0 }, { x: 10, y: 0 }, 4)).toEqual({
+      bordaA: [{ x: 0, y: 2 }, { x: 10, y: 2 }],
+      bordaB: [{ x: 0, y: -2 }, { x: 10, y: -2 }],
+    });
+    expect(faixaDoTubo2D({ x: 3, y: 3 }, { x: 3, y: 3 }, 4)).toBeNull();
+  });
+
+  it('o texto nunca fica de cabeça para baixo: o tubo para a esquerda lê como o tubo para a direita', () => {
+    expect(anguloDeLeitura({ x: 10, y: 0 }, { x: 0, y: 0 })).toBeCloseTo(0);
+    expect(anguloDeLeitura({ x: 0, y: 0 }, { x: -10, y: -10 })).toBeCloseTo(Math.PI / 4);
+    expect(anguloDeLeitura({ x: 0, y: 0 }, { x: 0, y: 10 })).toBeCloseTo(Math.PI / 2);
+  });
+
+  it('rótulo: "ø100 mm · i 1 %" no esgoto com caimento; água sem o i; TQ com o nome', () => {
+    const base = { a: point(0, 0), b: point(2000, 0) };
+    expect(rotuloDoTrecho2D({ ...base, bitolaMm: 100, rotulo: null, disciplina: 'ESGOTO', cotaAMm: -150, cotaBMm: -170 })).toBe('ø100 mm · i 1 %');
+    expect(rotuloDoTrecho2D({ ...base, bitolaMm: 25, rotulo: null, disciplina: 'AGUA_FRIA', cotaAMm: 2200, cotaBMm: 2200 })).toBe('ø25 mm');
+    expect(rotuloDoTrecho2D({ a: point(0, 0), b: point(0, 0), bitolaMm: 100, rotulo: 'TQ', disciplina: 'ESGOTO', cotaAMm: 2800, cotaBMm: 0 })).toBe('TQ ø100 mm');
+  });
+
+  it('pegada da caixa: CI 600 × 600 (ficha, sem medida declarada); CS redonda de 150; vaso não é caixa', () => {
+    const { m, t } = terreo();
+    const mm = applyBatch(m, [
+      { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'CI', at: point(0, 0), cotaMm: -600, tipoHidraulico: 'CAIXA_INSPECAO' },
+      { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'CS', at: point(900, 0), cotaMm: 0, tipoHidraulico: 'CAIXA_SIFONADA' },
+      { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'VS', at: point(1800, 0), cotaMm: 0, tipoHidraulico: 'VASO_SANITARIO' },
+    ]).model;
+    const [ci, cs, vs] = mm.terminais!;
+    expect(pegadaDaCaixa2D(ci)).toEqual({ forma: 'PRISMA', larguraMm: 600, profundidadeMm: 600 });
+    expect(pegadaDaCaixa2D(cs)).toEqual({ forma: 'CILINDRO', larguraMm: 150, profundidadeMm: 150 });
+    expect(pegadaDaCaixa2D(vs)).toBeNull();
   });
 });
 

@@ -17,6 +17,13 @@ Pedido seguinte, mesma sessão, depois da publicação de `e4070fa`:
 
 > detalhado também no 2d
 
+Pedido seguinte, mesma sessão, com print do 3D (caixa d'água azul no canto, tubos
+azuis em diagonal pelo cômodo), depois de `f93fb32`:
+
+> veja print.
+> 1. a caixa dgua esta dentro da parede .deve estar sobre a laje.
+> 2. tubulacao de agua fria e quinte deve passar pelas paredes
+
 ## Estado de partida (levantado no código em 27/09/2026)
 
 - 3D: cada trecho é um cilindro com raio = DN/2 e cor da disciplina
@@ -99,6 +106,25 @@ Pedido seguinte, mesma sessão, depois da publicação de `e4070fa`:
    sigla ("VS" em cima de "ø100 mm") — na planta só a prumada com nome (TQ,
    Ventilação) leva rótulo. Suíte: 506 arquivos / 5.801 testes verdes.
 
+9. [x] **Caixa d'água sobre a laje** (`blueprintIsometrico.centroDoTerminal3D`): a
+   ficha diz que a cota é o FUNDO; o 3D punha o centro nela e a caixa nascia meio
+   enfiada na parede. Agora apoia na cota. **Pronto quando:** teste (cota 2800,
+   altura 800 → centro 3,20 m) e visto no harness `?cena=agua`.
+   ✔ 27/09.
+10. [x] **Água fria e quente pelas paredes** (`utils/blueprintRotaPelasParedes.ts` +
+   `blueprintAguaAutomatica.ts`): grafo do eixo das paredes (partido nos encontros e
+   nas projeções dos pontos); ramal a 2,20 m e BARRILETE no teto pelo grafo (Steiner
+   por caminhos mínimos, nó de passagem emendado); coluna no eixo da parede; descida
+   dentro da parede e toco até a face. Ponto a mais de `raioDeEncaixeMm` (700) de
+   parede: reta, com aviso. `pelasParedes: false` volta ao reto. Rótulo 3D do tubo
+   embutido em parede opaca fica oculto (o sprite saía da parede como papel branco).
+   **Pronto quando:** teste — todo horizontal novo no ramal e no teto está sobre o eixo
+   de uma parede, inclusive com ponto do outro lado da sala; visto no harness.
+   ✔ 27/09: 6 testes em `blueprintRotaPelasParedes.test.ts`; harness `?cena=agua`
+   (sólido e transparente) em servidor novo, console limpo. O primeiro print mostrou o
+   BARRILETE ainda em reta cruzando a sala — passou a ir pelas paredes também. Suíte:
+   507 arquivos / 5.809 testes.
+
 ## Fora do escopo (anotado)
 
 - IFC continua emitindo `IFCPIPEFITTING` só para conexão lançada à mão.
@@ -106,5 +132,7 @@ Pedido seguinte, mesma sessão, depois da publicação de `e4070fa`:
 - Curva longa / joelho com raio: a bolsa não desenha a curvatura.
 - A árvore da caixa SIFONADA e da de GORDURA segue o Prim antigo (cada aparelho
   entra na caixa); só a árvore da CI/tubo de queda usa a junção 45°.
+- Parede em arco: a rede pelas paredes usa a corda a→b.
+- Ramais pelas paredes não desviam de portas/janelas: correm a 2,20 m, acima delas.
 - Com as paredes à vista, o tubo sob o piso fica escondido (e o rótulo junto):
   para ler a rede, esconder paredes ou usar o estilo Transparente.

@@ -20,7 +20,7 @@
  * Convenção do 3D (a mesma de `cilindroDoTrecho`): X e Z são a planta, Y é a
  * altura, metros; a cota soma a elevação do pavimento.
  */
-import type { BlueprintModel, ConexaoDerivada, DisciplinaDeRede, ObjectId, Terminal, Trecho } from './blueprintKernel';
+import type { BlueprintModel, ConexaoDerivada, DisciplinaDeRede, ObjectId, Terminal, Trecho, Wall } from './blueprintKernel';
 import { CAIXAS_DE_ESGOTO, conexoesDerivadas, extensaoVerticalDaCaixa } from './blueprintKernel';
 import { COR_DA_DISCIPLINA, ESCALA_3D } from './blueprintRede';
 
@@ -152,9 +152,35 @@ export const COMPRIMENTO_MINIMO_DO_ROTULO_MM = 400;
 /** "ø100 mm", "TQ ø100 mm", "Ventilação ø50 mm". */
 export const textoDoRotulo = (t: Pick<Trecho, 'bitolaMm' | 'rotulo'>) => `${t.rotulo ? `${t.rotulo} ` : ''}ø${t.bitolaMm} mm`;
 
-export function rotulosDaRede3D(model: BlueprintModel, idsVisiveis?: ReadonlySet<ObjectId>): RotuloDaRede3D[] {
+/**
+ * O trecho corre DENTRO de uma destas paredes? (As duas pontas no retângulo da
+ * parede — eixo ± meia espessura — e abaixo do topo dela.) É o tubo embutido
+ * pela rede "pelas paredes" (27/09/2026).
+ */
+export function embutidoEmParede(t: Pick<Trecho, 'levelId' | 'a' | 'b' | 'cotaAMm' | 'cotaBMm'>, paredes: readonly Wall[]): boolean {
+  const dentro = (p: { x: number; y: number }, cota: number, w: Wall) => {
+    if (w.levelId !== t.levelId || cota > w.heightMm || cota < 0) return false;
+    const dx = w.b.x - w.a.x;
+    const dy = w.b.y - w.a.y;
+    const L = Math.hypot(dx, dy);
+    if (L === 0) return false;
+    const s = ((p.x - w.a.x) * dx + (p.y - w.a.y) * dy) / L;
+    const d = Math.abs((p.x - w.a.x) * dy - (p.y - w.a.y) * dx) / L;
+    return s >= -w.thicknessMm / 2 && s <= L + w.thicknessMm / 2 && d <= w.thicknessMm / 2 + 1;
+  };
+  return paredes.some((w) => dentro(t.a, t.cotaAMm, w) && dentro(t.b, t.cotaBMm, w));
+}
+
+/**
+ * `paredesOpacas`: as paredes que ESCONDEM o que corre dentro delas (estilo
+ * sombreado, parede à vista). O tubo embutido nelas não leva rótulo: o sprite é
+ * mais largo que a parede e saía dela como um papelzinho branco sem o tubo que
+ * descreve (visto no harness). No estilo transparente, ou sem a parede, volta.
+ */
+export function rotulosDaRede3D(model: BlueprintModel, idsVisiveis?: ReadonlySet<ObjectId>, paredesOpacas: readonly Wall[] = []): RotuloDaRede3D[] {
   return (model.trechos ?? [])
     .filter((t) => HIDRAULICAS.includes(t.disciplina) && (!idsVisiveis || idsVisiveis.has(t.levelId)))
+    .filter((t) => paredesOpacas.length === 0 || !embutidoEmParede(t, paredesOpacas))
     .filter((t) => !!t.rotulo || Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y, t.cotaBMm - t.cotaAMm) >= COMPRIMENTO_MINIMO_DO_ROTULO_MM)
     .map((t) => {
       const elev = elevacaoDe(model, t.levelId);
@@ -273,4 +299,23 @@ export function pegadaDaCaixa2D(t: Terminal): { forma: 'PRISMA' | 'CILINDRO'; la
   const cilindro = t.tipoHidraulico === 'CAIXA_SIFONADA' || t.tipoHidraulico === 'RALO_SIFONADO';
   const largura = t.larguraMm ?? ficha.larguraPadraoMm;
   return { forma: cilindro ? 'CILINDRO' : 'PRISMA', larguraMm: largura, profundidadeMm: cilindro ? largura : (t.profundidadeMm ?? largura) };
+}
+
+// ─── A caixa d'água sobre a laje ─────────────────────────────────────────────
+
+/**
+ * O CENTRO 3D de um terminal (27/09/2026, print: *"a caixa dgua esta dentro da
+ * parede. deve estar sobre a laje"*). A convenção geral do viewer é a cota no
+ * CENTRO da peça (`blueprintRede.caixaDaPeca`, a mesma do IFC). A caixa d'água
+ * é a exceção que a própria ficha declara — "a cota é a do FUNDO: é de onde a
+ * rede sai" —, e com a cota no centro ela nascia com meia altura enfiada na
+ * parede. Aqui ela APOIA na cota. As caixas de esgoto têm `corpoDaCaixa3D`.
+ */
+export function centroDoTerminal3D(
+  t: Pick<Terminal, 'at' | 'cotaMm' | 'tipoHidraulico'>,
+  elevacaoDoNivelMm: number,
+  alturaMm: number,
+): V3 {
+  const z = t.tipoHidraulico === 'RESERVATORIO' ? t.cotaMm + alturaMm / 2 : t.cotaMm;
+  return para3D(t.at.x, t.at.y, elevacaoDoNivelMm + z);
 }

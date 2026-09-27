@@ -10,15 +10,22 @@
  *      (chuveiro, lavatório, pia…); na água fria, o AQUECEDOR também é ponto —
  *      alimentado pela fria, com o peso da soma dos pontos quentes que abastece.
  *   3. BARRILETE: da origem sobe/desce ao teto do pavimento dela e, no teto,
- *      corre em linha reta até a cabeça de cada COLUNA;
+ *      corre até a cabeça de cada COLUNA — por cima das paredes (27/09/2026,
+ *      o mesmo grafo dos ramais; visto no harness: em reta ele cruzava a sala
+ *      para chegar à coluna do outro lado); sem parede perto, em reta;
  *   4. COLUNAS: os pontos são agrupados por proximidade em planta
  *      (`raioDaColunaMm`, união entre pavimentos); cada grupo ganha uma prumada
  *      na posição do ponto de menor (x, y), do teto do pavimento da origem até
  *      a cota do ramal de cada pavimento que tem pontos do grupo — pela laje,
  *      quando desce de pavimento (cota 0 ≡ teto do de baixo);
  *   5. RAMAIS: em cada pavimento, na `cotaRamalMm` (2,20 m — logo abaixo do forro,
- *      acima das portas), a árvore de MENOR TUBO COM ROTA LIMITADA a partir do nó
- *      da coluna até a posição de cada ponto; de lá, a prumada até a cota do ponto.
+ *      acima das portas), PELAS PAREDES (27/09/2026, "tubulacao de agua fria e
+ *      quente deve passar pelas paredes"): a coluna fica no eixo da parede mais
+ *      próxima, o ramal corre pelo eixo das paredes (`blueprintRotaPelasParedes`)
+ *      até a projeção de cada ponto, desce DENTRO da parede até a cota do ponto e
+ *      sai para a face num toco. Ponto sem parede a `raioDeEncaixeMm` (a ilha)
+ *      liga-se como antes — árvore de menor tubo com rota limitada, em reta —,
+ *      com aviso. `pelasParedes: false` volta ao traçado reto em tudo.
  *   6. DIÂMETRO por trecho: o PESO acumulado a jusante (todos os pontos cujo
  *      caminho até a origem passa pelo trecho), Q = 0,3·√ΣP (L/s, NBR 5626),
  *      e o menor DN comercial com velocidade ≤ `velocidadeMaxMs` — nunca abaixo
@@ -46,6 +53,7 @@ import {
 } from './blueprintGrafoDeRede';
 import { FICHA_DO_PONTO_HIDRAULICO, ehPontoDeConsumo } from './blueprintHidraulica';
 import { shaftPreferido } from './blueprintNucleoVertical';
+import { arvorePelasParedes, chaveP, encaixarNaParede } from './blueprintRotaPelasParedes';
 
 export type TabelaDeTubo = 'PVC_SOLDAVEL' | 'CPVC';
 
@@ -88,6 +96,10 @@ export interface HipotesesDeAgua {
   rotaMaximaVezes: number | null;
   /** Raio em que um SHAFT (E2.4) atrai a coluna do grupo — a prumada sobe por ele. Ausente = 3000. */
   raioDoShaftMm?: number;
+  /** Ramais PELAS PAREDES (27/09/2026). Ausente = sim. */
+  pelasParedes?: boolean;
+  /** Distância máxima do ponto (ou da coluna) ao eixo da parede para correr por ela. Ausente = 700. */
+  raioDeEncaixeMm?: number;
 }
 
 export const HIPOTESES_AGUA_PADRAO: HipotesesDeAgua = {
@@ -98,6 +110,8 @@ export const HIPOTESES_AGUA_PADRAO: HipotesesDeAgua = {
   raioDaColunaMm: 1500,
   rotaMaximaVezes: 1.5,
   raioDoShaftMm: 3000,
+  pelasParedes: true,
+  raioDeEncaixeMm: 700,
 };
 
 /** Vazão de projeto da NBR 5626, em L/s: Q = 0,3 · √ΣP. */
@@ -316,15 +330,40 @@ export function planejarAgua(
   for (const k of alcancadosNoBarrilete.keys()) rota.set(k, rotaBarrilete.get(k) ?? Infinity);
   rota.set(noDaOrigemNoTeto, 0);
   // NÚCLEO VERTICAL (E2.4): o grupo perto de um shaft sobe por ele.
+  const pelasParedes = hip.pelasParedes !== false;
+  const raioDeEncaixe = hip.raioDeEncaixeMm ?? 700;
+  const paredesDe = (levelId: ObjectId) => model.walls.filter((w) => w.levelId === levelId);
   const posicaoDaColuna = (grupo: Terminal[]): Ponto2 => {
     const base = { x: grupo[0].at.x, y: grupo[0].at.y };
-    return shaftPreferido(model, base, grupo[0].levelId, hip.raioDoShaftMm ?? 3000) ?? base;
+    const shaft = shaftPreferido(model, base, grupo[0].levelId, hip.raioDoShaftMm ?? 3000);
+    if (shaft) return shaft;
+    // PELAS PAREDES: a coluna desce no EIXO da parede mais próxima, não na face.
+    const naParede = pelasParedes ? encaixarNaParede(base, paredesDe(grupo[0].levelId), raioDeEncaixe) : null;
+    return naParede ? naParede.q : base;
   };
   const cabecas = new Map<No, Ponto2>();
   for (const grupo of colunas) {
     const pos = posicaoDaColuna(grupo);
     const k = chave(origem.levelId, pos.x, pos.y, tetoO);
     if (!alcancadosNoBarrilete.has(k)) cabecas.set(k, pos);
+  }
+  // PELAS PAREDES: o barrilete corre no teto por cima das paredes até as cabeças.
+  const paredesDaOrigem = paredesDe(origem.levelId);
+  const barrilete = pelasParedes && paredesDaOrigem.length > 0 && cabecas.size > 0
+    ? arvorePelasParedes({ paredes: paredesDaOrigem, raiz: origem.at, pendentes: [...cabecas.values()], raioDeEncaixeMm: raioDeEncaixe })
+    : null;
+  if (barrilete?.raiz) {
+    if (chaveP(barrilete.raiz) !== chaveP(origem.at)) addTrecho(origem.levelId, origem.at, tetoO, barrilete.raiz, tetoO);
+    for (const a of barrilete.arestas) addTrecho(origem.levelId, a.de, tetoO, a.para, tetoO);
+    for (const [k, pos] of [...cabecas.entries()]) {
+      const q = barrilete.encaixe.get(chaveP(pos));
+      if (!q) continue;
+      // A cabeça já está no eixo (a coluna foi posta nele); se não, um toco no teto.
+      if (chaveP(q) !== chaveP(pos)) addTrecho(origem.levelId, q, tetoO, pos, tetoO);
+      alcancadosNoBarrilete.set(k, pos);
+      rota.set(k, 0);
+      cabecas.delete(k);
+    }
   }
   arvoreComRotaLimitada({
     alcancados: alcancadosNoBarrilete,
@@ -376,13 +415,41 @@ export function planejarAgua(
       const distRamal = distanciasDesde(noDaColuna, arestas);
       for (const k of alcancados.keys()) if (!rotaRamal.has(k)) rotaRamal.set(k, distRamal.get(k) ?? Infinity);
       const pendentesDoNivel = new Map<No, Ponto2>();
-      for (const p of grupo) {
-        if (p.levelId !== nivel.id) continue;
+      const doNivel = grupo.filter((p) => p.levelId === nivel.id);
+      const paredesDoNivel = paredesDe(nivel.id);
+      const pelas = pelasParedes && paredesDoNivel.length > 0
+        ? arvorePelasParedes({ paredes: paredesDoNivel, raiz: pos, pendentes: doNivel.map((p) => p.at), raioDeEncaixeMm: raioDeEncaixe })
+        : null;
+      if (pelas?.raiz) {
+        // Da coluna ao eixo (se ela não está nele), e o ramal pelo eixo das paredes.
+        if (chaveP(pelas.raiz) !== chaveP(pos)) addTrecho(nivel.id, pos, cotaRamal, pelas.raiz, cotaRamal);
+        alcancados.set(chave(nivel.id, pelas.raiz.x, pelas.raiz.y, cotaRamal), pelas.raiz);
+        rotaRamal.set(chave(nivel.id, pelas.raiz.x, pelas.raiz.y, cotaRamal), 0);
+        for (const a of pelas.arestas) {
+          addTrecho(nivel.id, a.de, cotaRamal, a.para, cotaRamal);
+          for (const v of [a.de, a.para]) {
+            const k = chave(nivel.id, v.x, v.y, cotaRamal);
+            alcancados.set(k, v);
+            if (!rotaRamal.has(k)) rotaRamal.set(k, Math.hypot(v.x - pos.x, v.y - pos.y));
+          }
+        }
+      }
+      let foraDaParede = 0;
+      for (const p of doNivel) {
+        const q = pelas?.raiz ? pelas.encaixe.get(chaveP(p.at)) : undefined;
+        if (q) {
+          // Desce DENTRO da parede, no eixo, até a cota do ponto; e sai para a face.
+          if (p.cotaMm !== cotaRamal) addTrecho(nivel.id, q, cotaRamal, q, p.cotaMm);
+          if (chaveP(q) !== chaveP(p.at)) addTrecho(nivel.id, q, p.cotaMm, p.at, p.cotaMm);
+          continue;
+        }
+        if (pelas) foraDaParede++;
         // Do ramal à cota do ponto, na posição dele.
         if (p.cotaMm !== cotaRamal) addTrecho(nivel.id, p.at, cotaRamal, p.at, p.cotaMm);
         const k = chave(nivel.id, p.at.x, p.at.y, cotaRamal);
         if (!alcancados.has(k)) pendentesDoNivel.set(k, { x: p.at.x, y: p.at.y });
       }
+      if (foraDaParede > 0) avisos.push(`${nivel.name}: ${foraDaParede} ponto(s) a mais de ${raioDeEncaixe} mm de qualquer parede — ligado(s) em linha reta`);
       arvoreComRotaLimitada({
         alcancados,
         rota: rotaRamal,

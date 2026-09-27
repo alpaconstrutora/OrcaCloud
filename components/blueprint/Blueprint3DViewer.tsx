@@ -44,7 +44,7 @@ import {
   rotacaoY3D,
 } from '../../utils/blueprintRede';
 import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
-import { corpoDaCaixa3D, pecasDasConexoes3D, rotulosDaRede3D } from '../../utils/blueprintIsometrico';
+import { centroDoTerminal3D, corpoDaCaixa3D, pecasDasConexoes3D, rotulosDaRede3D } from '../../utils/blueprintIsometrico';
 import { contornoDaSecaoT, secaoTValida } from '../../utils/blueprintKernel/secaoT';
 import { medirTerreno } from '../../utils/blueprintTerreno';
 import { ehClique } from '../../utils/blueprint3dSelecao';
@@ -1165,7 +1165,11 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
         .filter((t) => idsVisiveis.has(t.levelId) && !escondida(t.id))
         .map((t) => {
           const nivel = model.levels.find((l) => l.id === t.levelId);
-          const c = caixaDaPeca(t.at, t.cotaMm, nivel?.elevationMm ?? 0, medidasDoTerminal(t));
+          const md = medidasDoTerminal(t);
+          const c = caixaDaPeca(t.at, t.cotaMm, nivel?.elevationMm ?? 0, md);
+          // A CAIXA D'ÁGUA apoia na cota (o fundo, pela ficha), sobre a laje —
+          // com a cota no centro ela nascia meio enfiada na parede (print de 27/09/2026).
+          const centro = centroDoTerminal3D(t, nivel?.elevationMm ?? 0, md.alturaMm);
           return {
             id: t.id,
             uid: t.uid,
@@ -1178,7 +1182,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
             // `@ts-nocheck` e um sinal trocado passaria sem acusação, com o
             // sintoma de uma peça virada para o lado errado — plausível demais.
             giroY: rotacaoY3D(giroDaPeca(t)),
-            position: new THREE.Vector3(c.centro[0], c.centro[1], c.centro[2]),
+            position: new THREE.Vector3(centro[0], centro[1], centro[2]),
           };
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1203,9 +1207,17 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
     [model, levelIds?.join(',')],
   );
   const rotulos3d = useMemo(
-    () => (mostrarRotulosDeRede ? rotulosDaRede3D(model, idsVisiveis).filter((r) => !escondida(r.chave)) : []),
+    () =>
+      mostrarRotulosDeRede
+        ? rotulosDaRede3D(
+            model,
+            idsVisiveis,
+            // Parede à vista e opaca esconde o tubo embutido — e o rótulo dele junto.
+            estilo === 'TRANSPARENTE' ? [] : model.walls.filter((w) => idsVisiveis.has(w.levelId) && !escondida(w.id)),
+          ).filter((r) => !escondida(r.chave))
+        : [],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [model, levelIds?.join(','), chaveOcultos, mostrarRotulosDeRede],
+    [model, levelIds?.join(','), chaveOcultos, mostrarRotulosDeRede, estilo],
   );
 
   /**

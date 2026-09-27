@@ -10,6 +10,8 @@
  *   → http://localhost:3141/docs/spikes/esgoto-isometrico/index.html          (3D)
  *   → http://localhost:3141/docs/spikes/esgoto-isometrico/index.html?vista=2d (planta)
  *   → …?rotulos=0 (3D sem os ø) · ?paredes=0 (sem paredes) · ?estilo=transparente
+ *   → …?cena=agua — a sala do print de 27/09/2026: caixa d'água no canto (sobre a
+ *     laje) e lavatório/chuveiro numa parede, com a ÁGUA FRIA AUTOMÁTICA pelas paredes.
  */
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -17,6 +19,7 @@ import Blueprint3DViewer from '../../../components/blueprint/Blueprint3DViewer';
 import BlueprintCanvas from '../../../components/blueprint/BlueprintCanvas';
 import { applyBatch, applyCommand, conexoesDerivadas, emptyModel, point, recomputeSpaces, type Command, type TipoDePontoHidraulico } from '../../../utils/blueprintKernel';
 import { planejarEsgoto } from '../../../utils/blueprintEsgotoAutomatico';
+import { planejarAgua } from '../../../utils/blueprintAguaAutomatica';
 
 const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
 const t = base.levels[0].id;
@@ -28,7 +31,23 @@ const esg = (tipo: TipoDePontoHidraulico, x: number, y: number, cota: number, me
   ...(medidas ?? {}),
 } as Command);
 
-let m = applyBatch(base, [
+const params = new URLSearchParams(location.search);
+
+function salaDaAgua() {
+  let s = applyBatch(base, [
+    w(0, 0, 3000, 0), w(3000, 0, 3000, 5000), w(3000, 5000, 0, 5000), w(0, 5000, 0, 0),
+    { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: "Caixa d'água", at: point(0, 0), cotaMm: 2800, tipoHidraulico: 'RESERVATORIO', larguraMm: 1200, profundidadeMm: 1200, alturaMm: 800 } as Command,
+    { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Lavatório', at: point(75, 1800), cotaMm: 600, tipoHidraulico: 'LAVATORIO' } as Command,
+    { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Chuveiro', at: point(75, 3200), cotaMm: 2100, tipoHidraulico: 'CHUVEIRO' } as Command,
+    { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Pia', at: point(2925, 3800), cotaMm: 1100, tipoHidraulico: 'PIA_COZINHA' } as Command,
+  ]).model;
+  // O menu grava as medidas da ficha num segundo comando (`AddTerminal` não as recebe).
+  s = applyCommand(s, { type: 'SetTerminalProps', terminalId: s.terminais![0].id, larguraMm: 1200, profundidadeMm: 1200, alturaMm: 800 } as Command).model;
+  s = recomputeSpaces(s);
+  return applyBatch(s, planejarAgua(s, s.terminais![0]).comandos).model;
+}
+
+let m = params.get('cena') === 'agua' ? salaDaAgua() : applyBatch(base, [
   w(0, 0, 4500, 0), w(4500, 0, 4500, 3000), w(4500, 3000, 0, 3000), w(0, 3000, 0, 0), w(2000, 0, 2000, 3000),
   esg('VASO_SANITARIO', 600, 800, 0),
   esg('LAVATORIO', 600, 2500, 500),
@@ -37,11 +56,10 @@ let m = applyBatch(base, [
   esg('TANQUE', 3500, 2600, 500),
   esg('CAIXA_INSPECAO', 6000, -1500, -700, { larguraMm: 600, profundidadeMm: 600, alturaMm: 600 }),
 ]).model;
-m = recomputeSpaces(m);
-const plano = planejarEsgoto(m);
-m = applyBatch(m, plano.comandos).model;
-
-const params = new URLSearchParams(location.search);
+if (params.get('cena') !== 'agua') {
+  m = recomputeSpaces(m);
+  m = applyBatch(m, planejarEsgoto(m).comandos).model;
+}
 const conexoes = conexoesDerivadas(m).conexoes;
 const resumo = `trechos: ${m.trechos?.length ?? 0} · conexões: ${conexoes.map((c) => c.tipo).join(', ')} · avisos: ${conexoes.filter((c) => c.aviso).length}`;
 

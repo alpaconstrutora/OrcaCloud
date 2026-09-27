@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
-import { anguloDeLeitura, corDaConexao, corpoDaCaixa3D, escurecer, faixaDoTubo2D, pecasDasConexoes3D, pegadaDaCaixa2D, rotuloDoTrecho2D, rotulosDaRede3D, simbolosDasConexoes2D, textoDoRotulo } from '../utils/blueprintIsometrico';
+import { anguloDeLeitura, centroDoTerminal3D, corDaConexao, embutidoEmParede, corpoDaCaixa3D, escurecer, faixaDoTubo2D, pecasDasConexoes3D, pegadaDaCaixa2D, rotuloDoTrecho2D, rotulosDaRede3D, simbolosDasConexoes2D, textoDoRotulo } from '../utils/blueprintIsometrico';
 
 function terreo(): { m: BlueprintModel; t: string } {
   const m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
@@ -152,6 +152,29 @@ describe('planta 2D detalhada ("detalhado também no 2d")', () => {
     expect(pegadaDaCaixa2D(ci)).toEqual({ forma: 'PRISMA', larguraMm: 600, profundidadeMm: 600 });
     expect(pegadaDaCaixa2D(cs)).toEqual({ forma: 'CILINDRO', larguraMm: 150, profundidadeMm: 150 });
     expect(pegadaDaCaixa2D(vs)).toBeNull();
+  });
+});
+
+describe('centroDoTerminal3D', () => {
+  it("caixa d'água APOIA na cota (fundo 2800, 800 de altura → centro a 3,20 m); o resto segue com a cota no centro", () => {
+    expect(centroDoTerminal3D({ at: point(1000, 2000), cotaMm: 2800, tipoHidraulico: 'RESERVATORIO' }, 0, 800)).toEqual([1, 3.2, 2]);
+    expect(centroDoTerminal3D({ at: point(0, 0), cotaMm: 1600, tipoHidraulico: 'AQUECEDOR' }, 2800, 600)[1]).toBeCloseTo(4.4);
+  });
+});
+
+describe('rótulo do tubo embutido', () => {
+  it('o tubo dentro da parede opaca não leva rótulo; sem parede opaca, leva', () => {
+    const { m, t } = terreo();
+    const mm = applyBatch(m, [
+      { type: 'AddWall', levelId: t, a: point(0, 0), b: point(4000, 0), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: point(500, 0), b: point(3500, 0), cotaAMm: 2200, cotaBMm: 2200, bitolaMm: 25 },
+      { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: point(500, 1000), b: point(3500, 1000), cotaAMm: 2200, cotaBMm: 2200, bitolaMm: 25 },
+    ]).model;
+    const [dentro, fora] = mm.trechos!;
+    expect(embutidoEmParede(dentro, mm.walls)).toBe(true);
+    expect(embutidoEmParede(fora, mm.walls)).toBe(false);
+    expect(rotulosDaRede3D(mm, undefined, mm.walls).map((r) => r.chave)).toEqual([fora.id]);
+    expect(rotulosDaRede3D(mm).map((r) => r.chave)).toEqual([dentro.id, fora.id]);
   });
 });
 

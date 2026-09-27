@@ -314,8 +314,8 @@ nenhum** (coluna Ações só para a equipe, e escondida até passar o mouse).
   `CTV-007-007-0001`. Teste desfeito por exceção num título `-p`: `CTL-010-014-0001`.
 - [x] 20. `utils/reciboRecebimento.ts` — linha "Contrato: …" e logo em
   `caberNaCaixa` (proporção mantida, centralizada na caixa 30×15). Testes: 14.
-- [ ] 21. Publicação.
-- [ ] 22. Regerar o nº 4 — depois do deploy: backup do PDF antigo, apagar o objeto,
+- [x] 21. Publicação — commit `08954df` em main; `conferir-producao.sh "Contrato: "` provou SHA e texto no bundle servido.
+- [x] 22. Regerar o nº 4 — feito 27/09/2026: backup do PDF antigo (57.772 bytes, sha `0cb2af71…`, pasta temporária da sessão), objeto apagado via `supabase storage rm`, `file_path = NULL`, baixado em produção (orcacloud.vercel.app, `08954df`) → refeito e guardado (sha `e630eca9…`), com "Contrato: CTV-007-007-0001" e logo proporcional. Era: — depois do deploy: backup do PDF antigo, apagar o objeto,
   `file_path = NULL`, baixar em produção (refaz pelo snapshot). **Pronto quando:** o
   PDF baixado de produção traz "Contrato: CTV-007-007-0001" e a logo proporcional.
 

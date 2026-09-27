@@ -140,4 +140,49 @@ describe('conexões derivadas', () => {
     expect(r.entries).toHaveLength(1);
     expect(r.entries[0].quantity).toBe(2);
   });
+
+  it('junção 45° (27/09/2026): o ramal chega a 45° do tubo que passa; a 90° continua tê', () => {
+    const { m, t } = base();
+    const E = 'ESGOTO' as const;
+    // Coletor 0→6000 em y=0, ramal vindo de (2000,-1000) até o nó (3000,0): 45°.
+    const y = conexoesDerivadas(applyBatch(m, [
+      tr(t, 0, 0, 3000, 0, 100, -150, -150, E), tr(t, 3000, 0, 6000, 0, 100, -150, -150, E), tr(t, 2000, -1000, 3000, 0, 50, -150, -150, E),
+    ]).model);
+    expect(y.conexoes.map((c) => c.tipo)).toEqual(['JUNCAO_45']);
+    expect(y.conexoes[0]).toMatchObject({ bitolaMm: 100, paraMm: 50 });
+    const te = conexoesDerivadas(applyBatch(m, [
+      tr(t, 0, 0, 3000, 0, 100, -150, -150, E), tr(t, 3000, 0, 6000, 0, 100, -150, -150, E), tr(t, 3000, -1000, 3000, 0, 50, -150, -150, E),
+    ]).model);
+    expect(te.conexoes.map((c) => c.tipo)).toEqual(['TE']);
+  });
+
+  it('ramais: a direção 3D de cada tubo que sai do nó e a bitola dele', () => {
+    const { m, t } = base();
+    const r = conexoesDerivadas(applyBatch(m, [tr(t, 0, 0, 3000, 0, 25), tr(t, 3000, 0, 3000, 0, 20, 2200, 1100)]).model);
+    const ramais = r.conexoes[0].ramais!;
+    expect(ramais).toHaveLength(2);
+    const horizontal = ramais.find((x) => x.bitolaMm === 25)!;
+    const prumada = ramais.find((x) => x.bitolaMm === 20)!;
+    expect(horizontal.u).toEqual([-1, 0, 0]);
+    expect(prumada.u).toEqual([0, 0, -1]);
+  });
+
+  it('nó DENTRO da caixa de inspeção não tem conexão: os tubos entram na caixa', () => {
+    const { m, t } = base();
+    const E = 'ESGOTO' as const;
+    // CI em (6000,0), fundo −600, 600 de altura → 0. Três ramais chegam a −300, e a prumada desce ao fundo.
+    const comCi = applyBatch(m, [
+      { type: 'AddTerminal', levelId: t, disciplina: E, tipo: 'Caixa de inspeção', at: point(6000, 0), cotaMm: -600, tipoHidraulico: 'CAIXA_INSPECAO' },
+      tr(t, 0, 0, 6000, 0, 100, -200, -300, E),
+      tr(t, 6000, 3000, 6000, 0, 100, -200, -300, E),
+      tr(t, 9000, 0, 6000, 0, 100, -200, -300, E),
+      tr(t, 6000, 0, 6000, 0, 100, -300, -600, E),
+    ]).model;
+    const r = conexoesDerivadas(comCi);
+    expect(r.conexoes.filter((c) => c.no.x === 6000 && c.no.y === 0)).toEqual([]);
+    // Sem a caixa, o mesmo nó contaria uma cruzeta.
+    const semCi = { ...comCi, terminais: [] };
+    expect(conexoesDerivadas(semCi).conexoes.map((c) => c.tipo)).toContain('CRUZETA');
+  });
 });
+

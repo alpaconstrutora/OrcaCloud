@@ -14,9 +14,14 @@
  *     salvo terminal no nó (registro, aparelho) — a peça é a própria ligação.
  *   - 2 trechos a ~90° (±10°): JOELHO_90; a ~45° ou ~135° (±10°): JOELHO_45;
  *     outro ângulo: JOELHO_90 com aviso "ângulo fora de 45/90".
- *   - 3 trechos: TÊ (com `paraMm` quando as bitolas diferem — tê de redução).
+ *   - 3 trechos: TÊ (com `paraMm` quando as bitolas diferem — tê de redução);
+ *     JUNÇÃO 45° quando dois são colineares e o terceiro chega a ~45°/135° deles
+ *     (27/09/2026 — a derivação em Y do esgoto, NBR 8160).
  *   - 4 trechos: CRUZETA, com aviso (é rara e cara; vale conferir).
  *   - Terminal `CONEXAO_*` MANUAL no nó suprime a derivada: o usuário forçou a peça.
+ *   - Nó DENTRO de caixa de esgoto (CI, CG, CS, ralo sifonado — mesmo x,y, cota
+ *     entre o fundo e o topo da caixa): nada. Os tubos entram na caixa; a caixa
+ *     é a peça (27/09/2026 — antes contava tê/cruzeta na chegada da CI).
  *
  * O ângulo é em TRÊS dimensões: prumada + horizontal é um joelho de 90°, e o
  * esgoto com caimento de 2 % continua colinear com o trecho seguinte.
@@ -31,12 +36,13 @@
 import type { BlueprintModel, DisciplinaDeRede, Level, ObjectId, Terminal, Trecho } from './model';
 import type { Point } from './geom';
 
-export type TipoDeConexao = 'JOELHO_90' | 'JOELHO_45' | 'TE' | 'CRUZETA' | 'LUVA' | 'REDUCAO';
+export type TipoDeConexao = 'JOELHO_90' | 'JOELHO_45' | 'TE' | 'JUNCAO_45' | 'CRUZETA' | 'LUVA' | 'REDUCAO';
 
 export const ROTULO_DA_CONEXAO: Record<TipoDeConexao, string> = {
   JOELHO_90: 'Joelho 90°',
   JOELHO_45: 'Joelho 45°',
   TE: 'Tê',
+  JUNCAO_45: 'Junção 45°',
   CRUZETA: 'Cruzeta',
   LUVA: 'Luva',
   REDUCAO: 'Redução',
@@ -74,6 +80,40 @@ export interface ConexaoDerivada {
   /** `MANUAL` quando um terminal `CONEXAO_*` está no nó; `DERIVADA` no resto. */
   origem: 'DERIVADA' | 'MANUAL';
   aviso?: string;
+  /**
+   * Os tubos que saem do nó (27/09/2026): direção 3D unitária em mm do MODELO
+   * (x, y da planta; z = cota) e bitola de cada um — o que o desenho precisa
+   * para pôr uma bolsa em cada boca da peça. Ausente na conexão manual fora de nó.
+   */
+  ramais?: RamalDaConexao[];
+}
+
+export interface RamalDaConexao {
+  trechoId: ObjectId;
+  /** Vetor unitário saindo do nó: [x, y, cota]. */
+  u: [number, number, number];
+  bitolaMm: number;
+}
+
+/**
+ * CAIXAS DE ESGOTO (27/09/2026): recebem vários tubos sem conexão. A cota da
+ * ficha é o FUNDO na CI e na CG, e o TOPO (a grelha no piso) na CS e no ralo
+ * sifonado — ver `blueprintHidraulica.FICHA_DO_PONTO_HIDRAULICO`. A altura
+ * padrão é a da ficha, para a peça lançada sem medida.
+ */
+export const CAIXAS_DE_ESGOTO: Readonly<Record<string, { cotaE: 'FUNDO' | 'TOPO'; alturaPadraoMm: number; larguraPadraoMm: number }>> = {
+  CAIXA_INSPECAO: { cotaE: 'FUNDO', alturaPadraoMm: 600, larguraPadraoMm: 600 },
+  CAIXA_GORDURA: { cotaE: 'FUNDO', alturaPadraoMm: 500, larguraPadraoMm: 400 },
+  CAIXA_SIFONADA: { cotaE: 'TOPO', alturaPadraoMm: 200, larguraPadraoMm: 150 },
+  RALO_SIFONADO: { cotaE: 'TOPO', alturaPadraoMm: 150, larguraPadraoMm: 100 },
+};
+
+/** Fundo e topo da caixa de esgoto, em mm do piso do pavimento; `null` se não é caixa. */
+export function extensaoVerticalDaCaixa(t: Pick<Terminal, 'tipoHidraulico' | 'cotaMm' | 'alturaMm'>): { fundoMm: number; topoMm: number } | null {
+  const c = t.tipoHidraulico ? CAIXAS_DE_ESGOTO[t.tipoHidraulico] : undefined;
+  if (!c) return null;
+  const altura = t.alturaMm ?? c.alturaPadraoMm;
+  return c.cotaE === 'FUNDO' ? { fundoMm: t.cotaMm, topoMm: t.cotaMm + altura } : { fundoMm: t.cotaMm - altura, topoMm: t.cotaMm };
 }
 
 export interface PontaAberta {
@@ -162,6 +202,19 @@ export function conexoesDerivadas(model: BlueprintModel): ConexoesDoModelo {
     terminaisPorChave.set(k, lista);
   }
 
+  // Caixas de esgoto, na mesma normalização da chave (a laje como encontro).
+  const caixas = (model.terminais ?? []).flatMap((term) => {
+    if (term.disciplina !== 'ESGOTO') return [];
+    const ext = extensaoVerticalDaCaixa(term);
+    if (!ext) return [];
+    const k = chave(term.levelId, term.disciplina, term.at.x, term.at.y, term.cotaMm);
+    const desloc = k.cotaMm - term.cotaMm;
+    return [{ levelId: k.levelId, x: term.at.x, y: term.at.y, fundo: ext.fundoMm + desloc, topo: ext.topoMm + desloc }];
+  });
+  const dentroDeCaixa = (no: { levelId: ObjectId; no: Point; cotaMm: number; disciplina: DisciplinaDeRede }) =>
+    no.disciplina === 'ESGOTO' &&
+    caixas.some((c) => c.levelId === no.levelId && c.x === no.no.x && c.y === no.no.y && no.cotaMm >= c.fundo - 1 && no.cotaMm <= c.topo + 1);
+
   const conexoes: ConexaoDerivada[] = [];
   const pontasAbertas: PontaAberta[] = [];
   const chavesOrdenadas = [...nos.keys()].sort();
@@ -175,8 +228,12 @@ export function conexoesDerivadas(model: BlueprintModel): ConexoesDoModelo {
     const bitolas = inc.map((i) => i.trecho.bitolaMm);
     const maior = Math.max(...bitolas);
     const menor = Math.min(...bitolas);
-    const base = { levelId: no.levelId, no: no.no, cotaMm: no.cotaMm, disciplina: no.disciplina, trechoIds, bitolaMm: maior };
+    const ramais: RamalDaConexao[] = [...inc]
+      .sort((x, y) => x.trecho.id.localeCompare(y.trecho.id))
+      .map((i) => ({ trechoId: i.trecho.id, u: i.u, bitolaMm: i.trecho.bitolaMm }));
+    const base = { levelId: no.levelId, no: no.no, cotaMm: no.cotaMm, disciplina: no.disciplina, trechoIds, bitolaMm: maior, ramais };
 
+    if (!manual && dentroDeCaixa(no)) continue;
     if (manual) {
       conexoes.push({ ...base, tipo: manual, origem: 'MANUAL', ...(menor !== maior ? { paraMm: menor } : {}) });
       continue;
@@ -201,7 +258,16 @@ export function conexoesDerivadas(model: BlueprintModel): ConexoesDoModelo {
       continue;
     }
     if (inc.length === 3) {
-      conexoes.push({ ...base, tipo: 'TE', origem: 'DERIVADA', ...(menor !== maior ? { paraMm: menor } : {}) });
+      // O tubo que PASSA são os dois colineares; o terceiro é o ramal. Ramal a
+      // ~45°/135° do que passa = junção 45° (o Y do esgoto); o resto, tê.
+      let tipo: TipoDeConexao = 'TE';
+      for (const [i, j, k2] of [[0, 1, 2], [0, 2, 1], [1, 2, 0]] as const) {
+        if (anguloGraus(inc[i].u, inc[j].u) < 170) continue;
+        const ang = anguloGraus(inc[k2].u, inc[i].u);
+        if (Math.abs(ang - 45) <= 10 || Math.abs(ang - 135) <= 10) tipo = 'JUNCAO_45';
+        break;
+      }
+      conexoes.push({ ...base, tipo, origem: 'DERIVADA', ...(menor !== maior ? { paraMm: menor } : {}) });
       continue;
     }
     conexoes.push({ ...base, tipo: 'CRUZETA', origem: 'DERIVADA', aviso: `${inc.length} trechos no mesmo nó`, ...(menor !== maior ? { paraMm: menor } : {}) });

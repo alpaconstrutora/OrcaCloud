@@ -20,6 +20,8 @@ interface Props {
   levelIds?: string[];
   mostrarLaje?: boolean;
   mostrarArestas?: boolean;
+  /** Rótulos "ø100 mm" das redes hidráulicas — ver `Blueprint3DViewer`. */
+  mostrarRotulosDeRede?: boolean;
   /** ESTILO (E8.2): repassado ao visualizador. */
   estilo?: 'SOMBREADO' | 'LINHA_OCULTA' | 'TRANSPARENTE';
   mostrarTerreno?: boolean;

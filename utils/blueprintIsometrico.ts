@@ -1,0 +1,218 @@
+/**
+ * O DETALHE DAS INSTALAÇÕES no desenho (27/09/2026, pedido com print de
+ * isométrico sanitário: *"os tubos e conexoes devem ser detalhados"*).
+ *
+ * Três coisas que o 3D não mostrava, calculadas aqui e só DESENHADAS no viewer
+ * (que é `@ts-nocheck` — um sinal trocado lá passaria calado; aqui o compilador
+ * e o teste alcançam):
+ *
+ *   1. as CONEXÕES — para cada peça de `conexoesDerivadas`, uma BOLSA por boca
+ *      (cilindro curto mais grosso que o tubo, saindo do nó na direção do ramal)
+ *      e um corpo esférico no nó do joelho, tê, junção e cruzeta. A redução sai
+ *      sozinha: cada bolsa tem o diâmetro do seu tubo;
+ *   2. os CORPOS das caixas de esgoto na cota CERTA — a CI e a CG com o fundo na
+ *      cota, a CS e o ralo com a grelha (o topo) na cota; a caixa genérica do
+ *      viewer põe a cota no CENTRO (convenção do IFC para quadro/terminal, ver
+ *      `blueprintRede.caixaDaPeca`), e a CI aparecia meia altura abaixo;
+ *   3. os RÓTULOS "ø100 mm" — "TQ ø100 mm", "Ventilação ø50 mm" — no meio de
+ *      cada trecho hidráulico.
+ *
+ * Convenção do 3D (a mesma de `cilindroDoTrecho`): X e Z são a planta, Y é a
+ * altura, metros; a cota soma a elevação do pavimento.
+ */
+import type { BlueprintModel, ConexaoDerivada, DisciplinaDeRede, ObjectId, Terminal, Trecho } from './blueprintKernel';
+import { CAIXAS_DE_ESGOTO, conexoesDerivadas, extensaoVerticalDaCaixa } from './blueprintKernel';
+import { COR_DA_DISCIPLINA, ESCALA_3D } from './blueprintRede';
+
+type V3 = [number, number, number];
+
+const HIDRAULICAS: readonly DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO'];
+
+/** A bolsa é 30 % mais grossa que o tubo — o que a torna legível como peça. */
+export const FATOR_DA_BOLSA = 1.3;
+/** Comprimento da bolsa: um diâmetro, nunca menos de 50 mm. */
+export const BOLSA_MINIMA_MM = 50;
+/** Raio mínimo desenhado — o mesmo piso do tubo no viewer (15 mm), mais a folga da bolsa. */
+const RAIO_MINIMO_DA_BOLSA_M = 0.02;
+
+export interface Cilindro3D {
+  centro: V3;
+  /** Unitário, na convenção do 3D. */
+  eixo: V3;
+  raioM: number;
+  comprimentoM: number;
+}
+
+export interface PecaDaConexao3D {
+  chave: string;
+  tipo: ConexaoDerivada['tipo'];
+  disciplina: DisciplinaDeRede;
+  cor: string;
+  bolsas: Cilindro3D[];
+  /** O corpo no nó (joelho, tê, junção, cruzeta); `null` na luva e na redução. */
+  corpo: { centro: V3; raioM: number } | null;
+}
+
+/** A cor escurecida por `quanto` (0–1). */
+export function escurecer(hex: string, quanto = 0.35): string {
+  const n = parseInt(hex.replace('#', ''), 16);
+  const c = (v: number) => Math.round(v * (1 - quanto)).toString(16).padStart(2, '0');
+  return `#${c((n >> 16) & 255)}${c((n >> 8) & 255)}${c(n & 255)}`;
+}
+
+/**
+ * A cor da CONEXÃO: tem de CONTRASTAR com o tubo. Na água, a cor da rede
+ * escurecida (azul-escuro no azul). No esgoto o tubo já é cinza-escuro, e
+ * escurecer dava quase preto sobre cinza — a peça sumia (visto no harness
+ * `docs/spikes/esgoto-isometrico`); lá a conexão é cinza-CLARO, como nos
+ * isométricos de referência.
+ */
+export function corDaConexao(disciplina: DisciplinaDeRede): string {
+  return disciplina === 'ESGOTO' ? '#a1a1aa' : escurecer(COR_DA_DISCIPLINA[disciplina]);
+}
+
+const elevacaoDe = (model: BlueprintModel, levelId: ObjectId) => model.levels.find((l) => l.id === levelId)?.elevationMm ?? 0;
+
+/** [x, y, cota] do MODELO (mm, cota já com a elevação) → ponto do 3D (m). */
+const para3D = (x: number, y: number, zMm: number): V3 => [x * ESCALA_3D, zMm * ESCALA_3D, y * ESCALA_3D];
+
+export function pecasDasConexoes3D(model: BlueprintModel, idsVisiveis?: ReadonlySet<ObjectId>): PecaDaConexao3D[] {
+  return conexoesDerivadas(model)
+    .conexoes.filter((c) => c.ramais && c.ramais.length > 0 && (!idsVisiveis || idsVisiveis.has(c.levelId)))
+    .map((c) => {
+      const z = elevacaoDe(model, c.levelId) + c.cotaMm;
+      const no = para3D(c.no.x, c.no.y, z);
+      const bolsas = c.ramais!.map((r) => {
+        const comprimentoMm = Math.max(r.bitolaMm, BOLSA_MINIMA_MM);
+        // [x, y, cota] do modelo → [x, cota, y] do 3D.
+        const eixo: V3 = [r.u[0], r.u[2], r.u[1]];
+        const meio = (comprimentoMm / 2) * ESCALA_3D;
+        return {
+          centro: [no[0] + eixo[0] * meio, no[1] + eixo[1] * meio, no[2] + eixo[2] * meio] as V3,
+          eixo,
+          raioM: Math.max(((r.bitolaMm / 2) * FATOR_DA_BOLSA) * ESCALA_3D, RAIO_MINIMO_DA_BOLSA_M),
+          comprimentoM: comprimentoMm * ESCALA_3D,
+        };
+      });
+      const temCorpo = c.tipo !== 'LUVA' && c.tipo !== 'REDUCAO';
+      return {
+        chave: `${c.disciplina}|${c.levelId}|${c.no.x},${c.no.y}|${c.cotaMm}`,
+        tipo: c.tipo,
+        disciplina: c.disciplina,
+        cor: corDaConexao(c.disciplina),
+        bolsas,
+        corpo: temCorpo ? { centro: no, raioM: Math.max(...bolsas.map((b) => b.raioM)) } : null,
+      };
+    });
+}
+
+export interface CorpoDaCaixa3D {
+  forma: 'PRISMA' | 'CILINDRO';
+  centro: V3;
+  /** [largura, altura, profundidade] em m; no cilindro, largura = diâmetro. */
+  tamanho: V3;
+  /** Tampa (CI, CG) ou grelha (CS, ralo), no topo. */
+  tampa: { centro: V3; tamanho: V3 };
+}
+
+/** O corpo da caixa de esgoto na cota certa, ou `null` se o terminal não é caixa. */
+export function corpoDaCaixa3D(t: Terminal, elevacaoDoNivelMm: number): CorpoDaCaixa3D | null {
+  const ext = extensaoVerticalDaCaixa(t);
+  const ficha = t.tipoHidraulico ? CAIXAS_DE_ESGOTO[t.tipoHidraulico] : undefined;
+  if (!ext || !ficha || t.disciplina !== 'ESGOTO') return null;
+  const cilindro = t.tipoHidraulico === 'CAIXA_SIFONADA' || t.tipoHidraulico === 'RALO_SIFONADO';
+  const largura = t.larguraMm ?? ficha.larguraPadraoMm;
+  const profundidade = cilindro ? largura : (t.profundidadeMm ?? largura);
+  const altura = ext.topoMm - ext.fundoMm;
+  const espessura = cilindro ? 15 : 40;
+  const aba = cilindro ? 0 : 40;
+  const topo = elevacaoDoNivelMm + ext.topoMm;
+  return {
+    forma: cilindro ? 'CILINDRO' : 'PRISMA',
+    centro: para3D(t.at.x, t.at.y, elevacaoDoNivelMm + (ext.fundoMm + ext.topoMm) / 2),
+    tamanho: [largura * ESCALA_3D, altura * ESCALA_3D, profundidade * ESCALA_3D],
+    tampa: {
+      centro: para3D(t.at.x, t.at.y, topo + espessura / 2),
+      tamanho: [(largura + aba) * ESCALA_3D, espessura * ESCALA_3D, (profundidade + aba) * ESCALA_3D],
+    },
+  };
+}
+
+export interface RotuloDaRede3D {
+  chave: string;
+  texto: string;
+  posicao: V3;
+  cor: string;
+}
+
+/** Trecho mais curto que isto não leva rótulo (a menos que seja TQ/ventilação): vira ruído. */
+export const COMPRIMENTO_MINIMO_DO_ROTULO_MM = 400;
+
+/** "ø100 mm", "TQ ø100 mm", "Ventilação ø50 mm". */
+export const textoDoRotulo = (t: Pick<Trecho, 'bitolaMm' | 'rotulo'>) => `${t.rotulo ? `${t.rotulo} ` : ''}ø${t.bitolaMm} mm`;
+
+export function rotulosDaRede3D(model: BlueprintModel, idsVisiveis?: ReadonlySet<ObjectId>): RotuloDaRede3D[] {
+  return (model.trechos ?? [])
+    .filter((t) => HIDRAULICAS.includes(t.disciplina) && (!idsVisiveis || idsVisiveis.has(t.levelId)))
+    .filter((t) => !!t.rotulo || Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y, t.cotaBMm - t.cotaAMm) >= COMPRIMENTO_MINIMO_DO_ROTULO_MM)
+    .map((t) => {
+      const elev = elevacaoDe(model, t.levelId);
+      const meio = para3D((t.a.x + t.b.x) / 2, (t.a.y + t.b.y) / 2, elev + (t.cotaAMm + t.cotaBMm) / 2);
+      // Acima do tubo, afastado do raio: o texto não pode nascer dentro do cano.
+      const folga = (t.bitolaMm / 2) * ESCALA_3D + 0.06;
+      return { chave: t.id, texto: textoDoRotulo(t), posicao: [meio[0], meio[1] + folga, meio[2]] as V3, cor: COR_DA_DISCIPLINA[t.disciplina] };
+    });
+}
+
+// ─── A planta 2D ─────────────────────────────────────────────────────────────
+
+export interface SimboloDaConexao2D {
+  chave: string;
+  tipo: ConexaoDerivada['tipo'];
+  cor: string;
+  no: { x: number; y: number };
+  /** As bocas com componente em planta: segmento do nó para fora, em mm do modelo. */
+  bolsas: { de: { x: number; y: number }; para: { x: number; y: number }; larguraMm: number }[];
+  /** As bocas VERTICAIS (prumada): anel em volta do nó, raio em mm. */
+  aneis: number[];
+  /** Raio do corpo no nó (joelho, tê, junção, cruzeta), mm; `null` na luva e na redução. */
+  raioDoCorpoMm: number | null;
+}
+
+/**
+ * As conexões na PLANTA do pavimento (27/09/2026): a mesma bolsa do 3D,
+ * projetada — segmento grosso do nó para fora em cada boca que anda em planta,
+ * anel na boca que sobe ou desce. O pavimento é o dos TRECHOS da peça, e não o
+ * da chave do nó: o ramal sob o piso do andar de cima tem a chave no teto do
+ * térreo, mas é desenhado (e lido) na planta do andar de cima.
+ */
+export function simbolosDasConexoes2D(model: BlueprintModel, levelId: ObjectId | null): SimboloDaConexao2D[] {
+  const nivelDoTrecho = new Map((model.trechos ?? []).map((t) => [t.id, t.levelId]));
+  return conexoesDerivadas(model)
+    .conexoes.filter((c) => c.ramais && c.ramais.length > 0)
+    .filter((c) => !levelId || c.trechoIds.some((id) => nivelDoTrecho.get(id) === levelId))
+    .map((c) => {
+      const bolsas: SimboloDaConexao2D['bolsas'] = [];
+      const aneis: number[] = [];
+      for (const r of c.ramais!) {
+        const larguraMm = r.bitolaMm * FATOR_DA_BOLSA;
+        const emPlanta = Math.hypot(r.u[0], r.u[1]);
+        if (emPlanta < 0.2) {
+          aneis.push(larguraMm / 2);
+          continue;
+        }
+        const comp = Math.max(r.bitolaMm, BOLSA_MINIMA_MM);
+        bolsas.push({ de: { ...c.no }, para: { x: c.no.x + r.u[0] * comp, y: c.no.y + r.u[1] * comp }, larguraMm });
+      }
+      const temCorpo = c.tipo !== 'LUVA' && c.tipo !== 'REDUCAO';
+      return {
+        chave: `${c.disciplina}|${c.levelId}|${c.no.x},${c.no.y}|${c.cotaMm}`,
+        tipo: c.tipo,
+        cor: corDaConexao(c.disciplina),
+        no: { ...c.no },
+        bolsas,
+        aneis,
+        raioDoCorpoMm: temCorpo ? (Math.max(...c.ramais!.map((r) => r.bitolaMm)) * FATOR_DA_BOLSA) / 2 : null,
+      };
+    });
+}

@@ -134,6 +134,7 @@ import {
   terminalSob as acertoTerminal,
   trechoSob as acertoTrecho,
 } from '../../utils/blueprintRede';
+import { simbolosDasConexoes2D } from '../../utils/blueprintIsometrico';
 import { useRodaNaoPassiva } from '../../hooks/useRodaNaoPassiva';
 import { SIGLA_DO_PONTO_HIDRAULICO } from '../../utils/blueprintHidraulica';
 import {
@@ -1887,6 +1888,8 @@ export default function BlueprintCanvas({
     () => (model.trechos ?? []).filter((t) => (!levelId || t.levelId === levelId) && !ocultos.has(t.id)),
     [model.trechos, levelId, ocultos],
   );
+  /** As CONEXÕES da planta (27/09/2026, "os tubos e conexoes devem ser detalhados") — ver `blueprintIsometrico`. */
+  const simbolosConexoes2d = useMemo(() => simbolosDasConexoes2D(model, levelId ?? null), [model, levelId]);
   const terminaisReais = useMemo(
     () => (model.terminais ?? []).filter((t) => (!levelId || t.levelId === levelId) && !ocultos.has(t.id)),
     [model.terminais, levelId, ocultos],
@@ -5700,6 +5703,39 @@ export default function BlueprintCanvas({
     }
     ctx.setLineDash([]);
 
+    // ── CONEXÕES (27/09/2026) ──────────────────────────────────────────────
+    //
+    // Joelho, tê, junção 45°, luva e redução deduzidos dos encontros: a BOLSA
+    // (mais grossa que o tubo, na cor da rede escurecida) em cada boca, anel na
+    // boca que sobe/desce, e um disco no nó da peça que muda direção. Por cima
+    // dos tubos — é o que se confere no encontro.
+    for (const sc of simbolosConexoes2d) {
+      ctx.strokeStyle = sc.cor;
+      ctx.fillStyle = sc.cor;
+      ctx.lineCap = 'butt';
+      for (const b of sc.bolsas) {
+        const p = paraTela(b.de);
+        const q = paraTela(b.para);
+        ctx.lineWidth = Math.max(b.larguraMm * vista.escala, 3);
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(q.x, q.y);
+        ctx.stroke();
+      }
+      const c = paraTela(sc.no);
+      for (const r of sc.aneis) {
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, Math.max(emTela(r), 3), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      if (sc.raioDoCorpoMm != null) {
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, Math.max(emTela(sc.raioDoCorpoMm), 2.5), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
     for (const t of terminaisDoNivel) {
       const selecionado = selecao.has(t.id);
       // EM ESCALA: o diâmetro é a largura declarada da peça. Antes disto era um
@@ -8230,6 +8266,7 @@ export default function BlueprintCanvas({
     }
   }, [
     model,
+    simbolosConexoes2d,
     tamanho,
     vista,
     inicio,

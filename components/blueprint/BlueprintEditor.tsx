@@ -1404,6 +1404,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     'blueprint:vista3dArestas',
     true,
   );
+  /** RÓTULOS ø das redes no 3D (27/09/2026, isométrico sanitário). Nasce ligado. */
+  const [mostrarRotulosDeRede3d, setMostrarRotulosDeRede3d] = usePersistedState<boolean>('blueprint:vista3dRotulosDeRede', true);
   const [mostrarTerreno3d, setMostrarTerreno3d] = usePersistedState(
     'blueprint:vista3dTerreno',
     false,
@@ -10990,6 +10992,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                           ajuda: 'Realça as quinas das paredes com um traço.',
                         },
                         {
+                          chave: 'rotulos-rede-3d',
+                          rotulo: 'Diâmetros das redes',
+                          icone: Tag,
+                          ligado: mostrarRotulosDeRede3d,
+                          alternar: () => setMostrarRotulosDeRede3d((v) => !v),
+                          ajuda: 'Escreve "ø100 mm" (e "TQ", "Ventilação") no meio de cada tubo de água e esgoto.',
+                        },
+                        {
                           chave: 'armadura-3d',
                           rotulo: 'Armadura',
                           icone: Grip,
@@ -12056,6 +12066,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               levelIds={levelIdsDaVista}
               mostrarLaje={mostrarLaje3d}
               mostrarArestas={mostrarArestas3d || estilo3d === 'LINHA_OCULTA'}
+              mostrarRotulosDeRede={mostrarRotulosDeRede3d}
               estilo={estilo3d}
               armadura={mostrarArmadura3d ? { pecas: armadura.pecas, hipoteses: hipotesesDeArmadura } : undefined}
               // A guarda vive aqui, e não só no menu: o estado é persistido, e

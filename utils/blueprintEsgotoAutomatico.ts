@@ -28,6 +28,12 @@
  *      térreo como uma fonte; uma COLUNA DE VENTILAÇÃO (DN 50) sobe do TQ ao
  *      teto do andar.
  *   6. chegada na CI abaixo do FUNDO declarado dela → aviso "aprofundar".
+ *   7. JUNÇÃO 45° (27/09/2026, pedido com print de isométrico): na árvore que
+ *      vai à CI (ou ao tubo de queda), o ramal pode entrar NO MEIO de um trecho
+ *      já traçado, no ponto em que chega a 45° a favor do fluxo — o trecho é
+ *      partido ali e o encontro vira a junção em Y da NBR 8160, não um tê de
+ *      90° nem um ângulo qualquer. Na caixa sifonada e na de gordura cada
+ *      aparelho entra direto na caixa (é para isso que ela existe).
  *
  * Idempotente: ponto que já tem trecho de esgoto na sua posição está ligado.
  * Relançar apaga os sugeridos da rede da CI; refazer apaga tudo. Não há
@@ -119,6 +125,95 @@ type Fonte = {
 };
 
 const COLETORES: TipoDePontoHidraulico[] = ['CAIXA_SIFONADA', 'RALO_SIFONADO'];
+
+/** Afastamento mínimo da junção às pontas do trecho partido, e do ramal ao trecho, mm. */
+export const FOLGA_DA_JUNCAO_MM = 150;
+/**
+ * A junção ganha do nó existente se o ramal dela não passar de 1,25 × o ramal
+ * até o nó: o Y a 45° é a ligação certa no esgoto (NBR 8160), e pendurar o
+ * ramal no ponto de outro aparelho é o que fazia os ângulos tortos.
+ */
+export const PREFERENCIA_DA_JUNCAO = 1.25;
+
+/** Aresta dirigida em planta: `de` é JUSANTE (rumo à caixa), `para` é MONTANTE. */
+export interface ArestaDeEsgoto {
+  de: Ponto2;
+  para: Ponto2;
+}
+
+/**
+ * A árvore da caixa de inspeção COM JUNÇÕES A 45° — como se traça à mão:
+ *
+ *   1. o TRONCO sai do aparelho MAIS DISTANTE da raiz, reto até ela;
+ *   2. cada um dos outros, do mais distante ao mais perto, entra num trecho já
+ *      traçado por uma junção a 45° a favor do fluxo, ou direto na raiz (a caixa
+ *      recebe várias entradas) — o que for mais curto, com a junção valendo
+ *      `PREFERENCIA_DA_JUNCAO` × e a rota limitada (`limite` × a reta) valendo
+ *      para as duas;
+ *   3. aparelho EM CIMA de um trecho (a menos de `FOLGA_DA_JUNCAO_MM` da reta)
+ *      parte o trecho ali: o tubo passa por ele.
+ *
+ * Nunca pendura um ramal no ponto de OUTRO aparelho nem numa caixa
+ * intermediária: era isso que fazia os ângulos tortos (e o vaso entrando pela
+ * caixa sifonada). A junção Q: com `h` a distância de P à reta do trecho e `s`
+ * a projeção de P a partir da ponta de MONTANTE, Q fica a `s + h` dela — o
+ * ramal anda `h` para o lado e `h` a favor do fluxo; Q cai dentro do trecho, a
+ * `FOLGA_DA_JUNCAO_MM` das pontas. Determinístico.
+ */
+export function arvoreComJuncoes45(opts: {
+  raiz: Ponto2;
+  pendentes: readonly Ponto2[];
+  limite: number | null;
+}): ArestaDeEsgoto[] {
+  const k = (p: Ponto2) => `${p.x},${p.y}`;
+  const arestas: ArestaDeEsgoto[] = [];
+  /** Caminho em planta de cada nó até a raiz, mm. */
+  const rota = new Map<string, number>([[k(opts.raiz), 0]]);
+  const ordem = [...new Map(opts.pendentes.map((p) => [k(p), p])).values()]
+    .filter((p) => k(p) !== k(opts.raiz))
+    .sort((p, q) => distancia(q, opts.raiz) - distancia(p, opts.raiz) || p.x - q.x || p.y - q.y);
+  for (const p of ordem) {
+    const reta = distancia(p, opts.raiz);
+    const cabe = (r: number) => opts.limite == null || r <= opts.limite * reta + 1;
+    // Direto na raiz: sempre cabe.
+    let melhor: { custo: number; rota: number; parte: { aresta: number; q: Ponto2 } | null } = { custo: reta, rota: reta, parte: null };
+    arestas.forEach((a, ia) => {
+      const L = distancia(a.de, a.para);
+      if (L < 2 * FOLGA_DA_JUNCAO_MM) return;
+      const f = { x: (a.de.x - a.para.x) / L, y: (a.de.y - a.para.y) / L };
+      const w = { x: p.x - a.para.x, y: p.y - a.para.y };
+      const s = w.x * f.x + w.y * f.y;
+      const h = Math.abs(w.x * f.y - w.y * f.x);
+      const rotaDe = rota.get(k(a.de)) ?? Infinity;
+      if (h < FOLGA_DA_JUNCAO_MM) {
+        // Em cima do trecho: o tubo passa pelo aparelho (ou pela projeção dele).
+        if (s < FOLGA_DA_JUNCAO_MM || s > L - FOLGA_DA_JUNCAO_MM) return;
+        const q = h <= 1 ? p : { x: Math.round(a.para.x + s * f.x), y: Math.round(a.para.y + s * f.y) };
+        const r = rotaDe + (L - s) + h;
+        if (cabe(r) && h < melhor.custo) melhor = { custo: h, rota: r, parte: { aresta: ia, q } };
+        return;
+      }
+      const t = s + h;
+      if (t < FOLGA_DA_JUNCAO_MM || t > L - FOLGA_DA_JUNCAO_MM) return;
+      const q = { x: Math.round(a.para.x + t * f.x), y: Math.round(a.para.y + t * f.y) };
+      if (rota.has(k(q))) return;
+      const d = distancia(p, q);
+      const r = rotaDe + (L - t) + d;
+      if (cabe(r) && d / PREFERENCIA_DA_JUNCAO < melhor.custo) melhor = { custo: d / PREFERENCIA_DA_JUNCAO, rota: r, parte: { aresta: ia, q } };
+    });
+    if (!melhor.parte) {
+      arestas.push({ de: opts.raiz, para: p });
+    } else {
+      const { aresta, q } = melhor.parte;
+      const a = arestas[aresta];
+      arestas.splice(aresta, 1, { de: a.de, para: q }, { de: q, para: a.para });
+      rota.set(k(q), (rota.get(k(a.de)) ?? 0) + distancia(a.de, q));
+      if (k(q) !== k(p)) arestas.push({ de: q, para: p });
+    }
+    rota.set(k(p), melhor.rota);
+  }
+  return arestas;
+}
 const APARELHOS_DO_COLETOR: TipoDePontoHidraulico[] = ['LAVATORIO', 'CHUVEIRO', 'RALO_SECO', 'TANQUE', 'MAQUINA_LAVAR', 'DUCHA_HIGIENICA', 'TORNEIRA'];
 
 const uhcDe = (t: Terminal) => (t.tipoHidraulico ? (FICHA_DO_PONTO_HIDRAULICO[t.tipoHidraulico].uhcNbr8160 ?? 0) : 0);
@@ -238,13 +333,11 @@ export function planejarEsgoto(model: BlueprintModel, hip: HipotesesDeEsgoto = H
       const pend = new Map<No, Ponto2>(filhas.filter((f) => f.terminal.id !== inter.terminal.id).map((f) => [k2(levelId, f.terminal.at), f.terminal.at]));
       arvoreComRotaLimitada({ alcancados, rota, pendentes: pend, retaAteRaiz: (p) => distancia(p, inter.terminal.at), limite: hip.rotaMaximaVezes, ligar: (de, para) => ligarEmPlanta(de.pos, para.pos) });
     }
-    // 2) Árvore principal: raiz ← intermediários + diretas.
+    // 2) Árvore principal: raiz ← intermediários + diretas, com JUNÇÕES A 45°.
     const diretas = doNivel.filter((f) => f.destino == null || !doNivel.some((g) => g.terminal.id === f.destino!.id));
-    const alcancados = new Map<No, Ponto2>([[raizKey, raiz]]);
-    const rota = new Map<No, number>([[raizKey, 0]]);
-    const pend = new Map<No, Ponto2>();
+    const pend = new Map<string, Ponto2>();
     for (const f of diretas) if (k2(levelId, f.terminal.at) !== raizKey) pend.set(k2(levelId, f.terminal.at), f.terminal.at);
-    arvoreComRotaLimitada({ alcancados, rota, pendentes: pend, retaAteRaiz: (p) => distancia(p, raiz), limite: hip.rotaMaximaVezes, ligar: (de, para) => ligarEmPlanta(de.pos, para.pos) });
+    for (const a of arvoreComJuncoes45({ raiz, pendentes: [...pend.values()], limite: hip.rotaMaximaVezes })) ligarEmPlanta(a.de, a.para);
 
     // 3) UHC e DN mínimo a montante de cada nó (recursão da raiz para as folhas).
     const filhosDe = new Map<string, typeof dirigidas>();

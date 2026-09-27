@@ -44,6 +44,7 @@ import {
   rotacaoY3D,
 } from '../../utils/blueprintRede';
 import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
+import { corpoDaCaixa3D, pecasDasConexoes3D, rotulosDaRede3D } from '../../utils/blueprintIsometrico';
 import { contornoDaSecaoT, secaoTValida } from '../../utils/blueprintKernel/secaoT';
 import { medirTerreno } from '../../utils/blueprintTerreno';
 import { ehClique } from '../../utils/blueprint3dSelecao';
@@ -75,6 +76,8 @@ interface Props {
   levelIds?: string[];
   mostrarLaje?: boolean;
   mostrarArestas?: boolean;
+  /** RÓTULOS "ø100 mm" das redes hidráulicas (27/09/2026). Ausente = ligado. */
+  mostrarRotulosDeRede?: boolean;
   /** ESTILO (E8.2): sombreado (padrão), linha oculta (branco + arestas) ou transparente (paredes/lajes a 35 %). */
   estilo?: 'SOMBREADO' | 'LINHA_OCULTA' | 'TRANSPARENTE';
   /** O polígono do lote (divisas `TERRENO`) como um plano de chão. */
@@ -907,7 +910,49 @@ function usarCliqueDePeca(onSelecionar?: (ids: string[]) => void) {
       : {};
 }
 
-function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, envelope, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, ocultos, coresPorUid, selecionados, onSelecionar, armadura, estilo = 'SOMBREADO' }: Props) {
+/**
+ * O RÓTULO "ø100 mm" de um trecho (27/09/2026): sprite com textura de canvas
+ * própria — sem fonte externa (troika baixaria uma da rede, e o PWA roda offline).
+ * Sem `getContext` (jsdom, navegador sem canvas 2D) não desenha nada. Respeita a
+ * profundidade como o tubo: com `depthTest` desligado o rótulo aparecia SOBRE a
+ * parede que esconde o cano (visto no harness `docs/spikes/esgoto-isometrico`) —
+ * texto sem o tubo que ele descreve. Para ler a rede, esconde-se a parede ou usa
+ * o estilo transparente, como no print de referência.
+ */
+function RotuloDeRede({ texto, cor, posicao }: { texto: string; cor: string; posicao: [number, number, number] }) {
+  const textura = useMemo(() => {
+    if (typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext?.('2d');
+    if (!ctx) return null;
+    const px = 44;
+    const fonte = `600 ${px}px system-ui, sans-serif`;
+    ctx.font = fonte;
+    const largura = Math.ceil(ctx.measureText(texto).width) + 24;
+    const altura = px + 16;
+    canvas.width = largura;
+    canvas.height = altura;
+    ctx.font = fonte; // redimensionar o canvas apaga o estado do contexto
+    ctx.fillStyle = 'rgba(255,255,255,0.88)';
+    ctx.fillRect(0, 0, largura, altura);
+    ctx.fillStyle = cor;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(texto, 12, altura / 2 + 2);
+    const t = new THREE.CanvasTexture(canvas);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return { t, aspecto: largura / altura };
+  }, [texto, cor]);
+  useEffect(() => () => textura?.t.dispose(), [textura]);
+  if (!textura) return null;
+  const alturaM = 0.11;
+  return (
+    <sprite position={posicao} scale={[alturaM * textura.aspecto, alturaM, 1]} renderOrder={20}>
+      <spriteMaterial map={textura.t} transparent />
+    </sprite>
+  );
+}
+
+function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRede = true, mostrarTerreno, envelope, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, ocultos, coresPorUid, selecionados, onSelecionar, armadura, estilo = 'SOMBREADO' }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
 
@@ -1125,6 +1170,9 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, en
             id: t.id,
             uid: t.uid,
             cor: COR_DA_DISCIPLINA[t.disciplina],
+            // CAIXA DE ESGOTO (27/09/2026): corpo e tampa na cota CERTA (fundo na
+            // CI/CG, grelha na CS/ralo) — ver `blueprintIsometrico.corpoDaCaixa3D`.
+            corpo: corpoDaCaixa3D(t, nivel?.elevationMm ?? 0),
             tamanho: c.tamanho,
             // ⚠️ O sinal do giro vem de `rotacaoY3D`, no módulo puro: aqui é
             // `@ts-nocheck` e um sinal trocado passaria sem acusação, com o
@@ -1135,6 +1183,29 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, en
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [model, levelIds?.join(','), chaveOcultos],
+  );
+
+  /**
+   * As CONEXÕES e os RÓTULOS ø (27/09/2026, pedido com print de isométrico:
+   * "os tubos e conexoes devem ser detalhados"). A geometria sai de
+   * `utils/blueprintIsometrico.ts`; aqui só vira mesh e sprite.
+   */
+  const conexoes3d = useMemo(
+    () =>
+      pecasDasConexoes3D(model, idsVisiveis).map((p) => ({
+        ...p,
+        bolsas: p.bolsas.map((b) => ({
+          ...b,
+          quaternion: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(b.eixo[0], b.eixo[1], b.eixo[2])),
+        })),
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [model, levelIds?.join(',')],
+  );
+  const rotulos3d = useMemo(
+    () => (mostrarRotulosDeRede ? rotulosDaRede3D(model, idsVisiveis).filter((r) => !escondida(r.chave)) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [model, levelIds?.join(','), chaveOcultos, mostrarRotulosDeRede],
   );
 
   /**
@@ -1496,20 +1567,66 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, en
           />
         </mesh>
       ))}
-      {terminais3d.map((t) => (
-        <mesh
-          key={`terminal-${t.id}`}
-          position={t.position}
-          rotation={[0, t.giroY, 0]}
-          castShadow
-          {...cliqueDe(t.id)}
-        >
-          <boxGeometry args={t.tamanho} />
-          <meshStandardMaterial
-            color={selecionados?.has(t.id) ? COR_SELECIONADA : (coresPorUid?.get(t.uid) ?? t.cor)}
-            roughness={0.4}
-          />
-        </mesh>
+      {terminais3d.map((t) =>
+        t.corpo ? (
+          // O grupo nasce NO CENTRO da caixa e gira em torno dele; corpo e tampa
+          // vão em coordenadas relativas — girar um grupo na origem do mundo
+          // levaria a caixa para longe do lugar.
+          <group key={`terminal-${t.id}`} position={t.corpo.centro} rotation={[0, t.giroY, 0]} {...cliqueDe(t.id)}>
+            <mesh castShadow>
+              {t.corpo.forma === 'CILINDRO' ? (
+                <cylinderGeometry args={[t.corpo.tamanho[0] / 2, t.corpo.tamanho[0] / 2, t.corpo.tamanho[1], 24]} />
+              ) : (
+                <boxGeometry args={t.corpo.tamanho} />
+              )}
+              <meshStandardMaterial
+                color={selecionados?.has(t.id) ? COR_SELECIONADA : (coresPorUid?.get(t.uid) ?? '#9ca3af')}
+                roughness={0.7}
+              />
+            </mesh>
+            <mesh position={[0, t.corpo.tampa.centro[1] - t.corpo.centro[1], 0]} castShadow>
+              {t.corpo.forma === 'CILINDRO' ? (
+                <cylinderGeometry args={[t.corpo.tampa.tamanho[0] / 2, t.corpo.tampa.tamanho[0] / 2, t.corpo.tampa.tamanho[1], 24]} />
+              ) : (
+                <boxGeometry args={t.corpo.tampa.tamanho} />
+              )}
+              <meshStandardMaterial color="#374151" roughness={0.6} metalness={0.2} />
+            </mesh>
+          </group>
+        ) : (
+          <mesh
+            key={`terminal-${t.id}`}
+            position={t.position}
+            rotation={[0, t.giroY, 0]}
+            castShadow
+            {...cliqueDe(t.id)}
+          >
+            <boxGeometry args={t.tamanho} />
+            <meshStandardMaterial
+              color={selecionados?.has(t.id) ? COR_SELECIONADA : (coresPorUid?.get(t.uid) ?? t.cor)}
+              roughness={0.4}
+            />
+          </mesh>
+        ),
+      )}
+      {conexoes3d.map((p) => (
+        <group key={`conexao-${p.chave}`}>
+          {p.corpo && (
+            <mesh position={p.corpo.centro} castShadow>
+              <sphereGeometry args={[p.corpo.raioM, 16, 12]} />
+              <meshStandardMaterial color={p.cor} roughness={0.45} metalness={0.1} />
+            </mesh>
+          )}
+          {p.bolsas.map((b, i) => (
+            <mesh key={i} position={b.centro} quaternion={b.quaternion} castShadow>
+              <cylinderGeometry args={[b.raioM, b.raioM, b.comprimentoM, 16]} />
+              <meshStandardMaterial color={p.cor} roughness={0.45} metalness={0.1} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+      {rotulos3d.map((r) => (
+        <RotuloDeRede key={`rotulo-${r.chave}`} texto={r.texto} cor={r.cor} posicao={r.posicao} />
       ))}
       {quadros3d.map((q) => (
         <mesh

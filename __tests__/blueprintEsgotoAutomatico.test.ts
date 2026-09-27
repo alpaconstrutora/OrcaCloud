@@ -14,7 +14,7 @@ import {
   type Command,
   type TipoDePontoHidraulico,
 } from '../utils/blueprintKernel';
-import { HIPOTESES_ESGOTO_PADRAO, caimentoPct, dnPorUhc, planejarEsgoto, relancarEsgoto } from '../utils/blueprintEsgotoAutomatico';
+import { HIPOTESES_ESGOTO_PADRAO, arvoreComJuncoes45, caimentoPct, dnPorUhc, planejarEsgoto, relancarEsgoto } from '../utils/blueprintEsgotoAutomatico';
 
 type Trecho = Extract<Command, { type: 'AddTrecho' }>;
 
@@ -205,3 +205,52 @@ describe('planejarEsgoto — sobrado', () => {
     expect(doTq.b).toEqual({ x: 5000, y: -1500 });
   });
 });
+
+describe('junção 45° (27/09/2026): "os tubos e conexoes devem ser detalhados" — o Y do isométrico', () => {
+  it('árvore: o tronco sai do mais distante; o outro entra nele a 45° a favor do fluxo', () => {
+    const arestas = arvoreComJuncoes45({ raiz: { x: 6000, y: -1500 }, pendentes: [{ x: 3000, y: 0 }, { x: 1000, y: 0 }], limite: 1.5 });
+    // Tronco V1→CI partido em Q; V2→Q.
+    const doV2 = arestas.find((a) => a.para.x === 3000 && a.para.y === 0)!;
+    const q = doV2.de;
+    expect(arestas.some((a) => a.de.x === 6000 && a.para.x === q.x && a.para.y === q.y)).toBe(true);
+    expect(arestas.some((a) => a.de.x === q.x && a.de.y === q.y && a.para.x === 1000)).toBe(true);
+    // O ângulo entre o ramal (V2→Q) e o fluxo do tronco (Q→CI) é 45°.
+    const ramal = { x: q.x - 3000, y: q.y - 0 };
+    const fluxo = { x: 6000 - q.x, y: -1500 - q.y };
+    const cos = (ramal.x * fluxo.x + ramal.y * fluxo.y) / (Math.hypot(ramal.x, ramal.y) * Math.hypot(fluxo.x, fluxo.y));
+    expect(Math.round((Math.acos(cos) * 180) / Math.PI)).toBe(45);
+  });
+
+  it('aparelho EM CIMA do tronco: o tronco passa por ele — nada de tubo sobreposto', () => {
+    const arestas = arvoreComJuncoes45({ raiz: { x: 6000, y: 0 }, pendentes: [{ x: 0, y: 0 }, { x: 3000, y: 0 }], limite: 1.5 });
+    expect(arestas).toEqual([
+      { de: { x: 6000, y: 0 }, para: { x: 3000, y: 0 } },
+      { de: { x: 3000, y: 0 }, para: { x: 0, y: 0 } },
+    ]);
+  });
+
+  it('dois vasos em fila até a CI: o segundo entra por uma JUNÇÃO 45°; nenhuma conexão torta; sem ponta aberta', () => {
+    const { m, t } = nivel();
+    const dois = applyBatch(m, [
+      esg(t, 'VASO_SANITARIO', 1000, 0, 0),
+      esg(t, 'VASO_SANITARIO', 3000, 0, 0),
+      esg(t, 'CAIXA_INSPECAO', 6000, -1500, -700),
+    ]).model;
+    const aplicado = applyBatch(dois, planejarEsgoto(dois).comandos).model;
+    const { conexoes, pontasAbertas } = conexoesDerivadas(aplicado);
+    expect(conexoes.map((c) => c.tipo)).toContain('JUNCAO_45');
+    expect(conexoes.filter((c) => c.aviso)).toEqual([]);
+    expect(pontasAbertas).toHaveLength(0);
+  });
+
+  it('a casa de teste: toda conexão é 45/90 ou colinear — nenhum aviso "fora de 45/90"; a CI não conta peça', () => {
+    const { m } = casa();
+    const aplicado = applyBatch(m, planejarEsgoto(m).comandos).model;
+    const { conexoes } = conexoesDerivadas(aplicado);
+    expect(conexoes.filter((c) => c.aviso)).toEqual([]);
+    expect(conexoes.some((c) => c.tipo === 'JUNCAO_45')).toBe(true);
+    const ci = m.terminais!.find((x) => x.tipoHidraulico === 'CAIXA_INSPECAO')!;
+    expect(conexoes.filter((c) => c.no.x === ci.at.x && c.no.y === ci.at.y)).toEqual([]);
+  });
+});
+

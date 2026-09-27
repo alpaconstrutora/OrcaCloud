@@ -373,7 +373,7 @@ export const MEDIDAS: DefinicaoMedida[] = [
     rotulo: 'Conexões hidráulicas',
     escopo: 'INSTALACAO',
     dimensao: 'UN',
-    descricao: 'Joelhos, tês, luvas e reduções por disciplina, tipo e diâmetro — deduzidas dos encontros de trechos, mais as lançadas à mão.',
+    descricao: 'Joelhos, tês, junções 45°, luvas e reduções por disciplina, tipo e diâmetro — deduzidas dos encontros de trechos, mais as lançadas à mão.',
   },
   {
     id: 'CONTAGEM_PONTOS_HIDRAULICOS',

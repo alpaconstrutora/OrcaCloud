@@ -99,6 +99,6 @@ export {
   type CargaDoQuadro,
   type CargaDoCircuito,
 } from './quadroDeCargas';
-export { conexoesDerivadas, tipoDeConexaoManual, ROTULO_DA_CONEXAO } from './conexoes';
-export type { ConexaoDerivada, ConexoesDoModelo, PontaAberta, TipoDeConexao } from './conexoes';
+export { conexoesDerivadas, tipoDeConexaoManual, ROTULO_DA_CONEXAO, CAIXAS_DE_ESGOTO, extensaoVerticalDaCaixa } from './conexoes';
+export type { ConexaoDerivada, ConexoesDoModelo, PontaAberta, RamalDaConexao, TipoDeConexao } from './conexoes';
 export { furosDoNucleo, medirNucleo, type FuroDoNucleo, type MedidaDoNucleo } from './nucleo';

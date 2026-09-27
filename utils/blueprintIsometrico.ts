@@ -21,7 +21,7 @@
  * altura, metros; a cota soma a elevação do pavimento.
  */
 import type { BlueprintModel, ConexaoDerivada, DisciplinaDeRede, ObjectId, Terminal, Trecho, Wall } from './blueprintKernel';
-import { CAIXAS_DE_ESGOTO, conexoesDerivadas, extensaoVerticalDaCaixa } from './blueprintKernel';
+import { CAIXAS_DE_ESGOTO, conexoesDerivadas, extensaoVerticalDaCaixa, pointInPolygon } from './blueprintKernel';
 import { COR_DA_DISCIPLINA, ESCALA_3D } from './blueprintRede';
 
 type V3 = [number, number, number];
@@ -315,7 +315,28 @@ export function centroDoTerminal3D(
   t: Pick<Terminal, 'at' | 'cotaMm' | 'tipoHidraulico'>,
   elevacaoDoNivelMm: number,
   alturaMm: number,
+  /** Onde a caixa d'água apoia — ver `apoioDaCaixaDagua`. Ausente = a cota. */
+  apoioMm?: number,
 ): V3 {
-  const z = t.tipoHidraulico === 'RESERVATORIO' ? t.cotaMm + alturaMm / 2 : t.cotaMm;
+  const z = t.tipoHidraulico === 'RESERVATORIO' ? (apoioMm ?? t.cotaMm) + alturaMm / 2 : t.cotaMm;
   return para3D(t.at.x, t.at.y, elevacaoDoNivelMm + z);
+}
+
+/**
+ * Onde a caixa d'água APOIA (27/09/2026, print: *"parece que caixa dgua esta
+ * parte dentro da laje"*): a cota dela (o fundo), ou o TOPO da laje estrutural
+ * que está debaixo dela e que a cota atravessa. Na planta do usuário a laje L1
+ * vai de 2800 a 2900 e a caixa tem o fundo a 2800: os 10 cm de baixo ficavam
+ * dentro do concreto.
+ */
+export function apoioDaCaixaDagua(model: BlueprintModel, t: Pick<Terminal, 'at' | 'cotaMm' | 'levelId'>): number {
+  let apoio = t.cotaMm;
+  for (const s of model.structures ?? []) {
+    if (s.kind !== 'LAJE' || s.levelId !== t.levelId || s.pontos.length < 3) continue;
+    const topo = s.baseMm + s.alturaMm;
+    if (t.cotaMm < s.baseMm - 1 || t.cotaMm >= topo) continue;
+    if (!pointInPolygon(s.pontos, t.at)) continue;
+    apoio = Math.max(apoio, topo);
+  }
+  return apoio;
 }

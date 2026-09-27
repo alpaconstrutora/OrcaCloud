@@ -34,6 +34,15 @@ ao centro da louça, no ar — os pontos nasciam no centro da peça. Pergunta: "
 corrijo o ponto de água que fica no centro da louça?" → **"Louça põe na parede +
 água encosta os antigos (Recomendado)"**.
 
+Pedido seguinte, mesma sessão, depois de `ec994ab`:
+
+> 1. veja planta aberta. parece que caixa dgua esta parte dentro da laje
+> na visao em 3d. botão exibir / ocultar piso e lajes nao esta funcionando
+
+Na planta do usuário (rascunho de 23:25 UTC): laje ESTRUTURAL L1 de 2800 a 2900 e a
+caixa com o fundo a 2800 — 10 cm dentro do concreto. O botão "Piso / laje" só mexia na
+laje fina do piso (padrão desligado); a L1 era desenhada sempre.
+
 ## Estado de partida (levantado no código em 27/09/2026)
 
 - 3D: cada trecho é um cilindro com raio = DN/2 e cor da disciplina
@@ -145,6 +154,16 @@ corrijo o ponto de água que fica no centro da louça?" → **"Louça põe na pa
    ✔ 27/09: simulação na planta do usuário → 8 de 8 trechos de água DENTRO da parede.
    Suíte: 507 arquivos / 5.811 testes.
 
+12. [x] **Caixa d'água apoia no topo da laje** (`apoioDaCaixaDagua`): laje estrutural
+   debaixo dela (em planta) e atravessada pela cota → a base vai para o topo da laje.
+   **Pronto quando:** teste com a L1 do usuário (2800 → 2900) → apoio 2900; fora da
+   laje, a cota. ✔ 27/09, e visto no harness `?cena=agua`.
+13. [x] **Botão "Pisos e lajes"**: desligado esconde também as lajes ESTRUTURAIS; chave
+   nova (`blueprint:vista3dPisosELajes`) nascendo LIGADA — a antiga guardava `false` e
+   sumiria com as lajes de quem nunca tocou no botão. **Pronto quando:** harness
+   `?cena=agua&laje=0` sem a L1 e `?cena=agua` com ela. ✔ 27/09, console limpo.
+   Suíte: 507 arquivos / 5.812 testes.
+
 ## Fora do escopo (anotado)
 
 - IFC continua emitindo `IFCPIPEFITTING` só para conexão lançada à mão.
@@ -153,6 +172,8 @@ corrijo o ponto de água que fica no centro da louça?" → **"Louça põe na pa
 - A árvore da caixa SIFONADA e da de GORDURA segue o Prim antigo (cada aparelho
   entra na caixa); só a árvore da CI/tubo de queda usa a junção 45°.
 - Parede em arco: a rede pelas paredes usa a corda a→b.
+- A REDE continua saindo da cota da caixa (2800), dentro da laje; só o desenho da
+  caixa apoia no topo dela.
 - Ramais pelas paredes não desviam de portas/janelas: correm a 2,20 m, acima delas.
 - Com as paredes à vista, o tubo sob o piso fica escondido (e o rótulo junto):
   para ler a rede, esconder paredes ou usar o estilo Transparente.

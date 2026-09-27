@@ -44,7 +44,7 @@ import {
   rotacaoY3D,
 } from '../../utils/blueprintRede';
 import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
-import { centroDoTerminal3D, corpoDaCaixa3D, pecasDasConexoes3D, rotulosDaRede3D } from '../../utils/blueprintIsometrico';
+import { apoioDaCaixaDagua, centroDoTerminal3D, corpoDaCaixa3D, pecasDasConexoes3D, rotulosDaRede3D } from '../../utils/blueprintIsometrico';
 import { contornoDaSecaoT, secaoTValida } from '../../utils/blueprintKernel/secaoT';
 import { medirTerreno } from '../../utils/blueprintTerreno';
 import { ehClique } from '../../utils/blueprint3dSelecao';
@@ -1024,7 +1024,11 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
   const estruturas = useMemo(
     () =>
       (model.structures ?? [])
-        .filter((s) => idsVisiveis.has(s.levelId) && !escondida(s.id))
+        // "Pisos e lajes" desligado esconde a LAJE ESTRUTURAL também (27/09/2026:
+        // "botão exibir / ocultar piso e lajes nao esta funcionando" — ele só
+        // mexia na laje fina do piso, e a L1 continuava lá). Só com `false`
+        // explícito: quem não passa nada (harness) vê a laje.
+        .filter((s) => idsVisiveis.has(s.levelId) && !escondida(s.id) && !(mostrarLaje === false && s.kind === 'LAJE'))
         .map((s) => {
           const nivel = model.levels.find((l) => l.id === s.levelId);
           const g = geometriaDaEstrutura(s, nivel?.elevationMm ?? 0, furosPorLaje.get(s.id) ?? []);
@@ -1032,7 +1036,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
         })
         .filter(Boolean),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [model, levelIds?.join(','), chaveOcultos],
+    [model, levelIds?.join(','), chaveOcultos, mostrarLaje],
   );
 
   // ─── AS BARRAS ───────────────────────────────────────────────────────────
@@ -1169,7 +1173,12 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
           const c = caixaDaPeca(t.at, t.cotaMm, nivel?.elevationMm ?? 0, md);
           // A CAIXA D'ÁGUA apoia na cota (o fundo, pela ficha), sobre a laje —
           // com a cota no centro ela nascia meio enfiada na parede (print de 27/09/2026).
-          const centro = centroDoTerminal3D(t, nivel?.elevationMm ?? 0, md.alturaMm);
+          const centro = centroDoTerminal3D(
+            t,
+            nivel?.elevationMm ?? 0,
+            md.alturaMm,
+            t.tipoHidraulico === 'RESERVATORIO' ? apoioDaCaixaDagua(model, t) : undefined,
+          );
           return {
             id: t.id,
             uid: t.uid,

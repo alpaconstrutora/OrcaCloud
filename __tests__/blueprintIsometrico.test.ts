@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
-import { anguloDeLeitura, centroDoTerminal3D, corDaConexao, embutidoEmParede, corpoDaCaixa3D, escurecer, faixaDoTubo2D, pecasDasConexoes3D, pegadaDaCaixa2D, rotuloDoTrecho2D, rotulosDaRede3D, simbolosDasConexoes2D, textoDoRotulo } from '../utils/blueprintIsometrico';
+import { anguloDeLeitura, apoioDaCaixaDagua, centroDoTerminal3D, corDaConexao, embutidoEmParede, corpoDaCaixa3D, escurecer, faixaDoTubo2D, pecasDasConexoes3D, pegadaDaCaixa2D, rotuloDoTrecho2D, rotulosDaRede3D, simbolosDasConexoes2D, textoDoRotulo } from '../utils/blueprintIsometrico';
 
 function terreo(): { m: BlueprintModel; t: string } {
   const m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
@@ -175,6 +175,24 @@ describe('rótulo do tubo embutido', () => {
     expect(embutidoEmParede(fora, mm.walls)).toBe(false);
     expect(rotulosDaRede3D(mm, undefined, mm.walls).map((r) => r.chave)).toEqual([fora.id]);
     expect(rotulosDaRede3D(mm).map((r) => r.chave)).toEqual([dentro.id, fora.id]);
+  });
+});
+
+describe('apoioDaCaixaDagua', () => {
+  it('"parece que caixa dgua esta parte dentro da laje": com a laje L1 (2800 → 2900) debaixo, a caixa apoia a 2900', () => {
+    const { m, t } = terreo();
+    const mm = applyBatch(m, [
+      { type: 'AddStructural', levelId: t, kind: 'LAJE', pontos: [point(3475, 1475), point(11925, 1475), point(11925, 5725), point(3475, 5725)], alturaMm: 100, baseMm: 2800, rotulo: 'L1' },
+      { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Caixa', at: point(7800, 3600), cotaMm: 2800, tipoHidraulico: 'RESERVATORIO' },
+      { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Caixa fora', at: point(20000, 3600), cotaMm: 2800, tipoHidraulico: 'RESERVATORIO' },
+    ]).model;
+    const [dentro, fora] = mm.terminais!;
+    expect(apoioDaCaixaDagua(mm, dentro)).toBe(2900);
+    expect(centroDoTerminal3D(dentro, 0, 800, apoioDaCaixaDagua(mm, dentro))[1]).toBeCloseTo(3.3);
+    // Fora da laje (em planta), a cota vale.
+    expect(apoioDaCaixaDagua(mm, fora)).toBe(2800);
+    // Caixa já acima da laje: não desce.
+    expect(apoioDaCaixaDagua(mm, { ...dentro, cotaMm: 3000 })).toBe(3000);
   });
 });
 

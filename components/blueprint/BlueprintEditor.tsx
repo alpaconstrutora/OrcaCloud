@@ -1379,7 +1379,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     'blueprint:vistaEstrutura',
     true,
   );
-  const [mostrarLaje3d, setMostrarLaje3d] = usePersistedState('blueprint:vista3dLaje', false);
+  /**
+   * PISOS E LAJES no 3D (27/09/2026): um botão só para a laje fina do piso E a
+   * laje ESTRUTURAL — antes ele só mexia na fina, e a L1 ficava na tela ("botão
+   * exibir / ocultar piso e lajes nao esta funcionando"). Chave nova e nasce
+   * LIGADO: a antiga guardava `false` (o padrão dela), e herdá-la sumiria com as
+   * lajes estruturais de quem nunca tocou no botão.
+   */
+  const [mostrarLaje3d, setMostrarLaje3d] = usePersistedState('blueprint:vista3dPisosELajes', true);
   /**
    * Hipóteses do pré-dimensionamento elétrico — do ESTUDO, em
    * `blueprint_study_eletrica` (F7, 13/09/2026). Moravam no navegador, e duas
@@ -10977,11 +10984,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                       : [
                         {
                           chave: 'laje-3d',
-                          rotulo: 'Piso / laje',
+                          rotulo: 'Pisos e lajes',
                           icone: RectangleHorizontal,
                           ligado: mostrarLaje3d,
                           alternar: () => setMostrarLaje3d((v) => !v),
-                          ajuda: 'Uma laje fina no contorno externo de cada pavimento.',
+                          ajuda: 'As lajes estruturais e a laje de piso de cada pavimento. Desligue para ver a rede que corre sob o piso e dentro das lajes.',
                         },
                         {
                           chave: 'arestas-3d',

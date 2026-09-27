@@ -12,6 +12,7 @@
  *   → …?rotulos=0 (3D sem os ø) · ?paredes=0 (sem paredes) · ?estilo=transparente
  *   → …?cena=agua — a sala do print de 27/09/2026: caixa d'água no canto (sobre a
  *     laje) e lavatório/chuveiro numa parede, com a ÁGUA FRIA AUTOMÁTICA pelas paredes.
+ *     Com a laje L1 (2800 → 2900) em cima; `&laje=0` é o botão "Pisos e lajes" desligado.
  */
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -41,6 +42,8 @@ function salaDaAgua() {
     { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Chuveiro', at: point(75, 3200), cotaMm: 2100, tipoHidraulico: 'CHUVEIRO' } as Command,
     { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Pia', at: point(2925, 3800), cotaMm: 1100, tipoHidraulico: 'PIA_COZINHA' } as Command,
   ]).model;
+  // A laje L1 da planta do usuário (2800 → 2900) — a caixa tem de apoiar em cima dela.
+  s = applyCommand(s, { type: 'AddStructural', levelId: t, kind: 'LAJE', pontos: [point(0, 0), point(3000, 0), point(3000, 5000), point(0, 5000)], alturaMm: 100, baseMm: 2800, rotulo: 'L1' } as Command).model;
   // O menu grava as medidas da ficha num segundo comando (`AddTerminal` não as recebe).
   s = applyCommand(s, { type: 'SetTerminalProps', terminalId: s.terminais![0].id, larguraMm: 1200, profundidadeMm: 1200, alturaMm: 800 } as Command).model;
   s = recomputeSpaces(s);
@@ -94,7 +97,7 @@ createRoot(document.getElementById('raiz')!).render(
       ) : (
         <Blueprint3DViewer
           model={m}
-          mostrarLaje={false}
+          mostrarLaje={params.get('laje') !== '0'}
           mostrarArestas
           mostrarRotulosDeRede={params.get('rotulos') !== '0'}
           estilo={params.get('estilo') === 'transparente' ? 'TRANSPARENTE' : 'SOMBREADO'}

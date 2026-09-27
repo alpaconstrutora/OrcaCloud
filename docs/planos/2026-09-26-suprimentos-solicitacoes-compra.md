@@ -128,7 +128,7 @@ Frente `C:/D/frentes/solicitacoes-compra` (branch `feat/solicitacoes-compra`, a 
 - [x] 10 lista · [x] 11 form · [x] 12 seletores · [x] 13 sheet · [x] 14 AppRouter · [x] 15 Layout · [x] 16 persistência/varredura · [x] 17 OrganizationUsers
 - [x] 18 Plano de Aquisições · [x] 19 notificação · [x] 20 P2P
 - [x] Verificação de ponta a ponta no app (26/09, obra Casa de Formação, Playwright com o agente-leitura) — ver "Resultado da verificação".
-- [ ] Publicação (push em main)
+- [x] Publicação — push `d3a59e7` em main (27/09); `conferir-producao.sh "Solicitações de Compra"` provou o domínio servindo `d3a59e7` com o texto no bundle.
 
 "Pronto" dos itens 1–20 acima = código escrito + `tsc` + checadores. Os critérios que dependem do app rodando
 (SC nasce `SC-…-0001`, aparece na Central, conversões, notificação, card do P2P) só fecham com a verificação de ponta a ponta.

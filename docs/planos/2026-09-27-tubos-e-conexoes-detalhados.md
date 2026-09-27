@@ -76,8 +76,10 @@ Perguntas e respostas da mesma sessão:
    ✔ 27/09: mesmo harness, `?vista=2d` — a peça aparece no encontro, por cima do
    tubo. O pavimento do símbolo é o dos TRECHOS (teste: ramal sob o piso do
    superior aparece na planta do superior).
-7. [ ] Suíte (506 arquivos / 5.797 testes), typecheck e `check-ui-standard.sh` nos 4
-   componentes tocados: verdes em 27/09. Falta: publicar (push em main) e `conferir-producao.sh`.
+7. [x] Suíte (506 arquivos / 5.797 testes), typecheck, `check-ui-standard.sh` nos 4
+   componentes tocados e `check-xss-sinks.sh`: verdes em 27/09. Publicado (`e4070fa`,
+   push em main) e conferido de fora: `conferir-producao.sh "Diâmetros das redes"
+   "Junção 45°"` → o domínio serve exatamente origin/main.
 
 ## Fora do escopo (anotado)
 

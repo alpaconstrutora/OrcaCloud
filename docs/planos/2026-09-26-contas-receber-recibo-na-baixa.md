@@ -294,7 +294,7 @@ nenhum** (coluna Ações só para a equipe, e escondida até passar o mouse).
   Pagamento: 09/09/2026" (a gravada no título), assinado "Alpa Construtora e
   Incoporadora / 09.264.396/0001-59". José Roberto segue com "Baixar recibo
   Nº 000004". tsc ok, 5770 testes, build ok.
-- [ ] 18. Publicação.
+- [x] 18. Publicação — commit `78c2e56` em main; `conferir-producao.sh` provou o SHA e o texto novo no bundle servido (27/09/2026).
 
 ## Fora do escopo (anotado, não feito)
 

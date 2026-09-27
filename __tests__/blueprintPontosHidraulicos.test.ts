@@ -190,7 +190,7 @@ describe('pontosDaLouca (27/09/2026): a peça desenhada lança os pontos dela', 
     expect(colocar(m, { type: 'AddComponente', levelId: t, tipoId: 'CAMA_CASAL', at: point(0, 0) }).pontos).toEqual([]);
   });
 
-  it('IDEMPOTENTE: segunda chamada não duplica; a rede que falta nasce na posição do irmão que já existe', () => {
+  it('IDEMPOTENTE: segunda chamada não duplica; a água que falta nasce junto da água irmã, o esgoto no centro', () => {
     const { m, t } = terreo();
     const { m: comVaso } = colocar(m, { type: 'AddComponente', levelId: t, tipoId: 'VASO', at: point(1000, 1000) });
     const vaso = comVaso.componentes!.find((c) => c.tipoId === 'VASO')!;
@@ -203,7 +203,24 @@ describe('pontosDaLouca (27/09/2026): a peça desenhada lança os pontos dela', 
     const faltam = pontosDaLouca(soAf, soAf.componentes![0]);
     expect(faltam).toHaveLength(1);
     expect(faltam[0].disciplina).toBe('ESGOTO');
-    expect(faltam[0].at).toEqual({ x: 1300, y: 1000 });
+    // O esgoto do vaso é no piso, no centro da peça — não junto da água.
+    expect(faltam[0].at).toEqual({ x: 1000, y: 1000 });
+    // Lavatório com só a água fria a 300 mm: a QUENTE nasce junto da fria.
+    const lav = applyCommand(m, { type: 'AddComponente', levelId: t, tipoId: 'LAVATORIO', at: point(1000, 1000) }).model;
+    const soAfLav = applyCommand(lav, {
+      type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Lavatório', at: point(1300, 1000), cotaMm: 600, tipoHidraulico: 'LAVATORIO',
+    }).model;
+    const aq = pontosDaLouca(soAfLav, soAfLav.componentes![0]).find((c) => c.disciplina === 'AGUA_QUENTE')!;
+    expect(aq.at).toEqual({ x: 1300, y: 1000 });
+  });
+
+  it('"agua fria e quente passam embutidas nas paredes": junto da parede, a ÁGUA nasce na FACE atrás da peça; o esgoto, no centro', () => {
+    const { m, t } = terreo();
+    // Parede em y = 5725 (face interna em 5650); lavatório com o centro a 325 mm do eixo — a planta do usuário.
+    const comParede = applyCommand(m, { type: 'AddWall', levelId: t, a: point(3475, 5725), b: point(11925, 5725), thicknessMm: 150, heightMm: 2800 }).model;
+    const { pontos } = colocar(comParede, { type: 'AddComponente', levelId: t, tipoId: 'LAVATORIO', at: point(6600, 5400) });
+    for (const d of ['AGUA_FRIA', 'AGUA_QUENTE'] as const) expect(pontos.find((c) => c.disciplina === d)!.at).toEqual({ x: 6600, y: 5650 });
+    expect(pontos.find((c) => c.disciplina === 'ESGOTO')!.at).toEqual({ x: 6600, y: 5400 });
   });
 
   it('conjunto de banheiro: os filhos (vaso, lavatório, box) lançam os pontos de cada um', () => {

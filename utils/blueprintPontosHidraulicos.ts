@@ -36,6 +36,7 @@ import { CATALOGO_DE_COMPONENTES, DISCIPLINAS_DO_PONTO_HIDRAULICO, pointInPolygo
 import type { Point } from './blueprintKernel';
 import { etiquetaDoAmbiente, ladosDePiso, pontoJuntoAPorta, type LadoDoAmbiente } from './blueprintDistribuicao';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
+import { faceDaParede } from './blueprintRotaPelasParedes';
 
 export type KitHidraulico = 'BANHEIRO' | 'COZINHA' | 'AREA_SERVICO';
 
@@ -310,6 +311,12 @@ const RAIO_DA_LOUCA_MM = 600;
  * lê pontos. IDEMPOTENTE por (tipo, disciplina) a até 600 mm; a rede que falta
  * nasce na posição do irmão que já existe. Não é `sugerida`: a peça foi
  * colocada pelo usuário.
+ *
+ * ONDE (27/09/2026, "agua fria e quente passam embutidas nas paredes"): a ÁGUA
+ * (fria e quente) nasce na FACE da parede atrás da peça — é onde fica a saída —,
+ * e o esgoto no centro da peça (o do vaso é no piso). No centro, o último toco
+ * da água atravessava o cômodo no ar até a louça. Sem parede ao alcance
+ * (a peça solta no ambiente), tudo no centro, como antes.
  */
 export function pontosDaLouca(
   model: BlueprintModel,
@@ -324,19 +331,27 @@ export function pontosDaLouca(
     .filter((x) => x.d <= RAIO_DA_LOUCA_MM)
     .sort((a, b) => a.d - b.d)
     .map((x) => x.t);
-  const ponto = irmaos[0]?.at ?? componente.at;
   const ficha = FICHA_DO_PONTO_HIDRAULICO[tipo];
+  const ehAgua = (d: DisciplinaDeRede) => d === 'AGUA_FRIA' || d === 'AGUA_QUENTE';
+  const irmaoDeAgua = irmaos.find((t) => ehAgua(t.disciplina));
+  const alcance = Math.max(componente.larguraMm, componente.profundidadeMm) / 2 + 400;
+  const naFace = faceDaParede(componente.at, model.walls.filter((w) => w.levelId === componente.levelId), alcance)?.face;
+  const posicao = (d: DisciplinaDeRede) =>
+    ehAgua(d) ? (irmaoDeAgua?.at ?? naFace ?? componente.at) : (irmaos.find((t) => !ehAgua(t.disciplina))?.at ?? componente.at);
   return disciplinasDoAparelho(tipo, hip)
     .filter((d) => !irmaos.some((t) => t.disciplina === d))
-    .map((d) => ({
-      type: 'AddTerminal' as const,
-      levelId: componente.levelId,
-      disciplina: d,
-      tipo: ficha.rotulo,
-      at: { x: ponto.x, y: ponto.y },
-      cotaMm: ficha.cotaMm[d] ?? 0,
-      tipoHidraulico: tipo,
-    }));
+    .map((d) => {
+      const ponto = posicao(d);
+      return {
+        type: 'AddTerminal' as const,
+        levelId: componente.levelId,
+        disciplina: d,
+        tipo: ficha.rotulo,
+        at: { x: ponto.x, y: ponto.y },
+        cotaMm: ficha.cotaMm[d] ?? 0,
+        tipoHidraulico: tipo,
+      };
+    });
 }
 
 /** Os pontos das louças que ENTRARAM num comando (a peça, ou o conjunto e os filhos). */

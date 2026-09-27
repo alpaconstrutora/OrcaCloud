@@ -90,6 +90,30 @@ describe('planejarAgua pelas paredes', () => {
     for (const c of noAlto) expect(sobreParede(mm.walls, c.a, c.b), `${c.a.x},${c.a.y}→${c.b.x},${c.b.y} @${c.cotaAMm}`).toBe(true);
   });
 
+  it('ponto SOLTO no cômodo (a 325 mm do eixo, a planta do usuário) é ENCOSTADO na face; nenhum tubo fica fora da parede', () => {
+    const { m, t } = sala();
+    const mm = applyBatch(m, [
+      { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Caixa', at: point(0, 0), cotaMm: 2800, tipoHidraulico: 'RESERVATORIO' },
+      { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'LV', at: point(1000, 2675), cotaMm: 600, tipoHidraulico: 'LAVATORIO' },
+    ]).model;
+    const lv = mm.terminais![1];
+    const plano = planejarAgua(mm, mm.terminais![0]);
+    const mover = plano.comandos.find((c) => c.type === 'TranslateEntities') as Extract<Command, { type: 'TranslateEntities' }>;
+    expect(mover.terminalIds).toEqual([lv.id]);
+    expect(mover.delta).toEqual({ x: 0, y: 250 }); // 2675 → face 2925 (eixo 3000 − 75)
+    expect(plano.avisos.some((a) => /encostado/.test(a))).toBe(true);
+    const aplicado = applyBatch(mm, plano.comandos).model;
+    expect(aplicado.terminais!.find((x) => x.id === lv.id)!.at).toEqual({ x: 1000, y: 2925 });
+    // Todo trecho horizontal novo: no eixo, ou o toco eixo→face (75 mm).
+    const trechos = plano.comandos.filter((c): c is Extract<Command, { type: 'AddTrecho' }> => c.type === 'AddTrecho');
+    for (const c of trechos.filter((x) => x.a.x !== x.b.x || x.a.y !== x.b.y)) {
+      const toco = Math.hypot(c.b.x - c.a.x, c.b.y - c.a.y) <= 76;
+      expect(toco || sobreParede(mm.walls, c.a, c.b), `${c.a.x},${c.a.y}→${c.b.x},${c.b.y}`).toBe(true);
+    }
+    // Rodar de novo: nada a encostar, nada a fazer.
+    expect(planejarAgua(aplicado, aplicado.terminais![0]).comandos).toEqual([]);
+  });
+
   it('pelasParedes: false volta ao traçado reto de antes', () => {
     const { m, t } = sala();
     const mm = applyBatch(m, [

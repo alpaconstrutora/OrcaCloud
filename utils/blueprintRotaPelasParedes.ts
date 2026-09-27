@@ -231,3 +231,22 @@ export function arvorePelasParedes(opts: {
     raiz,
   };
 }
+
+/**
+ * A FACE da parede diante de `p` (27/09/2026, "agua fria e quente passam
+ * embutidas nas paredes"): o ponto de água é instalado NA FACE — a saída, o
+ * registro —, e a rede chega a ele por dentro da parede. `q` é a projeção no
+ * eixo; `face`, o ponto da face do lado de `p` (meia espessura a partir do eixo);
+ * `mover` diz se `p` está solto no cômodo (além da face). `null`: sem parede a
+ * menos de `raio`.
+ */
+export function faceDaParede(p: P2, paredes: readonly Wall[], raio: number): { q: P2; face: P2; mover: boolean } | null {
+  const e = encaixarNaParede(p, paredes, raio);
+  if (!e) return null;
+  const meia = e.parede.thicknessMm / 2;
+  if (e.d <= meia + 1) return { q: e.q, face: { x: p.x, y: p.y }, mover: false };
+  const ux = (p.x - e.q.x) / e.d;
+  const uy = (p.y - e.q.y) / e.d;
+  return { q: e.q, face: { x: Math.round(e.q.x + ux * meia), y: Math.round(e.q.y + uy * meia) }, mover: true };
+}
+

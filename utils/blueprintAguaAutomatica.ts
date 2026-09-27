@@ -23,7 +23,10 @@
  *      quente deve passar pelas paredes"): a coluna fica no eixo da parede mais
  *      próxima, o ramal corre pelo eixo das paredes (`blueprintRotaPelasParedes`)
  *      até a projeção de cada ponto, desce DENTRO da parede até a cota do ponto e
- *      sai para a face num toco. Ponto sem parede a `raioDeEncaixeMm` (a ilha)
+ *      sai para a face num toco. O ponto SOLTO no cômodo a até `raioDeEncaixeMm`
+ *      da parede (o que a louça punha no centro dela) é ENCOSTADO na face antes —
+ *      `TranslateEntities` no plano, Ctrl+Z desfaz; senão o toco atravessava o
+ *      ar. Ponto sem parede a `raioDeEncaixeMm` (a ilha)
  *      liga-se como antes — árvore de menor tubo com rota limitada, em reta —,
  *      com aviso. `pelasParedes: false` volta ao traçado reto em tudo.
  *   6. DIÂMETRO por trecho: o PESO acumulado a jusante (todos os pontos cujo
@@ -53,7 +56,7 @@ import {
 } from './blueprintGrafoDeRede';
 import { FICHA_DO_PONTO_HIDRAULICO, ehPontoDeConsumo } from './blueprintHidraulica';
 import { shaftPreferido } from './blueprintNucleoVertical';
-import { arvorePelasParedes, chaveP, encaixarNaParede } from './blueprintRotaPelasParedes';
+import { arvorePelasParedes, chaveP, encaixarNaParede, faceDaParede } from './blueprintRotaPelasParedes';
 
 export type TabelaDeTubo = 'PVC_SOLDAVEL' | 'CPVC';
 
@@ -309,7 +312,22 @@ export function planejarAgua(
     pontasEmPlanta.set(t.levelId, s);
   }
   const estaLigado = (p: Terminal) => pontasEmPlanta.get(p.levelId)?.has(`${p.at.x},${p.at.y}`) ?? false;
-  const pendentes = pontos.filter((p) => !estaLigado(p));
+  const pelasParedes = hip.pelasParedes !== false;
+  const raioDeEncaixe = hip.raioDeEncaixeMm ?? 700;
+  const paredesDe = (levelId: ObjectId) => model.walls.filter((w) => w.levelId === levelId);
+  // O ponto SOLTO no cômodo vai para a FACE da parede antes de traçar.
+  const encostos: Command[] = [];
+  const efetivo = new Map<ObjectId, Terminal>();
+  for (const p of pontos) {
+    if (!pelasParedes || estaLigado(p)) continue;
+    const f = faceDaParede(p.at, paredesDe(p.levelId), raioDeEncaixe);
+    if (!f?.mover) continue;
+    encostos.push({ type: 'TranslateEntities', wallIds: [], boundaryIds: [], structuralIds: [], terminalIds: [p.id], delta: { x: f.face.x - p.at.x, y: f.face.y - p.at.y }, manterJuncoes: false });
+    efetivo.set(p.id, { ...p, at: f.face });
+  }
+  if (encostos.length > 0) avisos.push(`${encostos.length} ponto(s) solto(s) no cômodo encostado(s) na face da parede — a água chega por dentro dela`);
+  const naPosicao = (p: Terminal) => efetivo.get(p.id) ?? p;
+  const pendentes = pontos.filter((p) => !estaLigado(p)).map(naPosicao);
   const niveisComPontos = niveis.filter((l) => pontos.some((p) => p.levelId === l.id));
   const pavimentos: PavimentoDoPlanoDeAgua[] = niveisComPontos.map((l) => {
     const doNivel = pontos.filter((p) => p.levelId === l.id);
@@ -330,9 +348,6 @@ export function planejarAgua(
   for (const k of alcancadosNoBarrilete.keys()) rota.set(k, rotaBarrilete.get(k) ?? Infinity);
   rota.set(noDaOrigemNoTeto, 0);
   // NÚCLEO VERTICAL (E2.4): o grupo perto de um shaft sobe por ele.
-  const pelasParedes = hip.pelasParedes !== false;
-  const raioDeEncaixe = hip.raioDeEncaixeMm ?? 700;
-  const paredesDe = (levelId: ObjectId) => model.walls.filter((w) => w.levelId === levelId);
   const posicaoDaColuna = (grupo: Terminal[]): Ponto2 => {
     const base = { x: grupo[0].at.x, y: grupo[0].at.y };
     const shaft = shaftPreferido(model, base, grupo[0].levelId, hip.raioDoShaftMm ?? 3000);
@@ -465,7 +480,7 @@ export function planejarAgua(
   const pesoPorAresta = new Map<number, number>();
   const pontosPorAresta = new Map<number, Terminal[]>();
   let somaDePesos = 0;
-  for (const p of pontos) {
+  for (const p of pontos.map(naPosicao)) {
     const peso = pesoDoPonto(model, p, disciplina);
     somaDePesos += peso;
     const caminho = caminhoEntre(chave(p.levelId, p.at.x, p.at.y, p.cotaMm), noDaOrigem, arestas);
@@ -541,14 +556,14 @@ export function planejarAgua(
   });
 
   const aLigar = pavimentos.reduce((n, p) => n + p.aLigar, 0);
-  if (emendados.length === 0 && atualizacoes.length === 0) {
+  if (emendados.length === 0 && atualizacoes.length === 0 && encostos.length === 0) {
     return vazio('todos os pontos já estão ligados', pavimentos, avisos);
   }
   return {
     disciplina, origemId: origem.id, origemNome, pavimentos,
     pontos: pontos.length, ligados: pontos.length - pendentes.length, aLigar,
     colunas: colunas.length, sugeridos: rede.filter((t) => t.sugerido).length, trechosDaRede: rede.length,
-    comandos: [...emendados, ...atualizacoes], metrosPrevistos: Math.round(mmNovos / 100) / 10,
+    comandos: [...encostos, ...emendados, ...atualizacoes], metrosPrevistos: Math.round(mmNovos / 100) / 10,
     dnMaximoMm, somaDePesos: Math.round(somaDePesos * 10) / 10, avisos, motivo: null,
   };
 }

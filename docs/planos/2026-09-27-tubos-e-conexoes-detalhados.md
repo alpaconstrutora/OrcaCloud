@@ -24,6 +24,16 @@ azuis em diagonal pelo cômodo), depois de `f93fb32`:
 > 1. a caixa dgua esta dentro da parede .deve estar sobre a laje.
 > 2. tubulacao de agua fria e quinte deve passar pelas paredes
 
+Pedido seguinte, mesma sessão, depois de `12dc3fd`:
+
+> agua fria e quante passam embutidas nas paredes
+
+Simulada a versão publicada na planta do usuário (rascunho de 19:27 UTC, em memória,
+sem gravar): barrilete e descidas já na parede, mas o TOCO final (325 mm) ia do eixo
+ao centro da louça, no ar — os pontos nasciam no centro da peça. Pergunta: "Como
+corrijo o ponto de água que fica no centro da louça?" → **"Louça põe na parede +
+água encosta os antigos (Recomendado)"**.
+
 ## Estado de partida (levantado no código em 27/09/2026)
 
 - 3D: cada trecho é um cilindro com raio = DN/2 e cor da disciplina
@@ -124,6 +134,16 @@ azuis em diagonal pelo cômodo), depois de `f93fb32`:
    (sólido e transparente) em servidor novo, console limpo. O primeiro print mostrou o
    BARRILETE ainda em reta cruzando a sala — passou a ir pelas paredes também. Suíte:
    507 arquivos / 5.809 testes.
+
+11. [x] **Ponto de água na face da parede.** `faceDaParede` (`blueprintRotaPelasParedes`);
+   `pontosDaLouca` põe a ÁGUA (fria/quente) na face atrás da peça (alcance: meia
+   maior medida + 400 mm), o esgoto no centro; a água automática ENCOSTA na face o
+   ponto solto a até `raioDeEncaixeMm` (`TranslateEntities` no plano, com aviso).
+   **Pronto quando:** testes — lavatório a 325 mm do eixo → água em (6600, 5650),
+   esgoto no centro; ponto solto encostado (delta 250) e nenhum horizontal fora do
+   eixo além do toco de 75 mm; rodar de novo → nada.
+   ✔ 27/09: simulação na planta do usuário → 8 de 8 trechos de água DENTRO da parede.
+   Suíte: 507 arquivos / 5.811 testes.
 
 ## Fora do escopo (anotado)
 

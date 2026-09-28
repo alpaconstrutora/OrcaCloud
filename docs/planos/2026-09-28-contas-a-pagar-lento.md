@@ -94,8 +94,30 @@ cobre contagem > 1000 e título extra entre a contagem e a busca.
 - [x] 2. Apropriação numa consulta — `fetchAllPages` sobre `property_expense_allocations` da org, cruzada com os ids; guarda `alocacoesSeq` contra resposta fora de ordem ao trocar de org
 - [x] 3. Blocos em paralelo — `fetchAllPagesParallel` em `lib/supabasePaginate.ts` (contagem `head: true` ao lado da 1ª página, restantes juntas, série como rede quando a contagem falha ou fica velha); 5 testes novos em `supabasePaginate.test.ts`
 - [x] `npm run ci` na frente: 510 arquivos / 5.839 testes verdes, build ok; `verificar:build` ok
-- [ ] Publicação (push em `main`)
-- [ ] Medição depois da publicação (mesmo script)
+- [x] Publicação — push `8b1b6b39..76f9b5d2` em `main`; `conferir-producao.sh` provou o domínio servindo `76f9b5d` com "Selecionar todas as parcelas desta página" no bundle (28/09/2026)
+- [x] Medição depois da publicação (mesmo script, rodado pelo usuário em 28/09/2026) — ver "Resultado" abaixo
+
+## Resultado (medido em produção, 28/09/2026, commit 76f9b5d)
+
+| | Antes | Depois (rodada 1, fria) | Depois (rodada 2) |
+|---|---|---|---|
+| Tabela visível | 1.960 ms | 1.535 ms | 771 ms |
+| Linhas / nós no `<tbody>` | 2.030 / 83.156 | 100 / 4.238 | 100 / 4.238 |
+| Long tasks > 100 ms na carga | 166 + 434 ms | nenhuma | nenhuma |
+| Consultas de apropriação | 14 em série, até 3.473 ms | 1, até 1.582 ms | 1, até 794 ms |
+| Tela completa (última requisição) | 3.547 ms | 1.664 ms | 836 ms |
+| Busca "alpa" (4 teclas) | ~430 ms de long tasks | nenhuma long task | — |
+
+Print do rodapé (`c:/tmp/pwtest/pagar-perf-rodape.png`): "1–100 de 2.030 ·
+100 por página · Anterior (desabilitado) · Página 1 de 21 · Próxima".
+
+**Item 3 rendeu pouco, e por quê:** os blocos 2 e 3 de fato saem juntos
+(início em 1.050/1.051 ms, logo após o bloco 1), mas a janela de `vw_payables`
+foi de 1.031 ms para 969 ms na rodada fria. Cada bloco refaz a varredura
+inteira com RLS (a ordenação precisa de todas as linhas antes do OFFSET), e
+em paralelo eles disputam o banco — o bloco 3 levou 417 ms. O ganho grande
+veio dos itens 1 e 2. O próximo degrau é o "Fora de escopo" acima (política
+de `internal_transactions` avaliando `is_org_member` por linha).
 
 ## Verificação
 

@@ -227,7 +227,7 @@ Padrão único, igual ao bloco "2b" de `orderService`: `try/catch`, `console.err
 
 - [x] Frente `processos-torre-p2p` aberta a partir de `origin/main` 76f9b5d2 (2026-09-28)
 - [x] Este plano escrito
-- [ ] 1.1 gancho lê `purchase_orders.organization_id`
+- [x] 1.1 gancho lê `purchase_orders.organization_id` (fallback `companies.org_id` só para pedido antigo) — teste `__tests__/processosGanchoOrgDoPedido.test.ts` (4 casos; falha no código antigo, passa no novo); `tsc` limpo; `orgContextGuard` 14/14
 - [ ] 1.2 primeira instância real nascida de pedido
 - [ ] 2.1 `p2pFlowService` costura derivada + rótulos corrigidos
 - [ ] 2.2 `P2PFlowBoard` mostra processos por nó

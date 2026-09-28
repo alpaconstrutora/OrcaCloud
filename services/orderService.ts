@@ -398,7 +398,7 @@ export const orderService = {
         // Fetch the updated row separately — avoids PostgREST RETURNING quirks
         const { data, error: refetchError } = await supabase
             .from('purchase_orders')
-            .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, cost_center_id, chart_of_accounts, plano_de_contas_id, notes, notes_visible_to_supplier, items, version, created_at, updated_at, status_updated_at')
+            .select('id, number, project_id, supplier_id, empresa_id, organization_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, cost_center_id, chart_of_accounts, plano_de_contas_id, notes, notes_visible_to_supplier, items, version, created_at, updated_at, status_updated_at')
             .eq('id', id)
             .single();
 
@@ -456,9 +456,18 @@ export const orderService = {
             if (['Recebido', 'Divergência'].includes(updates.status)) {
                 try {
                     const eventKey = updates.status === 'Recebido' ? 'purchase_order.received' : 'purchase_order.divergence';
-                    const orgId = data.empresa_id
-                        ? (await supabase.from('companies').select('org_id').eq('id', data.empresa_id).maybeSingle()).data?.org_id
-                        : null;
+                    // A org é a DO PEDIDO. Quando este gancho nasceu (F2, 07/2026) a
+                    // tabela não tinha `organization_id` e o caminho era
+                    // `empresa_id → companies.org_id`. Hoje a coluna existe e, medido
+                    // em 28/09/2026, DIVERGE de `companies.org_id` nos 2 pedidos
+                    // recebidos reais — pela via antiga a instância nascia na org da
+                    // empresa, não na do pedido. A empresa fica só como fallback para
+                    // pedido antigo sem `organization_id`.
+                    // docs/planos/2026-09-28-torre-p2p-processos.md (Passo 1.1)
+                    const orgId = data.organization_id
+                        ?? (data.empresa_id
+                            ? (await supabase.from('companies').select('org_id').eq('id', data.empresa_id).maybeSingle()).data?.org_id
+                            : null);
                     if (orgId) {
                         await processService.triggerEvent(orgId, eventKey, {
                             title: `Pedido ${data.number} — ${updates.status}`,

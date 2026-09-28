@@ -124,7 +124,7 @@ type Fonte = {
   prumada?: { rotulo: string; dnMm: number };
 };
 
-const COLETORES: TipoDePontoHidraulico[] = ['CAIXA_SIFONADA', 'RALO_SIFONADO'];
+const COLETORES: TipoDePontoHidraulico[] = ['CAIXA_SIFONADA', 'RALO_SIFONADO', 'RALO_LINEAR'];
 
 /** Afastamento mínimo da junção às pontas do trecho partido, e do ramal ao trecho, mm. */
 export const FOLGA_DA_JUNCAO_MM = 150;
@@ -214,7 +214,7 @@ export function arvoreComJuncoes45(opts: {
   }
   return arestas;
 }
-const APARELHOS_DO_COLETOR: TipoDePontoHidraulico[] = ['LAVATORIO', 'CHUVEIRO', 'RALO_SECO', 'TANQUE', 'MAQUINA_LAVAR', 'DUCHA_HIGIENICA', 'TORNEIRA'];
+const APARELHOS_DO_COLETOR: TipoDePontoHidraulico[] = ['LAVATORIO', 'CHUVEIRO', 'RALO_SECO', 'TANQUE', 'MAQUINA_LAVAR', 'DUCHA_HIGIENICA', 'TORNEIRA', 'BIDE', 'BANHEIRA'];
 
 const uhcDe = (t: Terminal) => (t.tipoHidraulico ? (FICHA_DO_PONTO_HIDRAULICO[t.tipoHidraulico].uhcNbr8160 ?? 0) : 0);
 const dnFichaDe = (t: Terminal) => (t.tipoHidraulico ? (FICHA_DO_PONTO_HIDRAULICO[t.tipoHidraulico].dnMinimoMm.ESGOTO ?? 40) : 40);

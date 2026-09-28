@@ -138,7 +138,8 @@ describe('taxonomia hidráulica · o kernel', () => {
       }
     };
     expect(codigo({ ...m, terminais: [{ ...m.terminais[0], disciplina: 'ELETRICA' }] })).toBe('BAD_POINT_KIND');
-    expect(codigo({ ...m, terminais: [{ ...m.terminais[0], tipoHidraulico: 'BIDE' }] })).toBe('BAD_POINT_KIND');
+    // Valor INVENTADO. Até 0.61.0 este caso usava 'BIDE' — que virou tipo de verdade em 0.62.0 (E0.4).
+    expect(codigo({ ...m, terminais: [{ ...m.terminais[0], tipoHidraulico: 'OFURO_INVENTADO' }] })).toBe('BAD_POINT_KIND');
     expect(codigo({ ...m, terminais: [{ ...m.terminais[0], disciplina: 'AGUA_QUENTE', tipoHidraulico: 'VASO_SANITARIO' }] })).toBe('BAD_POINT_KIND');
     expect(codigo({ ...m, terminais: [{ ...m.terminais[0], volumeL: 500 }] })).toBe('BAD_VOLUME');
     expect(codigo({ ...m, terminais: [{ ...m.terminais[0], tipoHidraulico: 'RESERVATORIO', volumeL: 0 }] })).toBe('BAD_VOLUME');

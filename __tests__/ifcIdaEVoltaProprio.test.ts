@@ -298,6 +298,29 @@ describe.skipIf(motivo !== '')(`instalações no IFC${motivo}`, () => {
     expect(comMalha).toBe(true);
   });
 
+  it('⚠️ as peças hidráulicas NOVAS (E0.4) saem no enum certo e são lidas — bidê, banheira, VRP', async () => {
+    const tipos = (await import('web-ifc')) as unknown as Record<string, number>;
+    const { obterApi, usarCaminhoDoWasm } = await import('../services/ifcViewerService');
+    usarCaminhoDoWasm('');
+    const api = (await obterApi()) as unknown as Record<string, (...a: unknown[]) => unknown>;
+    const { model } = sala();
+    const nivel = model.levels[0].id;
+    let m = applyCommand(model, { type: 'AddTerminal', levelId: nivel, disciplina: 'AGUA_FRIA', tipo: 'Bidê', at: point(500, 500), cotaMm: 250, tipoHidraulico: 'BIDE' }).model;
+    m = applyCommand(m, { type: 'AddTerminal', levelId: nivel, disciplina: 'AGUA_FRIA', tipo: 'Banheira', at: point(1500, 500), cotaMm: 550, tipoHidraulico: 'BANHEIRA' }).model;
+    m = applyCommand(m, { type: 'AddTerminal', levelId: nivel, disciplina: 'AGUA_FRIA', tipo: 'VRP', at: point(2500, 500), cotaMm: 2200, tipoHidraulico: 'VRP' }).model;
+    const id = (api.OpenModel as (d: Uint8Array) => number)(new TextEncoder().encode(gerarIfc(m, OPC)));
+    const ler = (tipo: number) => {
+      const ids = (api.GetLineIDsWithType as (m: number, t: number) => { size(): number; get(i: number): number })(id, tipo);
+      return Array.from({ length: ids.size() }, (_, i) => (api.GetLine as (m: number, e: number) => Record<string, unknown>)(id, ids.get(i)));
+    };
+    const v = (x: unknown) => String((x as { value?: unknown })?.value);
+    const sanitarios = ler(tipos.IFCSANITARYTERMINAL);
+    expect(sanitarios.map((x) => v(x.PredefinedType)).sort()).toEqual(['BATH', 'BIDET']);
+    expect(sanitarios.map((x) => v(x.Name)).sort()).toEqual(['Banheira', 'Bidê']);
+    const valvulas = ler(tipos.IFCVALVE);
+    expect(valvulas.map((x) => v(x.PredefinedType))).toEqual(['PRESSUREREDUCING']);
+  });
+
   it('⚠️ a LUMINÁRIA e a TOMADA são lidas, e nos campos certos', async () => {
     // A lição do `IfcDistributionBoard`, aplicada ANTES de publicar: uma
     // entidade pode ser legal pela norma e ilegível pelo parser que todo mundo

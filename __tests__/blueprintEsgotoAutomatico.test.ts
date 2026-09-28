@@ -254,3 +254,25 @@ describe('junção 45° (27/09/2026): "os tubos e conexoes devem ser detalhados"
   });
 });
 
+describe('peças novas (28/09/2026, E0.4)', () => {
+  it('RALO LINEAR é coletor: o chuveiro do box entra nele, e ele segue para a CI', () => {
+    const { m, t } = nivel();
+    const box = applyBatch(m, [
+      w(t, 0, 0, 2000, 0), w(t, 2000, 0, 2000, 3000), w(t, 2000, 3000, 0, 3000), w(t, 0, 3000, 0, 0),
+      esg(t, 'CHUVEIRO', 1500, 2500, 0),
+      esg(t, 'RALO_LINEAR', 1500, 2000, 0),
+      esg(t, 'BANHEIRA', 600, 2500, 0),
+      esg(t, 'CAIXA_INSPECAO', 4000, -1000, -700),
+    ]).model;
+    const p = planejarEsgoto(box);
+    expect(p.motivo).toBeNull();
+    const doChuveiro = novos(p).find((c) => horizontal(c) && em(c, 1500, 2500))!;
+    expect(doChuveiro.b).toEqual({ x: 1500, y: 2000 });
+    // A banheira também é aparelho do coletor do ambiente: vai à árvore do ralo
+    // linear (pelo ramal do chuveiro — a árvore do coletor encadeia aparelhos),
+    // nunca direto à caixa de inspeção.
+    expect(novos(p).find((c) => horizontal(c) && em(c, 600, 2500))!.b).not.toEqual({ x: 4000, y: -1000 });
+    expect(p.avisos.filter((a) => /sem caixa sifonada/.test(a))).toEqual([]);
+  });
+});
+

@@ -315,7 +315,15 @@
  * vegetação nativa, área consolidada, servidão, hidrografia), que ficam fora das
  * contas do loteamento (`ehAreaDoLoteamento`). Vocabulário novo, forma igual.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.61.0';
+/**
+ * ─── 0.61.0 → 0.62.0 (28/09/2026) — AS PEÇAS HIDRÁULICAS QUE FALTAVAM ─────────
+ *
+ * O ponto hidráulico aceita bidê, banheira, mictório, válvula de descarga, ponto
+ * de espera, torneira de boia, ralo linear, registro de esfera e VRP (E0.4 do
+ * roadmap hidrossanitário, `docs/planos/2026-09-28-hidrossanitario-roadmap.md`).
+ * Vocabulário novo, forma igual — provado antes do bump.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.62.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

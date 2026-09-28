@@ -2216,6 +2216,25 @@ function entidadeDoPontoHidraulico(
       return { entidade: 'IFCSANITARYTERMINAL', predefinido: '.SHOWER.' };
     case 'VASO_SANITARIO':
       return { entidade: 'IFCSANITARYTERMINAL', predefinido: '.TOILETPAN.' };
+    // 28/09/2026 (E0.4): as peças novas, cada uma no enum da norma.
+    case 'BIDE':
+      return { entidade: 'IFCSANITARYTERMINAL', predefinido: '.BIDET.' };
+    case 'BANHEIRA':
+      return { entidade: 'IFCSANITARYTERMINAL', predefinido: '.BATH.' };
+    case 'MICTORIO':
+      return { entidade: 'IFCSANITARYTERMINAL', predefinido: '.URINAL.' };
+    case 'VALVULA_DESCARGA':
+      return { entidade: 'IFCVALVE', predefinido: '.FLUSHING.' };
+    case 'PONTO_ESPERA':
+      return { entidade: 'IFCSANITARYTERMINAL', predefinido: '.USERDEFINED.' };
+    case 'TORNEIRA_BOIA':
+      return { entidade: 'IFCVALVE', predefinido: '.USERDEFINED.' };
+    case 'RALO_LINEAR':
+      return { entidade: 'IFCWASTETERMINAL', predefinido: '.FLOORTRAP.' };
+    case 'REGISTRO_ESFERA':
+      return { entidade: 'IFCVALVE', predefinido: '.ISOLATING.' };
+    case 'VRP':
+      return { entidade: 'IFCVALVE', predefinido: '.PRESSUREREDUCING.' };
     case 'DUCHA_HIGIENICA':
     case 'MAQUINA_LAVAR':
       return { entidade: 'IFCSANITARYTERMINAL', predefinido: '.USERDEFINED.' };

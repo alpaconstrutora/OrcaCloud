@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.61.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.62.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -611,17 +611,27 @@ var TIPOS_DE_PONTO_HIDRAULICO = [
   "MAQUINA_LAVAR",
   "VASO_SANITARIO",
   "DUCHA_HIGIENICA",
+  // 28/09/2026 (E0.4 do roadmap hidrossanitário): o que o benchmark AltoQi achou faltando.
+  "BIDE",
+  "BANHEIRA",
+  "MICTORIO",
+  "VALVULA_DESCARGA",
+  "PONTO_ESPERA",
   "RESERVATORIO",
   "BOMBA",
   "AQUECEDOR",
+  "TORNEIRA_BOIA",
   "RALO_SECO",
   "RALO_SIFONADO",
+  "RALO_LINEAR",
   "CAIXA_SIFONADA",
   "CAIXA_INSPECAO",
   "CAIXA_GORDURA",
   "REGISTRO_GAVETA",
   "REGISTRO_PRESSAO",
   "VALVULA_RETENCAO",
+  "REGISTRO_ESFERA",
+  "VRP",
   "HIDROMETRO",
   "CONEXAO_JOELHO_90",
   "CONEXAO_JOELHO_45",
@@ -4814,6 +4824,25 @@ function entidadeDoPontoHidraulico(tipo) {
       return { entidade: "IFCSANITARYTERMINAL", predefinido: ".SHOWER." };
     case "VASO_SANITARIO":
       return { entidade: "IFCSANITARYTERMINAL", predefinido: ".TOILETPAN." };
+    // 28/09/2026 (E0.4): as peças novas, cada uma no enum da norma.
+    case "BIDE":
+      return { entidade: "IFCSANITARYTERMINAL", predefinido: ".BIDET." };
+    case "BANHEIRA":
+      return { entidade: "IFCSANITARYTERMINAL", predefinido: ".BATH." };
+    case "MICTORIO":
+      return { entidade: "IFCSANITARYTERMINAL", predefinido: ".URINAL." };
+    case "VALVULA_DESCARGA":
+      return { entidade: "IFCVALVE", predefinido: ".FLUSHING." };
+    case "PONTO_ESPERA":
+      return { entidade: "IFCSANITARYTERMINAL", predefinido: ".USERDEFINED." };
+    case "TORNEIRA_BOIA":
+      return { entidade: "IFCVALVE", predefinido: ".USERDEFINED." };
+    case "RALO_LINEAR":
+      return { entidade: "IFCWASTETERMINAL", predefinido: ".FLOORTRAP." };
+    case "REGISTRO_ESFERA":
+      return { entidade: "IFCVALVE", predefinido: ".ISOLATING." };
+    case "VRP":
+      return { entidade: "IFCVALVE", predefinido: ".PRESSUREREDUCING." };
     case "DUCHA_HIGIENICA":
     case "MAQUINA_LAVAR":
       return { entidade: "IFCSANITARYTERMINAL", predefinido: ".USERDEFINED." };
@@ -5255,6 +5284,57 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     pesoNbr5626: 0.1,
     ajuda: "Ao lado do vaso, a 0,50 m. Peso 0,1."
   },
+  // ── 28/09/2026 (E0.4): as peças que o benchmark AltoQi achou faltando ─────
+  // Pesos: NBR 5626 (tabela de pesos relativos). UHC e DN de descarga: NBR 8160
+  // (tabela de UHC por aparelho). Cotas: as usuais de projeto, editáveis.
+  BIDE: {
+    rotulo: "Bid\xEA",
+    sigla: "BD",
+    grupo: CONSUMO,
+    cotaMm: { AGUA_FRIA: 250, AGUA_QUENTE: 250, ESGOTO: 0 },
+    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40 },
+    pesoNbr5626: 0.1,
+    uhcNbr8160: 1,
+    ajuda: "Bid\xEA: \xE1gua fria e quente a 0,25 m, descarga DN 40 no piso. Peso 0,1 \xB7 1 UHC."
+  },
+  BANHEIRA: {
+    rotulo: "Banheira",
+    sigla: "BH",
+    grupo: CONSUMO,
+    cotaMm: { AGUA_FRIA: 550, AGUA_QUENTE: 550, ESGOTO: 0 },
+    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40 },
+    pesoNbr5626: 1,
+    uhcNbr8160: 2,
+    ajuda: "Banheira: misturador a 0,55 m, descarga DN 40. Peso 1,0 \xB7 2 UHC."
+  },
+  MICTORIO: {
+    rotulo: "Mict\xF3rio",
+    sigla: "MC",
+    grupo: CONSUMO,
+    cotaMm: { AGUA_FRIA: 1100, ESGOTO: 500 },
+    dnMinimoMm: { AGUA_FRIA: 20, ESGOTO: 40 },
+    pesoNbr5626: 0.5,
+    uhcNbr8160: 2,
+    ajuda: "Mict\xF3rio com registro/descarga autom\xE1tica: \xE1gua a 1,10 m, descarga DN 40 a 0,50 m. Peso 0,5 \xB7 2 UHC (com v\xE1lvula de descarga a NBR 8160 d\xE1 6 \u2014 troque se for o caso)."
+  },
+  VALVULA_DESCARGA: {
+    rotulo: "V\xE1lvula de descarga",
+    sigla: "VD",
+    grupo: CONSUMO,
+    cotaMm: { AGUA_FRIA: 1100 },
+    dnMinimoMm: { AGUA_FRIA: 32 },
+    pesoNbr5626: 32,
+    ajuda: "V\xE1lvula de descarga da bacia SEM caixa acoplada: a 1,10 m, sub-ramal DN 32. Peso 32 na NBR 5626 \u2014 \xE9 ela que costuma mandar no di\xE2metro do ramal. O esgoto \xE9 o da bacia (vaso sanit\xE1rio)."
+  },
+  PONTO_ESPERA: {
+    rotulo: "Ponto de espera",
+    sigla: "PE",
+    grupo: CONSUMO,
+    cotaMm: { AGUA_FRIA: 600, AGUA_QUENTE: 600, ESGOTO: 0 },
+    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40 },
+    pesoNbr5626: 0.3,
+    ajuda: "Ponto tampado para uso futuro (filtro, aparelho a definir). Entra na rede com peso 0,3 e sem contribui\xE7\xE3o de esgoto \u2014 ajuste quando souber o aparelho."
+  },
   RESERVATORIO: {
     rotulo: "Caixa d'\xE1gua",
     sigla: "CX",
@@ -5284,6 +5364,14 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     medidasMm: { larguraMm: 400, profundidadeMm: 200, alturaMm: 600 },
     ajuda: "Aquecedor de passagem ou acumula\xE7\xE3o: recebe \xE1gua fria e \xE9 a origem da rede de \xE1gua quente."
   },
+  TORNEIRA_BOIA: {
+    rotulo: "Torneira de boia",
+    sigla: "TB",
+    grupo: RESERVA,
+    cotaMm: { AGUA_FRIA: 3500 },
+    dnMinimoMm: { AGUA_FRIA: 25 },
+    ajuda: "Entrada da caixa d'\xE1gua: fecha quando o n\xEDvel sobe. Fica no alto da caixa (a cota usual sup\xF5e a caixa de 800 mm apoiada na laje a 2,80 m)."
+  },
   RALO_SECO: {
     rotulo: "Ralo seco",
     sigla: "RS",
@@ -5303,6 +5391,16 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     uhcNbr8160: 1,
     medidasMm: { larguraMm: 100, profundidadeMm: 100, alturaMm: 150 },
     ajuda: "Ralo com fecho h\xEDdrico \u2014 recebe o chuveiro. 1 UHC."
+  },
+  RALO_LINEAR: {
+    rotulo: "Ralo linear",
+    sigla: "RL",
+    grupo: ESGOTO,
+    cotaMm: { ESGOTO: 0 },
+    dnMinimoMm: { ESGOTO: 50 },
+    uhcNbr8160: 1,
+    medidasMm: { larguraMm: 700, profundidadeMm: 70, alturaMm: 100 },
+    ajuda: "Ralo linear (com sif\xE3o) no box: recebe o chuveiro como a caixa sifonada. 1 UHC."
   },
   CAIXA_SIFONADA: {
     rotulo: "Caixa sifonada",
@@ -5358,6 +5456,24 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15 },
     sobreOTrecho: true,
     ajuda: "Impede o retorno. Insere-se sobre um trecho de \xE1gua."
+  },
+  REGISTRO_ESFERA: {
+    rotulo: "Registro de esfera",
+    sigla: "RE",
+    grupo: REGISTROS,
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200 },
+    dnMinimoMm: {},
+    sobreOTrecho: true,
+    ajuda: "Registro de esfera (abre/fecha em \xBC de volta) sobre o trecho \u2014 fica no DN dele."
+  },
+  VRP: {
+    rotulo: "V\xE1lvula redutora de press\xE3o",
+    sigla: "VRP",
+    grupo: REGISTROS,
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200 },
+    dnMinimoMm: {},
+    sobreOTrecho: true,
+    ajuda: "VRP sobre o trecho: limita a press\xE3o a jusante (NBR 5626: est\xE1tica m\xE1xima 400 kPa). O c\xE1lculo de press\xE3o entra na Etapa 1 do roadmap."
   },
   HIDROMETRO: {
     rotulo: "Hidr\xF4metro",

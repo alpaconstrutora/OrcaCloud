@@ -67,7 +67,7 @@ alimentação) e esgoto (tabelas NBR 8160 e ventilação); por fim os **sistemas
 | 0.1 Verificação visível ✅ | **Pontas abertas no desenho** (anel vermelho na ponta, contagem na gaveta), **aviso de DN no esgoto** (trecho confirmado menor que o pedido pela UHC, e maior que o necessário), aviso de peça pendente no croqui | `conexoesDerivadas().pontasAbertas` já calcula; `BlueprintCanvas.tsx`; `planejarEsgoto` |
 | 0.2 Quantitativo por pavimento ✅ | Tubos por DN, conexões e pontos **por pavimento** e por disciplina; **equipamentos e reservatórios como linhas próprias** (hoje contados como pontos), com volume/modelo | `utils/blueprintQuantitativosPorPavimento.ts` (hoje sem hidráulica), `quantities.ts:porBitola/porConexao` |
 | 0.3 IFC de instalação ✅ | Tubo como **`IfcPipeSegment`** (e `IfcDuctSegment` na mecânica), conexões derivadas como **`IfcPipeFitting`** com o tipo (joelho, tê, junção, redução), `Pset` com DN, cota, declividade | `utils/blueprintIfc.ts` (hoje `IfcFlowSegment` genérico; `entidadeDoPontoHidraulico` é o molde) |
-| 0.4 Peças que faltam | Tipos **válvula de descarga, torneira de boia, VRP, registro de esfera**, **bidê, banheira, mictório, ralo linear, ponto de espera** na ficha (peso, UHC, DN mínimo, cota, símbolo) | `utils/blueprintHidraulica.ts:FICHA_DO_PONTO_HIDRAULICO`, `TIPOS_DE_PONTO_HIDRAULICO` (**bump**) |
+| 0.4 Peças que faltam ✅ | Tipos **válvula de descarga, torneira de boia, VRP, registro de esfera**, **bidê, banheira, mictório, ralo linear, ponto de espera** na ficha (peso, UHC, DN mínimo, cota, símbolo) | `utils/blueprintHidraulica.ts:FICHA_DO_PONTO_HIDRAULICO`, `TIPOS_DE_PONTO_HIDRAULICO` (**bump**) |
 
 Fecha 3 Essenciais do bloco "verificação visível", 5 dos "entregáveis de dados", e prepara a
 Etapa 4 (boia) e a 1 (VRP).
@@ -293,4 +293,29 @@ Frente `hidro-e0`.
   cano lidos com `PredefinedType` certo; um "L" de esgoto → um `IfcPipeFitting` "Joelho 90° DN
   100", BEND, com malha. `ifcContagemDeAtributos` com as entidades novas na lista verificada pelo
   web-ifc. `plantaApi.test.ts` (paridade do bundle). Suíte cheia verde.
+- Publicado `90b7e7c`; **`planta-api` redeployada** com o bundle novo e o gate provado de fora
+  (REGRA #7): sem token → 401, token falso → 401, `/docs` → 200.
+
+### E0.4 — Peças que faltam (28/09/2026) · kernel 0.62.0 · fecha a Etapa 0
+
+- **Kernel** (bump 0.61.0 → 0.62.0, ritual dos goldens: com a string em 0.61.0 e os tipos no
+  lugar, 294 testes de kernel/goldens/hidráulica passaram; depois do bump as seis falhas foram
+  todas de hash, contagem de ambientes intacta — recapturados; 12 testes que fixam a versão
+  atualizados): `TIPOS_DE_PONTO_HIDRAULICO` + **BIDE, BANHEIRA, MICTORIO, VALVULA_DESCARGA,
+  PONTO_ESPERA, TORNEIRA_BOIA, RALO_LINEAR, REGISTRO_ESFERA, VRP**, com as disciplinas de cada.
+- **Ficha** (`blueprintHidraulica.ts`): peso NBR 5626 (válvula de descarga = 32, DN 32), UHC
+  NBR 8160, DN mínimo, cota usual, medidas (ralo linear 700 × 70); o ponto de espera entra com a
+  hipótese de um lavatório (peso 0,3 · 1 UHC), dita na ajuda.
+- **Esgoto automático:** RALO_LINEAR é coletor (como a caixa sifonada); bidê e banheira são
+  aparelhos do coletor do ambiente.
+- **IFC:** bidê `.BIDET.`, banheira `.BATH.`, mictório `.URINAL.`, válvula de descarga
+  `IfcValve .FLUSHING.`, VRP `.PRESSUREREDUCING.`, registro de esfera `.ISOLATING.`, ralo linear
+  `IfcWasteTerminal .FLOORTRAP.`, boia `IfcValve .USERDEFINED.`, espera `IfcSanitaryTerminal
+  .USERDEFINED.`.
+- **Pronto quando** ✔: taxonomia (14; o caso de "valor inventado" usava 'BIDE' e passou a usar
+  um inventado de fato), esgoto com ralo linear (o chuveiro do box entra nele), web-ifc lê bidê
+  BIDET, banheira BATH e VRP PRESSUREREDUCING. Bundle da `planta-api` regerado (0.62.0).
+  Suíte: 510 arquivos / 5.829 testes.
+
+**Etapa 0: 4 de 4 fases publicadas.**
 

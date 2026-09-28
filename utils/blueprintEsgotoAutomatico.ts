@@ -499,3 +499,86 @@ export function refazerEsgoto(model: BlueprintModel, hip: HipotesesDeEsgoto = HI
   const remocoes: Command[] = [...ids].map((id) => ({ type: 'DeleteTrecho', trechoId: id }));
   return { ...plano, sugeridos: 0, trechosDaRede: 0, comandos: [...remocoes, ...plano.comandos], motivo: null };
 }
+
+// ─── VERIFICAÇÃO DO DN (28/09/2026, Etapa 0.1 do roadmap hidrossanitário) ────
+
+export interface DnForaDoNecessario {
+  trechoId: ObjectId;
+  levelId: ObjectId;
+  /** O meio do trecho em planta — onde o desenho escreve o aviso. */
+  meio: { x: number; y: number };
+  dnAtualMm: number;
+  dnNecessarioMm: number;
+  uhc: number;
+  tipo: 'MENOR' | 'MAIOR';
+}
+
+/**
+ * O DN de CADA trecho da rede de esgoto — inclusive o desenhado à mão — contra
+ * o que ele recebe: as UHC acumuladas a montante (NBR 8160) e o maior ramal de
+ * descarga que passa por ele (vaso 100…), pela MESMA regra do lançamento
+ * (`dnPorUhc` + ficha). Antes só a água avisava, e só DN menor em trecho
+ * confirmado ("Aviso de diâmetro inferior ou superior ao necessário", E).
+ *
+ * A montante é o lado mais longe da caixa de inspeção pela rede (BFS a partir
+ * dela). O tubo de queda passa DN ≥ 100 adiante (é o que o lançamento faz) e
+ * nunca é "maior que o necessário"; trecho sem UHC a montante (ventilação,
+ * ponta morta) não é avaliado.
+ */
+export function verificarDnDoEsgoto(model: BlueprintModel, hip: HipotesesDeEsgoto = HIPOTESES_ESGOTO_PADRAO): DnForaDoNecessario[] {
+  const chave = fazerChave(model.levels);
+  const fontes = new Map<string, { uhc: number; dn: number }>();
+  for (const f of fontesDeEsgoto(model)) {
+    const k = chave(f.levelId, f.at.x, f.at.y, f.cotaMm);
+    const atual = fontes.get(k) ?? { uhc: 0, dn: 40 };
+    fontes.set(k, { uhc: atual.uhc + uhcDe(f), dn: Math.max(atual.dn, dnFichaDe(f)) });
+  }
+  const saida: DnForaDoNecessario[] = [];
+  const vistos = new Set<ObjectId>();
+  for (const ci of caixasDeInspecao(model)) {
+    const rede = redeDaOrigem(model, ci, 'ESGOTO');
+    const adj = new Map<string, { t: (typeof rede)[number]; outro: string }[]>();
+    for (const t of rede) {
+      const a = chave(t.levelId, t.a.x, t.a.y, t.cotaAMm);
+      const b = chave(t.levelId, t.b.x, t.b.y, t.cotaBMm);
+      adj.set(a, [...(adj.get(a) ?? []), { t, outro: b }]);
+      adj.set(b, [...(adj.get(b) ?? []), { t, outro: a }]);
+    }
+    const raiz = chave(ci.levelId, ci.at.x, ci.at.y, ci.cotaMm);
+    const filhos = new Map<string, { t: (typeof rede)[number]; filho: string }[]>();
+    const visitados = new Set<string>([raiz]);
+    const fila = [raiz];
+    while (fila.length > 0) {
+      const n = fila.shift()!;
+      for (const { t, outro } of adj.get(n) ?? []) {
+        if (visitados.has(outro)) continue;
+        visitados.add(outro);
+        filhos.set(n, [...(filhos.get(n) ?? []), { t, filho: outro }]);
+        fila.push(outro);
+      }
+    }
+    const acumular = (n: string): { uhc: number; dn: number } => {
+      let { uhc, dn } = fontes.get(n) ?? { uhc: 0, dn: 40 };
+      for (const { t, filho } of filhos.get(n) ?? []) {
+        const sub = acumular(filho);
+        const passa = t.rotulo === 'TQ' ? Math.max(sub.dn, hip.dnTuboQuedaMm) : sub.dn;
+        if (sub.uhc > 0 && !vistos.has(t.id)) {
+          vistos.add(t.id);
+          const necessario = Math.max(dnPorUhc(sub.uhc), passa);
+          const tipo = t.bitolaMm < necessario ? 'MENOR' : t.bitolaMm > necessario && t.rotulo !== 'TQ' ? 'MAIOR' : null;
+          if (tipo) {
+            saida.push({
+              trechoId: t.id, levelId: t.levelId, meio: { x: (t.a.x + t.b.x) / 2, y: (t.a.y + t.b.y) / 2 },
+              dnAtualMm: t.bitolaMm, dnNecessarioMm: necessario, uhc: sub.uhc, tipo,
+            });
+          }
+        }
+        uhc += sub.uhc;
+        dn = Math.max(dn, passa);
+      }
+      return { uhc, dn };
+    };
+    acumular(raiz);
+  }
+  return saida.sort((x, y) => x.trechoId.localeCompare(y.trechoId));
+}

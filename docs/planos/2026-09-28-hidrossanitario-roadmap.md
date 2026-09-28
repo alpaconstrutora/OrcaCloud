@@ -64,7 +64,7 @@ alimentação) e esgoto (tabelas NBR 8160 e ventilação); por fim os **sistemas
 
 | Fase | Entrega | Onde / reaproveita |
 |---|---|---|
-| 0.1 Verificação visível | **Pontas abertas no desenho** (anel vermelho na ponta, contagem na gaveta), **aviso de DN no esgoto** (trecho confirmado menor que o pedido pela UHC, e maior que o necessário), aviso de peça pendente no croqui | `conexoesDerivadas().pontasAbertas` já calcula; `BlueprintCanvas.tsx`; `planejarEsgoto` |
+| 0.1 Verificação visível ✅ | **Pontas abertas no desenho** (anel vermelho na ponta, contagem na gaveta), **aviso de DN no esgoto** (trecho confirmado menor que o pedido pela UHC, e maior que o necessário), aviso de peça pendente no croqui | `conexoesDerivadas().pontasAbertas` já calcula; `BlueprintCanvas.tsx`; `planejarEsgoto` |
 | 0.2 Quantitativo por pavimento | Tubos por DN, conexões e pontos **por pavimento** e por disciplina; **equipamentos e reservatórios como linhas próprias** (hoje contados como pontos), com volume/modelo | `utils/blueprintQuantitativosPorPavimento.ts` (hoje sem hidráulica), `quantities.ts:porBitola/porConexao` |
 | 0.3 IFC de instalação | Tubo como **`IfcPipeSegment`** (e `IfcDuctSegment` na mecânica), conexões derivadas como **`IfcPipeFitting`** com o tipo (joelho, tê, junção, redução), `Pset` com DN, cota, declividade | `utils/blueprintIfc.ts` (hoje `IfcFlowSegment` genérico; `entidadeDoPontoHidraulico` é o molde) |
 | 0.4 Peças que faltam | Tipos **válvula de descarga, torneira de boia, VRP, registro de esfera**, **bidê, banheira, mictório, ralo linear, ponto de espera** na ficha (peso, UHC, DN mínimo, cota, símbolo) | `utils/blueprintHidraulica.ts:FICHA_DO_PONTO_HIDRAULICO`, `TIPOS_DE_PONTO_HIDRAULICO` (**bump**) |
@@ -231,5 +231,28 @@ vez de deixar a documentação para o fim.
 
 ## Execução
 
-(nada executado — cada fase ganha aqui sua seção `### E<n>.<m>` com data, commit e o que ficou,
-como no roadmap da Planta)
+Pedido de execução, mesma sessão (28/09/2026), literal:
+
+> Etapa 0
+
+Frente `hidro-e0`.
+
+### E0.1 — Verificação visível (28/09/2026)
+
+- `utils/blueprintVerificacaoRede.ts` (novo): `marcasDeVerificacao` junta **ponta aberta**
+  (`conexoesDerivadas().pontasAbertas`, menos a saída da ventilação, que é aberta de propósito),
+  **DN fora do necessário** no esgoto e **louça sem ponto** (`pontosDaLouca`); pavimento da marca
+  = o do trecho. `resumoDaVerificacao` para a gaveta.
+- `utils/blueprintEsgotoAutomatico.ts:verificarDnDoEsgoto`: todo trecho da rede de cada CI
+  (manual incluído) contra as UHC a montante e o maior ramal de descarga, pela mesma regra do
+  lançamento; o TQ passa DN ≥ 100 adiante e nunca é "maior"; trecho sem UHC (ventilação) não é
+  avaliado. MENOR = erro, MAIOR = aviso.
+- Desenho (`BlueprintCanvas.tsx`): anel vermelho tracejado na ponta aberta, texto "DN 50 < 100
+  (6 UHC)" junto do trecho, anel âmbar na louça sem ponto — tamanho em pixel.
+- Gavetas de água e de esgoto: `PainelVerificacaoDaRede` com a contagem, cada DN fora e
+  "Selecionar".
+- **Pronto quando** ✔: 7 testes em `blueprintVerificacaoRede.test.ts` — os três de FALSO
+  POSITIVO (casa com esgoto automático, sobrado com ventilação, água pelas paredes → nenhuma
+  marca) e os casos de cada marca; 3 testes do painel; harness
+  `docs/spikes/esgoto-isometrico?vista=2d&defeitos=1` em servidor novo, console limpo (as três
+  marcas no lugar). Suíte: 509 arquivos / 5.822 testes.

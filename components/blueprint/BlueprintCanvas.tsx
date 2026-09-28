@@ -143,6 +143,7 @@ import {
   rotuloDoTrecho2D,
   simbolosDasConexoes2D,
 } from '../../utils/blueprintIsometrico';
+import { marcasDeVerificacao } from '../../utils/blueprintVerificacaoRede';
 import { useRodaNaoPassiva } from '../../hooks/useRodaNaoPassiva';
 import { SIGLA_DO_PONTO_HIDRAULICO } from '../../utils/blueprintHidraulica';
 import {
@@ -1898,6 +1899,8 @@ export default function BlueprintCanvas({
   );
   /** As CONEXÕES da planta (27/09/2026, "os tubos e conexoes devem ser detalhados") — ver `blueprintIsometrico`. */
   const simbolosConexoes2d = useMemo(() => simbolosDasConexoes2D(model, levelId ?? null), [model, levelId]);
+  /** As MARCAS da verificação da rede (28/09/2026, E0.1) — ver `blueprintVerificacaoRede`. */
+  const marcasDaRede2d = useMemo(() => marcasDeVerificacao(model, levelId ?? null), [model, levelId]);
   const terminaisReais = useMemo(
     () => (model.terminais ?? []).filter((t) => (!levelId || t.levelId === levelId) && !ocultos.has(t.id)),
     [model.terminais, levelId, ocultos],
@@ -5844,6 +5847,41 @@ export default function BlueprintCanvas({
       }
     }
 
+    // ── VERIFICAÇÃO DA REDE (28/09/2026, E0.1 do roadmap hidrossanitário) ─
+    //
+    // Ponta aberta: anel vermelho tracejado no fim do tubo que não liga em
+    // nada. DN fora do necessário: o texto junto do trecho (vermelho abaixo,
+    // âmbar acima). Louça sem ponto: anel âmbar na peça. Tamanho em PIXEL —
+    // a marca tem de aparecer em qualquer zoom, e não é medida de nada.
+    for (const mv of marcasDaRede2d) {
+      const c = paraTela(mv.at);
+      const cor = mv.severidade === 'ERRO' ? '#dc2626' : '#d97706';
+      ctx.save();
+      ctx.strokeStyle = cor;
+      ctx.fillStyle = cor;
+      if (mv.tipo === 'PONTA_ABERTA' || mv.tipo === 'LOUCA_SEM_PONTO') {
+        ctx.lineWidth = 2;
+        ctx.setLineDash([3, 2]);
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, mv.tipo === 'PONTA_ABERTA' ? 9 : 14, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      if (mv.tipo !== 'PONTA_ABERTA') {
+        ctx.font = `bold ${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+        const largura = ctx.measureText(mv.texto).width;
+        const x = c.x - largura / 2;
+        const y = c.y + (mv.tipo === 'LOUCA_SEM_PONTO' ? 16 : 10) * fz;
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.fillRect(x - 3, y - 9 * fz, largura + 6, 12 * fz);
+        ctx.fillStyle = cor;
+        ctx.textAlign = 'start';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(mv.texto, x, y);
+      }
+      ctx.restore();
+    }
+
     for (const t of terminaisDoNivel) {
       const selecionado = selecao.has(t.id);
       // EM ESCALA: o diâmetro é a largura declarada da peça. Antes disto era um
@@ -8454,6 +8492,7 @@ export default function BlueprintCanvas({
   }, [
     model,
     simbolosConexoes2d,
+    marcasDaRede2d,
     tamanho,
     vista,
     inicio,

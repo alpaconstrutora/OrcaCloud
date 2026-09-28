@@ -207,6 +207,8 @@ import PainelNucleoSelecionado from './PainelNucleoSelecionado';
 import PainelSubRegiaoSelecionada from './PainelSubRegiaoSelecionada';
 import PainelVagaSelecionada from './PainelVagaSelecionada';
 import PainelComponenteSelecionado from './PainelComponenteSelecionado';
+import PainelVerificacaoDaRede from './PainelVerificacaoDaRede';
+import { marcasDeVerificacao } from '../../utils/blueprintVerificacaoRede';
 import SeletorDeTipo from './SeletorDeTipo';
 import { camposDoComponente, propriedadesDoComponente, type PropriedadesDeComponente } from '../../utils/blueprintTipos';
 import { comandosDeMobiliario } from '../../utils/blueprintMobiliario';
@@ -7177,6 +7179,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [hipDeEsgotoSalvas, setHipDeEsgotoSalvas] = usePersistedState<HipotesesDeEsgoto>('blueprint:esgotoAutomatico', HIPOTESES_ESGOTO_PADRAO);
   const hipotesesDeEsgoto = useMemo<HipotesesDeEsgoto>(() => ({ ...HIPOTESES_ESGOTO_PADRAO, ...(hipDeEsgotoSalvas ?? {}) }), [hipDeEsgotoSalvas]);
   const planoDeEsgoto = useMemo(() => planejarEsgoto(editor.model, hipotesesDeEsgoto), [editor.model, hipotesesDeEsgoto]);
+  /** VERIFICAÇÃO DA REDE (28/09/2026, E0.1 do roadmap hidrossanitário): pontas abertas, DN do esgoto, louça sem ponto. */
+  const marcasDaRede = useMemo(() => marcasDeVerificacao(editor.model), [editor.model]);
   const lancarEsgoto = () => {
     const comandos = planoDeEsgoto.comandos.length > 0
       ? planoDeEsgoto.comandos
@@ -13700,6 +13704,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   ))}
                 </>
               )}
+              <PainelVerificacaoDaRede marcas={marcasDaRede} disciplinas={['ESGOTO']} onSelecionar={selecionar} />
             </div>
           )}
 
@@ -13820,6 +13825,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   </tbody>
                 </table>
               )}
+              <PainelVerificacaoDaRede marcas={marcasDaRede} disciplinas={['AGUA_FRIA', 'AGUA_QUENTE']} onSelecionar={selecionar} />
             </div>
           )}
 

@@ -10,6 +10,7 @@
  *   → http://localhost:3141/docs/spikes/esgoto-isometrico/index.html          (3D)
  *   → http://localhost:3141/docs/spikes/esgoto-isometrico/index.html?vista=2d (planta)
  *   → …?rotulos=0 (3D sem os ø) · ?paredes=0 (sem paredes) · ?estilo=transparente
+ *   → …?defeitos=1 — tubo solto, DN errado e louça sem ponto (verificação da rede, E0.1)
  *   → …?cena=agua — a sala do print de 27/09/2026: caixa d'água no canto (sobre a
  *     laje) e lavatório/chuveiro numa parede, com a ÁGUA FRIA AUTOMÁTICA pelas paredes.
  *     Com a laje L1 (2800 → 2900) em cima; `&laje=0` é o botão "Pisos e lajes" desligado.
@@ -62,6 +63,16 @@ let m = params.get('cena') === 'agua' ? salaDaAgua() : applyBatch(base, [
 if (params.get('cena') !== 'agua') {
   m = recomputeSpaces(m);
   m = applyBatch(m, planejarEsgoto(m).comandos).model;
+}
+// `?defeitos=1` (28/09/2026, E0.1): um tubo solto, o ramal do vaso em DN 50 e um
+// vaso desenhado sem ponto — as três marcas da verificação da rede.
+if (params.get('defeitos') === '1') {
+  const doVaso = m.trechos!.find((c) => c.disciplina === 'ESGOTO' && c.a.x === 600 && c.a.y === 800 && (c.a.x !== c.b.x || c.a.y !== c.b.y))!;
+  m = applyBatch(m, [
+    { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: point(2500, 1200), b: point(4000, 1200), cotaAMm: 2200, cotaBMm: 2200, bitolaMm: 25 },
+    { type: 'SetTrechoProps', trechoId: doVaso.id, bitolaMm: 50 },
+    { type: 'AddComponente', levelId: t, tipoId: 'VASO', at: point(3300, 600) },
+  ] as Command[]).model;
 }
 const conexoes = conexoesDerivadas(m).conexoes;
 const resumo = `trechos: ${m.trechos?.length ?? 0} · conexões: ${conexoes.map((c) => c.tipo).join(', ')} · avisos: ${conexoes.filter((c) => c.aviso).length}`;

@@ -61,6 +61,7 @@ import {
   type TipoDePontoEletrico,
   type TipoDeInterruptor,
   type TipoDePontoHidraulico,
+  type MaterialDeTubo,
   type LigacaoDoCircuito,
   type FaseDoCircuito,
   type TipoDeAmbiente,
@@ -785,6 +786,8 @@ function projetar(model: BlueprintModel): {
           ? [...new Set(t.circuitoIds.map((cid) => indiceDoCircuito.get(cid) ?? 0))].sort((p, q) => p - q)
           : undefined,
       condutores: t.condutores ?? undefined,
+      // E1.1 (0.63.0): só quando declarado — o padrão da disciplina não se grava.
+      material: t.material ?? undefined,
       // `true` ou AUSENTE — nunca `false`, pela razão do `sugerida` do terminal.
       sugerido: t.sugerido ? (true as const) : undefined,
       parametros: parametrosCanonicos(t.parametros),
@@ -1453,6 +1456,7 @@ export interface CanonicalPayload {
     circuitos?: number[];
     /** Quantos fios passam no eletroduto. Ausente sob kernel < 0.23.0. */
     condutores?: number;
+    material?: string;
     /** Lançado pelo sistema e ainda não confirmado. Ausente sob kernel < 0.30.0 e quando falso. */
     sugerido?: true;
     parametros?: Parametros;
@@ -2144,6 +2148,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
             ? [idsDeCircuito[t.circuito]]
             : null,
       condutores: t.condutores ?? null,
+      material: (t.material as MaterialDeTubo | undefined) ?? null,
       sugerido: t.sugerido ? true : null,
       ...(t.parametros && Object.keys(t.parametros).length > 0 ? { parametros: { ...t.parametros } } : {}),
     });

@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.62.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.63.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -601,6 +601,12 @@ function comprimentoDoGuardaCorpo(g) {
 var TIPOS_DE_AREA_DO_LOTEAMENTO = ["VERDE", "INSTITUCIONAL", "VIARIO", "RESERVA"];
 var TIPOS_AMBIENTAIS = ["APP", "RESERVA_LEGAL", "VEGETACAO_NATIVA", "AREA_CONSOLIDADA", "SERVIDAO", "HIDROGRAFIA"];
 var TIPOS_DE_AREA_PUBLICA = [...TIPOS_DE_AREA_DO_LOTEAMENTO, ...TIPOS_AMBIENTAIS];
+function materialPadraoDaDisciplina(d) {
+  return d === "AGUA_FRIA" ? "PVC_SOLDAVEL" : d === "AGUA_QUENTE" ? "CPVC" : null;
+}
+function materialDoTrecho(t) {
+  return t.material ?? materialPadraoDaDisciplina(t.disciplina);
+}
 var TIPOS_DE_PONTO_HIDRAULICO = [
   "TORNEIRA",
   "TORNEIRA_JARDIM",
@@ -2018,6 +2024,8 @@ function projetar(model) {
       // (0.31): índices em ordem crescente, sem repetição.
       circuitos: t.circuitoIds && t.circuitoIds.length > 0 ? [...new Set(t.circuitoIds.map((cid) => indiceDoCircuito.get(cid) ?? 0))].sort((p, q) => p - q) : void 0,
       condutores: t.condutores ?? void 0,
+      // E1.1 (0.63.0): só quando declarado — o padrão da disciplina não se grava.
+      material: t.material ?? void 0,
       // `true` ou AUSENTE — nunca `false`, pela razão do `sugerida` do terminal.
       sugerido: t.sugerido ? true : void 0,
       parametros: parametrosCanonicos(t.parametros)
@@ -2724,6 +2732,7 @@ function modelFromCanonicalPayload(payload) {
       // `circuitos` (0.31) ou o `circuito` escalar antigo como lista de um.
       circuitoIds: t.circuitos && t.circuitos.length > 0 ? t.circuitos.map((k2) => idsDeCircuito[k2]) : t.circuito != null ? [idsDeCircuito[t.circuito]] : null,
       condutores: t.condutores ?? null,
+      material: t.material ?? null,
       sugerido: t.sugerido ? true : null,
       ...t.parametros && Object.keys(t.parametros).length > 0 ? { parametros: { ...t.parametros } } : {}
     });
@@ -3076,7 +3085,10 @@ function conexoesDerivadas(model) {
 
 // utils/blueprintKernel/quantities.ts
 var POLITICA_PADRAO = {
-  version: "quant-1.16.0",
+  // quant-1.17.0 (28/09/2026, E1.1 do roadmap hidrossanitário): o trecho e a
+  // linha de compra do tubo ganharam `material` (o declarado ou o padrão da
+  // disciplina) — PVC DN 25 e PPR DN 25 são compras diferentes.
+  version: "quant-1.17.0",
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2
@@ -3224,6 +3236,7 @@ function agruparPorBitola(trechos) {
   const porBitolaMapa = /* @__PURE__ */ new Map();
   for (const t of trechos) {
     const chave = `${t.disciplina}
+${t.material ?? ""}
 ${t.bitolaMm}
 ${t.itemCode ?? ""}`;
     const atual = porBitolaMapa.get(chave);
@@ -3233,6 +3246,7 @@ ${t.itemCode ?? ""}`;
     } else {
       porBitolaMapa.set(chave, {
         disciplina: t.disciplina,
+        material: t.material ?? null,
         bitolaMm: t.bitolaMm,
         itemCode: t.itemCode,
         comprimentoM: t.comprimentoM,
@@ -3241,7 +3255,7 @@ ${t.itemCode ?? ""}`;
     }
   }
   return [...porBitolaMapa.values()].sort(
-    (x, y) => x.disciplina.localeCompare(y.disciplina) || x.bitolaMm - y.bitolaMm
+    (x, y) => x.disciplina.localeCompare(y.disciplina) || (x.material ?? "").localeCompare(y.material ?? "") || x.bitolaMm - y.bitolaMm
   );
 }
 function agruparPorTerminal(terminais) {
@@ -3623,6 +3637,7 @@ ${c.funcao}`;
     const real = emL ? planta + Math.abs(desnivel) : Math.hypot(planta, desnivel);
     return {
       trechoId: t.id,
+      material: materialDoTrecho(t),
       uid: t.uid,
       disciplina: t.disciplina,
       rotulo: t.rotulo ?? "",
@@ -4157,6 +4172,7 @@ function gerarIfc(model, o) {
       emitirPset(ctx, produto, t.uid, "Pset_OpuraInstalacao", [
         ["Disciplina", { tipo: "IFCLABEL", v: t.disciplina }],
         ["BitolaMm", { tipo: "IFCINTEGER", v: t.bitolaMm }],
+        ...materialDoTrecho(t) ? [["Material", { tipo: "IFCLABEL", v: materialDoTrecho(t) }]] : [],
         ["CotaAMm", { tipo: "IFCINTEGER", v: t.cotaAMm }],
         ["CotaBMm", { tipo: "IFCINTEGER", v: t.cotaBMm }],
         ...t.disciplina === "ESGOTO" && emPlanta > 0 ? [["DeclividadePct", { tipo: "IFCREAL", v: Math.round(Math.abs(t.cotaBMm - t.cotaAMm) / emPlanta * 1e4) / 100 }]] : [],
@@ -5190,6 +5206,69 @@ var ROTULO_DA_ORIGEM = {
   MANUAL: "manual"
 };
 
+// utils/blueprintHidraulicaPressao.ts
+var FICHA_DO_MATERIAL = {
+  PVC_SOLDAVEL: {
+    rotulo: "PVC sold\xE1vel",
+    rugosidadeMm: 0.01,
+    diametros: [
+      { dn: 20, internoMm: 17 },
+      { dn: 25, internoMm: 21.6 },
+      { dn: 32, internoMm: 27.8 },
+      { dn: 40, internoMm: 35.2 },
+      { dn: 50, internoMm: 44 },
+      { dn: 60, internoMm: 53.4 },
+      { dn: 75, internoMm: 66.6 },
+      { dn: 85, internoMm: 75.6 },
+      { dn: 110, internoMm: 97.8 }
+    ],
+    fonte: "NBR 5648 (tubo PVC sold\xE1vel para \xE1gua fria); \u03B5 de tubo pl\xE1stico liso"
+  },
+  CPVC: {
+    rotulo: "CPVC",
+    rugosidadeMm: 0.01,
+    diametros: [
+      { dn: 15, internoMm: 12.6 },
+      { dn: 22, internoMm: 18.4 },
+      { dn: 28, internoMm: 23.8 },
+      { dn: 35, internoMm: 29.8 },
+      { dn: 42, internoMm: 35.6 },
+      { dn: 54, internoMm: 46 },
+      { dn: 73, internoMm: 62 },
+      { dn: 89, internoMm: 76 }
+    ],
+    fonte: "NBR 15884 (CPVC para \xE1gua quente); \u03B5 de tubo pl\xE1stico liso"
+  },
+  PPR: {
+    rotulo: "PPR (PN 20)",
+    rugosidadeMm: 0.01,
+    diametros: [
+      { dn: 20, internoMm: 13.2 },
+      { dn: 25, internoMm: 16.6 },
+      { dn: 32, internoMm: 21.2 },
+      { dn: 40, internoMm: 26.6 },
+      { dn: 50, internoMm: 33.4 },
+      { dn: 63, internoMm: 42 },
+      { dn: 75, internoMm: 50 }
+    ],
+    fonte: "NBR 15813 / DIN 8077 PN 20 (SDR 6); \u03B5 de tubo pl\xE1stico liso"
+  },
+  COBRE: {
+    rotulo: "Cobre (classe E)",
+    rugosidadeMm: 15e-4,
+    diametros: [
+      { dn: 15, internoMm: 14 },
+      { dn: 22, internoMm: 20.8 },
+      { dn: 28, internoMm: 26.8 },
+      { dn: 35, internoMm: 33.6 },
+      { dn: 42, internoMm: 40.4 },
+      { dn: 54, internoMm: 52.2 },
+      { dn: 66, internoMm: 64.7 }
+    ],
+    fonte: "NBR 13206 classe E; \u03B5 de cobre trefilado"
+  }
+};
+
 // utils/blueprintHidraulica.ts
 var CONSUMO = "Hidr\xE1ulica \u2014 pontos de consumo";
 var RESERVA = "Hidr\xE1ulica \u2014 reserva\xE7\xE3o";
@@ -5333,7 +5412,8 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     cotaMm: { AGUA_FRIA: 600, AGUA_QUENTE: 600, ESGOTO: 0 },
     dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40 },
     pesoNbr5626: 0.3,
-    ajuda: "Ponto tampado para uso futuro (filtro, aparelho a definir). Entra na rede com peso 0,3 e sem contribui\xE7\xE3o de esgoto \u2014 ajuste quando souber o aparelho."
+    uhcNbr8160: 1,
+    ajuda: "Ponto tampado para uso futuro (filtro, aparelho a definir). Entra na rede com a hip\xF3tese de um lavat\xF3rio \u2014 peso 0,3 e 1 UHC \u2014 at\xE9 se saber o aparelho."
   },
   RESERVATORIO: {
     rotulo: "Caixa d'\xE1gua",
@@ -5542,6 +5622,9 @@ var GRUPO_DO_PONTO_HIDRAULICO = Object.fromEntries(
 );
 
 // utils/blueprintPlanilha.ts
+function rotuloDoMaterial(material) {
+  return material && material in FICHA_DO_MATERIAL ? ` \xB7 ${FICHA_DO_MATERIAL[material].rotulo}` : "";
+}
 var COBERTURA_PLANILHA = [
   "CONT\xC9M: ambientes (\xE1rea de eixo e de piso, per\xEDmetro, rodap\xE9), paredes (face, volume de alvenaria), aberturas, estrutura de concreto (volume e f\xF4rma por pe\xE7a), telhado (\xE1rea REAL e projetada por \xE1gua) e escadas/rampas (degraus, espelho, piso, pegada e o furo que abrem na laje).",
   "A LAJE j\xE1 vem DESCONTADA do furo da escada, em \xE1rea e em volume. O desconto \xE9 recalculado a cada leitura \u2014 mover a escada corrige o n\xFAmero sozinho.",
@@ -5644,7 +5727,7 @@ function abasDoQuantitativo(quant, ctx, armadura, parametros) {
   const nomeDoPonto = (p) => p.classificacao ? ROTULO_DO_PONTO_HIDRAULICO[p.classificacao] ?? ROTULO_DO_PONTO_ELETRICO[p.classificacao] ?? p.classificacao : `${p.tipo} (sem tipo)`;
   if ((t.porBitola ?? []).length > 0 || (t.porTerminal ?? []).length > 0) {
     totais.push([], ["INSTALA\xC7\xD5ES"]);
-    for (const b of t.porBitola ?? []) totais.push([`${nomeDaDisciplina(b.disciplina)} DN ${b.bitolaMm}${b.itemCode ? ` \xB7 ${b.itemCode}` : ""}`, n2(b.comprimentoM), "m"]);
+    for (const b of t.porBitola ?? []) totais.push([`${nomeDaDisciplina(b.disciplina)} DN ${b.bitolaMm}${b.itemCode ? ` \xB7 ${b.itemCode}` : ""}${rotuloDoMaterial(b.material)}`, n2(b.comprimentoM), "m"]);
     for (const p of t.porTerminal ?? []) totais.push([`${nomeDoPonto(p)} \xB7 ${nomeDaDisciplina(p.disciplina)}`, p.quantidade, "un"]);
     for (const c of t.porConexao ?? []) totais.push([`${ROTULO_DA_CONEXAO[c.tipo]} DN ${c.bitolaMm}${c.paraMm != null ? `\u2192${c.paraMm}` : ""} \xB7 ${nomeDaDisciplina(c.disciplina)}`, c.quantidade, "un"]);
     totais.push(["Rede \u2014 comprimento total", n2(t.comprimentoRedeM), "m"]);

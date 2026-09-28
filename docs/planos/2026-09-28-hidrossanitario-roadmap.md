@@ -80,7 +80,7 @@ Transforma o dimensionamento "por velocidade" em cálculo completo de água fria
 
 | Fase | Entrega | Detalhe |
 |---|---|---|
-| 1.1 Materiais e perda distribuída | Tabela de **materiais** (PVC soldável, CPVC, PPR, cobre; PEX fica pronto para o backlog) com diâmetro interno e **rugosidade absoluta**; **perda distribuída por Darcy-Weisbach** com fator de atrito de **Swamee-Jain** (a "fórmula universal" do Anexo da NBR 5626:2020 — cobre "rugosidade dos materiais"); material por trecho (padrão da disciplina, sobrescrevível) | `utils/blueprintHidraulicaPressao.ts` puro; `DIAMETROS` migra para a tabela de materiais. Material no trecho = **bump** |
+| 1.1 Materiais e perda distribuída ✅ | Tabela de **materiais** (PVC soldável, CPVC, PPR, cobre; PEX fica pronto para o backlog) com diâmetro interno e **rugosidade absoluta**; **perda distribuída por Darcy-Weisbach** com fator de atrito de **Swamee-Jain** (a "fórmula universal" do Anexo da NBR 5626:2020 — cobre "rugosidade dos materiais"); material por trecho (padrão da disciplina, sobrescrevível) | `utils/blueprintHidraulicaPressao.ts` puro; `DIAMETROS` migra para a tabela de materiais. Material no trecho = **bump** |
 | 1.2 Perdas localizadas | **Comprimento equivalente** de cada conexão derivada (joelho 90/45, tê passagem/saída lateral, junção, redução, luva), de registro e de hidrômetro, por DN e material (tabela com fonte) — as conexões já são conhecidas por nó (`conexoesDerivadas`, com `ramais`) | O tê distingue passagem direta × saída lateral pelo `ramais` (colinear ou não) |
 | 1.3 Pressão em cada ponto | Da origem (nível d'água do reservatório = fundo + lâmina) a cada ponto: **pressão disponível = desnível − perdas acumuladas** no caminho; **pressão mínima por aparelho** na ficha (10 kPa dinâmica; valores maiores onde o fabricante pede — chuveiro, válvula de descarga); pressão estática máxima 400 kPa; **aviso de pressão insuficiente/excessiva** na gaveta e no desenho (ponto em vermelho); **simulador** = a mesma conta com hipóteses editáveis (altura da caixa, material) | Três estados por ponto (molde conferência NBR 5410). Pressurizador e VRP (0.4) entram aqui como ganho/queda na linha |
 | 1.4 Dimensionar por pressão | O DN deixa de ser só "velocidade ≤ 3 m/s": **aumenta no caminho crítico até todo ponto atender**; conferência NBR 5626 (vazão, velocidade, pressão dinâmica e estática, DN mínimo) com fonte; perda e vazão suportada do **hidrômetro** | `dimensionarDN` vira a primeira passada; o ajuste por pressão é iterativo e determinístico |
@@ -318,4 +318,36 @@ Frente `hidro-e0`.
   Suíte: 510 arquivos / 5.829 testes.
 
 **Etapa 0: 4 de 4 fases publicadas.**
+
+---
+
+Pedido de execução da Etapa 1, mesma sessão (28/09/2026), literal:
+
+> sim
+
+Frente `hidro-e1`.
+
+### E1.1 — Materiais e perda distribuída (28/09/2026) · kernel 0.63.0 · quant-1.17.0
+
+- **Kernel** (0.62.0 → 0.63.0, ritual: com a string em 0.62.0 e o campo no lugar a suíte inteira
+  — 5.836 testes — passou; depois do bump só os seis hashes, recapturados; 12 pins de versão):
+  `MATERIAIS_DE_TUBO` (PVC soldável, CPVC, PPR, cobre), `materialPadraoDaDisciplina` (PVC na
+  fria, CPVC na quente), `materialDoTrecho`; `Trecho.material?` só em água fria/quente
+  (`BAD_PIPE_MATERIAL`), em `AddTrecho`/`SetTrechoProps` (`null` volta ao padrão), omitido do
+  canônico quando ausente.
+- `utils/blueprintHidraulicaPressao.ts` (novo): `FICHA_DO_MATERIAL` (diâmetro interno por DN e
+  rugosidade, com a norma de produto como fonte), `diametroInternoMm`, `fatorDeAtrito`
+  (64/Re; Swamee-Jain), `perdaDistribuida` (Darcy-Weisbach, viscosidade 20 °C / 60 °C). O
+  `DIAMETROS` da água automática passou a sair dessa tabela.
+- **Quantitativo quant-1.17.0**: `material` no trecho e na linha de compra; PVC e PPR do mesmo DN
+  viram duas linhas. Rótulos (tela, planilha, orçamento) com o material no FIM — o filtro que
+  procura "Água fria DN 25" continua casando; o `ref` do orçamento só muda quando o material
+  foge do padrão. Portão "MUDOU A FÓRMULA? A VERSÃO TEM QUE SUBIR" registrado.
+- **Tela:** "Material" no painel do trecho de água (com "Padrão da rede (PVC soldável)");
+  **IFC:** `Pset_OpuraInstalacao.Material`.
+- **Pronto quando** ✔: 7 testes em `blueprintHidraulicaPressao.test.ts` — canônico ida e volta,
+  invariante, quantitativo separado por material, **Darcy a menos de 15 % de Fair-Whipple-Hsiao**
+  (a fórmula clássica do PVC) em quatro casos residenciais, valor conferido à mão (PVC DN 25 a
+  0,3 L/s → 0,82 m/s, J 0,044 m/m), laminar 64/Re, quente perde menos; 2 testes do painel.
+  Suíte: 511 arquivos / 5.836 testes (+ os novos).
 

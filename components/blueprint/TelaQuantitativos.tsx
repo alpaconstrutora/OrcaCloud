@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { volumeDoAmbienteM3 } from '../../utils/blueprintNumeracao';
 import { Calculator } from 'lucide-react';
-import { ROTULO_DA_CONEXAO, nomeDoTipoEstrutural, type BlueprintModel, type DisciplinaDeRede, type TipoDePontoEletrico, type TipoDePontoHidraulico, type computeQuantities } from '../../utils/blueprintKernel';
+import { ROTULO_DA_CONEXAO, nomeDoTipoEstrutural, type BlueprintModel, type DisciplinaDeRede, type MaterialDeTubo, type TipoDePontoEletrico, type TipoDePontoHidraulico, type computeQuantities } from '../../utils/blueprintKernel';
+import { FICHA_DO_MATERIAL } from '../../utils/blueprintHidraulicaPressao';
 import { ROTULO_DA_DISCIPLINA, ROTULO_DO_PONTO_ELETRICO } from '../../utils/blueprintRede';
 import { ROTULO_DO_PONTO_HIDRAULICO } from '../../utils/blueprintHidraulica';
 import type { ArmaduraQuantificada } from '../../utils/blueprintArmadura';
@@ -155,6 +156,10 @@ interface Props {
 type Fmt = (v: number) => string;
 const num = (fmt: Fmt, v: number) => <span className="block text-right text-sm tabular-nums text-gray-700">{fmt(v)}</span>;
 
+/** " · PVC soldável" no nome do tubo (E1.1); vazio fora de água. */
+const nomeDoMaterial = (material: string | null | undefined) =>
+  material && material in FICHA_DO_MATERIAL ? ` · ${FICHA_DO_MATERIAL[material as MaterialDeTubo].rotulo}` : '';
+
 export default function TelaQuantitativos({ model, quant, armadura, revisao, oficial, gerando, onGerar, dirty, onSelecionarPeca, avaliacao, onAbrirAvaliacao, porCodigoDeMaterial }: Props) {
   const t = quant.totais;
   // PAVIMENTOS: o mapa entidade → nível, as linhas por pavimento e o filtro
@@ -279,7 +284,7 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
     // INSTALAÇÕES (18/09/2026): tubo por disciplina e DN, pontos por classificação,
     // conexões deduzidas dos encontros — as linhas de compra da rede.
     for (const b of t.porBitola ?? []) {
-      add({ grupo: 'Instalações', item: `${ROTULO_DA_DISCIPLINA[b.disciplina as DisciplinaDeRede] ?? b.disciplina} DN ${b.bitolaMm}`, valor: b.comprimentoM, unidade: 'm', detalhe: `${b.trechos} trecho(s), comprimento real` });
+      add({ grupo: 'Instalações', item: `${ROTULO_DA_DISCIPLINA[b.disciplina as DisciplinaDeRede] ?? b.disciplina} DN ${b.bitolaMm}${nomeDoMaterial(b.material)}`, valor: b.comprimentoM, unidade: 'm', detalhe: `${b.trechos} trecho(s), comprimento real` });
     }
     for (const p of t.porTerminal ?? []) {
       if (p.disciplina === 'ELETRICA') continue;
@@ -309,7 +314,7 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
     const linhas: LinhaDeInstalacao[] = [];
     const t = redeVisivel;
     for (const b of t.porBitola ?? []) {
-      linhas.push({ chave: `tubo:${b.disciplina}:${b.bitolaMm}:${b.itemCode ?? ''}`, familia: 'Tubo', disciplina: b.disciplina as DisciplinaDeRede, item: `${b.disciplina === 'ELETRICA' ? 'Eletroduto' : `Tubo ${nomeDaDisciplina(b.disciplina).toLowerCase()}`}${b.itemCode ? ` · ${b.itemCode}` : ''}`, dnMm: b.bitolaMm, quantidade: b.comprimentoM, unidade: 'm', detalhe: `${b.trechos} trecho(s) · comprimento real, com prumadas e caimento` });
+      linhas.push({ chave: `tubo:${b.disciplina}:${b.material ?? ''}:${b.bitolaMm}:${b.itemCode ?? ''}`, familia: 'Tubo', disciplina: b.disciplina as DisciplinaDeRede, item: `${b.disciplina === 'ELETRICA' ? 'Eletroduto' : `Tubo ${nomeDaDisciplina(b.disciplina).toLowerCase()}`}${nomeDoMaterial(b.material)}${b.itemCode ? ` · ${b.itemCode}` : ''}`, dnMm: b.bitolaMm, quantidade: b.comprimentoM, unidade: 'm', detalhe: `${b.trechos} trecho(s) · comprimento real, com prumadas e caimento` });
     }
     // A CAIXA D'ÁGUA por volume (E0.2): é assim que se compra.
     for (const r of reservatoriosPorVolume(model, pavimentoFiltro || null)) {

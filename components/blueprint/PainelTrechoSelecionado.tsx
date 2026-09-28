@@ -2,7 +2,8 @@ import React from 'react';
 import { ArrowDownRight, MoveVertical, Trash2 } from 'lucide-react';
 import type { DisciplinaDeRede, Terminal, Trecho } from '../../utils/blueprintKernel';
 import type { OcupacaoDoEletroduto } from '../../utils/blueprintEletricaDimensionamento';
-import { DISCIPLINAS } from '../../utils/blueprintKernel';
+import { DISCIPLINAS, MATERIAIS_DE_TUBO, materialPadraoDaDisciplina, type MaterialDeTubo } from '../../utils/blueprintKernel';
+import { FICHA_DO_MATERIAL } from '../../utils/blueprintHidraulicaPressao';
 import {
   ROTULO_DA_DISCIPLINA,
   comprimentoDoTrecho,
@@ -67,6 +68,7 @@ interface Props {
     rotulo?: string | null;
     circuitoIds?: string[] | null;
     condutores?: number | null;
+    material?: MaterialDeTubo | null;
   }) => void;
   onTerminal: (campos: {
     tipo?: string;
@@ -452,6 +454,28 @@ export default function PainelTrechoSelecionado({
           aoAplicar={(v) => onTrecho({ bitolaMm: v })}
           ariaLabel="Bitola do trecho, em milímetros"
         />
+
+        {/* MATERIAL (28/09/2026, E1.1 do roadmap hidrossanitário): só no cano de
+            água, que é onde ele muda o diâmetro interno e a perda de carga. O
+            vazio é o padrão da rede (PVC na fria, CPVC na quente), dito na opção. */}
+        {(trecho.disciplina === 'AGUA_FRIA' || trecho.disciplina === 'AGUA_QUENTE') && (
+          <label className="block">
+            <span className="text-[11px] font-medium text-slate-600">Material</span>
+            <select
+              value={trecho.material ?? ''}
+              onChange={(e) => onTrecho({ material: (e.target.value || null) as MaterialDeTubo | null })}
+              aria-label="Material do tubo"
+              className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+            >
+              <option value="">Padrão da rede ({FICHA_DO_MATERIAL[materialPadraoDaDisciplina(trecho.disciplina)!].rotulo})</option>
+              {MATERIAIS_DE_TUBO.map((m) => (
+                <option key={m} value={m}>
+                  {FICHA_DO_MATERIAL[m].rotulo}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         {/* ⚠️ CIRCUITO e CONDUTORES só no trecho ELÉTRICO: num cano de água eles
             não significam nada, e campo que não significa nada é convite a

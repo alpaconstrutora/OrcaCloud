@@ -19,6 +19,7 @@ import {
   type TipoDePontoEletrico,
   type TipoDeInterruptor,
   type TipoDePontoHidraulico,
+  type MaterialDeTubo,
   type LigacaoDoCircuito,
   type FaseDoCircuito,
   type TipoDeAmbiente,
@@ -641,6 +642,8 @@ export type Command =
       circuitoIds?: ObjectId[] | null;
       /** Condutores já conhecidos ao criar. */
       condutores?: number | null;
+      /** Material do cano (água fria/quente) — ver `Trecho.material`. */
+      material?: MaterialDeTubo | null;
       /** Gerado pelo lançamento automático — ver `Trecho.sugerido`. */
       sugerido?: boolean | null;
     }
@@ -659,6 +662,8 @@ export type Command =
       circuitoIds?: ObjectId[] | null;
       /** Quantos condutores passam no eletroduto. `null` = não informado. */
       condutores?: number | null;
+      /** Material do cano; `null` volta ao padrão da disciplina. Ausente não mexe. */
+      material?: MaterialDeTubo | null;
       /** `false` aceita o caminho sugerido — ver `Trecho.sugerido`. */
       sugerido?: boolean | null;
     }
@@ -3197,6 +3202,7 @@ function aplicarSemHash(
               ? { circuitoIds: [command.circuitoId] }
               : {}),
           ...(command.condutores != null ? { condutores: command.condutores } : {}),
+          ...(command.material != null ? { material: command.material } : {}),
           ...(command.sugerido ? { sugerido: true } : {}),
         },
       ];
@@ -3227,6 +3233,7 @@ function aplicarSemHash(
         trecho.circuitoIds = command.circuitoId ? [command.circuitoId] : null;
       }
       if (command.condutores !== undefined) trecho.condutores = command.condutores;
+      if (command.material !== undefined) trecho.material = command.material ?? null;
       if (command.sugerido !== undefined) trecho.sugerido = command.sugerido ? true : null;
       diff.updated.push(trecho.id);
       break;

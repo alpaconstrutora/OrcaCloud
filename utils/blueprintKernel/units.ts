@@ -323,7 +323,14 @@
  * roadmap hidrossanitário, `docs/planos/2026-09-28-hidrossanitario-roadmap.md`).
  * Vocabulário novo, forma igual — provado antes do bump.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.62.0';
+/**
+ * ─── 0.62.0 → 0.63.0 (28/09/2026) — O MATERIAL DO CANO ────────────────────────
+ *
+ * `Trecho.material` (PVC soldável, CPVC, PPR, cobre) em água fria e quente, para
+ * a perda de carga (E1.1 do roadmap hidrossanitário). Omitido quando ausente —
+ * o padrão da rede não se grava. Provado antes do bump.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.63.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

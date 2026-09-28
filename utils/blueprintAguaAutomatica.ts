@@ -43,7 +43,8 @@
  * disponível, sem desvio de viga ou laje. Serve ao quantitativo e ao traçado
  * de partida; o projeto executivo é do projetista.
  */
-import type { BlueprintModel, Command, DisciplinaDeRede, ObjectId, Terminal, Trecho } from './blueprintKernel';
+import type { BlueprintModel, Command, DisciplinaDeRede, MaterialDeTubo, ObjectId, Terminal, Trecho } from './blueprintKernel';
+import { FICHA_DO_MATERIAL } from './blueprintHidraulicaPressao';
 import {
   arvoreComRotaLimitada,
   caminhoEntre,
@@ -58,32 +59,17 @@ import { FICHA_DO_PONTO_HIDRAULICO, ehPontoDeConsumo } from './blueprintHidrauli
 import { shaftPreferido } from './blueprintNucleoVertical';
 import { arvorePelasParedes, chaveP, encaixarNaParede, faceDaParede } from './blueprintRotaPelasParedes';
 
-export type TabelaDeTubo = 'PVC_SOLDAVEL' | 'CPVC';
+/**
+ * A tabela de DN do lançamento é a do MATERIAL (E1.1): uma fonte só para o
+ * dimensionamento por velocidade e para a perda de carga
+ * (`blueprintHidraulicaPressao.FICHA_DO_MATERIAL`).
+ */
+export type TabelaDeTubo = MaterialDeTubo;
 
-/** DN nominal → diâmetro interno aproximado (mm). PVC soldável NBR 5648; CPVC Aquatherm. */
-export const DIAMETROS: Record<TabelaDeTubo, { dn: number; internoMm: number }[]> = {
-  PVC_SOLDAVEL: [
-    { dn: 20, internoMm: 17 },
-    { dn: 25, internoMm: 21.6 },
-    { dn: 32, internoMm: 27.8 },
-    { dn: 40, internoMm: 35.2 },
-    { dn: 50, internoMm: 44 },
-    { dn: 60, internoMm: 53.4 },
-    { dn: 75, internoMm: 66.6 },
-    { dn: 85, internoMm: 75.6 },
-    { dn: 110, internoMm: 97.8 },
-  ],
-  CPVC: [
-    { dn: 15, internoMm: 12.6 },
-    { dn: 22, internoMm: 18.4 },
-    { dn: 28, internoMm: 23.8 },
-    { dn: 35, internoMm: 29.8 },
-    { dn: 42, internoMm: 35.6 },
-    { dn: 54, internoMm: 46 },
-    { dn: 73, internoMm: 62 },
-    { dn: 89, internoMm: 76 },
-  ],
-};
+/** DN nominal → diâmetro interno (mm), por material. Derivado de `FICHA_DO_MATERIAL`. */
+export const DIAMETROS: Record<TabelaDeTubo, { dn: number; internoMm: number }[]> = Object.fromEntries(
+  Object.entries(FICHA_DO_MATERIAL).map(([k, f]) => [k, f.diametros]),
+) as Record<TabelaDeTubo, { dn: number; internoMm: number }[]>;
 
 export interface HipotesesDeAgua {
   /** Velocidade máxima na tubulação, m/s (NBR 5626 limita a 3; 2 é a prática para conter perda de carga). */

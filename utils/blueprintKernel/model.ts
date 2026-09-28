@@ -2394,6 +2394,27 @@ export const DISCIPLINAS: DisciplinaDeRede[] = [
  * atravessando a sala não parte o ambiente. Se entrasse no grafo, área de piso,
  * rodapé e revestimento mudariam por causa de um encanamento.
  */
+/**
+ * MATERIAL DO TUBO de água (28/09/2026, E1.1 do roadmap hidrossanitário). O
+ * VOCABULÁRIO mora no kernel (é dado do desenho); a física — diâmetro interno,
+ * rugosidade — mora em `utils/blueprintHidraulicaPressao.ts`.
+ */
+export const MATERIAIS_DE_TUBO = ['PVC_SOLDAVEL', 'CPVC', 'PPR', 'COBRE'] as const;
+export type MaterialDeTubo = (typeof MATERIAIS_DE_TUBO)[number];
+
+/**
+ * O material de quem NÃO declarou: PVC soldável na água fria, CPVC na quente —
+ * o que o lançamento automático sempre supôs. Outras redes não têm material.
+ */
+export function materialPadraoDaDisciplina(d: DisciplinaDeRede): MaterialDeTubo | null {
+  return d === 'AGUA_FRIA' ? 'PVC_SOLDAVEL' : d === 'AGUA_QUENTE' ? 'CPVC' : null;
+}
+
+/** O material efetivo do trecho: o declarado, senão o padrão da disciplina. */
+export function materialDoTrecho(t: Pick<Trecho, 'disciplina' | 'material'>): MaterialDeTubo | null {
+  return t.material ?? materialPadraoDaDisciplina(t.disciplina);
+}
+
 export interface Trecho {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
@@ -2453,6 +2474,12 @@ export interface Trecho {
    * contá-los a partir do desenho seria inventar dimensionamento.
    */
   condutores?: number | null;
+  /**
+   * MATERIAL declarado (E1.1, kernel 0.63.0). Só em água fria e quente; ausente
+   * = o padrão da disciplina (`materialPadraoDaDisciplina`). Omitido do canônico
+   * quando ausente — desenho anterior não muda de hash.
+   */
+  material?: MaterialDeTubo | null;
   /**
    * Gerado pelo LANÇAMENTO AUTOMÁTICO de eletrodutos (13/09/2026) e ainda não
    * confirmado — o irmão de `Terminal.sugerida`. Desenha-se pontilhado fino;
@@ -5238,6 +5265,12 @@ export function assertModelInvariants(model: BlueprintModel): void {
       // ⚠️ Zero condutores é um eletroduto vazio, que não alimenta nada e ainda
       // assim sairia desenhado como se alimentasse.
       throw new KernelError('BAD_CONDUCTORS', `Condutores inválidos em ${t.id}: ${t.condutores}`);
+    }
+    if (t.material != null) {
+      // Material é de CANO de água: eletroduto, esgoto e duto têm outra conversa.
+      if (!(MATERIAIS_DE_TUBO as readonly string[]).includes(t.material) || (t.disciplina !== 'AGUA_FRIA' && t.disciplina !== 'AGUA_QUENTE')) {
+        throw new KernelError('BAD_PIPE_MATERIAL', `Material inválido em ${t.id}: ${t.material} (${t.disciplina})`);
+      }
     }
   }
 

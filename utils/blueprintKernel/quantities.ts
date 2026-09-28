@@ -20,7 +20,7 @@
 
 import type { AcabamentosDoAmbiente, BlueprintModel, PainelDeCortina, OrientacaoDeBrise, FaseDeReforma, FuncaoCamada, Level, MaterialDeGuardaCorpo, Opening, Rodape, Space, Structural, StructuralKind, Terminal, TipoDeGuardaCorpo, Wall } from './model';
 import { areaDaSecaoT, perimetroDeFormaDaSecaoT, secaoTValida } from './secaoT';
-import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural, acabamentosDoAmbiente, comprimentoDoGuardaCorpo, faseDe } from './model';
+import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural, acabamentosDoAmbiente, comprimentoDoGuardaCorpo, faseDe, materialDoTrecho } from './model';
 import { contornoExternoDoNivel } from './arrangement';
 import { medirAgua } from './telhado';
 import { assinaturaDaEsquadria, nomeDaEsquadria } from './model';
@@ -171,7 +171,10 @@ export interface QuantityPolicy {
  * código). Desenho sem peça não muda de número.
  */
 export const POLITICA_PADRAO: QuantityPolicy = {
-  version: 'quant-1.16.0',
+  // quant-1.17.0 (28/09/2026, E1.1 do roadmap hidrossanitário): o trecho e a
+  // linha de compra do tubo ganharam `material` (o declarado ou o padrão da
+  // disciplina) — PVC DN 25 e PPR DN 25 são compras diferentes.
+  version: 'quant-1.17.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -614,6 +617,8 @@ export interface QuantidadeTrecho {
   rotulo: string;
   bitolaMm: number;
   itemCode: string | null;
+  /** Material efetivo do cano (água fria/quente); `null` nas outras redes. */
+  material: string | null;
   /** A projeção em planta. Zero na prumada. */
   comprimentoPlantaM: number;
   /** O que se compra: a distância real entre as duas pontas. */
@@ -631,6 +636,8 @@ export interface QuantidadeTrecho {
  */
 export interface QuantidadePorBitola {
   disciplina: string;
+  /** Material do cano (quant-1.17.0); `null` fora de água fria/quente. */
+  material: string | null;
   bitolaMm: number;
   itemCode: string | null;
   comprimentoM: number;
@@ -1125,7 +1132,7 @@ function areaOcupadaNoAmbiente(s: Structural, ring: Point[]): number {
 export function agruparPorBitola(trechos: readonly QuantidadeTrecho[]): QuantidadePorBitola[] {
   const porBitolaMapa = new Map<string, QuantidadePorBitola>();
   for (const t of trechos) {
-    const chave = `${t.disciplina}\n${t.bitolaMm}\n${t.itemCode ?? ''}`;
+    const chave = `${t.disciplina}\n${t.material ?? ''}\n${t.bitolaMm}\n${t.itemCode ?? ''}`;
     const atual = porBitolaMapa.get(chave);
     if (atual) {
       atual.comprimentoM += t.comprimentoM;
@@ -1133,6 +1140,7 @@ export function agruparPorBitola(trechos: readonly QuantidadeTrecho[]): Quantida
     } else {
       porBitolaMapa.set(chave, {
         disciplina: t.disciplina,
+        material: t.material ?? null,
         bitolaMm: t.bitolaMm,
         itemCode: t.itemCode,
         comprimentoM: t.comprimentoM,
@@ -1141,7 +1149,7 @@ export function agruparPorBitola(trechos: readonly QuantidadeTrecho[]): Quantida
     }
   }
   return [...porBitolaMapa.values()].sort(
-    (x, y) => x.disciplina.localeCompare(y.disciplina) || x.bitolaMm - y.bitolaMm,
+    (x, y) => x.disciplina.localeCompare(y.disciplina) || (x.material ?? '').localeCompare(y.material ?? '') || x.bitolaMm - y.bitolaMm,
   );
 }
 
@@ -1684,6 +1692,7 @@ export function computeQuantities(
     const real = emL ? planta + Math.abs(desnivel) : Math.hypot(planta, desnivel);
     return {
       trechoId: t.id,
+      material: materialDoTrecho(t),
       uid: t.uid,
       disciplina: t.disciplina,
       rotulo: t.rotulo ?? '',

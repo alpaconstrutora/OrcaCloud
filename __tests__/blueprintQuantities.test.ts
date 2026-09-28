@@ -282,7 +282,13 @@ describe('quantitativos · política', () => {
     // 6,50 m, e é por isso que a versão sobe — o cache chaveado por ela não
     // pode servir o número velho. Só a elétrica; o esgoto com caimento corre
     // inclinado de verdade e continua na diagonal.
-    expect(POLITICA_PADRAO.version).toBe('quant-1.16.0');
+    //
+    // 1.16.0 → 1.17.0 em 28/09/2026 (E1.1 do roadmap hidrossanitário): o trecho
+    // e a linha de compra do tubo ganharam `material` (o declarado, ou o padrão
+    // da rede), e o agrupamento passou a separar por ele — PVC DN 25 e PPR DN 25
+    // eram UMA linha e são duas compras. Acréscimo de campo que também muda o
+    // agrupamento: sem o bump o cache serviria a linha somada.
+    expect(POLITICA_PADRAO.version).toBe('quant-1.17.0');
   });
 });
 

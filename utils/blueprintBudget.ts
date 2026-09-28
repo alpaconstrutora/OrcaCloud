@@ -31,7 +31,8 @@
 
 import type { BudgetEntry, SinapiItem } from '../types/budget';
 import type { DisciplinaDeRede, Quantitativos, StructuralKind, TipoDePontoHidraulico } from './blueprintKernel';
-import { ROTULO_DA_CONEXAO } from './blueprintKernel';
+import { ROTULO_DA_CONEXAO, materialPadraoDaDisciplina, type MaterialDeTubo } from './blueprintKernel';
+import { FICHA_DO_MATERIAL } from './blueprintHidraulicaPressao';
 import {
   nomeDoTipoDeAbertura as nomeDoTipo,
   nomeDoTipoEstrutural,
@@ -878,10 +879,17 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
       // publicações enquanto existir tubo daquele DN.
       return (quant.totais.porBitola ?? [])
         .filter((b) => b.disciplina === disciplina && b.comprimentoM > 0)
-        .map((b) => ({ b, rotulo: `${nome} DN ${b.bitolaMm}${b.itemCode ? ` · ${b.itemCode}` : ''}` }))
+        // E1.1: o MATERIAL entra no FIM do rótulo (o filtro que procura "Água fria
+        // DN 25" continua casando) e no `ref` só quando foge do padrão da
+        // disciplina — a linha de compra já lançada não muda de identidade.
+        .map((b) => {
+          const foraDoPadrao = b.material != null && b.material !== materialPadraoDaDisciplina(b.disciplina as DisciplinaDeRede);
+          const nomeDoMaterial = b.material && b.material in FICHA_DO_MATERIAL ? ` · ${FICHA_DO_MATERIAL[b.material as MaterialDeTubo].rotulo}` : '';
+          return { b, foraDoPadrao, rotulo: `${nome} DN ${b.bitolaMm}${b.itemCode ? ` · ${b.itemCode}` : ''}${nomeDoMaterial}` };
+        })
         .filter(({ rotulo }) => combina(rotulo))
-        .map(({ b, rotulo }) => ({
-          ref: `${b.disciplina}-dn${b.bitolaMm}${b.itemCode ? `-${b.itemCode}` : ''}`,
+        .map(({ b, foraDoPadrao, rotulo }) => ({
+          ref: `${b.disciplina}-dn${b.bitolaMm}${b.itemCode ? `-${b.itemCode}` : ''}${foraDoPadrao ? `-${b.material}` : ''}`,
           rotulo,
           valor: b.comprimentoM,
           formula: `Σ comprimento real dos ${b.trechos} trecho(s) DN ${b.bitolaMm}`,

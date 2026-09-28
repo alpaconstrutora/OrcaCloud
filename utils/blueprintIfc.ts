@@ -50,6 +50,7 @@
 import {
   ehConjunto,
   ROTULO_DA_CONEXAO,
+  materialDoTrecho,
   type ConexaoDerivada,
   CATALOGO_DE_COMPONENTES,
   type Componente,
@@ -927,6 +928,7 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
       emitirPset(ctx, produto, t.uid, 'Pset_OpuraInstalacao', [
         ['Disciplina', { tipo: 'IFCLABEL', v: t.disciplina }],
         ['BitolaMm', { tipo: 'IFCINTEGER', v: t.bitolaMm }],
+        ...(materialDoTrecho(t) ? ([['Material', { tipo: 'IFCLABEL', v: materialDoTrecho(t)! }]] as [string, ValorIfc][]) : []),
         ['CotaAMm', { tipo: 'IFCINTEGER', v: t.cotaAMm }],
         ['CotaBMm', { tipo: 'IFCINTEGER', v: t.cotaBMm }],
         ...(t.disciplina === 'ESGOTO' && emPlanta > 0

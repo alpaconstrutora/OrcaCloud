@@ -123,6 +123,7 @@ import { supplierService } from '../services/supplierService';
 import { Organization } from '../types';
 import Button from './ui/Button';
 import { KpiCard } from './ui/KpiCard';
+import { TabsBar } from './ui/TabsBar';
 
 // ─── Avulso helpers ────────────────────────────────────────────────────────────
 interface AvulsoItem { code: string; description: string; unit: string; quantity: number; unitPrice: number; }
@@ -189,6 +190,8 @@ const FINANCEIRO_FORM_SECTIONS: ContractFormSection[] = [
 // Status do contrato e upload do contrato assinado (GED): editáveis na aba
 // Emissão, ao lado do documento e da assinatura eletrônica — não no Resumo.
 const EMISSAO_FORM_SECTIONS: ContractFormSection[] = ['status_documento'];
+
+type FinanceSubTab = 'dados' | 'parcelas';
 
 const OVERVIEW_TABS = [
     { id: 'overview_resumo', label: 'Resumo', icon: Layers },
@@ -264,6 +267,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const financeColumns = useTableColumns(FINANCE_COLUMNS, 'contractFinanceEntriesColumns');
     // §3 — busca persistida (nunca useState simples para termo de busca)
     const [financeSearch, setFinanceSearch] = usePersistedState<string>('contractFinance:search', '');
+    // Sub-abas da aba Financeiro: condições do contrato × parcelas lançadas.
+    const [financeSubTabSalva, setFinanceSubTab] = usePersistedState<FinanceSubTab>('contractFinance:subTab', 'dados');
+    // Valor persistido fora do vocabulário cai em "Dados Gerais" — senão a aba abriria vazia.
+    const financeSubTab: FinanceSubTab = financeSubTabSalva === 'parcelas' ? 'parcelas' : 'dados';
     const itemsColumns = useTableColumns(ITEMS_COLUMNS, 'contractItemsColumns');
     // §3 — busca persistida (nunca useState simples para termo de busca)
     const [itemsSearch, setItemsSearch] = usePersistedState<string>('contractItems:search', '');
@@ -1334,11 +1341,26 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         Resumo. Um atalho para "ir editar" seria um clique a mais
                         para chegar onde o usuário já está. */}
 
-                    {/* §5.3 — escopo da aba ativa. "Financeiro" existe nos dois
-                        tipos de contrato e de propósito NÃO repete este botão (ver
-                        §18 mais abaixo) — o empty state dela manda usar esta barra.
-                        "Faturas de Consumo" (só recorrente) também lança daqui. */}
-                    {(activeTab === 'utility_bills' || activeTab === 'financeiro') && (
+                    {/* Sub-abas do Financeiro — trilho `bare` dentro desta barra
+                        §5.3 (§19.1), em vez de um segundo card de abas empilhado. */}
+                    {activeTab === 'financeiro' && (
+                        <TabsBar<FinanceSubTab>
+                            bare
+                            tabs={[
+                                { id: 'dados', label: 'Dados Gerais' },
+                                { id: 'parcelas', label: 'Parcelas', badge: financialEntries.length },
+                            ]}
+                            value={financeSubTab}
+                            onChange={setFinanceSubTab}
+                        />
+                    )}
+
+                    {/* §5.3 — escopo da aba ativa. No Financeiro, só na sub-aba
+                        Parcelas, que é onde os lançamentos aparecem; ela de
+                        propósito NÃO repete este botão (§18) — o empty state manda
+                        usar esta barra. "Faturas de Consumo" (só recorrente) também
+                        lança daqui. */}
+                    {(activeTab === 'utility_bills' || (activeTab === 'financeiro' && financeSubTab === 'parcelas')) && (
                         <button
                             onClick={handleSyncFinance}
                             disabled={syncingFinance}
@@ -2716,12 +2738,13 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                 return (
                     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-                        {/* Condições financeiras do contrato — Valores, Condições
-                            de Pagamento e Centro de Custo e Orçamento. Editáveis
-                            aqui (e só aqui): é o que define os lançamentos
-                            listados logo abaixo. Tipo de Contrato e Natureza
-                            classificam o contrato, não o dinheiro: vivem no
-                            Resumo. */}
+                        {/* Sub-aba Dados Gerais: condições financeiras do contrato —
+                            Valores, Condições de Pagamento e Centro de Custo e
+                            Orçamento. Editáveis aqui (e só aqui): é o que define os
+                            lançamentos da sub-aba Parcelas. Tipo de Contrato e
+                            Natureza classificam o contrato, não o dinheiro: vivem
+                            no Resumo. */}
+                        {financeSubTab === 'dados' && (
                         <ContractModal
                             isOpen
                             variant="inline"
@@ -2738,9 +2761,12 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 setContract(updated);
                             }}
                         />
+                        )}
 
-                        {/* §18 — a ação de lançar mora na barra de botões §5.3
+                        {/* Sub-aba Parcelas: os lançamentos gerados pelo contrato.
+                            §18 — a ação de lançar mora na barra de botões §5.3
                             ("Lançar Financeiro"); repetir aqui era o mesmo botão duas vezes. */}
+                        {financeSubTab === 'parcelas' && (<>
                         <div className="mb-2">
                             <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
                                 Lançamentos Financeiros <span className="text-sm font-normal text-emerald-600">{financialEntries.length} registro(s)</span>
@@ -2850,6 +2876,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 </div>
                             )}
                         </div>
+                        </>)}
                     </div>
                 );
             })()}

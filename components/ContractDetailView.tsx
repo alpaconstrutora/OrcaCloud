@@ -309,10 +309,15 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [supplyMatrixModal, setSupplyMatrixModal] = React.useState<{ open: boolean; editing: ContractSupplyMatrixItem | null }>({ open: false, editing: null });
     const [interfaceModal, setInterfaceModal] = React.useState<{ open: boolean; editing: ContractInterface | null }>({ open: false, editing: null });
 
+    // Um timer só: cada aviso novo reinicia a contagem — antes o timer de um
+    // aviso anterior derrubava o novo antes da hora.
+    const notificationTimer = React.useRef<number | undefined>(undefined);
     const notify = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
         setNotification({ message, type });
-        setTimeout(() => setNotification(null), 4500);
+        window.clearTimeout(notificationTimer.current);
+        notificationTimer.current = window.setTimeout(() => setNotification(null), 4500);
     };
+    React.useEffect(() => () => window.clearTimeout(notificationTimer.current), []);
 
     React.useEffect(() => {
         let cancelled = false;
@@ -2056,7 +2061,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         direction={(contract as any).direction}
                         domain={(contract as any).domain}
                         onClose={() => { /* embutido: não há o que fechar */ }}
-                        onToast={(message, type) => setNotification({ message, type })}
+                        onToast={notify}
                         onSubmit={async (data) => {
                             const updated = await contractService.updateContract(contract.id, data);
                             setContract(updated);
@@ -2755,7 +2760,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             direction={(contract as any).direction}
                             domain={(contract as any).domain}
                             onClose={() => { /* embutido: não há o que fechar */ }}
-                            onToast={(message, type) => setNotification({ message, type })}
+                            onToast={notify}
                             onSubmit={async (data) => {
                                 const updated = await contractService.updateContract(contract.id, data);
                                 setContract(updated);
@@ -3201,7 +3206,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         direction={(contract as any).direction}
                         domain={(contract as any).domain}
                         onClose={() => { /* embutido: não há o que fechar */ }}
-                        onToast={(message, type) => setNotification({ message, type })}
+                        onToast={notify}
                         onSubmit={async (data) => {
                             const updated = await contractService.updateContract(contract.id, data);
                             setContract(updated);
@@ -3512,7 +3517,17 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     notification.type === 'error' ? 'bg-red-600 text-white' :
                     'bg-gray-900 text-white'
                 }`}>
-                    {notification.message}
+                    <span>{notification.message}</span>
+                    {/* Fica sobre o canto inferior direito — onde mora o "Salvar
+                        alterações" do formulário embutido —, então dá para
+                        dispensar na hora, sem esperar o timer. */}
+                    <button
+                        onClick={() => { window.clearTimeout(notificationTimer.current); setNotification(null); }}
+                        className="shrink-0 opacity-70 hover:opacity-100 transition-opacity"
+                        aria-label="Fechar aviso"
+                    >
+                        <X className="w-3.5 h-3.5" />
+                    </button>
                 </div>
             )}
 

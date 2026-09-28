@@ -1,0 +1,235 @@
+# Hidrossanitário — roadmap para "substituir o projetista"
+
+## Pedido original
+
+Sessão de 28/09/2026 (VS Code). Depois da classificação em
+`docs/planos/2026-09-28-hidrossanitario-benchmark-altoqi.md` (323 funcionalidades do AltoQi
+Builder Hidrossanitário, critério **"Substituir o projetista"**), a resposta terminava com:
+
+> Se quiser, o próximo passo é transformar isso num roadmap por etapas, como foi feito com a
+> análise do Revit.
+
+Resposta do usuário, literal:
+
+> sim
+
+O benchmark (pedido literal, legenda, tabelas e evidências) é a entrada deste plano; os números
+abaixo saem dele.
+
+## Estado de partida (28/09/2026, commit `1cde506`, kernel `0.61.0`)
+
+- **168 funcionalidades Essenciais**: 67 ✅, 34 🟡, 67 ❌.
+- O que está de pé é o **traçar e quantificar**: água fria e quente automáticas pelas paredes,
+  esgoto automático com junção 45° e TQ, kits por ambiente, louça que lança os pontos,
+  conexões derivadas desenhadas em 2D bifilar e 3D, quantitativo, orçamento, IFC dos pontos.
+- O que falta é o **calcular e entregar**: 101 Essenciais em 10 blocos — pressão (11),
+  reservatório e alimentação (19), pluvial (13), ventilação (8), esgoto completo (12),
+  tratamento individual (6), prancha (15), memoriais (6), verificação visível (3),
+  entregáveis de dados (8).
+
+## Corte e ordem
+
+| Entra | Fica (registrado no fim) |
+|---|---|
+| Os **101 Essenciais** pendentes, e os itens A que um deles exige para funcionar (ex.: sub-rede para separar o pluvial nos quantitativos; pressurizador e VRP junto da pressão) | O resto dos A, os M e os B viram backlog nomeado: PEX, boiler e solar, aproveitamento de chuva, elevatória, piscina, lançamento em corte, edição no 3D, biblioteca personalizada, imagens no BCF |
+
+**Ordem** (a do benchmark): **pressão primeiro** — é o que o projetista confere antes de tudo,
+e destrava avisos, bomba e hidrômetro —; depois **entrega** (prancha e memorial), para que cada
+cálculo novo já saia documentado; depois as **normas completas** de água (reservatório e
+alimentação) e esgoto (tabelas NBR 8160 e ventilação); por fim os **sistemas inteiros novos**
+(pluvial e tratamento). A Etapa 0 vem antes de tudo porque é barata e visível.
+
+## Regras que valem para todas as fases
+
+- **REGRA #8:** uma frente por etapa (`bash scripts/nova-frente.sh hidro-e<N>`); push em `main`
+  é o deploy; `conferir-producao.sh` prova. Ritual: `tsc`, suíte cheia, `check-ui-standard` nos
+  `.tsx` tocados, `check-xss-sinks`, harness visual quando há desenho (molde:
+  `docs/spikes/esgoto-isometrico`), plano atualizado, commit, push, conferência de fora.
+- **Modelo único:** só se grava o que o usuário decide (tubo, ponto, peça, hipótese). Vazão,
+  perda, pressão, DN sugerido, volume, avisos, memorial e prancha são **derivados** — funções
+  puras lendo o modelo, recalculadas a cada mudança, nunca cópia guardada.
+- **Kernel:** campo ou entidade nova no canônico → bump de `KERNEL_VERSION` + goldens (um bump por
+  fase que muda o payload; fase de cálculo ou de desenho não bumpa).
+- **Norma citada com fonte** (NBR, edição, tabela/equação) em cada constante; toda verificação
+  com três estados + "não avaliado" — molde `PainelConferenciaNbr` / `blueprintNbr5410.ts`.
+- **Hipóteses** (per capita, dias de reserva, intensidade pluviométrica, material do tubo):
+  `usePersistedState` primeiro; por estudo no banco quando o usuário pedir (molde armadura/elétrica).
+- **Prova na planta real** só em estudo descartável, e conferindo o banco depois (memória
+  `feedback_bloqueio_playwright_nao_segurou_autosave_planta`); para a planta do usuário, a
+  simulação em memória (teste temporário lendo `draft_payload`) é o jeito seguro.
+
+---
+
+## Etapa 0 — Trilhos rápidos (sem motor novo) · 4 fases
+
+| Fase | Entrega | Onde / reaproveita |
+|---|---|---|
+| 0.1 Verificação visível | **Pontas abertas no desenho** (anel vermelho na ponta, contagem na gaveta), **aviso de DN no esgoto** (trecho confirmado menor que o pedido pela UHC, e maior que o necessário), aviso de peça pendente no croqui | `conexoesDerivadas().pontasAbertas` já calcula; `BlueprintCanvas.tsx`; `planejarEsgoto` |
+| 0.2 Quantitativo por pavimento | Tubos por DN, conexões e pontos **por pavimento** e por disciplina; **equipamentos e reservatórios como linhas próprias** (hoje contados como pontos), com volume/modelo | `utils/blueprintQuantitativosPorPavimento.ts` (hoje sem hidráulica), `quantities.ts:porBitola/porConexao` |
+| 0.3 IFC de instalação | Tubo como **`IfcPipeSegment`** (e `IfcDuctSegment` na mecânica), conexões derivadas como **`IfcPipeFitting`** com o tipo (joelho, tê, junção, redução), `Pset` com DN, cota, declividade | `utils/blueprintIfc.ts` (hoje `IfcFlowSegment` genérico; `entidadeDoPontoHidraulico` é o molde) |
+| 0.4 Peças que faltam | Tipos **válvula de descarga, torneira de boia, VRP, registro de esfera**, **bidê, banheira, mictório, ralo linear, ponto de espera** na ficha (peso, UHC, DN mínimo, cota, símbolo) | `utils/blueprintHidraulica.ts:FICHA_DO_PONTO_HIDRAULICO`, `TIPOS_DE_PONTO_HIDRAULICO` (**bump**) |
+
+Fecha 3 Essenciais do bloco "verificação visível", 5 dos "entregáveis de dados", e prepara a
+Etapa 4 (boia) e a 1 (VRP).
+
+---
+
+## Etapa 1 — Motor de pressão (NBR 5626:2020) · 4 fases · **fundação**
+
+Transforma o dimensionamento "por velocidade" em cálculo completo de água fria e quente.
+
+| Fase | Entrega | Detalhe |
+|---|---|---|
+| 1.1 Materiais e perda distribuída | Tabela de **materiais** (PVC soldável, CPVC, PPR, cobre; PEX fica pronto para o backlog) com diâmetro interno e **rugosidade absoluta**; **perda distribuída por Darcy-Weisbach** com fator de atrito de **Swamee-Jain** (a "fórmula universal" do Anexo da NBR 5626:2020 — cobre "rugosidade dos materiais"); material por trecho (padrão da disciplina, sobrescrevível) | `utils/blueprintHidraulicaPressao.ts` puro; `DIAMETROS` migra para a tabela de materiais. Material no trecho = **bump** |
+| 1.2 Perdas localizadas | **Comprimento equivalente** de cada conexão derivada (joelho 90/45, tê passagem/saída lateral, junção, redução, luva), de registro e de hidrômetro, por DN e material (tabela com fonte) — as conexões já são conhecidas por nó (`conexoesDerivadas`, com `ramais`) | O tê distingue passagem direta × saída lateral pelo `ramais` (colinear ou não) |
+| 1.3 Pressão em cada ponto | Da origem (nível d'água do reservatório = fundo + lâmina) a cada ponto: **pressão disponível = desnível − perdas acumuladas** no caminho; **pressão mínima por aparelho** na ficha (10 kPa dinâmica; valores maiores onde o fabricante pede — chuveiro, válvula de descarga); pressão estática máxima 400 kPa; **aviso de pressão insuficiente/excessiva** na gaveta e no desenho (ponto em vermelho); **simulador** = a mesma conta com hipóteses editáveis (altura da caixa, material) | Três estados por ponto (molde conferência NBR 5410). Pressurizador e VRP (0.4) entram aqui como ganho/queda na linha |
+| 1.4 Dimensionar por pressão | O DN deixa de ser só "velocidade ≤ 3 m/s": **aumenta no caminho crítico até todo ponto atender**; conferência NBR 5626 (vazão, velocidade, pressão dinâmica e estática, DN mínimo) com fonte; perda e vazão suportada do **hidrômetro** | `dimensionarDN` vira a primeira passada; o ajuste por pressão é iterativo e determinístico |
+
+Fecha o bloco **pressão** (11) e o critério "Dimensionamento utilizando critérios normativos".
+
+---
+
+## Etapa 2 — Prancha hidrossanitária · 4 fases
+
+A entrega gráfica. Molde: a prancha elétrica (`utils/blueprintPranchaEletrica.ts`:
+`desenharEletrica`, `linhasDaLegenda`) e o planejador `utils/blueprintPranchas.ts`.
+
+| Fase | Entrega | Detalhe |
+|---|---|---|
+| 2.1 Pranchas de água e de esgoto | `TipoDePrancha` **HIDRAULICA** e **SANITARIA** (e **PLUVIAL** quando a Etapa 6 existir): planta de cada pavimento com a rede bifilar (`faixaDoTubo2D`), conexões (`simbolosDasConexoes2D`), caixas, ø e i %; **legendas automáticas** de condutos (material × DN × cor), peças e símbolos, atualizadas pelo modelo | PDF/DXF pelo caminho de exportação que as pranchas já usam |
+| 2.2 Isométrico de prancha | **Esquema isométrico automático** por ambiente molhado e por coluna: projeção isométrica 2D (30°) da rede, com ø, cotas dos pontos e nome das peças — a mesma geometria do 3D (`pecasDasConexoes3D`), projetada | `utils/blueprintIsometricoPrancha.ts` puro; é o "detalhe" hidráulico e sanitário |
+| 2.3 Esquema vertical | Corte esquemático de **colunas, TQ e ventilação** por pavimento, com níveis; **legenda automática de colunas** (AF-1, AQ-1, TQ-1, CV-1) | Colunas e TQ já são identificáveis (prumadas com posição fixa entre pavimentos) |
+| 2.4 Cotas e indicações | **Cota de nível do tubo** (e de fundo das caixas) na planta, **indicação das peças** (nome da conexão no detalhe), elevações; o corte (`blueprintCorte.ts`) sai na prancha com a rede | fecha os 🟡 do grupo 18 |
+
+Fecha o bloco **prancha** (15).
+
+---
+
+## Etapa 3 — Memoriais e emissão · 3 fases
+
+Molde: `utils/blueprintEletricaExecutivo.ts` (projeto emitido amarrado ao hash do desenho e das
+hipóteses, com responsável e ART) e o DOCX de `utils/blueprintMemorialLote.ts`.
+
+| Fase | Entrega | Detalhe |
+|---|---|---|
+| 3.1 Memorial de cálculo | Derivado do modelo, trecho a trecho: água (ΣP, Q, DN, V, J, perdas, pressão), esgoto (UHC, DN, declividade, cota), reservatório, bomba, pluvial, tratamento — cada seção só aparece se o sistema existe | DOCX e PDF; tabelas iguais às da conferência |
+| 3.2 Memorial descritivo | Sistemas, materiais, normas, premissas (hipóteses), peças | texto montado dos mesmos dados |
+| 3.3 Emissão com ART | **Conferência hidrossanitária** (NBR 5626, 8160, 10844, 7229) sem falta → emitir; o registro fica imutável e deixa de valer quando o desenho ou as hipóteses mudam | reaproveita `ResponsavelTecnico`, `snapshotHash` |
+
+Fecha o bloco **memoriais** (6) e dá o "entregável para o cliente".
+
+---
+
+## Etapa 4 — Reservatório e alimentação · 4 fases
+
+| Fase | Entrega | Detalhe |
+|---|---|---|
+| 4.1 Consumo e volume | **População** pelos dormitórios do programa (2 por dormitório, 1 por dependência — hipótese editável, com fonte), **per capita** (200 L/hab·dia padrão), dias de reserva → **consumo diário e volume**; **divisão inferior/superior** (hipótese 60/40 quando houver inferior); relatório | Ambientes: `utils/blueprintPrograma.ts` (`DORMITORIO`, `SUITE`); volume sugerido vs. o declarado na caixa |
+| 4.2 Papel e peças da caixa | Reservatório com **papel** (SUPERIOR/INFERIOR) e **forma** (prismática/cilíndrica, 3D certo); **boia, extravasor e limpeza** lançados junto da caixa (trechos + peças, DN por norma) | **bump** (papel/forma no terminal) |
+| 4.3 Entrada e alimentador | Ponto de **entrada de água** (cavalete + hidrômetro geral) no limite do lote → **alimentador predial** automático até o reservatório (inferior se houver, senão superior), pelas paredes/piso | `arvorePelasParedes` + hidrômetro da 0.4/1.4; perda no hidrômetro da 1.4 |
+| 4.4 Recalque | Com inferior + superior: **bomba de recalque**, **sucção e recalque** dimensionados (vazão pelo consumo e horas de funcionamento — Forchheimer), **altura manométrica** (desnível + perdas da Etapa 1), potência | `BOMBA` deixa de ser só peça; relatório de bombas |
+
+Fecha o bloco **reservatório e alimentação** (19).
+
+---
+
+## Etapa 5 — Esgoto e ventilação NBR 8160 · 5 fases
+
+| Fase | Entrega | Detalhe |
+|---|---|---|
+| 5.1 Tabelas da norma | `dnPorUhc` (4 degraus) dá lugar às **tabelas da NBR 8160** por tipo de tubo: ramal de descarga (por aparelho), ramal de esgoto, **tubo de queda** (por UHC e pavimentos), **subcoletor e coletor por declividade** | o plano sabe o papel de cada trecho (ramal/TQ/coletor) na árvore |
+| 5.2 Fluxo e verificação | **Sentido do fluxo** gravado no trecho (o automático já sabe; o manual pergunta pela cota); **verificação de declividade e de fluxo em qualquer trecho** (manual incluído): contrafluxo, declividade abaixo da mínima, DN que diminui a jusante — no desenho e na conferência | **bump** (sentido no trecho); fecha "sentido do fluxo", "tubos inadequados", "inconsistências" |
+| 5.3 Coletor predial | Da caixa de inspeção à **ligação na rede pública** (ponto no limite do lote com a cota da rede), **caixas de inspeção intermediárias** por distância e deflexão, coletor e subcoletores nomeados | aviso quando a cota da rede não permite a gravidade (→ elevatória, backlog) |
+| 5.4 Ventilação | **Ramais de ventilação automáticos** respeitando a **distância máxima do desconector ao tubo ventilador** (tabela da NBR 8160), **colunas dimensionadas** (por UHC e comprimento), **prolongamento acima da cobertura** (até o telhado da E-telhado + 30 cm), verificação da ventilação de cada aparelho | a coluna DN 50 fixa de hoje vira caso particular |
+| 5.5 Desvio estrutural | O traçado automático (água e esgoto) **evita pilares e vigas** — os conflitos trecho × estrutura já detectados (`conflitosDoModelo`) viram obstáculos no grafo | molde: `arvorePelasParedes` com nós proibidos |
+
+Fecha os blocos **esgoto completo** (12) e **ventilação** (8).
+
+---
+
+## Etapa 6 — Águas pluviais (NBR 10844) · 4 fases · sistema novo
+
+| Fase | Entrega | Detalhe |
+|---|---|---|
+| 6.1 Disciplina e contribuição | Disciplina **`PLUVIAL`** (cor, prancha, quantitativo, IFC); **área de contribuição** de cada água do telhado (projeção + inclinação, NBR 10844) e de lajes/terraços; **intensidade pluviométrica** por cidade (tabela com fonte) e período de retorno | `Agua.inclinacaoPct` do telhado já existe. **bump** |
+| 6.2 Calhas | Calha como trecho de **seção** (retangular/semicircular) ao longo do beiral, dimensionada por **Manning**; bocais | quantitativo em metro de calha |
+| 6.3 Condutores | **Condutores verticais** (ábaco/tabela da norma) e **horizontais** (por declividade), lançamento automático até **caixas de areia** e à sarjeta/rede | reaproveita o motor de árvore do esgoto (sem UHC; com vazão) |
+| 6.4 Ralos e quantitativos | Ralos externos e hemisféricos, redes independentes, quantitativo de calhas, conferência NBR 10844 | fecha o grupo 12 (E) |
+
+Fecha o bloco **pluvial** (13).
+
+---
+
+## Etapa 7 — Tratamento individual (NBR 7229 / 13969) · 2 fases · sistema novo
+
+| Fase | Entrega | Detalhe |
+|---|---|---|
+| 7.1 Unidades | **Tanque séptico, filtro anaeróbio, sumidouro** como peças com corpo (molde `corpoDaCaixa3D`), lançadas no lote a jusante da caixa de inspeção | **bump** (tipos novos) |
+| 7.2 Dimensionamento | **V = 1000 + N (C·T + K·Lf)** (NBR 7229), vazão contribuinte pela população da 4.1, **taxa de infiltração do solo** (hipótese), área do sumidouro; relatório e seção no memorial | vala de infiltração/filtração e múltiplos sumidouros ficam no backlog |
+
+Fecha o bloco **tratamento individual** (6).
+
+---
+
+## Etapa 8 — Água quente dimensionada e insumos · 2 fases
+
+| Fase | Entrega | Detalhe |
+|---|---|---|
+| 8.1 Aquecedor de passagem | **Vazão simultânea** dos pontos quentes → **L/min do aquecedor** e escolha do modelo (tabela), com a pressão da Etapa 1 | fecha "aquecedor de passagem" e "dimensionamento das tubulações" de água quente |
+| 8.2 Insumo por peça | **Composição de insumos por peça** (conexão, registro, caixa → itens SINAPI), para o orçamento sair por peça e não só por medida | `blueprintBudget.ts` (medidas de hoje) + `itemCode` |
+
+Fecha o bloco **entregáveis de dados** (8, somados aos da Etapa 0).
+
+---
+
+## Sequência e dependências
+
+```
+E0 ─┬─► E1 (pressão) ──► E4 (reservatório: 4.3/4.4 usam perdas)
+    │        └────────► E8.1 (aquecedor usa pressão)
+    ├─► E2 (prancha) ──► E3 (memorial/emissão) ◄── recebe cada cálculo novo
+    ├─► E5 (esgoto + ventilação) ──► E7 (tratamento a jusante da CI)
+    └─► E6 (pluvial; usa o motor de árvore da E5)
+```
+
+Ordem de execução: **E0 → E1 → E2 → E3 → E4 → E5 → E6 → E7 → E8**. E2 e E3 entram cedo de
+propósito: a partir delas, cada etapa seguinte acrescenta sua seção à prancha e ao memorial em
+vez de deixar a documentação para o fim.
+
+**Tamanho:** 32 fases em 9 etapas; 6 bumps de kernel (0.4, 1.1, 4.2, 5.2, 6.1, 7.1) — as demais são cálculo ou desenho derivado.
+
+## Cobertura dos 101 Essenciais pendentes
+
+| Bloco do benchmark | E pendentes | Onde fecha |
+|---|---|---|
+| Pressão e perda de carga | 11 | 1.1–1.4 (a parte "Hunter" do item de métodos fica no backlog; os pesos já existem) |
+| Reservatório e alimentação | 19 | 4.1–4.4, 1.4 (hidrômetro) |
+| Pluvial | 13 | 6.1–6.4 |
+| Ventilação NBR 8160 | 8 | 5.4 |
+| Esgoto completo | 12 | 5.1–5.3, 5.5, 0.1 (aviso de DN) |
+| Tratamento individual | 6 | 7.1–7.2 |
+| Prancha hidrossanitária | 15 | 2.1–2.4 |
+| Memoriais | 6 | 3.1–3.3 (o relatório do reservatório nasce na 4.1) |
+| Verificação visível | 3 | 0.1, 5.2 |
+| Entregáveis de dados | 8 | 0.2, 0.3, 0.4, 8.1, 8.2 |
+| **Total** | **101** | |
+
+## Fora do plano (backlog nomeado)
+
+| Item | Grau | Por que fica |
+|---|---|---|
+| PEX com manifold, multicurva, raio mínimo | A/M | a tabela de materiais da 1.1 já deixa o PEX a um passo; manifold é fase própria |
+| Boiler, placas solares, recirculação | A/M | aquecimento central é nicho no residencial da incorporadora |
+| Aproveitamento de água da chuva (cisterna, Rippl, simulação) | A/M | depende do pluvial (E6); entra logo depois se a cidade exigir |
+| Estação elevatória de esgoto | M | aparece como aviso na 5.3 quando a gravidade não fecha |
+| Piscinas (NBR 10339) | B | — |
+| Lançamento em corte, planta+detalhe simultâneo, edição no 3D | A/M | produtividade, não entrega |
+| Biblioteca de peças personalizadas, fabricantes, símbolo/3D próprios | A/M | exige editor de famílias |
+| Imagens nas notas BCF, vínculo vivo de IFC externo, filtro por pavimento nas colisões | A/M | coordenação, não projeto |
+| Hunter probabilístico para água, sub-redes nomeadas além do pluvial | M/A | a NBR 5626 usa pesos; sub-rede entra só onde uma fase precisar |
+| Integração com AltoQi Cloud | N | produto de terceiro |
+
+## Execução
+
+(nada executado — cada fase ganha aqui sua seção `### E<n>.<m>` com data, commit e o que ficou,
+como no roadmap da Planta)

@@ -83,7 +83,7 @@ Transforma o dimensionamento "por velocidade" em cálculo completo de água fria
 | 1.1 Materiais e perda distribuída ✅ | Tabela de **materiais** (PVC soldável, CPVC, PPR, cobre; PEX fica pronto para o backlog) com diâmetro interno e **rugosidade absoluta**; **perda distribuída por Darcy-Weisbach** com fator de atrito de **Swamee-Jain** (a "fórmula universal" do Anexo da NBR 5626:2020 — cobre "rugosidade dos materiais"); material por trecho (padrão da disciplina, sobrescrevível) | `utils/blueprintHidraulicaPressao.ts` puro; `DIAMETROS` migra para a tabela de materiais. Material no trecho = **bump** |
 | 1.2 Perdas localizadas ✅ | **Comprimento equivalente** de cada conexão derivada (joelho 90/45, tê passagem/saída lateral, junção, redução, luva), de registro e de hidrômetro, por DN e material (tabela com fonte) — as conexões já são conhecidas por nó (`conexoesDerivadas`, com `ramais`) | O tê distingue passagem direta × saída lateral pelo `ramais` (colinear ou não) |
 | 1.3 Pressão em cada ponto ✅ | Da origem (nível d'água do reservatório = fundo + lâmina) a cada ponto: **pressão disponível = desnível − perdas acumuladas** no caminho; **pressão mínima por aparelho** na ficha (10 kPa dinâmica; valores maiores onde o fabricante pede — chuveiro, válvula de descarga); pressão estática máxima 400 kPa; **aviso de pressão insuficiente/excessiva** na gaveta e no desenho (ponto em vermelho); **simulador** = a mesma conta com hipóteses editáveis (altura da caixa, material) | Três estados por ponto (molde conferência NBR 5410). Pressurizador e VRP (0.4) entram aqui como ganho/queda na linha |
-| 1.4 Dimensionar por pressão | O DN deixa de ser só "velocidade ≤ 3 m/s": **aumenta no caminho crítico até todo ponto atender**; conferência NBR 5626 (vazão, velocidade, pressão dinâmica e estática, DN mínimo) com fonte; perda e vazão suportada do **hidrômetro** | `dimensionarDN` vira a primeira passada; o ajuste por pressão é iterativo e determinístico |
+| 1.4 Dimensionar por pressão ✅ | O DN deixa de ser só "velocidade ≤ 3 m/s": **aumenta no caminho crítico até todo ponto atender**; conferência NBR 5626 (vazão, velocidade, pressão dinâmica e estática, DN mínimo) com fonte; perda e vazão suportada do **hidrômetro** | `dimensionarDN` vira a primeira passada; o ajuste por pressão é iterativo e determinístico |
 
 Fecha o bloco **pressão** (11) e o critério "Dimensionamento utilizando critérios normativos".
 
@@ -380,4 +380,26 @@ Publicadas juntas: a perda localizada só aparece no resultado de pressão.
   do painel. Harness `?cena=agua&vista=2d`: chuveiro 70 cm abaixo do fundo da caixa marca −0,6 kPa
   e a pia 4,6 kPa — a rede dimensionada só por velocidade (DN 20) não atende: é o que a 1.4 resolve.
   Suíte: 514 arquivos / 5.859 testes.
+
+### E1.4 — Dimensionar por pressão (28/09/2026) · fecha a Etapa 1
+
+- `blueprintPressaoDaRede.ts`: `ajustarDnPorPressao` — enquanto houver ponto INSUFICIENTE, no
+  caminho do de menor folga aumenta em UM DN comercial (tabela do material) o trecho SUGERIDO de
+  maior perda por metro, e recalcula (determinístico, até 80 passos). Não mexe em trecho
+  confirmado (aviso "aumente à mão"); se nem a estática chega à mínima, desiste do ponto com o
+  aviso "nenhum diâmetro resolve; eleve a caixa ou pressurize". `comAjusteDePressao(model, plano)`
+  aplica o plano numa cópia e devolve o mesmo plano com os `SetTrechoProps` no fim — UM lote, um
+  Ctrl+Z (os ids dos trechos novos são os que o editor dará: kernel determinístico). O cálculo
+  passou a devolver `caminhos` (trechos da origem a cada ponto) e `avisos` — **vazão suportada do
+  hidrômetro** (acima da Qmáx).
+- Editor: `planosDeAgua`, "Relançar" e "Refazer" saem já com o ajuste (com as hipóteses de
+  pressão da gaveta). O primeiro dimensionamento continua sendo o de velocidade; a pressão manda
+  onde for mais exigente.
+- **Pronto quando** ✔: 4 testes — a sala que a velocidade deixa INSUFICIENTE sai toda OK depois do
+  ajuste, só com trechos sugeridos e DN comercial; chuveiro 70 cm abaixo da caixa → "nenhum
+  diâmetro resolve"; trecho confirmado → aviso e nenhum comando; hidrômetro pequeno → aviso de
+  vazão. Harness `?cena=agua&vista=2d`: a marca da pia some (o trecho vai a ø25), a do chuveiro
+  fica (só o desnível resolve). Suíte: 514 arquivos / 5.863 testes.
+
+**Etapa 1: 4 de 4 fases publicadas.**
 

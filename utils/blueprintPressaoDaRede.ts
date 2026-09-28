@@ -24,10 +24,10 @@
  * Ponto sem caminho até a origem: NÃO AVALIADO (e não "zero", que pareceria
  * número conferido).
  */
-import type { BlueprintModel, DisciplinaDeRede, ObjectId, Terminal, Trecho } from './blueprintKernel';
-import { conexoesDerivadas, materialDoTrecho } from './blueprintKernel';
+import type { BlueprintModel, Command, DisciplinaDeRede, ObjectId, Terminal, Trecho } from './blueprintKernel';
+import { applyBatch, applyCommand, conexoesDerivadas, materialDoTrecho } from './blueprintKernel';
 import { fazerChave, comprimentoMm } from './blueprintGrafoDeRede';
-import { origensDeAgua, pesoDoPonto, pontosDeAgua, redeDaOrigem, vazaoDeProjetoLs } from './blueprintAguaAutomatica';
+import { DIAMETROS, origensDeAgua, pesoDoPonto, pontosDeAgua, redeDaOrigem, vazaoDeProjetoLs, type PlanoDeAgua } from './blueprintAguaAutomatica';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import {
   KPA_POR_MCA,
@@ -95,6 +95,10 @@ export interface PressoesDaRede {
   /** O ponto de MENOR folga (disponível − mínima) — o que manda na rede. */
   criticoId: ObjectId | null;
   motivo: string | null;
+  /** Os trechos da origem até cada ponto, na ordem da água (E1.4 usa para escolher o que aumentar). */
+  caminhos: Record<ObjectId, ObjectId[]>;
+  /** Avisos do cálculo (hidrômetro acima da vazão máxima…). */
+  avisos: string[];
 }
 
 type P3 = [number, number, number];
@@ -143,7 +147,7 @@ export function pressoesDaOrigem(
   const rede = redeDaOrigem(model, origem, disciplina);
   const pontos = pontosDeAgua(model, origem, disciplina);
   const vazio = (motivo: string): PressoesDaRede => ({
-    origemId: origem.id, disciplina, trechos: [], criticoId: null, motivo,
+    origemId: origem.id, disciplina, trechos: [], criticoId: null, motivo, caminhos: {}, avisos: [],
     pontos: pontos.map((p) => ({ terminalId: p.id, levelId: p.levelId, at: { ...p.at }, nome: nomeDoPonto(p), disponivelKpa: null, estaticaKpa: null, minimaKpa: minimaDe(p, hip), estado: 'NAO_AVALIADO', motivo })),
   });
   if (cargaInicialMca === null) return vazio('a rede fria não chega ao aquecedor — a pressão da quente depende dela');
@@ -205,6 +209,7 @@ export function pressoesDaOrigem(
   const cargaMca = new Map<string, number>([[raiz, cargaInicialMca?.dinamica ?? hip.laminaDaguaMm / 1000]]);
   const estaticaMca = new Map<string, number>([[raiz, cargaInicialMca?.estatica ?? hip.laminaDaguaMm / 1000]]);
   const trechos: TrechoCalculado[] = [];
+  const avisos: string[] = [];
   for (const k of ordem.slice(1)) {
     const { de, t } = pai.get(k)!;
     const q = vazaoDeProjetoLs(pesoAJusante.get(k) ?? 0);
@@ -234,7 +239,13 @@ export function pressoesDaOrigem(
     for (const pc of pecasDe(t)) {
       const peca = PECA_DO_TERMINAL[pc.tipoHidraulico!];
       if (peca) local += perdaLocalizadaMca(peca, q, material, t.bitolaMm, viscosidade);
-      if (pc.tipoHidraulico === 'HIDROMETRO') local += perdaNoHidrometroKpa(q, hip.qMaxDoHidrometroM3h) / KPA_POR_MCA;
+      if (pc.tipoHidraulico === 'HIDROMETRO') {
+        local += perdaNoHidrometroKpa(q, hip.qMaxDoHidrometroM3h) / KPA_POR_MCA;
+        // VAZÃO SUPORTADA (E1.4): acima da máxima o hidrômetro não mede nem aguenta.
+        if (q > hip.qMaxDoHidrometroM3h / 3.6) {
+          avisos.push(`hidrômetro com vazão de projeto ${q.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L/s acima da máxima dele (${(hip.qMaxDoHidrometroM3h / 3.6).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L/s = ${hip.qMaxDoHidrometroM3h} m³/h) — troque por um maior`);
+        }
+      }
       if (pc.tipoHidraulico === 'VRP') vrp = true;
     }
     const desnivel = (pos.get(de)![2] - pos.get(k)![2]) / 1000;
@@ -262,10 +273,21 @@ export function pressoesDaOrigem(
     const estado: EstadoDaPressao = disponivel < base.minimaKpa ? 'INSUFICIENTE' : estatica > hip.estaticaMaximaKpa ? 'EXCESSIVA' : 'OK';
     return { ...base, disponivelKpa: disponivel, estaticaKpa: estatica, estado };
   });
+  const caminhos: Record<ObjectId, ObjectId[]> = {};
+  for (const p of pontos) {
+    let k = chave(p.levelId, p.at.x, p.at.y, p.cotaMm);
+    if (!cargaMca.has(k)) continue;
+    const ids: ObjectId[] = [];
+    for (let e = pai.get(k); e; e = pai.get(k)) {
+      ids.push(e.t.id);
+      k = e.de;
+    }
+    caminhos[p.id] = ids.reverse();
+  }
   const avaliados = resultado.filter((r) => r.disponivelKpa != null);
   const critico = avaliados.sort((a, b) => a.disponivelKpa! - a.minimaKpa - (b.disponivelKpa! - b.minimaKpa))[0] ?? null;
   return {
-    origemId: origem.id, disciplina, trechos, criticoId: critico?.terminalId ?? null, motivo: null,
+    origemId: origem.id, disciplina, trechos, criticoId: critico?.terminalId ?? null, motivo: null, caminhos, avisos,
     pontos: resultado.sort((a, b) => a.nome.localeCompare(b.nome) || a.terminalId.localeCompare(b.terminalId)),
   };
 }
@@ -304,3 +326,100 @@ export function pressoesDoModelo(model: BlueprintModel, hip: HipotesesDePressao 
     });
   return [...frias, ...quentes];
 }
+
+// ─── E1.4 — DIMENSIONAR POR PRESSÃO ──────────────────────────────────────────
+
+/** Limite de passos do ajuste — cada passo aumenta UM trecho em UM DN. */
+const MAX_PASSOS_DO_AJUSTE = 80;
+
+/**
+ * DIMENSIONAR POR PRESSÃO (28/09/2026, E1.4 — NBR 5626:2020): o DN deixa de
+ * ser só "velocidade ≤ limite". Enquanto houver ponto INSUFICIENTE, no caminho
+ * do de menor folga aumenta-se em UM DN comercial o trecho SUGERIDO de maior
+ * perda por metro (é onde o ganho é maior), e recalcula-se. Determinístico.
+ *
+ * Não mexe em trecho CONFIRMADO (quem aceitou decidiu) — avisa. E não tenta o
+ * impossível: se nem a pressão ESTÁTICA (o desnível sem perda nenhuma) chega à
+ * mínima, nenhum diâmetro resolve, e o aviso diz o que resolve (elevar a caixa
+ * ou pressurizar).
+ */
+export function ajustarDnPorPressao(
+  model: BlueprintModel,
+  origemId: ObjectId,
+  hip: HipotesesDePressao = HIPOTESES_PRESSAO_PADRAO,
+): { comandos: Extract<Command, { type: 'SetTrechoProps' }>[]; avisos: string[] } {
+  let m = model;
+  const novoDn = new Map<ObjectId, number>();
+  const avisos: string[] = [];
+  const desistidos = new Set<ObjectId>();
+  const kpa = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+  for (let passo = 0; passo < MAX_PASSOS_DO_AJUSTE; passo++) {
+    const r = pressoesDoModelo(m, hip).find((x) => x.origemId === origemId);
+    if (!r) break;
+    const ruim = r.pontos
+      .filter((p) => p.estado === 'INSUFICIENTE' && !desistidos.has(p.terminalId))
+      .sort((a, b) => a.disponivelKpa! - a.minimaKpa - (b.disponivelKpa! - b.minimaKpa) || a.terminalId.localeCompare(b.terminalId))[0];
+    if (!ruim) break;
+    if (ruim.estaticaKpa! < ruim.minimaKpa) {
+      desistidos.add(ruim.terminalId);
+      avisos.push(`${ruim.nome}: o desnível até a caixa dá só ${kpa(ruim.estaticaKpa!)} kPa, abaixo da mínima de ${kpa(ruim.minimaKpa)} — nenhum diâmetro resolve; eleve a caixa ou pressurize`);
+      continue;
+    }
+    const porId = new Map((m.trechos ?? []).map((t) => [t.id, t]));
+    const calculado = new Map(r.trechos.map((t) => [t.trechoId, t]));
+    const candidato = (r.caminhos[ruim.terminalId] ?? [])
+      .map((id) => porId.get(id)!)
+      .filter((t) => t && t.sugerido)
+      .map((t) => {
+        const tabela = DIAMETROS[materialDoTrecho(t) ?? 'PVC_SOLDAVEL'];
+        const proximo = tabela.find((l) => l.dn > t.bitolaMm)?.dn ?? null;
+        const c = calculado.get(t.id);
+        const metros = Math.max(Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y, t.cotaBMm - t.cotaAMm) / 1000, 0.001);
+        return { t, proximo, porMetro: c ? (c.perdaDistribuidaMca + c.perdaLocalizadaMca) / metros : 0 };
+      })
+      .filter((x) => x.proximo != null)
+      .sort((a, b) => b.porMetro - a.porMetro || a.t.id.localeCompare(b.t.id))[0];
+    if (!candidato) {
+      desistidos.add(ruim.terminalId);
+      avisos.push(`${ruim.nome}: ${kpa(ruim.disponivelKpa!)} < ${kpa(ruim.minimaKpa)} kPa e o caminho não tem trecho sugerido para aumentar (confirmados, ou já no maior DN) — aumente à mão`);
+      continue;
+    }
+    novoDn.set(candidato.t.id, candidato.proximo!);
+    m = applyCommand(m, { type: 'SetTrechoProps', trechoId: candidato.t.id, bitolaMm: candidato.proximo! }).model;
+  }
+  return {
+    comandos: [...novoDn.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([trechoId, bitolaMm]) => ({ type: 'SetTrechoProps' as const, trechoId, bitolaMm })),
+    avisos,
+  };
+}
+
+/**
+ * O PLANO DA ÁGUA com o ajuste por pressão (E1.4): aplica o plano numa cópia,
+ * ajusta e devolve o mesmo plano com os `SetTrechoProps` no fim — UM lote, um
+ * Ctrl+Z. Os ids dos trechos novos são os que o editor vai dar ao aplicar o
+ * mesmo lote no mesmo modelo (o kernel é determinístico).
+ */
+export function comAjusteDePressao(model: BlueprintModel, plano: PlanoDeAgua, hip: HipotesesDePressao = HIPOTESES_PRESSAO_PADRAO): PlanoDeAgua & { ajustadosPorPressao: number } {
+  let aplicado: BlueprintModel;
+  try {
+    aplicado = applyBatch(model, plano.comandos).model;
+  } catch {
+    return { ...plano, ajustadosPorPressao: 0 };
+  }
+  const { comandos, avisos } = ajustarDnPorPressao(aplicado, plano.origemId, hip);
+  if (comandos.length === 0 && avisos.length === 0) return { ...plano, ajustadosPorPressao: 0 };
+  const dnFinal = Math.max(plano.dnMaximoMm, ...comandos.map((c) => c.bitolaMm ?? 0));
+  return {
+    ...plano,
+    comandos: [...plano.comandos, ...comandos],
+    dnMaximoMm: dnFinal,
+    avisos: [
+      ...plano.avisos,
+      ...(comandos.length > 0 ? [`${comandos.length} trecho(s) com o DN aumentado para atender a pressão mínima (NBR 5626)`] : []),
+      ...avisos,
+    ],
+    motivo: comandos.length > 0 ? null : plano.motivo,
+    ajustadosPorPressao: comandos.length,
+  };
+}
+

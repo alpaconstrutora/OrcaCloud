@@ -65,6 +65,9 @@ export default function PainelPressoesDaAgua({ pressoes, nomeDaOrigem, hip, onHi
             {r.disciplina === 'AGUA_QUENTE' ? 'Água quente' : 'Água fria'} — {nomeDaOrigem(r.origemId)}
           </p>
           {r.motivo && <p className="text-xs text-slate-500">{r.motivo}</p>}
+          {r.avisos.map((a, i) => (
+            <p key={i} className="rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-800">{a}</p>
+          ))}
           {r.pontos.length > 0 && (
             <table className="w-full table-fixed text-xs" aria-label={`Pressões ${r.disciplina === 'AGUA_QUENTE' ? 'da água quente' : 'da água fria'}`}>
               <thead>

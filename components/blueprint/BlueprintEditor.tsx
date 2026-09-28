@@ -209,7 +209,7 @@ import PainelVagaSelecionada from './PainelVagaSelecionada';
 import PainelComponenteSelecionado from './PainelComponenteSelecionado';
 import PainelVerificacaoDaRede from './PainelVerificacaoDaRede';
 import PainelPressoesDaAgua from './PainelPressoesDaAgua';
-import { HIPOTESES_PRESSAO_PADRAO, pressoesDoModelo, type HipotesesDePressao } from '../../utils/blueprintPressaoDaRede';
+import { HIPOTESES_PRESSAO_PADRAO, comAjusteDePressao, pressoesDoModelo, type HipotesesDePressao } from '../../utils/blueprintPressaoDaRede';
 import { marcasDeVerificacao } from '../../utils/blueprintVerificacaoRede';
 import SeletorDeTipo from './SeletorDeTipo';
 import { camposDoComponente, propriedadesDoComponente, type PropriedadesDeComponente } from '../../utils/blueprintTipos';
@@ -7146,7 +7146,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    */
   const [hipDeAguaSalvas, setHipDeAguaSalvas] = usePersistedState<HipotesesDeAgua>('blueprint:aguaAutomatica', HIPOTESES_AGUA_PADRAO);
   const hipotesesDeAgua = useMemo<HipotesesDeAgua>(() => ({ ...HIPOTESES_AGUA_PADRAO, ...(hipDeAguaSalvas ?? {}) }), [hipDeAguaSalvas]);
-  const planosDeAgua = useMemo(() => planejarAguaDoModelo(editor.model, hipotesesDeAgua), [editor.model, hipotesesDeAgua]);
+  /** PRESSÃO NOS PONTOS (28/09/2026, E1.3): hipóteses do usuário, cálculo derivado do modelo. */
+  const [hipPressaoSalvas, setHipPressao] = usePersistedState<HipotesesDePressao>('blueprint:pressaoDaAgua', HIPOTESES_PRESSAO_PADRAO);
+  const hipPressao = useMemo<HipotesesDePressao>(() => ({ ...HIPOTESES_PRESSAO_PADRAO, ...(hipPressaoSalvas ?? {}) }), [hipPressaoSalvas]);
+  // E1.4: cada plano sai já com o DN ajustado para a pressão mínima (NBR 5626).
+  const planosDeAgua = useMemo(
+    () => planejarAguaDoModelo(editor.model, hipotesesDeAgua).map((p) => comAjusteDePressao(editor.model, p, hipPressao)),
+    [editor.model, hipotesesDeAgua, hipPressao],
+  );
   const pontosDeAguaALigar = planosDeAgua.reduce((n, p) => n + p.aLigar, 0);
   const origemDoPlano = (p: PlanoDeAgua) => (editor.model.terminais ?? []).find((t) => t.id === p.origemId) ?? null;
   const lancarAgua = (planos: PlanoDeAgua[]) => {
@@ -7154,7 +7161,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       if (p.comandos.length > 0) return p.comandos;
       if (p.sugeridos === 0) return [];
       const origem = origemDoPlano(p);
-      return origem ? relancarAgua(editor.model, origem, hipotesesDeAgua).comandos : [];
+      return origem ? comAjusteDePressao(editor.model, relancarAgua(editor.model, origem, hipotesesDeAgua), hipPressao).comandos : [];
     });
     if (comandos.length === 0) return;
     const criados = editor.runBatch(comandos);
@@ -7170,7 +7177,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       variant: 'warning',
     });
     if (!ok) return;
-    const re = refazerAgua(editor.model, origem, hipotesesDeAgua);
+    const re = comAjusteDePressao(editor.model, refazerAgua(editor.model, origem, hipotesesDeAgua), hipPressao);
     if (re.comandos.length === 0) return;
     const criados = editor.runBatch(re.comandos);
     if (criados.length > 0) selecionar(criados);
@@ -7182,9 +7189,6 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const hipotesesDeEsgoto = useMemo<HipotesesDeEsgoto>(() => ({ ...HIPOTESES_ESGOTO_PADRAO, ...(hipDeEsgotoSalvas ?? {}) }), [hipDeEsgotoSalvas]);
   const planoDeEsgoto = useMemo(() => planejarEsgoto(editor.model, hipotesesDeEsgoto), [editor.model, hipotesesDeEsgoto]);
   /** VERIFICAÇÃO DA REDE (28/09/2026, E0.1 do roadmap hidrossanitário): pontas abertas, DN do esgoto, louça sem ponto. */
-  /** PRESSÃO NOS PONTOS (28/09/2026, E1.3): hipóteses do usuário, cálculo derivado do modelo. */
-  const [hipPressaoSalvas, setHipPressao] = usePersistedState<HipotesesDePressao>('blueprint:pressaoDaAgua', HIPOTESES_PRESSAO_PADRAO);
-  const hipPressao = useMemo<HipotesesDePressao>(() => ({ ...HIPOTESES_PRESSAO_PADRAO, ...(hipPressaoSalvas ?? {}) }), [hipPressaoSalvas]);
   const pressoesDaAgua = useMemo(() => pressoesDoModelo(editor.model, hipPressao), [editor.model, hipPressao]);
   const marcasDaRede = useMemo(() => marcasDeVerificacao(editor.model, null, pressoesDaAgua), [editor.model, pressoesDaAgua]);
   const lancarEsgoto = () => {

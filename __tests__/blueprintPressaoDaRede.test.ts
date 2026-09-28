@@ -151,3 +151,74 @@ describe('E1.3 — a marca no desenho', () => {
   });
 });
 
+
+describe('E1.4 — dimensionar por pressão', () => {
+  /** Sala 4 × 6 m, caixa no canto a 2,80 m, lavatório perto e pia longe — a rede pelas paredes em DN 20 não segura a pia. */
+  function sala() {
+    const { m, t } = nivel();
+    const w = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddWall', levelId: t, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 });
+    return {
+      t,
+      m: applyBatch(m, [
+        w(0, 0, 4000, 0), w(4000, 0, 4000, 6000), w(4000, 6000, 0, 6000), w(0, 6000, 0, 0),
+        ponto(t, 'RESERVATORIO', 0, 0, 2800),
+        ponto(t, 'LAVATORIO', 75, 1500, 600),
+        { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Pia', at: point(3925, 5500), cotaMm: 1100, tipoHidraulico: 'PIA_COZINHA' },
+        { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Máquina', at: point(2000, 5925), cotaMm: 900, tipoHidraulico: 'MAQUINA_LAVAR' },
+      ]).model,
+    };
+  }
+
+  it('a rede por velocidade não atende; com o ajuste, TODOS os pontos atendem — num lote só, sem mexer em confirmado', async () => {
+    const { m } = sala();
+    const { planejarAgua } = await import('../utils/blueprintAguaAutomatica');
+    const { comAjusteDePressao } = await import('../utils/blueprintPressaoDaRede');
+    const caixa = m.terminais!.find((x) => x.tipoHidraulico === 'RESERVATORIO')!;
+    const plano = planejarAgua(m, caixa);
+    const soVelocidade = applyBatch(m, plano.comandos).model;
+    expect(pressoesDoModelo(soVelocidade)[0].pontos.some((p) => p.estado === 'INSUFICIENTE')).toBe(true);
+    const ajustado = comAjusteDePressao(m, plano);
+    expect(ajustado.ajustadosPorPressao).toBeGreaterThan(0);
+    expect(ajustado.avisos.some((a) => /DN aumentado para atender a pressão/.test(a))).toBe(true);
+    const depois = applyBatch(m, ajustado.comandos).model;
+    const r = pressoesDoModelo(depois)[0];
+    expect(r.pontos.map((p) => p.estado)).toEqual(r.pontos.map(() => 'OK'));
+    // Todo trecho aumentado era sugerido, e o DN é comercial do PVC.
+    for (const c of ajustado.comandos.filter((x) => x.type === 'SetTrechoProps')) {
+      const t = depois.trechos!.find((x) => x.id === (c as { trechoId: string }).trechoId)!;
+      expect(t.sugerido).toBe(true);
+      expect([20, 25, 32, 40, 50, 60, 75, 85, 110]).toContain(t.bitolaMm);
+    }
+  });
+
+  it('chuveiro 70 cm abaixo do fundo da caixa: nenhum diâmetro resolve — o aviso diz o que resolve', async () => {
+    const { m, t } = sala();
+    const comChuveiro = applyCommand(m, ponto(t, 'CHUVEIRO', 75, 3500, 2100)).model;
+    const { planejarAgua } = await import('../utils/blueprintAguaAutomatica');
+    const { comAjusteDePressao } = await import('../utils/blueprintPressaoDaRede');
+    const caixa = comChuveiro.terminais!.find((x) => x.tipoHidraulico === 'RESERVATORIO')!;
+    const ajustado = comAjusteDePressao(comChuveiro, planejarAgua(comChuveiro, caixa));
+    expect(ajustado.avisos.some((a) => /Chuveiro: o desnível até a caixa dá só .* nenhum diâmetro resolve; eleve a caixa ou pressurize/.test(a))).toBe(true);
+  });
+
+  it('trecho CONFIRMADO não é mexido: o aviso manda aumentar à mão', async () => {
+    const { m, caixa } = simples();
+    // DN 20 e comprido demais — e confirmado (sem `sugerido`).
+    const longe = applyBatch(m, [
+      { type: 'SetTrechoProps', trechoId: m.trechos![1].id, bitolaMm: 20 },
+      { type: 'AddTrecho', levelId: m.levels[0].id, disciplina: 'AGUA_FRIA', a: point(3000, 0), b: point(3000, 30000), cotaAMm: 600, cotaBMm: 600, bitolaMm: 20 },
+      ponto(m.levels[0].id, 'LAVATORIO', 3000, 30000, 600),
+    ]).model;
+    const { ajustarDnPorPressao } = await import('../utils/blueprintPressaoDaRede');
+    const r = ajustarDnPorPressao(longe, caixa.id);
+    expect(r.comandos).toEqual([]);
+    expect(r.avisos.some((a) => /não tem trecho sugerido para aumentar .* aumente à mão/.test(a))).toBe(true);
+  });
+
+  it('HIDRÔMETRO pequeno para a vazão: aviso de vazão suportada', () => {
+    const { m, t, caixa } = simples();
+    const com = applyCommand(m, ponto(t, 'HIDROMETRO', 1500, 0, 600)).model;
+    const r = pressoesDaOrigem(com, caixa, { ...HIPOTESES_PRESSAO_PADRAO, qMaxDoHidrometroM3h: 0.5 });
+    expect(r.avisos.some((a) => /hidrômetro com vazão de projeto .* acima da máxima/.test(a))).toBe(true);
+  });
+});

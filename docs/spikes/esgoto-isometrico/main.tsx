@@ -22,7 +22,7 @@ import BlueprintCanvas from '../../../components/blueprint/BlueprintCanvas';
 import { applyBatch, applyCommand, conexoesDerivadas, emptyModel, point, recomputeSpaces, type Command, type TipoDePontoHidraulico } from '../../../utils/blueprintKernel';
 import { planejarEsgoto } from '../../../utils/blueprintEsgotoAutomatico';
 import { planejarAgua } from '../../../utils/blueprintAguaAutomatica';
-import { pressoesDoModelo } from '../../../utils/blueprintPressaoDaRede';
+import { comAjusteDePressao, pressoesDoModelo } from '../../../utils/blueprintPressaoDaRede';
 
 const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
 const t = base.levels[0].id;
@@ -49,7 +49,9 @@ function salaDaAgua() {
   // O menu grava as medidas da ficha num segundo comando (`AddTerminal` não as recebe).
   s = applyCommand(s, { type: 'SetTerminalProps', terminalId: s.terminais![0].id, larguraMm: 1200, profundidadeMm: 1200, alturaMm: 800 } as Command).model;
   s = recomputeSpaces(s);
-  return applyBatch(s, planejarAgua(s, s.terminais![0]).comandos).model;
+  // E1.4: o plano já sai com o DN ajustado para a pressão (`?semAjuste=1` mostra só a velocidade).
+  const plano = planejarAgua(s, s.terminais![0]);
+  return applyBatch(s, params.get('semAjuste') === '1' ? plano.comandos : comAjusteDePressao(s, plano).comandos).model;
 }
 
 let m = params.get('cena') === 'agua' ? salaDaAgua() : applyBatch(base, [

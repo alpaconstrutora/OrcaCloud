@@ -983,6 +983,13 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             } else {
                 notify(`Financeiro atualizado: ${count} lançamento${count > 1 ? 's' : ''} criado${count > 1 ? 's' : ''}`, "success");
             }
+            // A aba Financeiro lista o que acabou de ser gerado — sem recarregar,
+            // ela seguia no empty state até reabrir o contrato.
+            if (count > 0) {
+                contractService.listFinancialEntries(contract)
+                    .then(setFinancialEntries)
+                    .catch(err => console.error('Erro ao recarregar lançamentos financeiros:', err));
+            }
         } catch (e) {
             // Mensagem do serviço quando existe (ex: locação faturada pela
             // negociação) — "tente novamente" ali seria enganoso, porque repetir
@@ -1237,6 +1244,11 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {[...(contract.is_recurring ? [
                         ...OVERVIEW_TABS,
+                        // Mesma aba do não-recorrente: os blocos de dinheiro
+                        // (valores, pagamento, centro de custo) só existem nela
+                        // desde que saíram do Resumo — sem ela, o recorrente
+                        // não tinha onde editá-los nem ver os lançamentos.
+                        { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
                         { id: 'utility_bills', label: 'Faturas de Consumo', icon: BarChart3 }
                     ] : [
                         // "Itens do Contrato" vem logo depois de "Resumo" — é a
@@ -1326,12 +1338,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         Resumo. Um atalho para "ir editar" seria um clique a mais
                         para chegar onde o usuário já está. */}
 
-                    {/* §5.3 — escopo da aba ativa. "Faturas de Consumo" só existe
-                        em contrato recorrente; no não-recorrente a aba equivalente
-                        é "Financeiro", que de propósito NÃO repete este botão (ver
-                        §18 mais abaixo) e cujo empty state manda usar esta barra.
-                        Prender só a `utility_bills` deixaria todo contrato
-                        não-recorrente sem como lançar no financeiro. */}
+                    {/* §5.3 — escopo da aba ativa. "Financeiro" existe nos dois
+                        tipos de contrato e de propósito NÃO repete este botão (ver
+                        §18 mais abaixo) — o empty state dela manda usar esta barra.
+                        "Faturas de Consumo" (só recorrente) também lança daqui. */}
                     {(activeTab === 'utility_bills' || activeTab === 'financeiro') && (
                         <button
                             onClick={handleSyncFinance}

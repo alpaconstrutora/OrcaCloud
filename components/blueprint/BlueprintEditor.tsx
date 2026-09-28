@@ -208,6 +208,8 @@ import PainelSubRegiaoSelecionada from './PainelSubRegiaoSelecionada';
 import PainelVagaSelecionada from './PainelVagaSelecionada';
 import PainelComponenteSelecionado from './PainelComponenteSelecionado';
 import PainelVerificacaoDaRede from './PainelVerificacaoDaRede';
+import PainelPressoesDaAgua from './PainelPressoesDaAgua';
+import { HIPOTESES_PRESSAO_PADRAO, pressoesDoModelo, type HipotesesDePressao } from '../../utils/blueprintPressaoDaRede';
 import { marcasDeVerificacao } from '../../utils/blueprintVerificacaoRede';
 import SeletorDeTipo from './SeletorDeTipo';
 import { camposDoComponente, propriedadesDoComponente, type PropriedadesDeComponente } from '../../utils/blueprintTipos';
@@ -7180,7 +7182,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const hipotesesDeEsgoto = useMemo<HipotesesDeEsgoto>(() => ({ ...HIPOTESES_ESGOTO_PADRAO, ...(hipDeEsgotoSalvas ?? {}) }), [hipDeEsgotoSalvas]);
   const planoDeEsgoto = useMemo(() => planejarEsgoto(editor.model, hipotesesDeEsgoto), [editor.model, hipotesesDeEsgoto]);
   /** VERIFICAÇÃO DA REDE (28/09/2026, E0.1 do roadmap hidrossanitário): pontas abertas, DN do esgoto, louça sem ponto. */
-  const marcasDaRede = useMemo(() => marcasDeVerificacao(editor.model), [editor.model]);
+  /** PRESSÃO NOS PONTOS (28/09/2026, E1.3): hipóteses do usuário, cálculo derivado do modelo. */
+  const [hipPressaoSalvas, setHipPressao] = usePersistedState<HipotesesDePressao>('blueprint:pressaoDaAgua', HIPOTESES_PRESSAO_PADRAO);
+  const hipPressao = useMemo<HipotesesDePressao>(() => ({ ...HIPOTESES_PRESSAO_PADRAO, ...(hipPressaoSalvas ?? {}) }), [hipPressaoSalvas]);
+  const pressoesDaAgua = useMemo(() => pressoesDoModelo(editor.model, hipPressao), [editor.model, hipPressao]);
+  const marcasDaRede = useMemo(() => marcasDeVerificacao(editor.model, null, pressoesDaAgua), [editor.model, pressoesDaAgua]);
   const lancarEsgoto = () => {
     const comandos = planoDeEsgoto.comandos.length > 0
       ? planoDeEsgoto.comandos
@@ -12120,6 +12126,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             />
           ) : (
             <BlueprintCanvas
+              pressoesDaAgua={pressoesDaAgua}
               encaixesAtivos={encaixesAtivos}
               mostrarCircuitos={ajusteDaVista ? false : mostrarCircuitos}
               model={editor.model}
@@ -13825,6 +13832,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   </tbody>
                 </table>
               )}
+              <PainelPressoesDaAgua
+                pressoes={pressoesDaAgua}
+                nomeDaOrigem={(id) => {
+                  const o = editor.model.terminais?.find((x) => x.id === id);
+                  return o?.rotulo || (o?.tipoHidraulico === 'AQUECEDOR' ? 'Aquecedor' : "Caixa d'água");
+                }}
+                hip={hipPressao}
+                onHip={setHipPressao}
+                onSelecionar={selecionar}
+              />
               <PainelVerificacaoDaRede marcas={marcasDaRede} disciplinas={['AGUA_FRIA', 'AGUA_QUENTE']} onSelecionar={selecionar} />
             </div>
           )}

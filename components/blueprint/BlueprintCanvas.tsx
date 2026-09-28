@@ -144,6 +144,10 @@ import {
   simbolosDasConexoes2D,
 } from '../../utils/blueprintIsometrico';
 import { marcasDeVerificacao } from '../../utils/blueprintVerificacaoRede';
+import type { PressoesDaRede } from '../../utils/blueprintPressaoDaRede';
+
+/** Referência estável para o padrão (um `[]` literal no parâmetro refaria as marcas a cada render). */
+const SEM_PRESSOES: readonly PressoesDaRede[] = [];
 import { useRodaNaoPassiva } from '../../hooks/useRodaNaoPassiva';
 import { SIGLA_DO_PONTO_HIDRAULICO } from '../../utils/blueprintHidraulica';
 import {
@@ -981,6 +985,8 @@ interface Props {
    * paralelos derivam na primeira mudança.
    */
   pontasSoltas?: PontaSoltaCanvas[];
+  /** PRESSÕES da água (E1.3) — as marcas de pressão no desenho. Calculadas por quem tem as hipóteses. */
+  pressoesDaAgua?: readonly PressoesDaRede[];
   /**
    * A primeira ponta já escolhida na ferramenta Juntar. Sai preenchida e noutra
    * cor: é o "mudou de cor" que confirma o clique.
@@ -1484,6 +1490,7 @@ export default function BlueprintCanvas({
   vaos = [],
   vaoEmDestaque = null,
   pontasSoltas = [],
+  pressoesDaAgua = SEM_PRESSOES,
   pontaEmJuncao = null,
   onEscolherPontaJuncao,
   onJuntarPontas,
@@ -1900,7 +1907,7 @@ export default function BlueprintCanvas({
   /** As CONEXÕES da planta (27/09/2026, "os tubos e conexoes devem ser detalhados") — ver `blueprintIsometrico`. */
   const simbolosConexoes2d = useMemo(() => simbolosDasConexoes2D(model, levelId ?? null), [model, levelId]);
   /** As MARCAS da verificação da rede (28/09/2026, E0.1) — ver `blueprintVerificacaoRede`. */
-  const marcasDaRede2d = useMemo(() => marcasDeVerificacao(model, levelId ?? null), [model, levelId]);
+  const marcasDaRede2d = useMemo(() => marcasDeVerificacao(model, levelId ?? null, pressoesDaAgua), [model, levelId, pressoesDaAgua]);
   const terminaisReais = useMemo(
     () => (model.terminais ?? []).filter((t) => (!levelId || t.levelId === levelId) && !ocultos.has(t.id)),
     [model.terminais, levelId, ocultos],

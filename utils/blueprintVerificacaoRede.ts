@@ -20,8 +20,9 @@ import { conexoesDerivadas } from './blueprintKernel';
 import { verificarDnDoEsgoto } from './blueprintEsgotoAutomatico';
 import { pontosDaLouca } from './blueprintPontosHidraulicos';
 import { ROTULO_DA_DISCIPLINA } from './blueprintRede';
+import type { PressoesDaRede } from './blueprintPressaoDaRede';
 
-export type TipoDeMarca = 'PONTA_ABERTA' | 'DN_MENOR' | 'DN_MAIOR' | 'LOUCA_SEM_PONTO';
+export type TipoDeMarca = 'PONTA_ABERTA' | 'DN_MENOR' | 'DN_MAIOR' | 'LOUCA_SEM_PONTO' | 'PRESSAO_BAIXA' | 'PRESSAO_ALTA';
 
 export interface MarcaDeVerificacao {
   chave: string;
@@ -37,8 +38,12 @@ export interface MarcaDeVerificacao {
   disciplina?: DisciplinaDeRede;
 }
 
-/** Todas as marcas do modelo (ou só as do pavimento), em ordem estável. */
-export function marcasDeVerificacao(model: BlueprintModel, levelId: ObjectId | null = null): MarcaDeVerificacao[] {
+/**
+ * Todas as marcas do modelo (ou só as do pavimento), em ordem estável. As
+ * PRESSÕES (E1.3) chegam calculadas por quem tem as hipóteses do usuário — a
+ * marca não pode discordar da tabela da gaveta.
+ */
+export function marcasDeVerificacao(model: BlueprintModel, levelId: ObjectId | null = null, pressoes: readonly PressoesDaRede[] = []): MarcaDeVerificacao[] {
   const trechoPorId = new Map((model.trechos ?? []).map((t) => [t.id, t]));
   const marcas: MarcaDeVerificacao[] = [];
 
@@ -89,6 +94,17 @@ export function marcasDeVerificacao(model: BlueprintModel, levelId: ObjectId | n
       severidade: 'AVISO',
       alvoId: c.id,
     });
+  }
+
+  const um = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+  for (const r of pressoes) {
+    for (const p of r.pontos) {
+      if (p.estado === 'INSUFICIENTE') {
+        marcas.push({ chave: `pressao|${p.terminalId}`, tipo: 'PRESSAO_BAIXA', levelId: p.levelId, at: { ...p.at }, texto: `${um(p.disponivelKpa!)} < ${um(p.minimaKpa)} kPa`, severidade: 'ERRO', alvoId: p.terminalId, disciplina: r.disciplina });
+      } else if (p.estado === 'EXCESSIVA') {
+        marcas.push({ chave: `pressao|${p.terminalId}`, tipo: 'PRESSAO_ALTA', levelId: p.levelId, at: { ...p.at }, texto: `estática ${um(p.estaticaKpa!)} kPa`, severidade: 'AVISO', alvoId: p.terminalId, disciplina: r.disciplina });
+      }
+    }
   }
 
   return marcas.filter((m) => !levelId || m.levelId === levelId).sort((a, b) => a.chave.localeCompare(b.chave));

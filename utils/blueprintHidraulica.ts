@@ -45,6 +45,11 @@ export interface FichaDoPontoHidraulico {
   volumeL?: number;
   /** Peça que vive SOBRE um trecho (registro, válvula, hidrômetro, conexão manual). */
   sobreOTrecho?: boolean;
+  /**
+   * Pressão DINÂMICA mínima no ponto, kPa, quando o aparelho pede mais que a
+   * regra geral da NBR 5626:2020 (10 kPa) — E1.3. Ausente = a regra geral.
+   */
+  pressaoMinimaKpa?: number;
   ajuda: string;
 }
 
@@ -182,6 +187,9 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     cotaMm: { AGUA_FRIA: 1100 },
     dnMinimoMm: { AGUA_FRIA: 32 },
     pesoNbr5626: 32,
+    // A válvula de descarga precisa de mais pressão que a regra geral: 20 kPa
+    // (2 mca) é o mínimo usual dos fabricantes para a válvula de baixa pressão.
+    pressaoMinimaKpa: 20,
     ajuda: 'Válvula de descarga da bacia SEM caixa acoplada: a 1,10 m, sub-ramal DN 32. Peso 32 na NBR 5626 — é ela que costuma mandar no diâmetro do ramal. O esgoto é o da bacia (vaso sanitário).',
   },
   PONTO_ESPERA: {

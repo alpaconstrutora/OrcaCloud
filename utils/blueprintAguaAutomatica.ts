@@ -170,7 +170,7 @@ export function origensDeAgua(model: BlueprintModel): { origem: Terminal; discip
 }
 
 /** O peso NBR 5626 de um ponto da disciplina; o aquecedor na água fria vale a soma dos quentes. */
-function pesoDoPonto(model: BlueprintModel, t: Terminal, disciplina: DisciplinaDeRede): number {
+export function pesoDoPonto(model: BlueprintModel, t: Terminal, disciplina: DisciplinaDeRede): number {
   if (t.tipoHidraulico === 'AQUECEDOR' && disciplina === 'AGUA_FRIA') {
     const quentes = (model.terminais ?? []).filter((x) => x.disciplina === 'AGUA_QUENTE' && ehPontoDeConsumo(x.tipoHidraulico));
     const soma = quentes.reduce((s, x) => s + (FICHA_DO_PONTO_HIDRAULICO[x.tipoHidraulico!].pesoNbr5626 ?? 0), 0);

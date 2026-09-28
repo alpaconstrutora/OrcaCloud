@@ -81,8 +81,8 @@ Transforma o dimensionamento "por velocidade" em cálculo completo de água fria
 | Fase | Entrega | Detalhe |
 |---|---|---|
 | 1.1 Materiais e perda distribuída ✅ | Tabela de **materiais** (PVC soldável, CPVC, PPR, cobre; PEX fica pronto para o backlog) com diâmetro interno e **rugosidade absoluta**; **perda distribuída por Darcy-Weisbach** com fator de atrito de **Swamee-Jain** (a "fórmula universal" do Anexo da NBR 5626:2020 — cobre "rugosidade dos materiais"); material por trecho (padrão da disciplina, sobrescrevível) | `utils/blueprintHidraulicaPressao.ts` puro; `DIAMETROS` migra para a tabela de materiais. Material no trecho = **bump** |
-| 1.2 Perdas localizadas | **Comprimento equivalente** de cada conexão derivada (joelho 90/45, tê passagem/saída lateral, junção, redução, luva), de registro e de hidrômetro, por DN e material (tabela com fonte) — as conexões já são conhecidas por nó (`conexoesDerivadas`, com `ramais`) | O tê distingue passagem direta × saída lateral pelo `ramais` (colinear ou não) |
-| 1.3 Pressão em cada ponto | Da origem (nível d'água do reservatório = fundo + lâmina) a cada ponto: **pressão disponível = desnível − perdas acumuladas** no caminho; **pressão mínima por aparelho** na ficha (10 kPa dinâmica; valores maiores onde o fabricante pede — chuveiro, válvula de descarga); pressão estática máxima 400 kPa; **aviso de pressão insuficiente/excessiva** na gaveta e no desenho (ponto em vermelho); **simulador** = a mesma conta com hipóteses editáveis (altura da caixa, material) | Três estados por ponto (molde conferência NBR 5410). Pressurizador e VRP (0.4) entram aqui como ganho/queda na linha |
+| 1.2 Perdas localizadas ✅ | **Comprimento equivalente** de cada conexão derivada (joelho 90/45, tê passagem/saída lateral, junção, redução, luva), de registro e de hidrômetro, por DN e material (tabela com fonte) — as conexões já são conhecidas por nó (`conexoesDerivadas`, com `ramais`) | O tê distingue passagem direta × saída lateral pelo `ramais` (colinear ou não) |
+| 1.3 Pressão em cada ponto ✅ | Da origem (nível d'água do reservatório = fundo + lâmina) a cada ponto: **pressão disponível = desnível − perdas acumuladas** no caminho; **pressão mínima por aparelho** na ficha (10 kPa dinâmica; valores maiores onde o fabricante pede — chuveiro, válvula de descarga); pressão estática máxima 400 kPa; **aviso de pressão insuficiente/excessiva** na gaveta e no desenho (ponto em vermelho); **simulador** = a mesma conta com hipóteses editáveis (altura da caixa, material) | Três estados por ponto (molde conferência NBR 5410). Pressurizador e VRP (0.4) entram aqui como ganho/queda na linha |
 | 1.4 Dimensionar por pressão | O DN deixa de ser só "velocidade ≤ 3 m/s": **aumenta no caminho crítico até todo ponto atender**; conferência NBR 5626 (vazão, velocidade, pressão dinâmica e estática, DN mínimo) com fonte; perda e vazão suportada do **hidrômetro** | `dimensionarDN` vira a primeira passada; o ajuste por pressão é iterativo e determinístico |
 
 Fecha o bloco **pressão** (11) e o critério "Dimensionamento utilizando critérios normativos".
@@ -349,5 +349,35 @@ Frente `hidro-e1`.
   invariante, quantitativo separado por material, **Darcy a menos de 15 % de Fair-Whipple-Hsiao**
   (a fórmula clássica do PVC) em quatro casos residenciais, valor conferido à mão (PVC DN 25 a
   0,3 L/s → 0,82 m/s, J 0,044 m/m), laminar 64/Re, quente perde menos; 2 testes do painel.
-  Suíte: 511 arquivos / 5.836 testes (+ os novos).
+  Suíte: 511 arquivos / 5.836 testes (+ os novos). Publicado `66f549e`; `planta-api`
+  redeployada (0.63.0), gate provado (401/401/200); domínio conferido.
+
+### E1.2 + E1.3 — Perdas localizadas e pressão em cada ponto (28/09/2026)
+
+Publicadas juntas: a perda localizada só aparece no resultado de pressão.
+
+- **E1.2** (`blueprintHidraulicaPressao.ts`): `COMPRIMENTO_EQUIVALENTE_M` por peça e DN 20…75
+  (tabela usual de PVC rígido — anexo da NBR 5626:1998 e catálogos; aplicada a todos os materiais,
+  aproximação declarada), interpolada entre DN (CPVC 22, 28…); tê de PASSAGEM × SAÍDA LATERAL;
+  redução como joelho 45°; luva sem perda; entrada/saída; `perdaNoHidrometroKpa` — NBR 5626:
+  Δh = (36·Q)²·Qmáx⁻² (100 kPa na vazão máxima).
+- **E1.3** (`utils/blueprintPressaoDaRede.ts`, novo): `pressoesDaOrigem` percorre a rede em árvore
+  da origem; em cada trecho, desnível − perda distribuída − conexão do nó de montante (tê pela
+  geometria: saída alinhada com a chegada = passagem) − peças sobre o trecho (registros,
+  válvula de retenção, hidrômetro); a VRP limita a jusante (dinâmica e estática) ao ajuste.
+  Mínima: 10 kPa (NBR 5626:2020) ou a da ficha (`pressaoMinimaKpa`: válvula de descarga 20);
+  estática máxima 400 kPa. Estados OK / INSUFICIENTE / EXCESSIVA / NÃO AVALIADO (sem caminho —
+  nunca zero). Ponto crítico = menor folga. `pressoesDoModelo`: frias primeiro, e a QUENTE parte do
+  que a fria entrega ao aquecedor menos a perda dele (hipótese). Hipóteses (`HIPOTESES_PRESSAO_PADRAO`):
+  lâmina 0, aquecedor 20 kPa, VRP 200 kPa, hidrômetro Qmáx 3 m³/h.
+- **Tela:** gaveta da água com `PainelPressoesDaAgua` (tabela por rede, crítico, estado, ponto
+  selecionável, hipóteses editáveis = simulador, persistidas em `blueprint:pressaoDaAgua`); marcas
+  `PRESSAO_BAIXA`/`PRESSAO_ALTA` no desenho, calculadas com as MESMAS hipóteses da gaveta.
+- **Pronto quando** ✔: 9 testes em `blueprintPressaoDaRede.test.ts` — rede simples CONFERIDA À
+  MÃO (2,20 m menos a perda em 6,8 m equivalentes), caixa baixa = insuficiente, tê passagem × lateral
+  com os comprimentos da tabela, prédio de 45 m = excessiva e VRP segura em 200, hidrômetro pela
+  fórmula, ponto solto = não avaliado, água quente a partir do aquecedor; marca no desenho; 2 testes
+  do painel. Harness `?cena=agua&vista=2d`: chuveiro 70 cm abaixo do fundo da caixa marca −0,6 kPa
+  e a pia 4,6 kPa — a rede dimensionada só por velocidade (DN 20) não atende: é o que a 1.4 resolve.
+  Suíte: 514 arquivos / 5.859 testes.
 

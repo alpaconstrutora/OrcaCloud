@@ -22,6 +22,7 @@ import BlueprintCanvas from '../../../components/blueprint/BlueprintCanvas';
 import { applyBatch, applyCommand, conexoesDerivadas, emptyModel, point, recomputeSpaces, type Command, type TipoDePontoHidraulico } from '../../../utils/blueprintKernel';
 import { planejarEsgoto } from '../../../utils/blueprintEsgotoAutomatico';
 import { planejarAgua } from '../../../utils/blueprintAguaAutomatica';
+import { pressoesDoModelo } from '../../../utils/blueprintPressaoDaRede';
 
 const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
 const t = base.levels[0].id;
@@ -77,11 +78,14 @@ if (params.get('defeitos') === '1') {
 const conexoes = conexoesDerivadas(m).conexoes;
 const resumo = `trechos: ${m.trechos?.length ?? 0} · conexões: ${conexoes.map((c) => c.tipo).join(', ')} · avisos: ${conexoes.filter((c) => c.aviso).length}`;
 
+const pressoes = params.get('cena') === 'agua' ? pressoesDoModelo(m) : [];
+
 function Planta() {
   const [sel, setSel] = useState<string[]>([]);
   return (
     <BlueprintCanvas
       model={m}
+      pressoesDaAgua={pressoes}
       tool="selecionar"
       levelId={t}
       selectedIds={sel}

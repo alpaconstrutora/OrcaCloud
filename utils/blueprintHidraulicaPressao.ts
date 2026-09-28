@@ -156,3 +156,75 @@ export function perdaDistribuida(
   const j = v === 0 ? 0 : (f * v * v) / (d * 2 * G);
   return { velocidadeMs: v, reynolds: re, fatorDeAtrito: f, perdaUnitariaMpm: j, perdaMca: j * comprimentoM };
 }
+
+// ─── E1.2 — PERDAS LOCALIZADAS ───────────────────────────────────────────────
+
+/** As peças que perdem carga no caminho da água. */
+export type PecaDePerda =
+  | 'JOELHO_90'
+  | 'JOELHO_45'
+  | 'TE_PASSAGEM'
+  | 'TE_LATERAL'
+  | 'LUVA'
+  | 'REDUCAO'
+  | 'REGISTRO_GAVETA'
+  | 'REGISTRO_PRESSAO'
+  | 'REGISTRO_ESFERA'
+  | 'VALVULA_RETENCAO'
+  | 'ENTRADA'
+  | 'SAIDA';
+
+/** Os DN da tabela de comprimentos equivalentes, mm. */
+const DN_DA_TABELA = [20, 25, 32, 40, 50, 60, 75];
+
+/**
+ * COMPRIMENTO EQUIVALENTE, em metros de tubo do mesmo DN — tabela usual de
+ * PVC rígido (anexo da NBR 5626:1998 e catálogos técnicos de fabricante), por
+ * DN 20…75. Aplicada a todos os materiais: a tabela de metal é um pouco maior,
+ * e a aproximação fica declarada aqui e no memorial. O TÊ distingue passagem
+ * direta de saída lateral (a geometria do nó diz qual); a REDUÇÃO usa o joelho
+ * de 45° (ordem de grandeza da transição gradual); a LUVA não perde (emenda
+ * alinhada). ENTRADA é a saída do reservatório para o tubo; SAÍDA, a do tubo.
+ */
+export const COMPRIMENTO_EQUIVALENTE_M: Record<PecaDePerda, number[]> = {
+  JOELHO_90: [1.1, 1.2, 1.5, 2.0, 3.2, 3.4, 3.7],
+  JOELHO_45: [0.4, 0.5, 0.7, 1.0, 1.3, 1.5, 1.7],
+  TE_PASSAGEM: [0.7, 0.8, 0.9, 1.5, 2.2, 2.3, 2.4],
+  TE_LATERAL: [2.3, 2.4, 3.1, 4.6, 7.3, 7.6, 7.8],
+  LUVA: [0, 0, 0, 0, 0, 0, 0],
+  REDUCAO: [0.4, 0.5, 0.7, 1.0, 1.3, 1.5, 1.7],
+  REGISTRO_GAVETA: [0.1, 0.2, 0.3, 0.4, 0.7, 0.8, 0.9],
+  REGISTRO_PRESSAO: [11.1, 11.4, 15.0, 22.0, 35.8, 37.9, 38.0],
+  REGISTRO_ESFERA: [0.1, 0.2, 0.3, 0.4, 0.7, 0.8, 0.9],
+  VALVULA_RETENCAO: [2.5, 2.7, 3.8, 4.9, 6.8, 7.1, 8.2],
+  ENTRADA: [0.3, 0.4, 0.5, 0.6, 1.0, 1.5, 1.6],
+  SAIDA: [0.8, 0.9, 1.3, 1.4, 3.2, 3.3, 3.5],
+};
+
+/** Comprimento equivalente no DN — interpolado entre os DN da tabela (CPVC 22, 28…), extrapolado nas pontas pela reta. */
+export function comprimentoEquivalenteM(peca: PecaDePerda, dn: number): number {
+  const v = COMPRIMENTO_EQUIVALENTE_M[peca];
+  if (dn <= DN_DA_TABELA[0]) return (v[0] * dn) / DN_DA_TABELA[0];
+  for (let i = 1; i < DN_DA_TABELA.length; i++) {
+    if (dn <= DN_DA_TABELA[i]) {
+      const t = (dn - DN_DA_TABELA[i - 1]) / (DN_DA_TABELA[i] - DN_DA_TABELA[i - 1]);
+      return v[i - 1] + t * (v[i] - v[i - 1]);
+    }
+  }
+  const n = DN_DA_TABELA.length - 1;
+  return (v[n] * dn) / DN_DA_TABELA[n];
+}
+
+/** A perda de UMA peça, mca: a perda distribuída do seu comprimento equivalente. */
+export function perdaLocalizadaMca(peca: PecaDePerda, vazaoLs: number, material: MaterialDeTubo, dn: number, viscosidade = VISCOSIDADE_20C): number {
+  return perdaDistribuida(vazaoLs, material, dn, comprimentoEquivalenteM(peca, dn), viscosidade).perdaMca;
+}
+
+/**
+ * A perda no HIDRÔMETRO, kPa — NBR 5626 (anexo): Δh = (36·Q)² · Qmáx⁻², com Q em
+ * L/s e Qmáx em m³/h. Na vazão máxima a perda é 100 kPa (10 mca), que é como o
+ * hidrômetro é especificado.
+ */
+export function perdaNoHidrometroKpa(vazaoLs: number, qMaxM3h: number): number {
+  return ((36 * Math.max(0, vazaoLs)) ** 2) / qMaxM3h ** 2;
+}

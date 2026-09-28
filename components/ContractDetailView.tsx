@@ -1242,15 +1242,11 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 (bg-white text-blue-600 shadow-sm), não o azul sólido de ação. */}
             <div className="bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3 sticky top-4 z-40">
                 <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                    {[...(contract.is_recurring ? [
-                        ...OVERVIEW_TABS,
-                        // Mesma aba do não-recorrente: os blocos de dinheiro
-                        // (valores, pagamento, centro de custo) só existem nela
-                        // desde que saíram do Resumo — sem ela, o recorrente
-                        // não tinha onde editá-los nem ver os lançamentos.
-                        { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
-                        { id: 'utility_bills', label: 'Faturas de Consumo', icon: BarChart3 }
-                    ] : [
+                    {/* Recorrente e não-recorrente têm as MESMAS abas (pedido de
+                        2026-09-28); o recorrente só acrescenta "Faturas de
+                        Consumo". Antes o recorrente tinha só Resumo/Execução/Riscos,
+                        e ficava sem onde editar valores, status e documento. */}
+                    {[
                         // "Itens do Contrato" vem logo depois de "Resumo" — é a
                         // continuação natural da leitura do contrato, antes das
                         // abas de acompanhamento (execução, riscos).
@@ -1260,11 +1256,11 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         { id: 'addendums', label: 'Aditivos (VA/PR)', icon: History },
                         { id: 'measurements', label: (contract as any).direction === 'OUTGOING' ? 'Faturamento (M/F)' : 'Medições (M/F)', icon: BarChart3 },
                         { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
+                        ...(contract.is_recurring ? [{ id: 'utility_bills', label: 'Faturas de Consumo', icon: BarChart3 }] : []),
                         { id: 'retention', label: 'Retenção de Garantia', icon: HandCoins },
                         { id: 'penalties', label: 'Penalidades', icon: AlertCircle },
                         { id: 'evaluation', label: 'Avaliação de Desempenho', icon: BarChart3 },
                         { id: 'emissao', label: 'Emissão', icon: FileDown },
-                    ]),
                     ].map((tab) => (
                         <button
                             key={tab.id}

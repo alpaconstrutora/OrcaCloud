@@ -2886,6 +2886,7 @@ var ROTULO_DA_CONEXAO = {
   JOELHO_90: "Joelho 90\xB0",
   JOELHO_45: "Joelho 45\xB0",
   TE: "T\xEA",
+  JUNCAO_45: "Jun\xE7\xE3o 45\xB0",
   CRUZETA: "Cruzeta",
   LUVA: "Luva",
   REDUCAO: "Redu\xE7\xE3o"
@@ -2905,6 +2906,18 @@ function tipoDeConexaoManual(tipoHidraulico) {
     default:
       return null;
   }
+}
+var CAIXAS_DE_ESGOTO = {
+  CAIXA_INSPECAO: { cotaE: "FUNDO", alturaPadraoMm: 600, larguraPadraoMm: 600 },
+  CAIXA_GORDURA: { cotaE: "FUNDO", alturaPadraoMm: 500, larguraPadraoMm: 400 },
+  CAIXA_SIFONADA: { cotaE: "TOPO", alturaPadraoMm: 200, larguraPadraoMm: 150 },
+  RALO_SIFONADO: { cotaE: "TOPO", alturaPadraoMm: 150, larguraPadraoMm: 100 }
+};
+function extensaoVerticalDaCaixa(t) {
+  const c = t.tipoHidraulico ? CAIXAS_DE_ESGOTO[t.tipoHidraulico] : void 0;
+  if (!c) return null;
+  const altura = t.alturaMm ?? c.alturaPadraoMm;
+  return c.cotaE === "FUNDO" ? { fundoMm: t.cotaMm, topoMm: t.cotaMm + altura } : { fundoMm: t.cotaMm - altura, topoMm: t.cotaMm };
 }
 var HIDRAULICAS = ["AGUA_FRIA", "AGUA_QUENTE", "ESGOTO"];
 function fazerChave(niveis) {
@@ -2956,6 +2969,15 @@ function conexoesDerivadas(model) {
     lista.push(term);
     terminaisPorChave.set(k, lista);
   }
+  const caixas = (model.terminais ?? []).flatMap((term) => {
+    if (term.disciplina !== "ESGOTO") return [];
+    const ext = extensaoVerticalDaCaixa(term);
+    if (!ext) return [];
+    const k = chave(term.levelId, term.disciplina, term.at.x, term.at.y, term.cotaMm);
+    const desloc = k.cotaMm - term.cotaMm;
+    return [{ levelId: k.levelId, x: term.at.x, y: term.at.y, fundo: ext.fundoMm + desloc, topo: ext.topoMm + desloc }];
+  });
+  const dentroDeCaixa = (no) => no.disciplina === "ESGOTO" && caixas.some((c) => c.levelId === no.levelId && c.x === no.no.x && c.y === no.no.y && no.cotaMm >= c.fundo - 1 && no.cotaMm <= c.topo + 1);
   const conexoes = [];
   const pontasAbertas = [];
   const chavesOrdenadas = [...nos.keys()].sort();
@@ -2969,7 +2991,9 @@ function conexoesDerivadas(model) {
     const bitolas = inc.map((i) => i.trecho.bitolaMm);
     const maior = Math.max(...bitolas);
     const menor = Math.min(...bitolas);
-    const base = { levelId: no.levelId, no: no.no, cotaMm: no.cotaMm, disciplina: no.disciplina, trechoIds, bitolaMm: maior };
+    const ramais = [...inc].sort((x, y) => x.trecho.id.localeCompare(y.trecho.id)).map((i) => ({ trechoId: i.trecho.id, u: i.u, bitolaMm: i.trecho.bitolaMm }));
+    const base = { levelId: no.levelId, no: no.no, cotaMm: no.cotaMm, disciplina: no.disciplina, trechoIds, bitolaMm: maior, ramais };
+    if (!manual && dentroDeCaixa(no)) continue;
     if (manual) {
       conexoes.push({ ...base, tipo: manual, origem: "MANUAL", ...menor !== maior ? { paraMm: menor } : {} });
       continue;
@@ -2993,7 +3017,14 @@ function conexoesDerivadas(model) {
       continue;
     }
     if (inc.length === 3) {
-      conexoes.push({ ...base, tipo: "TE", origem: "DERIVADA", ...menor !== maior ? { paraMm: menor } : {} });
+      let tipo = "TE";
+      for (const [i, j, k2] of [[0, 1, 2], [0, 2, 1], [1, 2, 0]]) {
+        if (anguloGraus(inc[i].u, inc[j].u) < 170) continue;
+        const ang = anguloGraus(inc[k2].u, inc[i].u);
+        if (Math.abs(ang - 45) <= 10 || Math.abs(ang - 135) <= 10) tipo = "JUNCAO_45";
+        break;
+      }
+      conexoes.push({ ...base, tipo, origem: "DERIVADA", ...menor !== maior ? { paraMm: menor } : {} });
       continue;
     }
     conexoes.push({ ...base, tipo: "CRUZETA", origem: "DERIVADA", aviso: `${inc.length} trechos no mesmo n\xF3`, ...menor !== maior ? { paraMm: menor } : {} });
@@ -3178,6 +3209,67 @@ function areaOcupadaNoAmbiente(s2, ring) {
     return Math.PI * raio * raio;
   }
   return s2.larguraMm * s2.profundidadeMm;
+}
+function agruparPorBitola(trechos) {
+  const porBitolaMapa = /* @__PURE__ */ new Map();
+  for (const t of trechos) {
+    const chave = `${t.disciplina}
+${t.bitolaMm}
+${t.itemCode ?? ""}`;
+    const atual = porBitolaMapa.get(chave);
+    if (atual) {
+      atual.comprimentoM += t.comprimentoM;
+      atual.trechos += 1;
+    } else {
+      porBitolaMapa.set(chave, {
+        disciplina: t.disciplina,
+        bitolaMm: t.bitolaMm,
+        itemCode: t.itemCode,
+        comprimentoM: t.comprimentoM,
+        trechos: 1
+      });
+    }
+  }
+  return [...porBitolaMapa.values()].sort(
+    (x, y) => x.disciplina.localeCompare(y.disciplina) || x.bitolaMm - y.bitolaMm
+  );
+}
+function agruparPorTerminal(terminais) {
+  const porTerminalMapa = /* @__PURE__ */ new Map();
+  for (const t of terminais) {
+    const classificacao = t.tipoHidraulico ?? t.tipoEletrico ?? null;
+    const chave = `${t.disciplina}
+${classificacao ?? t.tipo}
+${t.itemCode ?? ""}`;
+    const atual = porTerminalMapa.get(chave);
+    if (atual) atual.quantidade += 1;
+    else {
+      porTerminalMapa.set(chave, {
+        disciplina: t.disciplina,
+        tipo: t.tipo,
+        classificacao,
+        itemCode: t.itemCode ?? null,
+        quantidade: 1
+      });
+    }
+  }
+  return [...porTerminalMapa.values()].sort(
+    (x, y) => x.disciplina.localeCompare(y.disciplina) || x.tipo.localeCompare(y.tipo)
+  );
+}
+function agruparPorConexao(conexoes) {
+  const porConexaoMapa = /* @__PURE__ */ new Map();
+  for (const c of conexoes) {
+    const k = `${c.disciplina}|${c.tipo}|${c.bitolaMm}|${c.paraMm ?? ""}`;
+    const atual = porConexaoMapa.get(k) ?? { disciplina: c.disciplina, tipo: c.tipo, bitolaMm: c.bitolaMm, paraMm: c.paraMm ?? null, quantidade: 0, derivadas: 0, manuais: 0 };
+    atual.quantidade += 1;
+    if (c.origem === "MANUAL") atual.manuais += 1;
+    else atual.derivadas += 1;
+    porConexaoMapa.set(k, atual);
+  }
+  return [...porConexaoMapa.values()].sort(
+    (x, y) => x.disciplina.localeCompare(y.disciplina) || x.tipo.localeCompare(y.tipo) || x.bitolaMm - y.bitolaMm
+  );
 }
 function computeQuantities(model, policy = POLITICA_PADRAO, kernelVersion = "") {
   const disputas = sobreposicoesDoModelo(model);
@@ -3532,62 +3624,10 @@ ${c.funcao}`;
       formula: desnivel === 0 ? `${(planta / 1e3).toFixed(3)} m em planta` : planta === 0 ? `${(Math.abs(desnivel) / 1e3).toFixed(3)} m de prumada` : emL ? `${(planta / 1e3).toFixed(3)} m em planta + ${(Math.abs(desnivel) / 1e3).toFixed(3)} m de prumada` : `\u221A(${(planta / 1e3).toFixed(3)}\xB2 + ${(Math.abs(desnivel) / 1e3).toFixed(3)}\xB2) m`
     };
   });
-  const porBitolaMapa = /* @__PURE__ */ new Map();
-  for (const t of trechos) {
-    const chave = `${t.disciplina}
-${t.bitolaMm}
-${t.itemCode ?? ""}`;
-    const atual = porBitolaMapa.get(chave);
-    if (atual) {
-      atual.comprimentoM += t.comprimentoM;
-      atual.trechos += 1;
-    } else {
-      porBitolaMapa.set(chave, {
-        disciplina: t.disciplina,
-        bitolaMm: t.bitolaMm,
-        itemCode: t.itemCode,
-        comprimentoM: t.comprimentoM,
-        trechos: 1
-      });
-    }
-  }
-  const porBitola = [...porBitolaMapa.values()].sort(
-    (x, y) => x.disciplina.localeCompare(y.disciplina) || x.bitolaMm - y.bitolaMm
-  );
-  const porTerminalMapa = /* @__PURE__ */ new Map();
-  for (const t of model.terminais ?? []) {
-    const classificacao = t.tipoHidraulico ?? t.tipoEletrico ?? null;
-    const chave = `${t.disciplina}
-${classificacao ?? t.tipo}
-${t.itemCode ?? ""}`;
-    const atual = porTerminalMapa.get(chave);
-    if (atual) atual.quantidade += 1;
-    else {
-      porTerminalMapa.set(chave, {
-        disciplina: t.disciplina,
-        tipo: t.tipo,
-        classificacao,
-        itemCode: t.itemCode ?? null,
-        quantidade: 1
-      });
-    }
-  }
+  const porBitola = agruparPorBitola(trechos);
+  const porTerminal = agruparPorTerminal(model.terminais ?? []);
   const { conexoes } = conexoesDerivadas(model);
-  const porConexaoMapa = /* @__PURE__ */ new Map();
-  for (const c of conexoes) {
-    const k = `${c.disciplina}|${c.tipo}|${c.bitolaMm}|${c.paraMm ?? ""}`;
-    const atual = porConexaoMapa.get(k) ?? { disciplina: c.disciplina, tipo: c.tipo, bitolaMm: c.bitolaMm, paraMm: c.paraMm ?? null, quantidade: 0, derivadas: 0, manuais: 0 };
-    atual.quantidade += 1;
-    if (c.origem === "MANUAL") atual.manuais += 1;
-    else atual.derivadas += 1;
-    porConexaoMapa.set(k, atual);
-  }
-  const porConexao = [...porConexaoMapa.values()].sort(
-    (x, y) => x.disciplina.localeCompare(y.disciplina) || x.tipo.localeCompare(y.tipo) || x.bitolaMm - y.bitolaMm
-  );
-  const porTerminal = [...porTerminalMapa.values()].sort(
-    (x, y) => x.disciplina.localeCompare(y.disciplina) || x.tipo.localeCompare(y.tipo)
-  );
+  const porConexao = agruparPorConexao(conexoes);
   const somaPiso = ambientes.reduce((s2, a) => s2 + a.areaPisoM2, 0);
   const somaFace = paredes.reduce((s2, p) => s2 + p.areaFaceLiquidaM2, 0);
   const somaConstruida = model.levels.reduce(
@@ -3758,7 +3798,7 @@ var COBERTURA_IFC = [
   "GEORREFER\xCANCIA: quando o desenho tem lugar informado, saem IfcSite.RefLatitude/RefLongitude/RefElevation e o norte verdadeiro no contexto geom\xE9trico. IfcMapConversion + IfcProjectedCRS s\xF3 saem quando algu\xE9m informou a coordenada PROJETADA (leste, norte e o c\xF3digo do CRS) \u2014 ela NUNCA \xE9 calculada a partir de latitude e longitude, porque a conta depende do fuso e errar o fuso p\xF5e o modelo a centenas de quil\xF4metros do lugar com a forma perfeita.",
   "PAR\xC2METROS PERSONALIZADOS: a pe\xE7a que os carrega ganha Pset_OpuraPersonalizado com a chave de programa como nome da propriedade (n\xFAmero \u2192 IfcReal, sim/n\xE3o \u2192 IfcBoolean, texto \u2192 IfcLabel). O nome leg\xEDvel e a unidade s\xE3o da defini\xE7\xE3o na organiza\xE7\xE3o e N\xC3O viajam.",
   'APROVA\xC7\xC3O: quando a revis\xE3o foi aprovada no sistema, Pset_OpuraPlanta traz ApprovalStatus, ApprovedBy e ApprovedAt em cada elemento, ao lado do SnapshotHash \u2014 \xE9 o par (o que foi aprovado, quem aprovou) que vale. Revis\xE3o que n\xE3o passou por aprova\xE7\xE3o N\xC3O menciona o assunto: dizer "n\xE3o aprovado" afirmaria que algu\xE9m olhou e recusou.',
-  "CONT\xC9M instala\xE7\xF5es: cada trecho sai como IfcFlowSegment \u2014 um cilindro na bitola declarada, ao longo do eixo, com as DUAS COTAS que o desenho tem (\xE9 o que distingue a prumada do trecho horizontal e o esgoto com caimento do sem) \u2014 e cada ponto como IfcFlowTerminal \u2014 e o ponto EL\xC9TRICO CLASSIFICADO sai na entidade que lhe cabe: IfcLightFixture para ilumina\xE7\xE3o (.USERDEFINED. com o ObjectType dizendo se \xE9 teto, arandela ou piso, porque o enum da norma fala de fotometria e o desenho n\xE3o a sabe) e IfcOutlet para tomadas e dados (.POWEROUTLET. para TUG e TUE, .TELEPHONEOUTLET., .AUDIOVISUALOUTLET. e .DATAOUTLET. para telefone, TV e rede). TUG e TUE s\xE3o distin\xE7\xE3o da NBR 5410 e N\xC3O do enum: a diferen\xE7a vive no ObjectType. Ponto sem classifica\xE7\xE3o, e ponto de outra disciplina, seguem como IfcFlowTerminal. Um IfcDistributionSystem por disciplina PRESENTE (el\xE9trica, \xE1gua fria, \xE1gua quente, esgoto) agrupa a rede, e ele atravessa pavimentos: a coluna que desce tr\xEAs andares \xE9 UMA rede. O comprimento em Qto_FlowSegmentBaseQuantities \xE9 o REAL do caminho em L: o eletroduto com desn\xEDvel SOBE pela parede e CORRE pela laje (um IfcFlowSegment com dois s\xF3lidos), e o comprimento \xE9 planta + prumada \u2014 nunca a diagonal, que eletroduto embutido n\xE3o faz. A prumada mede a altura que vence, n\xE3o zero. As MEDIDAS de quadro e de terminal s\xE3o as DECLARADAS no desenho. A pe\xE7a que ningu\xE9m mediu sai no padr\xE3o \u2014 quadro 400 \xD7 300 \xD7 200 mm, terminal 100 mm c\xFAbicos \u2014 e ali a caixa \xE9 MARCA DE LUGAR, n\xE3o forma: o desenho sabe onde a pe\xE7a est\xE1 e n\xE3o sabe o modelo dela. Em nenhum dos dois casos ela vira grandeza: quadro e terminal se contam por unidade. A COTA \xE9 o CENTRO da pe\xE7a, n\xE3o a base, e o quadro N\xC3O tem rota\xE7\xE3o \u2014 a caixa \xE9 girada pelo \xE2ngulo declarado (IfcAxis2Placement3D.RefDirection); sem giro declarado ela sai alinhada aos eixos e o arquivo N\xC3O menciona dire\xE7\xE3o nenhuma. CONT\xC9M o QUADRO de distribui\xE7\xE3o (IfcFlowController, tamb\xE9m como marca de lugar \u2014 IfcDistributionBoard seria o exato, e N\xC3O \xE9 usado porque ele s\xF3 existe a partir do IFC4 ADD2 e este arquivo declara IFC4; IfcFlowController \xE9 o pai dele na taxonomia, e diz menos sem dizer errado) e os CIRCUITOS (IfcDistributionCircuit), com o quadro e os pontos de cada circuito agrupados nele \u2014 \xE9 o que liga o disjuntor ao que ele protege. Tens\xE3o, disjuntor e se\xE7\xE3o saem em Pset_OpuraEletrica com o sufixo Declarado: s\xE3o o que o projetista ESCOLHEU, e N\xC3O resultado de dimensionamento. Um Pset normativo diria o contr\xE1rio. N\xC3O CONT\xC9M conex\xE3o (joelho, t\xEA, luva), registro, nem dimensionamento de qualquer esp\xE9cie: bitola e cota s\xE3o o que algu\xE9m desenhou, e n\xE3o resultado de c\xE1lculo de queda de tens\xE3o nem de perda de carga.",
+  "CONT\xC9M instala\xE7\xF5es: cada trecho sai na classe da sua rede (28/09/2026) \u2014 IfcPipeSegment .RIGIDSEGMENT. em \xE1gua fria, \xE1gua quente e esgoto, IfcCableCarrierSegment .CONDUITSEGMENT. no eletroduto e IfcDuctSegment .RIGIDSEGMENT. no duto \u2014, um cilindro na bitola declarada, ao longo do eixo, com as DUAS COTAS que o desenho tem (\xE9 o que distingue a prumada do trecho horizontal e o esgoto com caimento do sem) \u2014 e cada ponto como IfcFlowTerminal \u2014 e o ponto EL\xC9TRICO CLASSIFICADO sai na entidade que lhe cabe: IfcLightFixture para ilumina\xE7\xE3o (.USERDEFINED. com o ObjectType dizendo se \xE9 teto, arandela ou piso, porque o enum da norma fala de fotometria e o desenho n\xE3o a sabe) e IfcOutlet para tomadas e dados (.POWEROUTLET. para TUG e TUE, .TELEPHONEOUTLET., .AUDIOVISUALOUTLET. e .DATAOUTLET. para telefone, TV e rede). TUG e TUE s\xE3o distin\xE7\xE3o da NBR 5410 e N\xC3O do enum: a diferen\xE7a vive no ObjectType. Ponto sem classifica\xE7\xE3o, e ponto de outra disciplina, seguem como IfcFlowTerminal. Um IfcDistributionSystem por disciplina PRESENTE (el\xE9trica, \xE1gua fria, \xE1gua quente, esgoto) agrupa a rede, e ele atravessa pavimentos: a coluna que desce tr\xEAs andares \xE9 UMA rede. As CONEX\xD5ES DERIVADAS dos encontros de trechos (joelho, t\xEA, jun\xE7\xE3o 45\xB0, cruzeta, luva, redu\xE7\xE3o \u2014 as mesmas do quantitativo) saem como IfcPipeFitting (.BEND., .JUNCTION., .CONNECTOR., .TRANSITION.) com uma bolsa por boca, no pavimento do trecho e no sistema da rede; a conex\xE3o lan\xE7ada \xE0 m\xE3o continua saindo pelo ponto que a representa, e n\xE3o em dobro. Pset_OpuraInstalacao traz as duas cotas e, no esgoto, a declividade. O comprimento em Qto_PipeSegmentBaseQuantities (Qto_CableCarrierSegment\u2026/Qto_DuctSegment\u2026 nas outras redes) \xE9 o REAL do caminho em L: o eletroduto com desn\xEDvel SOBE pela parede e CORRE pela laje (um segmento com dois s\xF3lidos), e o comprimento \xE9 planta + prumada \u2014 nunca a diagonal, que eletroduto embutido n\xE3o faz. A prumada mede a altura que vence, n\xE3o zero. As MEDIDAS de quadro e de terminal s\xE3o as DECLARADAS no desenho. A pe\xE7a que ningu\xE9m mediu sai no padr\xE3o \u2014 quadro 400 \xD7 300 \xD7 200 mm, terminal 100 mm c\xFAbicos \u2014 e ali a caixa \xE9 MARCA DE LUGAR, n\xE3o forma: o desenho sabe onde a pe\xE7a est\xE1 e n\xE3o sabe o modelo dela. Em nenhum dos dois casos ela vira grandeza: quadro e terminal se contam por unidade. A COTA \xE9 o CENTRO da pe\xE7a, n\xE3o a base, e o quadro N\xC3O tem rota\xE7\xE3o \u2014 a caixa \xE9 girada pelo \xE2ngulo declarado (IfcAxis2Placement3D.RefDirection); sem giro declarado ela sai alinhada aos eixos e o arquivo N\xC3O menciona dire\xE7\xE3o nenhuma. CONT\xC9M o QUADRO de distribui\xE7\xE3o (IfcFlowController, tamb\xE9m como marca de lugar \u2014 IfcDistributionBoard seria o exato, e N\xC3O \xE9 usado porque ele s\xF3 existe a partir do IFC4 ADD2 e este arquivo declara IFC4; IfcFlowController \xE9 o pai dele na taxonomia, e diz menos sem dizer errado) e os CIRCUITOS (IfcDistributionCircuit), com o quadro e os pontos de cada circuito agrupados nele \u2014 \xE9 o que liga o disjuntor ao que ele protege. Tens\xE3o, disjuntor e se\xE7\xE3o saem em Pset_OpuraEletrica com o sufixo Declarado: s\xE3o o que o projetista ESCOLHEU, e N\xC3O resultado de dimensionamento. Um Pset normativo diria o contr\xE1rio. N\xC3O CONT\xC9M conex\xE3o (joelho, t\xEA, luva), registro, nem dimensionamento de qualquer esp\xE9cie: bitola e cota s\xE3o o que algu\xE9m desenhou, e n\xE3o resultado de c\xE1lculo de queda de tens\xE3o nem de perda de carga.",
   "CONT\xC9M guarda-corpos e corrim\xE3os (IfcRailing .GUARDRAIL. / .HANDRAIL.): um s\xF3lido por trecho da polilinha \u2014 50 mm de espessura, na altura declarada, apoiado no piso do pavimento \u2014, Qto_RailingBaseQuantities.Length (comprimento da polilinha) e Pset_OpuraGuardaCorpo (material, altura, item). A espessura \xE9 MARCA DE LUGAR, n\xE3o perfil: o desenho sabe onde a prote\xE7\xE3o est\xE1 e quanto mede, n\xE3o o desenho do gradil.",
   "N\xC3O CONT\xC9M ar-condicionado, g\xE1s nem inc\xEAndio.",
   "N\xC3O CONT\xC9M ARMADURA. Nenhuma barra de a\xE7o, estribo ou cobrimento \u2014 a estrutura aqui \xE9 s\xF3 a forma do concreto.",
@@ -3884,6 +3924,8 @@ function gerarIfc(model, o) {
   const qAmbiente = new Map(quant.ambientes.map((q) => [q.spaceId, q]));
   const qAgua = new Map(quant.telhados.map((q) => [q.aguaId, q]));
   const qTrecho = new Map(quant.trechos.map((q) => [q.trechoId, q]));
+  const conexoesIfc = quant.conexoes.filter((c) => c.origem === "DERIVADA" && (c.ramais?.length ?? 0) > 0);
+  const nivelDoTrecho = new Map((model.trechos ?? []).map((t) => [t.id, t.levelId]));
   const porSistema = /* @__PURE__ */ new Map();
   const porQuadro = /* @__PURE__ */ new Map();
   const porCircuito = /* @__PURE__ */ new Map();
@@ -4101,13 +4143,18 @@ function gerarIfc(model, o) {
       produtos.push(produto);
       porSistema.set(t.disciplina, [...porSistema.get(t.disciplina) ?? [], produto]);
       psetOpura(produto, t.uid, rotuloCurto(t.uid, "trecho"));
+      const emPlanta = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
       emitirPset(ctx, produto, t.uid, "Pset_OpuraInstalacao", [
         ["Disciplina", { tipo: "IFCLABEL", v: t.disciplina }],
-        ["BitolaMm", { tipo: "IFCINTEGER", v: t.bitolaMm }]
+        ["BitolaMm", { tipo: "IFCINTEGER", v: t.bitolaMm }],
+        ["CotaAMm", { tipo: "IFCINTEGER", v: t.cotaAMm }],
+        ["CotaBMm", { tipo: "IFCINTEGER", v: t.cotaBMm }],
+        ...t.disciplina === "ESGOTO" && emPlanta > 0 ? [["DeclividadePct", { tipo: "IFCREAL", v: Math.round(Math.abs(t.cotaBMm - t.cotaAMm) / emPlanta * 1e4) / 100 }]] : [],
+        ["Sugerido", { tipo: "IFCBOOLEAN", v: !!t.sugerido }]
       ]);
       const qt = qTrecho.get(t.id);
       if (qt) {
-        emitirQto(ctx, produto, t.uid, "Qto_FlowSegmentBaseQuantities", [
+        emitirQto(ctx, produto, t.uid, classeDoTrecho(t.disciplina).qto, [
           {
             classe: "IFCQUANTITYLENGTH",
             nome: "Length",
@@ -4119,6 +4166,19 @@ function gerarIfc(model, o) {
       if (t.itemCode) {
         produtosPorCodigo.set(t.itemCode, [...produtosPorCodigo.get(t.itemCode) ?? [], produto]);
       }
+    }
+    for (const c of conexoesIfc.filter((x) => (x.trechoIds.length > 0 ? nivelDoTrecho.get(x.trechoIds[0]) : x.levelId) === nivel.id)) {
+      const elevDaChave = model.levels.find((l) => l.id === c.levelId)?.elevationMm ?? nivel.elevationMm;
+      const produto = emitirConexao(c, ctx, localNivel, c.cotaMm + elevDaChave - nivel.elevationMm);
+      produtos.push(produto);
+      porSistema.set(c.disciplina, [...porSistema.get(c.disciplina) ?? [], produto]);
+      emitirPset(ctx, produto, void 0, "Pset_OpuraConexao", [
+        ["Tipo", { tipo: "IFCLABEL", v: c.tipo }],
+        ["Disciplina", { tipo: "IFCLABEL", v: c.disciplina }],
+        ["BitolaMm", { tipo: "IFCINTEGER", v: c.bitolaMm }],
+        ...c.paraMm != null ? [["ParaMm", { tipo: "IFCINTEGER", v: c.paraMm }]] : [],
+        ["Derivada", { tipo: "IFCBOOLEAN", v: true }]
+      ]);
     }
     for (const c of (model.componentes ?? []).filter((x) => x.levelId === nivel.id && !ehConjunto(x.tipoId))) {
       const produto = emitirComponente(c, ctx, localNivel);
@@ -4631,6 +4691,31 @@ var SISTEMA_IFC = {
   AGUA_QUENTE: ".DOMESTICHOTWATER.",
   ESGOTO: ".SEWAGE."
 };
+var CLASSE_DO_TRECHO = {
+  AGUA_FRIA: { entidade: "IFCPIPESEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_PipeSegmentBaseQuantities" },
+  AGUA_QUENTE: { entidade: "IFCPIPESEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_PipeSegmentBaseQuantities" },
+  ESGOTO: { entidade: "IFCPIPESEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_PipeSegmentBaseQuantities" },
+  ELETRICA: { entidade: "IFCCABLECARRIERSEGMENT", predefinido: ".CONDUITSEGMENT.", qto: "Qto_CableCarrierSegmentBaseQuantities" },
+  MECANICA: { entidade: "IFCDUCTSEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_DuctSegmentBaseQuantities" }
+};
+var classeDoTrecho = (disciplina) => CLASSE_DO_TRECHO[disciplina] ?? { entidade: "IFCPIPESEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_PipeSegmentBaseQuantities" };
+function solidoAoLongo(ctx, perfil, inicio, eixo, comprimento) {
+  const { emitir } = ctx;
+  const auxiliar = Math.abs(eixo[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
+  const perp = [
+    eixo[1] * auxiliar[2] - eixo[2] * auxiliar[1],
+    eixo[2] * auxiliar[0] - eixo[0] * auxiliar[2],
+    eixo[0] * auxiliar[1] - eixo[1] * auxiliar[0]
+  ];
+  const normaPerp = Math.hypot(perp[0], perp[1], perp[2]);
+  const pInicio = emitir(`IFCCARTESIANPOINT((${n(inicio[0])},${n(inicio[1])},${n(inicio[2])}))`);
+  const dirEixo = emitir(`IFCDIRECTION((${n(eixo[0])},${n(eixo[1])},${n(eixo[2])}))`);
+  const dirRef = emitir(
+    `IFCDIRECTION((${n(perp[0] / normaPerp)},${n(perp[1] / normaPerp)},${n(perp[2] / normaPerp)}))`
+  );
+  const posicao = emitir(`IFCAXIS2PLACEMENT3D(${pInicio},${dirEixo},${dirRef})`);
+  return emitir(`IFCEXTRUDEDAREASOLID(${perfil},${posicao},${ctx.dirZ},${n(comprimento)})`);
+}
 function emitirTrecho(t, ctx, localNivel, peDireitoMm) {
   const { emitir, guidDe, historico } = ctx;
   const origem = emitir(`IFCCARTESIANPOINT((${n(t.a.x)},${n(t.a.y)},${n(t.cotaAMm)}))`);
@@ -4646,29 +4731,42 @@ function emitirTrecho(t, ctx, localNivel, peDireitoMm) {
     const dz = seg.cotaBMm - seg.cotaAMm;
     const comprimento = Math.hypot(dx, dy, dz);
     const eixo = [dx / comprimento, dy / comprimento, dz / comprimento];
-    const auxiliar = Math.abs(eixo[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
-    const perp = [
-      eixo[1] * auxiliar[2] - eixo[2] * auxiliar[1],
-      eixo[2] * auxiliar[0] - eixo[0] * auxiliar[2],
-      eixo[0] * auxiliar[1] - eixo[1] * auxiliar[0]
-    ];
-    const normaPerp = Math.hypot(perp[0], perp[1], perp[2]);
-    const inicio = emitir(
-      `IFCCARTESIANPOINT((${n(seg.a.x - t.a.x)},${n(seg.a.y - t.a.y)},${n(seg.cotaAMm - t.cotaAMm)}))`
-    );
-    const dirEixo = emitir(`IFCDIRECTION((${n(eixo[0])},${n(eixo[1])},${n(eixo[2])}))`);
-    const dirRef = emitir(
-      `IFCDIRECTION((${n(perp[0] / normaPerp)},${n(perp[1] / normaPerp)},${n(perp[2] / normaPerp)}))`
-    );
-    const posicao = emitir(`IFCAXIS2PLACEMENT3D(${inicio},${dirEixo},${dirRef})`);
-    return emitir(`IFCEXTRUDEDAREASOLID(${perfil},${posicao},${ctx.dirZ},${n(comprimento)})`);
+    return solidoAoLongo(ctx, perfil, [seg.a.x - t.a.x, seg.a.y - t.a.y, seg.cotaAMm - t.cotaAMm], eixo, comprimento);
   });
   const forma = emitir(
     `IFCSHAPEREPRESENTATION(${ctx.subContexto},'Body','SweptSolid',(${solidos.join(",")}))`
   );
   const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
+  const classe = classeDoTrecho(t.disciplina);
   return emitir(
-    `IFCFLOWSEGMENT(${guidDe(t.uid, `trecho-${t.id}`)},${historico},${s(t.rotulo || `Trecho ${t.disciplina}`)},$,$,${local},${produtoForma},${s(rotuloCurto(t.uid, "trecho"))})`
+    `${classe.entidade}(${guidDe(t.uid, `trecho-${t.id}`)},${historico},${s(t.rotulo || `Trecho ${t.disciplina}`)},$,$,${local},${produtoForma},${s(rotuloCurto(t.uid, "trecho"))},${classe.predefinido})`
+  );
+}
+var PREDEFINIDO_DA_CONEXAO = {
+  JOELHO_90: ".BEND.",
+  JOELHO_45: ".BEND.",
+  TE: ".JUNCTION.",
+  JUNCAO_45: ".JUNCTION.",
+  CRUZETA: ".JUNCTION.",
+  LUVA: ".CONNECTOR.",
+  REDUCAO: ".TRANSITION."
+};
+function emitirConexao(c, ctx, localNivel, cotaNoNivelMm) {
+  const { emitir, guid, historico } = ctx;
+  const semente = `conexao-${c.disciplina}-${c.levelId}-${c.no.x}-${c.no.y}-${c.cotaMm}`;
+  const origem = emitir(`IFCCARTESIANPOINT((${n(c.no.x)},${n(c.no.y)},${n(cotaNoNivelMm)}))`);
+  const local = emitir(`IFCLOCALPLACEMENT(${localNivel},${emitir(`IFCAXIS2PLACEMENT3D(${origem},$,$)`)})`);
+  const centroPerfil = emitir("IFCCARTESIANPOINT((0.,0.))");
+  const posPerfil = emitir(`IFCAXIS2PLACEMENT2D(${centroPerfil},$)`);
+  const solidos = (c.ramais ?? []).map((r) => {
+    const perfil = emitir(`IFCCIRCLEPROFILEDEF(.AREA.,$,${posPerfil},${n(r.bitolaMm / 2 * 1.3)})`);
+    return solidoAoLongo(ctx, perfil, [0, 0, 0], r.u, Math.max(r.bitolaMm, 50));
+  });
+  const forma = emitir(`IFCSHAPEREPRESENTATION(${ctx.subContexto},'Body','SweptSolid',(${solidos.join(",")}))`);
+  const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
+  const nome = `${ROTULO_DA_CONEXAO[c.tipo]} DN ${c.bitolaMm}${c.paraMm != null ? `\u2192${c.paraMm}` : ""}`;
+  return emitir(
+    `IFCPIPEFITTING(${guid(semente)},${historico},${s(nome)},$,$,${local},${produtoForma},$,${PREDEFINIDO_DA_CONEXAO[c.tipo] ?? ".NOTDEFINED."})`
   );
 }
 function direcaoDaPeca(graus, ctx) {

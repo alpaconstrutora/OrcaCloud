@@ -231,8 +231,17 @@ describe.skipIf(motivo !== '')(`instalações no IFC${motivo}`, () => {
       );
     };
 
-    const trechos = ler(tipos.IFCFLOWSEGMENT);
-    expect(trechos).toHaveLength(2);
+    // 28/09/2026 (E0.3): cada trecho na classe da sua rede — o eletroduto
+    // `IfcCableCarrierSegment`, o esgoto `IfcPipeSegment` — com o PredefinedType
+    // no 9º atributo. Nenhum sai mais como `IfcFlowSegment` genérico.
+    expect(ler(tipos.IFCFLOWSEGMENT)).toHaveLength(0);
+    const eletrodutos = ler(tipos.IFCCABLECARRIERSEGMENT);
+    const canos = ler(tipos.IFCPIPESEGMENT);
+    expect(eletrodutos).toHaveLength(1);
+    expect(canos).toHaveLength(1);
+    expect(String((eletrodutos[0].PredefinedType as { value?: string })?.value)).toBe('CONDUITSEGMENT');
+    expect(String((canos[0].PredefinedType as { value?: string })?.value)).toBe('RIGIDSEGMENT');
+    const trechos = [...eletrodutos, ...canos];
     const c1 = trechos.find((t) => (t.Name as { value?: string })?.value === 'C1');
     // Se a contagem estivesse errada, `C1` teria caído em `Description` ou em
     // `ObjectType`, e este `find` não acharia nada.
@@ -259,6 +268,34 @@ describe.skipIf(motivo !== '')(`instalações no IFC${motivo}`, () => {
     expect(
       sistemas.map((x) => String((x.PredefinedType as { value?: string })?.value)).sort(),
     ).toEqual(['ELECTRICAL', 'SEWAGE']);
+  });
+
+  it('⚠️ a CONEXÃO DERIVADA sai IfcPipeFitting e é lida nos campos certos (E0.3, 28/09/2026)', async () => {
+    // Um "L" de esgoto: o joelho não é entidade do modelo, é consequência do
+    // encontro — e agora sai no arquivo, com a bolsa de cada boca.
+    const tipos = (await import('web-ifc')) as unknown as Record<string, number>;
+    const { obterApi, usarCaminhoDoWasm } = await import('../services/ifcViewerService');
+    usarCaminhoDoWasm('');
+    const api = (await obterApi()) as unknown as Record<string, (...a: unknown[]) => unknown>;
+    const { model } = sala();
+    const nivel = model.levels[0].id;
+    let m = applyCommand(model, { type: 'AddTrecho', levelId: nivel, disciplina: 'ESGOTO', a: point(0, 1000), b: point(3000, 1000), cotaAMm: -150, cotaBMm: -150, bitolaMm: 100 }).model;
+    m = applyCommand(m, { type: 'AddTrecho', levelId: nivel, disciplina: 'ESGOTO', a: point(3000, 1000), b: point(3000, 3000), cotaAMm: -150, cotaBMm: -150, bitolaMm: 100 }).model;
+    const id = (api.OpenModel as (d: Uint8Array) => number)(new TextEncoder().encode(gerarIfc(m, OPC)));
+    const ids = (api.GetLineIDsWithType as (m: number, t: number) => { size(): number; get(i: number): number })(id, tipos.IFCPIPEFITTING);
+    expect(ids.size()).toBe(1);
+    const fitting = (api.GetLine as (m: number, e: number) => Record<string, unknown>)(id, ids.get(0));
+    const v = (x: unknown) => (x as { value?: unknown })?.value;
+    expect(v(fitting.Name)).toBe('Joelho 90° DN 100');
+    expect(String(v(fitting.PredefinedType))).toBe('BEND');
+    expect(fitting.ObjectPlacement).toBeTruthy();
+    expect(fitting.Representation).toBeTruthy();
+    // Ela tem malha: as duas bolsas viram geometria de verdade no leitor.
+    let comMalha = false;
+    (api.StreamAllMeshes as (m: number, cb: (x: unknown) => void) => void)(id, (bruto) => {
+      if ((bruto as { expressID: number }).expressID === ids.get(0)) comMalha = true;
+    });
+    expect(comMalha).toBe(true);
   });
 
   it('⚠️ a LUMINÁRIA e a TOMADA são lidas, e nos campos certos', async () => {
@@ -394,7 +431,8 @@ describe.skipIf(motivo !== '')(`instalações no IFC${motivo}`, () => {
     );
     const tipos = (await import('web-ifc')) as unknown as Record<string, number>;
     const idsTrecho = new Set<number>();
-    const lista = (api.GetLineIDsWithType as (m: number, t: number) => { size(): number; get(i: number): number })(id, tipos.IFCFLOWSEGMENT);
+    // A prumada é o eletroduto C1 — desde E0.3, `IfcCableCarrierSegment`.
+    const lista = (api.GetLineIDsWithType as (m: number, t: number) => { size(): number; get(i: number): number })(id, tipos.IFCCABLECARRIERSEGMENT);
     for (let i = 0; i < lista.size(); i++) idsTrecho.add(lista.get(i));
 
     let alturaMaxima = 0;

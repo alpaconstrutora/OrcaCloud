@@ -101,7 +101,14 @@ const SEM_REFERENCIA = new Set([
   //
   // ⚠️ Esta lista NÃO É DISPENSA. Se um arquivo com MEP aparecer, o certo é
   // apontar o portão para ele e apagar estas cinco linhas.
-  'IFCFLOWSEGMENT',
+  // 28/09/2026 (E0.3): o trecho saiu do `IfcFlowSegment` genérico para a classe
+  // da rede — mesma situação (nenhum IFC ao alcance tem MEP) e MESMA verificação:
+  // `ifcIdaEVoltaProprio.test.ts` lê cada uma de volta e confere Name, Tag e
+  // PredefinedType no campo certo; o `IfcPipeFitting` derivado também.
+  'IFCPIPESEGMENT',
+  'IFCCABLECARRIERSEGMENT',
+  'IFCDUCTSEGMENT',
+  'IFCPIPEFITTING',
   'IFCFLOWTERMINAL',
   'IFCDISTRIBUTIONSYSTEM',
   'IFCRELASSIGNSTOGROUP',

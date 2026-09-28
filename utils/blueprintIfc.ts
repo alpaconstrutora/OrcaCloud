@@ -49,6 +49,8 @@
 
 import {
   ehConjunto,
+  ROTULO_DA_CONEXAO,
+  type ConexaoDerivada,
   CATALOGO_DE_COMPONENTES,
   type Componente,
   type GuardaCorpo,
@@ -123,7 +125,9 @@ export const COBERTURA_IFC = [
   'GEORREFERÊNCIA: quando o desenho tem lugar informado, saem IfcSite.RefLatitude/RefLongitude/RefElevation e o norte verdadeiro no contexto geométrico. IfcMapConversion + IfcProjectedCRS só saem quando alguém informou a coordenada PROJETADA (leste, norte e o código do CRS) — ela NUNCA é calculada a partir de latitude e longitude, porque a conta depende do fuso e errar o fuso põe o modelo a centenas de quilômetros do lugar com a forma perfeita.',
   'PARÂMETROS PERSONALIZADOS: a peça que os carrega ganha Pset_OpuraPersonalizado com a chave de programa como nome da propriedade (número → IfcReal, sim/não → IfcBoolean, texto → IfcLabel). O nome legível e a unidade são da definição na organização e NÃO viajam.',
   'APROVAÇÃO: quando a revisão foi aprovada no sistema, Pset_OpuraPlanta traz ApprovalStatus, ApprovedBy e ApprovedAt em cada elemento, ao lado do SnapshotHash — é o par (o que foi aprovado, quem aprovou) que vale. Revisão que não passou por aprovação NÃO menciona o assunto: dizer "não aprovado" afirmaria que alguém olhou e recusou.',
-  'CONTÉM instalações: cada trecho sai como IfcFlowSegment — um cilindro na bitola ' +
+  'CONTÉM instalações: cada trecho sai na classe da sua rede (28/09/2026) — IfcPipeSegment ' +
+    '.RIGIDSEGMENT. em água fria, água quente e esgoto, IfcCableCarrierSegment .CONDUITSEGMENT. ' +
+    'no eletroduto e IfcDuctSegment .RIGIDSEGMENT. no duto —, um cilindro na bitola ' +
     'declarada, ao longo do eixo, com as DUAS COTAS que o desenho tem (é o que distingue ' +
     'a prumada do trecho horizontal e o esgoto com caimento do sem) — e cada ponto como ' +
     'IfcFlowTerminal — e o ponto ELÉTRICO CLASSIFICADO sai na entidade que lhe cabe: ' +
@@ -135,9 +139,15 @@ export const COBERTURA_IFC = [
     'classificação, e ponto de outra disciplina, seguem como IfcFlowTerminal. ' +
     'Um IfcDistributionSystem por disciplina PRESENTE (elétrica, água ' +
     'fria, água quente, esgoto) agrupa a rede, e ele atravessa pavimentos: a coluna que ' +
-    'desce três andares é UMA rede. O comprimento em Qto_FlowSegmentBaseQuantities é o ' +
+    'desce três andares é UMA rede. As CONEXÕES DERIVADAS dos encontros de trechos (joelho, ' +
+    'tê, junção 45°, cruzeta, luva, redução — as mesmas do quantitativo) saem como ' +
+    'IfcPipeFitting (.BEND., .JUNCTION., .CONNECTOR., .TRANSITION.) com uma bolsa por boca, ' +
+    'no pavimento do trecho e no sistema da rede; a conexão lançada à mão continua saindo ' +
+    'pelo ponto que a representa, e não em dobro. Pset_OpuraInstalacao traz as duas cotas e, ' +
+    'no esgoto, a declividade. O comprimento em Qto_PipeSegmentBaseQuantities ' +
+    '(Qto_CableCarrierSegment…/Qto_DuctSegment… nas outras redes) é o ' +
     'REAL do caminho em L: o eletroduto com desnível SOBE pela parede e CORRE pela laje ' +
-    '(um IfcFlowSegment com dois sólidos), e o comprimento é planta + prumada — nunca a ' +
+    '(um segmento com dois sólidos), e o comprimento é planta + prumada — nunca a ' +
     'diagonal, que eletroduto embutido não faz. A prumada mede a altura que vence, não zero. ' +
     'As MEDIDAS de quadro e de terminal são as DECLARADAS no desenho. A peça que ninguém ' +
     'mediu sai no padrão — quadro 400 × 300 × 200 mm, terminal 100 mm cúbicos — e ali a ' +
@@ -588,6 +598,9 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   const qAmbiente = new Map(quant.ambientes.map((q) => [q.spaceId, q]));
   const qAgua = new Map(quant.telhados.map((q) => [q.aguaId, q]));
   const qTrecho = new Map(quant.trechos.map((q) => [q.trechoId, q]));
+  // As conexões DERIVADAS (a manual já sai pelo ponto dela) — E0.3.
+  const conexoesIfc = quant.conexoes.filter((c) => c.origem === 'DERIVADA' && (c.ramais?.length ?? 0) > 0);
+  const nivelDoTrecho = new Map((model.trechos ?? []).map((t) => [t.id, t.levelId]));
 
   /** Os produtos de cada disciplina, para o `IfcDistributionSystem` no fim. */
   const porSistema = new Map<string, string[]>();
@@ -910,13 +923,20 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
       produtos.push(produto);
       porSistema.set(t.disciplina, [...(porSistema.get(t.disciplina) ?? []), produto]);
       psetOpura(produto, t.uid, rotuloCurto(t.uid, 'trecho'));
+      const emPlanta = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
       emitirPset(ctx, produto, t.uid, 'Pset_OpuraInstalacao', [
         ['Disciplina', { tipo: 'IFCLABEL', v: t.disciplina }],
         ['BitolaMm', { tipo: 'IFCINTEGER', v: t.bitolaMm }],
+        ['CotaAMm', { tipo: 'IFCINTEGER', v: t.cotaAMm }],
+        ['CotaBMm', { tipo: 'IFCINTEGER', v: t.cotaBMm }],
+        ...(t.disciplina === 'ESGOTO' && emPlanta > 0
+          ? ([['DeclividadePct', { tipo: 'IFCREAL', v: Math.round((Math.abs(t.cotaBMm - t.cotaAMm) / emPlanta) * 10000) / 100 }]] as [string, ValorIfc][])
+          : []),
+        ['Sugerido', { tipo: 'IFCBOOLEAN', v: !!t.sugerido }],
       ]);
       const qt = qTrecho.get(t.id);
       if (qt) {
-        emitirQto(ctx, produto, t.uid, 'Qto_FlowSegmentBaseQuantities', [
+        emitirQto(ctx, produto, t.uid, classeDoTrecho(t.disciplina).qto, [
           {
             classe: 'IFCQUANTITYLENGTH',
             nome: 'Length',
@@ -928,6 +948,22 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
       if (t.itemCode) {
         produtosPorCodigo.set(t.itemCode, [...(produtosPorCodigo.get(t.itemCode) ?? []), produto]);
       }
+    }
+    // CONEXÕES DERIVADAS (28/09/2026, E0.3): `IfcPipeFitting` no pavimento do
+    // TRECHO (o ramal sob o piso do andar tem o nó no teto do de baixo, mas a
+    // peça é do andar), na cota relativa a ele, e no sistema da rede.
+    for (const c of conexoesIfc.filter((x) => (x.trechoIds.length > 0 ? nivelDoTrecho.get(x.trechoIds[0]) : x.levelId) === nivel.id)) {
+      const elevDaChave = model.levels.find((l) => l.id === c.levelId)?.elevationMm ?? nivel.elevationMm;
+      const produto = emitirConexao(c, ctx, localNivel, c.cotaMm + elevDaChave - nivel.elevationMm);
+      produtos.push(produto);
+      porSistema.set(c.disciplina, [...(porSistema.get(c.disciplina) ?? []), produto]);
+      emitirPset(ctx, produto, undefined, 'Pset_OpuraConexao', [
+        ['Tipo', { tipo: 'IFCLABEL', v: c.tipo }],
+        ['Disciplina', { tipo: 'IFCLABEL', v: c.disciplina }],
+        ['BitolaMm', { tipo: 'IFCINTEGER', v: c.bitolaMm }],
+        ...(c.paraMm != null ? ([['ParaMm', { tipo: 'IFCINTEGER', v: c.paraMm }]] as [string, ValorIfc][]) : []),
+        ['Derivada', { tipo: 'IFCBOOLEAN', v: true }],
+      ]);
     }
     // COMPONENTES (E7.1): louça → IfcSanitaryTerminal; o resto → IfcFurniture.
     // FAMÍLIAS ANINHADAS (P2.18): o conjunto-pai não é objeto — saem os filhos, cada um como o que é.
@@ -1913,7 +1949,54 @@ const SISTEMA_IFC: Record<string, string> = {
 };
 
 /**
- * O TRECHO como `IfcFlowSegment` — um cilindro ao longo do eixo.
+ * A CLASSE IFC do trecho pela disciplina (28/09/2026, E0.3 do roadmap
+ * hidrossanitário). Antes todo trecho saía `IfcFlowSegment`, o supertipo
+ * genérico: o receptor não sabia se era cano, eletroduto ou duto e não o
+ * filtrava como tal. As três são IFC4 (não ADD2) e têm 9 atributos — os 8 do
+ * `IfcFlowSegment` mais o `PredefinedType`.
+ */
+const CLASSE_DO_TRECHO: Record<string, { entidade: string; predefinido: string; qto: string }> = {
+  AGUA_FRIA: { entidade: 'IFCPIPESEGMENT', predefinido: '.RIGIDSEGMENT.', qto: 'Qto_PipeSegmentBaseQuantities' },
+  AGUA_QUENTE: { entidade: 'IFCPIPESEGMENT', predefinido: '.RIGIDSEGMENT.', qto: 'Qto_PipeSegmentBaseQuantities' },
+  ESGOTO: { entidade: 'IFCPIPESEGMENT', predefinido: '.RIGIDSEGMENT.', qto: 'Qto_PipeSegmentBaseQuantities' },
+  ELETRICA: { entidade: 'IFCCABLECARRIERSEGMENT', predefinido: '.CONDUITSEGMENT.', qto: 'Qto_CableCarrierSegmentBaseQuantities' },
+  MECANICA: { entidade: 'IFCDUCTSEGMENT', predefinido: '.RIGIDSEGMENT.', qto: 'Qto_DuctSegmentBaseQuantities' },
+};
+const classeDoTrecho = (disciplina: string) =>
+  CLASSE_DO_TRECHO[disciplina] ?? { entidade: 'IFCPIPESEGMENT', predefinido: '.RIGIDSEGMENT.', qto: 'Qto_PipeSegmentBaseQuantities' };
+
+/**
+ * Um CILINDRO de `comprimento` ao longo de `eixo` (unitário, mm do modelo),
+ * começando em `inicio` (relativo ao placement do elemento). O eixo é o Z local
+ * do sólido e a `RefDirection` é uma perpendicular escolhida longe dele — ver o
+ * comentário de `emitirTrecho`. Compartilhado pelo trecho e pela conexão.
+ */
+function solidoAoLongo(
+  ctx: Ctx,
+  perfil: string,
+  inicio: [number, number, number],
+  eixo: [number, number, number],
+  comprimento: number,
+): string {
+  const { emitir } = ctx;
+  const auxiliar: [number, number, number] = Math.abs(eixo[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
+  const perp: [number, number, number] = [
+    eixo[1] * auxiliar[2] - eixo[2] * auxiliar[1],
+    eixo[2] * auxiliar[0] - eixo[0] * auxiliar[2],
+    eixo[0] * auxiliar[1] - eixo[1] * auxiliar[0],
+  ];
+  const normaPerp = Math.hypot(perp[0], perp[1], perp[2]);
+  const pInicio = emitir(`IFCCARTESIANPOINT((${n(inicio[0])},${n(inicio[1])},${n(inicio[2])}))`);
+  const dirEixo = emitir(`IFCDIRECTION((${n(eixo[0])},${n(eixo[1])},${n(eixo[2])}))`);
+  const dirRef = emitir(
+    `IFCDIRECTION((${n(perp[0] / normaPerp)},${n(perp[1] / normaPerp)},${n(perp[2] / normaPerp)}))`,
+  );
+  const posicao = emitir(`IFCAXIS2PLACEMENT3D(${pInicio},${dirEixo},${dirRef})`);
+  return emitir(`IFCEXTRUDEDAREASOLID(${perfil},${posicao},${ctx.dirZ},${n(comprimento)})`);
+}
+
+/**
+ * O TRECHO como segmento da sua rede — um cilindro ao longo do eixo.
  *
  * ─── O EIXO É O Z LOCAL, E ISSO NÃO É DETALHE ───────────────────────────────
  *
@@ -1959,25 +2042,8 @@ function emitirTrecho(t: Trecho, ctx: Ctx, localNivel: string, peDireitoMm: numb
     const dz = seg.cotaBMm - seg.cotaAMm;
     const comprimento = Math.hypot(dx, dy, dz);
     const eixo: [number, number, number] = [dx / comprimento, dy / comprimento, dz / comprimento];
-    // Uma perpendicular qualquer, escolhida longe do eixo para o produto
-    // vetorial não sair quase nulo.
-    const auxiliar: [number, number, number] = Math.abs(eixo[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
-    const perp: [number, number, number] = [
-      eixo[1] * auxiliar[2] - eixo[2] * auxiliar[1],
-      eixo[2] * auxiliar[0] - eixo[0] * auxiliar[2],
-      eixo[0] * auxiliar[1] - eixo[1] * auxiliar[0],
-    ];
-    const normaPerp = Math.hypot(perp[0], perp[1], perp[2]);
     // Início do pedaço, RELATIVO à ponta A do elemento.
-    const inicio = emitir(
-      `IFCCARTESIANPOINT((${n(seg.a.x - t.a.x)},${n(seg.a.y - t.a.y)},${n(seg.cotaAMm - t.cotaAMm)}))`,
-    );
-    const dirEixo = emitir(`IFCDIRECTION((${n(eixo[0])},${n(eixo[1])},${n(eixo[2])}))`);
-    const dirRef = emitir(
-      `IFCDIRECTION((${n(perp[0] / normaPerp)},${n(perp[1] / normaPerp)},${n(perp[2] / normaPerp)}))`,
-    );
-    const posicao = emitir(`IFCAXIS2PLACEMENT3D(${inicio},${dirEixo},${dirRef})`);
-    return emitir(`IFCEXTRUDEDAREASOLID(${perfil},${posicao},${ctx.dirZ},${n(comprimento)})`);
+    return solidoAoLongo(ctx, perfil, [seg.a.x - t.a.x, seg.a.y - t.a.y, seg.cotaAMm - t.cotaAMm], eixo, comprimento);
   });
 
   const forma = emitir(
@@ -1985,10 +2051,48 @@ function emitirTrecho(t: Trecho, ctx: Ctx, localNivel: string, peDireitoMm: numb
   );
   const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
 
+  const classe = classeDoTrecho(t.disciplina);
   return emitir(
-    `IFCFLOWSEGMENT(${guidDe(t.uid, `trecho-${t.id}`)},${historico},` +
+    `${classe.entidade}(${guidDe(t.uid, `trecho-${t.id}`)},${historico},` +
       `${s(t.rotulo || `Trecho ${t.disciplina}`)},$,$,${local},${produtoForma},` +
-      `${s(rotuloCurto(t.uid, 'trecho'))})`,
+      `${s(rotuloCurto(t.uid, 'trecho'))},${classe.predefinido})`,
+  );
+}
+
+/** O `PredefinedType` do `IfcPipeFitting` pelo tipo da conexão derivada — o mesmo da conexão lançada à mão. */
+const PREDEFINIDO_DA_CONEXAO: Record<string, string> = {
+  JOELHO_90: '.BEND.',
+  JOELHO_45: '.BEND.',
+  TE: '.JUNCTION.',
+  JUNCAO_45: '.JUNCTION.',
+  CRUZETA: '.JUNCTION.',
+  LUVA: '.CONNECTOR.',
+  REDUCAO: '.TRANSITION.',
+};
+
+/**
+ * A CONEXÃO DERIVADA como `IfcPipeFitting` (28/09/2026, E0.3): uma BOLSA por
+ * boca — cilindro de 1,3 × o raio do tubo e comprimento de um diâmetro (mín.
+ * 50 mm), saindo do nó na direção do ramal —, a mesma forma do 3D da tela
+ * (`blueprintIsometrico.pecasDasConexoes3D`). `cotaNoNivelMm` já é a cota no
+ * pavimento em que ela sai (o do trecho), não a da chave do nó.
+ */
+function emitirConexao(c: ConexaoDerivada, ctx: Ctx, localNivel: string, cotaNoNivelMm: number): string {
+  const { emitir, guid, historico } = ctx;
+  const semente = `conexao-${c.disciplina}-${c.levelId}-${c.no.x}-${c.no.y}-${c.cotaMm}`;
+  const origem = emitir(`IFCCARTESIANPOINT((${n(c.no.x)},${n(c.no.y)},${n(cotaNoNivelMm)}))`);
+  const local = emitir(`IFCLOCALPLACEMENT(${localNivel},${emitir(`IFCAXIS2PLACEMENT3D(${origem},$,$)`)})`);
+  const centroPerfil = emitir('IFCCARTESIANPOINT((0.,0.))');
+  const posPerfil = emitir(`IFCAXIS2PLACEMENT2D(${centroPerfil},$)`);
+  const solidos = (c.ramais ?? []).map((r) => {
+    const perfil = emitir(`IFCCIRCLEPROFILEDEF(.AREA.,$,${posPerfil},${n((r.bitolaMm / 2) * 1.3)})`);
+    return solidoAoLongo(ctx, perfil, [0, 0, 0], r.u, Math.max(r.bitolaMm, 50));
+  });
+  const forma = emitir(`IFCSHAPEREPRESENTATION(${ctx.subContexto},'Body','SweptSolid',(${solidos.join(',')}))`);
+  const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
+  const nome = `${ROTULO_DA_CONEXAO[c.tipo]} DN ${c.bitolaMm}${c.paraMm != null ? `→${c.paraMm}` : ''}`;
+  return emitir(
+    `IFCPIPEFITTING(${guid(semente)},${historico},${s(nome)},$,$,${local},${produtoForma},$,${PREDEFINIDO_DA_CONEXAO[c.tipo] ?? '.NOTDEFINED.'})`,
   );
 }
 

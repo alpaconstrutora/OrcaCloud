@@ -66,7 +66,7 @@ alimentação) e esgoto (tabelas NBR 8160 e ventilação); por fim os **sistemas
 |---|---|---|
 | 0.1 Verificação visível ✅ | **Pontas abertas no desenho** (anel vermelho na ponta, contagem na gaveta), **aviso de DN no esgoto** (trecho confirmado menor que o pedido pela UHC, e maior que o necessário), aviso de peça pendente no croqui | `conexoesDerivadas().pontasAbertas` já calcula; `BlueprintCanvas.tsx`; `planejarEsgoto` |
 | 0.2 Quantitativo por pavimento ✅ | Tubos por DN, conexões e pontos **por pavimento** e por disciplina; **equipamentos e reservatórios como linhas próprias** (hoje contados como pontos), com volume/modelo | `utils/blueprintQuantitativosPorPavimento.ts` (hoje sem hidráulica), `quantities.ts:porBitola/porConexao` |
-| 0.3 IFC de instalação | Tubo como **`IfcPipeSegment`** (e `IfcDuctSegment` na mecânica), conexões derivadas como **`IfcPipeFitting`** com o tipo (joelho, tê, junção, redução), `Pset` com DN, cota, declividade | `utils/blueprintIfc.ts` (hoje `IfcFlowSegment` genérico; `entidadeDoPontoHidraulico` é o molde) |
+| 0.3 IFC de instalação ✅ | Tubo como **`IfcPipeSegment`** (e `IfcDuctSegment` na mecânica), conexões derivadas como **`IfcPipeFitting`** com o tipo (joelho, tê, junção, redução), `Pset` com DN, cota, declividade | `utils/blueprintIfc.ts` (hoje `IfcFlowSegment` genérico; `entidadeDoPontoHidraulico` é o molde) |
 | 0.4 Peças que faltam | Tipos **válvula de descarga, torneira de boia, VRP, registro de esfera**, **bidê, banheira, mictório, ralo linear, ponto de espera** na ficha (peso, UHC, DN mínimo, cota, símbolo) | `utils/blueprintHidraulica.ts:FICHA_DO_PONTO_HIDRAULICO`, `TIPOS_DE_PONTO_HIDRAULICO` (**bump**) |
 
 Fecha 3 Essenciais do bloco "verificação visível", 5 dos "entregáveis de dados", e prepara a
@@ -275,4 +275,22 @@ Frente `hidro-e0`.
   total em metros, conexões e pontos; conexão sob o piso do andar contada no andar; teste de
   tela (aba Instalações, filtro Superior some com a caixa de 500 L do térreo e o aquecedor).
   Suíte: 510 arquivos / 5.826 testes.
+
+### E0.3 — IFC de instalação (28/09/2026)
+
+- `utils/blueprintIfc.ts`: o trecho sai na **classe da rede** — `IfcPipeSegment .RIGIDSEGMENT.`
+  (água fria, quente, esgoto), `IfcCableCarrierSegment .CONDUITSEGMENT.` (eletroduto),
+  `IfcDuctSegment .RIGIDSEGMENT.` (duto) — com `Qto_PipeSegment…`/`Qto_CableCarrierSegment…`/
+  `Qto_DuctSegmentBaseQuantities`; `Pset_OpuraInstalacao` ganhou `CotaAMm`, `CotaBMm`,
+  `DeclividadePct` (esgoto) e `Sugerido`.
+- As **conexões derivadas** saem como `IfcPipeFitting` (.BEND./.JUNCTION./.CONNECTOR./
+  .TRANSITION.) com uma bolsa por boca (a forma do 3D), no pavimento do TRECHO, no
+  `IfcDistributionSystem` da rede e com `Pset_OpuraConexao`; a conexão MANUAL continua saindo
+  só pelo ponto dela. `solidoAoLongo` é o cilindro compartilhado por trecho e conexão.
+- `supabase/functions/planta-api/kernel.bundle.mjs` regerado (`scripts/build-planta-api-kernel.mjs`)
+  — o teste de frescor da E9.2 acusou, como deve.
+- **Pronto quando** ✔: `ifcIdaEVoltaProprio` (web-ifc): nenhum `IfcFlowSegment`; eletroduto e
+  cano lidos com `PredefinedType` certo; um "L" de esgoto → um `IfcPipeFitting` "Joelho 90° DN
+  100", BEND, com malha. `ifcContagemDeAtributos` com as entidades novas na lista verificada pelo
+  web-ifc. `plantaApi.test.ts` (paridade do bundle). Suíte cheia verde.
 

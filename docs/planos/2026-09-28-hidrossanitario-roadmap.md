@@ -65,7 +65,7 @@ alimentação) e esgoto (tabelas NBR 8160 e ventilação); por fim os **sistemas
 | Fase | Entrega | Onde / reaproveita |
 |---|---|---|
 | 0.1 Verificação visível ✅ | **Pontas abertas no desenho** (anel vermelho na ponta, contagem na gaveta), **aviso de DN no esgoto** (trecho confirmado menor que o pedido pela UHC, e maior que o necessário), aviso de peça pendente no croqui | `conexoesDerivadas().pontasAbertas` já calcula; `BlueprintCanvas.tsx`; `planejarEsgoto` |
-| 0.2 Quantitativo por pavimento | Tubos por DN, conexões e pontos **por pavimento** e por disciplina; **equipamentos e reservatórios como linhas próprias** (hoje contados como pontos), com volume/modelo | `utils/blueprintQuantitativosPorPavimento.ts` (hoje sem hidráulica), `quantities.ts:porBitola/porConexao` |
+| 0.2 Quantitativo por pavimento ✅ | Tubos por DN, conexões e pontos **por pavimento** e por disciplina; **equipamentos e reservatórios como linhas próprias** (hoje contados como pontos), com volume/modelo | `utils/blueprintQuantitativosPorPavimento.ts` (hoje sem hidráulica), `quantities.ts:porBitola/porConexao` |
 | 0.3 IFC de instalação | Tubo como **`IfcPipeSegment`** (e `IfcDuctSegment` na mecânica), conexões derivadas como **`IfcPipeFitting`** com o tipo (joelho, tê, junção, redução), `Pset` com DN, cota, declividade | `utils/blueprintIfc.ts` (hoje `IfcFlowSegment` genérico; `entidadeDoPontoHidraulico` é o molde) |
 | 0.4 Peças que faltam | Tipos **válvula de descarga, torneira de boia, VRP, registro de esfera**, **bidê, banheira, mictório, ralo linear, ponto de espera** na ficha (peso, UHC, DN mínimo, cota, símbolo) | `utils/blueprintHidraulica.ts:FICHA_DO_PONTO_HIDRAULICO`, `TIPOS_DE_PONTO_HIDRAULICO` (**bump**) |
 
@@ -256,3 +256,23 @@ Frente `hidro-e0`.
   marca) e os casos de cada marca; 3 testes do painel; harness
   `docs/spikes/esgoto-isometrico?vista=2d&defeitos=1` em servidor novo, console limpo (as três
   marcas no lugar). Suíte: 509 arquivos / 5.822 testes.
+
+### E0.2 — Quantitativo por pavimento (28/09/2026)
+
+- `utils/blueprintKernel/quantities.ts`: as linhas de compra da rede saíram de dentro de
+  `computeQuantities` para `agruparPorBitola`, `agruparPorTerminal`, `agruparPorConexao`
+  (exportadas) — o total e o pavimento usam a MESMA conta. Saída do quantitativo inalterada
+  (76 testes de quantitativo/planilha/orçamento/conexões verdes sem mudar uma linha).
+- `utils/blueprintQuantitativosPorPavimento.ts`: `redeDoPavimento` (tubo por DN, ponto,
+  conexão de um nível; sem nível = o total, tal qual); a conexão é do pavimento do TRECHO
+  dela (o ramal sob o piso do andar é do andar); `reservatoriosPorVolume`; `familiaDoPonto`;
+  a linha do pavimento ganhou tubo hidráulico (m), pontos e conexões.
+- `TelaQuantitativos.tsx`: aba **Instalações** com o filtro de pavimento (ao lado do de
+  disciplina); **caixa d'água pelo volume** (família Reservatório), aquecedor/bomba/hidrômetro
+  como **Equipamento**, CI/CS/CG/ralo sifonado como **Caixa**; aba **Por pavimento** com a
+  coluna Instalações.
+- **Pronto quando** ✔: sobrado com esgoto automático — a SOMA dos pavimentos fecha com o
+  total em metros, conexões e pontos; conexão sob o piso do andar contada no andar; teste de
+  tela (aba Instalações, filtro Superior some com a caixa de 500 L do térreo e o aquecedor).
+  Suíte: 510 arquivos / 5.826 testes.
+

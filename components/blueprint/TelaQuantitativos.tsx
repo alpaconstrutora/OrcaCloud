@@ -9,6 +9,9 @@ import {
   nomeDoPavimento,
   pavimentoDasEntidades,
   quantitativosPorPavimento,
+  familiaDoPonto,
+  redeDoPavimento,
+  reservatoriosPorVolume,
   type QuantitativoDoPavimento,
 } from '../../utils/blueprintQuantitativosPorPavimento';
 import type { BlueprintQuantitySnapshot } from '../../types/blueprint';
@@ -45,7 +48,7 @@ type AbaDosQuantitativos = 'resumo' | 'ambientes' | 'estruturas' | 'pavimentos' 
 /** Uma linha de compra das instalações: tubo por DN, ponto por classificação, conexão por tipo × DN. */
 interface LinhaDeInstalacao {
   chave: string;
-  familia: 'Tubo' | 'Ponto' | 'Conexão';
+  familia: 'Tubo' | 'Ponto' | 'Conexão' | 'Reservatório' | 'Equipamento' | 'Caixa';
   disciplina: DisciplinaDeRede;
   item: string;
   dnMm: number | null;
@@ -112,6 +115,7 @@ const COLUNAS_PAVIMENTO: StandardTableColumn[] = [
   { key: 'volumeConcretoM3', label: 'Concreto (m³)', width: 120, align: 'right' },
   { key: 'areaFormaM2', label: 'Fôrma (m²)', width: 110, align: 'right' },
   { key: 'acoKg', label: 'Aço (kg)', width: 100, align: 'right' },
+  { key: 'instalacoes', label: 'Instalações', width: 230, align: 'right' },
 ];
 const COLUNAS_INSTALACAO: StandardTableColumn[] = [
   { key: 'familia', label: 'Família', width: 100 },
@@ -297,23 +301,32 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
   // conexão por tipo × DN —, com filtro por disciplina. É a mesma conta do
   // orçamento (`COMPRIMENTO_TUBO_*`, `CONTAGEM_PONTOS_HIDRAULICOS`, `CONTAGEM_CONEXOES`).
   const [disciplinaFiltro, setDisciplinaFiltro] = useState<'' | DisciplinaDeRede>('');
+  // POR PAVIMENTO (28/09/2026, E0.2 do roadmap hidrossanitário): o mesmo filtro
+  // das outras abas recorta a rede; sem filtro, o total do quantitativo.
+  const redeVisivel = useMemo(() => redeDoPavimento(model, quant, pavimentoFiltro || null), [model, quant, pavimentoFiltro]);
   const instalacoes = useMemo<LinhaDeInstalacao[]>(() => {
     const nomeDaDisciplina = (d: string) => ROTULO_DA_DISCIPLINA[d as DisciplinaDeRede] ?? d;
     const linhas: LinhaDeInstalacao[] = [];
+    const t = redeVisivel;
     for (const b of t.porBitola ?? []) {
       linhas.push({ chave: `tubo:${b.disciplina}:${b.bitolaMm}:${b.itemCode ?? ''}`, familia: 'Tubo', disciplina: b.disciplina as DisciplinaDeRede, item: `${b.disciplina === 'ELETRICA' ? 'Eletroduto' : `Tubo ${nomeDaDisciplina(b.disciplina).toLowerCase()}`}${b.itemCode ? ` · ${b.itemCode}` : ''}`, dnMm: b.bitolaMm, quantidade: b.comprimentoM, unidade: 'm', detalhe: `${b.trechos} trecho(s) · comprimento real, com prumadas e caimento` });
     }
+    // A CAIXA D'ÁGUA por volume (E0.2): é assim que se compra.
+    for (const r of reservatoriosPorVolume(model, pavimentoFiltro || null)) {
+      linhas.push({ chave: `reservatorio:${r.volumeL ?? ''}`, familia: 'Reservatório', disciplina: 'AGUA_FRIA', item: `Caixa d'água${r.volumeL != null ? ` ${r.volumeL.toLocaleString('pt-BR')} L` : ' (volume não informado)'}`, dnMm: null, quantidade: r.quantidade, unidade: 'un', detalhe: 'reservatório, pelo volume' });
+    }
     for (const p of t.porTerminal ?? []) {
+      if (p.classificacao === 'RESERVATORIO') continue;
       const nome = p.classificacao
         ? (ROTULO_DO_PONTO_HIDRAULICO[p.classificacao as TipoDePontoHidraulico] ?? ROTULO_DO_PONTO_ELETRICO[p.classificacao as TipoDePontoEletrico] ?? p.classificacao)
         : `${p.tipo} (sem tipo)`;
-      linhas.push({ chave: `ponto:${p.disciplina}:${p.classificacao ?? p.tipo}:${p.itemCode ?? ''}`, familia: 'Ponto', disciplina: p.disciplina as DisciplinaDeRede, item: `${nome}${p.itemCode ? ` · ${p.itemCode}` : ''}`, dnMm: null, quantidade: p.quantidade, unidade: 'un', detalhe: p.classificacao ? 'ponto classificado' : p.disciplina === 'MECANICA' ? 'terminal de ar' : 'a classificar — escolha o tipo no painel do ponto' });
+      linhas.push({ chave: `ponto:${p.disciplina}:${p.classificacao ?? p.tipo}:${p.itemCode ?? ''}`, familia: familiaDoPonto(p.classificacao), disciplina: p.disciplina as DisciplinaDeRede, item: `${nome}${p.itemCode ? ` · ${p.itemCode}` : ''}`, dnMm: null, quantidade: p.quantidade, unidade: 'un', detalhe: p.classificacao ? 'ponto classificado' : p.disciplina === 'MECANICA' ? 'terminal de ar' : 'a classificar — escolha o tipo no painel do ponto' });
     }
     for (const c of t.porConexao ?? []) {
       linhas.push({ chave: `conexao:${c.disciplina}:${c.tipo}:${c.bitolaMm}:${c.paraMm ?? ''}`, familia: 'Conexão', disciplina: c.disciplina as DisciplinaDeRede, item: `${ROTULO_DA_CONEXAO[c.tipo]}${c.paraMm != null ? ` ${c.bitolaMm}→${c.paraMm}` : ''}`, dnMm: c.bitolaMm, quantidade: c.quantidade, unidade: 'un', detalhe: `${c.derivadas} deduzida(s) dos encontros${c.manuais ? ` + ${c.manuais} manual(is)` : ''}` });
     }
     return linhas;
-  }, [t]);
+  }, [redeVisivel, model, pavimentoFiltro]);
   const instalacoesVisiveis = useMemo(
     () => (disciplinaFiltro ? instalacoes.filter((l) => l.disciplina === disciplinaFiltro) : instalacoes),
     [instalacoes, disciplinaFiltro],
@@ -555,6 +568,8 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
                 return <span className="block text-right text-sm font-semibold tabular-nums text-gray-900">{fmt(p[key])}</span>;
               case 'aberturas':
                 return <span className="block text-right text-xs tabular-nums text-gray-600">{p.portas} porta(s), {p.janelas} janela(s) · {fmt(p.areaAberturasM2)} m²</span>;
+              case 'instalacoes':
+                return <span className="block text-right text-xs tabular-nums text-gray-600">{fmt(p.tuboHidraulicoM)} m de tubo · {p.pontosHidraulicos} ponto(s) · {p.conexoesHidraulicas} conexão(ões)</span>;
               case 'areaConstruidaM2':
               case 'areaParedeDuasFacesM2':
               case 'volumeAlvenariaM3':
@@ -566,7 +581,7 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
                 return null;
             }
           }}
-          sortValue={(key, p) => (key === 'nome' ? p.nome : key === 'aberturas' ? p.portas + p.janelas : (p as unknown as Record<string, number>)[key])}
+          sortValue={(key, p) => (key === 'nome' ? p.nome : key === 'aberturas' ? p.portas + p.janelas : key === 'instalacoes' ? p.tuboHidraulicoM : (p as unknown as Record<string, number>)[key])}
           searchText={(p) => p.nome}
           searchPlaceholder="Buscar pavimento..."
           empty={{ title: 'Nenhum pavimento', subtitle: 'Adicione um pavimento no painel Pavimentos.' }}
@@ -617,20 +632,25 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
           searchText={(l) => `${l.familia} ${ROTULO_DA_DISCIPLINA[l.disciplina]} ${l.item} ${l.dnMm ?? ''} ${l.detalhe}`}
           searchPlaceholder="Buscar tubo, ponto ou conexão..."
           filters={
-            disciplinasPresentes.length > 1 ? (
-              <select
-                value={disciplinaFiltro}
-                onChange={(e) => setDisciplinaFiltro(e.target.value as '' | DisciplinaDeRede)}
-                aria-label="Filtrar por disciplina"
-                className="h-9 rounded-[6px] border border-gray-200 bg-white px-2 text-sm text-gray-700"
-              >
-                <option value="">Todas as disciplinas</option>
-                {disciplinasPresentes.map((d) => (
-                  <option key={d} value={d}>
-                    {ROTULO_DA_DISCIPLINA[d]}
-                  </option>
-                ))}
-              </select>
+            filtroDePavimento || disciplinasPresentes.length > 1 ? (
+              <>
+                {filtroDePavimento}
+                {disciplinasPresentes.length > 1 && (
+                  <select
+                    value={disciplinaFiltro}
+                    onChange={(e) => setDisciplinaFiltro(e.target.value as '' | DisciplinaDeRede)}
+                    aria-label="Filtrar por disciplina"
+                    className="h-9 rounded-[6px] border border-gray-200 bg-white px-2 text-sm text-gray-700"
+                  >
+                    <option value="">Todas as disciplinas</option>
+                    {disciplinasPresentes.map((d) => (
+                      <option key={d} value={d}>
+                        {ROTULO_DA_DISCIPLINA[d]}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </>
             ) : undefined
           }
           empty={{ title: 'Nenhuma instalação na planta', subtitle: 'Lance pontos e trechos em Elétrica ou Hidráulica — ou use os lançamentos automáticos.' }}
@@ -638,7 +658,10 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
             <tr className="bg-gray-50 text-sm font-semibold text-gray-700">
               <td colSpan={n} className="px-6 py-2.5">
                 <span className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                  <span>Total {disciplinaFiltro ? `— ${ROTULO_DA_DISCIPLINA[disciplinaFiltro]}` : 'das instalações'}</span>
+                  <span>
+                    Total {disciplinaFiltro ? `— ${ROTULO_DA_DISCIPLINA[disciplinaFiltro]}` : 'das instalações'}
+                    {pavimentoFiltro ? ` — ${model.levels.find((l) => l.id === pavimentoFiltro)?.name ?? ''}` : ''}
+                  </span>
                   <span className="tabular-nums">
                     tubo {fmt(instalacoesVisiveis.filter((l) => l.familia === 'Tubo').reduce((s, l) => s + l.quantidade, 0))} m ·{' '}
                     {instalacoesVisiveis.filter((l) => l.familia === 'Ponto').reduce((s, l) => s + l.quantidade, 0)} ponto(s) ·{' '}

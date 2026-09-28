@@ -4,7 +4,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { POLITICA_PADRAO, applyBatch, applyCommand, computeQuantities, emptyModel, point, type Command } from '../utils/blueprintKernel';
-import { pavimentoDasEntidades, quantitativosPorPavimento } from '../utils/blueprintQuantitativosPorPavimento';
+import { familiaDoPonto, pavimentoDasEntidades, quantitativosPorPavimento, redeDoPavimento, reservatoriosPorVolume } from '../utils/blueprintQuantitativosPorPavimento';
+import { planejarEsgoto } from '../utils/blueprintEsgotoAutomatico';
 
 /** Térreo com uma sala 4×3 e uma porta; Superior com uma sala 6×3 e um pilar. */
 function sobrado() {
@@ -75,3 +76,68 @@ describe('quantitativos por pavimento', () => {
     expect(m.spaces.every((s) => mapa.get(s.id) === s.levelId)).toBe(true);
   });
 });
+
+describe('instalações por pavimento (28/09/2026, E0.2 do roadmap hidrossanitário)', () => {
+  /** Sobrado com banheiro em cima e a CI no térreo, e o esgoto automático (TQ, ramal sob o piso do andar). */
+  function sobradoComEsgoto() {
+    let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    m = applyCommand(m, { type: 'AddLevel', name: 'Superior', elevationMm: 2800, defaultHeightMm: 2800 }).model;
+    const [terreo, superior] = m.levels.map((l) => l.id);
+    const esg = (levelId: string, tipo: 'LAVATORIO' | 'CAIXA_SIFONADA' | 'VASO_SANITARIO' | 'CAIXA_INSPECAO', x: number, y: number, cota: number): Command =>
+      ({ type: 'AddTerminal', levelId, disciplina: 'ESGOTO', tipo, at: point(x, y), cotaMm: cota, tipoHidraulico: tipo });
+    m = applyBatch(m, [
+      esg(superior, 'LAVATORIO', 600, 2500, 500),
+      esg(superior, 'CAIXA_SIFONADA', 1200, 2100, 0),
+      esg(superior, 'VASO_SANITARIO', 600, 800, 0),
+      esg(terreo, 'CAIXA_INSPECAO', 5000, -1500, -700),
+      { type: 'AddTerminal', levelId: superior, disciplina: 'AGUA_FRIA', tipo: 'Caixa', at: point(0, 0), cotaMm: 2800, tipoHidraulico: 'RESERVATORIO', volumeL: 1000 },
+      { type: 'AddTerminal', levelId: superior, disciplina: 'AGUA_FRIA', tipo: 'Caixa', at: point(500, 0), cotaMm: 2800, tipoHidraulico: 'RESERVATORIO', volumeL: 1000 },
+      { type: 'AddTerminal', levelId: terreo, disciplina: 'AGUA_FRIA', tipo: 'Caixa', at: point(0, 500), cotaMm: 0, tipoHidraulico: 'RESERVATORIO', volumeL: 500 },
+    ]).model;
+    m = applyBatch(m, planejarEsgoto(m).comandos).model;
+    return { m, terreo, superior };
+  }
+
+  it('a SOMA dos pavimentos fecha com o total — tubo por DN, pontos e conexões', () => {
+    const { m, terreo, superior } = sobradoComEsgoto();
+    const q = computeQuantities(m, POLITICA_PADRAO);
+    const t = redeDoPavimento(m, q, terreo);
+    const s = redeDoPavimento(m, q, superior);
+    const total = redeDoPavimento(m, q, null);
+    const metros = (r: typeof t) => r.porBitola.reduce((x, b) => x + b.comprimentoM, 0);
+    expect(metros(t) + metros(s)).toBeCloseTo(metros(total), 9);
+    const n = (r: typeof t) => r.porConexao.reduce((x, c) => x + c.quantidade, 0);
+    expect(n(t) + n(s)).toBe(n(total));
+    const p = (r: typeof t) => r.porTerminal.reduce((x, c) => x + c.quantidade, 0);
+    expect(p(t) + p(s)).toBe(p(total));
+    // Cada pavimento tem rede: o TQ desce pelo térreo; os ramais são do superior.
+    expect(metros(t)).toBeGreaterThan(0);
+    expect(metros(s)).toBeGreaterThan(0);
+    // A linha do pavimento traz o resumo das instalações.
+    const linhas = quantitativosPorPavimento(m, q);
+    expect(linhas.reduce((x, l) => x + l.tuboHidraulicoM, 0)).toBeCloseTo(metros(total), 9);
+    expect(linhas.reduce((x, l) => x + l.conexoesHidraulicas, 0)).toBe(n(total));
+    expect(linhas.find((l) => l.levelId === superior)!.pontosHidraulicos).toBe(5);
+  });
+
+  it('a conexão sob o piso do andar é do ANDAR (o nó dela está no teto do térreo)', () => {
+    const { m, superior } = sobradoComEsgoto();
+    const q = computeQuantities(m, POLITICA_PADRAO);
+    const conexoesDoAndar = redeDoPavimento(m, q, superior).porConexao.reduce((x, c) => x + c.quantidade, 0);
+    const noTetoDoTerreo = q.conexoes.filter((c) => c.levelId !== superior && c.trechoIds.some((id) => m.trechos!.find((t) => t.id === id)?.levelId === superior)).length;
+    expect(noTetoDoTerreo).toBeGreaterThan(0);
+    expect(conexoesDoAndar).toBeGreaterThanOrEqual(noTetoDoTerreo);
+  });
+
+  it("caixa d'água pelo VOLUME e fora da lista de pontos; equipamentos e caixas com família própria", () => {
+    const { m, superior } = sobradoComEsgoto();
+    expect(reservatoriosPorVolume(m, null)).toEqual([{ volumeL: 1000, quantidade: 2 }, { volumeL: 500, quantidade: 1 }]);
+    expect(reservatoriosPorVolume(m, superior)).toEqual([{ volumeL: 1000, quantidade: 2 }]);
+    expect(familiaDoPonto('RESERVATORIO')).toBe('Reservatório');
+    expect(familiaDoPonto('AQUECEDOR')).toBe('Equipamento');
+    expect(familiaDoPonto('CAIXA_INSPECAO')).toBe('Caixa');
+    expect(familiaDoPonto('LAVATORIO')).toBe('Ponto');
+    expect(familiaDoPonto(null)).toBe('Ponto');
+  });
+});
+

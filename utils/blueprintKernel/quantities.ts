@@ -18,7 +18,7 @@
  * ligada ao snapshot que a originou.
  */
 
-import type { AcabamentosDoAmbiente, BlueprintModel, PainelDeCortina, OrientacaoDeBrise, FaseDeReforma, FuncaoCamada, Level, MaterialDeGuardaCorpo, Opening, Rodape, Space, Structural, StructuralKind, TipoDeGuardaCorpo, Wall } from './model';
+import type { AcabamentosDoAmbiente, BlueprintModel, PainelDeCortina, OrientacaoDeBrise, FaseDeReforma, FuncaoCamada, Level, MaterialDeGuardaCorpo, Opening, Rodape, Space, Structural, StructuralKind, Terminal, TipoDeGuardaCorpo, Wall } from './model';
 import { areaDaSecaoT, perimetroDeFormaDaSecaoT, secaoTValida } from './secaoT';
 import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural, acabamentosDoAmbiente, comprimentoDoGuardaCorpo, faseDe } from './model';
 import { contornoExternoDoNivel } from './arrangement';
@@ -1116,6 +1116,72 @@ function areaOcupadaNoAmbiente(s: Structural, ring: Point[]): number {
   return s.larguraMm * s.profundidadeMm;
 }
 
+/**
+ * As LINHAS DE COMPRA da rede (28/09/2026, E0.2 do roadmap hidrossanitário):
+ * saíram de dentro de `computeQuantities` para o quantitativo POR PAVIMENTO
+ * usar a MESMA conta — agrupar de outro jeito lá faria a soma dos pavimentos
+ * não fechar com o total, calada.
+ */
+export function agruparPorBitola(trechos: readonly QuantidadeTrecho[]): QuantidadePorBitola[] {
+  const porBitolaMapa = new Map<string, QuantidadePorBitola>();
+  for (const t of trechos) {
+    const chave = `${t.disciplina}\n${t.bitolaMm}\n${t.itemCode ?? ''}`;
+    const atual = porBitolaMapa.get(chave);
+    if (atual) {
+      atual.comprimentoM += t.comprimentoM;
+      atual.trechos += 1;
+    } else {
+      porBitolaMapa.set(chave, {
+        disciplina: t.disciplina,
+        bitolaMm: t.bitolaMm,
+        itemCode: t.itemCode,
+        comprimentoM: t.comprimentoM,
+        trechos: 1,
+      });
+    }
+  }
+  return [...porBitolaMapa.values()].sort(
+    (x, y) => x.disciplina.localeCompare(y.disciplina) || x.bitolaMm - y.bitolaMm,
+  );
+}
+
+export function agruparPorTerminal(terminais: readonly Terminal[]): QuantidadePorTerminal[] {
+  const porTerminalMapa = new Map<string, QuantidadePorTerminal>();
+  for (const t of terminais) {
+    const classificacao = t.tipoHidraulico ?? t.tipoEletrico ?? null;
+    const chave = `${t.disciplina}\n${classificacao ?? t.tipo}\n${t.itemCode ?? ''}`;
+    const atual = porTerminalMapa.get(chave);
+    if (atual) atual.quantidade += 1;
+    else {
+      porTerminalMapa.set(chave, {
+        disciplina: t.disciplina,
+        tipo: t.tipo,
+        classificacao,
+        itemCode: t.itemCode ?? null,
+        quantidade: 1,
+      });
+    }
+  }
+  return [...porTerminalMapa.values()].sort(
+    (x, y) => x.disciplina.localeCompare(y.disciplina) || x.tipo.localeCompare(y.tipo),
+  );
+}
+
+export function agruparPorConexao(conexoes: readonly ConexaoDerivada[]): QuantidadePorConexao[] {
+  const porConexaoMapa = new Map<string, QuantidadePorConexao>();
+  for (const c of conexoes) {
+    const k = `${c.disciplina}|${c.tipo}|${c.bitolaMm}|${c.paraMm ?? ''}`;
+    const atual = porConexaoMapa.get(k) ?? { disciplina: c.disciplina, tipo: c.tipo, bitolaMm: c.bitolaMm, paraMm: c.paraMm ?? null, quantidade: 0, derivadas: 0, manuais: 0 };
+    atual.quantidade += 1;
+    if (c.origem === 'MANUAL') atual.manuais += 1;
+    else atual.derivadas += 1;
+    porConexaoMapa.set(k, atual);
+  }
+  return [...porConexaoMapa.values()].sort(
+    (x, y) => x.disciplina.localeCompare(y.disciplina) || x.tipo.localeCompare(y.tipo) || x.bitolaMm - y.bitolaMm,
+  );
+}
+
 export function computeQuantities(
   model: BlueprintModel,
   policy: QuantityPolicy = POLITICA_PADRAO,
@@ -1638,60 +1704,12 @@ export function computeQuantities(
   });
 
   // Uma linha de COMPRA por disciplina × bitola × item de catálogo.
-  const porBitolaMapa = new Map<string, QuantidadePorBitola>();
-  for (const t of trechos) {
-    const chave = `${t.disciplina}\n${t.bitolaMm}\n${t.itemCode ?? ''}`;
-    const atual = porBitolaMapa.get(chave);
-    if (atual) {
-      atual.comprimentoM += t.comprimentoM;
-      atual.trechos += 1;
-    } else {
-      porBitolaMapa.set(chave, {
-        disciplina: t.disciplina,
-        bitolaMm: t.bitolaMm,
-        itemCode: t.itemCode,
-        comprimentoM: t.comprimentoM,
-        trechos: 1,
-      });
-    }
-  }
-  const porBitola = [...porBitolaMapa.values()].sort(
-    (x, y) => x.disciplina.localeCompare(y.disciplina) || x.bitolaMm - y.bitolaMm,
-  );
-
-  const porTerminalMapa = new Map<string, QuantidadePorTerminal>();
-  for (const t of model.terminais ?? []) {
-    const classificacao = t.tipoHidraulico ?? t.tipoEletrico ?? null;
-    const chave = `${t.disciplina}\n${classificacao ?? t.tipo}\n${t.itemCode ?? ''}`;
-    const atual = porTerminalMapa.get(chave);
-    if (atual) atual.quantidade += 1;
-    else {
-      porTerminalMapa.set(chave, {
-        disciplina: t.disciplina,
-        tipo: t.tipo,
-        classificacao,
-        itemCode: t.itemCode ?? null,
-        quantidade: 1,
-      });
-    }
-  }
+  // As mesmas contas servem ao total e ao pavimento (E0.2 do roadmap
+  // hidrossanitário) — ver `agruparPorBitola`/`agruparPorTerminal`/`agruparPorConexao`.
+  const porBitola = agruparPorBitola(trechos);
+  const porTerminal = agruparPorTerminal(model.terminais ?? []);
   const { conexoes } = conexoesDerivadas(model);
-  const porConexaoMapa = new Map<string, QuantidadePorConexao>();
-  for (const c of conexoes) {
-    const k = `${c.disciplina}|${c.tipo}|${c.bitolaMm}|${c.paraMm ?? ''}`;
-    const atual = porConexaoMapa.get(k) ?? { disciplina: c.disciplina, tipo: c.tipo, bitolaMm: c.bitolaMm, paraMm: c.paraMm ?? null, quantidade: 0, derivadas: 0, manuais: 0 };
-    atual.quantidade += 1;
-    if (c.origem === 'MANUAL') atual.manuais += 1;
-    else atual.derivadas += 1;
-    porConexaoMapa.set(k, atual);
-  }
-  const porConexao = [...porConexaoMapa.values()].sort(
-    (x, y) => x.disciplina.localeCompare(y.disciplina) || x.tipo.localeCompare(y.tipo) || x.bitolaMm - y.bitolaMm,
-  );
-
-  const porTerminal = [...porTerminalMapa.values()].sort(
-    (x, y) => x.disciplina.localeCompare(y.disciplina) || x.tipo.localeCompare(y.tipo),
-  );
+  const porConexao = agruparPorConexao(conexoes);
 
   // ── Totais ────────────────────────────────────────────────────────────────
   const somaPiso = ambientes.reduce((s, a) => s + a.areaPisoM2, 0);

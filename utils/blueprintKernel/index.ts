@@ -62,7 +62,7 @@ export { sha256, stableStringify } from './hash';
 export { novoUid, uidDeterministico, uidDeTeste, geradorSequencial, usarGeradorDeUid, rotuloCurto, EH_UID, PREFIXO_ROTULO_UID } from './identity';
 export type { ElementUid, FamiliaComUid } from './identity';
 
-export { computeQuantities, formatarQuantidade, POLITICA_PADRAO, areaRecuada, areaConstruidaMm2, medirEstrutura, aberturasDoAmbiente } from './quantities';
+export { computeQuantities, formatarQuantidade, POLITICA_PADRAO, areaRecuada, areaConstruidaMm2, medirEstrutura, aberturasDoAmbiente, agruparPorBitola, agruparPorTerminal, agruparPorConexao } from './quantities';
 export { sobreposicoesDe, sobreposicoesDoModelo, areaComum, recorteComum, pegadaEmPlanta, faixaDaEstruturaNaParede, pontasEncurtadasPorEstrutura } from './sobreposicao';
 export type { PontaEncurtada } from './sobreposicao';
 export type { Sobreposicao } from './sobreposicao';
@@ -77,6 +77,10 @@ export type {
   QuantidadeEstrutural,
   QuantidadeAgua,
   SobreposicaoQuantificada,
+  QuantidadeTrecho,
+  QuantidadePorBitola,
+  QuantidadePorTerminal,
+  QuantidadePorConexao,
 } from './quantities';
 
 export type { Command, CommandResult, Diff, FamiliaComParametros, EspecificacaoDeInstancia } from './commands';

@@ -9,7 +9,7 @@
  * filtro salvo dias antes, e nada na tela explica o porquê.
  */
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import type { Payable } from '../../types/financial';
 
@@ -109,5 +109,76 @@ describe('ContasPagarParcelas — deep-link por viewFocus', () => {
         renderTela({ focusId: 'de-outra-org', onFocusConsumed });
 
         await waitFor(() => expect(onFocusConsumed).toHaveBeenCalledWith(false, false));
+    });
+});
+
+/**
+ * Paginação da exibição (docs/planos/2026-09-28-contas-a-pagar-lento.md).
+ * Desenhar as ~2.000 parcelas de uma vez congelava a tela ~600 ms. O <tbody>
+ * passa a ter só a página; o resto (busca, total, export) segue na lista toda.
+ */
+const MUITAS = Array.from({ length: 250 }, (_, i) =>
+    linha({ id: `p${i}`, description: `Parcela ${i}`, party_name: `Credor ${i}` }));
+
+function renderMuitas(props: Partial<React.ComponentProps<typeof ContasPagarParcelas>> = {}) {
+    return renderTela({ rows: MUITAS, ...props });
+}
+
+const linhasDoCorpo = (container: HTMLElement) => container.querySelectorAll('tbody tr');
+
+describe('ContasPagarParcelas — paginação da exibição', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        window.localStorage.clear();
+        (Element.prototype as unknown as { scrollIntoView: unknown }).scrollIntoView = vi.fn();
+    });
+
+    it('desenha só 100 linhas de 250, e o rodapé conta a lista inteira', () => {
+        const { container } = renderMuitas();
+        expect(linhasDoCorpo(container)).toHaveLength(100);
+        expect(screen.getByText('1–100 de 250')).toBeInTheDocument();
+        expect(screen.getByText('250 parcelas')).toBeInTheDocument();
+        expect(screen.getByText('Página 1 de 3')).toBeInTheDocument();
+        fireEvent.click(screen.getByText('Próxima'));
+        expect(screen.getByText('Parcela 100')).toBeInTheDocument();
+        expect(screen.queryByText('Parcela 0')).not.toBeInTheDocument();
+    });
+
+    it('deep-link para um título da página 2 vai até a página dele', async () => {
+        const onFocusConsumed = vi.fn();
+        renderMuitas({ focusId: 'p180', onFocusConsumed });
+        expect(await screen.findByText('Parcela 180')).toBeInTheDocument();
+        await waitFor(() => expect(onFocusConsumed).toHaveBeenCalledWith(true, false));
+        expect(screen.getByText('Página 2 de 3')).toBeInTheDocument();
+    });
+
+    it('linha que muda de status não joga o usuário de volta para a página 1 (§22)', () => {
+        const props = {
+            organizationId: 'org1', vencDe: '', vencAte: '', loading: false, error: null,
+            onReload: () => {}, onRowChanged: () => {}, onRowRemoved: () => {}, notify: () => {},
+        };
+        const { rerender } = render(<ContasPagarParcelas rows={MUITAS} {...props} />);
+        fireEvent.click(screen.getByText('Próxima'));
+        expect(screen.getByText('Página 2 de 3')).toBeInTheDocument();
+        const paga = MUITAS.map(r => r.id === 'p150' ? { ...r, business_status: 'PAGO', effective_status: 'PAGO' } as Payable : r);
+        rerender(<ContasPagarParcelas rows={paga} {...props} />);
+        expect(screen.getByText('Página 2 de 3')).toBeInTheDocument();
+    });
+
+    it('busca volta para a página 1 e acha linha de qualquer página', () => {
+        renderMuitas();
+        fireEvent.click(screen.getByText('Próxima'));
+        fireEvent.change(screen.getByPlaceholderText('Buscar credor, descrição ou obra...'), { target: { value: 'Parcela 249' } });
+        expect(screen.getByText('Parcela 249')).toBeInTheDocument();
+        expect(screen.getByText('Página 1 de 1')).toBeInTheDocument();
+    });
+
+    it('"selecionar todos" marca só a página visível', () => {
+        const { container } = renderMuitas();
+        fireEvent.click(screen.getByTitle('Selecionar todas as parcelas desta página'));
+        const marcadas = [...container.querySelectorAll('tbody input[type="checkbox"]')]
+            .filter(el => (el as HTMLInputElement).checked);
+        expect(marcadas).toHaveLength(100);
+        expect(screen.getByText('100 selecionadas')).toBeInTheDocument();
     });
 });

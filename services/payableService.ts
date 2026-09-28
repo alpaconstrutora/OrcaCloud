@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { fetchAllPagesParallel, type RangeableQuery } from '../lib/supabasePaginate';
 import type { Payable, PayableBusinessStatus } from '../types/financial';
 import { propertyExpenseService } from './propertyExpenseService';
 
@@ -28,6 +29,13 @@ export function payableParty(p: Payable): string {
  */
 const PAGE_SIZE = 1000;
 
+/** O pedaço do query builder do supabase-js que `list()` usa para filtrar. */
+interface FiltravelPorColuna {
+    eq(column: string, value: unknown): FiltravelPorColuna;
+    gte(column: string, value: unknown): FiltravelPorColuna;
+    lte(column: string, value: unknown): FiltravelPorColuna;
+}
+
 export const payableService = {
 
     /**
@@ -36,14 +44,11 @@ export const payableService = {
      * o usuário pode ver (REGRA #5 do CLAUDE.md — leitura nunca bloqueia).
      */
     async list(organizationId?: string | null, filters?: PayableFilters): Promise<Payable[]> {
-        function buildQuery(from: number) {
-            let q = supabase
-                .from('vw_payables')
-                .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,direction,description,category,status,business_status,effective_status,party_id,party_name,party_type,entity_name,supplier_id,project_id,project_name,obra_id,obra_name,cost_center_id,plano_de_contas_id,created_at,updated_at')
-                .order('due_date', { ascending: true, nullsFirst: false })
-                .order('id', { ascending: true })
-                .range(from, from + PAGE_SIZE - 1);
-
+        // Os MESMOS filtros na página e na contagem — contagem de outro recorte
+        // só custaria requisição (o helper confere a última página de qualquer jeito).
+        // Tipo estreito de propósito: com o builder do supabase-js como genérico,
+        // o tsc estoura a profundidade de instanciação (TS2589).
+        function comFiltros(q: FiltravelPorColuna): FiltravelPorColuna {
             if (organizationId)      q = q.eq('organization_id', organizationId);
             if (filters?.dueFrom)    q = q.gte('due_date', filters.dueFrom);
             if (filters?.dueTo)      q = q.lte('due_date', filters.dueTo);
@@ -56,14 +61,18 @@ export const payableService = {
             return q;
         }
 
-        const todas: Payable[] = [];
-        for (let pagina = 0; ; pagina++) {
-            const { data, error } = await buildQuery(pagina * PAGE_SIZE);
-            if (error) throw error;
-            const bloco = (data || []) as Payable[];
-            todas.push(...bloco);
-            if (bloco.length < PAGE_SIZE) break;
-        }
+        const { data: todas, error } = await fetchAllPagesParallel<Payable>(
+            () => comFiltros(supabase
+                .from('vw_payables')
+                .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,direction,description,category,status,business_status,effective_status,party_id,party_name,party_type,entity_name,supplier_id,project_id,project_name,obra_id,obra_name,cost_center_id,plano_de_contas_id,created_at,updated_at')
+                .order('due_date', { ascending: true, nullsFirst: false })
+                .order('id', { ascending: true }) as unknown as FiltravelPorColuna) as unknown as RangeableQuery<Payable>,
+            () => comFiltros(supabase
+                .from('vw_payables')
+                .select('id', { count: 'exact', head: true }) as unknown as FiltravelPorColuna) as unknown as PromiseLike<{ count: number | null; error: unknown }>,
+            PAGE_SIZE,
+        );
+        if (error) throw error;
 
         let rows = todas;
 

@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { fetchAllPages, type RangeableQuery } from '../lib/supabasePaginate';
 import {
     allocateDirect,
     allocateProrated,
@@ -111,30 +112,36 @@ export const propertyExpenseService = {
      * resto do serviço, "não medido" é diferente de "não apropriado".
      */
     async allocationSummary(
-        transactionIds: string[]
+        transactionIds: string[],
+        /** Org do topo; `null`/`undefined` = "Todas" (a RLS recorta — REGRA #5). */
+        organizationId?: string | null,
     ): Promise<Map<string, { propertyIds: string[]; names: string[] }> | null> {
         if (transactionIds.length === 0) return new Map();
 
-        const rows: { transaction_id: string; property_id: string }[] = [];
-
-        // ⚠️ EM LOTES, obrigatoriamente. `.in()` vira query string, e Contas a
-        // Pagar abre com 1000 parcelas: 1000 UUIDs = ~37 KB de URL, que o
-        // servidor recusa. O erro caía no catch da tela e a coluna "Imóvel"
-        // mostrava "n/d" em TODAS as linhas — parecendo serviço indisponível
-        // quando era só a consulta grande demais.
-        for (const lote of chunk(transactionIds, ALLOCATION_QUERY_CHUNK)) {
-            const { data, error } = await supabase
+        // Lê as apropriações DA ORGANIZAÇÃO e cruza com os ids aqui, em vez de
+        // mandar os ids na URL. Com `.in()` eram lotes de 150 UUIDs (a URL tem
+        // limite) em série: 14 idas para as 2.030 parcelas de Contas a Pagar,
+        // terminando 3,5 s depois de a tela abrir — para achar 2 apropriações,
+        // que era o total do banco em 28/09/2026. Assim o custo cresce com o
+        // número de apropriações, não com o de títulos na tela.
+        // Filtrar por organização é seguro: `fn_set_property_allocations` grava a
+        // organização lida da PRÓPRIA transação, nunca outra.
+        const { data, error } = await fetchAllPages<{ transaction_id: string; property_id: string }>(() => {
+            let q = supabase
                 .from('property_expense_allocations')
                 .select('transaction_id, property_id')
-                .in('transaction_id', lote);
-
-            if (error) {
-                if (isMissingObject(error) || error.code === '42501') return null;
-                throw error;
-            }
-            rows.push(...((data || []) as { transaction_id: string; property_id: string }[]));
+                .order('id', { ascending: true });
+            if (organizationId) q = q.eq('organization_id', organizationId);
+            return q as unknown as RangeableQuery<{ transaction_id: string; property_id: string }>;
+        });
+        if (error) {
+            const e = error as { code?: string; message?: string };
+            if (isMissingObject(e) || e.code === '42501') return null;
+            throw error;
         }
 
+        const wanted = new Set(transactionIds);
+        const rows = data.filter(r => wanted.has(r.transaction_id));
         if (rows.length === 0) return new Map();
 
         // Nomes num segundo passo: a view não os traz e o join aninhado do

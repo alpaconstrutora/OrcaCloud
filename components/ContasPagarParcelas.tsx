@@ -348,15 +348,19 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     const [alocacoes, setAlocacoes] = useState<Map<string, { propertyIds: string[]; names: string[] }> | null>(null);
     const idsCarregados = useMemo(() => rows.map(r => r.id).join(','), [rows]);
 
+    // Guarda de resposta fora de ordem: trocar de organização no topo com a
+    // consulta anterior em voo não pode deixar a apropriação da org velha na tela.
+    const alocacoesSeq = useRef(0);
     const recarregarAlocacoes = React.useCallback(() => {
         const ids = idsCarregados ? idsCarregados.split(',') : [];
-        propertyExpenseService.allocationSummary(ids)
-            .then(setAlocacoes)
+        const seq = ++alocacoesSeq.current;
+        propertyExpenseService.allocationSummary(ids, organizationId)
+            .then(res => { if (seq === alocacoesSeq.current) setAlocacoes(res); })
             .catch(err => {
                 console.error('[ContasPagarParcelas] Erro ao carregar apropriação por imóvel:', err);
-                setAlocacoes(null);
+                if (seq === alocacoesSeq.current) setAlocacoes(null);
             });
-    }, [idsCarregados]);
+    }, [idsCarregados, organizationId]);
 
     useEffect(() => { recarregarAlocacoes(); }, [recarregarAlocacoes]);
 
@@ -453,6 +457,31 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
 
     useEffect(() => { onVisibleRowsChange?.(filtered); }, [filtered, onVisibleRowsChange]);
 
+    /*
+     * Paginação da EXIBIÇÃO (§6.7). Desenhar as ~2.000 parcelas de uma vez eram
+     * 83 mil nós no <tbody> e ~600 ms de tela congelada na abertura, mais ~100 ms
+     * por tecla na busca (medido em produção, 28/09/2026 — ver
+     * docs/planos/2026-09-28-contas-a-pagar-lento.md). A lista continua inteira
+     * em memória: busca, filtros, ordenação, o total do rodapé e o export (via
+     * `onVisibleRowsChange`) enxergam o recorte todo; só o <tbody> é fatiado.
+     */
+    const [pageSize, setPageSize] = usePersistedState<number>('contasPagarParcelas:pageSize', 100);
+    const [page, setPage] = useState(1);
+    const tableScrollRef = useRef<HTMLDivElement>(null);
+    // Volta para a 1 quando o RECORTE muda — não quando uma linha muda de
+    // status: marcar como pago na página 3 não pode jogar o usuário na 1 (§22).
+    // Linha que sai do recorte só encurta a lista; `currentPage` abaixo prende
+    // a página no novo total.
+    useEffect(() => { setPage(1); }, [search, statusFiltro, origemFiltro, vencDe, vencAte, tableColumns.sortColumn, tableColumns.sortDirection, pageSize, organizationId]);
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    const currentPage = Math.min(page, totalPages);
+    const pageStart = (currentPage - 1) * pageSize;
+    const pageRows = useMemo(() => filtered.slice(pageStart, pageStart + pageSize), [filtered, pageStart, pageSize]);
+    function irParaPagina(p: number) {
+        setPage(Math.max(1, Math.min(p, totalPages)));
+        if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
+    }
+
     /**
      * Deep-link: localizar, destacar e rolar até o título apontado por `focusId`.
      *
@@ -462,11 +491,15 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
      * causa de um filtro salvo dias antes, e nada na tela explica o porquê.
      * Só zera quando é o filtro que esconde a linha; se ela já está visível, os
      * filtros do usuário ficam de pé.
+     *
+     * Com a paginação, "visível" é também "na página certa": só a página atual
+     * tem <tr> (e ref) para rolar até ela.
      */
     useEffect(() => {
         if (!focusId || loading) return;
         if (!rows.some(r => r.id === focusId)) { onFocusConsumed?.(false, false); return; }
-        if (!filtered.some(r => r.id === focusId)) {
+        const indice = filtered.findIndex(r => r.id === focusId);
+        if (indice < 0) {
             setSearch('');
             setStatusFiltro('all');
             setOrigemFiltro('all');
@@ -474,6 +507,11 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
             limpouFiltrosRef.current = true;
             return;   // reexecuta quando `filtered` recalcular sem os filtros
         }
+        // Roda DEPOIS do efeito que volta para a página 1 (declarado antes), então
+        // na mesma rodada esta escolha vence — e o efeito reexecuta com a página
+        // do título já renderizada.
+        const paginaDoTitulo = Math.floor(indice / pageSize) + 1;
+        if (paginaDoTitulo !== currentPage) { setPage(paginaDoTitulo); return; }
         setHighlightId(focusId);
         rowRefs.current.get(focusId)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
         onFocusConsumed?.(true, limpouFiltrosRef.current);
@@ -481,19 +519,23 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         const t = setTimeout(() => setHighlightId(null), 4000);
         return () => clearTimeout(t);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [focusId, loading, rows, filtered]);
+    }, [focusId, loading, rows, filtered, currentPage, pageSize]);
 
     /** Cancelado não tem despesa a apropriar — o NOI já o ignora. Parcela PAGA
      *  entra: despesa paga é exatamente a que precisa cair no OPEX. */
     const isSelectable = (row: Payable) => row.effective_status !== 'CANCELADO';
     const selectableVisible = useMemo(() => filtered.filter(isSelectable), [filtered]);
-    // Interseção da seleção com o visível: se o filtro mudou, o que sumiu da
-    // tela não pode continuar entrando na ação em lote.
+    // Interseção da seleção com o recorte: se o filtro mudou, o que sumiu da
+    // tela não pode continuar entrando na ação em lote. Linha marcada à mão
+    // noutra página do MESMO recorte continua valendo — o usuário a viu.
     const selectedVisible = useMemo(
         () => selectableVisible.filter(r => selectedIds.has(r.id)),
         [selectableVisible, selectedIds],
     );
-    const allVisibleSelected = selectableVisible.length > 0 && selectedVisible.length === selectableVisible.length;
+    // "Selecionar todos" do <thead> é só da página (§6.7): marcar linha que o
+    // usuário não está vendo é armadilha em ação de lote.
+    const selectablePage = useMemo(() => pageRows.filter(isSelectable), [pageRows]);
+    const allVisibleSelected = selectablePage.length > 0 && selectablePage.every(r => selectedIds.has(r.id));
     const selectedTotal = selectedVisible.reduce((s, r) => s + (r.amount ?? 0), 0);
 
     /**
@@ -514,7 +556,8 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
             return next;
         });
     }
-    // Seleção de intervalo com Shift+clique (ui_ux_guia_unificado.md §10.1)
+    // Seleção de intervalo com Shift+clique (ui_ux_guia_unificado.md §10.1).
+    // `index` é GLOBAL em `filtered` (pageStart + i), não o da página (§6.7).
     function handleRowCheck(id: string, index: number, shiftKey: boolean) {
         if (shiftKey && lastCheckedIndex !== null) {
             const [start, end] = lastCheckedIndex < index ? [lastCheckedIndex, index] : [index, lastCheckedIndex];
@@ -528,8 +571,8 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     function toggleAllVisible() {
         setSelectedIds(prev => {
             const next = new Set(prev);
-            if (allVisibleSelected) selectableVisible.forEach(r => next.delete(r.id));
-            else selectableVisible.forEach(r => next.add(r.id));
+            if (allVisibleSelected) selectablePage.forEach(r => next.delete(r.id));
+            else selectablePage.forEach(r => next.add(r.id));
             return next;
         });
     }
@@ -728,8 +771,9 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                         </p>
                     </div>
                 ) : (
-                    /* §6.5 — lista longa: container rola em altura própria, thead fixo */
-                    <div className="overflow-auto max-h-[70vh]">
+                    <>
+                    {/* §6.5 — lista longa: container rola em altura própria, thead fixo */}
+                    <div ref={tableScrollRef} className="overflow-auto max-h-[70vh]">
                         <table ref={cols.tableRef} className="text-sm text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
                                 {/* checkbox — largura fixa, fora do redimensionamento. O comentário
@@ -753,9 +797,9 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                             type="checkbox"
                                             className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
                                             checked={allVisibleSelected}
-                                            disabled={selectableVisible.length === 0}
+                                            disabled={selectablePage.length === 0}
                                             onChange={toggleAllVisible}
-                                            title="Selecionar todas as parcelas visíveis"
+                                            title="Selecionar todas as parcelas desta página"
                                         />
                                     </th>
                                     {tableColumns.orderedVisibleColumns.map(key => {
@@ -787,7 +831,8 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filtered.map((row, idx) => {
+                                {pageRows.map((row, idxNaPagina) => {
+                                    const idx = pageStart + idxNaPagina;
                                     const vencido = row.effective_status === 'VENCIDO';
                                     const quitado = ['PAGO', 'CANCELADO'].includes(row.effective_status);
                                     const selecionada = selectedIds.has(row.id);
@@ -889,6 +934,41 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                             </tfoot>
                         </table>
                     </div>
+                    {/* Rodapé de paginação §6.7 — mesmo desenho do Extrato e do
+                        StandardTable. Fora do container que rola: fica sempre à vista. */}
+                    <div className="flex items-center justify-between gap-4 px-6 py-3 border-t border-gray-100 text-sm text-gray-500">
+                        <div className="flex items-center gap-2">
+                            <span>{`${pageStart + 1}–${Math.min(pageStart + pageSize, filtered.length)} de ${filtered.length.toLocaleString('pt-BR')}`}</span>
+                            <select
+                                value={pageSize}
+                                onChange={e => setPageSize(Number(e.target.value))}
+                                className="h-8 px-2 rounded-[6px] border border-gray-200 bg-white text-sm text-gray-600"
+                                title="Linhas por página"
+                            >
+                                {[50, 100, 200, 500].map(n => <option key={n} value={n}>{n} por página</option>)}
+                            </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => irParaPagina(currentPage - 1)}
+                                disabled={currentPage <= 1}
+                                title={currentPage <= 1 ? 'Já está na primeira página' : undefined}
+                                className="h-8 px-3 rounded-[6px] border border-gray-200 bg-white text-sm text-gray-600 hover:text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                            >
+                                Anterior
+                            </button>
+                            <span>Página {currentPage} de {totalPages}</span>
+                            <button
+                                onClick={() => irParaPagina(currentPage + 1)}
+                                disabled={currentPage >= totalPages}
+                                title={currentPage >= totalPages ? 'Já está na última página' : undefined}
+                                className="h-8 px-3 rounded-[6px] border border-gray-200 bg-white text-sm text-gray-600 hover:text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                            >
+                                Próxima
+                            </button>
+                        </div>
+                    </div>
+                    </>
                 )}
             </div>
         </div>

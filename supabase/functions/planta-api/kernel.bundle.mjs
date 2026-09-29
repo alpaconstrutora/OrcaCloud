@@ -3869,6 +3869,26 @@ ${c.funcao}`;
   };
 }
 
+// utils/blueprintKernel/caminhoDoEletroduto.ts
+function segmentosDoEletroduto(t, peDireitoMm) {
+  const reto = [{ a: t.a, b: t.b, cotaAMm: t.cotaAMm, cotaBMm: t.cotaBMm }];
+  if (t.disciplina !== "ELETRICA") return reto;
+  const prumada = t.a.x === t.b.x && t.a.y === t.b.y;
+  const horizontal = t.cotaAMm === t.cotaBMm;
+  if (prumada || horizontal) return reto;
+  const distanciaALaje = (cota) => Math.min(Math.abs(cota), Math.abs(peDireitoMm - cota));
+  const horizontalEmA = distanciaALaje(t.cotaAMm) <= distanciaALaje(t.cotaBMm);
+  return horizontalEmA ? [
+    // Corre na cota de A até o ponto B, e sobe/desce em B.
+    { a: t.a, b: t.b, cotaAMm: t.cotaAMm, cotaBMm: t.cotaAMm },
+    { a: t.b, b: t.b, cotaAMm: t.cotaAMm, cotaBMm: t.cotaBMm }
+  ] : [
+    // Sobe/desce em A, e corre na cota de B até o ponto B.
+    { a: t.a, b: t.a, cotaAMm: t.cotaAMm, cotaBMm: t.cotaBMm },
+    { a: t.a, b: t.b, cotaAMm: t.cotaBMm, cotaBMm: t.cotaBMm }
+  ];
+}
+
 // utils/blueprintDistribuicao.ts
 var ROTULO_DO_TIPO_DE_AMBIENTE = {
   BANHEIRO: "Banheiro",
@@ -3920,24 +3940,6 @@ var ROTULO_DO_PONTO_ELETRICO = {
   LIGACAO_DIRETA: "Liga\xE7\xE3o direta (chuveiro, aquecedor)",
   INTERRUPTOR: "Interruptor"
 };
-function segmentosDoEletroduto(t, peDireitoMm) {
-  const reto = [{ a: t.a, b: t.b, cotaAMm: t.cotaAMm, cotaBMm: t.cotaBMm }];
-  if (t.disciplina !== "ELETRICA") return reto;
-  const prumada = t.a.x === t.b.x && t.a.y === t.b.y;
-  const horizontal = t.cotaAMm === t.cotaBMm;
-  if (prumada || horizontal) return reto;
-  const distanciaALaje = (cota) => Math.min(Math.abs(cota), Math.abs(peDireitoMm - cota));
-  const horizontalEmA = distanciaALaje(t.cotaAMm) <= distanciaALaje(t.cotaBMm);
-  return horizontalEmA ? [
-    // Corre na cota de A até o ponto B, e sobe/desce em B.
-    { a: t.a, b: t.b, cotaAMm: t.cotaAMm, cotaBMm: t.cotaAMm },
-    { a: t.b, b: t.b, cotaAMm: t.cotaAMm, cotaBMm: t.cotaBMm }
-  ] : [
-    // Sobe/desce em A, e corre na cota de B até o ponto B.
-    { a: t.a, b: t.a, cotaAMm: t.cotaAMm, cotaBMm: t.cotaBMm },
-    { a: t.a, b: t.b, cotaAMm: t.cotaBMm, cotaBMm: t.cotaBMm }
-  ];
-}
 
 // utils/blueprintIfc.ts
 var COBERTURA_IFC = [

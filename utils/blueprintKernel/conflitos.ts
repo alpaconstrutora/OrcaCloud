@@ -1,6 +1,7 @@
 import { pointInPolygon, type Point } from './geom';
 import type { BlueprintModel, ObjectId, Trecho } from './model';
 import { pegadaEmPlanta } from './sobreposicao';
+import { segmentosDoEletroduto } from './caminhoDoEletroduto';
 
 /**
  * CONFLITO — uma instalação ocupando o mesmo espaço que outra coisa.
@@ -248,23 +249,34 @@ export function conflitosDoModelo(model: BlueprintModel): Conflito[] {
   const elevacao = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
   const trechos = model.trechos ?? [];
   const saida: Conflito[] = [];
+  // O eletroduto anda em "L" (sobe na parede, corre na laje) — o MESMO caminho
+  // que o 3D, o corte e o quantitativo usam (`segmentosDoEletroduto`). Até
+  // 29/09/2026 (E0.4) o clash media a DIAGONAL entre as pontas: o eletroduto
+  // da tomada à luminária "passava por baixo" da viga que o 3D mostrava
+  // atravessando. Tubo hidráulico continua reto — a função devolve o trecho
+  // inteiro fora da elétrica.
+  const peDireito = new Map(model.levels.map((l) => [l.id, l.defaultHeightMm]));
+  const pedacosDe = (x: Trecho): [Ponto3, Ponto3][] =>
+    segmentosDoEletroduto(x, peDireito.get(x.levelId) ?? 0).map((seg) =>
+      pontasNoMundo({ ...x, a: seg.a, b: seg.b, cotaAMm: seg.cotaAMm, cotaBMm: seg.cotaBMm }, elevacao.get(x.levelId) ?? 0),
+    );
 
   for (const t of trechos) {
-    const ez = elevacao.get(t.levelId) ?? 0;
-    const [A, B] = pontasNoMundo(t, ez);
+    const pedacos = pedacosDe(t);
     const raio = t.bitolaMm / 2;
 
     // ── Contra a ESTRUTURA ───────────────────────────────────────────────
     for (const s of model.structures) {
       const es = elevacao.get(s.levelId) ?? 0;
-      const r = contraPrisma(
-        A,
-        B,
-        raio,
-        pegadaEmPlanta(s),
-        es + s.baseMm,
-        es + s.baseMm + s.alturaMm,
-      );
+      const anel = pegadaEmPlanta(s);
+      // Um conflito por par (trecho, peça): o que está DENTRO soma pelos
+      // pedaços; a folga é a menor delas.
+      let r: { dentroMm: number; folgaMm: number } | null = null;
+      for (const [A, B] of pedacos) {
+        const parte = contraPrisma(A, B, raio, anel, es + s.baseMm, es + s.baseMm + s.alturaMm);
+        if (!parte) continue;
+        r = r ? { dentroMm: r.dentroMm + parte.dentroMm, folgaMm: Math.min(r.folgaMm, parte.folgaMm) } : parte;
+      }
       if (!r) continue;
       saida.push({
         trechoId: t.id,
@@ -282,9 +294,8 @@ export function conflitosDoModelo(model: BlueprintModel): Conflito[] {
       // `id` só cresce, então o par é visitado uma vez — e nunca contra si.
       if (u.id <= t.id) continue;
       if (u.disciplina === t.disciplina) continue;
-      const eu = elevacao.get(u.levelId) ?? 0;
-      const [C, D] = pontasNoMundo(u, eu);
-      const folga = distanciaEntreEixos3D(A, B, C, D);
+      let folga = Infinity;
+      for (const [A, B] of pedacos) for (const [C, D] of pedacosDe(u)) folga = Math.min(folga, distanciaEntreEixos3D(A, B, C, D));
       if (folga > raio + u.bitolaMm / 2) continue;
       saida.push({
         trechoId: t.id,

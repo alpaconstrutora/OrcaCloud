@@ -1908,14 +1908,14 @@ Automação (E6) e BIM (E7) fecham.
 
 ---
 
-## Etapa 0 — Trilhos rápidos (sem bump de kernel) · 4 fases
+## Etapa 0 — Trilhos rápidos (sem bump de kernel) · 4 fases · **✅ CONCLUÍDA em 29/09/2026 (4 de 4)**
 
 | Fase | Entrega (o que muda) | Pronto quando (como sei que terminou) |
 |---|---|---|
 | 0.1 Hipóteses na tela e os 7 achados ✅ (5 de 7; achados 2 e 3 vão para 0.4 e 0.2) | `PainelPreDimensionamento` ganha: fatores de demanda **por tabela nomeada** (presets "sem demanda", "NBR 5410 residencial — hipótese" e "personalizado", cada grupo editável), `limiteQuedaTotalPct`, `desequilibrioMaxPct`; decisão registrada do `ρ`; `I2 ≤ 1,45·Iz` na sobrecarga (5.3.4.1 completo); 6.2.7.1 entra na aba Conferência; PRE-DIM filtra por pavimento; comentário do quadro corrigido; nota de 17/09 corrigida no plano | teste de `preDimensionarCircuito` com I2 falhando; conferência lista 6.2.7.1; hipóteses gravadas em `blueprint_study_eletrica` aparecem no memorial; `blueprintEletricaDimensionamento.test.ts` verde; harness da prancha olhado |
 | 0.2 Circuitos: numeração, mover e ordenar ✅ (ordem manual → E4.1) | `proximoNumeroDeCircuito` = maior número existente + 1, com "Renumerar" (lote, Ctrl+Z); `SetCircuitoProps.quadroId` (mover circuito entre quadros — trechos que só serviam ao circuito seguem marcados "conferir"); ordem manual (`Circuito.ordem` opcional é payload → **fica para E3**; aqui só ordenação por número); coluna Descrição (`tipo`) e coluna Fases na tabela padrão | teste: apagar C2 e criar → C4, não C2; mover circuito muda o unifilar dos dois quadros; `check-ui-standard` em `PainelEletrica.tsx` |
 | 0.3 Quantitativo do que já existe · quant-1.19.0 ✅ | `computeQuantities` passa a contar **quadros** (por medidas), **disjuntores** (por In declarado), **DR** (por circuito com `protecaoDR`), **pontos por circuito e por quadro**, e **metros de condutor por seção** = Σ trecho (comprimento em "L" × `condutores`), com o aviso "sem retorno até a E2"; resumo por pavimento ganha os campos elétricos; medidas `COMPRIMENTO_CONDUTOR`, `CONTAGEM_QUADROS`, `CONTAGEM_DISJUNTORES`, `CONTAGEM_DR`, `CONTAGEM_PONTOS_ELETRICOS` no de-para; `gerarLancamentosDeInstalacoes` cobre `ELETRICA` | teste portão de `POLITICA_PADRAO.version`; XLSX com as abas novas; um estudo de prova lança linhas UN/M no orçamento e é apagado depois |
-| 0.4 Clash pelo "L" e fases visíveis | `conflitos.ts` usa `segmentosDoEletroduto` (o "L") no lugar da diagonal; pontos e quadros entram no clash como caixas; fases R/S/T no unifilar (3 barras rotuladas) e coluna no quadro de cargas | teste com eletroduto em desnível: colisão onde o 3D mostra; unifilar de quadro FFF mostra R/S/T; `blueprintUnifilar.test.ts` |
+| 0.4 Clash pelo "L" e fases visíveis ✅ (pontos/quadros no clash → E7.2) | `conflitos.ts` usa `segmentosDoEletroduto` (o "L") no lugar da diagonal; pontos e quadros entram no clash como caixas; fases R/S/T no unifilar (3 barras rotuladas) e coluna no quadro de cargas | teste com eletroduto em desnível: colisão onde o 3D mostra; unifilar de quadro FFF mostra R/S/T; `blueprintUnifilar.test.ts` |
 
 Fecha o bloco **6** (parcial — o fio completo depende da E2), parte do **2** e do **7**, e os achados.
 
@@ -2217,3 +2217,51 @@ linhas novas usam as mesmas células e famílias das existentes; o que está pro
 "Por quadro" ❌→✅, "Por circuito" ❌→🟡 (fio por circuito está no payload, sem tela); §30
 "Quantitativos" ❌→🟡; §46 "Itens" 🟡→✅ (código da peça elétrica chega ao orçamento); §51
 "Quantitativos" 🟡→✅, "Lista de materiais" ❌→🟡 (XLSX e tela; folha na prancha é a E5.2).
+
+### E0.4 — Clash pelo "L" e fases visíveis (29/09/2026) · frente `eletrico-e0` · sem bump de kernel · **fecha a Etapa 0**
+
+**O que mudou**
+
+- **`utils/blueprintKernel/caminhoDoEletroduto.ts`** (novo) — `SegmentoDoTrecho` e
+  `segmentosDoEletroduto` saíram de `utils/blueprintRede.ts` para o kernel, recortados
+  literalmente (doc de 10/09 incluída): o clash precisava do MESMO "L" que o 3D, o corte e o
+  quantitativo usam, e o kernel não importa de fora. `blueprintRede.ts` reexporta os dois —
+  os 7 importadores (Collada, Corte, Elevation, Ifc, 3DViewer, Canvas, teste) não mudaram.
+- `utils/blueprintKernel/conflitos.ts` — `conflitosDoModelo` deixa de medir a DIAGONAL entre as
+  pontas: cada trecho vira os **pedaços do "L"** (`pedacosDe`), o conflito com estrutura soma o
+  que está dentro pelos pedaços e guarda a menor folga (um conflito por par, como antes), e a
+  folga trecho × trecho é o mínimo entre todos os pares de pedaços. Tubo hidráulico continua
+  reto (a função devolve o trecho inteiro fora da elétrica) — achado 2 fechado.
+- `utils/blueprintUnifilar.ts` — `RamalUnifilar.fase`, `DiagramaUnifilar.comFases`; a letra
+  R/S/T vai **sobre o nó do ramal** no barramento; o rodapé explica só quando alguma fase aparece.
+- `utils/blueprintPranchaEletrica.ts` — folha do quadro de cargas ganha a coluna **Fase**
+  (R/S/T; "—" em F-N sem fase; vazio fora de F-N).
+- **`planta-api` redeployada** (bundle regenerado): `GET /v1/estudos` sem token **401**, token
+  falso **401**.
+- **Não entrou (declarado)**: **pontos e quadros no clash** — a tabela do roadmap para 0.4 previa
+  "pontos e quadros entram no clash como caixas", mas `Conflito` é `{trechoId, trechoUid, outroId…}`
+  e é consumido pelo painel, pelo BCF (`guid` por trecho) e pela tabela de aceite; alargar a forma é
+  mudança de contrato, não de geometria. **Vai para a E7.2** (BIM), onde já estava listado
+  ("clash com pontos/quadros"). Coluna Fases na TABELA já entrou na 0.2.
+- **Dívida pequena registrada**: existem dois `numeroDoCircuito` — `blueprintCondutores.ts:74`
+  (string, "?" sem número, para o unifilar) e `blueprintCircuitosAutomaticos.ts` (number | null,
+  da E0.2). Semânticas diferentes, nomes iguais; unificar quando a E4.1 mexer no `Circuito`.
+
+**Testes** — `__tests__/blueprintConflitos.test.ts` +3: tomada (300) → luminária (2800) cruzando a
+viga (2400–2800): a diagonal passava a 1,55 m, por baixo; o "L" corre no teto e **atravessa 200 mm**
+(1 conflito ESTRUTURA); o ESGOTO com a mesma geometria continua reto e não acusa; eletroduto × água
+a 2200 cruzando a **prumada** acusa REDE com folga 0 (a diagonal estaria a 1,9 m). Novo
+`__tests__/blueprintUnifilarFases.test.ts` (3): ramal com `fase: 'S'` e null; o traçado escreve a
+letra uma vez, sem R nem T; o rodapé só com `comFases`.
+
+**Verificação**: `tsc` ✓ · alvo 82 ✓ (conflitos, status, arquitetônicos, unifilar, prancha,
+caminho, collada, goldens, BCF) · suíte inteira **6.178 ✓ / 0 ✗ / 33 skip** (563 arquivos) · `build` ✓ ·
+`check-xss-sinks` ✓ (nenhum `.tsx` tocado) · `planta-api` 401/401. Goldens do kernel intactos: o
+payload canônico não mudou (o caminho é derivado).
+
+**Efeito no benchmark**: §43 "Detecção de colisões" ✅ (agora pelo caminho real), "Elétrica ×
+estrutura" ✅, "Elétrica × hidráulica" ✅ — as três com a ressalva removida; §34 "Fases" ❌→✅;
+§32 "Fases" ✅ (tabela na 0.2 + prancha aqui). Sete achados do benchmark: **todos fechados**
+(1 e 4–7 na 0.1, 3 na 0.2, 2 aqui).
+
+**Etapa 0: 4 de 4 fases** ✓. Próxima: **E1 — Modelo de pontos e caixas** (bump de kernel).

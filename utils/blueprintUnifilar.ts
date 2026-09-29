@@ -29,7 +29,7 @@
  * encolhe um quadro largo para caber).
  */
 import type { Desenhista } from './blueprintExport';
-import type { BlueprintModel, LigacaoDoCircuito } from './blueprintKernel';
+import type { BlueprintModel, FaseDoCircuito, LigacaoDoCircuito } from './blueprintKernel';
 import {
   HIPOTESES_PADRAO,
   preDimensionarQuadroCompleto,
@@ -54,6 +54,8 @@ export interface RamalUnifilar {
   cargaVA: number;
   pontos: number;
   dr: boolean;
+  /** Fase DECLARADA (R/S/T) do circuito F-N no quadro trifásico (E0.4); null fora disso. */
+  fase: FaseDoCircuito | null;
   /** Quantas FALTAS o pré-dimensionamento acusa neste circuito. */
   faltas: number;
 }
@@ -77,6 +79,8 @@ export interface DiagramaUnifilar {
   comDR: boolean;
   /** Ramal com valor SUGERIDO em vez de declarado — o aviso do rodapé. */
   comSugerido: boolean;
+  /** Algum ramal tem fase declarada — a legenda R/S/T só entra se aparece. */
+  comFases: boolean;
 }
 
 const fmt = (v: number | null | undefined) => (v == null ? '—' : String(v).replace('.', ','));
@@ -109,6 +113,7 @@ function ramaisDe(model: BlueprintModel, q: PreDimensionamentoDoQuadro): RamalUn
       cargaVA: Math.round(c.sVA),
       pontos: c.pontos,
       dr: circuito?.protecaoDR === true,
+      fase: circuito?.fase ?? null,
       faltas: c.achados.filter((a) => a.nivel === 'FALTA').length,
     };
   });
@@ -139,6 +144,7 @@ export function montarUnifilar(model: BlueprintModel, hip: HipotesesEletricas = 
         ramais,
         comDR: ramais.some((r) => r.dr),
         comSugerido: ramais.some((r) => r.disjuntorOrigem === 'SUGERIDO' || r.secaoOrigem === 'CALCULADA'),
+        comFases: ramais.some((r) => r.fase != null),
       } satisfies DiagramaUnifilar;
     })
     .filter((d): d is DiagramaUnifilar => d != null);
@@ -264,6 +270,9 @@ export function desenharUnifilar(d: Desenhista, diagrama: DiagramaUnifilar, x0: 
       ],
       COR,
     );
+    // A FASE do ramal (E0.4): a letra sobre o nó do barramento. Antes o
+    // unifilar de um quadro trifásico não dizia de qual fase saía cada F-N.
+    if (r.fase) t(x - 1 * k, yBus - 1.8 * k, r.fase, 2 * k, COR_FRACA);
     let y = yBus;
     d.linha(x, y, x, y + 5 * k, { espessuraMm: media, cor: COR });
     y += 5 * k;
@@ -312,6 +321,7 @@ export function rodapeDoUnifilar(diagramas: readonly DiagramaUnifilar[]): string
   L.push('Disjuntor: lâmina aberta no ramal (In em A). Barramento: traço grosso. Seta: segue ao circuito.');
   if (diagramas.some((d) => d.comDR)) L.push('DR: dispositivo diferencial-residual declarado no circuito (30 mA para pessoas — 5.1.3.2.2).');
   L.push('Condutores: "2#2,5 + T2,5" = dois carregados de 2,5 mm² e terra de 2,5 mm² (ligação FN/FF); "3#…" em FFF.');
+  if (diagramas.some((d) => d.comFases)) L.push('R / S / T sobre o ramal: fase declarada do circuito F-N no quadro trifásico — o balanceamento soma por fase.');
   if (diagramas.some((d) => d.comSugerido)) L.push('"sug." = valor do pré-dimensionamento, ainda não declarado no quadro de cargas — declare para assumir.');
   return L;
 }

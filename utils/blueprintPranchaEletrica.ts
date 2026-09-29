@@ -404,8 +404,9 @@ export function desenharQuadroDeCargas(
   if (quadros.length === 0) linha('Sem quadro de distribuição neste desenho.', 2.2, COR_FRACA);
 
   // Colunas da tabela, em mm a partir de x0.
-  const col = [0, 46, 62, 74, 88, 104, 124, 142, 156];
-  const cab = ['Circuito', 'Lig./V', 'Pts', 'VA', 'IB (A)', 'Seção decl./mín.', 'Disj. decl./sug.', 'ΔV %', 'DR'];
+  // E0.4 (29/09/2026): coluna Fase — R/S/T do circuito F-N em quadro trifásico; "—" sem fase; vazio fora de F-N.
+  const col = [0, 46, 62, 74, 88, 104, 124, 142, 156, 164];
+  const cab = ['Circuito', 'Lig./V', 'Pts', 'VA', 'IB (A)', 'Seção decl./mín.', 'Disj. decl./sug.', 'ΔV %', 'DR', 'Fase'];
   for (const q of quadros) {
     linha(`${q.nome} — ${q.ligacao}${q.tensaoV ? ` ${q.tensaoV} V` : ''}${q.ligacaoDeduzida ? ' (deduzido)' : ''}`, 2.6);
     const topoTabela = y - 1.5;
@@ -426,6 +427,7 @@ export function desenharQuadroDeCargas(
         `${c.disjuntorDeclaradoA ?? '—'} / ${c.disjuntorSugeridoA ?? '—'}`,
         c.quedaPct == null ? '—' : `${n1(c.quedaPct)}${c.comprimento?.origem === 'ESTIMADO' ? '*' : ''}`,
         dr,
+        circuito?.fase ?? (c.ligacao === 'FN' ? '—' : ''),
       ];
       cel.forEach((v, i) => d.texto(x0 + col[i], y, v, 1.9, cor));
       y += 3.4;

@@ -315,3 +315,34 @@ describe('a lista', () => {
     expect(c.outroUid).toBe(m.structures[0].uid);
   });
 });
+
+describe('E0.4 (29/09/2026) · o clash segue o "L" do eletroduto — o mesmo caminho do 3D e do quantitativo', () => {
+  it('⚠️ tomada (300) → luminária (2800) cruzando a viga: a DIAGONAL passava por baixo dela; o "L" corre no teto e ATRAVESSA os 200 mm', () => {
+    const { model, nivel } = comViga();
+    // Sobe em A (mais longe da laje) e corre a 2800 até B — por cima da viga (2400–2800).
+    const m = trecho(model, nivel, { a: [3000, 500], b: [3000, 3500], cotaAMm: 300, cotaBMm: 2800, bitolaMm: 25 });
+    const c = conflitosDoModelo(m);
+    expect(c).toHaveLength(1);
+    expect(c[0].classe).toBe('ESTRUTURA');
+    expect(c[0].comprimentoDentroMm).toBeCloseTo(200, 0);
+  });
+
+  it('o tubo de ESGOTO com a mesma geometria continua reto (diagonal de verdade): passa por baixo da viga, nenhum conflito', () => {
+    const { model, nivel } = comViga();
+    const m = trecho(model, nivel, { a: [3000, 500], b: [3000, 3500], cotaAMm: 300, cotaBMm: 2800, bitolaMm: 25, disciplina: 'ESGOTO' });
+    expect(conflitosDoModelo(m)).toHaveLength(0);
+  });
+
+  it('eletroduto × água: a folga é medida entre os PEDAÇOS — o ramal de água a 2200 que cruza a prumada acusa (a diagonal estaria a 1,9 m)', () => {
+    const { model, nivel } = comViga();
+    // Prumada em A (1000, 500) de 300 a 2800; depois corre no teto até (1000, 1500). Longe da viga (y = 2000).
+    let m = trecho(model, nivel, { a: [1000, 500], b: [1000, 1500], cotaAMm: 300, cotaBMm: 2800, bitolaMm: 25 });
+    // Água a 2200 passando exatamente por (1000, 500): cruza a prumada.
+    m = trecho(m, nivel, { a: [500, 500], b: [1500, 500], cotaAMm: 2200, cotaBMm: 2200, bitolaMm: 25, disciplina: 'AGUA_FRIA' });
+    const c = conflitosDoModelo(m);
+    expect(c.filter((x) => x.classe === 'ESTRUTURA')).toHaveLength(0);
+    const rede = c.filter((x) => x.classe === 'REDE');
+    expect(rede).toHaveLength(1);
+    expect(rede[0].folgaEntreEixosMm).toBeCloseTo(0, 6);
+  });
+});

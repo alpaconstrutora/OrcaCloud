@@ -1,9 +1,13 @@
 import { supabase } from '../lib/supabase';
 import { approvalService, type RoleLabels } from './approvalService';
+import { avaliarCondicao } from '../utils/processCondition';
+import { valorEfetivoDoItem } from '../utils/pedidoItemValor';
+import type { PurchaseOrderItem } from '../types/supplyChain';
 import type {
     ProcessTemplate, ProcessTemplateStep, ProcessInstance, ProcessInstanceStep,
     ProcessInstanceWithSteps, ProcessComment, ProcessInstanceStatus, PendingStepItem,
     ProcessPriority, ProcessCriticality, ProcessEventKey, ProcessStepBottleneck,
+    ProcessConditionContext,
 } from '../types/process';
 
 // ============================================================
@@ -44,11 +48,46 @@ async function logAction(
     if (error) console.warn('[processService] logAction:', error.message);
 }
 
-/** Avança a instância para a próxima etapa (ou conclui se não houver mais nenhuma). */
+/**
+ * O que a instância sabe sobre si para avaliar condição de etapa (Passo 4 do
+ * plano 2026-09-28): obra e fornecedor vêm da própria instância; o valor vem do
+ * PEDIDO de origem, quando há (soma de `valorEfetivoDoItem`, a mesma régua da
+ * alçada em `orderService.submitForApproval`). Sem pedido, `amount` fica null e
+ * a etapa cai no `step.amount` (etapa monetária avulsa) — ou executa, se nem
+ * isso houver: condição nunca pula por falta de dado.
+ */
+async function contextoDaInstancia(instanceId: string): Promise<ProcessConditionContext> {
+    const { data: inst } = await supabase
+        .from('process_instances')
+        .select('project_id, supplier_id, purchase_order_id')
+        .eq('id', instanceId)
+        .maybeSingle();
+    let amount: number | null = null;
+    if (inst?.purchase_order_id) {
+        const { data: po } = await supabase
+            .from('purchase_orders')
+            .select('items')
+            .eq('id', inst.purchase_order_id)
+            .maybeSingle();
+        const items = (po?.items as PurchaseOrderItem[] | null) ?? null;
+        if (items) amount = items.reduce((s, i) => s + valorEfetivoDoItem(i), 0);
+    }
+    return { project_id: inst?.project_id ?? null, supplier_id: inst?.supplier_id ?? null, amount };
+}
+
+type EtapaParaAvancar = Pick<ProcessInstanceStep, 'id' | 'status' | 'step_type' | 'order_index' | 'template_step_id' | 'condition' | 'amount'>;
+
+/**
+ * Avança a instância para a próxima etapa ELEGÍVEL (ou conclui se não houver
+ * mais nenhuma). Etapa pendente cuja condição é falsa vira 'PULADO' com log
+ * STEP_SKIPPED e o motor segue para a seguinte — é assim que "compra ≤ 5 mil
+ * não passa pelo diretor" acontece sem gateway BPMN. O contexto é lido uma
+ * vez por avanço, não por etapa.
+ */
 async function advanceToNextStep(instanceId: string, userId?: string): Promise<void> {
     const { data: steps, error } = await supabase
         .from('process_instance_steps')
-        .select('id, status, step_type, order_index, template_step_id')
+        .select('id, status, step_type, order_index, template_step_id, condition, amount')
         .eq('process_instance_id', instanceId)
         .order('order_index', { ascending: true });
     if (error) {
@@ -56,8 +95,23 @@ async function advanceToNextStep(instanceId: string, userId?: string): Promise<v
         throw new Error(`Erro ao carregar etapas: ${error.message}`);
     }
 
-    const next = (steps as Pick<ProcessInstanceStep, 'id' | 'status' | 'step_type' | 'order_index' | 'template_step_id'>[] ?? [])
-        .find(s => s.status === 'PENDENTE');
+    const pendentes = ((steps as EtapaParaAvancar[]) ?? []).filter(s => s.status === 'PENDENTE');
+    let next: EtapaParaAvancar | undefined;
+    if (pendentes.length > 0) {
+        const ctx = pendentes.some(s => s.condition) ? await contextoDaInstancia(instanceId) : {};
+        for (const s of pendentes) {
+            if (avaliarCondicao(s.condition, { ...ctx, amount: ctx.amount ?? s.amount ?? null })) { next = s; break; }
+            const { error: skipErr } = await supabase
+                .from('process_instance_steps')
+                .update({ status: 'PULADO', completed_at: new Date().toISOString() })
+                .eq('id', s.id);
+            if (skipErr) {
+                console.error('[processService] advanceToNextStep (skip):', skipErr);
+                throw new Error(`Erro ao pular etapa: ${skipErr.message}`);
+            }
+            await logAction(instanceId, userId, 'STEP_SKIPPED', { metadata: { step_id: s.id, condition: s.condition } });
+        }
+    }
 
     if (!next) {
         const { error: doneErr } = await supabase
@@ -76,18 +130,28 @@ async function advanceToNextStep(instanceId: string, userId?: string): Promise<v
     // DEPARTMENT/ROLE ficam sem responsável — usuário assume via "Assumir etapa").
     const { data: templateStep } = await supabase
         .from('process_template_steps')
-        .select('default_responsible_type, default_responsible_id')
+        .select('default_responsible_type, default_responsible_id, sla_hours')
         .eq('id', next.template_step_id)
         .maybeSingle();
     const responsibleUserId = templateStep?.default_responsible_type === 'USER'
         ? templateStep.default_responsible_id
         : null;
 
+    // O prazo da etapa nasce AQUI, quando ela começa — não no início da
+    // instância. Antes, `startInstance` calculava `due_at` de todas as etapas
+    // de uma vez, e a etapa 1 (SLA 24h) vencia antes da etapa 0 (SLA 48h) que
+    // a precedia (medido na instância do Passo 1.2, 28/09/2026).
+    const agora = new Date();
+    const dueAt = templateStep?.sla_hours
+        ? new Date(agora.getTime() + Number(templateStep.sla_hours) * 3_600_000).toISOString()
+        : null;
+
     const { error: stepErr } = await supabase
         .from('process_instance_steps')
         .update({
             status: 'EM_ANDAMENTO',
-            started_at: new Date().toISOString(),
+            started_at: agora.toISOString(),
+            due_at: dueAt,
             ...(responsibleUserId ? { responsible_user_id: responsibleUserId } : {}),
         })
         .eq('id', next.id);
@@ -278,39 +342,30 @@ export const processService = {
             throw new Error(`Erro ao iniciar processo: ${error.message}`);
         }
 
-        const firstStep = templateSteps[0];
+        // Todas nascem PENDENTE, com a condição copiada do template (snapshot —
+        // mudar o template depois não muda esta instância). Quem escolhe a
+        // primeira etapa a rodar é `advanceToNextStep`: assim a 1ª etapa também
+        // respeita condição, e o prazo (`due_at`) nasce quando ela começa.
         const stepRows = templateSteps.map(ts => ({
             process_instance_id: instance.id,
             template_step_id: ts.id,
             name: ts.name,
             step_type: ts.step_type,
             order_index: ts.order_index,
-            status: ts.id === firstStep.id ? 'EM_ANDAMENTO' : 'PENDENTE',
+            status: 'PENDENTE',
             responsible_user_id: ts.default_responsible_type === 'USER' ? ts.default_responsible_id : null,
-            started_at: ts.id === firstStep.id ? new Date().toISOString() : null,
-            due_at: ts.sla_hours ? new Date(Date.now() + ts.sla_hours * 3_600_000).toISOString() : null,
+            condition: ts.condition ?? null,
         }));
-        const { data: insertedSteps, error: stepsErr } = await supabase
+        const { error: stepsErr } = await supabase
             .from('process_instance_steps')
-            .insert(stepRows)
-            .select();
+            .insert(stepRows);
         if (stepsErr) {
             console.error('[processService] startInstance (steps):', stepsErr);
             throw new Error(`Erro ao criar etapas do processo: ${stepsErr.message}`);
         }
 
-        const firstInserted = (insertedSteps as ProcessInstanceStep[]).find(s => s.template_step_id === firstStep.id)!;
-        const firstResponsible = firstStep.default_responsible_type === 'USER' ? firstStep.default_responsible_id : null;
-
-        await supabase
-            .from('process_instances')
-            .update({
-                current_step_id: firstInserted.id,
-                status: firstResponsible ? WAITING_STATUS_BY_STEP_TYPE[firstStep.step_type] : 'AGUARDANDO_RESPONSAVEL',
-            })
-            .eq('id', instance.id);
-
         await logAction(instance.id, opts.requesterUserId, 'INSTANCE_STARTED', { metadata: { template_id: opts.templateId } });
+        await advanceToNextStep(instance.id, opts.requesterUserId);
 
         return this.getInstance(instance.id);
     },

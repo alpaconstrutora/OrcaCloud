@@ -45,6 +45,23 @@ export interface ProcessTemplate {
     archived_at?: string | null;
 }
 
+// ── Condição por etapa (Passo 4 do plano 2026-09-28) ──────────────────────
+// Decide se a etapa ENTRA NO CAMINHO. Avaliada em utils/processCondition.ts.
+// Não confundir com a faixa de valor da alçada (approvalService).
+export type ProcessConditionField = 'amount' | 'project_id' | 'supplier_id';
+export type ProcessConditionOp = 'gt' | 'gte' | 'lt' | 'lte' | 'eq' | 'neq' | 'in';
+export interface ProcessCondition {
+    field: ProcessConditionField;
+    op: ProcessConditionOp;
+    value: number | string | Array<number | string>;
+}
+/** O que a instância sabe sobre si na hora de avaliar. Campo ausente = a etapa executa. */
+export interface ProcessConditionContext {
+    amount?: number | null;
+    project_id?: string | null;
+    supplier_id?: string | null;
+}
+
 export interface ProcessTemplateStep {
     id: string;
     process_template_id: string;
@@ -58,6 +75,8 @@ export interface ProcessTemplateStep {
     sla_hours?: number | null;
     requires_document: boolean;
     can_skip: boolean;
+    /** Só executa quando… (null = sempre). Copiada para a instância ao iniciar. */
+    condition?: ProcessCondition | null;
     created_at: string;
     updated_at: string;
 }
@@ -104,6 +123,8 @@ export interface ProcessInstanceStep {
     approval_chain: unknown[];
     approval_required_levels: number;
     amount?: number | null;
+    /** Snapshot da condição do template quando a instância nasceu (Passo 4). Falsa em advanceToNextStep → 'PULADO'. */
+    condition?: ProcessCondition | null;
     started_at?: string | null;
     due_at?: string | null;
     completed_at?: string | null;

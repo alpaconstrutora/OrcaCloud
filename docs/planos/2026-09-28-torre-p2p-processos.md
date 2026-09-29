@@ -214,6 +214,12 @@ Padrão único, igual ao bloco "2b" de `orderService`: `try/catch`, `console.err
 - Como sei que terminou: `check-ui-standard.sh` sai 0; checklist REGRA #1 no
   relatório; template criado na tela persiste `condition` e a instância a copia.
 
+## Publicações
+
+| Data | Commit em `main` | O que foi ao ar | Prova |
+|---|---|---|---|
+| 2026-09-28 | `a8390d72` (rebase sobre `aa14555a`, +15 commits de outras frentes) | Passos 1.1, 2 e 3 + `darBaixa` cobrindo `internal_transaction.paid` (função nova de `main` achada no rebase) | `conferir-producao.sh "Orquestradas" "Conduzida por Processos"` → bundle `index-B04ZSa-F.js` carimbado `a8390d7`, os dois textos presentes |
+
 ## Fora de escopo (decidido, não esquecido)
 
 - Modelador BPMN 2.0 / gateways paralelos / subprocessos — Fase 4 de
@@ -235,7 +241,10 @@ Padrão único, igual ao bloco "2b" de `orderService`: `try/catch`, `console.err
 - [ ] 2.x **pendente de verificação visual** — a Torre não foi aberta no navegador; a costura `orquestrada` só aparece quando o Passo 1.2 gerar a primeira instância real
 - [x] 3.1–3.5 quatro eventos novos com chamador (2026-09-28) — mudança de desenho em relação ao plano: em vez de cada origem ler o pedido, um **resolvedor único** em `processService` (`triggerPurchaseOrderEvent` — lê o pedido, aplica a regra de org do 1.1, chama `triggerEvent`; `triggerForTransaction` — chega ao pedido pelo título, só DEBIT com `purchase_order_id`), ambos best-effort. Chamadores: `orderService.approveOrder` (só quando `approval_status` devolvido é APROVADO); `nfeService.approveAndLink`/`linkExistingTransaction` (o pedido vem do parâmetro ou do título; `linkExistingTransaction` passou a selecionar `purchase_order_id` do título); `receiptService.createReceipt` (Parcial ou item com problema, **e não** quando o status é 'Divergência' — esse é do `updateOrder`, senão nasciam dois processos); `payableService.updateStatus('PAGO')` e `bankReconciliationService.createMatch` (após a RPC, fora da transação). `STAGE_EVENT_KEYS` da Torre: pedido/recebimento/fiscal/financeiro. Teste `__tests__/processosEventosP2P.test.ts` (11 casos); `tsc` limpo
 - [x] 3.6 seed dos templates — `supabase/migrations/aplicar_20270928000001_processos_fase3_eventos.sql` escrito (4 templates por org, idempotente por (org, `trigger_event_key`), sem tabela/policy/função; `segurancaMigrations.test.ts` passa). **APLICADA no remoto em 2026-09-28** (`db query -f`, autorizado pelo usuário): 4 chaves × 4 orgs = 16 templates, 48 etapas; reexecução não duplicou (idempotência provada). Achado: as chaves da F2 (`received`/`divergence`) existem em só 3 orgs — a 4ª organização nasceu depois do seed de julho e não tem o template piloto
-- [ ] 4.1–4.4 condição por etapa
+- [x] 4.1 migration `aplicar_20270928000002_processos_fase3_condicao_etapa.sql` — `condition jsonb` em `process_template_steps` e `process_instance_steps` (ADD COLUMN IF NOT EXISTS, sem policy/função). **APLICADA no remoto em 2026-09-28** (`db query -f`, autorizada pelo usuário; conferido em `information_schema.columns`: as duas colunas `jsonb` existem). Pré-requisito da publicação do código deste passo cumprido — `startInstance` grava a coluna
+- [x] 4.2 `utils/processCondition.ts` — `avaliarCondicao` (puro; nula/campo ausente/valor não comparável → executa), `descreverCondicao`, `validarCondicao`, tabelas de rótulo/operadores por campo; `__tests__/processCondition.test.ts` (21 casos)
+- [x] 4.3 `services/processService.ts` — `startInstance` cria todas as etapas `PENDENTE` com `condition` copiada (snapshot) e delega a `advanceToNextStep`; este avalia a condição de cada pendente em ordem com `contextoDaInstancia` (obra/fornecedor da instância; valor = soma dos itens do pedido de origem, mesma régua da alçada; lido só se alguma pendente tem condição), pula com `PULADO` + log `STEP_SKIPPED`. **Bônus:** `due_at` passa a nascer quando a etapa começa (fecha o achado do 1.2). `__tests__/processServiceCondicaoEtapa.test.ts` (6 casos, banco em memória): 5 mil pula o diretor / 50 mil não; 1ª etapa condicionada falsa → nasce na 2ª; snapshot; prazo só na etapa em andamento; contexto lazy
+- [x] 4.4 `components/ProcessosModule.tsx` — criador de template: botão por etapa abre "Só executa quando" (campo Valor/Obra · operador · valor ou seletor de obra do `useStore`; `in`/Fornecedor ficam só no avaliador por enquanto); erro de validação aparece em texto e bloqueia o salvar; timeline mostra etapa `PULADO` tracejada/riscada com "Não se aplicou: <condição>" e a condição nas demais. Inputs do modal migrados para §16/§21 (`rounded-[6px]`, rótulo `text-xs font-semibold text-slate-500`); `check-ui-standard.sh` limpo; **não verificado no navegador**
 
 ## Verificação de ponta a ponta
 

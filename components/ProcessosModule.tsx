@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
     Workflow, ClipboardList, Layers, Plus, CheckCircle2, XCircle, FileText,
     Loader2, ChevronRight, MessageSquare, Send, Shield,
-    Activity, LayoutGrid, List as ListIcon, AlertTriangle,
+    Activity, LayoutGrid, List as ListIcon, AlertTriangle, SkipForward, GitBranch,
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { processService } from '../services/processService';
@@ -12,6 +12,9 @@ import type {
     ProcessInstanceStep, PendingStepItem, ProcessComment, ProcessStepType, ProcessStepBottleneck,
 } from '../types/process';
 import { INSTANCE_STATUS_LABEL } from '../types/process';
+import type { ProcessCondition, ProcessConditionOp } from '../types/process';
+import { CONDITION_FIELD_LABEL, CONDITION_OP_LABEL, CONDITION_OPS_BY_FIELD, descreverCondicao, validarCondicao } from '../utils/processCondition';
+import { useStore } from '../store/useStore';
 import type { OpuraDocument } from '../types/documents';
 import Button from './ui/Button';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/modal';
@@ -45,32 +48,56 @@ function StatusBadge({ status }: { status: string }) {
 
 // ─── criar template ─────────────────────────────────────────
 
+/** Etapa como o formulário a edita: a condição guarda o valor como TEXTO até gravar. */
+interface EtapaEmEdicao {
+    name: string;
+    step_type: ProcessStepType;
+    requires_document: boolean;
+    condition: { field: 'amount' | 'project_id'; op: ProcessConditionOp; value: string } | null;
+}
+
+/** Texto do formulário → `ProcessCondition` (valor numérico para `amount`); null quando não há condição. */
+function condicaoParaGravar(c: EtapaEmEdicao['condition']): ProcessCondition | null {
+    if (!c) return null;
+    const value = c.field === 'amount' ? Number(String(c.value).replace(/\./g, '').replace(',', '.')) : c.value;
+    return { field: c.field, op: c.op, value: c.field === 'amount' && !Number.isFinite(value as number) ? String(c.value) : value };
+}
+
 function NewTemplateModal({ open, onClose, organizationId, onCreated }: {
     open: boolean; onClose: () => void; organizationId: string; onCreated: () => void;
 }) {
     const [name, setName] = useState('');
     const [category, setCategory] = useState('');
-    const [steps, setSteps] = useState<Array<{ name: string; step_type: ProcessStepType; requires_document: boolean }>>([
-        { name: '', step_type: 'manual', requires_document: false },
-    ]);
+    const [steps, setSteps] = useState<EtapaEmEdicao[]>([{ name: '', step_type: 'manual', requires_document: false, condition: null }]);
     const [saving, setSaving] = useState(false);
+    const [erro, setErro] = useState<string | null>(null);
+    // Obras da organização ativa (só OBRA, sem projeto de sistema — REGRA #2/#3 já cortadas no store).
+    const obras = useStore(s => s.projects);
 
     if (!open) return null;
 
-    const addStep = () => setSteps(s => [...s, { name: '', step_type: 'manual', requires_document: false }]);
+    const addStep = () => setSteps(s => [...s, { name: '', step_type: 'manual', requires_document: false, condition: null }]);
     const removeStep = (idx: number) => setSteps(s => s.filter((_, i) => i !== idx));
+    const setStep = (idx: number, patch: Partial<EtapaEmEdicao>) => setSteps(arr => arr.map((x, i) => i === idx ? { ...x, ...patch } : x));
 
     const save = async () => {
         if (!name.trim() || steps.some(s => !s.name.trim())) return;
+        // Condição inválida bloqueia o salvar COM o motivo (o botão nunca fica mudo).
+        const condicoes = steps.map(s => condicaoParaGravar(s.condition));
+        for (let i = 0; i < steps.length; i++) {
+            const problema = validarCondicao(condicoes[i]);
+            if (problema) { setErro(`Etapa ${i + 1}: ${problema}`); return; }
+        }
+        setErro(null);
         setSaving(true);
         try {
             await processService.createTemplate(
                 { organization_id: organizationId, name, category, criticality: 'MEDIA', default_sla_hours: null },
-                steps.map(s => ({ name: s.name, step_type: s.step_type, is_required: true, requires_document: s.requires_document, can_skip: false })),
+                steps.map((s, i) => ({ name: s.name, step_type: s.step_type, is_required: true, requires_document: s.requires_document, can_skip: false, condition: condicoes[i] })),
             );
             onCreated();
             onClose();
-            setName(''); setCategory(''); setSteps([{ name: '', step_type: 'manual', requires_document: false }]);
+            setName(''); setCategory(''); setSteps([{ name: '', step_type: 'manual', requires_document: false, condition: null }]);
         } finally {
             setSaving(false);
         }
@@ -93,30 +120,71 @@ function NewTemplateModal({ open, onClose, organizationId, onCreated }: {
                     </div>
                 </div>
 
-                <div>
-                    <label className="text-xs font-bold text-gray-600 uppercase tracking-wide">Etapas (sequenciais)</label>
-                    <div className="mt-2 space-y-2">
+                <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500">Etapas (sequenciais)</label>
+                    <div className="space-y-4">
                         {steps.map((s, idx) => (
-                            <div key={idx} className="flex items-center gap-2">
-                                <span className="w-5 text-xs font-black text-gray-400">{idx + 1}.</span>
-                                <input value={s.name} onChange={e => setSteps(arr => arr.map((x, i) => i === idx ? { ...x, name: e.target.value } : x))}
-                                    className="flex-1 h-9 px-3 rounded-xl border border-gray-200 text-sm" placeholder="Nome da etapa" />
-                                <select value={s.step_type} onChange={e => setSteps(arr => arr.map((x, i) => i === idx ? { ...x, step_type: e.target.value as ProcessStepType } : x))}
-                                    className="h-9 px-2 rounded-xl border border-gray-200 text-xs">
-                                    {(Object.keys(STEP_TYPE_LABEL) as ProcessStepType[]).map(t => (
-                                        <option key={t} value={t}>{STEP_TYPE_LABEL[t]}</option>
-                                    ))}
-                                </select>
-                                {steps.length > 1 && (
-                                    <ActionIconButton kind="delete" onClick={() => removeStep(idx)} />
+                            <div key={idx} className="space-y-1.5">
+                                <div className="flex items-center gap-2">
+                                    <span className="w-5 text-xs font-black text-gray-400">{idx + 1}.</span>
+                                    <input value={s.name} onChange={e => setStep(idx, { name: e.target.value })}
+                                        className="flex-1 h-9 px-3 rounded-[6px] border border-gray-200 text-sm" placeholder="Nome da etapa" />
+                                    <select value={s.step_type} onChange={e => setStep(idx, { step_type: e.target.value as ProcessStepType })}
+                                        className="h-9 px-2 rounded-[6px] border border-gray-200 text-sm font-normal">
+                                        {(Object.keys(STEP_TYPE_LABEL) as ProcessStepType[]).map(t => (
+                                            <option key={t} value={t}>{STEP_TYPE_LABEL[t]}</option>
+                                        ))}
+                                    </select>
+                                    {!s.condition && (
+                                        <ActionIconButton kind="settings" title="Só executa quando… (condição)" icon={<GitBranch className="w-4 h-4" />}
+                                            onClick={() => setStep(idx, { condition: { field: 'amount', op: 'gt', value: '' } })} />
+                                    )}
+                                    {steps.length > 1 && (
+                                        <ActionIconButton kind="delete" onClick={() => removeStep(idx)} />
+                                    )}
+                                </div>
+                                {s.condition && (
+                                    <div className="ml-7 flex flex-wrap items-center gap-2">
+                                        <span className="text-xs text-gray-500 whitespace-nowrap">Só executa quando</span>
+                                        <select value={s.condition.field}
+                                            onChange={e => {
+                                                const field = e.target.value as 'amount' | 'project_id';
+                                                setStep(idx, { condition: { field, op: CONDITION_OPS_BY_FIELD[field][0], value: '' } });
+                                            }}
+                                            className="h-9 px-2 rounded-[6px] border border-gray-200 text-sm font-normal">
+                                            <option value="amount">{CONDITION_FIELD_LABEL.amount}</option>
+                                            <option value="project_id">{CONDITION_FIELD_LABEL.project_id}</option>
+                                        </select>
+                                        <select value={s.condition.op}
+                                            onChange={e => setStep(idx, { condition: { ...s.condition!, op: e.target.value as ProcessConditionOp } })}
+                                            className="h-9 px-2 rounded-[6px] border border-gray-200 text-sm font-normal">
+                                            {CONDITION_OPS_BY_FIELD[s.condition.field].filter(op => op !== 'in').map(op => (
+                                                <option key={op} value={op}>{CONDITION_OP_LABEL[op]}</option>
+                                            ))}
+                                        </select>
+                                        {s.condition.field === 'amount' ? (
+                                            <input inputMode="decimal" value={s.condition.value}
+                                                onChange={e => setStep(idx, { condition: { ...s.condition!, value: e.target.value } })}
+                                                className="h-9 w-36 px-3 rounded-[6px] border border-gray-200 text-sm" placeholder="R$ 30000" />
+                                        ) : (
+                                            <select value={s.condition.value}
+                                                onChange={e => setStep(idx, { condition: { ...s.condition!, value: e.target.value } })}
+                                                className="h-9 px-2 rounded-[6px] border border-gray-200 text-sm font-normal min-w-40">
+                                                <option value="">Escolha a obra…</option>
+                                                {obras.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                            </select>
+                                        )}
+                                        <ActionIconButton kind="delete" title="Remover condição" onClick={() => setStep(idx, { condition: null })} />
+                                    </div>
                                 )}
                             </div>
                         ))}
                     </div>
-                    <Button variant="secondary" size="sm" className="mt-2" onClick={addStep}>
+                    <Button variant="secondary" size="sm" onClick={addStep}>
                         <Plus className="w-3.5 h-3.5" /> Adicionar etapa
                     </Button>
                 </div>
+                {erro && <p className="text-sm text-red-600">{erro}</p>}
             </ModalBody>
             <ModalFooter>
                 <Button variant="secondary" onClick={onClose}>Cancelar</Button>
@@ -292,19 +360,28 @@ function InstanceDetail({ open, onClose, instanceId, organizationId, userId, use
                             const isCurrent = step.id === instance.current_step_id;
                             const isDone = step.status === 'CONCLUIDO';
                             const isRejected = step.status === 'REPROVADO';
+                            // Pulada pela condição (Passo 4): fica no caminho, apagada, com o motivo.
+                            const isSkipped = step.status === 'PULADO';
+                            const condicao = descreverCondicao(step.condition);
                             return (
-                                <div key={step.id} className={`rounded-2xl border p-4 ${isCurrent ? 'border-blue-300 bg-blue-50/50' : isDone ? 'border-green-200 bg-green-50/30' : 'border-gray-200'}`}>
+                                <div key={step.id} className={`rounded-2xl border p-4 ${isCurrent ? 'border-blue-300 bg-blue-50/50' : isDone ? 'border-green-200 bg-green-50/30' : isSkipped ? 'border-dashed border-gray-200 opacity-70' : 'border-gray-200'}`}>
                                     <div className="flex items-center gap-3">
                                         <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0
-                                            ${isDone ? 'bg-green-600 text-white' : isRejected ? 'bg-red-600 text-white' : isCurrent ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'}`}>
-                                            {isDone ? <CheckCircle2 className="w-4 h-4" /> : isRejected ? <XCircle className="w-4 h-4" /> : idx + 1}
+                                            ${isDone ? 'bg-green-600 text-white' : isRejected ? 'bg-red-600 text-white' : isCurrent ? 'bg-blue-600 text-white' : isSkipped ? 'bg-gray-100 text-gray-400' : 'bg-gray-200 text-gray-500'}`}>
+                                            {isDone ? <CheckCircle2 className="w-4 h-4" /> : isRejected ? <XCircle className="w-4 h-4" /> : isSkipped ? <SkipForward className="w-4 h-4" /> : idx + 1}
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-bold text-gray-900">{step.name}</p>
+                                            <p className={`text-sm font-bold ${isSkipped ? 'text-gray-500 line-through' : 'text-gray-900'}`}>{step.name}</p>
                                             <p className="text-[10px] text-gray-500 uppercase tracking-wide">
                                                 {STEP_TYPE_LABEL[step.step_type]}
-                                                {step.step_type === 'approval' && ` · ${step.approval_status}`}
+                                                {step.step_type === 'approval' && !isSkipped && ` · ${step.approval_status}`}
+                                                {isSkipped && ' · pulada'}
                                             </p>
+                                            {condicao && (
+                                                <p className="text-xs text-gray-500 mt-0.5">
+                                                    {isSkipped ? 'Não se aplicou: ' : 'Só executa quando '}{condicao}
+                                                </p>
+                                            )}
                                         </div>
                                         {isCurrent && (
                                             <div className="flex items-center gap-2">

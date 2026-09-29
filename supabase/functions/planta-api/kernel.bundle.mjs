@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.67.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.68.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -640,6 +640,11 @@ var TIPOS_DE_PONTO_HIDRAULICO = [
   "RALO_PLUVIAL",
   "CAIXA_AREIA",
   "LIGACAO_PLUVIAL",
+  // 29/09/2026 (E7.1): o tratamento individual (NBR 7229/13969) — onde não há
+  // rede pública de esgoto, o coletor vai ao tanque, ao filtro e ao sumidouro.
+  "TANQUE_SEPTICO",
+  "FILTRO_ANAEROBIO",
+  "SUMIDOURO",
   "REGISTRO_GAVETA",
   "REGISTRO_PRESSAO",
   "VALVULA_RETENCAO",
@@ -2948,12 +2953,20 @@ var CAIXAS_DE_ESGOTO = {
   CAIXA_SIFONADA: { cotaE: "TOPO", alturaPadraoMm: 200, larguraPadraoMm: 150 },
   RALO_SIFONADO: { cotaE: "TOPO", alturaPadraoMm: 150, larguraPadraoMm: 100 },
   // E6.1: a caixa de areia da rede pluvial — enterrada, cota do fundo, como a CI.
-  CAIXA_AREIA: { cotaE: "FUNDO", alturaPadraoMm: 600, larguraPadraoMm: 600 }
+  CAIXA_AREIA: { cotaE: "FUNDO", alturaPadraoMm: 600, larguraPadraoMm: 600 },
+  // E7.1: o tanque, o filtro e o sumidouro — a cota é a do tubo, 40 cm abaixo da tampa.
+  TANQUE_SEPTICO: { cotaE: "TUBO", alturaPadraoMm: 1800, larguraPadraoMm: 1200, acimaDoTuboMm: 400 },
+  FILTRO_ANAEROBIO: { cotaE: "TUBO", alturaPadraoMm: 1800, larguraPadraoMm: 1500, acimaDoTuboMm: 400 },
+  SUMIDOURO: { cotaE: "TUBO", alturaPadraoMm: 3e3, larguraPadraoMm: 1500, acimaDoTuboMm: 400 }
 };
 function extensaoVerticalDaCaixa(t) {
   const c = t.tipoHidraulico ? CAIXAS_DE_ESGOTO[t.tipoHidraulico] : void 0;
   if (!c) return null;
   const altura = t.alturaMm ?? c.alturaPadraoMm;
+  if (c.cotaE === "TUBO") {
+    const topo = t.cotaMm + (c.acimaDoTuboMm ?? 0);
+    return { fundoMm: topo - altura, topoMm: topo };
+  }
   return c.cotaE === "FUNDO" ? { fundoMm: t.cotaMm, topoMm: t.cotaMm + altura } : { fundoMm: t.cotaMm - altura, topoMm: t.cotaMm };
 }
 var HIDRAULICAS = ["AGUA_FRIA", "AGUA_QUENTE", "ESGOTO", "PLUVIAL"];
@@ -4915,6 +4928,11 @@ function entidadeDoPontoHidraulico(tipo) {
       return { entidade: "IFCINTERCEPTOR", predefinido: ".USERDEFINED." };
     case "LIGACAO_PLUVIAL":
       return { entidade: "IFCWASTETERMINAL", predefinido: ".USERDEFINED." };
+    case "TANQUE_SEPTICO":
+    case "FILTRO_ANAEROBIO":
+      return { entidade: "IFCTANK", predefinido: ".USERDEFINED." };
+    case "SUMIDOURO":
+      return { entidade: "IFCDISTRIBUTIONCHAMBERELEMENT", predefinido: ".SUMP." };
     case "REGISTRO_GAVETA":
       return { entidade: "IFCVALVE", predefinido: ".ISOLATING." };
     case "REGISTRO_PRESSAO":
@@ -5578,6 +5596,34 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     medidasMm: { larguraMm: 300, profundidadeMm: 300, alturaMm: 300 },
     ajuda: "Onde a \xE1gua da chuva deixa o lote \u2014 na sarjeta, sob a cal\xE7ada, ou na galeria pluvial. Nunca na rede de esgoto."
   },
+  TANQUE_SEPTICO: {
+    rotulo: "Tanque s\xE9ptico",
+    sigla: "TS",
+    grupo: ESGOTO,
+    // A cota é a do TUBO (entrada e saída); a tampa fica 40 cm acima dela.
+    cotaMm: { ESGOTO: -800 },
+    dnMinimoMm: { ESGOTO: 100 },
+    medidasMm: { larguraMm: 1200, profundidadeMm: 2400, alturaMm: 1800 },
+    ajuda: "Tratamento prim\xE1rio do esgoto onde n\xE3o h\xE1 rede p\xFAblica (NBR 7229). A cota \xE9 a do tubo de entrada e de sa\xEDda. Volume pela NBR 7229 na gaveta de esgoto."
+  },
+  FILTRO_ANAEROBIO: {
+    rotulo: "Filtro anaer\xF3bio",
+    sigla: "FA",
+    grupo: ESGOTO,
+    cotaMm: { ESGOTO: -900 },
+    dnMinimoMm: { ESGOTO: 100 },
+    medidasMm: { larguraMm: 1500, profundidadeMm: 1500, alturaMm: 1800 },
+    ajuda: "Tratamento complementar do efluente do tanque s\xE9ptico (NBR 13969), antes do sumidouro. A cota \xE9 a do tubo."
+  },
+  SUMIDOURO: {
+    rotulo: "Sumidouro",
+    sigla: "SU",
+    grupo: ESGOTO,
+    cotaMm: { ESGOTO: -1e3 },
+    dnMinimoMm: { ESGOTO: 100 },
+    medidasMm: { larguraMm: 1500, profundidadeMm: 1500, alturaMm: 3e3 },
+    ajuda: "Infiltra\xE7\xE3o do efluente tratado no solo (NBR 13969) \u2014 o destino final do esgoto sem rede p\xFAblica. A cota \xE9 a do tubo de entrada."
+  },
   CAIXA_GORDURA: {
     rotulo: "Caixa de gordura",
     sigla: "CG",
@@ -5698,6 +5744,11 @@ var GRUPO_DO_PONTO_HIDRAULICO = Object.fromEntries(
   TIPOS_DE_PONTO_HIDRAULICO.map((t) => [t, FICHA_DO_PONTO_HIDRAULICO[t].grupo])
 );
 
+// utils/blueprintCalhas.ts
+function nomeDaCalha(secao, larguraMm) {
+  return secao === "SEMICIRCULAR" ? `Calha meia-cana \xF8${larguraMm}` : `Calha retangular ${larguraMm} mm de largura`;
+}
+
 // utils/blueprintPlanilha.ts
 function rotuloDoMaterial(material) {
   return material && material in FICHA_DO_MATERIAL ? ` \xB7 ${FICHA_DO_MATERIAL[material].rotulo}` : "";
@@ -5804,7 +5855,7 @@ function abasDoQuantitativo(quant, ctx, armadura, parametros) {
   const nomeDoPonto = (p) => p.classificacao ? ROTULO_DO_PONTO_HIDRAULICO[p.classificacao] ?? ROTULO_DO_PONTO_ELETRICO[p.classificacao] ?? p.classificacao : `${p.tipo} (sem tipo)`;
   if ((t.porBitola ?? []).length > 0 || (t.porTerminal ?? []).length > 0) {
     totais.push([], ["INSTALA\xC7\xD5ES"]);
-    for (const b of t.porBitola ?? []) totais.push([`${nomeDaDisciplina(b.disciplina)} DN ${b.bitolaMm}${b.itemCode ? ` \xB7 ${b.itemCode}` : ""}${rotuloDoMaterial(b.material)}`, n2(b.comprimentoM), "m"]);
+    for (const b of t.porBitola ?? []) totais.push([b.secaoCalha ? `${nomeDaCalha(b.secaoCalha, b.bitolaMm)}${b.itemCode ? ` \xB7 ${b.itemCode}` : ""}` : `${nomeDaDisciplina(b.disciplina)} DN ${b.bitolaMm}${b.itemCode ? ` \xB7 ${b.itemCode}` : ""}${rotuloDoMaterial(b.material)}`, n2(b.comprimentoM), "m"]);
     for (const p of t.porTerminal ?? []) totais.push([`${nomeDoPonto(p)} \xB7 ${nomeDaDisciplina(p.disciplina)}`, p.quantidade, "un"]);
     for (const c of t.porConexao ?? []) totais.push([`${ROTULO_DA_CONEXAO[c.tipo]} DN ${c.bitolaMm}${c.paraMm != null ? `\u2192${c.paraMm}` : ""} \xB7 ${nomeDaDisciplina(c.disciplina)}`, c.quantidade, "un"]);
     totais.push(["Rede \u2014 comprimento total", n2(t.comprimentoRedeM), "m"]);

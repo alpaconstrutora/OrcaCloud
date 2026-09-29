@@ -101,13 +101,23 @@ export interface RamalDaConexao {
  * sifonado — ver `blueprintHidraulica.FICHA_DO_PONTO_HIDRAULICO`. A altura
  * padrão é a da ficha, para a peça lançada sem medida.
  */
-export const CAIXAS_DE_ESGOTO: Readonly<Record<string, { cotaE: 'FUNDO' | 'TOPO'; alturaPadraoMm: number; larguraPadraoMm: number }>> = {
+/**
+ * `cotaE` diz o que a cota do terminal marca: o FUNDO (a caixa enterrada), o
+ * TOPO (a caixa sifonada no piso) ou o TUBO (E7.1 — o tratamento individual: a
+ * cota é a da geratriz da entrada e da saída, e o corpo vai de `acimaDoTuboMm`
+ * acima dela até o fundo).
+ */
+export const CAIXAS_DE_ESGOTO: Readonly<Record<string, { cotaE: 'FUNDO' | 'TOPO' | 'TUBO'; alturaPadraoMm: number; larguraPadraoMm: number; acimaDoTuboMm?: number }>> = {
   CAIXA_INSPECAO: { cotaE: 'FUNDO', alturaPadraoMm: 600, larguraPadraoMm: 600 },
   CAIXA_GORDURA: { cotaE: 'FUNDO', alturaPadraoMm: 500, larguraPadraoMm: 400 },
   CAIXA_SIFONADA: { cotaE: 'TOPO', alturaPadraoMm: 200, larguraPadraoMm: 150 },
   RALO_SIFONADO: { cotaE: 'TOPO', alturaPadraoMm: 150, larguraPadraoMm: 100 },
   // E6.1: a caixa de areia da rede pluvial — enterrada, cota do fundo, como a CI.
   CAIXA_AREIA: { cotaE: 'FUNDO', alturaPadraoMm: 600, larguraPadraoMm: 600 },
+  // E7.1: o tanque, o filtro e o sumidouro — a cota é a do tubo, 40 cm abaixo da tampa.
+  TANQUE_SEPTICO: { cotaE: 'TUBO', alturaPadraoMm: 1800, larguraPadraoMm: 1200, acimaDoTuboMm: 400 },
+  FILTRO_ANAEROBIO: { cotaE: 'TUBO', alturaPadraoMm: 1800, larguraPadraoMm: 1500, acimaDoTuboMm: 400 },
+  SUMIDOURO: { cotaE: 'TUBO', alturaPadraoMm: 3000, larguraPadraoMm: 1500, acimaDoTuboMm: 400 },
 };
 
 /** Fundo e topo da caixa de esgoto, em mm do piso do pavimento; `null` se não é caixa. */
@@ -115,6 +125,10 @@ export function extensaoVerticalDaCaixa(t: Pick<Terminal, 'tipoHidraulico' | 'co
   const c = t.tipoHidraulico ? CAIXAS_DE_ESGOTO[t.tipoHidraulico] : undefined;
   if (!c) return null;
   const altura = t.alturaMm ?? c.alturaPadraoMm;
+  if (c.cotaE === 'TUBO') {
+    const topo = t.cotaMm + (c.acimaDoTuboMm ?? 0);
+    return { fundoMm: topo - altura, topoMm: topo };
+  }
   return c.cotaE === 'FUNDO' ? { fundoMm: t.cotaMm, topoMm: t.cotaMm + altura } : { fundoMm: t.cotaMm - altura, topoMm: t.cotaMm };
 }
 

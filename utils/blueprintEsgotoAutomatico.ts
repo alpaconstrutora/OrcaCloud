@@ -227,10 +227,26 @@ function espacoDe(model: BlueprintModel, t: Terminal): Space | null {
   );
 }
 
+/** O que NÃO é fonte de esgoto: as caixas de passagem e os destinos. */
+const PASSAGEM_OU_DESTINO = new Set(['CAIXA_INSPECAO', 'LIGACAO_ESGOTO', 'TANQUE_SEPTICO', 'FILTRO_ANAEROBIO', 'SUMIDOURO']);
+
 /** Os pontos de esgoto tipados do desenho (fora as caixas de inspeção). */
 export function fontesDeEsgoto(model: BlueprintModel): Terminal[] {
-  // A ligação à rede pública (E5.3) é destino, não fonte.
-  return (model.terminais ?? []).filter((t) => t.disciplina === 'ESGOTO' && t.tipoHidraulico != null && t.tipoHidraulico !== 'CAIXA_INSPECAO' && t.tipoHidraulico !== 'LIGACAO_ESGOTO');
+  // A ligação à rede pública (E5.3) é destino, não fonte; o tratamento individual (E7.1) é passagem e destino.
+  return (model.terminais ?? []).filter((t) => t.disciplina === 'ESGOTO' && t.tipoHidraulico != null && !PASSAGEM_OU_DESTINO.has(t.tipoHidraulico));
+}
+
+/**
+ * Os DESTINOS finais do esgoto, antes das caixas de inspeção: a ligação à rede
+ * pública (E5.3) e, sem rede, o sumidouro do tratamento individual (E7.1).
+ */
+export function destinosDoEsgoto(model: BlueprintModel): Terminal[] {
+  return (model.terminais ?? []).filter((t) => t.disciplina === 'ESGOTO' && (t.tipoHidraulico === 'LIGACAO_ESGOTO' || t.tipoHidraulico === 'SUMIDOURO'));
+}
+
+/** As unidades do tratamento individual por onde o esgoto passa (E7.1). */
+export function unidadesDeTratamento(model: BlueprintModel): Terminal[] {
+  return (model.terminais ?? []).filter((t) => t.disciplina === 'ESGOTO' && (t.tipoHidraulico === 'TANQUE_SEPTICO' || t.tipoHidraulico === 'FILTRO_ANAEROBIO' || t.tipoHidraulico === 'SUMIDOURO'));
 }
 
 export function caixasDeInspecao(model: BlueprintModel): Terminal[] {
@@ -549,7 +565,7 @@ export function refazerEsgoto(model: BlueprintModel, hip: HipotesesDeEsgoto = HI
  * de inspeção — o esgoto deles não tem para onde ir.
  */
 export function trechosDeEsgotoSemDestino(model: BlueprintModel): string[] {
-  const raizes = [...(model.terminais ?? []).filter((t) => t.disciplina === 'ESGOTO' && t.tipoHidraulico === 'LIGACAO_ESGOTO'), ...caixasDeInspecao(model)];
+  const raizes = [...destinosDoEsgoto(model), ...caixasDeInspecao(model)];
   const ligados = new Set(raizes.flatMap((ci) => redeDaOrigem(model, ci, 'ESGOTO')).map((t) => t.id));
   return (model.trechos ?? [])
     .filter((t) => t.disciplina === 'ESGOTO' && t.rotulo !== 'Ventilação' && !ligados.has(t.id))
@@ -639,8 +655,9 @@ export function esgotoTrechoATrecho(model: BlueprintModel, hip: HipotesesDeEsgot
   const vistos = new Set<ObjectId>();
   // E5.3: a LIGAÇÃO à rede pública é a primeira raiz — o sentido vai até a rede,
   // passando pelas caixas; sem ela, cada CI é raiz como antes.
-  const ligacoes = (model.terminais ?? []).filter((t) => t.disciplina === 'ESGOTO' && t.tipoHidraulico === 'LIGACAO_ESGOTO');
-  const nosDeCaixa = new Set(caixasDeInspecao(model).map((c) => chave(c.levelId, c.at.x, c.at.y, c.cotaMm)));
+  // E7.1: o sumidouro também é destino final, e o tanque e o filtro são caixas de passagem.
+  const ligacoes = destinosDoEsgoto(model);
+  const nosDeCaixa = new Set([...caixasDeInspecao(model), ...unidadesDeTratamento(model)].map((c) => chave(c.levelId, c.at.x, c.at.y, c.cotaMm)));
   for (const ci of [...ligacoes, ...caixasDeInspecao(model)]) {
     // A VENTILAÇÃO não leva esgoto (E5.4): fora da árvore do fluxo — uma coluna que
     // atravessa o andar de cima criaria um atalho e trocaria o sentido dos ramais.

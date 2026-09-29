@@ -35,6 +35,7 @@ import { memorialDeCalculoHidro, memorialDescritivoHidro, nBr, type BlocoDoMemor
 import { contribuicaoPluvial, misturasPluvialEsgoto } from './blueprintPluvial';
 import { verificarCalhas } from './blueprintCalhas';
 import { verificarCondutores } from './blueprintCondutoresPluviais';
+import { temTratamentoIndividual } from './blueprintTratamento';
 
 export interface VerificacaoHidro {
   grupo: 'RESPONSAVEL' | 'DADOS' | 'NBR5626' | 'NBR8160' | 'NBR10844';
@@ -204,7 +205,8 @@ export function verificacoesHidro(model: BlueprintModel, hip: HipotesesHidro, re
     // E5.3: a ligação à rede pública, o coletor lançado e a gravidade.
     const col = planejarColetorPredial(model, hip.esgoto);
     const coletorLancado = (model.trechos ?? []).some((t) => t.rotulo === ROTULO_DO_COLETOR);
-    v.push({
+    // E7: sem rede pública, o destino é o tratamento individual — o coletor até a rede não se aplica.
+    if (!temTratamentoIndividual(model)) v.push({
       grupo: 'NBR8160',
       item: 'Coletor predial até a rede pública',
       norma: 'NBR 8160',

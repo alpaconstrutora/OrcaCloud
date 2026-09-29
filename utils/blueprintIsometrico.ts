@@ -296,7 +296,8 @@ export function rotuloDoTrecho2D(t: Pick<Trecho, 'bitolaMm' | 'rotulo' | 'discip
 export function pegadaDaCaixa2D(t: Terminal): { forma: 'PRISMA' | 'CILINDRO'; larguraMm: number; profundidadeMm: number } | null {
   const ficha = t.tipoHidraulico ? CAIXAS_DE_ESGOTO[t.tipoHidraulico] : undefined;
   if (!ficha || t.disciplina !== 'ESGOTO') return null;
-  const cilindro = t.tipoHidraulico === 'CAIXA_SIFONADA' || t.tipoHidraulico === 'RALO_SIFONADO';
+  // O filtro anaeróbio e o sumidouro (E7.1) são anéis de concreto — cilindros, como a caixa sifonada.
+  const cilindro = t.tipoHidraulico === 'CAIXA_SIFONADA' || t.tipoHidraulico === 'RALO_SIFONADO' || t.tipoHidraulico === 'FILTRO_ANAEROBIO' || t.tipoHidraulico === 'SUMIDOURO';
   const largura = t.larguraMm ?? ficha.larguraPadraoMm;
   return { forma: cilindro ? 'CILINDRO' : 'PRISMA', larguraMm: largura, profundidadeMm: cilindro ? largura : (t.profundidadeMm ?? largura) };
 }

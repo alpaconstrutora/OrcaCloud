@@ -36,6 +36,7 @@ import { HIPOTESES_RECALQUE_PADRAO, planejarRecalque, type HipotesesDeRecalque }
 import { HIPOTESES_ALIMENTACAO_PADRAO, planejarAlimentador, type HipotesesDeAlimentacao } from './blueprintAlimentador';
 import { HIPOTESES_RESERVATORIO_PADRAO, dimensionarReservacao, volumeDoReservatorioL, type HipotesesDeReservatorio } from './blueprintReservacao';
 import { HIPOTESES_PLUVIAIS_PADRAO, contribuicaoPluvial, type HipotesesPluviais } from './blueprintPluvial';
+import { HIPOTESES_TRATAMENTO_PADRAO, temTratamentoIndividual, type HipotesesDeTratamento } from './blueprintTratamento';
 import { RUGOSIDADE_DA_CALHA, verificarCalhas } from './blueprintCalhas';
 import { verificarCondutores } from './blueprintCondutoresPluviais';
 
@@ -60,6 +61,8 @@ export interface HipotesesHidro {
   recalque: HipotesesDeRecalque;
   /** E6.1: cidade, período de retorno e intensidade pluviométrica (NBR 10844). */
   pluvial: HipotesesPluviais;
+  /** E7: o tratamento individual (NBR 7229/13969). */
+  tratamento: HipotesesDeTratamento;
 }
 
 export const HIPOTESES_HIDRO_PADRAO: HipotesesHidro = {
@@ -70,6 +73,7 @@ export const HIPOTESES_HIDRO_PADRAO: HipotesesHidro = {
   alimentacao: HIPOTESES_ALIMENTACAO_PADRAO,
   recalque: HIPOTESES_RECALQUE_PADRAO,
   pluvial: HIPOTESES_PLUVIAIS_PADRAO,
+  tratamento: HIPOTESES_TRATAMENTO_PADRAO,
 };
 
 export interface ContextoDoMemorial {
@@ -410,10 +414,13 @@ export function memorialDeCalculoHidro(model: BlueprintModel, hip: HipotesesHidr
         });
       }
     }
-    // E5.3: o coletor predial até a rede pública.
+    // E5.3: o coletor predial até a rede pública — sem rede, o tratamento individual (E7) toma o lugar.
     const col = planejarColetorPredial(model, hip.esgoto);
-    B.push({ tipo: 'subsecao', texto: 'Coletor predial e ligação à rede pública' });
-    if (col.motivo) B.push({ tipo: 'paragrafo', texto: col.motivo });
+    const semRedePublica = temTratamentoIndividual(model);
+    if (!semRedePublica) B.push({ tipo: 'subsecao', texto: 'Coletor predial e ligação à rede pública' });
+    if (semRedePublica) {
+      // Sem rede pública o coletor não se aplica; o tratamento individual tem a seção dele.
+    } else if (col.motivo) B.push({ tipo: 'paragrafo', texto: col.motivo });
     else {
       B.push({
         tipo: 'tabela',

@@ -2637,6 +2637,11 @@ export const TIPOS_DE_PONTO_HIDRAULICO = [
   'RALO_PLUVIAL',
   'CAIXA_AREIA',
   'LIGACAO_PLUVIAL',
+  // 29/09/2026 (E7.1): o tratamento individual (NBR 7229/13969) — onde não há
+  // rede pública de esgoto, o coletor vai ao tanque, ao filtro e ao sumidouro.
+  'TANQUE_SEPTICO',
+  'FILTRO_ANAEROBIO',
+  'SUMIDOURO',
   'REGISTRO_GAVETA',
   'REGISTRO_PRESSAO',
   'VALVULA_RETENCAO',
@@ -2699,6 +2704,9 @@ export const DISCIPLINAS_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, Disc
   RALO_PLUVIAL: PLU,
   CAIXA_AREIA: PLU,
   LIGACAO_PLUVIAL: PLU,
+  TANQUE_SEPTICO: ESG,
+  FILTRO_ANAEROBIO: ESG,
+  SUMIDOURO: ESG,
   CAIXA_GORDURA: ESG,
   REGISTRO_GAVETA: AF_AQ,
   REGISTRO_PRESSAO: AF_AQ,

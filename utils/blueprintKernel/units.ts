@@ -361,7 +361,15 @@
  * do roadmap hidrossanitário): o trecho pluvial que é calha. Só em PLUVIAL; a
  * retangular exige altura. Omitidos quando ausentes — provado antes do bump.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.67.0';
+/**
+ * ─── 0.67.0 → 0.68.0 (29/09/2026) — O TRATAMENTO INDIVIDUAL ─────────────────
+ *
+ * O ponto de esgoto aceita `TANQUE_SEPTICO`, `FILTRO_ANAEROBIO` e `SUMIDOURO`
+ * (E7.1 do roadmap hidrossanitário, NBR 7229/13969), caixas cuja cota é a do
+ * TUBO (`CAIXAS_DE_ESGOTO.cotaE = 'TUBO'`); `AddTerminal` aceita as medidas.
+ * Vocabulário novo, forma igual — provado antes do bump.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.68.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

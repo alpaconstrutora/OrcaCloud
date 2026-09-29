@@ -2268,6 +2268,11 @@ function entidadeDoPontoHidraulico(
       return { entidade: 'IFCINTERCEPTOR', predefinido: '.USERDEFINED.' };
     case 'LIGACAO_PLUVIAL':
       return { entidade: 'IFCWASTETERMINAL', predefinido: '.USERDEFINED.' };
+    case 'TANQUE_SEPTICO':
+    case 'FILTRO_ANAEROBIO':
+      return { entidade: 'IFCTANK', predefinido: '.USERDEFINED.' };
+    case 'SUMIDOURO':
+      return { entidade: 'IFCDISTRIBUTIONCHAMBERELEMENT', predefinido: '.SUMP.' };
     case 'REGISTRO_GAVETA':
       return { entidade: 'IFCVALVE', predefinido: '.ISOLATING.' };
     case 'REGISTRO_PRESSAO':

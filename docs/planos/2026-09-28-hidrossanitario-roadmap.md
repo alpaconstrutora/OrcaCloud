@@ -903,3 +903,28 @@ vertical cobre o traçado das colunas) e anticolisão dos rótulos na planta.
 contribuição, calhas por Manning, condutores até a caixa de areia e a saída, conferência e
 memoriais. ⚠️ A conferir na norma antes de emitir: a **tabela de intensidades** (E6.1) e a
 **capacidade do condutor vertical** (E6.3, Wyly–Eaton no lugar do ábaco).
+
+### E7.1 — Unidades do tratamento individual (29/09/2026) · kernel 0.68.0
+
+- **Kernel 0.68.0**: o ponto de esgoto aceita `TANQUE_SEPTICO`, `FILTRO_ANAEROBIO` e `SUMIDOURO`;
+  são caixas (`CAIXAS_DE_ESGOTO`) com um modo novo de cota, **TUBO** — a cota do terminal é a do
+  tubo de entrada e saída, e o corpo vai de 40 cm acima dela até o fundo (a tampa não fica na cota
+  do tubo, e o tubo que chega na cota da peça está ligado). `AddTerminal` passou a aceitar as
+  medidas (largura, profundidade, altura) — o lançamento cria a peça já no tamanho. Ritual: suíte
+  inteira em 0.67.0 (6.131 testes), depois os seis hashes, os pins e o bundle.
+- Ficha (TS, FA, SU), IFC (`IfcTank`, e o sumidouro `IfcDistributionChamberElement .SUMP.`), 3D (o
+  filtro e o sumidouro são cilindros — anéis de concreto; o tanque, prisma).
+- **O esgoto termina no sumidouro**: `destinosDoEsgoto` (ligação à rede pública e sumidouro) são as
+  primeiras raízes do cálculo; o tanque e o filtro são caixas de passagem; nenhuma das três é
+  fonte. Sem rede pública (`temTratamentoIndividual`), a conferência e o memorial deixam de pedir
+  o coletor até a rede.
+- `utils/blueprintTratamento.ts` (novo): **lançamento** a partir da caixa de inspeção, no eixo que
+  se afasta do centro das paredes — tanque, filtro (opcional, premissa do estudo) e sumidouro em
+  fila, 1,0 m entre faces e 1,5 m até o sumidouro, tubos DN 100 a 1 %; relançar troca as sugeridas;
+  com ligação à rede pública ou unidade confirmada, o motivo. Gaveta de esgoto → **Tratamento
+  individual**. As medidas são as da ficha; a E7.2 as troca pelas dimensionadas.
+- **Pronto quando** ✔: 9 testes em `blueprintTratamento.test.ts` (só no esgoto e a cota do tubo;
+  cilindros e prisma no 3D; a fila no sobrado com posições e cotas; sem filtro; os motivos;
+  relançar e a confirmada; a árvore partindo do sumidouro, sem destino faltando nem ponta solta;
+  a conferência sem o coletor; a premissa) e 2 em `PainelTratamento.test.tsx`. Suíte: 551 arquivos
+  / 6.131 testes.

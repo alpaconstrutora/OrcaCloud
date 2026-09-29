@@ -225,6 +225,8 @@ import PainelAlimentador from './PainelAlimentador';
 import PainelRecalque from './PainelRecalque';
 import PainelColetorPredial from './PainelColetorPredial';
 import { planejarColetorPredial } from '../../utils/blueprintColetorPredial';
+import PainelTratamento from './PainelTratamento';
+import { planejarTratamento } from '../../utils/blueprintTratamento';
 import { planejarVentilacao } from '../../utils/blueprintVentilacao';
 import { planejarRecalque } from '../../utils/blueprintRecalque';
 import { planejarAlimentador } from '../../utils/blueprintAlimentador';
@@ -7247,6 +7249,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     () => (tarefaAberta === 'esgoto' ? planejarColetorPredial(editor.model, hipotesesDeEsgoto) : null),
     [tarefaAberta, editor.model, hipotesesDeEsgoto],
   );
+  /** TRATAMENTO INDIVIDUAL (29/09/2026, E7): sem rede pública, tanque → filtro → sumidouro. */
+  const hipDeTratamento = hidroDoEstudo.hipoteses.tratamento;
+  const planoDoTratamento = useMemo(
+    () => (tarefaAberta === 'esgoto' ? planejarTratamento(editor.model, { comFiltro: hipDeTratamento.comFiltro }) : null),
+    [tarefaAberta, editor.model, hipDeTratamento],
+  );
   /** VERIFICAÇÃO DA REDE (28/09/2026, E0.1 do roadmap hidrossanitário): pontas abertas, DN do esgoto, louça sem ponto. */
   const pressoesDaAgua = useMemo(() => pressoesDoModelo(editor.model, hipPressao), [editor.model, hipPressao]);
   const marcasDaRede = useMemo(() => marcasDeVerificacao(editor.model, null, pressoesDaAgua, hidroDoEstudo.hipoteses.pluvial), [editor.model, pressoesDaAgua, hidroDoEstudo.hipoteses.pluvial]);
@@ -13994,6 +14002,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   plano={planoDoColetor}
                   onLancar={() => {
                     if (planoDoColetor.comandos.length) editor.runBatch(planoDoColetor.comandos);
+                  }}
+                />
+              )}
+              {planoDoTratamento && (
+                <PainelTratamento
+                  plano={planoDoTratamento}
+                  hip={hipDeTratamento}
+                  onHip={(tratamento) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, tratamento })}
+                  onLancar={() => {
+                    if (planoDoTratamento.comandos.length) editor.runBatch(planoDoTratamento.comandos);
                   }}
                 />
               )}

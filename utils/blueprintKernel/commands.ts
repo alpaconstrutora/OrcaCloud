@@ -702,6 +702,10 @@ export type Command =
       /** Papel e forma (E4.2) — só em `RESERVATORIO`; ignorados nos demais. */
       papelReservatorio?: PapelDoReservatorio | null;
       formaReservatorio?: FormaDoReservatorio | null;
+      /** Medidas já conhecidas ao criar (E7.1: o tanque séptico dimensionado). Ausentes = as da família. */
+      larguraMm?: number | null;
+      alturaMm?: number | null;
+      profundidadeMm?: number | null;
     }
   | {
       type: 'SetTerminalProps';
@@ -3298,6 +3302,11 @@ function aplicarSemHash(
           ...(command.formaReservatorio != null && command.tipoHidraulico === 'RESERVATORIO' ? { formaReservatorio: command.formaReservatorio } : {}),
         },
       ];
+      // E7.1: as medidas, só quando informadas — a chave ausente é o estado de todo terminal anterior.
+      if (command.larguraMm != null || command.alturaMm != null || command.profundidadeMm != null) {
+        const criado = next.terminais[next.terminais.length - 1];
+        aplicarMedidas(criado, { larguraMm: command.larguraMm ?? undefined, alturaMm: command.alturaMm ?? undefined, profundidadeMm: command.profundidadeMm ?? undefined });
+      }
       diff.created.push(id);
       break;
     }

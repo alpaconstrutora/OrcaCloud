@@ -77,6 +77,7 @@ export function hipotesesHidroDaColuna(raw: unknown): HipotesesHidro {
     alimentacao: completar(r.alimentacao, HIPOTESES_HIDRO_PADRAO.alimentacao),
     recalque: completar(r.recalque, HIPOTESES_HIDRO_PADRAO.recalque),
     pluvial: pluvialDaColuna(r.pluvial),
+    tratamento: completar(r.tratamento, HIPOTESES_HIDRO_PADRAO.tratamento),
   };
 }
 

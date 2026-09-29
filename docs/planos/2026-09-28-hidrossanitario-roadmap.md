@@ -403,3 +403,28 @@ Publicadas juntas: a perda localizada só aparece no resultado de pressão.
 
 **Etapa 1: 4 de 4 fases publicadas.**
 
+
+### E2.1 — Pranchas de água e de esgoto (28/09/2026)
+
+- `utils/blueprintPranchaHidro.ts` (novo, puro): `desenharHidrossanitaria` põe a rede por cima da
+  planta — tubo **bifilar** quando a largura real passa de 0,8 mm no papel (duas bordas e o miolo
+  claro), senão traço; as conexões derivadas (`simbolosDasConexoes2D`: bolsas e disco no nó); caixas
+  de esgoto com tampa e o reservatório com a pegada gravada; pontos com a sigla; prumada como
+  círculo com o nome; ø e i % (`rotuloDoTrecho2D`) ao lado do tubo, do lado de cima e sem cruzar o
+  traço (`posicaoDoRotulo`). `itensDaLegendaHidro`/`desenharLegendaHidro`: a legenda só do que
+  EXISTE — condutos por rede × material × DN com a amostra da cor, conexões, pontos e peças.
+- Conjunto de pranchas: `TipoDePrancha` **HIDRAULICA**, **SANITARIA** e **DETALHES_HIDRO**;
+  `incluir.hidraulica` / `incluir.sanitaria` (padrão desligado; o executivo A0 de fábrica liga e
+  passou a se chamar "executivo + instalações"). Uma planta por pavimento **que tem a rede**
+  (`temRedeNoPavimento`) e uma folha "Legenda e detalhes hidrossanitários" no fim (a E2.2 põe os
+  isométricos nela). `desenharConjunto` tem os três `case` — o `default: break` mudo não engole.
+- Exportação avulsa (aba Versões): pranchas "Hidráulica" e "Esgoto" no PDF e no PNG, com a
+  folha de legenda uma vez só; no DXF, camadas `PLANTA-AGUA(-TEXTO)` e `PLANTA-ESGOTO(-TEXTO)`
+  (tubo na largura real em mm do mundo, textos no tamanho de papel a 1:50) e a linha na
+  `COBERTURA_DXF`. `ehPlantaDaPrancha` junta as cinco "plantas" que antes eram três `||` repetidos.
+- **Pronto quando** ✔: 9 testes em `blueprintPranchaHidro.test.ts` — sem a opção a planta é a de
+  sempre; água sem nada de esgoto e vice-versa; ø100 bifilar a 1:50 com "i 2 %", "TQ1 ø100" e a CI;
+  legenda estável; conjunto só com o pavimento que tem rede e sem folha de legenda quando não há
+  rede; nenhuma folha em branco; DXF com as bordas do ø100 a 50 mm do eixo. Harness
+  `docs/spikes/prancha-hidro` (porta 3147): banheiro + área com água e esgoto automáticos, três
+  folhas A3 conferidas no olho. Suíte: 515 arquivos / 5.872 testes; build ok.

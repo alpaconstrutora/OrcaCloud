@@ -24,6 +24,7 @@
  * os dois a carregar condicional do outro.
  */
 
+import { desenharHidrossanitaria, desenharLegendaHidro, type RedeDaPrancha } from './blueprintPranchaHidro';
 import type { Anotacao, BlueprintModel, Point, Wall } from './blueprintKernel';
 import { contornoDaNuvem, cotaAngularDesenhada, dataDaRevisaoBr, linhasDaHachura, pontaDaSeta, posicaoDaEtiquetaDaNuvem, revisoesDasAnotacoes, revisoesDoModelo, COR_PADRAO_DA_ANOTACAO, type RevisaoDaPrancha } from './blueprintAnotacoes';
 import { contornoEmPlanta, extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
@@ -335,6 +336,13 @@ export interface OpcoesExportacao {
    * planta arquitetônica, como sempre foi.
    */
   eletrica?: boolean;
+  /**
+   * PRANCHA HIDROSSANITÁRIA (E2.1, 28/09/2026): desenha a rede de ÁGUA (fria e
+   * quente) ou a de ESGOTO por cima da planta. Ausente = planta arquitetônica.
+   */
+  hidrossanitaria?: RedeDaPrancha;
+  /** E2.1: as redes hidrossanitárias que vão como camadas no DXF (a aba Versões marca pelas pranchas). */
+  redesNoDxf?: RedeDaPrancha[];
   /** Hipóteses do pré-dimensionamento, para o quadro de cargas da prancha. */
   hipotesesEletricas?: HipotesesEletricas;
   /**
@@ -561,6 +569,7 @@ export function desenharPlanta(
   // A camada elétrica vem DEPOIS da arquitetura e ANTES das cotas: símbolo
   // por cima da parede, cota por cima de tudo — a ordem da prancha.
   if (opcoes.eletrica) desenharEletrica(d, model, { px, py });
+  if (opcoes.hidrossanitaria) desenharHidrossanitaria(d, model, { px, py }, opcoes.hidrossanitaria, opcoes.denominador, null);
 
   if (opcoes.cotas) desenharCotas(d, model, opcoes, enq, px, py);
 
@@ -850,6 +859,24 @@ export function desenharFolhaDoQuadroDeCargas(
   enq: Enquadramento,
 ): void {
   desenharQuadroDeCargas(d, model, opcoes, enq, opcoes.hipotesesEletricas);
+  desenharCarimbo(d, opcoes, enq);
+}
+
+/**
+ * A FOLHA DE LEGENDA E DETALHES HIDROSSANITÁRIOS (E2.1, 28/09/2026): a legenda
+ * do desenho inteiro — condutos por rede × material × DN, conexões, pontos e
+ * peças que EXISTEM. A E2.2 acrescenta os isométricos abaixo dela.
+ */
+export function desenharFolhaDeDetalhesHidro(
+  d: Desenhista,
+  model: BlueprintModel,
+  opcoes: OpcoesExportacao,
+  enq: Enquadramento,
+): void {
+  const x0 = enq.offsetXMm - Math.max(0, (enq.utilLarguraMm - enq.desenhoLarguraMm) / 2);
+  const y0 = enq.offsetYMm - Math.max(0, (enq.utilAlturaMm - enq.desenhoAlturaMm) / 2) + 6;
+  d.texto(x0, y0, 'LEGENDA E DETALHES HIDROSSANITÁRIOS', 3.2);
+  desenharLegendaHidro(d, model, x0, y0 + 9, enq.utilLarguraMm);
   desenharCarimbo(d, opcoes, enq);
 }
 

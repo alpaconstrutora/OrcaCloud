@@ -65,6 +65,8 @@ vi.mock('../../services/blueprintExportService', () => ({
   exportarDxf: (...a: unknown[]) => exportarDxf(...a),
   exportarIfc: (...a: unknown[]) => exportarIfc(...a),
   exportarConjuntoPdf: (...a: unknown[]) => exportarConjuntoPdf(...a),
+  // Puro — a mesma lista do serviço (E2.1 acrescentou hidráulica e esgoto).
+  ehPlantaDaPrancha: (p: string) => ['planta', 'eletrica', 'humanizada', 'hidraulica', 'sanitaria'].includes(p),
 }));
 
 const study: BlueprintStudy = {
@@ -535,7 +537,7 @@ describe('PainelVersoes · conjunto de pranchas (E8.3)', () => {
     const painel = screen.getByTestId('conjunto-de-pranchas');
     // Templates de fábrica no seletor; nenhum da organização.
     const seletor = within(painel).getByLabelText('Template de prancha') as HTMLSelectElement;
-    expect(Array.from(seletor.options).map((o) => o.textContent)).toEqual(['A1 · 1:50 (padrão) (fábrica)', 'A3 · 1:100 (estudo) (fábrica)', 'A0 · 1:50 (executivo + elétrica) (fábrica)']);
+    expect(Array.from(seletor.options).map((o) => o.textContent)).toEqual(['A1 · 1:50 (padrão) (fábrica)', 'A3 · 1:100 (estudo) (fábrica)', 'A0 · 1:50 (executivo + instalações) (fábrica)']);
     // Topo em "Todas" (REGRA #5): a lista vem de TODAS as organizações do usuário (a RLS filtra), não da org do estudo.
     expect(listSheetTemplates).toHaveBeenCalledWith(null);
     // Sala 4×3 sem corte, sem molhado e sem elétrica: índice + planta + 4 fachadas + tabelas = 7 folhas.

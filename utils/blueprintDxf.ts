@@ -31,6 +31,7 @@
  * O eixo vai junto, em camada própria: é dele que se reeditam as paredes.
  */
 
+import { desenharHidrossanitaria, type RedeDaPrancha } from './blueprintPranchaHidro';
 import { type Anotacao,
   planoDaAgua,
   type Agua,
@@ -137,6 +138,14 @@ export const CAMADAS = {
    */
   ELETRICA: 'PLANTA-ELETRICA',
   ELETRICA_TEXTO: 'PLANTA-ELETRICA-TEXTO',
+  /**
+   * HIDROSSANITÁRIO (E2.1, 28/09/2026): a rede de água (fria e quente) e a de
+   * esgoto, cada uma com a camada dos rótulos (ø, i %, siglas) à parte.
+   */
+  AGUA: 'PLANTA-AGUA',
+  AGUA_TEXTO: 'PLANTA-AGUA-TEXTO',
+  ESGOTO: 'PLANTA-ESGOTO',
+  ESGOTO_TEXTO: 'PLANTA-ESGOTO-TEXTO',
 } as const;
 
 /** Cor por índice ACI, como o R12 espera. */
@@ -174,6 +183,10 @@ const COR_CAMADA: Record<string, number> = {
   [CAMADAS.CORTE_ESCADA]: 9,
   [CAMADAS.ELETRICA]: 2, // amarelo — a cor da elétrica no canvas
   [CAMADAS.ELETRICA_TEXTO]: 2,
+  [CAMADAS.AGUA]: 5, // azul — a cor da água no canvas
+  [CAMADAS.AGUA_TEXTO]: 5,
+  [CAMADAS.ESGOTO]: 32, // marrom — a convenção de esgoto em prancha
+  [CAMADAS.ESGOTO_TEXTO]: 32,
 };
 
 const ROTULO_ELEVACAO: Record<string, string> = {
@@ -482,6 +495,8 @@ export interface OpcoesDxf {
   /** F8: símbolos elétricos em PLANTA-ELETRICA e o quadro de cargas em texto, abaixo da planta. */
   eletrica?: boolean;
   hipotesesEletricas?: HipotesesEletricas;
+  /** E2.1: as redes hidrossanitárias a desenhar, cada uma nas suas camadas `PLANTA-AGUA*` / `PLANTA-ESGOTO*`. */
+  redes?: RedeDaPrancha[];
 }
 
 /**
@@ -867,6 +882,7 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
   dxf += entidadesDeMarcaDeCorte(model);
   dxf += entidadesDeEscada(model);
   if (o.eletrica) dxf += entidadesDeEletrica(model, o.hipotesesEletricas);
+  for (const rede of o.redes ?? []) dxf += entidadesDaRedeHidro(model, rede);
 
   // Elevações, uma após a outra à direita da planta. O passo entre elas é a
   // largura da mais larga mais uma folga, para não se sobreporem.
@@ -952,6 +968,36 @@ function entidadesDeEletrica(model: BlueprintModel, hip?: HipotesesEletricas): s
   return saida;
 }
 
+/**
+ * A REDE HIDROSSANITÁRIA no DXF (E2.1): o MESMO desenho da prancha, feito no
+ * "papel a 1:50" (x/50, −y/50) e escrito de volta ×50 — assim o tubo sai na
+ * LARGURA REAL (bifilar), as peças no lugar certo em mm do mundo e os textos
+ * e símbolos no tamanho de papel a 1:50, como na elétrica.
+ */
+function entidadesDaRedeHidro(model: BlueprintModel, rede: RedeDaPrancha): string {
+  let saida = '';
+  const FATOR = 50;
+  const traco = rede === 'AGUA' ? CAMADAS.AGUA : CAMADAS.ESGOTO;
+  const rotulo = rede === 'AGUA' ? CAMADAS.AGUA_TEXTO : CAMADAS.ESGOTO_TEXTO;
+  const real = (x: number, y: number) => ({ x: x * FATOR, y: -y * FATOR });
+  const d: Desenhista = {
+    linha: (x1, y1, x2, y2) => {
+      saida += linha(traco, real(x1, y1), real(x2, y2));
+    },
+    poligono: (pontos) => {
+      saida += polilinha(traco, pontos.map((p) => real(p.x, p.y)));
+    },
+    texto: (x, y, t, alturaMm) => {
+      saida += texto(rotulo, real(x, y), t, alturaMm * FATOR);
+    },
+    retangulo: (x, y, w, h) => {
+      saida += polilinha(traco, [real(x, y), real(x + w, y), real(x + w, y + h), real(x, y + h)]);
+    },
+  };
+  desenharHidrossanitaria(d, model, { px: (x) => x / FATOR, py: (y) => -y / FATOR }, rede, FATOR, null);
+  return saida;
+}
+
 function boundingBoxDoModelo(model: BlueprintModel): { minX: number; minY: number } | null {
   const xs: number[] = [];
   const ys: number[] = [];
@@ -1021,6 +1067,7 @@ function entidadesDeCota(model: BlueprintModel): string {
  * — e as duas levam a decisões opostas.
  */
 export const COBERTURA_DXF = [
+  'Hidrossanitário (quando pedido): tubos na largura real (bifilar), conexões, caixas e pontos em PLANTA-AGUA e PLANTA-ESGOTO; ø, i % e siglas em PLANTA-AGUA-TEXTO e PLANTA-ESGOTO-TEXTO, no tamanho de papel a 1:50. A cota do tubo não está na geometria 2D — só no IFC.',
   'Elétrica (quando pedida): símbolos NBR 5444 e eletrodutos em PLANTA-ELETRICA, rótulos (sigla · circuito, Ø, #seção, VA) em PLANTA-ELETRICA-TEXTO; os símbolos têm tamanho de papel a 1:50. O quadro de cargas e a legenda saem como TEXT abaixo da planta.',
   'Unidade: MILÍMETRO, declarada em $INSUNITS. O desenho está em 1:1 — a escala é da prancha.',
   'Paredes: sólido fechado por parede, NÃO APARADO nas junções (os retângulos se sobrepõem).',

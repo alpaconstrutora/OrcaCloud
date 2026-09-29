@@ -13,6 +13,7 @@
  * template é da ORGANIZAÇÃO (JSONB sanitizado em `templateDePranchaDaColuna`),
  * como o template de vista (E8.2) e o tipo de parede.
  */
+import { temRedeNoPavimento } from './blueprintPranchaHidro';
 import type { BlueprintModel, ObjectId, Point, TipoDeAmbiente } from './blueprintKernel';
 import { ESCALAS, PAPEIS, type Papel } from './blueprintExport';
 
@@ -48,6 +49,10 @@ export interface InclusaoNoConjunto {
   topografica?: boolean;
   /** A4: a planta no PADRÃO INCRA (códigos dos vértices, coordenadas geodésicas, tipos de limite). Ausente → falso. */
   incra?: boolean;
+  /** E2.1 (hidrossanitário): a planta de ÁGUA (fria e quente) por pavimento. Ausente → falso. */
+  hidraulica?: boolean;
+  /** E2.1: a planta de ESGOTO por pavimento. Ausente → falso. */
+  sanitaria?: boolean;
 }
 export interface TemplateDePrancha {
   papel: PapelId;
@@ -69,7 +74,7 @@ export const TEMPLATE_DE_PRANCHA_PADRAO: TemplateDePrancha = {
   denominadorAmpliacao: 25,
   cotas: true,
   carimbo: { empresa: '', responsavel: '', registro: '', cliente: '', endereco: '', prefixo: 'A', camposExtras: [] },
-  incluir: { indice: true, plantas: true, cortes: true, elevacoes: true, ampliacoes: true, tabelas: true, eletrica: false, humanizada: false, topografica: false },
+  incluir: { indice: true, plantas: true, cortes: true, elevacoes: true, ampliacoes: true, tabelas: true, eletrica: false, humanizada: false, topografica: false, hidraulica: false, sanitaria: false },
 };
 
 export interface TemplateDePranchaSalvo {
@@ -84,7 +89,7 @@ export interface TemplateDePranchaSalvo {
 export const TEMPLATES_DE_PRANCHA_DE_FABRICA: readonly TemplateDePranchaSalvo[] = [
   { id: 'fab:a1-50', organizationId: '', nome: 'A1 · 1:50 (padrão)', template: TEMPLATE_DE_PRANCHA_PADRAO, active: true, deFabrica: true },
   { id: 'fab:a3-100', organizationId: '', nome: 'A3 · 1:100 (estudo)', template: { ...TEMPLATE_DE_PRANCHA_PADRAO, papel: 'A3', denominadorPlanta: 100, denominadorCortes: 100, denominadorAmpliacao: 50, cotas: false, incluir: { ...TEMPLATE_DE_PRANCHA_PADRAO.incluir, ampliacoes: false, tabelas: false } }, active: true, deFabrica: true },
-  { id: 'fab:a0-50-exec', organizationId: '', nome: 'A0 · 1:50 (executivo + elétrica)', template: { ...TEMPLATE_DE_PRANCHA_PADRAO, papel: 'A0', incluir: { ...TEMPLATE_DE_PRANCHA_PADRAO.incluir, eletrica: true } }, active: true, deFabrica: true },
+  { id: 'fab:a0-50-exec', organizationId: '', nome: 'A0 · 1:50 (executivo + instalações)', template: { ...TEMPLATE_DE_PRANCHA_PADRAO, papel: 'A0', incluir: { ...TEMPLATE_DE_PRANCHA_PADRAO.incluir, eletrica: true, hidraulica: true, sanitaria: true } }, active: true, deFabrica: true },
 ];
 
 const bool = (v: unknown, p: boolean) => (typeof v === 'boolean' ? v : p);
@@ -137,7 +142,7 @@ export interface Recorte {
   maxY: number;
 }
 
-export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'HUMANIZADA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS' | 'TOPOGRAFICA' | 'INCRA';
+export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'HUMANIZADA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS' | 'TOPOGRAFICA' | 'INCRA' | 'HIDRAULICA' | 'SANITARIA' | 'DETALHES_HIDRO';
 
 export interface PranchaPlanejada {
   /** "A-01". */
@@ -210,6 +215,26 @@ export function planejarConjunto(model: BlueprintModel, t: TemplateDePrancha): P
       numerar({ tipo: 'QUADRO_DE_CARGAS', titulo: 'Quadro de cargas', denominador: 0 });
       numerar({ tipo: 'UNIFILAR', titulo: 'Diagrama unifilar', denominador: 0 });
     }
+  }
+  // HIDROSSANITÁRIO (E2.1, 28/09/2026): planta de água e de esgoto por pavimento
+  // que TEM a rede, e uma folha de legenda e detalhes do desenho inteiro.
+  {
+    let alguma = false;
+    if (t.incluir.hidraulica) {
+      for (const n of niveis) {
+        if (!temRedeNoPavimento(model, n.id, 'AGUA')) continue;
+        numerar({ tipo: 'HIDRAULICA', titulo: `Hidráulica (água fria e quente) — ${n.name}`, denominador: t.denominadorPlanta, levelId: n.id });
+        alguma = true;
+      }
+    }
+    if (t.incluir.sanitaria) {
+      for (const n of niveis) {
+        if (!temRedeNoPavimento(model, n.id, 'ESGOTO')) continue;
+        numerar({ tipo: 'SANITARIA', titulo: `Esgoto sanitário — ${n.name}`, denominador: t.denominadorPlanta, levelId: n.id });
+        alguma = true;
+      }
+    }
+    if (alguma) numerar({ tipo: 'DETALHES_HIDRO', titulo: 'Legenda e detalhes hidrossanitários', denominador: 0 });
   }
   if (t.incluir.cortes) {
     for (const c of model.sections ?? []) numerar({ tipo: 'CORTE', titulo: `Corte ${c.rotulo}`, denominador: t.denominadorCortes, corteId: c.id });

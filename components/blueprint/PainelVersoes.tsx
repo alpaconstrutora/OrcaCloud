@@ -22,8 +22,10 @@ import {
   exportarQuantitativoXlsx,
   exportarPranchasPdf,
   exportarPranchasPng,
+  ehPlantaDaPrancha,
   type PranchaExport,
 } from '../../services/blueprintExportService';
+import type { RedeDaPrancha } from '../../utils/blueprintPranchaHidro';
 import {
   ESCALAS,
   MENOR_ESCALA_DE_PLANTA,
@@ -382,6 +384,8 @@ export default function PainelVersoes({
       // F8: a camada elétrica no DXF quando a prancha "Elétrica" está marcada;
       // no PDF/PNG cada prancha decide por si (`exportarPranchasPdf`).
       eletrica: comEletrica || undefined,
+      // E2.1: idem para as redes hidrossanitárias (camadas PLANTA-AGUA / PLANTA-ESGOTO).
+      redesNoDxf: redesNoDxf.length ? redesNoDxf : undefined,
       hipotesesEletricas,
       armadura: hipotesesDeArmadura,
       // Custo no IFC só quando explicitamente marcado nesta exportação — ver o
@@ -462,6 +466,9 @@ export default function PainelVersoes({
     { id: 'humanizada', rotulo: 'Humanizada' },
     // F8: a planta com os símbolos elétricos + a folha do quadro de cargas + o unifilar.
     { id: 'eletrica', rotulo: 'Elétrica' },
+    // E2.1: a planta com a rede de água / de esgoto + a folha de legenda hidrossanitária.
+    { id: 'hidraulica', rotulo: 'Hidráulica' },
+    { id: 'sanitaria', rotulo: 'Esgoto' },
     { id: 'frente', rotulo: 'Frente' },
     { id: 'fundos', rotulo: 'Fundos' },
     { id: 'lateral-esq', rotulo: 'Lat. esq.' },
@@ -478,10 +485,11 @@ export default function PainelVersoes({
       return PRANCHAS.map((p) => p.id).filter((p) => proximo.includes(p));
     });
   const elevacoesSelecionadas = pranchas.filter(
-    (p): p is Exclude<PranchaExport, 'planta' | 'eletrica' | 'humanizada'> => p !== 'planta' && p !== 'eletrica' && p !== 'humanizada',
+    (p): p is Exclude<PranchaExport, 'planta' | 'eletrica' | 'humanizada' | 'hidraulica' | 'sanitaria'> => !ehPlantaDaPrancha(p),
   );
-  /** As três "plantas" (técnica, humanizada, elétrica) dependem da escala caber. */
-  const comPlanta = pranchas.includes('planta') || pranchas.includes('humanizada');
+  /** As "plantas" (técnica, humanizada, elétrica, hidráulica, esgoto) dependem da escala caber. */
+  const comPlanta = pranchas.some(ehPlantaDaPrancha);
+  const redesNoDxf: RedeDaPrancha[] = [...(pranchas.includes('hidraulica') ? (['AGUA'] as const) : []), ...(pranchas.includes('sanitaria') ? (['ESGOTO'] as const) : [])];
   /** A elétrica marcada vai para o DXF como camada, e para o PDF/PNG como prancha própria. */
   const comEletrica = pranchas.includes('eletrica');
 

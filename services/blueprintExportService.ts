@@ -11,6 +11,7 @@ import { jsPDF } from 'jspdf';
 import {
   AVISO_PADRAO,
   desenharElevacao,
+  desenharFolhaDeDetalhesHidro,
   desenharFolhaDoQuadroDeCargas,
   desenharFolhaDoUnifilar,
   desenharPlanta,
@@ -70,6 +71,10 @@ export type PranchaExport =
   | 'eletrica'
   /** E8.4: a planta HUMANIZADA (venda) — pisos por material, sombra, mobiliário, vegetação; sem cotas, com aviso próprio. */
   | 'humanizada'
+  /** E2.1: a planta com a rede de ÁGUA (fria e quente) + a folha de legenda hidrossanitária. */
+  | 'hidraulica'
+  /** E2.1: a planta com a rede de ESGOTO + a folha de legenda hidrossanitária. */
+  | 'sanitaria'
   | 'frente'
   | 'fundos'
   | 'lateral-esq'
@@ -92,6 +97,8 @@ const ROTULO_FIXO: Record<string, string> = {
   planta: 'Planta',
   eletrica: 'Planta elétrica',
   humanizada: 'Planta humanizada',
+  hidraulica: 'Planta hidráulica',
+  sanitaria: 'Planta de esgoto',
   frente: 'Elevação frente',
   fundos: 'Elevação fundos',
   'lateral-esq': 'Elevação lateral esquerda',
@@ -105,6 +112,25 @@ const ROTULO_FIXO: Record<string, string> = {
 /** A planta humanizada (E8.4) sai SEM cotas e com o aviso de material de venda — independentemente do que o painel marcou. */
 function opcoesDaHumanizada(p: PranchaExport): Partial<OpcoesExportacao> {
   return p === 'humanizada' ? { humanizada: true, cotas: false, aviso: AVISO_HUMANIZADA } : {};
+}
+
+/** As pranchas que SÃO a planta (com ou sem uma camada por cima) — não têm projeção de elevação. */
+export function ehPlantaDaPrancha(p: PranchaExport): boolean {
+  return p === 'planta' || p === 'eletrica' || p === 'humanizada' || p === 'hidraulica' || p === 'sanitaria';
+}
+
+/** O que cada planta põe por cima da arquitetura (elétrica, rede hidrossanitária, humanizada). */
+function opcoesDaCamada(p: PranchaExport): Partial<OpcoesExportacao> {
+  return {
+    eletrica: p === 'eletrica',
+    hidrossanitaria: p === 'hidraulica' ? 'AGUA' : p === 'sanitaria' ? 'ESGOTO' : undefined,
+    ...opcoesDaHumanizada(p),
+  };
+}
+
+/** A legenda hidrossanitária sai UMA vez, depois da última planta hidrossanitária marcada. */
+function levaLegendaHidro(p: PranchaExport, pranchas: PranchaExport[]): boolean {
+  return p === 'sanitaria' || (p === 'hidraulica' && !pranchas.includes('sanitaria'));
 }
 
 function rotuloDaPrancha(model: BlueprintModel, p: PranchaExport): string {
@@ -126,7 +152,7 @@ function projecaoDaPrancha(
   p: PranchaExport,
   levelIds?: string[],
 ): ProjecaoElevacao | ProjecaoCorte | null {
-  if (p === 'planta' || p === 'eletrica' || p === 'humanizada') return null;
+  if (ehPlantaDaPrancha(p)) return null;
   const id = corteDaPrancha(p);
   if (id) {
     const corte = (model.sections ?? []).find((x) => x.id === id);
@@ -357,15 +383,18 @@ export function exportarPranchasPdf(
     /** F8: a segunda página da prancha elétrica — legenda e quadro de cargas. */
     quadroDeCargas?: boolean;
     unifilar?: boolean;
+    /** E2.1: a folha de legenda das plantas hidrossanitárias. */
+    legendaHidro?: boolean;
   };
 
   // Enquadra tudo antes: uma página não pode sair e a seguinte falhar.
   const enquadrados = pranchas.flatMap<Pagina>((p) => {
-    if (p === 'planta' || p === 'eletrica' || p === 'humanizada') {
+    if (ehPlantaDaPrancha(p)) {
       const enq = enquadrar(model, o.denominador, o.papel, o.cotas);
       if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
       // A prancha elétrica são TRÊS folhas: a planta, o quadro de cargas e o unifilar.
       if (p === 'eletrica') return [{ p, enq, proj: null }, { p, enq, proj: null, quadroDeCargas: true }, { p, enq, proj: null, unifilar: true }];
+      if (levaLegendaHidro(p, pranchas)) return [{ p, enq, proj: null }, { p, enq, proj: null, legendaHidro: true }];
       return [{ p, enq, proj: null }];
     }
     const proj = projecaoDaPrancha(model, p, levelIds);
@@ -382,19 +411,19 @@ export function exportarPranchasPdf(
     orientation: o.papel.larguraMm > o.papel.alturaMm ? 'landscape' : 'portrait',
   });
 
-  enquadrados.forEach(({ p, enq, proj, quadroDeCargas, unifilar }, i) => {
+  enquadrados.forEach(({ p, enq, proj, quadroDeCargas, unifilar, legendaHidro }, i) => {
     if (i > 0) doc.addPage([o.papel.larguraMm, o.papel.alturaMm]);
     const oPagina = {
       ...o,
       // As anotações do corte/elevação viajam nas opções: a folha não recebe o modelo (E8.1).
       anotacoes: model.anotacoes ?? [],
-      eletrica: p === 'eletrica',
-      titulo: `${o.titulo} — ${quadroDeCargas ? 'Quadro de cargas' : unifilar ? 'Diagrama unifilar' : rotuloDaPrancha(model, p)}`,
-      ...opcoesDaHumanizada(p),
+      ...opcoesDaCamada(p),
+      titulo: `${o.titulo} — ${quadroDeCargas ? 'Quadro de cargas' : unifilar ? 'Diagrama unifilar' : legendaHidro ? 'Legenda hidrossanitária' : rotuloDaPrancha(model, p)}`,
     };
     const desenhista = new DesenhistaPdf(doc);
     if (quadroDeCargas) desenharFolhaDoQuadroDeCargas(desenhista, model, oPagina, enq);
     else if (unifilar) desenharFolhaDoUnifilar(desenhista, model, oPagina, enq);
+    else if (legendaHidro) desenharFolhaDeDetalhesHidro(desenhista, model, { ...oPagina, denominador: 0 }, enq);
     else if (proj) desenharElevacao(desenhista, proj, oPagina, enq);
     else desenharPlanta(desenhista, model, oPagina, enq);
   });
@@ -450,6 +479,26 @@ export function desenharConjunto(
         }
         desenharPlanta(d, m, comPrancha(den, p.tipo === 'HUMANIZADA' ? { humanizada: true, cotas: false, aviso: AVISO_HUMANIZADA } : { eletrica: p.tipo === 'ELETRICA' }), enq);
         folhas.push({ prancha: p, denominador: den });
+        break;
+      }
+      // HIDROSSANITÁRIO (E2.1): a planta do pavimento com a rede por cima.
+      case 'HIDRAULICA':
+      case 'SANITARIA': {
+        const m = modeloDoPavimento(model, p.levelId!);
+        let enq = enquadrar(m, p.denominador, papel, template.cotas);
+        let den = p.denominador;
+        if (!enq.cabe && enq.escalaSugerida) {
+          den = enq.escalaSugerida;
+          enq = enquadrar(m, den, papel, template.cotas);
+        }
+        desenharPlanta(d, m, comPrancha(den, { hidrossanitaria: p.tipo === 'HIDRAULICA' ? 'AGUA' : 'ESGOTO' }), enq);
+        folhas.push({ prancha: p, denominador: den });
+        break;
+      }
+      case 'DETALHES_HIDRO': {
+        const enq = enquadrar(model, template.denominadorPlanta, papel, false);
+        desenharFolhaDeDetalhesHidro(d, model, comPrancha(0), enq);
+        folhas.push({ prancha: p, denominador: 0 });
         break;
       }
       case 'QUADRO_DE_CARGAS':
@@ -548,8 +597,8 @@ export function exportarPranchasPng(
   const k = dpi / 25.4;
   for (const p of pranchas) {
     const proj = projecaoDaPrancha(model, p, levelIds);
-    if (p !== 'planta' && p !== 'eletrica' && p !== 'humanizada' && !proj) continue;
-    const oArquivo = { ...o, eletrica: p === 'eletrica', titulo: `${o.titulo} — ${rotuloDaPrancha(model, p)}`, ...opcoesDaHumanizada(p) };
+    if (!ehPlantaDaPrancha(p) && !proj) continue;
+    const oArquivo = { ...o, ...opcoesDaCamada(p), titulo: `${o.titulo} — ${rotuloDaPrancha(model, p)}` };
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(o.papel.larguraMm * k);
     canvas.height = Math.round(o.papel.alturaMm * k);
@@ -558,10 +607,26 @@ export function exportarPranchasPng(
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    if (p === 'planta' || p === 'eletrica' || p === 'humanizada') {
+    if (ehPlantaDaPrancha(p)) {
       const enq = enquadrar(model, o.denominador, o.papel, o.cotas);
       if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
       desenharPlanta(new DesenhistaCanvas(ctx, dpi), model, oArquivo, enq);
+      if (levaLegendaHidro(p, pranchas)) {
+        // E2.1: a folha de legenda hidrossanitária, uma vez só.
+        const c2 = document.createElement('canvas');
+        c2.width = canvas.width;
+        c2.height = canvas.height;
+        const ctx2 = c2.getContext('2d');
+        if (ctx2) {
+          ctx2.fillStyle = '#ffffff';
+          ctx2.fillRect(0, 0, c2.width, c2.height);
+          desenharFolhaDeDetalhesHidro(new DesenhistaCanvas(ctx2, dpi), model, { ...oArquivo, denominador: 0, titulo: `${o.titulo} — Legenda hidrossanitária` }, enq);
+          const nome2 = nomeArquivo(oArquivo, 'png').replace(/\.png$/, '-legenda-hidrossanitaria.png');
+          c2.toBlob((blob) => {
+            if (blob) baixar(blob, nome2);
+          }, 'image/png');
+        }
+      }
       if (p === 'eletrica') {
         // A segunda folha da prancha elétrica: legenda + quadro de cargas.
         const c2 = document.createElement('canvas');
@@ -655,6 +720,7 @@ export function montarDxf(
     cotas: o.cotas,
     eletrica: o.eletrica,
     hipotesesEletricas: o.hipotesesEletricas,
+    redes: o.redesNoDxf,
     // Elevação e corte saem no MESMO fluxo de blocos à direita da planta: numa
     // prancha os dois são vistas, e separá-los em duas faixas só faria o
     // arquivo ter dois espaçamentos diferentes para a mesma coisa.

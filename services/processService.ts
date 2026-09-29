@@ -7,7 +7,7 @@ import type {
     ProcessTemplate, ProcessTemplateStep, ProcessInstance, ProcessInstanceStep,
     ProcessInstanceWithSteps, ProcessComment, ProcessInstanceStatus, PendingStepItem,
     ProcessPriority, ProcessCriticality, ProcessEventKey, ProcessStepBottleneck,
-    ProcessConditionContext, ProcessAssignableMember,
+    ProcessConditionContext, ProcessAssignableMember, ProcessGroup,
 } from '../types/process';
 
 // ============================================================
@@ -354,6 +354,10 @@ export const processService = {
             order_index: ts.order_index,
             status: 'PENDENTE',
             responsible_user_id: ts.default_responsible_type === 'USER' ? ts.default_responsible_id : null,
+            // F3.2: o responsável do template vai junto (pessoa OU grupo). Grupo não
+            // preenche responsible_user_id — um membro assume depois (claimStep).
+            responsible_type: ts.default_responsible_type ?? null,
+            responsible_ref_id: ts.default_responsible_id ?? null,
             condition: ts.condition ?? null,
             // F3: escalonamento também é snapshot — mudar o template não muda a instância em curso.
             escalation_user_id: ts.escalation_user_id ?? null,
@@ -596,15 +600,131 @@ export const processService = {
 
     // ── Etapas — "assumir" e conclusão manual/validação ────────
 
-    async claimStep(stepId: string, userId: string): Promise<void> {
+    /**
+     * "Assumir etapa" (F3.2). Até aqui esta função filtrava `status = 'PENDENTE'`
+     * — mas a etapa atual está sempre EM_ANDAMENTO, então ela nunca agia sobre a
+     * etapa que importa, e nenhuma tela a chamava; mesmo assim a F1 e o aviso de
+     * escalonamento da F3 mandavam o usuário "assumir".
+     *
+     * Regras: etapa com responsável que não é o próprio usuário → recusa; etapa
+     * de grupo → só membro do grupo; etapa sem responsável nenhum → qualquer
+     * membro da org (a RLS já garante a org). A instância sai de
+     * AGUARDANDO_RESPONSAVEL para o "aguardando" do tipo da etapa; ATRASADO fica
+     * ATRASADO (o prazo não mudou).
+     */
+    async claimStep(stepId: string, instanceId: string, userId: string): Promise<void> {
+        const { data: step, error: sErr } = await supabase
+            .from('process_instance_steps')
+            .select('id, status, step_type, responsible_user_id, responsible_type, responsible_ref_id')
+            .eq('id', stepId)
+            .single();
+        if (sErr || !step) throw new Error(`Erro ao carregar etapa: ${sErr?.message ?? 'não encontrada'}`);
+        const s = step as Pick<ProcessInstanceStep, 'id' | 'status' | 'step_type' | 'responsible_user_id' | 'responsible_type' | 'responsible_ref_id'>;
+
+        if (!['EM_ANDAMENTO', 'PENDENTE'].includes(s.status)) throw new Error('Esta etapa não está aberta.');
+        if (s.responsible_user_id === userId) return;
+        if (s.responsible_user_id) throw new Error('Esta etapa já foi assumida por outra pessoa.');
+        if (s.responsible_type === 'DEPARTMENT' || s.responsible_type === 'ROLE') {
+            const { data: membro } = await supabase
+                .from('process_group_members')
+                .select('id')
+                .eq('group_type', s.responsible_type)
+                .eq('group_id', s.responsible_ref_id ?? '')
+                .eq('user_id', userId)
+                .maybeSingle();
+            if (!membro) throw new Error('Só quem é do departamento/cargo desta etapa pode assumi-la.');
+        }
+
         const { error } = await supabase
             .from('process_instance_steps')
-            .update({ responsible_user_id: userId, status: 'EM_ANDAMENTO' })
-            .eq('id', stepId)
-            .eq('status', 'PENDENTE');
+            .update({ responsible_user_id: userId })
+            .eq('id', stepId);
         if (error) {
             console.error('[processService] claimStep:', error);
             throw new Error(`Erro ao assumir etapa: ${error.message}`);
+        }
+        const { data: inst } = await supabase.from('process_instances').select('status').eq('id', instanceId).maybeSingle();
+        if (inst?.status === 'AGUARDANDO_RESPONSAVEL') {
+            await supabase.from('process_instances')
+                .update({ status: WAITING_STATUS_BY_STEP_TYPE[s.step_type] })
+                .eq('id', instanceId);
+        }
+        await logAction(instanceId, userId, 'STEP_CLAIMED', { metadata: { step_id: stepId, via: s.responsible_type ?? null } });
+    },
+
+    // ── F3.2 — grupos (departamento/cargo) como responsável ─────
+
+    /**
+     * Departamentos e cargos das empresas da organização, com os membros
+     * marcados. Org nula ("Todas") = das orgs do usuário (a RLS recorta).
+     */
+    async listGroups(organizationId: string | null): Promise<ProcessGroup[]> {
+        let cq = supabase.from('companies').select('id, org_id, nome_fantasia, razao_social');
+        if (organizationId) cq = cq.eq('org_id', organizationId);
+        const { data: companies, error: cErr } = await cq;
+        if (cErr) throw new Error(`Erro ao carregar empresas: ${cErr.message}`);
+        const empresas = (companies ?? []) as { id: string; org_id: string; nome_fantasia: string | null; razao_social: string | null }[];
+        if (empresas.length === 0) return [];
+        const ids = empresas.map(c => c.id);
+        const porEmpresa = new Map(empresas.map(c => [c.id, c]));
+
+        let mq = supabase.from('process_group_members').select('group_type, group_id, user_id');
+        if (organizationId) mq = mq.eq('organization_id', organizationId);
+        const [deps, roles, membros] = await Promise.all([
+            supabase.from('company_departments').select('id, company_id, nome').in('company_id', ids).eq('ativo', true),
+            supabase.from('org_roles').select('id, company_id, nome').in('company_id', ids),
+            mq,
+        ]);
+        if (deps.error) throw new Error(`Erro ao carregar departamentos: ${deps.error.message}`);
+        if (roles.error) throw new Error(`Erro ao carregar cargos: ${roles.error.message}`);
+        if (membros.error) throw new Error(`Erro ao carregar membros dos grupos: ${membros.error.message}`);
+
+        const membrosDe = new Map<string, string[]>();
+        for (const m of (membros.data ?? []) as { group_type: string; group_id: string; user_id: string }[]) {
+            const k = `${m.group_type}:${m.group_id}`;
+            membrosDe.set(k, [...(membrosDe.get(k) ?? []), m.user_id]);
+        }
+        const montar = (type: ProcessGroup['type']) => (r: { id: string; company_id: string; nome: string }): ProcessGroup => {
+            const c = porEmpresa.get(r.company_id);
+            return {
+                type, id: r.id, name: r.nome,
+                organizationId: c?.org_id ?? '',
+                companyName: c?.nome_fantasia || c?.razao_social || '',
+                memberUserIds: membrosDe.get(`${type}:${r.id}`) ?? [],
+            };
+        };
+        return [
+            ...((deps.data ?? []) as { id: string; company_id: string; nome: string }[]).map(montar('DEPARTMENT')),
+            ...((roles.data ?? []) as { id: string; company_id: string; nome: string }[]).map(montar('ROLE')),
+        ].sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name, 'pt-BR'));
+    },
+
+    /** Grava quem é do grupo: insere os novos, remove os que saíram (diff). */
+    async setGroupMembers(
+        group: Pick<ProcessGroup, 'type' | 'id' | 'organizationId'>,
+        userIds: string[],
+        createdBy: string,
+    ): Promise<void> {
+        const { data: atuais, error } = await supabase
+            .from('process_group_members')
+            .select('id, user_id')
+            .eq('organization_id', group.organizationId)
+            .eq('group_type', group.type)
+            .eq('group_id', group.id);
+        if (error) throw new Error(`Erro ao carregar membros do grupo: ${error.message}`);
+        const existentes = (atuais ?? []) as { id: string; user_id: string }[];
+        const novos = userIds.filter(u => !existentes.some(e => e.user_id === u));
+        const sair = existentes.filter(e => !userIds.includes(e.user_id)).map(e => e.id);
+
+        if (novos.length > 0) {
+            const { error: iErr } = await supabase.from('process_group_members').insert(novos.map(user_id => ({
+                organization_id: group.organizationId, group_type: group.type, group_id: group.id, user_id, created_by: createdBy,
+            })));
+            if (iErr) throw new Error(`Erro ao incluir membros: ${iErr.message}`);
+        }
+        if (sair.length > 0) {
+            const { error: dErr } = await supabase.from('process_group_members').delete().in('id', sair);
+            if (dErr) throw new Error(`Erro ao remover membros: ${dErr.message}`);
         }
     },
 
@@ -700,6 +820,11 @@ export const processService = {
 
     // ── Pendências ("pendente comigo") ──────────────────────────
 
+    /**
+     * Etapas com o usuário: as dele (responsible_user_id) + as dos grupos dele
+     * que ninguém assumiu ainda (F3.2) — só a etapa ATUAL do grupo
+     * (EM_ANDAMENTO), porque a pendente futura ainda não é trabalho de ninguém.
+     */
     async listMyPendingSteps(organizationId: string | null, userId: string): Promise<PendingStepItem[]> {
         let q = supabase
             .from('process_instance_steps')
@@ -712,12 +837,50 @@ export const processService = {
             console.error('[processService] listMyPendingSteps:', error);
             throw new Error(`Erro ao carregar pendências: ${error.message}`);
         }
-        return (data ?? []).map((r: any) => ({
+        const mapear = (r: any, via_group: string | null = null): PendingStepItem => ({
             ...r,
             instance_title: r.process_instances.title,
             instance_status: r.process_instances.status,
             instance_priority: r.process_instances.priority,
-        }));
+            via_group,
+        });
+        const minhas = (data ?? []).map((r: any) => mapear(r));
+
+        // Grupos do usuário → etapas de grupo sem ninguém assumido.
+        const { data: grupos } = await supabase
+            .from('process_group_members')
+            .select('group_type, group_id')
+            .eq('user_id', userId);
+        const refs = ((grupos ?? []) as { group_type: string; group_id: string }[]).map(g => g.group_id);
+        if (refs.length === 0) return minhas;
+
+        let gq = supabase
+            .from('process_instance_steps')
+            .select('*, process_instances!inner(title, status, priority, organization_id)')
+            .is('responsible_user_id', null)
+            .in('responsible_type', ['DEPARTMENT', 'ROLE'])
+            .in('responsible_ref_id', refs)
+            .eq('status', 'EM_ANDAMENTO');
+        if (organizationId) gq = gq.eq('process_instances.organization_id', organizationId);
+        const { data: doGrupo, error: gErr } = await gq;
+        if (gErr) {
+            console.error('[processService] listMyPendingSteps (grupos):', gErr);
+            return minhas; // a fila pessoal não cai por causa da de grupo
+        }
+        const linhas = (doGrupo ?? []) as any[];
+        if (linhas.length === 0) return minhas;
+
+        // Nome do grupo para o "via …": uma consulta por tipo presente.
+        const nomes = new Map<string, string>();
+        const deps = linhas.filter(l => l.responsible_type === 'DEPARTMENT').map(l => l.responsible_ref_id);
+        const roles = linhas.filter(l => l.responsible_type === 'ROLE').map(l => l.responsible_ref_id);
+        const [d, r] = await Promise.all([
+            deps.length ? supabase.from('company_departments').select('id, nome').in('id', deps) : Promise.resolve({ data: [] as any[] }),
+            roles.length ? supabase.from('org_roles').select('id, nome').in('id', roles) : Promise.resolve({ data: [] as any[] }),
+        ]);
+        for (const x of [...((d.data ?? []) as any[]), ...((r.data ?? []) as any[])]) nomes.set(x.id, x.nome);
+
+        return [...minhas, ...linhas.map(l => mapear(l, nomes.get(l.responsible_ref_id) ?? 'seu grupo'))];
     },
 
     /** Aprovações de etapa pendentes (fila própria — fn_approval_action_queue ainda não cobre 'process_step'). */

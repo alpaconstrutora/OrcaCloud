@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
     Workflow, ClipboardList, Layers, Plus, CheckCircle2, XCircle, FileText,
     Loader2, ChevronRight, MessageSquare, Send, Shield,
-    Activity, LayoutGrid, List as ListIcon, AlertTriangle, SkipForward, GitBranch,
+    Activity, LayoutGrid, List as ListIcon, AlertTriangle, SkipForward, GitBranch, Users,
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { processService } from '../services/processService';
@@ -12,7 +12,9 @@ import type {
     ProcessInstanceStep, PendingStepItem, ProcessComment, ProcessStepType, ProcessStepBottleneck,
 } from '../types/process';
 import { INSTANCE_STATUS_LABEL } from '../types/process';
-import type { ProcessCondition, ProcessConditionField, ProcessConditionOp, ProcessAssignableMember } from '../types/process';
+import type { ProcessCondition, ProcessConditionField, ProcessConditionOp, ProcessAssignableMember, ProcessGroup, ProcessResponsibleType } from '../types/process';
+import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
+import { SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import { CONDITION_FIELD_LABEL, CONDITION_OP_LABEL, CONDITION_OPS_BY_FIELD, descreverCondicao, validarCondicao } from '../utils/processCondition';
 import { useStore } from '../store/useStore';
 import { supplierService } from '../services/supplierService';
@@ -58,16 +60,62 @@ interface EtapaEmEdicao {
     condition: { field: ProcessConditionField; op: ProcessConditionOp; value: string | string[] } | null;
     /** F3 — SLA da etapa em horas (texto até gravar; vazio = sem prazo). */
     sla_hours: string;
-    /** F3 — responsável (user_id de auth) e escalonamento; vazio = ninguém. */
-    responsible_user_id: string;
+    /** F3/F3.2 — responsável codificado: '' | 'USER:<user_id>' | 'DEPARTMENT:<id>' | 'ROLE:<id>'. */
+    responsavel: string;
     escalation_user_id: string;
     escalation_after_hours: string;
 }
 
 const ETAPA_VAZIA: EtapaEmEdicao = {
     name: '', step_type: 'manual', requires_document: false, condition: null,
-    sla_hours: '', responsible_user_id: '', escalation_user_id: '', escalation_after_hours: '',
+    sla_hours: '', responsavel: '', escalation_user_id: '', escalation_after_hours: '',
 };
+
+/** 'DEPARTMENT:abc' → { type, id }; '' → nulls. */
+function decodificarResponsavel(v: string): { type: ProcessResponsibleType | null; id: string | null } {
+    const i = v.indexOf(':');
+    if (i < 0) return { type: null, id: null };
+    return { type: v.slice(0, i) as ProcessResponsibleType, id: v.slice(i + 1) || null };
+}
+
+const GROUP_TYPE_LABEL: Record<ProcessGroup['type'], string> = { DEPARTMENT: 'Departamento', ROLE: 'Cargo' };
+
+/**
+ * Responsável da etapa: uma pessoa OU um departamento/cargo (F3.2). Grupo sem
+ * ninguém marcado aparece com o aviso no próprio rótulo — dá para escolher,
+ * mas quem escolhe fica sabendo que a etapa nasce sem dono.
+ */
+function ResponsavelSelect({ value, onChange, membros, grupos }: {
+    value: string; onChange: (v: string) => void; membros: ProcessAssignableMember[]; grupos: ProcessGroup[];
+}) {
+    const deps = grupos.filter(g => g.type === 'DEPARTMENT');
+    const roles = grupos.filter(g => g.type === 'ROLE');
+    const rotulo = (g: ProcessGroup) => `${g.name}${g.memberUserIds.length === 0 ? ' — ninguém marcado em Equipes' : ` (${g.memberUserIds.length})`}`;
+    return (
+        <select value={value} onChange={e => onChange(e.target.value)}
+            className="h-9 px-2 rounded-[6px] border border-gray-200 text-sm font-normal min-w-44 max-w-64 truncate">
+            <option value="">Responsável (quem assume)</option>
+            <optgroup label="Pessoas">
+                {membros.map(m => (
+                    <option key={m.email} value={m.userId ? `USER:${m.userId}` : ''} disabled={!m.userId}
+                        title={m.userId ? undefined : 'Sem login vinculado — o membro precisa entrar no app uma vez'}>
+                        {m.name}{m.userId ? '' : ' (sem login vinculado)'}
+                    </option>
+                ))}
+            </optgroup>
+            {deps.length > 0 && (
+                <optgroup label="Departamentos">
+                    {deps.map(g => <option key={g.id} value={`DEPARTMENT:${g.id}`}>{rotulo(g)}</option>)}
+                </optgroup>
+            )}
+            {roles.length > 0 && (
+                <optgroup label="Cargos">
+                    {roles.map(g => <option key={g.id} value={`ROLE:${g.id}`}>{rotulo(g)}</option>)}
+                </optgroup>
+            )}
+        </select>
+    );
+}
 
 const horasOuNull = (v: string): number | null => {
     if (v.trim() === '') return null;
@@ -137,12 +185,15 @@ function NewTemplateModal({ open, onClose, organizationId, onCreated }: {
     const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
     // Membros para responsável/escalado (F3) — idem, só com o modal aberto.
     const [membros, setMembros] = useState<ProcessAssignableMember[]>([]);
+    // Departamentos e cargos da org, para responsável por grupo (F3.2).
+    const [grupos, setGrupos] = useState<ProcessGroup[]>([]);
     useEffect(() => {
         if (!open) return;
         supplierService.listSuppliers(organizationId)
             .then(lista => setSuppliers(lista.map(s => ({ id: s.id, name: s.name, nickname: s.nickname ?? null }))))
             .catch(() => setSuppliers([]));
         processService.listAssignableMembers(organizationId).then(setMembros).catch(() => setMembros([]));
+        processService.listGroups(organizationId).then(setGrupos).catch(() => setGrupos([]));
     }, [open, organizationId]);
 
     if (!open) return null;
@@ -171,8 +222,8 @@ function NewTemplateModal({ open, onClose, organizationId, onCreated }: {
                     name: s.name, step_type: s.step_type, is_required: true, requires_document: s.requires_document, can_skip: false,
                     condition: condicoes[i],
                     sla_hours: horasOuNull(s.sla_hours),
-                    default_responsible_type: s.responsible_user_id ? 'USER' : null,
-                    default_responsible_id: s.responsible_user_id || null,
+                    default_responsible_type: decodificarResponsavel(s.responsavel).type,
+                    default_responsible_id: decodificarResponsavel(s.responsavel).id,
                     escalation_user_id: s.escalation_user_id || null,
                     escalation_after_hours: s.escalation_user_id ? (horasOuNull(s.escalation_after_hours) ?? 0) : null,
                 })),
@@ -232,8 +283,8 @@ function NewTemplateModal({ open, onClose, organizationId, onCreated }: {
                                         <input inputMode="decimal" value={s.sla_hours} onChange={e => setStep(idx, { sla_hours: e.target.value })}
                                             className="h-9 w-20 px-3 rounded-[6px] border border-gray-200 text-sm" placeholder="48" />
                                     </label>
-                                    <MembroSelect value={s.responsible_user_id} onChange={v => setStep(idx, { responsible_user_id: v })}
-                                        membros={membros} placeholder="Responsável (quem assume)" />
+                                    <ResponsavelSelect value={s.responsavel} onChange={v => setStep(idx, { responsavel: v })}
+                                        membros={membros} grupos={grupos} />
                                     <MembroSelect value={s.escalation_user_id} onChange={v => setStep(idx, { escalation_user_id: v })}
                                         membros={membros} placeholder="Escalonar para… (opcional)" />
                                     {s.escalation_user_id && (
@@ -383,6 +434,11 @@ function InstanceDetail({ open, onClose, instanceId, organizationId, userId, use
     const [blockOpen, setBlockOpen] = useState(false);
     const [blockReason, setBlockReason] = useState('');
     const [blockErro, setBlockErro] = useState<string | null>(null);
+    // F3.2 — para dizer QUEM é o responsável e se o usuário pode assumir.
+    // Da org DA INSTÂNCIA: o topo pode estar em "Todas".
+    const [membrosOrg, setMembrosOrg] = useState<ProcessAssignableMember[]>([]);
+    const [gruposOrg, setGruposOrg] = useState<ProcessGroup[]>([]);
+    const [claimErro, setClaimErro] = useState<string | null>(null);
 
     const reload = useCallback(() => {
         if (!instanceId) return;
@@ -391,6 +447,13 @@ function InstanceDetail({ open, onClose, instanceId, organizationId, userId, use
     }, [instanceId]);
 
     useEffect(() => { if (open) reload(); }, [open, reload]);
+
+    const orgDaInstancia = instance?.organization_id;
+    useEffect(() => {
+        if (!orgDaInstancia) return;
+        processService.listAssignableMembers(orgDaInstancia).then(setMembrosOrg).catch(() => setMembrosOrg([]));
+        processService.listGroups(orgDaInstancia).then(setGruposOrg).catch(() => setGruposOrg([]));
+    }, [orgDaInstancia]);
 
     if (!open || !instanceId) return null;
 
@@ -482,6 +545,35 @@ function InstanceDetail({ open, onClose, instanceId, organizationId, userId, use
     const agora = Date.now();
     const horasDeAtraso = (dueAt?: string | null) => dueAt ? Math.max(0, Math.floor((agora - new Date(dueAt).getTime()) / 3_600_000)) : null;
 
+    /** Quem responde pela etapa, em texto, e se ESTE usuário pode assumir (com o motivo quando não pode). */
+    const responsavelDa = (step: ProcessInstanceStep): { texto: string; podeAssumir: boolean; motivo?: string } => {
+        if (step.responsible_user_id) {
+            const quem = step.responsible_user_id === userId ? 'você' : (membrosOrg.find(m => m.userId === step.responsible_user_id)?.name ?? 'outra pessoa');
+            return { texto: `Responsável: ${quem}`, podeAssumir: false };
+        }
+        if (step.responsible_type === 'DEPARTMENT' || step.responsible_type === 'ROLE') {
+            const g = gruposOrg.find(x => x.type === step.responsible_type && x.id === step.responsible_ref_id);
+            const nome = g ? `${GROUP_TYPE_LABEL[g.type].toLowerCase()} ${g.name}` : 'grupo';
+            const souDoGrupo = !!g?.memberUserIds.includes(userId);
+            return {
+                texto: `Com o ${nome} — ninguém assumiu`,
+                podeAssumir: souDoGrupo,
+                motivo: souDoGrupo ? undefined : `Só quem é do ${nome} pode assumir. Peça para marcarem você em Processos › Equipes.`,
+            };
+        }
+        return { texto: 'Sem responsável — qualquer pessoa da organização pode assumir', podeAssumir: true };
+    };
+
+    const handleClaim = async (step: ProcessInstanceStep) => {
+        if (!instance) return;
+        setClaimErro(null);
+        try {
+            await act(() => processService.claimStep(step.id, instance.id, userId), step.id);
+        } catch (e) {
+            setClaimErro(e instanceof Error ? e.message : String(e));
+        }
+    };
+
     return (
         <Sheet open={open} onClose={onClose} size="xl">
             {!instance ? (
@@ -563,6 +655,26 @@ function InstanceDetail({ open, onClose, instanceId, organizationId, userId, use
                                                     {step.escalated_at && ` · escalonada em ${fmtDate(step.escalated_at)}`}
                                                 </p>
                                             )}
+                                            {/* F3.2 — quem responde pela etapa atual e "Assumir etapa" */}
+                                            {isCurrent && !encerrado && (() => {
+                                                const r = responsavelDa(step);
+                                                return (
+                                                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                                                        <span className={`text-xs ${step.responsible_user_id ? 'text-gray-600' : 'text-indigo-700'}`}>{r.texto}</span>
+                                                        {!step.responsible_user_id && !bloqueado && (
+                                                            <Button size="sm" variant="secondary" onClick={() => handleClaim(step)}
+                                                                disabled={!r.podeAssumir || busyStep === step.id}
+                                                                title={r.motivo}>
+                                                                Assumir etapa
+                                                            </Button>
+                                                        )}
+                                                        {!step.responsible_user_id && !bloqueado && !r.podeAssumir && r.motivo && (
+                                                            <span className="text-xs text-gray-500 basis-full">{r.motivo}</span>
+                                                        )}
+                                                        {claimErro && <span className="text-xs text-red-600 basis-full">{claimErro}</span>}
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
                                         {isCurrent && bloqueado && (
                                             <span className="text-xs text-gray-500" title={instance.blocked_reason ?? undefined}>
@@ -668,7 +780,10 @@ function PendingList({ organizationId, userId, onOpen }: { organizationId: strin
                     </div>
                     <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-gray-900 truncate">{item.instance_title}</p>
-                        <p className="text-xs text-gray-500">{item.name} · {STEP_TYPE_LABEL[item.step_type]}</p>
+                        <p className="text-xs text-gray-500">
+                            {item.name} · {STEP_TYPE_LABEL[item.step_type]}
+                            {item.via_group && <span className="text-indigo-600"> · via {item.via_group} — ninguém assumiu</span>}
+                        </p>
                     </div>
                     <StatusBadge status={item.instance_status} />
                     <ChevronRight className="w-4 h-4 text-gray-300" />
@@ -887,7 +1002,121 @@ function TemplateList({ organizationId, onCreate }: { organizationId: string | n
 
 // ─── main ────────────────────────────────────────────────────
 
-type Tab = 'pendente' | 'processos' | 'dashboard' | 'templates';
+type Tab = 'pendente' | 'processos' | 'dashboard' | 'templates' | 'equipes';
+
+// ─── Equipes (F3.2) — quem é de cada departamento/cargo ─────
+
+const EQUIPES_COLUMNS: StandardTableColumn[] = [
+    { key: 'name',    label: 'Nome',    sortable: true, width: 260 },
+    { key: 'type',    label: 'Tipo',    sortable: true, width: 140 },
+    { key: 'company', label: 'Empresa', sortable: true, width: 220 },
+    { key: 'members', label: 'Membros', sortable: true, width: 320 },
+];
+
+function EquipesTab({ organizationId, userId }: { organizationId: string | null; userId: string }) {
+    const [grupos, setGrupos] = useState<ProcessGroup[]>([]);
+    const [loading, setLoading] = useState(true);
+    // Membros por organização — o grupo pertence à org da empresa dele; em "Todas" podem ser várias.
+    const [membrosPorOrg, setMembrosPorOrg] = useState<Record<string, ProcessAssignableMember[]>>({});
+    const [editando, setEditando] = useState<ProcessGroup | null>(null);
+    const [marcados, setMarcados] = useState<string[]>([]);
+    const [salvando, setSalvando] = useState(false);
+    const [erro, setErro] = useState<string | null>(null);
+
+    const carregar = useCallback(() => {
+        setLoading(true);
+        processService.listGroups(organizationId)
+            .then(async gs => {
+                setGrupos(gs);
+                const orgs = [...new Set(gs.map(g => g.organizationId).filter(Boolean))];
+                const pares = await Promise.all(orgs.map(async o => [o, await processService.listAssignableMembers(o).catch(() => [])] as const));
+                setMembrosPorOrg(Object.fromEntries(pares));
+            })
+            .catch(() => setGrupos([]))
+            .finally(() => setLoading(false));
+    }, [organizationId]);
+
+    useEffect(() => { carregar(); }, [carregar]);
+
+    const nomeDe = (orgId: string, uid: string) => membrosPorOrg[orgId]?.find(m => m.userId === uid)?.name ?? 'membro removido';
+
+    const abrir = (g: ProcessGroup) => { setEditando(g); setMarcados(g.memberUserIds); setErro(null); };
+
+    const salvar = async () => {
+        if (!editando) return;
+        setSalvando(true);
+        try {
+            await processService.setGroupMembers(editando, marcados, userId);
+            // §22: atualiza a linha local em vez de recarregar tudo.
+            setGrupos(gs => gs.map(g => g.type === editando.type && g.id === editando.id ? { ...g, memberUserIds: marcados } : g));
+            setEditando(null);
+        } catch (e) {
+            setErro(e instanceof Error ? e.message : String(e));
+        } finally {
+            setSalvando(false);
+        }
+    };
+
+    const membrosDaOrg = editando ? (membrosPorOrg[editando.organizationId] ?? []) : [];
+
+    return (
+        <div className="p-4 space-y-3">
+            <p className="text-sm text-gray-500">
+                Marque quem é de cada departamento ou cargo. Etapas atribuídas a um deles aparecem em "Pendente comigo" para todos os marcados, e o primeiro que assumir fica com ela.
+            </p>
+            <StandardTable<ProcessGroup>
+                storageKey="processos:equipes:tabela"
+                columns={EQUIPES_COLUMNS}
+                rows={grupos}
+                rowKey={g => `${g.type}:${g.id}`}
+                loading={loading}
+                searchText={g => `${g.name} ${g.companyName} ${GROUP_TYPE_LABEL[g.type]} ${g.memberUserIds.map(u => nomeDe(g.organizationId, u)).join(' ')}`}
+                searchPlaceholder="Buscar departamento, cargo ou pessoa..."
+                sortValue={(key, g) => key === 'type' ? GROUP_TYPE_LABEL[g.type] : key === 'company' ? g.companyName : key === 'members' ? g.memberUserIds.length : g.name}
+                onRowClick={abrir}
+                renderCell={(key, g) => {
+                    if (key === 'type') return <span className="text-sm font-normal text-gray-600">{GROUP_TYPE_LABEL[g.type]}</span>;
+                    if (key === 'company') return <span className="block truncate text-sm font-normal text-gray-600" title={g.companyName}>{g.companyName || '—'}</span>;
+                    if (key === 'members') {
+                        if (g.memberUserIds.length === 0) return <span className="text-sm font-normal text-amber-700">Ninguém — etapas deste grupo ficam sem dono</span>;
+                        const nomes = g.memberUserIds.map(u => nomeDe(g.organizationId, u)).join(', ');
+                        return <span className="block truncate text-sm font-normal text-gray-700" title={nomes}>{nomes}</span>;
+                    }
+                    return <span className="block truncate text-sm font-normal text-gray-700" title={g.name}>{g.name}</span>;
+                }}
+                actions={{ width: 150, render: g => (
+                    <button onClick={e => { e.stopPropagation(); abrir(g); }} className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all">
+                        Editar membros
+                    </button>
+                ) }}
+                empty={{ icon: <Layers className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhum departamento ou cargo', subtitle: 'Cadastre departamentos e cargos da empresa em Minha Organização.' }}
+            />
+
+            <Sheet open={!!editando} onClose={() => setEditando(null)} size="md">
+                {editando && (
+                    <>
+                        <SheetHeader onClose={() => setEditando(null)}>
+                            <SheetTitle>{editando.name}</SheetTitle>
+                            <SheetDescription>{GROUP_TYPE_LABEL[editando.type]} · {editando.companyName}</SheetDescription>
+                        </SheetHeader>
+                        <SheetPanel className="p-6 space-y-3">
+                            <p className="text-sm text-gray-500">Só membros com login aparecem aqui — quem nunca entrou no app não pode assumir etapa.</p>
+                            <ListaDeMarcacao
+                                opcoes={membrosDaOrg.filter(m => m.userId).map(m => ({ id: m.userId!, name: m.name }))}
+                                marcados={marcados}
+                                onChange={setMarcados} />
+                            {erro && <p className="text-sm text-red-600">{erro}</p>}
+                        </SheetPanel>
+                        <SheetFooter>
+                            <Button variant="secondary" onClick={() => setEditando(null)}>Cancelar</Button>
+                            <Button onClick={salvar} disabled={salvando}>{salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : `Salvar (${marcados.length})`}</Button>
+                        </SheetFooter>
+                    </>
+                )}
+            </Sheet>
+        </div>
+    );
+}
 
 interface Props {
     organizationId?: string;
@@ -931,6 +1160,7 @@ export default function ProcessosModule({ organizationId = '', userId = '', user
         { id: 'processos', label: 'Todos os Processos', icon: Workflow },
         { id: 'dashboard', label: 'Dashboard',          icon: Activity },
         { id: 'templates', label: 'Templates',          icon: Layers },
+        { id: 'equipes',   label: 'Equipes',            icon: Users },
     ];
 
     return (
@@ -970,6 +1200,7 @@ export default function ProcessosModule({ organizationId = '', userId = '', user
                 {tab === 'processos' && <InstanceList key={refreshKey} organizationId={organizationId} onOpen={setOpenInstanceId} />}
                 {tab === 'dashboard' && <ProcessDashboard key={refreshKey} organizationId={organizationId} />}
                 {tab === 'templates' && <TemplateList organizationId={organizationId} onCreate={handleNewTemplate} />}
+                {tab === 'equipes'   && <EquipesTab organizationId={organizationId || null} userId={userId} />}
             </div>
 
             {showStart && modalOrgId && (

@@ -138,6 +138,9 @@ export interface ProcessInstanceStep {
     amount?: number | null;
     /** Snapshot da condição do template quando a instância nasceu (Passo 4). Falsa em advanceToNextStep → 'PULADO'. */
     condition?: ProcessCondition | null;
+    /** F3.2: snapshot do responsável do template. DEPARTMENT/ROLE = grupo; um membro assume e vira `responsible_user_id`. */
+    responsible_type?: ProcessResponsibleType | null;
+    responsible_ref_id?: string | null;
     /** F3: snapshot do escalonamento do template; marcas de idempotência do sweep (`fn_process_sla_sweep`). */
     escalation_user_id?: string | null;
     escalation_after_hours?: number | null;
@@ -183,6 +186,22 @@ export interface PendingStepItem extends ProcessInstanceStep {
     instance_title: string;
     instance_status: ProcessInstanceStatus;
     instance_priority: ProcessPriority;
+    /** F3.2 — etapa chegou por um grupo do usuário (ninguém assumiu ainda): nome do grupo. */
+    via_group?: string | null;
+}
+
+/**
+ * F3.2 — departamento (`company_departments`) ou cargo (`org_roles`) usado como
+ * responsável de etapa. Quem pertence é marcado em Processos › Equipes
+ * (`process_group_members`), sobre os membros com login.
+ */
+export interface ProcessGroup {
+    type: 'DEPARTMENT' | 'ROLE';
+    id: string;
+    name: string;
+    organizationId: string;
+    companyName: string;
+    memberUserIds: string[];
 }
 
 /** Linha do dashboard de gargalos — agregado por nome de etapa (fn_process_bottlenecks). */

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { UNIDADE_DE_POTENCIA } from '../../utils/blueprintRede';
 import { AlertTriangle, Plus, Zap } from 'lucide-react';
 import type { BlueprintModel, FaseDoCircuito, LigacaoDoCircuito, ObjectId } from '../../utils/blueprintKernel';
-import { LIGACOES_DO_CIRCUITO, quadroDeCargas } from '../../utils/blueprintKernel';
+import { FASES_DO_CIRCUITO, LIGACOES_DO_CIRCUITO, quadroDeCargas } from '../../utils/blueprintKernel';
 import {
   HIPOTESES_PADRAO,
   SERIE_COMERCIAL_DE_DISJUNTORES_A,
@@ -18,7 +18,7 @@ import { StandardTable, type StandardTableColumn } from '../ui/StandardTable';
 import { TabsBar, type TabsBarItem } from '../ui/TabsBar';
 import ActionIconButton from '../ui/ActionIconButton';
 import { pontosAPreencher } from '../../utils/blueprintPotenciaPadrao';
-import { proximoNumeroDeCircuito } from '../../utils/blueprintCircuitosAutomaticos';
+import { proximoNumeroDeCircuito, renumerarCircuitos } from '../../utils/blueprintCircuitosAutomaticos';
 import {
   CRITERIOS_DE_AGRUPAMENTO,
   CRITERIO_SUGERIDO,
@@ -77,6 +77,8 @@ interface LinhaDeCircuito {
   tipo: string | null;
   tensaoV: number | null;
   ligacao: LigacaoDoCircuito;
+  /** A fase declarada (R/S/T) — só faz sentido em F-N dentro de quadro trifásico. */
+  fase: FaseDoCircuito | null;
   protecaoDR: boolean;
   disjuntorA: number | null;
   secaoMm2: number | null;
@@ -94,9 +96,13 @@ interface LinhaDeCircuito {
  */
 const COLUNA_QUADRO: StandardTableColumn = { key: 'quadroNome', label: 'Quadro', width: 88 };
 const COLUNAS_DE_CIRCUITO: StandardTableColumn[] = [
-  { key: 'nome', label: 'Circuito', width: 200 },
+  { key: 'nome', label: 'Circuito', width: 160 },
+  // E0.2 (29/09/2026): a DESCRIÇÃO (`Circuito.tipo`, texto livre) já existia no
+  // modelo e não tinha coluna; a FASE só aparecia na aba Quadros.
+  { key: 'tipo', label: 'Descrição', width: 160 },
   { key: 'tensaoV', label: 'Tensão (V)', width: 100, align: 'right' },
   { key: 'ligacao', label: 'Ligação', width: 124 },
+  { key: 'fase', label: 'Fase', width: 64, align: 'center' },
   { key: 'protecaoDR', label: 'DR', width: 52, align: 'center' },
   { key: 'disjuntorA', label: 'Disjuntor (A)', width: 100, align: 'right' },
   { key: 'secaoMm2', label: 'Seção (mm²)', width: 100, align: 'right' },
@@ -122,15 +128,23 @@ export default function PainelEletrica({
   hipoteses = HIPOTESES_PADRAO,
   onHipoteses,
   onQuadroProps,
+  onRenumerarCircuitos,
   executivoSlot,
   conferenciaSlot,
   conferenciaPendencias,
 }: {
   model: BlueprintModel;
   onAddCircuito: (quadroId: ObjectId, nome: string) => void;
+  /**
+   * Renumera C1…Cn por quadro, na ordem atual (E0.2). Recebe o quadro do
+   * filtro, ou null para todos. O editor roda `renumerarCircuitos` num lote.
+   */
+  onRenumerarCircuitos?: (quadroId: ObjectId | null) => void;
   onCircuitoProps: (
     circuitoId: ObjectId,
     campos: {
+      /** Mover para outro quadro (E0.2). */
+      quadroId?: ObjectId;
       nome?: string;
       tipo?: string | null;
       tensaoV?: number | null;
@@ -287,6 +301,7 @@ export default function PainelEletrica({
           tipo: circuito?.tipo ?? null,
           tensaoV: c.tensaoV ?? null,
           ligacao: circuito?.ligacao ?? 'FN',
+          fase: circuito?.fase ?? null,
           protecaoDR: circuito?.protecaoDR === true,
           disjuntorA: c.disjuntorA ?? null,
           secaoMm2: c.secaoMm2 ?? null,
@@ -371,9 +386,60 @@ export default function PainelEletrica({
   const celula = (key: string, l: LinhaDeCircuito): React.ReactNode => {
     switch (key) {
       case 'quadroNome':
-        return (
+        // MOVER o circuito de quadro (E0.2): um seletor na própria célula. Os
+        // pontos vão junto; os eletrodutos foram traçados até o quadro antigo e
+        // precisam ser relançados — o title diz isso antes do clique.
+        return quadros.length > 1 ? (
+          <select
+            value={l.quadroId}
+            onChange={(e) => onCircuitoProps(l.circuitoId, { quadroId: e.target.value })}
+            aria-label={`Quadro do circuito ${l.nome}`}
+            title="Mover o circuito para outro quadro — os pontos vão junto; eletrodutos já lançados até o quadro antigo precisam ser relançados (Instalações › Eletrodutos)"
+            className={CAMPO_NA_CELULA}
+          >
+            {quadros.map((q) => (
+              <option key={q.id} value={q.id}>
+                {q.nome}
+              </option>
+            ))}
+          </select>
+        ) : (
           <span className="block truncate text-sm text-gray-700" title={l.quadroNome}>
             {l.quadroNome}
+          </span>
+        );
+      case 'tipo':
+        return (
+          <input
+            type="text"
+            value={l.tipo ?? ''}
+            onChange={(e) => onCircuitoProps(l.circuitoId, { tipo: e.target.value || null })}
+            placeholder="descrição"
+            aria-label={`Descrição do circuito ${l.nome}`}
+            title={l.tipo ?? undefined}
+            className={CAMPO_NA_CELULA}
+          />
+        );
+      case 'fase':
+        // A fase só se declara em F-N: F-F e trifásico usam duas ou três fases.
+        return l.ligacao === 'FN' ? (
+          <select
+            value={l.fase ?? ''}
+            onChange={(e) => onCircuitoProps(l.circuitoId, { fase: (e.target.value || null) as FaseDoCircuito | null })}
+            aria-label={`Fase do circuito ${l.nome}`}
+            title="Fase do circuito F-N no quadro trifásico (R/S/T) — o balanceamento soma por fase"
+            className={`${CAMPO_NA_CELULA} text-center`}
+          >
+            <option value="">—</option>
+            {FASES_DO_CIRCUITO.map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="block text-center text-sm text-gray-400" title="Fase só se escolhe em circuito F-N; F-F e trifásico usam duas ou três fases">
+            —
           </span>
         );
       case 'nome':
@@ -505,6 +571,28 @@ export default function PainelEletrica({
     }
   };
 
+  /**
+   * RENUMERAR (E0.2): C1…Cn por quadro, na ordem atual. Desligado quando já
+   * está em sequência — e o title diz isso, porque botão desligado sem motivo
+   * é uma pergunta sem resposta.
+   */
+  const comandosDeRenumeracao = onRenumerarCircuitos ? renumerarCircuitos(model, quadroFiltro || null).length : 0;
+  const botaoRenumerar = onRenumerarCircuitos ? (
+    <button
+      type="button"
+      onClick={() => onRenumerarCircuitos(quadroFiltro || null)}
+      disabled={comandosDeRenumeracao === 0}
+      title={
+        comandosDeRenumeracao === 0
+          ? 'Os circuitos já estão numerados em sequência (C1…Cn) — nada a renumerar'
+          : `Renumera C1…Cn por quadro, na ordem atual (${comandosDeRenumeracao} ${comandosDeRenumeracao === 1 ? 'muda' : 'mudam'}) — Ctrl+Z desfaz`
+      }
+      className="flex h-9 items-center rounded-[6px] border border-gray-200 bg-white px-3 text-[13px] font-medium text-gray-700 transition-all hover:bg-gray-50 active:scale-95 disabled:opacity-40 disabled:active:scale-100"
+    >
+      Renumerar
+    </button>
+  ) : null;
+
   const botaoNovoCircuito = (
     <button
       type="button"
@@ -537,6 +625,7 @@ export default function PainelEletrica({
       )}
 
       <TabsBar tabs={abas} value={aba} onChange={setAba}>
+        {aba === 'circuitos' && botaoRenumerar}
         {botaoNovoCircuito}
       </TabsBar>
 

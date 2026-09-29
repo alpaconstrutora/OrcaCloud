@@ -46,6 +46,7 @@
 import {
   applyBatch,
   type BlueprintModel,
+  type Circuito,
   type Command,
   type LigacaoDoCircuito,
   type ObjectId,
@@ -198,13 +199,58 @@ export function pavimentoDoQuadro(model: BlueprintModel, quadro: Quadro): string
   return model.levels.find((l) => l.id === quadro.levelId)?.name ?? '';
 }
 
+/** O número do circuito pelo NOME: "C3", "C3 — Iluminação", "c 12" → 3, 3, 12; sem o prefixo → null. */
+export function numeroDoCircuito(nome: string): number | null {
+  const m = /^C\s*(\d+)(?!\d)/i.exec(nome.trim());
+  return m ? Number(m[1]) : null;
+}
+
 /**
  * O próximo número livre no quadro (ou no desenho todo, sem quadro) — a mesma
  * conta do "Criar novo…" do Quadro de cargas, para os dois caminhos numerarem
  * igual.
+ *
+ * ⚠️ É o MAIOR número existente + 1, não a contagem + 1 (E0.2, 29/09/2026).
+ * Contar repetia número: com C1, C2, C3, apagar o C2 e criar de novo dava
+ * "C3" — dois circuitos com o mesmo nome no mesmo quadro, e o quadro de
+ * cargas, o unifilar e a prancha não têm como distinguir. Nome sem o prefixo
+ * "C<n>" não entra na conta.
  */
 export function proximoNumeroDeCircuito(model: BlueprintModel, quadroId: ObjectId | null): number {
-  return (model.circuitos ?? []).filter((c) => !quadroId || c.quadroId === quadroId).length + 1;
+  const numeros = (model.circuitos ?? [])
+    .filter((c) => !quadroId || c.quadroId === quadroId)
+    .map((c) => numeroDoCircuito(c.nome))
+    .filter((n): n is number => n != null);
+  return (numeros.length > 0 ? Math.max(...numeros) : 0) + 1;
+}
+
+/**
+ * RENUMERAR os circuitos de um quadro (ou de todos, quadro a quadro) em
+ * C1…Cn, na ordem atual — pelo número que já têm e depois pelo nome; os sem
+ * prefixo vão para o fim e ganham "C<n> — <nome>". Devolve só os
+ * `SetCircuitoProps` que MUDAM algo, para um `runBatch` (um passo de undo).
+ * Vazio = já está em sequência. Nunca toca no que vem depois do número
+ * ("C3 — Iluminação" vira "C2 — Iluminação").
+ */
+export function renumerarCircuitos(model: BlueprintModel, quadroId: ObjectId | null): Command[] {
+  const quadros = quadroId ? [quadroId] : (model.quadros ?? []).map((q) => q.id);
+  const comandos: Command[] = [];
+  const porNumeroENome = (a: Circuito, b: Circuito) => {
+    const na = numeroDoCircuito(a.nome) ?? Number.POSITIVE_INFINITY;
+    const nb = numeroDoCircuito(b.nome) ?? Number.POSITIVE_INFINITY;
+    if (na !== nb) return na - nb;
+    return a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true });
+  };
+  for (const q of quadros) {
+    const doQuadro = (model.circuitos ?? []).filter((c) => c.quadroId === q).sort(porNumeroENome);
+    doQuadro.forEach((c, i) => {
+      const n = i + 1;
+      const nome = c.nome.trim();
+      const novo = numeroDoCircuito(nome) != null ? nome.replace(/^C\s*\d+/i, `C${n}`) : `C${n} — ${nome}`;
+      if (novo !== c.nome) comandos.push({ type: 'SetCircuitoProps', circuitoId: c.id, nome: novo });
+    });
+  }
+  return comandos;
 }
 
 /**

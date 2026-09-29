@@ -126,7 +126,10 @@ export function quadroDeCargas(model: BlueprintModel): QuadroDeCargas {
             pontosSemPotencia: soma.semPotencia,
           };
         })
-        .sort((a, b) => a.nome.localeCompare(b.nome));
+        // Ordem NUMÉRICA (E0.2, 29/09/2026): "C2" antes de "C10". Sem `numeric`
+        // o C10 vinha logo depois do C1, e a tabela, a prancha e o unifilar
+        // (que leem daqui) saíam fora de ordem a partir do décimo circuito.
+        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true }));
 
       return {
         quadroId: q.id,

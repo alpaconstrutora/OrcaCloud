@@ -784,6 +784,14 @@ export type Command =
   | {
       type: 'SetCircuitoProps';
       circuitoId: ObjectId;
+      /**
+       * MOVER o circuito para outro quadro (E0.2, 29/09/2026). Os pontos vão
+       * junto (apontam para o circuito, não para o quadro). Os eletrodutos
+       * também guardam só o circuito — mas foram TRAÇADOS até o quadro antigo:
+       * a rede do quadro novo precisa ser relançada. O painel avisa; o kernel
+       * não apaga trecho nenhum, porque isso é decisão de quem move.
+       */
+      quadroId?: ObjectId;
       nome?: string;
       tipo?: string | null;
       tensaoV?: number | null;
@@ -3432,6 +3440,12 @@ function aplicarSemHash(
       const c = (next.circuitos ?? []).find((x) => x.id === command.circuitoId);
       if (!c) {
         throw new KernelError('CIRCUIT_NOT_FOUND', `Circuito não encontrado: ${command.circuitoId}`);
+      }
+      if (command.quadroId !== undefined) {
+        if (!(next.quadros ?? []).some((q) => q.id === command.quadroId)) {
+          throw new KernelError('BOARD_NOT_FOUND', `Quadro não encontrado: ${command.quadroId}`);
+        }
+        c.quadroId = command.quadroId;
       }
       if (command.nome !== undefined) {
         if (!command.nome.trim()) {

@@ -1913,7 +1913,7 @@ Automação (E6) e BIM (E7) fecham.
 | Fase | Entrega (o que muda) | Pronto quando (como sei que terminou) |
 |---|---|---|
 | 0.1 Hipóteses na tela e os 7 achados ✅ (5 de 7; achados 2 e 3 vão para 0.4 e 0.2) | `PainelPreDimensionamento` ganha: fatores de demanda **por tabela nomeada** (presets "sem demanda", "NBR 5410 residencial — hipótese" e "personalizado", cada grupo editável), `limiteQuedaTotalPct`, `desequilibrioMaxPct`; decisão registrada do `ρ`; `I2 ≤ 1,45·Iz` na sobrecarga (5.3.4.1 completo); 6.2.7.1 entra na aba Conferência; PRE-DIM filtra por pavimento; comentário do quadro corrigido; nota de 17/09 corrigida no plano | teste de `preDimensionarCircuito` com I2 falhando; conferência lista 6.2.7.1; hipóteses gravadas em `blueprint_study_eletrica` aparecem no memorial; `blueprintEletricaDimensionamento.test.ts` verde; harness da prancha olhado |
-| 0.2 Circuitos: numeração, mover e ordenar | `proximoNumeroDeCircuito` = maior número existente + 1, com "Renumerar" (lote, Ctrl+Z); `SetCircuitoProps.quadroId` (mover circuito entre quadros — trechos que só serviam ao circuito seguem marcados "conferir"); ordem manual (`Circuito.ordem` opcional é payload → **fica para E3**; aqui só ordenação por número); coluna Descrição (`tipo`) e coluna Fases na tabela padrão | teste: apagar C2 e criar → C4, não C2; mover circuito muda o unifilar dos dois quadros; `check-ui-standard` em `PainelEletrica.tsx` |
+| 0.2 Circuitos: numeração, mover e ordenar ✅ (ordem manual → E4.1) | `proximoNumeroDeCircuito` = maior número existente + 1, com "Renumerar" (lote, Ctrl+Z); `SetCircuitoProps.quadroId` (mover circuito entre quadros — trechos que só serviam ao circuito seguem marcados "conferir"); ordem manual (`Circuito.ordem` opcional é payload → **fica para E3**; aqui só ordenação por número); coluna Descrição (`tipo`) e coluna Fases na tabela padrão | teste: apagar C2 e criar → C4, não C2; mover circuito muda o unifilar dos dois quadros; `check-ui-standard` em `PainelEletrica.tsx` |
 | 0.3 Quantitativo do que já existe · quant-1.19.0 | `computeQuantities` passa a contar **quadros** (por medidas), **disjuntores** (por In declarado), **DR** (por circuito com `protecaoDR`), **pontos por circuito e por quadro**, e **metros de condutor por seção** = Σ trecho (comprimento em "L" × `condutores`), com o aviso "sem retorno até a E2"; resumo por pavimento ganha os campos elétricos; medidas `COMPRIMENTO_CONDUTOR`, `CONTAGEM_QUADROS`, `CONTAGEM_DISJUNTORES`, `CONTAGEM_DR`, `CONTAGEM_PONTOS_ELETRICOS` no de-para; `gerarLancamentosDeInstalacoes` cobre `ELETRICA` | teste portão de `POLITICA_PADRAO.version`; XLSX com as abas novas; um estudo de prova lança linhas UN/M no orçamento e é apagado depois |
 | 0.4 Clash pelo "L" e fases visíveis | `conflitos.ts` usa `segmentosDoEletroduto` (o "L") no lugar da diagonal; pontos e quadros entram no clash como caixas; fases R/S/T no unifilar (3 barras rotuladas) e coluna no quadro de cargas | teste com eletroduto em desnível: colisão onde o 3D mostra; unifilar de quadro FFF mostra R/S/T; `blueprintUnifilar.test.ts` |
 
@@ -2100,3 +2100,54 @@ por kVA — essa é a E4.2); §11 "Sobrecarga" 🟡→✅ (nota do I2); §12 "Li
 🟡→✅; §46 "Fatores de demanda" 🟡→✅; §52 "Queda de tensão excessiva" perde a ressalva do
 6.2.7.1. Cinco dos sete achados fechados; 2 e 3 ficam para 0.4 e 0.2.
 
+### E0.2 — Circuitos: numeração, mover e colunas (29/09/2026) · frente `eletrico-e0` · sem bump
+
+**O que mudou**
+
+- `utils/blueprintCircuitosAutomaticos.ts` — `proximoNumeroDeCircuito` passa a ser **o maior
+  número existente + 1** (lido do nome por `numeroDoCircuito`: "C3 — Iluminação" → 3), não a
+  contagem + 1: com C1, C2, C3, apagar o C2 e criar de novo dava outro "C3" (achado 3). Nome sem o
+  prefixo `C<n>` não entra na conta. **`renumerarCircuitos(model, quadroId | null)`** devolve
+  só os `SetCircuitoProps` que mudam algo — C1…Cn por quadro, na ordem atual (número, depois
+  nome), sem prefixo vai para o fim como "C<n> — <nome>"; o que vem depois do número fica.
+  Vazio = já em sequência.
+- `utils/blueprintKernel/commands.ts` — **`SetCircuitoProps.quadroId`** move o circuito de
+  quadro (quadro inexistente → `BOARD_NOT_FOUND`). Os pontos vão junto porque apontam para o
+  circuito; os eletrodutos também guardam só o circuito, mas foram TRAÇADOS até o quadro
+  antigo — o kernel não apaga trecho nenhum e o painel avisa que a rede do quadro novo precisa
+  ser relançada. `quadroId` já era campo do `Circuito`: **sem mudança de payload, sem bump**.
+- `utils/blueprintKernel/quadroDeCargas.ts` — ordem **numérica** dos circuitos
+  (`localeCompare(…, 'pt-BR', { numeric: true })`): "C2" antes de "C10". Tabela, prancha e
+  unifilar leem daqui, então os três saem em ordem a partir do décimo circuito.
+- `components/blueprint/PainelEletrica.tsx` — colunas **Descrição** (`Circuito.tipo`, que existia
+  no modelo e não tinha coluna) e **Fase** (R/S/T; só abre em F-N, F-F e trifásico mostram "—"
+  com o motivo); a célula **Quadro** vira seletor quando há 2+ quadros e move o circuito, com o
+  aviso dos eletrodutos no title; botão **Renumerar** na barra de abas (aba Circuitos), que fica
+  desligado quando já está em sequência — e o title diz isso — e informa quantos mudam quando
+  ligado; respeita o filtro por quadro (filtro vazio = todos, quadro a quadro).
+- `components/blueprint/BlueprintEditor.tsx` — `onRenumerarCircuitos` roda o lote em
+  `editor.runBatch` (um passo de undo).
+- **Fora desta fase**: ordem MANUAL dos circuitos (`Circuito.ordem` é payload novo → E4.1, junto
+  com o circuito reserva); prefixo configurável (M).
+
+**Testes** (`__tests__/blueprintCircuitosAutomaticos.test.ts` +4 no lugar do antigo "conta os do
+quadro (+1)"; `__tests__/components/PainelEletrica.test.tsx` +3): apagar C2 e criar → 4, não 3;
+nome sem prefixo ignorado; renumerar C1/C3/C7 — luz/Bomba → C1/C2/C3 — luz/C4 — Bomba com 3
+comandos (o C1 não muda) e depois vazio; com `null` numera quadro a quadro; mover circuito leva os
+pontos e quadro inexistente lança erro nomeado. Na tela: coluna Descrição chama `{ tipo }`, Fase
+chama `{ fase }`, seletor de quadro só com 2+ quadros e chama `{ quadroId }`, Renumerar
+desligado com "já estão numerados em sequência" e ligado com "1 muda", chamando com o filtro.
+
+**O que o `tsc` pegou antes dos testes**: o tipo do prop `onCircuitoProps` no painel enumerava
+os campos e não tinha `quadroId`; `Circuito` não estava importado no módulo de circuitos.
+
+**Verificação**: `tsc` ✓ · alvo 91 ✓ · suíte inteira 6.163 ✓ / 0 ✗ / 33 skip (561 arquivos) ·
+`build` ✓ · `check-ui-standard PainelEletrica.tsx` ✓ · `check-xss-sinks` ✓. Harness visual não
+rodou: as células novas usam o mesmo `CAMPO_NA_CELULA` das existentes e o botão o mesmo molde
+secundário da barra; cobertos por jsdom.
+
+**Efeito no benchmark**: §5 "Numeração automática" 🟡→✅, "Movimentação de circuitos entre
+quadros" ❌→✅, "Descrições dos circuitos" 🟡→✅, "Seleção das fases" 🟡 (agora na tabela; segue
+só F-N em quadro FFF), "Ordenação dos circuitos" 🟡 (numérica; sem manual); §7 "Mudança de
+circuitos entre quadros" ❌→✅; §32 "Descrição" 🟡→✅, "Fases" 🟡→✅. Achado 3 fechado; resta o
+2 (clash pela diagonal → 0.4).

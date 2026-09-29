@@ -19,8 +19,10 @@ import {
   idsPrevistos,
   planejarCircuitos,
   pontosElegiveis,
+  numeroDoCircuito,
   proximoNumeroDeCircuito,
   quadrosDoNivel,
+  renumerarCircuitos,
   secaoMinimaDaFuncaoMm2,
   type HipotesesDeCircuitos,
 } from '../utils/blueprintCircuitosAutomaticos';
@@ -347,9 +349,67 @@ describe('planejarCircuitos — quadro, tensão e hipóteses', () => {
     expect(secaoMinimaDaFuncaoMm2('TUE', { ...HIPOTESES_PADRAO, secaoMinimaTueMm2: 1.5 })).toBe(2.5);
   });
 
-  it('proximoNumeroDeCircuito conta os do quadro (+1)', () => {
-    const { m, quadroId } = casa();
-    expect(proximoNumeroDeCircuito(m, quadroId)).toBe(2);
-    expect(proximoNumeroDeCircuito(m, null)).toBe(2);
+  it('proximoNumeroDeCircuito é o MAIOR número + 1 (E0.2): apagar o C2 e criar de novo não repete o C3', () => {
+    const { m: m0, quadroId } = casa(); // já tem "C1 — Existente"
+    expect(proximoNumeroDeCircuito(m0, quadroId)).toBe(2);
+    expect(proximoNumeroDeCircuito(m0, null)).toBe(2);
+    let m = applyCommand(m0, { type: 'AddCircuito', quadroId, nome: 'C2 — TUG' }).model;
+    m = applyCommand(m, { type: 'AddCircuito', quadroId, nome: 'C3 — TUE' }).model;
+    const c2 = m.circuitos.find((c) => c.nome.startsWith('C2'))!;
+    m = applyCommand(m, { type: 'DeleteCircuito', circuitoId: c2.id }).model;
+    // Contar daria 3 — e "C3" já existe. O maior + 1 dá 4.
+    expect(proximoNumeroDeCircuito(m, quadroId)).toBe(4);
+    // Nome sem o prefixo não entra na conta.
+    m = applyCommand(m, { type: 'AddCircuito', quadroId, nome: 'Bomba da piscina' }).model;
+    expect(proximoNumeroDeCircuito(m, quadroId)).toBe(4);
+    expect(numeroDoCircuito('C3 — TUE')).toBe(3);
+    expect(numeroDoCircuito('c 12')).toBe(12);
+    expect(numeroDoCircuito('Bomba')).toBeNull();
+  });
+
+  it('renumerarCircuitos (E0.2): C1, C3, C7 — luz e "Bomba" viram C1, C2, C3 — luz, C4 — Bomba; só o que muda entra no lote', () => {
+    const { m: m0, quadroId } = casa();
+    let m = applyBatch(m0, [
+      { type: 'AddCircuito', quadroId, nome: 'C7 — luz' },
+      { type: 'AddCircuito', quadroId, nome: 'C3' },
+      { type: 'AddCircuito', quadroId, nome: 'Bomba' },
+    ]).model;
+    const comandos = renumerarCircuitos(m, quadroId);
+    // "C1 — Existente" já é C1: não muda; os outros três mudam.
+    expect(comandos).toHaveLength(3);
+    m = applyBatch(m, comandos).model;
+    const nomes = m.circuitos.filter((c) => c.quadroId === quadroId).map((c) => c.nome).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+    expect(nomes).toEqual(['C1 — Existente', 'C2', 'C3 — luz', 'C4 — Bomba']);
+    // Em sequência: nada a fazer — é o que desliga o botão.
+    expect(renumerarCircuitos(m, quadroId)).toEqual([]);
+  });
+
+  it('renumerarCircuitos com quadroId nulo numera QUADRO A QUADRO, cada um do 1', () => {
+    const { m: m0, quadroId } = casa();
+    const t = m0.levels[0].id;
+    let m = applyCommand(m0, { type: 'AddQuadro', levelId: t, nome: 'QD2', at: point(9000, 500), cotaMm: 1500 }).model;
+    const qd2 = m.quadros[1].id;
+    m = applyBatch(m, [
+      { type: 'AddCircuito', quadroId, nome: 'C5' },
+      { type: 'AddCircuito', quadroId: qd2, nome: 'C9 — cozinha' },
+    ]).model;
+    m = applyBatch(m, renumerarCircuitos(m, null)).model;
+    expect(m.circuitos.filter((c) => c.quadroId === quadroId).map((c) => c.nome).sort()).toEqual(['C1 — Existente', 'C2']);
+    expect(m.circuitos.filter((c) => c.quadroId === qd2).map((c) => c.nome)).toEqual(['C1 — cozinha']);
+  });
+
+  it('SetCircuitoProps.quadroId MOVE o circuito de quadro (E0.2); quadro inexistente é erro nomeado', () => {
+    const { m: m0, quadroId } = casa();
+    const t = m0.levels[0].id;
+    let m = applyCommand(m0, { type: 'AddQuadro', levelId: t, nome: 'QD2', at: point(9000, 500), cotaMm: 1500 }).model;
+    const qd2 = m.quadros[1].id;
+    const c1 = m.circuitos[0];
+    const pontosAntes = m.terminais.filter((x) => x.circuitoId === c1.id).length;
+    m = applyCommand(m, { type: 'SetCircuitoProps', circuitoId: c1.id, quadroId: qd2 }).model;
+    expect(m.circuitos[0].quadroId).toBe(qd2);
+    // Os pontos apontam para o circuito: vão junto sem mexer em nada.
+    expect(m.terminais.filter((x) => x.circuitoId === c1.id).length).toBe(pontosAntes);
+    expect(() => applyCommand(m, { type: 'SetCircuitoProps', circuitoId: c1.id, quadroId: 'qua_9999' })).toThrow(/Quadro não encontrado/);
+    expect(quadroId).not.toBe(qd2);
   });
 });

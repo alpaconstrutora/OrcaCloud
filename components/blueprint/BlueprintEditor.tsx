@@ -336,6 +336,7 @@ import {
   pontosElegiveis,
   quadrosDoNivel,
   pavimentoDoQuadro,
+  renumerarCircuitos,
   type HipotesesDeCircuitos,
 } from '../../utils/blueprintCircuitosAutomaticos';
 import {
@@ -8859,6 +8860,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 onCircuitoProps={(circuitoId, campos) =>
                   editor.run({ type: 'SetCircuitoProps', circuitoId, ...campos })
                 }
+                // Renumerar (E0.2): um lote, um passo de undo.
+                onRenumerarCircuitos={(quadroId) => editor.runBatch(renumerarCircuitos(editor.model, quadroId))}
                 onSelecionar={(id) => {
             selecionar([id]);
             setTelaAberta(null);

@@ -76,6 +76,49 @@ async function abrirAba(nome: RegExp) {
   await userEvent.setup().click(screen.getByRole('tab', { name: nome }));
 }
 
+describe('PainelEletrica · E0.2 (29/09/2026): Descrição, Fase, mover de quadro e Renumerar', () => {
+  it('a coluna Descrição edita `tipo`; a coluna Fase só abre em F-N e chama onCircuitoProps', async () => {
+    const onCircuitoProps = vi.fn();
+    render(<PainelEletrica model={modelo({ comPotencia: true, soltos: 0 })} {...vazio} onCircuitoProps={onCircuitoProps} />);
+    expect(screen.getByRole('columnheader', { name: /descrição/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /^fase$/i })).toBeInTheDocument();
+    const descricao = screen.getByLabelText('Descrição do circuito C1');
+    await userEvent.setup().type(descricao, 'I');
+    expect(onCircuitoProps).toHaveBeenLastCalledWith(expect.any(String), { tipo: 'I' });
+    // Ligação ausente vale F-N na tabela: a fase é um seletor R/S/T.
+    await userEvent.setup().selectOptions(screen.getByLabelText('Fase do circuito C1'), 'S');
+    expect(onCircuitoProps).toHaveBeenLastCalledWith(expect.any(String), { fase: 'S' });
+  });
+
+  it('com um quadro só, Quadro é texto; com dois, vira seletor que MOVE o circuito (quadroId)', async () => {
+    const onCircuitoProps = vi.fn();
+    let m = modelo({ comPotencia: true, soltos: 0 });
+    m = applyCommand(m, { type: 'AddQuadro', levelId: m.levels[0].id, nome: 'QD2', at: point(5000, 0) }).model;
+    render(<PainelEletrica model={m} {...vazio} onCircuitoProps={onCircuitoProps} />);
+    const seletor = screen.getByLabelText('Quadro do circuito C1') as HTMLSelectElement;
+    expect(seletor.value).toBe(m.quadros[0].id);
+    await userEvent.setup().selectOptions(seletor, m.quadros[1].id);
+    expect(onCircuitoProps).toHaveBeenLastCalledWith(m.circuitos[0].id, { quadroId: m.quadros[1].id });
+  });
+
+  it('Renumerar: desligado (com o motivo) quando já está em sequência; ligado quando há buraco, e chama com o quadro do filtro', async () => {
+    const onRenumerarCircuitos = vi.fn();
+    const m = modelo({ comPotencia: true, soltos: 0 }); // só "C1"
+    const { unmount } = render(<PainelEletrica model={m} {...vazio} onRenumerarCircuitos={onRenumerarCircuitos} />);
+    const botao = screen.getByRole('button', { name: /^renumerar$/i });
+    expect(botao).toBeDisabled();
+    expect(botao).toHaveAttribute('title', expect.stringMatching(/já estão numerados em sequência/));
+    unmount();
+    const comBuraco = applyCommand(m, { type: 'AddCircuito', quadroId: m.quadros[0].id, nome: 'C7 — TUE' }).model;
+    render(<PainelEletrica model={comBuraco} {...vazio} onRenumerarCircuitos={onRenumerarCircuitos} />);
+    const ligado = screen.getByRole('button', { name: /^renumerar$/i });
+    expect(ligado).toBeEnabled();
+    expect(ligado).toHaveAttribute('title', expect.stringMatching(/1 muda/));
+    await userEvent.setup().click(ligado);
+    expect(onRenumerarCircuitos).toHaveBeenCalledWith(null);
+  });
+});
+
 describe('PainelEletrica', () => {
   it('mostra a carga somada e o disjuntor DECLARADO', () => {
     render(<PainelEletrica model={modelo({ comPotencia: true, soltos: 0 })} {...vazio} />);

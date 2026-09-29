@@ -428,3 +428,24 @@ Publicadas juntas: a perda localizada só aparece no resultado de pressão.
   rede; nenhuma folha em branco; DXF com as bordas do ø100 a 50 mm do eixo. Harness
   `docs/spikes/prancha-hidro` (porta 3147): banheiro + área com água e esgoto automáticos, três
   folhas A3 conferidas no olho. Suíte: 515 arquivos / 5.872 testes; build ok.
+
+### E2.2 — Isométrico de prancha (28/09/2026)
+
+- `utils/blueprintIsometricoPrancha.ts` (novo, puro): `isometricosDoModelo` — um por pavimento ×
+  rede (água, esgoto) × ambiente que tem ponto dessa rede; os trechos entram **recortados** na
+  caixa do ambiente (+300 mm de folga, para pegar o ponto na face da parede) por Liang–Barsky com
+  a cota interpolada — o tronco que segue até a CI lá fora não esmaga o detalhe. Z = elevação do
+  pavimento + cota. `projetarIsometrico`: isométrico VERDADEIRO a 30° (1 m em x, y ou z mede 1 m).
+  `desenharIsometrico`: título "Água — Banheiro (Térreo)", a maior escala da lista que cabe, ø em
+  cada tubo (sem cruzar o traço), nó de cada conexão, e cada ponto com "sigla · h 0,60".
+  `desenharIsometricos`: grade com células perto de 3:2; abaixo de 35 mm de altura não desenha e a
+  folha diz "+N isométrico(s) não couberam — use um papel maior".
+- A folha "Legenda e detalhes hidrossanitários" (conjunto e exportação avulsa) traz os
+  ISOMÉTRICOS abaixo da legenda.
+- Fica para depois: isométrico **por coluna** (sai com o esquema vertical, 2.3) e o nome da
+  conexão no detalhe (2.4).
+- **Pronto quando** ✔: 6 testes em `blueprintIsometricoPrancha.test.ts` — verdadeira grandeza nos
+  três eixos; recorte com cota interpolada e prumada inteira; um isométrico por ambiente × rede,
+  com o ramal de 5,4 m cortado em x = 2300; ø25 e "LV · h 0,60" no papel e tudo dentro da caixa;
+  a folha com "ISOMÉTRICOS" e a contagem do que não coube. Harness `docs/spikes/prancha-hidro`:
+  quatro isométricos (água e esgoto do banheiro e da área de serviço) numa A3.

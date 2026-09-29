@@ -24,6 +24,7 @@
  * os dois a carregar condicional do outro.
  */
 
+import { desenharIsometricos, isometricosDoModelo } from './blueprintIsometricoPrancha';
 import { desenharHidrossanitaria, desenharLegendaHidro, type RedeDaPrancha } from './blueprintPranchaHidro';
 import type { Anotacao, BlueprintModel, Point, Wall } from './blueprintKernel';
 import { contornoDaNuvem, cotaAngularDesenhada, dataDaRevisaoBr, linhasDaHachura, pontaDaSeta, posicaoDaEtiquetaDaNuvem, revisoesDasAnotacoes, revisoesDoModelo, COR_PADRAO_DA_ANOTACAO, type RevisaoDaPrancha } from './blueprintAnotacoes';
@@ -865,7 +866,7 @@ export function desenharFolhaDoQuadroDeCargas(
 /**
  * A FOLHA DE LEGENDA E DETALHES HIDROSSANITÁRIOS (E2.1, 28/09/2026): a legenda
  * do desenho inteiro — condutos por rede × material × DN, conexões, pontos e
- * peças que EXISTEM. A E2.2 acrescenta os isométricos abaixo dela.
+ * peças que EXISTEM — e, abaixo dela (E2.2), os isométricos por ambiente molhado.
  */
 export function desenharFolhaDeDetalhesHidro(
   d: Desenhista,
@@ -876,7 +877,17 @@ export function desenharFolhaDeDetalhesHidro(
   const x0 = enq.offsetXMm - Math.max(0, (enq.utilLarguraMm - enq.desenhoLarguraMm) / 2);
   const y0 = enq.offsetYMm - Math.max(0, (enq.utilAlturaMm - enq.desenhoAlturaMm) / 2) + 6;
   d.texto(x0, y0, 'LEGENDA E DETALHES HIDROSSANITÁRIOS', 3.2);
-  desenharLegendaHidro(d, model, x0, y0 + 9, enq.utilLarguraMm);
+  const alturaDaLegenda = desenharLegendaHidro(d, model, x0, y0 + 9, enq.utilLarguraMm);
+  // E2.2: os isométricos por ambiente molhado, no resto da folha.
+  const isos = isometricosDoModelo(model);
+  if (isos.length > 0) {
+    const yIso = y0 + 9 + alturaDaLegenda + 8;
+    d.texto(x0, yIso, 'ISOMÉTRICOS', 3.0);
+    const topo = enq.offsetYMm - Math.max(0, (enq.utilAlturaMm - enq.desenhoAlturaMm) / 2);
+    const livre = topo + enq.utilAlturaMm - (yIso + 4);
+    const { deFora } = desenharIsometricos(d, isos, x0, yIso + 4, enq.utilLarguraMm, livre);
+    if (deFora > 0) d.texto(x0 + 40, yIso, `+${deFora} isométrico(s) não couberam nesta folha — use um papel maior.`, 2.0, '#b91c1c');
+  }
   desenharCarimbo(d, opcoes, enq);
 }
 

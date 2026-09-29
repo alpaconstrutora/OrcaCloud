@@ -1,5 +1,5 @@
 /**
- * HARNESS VISUAL da PRANCHA HIDROSSANITÁRIA (E2.1, 28/09/2026).
+ * HARNESS VISUAL da PRANCHA HIDROSSANITÁRIA (E2.1 + E2.2 isométricos, 28/09/2026).
  *
  * O MESMO `desenharPlanta` (com `hidrossanitaria`) e a MESMA folha de legenda
  * do conjunto, num `Desenhista` de canvas igual ao do PNG do app. Banheiro +
@@ -85,6 +85,10 @@ function casa(): BlueprintModel {
   ]).model;
   m = applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais![0].id, larguraMm: 1200, profundidadeMm: 1200, alturaMm: 800 } as Command).model;
   m = recomputeSpaces(m);
+  for (const s of m.spaces) {
+    const esquerda = s.ring.every((p) => p.x <= 2000);
+    m = applyCommand(m, { type: 'NameSpace', spaceId: s.id, name: esquerda ? 'Banheiro' : 'Área de serviço', tipoDeAmbiente: esquerda ? 'BANHEIRO' : 'COZINHA_SERVICO' } as Command).model;
+  }
   m = applyBatch(m, planejarAgua(m, m.terminais![0]).comandos).model;
   m = applyBatch(m, planejarEsgoto(m).comandos).model;
   return m;

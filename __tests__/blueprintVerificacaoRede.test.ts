@@ -4,6 +4,7 @@
  * sem ponto. O teste que mais importa é o do FALSO POSITIVO: rede traçada pelo
  * próprio lançamento automático não pode acender marca nenhuma.
  */
+import { planejarVentilacao } from '../utils/blueprintVentilacao';
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command, type TipoDePontoHidraulico } from '../utils/blueprintKernel';
 import { planejarEsgoto, verificarDnDoEsgoto } from '../utils/blueprintEsgotoAutomatico';
@@ -38,9 +39,12 @@ function casaComEsgoto(): { m: BlueprintModel; t: string } {
 }
 
 describe('sem falso positivo: a rede do lançamento automático não acende nada', () => {
-  it('casa térrea com esgoto automático', () => {
+  it('casa térrea com esgoto automático — e, desde a E5.4, a ventilação lançada', () => {
     const { m } = casaComEsgoto();
-    expect(marcasDeVerificacao(m)).toEqual([]);
+    // Sem ventilação a casa térrea TEM pendência (a norma pede): o vaso e a sifonada.
+    expect(marcasDeVerificacao(m).map((x) => x.tipo)).toEqual(['SEM_VENTILACAO', 'SEM_VENTILACAO']);
+    const ventilado = applyBatch(m, planejarVentilacao(m).comandos).model;
+    expect(marcasDeVerificacao(ventilado)).toEqual([]);
   });
 
   it('sobrado: o topo da VENTILAÇÃO é aberto de propósito e não conta; o TQ não é "maior que o necessário"', () => {
@@ -54,7 +58,9 @@ describe('sem falso positivo: a rede do lançamento automático não acende nada
       esg(superior, 'VASO_SANITARIO', 600, 800, 0),
       esg(terreo, 'CAIXA_INSPECAO', 5000, -1500, -700),
     ]).model;
-    const aplicado = applyBatch(m, planejarEsgoto(m).comandos).model;
+    const esgoto = applyBatch(m, planejarEsgoto(m).comandos).model;
+    // E5.4: a ventilação do TQ passa da cobertura e a sifonada ganha a sua coluna.
+    const aplicado = applyBatch(esgoto, planejarVentilacao(esgoto).comandos).model;
     expect(marcasDeVerificacao(aplicado)).toEqual([]);
   });
 

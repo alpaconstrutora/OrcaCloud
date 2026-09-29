@@ -8,6 +8,7 @@ import { applyBatch, applyCommand, emptyModel, point, recomputeSpaces, type Blue
 import { planejarAgua } from '../../utils/blueprintAguaAutomatica';
 import { HIPOTESES_ESGOTO_PADRAO, planejarEsgoto } from '../../utils/blueprintEsgotoAutomatico';
 import { planejarColetorPredial } from '../../utils/blueprintColetorPredial';
+import { planejarVentilacao } from '../../utils/blueprintVentilacao';
 import { comAjusteDePressao } from '../../utils/blueprintPressaoDaRede';
 import { HIPOTESES_ALIMENTACAO_PADRAO, planejarAlimentador } from '../../utils/blueprintAlimentador';
 import { HIPOTESES_RESERVATORIO_PADRAO } from '../../utils/blueprintReservacao';
@@ -18,7 +19,7 @@ import { planejarPecasDaCaixa } from '../../utils/blueprintPecasDaCaixa';
  * `cotaDaCaixaMm` acima do piso dele — a caixa elevada da E3.3); CI no térreo.
  * `comAjuste`: a água sai com o DN ajustado pela pressão, como no editor.
  */
-export function sobrado(doisAndares = true, opcoes: { cotaDaCaixaMm?: number; comAjuste?: boolean; volumeDaCaixaL?: number; alimentador?: boolean; ligacao?: boolean } = {}): BlueprintModel {
+export function sobrado(doisAndares = true, opcoes: { cotaDaCaixaMm?: number; comAjuste?: boolean; volumeDaCaixaL?: number; alimentador?: boolean; ligacao?: boolean; ventilacao?: boolean } = {}): BlueprintModel {
   let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
   if (doisAndares) m = applyCommand(m, { type: 'AddLevel', name: 'Superior', elevationMm: 2900, defaultHeightMm: 2800 }).model;
   const niveis = m.levels.map((l) => l.id);
@@ -55,6 +56,8 @@ export function sobrado(doisAndares = true, opcoes: { cotaDaCaixaMm?: number; co
   const plano = planejarAgua(m, m.terminais!.find((t) => t.tipoHidraulico === 'RESERVATORIO')!);
   m = applyBatch(m, (opcoes.comAjuste ? comAjusteDePressao(m, plano) : plano).comandos).model;
   m = applyBatch(m, planejarEsgoto(m).comandos).model;
+  // E5.4: a ventilação lançada (colunas dos desconectores e o prolongamento acima da cobertura).
+  if (opcoes.ventilacao) m = applyBatch(m, planejarVentilacao(m).comandos).model;
   // E5.3: a ligação à rede pública 4,5 m além da CI (rede a −0,80) e o coletor predial.
   if (opcoes.ligacao) {
     m = applyCommand(m, { type: 'AddTerminal', levelId: niveis[0], disciplina: 'ESGOTO', tipo: 'Ligação', at: point(6000, -6000), cotaMm: -800, tipoHidraulico: 'LIGACAO_ESGOTO' } as Command).model;

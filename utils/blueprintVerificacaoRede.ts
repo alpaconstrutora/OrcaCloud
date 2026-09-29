@@ -15,6 +15,7 @@
  * chave do nó põe o que está sob o piso do andar no teto do de baixo, mas o
  * tubo é desenhado e lido no andar dele) — mesma regra de `simbolosDasConexoes2D`.
  */
+import { verificarVentilacao } from './blueprintVentilacao';
 import { ROTULO_DA_LIMPEZA, ROTULO_DO_EXTRAVASOR } from './blueprintPecasDaCaixa';
 import type { BlueprintModel, DisciplinaDeRede, ObjectId } from './blueprintKernel';
 import { conexoesDerivadas } from './blueprintKernel';
@@ -34,7 +35,11 @@ export type TipoDeMarca =
   | 'CONTRAFLUXO'
   | 'DECLIVIDADE_BAIXA'
   | 'DN_DIMINUI'
-  | 'SEM_DESTINO';
+  | 'SEM_DESTINO'
+  // E5.4 — ventilação.
+  | 'SEM_VENTILACAO'
+  | 'VENTILACAO_BAIXA'
+  | 'DN_VENTILACAO';
 
 export interface MarcaDeVerificacao {
   chave: string;
@@ -98,6 +103,21 @@ export function marcasDeVerificacao(model: BlueprintModel, levelId: ObjectId | n
       marcas.push({ chave: `diminui|${c.trechoId}`, tipo: 'DN_DIMINUI', levelId: c.levelId, at: aoLongo(c.trechoId, 0.7), texto: `DN ${c.dnAtualMm} depois de ${c.dnMontanteMaxMm}`, severidade: 'ERRO', alvoId: c.trechoId, disciplina: 'ESGOTO' });
     }
   }
+  // E5.4: o desconector sem ventilação ao alcance, e a coluna baixa ou fina.
+  const vent = verificarVentilacao(model);
+  const m2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  for (const d of vent.desconectores.filter((x) => !x.ventilado)) {
+    marcas.push({
+      chave: `vent|${d.terminalId}`, tipo: 'SEM_VENTILACAO', levelId: d.levelId, at: d.at,
+      texto: d.distanciaM == null ? `${d.sigla} sem ventilação` : `${d.sigla} a ${m2(d.distanciaM)} m da ventilação (máx. ${m2(d.maximaM)})`,
+      severidade: 'ERRO', alvoId: d.terminalId, disciplina: 'ESGOTO',
+    });
+  }
+  for (const c of vent.colunas) {
+    const t = trechoPorIdE.get(c.trechoIds[0])!;
+    if (!c.acimaDaCobertura) marcas.push({ chave: `ventbaixa|${c.x},${c.y}`, tipo: 'VENTILACAO_BAIXA', levelId: t.levelId, at: { x: c.x, y: c.y }, texto: 'ventilação abaixo da cobertura + 30 cm', severidade: 'ERRO', alvoId: t.id, disciplina: 'ESGOTO' });
+    if (c.dnAtualMm < c.dnNecessarioMm) marcas.push({ chave: `ventdn|${c.x},${c.y}`, tipo: 'DN_VENTILACAO', levelId: t.levelId, at: { x: c.x + 1, y: c.y }, texto: `ventilação DN ${c.dnAtualMm} < ${c.dnNecessarioMm}`, severidade: 'ERRO', alvoId: t.id, disciplina: 'ESGOTO' });
+  }
   for (const id of trechosDeEsgotoSemDestino(model)) {
     const t = trechoPorIdE.get(id)!;
     marcas.push({ chave: `destino|${id}`, tipo: 'SEM_DESTINO', levelId: t.levelId, at: aoLongo(id, 0.5), texto: 'não chega à caixa de inspeção', severidade: 'ERRO', alvoId: id, disciplina: 'ESGOTO' });
@@ -150,13 +170,13 @@ export function marcasDeVerificacao(model: BlueprintModel, levelId: ObjectId | n
 export function resumoDaVerificacao(marcas: readonly MarcaDeVerificacao[], disciplinas: readonly DisciplinaDeRede[]): {
   pontasAbertas: number;
   dnFora: MarcaDeVerificacao[];
-  /** E5.2: contrafluxo, declividade baixa, DN que diminui e trecho sem destino. */
+  /** E5.2/E5.4: contrafluxo, declividade baixa, DN que diminui, sem destino e a ventilação. */
   fluxo: MarcaDeVerificacao[];
 } {
   const daRede = marcas.filter((m) => m.disciplina && disciplinas.includes(m.disciplina));
   return {
     pontasAbertas: daRede.filter((m) => m.tipo === 'PONTA_ABERTA').length,
     dnFora: daRede.filter((m) => m.tipo === 'DN_MENOR' || m.tipo === 'DN_MAIOR'),
-    fluxo: daRede.filter((m) => m.tipo === 'CONTRAFLUXO' || m.tipo === 'DECLIVIDADE_BAIXA' || m.tipo === 'DN_DIMINUI' || m.tipo === 'SEM_DESTINO'),
+    fluxo: daRede.filter((m) => ['CONTRAFLUXO', 'DECLIVIDADE_BAIXA', 'DN_DIMINUI', 'SEM_DESTINO', 'SEM_VENTILACAO', 'VENTILACAO_BAIXA', 'DN_VENTILACAO'].includes(m.tipo)),
   };
 }

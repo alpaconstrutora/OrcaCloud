@@ -24,6 +24,7 @@ import { planejarAguaDoModelo } from './blueprintAguaAutomatica';
 import { pressoesDoModelo } from './blueprintPressaoDaRede';
 import { esgotoTrechoATrecho, planejarEsgoto, trechosDeEsgotoSemDestino } from './blueprintEsgotoAutomatico';
 import { ROTULO_DO_COLETOR, planejarColetorPredial } from './blueprintColetorPredial';
+import { verificarVentilacao } from './blueprintVentilacao';
 import { marcasDeVerificacao } from './blueprintVerificacaoRede';
 import { colunasDoModelo } from './blueprintEsquemaVertical';
 import { dimensionarReservacao } from './blueprintReservacao';
@@ -202,6 +203,12 @@ export function verificacoesHidro(model: BlueprintModel, hip: HipotesesHidro, re
       obtido: col.motivo ?? (!coletorLancado ? 'coletor não lançado' : col.porGravidade ? `DN ${col.dnMm} a ${nBr(col.declividadePct, 2)} %` : col.avisos[0] ?? 'sem gravidade'),
       atende: !col.motivo && coletorLancado && col.porGravidade,
     });
+    // E5.4: ventilação de cada desconector e as colunas (DN da tabela, acima da cobertura).
+    const vent = verificarVentilacao(model, hip.esgoto);
+    const semVent = vent.desconectores.filter((d) => !d.ventilado).length;
+    v.push({ grupo: 'NBR8160', item: 'Todo desconector ventilado', norma: 'NBR 8160:1999', exigido: 'a ventilação ao alcance da tabela (1,00 a 2,40 m)', obtido: semVent ? `${semVent} sem ventilação ao alcance` : `${vent.desconectores.length} ventilado(s)`, atende: semVent === 0 });
+    const colunasRuins = vent.colunas.filter((c) => !c.acimaDaCobertura || c.dnAtualMm < c.dnNecessarioMm).length;
+    v.push({ grupo: 'NBR8160', item: 'Colunas de ventilação', norma: 'NBR 8160:1999', exigido: 'DN da tabela e 30 cm acima da cobertura', obtido: colunasRuins ? `${colunasRuins} coluna(s) fora` : `${vent.colunas.length} coluna(s) em ordem`, atende: colunasRuins === 0 });
     const tqs = colunasDoModelo(model).filter((c) => c.sigla === 'TQ');
     const semVentilacao = tqs.filter((c) => !c.nomeDaVentilacao).length;
     v.push({ grupo: 'NBR8160', item: 'Tubo de queda ventilado', norma: 'NBR 8160:1999', exigido: 'todo TQ com coluna de ventilação', obtido: tqs.length ? (semVentilacao ? `${semVentilacao} sem ventilação` : `${tqs.length} TQ ventilado(s)`) : 'sem tubo de queda', atende: semVentilacao === 0 });

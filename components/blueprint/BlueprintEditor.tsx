@@ -218,6 +218,7 @@ import PainelAlimentador from './PainelAlimentador';
 import PainelRecalque from './PainelRecalque';
 import PainelColetorPredial from './PainelColetorPredial';
 import { planejarColetorPredial } from '../../utils/blueprintColetorPredial';
+import { planejarVentilacao } from '../../utils/blueprintVentilacao';
 import { planejarRecalque } from '../../utils/blueprintRecalque';
 import { planejarAlimentador } from '../../utils/blueprintAlimentador';
 import { planejarPecasDaCaixa } from '../../utils/blueprintPecasDaCaixa';
@@ -7226,6 +7227,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const hipotesesDeEsgoto = hidroDoEstudo.hipoteses.esgoto;
   const setHipDeEsgotoSalvas = (esgoto: HipotesesDeEsgoto) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, esgoto });
   const planoDeEsgoto = useMemo(() => planejarEsgoto(editor.model, hipotesesDeEsgoto), [editor.model, hipotesesDeEsgoto]);
+  /** VENTILAÇÃO (29/09/2026, E5.4): colunas ao alcance de cada desconector, DN da tabela, acima da cobertura. */
+  const planoDaVentilacao = useMemo(
+    () => (tarefaAberta === 'esgoto' ? planejarVentilacao(editor.model, hipotesesDeEsgoto) : null),
+    [tarefaAberta, editor.model, hipotesesDeEsgoto],
+  );
   /** COLETOR PREDIAL (29/09/2026, E5.3): da CI à ligação na rede pública. */
   const planoDoColetor = useMemo(
     () => (tarefaAberta === 'esgoto' ? planejarColetorPredial(editor.model, hipotesesDeEsgoto) : null),
@@ -13868,6 +13874,32 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                     <p key={i} className="rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-800">{a}</p>
                   ))}
                 </>
+              )}
+              {planoDaVentilacao && (
+                <div className="space-y-1.5" data-testid="ventilacao">
+                  <p className="text-xs font-semibold text-slate-700">Ventilação (NBR 8160)</p>
+                  <p className="text-xs text-slate-600">
+                    {planoDaVentilacao.comandos.length === 0
+                      ? 'Todo desconector ventilado ao alcance da tabela e as colunas 30 cm acima da cobertura.'
+                      : `A lançar: ${planoDaVentilacao.resumo.join(', ')}.`}
+                  </p>
+                  {planoDaVentilacao.avisos.map((a) => (
+                    <p key={a} className="text-xs text-amber-700">
+                      {a}
+                    </p>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (planoDaVentilacao.comandos.length) editor.runBatch(planoDaVentilacao.comandos);
+                    }}
+                    disabled={planoDaVentilacao.comandos.length === 0}
+                    title={planoDaVentilacao.comandos.length === 0 ? 'Nada a lançar: a ventilação já atende' : undefined}
+                    className="rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Lançar ventilação
+                  </button>
+                </div>
               )}
               {planoDoColetor && (
                 <PainelColetorPredial

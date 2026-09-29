@@ -8,6 +8,17 @@ import React from 'react';
 import type { DisciplinaDeRede } from '../../utils/blueprintKernel';
 import { resumoDaVerificacao, type MarcaDeVerificacao } from '../../utils/blueprintVerificacaoRede';
 
+/** O nome de cada marca de fluxo e de ventilação na lista (E5.2/E5.4). */
+const ROTULO_DO_FLUXO: Partial<Record<MarcaDeVerificacao['tipo'], string>> = {
+  CONTRAFLUXO: 'Contrafluxo',
+  DECLIVIDADE_BAIXA: 'Declividade abaixo da mínima',
+  DN_DIMINUI: 'DN diminui a jusante',
+  SEM_DESTINO: 'Sem destino',
+  SEM_VENTILACAO: 'Sem ventilação',
+  VENTILACAO_BAIXA: 'Ventilação baixa',
+  DN_VENTILACAO: 'DN da ventilação',
+};
+
 interface Props {
   marcas: readonly MarcaDeVerificacao[];
   disciplinas: readonly DisciplinaDeRede[];
@@ -40,7 +51,7 @@ export default function PainelVerificacaoDaRede({ marcas, disciplinas, onSelecio
       {fluxo.map((m) => (
         <p key={m.chave} className="flex items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-800">
           <span>
-            {m.tipo === 'CONTRAFLUXO' ? 'Contrafluxo' : m.tipo === 'DECLIVIDADE_BAIXA' ? 'Declividade abaixo da mínima' : m.tipo === 'DN_DIMINUI' ? 'DN diminui a jusante' : 'Sem destino'}: {m.texto}
+            {ROTULO_DO_FLUXO[m.tipo] ?? m.tipo}: {m.texto}
           </span>
           <button type="button" className="shrink-0 font-medium text-blue-700 hover:underline" onClick={() => onSelecionar([m.alvoId])}>
             Selecionar

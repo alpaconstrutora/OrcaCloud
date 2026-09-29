@@ -642,7 +642,9 @@ export function esgotoTrechoATrecho(model: BlueprintModel, hip: HipotesesDeEsgot
   const ligacoes = (model.terminais ?? []).filter((t) => t.disciplina === 'ESGOTO' && t.tipoHidraulico === 'LIGACAO_ESGOTO');
   const nosDeCaixa = new Set(caixasDeInspecao(model).map((c) => chave(c.levelId, c.at.x, c.at.y, c.cotaMm)));
   for (const ci of [...ligacoes, ...caixasDeInspecao(model)]) {
-    const rede = redeDaOrigem(model, ci, 'ESGOTO');
+    // A VENTILAÇÃO não leva esgoto (E5.4): fora da árvore do fluxo — uma coluna que
+    // atravessa o andar de cima criaria um atalho e trocaria o sentido dos ramais.
+    const rede = redeDaOrigem(model, ci, 'ESGOTO').filter((t) => t.rotulo !== 'Ventilação');
     const adj = new Map<string, { t: (typeof rede)[number]; outro: string }[]>();
     for (const t of rede) {
       const a = chave(t.levelId, t.a.x, t.a.y, t.cotaAMm);

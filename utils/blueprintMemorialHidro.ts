@@ -31,6 +31,7 @@ import { colunasDoModelo, linhasDaLegendaDeColunas } from './blueprintEsquemaVer
 import { ROTULO_DA_DISCIPLINA } from './blueprintRede';
 import { ROTULO_DO_PAPEL } from './blueprintNbr8160';
 import { planejarColetorPredial } from './blueprintColetorPredial';
+import { verificarVentilacao } from './blueprintVentilacao';
 import { HIPOTESES_RECALQUE_PADRAO, planejarRecalque, type HipotesesDeRecalque } from './blueprintRecalque';
 import { HIPOTESES_ALIMENTACAO_PADRAO, planejarAlimentador, type HipotesesDeAlimentacao } from './blueprintAlimentador';
 import { HIPOTESES_RESERVATORIO_PADRAO, dimensionarReservacao, volumeDoReservatorioL, type HipotesesDeReservatorio } from './blueprintReservacao';
@@ -380,6 +381,28 @@ export function memorialDeCalculoHidro(model: BlueprintModel, hip: HipotesesHidr
         ];
       }),
     });
+    // E5.4: a ventilação — cada desconector e cada coluna.
+    const vent = verificarVentilacao(model, hip.esgoto);
+    if (vent.desconectores.length || vent.colunas.length) {
+      B.push({ tipo: 'subsecao', texto: 'Ventilação' });
+      if (vent.desconectores.length) {
+        B.push({
+          tipo: 'tabela',
+          cabecalho: ['Desconector', 'Pav.', 'DN', 'Distância à ventilação (m)', 'Máxima (m)', 'Situação'],
+          linhas: vent.desconectores.map((d) => [d.sigla, nivel(d.levelId), String(d.dnMm), d.distanciaM == null ? '—' : nBr(d.distanciaM), nBr(d.maximaM), d.ventilado ? 'Atende' : 'Sem ventilação ao alcance']),
+        });
+      }
+      if (vent.colunas.length) {
+        B.push({
+          tipo: 'tabela',
+          cabecalho: ['Coluna', 'Comprimento (m)', 'DN', 'DN da tabela', 'Topo', 'Cobertura + 0,30', 'Situação'],
+          linhas: vent.colunas.map((c, i) => [
+            `CV${i + 1}`, nBr(c.comprimentoM), String(c.dnAtualMm), String(c.dnNecessarioMm), cota(c.topoMm), cota(c.coberturaMm + 300),
+            [c.dnAtualMm < c.dnNecessarioMm ? 'DN abaixo da tabela' : '', !c.acimaDaCobertura ? 'abaixo da cobertura' : ''].filter(Boolean).join('; ') || 'Atende',
+          ]),
+        });
+      }
+    }
     // E5.3: o coletor predial até a rede pública.
     const col = planejarColetorPredial(model, hip.esgoto);
     B.push({ tipo: 'subsecao', texto: 'Coletor predial e ligação à rede pública' });

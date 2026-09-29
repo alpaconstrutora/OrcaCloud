@@ -728,3 +728,31 @@ vertical cobre o traçado das colunas) e anticolisão dos rótulos na planta.
   fonte; 4,5 m → DN 100 a 2,22 %; 60 m → caixas a 20 e 45 m na cota da linha; rede alta → elevatória;
   lançado é COLETOR_PREDIAL com as 20 UHC, sem marca; conferência e relançar). Suíte: 541 arquivos /
   6.058 testes.
+
+### E5.4 — Ventilação (29/09/2026)
+
+- `utils/blueprintVentilacao.ts` (novo): **desconectores** (bacia, caixa sifonada, ralo sifonado,
+  mictório) ventilados a no máximo a distância da tabela **medida pelo tubo** até a saída de
+  ventilação (DN 40 → 1,00 m; 50 → 1,20; 75 → 1,80; 100 → 2,40); a **ventilação primária** conta —
+  todo nó do TQ que continua em ventilação na mesma posição é tubo ventilador; **colunas** pelo DN e
+  UHC do TQ (ou do ramal, sem TQ) e o comprimento (tabela de colunas e barriletes), nunca abaixo de
+  50 com bacia; **30 cm acima da cobertura** (a água de telhado sobre o ponto, senão o topo do
+  último pavimento).
+- ⚠️ **As duas tabelas foram transcritas da NBR 8160:1999 de memória — CONFERIR NA NORMA antes de
+  emitir.** Estão num lugar só (`DISTANCIA_MAXIMA_AO_VENTILADOR_M`, `TABELA_COLUNA_DE_VENTILACAO`).
+- **Lançamento** (`planejarVentilacao`, gaveta de esgoto → "Lançar ventilação"): corrige o DN das
+  colunas sugeridas, estende a que para abaixo da cobertura e, ao desconector sem ventilação ao
+  alcance, sobe uma coluna do nó logo abaixo dele até a cobertura — a mesma simplificação do TQ (a
+  coluna sobe na posição da peça; em banheiros empilhados uma coluna serve os dois). A DN 50 fixa de
+  antes virou caso particular da tabela.
+- A ventilação **saiu da árvore do fluxo** (`esgotoTrechoATrecho`): a coluna nova que atravessa o
+  andar de cima criava um atalho e trocava o sentido dos ramais (achado pelos testes da emissão).
+- Marcas: **SEM_VENTILACAO** (no desconector, com a distância), **VENTILACAO_BAIXA**,
+  **DN_VENTILACAO**; gaveta lista; memorial: subseção **Ventilação** (desconectores e colunas);
+  conferência: **Todo desconector ventilado** e **Colunas de ventilação**. Fixture: `ventilacao: true`.
+- Os testes "sem falso positivo" da verificação agora fazem o fluxo inteiro (esgoto + ventilação):
+  a casa térrea só com o esgoto automático TEM a pendência (a norma pede ventilação).
+- **Pronto quando** ✔: 8 testes em `blueprintVentilacao.test.ts` (as tabelas; a cobertura com e sem
+  telhado; vasos ventilados pelo TQ e sifonadas longe; térrea sem ventilação; o lançamento no
+  sobrado — estende a do TQ e uma coluna nas sifonadas empilhadas — e na térrea — vaso DN 50 e
+  sifonada DN 40 —; o esgoto calculado igual antes e depois). Suíte: 542 arquivos / 6.066 testes.

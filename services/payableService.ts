@@ -5,6 +5,7 @@ import type { Payable, PayableBusinessStatus, ReceivablePaymentType } from '../t
 /** Mesmo vocabulário de `internal_transactions.payment_type` usado em Receber. */
 export type PayablePaymentType = ReceivablePaymentType;
 import { propertyExpenseService } from './propertyExpenseService';
+import { processService } from './processService';
 
 export interface PayableFilters {
     search?: string;
@@ -126,6 +127,18 @@ export const payableService = {
             .update(updates)
             .eq('id', id);
         if (error) throw error;
+
+        // Costura P2P (Passo 3 do plano 2026-09-28): baixa MANUAL de título de
+        // pedido. A baixa por conciliação bancária dispara o mesmo evento em
+        // `bankReconciliationService.createMatch`. O resolvedor só segue se o
+        // título é DEBIT com purchase_order_id. Best-effort.
+        if (newStatus === 'PAGO') {
+            try {
+                await processService.triggerForTransaction(id, 'internal_transaction.paid');
+            } catch (e) {
+                console.error('[payableService] process trigger (paid) failed:', e);
+            }
+        }
     },
 
     /**

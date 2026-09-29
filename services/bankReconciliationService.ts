@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 // cuida do banco; `utils/reconciliationRules` cuida do julgamento.
 import * as regras from '../utils/reconciliationRules';
 import { fetchAllPages, type RangeableQuery } from '../lib/supabasePaginate';
+import { processService } from './processService';
 import {
     parseStatementFile,
     accountMatches,
@@ -994,6 +995,18 @@ export const bankReconciliationService = {
             p_adjustment_category: adjustmentCategory ?? null,
         });
         if (error) throw error;
+
+        // Costura P2P (Passo 3 do plano 2026-09-28): o título acabou de virar
+        // CONCILIATED dentro da RPC. Se for DEBIT de um pedido, o motor nasce
+        // aqui (a baixa manual dispara o mesmo evento em payableService). Fora
+        // da transação da RPC de propósito — o motor é best-effort e não pode
+        // desfazer uma conciliação já gravada.
+        try {
+            await processService.triggerForTransaction(internalTxId, 'internal_transaction.paid');
+        } catch (e) {
+            console.error('[bankReconciliationService] process trigger (paid) failed:', e);
+        }
+
         return data as { match_id: string; payment_date: string; adjustment_id: string | null };
     },
 

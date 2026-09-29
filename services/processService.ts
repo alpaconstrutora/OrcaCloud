@@ -386,6 +386,71 @@ export const processService = {
         }
     },
 
+    /**
+     * Dispara um evento A PARTIR DO PEDIDO: lê `purchase_orders`, resolve a
+     * organização com a mesma regra do gancho de `orderService` (a coluna do
+     * pedido primeiro; `companies.org_id` só para pedido antigo sem ela — ver
+     * docs/planos/2026-09-28-torre-p2p-processos.md, Passo 1.1) e delega a
+     * `triggerEvent`. É o resolvedor único do Passo 3: `approveOrder`,
+     * `nfeService`, `receiptService`, `payableService` e a conciliação chamam
+     * isto em vez de cada um repetir a leitura do pedido. Best-effort: nunca
+     * lança — quem chama está no meio de uma gravação que não pode cair por
+     * causa do motor.
+     */
+    async triggerPurchaseOrderEvent(
+        purchaseOrderId: string,
+        eventKey: ProcessEventKey,
+        opts: { titleSuffix?: string } = {},
+    ): Promise<void> {
+        try {
+            const { data: po, error } = await supabase
+                .from('purchase_orders')
+                .select('id, number, organization_id, empresa_id, project_id, supplier_id')
+                .eq('id', purchaseOrderId)
+                .maybeSingle();
+            if (error || !po) {
+                if (error) console.error('[processService] triggerPurchaseOrderEvent (pedido):', error);
+                return;
+            }
+            const orgId = po.organization_id
+                ?? (po.empresa_id
+                    ? (await supabase.from('companies').select('org_id').eq('id', po.empresa_id).maybeSingle()).data?.org_id
+                    : null);
+            if (!orgId) return;
+            await this.triggerEvent(orgId, eventKey, {
+                title: `Pedido ${po.number}${opts.titleSuffix ? ` — ${opts.titleSuffix}` : ''}`,
+                purchaseOrderId: po.id,
+                supplierId: po.supplier_id ?? undefined,
+                projectId: po.project_id ?? undefined,
+            });
+        } catch (e) {
+            console.error('[processService] triggerPurchaseOrderEvent:', e);
+        }
+    },
+
+    /**
+     * Dispara um evento A PARTIR DO TÍTULO (`internal_transactions`): só quando
+     * é DEBIT com `purchase_order_id` — título fora do P2P (folha, tributo,
+     * receita) não tem pedido e não gera processo. Best-effort, como o de cima.
+     */
+    async triggerForTransaction(internalTransactionId: string, eventKey: ProcessEventKey): Promise<void> {
+        try {
+            const { data: tx, error } = await supabase
+                .from('internal_transactions')
+                .select('id, direction, purchase_order_id')
+                .eq('id', internalTransactionId)
+                .maybeSingle();
+            if (error || !tx) {
+                if (error) console.error('[processService] triggerForTransaction (título):', error);
+                return;
+            }
+            if (tx.direction !== 'DEBIT' || !tx.purchase_order_id) return;
+            await this.triggerPurchaseOrderEvent(tx.purchase_order_id, eventKey, { titleSuffix: 'Pago' });
+        } catch (e) {
+            console.error('[processService] triggerForTransaction:', e);
+        }
+    },
+
     // ── Dashboard de gargalos (Fase 2) ───────────────────────────
 
     async getBottlenecks(organizationId: string | null): Promise<ProcessStepBottleneck[]> {

@@ -40,12 +40,15 @@ export interface P2PProcessItem {
 /**
  * Eventos do motor de Processos que NASCEM em cada nó. O processo que nasce no
  * nó N conduz a transição N → N+1; por isso a costura de ENTRADA de N+1 é a
- * que vira `orquestrada`. Hoje só o Recebimento emite (`orderService`, bloco
- * 2b); os demais nós entram no Passo 3 do plano
- * (docs/planos/2026-09-28-torre-p2p-processos.md).
+ * que vira `orquestrada`. Quem emite cada chave está documentado em
+ * `ProcessEventKey` (types/process.ts) — Passo 3 de
+ * docs/planos/2026-09-28-torre-p2p-processos.md.
  */
 export const STAGE_EVENT_KEYS: Record<string, ProcessEventKey[]> = {
-  recebimento: ['purchase_order.received', 'purchase_order.divergence'],
+  pedido:      ['purchase_order.approved'],
+  recebimento: ['purchase_order.received', 'purchase_order.divergence', 'purchase_receipt.divergence'],
+  fiscal:      ['nfe.linked'],
+  financeiro:  ['internal_transaction.paid'],
 };
 
 export interface P2PRecord {
@@ -369,6 +372,7 @@ export const p2pFlowService = {
         id: 'pedido', label: 'Pedido de Compra', owner: 'Suprimentos',
         view: 'supplies-orders', count: pedidosAbertos + pedidosRecebidos, pending: pedidosAbertos,
         inboundSeam: 'auto', inboundNote: 'Cotação equalizada vira pedido',
+        eventKeys: STAGE_EVENT_KEYS.pedido,
       },
       {
         id: 'recebimento', label: 'Recebimento', owner: 'Estoque',
@@ -386,12 +390,14 @@ export const p2pFlowService = {
         view: 'fiscal-nfe', count: notas,
         inboundSeam: 'manual',
         inboundNote: '3-way match (Pedido × Recebimento × Nota) na aba Recebimento do pedido; sem bloqueio automático',
+        eventKeys: STAGE_EVENT_KEYS.fiscal,
       },
       {
         id: 'financeiro', label: 'Contas a Pagar', owner: 'Financeiro',
         view: 'contas-a-pagar', count: contasPagar, pending: contasPagar,
         inboundSeam: 'auto',
         inboundNote: 'Título nasce do pedido recebido ou da NF-e vinculada, com o pedido de origem (purchase_order_id)',
+        eventKeys: STAGE_EVENT_KEYS.financeiro,
       },
       {
         id: 'pagamento', label: 'Pago / Baixado', owner: 'Tesouraria',

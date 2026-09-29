@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { sanitizeFileName } from '../utils/storageUtils';
+import { processService } from './processService';
 
 export interface PurchaseReceiptItem {
     id: string;
@@ -85,6 +86,21 @@ export const receiptService = {
                     }))
                 );
             if (itemsError) throw itemsError;
+        }
+
+        // Costura P2P (Passo 3 do plano 2026-09-28): divergência DE ITEM que não
+        // vira status 'Divergência' do pedido — recebimento Parcial, ou Recebido
+        // com item quebrado/faltando. Quando o pedido inteiro é marcado
+        // Divergência, quem dispara é `orderService.updateOrder`
+        // (`purchase_order.divergence`); não repetir aqui, senão nascem dois
+        // processos para a mesma divergência. Best-effort.
+        const itemDivergente = data.items.some(i => i.issue || i.quantityReceived < i.quantityOrdered);
+        if (data.status !== 'Divergência' && (data.status === 'Parcial' || itemDivergente)) {
+            try {
+                await processService.triggerPurchaseOrderEvent(orderId, 'purchase_receipt.divergence', { titleSuffix: 'Divergência de itens' });
+            } catch (e) {
+                console.error('[receiptService] process trigger (purchase_receipt.divergence) failed:', e);
+            }
         }
 
         return { ...this.mapReceipt(receipt), items: data.items.map((item, i) => ({

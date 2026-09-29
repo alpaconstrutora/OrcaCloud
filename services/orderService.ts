@@ -750,11 +750,20 @@ export const orderService = {
     },
 
     async approveOrder(orderId: string, level: 1 | 2, approvedBy: string, notes?: string): Promise<void> {
-        await approvalService.approve(
+        const result = await approvalService.approve(
             'purchase_order', orderId, level, approvedBy,
             { level1_label: 'Gestor', level2_label: 'Financeiro/Diretoria' },
             notes,
         );
+        // Costura P2P (Passo 3): só quando a alçada FECHOU (não no nível 1 de 2).
+        // Best-effort — a aprovação já está gravada; o motor não pode desfazê-la.
+        if (result?.approval_status === 'APROVADO') {
+            try {
+                await processService.triggerPurchaseOrderEvent(orderId, 'purchase_order.approved', { titleSuffix: 'Aprovado' });
+            } catch (procError) {
+                console.error('[ORDER SERVICE] Process trigger (approved) failed:', procError);
+            }
+        }
     },
 
     async rejectOrder(orderId: string, rejectedBy: string, reason: string): Promise<void> {

@@ -18,6 +18,22 @@ import type {
 } from '../types/fiscal';
 import { supplierService } from './supplierService';
 import { orderService } from './orderService';
+import { processService } from './processService';
+
+/**
+ * Costura P2P (Passo 3 do plano 2026-09-28): NF-e vinculada a título DE UM
+ * PEDIDO dispara `nfe.linked`. NF-e sem pedido não gera processo — não há a
+ * quem "conferir contra". Best-effort: a nota já está vinculada quando isto
+ * roda; erro do motor só vai para o console.
+ */
+async function dispararNfeVinculada(purchaseOrderId: string | null | undefined): Promise<void> {
+  if (!purchaseOrderId) return;
+  try {
+    await processService.triggerPurchaseOrderEvent(purchaseOrderId, 'nfe.linked', { titleSuffix: 'NF-e vinculada' });
+  } catch (e) {
+    console.error('[nfeService] process trigger (nfe.linked) failed:', e);
+  }
+}
 
 // ============================================================
 // UPLOAD
@@ -383,6 +399,7 @@ export async function approveAndLink(params: {
     .single<NfeInvoice>();
 
   if (updErr || !updated) throw new Error(`Erro ao atualizar NF-e: ${updErr?.message}`);
+  await dispararNfeVinculada(purchaseOrderId);
   return updated;
 }
 
@@ -412,7 +429,7 @@ export async function linkExistingTransaction(params: {
   // 2. Buscar a transação existente
   const { data: tx, error: txErr } = await supabase
     .from('internal_transactions')
-    .select('id, project_id, organization_id')
+    .select('id, project_id, organization_id, purchase_order_id')
     .eq('id', transactionId)
     .single();
 
@@ -434,6 +451,8 @@ export async function linkExistingTransaction(params: {
     .single<NfeInvoice>();
 
   if (updErr || !updated) throw new Error(`Erro ao atualizar NF-e: ${updErr?.message}`);
+  // O pedido vem do TÍTULO (a nota herda a obra dele; herda o pedido também).
+  await dispararNfeVinculada((tx as { purchase_order_id?: string | null }).purchase_order_id ?? invoice.purchase_order_id);
   return updated;
 }
 

@@ -157,4 +157,16 @@ export interface ProcessStepBottleneck {
 }
 
 /** Chaves de evento do P2P que o motor de Processos escuta (costura — ver PLANO_MODULO_PROCESSOS.md §6). */
-export type ProcessEventKey = 'purchase_order.received' | 'purchase_order.divergence';
+export type ProcessEventKey =
+    /** `orderService.updateOrder` — pedido marcado Recebido (nasce no nó Recebimento). */
+    | 'purchase_order.received'
+    /** `orderService.updateOrder` — pedido marcado Divergência (nasce no nó Recebimento). */
+    | 'purchase_order.divergence'
+    /** `orderService.approveOrder` — alçada devolveu APROVADO (nasce no nó Pedido). Passo 3 do plano 2026-09-28. */
+    | 'purchase_order.approved'
+    /** `nfeService.approveAndLink`/`linkExistingTransaction` — NF-e vinculada a título de um pedido (nasce no nó Nota Fiscal). */
+    | 'nfe.linked'
+    /** `receiptService.createReceipt` — recebimento com divergência de ITEM sem o pedido inteiro virar Divergência (nasce no nó Recebimento). */
+    | 'purchase_receipt.divergence'
+    /** `payableService.updateStatus('PAGO')` / `bankReconciliationService.createMatch` — título DEBIT de um pedido baixado (nasce no nó Contas a Pagar). */
+    | 'internal_transaction.paid';

@@ -9,6 +9,7 @@ import {
   comprimentoDoTrecho,
   ehPrumada,
 } from '../../utils/blueprintRede';
+import { padraoDaTomada } from '../../utils/blueprintRede';
 import { CampoMedida } from './PainelParedeSelecionada';
 import CamposDeDimensao from './CamposDeDimensao';
 import {
@@ -92,8 +93,12 @@ interface Props {
     profundidadeMm?: number | null;
     rotacaoGraus?: number | null;
   }) => void;
-  /** Os circuitos do desenho, para o ponto elétrico escolher o seu. */
-  circuitos?: { id: string; nome: string; quadroNome: string }[];
+  /**
+   * Os circuitos do desenho, para o ponto elétrico escolher o seu. Tensão e
+   * ligação (E1.3) vêm do circuito ou do quadro dele — o ponto não as tem, e
+   * o painel as mostra DERIVADAS, com o padrão da tomada (NBR 14136).
+   */
+  circuitos?: { id: string; nome: string; quadroNome: string; tensaoV?: number | null; ligacao?: 'FN' | 'FF' | 'FFF' | null }[];
   /** TIPO × INSTÂNCIA (E1.1): copia as propriedades de um tipo salvo para este ponto. */
   onAplicarTipoDoTerminal?: (propriedades: PropriedadesDeTerminal) => void;
   /**
@@ -344,6 +349,22 @@ export default function PainelTrechoSelecionado({
                     Nenhum circuito ainda — crie um no painel <strong>Elétrica</strong>.
                   </span>
                 )}
+                {/* E1.3: tensão e ligação DERIVADAS do circuito (o ponto não as
+                    guarda — duas verdades divergiriam), e o padrão da tomada
+                    pela corrente. */}
+                {(() => {
+                  const c = circuitos.find((x) => x.id === terminal.circuitoId);
+                  if (!c || (c.tensaoV == null && !c.ligacao)) return null;
+                  const ehTomada = terminal.tipoEletrico === 'TUG' || terminal.tipoEletrico === 'TUE';
+                  const padrao = ehTomada ? padraoDaTomada(terminal.potenciaW, c.tensaoV) : null;
+                  return (
+                    <span className="mt-0.5 block text-[10px] text-slate-600" data-testid="derivado-do-circuito">
+                      Do circuito: {c.tensaoV != null ? `${c.tensaoV} V` : 'tensão não declarada'}
+                      {c.ligacao ? ` · ${c.ligacao === 'FN' ? 'F-N' : c.ligacao === 'FF' ? 'F-F' : 'trifásico'}` : ''}
+                      {padrao ? ` · tomada ${padrao}` : ''}
+                    </span>
+                  );
+                })()}
               </label>
 
               <label className="block">

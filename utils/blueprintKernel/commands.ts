@@ -1251,6 +1251,17 @@ export type Command =
        * quebraria as onze delas para dizer `[]`.
        */
       aguaIds?: ObjectId[];
+      /**
+       * INSTALAÇÃO copiada (E1.3 do roadmap elétrico, 29/09/2026): pontos,
+       * trechos e quadros andam pelo `delta` como as paredes. A cópia nasce SEM
+       * circuito (o ponto perde `circuitoId`, o trecho perde `circuitoIds`): o
+       * circuito é do quadro de origem, e a cópia num outro lugar/pavimento é
+       * de outro quadro — ligar é o passo seguinte (planejador ou painel), e a
+       * prévia diz isso. Opcionais pela razão de `aguaIds`.
+       */
+      terminalIds?: ObjectId[];
+      trechoIds?: ObjectId[];
+      quadroIds?: ObjectId[];
       openings: { openingId: ObjectId; wallId: ObjectId; offsetMm: number }[];
       delta: Point;
     };
@@ -4801,6 +4812,34 @@ function aplicarSemHash(
         next.labels.push({ ...l, id, uid: novoUid(), levelId: novoNivelId, at: { ...l.at } });
         diff.created.push(id);
       }
+      // INSTALAÇÃO (E1.3 do roadmap elétrico, 29/09/2026): a cópia SOLTA de um
+      // pavimento leva quadros, pontos e trechos — antes só a arquitetura e a
+      // estrutura vinham, e o andar copiado nascia sem uma tomada. Os circuitos
+      // NÃO vêm: são do quadro de origem; o ponto copiado fica "sem circuito" e o
+      // trecho sem `circuitoIds`, para o planejador ou o painel ligarem ao quadro
+      // copiado. O pavimento VINCULADO (`tipoDeId`) continua sem instalação —
+      // ela é re-derivada do tipo a cada comando e duplicaria a cada sync.
+      for (const q of (next.quadros ?? []).filter((q) => q.levelId === origem.id)) {
+        const id = nextId(next, 'qdr');
+        next.quadros = [...(next.quadros ?? []), { ...q, id, uid: novoUid(), levelId: novoNivelId, at: { ...q.at } }];
+        diff.created.push(id);
+      }
+      for (const t of (next.terminais ?? []).filter((t) => t.levelId === origem.id)) {
+        const id = nextId(next, 'trm');
+        const { circuitoId: _circuito, sugerida: _sugerida, ...resto } = t;
+        void _circuito;
+        void _sugerida;
+        next.terminais = [...(next.terminais ?? []), { ...resto, id, uid: novoUid(), levelId: novoNivelId, at: { ...t.at } }];
+        diff.created.push(id);
+      }
+      for (const t of (next.trechos ?? []).filter((t) => t.levelId === origem.id)) {
+        const id = nextId(next, 'trc');
+        const { circuitoIds: _circuitos, sugerido: _sugerido, ...resto } = t;
+        void _circuitos;
+        void _sugerido;
+        next.trechos = [...(next.trechos ?? []), { ...resto, id, uid: novoUid(), levelId: novoNivelId, a: { ...t.a }, b: { ...t.b } }];
+        diff.created.push(id);
+      }
       break;
     }
 
@@ -4826,6 +4865,21 @@ function aplicarSemHash(
       const limites = command.boundaryIds.map((id) => findBoundary(next, id));
       const estruturas = (command.structuralIds ?? []).map((id) => findStructural(next, id));
       const aguas = (command.aguaIds ?? []).map((id) => findAgua(next, id));
+      const terminais = (command.terminalIds ?? []).map((id) => {
+        const t = (next.terminais ?? []).find((x) => x.id === id);
+        if (!t) throw new KernelError('TERMINAL_NOT_FOUND', `Terminal não encontrado: ${id}`);
+        return t;
+      });
+      const trechosCopiados = (command.trechoIds ?? []).map((id) => {
+        const t = (next.trechos ?? []).find((x) => x.id === id);
+        if (!t) throw new KernelError('TRECHO_NOT_FOUND', `Trecho não encontrado: ${id}`);
+        return t;
+      });
+      const quadrosCopiados = (command.quadroIds ?? []).map((id) => {
+        const q = (next.quadros ?? []).find((x) => x.id === id);
+        if (!q) throw new KernelError('BOARD_NOT_FOUND', `Quadro não encontrado: ${id}`);
+        return q;
+      });
       const avulsas = command.openings.map((alvo) => {
         const original = next.openings.find((o) => o.id === alvo.openingId);
         if (!original) {
@@ -4839,7 +4893,10 @@ function aplicarSemHash(
         limites.length === 0 &&
         estruturas.length === 0 &&
         aguas.length === 0 &&
-        avulsas.length === 0
+        avulsas.length === 0 &&
+        terminais.length === 0 &&
+        trechosCopiados.length === 0 &&
+        quadrosCopiados.length === 0
       ) {
         throw new KernelError('NOTHING_TO_DUPLICATE', 'Nada selecionado para copiar');
       }
@@ -4933,6 +4990,31 @@ function aplicarSemHash(
           ...(next.roofs ?? []),
           { ...r, id, uid: novoUid(), levelId: command.levelId, pontos: r.pontos.map(deslocar), ...(r.extrusao ? { extrusao: { a: deslocar(r.extrusao.a), b: deslocar(r.extrusao.b) } } : {}) },
         ];
+        diff.created.push(id);
+      }
+
+      // INSTALAÇÃO (E1.3): quadro, ponto e trecho deslocados; a cópia nasce SEM
+      // circuito (ver o tipo do comando) e sem a marca de "sugerido" — quem
+      // colou, decidiu a posição.
+      for (const q of quadrosCopiados) {
+        const id = nextId(next, 'qdr');
+        next.quadros = [...(next.quadros ?? []), { ...q, id, uid: novoUid(), levelId: command.levelId, at: deslocar(q.at) }];
+        diff.created.push(id);
+      }
+      for (const t of terminais) {
+        const id = nextId(next, 'trm');
+        const { circuitoId: _circuito, sugerida: _sugerida, ...resto } = t;
+        void _circuito;
+        void _sugerida;
+        next.terminais = [...(next.terminais ?? []), { ...resto, id, uid: novoUid(), levelId: command.levelId, at: deslocar(t.at) }];
+        diff.created.push(id);
+      }
+      for (const t of trechosCopiados) {
+        const id = nextId(next, 'trc');
+        const { circuitoIds: _circuitos, sugerido: _sugerido, ...resto } = t;
+        void _circuitos;
+        void _sugerido;
+        next.trechos = [...(next.trechos ?? []), { ...resto, id, uid: novoUid(), levelId: command.levelId, a: deslocar(t.a), b: deslocar(t.b) }];
         diff.created.push(id);
       }
       break;

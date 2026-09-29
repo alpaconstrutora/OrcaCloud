@@ -3522,11 +3522,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   /** Os circuitos com o nome do quadro junto — "QDC · C1" é o que se reconhece. */
   const circuitosParaEscolher = useMemo(
     () =>
-      (editor.model.circuitos ?? []).map((c) => ({
-        id: c.id,
-        nome: c.nome,
-        quadroNome: (editor.model.quadros ?? []).find((q) => q.id === c.quadroId)?.nome ?? '',
-      })),
+      (editor.model.circuitos ?? []).map((c) => {
+        const quadro = (editor.model.quadros ?? []).find((q) => q.id === c.quadroId);
+        return {
+          id: c.id,
+          nome: c.nome,
+          quadroNome: quadro?.nome ?? '',
+          // E1.3: tensão e ligação do circuito, ou do quadro dele — derivadas para o painel do ponto.
+          tensaoV: c.tensaoV ?? quadro?.tensaoV ?? null,
+          ligacao: c.ligacao ?? quadro?.ligacao ?? null,
+        };
+      }),
     [editor.model.circuitos, editor.model.quadros],
   );
 

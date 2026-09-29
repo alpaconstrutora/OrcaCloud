@@ -726,6 +726,20 @@ export const COTA_USUAL_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, number> =
 };
 
 /**
+ * O PADRÃO da tomada pela corrente (E1.3, 29/09/2026): a NBR 14136 tem duas
+ * correntes, 10 A e 20 A. Até 10 A é a tomada comum; acima, a de 20 A; acima
+ * de 20 A não é tomada — é ligação direta (NBR 5410 9.5.2.3). DERIVADO da
+ * potência e da tensão do circuito; `null` sem uma das duas.
+ */
+export function padraoDaTomada(potenciaVA: number | null | undefined, tensaoV: number | null | undefined): string | null {
+  if (potenciaVA == null || !tensaoV) return null;
+  const i = potenciaVA / tensaoV;
+  if (i <= 10) return '2P+T 10 A (NBR 14136)';
+  if (i <= 20) return '2P+T 20 A (NBR 14136)';
+  return `acima de 20 A (${i.toFixed(1).replace('.', ',')} A) — ligação direta, não tomada (9.5.2.3)`;
+}
+
+/**
  * A CAIXA DE PASSAGEM 4×4 (E1.2): 100 × 100 mm de boca e 50 mm de fundo — é o
  * que o menu grava ao criar; a octogonal e a 4×2 se declaram no painel.
  */

@@ -36,6 +36,14 @@ export interface AreaDeTransferencia {
   /** Estruturas copiadas. Andam pelo `delta`, como paredes e limites. */
   structuralIds: ObjectId[];
   /**
+   * INSTALAÇÃO copiada (E1.3): pontos, trechos e quadros — andam pelo `delta`
+   * e colam SEM circuito (o kernel diz por quê). Opcionais pela razão de
+   * `structuralIds`: área montada antes deles não os tem.
+   */
+  terminalIds?: ObjectId[];
+  trechoIds?: ObjectId[];
+  quadroIds?: ObjectId[];
+  /**
    * Canto (x mínimo, y mínimo) do que foi copiado.
    *
    * ÂNCORA NO CANTO, NÃO NO CENTRO. O delta da colagem é a diferença entre o
@@ -84,12 +92,18 @@ export function copiarSelecao(model: BlueprintModel, selectedIds: string[]): Res
   });
   const boundaryIds = selectedIds.filter((id) => model.boundaries.some((b) => b.id === id));
   const structuralIds = selectedIds.filter((id) => model.structures.some((s) => s.id === id));
+  const terminalIds = selectedIds.filter((id) => (model.terminais ?? []).some((t) => t.id === id));
+  const trechoIds = selectedIds.filter((id) => (model.trechos ?? []).some((t) => t.id === id));
+  const quadroIds = selectedIds.filter((id) => (model.quadros ?? []).some((q) => q.id === id));
 
   if (
     wallIds.length === 0 &&
     openingIds.length === 0 &&
     boundaryIds.length === 0 &&
-    structuralIds.length === 0
+    structuralIds.length === 0 &&
+    terminalIds.length === 0 &&
+    trechoIds.length === 0 &&
+    quadroIds.length === 0
   ) {
     // Seleção vazia, ou só medição: medição não entra no histórico do kernel.
     return { ok: false, aviso: 'Nada que se possa copiar está selecionado.' };
@@ -122,11 +136,19 @@ export function copiarSelecao(model: BlueprintModel, selectedIds: string[]): Res
   for (const s of model.structures) {
     if (estruturas.has(s.id)) s.pontos.forEach(marcar);
   }
+  // A instalação entra na âncora pelos pontos dela (centro do terminal e do
+  // quadro, pontas do trecho) — todos na grade, como as paredes.
+  const pontosEl = new Set(terminalIds);
+  for (const t of model.terminais ?? []) if (pontosEl.has(t.id)) marcar(t.at);
+  const trechosEl = new Set(trechoIds);
+  for (const t of model.trechos ?? []) if (trechosEl.has(t.id)) { marcar(t.a); marcar(t.b); }
+  const quadrosEl = new Set(quadroIds);
+  for (const q of model.quadros ?? []) if (quadrosEl.has(q.id)) marcar(q.at);
 
   // Só aberturas avulsas: elas não têm posição no plano — o destino delas é um
   // offset na parede apontada — então a âncora nunca é consultada.
   const ancora: Point = minX === Infinity ? { x: 0, y: 0 } : { x: minX, y: minY };
-  return { ok: true, area: { wallIds, openingIds, boundaryIds, structuralIds, ancora } };
+  return { ok: true, area: { wallIds, openingIds, boundaryIds, structuralIds, terminalIds, trechoIds, quadroIds, ancora } };
 }
 
 /**
@@ -153,12 +175,18 @@ export function comandoDeColagem(
   const avulsas = area.openingIds
     .map((id) => model.openings.find((o) => o.id === id))
     .filter((o): o is NonNullable<typeof o> => Boolean(o));
+  const terminalIds = (area.terminalIds ?? []).filter((id) => (model.terminais ?? []).some((t) => t.id === id));
+  const trechoIds = (area.trechoIds ?? []).filter((id) => (model.trechos ?? []).some((t) => t.id === id));
+  const quadroIds = (area.quadroIds ?? []).filter((id) => (model.quadros ?? []).some((q) => q.id === id));
 
   if (
     wallIds.length === 0 &&
     boundaryIds.length === 0 &&
     structuralIds.length === 0 &&
-    avulsas.length === 0
+    avulsas.length === 0 &&
+    terminalIds.length === 0 &&
+    trechoIds.length === 0 &&
+    quadroIds.length === 0
   ) {
     return { ok: false, aviso: 'O que estava copiado não existe mais no desenho.' };
   }
@@ -180,7 +208,7 @@ export function comandoDeColagem(
         avulsas.length === 1
           ? 'Aponte o cursor sobre uma parede para colar a abertura.'
           : 'Aponte o cursor sobre uma parede para colar as aberturas.';
-      if (wallIds.length === 0 && boundaryIds.length === 0 && structuralIds.length === 0) {
+      if (wallIds.length === 0 && boundaryIds.length === 0 && structuralIds.length === 0 && terminalIds.length === 0 && trechoIds.length === 0 && quadroIds.length === 0) {
         return { ok: false, aviso };
       }
     } else {
@@ -202,10 +230,21 @@ export function comandoDeColagem(
     }
   }
 
+  // A instalação colada nasce SEM circuito (E1.3) — dizer isso antes do próximo passo.
+  const comCircuito =
+    terminalIds.some((id) => (model.terminais ?? []).find((t) => t.id === id)?.circuitoId) ||
+    trechoIds.some((id) => ((model.trechos ?? []).find((t) => t.id === id)?.circuitoIds ?? []).length > 0);
+  if (comCircuito) {
+    const recado = 'A cópia nasce sem circuito: ligue os pontos ao quadro (painel ou Circuitos automáticos).';
+    aviso = aviso ? `${aviso} ${recado}` : recado;
+  }
   return {
     ok: true,
     comando: {
       type: 'DuplicateEntities',
+      terminalIds,
+      trechoIds,
+      quadroIds,
       levelId,
       wallIds,
       boundaryIds,

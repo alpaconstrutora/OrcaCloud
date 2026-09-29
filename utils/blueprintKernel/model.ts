@@ -60,8 +60,10 @@ export interface Level {
    * no IFC da revisão seguinte. Editar essas peças aqui é recusado
    * (`LEVEL_LINKED`): edita-se o tipo, e a edição propaga.
    *
-   * As INSTALAÇÕES não são copiadas: colunas, quadros e circuitos são por
-   * pavimento de qualquer forma, e o lançamento automático já os faz por andar.
+   * As INSTALAÇÕES não são copiadas no pavimento VINCULADO: colunas, quadros e
+   * circuitos são por pavimento de qualquer forma, e o lançamento automático já
+   * os faz por andar. (A cópia SOLTA — `DuplicateLevel` — leva quadros, pontos e
+   * trechos desde a E1.3 do roadmap elétrico, sem os circuitos.)
    * Cota, pé-direito e nome continuam próprios do pavimento vinculado.
    *
    * Sem corrente: o tipo não pode ser ele mesmo vinculado (invariante), e

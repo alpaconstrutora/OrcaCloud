@@ -1919,13 +1919,13 @@ Automação (E6) e BIM (E7) fecham.
 
 Fecha o bloco **6** (parcial — o fio completo depende da E2), parte do **2** e do **7**, e os achados.
 
-## Etapa 1 — Modelo de pontos e caixas · kernel bump · 3 fases
+## Etapa 1 — Modelo de pontos e caixas · kernel bump · 3 fases · **✅ CONCLUÍDA em 29/09/2026 (3 de 3; kernel 0.68.0 → 0.70.0)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
 | 1.1 Tipos de ponto que faltam ✅ (kernel 0.69.0) | `TIPOS_DE_PONTO_ELETRICO` ganha `AR_CONDICIONADO`, `MOTOR_BOMBA`, `CAMPAINHA`, `PORTAO`, `CARREGADOR_VE`, `PONTO_ESPERA`, `VENTILADOR_EXAUSTOR`, `ATERRAMENTO`, cada um com cota usual, potência padrão (hipótese nomeada — AC por BTU, VE 7,4 kW), grupo de carga (novo grupo `MOTOR` com fator próprio), uso do circuito (TUE/FORCA), símbolo NBR 5444, entidade IFC (`IfcElectricAppliance`, `IfcElectricMotor`, `IfcAudioVisualAppliance`…) e regra 9.5.3.1 quando > 10 A | goldens com os tipos novos; `blueprintPontoEletricoTipos.test.ts`; menu de inserir mostra os grupos; IFC valida no visualizador |
 | 1.2 Componente com carga ✅ (kernel 0.70.0; caixa automática → E6.3) | `Componente` de CLIMATIZACAO/EXAUSTOR **lança o ponto elétrico** ao ser inserido (molde: louça → ponto hidráulico, 27/09) e o ponto carrega a potência do componente; caixa `CAIXA_PASSAGEM` como terminal com medidas (4×2, 4×4, octogonal) — a tomada/interruptor já é a própria caixa | inserir evaporadora cria `AR_CONDICIONADO` na parede atrás dela; apagar o componente apaga o ponto (invariante); caixa aparece no 2D/3D/IFC/quantitativo |
-| 1.3 Tensão e padrão visíveis no ponto; copiar entre pavimentos | painel do ponto mostra tensão e ligação **derivadas do circuito** e o padrão da tomada (2P+T 10 A / 20 A por potência, hipótese); `DuplicateLevel`/área de transferência aceitam terminal, trecho e quadro (com `circuitoId` remapeado ou zerado — dito na prévia) | teste: duplicar pavimento copia pontos e eletrodutos, circuitos ficam por criar; Ctrl+V de seleção elétrica funciona; goldens |
+| 1.3 Tensão e padrão visíveis no ponto; copiar entre pavimentos ✅ | painel do ponto mostra tensão e ligação **derivadas do circuito** e o padrão da tomada (2P+T 10 A / 20 A por potência, hipótese); `DuplicateLevel`/área de transferência aceitam terminal, trecho e quadro (com `circuitoId` remapeado ou zerado — dito na prévia) | teste: duplicar pavimento copia pontos e eletrodutos, circuitos ficam por criar; Ctrl+V de seleção elétrica funciona; goldens |
 
 Fecha o bloco **5**.
 
@@ -2379,3 +2379,53 @@ medidas 4×4, sem carga (grupo null, função null); IFC `IfcJunctionBox .POWER.
 **Efeito no benchmark**: §2 "Condicionadores de ar" ✅ (agora a PEÇA gera a carga), "Exaustores" ✅;
 §7 "Caixas de passagem" ❌→✅ (como peça; a automática é E6.3); §18 "Caixas" ❌→✅; §45 "Caixas"
 ❌→✅; §47 "Caixas" ❌→✅ (conta por classificação).
+
+### E1.3 — Tensão e padrão visíveis no ponto; copiar a instalação entre pavimentos (29/09/2026) · frente `eletrico-e1` · sem bump · **fecha a Etapa 1**
+
+**O que mudou**
+
+- `utils/blueprintKernel/commands.ts` — **`DuplicateEntities`** aceita `terminalIds`, `trechoIds`
+  e `quadroIds` (opcionais, pela razão de `aguaIds`): ponto, trecho e quadro andam pelo `delta`
+  como as paredes; **a cópia nasce SEM circuito** (o ponto perde `circuitoId`, o trecho perde
+  `circuitoIds`) e sem a marca de sugerido — o circuito é do quadro de origem, e ligar é o passo
+  seguinte. **`DuplicateLevel`** (a cópia SOLTA do pavimento) passa a levar quadros, pontos e
+  trechos — antes o andar copiado nascia sem uma tomada. O pavimento **vinculado** (`tipoDeId`)
+  continua sem instalação, e o comentário do `Level` diz por quê (ela é re-derivada do tipo a cada
+  comando e duplicaria a cada sync). Sem mudança de payload: **sem bump**.
+- `utils/blueprintAreaDeTransferencia.ts` — Ctrl+C reconhece ponto, trecho e quadro (antes "Nada
+  que se possa copiar"); a âncora enxerga os pontos deles; Ctrl+V monta o `DuplicateEntities` com
+  as três listas e **avisa "A cópia nasce sem circuito…"** quando o que foi copiado estava ligado.
+- `utils/blueprintRede.ts` — **`padraoDaTomada(potenciaVA, tensaoV)`**: 10 A até 10 A, 20 A até
+  20 A (NBR 14136), acima disso "ligação direta, não tomada (9.5.2.3)"; `null` sem potência ou
+  tensão. Derivado, nunca gravado.
+- `components/blueprint/PainelTrechoSelecionado.tsx` + editor — sob o seletor de circuito, a linha
+  **"Do circuito: 127 V · F-N · tomada 2P+T 10 A (NBR 14136)"**: tensão e ligação vêm do circuito
+  ou do quadro dele (o ponto não as guarda — duas verdades divergiriam), o padrão só em TUG/TUE.
+- **Não entrou (declarado)**: circuito acompanhando a cópia (criar circuito espelho no quadro
+  copiado) — é decisão de projeto, não de cópia; o planejador de circuitos faz isso em um clique.
+  Copiar instalação para o pavimento VINCULADO — por desenho, não.
+
+**Testes** — novo `__tests__/blueprintCopiarInstalacao.test.ts` (6): `DuplicateEntities` copia
+quadro/ponto/trecho deslocados, sem circuito e sem sugerido, original intacto; id inexistente
+derruba o comando com o nome da família; `DuplicateLevel` leva a instalação sem circuitos e o
+vinculado não; `copiarSelecao` reconhece os três, âncora nos pontos deles, `comandoDeColagem`
+avisa "nasce sem circuito" e cola deslocado; ponto solto cola sem aviso; `padraoDaTomada` (600 VA
+/127 V → 10 A; 2.000 → 20 A; 4.400/220 → 20 A; 5.500/220 → ligação direta; sem tensão → null).
+
+**O que os testes pegaram antes de publicar**: o script de edição chutou a forma do `return` de
+`comandoDeColagem` ("`return { ok: true, comando: {`" numa linha) e abortou no meio — os passos já
+gravados eram idempotentes por ficheiro, e um segundo script terminou o resto. Nada quebrou;
+ficou a lição de ler a forma antes de casar texto.
+
+**Verificação**: `tsc` ✓ · alvo 166 ✓ (cópia, duplicação, pavimento tipo, identidade, goldens,
+painéis) · suíte inteira **6.196 ✓ / 0 ✗ / 33 skip** (566 arquivos) · `build` ✓ · `check-ui-standard` nos 2 `.tsx` ✓ ·
+`check-xss-sinks` ✓ · bundle da `planta-api` sem mudança (o `commands.ts` não entra nele).
+**Sem teste jsdom da linha derivada do painel** e sem harness — fica dito.
+
+**Efeito no benchmark**: §1 "Aproveitamento de lançamentos entre pavimentos" ❌→✅ (cópia solta),
+"Cópia de elementos entre pavimentos" ❌→✅; §2 "Atributos por ponto (tensão, fase…)" 🟡→✅
+(derivados e visíveis), "Tomadas 2P+T" 🟡→✅ (padrão pela corrente), "Tomadas bifásicas" 🟡→✅
+(ligação visível); §7 "Cópia de quadros entre pavimentos" ❌→✅.
+
+**Etapa 1: 3 de 3 fases** ✓ (kernel 0.68.0 → 0.70.0). Próxima: **E2 — Comandos, esquemas de ligação
+e fiação** (bump; o motor que o benchmark apontou como o maior buraco).

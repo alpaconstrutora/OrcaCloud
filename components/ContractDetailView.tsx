@@ -1167,6 +1167,13 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     };
     const ovColunaUnica = !!ovGroup && (!ovTemPrincipal[ovGroup] || !ovTemLateral[ovGroup]);
 
+    // A barra §5.3 só aparece se a aba ativa tiver ação própria — as mesmas
+    // condições dos botões dentro dela. Botão novo na barra = condição nova aqui.
+    const podeGerarObra = (contract as any)?.direction === 'OUTGOING' && !contract?.project_id
+        && ['Assinado', 'Ativo'].includes(contract?.status ?? '');
+    const temAcoesDaAba = activeTab === 'items' || activeTab === 'emissao' || activeTab === 'financeiro'
+        || contractTemplates.length > 0 || podeGerarObra;
+
     const activities = React.useMemo(() => {
         const m = measurements.map(item => ({
             id: item.id,
@@ -1252,7 +1259,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             {/* §19.1 — trilho cinza DENTRO de card branco, flex-wrap (nunca
                 overflow-x-auto), abas h-7. Aba ativa é ESTADO DE NAVEGAÇÃO
                 (bg-white text-blue-600 shadow-sm), não o azul sólido de ação. */}
-            <div className="bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3 sticky top-4 z-40">
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3 sticky top-4 z-40">
                 <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {/* Recorrente e não-recorrente têm as MESMAS abas (pedido de
                         2026-09-28); o recorrente só acrescenta "Faturas de
@@ -1285,12 +1292,27 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         </button>
                     ))}
                 </div>
+
+                {/* §17/§19.1: ação primária compacta, única azul sólida da tela, no
+                    slot à direita do card de abas. Morava sozinha na barra §5.3
+                    abaixo, que em Resumo/Execução/Riscos/Medições… era um card
+                    inteiro só para ela. Não usar o <Button> compartilhado — a
+                    classe BASE dele herda font-black uppercase + shadow pesado. */}
+                <button
+                    onClick={() => handleSendWebhook()}
+                    disabled={loading}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-50"
+                    title="Enviar para Automação (Make.com)"
+                >
+                    <Zap className="w-[15px] h-[15px]" />
+                    Enviar automação
+                </button>
             </div>
 
-            {/* §5.3 — toolbar de botões: ações do contrato à esquerda, ação
-                primária (única azul sólida) à direita. Antes ficavam soltas ao
-                lado do <h1>, o que o §17/§20 não permitem. */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+            {/* §5.3 — barra de ações do escopo da aba ativa. Só existe quando a
+                aba tem ação própria: vazia, era moldura sem conteúdo (§30). */}
+            {temAcoesDaAba && (
+            <div className="flex flex-wrap items-center gap-2 bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center gap-2">
                     {/* Ações da planilha de itens — escopo da aba ativa (§5.3) */}
                     {activeTab === 'items' && (
@@ -1375,7 +1397,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     )}
 
                     {/* Gerar Obra — visível apenas para contratos OUTGOING assinados/ativos sem obra vinculada */}
-                    {(contract as any).direction === 'OUTGOING' && !contract.project_id && ['Assinado', 'Ativo'].includes(contract.status) && (
+                    {podeGerarObra && (
                         <button
                             onClick={async () => {
                                 const ok = await confirm({
@@ -1400,20 +1422,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         </button>
                     )}
                 </div>
-
-                {/* §17: ação primária compacta, única azul sólida da tela. Não usar
-                    o <Button> compartilhado aqui — a classe BASE dele herda
-                    font-black uppercase tracking-widest + shadow pesado. */}
-                <button
-                    onClick={() => handleSendWebhook()}
-                    disabled={loading}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-50"
-                    title="Enviar para Automação (Make.com)"
-                >
-                    <Zap className="w-[15px] h-[15px]" />
-                    Enviar automação
-                </button>
             </div>
+            )}
 
             {hasDivergence && (
                 <div className="bg-amber-50 border border-amber-100 p-4 rounded-[10px] flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-500 shadow-sm">
@@ -1513,6 +1523,32 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         )}
 
                         {/* Diff Visual do Orçamento */}
+                        {/* Formulário do contrato, embutido no Resumo (o antigo modal
+                            "Ajustar Contrato"). Mora na coluna principal, abaixo do
+                            Resumo de Execução, com o card de valores ao lado — antes
+                            ficava embaixo da grade, na largura toda, e o painel da
+                            direita, mais alto, deixava um vão vazio sob o Resumo de
+                            Execução. Os blocos de dinheiro (valores, pagamento, centro
+                            de custo) vivem na aba Financeiro — ver RESUMO_FORM_SECTIONS. */}
+                        {showOv('resumo') && (
+                                <ContractModal
+                                    isOpen
+                                    variant="inline"
+                                    sections={RESUMO_FORM_SECTIONS}
+                                    initialData={contract}
+                                    projectId={contract.project_id ?? ''}
+                                    organizationId={contract.organization_id ?? orgIdProp}
+                                    direction={(contract as any).direction}
+                                    domain={(contract as any).domain}
+                                    onClose={() => { /* embutido: não há o que fechar */ }}
+                                    onToast={notify}
+                                    onSubmit={async (data) => {
+                                        const updated = await contractService.updateContract(contract.id, data);
+                                        setContract(updated);
+                                    }}
+                                />
+                        )}
+
                         {showOv('riscos') && budgetDifferences.length > 0 && (
                             <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
                                 <div className="flex items-center justify-between">
@@ -3191,33 +3227,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             </table>
                         )}
                     </div>
-                </div>
-            )}
-
-            {/* Formulário do contrato, embutido na aba Resumo — o antigo modal
-                "Ajustar Contrato": os dados do contrato se leem e se editam no
-                mesmo lugar, em vez de aparecerem em card só-leitura aqui e em
-                campo editável noutra aba. Os blocos de dinheiro (valores,
-                pagamento, centro de custo) saíram daqui para a aba Financeiro —
-                ver RESUMO_FORM_SECTIONS. */}
-            {showOv('resumo') && (
-                <div className="animate-in slide-in-from-bottom-4 duration-500">
-                    <ContractModal
-                        isOpen
-                        variant="inline"
-                        sections={RESUMO_FORM_SECTIONS}
-                        initialData={contract}
-                        projectId={contract.project_id ?? ''}
-                        organizationId={contract.organization_id ?? orgIdProp}
-                        direction={(contract as any).direction}
-                        domain={(contract as any).domain}
-                        onClose={() => { /* embutido: não há o que fechar */ }}
-                        onToast={notify}
-                        onSubmit={async (data) => {
-                            const updated = await contractService.updateContract(contract.id, data);
-                            setContract(updated);
-                        }}
-                    />
                 </div>
             )}
 

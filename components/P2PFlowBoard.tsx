@@ -7,7 +7,8 @@ import {
   ChevronRight, Loader2, Inbox,
   Building2,
 } from 'lucide-react';
-import { p2pFlowService, P2PStage, P2PRecord, SeamStatus } from '../services/p2pFlowService';
+import { p2pFlowService, P2PStage, P2PRecord, P2PProcessItem, SeamStatus } from '../services/p2pFlowService';
+import { INSTANCE_STATUS_LABEL } from '../types/process';
 import { KpiCard, KpiColor } from './ui/KpiCard';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 
@@ -27,18 +28,25 @@ const STAGE_ICON: Record<string, React.ElementType> = {
   pagamento:   Landmark,
 };
 
-const SEAM_CFG: Record<SeamStatus, { label: string; color: string; lineColor: string; icon: React.ElementType }> = {
-  auto:   { label: 'Automático',  color: 'text-emerald-600', lineColor: 'bg-emerald-300', icon: CheckCircle2 },
-  manual: { label: 'Semi-manual', color: 'text-amber-600',   lineColor: 'bg-amber-300',   icon: AlertTriangle },
-  gap:    { label: 'Lacuna',      color: 'text-red-600',     lineColor: 'bg-red-300',      icon: XCircle },
+const SEAM_CFG: Record<SeamStatus, { label: string; color: string; lineColor: string; border: string; icon: React.ElementType }> = {
+  auto:        { label: 'Automático',  color: 'text-emerald-600', lineColor: 'bg-emerald-300', border: 'border-slate-200',  icon: CheckCircle2 },
+  orquestrada: { label: 'Orquestrada', color: 'text-indigo-600',  lineColor: 'bg-indigo-300',  border: 'border-indigo-200', icon: Workflow },
+  manual:      { label: 'Semi-manual', color: 'text-amber-600',   lineColor: 'bg-amber-300',   border: 'border-amber-200',  icon: AlertTriangle },
+  gap:         { label: 'Lacuna',      color: 'text-red-600',     lineColor: 'bg-red-300',     border: 'border-red-200',    icon: XCircle },
 };
+
+/** Costuras que pedem atenção (a legenda do rodapé). `orquestrada` é conduzida por processo, não é pendência. */
+const SEAM_ATENCAO: SeamStatus[] = ['manual', 'gap'];
 
 // KPIs de saúde das integrações — um por situação da costura de entrada.
 const SEAM_KPI: { seam: SeamStatus; label: string; sub: string; color: KpiColor; icon: React.ElementType; vazio: string }[] = [
-  { seam: 'auto',   label: 'Automáticas',  sub: 'Integração sem intervenção', color: 'emerald', icon: CheckCircle2,  vazio: 'Nenhuma etapa recebe dados automaticamente.' },
-  { seam: 'manual', label: 'Semi-manuais', sub: 'Exigem ação do usuário',     color: 'amber',   icon: AlertTriangle, vazio: 'Nenhuma etapa depende de ação manual.' },
-  { seam: 'gap',    label: 'Lacunas',      sub: 'Sem integração',             color: 'red',     icon: XCircle,       vazio: 'Nenhuma lacuna de integração.' },
+  { seam: 'auto',        label: 'Automáticas',  sub: 'Integração sem intervenção', color: 'emerald', icon: CheckCircle2,  vazio: 'Nenhuma etapa recebe dados automaticamente.' },
+  { seam: 'orquestrada', label: 'Orquestradas', sub: 'Conduzidas por um processo', color: 'indigo',  icon: Workflow,      vazio: 'Nenhuma etapa é conduzida por processo. Ative um template com gatilho por evento em Processos › Templates.' },
+  { seam: 'manual',      label: 'Semi-manuais', sub: 'Exigem ação do usuário',     color: 'amber',   icon: AlertTriangle, vazio: 'Nenhuma etapa depende de ação manual.' },
+  { seam: 'gap',         label: 'Lacunas',      sub: 'Sem integração',             color: 'red',     icon: XCircle,       vazio: 'Nenhuma lacuna de integração.' },
 ];
+
+const fmtDataHora = (iso?: string) => iso ? new Date(iso).toLocaleDateString('pt-BR') : undefined;
 
 const BTN_PRIMARIO   = 'flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95';
 const BTN_SECUNDARIO = 'flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95';
@@ -96,6 +104,73 @@ function StageRecords({ stageId, organizationId, projectId }: {
   );
 }
 
+// ── Processos nascidos numa etapa (corpo do drawer, só para nó com evento) ──
+function StageProcesses({ stage, organizationId, projectId, onNavigate }: {
+  stage: P2PStage;
+  organizationId: string | null;
+  projectId?: string;
+  onNavigate: (v: string) => void;
+}) {
+  const [itens, setItens] = useState<P2PProcessItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    p2pFlowService.getStageProcesses(stage.id, organizationId, projectId)
+      .then(setItens)
+      .finally(() => setLoading(false));
+  }, [stage.id, organizationId, projectId]);
+
+  const templates = stage.processes?.templates ?? [];
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-gray-700">Processos em andamento</h3>
+        <button
+          onClick={() => onNavigate('opura-processos')}
+          className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800"
+        >
+          Abrir Processos <ChevronRight className="w-[15px] h-[15px]" />
+        </button>
+      </div>
+      {templates.length > 0 && (
+        <p className="text-xs text-gray-500">Nascem aqui: {templates.join(', ')}.</p>
+      )}
+      {loading ? (
+        <div className="text-center py-6">
+          <Loader2 className="w-6 h-6 animate-spin text-blue-600 mx-auto" />
+        </div>
+      ) : itens.length === 0 ? (
+        <p className="text-sm text-gray-500 py-3">
+          {templates.length > 0
+            ? 'Nenhum processo em andamento nascido nesta etapa.'
+            : 'Nenhum template ativo escuta esta etapa. Ative um em Processos › Templates para a transição seguinte virar orquestrada.'}
+        </p>
+      ) : (
+        <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
+          {itens.map(p => (
+            <div key={p.id} className="flex items-start justify-between gap-3 px-4 py-2.5">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-800 break-words">{p.title}</p>
+                <p className="text-xs text-gray-500 break-words">
+                  {p.templateName}{p.stepName && ` · ${p.stepName}`}
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-0.5 shrink-0">
+                <span className={`text-sm font-normal whitespace-nowrap ${p.overdue ? 'text-red-600' : 'text-gray-600'}`}>
+                  {p.overdue ? 'Atrasado' : (INSTANCE_STATUS_LABEL[p.status] ?? p.status)}
+                </span>
+                {p.dueAt && <span className="text-xs text-gray-400">prazo {fmtDataHora(p.dueAt)}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Drawer de uma etapa ─────────────────────────────────────────────────────
 function StageSheet({ stage, organizationId, projectId, onClose, onNavigate }: {
   stage: P2PStage | null;
@@ -126,6 +201,9 @@ function StageSheet({ stage, organizationId, projectId, onClose, onNavigate }: {
               </div>
             </div>
             <StageRecords stageId={stage.id} organizationId={organizationId} projectId={projectId} />
+            {stage.eventKeys && (
+              <StageProcesses stage={stage} organizationId={organizationId} projectId={projectId} onNavigate={onNavigate} />
+            )}
           </SheetPanel>
 
           <SheetFooter>
@@ -214,7 +292,7 @@ function StageCard({ stage, selected, onOpen }: {
       onClick={onOpen}
       className={`w-full sm:w-48 text-left p-4 bg-white border rounded-2xl shadow-sm hover:bg-slate-50 transition-all
         ${selected ? 'ring-2 ring-indigo-400' : ''}
-        ${stage.inboundSeam === 'gap' ? 'border-red-200' : stage.inboundSeam === 'manual' ? 'border-amber-200' : 'border-slate-200'}`}
+        ${seam.border}`}
     >
       <div className="flex items-center gap-2 mb-3">
         <div className="bg-indigo-50 text-indigo-600 p-2 rounded-xl shrink-0">
@@ -232,6 +310,14 @@ function StageCard({ stage, selected, onOpen }: {
           <span className="text-xs font-bold text-amber-600">{stage.pending} pend.</span>
         )}
       </div>
+
+      {/* Processos nascidos neste nó (só nó com evento do motor) */}
+      {stage.processes && (
+        <p className={`mt-1 text-xs ${stage.processes.atrasados > 0 ? 'text-red-600' : 'text-indigo-600'}`}>
+          {stage.processes.ativos} {stage.processes.ativos === 1 ? 'processo' : 'processos'}
+          {stage.processes.atrasados > 0 && ` · ${stage.processes.atrasados} atrasado${stage.processes.atrasados === 1 ? '' : 's'}`}
+        </p>
+      )}
 
       {/* Badge da costura de entrada */}
       <div className={`mt-2 flex items-center gap-1 ${seam.color}`}>
@@ -287,13 +373,13 @@ export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeVi
 
   useEffect(() => { load(); }, [load]);
 
-  const gaps    = stages.filter(s => s.inboundSeam === 'gap').length;
-  const manuais = stages.filter(s => s.inboundSeam === 'manual').length;
   const contagemPorSeam: Record<SeamStatus, number> = {
-    auto: stages.filter(s => s.inboundSeam === 'auto').length,
-    manual: manuais,
-    gap: gaps,
+    auto:        stages.filter(s => s.inboundSeam === 'auto').length,
+    orquestrada: stages.filter(s => s.inboundSeam === 'orquestrada').length,
+    manual:      stages.filter(s => s.inboundSeam === 'manual').length,
+    gap:         stages.filter(s => s.inboundSeam === 'gap').length,
   };
+  const etapasComAtencao = stages.filter(s => SEAM_ATENCAO.includes(s.inboundSeam));
   const openStage = stages.find(s => s.id === openStageId) ?? null;
 
   return (
@@ -338,7 +424,7 @@ export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeVi
       </div>
 
       {/* KPIs de saúde das integrações (§4) — clicar abre as etapas daquela situação */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
         {SEAM_KPI.map(k => (
           <KpiCard
             key={k.seam}
@@ -379,13 +465,13 @@ export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeVi
       </div>
 
       {/* Legenda dos pontos de atenção */}
-      {(gaps > 0 || manuais > 0) && (
+      {etapasComAtencao.length > 0 && (
         <div>
           <h2 className="text-sm font-black uppercase tracking-wider text-slate-500 mb-2">
             Pontos de atenção nas integrações
           </h2>
           <div className="space-y-2">
-            {stages.filter(s => s.inboundSeam !== 'auto').map(s => {
+            {etapasComAtencao.map(s => {
               const cfg = SEAM_CFG[s.inboundSeam];
               return (
                 <div key={s.id} className="flex items-start gap-3 bg-white border border-slate-200 rounded-xl p-3">

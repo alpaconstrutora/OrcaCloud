@@ -17,6 +17,14 @@ export type ProcessInstanceStatus =
 
 export type ProcessInstanceStepStatus = 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDO' | 'REPROVADO' | 'PULADO';
 
+/** Rótulo em português de cada status de instância — um vocabulário só, para o módulo e para quem mostra processos fora dele (Torre P2P, Central). */
+export const INSTANCE_STATUS_LABEL: Record<ProcessInstanceStatus, string> = {
+    EM_ANDAMENTO: 'Em andamento', AGUARDANDO_RESPONSAVEL: 'Aguardando responsável',
+    AGUARDANDO_APROVACAO: 'Aguardando aprovação', AGUARDANDO_DOCUMENTO: 'Aguardando documento',
+    BLOQUEADO: 'Bloqueado', ATRASADO: 'Atrasado', DEVOLVIDO: 'Devolvido',
+    CONCLUIDO: 'Concluído', CANCELADO: 'Cancelado',
+};
+
 export interface ProcessTemplate {
     id: string;
     organization_id: string;

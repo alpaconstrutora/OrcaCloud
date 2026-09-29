@@ -3,11 +3,50 @@ import { projectService } from './projectService';
 import { purchaseRequestService } from './purchaseRequestService';
 import { statusDaSolicitacao, STATUS_LABEL } from '../utils/solicitacaoCompra';
 import type { PurchaseRequestDisplayStatus } from '../types/purchaseRequest';
+import type { ProcessEventKey, ProcessInstanceStatus } from '../types/process';
 
 /** SC que ainda pede ação de alguém (a etapa "Solicitação" do quadro). */
 const SC_ABERTA: PurchaseRequestDisplayStatus[] = ['rascunho', 'em_aprovacao', 'aprovada', 'em_atendimento'];
 
-export type SeamStatus = 'auto' | 'manual' | 'gap';
+/**
+ * Costura de entrada de um nó. `orquestrada` não é rótulo fixo: é derivada do
+ * motor de Processos — a organização tem template ATIVO com gatilho por evento
+ * para o nó anterior, então a transição é conduzida por um processo, com
+ * etapas, responsável e SLA. Os outros três continuam sendo o retrato estático
+ * do código (ver `DEFINICAO_DOS_NOS`).
+ */
+export type SeamStatus = 'auto' | 'manual' | 'gap' | 'orquestrada';
+
+/** Resumo das instâncias de processo nascidas num nó. */
+export interface P2PProcessSummary {
+  ativos: number;
+  atrasados: number;
+  /** Nomes dos templates ATIVOS que escutam os eventos deste nó. */
+  templates: string[];
+}
+
+/** Uma instância de processo, do jeito que o drawer do nó a mostra. */
+export interface P2PProcessItem {
+  id: string;
+  title: string;
+  status: ProcessInstanceStatus;
+  templateName: string;
+  stepName?: string;
+  startedAt: string;
+  dueAt?: string;
+  overdue: boolean;
+}
+
+/**
+ * Eventos do motor de Processos que NASCEM em cada nó. O processo que nasce no
+ * nó N conduz a transição N → N+1; por isso a costura de ENTRADA de N+1 é a
+ * que vira `orquestrada`. Hoje só o Recebimento emite (`orderService`, bloco
+ * 2b); os demais nós entram no Passo 3 do plano
+ * (docs/planos/2026-09-28-torre-p2p-processos.md).
+ */
+export const STAGE_EVENT_KEYS: Record<string, ProcessEventKey[]> = {
+  recebimento: ['purchase_order.received', 'purchase_order.divergence'],
+};
 
 export interface P2PRecord {
   id: string;
@@ -28,6 +67,10 @@ export interface P2PStage {
   inboundSeam: SeamStatus;
   inboundNote?: string;
   records?: P2PRecord[];
+  /** Eventos do motor que nascem neste nó (ver `STAGE_EVENT_KEYS`). */
+  eventKeys?: ProcessEventKey[];
+  /** Instâncias ativas nascidas neste nó. Só existe quando há `eventKeys`. */
+  processes?: P2PProcessSummary;
 }
 
 export interface P2PFlowSnapshot {
@@ -112,6 +155,114 @@ async function fetchRows<T extends Record<string, unknown>>(
   }
 }
 
+// ── Motor de Processos — o que a Torre lê dele ──────────────────────────────
+
+interface InstanciaDoMotor {
+  id: string;
+  title: string;
+  status: ProcessInstanceStatus;
+  started_at: string;
+  due_at: string | null;
+  current_step_id: string | null;
+  process_templates: { name: string; trigger_event_key: string | null } | null;
+}
+
+interface LeituraDoMotor {
+  /** trigger_event_key → nomes dos templates ATIVOS que o escutam. */
+  templatesAtivos: Map<string, string[]>;
+  /** Instâncias não terminais de templates com gatilho por evento. */
+  instancias: InstanciaDoMotor[];
+  /** id da etapa atual → { nome, due_at }. */
+  etapaAtual: Map<string, { name: string; due_at: string | null }>;
+}
+
+const MOTOR_VAZIO: LeituraDoMotor = { templatesAtivos: new Map(), instancias: [], etapaAtual: new Map() };
+
+/**
+ * Duas consultas em paralelo (templates ATIVOS por evento; instâncias não
+ * terminais com o template embutido) e uma terceira, só se houver instância,
+ * para a etapa atual — `process_instances` ↔ `process_instance_steps` têm DUAS
+ * FKs (a etapa aponta para a instância; a instância aponta para a etapa
+ * atual), então o embed do PostgREST fica ambíguo e a consulta separada é o
+ * caminho que não depende do nome da constraint.
+ *
+ * Erro em qualquer uma devolve o motor vazio: a Torre então mostra o retrato
+ * estático, como antes — nunca esconde o quadro por causa do motor.
+ */
+async function lerMotor(organizationId: string | null, projectId?: string): Promise<LeituraDoMotor> {
+  try {
+    let tq = supabase
+      .from('process_templates')
+      .select('name, trigger_event_key')
+      .eq('trigger_type', 'EVENTO')
+      .eq('status', 'ATIVO')
+      .not('trigger_event_key', 'is', null);
+    if (organizationId) tq = tq.eq('organization_id', organizationId);
+
+    let iq = supabase
+      .from('process_instances')
+      .select('id, title, status, started_at, due_at, current_step_id, process_templates!inner(name, trigger_event_key)')
+      .not('status', 'in', '(CONCLUIDO,CANCELADO)')
+      .order('started_at', { ascending: false })
+      .limit(200);
+    if (organizationId) iq = iq.eq('organization_id', organizationId);
+    if (projectId) iq = iq.eq('project_id', projectId);
+
+    const [t, i] = await Promise.all([tq, iq]);
+    if (t.error) { console.warn('[p2pFlow] templates do motor:', t.error.message); return MOTOR_VAZIO; }
+    if (i.error) { console.warn('[p2pFlow] instâncias do motor:', i.error.message); return MOTOR_VAZIO; }
+
+    const templatesAtivos = new Map<string, string[]>();
+    for (const row of (t.data ?? []) as { name: string; trigger_event_key: string | null }[]) {
+      if (!row.trigger_event_key) continue;
+      templatesAtivos.set(row.trigger_event_key, [...(templatesAtivos.get(row.trigger_event_key) ?? []), row.name]);
+    }
+
+    const instancias = ((i.data ?? []) as unknown as InstanciaDoMotor[])
+      .filter(inst => inst.process_templates?.trigger_event_key);
+
+    const etapaAtual = new Map<string, { name: string; due_at: string | null }>();
+    const idsEtapa = instancias.map(inst => inst.current_step_id).filter((id): id is string => !!id);
+    if (idsEtapa.length > 0) {
+      const { data: etapas, error } = await supabase
+        .from('process_instance_steps')
+        .select('id, name, due_at')
+        .in('id', idsEtapa);
+      if (error) console.warn('[p2pFlow] etapa atual do motor:', error.message);
+      for (const e of (etapas ?? []) as { id: string; name: string; due_at: string | null }[]) {
+        etapaAtual.set(e.id, { name: e.name, due_at: e.due_at });
+      }
+    }
+
+    return { templatesAtivos, instancias, etapaAtual };
+  } catch (e) {
+    console.warn('[p2pFlow] motor:', e);
+    return MOTOR_VAZIO;
+  }
+}
+
+/** Atrasada = status já diz, ou a etapa atual/instância passou do prazo. */
+function instanciaAtrasada(inst: InstanciaDoMotor, motor: LeituraDoMotor, agora: number): boolean {
+  if (inst.status === 'ATRASADO') return true;
+  const etapa = inst.current_step_id ? motor.etapaAtual.get(inst.current_step_id) : undefined;
+  const prazo = etapa?.due_at ?? inst.due_at;
+  return !!prazo && new Date(prazo).getTime() < agora;
+}
+
+function instanciasDoNo(motor: LeituraDoMotor, eventKeys: ProcessEventKey[]): InstanciaDoMotor[] {
+  const chaves = new Set<string>(eventKeys);
+  return motor.instancias.filter(inst => chaves.has(inst.process_templates!.trigger_event_key!));
+}
+
+function resumirProcessos(motor: LeituraDoMotor, eventKeys: ProcessEventKey[], agora: number): P2PProcessSummary {
+  const lista = instanciasDoNo(motor, eventKeys);
+  return {
+    ativos: lista.length,
+    atrasados: lista.filter(inst => instanciaAtrasada(inst, motor, agora)).length,
+    templates: eventKeys.flatMap(k => motor.templatesAtivos.get(k) ?? []),
+  };
+}
+
 const fmtBrl = (n?: number) =>
   n != null ? n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : undefined;
 
@@ -183,6 +334,7 @@ export const p2pFlowService = {
       notas,
       contasPagar,
       pagos,
+      motor,
     ] = await Promise.all([
       contarSolicitacoes(),
       contarCotacoes(),
@@ -193,9 +345,16 @@ export const p2pFlowService = {
       countRows('nfe_invoices', { ...org }),
       countRows('internal_transactions', { ...org, ...proj, direction: 'DEBIT', status: 'PENDING' }),
       countRows('internal_transactions', { ...org, ...proj, direction: 'DEBIT', status: 'CONCILIATED' }),
+      lerMotor(organizationId, projectId),
     ]);
 
-    const stages: P2PStage[] = [
+    // Retrato ESTÁTICO das costuras — o que o código faz sozinho, sem o motor.
+    // Conferido contra o código em 28/09/2026 (os três últimos nós estavam
+    // com o rótulo de junho: "SEM 3-way match" quando o `matchService` +
+    // `ThreeWayMatchPanel` já existiam na aba Recebimento do pedido, e "NF-e
+    // isolada não gera título" quando `nfeService` já criava o título com
+    // `purchase_order_id`). Se uma costura mudar no código, mude AQUI.
+    const definicoes: P2PStage[] = [
       {
         id: 'solicitacao', label: 'Solicitação', owner: 'Obras / Almoxarifado',
         view: 'supplies-solicitacoes', count: solicitacoes.abertas, pending: solicitacoes.emAprovacao,
@@ -215,6 +374,7 @@ export const p2pFlowService = {
         id: 'recebimento', label: 'Recebimento', owner: 'Estoque',
         view: 'supplies-receipts', count: recebimentos,
         inboundSeam: 'auto', inboundNote: 'Conferência física do pedido',
+        eventKeys: STAGE_EVENT_KEYS.recebimento,
       },
       {
         id: 'estoque', label: 'Estoque', owner: 'Almoxarifado',
@@ -224,13 +384,14 @@ export const p2pFlowService = {
       {
         id: 'fiscal', label: 'Nota Fiscal', owner: 'Fiscal',
         view: 'fiscal-nfe', count: notas,
-        inboundSeam: 'gap', inboundNote: 'SEM 3-way match (Pedido × Recebimento × Nota)',
+        inboundSeam: 'manual',
+        inboundNote: '3-way match (Pedido × Recebimento × Nota) na aba Recebimento do pedido; sem bloqueio automático',
       },
       {
         id: 'financeiro', label: 'Contas a Pagar', owner: 'Financeiro',
         view: 'contas-a-pagar', count: contasPagar, pending: contasPagar,
-        inboundSeam: 'manual',
-        inboundNote: 'Título nasce do recebimento+nota (parcial); NF-e isolada não gera título',
+        inboundSeam: 'auto',
+        inboundNote: 'Título nasce do pedido recebido ou da NF-e vinculada, com o pedido de origem (purchase_order_id)',
       },
       {
         id: 'pagamento', label: 'Pago / Baixado', owner: 'Tesouraria',
@@ -239,7 +400,51 @@ export const p2pFlowService = {
       },
     ];
 
+    // Sobrepõe o motor ao retrato: o nó que EMITE evento ganha o resumo das
+    // instâncias nascidas nele; o nó SEGUINTE tem a entrada `orquestrada`
+    // quando há template ativo escutando. "Todas as organizações" (org null)
+    // conta template de qualquer org do usuário — a RLS já recortou.
+    const agora = Date.now();
+    const stages: P2PStage[] = definicoes.map((no, i) => {
+      const emissor = definicoes[i - 1];
+      const templatesDoAnterior = emissor?.eventKeys?.flatMap(k => motor.templatesAtivos.get(k) ?? []) ?? [];
+      const orquestrada = templatesDoAnterior.length > 0;
+      return {
+        ...no,
+        ...(no.eventKeys ? { processes: resumirProcessos(motor, no.eventKeys, agora) } : {}),
+        ...(orquestrada ? {
+          inboundSeam: 'orquestrada' as SeamStatus,
+          inboundNote: `Conduzida por Processos: ${[...new Set(templatesDoAnterior)].join(', ')}`,
+        } : {}),
+      };
+    });
+
     return { stages, generatedAt: new Date().toISOString() };
+  },
+
+  /** Instâncias ativas nascidas num nó (drawer do nó). Vazio para nó sem evento. */
+  async getStageProcesses(
+    stageId: string,
+    organizationId: string | null,
+    projectId?: string,
+  ): Promise<P2PProcessItem[]> {
+    const eventKeys = STAGE_EVENT_KEYS[stageId];
+    if (!eventKeys) return [];
+    const motor = await lerMotor(organizationId, projectId);
+    const agora = Date.now();
+    return instanciasDoNo(motor, eventKeys).map(inst => {
+      const etapa = inst.current_step_id ? motor.etapaAtual.get(inst.current_step_id) : undefined;
+      return {
+        id: inst.id,
+        title: inst.title,
+        status: inst.status,
+        templateName: inst.process_templates?.name ?? '',
+        stepName: etapa?.name,
+        startedAt: inst.started_at,
+        dueAt: etapa?.due_at ?? inst.due_at ?? undefined,
+        overdue: instanciaAtrasada(inst, motor, agora),
+      };
+    });
   },
 
   async getStageRecords(

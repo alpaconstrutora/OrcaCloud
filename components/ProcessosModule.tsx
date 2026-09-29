@@ -11,6 +11,7 @@ import type {
     ProcessTemplate, ProcessTemplateStep, ProcessInstance, ProcessInstanceWithSteps,
     ProcessInstanceStep, PendingStepItem, ProcessComment, ProcessStepType, ProcessStepBottleneck,
 } from '../types/process';
+import { INSTANCE_STATUS_LABEL } from '../types/process';
 import type { OpuraDocument } from '../types/documents';
 import Button from './ui/Button';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/modal';
@@ -26,24 +27,18 @@ const STEP_TYPE_LABEL: Record<ProcessStepType, string> = {
     approval: 'Aprovação', task: 'Tarefa', document: 'Documento', validation: 'Validação', manual: 'Manual',
 };
 
-const INSTANCE_STATUS_LABEL: Record<string, string> = {
-    EM_ANDAMENTO: 'Em andamento', AGUARDANDO_RESPONSAVEL: 'Aguardando responsável',
-    AGUARDANDO_APROVACAO: 'Aguardando aprovação', AGUARDANDO_DOCUMENTO: 'Aguardando documento',
-    BLOQUEADO: 'Bloqueado', ATRASADO: 'Atrasado', DEVOLVIDO: 'Devolvido',
-    CONCLUIDO: 'Concluído', CANCELADO: 'Cancelado',
-};
-
+// §8 do guia: status é texto colorido simples — sem pílula, fundo ou uppercase.
 const INSTANCE_STATUS_COLOR: Record<string, string> = {
-    EM_ANDAMENTO: 'bg-blue-100 text-blue-700', AGUARDANDO_RESPONSAVEL: 'bg-amber-100 text-amber-700',
-    AGUARDANDO_APROVACAO: 'bg-purple-100 text-purple-700', AGUARDANDO_DOCUMENTO: 'bg-amber-100 text-amber-700',
-    BLOQUEADO: 'bg-red-100 text-red-700', ATRASADO: 'bg-red-100 text-red-700', DEVOLVIDO: 'bg-orange-100 text-orange-700',
-    CONCLUIDO: 'bg-green-100 text-green-700', CANCELADO: 'bg-gray-100 text-gray-600',
+    EM_ANDAMENTO: 'text-blue-700', AGUARDANDO_RESPONSAVEL: 'text-amber-700',
+    AGUARDANDO_APROVACAO: 'text-purple-700', AGUARDANDO_DOCUMENTO: 'text-amber-700',
+    BLOQUEADO: 'text-red-700', ATRASADO: 'text-red-700', DEVOLVIDO: 'text-orange-700',
+    CONCLUIDO: 'text-green-700', CANCELADO: 'text-gray-600',
 };
 
 function StatusBadge({ status }: { status: string }) {
     return (
-        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide ${INSTANCE_STATUS_COLOR[status] ?? 'bg-gray-100 text-gray-600'}`}>
-            {INSTANCE_STATUS_LABEL[status] ?? status}
+        <span className={`text-sm font-normal ${INSTANCE_STATUS_COLOR[status] ?? 'text-gray-600'}`}>
+            {(INSTANCE_STATUS_LABEL as Record<string, string>)[status] ?? status}
         </span>
     );
 }
@@ -554,7 +549,7 @@ function ProcessDashboard({ organizationId }: { organizationId: string | null })
                                         <td className="px-4 py-2 text-right text-gray-700">{b.active_count}</td>
                                         <td className="px-4 py-2 text-right">
                                             {b.overdue_count > 0 ? (
-                                                <span className="inline-flex items-center gap-1 text-red-600 font-bold">
+                                                <span className="inline-flex items-center gap-1 text-red-600 font-normal">
                                                     <AlertTriangle className="w-3.5 h-3.5" /> {b.overdue_count}
                                                 </span>
                                             ) : '—'}

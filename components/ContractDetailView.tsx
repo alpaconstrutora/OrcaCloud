@@ -150,7 +150,7 @@ const persistUnits = (u: string[]) => localStorage.setItem(UNITS_KEY, JSON.strin
 type ContractDetailTab =
     | 'overview_resumo' | 'overview_execucao' | 'overview_riscos'
     | 'items' | 'addendums' | 'measurements' | 'financeiro'
-    | 'penalties' | 'evaluation' | 'utility_bills' | 'emissao';
+    | 'penalties' | 'evaluation' | 'emissao';
 
 /**
  * A antiga aba "Visão Geral" empilhava 17 blocos numa tela só — o usuário
@@ -1268,7 +1268,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         { id: 'addendums', label: 'Aditivos (VA/PR)', icon: History },
                         { id: 'measurements', label: (contract as any).direction === 'OUTGOING' ? 'Faturamento (M/F)' : 'Medições (M/F)', icon: BarChart3 },
                         { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
-                        ...(contract.is_recurring ? [{ id: 'utility_bills', label: 'Faturas de Consumo', icon: BarChart3 }] : []),
                         { id: 'penalties', label: 'Penalidades', icon: AlertCircle },
                         { id: 'evaluation', label: 'Avaliação de Desempenho', icon: BarChart3 },
                         { id: 'emissao', label: 'Emissão', icon: FileDown },
@@ -1362,9 +1361,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     {/* §5.3 — escopo da aba ativa. No Financeiro, só na sub-aba
                         Parcelas, que é onde os lançamentos aparecem; ela de
                         propósito NÃO repete este botão (§18) — o empty state manda
-                        usar esta barra. "Faturas de Consumo" (só recorrente) também
-                        lança daqui. */}
-                    {(activeTab === 'utility_bills' || (activeTab === 'financeiro' && financeSubTab === 'parcelas')) && (
+                        usar esta barra. */}
+                    {activeTab === 'financeiro' && financeSubTab === 'parcelas' && (
                         <button
                             onClick={handleSyncFinance}
                             disabled={syncingFinance}
@@ -2943,6 +2941,98 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 </div>
                             )}
                         </div>
+
+                        {/* Faturas de Consumo (só contrato recorrente) — era aba
+                            própria; vive aqui desde 2026-09-28, junto dos
+                            lançamentos que o contrato gera. */}
+                        {contract.is_recurring && (
+                        <div className="space-y-6">
+                            <div className="flex justify-between items-center mb-2">
+                                <div>
+                                    <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
+                                        Histórico de Consumo <span className="text-sm font-normal text-blue-600">{utilityBills.length} faturas</span>
+                                    </h3>
+                                    <p className="text-xs font-medium text-gray-400 mt-1">Gerencie os pagamentos mensais deste contrato recorrente.</p>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setEditingUtilityBill(null);
+                                        setIsUtilityBillModalOpen(true);
+                                    }}
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all active:scale-95 shrink-0 font-medium text-[13px] group"
+                                >
+                                    <Plus className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                    Lançar Fatura
+                                </button>
+                            </div>
+
+                            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            <th className="px-6 py-2 border-r border-gray-100 text-left">Mês ref.</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 text-left">Status</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 text-left">Vencimento</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 text-right">Consumo</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 text-right">Valor total</th>
+                                            <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50 text-gray-700">
+                                        {utilityBills.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={6} className="px-8 py-20 text-center">
+                                                    <p className="text-sm font-bold text-gray-400">Nenhuma fatura registrada para este contrato.</p>
+                                                </td>
+                                            </tr>
+                                        ) : utilityBills.map((bill) => (
+                                            <tr key={bill.id} className="hover:bg-blue-50/20 transition-all group">
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-10 h-10 bg-gray-50 rounded-[6px] flex items-center justify-center text-gray-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
+                                                            <BarChart3 className="w-5 h-5" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
+                                                                {/* Meio-dia local: 'AAAA-MM-01' puro vira meia-noite UTC e, no fuso do Brasil, o mês anterior. */}
+                                                                {new Date(String(bill.reference_month).slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-6 font-normal text-sm">
+                                                    <span className={`px-2 py-1 rounded-lg text-table-body font-medium ${bill.status === 'Pago' ? 'bg-green-100 text-green-800' :
+                                                        bill.status === 'Atrasado' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
+                                                        }`}>
+                                                        {bill.status}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-6 font-normal text-sm text-gray-700">
+                                                    {bill.due_date ? new Date(bill.due_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'N/A'}
+                                                </td>
+                                                <td className="px-6 py-6 text-right font-normal text-sm text-gray-700">
+                                                    {bill.consumption_metric ? bill.consumption_metric.toLocaleString('pt-BR') : '-'}
+                                                </td>
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
+                                                    <p className="text-base font-medium text-gray-900 tracking-tighter">R$ {bill.total_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                                </td>
+                                                <td className="px-6 py-6 border-l border-gray-50 flex items-center gap-2">
+                                                    <ActionIconButton
+                                                        kind="edit"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setEditingUtilityBill(bill);
+                                                            setIsUtilityBillModalOpen(true);
+                                                        }}
+                                                    />
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        )}
                         </>)}
                     </div>
                 );
@@ -3096,95 +3186,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 </tbody>
                             </table>
                         )}
-                    </div>
-                </div>
-            )}
-
-            {/* Tab: Faturas de Consumo */}
-            {activeTab === 'utility_bills' && (
-                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-                    <div className="flex justify-between items-center mb-2">
-                        <div>
-                            <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
-                                Histórico de Consumo <span className="text-sm font-normal text-blue-600">{utilityBills.length} faturas</span>
-                            </h3>
-                            <p className="text-xs font-medium text-gray-400 mt-1">Gerencie os pagamentos mensais deste contrato recorrente.</p>
-                        </div>
-                        <button
-                            onClick={() => {
-                                setEditingUtilityBill(null);
-                                setIsUtilityBillModalOpen(true);
-                            }}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all active:scale-95 shrink-0 font-medium text-[13px] group"
-                        >
-                            <Plus className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                            Lançar Fatura
-                        </button>
-                    </div>
-
-                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    <th className="px-6 py-2 border-r border-gray-100 text-left">Mês ref.</th>
-                                    <th className="px-6 py-2 border-r border-gray-100 text-left">Status</th>
-                                    <th className="px-6 py-2 border-r border-gray-100 text-left">Vencimento</th>
-                                    <th className="px-6 py-2 border-r border-gray-100 text-right">Consumo</th>
-                                    <th className="px-6 py-2 border-r border-gray-100 text-right">Valor total</th>
-                                    <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50 text-gray-700">
-                                {utilityBills.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={6} className="px-8 py-20 text-center">
-                                            <p className="text-sm font-bold text-gray-400">Nenhuma fatura registrada para este contrato.</p>
-                                        </td>
-                                    </tr>
-                                ) : utilityBills.map((bill) => (
-                                    <tr key={bill.id} className="hover:bg-blue-50/20 transition-all group">
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 bg-gray-50 rounded-[6px] flex items-center justify-center text-gray-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
-                                                    <BarChart3 className="w-5 h-5" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
-                                                        {new Date(bill.reference_month).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-6 font-normal text-sm">
-                                            <span className={`px-2 py-1 rounded-lg text-table-body font-medium ${bill.status === 'Pago' ? 'bg-green-100 text-green-800' :
-                                                bill.status === 'Atrasado' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
-                                                }`}>
-                                                {bill.status}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-6 font-normal text-sm text-gray-700">
-                                            {bill.due_date ? new Date(bill.due_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'N/A'}
-                                        </td>
-                                        <td className="px-6 py-6 text-right font-normal text-sm text-gray-700">
-                                            {bill.consumption_metric ? bill.consumption_metric.toLocaleString('pt-BR') : '-'}
-                                        </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
-                                            <p className="text-base font-medium text-gray-900 tracking-tighter">R$ {bill.total_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                                        </td>
-                                        <td className="px-6 py-6 border-l border-gray-50 flex items-center gap-2">
-                                            <ActionIconButton
-                                                kind="edit"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setEditingUtilityBill(bill);
-                                                    setIsUtilityBillModalOpen(true);
-                                                }}
-                                            />
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
                     </div>
                 </div>
             )}

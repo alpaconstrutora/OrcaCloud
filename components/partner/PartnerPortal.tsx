@@ -941,7 +941,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           <div className="px-2.5 py-1 bg-orange-500 text-white rounded-lg text-xs font-black uppercase tracking-wider">
             Partner Portal
           </div>
-          <h1 className="text-md font-bold text-gray-900 tracking-tight">
+          <h1 className="text-base font-bold text-gray-900 tracking-tight">
             {workspace?.supplier_name}
           </h1>
         </div>
@@ -949,11 +949,11 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           <button
             type="button"
             onClick={() => setIsAccountMenuOpen(o => !o)}
-            className="flex items-center gap-2 text-xs bg-gray-50 hover:bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200 transition-colors"
+            className="flex items-center gap-2 text-sm bg-gray-50 hover:bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200 transition-colors"
             aria-haspopup="menu"
             aria-expanded={isAccountMenuOpen}
           >
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-500 text-[11px] font-bold text-white">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-500 text-xs font-bold text-white">
               {(partnerUser?.name || 'P').charAt(0).toUpperCase()}
             </span>
             <span className="font-semibold text-gray-600">{partnerUser?.name} ({partnerUser?.role})</span>
@@ -1148,7 +1148,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                           {act.kind === 'documento' ? <FolderOpen className="w-3.5 h-3.5" /> : act.label}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-gray-800 truncate">
+                          <p className="text-sm font-semibold text-gray-800 truncate">
                             {act.kind === 'documento' ? `Documento compartilhado: ${act.title}` : act.title}
                           </p>
                           <span className="text-xs text-gray-400">
@@ -1158,7 +1158,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                       </div>
                     ))}
                     {recentActivity.length === 0 && (
-                      <div className="text-center py-6 text-xs text-gray-400">Nenhuma atividade recente cadastrada.</div>
+                      <div className="text-center py-6 text-sm text-gray-400">Nenhuma atividade recente cadastrada.</div>
                     )}
                   </div>
                 </div>
@@ -1166,13 +1166,13 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                 {/* Info Card Construtora */}
                 <div className="bg-white border border-gray-200 p-5 rounded-2xl shadow-sm flex flex-col gap-4">
                   <h4 className="text-sm font-bold text-gray-900">Canal de Atendimento</h4>
-                  <p className="text-xs text-gray-500 leading-relaxed">
+                  <p className="text-sm text-gray-500 leading-relaxed">
                     Este é o canal direto de comunicação da sua empresa com a Construtora. Qualquer dúvida ou solicitação técnica/financeira deve ser formalizada pela aba <strong>Solicitações</strong>.
                   </p>
                   <div className="h-px bg-gray-100 my-1"></div>
                   <div>
                     <span className="text-xs text-gray-400 uppercase block font-bold">Documentação GED</span>
-                    <span className="text-xs text-gray-600">Todos os projetos e contratos oficiais estão na aba <strong>Documentos</strong>.</span>
+                    <span className="text-sm text-gray-600">Todos os projetos e contratos oficiais estão na aba <strong>Documentos</strong>.</span>
                   </div>
                 </div>
               </div>
@@ -1198,7 +1198,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                     </button>
                   ))}
                   {conversations.length === 0 && (
-                    <div className="text-center py-6 text-xs text-gray-400">Nenhum canal ativo.</div>
+                    <div className="text-center py-6 text-sm text-gray-400">Nenhum canal ativo.</div>
                   )}
                 </div>
               </div>
@@ -1207,7 +1207,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
               <div className="flex-1 flex flex-col bg-white">
                 {selectedConversation ? (
                   <>
-                    <div className="h-12 border-b border-gray-100 bg-gray-50 px-4 flex items-center justify-between text-xs font-bold text-gray-800 shrink-0">
+                    <div className="h-12 border-b border-gray-100 bg-gray-50 px-4 flex items-center justify-between text-sm font-bold text-gray-800 shrink-0">
                       <span># {selectedConversation.name}</span>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
@@ -1216,11 +1216,11 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                         return (
                           <div key={msg.id} className={`flex flex-col max-w-[70%] ${isMe ? 'ml-auto items-end' : 'mr-auto items-start'}`}>
                             <span className="text-xs text-gray-400 mb-0.5 font-medium">{msg.sender_name}</span>
-                            <div className={`px-4 py-2.5 rounded-2xl text-xs leading-relaxed
+                            <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed
                               ${isMe ? 'bg-orange-500 text-white rounded-tr-none' : 'bg-gray-100 text-gray-800 rounded-tl-none border border-gray-100'}`}>
                               {msg.message}
                             </div>
-                            <span className="text-[9px] text-gray-400 mt-1">{new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                            <span className="text-xs text-gray-400 mt-1">{new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                           </div>
                         );
                       })}
@@ -1240,7 +1240,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                     </form>
                   </>
                 ) : (
-                  <div className="flex-1 flex items-center justify-center text-xs text-gray-400">Selecione ou aguarde o início de uma conversa.</div>
+                  <div className="flex-1 flex items-center justify-center text-sm text-gray-400">Selecione ou aguarde o início de uma conversa.</div>
                 )}
               </div>
             </div>
@@ -1256,7 +1256,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   toolbar da tabela, que passa a ocupar a largura toda. */}
               <div className="flex flex-col gap-6 min-w-0">
                 <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <h3 className="text-md font-bold text-gray-900">Documentos Compartilhados</h3>
+                  <h3 className="text-base font-bold text-gray-900">Documentos Compartilhados</h3>
                   <Button
                     onClick={() => setIsSendDocModalOpen(true)}
                     disabled={isPreview}
@@ -1279,16 +1279,16 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                         <div key={req.id} className="bg-white border border-gray-200 p-4 rounded-2xl flex flex-col gap-3 shadow-sm">
                           <div className="flex items-start justify-between">
                             <div className="p-2 bg-purple-50 text-purple-600 rounded-xl"><Upload className="w-5 h-5" /></div>
-                            <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border
+                            <span className={`text-xs font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border
                               ${req.status === 'CONCLUIDO' ? 'bg-green-50 text-green-600 border-green-200' : 'bg-yellow-50 text-yellow-600 border-yellow-200'}`}>
                               {req.status === 'CONCLUIDO' ? 'Incluído no GED' : 'Aguardando revisão'}
                             </span>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h4 className="text-xs font-bold text-gray-900 truncate">{req.title}</h4>
-                            <p className="text-xs text-gray-400 mt-1 truncate">{req.description}</p>
+                            <h4 className="text-sm font-bold text-gray-900 truncate">{req.title}</h4>
+                            <p className="text-sm text-gray-400 mt-1 truncate">{req.description}</p>
                           </div>
-                          <div className="flex items-center justify-between text-xs text-gray-400 border-t border-gray-100 pt-3 mt-1">
+                          <div className="flex items-center justify-between text-sm text-gray-400 border-t border-gray-100 pt-3 mt-1">
                             <span>Enviado em: {new Date(req.created_at).toLocaleDateString()}</span>
                             {req.attachment_paths?.[0] && (
                               <button
@@ -1390,7 +1390,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                           <button
                             key={opt.id}
                             onClick={() => setDocStatusFilter(opt.id)}
-                            className={`px-3 h-7 rounded-[6px] text-xs font-medium transition-all
+                            className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all
                               ${docStatusFilter === opt.id ? 'bg-orange-500 text-white' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100'}`}
                           >
                             {opt.label}
@@ -1447,7 +1447,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                 </button>
                 <div className="min-w-0">
                   <span className="text-xs text-gray-400 font-bold uppercase">Nº {detailContract.number}</span>
-                  <h3 className="text-md font-bold text-gray-900 truncate">{detailContract.title || 'Contrato'}</h3>
+                  <h3 className="text-base font-bold text-gray-900 truncate">{detailContract.title || 'Contrato'}</h3>
                 </div>
               </div>
 
@@ -1464,7 +1464,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   <button
                     key={tab.id}
                     onClick={() => setDetailTab(tab.id)}
-                    className={`px-3 py-2.5 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition-all
+                    className={`px-3 py-2.5 text-sm font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition-all
                       ${detailTab === tab.id ? 'border-orange-500 text-orange-500' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
                   >
                     <tab.icon className="w-3.5 h-3.5" />
@@ -1474,14 +1474,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
               </div>
 
               {detailLoading ? (
-                <div className="text-center py-12 text-xs text-gray-400">Carregando...</div>
+                <div className="text-center py-12 text-sm text-gray-400">Carregando...</div>
               ) : (
                 <>
                   {detailTab === 'overview' && (
                     <div className="flex flex-col gap-4">
                       <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4">
                         <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Resumo de Execução</h4>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs mb-4">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
                           <div>
                             <span className="text-gray-400 block">Data Início</span>
                             <span className="font-bold text-gray-900">{detailContract.start_date ? new Date(detailContract.start_date).toLocaleDateString() : '-'}</span>
@@ -1501,7 +1501,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                         </div>
                         <div className="flex flex-col gap-2.5">
                           <div>
-                            <div className="flex justify-between text-[10px] text-gray-400 mb-1">
+                            <div className="flex justify-between text-xs text-gray-400 mb-1">
                               <span>Execução do Prazo</span><span>{timeProgress.toFixed(1)}%</span>
                             </div>
                             <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
@@ -1509,7 +1509,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                             </div>
                           </div>
                           <div>
-                            <div className="flex justify-between text-[10px] text-gray-400 mb-1">
+                            <div className="flex justify-between text-xs text-gray-400 mb-1">
                               <span>Progresso Físico-Financeiro</span><span>{physicalProgress.toFixed(1)}%</span>
                             </div>
                             <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
@@ -1521,27 +1521,27 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
 
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                         <div className="bg-white border border-gray-200 rounded-xl p-3">
-                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">Valor Atual</span>
+                          <span className="text-xs text-gray-400 uppercase font-semibold block">Valor Atual</span>
                           <span className="text-sm font-black text-gray-900">R$ {Number(detailContract.current_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                         </div>
                         <div className="bg-white border border-gray-200 rounded-xl p-3">
-                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">Valor Original</span>
+                          <span className="text-xs text-gray-400 uppercase font-semibold block">Valor Original</span>
                           <span className="text-sm font-black text-gray-900">R$ {Number(detailContract.original_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                         </div>
                         <div className="bg-white border border-gray-200 rounded-xl p-3">
-                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">% em Aditivos</span>
+                          <span className="text-xs text-gray-400 uppercase font-semibold block">% em Aditivos</span>
                           <span className="text-sm font-black text-gray-900">{addendumsPercentage.toFixed(1)}%</span>
                         </div>
                         <div className="bg-white border border-gray-200 rounded-xl p-3">
-                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">Total Medido</span>
+                          <span className="text-xs text-gray-400 uppercase font-semibold block">Total Medido</span>
                           <span className="text-sm font-black text-gray-900">R$ {totalMeasured.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                         </div>
                         <div className="bg-white border border-gray-200 rounded-xl p-3">
-                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">Retenções</span>
+                          <span className="text-xs text-gray-400 uppercase font-semibold block">Retenções</span>
                           <span className="text-sm font-black text-gray-900">R$ {retentionValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                         </div>
                         <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
-                          <span className="text-[10px] text-orange-600 uppercase font-semibold block">Saldo a Faturar</span>
+                          <span className="text-xs text-orange-600 uppercase font-semibold block">Saldo a Faturar</span>
                           <span className="text-sm font-black text-orange-700">R$ {saldoAFaturar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                         </div>
                       </div>
@@ -1553,14 +1553,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                       {contractItems.map((item) => (
                         <div key={item.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="text-xs font-bold text-gray-900 truncate">{item.description}</p>
-                            <p className="text-[10px] text-gray-400">{item.quantity} {item.unit} × R$ {Number(item.unit_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                            <p className="text-sm font-bold text-gray-900 truncate">{item.description}</p>
+                            <p className="text-sm text-gray-400">{item.quantity} {item.unit} × R$ {Number(item.unit_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                           </div>
-                          <span className="text-xs font-black text-gray-900 shrink-0">R$ {Number(item.total_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                          <span className="text-sm font-black text-gray-900 shrink-0">R$ {Number(item.total_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                         </div>
                       ))}
                       {contractItems.length === 0 && (
-                        <div className="text-center py-8 text-xs text-gray-400">Nenhum item cadastrado.</div>
+                        <div className="text-center py-8 text-sm text-gray-400">Nenhum item cadastrado.</div>
                       )}
                     </div>
                   )}
@@ -1571,20 +1571,20 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                         <div key={a.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3">
                           <div className="flex items-center justify-between gap-2 mb-1">
                             <span className="text-xs font-bold text-gray-900">Aditivo Nº {a.number} — {a.type}</span>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full
                               ${a.status === 'Aprovado' ? 'bg-green-100 text-green-700' : a.status === 'Rejeitado' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
                               {a.status}
                             </span>
                           </div>
-                          {a.description && <p className="text-[11px] text-gray-500 mb-1">{a.description}</p>}
-                          <div className="flex flex-wrap gap-4 text-[10px] text-gray-400">
+                          {a.description && <p className="text-sm text-gray-500 mb-1">{a.description}</p>}
+                          <div className="flex flex-wrap gap-4 text-sm text-gray-400">
                             {a.value_impact ? <span>Impacto: R$ {Number(a.value_impact).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span> : null}
                             {a.new_end_date ? <span>Novo término: {new Date(a.new_end_date).toLocaleDateString()}</span> : null}
                           </div>
                         </div>
                       ))}
                       {contractAddendums.length === 0 && (
-                        <div className="text-center py-8 text-xs text-gray-400">Nenhum aditivo registrado.</div>
+                        <div className="text-center py-8 text-sm text-gray-400">Nenhum aditivo registrado.</div>
                       )}
                     </div>
                   )}
@@ -1597,15 +1597,15 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                       {(detailContract.description || (detailContract as any).services_included || (detailContract as any).services_excluded
                         || (detailContract as any).execution_address || (detailContract as any).sla_days || (detailContract as any).warranty_months) && (
                         <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col gap-2">
-                          <h4 className="text-xs font-bold text-gray-900">Escopo do Serviço</h4>
-                          {detailContract.description && <p className="text-xs text-gray-600 whitespace-pre-line">{detailContract.description}</p>}
+                          <h4 className="text-sm font-bold text-gray-900">Escopo do Serviço</h4>
+                          {detailContract.description && <p className="text-sm text-gray-600 whitespace-pre-line">{detailContract.description}</p>}
                           {(detailContract as any).services_included && (
-                            <p className="text-xs text-gray-600"><span className="text-gray-400">Inclui: </span>{(detailContract as any).services_included}</p>
+                            <p className="text-sm text-gray-600"><span className="text-gray-400">Inclui: </span>{(detailContract as any).services_included}</p>
                           )}
                           {(detailContract as any).services_excluded && (
-                            <p className="text-xs text-gray-600"><span className="text-gray-400">Não inclui: </span>{(detailContract as any).services_excluded}</p>
+                            <p className="text-sm text-gray-600"><span className="text-gray-400">Não inclui: </span>{(detailContract as any).services_excluded}</p>
                           )}
-                          <div className="flex flex-wrap gap-4 text-[11px] text-gray-500 pt-1">
+                          <div className="flex flex-wrap gap-4 text-sm text-gray-500 pt-1">
                             {(detailContract as any).execution_address && <span>Local: {(detailContract as any).execution_address}</span>}
                             {(detailContract as any).sla_days ? <span>SLA: {(detailContract as any).sla_days} dias</span> : null}
                             {(detailContract as any).warranty_months ? <span>Garantia: {(detailContract as any).warranty_months} meses</span> : null}
@@ -1615,32 +1615,32 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
 
                       <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col gap-2">
                         <div className="flex items-center justify-between gap-2">
-                          <h4 className="text-xs font-bold text-gray-900">Pré-mobilização</h4>
+                          <h4 className="text-sm font-bold text-gray-900">Pré-mobilização</h4>
                           {detailContract.start_order_issued_at ? (
-                            <span className="text-xs text-emerald-700">
+                            <span className="text-sm text-emerald-700">
                               Ordem de Início emitida em {new Date(detailContract.start_order_issued_at + 'T12:00:00').toLocaleDateString('pt-BR')}
                             </span>
                           ) : (
-                            <span className="text-xs text-gray-400">Ordem de Início ainda não emitida</span>
+                            <span className="text-sm text-gray-400">Ordem de Início ainda não emitida</span>
                           )}
                         </div>
                         {contractDetail.precedentConditions.length === 0 ? (
-                          <p className="text-xs text-gray-400">Nenhuma condição precedente cadastrada.</p>
+                          <p className="text-sm text-gray-400">Nenhuma condição precedente cadastrada.</p>
                         ) : contractDetail.precedentConditions.map((cond) => (
                           <div key={cond.id} className="flex items-center justify-between gap-3 px-3 py-2 bg-white border border-gray-100 rounded-lg">
                             <span className="flex items-center gap-2 min-w-0">
                               <CheckCircle2 className={`w-4 h-4 shrink-0 ${cond.satisfied ? 'text-emerald-500' : 'text-gray-300'}`} />
-                              <span className="text-xs text-gray-700 truncate">{cond.item}</span>
+                              <span className="text-sm text-gray-700 truncate">{cond.item}</span>
                             </span>
-                            <span className="text-[11px] text-gray-400 shrink-0">{cond.responsible}</span>
+                            <span className="text-sm text-gray-400 shrink-0">{cond.responsible}</span>
                           </div>
                         ))}
                       </div>
 
                       <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col gap-2">
-                        <h4 className="text-xs font-bold text-gray-900">Matriz Documental</h4>
+                        <h4 className="text-sm font-bold text-gray-900">Matriz Documental</h4>
                         {contractDetail.documentRequirements.length === 0 ? (
-                          <p className="text-xs text-gray-400">Nenhum documento condicionante cadastrado.</p>
+                          <p className="text-sm text-gray-400">Nenhum documento condicionante cadastrado.</p>
                         ) : contractDetail.documentRequirements.map((doc) => {
                           const hoje = new Date().toISOString().split('T')[0];
                           // Mesma regra da tela interna: mensal sem validade em dia = vencido;
@@ -1649,14 +1649,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                           const entregue = doc.phase === 'MENSAL' ? !vencido : !!doc.document_url;
                           return (
                             <div key={doc.id} className="flex items-center justify-between gap-3 px-3 py-2 bg-white border border-gray-100 rounded-lg">
-                              <span className="text-xs text-gray-700 flex items-center gap-2 min-w-0">
+                              <span className="text-sm text-gray-700 flex items-center gap-2 min-w-0">
                                 <span className="truncate">{doc.document}</span>
-                                {doc.is_sst_critical && <span className="text-[11px] text-amber-600 shrink-0">SST</span>}
-                                {doc.blocks_payment && <span className="text-[11px] text-red-500 shrink-0">bloqueia pagamento</span>}
+                                {doc.is_sst_critical && <span className="text-xs text-amber-600 shrink-0">SST</span>}
+                                {doc.blocks_payment && <span className="text-xs text-red-500 shrink-0">bloqueia pagamento</span>}
                               </span>
                               <span className="flex items-center gap-3 shrink-0">
-                                <span className="text-[11px] text-gray-400">{DOC_PHASE_LABELS[doc.phase]}</span>
-                                <span className={`text-xs ${vencido ? 'text-red-600' : entregue ? 'text-emerald-700' : 'text-amber-700'}`}>
+                                <span className="text-xs text-gray-400">{DOC_PHASE_LABELS[doc.phase]}</span>
+                                <span className={`text-sm ${vencido ? 'text-red-600' : entregue ? 'text-emerald-700' : 'text-amber-700'}`}>
                                   {vencido ? 'Vencido' : entregue ? 'Entregue' : 'Pendente'}
                                 </span>
                               </span>
@@ -1666,17 +1666,17 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                       </div>
 
                       <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col gap-2">
-                        <h4 className="text-xs font-bold text-gray-900">Recebimento</h4>
+                        <h4 className="text-sm font-bold text-gray-900">Recebimento</h4>
                         {contractDetail.acceptances.length === 0 ? (
-                          <p className="text-xs text-gray-400">Nenhum termo de recebimento emitido.</p>
+                          <p className="text-sm text-gray-400">Nenhum termo de recebimento emitido.</p>
                         ) : contractDetail.acceptances.map((a) => (
                           <div key={a.id} className="px-3 py-2 bg-white border border-gray-100 rounded-lg">
                             <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs text-gray-700">{ACCEPTANCE_KIND_LABELS[a.kind]}</span>
-                              <span className="text-[11px] text-gray-400">{new Date(a.issued_at + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                              <span className="text-sm text-gray-700">{ACCEPTANCE_KIND_LABELS[a.kind]}</span>
+                              <span className="text-sm text-gray-400">{new Date(a.issued_at + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
                             </div>
                             {(a.pending_items?.length ?? 0) > 0 && (
-                              <p className="text-[11px] text-amber-700 mt-1">{a.pending_items.length} pendência(s)</p>
+                              <p className="text-sm text-amber-700 mt-1">{a.pending_items.length} pendência(s)</p>
                             )}
                           </div>
                         ))}
@@ -1690,15 +1690,15 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                     <div className="flex flex-col gap-4">
                       <div className="grid grid-cols-3 gap-3">
                         <div className="bg-white border border-gray-200 rounded-xl p-3">
-                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">Retido</span>
+                          <span className="text-xs text-gray-400 uppercase font-semibold block">Retido</span>
                           <span className="text-sm font-black text-gray-900">R$ {contractDetail.retention.totalRetained.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                         </div>
                         <div className="bg-white border border-gray-200 rounded-xl p-3">
-                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">Liberado</span>
+                          <span className="text-xs text-gray-400 uppercase font-semibold block">Liberado</span>
                           <span className="text-sm font-black text-gray-900">R$ {contractDetail.retention.totalReleased.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                         </div>
                         <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
-                          <span className="text-[10px] text-orange-600 uppercase font-semibold block">Saldo Retido</span>
+                          <span className="text-xs text-orange-600 uppercase font-semibold block">Saldo Retido</span>
                           <span className="text-sm font-black text-orange-700">R$ {contractDetail.retention.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                         </div>
                       </div>
@@ -1706,14 +1706,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                         {contractDetail.retention.releases.map((r) => (
                           <div key={r.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="text-xs font-bold text-gray-900">Liberação {RETENTION_RELEASE_KIND_LABELS[r.kind]}</p>
-                              <p className="text-[10px] text-gray-400">{new Date(r.released_at + 'T12:00:00').toLocaleDateString('pt-BR')}{r.notes ? ` · ${r.notes}` : ''}</p>
+                              <p className="text-sm font-bold text-gray-900">Liberação {RETENTION_RELEASE_KIND_LABELS[r.kind]}</p>
+                              <p className="text-sm text-gray-400">{new Date(r.released_at + 'T12:00:00').toLocaleDateString('pt-BR')}{r.notes ? ` · ${r.notes}` : ''}</p>
                             </div>
-                            <span className="text-xs font-black text-gray-900 shrink-0">R$ {Number(r.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            <span className="text-sm font-black text-gray-900 shrink-0">R$ {Number(r.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                           </div>
                         ))}
                         {contractDetail.retention.releases.length === 0 && (
-                          <div className="text-center py-8 text-xs text-gray-400">Nenhuma liberação registrada.</div>
+                          <div className="text-center py-8 text-sm text-gray-400">Nenhuma liberação registrada.</div>
                         )}
                       </div>
                     </div>
@@ -1725,11 +1725,11 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                       {contractDetail.penalties.map((pen) => (
                         <div key={pen.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3">
                           <div className="flex items-center justify-between gap-2 mb-1">
-                            <span className="text-xs font-bold text-gray-900">{PENALTY_KIND_LABELS[pen.kind]}</span>
-                            <span className={`text-xs ${PENALTY_STATUS_COLORS[pen.status]}`}>{PENALTY_STATUS_LABELS[pen.status]}</span>
+                            <span className="text-sm font-bold text-gray-900">{PENALTY_KIND_LABELS[pen.kind]}</span>
+                            <span className={`text-sm ${PENALTY_STATUS_COLORS[pen.status]}`}>{PENALTY_STATUS_LABELS[pen.status]}</span>
                           </div>
-                          {pen.reason && <p className="text-[11px] text-gray-500 mb-1">{pen.reason}</p>}
-                          <div className="flex flex-wrap gap-4 text-[10px] text-gray-400">
+                          {pen.reason && <p className="text-sm text-gray-500 mb-1">{pen.reason}</p>}
+                          <div className="flex flex-wrap gap-4 text-sm text-gray-400">
                             <span>Valor: R$ {Number(pen.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                             {pen.cure_deadline && <span>Prazo de cura: {new Date(pen.cure_deadline + 'T12:00:00').toLocaleDateString('pt-BR')}</span>}
                             {pen.applied_at && <span>Aplicada em: {new Date(pen.applied_at).toLocaleDateString('pt-BR')}</span>}
@@ -1737,7 +1737,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                         </div>
                       ))}
                       {contractDetail.penalties.length === 0 && (
-                        <div className="text-center py-8 text-xs text-gray-400">Nenhuma penalidade registrada.</div>
+                        <div className="text-center py-8 text-sm text-gray-400">Nenhuma penalidade registrada.</div>
                       )}
                     </div>
                   )}
@@ -1748,15 +1748,15 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                         <div key={m.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3">
                           <div className="flex items-center justify-between gap-2 mb-1">
                             <span className="text-xs font-bold text-gray-900">Medição Nº {m.number}</span>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full
                               ${m.status === 'Paga' || m.status === 'Processada' ? 'bg-green-100 text-green-700' : m.status === 'Cancelada' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
                               {m.status}
                             </span>
                           </div>
-                          <p className="text-[11px] text-gray-500 mb-1">
+                          <p className="text-sm text-gray-500 mb-1">
                             Período: {m.period_start ? new Date(m.period_start).toLocaleDateString() : '-'} até {m.period_end ? new Date(m.period_end).toLocaleDateString() : '-'}
                           </p>
-                          <div className="flex flex-wrap gap-4 text-[10px] text-gray-400">
+                          <div className="flex flex-wrap gap-4 text-sm text-gray-400">
                             <span>Bruto: R$ {Number(m.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                             <span>Retenção: R$ {Number(m.retention_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                             <span>Líquido: R$ {Number(m.net_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
@@ -1767,7 +1767,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                         </div>
                       ))}
                       {contractMeasurements.length === 0 && (
-                        <div className="text-center py-8 text-xs text-gray-400">Nenhuma medição registrada.</div>
+                        <div className="text-center py-8 text-sm text-gray-400">Nenhuma medição registrada.</div>
                       )}
                     </div>
                   )}
@@ -1779,7 +1779,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           {/* TAB: CONTRATOS (lista) */}
           {activeTab === 'contratos' && !detailContract && (
             <div className="flex flex-col gap-6">
-              <h3 className="text-md font-bold text-gray-900">Seus Contratos Ativos</h3>
+              <h3 className="text-base font-bold text-gray-900">Seus Contratos Ativos</h3>
               <div className="flex flex-col gap-4">
                 {contracts.map((contract) => (
                   <div
@@ -1794,7 +1794,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                         </span>
                         <span className="text-xs text-gray-400 font-bold">Nº {contract.number}</span>
                       </div>
-                      <h4 className="text-xs font-bold text-gray-900 truncate">{contract.title || 'Contrato Prestação de Serviços'}</h4>
+                      <h4 className="text-sm font-bold text-gray-900 truncate">{contract.title || 'Contrato Prestação de Serviços'}</h4>
                       <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-gray-400">
                         <span>Vigência: {contract.start_date ? new Date(contract.start_date).toLocaleDateString() : '-'} até {contract.end_date ? new Date(contract.end_date).toLocaleDateString() : '-'}</span>
                         <span>Reajuste: {contract.reajuste_index || 'Sem reajuste'}</span>
@@ -1808,7 +1808,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                       <button
                         type="button"
                         onClick={() => openContractDetail(contract)}
-                        className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-3.5 py-2 rounded-xl text-xs text-gray-700 hover:bg-gray-100 active:scale-95 transition-all font-semibold"
+                        className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-3.5 py-2 rounded-xl text-sm text-gray-700 hover:bg-gray-100 active:scale-95 transition-all font-semibold"
                       >
                         Ver Detalhes
                       </button>
@@ -1817,7 +1817,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                           href={getContractFileUrl(contract)!}
                           target="_blank"
                           rel="noreferrer"
-                          className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-3.5 py-2 rounded-xl text-xs text-gray-700 hover:bg-gray-100 active:scale-95 transition-all font-semibold"
+                          className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-3.5 py-2 rounded-xl text-sm text-gray-700 hover:bg-gray-100 active:scale-95 transition-all font-semibold"
                         >
                           <ExternalLink className="w-3.5 h-3.5 text-orange-500" />
                           Ver PDF
@@ -1838,14 +1838,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           {/* TAB: FINANCEIRO */}
           {activeTab === 'financeiro' && (
             <div className="flex flex-col gap-6">
-              <h3 className="text-md font-bold text-gray-900">Financeiro</h3>
+              <h3 className="text-base font-bold text-gray-900">Financeiro</h3>
 
               {financialsLoading ? (
-                <div className="text-center py-12 text-xs text-gray-400">Carregando...</div>
+                <div className="text-center py-12 text-sm text-gray-400">Carregando...</div>
               ) : (
                 <>
                   {invoiceUploadError && (
-                    <div className="bg-red-50 border border-red-200 text-red-600 text-xs font-medium rounded-xl p-3">
+                    <div className="bg-red-50 border border-red-200 text-red-600 text-sm font-medium rounded-xl p-3">
                       {invoiceUploadError}
                     </div>
                   )}
@@ -1853,15 +1853,15 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   {/* Resumo de retenção */}
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     <div className="bg-white border border-gray-200 rounded-xl p-3">
-                      <span className="text-[10px] text-gray-400 uppercase font-semibold block">Retenção Acumulada</span>
+                      <span className="text-xs text-gray-400 uppercase font-semibold block">Retenção Acumulada</span>
                       <span className="text-sm font-black text-gray-900">R$ {financials.retention.retained.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="bg-white border border-gray-200 rounded-xl p-3">
-                      <span className="text-[10px] text-gray-400 uppercase font-semibold block">Retenção Liberada</span>
+                      <span className="text-xs text-gray-400 uppercase font-semibold block">Retenção Liberada</span>
                       <span className="text-sm font-black text-gray-900">R$ {financials.retention.released.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
-                      <span className="text-[10px] text-orange-600 uppercase font-semibold block">Saldo Retido</span>
+                      <span className="text-xs text-orange-600 uppercase font-semibold block">Saldo Retido</span>
                       <span className="text-sm font-black text-orange-700">R$ {financials.retention.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                   </div>
@@ -1869,15 +1869,15 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   {/* Parcelas / contas a pagar */}
                   <div>
                     <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Parcelas</h4>
-                    {erroRecibo && <p className="text-xs text-red-600 mb-2">{erroRecibo}</p>}
+                    {erroRecibo && <p className="text-sm text-red-600 mb-2">{erroRecibo}</p>}
                     <div className="flex flex-col gap-2">
                       {financials.installments.map((t) => {
                         const situacao = situacaoDaParcela(t);
                         return (
                         <div key={t.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="text-xs font-bold text-gray-900 truncate">{t.description || 'Parcela do contrato'}</p>
-                            <p className="text-[10px] text-gray-400">Vencimento: {t.transaction_date ? new Date(t.transaction_date).toLocaleDateString() : '-'}</p>
+                            <p className="text-sm font-bold text-gray-900 truncate">{t.description || 'Parcela do contrato'}</p>
+                            <p className="text-sm text-gray-400">Vencimento: {t.transaction_date ? new Date(t.transaction_date).toLocaleDateString() : '-'}</p>
                           </div>
                           <div className="flex items-center gap-3 shrink-0">
                             {situacao === 'PAGA' && t.recibo_numero != null && (
@@ -1886,22 +1886,22 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                                 onClick={() => baixarRecibo(t.id)}
                                 disabled={baixandoRecibo === t.id}
                                 title="Baixar o recibo deste pagamento"
-                                className="text-[10px] text-orange-500 hover:text-orange-600 font-semibold disabled:opacity-50"
+                                className="text-sm text-orange-500 hover:text-orange-600 font-semibold disabled:opacity-50"
                               >
                                 {baixandoRecibo === t.id ? 'Baixando…' : `Recibo ${rotuloRecibo(t.recibo_numero)}`}
                               </button>
                             )}
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full
                               ${situacao === 'PAGA' ? 'bg-green-100 text-green-700' : situacao === 'CANCELADA' ? 'bg-gray-100 text-gray-500' : 'bg-yellow-100 text-yellow-700'}`}>
                               {situacao === 'PAGA' ? 'Pago' : situacao === 'CANCELADA' ? 'Cancelado' : 'Pendente'}
                             </span>
-                            <span className="text-xs font-black text-gray-900">R$ {Number(t.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            <span className="text-sm font-black text-gray-900">R$ {Number(t.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                           </div>
                         </div>
                         );
                       })}
                       {financials.installments.length === 0 && (
-                        <div className="text-center py-8 text-xs text-gray-400 bg-gray-50 border border-dashed border-gray-200 rounded-xl">Nenhuma parcela encontrada.</div>
+                        <div className="text-center py-8 text-sm text-gray-400 bg-gray-50 border border-dashed border-gray-200 rounded-xl">Nenhuma parcela encontrada.</div>
                       )}
                     </div>
                   </div>
@@ -1914,15 +1914,15 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                         <div key={m.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3">
                           <div className="flex items-center justify-between gap-2 mb-1">
                             <span className="text-xs font-bold text-gray-900">Medição Nº {m.number}</span>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full
                               ${m.status === 'Paga' || m.status === 'Processada' ? 'bg-green-100 text-green-700' : m.status === 'Cancelada' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
                               {m.status}
                             </span>
                           </div>
-                          <p className="text-[11px] text-gray-500 mb-2">
+                          <p className="text-sm text-gray-500 mb-2">
                             Período: {m.period_start ? new Date(m.period_start).toLocaleDateString() : '-'} até {m.period_end ? new Date(m.period_end).toLocaleDateString() : '-'}
                           </p>
-                          <div className="flex flex-wrap items-center gap-4 text-[10px] text-gray-400">
+                          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-400">
                             <span>Bruto: R$ {Number(m.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                             <span>Retenção: R$ {Number(m.retention_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                             <span>Líquido: R$ {Number(m.net_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
@@ -1950,7 +1950,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                         </div>
                       ))}
                       {financials.measurements.length === 0 && (
-                        <div className="text-center py-8 text-xs text-gray-400 bg-gray-50 border border-dashed border-gray-200 rounded-xl">Nenhuma medição registrada.</div>
+                        <div className="text-center py-8 text-sm text-gray-400 bg-gray-50 border border-dashed border-gray-200 rounded-xl">Nenhuma medição registrada.</div>
                       )}
                     </div>
                   </div>
@@ -1963,7 +1963,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           {activeTab === 'solicitacoes' && (
             <div className="flex flex-col gap-6">
               <div className="flex items-center justify-between">
-                <h3 className="text-md font-bold text-gray-900">Solicitações de Atendimento</h3>
+                <h3 className="text-base font-bold text-gray-900">Solicitações de Atendimento</h3>
                 <Button
                   onClick={() => setIsNewRequestModalOpen(true)}
                   disabled={isPreview}
@@ -1980,14 +1980,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   <div key={req.id} className="bg-white border border-gray-200 p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1.5">
-                        <span className={`px-2 py-0.5 text-[9px] font-black rounded-md border
+                        <span className={`px-2 py-0.5 text-xs font-black rounded-md border
                           ${req.priority === 'ALTA' ? 'bg-red-50 text-red-500 border-red-100' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
                           {req.priority}
                         </span>
                         <span className="text-xs text-gray-400 font-bold uppercase">{req.type}</span>
                       </div>
-                      <h4 className="text-xs font-bold text-gray-900 truncate">{req.title}</h4>
-                      <p className="text-xs text-gray-400 mt-1 leading-relaxed">{req.description}</p>
+                      <h4 className="text-sm font-bold text-gray-900 truncate">{req.title}</h4>
+                      <p className="text-sm text-gray-400 mt-1 leading-relaxed">{req.description}</p>
                       {req.attachment_paths && req.attachment_paths.length > 0 && (
                         <div className="flex flex-wrap gap-2 pt-2">
                           {req.attachment_paths.map((path, idx) => (
@@ -1995,7 +1995,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                               key={idx}
                               type="button"
                               onClick={() => handleDownloadAttachment(path)}
-                              className="flex items-center gap-1 text-xs text-orange-500 hover:text-orange-600 font-semibold bg-gray-50 border border-gray-200 px-2 py-1 rounded-lg"
+                              className="flex items-center gap-1 text-sm text-orange-500 hover:text-orange-600 font-semibold bg-gray-50 border border-gray-200 px-2 py-1 rounded-lg"
                             >
                               <Paperclip className="w-3 h-3" />
                               <span className="truncate max-w-[10rem]">{path.split('/').pop()?.replace(/^\d+_/, '')}</span>
@@ -2012,7 +2012,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                           {req.status}
                         </span>
                       </div>
-                      <span className="text-xs text-gray-400 font-medium">Aberto em: {new Date(req.created_at).toLocaleDateString()}</span>
+                      <span className="text-sm text-gray-400 font-medium">Aberto em: {new Date(req.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>
                 ))}
@@ -2032,7 +2032,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
       {isNewRequestModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white border border-gray-200 max-w-md w-full p-6 rounded-2xl flex flex-col gap-4 shadow-2xl relative">
-            <h3 className="text-md font-bold text-gray-900">Nova Solicitação</h3>
+            <h3 className="text-base font-bold text-gray-900">Nova Solicitação</h3>
 
             <form onSubmit={handleCreateRequest} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
@@ -2094,12 +2094,12 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   type="file"
                   multiple
                   onChange={(e) => setNewRequestFiles(Array.from(e.target.files || []))}
-                  className="text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-gray-100 file:text-gray-700 file:text-xs file:font-semibold hover:file:bg-gray-200"
+                  className="text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-gray-100 file:text-gray-700 file:text-sm file:font-semibold hover:file:bg-gray-200"
                 />
                 {newRequestFiles.length > 0 && (
                   <ul className="flex flex-col gap-1 pt-1">
                     {newRequestFiles.map((f, idx) => (
-                      <li key={idx} className="flex items-center gap-1.5 text-xs text-gray-500">
+                      <li key={idx} className="flex items-center gap-1.5 text-sm text-gray-500">
                         <Paperclip className="w-3 h-3" />
                         <span className="truncate">{f.name}</span>
                       </li>
@@ -2134,8 +2134,8 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
       {isSendDocModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white border border-gray-200 max-w-md w-full p-6 rounded-2xl flex flex-col gap-4 shadow-2xl relative">
-            <h3 className="text-md font-bold text-gray-900">Enviar Documento</h3>
-            <p className="text-xs text-gray-500 leading-relaxed">
+            <h3 className="text-base font-bold text-gray-900">Enviar Documento</h3>
+            <p className="text-sm text-gray-500 leading-relaxed">
               O arquivo enviado aqui fica pendente de revisão da construtora antes de entrar
               oficialmente no GED. Você pode acompanhar o status na própria aba Documentos.
             </p>
@@ -2147,7 +2147,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   required
                   type="file"
                   onChange={(e) => setSendDocFile(e.target.files?.[0] || null)}
-                  className="text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-gray-100 file:text-gray-700 file:text-xs file:font-semibold hover:file:bg-gray-200"
+                  className="text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-gray-100 file:text-gray-700 file:text-sm file:font-semibold hover:file:bg-gray-200"
                 />
               </div>
 
@@ -2227,7 +2227,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   <div className="text-sm font-semibold text-gray-800">{value}</div>
                 </div>
               ))}
-              <p className="text-xs text-gray-400 pt-3 border-t border-gray-100">
+              <p className="text-sm text-gray-400 pt-3 border-t border-gray-100">
                 Para alterar seus dados cadastrais, entre em contato com a construtora.
               </p>
             </div>

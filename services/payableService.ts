@@ -1,6 +1,9 @@
 import { supabase } from '../lib/supabase';
 import { fetchAllPagesParallel, type RangeableQuery } from '../lib/supabasePaginate';
-import type { Payable, PayableBusinessStatus } from '../types/financial';
+import type { Payable, PayableBusinessStatus, ReceivablePaymentType } from '../types/financial';
+
+/** Mesmo vocabulário de `internal_transactions.payment_type` usado em Receber. */
+export type PayablePaymentType = ReceivablePaymentType;
 import { propertyExpenseService } from './propertyExpenseService';
 
 export interface PayableFilters {
@@ -121,6 +124,29 @@ export const payableService = {
         const { error } = await supabase
             .from('internal_transactions')
             .update(updates)
+            .eq('id', id);
+        if (error) throw error;
+    },
+
+    /**
+     * Baixa com os dados do painel (espelho de `receivableService.darBaixa`).
+     * `payment_date` vai explícito: a trigger `trg_payment_date_na_baixa` só
+     * preenche quando chega vazio, então a data escolhida no painel prevalece
+     * sobre o "hoje" dela. A forma de pagamento sai no recibo.
+     */
+    async darBaixa(
+        id: string,
+        pagamento: { paymentDate: string; paymentType: PayablePaymentType | null },
+    ): Promise<void> {
+        const { error } = await supabase
+            .from('internal_transactions')
+            .update({
+                business_status: 'PAGO',
+                status: 'CONCILIATED',
+                payment_date: pagamento.paymentDate,
+                payment_type: pagamento.paymentType,
+                updated_at: new Date().toISOString(),
+            })
             .eq('id', id);
         if (error) throw error;
     },

@@ -34,6 +34,9 @@ vi.mock('../../services/payableService', () => ({
     payableParty: (p: { party_name?: string; entity_name?: string }) => p.party_name || p.entity_name || '—',
 }));
 vi.mock('../../components/financeiro/ApropriarImovelSheet', () => ({ default: () => null }));
+vi.mock('../../services/financialReceiptService', () => ({
+    financialReceiptService: { listarAtivosDaOrg: vi.fn(async () => new Map()), baixarPdf: vi.fn() },
+}));
 vi.mock('../../components/ui/confirm', () => ({ useConfirm: () => vi.fn(async () => true) }));
 
 import ContasPagarParcelas from '../../components/ContasPagarParcelas';

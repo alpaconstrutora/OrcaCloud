@@ -1,15 +1,59 @@
 // components/financeiro/BaixaRecebivelSheet.tsx
 //
-// Painel de baixa de Contas a Receber — um título ou um lote. Substituiu o
-// `useConfirm` sem campos: a baixa passa a gravar data e forma de pagamento, e
-// opcionalmente emite o recibo numerado (um PDF por título).
-// Plano: docs/planos/2026-09-26-contas-receber-recibo-na-baixa.md
+// Painel de baixa de Contas a Receber e de Contas a Pagar — um título ou um
+// lote. Substituiu o `useConfirm` sem campos: a baixa passa a gravar data e
+// forma de pagamento, e opcionalmente emite o recibo numerado (um PDF por título).
+// `tipo` troca só os rótulos: o fluxo e as regras são os mesmos nas duas telas.
+// Planos: docs/planos/2026-09-26-contas-receber-recibo-na-baixa.md e
+//         docs/planos/2026-09-28-contas-a-pagar-recibo-na-baixa.md
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Loader2, Receipt, Wallet } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { formatMoney as fmt, formatDateBR as fmtDate } from '../ui/Format';
 import { FORMAS_PAGAMENTO, hojeLocal, motivoBaixaBloqueada } from '../../utils/baixaRecebivel';
 import type { Receivable, ReceivablePaymentType } from '../../types/financial';
+
+/** O que o painel mostra de cada título — neutro entre Receber e Pagar. */
+export interface TituloDaBaixa {
+    id: string;
+    /** Pagador (Receber) ou credor (Pagar). */
+    contraparte: string | null;
+    descricao: string | null;
+    vencimento: string | null;
+    valor: number;
+}
+
+export const tituloDeRecebivel = (r: Receivable): TituloDaBaixa => ({
+    id: r.id,
+    contraparte: r.party_name ?? null,
+    descricao: r.description ?? null,
+    vencimento: r.due_date ?? null,
+    valor: Number(r.amount) || 0,
+});
+
+type TipoDaBaixa = 'receber' | 'pagar';
+
+const ROTULOS: Record<TipoDaBaixa, {
+    titulo: string; tituloLote: (n: number) => string; descricao: string;
+    contraparte: string; confirmar: string; reciboAjuda: string;
+}> = {
+    receber: {
+        titulo: 'Confirmar recebimento',
+        tituloLote: n => `Confirmar recebimento de ${n} títulos`,
+        descricao: 'Informe como o pagamento foi recebido. A data e a forma saem no recibo.',
+        contraparte: 'Pagador',
+        confirmar: 'Confirmar recebimento',
+        reciboAjuda: 'Gera o recibo numerado, guarda uma cópia e baixa o PDF.',
+    },
+    pagar: {
+        titulo: 'Confirmar pagamento',
+        tituloLote: n => `Confirmar pagamento de ${n} títulos`,
+        descricao: 'Informe como o pagamento foi feito. A data e a forma saem no recibo que o credor assina.',
+        contraparte: 'Credor',
+        confirmar: 'Confirmar pagamento',
+        reciboAjuda: 'Gera o recibo numerado para o credor assinar, guarda uma cópia e baixa o PDF.',
+    },
+};
 
 export interface DadosDaBaixa {
     paymentDate: string;
@@ -19,7 +63,15 @@ export interface DadosDaBaixa {
 
 interface Props {
     /** Títulos a baixar; `null` fecha o painel. */
-    titulos: Receivable[] | null;
+    titulos: TituloDaBaixa[] | null;
+    /** Rótulos de Contas a Receber (padrão) ou de Contas a Pagar. */
+    tipo?: TipoDaBaixa;
+    /** Estado inicial de "Emitir recibo" (Pagar: desmarcado em lote só de boleto). */
+    emitirReciboPadrao?: boolean;
+    /** Motivo de não haver recibo para NENHUM título (ex.: só Folha). Some a caixa. */
+    reciboIndisponivel?: string | null;
+    /** Observação sob a caixa quando PARTE do lote não recebe recibo. */
+    avisoRecibo?: string | null;
     onClose: () => void;
     /** Faz a baixa (e o recibo). O painel fica travado até a promessa terminar. */
     onConfirm: (dados: DadosDaBaixa) => Promise<void>;
@@ -29,14 +81,21 @@ interface Props {
 
 const inputCls = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
 
-export default function BaixaRecebivelSheet({ titulos, onClose, onConfirm, progresso }: Props) {
+export default function BaixaRecebivelSheet({
+    titulos, tipo = 'receber', emitirReciboPadrao = true, reciboIndisponivel = null, avisoRecibo = null,
+    onClose, onConfirm, progresso,
+}: Props) {
     const aberto = !!titulos && titulos.length > 0;
     const lista = titulos ?? [];
     const lote = lista.length > 1;
+    const rotulos = ROTULOS[tipo];
+    // Identidade dos títulos por ids, não pelo array: quem chama pode mapear a
+    // lista a cada render, e isso não pode zerar o que o usuário já preencheu.
+    const chaveDosTitulos = lista.map(t => t.id).join(',');
 
     const [dataPagamento, setDataPagamento] = useState(hojeLocal());
     const [forma, setForma] = useState<ReceivablePaymentType | ''>('');
-    const [emitirRecibo, setEmitirRecibo] = useState(true);
+    const [emitirRecibo, setEmitirRecibo] = useState(emitirReciboPadrao);
     const [salvando, setSalvando] = useState(false);
 
     // Cada abertura começa do padrão (hoje, sem forma, com recibo) — o painel
@@ -45,13 +104,13 @@ export default function BaixaRecebivelSheet({ titulos, onClose, onConfirm, progr
         if (!aberto) return;
         setDataPagamento(hojeLocal());
         setForma('');
-        setEmitirRecibo(true);
+        setEmitirRecibo(emitirReciboPadrao);
         setSalvando(false);
-    }, [aberto, titulos]);
+    }, [aberto, chaveDosTitulos, emitirReciboPadrao]);
 
     const hoje = hojeLocal();
     const motivo = motivoBaixaBloqueada(dataPagamento, hoje);
-    const total = useMemo(() => lista.reduce((s, r) => s + (Number(r.amount) || 0), 0), [lista]);
+    const total = useMemo(() => lista.reduce((s, r) => s + (Number(r.valor) || 0), 0), [lista]);
 
     const fechar = () => { if (!salvando) onClose(); };
 
@@ -59,7 +118,7 @@ export default function BaixaRecebivelSheet({ titulos, onClose, onConfirm, progr
         if (motivo || salvando) return;
         setSalvando(true);
         try {
-            await onConfirm({ paymentDate: dataPagamento, paymentType: forma || null, emitirRecibo });
+            await onConfirm({ paymentDate: dataPagamento, paymentType: forma || null, emitirRecibo: emitirRecibo && !reciboIndisponivel });
         } finally {
             setSalvando(false);
         }
@@ -68,11 +127,11 @@ export default function BaixaRecebivelSheet({ titulos, onClose, onConfirm, progr
     return (
         <Sheet open={aberto} onClose={fechar} size="lg">
             <SheetHeader onClose={fechar}>
-                <SheetTitle>{lote ? `Confirmar recebimento de ${lista.length} títulos` : 'Confirmar recebimento'}</SheetTitle>
+                <SheetTitle>{lote ? rotulos.tituloLote(lista.length) : rotulos.titulo}</SheetTitle>
                 <SheetDescription>
                     {lote
                         ? 'A mesma data e forma de pagamento valem para todos os títulos selecionados.'
-                        : 'Informe como o pagamento foi recebido. A data e a forma saem no recibo.'}
+                        : rotulos.descricao}
                 </SheetDescription>
             </SheetHeader>
 
@@ -87,7 +146,7 @@ export default function BaixaRecebivelSheet({ titulos, onClose, onConfirm, progr
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="sticky top-0 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    <th className="px-4 py-2 border-r border-gray-100">Pagador</th>
+                                    <th className="px-4 py-2 border-r border-gray-100">{rotulos.contraparte}</th>
                                     <th className="px-3 py-2 border-r border-gray-100 whitespace-nowrap">Vencimento</th>
                                     <th className="px-3 py-2 text-right">Valor</th>
                                 </tr>
@@ -96,15 +155,15 @@ export default function BaixaRecebivelSheet({ titulos, onClose, onConfirm, progr
                                 {lista.map(r => (
                                     <tr key={r.id}>
                                         <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 max-w-0 w-full">
-                                            <span className="block truncate" title={r.party_name ?? ''}>{r.party_name || '—'}</span>
-                                            {r.description && (
-                                                <span className="block truncate text-xs text-gray-400" title={r.description}>{r.description}</span>
+                                            <span className="block truncate" title={r.contraparte ?? ''}>{r.contraparte || '—'}</span>
+                                            {r.descricao && (
+                                                <span className="block truncate text-xs text-gray-400" title={r.descricao}>{r.descricao}</span>
                                             )}
                                         </td>
                                         <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
-                                            {r.due_date ? fmtDate(r.due_date) : '—'}
+                                            {r.vencimento ? fmtDate(r.vencimento) : '—'}
                                         </td>
-                                        <td className="px-3 py-2.5 text-sm font-medium text-gray-800 text-right whitespace-nowrap">{fmt(r.amount)}</td>
+                                        <td className="px-3 py-2.5 text-sm font-medium text-gray-800 text-right whitespace-nowrap">{fmt(r.valor)}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -155,6 +214,9 @@ export default function BaixaRecebivelSheet({ titulos, onClose, onConfirm, progr
                         </div>
                     </div>
 
+                    {reciboIndisponivel ? (
+                        <p className="text-xs text-gray-500">{reciboIndisponivel}</p>
+                    ) : (
                     <label className="flex items-start gap-3 cursor-pointer select-none">
                         <input
                             type="checkbox"
@@ -168,10 +230,12 @@ export default function BaixaRecebivelSheet({ titulos, onClose, onConfirm, progr
                             <span className="block text-xs text-gray-500">
                                 {lote
                                     ? 'Um recibo numerado por título, cada um em seu PDF. O navegador pode pedir permissão para baixar vários arquivos.'
-                                    : 'Gera o recibo numerado, guarda uma cópia e baixa o PDF.'}
+                                    : rotulos.reciboAjuda}
                             </span>
+                            {avisoRecibo && <span className="block text-xs text-amber-700">{avisoRecibo}</span>}
                         </span>
                     </label>
+                    )}
                 </div>
             </SheetPanel>
 
@@ -195,7 +259,7 @@ export default function BaixaRecebivelSheet({ titulos, onClose, onConfirm, progr
                     className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     {salvando && <Loader2 className="w-[15px] h-[15px] animate-spin" />}
-                    Confirmar recebimento
+                    {rotulos.confirmar}
                 </button>
             </SheetFooter>
         </Sheet>

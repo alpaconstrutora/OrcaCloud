@@ -796,7 +796,17 @@ export interface FinancialReceipt {
     /** Nº do contrato de origem (`contracts.number`), congelado na emissão
      *  (aplicar_20270927000120). NULL = título sem contrato. */
     contract_number: string | null;
+    /** RECEBIMENTO (Contas a Receber) ou PAGAMENTO (Contas a Pagar — o credor
+     *  assina). Numeração própria por tipo (aplicar_20270928000110). Ausente
+     *  em registro lido antes da migration = RECEBIMENTO. */
+    kind?: FinancialReceiptKind;
+    /** Só PAGAMENTO: credor que recebeu e assina. Em PAGAMENTO, `issuer_*` é a
+     *  organização (cabeçalho) e `payer_*` fica nulo. */
+    payee_name?: string | null;
+    payee_document?: string | null;
 }
+
+export type FinancialReceiptKind = 'RECEBIMENTO' | 'PAGAMENTO';
 
 // ────────────────────────────────────────────────────────────
 // Contas a Pagar (parcelas de Suprimentos — Pedidos e Contratos)

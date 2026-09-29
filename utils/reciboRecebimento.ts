@@ -1,5 +1,12 @@
 /**
- * Recibo de recebimento (Contas a Receber) — montagem pura do texto e do PDF.
+ * Recibo de recebimento (Contas a Receber) e de pagamento (Contas a Pagar) —
+ * montagem pura do texto e do PDF.
+ *
+ * O tipo vem do próprio registro (`kind`, aplicar_20270928000110):
+ *   RECEBIMENTO  a organização declara que recebeu do pagador e assina;
+ *   PAGAMENTO    o CREDOR declara que recebeu da organização e assina — a
+ *                organização continua no cabeçalho (é ela quem prepara o papel).
+ * Registro sem `kind` (anterior à migration) é RECEBIMENTO.
  *
  * Tudo sai do registro CONGELADO em `financial_receipts` (migration
  * aplicar_20270926000110), nunca do título ou do cliente atuais: é isso que faz
@@ -49,16 +56,42 @@ function rotuloDocumento(doc: string): string {
     return 'documento';
 }
 
+const ehPagamento = (r: Pick<FinancialReceipt, 'kind'>) => r.kind === 'PAGAMENTO';
+
+/**
+ * Sujeito do recibo de pagamento, pela pessoa do credor: "Recebi" (CPF),
+ * "Recebemos" (CNPJ), "Recebi(emos)" quando não se sabe. Pura, para teste.
+ */
+export function verboDoCredor(documento?: string | null): string {
+    const digitos = (documento ?? '').replace(/\D/g, '').length;
+    if (digitos === 11) return 'Recebi';
+    if (digitos === 14) return 'Recebemos';
+    return 'Recebi(emos)';
+}
+
 /** A frase do corpo do recibo. Pura, para teste. */
-export function textoRecibo(r: Pick<FinancialReceipt, 'amount' | 'payer_name' | 'payer_document' | 'description'>): string {
+export function textoRecibo(
+    r: Pick<FinancialReceipt, 'amount' | 'payer_name' | 'payer_document' | 'description' | 'kind' | 'issuer_name' | 'issuer_document' | 'payee_document'>,
+): string {
+    const descricao = (r.description ?? '').trim();
+    const referente = descricao ? `, referente a ${descricao}` : '';
+    const valor = `${brl(r.amount)} (${valorPorExtenso(r.amount)})`;
+
+    if (ehPagamento(r)) {
+        // O credor fala: quem pagou é a organização emitente do documento.
+        const verbo = verboDoCredor(r.payee_document);
+        const org = (r.issuer_name ?? '').trim();
+        const cnpj = (r.issuer_document ?? '').trim();
+        const de = org ? ` de ${org}${cnpj ? ` (${rotuloDocumento(cnpj)} ${cnpj})` : ''}` : '';
+        return `${verbo}${de} a importância de ${valor}${referente}.`;
+    }
+
     const pagador = (r.payer_name ?? '').trim();
     const doc = (r.payer_document ?? '').trim();
     const quem = pagador
         ? `Recebemos de ${pagador}${doc ? ` (${rotuloDocumento(doc)} ${doc})` : ''} a importância de`
         : 'Recebemos a importância de';
-    const descricao = (r.description ?? '').trim();
-    const referente = descricao ? `, referente a ${descricao}` : '';
-    return `${quem} ${brl(r.amount)} (${valorPorExtenso(r.amount)})${referente}.`;
+    return `${quem} ${valor}${referente}.`;
 }
 
 /** Linhas de detalhe abaixo do corpo (data e forma). */
@@ -71,12 +104,14 @@ export function detalhesRecibo(r: Pick<FinancialReceipt, 'payment_date' | 'payme
     return linhas;
 }
 
-export function nomeArquivoRecibo(r: Pick<FinancialReceipt, 'receipt_number' | 'payer_name'>): string {
-    const pagador = (r.payer_name ?? '')
+export function nomeArquivoRecibo(r: Pick<FinancialReceipt, 'receipt_number' | 'payer_name' | 'kind' | 'payee_name'>): string {
+    const pagamento = ehPagamento(r);
+    // No de pagamento, o nome é o do credor (quem assina); no de recebimento, o do pagador.
+    const pessoa = ((pagamento ? r.payee_name : r.payer_name) ?? '')
         .normalize('NFD').replace(/[̀-ͯ]/g, '')
         .replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
         .slice(0, 40);
-    return `Recibo_${numeroRecibo(r.receipt_number)}${pagador ? `_${pagador}` : ''}.pdf`;
+    return `Recibo_${pagamento ? 'Pagamento_' : ''}${numeroRecibo(r.receipt_number)}${pessoa ? `_${pessoa}` : ''}.pdf`;
 }
 
 /**
@@ -174,15 +209,23 @@ export function montarReciboPdf(r: FinancialReceipt, logoDataUrl?: string | null
         y += 7;
     }
 
-    // Assinatura
+    // Assinatura — de quem RECEBEU: a organização (recebimento) ou o credor
+    // (pagamento). No de pagamento o papel é preparado para colher a assinatura
+    // do credor, então leva também a linha de local e data.
     y += 30;
     doc.setDrawColor(100, 116, 139);
+    if (ehPagamento(r)) {
+        doc.setFontSize(10);
+        doc.text('Local e data: ______________________________________', M, y - 14);
+    }
     doc.line(W / 2 - 45, y, W / 2 + 45, y);
     doc.setFontSize(10);
-    doc.text(r.issuer_name || '', W / 2, y + 5, { align: 'center' });
-    if (r.issuer_document) {
+    const assinante = ehPagamento(r) ? (r.payee_name || 'Credor') : (r.issuer_name || '');
+    const docAssinante = ehPagamento(r) ? r.payee_document : r.issuer_document;
+    doc.text(assinante, W / 2, y + 5, { align: 'center' });
+    if (docAssinante) {
         doc.setFontSize(8);
-        doc.text(`CNPJ ${r.issuer_document}`, W / 2, y + 10, { align: 'center' });
+        doc.text(`${rotuloDocumento(docAssinante)} ${docAssinante}`, W / 2, y + 10, { align: 'center' });
     }
 
     // Cancelado

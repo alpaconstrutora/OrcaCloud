@@ -887,6 +887,9 @@ export default function ContasPagarManager({ organizations }: Props) {
                             focusId={focusPayableId}
                             onFocusConsumed={handleFocusConsumed}
                             onClearPeriod={handleClearPeriod}
+                            // Sem a organização na lista, `undefined` faz o serviço
+                            // buscar a logo da organização dona do recibo.
+                            logoDaOrg={orgId => organizations?.find(o => o.id === orgId)?.logoUrl}
                         />
                     ) : (
                     /* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — toolbar e

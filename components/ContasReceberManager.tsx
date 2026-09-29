@@ -10,7 +10,7 @@ import { asaasConfigService } from '../services/asaasConfigService';
 import { clientService } from '../services/clientService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { financialReceiptService, type ReciboAtivo } from '../services/financialReceiptService';
-import BaixaRecebivelSheet, { type DadosDaBaixa } from './financeiro/BaixaRecebivelSheet';
+import BaixaRecebivelSheet, { type DadosDaBaixa, tituloDeRecebivel } from './financeiro/BaixaRecebivelSheet';
 import { mensagemResultadoBaixa } from '../utils/baixaRecebivel';
 import { numeroRecibo } from '../utils/reciboRecebimento';
 import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
@@ -1685,7 +1685,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
             )}
 
             <BaixaRecebivelSheet
-                titulos={baixando}
+                titulos={baixando?.map(tituloDeRecebivel) ?? null}
                 onClose={() => setBaixando(null)}
                 onConfirm={confirmarBaixa}
                 progresso={baixaProgresso}

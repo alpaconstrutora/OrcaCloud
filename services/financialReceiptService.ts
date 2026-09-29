@@ -1,9 +1,12 @@
 /**
- * Recibo de recebimento de Contas a Receber — emitir, guardar e baixar.
+ * Recibos de Contas a Receber (RECEBIMENTO) e de Contas a Pagar (PAGAMENTO) —
+ * emitir, guardar e baixar.
  *
- * Banco: migration aplicar_20270926000110. Escrita SÓ pelas RPCs:
+ * Banco: migrations aplicar_20270926000110 e aplicar_20270928000110. Escrita SÓ
+ * pelas RPCs:
  *   emitir_recibo_recebimento(tx)   → numera e congela o conteúdo; idempotente
- *                                     (título com recibo ativo devolve o mesmo)
+ *   emitir_recibo_pagamento(tx)       (título com recibo ativo devolve o mesmo);
+ *                                     cada tipo com numeração própria
  *   registrar_arquivo_recibo(id, p) → grava o caminho do PDF, uma vez
  * Estorno da baixa cancela o recibo por trigger — nada a fazer aqui.
  *
@@ -14,8 +17,14 @@
  */
 import { saveAs } from 'file-saver';
 import { supabase } from '../lib/supabase';
+import { fetchAllPages, type RangeableQuery } from '../lib/supabasePaginate';
 import { montarReciboPdf, nomeArquivoRecibo } from '../utils/reciboRecebimento';
-import type { FinancialReceipt } from '../types/financial';
+import type { FinancialReceipt, FinancialReceiptKind } from '../types/financial';
+
+const RPC_EMITIR: Record<FinancialReceiptKind, string> = {
+    RECEBIMENTO: 'emitir_recibo_recebimento',
+    PAGAMENTO: 'emitir_recibo_pagamento',
+};
 
 const BUCKET = 'financial-receipts';
 
@@ -76,8 +85,8 @@ async function guardarPdf(recibo: FinancialReceipt, pdf: Blob): Promise<void> {
 
 export const financialReceiptService = {
     /** Numera e congela (ou devolve o recibo ativo do título). */
-    async emitir(transactionId: string): Promise<FinancialReceipt> {
-        const { data, error } = await supabase.rpc('emitir_recibo_recebimento', {
+    async emitir(transactionId: string, kind: FinancialReceiptKind = 'RECEBIMENTO'): Promise<FinancialReceipt> {
+        const { data, error } = await supabase.rpc(RPC_EMITIR[kind], {
             p_transaction_id: transactionId,
         });
         if (error) throw error;
@@ -103,6 +112,33 @@ export const financialReceiptService = {
     },
 
     /**
+     * Recibos ativos de UM tipo, da organização (ou de todas as do usuário, em
+     * "Todas" — a RLS recorta), numa consulta paginada, sem mandar ids na URL.
+     * Contas a Pagar tem ~800 títulos pagos: por `listarAtivos` seriam 4 idas
+     * em série de 200 ids — o mesmo desenho que deixava a coluna Imóvel lenta
+     * (docs/planos/2026-09-28-contas-a-pagar-lento.md).
+     */
+    async listarAtivosDaOrg(
+        organizationId: string | null | undefined,
+        kind: FinancialReceiptKind,
+    ): Promise<Map<string, ReciboAtivo>> {
+        const { data, error } = await fetchAllPages<ReciboAtivo>(() => {
+            let q = supabase
+                .from('financial_receipts')
+                .select('id,transaction_id,receipt_number')
+                .eq('kind', kind)
+                .is('cancelled_at', null)
+                .order('id', { ascending: true });
+            if (organizationId) q = q.eq('organization_id', organizationId);
+            return q as unknown as RangeableQuery<ReciboAtivo>;
+        });
+        if (error) throw error;
+        const out = new Map<string, ReciboAtivo>();
+        for (const r of data) if (r.transaction_id) out.set(r.transaction_id, r);
+        return out;
+    },
+
+    /**
      * Fluxo único da baixa e da reimpressão: emite (ou reaproveita) o recibo e
      * entrega o PDF ao navegador. Devolve o recibo, e `guardado=false` quando o
      * PDF foi entregue mas não conseguiu ir para o Storage (a próxima
@@ -110,9 +146,9 @@ export const financialReceiptService = {
      */
     async baixarPdf(
         transactionId: string,
-        opts: { logoUrl?: string | null } = {},
+        opts: { logoUrl?: string | null; kind?: FinancialReceiptKind } = {},
     ): Promise<{ recibo: FinancialReceipt; guardado: boolean }> {
-        const recibo = await this.emitir(transactionId);
+        const recibo = await this.emitir(transactionId, opts.kind);
         const nome = nomeArquivoRecibo(recibo);
 
         if (recibo.file_path) {

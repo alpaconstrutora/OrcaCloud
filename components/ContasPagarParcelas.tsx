@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    AlertCircle, Building2, Check, ChevronDown, FileText, Loader2, MoveHorizontal, RefreshCw, Search, Tag, Undo2, X,
+    AlertCircle, Building2, Check, ChevronDown, Download, FileText, Loader2, MoveHorizontal, Receipt, RefreshCw, Search, Tag, Undo2, X,
 } from 'lucide-react';
 import type { Payable, PayableBusinessStatus, CostCenter } from '../types/financial';
 import { payableService, payableParty } from '../services/payableService';
@@ -13,6 +13,10 @@ import { Money, formatMoney, formatDateBR } from './ui/Format';
 import { useConfirm } from './ui/confirm';
 import ActionIconButton from './ui/ActionIconButton';
 import ApropriarImovelSheet from './financeiro/ApropriarImovelSheet';
+import BaixaRecebivelSheet, { type DadosDaBaixa, type TituloDaBaixa } from './financeiro/BaixaRecebivelSheet';
+import { financialReceiptService, type ReciboAtivo } from '../services/financialReceiptService';
+import { mensagemResultadoBaixa } from '../utils/baixaRecebivel';
+import { numeroRecibo } from '../utils/reciboRecebimento';
 
 /**
  * Rótulo de origem por `source_system`. É a coluna que responde "de onde essa
@@ -98,6 +102,9 @@ const PARCELAS_COLUMNS: ColumnConfig[] = [
     { key: 'obra', label: 'Obra', sortable: true },
     { key: 'valor', label: 'Valor', sortable: true },
     { key: 'vencimento', label: 'Vencimento', sortable: true },
+    // Recibo de pagamento (o credor assina) — antes de Status, como em Contas a
+    // Receber: a tabela é larga e a coluna Ações costuma ficar fora da tela.
+    { key: 'recibo', label: 'Recibo', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
     // Duas dimensões DIFERENTES (ver migration 20270822000013): Centro de
     // Custo é cost_centers_v2, Plano de Contas é plano_de_contas. Resolvidas
@@ -120,6 +127,7 @@ const PARCELAS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolea
     obra: { label: 'Obra', className: 'text-left px-6 py-2 border-r border-gray-100 overflow-hidden' },
     valor: { label: 'Valor', className: 'text-right px-6 py-2 border-r border-gray-100 overflow-hidden' },
     vencimento: { label: 'Vencimento', className: 'text-center px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    recibo: { label: 'Recibo', className: 'text-left px-6 py-2 border-r border-gray-100 overflow-hidden' },
     status: { label: 'Status', className: 'text-center px-6 py-2 border-r border-gray-100 overflow-hidden' },
     centro_custo: { label: 'Centro de Custo', className: 'text-left px-6 py-2 border-r border-gray-100 overflow-hidden' },
     plano_contas: { label: 'Plano de Contas', className: 'text-left px-6 py-2 border-r border-gray-100 overflow-hidden' },
@@ -127,7 +135,7 @@ const PARCELAS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolea
 };
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    credor: 200, descricao: 260, origem: 150, obra: 160, valor: 140, vencimento: 150, status: 120,
+    credor: 200, descricao: 260, origem: 150, obra: 160, valor: 140, vencimento: 150, recibo: 130, status: 120,
     centro_custo: 180, plano_contas: 180, imovel: 190, actions: 200,
 };
 
@@ -152,7 +160,10 @@ function diasAtraso(dueDate: string): number {
 /** Linha com os nomes já resolvidos (Centro de Custo/Plano de Contas/Imóvel) —
  *  ver `rowsWithNames` no componente, que injeta esses três campos a partir
  *  dos UUIDs que `vw_payables` expõe. */
-type ParcelaRow = Payable & { cost_center_name: string; plano_de_contas_name: string; imovel_label: string };
+type ParcelaRow = Payable & { cost_center_name: string; plano_de_contas_name: string; imovel_label: string; recibo_numero: number | null };
+
+/** Folha reúne vários colaboradores num título: não há um credor para assinar. */
+const semReciboPorOrigem = (row: Pick<Payable, 'source_system'>) => row.source_system === 'LABOR';
 
 // Conteúdo de cada célula por coluna — extraído para função pura para que o corpo
 // da tabela possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável)
@@ -282,14 +293,23 @@ interface Props {
     /** Zera o período (vencDe/vencAte/competência), que é estado do PAI, quando
      *  ele é o que esconde a linha do deep-link. */
     onClearPeriod?: () => void;
+    /** Logo da organização dona do título, para o PDF do recibo. `undefined` =
+     *  o serviço busca a da organização DONA do recibo (não a do topo). */
+    logoDaOrg?: (organizationId: string) => string | null | undefined;
 }
 
-export default function ContasPagarParcelas({ rows, organizationId, vencDe, vencAte, loading, error, onReload, onRowChanged, onRowRemoved, notify, onVisibleRowsChange, focusId, onFocusConsumed, onClearPeriod }: Props) {
+export default function ContasPagarParcelas({ rows, organizationId, vencDe, vencAte, loading, error, onReload, onRowChanged, onRowRemoved, notify, onVisibleRowsChange, focusId, onFocusConsumed, onClearPeriod, logoDaOrg }: Props) {
     const confirm = useConfirm();
     const [search, setSearch] = usePersistedState('contasPagarParcelas:search', '');
     const [statusFiltro, setStatusFiltro] = usePersistedState<StatusFiltro>('contasPagarParcelas:status', 'all');
     const [origemFiltro, setOrigemFiltro] = usePersistedState<OrigemFiltro>('contasPagarParcelas:origem', 'all');
     const [salvando, setSalvando] = useState<string | null>(null);
+    // Baixa com painel (data + forma + recibo) — 1 título ou lote. Plano
+    // docs/planos/2026-09-28-contas-a-pagar-recibo-na-baixa.md
+    const [baixando, setBaixando] = useState<Payable[] | null>(null);
+    const [baixaProgresso, setBaixaProgresso] = useState<string | null>(null);
+    const [recibos, setRecibos] = useState<Map<string, ReciboAtivo>>(new Map());
+    const [gerandoRecibo, setGerandoRecibo] = useState<string | null>(null);
     // Seleção múltipla: existe para apropriar despesa a imóvel em lote (IPTU de
     // 12 meses num clique só). Esta é a ÚNICA visão de Contas a Pagar com id de
     // `internal_transactions` — a de Notas Fiscais lê `invoices`, e passar id de
@@ -379,7 +399,20 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         plano_de_contas_name: r.plano_de_contas_id ? (planoContasNameById.get(r.plano_de_contas_id) ?? '') : '',
         imovel_label: imovelLabel(r.id),
         credor_display: credorDisplay(r),
-    })), [rows, costCenterNameById, planoContasNameById, imovelLabel, credorDisplay]);
+        recibo_numero: recibos.get(r.id)?.receipt_number ?? null,
+    })), [rows, costCenterNameById, planoContasNameById, imovelLabel, credorDisplay, recibos]);
+
+    // Recibos ativos de pagamento da organização — depois da lista, sem segurar
+    // a tabela. Uma consulta só (sem ids na URL), com guarda de resposta fora de
+    // ordem ao trocar de organização no topo.
+    const recibosSeq = useRef(0);
+    useEffect(() => {
+        if (loading) return;
+        const seq = ++recibosSeq.current;
+        financialReceiptService.listarAtivosDaOrg(organizationId, 'PAGAMENTO')
+            .then(m => { if (seq === recibosSeq.current) setRecibos(m); })
+            .catch(err => console.error('[ContasPagarParcelas] Erro ao carregar recibos:', err));
+    }, [organizationId, loading]);
 
     /* Origens realmente presentes nos dados, ordenadas pelo rótulo. Se o filtro
        persistido apontar para uma origem que sumiu do recorte atual, ele é
@@ -425,7 +458,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
 
         if (tableColumns.sortColumn) {
             const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
-            const valor = (r: Payable): string | number => {
+            const valor = (r: ParcelaRow): string | number => {
                 switch (tableColumns.sortColumn) {
                     case 'credor':       return (r.credor_display || payableParty(r)).toLowerCase();
                     case 'descricao':    return (r.description ?? '').toLowerCase();
@@ -438,6 +471,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                     case 'centro_custo': return (r.cost_center_name ?? '').toLowerCase();
                     case 'plano_contas': return (r.plano_de_contas_name ?? '').toLowerCase();
                     case 'imovel':       return (r.imovel_label ?? '').toLowerCase();
+                    case 'recibo':       return r.recibo_numero ?? -1;
                     default:             return '';
                 }
             };
@@ -605,6 +639,8 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                     : aberto ? 'PENDING' : row.status,
                 ...(aberto ? { payment_date: null } : {}),
             });
+            // O banco cancela o recibo pela trigger; aqui só some da coluna.
+            if (aberto) setRecibos(prev => { const m = new Map(prev); m.delete(row.id); return m; });
             notify(novo === 'PAGO' ? 'Parcela marcada como paga.'
                 : aberto ? 'Baixa estornada.'
                 : 'Status atualizado.');
@@ -636,6 +672,119 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         if (!ok) return;
         await marcarStatus(row, 'PREVISTO');
     }
+
+    /** Credor como o painel e o toast mostram (cadastro vivo, senão o texto). */
+    const nomeDoCredor = (row: Payable) => credorDisplay(row) || row.description || row.id;
+
+    /**
+     * Baixa (1 título ou lote) com os dados do painel e, se pedido, um recibo
+     * por título para o credor assinar. Sequencial, como em Contas a Receber:
+     * cada recibo é um download e a numeração sai na ordem da lista. Falha de
+     * recibo não desfaz a baixa — o botão Recibo da linha emite depois.
+     */
+    async function confirmarBaixa(dados: DadosDaBaixa) {
+        const alvos = baixando ?? [];
+        let baixados = 0;
+        const falhasBaixa: string[] = [];
+        const falhasRecibo: string[] = [];
+        let emitidos = 0;
+        let naoGuardados = 0;
+
+        for (const [i, row] of alvos.entries()) {
+            setBaixaProgresso(alvos.length > 1 ? `Baixando ${i + 1} de ${alvos.length}…` : null);
+            try {
+                await payableService.darBaixa(row.id, { paymentDate: dados.paymentDate, paymentType: dados.paymentType });
+                baixados++;
+                onRowChanged({
+                    ...row,
+                    business_status: 'PAGO',
+                    effective_status: 'PAGO',
+                    status: 'CONCILIATED',
+                });
+            } catch {
+                falhasBaixa.push(nomeDoCredor(row));
+                continue;
+            }
+            if (!dados.emitirRecibo || semReciboPorOrigem(row)) continue;
+            try {
+                const { recibo, guardado } = await financialReceiptService.baixarPdf(row.id, {
+                    kind: 'PAGAMENTO',
+                    logoUrl: logoDaOrg?.(row.organization_id),
+                });
+                setRecibos(prev => new Map(prev).set(row.id, recibo));
+                emitidos++;
+                if (!guardado) naoGuardados++;
+            } catch (e) {
+                console.error('[ContasPagarParcelas] Recibo não gerado:', e);
+                falhasRecibo.push(nomeDoCredor(row));
+            }
+        }
+
+        setBaixaProgresso(null);
+        setBaixando(null);
+        if (alvos.length > 1) clearSelection();
+        const { texto, erro } = mensagemResultadoBaixa({
+            baixados, falhasBaixa, emitirRecibo: dados.emitirRecibo,
+            recibos: emitidos, falhasRecibo, naoGuardados,
+        });
+        notify(texto, erro ? 'error' : 'success');
+    }
+
+    /** Emite (título pago antes do recibo existir) ou reimprime o mesmo PDF. */
+    async function handleRecibo(row: Payable) {
+        setGerandoRecibo(row.id);
+        try {
+            const { recibo, guardado } = await financialReceiptService.baixarPdf(row.id, {
+                kind: 'PAGAMENTO',
+                logoUrl: logoDaOrg?.(row.organization_id),
+            });
+            setRecibos(prev => new Map(prev).set(row.id, recibo));
+            if (!guardado) notify('O PDF foi baixado, mas não ficou guardado. Reimprima para guardar.', 'error');
+        } catch (e: unknown) {
+            notify('Erro ao gerar o recibo: ' + ((e as Error).message ?? 'falha desconhecida'), 'error');
+        } finally {
+            setGerandoRecibo(null);
+        }
+    }
+
+    /** Célula da coluna Recibo: "Nº 000001" baixa o PDF guardado; "Emitir" no
+     *  pago sem recibo; "—" em aberto e em Folha (sem credor único). */
+    function renderReciboCell(row: ParcelaRow): React.ReactNode {
+        if (row.effective_status !== 'PAGO' || semReciboPorOrigem(row)) {
+            return <span className="text-sm font-normal text-gray-400">—</span>;
+        }
+        const ocupado = gerandoRecibo === row.id;
+        const rotulo = row.recibo_numero != null ? `Nº ${numeroRecibo(row.recibo_numero)}` : 'Emitir';
+        return (
+            <button
+                onClick={() => handleRecibo(row)}
+                disabled={ocupado}
+                title={row.recibo_numero != null ? 'Baixar o recibo guardado' : 'Emitir o recibo para o credor assinar'}
+                className="flex items-center gap-1.5 text-sm font-normal text-blue-600 hover:text-blue-800 disabled:opacity-50"
+            >
+                {ocupado
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : row.recibo_numero != null ? <Download className="w-3.5 h-3.5" /> : <Receipt className="w-3.5 h-3.5" />}
+                {rotulo}
+            </button>
+        );
+    }
+
+    // Títulos em aberto da seleção — os que a baixa em lote alcança.
+    const selecionadasEmAberto = selectedVisible.filter(r => !['PAGO', 'CANCELADO'].includes(r.effective_status));
+
+    /** Props do painel para os títulos em baixa: rótulos de Pagar, credor como
+     *  contraparte, recibo desmarcado em lote só de boleto e ausente em Folha. */
+    const titulosDaBaixa: TituloDaBaixa[] | null = baixando?.map(r => ({
+        id: r.id,
+        contraparte: credorDisplay(r) || null,
+        descricao: r.description ?? null,
+        vencimento: r.due_date ?? null,
+        valor: Number(r.amount) || 0,
+    })) ?? null;
+    const baixaSoFolha = !!baixando?.length && baixando.every(semReciboPorOrigem);
+    const baixaComFolha = !!baixando?.some(semReciboPorOrigem);
+    const baixaSoBoleto = !!baixando?.length && baixando.every(r => r.source_system === 'BOLETO');
 
     async function excluir(row: Payable) {
         const ok = await confirm({
@@ -859,7 +1008,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                             </td>
                                             {tableColumns.orderedVisibleColumns.map(key => (
                                                 <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    {renderParcelaCell(key, row, alocacoes)}
+                                                    {key === 'recibo' ? renderReciboCell(row) : renderParcelaCell(key, row, alocacoes)}
                                                 </td>
                                             ))}
                                             {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
@@ -868,10 +1017,10 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                 <div className="flex items-center justify-end gap-1.5">
                                                     {!quitado && (
                                                         <button
-                                                            onClick={() => marcarStatus(row, 'PAGO')}
+                                                            onClick={() => setBaixando([row])}
                                                             disabled={salvando === row.id}
                                                             className="text-green-700 hover:text-green-800 text-sm font-medium p-1.5 hover:bg-green-50 rounded-[6px] transition-all disabled:opacity-50 flex items-center gap-1"
-                                                            title="Marcar como pago"
+                                                            title="Dar baixa: data, forma de pagamento e recibo"
                                                         >
                                                             {salvando === row.id
                                                                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -885,6 +1034,17 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                                 <Check className="w-4 h-4" /> Quitado
                                                             </span>
                                                             {/* O caminho de volta. Sem ele, "Pago" era mão única. */}
+                                                            {!semReciboPorOrigem(row) && (
+                                                                <ActionIconButton
+                                                                    kind="settings"
+                                                                    title={row.recibo_numero != null
+                                                                        ? `Reimprimir recibo Nº ${numeroRecibo(row.recibo_numero)}`
+                                                                        : 'Emitir recibo'}
+                                                                    icon={<Receipt className="w-4 h-4" />}
+                                                                    disabled={gerandoRecibo === row.id}
+                                                                    onClick={() => handleRecibo(row)}
+                                                                />
+                                                            )}
                                                             <ActionIconButton
                                                                 kind="settings"
                                                                 title="Estornar baixa"
@@ -981,6 +1141,17 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                     <span className="ml-2 font-normal opacity-75">· {formatMoney(selectedTotal)}</span>
                 </span>
                 <button
+                    onClick={() => setBaixando(selecionadasEmAberto)}
+                    disabled={selecionadasEmAberto.length === 0}
+                    title={selecionadasEmAberto.length
+                        ? 'Dar baixa nas parcelas em aberto da seleção (data, forma e recibo)'
+                        : 'Todas as parcelas selecionadas já estão pagas ou canceladas.'}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-blue-700 rounded-[6px] text-[13px] font-medium hover:bg-blue-50 disabled:opacity-60 disabled:cursor-not-allowed transition-all active:scale-95"
+                >
+                    <Check className="w-3.5 h-3.5" />
+                    Dar baixa{selecionadasEmAberto.length && selecionadasEmAberto.length !== selectedVisible.length ? ` (${selecionadasEmAberto.length})` : ''}
+                </button>
+                <button
                     onClick={() => orgDoLote && setApropriando({ organizationId: orgDoLote, payables: selectedVisible })}
                     disabled={!orgDoLote}
                     title={orgDoLote
@@ -1000,6 +1171,19 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                 </button>
             </div>
         )}
+
+        <BaixaRecebivelSheet
+            tipo="pagar"
+            titulos={titulosDaBaixa}
+            emitirReciboPadrao={!baixaSoBoleto}
+            reciboIndisponivel={baixaSoFolha
+                ? 'Título de folha reúne vários colaboradores: não há um credor único para assinar o recibo.'
+                : null}
+            avisoRecibo={baixaComFolha && !baixaSoFolha ? 'Os títulos de folha do lote não recebem recibo.' : null}
+            onClose={() => setBaixando(null)}
+            onConfirm={confirmarBaixa}
+            progresso={baixaProgresso}
+        />
 
         {apropriando && (
             <ApropriarImovelSheet

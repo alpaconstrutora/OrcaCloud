@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-    textoRecibo, detalhesRecibo, nomeArquivoRecibo, numeroRecibo, montarReciboPdf, caberNaCaixa,
+    textoRecibo, detalhesRecibo, nomeArquivoRecibo, numeroRecibo, montarReciboPdf, caberNaCaixa, verboDoCredor,
 } from '../utils/reciboRecebimento';
 import type { FinancialReceipt } from '../types/financial';
 
@@ -116,5 +116,52 @@ describe('caberNaCaixa — logo sem esticar', () => {
     });
     it('dimensão inválida cai na caixa inteira (não divide por zero)', () => {
         expect(caberNaCaixa(0, 0, 30, 15)).toEqual({ w: 30, h: 15 });
+    });
+});
+
+/**
+ * Recibo de PAGAMENTO (Contas a Pagar) — o credor assina declarando que recebeu
+ * da organização. Plano docs/planos/2026-09-28-contas-a-pagar-recibo-na-baixa.md.
+ */
+function reciboPagamento(over: Partial<FinancialReceipt> = {}): FinancialReceipt {
+    return recibo({
+        kind: 'PAGAMENTO',
+        receipt_number: 1,
+        payer_name: null,
+        payer_document: null,
+        payee_name: 'R N Tintas e Ferramentas Ltda',
+        payee_document: '25.271.628/0008-29',
+        description: 'Pedido de compra 42 — tintas',
+        ...over,
+    });
+}
+
+describe('recibo de PAGAMENTO — o credor declara que recebeu da organização', () => {
+    it('credor PJ: "Recebemos de <organização> (CNPJ …)", sem citar o credor no corpo', () => {
+        const t = textoRecibo(reciboPagamento());
+        expect(t).toContain('Recebemos de Alpa Construtora (CNPJ 09.264.396/0001-59) a importância de');
+        expect(t).toContain('referente a Pedido de compra 42 — tintas.');
+        expect(t).not.toContain('R N Tintas');
+    });
+
+    it('credor PF: "Recebi"; sem documento: "Recebi(emos)"', () => {
+        expect(textoRecibo(reciboPagamento({ payee_document: '005.871.088-43' }))).toMatch(/^Recebi de Alpa/);
+        expect(textoRecibo(reciboPagamento({ payee_document: null }))).toMatch(/^Recebi\(emos\) de Alpa/);
+        expect(verboDoCredor('12.345.678/0001-90')).toBe('Recebemos');
+    });
+
+    it('sem kind (registro anterior à migration) continua sendo recebimento', () => {
+        const t = textoRecibo(recibo({ kind: undefined }));
+        expect(t).toContain('Recebemos de Ivana Braga');
+    });
+
+    it('arquivo leva "Pagamento" e o nome do CREDOR', () => {
+        expect(nomeArquivoRecibo(reciboPagamento())).toBe('Recibo_Pagamento_000001_R_N_Tintas_e_Ferramentas_Ltda.pdf');
+        expect(nomeArquivoRecibo(recibo())).toBe('Recibo_000123_Ivana_Braga.pdf');
+    });
+
+    it('PDF de uma página, com e sem cancelado', () => {
+        expect(montarReciboPdf(reciboPagamento()).getNumberOfPages()).toBe(1);
+        expect(montarReciboPdf(reciboPagamento({ cancelled_at: '2026-09-28T12:00:00Z' })).getNumberOfPages()).toBe(1);
     });
 });

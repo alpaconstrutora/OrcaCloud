@@ -58,3 +58,6 @@ engrenagem só para admin → modal com as abas → cada clique liga/desliga e g
    `settings={partnerPortalTabs: null}`.
 6. **Publicação** — push em main e prova de fora com `conferir-producao.sh`.
    *Pronto quando:* o domínio serve um commit que contém o desta frente.
+   ✅ commit `152541dd` em main; `conferir-producao.sh` em 29/09/2026: domínio
+   serve `152541d`, com "Configurar abas visíveis do parceiro" e "Portal em
+   configuração" nos bundles.

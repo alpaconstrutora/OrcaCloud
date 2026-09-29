@@ -20,8 +20,12 @@
  * Quem não tem parede perto (a pia numa ilha) sai em `foraDaParede`, e quem
  * chama decide (a água liga em reta, com aviso). Parede em arco é tratada pela
  * corda a→b. Determinístico: nós e empates em ordem fixa.
+ *
+ * E5.5 (29/09/2026): com `obstaculos` (pegadas de pilares), a aresta que entra
+ * num pilar custa 10 m a mais — ver `blueprintObstaculosEstruturais.ts`.
  */
-import type { Wall } from './blueprintKernel';
+import type { Point, Wall } from './blueprintKernel';
+import { custoComPilares, foraDoPilar } from './blueprintObstaculosEstruturais';
 
 export type P2 = { x: number; y: number };
 
@@ -68,8 +72,11 @@ export function arvorePelasParedes(opts: {
   raiz: P2;
   pendentes: readonly P2[];
   raioDeEncaixeMm: number;
+  /** E5.5: pegadas de pilares — a aresta que entra numa custa 10 m a mais (desvia quando há outro caminho). */
+  obstaculos?: readonly Point[][];
 }): ArvorePelasParedes {
   const { paredes, raioDeEncaixeMm } = opts;
+  const obstaculos = opts.obstaculos ?? [];
   const encaixe = new Map<string, P2>();
   const foraDaParede: P2[] = [];
   // Pontos a pôr sobre cada parede: pontas, encontros e projeções.
@@ -89,7 +96,7 @@ export function arvorePelasParedes(opts: {
     if (ka === kb) return;
     posicao.set(ka, a);
     posicao.set(kb, b);
-    const mm = Math.hypot(a.x - b.x, a.y - b.y);
+    const mm = custoComPilares(a, b, obstaculos);
     const va = vizinhos.get(ka) ?? [];
     if (!va.some((v) => v.k === kb)) va.push({ k: kb, mm });
     vizinhos.set(ka, va);
@@ -121,8 +128,10 @@ export function arvorePelasParedes(opts: {
   const encaixar = (p: P2): P2 | null => {
     const e = encaixarNaParede(p, ordenadas, raioDeEncaixeMm);
     if (!e) return null;
-    pendurar(e.parede, e.q);
-    return e.q;
+    // E5.5: a descida até o ponto não fica dentro de pilar — escorrega pela parede.
+    const q = obstaculos.length > 0 ? foraDoPilar(e.q, e.parede, obstaculos) : e.q;
+    pendurar(e.parede, q);
+    return q;
   };
   const raiz = encaixar(opts.raiz);
   for (const p of opts.pendentes) {

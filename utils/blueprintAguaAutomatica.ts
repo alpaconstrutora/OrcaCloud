@@ -40,8 +40,13 @@
  * `SetTrechoProps`; trecho CONFIRMADO vira aviso — quem aceitou decidiu.
  *
  * É PRÉ-DIMENSIONAMENTO por velocidade: sem perda de carga, sem pressão
- * disponível, sem desvio de viga ou laje. Serve ao quantitativo e ao traçado
- * de partida; o projeto executivo é do projetista.
+ * disponível. Serve ao quantitativo e ao traçado de partida; o projeto
+ * executivo é do projetista.
+ *
+ * E5.5 (29/09/2026): a ESTRUTURA entra no traçado — o barrilete corre 10 cm
+ * abaixo da viga mais baixa do teto, a rota pelas paredes contorna pilar
+ * (entrar num custa 10 m de tubo) e a coluna que cairia num pilar escorrega pela parede. Ver
+ * `blueprintObstaculosEstruturais.ts`.
  */
 import type { BlueprintModel, Command, DisciplinaDeRede, MaterialDeTubo, ObjectId, Terminal, Trecho } from './blueprintKernel';
 import { FICHA_DO_MATERIAL } from './blueprintHidraulicaPressao';
@@ -58,6 +63,7 @@ import {
 import { FICHA_DO_PONTO_HIDRAULICO, ehPontoDeConsumo } from './blueprintHidraulica';
 import { shaftPreferido } from './blueprintNucleoVertical';
 import { arvorePelasParedes, chaveP, encaixarNaParede, faceDaParede } from './blueprintRotaPelasParedes';
+import { ABAIXO_DA_VIGA_MM, foraDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
 
 /**
  * A tabela de DN do lançamento é a do MATERIAL (E1.1): uma fonte só para o
@@ -289,7 +295,16 @@ export function planejarAgua(
   };
 
   // ── A origem sobe/desce ao teto do pavimento dela: o barrilete ───────────
-  const tetoO = nivelDaOrigem.defaultHeightMm;
+  // E5.5: com viga no teto, o barrilete corre 10 cm abaixo do fundo da mais baixa
+  // (desde que ainda acima do ramal) — `tetoO` é a cota DO BARRILETE, não a do teto.
+  const fundoDaViga = fundoDaVigaMaisBaixaMm(model, origem.levelId, nivelDaOrigem.defaultHeightMm);
+  const abaixoDaViga = fundoDaViga == null ? null : fundoDaViga - ABAIXO_DA_VIGA_MM;
+  const tetoO = abaixoDaViga != null && abaixoDaViga > hip.cotaRamalMm ? abaixoDaViga : nivelDaOrigem.defaultHeightMm;
+  if (abaixoDaViga != null) {
+    avisos.push(tetoO === abaixoDaViga
+      ? `barrilete a ${(tetoO / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} m do piso — 10 cm abaixo da viga mais baixa do teto`
+      : 'a viga do teto desce até o ramal — o barrilete ficou no teto, cruzando a viga (confira o furo com o projeto estrutural)');
+  }
   const noDaOrigem = chave(origem.levelId, origem.at.x, origem.at.y, origem.cotaMm);
   const noDaOrigemNoTeto = chave(origem.levelId, origem.at.x, origem.at.y, tetoO);
   if (origem.cotaMm !== tetoO) addTrecho(origem.levelId, origem.at, origem.cotaMm, origem.at, tetoO);
@@ -339,6 +354,7 @@ export function planejarAgua(
   const rota = new Map<No, number>();
   for (const k of alcancadosNoBarrilete.keys()) rota.set(k, rotaBarrilete.get(k) ?? Infinity);
   rota.set(noDaOrigemNoTeto, 0);
+  const pilaresDaPrumada = niveis.flatMap((l) => pegadasDePilares(model, l.id));
   // NÚCLEO VERTICAL (E2.4): o grupo perto de um shaft sobe por ele.
   const posicaoDaColuna = (grupo: Terminal[]): Ponto2 => {
     const base = { x: grupo[0].at.x, y: grupo[0].at.y };
@@ -346,7 +362,8 @@ export function planejarAgua(
     if (shaft) return shaft;
     // PELAS PAREDES: a coluna desce no EIXO da parede mais próxima, não na face.
     const naParede = pelasParedes ? encaixarNaParede(base, paredesDe(grupo[0].levelId), raioDeEncaixe) : null;
-    return naParede ? naParede.q : base;
+    // E5.5: a coluna que cairia dentro de um pilar (de qualquer pavimento que ela cruza) escorrega pela parede.
+    return naParede ? foraDoPilar(naParede.q, naParede.parede, pilaresDaPrumada) : base;
   };
   const cabecas = new Map<No, Ponto2>();
   for (const grupo of colunas) {
@@ -357,7 +374,7 @@ export function planejarAgua(
   // PELAS PAREDES: o barrilete corre no teto por cima das paredes até as cabeças.
   const paredesDaOrigem = paredesDe(origem.levelId);
   const barrilete = pelasParedes && paredesDaOrigem.length > 0 && cabecas.size > 0
-    ? arvorePelasParedes({ paredes: paredesDaOrigem, raiz: origem.at, pendentes: [...cabecas.values()], raioDeEncaixeMm: raioDeEncaixe })
+    ? arvorePelasParedes({ paredes: paredesDaOrigem, raiz: origem.at, pendentes: [...cabecas.values()], raioDeEncaixeMm: raioDeEncaixe, obstaculos: pegadasDePilares(model, origem.levelId) })
     : null;
   if (barrilete?.raiz) {
     if (chaveP(barrilete.raiz) !== chaveP(origem.at)) addTrecho(origem.levelId, origem.at, tetoO, barrilete.raiz, tetoO);
@@ -394,7 +411,7 @@ export function planejarAgua(
         // Abaixo: atravessa os pavimentos intermediários do teto ao piso (a laje é o encontro)...
         for (let k = idxO; k > idx; k--) {
           const m = niveis[k];
-          addTrecho(m.id, pos, m.defaultHeightMm, pos, 0);
+          addTrecho(m.id, pos, k === idxO ? tetoO : m.defaultHeightMm, pos, 0);
         }
         // ...e neste, do teto ao ramal.
         addTrecho(nivel.id, pos, nivel.defaultHeightMm, pos, hip.cotaRamalMm);
@@ -425,7 +442,7 @@ export function planejarAgua(
       const doNivel = grupo.filter((p) => p.levelId === nivel.id);
       const paredesDoNivel = paredesDe(nivel.id);
       const pelas = pelasParedes && paredesDoNivel.length > 0
-        ? arvorePelasParedes({ paredes: paredesDoNivel, raiz: pos, pendentes: doNivel.map((p) => p.at), raioDeEncaixeMm: raioDeEncaixe })
+        ? arvorePelasParedes({ paredes: paredesDoNivel, raiz: pos, pendentes: doNivel.map((p) => p.at), raioDeEncaixeMm: raioDeEncaixe, obstaculos: pegadasDePilares(model, nivel.id) })
         : null;
       if (pelas?.raiz) {
         // Da coluna ao eixo (se ela não está nele), e o ramal pelo eixo das paredes.

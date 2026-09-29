@@ -8,7 +8,7 @@ import React from 'react';
 import type { DisciplinaDeRede } from '../../utils/blueprintKernel';
 import { resumoDaVerificacao, type MarcaDeVerificacao } from '../../utils/blueprintVerificacaoRede';
 
-/** O nome de cada marca de fluxo e de ventilação na lista (E5.2/E5.4). */
+/** O nome de cada marca de fluxo, de ventilação e de estrutura na lista (E5.2/E5.4/E5.5). */
 const ROTULO_DO_FLUXO: Partial<Record<MarcaDeVerificacao['tipo'], string>> = {
   CONTRAFLUXO: 'Contrafluxo',
   DECLIVIDADE_BAIXA: 'Declividade abaixo da mínima',
@@ -17,6 +17,8 @@ const ROTULO_DO_FLUXO: Partial<Record<MarcaDeVerificacao['tipo'], string>> = {
   SEM_VENTILACAO: 'Sem ventilação',
   VENTILACAO_BAIXA: 'Ventilação baixa',
   DN_VENTILACAO: 'DN da ventilação',
+  ATRAVESSA_PILAR: 'Atravessa pilar',
+  CRUZA_VIGA: 'Cruza viga',
 };
 
 interface Props {

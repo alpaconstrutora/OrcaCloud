@@ -19,7 +19,7 @@ import { planejarPecasDaCaixa } from '../../utils/blueprintPecasDaCaixa';
  * `cotaDaCaixaMm` acima do piso dele — a caixa elevada da E3.3); CI no térreo.
  * `comAjuste`: a água sai com o DN ajustado pela pressão, como no editor.
  */
-export function sobrado(doisAndares = true, opcoes: { cotaDaCaixaMm?: number; comAjuste?: boolean; volumeDaCaixaL?: number; alimentador?: boolean; ligacao?: boolean; ventilacao?: boolean } = {}): BlueprintModel {
+export function sobrado(doisAndares = true, opcoes: { cotaDaCaixaMm?: number; comAjuste?: boolean; volumeDaCaixaL?: number; alimentador?: boolean; ligacao?: boolean; ventilacao?: boolean; estrutura?: (niveis: string[]) => Command[] } = {}): BlueprintModel {
   let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
   if (doisAndares) m = applyCommand(m, { type: 'AddLevel', name: 'Superior', elevationMm: 2900, defaultHeightMm: 2800 }).model;
   const niveis = m.levels.map((l) => l.id);
@@ -43,6 +43,8 @@ export function sobrado(doisAndares = true, opcoes: { cotaDaCaixaMm?: number; co
     { type: 'AddTerminal', levelId: niveis[niveis.length - 1], disciplina: 'AGUA_FRIA', tipo: "Caixa d'água", at: point(4500, 0), cotaMm: opcoes.cotaDaCaixaMm ?? 2800, tipoHidraulico: 'RESERVATORIO' } as Command,
     ...niveis.flatMap(banheiro),
     ponto(niveis[0], 'ESGOTO', 'CAIXA_INSPECAO', 6000, -1500, -700),
+    // E5.5: pilares e vigas ANTES dos planejadores — o traçado desvia deles.
+    ...(opcoes.estrutura?.(niveis) ?? []),
   ]).model;
   m = recomputeSpaces(m);
   // E4.1: os ambientes com nome — o banheiro à esquerda e um QUARTO à direita (população pelos dormitórios).

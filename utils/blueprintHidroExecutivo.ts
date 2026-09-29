@@ -99,6 +99,9 @@ export function verificacoesHidro(model: BlueprintModel, hip: HipotesesHidro, re
   const pontas = marcas.filter((m) => m.tipo === 'PONTA_ABERTA' && m.disciplina && (HIDRAULICAS as readonly string[]).includes(m.disciplina)).length;
   v.push({ grupo: 'DADOS', item: 'Nenhuma ponta aberta', norma: '—', exigido: '0', obtido: String(pontas), atende: pontas === 0 });
   const loucas = marcas.filter((m) => m.tipo === 'LOUCA_SEM_PONTO').length;
+  // E5.5: tubo dentro de pilar é pendência; o que cruza viga é marca de aviso (o furo é do estrutural).
+  const pilares = new Set(marcas.filter((m) => m.tipo === 'ATRAVESSA_PILAR').map((m) => m.alvoId)).size;
+  v.push({ grupo: 'DADOS', item: 'Nenhum tubo atravessa pilar', norma: '—', exigido: '0', obtido: pilares ? `${pilares} trecho(s) dentro de pilar` : 'nenhum', atende: pilares === 0 });
   v.push({ grupo: 'DADOS', item: 'Toda louça tem os seus pontos', norma: '—', exigido: '0 sem ponto', obtido: loucas ? `${loucas} sem ponto` : 'todas', atende: loucas === 0 });
 
   // ── NBR 5626 ────────────────────────────────────────────────────────────────

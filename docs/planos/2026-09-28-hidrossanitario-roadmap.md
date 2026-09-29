@@ -228,6 +228,7 @@ vez de deixar a documentação para o fim.
 | Imagens nas notas BCF, vínculo vivo de IFC externo, filtro por pavimento nas colisões | A/M | coordenação, não projeto |
 | Hunter probabilístico para água, sub-redes nomeadas além do pluvial | M/A | a NBR 5626 usa pesos; sub-rede entra só onde uma fase precisar |
 | Integração com AltoQi Cloud | N | produto de terceiro |
+| Desvio estrutural do ESGOTO, do alimentador e do recalque; contorno do pilar de canto | A | a E5.5 fez a água (onde está o grafo pelas paredes); o esgoto tem traçado próprio (junções 45°), e o pilar de canto pede rota fora do eixo — hoje ficam como marca e pendência |
 
 ## Execução
 
@@ -756,3 +757,30 @@ vertical cobre o traçado das colunas) e anticolisão dos rótulos na planta.
   telhado; vasos ventilados pelo TQ e sifonadas longe; térrea sem ventilação; o lançamento no
   sobrado — estende a do TQ e uma coluna nas sifonadas empilhadas — e na térrea — vaso DN 50 e
   sifonada DN 40 —; o esgoto calculado igual antes e depois). Suíte: 542 arquivos / 6.066 testes.
+
+### E5.5 — Desvio estrutural (29/09/2026) · fecha a Etapa 5
+
+- `utils/blueprintObstaculosEstruturais.ts` (novo): pegadas dos **pilares** do pavimento, custo da
+  aresta que entra num pilar, o ponto que **escorrega pela parede** para fora dele (5 cm além da
+  face) e o fundo da **viga de teto** mais baixa (a verga no meio da parede não conta).
+- **Pilar = custo, não proibição**: em `arvorePelasParedes`, a aresta que entra num pilar custa
+  como **10 m de tubo a mais**. Os pilares costumam estar nos encontros das paredes — proibir
+  tornaria quase todo canto inútil. O "10× o comprimento" do plano foi trocado na hora: 10× de
+  um pilar de 20 cm são 1,8 m, e o desvio de verdade é de metros (visto no sobrado: o barrilete
+  seguia atravessando o pilar do meio da parede).
+- Na água automática: a rota do **barrilete** e a dos **ramais** contornam o pilar quando há outro
+  caminho; a **coluna** e a **descida** até o ponto que cairiam num pilar escorregam pela parede.
+  **Viga**: o barrilete corre **10 cm abaixo do fundo da viga de teto mais baixa** do pavimento da
+  caixa (com aviso), desde que ainda acima do ramal — senão fica no teto e o aviso manda conferir o
+  furo com o estrutural.
+- O que não dá para evitar vira verificação (de `conflitosDoModelo`, só trechos hidrossanitários,
+  o raspão não conta): marca **ATRAVESSA_PILAR** (erro) e **CRUZA_VIGA** (aviso — furo a
+  aprovar); gaveta lista; conferência: **Nenhum tubo atravessa pilar** (pendência). Fixture:
+  `estrutura: (niveis) => Command[]` (lançada antes dos planejadores).
+- Fica no backlog: o desvio do **esgoto** (traçado próprio, junções 45°), do alimentador e do
+  recalque, e o contorno do **pilar de canto** (a rota pelo eixo sempre entra nele).
+- **Pronto quando** ✔: 9 testes em `blueprintObstaculosEstruturais.test.ts` (fração e custo;
+  o escorregar; a rota que dá a volta no pilar do meio da parede; a viga de teto; sobrado sem
+  estrutura sem marca; o barrilete que contorna o pilar; a prumada fora do pilar da coluna, com
+  as 2 marcas do toco até o vaso que está dentro dele e a pendência na conferência; o barrilete
+  a 2,30 m sob a viga; o tubo desenhado cruzando a viga como aviso). Suíte: 543 arquivos / 6.075 testes.

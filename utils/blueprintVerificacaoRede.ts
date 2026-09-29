@@ -18,7 +18,7 @@
 import { verificarVentilacao } from './blueprintVentilacao';
 import { ROTULO_DA_LIMPEZA, ROTULO_DO_EXTRAVASOR } from './blueprintPecasDaCaixa';
 import type { BlueprintModel, DisciplinaDeRede, ObjectId } from './blueprintKernel';
-import { conexoesDerivadas } from './blueprintKernel';
+import { conexoesDerivadas, conflitosDoModelo } from './blueprintKernel';
 import { esgotoTrechoATrecho, trechosDeEsgotoSemDestino, verificarDnDoEsgoto } from './blueprintEsgotoAutomatico';
 import { pontosDaLouca } from './blueprintPontosHidraulicos';
 import { ROTULO_DA_DISCIPLINA } from './blueprintRede';
@@ -39,7 +39,10 @@ export type TipoDeMarca =
   // E5.4 — ventilação.
   | 'SEM_VENTILACAO'
   | 'VENTILACAO_BAIXA'
-  | 'DN_VENTILACAO';
+  | 'DN_VENTILACAO'
+  // E5.5 — a estrutura: tubo DENTRO de pilar (erro) e tubo que cruza viga (aviso: furo a aprovar).
+  | 'ATRAVESSA_PILAR'
+  | 'CRUZA_VIGA';
 
 export interface MarcaDeVerificacao {
   chave: string;
@@ -123,6 +126,23 @@ export function marcasDeVerificacao(model: BlueprintModel, levelId: ObjectId | n
     marcas.push({ chave: `destino|${id}`, tipo: 'SEM_DESTINO', levelId: t.levelId, at: aoLongo(id, 0.5), texto: 'não chega à caixa de inspeção', severidade: 'ERRO', alvoId: id, disciplina: 'ESGOTO' });
   }
 
+  // E5.5: tubo hidrossanitário contra a estrutura (o raspão — eixo por fora — não conta).
+  const hidraulicos = (model.trechos ?? []).filter((t) => t.disciplina === 'AGUA_FRIA' || t.disciplina === 'AGUA_QUENTE' || t.disciplina === 'ESGOTO');
+  const estruturaPorId = new Map((model.structures ?? []).map((x) => [x.id, x]));
+  if (hidraulicos.length > 0 && estruturaPorId.size > 0) {
+    for (const c of conflitosDoModelo({ ...model, trechos: hidraulicos })) {
+      if (c.classe !== 'ESTRUTURA' || c.comprimentoDentroMm <= 0) continue;
+      const e = estruturaPorId.get(c.outroId)!;
+      const t = trechoPorIdE.get(c.trechoId)!;
+      const cm = Math.max(1, Math.round(c.comprimentoDentroMm / 10));
+      if (e.kind === 'PILAR') {
+        marcas.push({ chave: `pilar|${t.id}|${e.id}`, tipo: 'ATRAVESSA_PILAR', levelId: t.levelId, at: aoLongo(t.id, 0.5), texto: `atravessa pilar (${cm} cm)`, severidade: 'ERRO', alvoId: t.id, disciplina: t.disciplina });
+      } else if (e.kind === 'VIGA') {
+        marcas.push({ chave: `viga|${t.id}|${e.id}`, tipo: 'CRUZA_VIGA', levelId: t.levelId, at: aoLongo(t.id, 0.5), texto: 'cruza viga — furo a aprovar', severidade: 'AVISO', alvoId: t.id, disciplina: t.disciplina });
+      }
+    }
+  }
+
   for (const v of verificarDnDoEsgoto(model)) {
     const menor = v.tipo === 'MENOR';
     marcas.push({
@@ -170,13 +190,13 @@ export function marcasDeVerificacao(model: BlueprintModel, levelId: ObjectId | n
 export function resumoDaVerificacao(marcas: readonly MarcaDeVerificacao[], disciplinas: readonly DisciplinaDeRede[]): {
   pontasAbertas: number;
   dnFora: MarcaDeVerificacao[];
-  /** E5.2/E5.4: contrafluxo, declividade baixa, DN que diminui, sem destino e a ventilação. */
+  /** E5.2/E5.4/E5.5: contrafluxo, declividade baixa, DN que diminui, sem destino, a ventilação e a estrutura. */
   fluxo: MarcaDeVerificacao[];
 } {
   const daRede = marcas.filter((m) => m.disciplina && disciplinas.includes(m.disciplina));
   return {
     pontasAbertas: daRede.filter((m) => m.tipo === 'PONTA_ABERTA').length,
     dnFora: daRede.filter((m) => m.tipo === 'DN_MENOR' || m.tipo === 'DN_MAIOR'),
-    fluxo: daRede.filter((m) => ['CONTRAFLUXO', 'DECLIVIDADE_BAIXA', 'DN_DIMINUI', 'SEM_DESTINO', 'SEM_VENTILACAO', 'VENTILACAO_BAIXA', 'DN_VENTILACAO'].includes(m.tipo)),
+    fluxo: daRede.filter((m) => ['CONTRAFLUXO', 'DECLIVIDADE_BAIXA', 'DN_DIMINUI', 'SEM_DESTINO', 'SEM_VENTILACAO', 'VENTILACAO_BAIXA', 'DN_VENTILACAO', 'ATRAVESSA_PILAR', 'CRUZA_VIGA'].includes(m.tipo)),
   };
 }

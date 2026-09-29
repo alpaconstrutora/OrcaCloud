@@ -36,7 +36,7 @@ import { HIPOTESES_RECALQUE_PADRAO, planejarRecalque, type HipotesesDeRecalque }
 import { HIPOTESES_ALIMENTACAO_PADRAO, planejarAlimentador, type HipotesesDeAlimentacao } from './blueprintAlimentador';
 import { HIPOTESES_RESERVATORIO_PADRAO, dimensionarReservacao, volumeDoReservatorioL, type HipotesesDeReservatorio } from './blueprintReservacao';
 import { HIPOTESES_PLUVIAIS_PADRAO, contribuicaoPluvial, type HipotesesPluviais } from './blueprintPluvial';
-import { HIPOTESES_TRATAMENTO_PADRAO, temTratamentoIndividual, type HipotesesDeTratamento } from './blueprintTratamento';
+import { HIPOTESES_TRATAMENTO_PADRAO, dimensionarTratamento, temTratamentoIndividual, verificarTratamento, type HipotesesDeTratamento } from './blueprintTratamento';
 import { RUGOSIDADE_DA_CALHA, verificarCalhas } from './blueprintCalhas';
 import { verificarCondutores } from './blueprintCondutoresPluviais';
 
@@ -419,7 +419,32 @@ export function memorialDeCalculoHidro(model: BlueprintModel, hip: HipotesesHidr
     const semRedePublica = temTratamentoIndividual(model);
     if (!semRedePublica) B.push({ tipo: 'subsecao', texto: 'Coletor predial e ligação à rede pública' });
     if (semRedePublica) {
-      // Sem rede pública o coletor não se aplica; o tratamento individual tem a seção dele.
+      // E7.2: sem rede pública, o tratamento individual no lugar do coletor.
+      const d = dimensionarTratamento(model, hip.tratamento, hip.reservatorio);
+      B.push({ tipo: 'subsecao', texto: 'Tratamento individual (NBR 7229 / NBR 13969)' });
+      B.push({
+        tipo: 'tabela',
+        cabecalho: ['Grandeza', 'Valor'],
+        linhas: [
+          ['População (N)', `${d.pessoas} pessoa(s)`],
+          ['Contribuição de despejos (C) / lodo fresco (Lf)', `${d.C} / ${d.Lf} L/pessoa·dia`],
+          ['Contribuição diária (N·C)', `${nBr(d.contribuicaoDiariaL, 0)} L/dia`],
+          ['Tanque — detenção (T) / acumulação de lodo (K)', `${nBr(d.tanque.T)} dia / ${d.tanque.K} dias (limpeza a cada ${hip.tratamento.intervaloDeLimpezaAnos} ano(s), ${hip.tratamento.temperaturaC} °C)`],
+          ['Tanque — V = 1000 + N·(C·T + K·Lf)', `${nBr(d.tanque.volumeL, 0)} L → ${nBr(d.tanque.comprimentoMm / 1000)} × ${nBr(d.tanque.larguraMm / 1000)} m, profundidade útil ${nBr(d.tanque.profundidadeUtilMm / 1000)} m`],
+          ...(hip.tratamento.comFiltro ? [['Filtro anaeróbio — Vu = 1,6·N·C·T', `${nBr(d.filtro.volumeUtilL, 0)} L (T = ${nBr(d.filtro.T)} dia) → ø ${nBr(d.filtro.diametroMm / 1000)} m, leito ${nBr(d.filtro.leitoMm / 1000)} m`]] : []),
+          ['Sumidouro — A = N·C / Ci', `${nBr(d.sumidouro.areaM2)} m² (Ci = ${nBr(hip.tratamento.taxaDeInfiltracaoLM2Dia, 0)} L/m²·dia) → ø ${nBr(d.sumidouro.diametroMm / 1000)} m, altura útil ${nBr(d.sumidouro.alturaUtilMm / 1000)} m`],
+        ],
+      });
+      const us = verificarTratamento(model, d);
+      if (us.length) {
+        B.push({
+          tipo: 'tabela',
+          cabecalho: ['Unidade no desenho', 'Tem', 'Precisa', 'Situação'],
+          linhas: us.map((u) => [FICHA_DO_PONTO_HIDRAULICO[u.tipo].rotulo, `${nBr(u.tem, u.unidade === 'L' ? 0 : 2)} ${u.unidade}`, `${nBr(u.precisa, u.unidade === 'L' ? 0 : 2)} ${u.unidade}`, u.atende ? 'Atende' : 'Insuficiente']),
+        });
+      }
+      for (const a of d.avisos) B.push({ tipo: 'paragrafo', texto: a });
+      B.push({ tipo: 'paragrafo', texto: 'A taxa de infiltração (Ci) é a do ensaio de infiltração do solo no local (NBR 13969, Anexo A).' });
     } else if (col.motivo) B.push({ tipo: 'paragrafo', texto: col.motivo });
     else {
       B.push({
@@ -532,6 +557,11 @@ export function memorialDescritivoHidro(model: BlueprintModel, hip: HipotesesHid
   if (temFria || temQuente) normas.push(['ABNT NBR 5626:2020', 'Sistemas prediais de água fria e água quente — projeto, execução, operação e manutenção']);
   if (temEsgoto) normas.push(['ABNT NBR 8160:1999', 'Sistemas prediais de esgoto sanitário — projeto e execução']);
   if (temPluvial) normas.push(['ABNT NBR 10844:1989', 'Instalações prediais de águas pluviais']);
+  const comTratamento = temEsgoto && temTratamentoIndividual(model);
+  if (comTratamento) {
+    normas.push(['ABNT NBR 7229:1993', 'Projeto, construção e operação de sistemas de tanques sépticos']);
+    normas.push(['ABNT NBR 13969:1997', 'Tanques sépticos — unidades de tratamento complementar e disposição final dos efluentes líquidos']);
+  }
   B.push({ tipo: 'tabela', cabecalho: ['Norma', 'Assunto'], linhas: normas });
 
   B.push({ tipo: 'secao', texto: 'Sistemas' });
@@ -568,6 +598,14 @@ export function memorialDescritivoHidro(model: BlueprintModel, hip: HipotesesHid
     });
   }
 
+  if (comTratamento) {
+    const d = dimensionarTratamento(model, hip.tratamento, hip.reservatorio);
+    B.push({ tipo: 'subsecao', texto: 'Tratamento individual' });
+    B.push({
+      tipo: 'paragrafo',
+      texto: `Sem rede pública de esgoto, o esgoto sai da caixa de inspeção para um tanque séptico de ${nBr(d.tanque.volumeL, 0)} L${hip.tratamento.comFiltro ? `, um filtro anaeróbio de ${nBr(d.filtro.volumeUtilL, 0)} L de leito` : ''} e um sumidouro com ${nBr(d.sumidouro.areaM2)} m² de área de infiltração, dimensionados para ${d.pessoas} pessoa(s) (NBR 7229 e NBR 13969). O tanque deve ser limpo a cada ${hip.tratamento.intervaloDeLimpezaAnos} ano(s); o lodo removido tem destino adequado.`,
+    });
+  }
   if (temPluvial) {
     const c = contribuicaoPluvial(model, hip.pluvial);
     const calhas = trechos.filter((t) => t.secaoCalha).length;

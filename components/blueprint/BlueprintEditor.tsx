@@ -226,7 +226,7 @@ import PainelRecalque from './PainelRecalque';
 import PainelColetorPredial from './PainelColetorPredial';
 import { planejarColetorPredial } from '../../utils/blueprintColetorPredial';
 import PainelTratamento from './PainelTratamento';
-import { planejarTratamento } from '../../utils/blueprintTratamento';
+import { dimensionarTratamento, medidasDimensionadas, planejarTratamento, verificarTratamento } from '../../utils/blueprintTratamento';
 import { planejarVentilacao } from '../../utils/blueprintVentilacao';
 import { planejarRecalque } from '../../utils/blueprintRecalque';
 import { planejarAlimentador } from '../../utils/blueprintAlimentador';
@@ -7251,10 +7251,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   );
   /** TRATAMENTO INDIVIDUAL (29/09/2026, E7): sem rede pública, tanque → filtro → sumidouro. */
   const hipDeTratamento = hidroDoEstudo.hipoteses.tratamento;
-  const planoDoTratamento = useMemo(
-    () => (tarefaAberta === 'esgoto' ? planejarTratamento(editor.model, { comFiltro: hipDeTratamento.comFiltro }) : null),
-    [tarefaAberta, editor.model, hipDeTratamento],
+  // E7.2: o dimensionamento pela população da reservação; o lançamento já cria as peças nesse tamanho.
+  const dimDoTratamento = useMemo(
+    () => (tarefaAberta === 'esgoto' ? dimensionarTratamento(editor.model, hipDeTratamento, hidroDoEstudo.hipoteses.reservatorio) : null),
+    [tarefaAberta, editor.model, hipDeTratamento, hidroDoEstudo.hipoteses.reservatorio],
   );
+  const planoDoTratamento = useMemo(
+    () => (tarefaAberta === 'esgoto' && dimDoTratamento ? planejarTratamento(editor.model, { comFiltro: hipDeTratamento.comFiltro, medidas: medidasDimensionadas(dimDoTratamento) }) : null),
+    [tarefaAberta, editor.model, hipDeTratamento, dimDoTratamento],
+  );
+  const unidadesDoTratamento = useMemo(() => (dimDoTratamento ? verificarTratamento(editor.model, dimDoTratamento) : []), [editor.model, dimDoTratamento]);
   /** VERIFICAÇÃO DA REDE (28/09/2026, E0.1 do roadmap hidrossanitário): pontas abertas, DN do esgoto, louça sem ponto. */
   const pressoesDaAgua = useMemo(() => pressoesDoModelo(editor.model, hipPressao), [editor.model, hipPressao]);
   const marcasDaRede = useMemo(() => marcasDeVerificacao(editor.model, null, pressoesDaAgua, hidroDoEstudo.hipoteses.pluvial), [editor.model, pressoesDaAgua, hidroDoEstudo.hipoteses.pluvial]);
@@ -14005,9 +14011,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   }}
                 />
               )}
-              {planoDoTratamento && (
+              {planoDoTratamento && dimDoTratamento && (
                 <PainelTratamento
                   plano={planoDoTratamento}
+                  dim={dimDoTratamento}
+                  unidades={unidadesDoTratamento}
+                  onSelecionar={selecionar}
                   hip={hipDeTratamento}
                   onHip={(tratamento) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, tratamento })}
                   onLancar={() => {

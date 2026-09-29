@@ -3,6 +3,7 @@ import { blueprintHidroService } from '../services/blueprintHidroService';
 import { HIPOTESES_HIDRO_PADRAO, type HipotesesHidro } from '../utils/blueprintMemorialHidro';
 import { PERIODOS_DE_RETORNO, type HipotesesPluviais } from '../utils/blueprintPluvial';
 import { RUGOSIDADE_DA_CALHA } from '../utils/blueprintCalhas';
+import { PADROES_DE_RESIDENCIA, type HipotesesDeTratamento } from '../utils/blueprintTratamento';
 import { SECOES_DE_CALHA } from '../utils/blueprintKernel';
 
 /**
@@ -67,6 +68,13 @@ function pluvialDaColuna(raw: unknown): HipotesesPluviais {
   };
 }
 
+/** As premissas do tratamento: o padrão só vale se for um dos da NBR 7229. */
+function tratamentoDaColuna(raw: unknown): HipotesesDeTratamento {
+  const padrao = HIPOTESES_HIDRO_PADRAO.tratamento;
+  const t = completar(raw, padrao);
+  return (PADROES_DE_RESIDENCIA as readonly string[]).includes(t.padrao) ? t : { ...t, padrao: padrao.padrao };
+}
+
 export function hipotesesHidroDaColuna(raw: unknown): HipotesesHidro {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   return {
@@ -77,7 +85,7 @@ export function hipotesesHidroDaColuna(raw: unknown): HipotesesHidro {
     alimentacao: completar(r.alimentacao, HIPOTESES_HIDRO_PADRAO.alimentacao),
     recalque: completar(r.recalque, HIPOTESES_HIDRO_PADRAO.recalque),
     pluvial: pluvialDaColuna(r.pluvial),
-    tratamento: completar(r.tratamento, HIPOTESES_HIDRO_PADRAO.tratamento),
+    tratamento: tratamentoDaColuna(r.tratamento),
   };
 }
 

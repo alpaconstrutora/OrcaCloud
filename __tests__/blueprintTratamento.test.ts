@@ -114,7 +114,7 @@ describe('E7.1 — o esgoto termina no sumidouro', () => {
   });
 
   it('premissa do estudo: com filtro por padrão; o gravado volta', () => {
-    expect(hipotesesHidroDaColuna({}).tratamento).toEqual({ comFiltro: true });
-    expect(hipotesesHidroDaColuna({ tratamento: { comFiltro: false } }).tratamento).toEqual({ comFiltro: false });
+    expect(hipotesesHidroDaColuna({}).tratamento).toMatchObject({ comFiltro: true });
+    expect(hipotesesHidroDaColuna({ tratamento: { comFiltro: false } }).tratamento).toMatchObject({ comFiltro: false });
   });
 });

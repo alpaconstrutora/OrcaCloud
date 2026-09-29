@@ -35,10 +35,10 @@ import { memorialDeCalculoHidro, memorialDescritivoHidro, nBr, type BlocoDoMemor
 import { contribuicaoPluvial, misturasPluvialEsgoto } from './blueprintPluvial';
 import { verificarCalhas } from './blueprintCalhas';
 import { verificarCondutores } from './blueprintCondutoresPluviais';
-import { temTratamentoIndividual } from './blueprintTratamento';
+import { dimensionarTratamento, temTratamentoIndividual, verificarTratamento } from './blueprintTratamento';
 
 export interface VerificacaoHidro {
-  grupo: 'RESPONSAVEL' | 'DADOS' | 'NBR5626' | 'NBR8160' | 'NBR10844';
+  grupo: 'RESPONSAVEL' | 'DADOS' | 'NBR5626' | 'NBR8160' | 'NBR10844' | 'NBR7229';
   item: string;
   norma: string;
   exigido: string;
@@ -225,6 +225,27 @@ export function verificacoesHidro(model: BlueprintModel, hip: HipotesesHidro, re
     v.push({ grupo: 'NBR8160', item: 'Tubo de queda ventilado', norma: 'NBR 8160:1999', exigido: 'todo TQ com coluna de ventilação', obtido: tqs.length ? (semVentilacao ? `${semVentilacao} sem ventilação` : `${tqs.length} TQ ventilado(s)`) : 'sem tubo de queda', atende: semVentilacao === 0 });
   }
 
+  // ── NBR 7229 / 13969 (E7.2): sem rede pública, o tratamento individual ──────
+  if (temEsgoto && temTratamentoIndividual(model)) {
+    const d = dimensionarTratamento(model, hip.tratamento, hip.reservatorio);
+    const unidades = verificarTratamento(model, d);
+    v.push({ grupo: 'NBR7229', item: 'População de projeto', norma: 'NBR 7229', exigido: 'N > 0', obtido: `${d.pessoas} pessoa(s)`, atende: d.pessoas > 0 });
+    const conferir = (tipo: string, item: string, norma: string, exigido: string, obrigatorio: boolean) => {
+      const us = unidades.filter((u) => u.tipo === tipo);
+      if (us.length === 0 && !obrigatorio) return;
+      const ruins = us.filter((u) => !u.atende);
+      const casas = us[0]?.unidade === 'm²' ? 2 : 0;
+      v.push({
+        grupo: 'NBR7229', item, norma, exigido,
+        obtido: us.length === 0 ? 'não está no desenho' : ruins.length ? `${nBr(ruins[0].tem, casas)} de ${nBr(ruins[0].precisa, casas)} ${ruins[0].unidade}` : `${nBr(us[0].tem, casas)} ${us[0].unidade}`,
+        atende: us.length > 0 && ruins.length === 0,
+      });
+    };
+    conferir('TANQUE_SEPTICO', 'Tanque séptico: volume útil', 'NBR 7229:1993', `≥ ${nBr(d.tanque.volumeL, 0)} L`, true);
+    conferir('FILTRO_ANAEROBIO', 'Filtro anaeróbio: volume do leito', 'NBR 13969:1997', `≥ ${nBr(d.filtro.volumeUtilL, 0)} L`, hip.tratamento.comFiltro);
+    conferir('SUMIDOURO', 'Sumidouro: área de infiltração', 'NBR 13969:1997', `≥ ${nBr(d.sumidouro.areaM2)} m²`, true);
+  }
+
   // ── NBR 10844 (E6.4) ────────────────────────────────────────────────────────
   if (temPluvial) {
     const c = contribuicaoPluvial(model, hip.pluvial);
@@ -263,6 +284,7 @@ const ROTULO_DO_GRUPO: Record<VerificacaoHidro['grupo'], string> = {
   NBR5626: 'Água fria e quente — NBR 5626',
   NBR8160: 'Esgoto sanitário — NBR 8160',
   NBR10844: 'Águas pluviais — NBR 10844',
+  NBR7229: 'Tratamento individual — NBR 7229 / NBR 13969',
 };
 
 /** A capa executiva + o memorial de cálculo + o descritivo, como blocos. */

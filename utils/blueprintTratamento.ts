@@ -11,19 +11,211 @@
  * que se afasta da construção (o eixo dominante entre o centro das paredes e a
  * caixa), com folgas entre as faces, ligadas por tubos DN 100 a 1 %. Relançar
  * troca as sugeridas; com a ligação à rede pública no desenho, não se aplica.
+ *
+ * E7.2 — o DIMENSIONAMENTO:
+ *   - TANQUE SÉPTICO (NBR 7229, 5.7): V = 1000 + N·(C·T + K·Lf), litros — N a
+ *     população (a mesma da reservação, E4.1), C e Lf da Tabela 1 (padrão da
+ *     residência), T da Tabela 2 (pela contribuição diária), K da Tabela 3
+ *     (intervalo de limpeza × temperatura). Retangular 2:1, largura interna
+ *     ≥ 0,80 m, profundidade útil a mínima da Tabela 4 para o volume;
+ *   - FILTRO ANAERÓBIO (NBR 13969, 4.1): Vu = 1,6·N·C·T, mínimo 1000 L, T da
+ *     Tabela 4 (pela contribuição e pela temperatura); cilindro com leito de
+ *     1,20 m — o diâmetro sai do volume;
+ *   - SUMIDOURO (NBR 13969, 4.3): área de infiltração (fundo + parede) =
+ *     N·C / Ci, com Ci a taxa de infiltração do SOLO (premissa — o ensaio do
+ *     Anexo A); cilindro do diâmetro da premissa, a altura útil sai da área.
+ *     Acima de 3,00 m de altura útil, o aviso de dividir em mais sumidouros
+ *     (backlog: múltiplos sumidouros e valas de infiltração).
+ *
+ * ⚠️ As tabelas foram transcritas de memória — CONFERIR NA NORMA antes de
+ * emitir (`TABELA_*` abaixo, num lugar só).
  */
 import type { BlueprintModel, Command, ObjectId, Terminal, TipoDePontoHidraulico } from './blueprintKernel';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { caixasDeInspecao } from './blueprintEsgotoAutomatico';
+import { populacaoDoModelo, type HipotesesDeReservatorio } from './blueprintReservacao';
 
 export const ROTULO_DO_TRATAMENTO = 'Tratamento';
+
+/** O padrão da residência (NBR 7229, Tabela 1): a contribuição de despejos. */
+export const PADROES_DE_RESIDENCIA = ['ALTO', 'MEDIO', 'BAIXO'] as const;
+export type PadraoDeResidencia = (typeof PADROES_DE_RESIDENCIA)[number];
 
 /** As premissas do tratamento individual — do estudo. */
 export interface HipotesesDeTratamento {
   /** O filtro anaeróbio entre o tanque e o sumidouro (NBR 13969). */
   comFiltro: boolean;
+  padrao: PadraoDeResidencia;
+  /** Temperatura média do mês mais frio, °C — cada tabela tem as suas faixas (NBR 7229 ≠ NBR 13969). */
+  temperaturaC: number;
+  /** Intervalo entre limpezas do tanque, anos (1 a 5). */
+  intervaloDeLimpezaAnos: number;
+  /** Taxa de infiltração do solo, L/m²·dia — do ensaio de infiltração (NBR 13969, Anexo A). */
+  taxaDeInfiltracaoLM2Dia: number;
+  /** Diâmetro interno do sumidouro, mm. */
+  diametroDoSumidouroMm: number;
 }
-export const HIPOTESES_TRATAMENTO_PADRAO: HipotesesDeTratamento = { comFiltro: true };
+export const HIPOTESES_TRATAMENTO_PADRAO: HipotesesDeTratamento = {
+  comFiltro: true,
+  padrao: 'MEDIO',
+  temperaturaC: 18,
+  intervaloDeLimpezaAnos: 1,
+  taxaDeInfiltracaoLM2Dia: 50,
+  diametroDoSumidouroMm: 1500,
+};
+
+// ─── As tabelas (⚠️ CONFERIR NA NORMA) ──────────────────────────────────────
+
+/** NBR 7229, Tabela 1 — residência: contribuição de despejos C e de lodo fresco Lf, L/pessoa·dia. */
+export const TABELA_CONTRIBUICAO: Readonly<Record<PadraoDeResidencia, { C: number; Lf: number }>> = {
+  ALTO: { C: 160, Lf: 1 },
+  MEDIO: { C: 130, Lf: 1 },
+  BAIXO: { C: 100, Lf: 1 },
+};
+/** NBR 7229, Tabela 2 — período de detenção T (dias) pela contribuição diária (L), até o limite. */
+export const TABELA_DETENCAO_DO_TANQUE: readonly { ateL: number; T: number }[] = [
+  { ateL: 1500, T: 1.0 },
+  { ateL: 3000, T: 0.92 },
+  { ateL: 4500, T: 0.83 },
+  { ateL: 6000, T: 0.75 },
+  { ateL: 7500, T: 0.67 },
+  { ateL: 9000, T: 0.58 },
+  { ateL: Infinity, T: 0.5 },
+];
+/**
+ * NBR 7229, Tabela 3 — taxa de acumulação de lodo K (dias) por intervalo de
+ * limpeza (1–5 anos), nas faixas t ≤ 10 °C, 10 < t ≤ 20 °C e t > 20 °C.
+ */
+export const TABELA_ACUMULACAO_DE_LODO: readonly (readonly number[])[] = [
+  [94, 134, 174, 214, 254],
+  [65, 105, 145, 185, 225],
+  [57, 97, 137, 177, 217],
+];
+const faixaDoLodo = (t: number) => (t <= 10 ? 0 : t <= 20 ? 1 : 2);
+/** NBR 7229, Tabela 4 — profundidade útil mínima (m) pelo volume útil (m³). */
+export const TABELA_PROFUNDIDADE_DO_TANQUE: readonly { ateM3: number; minimaM: number; maximaM: number }[] = [
+  { ateM3: 6, minimaM: 1.2, maximaM: 2.2 },
+  { ateM3: 10, minimaM: 1.5, maximaM: 2.5 },
+  { ateM3: Infinity, minimaM: 1.8, maximaM: 2.8 },
+];
+/**
+ * NBR 13969, Tabela 4 — tempo de detenção do filtro anaeróbio (dias) pela
+ * contribuição diária, nas faixas t < 15 °C, 15 ≤ t ≤ 25 °C e t > 25 °C.
+ */
+export const TABELA_DETENCAO_DO_FILTRO: readonly { ateL: number; T: readonly [number, number, number] }[] = [
+  { ateL: 1500, T: [1.17, 1.0, 0.92] },
+  { ateL: 3000, T: [1.08, 0.92, 0.83] },
+  { ateL: 4500, T: [1.0, 0.83, 0.75] },
+  { ateL: 6000, T: [0.92, 0.75, 0.67] },
+  { ateL: 7500, T: [0.83, 0.67, 0.58] },
+  { ateL: 9000, T: [0.75, 0.58, 0.5] },
+  { ateL: Infinity, T: [0.75, 0.5, 0.5] },
+];
+const faixaDoFiltro = (t: number) => (t < 15 ? 0 : t <= 25 ? 1 : 2);
+export const LARGURA_MINIMA_DO_TANQUE_MM = 800;
+export const ALTURA_DO_LEITO_DO_FILTRO_MM = 1200;
+export const VOLUME_MINIMO_DO_FILTRO_L = 1000;
+/** Acima disto de altura útil, o sumidouro deve ser dividido (backlog: múltiplos sumidouros). */
+export const ALTURA_UTIL_MAXIMA_DO_SUMIDOURO_MM = 3000;
+/** O corpo sobe 40 cm acima do tubo (a cota da peça) — `CAIXAS_DE_ESGOTO.acimaDoTuboMm`. */
+const ACIMA_DO_TUBO_MM = 400;
+/** A altura do filtro: o leito e o fundo falso/espaço acima dele. */
+const ALTURA_DO_FILTRO_MM = 1800;
+
+const acima50 = (mm: number) => Math.ceil(mm / 50) * 50;
+
+export interface DimensionamentoDoTratamento {
+  pessoas: number;
+  /** N·C, L/dia. */
+  contribuicaoDiariaL: number;
+  C: number;
+  Lf: number;
+  tanque: { T: number; K: number; volumeL: number; comprimentoMm: number; larguraMm: number; profundidadeUtilMm: number };
+  filtro: { T: number; volumeUtilL: number; diametroMm: number; leitoMm: number };
+  sumidouro: { areaM2: number; diametroMm: number; alturaUtilMm: number };
+  avisos: string[];
+}
+
+/** O dimensionamento do tanque, do filtro e do sumidouro para a população do desenho. */
+export function dimensionarTratamento(model: BlueprintModel, hip: HipotesesDeTratamento, reserva: HipotesesDeReservatorio): DimensionamentoDoTratamento {
+  const pessoas = populacaoDoModelo(model, reserva).pessoas;
+  const { C, Lf } = TABELA_CONTRIBUICAO[hip.padrao] ?? TABELA_CONTRIBUICAO.MEDIO;
+  const contribuicaoDiariaL = pessoas * C;
+  const avisos: string[] = [];
+  if (pessoas === 0) avisos.push('População zero — dê nome aos dormitórios (ou declare a população na reservação).');
+  // Tanque séptico.
+  const T = TABELA_DETENCAO_DO_TANQUE.find((l) => contribuicaoDiariaL <= l.ateL)!.T;
+  const anos = Math.min(5, Math.max(1, Math.round(hip.intervaloDeLimpezaAnos)));
+  const K = TABELA_ACUMULACAO_DE_LODO[faixaDoLodo(hip.temperaturaC)][anos - 1];
+  const volumeL = 1000 + pessoas * (C * T + K * Lf);
+  const faixa = TABELA_PROFUNDIDADE_DO_TANQUE.find((l) => volumeL / 1000 <= l.ateM3)!;
+  const profundidadeUtilMm = Math.round(faixa.minimaM * 1000);
+  // 2:1 — V = 2·W²·h → W = √(V / 2h).
+  const larguraMm = Math.max(LARGURA_MINIMA_DO_TANQUE_MM, acima50(Math.sqrt((volumeL / 1000) / (2 * faixa.minimaM)) * 1000));
+  const comprimentoMm = acima50(Math.max(2 * larguraMm, ((volumeL / 1000) / (larguraMm / 1000) / faixa.minimaM) * 1000));
+  // Filtro anaeróbio.
+  const Tf = TABELA_DETENCAO_DO_FILTRO.find((l) => contribuicaoDiariaL <= l.ateL)!.T[faixaDoFiltro(hip.temperaturaC)];
+  const volumeUtilL = Math.max(VOLUME_MINIMO_DO_FILTRO_L, 1.6 * pessoas * C * Tf);
+  const diametroDoFiltroMm = acima50(Math.sqrt((4 * (volumeUtilL / 1000)) / (Math.PI * (ALTURA_DO_LEITO_DO_FILTRO_MM / 1000))) * 1000);
+  // Sumidouro: fundo + parede = N·C / Ci.
+  const areaM2 = contribuicaoDiariaL / Math.max(1, hip.taxaDeInfiltracaoLM2Dia);
+  const D = hip.diametroDoSumidouroMm / 1000;
+  const fundo = (Math.PI * D * D) / 4;
+  const alturaUtilMm = Math.max(500, acima50((Math.max(0, areaM2 - fundo) / (Math.PI * D)) * 1000));
+  if (alturaUtilMm > ALTURA_UTIL_MAXIMA_DO_SUMIDOURO_MM) avisos.push(`O sumidouro pediria ${(alturaUtilMm / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} m de altura útil — divida em mais sumidouros ou aumente o diâmetro.`);
+  return {
+    pessoas, contribuicaoDiariaL, C, Lf,
+    tanque: { T, K, volumeL, comprimentoMm, larguraMm, profundidadeUtilMm },
+    filtro: { T: Tf, volumeUtilL, diametroMm: diametroDoFiltroMm, leitoMm: ALTURA_DO_LEITO_DO_FILTRO_MM },
+    sumidouro: { areaM2, diametroMm: hip.diametroDoSumidouroMm, alturaUtilMm },
+    avisos,
+  };
+}
+
+/** As medidas das peças que o lançamento cria, a partir do dimensionamento. */
+export function medidasDimensionadas(d: DimensionamentoDoTratamento): Record<UnidadeDeTratamento, MedidasDaUnidade> {
+  return {
+    TANQUE_SEPTICO: { comprimentoMm: d.tanque.comprimentoMm, larguraMm: d.tanque.larguraMm, alturaMm: d.tanque.profundidadeUtilMm + ACIMA_DO_TUBO_MM },
+    FILTRO_ANAEROBIO: { comprimentoMm: d.filtro.diametroMm, larguraMm: d.filtro.diametroMm, alturaMm: ALTURA_DO_FILTRO_MM },
+    SUMIDOURO: { comprimentoMm: d.sumidouro.diametroMm, larguraMm: d.sumidouro.diametroMm, alturaMm: d.sumidouro.alturaUtilMm + ACIMA_DO_TUBO_MM },
+  };
+}
+
+// ─── A verificação das unidades desenhadas ──────────────────────────────────
+
+export interface UnidadeVerificada {
+  terminalId: ObjectId;
+  tipo: UnidadeDeTratamento;
+  /** O que a peça tem: volume útil (L) no tanque e no filtro, área de infiltração (m²) no sumidouro. */
+  tem: number;
+  precisa: number;
+  unidade: 'L' | 'm²';
+  atende: boolean;
+}
+
+/** Cada unidade do desenho contra o dimensionamento: volume útil do tanque e do filtro, área do sumidouro. */
+export function verificarTratamento(model: BlueprintModel, d: DimensionamentoDoTratamento): UnidadeVerificada[] {
+  return (model.terminais ?? [])
+    .filter(ehUnidade)
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((t) => {
+      const tipo = t.tipoHidraulico as UnidadeDeTratamento;
+      const m = FICHA_DO_PONTO_HIDRAULICO[tipo].medidasMm!;
+      const largura = (t.larguraMm ?? m.larguraMm) / 1000;
+      const profundidade = (t.profundidadeMm ?? m.profundidadeMm) / 1000;
+      const alturaUtil = ((t.alturaMm ?? m.alturaMm) - ACIMA_DO_TUBO_MM) / 1000;
+      if (tipo === 'TANQUE_SEPTICO') {
+        const tem = largura * profundidade * alturaUtil * 1000;
+        return { terminalId: t.id, tipo, tem, precisa: d.tanque.volumeL, unidade: 'L' as const, atende: tem + 1e-6 >= d.tanque.volumeL };
+      }
+      if (tipo === 'FILTRO_ANAEROBIO') {
+        const tem = ((Math.PI * largura * largura) / 4) * (d.filtro.leitoMm / 1000) * 1000;
+        return { terminalId: t.id, tipo, tem, precisa: d.filtro.volumeUtilL, unidade: 'L' as const, atende: tem + 1e-6 >= d.filtro.volumeUtilL };
+      }
+      const tem = (Math.PI * largura * largura) / 4 + Math.PI * largura * alturaUtil;
+      return { terminalId: t.id, tipo, tem, precisa: d.sumidouro.areaM2, unidade: 'm²' as const, atende: tem + 1e-6 >= d.sumidouro.areaM2 };
+    });
+}
 
 /** O desenho usa tratamento individual: há sumidouro e não há ligação à rede pública. */
 export function temTratamentoIndividual(model: BlueprintModel): boolean {

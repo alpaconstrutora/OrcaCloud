@@ -228,6 +228,7 @@ vez de deixar a documentação para o fim.
 | Imagens nas notas BCF, vínculo vivo de IFC externo, filtro por pavimento nas colisões | A/M | coordenação, não projeto |
 | Hunter probabilístico para água, sub-redes nomeadas além do pluvial | M/A | a NBR 5626 usa pesos; sub-rede entra só onde uma fase precisar |
 | Integração com AltoQi Cloud | N | produto de terceiro |
+| Tratamento individual: vala de infiltração e de filtração, múltiplos sumidouros, ensaio de infiltração no sistema, distâncias mínimas a divisas e poços (NBR 7229/13969) | A/M | a E7 cobre o arranjo residencial usual (tanque → filtro → um sumidouro); o resto pede dado do terreno que o desenho não tem |
 | Pluvial no ORÇAMENTO (medida de calha e de tubo pluvial no de-para SINAPI), contribuição do piso descoberto nos ralos, paredes que interceptam a chuva (5.2.2), ábaco da Figura 3 no lugar de Wyly–Eaton | A/M | a E6 fechou o projeto; o orçamento é a E8 (insumos), e as três contas pedem dado que o desenho ainda não tem |
 | Desvio estrutural do ESGOTO, do alimentador e do recalque; contorno do pilar de canto | A | a E5.5 fez a água (onde está o grafo pelas paredes); o esgoto tem traçado próprio (junções 45°), e o pilar de canto pede rota fora do eixo — hoje ficam como marca e pendência |
 
@@ -928,3 +929,33 @@ memoriais. ⚠️ A conferir na norma antes de emitir: a **tabela de intensidade
   relançar e a confirmada; a árvore partindo do sumidouro, sem destino faltando nem ponta solta;
   a conferência sem o coletor; a premissa) e 2 em `PainelTratamento.test.tsx`. Suíte: 551 arquivos
   / 6.131 testes.
+
+### E7.2 — Dimensionamento do tratamento individual (29/09/2026) · fecha a Etapa 7
+
+- `utils/blueprintTratamento.ts`: **tanque séptico** (NBR 7229) — V = 1000 + N·(C·T + K·Lf), com N a
+  população da reservação (E4.1), C e Lf pelo padrão da residência (Tabela 1), T pela contribuição
+  diária (Tabela 2), K pelo intervalo de limpeza e pela temperatura (Tabela 3); retangular 2:1,
+  largura ≥ 0,80 m, profundidade útil a mínima da Tabela 4. **Filtro anaeróbio** (NBR 13969) —
+  Vu = 1,6·N·C·T, mínimo 1000 L, leito de 1,20 m, o diâmetro sai do volume. **Sumidouro** — área de
+  infiltração (fundo + parede) = N·C/Ci, com Ci a **taxa de infiltração do solo** (premissa — o ensaio
+  do Anexo A); acima de 3,00 m de altura útil, o aviso de dividir.
+- A **temperatura** é um número (°C do mês mais frio), e cada tabela usa as faixas dela: a NBR 7229
+  corta em 10/20 °C, a NBR 13969 em 15/25 °C (achado ao escrever: juntar as duas faixas numa premissa
+  só trocaria o K ou o T de quem mora entre 10 e 15 °C).
+- ⚠️ **As tabelas (C, Lf, T, K, profundidade útil, detenção do filtro) foram transcritas de memória —
+  CONFERIR NA NORMA antes de emitir.** Estão todas em `TABELA_*`, num lugar só.
+- O **lançamento** cria as peças já nas medidas dimensionadas; a **verificação** confere cada unidade
+  do desenho — volume útil do tanque, volume do leito do filtro, área de infiltração do sumidouro.
+- **Conferência** (grupo NBR 7229 / NBR 13969, só sem rede pública): população, tanque, filtro (se
+  pedido nas premissas ou desenhado) e sumidouro — com "tem × precisa". **Memorial de cálculo**:
+  subseção do tratamento no lugar do coletor (as grandezas, as fórmulas, as unidades do desenho);
+  **descritivo**: NBR 7229 e 13969 nas normas e o sistema com a limpeza.
+- Premissas `tratamento` (filtro, padrão, °C, limpeza, infiltração, ø do sumidouro) no estudo.
+- **Pronto quando** ✔: 8 testes em `blueprintTratamentoDimensionamento.test.ts` (o sobrado de 4 pessoas
+  — tanque 1780 L em 1,80 × 0,90 m, filtro 1000 L em ø 1,05 m, sumidouro 10,4 m² com 1,85 m; as faixas
+  de temperatura de cada norma; o solo pouco permeável; as peças lançadas atendendo e o grupo da
+  conferência; o tanque encolhido à mão; o filtro pedido e ausente; os dois memoriais; as premissas) e
+  o painel. Suíte: 553 arquivos / 6.141 testes.
+
+**Etapa 7 fechada**: tanque séptico, filtro anaeróbio e sumidouro no kernel (0.68.0), o esgoto
+terminando no sumidouro, lançamento dimensionado, conferência e memoriais.

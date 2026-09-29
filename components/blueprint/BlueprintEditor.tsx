@@ -209,6 +209,9 @@ import PainelVagaSelecionada from './PainelVagaSelecionada';
 import PainelComponenteSelecionado from './PainelComponenteSelecionado';
 import PainelVerificacaoDaRede from './PainelVerificacaoDaRede';
 import PainelPressoesDaAgua from './PainelPressoesDaAgua';
+import PainelMemoriaisHidro, { type FormatoDoMemorial, type QualMemorial } from './PainelMemoriaisHidro';
+import { memorialDeCalculoHidro, memorialDescritivoHidro, type HipotesesHidro } from '../../utils/blueprintMemorialHidro';
+import { artefatosDoMemorial } from '../../services/blueprintMemorialHidroService';
 import { HIPOTESES_PRESSAO_PADRAO, comAjusteDePressao, pressoesDoModelo, type HipotesesDePressao } from '../../utils/blueprintPressaoDaRede';
 import { marcasDeVerificacao } from '../../utils/blueprintVerificacaoRede';
 import SeletorDeTipo from './SeletorDeTipo';
@@ -947,6 +950,9 @@ const ROTULO_DA_TAREFA = {
   // Esgoto automático (18/09/2026, F5): aparelhos → coletores → caixa de
   // inspeção, com caimento por DN, tubo de queda e ventilação.
   esgoto: 'Esgoto automático',
+  // Memoriais hidrossanitários (28/09/2026, roadmap hidrossanitário E3.1/E3.2): o de
+  // cálculo e o descritivo, derivados do desenho, em PDF ou DOCX.
+  memoriaisHidro: 'Memoriais hidrossanitários',
   // Matriz (18/09/2026, roadmap E0.1): N cópias da seleção a k·passo — a
   // fileira de pilares, a bateria de banheiros. Um lote, um Ctrl+Z.
   matriz: 'Matriz — repetir a seleção',
@@ -7191,6 +7197,27 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   /** VERIFICAÇÃO DA REDE (28/09/2026, E0.1 do roadmap hidrossanitário): pontas abertas, DN do esgoto, louça sem ponto. */
   const pressoesDaAgua = useMemo(() => pressoesDoModelo(editor.model, hipPressao), [editor.model, hipPressao]);
   const marcasDaRede = useMemo(() => marcasDeVerificacao(editor.model, null, pressoesDaAgua), [editor.model, pressoesDaAgua]);
+  // MEMORIAIS HIDROSSANITÁRIOS (28/09/2026, E3.1/E3.2): com as MESMAS premissas das
+  // gavetas de água, de pressão e de esgoto. A prévia (o sumário das seções) só é
+  // montada com a gaveta aberta; o arquivo remonta na hora, com a data do download.
+  const hipotesesHidro = useMemo<HipotesesHidro>(
+    () => ({ agua: hipotesesDeAgua, pressao: hipPressao, esgoto: hipotesesDeEsgoto }),
+    [hipotesesDeAgua, hipPressao, hipotesesDeEsgoto],
+  );
+  const previaDosMemoriaisHidro = useMemo(() => {
+    if (tarefaAberta !== 'memoriaisHidro') return null;
+    const ctx = { nomeDoEstudo: study.name, geradoEm: new Date().toISOString() };
+    return { calculo: memorialDeCalculoHidro(editor.model, hipotesesHidro, ctx), descritivo: memorialDescritivoHidro(editor.model, hipotesesHidro, ctx) };
+  }, [tarefaAberta, editor.model, hipotesesHidro, study.name]);
+  const baixarMemorialHidro = useCallback(
+    async (qual: QualMemorial, formato: FormatoDoMemorial) => {
+      const ctx = { nomeDoEstudo: study.name, geradoEm: new Date().toISOString() };
+      const blocos = qual === 'calculo' ? memorialDeCalculoHidro(editor.model, hipotesesHidro, ctx) : memorialDescritivoHidro(editor.model, hipotesesHidro, ctx);
+      const titulo = `${study.name} — memorial ${qual === 'calculo' ? 'de cálculo' : 'descritivo'} hidrossanitário`;
+      baixarArtefatos(await artefatosDoMemorial(blocos, titulo, titulo, formato));
+    },
+    [editor.model, hipotesesHidro, study.name],
+  );
   const lancarEsgoto = () => {
     const comandos = planoDeEsgoto.comandos.length > 0
       ? planoDeEsgoto.comandos
@@ -10153,6 +10180,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 disabled={sugeridasNoNivel === 0}
                 onClick={aceitarSugeridas}
                 ajuda="Confirma todas as peças sugeridas do pavimento (tomadas e pontos hidráulicos) de uma vez."
+              />
+            </GrupoDoRibbon>
+            {/* DOCUMENTOS (28/09/2026, roadmap hidrossanitário E3): os memoriais. */}
+            <GrupoDoRibbon rotulo="Documentos">
+              <BotaoDoRibbon
+                icone={FileText}
+                rotulo="Memoriais"
+                ativo={tarefaAberta === 'memoriaisHidro'}
+                onClick={() => alternarTarefa('memoriaisHidro')}
+                ajuda="Memorial de cálculo (água trecho a trecho, pressões, esgoto por UHC e declividade) e memorial descritivo, gerados do desenho — PDF ou DOCX"
               />
             </GrupoDoRibbon>
           </>
@@ -13147,6 +13184,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'pontosHidraulicos' && <ShowerHead className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'agua' && <Droplets className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'esgoto' && <Waves className="h-5 w-5 text-slate-700" />}
+              {tarefaAberta === 'memoriaisHidro' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -13202,6 +13240,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 trechos nascem <em>sugeridos</em>.
               </>
             )}
+            {tarefaAberta === 'memoriaisHidro' &&
+              'O memorial de cálculo e o descritivo das instalações de água e esgoto, gerados do desenho e das premissas das gavetas de água, pressão e esgoto — os mesmos números das marcas e da verificação. Só entram as seções dos sistemas que existem.'}
             {tarefaAberta === 'agua' && (
               <>
                 Para cada <strong>caixa d'água</strong> (água fria) e cada <strong>aquecedor</strong> (água quente), o
@@ -13631,6 +13671,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 </button>
               </div>
             </div>
+          )}
+
+          {tarefaAberta === 'memoriaisHidro' && previaDosMemoriaisHidro && (
+            <PainelMemoriaisHidro calculo={previaDosMemoriaisHidro.calculo} descritivo={previaDosMemoriaisHidro.descritivo} onBaixar={baixarMemorialHidro} />
           )}
 
           {tarefaAberta === 'esgoto' && (

@@ -375,7 +375,9 @@ export function planejarEsgoto(model: BlueprintModel, hip: HipotesesDeEsgoto = H
       let cota = hip.cotaMinimaSobPisoMm;
       for (const d of filhosDe.get(key) ?? []) {
         const dn = dnDaAresta(d);
-        const queda = Math.max(1, Math.round((distancia(d.de, d.para) * caimentoPct(dn, hip)) / 100));
+        // Para CIMA (28/09/2026, achado pelo memorial E3.1): com `round`, 0,72 m a 2 % davam
+        // 14 mm de queda = 1,94 % — abaixo da mínima que o próprio lançamento promete.
+        const queda = Math.max(1, Math.ceil((distancia(d.de, d.para) * caimentoPct(dn, hip)) / 100 - 1e-9));
         cota = Math.min(cota, cotaDe(d.paraKey) - queda);
       }
       if (key === raizKey && cotaDaRaizMinima != null) cota = Math.min(cota, cotaDaRaizMinima);
@@ -526,6 +528,32 @@ export interface DnForaDoNecessario {
  * ponta morta) não é avaliado.
  */
 export function verificarDnDoEsgoto(model: BlueprintModel, hip: HipotesesDeEsgoto = HIPOTESES_ESGOTO_PADRAO): DnForaDoNecessario[] {
+  return esgotoTrechoATrecho(model, hip)
+    .filter((c) => c.tipo !== null)
+    .map((c) => ({ trechoId: c.trechoId, levelId: c.levelId, meio: c.meio, dnAtualMm: c.dnAtualMm, dnNecessarioMm: c.dnNecessarioMm, uhc: c.uhc, tipo: c.tipo! }));
+}
+
+/**
+ * O CÁLCULO do esgoto trecho a trecho (E3.1, 28/09/2026): o mesmo percurso da
+ * verificação acima — UHC acumuladas a montante, DN necessário, o que o trecho
+ * tem — mais a declividade e as cotas, para o memorial de cálculo. A
+ * verificação é este cálculo filtrado; os dois não podem divergir.
+ */
+export interface TrechoDeEsgotoCalculado extends Omit<DnForaDoNecessario, 'tipo'> {
+  tipo: DnForaDoNecessario['tipo'] | null;
+  /** A caixa de inspeção a que o trecho leva. */
+  caixaId: ObjectId;
+  rotulo: string | null;
+  comprimentoM: number;
+  /** Cotas (relativas ao pavimento) da ponta de montante e da de jusante, mm. */
+  cotaMontanteMm: number;
+  cotaJusanteMm: number;
+  /** Declividade do trecho, % (null na prumada). */
+  declividadePct: number | null;
+  declividadeMinimaPct: number;
+}
+
+export function esgotoTrechoATrecho(model: BlueprintModel, hip: HipotesesDeEsgoto = HIPOTESES_ESGOTO_PADRAO): TrechoDeEsgotoCalculado[] {
   const chave = fazerChave(model.levels);
   const fontes = new Map<string, { uhc: number; dn: number }>();
   for (const f of fontesDeEsgoto(model)) {
@@ -533,7 +561,7 @@ export function verificarDnDoEsgoto(model: BlueprintModel, hip: HipotesesDeEsgot
     const atual = fontes.get(k) ?? { uhc: 0, dn: 40 };
     fontes.set(k, { uhc: atual.uhc + uhcDe(f), dn: Math.max(atual.dn, dnFichaDe(f)) });
   }
-  const saida: DnForaDoNecessario[] = [];
+  const saida: TrechoDeEsgotoCalculado[] = [];
   const vistos = new Set<ObjectId>();
   for (const ci of caixasDeInspecao(model)) {
     const rede = redeDaOrigem(model, ci, 'ESGOTO');
@@ -566,12 +594,20 @@ export function verificarDnDoEsgoto(model: BlueprintModel, hip: HipotesesDeEsgot
           vistos.add(t.id);
           const necessario = Math.max(dnPorUhc(sub.uhc), passa);
           const tipo = t.bitolaMm < necessario ? 'MENOR' : t.bitolaMm > necessario && t.rotulo !== 'TQ' ? 'MAIOR' : null;
-          if (tipo) {
-            saida.push({
-              trechoId: t.id, levelId: t.levelId, meio: { x: (t.a.x + t.b.x) / 2, y: (t.a.y + t.b.y) / 2 },
-              dnAtualMm: t.bitolaMm, dnNecessarioMm: necessario, uhc: sub.uhc, tipo,
-            });
-          }
+          // Montante = a ponta do FILHO (mais longe da caixa); jusante = a do nó `n`.
+          const montanteEhA = chave(t.levelId, t.a.x, t.a.y, t.cotaAMm) === filho;
+          const cotaMontanteMm = montanteEhA ? t.cotaAMm : t.cotaBMm;
+          const cotaJusanteMm = montanteEhA ? t.cotaBMm : t.cotaAMm;
+          const planta = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
+          saida.push({
+            trechoId: t.id, levelId: t.levelId, meio: { x: (t.a.x + t.b.x) / 2, y: (t.a.y + t.b.y) / 2 },
+            dnAtualMm: t.bitolaMm, dnNecessarioMm: necessario, uhc: sub.uhc, tipo,
+            caixaId: ci.id, rotulo: t.rotulo ?? null,
+            comprimentoM: Math.hypot(planta, t.cotaBMm - t.cotaAMm) / 1000,
+            cotaMontanteMm, cotaJusanteMm,
+            declividadePct: planta < 1 ? null : ((cotaMontanteMm - cotaJusanteMm) / planta) * 100,
+            declividadeMinimaPct: caimentoPct(t.bitolaMm, hip),
+          });
         }
         uhc += sub.uhc;
         dn = Math.max(dn, passa);

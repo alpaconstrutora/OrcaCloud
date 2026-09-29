@@ -494,3 +494,38 @@ Publicadas juntas: a perda localizada só aparece no resultado de pressão.
 
 **Etapa 2: 4 de 4 fases publicadas.** Fica para depois (backlog): isométrico por COLUNA (o esquema
 vertical cobre o traçado das colunas) e anticolisão dos rótulos na planta.
+
+### E3.1 + E3.2 — Memorial de cálculo e memorial descritivo (28/09/2026)
+
+- `utils/blueprintMemorialHidro.ts` (novo, puro): os memoriais como BLOCOS (título, seção,
+  parágrafo, tabela), derivados do modelo a cada vez. **Cálculo:** premissas; água por origem,
+  trecho a trecho (Abastece, material, DN, L, ΣP, Q, V, J, hf distribuída e localizada, P a
+  jusante — de `pressoesDoModelo`, o mesmo cálculo das marcas) e ponto a ponto (disponível ×
+  mínima × estática) com o ponto crítico; reservação SÓ com medidas declaradas (volume bruto);
+  esgoto com aparelhos × UHC, trechos (UHC, DN × DN mínimo, L, i × i mínima, cotas — de
+  `esgotoTrechoATrecho`, o mesmo percurso da verificação do DN) e caixas (tampa/fundo); colunas
+  (E2.3). **Descritivo:** objeto, normas, sistemas, materiais, peças por pavimento, premissas,
+  execução e ensaios. Cada seção só sai se o sistema existe; premissa de aquecedor/hidrômetro só
+  com a peça no desenho. `linhasDoMemorial`/`blocosDasLinhas`: texto para a emissão (E3.3), ida e
+  volta sem perda.
+- `utils/blueprintEsgotoAutomatico.ts`: `esgotoTrechoATrecho` (cálculo por trecho) e
+  `verificarDnDoEsgoto` virou esse cálculo filtrado. ⚠️ **Achado pelo memorial:** o lançamento
+  arredondava a queda (`Math.round`) — 0,72 m a 2 % davam 14 mm = **1,94 %**, abaixo da mínima que
+  ele mesmo promete. Agora arredonda para cima.
+- Arquivos: `services/blueprintMemorialHidroService.ts` — PDF com tabelas (jspdf-autotable; A4
+  deitado quando há tabela larga; rodapé com "página x de y"; Σ √ − Δ → trocados por texto, que a
+  fonte WinAnsi não tem) e DOCX (`utils/blueprintMemorialDocx.ts`: WordprocessingML mínimo, pizzip
+  com DEFLATE, cabeçalho de tabela repetido). ⚠️ O roadmap dizia "o DOCX de
+  `blueprintMemorialLote`" — ele não existia (o do loteamento sai em .txt); este é o primeiro.
+- Tela: ribbon Hidráulica → grupo **Documentos → Memoriais** (gaveta "Memoriais
+  hidrossanitários", `PainelMemoriaisHidro`): o sumário das seções de cada memorial e PDF/DOCX; sem
+  rede, botões desligados dizendo por quê. As premissas são as das gavetas de água, pressão e
+  esgoto (ainda por navegador — ver E3.3).
+- **Pronto quando** ✔: 14 testes em `blueprintMemorialHidro.test.ts` com o sobrado lançado pelos
+  planejadores (`__tests__/fixtures/sobradoHidro.ts`, agora compartilhado com o esquema vertical) —
+  seções na ordem; linha a linha igual a `pressoesDoModelo`/`esgotoTrechoATrecho`; ΣP de volta da
+  vazão; UHC somando; DN reduzido à mão aparece como "DN abaixo do exigido (100)"; declividade do
+  lançamento ≥ mínima; reservatório 1,2 × 1,0 × 0,8 = 960 L; só esgoto sem premissa de água; ida e
+  volta do texto com "|" e célula vazia; DOCX escapado e deitado; troca WinAnsi. 3 testes do painel.
+  PDF (3 págs. de cálculo, 2 de descritivo) conferido no olho; DOCX aberto pelo mammoth sem erro.
+  Suíte: 526 arquivos / 5.942 testes; build ok.

@@ -449,7 +449,14 @@ export function desenharQuadroDeCargas(
         String(c.pontos) + (c.pontosSemPotencia ? '*' : ''),
         String(Math.round(c.sVA)),
         c.ibA == null ? '—' : n1(c.ibA),
-        `${mm2(c.secaoDeclaradaMm2)} / ${mm2(c.secaoCalculada?.secaoMm2)}`,
+        `${mm2(c.secaoDeclaradaMm2)} / ${mm2(c.secaoCalculada?.secaoMm2)}${(() => {
+          // E2.3: o PE (Tab. 58) e o neutro só aparecem quando diferem da fase.
+          const fase = c.secaoDeclaradaMm2 ?? c.secaoCalculada?.secaoMm2 ?? null;
+          const partes: string[] = [];
+          if (c.secaoNeutroMm2 != null && c.secaoNeutroMm2 !== fase) partes.push(`N ${mm2(c.secaoNeutroMm2)}`);
+          if (c.secaoPeMm2 != null && c.secaoPeMm2 !== fase) partes.push(`PE ${mm2(c.secaoPeMm2)}`);
+          return partes.length ? ` · ${partes.join(' · ')}` : '';
+        })()}`,
         `${c.disjuntorDeclaradoA ?? '—'} / ${c.disjuntorSugeridoA ?? '—'}`,
         c.quedaPct == null ? '—' : `${n1(c.quedaPct)}${c.comprimento?.origem === 'ESTIMADO' ? '*' : ''}`,
         dr,

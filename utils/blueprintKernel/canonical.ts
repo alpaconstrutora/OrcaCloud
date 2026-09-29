@@ -750,6 +750,9 @@ function projetar(model: BlueprintModel): {
       tensaoV: c.tensaoV ?? null,
       disjuntorA: c.disjuntorA ?? null,
       secaoMm2: c.secaoMm2 ?? null,
+      // E2.3: omitidas quando ausentes — o acervo não muda de hash.
+      secaoNeutroMm2: c.secaoNeutroMm2 ?? undefined,
+      secaoPeMm2: c.secaoPeMm2 ?? undefined,
       // Os três são omitidos quando ausentes — todo circuito anterior a
       // 13/09/2026 está assim, e o hash dele não muda por isto.
       ligacao: c.ligacao ?? undefined,
@@ -1548,6 +1551,9 @@ export interface CanonicalPayload {
     tensaoV: number | null;
     disjuntorA: number | null;
     secaoMm2: number | null;
+    /** Neutro e PE declarados (E2.3). Ausentes sob kernel < 0.72.0 e quando não declarados. */
+    secaoNeutroMm2?: number;
+    secaoPeMm2?: number;
     /** Ausentes sob kernel < 0.28.0 e quando não declarados. */
     ligacao?: string;
     protecaoDR?: boolean;
@@ -2134,6 +2140,8 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       tensaoV: c.tensaoV,
       disjuntorA: c.disjuntorA,
       secaoMm2: c.secaoMm2,
+      secaoNeutroMm2: c.secaoNeutroMm2 ?? null,
+      secaoPeMm2: c.secaoPeMm2 ?? null,
       ligacao: (c.ligacao as LigacaoDoCircuito | undefined) ?? null,
       protecaoDR: c.protecaoDR ?? null,
       fase: (c.fase as FaseDoCircuito | undefined) ?? null,

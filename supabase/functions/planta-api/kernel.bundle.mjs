@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.71.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.72.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -1026,11 +1026,11 @@ function degrausDaEscada(model, escada) {
 }
 function medirEscada(model, escada) {
   const desnivelMm = desnivelDaEscada(model, escada);
-  const comprimentoMm = comprimentoDoPercurso(escada.pontos);
+  const comprimentoMm2 = comprimentoDoPercurso(escada.pontos);
   const contorno = contornoDaEscada(escada);
   const chegada = nivelDeChegada(model, escada);
-  const inclinacaoPct = comprimentoMm > 0 ? desnivelMm / comprimentoMm * 100 : 0;
-  const comprimentoInclinadoMm = Math.hypot(comprimentoMm, desnivelMm);
+  const inclinacaoPct = comprimentoMm2 > 0 ? desnivelMm / comprimentoMm2 * 100 : 0;
+  const comprimentoInclinadoMm = Math.hypot(comprimentoMm2, desnivelMm);
   const avisos = [];
   if (escada.tipo === "RAMPA") {
     if (inclinacaoPct > RAMPA_INCLINACAO_MAX_PCT) {
@@ -1044,7 +1044,7 @@ function medirEscada(model, escada) {
       degraus: 0,
       espelhoMm: 0,
       pisoMm: 0,
-      comprimentoMm,
+      comprimentoMm: comprimentoMm2,
       comprimentoInclinadoMm,
       inclinacaoPct,
       blondelMm: 0,
@@ -1055,7 +1055,7 @@ function medirEscada(model, escada) {
   }
   const degraus = Math.max(2, Math.round(desnivelMm / escada.alvoEspelhoMm) || 2);
   const espelhoMm = desnivelMm / degraus;
-  const pisoMm = comprimentoMm / (degraus - 1);
+  const pisoMm = comprimentoMm2 / (degraus - 1);
   const blondelMm = 2 * espelhoMm + pisoMm;
   if (espelhoMm < ESPELHO_MIN_MM || espelhoMm > ESPELHO_MAX_MM) {
     avisos.push(
@@ -1073,7 +1073,7 @@ function medirEscada(model, escada) {
     degraus,
     espelhoMm,
     pisoMm,
-    comprimentoMm,
+    comprimentoMm: comprimentoMm2,
     comprimentoInclinadoMm,
     inclinacaoPct,
     blondelMm,
@@ -1107,9 +1107,9 @@ function furosDaEscada(model) {
   }
   return saida;
 }
-function cotaNoPercurso(desnivelMm, comprimentoMm, u) {
-  if (comprimentoMm <= 0) return 0;
-  return desnivelMm * Math.max(0, Math.min(comprimentoMm, u)) / comprimentoMm;
+function cotaNoPercurso(desnivelMm, comprimentoMm2, u) {
+  if (comprimentoMm2 <= 0) return 0;
+  return desnivelMm * Math.max(0, Math.min(comprimentoMm2, u)) / comprimentoMm2;
 }
 function fatiasDaEscada(model, escada) {
   const m = medirEscada(model, escada);
@@ -2010,6 +2010,9 @@ function projetar(model) {
       tensaoV: c.tensaoV ?? null,
       disjuntorA: c.disjuntorA ?? null,
       secaoMm2: c.secaoMm2 ?? null,
+      // E2.3: omitidas quando ausentes — o acervo não muda de hash.
+      secaoNeutroMm2: c.secaoNeutroMm2 ?? void 0,
+      secaoPeMm2: c.secaoPeMm2 ?? void 0,
       // Os três são omitidos quando ausentes — todo circuito anterior a
       // 13/09/2026 está assim, e o hash dele não muda por isto.
       ligacao: c.ligacao ?? void 0,
@@ -2730,6 +2733,8 @@ function modelFromCanonicalPayload(payload) {
       tensaoV: c.tensaoV,
       disjuntorA: c.disjuntorA,
       secaoMm2: c.secaoMm2,
+      secaoNeutroMm2: c.secaoNeutroMm2 ?? null,
+      secaoPeMm2: c.secaoPeMm2 ?? null,
       ligacao: c.ligacao ?? null,
       protecaoDR: c.protecaoDR ?? null,
       fase: c.fase ?? null
@@ -3118,6 +3123,290 @@ function conexoesDerivadas(model) {
   return { conexoes, pontasAbertas };
 }
 
+// utils/blueprintKernel/grafoDeRede.ts
+function fazerChave2(niveis) {
+  const ordenados = [...niveis].sort((a, b) => a.elevationMm - b.elevationMm);
+  const abaixoDe = /* @__PURE__ */ new Map();
+  ordenados.forEach((l, i) => abaixoDe.set(l.id, i > 0 ? ordenados[i - 1] : null));
+  return (levelId, x, y, cota) => {
+    if (cota <= 0) {
+      const abaixo = abaixoDe.get(levelId);
+      if (abaixo) return `${abaixo.id}|${x},${y}|${abaixo.defaultHeightMm + cota}`;
+    }
+    return `${levelId}|${x},${y}|${cota}`;
+  };
+}
+var comprimentoMm = (t) => Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y, t.cotaBMm - t.cotaAMm);
+function distanciasDesde(origem, arestas) {
+  const viz = /* @__PURE__ */ new Map();
+  for (const a of arestas) {
+    viz.set(a.de, [...viz.get(a.de) ?? [], { para: a.para, mm: a.mm }]);
+    viz.set(a.para, [...viz.get(a.para) ?? [], { para: a.de, mm: a.mm }]);
+  }
+  const dist = /* @__PURE__ */ new Map([[origem, 0]]);
+  const abertos = /* @__PURE__ */ new Set([origem]);
+  while (abertos.size > 0) {
+    let atual = null;
+    for (const n4 of abertos) if (atual == null || (dist.get(n4) ?? Infinity) < (dist.get(atual) ?? Infinity)) atual = n4;
+    if (atual == null) break;
+    abertos.delete(atual);
+    const dAtual = dist.get(atual) ?? Infinity;
+    for (const v of viz.get(atual) ?? []) {
+      const nova = dAtual + v.mm;
+      if (nova < (dist.get(v.para) ?? Infinity)) {
+        dist.set(v.para, nova);
+        abertos.add(v.para);
+      }
+    }
+  }
+  return dist;
+}
+function caminhoEntre(origem, destino, arestas) {
+  const vizinhos = /* @__PURE__ */ new Map();
+  arestas.forEach((ar, i) => {
+    vizinhos.set(ar.de, [...vizinhos.get(ar.de) ?? [], { para: ar.para, aresta: i }]);
+    vizinhos.set(ar.para, [...vizinhos.get(ar.para) ?? [], { para: ar.de, aresta: i }]);
+  });
+  const anterior = /* @__PURE__ */ new Map([[origem, null]]);
+  const fila = [origem];
+  while (fila.length > 0) {
+    const n4 = fila.shift();
+    if (n4 === destino) {
+      const caminho = [];
+      let atual = n4;
+      for (let passo = anterior.get(atual); passo; passo = anterior.get(atual)) {
+        caminho.push(passo.aresta);
+        atual = passo.de;
+      }
+      return caminho;
+    }
+    for (const v of vizinhos.get(n4) ?? []) {
+      if (anterior.has(v.para)) continue;
+      anterior.set(v.para, { de: n4, aresta: v.aresta });
+      fila.push(v.para);
+    }
+  }
+  return null;
+}
+
+// utils/blueprintKernel/comandos.ts
+var letrasDe = (t) => (t.comando ?? "").trim().toLowerCase().split("").filter((c) => c !== " ");
+var ehLuz = (t) => t.tipoEletrico?.startsWith("ILUMINACAO") ?? false;
+function comandosDoModelo(model) {
+  const mapa = /* @__PURE__ */ new Map();
+  const ordem = new Map(model.levels.map((l, i) => [l.id, i]));
+  for (const t of model.terminais ?? []) {
+    if (t.disciplina !== "ELETRICA") continue;
+    const interruptor = t.tipoEletrico === "INTERRUPTOR";
+    if (!interruptor && !ehLuz(t)) continue;
+    for (const letra of letrasDe(t)) {
+      const global = t.comandoGlobal === true;
+      const chave = global ? `global:${letra}` : `${t.levelId}:${letra}`;
+      const c = mapa.get(chave) ?? { chave, letra, global, levelIds: [], interruptorIds: [], luzIds: [], variantes: [] };
+      if (!c.levelIds.includes(t.levelId)) c.levelIds.push(t.levelId);
+      if (interruptor) {
+        c.interruptorIds.push(t.id);
+        const v = t.interruptor ?? "UMA_SECAO";
+        if (!c.variantes.includes(v)) c.variantes.push(v);
+      } else c.luzIds.push(t.id);
+      mapa.set(chave, c);
+    }
+  }
+  return [...mapa.values()].sort((a, b) => {
+    if (a.global !== b.global) return a.global ? -1 : 1;
+    const la = Math.min(...a.levelIds.map((id) => ordem.get(id) ?? 0));
+    const lb = Math.min(...b.levelIds.map((id) => ordem.get(id) ?? 0));
+    return la - lb || a.letra.localeCompare(b.letra);
+  });
+}
+
+// utils/blueprintKernel/condutores.ts
+var ROTULO_DO_CONDUTOR = {
+  FASE: "fase",
+  NEUTRO: "neutro",
+  RETORNO: "retorno",
+  TERRA: "terra"
+};
+var BASE_POR_LIGACAO = {
+  FN: ["FASE", "NEUTRO", "TERRA"],
+  FF: ["FASE", "FASE", "TERRA"],
+  FFF: ["FASE", "FASE", "FASE", "TERRA"]
+};
+function condutoresDoTrecho(trecho, circuito) {
+  const n4 = Math.max(0, Math.floor(trecho.condutores ?? 0));
+  if (n4 === 0) return [];
+  const base = BASE_POR_LIGACAO[circuito?.ligacao ?? "FN"];
+  if (n4 <= base.length) return base.slice(0, n4);
+  const semTerra = base.slice(0, -1);
+  const retornos = Array.from({ length: n4 - base.length }, () => "RETORNO");
+  return [...semTerra, ...retornos, "TERRA"];
+}
+function condutoresDoEletroduto(trecho, circuitos) {
+  if (circuitos.length <= 1) {
+    const c = circuitos[0] ?? null;
+    return condutoresDoTrecho(trecho, c).map((tipo) => ({ tipo, circuitoId: c?.id ?? null }));
+  }
+  const n4 = Math.max(0, Math.floor(trecho.condutores ?? 0));
+  const bases = circuitos.map((c) => BASE_POR_LIGACAO[c.ligacao ?? "FN"].map((tipo) => ({ tipo, circuitoId: c.id })));
+  const soma = bases.reduce((t, b) => t + b.length, 0);
+  const lista = bases.flat();
+  if (n4 === 0) return lista;
+  if (n4 <= soma) return lista.slice(0, n4);
+  const retornos = Array.from({ length: n4 - soma }, () => ({ tipo: "RETORNO", circuitoId: null }));
+  return [...lista, ...retornos];
+}
+var SECOES_NOMINAIS_DE_CONDUTOR_MM2 = [0.5, 0.75, 1, 1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120, 150, 185, 240, 300, 400, 500];
+function secaoDoNeutroMm2(faseMm2, _ligacao) {
+  return faseMm2;
+}
+function secaoDoPeMm2(faseMm2) {
+  if (faseMm2 <= 16) return faseMm2;
+  if (faseMm2 <= 35) return 16;
+  const metade = faseMm2 / 2;
+  return SECOES_NOMINAIS_DE_CONDUTOR_MM2.find((s2) => s2 >= metade) ?? metade;
+}
+function secoesDosCondutores(circuito, faseMm2) {
+  const fase = faseMm2 ?? null;
+  const neutro = circuito.secaoNeutroMm2 ?? (fase != null ? secaoDoNeutroMm2(fase, circuito.ligacao) : null);
+  const pe = circuito.secaoPeMm2 ?? (fase != null ? secaoDoPeMm2(fase) : null);
+  return { faseMm2: fase, neutroMm2: neutro, peMm2: pe, neutroDerivado: circuito.secaoNeutroMm2 == null, peDerivado: circuito.secaoPeMm2 == null };
+}
+
+// utils/blueprintKernel/fiacao.ts
+var fasesDa = (lig) => lig === "FFF" ? 3 : lig === "FF" ? 2 : 1;
+var ehLuz2 = (t) => t.tipoEletrico?.startsWith("ILUMINACAO") ?? false;
+var SEM_FIO = /* @__PURE__ */ new Set(["ATERRAMENTO", "CAIXA_PASSAGEM"]);
+function exigenciaDoPonto(t, lig, luzComComando, interruptorPrecisaDeFase) {
+  if (t.tipoEletrico && SEM_FIO.has(t.tipoEletrico)) return null;
+  if (t.tipoEletrico === "INTERRUPTOR") return interruptorPrecisaDeFase ? { fases: 1, neutro: false, terra: false } : null;
+  if (ehLuz2(t) && luzComComando) return { fases: 0, neutro: true, terra: true };
+  return { fases: fasesDa(lig), neutro: lig === "FN", terra: true };
+}
+function composicaoDaRede(model) {
+  const saida = /* @__PURE__ */ new Map();
+  const trechos = (model.trechos ?? []).filter((t) => t.disciplina === "ELETRICA");
+  const circuitos = new Map((model.circuitos ?? []).map((c) => [c.id, c]));
+  const quadros = new Map((model.quadros ?? []).map((q) => [q.id, q]));
+  const chave = fazerChave2(model.levels);
+  const arestas = trechos.map((t) => ({
+    ref: { existente: t.id },
+    de: chave(t.levelId, t.a.x, t.a.y, t.cotaAMm),
+    para: chave(t.levelId, t.b.x, t.b.y, t.cotaBMm),
+    mm: comprimentoMm(t)
+  }));
+  const indiceDoTrecho = new Map(trechos.map((t, i) => [t.id, i]));
+  const noDoPonto = (t) => chave(t.levelId, t.at.x, t.at.y, t.cotaMm);
+  const acum = /* @__PURE__ */ new Map();
+  const acumDe = (trechoId, circuitoId) => {
+    const porCircuito = acum.get(trechoId) ?? /* @__PURE__ */ new Map();
+    acum.set(trechoId, porCircuito);
+    const a = porCircuito.get(circuitoId) ?? { fases: 0, neutro: false, terra: false, retornos: [] };
+    porCircuito.set(circuitoId, a);
+    return a;
+  };
+  const arestasDo = (c) => {
+    const proprias = arestas.filter((a) => {
+      const t = trechos[indiceDoTrecho.get(a.ref.existente)];
+      return (t.circuitoIds ?? []).includes(c.id);
+    });
+    return proprias.length > 0 ? proprias : arestas;
+  };
+  const caminho = (de, para, c) => {
+    const tentar = (lista) => {
+      const idx = caminhoEntre(de, para, lista);
+      return idx ? idx.map((i) => lista[i].ref.existente) : null;
+    };
+    const proprias = arestasDo(c);
+    return tentar(proprias) ?? (proprias === arestas ? null : tentar(arestas));
+  };
+  const noDoQuadro = (c) => {
+    const q = quadros.get(c.quadroId);
+    return q ? chave(q.levelId, q.at.x, q.at.y, q.cotaMm) : null;
+  };
+  const terminais = new Map((model.terminais ?? []).map((t) => [t.id, t]));
+  const comandos = comandosDoModelo(model);
+  const luzesComComando = /* @__PURE__ */ new Set();
+  const interruptoresComFase = /* @__PURE__ */ new Set();
+  const retornos = [];
+  for (const cmd of comandos) {
+    const luzes = cmd.luzIds.map((id) => terminais.get(id)).filter((t) => !!t);
+    const ints = cmd.interruptorIds.map((id) => terminais.get(id)).filter((t) => !!t);
+    if (ints.length === 0) continue;
+    const circuitoId = luzes.find((l) => l.circuitoId)?.circuitoId ?? ints.find((i) => i.circuitoId)?.circuitoId ?? null;
+    const c = circuitoId ? circuitos.get(circuitoId) : void 0;
+    if (!c) continue;
+    for (const l of luzes) luzesComComando.add(l.id);
+    const raiz = noDoQuadro(c);
+    const dist = raiz ? distanciasDesde(raiz, arestasDo(c)) : /* @__PURE__ */ new Map();
+    const ordenados = [...ints].sort((a, b) => (dist.get(noDoPonto(a)) ?? Infinity) - (dist.get(noDoPonto(b)) ?? Infinity));
+    interruptoresComFase.add(ordenados[0].id);
+    const ehPar = (t) => t.interruptor === "PARALELO" || t.interruptor === "INTERMEDIARIO";
+    const cadeia = ordenados.some(ehPar);
+    if (cadeia) {
+      for (let k = 0; k + 1 < ordenados.length; k++) retornos.push({ de: ordenados[k], para: ordenados[k + 1], quantos: 2, letra: cmd.letra, circuito: c });
+      const ultimo = ordenados[ordenados.length - 1];
+      for (const l of luzes) retornos.push({ de: ultimo, para: l, quantos: 1, letra: cmd.letra, circuito: c });
+    } else {
+      for (const i of ordenados) for (const l of luzes) retornos.push({ de: i, para: l, quantos: 1, letra: cmd.letra, circuito: c });
+    }
+  }
+  for (const t of model.terminais ?? []) {
+    if (t.disciplina !== "ELETRICA" || !t.circuitoId) continue;
+    const c = circuitos.get(t.circuitoId);
+    if (!c) continue;
+    const ex = exigenciaDoPonto(t, c.ligacao ?? "FN", luzesComComando.has(t.id), interruptoresComFase.has(t.id) || !comandos.some((k) => k.interruptorIds.includes(t.id)));
+    if (!ex) continue;
+    const raiz = noDoQuadro(c);
+    if (!raiz) continue;
+    const trilha = caminho(noDoPonto(t), raiz, c);
+    if (!trilha) continue;
+    for (const id of trilha) {
+      const a = acumDe(id, c.id);
+      a.fases = Math.max(a.fases, ex.fases);
+      a.neutro = a.neutro || ex.neutro;
+      a.terra = a.terra || ex.terra;
+    }
+  }
+  for (const r of retornos) {
+    const trilha = caminho(noDoPonto(r.de), noDoPonto(r.para), r.circuito);
+    if (!trilha) continue;
+    for (const id of trilha) {
+      const a = acumDe(id, r.circuito.id);
+      for (let k = 0; k < r.quantos; k++) a.retornos.push({ comando: r.letra });
+    }
+  }
+  for (const t of trechos) {
+    const porCircuito = acum.get(t.id) ?? /* @__PURE__ */ new Map();
+    const ordem = [...t.circuitoIds ?? [], ...[...porCircuito.keys()].filter((id) => !(t.circuitoIds ?? []).includes(id))];
+    const derivados = [];
+    for (const cid of ordem) {
+      const a = porCircuito.get(cid);
+      if (!a) continue;
+      for (let k = 0; k < a.fases; k++) derivados.push({ tipo: "FASE", circuitoId: cid });
+      if (a.neutro) derivados.push({ tipo: "NEUTRO", circuitoId: cid });
+      for (const r of a.retornos) derivados.push({ tipo: "RETORNO", circuitoId: cid, comando: r.comando });
+      if (a.terra) derivados.push({ tipo: "TERRA", circuitoId: cid });
+    }
+    const declarados = t.condutores ?? null;
+    const circuitosDoTrecho2 = (t.circuitoIds ?? []).map((id) => circuitos.get(id)).filter((c) => !!c);
+    const base = () => declarados != null ? condutoresDoEletroduto(t, circuitosDoTrecho2.map((c) => ({ id: c.id, ligacao: c.ligacao ?? null }))).map((c) => ({ tipo: c.tipo, circuitoId: c.circuitoId })) : circuitosDoTrecho2.flatMap((c) => {
+      const lig = c.ligacao ?? "FN";
+      const fases = Array.from({ length: fasesDa(lig) }, () => ({ tipo: "FASE", circuitoId: c.id }));
+      return [...fases, ...lig === "FN" ? [{ tipo: "NEUTRO", circuitoId: c.id }] : [], { tipo: "TERRA", circuitoId: c.id }];
+    });
+    if (derivados.length === 0) {
+      saida.set(t.id, { trechoId: t.id, lista: base(), derivados, declarados, origem: "BASE", divergente: false });
+      continue;
+    }
+    if (declarados != null && declarados !== derivados.length) {
+      saida.set(t.id, { trechoId: t.id, lista: base(), derivados, declarados, origem: "DECLARADO", divergente: true });
+      continue;
+    }
+    saida.set(t.id, { trechoId: t.id, lista: derivados, derivados, declarados, origem: "DERIVADO", divergente: false });
+  }
+  return saida;
+}
+
 // utils/blueprintKernel/quantities.ts
 var POLITICA_PADRAO = {
   // quant-1.17.0 (28/09/2026, E1.1 do roadmap hidrossanitário): o trecho e a
@@ -3129,35 +3418,24 @@ var POLITICA_PADRAO = {
   // `condutores`/`condutorM`/`condutoresPorSecao`; os totais ganharam
   // `porCondutor` (metro de fio por seção), `porQuadro`, `porDisjuntor` e `drs`.
   // Até aqui NENHUM fio, quadro, disjuntor ou DR era quantificado.
-  version: "quant-1.19.0",
+  // quant-1.20.0 (29/09/2026, E2.3 do roadmap elétrico): o fio passa a sair da
+  // FIAÇÃO DERIVADA (`fiacao.ts`) — fase, neutro, RETORNO e terra por tipo e
+  // seção, com o neutro pela 6.2.6.2 e o PE pela Tabela 58. Antes era contagem
+  // × comprimento numa seção só, sem retorno.
+  version: "quant-1.20.0",
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2
 };
-function repartirCondutores(condutores, circuitos, secoes) {
-  const base = circuitos.map((c) => (c.ligacao ?? "FN") === "FFF" ? 4 : 3);
-  const soma = base.reduce((t, b) => t + b, 0);
-  const saida = [];
-  if (condutores >= soma) {
-    circuitos.forEach((_, i) => saida.push({ indice: i, secaoMm2: secoes[i] ?? null, quantidade: base[i] + (i === 0 ? condutores - soma : 0) }));
-    return saida;
-  }
-  let restam = condutores;
-  circuitos.forEach((_, i) => {
-    const q = Math.min(base[i], restam);
-    restam -= q;
-    if (q > 0) saida.push({ indice: i, secaoMm2: secoes[i] ?? null, quantidade: q });
-  });
-  return saida;
-}
+var ORDEM_DO_TIPO = { FASE: 0, NEUTRO: 1, RETORNO: 2, TERRA: 3 };
 function agruparPorCondutor(trechos) {
   const mapa = /* @__PURE__ */ new Map();
   for (const t of trechos) {
     if (t.disciplina !== "ELETRICA" || t.condutoresPorSecao.length === 0) continue;
     const vistas = /* @__PURE__ */ new Set();
     for (const c of t.condutoresPorSecao) {
-      const k = String(c.secaoMm2 ?? "");
-      const atual = mapa.get(k) ?? { secaoMm2: c.secaoMm2, comprimentoM: 0, trechos: 0 };
+      const k = `${c.tipo}|${c.secaoMm2 ?? ""}`;
+      const atual = mapa.get(k) ?? { tipo: c.tipo, secaoMm2: c.secaoMm2, comprimentoM: 0, trechos: 0 };
       atual.comprimentoM += c.quantidade * t.comprimentoM;
       if (!vistas.has(k)) {
         atual.trechos += 1;
@@ -3166,7 +3444,9 @@ function agruparPorCondutor(trechos) {
       mapa.set(k, atual);
     }
   }
-  return [...mapa.values()].sort((a, b) => (a.secaoMm2 ?? Number.POSITIVE_INFINITY) - (b.secaoMm2 ?? Number.POSITIVE_INFINITY));
+  return [...mapa.values()].sort(
+    (a, b) => (a.secaoMm2 ?? Number.POSITIVE_INFINITY) - (b.secaoMm2 ?? Number.POSITIVE_INFINITY) || ORDEM_DO_TIPO[a.tipo] - ORDEM_DO_TIPO[b.tipo]
+  );
 }
 function agruparPorDisjuntor(circuitos) {
   const mapa = /* @__PURE__ */ new Map();
@@ -3740,6 +4020,8 @@ ${c.funcao}`;
     }
   }
   const porGuardaCorpo = [...gruposDeGuardaCorpo.values()].sort((a, b) => a.tipo.localeCompare(b.tipo) || a.material.localeCompare(b.material) || a.itemCode.localeCompare(b.itemCode));
+  const fiacao = (model.trechos ?? []).some((t) => t.disciplina === "ELETRICA") ? composicaoDaRede(model) : null;
+  const circuitoPorId = new Map((model.circuitos ?? []).map((c) => [c.id, c]));
   const trechos = (model.trechos ?? []).map((t) => {
     const dx = t.b.x - t.a.x;
     const dy = t.b.y - t.a.y;
@@ -3747,19 +4029,25 @@ ${c.funcao}`;
     const desnivel = t.cotaBMm - t.cotaAMm;
     const emL = t.disciplina === "ELETRICA";
     const real = emL ? planta + Math.abs(desnivel) : Math.hypot(planta, desnivel);
-    const circuitosDoTrecho2 = emL ? (t.circuitoIds ?? []).map((id) => (model.circuitos ?? []).find((c) => c.id === id)).filter((c) => !!c) : [];
-    const baseDaLigacao = circuitosDoTrecho2.reduce((s2, c) => s2 + ((c.ligacao ?? "FN") === "FFF" ? 4 : 3), 0);
-    const condutoresDeclarados = emL ? t.condutores ?? null : null;
-    const condutores = emL ? condutoresDeclarados ?? (baseDaLigacao > 0 ? baseDaLigacao : null) : null;
-    const condutoresPorSecao = emL && condutores ? circuitosDoTrecho2.length > 0 ? repartirCondutores(condutores, circuitosDoTrecho2, circuitosDoTrecho2.map((c) => c.secaoMm2 ?? null)).map((r) => ({
-      circuitoId: circuitosDoTrecho2[r.indice]?.id ?? null,
-      secaoMm2: r.secaoMm2,
-      quantidade: r.quantidade
-    })) : [{ circuitoId: null, secaoMm2: null, quantidade: condutores }] : [];
+    const composicao = emL ? fiacao?.get(t.id) ?? null : null;
+    const lista = composicao?.lista ?? [];
+    const porChave = /* @__PURE__ */ new Map();
+    for (const cd of lista) {
+      const c = cd.circuitoId ? circuitoPorId.get(cd.circuitoId) : void 0;
+      const secoes = c ? secoesDosCondutores(c, c.secaoMm2 ?? null) : null;
+      const secaoMm2 = !secoes ? null : cd.tipo === "NEUTRO" ? secoes.neutroMm2 : cd.tipo === "TERRA" ? secoes.peMm2 : secoes.faseMm2;
+      const k = `${cd.circuitoId ?? ""}|${cd.tipo}|${secaoMm2 ?? ""}`;
+      const atual = porChave.get(k) ?? { circuitoId: cd.circuitoId, tipo: cd.tipo, secaoMm2, quantidade: 0 };
+      atual.quantidade += 1;
+      porChave.set(k, atual);
+    }
+    const condutoresPorSecao = [...porChave.values()];
+    const condutores = emL ? lista.length > 0 ? lista.length : null : null;
     return {
       trechoId: t.id,
       condutores,
-      condutoresAssumidos: emL && condutoresDeclarados == null && condutores != null,
+      condutoresAssumidos: composicao?.origem === "BASE",
+      origemDaFiacao: composicao?.origem ?? null,
       condutorM: (condutores ?? 0) * real / 1e3,
       condutoresPorSecao,
       material: materialDoTrecho(t),
@@ -5989,7 +6277,7 @@ function abasDoQuantitativo(quant, ctx, armadura, parametros) {
     for (const b of t.porBitola ?? []) totais.push([b.secaoCalha ? `${nomeDaCalha(b.secaoCalha, b.bitolaMm)}${b.itemCode ? ` \xB7 ${b.itemCode}` : ""}` : `${nomeDaDisciplina(b.disciplina)} DN ${b.bitolaMm}${b.itemCode ? ` \xB7 ${b.itemCode}` : ""}${rotuloDoMaterial(b.material)}`, n2(b.comprimentoM), "m"]);
     for (const p of t.porTerminal ?? []) totais.push([`${nomeDoPonto(p)} \xB7 ${nomeDaDisciplina(p.disciplina)}`, p.quantidade, "un"]);
     for (const c of t.porConexao ?? []) totais.push([`${ROTULO_DA_CONEXAO[c.tipo]} DN ${c.bitolaMm}${c.paraMm != null ? `\u2192${c.paraMm}` : ""} \xB7 ${nomeDaDisciplina(c.disciplina)}`, c.quantidade, "un"]);
-    for (const c of t.porCondutor ?? []) totais.push([c.secaoMm2 != null ? `Condutor ${String(c.secaoMm2).replace(".", ",")} mm\xB2 \xB7 El\xE9trica` : "Condutor (circuito sem se\xE7\xE3o) \xB7 El\xE9trica", n2(c.comprimentoM), "m"]);
+    for (const c of t.porCondutor ?? []) totais.push([`Condutor ${ROTULO_DO_CONDUTOR[c.tipo]}${c.secaoMm2 != null ? ` ${String(c.secaoMm2).replace(".", ",")} mm\xB2` : " (circuito sem se\xE7\xE3o)"} \xB7 El\xE9trica`, n2(c.comprimentoM), "m"]);
     if ((t.quadros ?? 0) > 0) totais.push(["Quadros de distribui\xE7\xE3o", t.quadros, "un"]);
     for (const d of t.porDisjuntor ?? []) totais.push([d.inA != null ? `Disjuntor ${d.inA} A` : "Disjuntor (In n\xE3o declarado)", d.quantidade, "un"]);
     if ((t.drs ?? 0) > 0) totais.push(["DR 30 mA (por circuito)", t.drs, "un"]);

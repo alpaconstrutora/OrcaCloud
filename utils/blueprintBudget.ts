@@ -32,7 +32,7 @@
 import type { BudgetEntry, SinapiItem } from '../types/budget';
 import type { DisciplinaDeRede, Quantitativos, StructuralKind, TipoDePontoEletrico, TipoDePontoHidraulico } from './blueprintKernel';
 import { nomeDaCalha } from './blueprintCalhas';
-import { ROTULO_DA_CONEXAO, materialPadraoDaDisciplina, type MaterialDeTubo } from './blueprintKernel';
+import { ROTULO_DA_CONEXAO, ROTULO_DO_CONDUTOR, materialPadraoDaDisciplina, type MaterialDeTubo } from './blueprintKernel';
 import { FICHA_DO_MATERIAL } from './blueprintHidraulicaPressao';
 import {
   nomeDoTipoDeAbertura as nomeDoTipo,
@@ -989,16 +989,17 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
     }
 
     case 'COMPRIMENTO_CONDUTOR': {
+      // E2.3: uma linha por TIPO (fase, neutro, retorno, terra) e seção — é assim que se compra o fio.
       return (quant.totais.porCondutor ?? [])
         .filter((c) => c.comprimentoM > 0)
-        .map((c) => ({ c, rotulo: c.secaoMm2 != null ? `Condutor ${String(c.secaoMm2).replace('.', ',')} mm²` : 'Condutor (circuito sem seção declarada)' }))
+        .map((c) => ({ c, rotulo: `Condutor ${ROTULO_DO_CONDUTOR[c.tipo]}${c.secaoMm2 != null ? ` ${String(c.secaoMm2).replace('.', ',')} mm²` : ' (circuito sem seção declarada)'}` }))
         .filter(({ rotulo }) => combina(rotulo))
         .map(({ c, rotulo }) => ({
-          ref: `ELETRICA-condutor-${c.secaoMm2 ?? 'sem-secao'}`,
+          ref: `ELETRICA-condutor-${c.tipo}-${c.secaoMm2 ?? 'sem-secao'}`,
           rotulo,
           valor: c.comprimentoM,
-          formula: `Σ condutores × comprimento real em ${c.trechos} eletroduto(s)`,
-          variaveis: { secaoMm2: c.secaoMm2 ?? 'sem seção', trechos: c.trechos, comprimentoM: c.comprimentoM },
+          formula: `Σ condutores (${ROTULO_DO_CONDUTOR[c.tipo]}) × comprimento real em ${c.trechos} eletroduto(s), pela fiação derivada`,
+          variaveis: { tipo: c.tipo, secaoMm2: c.secaoMm2 ?? 'sem seção', trechos: c.trechos, comprimentoM: c.comprimentoM },
         }));
     }
 

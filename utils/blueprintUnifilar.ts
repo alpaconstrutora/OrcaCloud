@@ -37,6 +37,7 @@ import {
   type PreDimensionamentoDoQuadro,
 } from './blueprintEletricaDimensionamento';
 import { numeroDoCircuito } from './blueprintCondutores';
+import { secaoDoPeMm2 } from './blueprintKernel';
 
 export interface RamalUnifilar {
   circuitoId: string;
@@ -85,12 +86,19 @@ export interface DiagramaUnifilar {
 
 const fmt = (v: number | null | undefined) => (v == null ? '—' : String(v).replace('.', ','));
 
-/** Carregados por ligação: FN = fase + neutro; FF = duas fases; FFF = três. */
-export function condutoresDoRamal(ligacao: LigacaoDoCircuito, secaoMm2: number | null): string | null {
+/**
+ * Carregados por ligação: FN = fase + neutro; FF = duas fases; FFF = três. O
+ * PE pela Tabela 58 (E2.3) ou o declarado; o neutro só aparece à parte quando
+ * difere da fase ("1#4 + N2,5 + T4").
+ */
+export function condutoresDoRamal(ligacao: LigacaoDoCircuito, secaoMm2: number | null, secaoNeutroMm2?: number | null, secaoPeMm2?: number | null): string | null {
   if (secaoMm2 == null) return null;
-  const carregados = ligacao === 'FFF' ? 3 : 2;
+  const pe = secaoPeMm2 ?? secaoDoPeMm2(secaoMm2);
+  const neutro = secaoNeutroMm2 ?? secaoMm2;
   const s = fmt(secaoMm2);
-  return `${carregados}#${s} + T${s}`;
+  if (ligacao === 'FN' && neutro !== secaoMm2) return `1#${s} + N${fmt(neutro)} + T${fmt(pe)}`;
+  const carregados = ligacao === 'FFF' ? 3 : 2;
+  return `${carregados}#${s} + T${fmt(pe)}`;
 }
 
 function ramaisDe(model: BlueprintModel, q: PreDimensionamentoDoQuadro): RamalUnifilar[] {
@@ -109,7 +117,7 @@ function ramaisDe(model: BlueprintModel, q: PreDimensionamentoDoQuadro): RamalUn
       disjuntorOrigem: c.disjuntorDeclaradoA != null ? 'DECLARADO' : disjuntorA != null ? 'SUGERIDO' : null,
       secaoMm2,
       secaoOrigem: c.secaoDeclaradaMm2 != null ? 'DECLARADA' : secaoMm2 != null ? 'CALCULADA' : null,
-      condutores: condutoresDoRamal(c.ligacao, secaoMm2),
+      condutores: condutoresDoRamal(c.ligacao, secaoMm2, circuito?.secaoNeutroMm2 ?? null, circuito?.secaoPeMm2 ?? null),
       cargaVA: Math.round(c.sVA),
       pontos: c.pontos,
       dr: circuito?.protecaoDR === true,

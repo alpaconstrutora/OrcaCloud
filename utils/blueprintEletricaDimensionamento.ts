@@ -35,7 +35,7 @@
  * Puro: números entram, números e textos saem.
  */
 import type { BlueprintModel, Circuito, LigacaoDoCircuito, Quadro, Terminal, Trecho } from './blueprintKernel';
-import { repartirCondutores } from './blueprintKernel';
+import { repartirCondutores, secoesDosCondutores } from './blueprintKernel';
 import { comprimentoDoTrecho } from './blueprintRede';
 
 // ─── Tabela 36 — capacidade de condução de corrente (A) ────────────────────
@@ -501,6 +501,15 @@ export interface PreDimensionamentoDoCircuito {
   /** A seção que a norma pede, com a Iz corrigida dela. */
   secaoCalculada: SecaoMinima | null;
   secaoDeclaradaMm2: number | null;
+  /**
+   * E2.3: a seção do NEUTRO e do PE que valem para este circuito — o declarado
+   * ou a norma (neutro = fase, 6.2.6.2; PE pela Tabela 58) sobre a fase
+   * declarada (ou, sem ela, a calculada). `*Derivado` diz de onde veio.
+   */
+  secaoNeutroMm2: number | null;
+  secaoPeMm2: number | null;
+  neutroDerivado: boolean;
+  peDerivado: boolean;
   /** Iz corrigida da seção DECLARADA — é contra ela que o disjuntor se confere. */
   izDeclaradaA: number | null;
   disjuntorSugeridoA: number | null;
@@ -548,6 +557,10 @@ export function preDimensionarCircuito(
     ibA: null,
     secaoCalculada: null,
     secaoDeclaradaMm2,
+    ...(() => {
+      const sec = secoesDosCondutores(circuito, secaoDeclaradaMm2 ?? null);
+      return { secaoNeutroMm2: sec.neutroMm2, secaoPeMm2: sec.peMm2, neutroDerivado: sec.neutroDerivado, peDerivado: sec.peDerivado };
+    })(),
     izDeclaradaA: null,
     disjuntorSugeridoA: null,
     disjuntorDeclaradoA,
@@ -576,6 +589,12 @@ export function preDimensionarCircuito(
   // Seção mínima (Tab. 36 corrigida + Tab. 47).
   const calc = secaoMinima(ibA, hip, ligacao, uso);
   base.secaoCalculada = calc;
+  if (secaoDeclaradaMm2 == null && calc) {
+    // E2.3: sem fase declarada, o neutro e o PE saem da fase CALCULADA.
+    const sec = secoesDosCondutores(circuito, calc.secaoMm2);
+    base.secaoNeutroMm2 = sec.neutroMm2;
+    base.secaoPeMm2 = sec.peMm2;
+  }
   if (!calc) {
     naoAvaliado.push('IB acima da maior seção da Tabela 36 ou temperatura sem fator');
   }

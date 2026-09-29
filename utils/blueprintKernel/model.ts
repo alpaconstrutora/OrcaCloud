@@ -2973,6 +2973,14 @@ export interface Circuito {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
   uid: ElementUid;
+  /**
+   * SEÇÃO DO NEUTRO e do PE declaradas (E2.3, kernel 0.72.0). Ausentes = a
+   * conta da norma (`secoesDosCondutores`: neutro = fase, 6.2.6.2; PE pela
+   * Tabela 58). Só se declaram quando o projetista quer outra coisa — e por
+   * isso são omitidas no canônico quando ausentes.
+   */
+  secaoNeutroMm2?: number | null;
+  secaoPeMm2?: number | null;
   quadroId: ObjectId;
   /** "C1 — Iluminação social". */
   nome: string;

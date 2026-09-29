@@ -32,6 +32,7 @@ import { ROTULO_DA_ORIGEM, type ArmaduraQuantificada } from './blueprintArmadura
 import { ROTULO_DA_CONEXAO, type DisciplinaDeRede, type MaterialDeTubo, type TipoDePontoEletrico, type TipoDePontoHidraulico } from './blueprintKernel';
 import { FICHA_DO_MATERIAL } from './blueprintHidraulicaPressao';
 import { ROTULO_DA_DISCIPLINA, ROTULO_DO_PONTO_ELETRICO } from './blueprintRede';
+import { ROTULO_DO_CONDUTOR } from './blueprintKernel';
 import { ROTULO_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { nomeDaCalha } from './blueprintCalhas';
 
@@ -199,7 +200,7 @@ export function abasDoQuantitativo(
     for (const p of t.porTerminal ?? []) totais.push([`${nomeDoPonto(p)} · ${nomeDaDisciplina(p.disciplina)}`, p.quantidade, 'un']);
     for (const c of t.porConexao ?? []) totais.push([`${ROTULO_DA_CONEXAO[c.tipo]} DN ${c.bitolaMm}${c.paraMm != null ? `→${c.paraMm}` : ''} · ${nomeDaDisciplina(c.disciplina)}`, c.quantidade, 'un']);
     // ELÉTRICA (E0.3, quant-1.19.0): fio por seção, quadros, disjuntores e DR.
-    for (const c of t.porCondutor ?? []) totais.push([c.secaoMm2 != null ? `Condutor ${String(c.secaoMm2).replace('.', ',')} mm² · Elétrica` : 'Condutor (circuito sem seção) · Elétrica', n2(c.comprimentoM), 'm']);
+    for (const c of t.porCondutor ?? []) totais.push([`Condutor ${ROTULO_DO_CONDUTOR[c.tipo]}${c.secaoMm2 != null ? ` ${String(c.secaoMm2).replace('.', ',')} mm²` : ' (circuito sem seção)'} · Elétrica`, n2(c.comprimentoM), 'm']);
     if ((t.quadros ?? 0) > 0) totais.push(['Quadros de distribuição', t.quadros, 'un']);
     for (const d of t.porDisjuntor ?? []) totais.push([d.inA != null ? `Disjuntor ${d.inA} A` : 'Disjuntor (In não declarado)', d.quantidade, 'un']);
     if ((t.drs ?? 0) > 0) totais.push(['DR 30 mA (por circuito)', t.drs, 'un']);

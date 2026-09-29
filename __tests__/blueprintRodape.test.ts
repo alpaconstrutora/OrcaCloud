@@ -52,7 +52,7 @@ describe('rodapé como elemento (P2.21)', () => {
   it('comandos e invariantes; quantitativo soma os trechos quando existem (senão o derivado); orçamento por trecho; canônico ida e volta com a etiqueta por índice', () => {
     const { m, t } = casa();
     const qSem = computeQuantities(m, POLITICA_PADRAO, KERNEL_VERSION);
-    expect(POLITICA_PADRAO.version).toBe('quant-1.19.0');
+    expect(POLITICA_PADRAO.version).toBe('quant-1.20.0');
     expect(qSem.totais.origemDoRodape).toBe('DERIVADO');
     expect(qSem.totais.comprimentoRodapeM).toBeCloseTo(13.1, 3); // Sala 14 − 0,9; Garagem declarou sem rodapé
     // Trechos: um à mão de 2 m com 70 mm e os 5 do gerador.
@@ -88,7 +88,7 @@ describe('rodapé como elemento (P2.21)', () => {
     expect(lanc.entries.length).toBeGreaterThan(0);
     expect(lanc.entries.reduce((acc, l) => acc + l.quantity, 0)).toBeCloseTo(15.1, 2);
     // Canônico.
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.71.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.72.0');
     expect(parseCanonicalPayload(canonicalPayload(m)).rodapes).toBeUndefined();
     const payload = parseCanonicalPayload(canonicalPayload(r));
     expect(payload.rodapes).toHaveLength(6);

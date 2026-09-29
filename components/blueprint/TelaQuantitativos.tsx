@@ -4,6 +4,7 @@ import { Calculator } from 'lucide-react';
 import { ROTULO_DA_CONEXAO, nomeDoTipoEstrutural, type BlueprintModel, type DisciplinaDeRede, type MaterialDeTubo, type TipoDePontoEletrico, type TipoDePontoHidraulico, type computeQuantities } from '../../utils/blueprintKernel';
 import { FICHA_DO_MATERIAL } from '../../utils/blueprintHidraulicaPressao';
 import { ROTULO_DA_DISCIPLINA, ROTULO_DO_PONTO_ELETRICO } from '../../utils/blueprintRede';
+import { ROTULO_DO_CONDUTOR } from '../../utils/blueprintKernel';
 import { ROTULO_DO_PONTO_HIDRAULICO } from '../../utils/blueprintHidraulica';
 import { nomeDaCalha } from '../../utils/blueprintCalhas';
 import type { ArmaduraQuantificada } from '../../utils/blueprintArmadura';
@@ -299,7 +300,7 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
     }
     // ELÉTRICA (E0.3, quant-1.19.0): fio por seção, quadros, disjuntores e DR.
     for (const c of t.porCondutor ?? []) {
-      add({ grupo: 'Instalações', item: c.secaoMm2 != null ? `Condutor ${String(c.secaoMm2).replace('.', ',')} mm² · Elétrica` : 'Condutor (circuito sem seção) · Elétrica', valor: c.comprimentoM, unidade: 'm', detalhe: `${c.trechos} eletroduto(s) · condutores × comprimento real; sem retorno` });
+      add({ grupo: 'Instalações', item: `Condutor ${ROTULO_DO_CONDUTOR[c.tipo]}${c.secaoMm2 != null ? ` ${String(c.secaoMm2).replace('.', ',')} mm²` : ' (circuito sem seção)'} · Elétrica`, valor: c.comprimentoM, unidade: 'm', detalhe: `${c.trechos} eletroduto(s) · fiação derivada × comprimento real` });
     }
     if ((t.quadros ?? 0) > 0) add({ grupo: 'Instalações', item: 'Quadros de distribuição', valor: t.quadros, unidade: 'un', detalhe: (t.porQuadro ?? []).map((q) => `${q.nome}: ${q.circuitos} circ.`).join(' · ') });
     for (const d of t.porDisjuntor ?? []) {
@@ -330,7 +331,7 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
     }
     // ELÉTRICA (E0.3): fio por seção do pavimento; quadros, disjuntores e DR do quadro que está no pavimento.
     for (const c of t.porCondutor ?? []) {
-      linhas.push({ chave: `condutor:${c.secaoMm2 ?? ''}`, familia: 'Condutor', disciplina: 'ELETRICA', item: c.secaoMm2 != null ? `Condutor ${String(c.secaoMm2).replace('.', ',')} mm²` : 'Condutor (circuito sem seção declarada)', dnMm: null, quantidade: c.comprimentoM, unidade: 'm', detalhe: `${c.trechos} eletroduto(s) · condutores declarados × comprimento real · sem retorno (E2)` });
+      linhas.push({ chave: `condutor:${c.tipo}:${c.secaoMm2 ?? ''}`, familia: 'Condutor', disciplina: 'ELETRICA', item: `Condutor ${ROTULO_DO_CONDUTOR[c.tipo]}${c.secaoMm2 != null ? ` ${String(c.secaoMm2).replace('.', ',')} mm²` : ' (circuito sem seção declarada)'}`, dnMm: null, quantidade: c.comprimentoM, unidade: 'm', detalhe: `${c.trechos} eletroduto(s) · fiação derivada (fase, neutro, retorno, terra) × comprimento real` });
     }
     for (const q of (quant.totais.porQuadro ?? []).filter((x) => !pavimentoFiltro || x.levelId === pavimentoFiltro)) {
       linhas.push({ chave: `quadro:${q.quadroId}`, familia: 'Quadro', disciplina: 'ELETRICA', item: `Quadro ${q.nome}`, dnMm: null, quantidade: 1, unidade: 'un', detalhe: `${q.circuitos} circuito(s) · ${q.pontos} ponto(s) · ${q.eletrodutoM.toFixed(1)} m de eletroduto · ${q.condutorM.toFixed(1)} m de fio` });

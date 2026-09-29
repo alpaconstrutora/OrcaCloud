@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { UNIDADE_DE_POTENCIA } from '../../utils/blueprintRede';
 import { AlertTriangle, Plus, Zap } from 'lucide-react';
 import type { BlueprintModel, FaseDoCircuito, LigacaoDoCircuito, ObjectId } from '../../utils/blueprintKernel';
-import { FASES_DO_CIRCUITO, LIGACOES_DO_CIRCUITO, quadroDeCargas } from '../../utils/blueprintKernel';
+import { FASES_DO_CIRCUITO, LIGACOES_DO_CIRCUITO, SECOES_NOMINAIS_DE_CONDUTOR_MM2, quadroDeCargas, secoesDosCondutores } from '../../utils/blueprintKernel';
 import {
   HIPOTESES_PADRAO,
   SERIE_COMERCIAL_DE_DISJUNTORES_A,
@@ -106,6 +106,11 @@ interface LinhaDeCircuito {
   protecaoDR: boolean;
   disjuntorA: number | null;
   secaoMm2: number | null;
+  /** E2.3: declarados; `null` = a conta da norma, que `neutroDerivadoMm2`/`peDerivadoMm2` mostram. */
+  secaoNeutroMm2: number | null;
+  secaoPeMm2: number | null;
+  neutroDerivadoMm2: number | null;
+  peDerivadoMm2: number | null;
   pontos: number;
   pontosSemPotencia: number;
   potenciaW: number;
@@ -130,6 +135,9 @@ const COLUNAS_DE_CIRCUITO: StandardTableColumn[] = [
   { key: 'protecaoDR', label: 'DR', width: 52, align: 'center' },
   { key: 'disjuntorA', label: 'Disjuntor (A)', width: 100, align: 'right' },
   { key: 'secaoMm2', label: 'Seção (mm²)', width: 100, align: 'right' },
+  // E2.3: neutro e PE — em branco vale a norma (neutro = fase; PE pela Tab. 58), e a célula diz o valor.
+  { key: 'secaoNeutroMm2', label: 'Neutro (mm²)', width: 108, align: 'right' },
+  { key: 'secaoPeMm2', label: 'PE (mm²)', width: 108, align: 'right' },
   { key: 'pontos', label: 'Pontos', width: 72, align: 'right' },
   { key: 'potenciaW', label: `Carga (${UNIDADE_DE_POTENCIA})`, width: 92, align: 'right' },
   { key: 'predim', label: 'Pré-dimensionamento NBR 5410', width: 270, sortable: false },
@@ -169,6 +177,9 @@ export default function PainelEletrica({
     campos: {
       /** Mover para outro quadro (E0.2). */
       quadroId?: ObjectId;
+      /** E2.3: neutro e PE declarados; `null` volta à norma. */
+      secaoNeutroMm2?: number | null;
+      secaoPeMm2?: number | null;
       nome?: string;
       tipo?: string | null;
       tensaoV?: number | null;
@@ -329,6 +340,13 @@ export default function PainelEletrica({
           protecaoDR: circuito?.protecaoDR === true,
           disjuntorA: c.disjuntorA ?? null,
           secaoMm2: c.secaoMm2 ?? null,
+          secaoNeutroMm2: circuito?.secaoNeutroMm2 ?? null,
+          secaoPeMm2: circuito?.secaoPeMm2 ?? null,
+          ...(() => {
+            const predim = circuito ? preDimensionarCircuito(model, circuito, hipoteses) : null;
+            const sec = secoesDosCondutores(circuito ?? {}, c.secaoMm2 ?? predim?.secaoCalculada?.secaoMm2 ?? null);
+            return { neutroDerivadoMm2: sec.neutroMm2, peDerivadoMm2: sec.peMm2 };
+          })(),
           pontos: c.pontos,
           pontosSemPotencia: c.pontosSemPotencia,
           potenciaW: c.potenciaW,
@@ -570,6 +588,29 @@ export default function PainelEletrica({
             className={`${CAMPO_NA_CELULA} text-right`}
           />
         );
+      case 'secaoNeutroMm2':
+      case 'secaoPeMm2': {
+        // E2.3: em branco = a norma (o valor derivado aparece); um valor vence a conta.
+        const declarado = l[key];
+        const derivado = key === 'secaoNeutroMm2' ? l.neutroDerivadoMm2 : l.peDerivadoMm2;
+        const rotulo = key === 'secaoNeutroMm2' ? 'neutro' : 'PE';
+        return (
+          <select
+            value={declarado ?? ''}
+            onChange={(e) => onCircuitoProps(l.circuitoId, { [key]: numeroOuNulo(e.target.value) } as { secaoNeutroMm2?: number | null; secaoPeMm2?: number | null })}
+            aria-label={`Seção do ${rotulo} do circuito ${l.nome}, em mm²`}
+            title={key === 'secaoNeutroMm2' ? 'Em branco: igual à fase (NBR 5410 6.2.6.2)' : 'Em branco: pela Tabela 58 da NBR 5410 (≤16 = fase; 16–35 = 16; >35 = metade)'}
+            className={`${CAMPO_NA_CELULA} text-right ${declarado == null ? 'text-gray-500' : ''}`}
+          >
+            <option value="">{derivado != null ? `${String(derivado).replace('.', ',')} (norma)` : '— (norma)'}</option>
+            {SECOES_NOMINAIS_DE_CONDUTOR_MM2.filter((s) => s >= 1.5).map((s) => (
+              <option key={s} value={s}>
+                {String(s).replace('.', ',')}
+              </option>
+            ))}
+          </select>
+        );
+      }
       case 'pontos':
         return (
           <span className="text-sm tabular-nums text-gray-700">

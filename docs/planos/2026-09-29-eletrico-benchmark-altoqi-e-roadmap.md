@@ -1935,7 +1935,7 @@ Fecha o bloco **5**.
 |---|---|---|
 | 2.1 Comando como relação ✅ (kernel 0.71.0) | `Comando {id, letra, nome?, levelIds[]}` derivado das letras (índice), com **letra global opcional** para comando entre pavimentos (`Terminal.comandoGlobal: boolean`); painel "Comandos" no Navegador: renomear, listar interruptores e luzes, achar par de paralelo em outro andar | conferência 9.5.2.1 aceita paralelo em pavimentos diferentes quando global; goldens; teste `blueprintNbr5410Iluminacao` |
 | 2.2 Motor de esquemas de ligação ✅ (regras fixas; editáveis → backlog A) | `utils/blueprintEsquemasDeLigacao.ts` puro: tabela **ESQUEMAS** (interruptor simples / 2 e 3 seções / paralelo / intermediário / luz sem interruptor / tomada / TUE / ligação direta × FN/FF/FFF → condutores F, N, R, T por TRECHO entre os pontos do comando), com fonte (NBR 5410 6.1.5 + prática de prancha); `condutoresDoTrecho(model, trecho)` passa a **derivar** fase/neutro/retorno/terra por circuito e por comando que atravessa o trecho — retorno só entre interruptor e luz; `Trecho.condutores` vira **declarado opcional** que sobrescreve (marcado na tela) | teste com sala: interruptor paralelo + 2 luzes → o trecho entre os interruptores tem 2 retornos e nenhum neutro; prancha mostra os traços certos; `blueprintCondutores.test.ts` reescrito |
-| 2.3 Seção por condutor | `SECOES_PE_TAB58` (S_PE por S_fase, NBR 5410 Tab. 58) e regra do neutro (6.2.6.2: igual à fase em FN/FF e FFF ≤ 25 mm²; redução admitida acima, hipótese); `Circuito.secaoNeutroMm2`/`secaoPeMm2` declarados opcionais; unifilar escreve "2#2,5 + N2,5 + T2,5" quando diferem; quantitativo de fio **por tipo e seção** substitui o total da 0.3 | teste Tab. 58 pontos contra o PDF; `Trecho.condutores` declarado ≠ derivado aparece em âmbar; quant bump |
+| 2.3 Seção por condutor ✅ (kernel 0.72.0 · quant-1.20.0; motor de fiação movido para o kernel) | `SECOES_PE_TAB58` (S_PE por S_fase, NBR 5410 Tab. 58) e regra do neutro (6.2.6.2: igual à fase em FN/FF e FFF ≤ 25 mm²; redução admitida acima, hipótese); `Circuito.secaoNeutroMm2`/`secaoPeMm2` declarados opcionais; unifilar escreve "2#2,5 + N2,5 + T2,5" quando diferem; quantitativo de fio **por tipo e seção** substitui o total da 0.3 | teste Tab. 58 pontos contra o PDF; `Trecho.condutores` declarado ≠ derivado aparece em âmbar; quant bump |
 | 2.4 Fiação na planta e no quadro de cargas | rótulo por trecho com contagem por tipo; coluna "Condutores" no quadro de cargas ("2F+N+T"); ocupação do eletroduto usa a seção real de cada condutor (não mais a do 1º circuito); legenda numérica de trecho quando > N condutores (`Trecho.rotulo` impresso + tabela na folha) | harness da prancha olhado com trecho de 7 condutores; `ocupacaoDoEletrodutoCompartilhado` com seções mistas testado |
 
 Fecha o bloco **4** e completa o **6** (fios).
@@ -2538,3 +2538,65 @@ editável), "Algoritmo escolhe trajetos" ❌→🟡 (segue a rede lançada); §2
 declarado que vence), "Adicionar aterramento" 🟡→✅ (terra derivado por caminho); §3/§6 "Comandar
 um ponto de locais diferentes" 🟡→✅ (fiação de paralelo); §13 "Quantidade de condutores" 🟡→✅;
 §20 "Quantidade de condutores" 🟡→✅; §52 "Ausência de esquema compatível" ❌→🟡 (trecho BASE dito).
+
+### E2.3 — Seção por condutor e fio por tipo (29/09/2026) · frente `eletrico-e2` · **kernel 0.71.0 → 0.72.0 · quant-1.19.0 → 1.20.0**
+
+**O que mudou**
+
+- **Quatro módulos entraram no KERNEL** — `blueprintKernel/grafoDeRede.ts`, `comandos.ts`,
+  `condutores.ts`, `fiacao.ts` (antes em `utils/`; os caminhos antigos só reexportam, os 19
+  importadores não mudaram). Motivo: o quantitativo (`quantities.ts`) precisa ler a **mesma fiação
+  derivada** que o desenho, e o kernel não importa de fora. É o "motor no kernel" que a E2.2 deixou dito.
+- **`condutores.ts`** — `secaoDoPeMm2(fase)` = **NBR 5410 Tabela 58** (S ≤ 16 → S; 16 < S ≤ 35 →
+  16; S > 35 → S/2 na nominal acima: 95 → 50, 120 → 70); `secaoDoNeutroMm2` = fase (6.2.6.2) —
+  **sem** a redução admitida no trifásico acima de 25 mm² (6.2.6.2.4): hipótese conservadora, dita
+  no código, até a E4 trazer o quadro trifásico inteiro; `secoesDosCondutores(circuito, fase)` dá
+  fase/neutro/PE com o **declarado vencendo** e diz qual foi derivado; `SECOES_NOMINAIS_DE_CONDUTOR_MM2`.
+- **Kernel 0.72.0** — `Circuito.secaoNeutroMm2` / `secaoPeMm2` declarados opcionais; canônico
+  **omite quando ausentes** (nenhum desenho muda de payload — goldens 7/7 com a string em 0.71.0,
+  depois só os 6 hashes); `AddCircuito` e `SetCircuitoProps` aceitam (`null` volta à norma).
+- **quant-1.20.0** — o fio por trecho sai da **fiação derivada** (`composicaoDaRede`, uma vez por
+  quantitativo): `condutoresPorSecao` ganhou **`tipo`** (FASE/NEUTRO/RETORNO/TERRA) e cada
+  condutor vai na SUA seção — fase e retorno na do circuito, neutro pela 6.2.6.2, PE pela Tab. 58
+  (ou o declarado); `origemDaFiacao` (DERIVADO/DECLARADO/BASE) e `condutoresAssumidos` = BASE.
+  `QuantidadePorCondutor` agora é por **(tipo, seção)**; totais `porCondutor` ordenados por seção e,
+  dentro dela, fase → neutro → retorno → terra. **O retorno passou a virar metro de fio** e o ramal
+  da luz comandada **deixou de comprar fase** (antes: contagem × comprimento numa seção só).
+- Orçamento (`COMPRIMENTO_CONDUTOR`): uma linha por tipo e seção — "Condutor fase 2,5 mm²",
+  "Condutor terra 2,5 mm²"…, `ref ELETRICA-condutor-<TIPO>-<seção>`; o filtro por texto continua
+  ("terra", "1,5 mm²"). Tela de quantitativos e planilha com o mesmo rótulo.
+- Unifilar `condutoresDoRamal(ligacao, fase, neutro?, pe?)`: "2#2,5 + T2,5"; fase 50 → "2#50 +
+  T25"; neutro declarado diferente em F-N → "1#4 + N2,5 + T4". Prancha (quadro de cargas) e
+  memorial: PE e neutro **só quando diferem da fase** (memorial sempre diz o PE e a origem: "PE 2,5
+  mm² (Tab. 58)"). `PreDimensionamentoDoCircuito` carrega `secaoNeutroMm2/secaoPeMm2/…Derivado`
+  (sem fase declarada, saem da fase CALCULADA).
+- `components/blueprint/PainelEletrica.tsx` — colunas **"Neutro (mm²)"** e **"PE (mm²)"** no
+  quadro de cargas: select cuja opção vazia mostra o valor da norma ("2,5 (norma)"), o `title` diz a
+  regra; escolher um valor declara, vazio volta à norma.
+- **Não entrou (declarado)**: a redução do neutro no trifásico (hipótese conservadora, acima);
+  `SECOES_PE_TAB58` como tabela literal — virou função com os três degraus da Tab. 58 (mesma coisa,
+  menos linhas); "declarado ≠ derivado em âmbar" já estava na E2.2 (painel do trecho).
+
+**Testes** — novo `__tests__/blueprintSecaoPorCondutor.test.ts` (7): Tab. 58 ponto a ponto (1,5 · 2,5
+· 16 · 25 · 35 · 50 · 70 · 95 · 120); neutro = fase inclusive FFF 50; declarado vence; unifilar nos
+três formatos; kernel grava/omite/emite/anula; **casa LIGADA de verdade** (quadro → teto → tronco 4 m
+→ ramal da luz 2 m e ramal do interruptor 2 m + prumada 1,7 m, comando 'a'): **fase 9,0 m (vai ao
+interruptor), neutro 7,3 e terra 7,3 (vão à luz), retorno 5,7 m**, todos DERIVADO, ramal da luz = N R
+T; PE declarado 4 mm² muda só a linha do terra. `blueprintQuantitativoEletrico.test.ts` refeito por
+tipo (totais por seção 19,5 / 18 m mantidos; agora 6 lançamentos, não 2; todos BASE porque nessa
+casa nenhum ponto está na ponta do eletroduto — dito). Memorial: regex ganhou "PE 2,5 mm² (Tab. 58)".
+**15 pinos** de `KERNEL_VERSION` e **10** de `quant` atualizados.
+
+**O que os testes pegaram antes de publicar**: o memorial não recebe `model` — a primeira versão
+chamava `secoesDosCondutores` com um `model` que não existia ali (tsc); a saída foi pôr as seções no
+resultado do pré-dimensionamento, que memorial e prancha já leem. Nada no motor.
+
+**Verificação**: `tsc` ✓ · goldens 7/7 (prova em 0.71.0 + hashes) · alvo 45 ✓ · suíte inteira
+**6.216 ✓** (564 arquivos) · `build` ✓ · `check-ui-standard` nos 2 `.tsx` ✓ · `check-xss-sinks` ✓ ·
+**bundle da `planta-api` regenerado** (teste "bundle fresco" ✓) · **deploy** da função · `GET
+/v1/estudos` **401/401** (sem token / token falso). **Sem teste jsdom** das colunas Neutro/PE — fica dito.
+
+**Efeito no benchmark**: §21 "Seção por condutor / PE" ❌→✅ (Tab. 58 + declarado), "Neutro"
+🟡→✅ (6.2.6.2, sem redução: hipótese dita); §13/§20 "Quantitativo de fio por tipo e seção" ❌→✅
+(fase/neutro/retorno/terra × seção, da fiação derivada); §22 "Fiação no quantitativo" 🟡→✅; §26
+"Unifilar com seção de neutro e PE" 🟡→✅; §27 "Memorial cita o PE" ❌→✅.

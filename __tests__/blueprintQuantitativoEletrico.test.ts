@@ -53,7 +53,7 @@ function casa(): BlueprintModel {
 
 describe('quantitativo elétrico · quant-1.19.0', () => {
   it('a política subiu de versão — fio, quadro, disjuntor e DR entraram no payload', () => {
-    expect(POLITICA_PADRAO.version).toBe('quant-1.19.0');
+    expect(POLITICA_PADRAO.version).toBe('quant-1.20.0');
   });
 
   it('repartirCondutores: base por ligação, excedente no primeiro, falta nos últimos — com o índice do circuito', () => {
@@ -74,21 +74,28 @@ describe('quantitativo elétrico · quant-1.19.0', () => {
     ]);
   });
 
-  it('⚠️ metro de FIO por seção: 2,5 mm² = 4×3 + 2,5×3 = 19,5 m; 1,5 mm² = 4×3 + 2×3 (base assumida) = 18 m', () => {
+  it('⚠️ metro de FIO por TIPO e seção (E2.3): os pontos desta casa não têm caminho até o quadro → base da ligação em todos (F N T por circuito); 2,5 mm² = 19,5 m, 1,5 mm² = 18 m', () => {
     const q = computeQuantities(casa(), POLITICA_PADRAO);
-    const porSecao = new Map(q.totais.porCondutor.map((c) => [c.secaoMm2, c]));
-    expect(porSecao.get(2.5)!.comprimentoM).toBeCloseTo(19.5, 6);
-    expect(porSecao.get(2.5)!.trechos).toBe(2);
-    expect(porSecao.get(1.5)!.comprimentoM).toBeCloseTo(18, 6);
+    const soma = (secao: number) => q.totais.porCondutor.filter((c) => c.secaoMm2 === secao).reduce((s, c) => s + c.comprimentoM, 0);
+    expect(soma(2.5)).toBeCloseTo(19.5, 6);
+    expect(soma(1.5)).toBeCloseTo(18, 6);
+    // Por TIPO: em 2,5 mm² a fase, o neutro (= fase, 6.2.6.2) e o PE (Tab. 58: ≤16 → igual) têm 6,5 m cada.
+    const tipos25 = new Map(q.totais.porCondutor.filter((c) => c.secaoMm2 === 2.5).map((c) => [c.tipo, c.comprimentoM]));
+    expect(tipos25.get('FASE')).toBeCloseTo(6.5, 6);
+    expect(tipos25.get('NEUTRO')).toBeCloseTo(6.5, 6);
+    expect(tipos25.get('TERRA')).toBeCloseTo(6.5, 6);
+    expect(tipos25.has('RETORNO')).toBe(false);
     expect(q.totais.comprimentoCondutorM).toBeCloseTo(37.5, 6);
-    // O trecho sem contagem declarada assumiu a base e DIZ isso.
+    // Todos os trechos caíram na BASE (nenhum ponto está na ponta de um eletroduto) — e dizem isso.
+    for (const t of q.trechos) {
+      expect(t.origemDaFiacao).toBe('BASE');
+      expect(t.condutoresAssumidos).toBe(true);
+    }
     const semDeclarar = q.trechos.find((t) => t.bitolaMm === 20)!;
     expect(semDeclarar.condutores).toBe(3);
-    expect(semDeclarar.condutoresAssumidos).toBe(true);
     expect(semDeclarar.condutorM).toBeCloseTo(6, 6);
-    const declarado = q.trechos.find((t) => t.condutores === 6)!;
-    expect(declarado.condutoresAssumidos).toBe(false);
-    expect(declarado.condutoresPorSecao.map((c) => c.quantidade)).toEqual([3, 3]);
+    const compartilhado = q.trechos.find((t) => t.condutores === 6)!;
+    expect(compartilhado.condutoresPorSecao.map((c) => `${c.tipo}:${c.secaoMm2}`).sort()).toEqual(['FASE:1.5', 'FASE:2.5', 'NEUTRO:1.5', 'NEUTRO:2.5', 'TERRA:1.5', 'TERRA:2.5']);
   });
 
   it('o QUADRO: 2 circuitos, 3 pontos, disjuntores por In, 1 DR, 8,5 m de eletroduto e 37,5 m de fio', () => {
@@ -120,12 +127,15 @@ describe('quantitativo elétrico · quant-1.19.0', () => {
     const q = computeQuantities(casa(), POLITICA_PADRAO);
     const fio = gerarLancamentos(q, resolvido(mapa({ medida: 'COMPRIMENTO_CONDUTOR' }), item('F', 'M')), CTX);
     expect(fio.divergencias).toHaveLength(0);
-    expect(fio.entries).toHaveLength(2);
-    expect(fio.entries.map(nome).join(' ')).toMatch(/2,5 mm²/);
-    expect(fio.entries.find((e) => /2,5/.test(nome(e)))!.quantity).toBeCloseTo(19.5, 6);
+    // E2.3: uma linha por TIPO e seção — fase, neutro e terra em 1,5 e em 2,5.
+    expect(fio.entries).toHaveLength(6);
+    expect(fio.entries.map(nome).join(' ')).toMatch(/Condutor fase 2,5 mm²/);
+    expect(fio.entries.filter((e) => /2,5/.test(nome(e))).reduce((s, e) => s + e.quantity, 0)).toBeCloseTo(19.5, 6);
     const so15 = gerarLancamentos(q, resolvido(mapa({ medida: 'COMPRIMENTO_CONDUTOR', filtro_ambiente: ['1,5 mm²'] }), item('F', 'M')), CTX);
-    expect(so15.entries).toHaveLength(1);
-    expect(so15.entries[0].quantity).toBeCloseTo(18, 6);
+    expect(so15.entries).toHaveLength(3);
+    expect(so15.entries.reduce((s, e) => s + e.quantity, 0)).toBeCloseTo(18, 6);
+    const soTerra = gerarLancamentos(q, resolvido(mapa({ medida: 'COMPRIMENTO_CONDUTOR', filtro_ambiente: ['terra'] }), item('F', 'M')), CTX);
+    expect(soTerra.entries).toHaveLength(2);
 
     const disj = gerarLancamentos(q, resolvido(mapa({ medida: 'CONTAGEM_DISJUNTORES' }), item('D', 'UN')), CTX);
     expect(disj.entries.map(nome).sort()).toEqual(['Disjuntor 10 A', 'Disjuntor 16 A']);

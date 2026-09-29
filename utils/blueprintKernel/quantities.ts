@@ -28,6 +28,8 @@ import { furosDaEscada, medirEscada } from './escada';
 import { furosDoNucleo } from './nucleo';
 import { sobreposicoesDoModelo } from './sobreposicao';
 import { conexoesDerivadas, type ConexaoDerivada, type TipoDeConexao } from './conexoes';
+import { composicaoDaRede } from './fiacao';
+import { secoesDosCondutores, type TipoDeCondutor } from './condutores';
 import {
   areCollinear,
   isBetween,
@@ -180,7 +182,11 @@ export const POLITICA_PADRAO: QuantityPolicy = {
   // `condutores`/`condutorM`/`condutoresPorSecao`; os totais ganharam
   // `porCondutor` (metro de fio por seção), `porQuadro`, `porDisjuntor` e `drs`.
   // Até aqui NENHUM fio, quadro, disjuntor ou DR era quantificado.
-  version: 'quant-1.19.0',
+  // quant-1.20.0 (29/09/2026, E2.3 do roadmap elétrico): o fio passa a sair da
+  // FIAÇÃO DERIVADA (`fiacao.ts`) — fase, neutro, RETORNO e terra por tipo e
+  // seção, com o neutro pela 6.2.6.2 e o PE pela Tabela 58. Antes era contagem
+  // × comprimento numa seção só, sem retorno.
+  version: 'quant-1.20.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -634,23 +640,30 @@ export interface QuantidadeTrecho {
   desnivelM: number;
   formula: string;
   /**
-   * CONDUTORES no eletroduto (quant-1.19.0, E0.3 do roadmap elétrico). A
-   * contagem DECLARADA no trecho; quando não há, a base da ligação dos
-   * circuitos (3 por F-N/F-F, 4 por trifásico) — e `condutoresAssumidos` diz
-   * que foi assumida. `null` fora da elétrica e no eletroduto sem circuito.
-   *
-   * ⚠️ Sem RETORNO até a E2: é o que o trecho diz, não o que o comando pede.
+   * CONDUTORES no eletroduto (quant-1.19.0, E0.3; refeito na E2.3, quant-1.20.0).
+   * A lista vem da FIAÇÃO DERIVADA (`fiacao.ts`): fase, neutro, retorno e terra
+   * por circuito, pelo esquema de cada ponto e pelo caminho na rede. Quando o
+   * trecho tem contagem declarada diferente, ela vence (origem DECLARADO); sem
+   * ponto com caminho, a base da ligação (origem BASE — `condutoresAssumidos`).
+   * `null` fora da elétrica e no eletroduto sem circuito.
    */
   condutores: number | null;
+  /** Origem BASE: nenhum ponto do trecho tem caminho até o quadro — a composição foi assumida pela ligação. */
   condutoresAssumidos: boolean;
+  origemDaFiacao: 'DERIVADO' | 'DECLARADO' | 'BASE' | null;
   /** Metros de fio: condutores × comprimento real. Zero fora da elétrica. */
   condutorM: number;
-  /** Como a contagem se reparte entre os circuitos que passam — a seção é a DECLARADA no circuito (`null` = sem seção). */
-  condutoresPorSecao: { circuitoId: string | null; secaoMm2: number | null; quantidade: number }[];
+  /**
+   * Cada condutor do trecho, por circuito, TIPO e seção: fase e retorno na
+   * seção do circuito; neutro pela 6.2.6.2; PE pela Tabela 58 — ou o declarado
+   * no circuito. `secaoMm2` null = circuito sem seção declarada.
+   */
+  condutoresPorSecao: { circuitoId: string | null; tipo: TipoDeCondutor; secaoMm2: number | null; quantidade: number }[];
 }
 
-/** Metro de FIO por seção (quant-1.19.0). `secaoMm2` null = circuito sem seção declarada. */
+/** Metro de FIO por TIPO e seção (quant-1.20.0). `secaoMm2` null = circuito sem seção declarada. */
 export interface QuantidadePorCondutor {
+  tipo: TipoDeCondutor;
   secaoMm2: number | null;
   comprimentoM: number;
   /** Eletrodutos que contribuíram. */
@@ -924,15 +937,17 @@ export function repartirCondutores(
   return saida;
 }
 
-/** Metro de fio por seção, a partir dos trechos — a mesma conta para o total e para o pavimento. */
+const ORDEM_DO_TIPO: Record<TipoDeCondutor, number> = { FASE: 0, NEUTRO: 1, RETORNO: 2, TERRA: 3 };
+
+/** Metro de fio por TIPO e seção, a partir dos trechos — a mesma conta para o total e para o pavimento. */
 export function agruparPorCondutor(trechos: readonly QuantidadeTrecho[]): QuantidadePorCondutor[] {
   const mapa = new Map<string, QuantidadePorCondutor>();
   for (const t of trechos) {
     if (t.disciplina !== 'ELETRICA' || t.condutoresPorSecao.length === 0) continue;
     const vistas = new Set<string>();
     for (const c of t.condutoresPorSecao) {
-      const k = String(c.secaoMm2 ?? '');
-      const atual = mapa.get(k) ?? { secaoMm2: c.secaoMm2, comprimentoM: 0, trechos: 0 };
+      const k = `${c.tipo}|${c.secaoMm2 ?? ''}`;
+      const atual = mapa.get(k) ?? { tipo: c.tipo, secaoMm2: c.secaoMm2, comprimentoM: 0, trechos: 0 };
       atual.comprimentoM += c.quantidade * t.comprimentoM;
       if (!vistas.has(k)) {
         atual.trechos += 1;
@@ -941,8 +956,10 @@ export function agruparPorCondutor(trechos: readonly QuantidadeTrecho[]): Quanti
       mapa.set(k, atual);
     }
   }
-  // Seção declarada primeiro, em ordem; "sem seção" por último — é pendência, não compra.
-  return [...mapa.values()].sort((a, b) => (a.secaoMm2 ?? Number.POSITIVE_INFINITY) - (b.secaoMm2 ?? Number.POSITIVE_INFINITY));
+  // Seção em ordem ("sem seção" por último — é pendência, não compra); dentro da seção, fase, neutro, retorno, terra.
+  return [...mapa.values()].sort(
+    (a, b) => (a.secaoMm2 ?? Number.POSITIVE_INFINITY) - (b.secaoMm2 ?? Number.POSITIVE_INFINITY) || ORDEM_DO_TIPO[a.tipo] - ORDEM_DO_TIPO[b.tipo],
+  );
 }
 
 /** Disjuntores por In declarado; sem declaração por último. */
@@ -1837,6 +1854,9 @@ export function computeQuantities(
   // para toda PRUMADA — o trecho que sobe pela parede, o mais comum de uma
   // instalação — e daria a menos em todo esgoto com caimento. E o erro seria
   // silencioso: o número sairia plausível e a obra compraria cano a menos.
+  // E2.3: a FIAÇÃO DERIVADA de toda a rede elétrica, uma vez — a mesma do desenho.
+  const fiacao = (model.trechos ?? []).some((t) => t.disciplina === 'ELETRICA') ? composicaoDaRede(model) : null;
+  const circuitoPorId = new Map((model.circuitos ?? []).map((c) => [c.id, c]));
   const trechos: QuantidadeTrecho[] = (model.trechos ?? []).map((t) => {
     const dx = t.b.x - t.a.x;
     const dy = t.b.y - t.a.y;
@@ -1851,29 +1871,29 @@ export function computeQuantities(
     // mede a diagonal — o teste do caimento de 2 % em 10 m garante isso.
     const emL = t.disciplina === 'ELETRICA';
     const real = emL ? planta + Math.abs(desnivel) : Math.hypot(planta, desnivel);
-    // CONDUTORES (quant-1.19.0, E0.3): a contagem DECLARADA no eletroduto,
-    // repartida entre os circuitos pela ligação de cada um — a mesma conta da
-    // ocupação (`repartirCondutores`). Sem contagem, a base da ligação — dito.
-    const circuitosDoTrecho = emL
-      ? (t.circuitoIds ?? []).map((id) => (model.circuitos ?? []).find((c) => c.id === id)).filter((c): c is Circuito => !!c)
-      : [];
-    const baseDaLigacao = circuitosDoTrecho.reduce((s, c) => s + ((c.ligacao ?? 'FN') === 'FFF' ? 4 : 3), 0);
-    const condutoresDeclarados = emL ? (t.condutores ?? null) : null;
-    const condutores = emL ? (condutoresDeclarados ?? (baseDaLigacao > 0 ? baseDaLigacao : null)) : null;
-    const condutoresPorSecao =
-      emL && condutores
-        ? circuitosDoTrecho.length > 0
-          ? repartirCondutores(condutores, circuitosDoTrecho, circuitosDoTrecho.map((c) => c.secaoMm2 ?? null)).map((r) => ({
-              circuitoId: circuitosDoTrecho[r.indice]?.id ?? null,
-              secaoMm2: r.secaoMm2,
-              quantidade: r.quantidade,
-            }))
-          : [{ circuitoId: null, secaoMm2: null, quantidade: condutores }]
-        : [];
+    // CONDUTORES (quant-1.20.0, E2.3): a FIAÇÃO DERIVADA do trecho — fase,
+    // neutro, retorno e terra por circuito, pelo esquema e pelo caminho na
+    // rede (`fiacao.ts`) —, cada condutor na sua seção: fase e retorno na do
+    // circuito, neutro pela 6.2.6.2, PE pela Tabela 58 (ou o declarado).
+    const composicao = emL ? fiacao?.get(t.id) ?? null : null;
+    const lista = composicao?.lista ?? [];
+    const porChave = new Map<string, { circuitoId: string | null; tipo: TipoDeCondutor; secaoMm2: number | null; quantidade: number }>();
+    for (const cd of lista) {
+      const c = cd.circuitoId ? circuitoPorId.get(cd.circuitoId) : undefined;
+      const secoes = c ? secoesDosCondutores(c, c.secaoMm2 ?? null) : null;
+      const secaoMm2 = !secoes ? null : cd.tipo === 'NEUTRO' ? secoes.neutroMm2 : cd.tipo === 'TERRA' ? secoes.peMm2 : secoes.faseMm2;
+      const k = `${cd.circuitoId ?? ''}|${cd.tipo}|${secaoMm2 ?? ''}`;
+      const atual = porChave.get(k) ?? { circuitoId: cd.circuitoId, tipo: cd.tipo, secaoMm2, quantidade: 0 };
+      atual.quantidade += 1;
+      porChave.set(k, atual);
+    }
+    const condutoresPorSecao = [...porChave.values()];
+    const condutores = emL ? (lista.length > 0 ? lista.length : null) : null;
     return {
       trechoId: t.id,
       condutores,
-      condutoresAssumidos: emL && condutoresDeclarados == null && condutores != null,
+      condutoresAssumidos: composicao?.origem === 'BASE',
+      origemDaFiacao: composicao?.origem ?? null,
       condutorM: ((condutores ?? 0) * real) / 1000,
       condutoresPorSecao,
       material: materialDoTrecho(t),

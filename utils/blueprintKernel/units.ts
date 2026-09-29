@@ -393,7 +393,16 @@
  * cima. `true` ou ausente no canônico, como `sugerida`; nenhum desenho existente
  * muda de payload — provado antes do bump com os goldens na string antiga.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.71.0';
+/**
+ * ─── 0.71.0 → 0.72.0 (29/09/2026) — NEUTRO E PE DECLARADOS ──────────────────
+ *
+ * `Circuito.secaoNeutroMm2` e `secaoPeMm2` (E2.3 do roadmap elétrico): o
+ * projetista pode declarar seções diferentes da fase para o neutro e o terra;
+ * ausentes, vale a conta da norma (neutro = fase, PE pela Tabela 58). Omitidas
+ * no canônico quando ausentes — nenhum desenho muda de payload, provado antes
+ * do bump com os goldens na string antiga.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.72.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

@@ -781,6 +781,9 @@ export type Command =
       tensaoV?: number | null;
       disjuntorA?: number | null;
       secaoMm2?: number | null;
+      /** E2.3: neutro e PE declarados; ausentes = a conta da norma. */
+      secaoNeutroMm2?: number | null;
+      secaoPeMm2?: number | null;
       ligacao?: LigacaoDoCircuito | null;
       protecaoDR?: boolean | null;
       fase?: FaseDoCircuito | null;
@@ -801,6 +804,9 @@ export type Command =
       tensaoV?: number | null;
       disjuntorA?: number | null;
       secaoMm2?: number | null;
+      /** E2.3: neutro e PE declarados; ausentes = a conta da norma. */
+      secaoNeutroMm2?: number | null;
+      secaoPeMm2?: number | null;
       ligacao?: LigacaoDoCircuito | null;
       protecaoDR?: boolean | null;
       fase?: FaseDoCircuito | null;
@@ -3446,6 +3452,8 @@ function aplicarSemHash(
           tensaoV: command.tensaoV ?? null,
           disjuntorA: command.disjuntorA ?? null,
           secaoMm2: command.secaoMm2 ?? null,
+          secaoNeutroMm2: command.secaoNeutroMm2 ?? null,
+          secaoPeMm2: command.secaoPeMm2 ?? null,
           ligacao: command.ligacao ?? null,
           protecaoDR: command.protecaoDR ?? null,
           fase: command.fase ?? null,
@@ -3476,6 +3484,8 @@ function aplicarSemHash(
       if (command.tensaoV !== undefined) c.tensaoV = command.tensaoV;
       if (command.disjuntorA !== undefined) c.disjuntorA = command.disjuntorA;
       if (command.secaoMm2 !== undefined) c.secaoMm2 = command.secaoMm2;
+      if (command.secaoNeutroMm2 !== undefined) c.secaoNeutroMm2 = command.secaoNeutroMm2;
+      if (command.secaoPeMm2 !== undefined) c.secaoPeMm2 = command.secaoPeMm2;
       if (command.ligacao !== undefined) c.ligacao = command.ligacao;
       if (command.protecaoDR !== undefined) c.protecaoDR = command.protecaoDR;
       if (command.fase !== undefined) c.fase = command.fase;

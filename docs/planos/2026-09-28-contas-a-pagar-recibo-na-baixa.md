@@ -197,9 +197,23 @@ O caminho é o mesmo: autorizar pela **mesma RPC do portal** com a credencial de
 - [x] 5. `financialReceiptService`: `emitir(tx, kind)`, `baixarPdf({ kind })`, `listarAtivosDaOrg` + `__tests__/financialReceiptService.test.ts`.
 - [x] 6. `BaixaRecebivelSheet` genérico (`tipo`, `TituloDaBaixa`, `emitirReciboPadrao`, `reciboIndisponivel`, `avisoRecibo`; o reset é pela chave dos ids). Receber passa `baixando.map(tituloDeRecebivel)`. Coberto por `__tests__/components/BaixaRecebivelSheet.test.tsx`.
 - [x] 7. `ContasPagarParcelas`: "Pago" abre o painel, lote "Dar baixa", coluna Recibo antes de Status, ícone de recibo nas pagas, o estorno limpa. Coberto por `__tests__/components/ContasPagarRecibo.test.tsx` (5 testes); deep-link e paginação (8) seguem verdes; `check-ui-standard.sh` limpo.
-- [ ] `npm run ci` completo na frente
-- [ ] Publicação (push em `main`, com aval do usuário) + `conferir-producao.sh`
+- [x] `npm run ci` completo na frente (518 arquivos / 5.882 testes); após rebase, 5.897 testes verdes
+- [x] Publicação — push `7f6bf64b..1d16990f`; `conferir-producao.sh` provou o domínio em `1d16990` com "Confirmar pagamento" no bundle
 - [ ] Usuário confere um recibo real
+
+### Correção pedida depois da Fase 1 (28/09/2026)
+
+> 1. Sim
+> 2. Sim
+
+(Respostas a: "1. Corrijo o mesmo defeito na função de recibo de Contas a Receber?" e
+"2. No Portal do Parceiro, parcelas canceladas aparecem como 'Pago'. Corrijo junto na Fase 2?")
+
+- [x] 1. `aplicar_20270928000111_recibo_recebimento_coalesce.sql` (aplicada): `emitir_recibo_recebimento` reescrita a partir do arquivo 000120, com só a checagem de baixa trocada por `COALESCE`, e `trg_cancelar_recibo_no_estorno` com `COALESCE` do lado NEW. O teste transacional, antes/depois, mostrou:
+  - título a receber em aberto com `business_status` NULL: antes emitia recibo, depois é recusado;
+  - estorno deixando NULL: antes não cancelava, depois cancela.
+  - ACL igual, sem mojibake, e 5 recibos antes e depois.
+- [ ] 2. Portal do Parceiro: parcela CANCELLED aparecendo como "Pago" → entra na Fase 2 (item 10).
 
 ### Fase 2
 - [ ] 8 · [ ] 9 · [ ] 10 (só depois da conferência da Fase 1)

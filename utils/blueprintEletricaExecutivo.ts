@@ -28,7 +28,7 @@ import {
   type HipotesesEletricas,
   type PreDimensionamentoDoQuadro,
 } from './blueprintEletricaDimensionamento';
-import { ROTULO_DA_EXPOSICAO } from './blueprintEletricaDimensionamento';
+import { ROTULO_DA_EXPOSICAO, limiteQuedaTotalEfetivoPct } from './blueprintEletricaDimensionamento';
 
 export interface VerificacaoEletrica {
   /** Grupo para a tela agrupar. */
@@ -167,7 +167,9 @@ export function memorialEletrico(
   L.push('## 3. Hipóteses');
   L.push(`Condutores de cobre, isolação PVC 70 °C, método de instalação ${hip.metodoDeInstalacao} (Tabela 36); temperatura ambiente ${hip.temperaturaAmbienteC} °C (Tabela 40); ${hip.circuitosAgrupados} circuito(s) por eletroduto (Tabela 42); seção mínima por uso pela Tabela 47; TUE / ligação direta ≥ ${String(hip.secaoMinimaTueMm2).replace('.', ',')} mm² (hipótese de projeto).`);
   L.push(`ρ do cobre ${String(hip.rhoOhmMm2PorM).replace('.', ',')} Ω·mm²/m; queda máxima ${hip.limiteQuedaTerminalPct} % no circuito terminal e ${hip.limiteQuedaTotalPct} % da origem (6.2.7). Disjuntores: ${hip.catalogoDeDisjuntoresA.join(', ')} A (IB ≤ In ≤ Iz, 5.3.4.1).`);
-  L.push(`Demanda: ${hip.demanda.nome} — iluminação ${hip.demanda.ILUMINACAO}, TUG ${hip.demanda.TUG}, força ${hip.demanda.FORCA}, motores/AC ${hip.demanda.MOTOR ?? 1}. Desequilíbrio de fases tolerado ${hip.desequilibrioMaxPct} %.`);
+  L.push(`Demanda: ${hip.demanda.nome} — iluminação ${hip.demanda.ILUMINACAO}, TUG ${hip.demanda.TUG}, força ${hip.demanda.FORCA}, motores/AC ${hip.demanda.MOTOR ?? 1}${hip.demanda.fonte ? `; fonte ${hip.demanda.fonte}${hip.demanda.dataISO ? ` (${hip.demanda.dataISO.split('-').reverse().join('/')})` : ''} — CONFERIR na norma da concessionária` : ''}. Desequilíbrio de fases tolerado ${hip.desequilibrioMaxPct} %.`);
+  // E4.2: o limite da origem que valeu, e por quê.
+  L.push(`Queda da origem ao pior ponto (6.2.7.1): limite ${String(limiteQuedaTotalEfetivoPct(hip)).replace('.', ',')} % — ${hip.origemComTransformador ? 'instalação com transformador próprio (hipótese de projeto: 7 %)' : 'alimentação pela rede pública (5 %)'}; nos quadros alimentados por outro quadro a queda soma os alimentadores da cadeia.`);
   L.push(`Exposição a descargas atmosféricas (6.3.5.2.1): ${ROTULO_DA_EXPOSICAO[hip.exposicaoARaios]}. DPS sugerido quando falta: classe ${hip.dpsPadrao.classe}, ${hip.dpsPadrao.inKa} kA, Up ${String(hip.dpsPadrao.upKv).replace('.', ',')} kV (hipótese de catálogo).`);
   L.push(`Corrente de curto-circuito presumida na entrada: ${String(hip.ikEntradaKa).replace('.', ',')} kA — hipótese, a confirmar com a concessionária; Icn dos disjuntores ≥ Ik (5.3.5.5). Cálculo por impedância da rede não realizado.`);
   L.push('');
@@ -176,7 +178,9 @@ export function memorialEletrico(
     L.push(`### ${q.nome}${q.tipo !== 'QD' ? ` (${q.tipo})` : ''} — ${q.ligacao}${q.tensaoV ? ` ${q.tensaoV} V` : ''}${q.ligacaoDeduzida ? ' (ligação deduzida dos circuitos)' : ''}${q.paiNome ? ` — alimentado por ${q.paiNome}${q.alimentadorOrigem === 'ELETRODUTOS' ? ` (alimentador ${n1(q.alimentadorM ?? 0)} m pelo eletroduto)` : ''}` : ' — quadro de entrada'}`);
     L.push(`Carga instalada ${Math.round(q.sInstaladaVA)} VA (iluminação ${Math.round(q.porGrupoVA.ILUMINACAO)}, TUG ${Math.round(q.porGrupoVA.TUG)}, força ${Math.round(q.porGrupoVA.FORCA)}${q.porGrupoVA.MOTOR ? `, motores/AC ${Math.round(q.porGrupoVA.MOTOR)}` : ''}); demandada ${Math.round(q.sDemandadaVA)} VA.`);
     if (q.ibA != null) {
-      L.push(`Alimentador: IB ${n1(q.ibA)} A; seção ${mm2(q.secaoCalculada?.secaoMm2)} mm² (Iz ${q.secaoCalculada ? n1(q.secaoCalculada.izA) : '—'} A); disjuntor geral ${q.disjuntorGeralA ?? '—'} A${q.quedaAlimentadorPct != null ? `; queda no alimentador ${n1(q.quedaAlimentadorPct)} %, total até o pior ponto ${n1(q.quedaTotalMaxPct ?? 0)} %` : ''}.`);
+      L.push(`Alimentador: IB ${n1(q.ibA)} A; seção ${mm2(q.secaoCalculada?.secaoMm2)} mm² (Iz ${q.secaoCalculada ? n1(q.secaoCalculada.izA) : '—'} A); disjuntor geral ${q.disjuntorGeralA ?? '—'} A${q.quedaAlimentadorPct != null ? `; queda no alimentador ${n1(q.quedaAlimentadorPct)} %, total até o pior ponto ${n1(q.quedaTotalMaxPct ?? 0)} % (limite ${n1(q.limiteQuedaEfetivoPct)} %)` : ''}.`);
+      // E4.2: a cadeia até a origem, elo a elo.
+      if (q.cadeia.length > 1) L.push(`Queda até a origem: ${q.cadeia.map((e) => `${e.nome} ${e.quedaAlimentadorPct == null ? '—' : n1(e.quedaAlimentadorPct)} %`).join(' + ')}${q.quedaAcumuladaPct != null ? ` = ${n1(q.quedaAcumuladaPct)} % nos alimentadores` : ' (elo sem comprimento — soma indefinida)'}.`);
     }
     if (q.fases) L.push(`Fases: R ${Math.round(q.fases.R)} · S ${Math.round(q.fases.S)} · T ${Math.round(q.fases.T)} VA${q.desequilibrioPct != null ? ` (desequilíbrio ${n1(q.desequilibrioPct)} %)` : ''}.`);
     // E3.1: a proteção DR do quadro, peça a peça.

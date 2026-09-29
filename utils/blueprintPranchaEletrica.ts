@@ -533,7 +533,8 @@ export function desenharQuadroDeCargas(
     linha(
       `Instalado ${Math.round(q.sInstaladaVA)} VA (luz ${Math.round(q.porGrupoVA.ILUMINACAO)} · TUG ${Math.round(q.porGrupoVA.TUG)} · força ${Math.round(q.porGrupoVA.FORCA)}${q.porGrupoVA.MOTOR ? ` · motores/AC ${Math.round(q.porGrupoVA.MOTOR)}` : ''}) · demandado ${Math.round(q.sDemandadaVA)} VA (${q.demanda.nome})` +
         (q.ibA != null ? ` · alimentador IB ${n1(q.ibA)} A, ${mm2(q.secaoCalculada?.secaoMm2)} mm², geral ${q.disjuntorGeralA ?? '—'} A` : '') +
-        (q.quedaTotalMaxPct != null ? ` · ΔV total ${n1(q.quedaTotalMaxPct)} %` : ''),
+        // E4.2: a cadeia quando há pai — cada elo, e o limite que valeu.
+        (q.quedaTotalMaxPct != null ? ` · ΔV total ${n1(q.quedaTotalMaxPct)} % (limite ${n1(q.limiteQuedaEfetivoPct)} %${q.cadeia.length > 1 ? `; cadeia ${q.cadeia.map((e) => `${e.nome} ${e.quedaAlimentadorPct == null ? '—' : n1(e.quedaAlimentadorPct)}`).join(' + ')}` : ''})` : ''),
       2.0,
     );
     if (q.fases) linha(`Fases: R ${Math.round(q.fases.R)} · S ${Math.round(q.fases.S)} · T ${Math.round(q.fases.T)} VA${q.desequilibrioPct != null ? ` (desequilíbrio ${n1(q.desequilibrioPct)} %)` : ''}`, 2.0);

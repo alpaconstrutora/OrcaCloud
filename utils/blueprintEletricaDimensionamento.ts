@@ -35,7 +35,7 @@
  * Puro: números entram, números e textos saem.
  */
 import type { BlueprintModel, Circuito, LigacaoDoCircuito, Quadro, Terminal, TipoDeCondutor, Trecho } from './blueprintKernel';
-import { repartirCondutores, secoesDosCondutores } from './blueprintKernel';
+import { cadeiaDeQuadros, repartirCondutores, secoesDosCondutores } from './blueprintKernel';
 import { comprimentoDoTrecho } from './blueprintRede';
 
 // ─── Tabela 36 — capacidade de condução de corrente (A) ────────────────────
@@ -272,6 +272,12 @@ export interface HipotesesEletricas {
   /** O DPS que se sugere quando falta (catálogo/hipótese): classe II, 20 kA, Up 1,5 kV, desconexão 20 A. */
   dpsPadrao: { classe: 'I' | 'II' | 'III'; upKv: number; inKa: number; disjuntorDesconexaoA: number };
   /**
+   * E4.2 — a instalação tem TRANSFORMADOR PRÓPRIO (origem na subestação, não
+   * na rede pública): o limite de queda da origem sobe de 5 para 7 %
+   * (6.2.7.1 b). Hipótese de projeto — dita no memorial.
+   */
+  origemComTransformador: boolean;
+  /**
    * E3.3 — CORRENTE DE CURTO-CIRCUITO PRESUMIDA na entrada, kA. Hipótese, a
    * confirmar com a concessionária (é ela quem informa a Ik no ponto de
    * entrega): 4,5 kA é o usual residencial em rede pública de baixa tensão.
@@ -358,6 +364,7 @@ export const HIPOTESES_PADRAO: HipotesesEletricas = {
   exposicaoARaios: 'NAO_AVALIADA',
   dpsPadrao: DPS_PADRAO,
   ikEntradaKa: 4.5,
+  origemComTransformador: false,
 };
 
 // ─── Corrente de projeto ───────────────────────────────────────────────────
@@ -818,9 +825,42 @@ export interface FatoresDeDemanda {
   FORCA: number;
   /** Motores e ar-condicionado (E1.1). Coluna gravada antes dele lê 1,00. */
   MOTOR: number;
+  /**
+   * E4.2 — a FONTE (documento da concessionária: "NTD-001 rev. 3") e a DATA
+   * (ISO) da tabela. Sem eles a tabela é palavra do projetista; o memorial
+   * imprime os dois. Ausentes na tabela "sem demanda".
+   */
+  fonte?: string | null;
+  dataISO?: string | null;
 }
 
 export const DEMANDA_SEM_FATOR: FatoresDeDemanda = { nome: 'sem demanda (1,00)', ILUMINACAO: 1, TUG: 1, FORCA: 1, MOTOR: 1 };
+
+/**
+ * E4.2 — PRESETS de demanda por concessionária: a ESTRUTURA. Cada preset exige
+ * nome, fonte e data, e sai no memorial com "CONFERIR na norma da
+ * concessionária". A lista embutida tem SÓ o "sem demanda": nenhuma tabela de
+ * concessionária é digitada de memória aqui — quem tem a NT em mãos informa
+ * (opção "informada") ou acrescenta o preset com a fonte.
+ */
+export interface PresetDeDemanda {
+  id: string;
+  fatores: FatoresDeDemanda;
+  /** Sempre presente num preset de concessionária — a "verdade" é dela, não nossa. */
+  conferir: string;
+}
+export const PRESETS_DE_DEMANDA: readonly PresetDeDemanda[] = [
+  { id: 'SEM', fatores: DEMANDA_SEM_FATOR, conferir: 'fator 1,00 em tudo — a demanda é a carga instalada; conservador' },
+];
+
+/**
+ * E4.2 — o limite de queda da ORIGEM ao pior ponto que vale (6.2.7.1): 7 %
+ * quando a instalação tem transformador próprio (hipótese
+ * `origemComTransformador`), senão o declarado (5 % em rede pública).
+ */
+export function limiteQuedaTotalEfetivoPct(hip: Pick<HipotesesEletricas, 'limiteQuedaTotalPct' | 'origemComTransformador'>): number {
+  return hip.origemComTransformador ? Math.max(7, hip.limiteQuedaTotalPct) : hip.limiteQuedaTotalPct;
+}
 
 export interface CargaPorFase {
   R: number;
@@ -868,6 +908,16 @@ export interface PreDimensionamentoDoQuadro {
   sDemandadaPropriaVA: number;
   alimentadorM: number | null;
   alimentadorOrigem: 'DECLARADO' | 'ELETRODUTOS' | null;
+  /**
+   * E4.2 — a CADEIA até a origem: a queda do alimentador de cada quadro acima
+   * deste (do mais próximo da origem para cá) e a deste; `quedaAcumuladaPct` é
+   * a soma (`null` quando algum elo não tem comprimento — e `cadeia` diz qual).
+   * `quedaTotalMaxPct` = acumulada + pior circuito terminal — é isso que a
+   * 6.2.7.1 limita, contra `limiteQuedaEfetivoPct` (5 %, ou 7 % com trafo).
+   */
+  cadeia: { quadroId: string; nome: string; quedaAlimentadorPct: number | null }[];
+  quedaAcumuladaPct: number | null;
+  limiteQuedaEfetivoPct: number;
 }
 
 /** Um quadro alimentado por este — a linha dele no quadro de cargas do pai. */
@@ -955,6 +1005,8 @@ export function preDimensionarQuadroCompleto(
   hip: HipotesesEletricas = HIPOTESES_PADRAO,
   /** E4.1: os quadros acima na recursão — um ciclo (que a invariante recusa) não vira laço infinito. */
   visitados: ReadonlySet<string> = new Set(),
+  /** E4.2: só a chamada de fora sobe a cadeia até a origem; as recursivas (filhos, pais) não — senão pai ↔ filho se chamam para sempre. */
+  comCadeia = true,
 ): PreDimensionamentoDoQuadro | null {
   const quadro = (model.quadros ?? []).find((q) => q.id === quadroId);
   if (!quadro) return null;
@@ -993,7 +1045,7 @@ export function preDimensionarQuadroCompleto(
   const filhos: FilhoDoQuadro[] = (model.quadros ?? [])
     .filter((f) => f.quadroPaiId === quadroId && !proximos.has(f.id))
     .map((f) => {
-      const r = preDimensionarQuadroCompleto(model, f.id, hip, proximos);
+      const r = preDimensionarQuadroCompleto(model, f.id, hip, proximos, false);
       if (!r) return null;
       return {
         quadroId: f.id,
@@ -1048,6 +1100,9 @@ export function preDimensionarQuadroCompleto(
     sDemandadaPropriaVA,
     alimentadorM,
     alimentadorOrigem,
+    cadeia: [],
+    quedaAcumuladaPct: null,
+    limiteQuedaEfetivoPct: limiteQuedaTotalEfetivoPct(hip),
   };
 
   if (tensaoV == null) {
@@ -1062,13 +1117,38 @@ export function preDimensionarQuadroCompleto(
         const queda = quedaDeTensaoPct(ibA, alimentadorM, base.secaoCalculada.secaoMm2, tensaoV, ligacao, hip.rhoOhmMm2PorM);
         base.quedaAlimentadorPct = queda;
         const piorTerminal = Math.max(0, ...circuitos.map((c) => c.quedaPct ?? 0));
-        base.quedaTotalMaxPct = queda + piorTerminal;
-        if (base.quedaTotalMaxPct > hip.limiteQuedaTotalPct) {
-          achados.push({
-            nivel: 'FALTA',
-            referencia: '6.2.7.1',
-            mensagem: `queda da origem ao pior ponto ${n1(base.quedaTotalMaxPct)} % (alimentador ${n1(queda)} % + terminal ${n1(piorTerminal)} %), limite ${hip.limiteQuedaTotalPct} %`,
-          });
+        // E4.2: a queda até a ORIGEM soma os alimentadores de todos os quadros
+        // acima deste (a cadeia), não só o deste. Cada elo sem comprimento
+        // deixa a soma indefinida — e a cadeia diz qual elo faltou.
+        const acima = comCadeia ? cadeiaDeQuadros(model, quadroId).reverse() : [];
+        const cadeia = acima.map((p) => {
+          // Visitados VAZIO de propósito: o pai precisa somar os filhos (inclusive
+          // este) para ter IB e queda; o que corta a recursão é `comCadeia = false`.
+          const r = preDimensionarQuadroCompleto(model, p.id, hip, new Set(), false);
+          return { quadroId: p.id, nome: p.nome, quedaAlimentadorPct: r?.quedaAlimentadorPct ?? null };
+        });
+        cadeia.push({ quadroId, nome: quadro.nome, quedaAlimentadorPct: queda });
+        base.cadeia = cadeia;
+        const eloSemQueda = cadeia.find((e) => e.quedaAlimentadorPct == null);
+        base.quedaAcumuladaPct = eloSemQueda ? null : cadeia.reduce((s, e) => s + (e.quedaAlimentadorPct ?? 0), 0);
+        const limite = base.limiteQuedaEfetivoPct;
+        if (eloSemQueda) {
+          // Conservador e dito: sem o elo, avalia só o que se tem, e avisa.
+          base.quedaTotalMaxPct = queda + piorTerminal;
+          naoAvaliado.push(`queda até a origem incompleta — ${eloSemQueda.nome} sem comprimento de alimentador; avaliado só deste quadro para baixo`);
+          if (base.quedaTotalMaxPct > limite) {
+            achados.push({ nivel: 'FALTA', referencia: '6.2.7.1', mensagem: `queda deste quadro ao pior ponto ${n1(base.quedaTotalMaxPct)} % (alimentador ${n1(queda)} % + terminal ${n1(piorTerminal)} %) já passa do limite ${n1(limite)} %` });
+          }
+        } else {
+          base.quedaTotalMaxPct = (base.quedaAcumuladaPct ?? 0) + piorTerminal;
+          if (base.quedaTotalMaxPct > limite) {
+            const elos = cadeia.map((e) => `${e.nome} ${n1(e.quedaAlimentadorPct ?? 0)} %`).join(' + ');
+            achados.push({
+              nivel: 'FALTA',
+              referencia: '6.2.7.1',
+              mensagem: `queda da origem ao pior ponto ${n1(base.quedaTotalMaxPct)} % (${elos} + terminal ${n1(piorTerminal)} %), limite ${n1(limite)} %${hip.origemComTransformador ? ' (transformador próprio)' : ''}`,
+            });
+          }
         }
       } else {
         naoAvaliado.push(pai ? `comprimento do alimentador não declarado e sem eletroduto entre ${pai.nome} e este quadro — queda da origem não calculada` : 'comprimento do alimentador não declarado — queda da origem não calculada');

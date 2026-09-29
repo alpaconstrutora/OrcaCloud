@@ -1955,7 +1955,7 @@ Fecha o bloco **3**.
 | Fase | Entrega | Pronto quando |
 |---|---|---|
 | 4.1 Quadro com tipo e pai ✅ (kernel 0.76.0; alimentador derivado do eletroduto; `numeroDoCircuito` unificado) | `Quadro.tipo: 'QD' \| 'QGBT' \| 'MEDICAO'` e `quadroPaiId?`; **circuito alimentador derivado** (quadro filho = uma linha no quadro de cargas do pai, com IB = demanda do filho); `alimentadorM` passa a ser derivado do eletroduto entre os dois quadros quando existe, declarado quando não; `Circuito.reserva: boolean` (linha sem pontos, conta no quadro e no unifilar) | goldens; `preDimensionarQuadroCompleto` do pai soma os filhos; ciclo de pais → invariante; teste com QGBT → QD1, QD2 |
-| 4.2 Demanda e queda acumuladas | demanda do pai = Σ demanda dos filhos + cargas próprias, com **fatores por tabela nomeada** (presets por concessionária como hipótese com fonte e data — a "verdade da concessionária" continua preset, nunca embutida); queda acumulada multinível até a origem (6.2.7.1: 5 %, ou 7 % com trafo — hipótese `origemComTransformador`) | teste: QGBT→QD→C1 com quedas 1 + 2 + 2,5 → FALTA; memorial mostra a cadeia |
+| 4.2 Demanda e queda acumuladas ✅ (cadeia até a origem; 7 % com trafo como hipótese; fonte/data da demanda) | demanda do pai = Σ demanda dos filhos + cargas próprias, com **fatores por tabela nomeada** (presets por concessionária como hipótese com fonte e data — a "verdade da concessionária" continua preset, nunca embutida); queda acumulada multinível até a origem (6.2.7.1: 5 %, ou 7 % com trafo — hipótese `origemComTransformador`) | teste: QGBT→QD→C1 com quedas 1 + 2 + 2,5 → FALTA; memorial mostra a cadeia |
 | 4.3 Entrada de energia no desenho | terminal `ENTRADA_SERVICO` (poste/mureta) e `MEDIDOR` (por unidade), ligados ao quadro de MEDICAO; **preset de padrão de entrada** (tabela `PADROES_DE_ENTRADA` por concessionária: categoria × demanda → ramal, disjuntor geral, eletroduto de entrada, aterramento — cada preset com fonte e "CONFERIR na norma da concessionária"); dimensionamento do ramal = o mesmo motor de condutores com método D/B1 | teste com preset "genérico — hipótese": 12 kVA → categoria, ramal 16 mm², disjuntor 63 A; falta se demanda > categoria; goldens |
 | 4.4 Uso coletivo (A, mas destravado aqui) | medição por unidade do Empreendimento (unidades já existem em `empreendimento_*`): um MEDIDOR por unidade, demanda do condomínio = Σ unidades × fator de diversidade (hipótese nomeada) + serviço; fora: CODI por concessionária (backlog) | teste com 8 unidades; unifilar do QGBT lista os medidores |
 | 4.5 Unifilar hierárquico e esquema vertical elétrico | unifilar em árvore (QGBT no topo, filhos abaixo, um diagrama só ou por quadro — opção); `utils/blueprintEsquemaVertical.ts` ganha a disciplina ELETRICA: pavimentos × quadros × prumadas × alimentadores, folha "ESQUEMA VERTICAL ELÉTRICO" na prancha; unifilar sai em DXF | harness da prancha olhado; `blueprintEsquemaVertical` testado com sobrado de 2 quadros; DXF abre com camada `UNIFILAR` |
@@ -2905,3 +2905,54 @@ selects Tipo/"de" e do ramal "→" — fica dito.
 ❌→✅, "Alimentador entre quadros pelo eletroduto" ❌→✅ (declarado vence), "Tipo do quadro" ❌→✅,
 "Circuito de reserva" ❌→✅; §26 "Unifilar com ramal para quadro filho" ❌→🟡 (por quadro; árvore na
 E4.5); §16 "DPS só na entrada" 🟡→✅.
+
+### E4.2 — Demanda e queda acumuladas (29/09/2026) · frente `eletrico-e4` · sem bump
+
+**O que mudou**
+
+- **Queda até a ORIGEM multinível** (`preDimensionarQuadroCompleto`): a 6.2.7.1 limita a queda da
+  origem ao pior ponto — num QD alimentado por um QGBT, isso é alimentador do QGBT + alimentador do
+  QD + circuito terminal, não só o último. O resultado ganhou **`cadeia[]`** (cada quadro acima
+  deste, do mais próximo da origem para cá, com a queda do alimentador dele), **`quedaAcumuladaPct`**
+  (a soma; `null` quando um elo não tem comprimento — e a cadeia diz qual) e
+  **`limiteQuedaEfetivoPct`**. A FALTA cita os elos: "queda da origem ao pior ponto 12,4 % (QGBT 8,5 %
+  + QD 2,0 % + terminal 1,9 %), limite 5,0 %". Elo sem comprimento: avalia só deste quadro para baixo
+  e diz. A cadeia só se sobe na chamada de fora (`comCadeia`): filhos e pais recursivos não sobem —
+  senão pai ↔ filho se chamariam para sempre.
+- **Transformador próprio como hipótese** — `hip.origemComTransformador` (checkbox na aba Hipóteses;
+  gravado; entra no hash da base): `limiteQuedaTotalEfetivoPct` = 7 % (6.2.7.1 b) ou o declarado (5 %
+  rede pública). Memorial diz o limite que valeu e por quê.
+- **Demanda com fonte e data** — `FatoresDeDemanda.fonte`/`dataISO` (documento da concessionária e
+  data; campos na aba Hipóteses; lidos da coluna gravada); memorial imprime "fonte NTD-001 rev. 3
+  (10/03/2025) — CONFERIR na norma da concessionária". **`PRESETS_DE_DEMANDA`**: a estrutura (id,
+  fatores, "conferir") com **só o "sem demanda"** embutido — nenhuma tabela de concessionária digitada
+  de memória (a decisão da E0.1 continua); quem tem a NT informa nome + fonte + data.
+- Tela: "ΔV alimentador … (total … / limite …) · cadeia QGBT 8,5 % + QD 2,0 %"; folha do quadro de
+  cargas: "ΔV total … (limite …; cadeia …)"; memorial: "Queda até a origem: QGBT 8,5 % + QD 2,0 % =
+  10,5 % nos alimentadores." e o limite com a hipótese.
+- **Não entrou (declarado)**: fatores de demanda DIFERENTES por nível (o pai aplica os fatores globais
+  à soma dos filhos já demandados — não há "demanda da demanda" de tabela de agrupamento; entra com o
+  uso coletivo, E4.4); tabelas de concessionária embutidas (nunca — só com fonte e data informadas).
+
+**Testes** — novo `__tests__/blueprintQuedaAcumulada.test.ts` (3): **QGBT (40 m) → QD (40 m) → chuveiro
+5 kW a 30 m**: a cadeia do QD é [QGBT, QD], o elo do QGBT é a queda do próprio QGBT, acumulada = soma,
+total = acumulada + terminal (> 5 %), FALTA cita "QGBT x % + QD y % + terminal z %"; o QGBT sozinho
+também estoura (8,5 %) e a mensagem dele não cita o QD; com trafo o limite vira 7 % e a mensagem diz;
+a conferência repete com o nome do quadro; a hipótese muda o hash da base; **elo sem comprimento** →
+soma indefinida, "QGBT sem comprimento de alimentador; avaliado só deste quadro para baixo"; memorial
+com fonte/data/CONFERIR, limite 7 % "transformador próprio", cadeia elo a elo; presets = ['SEM'];
+`hipotesesDaColuna` lê fonte, data (ISO válida), trafo.
+
+**O que os testes pegaram antes de publicar**: (1) subir a cadeia passando `visitados` com o próprio
+quadro fazia o pai somar os filhos SEM este — QGBT sem circuitos próprios ficava com 0 VA, sem IB e sem
+queda (elo nulo); a cadeia sobe com visitados vazio e `comCadeia = false` é o que corta a recursão;
+(2) eu esperava o QGBT "passar" sozinho — 40 m em 6 mm² a 39 A dá 8,5 %, e ele estoura de fato; o
+teste passou a exigir a mensagem só com o elo dele.
+
+**Verificação**: `tsc` ✓ · alvo 82 ✓ (9 arquivos) · suíte inteira **6.257 ✓** (572 arquivos) · `build` ✓ (o wrapper `npm run build` deu SIGSEGV duas vezes no Git Bash — ambiente, não código: `tsc` ✓ e `node node_modules/vite/bin/vite.js build` ✓) ·
+`check-ui-standard` nos 2 `.tsx` ✓ · `check-xss-sinks` ✓ · sem mudança no kernel (bundle da planta-api
+intacto). **Sem harness visual** — fica dito.
+
+**Efeito no benchmark**: §2 "Queda de tensão acumulada até a origem (multinível)" ❌→✅, "Limite 7 % com
+transformador" ❌→✅ (hipótese), "Tabela de demanda com fonte" 🟡→✅ (fonte + data + CONFERIR);
+§27 "Memorial mostra a cadeia de queda" ❌→✅.

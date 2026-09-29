@@ -51,6 +51,9 @@ export function hipotesesDaColuna(raw: unknown): HipotesesEletricas {
       FORCA: n(d.FORCA, 1),
       // E1.1: coluna gravada antes do grupo MOTOR não o tem — vale 1,00.
       MOTOR: n(d.MOTOR, 1),
+      // E4.2: fonte e data da tabela, quando informadas.
+      fonte: typeof d.fonte === 'string' && d.fonte.trim() ? d.fonte : null,
+      dataISO: typeof d.dataISO === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.dataISO) ? d.dataISO : null,
     },
     limiteQuedaTotalPct: n(r.limiteQuedaTotalPct, HIPOTESES_PADRAO.limiteQuedaTotalPct),
     desequilibrioMaxPct: n(r.desequilibrioMaxPct, HIPOTESES_PADRAO.desequilibrioMaxPct),
@@ -65,6 +68,8 @@ export function hipotesesDaColuna(raw: unknown): HipotesesEletricas {
     dpsPadrao: HIPOTESES_PADRAO.dpsPadrao,
     // E3.3: a Ik presumida é do lugar — gravada.
     ikEntradaKa: Math.max(0.1, n(r.ikEntradaKa, HIPOTESES_PADRAO.ikEntradaKa)),
+    // E4.2: transformador próprio — gravado.
+    origemComTransformador: r.origemComTransformador === true,
   };
 }
 

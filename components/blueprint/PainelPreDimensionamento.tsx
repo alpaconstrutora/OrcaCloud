@@ -147,7 +147,7 @@ export function HipotesesDoPreDimensionamento({
     hipoteses.demanda.TUG !== 1 ||
     hipoteses.demanda.FORCA !== 1 ||
     (hipoteses.demanda.MOTOR ?? 1) !== 1;
-  const resumo = `${hipoteses.metodoDeInstalacao} · ${hipoteses.temperaturaAmbienteC} °C · ${hipoteses.circuitosAgrupados} circ./eletroduto · ρ ${String(hipoteses.rhoOhmMm2PorM).replace('.', ',')} · ΔV ≤ ${hipoteses.limiteQuedaTerminalPct} % (origem ${hipoteses.limiteQuedaTotalPct} %) · TUE ≥ ${String(hipoteses.secaoMinimaTueMm2).replace('.', ',')} mm²${demandaInformada ? ` · demanda: ${hipoteses.demanda.nome}` : ''}${hipoteses.exposicaoARaios !== 'NAO_AVALIADA' ? ` · descargas: ${hipoteses.exposicaoARaios === 'EXPOSTA' ? 'exposta' : 'não exposta'}` : ''}`;
+  const resumo = `${hipoteses.metodoDeInstalacao} · ${hipoteses.temperaturaAmbienteC} °C · ${hipoteses.circuitosAgrupados} circ./eletroduto · ρ ${String(hipoteses.rhoOhmMm2PorM).replace('.', ',')} · ΔV ≤ ${hipoteses.limiteQuedaTerminalPct} % (origem ${hipoteses.limiteQuedaTotalPct} %) · TUE ≥ ${String(hipoteses.secaoMinimaTueMm2).replace('.', ',')} mm²${demandaInformada ? ` · demanda: ${hipoteses.demanda.nome}` : ''}${hipoteses.exposicaoARaios !== 'NAO_AVALIADA' ? ` · descargas: ${hipoteses.exposicaoARaios === 'EXPOSTA' ? 'exposta' : 'não exposta'}` : ''}${hipoteses.origemComTransformador ? ' · trafo próprio (7 %)' : ''}`;
   const campo = 'w-16 rounded border border-slate-300 px-1 py-0.5 text-sm';
   return (
     <div className="rounded-md border border-dashed border-slate-300">
@@ -200,6 +200,11 @@ export function HipotesesDoPreDimensionamento({
           <label className="flex items-center justify-between gap-2">
             <span>Seção mínima de TUE, mm² (hipótese; Tab. 47 pede 2,5)</span>
             <input type="number" step="0.5" min={2.5} value={hipoteses.secaoMinimaTueMm2} onChange={(e) => onChange({ ...hipoteses, secaoMinimaTueMm2: Number(e.target.value) || HIPOTESES_PADRAO.secaoMinimaTueMm2 })} aria-label="Seção mínima de TUE" className={campo} />
+          </label>
+          {/* E4.2: transformador próprio = 7 % da origem (6.2.7.1 b) — hipótese de projeto. */}
+          <label className="flex items-center justify-between gap-2">
+            <span>Instalação com transformador próprio (limite da origem 7 %)</span>
+            <input type="checkbox" checked={hipoteses.origemComTransformador} onChange={(e) => onChange({ ...hipoteses, origemComTransformador: e.target.checked })} aria-label="Instalação com transformador próprio" className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
           </label>
           <label className="flex items-center justify-between gap-2">
             <span>Queda máxima da origem ao pior ponto, % (6.2.7.1)</span>
@@ -257,8 +262,17 @@ export function HipotesesDoPreDimensionamento({
           {demandaInformada && (
             <div className="space-y-1.5 pl-3">
               <label className="flex items-center justify-between gap-2">
-                <span>Fonte da tabela</span>
+                <span>Nome da tabela</span>
                 <input type="text" value={hipoteses.demanda.nome} onChange={(e) => onChange({ ...hipoteses, demanda: { ...hipoteses.demanda, nome: e.target.value } })} aria-label="Fonte da tabela de demanda" className="w-40 rounded border border-slate-300 px-1 py-0.5 text-sm" />
+              </label>
+              {/* E4.2: documento e data — o memorial imprime e manda CONFERIR na norma da concessionária. */}
+              <label className="flex items-center justify-between gap-2">
+                <span>Documento da concessionária (NT, rev.)</span>
+                <input type="text" value={hipoteses.demanda.fonte ?? ''} onChange={(e) => onChange({ ...hipoteses, demanda: { ...hipoteses.demanda, fonte: e.target.value || null } })} placeholder="ex.: NTD-001 rev. 3" aria-label="Documento da tabela de demanda" className="w-40 rounded border border-slate-300 px-1 py-0.5 text-sm" />
+              </label>
+              <label className="flex items-center justify-between gap-2">
+                <span>Data da tabela</span>
+                <input type="date" value={hipoteses.demanda.dataISO ?? ''} onChange={(e) => onChange({ ...hipoteses, demanda: { ...hipoteses.demanda, dataISO: e.target.value || null } })} aria-label="Data da tabela de demanda" className="w-40 rounded border border-slate-300 px-1 py-0.5 text-sm" />
               </label>
               {(['ILUMINACAO', 'TUG', 'FORCA', 'MOTOR'] as const).map((g) => (
                 <label key={g} className="flex items-center justify-between gap-2">

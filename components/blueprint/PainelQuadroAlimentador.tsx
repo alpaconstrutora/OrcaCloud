@@ -177,7 +177,17 @@ export default function PainelQuadroAlimentador({
             {' · geral '}
             {q.disjuntorGeralA != null ? `${q.disjuntorGeralA} A` : '—'}
             {q.quedaTotalMaxPct != null && q.quedaAlimentadorPct != null && (
-              <> · ΔV alimentador {n1(q.quedaAlimentadorPct)} % (total {n1(q.quedaTotalMaxPct)} %)</>
+              <>
+                {' · ΔV alimentador '}
+                {n1(q.quedaAlimentadorPct)} % (total {n1(q.quedaTotalMaxPct)} % / limite {n1(q.limiteQuedaEfetivoPct)} %)
+                {/* E4.2: a cadeia até a origem, quando este quadro é alimentado por outro. */}
+                {q.cadeia.length > 1 && (
+                  <span className="text-slate-500" title="Queda até a origem: a soma dos alimentadores de cada quadro acima deste (6.2.7.1)">
+                    {' · cadeia '}
+                    {q.cadeia.map((e) => `${e.nome} ${e.quedaAlimentadorPct == null ? '—' : n1(e.quedaAlimentadorPct)} %`).join(' + ')}
+                  </span>
+                )}
+              </>
             )}
           </>
         )}

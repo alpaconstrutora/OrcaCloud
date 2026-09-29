@@ -150,7 +150,7 @@ const persistUnits = (u: string[]) => localStorage.setItem(UNITS_KEY, JSON.strin
 type ContractDetailTab =
     | 'overview_resumo' | 'overview_execucao' | 'overview_riscos'
     | 'items' | 'addendums' | 'measurements' | 'financeiro'
-    | 'retention' | 'penalties' | 'evaluation' | 'utility_bills' | 'emissao';
+    | 'penalties' | 'evaluation' | 'utility_bills' | 'emissao';
 
 /**
  * A antiga aba "Visão Geral" empilhava 17 blocos numa tela só — o usuário
@@ -1269,7 +1269,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         { id: 'measurements', label: (contract as any).direction === 'OUTGOING' ? 'Faturamento (M/F)' : 'Medições (M/F)', icon: BarChart3 },
                         { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
                         ...(contract.is_recurring ? [{ id: 'utility_bills', label: 'Faturas de Consumo', icon: BarChart3 }] : []),
-                        { id: 'retention', label: 'Retenção de Garantia', icon: HandCoins },
                         { id: 'penalties', label: 'Penalidades', icon: AlertCircle },
                         { id: 'evaluation', label: 'Avaliação de Desempenho', icon: BarChart3 },
                         { id: 'emissao', label: 'Emissão', icon: FileDown },
@@ -2768,6 +2767,69 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         />
                         )}
 
+                        {/* Retenção de Garantia (Fase 5.2 — CP-08/Cl.18) — era aba
+                            própria; vive aqui desde 2026-09-28, junto das
+                            condições financeiras do contrato. */}
+                        {financeSubTab === 'dados' && (
+                        <div className="space-y-6">
+                            <div className="mb-2">
+                                <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
+                                    <HandCoins className="w-5 h-5 text-amber-500" /> Retenção de Garantia
+                                </h3>
+                                <p className="text-xs font-medium text-gray-400 mt-1">Valores retidos do contrato até liberação (provisória ou definitiva).</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+                                <KpiCard label="RETIDO" value={`R$ ${fmt(retentionLedger?.total_retained ?? 0)}`} icon={<HandCoins className="w-5 h-5" />} color="gray" />
+                                <KpiCard label="LIBERADO" value={`R$ ${fmt(retentionLedger?.total_released ?? 0)}`} icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
+                                <KpiCard label="SALDO RETIDO" value={`R$ ${fmt(retentionLedger?.balance ?? 0)}`} icon={<HandCoins className="w-5 h-5" />} color="amber" />
+                            </div>
+
+                            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                                <div className="p-2 border-b border-gray-100 bg-white flex items-center justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => setReleaseModal(true)}
+                                        disabled={!retentionLedger || retentionLedger.balance <= 0}
+                                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 shrink-0 disabled:opacity-40"
+                                    >
+                                        Liberar Retenção
+                                    </button>
+                                </div>
+                                {retentionReleases.length === 0 ? (
+                                    <div className="text-center py-12">
+                                        <HandCoins className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                        <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma liberação registrada</h3>
+                                        <p className="text-sm text-gray-500">Use "Liberar Retenção" quando houver saldo retido.</p>
+                                    </div>
+                                ) : (
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                <th className="px-6 py-2 border-r border-gray-100 text-left">Tipo</th>
+                                                <th className="px-6 py-2 border-r border-gray-100 text-left">Data</th>
+                                                <th className="px-6 py-2 text-right">Valor</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-200">
+                                            {retentionReleases.map(r => (
+                                                <tr key={r.id} className="hover:bg-blue-50/50 transition-colors">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
+                                                        {RETENTION_RELEASE_KIND_LABELS[r.kind]}
+                                                    </td>
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                                                        {new Date(r.released_at + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                                    </td>
+                                                    <td className="px-6 py-2.5 text-right text-sm font-medium text-gray-800">R$ {fmt(r.amount)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
+                        </div>
+                        )}
+
                         {/* Sub-aba Parcelas: os lançamentos gerados pelo contrato.
                             §18 — a ação de lançar mora na barra de botões §5.3
                             ("Lançar Financeiro"); repetir aqui era o mesmo botão duas vezes. */}
@@ -2885,67 +2947,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     </div>
                 );
             })()}
-
-            {/* Tab: Retenção de Garantia (Fase 5.2 — CP-08/Cl.18) */}
-            {activeTab === 'retention' && contract && (
-                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-                    <div className="mb-2">
-                        <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
-                            <HandCoins className="w-5 h-5 text-amber-500" /> Retenção de Garantia
-                        </h3>
-                        <p className="text-xs font-medium text-gray-400 mt-1">Valores retidos do contrato até liberação (provisória ou definitiva).</p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
-                        <KpiCard label="RETIDO" value={`R$ ${fmt(retentionLedger?.total_retained ?? 0)}`} icon={<HandCoins className="w-5 h-5" />} color="gray" />
-                        <KpiCard label="LIBERADO" value={`R$ ${fmt(retentionLedger?.total_released ?? 0)}`} icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
-                        <KpiCard label="SALDO RETIDO" value={`R$ ${fmt(retentionLedger?.balance ?? 0)}`} icon={<HandCoins className="w-5 h-5" />} color="amber" />
-                    </div>
-
-                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                        <div className="p-2 border-b border-gray-100 bg-white flex items-center justify-end">
-                            <button
-                                type="button"
-                                onClick={() => setReleaseModal(true)}
-                                disabled={!retentionLedger || retentionLedger.balance <= 0}
-                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 shrink-0 disabled:opacity-40"
-                            >
-                                Liberar Retenção
-                            </button>
-                        </div>
-                        {retentionReleases.length === 0 ? (
-                            <div className="text-center py-12">
-                                <HandCoins className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                                <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma liberação registrada</h3>
-                                <p className="text-sm text-gray-500">Use "Liberar Retenção" quando houver saldo retido.</p>
-                            </div>
-                        ) : (
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                        <th className="px-6 py-2 border-r border-gray-100 text-left">Tipo</th>
-                                        <th className="px-6 py-2 border-r border-gray-100 text-left">Data</th>
-                                        <th className="px-6 py-2 text-right">Valor</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200">
-                                    {retentionReleases.map(r => (
-                                        <tr key={r.id} className="hover:bg-blue-50/50 transition-colors">
-                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
-                                                {RETENTION_RELEASE_KIND_LABELS[r.kind]}
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
-                                                {new Date(r.released_at + 'T12:00:00').toLocaleDateString('pt-BR')}
-                                            </td>
-                                            <td className="px-6 py-2.5 text-right text-sm font-medium text-gray-800">R$ {fmt(r.amount)}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        )}
-                    </div>
-                </div>
-            )}
 
             {/* Tab: Penalidades (Fase 5.3 — CP-09/CP-10/Cl.23/Cl.31) */}
             {activeTab === 'penalties' && contract && (() => {

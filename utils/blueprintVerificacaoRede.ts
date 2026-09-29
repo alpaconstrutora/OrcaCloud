@@ -15,6 +15,7 @@
  * chave do nó põe o que está sob o piso do andar no teto do de baixo, mas o
  * tubo é desenhado e lido no andar dele) — mesma regra de `simbolosDasConexoes2D`.
  */
+import { ROTULO_DA_LIMPEZA, ROTULO_DO_EXTRAVASOR } from './blueprintPecasDaCaixa';
 import type { BlueprintModel, DisciplinaDeRede, ObjectId } from './blueprintKernel';
 import { conexoesDerivadas } from './blueprintKernel';
 import { verificarDnDoEsgoto } from './blueprintEsgotoAutomatico';
@@ -50,6 +51,8 @@ export function marcasDeVerificacao(model: BlueprintModel, levelId: ObjectId | n
   for (const p of conexoesDerivadas(model).pontasAbertas) {
     const t = trechoPorId.get(p.trechoId);
     if (!t) continue;
+    // E4.2: extravasor e limpeza da caixa d'água descarregam LIVRES — as duas pontas são de propósito.
+    if (t.rotulo === ROTULO_DO_EXTRAVASOR || t.rotulo === ROTULO_DA_LIMPEZA) continue;
     // A saída da ventilação (a ponta de CIMA do trecho "Ventilação") é aberta de propósito.
     if (t.rotulo === 'Ventilação') {
       const pontaDeCima = t.cotaAMm >= t.cotaBMm ? t.a : t.b;

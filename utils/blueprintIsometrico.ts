@@ -301,6 +301,17 @@ export function pegadaDaCaixa2D(t: Terminal): { forma: 'PRISMA' | 'CILINDRO'; la
   return { forma: cilindro ? 'CILINDRO' : 'PRISMA', larguraMm: largura, profundidadeMm: cilindro ? largura : (t.profundidadeMm ?? largura) };
 }
 
+/**
+ * A pegada em planta do RESERVATÓRIO (E4.2, 29/09/2026): prisma pelas medidas
+ * (largura × profundidade), cilindro pelo diâmetro (= largura). `null` se não é
+ * reservatório ou não tem medida.
+ */
+export function pegadaDoReservatorio2D(t: Terminal): { forma: 'PRISMA' | 'CILINDRO'; larguraMm: number; profundidadeMm: number } | null {
+  if (t.tipoHidraulico !== 'RESERVATORIO' || !t.larguraMm) return null;
+  const cilindro = t.formaReservatorio === 'CILINDRO';
+  return { forma: cilindro ? 'CILINDRO' : 'PRISMA', larguraMm: t.larguraMm, profundidadeMm: cilindro ? t.larguraMm : (t.profundidadeMm ?? t.larguraMm) };
+}
+
 // ─── A caixa d'água sobre a laje ─────────────────────────────────────────────
 
 /**

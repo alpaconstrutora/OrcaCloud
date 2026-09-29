@@ -330,7 +330,15 @@
  * a perda de carga (E1.1 do roadmap hidrossanitário). Omitido quando ausente —
  * o padrão da rede não se grava. Provado antes do bump.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.63.0';
+/**
+ * ─── 0.63.0 → 0.64.0 (29/09/2026) — PAPEL E FORMA DO RESERVATÓRIO ─────────────
+ *
+ * `Terminal.papelReservatorio` (SUPERIOR/INFERIOR) e `Terminal.formaReservatorio`
+ * (PRISMA/CILINDRO), só em RESERVATORIO (E4.2 do roadmap hidrossanitário). O
+ * INFERIOR não distribui; o CILINDRO tem volume e 3D de cilindro. Omitidos
+ * quando ausentes. Provado antes do bump.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.64.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

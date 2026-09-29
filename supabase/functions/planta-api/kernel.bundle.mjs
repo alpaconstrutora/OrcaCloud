@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.63.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.64.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -2057,6 +2057,9 @@ function projetar(model) {
       interruptor: t.interruptor ?? void 0,
       tipoHidraulico: t.tipoHidraulico ?? void 0,
       volumeL: t.volumeL ?? void 0,
+      // E4.2 (0.64.0): só quando declarados — SUPERIOR e PRISMA não se gravam.
+      papelReservatorio: t.papelReservatorio ?? void 0,
+      formaReservatorio: t.formaReservatorio ?? void 0,
       larguraMm: t.larguraMm ?? void 0,
       alturaMm: t.alturaMm ?? void 0,
       profundidadeMm: t.profundidadeMm ?? void 0,
@@ -2758,6 +2761,8 @@ function modelFromCanonicalPayload(payload) {
       interruptor: t.interruptor ?? null,
       tipoHidraulico: t.tipoHidraulico ?? null,
       volumeL: t.volumeL ?? null,
+      papelReservatorio: t.papelReservatorio ?? null,
+      formaReservatorio: t.formaReservatorio ?? null,
       larguraMm: t.larguraMm ?? null,
       alturaMm: t.alturaMm ?? null,
       profundidadeMm: t.profundidadeMm ?? null,
@@ -5403,6 +5408,9 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     cotaMm: { AGUA_FRIA: 1100 },
     dnMinimoMm: { AGUA_FRIA: 32 },
     pesoNbr5626: 32,
+    // A válvula de descarga precisa de mais pressão que a regra geral: 20 kPa
+    // (2 mca) é o mínimo usual dos fabricantes para a válvula de baixa pressão.
+    pressaoMinimaKpa: 20,
     ajuda: "V\xE1lvula de descarga da bacia SEM caixa acoplada: a 1,10 m, sub-ramal DN 32. Peso 32 na NBR 5626 \u2014 \xE9 ela que costuma mandar no di\xE2metro do ramal. O esgoto \xE9 o da bacia (vaso sanit\xE1rio)."
   },
   PONTO_ESPERA: {

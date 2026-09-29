@@ -89,6 +89,8 @@ export function volumeComercialL(necessarioL: number): number {
 /** O volume declarado da caixa: o comercial, senão o bruto das medidas; `null` se nenhum. */
 export function volumeDoReservatorioL(t: Terminal): number | null {
   if (t.volumeL != null && t.volumeL > 0) return t.volumeL;
+  // E4.2: o cilindro pelo diâmetro (= largura).
+  if (t.formaReservatorio === 'CILINDRO' && t.larguraMm && t.alturaMm) return Math.round((Math.PI * (t.larguraMm / 2) ** 2 * t.alturaMm) / 1e6);
   if (t.larguraMm && t.profundidadeMm && t.alturaMm) return Math.round((t.larguraMm * t.profundidadeMm * t.alturaMm) / 1e6);
   return null;
 }
@@ -120,9 +122,13 @@ const litros = (v: number) => `${Math.round(v).toLocaleString('pt-BR')} L`;
 
 /**
  * O dimensionamento da reservação. `inferiores` são os reservatórios de papel
- * INFERIOR (E4.2); até lá, nenhum.
+ * INFERIOR (E4.2) — por padrão, os que o desenho marca assim.
  */
-export function dimensionarReservacao(model: BlueprintModel, hip: HipotesesDeReservatorio, inferiores: ReadonlySet<string> = new Set()): DimensionamentoDaReservacao {
+export function dimensionarReservacao(
+  model: BlueprintModel,
+  hip: HipotesesDeReservatorio,
+  inferiores: ReadonlySet<string> = new Set((model.terminais ?? []).filter((t) => t.tipoHidraulico === 'RESERVATORIO' && t.papelReservatorio === 'INFERIOR').map((t) => t.id)),
+): DimensionamentoDaReservacao {
   const populacao = populacaoDoModelo(model, hip);
   const consumoDiarioL = populacao.pessoas * hip.perCapitaLDia;
   const volumeNecessarioL = consumoDiarioL * hip.diasDeReserva;

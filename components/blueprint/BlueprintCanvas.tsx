@@ -139,7 +139,7 @@ import {
   LARGURA_MINIMA_DO_DETALHE_PX,
   anguloDeLeitura,
   faixaDoTubo2D,
-  pegadaDaCaixa2D,
+  pegadaDaCaixa2D, pegadaDoReservatorio2D,
   rotuloDoTrecho2D,
   simbolosDasConexoes2D,
 } from '../../utils/blueprintIsometrico';
@@ -6190,12 +6190,17 @@ export default function BlueprintCanvas({
       // CI e CG: a parede da caixa e a TAMPA dentro, com a sigla; CS e ralo
       // sifonado: o corpo redondo e a GRELHA. Só com zoom para isso (meia
       // largura >= 6 px); longe, o símbolo cheio de sempre.
-      const pegada = pegadaDaCaixa2D(t);
+      // E4.2: o reservatório entra no mesmo desenho — prisma ou cilindro, com volume e papel.
+      const pegada = pegadaDaCaixa2D(t) ?? pegadaDoReservatorio2D(t);
       const caixaDetalhada = !!pegada && emTela(Math.min(pegada.larguraMm, pegada.profundidadeMm) / 2) >= 6;
       if (pegada && caixaDetalhada) {
         const contorno = selecionado ? COR_SELECIONADA : COR_DO_CONTORNO_DA_PECA;
         const centro = paraTela(t.at);
-        const sigla = t.tipoHidraulico ? SIGLA_DO_PONTO_HIDRAULICO[t.tipoHidraulico] : '';
+        const sigla = !t.tipoHidraulico
+          ? ''
+          : t.tipoHidraulico === 'RESERVATORIO'
+            ? `${SIGLA_DO_PONTO_HIDRAULICO[t.tipoHidraulico]}${t.papelReservatorio === 'INFERIOR' ? ' inf.' : ''}${t.volumeL != null ? ` ${t.volumeL} L` : ''}`
+            : SIGLA_DO_PONTO_HIDRAULICO[t.tipoHidraulico];
         ctx.save();
         ctx.setLineDash([]);
         if (pegada.forma === 'PRISMA') {
@@ -6232,14 +6237,23 @@ export default function BlueprintCanvas({
           ctx.strokeStyle = contorno;
           ctx.lineWidth = selecionado ? 2.5 : 1.5;
           ctx.stroke();
-          // A grelha: disco interno com a malha, recortada nele.
+          // A grelha: disco interno com a malha, recortada nele. A CAIXA D'ÁGUA
+          // cilíndrica (E4.2) tem TAMPA, não grelha: o disco liso e o nome dentro.
           const ri = r * 0.72;
+          const reservatorio = t.tipoHidraulico === 'RESERVATORIO';
           ctx.beginPath();
-          ctx.arc(centro.x, centro.y, ri, 0, Math.PI * 2);
+          ctx.arc(centro.x, centro.y, reservatorio ? r - Math.max(emTela(60), 1) : ri, 0, Math.PI * 2);
           ctx.fillStyle = '#d4d4d8';
           ctx.fill();
           ctx.lineWidth = 1;
           ctx.stroke();
+          if (reservatorio) {
+            ctx.fillStyle = '#27272a';
+            ctx.font = `bold ${Math.round(11 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(sigla, centro.x, centro.y);
+          }
           ctx.clip();
           ctx.strokeStyle = '#71717a';
           ctx.beginPath();
@@ -6250,10 +6264,10 @@ export default function BlueprintCanvas({
             ctx.moveTo(centro.x + d, centro.y - ri);
             ctx.lineTo(centro.x + d, centro.y + ri);
           }
-          ctx.stroke();
+          if (!reservatorio) ctx.stroke();
         }
         ctx.restore();
-        if (pegada.forma === 'CILINDRO') {
+        if (pegada.forma === 'CILINDRO' && t.tipoHidraulico !== 'RESERVATORIO') {
           // A sigla da CS/ralo vai por fora: dentro, a grelha não deixa ler.
           const r = emTela(pegada.larguraMm / 2);
           ctx.fillStyle = COR_DA_DISCIPLINA[t.disciplina];

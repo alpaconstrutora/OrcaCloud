@@ -165,7 +165,8 @@ const HIDRAULICA_DA_ORIGEM: Record<'RESERVATORIO' | 'AQUECEDOR', DisciplinaDeRed
 /** As origens do desenho: caixas d'água (água fria) e aquecedores (água quente). */
 export function origensDeAgua(model: BlueprintModel): { origem: Terminal; disciplina: DisciplinaDeRede }[] {
   return (model.terminais ?? [])
-    .filter((t) => (t.tipoHidraulico === 'RESERVATORIO' && t.disciplina === 'AGUA_FRIA') || (t.tipoHidraulico === 'AQUECEDOR' && t.disciplina === 'AGUA_QUENTE'))
+    // E4.2: o reservatório INFERIOR não distribui — recebe o alimentador e é recalcado ao superior.
+    .filter((t) => (t.tipoHidraulico === 'RESERVATORIO' && t.disciplina === 'AGUA_FRIA' && t.papelReservatorio !== 'INFERIOR') || (t.tipoHidraulico === 'AQUECEDOR' && t.disciplina === 'AGUA_QUENTE'))
     .map((t) => ({ origem: t, disciplina: HIDRAULICA_DA_ORIGEM[t.tipoHidraulico as 'RESERVATORIO' | 'AQUECEDOR'] }));
 }
 

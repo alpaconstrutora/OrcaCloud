@@ -1187,6 +1187,8 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
             // CI/CG, grelha na CS/ralo) — ver `blueprintIsometrico.corpoDaCaixa3D`.
             corpo: corpoDaCaixa3D(t, nivel?.elevationMm ?? 0),
             tamanho: c.tamanho,
+            // E4.2: a caixa d'água cilíndrica sai cilindro (diâmetro = largura).
+            cilindro: t.tipoHidraulico === 'RESERVATORIO' && t.formaReservatorio === 'CILINDRO',
             // ⚠️ O sinal do giro vem de `rotacaoY3D`, no módulo puro: aqui é
             // `@ts-nocheck` e um sinal trocado passaria sem acusação, com o
             // sintoma de uma peça virada para o lado errado — plausível demais.
@@ -1622,7 +1624,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
             castShadow
             {...cliqueDe(t.id)}
           >
-            <boxGeometry args={t.tamanho} />
+            {t.cilindro ? <cylinderGeometry args={[t.tamanho[0] / 2, t.tamanho[0] / 2, t.tamanho[1], 32]} /> : <boxGeometry args={t.tamanho} />}
             <meshStandardMaterial
               color={selecionados?.has(t.id) ? COR_SELECIONADA : (coresPorUid?.get(t.uid) ?? t.cor)}
               roughness={0.4}

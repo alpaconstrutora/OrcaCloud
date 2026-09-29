@@ -62,6 +62,8 @@ import {
   type TipoDeInterruptor,
   type TipoDePontoHidraulico,
   type MaterialDeTubo,
+  type PapelDoReservatorio,
+  type FormaDoReservatorio,
   type LigacaoDoCircuito,
   type FaseDoCircuito,
   type TipoDeAmbiente,
@@ -824,6 +826,9 @@ function projetar(model: BlueprintModel): {
       interruptor: t.interruptor ?? undefined,
       tipoHidraulico: t.tipoHidraulico ?? undefined,
       volumeL: t.volumeL ?? undefined,
+      // E4.2 (0.64.0): só quando declarados — SUPERIOR e PRISMA não se gravam.
+      papelReservatorio: t.papelReservatorio ?? undefined,
+      formaReservatorio: t.formaReservatorio ?? undefined,
       larguraMm: t.larguraMm ?? undefined,
       alturaMm: t.alturaMm ?? undefined,
       profundidadeMm: t.profundidadeMm ?? undefined,
@@ -1486,6 +1491,9 @@ export interface CanonicalPayload {
     tipoHidraulico?: string;
     /** Volume do reservatório em litros. Ausente sob kernel < 0.32.0 e fora de RESERVATORIO. */
     volumeL?: number;
+    /** Papel e forma do reservatório. Ausentes sob kernel < 0.64.0 e quando não declarados. */
+    papelReservatorio?: string;
+    formaReservatorio?: string;
     /** Medidas em mm. Ausentes sob kernel < 0.20.0 e quando não declaradas. */
     larguraMm?: number;
     alturaMm?: number;
@@ -2176,6 +2184,8 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       interruptor: (t.interruptor as TipoDeInterruptor | undefined) ?? null,
       tipoHidraulico: (t.tipoHidraulico as TipoDePontoHidraulico | undefined) ?? null,
       volumeL: t.volumeL ?? null,
+      papelReservatorio: (t.papelReservatorio as PapelDoReservatorio | undefined) ?? null,
+      formaReservatorio: (t.formaReservatorio as FormaDoReservatorio | undefined) ?? null,
       larguraMm: t.larguraMm ?? null,
       alturaMm: t.alturaMm ?? null,
       profundidadeMm: t.profundidadeMm ?? null,

@@ -214,6 +214,7 @@ import { blocosDasLinhas, linhasDoMemorial, memorialDeCalculoHidro, memorialDesc
 import { hashDaBaseHidro, memorialExecutivoHidro, verificacoesHidro } from '../../utils/blueprintHidroExecutivo';
 import PainelHidroExecutivo from './PainelHidroExecutivo';
 import PainelReservacao from './PainelReservacao';
+import { planejarPecasDaCaixa } from '../../utils/blueprintPecasDaCaixa';
 import { dimensionarReservacao } from '../../utils/blueprintReservacao';
 import { useBlueprintHidro } from '../../hooks/useBlueprintHidro';
 import { artefatosDoMemorial } from '../../services/blueprintMemorialHidroService';
@@ -8102,6 +8103,20 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         comAMesmaAssinatura={
           terminalSel
             ? (editor.model.terminais ?? []).filter((t) => assinaturaDoTipo(propriedadesDoTerminal(t)) === assinaturaDoTipo(propriedadesDoTerminal(terminalSel))).length
+            : undefined
+        }
+        pecasDaCaixa={
+          terminalSel?.tipoHidraulico === 'RESERVATORIO'
+            ? (() => {
+                // E4.2: boia, extravasor e limpeza — um lote, sugeridos, um Ctrl+Z.
+                const plano = planejarPecasDaCaixa(editor.model, terminalSel);
+                return {
+                  resumo: plano.resumo,
+                  onLancar: () => {
+                    if (plano.comandos.length) editor.runBatch(plano.comandos);
+                  },
+                };
+              })()
             : undefined
         }
         onTerminal={(campos) => {

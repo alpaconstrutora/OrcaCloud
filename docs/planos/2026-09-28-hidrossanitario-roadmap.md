@@ -585,3 +585,28 @@ vertical cobre o traçado das colunas) e anticolisão dos rótulos na planta.
   série comercial, volume declarado × medidas, as cinco situações, dias e 60/40, coluna antiga) + 2
   do painel; testes da E3 atualizados (a caixa sem volume agora é pendência). Suíte: 533 arquivos /
   5.998 testes.
+
+### E4.2 — Papel, forma e peças da caixa d'água (29/09/2026) · kernel 0.64.0
+
+- **Kernel 0.64.0**: `Terminal.papelReservatorio` (SUPERIOR/INFERIOR) e
+  `Terminal.formaReservatorio` (PRISMA/CILINDRO), só em RESERVATORIO (invariante
+  `BAD_RESERVOIR`), por `AddTerminal`/`SetTerminalProps` (`null` volta ao padrão; deixar de ser
+  reservatório leva os dois junto); omitidos do canônico quando ausentes. Ritual: com a string em
+  0.63.0 e os campos no lugar a suíte inteira passou (6.007 testes); depois do bump, só os seis
+  hashes dos goldens (contagens intactas) e os 12 pins de versão. `kernel.bundle.mjs` da
+  `planta-api` regerado e redeployado.
+- Em uso: o INFERIOR sai de `origensDeAgua` (não distribui — recebe o alimentador e é recalcado);
+  a reservação divide 60/40 quando há INFERIOR; o CILINDRO tem volume π·(d/2)²·h, pegada redonda
+  (`pegadaDoReservatorio2D`) no canvas (tampa lisa e o nome dentro — não a grelha da caixa
+  sifonada), na prancha e cilindro no 3D. Canvas: a caixa d'água passou ao desenho detalhado, com
+  "CX inf." e o volume. Painel da peça: Papel e Forma. Memorial: coluna Papel e ø × h no cilindro.
+- `utils/blueprintPecasDaCaixa.ts`: **torneira de boia** (10 cm abaixo do topo), **extravasor**
+  (um DN acima da alimentação — 32 para 25) e **limpeza** no fundo com registro de gaveta, do lado
+  +x da caixa (girado com ela), sugeridos, num lote; idempotente. Extravasor e limpeza descarregam
+  livres: a verificação não os acusa de ponta aberta, e eles não entram na rede que a caixa
+  distribui. Painel da caixa selecionada: "Falta: … — Lançar".
+- **Pronto quando** ✔: 9 testes em `blueprintReservatorioPapelForma.test.ts` (comandos, invariante,
+  canônico omitido e ida e volta, INFERIOR fora das origens, cilindro 905 L, 60/40, DN do
+  extravasor, as três peças e a idempotência, a caixa girada 90° e nenhuma ponta aberta). Harness
+  `docs/spikes/esgoto-isometrico?cena=agua&cilindro=1&pecas=1` conferido em 2D e 3D. Suíte: 534
+  arquivos / 6.007 testes.

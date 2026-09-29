@@ -194,6 +194,13 @@
  *   tem instalação, então nenhuma delas ganha chave — só a versão embutida no
  *   payload mudou.
  *
+ *   0.63.0 → 0.64.0 (29/09/2026): E4.2 do roadmap hidrossanitário — o
+ *   reservatório ganhou `papelReservatorio` (SUPERIOR/INFERIOR) e
+ *   `formaReservatorio` (PRISMA/CILINDRO), omitidos quando ausentes. Mesma
+ *   prova, ANTES de tocar num hash: com a string em 0.63.0 e os campos no
+ *   lugar, a suíte inteira (6.007 testes) passou; depois do bump as seis falhas
+ *   foram todas de hash, contagens intactas.
+ *
  *   0.62.0 → 0.63.0 (28/09/2026): E1.1 do roadmap hidrossanitário — o trecho
  *   ganhou `material` (PVC soldável, CPVC, PPR, cobre), omitido do canônico
  *   quando ausente. Mesma prova, refeita ANTES de tocar num hash: com a string
@@ -708,17 +715,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: 'd64a1f9ba23da3878af48c3f5564d479ce45f29391a60b956495eb44744cfa9c',
+    hash: 'a98f8b2a61354fa1a87c41f4065bf1090c0378ca90b74390fc2c1e86f94f65c2',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'ae31d6f55f7a5240c5e3105943cff6c80f8528b26297a61a5ffd16a1adc54092',
+    hash: 'd751d9eb31e2ec65d86723109f47fb0bec35f679e83bb173f3b966d3beb71c1d',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '50b74603a802558085b4478567f902a226bae2cff4e00d36d0dcd0352ad482dc',
+    hash: 'b1a26230a306a6b56f807604722cbd58ab4a22dc110543b59e2a7a062dcf630d',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -726,7 +733,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '5896717a5bac1a220205d62b7fd4388cc96c0ad7d1fe4317000383f45ad1a084',
+    hash: 'c9d284cacd9e6885fbb7ca285a2847d366b41c01a74ebffdc0982299e7f4174a',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -736,7 +743,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '1d4c1d76d6bd2c0888c4b04df0330af1f23ddc1298d1663982cb7c1ed7dcc10e',
+    hash: '008c39ac18da83a44faa19eb7d8162b942941a5247d83ed441ab6d922a2fde85',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -747,7 +754,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: 'fb930d47997e9aa22f0e49c8eb43edac525ddea87eee5f3b09e36ed419089039',
+    hash: '512f5ac4ebd7b69269e82de7df5ebdce4fd9bf89c6aa9754d2569f6d3e2987e3',
   },
 };
 

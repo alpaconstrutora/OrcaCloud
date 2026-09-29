@@ -84,6 +84,9 @@ interface Props {
     tipoHidraulico?: TipoDePontoHidraulico | null;
     /** Volume do reservatório em litros. */
     volumeL?: number | null;
+    /** Papel e forma do reservatório (E4.2). `null` = SUPERIOR / PRISMA. */
+    papelReservatorio?: 'SUPERIOR' | 'INFERIOR' | null;
+    formaReservatorio?: 'PRISMA' | 'CILINDRO' | null;
     larguraMm?: number | null;
     alturaMm?: number | null;
     profundidadeMm?: number | null;
@@ -93,6 +96,11 @@ interface Props {
   circuitos?: { id: string; nome: string; quadroNome: string }[];
   /** TIPO × INSTÂNCIA (E1.1): copia as propriedades de um tipo salvo para este ponto. */
   onAplicarTipoDoTerminal?: (propriedades: PropriedadesDeTerminal) => void;
+  /**
+   * E4.2: com uma caixa d'água selecionada, o que falta lançar junto dela (boia,
+   * extravasor, limpeza) e o botão que lança. `resumo` vazio = já tem tudo.
+   */
+  pecasDaCaixa?: { resumo: string[]; onLancar: () => void };
   comAMesmaAssinatura?: number;
   /**
    * Exclui a peça selecionada — como os painéis de parede, estrutura e escada
@@ -121,6 +129,7 @@ export default function PainelTrechoSelecionado({
   trecho,
   terminal,
   onAplicarTipoDoTerminal,
+  pecasDaCaixa,
   comAMesmaAssinatura,
   onTrecho,
   onTerminal,
@@ -247,6 +256,53 @@ export default function PainelTrechoSelecionado({
                     className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs tabular-nums"
                   />
                 </label>
+              )}
+              {terminal.tipoHidraulico === 'RESERVATORIO' && pecasDaCaixa && (
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-600" data-testid="pecas-da-caixa">
+                  {pecasDaCaixa.resumo.length === 0 ? (
+                    'Boia, extravasor e limpeza já lançados.'
+                  ) : (
+                    <>
+                      <span>Falta: {pecasDaCaixa.resumo.join(', ')}.</span>
+                      <button
+                        type="button"
+                        onClick={pecasDaCaixa.onLancar}
+                        className="ml-1 font-medium text-blue-700 hover:underline"
+                      >
+                        Lançar
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+              {terminal.tipoHidraulico === 'RESERVATORIO' && (
+                <div className="grid grid-cols-2 gap-2">
+                  {/* E4.2: o papel (quem distribui) e a forma (o 3D e o volume). */}
+                  <label className="block">
+                    <span className="text-[11px] font-medium text-slate-600">Papel</span>
+                    <select
+                      value={terminal.papelReservatorio ?? 'SUPERIOR'}
+                      onChange={(e) => onTerminal({ papelReservatorio: e.target.value === 'SUPERIOR' ? null : (e.target.value as 'INFERIOR') })}
+                      aria-label="Papel do reservatório"
+                      className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                    >
+                      <option value="SUPERIOR">Superior (distribui)</option>
+                      <option value="INFERIOR">Inferior (recalcado)</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-[11px] font-medium text-slate-600">Forma</span>
+                    <select
+                      value={terminal.formaReservatorio ?? 'PRISMA'}
+                      onChange={(e) => onTerminal({ formaReservatorio: e.target.value === 'PRISMA' ? null : (e.target.value as 'CILINDRO') })}
+                      aria-label="Forma do reservatório"
+                      className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                    >
+                      <option value="PRISMA">Prismática</option>
+                      <option value="CILINDRO">Cilíndrica</option>
+                    </select>
+                  </label>
+                </div>
               )}
               {terminal.tipoHidraulico && (
                 <p className="text-[11px] text-slate-500" data-testid="ficha-hidraulica">

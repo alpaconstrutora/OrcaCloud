@@ -21,7 +21,7 @@ import type { Desenhista } from './blueprintExport';
 import { COR_DA_DISCIPLINA, ROTULO_DA_DISCIPLINA } from './blueprintRede';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { FICHA_DO_MATERIAL } from './blueprintHidraulicaPressao';
-import { COR_DO_CONTORNO_DA_PECA, corDaConexao, pegadaDaCaixa2D, rotuloDoTrecho2D, simbolosDasConexoes2D } from './blueprintIsometrico';
+import { COR_DO_CONTORNO_DA_PECA, corDaConexao, pegadaDaCaixa2D, pegadaDoReservatorio2D, rotuloDoTrecho2D, simbolosDasConexoes2D } from './blueprintIsometrico';
 
 export type RedeDaPrancha = 'AGUA' | 'ESGOTO';
 type P = { x: number; y: number };
@@ -212,7 +212,7 @@ export function desenharHidrossanitaria(
     const c = { x: px(t.at.x), y: py(t.at.y) };
     const ficha = FICHA_DO_PONTO_HIDRAULICO[t.tipoHidraulico];
     // Caixa de esgoto pela ficha; reservatório (e o que mais tiver medida) pela medida gravada.
-    const pegada = pegadaDaCaixa2D(t) ?? (t.larguraMm && t.profundidadeMm ? { forma: 'PRISMA' as const, larguraMm: t.larguraMm, profundidadeMm: t.profundidadeMm } : null);
+    const pegada = pegadaDaCaixa2D(t) ?? pegadaDoReservatorio2D(t) ?? (t.larguraMm && t.profundidadeMm ? { forma: 'PRISMA' as const, larguraMm: t.larguraMm, profundidadeMm: t.profundidadeMm } : null);
     if (pegada) {
       const l = pegada.larguraMm / denominador;
       const p = pegada.profundidadeMm / denominador;

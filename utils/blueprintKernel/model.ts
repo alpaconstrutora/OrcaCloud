@@ -2630,6 +2630,13 @@ export const TIPOS_DE_PONTO_HIDRAULICO = [
 
 export type TipoDePontoHidraulico = (typeof TIPOS_DE_PONTO_HIDRAULICO)[number];
 
+/** O papel do reservatório (E4.2): quem distribui e quem é recalcado. */
+export const PAPEIS_DO_RESERVATORIO = ['SUPERIOR', 'INFERIOR'] as const;
+export type PapelDoReservatorio = (typeof PAPEIS_DO_RESERVATORIO)[number];
+/** A forma do reservatório (E4.2). */
+export const FORMAS_DO_RESERVATORIO = ['PRISMA', 'CILINDRO'] as const;
+export type FormaDoReservatorio = (typeof FORMAS_DO_RESERVATORIO)[number];
+
 const AF_AQ: DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE'];
 const AF_AQ_ESG: DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO'];
 const ESG: DisciplinaDeRede[] = ['ESGOTO'];
@@ -2748,6 +2755,18 @@ export interface Terminal {
    * o volume é o que dimensiona a reserva. Omitido no canônico quando ausente.
    */
   volumeL?: number | null;
+  /**
+   * O PAPEL do reservatório (E4.2, 29/09/2026) — só em `RESERVATORIO`. O
+   * SUPERIOR distribui (é a origem da água fria); o INFERIOR recebe o
+   * alimentador e é recalcado ao superior. Ausente = SUPERIOR (o de sempre);
+   * omitido do canônico quando ausente.
+   */
+  papelReservatorio?: PapelDoReservatorio | null;
+  /**
+   * A FORMA do reservatório (E4.2) — só em `RESERVATORIO`. PRISMA usa largura ×
+   * profundidade × altura; CILINDRO, o diâmetro = largura. Ausente = PRISMA.
+   */
+  formaReservatorio?: FormaDoReservatorio | null;
   /**
    * O ponto foi GERADO pelo sistema e ainda não foi tocado por ninguém.
    *
@@ -5363,6 +5382,18 @@ export function assertModelInvariants(model: BlueprintModel): void {
       }
       if (!Number.isInteger(t.volumeL) || t.volumeL <= 0) {
         throw new KernelError('BAD_VOLUME', `Volume inválido em ${t.id}: ${t.volumeL}`);
+      }
+    }
+    // Papel e forma (E4.2): só no reservatório, e só do vocabulário.
+    if (t.papelReservatorio != null || t.formaReservatorio != null) {
+      if (t.tipoHidraulico !== 'RESERVATORIO') {
+        throw new KernelError('BAD_RESERVOIR', `Terminal ${t.id} não é reservatório e não pode ter papel nem forma`);
+      }
+      if (t.papelReservatorio != null && !(PAPEIS_DO_RESERVATORIO as readonly string[]).includes(t.papelReservatorio)) {
+        throw new KernelError('BAD_RESERVOIR', `Papel de reservatório inválido em ${t.id}: ${t.papelReservatorio}`);
+      }
+      if (t.formaReservatorio != null && !(FORMAS_DO_RESERVATORIO as readonly string[]).includes(t.formaReservatorio)) {
+        throw new KernelError('BAD_RESERVOIR', `Forma de reservatório inválida em ${t.id}: ${t.formaReservatorio}`);
       }
     }
   }

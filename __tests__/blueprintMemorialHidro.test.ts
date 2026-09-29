@@ -91,7 +91,8 @@ describe('E3.1 — memorial de cálculo', () => {
     const comMedidas = applyCommand(m, { type: 'SetTerminalProps', terminalId: cx.id, larguraMm: 1200, profundidadeMm: 1000, alturaMm: 800 }).model;
     const b = memorialDeCalculoHidro(comMedidas, HIPOTESES_HIDRO_PADRAO, ctx);
     const r = tabelas(b).find((t) => t.cabecalho[0] === 'Reservatório')!;
-    expect(r.linhas[0][3]).toBe('960 (bruto)');
+    expect(r.linhas[0][4]).toBe('960 (bruto)');
+    expect(r.linhas[0][1]).toBe('Superior');
     const pop = tabelas(b).find((t) => t.cabecalho[0] === 'Ambiente')!;
     expect(pop.linhas).toEqual([['Quarto', 'Dormitório', '2'], ['Quarto', 'Dormitório', '2'], ['Total contado', '', '4']]);
     const grandezas = tabelas(b).find((t) => t.cabecalho[0] === 'Grandeza')!;

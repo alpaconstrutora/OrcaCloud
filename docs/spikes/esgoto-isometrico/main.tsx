@@ -22,6 +22,7 @@ import BlueprintCanvas from '../../../components/blueprint/BlueprintCanvas';
 import { applyBatch, applyCommand, conexoesDerivadas, emptyModel, point, recomputeSpaces, type Command, type TipoDePontoHidraulico } from '../../../utils/blueprintKernel';
 import { planejarEsgoto } from '../../../utils/blueprintEsgotoAutomatico';
 import { planejarAgua } from '../../../utils/blueprintAguaAutomatica';
+import { planejarPecasDaCaixa } from '../../../utils/blueprintPecasDaCaixa';
 import { comAjusteDePressao, pressoesDoModelo } from '../../../utils/blueprintPressaoDaRede';
 
 const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
@@ -48,6 +49,9 @@ function salaDaAgua() {
   s = applyCommand(s, { type: 'AddStructural', levelId: t, kind: 'LAJE', pontos: [point(0, 0), point(3000, 0), point(3000, 5000), point(0, 5000)], alturaMm: 100, baseMm: 2800, rotulo: 'L1' } as Command).model;
   // O menu grava as medidas da ficha num segundo comando (`AddTerminal` não as recebe).
   s = applyCommand(s, { type: 'SetTerminalProps', terminalId: s.terminais![0].id, larguraMm: 1200, profundidadeMm: 1200, alturaMm: 800 } as Command).model;
+  // E4.2: `?cilindro=1` — a caixa cilíndrica; `?pecas=1` — boia, extravasor e limpeza lançados.
+  if (params.get('cilindro') === '1') s = applyCommand(s, { type: 'SetTerminalProps', terminalId: s.terminais![0].id, formaReservatorio: 'CILINDRO' } as Command).model;
+  if (params.get('pecas') === '1') s = applyBatch(s, planejarPecasDaCaixa(s, s.terminais![0]).comandos).model;
   s = recomputeSpaces(s);
   // E1.4: o plano já sai com o DN ajustado para a pressão (`?semAjuste=1` mostra só a velocidade).
   const plano = planejarAgua(s, s.terminais![0]);

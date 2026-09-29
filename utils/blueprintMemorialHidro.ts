@@ -241,11 +241,16 @@ export function memorialDeCalculoHidro(model: BlueprintModel, hip: HipotesesHidr
     if (caixas.length) {
       B.push({
         tipo: 'tabela',
-        cabecalho: ['Reservatório', 'Pav.', 'Dimensões (m)', 'Volume (L)', 'Cota do fundo'],
+        cabecalho: ['Reservatório', 'Papel', 'Pav.', 'Dimensões (m)', 'Volume (L)', 'Cota do fundo'],
         linhas: caixas.map((t, i) => [
           `R${i + 1}`,
+          t.papelReservatorio === 'INFERIOR' ? 'Inferior' : 'Superior',
           nivel(t.levelId),
-          t.larguraMm && t.profundidadeMm && t.alturaMm ? `${nBr(t.larguraMm / 1000)} × ${nBr(t.profundidadeMm / 1000)} × ${nBr(t.alturaMm / 1000)}` : '—',
+          t.formaReservatorio === 'CILINDRO' && t.larguraMm && t.alturaMm
+            ? `ø ${nBr(t.larguraMm / 1000)} × ${nBr(t.alturaMm / 1000)}`
+            : t.larguraMm && t.profundidadeMm && t.alturaMm
+              ? `${nBr(t.larguraMm / 1000)} × ${nBr(t.profundidadeMm / 1000)} × ${nBr(t.alturaMm / 1000)}`
+              : '—',
           (() => {
             const v = volumeDoReservatorioL(t);
             return v == null ? '—' : `${nBr(v, 0)}${t.volumeL ? '' : ' (bruto)'}`;

@@ -20,6 +20,8 @@ import {
   type TipoDeInterruptor,
   type TipoDePontoHidraulico,
   type MaterialDeTubo,
+  type PapelDoReservatorio,
+  type FormaDoReservatorio,
   type LigacaoDoCircuito,
   type FaseDoCircuito,
   type TipoDeAmbiente,
@@ -690,6 +692,9 @@ export type Command =
       tipoHidraulico?: TipoDePontoHidraulico | null;
       /** Volume em litros — só faz sentido em `RESERVATORIO`; ignorado nos demais. */
       volumeL?: number | null;
+      /** Papel e forma (E4.2) — só em `RESERVATORIO`; ignorados nos demais. */
+      papelReservatorio?: PapelDoReservatorio | null;
+      formaReservatorio?: FormaDoReservatorio | null;
     }
   | {
       type: 'SetTerminalProps';
@@ -712,6 +717,9 @@ export type Command =
       tipoHidraulico?: TipoDePontoHidraulico | null;
       /** Volume em litros (reservatório). `null` apaga. */
       volumeL?: number | null;
+      /** Papel e forma do reservatório (E4.2). `null` volta ao padrão (SUPERIOR, PRISMA). */
+      papelReservatorio?: PapelDoReservatorio | null;
+      formaReservatorio?: FormaDoReservatorio | null;
       /** Medidas em mm. `null` volta ao padrão da família; ausente não mexe. */
       larguraMm?: number | null;
       alturaMm?: number | null;
@@ -3272,6 +3280,8 @@ function aplicarSemHash(
           ...(command.volumeL != null && command.tipoHidraulico === 'RESERVATORIO'
             ? { volumeL: assertIntegerMm(Math.round(command.volumeL), 'volumeL') }
             : {}),
+          ...(command.papelReservatorio != null && command.tipoHidraulico === 'RESERVATORIO' ? { papelReservatorio: command.papelReservatorio } : {}),
+          ...(command.formaReservatorio != null && command.tipoHidraulico === 'RESERVATORIO' ? { formaReservatorio: command.formaReservatorio } : {}),
         },
       ];
       diff.created.push(id);
@@ -3309,9 +3319,13 @@ function aplicarSemHash(
       if (command.volumeL !== undefined) {
         terminal.volumeL = command.volumeL == null ? null : assertIntegerMm(Math.round(command.volumeL), 'volumeL');
       }
-      // Deixar de ser reservatório leva o volume junto — a invariante recusaria.
-      if (terminal.tipoHidraulico !== 'RESERVATORIO' && terminal.volumeL != null) {
-        terminal.volumeL = null;
+      if (command.papelReservatorio !== undefined) terminal.papelReservatorio = command.papelReservatorio ?? null;
+      if (command.formaReservatorio !== undefined) terminal.formaReservatorio = command.formaReservatorio ?? null;
+      // Deixar de ser reservatório leva volume, papel e forma juntos — a invariante recusaria.
+      if (terminal.tipoHidraulico !== 'RESERVATORIO') {
+        if (terminal.volumeL != null) terminal.volumeL = null;
+        if (terminal.papelReservatorio != null) terminal.papelReservatorio = null;
+        if (terminal.formaReservatorio != null) terminal.formaReservatorio = null;
       }
       aplicarMedidas(terminal, command);
       diff.updated.push(terminal.id);

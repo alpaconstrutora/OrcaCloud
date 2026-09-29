@@ -231,4 +231,6 @@ O caminho é o mesmo: autorizar pela **mesma RPC do portal** com a credencial de
   - Serviço `reciboPagamentoPortalService` (+ `rotuloRecibo`, sem puxar o jsPDF para o portal).
   - **Status do parceiro:** `utils/situacaoParcelaParceiro.ts` passa a ser o predicado único de `PartnerPortal` e `PartnerWorkspaceManager`; cancelada vira "Cancelado" e deixa de somar no "pago" do gestor. Status reais das parcelas de contrato em 28/09/2026: só PENDING, CONCILIATED e CANCELLED; a regra nova só muda as 5 canceladas.
   - Testes: `situacaoParcelaParceiro.test.ts`, `pedidoFinanceiroService.test.ts` (recibo_numero) e `PortalFinanceiro.test.tsx` (2 novos).
-- [ ] `npm run ci` + publicação + conferência do usuário nos dois portais
+- [x] `npm run ci` (525 arquivos / 5.932 testes) e, após o rebase, 5.959 testes verdes; publicação com push `ee357200..ee283003`; `conferir-producao.sh` provou o domínio em `ee28300` com "Baixar o recibo deste pagamento" no bundle
+- [x] Conferência do usuário, 29/09/2026: *"consegui visualizar o recebi no portal do parceiro"*. O recibo nº 000001 (parcela de contrato) baixou pelo Portal do Parceiro.
+- [ ] Portal do Fornecedor: coluna publicada e testada, mas ainda sem recibo real para conferir, porque nenhuma parcela de PEDIDO foi baixada com recibo até 29/09/2026. Fica para o primeiro uso.

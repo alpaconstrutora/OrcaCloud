@@ -34,7 +34,7 @@
  *
  * Puro: números entram, números e textos saem.
  */
-import type { BlueprintModel, Circuito, LigacaoDoCircuito, Quadro, Terminal, Trecho } from './blueprintKernel';
+import type { BlueprintModel, Circuito, LigacaoDoCircuito, Quadro, Terminal, TipoDeCondutor, Trecho } from './blueprintKernel';
 import { repartirCondutores, secoesDosCondutores } from './blueprintKernel';
 import { comprimentoDoTrecho } from './blueprintRede';
 
@@ -1085,16 +1085,17 @@ export function ocupacaoDoTrecho(
   hip: HipotesesEletricas = HIPOTESES_PADRAO,
   /**
    * E2.2: a fiação DERIVADA do trecho (`composicaoDaRede(model).get(id).lista`),
-   * quando quem chama já a tem — é ela que vale sem contagem declarada.
+   * quando quem chama já a tem — é ela que vale sem contagem declarada. E2.4:
+   * com o `tipo`, cada condutor entra na SUA seção (neutro 6.2.6.2, PE Tab. 58).
    */
-  derivados?: readonly { circuitoId: string | null }[] | null,
+  derivados?: readonly { circuitoId: string | null; tipo?: TipoDeCondutor }[] | null,
 ): { ocupacao: OcupacaoDoEletroduto | null; motivo: string | null } {
   if (trecho.disciplina !== 'ELETRICA') return { ocupacao: null, motivo: 'não é eletroduto' };
   const ids = trecho.circuitoIds ?? [];
   const circuitos = (model.circuitos ?? []).filter((c) => ids.includes(c.id));
   // Sem contagem declarada, vale a derivada (E2.2); sem nenhuma das duas, não se avalia.
   const porCircuitoDerivado = derivados && derivados.length > 0 && !trecho.condutores
-    ? circuitos.map((c) => ({ c, quantidade: derivados.filter((d) => d.circuitoId === c.id).length })).filter((x) => x.quantidade > 0)
+    ? circuitos.map((c) => ({ c, lista: derivados.filter((d) => d.circuitoId === c.id) })).filter((x) => x.lista.length > 0)
     : null;
   if (!trecho.condutores && !porCircuitoDerivado) return { ocupacao: null, motivo: 'condutores não declarados nem derivados (ponto sem caminho até o quadro)' };
   if (circuitos.length === 0) return { ocupacao: null, motivo: 'sem circuito — a seção vem do circuito' };
@@ -1103,8 +1104,19 @@ export function ocupacaoDoTrecho(
   // algum, a mínima calculada dele; sem nem isso, não se avalia.
   const secoes = circuitos.map((c) => c.secaoMm2 ?? preDimensionarCircuito(model, c, hip).secaoCalculada?.secaoMm2 ?? null);
   if (secoes.some((v) => v == null)) return { ocupacao: null, motivo: 'circuito sem seção declarada nem calculável' };
+  // E2.4: na derivação, cada condutor na SUA seção — neutro pela 6.2.6.2, PE
+  // pela Tab. 58 (ou o declarado); sem `tipo`, a da fase. Na contagem DECLARADA
+  // não há tipos: continua tudo na seção da fase (conservador) — dito.
   const composicao = porCircuitoDerivado
-    ? porCircuitoDerivado.map((x) => ({ secaoMm2: secoes[circuitos.indexOf(x.c)] as number, quantidade: x.quantidade }))
+    ? porCircuitoDerivado.flatMap((x) => {
+        const sec = secoesDosCondutores(x.c, secoes[circuitos.indexOf(x.c)] as number);
+        const conta = new Map<number, number>();
+        for (const d of x.lista) {
+          const s = (d.tipo === 'NEUTRO' ? sec.neutroMm2 : d.tipo === 'TERRA' ? sec.peMm2 : sec.faseMm2) ?? (sec.faseMm2 as number);
+          conta.set(s, (conta.get(s) ?? 0) + 1);
+        }
+        return [...conta.entries()].map(([secaoMm2, quantidade]) => ({ secaoMm2, quantidade }));
+      })
     : condutoresPorCircuitoNoTrecho(trecho.condutores as number, circuitos, secoes as number[]);
   const oc = ocupacaoDoEletrodutoCompartilhado(trecho.bitolaMm, composicao, hip);
   if (!oc) return { ocupacao: null, motivo: `bitola ${trecho.bitolaMm} mm ou seção fora das tabelas` };

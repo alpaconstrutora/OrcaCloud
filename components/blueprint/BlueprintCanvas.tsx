@@ -104,7 +104,7 @@ import {
   type LadoDoContorno,
 } from '../../utils/blueprintCotas';
 import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor, type TipoDeCondutor } from '../../utils/blueprintCondutores';
-import { composicaoDaRede } from '../../utils/blueprintFiacao';
+import { composicaoDaRede, trechosNumerados } from '../../utils/blueprintFiacao';
 import { pegadaDaPecaPrevista, type PecaPrevista } from '../../utils/blueprintPilaresAutomaticos';
 import { idsDoGrupo } from '../../utils/blueprintGrupoDeFundacao';
 import {
@@ -1822,6 +1822,8 @@ export default function BlueprintCanvas({
   );
   /** E2.2: a fiação DERIVADA de cada eletroduto (com retorno) — a mesma lista da prancha e do painel. */
   const fiacaoDaRede = useMemo(() => composicaoDaRede(model), [model]);
+  // E2.4: eletrodutos com mais condutores do que se lê em traços levam um número (tabela na folha).
+  const trechosNumeradosDaRede = useMemo(() => trechosNumerados(model, fiacaoDaRede), [model, fiacaoDaRede]);
 
   /** Seção declarada por circuito — é ela que vira o `#2,5` ao lado do traço. */
   const secaoPorCircuito = useMemo(
@@ -5659,9 +5661,30 @@ export default function BlueprintCanvas({
               t,
               idsDoTrecho.map((cid) => ({ id: cid, ligacao: ligacaoPorCircuito.get(cid)?.ligacao ?? null })),
             );
+          // E2.4: trecho CHEIO (mais condutores que o limite) — um número num
+          // círculo no lugar dos traços; a composição está na tabela da folha e
+          // no painel do trecho. Nenhum grupo se desenha.
+          const numerado = trechosNumeradosDaRede.get(t.id) ?? null;
+          if (numerado) {
+            const r = 7 * fz;
+            ctx.setLineDash([]);
+            ctx.lineWidth = 1.25;
+            ctx.strokeStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA.ELETRICA;
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(meio.x, meio.y, r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = '#334155';
+            ctx.textAlign = 'center';
+            ctx.font = `bold ${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+            ctx.fillText(numerado.rotulo, meio.x, meio.y + 3 * fz);
+            ctx.font = `${Math.round(8 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+            ctx.fillText(`${numerado.condutores} cond.`, meio.x + nx * (r + 6 * fz), meio.y + ny * (r + 6 * fz) + 3 * fz);
+          }
           // Grupos consecutivos por circuito (retornos sem dono viram grupo próprio).
           const grupos: { circuitoId: string | null; tipos: TipoDeCondutor[] }[] = [];
-          for (const c of lista) {
+          for (const c of numerado ? [] : lista) {
             const ultimo = grupos[grupos.length - 1];
             if (ultimo && ultimo.circuitoId === c.circuitoId) ultimo.tipos.push(c.tipo);
             else grupos.push({ circuitoId: c.circuitoId, tipos: [c.tipo] });

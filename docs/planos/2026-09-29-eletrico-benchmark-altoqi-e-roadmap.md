@@ -1929,14 +1929,14 @@ Fecha o bloco **6** (parcial — o fio completo depende da E2), parte do **2** e
 
 Fecha o bloco **5**.
 
-## Etapa 2 — Comandos, esquemas de ligação e fiação · kernel bump · 4 fases · **o motor que falta**
+## Etapa 2 — Comandos, esquemas de ligação e fiação · kernel bump · 4 fases · **✅ CONCLUÍDA em 29/09/2026 (4 de 4; kernel 0.70.0 → 0.72.0 · quant-1.19.0 → 1.20.0)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
 | 2.1 Comando como relação ✅ (kernel 0.71.0) | `Comando {id, letra, nome?, levelIds[]}` derivado das letras (índice), com **letra global opcional** para comando entre pavimentos (`Terminal.comandoGlobal: boolean`); painel "Comandos" no Navegador: renomear, listar interruptores e luzes, achar par de paralelo em outro andar | conferência 9.5.2.1 aceita paralelo em pavimentos diferentes quando global; goldens; teste `blueprintNbr5410Iluminacao` |
 | 2.2 Motor de esquemas de ligação ✅ (regras fixas; editáveis → backlog A) | `utils/blueprintEsquemasDeLigacao.ts` puro: tabela **ESQUEMAS** (interruptor simples / 2 e 3 seções / paralelo / intermediário / luz sem interruptor / tomada / TUE / ligação direta × FN/FF/FFF → condutores F, N, R, T por TRECHO entre os pontos do comando), com fonte (NBR 5410 6.1.5 + prática de prancha); `condutoresDoTrecho(model, trecho)` passa a **derivar** fase/neutro/retorno/terra por circuito e por comando que atravessa o trecho — retorno só entre interruptor e luz; `Trecho.condutores` vira **declarado opcional** que sobrescreve (marcado na tela) | teste com sala: interruptor paralelo + 2 luzes → o trecho entre os interruptores tem 2 retornos e nenhum neutro; prancha mostra os traços certos; `blueprintCondutores.test.ts` reescrito |
 | 2.3 Seção por condutor ✅ (kernel 0.72.0 · quant-1.20.0; motor de fiação movido para o kernel) | `SECOES_PE_TAB58` (S_PE por S_fase, NBR 5410 Tab. 58) e regra do neutro (6.2.6.2: igual à fase em FN/FF e FFF ≤ 25 mm²; redução admitida acima, hipótese); `Circuito.secaoNeutroMm2`/`secaoPeMm2` declarados opcionais; unifilar escreve "2#2,5 + N2,5 + T2,5" quando diferem; quantitativo de fio **por tipo e seção** substitui o total da 0.3 | teste Tab. 58 pontos contra o PDF; `Trecho.condutores` declarado ≠ derivado aparece em âmbar; quant bump |
-| 2.4 Fiação na planta e no quadro de cargas | rótulo por trecho com contagem por tipo; coluna "Condutores" no quadro de cargas ("2F+N+T"); ocupação do eletroduto usa a seção real de cada condutor (não mais a do 1º circuito); legenda numérica de trecho quando > N condutores (`Trecho.rotulo` impresso + tabela na folha) | harness da prancha olhado com trecho de 7 condutores; `ocupacaoDoEletrodutoCompartilhado` com seções mistas testado |
+| 2.4 Fiação na planta e no quadro de cargas ✅ (trecho numerado + tabela; coluna Condutores; ocupação por seção real) | rótulo por trecho com contagem por tipo; coluna "Condutores" no quadro de cargas ("2F+N+T"); ocupação do eletroduto usa a seção real de cada condutor (não mais a do 1º circuito); legenda numérica de trecho quando > N condutores (`Trecho.rotulo` impresso + tabela na folha) | harness da prancha olhado com trecho de 7 condutores; `ocupacaoDoEletrodutoCompartilhado` com seções mistas testado |
 
 Fecha o bloco **4** e completa o **6** (fios).
 
@@ -2600,3 +2600,59 @@ resultado do pré-dimensionamento, que memorial e prancha já leem. Nada no moto
 🟡→✅ (6.2.6.2, sem redução: hipótese dita); §13/§20 "Quantitativo de fio por tipo e seção" ❌→✅
 (fase/neutro/retorno/terra × seção, da fiação derivada); §22 "Fiação no quantitativo" 🟡→✅; §26
 "Unifilar com seção de neutro e PE" 🟡→✅; §27 "Memorial cita o PE" ❌→✅.
+
+### E2.4 — Fiação na planta e no quadro de cargas (29/09/2026) · frente `eletrico-e2` · sem bump
+
+**O que mudou**
+
+- **`blueprintKernel/fiacao.ts`** — `LIMITE_DE_CONDUTORES_DESENHADOS = 6` (hipótese de prancha,
+  dita: acima disso os traços da NBR 5444 viram mancha em Ø25 a 1:50); `trechosNumerados(model)`:
+  os eletrodutos com mais condutores que o limite, cada um com rótulo — o **`Trecho.rotulo`** do
+  projetista vence; sem ele, "1", "2", … **por pavimento**, na ordem dos ids (estável enquanto não
+  se cria trecho cheio novo — dito); `linhasDosTrechosNumerados` (nº · pavimento · contagem ·
+  composição) e `resumoComSecoes` ("C1: F N 5R T 2,5 mm² · C2: 3F T 50 mm² (PE 25)" — PE e neutro só
+  quando diferem da fase); **`condutoresDoCircuito(circuito, fase, fiacao)`** → "F+N+T 2,5 mm² (PE
+  …) · 2 comandos": os que saem do quadro pela ligação, a seção, os extras, e quantos **comandos**
+  (letras distintas de retorno na fiação derivada) o circuito serve.
+- **Canvas e prancha**: o trecho cheio recebe **círculo branco com o número** no lugar dos traços
+  (canvas escreve "8 cond." ao lado); os grupos de traços não se desenham nele. Legenda ganha a linha
+  "TRECHO NUMERADO — … remete à tabela"; a **folha do quadro de cargas** ganha a tabela **"FIAÇÃO DOS
+  TRECHOS NUMERADOS"** (nº · pavimento · cond. · composição por circuito com seção), só quando há
+  trecho cheio — no DXF/texto também (`linhasDoQuadroDeCargas`).
+- **Coluna "Condutores"** no quadro de cargas — em tela (`PainelEletrica.tsx`, 190 px, title explica) e
+  na folha (11ª coluna a 176 mm; texto do DXF também).
+- **`ocupacaoDoTrecho`** — na derivação, **cada condutor na SUA seção**: neutro pela 6.2.6.2, PE pela
+  Tab. 58 (ou o declarado); o 4º argumento aceita `tipo` (canvas/painel/conferência já passam a lista
+  derivada inteira, que o tem). Sem `tipo` (chamador antigo) ou com **contagem DECLARADA** (não tem
+  tipos), continua tudo na seção da fase — conservador, dito no código.
+- **Não entrou (declarado)**: rótulo numérico **persistido** automaticamente (o derivado basta; se a
+  prancha pedir estabilidade entre revisões, o projetista já pode fixar `Trecho.rotulo` na peça);
+  seções no texto do painel do trecho (segue o resumo da E2.2 por siglas — as seções estão na tabela
+  da folha e no quadro de cargas); desenho **jsdom/visual** do círculo — a geometria é a do prumada
+  (círculo + texto), já exercitada; harness visual da prancha com 7 condutores fica dito como não feito.
+
+**Testes** — novo `__tests__/blueprintFiacaoNaPlanta.test.ts` (5): dois pavimentos com trechos de 8/3 e
+9/7 declarados → só 3 numerados, "1" no térreo, "1" e "2" no superior, `rotulo` 'T-A' vence; tabela
+da folha e legenda presentes com trecho cheio e **ausentes sem** (todos a 3); `resumoComSecoes` 50 →
+"(PE 25)", neutro declarado 2,5 em fase 4 → "(N 2,5)"; coluna "Condutores": "F+N+T 2,5 mm²", "3F+T 50
+mm² (PE 25)", "F+N+T 4 mm² (N 2,5)", sem fase "F+N+T", e a **casa ligada** dá "· 1 comando" — que
+aparece na linha do quadro de cargas em texto; **ocupação**: F-N 50 mm² com F N T derivados em Ø50
+ocupa o mesmo que {2×50 + 1×25} e **menos** que 3×50; sem `tipo` = 3×50; declarado 3 = 3×50.
+
+**O que os testes pegaram antes de publicar**: nada no motor — os 5 passaram na primeira rodada; o
+script de edição abortou uma vez no `PainelEletrica` (âncora `default:` que não existe naquele
+`switch`) e foi refeito com a âncora certa, sem tocar arquivo nenhum antes de conferir.
+
+**Verificação**: `tsc` ✓ · alvo 101 ✓ (9 arquivos) · suíte inteira **6.221 ✓** (565 arquivos) · `build` ✓
+· `check-ui-standard` nos 2 `.tsx` ✓ · `check-xss-sinks` ✓ · bundle da `planta-api` regenerado
+(teste "bundle fresco" ✓) · deploy da função · `GET /v1/estudos` **401/401**.
+
+**Efeito no benchmark**: §21 "Fiação na planta legível (trecho cheio)" ❌→✅ (número + tabela); §13/§25
+"Coluna de condutores no quadro de cargas" ❌→✅; §20 "Ocupação com seção real por condutor" 🟡→✅
+(derivado; declarado sem tipo continua conservador — dito); §22 "Rótulo de trecho na prancha" 🟡→✅
+(`Trecho.rotulo` impresso quando o trecho é cheio).
+
+**Etapa 2 concluída** — quatro fases, kernel 0.70.0 → 0.72.0, quant-1.19.0 → 1.20.0. Backlog que sai
+daqui: A) esquemas editáveis pelo usuário; B) redução do neutro no trifásico > 25 mm² (6.2.6.2.4) com o
+quadro trifásico da E4; C) unificar os dois `numeroDoCircuito` (E4.1); D) harness visual da prancha com
+trecho numerado.

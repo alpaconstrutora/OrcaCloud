@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { UNIDADE_DE_POTENCIA } from '../../utils/blueprintRede';
 import { AlertTriangle, Plus, Zap } from 'lucide-react';
 import type { BlueprintModel, FaseDoCircuito, LigacaoDoCircuito, ObjectId } from '../../utils/blueprintKernel';
-import { FASES_DO_CIRCUITO, LIGACOES_DO_CIRCUITO, SECOES_NOMINAIS_DE_CONDUTOR_MM2, quadroDeCargas, secoesDosCondutores } from '../../utils/blueprintKernel';
+import { FASES_DO_CIRCUITO, LIGACOES_DO_CIRCUITO, SECOES_NOMINAIS_DE_CONDUTOR_MM2, composicaoDaRede, condutoresDoCircuito, quadroDeCargas, secoesDosCondutores } from '../../utils/blueprintKernel';
 import {
   HIPOTESES_PADRAO,
   SERIE_COMERCIAL_DE_DISJUNTORES_A,
@@ -111,6 +111,8 @@ interface LinhaDeCircuito {
   secaoPeMm2: number | null;
   neutroDerivadoMm2: number | null;
   peDerivadoMm2: number | null;
+  /** E2.4: "F+N+T 2,5 mm² (PE 2,5) · 2 comandos" — o texto do quadro de cargas. */
+  condutores: string;
   pontos: number;
   pontosSemPotencia: number;
   potenciaW: number;
@@ -138,6 +140,8 @@ const COLUNAS_DE_CIRCUITO: StandardTableColumn[] = [
   // E2.3: neutro e PE — em branco vale a norma (neutro = fase; PE pela Tab. 58), e a célula diz o valor.
   { key: 'secaoNeutroMm2', label: 'Neutro (mm²)', width: 108, align: 'right' },
   { key: 'secaoPeMm2', label: 'PE (mm²)', width: 108, align: 'right' },
+  // E2.4: o que sai do quadro por este circuito, pela fiação derivada — "F+N+T 2,5 mm² · 2 comandos".
+  { key: 'condutores', label: 'Condutores', width: 190 },
   { key: 'pontos', label: 'Pontos', width: 72, align: 'right' },
   { key: 'potenciaW', label: `Carga (${UNIDADE_DE_POTENCIA})`, width: 92, align: 'right' },
   { key: 'predim', label: 'Pré-dimensionamento NBR 5410', width: 270, sortable: false },
@@ -323,6 +327,8 @@ export default function PainelEletrica({
    * As LINHAS da tabela — todos os circuitos de todos os quadros. Memoizado
    * pela identidade: o `StandardTable` ordena e busca em cima deste array.
    */
+  // E2.4: a fiação derivada, uma vez por modelo — para contar os comandos de cada circuito.
+  const fiacao = useMemo(() => composicaoDaRede(model), [model]);
   const linhas = useMemo<LinhaDeCircuito[]>(() => {
     const porId = new Map((model.circuitos ?? []).map((c) => [c.id, c]));
     return cargas.quadros.flatMap((q) =>
@@ -344,8 +350,13 @@ export default function PainelEletrica({
           secaoPeMm2: circuito?.secaoPeMm2 ?? null,
           ...(() => {
             const predim = circuito ? preDimensionarCircuito(model, circuito, hipoteses) : null;
-            const sec = secoesDosCondutores(circuito ?? {}, c.secaoMm2 ?? predim?.secaoCalculada?.secaoMm2 ?? null);
-            return { neutroDerivadoMm2: sec.neutroMm2, peDerivadoMm2: sec.peMm2 };
+            const fase = c.secaoMm2 ?? predim?.secaoCalculada?.secaoMm2 ?? null;
+            const sec = secoesDosCondutores(circuito ?? {}, fase);
+            return {
+              neutroDerivadoMm2: sec.neutroMm2,
+              peDerivadoMm2: sec.peMm2,
+              condutores: circuito ? condutoresDoCircuito(circuito, fase, fiacao).texto : '—',
+            };
           })(),
           pontos: c.pontos,
           pontosSemPotencia: c.pontosSemPotencia,
@@ -354,7 +365,7 @@ export default function PainelEletrica({
         };
       }),
     );
-  }, [model, cargas, hipoteses]);
+  }, [model, cargas, hipoteses, fiacao]);
   const linhasVisiveis = useMemo(
     () => (quadroFiltro ? linhas.filter((l) => l.quadroId === quadroFiltro) : linhas),
     [linhas, quadroFiltro],
@@ -624,6 +635,12 @@ export default function PainelEletrica({
         );
       case 'potenciaW':
         return <span className="text-sm tabular-nums text-gray-700">{l.potenciaW.toLocaleString('pt-BR')}</span>;
+      case 'condutores':
+        return (
+          <span className="text-sm text-gray-700" title="Os condutores que saem do quadro por este circuito (ligação), a seção da fase, o PE e o neutro quando diferem, e quantos comandos (retornos) a fiação derivada encontrou">
+            {l.condutores}
+          </span>
+        );
       case 'predim':
         // As DECLARAÇÕES (tensão, ligação, DR) ficam nas colunas ao lado; aqui o
         // que a norma pede para elas. Declarado e calculado lado a lado, nunca

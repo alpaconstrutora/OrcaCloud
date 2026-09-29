@@ -51,7 +51,7 @@
 import type { BlueprintModel, Circuito, LigacaoDoCircuito, ObjectId, Terminal, Trecho } from './model';
 import { caminhoEntre, comprimentoMm, distanciasDesde, fazerChave, type Aresta, type No } from './grafoDeRede';
 import { comandosDoModelo } from './comandos';
-import { condutoresDoEletroduto, type TipoDeCondutor } from './condutores';
+import { condutoresDoEletroduto, secoesDosCondutores, type TipoDeCondutor } from './condutores';
 
 export interface CondutorDerivado {
   tipo: TipoDeCondutor;
@@ -264,4 +264,116 @@ export function resumoDaComposicao(lista: readonly CondutorDerivado[], nomeDoCir
       return `${nomeDoCircuito(cid)}: ${partes.join(' ')}`;
     })
     .join(' · ');
+}
+
+// ─── FIAÇÃO NA PLANTA E NO QUADRO DE CARGAS (E2.4, 29/09/2026) ──────────────
+
+/**
+ * Acima de tantos condutores os traços da NBR 5444 viram mancha no trecho: a
+ * planta passa a escrever um NÚMERO no eletroduto e a folha traz a tabela com a
+ * fiação de cada trecho numerado. HIPÓTESE de prancha (não é norma): seis é o
+ * que ainda se lê em Ø25 a 1:50.
+ */
+export const LIMITE_DE_CONDUTORES_DESENHADOS = 6;
+
+export interface TrechoNumerado {
+  trechoId: ObjectId;
+  levelId: ObjectId;
+  /** O `Trecho.rotulo` quando há; senão um número sequencial por pavimento, na ordem dos ids. */
+  rotulo: string;
+  condutores: number;
+  lista: CondutorDerivado[];
+}
+
+/**
+ * Os eletrodutos com MAIS condutores que o limite, cada um com o seu rótulo.
+ * O rótulo do projetista (`Trecho.rotulo`) vence; sem ele, "1", "2", … por
+ * pavimento, na ordem dos ids — estável enquanto não se cria trecho cheio novo.
+ */
+export function trechosNumerados(model: BlueprintModel, fiacao: ComposicaoDaRede = composicaoDaRede(model), limite = LIMITE_DE_CONDUTORES_DESENHADOS): Map<ObjectId, TrechoNumerado> {
+  const saida = new Map<ObjectId, TrechoNumerado>();
+  const ordem = model.levels.map((l) => l.id);
+  const cheios = (model.trechos ?? [])
+    .filter((t) => t.disciplina === 'ELETRICA' && (fiacao.get(t.id)?.lista.length ?? 0) > limite)
+    .sort((a, b) => ordem.indexOf(a.levelId) - ordem.indexOf(b.levelId) || a.id.localeCompare(b.id, undefined, { numeric: true }));
+  const contador = new Map<ObjectId, number>();
+  for (const t of cheios) {
+    const lista = fiacao.get(t.id)?.lista ?? [];
+    let rotulo = t.rotulo?.trim() || '';
+    if (!rotulo) {
+      const n = (contador.get(t.levelId) ?? 0) + 1;
+      contador.set(t.levelId, n);
+      rotulo = String(n);
+    }
+    saida.set(t.id, { trechoId: t.id, levelId: t.levelId, rotulo, condutores: lista.length, lista });
+  }
+  return saida;
+}
+
+/**
+ * A composição de um trecho COM a seção de cada condutor, por circuito:
+ * "C1: F N 2R T 2,5 mm² · C2: 3F T 50 mm² (PE 25)". É a linha da tabela dos
+ * trechos numerados e o texto do painel do trecho.
+ */
+export function resumoComSecoes(lista: readonly CondutorDerivado[], circuitoPorId: ReadonlyMap<ObjectId, Circuito>): string {
+  const grupos = new Map<ObjectId | null, CondutorDerivado[]>();
+  for (const c of lista) grupos.set(c.circuitoId, [...(grupos.get(c.circuitoId) ?? []), c]);
+  return [...grupos.entries()]
+    .map(([cid, cs]) => {
+      const c = cid ? circuitoPorId.get(cid) : undefined;
+      const siglas = resumoDaComposicao(cs, () => '').replace(/^: /, '');
+      const sec = secoesDosCondutores(c ?? {}, c?.secaoMm2 ?? null);
+      const partes: string[] = [];
+      if (sec.faseMm2 != null) partes.push(`${mm2(sec.faseMm2)} mm²`);
+      const extras: string[] = [];
+      if (sec.neutroMm2 != null && sec.neutroMm2 !== sec.faseMm2 && cs.some((x) => x.tipo === 'NEUTRO')) extras.push(`N ${mm2(sec.neutroMm2)}`);
+      if (sec.peMm2 != null && sec.peMm2 !== sec.faseMm2 && cs.some((x) => x.tipo === 'TERRA')) extras.push(`PE ${mm2(sec.peMm2)}`);
+      if (extras.length) partes.push(`(${extras.join(' · ')})`);
+      return `${c?.nome ?? '?'}: ${siglas}${partes.length ? ` ${partes.join(' ')}` : ''}`;
+    })
+    .join(' · ');
+}
+
+/** As linhas da tabela "Fiação dos trechos numerados" da folha, uma por trecho. */
+export function linhasDosTrechosNumerados(model: BlueprintModel, fiacao: ComposicaoDaRede = composicaoDaRede(model), limite = LIMITE_DE_CONDUTORES_DESENHADOS): { rotulo: string; pavimento: string; condutores: number; descricao: string }[] {
+  const circuitoPorId = new Map((model.circuitos ?? []).map((c) => [c.id, c]));
+  const nomeDoNivel = new Map(model.levels.map((l) => [l.id, l.name]));
+  return [...trechosNumerados(model, fiacao, limite).values()].map((n) => ({
+    rotulo: n.rotulo,
+    pavimento: nomeDoNivel.get(n.levelId) ?? '?',
+    condutores: n.condutores,
+    descricao: resumoComSecoes(n.lista, circuitoPorId),
+  }));
+}
+
+/**
+ * Os CONDUTORES de um circuito como o quadro de cargas os lista: os que saem
+ * do quadro pela ligação ("F+N+T", "2F+T", "3F+T") com a seção da fase, o PE e
+ * o neutro quando diferem (Tab. 58 / 6.2.6.2 ou declarados) e quantos COMANDOS
+ * o circuito serve (cada um é um retorno a mais em algum trecho — pela fiação
+ * derivada). A fase é a declarada ou a que quem chama calculou.
+ */
+export function condutoresDoCircuito(
+  circuito: Pick<Circuito, 'id' | 'ligacao' | 'secaoNeutroMm2' | 'secaoPeMm2'>,
+  faseMm2: number | null,
+  fiacao: ComposicaoDaRede | null,
+): { texto: string; comandos: number } {
+  const lig = circuito.ligacao ?? 'FN';
+  const saida = lig === 'FFF' ? '3F+T' : lig === 'FF' ? '2F+T' : 'F+N+T';
+  const sec = secoesDosCondutores(circuito, faseMm2);
+  const partes = [saida];
+  if (sec.faseMm2 != null) partes.push(`${mm2(sec.faseMm2)} mm²`);
+  const extras: string[] = [];
+  if (lig === 'FN' && sec.neutroMm2 != null && sec.neutroMm2 !== sec.faseMm2) extras.push(`N ${mm2(sec.neutroMm2)}`);
+  if (sec.peMm2 != null && sec.peMm2 !== sec.faseMm2) extras.push(`PE ${mm2(sec.peMm2)}`);
+  if (extras.length) partes.push(`(${extras.join(' · ')})`);
+  const letras = new Set<string>();
+  if (fiacao) for (const comp of fiacao.values()) for (const c of comp.lista) if (c.circuitoId === circuito.id && c.tipo === 'RETORNO' && c.comando) letras.add(c.comando);
+  const comandos = letras.size;
+  if (comandos > 0) partes.push(`· ${comandos} comando${comandos > 1 ? 's' : ''}`);
+  return { texto: partes.join(' '), comandos };
+}
+
+function mm2(v: number): string {
+  return String(v).replace('.', ',');
 }

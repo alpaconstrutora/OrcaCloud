@@ -45,7 +45,7 @@ import {
 } from './blueprintRede';
 import { TIPOS_DE_EQUIPAMENTO_ELETRICO } from './blueprintRede';
 import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor, type TipoDeCondutor } from './blueprintCondutores';
-import { composicaoDaRede } from './blueprintFiacao';
+import { composicaoDaRede, condutoresDoCircuito, linhasDosTrechosNumerados, trechosNumerados, type ComposicaoDaRede } from './blueprintFiacao';
 import {
   HIPOTESES_PADRAO,
   preDimensionarQuadroCompleto,
@@ -219,6 +219,8 @@ export function desenharEletrica(d: Desenhista, model: BlueprintModel, proj: Pro
 
   // E2.2: a fiação derivada de toda a rede, uma vez — a mesma lista do canvas.
   const fiacao = composicaoDaRede(model);
+  // E2.4: os trechos cheios levam número; a composição vai para a tabela da folha.
+  const numerados = trechosNumerados(model, fiacao);
   // Eletrodutos primeiro: ficam por baixo dos símbolos.
   for (const t of model.trechos ?? []) {
     if (t.disciplina !== 'ELETRICA') continue;
@@ -249,8 +251,14 @@ export function desenharEletrica(d: Desenhista, model: BlueprintModel, proj: Pro
         t,
         circuitosDoEletroduto.map((c) => ({ id: c.id, ligacao: c.ligacao ?? null })),
       );
+    const numerado = numerados.get(t.id) ?? null;
+    if (numerado) {
+      // Círculo branco com o rótulo no meio do trecho, no lugar dos traços.
+      circulo(d, meio, 2.2 * k, { traco: FINA, cheio: '#ffffff' });
+      d.texto(meio.x - 0.7 * k * numerado.rotulo.length, meio.y + 0.7 * k, numerado.rotulo, TEXTO_MM * 0.9);
+    }
     const grupos: { circuitoId: string | null; tipos: TipoDeCondutor[] }[] = [];
-    for (const c of lista) {
+    for (const c of numerado ? [] : lista) {
       const ultimo = grupos[grupos.length - 1];
       if (ultimo && ultimo.circuitoId === c.circuitoId) ultimo.tipos.push(c.tipo);
       else grupos.push({ circuitoId: c.circuitoId, tipos: [c.tipo] });
@@ -373,6 +381,7 @@ export function linhasDaLegenda(model: BlueprintModel): string[] {
   if (['DADOS_TELEFONE', 'DADOS_TV', 'DADOS_REDE', 'DADOS_USB'].some((x) => f.has(x))) L.push('DADOS — círculo pequeno com traço (telefone, TV, rede, USB)');
   if (f.has('ELETRODUTO')) L.push('ELETRODUTO — linha contínua = embutido na parede ou teto; Ø nominal ao lado; condutores (NBR 5444): traço reto = fase, com pé = neutro, só de um lado = retorno, com barra = terra; número do circuito em cima, seção (mm²) embaixo');
   if (f.has('ELETRODUTO_PISO')) L.push('ELETRODUTO NO PISO — linha tracejada');
+  if (trechosNumerados(model).size > 0) L.push('TRECHO NUMERADO — eletroduto com mais condutores do que se lê em traços: o número no círculo remete à tabela "Fiação dos trechos numerados"');
   if (f.has('SEM_TIPO')) L.push('● — ponto elétrico sem tipo (a classificar)');
   L.push('Ao lado de cada ponto: SIGLA · circuito; "?" = sem circuito ou sem tipo. Letra em itálico = comando (interruptor ↔ luz).');
   return L;
@@ -381,20 +390,28 @@ export function linhasDaLegenda(model: BlueprintModel): string[] {
 /** O quadro de cargas em LINHAS de texto — para o DXF, que não tem tabela. */
 export function linhasDoQuadroDeCargas(model: BlueprintModel, hip: HipotesesEletricas = HIPOTESES_PADRAO): string[] {
   const L: string[] = ['QUADRO DE CARGAS E PRE-DIMENSIONAMENTO - NBR 5410:2004'];
+  const fiacao: ComposicaoDaRede = composicaoDaRede(model);
   const quadros = (model.quadros ?? []).map((q) => preDimensionarQuadroCompleto(model, q.id, hip)).filter((q): q is NonNullable<typeof q> => !!q);
   for (const q of quadros) {
     L.push(`${q.nome} - ${q.ligacao}${q.tensaoV ? ` ${q.tensaoV} V` : ''}`);
-    L.push('Circuito | Lig./V | Pts | VA | IB (A) | Secao decl./min. | Disj. decl./sug. | dV % | DR');
+    L.push('Circuito | Lig./V | Pts | VA | IB (A) | Secao decl./min. | Disj. decl./sug. | dV % | DR | Condutores');
     for (const c of q.circuitos) {
       const circuito = (model.circuitos ?? []).find((x) => x.id === c.circuitoId);
       const dr = circuito?.protecaoDR === true ? 'DR' : circuito?.protecaoDR === false ? 'nao' : '-';
+      const cond = circuito ? condutoresDoCircuito(circuito, c.secaoDeclaradaMm2 ?? c.secaoCalculada?.secaoMm2 ?? null, fiacao).texto : '-';
       L.push(
-        `${c.nome} | ${c.ligacao}${c.tensaoV ? ` ${c.tensaoV}` : ''} | ${c.pontos}${c.pontosSemPotencia ? '*' : ''} | ${Math.round(c.sVA)} | ${c.ibA == null ? '-' : n1(c.ibA)} | ${mm2(c.secaoDeclaradaMm2)} / ${mm2(c.secaoCalculada?.secaoMm2)} | ${c.disjuntorDeclaradoA ?? '-'} / ${c.disjuntorSugeridoA ?? '-'} | ${c.quedaPct == null ? '-' : n1(c.quedaPct)} | ${dr}`,
+        `${c.nome} | ${c.ligacao}${c.tensaoV ? ` ${c.tensaoV}` : ''} | ${c.pontos}${c.pontosSemPotencia ? '*' : ''} | ${Math.round(c.sVA)} | ${c.ibA == null ? '-' : n1(c.ibA)} | ${mm2(c.secaoDeclaradaMm2)} / ${mm2(c.secaoCalculada?.secaoMm2)} | ${c.disjuntorDeclaradoA ?? '-'} / ${c.disjuntorSugeridoA ?? '-'} | ${c.quedaPct == null ? '-' : n1(c.quedaPct)} | ${dr} | ${cond}`,
       );
       for (const a of c.achados.filter((x) => x.nivel === 'FALTA')) L.push(`  ${a.referencia}: ${a.mensagem}`);
     }
     L.push(`Instalado ${Math.round(q.sInstaladaVA)} VA - demandado ${Math.round(q.sDemandadaVA)} VA (${q.demanda.nome})${q.ibA != null ? ` - alimentador IB ${n1(q.ibA)} A, ${mm2(q.secaoCalculada?.secaoMm2)} mm2, geral ${q.disjuntorGeralA ?? '-'} A` : ''}${q.quedaTotalMaxPct != null ? ` - dV total ${n1(q.quedaTotalMaxPct)} %` : ''}`);
     for (const a of q.achados) L.push(`  ${a.referencia}: ${a.mensagem}`);
+  }
+  const numerados = linhasDosTrechosNumerados(model, fiacao);
+  if (numerados.length) {
+    L.push('FIACAO DOS TRECHOS NUMERADOS');
+    L.push('No. | Pavimento | Cond. | Composicao por circuito');
+    for (const n of numerados) L.push(`${n.rotulo} | ${n.pavimento} | ${n.condutores} | ${n.descricao}`);
   }
   L.push(`Hipoteses: cobre/PVC, metodo ${hip.metodoDeInstalacao}, ${hip.temperaturaAmbienteC} C, ${hip.circuitosAgrupados} circ./eletroduto, rho ${hip.rhoOhmMm2PorM}, dV <= ${hip.limiteQuedaTerminalPct} % terminal / ${hip.limiteQuedaTotalPct} % origem, demanda ${hip.demanda.nome}.`);
   L.push('LEGENDA');
@@ -428,11 +445,13 @@ export function desenharQuadroDeCargas(
 
   const quadros = (model.quadros ?? []).map((q) => preDimensionarQuadroCompleto(model, q.id, hip)).filter((q): q is NonNullable<typeof q> => !!q);
   if (quadros.length === 0) linha('Sem quadro de distribuição neste desenho.', 2.2, COR_FRACA);
+  const fiacao: ComposicaoDaRede = composicaoDaRede(model);
 
   // Colunas da tabela, em mm a partir de x0.
   // E0.4 (29/09/2026): coluna Fase — R/S/T do circuito F-N em quadro trifásico; "—" sem fase; vazio fora de F-N.
-  const col = [0, 46, 62, 74, 88, 104, 124, 142, 156, 164];
-  const cab = ['Circuito', 'Lig./V', 'Pts', 'VA', 'IB (A)', 'Seção decl./mín.', 'Disj. decl./sug.', 'ΔV %', 'DR', 'Fase'];
+  // E2.4: coluna Condutores — "F+N+T 2,5 mm² (PE …) · n comandos", pela fiação derivada.
+  const col = [0, 46, 62, 74, 88, 104, 124, 142, 156, 164, 176];
+  const cab = ['Circuito', 'Lig./V', 'Pts', 'VA', 'IB (A)', 'Seção decl./mín.', 'Disj. decl./sug.', 'ΔV %', 'DR', 'Fase', 'Condutores'];
   for (const q of quadros) {
     linha(`${q.nome} — ${q.ligacao}${q.tensaoV ? ` ${q.tensaoV} V` : ''}${q.ligacaoDeduzida ? ' (deduzido)' : ''}`, 2.6);
     const topoTabela = y - 1.5;
@@ -461,6 +480,7 @@ export function desenharQuadroDeCargas(
         c.quedaPct == null ? '—' : `${n1(c.quedaPct)}${c.comprimento?.origem === 'ESTIMADO' ? '*' : ''}`,
         dr,
         circuito?.fase ?? (c.ligacao === 'FN' ? '—' : ''),
+        circuito ? condutoresDoCircuito(circuito, c.secaoDeclaradaMm2 ?? c.secaoCalculada?.secaoMm2 ?? null, fiacao).texto : '—',
       ];
       cel.forEach((v, i) => d.texto(x0 + col[i], y, v, 1.9, cor));
       y += 3.4;
@@ -484,6 +504,21 @@ export function desenharQuadroDeCargas(
 
   linha('* pontos sem potência (VA é piso) / comprimento estimado em planta (sem eletroduto até o quadro)', 1.7, COR_FRACA);
   y += 1;
+  // E2.4: a tabela dos trechos numerados — só quando há trecho cheio.
+  const numerados = linhasDosTrechosNumerados(model, fiacao);
+  if (numerados.length) {
+    linha('FIAÇÃO DOS TRECHOS NUMERADOS', 2.6);
+    const colN = [0, 12, 48, 62];
+    const topo = y - 1.5;
+    ['Nº', 'Pavimento', 'Cond.', 'Composição por circuito (fase · neutro · retorno · terra, seção)'].forEach((c, i) => d.texto(x0 + colN[i], y, c, 1.9, COR_FRACA));
+    y += 3.6;
+    for (const n of numerados) {
+      [n.rotulo, n.pavimento.slice(0, 22), String(n.condutores), n.descricao].forEach((v, i) => d.texto(x0 + colN[i], y, v, 1.9));
+      y += 3.4;
+    }
+    d.retangulo(x0 - 1.5, topo, larg - 2, y - topo + 0.5, { espessuraMm: 0.2, cor: COR });
+    y += 2.5;
+  }
   linha('HIPÓTESES', 2.6);
   linha(`Cobre / PVC 70 °C, método ${hip.metodoDeInstalacao} (Tab. 36) · ${hip.temperaturaAmbienteC} °C (Tab. 40) · ${hip.circuitosAgrupados} circ./eletroduto (Tab. 42) · mínimo por uso Tab. 47 · TUE ≥ ${String(hip.secaoMinimaTueMm2).replace('.', ',')} mm² (hipótese) · ρ ${String(hip.rhoOhmMm2PorM).replace('.', ',')} Ω·mm²/m · ΔV ≤ ${hip.limiteQuedaTerminalPct} % terminal, ≤ ${hip.limiteQuedaTotalPct} % da origem · IB ≤ In ≤ Iz (5.3.4.1)`, 1.8);
   linha(`Demanda: ${hip.demanda.nome} (luz ${hip.demanda.ILUMINACAO} · TUG ${hip.demanda.TUG} · força ${hip.demanda.FORCA} · motores/AC ${hip.demanda.MOTOR ?? 1}). Pré-dimensionamento: sugere; o dimensionamento é do responsável técnico.`, 1.8);

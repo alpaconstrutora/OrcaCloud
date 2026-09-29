@@ -7,7 +7,7 @@ import type {
     ProcessTemplate, ProcessTemplateStep, ProcessInstance, ProcessInstanceStep,
     ProcessInstanceWithSteps, ProcessComment, ProcessInstanceStatus, PendingStepItem,
     ProcessPriority, ProcessCriticality, ProcessEventKey, ProcessStepBottleneck,
-    ProcessConditionContext,
+    ProcessConditionContext, ProcessAssignableMember,
 } from '../types/process';
 
 // ============================================================
@@ -355,6 +355,9 @@ export const processService = {
             status: 'PENDENTE',
             responsible_user_id: ts.default_responsible_type === 'USER' ? ts.default_responsible_id : null,
             condition: ts.condition ?? null,
+            // F3: escalonamento também é snapshot — mudar o template não muda a instância em curso.
+            escalation_user_id: ts.escalation_user_id ?? null,
+            escalation_after_hours: ts.escalation_after_hours ?? null,
         }));
         const { error: stepsErr } = await supabase
             .from('process_instance_steps')
@@ -368,6 +371,80 @@ export const processService = {
         await advanceToNextStep(instance.id, opts.requesterUserId);
 
         return this.getInstance(instance.id);
+    },
+
+    // ── F3 — bloqueio manual ─────────────────────────────────────
+    // Parada declarada: o sweep de SLA (`fn_process_sla_sweep`) ignora instância
+    // BLOQUEADO, e desbloquear devolve o status que ela tinha.
+
+    async blockInstance(id: string, userId: string, reason: string): Promise<void> {
+        const motivo = reason.trim();
+        if (!motivo) throw new Error('Informe o motivo do bloqueio.');
+        const { data: inst, error: fErr } = await supabase
+            .from('process_instances')
+            .select('status')
+            .eq('id', id)
+            .single();
+        if (fErr) throw new Error(`Erro ao carregar processo: ${fErr.message}`);
+        const anterior = (inst as { status: ProcessInstanceStatus }).status;
+        if (['CONCLUIDO', 'CANCELADO', 'BLOQUEADO'].includes(anterior)) {
+            throw new Error(`Processo em ${anterior} não pode ser bloqueado.`);
+        }
+        const { error } = await supabase
+            .from('process_instances')
+            .update({ status: 'BLOQUEADO' as ProcessInstanceStatus, status_before_block: anterior, blocked_reason: motivo })
+            .eq('id', id);
+        if (error) throw new Error(`Erro ao bloquear processo: ${error.message}`);
+        await logAction(id, userId, 'INSTANCE_BLOCKED', { old_value: anterior, new_value: 'BLOQUEADO', metadata: { reason: motivo } });
+    },
+
+    async unblockInstance(id: string, userId: string): Promise<void> {
+        const { data: inst, error: fErr } = await supabase
+            .from('process_instances')
+            .select('status, status_before_block, current_step_id')
+            .eq('id', id)
+            .single();
+        if (fErr) throw new Error(`Erro ao carregar processo: ${fErr.message}`);
+        const row = inst as { status: ProcessInstanceStatus; status_before_block: ProcessInstanceStatus | null; current_step_id: string | null };
+        if (row.status !== 'BLOQUEADO') throw new Error('Processo não está bloqueado.');
+        // Volta ao que era; se o anterior já era ATRASADO ou não foi guardado,
+        // recalcula pela etapa atual (o sweep marca de novo se ainda estiver vencida).
+        let volta: ProcessInstanceStatus = row.status_before_block && row.status_before_block !== 'ATRASADO'
+            ? row.status_before_block
+            : 'AGUARDANDO_RESPONSAVEL';
+        if (!row.status_before_block || row.status_before_block === 'ATRASADO') {
+            const { data: step } = await supabase
+                .from('process_instance_steps')
+                .select('step_type, responsible_user_id')
+                .eq('id', row.current_step_id ?? '')
+                .maybeSingle();
+            if (step?.responsible_user_id) volta = WAITING_STATUS_BY_STEP_TYPE[(step as { step_type: ProcessInstanceStep['step_type'] }).step_type];
+        }
+        const { error } = await supabase
+            .from('process_instances')
+            .update({ status: volta, status_before_block: null, blocked_reason: null })
+            .eq('id', id);
+        if (error) throw new Error(`Erro ao desbloquear processo: ${error.message}`);
+        await logAction(id, userId, 'INSTANCE_UNBLOCKED', { old_value: 'BLOQUEADO', new_value: volta });
+    },
+
+    /**
+     * Membros da organização para o seletor de responsável/escalado. Quem não
+     * tem `user_id` (convite por e-mail nunca vinculado) vem com `userId: null`
+     * — a UI mostra desabilitado, com o motivo, em vez de esconder.
+     */
+    async listAssignableMembers(organizationId: string): Promise<ProcessAssignableMember[]> {
+        const { data, error } = await supabase
+            .from('organization_members')
+            .select('user_id, name, email')
+            .eq('organization_id', organizationId)
+            .order('name');
+        if (error) {
+            console.error('[processService] listAssignableMembers:', error);
+            throw new Error(`Erro ao carregar membros: ${error.message}`);
+        }
+        return ((data ?? []) as { user_id: string | null; name: string | null; email: string }[])
+            .map(m => ({ userId: m.user_id, name: m.name || m.email, email: m.email }));
     },
 
     async cancelInstance(id: string, userId: string, reason?: string): Promise<void> {

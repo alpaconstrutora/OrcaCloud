@@ -12,7 +12,7 @@ import type {
     ProcessInstanceStep, PendingStepItem, ProcessComment, ProcessStepType, ProcessStepBottleneck,
 } from '../types/process';
 import { INSTANCE_STATUS_LABEL } from '../types/process';
-import type { ProcessCondition, ProcessConditionField, ProcessConditionOp } from '../types/process';
+import type { ProcessCondition, ProcessConditionField, ProcessConditionOp, ProcessAssignableMember } from '../types/process';
 import { CONDITION_FIELD_LABEL, CONDITION_OP_LABEL, CONDITION_OPS_BY_FIELD, descreverCondicao, validarCondicao } from '../utils/processCondition';
 import { useStore } from '../store/useStore';
 import { supplierService } from '../services/supplierService';
@@ -56,6 +56,41 @@ interface EtapaEmEdicao {
     step_type: ProcessStepType;
     requires_document: boolean;
     condition: { field: ProcessConditionField; op: ProcessConditionOp; value: string | string[] } | null;
+    /** F3 — SLA da etapa em horas (texto até gravar; vazio = sem prazo). */
+    sla_hours: string;
+    /** F3 — responsável (user_id de auth) e escalonamento; vazio = ninguém. */
+    responsible_user_id: string;
+    escalation_user_id: string;
+    escalation_after_hours: string;
+}
+
+const ETAPA_VAZIA: EtapaEmEdicao = {
+    name: '', step_type: 'manual', requires_document: false, condition: null,
+    sla_hours: '', responsible_user_id: '', escalation_user_id: '', escalation_after_hours: '',
+};
+
+const horasOuNull = (v: string): number | null => {
+    if (v.trim() === '') return null;
+    const n = Number(v.replace(',', '.'));
+    return Number.isFinite(n) && n >= 0 ? n : null;
+};
+
+/** Seletor de membro da organização. Quem não tem login vinculado aparece desabilitado COM o motivo — nunca escondido. */
+function MembroSelect({ value, onChange, membros, placeholder }: {
+    value: string; onChange: (userId: string) => void; membros: ProcessAssignableMember[]; placeholder: string;
+}) {
+    return (
+        <select value={value} onChange={e => onChange(e.target.value)}
+            className="h-9 px-2 rounded-[6px] border border-gray-200 text-sm font-normal min-w-44 max-w-56 truncate">
+            <option value="">{placeholder}</option>
+            {membros.map(m => (
+                <option key={m.email} value={m.userId ?? ''} disabled={!m.userId}
+                    title={m.userId ? undefined : 'Sem login vinculado — o membro precisa entrar no app uma vez'}>
+                    {m.name}{m.userId ? '' : ' (sem login vinculado)'}
+                </option>
+            ))}
+        </select>
+    );
 }
 
 /** Texto do formulário → `ProcessCondition` (valor numérico para `amount`, lista para `in`); null quando não há condição. */
@@ -93,23 +128,26 @@ function NewTemplateModal({ open, onClose, organizationId, onCreated }: {
 }) {
     const [name, setName] = useState('');
     const [category, setCategory] = useState('');
-    const [steps, setSteps] = useState<EtapaEmEdicao[]>([{ name: '', step_type: 'manual', requires_document: false, condition: null }]);
+    const [steps, setSteps] = useState<EtapaEmEdicao[]>([{ ...ETAPA_VAZIA }]);
     const [saving, setSaving] = useState(false);
     const [erro, setErro] = useState<string | null>(null);
     // Obras da organização ativa (só OBRA, sem projeto de sistema — REGRA #2/#3 já cortadas no store).
     const obras = useStore(s => s.projects);
     // Fornecedores para a condição por fornecedor — carregados só com o modal aberto (§7.1.1: drawer, não <select>).
     const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
+    // Membros para responsável/escalado (F3) — idem, só com o modal aberto.
+    const [membros, setMembros] = useState<ProcessAssignableMember[]>([]);
     useEffect(() => {
         if (!open) return;
         supplierService.listSuppliers(organizationId)
             .then(lista => setSuppliers(lista.map(s => ({ id: s.id, name: s.name, nickname: s.nickname ?? null }))))
             .catch(() => setSuppliers([]));
+        processService.listAssignableMembers(organizationId).then(setMembros).catch(() => setMembros([]));
     }, [open, organizationId]);
 
     if (!open) return null;
 
-    const addStep = () => setSteps(s => [...s, { name: '', step_type: 'manual', requires_document: false, condition: null }]);
+    const addStep = () => setSteps(s => [...s, { ...ETAPA_VAZIA }]);
     const removeStep = (idx: number) => setSteps(s => s.filter((_, i) => i !== idx));
     const setStep = (idx: number, patch: Partial<EtapaEmEdicao>) => setSteps(arr => arr.map((x, i) => i === idx ? { ...x, ...patch } : x));
 
@@ -121,16 +159,27 @@ function NewTemplateModal({ open, onClose, organizationId, onCreated }: {
             const problema = validarCondicao(condicoes[i]);
             if (problema) { setErro(`Etapa ${i + 1}: ${problema}`); return; }
         }
+        // Escalonamento sem prazo não tem quando disparar — o botão diz por quê em vez de gravar algo inerte.
+        const semPrazoComEscalado = steps.findIndex(s => s.escalation_user_id && horasOuNull(s.sla_hours) === null);
+        if (semPrazoComEscalado >= 0) { setErro(`Etapa ${semPrazoComEscalado + 1}: escalonamento exige SLA (h) preenchido.`); return; }
         setErro(null);
         setSaving(true);
         try {
             await processService.createTemplate(
                 { organization_id: organizationId, name, category, criticality: 'MEDIA', default_sla_hours: null },
-                steps.map((s, i) => ({ name: s.name, step_type: s.step_type, is_required: true, requires_document: s.requires_document, can_skip: false, condition: condicoes[i] })),
+                steps.map((s, i) => ({
+                    name: s.name, step_type: s.step_type, is_required: true, requires_document: s.requires_document, can_skip: false,
+                    condition: condicoes[i],
+                    sla_hours: horasOuNull(s.sla_hours),
+                    default_responsible_type: s.responsible_user_id ? 'USER' : null,
+                    default_responsible_id: s.responsible_user_id || null,
+                    escalation_user_id: s.escalation_user_id || null,
+                    escalation_after_hours: s.escalation_user_id ? (horasOuNull(s.escalation_after_hours) ?? 0) : null,
+                })),
             );
             onCreated();
             onClose();
-            setName(''); setCategory(''); setSteps([{ name: '', step_type: 'manual', requires_document: false, condition: null }]);
+            setName(''); setCategory(''); setSteps([{ ...ETAPA_VAZIA }]);
         } finally {
             setSaving(false);
         }
@@ -174,6 +223,25 @@ function NewTemplateModal({ open, onClose, organizationId, onCreated }: {
                                     )}
                                     {steps.length > 1 && (
                                         <ActionIconButton kind="delete" onClick={() => removeStep(idx)} />
+                                    )}
+                                </div>
+                                {/* F3 — prazo, responsável e escalonamento da etapa */}
+                                <div className="ml-7 flex flex-wrap items-center gap-2">
+                                    <label className="flex items-center gap-1.5 text-xs text-gray-500 whitespace-nowrap">
+                                        SLA (h)
+                                        <input inputMode="decimal" value={s.sla_hours} onChange={e => setStep(idx, { sla_hours: e.target.value })}
+                                            className="h-9 w-20 px-3 rounded-[6px] border border-gray-200 text-sm" placeholder="48" />
+                                    </label>
+                                    <MembroSelect value={s.responsible_user_id} onChange={v => setStep(idx, { responsible_user_id: v })}
+                                        membros={membros} placeholder="Responsável (quem assume)" />
+                                    <MembroSelect value={s.escalation_user_id} onChange={v => setStep(idx, { escalation_user_id: v })}
+                                        membros={membros} placeholder="Escalonar para… (opcional)" />
+                                    {s.escalation_user_id && (
+                                        <label className="flex items-center gap-1.5 text-xs text-gray-500 whitespace-nowrap">
+                                            após (h)
+                                            <input inputMode="decimal" value={s.escalation_after_hours} onChange={e => setStep(idx, { escalation_after_hours: e.target.value })}
+                                                className="h-9 w-16 px-3 rounded-[6px] border border-gray-200 text-sm" placeholder="0" />
+                                        </label>
                                     )}
                                 </div>
                                 {s.condition && (
@@ -311,6 +379,10 @@ function InstanceDetail({ open, onClose, instanceId, organizationId, userId, use
     const [docPickerStep, setDocPickerStep] = useState<string | null>(null);
     const [rejectStep, setRejectStep] = useState<ProcessInstanceStep | null>(null);
     const [rejectReason, setRejectReason] = useState('');
+    // F3 — bloqueio manual: campo de motivo aberto inline no cabeçalho.
+    const [blockOpen, setBlockOpen] = useState(false);
+    const [blockReason, setBlockReason] = useState('');
+    const [blockErro, setBlockErro] = useState<string | null>(null);
 
     const reload = useCallback(() => {
         if (!instanceId) return;
@@ -387,6 +459,29 @@ function InstanceDetail({ open, onClose, instanceId, organizationId, userId, use
         processService.listComments(instance.id).then(setComments);
     };
 
+    const handleBlock = async () => {
+        if (!instance) return;
+        try {
+            await processService.blockInstance(instance.id, userId, blockReason);
+            setBlockOpen(false); setBlockReason(''); setBlockErro(null);
+            reload(); onChanged();
+        } catch (e) {
+            setBlockErro(e instanceof Error ? e.message : String(e));
+        }
+    };
+
+    const handleUnblock = async () => {
+        if (!instance) return;
+        if (!await confirm({ title: 'Desbloquear processo?', message: `Motivo do bloqueio: ${instance.blocked_reason ?? '—'}. O prazo da etapa volta a contar.`, variant: 'default', confirmLabel: 'Desbloquear' })) return;
+        await processService.unblockInstance(instance.id, userId);
+        reload(); onChanged();
+    };
+
+    const bloqueado = instance?.status === 'BLOQUEADO';
+    const encerrado = !!instance && ['CONCLUIDO', 'CANCELADO'].includes(instance.status);
+    const agora = Date.now();
+    const horasDeAtraso = (dueAt?: string | null) => dueAt ? Math.max(0, Math.floor((agora - new Date(dueAt).getTime()) / 3_600_000)) : null;
+
     return (
         <Sheet open={open} onClose={onClose} size="xl">
             {!instance ? (
@@ -401,8 +496,34 @@ function InstanceDetail({ open, onClose, instanceId, organizationId, userId, use
                             </div>
                             <StatusBadge status={instance.status} />
                         </div>
-                        {!['CONCLUIDO', 'CANCELADO'].includes(instance.status) && (
-                            <button onClick={handleCancel} className="text-xs text-red-500 hover:text-red-700 mt-2">Cancelar processo</button>
+                        {bloqueado && (
+                            <p className="text-sm text-red-700 mt-2">
+                                Bloqueado{instance.blocked_reason ? `: ${instance.blocked_reason}` : ''}. O prazo das etapas não conta enquanto bloqueado.
+                            </p>
+                        )}
+                        {!encerrado && (
+                            <div className="flex flex-wrap items-center gap-3 mt-2">
+                                {bloqueado ? (
+                                    <button onClick={handleUnblock} className="text-xs text-blue-600 hover:text-blue-800">Desbloquear</button>
+                                ) : (
+                                    <button onClick={() => { setBlockOpen(v => !v); setBlockErro(null); }} className="text-xs text-amber-700 hover:text-amber-900">
+                                        {blockOpen ? 'Fechar bloqueio' : 'Bloquear'}
+                                    </button>
+                                )}
+                                <button onClick={handleCancel} className="text-xs text-red-500 hover:text-red-700">Cancelar processo</button>
+                            </div>
+                        )}
+                        {blockOpen && !bloqueado && (
+                            <div className="mt-2 space-y-1.5">
+                                <div className="flex gap-2">
+                                    <input value={blockReason} onChange={e => setBlockReason(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && handleBlock()}
+                                        className="flex-1 h-9 px-3 rounded-[6px] border border-gray-200 text-sm" placeholder="Motivo do bloqueio (obrigatório)" />
+                                    <Button size="sm" onClick={handleBlock} disabled={!blockReason.trim()}
+                                        title={!blockReason.trim() ? 'Informe o motivo para bloquear' : undefined}>Bloquear</Button>
+                                </div>
+                                {blockErro && <p className="text-sm text-red-600">{blockErro}</p>}
+                            </div>
                         )}
                     </div>
 
@@ -433,8 +554,22 @@ function InstanceDetail({ open, onClose, instanceId, organizationId, userId, use
                                                     {isSkipped ? 'Não se aplicou: ' : 'Só executa quando '}{condicao}
                                                 </p>
                                             )}
+                                            {/* F3 — prazo, atraso e escalonamento da etapa atual (§8: texto colorido, sem pílula) */}
+                                            {isCurrent && step.due_at && (
+                                                <p className={`text-xs mt-0.5 ${(horasDeAtraso(step.due_at) ?? 0) > 0 && !bloqueado ? 'text-red-600' : 'text-gray-500'}`}>
+                                                    {(horasDeAtraso(step.due_at) ?? 0) > 0 && !bloqueado
+                                                        ? `Atrasada há ${horasDeAtraso(step.due_at)}h (prazo ${fmtDate(step.due_at)})`
+                                                        : `Prazo ${fmtDate(step.due_at)}`}
+                                                    {step.escalated_at && ` · escalonada em ${fmtDate(step.escalated_at)}`}
+                                                </p>
+                                            )}
                                         </div>
-                                        {isCurrent && (
+                                        {isCurrent && bloqueado && (
+                                            <span className="text-xs text-gray-500" title={instance.blocked_reason ?? undefined}>
+                                                Ações suspensas: processo bloqueado
+                                            </span>
+                                        )}
+                                        {isCurrent && !bloqueado && (
                                             <div className="flex items-center gap-2">
                                                 {step.step_type === 'approval' && step.approval_status === 'PENDENTE' && (
                                                     <button onClick={() => setRejectStep(step)} className="text-xs text-red-600 hover:text-red-800 font-bold">Reprovar</button>

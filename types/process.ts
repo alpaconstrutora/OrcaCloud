@@ -77,6 +77,9 @@ export interface ProcessTemplateStep {
     can_skip: boolean;
     /** Só executa quando… (null = sempre). Copiada para a instância ao iniciar. */
     condition?: ProcessCondition | null;
+    /** F3: quem é avisado quando a etapa vence + `escalation_after_hours`. NULL = sem escalonamento. */
+    escalation_user_id?: string | null;
+    escalation_after_hours?: number | null;
     created_at: string;
     updated_at: string;
 }
@@ -104,8 +107,18 @@ export interface ProcessInstance {
     due_at?: string | null;
     completed_at?: string | null;
     cancelled_at?: string | null;
+    /** F3: bloqueio manual — motivo obrigatório; o status anterior volta ao desbloquear. */
+    blocked_reason?: string | null;
+    status_before_block?: ProcessInstanceStatus | null;
     created_at: string;
     updated_at: string;
+}
+
+/** Membro da organização que pode ser responsável/escalado de uma etapa (precisa de login vinculado). */
+export interface ProcessAssignableMember {
+    userId: string | null;
+    name: string;
+    email: string;
 }
 
 export interface ProcessInstanceStep {
@@ -125,6 +138,11 @@ export interface ProcessInstanceStep {
     amount?: number | null;
     /** Snapshot da condição do template quando a instância nasceu (Passo 4). Falsa em advanceToNextStep → 'PULADO'. */
     condition?: ProcessCondition | null;
+    /** F3: snapshot do escalonamento do template; marcas de idempotência do sweep (`fn_process_sla_sweep`). */
+    escalation_user_id?: string | null;
+    escalation_after_hours?: number | null;
+    overdue_notified_at?: string | null;
+    escalated_at?: string | null;
     started_at?: string | null;
     due_at?: string | null;
     completed_at?: string | null;

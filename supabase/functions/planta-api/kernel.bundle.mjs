@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.64.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.65.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -633,6 +633,8 @@ var TIPOS_DE_PONTO_HIDRAULICO = [
   "CAIXA_SIFONADA",
   "CAIXA_INSPECAO",
   "CAIXA_GORDURA",
+  // 29/09/2026 (E5.3): a ligação do coletor predial à rede pública, no limite do lote.
+  "LIGACAO_ESGOTO",
   "REGISTRO_GAVETA",
   "REGISTRO_PRESSAO",
   "VALVULA_RETENCAO",
@@ -4885,6 +4887,8 @@ function entidadeDoPontoHidraulico(tipo) {
       return { entidade: "IFCDISTRIBUTIONCHAMBERELEMENT", predefinido: ".INSPECTIONCHAMBER." };
     case "CAIXA_GORDURA":
       return { entidade: "IFCINTERCEPTOR", predefinido: ".GREASE." };
+    case "LIGACAO_ESGOTO":
+      return { entidade: "IFCWASTETERMINAL", predefinido: ".USERDEFINED." };
     case "REGISTRO_GAVETA":
       return { entidade: "IFCVALVE", predefinido: ".ISOLATING." };
     case "REGISTRO_PRESSAO":
@@ -5508,6 +5512,16 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     dnMinimoMm: { ESGOTO: 100 },
     medidasMm: { larguraMm: 600, profundidadeMm: 600, alturaMm: 600 },
     ajuda: "Caixa enterrada onde os ramais se juntam antes do coletor. A cota \xE9 a do fundo. \xC9 o destino do esgoto autom\xE1tico."
+  },
+  LIGACAO_ESGOTO: {
+    rotulo: "Liga\xE7\xE3o \xE0 rede p\xFAblica",
+    sigla: "LR",
+    grupo: ESGOTO,
+    // A cota é a da GERATRIZ INFERIOR do coletor público no ponto de ligação.
+    cotaMm: { ESGOTO: -1500 },
+    dnMinimoMm: { ESGOTO: 100 },
+    medidasMm: { larguraMm: 300, profundidadeMm: 300, alturaMm: 300 },
+    ajuda: "Onde o coletor predial encontra a rede p\xFAblica, no limite do lote. A cota \xE9 a da rede (geratriz inferior): \xE9 ela que diz se o esgoto chega por gravidade."
   },
   CAIXA_GORDURA: {
     rotulo: "Caixa de gordura",

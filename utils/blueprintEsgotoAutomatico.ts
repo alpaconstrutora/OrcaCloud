@@ -229,7 +229,8 @@ function espacoDe(model: BlueprintModel, t: Terminal): Space | null {
 
 /** Os pontos de esgoto tipados do desenho (fora as caixas de inspeção). */
 export function fontesDeEsgoto(model: BlueprintModel): Terminal[] {
-  return (model.terminais ?? []).filter((t) => t.disciplina === 'ESGOTO' && t.tipoHidraulico != null && t.tipoHidraulico !== 'CAIXA_INSPECAO');
+  // A ligação à rede pública (E5.3) é destino, não fonte.
+  return (model.terminais ?? []).filter((t) => t.disciplina === 'ESGOTO' && t.tipoHidraulico != null && t.tipoHidraulico !== 'CAIXA_INSPECAO' && t.tipoHidraulico !== 'LIGACAO_ESGOTO');
 }
 
 export function caixasDeInspecao(model: BlueprintModel): Terminal[] {
@@ -548,7 +549,8 @@ export function refazerEsgoto(model: BlueprintModel, hip: HipotesesDeEsgoto = HI
  * de inspeção — o esgoto deles não tem para onde ir.
  */
 export function trechosDeEsgotoSemDestino(model: BlueprintModel): string[] {
-  const ligados = new Set(caixasDeInspecao(model).flatMap((ci) => redeDaOrigem(model, ci, 'ESGOTO')).map((t) => t.id));
+  const raizes = [...(model.terminais ?? []).filter((t) => t.disciplina === 'ESGOTO' && t.tipoHidraulico === 'LIGACAO_ESGOTO'), ...caixasDeInspecao(model)];
+  const ligados = new Set(raizes.flatMap((ci) => redeDaOrigem(model, ci, 'ESGOTO')).map((t) => t.id));
   return (model.trechos ?? [])
     .filter((t) => t.disciplina === 'ESGOTO' && t.rotulo !== 'Ventilação' && !ligados.has(t.id))
     .map((t) => t.id)
@@ -635,7 +637,11 @@ export function esgotoTrechoATrecho(model: BlueprintModel, hip: HipotesesDeEsgot
   const pavimentos = model.levels.length;
   const saida: TrechoDeEsgotoCalculado[] = [];
   const vistos = new Set<ObjectId>();
-  for (const ci of caixasDeInspecao(model)) {
+  // E5.3: a LIGAÇÃO à rede pública é a primeira raiz — o sentido vai até a rede,
+  // passando pelas caixas; sem ela, cada CI é raiz como antes.
+  const ligacoes = (model.terminais ?? []).filter((t) => t.disciplina === 'ESGOTO' && t.tipoHidraulico === 'LIGACAO_ESGOTO');
+  const nosDeCaixa = new Set(caixasDeInspecao(model).map((c) => chave(c.levelId, c.at.x, c.at.y, c.cotaMm)));
+  for (const ci of [...ligacoes, ...caixasDeInspecao(model)]) {
     const rede = redeDaOrigem(model, ci, 'ESGOTO');
     const adj = new Map<string, { t: (typeof rede)[number]; outro: string }[]>();
     for (const t of rede) {
@@ -674,7 +680,9 @@ export function esgotoTrechoATrecho(model: BlueprintModel, hip: HipotesesDeEsgot
           // O PAPEL (E5.1) e a tabela da NBR 8160 que vale para ele.
           const papel: PapelNoEsgoto = ehTQ
             ? 'TUBO_DE_QUEDA'
-            : sub.temTQ || n === raiz || sub.ambientes.size >= 2
+            : t.rotulo === 'Coletor predial'
+              ? 'COLETOR_PREDIAL'
+            : sub.temTQ || n === raiz || nosDeCaixa.has(n) || sub.ambientes.size >= 2
               ? 'SUBCOLETOR'
               : sub.fontes <= 1
                 ? 'RAMAL_DE_DESCARGA'
@@ -682,7 +690,7 @@ export function esgotoTrechoATrecho(model: BlueprintModel, hip: HipotesesDeEsgot
           const daTabela =
             papel === 'TUBO_DE_QUEDA'
               ? dnDoTuboDeQueda(sub.uhc, Math.max(0, ...sub.porNivel.values()), pavimentos)
-              : papel === 'SUBCOLETOR'
+              : papel === 'SUBCOLETOR' || papel === 'COLETOR_PREDIAL'
                 ? dnDoSubcoletor(sub.uhc, decl)
                 : papel === 'RAMAL_DE_ESGOTO'
                   ? dnDoRamalDeEsgoto(sub.uhc)

@@ -20,7 +20,7 @@ const confirmado = (m: BlueprintModel): BlueprintModel => ({
   terminais: (m.terminais ?? []).map((t) => ({ ...t, sugerida: false })),
 });
 /** Caixa elevada 4,5 m acima do piso do superior e DN ajustado pela pressão: atende a tudo. */
-const pronto = () => confirmado(sobrado(true, { cotaDaCaixaMm: 4500, comAjuste: true, volumeDaCaixaL: 1000, alimentador: true }));
+const pronto = () => confirmado(sobrado(true, { cotaDaCaixaMm: 4500, comAjuste: true, volumeDaCaixaL: 1000, alimentador: true, ligacao: true }));
 const itens = (m: BlueprintModel, r: ResponsavelTecnico = ana) => verificacoesHidro(m, HIPOTESES_HIDRO_PADRAO, r);
 
 describe('E3.3 — a conferência que libera a emissão', () => {
@@ -38,7 +38,7 @@ describe('E3.3 — a conferência que libera a emissão', () => {
   });
 
   it('caixa no teto do superior: o chuveiro de cima não tem pressão — nem o ajuste de DN resolve', () => {
-    const r = itens(confirmado(sobrado(true, { comAjuste: true, volumeDaCaixaL: 1000, alimentador: true })));
+    const r = itens(confirmado(sobrado(true, { comAjuste: true, volumeDaCaixaL: 1000, alimentador: true, ligacao: true })));
     expect(r.podeEmitir).toBe(false);
     expect(r.pendencias).toHaveLength(1);
     expect(r.pendencias[0]).toMatch(/^Pressão dinâmica mínima em cada ponto: 1 ponto\(s\) abaixo; pior Chuveiro -?\d+,\d kPa$/);
@@ -50,9 +50,9 @@ describe('E3.3 — a conferência que libera a emissão', () => {
   });
 
   it('E4.1: caixa menor que o consumo (2 quartos × 2 pessoas × 200 L = 800 L) e caixa sem volume: pendência de reservação', () => {
-    const pequena = itens(confirmado(sobrado(true, { cotaDaCaixaMm: 4500, comAjuste: true, volumeDaCaixaL: 500, alimentador: true })));
+    const pequena = itens(confirmado(sobrado(true, { cotaDaCaixaMm: 4500, comAjuste: true, volumeDaCaixaL: 500, alimentador: true, ligacao: true })));
     expect(pequena.pendencias).toEqual(['Volume de reservação: Reservar 800 L; o desenho tem 500 L — faltam 300 L (sugerida: 1.000 L).']);
-    const semVolume = itens(confirmado(sobrado(true, { cotaDaCaixaMm: 4500, comAjuste: true, alimentador: true })));
+    const semVolume = itens(confirmado(sobrado(true, { cotaDaCaixaMm: 4500, comAjuste: true, alimentador: true, ligacao: true })));
     expect(semVolume.pendencias).toEqual(["Volume de reservação: Reservar 800 L, mas há caixa sem volume nem medidas: declare o volume para conferir."]);
   });
 

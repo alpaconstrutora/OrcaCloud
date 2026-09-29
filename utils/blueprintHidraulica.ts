@@ -288,6 +288,16 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     medidasMm: { larguraMm: 600, profundidadeMm: 600, alturaMm: 600 },
     ajuda: 'Caixa enterrada onde os ramais se juntam antes do coletor. A cota é a do fundo. É o destino do esgoto automático.',
   },
+  LIGACAO_ESGOTO: {
+    rotulo: 'Ligação à rede pública',
+    sigla: 'LR',
+    grupo: ESGOTO,
+    // A cota é a da GERATRIZ INFERIOR do coletor público no ponto de ligação.
+    cotaMm: { ESGOTO: -1500 },
+    dnMinimoMm: { ESGOTO: 100 },
+    medidasMm: { larguraMm: 300, profundidadeMm: 300, alturaMm: 300 },
+    ajuda: 'Onde o coletor predial encontra a rede pública, no limite do lote. A cota é a da rede (geratriz inferior): é ela que diz se o esgoto chega por gravidade.',
+  },
   CAIXA_GORDURA: {
     rotulo: 'Caixa de gordura',
     sigla: 'CG',

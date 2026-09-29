@@ -18,13 +18,14 @@
  * descarga; o resto, ramal de esgoto.
  */
 
-export type PapelNoEsgoto = 'RAMAL_DE_DESCARGA' | 'RAMAL_DE_ESGOTO' | 'TUBO_DE_QUEDA' | 'SUBCOLETOR';
+export type PapelNoEsgoto = 'RAMAL_DE_DESCARGA' | 'RAMAL_DE_ESGOTO' | 'TUBO_DE_QUEDA' | 'SUBCOLETOR' | 'COLETOR_PREDIAL';
 
 export const ROTULO_DO_PAPEL: Record<PapelNoEsgoto, string> = {
   RAMAL_DE_DESCARGA: 'Ramal de descarga',
   RAMAL_DE_ESGOTO: 'Ramal de esgoto',
   TUBO_DE_QUEDA: 'Tubo de queda',
   SUBCOLETOR: 'Subcoletor',
+  COLETOR_PREDIAL: 'Coletor predial',
 };
 
 /** Tabela 5 — ramais de esgoto: DN → UHC máxima. */

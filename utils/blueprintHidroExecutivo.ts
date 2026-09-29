@@ -23,6 +23,7 @@ import type { ResponsavelTecnico } from './blueprintTopografiaExecutivo';
 import { planejarAguaDoModelo } from './blueprintAguaAutomatica';
 import { pressoesDoModelo } from './blueprintPressaoDaRede';
 import { esgotoTrechoATrecho, planejarEsgoto, trechosDeEsgotoSemDestino } from './blueprintEsgotoAutomatico';
+import { ROTULO_DO_COLETOR, planejarColetorPredial } from './blueprintColetorPredial';
 import { marcasDeVerificacao } from './blueprintVerificacaoRede';
 import { colunasDoModelo } from './blueprintEsquemaVertical';
 import { dimensionarReservacao } from './blueprintReservacao';
@@ -190,6 +191,17 @@ export function verificacoesHidro(model: BlueprintModel, hip: HipotesesHidro, re
     v.push({ grupo: 'NBR8160', item: 'DN não diminui a jusante', norma: 'NBR 8160:1999', exigido: 'DN ≥ o de montante', obtido: diminui ? `${diminui} trecho(s) com DN menor que o de montante` : 'nenhum', atende: diminui === 0 });
     const semDestino = trechosDeEsgotoSemDestino(model).length;
     v.push({ grupo: 'NBR8160', item: 'Todo trecho chega à caixa de inspeção', norma: 'NBR 8160', exigido: '0 sem destino', obtido: semDestino ? `${semDestino} sem destino` : 'todos', atende: semDestino === 0 });
+    // E5.3: a ligação à rede pública, o coletor lançado e a gravidade.
+    const col = planejarColetorPredial(model, hip.esgoto);
+    const coletorLancado = (model.trechos ?? []).some((t) => t.rotulo === ROTULO_DO_COLETOR);
+    v.push({
+      grupo: 'NBR8160',
+      item: 'Coletor predial até a rede pública',
+      norma: 'NBR 8160',
+      exigido: 'ligação, coletor lançado e escoamento por gravidade',
+      obtido: col.motivo ?? (!coletorLancado ? 'coletor não lançado' : col.porGravidade ? `DN ${col.dnMm} a ${nBr(col.declividadePct, 2)} %` : col.avisos[0] ?? 'sem gravidade'),
+      atende: !col.motivo && coletorLancado && col.porGravidade,
+    });
     const tqs = colunasDoModelo(model).filter((c) => c.sigla === 'TQ');
     const semVentilacao = tqs.filter((c) => !c.nomeDaVentilacao).length;
     v.push({ grupo: 'NBR8160', item: 'Tubo de queda ventilado', norma: 'NBR 8160:1999', exigido: 'todo TQ com coluna de ventilação', obtido: tqs.length ? (semVentilacao ? `${semVentilacao} sem ventilação` : `${tqs.length} TQ ventilado(s)`) : 'sem tubo de queda', atende: semVentilacao === 0 });

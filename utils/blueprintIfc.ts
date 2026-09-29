@@ -2258,6 +2258,8 @@ function entidadeDoPontoHidraulico(
       return { entidade: 'IFCDISTRIBUTIONCHAMBERELEMENT', predefinido: '.INSPECTIONCHAMBER.' };
     case 'CAIXA_GORDURA':
       return { entidade: 'IFCINTERCEPTOR', predefinido: '.GREASE.' };
+    case 'LIGACAO_ESGOTO':
+      return { entidade: 'IFCWASTETERMINAL', predefinido: '.USERDEFINED.' };
     case 'REGISTRO_GAVETA':
       return { entidade: 'IFCVALVE', predefinido: '.ISOLATING.' };
     case 'REGISTRO_PRESSAO':

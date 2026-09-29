@@ -704,3 +704,27 @@ vertical cobre o traçado das colunas) e anticolisão dos rótulos na planta.
   atende; trecho solto → sem destino) + 1 do painel; os da verificação atualizados (o ramal do vaso
   em DN 50 agora também "diminui depois de 100"; o trecho solto do andar também "sem destino").
   Suíte: 540 arquivos / 6.052 testes.
+
+### E5.3 — Coletor predial e ligação à rede pública (29/09/2026) · kernel 0.65.0
+
+- **Kernel 0.65.0**: o ponto hidráulico aceita `LIGACAO_ESGOTO` ("Ligação à rede pública", LR; ficha
+  com a cota da geratriz da rede, −1,50 padrão; IFC `IfcWasteTerminal`). Só vocabulário — provado em
+  0.64.0 (suíte inteira), depois os seis hashes e os pins; bundle da `planta-api` regerado e
+  redeployado. A ligação é DESTINO: saiu de `fontesDeEsgoto`.
+- `utils/blueprintColetorPredial.ts` (novo): da CI mais perto da ligação até ela, em reta —
+  declividade única do fundo da CI à cota da rede; DN pela **tabela 7** (UHC que chega ao NÓ da CI
+  — a horizontal e a prumada que descem a ela não contam duas vezes — e a declividade), mínimo 100;
+  **caixas intermediárias** de trás para a frente: a última a 15 m da ligação, depois a cada 25 m
+  (NBR 8160), na cota da linha; **sem gravidade** (rede acima do fundo ou declividade abaixo da
+  mínima) → aviso de estação elevatória (backlog); acima de 5 % → aviso de degrau. Trechos "Coletor
+  predial" e caixas "CI do coletor", sugeridos; relançar refaz.
+- `esgotoTrechoATrecho`: a ligação é a **primeira raiz** (o sentido vai até a rede, passando pelas
+  CIs); "chega a qualquer CI" é subcoletor; o trecho "Coletor predial" tem o papel **COLETOR_PREDIAL**
+  (tabela 7).
+- Gaveta de esgoto: **Coletor predial e ligação à rede pública** (`PainelColetorPredial`). Memorial:
+  subseção do coletor. Conferência: **Coletor predial até a rede pública** (ligação, coletor
+  lançado e gravidade). Fixture: `ligacao: true` (LR 4,5 m além da CI, rede a −0,80).
+- **Pronto quando** ✔: 6 testes em `blueprintColetorPredial.test.ts` (sem ligação e a ligação não é
+  fonte; 4,5 m → DN 100 a 2,22 %; 60 m → caixas a 20 e 45 m na cota da linha; rede alta → elevatória;
+  lançado é COLETOR_PREDIAL com as 20 UHC, sem marca; conferência e relançar). Suíte: 541 arquivos /
+  6.058 testes.

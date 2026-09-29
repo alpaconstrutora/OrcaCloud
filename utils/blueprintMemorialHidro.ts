@@ -30,6 +30,7 @@ import { HIPOTESES_ESGOTO_PADRAO, caixasDeInspecao, esgotoTrechoATrecho, fontesD
 import { colunasDoModelo, linhasDaLegendaDeColunas } from './blueprintEsquemaVertical';
 import { ROTULO_DA_DISCIPLINA } from './blueprintRede';
 import { ROTULO_DO_PAPEL } from './blueprintNbr8160';
+import { planejarColetorPredial } from './blueprintColetorPredial';
 import { HIPOTESES_RECALQUE_PADRAO, planejarRecalque, type HipotesesDeRecalque } from './blueprintRecalque';
 import { HIPOTESES_ALIMENTACAO_PADRAO, planejarAlimentador, type HipotesesDeAlimentacao } from './blueprintAlimentador';
 import { HIPOTESES_RESERVATORIO_PADRAO, dimensionarReservacao, volumeDoReservatorioL, type HipotesesDeReservatorio } from './blueprintReservacao';
@@ -366,7 +367,7 @@ export function memorialDeCalculoHidro(model: BlueprintModel, hip: HipotesesHidr
           `E${String(i + 1).padStart(2, '0')}${c.rotulo ? ` (${c.rotulo})` : ''}`,
           ROTULO_DO_PAPEL[c.papel],
           nivel(c.levelId),
-          siglaDe(caixas.get(c.caixaId)),
+          siglaDe(caixas.get(c.caixaId) ?? terminais.get(c.caixaId)),
           String(c.uhc),
           String(c.dnAtualMm),
           String(c.dnNecessarioMm),
@@ -379,6 +380,24 @@ export function memorialDeCalculoHidro(model: BlueprintModel, hip: HipotesesHidr
         ];
       }),
     });
+    // E5.3: o coletor predial até a rede pública.
+    const col = planejarColetorPredial(model, hip.esgoto);
+    B.push({ tipo: 'subsecao', texto: 'Coletor predial e ligação à rede pública' });
+    if (col.motivo) B.push({ tipo: 'paragrafo', texto: col.motivo });
+    else {
+      B.push({
+        tipo: 'tabela',
+        cabecalho: ['Grandeza', 'Valor'],
+        linhas: [
+          ['UHC na caixa de inspeção', String(col.uhc)],
+          ['Comprimento até a ligação', `${nBr(col.comprimentoM)} m`],
+          ['Declividade (fundo da CI → rede)', `${nBr(col.declividadePct, 2)} % (mín. ${nBr(col.declividadeMinimaPct, 0)} %)`],
+          ['DN (NBR 8160, tabela 7)', `${col.dnMm} mm`],
+          ['Caixas intermediárias', col.caixasIntermediarias ? `${col.caixasIntermediarias} (última a ≤ 15 m da ligação; ≤ 25 m entre caixas)` : 'nenhuma (até 15 m)'],
+        ],
+      });
+      B.push({ tipo: 'paragrafo', texto: col.porGravidade ? 'Atende: o esgoto chega à rede pública por gravidade.' : `Não atende: ${col.avisos[0] ?? 'sem declividade para a gravidade.'}` });
+    }
     const caixasComCota = [...caixas.values()].map((c) => ({ c, ext: extensaoVerticalDaCaixa(c) })).filter((x) => x.ext);
     if (caixasComCota.length) {
       B.push({ tipo: 'subsecao', texto: 'Caixas' });

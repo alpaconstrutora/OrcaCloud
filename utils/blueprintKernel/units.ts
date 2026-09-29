@@ -338,7 +338,14 @@
  * INFERIOR não distribui; o CILINDRO tem volume e 3D de cilindro. Omitidos
  * quando ausentes. Provado antes do bump.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.64.0';
+/**
+ * ─── 0.64.0 → 0.65.0 (29/09/2026) — A LIGAÇÃO À REDE PÚBLICA ─────────────────
+ *
+ * O ponto hidráulico aceita `LIGACAO_ESGOTO` (E5.3 do roadmap hidrossanitário):
+ * onde o coletor predial encontra a rede pública, com a cota da rede.
+ * Vocabulário novo, forma igual — provado antes do bump.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.65.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

@@ -216,6 +216,8 @@ import PainelHidroExecutivo from './PainelHidroExecutivo';
 import PainelReservacao from './PainelReservacao';
 import PainelAlimentador from './PainelAlimentador';
 import PainelRecalque from './PainelRecalque';
+import PainelColetorPredial from './PainelColetorPredial';
+import { planejarColetorPredial } from '../../utils/blueprintColetorPredial';
 import { planejarRecalque } from '../../utils/blueprintRecalque';
 import { planejarAlimentador } from '../../utils/blueprintAlimentador';
 import { planejarPecasDaCaixa } from '../../utils/blueprintPecasDaCaixa';
@@ -7224,6 +7226,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const hipotesesDeEsgoto = hidroDoEstudo.hipoteses.esgoto;
   const setHipDeEsgotoSalvas = (esgoto: HipotesesDeEsgoto) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, esgoto });
   const planoDeEsgoto = useMemo(() => planejarEsgoto(editor.model, hipotesesDeEsgoto), [editor.model, hipotesesDeEsgoto]);
+  /** COLETOR PREDIAL (29/09/2026, E5.3): da CI à ligação na rede pública. */
+  const planoDoColetor = useMemo(
+    () => (tarefaAberta === 'esgoto' ? planejarColetorPredial(editor.model, hipotesesDeEsgoto) : null),
+    [tarefaAberta, editor.model, hipotesesDeEsgoto],
+  );
   /** VERIFICAÇÃO DA REDE (28/09/2026, E0.1 do roadmap hidrossanitário): pontas abertas, DN do esgoto, louça sem ponto. */
   const pressoesDaAgua = useMemo(() => pressoesDoModelo(editor.model, hipPressao), [editor.model, hipPressao]);
   const marcasDaRede = useMemo(() => marcasDeVerificacao(editor.model, null, pressoesDaAgua), [editor.model, pressoesDaAgua]);
@@ -13861,6 +13868,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                     <p key={i} className="rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-800">{a}</p>
                   ))}
                 </>
+              )}
+              {planoDoColetor && (
+                <PainelColetorPredial
+                  plano={planoDoColetor}
+                  onLancar={() => {
+                    if (planoDoColetor.comandos.length) editor.runBatch(planoDoColetor.comandos);
+                  }}
+                />
               )}
               <PainelVerificacaoDaRede marcas={marcasDaRede} disciplinas={['ESGOTO']} onSelecionar={selecionar} />
             </div>

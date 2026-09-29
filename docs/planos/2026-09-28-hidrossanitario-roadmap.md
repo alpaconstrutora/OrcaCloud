@@ -959,3 +959,23 @@ memoriais. ⚠️ A conferir na norma antes de emitir: a **tabela de intensidade
 
 **Etapa 7 fechada**: tanque séptico, filtro anaeróbio e sumidouro no kernel (0.68.0), o esgoto
 terminando no sumidouro, lançamento dimensionado, conferência e memoriais.
+
+### E8.1 — Aquecedor de passagem (29/09/2026)
+
+- `utils/blueprintAquecedor.ts` (novo): para cada aquecedor, os **pontos quentes** que ele serve (os
+  que a rede quente dele alcança; o solto vai para o mais perto), a **vazão simultânea** pelos pesos
+  da NBR 5626 — Q = 0,3·√ΣP, o mesmo método da distribuição —, a **capacidade nominal** que ela pede
+  (o aquecedor de passagem é vendido pela vazão que aquece 20 °C: nominal = Q·ΔT/20, com ΔT = uso −
+  água fria) e o **modelo**: o menor da lista de faixas comerciais (15 · 20 · 27 · 33 · 43 L/min —
+  não é catálogo de fabricante); nenhum dá conta, o aviso (dois aquecedores ou acumulação).
+- **Pressão na entrada**: a que a rede fria entrega no ponto de água fria do aquecedor (E1.3), contra
+  a mínima do aparelho (premissa, 20 kPa). O "dimensionamento das tubulações de água quente" já
+  vinha da E1 (DN pelo peso, pressão em cada ponto quente descontando a perda no aquecedor).
+- Gaveta de água → **Aquecedor de passagem** (premissas e a linha do resultado); conferência NBR 5626
+  (item por aquecedor); memorial de cálculo (seção com Q, ΔT, nominal, modelo e entrada) e descritivo
+  (o modelo e a temperatura). Premissas `aquecedor` no estudo. Fixture: `aguaQuente: true` (aquecedor
+  no térreo, chuveiro e lavatório quentes nos dois andares, as duas redes lançadas).
+- **Pronto quando** ✔: 7 testes em `blueprintAquecedor.test.ts` (o sobrado — ΣP 1,4, 21,3 L/min,
+  aquecedor de 27 L/min, entrada acima de 20 kPa; ΔT 30 → 33 L/min; ΔT 50 passa da lista; pressão
+  mínima acima da entrada; sem aquecedor; o segundo aquecedor sem pontos; conferência; memoriais;
+  premissas) e 2 em `PainelAquecedor.test.tsx`. Suíte: 555 arquivos / 6.150 testes.

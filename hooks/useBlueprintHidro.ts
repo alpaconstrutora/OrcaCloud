@@ -86,6 +86,7 @@ export function hipotesesHidroDaColuna(raw: unknown): HipotesesHidro {
     recalque: completar(r.recalque, HIPOTESES_HIDRO_PADRAO.recalque),
     pluvial: pluvialDaColuna(r.pluvial),
     tratamento: tratamentoDaColuna(r.tratamento),
+    aquecedor: completar(r.aquecedor, HIPOTESES_HIDRO_PADRAO.aquecedor),
   };
 }
 

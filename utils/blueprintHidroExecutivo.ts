@@ -36,6 +36,7 @@ import { contribuicaoPluvial, misturasPluvialEsgoto } from './blueprintPluvial';
 import { verificarCalhas } from './blueprintCalhas';
 import { verificarCondutores } from './blueprintCondutoresPluviais';
 import { dimensionarTratamento, temTratamentoIndividual, verificarTratamento } from './blueprintTratamento';
+import { dimensionarAquecedores } from './blueprintAquecedor';
 
 export interface VerificacaoHidro {
   grupo: 'RESPONSAVEL' | 'DADOS' | 'NBR5626' | 'NBR8160' | 'NBR10844' | 'NBR7229';
@@ -176,6 +177,17 @@ export function verificacoesHidro(model: BlueprintModel, hip: HipotesesHidro, re
       obtido: reserva.situacao === 'ATENDE' ? `${Math.round(reserva.declaradoL).toLocaleString('pt-BR')} L` : reserva.texto,
       atende: reserva.situacao === 'ATENDE',
     });
+    // E8.1: o aquecedor de passagem — capacidade para a vazão simultânea e pressão na entrada.
+    for (const [i, a] of dimensionarAquecedores(model, hip.aquecedor, pressoes).entries()) {
+      v.push({
+        grupo: 'NBR5626',
+        item: `Aquecedor de passagem${i > 0 ? ` ${i + 1}` : ''}: capacidade e pressão`,
+        norma: 'NBR 5626:2020',
+        exigido: `≥ ${nBr(a.capacidadeNecessariaLMin, 1)} L/min nominais; entrada ≥ ${nBr(hip.aquecedor.pressaoMinimaKpa, 0)} kPa`,
+        obtido: `${a.modeloLMin != null ? `${a.modeloLMin} L/min` : 'nenhum modelo da lista'}; entrada ${a.pressaoNaEntradaKpa != null ? `${nBr(a.pressaoNaEntradaKpa, 1)} kPa` : 'não avaliada'}`,
+        atende: a.atende,
+      });
+    }
     v.push({ grupo: 'NBR5626', item: 'Velocidade da água', norma: 'NBR 5626:2020', exigido: `≤ ${nBr(VELOCIDADE_MAXIMA_DA_NORMA_MS, 1)} m/s`, obtido: `máx. ${nBr(vMax)} m/s`, atende: vMax <= VELOCIDADE_MAXIMA_DA_NORMA_MS + 1e-9 });
   }
 

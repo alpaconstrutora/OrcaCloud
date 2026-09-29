@@ -226,6 +226,8 @@ import PainelRecalque from './PainelRecalque';
 import PainelColetorPredial from './PainelColetorPredial';
 import { planejarColetorPredial } from '../../utils/blueprintColetorPredial';
 import PainelTratamento from './PainelTratamento';
+import PainelAquecedor from './PainelAquecedor';
+import { dimensionarAquecedores } from '../../utils/blueprintAquecedor';
 import { dimensionarTratamento, medidasDimensionadas, planejarTratamento, verificarTratamento } from '../../utils/blueprintTratamento';
 import { planejarVentilacao } from '../../utils/blueprintVentilacao';
 import { planejarRecalque } from '../../utils/blueprintRecalque';
@@ -7264,6 +7266,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   /** VERIFICAÇÃO DA REDE (28/09/2026, E0.1 do roadmap hidrossanitário): pontas abertas, DN do esgoto, louça sem ponto. */
   const pressoesDaAgua = useMemo(() => pressoesDoModelo(editor.model, hipPressao), [editor.model, hipPressao]);
   const marcasDaRede = useMemo(() => marcasDeVerificacao(editor.model, null, pressoesDaAgua, hidroDoEstudo.hipoteses.pluvial), [editor.model, pressoesDaAgua, hidroDoEstudo.hipoteses.pluvial]);
+  /** AQUECEDOR DE PASSAGEM (29/09/2026, E8.1): vazão simultânea da rede quente, capacidade e pressão na entrada. */
+  const hipDoAquecedor = hidroDoEstudo.hipoteses.aquecedor;
+  const aquecedoresDimensionados = useMemo(
+    () => (tarefaAberta === 'agua' ? dimensionarAquecedores(editor.model, hipDoAquecedor, pressoesDaAgua) : []),
+    [tarefaAberta, editor.model, hipDoAquecedor, pressoesDaAgua],
+  );
   // MEMORIAIS HIDROSSANITÁRIOS (28/09/2026, E3.1/E3.2): com as MESMAS premissas das
   // gavetas de água, de pressão e de esgoto. A prévia (o sumário das seções) só é
   // montada com a gaveta aberta; o arquivo remonta na hora, com a data do download.
@@ -14170,6 +14178,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   onLancar={() => {
                     if (planoDoRecalque.comandos.length) editor.runBatch(planoDoRecalque.comandos);
                   }}
+                />
+              )}
+              {aquecedoresDimensionados.length > 0 && (
+                <PainelAquecedor
+                  aquecedores={aquecedoresDimensionados}
+                  hip={hipDoAquecedor}
+                  onHip={(aquecedor) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, aquecedor })}
+                  onSelecionar={selecionar}
                 />
               )}
               <PainelPressoesDaAgua

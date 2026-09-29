@@ -37,6 +37,7 @@ import { HIPOTESES_ALIMENTACAO_PADRAO, planejarAlimentador, type HipotesesDeAlim
 import { HIPOTESES_RESERVATORIO_PADRAO, dimensionarReservacao, volumeDoReservatorioL, type HipotesesDeReservatorio } from './blueprintReservacao';
 import { HIPOTESES_PLUVIAIS_PADRAO, contribuicaoPluvial, type HipotesesPluviais } from './blueprintPluvial';
 import { HIPOTESES_TRATAMENTO_PADRAO, dimensionarTratamento, temTratamentoIndividual, verificarTratamento, type HipotesesDeTratamento } from './blueprintTratamento';
+import { HIPOTESES_AQUECEDOR_PADRAO, dimensionarAquecedores, type HipotesesDeAquecedor } from './blueprintAquecedor';
 import { RUGOSIDADE_DA_CALHA, verificarCalhas } from './blueprintCalhas';
 import { verificarCondutores } from './blueprintCondutoresPluviais';
 
@@ -63,6 +64,8 @@ export interface HipotesesHidro {
   pluvial: HipotesesPluviais;
   /** E7: o tratamento individual (NBR 7229/13969). */
   tratamento: HipotesesDeTratamento;
+  /** E8.1: o aquecedor de passagem — temperaturas e pressão mínima na entrada. */
+  aquecedor: HipotesesDeAquecedor;
 }
 
 export const HIPOTESES_HIDRO_PADRAO: HipotesesHidro = {
@@ -74,6 +77,7 @@ export const HIPOTESES_HIDRO_PADRAO: HipotesesHidro = {
   recalque: HIPOTESES_RECALQUE_PADRAO,
   pluvial: HIPOTESES_PLUVIAIS_PADRAO,
   tratamento: HIPOTESES_TRATAMENTO_PADRAO,
+  aquecedor: HIPOTESES_AQUECEDOR_PADRAO,
 };
 
 export interface ContextoDoMemorial {
@@ -474,6 +478,22 @@ export function memorialDeCalculoHidro(model: BlueprintModel, hip: HipotesesHidr
   // ── Águas pluviais (E6.4) ───────────────────────────────────────────────────
   if (temPluvial) B.push(...secaoPluvial(model, hip.pluvial, nivel));
 
+  // ── Aquecedor de passagem (E8.1) ──────────────────────────────────────────
+  const aquecedores = temAgua ? dimensionarAquecedores(model, hip.aquecedor, redesDeAgua) : [];
+  if (aquecedores.length) {
+    B.push({ tipo: 'secao', texto: 'Aquecedor de passagem' });
+    B.push({
+      tipo: 'tabela',
+      cabecalho: ['Aquecedor', 'Pontos', 'ΣP', 'Q (L/min)', 'ΔT (°C)', 'Nominal pedida (L/min)', 'Modelo', 'Entrada (kPa)', 'Situação'],
+      linhas: aquecedores.map((a, i) => [
+        `AQ${i + 1} (${nivel(a.levelId)})`, String(a.pontos), nBr(a.somaDePesos), nBr(a.vazaoLMin, 1), nBr(a.deltaTC, 0), nBr(a.capacidadeNecessariaLMin, 1),
+        a.modeloLMin != null ? `${a.modeloLMin} L/min` : '—', a.pressaoNaEntradaKpa != null ? nBr(a.pressaoNaEntradaKpa, 1) : '—',
+        a.atende ? 'Atende' : a.modeloLMin == null ? 'Acima da lista' : !a.pressaoOk ? 'Pressão insuficiente' : 'Sem pontos',
+      ]),
+    });
+    B.push({ tipo: 'paragrafo', texto: `Vazão simultânea da rede quente pelos pesos da NBR 5626 (Q = 0,3·√ΣP). A capacidade nominal do aquecedor de passagem é a vazão aquecida em 20 °C: para levar Q de ${nBr(hip.aquecedor.temperaturaDaAguaFriaC, 0)} °C a ${nBr(hip.aquecedor.temperaturaDeUsoC, 0)} °C, a nominal é Q·ΔT/20. Pressão mínima na entrada: ${nBr(hip.aquecedor.pressaoMinimaKpa, 0)} kPa.` });
+  }
+
   // ── Colunas (E2.3) ──────────────────────────────────────────────────────────
   const colunas = colunasDoModelo(model);
   if (colunas.length) {
@@ -585,8 +605,10 @@ export function memorialDescritivoHidro(model: BlueprintModel, hip: HipotesesHid
     }
   }
   if (temQuente) {
+    const aqs = dimensionarAquecedores(model, hip.aquecedor, pressoesDoModelo(model, hip.pressao));
+    const modelos = aqs.filter((a) => a.modeloLMin != null).map((a) => `${a.modeloLMin} L/min`);
     B.push({ tipo: 'subsecao', texto: 'Água quente' });
-    B.push({ tipo: 'paragrafo', texto: 'Produção no aquecedor indicado no desenho, alimentado pela rede de água fria; distribuição em tubulação própria para água quente até os pontos de utilização.' });
+    B.push({ tipo: 'paragrafo', texto: `Produção no aquecedor indicado no desenho${modelos.length ? ` (de passagem, capacidade nominal de ${modelos.join(' e ')} a ΔT 20 °C)` : ''}, alimentado pela rede de água fria; distribuição em tubulação própria para água quente até os pontos de utilização, a ${nBr(hip.aquecedor.temperaturaDeUsoC, 0)} °C.` });
   }
   if (temEsgoto) {
     const cis = caixasDeInspecao(model).length;

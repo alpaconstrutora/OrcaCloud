@@ -19,7 +19,7 @@ import { planejarPecasDaCaixa } from '../../utils/blueprintPecasDaCaixa';
  * `cotaDaCaixaMm` acima do piso dele — a caixa elevada da E3.3); CI no térreo.
  * `comAjuste`: a água sai com o DN ajustado pela pressão, como no editor.
  */
-export function sobrado(doisAndares = true, opcoes: { cotaDaCaixaMm?: number; comAjuste?: boolean; volumeDaCaixaL?: number; alimentador?: boolean; ligacao?: boolean; ventilacao?: boolean; estrutura?: (niveis: string[]) => Command[] } = {}): BlueprintModel {
+export function sobrado(doisAndares = true, opcoes: { cotaDaCaixaMm?: number; comAjuste?: boolean; volumeDaCaixaL?: number; alimentador?: boolean; ligacao?: boolean; ventilacao?: boolean; estrutura?: (niveis: string[]) => Command[]; aguaQuente?: boolean } = {}): BlueprintModel {
   let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
   if (doisAndares) m = applyCommand(m, { type: 'AddLevel', name: 'Superior', elevationMm: 2900, defaultHeightMm: 2800 }).model;
   const niveis = m.levels.map((l) => l.id);
@@ -27,7 +27,7 @@ export function sobrado(doisAndares = true, opcoes: { cotaDaCaixaMm?: number; co
     [[0, 0, 4500, 0], [4500, 0, 4500, 3000], [4500, 3000, 0, 3000], [0, 3000, 0, 0], [2000, 0, 2000, 3000]].map(([ax, ay, bx, by]) => ({
       type: 'AddWall', levelId, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800,
     }) as Command);
-  const ponto = (levelId: string, disciplina: 'AGUA_FRIA' | 'ESGOTO', tipo: TipoDePontoHidraulico, x: number, y: number, cota: number): Command =>
+  const ponto = (levelId: string, disciplina: 'AGUA_FRIA' | 'AGUA_QUENTE' | 'ESGOTO', tipo: TipoDePontoHidraulico, x: number, y: number, cota: number): Command =>
     ({ type: 'AddTerminal', levelId, disciplina, tipo, at: point(x, y), cotaMm: cota, tipoHidraulico: tipo }) as Command;
   const banheiro = (l: string): Command[] => [
     ponto(l, 'AGUA_FRIA', 'LAVATORIO', 75, 2500, 600),
@@ -45,6 +45,18 @@ export function sobrado(doisAndares = true, opcoes: { cotaDaCaixaMm?: number; co
     ponto(niveis[0], 'ESGOTO', 'CAIXA_INSPECAO', 6000, -1500, -700),
     // E5.5: pilares e vigas ANTES dos planejadores — o traçado desvia deles.
     ...(opcoes.estrutura?.(niveis) ?? []),
+    // E8.1: o aquecedor de passagem no térreo (entrada fria e saída quente no mesmo lugar)
+    // e o chuveiro e o lavatório quentes em cada andar.
+    ...(opcoes.aguaQuente
+      ? [
+          ({ type: 'AddTerminal', levelId: niveis[0], disciplina: 'AGUA_FRIA', tipo: 'Aquecedor', at: point(4425, 1500), cotaMm: 1600, tipoHidraulico: 'AQUECEDOR' }) as Command,
+          ({ type: 'AddTerminal', levelId: niveis[0], disciplina: 'AGUA_QUENTE', tipo: 'Aquecedor', at: point(4425, 1500), cotaMm: 1600, tipoHidraulico: 'AQUECEDOR' }) as Command,
+          ...niveis.flatMap((l) => [
+            ponto(l, 'AGUA_QUENTE', 'CHUVEIRO', 1600, 2925, 2100),
+            ponto(l, 'AGUA_QUENTE', 'LAVATORIO', 75, 2400, 600),
+          ]),
+        ]
+      : []),
   ]).model;
   m = recomputeSpaces(m);
   // E4.1: os ambientes com nome — o banheiro à esquerda e um QUARTO à direita (população pelos dormitórios).
@@ -57,6 +69,7 @@ export function sobrado(doisAndares = true, opcoes: { cotaDaCaixaMm?: number; co
   }
   const plano = planejarAgua(m, m.terminais!.find((t) => t.tipoHidraulico === 'RESERVATORIO')!);
   m = applyBatch(m, (opcoes.comAjuste ? comAjusteDePressao(m, plano) : plano).comandos).model;
+  if (opcoes.aguaQuente) m = applyBatch(m, planejarAgua(m, m.terminais!.find((t) => t.tipoHidraulico === 'AQUECEDOR' && t.disciplina === 'AGUA_QUENTE')!).comandos).model;
   m = applyBatch(m, planejarEsgoto(m).comandos).model;
   // E5.4: a ventilação lançada (colunas dos desconectores e o prolongamento acima da cobertura).
   if (opcoes.ventilacao) m = applyBatch(m, planejarVentilacao(m).comandos).model;

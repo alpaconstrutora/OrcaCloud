@@ -210,9 +210,12 @@ import PainelComponenteSelecionado from './PainelComponenteSelecionado';
 import PainelVerificacaoDaRede from './PainelVerificacaoDaRede';
 import PainelPressoesDaAgua from './PainelPressoesDaAgua';
 import PainelMemoriaisHidro, { type FormatoDoMemorial, type QualMemorial } from './PainelMemoriaisHidro';
-import { memorialDeCalculoHidro, memorialDescritivoHidro, type HipotesesHidro } from '../../utils/blueprintMemorialHidro';
+import { blocosDasLinhas, linhasDoMemorial, memorialDeCalculoHidro, memorialDescritivoHidro, type HipotesesHidro } from '../../utils/blueprintMemorialHidro';
+import { hashDaBaseHidro, memorialExecutivoHidro, verificacoesHidro } from '../../utils/blueprintHidroExecutivo';
+import PainelHidroExecutivo from './PainelHidroExecutivo';
+import { useBlueprintHidro } from '../../hooks/useBlueprintHidro';
 import { artefatosDoMemorial } from '../../services/blueprintMemorialHidroService';
-import { HIPOTESES_PRESSAO_PADRAO, comAjusteDePressao, pressoesDoModelo, type HipotesesDePressao } from '../../utils/blueprintPressaoDaRede';
+import { comAjusteDePressao, pressoesDoModelo, type HipotesesDePressao } from '../../utils/blueprintPressaoDaRede';
 import { marcasDeVerificacao } from '../../utils/blueprintVerificacaoRede';
 import SeletorDeTipo from './SeletorDeTipo';
 import { camposDoComponente, propriedadesDoComponente, type PropriedadesDeComponente } from '../../utils/blueprintTipos';
@@ -488,7 +491,7 @@ import { useBlueprintUnderlay } from '../../hooks/useBlueprintUnderlay';
 import type { PontoPx } from '../../utils/blueprintUnderlay';
 import type { ParedeGerada, PortaGerada } from '../../utils/blueprintVetor';
 import { extrairSegmentosPdf } from '../../services/blueprintUnderlayService';
-import type { BlueprintBranch, BlueprintQuantitySnapshot, BlueprintStudy } from '../../types/blueprint';
+import type { BlueprintBranch, BlueprintProjetoExecutivoRow, BlueprintQuantitySnapshot, BlueprintStudy } from '../../types/blueprint';
 import {
   computeAndStoreQuantities,
   createAlternative,
@@ -625,7 +628,6 @@ import {
   type KitHidraulico,
 } from '../../utils/blueprintPontosHidraulicos';
 import {
-  HIPOTESES_AGUA_PADRAO,
   planejarAguaDoModelo,
   refazerAgua,
   relancarAgua,
@@ -633,7 +635,6 @@ import {
   type PlanoDeAgua,
 } from '../../utils/blueprintAguaAutomatica';
 import {
-  HIPOTESES_ESGOTO_PADRAO,
   planejarEsgoto,
   refazerEsgoto,
   relancarEsgoto,
@@ -952,7 +953,7 @@ const ROTULO_DA_TAREFA = {
   esgoto: 'Esgoto automático',
   // Memoriais hidrossanitários (28/09/2026, roadmap hidrossanitário E3.1/E3.2): o de
   // cálculo e o descritivo, derivados do desenho, em PDF ou DOCX.
-  memoriaisHidro: 'Memoriais hidrossanitários',
+  memoriaisHidro: 'Memoriais hidrossanitários e emissão (ART)',
   // Matriz (18/09/2026, roadmap E0.1): N cópias da seleção a k·passo — a
   // fileira de pilares, a bateria de banheiros. Um lote, um Ctrl+Z.
   matriz: 'Matriz — repetir a seleção',
@@ -7150,11 +7151,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * lançar (sugeridos), relançar (refaz os sugeridos) e refazer (apaga tudo,
    * com confirmação).
    */
-  const [hipDeAguaSalvas, setHipDeAguaSalvas] = usePersistedState<HipotesesDeAgua>('blueprint:aguaAutomatica', HIPOTESES_AGUA_PADRAO);
-  const hipotesesDeAgua = useMemo<HipotesesDeAgua>(() => ({ ...HIPOTESES_AGUA_PADRAO, ...(hipDeAguaSalvas ?? {}) }), [hipDeAguaSalvas]);
+  // PREMISSAS DO ESTUDO (29/09/2026, E3.3): água, pressão e esgoto moram no estudo
+  // (`blueprint_study_hidro`) e não mais no navegador — a emissão com ART amarra o
+  // hash delas. Sem a tabela, o hook segue no navegador como antes.
+  const hidroDoEstudo = useBlueprintHidro(study.id, study.organization_id);
+  const hipotesesDeAgua = hidroDoEstudo.hipoteses.agua;
+  const setHipDeAguaSalvas = (agua: HipotesesDeAgua) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, agua });
   /** PRESSÃO NOS PONTOS (28/09/2026, E1.3): hipóteses do usuário, cálculo derivado do modelo. */
-  const [hipPressaoSalvas, setHipPressao] = usePersistedState<HipotesesDePressao>('blueprint:pressaoDaAgua', HIPOTESES_PRESSAO_PADRAO);
-  const hipPressao = useMemo<HipotesesDePressao>(() => ({ ...HIPOTESES_PRESSAO_PADRAO, ...(hipPressaoSalvas ?? {}) }), [hipPressaoSalvas]);
+  const hipPressao = hidroDoEstudo.hipoteses.pressao;
+  const setHipPressao = (pressao: HipotesesDePressao) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, pressao });
   // E1.4: cada plano sai já com o DN ajustado para a pressão mínima (NBR 5626).
   const planosDeAgua = useMemo(
     () => planejarAguaDoModelo(editor.model, hipotesesDeAgua).map((p) => comAjusteDePressao(editor.model, p, hipPressao)),
@@ -7191,8 +7196,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const haAguaALancar = planosDeAgua.some((p) => p.comandos.length > 0 || p.sugeridos > 0);
 
   /** ─── ESGOTO AUTOMÁTICO (18/09/2026, F5) ─────────────────────────────────── */
-  const [hipDeEsgotoSalvas, setHipDeEsgotoSalvas] = usePersistedState<HipotesesDeEsgoto>('blueprint:esgotoAutomatico', HIPOTESES_ESGOTO_PADRAO);
-  const hipotesesDeEsgoto = useMemo<HipotesesDeEsgoto>(() => ({ ...HIPOTESES_ESGOTO_PADRAO, ...(hipDeEsgotoSalvas ?? {}) }), [hipDeEsgotoSalvas]);
+  const hipotesesDeEsgoto = hidroDoEstudo.hipoteses.esgoto;
+  const setHipDeEsgotoSalvas = (esgoto: HipotesesDeEsgoto) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, esgoto });
   const planoDeEsgoto = useMemo(() => planejarEsgoto(editor.model, hipotesesDeEsgoto), [editor.model, hipotesesDeEsgoto]);
   /** VERIFICAÇÃO DA REDE (28/09/2026, E0.1 do roadmap hidrossanitário): pontas abertas, DN do esgoto, louça sem ponto. */
   const pressoesDaAgua = useMemo(() => pressoesDoModelo(editor.model, hipPressao), [editor.model, hipPressao]);
@@ -7200,15 +7205,56 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   // MEMORIAIS HIDROSSANITÁRIOS (28/09/2026, E3.1/E3.2): com as MESMAS premissas das
   // gavetas de água, de pressão e de esgoto. A prévia (o sumário das seções) só é
   // montada com a gaveta aberta; o arquivo remonta na hora, com a data do download.
-  const hipotesesHidro = useMemo<HipotesesHidro>(
-    () => ({ agua: hipotesesDeAgua, pressao: hipPressao, esgoto: hipotesesDeEsgoto }),
-    [hipotesesDeAgua, hipPressao, hipotesesDeEsgoto],
-  );
+  const hipotesesHidro: HipotesesHidro = hidroDoEstudo.hipoteses;
   const previaDosMemoriaisHidro = useMemo(() => {
     if (tarefaAberta !== 'memoriaisHidro') return null;
     const ctx = { nomeDoEstudo: study.name, geradoEm: new Date().toISOString() };
     return { calculo: memorialDeCalculoHidro(editor.model, hipotesesHidro, ctx), descritivo: memorialDescritivoHidro(editor.model, hipotesesHidro, ctx) };
   }, [tarefaAberta, editor.model, hipotesesHidro, study.name]);
+  // EMISSÃO COM ART (29/09/2026, E3.3): conferência NBR 5626/8160 do modelo inteiro,
+  // hash de desenho + premissas, e os dois memoriais gravados na emissão. A conferência
+  // (que roda os planejadores) só com a gaveta aberta.
+  const executivoHidro = useBlueprintProjetoExecutivo(study.id, study.organization_id, 'HIDROSSANITARIA');
+  const resultadoHidro = useMemo(
+    () => (tarefaAberta === 'memoriaisHidro' ? verificacoesHidro(editor.model, hipotesesHidro, executivoHidro.responsavel) : null),
+    [tarefaAberta, editor.model, hipotesesHidro, executivoHidro.responsavel],
+  );
+  const hashHidro = useMemo(
+    () => (tarefaAberta === 'memoriaisHidro' ? hashDaBaseHidro(editor.model, hipotesesHidro) : null),
+    [tarefaAberta, editor.model, hipotesesHidro],
+  );
+  const emissaoHidroValida = useMemo<EmissaoExecutiva | null>(() => {
+    const row = hashHidro && executivoHidro.emitidos.find((r) => r.hash_da_base === hashHidro.base && r.emitido_em);
+    if (!row) return null;
+    return { artNumero: row.responsavel.artNumero, responsavel: row.responsavel.nome, conselho: row.responsavel.conselho, registro: row.responsavel.registro, emitidoEm: row.emitido_em! };
+  }, [executivoHidro.emitidos, hashHidro]);
+  const emitirHidro = useCallback(async () => {
+    if (!resultadoHidro?.podeEmitir || !hashHidro) return;
+    const emitidoEm = new Date().toISOString();
+    const blocos = memorialExecutivoHidro(editor.model, hipotesesHidro, executivoHidro.responsavel, resultadoHidro, {
+      nomeDoEstudo: study.name,
+      hashDoDesenho: hashHidro.desenho,
+      hashDaBase: hashHidro.base,
+      emitidoEm,
+    });
+    await executivoHidro.emitir({
+      topografia_id: null,
+      topografia_versao: null,
+      topografia_hash: null,
+      hash_da_base: hashHidro.base,
+      verificacoes: resultadoHidro.verificacoes,
+      memorial: linhasDoMemorial(blocos).join('\n'),
+      emitido_em: emitidoEm,
+    });
+  }, [resultadoHidro, hashHidro, editor.model, hipotesesHidro, executivoHidro, study.name]);
+  /** O memorial GRAVADO na emissão (texto) → PDF/DOCX. Não recalcula: é o que foi emitido. */
+  const baixarMemorialEmitidoHidro = useCallback(
+    async (row: BlueprintProjetoExecutivoRow, formato: FormatoDoMemorial) => {
+      const nome = `${study.name} - projeto executivo hidrossanitário ${row.responsavel.conselho === 'CAU' ? 'RRT' : 'ART'} ${row.responsavel.artNumero}`;
+      baixarArtefatos(await artefatosDoMemorial(blocosDasLinhas((row.memorial ?? '').split('\n')), nome, nome, formato));
+    },
+    [study.name],
+  );
   const baixarMemorialHidro = useCallback(
     async (qual: QualMemorial, formato: FormatoDoMemorial) => {
       const ctx = { nomeDoEstudo: study.name, geradoEm: new Date().toISOString() };
@@ -10186,7 +10232,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             <GrupoDoRibbon rotulo="Documentos">
               <BotaoDoRibbon
                 icone={FileText}
-                rotulo="Memoriais"
+                rotulo="Memoriais e ART"
+                contagem={executivoHidro.emitidos.length || undefined}
                 ativo={tarefaAberta === 'memoriaisHidro'}
                 onClick={() => alternarTarefa('memoriaisHidro')}
                 ajuda="Memorial de cálculo (água trecho a trecho, pressões, esgoto por UHC e declividade) e memorial descritivo, gerados do desenho — PDF ou DOCX"
@@ -13674,7 +13721,24 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           )}
 
           {tarefaAberta === 'memoriaisHidro' && previaDosMemoriaisHidro && (
-            <PainelMemoriaisHidro calculo={previaDosMemoriaisHidro.calculo} descritivo={previaDosMemoriaisHidro.descritivo} onBaixar={baixarMemorialHidro} />
+            <div className="space-y-3">
+              <PainelMemoriaisHidro calculo={previaDosMemoriaisHidro.calculo} descritivo={previaDosMemoriaisHidro.descritivo} onBaixar={baixarMemorialHidro} />
+              <PainelHidroExecutivo
+                e={{
+                  responsavel: executivoHidro.responsavel,
+                  onResponsavel: executivoHidro.setResponsavel,
+                  resultado: resultadoHidro,
+                  emitidos: executivoHidro.emitidos,
+                  emissaoValida: emissaoHidroValida,
+                  hashDaBaseAtual: hashHidro?.base ?? '',
+                  onEmitir: () => void emitirHidro(),
+                  emitindo: executivoHidro.emitindo,
+                  erro: executivoHidro.erro,
+                  onBaixarMemorial: (row, formato) => void baixarMemorialEmitidoHidro(row, formato),
+                  persistenciaIndisponivel: executivoHidro.persistenciaIndisponivel,
+                }}
+              />
+            </div>
           )}
 
           {tarefaAberta === 'esgoto' && (

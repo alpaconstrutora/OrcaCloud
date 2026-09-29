@@ -7,9 +7,14 @@
 import { applyBatch, applyCommand, emptyModel, point, recomputeSpaces, type BlueprintModel, type Command, type TipoDePontoHidraulico } from '../../utils/blueprintKernel';
 import { planejarAgua } from '../../utils/blueprintAguaAutomatica';
 import { planejarEsgoto } from '../../utils/blueprintEsgotoAutomatico';
+import { comAjusteDePressao } from '../../utils/blueprintPressaoDaRede';
 
-/** O banheiro repetido nos dois andares; caixa d'água no teto do superior; CI no térreo. */
-export function sobrado(doisAndares = true): BlueprintModel {
+/**
+ * O banheiro repetido nos dois andares; caixa d'água no teto do superior (ou
+ * `cotaDaCaixaMm` acima do piso dele — a caixa elevada da E3.3); CI no térreo.
+ * `comAjuste`: a água sai com o DN ajustado pela pressão, como no editor.
+ */
+export function sobrado(doisAndares = true, opcoes: { cotaDaCaixaMm?: number; comAjuste?: boolean } = {}): BlueprintModel {
   let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
   if (doisAndares) m = applyCommand(m, { type: 'AddLevel', name: 'Superior', elevationMm: 2900, defaultHeightMm: 2800 }).model;
   const niveis = m.levels.map((l) => l.id);
@@ -30,11 +35,12 @@ export function sobrado(doisAndares = true): BlueprintModel {
   ];
   m = applyBatch(m, [
     ...niveis.flatMap(paredes),
-    { type: 'AddTerminal', levelId: niveis[niveis.length - 1], disciplina: 'AGUA_FRIA', tipo: "Caixa d'água", at: point(4500, 0), cotaMm: 2800, tipoHidraulico: 'RESERVATORIO' } as Command,
+    { type: 'AddTerminal', levelId: niveis[niveis.length - 1], disciplina: 'AGUA_FRIA', tipo: "Caixa d'água", at: point(4500, 0), cotaMm: opcoes.cotaDaCaixaMm ?? 2800, tipoHidraulico: 'RESERVATORIO' } as Command,
     ...niveis.flatMap(banheiro),
     ponto(niveis[0], 'ESGOTO', 'CAIXA_INSPECAO', 6000, -1500, -700),
   ]).model;
   m = recomputeSpaces(m);
-  m = applyBatch(m, planejarAgua(m, m.terminais!.find((t) => t.tipoHidraulico === 'RESERVATORIO')!).comandos).model;
+  const plano = planejarAgua(m, m.terminais!.find((t) => t.tipoHidraulico === 'RESERVATORIO')!);
+  m = applyBatch(m, (opcoes.comAjuste ? comAjusteDePressao(m, plano) : plano).comandos).model;
   return applyBatch(m, planejarEsgoto(m).comandos).model;
 }

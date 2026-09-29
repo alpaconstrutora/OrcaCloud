@@ -529,3 +529,35 @@ vertical cobre o traçado das colunas) e anticolisão dos rótulos na planta.
   volta do texto com "|" e célula vazia; DOCX escapado e deitado; troca WinAnsi. 3 testes do painel.
   PDF (3 págs. de cálculo, 2 de descritivo) conferido no olho; DOCX aberto pelo mammoth sem erro.
   Suíte: 526 arquivos / 5.942 testes; build ok.
+
+### E3.3 — Emissão com ART (29/09/2026) · fecha a Etapa 3
+
+- **Migration** `aplicar_20270929000001_blueprint_hidro_executivo.sql` (aplicada em 29/09 com o OK
+  do usuário, por `db query -f`; conferida por leitura: CHECK com HIDROSSANITARIA, RLS ligada,
+  policy por organização, grants só para `authenticated`, 0 linhas de emissão tocadas):
+  `blueprint_study_hidro` (premissas por estudo) e a disciplina HIDROSSANITARIA na tabela de
+  emissão da topografia e da elétrica.
+- **Premissas do ESTUDO**: `hooks/useBlueprintHidro.ts` + `services/blueprintHidroService.ts`. Até
+  aqui água, pressão e esgoto moravam em três chaves do `localStorage` — o mesmo estudo calculava
+  diferente em outra máquina, e a emissão amarra o hash delas. Passagem: estudo com linha → a
+  linha; sem linha → adota o que o navegador já tinha e grava no estudo; sem a tabela → segue no
+  navegador. `hipotesesHidroDaColuna`: JSON parcial completado com o padrão, tipo errado e chave
+  estranha fora, `rotaMaximaVezes: null` preservado.
+- `utils/blueprintHidroExecutivo.ts` (puro): `verificacoesHidro` — RESPONSAVEL (nome/registro,
+  ART/RRT), DADOS (há instalação, nada sugerido, nenhuma ponta aberta, toda louça com ponto), NBR
+  5626 (todo ponto ligado, toda rede calculada, pressão dinâmica mínima em cada ponto, estática
+  máxima, V ≤ 3 m/s) e NBR 8160 (toda fonte ligada à CI, DN pelas UHC, declividade mínima, TQ
+  ventilado); `hashDaBaseHidro` (desenho + premissas); `memorialExecutivoHidro` — capa
+  (responsável, ART, base, verificações, declaração) + memorial de cálculo + descritivo, gravado
+  em texto na emissão e reaberto em PDF/DOCX. NBR 10844 e 7229 entram com os sistemas (E6/E7).
+- Tela: a gaveta **Memoriais e ART** ganhou `PainelHidroExecutivo` (molde do elétrico): responsável,
+  verificações por grupo com ✓/✗, Emitir desligado dizendo o motivo, carimbo da emissão válida e a
+  lista de emissões dizendo se ainda valem, com o memorial gravado em PDF e DOCX.
+- **Pronto quando** ✔: 9 testes em `blueprintHidroExecutivo.test.ts` — sobrado com caixa 4,5 m
+  acima do superior, confirmado e com responsável: nenhuma pendência; caixa no teto do superior: o
+  chuveiro de cima fica sem pressão mesmo com o ajuste de DN (a única pendência); sugerida, DN do
+  esgoto reduzido e desenho vazio travam; hash muda com o desenho e com a premissa; capa + cálculo
+  + descritivo com ida e volta do texto; coluna parcial. 4 testes do painel. Suíte: 530 arquivos /
+  5.982 testes.
+
+**Etapa 3: 3 de 3 fases publicadas.**

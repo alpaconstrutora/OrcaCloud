@@ -127,7 +127,7 @@ export interface BlueprintProjetoExecutivoRow {
    * TERRAPLENAGEM (topografia) ou ELETRICA (NBR 5410). Um rascunho por
    * estudo POR disciplina.
    */
-  disciplina: 'TERRAPLENAGEM' | 'ELETRICA';
+  disciplina: 'TERRAPLENAGEM' | 'ELETRICA' | 'HIDROSSANITARIA';
   responsavel: ResponsavelTecnico;
   /** Só a terraplenagem usa; a elétrica grava `{}`. */
   sondagem: Sondagem;
@@ -150,6 +150,20 @@ export interface BlueprintProjetoExecutivoRow {
  * estudo; JSONB parcial, completado com `HIPOTESES_PADRAO` na leitura.
  */
 export interface BlueprintEletricaRow {
+  id: string;
+  study_id: string;
+  organization_id: string;
+  hipoteses: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Premissas hidrossanitárias de um estudo — linha de `blueprint_study_hidro`
+ * (migration `aplicar_20270929000001`). Uma por estudo; JSONB parcial
+ * `{ agua, pressao, esgoto }`, completado com o padrão na leitura.
+ */
+export interface BlueprintHidroRow {
   id: string;
   study_id: string;
   organization_id: string;

@@ -76,7 +76,7 @@ describe('E2.1 — a planta hidrossanitária no papel', () => {
     desenharPlanta(d, m, opcoes({ hidrossanitaria: 'ESGOTO' }), enquadrar(m, 50, papel, false));
     const textos = d.textos().join(' | ');
     expect(textos).toMatch(/ø100 mm · i 2 %/);
-    expect(textos).toMatch(/TQ1 ø100/);
+    expect(textos).toMatch(/TQ-1 ø100/); // E2.3: o nome da coluna do desenho
     expect(textos).toMatch(/CI/);
     expect(textos).not.toMatch(/ø25/);
     // Bifilar = o miolo é um polígono a mais que a arquitetura.
@@ -120,9 +120,10 @@ describe('E2.1 — o conjunto de pranchas', () => {
     expect(temRedeNoPavimento(m, t, 'AGUA')).toBe(true);
     expect(temRedeNoPavimento(m, s, 'AGUA')).toBe(false);
     const plano = planejarConjunto(m, sem({ hidraulica: true, sanitaria: true }));
-    expect(plano.map((p) => p.tipo)).toEqual(['HIDRAULICA', 'SANITARIA', 'DETALHES_HIDRO']);
-    expect(plano.map((p) => p.levelId)).toEqual([t, t, undefined]);
-    expect(planejarConjunto(m, sem({})).some((p) => ['HIDRAULICA', 'SANITARIA', 'DETALHES_HIDRO'].includes(p.tipo))).toBe(false);
+    // E2.3: o TQ1 é coluna — o esquema vertical entra no fim.
+    expect(plano.map((p) => p.tipo)).toEqual(['HIDRAULICA', 'SANITARIA', 'DETALHES_HIDRO', 'ESQUEMA_HIDRO']);
+    expect(plano.map((p) => p.levelId)).toEqual([t, t, undefined, undefined]);
+    expect(planejarConjunto(m, sem({})).some((p) => ['HIDRAULICA', 'SANITARIA', 'DETALHES_HIDRO', 'ESQUEMA_HIDRO'].includes(p.tipo))).toBe(false);
     // Sem rede nenhuma: nem a folha de legenda.
     const vazio = { ...m, trechos: [], terminais: [] };
     expect(planejarConjunto(vazio, sem({ hidraulica: true, sanitaria: true }))).toEqual([]);
@@ -139,10 +140,11 @@ describe('E2.1 — o conjunto de pranchas', () => {
       folhas.push(f);
       return f;
     });
-    expect(r.folhas).toHaveLength(3);
+    expect(r.folhas).toHaveLength(4);
     expect(folhas[0].textos().join(' | ')).toMatch(/ø25/);
     expect(folhas[1].textos().join(' | ')).toMatch(/ø100/);
     expect(folhas[2].textos()).toContain('LEGENDA E DETALHES HIDROSSANITÁRIOS');
+    expect(folhas[3].textos()).toContain('ESQUEMA VERTICAL HIDROSSANITÁRIO');
   });
 });
 

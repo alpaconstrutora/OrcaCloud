@@ -24,6 +24,7 @@
  * os dois a carregar condicional do outro.
  */
 
+import { desenharEsquemaVertical, nomesDasColunas } from './blueprintEsquemaVertical';
 import { desenharIsometricos, isometricosDoModelo } from './blueprintIsometricoPrancha';
 import { desenharHidrossanitaria, desenharLegendaHidro, type RedeDaPrancha } from './blueprintPranchaHidro';
 import type { Anotacao, BlueprintModel, Point, Wall } from './blueprintKernel';
@@ -344,6 +345,12 @@ export interface OpcoesExportacao {
   hidrossanitaria?: RedeDaPrancha;
   /** E2.1: as redes hidrossanitárias que vão como camadas no DXF (a aba Versões marca pelas pranchas). */
   redesNoDxf?: RedeDaPrancha[];
+  /**
+   * E2.3: o nome de cada coluna (AF-1, TQ-1 · CV-1) calculado no desenho
+   * INTEIRO — a planta de um pavimento recebe o modelo recortado, e numerar
+   * nele daria "AF-1" a colunas diferentes em pranchas diferentes.
+   */
+  nomesDasColunas?: ReadonlyMap<string, string>;
   /** Hipóteses do pré-dimensionamento, para o quadro de cargas da prancha. */
   hipotesesEletricas?: HipotesesEletricas;
   /**
@@ -570,7 +577,7 @@ export function desenharPlanta(
   // A camada elétrica vem DEPOIS da arquitetura e ANTES das cotas: símbolo
   // por cima da parede, cota por cima de tudo — a ordem da prancha.
   if (opcoes.eletrica) desenharEletrica(d, model, { px, py });
-  if (opcoes.hidrossanitaria) desenharHidrossanitaria(d, model, { px, py }, opcoes.hidrossanitaria, opcoes.denominador, null);
+  if (opcoes.hidrossanitaria) desenharHidrossanitaria(d, model, { px, py }, opcoes.hidrossanitaria, opcoes.denominador, null, opcoes.nomesDasColunas ?? nomesDasColunas(model));
 
   if (opcoes.cotas) desenharCotas(d, model, opcoes, enq, px, py);
 
@@ -860,6 +867,24 @@ export function desenharFolhaDoQuadroDeCargas(
   enq: Enquadramento,
 ): void {
   desenharQuadroDeCargas(d, model, opcoes, enq, opcoes.hipotesesEletricas);
+  desenharCarimbo(d, opcoes, enq);
+}
+
+/**
+ * A FOLHA DO ESQUEMA VERTICAL (E2.3, 28/09/2026): colunas de água, tubos de
+ * queda e ventilação com os pavimentos, e a legenda das colunas.
+ */
+export function desenharFolhaDoEsquemaVertical(
+  d: Desenhista,
+  model: BlueprintModel,
+  opcoes: OpcoesExportacao,
+  enq: Enquadramento,
+  redes: RedeDaPrancha[],
+): void {
+  const x0 = enq.offsetXMm - Math.max(0, (enq.utilLarguraMm - enq.desenhoLarguraMm) / 2);
+  const topo = enq.offsetYMm - Math.max(0, (enq.utilAlturaMm - enq.desenhoAlturaMm) / 2);
+  d.texto(x0, topo + 6, 'ESQUEMA VERTICAL HIDROSSANITÁRIO', 3.2);
+  desenharEsquemaVertical(d, model, redes, x0, topo + 12, enq.utilLarguraMm, enq.utilAlturaMm - 14);
   desenharCarimbo(d, opcoes, enq);
 }
 

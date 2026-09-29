@@ -13,7 +13,8 @@
  * template é da ORGANIZAÇÃO (JSONB sanitizado em `templateDePranchaDaColuna`),
  * como o template de vista (E8.2) e o tipo de parede.
  */
-import { temRedeNoPavimento } from './blueprintPranchaHidro';
+import { DISCIPLINAS_DA_REDE, temRedeNoPavimento, type RedeDaPrancha } from './blueprintPranchaHidro';
+import { colunasDoModelo } from './blueprintEsquemaVertical';
 import type { BlueprintModel, ObjectId, Point, TipoDeAmbiente } from './blueprintKernel';
 import { ESCALAS, PAPEIS, type Papel } from './blueprintExport';
 
@@ -142,7 +143,7 @@ export interface Recorte {
   maxY: number;
 }
 
-export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'HUMANIZADA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS' | 'TOPOGRAFICA' | 'INCRA' | 'HIDRAULICA' | 'SANITARIA' | 'DETALHES_HIDRO';
+export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'HUMANIZADA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS' | 'TOPOGRAFICA' | 'INCRA' | 'HIDRAULICA' | 'SANITARIA' | 'DETALHES_HIDRO' | 'ESQUEMA_HIDRO';
 
 export interface PranchaPlanejada {
   /** "A-01". */
@@ -235,6 +236,9 @@ export function planejarConjunto(model: BlueprintModel, t: TemplateDePrancha): P
       }
     }
     if (alguma) numerar({ tipo: 'DETALHES_HIDRO', titulo: 'Legenda e detalhes hidrossanitários', denominador: 0 });
+    // E2.3: o esquema vertical, quando há coluna das redes pedidas.
+    const redes = redesDoTemplate(t);
+    if (alguma && temColunaDasRedes(model, redes)) numerar({ tipo: 'ESQUEMA_HIDRO', titulo: 'Esquema vertical hidrossanitário', denominador: 0 });
   }
   if (t.incluir.cortes) {
     for (const c of model.sections ?? []) numerar({ tipo: 'CORTE', titulo: `Corte ${c.rotulo}`, denominador: t.denominadorCortes, corteId: c.id });
@@ -300,6 +304,16 @@ export function modeloDoPavimento(model: BlueprintModel, levelId: ObjectId): Blu
     quadros: doNivel(model.quadros),
     eixos: model.eixos ?? [],
   };
+}
+
+/** As redes hidrossanitárias que o template pede (E2.3). */
+export function redesDoTemplate(t: TemplateDePrancha): RedeDaPrancha[] {
+  return [...(t.incluir.hidraulica ? (['AGUA'] as const) : []), ...(t.incluir.sanitaria ? (['ESGOTO'] as const) : [])];
+}
+
+function temColunaDasRedes(model: BlueprintModel, redes: RedeDaPrancha[]): boolean {
+  const ds = redes.flatMap((r) => DISCIPLINAS_DA_REDE[r]);
+  return colunasDoModelo(model).some((c) => ds.includes(c.disciplina));
 }
 
 /** Quantos pavimentos têm parede — decide se a planta é "por pavimento" ou uma só. */

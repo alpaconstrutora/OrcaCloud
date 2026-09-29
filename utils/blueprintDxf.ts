@@ -31,6 +31,7 @@
  * O eixo vai junto, em camada própria: é dele que se reeditam as paredes.
  */
 
+import { nomesDasColunas } from './blueprintEsquemaVertical';
 import { desenharHidrossanitaria, type RedeDaPrancha } from './blueprintPranchaHidro';
 import { type Anotacao,
   planoDaAgua,
@@ -994,7 +995,7 @@ function entidadesDaRedeHidro(model: BlueprintModel, rede: RedeDaPrancha): strin
       saida += polilinha(traco, [real(x, y), real(x + w, y), real(x + w, y + h), real(x, y + h)]);
     },
   };
-  desenharHidrossanitaria(d, model, { px: (x) => x / FATOR, py: (y) => -y / FATOR }, rede, FATOR, null);
+  desenharHidrossanitaria(d, model, { px: (x) => x / FATOR, py: (y) => -y / FATOR }, rede, FATOR, null, nomesDasColunas(model));
   return saida;
 }
 

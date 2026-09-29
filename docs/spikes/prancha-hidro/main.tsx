@@ -1,5 +1,6 @@
 /**
- * HARNESS VISUAL da PRANCHA HIDROSSANITÁRIA (E2.1 + E2.2 isométricos, 28/09/2026).
+ * HARNESS VISUAL da PRANCHA HIDROSSANITÁRIA (E2.1 plantas, E2.2 isométricos, E2.3
+ * esquema vertical — 28/09/2026). `?cena=sobrado&nivel=1` mostra o superior.
  *
  * O MESMO `desenharPlanta` (com `hidrossanitaria`) e a MESMA folha de legenda
  * do conjunto, num `Desenhista` de canvas igual ao do PNG do app. Banheiro +
@@ -12,6 +13,7 @@ import { applyBatch, applyCommand, emptyModel, point, recomputeSpaces, type Blue
 import {
   PAPEIS,
   desenharFolhaDeDetalhesHidro,
+  desenharFolhaDoEsquemaVertical,
   desenharPlanta,
   enquadrar,
   orientar,
@@ -20,6 +22,8 @@ import {
   type OpcoesExportacao,
 } from '../../../utils/blueprintExport';
 import { planejarEsgoto } from '../../../utils/blueprintEsgotoAutomatico';
+import { modeloDoPavimento } from '../../../utils/blueprintPranchas';
+import { nomesDasColunas } from '../../../utils/blueprintEsquemaVertical';
 import { planejarAgua } from '../../../utils/blueprintAguaAutomatica';
 
 /** O desenhista de canvas — cópia do `DesenhistaCanvas` do serviço (mm → px). */
@@ -63,49 +67,68 @@ class DesenhistaCanvas implements Desenhista {
   }
 }
 
-function casa(): BlueprintModel {
-  const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
-  const t = base.levels[0].id;
-  const w = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddWall', levelId: t, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 });
-  const ponto = (disciplina: 'AGUA_FRIA' | 'ESGOTO', tipo: TipoDePontoHidraulico, x: number, y: number, cota: number): Command =>
-    ({ type: 'AddTerminal', levelId: t, disciplina, tipo, at: point(x, y), cotaMm: cota, tipoHidraulico: tipo } as Command);
-  let m = applyBatch(base, [
-    w(0, 0, 4500, 0), w(4500, 0, 4500, 3000), w(4500, 3000, 0, 3000), w(0, 3000, 0, 0), w(2000, 0, 2000, 3000),
-    { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: "Caixa d'água", at: point(4500, 0), cotaMm: 2800, tipoHidraulico: 'RESERVATORIO' } as Command,
-    ponto('AGUA_FRIA', 'LAVATORIO', 75, 2500, 600),
-    ponto('AGUA_FRIA', 'CHUVEIRO', 1500, 2925, 2100),
-    ponto('AGUA_FRIA', 'VASO_SANITARIO', 75, 800, 300),
-    ponto('AGUA_FRIA', 'TANQUE', 3500, 2925, 1100),
-    ponto('ESGOTO', 'VASO_SANITARIO', 600, 800, 0),
-    ponto('ESGOTO', 'LAVATORIO', 600, 2500, 500),
-    ponto('ESGOTO', 'CHUVEIRO', 1500, 2500, 0),
-    ponto('ESGOTO', 'CAIXA_SIFONADA', 1200, 2100, 0),
-    ponto('ESGOTO', 'TANQUE', 3500, 2600, 500),
-    ponto('ESGOTO', 'CAIXA_INSPECAO', 6000, -1500, -700),
+/**
+ * Banheiro + área de serviço no térreo. `?cena=sobrado` (E2.3): o mesmo
+ * banheiro no pavimento superior e a caixa d'água no teto dele — sai o TQ, a
+ * ventilação e as colunas de água atravessando o piso.
+ */
+function casa(sobrado: boolean): BlueprintModel {
+  let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+  if (sobrado) m = applyCommand(m, { type: 'AddLevel', name: 'Superior', elevationMm: 2900, defaultHeightMm: 2800 }).model;
+  const [t, s] = m.levels.map((l) => l.id);
+  const topo = sobrado ? s : t;
+  const paredes = (levelId: string): Command[] =>
+    [[0, 0, 4500, 0], [4500, 0, 4500, 3000], [4500, 3000, 0, 3000], [0, 3000, 0, 0], [2000, 0, 2000, 3000]].map(([ax, ay, bx, by]) => ({
+      type: 'AddWall', levelId, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800,
+    }) as Command);
+  const ponto = (levelId: string, disciplina: 'AGUA_FRIA' | 'ESGOTO', tipo: TipoDePontoHidraulico, x: number, y: number, cota: number): Command =>
+    ({ type: 'AddTerminal', levelId, disciplina, tipo, at: point(x, y), cotaMm: cota, tipoHidraulico: tipo } as Command);
+  const banheiro = (levelId: string): Command[] => [
+    ponto(levelId, 'AGUA_FRIA', 'LAVATORIO', 75, 2500, 600),
+    ponto(levelId, 'AGUA_FRIA', 'CHUVEIRO', 1500, 2925, 2100),
+    ponto(levelId, 'AGUA_FRIA', 'VASO_SANITARIO', 75, 800, 300),
+    ponto(levelId, 'ESGOTO', 'VASO_SANITARIO', 600, 800, 0),
+    ponto(levelId, 'ESGOTO', 'LAVATORIO', 600, 2500, 500),
+    ponto(levelId, 'ESGOTO', 'CHUVEIRO', 1500, 2500, 0),
+    ponto(levelId, 'ESGOTO', 'CAIXA_SIFONADA', 1200, 2100, 0),
+  ];
+  m = applyBatch(m, [
+    ...paredes(t),
+    ...(sobrado ? paredes(s) : []),
+    { type: 'AddTerminal', levelId: topo, disciplina: 'AGUA_FRIA', tipo: "Caixa d'água", at: point(4500, 0), cotaMm: 2800, tipoHidraulico: 'RESERVATORIO' } as Command,
+    ...banheiro(t),
+    ...(sobrado ? banheiro(s) : []),
+    ponto(t, 'AGUA_FRIA', 'TANQUE', 3500, 2925, 1100),
+    ponto(t, 'ESGOTO', 'TANQUE', 3500, 2600, 500),
+    ponto(t, 'ESGOTO', 'CAIXA_INSPECAO', 6000, -1500, -700),
   ]).model;
   m = applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais![0].id, larguraMm: 1200, profundidadeMm: 1200, alturaMm: 800 } as Command).model;
   m = recomputeSpaces(m);
-  for (const s of m.spaces) {
-    const esquerda = s.ring.every((p) => p.x <= 2000);
-    m = applyCommand(m, { type: 'NameSpace', spaceId: s.id, name: esquerda ? 'Banheiro' : 'Área de serviço', tipoDeAmbiente: esquerda ? 'BANHEIRO' : 'COZINHA_SERVICO' } as Command).model;
+  for (const e of m.spaces) {
+    const esquerda = e.ring.every((p) => p.x <= 2000);
+    m = applyCommand(m, { type: 'NameSpace', spaceId: e.id, name: esquerda ? 'Banheiro' : e.levelId === t ? 'Área de serviço' : 'Quarto', tipoDeAmbiente: esquerda ? 'BANHEIRO' : 'COZINHA_SERVICO' } as Command).model;
   }
   m = applyBatch(m, planejarAgua(m, m.terminais![0]).comandos).model;
   m = applyBatch(m, planejarEsgoto(m).comandos).model;
   return m;
 }
 
-const modelo = casa();
 const params = new URLSearchParams(location.search);
+const modelo = casa(params.get('cena') === 'sobrado');
+// A planta é a do pavimento `?nivel=` (0 = térreo), com os nomes das colunas do desenho inteiro.
+const pavimento = modeloDoPavimento(modelo, modelo.levels[Number(params.get('nivel') ?? 0)].id);
+const nomes = nomesDasColunas(modelo);
 const papel = orientar(PAPEIS.find((p) => p.id === (params.get('papel') ?? 'A3')) ?? PAPEIS[0], true);
 const denominador = Number(params.get('escala') ?? 50);
 const o: OpcoesExportacao = { denominador, papel, titulo: 'Casa de prova', revisao: 1, hash: 'e2'.repeat(32), data: new Date('2026-09-28T12:00:00Z') };
-const enq = enquadrar(modelo, o.denominador, o.papel, false);
+const enq = enquadrar(pavimento, o.denominador, o.papel, false);
 const DPI = 110;
 const raiz = document.getElementById('raiz')!;
 for (const [id, desenhar] of [
-  ['agua', (d: Desenhista) => desenharPlanta(d, modelo, { ...o, titulo: `${o.titulo} — Hidráulica`, hidrossanitaria: 'AGUA' }, enq)],
-  ['esgoto', (d: Desenhista) => desenharPlanta(d, modelo, { ...o, titulo: `${o.titulo} — Esgoto`, hidrossanitaria: 'ESGOTO' }, enq)],
+  ['agua', (d: Desenhista) => desenharPlanta(d, pavimento, { ...o, titulo: `${o.titulo} — Hidráulica`, hidrossanitaria: 'AGUA', nomesDasColunas: nomes }, enq)],
+  ['esgoto', (d: Desenhista) => desenharPlanta(d, pavimento, { ...o, titulo: `${o.titulo} — Esgoto`, hidrossanitaria: 'ESGOTO', nomesDasColunas: nomes }, enq)],
   ['legenda', (d: Desenhista) => desenharFolhaDeDetalhesHidro(d, modelo, { ...o, denominador: 0, titulo: `${o.titulo} — Legenda` }, enq)],
+  ['esquema', (d: Desenhista) => desenharFolhaDoEsquemaVertical(d, modelo, { ...o, denominador: 0, titulo: `${o.titulo} — Esquema vertical` }, enq, ['AGUA', 'ESGOTO'])],
 ] as const) {
   const canvas = document.createElement('canvas');
   canvas.id = id;

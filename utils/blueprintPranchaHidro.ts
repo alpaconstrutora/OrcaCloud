@@ -40,6 +40,9 @@ export const DISCIPLINAS_DA_REDE: Record<RedeDaPrancha, DisciplinaDeRede[]> = {
   ESGOTO: ['ESGOTO'],
 };
 
+/** A chave da posição de uma COLUNA (E2.3) — a mesma na planta e no esquema vertical. */
+export const chaveDaColuna = (disciplina: DisciplinaDeRede, x: number, y: number) => `${disciplina}|${Math.round(x)}|${Math.round(y)}`;
+
 /** Tem instalação desta rede no pavimento? (trecho ou ponto) — é o que põe a prancha no conjunto. */
 export function temRedeNoPavimento(model: BlueprintModel, levelId: ObjectId, rede: RedeDaPrancha): boolean {
   const ds = DISCIPLINAS_DA_REDE[rede];
@@ -112,10 +115,38 @@ function clarear(hex: string, quanto: number): string {
  * A INSTALAÇÃO da rede sobre a planta. `denominador` converte mm reais em mm de
  * papel para a largura do tubo; o resto do desenho vem de `proj`.
  */
-export function desenharHidrossanitaria(d: Desenhista, model: BlueprintModel, proj: Proj, rede: RedeDaPrancha, denominador: number, levelId: ObjectId | null): void {
+export function desenharHidrossanitaria(
+  d: Desenhista,
+  model: BlueprintModel,
+  proj: Proj,
+  rede: RedeDaPrancha,
+  denominador: number,
+  levelId: ObjectId | null,
+  nomesDasColunas: ReadonlyMap<string, string> = new Map(),
+): void {
   const { px, py } = proj;
   const ds = DISCIPLINAS_DA_REDE[rede];
   const trechos = (model.trechos ?? []).filter((t) => ds.includes(t.disciplina) && (!levelId || t.levelId === levelId));
+
+  // ── Prumadas (E2.3): os verticais empilhados no mesmo ponto viram UM círculo
+  // (o maior ø) com o nome da coluna do desenho inteiro — "AF-1", "TQ-1 · CV-1".
+  const prumadas = new Map<string, { a: P; disciplina: DisciplinaDeRede; dn: number; rotulos: Set<string> }>();
+  for (const t of trechos) {
+    if (Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y) >= 1) continue;
+    const k = chaveDaColuna(t.disciplina, t.a.x, t.a.y);
+    const g = prumadas.get(k) ?? { a: { x: px(t.a.x), y: py(t.a.y) }, disciplina: t.disciplina, dn: 0, rotulos: new Set<string>() };
+    g.dn = Math.max(g.dn, t.bitolaMm);
+    if (t.rotulo) g.rotulos.add(t.rotulo);
+    prumadas.set(k, g);
+  }
+  for (const [k, g] of prumadas) {
+    const cor = COR_DA_DISCIPLINA[g.disciplina];
+    const r = Math.max(g.dn / denominador / 2, 0.8);
+    circulo(d, g.a, r, { cheio: clarear(cor, 0.7), traco: FINA, cor });
+    const nome = nomesDasColunas.get(k) ?? [...g.rotulos].join(' · ');
+    // Embaixo do círculo: em cima e à direita fica a sigla do ponto que costuma estar ali (o vaso do TQ).
+    if (nome) d.texto(g.a.x + r + 0.6, g.a.y + r + 2.2, `${nome} ø${g.dn}`, TEXTO_MM, cor);
+  }
 
   // ── Tubos ────────────────────────────────────────────────────────────────
   for (const t of trechos) {
@@ -123,12 +154,7 @@ export function desenharHidrossanitaria(d: Desenhista, model: BlueprintModel, pr
     const b = { x: px(t.b.x), y: py(t.b.y) };
     const cor = COR_DA_DISCIPLINA[t.disciplina];
     const larguraPapel = t.bitolaMm / denominador;
-    if (Math.hypot(b.x - a.x, b.y - a.y) < 0.2) {
-      // Prumada: a seção do tubo, cheia, com o nome (TQ, Ventilação) ao lado.
-      circulo(d, a, Math.max(larguraPapel / 2, 0.8), { cheio: clarear(cor, 0.7), traco: FINA, cor });
-      if (t.rotulo) d.texto(a.x + Math.max(larguraPapel / 2, 0.8) + 0.8, a.y - 0.6, `${t.rotulo} ø${t.bitolaMm}`, TEXTO_MM, cor);
-      continue;
-    }
+    if (Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y) < 1) continue; // prumada: acima
     const f = larguraPapel >= LARGURA_MINIMA_BIFILAR_MM ? faixa(a, b, larguraPapel) : null;
     if (f) {
       d.poligono(f, clarear(cor, 0.82));

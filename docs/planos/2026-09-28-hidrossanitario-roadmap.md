@@ -449,3 +449,25 @@ Publicadas juntas: a perda localizada só aparece no resultado de pressão.
   com o ramal de 5,4 m cortado em x = 2300; ø25 e "LV · h 0,60" no papel e tudo dentro da caixa;
   a folha com "ISOMÉTRICOS" e a contagem do que não coube. Harness `docs/spikes/prancha-hidro`:
   quatro isométricos (água e esgoto do banheiro e da área de serviço) numa A3.
+
+### E2.3 — Esquema vertical (28/09/2026)
+
+- `utils/blueprintEsquemaVertical.ts` (novo, puro): `colunasDoModelo` agrupa os trechos VERTICAIS
+  da mesma disciplina no mesmo (x, y), em qualquer pavimento, e numera no desenho inteiro — AF-n,
+  AQ-n, TQ-n (+ CV-n quando o TQ tem ventilação), por x e depois y. Fica de fora a **descida ao
+  ponto** (vertical com uma ponta na cota de um ponto da rede a até 200 mm: o ponto na face, a
+  descida no eixo da parede), salvo o que é coluna de fato: no esgoto o que o planejador chamou de
+  "TQ"/"Ventilação"; na água o que chega ao teto ou ao piso (atravessa a laje).
+  `desenharEsquemaVertical`: pavimentos como linhas de nível com nome e cota, a cobertura
+  tracejada, uma vertical por coluna (ventilação tracejada, travessia da laje desenhada), ø em cada
+  mudança, a saída de cada ramal e a **legenda das colunas**; escala vertical da lista.
+- Folha nova **ESQUEMA_HIDRO** no conjunto (depois da legenda, só quando há coluna das redes
+  pedidas) e na exportação avulsa (PDF e PNG, depois da legenda).
+- A planta de cada pavimento usa o MESMO nome (`nomesDasColunas`, calculado no desenho inteiro e
+  levado em `OpcoesExportacao.nomesDasColunas`): os verticais empilhados no mesmo ponto viram UM
+  círculo com "TQ-1 · CV-1 ø100" — antes saíam "TQ" e "Ventilação" escritos um sobre o outro.
+- **Pronto quando** ✔: 7 testes em `blueprintEsquemaVertical.test.ts` com um sobrado lançado pelos
+  planejadores — AF atravessando os dois andares, UM TQ com CV, nenhuma "coluna" no chuveiro, no
+  lavatório ou na sifonada; legenda com a CV logo depois do TQ; esquema com +0,00/+2,90/+5,70;
+  filtro por rede; planta do superior com "TQ-1 · CV-1"; folha no fim do conjunto. Harness
+  `docs/spikes/prancha-hidro?cena=sobrado` conferido no olho. Suíte: 517 arquivos / 5.884 testes.

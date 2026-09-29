@@ -50,7 +50,7 @@ type AbaDosQuantitativos = 'resumo' | 'ambientes' | 'estruturas' | 'pavimentos' 
 /** Uma linha de compra das instalações: tubo por DN, ponto por classificação, conexão por tipo × DN. */
 interface LinhaDeInstalacao {
   chave: string;
-  familia: 'Tubo' | 'Calha' | 'Ponto' | 'Conexão' | 'Reservatório' | 'Equipamento' | 'Caixa';
+  familia: 'Tubo' | 'Calha' | 'Ponto' | 'Conexão' | 'Reservatório' | 'Equipamento' | 'Caixa' | 'Condutor' | 'Quadro' | 'Disjuntor' | 'DR';
   disciplina: DisciplinaDeRede;
   item: string;
   dnMm: number | null;
@@ -288,7 +288,7 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
       add({ grupo: 'Instalações', item: b.secaoCalha ? `${nomeDaCalha(b.secaoCalha, b.bitolaMm)} · ${ROTULO_DA_DISCIPLINA.PLUVIAL}` : `${ROTULO_DA_DISCIPLINA[b.disciplina as DisciplinaDeRede] ?? b.disciplina} DN ${b.bitolaMm}${nomeDoMaterial(b.material)}`, valor: b.comprimentoM, unidade: 'm', detalhe: `${b.trechos} trecho(s), comprimento real` });
     }
     for (const p of t.porTerminal ?? []) {
-      if (p.disciplina === 'ELETRICA') continue;
+      // E0.3 (29/09/2026): os pontos ELÉTRICOS entram no Resumo — antes ficavam só na aba Instalações.
       // O terminal MECÂNICO (P2.2) não tem taxonomia: o nome em texto (Difusor, Grelha) É a classificação.
       const mecanico = p.disciplina === 'MECANICA';
       const nome = p.classificacao ? (ROTULO_DO_PONTO_HIDRAULICO[p.classificacao as TipoDePontoHidraulico] ?? ROTULO_DO_PONTO_ELETRICO[p.classificacao as TipoDePontoEletrico] ?? p.tipo) : mecanico ? p.tipo : `${p.tipo} (sem tipo)`;
@@ -297,6 +297,15 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
     for (const c of t.porConexao ?? []) {
       add({ grupo: 'Instalações', item: `${ROTULO_DA_CONEXAO[c.tipo]} DN ${c.bitolaMm}${c.paraMm != null ? `→${c.paraMm}` : ''} · ${ROTULO_DA_DISCIPLINA[c.disciplina as DisciplinaDeRede] ?? c.disciplina}`, valor: c.quantidade, unidade: 'un', detalhe: `${c.derivadas} deduzida(s) dos encontros${c.manuais ? ` + ${c.manuais} manual(is)` : ''}` });
     }
+    // ELÉTRICA (E0.3, quant-1.19.0): fio por seção, quadros, disjuntores e DR.
+    for (const c of t.porCondutor ?? []) {
+      add({ grupo: 'Instalações', item: c.secaoMm2 != null ? `Condutor ${String(c.secaoMm2).replace('.', ',')} mm² · Elétrica` : 'Condutor (circuito sem seção) · Elétrica', valor: c.comprimentoM, unidade: 'm', detalhe: `${c.trechos} eletroduto(s) · condutores × comprimento real; sem retorno` });
+    }
+    if ((t.quadros ?? 0) > 0) add({ grupo: 'Instalações', item: 'Quadros de distribuição', valor: t.quadros, unidade: 'un', detalhe: (t.porQuadro ?? []).map((q) => `${q.nome}: ${q.circuitos} circ.`).join(' · ') });
+    for (const d of t.porDisjuntor ?? []) {
+      add({ grupo: 'Instalações', item: d.inA != null ? `Disjuntor ${d.inA} A` : 'Disjuntor (In não declarado)', valor: d.quantidade, unidade: 'un', detalhe: 'um por circuito, pelo In declarado' });
+    }
+    if ((t.drs ?? 0) > 0) add({ grupo: 'Instalações', item: 'DR 30 mA', valor: t.drs, unidade: 'un', detalhe: 'circuitos com DR declarado' });
     return linhas;
   }, [quant, armadura, fmt, t]);
 
@@ -318,6 +327,17 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
       // E6.4: a calha é linha própria, pelo nome da seção (quant-1.18.0 já as separa).
       const item = b.secaoCalha ? nomeDaCalha(b.secaoCalha, b.bitolaMm) : `${b.disciplina === 'ELETRICA' ? 'Eletroduto' : `Tubo ${nomeDaDisciplina(b.disciplina).toLowerCase()}`}${nomeDoMaterial(b.material)}`;
       linhas.push({ chave: `tubo:${b.disciplina}:${b.material ?? ''}:${b.secaoCalha ?? ''}:${b.bitolaMm}:${b.itemCode ?? ''}`, familia: b.secaoCalha ? 'Calha' : 'Tubo', disciplina: b.disciplina as DisciplinaDeRede, item: `${item}${b.itemCode ? ` · ${b.itemCode}` : ''}`, dnMm: b.bitolaMm, quantidade: b.comprimentoM, unidade: 'm', detalhe: `${b.trechos} trecho(s) · comprimento real${b.secaoCalha ? ', com o caimento' : ', com prumadas e caimento'}` });
+    }
+    // ELÉTRICA (E0.3): fio por seção do pavimento; quadros, disjuntores e DR do quadro que está no pavimento.
+    for (const c of t.porCondutor ?? []) {
+      linhas.push({ chave: `condutor:${c.secaoMm2 ?? ''}`, familia: 'Condutor', disciplina: 'ELETRICA', item: c.secaoMm2 != null ? `Condutor ${String(c.secaoMm2).replace('.', ',')} mm²` : 'Condutor (circuito sem seção declarada)', dnMm: null, quantidade: c.comprimentoM, unidade: 'm', detalhe: `${c.trechos} eletroduto(s) · condutores declarados × comprimento real · sem retorno (E2)` });
+    }
+    for (const q of (quant.totais.porQuadro ?? []).filter((x) => !pavimentoFiltro || x.levelId === pavimentoFiltro)) {
+      linhas.push({ chave: `quadro:${q.quadroId}`, familia: 'Quadro', disciplina: 'ELETRICA', item: `Quadro ${q.nome}`, dnMm: null, quantidade: 1, unidade: 'un', detalhe: `${q.circuitos} circuito(s) · ${q.pontos} ponto(s) · ${q.eletrodutoM.toFixed(1)} m de eletroduto · ${q.condutorM.toFixed(1)} m de fio` });
+      for (const d of q.porDisjuntor) {
+        linhas.push({ chave: `disjuntor:${q.quadroId}:${d.inA ?? ''}`, familia: 'Disjuntor', disciplina: 'ELETRICA', item: d.inA != null ? `Disjuntor ${d.inA} A · ${q.nome}` : `Disjuntor (In não declarado) · ${q.nome}`, dnMm: null, quantidade: d.quantidade, unidade: 'un', detalhe: 'um por circuito, pelo In declarado' });
+      }
+      if (q.drs > 0) linhas.push({ chave: `dr:${q.quadroId}`, familia: 'DR', disciplina: 'ELETRICA', item: `DR 30 mA · ${q.nome}`, dnMm: null, quantidade: q.drs, unidade: 'un', detalhe: 'circuitos com DR declarado' });
     }
     // A CAIXA D'ÁGUA por volume (E0.2): é assim que se compra.
     for (const r of reservatoriosPorVolume(model, pavimentoFiltro || null)) {
@@ -577,7 +597,7 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
               case 'aberturas':
                 return <span className="block text-right text-xs tabular-nums text-gray-600">{p.portas} porta(s), {p.janelas} janela(s) · {fmt(p.areaAberturasM2)} m²</span>;
               case 'instalacoes':
-                return <span className="block text-right text-xs tabular-nums text-gray-600">{fmt(p.tuboHidraulicoM)} m de tubo · {p.pontosHidraulicos} ponto(s) · {p.conexoesHidraulicas} conexão(ões)</span>;
+                return <span className="block text-right text-xs tabular-nums text-gray-600">{fmt(p.tuboHidraulicoM)} m de tubo · {p.pontosHidraulicos} ponto(s) · {p.conexoesHidraulicas} conexão(ões) · {fmt(p.eletrodutoM)} m de eletroduto · {fmt(p.condutorM)} m de fio · {p.pontosEletricos} ponto(s) elétrico(s)</span>;
               case 'areaConstruidaM2':
               case 'areaParedeDuasFacesM2':
               case 'volumeAlvenariaM3':

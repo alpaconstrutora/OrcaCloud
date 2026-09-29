@@ -18,7 +18,7 @@
  * ligada ao snapshot que a originou.
  */
 
-import type { AcabamentosDoAmbiente, BlueprintModel, PainelDeCortina, OrientacaoDeBrise, FaseDeReforma, FuncaoCamada, Level, MaterialDeGuardaCorpo, Opening, Rodape, Space, Structural, StructuralKind, Terminal, TipoDeGuardaCorpo, Wall } from './model';
+import type { AcabamentosDoAmbiente, BlueprintModel, Circuito, LigacaoDoCircuito, PainelDeCortina, OrientacaoDeBrise, FaseDeReforma, FuncaoCamada, Level, MaterialDeGuardaCorpo, Opening, Rodape, Space, Structural, StructuralKind, Terminal, TipoDeGuardaCorpo, Wall } from './model';
 import { areaDaSecaoT, perimetroDeFormaDaSecaoT, secaoTValida } from './secaoT';
 import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural, acabamentosDoAmbiente, comprimentoDoGuardaCorpo, faseDe, materialDoTrecho } from './model';
 import { contornoExternoDoNivel } from './arrangement';
@@ -176,7 +176,11 @@ export const POLITICA_PADRAO: QuantityPolicy = {
   // disciplina) — PVC DN 25 e PPR DN 25 são compras diferentes.
   // quant-1.18.0 (29/09/2026, E6.2 do roadmap hidrossanitário): o trecho e a
   // linha de compra ganharam `secaoCalha` — a calha de 150 não é o tubo de 150.
-  version: 'quant-1.18.0',
+  // quant-1.19.0 (29/09/2026, E0.3 do roadmap elétrico): o eletroduto ganhou
+  // `condutores`/`condutorM`/`condutoresPorSecao`; os totais ganharam
+  // `porCondutor` (metro de fio por seção), `porQuadro`, `porDisjuntor` e `drs`.
+  // Até aqui NENHUM fio, quadro, disjuntor ou DR era quantificado.
+  version: 'quant-1.19.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -629,6 +633,50 @@ export interface QuantidadeTrecho {
   comprimentoM: number;
   desnivelM: number;
   formula: string;
+  /**
+   * CONDUTORES no eletroduto (quant-1.19.0, E0.3 do roadmap elétrico). A
+   * contagem DECLARADA no trecho; quando não há, a base da ligação dos
+   * circuitos (3 por F-N/F-F, 4 por trifásico) — e `condutoresAssumidos` diz
+   * que foi assumida. `null` fora da elétrica e no eletroduto sem circuito.
+   *
+   * ⚠️ Sem RETORNO até a E2: é o que o trecho diz, não o que o comando pede.
+   */
+  condutores: number | null;
+  condutoresAssumidos: boolean;
+  /** Metros de fio: condutores × comprimento real. Zero fora da elétrica. */
+  condutorM: number;
+  /** Como a contagem se reparte entre os circuitos que passam — a seção é a DECLARADA no circuito (`null` = sem seção). */
+  condutoresPorSecao: { circuitoId: string | null; secaoMm2: number | null; quantidade: number }[];
+}
+
+/** Metro de FIO por seção (quant-1.19.0). `secaoMm2` null = circuito sem seção declarada. */
+export interface QuantidadePorCondutor {
+  secaoMm2: number | null;
+  comprimentoM: number;
+  /** Eletrodutos que contribuíram. */
+  trechos: number;
+}
+
+/** Disjuntores por corrente nominal DECLARADA (`inA` null = circuito sem disjuntor declarado). */
+export interface QuantidadePorDisjuntor {
+  inA: number | null;
+  quantidade: number;
+}
+
+/** O que um QUADRO alimenta e protege — a lista de compra do quadro (quant-1.19.0). */
+export interface QuantidadeDoQuadro {
+  quadroId: string;
+  uid: string;
+  levelId: string;
+  nome: string;
+  circuitos: number;
+  pontos: number;
+  porDisjuntor: QuantidadePorDisjuntor[];
+  /** Circuitos com DR declarado (`protecaoDR`). Vira peça na E3.1. */
+  drs: number;
+  eletrodutoM: number;
+  condutorM: number;
+  porCondutor: QuantidadePorCondutor[];
 }
 
 /**
@@ -833,7 +881,113 @@ export interface Quantitativos {
     /** Comprimento somado de TODA a rede. Serve à conferência, não à compra. */
     comprimentoRedeM: number;
     terminais: number;
+    /**
+     * ELÉTRICA (quant-1.19.0): fio por seção, quadros, disjuntores e DR. Antes
+     * só o eletroduto e a contagem de pontos saíam — o orçamento comprava tubo
+     * e nenhum fio. Metro de condutor é a maior verba da elétrica residencial.
+     */
+    porCondutor: QuantidadePorCondutor[];
+    comprimentoCondutorM: number;
+    porQuadro: QuantidadeDoQuadro[];
+    quadros: number;
+    porDisjuntor: QuantidadePorDisjuntor[];
+    drs: number;
   };
+}
+
+/**
+ * Reparte a CONTAGEM de condutores de um eletroduto entre os circuitos que
+ * passam por ele, pela base da ligação de cada um (F-N e F-F = 3, trifásico =
+ * 4). O excedente é retorno e fica no PRIMEIRO circuito; faltando, os últimos
+ * ficam sem. É a conta da ocupação (`condutoresPorCircuitoNoTrecho`, no
+ * dimensionamento) e a do quantitativo — mora no kernel para as duas lerem a
+ * mesma. `indice` é a posição do circuito na lista de entrada.
+ */
+export function repartirCondutores(
+  condutores: number,
+  circuitos: readonly { ligacao?: LigacaoDoCircuito | null }[],
+  secoes: readonly (number | null)[],
+): { indice: number; secaoMm2: number | null; quantidade: number }[] {
+  const base = circuitos.map((c) => ((c.ligacao ?? 'FN') === 'FFF' ? 4 : 3));
+  const soma = base.reduce((t, b) => t + b, 0);
+  const saida: { indice: number; secaoMm2: number | null; quantidade: number }[] = [];
+  if (condutores >= soma) {
+    circuitos.forEach((_, i) => saida.push({ indice: i, secaoMm2: secoes[i] ?? null, quantidade: base[i] + (i === 0 ? condutores - soma : 0) }));
+    return saida;
+  }
+  let restam = condutores;
+  circuitos.forEach((_, i) => {
+    const q = Math.min(base[i], restam);
+    restam -= q;
+    if (q > 0) saida.push({ indice: i, secaoMm2: secoes[i] ?? null, quantidade: q });
+  });
+  return saida;
+}
+
+/** Metro de fio por seção, a partir dos trechos — a mesma conta para o total e para o pavimento. */
+export function agruparPorCondutor(trechos: readonly QuantidadeTrecho[]): QuantidadePorCondutor[] {
+  const mapa = new Map<string, QuantidadePorCondutor>();
+  for (const t of trechos) {
+    if (t.disciplina !== 'ELETRICA' || t.condutoresPorSecao.length === 0) continue;
+    const vistas = new Set<string>();
+    for (const c of t.condutoresPorSecao) {
+      const k = String(c.secaoMm2 ?? '');
+      const atual = mapa.get(k) ?? { secaoMm2: c.secaoMm2, comprimentoM: 0, trechos: 0 };
+      atual.comprimentoM += c.quantidade * t.comprimentoM;
+      if (!vistas.has(k)) {
+        atual.trechos += 1;
+        vistas.add(k);
+      }
+      mapa.set(k, atual);
+    }
+  }
+  // Seção declarada primeiro, em ordem; "sem seção" por último — é pendência, não compra.
+  return [...mapa.values()].sort((a, b) => (a.secaoMm2 ?? Number.POSITIVE_INFINITY) - (b.secaoMm2 ?? Number.POSITIVE_INFINITY));
+}
+
+/** Disjuntores por In declarado; sem declaração por último. */
+export function agruparPorDisjuntor(circuitos: readonly Circuito[]): QuantidadePorDisjuntor[] {
+  const mapa = new Map<string, QuantidadePorDisjuntor>();
+  for (const c of circuitos) {
+    const k = String(c.disjuntorA ?? '');
+    const atual = mapa.get(k) ?? { inA: c.disjuntorA ?? null, quantidade: 0 };
+    atual.quantidade += 1;
+    mapa.set(k, atual);
+  }
+  return [...mapa.values()].sort((a, b) => (a.inA ?? Number.POSITIVE_INFINITY) - (b.inA ?? Number.POSITIVE_INFINITY));
+}
+
+/**
+ * Cada QUADRO com o que alimenta: circuitos, pontos, disjuntores por In, DRs,
+ * metros de eletroduto e de fio dos circuitos dele. O eletroduto que serve a
+ * dois quadros (não deveria: a rede é por quadro) conta nos dois, e é dito.
+ */
+export function quadrosQuantificados(model: BlueprintModel, trechos: readonly QuantidadeTrecho[]): QuantidadeDoQuadro[] {
+  const trechoPorId = new Map(trechos.map((t) => [t.trechoId, t]));
+  return (model.quadros ?? []).map((q) => {
+    const circuitos = (model.circuitos ?? []).filter((c) => c.quadroId === q.id);
+    const ids = new Set(circuitos.map((c) => c.id));
+    const pontos = (model.terminais ?? []).filter((t) => t.circuitoId && ids.has(t.circuitoId)).length;
+    const eletrodutos = (model.trechos ?? []).filter((t) => t.disciplina === 'ELETRICA' && (t.circuitoIds ?? []).some((id) => ids.has(id)));
+    const doQuadro = eletrodutos.map((t) => trechoPorId.get(t.id)).filter((t): t is QuantidadeTrecho => !!t);
+    // Só os condutores DESTE quadro: num eletroduto compartilhado entre quadros
+    // (não deveria acontecer), o fio do outro quadro fica de fora.
+    const soDoQuadro: QuantidadeTrecho[] = doQuadro.map((t) => ({ ...t, condutoresPorSecao: t.condutoresPorSecao.filter((c) => c.circuitoId != null && ids.has(c.circuitoId)) }));
+    const porCondutor = agruparPorCondutor(soDoQuadro);
+    return {
+      quadroId: q.id,
+      uid: q.uid,
+      levelId: q.levelId,
+      nome: q.nome,
+      circuitos: circuitos.length,
+      pontos,
+      porDisjuntor: agruparPorDisjuntor(circuitos),
+      drs: circuitos.filter((c) => c.protecaoDR === true).length,
+      eletrodutoM: doQuadro.reduce((s, t) => s + t.comprimentoM, 0),
+      condutorM: porCondutor.reduce((s, c) => s + c.comprimentoM, 0),
+      porCondutor,
+    };
+  });
 }
 
 const MM2_PARA_M2 = 1_000_000;
@@ -1697,8 +1851,31 @@ export function computeQuantities(
     // mede a diagonal — o teste do caimento de 2 % em 10 m garante isso.
     const emL = t.disciplina === 'ELETRICA';
     const real = emL ? planta + Math.abs(desnivel) : Math.hypot(planta, desnivel);
+    // CONDUTORES (quant-1.19.0, E0.3): a contagem DECLARADA no eletroduto,
+    // repartida entre os circuitos pela ligação de cada um — a mesma conta da
+    // ocupação (`repartirCondutores`). Sem contagem, a base da ligação — dito.
+    const circuitosDoTrecho = emL
+      ? (t.circuitoIds ?? []).map((id) => (model.circuitos ?? []).find((c) => c.id === id)).filter((c): c is Circuito => !!c)
+      : [];
+    const baseDaLigacao = circuitosDoTrecho.reduce((s, c) => s + ((c.ligacao ?? 'FN') === 'FFF' ? 4 : 3), 0);
+    const condutoresDeclarados = emL ? (t.condutores ?? null) : null;
+    const condutores = emL ? (condutoresDeclarados ?? (baseDaLigacao > 0 ? baseDaLigacao : null)) : null;
+    const condutoresPorSecao =
+      emL && condutores
+        ? circuitosDoTrecho.length > 0
+          ? repartirCondutores(condutores, circuitosDoTrecho, circuitosDoTrecho.map((c) => c.secaoMm2 ?? null)).map((r) => ({
+              circuitoId: circuitosDoTrecho[r.indice]?.id ?? null,
+              secaoMm2: r.secaoMm2,
+              quantidade: r.quantidade,
+            }))
+          : [{ circuitoId: null, secaoMm2: null, quantidade: condutores }]
+        : [];
     return {
       trechoId: t.id,
+      condutores,
+      condutoresAssumidos: emL && condutoresDeclarados == null && condutores != null,
+      condutorM: ((condutores ?? 0) * real) / 1000,
+      condutoresPorSecao,
       material: materialDoTrecho(t),
       secaoCalha: t.secaoCalha ?? null,
       uid: t.uid,
@@ -1727,6 +1904,9 @@ export function computeQuantities(
   const porTerminal = agruparPorTerminal(model.terminais ?? []);
   const { conexoes } = conexoesDerivadas(model);
   const porConexao = agruparPorConexao(conexoes);
+  // ELÉTRICA (quant-1.19.0): fio por seção, quadros, disjuntores e DR.
+  const porCondutor = agruparPorCondutor(trechos);
+  const porQuadro = quadrosQuantificados(model, trechos);
 
   // ── Totais ────────────────────────────────────────────────────────────────
   const somaPiso = ambientes.reduce((s, a) => s + a.areaPisoM2, 0);
@@ -1815,6 +1995,12 @@ export function computeQuantities(
       porConexao,
       comprimentoRedeM: trechos.reduce((soma, t) => soma + t.comprimentoM, 0),
       terminais: (model.terminais ?? []).length,
+      porCondutor,
+      comprimentoCondutorM: porCondutor.reduce((s, c) => s + c.comprimentoM, 0),
+      porQuadro,
+      quadros: porQuadro.length,
+      porDisjuntor: agruparPorDisjuntor(model.circuitos ?? []),
+      drs: (model.circuitos ?? []).filter((c) => c.protecaoDR === true).length,
     },
   };
 }

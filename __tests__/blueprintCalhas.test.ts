@@ -90,7 +90,7 @@ describe('E6.2 — a calha no kernel', () => {
     ]).model;
     const pluvial = computeQuantities(m, POLITICA_PADRAO, KERNEL_VERSION).totais.porBitola.filter((b) => b.disciplina === 'PLUVIAL');
     expect(pluvial.map((b) => [b.secaoCalha, b.bitolaMm])).toEqual([[null, 100], ['SEMICIRCULAR', 100]]);
-    expect(POLITICA_PADRAO.version).toBe('quant-1.18.0');
+    expect(POLITICA_PADRAO.version).toBe('quant-1.19.0');
     // E na legenda da prancha: a calha pela seção, o tubo pelo material.
     const textos = itensDaLegendaHidro(m).filter((i) => i.grupo === 'Condutos').map((i) => i.texto);
     expect(textos).toEqual(expect.arrayContaining(['Calha meia-cana ø100 mm', 'Águas pluviais · PVC série R (NBR 5688) · ø100 mm']));

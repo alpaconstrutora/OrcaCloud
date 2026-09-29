@@ -27,7 +27,7 @@ describe('cortina de vidro e brise (P2.20)', () => {
     expect(() => applyCommand(r, { type: 'SetWallCortina', wallId: frente.id, cortina: { moduloMm: 1200, montanteMm: 1300, painel: 'VIDRO' } })).toThrow(/BAD_CURTAIN|montante/);
     expect(() => applyCommand(r, { type: 'SetWallBrise', wallId: frente.id, brise: { orientacao: 'VERTICAL', laminaMm: 150, passoMm: 100, afastamentoMm: 0, lado: 'DIREITA' } })).toThrow(/BAD_BRISE|passo/);
     const q = computeQuantities(r, POLITICA_PADRAO, KERNEL_VERSION);
-    expect(POLITICA_PADRAO.version).toBe('quant-1.18.0');
+    expect(POLITICA_PADRAO.version).toBe('quant-1.19.0');
     const qc = q.paredes.find((p) => p.wallId === frente.id)!;
     expect(qc.volumeM3).toBe(0);
     expect(qc.camadas).toEqual([]);

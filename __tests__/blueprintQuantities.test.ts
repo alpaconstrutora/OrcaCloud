@@ -292,7 +292,10 @@ describe('quantitativos · política', () => {
     // 1.17.0 → 1.18.0 em 29/09/2026 (E6.2 do roadmap hidrossanitário): o trecho
     // e a linha de compra ganharam `secaoCalha` — a calha de 150 e o tubo de 150
     // eram UMA linha e são duas compras.
-    expect(POLITICA_PADRAO.version).toBe('quant-1.18.0');
+    // quant-1.19.0 (29/09/2026, E0.3 do roadmap elétrico): o eletroduto ganhou
+    // `condutores`/`condutorM`/`condutoresPorSecao` e os totais ganharam fio por
+    // seção, quadros, disjuntores e DR — o orçamento comprava tubo e nenhum fio.
+    expect(POLITICA_PADRAO.version).toBe('quant-1.19.0');
   });
 });
 

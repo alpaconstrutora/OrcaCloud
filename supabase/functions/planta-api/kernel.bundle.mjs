@@ -3122,11 +3122,84 @@ var POLITICA_PADRAO = {
   // disciplina) — PVC DN 25 e PPR DN 25 são compras diferentes.
   // quant-1.18.0 (29/09/2026, E6.2 do roadmap hidrossanitário): o trecho e a
   // linha de compra ganharam `secaoCalha` — a calha de 150 não é o tubo de 150.
-  version: "quant-1.18.0",
+  // quant-1.19.0 (29/09/2026, E0.3 do roadmap elétrico): o eletroduto ganhou
+  // `condutores`/`condutorM`/`condutoresPorSecao`; os totais ganharam
+  // `porCondutor` (metro de fio por seção), `porQuadro`, `porDisjuntor` e `drs`.
+  // Até aqui NENHUM fio, quadro, disjuntor ou DR era quantificado.
+  version: "quant-1.19.0",
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2
 };
+function repartirCondutores(condutores, circuitos, secoes) {
+  const base = circuitos.map((c) => (c.ligacao ?? "FN") === "FFF" ? 4 : 3);
+  const soma = base.reduce((t, b) => t + b, 0);
+  const saida = [];
+  if (condutores >= soma) {
+    circuitos.forEach((_, i) => saida.push({ indice: i, secaoMm2: secoes[i] ?? null, quantidade: base[i] + (i === 0 ? condutores - soma : 0) }));
+    return saida;
+  }
+  let restam = condutores;
+  circuitos.forEach((_, i) => {
+    const q = Math.min(base[i], restam);
+    restam -= q;
+    if (q > 0) saida.push({ indice: i, secaoMm2: secoes[i] ?? null, quantidade: q });
+  });
+  return saida;
+}
+function agruparPorCondutor(trechos) {
+  const mapa = /* @__PURE__ */ new Map();
+  for (const t of trechos) {
+    if (t.disciplina !== "ELETRICA" || t.condutoresPorSecao.length === 0) continue;
+    const vistas = /* @__PURE__ */ new Set();
+    for (const c of t.condutoresPorSecao) {
+      const k = String(c.secaoMm2 ?? "");
+      const atual = mapa.get(k) ?? { secaoMm2: c.secaoMm2, comprimentoM: 0, trechos: 0 };
+      atual.comprimentoM += c.quantidade * t.comprimentoM;
+      if (!vistas.has(k)) {
+        atual.trechos += 1;
+        vistas.add(k);
+      }
+      mapa.set(k, atual);
+    }
+  }
+  return [...mapa.values()].sort((a, b) => (a.secaoMm2 ?? Number.POSITIVE_INFINITY) - (b.secaoMm2 ?? Number.POSITIVE_INFINITY));
+}
+function agruparPorDisjuntor(circuitos) {
+  const mapa = /* @__PURE__ */ new Map();
+  for (const c of circuitos) {
+    const k = String(c.disjuntorA ?? "");
+    const atual = mapa.get(k) ?? { inA: c.disjuntorA ?? null, quantidade: 0 };
+    atual.quantidade += 1;
+    mapa.set(k, atual);
+  }
+  return [...mapa.values()].sort((a, b) => (a.inA ?? Number.POSITIVE_INFINITY) - (b.inA ?? Number.POSITIVE_INFINITY));
+}
+function quadrosQuantificados(model, trechos) {
+  const trechoPorId = new Map(trechos.map((t) => [t.trechoId, t]));
+  return (model.quadros ?? []).map((q) => {
+    const circuitos = (model.circuitos ?? []).filter((c) => c.quadroId === q.id);
+    const ids = new Set(circuitos.map((c) => c.id));
+    const pontos = (model.terminais ?? []).filter((t) => t.circuitoId && ids.has(t.circuitoId)).length;
+    const eletrodutos = (model.trechos ?? []).filter((t) => t.disciplina === "ELETRICA" && (t.circuitoIds ?? []).some((id) => ids.has(id)));
+    const doQuadro = eletrodutos.map((t) => trechoPorId.get(t.id)).filter((t) => !!t);
+    const soDoQuadro = doQuadro.map((t) => ({ ...t, condutoresPorSecao: t.condutoresPorSecao.filter((c) => c.circuitoId != null && ids.has(c.circuitoId)) }));
+    const porCondutor = agruparPorCondutor(soDoQuadro);
+    return {
+      quadroId: q.id,
+      uid: q.uid,
+      levelId: q.levelId,
+      nome: q.nome,
+      circuitos: circuitos.length,
+      pontos,
+      porDisjuntor: agruparPorDisjuntor(circuitos),
+      drs: circuitos.filter((c) => c.protecaoDR === true).length,
+      eletrodutoM: doQuadro.reduce((s2, t) => s2 + t.comprimentoM, 0),
+      condutorM: porCondutor.reduce((s2, c) => s2 + c.comprimentoM, 0),
+      porCondutor
+    };
+  });
+}
 var MM2_PARA_M2 = 1e6;
 var MM3_PARA_M3 = 1e9;
 function espessuraDoTrecho(walls, a, b) {
@@ -3671,8 +3744,21 @@ ${c.funcao}`;
     const desnivel = t.cotaBMm - t.cotaAMm;
     const emL = t.disciplina === "ELETRICA";
     const real = emL ? planta + Math.abs(desnivel) : Math.hypot(planta, desnivel);
+    const circuitosDoTrecho2 = emL ? (t.circuitoIds ?? []).map((id) => (model.circuitos ?? []).find((c) => c.id === id)).filter((c) => !!c) : [];
+    const baseDaLigacao = circuitosDoTrecho2.reduce((s2, c) => s2 + ((c.ligacao ?? "FN") === "FFF" ? 4 : 3), 0);
+    const condutoresDeclarados = emL ? t.condutores ?? null : null;
+    const condutores = emL ? condutoresDeclarados ?? (baseDaLigacao > 0 ? baseDaLigacao : null) : null;
+    const condutoresPorSecao = emL && condutores ? circuitosDoTrecho2.length > 0 ? repartirCondutores(condutores, circuitosDoTrecho2, circuitosDoTrecho2.map((c) => c.secaoMm2 ?? null)).map((r) => ({
+      circuitoId: circuitosDoTrecho2[r.indice]?.id ?? null,
+      secaoMm2: r.secaoMm2,
+      quantidade: r.quantidade
+    })) : [{ circuitoId: null, secaoMm2: null, quantidade: condutores }] : [];
     return {
       trechoId: t.id,
+      condutores,
+      condutoresAssumidos: emL && condutoresDeclarados == null && condutores != null,
+      condutorM: (condutores ?? 0) * real / 1e3,
+      condutoresPorSecao,
       material: materialDoTrecho(t),
       secaoCalha: t.secaoCalha ?? null,
       uid: t.uid,
@@ -3690,6 +3776,8 @@ ${c.funcao}`;
   const porTerminal = agruparPorTerminal(model.terminais ?? []);
   const { conexoes } = conexoesDerivadas(model);
   const porConexao = agruparPorConexao(conexoes);
+  const porCondutor = agruparPorCondutor(trechos);
+  const porQuadro = quadrosQuantificados(model, trechos);
   const somaPiso = ambientes.reduce((s2, a) => s2 + a.areaPisoM2, 0);
   const somaFace = paredes.reduce((s2, p) => s2 + p.areaFaceLiquidaM2, 0);
   const somaConstruida = model.levels.reduce(
@@ -3770,7 +3858,13 @@ ${c.funcao}`;
       porTerminal,
       porConexao,
       comprimentoRedeM: trechos.reduce((soma, t) => soma + t.comprimentoM, 0),
-      terminais: (model.terminais ?? []).length
+      terminais: (model.terminais ?? []).length,
+      porCondutor,
+      comprimentoCondutorM: porCondutor.reduce((s2, c) => s2 + c.comprimentoM, 0),
+      porQuadro,
+      quadros: porQuadro.length,
+      porDisjuntor: agruparPorDisjuntor(model.circuitos ?? []),
+      drs: (model.circuitos ?? []).filter((c) => c.protecaoDR === true).length
     }
   };
 }
@@ -5858,6 +5952,10 @@ function abasDoQuantitativo(quant, ctx, armadura, parametros) {
     for (const b of t.porBitola ?? []) totais.push([b.secaoCalha ? `${nomeDaCalha(b.secaoCalha, b.bitolaMm)}${b.itemCode ? ` \xB7 ${b.itemCode}` : ""}` : `${nomeDaDisciplina(b.disciplina)} DN ${b.bitolaMm}${b.itemCode ? ` \xB7 ${b.itemCode}` : ""}${rotuloDoMaterial(b.material)}`, n2(b.comprimentoM), "m"]);
     for (const p of t.porTerminal ?? []) totais.push([`${nomeDoPonto(p)} \xB7 ${nomeDaDisciplina(p.disciplina)}`, p.quantidade, "un"]);
     for (const c of t.porConexao ?? []) totais.push([`${ROTULO_DA_CONEXAO[c.tipo]} DN ${c.bitolaMm}${c.paraMm != null ? `\u2192${c.paraMm}` : ""} \xB7 ${nomeDaDisciplina(c.disciplina)}`, c.quantidade, "un"]);
+    for (const c of t.porCondutor ?? []) totais.push([c.secaoMm2 != null ? `Condutor ${String(c.secaoMm2).replace(".", ",")} mm\xB2 \xB7 El\xE9trica` : "Condutor (circuito sem se\xE7\xE3o) \xB7 El\xE9trica", n2(c.comprimentoM), "m"]);
+    if ((t.quadros ?? 0) > 0) totais.push(["Quadros de distribui\xE7\xE3o", t.quadros, "un"]);
+    for (const d of t.porDisjuntor ?? []) totais.push([d.inA != null ? `Disjuntor ${d.inA} A` : "Disjuntor (In n\xE3o declarado)", d.quantidade, "un"]);
+    if ((t.drs ?? 0) > 0) totais.push(["DR 30 mA (por circuito)", t.drs, "un"]);
     totais.push(["Rede \u2014 comprimento total", n2(t.comprimentoRedeM), "m"]);
   }
   abas.push({ nome: "Totais", linhas: totais });

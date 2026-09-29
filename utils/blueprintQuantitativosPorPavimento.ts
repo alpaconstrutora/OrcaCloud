@@ -10,8 +10,8 @@
  * face líquida, alvenaria = soma dos volumes das paredes…), para a soma das
  * linhas fechar com a linha de total. Regra pura, sem React.
  */
-import type { BlueprintModel, ConexaoDerivada, QuantidadePorBitola, QuantidadePorConexao, QuantidadePorTerminal, computeQuantities } from './blueprintKernel';
-import { agruparPorBitola, agruparPorConexao, agruparPorTerminal, areaConstruidaMm2 } from './blueprintKernel';
+import type { BlueprintModel, ConexaoDerivada, QuantidadePorBitola, QuantidadePorCondutor, QuantidadePorConexao, QuantidadePorTerminal, computeQuantities } from './blueprintKernel';
+import { agruparPorBitola, agruparPorCondutor, agruparPorConexao, agruparPorTerminal, areaConstruidaMm2 } from './blueprintKernel';
 import type { ArmaduraQuantificada } from './blueprintArmadura';
 
 type Quant = ReturnType<typeof computeQuantities>;
@@ -39,6 +39,10 @@ export interface QuantitativoDoPavimento {
   pontosHidraulicos: number;
   /** Conexões de água e esgoto (derivadas + manuais). */
   conexoesHidraulicas: number;
+  /** ELÉTRICA (29/09/2026, E0.3 do roadmap elétrico): eletroduto, fio e pontos do pavimento. */
+  eletrodutoM: number;
+  condutorM: number;
+  pontosEletricos: number;
 }
 
 const HIDRAULICAS = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL'];
@@ -48,6 +52,8 @@ export interface RedeDoPavimento {
   porBitola: QuantidadePorBitola[];
   porTerminal: QuantidadePorTerminal[];
   porConexao: QuantidadePorConexao[];
+  /** Fio por seção (quant-1.19.0). */
+  porCondutor: QuantidadePorCondutor[];
 }
 
 /**
@@ -67,10 +73,11 @@ function pavimentoDaConexao(c: ConexaoDerivada, nivelDoTrecho: Map<string, strin
  */
 export function redeDoPavimento(model: BlueprintModel, quant: Quant, levelId: string | null): RedeDoPavimento {
   if (!levelId) {
-    return { porBitola: quant.totais.porBitola ?? [], porTerminal: quant.totais.porTerminal ?? [], porConexao: quant.totais.porConexao ?? [] };
+    return { porBitola: quant.totais.porBitola ?? [], porTerminal: quant.totais.porTerminal ?? [], porConexao: quant.totais.porConexao ?? [], porCondutor: quant.totais.porCondutor ?? [] };
   }
   const nivelDoTrecho = new Map((model.trechos ?? []).map((t) => [t.id, t.levelId]));
   return {
+    porCondutor: agruparPorCondutor(quant.trechos.filter((q) => nivelDoTrecho.get(q.trechoId) === levelId)),
     porBitola: agruparPorBitola(quant.trechos.filter((q) => nivelDoTrecho.get(q.trechoId) === levelId)),
     porTerminal: agruparPorTerminal((model.terminais ?? []).filter((t) => t.levelId === levelId)),
     porConexao: agruparPorConexao((quant.conexoes ?? []).filter((c) => pavimentoDaConexao(c, nivelDoTrecho) === levelId)),
@@ -156,6 +163,9 @@ export function quantitativosPorPavimento(
       tuboHidraulicoM: rede.porBitola.filter((b) => HIDRAULICAS.includes(b.disciplina)).reduce((s, b) => s + b.comprimentoM, 0),
       pontosHidraulicos: (model.terminais ?? []).filter((t) => t.levelId === nivel.id && t.tipoHidraulico != null).length,
       conexoesHidraulicas: rede.porConexao.filter((c) => HIDRAULICAS.includes(c.disciplina)).reduce((s, c) => s + c.quantidade, 0),
+      eletrodutoM: rede.porBitola.filter((b) => b.disciplina === 'ELETRICA').reduce((s, b) => s + b.comprimentoM, 0),
+      condutorM: rede.porCondutor.reduce((s, c) => s + c.comprimentoM, 0),
+      pontosEletricos: (model.terminais ?? []).filter((t) => t.levelId === nivel.id && t.disciplina === 'ELETRICA').length,
     };
   });
 }

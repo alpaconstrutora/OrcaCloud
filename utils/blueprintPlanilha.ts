@@ -198,6 +198,11 @@ export function abasDoQuantitativo(
     for (const b of t.porBitola ?? []) totais.push([b.secaoCalha ? `${nomeDaCalha(b.secaoCalha, b.bitolaMm)}${b.itemCode ? ` · ${b.itemCode}` : ''}` : `${nomeDaDisciplina(b.disciplina)} DN ${b.bitolaMm}${b.itemCode ? ` · ${b.itemCode}` : ''}${rotuloDoMaterial(b.material)}`, n2(b.comprimentoM), 'm']);
     for (const p of t.porTerminal ?? []) totais.push([`${nomeDoPonto(p)} · ${nomeDaDisciplina(p.disciplina)}`, p.quantidade, 'un']);
     for (const c of t.porConexao ?? []) totais.push([`${ROTULO_DA_CONEXAO[c.tipo]} DN ${c.bitolaMm}${c.paraMm != null ? `→${c.paraMm}` : ''} · ${nomeDaDisciplina(c.disciplina)}`, c.quantidade, 'un']);
+    // ELÉTRICA (E0.3, quant-1.19.0): fio por seção, quadros, disjuntores e DR.
+    for (const c of t.porCondutor ?? []) totais.push([c.secaoMm2 != null ? `Condutor ${String(c.secaoMm2).replace('.', ',')} mm² · Elétrica` : 'Condutor (circuito sem seção) · Elétrica', n2(c.comprimentoM), 'm']);
+    if ((t.quadros ?? 0) > 0) totais.push(['Quadros de distribuição', t.quadros, 'un']);
+    for (const d of t.porDisjuntor ?? []) totais.push([d.inA != null ? `Disjuntor ${d.inA} A` : 'Disjuntor (In não declarado)', d.quantidade, 'un']);
+    if ((t.drs ?? 0) > 0) totais.push(['DR 30 mA (por circuito)', t.drs, 'un']);
     totais.push(['Rede — comprimento total', n2(t.comprimentoRedeM), 'm']);
   }
   abas.push({ nome: 'Totais', linhas: totais });

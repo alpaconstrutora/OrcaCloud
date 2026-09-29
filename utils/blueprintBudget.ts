@@ -30,7 +30,7 @@
  */
 
 import type { BudgetEntry, SinapiItem } from '../types/budget';
-import type { DisciplinaDeRede, Quantitativos, StructuralKind, TipoDePontoHidraulico } from './blueprintKernel';
+import type { DisciplinaDeRede, Quantitativos, StructuralKind, TipoDePontoEletrico, TipoDePontoHidraulico } from './blueprintKernel';
 import { nomeDaCalha } from './blueprintCalhas';
 import { ROTULO_DA_CONEXAO, materialPadraoDaDisciplina, type MaterialDeTubo } from './blueprintKernel';
 import { FICHA_DO_MATERIAL } from './blueprintHidraulicaPressao';
@@ -39,7 +39,7 @@ import {
   nomeDoTipoEstrutural,
 } from './blueprintKernel';
 import { familiaDaPeca, type ArmaduraQuantificada } from './blueprintArmadura';
-import { ROTULO_DA_DISCIPLINA } from './blueprintRede';
+import { ROTULO_DA_DISCIPLINA, ROTULO_DO_PONTO_ELETRICO } from './blueprintRede';
 import { ROTULO_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 
 /**
@@ -398,6 +398,48 @@ export const MEDIDAS: DefinicaoMedida[] = [
     escopo: 'INSTALACAO',
     dimensao: 'UN',
     descricao: 'Peças hidráulicas por tipo — chuveiro, vaso, lavatório, ralo, caixa sifonada, caixa d\'água, registro… Uma linha por tipo e disciplina.',
+  },
+
+  // ── Instalações elétricas (29/09/2026, E0.3 do roadmap elétrico) ─────────
+  //
+  // Até aqui só o ELETRODUTO chegava ao orçamento: nenhum fio, quadro,
+  // disjuntor, DR ou ponto elétrico tinha medida — e o metro de condutor é a
+  // maior verba da elétrica residencial. Uma linha por seção de fio (é assim
+  // que se compra), por In de disjuntor, por tipo de ponto.
+  {
+    id: 'COMPRIMENTO_CONDUTOR',
+    rotulo: 'Condutor elétrico (fio)',
+    escopo: 'INSTALACAO',
+    dimensao: 'M',
+    descricao: 'Metros de condutor por seção (mm²): condutores declarados em cada eletroduto × comprimento real, repartidos pelos circuitos. Sem retorno modelado — a contagem é a do eletroduto. Circuito sem seção declarada sai numa linha "sem seção".',
+  },
+  {
+    id: 'CONTAGEM_PONTOS_ELETRICOS',
+    rotulo: 'Pontos elétricos',
+    escopo: 'INSTALACAO',
+    dimensao: 'UN',
+    descricao: 'Tomadas (TUG/TUE), pontos de luz, interruptores, pontos de dados e ligações diretas por tipo — uma linha por tipo (e código, quando a peça tem).',
+  },
+  {
+    id: 'CONTAGEM_QUADROS',
+    rotulo: 'Quadros de distribuição',
+    escopo: 'INSTALACAO',
+    dimensao: 'UN',
+    descricao: 'Um por quadro do desenho; o rótulo é o nome do quadro (filtre pelo nome para orçar um só).',
+  },
+  {
+    id: 'CONTAGEM_DISJUNTORES',
+    rotulo: 'Disjuntores',
+    escopo: 'INSTALACAO',
+    dimensao: 'UN',
+    descricao: 'Disjuntores dos circuitos por corrente nominal DECLARADA (uma linha por In). O disjuntor geral do quadro não entra: é calculado, não declarado (E4).',
+  },
+  {
+    id: 'CONTAGEM_DR',
+    rotulo: 'Dispositivos DR',
+    escopo: 'INSTALACAO',
+    dimensao: 'UN',
+    descricao: 'Circuitos com DR declarado — um DR por circuito, 30 mA. Vira peça com In e escopo (grupo/geral) na E3.1.',
   },
 
   // ── Telhado ──────────────────────────────────────────────────────────────
@@ -946,6 +988,69 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
         }));
     }
 
+    case 'COMPRIMENTO_CONDUTOR': {
+      return (quant.totais.porCondutor ?? [])
+        .filter((c) => c.comprimentoM > 0)
+        .map((c) => ({ c, rotulo: c.secaoMm2 != null ? `Condutor ${String(c.secaoMm2).replace('.', ',')} mm²` : 'Condutor (circuito sem seção declarada)' }))
+        .filter(({ rotulo }) => combina(rotulo))
+        .map(({ c, rotulo }) => ({
+          ref: `ELETRICA-condutor-${c.secaoMm2 ?? 'sem-secao'}`,
+          rotulo,
+          valor: c.comprimentoM,
+          formula: `Σ condutores × comprimento real em ${c.trechos} eletroduto(s)`,
+          variaveis: { secaoMm2: c.secaoMm2 ?? 'sem seção', trechos: c.trechos, comprimentoM: c.comprimentoM },
+        }));
+    }
+
+    case 'CONTAGEM_PONTOS_ELETRICOS': {
+      return (quant.totais.porTerminal ?? [])
+        .filter((t) => t.disciplina === 'ELETRICA' && t.quantidade > 0)
+        .map((t) => ({
+          t,
+          rotulo: `${t.classificacao ? (ROTULO_DO_PONTO_ELETRICO[t.classificacao as TipoDePontoEletrico] ?? t.tipo) : `${t.tipo} (sem tipo)`}${t.itemCode ? ` · ${t.itemCode}` : ''}`,
+        }))
+        .filter(({ rotulo }) => combina(rotulo))
+        .map(({ t, rotulo }) => ({
+          ref: `ELETRICA-${t.classificacao ?? t.tipo}${t.itemCode ? `-${t.itemCode}` : ''}`,
+          rotulo,
+          valor: t.quantidade,
+          formula: `contagem dos pontos ${t.classificacao ?? 'sem tipo'}`,
+          variaveis: { classificacao: t.classificacao ?? 'sem tipo', quantidade: t.quantidade },
+        }));
+    }
+
+    case 'CONTAGEM_QUADROS': {
+      return (quant.totais.porQuadro ?? [])
+        .filter((q) => combina(q.nome))
+        .map((q) => ({
+          ref: `quadro-${q.uid}`,
+          rotulo: `Quadro ${q.nome}`,
+          valor: 1,
+          formula: `${q.circuitos} circuito(s), ${q.pontos} ponto(s)`,
+          variaveis: { nome: q.nome, circuitos: q.circuitos, pontos: q.pontos, drs: q.drs },
+        }));
+    }
+
+    case 'CONTAGEM_DISJUNTORES': {
+      return (quant.totais.porDisjuntor ?? [])
+        .filter((d) => d.quantidade > 0)
+        .map((d) => ({ d, rotulo: d.inA != null ? `Disjuntor ${d.inA} A` : 'Disjuntor (In não declarado)' }))
+        .filter(({ rotulo }) => combina(rotulo))
+        .map(({ d, rotulo }) => ({
+          ref: `disjuntor-${d.inA ?? 'sem-in'}`,
+          rotulo,
+          valor: d.quantidade,
+          formula: 'um por circuito, pelo In declarado',
+          variaveis: { inA: d.inA ?? 'não declarado', quantidade: d.quantidade },
+        }));
+    }
+
+    case 'CONTAGEM_DR': {
+      const n = quant.totais.drs ?? 0;
+      if (n <= 0 || !combina('DR 30 mA')) return [];
+      return [{ ref: 'dr-30ma', rotulo: 'DR 30 mA (um por circuito com DR declarado)', valor: n, formula: 'circuitos com protecaoDR', variaveis: { circuitos: n } }];
+    }
+
     case 'CONTAGEM_PONTOS_HIDRAULICOS': {
       return (quant.totais.porTerminal ?? [])
         .filter((t) => t.disciplina !== 'ELETRICA' && t.quantidade > 0)
@@ -1437,8 +1542,12 @@ export function gerarLancamentosDeGuardaCorpos(
   return { entries, divergencias };
 }
 
-/** As redes hidrossanitárias — as que a E8.2 lança por peça. */
-const REDES_HIDROSSANITARIAS = new Set(['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL']);
+/**
+ * As redes que se lançam por PEÇA: as hidrossanitárias (E8.2 do roadmap
+ * hidro) e, desde a E0.3 do roadmap elétrico (29/09/2026), a ELÉTRICA —
+ * ponto com código vira linha UN, eletroduto com código vira linha M.
+ */
+const REDES_HIDROSSANITARIAS = new Set(['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL', 'ELETRICA']);
 
 /**
  * Lançamentos por PEÇA das instalações hidrossanitárias (E8.2 do roadmap
@@ -1469,7 +1578,7 @@ export function gerarLancamentosDeInstalacoes(
   const entries: BudgetEntry[] = [];
   const divergencias: Divergencia[] = [];
   const procedencia =
-    `Gerado das peças hidrossanitárias com código da planta "${ctx.studyName}", versão ${ctx.revision} ` +
+    `Gerado das peças de instalação (hidrossanitárias e elétricas) com código da planta "${ctx.studyName}", versão ${ctx.revision} ` +
     `(hash ${ctx.snapshotHash.slice(0, 12)}). Política ${quant.policy.version}, kernel ${quant.kernelVersion || '—'}.`;
   const nomeDaRede = (d: string) => ROTULO_DA_DISCIPLINA[d as DisciplinaDeRede] ?? d;
   const conferir = (chave: string, itemCode: string, aceita: Dimensao, oQue: string): SinapiItem | null => {
@@ -1486,7 +1595,7 @@ export function gerarLancamentosDeInstalacoes(
   };
   for (const t of quant.totais.porTerminal ?? []) {
     if (!t.itemCode || !REDES_HIDROSSANITARIAS.has(t.disciplina) || t.quantidade <= 0) continue;
-    const nome = t.classificacao ? (ROTULO_DO_PONTO_HIDRAULICO[t.classificacao as TipoDePontoHidraulico] ?? t.tipo) : t.tipo;
+    const nome = t.classificacao ? (ROTULO_DO_PONTO_HIDRAULICO[t.classificacao as TipoDePontoHidraulico] ?? ROTULO_DO_PONTO_ELETRICO[t.classificacao as TipoDePontoEletrico] ?? t.tipo) : t.tipo;
     const chave = `instalacao:peca:${t.disciplina}:${t.classificacao ?? t.tipo}:${t.itemCode}`;
     const item = conferir(chave, t.itemCode, 'UN', `A peça "${nome}"`);
     if (!item) continue;
@@ -1495,7 +1604,7 @@ export function gerarLancamentosDeInstalacoes(
       sinapiItem: item,
       quantity: t.quantidade,
       phase: '',
-      group: `Instalações hidrossanitárias — peças · ${nomeDaRede(t.disciplina)}`,
+      group: `Instalações ${t.disciplina === 'ELETRICA' ? 'elétricas' : 'hidrossanitárias'} — peças · ${nomeDaRede(t.disciplina)}`,
       discipline: 'Planta Inteligente',
       notes: procedencia,
       calculationMemory: {
@@ -1508,7 +1617,7 @@ export function gerarLancamentosDeInstalacoes(
   }
   for (const b of quant.totais.porBitola ?? []) {
     if (!b.itemCode || !REDES_HIDROSSANITARIAS.has(b.disciplina) || b.comprimentoM <= 0) continue;
-    const nome = b.secaoCalha ? nomeDaCalha(b.secaoCalha, b.bitolaMm) : `${nomeDaRede(b.disciplina)} DN ${b.bitolaMm}`;
+    const nome = b.secaoCalha ? nomeDaCalha(b.secaoCalha, b.bitolaMm) : b.disciplina === 'ELETRICA' ? `Eletroduto Ø${b.bitolaMm}` : `${nomeDaRede(b.disciplina)} DN ${b.bitolaMm}`;
     const chave = `instalacao:tubo:${b.disciplina}:${b.material ?? ''}:${b.secaoCalha ?? ''}:${b.bitolaMm}:${b.itemCode}`;
     const item = conferir(chave, b.itemCode, 'M', `O tubo "${nome}"`);
     if (!item) continue;
@@ -1517,7 +1626,7 @@ export function gerarLancamentosDeInstalacoes(
       sinapiItem: item,
       quantity: b.comprimentoM,
       phase: '',
-      group: `Instalações hidrossanitárias — ${b.secaoCalha ? 'calhas' : 'tubos'} · ${nomeDaRede(b.disciplina)}`,
+      group: b.disciplina === 'ELETRICA' ? 'Instalações elétricas — eletrodutos' : `Instalações hidrossanitárias — ${b.secaoCalha ? 'calhas' : 'tubos'} · ${nomeDaRede(b.disciplina)}`,
       discipline: 'Planta Inteligente',
       notes: procedencia,
       calculationMemory: {

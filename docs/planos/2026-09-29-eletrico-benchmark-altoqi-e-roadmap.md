@@ -1914,7 +1914,7 @@ Automação (E6) e BIM (E7) fecham.
 |---|---|---|
 | 0.1 Hipóteses na tela e os 7 achados ✅ (5 de 7; achados 2 e 3 vão para 0.4 e 0.2) | `PainelPreDimensionamento` ganha: fatores de demanda **por tabela nomeada** (presets "sem demanda", "NBR 5410 residencial — hipótese" e "personalizado", cada grupo editável), `limiteQuedaTotalPct`, `desequilibrioMaxPct`; decisão registrada do `ρ`; `I2 ≤ 1,45·Iz` na sobrecarga (5.3.4.1 completo); 6.2.7.1 entra na aba Conferência; PRE-DIM filtra por pavimento; comentário do quadro corrigido; nota de 17/09 corrigida no plano | teste de `preDimensionarCircuito` com I2 falhando; conferência lista 6.2.7.1; hipóteses gravadas em `blueprint_study_eletrica` aparecem no memorial; `blueprintEletricaDimensionamento.test.ts` verde; harness da prancha olhado |
 | 0.2 Circuitos: numeração, mover e ordenar ✅ (ordem manual → E4.1) | `proximoNumeroDeCircuito` = maior número existente + 1, com "Renumerar" (lote, Ctrl+Z); `SetCircuitoProps.quadroId` (mover circuito entre quadros — trechos que só serviam ao circuito seguem marcados "conferir"); ordem manual (`Circuito.ordem` opcional é payload → **fica para E3**; aqui só ordenação por número); coluna Descrição (`tipo`) e coluna Fases na tabela padrão | teste: apagar C2 e criar → C4, não C2; mover circuito muda o unifilar dos dois quadros; `check-ui-standard` em `PainelEletrica.tsx` |
-| 0.3 Quantitativo do que já existe · quant-1.19.0 | `computeQuantities` passa a contar **quadros** (por medidas), **disjuntores** (por In declarado), **DR** (por circuito com `protecaoDR`), **pontos por circuito e por quadro**, e **metros de condutor por seção** = Σ trecho (comprimento em "L" × `condutores`), com o aviso "sem retorno até a E2"; resumo por pavimento ganha os campos elétricos; medidas `COMPRIMENTO_CONDUTOR`, `CONTAGEM_QUADROS`, `CONTAGEM_DISJUNTORES`, `CONTAGEM_DR`, `CONTAGEM_PONTOS_ELETRICOS` no de-para; `gerarLancamentosDeInstalacoes` cobre `ELETRICA` | teste portão de `POLITICA_PADRAO.version`; XLSX com as abas novas; um estudo de prova lança linhas UN/M no orçamento e é apagado depois |
+| 0.3 Quantitativo do que já existe · quant-1.19.0 ✅ | `computeQuantities` passa a contar **quadros** (por medidas), **disjuntores** (por In declarado), **DR** (por circuito com `protecaoDR`), **pontos por circuito e por quadro**, e **metros de condutor por seção** = Σ trecho (comprimento em "L" × `condutores`), com o aviso "sem retorno até a E2"; resumo por pavimento ganha os campos elétricos; medidas `COMPRIMENTO_CONDUTOR`, `CONTAGEM_QUADROS`, `CONTAGEM_DISJUNTORES`, `CONTAGEM_DR`, `CONTAGEM_PONTOS_ELETRICOS` no de-para; `gerarLancamentosDeInstalacoes` cobre `ELETRICA` | teste portão de `POLITICA_PADRAO.version`; XLSX com as abas novas; um estudo de prova lança linhas UN/M no orçamento e é apagado depois |
 | 0.4 Clash pelo "L" e fases visíveis | `conflitos.ts` usa `segmentosDoEletroduto` (o "L") no lugar da diagonal; pontos e quadros entram no clash como caixas; fases R/S/T no unifilar (3 barras rotuladas) e coluna no quadro de cargas | teste com eletroduto em desnível: colisão onde o 3D mostra; unifilar de quadro FFF mostra R/S/T; `blueprintUnifilar.test.ts` |
 
 Fecha o bloco **6** (parcial — o fio completo depende da E2), parte do **2** e do **7**, e os achados.
@@ -2151,3 +2151,69 @@ quadros" ❌→✅, "Descrições dos circuitos" 🟡→✅, "Seleção das fase
 só F-N em quadro FFF), "Ordenação dos circuitos" 🟡 (numérica; sem manual); §7 "Mudança de
 circuitos entre quadros" ❌→✅; §32 "Descrição" 🟡→✅, "Fases" 🟡→✅. Achado 3 fechado; resta o
 2 (clash pela diagonal → 0.4).
+
+### E0.3 — Quantitativo elétrico do que já existe (29/09/2026) · frente `eletrico-e0` · **quant-1.19.0**, sem bump de kernel
+
+**O que mudou**
+
+- `utils/blueprintKernel/quantities.ts` — o eletroduto (`QuantidadeTrecho`) ganhou
+  **`condutores`** (a contagem DECLARADA; sem ela, a base da ligação dos circuitos — 3 por F-N/F-F,
+  4 por trifásico — e **`condutoresAssumidos`** diz que foi assumida), **`condutorM`** (condutores ×
+  comprimento real em "L") e **`condutoresPorSecao`** (a repartição entre os circuitos, com a seção
+  DECLARADA de cada um; `null` = sem seção). Os totais ganharam **`porCondutor`** (metro de fio por
+  seção), `comprimentoCondutorM`, **`porQuadro`** (`QuantidadeDoQuadro`: circuitos, pontos,
+  disjuntores por In, DRs, eletroduto e fio do quadro), `quadros`, **`porDisjuntor`** e **`drs`**.
+  Até aqui o orçamento comprava eletroduto e contava pontos — **nenhum fio, quadro, disjuntor ou
+  DR era quantificado**, e o metro de fio é a maior verba da elétrica residencial.
+- **`repartirCondutores`** passou para o kernel (era `condutoresPorCircuitoNoTrecho` no
+  dimensionamento, que agora delega): a ocupação do eletroduto e o quantitativo de fio fazem a
+  MESMA conta — duas cópias divergiriam em silêncio. Ganhou o `indice` do circuito, porque quando
+  faltam condutores a saída pula os que ficaram sem.
+- `utils/blueprintBudget.ts` — cinco medidas novas no de-para, escopo INSTALACAO:
+  **`COMPRIMENTO_CONDUTOR`** (M, uma linha por seção, "sem seção" à parte), **`CONTAGEM_PONTOS_ELETRICOS`**
+  (UN, por tipo e código), **`CONTAGEM_QUADROS`** (UN, uma por quadro, rótulo = nome),
+  **`CONTAGEM_DISJUNTORES`** (UN, por In declarado — o geral do quadro não entra: é calculado),
+  **`CONTAGEM_DR`** (UN). `gerarLancamentosDeInstalacoes` passa a lançar **peça elétrica com
+  código** (UN) e **eletroduto com código** (M) nos grupos "Instalações elétricas — peças /
+  eletrodutos".
+- `utils/blueprintQuantitativosPorPavimento.ts` — `RedeDoPavimento.porCondutor` e, por pavimento,
+  `eletrodutoM`, `condutorM`, `pontosEletricos` (as mesmas funções de agrupamento do total: a soma
+  dos pavimentos fecha por construção).
+- `components/blueprint/TelaQuantitativos.tsx` — o Resumo deixa de pular os pontos ELÉTRICOS
+  (`if (p.disciplina === 'ELETRICA') continue` saiu) e ganha fio por seção, quadros, disjuntores e
+  DR; a aba Instalações ganha as famílias Condutor / Quadro / Disjuntor / DR (o quadro só do
+  pavimento filtrado); a coluna por pavimento mostra eletroduto, fio e pontos elétricos.
+- `utils/blueprintPlanilha.ts` — aba Totais com as mesmas linhas.
+- **`planta-api` redeployada** com o bundle regenerado (`scripts/build-planta-api-kernel.mjs`;
+  o `plantaApi.test.ts` acusa bundle velho) — prova em `GET /v1/estudos`: sem token **401**,
+  token falso **401** (`/docs` e `/openapi.json` são públicos por desenho; POST é 405).
+- **Não entrou**: retorno (a contagem é a do eletroduto — E2.2); metro de fio por TIPO de condutor
+  (fase/neutro/terra — E2.3); disjuntor geral do quadro e DR como peça (E3/E4); composição de
+  insumos por peça (backlog, decisão do hidro).
+
+**Testes** — novo `__tests__/blueprintQuantitativoEletrico.test.ts` (8): versão; `repartirCondutores`
+(base, excedente no primeiro, falta nos últimos, índice); casa com QDC, C1 (2,5 mm², 16 A, DR) e C2
+(1,5 mm², 10 A), eletroduto compartilhado de 4 m com 6 condutores, prumada de 2,5 m com 3 e 2 m
+SEM contagem → **2,5 mm² = 19,5 m; 1,5 mm² = 18 m** (12 + 6 assumidos e ditos); quadro com 2
+circuitos, 3 pontos, `[{10,1},{16,1}]`, 1 DR, 8,5 m de eletroduto, 37,5 m de fio; as cinco medidas
+no catálogo; de-para com 2 linhas de fio, filtro por "1,5 mm²", disjuntores por In, DR, quadro,
+pontos (3), unidade errada = divergência; lançamento por peça da tomada com código (UN, grupo
+elétrico); por pavimento fecha com o total; desenho sem elétrica = listas vazias e zeros.
+Pinos de versão `quant-1.18.0 → 1.19.0` em **9 arquivos** (Acabamentos, Calhas, CortinaEBrise,
+Quantities, Rodape, GuardaCorpo, Fases, VolumeEFace, EsquadriaSaidas).
+
+**O que os testes pegaram antes de publicar**: o `grep … | head -8` dos pinos de versão cortou a
+lista — 3 corrigidos, 4 acusados pela suíte inteira, e depois mais 5; a suíte inteira é o portão,
+não o grep (memória `feedback_grep_v_version_escondeu_funcao` tem irmã nova).
+
+**Verificação**: `tsc` ✓ · alvo 163 ✓ · suíte inteira **6.172 ✓ / 0 ✗ / 33 skip** (562 arquivos,
+depois dos pinos) · `build` ✓ · `check-ui-standard TelaQuantitativos.tsx` ✓ · `check-xss-sinks` ✓ ·
+`planta-api` 401/401. **Harness visual não rodou e a tela não ganhou teste jsdom nesta fase**: as
+linhas novas usam as mesmas células e famílias das existentes; o que está provado é o dado
+(`computeQuantities`, de-para, planilha), não o pixel — fica dito.
+
+**Efeito no benchmark**: §47 "Cabos" e "Fios" ❌→🟡 (metro por seção, sem tipo/retorno),
+"Quadros" ❌→✅, "Disjuntores" ❌→✅, "IDRs" ❌→🟡 (contagem, sem peça), "Por pavimento" 🟡→✅,
+"Por quadro" ❌→✅, "Por circuito" ❌→🟡 (fio por circuito está no payload, sem tela); §30
+"Quantitativos" ❌→🟡; §46 "Itens" 🟡→✅ (código da peça elétrica chega ao orçamento); §51
+"Quantitativos" 🟡→✅, "Lista de materiais" ❌→🟡 (XLSX e tela; folha na prancha é a E5.2).

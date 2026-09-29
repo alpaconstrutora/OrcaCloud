@@ -35,6 +35,7 @@
  * Puro: números entram, números e textos saem.
  */
 import type { BlueprintModel, Circuito, LigacaoDoCircuito, Quadro, Terminal, Trecho } from './blueprintKernel';
+import { repartirCondutores } from './blueprintKernel';
 import { comprimentoDoTrecho } from './blueprintRede';
 
 // ─── Tabela 36 — capacidade de condução de corrente (A) ────────────────────
@@ -945,20 +946,9 @@ export function condutoresPorCircuitoNoTrecho(
   circuitos: readonly { ligacao?: LigacaoDoCircuito | null }[],
   secoes: readonly number[],
 ): { secaoMm2: number; quantidade: number }[] {
-  const base = circuitos.map((c) => ((c.ligacao ?? 'FN') === 'FFF' ? 4 : 3));
-  const soma = base.reduce((t, b) => t + b, 0);
-  const saida: { secaoMm2: number; quantidade: number }[] = [];
-  if (condutores >= soma) {
-    circuitos.forEach((_, i) => saida.push({ secaoMm2: secoes[i], quantidade: base[i] + (i === 0 ? condutores - soma : 0) }));
-    return saida;
-  }
-  let restam = condutores;
-  circuitos.forEach((_, i) => {
-    const q = Math.min(base[i], restam);
-    restam -= q;
-    if (q > 0) saida.push({ secaoMm2: secoes[i], quantidade: q });
-  });
-  return saida;
+  // A conta mora no kernel desde a E0.3 (29/09/2026): o quantitativo de fio
+  // usa a MESMA repartição — duas cópias divergiriam em silêncio.
+  return repartirCondutores(condutores, circuitos, secoes).map((r) => ({ secaoMm2: r.secaoMm2 as number, quantidade: r.quantidade }));
 }
 
 /**

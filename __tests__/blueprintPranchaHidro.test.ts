@@ -65,6 +65,8 @@ describe('E2.1 — a planta hidrossanitária no papel', () => {
     const textos = d.textos().join(' | ');
     expect(textos).toMatch(/ø25/);
     expect(textos).toMatch(/ø22/);
+    // E2.4: a altura do tubo de água.
+    expect(textos).toMatch(/ø25 mm · h 2,20/);
     expect(textos).not.toMatch(/ø100|TQ1/);
   });
 
@@ -79,6 +81,8 @@ describe('E2.1 — a planta hidrossanitária no papel', () => {
     expect(textos).toMatch(/TQ-1 ø100/); // E2.3: o nome da coluna do desenho
     expect(textos).toMatch(/CI/);
     expect(textos).not.toMatch(/ø25/);
+    // E2.4: a tampa e o fundo da caixa, relativos ao piso.
+    expect(d.textos().some((t) => /^CT [+−]\d,\d\d · CF −\d,\d\d$/.test(t))).toBe(true);
     // Bifilar = o miolo é um polígono a mais que a arquitetura.
     const poligonos = (x: DesenhistaDeProva) => x.chamadas.filter((c) => c.tipo === 'poligono').length;
     expect(poligonos(d)).toBeGreaterThan(poligonos(antes));

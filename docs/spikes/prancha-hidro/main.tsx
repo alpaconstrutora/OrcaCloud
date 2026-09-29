@@ -14,6 +14,8 @@ import {
   PAPEIS,
   desenharFolhaDeDetalhesHidro,
   desenharFolhaDoEsquemaVertical,
+  desenharElevacao,
+  enquadrarElevacao,
   desenharPlanta,
   enquadrar,
   orientar,
@@ -23,6 +25,7 @@ import {
 } from '../../../utils/blueprintExport';
 import { planejarEsgoto } from '../../../utils/blueprintEsgotoAutomatico';
 import { modeloDoPavimento } from '../../../utils/blueprintPranchas';
+import { projetarCorte } from '../../../utils/blueprintCorte';
 import { nomesDasColunas } from '../../../utils/blueprintEsquemaVertical';
 import { planejarAgua } from '../../../utils/blueprintAguaAutomatica';
 
@@ -122,6 +125,9 @@ const papel = orientar(PAPEIS.find((p) => p.id === (params.get('papel') ?? 'A3')
 const denominador = Number(params.get('escala') ?? 50);
 const o: OpcoesExportacao = { denominador, papel, titulo: 'Casa de prova', revisao: 1, hash: 'e2'.repeat(32), data: new Date('2026-09-28T12:00:00Z') };
 const enq = enquadrar(pavimento, o.denominador, o.papel, false);
+const comCorte = applyCommand(modelo, { type: 'AddCorte', a: point(-800, 1500), b: point(7000, 1500) } as Command).model;
+const projCorte = projetarCorte(comCorte, { corte: comCorte.sections[0] });
+const enqCorte = enquadrarElevacao(projCorte, 50, papel);
 const DPI = 110;
 const raiz = document.getElementById('raiz')!;
 for (const [id, desenhar] of [
@@ -129,6 +135,8 @@ for (const [id, desenhar] of [
   ['esgoto', (d: Desenhista) => desenharPlanta(d, pavimento, { ...o, titulo: `${o.titulo} — Esgoto`, hidrossanitaria: 'ESGOTO', nomesDasColunas: nomes }, enq)],
   ['legenda', (d: Desenhista) => desenharFolhaDeDetalhesHidro(d, modelo, { ...o, denominador: 0, titulo: `${o.titulo} — Legenda` }, enq)],
   ['esquema', (d: Desenhista) => desenharFolhaDoEsquemaVertical(d, modelo, { ...o, denominador: 0, titulo: `${o.titulo} — Esquema vertical` }, enq, ['AGUA', 'ESGOTO'])],
+  // E2.4: um corte em y = 1500 atravessando o banheiro, com a rede (`instalacoesNoCorte`).
+  ['corte', (d: Desenhista) => desenharElevacao(d, projCorte, { ...o, titulo: `${o.titulo} — Corte AA`, instalacoesNoCorte: params.get('semRede') !== '1' }, enqCorte)],
 ] as const) {
   const canvas = document.createElement('canvas');
   canvas.id = id;

@@ -82,6 +82,8 @@ describe('E2.2 — no papel', () => {
     expect(textos).toContain(`Isométrico · 1:${den} (medidas em verdadeira grandeza nos eixos)`);
     expect(textos).toContain('ø25');
     expect(textos).toContain('LV · h 0,60');
+    // E2.4: a peça no nó pela sigla — a descida do lavatório faz um joelho no teto.
+    expect(textos).toContain('J90');
     // Tudo dentro da caixa do papel.
     for (const c of d.chamadas.filter((x) => x.tipo === 'linha')) {
       const [x1, y1, x2, y2] = c.args as number[];

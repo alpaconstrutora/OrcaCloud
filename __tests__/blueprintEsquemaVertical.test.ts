@@ -5,7 +5,10 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, recomputeSpaces, type BlueprintModel, type Command, type TipoDePontoHidraulico } from '../utils/blueprintKernel';
-import { DesenhistaDeProva, PAPEIS, desenharFolhaDoEsquemaVertical, desenharPlanta, enquadrar, orientar, type OpcoesExportacao } from '../utils/blueprintExport';
+import { DesenhistaDeProva, PAPEIS, desenharElevacao, desenharFolhaDoEsquemaVertical, desenharPlanta, enquadrar, enquadrarElevacao, orientar, type OpcoesExportacao } from '../utils/blueprintExport';
+import { isometricosDoModelo } from '../utils/blueprintIsometricoPrancha';
+import { projetarCorte } from '../utils/blueprintCorte';
+import { COR_DA_DISCIPLINA } from '../utils/blueprintRede';
 import { colunasDoModelo, desenharEsquemaVertical, linhasDaLegendaDeColunas, nomesDasColunas } from '../utils/blueprintEsquemaVertical';
 import { planejarAgua } from '../utils/blueprintAguaAutomatica';
 import { planejarEsgoto } from '../utils/blueprintEsgotoAutomatico';
@@ -126,5 +129,38 @@ describe('E2.3 — no conjunto', () => {
     const d = new DesenhistaDeProva();
     desenharFolhaDoEsquemaVertical(d, m, opcoes({ denominador: 0 }), enquadrar(m, 50, papel, false), ['AGUA', 'ESGOTO']);
     expect(d.textos()).toContain('Sobrado');
+  });
+});
+
+describe('E2.4 — cotas e indicações', () => {
+  it('isométrico do sobrado: todo nó está na ponta de um tubo desenhado (o do andar de cima não fica solto no ar)', () => {
+    for (const iso of isometricosDoModelo(sobrado())) {
+      const pts = iso.segmentos.flatMap((s) => [s.a, s.b]);
+      for (const n of iso.nos) expect(pts.some((p) => Math.hypot(p.x - n.p.x, p.y - n.p.y) < 1 && Math.abs(p.z - n.p.z) < 1)).toBe(true);
+    }
+  });
+
+  it('o CORTE leva a rede só quando pedido: atrás do plano em linha, cortada na cor da disciplina', () => {
+    const m = applyCommand(sobrado(), { type: 'AddCorte', a: point(-800, 1500), b: point(7000, 1500) }).model;
+    const proj = projetarCorte(m, { corte: m.sections[0] });
+    const enq = enquadrarElevacao(proj, 50, papel);
+    const agua = COR_DA_DISCIPLINA.AGUA_FRIA;
+    const tracosDeAgua = (d: DesenhistaDeProva) => d.chamadas.filter((c) => c.tipo === 'linha' && (c.args[4] as { cor: string }).cor === agua).length;
+    const sem = new DesenhistaDeProva();
+    desenharElevacao(sem, proj, opcoes(), enq);
+    const com = new DesenhistaDeProva();
+    desenharElevacao(com, proj, opcoes({ instalacoesNoCorte: true }), enq);
+    expect(tracosDeAgua(sem)).toBe(0);
+    expect(tracosDeAgua(com)).toBeGreaterThan(0);
+    // O conjunto com hidrossanitário liga sozinho.
+    const t = { ...TEMPLATE_DE_PRANCHA_PADRAO, incluir: { ...TEMPLATE_DE_PRANCHA_PADRAO.incluir, indice: false, plantas: false, elevacoes: false, ampliacoes: false, tabelas: false, cortes: true, hidraulica: true } };
+    const folhas: DesenhistaDeProva[] = [];
+    const r = desenharConjunto(m, opcoes(), t, () => {
+      const f = new DesenhistaDeProva();
+      folhas.push(f);
+      return f;
+    });
+    const iCorte = r.pranchas.findIndex((p) => p.tipo === 'CORTE');
+    expect(tracosDeAgua(folhas[iCorte])).toBeGreaterThan(0);
   });
 });

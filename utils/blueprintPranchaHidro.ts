@@ -16,7 +16,7 @@
  * Tudo em mm de PAPEL; a projeção (`proj`) é a da planta (`desenharPlanta`).
  */
 import type { BlueprintModel, DisciplinaDeRede, MaterialDeTubo, ObjectId } from './blueprintKernel';
-import { ROTULO_DA_CONEXAO, materialDoTrecho } from './blueprintKernel';
+import { ROTULO_DA_CONEXAO, extensaoVerticalDaCaixa, materialDoTrecho, type TipoDeConexao } from './blueprintKernel';
 import type { Desenhista } from './blueprintExport';
 import { COR_DA_DISCIPLINA, ROTULO_DA_DISCIPLINA } from './blueprintRede';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
@@ -104,6 +104,26 @@ export function posicaoDoRotulo(a: P, b: P, folga: number, texto: string): P {
   return { x: sobeParaADireita ? x - texto.length * TEXTO_MM * 0.55 : x, y };
 }
 
+/** "2,20" — a altura em metros, como se cota em planta. */
+export const metros = (mm: number) => (mm / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** "+0,10" / "−0,70" — cota relativa ao piso, com o sinal sempre escrito. */
+export const cotaComSinal = (mm: number) => `${mm < 0 ? '−' : '+'}${metros(Math.abs(mm))}`;
+/** A altura do tubo: uma só quando é horizontal, "de → para" quando não. */
+function alturaDoTubo(a: number, b: number): string {
+  return a === b ? metros(a) : `${metros(a)}→${metros(b)}`;
+}
+
+/** A SIGLA da conexão no detalhe (E2.4) — a legenda diz o nome por extenso. */
+export const SIGLA_DA_CONEXAO: Record<TipoDeConexao, string> = {
+  JOELHO_90: 'J90',
+  JOELHO_45: 'J45',
+  TE: 'T',
+  JUNCAO_45: 'Y',
+  CRUZETA: 'X',
+  LUVA: 'L',
+  REDUCAO: 'R',
+};
+
 /** Clareia a cor em `quanto` (0–1) — o miolo do tubo bifilar. */
 function clarear(hex: string, quanto: number): string {
   const n = parseInt(hex.replace('#', ''), 16);
@@ -163,10 +183,12 @@ export function desenharHidrossanitaria(
     } else {
       d.linha(a.x, a.y, b.x, b.y, { espessuraMm: t.disciplina === 'ESGOTO' ? MEDIA * 1.4 : MEDIA, cor });
     }
-    // O ø (e o i %) junto do meio, quando o tubo tem papel para isso.
+    // O ø (e o i %) junto do meio, quando o tubo tem papel para isso. E2.4: na água,
+    // a ALTURA do tubo (o esgoto já diz o caimento; a cota dele está nas caixas).
     if (Math.hypot(b.x - a.x, b.y - a.y) >= 12) {
-      const r = posicaoDoRotulo(a, b, Math.max(larguraPapel / 2, 0.4) + 0.7, rotuloDoTrecho2D(t));
-      d.texto(r.x, r.y, rotuloDoTrecho2D(t), TEXTO_MM, cor);
+      const texto = t.disciplina === 'ESGOTO' ? rotuloDoTrecho2D(t) : `${rotuloDoTrecho2D(t)} · h ${alturaDoTubo(t.cotaAMm, t.cotaBMm)}`;
+      const r = posicaoDoRotulo(a, b, Math.max(larguraPapel / 2, 0.4) + 0.7, texto);
+      d.texto(r.x, r.y, texto, TEXTO_MM, cor);
     }
   }
 
@@ -203,6 +225,9 @@ export function desenharHidrossanitaria(
         circulo(d, c, (l / 2) * 0.7, { traco: FINA, cor: COR_FRACA });
       }
       d.texto(c.x + l / 2 + 0.6, c.y - p / 2 - 0.4, ficha.sigla, TEXTO_MM, COR);
+      // E2.4: a cota da TAMPA e a do FUNDO da caixa de esgoto (relativas ao piso do pavimento).
+      const ext = extensaoVerticalDaCaixa(t);
+      if (ext) d.texto(c.x + l / 2 + 0.6, c.y - p / 2 + 2.0, `CT ${cotaComSinal(ext.topoMm)} · CF ${cotaComSinal(ext.fundoMm)}`, TEXTO_MM * 0.9, COR_FRACA);
       continue;
     }
     circulo(d, c, 0.9, { cheio: COR_DA_DISCIPLINA[t.disciplina], traco: FINA });
@@ -232,7 +257,7 @@ export function itensDaLegendaHidro(model: BlueprintModel): ItemDaLegendaHidro[]
   }
   const conexoes = new Set<string>();
   for (const sc of simbolosDasConexoes2D(model, null)) {
-    if (hidraulicas.includes(sc.chave.split('|')[0] as DisciplinaDeRede)) conexoes.add(ROTULO_DA_CONEXAO[sc.tipo]);
+    if (hidraulicas.includes(sc.chave.split('|')[0] as DisciplinaDeRede)) conexoes.add(`${SIGLA_DA_CONEXAO[sc.tipo]} — ${ROTULO_DA_CONEXAO[sc.tipo]}`);
   }
   const pecas = new Map<string, string>();
   for (const t of model.terminais ?? []) {

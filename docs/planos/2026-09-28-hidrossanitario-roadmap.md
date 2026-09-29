@@ -471,3 +471,26 @@ Publicadas juntas: a perda localizada só aparece no resultado de pressão.
   lavatório ou na sifonada; legenda com a CV logo depois do TQ; esquema com +0,00/+2,90/+5,70;
   filtro por rede; planta do superior com "TQ-1 · CV-1"; folha no fim do conjunto. Harness
   `docs/spikes/prancha-hidro?cena=sobrado` conferido no olho. Suíte: 517 arquivos / 5.884 testes.
+
+### E2.4 — Cotas e indicações (28/09/2026) · fecha a Etapa 2
+
+- Planta: o tubo de ÁGUA leva a altura ("ø25 mm · h 2,20"; "de → para" quando inclina); a caixa
+  de esgoto leva a cota da TAMPA e a do FUNDO relativas ao piso ("CT −0,10 · CF −0,70", de
+  `extensaoVerticalDaCaixa`). O esgoto continua com ø e i % no tubo.
+- Isométrico: a peça em cada nó pela sigla (`SIGLA_DA_CONEXAO`: J90, J45, T, Y, X, L, R) e a
+  legenda da folha passa a dizer "J90 — Joelho 90°". O nó só entra se for de um tubo DESTE
+  isométrico, com o z da ponta do tubo — o kernel encontra os andares na laje (piso de cima =
+  teto de baixo) e a elevação conta a espessura dela; antes, os nós do andar de cima ficavam
+  soltos no ar no isométrico do térreo.
+- Corte na prancha: `OpcoesExportacao.instalacoesNoCorte` — a rede atrás do plano em linha na cor
+  da disciplina (esgoto tracejado, como na tela) e a cortada na cor da disciplina em vez do cinza
+  da parede. Liga sozinho no conjunto com hidráulica/esgoto e na exportação avulsa com as pranchas
+  hidrossanitárias marcadas; o corte arquitetônico de sempre não muda.
+- **Pronto quando** ✔: testes novos em `blueprintPranchaHidro`, `blueprintIsometricoPrancha` e
+  `blueprintEsquemaVertical` — "h 2,20" no tubo, CT/CF na CI, "J90" no detalhe, nenhum nó solto no
+  isométrico do sobrado, corte sem a opção = zero traço de água e com ela > 0 (e o conjunto liga).
+  Harness `prancha-hidro?cena=sobrado` com a 5ª folha, o Corte AA. Suíte: 521 arquivos / 5.905
+  testes.
+
+**Etapa 2: 4 de 4 fases publicadas.** Fica para depois (backlog): isométrico por COLUNA (o esquema
+vertical cobre o traçado das colunas) e anticolisão dos rótulos na planta.

@@ -24,6 +24,7 @@
  * os dois a carregar condicional do outro.
  */
 
+import { COR_DA_DISCIPLINA } from './blueprintRede';
 import { desenharEsquemaVertical, nomesDasColunas } from './blueprintEsquemaVertical';
 import { desenharIsometricos, isometricosDoModelo } from './blueprintIsometricoPrancha';
 import { desenharHidrossanitaria, desenharLegendaHidro, type RedeDaPrancha } from './blueprintPranchaHidro';
@@ -351,6 +352,12 @@ export interface OpcoesExportacao {
    * nele daria "AF-1" a colunas diferentes em pranchas diferentes.
    */
   nomesDasColunas?: ReadonlyMap<string, string>;
+  /**
+   * E2.4: o CORTE sai com as instalações — as que o plano atravessa na cor da
+   * disciplina (e não no cinza da parede) e as de trás como linha (esgoto
+   * tracejado), igual à tela. Ausente = o corte arquitetônico de sempre.
+   */
+  instalacoesNoCorte?: boolean;
   /** Hipóteses do pré-dimensionamento, para o quadro de cargas da prancha. */
   hipotesesEletricas?: HipotesesEletricas;
   /**
@@ -1141,6 +1148,27 @@ export function desenharElevacao(
   itens.sort((a, b) => b.profundidade - a.profundidade);
   for (const i of itens) i.pintar();
 
+  // E2.4: as instalações ATRÁS do plano de corte — linha na cor da disciplina, esgoto
+  // tracejado, a convenção da tela (`ElevationCanvas`). Linha, e não corpo: o cano
+  // está quase sempre dentro da parede.
+  if (opcoes.instalacoesNoCorte && 'corteId' in projecao) {
+    for (const r of projecao.redes ?? []) {
+      if (r.degenerada) continue;
+      const a = { x: px(r.a.u), y: py(r.a.v) };
+      const b = { x: px(r.b.u), y: py(r.b.v) };
+      const cor = COR_DA_DISCIPLINA[r.disciplina as keyof typeof COR_DA_DISCIPLINA] ?? '#64748b';
+      if (r.disciplina !== 'ESGOTO') {
+        d.linha(a.x, a.y, b.x, b.y, { espessuraMm: 0.35, cor });
+        continue;
+      }
+      const n = Math.hypot(b.x - a.x, b.y - a.y);
+      for (let s = 0; s < n; s += 2.4) {
+        const f = Math.min(s + 1.6, n);
+        d.linha(a.x + ((b.x - a.x) * s) / n, a.y + ((b.y - a.y) * s) / n, a.x + ((b.x - a.x) * f) / n, a.y + ((b.y - a.y) * f) / n, { espessuraMm: 0.35, cor });
+      }
+    }
+  }
+
   // ── O QUE O PLANO CORTA — por cima de tudo, fora da ordenacao ──────────────
   //
   // A mesma regra da tela, e pela mesma razao: a face cortada E o plano, e tudo
@@ -1155,7 +1183,9 @@ export function desenharElevacao(
       const pts = c.pontos.map((q) => ({ x: px(q.u), y: py(q.v) }));
       d.poligono(
         pts,
-        c.familia === 'TELHADO'
+        opcoes.instalacoesNoCorte && c.familia === 'REDE'
+          ? (COR_DA_DISCIPLINA[c.disciplina as keyof typeof COR_DA_DISCIPLINA] ?? COR_CORTE_PAREDE)
+          : c.familia === 'TELHADO'
           ? COR_CORTE_TELHADO
           : c.familia === 'ESTRUTURA'
             ? COR_CORTE_ESTRUTURA

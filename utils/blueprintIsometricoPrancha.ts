@@ -15,12 +15,12 @@
  * Puro: `isometricosDoModelo` diz QUAIS existem; `desenharIsometrico` desenha
  * um numa caixa do papel (mm) com a maior escala da lista que cabe.
  */
-import type { BlueprintModel, DisciplinaDeRede, ObjectId, Point } from './blueprintKernel';
+import type { BlueprintModel, DisciplinaDeRede, ObjectId, Point, TipoDeConexao } from './blueprintKernel';
 import { conexoesDerivadas, pointInPolygon } from './blueprintKernel';
 import type { Desenhista } from './blueprintExport';
 import { COR_DA_DISCIPLINA } from './blueprintRede';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
-import { DISCIPLINAS_DA_REDE, posicaoDoRotulo, type RedeDaPrancha } from './blueprintPranchaHidro';
+import { DISCIPLINAS_DA_REDE, SIGLA_DA_CONEXAO, cotaComSinal, posicaoDoRotulo, type RedeDaPrancha } from './blueprintPranchaHidro';
 
 const FOLGA_MM = 300;
 const COS30 = Math.cos(Math.PI / 6);
@@ -44,7 +44,7 @@ export interface IsometricoDePrancha {
   /** Os segmentos recortados, em mm do modelo (z = elevação do pavimento + cota). */
   segmentos: { trechoId: ObjectId; disciplina: DisciplinaDeRede; bitolaMm: number; a: P3; b: P3 }[];
   pontos: { terminalId: ObjectId; sigla: string; cotaMm: number; p: P3; disciplina: DisciplinaDeRede }[];
-  nos: { p: P3; disciplina: DisciplinaDeRede }[];
+  nos: { p: P3; disciplina: DisciplinaDeRede; tipo: TipoDeConexao }[];
 }
 
 const ROTULO_DA_REDE: Record<RedeDaPrancha, string> = { AGUA: 'Água', ESGOTO: 'Esgoto' };
@@ -95,6 +95,7 @@ export function projetarIsometrico(p: P3): { u: number; v: number } {
 export function isometricosDoModelo(model: BlueprintModel): IsometricoDePrancha[] {
   const saida: IsometricoDePrancha[] = [];
   const nos = conexoesDerivadas(model).conexoes;
+  const elevacao = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
   for (const nivel of model.levels) {
     const z0 = nivel.elevationMm;
     const ambientes = model.spaces.filter((s) => s.levelId === nivel.id && s.ring.length >= 3);
@@ -113,6 +114,7 @@ export function isometricosDoModelo(model: BlueprintModel): IsometricoDePrancha[
           if (r) segmentos.push({ trechoId: t.id, disciplina: t.disciplina, bitolaMm: t.bitolaMm, a: r[0], b: r[1] });
         }
         if (segmentos.length === 0) continue;
+        const idsDosSegmentos = new Set(segmentos.map((x) => x.trechoId));
         saida.push({
           chave: `${nivel.id}|${rede}|${s.id}`,
           titulo: `${ROTULO_DA_REDE[rede]} — ${s.name ?? 'Ambiente'} (${nivel.name})`,
@@ -127,9 +129,21 @@ export function isometricosDoModelo(model: BlueprintModel): IsometricoDePrancha[
             p: { x: t.at.x, y: t.at.y, z: z0 + t.cotaMm },
             disciplina: t.disciplina,
           })),
+          // O nó de um tubo DESTE isométrico — o do andar de cima, abaixo da laje dele, vem
+          // com o levelId do de baixo (a laje é o encontro) e ficaria solto no ar.
+          // O z vem da PONTA do tubo, não da cota do nó: o kernel encontra os andares na
+          // laje (piso de cima = teto de baixo) e a elevação conta a espessura dela.
           nos: nos
-            .filter((c) => c.levelId === nivel.id && ds.includes(c.disciplina) && dentro(caixa, c.no))
-            .map((c) => ({ p: { x: c.no.x, y: c.no.y, z: z0 + c.cotaMm }, disciplina: c.disciplina })),
+            .filter((c) => dentro(caixa, c.no) && c.trechoIds.some((id) => idsDosSegmentos.has(id)))
+            .flatMap((c) => {
+              const estimado = (elevacao.get(c.levelId) ?? z0) + c.cotaMm;
+              const pontas = segmentos
+                .filter((x) => c.trechoIds.includes(x.trechoId))
+                .flatMap((x) => [x.a, x.b])
+                .filter((q) => Math.hypot(q.x - c.no.x, q.y - c.no.y) < 1)
+                .sort((q, r) => Math.abs(q.z - estimado) - Math.abs(r.z - estimado));
+              return pontas.length ? [{ p: { ...pontas[0] }, disciplina: c.disciplina, tipo: c.tipo }] : [];
+            }),
         });
       }
     }
@@ -137,8 +151,6 @@ export function isometricosDoModelo(model: BlueprintModel): IsometricoDePrancha[
   return saida;
 }
 
-/** "0,60" — a altura do ponto em metros, como se cota no detalhe. */
-const metros = (mm: number) => (mm / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /**
  * Desenha um isométrico na caixa `(x, y, w, h)` do papel: título, escala, a
@@ -182,6 +194,8 @@ export function desenharIsometrico(d: Desenhista, iso: IsometricoDePrancha, x: n
       Array.from({ length: 12 }, (_, i) => ({ x: c.x + 0.45 * Math.cos((i / 12) * Math.PI * 2), y: c.y + 0.45 * Math.sin((i / 12) * Math.PI * 2) })),
       COR_DA_DISCIPLINA[n.disciplina],
     );
+    // E2.4: a peça no nó, pela sigla (a legenda da folha diz o nome).
+    d.texto(c.x - 2.2, c.y + 2.4, SIGLA_DA_CONEXAO[n.tipo], TEXTO_MM * 0.8, COR_FRACA);
   }
   for (const p of iso.pontos) {
     const c = papel(p.p);
@@ -190,7 +204,7 @@ export function desenharIsometrico(d: Desenhista, iso: IsometricoDePrancha, x: n
       const a1 = ((i + 1) / 12) * Math.PI * 2;
       d.linha(c.x + 0.8 * Math.cos(a0), c.y + 0.8 * Math.sin(a0), c.x + 0.8 * Math.cos(a1), c.y + 0.8 * Math.sin(a1), { espessuraMm: 0.25, cor: COR });
     }
-    d.texto(c.x + 1.3, c.y - 0.9, `${p.sigla} · h ${metros(p.cotaMm)}`, TEXTO_MM, COR);
+    d.texto(c.x + 1.3, c.y - 0.9, `${p.sigla} · h ${cotaComSinal(p.cotaMm).replace('+', '')}`, TEXTO_MM, COR);
   }
   return den;
 }

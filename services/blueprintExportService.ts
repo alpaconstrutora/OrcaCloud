@@ -443,7 +443,7 @@ export function exportarPranchasPdf(
     else if (unifilar) desenharFolhaDoUnifilar(desenhista, model, oPagina, enq);
     else if (legendaHidro) desenharFolhaDeDetalhesHidro(desenhista, model, { ...oPagina, denominador: 0 }, enq);
     else if (esquemaHidro) desenharFolhaDoEsquemaVertical(desenhista, model, { ...oPagina, denominador: 0 }, enq, redesDasPranchas(pranchas));
-    else if (proj) desenharElevacao(desenhista, proj, oPagina, enq);
+    else if (proj) desenharElevacao(desenhista, proj, { ...oPagina, instalacoesNoCorte: redesDasPranchas(pranchas).length > 0 }, enq);
     else desenharPlanta(desenhista, model, oPagina, enq);
   });
 
@@ -550,7 +550,8 @@ export function desenharConjunto(
           den = enq.escalaSugerida;
           enq = enquadrarElevacao(proj, den, papel);
         }
-        desenharElevacao(d, proj, comPrancha(den), enq);
+        // E2.4: com prancha hidrossanitária no conjunto, o corte sai com a rede.
+        desenharElevacao(d, proj, comPrancha(den, { instalacoesNoCorte: redesDoTemplate(template).length > 0 }), enq);
         folhas.push({ prancha: p, denominador: den });
         break;
       }
@@ -702,7 +703,7 @@ export function exportarPranchasPng(
     } else {
       const enq = enquadrarElevacao(proj!, o.denominador, o.papel);
       if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
-      desenharElevacao(new DesenhistaCanvas(ctx, dpi), proj!, { ...oArquivo, anotacoes: model.anotacoes ?? [] }, enq);
+      desenharElevacao(new DesenhistaCanvas(ctx, dpi), proj!, { ...oArquivo, anotacoes: model.anotacoes ?? [], instalacoesNoCorte: redesDasPranchas(pranchas).length > 0 }, enq);
     }
 
     // `corte:abc` no nome do arquivo NAO desce no Windows: dois-pontos e

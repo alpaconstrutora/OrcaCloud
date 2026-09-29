@@ -12,9 +12,11 @@ import type {
     ProcessInstanceStep, PendingStepItem, ProcessComment, ProcessStepType, ProcessStepBottleneck,
 } from '../types/process';
 import { INSTANCE_STATUS_LABEL } from '../types/process';
-import type { ProcessCondition, ProcessConditionOp } from '../types/process';
+import type { ProcessCondition, ProcessConditionField, ProcessConditionOp } from '../types/process';
 import { CONDITION_FIELD_LABEL, CONDITION_OP_LABEL, CONDITION_OPS_BY_FIELD, descreverCondicao, validarCondicao } from '../utils/processCondition';
 import { useStore } from '../store/useStore';
+import { supplierService } from '../services/supplierService';
+import SupplierSelect, { type SupplierOption } from './SupplierSelect';
 import type { OpuraDocument } from '../types/documents';
 import Button from './ui/Button';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/modal';
@@ -48,19 +50,42 @@ function StatusBadge({ status }: { status: string }) {
 
 // ─── criar template ─────────────────────────────────────────
 
-/** Etapa como o formulário a edita: a condição guarda o valor como TEXTO até gravar. */
+/** Etapa como o formulário a edita: a condição guarda o valor como TEXTO (ou lista de ids, no `in`) até gravar. */
 interface EtapaEmEdicao {
     name: string;
     step_type: ProcessStepType;
     requires_document: boolean;
-    condition: { field: 'amount' | 'project_id'; op: ProcessConditionOp; value: string } | null;
+    condition: { field: ProcessConditionField; op: ProcessConditionOp; value: string | string[] } | null;
 }
 
-/** Texto do formulário → `ProcessCondition` (valor numérico para `amount`); null quando não há condição. */
+/** Texto do formulário → `ProcessCondition` (valor numérico para `amount`, lista para `in`); null quando não há condição. */
 function condicaoParaGravar(c: EtapaEmEdicao['condition']): ProcessCondition | null {
     if (!c) return null;
-    const value = c.field === 'amount' ? Number(String(c.value).replace(/\./g, '').replace(',', '.')) : c.value;
-    return { field: c.field, op: c.op, value: c.field === 'amount' && !Number.isFinite(value as number) ? String(c.value) : value };
+    if (Array.isArray(c.value)) return { field: c.field, op: c.op, value: c.value };
+    if (c.field !== 'amount') return { field: c.field, op: c.op, value: c.value };
+    const n = Number(String(c.value).replace(/\./g, '').replace(',', '.'));
+    return { field: c.field, op: c.op, value: Number.isFinite(n) && c.value !== '' ? n : String(c.value) };
+}
+
+/** Lista de marcação para o operador `in` (obras ou fornecedores). Rola quando passa de ~6 itens. */
+function ListaDeMarcacao({ opcoes, marcados, onChange }: {
+    opcoes: { id: string; name: string }[];
+    marcados: string[];
+    onChange: (ids: string[]) => void;
+}) {
+    return (
+        <div className="max-h-40 overflow-y-auto rounded-[6px] border border-gray-200 divide-y divide-gray-100 min-w-64">
+            {opcoes.length === 0 && <p className="px-3 py-2 text-sm text-gray-400">Nenhum item disponível.</p>}
+            {opcoes.map(o => (
+                <label key={o.id} className="flex items-center gap-2 px-3 h-9 text-sm font-normal text-gray-700 cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-blue-600"
+                        checked={marcados.includes(o.id)}
+                        onChange={e => onChange(e.target.checked ? [...marcados, o.id] : marcados.filter(id => id !== o.id))} />
+                    <span className="truncate">{o.name}</span>
+                </label>
+            ))}
+        </div>
+    );
 }
 
 function NewTemplateModal({ open, onClose, organizationId, onCreated }: {
@@ -73,6 +98,14 @@ function NewTemplateModal({ open, onClose, organizationId, onCreated }: {
     const [erro, setErro] = useState<string | null>(null);
     // Obras da organização ativa (só OBRA, sem projeto de sistema — REGRA #2/#3 já cortadas no store).
     const obras = useStore(s => s.projects);
+    // Fornecedores para a condição por fornecedor — carregados só com o modal aberto (§7.1.1: drawer, não <select>).
+    const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
+    useEffect(() => {
+        if (!open) return;
+        supplierService.listSuppliers(organizationId)
+            .then(lista => setSuppliers(lista.map(s => ({ id: s.id, name: s.name, nickname: s.nickname ?? null }))))
+            .catch(() => setSuppliers([]));
+    }, [open, organizationId]);
 
     if (!open) return null;
 
@@ -148,31 +181,49 @@ function NewTemplateModal({ open, onClose, organizationId, onCreated }: {
                                         <span className="text-xs text-gray-500 whitespace-nowrap">Só executa quando</span>
                                         <select value={s.condition.field}
                                             onChange={e => {
-                                                const field = e.target.value as 'amount' | 'project_id';
+                                                const field = e.target.value as ProcessConditionField;
                                                 setStep(idx, { condition: { field, op: CONDITION_OPS_BY_FIELD[field][0], value: '' } });
                                             }}
                                             className="h-9 px-2 rounded-[6px] border border-gray-200 text-sm font-normal">
-                                            <option value="amount">{CONDITION_FIELD_LABEL.amount}</option>
-                                            <option value="project_id">{CONDITION_FIELD_LABEL.project_id}</option>
+                                            {(Object.keys(CONDITION_FIELD_LABEL) as ProcessConditionField[]).map(f => (
+                                                <option key={f} value={f}>{CONDITION_FIELD_LABEL[f]}</option>
+                                            ))}
                                         </select>
                                         <select value={s.condition.op}
-                                            onChange={e => setStep(idx, { condition: { ...s.condition!, op: e.target.value as ProcessConditionOp } })}
+                                            onChange={e => {
+                                                const op = e.target.value as ProcessConditionOp;
+                                                // `in` guarda lista; os outros, um valor só — trocar o operador zera o valor.
+                                                setStep(idx, { condition: { ...s.condition!, op, value: op === 'in' ? [] : '' } });
+                                            }}
                                             className="h-9 px-2 rounded-[6px] border border-gray-200 text-sm font-normal">
-                                            {CONDITION_OPS_BY_FIELD[s.condition.field].filter(op => op !== 'in').map(op => (
+                                            {CONDITION_OPS_BY_FIELD[s.condition.field].map(op => (
                                                 <option key={op} value={op}>{CONDITION_OP_LABEL[op]}</option>
                                             ))}
                                         </select>
                                         {s.condition.field === 'amount' ? (
-                                            <input inputMode="decimal" value={s.condition.value}
+                                            <input inputMode="decimal" value={s.condition.value as string}
                                                 onChange={e => setStep(idx, { condition: { ...s.condition!, value: e.target.value } })}
                                                 className="h-9 w-36 px-3 rounded-[6px] border border-gray-200 text-sm" placeholder="R$ 30000" />
-                                        ) : (
-                                            <select value={s.condition.value}
+                                        ) : s.condition.op === 'in' ? (
+                                            <ListaDeMarcacao
+                                                opcoes={s.condition.field === 'project_id'
+                                                    ? obras.flatMap(p => p.id ? [{ id: p.id, name: p.name }] : [])
+                                                    : suppliers}
+                                                marcados={Array.isArray(s.condition.value) ? s.condition.value : []}
+                                                onChange={ids => setStep(idx, { condition: { ...s.condition!, value: ids } })} />
+                                        ) : s.condition.field === 'project_id' ? (
+                                            <select value={s.condition.value as string}
                                                 onChange={e => setStep(idx, { condition: { ...s.condition!, value: e.target.value } })}
                                                 className="h-9 px-2 rounded-[6px] border border-gray-200 text-sm font-normal min-w-40">
                                                 <option value="">Escolha a obra…</option>
                                                 {obras.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                             </select>
+                                        ) : (
+                                            <div className="min-w-56">
+                                                <SupplierSelect size="sm" suppliers={suppliers} value={s.condition.value as string}
+                                                    onChange={id => setStep(idx, { condition: { ...s.condition!, value: id } })}
+                                                    placeholder="Escolha o fornecedor…" />
+                                            </div>
                                         )}
                                         <ActionIconButton kind="delete" title="Remover condição" onClick={() => setStep(idx, { condition: null })} />
                                     </div>
@@ -606,30 +657,31 @@ function ProcessDashboard({ organizationId }: { organizationId: string | null })
                 {bottlenecks.length === 0 ? (
                     <p className="text-sm text-gray-400">Sem dados suficientes ainda.</p>
                 ) : (
-                    <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-                        <table className="w-full text-sm">
-                            <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
-                                <tr>
-                                    <th className="text-left px-4 py-2 font-bold">Etapa</th>
-                                    <th className="text-left px-4 py-2 font-bold">Tipo</th>
-                                    <th className="text-right px-4 py-2 font-bold">Tempo médio</th>
-                                    <th className="text-right px-4 py-2 font-bold">Ativos</th>
-                                    <th className="text-right px-4 py-2 font-bold">Atrasados</th>
+                    // §6.2 sentence case · §6.6 px-6 + border-r · §7 tipografia · §7.2 py-2.5 · §16 radius
+                    <div className="bg-white border border-gray-100 rounded-[10px] overflow-hidden">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <th className="px-6 py-2 border-r border-gray-100">Etapa</th>
+                                    <th className="px-6 py-2 border-r border-gray-100">Tipo</th>
+                                    <th className="px-6 py-2 border-r border-gray-100 text-right">Tempo médio</th>
+                                    <th className="px-6 py-2 border-r border-gray-100 text-right">Ativos</th>
+                                    <th className="px-6 py-2 text-right">Atrasados</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody className="divide-y divide-gray-200">
                                 {bottlenecks.map((b, idx) => (
-                                    <tr key={`${b.step_name}-${idx}`} className="border-t border-gray-100">
-                                        <td className="px-4 py-2 font-semibold text-gray-900">{b.step_name}</td>
-                                        <td className="px-4 py-2 text-gray-500">{STEP_TYPE_LABEL[b.step_type]}</td>
-                                        <td className="px-4 py-2 text-right text-gray-700">{b.avg_hours != null ? `${b.avg_hours}h` : '—'}</td>
-                                        <td className="px-4 py-2 text-right text-gray-700">{b.active_count}</td>
-                                        <td className="px-4 py-2 text-right">
+                                    <tr key={`${b.step_name}-${idx}`} className="hover:bg-blue-50/50 transition-colors">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{b.step_name}</td>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{STEP_TYPE_LABEL[b.step_type]}</td>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 text-right">{b.avg_hours != null ? `${b.avg_hours}h` : '—'}</td>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 text-right">{b.active_count}</td>
+                                        <td className="px-6 py-2.5 text-sm font-normal text-right">
                                             {b.overdue_count > 0 ? (
-                                                <span className="inline-flex items-center gap-1 text-red-600 font-normal">
+                                                <span className="inline-flex items-center gap-1 text-red-600">
                                                     <AlertTriangle className="w-3.5 h-3.5" /> {b.overdue_count}
                                                 </span>
-                                            ) : '—'}
+                                            ) : <span className="text-gray-600">—</span>}
                                         </td>
                                     </tr>
                                 ))}

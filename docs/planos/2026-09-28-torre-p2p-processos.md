@@ -225,6 +225,16 @@ Padrão único, igual ao bloco "2b" de `orderService`: `try/catch`, `console.err
 
 Passos 1 a 4 implementados, testados e publicados. Pendências deixadas de propósito, todas registradas acima: verificação visual do criador de template com condição; org "Altair Pereira da Rosa" sem os templates da F2; `in`/Fornecedor só no avaliador (sem UI); o roteiro `docs/spikes/torre-p2p` fica como receita para o próximo teste real de costura.
 
+### Pendências — fechamento (2026-09-29, pedido "corrija todos")
+
+| Pendência | Estado |
+|---|---|
+| Verificação visual do criador de template com condição e da etapa `PULADO` | ✅ confirmada pelo usuário em 2026-09-29 |
+| Org "Altair Pereira da Rosa" sem templates da F2 | ✅ seeds `20270104000000` (F1) e `20270105000000` (F2) reexecutados no remoto — idempotentes; as 4 orgs ficaram com 6 templates EVENTO cada (24 no total) |
+| `in` / Fornecedor sem UI no criador de template | ✅ frente `processos-pendencias` — Fornecedor via drawer `SupplierSelect` (§7.1.1: fornecedor nunca em `<select>`); `in` (lista) para Obra e Fornecedor |
+| Tabela "Gargalos por etapa" do módulo fora do §6.6/§7 (dívida pré-existente, achada ao tocar no arquivo) | ✅ mesma frente — `px-6 py-2.5 border-r`, thead sentence case, `font-normal`, `rounded-[10px]` |
+| Eventos `approved`/`nfe.linked`/`receipt.divergence`/`paid` sem instância real | ⏳ depende de operação real (alçada de pedido, NF-e vinculada, baixa de título). Não se força com dado fabricado; o roteiro de `docs/spikes/torre-p2p` é o molde se quiser provocar |
+
 ## Fora de escopo (decidido, não esquecido)
 
 - Modelador BPMN 2.0 / gateways paralelos / subprocessos — Fase 4 de

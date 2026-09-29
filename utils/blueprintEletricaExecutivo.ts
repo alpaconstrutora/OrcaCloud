@@ -20,6 +20,8 @@
  */
 import { sha256, snapshotHash, stableStringify, type BlueprintModel } from './blueprintKernel';
 import { drsDoQuadro as drsDoQuadroKernel, rotuloDoDPS, rotuloDoDR } from './blueprintKernel';
+import { TIPOS_DE_INFRAESTRUTURA_ELETRICA } from './blueprintKernel';
+import { entradaDoQuadro, rotuloDaEntrada } from './blueprintEntradaDeEnergia';
 import { KERNEL_VERSION } from './blueprintKernel';
 import type { ConferenciaNbr5410 } from './blueprintNbr5410';
 import type { ResponsavelTecnico } from './blueprintTopografiaExecutivo';
@@ -70,7 +72,8 @@ export function verificacoesEletricas(
   const pontos = (model.terminais ?? []).filter((t) => t.disciplina === 'ELETRICA');
   const semPotencia = pontos.filter((t) => t.potenciaW == null && t.tipoEletrico !== 'INTERRUPTOR').length;
   v.push({ grupo: 'DADOS', item: 'Todo ponto com potência declarada', norma: '9.5.2 (VA por ponto)', exigido: '0 sem potência', obtido: `${semPotencia} sem potência`, atende: semPotencia === 0 });
-  const semCircuito = pontos.filter((t) => !t.circuitoId && t.tipoEletrico !== 'INTERRUPTOR').length;
+  // E4.3: infraestrutura (terra, caixa, entrada, medidor) não pede circuito.
+  const semCircuito = pontos.filter((t) => !t.circuitoId && t.tipoEletrico !== 'INTERRUPTOR' && !(t.tipoEletrico && TIPOS_DE_INFRAESTRUTURA_ELETRICA.has(t.tipoEletrico))).length;
   v.push({ grupo: 'DADOS', item: 'Todo ponto em circuito', norma: '4.2.5 (divisão)', exigido: '0 fora de circuito', obtido: `${semCircuito} fora de circuito`, atende: semCircuito === 0 });
   const circuitos = model.circuitos ?? [];
   const semTensao = circuitos.filter((c) => !c.tensaoV).length;
@@ -84,7 +87,7 @@ export function verificacoesEletricas(
     // repetir aqui contaria a mesma falta duas vezes.
     if (r.codigo === 'SUGERIDAS' || r.codigo === 'PRE-DIM' || r.codigo === '6.2.7.1') continue;
     const faltas = r.achados.filter((a) => a.nivel === 'FALTA');
-    v.push({ grupo: 'NORMA', item: r.titulo, norma: `NBR 5410 ${r.codigo}`, exigido: 'sem falta', obtido: faltas.length === 0 ? (r.naoAvaliado.length ? 'sem falta (parcial)' : 'sem falta') : `${faltas.length} falta(s)`, atende: faltas.length === 0 });
+    v.push({ grupo: 'NORMA', item: r.titulo, norma: r.codigo === 'ENTRADA' ? 'Padrão de entrada (concessionária — hipótese)' : `NBR 5410 ${r.codigo}`, exigido: 'sem falta', obtido: faltas.length === 0 ? (r.naoAvaliado.length ? 'sem falta (parcial)' : 'sem falta') : `${faltas.length} falta(s)`, atende: faltas.length === 0 });
   }
   const sugeridas = pontos.filter((t) => t.sugerida).length;
   v.push({ grupo: 'DADOS', item: 'Nenhum ponto em posição sugerida', norma: '—', exigido: '0 sugeridos', obtido: `${sugeridas} sugerido(s)`, atende: sugeridas === 0 });
@@ -193,6 +196,11 @@ export function memorialEletrico(
       const quadroDoModelo = model?.quadros.find((x) => x.id === q.quadroId);
       if (quadroDoModelo?.dps) L.push(`Proteção contra surtos: ${rotuloDoDPS(quadroDoModelo.dps)}.`);
       else if (model) L.push(`Proteção contra surtos: sem DPS declarado — exposição a descargas ${ROTULO_DA_EXPOSICAO[hip.exposicaoARaios]}.`);
+      // E4.3: a entrada de energia — só no quadro de entrada.
+      if (model) {
+        const e = entradaDoQuadro(model, q.quadroId, hip);
+        if (e) L.push(`Entrada de energia: ${rotuloDaEntrada(e)} — ${e.padrao.conferir}. ${e.entradasDeServico.length} ponto(s) de entrada de serviço e ${e.medidores.length} medidor(es) no desenho.${e.achados.some((a) => a.nivel === 'FALTA') ? ' NÃO ATENDE.' : ''}`);
+      }
       // E3.3: Icn × Ik presumida.
       if (model) {
         const icn = quadroDoModelo?.icnKa ?? null;

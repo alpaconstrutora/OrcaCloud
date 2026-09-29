@@ -4,6 +4,7 @@ import { AlertTriangle, Plus, Zap } from 'lucide-react';
 import type { BlueprintModel, Command, CurvaDoDisjuntor, DispositivoDPS, DRDoQuadro, FaseDoCircuito, LigacaoDoCircuito, ObjectId, TipoDeQuadro } from '../../utils/blueprintKernel';
 import { CURVAS_DO_DISJUNTOR, drDoCircuito, drsDoQuadro, rotuloDoDR } from '../../utils/blueprintKernel';
 import { sugerirDRs } from '../../utils/blueprintNbr5410';
+import { entradaDoQuadro } from '../../utils/blueprintEntradaDeEnergia';
 import { FASES_DO_CIRCUITO, LIGACOES_DO_CIRCUITO, SECOES_NOMINAIS_DE_CONDUTOR_MM2, composicaoDaRede, condutoresDoCircuito, quadroDeCargas, secoesDosCondutores } from '../../utils/blueprintKernel';
 import {
   HIPOTESES_PADRAO,
@@ -1186,6 +1187,7 @@ export default function PainelEletrica({
                       ikEntradaKa={hipoteses.ikEntradaKa}
                       tipo={quadro.tipo ?? null}
                       quadroPaiId={quadro.quadroPaiId ?? null}
+                      entrada={entradaDoQuadro(model, q.quadroId, hipoteses)}
                       quadrosDisponiveis={(() => {
                         // Quem pode alimentar este: qualquer quadro que não seja ele nem um descendente dele (senão fecha ciclo).
                         const descendentes = new Set<ObjectId>();

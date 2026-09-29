@@ -87,6 +87,9 @@ describe('taxonomia · os três grupos', () => {
       'ATERRAMENTO',
       // E1.2 (kernel 0.70.0): a caixa de passagem — infraestrutura com medidas.
       'CAIXA_PASSAGEM',
+      // E4.3 (29/09/2026): a entrada de energia — infraestrutura, sem carga.
+      'ENTRADA_SERVICO',
+      'MEDIDOR',
     ]);
   });
 
@@ -97,6 +100,7 @@ describe('taxonomia · os três grupos', () => {
     const grupos = new Set(TIPOS_DE_PONTO_ELETRICO.map((t) => GRUPO_DO_PONTO_ELETRICO[t]));
     expect([...grupos].sort()).toEqual([
       'Elétrica — caixas',
+      'Elétrica — entrada de energia',
       'Elétrica — equipamentos',
       'Elétrica — especiais e dados',
       'Elétrica — iluminação',

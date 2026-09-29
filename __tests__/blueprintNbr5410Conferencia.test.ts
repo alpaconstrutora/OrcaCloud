@@ -279,7 +279,7 @@ describe('9.5.3.3 · circuito comum', () => {
 });
 
 describe('o conjunto', () => {
-  it('treze regras, sempre na mesma ordem; faltas e avisos somados', () => {
+  it('catorze regras, sempre na mesma ordem; faltas e avisos somados', () => {
     let m = classificar(casa(), 0, 'Sala', 'SALA_DORMITORIO');
     m = ponto(m, ESQ.x, ESQ.y, 'TUE', { tipo: 'Chuveiro' });
     const c = conferirNbr5410(m);
@@ -303,6 +303,8 @@ describe('o conjunto', () => {
       '6.3.5.2',
       // E3.3 (29/09/2026): Icn dos disjuntores × Ik presumida.
       '5.3.5.5',
+      // E4.3 (29/09/2026): a entrada de energia pelo padrão da concessionária (hipótese).
+      'ENTRADA',
       // F9 (13/09/2026): a taxa de ocupação do eletroduto.
       '6.2.11.1.6',
       'SUGERIDAS',

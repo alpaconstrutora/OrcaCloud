@@ -8,6 +8,7 @@ import {
   type PreDimensionamentoDoCircuito,
 } from '../../utils/blueprintEletricaDimensionamento';
 import { EXPOSICOES_A_RAIOS, ROTULO_DA_EXPOSICAO, type ExposicaoARaios } from '../../utils/blueprintEletricaDimensionamento';
+import { PADROES_DE_ENTRADA, padraoDeEntrada } from '../../utils/blueprintEntradaDeEnergia';
 
 const ROTULO_DO_GRUPO = { ILUMINACAO: 'iluminação', TUG: 'TUG', FORCA: 'força', MOTOR: 'motores / ar-condicionado' } as const;
 /** Fator de demanda entre 0 e 1; texto vazio ou inválido mantém o atual. */
@@ -218,6 +219,17 @@ export function HipotesesDoPreDimensionamento({
           <label className="flex items-center justify-between gap-2">
             <span>Desequilíbrio de fases tolerado, % (quadro trifásico)</span>
             <input type="number" step="1" min={0} value={hipoteses.desequilibrioMaxPct} onChange={(e) => onChange({ ...hipoteses, desequilibrioMaxPct: Number(e.target.value) || HIPOTESES_PADRAO.desequilibrioMaxPct })} aria-label="Desequilíbrio de fases tolerado" className={campo} />
+          </label>
+          {/* E4.3: o padrão de entrada — só o genérico existe; um preset real entra com fonte e data. */}
+          <label className="flex items-center justify-between gap-2">
+            <span>Padrão de entrada (concessionária)</span>
+            <select value={hipoteses.padraoDeEntrada} onChange={(e) => onChange({ ...hipoteses, padraoDeEntrada: e.target.value })} aria-label="Padrão de entrada" title={padraoDeEntrada(hipoteses.padraoDeEntrada).conferir} className="w-40 rounded border border-slate-300 px-1 py-0.5 text-sm">
+              {PADROES_DE_ENTRADA.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nome}
+                </option>
+              ))}
+            </select>
           </label>
           {/* E3.3: a Ik presumida é da CONCESSIONÁRIA — hipótese até ela informar (5.3.5.5). */}
           <label className="flex items-center justify-between gap-2">

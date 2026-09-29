@@ -856,6 +856,8 @@ function projetar(model: BlueprintModel): {
       // a forma canônica dos desenhos que nunca souberam o que é circuito — e o
       // hash deles junto. É a mesma decisão de `alinhamento` na parede.
       circuito: t.circuitoId != null ? (indiceDoCircuito.get(t.circuitoId) ?? 0) : undefined,
+      // E4.3: o quadro da entrada/medidor, por índice — omitido quando ausente.
+      quadro: t.quadroId != null && indiceDoQuadro.has(t.quadroId) ? indiceDoQuadro.get(t.quadroId) : undefined,
       potenciaW: t.potenciaW ?? undefined,
       tipoEletrico: t.tipoEletrico ?? undefined,
       comando: t.comando ?? undefined,
@@ -1523,6 +1525,8 @@ export interface CanonicalPayload {
     rotulo: string | null;
     /** ÍNDICE do circuito na ordem canônica. Ausente = ponto sem circuito. */
     circuito?: number;
+    /** E4.3: índice do QUADRO a que a entrada/medidor se liga. Ausente sob kernel < 0.77.0 e sem vínculo. */
+    quadro?: number;
     /** Carga DECLARADA. Ausente = ninguém informou — que é diferente de zero. */
     potenciaW?: number;
     /** Letra do comando ("a", "b"). Ausente sob kernel < 0.23.0 e quando não há. */
@@ -2283,6 +2287,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       rotulo: t.rotulo,
       // Ausente e `null` são a mesma coisa na volta — ver a projeção.
       circuitoId: t.circuito != null ? idsDeCircuito[t.circuito] : null,
+      quadroId: t.quadro != null ? (idsDeQuadro[t.quadro] ?? null) : null,
       potenciaW: t.potenciaW ?? null,
       tipoEletrico: (t.tipoEletrico as TipoDePontoEletrico) ?? null,
       comando: t.comando ?? null,

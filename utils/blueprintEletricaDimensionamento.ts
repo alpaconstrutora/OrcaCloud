@@ -201,7 +201,7 @@ export const TIPOS_DE_USO_ESPECIFICO: ReadonlySet<string> = new Set([
 ]);
 
 /** Tipos que NÃO são carga: comando e aterramento ficam fora de uso, grupo e demanda. */
-export const TIPOS_SEM_CARGA: ReadonlySet<string> = new Set(['INTERRUPTOR', 'ATERRAMENTO', 'CAIXA_PASSAGEM']);
+export const TIPOS_SEM_CARGA: ReadonlySet<string> = new Set(['INTERRUPTOR', 'ATERRAMENTO', 'CAIXA_PASSAGEM', 'ENTRADA_SERVICO', 'MEDIDOR']);
 
 export function usoDoCircuito(pontos: readonly Pick<Terminal, 'tipoEletrico'>[]): UsoDoCircuito | null {
   if (pontos.length === 0) return null;
@@ -277,6 +277,13 @@ export interface HipotesesEletricas {
    * (6.2.7.1 b). Hipótese de projeto — dita no memorial.
    */
   origemComTransformador: boolean;
+  /**
+   * E4.3 — o PADRÃO DE ENTRADA da concessionária (id em `PADROES_DE_ENTRADA`,
+   * em `blueprintEntradaDeEnergia.ts`). Só o "GENERICO" existe — hipótese com
+   * valores usuais de projeto; cada preset real entra com fonte e data e sai
+   * no memorial com "CONFERIR na norma da concessionária".
+   */
+  padraoDeEntrada: string;
   /**
    * E3.3 — CORRENTE DE CURTO-CIRCUITO PRESUMIDA na entrada, kA. Hipótese, a
    * confirmar com a concessionária (é ela quem informa a Ik no ponto de
@@ -365,6 +372,7 @@ export const HIPOTESES_PADRAO: HipotesesEletricas = {
   dpsPadrao: DPS_PADRAO,
   ikEntradaKa: 4.5,
   origemComTransformador: false,
+  padraoDeEntrada: 'GENERICO',
 };
 
 // ─── Corrente de projeto ───────────────────────────────────────────────────

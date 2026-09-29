@@ -43,6 +43,7 @@ import {
   type HipotesesEletricas,
 } from './blueprintEletricaDimensionamento';
 import { sugerirInDoDR } from './blueprintEletricaDimensionamento';
+import { entradaDoQuadro, padraoDeEntrada } from './blueprintEntradaDeEnergia';
 import { composicaoDaRede } from './blueprintFiacao';
 
 export type CodigoDaRegra =
@@ -59,6 +60,7 @@ export type CodigoDaRegra =
   | '6.2.11.1.6'
   | '6.3.5.2'
   | '5.3.5.5'
+  | 'ENTRADA'
   | 'SUGERIDAS';
 
 export interface Achado {
@@ -798,6 +800,26 @@ function regraIcn(model: BlueprintModel, levelId: ObjectId | null, hip: Hipotese
   };
 }
 
+// ─── ENTRADA — o padrão da concessionária (hipótese) ────────────────────────
+function regraEntrada(model: BlueprintModel, levelId: ObjectId | null, hip: HipotesesEletricas): RegraConferida {
+  const achados: Achado[] = [];
+  let avaliados = 0;
+  for (const q of (model.quadros ?? []).filter((x) => (!levelId || x.levelId === levelId) && !x.quadroPaiId)) {
+    const e = entradaDoQuadro(model, q.id, hip);
+    if (!e) continue;
+    avaliados++;
+    for (const a of e.achados) achados.push({ nivel: a.nivel, mensagem: `${q.nome}: ${a.mensagem}`, ids: [q.id] });
+  }
+  const padrao = padraoDeEntrada(hip.padraoDeEntrada);
+  return {
+    codigo: 'ENTRADA',
+    titulo: `Entrada de energia — padrão ${padrao.nome}: categoria por demanda, ramal, geral, eletroduto (${padrao.conferir})`,
+    achados,
+    naoAvaliado: [],
+    avaliados,
+  };
+}
+
 function regraQuadro(model: BlueprintModel, levelId: ObjectId | null, hip: HipotesesEletricas): RegraConferida {
   const achados: Achado[] = [];
   const naoAvaliado: string[] = [];
@@ -883,6 +905,7 @@ export function conferirNbr5410(
     regraQuadro(model, levelId, hipoteses),
     regraDps(model, levelId, hipoteses),
     regraIcn(model, levelId, hipoteses),
+    regraEntrada(model, levelId, hipoteses),
     regraEletroduto(model, levelId, hipoteses),
     regraSugeridas(model, levelId),
   ];

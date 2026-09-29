@@ -47,6 +47,7 @@ import { TIPOS_DE_EQUIPAMENTO_ELETRICO } from './blueprintRede';
 import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor, type TipoDeCondutor } from './blueprintCondutores';
 import { composicaoDaRede, condutoresDoCircuito, linhasDosTrechosNumerados, trechosNumerados, type ComposicaoDaRede } from './blueprintFiacao';
 import { drDoCircuito, drsDoQuadro, rotuloDoDPS, rotuloDoDR } from './blueprintKernel';
+import { entradaDoQuadro, rotuloDaEntrada } from './blueprintEntradaDeEnergia';
 import {
   HIPOTESES_PADRAO,
   preDimensionarQuadroCompleto,
@@ -184,6 +185,19 @@ function simboloDoPonto(d: Desenhista, t: Pick<Terminal, 'tipoEletrico' | 'cotaM
     d.linha(c.x - h / 2, c.y, c.x + h / 2, c.y, { espessuraMm: MEDIA, cor: COR });
     d.linha(c.x - h / 3, c.y + h / 5, c.x + h / 3, c.y + h / 5, { espessuraMm: MEDIA, cor: COR });
     d.linha(c.x - h / 6, c.y + (2 * h) / 5, c.x + h / 6, c.y + (2 * h) / 5, { espessuraMm: MEDIA, cor: COR });
+    return;
+  }
+  if (tipo === 'ENTRADA_SERVICO') {
+    // A ENTRADA DE SERVIÇO (E4.3): círculo com a seta que chega — o ramal da concessionária.
+    circulo(d, c, LD_MM / 2, { cheio: '#ffffff', traco: MEDIA });
+    d.linha(c.x - LD_MM, c.y, c.x - LD_MM / 2, c.y, { espessuraMm: MEDIA, cor: COR });
+    d.poligono([{ x: c.x - LD_MM / 2, y: c.y }, { x: c.x - LD_MM * 0.8, y: c.y - LD_MM * 0.2 }, { x: c.x - LD_MM * 0.8, y: c.y + LD_MM * 0.2 }], COR);
+    return;
+  }
+  if (tipo === 'MEDIDOR') {
+    // O MEDIDOR (E4.3): retângulo com "kWh" — a caixa de medição.
+    d.retangulo(c.x - LD_MM * 0.7, c.y - LD_MM / 2, LD_MM * 1.4, LD_MM, { espessuraMm: MEDIA, cor: COR });
+    d.texto(c.x - LD_MM * 0.55, c.y + LD_MM * 0.22, 'kWh', LD_MM * 0.55);
     return;
   }
   if (tipo?.startsWith('ILUMINACAO')) {
@@ -379,6 +393,8 @@ export function linhasDaLegenda(model: BlueprintModel): string[] {
   if (f.has('CAMPAINHA')) L.push('CAMP — campainha (círculo pequeno com traço)');
   if (f.has('ATERRAMENTO')) L.push('TERRA — ponto de aterramento (haste e três traços)');
   if (f.has('CAIXA_PASSAGEM')) L.push('CP — caixa de passagem (quadrado sem diagonal; medidas no painel da peça)');
+  if (f.has('ENTRADA_SERVICO')) L.push('ES — entrada de serviço (círculo com a seta do ramal da concessionária; poste/mureta)');
+  if (f.has('MEDIDOR')) L.push('kWh — medidor de energia (caixa de medição; um por unidade consumidora)');
   if (['DADOS_TELEFONE', 'DADOS_TV', 'DADOS_REDE', 'DADOS_USB'].some((x) => f.has(x))) L.push('DADOS — círculo pequeno com traço (telefone, TV, rede, USB)');
   if (f.has('ELETRODUTO')) L.push('ELETRODUTO — linha contínua = embutido na parede ou teto; Ø nominal ao lado; condutores (NBR 5444): traço reto = fase, com pé = neutro, só de um lado = retorno, com barra = terra; número do circuito em cima, seção (mm²) embaixo');
   if (f.has('ELETRODUTO_PISO')) L.push('ELETRODUTO NO PISO — linha tracejada');
@@ -412,6 +428,10 @@ export function linhasDoQuadroDeCargas(model: BlueprintModel, hip: HipotesesElet
     {
       const quadroDoModelo = (model.quadros ?? []).find((x) => x.id === q.quadroId);
       L.push(`  ${quadroDoModelo?.dps ? rotuloDoDPS(quadroDoModelo.dps) : 'sem DPS'}`);
+      {
+        const e = entradaDoQuadro(model, q.quadroId, hip);
+        if (e) L.push(`  Entrada: ${rotuloDaEntrada(e)}`);
+      }
       L.push(`  Icn dos disjuntores: ${quadroDoModelo?.icnKa != null ? `${String(quadroDoModelo.icnKa).replace('.', ',')} kA` : 'nao declarada'} - Ik presumida ${String(hip.ikEntradaKa).replace('.', ',')} kA (hipotese)`);
     }
     L.push(`Instalado ${Math.round(q.sInstaladaVA)} VA - demandado ${Math.round(q.sDemandadaVA)} VA (${q.demanda.nome})${q.ibA != null ? ` - alimentador IB ${n1(q.ibA)} A, ${mm2(q.secaoCalculada?.secaoMm2)} mm2, geral ${q.disjuntorGeralA ?? '-'} A` : ''}${q.quedaTotalMaxPct != null ? ` - dV total ${n1(q.quedaTotalMaxPct)} %` : ''}`);
@@ -522,6 +542,9 @@ export function desenharQuadroDeCargas(
       // E3.2: o DPS do quadro, ou a ausência dele — dita.
       const quadroDoModelo = (model.quadros ?? []).find((x) => x.id === q.quadroId);
       linha(quadroDoModelo?.dps ? rotuloDoDPS(quadroDoModelo.dps) : 'Sem DPS declarado (6.3.5.2 — ver conferência)', 1.8, quadroDoModelo?.dps ? undefined : COR_FRACA);
+      // E4.3: a entrada de energia, quando este é o quadro de entrada.
+      const e = entradaDoQuadro(model, q.quadroId, hip);
+      if (e) linha(`Entrada: ${rotuloDaEntrada(e)}`, 1.8, e.achados.some((a) => a.nivel === 'FALTA') ? '#b91c1c' : undefined);
       // E3.3: a Icn contra a Ik presumida — hipótese dita na própria linha.
       const icn = quadroDoModelo?.icnKa ?? null;
       linha(

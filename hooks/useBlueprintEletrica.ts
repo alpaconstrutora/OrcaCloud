@@ -70,6 +70,8 @@ export function hipotesesDaColuna(raw: unknown): HipotesesEletricas {
     ikEntradaKa: Math.max(0.1, n(r.ikEntradaKa, HIPOTESES_PADRAO.ikEntradaKa)),
     // E4.2: transformador próprio — gravado.
     origemComTransformador: r.origemComTransformador === true,
+    // E4.3: o padrão de entrada — só ids conhecidos; senão o genérico.
+    padraoDeEntrada: typeof r.padraoDeEntrada === 'string' && r.padraoDeEntrada.trim() ? r.padraoDeEntrada : HIPOTESES_PADRAO.padraoDeEntrada,
   };
 }
 

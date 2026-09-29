@@ -609,6 +609,8 @@ export const ROTULO_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, string> = {
   PONTO_ESPERA: 'Ponto de espera (equipamento a definir)',
   ATERRAMENTO: 'Ponto de aterramento',
   CAIXA_PASSAGEM: 'Caixa de passagem (4×4 / octogonal)',
+  ENTRADA_SERVICO: 'Entrada de serviço (poste / mureta)',
+  MEDIDOR: 'Medidor de energia',
 };
 
 /**
@@ -647,6 +649,8 @@ export const SIGLA_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, string> = {
   PONTO_ESPERA: 'Espera',
   ATERRAMENTO: 'Terra',
   CAIXA_PASSAGEM: 'CP',
+  ENTRADA_SERVICO: 'ES',
+  MEDIDOR: 'kWh',
 };
 
 /**
@@ -686,6 +690,8 @@ export const GRUPO_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, string> = {
   ATERRAMENTO: 'Elétrica — especiais e dados',
   // E1.2: a caixa é infraestrutura — grupo próprio, ao lado dos eletrodutos.
   CAIXA_PASSAGEM: 'Elétrica — caixas',
+  ENTRADA_SERVICO: 'Elétrica — entrada de energia',
+  MEDIDOR: 'Elétrica — entrada de energia',
 };
 
 /**
@@ -723,6 +729,9 @@ export const COTA_USUAL_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, number> =
   ATERRAMENTO: 0,
   // A caixa de passagem no teto (laje), onde os eletrodutos correm.
   CAIXA_PASSAGEM: 2800,
+  // A entrada de serviço no poste/mureta e o medidor na caixa de medição — altura de leitura.
+  ENTRADA_SERVICO: 1500,
+  MEDIDOR: 1500,
 };
 
 /**

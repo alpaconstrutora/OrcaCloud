@@ -85,7 +85,7 @@ function LinhaDaRegra({
   const cor = temFalta ? 'text-red-600' : temAviso ? 'text-amber-600' : 'text-emerald-600';
   const estado = temFalta ? 'falta' : temAviso ? 'aviso' : 'atende';
   const Seta = aberta ? ChevronDown : ChevronRight;
-  const codigo = regra.codigo === 'SUGERIDAS' ? 'Sugeridas' : regra.codigo;
+  const codigo = regra.codigo === 'SUGERIDAS' ? 'Sugeridas' : regra.codigo === 'ENTRADA' ? 'Entrada' : regra.codigo;
 
   return (
     <li>

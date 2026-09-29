@@ -2223,6 +2223,13 @@ function entidadeDoPontoEletrico(
       // A caixa de passagem É uma IfcJunctionBox — o enum tem POWER e DATA; a
       // caixa da elétrica de força e luz é .POWER.
       return { entidade: 'IFCJUNCTIONBOX', predefinido: '.POWER.', objectType: tipo };
+    // E4.3 — a ENTRADA de energia: o medidor É um IfcFlowMeter.ENERGYMETER (IFC4,
+    // mesmos nove atributos); a entrada de serviço não tem enum — caixa
+    // .USERDEFINED. com o tipo do kernel.
+    case 'MEDIDOR':
+      return { entidade: 'IFCFLOWMETER', predefinido: '.ENERGYMETER.', objectType: tipo };
+    case 'ENTRADA_SERVICO':
+      return { entidade: 'IFCJUNCTIONBOX', predefinido: '.USERDEFINED.', objectType: tipo };
   }
 }
 

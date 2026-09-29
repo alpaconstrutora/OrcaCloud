@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.76.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.77.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -2090,6 +2090,8 @@ function projetar(model) {
       // a forma canônica dos desenhos que nunca souberam o que é circuito — e o
       // hash deles junto. É a mesma decisão de `alinhamento` na parede.
       circuito: t.circuitoId != null ? indiceDoCircuito.get(t.circuitoId) ?? 0 : void 0,
+      // E4.3: o quadro da entrada/medidor, por índice — omitido quando ausente.
+      quadro: t.quadroId != null && indiceDoQuadro.has(t.quadroId) ? indiceDoQuadro.get(t.quadroId) : void 0,
       potenciaW: t.potenciaW ?? void 0,
       tipoEletrico: t.tipoEletrico ?? void 0,
       comando: t.comando ?? void 0,
@@ -2829,6 +2831,7 @@ function modelFromCanonicalPayload(payload) {
       rotulo: t.rotulo,
       // Ausente e `null` são a mesma coisa na volta — ver a projeção.
       circuitoId: t.circuito != null ? idsDeCircuito[t.circuito] : null,
+      quadroId: t.quadro != null ? idsDeQuadro[t.quadro] ?? null : null,
       potenciaW: t.potenciaW ?? null,
       tipoEletrico: t.tipoEletrico ?? null,
       comando: t.comando ?? null,
@@ -3327,7 +3330,7 @@ function secoesDosCondutores(circuito, faseMm2) {
 // utils/blueprintKernel/fiacao.ts
 var fasesDa = (lig) => lig === "FFF" ? 3 : lig === "FF" ? 2 : 1;
 var ehLuz2 = (t) => t.tipoEletrico?.startsWith("ILUMINACAO") ?? false;
-var SEM_FIO = /* @__PURE__ */ new Set(["ATERRAMENTO", "CAIXA_PASSAGEM"]);
+var SEM_FIO = /* @__PURE__ */ new Set(["ATERRAMENTO", "CAIXA_PASSAGEM", "ENTRADA_SERVICO", "MEDIDOR"]);
 function exigenciaDoPonto(t, lig, luzComComando, interruptorPrecisaDeFase) {
   if (t.tipoEletrico && SEM_FIO.has(t.tipoEletrico)) return null;
   if (t.tipoEletrico === "INTERRUPTOR") return interruptorPrecisaDeFase ? { fases: 1, neutro: false, terra: false } : null;
@@ -4349,7 +4352,9 @@ var ROTULO_DO_PONTO_ELETRICO = {
   CAMPAINHA: "Campainha",
   PONTO_ESPERA: "Ponto de espera (equipamento a definir)",
   ATERRAMENTO: "Ponto de aterramento",
-  CAIXA_PASSAGEM: "Caixa de passagem (4\xD74 / octogonal)"
+  CAIXA_PASSAGEM: "Caixa de passagem (4\xD74 / octogonal)",
+  ENTRADA_SERVICO: "Entrada de servi\xE7o (poste / mureta)",
+  MEDIDOR: "Medidor de energia"
 };
 
 // utils/blueprintIfc.ts
@@ -5397,6 +5402,13 @@ function entidadeDoPontoEletrico(tipo) {
       return { entidade: "IFCAUDIOVISUALAPPLIANCE", predefinido: ".USERDEFINED.", objectType: tipo };
     case "CAIXA_PASSAGEM":
       return { entidade: "IFCJUNCTIONBOX", predefinido: ".POWER.", objectType: tipo };
+    // E4.3 — a ENTRADA de energia: o medidor É um IfcFlowMeter.ENERGYMETER (IFC4,
+    // mesmos nove atributos); a entrada de serviço não tem enum — caixa
+    // .USERDEFINED. com o tipo do kernel.
+    case "MEDIDOR":
+      return { entidade: "IFCFLOWMETER", predefinido: ".ENERGYMETER.", objectType: tipo };
+    case "ENTRADA_SERVICO":
+      return { entidade: "IFCJUNCTIONBOX", predefinido: ".USERDEFINED.", objectType: tipo };
   }
 }
 function entidadeDoPontoHidraulico(tipo) {

@@ -1,4 +1,5 @@
 import type { BlueprintModel, ObjectId } from './model';
+import { TIPOS_DE_INFRAESTRUTURA_ELETRICA } from './model';
 
 /**
  * O QUADRO DE CARGAS — o que cada circuito alimenta, somado.
@@ -88,6 +89,8 @@ export function quadroDeCargas(model: BlueprintModel): QuadroDeCargas {
   let pontosSemCircuito = 0;
   const soltos: QuadroDeCargas['soltos'] = [];
   for (const t of terminais) {
+    // E4.3: infraestrutura (terra, caixa, entrada, medidor) não é "ponto fora de circuito".
+    if (!t.circuitoId && t.tipoEletrico && TIPOS_DE_INFRAESTRUTURA_ELETRICA.has(t.tipoEletrico)) continue;
     if (!t.circuitoId) {
       pontosSemCircuito++;
       // O rótulo do projetista vence o tipo: quem escreveu "TUG cozinha" quer

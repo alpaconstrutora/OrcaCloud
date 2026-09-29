@@ -1956,7 +1956,7 @@ Fecha o bloco **3**.
 |---|---|---|
 | 4.1 Quadro com tipo e pai ✅ (kernel 0.76.0; alimentador derivado do eletroduto; `numeroDoCircuito` unificado) | `Quadro.tipo: 'QD' \| 'QGBT' \| 'MEDICAO'` e `quadroPaiId?`; **circuito alimentador derivado** (quadro filho = uma linha no quadro de cargas do pai, com IB = demanda do filho); `alimentadorM` passa a ser derivado do eletroduto entre os dois quadros quando existe, declarado quando não; `Circuito.reserva: boolean` (linha sem pontos, conta no quadro e no unifilar) | goldens; `preDimensionarQuadroCompleto` do pai soma os filhos; ciclo de pais → invariante; teste com QGBT → QD1, QD2 |
 | 4.2 Demanda e queda acumuladas ✅ (cadeia até a origem; 7 % com trafo como hipótese; fonte/data da demanda) | demanda do pai = Σ demanda dos filhos + cargas próprias, com **fatores por tabela nomeada** (presets por concessionária como hipótese com fonte e data — a "verdade da concessionária" continua preset, nunca embutida); queda acumulada multinível até a origem (6.2.7.1: 5 %, ou 7 % com trafo — hipótese `origemComTransformador`) | teste: QGBT→QD→C1 com quedas 1 + 2 + 2,5 → FALTA; memorial mostra a cadeia |
-| 4.3 Entrada de energia no desenho | terminal `ENTRADA_SERVICO` (poste/mureta) e `MEDIDOR` (por unidade), ligados ao quadro de MEDICAO; **preset de padrão de entrada** (tabela `PADROES_DE_ENTRADA` por concessionária: categoria × demanda → ramal, disjuntor geral, eletroduto de entrada, aterramento — cada preset com fonte e "CONFERIR na norma da concessionária"); dimensionamento do ramal = o mesmo motor de condutores com método D/B1 | teste com preset "genérico — hipótese": 12 kVA → categoria, ramal 16 mm², disjuntor 63 A; falta se demanda > categoria; goldens |
+| 4.3 Entrada de energia no desenho ✅ (kernel 0.77.0; padrão GENERICO como hipótese; ramal = maior entre categoria e Tab. 36) | terminal `ENTRADA_SERVICO` (poste/mureta) e `MEDIDOR` (por unidade), ligados ao quadro de MEDICAO; **preset de padrão de entrada** (tabela `PADROES_DE_ENTRADA` por concessionária: categoria × demanda → ramal, disjuntor geral, eletroduto de entrada, aterramento — cada preset com fonte e "CONFERIR na norma da concessionária"); dimensionamento do ramal = o mesmo motor de condutores com método D/B1 | teste com preset "genérico — hipótese": 12 kVA → categoria, ramal 16 mm², disjuntor 63 A; falta se demanda > categoria; goldens |
 | 4.4 Uso coletivo (A, mas destravado aqui) | medição por unidade do Empreendimento (unidades já existem em `empreendimento_*`): um MEDIDOR por unidade, demanda do condomínio = Σ unidades × fator de diversidade (hipótese nomeada) + serviço; fora: CODI por concessionária (backlog) | teste com 8 unidades; unifilar do QGBT lista os medidores |
 | 4.5 Unifilar hierárquico e esquema vertical elétrico | unifilar em árvore (QGBT no topo, filhos abaixo, um diagrama só ou por quadro — opção); `utils/blueprintEsquemaVertical.ts` ganha a disciplina ELETRICA: pavimentos × quadros × prumadas × alimentadores, folha "ESQUEMA VERTICAL ELÉTRICO" na prancha; unifilar sai em DXF | harness da prancha olhado; `blueprintEsquemaVertical` testado com sobrado de 2 quadros; DXF abre com camada `UNIFILAR` |
 
@@ -2956,3 +2956,68 @@ intacto). **Sem harness visual** — fica dito.
 **Efeito no benchmark**: §2 "Queda de tensão acumulada até a origem (multinível)" ❌→✅, "Limite 7 % com
 transformador" ❌→✅ (hipótese), "Tabela de demanda com fonte" 🟡→✅ (fonte + data + CONFERIR);
 §27 "Memorial mostra a cadeia de queda" ❌→✅.
+
+### E4.3 — Entrada de energia no desenho (29/09/2026) · frente `eletrico-e4` · **kernel 0.76.0 → 0.77.0 · sem bump de quant**
+
+**O que mudou**
+
+- **Kernel 0.77.0** — tipos **`ENTRADA_SERVICO`** (poste/mureta, onde o ramal da concessionária chega)
+  e **`MEDIDOR`** (um por unidade consumidora); **`Terminal.quadroId`** — o vínculo do ponto com o quadro
+  de entrada/medição, sem circuito (canônico `quadro` por índice, omitido sem vínculo; invariante: só
+  esses dois tipos e o quadro existe; `DeleteQuadro` solta). `TIPOS_DE_INFRAESTRUTURA_ELETRICA` (terra,
+  caixa, entrada, medidor) num lugar só: o quadro de cargas e o executivo **deixam de contar esses
+  pontos como "fora de circuito"** — antes uma caixa de passagem sem circuito virava pendência (dito
+  como correção de comportamento). Sem fio derivado (`SEM_FIO`), sem carga (`TIPOS_SEM_CARGA`).
+  Goldens 7/7 com a string em 0.76.0.
+- **Símbolos** — prancha: ES = círculo com a seta do ramal; kWh = retângulo com "kWh"; canvas idem;
+  legenda; IFC: medidor `IfcFlowMeter.ENERGYMETER`, entrada `IfcJunctionBox.USERDEFINED`; rótulo/
+  sigla/grupo ("Elétrica — entrada de energia")/cota (1,50 m) nos mapas do `blueprintRede`.
+- **`utils/blueprintEntradaDeEnergia.ts`** — o padrão de entrada como PRESET: `PADROES_DE_ENTRADA`
+  tem só o **`GENERICO`** ("genérico — hipótese de projeto", fonte `null`, 9 categorias M1/M2 FN, B1/B2 FF,
+  T1–T5 FFF por demanda máxima → ramal, disjuntor geral, eletroduto; ramal em método **D**), com
+  `conferir` explícito — valores usuais, sem fonte normativa; um preset real entra com fonte e data.
+  `entradaDoQuadro(model, quadroId, hip)` (só quadro **sem pai**): demanda (kVA) → categoria (a menor da
+  ligação que cabe) · **ramal = a MAIOR entre a categoria e a Tab. 36** (método do padrão, uso FORÇA) ·
+  disjuntor geral da categoria (ou o sugerido pela Tab. 36 sem categoria) · eletroduto · **aterramento
+  pela Tab. 58** do ramal · os pontos ES/medidor ligados. Achados: demanda acima da maior categoria =
+  FALTA; geral da categoria < IB = FALTA; sem ES / sem medidor no desenho = AVISO.
+- **Regra `ENTRADA`** na conferência (título com o padrão e o "conferir"; só quadros sem pai);
+  executivo rotula "Padrão de entrada (concessionária — hipótese)"; painel da conferência "Entrada".
+  Memorial: "Entrada de energia: categoria B1 (FF até 12 kVA) · demanda 12 kVA · ramal 16 mm² · geral 63
+  A · eletroduto Ø32 · terra 16 mm² — padrão genérico — hipótese de projeto — CONFERIR …"; folha do
+  quadro de cargas: linha "Entrada: …" (vermelha com falta); tela: linha **Entrada** no bloco do quadro
+  com os achados; aba Hipóteses: select "Padrão de entrada" (um só, pronto para presets com fonte).
+- **`hip.padraoDeEntrada`** (id; gravado na coluna, ids desconhecidos caem no genérico).
+- **Ferramenta**: o `tsc` do projeto passou de 4 GB de heap — o Node caía com 0xC0000005/SIGSEGV (sem
+  "heap out of memory") no `npm run build` desde a E4.2. `package.json`: `typecheck` roda
+  `node --max-old-space-size=8192 …tsc`; `build` = `npm run typecheck && vite build`; CI ganhou
+  `NODE_OPTIONS: --max-old-space-size=6144` (runner de 7 GB). O `verificar:build` da Vercel chama
+  `typecheck` — herda. Fica anotado na memória.
+- **Não entrou (declarado)**: presets reais de concessionária (só com fonte e data); medição por unidade
+  do Empreendimento e fator de diversidade (E4.4); o MEDIDOR não é ainda "por unidade" (é peça solta);
+  aterramento como peça dimensionada (E7).
+
+**Testes** — novo `__tests__/blueprintEntradaDeEnergia.test.ts` (5): tipos com rótulo/sigla/grupo/cota,
+sem carga, infraestrutura, **não viram "ponto fora de circuito"**; `quadroId` grava, canônico `quadro`
+por índice com ida e volta, sem vínculo nenhum terminal leva a chave, tomada não se liga a quadro, quadro
+inexistente recusado, apagar o quadro solta; **12 kVA F-F → B1, ramal 16, geral 63, Ø32, terra 16,
+rótulo inteiro**; 13 kVA → B2; 20 kVA F-F → FALTA "acima da maior categoria FF (15 kVA)" + AVISOS sem
+ES/medidor; quadro com pai não é entrada; Tab. 36 vence com 50 °C; regra ENTRADA (1 avaliado, título com
+o padrão), executivo, folha "Entrada: categoria B1", legenda ES/kWh só quando há. Atualizados:
+`blueprintPontoEletricoTipos` (lista e grupos), ordem das regras (catorze). **20 pinos** de `KERNEL_VERSION`.
+
+**O que os testes pegaram antes de publicar**: (1) eu asseverei que o canônico sem vínculo não tinha
+`"quadro"` — o CIRCUITO sempre tem a chave `quadro` (é o índice dele); o teste passou a olhar só os
+terminais; (2) a lista fixa de tipos e a de grupos da taxonomia. Nada no motor. Fora dos testes: a
+inserção do import em `quadroDeCargas.ts` não entrou (condição do script olhava o arquivo já editado) —
+tsc pegou.
+
+**Verificação**: `tsc` ✓ (heap 8 GB) · goldens 7/7 (prova em 0.76.0 + hashes) · alvo 84 ✓ (9 arquivos) ·
+suíte inteira **6.262 ✓** (573 arquivos) · `vite build` ✓ · `check-ui-standard` nos 5 `.tsx` ✓ ·
+`check-xss-sinks` ✓ · bundle da `planta-api` regenerado · deploy · `GET /v1/estudos` **401/401**.
+**Sem harness visual** dos símbolos ES/kWh no canvas e na prancha — fica dito.
+
+**Efeito no benchmark**: §1 "Entrada de serviço e medidor no desenho" ❌→✅, "Padrão de entrada por
+concessionária" ❌→🟡 (estrutura + genérico como hipótese; presets reais só com fonte), "Ramal de entrada
+dimensionado" ❌→✅ (categoria × Tab. 36), "Aterramento da entrada" ❌→🟡 (seção pela Tab. 58, sem peça);
+§27 "Memorial descreve a entrada" ❌→✅; §8 "Símbolos de entrada/medidor" ❌→✅.

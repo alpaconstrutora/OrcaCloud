@@ -433,7 +433,15 @@
  * do roadmap elétrico). Omitidos quando ausentes — nenhum desenho muda de
  * payload, provado antes do bump com os goldens na string antiga.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.76.0';
+/**
+ * ─── 0.76.0 → 0.77.0 (29/09/2026) — ENTRADA DE ENERGIA ─────────────────────
+ *
+ * Tipos `ENTRADA_SERVICO` e `MEDIDOR` (E4.3 do roadmap elétrico) e
+ * `Terminal.quadroId` (canônico `quadro` por índice, omitido sem vínculo).
+ * Nenhum desenho muda de payload — provado antes do bump com os goldens na
+ * string antiga.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.77.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

@@ -2589,9 +2589,22 @@ export const TIPOS_DE_PONTO_ELETRICO = [
   // caixa 4×4 (ou octogonal) onde o eletroduto emenda ou muda de direção. Tem
   // medidas (as da caixa), conta no quantitativo e sai no IFC como caixa.
   'CAIXA_PASSAGEM',
+  // A ENTRADA DE ENERGIA (E4.3, kernel 0.77.0): o ponto de ENTRADA DE SERVIÇO
+  // (poste/mureta, onde o ramal da concessionária chega) e o MEDIDOR (um por
+  // unidade consumidora). Infraestrutura, não carga: sem circuito, sem fio
+  // derivado; ligam-se a um QUADRO (`Terminal.quadroId`) — o de medição.
+  'ENTRADA_SERVICO',
+  'MEDIDOR',
 ] as const;
 
 export type TipoDePontoEletrico = (typeof TIPOS_DE_PONTO_ELETRICO)[number];
+
+/**
+ * Os tipos que são INFRAESTRUTURA, não carga: não pedem circuito, não são
+ * "ponto fora de circuito" no quadro de cargas nem no executivo. Um lugar só
+ * para o kernel, o pré-dimensionamento e a fiação lerem igual.
+ */
+export const TIPOS_DE_INFRAESTRUTURA_ELETRICA: ReadonlySet<TipoDePontoEletrico> = new Set<TipoDePontoEletrico>(['ATERRAMENTO', 'CAIXA_PASSAGEM', 'ENTRADA_SERVICO', 'MEDIDOR']);
 
 /**
  * As VARIANTES do interruptor, na simbologia informada pelo usuário em
@@ -2774,6 +2787,12 @@ export interface Terminal {
    * desenhos que nunca souberam o que é circuito.
    */
   circuitoId?: ObjectId | null;
+  /**
+   * E4.3: o QUADRO a que este ponto se liga sem circuito — só para
+   * ENTRADA_SERVICO e MEDIDOR (o quadro de medição/entrada). Omitido no
+   * canônico quando ausente. A invariante recusa nos outros tipos.
+   */
+  quadroId?: ObjectId | null;
   /** Carga DECLARADA do ponto, em watts. Nunca calculada — ver `Circuito`. */
   potenciaW?: number | null;
   /**
@@ -5560,6 +5579,11 @@ export function assertModelInvariants(model: BlueprintModel): void {
         'CIRCUIT_NOT_FOUND',
         `Terminal ${t.id} aponta para um circuito inexistente: ${t.circuitoId}`,
       );
+    }
+    // E4.3: o vínculo com o quadro (entrada/medidor) exige o quadro e o tipo certo.
+    if (t.quadroId) {
+      if (!(model.quadros ?? []).some((q) => q.id === t.quadroId)) throw new KernelError('BOARD_NOT_FOUND', `Terminal ${t.id} aponta para um quadro inexistente: ${t.quadroId}`);
+      if (t.tipoEletrico !== 'ENTRADA_SERVICO' && t.tipoEletrico !== 'MEDIDOR') throw new KernelError('BAD_TERMINAL_KIND', `Terminal ${t.id} (${t.tipoEletrico ?? 'sem tipo'}) não se liga a quadro — só entrada de serviço e medidor`);
     }
     if (t.potenciaW != null && (!Number.isFinite(t.potenciaW) || t.potenciaW < 0)) {
       throw new KernelError('BAD_POWER', `Potência inválida em ${t.id}: ${t.potenciaW}`);

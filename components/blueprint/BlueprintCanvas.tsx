@@ -6151,6 +6151,47 @@ export default function BlueprintCanvas({
         ctx.restore();
       }
 
+      // ── A ENTRADA DE ENERGIA (E4.3): entrada de serviço e medidor ────────
+      const ehEntrada = t.disciplina === 'ELETRICA' && (t.tipoEletrico === 'ENTRADA_SERVICO' || t.tipoEletrico === 'MEDIDOR');
+      if (ehEntrada) {
+        const cor = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA.ELETRICA;
+        const lado = Math.max(emTela(md.larguraMm), 10);
+        ctx.save();
+        ctx.setLineDash([]);
+        ctx.lineWidth = selecionado ? 2 : 1.5;
+        ctx.strokeStyle = cor;
+        ctx.fillStyle = '#ffffff';
+        if (t.tipoEletrico === 'MEDIDOR') {
+          // Retângulo com "kWh" — a caixa de medição.
+          ctx.beginPath();
+          ctx.rect(c.x - lado * 0.7, c.y - lado / 2, lado * 1.4, lado);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = cor;
+          ctx.font = `${Math.max(7, Math.round(lado * 0.5))}px ui-sans-serif, system-ui, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.fillText('kWh', c.x, c.y + lado * 0.2);
+        } else {
+          // Círculo com a seta do ramal que chega.
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, lado / 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(c.x - lado, c.y);
+          ctx.lineTo(c.x - lado / 2, c.y);
+          ctx.stroke();
+          ctx.fillStyle = cor;
+          ctx.beginPath();
+          ctx.moveTo(c.x - lado / 2, c.y);
+          ctx.lineTo(c.x - lado * 0.8, c.y - lado * 0.2);
+          ctx.lineTo(c.x - lado * 0.8, c.y + lado * 0.2);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
       // ── O INTERRUPTOR — a simbologia informada em 10/09/2026 ──────────────
       //
       //   uma seção: círculo vazio, letra em cima à direita;

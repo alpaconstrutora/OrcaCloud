@@ -33,6 +33,10 @@ jobs:
     env:
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      # 29/09/2026 (E4.3): o `tsc` do projeto passou de 4 GB de heap — com o padrão
+      # do Node o processo caía (0xC0000005 no Windows, sem "heap out of memory").
+      # Um teto explícito aqui e no script `typecheck`; o runner tem 7 GB.
+      NODE_OPTIONS: --max-old-space-size=6144
 
     steps:
       - uses: actions/checkout@v4

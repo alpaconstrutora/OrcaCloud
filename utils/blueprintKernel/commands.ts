@@ -713,6 +713,8 @@ export type Command =
       larguraMm?: number | null;
       alturaMm?: number | null;
       profundidadeMm?: number | null;
+      /** E4.3: o quadro da entrada/medidor, quando já se sabe. */
+      quadroId?: ObjectId | null;
     }
   | {
       type: 'SetTerminalProps';
@@ -723,6 +725,8 @@ export type Command =
       rotulo?: string | null;
       /** `null` desliga o ponto do circuito; ausente não mexe. */
       circuitoId?: ObjectId | null;
+      /** E4.3: o quadro da entrada/medidor; `null` desliga. */
+      quadroId?: ObjectId | null;
       potenciaW?: number | null;
       /** Letra do comando ("a", "b"). `null` apaga. */
       comando?: string | null;
@@ -3368,6 +3372,7 @@ function aplicarSemHash(
           comando: command.comando?.trim() || null,
           comandoGlobal: command.comandoGlobal ? true : null,
           sugerida: command.sugerida ? true : null,
+          ...(command.quadroId ? { quadroId: command.quadroId } : {}),
           ...(command.potenciaW != null ? { potenciaW: command.potenciaW } : {}),
           ...(command.interruptor != null && command.tipoEletrico === 'INTERRUPTOR'
             ? { interruptor: command.interruptor }
@@ -3407,6 +3412,7 @@ function aplicarSemHash(
       if (command.itemCode !== undefined) terminal.itemCode = command.itemCode?.trim() || null;
       if (command.rotulo !== undefined) terminal.rotulo = command.rotulo?.trim() || null;
       if (command.circuitoId !== undefined) terminal.circuitoId = command.circuitoId;
+      if (command.quadroId !== undefined) terminal.quadroId = command.quadroId;
       if (command.potenciaW !== undefined) terminal.potenciaW = command.potenciaW;
       if (command.tipoEletrico !== undefined) terminal.tipoEletrico = command.tipoEletrico;
       if (command.comando !== undefined) terminal.comando = command.comando?.trim() || null;
@@ -3687,6 +3693,8 @@ function aplicarSemHash(
       next.quadros = (next.quadros ?? []).filter((q) => q.id !== quadro.id);
       // E4.1: quem era alimentado por ele vira quadro de entrada — não some, fica dito na conferência.
       next.quadros = next.quadros.map((q) => (q.quadroPaiId === quadro.id ? { ...q, quadroPaiId: null } : q));
+      // E4.3: entrada/medidor ligados a ele ficam soltos (a conferência avisa).
+      next.terminais = (next.terminais ?? []).map((t) => (t.quadroId === quadro.id ? { ...t, quadroId: null } : t));
       diff.deleted.push(quadro.id, ...filhos.map((c) => c.id));
       break;
     }

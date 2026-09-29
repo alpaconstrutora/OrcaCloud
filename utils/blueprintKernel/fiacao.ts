@@ -82,7 +82,7 @@ interface Exigencia {
 
 const fasesDa = (lig: LigacaoDoCircuito) => (lig === 'FFF' ? 3 : lig === 'FF' ? 2 : 1);
 const ehLuz = (t: Terminal) => t.tipoEletrico?.startsWith('ILUMINACAO') ?? false;
-const SEM_FIO: ReadonlySet<string> = new Set(['ATERRAMENTO', 'CAIXA_PASSAGEM']);
+const SEM_FIO: ReadonlySet<string> = new Set(['ATERRAMENTO', 'CAIXA_PASSAGEM', 'ENTRADA_SERVICO', 'MEDIDOR']);
 
 /** O que o ponto exige DO QUADRO. `null` = nada (terra, caixa). */
 export function exigenciaDoPonto(t: Terminal, lig: LigacaoDoCircuito, luzComComando: boolean, interruptorPrecisaDeFase: boolean): Exigencia | null {

@@ -4,6 +4,7 @@ import { CLASSES_DE_DPS, CORRENTES_DIFERENCIAIS_MA, LIGACOES_DO_CIRCUITO, POLOS_
 import type { PreDimensionamentoDoQuadro } from '../../utils/blueprintEletricaDimensionamento';
 import type { SugestaoDeDR } from '../../utils/blueprintNbr5410';
 import { comandosDasSugestoesDeDR } from '../../utils/blueprintNbr5410';
+import { rotuloDaEntrada, type EntradaDoQuadro } from '../../utils/blueprintEntradaDeEnergia';
 import { Plus, X } from 'lucide-react';
 
 /**
@@ -39,6 +40,7 @@ export default function PainelQuadroAlimentador({
   tipo = null,
   quadroPaiId = null,
   quadrosDisponiveis = [],
+  entrada = null,
 }: {
   q: PreDimensionamentoDoQuadro;
   ligacaoDeclarada: LigacaoDoCircuito | null;
@@ -65,6 +67,8 @@ export default function PainelQuadroAlimentador({
   tipo?: TipoDeQuadro | null;
   quadroPaiId?: ObjectId | null;
   quadrosDisponiveis?: { id: ObjectId; nome: string }[];
+  /** E4.3: a entrada de energia deste quadro (só sem pai) — categoria, ramal, geral, pontos no desenho. */
+  entrada?: EntradaDoQuadro | null;
 }) {
   const faltas = q.achados.filter((a) => a.nivel === 'FALTA');
   const avisos = q.achados.filter((a) => a.nivel === 'AVISO');
@@ -151,6 +155,18 @@ export default function PainelQuadroAlimentador({
         </label>
       </div>
 
+      {/* E4.3: a ENTRADA — padrão da concessionária (hipótese, dito), categoria pela demanda, e os pontos no desenho. */}
+      {entrada && (
+        <p className={entrada.achados.some((a) => a.nivel === 'FALTA') ? 'text-red-700' : 'text-slate-600'} title={entrada.padrao.conferir}>
+          <span className="font-medium">Entrada</span> {rotuloDaEntrada(entrada)}
+          {entrada.achados.map((a, i) => (
+            <span key={i} className={a.nivel === 'FALTA' ? 'text-red-700' : 'text-amber-700'}>
+              {' · '}
+              {a.mensagem}
+            </span>
+          ))}
+        </p>
+      )}
       {/* E4.1: o que este quadro alimenta — cada filho é uma linha no quadro de cargas dele. */}
       {q.filhos.length > 0 && (
         <p className="text-slate-600">

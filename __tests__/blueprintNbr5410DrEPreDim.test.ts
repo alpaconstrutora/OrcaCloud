@@ -136,3 +136,43 @@ describe('PRE-DIM · seção, disjuntor e queda dentro da conferência', () => {
     expect(r.achados.some((a) => /Tab\. 36/.test(a.mensagem))).toBe(true);
   });
 });
+
+describe('E0.1 (29/09/2026) · PRE-DIM por pavimento e 6.2.7.1 na conferência', () => {
+  it('⚠️ PRE-DIM filtra pelo pavimento: circuito com pontos só no Térreo não aparece na conferência do Pavimento 1', () => {
+    let m = classificar(casa(), 0, 'Sala', 'SALA_DORMITORIO');
+    const { m: m1, id } = circuito(m, { secaoMm2: 1.5, disjuntorA: 25 });
+    m = m1;
+    for (const x of [1000, 2000, 3000]) m = ponto(m, x, 75, 'TUG', id, 600);
+    m = applyCommand(m, { type: 'AddLevel', name: 'Pavimento 1', elevationMm: 2900, defaultHeightMm: 2800 }).model;
+    const p1 = m.levels[1].id;
+    const terreo = conferirNbr5410(m, m.levels[0].id, HIPOTESES_PADRAO).regras.find((r) => r.codigo === 'PRE-DIM')!;
+    const cima = conferirNbr5410(m, p1, HIPOTESES_PADRAO).regras.find((r) => r.codigo === 'PRE-DIM')!;
+    expect(terreo.avaliados).toBe(1);
+    expect(terreo.achados.length).toBeGreaterThan(0);
+    expect(cima.avaliados).toBe(0);
+    expect(cima.achados).toEqual([]);
+    // O modelo inteiro (levelId nulo) continua vendo tudo — é o que a emissão usa.
+    expect(regra(m, 'PRE-DIM').avaliados).toBe(1);
+  });
+
+  it('⚠️ 6.2.7.1: queda da origem estourada é FALTA na conferência, com o nome do quadro e "ver" no quadro', () => {
+    let m = classificar(casa(), 0, 'Sala', 'SALA_DORMITORIO');
+    const { m: m1, id } = circuito(m, { secaoMm2: 2.5, disjuntorA: 20 });
+    m = m1;
+    for (const x of [1000, 2000, 3000]) m = ponto(m, x, 75, 'TUG', id, 600); // 1.800 VA → 14,2 A
+    // Alimentador de 120 m em 127 V: a queda do alimentador sozinha passa dos 5 %.
+    m = applyCommand(m, { type: 'SetQuadroProps', quadroId: m.quadros[0].id, alimentadorM: 120, tensaoV: 127, ligacao: 'FN' }).model;
+    const r = regra(m, '6.2.7.1');
+    expect(r.avaliados).toBe(1);
+    expect(r.achados.some((a) => a.nivel === 'FALTA' && /^QDC \(6\.2\.7\.1\)/.test(a.mensagem))).toBe(true);
+    expect(r.achados[0].ids).toEqual([m.quadros[0].id]);
+    // Sem comprimento do alimentador: não avaliado, e dito.
+    const semM = applyCommand(m, { type: 'SetQuadroProps', quadroId: m.quadros[0].id, alimentadorM: null }).model;
+    const r2 = regra(semM, '6.2.7.1');
+    expect(r2.achados).toEqual([]);
+    expect(r2.naoAvaliado.join(' ')).toMatch(/QDC: comprimento do alimentador não declarado/);
+    // Por pavimento: o quadro é do Térreo; a conferência de outro pavimento não o vê.
+    const comAndar = applyCommand(m, { type: 'AddLevel', name: 'Pavimento 1', elevationMm: 2900, defaultHeightMm: 2800 }).model;
+    expect(conferirNbr5410(comAndar, comAndar.levels[1].id, HIPOTESES_PADRAO).regras.find((x) => x.codigo === '6.2.7.1')!.avaliados).toBe(0);
+  });
+});

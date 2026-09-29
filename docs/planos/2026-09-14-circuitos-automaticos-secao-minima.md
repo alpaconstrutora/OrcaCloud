@@ -92,6 +92,9 @@ circuito" (correto). Pavimento 1 com 28 pontos sem circuito e **nenhum quadro** 
   desenho… em qualquer pavimento".
 - Fica para depois: **Lançar eletrodutos** ainda traça a rede a partir do quadro do mesmo piso;
   circuito no QDC do térreo para pontos do andar de cima precisará de prumada entre pisos.
+  - **Atualização 29/09/2026:** já feito em 15/09 — `planejarEletrodutos` sobe e desce pela
+    prumada na posição do quadro entre pavimentos
+    (`docs/planos/2026-09-15-eletrodutos-compartilhados-por-quadro.md`). Esta nota ficou para trás.
 
 ### Verificação
 

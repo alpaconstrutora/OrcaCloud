@@ -153,6 +153,9 @@ tiver. Um número errado aqui sai "plausível" numa prancha.
 - ΔV% = 2 · ρ · L · IB ÷ (S · V) · 100 (FN/FF); √3 · ρ · L · IB ÷ (S · V) · 100 (FFF).
   ρ do cobre a 70 °C **declarado** (padrão 0,0217 Ω·mm²/m — hipótese editável,
   com a alternativa 1/56 a 20 °C).
+  - **Atualização 29/09/2026:** o padrão implementado é **0,0206** — 0,01724 Ω·mm²/m a
+    20 °C × (1 + 0,00393 × 50) para 70 °C, conta que está no comentário de
+    `HipotesesEletricas.rhoOhmMm2PorM`. O 0,0217 acima era arredondamento; vale o código.
 - **L = comprimento do circuito até o ponto mais distante**: caminho mais
   longo a partir do quadro pelos eletrodutos do circuito (`comprimentoDoTrecho`
   em L, já com prumadas). Quando a rede do circuito não está ligada ao quadro

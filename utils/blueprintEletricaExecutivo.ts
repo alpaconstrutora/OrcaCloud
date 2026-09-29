@@ -78,7 +78,9 @@ export function verificacoesEletricas(
 
   // 3. As regras da conferência, uma verificação por regra.
   for (const r of conferencia.regras) {
-    if (r.codigo === 'SUGERIDAS' || r.codigo === 'PRE-DIM') continue;
+    // PRE-DIM e 6.2.7.1 entram por circuito e por quadro no grupo 4 abaixo —
+    // repetir aqui contaria a mesma falta duas vezes.
+    if (r.codigo === 'SUGERIDAS' || r.codigo === 'PRE-DIM' || r.codigo === '6.2.7.1') continue;
     const faltas = r.achados.filter((a) => a.nivel === 'FALTA');
     v.push({ grupo: 'NORMA', item: r.titulo, norma: `NBR 5410 ${r.codigo}`, exigido: 'sem falta', obtido: faltas.length === 0 ? (r.naoAvaliado.length ? 'sem falta (parcial)' : 'sem falta') : `${faltas.length} falta(s)`, atende: faltas.length === 0 });
   }

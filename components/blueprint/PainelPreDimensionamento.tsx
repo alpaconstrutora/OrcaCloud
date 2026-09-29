@@ -1,11 +1,19 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, Ruler } from 'lucide-react';
 import {
+  DEMANDA_SEM_FATOR,
   HIPOTESES_PADRAO,
   METODOS_DE_INSTALACAO,
   type HipotesesEletricas,
   type PreDimensionamentoDoCircuito,
 } from '../../utils/blueprintEletricaDimensionamento';
+
+const ROTULO_DO_GRUPO = { ILUMINACAO: 'iluminação', TUG: 'TUG', FORCA: 'força' } as const;
+/** Fator de demanda entre 0 e 1; texto vazio ou inválido mantém o atual. */
+const fatorDeDemanda = (v: string, atual: number) => {
+  const n = Number(v);
+  return v.trim() !== '' && Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : atual;
+};
 
 /**
  * O PRÉ-DIMENSIONAMENTO na tela — a linha de cada circuito e as hipóteses.
@@ -130,7 +138,14 @@ export function HipotesesDoPreDimensionamento({
 }) {
   const [aberto, setAberto] = useState(false);
   const Seta = aberto ? ChevronDown : ChevronRight;
-  const resumo = `${hipoteses.metodoDeInstalacao} · ${hipoteses.temperaturaAmbienteC} °C · ${hipoteses.circuitosAgrupados} circ./eletroduto · ρ ${String(hipoteses.rhoOhmMm2PorM).replace('.', ',')} · ΔV ≤ ${hipoteses.limiteQuedaTerminalPct} % · TUE ≥ ${String(hipoteses.secaoMinimaTueMm2).replace('.', ',')} mm²`;
+  // Demanda "informada" = qualquer coisa diferente do preset sem demanda — pelo
+  // nome ou por um fator que não seja 1,00 (coluna gravada à mão, por exemplo).
+  const demandaInformada =
+    hipoteses.demanda.nome !== DEMANDA_SEM_FATOR.nome ||
+    hipoteses.demanda.ILUMINACAO !== 1 ||
+    hipoteses.demanda.TUG !== 1 ||
+    hipoteses.demanda.FORCA !== 1;
+  const resumo = `${hipoteses.metodoDeInstalacao} · ${hipoteses.temperaturaAmbienteC} °C · ${hipoteses.circuitosAgrupados} circ./eletroduto · ρ ${String(hipoteses.rhoOhmMm2PorM).replace('.', ',')} · ΔV ≤ ${hipoteses.limiteQuedaTerminalPct} % (origem ${hipoteses.limiteQuedaTotalPct} %) · TUE ≥ ${String(hipoteses.secaoMinimaTueMm2).replace('.', ',')} mm²${demandaInformada ? ` · demanda: ${hipoteses.demanda.nome}` : ''}`;
   const campo = 'w-16 rounded border border-slate-300 px-1 py-0.5 text-sm';
   return (
     <div className="rounded-md border border-dashed border-slate-300">
@@ -184,6 +199,51 @@ export function HipotesesDoPreDimensionamento({
             <span>Seção mínima de TUE, mm² (hipótese; Tab. 47 pede 2,5)</span>
             <input type="number" step="0.5" min={2.5} value={hipoteses.secaoMinimaTueMm2} onChange={(e) => onChange({ ...hipoteses, secaoMinimaTueMm2: Number(e.target.value) || HIPOTESES_PADRAO.secaoMinimaTueMm2 })} aria-label="Seção mínima de TUE" className={campo} />
           </label>
+          <label className="flex items-center justify-between gap-2">
+            <span>Queda máxima da origem ao pior ponto, % (6.2.7.1)</span>
+            <input type="number" step="0.5" min={0} value={hipoteses.limiteQuedaTotalPct} onChange={(e) => onChange({ ...hipoteses, limiteQuedaTotalPct: Number(e.target.value) || HIPOTESES_PADRAO.limiteQuedaTotalPct })} aria-label="Limite de queda de tensão da origem" className={campo} />
+          </label>
+          <label className="flex items-center justify-between gap-2">
+            <span>Desequilíbrio de fases tolerado, % (quadro trifásico)</span>
+            <input type="number" step="1" min={0} value={hipoteses.desequilibrioMaxPct} onChange={(e) => onChange({ ...hipoteses, desequilibrioMaxPct: Number(e.target.value) || HIPOTESES_PADRAO.desequilibrioMaxPct })} aria-label="Desequilíbrio de fases tolerado" className={campo} />
+          </label>
+          {/* Demanda (E0.1, 29/09/2026): a tabela é da CONCESSIONÁRIA, não da 5410 —
+              por isso é um preset NOMEADO. Só dois: sem demanda (o padrão) e o que o
+              projetista informar, com o nome da fonte. Nenhuma tabela "de memória". */}
+          <label className="flex items-center justify-between gap-2">
+            <span>Fatores de demanda do alimentador</span>
+            <select
+              value={demandaInformada ? 'INFORMADA' : 'SEM'}
+              onChange={(e) =>
+                onChange({
+                  ...hipoteses,
+                  demanda:
+                    e.target.value === 'SEM'
+                      ? DEMANDA_SEM_FATOR
+                      : { ...hipoteses.demanda, nome: demandaInformada ? hipoteses.demanda.nome : 'tabela informada pelo projetista' },
+                })
+              }
+              aria-label="Tabela de demanda"
+              className="w-40 rounded border border-slate-300 px-1 py-0.5 text-sm"
+            >
+              <option value="SEM">sem demanda (1,00)</option>
+              <option value="INFORMADA">informada (nomear a fonte)</option>
+            </select>
+          </label>
+          {demandaInformada && (
+            <div className="space-y-1.5 pl-3">
+              <label className="flex items-center justify-between gap-2">
+                <span>Fonte da tabela</span>
+                <input type="text" value={hipoteses.demanda.nome} onChange={(e) => onChange({ ...hipoteses, demanda: { ...hipoteses.demanda, nome: e.target.value } })} aria-label="Fonte da tabela de demanda" className="w-40 rounded border border-slate-300 px-1 py-0.5 text-sm" />
+              </label>
+              {(['ILUMINACAO', 'TUG', 'FORCA'] as const).map((g) => (
+                <label key={g} className="flex items-center justify-between gap-2">
+                  <span>Fator — {ROTULO_DO_GRUPO[g]}</span>
+                  <input type="number" step="0.05" min={0} max={1} value={hipoteses.demanda[g]} onChange={(e) => onChange({ ...hipoteses, demanda: { ...hipoteses.demanda, [g]: fatorDeDemanda(e.target.value, hipoteses.demanda[g]) } })} aria-label={`Fator de demanda de ${ROTULO_DO_GRUPO[g]}`} className={campo} />
+                </label>
+              ))}
+            </div>
+          )}
           <p className="text-xs text-slate-400">
             Cobre com isolação PVC (Tabela 36); B1 = eletroduto embutido em alvenaria. Disjuntores:{' '}
             {hipoteses.catalogoDeDisjuntoresA.join(', ')} A.{' '}

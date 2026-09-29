@@ -2872,9 +2872,10 @@ export interface Quadro {
    * embutidas (400 × 300 × 200), para que o arquivo de quem nunca declarou nada
    * continue idêntico byte a byte.
    *
-   * ⚠️ E o quadro NÃO tem rotação: a pegada em planta é alinhada aos eixos. Um
-   * quadro numa parede inclinada aparece torto em relação a ela — declarar isso
-   * é melhor do que inventar um ângulo que ninguém informou.
+   * ⚠️ Rotação: quando este bloco nasceu o quadro NÃO girava — a pegada era
+   * alinhada aos eixos. Depois entrou `rotacaoGraus` (logo abaixo); ausente
+   * continua valendo 0, alinhado aos eixos. (Texto corrigido em 29/09/2026: o
+   * anterior dizia o contrário do campo que existe a três linhas dele.)
    */
   larguraMm?: number | null;
   alturaMm?: number | null;

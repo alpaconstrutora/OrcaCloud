@@ -1912,7 +1912,7 @@ Automação (E6) e BIM (E7) fecham.
 
 | Fase | Entrega (o que muda) | Pronto quando (como sei que terminou) |
 |---|---|---|
-| 0.1 Hipóteses na tela e os 7 achados | `PainelPreDimensionamento` ganha: fatores de demanda **por tabela nomeada** (presets "sem demanda", "NBR 5410 residencial — hipótese" e "personalizado", cada grupo editável), `limiteQuedaTotalPct`, `desequilibrioMaxPct`; decisão registrada do `ρ`; `I2 ≤ 1,45·Iz` na sobrecarga (5.3.4.1 completo); 6.2.7.1 entra na aba Conferência; PRE-DIM filtra por pavimento; comentário do quadro corrigido; nota de 17/09 corrigida no plano | teste de `preDimensionarCircuito` com I2 falhando; conferência lista 6.2.7.1; hipóteses gravadas em `blueprint_study_eletrica` aparecem no memorial; `blueprintEletricaDimensionamento.test.ts` verde; harness da prancha olhado |
+| 0.1 Hipóteses na tela e os 7 achados ✅ (5 de 7; achados 2 e 3 vão para 0.4 e 0.2) | `PainelPreDimensionamento` ganha: fatores de demanda **por tabela nomeada** (presets "sem demanda", "NBR 5410 residencial — hipótese" e "personalizado", cada grupo editável), `limiteQuedaTotalPct`, `desequilibrioMaxPct`; decisão registrada do `ρ`; `I2 ≤ 1,45·Iz` na sobrecarga (5.3.4.1 completo); 6.2.7.1 entra na aba Conferência; PRE-DIM filtra por pavimento; comentário do quadro corrigido; nota de 17/09 corrigida no plano | teste de `preDimensionarCircuito` com I2 falhando; conferência lista 6.2.7.1; hipóteses gravadas em `blueprint_study_eletrica` aparecem no memorial; `blueprintEletricaDimensionamento.test.ts` verde; harness da prancha olhado |
 | 0.2 Circuitos: numeração, mover e ordenar | `proximoNumeroDeCircuito` = maior número existente + 1, com "Renumerar" (lote, Ctrl+Z); `SetCircuitoProps.quadroId` (mover circuito entre quadros — trechos que só serviam ao circuito seguem marcados "conferir"); ordem manual (`Circuito.ordem` opcional é payload → **fica para E3**; aqui só ordenação por número); coluna Descrição (`tipo`) e coluna Fases na tabela padrão | teste: apagar C2 e criar → C4, não C2; mover circuito muda o unifilar dos dois quadros; `check-ui-standard` em `PainelEletrica.tsx` |
 | 0.3 Quantitativo do que já existe · quant-1.19.0 | `computeQuantities` passa a contar **quadros** (por medidas), **disjuntores** (por In declarado), **DR** (por circuito com `protecaoDR`), **pontos por circuito e por quadro**, e **metros de condutor por seção** = Σ trecho (comprimento em "L" × `condutores`), com o aviso "sem retorno até a E2"; resumo por pavimento ganha os campos elétricos; medidas `COMPRIMENTO_CONDUTOR`, `CONTAGEM_QUADROS`, `CONTAGEM_DISJUNTORES`, `CONTAGEM_DR`, `CONTAGEM_PONTOS_ELETRICOS` no de-para; `gerarLancamentosDeInstalacoes` cobre `ELETRICA` | teste portão de `POLITICA_PADRAO.version`; XLSX com as abas novas; um estudo de prova lança linhas UN/M no orçamento e é apagado depois |
 | 0.4 Clash pelo "L" e fases visíveis | `conflitos.ts` usa `segmentosDoEletroduto` (o "L") no lugar da diagonal; pontos e quadros entram no clash como caixas; fases R/S/T no unifilar (3 barras rotuladas) e coluna no quadro de cargas | teste com eletroduto em desnível: colisão onde o 3D mostra; unifilar de quadro FFF mostra R/S/T; `blueprintUnifilar.test.ts` |
@@ -2042,3 +2042,61 @@ quantitativo (0.3, 2.3, 3.1) — as demais são cálculo, desenho ou documento d
 (Cada fase ganha aqui uma subseção `### E<N>.<M> — <título> (<data>)` com o que foi feito, o
 commit, o que os testes/harness pegaram antes de publicar e o que ficou fora. Nada executado
 ao escrever este documento.)
+
+### E0.1 — Hipóteses na tela e os 7 achados (29/09/2026) · frente `eletrico-e0` · sem bump
+
+**O que mudou**
+
+- `components/blueprint/PainelPreDimensionamento.tsx` — o painel "Hipóteses do
+  pré-dimensionamento" ganhou três coisas que só existiam no JSON: **queda máxima da origem ao
+  pior ponto (6.2.7.1)**, **desequilíbrio de fases tolerado** e os **fatores de demanda do
+  alimentador** como preset NOMEADO — `sem demanda (1,00)` (padrão) ou `informada (nomear a
+  fonte)`, que abre a fonte e os três fatores (0–1, clampados). Não entrou nenhuma tabela de
+  demanda "de memória": a tabela é da concessionária, e quem a informa nomeia a fonte. O resumo
+  recolhido mostra `(origem 5 %)` e `demanda: <fonte>` quando informada.
+- `utils/blueprintNbr5410.ts` — regra nova **`6.2.7.1`** ("Alimentador do quadro: queda da origem
+  ao pior ponto e equilíbrio de fases"): lê `preDimensionarQuadroCompleto` de cada quadro do
+  pavimento, FALTA 6.2.7.1 e AVISO de desequilíbrio, "ver" seleciona o quadro, não avaliado dito
+  ("comprimento do alimentador não declarado"). Antes isso só aparecia no painel do quadro
+  (achado 5). **`PRE-DIM` passou a filtrar por pavimento**: circuito é "do pavimento" quando
+  tem ponto nele; com `levelId` nulo (emissão) continua vendo tudo (achado 4).
+- `utils/blueprintEletricaExecutivo.ts` — o portão da ART pula `6.2.7.1` na iteração das
+  regras porque a mesma falta já entra por quadro no grupo QUADROS (evita contar duas vezes).
+- `utils/blueprintEletricaDimensionamento.ts` — **I2 ≤ 1,45·Iz (5.3.4.1 b)**: comentário
+  registrando que, para minidisjuntor NBR NM 60898, I2 = 1,45·In por norma de produto, então
+  In ≤ Iz implica a condição b) — não é omissão, é a mesma conta; se entrar disjuntor de outra
+  norma, volta a precisar de linha própria. O item "Sobrecarga" do §11 passa a ✅ com essa nota.
+- **ρ decidido: 0,0206** (0,01724 a 20 °C × (1 + 0,00393 × 50) — a conta já estava no
+  comentário de `rhoOhmMm2PorM`). O plano de 13/09 ganhou nota de atualização (achado 1).
+- `utils/blueprintKernel/model.ts` — comentário do quadro corrigido: dizia "NÃO tem rotação"
+  três linhas acima de `rotacaoGraus` (achado 6).
+- `docs/planos/2026-09-14-circuitos-automaticos-secao-minima.md` — nota de 17/09 sobre
+  "prumada entre pisos fica para depois" ganhou a atualização: feito em 15/09 (achado 7).
+- **Não entrou nesta fase**: achado 2 (clash pela diagonal → fase 0.4) e achado 3 (numeração
+  repete → fase 0.2). Tab. 37 (EPR/XLPE) e método por circuito, que a tabela de cobertura
+  apontava para 0.1, **ficam para 0.4**: exigem transcrever a tabela do PDF da norma, que o
+  usuário ainda não colou — não se transcreve de memória.
+
+**Testes** (`__tests__/blueprintNbr5410DrEPreDim.test.ts` +2, `__tests__/components/PainelEletricaPreDim.test.tsx` +2, `__tests__/blueprintNbr5410Conferencia.test.ts` lista de códigos):
+PRE-DIM some da conferência do Pavimento 1 quando o circuito só tem pontos no Térreo e continua
+no modelo inteiro; alimentador de 120 m em 127 V → FALTA `QDC (6.2.7.1)` com `ids = [quadro]`,
+sem `alimentadorM` → não avaliado dito, quadro do Térreo invisível na conferência do andar de
+cima; na tela, os três campos novos chamam `onHipoteses` com o objeto certo, a demanda começa
+sem fatores visíveis, `informada` nomeia a fonte, fator 1,4 vira 1, voltar a `sem demanda`
+restaura o preset inteiro.
+
+**O que os testes pegaram antes de publicar**: o teste da lista de códigos da conferência
+(`blueprintNbr5410Conferencia.test.ts:286`) enumerava as 11 regras e caiu com a 12ª — é o
+comportamento novo, a lista foi atualizada com o comentário do porquê.
+
+**Verificação**: `tsc` ✓ · suíte inteira 6.176 ✓ / 0 ✗ / 33 skip (561 arquivos) · `build` ✓ ·
+`check-ui-standard PainelPreDimensionamento.tsx` ✓ · `check-xss-sinks` ✓. **Harness visual não
+rodou**: a mudança de tela é um formulário coberto pelos testes jsdom; a regra nova aparece na
+aba pela mesma `LinhaDaRegra` das outras onze.
+
+**Efeito no benchmark (Parte 1, foto de `b888c00b`)**: §5 "Configuração de queda de tensão"
+🟡→✅; §10/§33 "Fatores de demanda" continuam 🟡 (editáveis e nomeados, mas sem tabela escalonada
+por kVA — essa é a E4.2); §11 "Sobrecarga" 🟡→✅ (nota do I2); §12 "Limite máximo configurável"
+🟡→✅; §46 "Fatores de demanda" 🟡→✅; §52 "Queda de tensão excessiva" perde a ressalva do
+6.2.7.1. Cinco dos sete achados fechados; 2 e 3 ficam para 0.4 e 0.2.
+

@@ -104,4 +104,38 @@ describe('PainelEletrica · pré-dimensionamento', () => {
     fireEvent.change(campo, { target: { value: '6' } });
     expect(onHipoteses).toHaveBeenLastCalledWith({ ...HIPOTESES_PADRAO, secaoMinimaTueMm2: 6 });
   });
+
+  it('E0.1 (29/09/2026): queda da origem, desequilíbrio e demanda são editáveis; a demanda é preset NOMEADO', async () => {
+    const onHipoteses = vi.fn();
+    render(<PainelEletrica model={cena()} onCircuitoProps={vi.fn()} hipoteses={HIPOTESES_PADRAO} onHipoteses={onHipoteses} {...props} />);
+    await abrirAba(/^hipóteses$/i);
+    const botao = screen.getByRole('button', { name: /Hipóteses do pré-dimensionamento/ });
+    expect(botao.textContent).toMatch(/origem 5 %/);
+    await userEvent.click(botao);
+    fireEvent.change(screen.getByLabelText('Limite de queda de tensão da origem'), { target: { value: '7' } });
+    expect(onHipoteses).toHaveBeenLastCalledWith({ ...HIPOTESES_PADRAO, limiteQuedaTotalPct: 7 });
+    fireEvent.change(screen.getByLabelText('Desequilíbrio de fases tolerado'), { target: { value: '15' } });
+    expect(onHipoteses).toHaveBeenLastCalledWith({ ...HIPOTESES_PADRAO, desequilibrioMaxPct: 15 });
+    // Padrão: sem demanda; os fatores só aparecem quando o projetista escolhe informar.
+    expect(screen.queryByLabelText('Fator de demanda de TUG')).toBeNull();
+    await userEvent.selectOptions(screen.getByLabelText('Tabela de demanda'), 'INFORMADA');
+    expect(onHipoteses).toHaveBeenLastCalledWith({ ...HIPOTESES_PADRAO, demanda: { ...HIPOTESES_PADRAO.demanda, nome: 'tabela informada pelo projetista' } });
+  });
+
+  it('E0.1: com demanda informada, a fonte e os três fatores são editáveis e o fator fica entre 0 e 1', async () => {
+    const onHipoteses = vi.fn();
+    const hip = { ...HIPOTESES_PADRAO, demanda: { nome: 'NT concessionária X', ILUMINACAO: 0.8, TUG: 0.5, FORCA: 1 } };
+    render(<PainelEletrica model={cena()} onCircuitoProps={vi.fn()} hipoteses={hip} onHipoteses={onHipoteses} {...props} />);
+    await abrirAba(/^hipóteses$/i);
+    const botao = screen.getByRole('button', { name: /Hipóteses do pré-dimensionamento/ });
+    expect(botao.textContent).toMatch(/demanda: NT concessionária X/);
+    await userEvent.click(botao);
+    expect(screen.getByLabelText('Fonte da tabela de demanda')).toHaveValue('NT concessionária X');
+    expect(screen.getByLabelText('Fator de demanda de TUG')).toHaveValue(0.5);
+    fireEvent.change(screen.getByLabelText('Fator de demanda de TUG'), { target: { value: '1.4' } });
+    expect(onHipoteses).toHaveBeenLastCalledWith({ ...hip, demanda: { ...hip.demanda, TUG: 1 } });
+    // Voltar a "sem demanda" zera tudo para o preset, não só o nome.
+    await userEvent.selectOptions(screen.getByLabelText('Tabela de demanda'), 'SEM');
+    expect(onHipoteses).toHaveBeenLastCalledWith({ ...hip, demanda: HIPOTESES_PADRAO.demanda });
+  });
 });

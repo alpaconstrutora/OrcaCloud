@@ -37,6 +37,7 @@ import {
   HIPOTESES_PADRAO,
   ocupacaoDoTrecho,
   preDimensionarCircuito,
+  preDimensionarQuadroCompleto,
   type HipotesesEletricas,
 } from './blueprintEletricaDimensionamento';
 
@@ -50,6 +51,7 @@ export type CodigoDaRegra =
   | '9.5.3.3'
   | '5.1.3.2.2'
   | 'PRE-DIM'
+  | '6.2.7.1'
   | '6.2.11.1.6'
   | 'SUGERIDAS';
 
@@ -605,18 +607,23 @@ function regra51322(model: BlueprintModel, levelId: ObjectId | null): RegraConfe
 // O que `blueprintEletricaDimensionamento` calcula a partir do declarado,
 // confrontado com o declarado. Cada achado leva o item da norma.
 
-function regraPreDim(model: BlueprintModel, hip: HipotesesEletricas): RegraConferida {
+function regraPreDim(model: BlueprintModel, levelId: ObjectId | null, hip: HipotesesEletricas): RegraConferida {
   const achados: Achado[] = [];
   const naoAvaliado: string[] = [];
   let avaliados = 0;
   for (const c of model.circuitos ?? []) {
+    // O circuito não tem pavimento; ele é "do pavimento" quando tem ponto nele.
+    // Até 29/09/2026 esta regra era a única da conferência que ignorava o
+    // `levelId` — a aba do Térreo listava faltas de circuitos do andar de cima.
+    const pontosDoCircuito = (model.terminais ?? []).filter((t) => t.circuitoId === c.id);
+    if (levelId && !pontosDoCircuito.some((t) => t.levelId === levelId)) continue;
     const r = preDimensionarCircuito(model, c, hip);
     if (r.ibA == null) {
       if (r.pontos > 0) naoAvaliado.push(`${c.nome}: ${r.naoAvaliado.join('; ')}`);
       continue;
     }
     avaliados++;
-    const pontos = (model.terminais ?? []).filter((t) => t.circuitoId === c.id).map((t) => t.id);
+    const pontos = pontosDoCircuito.map((t) => t.id);
     for (const a of r.achados) {
       achados.push({ nivel: a.nivel, mensagem: `${c.nome} (${a.referencia}): ${a.mensagem}`, ids: [c.quadroId, ...pontos] });
     }
@@ -625,6 +632,40 @@ function regraPreDim(model: BlueprintModel, hip: HipotesesEletricas): RegraConfe
   return {
     codigo: 'PRE-DIM',
     titulo: 'Pré-dimensionamento: seção (Tab. 36/47), disjuntor (5.3.4.1) e queda de tensão (6.2.7)',
+    achados,
+    naoAvaliado,
+    avaliados,
+  };
+}
+
+// ─── 6.2.7.1 — alimentador do quadro: queda da origem e equilíbrio de fases ──
+//
+// Até 29/09/2026 a queda da ORIGEM ao pior ponto (alimentador + pior terminal)
+// só aparecia no painel do quadro; a aba Conferência não a listava, e um
+// projeto podia estar "sem falta" na aba com 6 % de queda total. Aqui entra o
+// que `preDimensionarQuadroCompleto` acha do QUADRO: a FALTA 6.2.7.1 e o AVISO
+// de desequilíbrio de fases. O quadro é do pavimento pelo `levelId` dele.
+
+function regraQuadro(model: BlueprintModel, levelId: ObjectId | null, hip: HipotesesEletricas): RegraConferida {
+  const achados: Achado[] = [];
+  const naoAvaliado: string[] = [];
+  let avaliados = 0;
+  for (const q of (model.quadros ?? []).filter((x) => !levelId || x.levelId === levelId)) {
+    const r = preDimensionarQuadroCompleto(model, q.id, hip);
+    if (!r) continue;
+    if (r.ibA == null) {
+      if (r.circuitos.length > 0) naoAvaliado.push(`${q.nome}: ${r.naoAvaliado.join('; ')}`);
+      continue;
+    }
+    avaliados++;
+    for (const a of r.achados) {
+      achados.push({ nivel: a.nivel, mensagem: `${q.nome} (${a.referencia}): ${a.mensagem}`, ids: [q.id] });
+    }
+    for (const x of r.naoAvaliado) naoAvaliado.push(`${q.nome}: ${x}`);
+  }
+  return {
+    codigo: '6.2.7.1',
+    titulo: 'Alimentador do quadro: queda da origem ao pior ponto (6.2.7.1) e equilíbrio de fases',
     achados,
     naoAvaliado,
     avaliados,
@@ -684,7 +725,8 @@ export function conferirNbr5410(
     regra9532(model, levelId),
     regra9533(model, levelId),
     regra51322(model, levelId),
-    regraPreDim(model, hipoteses),
+    regraPreDim(model, levelId, hipoteses),
+    regraQuadro(model, levelId, hipoteses),
     regraEletroduto(model, levelId, hipoteses),
     regraSugeridas(model, levelId),
   ];

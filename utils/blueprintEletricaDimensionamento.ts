@@ -600,6 +600,12 @@ export function preDimensionarCircuito(
     if (base.disjuntorSugeridoA == null && calc && calc.izA !== izReferencia) {
       base.disjuntorSugeridoA = disjuntorSugeridoA(ibA, calc.izA, hip.catalogoDeDisjuntoresA);
     }
+    // 5.3.4.1 tem DUAS condições: a) IB ≤ In ≤ Iz, conferida abaixo; b) I2 ≤ 1,45·Iz,
+    // com I2 a corrente convencional de atuação. Para minidisjuntor NBR NM 60898
+    // (o residencial) I2 = 1,45·In por norma de produto — então In ≤ Iz já
+    // implica b). Não é omissão: é a mesma conta (registrado em 29/09/2026,
+    // benchmark AltoQi, E0.1). Se entrar disjuntor de outra norma (I2 ≠ 1,45·In),
+    // a condição b) volta a precisar de linha própria.
     if (disjuntorDeclaradoA != null) {
       if (disjuntorDeclaradoA < ibA) {
         achados.push({

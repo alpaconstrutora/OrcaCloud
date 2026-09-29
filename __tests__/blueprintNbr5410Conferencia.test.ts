@@ -296,6 +296,9 @@ describe('o conjunto', () => {
       // sugeridas são pendência de posição.
       '5.1.3.2.2',
       'PRE-DIM',
+      // E0.1 (29/09/2026): a queda da origem (6.2.7.1) e as fases do quadro, que só
+      // apareciam no painel do quadro, entram na conferência.
+      '6.2.7.1',
       // F9 (13/09/2026): a taxa de ocupação do eletroduto.
       '6.2.11.1.6',
       'SUGERIDAS',

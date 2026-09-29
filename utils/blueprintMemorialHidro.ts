@@ -29,6 +29,7 @@ import { HIPOTESES_PRESSAO_PADRAO, pressoesDoModelo, type EstadoDaPressao, type 
 import { HIPOTESES_ESGOTO_PADRAO, caixasDeInspecao, esgotoTrechoATrecho, fontesDeEsgoto, type HipotesesDeEsgoto } from './blueprintEsgotoAutomatico';
 import { colunasDoModelo, linhasDaLegendaDeColunas } from './blueprintEsquemaVertical';
 import { ROTULO_DA_DISCIPLINA } from './blueprintRede';
+import { HIPOTESES_RESERVATORIO_PADRAO, dimensionarReservacao, volumeDoReservatorioL, type HipotesesDeReservatorio } from './blueprintReservacao';
 
 // ─── Blocos ──────────────────────────────────────────────────────────────────
 
@@ -43,12 +44,15 @@ export interface HipotesesHidro {
   agua: HipotesesDeAgua;
   pressao: HipotesesDePressao;
   esgoto: HipotesesDeEsgoto;
+  /** E4.1: população, per capita, dias de reserva, divisão inferior/superior. */
+  reservatorio: HipotesesDeReservatorio;
 }
 
 export const HIPOTESES_HIDRO_PADRAO: HipotesesHidro = {
   agua: HIPOTESES_AGUA_PADRAO,
   pressao: HIPOTESES_PRESSAO_PADRAO,
   esgoto: HIPOTESES_ESGOTO_PADRAO,
+  reservatorio: HIPOTESES_RESERVATORIO_PADRAO,
 };
 
 export interface ContextoDoMemorial {
@@ -207,24 +211,50 @@ export function memorialDeCalculoHidro(model: BlueprintModel, hip: HipotesesHidr
     }
   }
 
-  // ── Reservatório (só o que está DECLARADO no desenho) ───────────────────────
-  const reservatorios = origensDeAgua(model)
-    .map((o) => o.origem)
-    .filter((t) => t.tipoHidraulico === 'RESERVATORIO' && t.larguraMm && t.profundidadeMm && t.alturaMm);
-  if (reservatorios.length) {
+  // ── Reservação (E4.1): população → consumo → volume, contra o declarado ─────
+  if (temAgua) {
+    const r = dimensionarReservacao(model, hip.reservatorio);
     B.push({ tipo: 'secao', texto: 'Reservação' });
-    B.push({
-      tipo: 'tabela',
-      cabecalho: ['Reservatório', 'Pav.', 'Dimensões (m)', 'Volume bruto (L)', 'Cota do fundo'],
-      linhas: reservatorios.map((t, i) => [
-        `R${i + 1}`,
-        nivel(t.levelId),
-        `${nBr(t.larguraMm! / 1000)} × ${nBr(t.profundidadeMm! / 1000)} × ${nBr(t.alturaMm! / 1000)}`,
-        nBr((t.larguraMm! * t.profundidadeMm! * t.alturaMm!) / 1e6, 0),
-        cota(t.cotaMm),
-      ]),
-    });
-    B.push({ tipo: 'paragrafo', texto: 'Volume bruto pelas dimensões declaradas no desenho; o volume útil depende da posição da boia e do extravasor.' });
+    if (r.populacao.ambientes.length) {
+      B.push({
+        tipo: 'tabela',
+        cabecalho: ['Ambiente', 'Tipo', 'Pessoas'],
+        linhas: [
+          ...r.populacao.ambientes.map((a) => [a.nome, a.tipo === 'SUITE' ? 'Suíte' : a.tipo === 'DORMITORIO' ? 'Dormitório' : 'Dependência', String(a.pessoas)]),
+          ['Total contado', '', String(r.populacao.contada)],
+        ],
+      });
+    }
+    const linhas: string[][] = [
+      ['População de projeto', `${r.populacao.pessoas} pessoa(s)${r.populacao.declarada ? ' (declarada)' : ''}`],
+      ['Consumo per capita', `${nBr(hip.reservatorio.perCapitaLDia, 0)} L/hab·dia`],
+      ['Consumo diário', `${nBr(r.consumoDiarioL, 0)} L`],
+      ['Dias de reserva', nBr(hip.reservatorio.diasDeReserva, hip.reservatorio.diasDeReserva % 1 ? 1 : 0)],
+      ['Volume a reservar', `${nBr(r.volumeNecessarioL, 0)} L`],
+    ];
+    if (r.inferiorNecessarioL > 0) {
+      linhas.push(['Inferior / superior', `${nBr(r.inferiorNecessarioL, 0)} L / ${nBr(r.superiorNecessarioL, 0)} L (${nBr(hip.reservatorio.fracaoInferior * 100, 0)} % / ${nBr((1 - hip.reservatorio.fracaoInferior) * 100, 0)} %)`]);
+    }
+    linhas.push(['Caixa comercial sugerida', r.volumeSugeridoL ? `${nBr(r.volumeSugeridoL, 0)} L` : '—'], ['Volume no desenho', `${nBr(r.declaradoL, 0)} L`]);
+    B.push({ tipo: 'tabela', cabecalho: ['Grandeza', 'Valor'], linhas });
+    const caixas = (model.terminais ?? []).filter((t) => t.tipoHidraulico === 'RESERVATORIO');
+    if (caixas.length) {
+      B.push({
+        tipo: 'tabela',
+        cabecalho: ['Reservatório', 'Pav.', 'Dimensões (m)', 'Volume (L)', 'Cota do fundo'],
+        linhas: caixas.map((t, i) => [
+          `R${i + 1}`,
+          nivel(t.levelId),
+          t.larguraMm && t.profundidadeMm && t.alturaMm ? `${nBr(t.larguraMm / 1000)} × ${nBr(t.profundidadeMm / 1000)} × ${nBr(t.alturaMm / 1000)}` : '—',
+          (() => {
+            const v = volumeDoReservatorioL(t);
+            return v == null ? '—' : `${nBr(v, 0)}${t.volumeL ? '' : ' (bruto)'}`;
+          })(),
+          cota(t.cotaMm),
+        ]),
+      });
+    }
+    B.push({ tipo: 'paragrafo', texto: `${r.situacao === 'ATENDE' ? 'Atende' : 'Não atende'}: ${r.texto}` });
   }
 
   // ── Esgoto ────────────────────────────────────────────────────────────────
@@ -335,6 +365,16 @@ export function memorialDescritivoHidro(model: BlueprintModel, hip: HipotesesHid
       tipo: 'paragrafo',
       texto: `${fontes.length ? `Alimentação a partir de ${[...new Set(fontes)].join(' e ')}. ` : ''}Distribuição por gravidade com barrilete, colunas e ramais${hip.agua.pelasParedes !== false ? ' embutidos nas paredes' : ''}, ramais a ${nBr(hip.agua.cotaRamalMm / 1000)} m do piso. Diâmetros pela vazão de projeto (Q = 0,3·√ΣP) com velocidade até ${nBr(hip.agua.velocidadeMaxMs, 1)} m/s e verificação da pressão dinâmica em cada ponto de utilização.`,
     });
+  }
+  if (temFria) {
+    const r = dimensionarReservacao(model, hip.reservatorio);
+    if (r.populacao.pessoas > 0) {
+      B.push({ tipo: 'subsecao', texto: 'Reservação' });
+      B.push({
+        tipo: 'paragrafo',
+        texto: `População de projeto de ${r.populacao.pessoas} pessoa(s)${r.populacao.declarada ? ' (declarada)' : ' (2 por dormitório)'}, consumo de ${nBr(hip.reservatorio.perCapitaLDia, 0)} L/hab·dia e reserva de ${nBr(hip.reservatorio.diasDeReserva, 0)} dia(s): ${nBr(r.volumeNecessarioL, 0)} L a reservar; o desenho prevê ${nBr(r.declaradoL, 0)} L.`,
+      });
+    }
   }
   if (temQuente) {
     B.push({ tipo: 'subsecao', texto: 'Água quente' });

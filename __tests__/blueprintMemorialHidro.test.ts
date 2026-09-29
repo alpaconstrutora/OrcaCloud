@@ -27,9 +27,9 @@ describe('E3.1 — memorial de cálculo', () => {
   it('sobrado: premissas, água, reservação, esgoto e colunas — nessa ordem', () => {
     const b = memorialDeCalculoHidro(sobrado(), HIPOTESES_HIDRO_PADRAO, ctx);
     expect(b[0]).toEqual({ tipo: 'titulo', texto: 'Memorial de cálculo — instalações hidrossanitárias' });
-    expect(secoes(b)).toEqual(['Premissas de cálculo', 'Água fria e água quente', 'Esgoto sanitário', 'Colunas, tubos de queda e ventilação']);
-    // Sem medidas declaradas, o reservatório não inventa volume: a seção não sai.
-    expect(secoes(b)).not.toContain('Reservação');
+    expect(secoes(b)).toEqual(['Premissas de cálculo', 'Água fria e água quente', 'Reservação', 'Esgoto sanitário', 'Colunas, tubos de queda e ventilação']);
+    // E4.1: sem volume nem medidas na caixa, a reservação diz que não dá para conferir.
+    expect(b.some((x) => x.tipo === 'paragrafo' && /^Não atende: Reservar 800 L, mas há caixa sem volume/.test(x.texto))).toBe(true);
   });
 
   it('a tabela da água tem UMA linha por trecho calculado, com os números de `pressoesDoModelo`', () => {
@@ -85,13 +85,18 @@ describe('E3.1 — memorial de cálculo', () => {
     expect(trechos.linhas.some((l) => /DN abaixo do exigido \(100\)/.test(l[l.length - 1]))).toBe(true);
   });
 
-  it('reservatório com medidas: seção de reservação com o volume bruto', () => {
+  it('reservação (E4.1): os dois quartos (2 pessoas cada), 800 L/dia; caixa com medidas = volume bruto', () => {
     const m = sobrado();
     const cx = m.terminais!.find((t) => t.tipoHidraulico === 'RESERVATORIO')!;
     const comMedidas = applyCommand(m, { type: 'SetTerminalProps', terminalId: cx.id, larguraMm: 1200, profundidadeMm: 1000, alturaMm: 800 }).model;
     const b = memorialDeCalculoHidro(comMedidas, HIPOTESES_HIDRO_PADRAO, ctx);
     const r = tabelas(b).find((t) => t.cabecalho[0] === 'Reservatório')!;
-    expect(r.linhas[0][3]).toBe('960');
+    expect(r.linhas[0][3]).toBe('960 (bruto)');
+    const pop = tabelas(b).find((t) => t.cabecalho[0] === 'Ambiente')!;
+    expect(pop.linhas).toEqual([['Quarto', 'Dormitório', '2'], ['Quarto', 'Dormitório', '2'], ['Total contado', '', '4']]);
+    const grandezas = tabelas(b).find((t) => t.cabecalho[0] === 'Grandeza')!;
+    expect(grandezas.linhas.find((l) => l[0] === 'Consumo diário')![1]).toBe('800 L');
+    expect(b.some((x) => x.tipo === 'paragrafo' && x.texto === 'Atende: Reservar 800 L; o desenho tem 960 L.')).toBe(true);
   });
 
   it('só esgoto: nenhuma linha de premissa nem seção de água', () => {

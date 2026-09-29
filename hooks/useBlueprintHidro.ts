@@ -48,6 +48,7 @@ export function hipotesesHidroDaColuna(raw: unknown): HipotesesHidro {
     agua: completar(r.agua, HIPOTESES_HIDRO_PADRAO.agua),
     pressao: completar(r.pressao, HIPOTESES_HIDRO_PADRAO.pressao),
     esgoto: completar(r.esgoto, HIPOTESES_HIDRO_PADRAO.esgoto),
+    reservatorio: completar(r.reservatorio, HIPOTESES_HIDRO_PADRAO.reservatorio),
   };
 }
 

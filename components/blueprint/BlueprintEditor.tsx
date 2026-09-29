@@ -213,6 +213,8 @@ import PainelMemoriaisHidro, { type FormatoDoMemorial, type QualMemorial } from 
 import { blocosDasLinhas, linhasDoMemorial, memorialDeCalculoHidro, memorialDescritivoHidro, type HipotesesHidro } from '../../utils/blueprintMemorialHidro';
 import { hashDaBaseHidro, memorialExecutivoHidro, verificacoesHidro } from '../../utils/blueprintHidroExecutivo';
 import PainelHidroExecutivo from './PainelHidroExecutivo';
+import PainelReservacao from './PainelReservacao';
+import { dimensionarReservacao } from '../../utils/blueprintReservacao';
 import { useBlueprintHidro } from '../../hooks/useBlueprintHidro';
 import { artefatosDoMemorial } from '../../services/blueprintMemorialHidroService';
 import { comAjusteDePressao, pressoesDoModelo, type HipotesesDePressao } from '../../utils/blueprintPressaoDaRede';
@@ -7159,6 +7161,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const setHipDeAguaSalvas = (agua: HipotesesDeAgua) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, agua });
   /** PRESSÃO NOS PONTOS (28/09/2026, E1.3): hipóteses do usuário, cálculo derivado do modelo. */
   const hipPressao = hidroDoEstudo.hipoteses.pressao;
+  /** RESERVAÇÃO (29/09/2026, E4.1): população → consumo → volume, contra a(s) caixa(s). */
+  const dimensionamentoDaReservacao = useMemo(
+    () => (tarefaAberta === 'agua' ? dimensionarReservacao(editor.model, hidroDoEstudo.hipoteses.reservatorio) : null),
+    [tarefaAberta, editor.model, hidroDoEstudo.hipoteses.reservatorio],
+  );
   const setHipPressao = (pressao: HipotesesDePressao) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, pressao });
   // E1.4: cada plano sai já com o DN ajustado para a pressão mínima (NBR 5626).
   const planosDeAgua = useMemo(
@@ -13943,6 +13950,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                     ))}
                   </tbody>
                 </table>
+              )}
+              {dimensionamentoDaReservacao && (
+                <PainelReservacao
+                  r={dimensionamentoDaReservacao}
+                  hip={hidroDoEstudo.hipoteses.reservatorio}
+                  onHip={(reservatorio) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, reservatorio })}
+                />
               )}
               <PainelPressoesDaAgua
                 pressoes={pressoesDaAgua}

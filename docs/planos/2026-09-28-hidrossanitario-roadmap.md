@@ -561,3 +561,27 @@ vertical cobre o traçado das colunas) e anticolisão dos rótulos na planta.
   5.982 testes.
 
 **Etapa 3: 3 de 3 fases publicadas.**
+
+### E4.1 — Consumo e volume de reservação (29/09/2026)
+
+- `utils/blueprintReservacao.ts` (novo, puro): **população** pelos NOMES dos ambientes
+  (`usoDoNome`: dormitório/suíte = 2 pessoas, "dependência"/"quarto de serviço" = 1 — premissa
+  editável) ou a **declarada** (> 0 substitui); **consumo diário** = população × per capita (200
+  L/hab·dia); **volume** = consumo × dias de reserva (1: a NBR 5626 pede ao menos 24 h), com a
+  **caixa comercial** sugerida (série 310…20 000 L, para cima); volume DECLARADO da caixa =
+  `volumeL` (comercial) ou o bruto das medidas; situações ATENDE / INSUFICIENTE / SEM_VOLUME /
+  SEM_RESERVATORIO / SEM_POPULACAO com a frase pronta; divisão inferior/superior (60/40) já
+  preparada para a E4.2.
+- As premissas entram no `HipotesesHidro` do ESTUDO (grupo `reservatorio`; coluna antiga completa
+  com o padrão). Nenhuma emissão hidro nem linha de premissas existia no banco — o hash da base
+  mudar não invalidou nada.
+- Gaveta de água: bloco **Reservação** (`PainelReservacao`) — situação colorida, população com os
+  ambientes que contaram, consumo, volume a reservar × no desenho, premissas editáveis. Memorial de
+  cálculo: a seção Reservação sai sempre que há água (ambientes contados, grandezas, caixas, e
+  "Atende/Não atende"); o descritivo diz a população e o volume; a conferência da emissão ganhou
+  **Volume de reservação** (NBR 5626).
+- Fixture do sobrado: ambientes com nome (Banheiro, Quarto) e `volumeDaCaixaL`.
+- **Pronto quando** ✔: 7 testes em `blueprintReservacao.test.ts` (população pelos nomes, declarada,
+  série comercial, volume declarado × medidas, as cinco situações, dias e 60/40, coluna antiga) + 2
+  do painel; testes da E3 atualizados (a caixa sem volume agora é pendência). Suíte: 533 arquivos /
+  5.998 testes.

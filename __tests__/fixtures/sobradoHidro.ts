@@ -14,7 +14,7 @@ import { comAjusteDePressao } from '../../utils/blueprintPressaoDaRede';
  * `cotaDaCaixaMm` acima do piso dele — a caixa elevada da E3.3); CI no térreo.
  * `comAjuste`: a água sai com o DN ajustado pela pressão, como no editor.
  */
-export function sobrado(doisAndares = true, opcoes: { cotaDaCaixaMm?: number; comAjuste?: boolean } = {}): BlueprintModel {
+export function sobrado(doisAndares = true, opcoes: { cotaDaCaixaMm?: number; comAjuste?: boolean; volumeDaCaixaL?: number } = {}): BlueprintModel {
   let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
   if (doisAndares) m = applyCommand(m, { type: 'AddLevel', name: 'Superior', elevationMm: 2900, defaultHeightMm: 2800 }).model;
   const niveis = m.levels.map((l) => l.id);
@@ -40,6 +40,14 @@ export function sobrado(doisAndares = true, opcoes: { cotaDaCaixaMm?: number; co
     ponto(niveis[0], 'ESGOTO', 'CAIXA_INSPECAO', 6000, -1500, -700),
   ]).model;
   m = recomputeSpaces(m);
+  // E4.1: os ambientes com nome — o banheiro à esquerda e um QUARTO à direita (população pelos dormitórios).
+  for (const e of m.spaces) {
+    m = applyCommand(m, { type: 'NameSpace', spaceId: e.id, name: e.ring.every((p) => p.x <= 2000) ? 'Banheiro' : 'Quarto' } as Command).model;
+  }
+  if (opcoes.volumeDaCaixaL) {
+    const cx = m.terminais!.find((t) => t.tipoHidraulico === 'RESERVATORIO')!;
+    m = applyCommand(m, { type: 'SetTerminalProps', terminalId: cx.id, volumeL: opcoes.volumeDaCaixaL } as Command).model;
+  }
   const plano = planejarAgua(m, m.terminais!.find((t) => t.tipoHidraulico === 'RESERVATORIO')!);
   m = applyBatch(m, (opcoes.comAjuste ? comAjusteDePressao(m, plano) : plano).comandos).model;
   return applyBatch(m, planejarEsgoto(m).comandos).model;

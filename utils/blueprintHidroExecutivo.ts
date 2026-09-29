@@ -25,6 +25,7 @@ import { pressoesDoModelo } from './blueprintPressaoDaRede';
 import { esgotoTrechoATrecho, planejarEsgoto } from './blueprintEsgotoAutomatico';
 import { marcasDeVerificacao } from './blueprintVerificacaoRede';
 import { colunasDoModelo } from './blueprintEsquemaVertical';
+import { dimensionarReservacao } from './blueprintReservacao';
 import { memorialDeCalculoHidro, memorialDescritivoHidro, nBr, type BlocoDoMemorial, type HipotesesHidro } from './blueprintMemorialHidro';
 
 export interface VerificacaoHidro {
@@ -116,6 +117,16 @@ export function verificacoesHidro(model: BlueprintModel, hip: HipotesesHidro, re
     const altas = pontos.filter((p) => p.estado === 'EXCESSIVA').length;
     v.push({ grupo: 'NBR5626', item: 'Pressão estática máxima', norma: 'NBR 5626:2020', exigido: `≤ ${nBr(hip.pressao.estaticaMaximaKpa, 0)} kPa`, obtido: altas ? `${altas} ponto(s) acima` : 'todos abaixo', atende: altas === 0 });
     const vMax = Math.max(0, ...pressoes.flatMap((r) => r.trechos.map((t) => t.velocidadeMs)));
+    // E4.1: a caixa guarda ao menos o consumo dos dias de reserva.
+    const reserva = dimensionarReservacao(model, hip.reservatorio);
+    v.push({
+      grupo: 'NBR5626',
+      item: 'Volume de reservação',
+      norma: 'NBR 5626',
+      exigido: reserva.populacao.pessoas > 0 ? `≥ ${Math.round(reserva.volumeNecessarioL).toLocaleString('pt-BR')} L (${reserva.populacao.pessoas} pessoa(s) × ${nBr(hip.reservatorio.perCapitaLDia, 0)} L × ${nBr(hip.reservatorio.diasDeReserva, 0)} dia(s))` : 'população conhecida',
+      obtido: reserva.situacao === 'ATENDE' ? `${Math.round(reserva.declaradoL).toLocaleString('pt-BR')} L` : reserva.texto,
+      atende: reserva.situacao === 'ATENDE',
+    });
     v.push({ grupo: 'NBR5626', item: 'Velocidade da água', norma: 'NBR 5626:2020', exigido: `≤ ${nBr(VELOCIDADE_MAXIMA_DA_NORMA_MS, 1)} m/s`, obtido: `máx. ${nBr(vMax)} m/s`, atende: vMax <= VELOCIDADE_MAXIMA_DA_NORMA_MS + 1e-9 });
   }
 

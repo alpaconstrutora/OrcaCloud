@@ -61,6 +61,7 @@ import {
   Grid3x3,
   Spline,
   Tent,
+  CloudRain,
 } from 'lucide-react';
 import { type TipoDeGuardaCorpo,
   TIPOS_DE_INTERRUPTOR,
@@ -266,6 +267,7 @@ function gruposDoPontoHidraulico(): { titulo: string; itens: ItemComponente[] }[
     'Hidráulica — pontos de consumo': ShowerHead,
     'Hidráulica — reservação': Container,
     'Hidráulica — esgoto': CircleDot,
+    'Hidráulica — águas pluviais': CloudRain,
     'Hidráulica — registros e válvulas': Gauge,
     'Hidráulica — conexões': GitFork,
   };
@@ -778,6 +780,15 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
           'O trecho de esgoto. Ele nasce ABAIXO do piso, e as duas cotas são ' +
           'independentes — é assim que se dá caimento.',
         escolha: { tool: 'rede', disciplina: 'ESGOTO' },
+      },
+      {
+        chave: 'REDE_PLUVIAL',
+        rotulo: 'Águas pluviais',
+        icone: CloudRain,
+        ajuda:
+          'O condutor de águas pluviais — rede independente do esgoto (NBR 10844). ' +
+          'Nasce enterrado, como o esgoto; as duas cotas dão o caimento.',
+        escolha: { tool: 'rede', disciplina: 'PLUVIAL' },
       },
     ],
   },

@@ -345,7 +345,16 @@
  * onde o coletor predial encontra a rede pública, com a cota da rede.
  * Vocabulário novo, forma igual — provado antes do bump.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.65.0';
+/**
+ * ─── 0.65.0 → 0.66.0 (29/09/2026) — ÁGUAS PLUVIAIS ──────────────────────────
+ *
+ * A disciplina `PLUVIAL` (E6.1 do roadmap hidrossanitário, NBR 10844) e os
+ * pontos dela: `RALO_PLUVIAL`, `CAIXA_AREIA` e `LIGACAO_PLUVIAL`; a espera e as
+ * conexões forçadas passam a aceitar a pluvial, e a caixa de areia é caixa (a
+ * ponta que termina dentro dela está ligada). Vocabulário novo, forma igual —
+ * provado antes do bump.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.66.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

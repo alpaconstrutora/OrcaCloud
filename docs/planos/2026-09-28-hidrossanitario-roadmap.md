@@ -784,3 +784,35 @@ vertical cobre o traçado das colunas) e anticolisão dos rótulos na planta.
   estrutura sem marca; o barrilete que contorna o pilar; a prumada fora do pilar da coluna, com
   as 2 marcas do toco até o vaso que está dentro dele e a pendência na conferência; o barrilete
   a 2,30 m sob a viga; o tubo desenhado cruzando a viga como aviso). Suíte: 543 arquivos / 6.075 testes.
+
+### E6.1 — Disciplina PLUVIAL e contribuição (29/09/2026) · kernel 0.66.0
+
+- **Kernel 0.66.0**: a disciplina `PLUVIAL` e os pontos `RALO_PLUVIAL` (piso descoberto ou bocal da
+  calha), `CAIXA_AREIA` (cota do fundo, como a CI) e `LIGACAO_PLUVIAL` (sarjeta ou galeria — nunca o
+  esgoto); a espera e as conexões forçadas aceitam a pluvial; a ponta que termina dentro da caixa
+  de areia está ligada (`conexoesDerivadas`). Ritual: suíte inteira em 0.65.0 (6.088 testes), depois
+  só os seis hashes, os 12 pins e o `kernel.bundle.mjs` da planta-api.
+- Onde a disciplina aparece: cor própria (verde-limão, distinta em cinza), nome "Tubulação de águas
+  pluviais", cota de partida −0,30 m (condutor enterrado); menu (grupo **Hidráulica — águas
+  pluviais** e o trecho "Águas pluviais"); IFC (`IfcPipeSegment`, sistema **.STORMWATER.**, ralo
+  `.ROOFDRAIN.`); legenda e **prancha sanitária** (esgoto + pluvial, cores separadas; material
+  "PVC série R"); quantitativo por pavimento.
+- `utils/blueprintPluvial.ts` (novo): **área de contribuição** (NBR 10844, 5.2) de cada água do
+  telhado — A = Ap·(1 + i/2), para qualquer contorno — e de cada **laje descoberta** do último
+  pavimento (fora da projeção do telhado; a de pavimento intermediário não entra — o sistema não
+  inventa terraço); **intensidade**: a informada no estudo > a da tabela pela cidade e pelo período
+  de retorno (1/5/25 anos, 5.1.2) > 150 mm/h com até 100 m² de projeção (5.1.4) > pendência;
+  **Q = I·A/60**. O beiral de cada água sai junto — é onde a calha da E6.2 corre.
+- ⚠️ **A tabela de intensidades (13 capitais, NBR 10844 Tabela 5) foi transcrita de memória —
+  CONFERIR NA NORMA antes de emitir.** A intensidade informada no estudo vale sobre ela; o painel
+  diz a origem do valor.
+- Premissas `pluvial` (cidade, período, intensidade) no estudo (`HipotesesHidro`); o leitor da
+  coluna passou a tipar as anuláveis (cidade = texto, intensidade = número).
+- Tela: Hidráulica → **Pluvial → Águas pluviais** — premissas, intensidade com a origem, a tabela
+  das superfícies (clique seleciona) e o total.
+- Fora (declarado): a contribuição das paredes que interceptam a chuva (5.2.2).
+- **Pronto quando** ✔: 10 testes em `blueprintPluvial.test.ts` (as contas; a ordem da intensidade;
+  casa 10 × 8 m em duas águas de 30 % — 46 m² cada, 150 mm/h; acima de 100 m² sem cidade é
+  pendência e com Curitiba a tabela; a laje descoberta entra e a coberta não; a rede pluvial no
+  kernel sem ponta aberta na caixa; a disciplina recusada no ponto errado; cores e prancha; as
+  premissas gravadas) e 3 em `PainelPluvial.test.tsx`. Suíte: 545 arquivos / 6.088 testes.

@@ -37,7 +37,8 @@ const LARGURA_MINIMA_BIFILAR_MM = 0.8;
 
 export const DISCIPLINAS_DA_REDE: Record<RedeDaPrancha, DisciplinaDeRede[]> = {
   AGUA: ['AGUA_FRIA', 'AGUA_QUENTE'],
-  ESGOTO: ['ESGOTO'],
+  // A prancha sanitária leva também as águas pluviais (E6.1) — redes separadas, cores separadas.
+  ESGOTO: ['ESGOTO', 'PLUVIAL'],
 };
 
 /** A chave da posição de uma COLUNA (E2.3) — a mesma na planta e no esquema vertical. */
@@ -246,12 +247,12 @@ export interface ItemDaLegendaHidro {
 
 /** As linhas da LEGENDA — só o que existe no desenho, em ordem estável. */
 export function itensDaLegendaHidro(model: BlueprintModel): ItemDaLegendaHidro[] {
-  const hidraulicas: DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO'];
+  const hidraulicas: DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL'];
   const condutos = new Map<string, ItemDaLegendaHidro>();
   for (const t of model.trechos ?? []) {
     if (!hidraulicas.includes(t.disciplina)) continue;
     const material = materialDoTrecho(t);
-    const nomeMaterial = material ? ` · ${FICHA_DO_MATERIAL[material as MaterialDeTubo].rotulo}` : ' · PVC esgoto (NBR 5688)';
+    const nomeMaterial = material ? ` · ${FICHA_DO_MATERIAL[material as MaterialDeTubo].rotulo}` : t.disciplina === 'PLUVIAL' ? ' · PVC série R (NBR 5688)' : ' · PVC esgoto (NBR 5688)';
     const k = `${hidraulicas.indexOf(t.disciplina)}|${material ?? ''}|${String(t.bitolaMm).padStart(4, '0')}`;
     condutos.set(k, { grupo: 'Condutos', texto: `${ROTULO_DA_DISCIPLINA[t.disciplina]}${nomeMaterial} · ø${t.bitolaMm} mm`, cor: COR_DA_DISCIPLINA[t.disciplina] });
   }

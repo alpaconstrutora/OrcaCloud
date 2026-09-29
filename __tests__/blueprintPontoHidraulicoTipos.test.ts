@@ -58,12 +58,13 @@ function comPonto(disciplina: DisciplinaDeRede, tipoHidraulico?: TipoDePontoHidr
 }
 
 describe('taxonomia hidráulica · a lista e a ficha', () => {
-  it('os cinco grupos do pedido existem: consumo, reservação, esgoto, registros e conexões', () => {
+  it('os grupos do pedido existem: consumo, reservação, esgoto, registros e conexões — e as águas pluviais (E6.1)', () => {
     const grupos = new Set(Object.values(GRUPO_DO_PONTO_HIDRAULICO));
     expect([...grupos].sort()).toEqual(
       [
         'Hidráulica — conexões',
         'Hidráulica — esgoto',
+        'Hidráulica — águas pluviais',
         'Hidráulica — pontos de consumo',
         'Hidráulica — registros e válvulas',
         'Hidráulica — reservação',

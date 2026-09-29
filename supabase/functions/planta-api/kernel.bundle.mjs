@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.65.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.66.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -635,6 +635,11 @@ var TIPOS_DE_PONTO_HIDRAULICO = [
   "CAIXA_GORDURA",
   // 29/09/2026 (E5.3): a ligação do coletor predial à rede pública, no limite do lote.
   "LIGACAO_ESGOTO",
+  // 29/09/2026 (E6.1): as águas pluviais — ralo (de piso ou o bocal da calha),
+  // caixa de areia e a saída para a sarjeta ou a rede pluvial.
+  "RALO_PLUVIAL",
+  "CAIXA_AREIA",
+  "LIGACAO_PLUVIAL",
   "REGISTRO_GAVETA",
   "REGISTRO_PRESSAO",
   "VALVULA_RETENCAO",
@@ -2937,7 +2942,9 @@ var CAIXAS_DE_ESGOTO = {
   CAIXA_INSPECAO: { cotaE: "FUNDO", alturaPadraoMm: 600, larguraPadraoMm: 600 },
   CAIXA_GORDURA: { cotaE: "FUNDO", alturaPadraoMm: 500, larguraPadraoMm: 400 },
   CAIXA_SIFONADA: { cotaE: "TOPO", alturaPadraoMm: 200, larguraPadraoMm: 150 },
-  RALO_SIFONADO: { cotaE: "TOPO", alturaPadraoMm: 150, larguraPadraoMm: 100 }
+  RALO_SIFONADO: { cotaE: "TOPO", alturaPadraoMm: 150, larguraPadraoMm: 100 },
+  // E6.1: a caixa de areia da rede pluvial — enterrada, cota do fundo, como a CI.
+  CAIXA_AREIA: { cotaE: "FUNDO", alturaPadraoMm: 600, larguraPadraoMm: 600 }
 };
 function extensaoVerticalDaCaixa(t) {
   const c = t.tipoHidraulico ? CAIXAS_DE_ESGOTO[t.tipoHidraulico] : void 0;
@@ -2945,7 +2952,8 @@ function extensaoVerticalDaCaixa(t) {
   const altura = t.alturaMm ?? c.alturaPadraoMm;
   return c.cotaE === "FUNDO" ? { fundoMm: t.cotaMm, topoMm: t.cotaMm + altura } : { fundoMm: t.cotaMm - altura, topoMm: t.cotaMm };
 }
-var HIDRAULICAS = ["AGUA_FRIA", "AGUA_QUENTE", "ESGOTO"];
+var HIDRAULICAS = ["AGUA_FRIA", "AGUA_QUENTE", "ESGOTO", "PLUVIAL"];
+var POR_GRAVIDADE = ["ESGOTO", "PLUVIAL"];
 function fazerChave(niveis) {
   const ordenados = [...niveis].sort((a, b) => a.elevationMm - b.elevationMm);
   const abaixoDe = /* @__PURE__ */ new Map();
@@ -2996,14 +3004,14 @@ function conexoesDerivadas(model) {
     terminaisPorChave.set(k, lista);
   }
   const caixas = (model.terminais ?? []).flatMap((term) => {
-    if (term.disciplina !== "ESGOTO") return [];
+    if (!POR_GRAVIDADE.includes(term.disciplina)) return [];
     const ext = extensaoVerticalDaCaixa(term);
     if (!ext) return [];
     const k = chave(term.levelId, term.disciplina, term.at.x, term.at.y, term.cotaMm);
     const desloc = k.cotaMm - term.cotaMm;
-    return [{ levelId: k.levelId, x: term.at.x, y: term.at.y, fundo: ext.fundoMm + desloc, topo: ext.topoMm + desloc }];
+    return [{ levelId: k.levelId, disciplina: term.disciplina, x: term.at.x, y: term.at.y, fundo: ext.fundoMm + desloc, topo: ext.topoMm + desloc }];
   });
-  const dentroDeCaixa = (no) => no.disciplina === "ESGOTO" && caixas.some((c) => c.levelId === no.levelId && c.x === no.no.x && c.y === no.no.y && no.cotaMm >= c.fundo - 1 && no.cotaMm <= c.topo + 1);
+  const dentroDeCaixa = (no) => POR_GRAVIDADE.includes(no.disciplina) && caixas.some((c) => c.disciplina === no.disciplina && c.levelId === no.levelId && c.x === no.no.x && c.y === no.no.y && no.cotaMm >= c.fundo - 1 && no.cotaMm <= c.topo + 1);
   const conexoes = [];
   const pontasAbertas = [];
   const chavesOrdenadas = [...nos.keys()].sort();
@@ -3780,7 +3788,8 @@ var ROTULO_DA_DISCIPLINA = {
   AGUA_FRIA: "\xC1gua fria",
   AGUA_QUENTE: "\xC1gua quente",
   ESGOTO: "Esgoto",
-  MECANICA: "Mec\xE2nica"
+  MECANICA: "Mec\xE2nica",
+  PLUVIAL: "\xC1guas pluviais"
 };
 var ROTULO_DO_PONTO_ELETRICO = {
   ILUMINACAO_TETO: "Luz de teto",
@@ -4722,12 +4731,14 @@ var SISTEMA_IFC = {
   ELETRICA: ".ELECTRICAL.",
   AGUA_FRIA: ".DOMESTICCOLDWATER.",
   AGUA_QUENTE: ".DOMESTICHOTWATER.",
-  ESGOTO: ".SEWAGE."
+  ESGOTO: ".SEWAGE.",
+  PLUVIAL: ".STORMWATER."
 };
 var CLASSE_DO_TRECHO = {
   AGUA_FRIA: { entidade: "IFCPIPESEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_PipeSegmentBaseQuantities" },
   AGUA_QUENTE: { entidade: "IFCPIPESEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_PipeSegmentBaseQuantities" },
   ESGOTO: { entidade: "IFCPIPESEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_PipeSegmentBaseQuantities" },
+  PLUVIAL: { entidade: "IFCPIPESEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_PipeSegmentBaseQuantities" },
   ELETRICA: { entidade: "IFCCABLECARRIERSEGMENT", predefinido: ".CONDUITSEGMENT.", qto: "Qto_CableCarrierSegmentBaseQuantities" },
   MECANICA: { entidade: "IFCDUCTSEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_DuctSegmentBaseQuantities" }
 };
@@ -4888,6 +4899,12 @@ function entidadeDoPontoHidraulico(tipo) {
     case "CAIXA_GORDURA":
       return { entidade: "IFCINTERCEPTOR", predefinido: ".GREASE." };
     case "LIGACAO_ESGOTO":
+      return { entidade: "IFCWASTETERMINAL", predefinido: ".USERDEFINED." };
+    case "RALO_PLUVIAL":
+      return { entidade: "IFCWASTETERMINAL", predefinido: ".ROOFDRAIN." };
+    case "CAIXA_AREIA":
+      return { entidade: "IFCINTERCEPTOR", predefinido: ".USERDEFINED." };
+    case "LIGACAO_PLUVIAL":
       return { entidade: "IFCWASTETERMINAL", predefinido: ".USERDEFINED." };
     case "REGISTRO_GAVETA":
       return { entidade: "IFCVALVE", predefinido: ".ISOLATING." };
@@ -5282,6 +5299,7 @@ var FICHA_DO_MATERIAL = {
 var CONSUMO = "Hidr\xE1ulica \u2014 pontos de consumo";
 var RESERVA = "Hidr\xE1ulica \u2014 reserva\xE7\xE3o";
 var ESGOTO = "Hidr\xE1ulica \u2014 esgoto";
+var PLUVIAL = "Hidr\xE1ulica \u2014 \xE1guas pluviais";
 var REGISTROS = "Hidr\xE1ulica \u2014 registros e v\xE1lvulas";
 var CONEXOES = "Hidr\xE1ulica \u2014 conex\xF5es";
 var FICHA_DO_PONTO_HIDRAULICO = {
@@ -5308,7 +5326,7 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     sigla: "CH",
     grupo: CONSUMO,
     cotaMm: { AGUA_FRIA: 2100, AGUA_QUENTE: 2100, ESGOTO: 0 },
-    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40 },
+    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40, PLUVIAL: 75 },
     pesoNbr5626: 0.4,
     uhcNbr8160: 2,
     ajuda: "Ponto de \xE1gua a 2,10 m; o esgoto do box vai por ralo/caixa sifonada. Peso 0,4 \xB7 2 UHC."
@@ -5318,7 +5336,7 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     sigla: "LV",
     grupo: CONSUMO,
     cotaMm: { AGUA_FRIA: 600, AGUA_QUENTE: 600, ESGOTO: 500 },
-    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40 },
+    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40, PLUVIAL: 75 },
     pesoNbr5626: 0.3,
     uhcNbr8160: 1,
     ajuda: "\xC1gua a 0,60 m, esgoto a 0,50 m (sif\xE3o). Peso 0,3 \xB7 1 UHC."
@@ -5380,7 +5398,7 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     sigla: "BD",
     grupo: CONSUMO,
     cotaMm: { AGUA_FRIA: 250, AGUA_QUENTE: 250, ESGOTO: 0 },
-    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40 },
+    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40, PLUVIAL: 75 },
     pesoNbr5626: 0.1,
     uhcNbr8160: 1,
     ajuda: "Bid\xEA: \xE1gua fria e quente a 0,25 m, descarga DN 40 no piso. Peso 0,1 \xB7 1 UHC."
@@ -5390,7 +5408,7 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     sigla: "BH",
     grupo: CONSUMO,
     cotaMm: { AGUA_FRIA: 550, AGUA_QUENTE: 550, ESGOTO: 0 },
-    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40 },
+    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40, PLUVIAL: 75 },
     pesoNbr5626: 1,
     uhcNbr8160: 2,
     ajuda: "Banheira: misturador a 0,55 m, descarga DN 40. Peso 1,0 \xB7 2 UHC."
@@ -5421,8 +5439,8 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     rotulo: "Ponto de espera",
     sigla: "PE",
     grupo: CONSUMO,
-    cotaMm: { AGUA_FRIA: 600, AGUA_QUENTE: 600, ESGOTO: 0 },
-    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40 },
+    cotaMm: { AGUA_FRIA: 600, AGUA_QUENTE: 600, ESGOTO: 0, PLUVIAL: 0 },
+    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40, PLUVIAL: 75 },
     pesoNbr5626: 0.3,
     uhcNbr8160: 1,
     ajuda: "Ponto tampado para uso futuro (filtro, aparelho a definir). Entra na rede com a hip\xF3tese de um lavat\xF3rio \u2014 peso 0,3 e 1 UHC \u2014 at\xE9 se saber o aparelho."
@@ -5523,6 +5541,34 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     medidasMm: { larguraMm: 300, profundidadeMm: 300, alturaMm: 300 },
     ajuda: "Onde o coletor predial encontra a rede p\xFAblica, no limite do lote. A cota \xE9 a da rede (geratriz inferior): \xE9 ela que diz se o esgoto chega por gravidade."
   },
+  RALO_PLUVIAL: {
+    rotulo: "Ralo pluvial",
+    sigla: "RP",
+    grupo: PLUVIAL,
+    cotaMm: { PLUVIAL: 0 },
+    dnMinimoMm: { PLUVIAL: 75 },
+    medidasMm: { larguraMm: 150, profundidadeMm: 150, alturaMm: 150 },
+    ajuda: "Ralo de \xE1guas pluviais \u2014 no piso descoberto (grelha) ou no fundo da calha (bocal com ralo hemisf\xE9rico). Rede independente do esgoto (NBR 10844)."
+  },
+  CAIXA_AREIA: {
+    rotulo: "Caixa de areia",
+    sigla: "CA",
+    grupo: PLUVIAL,
+    cotaMm: { PLUVIAL: -600 },
+    dnMinimoMm: { PLUVIAL: 100 },
+    medidasMm: { larguraMm: 600, profundidadeMm: 600, alturaMm: 600 },
+    ajuda: "Caixa enterrada da rede pluvial: junta os condutores e ret\xE9m a areia antes da sa\xEDda. A cota \xE9 a do fundo."
+  },
+  LIGACAO_PLUVIAL: {
+    rotulo: "Sa\xEDda pluvial (sarjeta ou rede)",
+    sigla: "SP",
+    grupo: PLUVIAL,
+    // A cota é a da saída: sob a calçada para a sarjeta, ou a geratriz da galeria pluvial.
+    cotaMm: { PLUVIAL: -300 },
+    dnMinimoMm: { PLUVIAL: 100 },
+    medidasMm: { larguraMm: 300, profundidadeMm: 300, alturaMm: 300 },
+    ajuda: "Onde a \xE1gua da chuva deixa o lote \u2014 na sarjeta, sob a cal\xE7ada, ou na galeria pluvial. Nunca na rede de esgoto."
+  },
   CAIXA_GORDURA: {
     rotulo: "Caixa de gordura",
     sigla: "CG",
@@ -5591,7 +5637,7 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     rotulo: "Joelho 90\xB0",
     sigla: "J90",
     grupo: CONEXOES,
-    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150 },
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300 },
     dnMinimoMm: {},
     sobreOTrecho: true,
     ajuda: "For\xE7a um joelho de 90\xB0 neste n\xF3. As conex\xF5es dos encontros de trechos s\xE3o contadas sozinhas \u2014 s\xF3 lance \xE0 m\xE3o o que o desenho n\xE3o deduz."
@@ -5600,7 +5646,7 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     rotulo: "Joelho 45\xB0",
     sigla: "J45",
     grupo: CONEXOES,
-    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150 },
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300 },
     dnMinimoMm: {},
     sobreOTrecho: true,
     ajuda: "For\xE7a um joelho de 45\xB0 neste n\xF3."
@@ -5609,7 +5655,7 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     rotulo: "T\xEA",
     sigla: "T",
     grupo: CONEXOES,
-    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150 },
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300 },
     dnMinimoMm: {},
     sobreOTrecho: true,
     ajuda: "For\xE7a um t\xEA neste n\xF3."
@@ -5618,7 +5664,7 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     rotulo: "Luva",
     sigla: "L",
     grupo: CONEXOES,
-    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150 },
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300 },
     dnMinimoMm: {},
     sobreOTrecho: true,
     ajuda: "For\xE7a uma luva (emenda reta) neste ponto."
@@ -5627,7 +5673,7 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     rotulo: "Redu\xE7\xE3o",
     sigla: "R",
     grupo: CONEXOES,
-    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150 },
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300 },
     dnMinimoMm: {},
     sobreOTrecho: true,
     ajuda: "For\xE7a uma redu\xE7\xE3o (mudan\xE7a de di\xE2metro) neste ponto."

@@ -41,7 +41,7 @@ export interface QuantitativoDoPavimento {
   conexoesHidraulicas: number;
 }
 
-const HIDRAULICAS = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO'];
+const HIDRAULICAS = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL'];
 
 /** As linhas de compra da rede de UM pavimento — ou do projeto inteiro, com `levelId` nulo. */
 export interface RedeDoPavimento {

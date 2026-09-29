@@ -106,6 +106,8 @@ export const CAIXAS_DE_ESGOTO: Readonly<Record<string, { cotaE: 'FUNDO' | 'TOPO'
   CAIXA_GORDURA: { cotaE: 'FUNDO', alturaPadraoMm: 500, larguraPadraoMm: 400 },
   CAIXA_SIFONADA: { cotaE: 'TOPO', alturaPadraoMm: 200, larguraPadraoMm: 150 },
   RALO_SIFONADO: { cotaE: 'TOPO', alturaPadraoMm: 150, larguraPadraoMm: 100 },
+  // E6.1: a caixa de areia da rede pluvial — enterrada, cota do fundo, como a CI.
+  CAIXA_AREIA: { cotaE: 'FUNDO', alturaPadraoMm: 600, larguraPadraoMm: 600 },
 };
 
 /** Fundo e topo da caixa de esgoto, em mm do piso do pavimento; `null` se não é caixa. */
@@ -129,7 +131,9 @@ export interface ConexoesDoModelo {
   pontasAbertas: PontaAberta[];
 }
 
-const HIDRAULICAS: readonly DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO'];
+const HIDRAULICAS: readonly DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL'];
+/** As redes por gravidade, que chegam a CAIXAS enterradas (E6.1: a pluvial também). */
+const POR_GRAVIDADE: readonly DisciplinaDeRede[] = ['ESGOTO', 'PLUVIAL'];
 
 type Chave = string;
 
@@ -204,16 +208,16 @@ export function conexoesDerivadas(model: BlueprintModel): ConexoesDoModelo {
 
   // Caixas de esgoto, na mesma normalização da chave (a laje como encontro).
   const caixas = (model.terminais ?? []).flatMap((term) => {
-    if (term.disciplina !== 'ESGOTO') return [];
+    if (!POR_GRAVIDADE.includes(term.disciplina)) return [];
     const ext = extensaoVerticalDaCaixa(term);
     if (!ext) return [];
     const k = chave(term.levelId, term.disciplina, term.at.x, term.at.y, term.cotaMm);
     const desloc = k.cotaMm - term.cotaMm;
-    return [{ levelId: k.levelId, x: term.at.x, y: term.at.y, fundo: ext.fundoMm + desloc, topo: ext.topoMm + desloc }];
+    return [{ levelId: k.levelId, disciplina: term.disciplina, x: term.at.x, y: term.at.y, fundo: ext.fundoMm + desloc, topo: ext.topoMm + desloc }];
   });
   const dentroDeCaixa = (no: { levelId: ObjectId; no: Point; cotaMm: number; disciplina: DisciplinaDeRede }) =>
-    no.disciplina === 'ESGOTO' &&
-    caixas.some((c) => c.levelId === no.levelId && c.x === no.no.x && c.y === no.no.y && no.cotaMm >= c.fundo - 1 && no.cotaMm <= c.topo + 1);
+    POR_GRAVIDADE.includes(no.disciplina) &&
+    caixas.some((c) => c.disciplina === no.disciplina && c.levelId === no.levelId && c.x === no.no.x && c.y === no.no.y && no.cotaMm >= c.fundo - 1 && no.cotaMm <= c.topo + 1);
 
   const conexoes: ConexaoDerivada[] = [];
   const pontasAbertas: PontaAberta[] = [];

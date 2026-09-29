@@ -39,6 +39,8 @@ export const COTA_PADRAO_MM: Record<DisciplinaDeRede, number> = {
   ESGOTO: -150,
   // Duto no forro (E11.1) — a disciplina existe no kernel; o menu de dutos não.
   MECANICA: 2600,
+  // O condutor horizontal enterrado, a caminho da caixa de areia (E6.1).
+  PLUVIAL: -300,
 };
 
 /**
@@ -53,6 +55,7 @@ export const BITOLA_PADRAO_MM: Record<DisciplinaDeRede, number> = {
   AGUA_QUENTE: 22,
   ESGOTO: 100,
   MECANICA: 200,
+  PLUVIAL: 100,
 };
 
 /**
@@ -72,6 +75,8 @@ export const COTA_TERMINAL_PADRAO_MM: Record<DisciplinaDeRede, number> = {
   ESGOTO: 0,
   // Difusor/grelha no forro (P2.2).
   MECANICA: 2600,
+  // Ralo e caixa de areia no piso (E6.1).
+  PLUVIAL: 0,
 };
 
 /** Quanto uma ponta de trecho pode estar longe do terminal e ainda encaixar. */
@@ -276,6 +281,8 @@ export const COR_DA_DISCIPLINA: Record<DisciplinaDeRede, string> = {
   ESGOTO: '#4b5563',
   // Verde-azulado: separa das quatro em cor e em cinza (E11.1).
   MECANICA: '#0d9488',
+  // Verde-limão (E6.1): mais claro que o azul da fria e o verde da mecânica, mais escuro que o amarelo.
+  PLUVIAL: '#65a30d',
 };
 
 /**
@@ -322,6 +329,7 @@ export const NOME_DO_TRECHO: Record<DisciplinaDeRede, string> = {
   AGUA_QUENTE: 'Tubulação de água quente',
   ESGOTO: 'Tubulação de esgoto',
   MECANICA: 'Duto',
+  PLUVIAL: 'Tubulação de águas pluviais',
 };
 
 export const ROTULO_DA_DISCIPLINA: Record<DisciplinaDeRede, string> = {
@@ -330,6 +338,7 @@ export const ROTULO_DA_DISCIPLINA: Record<DisciplinaDeRede, string> = {
   AGUA_QUENTE: 'Água quente',
   ESGOTO: 'Esgoto',
   MECANICA: 'Mecânica',
+  PLUVIAL: 'Águas pluviais',
 };
 
 /** O comprimento REAL do trecho, em mm — em três dimensões. Ver `Trecho`. */

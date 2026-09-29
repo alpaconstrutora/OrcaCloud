@@ -57,6 +57,7 @@ import {
   FileDown,
   Activity,
   Waves,
+  CloudRain,
   Milestone,
   Grid2x2,
   Grid3x3,
@@ -214,6 +215,8 @@ import { blocosDasLinhas, linhasDoMemorial, memorialDeCalculoHidro, memorialDesc
 import { hashDaBaseHidro, memorialExecutivoHidro, verificacoesHidro } from '../../utils/blueprintHidroExecutivo';
 import PainelHidroExecutivo from './PainelHidroExecutivo';
 import PainelReservacao from './PainelReservacao';
+import PainelPluvial from './PainelPluvial';
+import { contribuicaoPluvial } from '../../utils/blueprintPluvial';
 import PainelAlimentador from './PainelAlimentador';
 import PainelRecalque from './PainelRecalque';
 import PainelColetorPredial from './PainelColetorPredial';
@@ -964,6 +967,9 @@ const ROTULO_DA_TAREFA = {
   // Memoriais hidrossanitários (28/09/2026, roadmap hidrossanitário E3.1/E3.2): o de
   // cálculo e o descritivo, derivados do desenho, em PDF ou DOCX.
   memoriaisHidro: 'Memoriais hidrossanitários e emissão (ART)',
+  // Águas pluviais (29/09/2026, roadmap hidrossanitário E6): contribuição de cada
+  // água do telhado e laje descoberta, intensidade e vazão (NBR 10844).
+  pluvial: 'Águas pluviais (NBR 10844)',
   // Matriz (18/09/2026, roadmap E0.1): N cópias da seleção a k·passo — a
   // fileira de pilares, a bateria de banheiros. Um lote, um Ctrl+Z.
   matriz: 'Matriz — repetir a seleção',
@@ -7253,6 +7259,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   // hash de desenho + premissas, e os dois memoriais gravados na emissão. A conferência
   // (que roda os planejadores) só com a gaveta aberta.
   const executivoHidro = useBlueprintProjetoExecutivo(study.id, study.organization_id, 'HIDROSSANITARIA');
+  // ÁGUAS PLUVIAIS (29/09/2026, E6.1): a contribuição só com a gaveta aberta.
+  const contribuicaoDaChuva = useMemo(
+    () => (tarefaAberta === 'pluvial' ? contribuicaoPluvial(editor.model, hipotesesHidro.pluvial) : null),
+    [tarefaAberta, editor.model, hipotesesHidro.pluvial],
+  );
   const resultadoHidro = useMemo(
     () => (tarefaAberta === 'memoriaisHidro' ? verificacoesHidro(editor.model, hipotesesHidro, executivoHidro.responsavel) : null),
     [tarefaAberta, editor.model, hipotesesHidro, executivoHidro.responsavel],
@@ -10280,6 +10291,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 ajuda="Confirma todas as peças sugeridas do pavimento (tomadas e pontos hidráulicos) de uma vez."
               />
             </GrupoDoRibbon>
+            {/* ÁGUAS PLUVIAIS (29/09/2026, roadmap hidrossanitário E6): rede independente do esgoto. */}
+            <GrupoDoRibbon rotulo="Pluvial">
+              <BotaoDoRibbon
+                icone={CloudRain}
+                rotulo="Águas pluviais"
+                ativo={tarefaAberta === 'pluvial'}
+                onClick={() => alternarTarefa('pluvial')}
+                ajuda="Área de contribuição de cada água do telhado e de cada laje descoberta, intensidade pluviométrica e vazão de projeto (NBR 10844)"
+              />
+            </GrupoDoRibbon>
             {/* DOCUMENTOS (28/09/2026, roadmap hidrossanitário E3): os memoriais. */}
             <GrupoDoRibbon rotulo="Documentos">
               <BotaoDoRibbon
@@ -13284,6 +13305,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'agua' && <Droplets className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'esgoto' && <Waves className="h-5 w-5 text-slate-700" />}
               {tarefaAberta === 'memoriaisHidro' && <FileText className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'pluvial' && <CloudRain className="h-5 w-5 text-lime-700" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -13339,6 +13361,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 trechos nascem <em>sugeridos</em>.
               </>
             )}
+            {tarefaAberta === 'pluvial' &&
+              'A chuva que o telhado e as lajes descobertas recebem: a área de contribuição de cada superfície (NBR 10844), a intensidade pluviométrica da cidade e a vazão de projeto que as calhas e os condutores vão levar. A rede pluvial é independente do esgoto.'}
             {tarefaAberta === 'memoriaisHidro' &&
               'O memorial de cálculo e o descritivo das instalações de água e esgoto, gerados do desenho e das premissas das gavetas de água, pressão e esgoto — os mesmos números das marcas e da verificação. Só entram as seções dos sistemas que existem.'}
             {tarefaAberta === 'agua' && (
@@ -13769,6 +13793,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   Criar matriz
                 </button>
               </div>
+            </div>
+          )}
+
+          {tarefaAberta === 'pluvial' && contribuicaoDaChuva && (
+            <div data-testid="tarefa-pluvial">
+              <PainelPluvial
+                c={contribuicaoDaChuva}
+                hip={hipotesesHidro.pluvial}
+                onHip={(pluvial) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, pluvial })}
+                onSelecionar={selecionar}
+              />
             </div>
           )}
 

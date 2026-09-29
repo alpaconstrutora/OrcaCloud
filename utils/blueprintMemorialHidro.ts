@@ -35,6 +35,7 @@ import { verificarVentilacao } from './blueprintVentilacao';
 import { HIPOTESES_RECALQUE_PADRAO, planejarRecalque, type HipotesesDeRecalque } from './blueprintRecalque';
 import { HIPOTESES_ALIMENTACAO_PADRAO, planejarAlimentador, type HipotesesDeAlimentacao } from './blueprintAlimentador';
 import { HIPOTESES_RESERVATORIO_PADRAO, dimensionarReservacao, volumeDoReservatorioL, type HipotesesDeReservatorio } from './blueprintReservacao';
+import { HIPOTESES_PLUVIAIS_PADRAO, type HipotesesPluviais } from './blueprintPluvial';
 
 // ─── Blocos ──────────────────────────────────────────────────────────────────
 
@@ -55,6 +56,8 @@ export interface HipotesesHidro {
   alimentacao: HipotesesDeAlimentacao;
   /** E4.4: horas de funcionamento e rendimento da bomba de recalque. */
   recalque: HipotesesDeRecalque;
+  /** E6.1: cidade, período de retorno e intensidade pluviométrica (NBR 10844). */
+  pluvial: HipotesesPluviais;
 }
 
 export const HIPOTESES_HIDRO_PADRAO: HipotesesHidro = {
@@ -64,6 +67,7 @@ export const HIPOTESES_HIDRO_PADRAO: HipotesesHidro = {
   reservatorio: HIPOTESES_RESERVATORIO_PADRAO,
   alimentacao: HIPOTESES_ALIMENTACAO_PADRAO,
   recalque: HIPOTESES_RECALQUE_PADRAO,
+  pluvial: HIPOTESES_PLUVIAIS_PADRAO,
 };
 
 export interface ContextoDoMemorial {

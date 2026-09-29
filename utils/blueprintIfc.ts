@@ -1948,6 +1948,7 @@ const SISTEMA_IFC: Record<string, string> = {
   AGUA_FRIA: '.DOMESTICCOLDWATER.',
   AGUA_QUENTE: '.DOMESTICHOTWATER.',
   ESGOTO: '.SEWAGE.',
+  PLUVIAL: '.STORMWATER.',
 };
 
 /**
@@ -1961,6 +1962,7 @@ const CLASSE_DO_TRECHO: Record<string, { entidade: string; predefinido: string; 
   AGUA_FRIA: { entidade: 'IFCPIPESEGMENT', predefinido: '.RIGIDSEGMENT.', qto: 'Qto_PipeSegmentBaseQuantities' },
   AGUA_QUENTE: { entidade: 'IFCPIPESEGMENT', predefinido: '.RIGIDSEGMENT.', qto: 'Qto_PipeSegmentBaseQuantities' },
   ESGOTO: { entidade: 'IFCPIPESEGMENT', predefinido: '.RIGIDSEGMENT.', qto: 'Qto_PipeSegmentBaseQuantities' },
+  PLUVIAL: { entidade: 'IFCPIPESEGMENT', predefinido: '.RIGIDSEGMENT.', qto: 'Qto_PipeSegmentBaseQuantities' },
   ELETRICA: { entidade: 'IFCCABLECARRIERSEGMENT', predefinido: '.CONDUITSEGMENT.', qto: 'Qto_CableCarrierSegmentBaseQuantities' },
   MECANICA: { entidade: 'IFCDUCTSEGMENT', predefinido: '.RIGIDSEGMENT.', qto: 'Qto_DuctSegmentBaseQuantities' },
 };
@@ -2259,6 +2261,12 @@ function entidadeDoPontoHidraulico(
     case 'CAIXA_GORDURA':
       return { entidade: 'IFCINTERCEPTOR', predefinido: '.GREASE.' };
     case 'LIGACAO_ESGOTO':
+      return { entidade: 'IFCWASTETERMINAL', predefinido: '.USERDEFINED.' };
+    case 'RALO_PLUVIAL':
+      return { entidade: 'IFCWASTETERMINAL', predefinido: '.ROOFDRAIN.' };
+    case 'CAIXA_AREIA':
+      return { entidade: 'IFCINTERCEPTOR', predefinido: '.USERDEFINED.' };
+    case 'LIGACAO_PLUVIAL':
       return { entidade: 'IFCWASTETERMINAL', predefinido: '.USERDEFINED.' };
     case 'REGISTRO_GAVETA':
       return { entidade: 'IFCVALVE', predefinido: '.ISOLATING.' };

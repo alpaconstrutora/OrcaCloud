@@ -23,6 +23,7 @@ export type GrupoHidraulico =
   | 'Hidráulica — pontos de consumo'
   | 'Hidráulica — reservação'
   | 'Hidráulica — esgoto'
+  | 'Hidráulica — águas pluviais'
   | 'Hidráulica — registros e válvulas'
   | 'Hidráulica — conexões';
 
@@ -56,6 +57,7 @@ export interface FichaDoPontoHidraulico {
 const CONSUMO: GrupoHidraulico = 'Hidráulica — pontos de consumo';
 const RESERVA: GrupoHidraulico = 'Hidráulica — reservação';
 const ESGOTO: GrupoHidraulico = 'Hidráulica — esgoto';
+const PLUVIAL: GrupoHidraulico = 'Hidráulica — águas pluviais';
 const REGISTROS: GrupoHidraulico = 'Hidráulica — registros e válvulas';
 const CONEXOES: GrupoHidraulico = 'Hidráulica — conexões';
 
@@ -83,7 +85,7 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     sigla: 'CH',
     grupo: CONSUMO,
     cotaMm: { AGUA_FRIA: 2100, AGUA_QUENTE: 2100, ESGOTO: 0 },
-    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40 },
+    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40, PLUVIAL: 75 },
     pesoNbr5626: 0.4,
     uhcNbr8160: 2,
     ajuda: 'Ponto de água a 2,10 m; o esgoto do box vai por ralo/caixa sifonada. Peso 0,4 · 2 UHC.',
@@ -93,7 +95,7 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     sigla: 'LV',
     grupo: CONSUMO,
     cotaMm: { AGUA_FRIA: 600, AGUA_QUENTE: 600, ESGOTO: 500 },
-    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40 },
+    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40, PLUVIAL: 75 },
     pesoNbr5626: 0.3,
     uhcNbr8160: 1,
     ajuda: 'Água a 0,60 m, esgoto a 0,50 m (sifão). Peso 0,3 · 1 UHC.',
@@ -155,7 +157,7 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     sigla: 'BD',
     grupo: CONSUMO,
     cotaMm: { AGUA_FRIA: 250, AGUA_QUENTE: 250, ESGOTO: 0 },
-    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40 },
+    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40, PLUVIAL: 75 },
     pesoNbr5626: 0.1,
     uhcNbr8160: 1,
     ajuda: 'Bidê: água fria e quente a 0,25 m, descarga DN 40 no piso. Peso 0,1 · 1 UHC.',
@@ -165,7 +167,7 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     sigla: 'BH',
     grupo: CONSUMO,
     cotaMm: { AGUA_FRIA: 550, AGUA_QUENTE: 550, ESGOTO: 0 },
-    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40 },
+    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40, PLUVIAL: 75 },
     pesoNbr5626: 1.0,
     uhcNbr8160: 2,
     ajuda: 'Banheira: misturador a 0,55 m, descarga DN 40. Peso 1,0 · 2 UHC.',
@@ -196,8 +198,8 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     rotulo: 'Ponto de espera',
     sigla: 'PE',
     grupo: CONSUMO,
-    cotaMm: { AGUA_FRIA: 600, AGUA_QUENTE: 600, ESGOTO: 0 },
-    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40 },
+    cotaMm: { AGUA_FRIA: 600, AGUA_QUENTE: 600, ESGOTO: 0, PLUVIAL: 0 },
+    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40, PLUVIAL: 75 },
     pesoNbr5626: 0.3,
     uhcNbr8160: 1,
     ajuda: 'Ponto tampado para uso futuro (filtro, aparelho a definir). Entra na rede com a hipótese de um lavatório — peso 0,3 e 1 UHC — até se saber o aparelho.',
@@ -298,6 +300,34 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     medidasMm: { larguraMm: 300, profundidadeMm: 300, alturaMm: 300 },
     ajuda: 'Onde o coletor predial encontra a rede pública, no limite do lote. A cota é a da rede (geratriz inferior): é ela que diz se o esgoto chega por gravidade.',
   },
+  RALO_PLUVIAL: {
+    rotulo: 'Ralo pluvial',
+    sigla: 'RP',
+    grupo: PLUVIAL,
+    cotaMm: { PLUVIAL: 0 },
+    dnMinimoMm: { PLUVIAL: 75 },
+    medidasMm: { larguraMm: 150, profundidadeMm: 150, alturaMm: 150 },
+    ajuda: 'Ralo de águas pluviais — no piso descoberto (grelha) ou no fundo da calha (bocal com ralo hemisférico). Rede independente do esgoto (NBR 10844).',
+  },
+  CAIXA_AREIA: {
+    rotulo: 'Caixa de areia',
+    sigla: 'CA',
+    grupo: PLUVIAL,
+    cotaMm: { PLUVIAL: -600 },
+    dnMinimoMm: { PLUVIAL: 100 },
+    medidasMm: { larguraMm: 600, profundidadeMm: 600, alturaMm: 600 },
+    ajuda: 'Caixa enterrada da rede pluvial: junta os condutores e retém a areia antes da saída. A cota é a do fundo.',
+  },
+  LIGACAO_PLUVIAL: {
+    rotulo: 'Saída pluvial (sarjeta ou rede)',
+    sigla: 'SP',
+    grupo: PLUVIAL,
+    // A cota é a da saída: sob a calçada para a sarjeta, ou a geratriz da galeria pluvial.
+    cotaMm: { PLUVIAL: -300 },
+    dnMinimoMm: { PLUVIAL: 100 },
+    medidasMm: { larguraMm: 300, profundidadeMm: 300, alturaMm: 300 },
+    ajuda: 'Onde a água da chuva deixa o lote — na sarjeta, sob a calçada, ou na galeria pluvial. Nunca na rede de esgoto.',
+  },
   CAIXA_GORDURA: {
     rotulo: 'Caixa de gordura',
     sigla: 'CG',
@@ -366,7 +396,7 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     rotulo: 'Joelho 90°',
     sigla: 'J90',
     grupo: CONEXOES,
-    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150 },
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300 },
     dnMinimoMm: {},
     sobreOTrecho: true,
     ajuda: 'Força um joelho de 90° neste nó. As conexões dos encontros de trechos são contadas sozinhas — só lance à mão o que o desenho não deduz.',
@@ -375,7 +405,7 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     rotulo: 'Joelho 45°',
     sigla: 'J45',
     grupo: CONEXOES,
-    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150 },
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300 },
     dnMinimoMm: {},
     sobreOTrecho: true,
     ajuda: 'Força um joelho de 45° neste nó.',
@@ -384,7 +414,7 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     rotulo: 'Tê',
     sigla: 'T',
     grupo: CONEXOES,
-    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150 },
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300 },
     dnMinimoMm: {},
     sobreOTrecho: true,
     ajuda: 'Força um tê neste nó.',
@@ -393,7 +423,7 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     rotulo: 'Luva',
     sigla: 'L',
     grupo: CONEXOES,
-    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150 },
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300 },
     dnMinimoMm: {},
     sobreOTrecho: true,
     ajuda: 'Força uma luva (emenda reta) neste ponto.',
@@ -402,7 +432,7 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     rotulo: 'Redução',
     sigla: 'R',
     grupo: CONEXOES,
-    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150 },
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300 },
     dnMinimoMm: {},
     sobreOTrecho: true,
     ajuda: 'Força uma redução (mudança de diâmetro) neste ponto.',

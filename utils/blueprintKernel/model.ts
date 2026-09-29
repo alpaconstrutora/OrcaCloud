@@ -2350,7 +2350,7 @@ export function nomeDoTipoDeNucleo(tipo: TipoDeNucleo): string {
  * ficam de fora só porque ninguém os pediu ainda. Acrescentar um valor é
  * acrescentar um valor — não é mexer no modelo.
  */
-export type DisciplinaDeRede = 'ELETRICA' | 'AGUA_FRIA' | 'AGUA_QUENTE' | 'ESGOTO' | 'MECANICA';
+export type DisciplinaDeRede = 'ELETRICA' | 'AGUA_FRIA' | 'AGUA_QUENTE' | 'ESGOTO' | 'MECANICA' | 'PLUVIAL';
 
 /** As disciplinas, em lista — para os invariantes recusarem valor inventado. */
 export const DISCIPLINAS: DisciplinaDeRede[] = [
@@ -2361,6 +2361,9 @@ export const DISCIPLINAS: DisciplinaDeRede[] = [
   // MECÂNICA (20/09/2026, roadmap E11.1): HVAC mínimo — o shaft mecânico e as
   // reservas de espaço de equipamento. Dutos, terminais e cargas ficam fora.
   'MECANICA',
+  // PLUVIAL (29/09/2026, roadmap hidrossanitário E6.1): calhas, condutores e
+  // caixas de areia — a água da chuva, rede independente do esgoto (NBR 10844).
+  'PLUVIAL',
 ];
 
 /**
@@ -2617,6 +2620,11 @@ export const TIPOS_DE_PONTO_HIDRAULICO = [
   'CAIXA_GORDURA',
   // 29/09/2026 (E5.3): a ligação do coletor predial à rede pública, no limite do lote.
   'LIGACAO_ESGOTO',
+  // 29/09/2026 (E6.1): as águas pluviais — ralo (de piso ou o bocal da calha),
+  // caixa de areia e a saída para a sarjeta ou a rede pluvial.
+  'RALO_PLUVIAL',
+  'CAIXA_AREIA',
+  'LIGACAO_PLUVIAL',
   'REGISTRO_GAVETA',
   'REGISTRO_PRESSAO',
   'VALVULA_RETENCAO',
@@ -2642,6 +2650,9 @@ export type FormaDoReservatorio = (typeof FORMAS_DO_RESERVATORIO)[number];
 const AF_AQ: DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE'];
 const AF_AQ_ESG: DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO'];
 const ESG: DisciplinaDeRede[] = ['ESGOTO'];
+const PLU: DisciplinaDeRede[] = ['PLUVIAL'];
+// A espera e as conexões forçadas servem a qualquer rede de tubo — a pluvial também (E6.1).
+const TUBOS: DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL'];
 
 /** Em que disciplinas cada tipo hidráulico pode existir — a invariante recusa o resto. */
 export const DISCIPLINAS_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, DisciplinaDeRede[]> = {
@@ -2660,7 +2671,7 @@ export const DISCIPLINAS_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, Disc
   // A válvula de descarga alimenta a bacia SEM caixa acoplada — só água fria.
   VALVULA_DESCARGA: ['AGUA_FRIA'],
   // A espera é ponto para o futuro, em qualquer rede.
-  PONTO_ESPERA: AF_AQ_ESG,
+  PONTO_ESPERA: TUBOS,
   RESERVATORIO: ['AGUA_FRIA'],
   BOMBA: ['AGUA_FRIA'],
   // O aquecedor é ALIMENTADO pela água fria e é a ORIGEM da rede quente.
@@ -2673,6 +2684,9 @@ export const DISCIPLINAS_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, Disc
   CAIXA_SIFONADA: ESG,
   CAIXA_INSPECAO: ESG,
   LIGACAO_ESGOTO: ESG,
+  RALO_PLUVIAL: PLU,
+  CAIXA_AREIA: PLU,
+  LIGACAO_PLUVIAL: PLU,
   CAIXA_GORDURA: ESG,
   REGISTRO_GAVETA: AF_AQ,
   REGISTRO_PRESSAO: AF_AQ,
@@ -2680,11 +2694,11 @@ export const DISCIPLINAS_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, Disc
   REGISTRO_ESFERA: AF_AQ,
   VRP: AF_AQ,
   HIDROMETRO: ['AGUA_FRIA'],
-  CONEXAO_JOELHO_90: AF_AQ_ESG,
-  CONEXAO_JOELHO_45: AF_AQ_ESG,
-  CONEXAO_TE: AF_AQ_ESG,
-  CONEXAO_LUVA: AF_AQ_ESG,
-  CONEXAO_REDUCAO: AF_AQ_ESG,
+  CONEXAO_JOELHO_90: TUBOS,
+  CONEXAO_JOELHO_45: TUBOS,
+  CONEXAO_TE: TUBOS,
+  CONEXAO_LUVA: TUBOS,
+  CONEXAO_REDUCAO: TUBOS,
 };
 
 export interface Terminal {

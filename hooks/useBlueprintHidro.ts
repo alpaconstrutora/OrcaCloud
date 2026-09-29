@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { blueprintHidroService } from '../services/blueprintHidroService';
 import { HIPOTESES_HIDRO_PADRAO, type HipotesesHidro } from '../utils/blueprintMemorialHidro';
+import { PERIODOS_DE_RETORNO, type HipotesesPluviais } from '../utils/blueprintPluvial';
 
 /**
  * As PREMISSAS hidrossanitárias do ESTUDO (E3.3, 29/09/2026) — água, pressão e
@@ -24,8 +25,11 @@ export interface HidroDoEstudo {
 /** As chaves antigas do navegador (antes de E3.3). */
 export const CHAVES_DO_NAVEGADOR = { agua: 'blueprint:aguaAutomatica', pressao: 'blueprint:pressaoDaAgua', esgoto: 'blueprint:esgotoAutomatico' } as const;
 
-/** Premissas em que `null` é valor legítimo (`rotaMaximaVezes: null` = sem limite). */
-const ANULAVEIS = new Set(['rotaMaximaVezes']);
+/**
+ * Premissas em que `null` é valor legítimo (`rotaMaximaVezes: null` = sem limite;
+ * E6.1: `cidade` e `intensidadeMmH` nulas = sem cidade escolhida, usar a tabela).
+ */
+const ANULAVEIS = new Map<string, 'number' | 'string'>([['rotaMaximaVezes', 'number'], ['cidade', 'string'], ['intensidadeMmH', 'number']]);
 
 /** Um grupo parcial completado com o padrão — só entra valor do MESMO tipo (sem chaves estranhas). */
 function completar<T extends object>(raw: unknown, padrao: T): T {
@@ -37,11 +41,20 @@ function completar<T extends object>(raw: unknown, padrao: T): T {
     if (typeof v === 'number' && typeof x === 'number' && Number.isFinite(x)) saida[k] = x;
     else if (typeof v === 'boolean' && typeof x === 'boolean') saida[k] = x;
     else if (x === null && ANULAVEIS.has(k)) saida[k] = null;
+    // Anulável com padrão nulo: o valor gravado vale se for do tipo da premissa (E6.1).
+    else if (v === null && ANULAVEIS.get(k) === 'number' && typeof x === 'number' && Number.isFinite(x)) saida[k] = x;
+    else if (v === null && ANULAVEIS.get(k) === 'string' && typeof x === 'string') saida[k] = x;
   }
   return saida as T;
 }
 
 /** O JSON gravado `{ agua, pressao, esgoto }`, completado com o padrão. */
+/** As premissas pluviais gravadas; o período de retorno só vale se for um dos da norma (1, 5, 25). */
+function pluvialDaColuna(raw: unknown): HipotesesPluviais {
+  const p = completar(raw, HIPOTESES_HIDRO_PADRAO.pluvial);
+  return (PERIODOS_DE_RETORNO as readonly number[]).includes(p.periodoDeRetornoAnos) ? p : { ...p, periodoDeRetornoAnos: HIPOTESES_HIDRO_PADRAO.pluvial.periodoDeRetornoAnos };
+}
+
 export function hipotesesHidroDaColuna(raw: unknown): HipotesesHidro {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   return {
@@ -51,6 +64,7 @@ export function hipotesesHidroDaColuna(raw: unknown): HipotesesHidro {
     reservatorio: completar(r.reservatorio, HIPOTESES_HIDRO_PADRAO.reservatorio),
     alimentacao: completar(r.alimentacao, HIPOTESES_HIDRO_PADRAO.alimentacao),
     recalque: completar(r.recalque, HIPOTESES_HIDRO_PADRAO.recalque),
+    pluvial: pluvialDaColuna(r.pluvial),
   };
 }
 
